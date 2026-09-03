@@ -21,11 +21,15 @@ import {
   nextReadingWidthMode,
   type PersistedShellLayout,
   readingColumnClass,
+  reduceColumnModeChange,
   reduceShellSurface,
   type ShellSurfaceState,
   sanitizeShellLayoutPersisted,
 } from '@/components/workspace-shell/shellLayoutModel';
-import type { ContextSurfaceId } from '@/components/workspace-shell/surfaceRegistry';
+import type {
+  ContextSurfaceId,
+  ShellColumnMode,
+} from '@/components/workspace-shell/surfaceRegistry';
 import { sortSurfaces } from '@/components/workspace-shell/surfaceRegistry';
 
 /**
@@ -63,6 +67,9 @@ export interface ShellLayoutState extends PersistedShellLayout, ShellSessionOver
   clearManualOverrides: () => void;
   /** Reserved for rail drag-sort (postponed); already sanitized through the registry. */
   setRailOrder: (order: readonly string[]) => void;
+  // column mode (U02): three-column (full rail) vs two-column (context only).
+  setShellColumnMode: (mode: ShellColumnMode) => void;
+  toggleShellColumnMode: () => void;
   // reading column
   toggleReadingWidthMode: () => void;
 }
@@ -103,13 +110,21 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
       selectSurface: (id) =>
         set((state) =>
           withManualPanel(
-            reduceShellSurface(surfaceStateOf(state), { type: 'select', surfaceId: id })
+            reduceShellSurface(
+              surfaceStateOf(state),
+              { type: 'select', surfaceId: id },
+              state.shellColumnMode
+            )
           )
         ),
       openSurface: (id) =>
         set((state) =>
           withManualPanel(
-            reduceShellSurface(surfaceStateOf(state), { type: 'open', surfaceId: id })
+            reduceShellSurface(
+              surfaceStateOf(state),
+              { type: 'open', surfaceId: id },
+              state.shellColumnMode
+            )
           )
         ),
       closeSurface: () =>
@@ -118,7 +133,13 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
         ),
       toggleContextPanel: () =>
         set((state) =>
-          withManualPanel(reduceShellSurface(surfaceStateOf(state), { type: 'toggle-panel' }))
+          withManualPanel(
+            reduceShellSurface(
+              surfaceStateOf(state),
+              { type: 'toggle-panel' },
+              state.shellColumnMode
+            )
+          )
         ),
       toggleExpanded: () =>
         set((state) => reduceShellSurface(surfaceStateOf(state), { type: 'toggle-expanded' })),
@@ -133,6 +154,19 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
       clearManualOverrides: () => set({ ...initialSessionOverrides }),
 
       setRailOrder: (order) => set({ railOrder: sortSurfaces(order).map((surface) => surface.id) }),
+
+      setShellColumnMode: (mode) =>
+        set((state) => ({
+          shellColumnMode: mode,
+          // Converge the open surface so two-column never keeps a hidden one active.
+          ...reduceColumnModeChange(surfaceStateOf(state), mode),
+        })),
+      toggleShellColumnMode: () =>
+        set((state) => {
+          const mode: ShellColumnMode =
+            state.shellColumnMode === 'two-column' ? 'three-column' : 'two-column';
+          return { shellColumnMode: mode, ...reduceColumnModeChange(surfaceStateOf(state), mode) };
+        }),
 
       toggleReadingWidthMode: () =>
         set((state) => ({ readingWidthMode: nextReadingWidthMode(state.readingWidthMode) })),
@@ -152,6 +186,7 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
         railOrder: state.railOrder,
         readingWidthMode: state.readingWidthMode,
         editorRatio: state.editorRatio,
+        shellColumnMode: state.shellColumnMode,
       }),
       // v1 → v2 (T-32): `railOrder` was persisted before the registry moved to
       // A08's tab order, so a v1 profile pins the OLD order — the tab strip

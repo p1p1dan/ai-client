@@ -59,4 +59,16 @@ describe('derivePanelTabs', () => {
   it('ignores garbage ids instead of throwing', () => {
     expect(derivePanelTabs(['nope', '', 'git'], noChanges)[0]?.id).toBe('git');
   });
+
+  it('collapses to the context tab alone in two-column mode (U02-b, D02)', () => {
+    expect(
+      derivePanelTabs(DEFAULT_SURFACE_ORDER, noChanges, 'two-column').map((tab) => tab.id)
+    ).toEqual(['context']);
+  });
+
+  it('keeps the full tab strip when columnMode is three-column', () => {
+    expect(
+      derivePanelTabs(DEFAULT_SURFACE_ORDER, noChanges, 'three-column').map((tab) => tab.id)
+    ).toEqual(['git', 'editor', 'context', 'terminal']);
+  });
 });

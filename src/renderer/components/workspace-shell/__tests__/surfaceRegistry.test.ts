@@ -8,6 +8,7 @@ import {
   firstAlwaysSurfaceId,
   isContextSurfaceId,
   isRailSelectableSurface,
+  isSurfaceAvailableInColumnMode,
   railSurfaces,
   shouldShowActivityDot,
   sortSurfaces,
@@ -157,6 +158,18 @@ describe('railSurfaces', () => {
     const result = railSurfaces(['terminal', 'git', 'context', 'editor']).map((s) => s.id);
     expect(result).toEqual(['terminal', 'git', 'context', 'editor']);
   });
+
+  it('collapses to context alone in two-column mode (U02-b, D02)', () => {
+    expect(
+      railSurfaces(DEFAULT_SURFACE_ORDER, { columnMode: 'two-column' }).map((s) => s.id)
+    ).toEqual(['context']);
+  });
+
+  it('keeps the full rail when columnMode is explicitly three-column', () => {
+    expect(
+      railSurfaces(DEFAULT_SURFACE_ORDER, { columnMode: 'three-column' }).map((s) => s.id)
+    ).toEqual(['git', 'editor', 'context', 'terminal']);
+  });
 });
 
 describe('isRailSelectableSurface', () => {
@@ -172,6 +185,13 @@ describe('isRailSelectableSurface', () => {
     expect(isRailSelectableSurface('chat')).toBe(false);
     expect(isRailSelectableSurface('chat', { hasContent: () => true })).toBe(true);
   });
+
+  it('rejects every non-context surface in two-column, keeps context (U02-b)', () => {
+    for (const id of ['git', 'editor', 'terminal'] as const) {
+      expect(isRailSelectableSurface(id, { columnMode: 'two-column' })).toBe(false);
+    }
+    expect(isRailSelectableSurface('context', { columnMode: 'two-column' })).toBe(true);
+  });
 });
 
 describe('firstAlwaysSurfaceId', () => {
@@ -179,6 +199,25 @@ describe('firstAlwaysSurfaceId', () => {
     // T-32: `git` is first now that the rail follows A08's tab order.
     expect(firstAlwaysSurfaceId()).toBe('git');
     expect(firstAlwaysSurfaceId({ hasContent: () => true })).toBe('git');
+  });
+
+  it('falls back to context in two-column mode (U02-b)', () => {
+    expect(firstAlwaysSurfaceId({ columnMode: 'two-column' })).toBe('context');
+  });
+});
+
+describe('isSurfaceAvailableInColumnMode', () => {
+  it('offers every rail surface in three-column', () => {
+    for (const id of ['git', 'editor', 'context', 'terminal'] as const) {
+      expect(isSurfaceAvailableInColumnMode(id, 'three-column')).toBe(true);
+    }
+  });
+
+  it('offers only context in two-column (D02: AI conversation + development only)', () => {
+    expect(isSurfaceAvailableInColumnMode('context', 'two-column')).toBe(true);
+    for (const id of ['git', 'editor', 'terminal'] as const) {
+      expect(isSurfaceAvailableInColumnMode(id, 'two-column')).toBe(false);
+    }
   });
 });
 

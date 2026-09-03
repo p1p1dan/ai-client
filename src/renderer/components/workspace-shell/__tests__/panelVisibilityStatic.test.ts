@@ -61,11 +61,16 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     expect(shell).toContain('resolveShellChrome({');
     // Round-12: `railVisible` is gone — the rail is permanent, so the
     // complement it used to express no longer exists.
-    expect(shell).toContain('const { panelVisible, chatVisible } = chrome;');
+    // U03-a: TUI collapses the right panel, so the two chrome flags are composed
+    // with an `isTui` override rather than destructured raw — still one
+    // derivation point (resolveShellChrome), now with the terminal sub-mode atop.
+    expect(shell).toContain('const panelVisible = isTui ? false : chrome.panelVisible;');
+    expect(shell).toContain('const chatVisible = isTui ? true : chrome.chatVisible;');
     // m5: the panel must be capped so it can never eat the content floor.
     expect(shell).toContain('maxPanelWidth({');
-    // The yield model reads the preference; it must never write it.
-    expect(shell).toContain('panelOpen: activeSurfaceId !== null');
+    // The yield model reads the preference; it must never write it. U03-a adds
+    // the TUI guard in front, but the read of `activeSurfaceId` is unchanged.
+    expect(shell).toContain('panelOpen: !isTui && activeSurfaceId !== null');
   });
 
   it('ContextPanel receives visibility instead of computing it', () => {
@@ -90,8 +95,11 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     // than `flex-1` — a growable/shrinkable editor would absorb the overflow
     // the right edge is supposed to clip. Both original invariants are
     // unchanged: mounted on a pending intent, laid out only when open.
+    // U03-a: the column is additionally gated by `!isTui` — TUI shows neither
+    // the editor nor a pending intent's hidden column, so the terminal owns the
+    // whole center. The m6/round-10 invariants below are otherwise unchanged.
     expect(shell).toMatch(
-      /\{\(editorOpen \|\| fileIntentPending\) && \( <div className=\{editorOpen \? 'min-w-0 shrink-0' : 'hidden'\}/
+      /\{!isTui && \(editorOpen \|\| fileIntentPending\) && \( <div className=\{editorOpen \? 'min-w-0 shrink-0' : 'hidden'\}/
     );
     expect(shell).toContain("style={editorOpen ? { width: 'var(--shell-editor-w)' } : undefined}");
   });

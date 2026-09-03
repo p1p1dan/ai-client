@@ -70,6 +70,19 @@ describe('resolveShellShortcut', () => {
       expect(resolveShellShortcut(input({ code: 'Digit5', ctrlKey: true }))).toBeNull();
     });
 
+    it('binds only Digit1→context in two-column; Digit2..4 resolve to nothing (U02-b)', () => {
+      expect(
+        resolveShellShortcut(input({ code: 'Digit1', ctrlKey: true, columnMode: 'two-column' }))
+      ).toEqual({ type: 'select-surface', surfaceId: 'context' });
+      for (const digit of [2, 3, 4]) {
+        expect(
+          resolveShellShortcut(
+            input({ code: `Digit${digit}`, ctrlKey: true, columnMode: 'two-column' })
+          )
+        ).toBeNull();
+      }
+    });
+
     it('is not honored when the target is editable', () => {
       expect(
         resolveShellShortcut(input({ code: 'Digit1', ctrlKey: true, targetIsEditable: true }))

@@ -3,7 +3,13 @@
  * so vitest can cover every branch without mounting `WorkspaceShell` — same
  * pattern as `shellLayoutModel.ts`.
  */
-import { type ContextSurfaceId, DEFAULT_SURFACE_ORDER, railSurfaces } from './surfaceRegistry';
+import {
+  type ContextSurfaceId,
+  DEFAULT_SHELL_COLUMN_MODE,
+  DEFAULT_SURFACE_ORDER,
+  railSurfaces,
+  type ShellColumnMode,
+} from './surfaceRegistry';
 
 export type ShellShortcutAction =
   | { type: 'toggle-context-panel' }
@@ -37,6 +43,12 @@ export interface ResolveShellShortcutInput {
    * to the registry order so existing callers and tests keep working.
    */
   railOrder?: readonly string[];
+  /**
+   * Current column mode (the store's `shellColumnMode`). In two-column only
+   * `context` is rail-numbered, so Ctrl/Cmd+2..4 resolve to nothing. Defaults
+   * to three-column so existing callers and tests keep the full digit map.
+   */
+  columnMode?: ShellColumnMode;
 }
 
 /**
@@ -49,8 +61,11 @@ export interface ResolveShellShortcutInput {
  * `git|files|context|terminal`, i.e. the digits "jumped" to the wrong tabs.
  * Taking the same order the caller renders makes that drift impossible.
  */
-function numberedSurfaceIds(order: readonly string[]): readonly ContextSurfaceId[] {
-  return railSurfaces(order)
+function numberedSurfaceIds(
+  order: readonly string[],
+  columnMode: ShellColumnMode
+): readonly ContextSurfaceId[] {
+  return railSurfaces(order, { columnMode })
     .slice(0, 4)
     .map((surface) => surface.id);
 }
@@ -104,7 +119,10 @@ export function resolveShellShortcut(input: ResolveShellShortcutInput): ShellSho
   const digitMatch = /^Digit([1-4])$/.exec(input.code);
   if (digitMatch) {
     const index = Number(digitMatch[1]) - 1;
-    const surfaceId = numberedSurfaceIds(input.railOrder ?? DEFAULT_SURFACE_ORDER)[index];
+    const surfaceId = numberedSurfaceIds(
+      input.railOrder ?? DEFAULT_SURFACE_ORDER,
+      input.columnMode ?? DEFAULT_SHELL_COLUMN_MODE
+    )[index];
     return surfaceId ? { type: 'select-surface', surfaceId } : null;
   }
 

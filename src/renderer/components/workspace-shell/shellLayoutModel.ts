@@ -6,10 +6,13 @@
 import { clampEditorRatio, DEFAULT_EDITOR_RATIO } from './centerLayoutModel';
 import {
   type ContextSurfaceId,
+  DEFAULT_SHELL_COLUMN_MODE,
   DEFAULT_SURFACE_ORDER,
   firstAlwaysSurfaceId,
   isContextSurfaceId,
   isRailSelectableSurface,
+  isSurfaceAvailableInColumnMode,
+  type ShellColumnMode,
   sortSurfaces,
 } from './surfaceRegistry';
 
@@ -353,12 +356,23 @@ function closePanel(prev: ShellSurfaceState): ShellSurfaceState {
   };
 }
 
-function bareOpenTarget(prev: ShellSurfaceState): ContextSurfaceId {
-  return prev.activeSurfaceId ?? prev.lastSurfaceId ?? firstAlwaysSurfaceId();
+function bareOpenTarget(prev: ShellSurfaceState, columnMode: ShellColumnMode): ContextSurfaceId {
+  // The remembered surface may be unavailable in this mode (e.g. `git` carried
+  // over from three-column), so guard it before reusing it; otherwise fall back
+  // to the first surface the mode actually offers (two-column → context).
+  const remembered = prev.activeSurfaceId ?? prev.lastSurfaceId;
+  if (remembered && isRailSelectableSurface(remembered, { columnMode })) {
+    return remembered;
+  }
+  return firstAlwaysSurfaceId({ columnMode });
 }
 
-function applySelect(prev: ShellSurfaceState, id: ContextSurfaceId): ShellSurfaceState {
-  if (!isRailSelectableSurface(id)) {
+function applySelect(
+  prev: ShellSurfaceState,
+  id: ContextSurfaceId,
+  columnMode: ShellColumnMode
+): ShellSurfaceState {
+  if (!isRailSelectableSurface(id, { columnMode })) {
     return prev;
   }
   if (id === prev.activeSurfaceId) {
@@ -368,37 +382,75 @@ function applySelect(prev: ShellSurfaceState, id: ContextSurfaceId): ShellSurfac
   return openSurface(prev, id);
 }
 
-function applyOpen(prev: ShellSurfaceState, id: ContextSurfaceId | undefined): ShellSurfaceState {
+function applyOpen(
+  prev: ShellSurfaceState,
+  id: ContextSurfaceId | undefined,
+  columnMode: ShellColumnMode
+): ShellSurfaceState {
   if (id === undefined) {
     // Explicit open never no-ops (decision 4 correction): fall back through
-    // the last surface, then the first always-available rail surface.
-    return openSurface(prev, bareOpenTarget(prev));
+    // the last surface, then the first surface this mode offers.
+    return openSurface(prev, bareOpenTarget(prev, columnMode));
   }
-  if (!isRailSelectableSurface(id)) {
+  if (!isRailSelectableSurface(id, { columnMode })) {
     return prev;
   }
   // Explicit open is always an open, never a toggle-off — unlike `select`.
   return openSurface(prev, id);
 }
 
+/**
+ * `columnMode` gates which surfaces `select`/`open` may reach — the SAME guard
+ * the rail and shortcuts use (`isRailSelectableSurface`), so no entry point can
+ * open a surface the current mode hides. Defaults to three-column so existing
+ * callers and tests are unaffected.
+ */
 export function reduceShellSurface(
   prev: ShellSurfaceState,
-  action: ShellSurfaceAction
+  action: ShellSurfaceAction,
+  columnMode: ShellColumnMode = DEFAULT_SHELL_COLUMN_MODE
 ): ShellSurfaceState {
   switch (action.type) {
     case 'select':
-      return applySelect(prev, action.surfaceId);
+      return applySelect(prev, action.surfaceId, columnMode);
     case 'open':
-      return applyOpen(prev, action.surfaceId);
+      return applyOpen(prev, action.surfaceId, columnMode);
     case 'close':
       return closePanel(prev);
     case 'toggle-panel':
-      return prev.activeSurfaceId !== null ? closePanel(prev) : applyOpen(prev, undefined);
+      return prev.activeSurfaceId !== null
+        ? closePanel(prev)
+        : applyOpen(prev, undefined, columnMode);
     case 'toggle-expanded':
       return prev.activeSurfaceId === null ? prev : { ...prev, expanded: !prev.expanded };
     default:
       return prev;
   }
+}
+
+/**
+ * U02-b: converge the surface state when the column mode changes. Two-column
+ * offers `context` only, so an active surface it no longer offers (e.g. `git`)
+ * is swapped to `context` — while `lastSurfaceId` remembers the three-column
+ * surface so a round-trip back to three-column can restore it. Switching TO
+ * three-column, or with the panel closed / already on context, is a no-op:
+ * `railOrder` is never touched, so the mode toggle cannot damage it.
+ */
+export function reduceColumnModeChange(
+  prev: ShellSurfaceState,
+  columnMode: ShellColumnMode
+): ShellSurfaceState {
+  if (columnMode !== 'two-column' || prev.activeSurfaceId === null) {
+    return prev;
+  }
+  if (isSurfaceAvailableInColumnMode(prev.activeSurfaceId, columnMode)) {
+    return prev;
+  }
+  return {
+    activeSurfaceId: 'context',
+    lastSurfaceId: prev.activeSurfaceId,
+    expanded: prev.expanded,
+  };
 }
 
 // ── persistence hygiene ─────────────────────────────────────────────────
@@ -414,6 +466,11 @@ export interface PersistedShellLayout {
   readingWidthMode: ReadingWidthMode;
   /** T-32: share of the center row given to the editor when a file is open. */
   editorRatio: number;
+  /**
+   * U02: three-column (rail: git/files/context/terminal) vs two-column
+   * (context only). Persisted so the choice survives a restart.
+   */
+  shellColumnMode: ShellColumnMode;
 }
 
 export const defaultShellLayout: PersistedShellLayout = {
@@ -426,6 +483,7 @@ export const defaultShellLayout: PersistedShellLayout = {
   railOrder: [...DEFAULT_SURFACE_ORDER],
   readingWidthMode: 'normal',
   editorRatio: DEFAULT_EDITOR_RATIO,
+  shellColumnMode: DEFAULT_SHELL_COLUMN_MODE,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -443,6 +501,11 @@ function sanitizeSurfaceIdOrNull(value: unknown): ContextSurfaceId | null {
 function sanitizePanelWidth(raw: unknown): number | null {
   // No `availableWidth` here: the window size is unknown at persistence time.
   return isFiniteNumber(raw) ? clampContextPanelWidth(raw) : null;
+}
+
+/** Any value but the explicit 'two-column' opt-in → the three-column default. */
+function sanitizeShellColumnMode(raw: unknown): ShellColumnMode {
+  return raw === 'two-column' ? 'two-column' : DEFAULT_SHELL_COLUMN_MODE;
 }
 
 function sanitizeRailOrder(raw: unknown): ContextSurfaceId[] {
@@ -473,5 +536,6 @@ export function sanitizeShellLayoutPersisted(raw: unknown): PersistedShellLayout
     editorRatio: clampEditorRatio(
       typeof raw.editorRatio === 'number' ? raw.editorRatio : Number.NaN
     ),
+    shellColumnMode: sanitizeShellColumnMode(raw.shellColumnMode),
   };
 }

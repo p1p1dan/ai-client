@@ -9,7 +9,9 @@
  */
 import {
   type ContextSurfaceId,
+  DEFAULT_SHELL_COLUMN_MODE,
   railSurfaces,
+  type ShellColumnMode,
   type SurfaceIconName,
   shouldShowActivityDot,
 } from './surfaceRegistry';
@@ -33,8 +35,12 @@ export interface PanelTabSignals {
  * `order` is the persisted `railOrder`; `railSurfaces` already drops
  * registry-only and content-less surfaces and re-appends anything missing.
  */
-export function derivePanelTabs(order: readonly string[], signals: PanelTabSignals): PanelTab[] {
-  return railSurfaces(order).map((surface) => ({
+export function derivePanelTabs(
+  order: readonly string[],
+  signals: PanelTabSignals,
+  columnMode: ShellColumnMode = DEFAULT_SHELL_COLUMN_MODE
+): PanelTab[] {
+  return railSurfaces(order, { columnMode }).map((surface) => ({
     id: surface.id,
     icon: surface.icon,
     labelKey: surface.labelKey,

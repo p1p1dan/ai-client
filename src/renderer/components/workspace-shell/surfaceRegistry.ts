@@ -26,6 +26,24 @@ export type ContextSurfaceId =
 /** 'always' can be opened empty from the rail; 'has-content' stays hidden until content exists. */
 export type SurfaceAvailability = 'always' | 'has-content';
 
+/**
+ * U02: the shell's column count.
+ * - 'three-column' — the rail offers git/files/context/terminal (default).
+ * - 'two-column'   — AI conversation + development only; the rail collapses to
+ *   `context` alone. Files/Git/Terminal are deliberately not offered (D02);
+ *   switch back to three-column to reach them.
+ *
+ * Lives here, not in `shellLayoutModel.ts`, so the rail filters (`railSurfaces`,
+ * `isRailSelectableSurface`) can honour it without that module importing back
+ * into this one (it already imports FROM here) — a cycle vite would then have to
+ * chunk. Distinct too from settings' `LayoutMode` ('columns' | 'tree'), which
+ * is the OUTER repo/worktree axis, hence the different name.
+ */
+export type ShellColumnMode = 'two-column' | 'three-column';
+
+/** Default so no existing user's layout moves when the field first appears. */
+export const DEFAULT_SHELL_COLUMN_MODE: ShellColumnMode = 'three-column';
+
 export type SurfaceIconName =
   | 'file-code'
   | 'git-branch'
@@ -221,6 +239,23 @@ export function sortSurfaces(order: readonly string[]): ContextSurfaceDescriptor
 export interface RailSurfacesOptions {
   /** MVP: always false. T-12~T-15 pass a real predicate when content-driven surfaces land. */
   hasContent?: (id: ContextSurfaceId) => boolean;
+  /**
+   * U02-b: in 'two-column' mode the rail collapses to `context` alone. Defaults
+   * to 'three-column' (via the caller), so existing callers keep the full rail.
+   */
+  columnMode?: ShellColumnMode;
+}
+
+/**
+ * U02-b (D02): which surfaces the rail offers in a given column mode. Two-column
+ * is "AI conversation + development only" — Files/Git/Terminal are deliberately
+ * unreachable there; switch back to three-column to get them.
+ */
+export function isSurfaceAvailableInColumnMode(
+  id: ContextSurfaceId,
+  columnMode: ShellColumnMode
+): boolean {
+  return columnMode === 'two-column' ? id === 'context' : true;
 }
 
 /** True when the rail may select this surface today (used as a reducer guard). */
@@ -230,6 +265,9 @@ export function isRailSelectableSurface(
 ): boolean {
   const surface = getSurface(id);
   if (!surface || surface.registeredOnly) {
+    return false;
+  }
+  if (!isSurfaceAvailableInColumnMode(id, options.columnMode ?? DEFAULT_SHELL_COLUMN_MODE)) {
     return false;
   }
   if (surface.availability === 'has-content') {

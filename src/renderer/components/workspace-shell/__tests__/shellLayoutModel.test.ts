@@ -13,6 +13,7 @@ import {
   READING_COLUMN_CLASS,
   type ReadingWidthMode,
   readingColumnClass,
+  reduceColumnModeChange,
   reduceShellSurface,
   resolveContentColumnWidth,
   resolveContextPanelWidth,
@@ -323,6 +324,129 @@ describe('reduceShellSurface', () => {
   });
 });
 
+describe('reduceShellSurface — two-column guard (U02-b)', () => {
+  it('blocks selecting a non-context surface in two-column', () => {
+    expect(
+      reduceShellSurface(
+        initialShellSurfaceState,
+        { type: 'select', surfaceId: 'git' },
+        'two-column'
+      )
+    ).toBe(initialShellSurfaceState);
+  });
+
+  it('allows selecting context in two-column', () => {
+    expect(
+      reduceShellSurface(
+        initialShellSurfaceState,
+        { type: 'select', surfaceId: 'context' },
+        'two-column'
+      )
+    ).toEqual({ activeSurfaceId: 'context', lastSurfaceId: 'context', expanded: false });
+  });
+
+  it('blocks an explicit open of a hidden surface in two-column', () => {
+    expect(
+      reduceShellSurface(
+        initialShellSurfaceState,
+        { type: 'open', surfaceId: 'terminal' },
+        'two-column'
+      )
+    ).toBe(initialShellSurfaceState);
+  });
+
+  it('opens context on a bare open and on toggle-panel in two-column', () => {
+    expect(
+      reduceShellSurface(initialShellSurfaceState, { type: 'open' }, 'two-column').activeSurfaceId
+    ).toBe('context');
+    expect(
+      reduceShellSurface(initialShellSurfaceState, { type: 'toggle-panel' }, 'two-column')
+        .activeSurfaceId
+    ).toBe('context');
+  });
+
+  it('does not reuse a remembered non-context surface on a bare open in two-column', () => {
+    const prev: ShellSurfaceState = {
+      activeSurfaceId: null,
+      lastSurfaceId: 'git',
+      expanded: false,
+    };
+    expect(reduceShellSurface(prev, { type: 'open' }, 'two-column').activeSurfaceId).toBe(
+      'context'
+    );
+  });
+
+  it('still binds every rail surface in the default (three-column) mode', () => {
+    expect(
+      reduceShellSurface(initialShellSurfaceState, { type: 'select', surfaceId: 'git' })
+        .activeSurfaceId
+    ).toBe('git');
+  });
+});
+
+describe('reduceColumnModeChange (U02-b)', () => {
+  it('swaps a hidden active surface to context, remembering it as lastSurfaceId', () => {
+    const prev: ShellSurfaceState = {
+      activeSurfaceId: 'git',
+      lastSurfaceId: 'git',
+      expanded: false,
+    };
+    expect(reduceColumnModeChange(prev, 'two-column')).toEqual({
+      activeSurfaceId: 'context',
+      lastSurfaceId: 'git',
+      expanded: false,
+    });
+  });
+
+  it('preserves the expanded overlay while converging', () => {
+    const prev: ShellSurfaceState = {
+      activeSurfaceId: 'git',
+      lastSurfaceId: 'terminal',
+      expanded: true,
+    };
+    expect(reduceColumnModeChange(prev, 'two-column')).toEqual({
+      activeSurfaceId: 'context',
+      lastSurfaceId: 'git',
+      expanded: true,
+    });
+  });
+
+  it('leaves an already-context surface untouched', () => {
+    const prev: ShellSurfaceState = {
+      activeSurfaceId: 'context',
+      lastSurfaceId: 'context',
+      expanded: false,
+    };
+    expect(reduceColumnModeChange(prev, 'two-column')).toBe(prev);
+  });
+
+  it('is a no-op with the panel closed', () => {
+    expect(reduceColumnModeChange(initialShellSurfaceState, 'two-column')).toBe(
+      initialShellSurfaceState
+    );
+  });
+
+  it('never touches surfaces when switching to three-column', () => {
+    const prev: ShellSurfaceState = {
+      activeSurfaceId: 'git',
+      lastSurfaceId: 'git',
+      expanded: true,
+    };
+    expect(reduceColumnModeChange(prev, 'three-column')).toBe(prev);
+  });
+
+  it('round-trips without losing lastSurfaceId (two-column then three-column)', () => {
+    const three: ShellSurfaceState = {
+      activeSurfaceId: 'git',
+      lastSurfaceId: 'git',
+      expanded: false,
+    };
+    const two = reduceColumnModeChange(three, 'two-column');
+    const back = reduceColumnModeChange(two, 'three-column');
+    expect(back.lastSurfaceId).toBe('git');
+  });
+});
+
 describe('readingColumnClass', () => {
   it('maps normal to max-w-reading (45rem, D25 §3.4)', () => {
     expect(readingColumnClass('normal')).toBe('max-w-reading');
@@ -407,6 +531,31 @@ describe('sanitizeShellLayoutPersisted', () => {
     );
     expect(sanitizeShellLayoutPersisted({ readingWidthMode: 'wide' }).readingWidthMode).toBe(
       'wide'
+    );
+  });
+
+  it('defaults a column mode absent from an old profile to three-column (U02-a)', () => {
+    // Old persisted layouts predate the field; the sanitiser must supply the
+    // default so no existing user's layout moves.
+    expect(sanitizeShellLayoutPersisted({}).shellColumnMode).toBe('three-column');
+    expect(defaultShellLayout.shellColumnMode).toBe('three-column');
+  });
+
+  it('keeps a persisted two-column mode and a persisted three-column mode (U02-a)', () => {
+    expect(sanitizeShellLayoutPersisted({ shellColumnMode: 'two-column' }).shellColumnMode).toBe(
+      'two-column'
+    );
+    expect(sanitizeShellLayoutPersisted({ shellColumnMode: 'three-column' }).shellColumnMode).toBe(
+      'three-column'
+    );
+  });
+
+  it('normalises an unknown column mode to three-column (U02-a)', () => {
+    expect(sanitizeShellLayoutPersisted({ shellColumnMode: 'four-column' }).shellColumnMode).toBe(
+      'three-column'
+    );
+    expect(sanitizeShellLayoutPersisted({ shellColumnMode: 42 }).shellColumnMode).toBe(
+      'three-column'
     );
   });
 });

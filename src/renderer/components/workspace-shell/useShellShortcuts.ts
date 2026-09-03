@@ -30,6 +30,8 @@ export function useShellShortcuts(): void {
   const toggleSidebarCollapsed = useShellLayoutStore((state) => state.toggleSidebarCollapsed);
   // Same order the tab strip and rail render — see `numberedSurfaceIds`.
   const railOrder = useShellLayoutStore((state) => state.railOrder);
+  // Two-column narrows the numbered surfaces to `context` alone.
+  const shellColumnMode = useShellLayoutStore((state) => state.shellColumnMode);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -45,6 +47,7 @@ export function useShellShortcuts(): void {
         // m15: IME composition guard (mirrors App/useAppKeyboardShortcuts.ts).
         isComposing: event.isComposing,
         railOrder,
+        columnMode: shellColumnMode,
       });
       if (!action) {
         return;
@@ -73,5 +76,12 @@ export function useShellShortcuts(): void {
     // own element-level handlers can consume the event.
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [toggleContextPanel, selectSurface, openSurface, toggleSidebarCollapsed, railOrder]);
+  }, [
+    toggleContextPanel,
+    selectSurface,
+    openSurface,
+    toggleSidebarCollapsed,
+    railOrder,
+    shellColumnMode,
+  ]);
 }

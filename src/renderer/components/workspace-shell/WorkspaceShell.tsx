@@ -113,6 +113,7 @@ export function WorkspaceShell({
   const [centerResizing, setCenterResizing] = useState(false);
 
   const temporaryWorkspaceEnabled = useSettingsStore((state) => state.temporaryWorkspaceEnabled);
+  const presentationMode = useSettingsStore((state) => state.presentationMode);
   useSyncChatWorkspaceTree({
     repositories,
     selectedRepoPath,
@@ -182,13 +183,24 @@ export function WorkspaceShell({
   // single derivation point (R1) and is handed down; nobody re-derives it.
   // D35 round 2 adds `diffTabActive` as the one deliberate exception — see
   // `resolveShellChrome`'s doc note on that field.
+  // U03-a (D02): TUI is the two-column sub-mode at its limit — left rail + one
+  // full-bleed terminal. The right panel and the editor column both collapse so
+  // the terminal owns everything right of the sidebar. presentationMode stays in
+  // settings (untouched, so D19's single-writer TUI handover is intact); this
+  // only suppresses the two right-hand columns while it is 'tui'.
+  const isTui = presentationMode === 'tui';
+
   const chrome = resolveShellChrome({
     sidebarUserCollapsed: sidebarCollapsed,
-    panelOpen: activeSurfaceId !== null,
+    panelOpen: !isTui && activeSurfaceId !== null,
     manualChat,
-    diffTabActive,
+    diffTabActive: !isTui && diffTabActive,
   });
-  const { panelVisible, chatVisible } = chrome;
+  const panelVisible = isTui ? false : chrome.panelVisible;
+  const chatVisible = isTui ? true : chrome.chatVisible;
+  // TUI shows neither the editor nor a pending file intent's hidden column, so
+  // the terminal (in the chat column) gets the whole center row.
+  const editorAllocated = !isTui && editorOpen;
 
   // Widths come from one allocator so the columns cannot disagree about who
   // owns which pixel: sidebar and chat are satisfied first, and whatever does
@@ -198,7 +210,7 @@ export function WorkspaceShell({
     sidebarWidth,
     sidebarCollapsed: chrome.sidebarCollapsed,
     chatVisible,
-    editorOpen,
+    editorOpen: editorAllocated,
     editorRatio,
     panelVisible,
     // D34: the fallback is the 380 DEFAULT, not the (now 250) MIN — "no
@@ -273,7 +285,7 @@ export function WorkspaceShell({
   const panelWidthCap = maxPanelWidth({
     shellWidth,
     sidebarWidth: allocation.sidebarWidth,
-    editorOpen,
+    editorOpen: editorAllocated,
     chatVisible,
   });
 
@@ -395,7 +407,7 @@ export function WorkspaceShell({
                 style={chatVisible ? { width: 'var(--shell-chat-w)' } : undefined}
               >
                 <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
-                {editorOpen && chatVisible && (
+                {editorAllocated && chatVisible && (
                   <ShellResizeHandle
                     side="right"
                     ariaLabel={t('Resize chat column')}
@@ -450,7 +462,7 @@ export function WorkspaceShell({
                 and effects still run): the intent effect opens the tab,
                 `editorOpen` flips, and the wrapper becomes the flex-1 box.
               */}
-              {(editorOpen || fileIntentPending) && (
+              {!isTui && (editorOpen || fileIntentPending) && (
                 <div
                   className={editorOpen ? 'min-w-0 shrink-0' : 'hidden'}
                   style={editorOpen ? { width: 'var(--shell-editor-w)' } : undefined}

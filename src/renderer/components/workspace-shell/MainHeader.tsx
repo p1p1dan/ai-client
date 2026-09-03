@@ -1,4 +1,4 @@
-import { Folder, LayoutGrid, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Columns2, Folder, LayoutGrid, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
@@ -39,8 +39,11 @@ export function MainHeader({
   const railOrder = useShellLayoutStore((state) => state.railOrder);
   const activeSurfaceId = useShellLayoutStore((state) => state.activeSurfaceId);
   const selectSurface = useShellLayoutStore((state) => state.selectSurface);
+  const shellColumnMode = useShellLayoutStore((state) => state.shellColumnMode);
+  const toggleShellColumnMode = useShellLayoutStore((state) => state.toggleShellColumnMode);
   const changedFilesCount = useGitChangeCount();
-  const surfaces = derivePanelTabs(railOrder, { changedFilesCount });
+  // U02-b: two-column collapses the rail to `context` alone.
+  const surfaces = derivePanelTabs(railOrder, { changedFilesCount }, shellColumnMode);
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
@@ -123,6 +126,17 @@ export function MainHeader({
           icon={LayoutGrid}
           active={readingWidthMode === 'wide'}
           onClick={onToggleReadingWidth}
+        />
+        {/*
+          U02-b (D02): two-column layout — AI conversation + development only.
+          The rail collapses to `context`; Files/Git/Terminal are unreachable
+          until you switch back. aria-pressed carries the state (rail idiom).
+        */}
+        <HeaderIconButton
+          label={t('Two-column layout')}
+          icon={Columns2}
+          active={shellColumnMode === 'two-column'}
+          onClick={toggleShellColumnMode}
         />
         {/*
           D34: the surface switcher, migrated from the retired vertical rail.
