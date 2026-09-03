@@ -1,6 +1,6 @@
 # Evidence — Q02 模型分组键 / Q03 pix Resources 取证
 
-> 2026-09-03，[D02](./decisions/002-layout-cwd-and-evidence-scope.md) 决定三派 `maxapi/grok-4.6` 子代理取证。
+> 2026-09-03，[D02](../decisions/002-layout-cwd-and-evidence-scope.md) 决定三派 `maxapi/grok-4.6` 子代理取证。
 > 读取对象：AiClient `feat/pi-primary-backend` 当前代码 + pix 冻结提交 `da01b3e`。
 > 结论已分别关闭 Q02 / Q03。
 

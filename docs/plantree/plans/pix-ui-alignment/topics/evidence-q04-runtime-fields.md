@@ -1,6 +1,6 @@
 # Evidence — Q04 Run 面板字段可用性取证
 
-> 2026-09-03，[D02](./decisions/002-layout-cwd-and-evidence-scope.md) 决定三派 `maxapi/grok-4.6` 子代理取证。
+> 2026-09-03，[D02](../decisions/002-layout-cwd-and-evidence-scope.md) 决定三派 `maxapi/grok-4.6` 子代理取证。
 > 读取对象：AiClient `feat/pi-primary-backend` 当前代码。
 > 结论已关闭 Q04：**U06 不能纯靠渲染层**，上下文占用/usage 字段需 Pi runtime 补（归 Pi 计划）。
 

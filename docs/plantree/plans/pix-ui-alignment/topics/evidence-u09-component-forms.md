@@ -1,6 +1,6 @@
 # Evidence — U09 组件形态对照表
 
-> 2026-09-03，[D02](./decisions/002-layout-cwd-and-evidence-scope.md) 决定三派 `maxapi/grok-4.6` 子代理取证。
+> 2026-09-03，[D02](../decisions/002-layout-cwd-and-evidence-scope.md) 决定三派 `maxapi/grok-4.6` 子代理取证。
 > 读取对象：pix 冻结提交 `da01b3e` 的组件 form vs AiClient `feat/pi-primary-backend`。**只比组件形态，不比 token 名**（D01 禁止照搬 `--bg-composer`/`--user-bubble`/`--hover-fill` 等）。
 
 ## 对照表（逐件）

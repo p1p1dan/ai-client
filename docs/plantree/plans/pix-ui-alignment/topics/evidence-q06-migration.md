@@ -1,6 +1,6 @@
 # Evidence — Q06 思考强度迁移逻辑取证
 
-> 2026-09-03，[D02](./decisions/002-layout-cwd-and-evidence-scope.md) 决定三派 `maxapi/grok-4.6` 子代理取证。
+> 2026-09-03，[D02](../decisions/002-layout-cwd-and-evidence-scope.md) 决定三派 `maxapi/grok-4.6` 子代理取证。
 > 读取对象：pix 冻结提交 `da01b3e` 的 `service-tier.ts` 迁移逻辑 + AiClient `feat/pi-primary-backend` 的持久化落点。
 > 结论已关闭 Q06。
 

@@ -36,21 +36,33 @@
   --color-folder: var(--folder);
   --color-tool-arg: var(--tool-arg);
 
+  /*
+   * U01-a: radius scale tightened to pix's three tiers (6/10/12px). `--radius`
+   * itself carries the sm value, so the base declaration in `:root` moved with
+   * it. `--radius-xs` is this repo's own tier and pix has no counterpart, so it
+   * stays at 4px. Evidence: docs/plantree/plans/pix-ui-alignment/topics/
+   * evidence-u01-numeric-scale.md.
+   */
   --radius-xs: 0.25rem;
   --radius-sm: var(--radius);
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.75rem;
 
   --text-2xs: 10px;
   --text-2xs--line-height: 14px;
   /* T-05: first real landing of the design-system.md:335/337 code/markdown tiers into @theme. */
-  --text-code: 0.8125rem;      /* 13px -- A07 --t-code; sized as optical compensation vs 15px sans body (D25 §2.4) */
-  --text-markdown: 0.9375rem;  /* 15px -- A07 --t-md, tool rows share body copy's tier */
+  --text-code: 0.75rem;        /* 12px -- A07 --t-code; optical compensation vs the 14px sans body (D25 §2.4, retuned by U01-a) */
+  --text-markdown: 0.875rem;   /* 14px -- A07 --t-md, tool rows share body copy's tier */
   /*
-   * D25: --text-meta shares 13px with --text-code on purpose but is a separate
-   * token -- code's 13 is a mono-vs-sans optical compensation value, meta's 13
-   * is "secondary UI text". A future mono recalibration must not silently move
-   * every timestamp (D25 §3.1).
+   * D25: --text-meta is a separate token from --text-code on purpose -- code's
+   * size is a mono-vs-sans optical compensation value, meta's is "secondary UI
+   * text". A future mono recalibration must not silently move every timestamp
+   * (D25 §3.1). U01-a moved code 13->12 with the body; meta stayed at 13
+   * because the body change is not its reason to move.
+   *
+   * --text-markdown and --text-ui now hold the same 14px, exactly as they do in
+   * pix. They stay two tokens for the same reason meta and code did at 13px:
+   * equal values, different reasons to change.
    */
   --text-meta: 0.8125rem;      /* 13px sans -- timestamps / statusline / meta rows */
   --text-ui: 0.875rem;         /* 14px sans -- sidebar rows, buttons, labels, tabs, dropdown triggers */
@@ -163,32 +175,50 @@
    * opaque or hover states vanish behind a background image, and --border /
    * --input must stay opaque because in light mode --card is nearly identical
    * to --background and all panel separation rests on the border.
+   *
+   * U01-b (2026-09-03) retuned the LIGHTNESS of the surface steps only. Hue and
+   * chroma are untouched, so these are still the Flexoki colors -- pix's grays
+   * are achromatic hex and copying them would flatten the warm cast (see
+   * docs/plantree/plans/pix-ui-alignment/topics/evidence-u01-numeric-scale.md).
+   *
+   * What moved and why: the canvas -> panel step was 0.0216 L in dark, which is
+   * a 1.05:1 separation -- panels were effectively invisible against the canvas
+   * and, as the paragraph above admits, "all panel separation rests on the
+   * border". pix separates them by 0.0838 L. The step is now 0.0639 L (1.18:1),
+   * about three quarters of the way there, with panel -> hover set to pix's own
+   * 0.043 L so hover stays readable on the raised panel.
+   *
+   * Every token kept its rank in the ladder; only the gaps widened. Foregrounds
+   * were not touched, and the resulting contrast was measured rather than
+   * assumed: --foreground lands between 6.67:1 and 11.38:1 on every dark
+   * surface and 11.98:1 to 18.78:1 on every light one. Numbers and method:
+   * docs/plantree/plans/pix-ui-alignment/evidence/2026-09-03-u01-style-baseline.md.
    */
   :root {
     --panel-bg-opacity: 1;
     --font-size-base: 16px;
     --background: oklch(0.9931 0.012 96.42 / var(--panel-bg-opacity, 1));
     --foreground: oklch(0.1696 0.0017 17.32);
-    --card: oklch(0.9837 0.0106 100.82 / var(--panel-bg-opacity, 1));
+    --card: oklch(0.97 0.0106 100.82 / var(--panel-bg-opacity, 1));
     --card-foreground: oklch(0.1696 0.0017 17.32);
-    --popover: oklch(0.9837 0.0106 100.82 / var(--panel-bg-opacity, 1));
+    --popover: oklch(0.97 0.0106 100.82 / var(--panel-bg-opacity, 1));
     --popover-foreground: oklch(0.1696 0.0017 17.32);
     /* primary is the brand orange (#BC5215), no longer "highest contrast ink" */
     --primary: oklch(0.5665 0.1523 45.02);
     --primary-foreground: oklch(0.9931 0.012 96.42);
-    --secondary: oklch(0.9673 0.0111 89.72);
+    --secondary: oklch(0.962 0.0111 89.72);
     --secondary-foreground: oklch(0.1696 0.0017 17.32);
-    --muted: oklch(0.969 0.0093 99.98 / var(--panel-bg-opacity, 1));
+    --muted: oklch(0.965 0.0093 99.98 / var(--panel-bg-opacity, 1));
     --muted-foreground: oklch(0.4531 0.005 91.5);
-    /* interactive.hover #76736f @ 12.55% pre-composited over --background */
-    --accent: oklch(0.9422 0.0122 96.43);
+    /* interactive.hover #76736f @ 12.55% pre-composited over --background; L retuned by U01-b */
+    --accent: oklch(0.935 0.0122 96.43);
     --accent-foreground: oklch(0.1696 0.0017 17.32);
     /* primary.emphasis #F9AE77 - light mode: fills/borders/hover-on-primary only (1.82:1 on bg) */
     --accent-primary: oklch(0.8109 0.1131 56.61);
     /* interactive.selection pre-composited; tree/list selected rows, never ::selection. Do not add /N */
-    --selection: oklch(0.9152 0.0109 95.17);
+    --selection: oklch(0.91 0.0109 95.17);
     /* same source as --accent; semantic alias for new code. Do not add /N */
-    --hover: oklch(0.9422 0.0122 96.43);
+    --hover: oklch(0.935 0.0122 96.43);
     /* status.info - deliberately not warning: Flexoki warning == primary */
     --status-running: oklch(0.4818 0.1315 254.79);
     --destructive: oklch(0.5042 0.1648 27.84);
@@ -202,12 +232,13 @@
     --info-foreground: oklch(0.9931 0.012 96.42);
     /* syntax.base.type - directory/folder affordances */
     --folder: oklch(0.6333 0.1295 85.81);
-    --border: oklch(0.881 0.0137 97.46);
+    --border: oklch(0.875 0.0137 97.46);
     /* interactive.borderHover, not border: this repo uses --input as a fill */
     --input: oklch(0.8463 0.0137 102.05);
     /* interactive.focus without alpha (focusRing's own 0.251 would collapse ring-ring/24) */
     --ring: oklch(0.5665 0.1523 45.02);
-    --radius: 0.5rem;
+    /* U01-a: 8px -> 6px, the sm tier of the pix-aligned radius scale in @theme. */
+    --radius: 0.375rem;
     /* Neutral overlay for Monaco decorations; host background is the terminal theme */
     --editor-current-diff: oklch(0 0 0 / 0.06);
     /* T-05, A07 screen 5: the only new derived color -- tool row argument tier
@@ -222,22 +253,22 @@
   .dark {
     --background: oklch(0.1981 0.0032 17.43 / var(--panel-bg-opacity, 1));
     --foreground: oklch(0.8463 0.0137 102.05);
-    --card: oklch(0.2197 0.0037 48.55 / var(--panel-bg-opacity, 1));
+    --card: oklch(0.262 0.0037 48.55 / var(--panel-bg-opacity, 1));
     --card-foreground: oklch(0.8463 0.0137 102.05);
-    --popover: oklch(0.2197 0.0037 48.55 / var(--panel-bg-opacity, 1));
+    --popover: oklch(0.262 0.0037 48.55 / var(--panel-bg-opacity, 1));
     --popover-foreground: oklch(0.8463 0.0137 102.05);
     --primary: oklch(0.6576 0.1539 49.3);
     --primary-foreground: oklch(0.1981 0.0032 17.43);
-    --secondary: oklch(0.2315 0.0024 67.71);
+    --secondary: oklch(0.276 0.0024 67.71);
     --secondary-foreground: oklch(0.8463 0.0137 102.05);
-    --muted: oklch(0.2228 0.0025 67.7 / var(--panel-bg-opacity, 1));
+    --muted: oklch(0.268 0.0025 67.7 / var(--panel-bg-opacity, 1));
     --muted-foreground: oklch(0.6956 0.0103 93.62);
-    /* interactive.hover #ffffff @ 9.41% pre-composited over --background */
-    --accent: oklch(0.2912 0.0029 17.32);
+    /* interactive.hover #ffffff @ 9.41% pre-composited over --background; L retuned by U01-b */
+    --accent: oklch(0.305 0.0029 17.32);
     --accent-foreground: oklch(0.8463 0.0137 102.05);
     --accent-primary: oklch(0.8109 0.1131 56.61);
-    --selection: oklch(0.3112 0.0029 17.31);
-    --hover: oklch(0.2912 0.0029 17.32);
+    --selection: oklch(0.325 0.0029 17.31);
+    --hover: oklch(0.305 0.0029 17.32);
     --status-running: oklch(0.5988 0.1104 247);
     --destructive: oklch(0.597 0.1692 28.38);
     --destructive-foreground: oklch(0.1981 0.0032 17.43);
@@ -248,7 +279,7 @@
     --info: oklch(0.5988 0.1104 247);
     --info-foreground: oklch(0.1981 0.0032 17.43);
     --folder: oklch(0.7346 0.1462 87.46);
-    --border: oklch(0.3214 0.0038 84.58);
+    --border: oklch(0.34 0.0038 84.58);
     --input: oklch(0.3651 0.0044 67.69);
     --ring: oklch(0.6576 0.1539 49.3);
     --editor-current-diff: oklch(1 0 0 / 0.08);
@@ -301,8 +332,22 @@
     font-family: var(--font-mono);
   }
 
+  /*
+   * U01-a: pix sets its body to 14px / 1.45; this repo previously left both
+   * unset, so unstyled text fell back to the 16px rem basis and the UA's
+   * `normal` leading. Two things are deliberately NOT touched here:
+   *
+   *  - `html`'s `--font-size-base: 16px` stays 16px. It is the rem basis for
+   *    the entire token scale, so moving it would rescale every `rem` value in
+   *    the app rather than just the text that inherits.
+   *  - Markdown prose keeps its own `leading-relaxed` (1.625) from F5 D1-b
+   *    (2026-08-18). That decision was made about long-form reading and is not
+   *    the same question as the UI chrome's default leading.
+   */
   body {
     @apply bg-background text-foreground;
+    font-size: var(--text-ui);
+    line-height: 1.45;
   }
 
   button:not(:disabled),

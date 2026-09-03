@@ -268,9 +268,13 @@ variant="destructive"
 | Level | Token | 声明值 | 真实值 | 典型场景 |
 |------|------|-------|-------|---------|
 | xs | `--radius-xs` | `0.25rem` | 4px | checkbox、badge、kbd 等内嵌元素 |
-| sm | `--radius-sm`（= `--radius`） | `0.5rem` | **8px** | input、tab、tooltip 等交互元素 |
-| md | `--radius-md` | `0.75rem` | 12px | card、alert、toolbar 等容器 |
-| lg | `--radius-lg` | `1rem` | 16px | dialog、sheet 等顶层容器 |
+| sm | `--radius-sm`（= `--radius`） | `0.375rem` | **6px** | input、tab、tooltip 等交互元素 |
+| md | `--radius-md` | `0.625rem` | 10px | card、alert、toolbar 等容器 |
+| lg | `--radius-lg` | `0.75rem` | 12px | dialog、sheet 等顶层容器 |
+
+> **U01-a（2026-09-03）把 sm/md/lg 从 8/12/16 收到 6/10/12**，对齐 pix 的三档圆角。
+> `xs` 是本仓独有的一档，pix 没有对应物，保持 4px 不变。
+> 依据：[evidence-u01](./plantree/plans/pix-ui-alignment/topics/evidence-u01-numeric-scale.md)。
 
 **使用建议**：
 - 小内嵌元素：优先 `rounded-xs`
@@ -402,16 +406,27 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 | 语义档 | Size | Token | **字族** | 覆盖的用途 |
 |-------|------|-------|---------|-----------|
 | 2xs | **10px** | `--text-2xs` | **mono only** | `kbd` 快捷键 chip。**禁止承载 CJK**——中文 10px 不可读，见「CJK 级联规则」 |
-| code | **13px**（0.8125rem） | `--text-code` | **mono** | 行内代码、代码块、工具行 ident 型参数、路径、hash、diff |
+| code | **12px**（0.75rem） | `--text-code` | **mono** | 行内代码、代码块、工具行 ident 型参数、路径、hash、diff |
 | meta | **13px**（0.8125rem） | `--text-meta` | sans | 时间戳、statusLine、meta 行、footer、次级说明 |
 | ui | **14px**（0.875rem） | `--text-ui` | sans | 侧栏行、按钮、label、段头、tab、下拉触发器 |
-| markdown | **15px**（0.9375rem） | `--text-markdown` | sans | 聊天正文、工具行动词、Markdown 全部内容、**以及所有标题 h1–h6** |
-| title | **18px**（1.125rem） | `--text-title` | sans | 设置页 L1 与对话框 / 抽屉标题（唯一 >15px 的档） |
+| markdown | **14px**（0.875rem） | `--text-markdown` | sans | 聊天正文、工具行动词、Markdown 全部内容、**以及所有标题 h1–h6** |
+| title | **18px**（1.125rem） | `--text-title` | sans | 设置页 L1 与对话框 / 抽屉标题（唯一 >14px 的档） |
 
-**为什么 `--text-meta` 与 `--text-code` 同为 13px 却必须是两个 token**：两者**变更理由不同**。
-`--text-code` 的 13 是「对 15px sans 正文的**光学补偿值**」——同 px 下 mono 的视觉体量比 sans 大 8~12%
-（平均 advance 0.6em vs 0.5em），15/13 的档比 0.867 正落在行业推荐带内；将来正文档位或 mono 栈变了，它必须跟着动。
-`--text-meta` 的 13 是「次级 UI 文本」，不该被 mono 的光学调参拖着走。
+> **U01-a（2026-09-03）把 markdown 15→14、code 13→12**，对齐 pix 的正文与代码档
+> （[evidence-u01](./plantree/plans/pix-ui-alignment/topics/evidence-u01-numeric-scale.md)）。
+> 同时给 `body` 补上 **14px / 行高 1.45**——此前 body 既没有字号也没有行高，未显式标注的文本会掉回
+> 16px 与 UA 的 `normal` 行距。`html` 的 `--font-size-base: 16px` **不动**：它是整套 token 的 rem 基准，
+> 改它等于把全仓每个 rem 值一起缩放。Markdown 正文的 `leading-relaxed`（1.625）也**不动**，
+> 那是 F5 D1-b 针对长文阅读单独定的，与 UI 外壳的默认行距不是同一个问题。
+
+**`--text-markdown` 与 `--text-ui` 现在同为 14px，但仍是两个 token**——pix 也是这样（`--ui-font-size`
+与 `.pix-md` 都是 14）。理由与下面 meta/code 那条完全一样：**值相同，变更理由不同**。
+
+**为什么 `--text-meta` 与 `--text-code` 必须是两个 token**：两者**变更理由不同**。
+`--text-code` 是「对 sans 正文的**光学补偿值**」——同 px 下 mono 的视觉体量比 sans 大 8~12%
+（平均 advance 0.6em vs 0.5em）。U01-a 把正文从 15 降到 14 时，它跟着从 13 降到 12，档比由 0.867 变 0.857，
+仍落在行业推荐带内——**这正是「跟着正文动」这条规则第一次真的生效**。
+`--text-meta` 的 13 是「次级 UI 文本」，正文变化不是它的变更理由，所以它**没有跟着动**。
 合成一个 token 的后果很具体：**未来一次 mono 调参会静默改掉全部时间戳字号。**
 
 **关键特征（照抄时最容易漏的一条）**：
@@ -612,6 +627,14 @@ D25 的四档 + 一个例外：
 > 正确组合是「比例字体 **+** 收窄栏宽」，不是单纯替换字族。参照实现实测为 **48 CJK 当量/行**，
 > 15px × 48 字 = 720px = **45rem**，逐字对齐；宽模式按同比例（−6.25%）从 64rem 收到 60rem。
 > 两个值落成 `@theme` 的容器 token（`--container-reading{,-wide}`）而不是 `max-w-[45rem]` 任意值。
+>
+> ⚠️ **U01-a 之后这条推导的输入变了，结论暂未跟着改（2026-09-03）**。正文档从 15px 降到 14px 后，
+> 同样的 720px 装的不再是 48 个 CJK 当量，而是约 **51.4 个**。三条路各有道理，属于要单独拍板的取舍：
+> 保住「48 字/行」这条**可读性规则**要收到 42rem（672px）；保住**当前观感**就维持 45rem；
+> 对齐 pix 的 thread-max（760px，约 54 字/行）要放到 47.5rem。
+> **本轮维持 45rem 不动**——栏宽属布局尺寸，不在 [D01](./plantree/plans/pix-ui-alignment/decisions/001-style-depth-and-sequencing.md)
+> 授权的「字号 / 行高 / 间距 / 圆角 / 灰阶」范围内。待 Q11 拍板后再改，见
+> [open-questions](./plantree/plans/pix-ui-alignment/open-questions.md)。
 
 ## 字体族（分域：UI 比例 / 代码等宽）
 

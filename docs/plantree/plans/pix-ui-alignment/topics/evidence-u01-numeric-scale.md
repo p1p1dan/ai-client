@@ -1,6 +1,6 @@
 # Evidence — U01 数值档对齐取证
 
-> 2026-09-03，[D02](./decisions/002-layout-cwd-and-evidence-scope.md) 决定三派 `maxapi/grok-4.6` 子代理取证。
+> 2026-09-03，[D02](../decisions/002-layout-cwd-and-evidence-scope.md) 决定三派 `maxapi/grok-4.6` 子代理取证。
 > 读取对象：pix 冻结提交 `da01b3e` 的 `styles.css` vs AiClient `src/renderer/styles/globals.css` + `docs/design-system.md`。
 > 两者 rem 基准都是 16px（pix 未设 html font-size；AiClient `--font-size-base: 16px` `globals.css:169`）。
 

@@ -1,10 +1,12 @@
 # Implementation Status — Pi-only Application Convergence
 
-**Current Phase**：Completed — Phase H / T37 release candidate closed。
+**Current Phase**：Completed core — Phase H / T37 release candidate closed；Phase I / T38 已开立未开工。
 
-**Next Target**：本计划无活动实现任务。后续正式发布按
+**Next Target**：T38 runtime 补字段（`usage.updated` 生产者、`contextWindow` 暴露），由 UI 计划
+[D03](../pix-ui-alignment/decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二开立，
+**不重开 T37 发版门禁**。正式发布仍按
 [`docs/pi-only-rollout-rollback.md`](../../../pi-only-rollout-rollback.md) 完成内部观察、限量扩大、
-macOS 签名/公证与 rollback 记录；产品界面改造转入已注册的 pix/pi-app UI 对齐计划。
+macOS 签名/公证与 rollback 记录；产品界面改造在 pix/pi-app UI 对齐计划推进。
 
 **Last Landed**：2026-09-03 T37-d release closure：MIT notices、Pi-only migration guide、curated
 release notes、rollout/rollback runbook 与 packaged legal gate 已落地；清除第二个 release-note owner；新增
@@ -43,7 +45,11 @@ packaging 均为 Pi-only。保留的 Claude/Codex 名称仅限 migration/import�
 
 ## Active TODO
 
-None — implementation roadmap complete。
+1. T38-a：Pi worker 从 `turn_end`/`agent_end` 的 `message.usage` 发出 `usage.updated`（事件类型已存在，缺生产者）。
+2. T38-b：在 `AgentModelOption` 上保留 `contextWindow`（当前被 `piModelConfig.ts:109` 剥离）。
+3. T38-c（可选）：`tool.updated` 转发 partialResult，供活动工具状态行。
+4. ~~T38-d service_tier 注入~~：触发条件未成立——Q09 取证证实 Pi SDK 有透传通道，不是 runtime 缺字段问题，
+   落地取舍留在 UI 计划 Q12。
 
 ## Operational follow-ups（不重开 T37）
 
