@@ -162,8 +162,15 @@ D16 将实际删除前移到 T29–T36 各替代切片；最终审计关闭 dead
   强杀 app 重启），11 步全过并留截图。期间修掉三个真缺陷：`pnpm dev` 读已删除文件而完全无法启动、
   dev 模式 worker 因 strip-only 语法与缺扩展名导入启动即死、worker stderr 被丢弃导致崩溃无从诊断。
   packaged 安装包按决定交 CI。见 [T37-c evidence](./evidence/2026-09-02-t37c-gui-packaged.md)。
-- **T37-d Release**：license notices、migration docs、release notes、内部运行后扩大范围；
-  另接手 T37-c 报出的 `WORKER_SESSION_FILE_NOT_FOUND` 会话变砖缺陷、CI packaged 触发与 macOS 产物欠项。
+- **T37-d Release — In Progress**：
+  - **会话变砖缺陷 — Done**：根因是 Pi 只在第一条 assistant 消息落地时才写 JSONL，而 Main 把它
+    创建时预留的路径当作持久身份写进索引。实际影响面远超原记录：Stop、退出应用、模型报错都会留下永久坏行
+    （本机索引 54 行中有 5 行）。改为文件存在才发布身份、文件出现即补发 `session.updated`、
+    未 materialize 的会话崩溃后重建、`error` entry 可被清除与淘汰，并就地修复历史坏行。
+    12 步 GUI 探针（新增 `crashUnwritten`）在真账号上全过，索引 dangling 行归零。
+    见 [T37-d evidence](./evidence/2026-09-02-t37d-session-brick-fix.md)。
+  - **剩余**：license notices、migration docs、release notes、内部运行后扩大范围；
+    CI packaged 触发与 macOS 产物欠项。
 
 ## Dependencies
 

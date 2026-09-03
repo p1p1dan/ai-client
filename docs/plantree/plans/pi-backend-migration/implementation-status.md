@@ -2,10 +2,17 @@
 
 **Current Phase**：Phase H / T37 Pi-only release gates。
 
-**Next Target**：T37-a/T37-b/T37-c 已关闭；下一步 [T37-d](./roadmap.md#t37--pi-only-release-gates--in-progress) release：
-license/migration/release notes，外加 T37-c 报出的会话变砖缺陷、CI packaged 触发与 macOS 产物欠项。
+**Next Target**：T37-a/T37-b/T37-c 已关闭，T37-d 的会话变砖缺陷已修完；
+[T37-d](./roadmap.md#t37--pi-only-release-gates--in-progress) 剩余：license/migration/release notes、
+CI packaged 触发与 macOS 产物欠项。
 
-**Last Landed**：2026-09-02 T37-c GUI/真账号点验：新增 CDP 探针 `scripts/run-t37c-gui-probe.mjs`，
+**Last Landed**：2026-09-02 T37-d 会话变砖缺陷修复：Pi 只在第一条 assistant 消息落地时才写 JSONL，
+Main 却把创建时预留的路径当作持久身份写进索引——任何没拿到首条回复的会话（Stop、退出、模型报错，
+不只是崩溃）都会留下永久不可用的一行，本机索引 54 行里坏了 5 行。改为文件存在才发布身份、
+文件出现即补发 `session.updated`、未 materialize 的会话崩溃后重建同一逻辑会话、`error` entry 可清除也可淘汰，
+并在 resume 时就地修复历史坏行。探针新增 `crashUnwritten` 步，12 步全过，索引 dangling 行归零。
+见 [T37-d evidence](./evidence/2026-09-02-t37d-session-brick-fix.md)。前一批为 T37-c GUI/真账号点验：
+新增 CDP 探针 `scripts/run-t37c-gui-probe.mjs`，
 在真 cx2/maxapi 账号上跑通 11 步 GUI 门禁并留 20 张截图；修掉三个真缺陷——`pnpm dev` 读已删除的
 `RemoteHelperSource.ts` 而完全无法启动、dev 模式 Pi worker 因构造函数参数属性与缺扩展名值导入
 在 strip-only 模式下启动即死、`WorkerManager` 生产单例未接 `log` 导致 worker stderr 被整段丢弃；
@@ -15,7 +22,7 @@ license/migration/release notes，外加 T37-c 报出的会话变砖缺陷、CI 
 并修掉 `WorkerSlot` 一处"dispose 应答输给进程退出 → 关闭/淘汰成功却报错"的缺陷，
 见 [T37-b evidence](./evidence/2026-09-02-t37b-resource-longevity.md)。前一批为 Q17 落地（D19：TUI 接管 GUI 会话文件）与 Todo 看板整体移除；同批修复了一个既有的 `pnpm build` 阻断故障（electron-vite `esm-shim` 把以 `import` 结尾的字符串误读为 import 语句）。前一批为 T37-a stale test sweep：关闭全部 20 条 pre-existing 失败（溯源为 `c954b3e1`/`8aafd450`/T36 三次收敛留下的陈旧断言，零生产缺陷），见 [T37-a stale test sweep](./evidence/2026-09-02-t37a-stale-test-sweep.md)。前一批为 T37 post-T36 review fixes `ddfbbb4a`：修复阻断打包的 `electron-builder.yml` 重复键、自动执行队列只结算首个任务、登出漏掉 Pi TUI 与 utility worker、挂起终端回放丢失、旧版会话跨升级复活；远程 Agent 终端改为显式失败，见 [T37 review-fix evidence](./evidence/2026-09-02-t37-post-t36-review-fixes.md)。
 
-**Last Verified**：2026-09-02 — 全量 `vitest run` **256 files / 3898 tests 全部通过，0 失败**；`pnpm typecheck` 与 `pnpm typecheck:agent-host` pass；Scoped Biome 与 diff check pass；`node scripts/run-t37c-gui-probe.mjs` **11/11 步通过**（真 cx2/maxapi 账号、真模型端点，退出后 `pi`/`electron` 进程数为 0）；`node scripts/run-t37b-longevity-probe.mjs` 连续 6 次通过（含一次 20 轮长稳）。**`pnpm dev` 与 `pnpm build` 均可跑通**（前者本批修复）；packaged electron-builder 产物仍未验证，按决定交 CI。
+**Last Verified**：2026-09-02 — 全量 `vitest run` **256 files / 3909 tests 全部通过，0 失败**；`pnpm typecheck` 与 `pnpm typecheck:agent-host` pass；Scoped Biome 与 diff check pass；`node scripts/run-t37c-gui-probe.mjs` **12/12 步通过**（真 cx2/maxapi 账号、真模型端点，退出后 `pi`/`electron` 进程数为 0）；`node scripts/run-t37b-longevity-probe.mjs` 连续 6 次通过（含一次 20 轮长稳）。**`pnpm dev` 与 `pnpm build` 均可跑通**；packaged electron-builder 产物仍未验证，按决定交 CI。
 
 ## Current architecture decision
 
@@ -37,11 +44,15 @@ T28–T36 已完成。活动 chat、one-shot、TUI、onboarding、settings、IPC
 3. ~~**T37-c GUI/真账号**~~ — **已完成**：CDP 探针 11 步全过（多会话、队列/Stop、历史、Claude 导入、
    GUI↔TUI 交接、权限四选项、模型切换、三种崩溃恢复），修掉 dev 启动、dev worker 启动、worker stderr 丢弃
    三个真缺陷（[T37-c evidence](./evidence/2026-09-02-t37c-gui-packaged.md)）。
-4. **T37-d Release**：license notices、migration/release notes、rollout/rollback evidence；
-   并接手下列 T37-c 遗留项。
-5. **T37-c 遗留项**：(a) worker 在会话 JSONL 落盘前崩溃 → 重启两次都报 `WORKER_SESSION_FILE_NOT_FOUND` →
-   `entry.state = 'error'` 且无路径可清除，该会话永久不可用；修法牵涉 T30-a 的 identity/index 提交不变量，需独立切片。
-   (b) `build.yml` 的 `workflow_dispatch` packaged 门禁尚未触发（需先推分支，等授权）。(c) macOS 无 CI runner。
+4. ~~**T37-c 遗留的会话变砖缺陷**~~ — **已完成**：根因是 Pi 只在第一条 assistant 消息落地时才写 JSONL，
+   Main 却把创建时预留的路径当作持久身份写进索引。影响面远超原记录（Stop/退出/模型报错都触发，
+   本机 54 行坏 5 行）。已改为文件存在才发布身份 + 出现即补发 + 未 materialize 崩溃后重建 +
+   `error` 可清除可淘汰 + 历史坏行就地修复（[T37-d evidence](./evidence/2026-09-02-t37d-session-brick-fix.md)）。
+5. **T37-d Release**：license notices、migration/release notes、rollout/rollback evidence；
+   并接手：(a) `build.yml` 的 `workflow_dispatch` packaged 门禁尚未触发。(b) macOS 无 CI runner。
+   (c) 未 materialize 的会话被空闲淘汰后再输入会得到 `session_not_found`（既有窟窿，修它要动红线文件
+   `chatSessions.ts`，需独立切片）。(d) 配了 `HTTP_PROXY` 的机器上 `pnpm dev` 会静默挂死，
+   Chromium 只认小写 `no_proxy`；探针已自带绕过，产品侧未处理。
 
 ## Blocked By / risks
 
