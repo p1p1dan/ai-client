@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="three" data-panel="run">
+<head>
+<meta charset="utf-8">
+<title>A10 — pix/pi-app UI 对齐原型（D01/D02 已拍板项可视化）</title>
+<style>
+/* =====================================================================
+   A10 — pix/pi-app UI 对齐原型
+   目的：把 pix-ui-alignment 计划已拍板的决策做成可视化，供用户点验。
+   数值直接取自 pix 冻结提交 da01b3e 的 styles.css（有注释标出来源行）。
+   这是「原型画面」，不是施工依据：颜色只是示意，正式 token 按 D01
+   保留本仓 Flexoki 语义结构，只搬密度/字体/圆角/灰阶关系。
+   ===================================================================== */
+:root {
+  /* --- pix styles.css:13-19 字体 + 圆角三档 --- */
+  --font-sans: "Inter","SF Pro Text","Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei UI",sans-serif;
+  --font-mono: "SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --radius-sm: 6px;   /* 列表行、图标按钮 */
+  --radius-md: 10px;  /* 输入框、气泡、菜单项 */
+  --radius-lg: 12px;  /* 卡片、面板、对话框 */
+
+  /* --- pix styles.css:91-160 暗色灰阶栈 --- */
+  --background: #191919;      /* 画布 */
+  --sidebar: #151515;         /* 侧栏 */
+  --surface-panel: #2d2d2d;   /* 输入框/面板/菜单/对话框 */
+  --surface-muted: #383838;   /* 悬停高亮、输入区凸起 */
+  --surface-soft: #272727;    /* 用户消息气泡 */
+  --muted: #222222;
+  --muted-foreground: #acacac;
+  --foreground: #fafafa;
+  --border: #3c3c3c;
+  --border-subtle: rgba(255,255,255,.11);
+  --divider: rgba(255,255,255,.09);
+  --hover-fill: var(--surface-muted);
+  --bg-composer: #2b2b2b;                 /* :153 */
+  --composer-protrusion: #1f1f1f;         /* :155 */
+  --code-bg: #0f0f0f;
+  --group-label-color: #747474;           /* :203 */
+  --link: #379cfc;
+  --running: #4c8dff;
+  --success: #3ecf8e;
+  --warning: #f0a500;
+  --danger: #e05555;
+  --chip: #8ea2ff;
+
+  /* --- pix styles.css:190-196 字号 --- */
+  --ui-font-size: 14px;
+  --code-font-size: 12px;
+
+  /* --- pix styles.css:173-175 布局常量 --- */
+  --sidebar-width: 272px;
+  --thread-max: 760px;
+  --review-width: 480px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--font-sans);
+  font-size: var(--ui-font-size);
+  line-height: 1.45;                       /* pix body :356 */
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ---------- 顶部控制条（原型专用，不属于产品） ---------- */
+.proto-bar {
+  height: 44px; display: flex; align-items: center; gap: 16px;
+  padding: 0 16px; background: #0d0d0d; border-bottom: 1px solid var(--border);
+  font-size: 13px; color: var(--muted-foreground);
+}
+.proto-bar b { color: var(--foreground); font-weight: 600; }
+.proto-group { display: flex; gap: 4px; align-items: center; }
+.proto-group label { margin-right: 4px; }
+.proto-btn {
+  height: 26px; padding: 0 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: transparent; color: var(--muted-foreground);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.proto-btn[data-active="true"] { background: var(--surface-muted); color: var(--foreground); border-color: var(--surface-muted); }
+.proto-legend { margin-left: auto; font-size: 12px; }
+.proto-legend code { font-family: var(--font-mono); font-size: 11px; color: var(--chip); }
+
+/* ---------- 应用壳 ---------- */
+.shell { display: grid; height: calc(100vh - 44px); grid-template-columns: var(--sidebar-width) 1fr; }
+[data-mode="three"] .shell { grid-template-columns: var(--sidebar-width) 1fr var(--review-width); }
+[data-mode="two"]   .shell { grid-template-columns: var(--sidebar-width) 1fr; }
+[data-mode="tui"]   .shell { grid-template-columns: var(--sidebar-width) 1fr; }
+[data-mode="two"] .right, [data-mode="tui"] .right { display: none; }
+[data-mode="tui"] .center { display: none; }
+[data-mode="three"] .tui, [data-mode="two"] .tui { display: none; }
+
+/* ---------- 左栏（对照 pix AppSidebar：新建会话 / 插件 / 资源） ---------- */
+.sidebar {
+  background: var(--sidebar); border-right: 1px solid var(--divider);
+  display: flex; flex-direction: column; padding: 10px 8px; gap: 2px; min-width: 0;
+  overflow: auto;
+}
+.nav-item {
+  height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 10px;
+  border-radius: var(--radius-sm); color: var(--foreground); cursor: pointer; font-weight: 400;
+}
+.nav-item:hover { background: var(--hover-fill); }
+.nav-item .ic { width: 16px; height: 16px; flex: none; opacity: .85; }
+.nav-item .badge {
+  margin-left: auto; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 9px;
+  background: var(--surface-muted); color: var(--muted-foreground);
+  font-size: 11px; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums;
+}
+.nav-item .badge.ok { color: var(--success); }
+.group-label {
+  /* pix :338-350 分组标签：与正文同号，只靠颜色/字重分层 */
+  font-size: var(--ui-font-size); font-weight: 500; line-height: 1.35;
+  color: var(--group-label-color); padding: 14px 10px 6px; letter-spacing: normal;
+}
+.session-row {
+  height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  border-radius: var(--radius-sm); cursor: pointer; min-width: 0;
+}
+.session-row:hover { background: var(--hover-fill); }
+.session-row[data-active="true"] { background: var(--surface-muted); }
+.session-row .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-row .time { font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; flex: none; }
+.session-row .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--running); flex: none; }
+.session-row .no-cwd {
+  /* D02 决定二：免绑定会话要有身份标识 */
+  font-size: 11px; padding: 1px 6px; border-radius: 4px; flex: none;
+  background: rgba(240,165,0,.14); color: var(--warning);
+}
+.sidebar .spacer { flex: 1; }
+.sidebar .footer { border-top: 1px solid var(--divider); padding-top: 8px; margin-top: 8px; }
+
+/* ---------- 中栏：时间线 + Composer ---------- */
+.center { display: flex; flex-direction: column; min-width: 0; background: var(--background); }
+.center-head {
+  height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 20px;
+  border-bottom: 1px solid var(--divider); font-size: 13px; color: var(--muted-foreground);
+}
+.center-head .title { color: var(--foreground); font-weight: 500; }
+.center-head .mode-switch { margin-left: auto; display: flex; gap: 2px; }
+.mode-switch button {
+  height: 26px; width: 30px; border-radius: var(--radius-sm); border: 0; background: transparent;
+  color: var(--muted-foreground); cursor: pointer; display: grid; place-items: center;
+}
+.mode-switch button:hover { background: var(--hover-fill); color: var(--foreground); }
+.mode-switch button[data-active="true"] { background: var(--surface-muted); color: var(--foreground); }
+.thread { flex: 1; overflow: auto; padding: 24px 20px 12px; }
+.thread-inner { max-width: var(--thread-max); margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+/* 用户气泡：pix --user-bubble = surface-soft，右对齐、圆角 md */
+.turn.user { display: flex; justify-content: flex-end; }
+.turn.user .bubble {
+  max-width: 78%; background: var(--surface-soft); border-radius: var(--radius-md);
+  padding: 10px 14px; line-height: 1.5;
+}
+/* 助手输出：无卡壳，直接 prose */
+.turn.assistant { position: relative; }
+.turn.assistant .prose { line-height: 1.6; }
+.turn.assistant .prose p { margin: 0 0 10px; }
+.turn.assistant .prose h3 { font-size: var(--ui-font-size); font-weight: 600; margin: 14px 0 6px; }
+.turn.assistant .prose code { font-family: var(--font-mono); font-size: var(--code-font-size); background: var(--muted); padding: 1px 5px; border-radius: 4px; }
+.turn.assistant .prose pre {
+  font-family: var(--font-mono); font-size: var(--code-font-size); background: var(--code-bg);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 12px 14px;
+  overflow: auto; line-height: 1.55; margin: 8px 0 12px;
+}
+.turn.assistant .prose ul { padding-left: 20px; margin: 0 0 10px; }
+.turn .meta {
+  display: flex; align-items: center; gap: 10px; margin-top: 6px;
+  font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums;
+}
+.turn .actions { display: flex; gap: 2px; margin-left: auto; opacity: 0; transition: opacity .15s; }
+.turn:hover .actions { opacity: 1; }
+.icon-btn {
+  height: 24px; width: 24px; border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--muted-foreground); cursor: pointer; display: grid; place-items: center;
+}
+.icon-btn:hover { background: var(--hover-fill); color: var(--foreground); }
+/* 工具行 */
+.tool-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin: 6px 0;
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: 13px;
+  color: var(--muted-foreground);
+}
+.tool-row .name { color: var(--foreground); }
+.tool-row .arg { font-family: var(--font-mono); font-size: var(--code-font-size); }
+.tool-row .state { margin-left: auto; font-size: 12px; }
+.tool-row .state.ok { color: var(--success); }
+.tool-row .state.run { color: var(--running); }
+.thinking { font-size: 13px; color: var(--muted-foreground); font-style: italic; padding: 2px 0 6px; }
+
+/* Composer：pix 卡片 + 底部凸起（protrusion） */
+.composer-wrap { padding: 8px 20px 16px; }
+.composer { max-width: var(--thread-max); margin: 0 auto; }
+.composer-card {
+  background: var(--bg-composer); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.composer-prompt {
+  padding: 12px 14px 4px;                 /* pix :1569 --composer-prompt-pad */
+  min-height: 56px; font-size: var(--ui-font-size); line-height: 1.5; color: var(--muted-foreground);
+}
+/* Composer 底部工具条：左「附件 / 权限」，右「上下文 / 模型 / 思考 / 发送」（用户 2026-09-03 拍板，与 pix Composer.tsx:1618-1770 顺序一致） */
+.composer-toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 8px 8px; }
+.composer-toolbar .tb-right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.ctx-chip { display: inline-flex; align-items: center; gap: 6px; }
+.ctx-ring { width: 14px; height: 14px; border-radius: 50%; flex: none;
+  background: conic-gradient(var(--link) 0 58%, var(--surface-muted) 58% 100%); position: relative; }
+.ctx-ring::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--bg-composer); }
+.chip.perm .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+/* ghost chip：文字+chevron，无边框无阴影（对齐 design-system「表单控件 vs 文字 chip」） */
+.chip {
+  height: 26px; padding: 0 8px; border-radius: var(--radius-sm); border: 0; background: transparent;
+  color: var(--muted-foreground); font: inherit; font-size: 13px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.chip:hover { background: var(--hover-fill); color: var(--foreground); }
+.chip .chev { font-size: 10px; opacity: .7; }
+.chip.effort-off { color: var(--muted-foreground); }
+.composer-toolbar .send {
+  height: 28px; width: 28px; border-radius: 50%; border: 0;
+  background: var(--foreground); color: var(--background); cursor: pointer; display: grid; place-items: center;
+}
+.composer-protrusion {
+  /* pix :1331-1349：只有顶部圆角、独立 muted 填充、无面板边框 */
+  margin: 0 12px; padding: 5px 10px; display: flex; align-items: center; gap: 8px;
+  background: var(--composer-protrusion); border-radius: 0 0 var(--radius-md) var(--radius-md);
+  font-size: 12px; color: var(--muted-foreground);
+}
+.composer-protrusion .path { font-family: var(--font-mono); font-size: 11px; color: var(--foreground); opacity: .85; }
+.composer-protrusion .trust { margin-left: auto; padding: 1px 6px; border-radius: 4px; }
+.composer-protrusion .trust.ok { background: rgba(62,207,142,.12); color: var(--success); }
+.composer-protrusion .trust.no { background: rgba(240,165,0,.14); color: var(--warning); }
+
+/* ---------- 右栏：Context / Run 切换（pi-app 参照） ---------- */
+.right { border-left: 1px solid var(--divider); background: var(--background); display: flex; flex-direction: column; min-width: 0; }
+.right-tabs { height: 44px; display: flex; align-items: center; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--divider); }
+.right-tabs button {
+  height: 28px; padding: 0 10px; border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--muted-foreground); font: inherit; font-size: 13px; cursor: pointer;
+}
+.right-tabs button:hover { background: var(--hover-fill); color: var(--foreground); }
+.right-tabs button[data-active="true"] { background: var(--surface-muted); color: var(--foreground); }
+.right-body { flex: 1; overflow: auto; padding: 14px 14px 20px; }
+[data-panel="run"] .panel-context { display: none; }
+[data-panel="context"] .panel-run { display: none; }
+.card { background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 12px 14px; margin-bottom: 10px; }
+.card h4 { margin: 0 0 8px; font-size: var(--ui-font-size); font-weight: 500; color: var(--group-label-color); }
+.kv { display: grid; grid-template-columns: 96px 1fr; row-gap: 6px; font-size: 13px; }
+.kv .k { color: var(--muted-foreground); }
+.kv .v { color: var(--foreground); font-variant-numeric: tabular-nums; }
+.kv .v.mono { font-family: var(--font-mono); font-size: var(--code-font-size); }
+.state-pill { display: inline-flex; align-items: center; gap: 6px; }
+.state-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--running); animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.donut-wrap { display: flex; align-items: center; gap: 14px; }
+.donut { width: 88px; height: 88px; border-radius: 50%; position: relative; flex: none;
+  background: conic-gradient(var(--link) 0 34%, var(--chip) 34% 46%, var(--success) 46% 58%, var(--surface-muted) 58% 100%); }
+.donut::after { content: ""; position: absolute; inset: 14px; border-radius: 50%; background: var(--surface-panel); }
+.donut .pct { position: absolute; inset: 0; display: grid; place-items: center; font-size: 15px; font-weight: 600; z-index: 1; font-variant-numeric: tabular-nums; }
+.legend { font-size: 12px; color: var(--muted-foreground); display: grid; gap: 4px; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+.blocked {
+  /* Q04 取证：占用 % / usage 行需 Pi runtime 补 usage.updated */
+  margin-top: 8px; padding: 6px 8px; font-size: 11px; border-radius: var(--radius-sm);
+  background: rgba(240,165,0,.10); color: var(--warning); border: 1px dashed rgba(240,165,0,.35);
+}
+.ctx-seg { border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); margin-bottom: 6px; overflow: hidden; }
+.ctx-seg summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: 13px; }
+.ctx-seg summary::before { content: "▸"; color: var(--muted-foreground); font-size: 10px; }
+.ctx-seg[open] summary::before { content: "▾"; }
+.ctx-seg summary .role { font-weight: 500; }
+.ctx-seg summary .tok { margin-left: auto; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.ctx-seg .body { padding: 6px 10px 10px; font-family: var(--font-mono); font-size: var(--code-font-size); color: var(--muted-foreground); white-space: pre-wrap; line-height: 1.5; border-top: 1px solid var(--divider); }
+
+/* ---------- TUI 模式：左栏 + 整块终端 ---------- */
+.tui { background: #0b0b0b; display: flex; flex-direction: column; min-width: 0; }
+.tui-head { height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--divider); font-size: 13px; color: var(--muted-foreground); }
+.tui-head .mode-switch { margin-left: auto; }
+.tui-body { flex: 1; padding: 16px 18px; font-family: var(--font-mono); font-size: 13px; line-height: 1.5; color: #d7d7d0; white-space: pre; overflow: auto; }
+.tui-body .dim { color: #7a7a74; }
+.tui-body .acc { color: var(--link); }
+.tui-body .ok { color: var(--success); }
+
+/* ---------- 注释气泡（原型专用） ---------- */
+.note {
+  font-size: 11px; line-height: 1.35; padding: 5px 8px; border-radius: 6px;
+  background: #2a2413; color: #f0c86a; border: 1px solid rgba(240,200,106,.35); z-index: 5; pointer-events: none;
+}
+.note[style*="top:"], .note[style*="bottom:"] { position: absolute; max-width: 220px; }
+[data-notes="off"] .note { display: none; }
+.note b { color: #ffd98a; }
+</style>
+</head>
+<body data-notes="on">
+
+<div class="proto-bar">
+  <b>A10 · UI 对齐原型</b>
+  <div class="proto-group">
+    <label>布局模式</label>
+    <button class="proto-btn" data-set-mode="three" data-active="true">三栏</button>
+    <button class="proto-btn" data-set-mode="two">双栏</button>
+    <button class="proto-btn" data-set-mode="tui">TUI</button>
+  </div>
+  <div class="proto-group">
+    <label>右栏</label>
+    <button class="proto-btn" data-set-panel="run" data-active="true">Run</button>
+    <button class="proto-btn" data-set-panel="context">Context</button>
+  </div>
+  <div class="proto-group">
+    <button class="proto-btn" id="toggle-notes" data-active="true">显示标注</button>
+  </div>
+  <div class="proto-legend">数值来源：pix <code>da01b3e</code> styles.css · 面板参照 pi-app <code>c5ad2f4</code></div>
+</div>
+
+<div class="shell">
+
+  <!-- ================= 左栏 ================= -->
+  <aside class="sidebar" style="position:relative">
+    <div class="nav-item"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg>新建会话</div>
+    <div class="nav-item"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M2.5 6.5h11M6.5 2.5v11"/></svg>插件<span class="badge ok">2/2</span></div>
+    <div class="note" style="margin:4px 2px 2px"><b>U04 已拍</b>：左栏只保留「新建会话 / 插件」。pix 的「资源」（index.js / extension.js / agent.md 文件清单）本轮不要。</div>
+
+    <div class="group-label">项目</div>
+    <div class="session-row"><span class="title">ai-client</span><span class="time">main</span></div>
+    <div class="session-row"><span class="title">pix</span><span class="time">v0.7.7</span></div>
+
+    <div class="group-label">对话</div>
+    <div class="session-row" data-active="true"><span class="dot"></span><span class="title">pix UI 对齐：D02 拍板与取证</span><span class="time">2m</span></div>
+    <div class="session-row"><span class="title">T37-d 会话变砖修复</span><span class="time">1h</span></div>
+    <div class="session-row"><span class="no-cwd">未绑定</span><span class="title">随手问：oklch 转换</span><span class="time">3h</span></div>
+    <div class="note" style="margin:2px 2px 4px"><b>D02 决定二</b>：免绑定会话带「未绑定」标识；cwd 是隔离临时目录，默认不信任。</div>
+    <div class="session-row"><span class="title">WorkerManager 竞态复核</span><span class="time">6d</span></div>
+
+    <div class="spacer"></div>
+    <div class="footer nav-item"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2"/></svg>设置</div>
+  </aside>
+
+  <!-- ================= 中栏 ================= -->
+  <main class="center" style="position:relative">
+    <div class="center-head">
+      <span class="title">pix UI 对齐：D02 拍板与取证</span>
+      <span>ai-client · main</span>
+      <div class="mode-switch">
+        <button title="三栏" data-set-mode="three" data-active="true">▥</button>
+        <button title="双栏" data-set-mode="two">▤</button>
+        <button title="TUI" data-set-mode="tui">▣</button>
+      </div>
+    </div>
+    <div class="note" style="right:16px;top:50px;max-width:260px"><b>U02/U03</b>：三栏 / 双栏 / TUI 三种模式，持久化到 PersistedShellLayout。双栏＝只做 AI 对话与开发，右栏与 Files/Git/Terminal 都不在（D02 决定一）。</div>
+
+    <div class="thread">
+      <div class="thread-inner">
+
+        <div class="turn user">
+          <div class="bubble">把 Q02 到 Q06 的取证结论汇总一下，然后告诉我 U06 Run 面板哪些能先做。</div>
+        </div>
+
+        <div class="turn assistant">
+          <div class="thinking">思考 2.1s · 读取 evidence-q04-runtime-fields.md</div>
+          <div class="tool-row"><span class="name">read</span><span class="arg">docs/plantree/plans/pix-ui-alignment/topics/evidence-q04-runtime-fields.md</span><span class="state ok">✓ 48 行</span></div>
+          <div class="tool-row"><span class="name">grep</span><span class="arg">usage.updated · src/agent-host/piWorkerSession.ts</span><span class="state run">运行中</span></div>
+          <div class="prose">
+            <p>Run 面板可以拆成两半，先做渲染层就能拼出来的部分：</p>
+            <h3>现在就能做</h3>
+            <ul>
+              <li><strong>状态机</strong> —— <code>session.status</code> 已有 idle / running / stopping / failed 等 9 个态。</li>
+              <li><strong>模型</strong> —— <code>message.started.payload.model</code>。</li>
+              <li><strong>思考档</strong> —— renderer-local 的 <code>useSessionEffort</code>，live 态由 <code>thinking.started</code> 推导。</li>
+              <li><strong>回合耗时</strong> —— 每个事件带 <code>timestamp</code>，无需新字段。</li>
+            </ul>
+            <h3>要等 Pi runtime</h3>
+            <p>上下文占用环形图和 usage 行：<code>usage.updated</code> 在 schema 里有，但 worker 从不发。</p>
+<pre>// src/agent-host/piWorkerSession.ts:672
+case "agent_end":
+  // message.usage 在这里被丢弃 —— 需要补一条 usage.updated
+  break;</pre>
+          </div>
+          <div class="meta">
+            <span>claude-fable-5-1</span><span>·</span><span>effort high</span><span>·</span><span>4.8s</span><span>·</span><span>14:32</span>
+            <div class="actions">
+              <button class="icon-btn" title="复制"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3.5A.5.5 0 0 1 3.5 3H11"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="note" style="margin-top:4px"><b>D01 决定三</b>：消息操作只保留「复制」（悬停回合时在右下角显形）。回退 / 新会话继续进 Deferred。</div>
+
+      </div>
+    </div>
+
+    <div class="note" style="max-width:var(--thread-max);margin:0 auto 6px"><b>U09 Composer 底栏（已拍）</b>：左「＋附件 · 权限管理」，右「上下文占用 · 模型 · 思考 · 发送」。信任态从底部摘列移到权限 chip；上下文环依赖 Q04 的 usage.updated（先占位）。&nbsp;<b>U08</b>：思考档改 Pi ThinkingLevel（补 off/minimal，按模型过滤）；请求优先级不占底栏，放进模型菜单二级；模型分组保留管理站主页标签（Q02）。</div>
+    <div class="composer-wrap">
+      <div class="composer">
+        <div class="composer-card">
+          <div class="composer-prompt">继续追问，或输入 / 调命令…</div>
+          <div class="composer-toolbar">
+            <button class="chip" title="附件"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10M3 8h10"/></svg></button>
+            <button class="chip perm"><span class="dot"></span>已信任 · 逐次确认 <span class="chev">▾</span></button>
+            <div class="tb-right">
+              <span class="chip ctx-chip" title="上下文 116k / 200k"><span class="ctx-ring"></span>58%</span>
+              <button class="chip">claude-fable-5-1 <span class="chev">▾</span></button>
+              <button class="chip">思考 · high <span class="chev">▾</span></button>
+              <button class="send" title="发送"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 13V3M4 7l4-4 4 4"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="composer-protrusion">
+          <span>工作目录</span><span class="path">~/code/ai-client</span><span>·</span><span>main</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ================= 右栏 ================= -->
+  <aside class="right" style="position:relative">
+    <div class="right-tabs">
+      <button data-set-panel="run" data-active="true">Run</button>
+      <button data-set-panel="context">Context</button>
+      <button style="margin-left:auto">Files</button><button>Git</button><button>Terminal</button>
+    </div>
+    <div class="note" style="right:12px;top:50px;max-width:230px"><b>三栏专属</b>：Files / Git / Terminal 只在三栏出现（D02 决定一）。Run 是新增 surface（U06），Context 已有（U07 增强）。</div>
+
+    <div class="right-body">
+      <!-- Run 面板（pi-app run-panel.tsx + context-donut.tsx 参照） -->
+      <div class="panel-run">
+        <div class="card">
+          <h4>运行态</h4>
+          <div class="kv">
+            <span class="k">状态</span><span class="v state-pill"><span class="dot"></span>running · tool</span>
+            <span class="k">模型</span><span class="v mono">claude-fable-5-1</span>
+            <span class="k">思考档</span><span class="v">high</span>
+            <span class="k">活动工具</span><span class="v mono">grep</span>
+            <span class="k">本回合</span><span class="v">4.8s</span>
+            <span class="k">会话累计</span><span class="v">12 回合 · 3m 41s</span>
+          </div>
+        </div>
+        <div class="card">
+          <h4>上下文占用</h4>
+          <div class="donut-wrap">
+            <div class="donut"><span class="pct">58%</span></div>
+            <div class="legend">
+              <div><i style="background:var(--link)"></i>system / AGENTS.md · 34%</div>
+              <div><i style="background:var(--chip)"></i>user · 12%</div>
+              <div><i style="background:var(--success)"></i>assistant + tool · 12%</div>
+              <div><i style="background:var(--surface-muted)"></i>剩余 · 42% / 200k</div>
+            </div>
+          </div>
+          <div class="blocked">⚠ Q04 取证：占用 % 与 usage 行需 Pi runtime 补发 <code>usage.updated</code>（schema 已有，worker 不发）+ 目录暴露 contextWindow —— 归 Pi-only 计划。此卡目前只能是占位。</div>
+        </div>
+        <div class="card">
+          <h4>用量</h4>
+          <div class="kv">
+            <span class="k">input</span><span class="v">86,412</span>
+            <span class="k">output</span><span class="v">4,930</span>
+            <span class="k">cache read</span><span class="v">71,200</span>
+            <span class="k">cost</span><span class="v">$0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Context 面板（pi-app context-panel.tsx 参照，U07 增强） -->
+      <div class="panel-context">
+        <div class="card" style="padding:10px 12px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+            <span style="color:var(--muted-foreground)">按角色分段 · 估算 116k tokens</span>
+            <button class="chip" style="margin-left:auto;height:24px">刷新</button>
+          </div>
+        </div>
+        <details class="ctx-seg" open>
+          <summary><span class="role">system</span><span class="tok">31.2k</span></summary>
+          <div class="body">You are Claude Code… (project AGENTS.md 已注入)
+# PROJECT KNOWLEDGE BASE
+AiClient 正在收敛为 Pi-only …</div>
+        </details>
+        <details class="ctx-seg">
+          <summary><span class="role">user</span><span class="tok">12.4k</span></summary>
+          <div class="body">把 Q02 到 Q06 的取证结论汇总一下…</div>
+        </details>
+        <details class="ctx-seg">
+          <summary><span class="role">assistant</span><span class="tok">9.8k</span></summary>
+          <div class="body">Run 面板可以拆成两半…</div>
+        </details>
+        <details class="ctx-seg">
+          <summary><span class="role">tool</span><span class="tok">62.9k</span></summary>
+          <div class="body">read · evidence-q04-runtime-fields.md (48 lines)
+grep · usage.updated …</div>
+        </details>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ================= TUI 模式：左栏 + 整块 TUI ================= -->
+  <section class="tui" style="position:relative">
+    <div class="tui-head">
+      <span>pix UI 对齐：D02 拍板与取证</span><span>· TUI</span>
+      <div class="mode-switch">
+        <button title="三栏" data-set-mode="three">▥</button>
+        <button title="双栏" data-set-mode="two">▤</button>
+        <button title="TUI" data-set-mode="tui" data-active="true">▣</button>
+      </div>
+    </div>
+    <div class="note" style="right:16px;top:50px"><b>U03</b>：TUI = 左栏 + 右侧整块终端，没有第三栏（D02：TUI 是双栏的专用子模式）。现状只换中栏，右栏还在——这是要改的。</div>
+    <div class="tui-body"><span class="dim">┌─ pi · ai-client · main ─────────────────────────────────────────────┐</span>
+
+<span class="acc">›</span> 把 Q02 到 Q06 的取证结论汇总一下
+
+<span class="dim">⋯ thinking 2.1s</span>
+<span class="ok">✓</span> read  docs/plantree/plans/pix-ui-alignment/topics/evidence-q04-runtime-fields.md
+<span class="acc">⟳</span> grep  usage.updated  src/agent-host/piWorkerSession.ts
+
+Run 面板可以拆成两半，先做渲染层就能拼出来的部分：
+  • 状态机  session.status 已有 9 个态
+  • 模型    message.started.payload.model
+  • 思考档  useSessionEffort + thinking.started
+  • 耗时    事件 timestamp
+
+要等 Pi runtime：usage.updated（schema 有、worker 不发）
+
+<span class="dim">└─ claude-fable-5-1 · high · 4.8s ───────────────────────── ctx 58% ─┘</span>
+<span class="acc">›</span> <span class="dim">▏</span></div>
+  </section>
+
+</div>
+
+<script>
+  const root = document.documentElement;
+  function setMode(m){
+    root.dataset.mode = m;
+    document.querySelectorAll('[data-set-mode]').forEach(b => b.dataset.active = String(b.dataset.setMode === m));
+  }
+  function setPanel(p){
+    root.dataset.panel = p;
+    document.querySelectorAll('[data-set-panel]').forEach(b => b.dataset.active = String(b.dataset.setPanel === p));
+  }
+  document.querySelectorAll('[data-set-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.setMode)));
+  document.querySelectorAll('[data-set-panel]').forEach(b => b.addEventListener('click', () => setPanel(b.dataset.setPanel)));
+  const tn = document.getElementById('toggle-notes');
+  tn.addEventListener('click', () => {
+    const on = document.body.dataset.notes !== 'off';
+    document.body.dataset.notes = on ? 'off' : 'on';
+    tn.dataset.active = String(!on);
+    tn.textContent = on ? '显示标注' : '隐藏标注';
+  });
+  tn.textContent = '隐藏标注';
+</script>
+</body>
+</html>
