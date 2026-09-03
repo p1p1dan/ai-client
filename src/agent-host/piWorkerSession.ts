@@ -2,6 +2,7 @@ import { unlink } from 'node:fs/promises';
 import { parsePiModelRef } from '../shared/piModelConfig.ts';
 import type { SessionAttachment, SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type { ExtensionUiResponse, RuntimeEventDraft } from '../shared/types/runtimeEvents.ts';
+import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
 import type {
   WorkerBootstrapPayload,
   WorkerBootstrapResult,
@@ -35,6 +36,10 @@ import { preflightPiSessionFile, samePiSessionPath } from './piSessionPreflight.
 import { readPiSessionHistoryPage } from './piSessionTimeline.ts';
 import { buildPiSessionTreeSnapshot, readPiLeafCheckpoint } from './piSessionTree.ts';
 import { PiWorkerSessionError } from './piWorkerErrors.ts';
+import {
+  createSessionTierAuthorizer,
+  type SessionTierAuthorizerState,
+} from './sessionTierAuthorizer.ts';
 
 interface PiImageContent {
   type: 'image';
@@ -267,6 +272,7 @@ export class PiWorkerSession {
   private sessionManager: PiSessionManager | null = null;
   private sdk: PiSdkModule | null = null;
   private readonly stagedForkFiles = new Set<string>();
+  private tierState: SessionTierAuthorizerState | null = null;
   private unsubscribe: (() => void) | null = null;
   private activeTurn: ActiveTurn | null = null;
   private turnSequence = 0;
@@ -610,6 +616,10 @@ export class PiWorkerSession {
 
   respondExtensionUi(response: ExtensionUiResponse): boolean {
     return this.extensionUi.respond(response);
+  }
+
+  setPermissionTier(tier: SessionPermissionTier): void {
+    this.tierState?.setTier(tier);
   }
 
   async dispose(): Promise<void> {
@@ -1130,6 +1140,11 @@ export class PiWorkerSession {
         : await import('@earendil-works/pi-coding-agent')
     ) as PiSdkModule;
     this.sdk = sdk;
+    const { factory: tierFactory, state: tierState } = createSessionTierAuthorizer({
+      log: this.options.log,
+    });
+    this.tierState = tierState;
+
     const bootstrapped = await bootstrapPiAgentSession({
       sdk,
       cwd: this.cwd,
@@ -1140,6 +1155,9 @@ export class PiWorkerSession {
       effort: this.options.effort,
       leafCheckpoint: this.options.leafCheckpoint,
       decidePermissionGate: this.options.decidePermissionGate,
+      additionalExtensionFactories: [
+        { name: 'aiclient-session-tier', factory: tierFactory, hidden: true },
+      ],
       log: this.options.log,
       onPermissionActivity: (payload) =>
         this.emit({ type: 'permission.activity', sessionId: this.logicalSessionId, payload }),

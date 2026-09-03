@@ -18,6 +18,7 @@ import {
 } from '@shared/types/runtimeEvents';
 import type { PiLeafCheckpoint, SessionTreeSnapshot } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
+import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
 import {
   isWorkerDiscardForkResult,
   isWorkerExtensionUiResponseResult,
@@ -40,6 +41,8 @@ import {
   type WorkerRpcEvent,
   type WorkerSendPayload,
   type WorkerSendResult,
+  type WorkerSetPermissionTierPayload,
+  type WorkerSetPermissionTierResult,
   type WorkerStopPayload,
   type WorkerStopResult,
   type WorkerTreePayload,
@@ -1377,6 +1380,19 @@ export class WorkerManager {
       );
     }
     this.forgetBlockingRequest(response.uiRequestId);
+    entry.lastUsedAt = this.now();
+    return requestId;
+  }
+
+  async setPermissionTier(sessionId: string, tier: SessionPermissionTier): Promise<string> {
+    const requestId = nextRequestId('permtier');
+    const entry = this.entriesBySession.get(sessionId);
+    if (!entry?.slot || entry.state !== 'ready') return requestId;
+    const payload: WorkerSetPermissionTierPayload = { logicalSessionId: sessionId, tier };
+    await entry.slot.request<WorkerSetPermissionTierResult, WorkerSetPermissionTierPayload>(
+      'worker.setPermissionTier',
+      payload
+    );
     entry.lastUsedAt = this.now();
     return requestId;
   }

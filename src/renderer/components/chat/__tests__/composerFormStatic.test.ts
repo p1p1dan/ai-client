@@ -261,26 +261,42 @@ describe('F6: the session composer card is two rows, the empty card is unchanged
   // or not the session row ever picks it up — the assertion has to be scoped to
   // the row located above. Order matters as much as presence: the group's whole
   // job is `ms-auto` tail-anchoring, which only reads correctly as the last
-  // child. Row 2's own left-to-right order is pinned in the same breath (D48 S1
-  it('[F6-5] Pi-only session row reads attach → model → actions, tail-anchored', () => {
+  // child.
+  //
+  // U09-2 (2026-09-03) changed WHAT this asserts about the row's interior. The
+  // row no longer names its controls; it maps two exported order arrays, and
+  // the controls themselves are keyed off those names. So the structural fact
+  // worth pinning moved up a level: the row is [leading group, tail group], and
+  // each group is wired to the RIGHT array. That last clause is the load-bearing
+  // half — `renderBarSlots` alone reads identically whichever array is passed,
+  // so swapping the two would sail through a callee-name comparison while
+  // putting the send key on the left.
+  it('[F6-5] the session row maps leading slots, then the tail-anchored trailing group', () => {
     const rows = asJsxHost(unwrapParens(sessionModeTernary().whenTrue));
     const controlRow = meaningfulChildren(rows)
       .filter((child) => !isConditionalRender(child))
       .find((child) => classNameOf(child) === "composerBarClass('session')");
     expect(controlRow).toBeDefined();
 
-    const slots = meaningfulChildren(asJsxHost(controlRow as ts.JsxChild)).map(slotToken);
-    expect(slots).toEqual(['attachButton', 'modelEffortControls', 'composerActionGroupClass()']);
-    expect(slots[slots.length - 1]).toBe('composerActionGroupClass()');
+    const children = meaningfulChildren(asJsxHost(controlRow as ts.JsxChild));
+    expect(children.map(slotToken)).toEqual(['renderBarSlots', 'composerActionGroupClass()']);
+    expect(normalise(children[0])).toContain('COMPOSER_BAR_LEADING');
+    expect(normalise(children[1])).toContain('COMPOSER_BAR_TRAILING');
+    // The tail group must stay last, or `ms-auto` anchors nothing.
+    expect(classNameOf(children[children.length - 1])).toBe('composerActionGroupClass()');
   });
 
-  // [F6-6] T-30b2 §5.2's reading order has no other static guard. The empty
-  // card was already two rows before F6, so the cheapest way to "finish" this
-  // change is to unify the two branches — which would silently reorder the
-  // empty card's bottom bar and move its status line into an extras stack it
-  // does not have. These are ORDER comparisons, not set comparisons, for
-  // exactly that reason.
-  it('[F6-6] the empty branch keeps its T-30b2 §5.2 order, untouched by the session split', () => {
+  // [F6-6] The empty card was already two rows before F6, so the cheapest way
+  // to "finish" that change was to unify the two branches — which would move
+  // its status line into an extras stack it does not have. These are ORDER
+  // comparisons, not set comparisons, for exactly that reason.
+  //
+  // U09-2 replaced the bar's interior order (was: attach → model → status →
+  // actions). The status line stays where it was — between the two groups,
+  // holding the elastic middle — and that is the fact this still guards: the
+  // empty bar has a third, non-slot child that the session bar does not, and
+  // "unifying" the branches would drop it.
+  it('[F6-6] the empty branch keeps its own outer order and its mid-bar status line', () => {
     const empty = asJsxHost(unwrapParens(sessionModeTernary().whenFalse));
     const children = meaningfulChildren(empty);
     expect(children.map(slotToken)).toEqual([
@@ -294,12 +310,16 @@ describe('F6: the session composer card is two rows, the empty card is unchanged
 
     const bottomBar = children.find((child) => classNameOf(child) === "composerBarClass('empty')");
     expect(bottomBar).toBeDefined();
-    expect(meaningfulChildren(asJsxHost(bottomBar as ts.JsxChild)).map(slotToken)).toEqual([
-      'attachButton',
-      'modelEffortControls',
+    const barChildren = meaningfulChildren(asJsxHost(bottomBar as ts.JsxChild));
+    expect(barChildren.map(slotToken)).toEqual([
+      'renderBarSlots',
       'renderStatusLine',
       'composerActionGroupClass()',
     ]);
+    // Same wiring check as [F6-5]: the callee name cannot tell the two arrays
+    // apart, so the arrays themselves are asserted.
+    expect(normalise(barChildren[0])).toContain('COMPOSER_BAR_LEADING');
+    expect(normalise(barChildren[2])).toContain('COMPOSER_BAR_TRAILING');
   });
 
   // The session status line moved into the extras stack (§6.4): it is a
@@ -324,6 +344,22 @@ describe('F6: the session composer card is two rows, the empty card is unchanged
       'mentionChipsBlock',
       'renderStatusLine',
     ]);
+  });
+});
+
+/**
+ * U12 — the `permission` bar slot is no longer null.
+ *
+ * The slot was reserved in U09-2 as `permission: null`. U12 fills it with
+ * `ComposerPermissionTrigger`. A static scan catches the regression where
+ * someone reverts the slot back to `null` — that is not a component-render
+ * fact, just a spelling fact in the source.
+ */
+describe('U12: permission bar slot is wired', () => {
+  it('the barSlotNodes record assigns a non-null value to the permission slot', () => {
+    const source = readStripped(join(CHAT_DIR, 'ChatComposer.tsx'));
+    expect(source).toContain('ComposerPermissionTrigger');
+    expect(source).not.toMatch(/permission\s*:\s*null/);
   });
 });
 

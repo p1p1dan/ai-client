@@ -1702,6 +1702,22 @@ export const zhTranslations: Record<string, string> = {
   'Permission tier: {{tier}} — {{scope}}': '权限档：{{tier}} —— {{scope}}',
   'Permission tier: {{tier}} ({{pending}}) — {{scope}}':
     '权限档：{{tier}}（{{pending}}） —— {{scope}}',
+  // U12 — session-level permission tier chip labels and descriptions.
+  'Read-only': '只读',
+  'Can read and search, cannot edit files or run commands.':
+    '可以读取和搜索，不能编辑文件或执行命令。',
+  Pragmatic: '务实',
+  'Shipped defaults — reads are free, changes ask for confirmation.':
+    '随包默认——读取免确认，修改需要确认。',
+  'Hands-off': '放手',
+  'File edits apply without asking; commands still ask.': '文件修改直接生效；命令仍会询问。',
+  'Full access': '完全放开',
+  'Approves most actions automatically. Secret-file protection and cross-directory confirmation remain.':
+    '自动批准大部分操作。密钥文件保护与跨目录确认仍然生效。',
+  'Remove limits on this chat?': '移除当前对话的限制？',
+  'Full access approves most tool calls automatically. Only secret-file protection and cross-directory confirmation remain. This applies to this chat only.':
+    '「完全放开」会自动批准大部分工具调用。仅保留密钥文件保护与跨目录确认。该设置仅作用于当前对话。',
+  Apply: '应用',
   'Host status': 'Host 状态',
   'Process ID': '进程 ID',
   Driver: '驱动',

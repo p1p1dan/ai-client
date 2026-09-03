@@ -88,6 +88,7 @@ import { IPC_CHANNELS } from '@shared/types';
 import type { AgentModelCatalog, ListPiModelsRequest } from '@shared/types/agentCatalog';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import type { ExtensionUiResponse } from '@shared/types/runtimeEvents';
+import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import { parseInitialThemeArg } from '@shared/windowTheme';
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
@@ -1032,6 +1033,11 @@ const electronAPI = {
      */
     respondExtensionUi: (payload: ExtensionUiResponse): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_EXTENSION_UI, payload),
+    setPermissionTier: (payload: {
+      sessionId: string;
+      tier: SessionPermissionTier;
+    }): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SET_PERMISSION_TIER, payload),
     onRuntimeEvent: (callback: (event: RuntimeEvent) => void): (() => void) => {
       const handler = (_: unknown, event: RuntimeEvent) => callback(event);
       ipcRenderer.on(IPC_CHANNELS.CHAT_RUNTIME_EVENT, handler);

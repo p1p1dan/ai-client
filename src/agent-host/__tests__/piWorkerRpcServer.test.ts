@@ -303,6 +303,56 @@ describe('PiWorkerRpcServer', () => {
     ]);
   });
 
+  it('forwards setPermissionTier to the runtime and responds success', async () => {
+    const messages: Array<Record<string, unknown>> = [];
+    const setPermissionTier = vi.fn();
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      createRuntime: () => runtime({ setPermissionTier }),
+    });
+    server.receive(
+      request('bootstrap', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    server.receive(
+      request('tier', 'worker.setPermissionTier', {
+        logicalSessionId: 'logical-1',
+        tier: 'readonly',
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(setPermissionTier).toHaveBeenCalledWith('readonly');
+    expect(messages[1]).toMatchObject({ requestId: 'tier', ok: true, result: { applied: true } });
+  });
+
+  it('rejects setPermissionTier with an invalid payload', async () => {
+    const messages: Array<Record<string, unknown>> = [];
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      createRuntime: () => runtime(),
+    });
+    server.receive(
+      request('bootstrap', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    server.receive(
+      request('bad-tier', 'worker.setPermissionTier', {
+        logicalSessionId: 'logical-1',
+        tier: 'yolo',
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(messages[1]).toMatchObject({
+      requestId: 'bad-tier',
+      ok: false,
+      error: { code: 'WORKER_INVALID_PAYLOAD' },
+    });
+  });
+
   it('waits for disposal before ACK and exit hook', async () => {
     const messages: Array<Record<string, unknown>> = [];
     let finishDispose: () => void = () => undefined;

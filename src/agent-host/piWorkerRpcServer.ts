@@ -10,6 +10,7 @@ import type {
 } from '../shared/types/legacyImport.ts';
 import { isWorkerImportConversationPayload } from '../shared/types/legacyImport.ts';
 import type { RuntimeEvent, RuntimeEventDraft } from '../shared/types/runtimeEvents.ts';
+import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
 import {
   isWorkerBootstrapPayload,
   isWorkerDiscardForkPayload,
@@ -22,6 +23,7 @@ import {
   isWorkerRewindPayload,
   isWorkerRpcRequest,
   isWorkerSendPayload,
+  isWorkerSetPermissionTierPayload,
   isWorkerStopPayload,
   isWorkerTreePayload,
   isWorkerUtilityCancelPayload,
@@ -46,6 +48,7 @@ import {
   type WorkerRpcSuccessResponse,
   type WorkerSendPayload,
   type WorkerSendResult,
+  type WorkerSetPermissionTierResult,
   type WorkerStopPayload,
   type WorkerStopResult,
   type WorkerTreePayload,
@@ -78,6 +81,7 @@ export interface PiWorkerRuntime {
   discardFork?(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
   respondExtensionUi(response: Parameters<PiWorkerSession['respondExtensionUi']>[0]): boolean;
+  setPermissionTier?(tier: SessionPermissionTier): void;
   dispose(): Promise<void>;
 }
 
@@ -269,6 +273,9 @@ export class PiWorkerRpcServer {
           break;
         case 'worker.extensionUi.respond':
           this.handleExtensionUiResponse(request);
+          break;
+        case 'worker.setPermissionTier':
+          this.handleSetPermissionTier(request);
           break;
         case 'worker.dispose':
           await this.handleDispose(request);
@@ -614,6 +621,26 @@ export class PiWorkerRpcServer {
     const result: WorkerExtensionUiResponseResult = {
       handled: this.runtime?.respondExtensionUi(request.payload.response) ?? false,
     };
+    this.respondSuccess(request, result);
+  }
+
+  private handleSetPermissionTier(request: WorkerRpcRequest): void {
+    if (!isWorkerSetPermissionTierPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.setPermissionTier requires logicalSessionId and a valid tier',
+        retryable: false,
+      });
+      return;
+    }
+    if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_MISMATCH',
+        'Permission tier change targets another session'
+      );
+    }
+    this.runtime?.setPermissionTier?.(request.payload.tier);
+    const result: WorkerSetPermissionTierResult = { applied: true };
     this.respondSuccess(request, result);
   }
 

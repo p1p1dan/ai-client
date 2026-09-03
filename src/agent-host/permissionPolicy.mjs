@@ -139,6 +139,12 @@ export const AICLIENT_DEFAULT_PERMISSION_POLICY = {
   // Never shipped on. Yolo re-permits even the wrapper floors.
   yoloMode: false,
 
+  // U12: the session-tier authorizer link registered by our inline extension.
+  // The delegation envelope caps `allow` on `path` and `external_directory`
+  // to `defer`, so even the `fullopen` tier cannot bypass secret-file denies
+  // or cross-directory confirmation.
+  authorizerChain: ['aiclient-session-tier'],
+
   permission: {
     // Universal fallback for any surface with no rule of its own — including
     // extension tools this build has never heard of.

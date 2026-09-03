@@ -22,6 +22,7 @@ import {
   type SessionHistoryPage,
   type SessionTreeSnapshot,
 } from './sessionHistory.ts';
+import type { SessionPermissionTier } from './sessionPermissionTier';
 
 /**
  * Main ↔ utility worker RPC protocol.
@@ -224,6 +225,15 @@ export interface WorkerExtensionUiResponseResult {
   handled: boolean;
 }
 
+export interface WorkerSetPermissionTierPayload {
+  logicalSessionId: string;
+  tier: SessionPermissionTier;
+}
+
+export interface WorkerSetPermissionTierResult {
+  applied: boolean;
+}
+
 export type WorkerSendRequest = WorkerRpcRequest<'worker.send', WorkerSendPayload>;
 
 /**
@@ -292,6 +302,10 @@ export type WorkerStopRequest = WorkerRpcRequest<'worker.stop', WorkerStopPayloa
 export type WorkerExtensionUiResponseRequest = WorkerRpcRequest<
   'worker.extensionUi.respond',
   WorkerExtensionUiResponsePayload
+>;
+export type WorkerSetPermissionTierRequest = WorkerRpcRequest<
+  'worker.setPermissionTier',
+  WorkerSetPermissionTierPayload
 >;
 
 export type WorkerDisposeRequest = WorkerRpcRequest<
@@ -761,6 +775,25 @@ export function isWorkerExtensionUiResponseResult(
   value: unknown
 ): value is WorkerExtensionUiResponseResult {
   return isRecord(value) && typeof value.handled === 'boolean';
+}
+
+const VALID_TIERS = new Set(['readonly', 'pragmatic', 'handsoff', 'fullopen']);
+
+export function isWorkerSetPermissionTierPayload(
+  value: unknown
+): value is WorkerSetPermissionTierPayload {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    typeof value.tier === 'string' &&
+    VALID_TIERS.has(value.tier)
+  );
+}
+
+export function isWorkerSetPermissionTierResult(
+  value: unknown
+): value is WorkerSetPermissionTierResult {
+  return isRecord(value) && typeof value.applied === 'boolean';
 }
 
 export function isWorkerDisposeResult(value: unknown): value is WorkerDisposeResult {

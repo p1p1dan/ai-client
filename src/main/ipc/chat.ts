@@ -9,6 +9,10 @@ import type { SessionEffortLevel } from '@shared/types/agentHost';
 import { PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
 import type { ExtensionUiResponse, RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
+import {
+  isSessionPermissionTier,
+  type SessionPermissionTier,
+} from '@shared/types/sessionPermissionTier';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { workerManager } from '../services/agent-host/WorkerManager';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
@@ -355,6 +359,21 @@ export function registerChatHandlers(): void {
       // Forget only after the authoritative slot acknowledges the response so
       // a transient failure can be retried by the same owner.
       extensionUiRouter.forgetRequest(payload.uiRequestId);
+      return { requestId };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_SET_PERMISSION_TIER,
+    async (
+      e,
+      payload: { sessionId: string; tier: SessionPermissionTier }
+    ): Promise<{ requestId: string }> => {
+      if (!isSessionPermissionTier(payload.tier)) {
+        throw new Error(`Invalid permission tier: ${String(payload.tier)}`);
+      }
+      claimSessionForSender(e, payload.sessionId);
+      const requestId = await workerManager.setPermissionTier(payload.sessionId, payload.tier);
       return { requestId };
     }
   );

@@ -1,7 +1,12 @@
+import {
+  isSessionPermissionTier,
+  type SessionPermissionTier,
+} from '@shared/types/sessionPermissionTier';
 import { isEffortSelection } from './efforts';
 
 export const SESSION_MODEL_STORAGE_KEY = 'aiclient:chat:session-models';
 export const SESSION_EFFORT_STORAGE_KEY = 'aiclient:chat:session-efforts';
+export const SESSION_TIER_STORAGE_KEY = 'aiclient:chat:session-tiers';
 
 type PreferenceMap = Record<string, unknown>;
 
@@ -73,4 +78,18 @@ export function writeSessionEffort(sessionId: string, selection: string): void {
 
 export function removeSessionEffort(sessionId: string): void {
   removeEntry(SESSION_EFFORT_STORAGE_KEY, sessionId);
+}
+
+export function readSessionTier(sessionId: string): SessionPermissionTier | null {
+  const raw = readEntry(SESSION_TIER_STORAGE_KEY, sessionId);
+  return raw && isSessionPermissionTier(raw) ? raw : null;
+}
+
+export function writeSessionTier(sessionId: string, tier: SessionPermissionTier): void {
+  if (!isSessionPermissionTier(tier)) return;
+  writeEntry(SESSION_TIER_STORAGE_KEY, sessionId, tier);
+}
+
+export function removeSessionTier(sessionId: string): void {
+  removeEntry(SESSION_TIER_STORAGE_KEY, sessionId);
 }

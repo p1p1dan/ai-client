@@ -9,7 +9,16 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  memo,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Alert, AlertAction, AlertTitle } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
@@ -48,6 +57,7 @@ import {
 } from './attachments';
 import { ComposerAttachMenu } from './ComposerAttachMenu';
 import { ComposerModelTrigger } from './ComposerModelTrigger';
+import { ComposerPermissionTrigger } from './ComposerPermissionTrigger';
 import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
 import { deriveChatEmptySurface } from './chatEmptyState';
@@ -59,9 +69,13 @@ import { consumeForkDraftCarry } from './forkDraftCarry';
 import { encodePiResumeError } from './historyError';
 import { type QueuedMessage, selectSessionQueue } from './messageQueue';
 import {
+  COMPOSER_BAR_LEADING,
+  COMPOSER_BAR_TRAILING,
+  type ComposerBarSlot,
   composerActionGroupClass,
   composerBarClass,
   composerCardClass,
+  composerHasProtrusion,
   composerPlaceholder,
   composerRowsClass,
   composerTextareaClass,
@@ -501,6 +515,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     workspace: activeWorkspace,
     cwd,
   } = resolveActiveTarget({ activeSessionId, sessions, workspaces });
+  // U09-1: does the empty card wear the joined tab? `cwd` is already
+  // `workspace && isTargetableWorkspace(workspace) ? path : null` (see
+  // `resolveActiveTarget`), which is exactly the predicate `ComposerTargetBar`
+  // renders under — so this reads the same fact the bar does rather than
+  // calling `useComposerTarget` a second time. That hook owns effects (the
+  // pending-target apply flow) and a query; a second instance would run them
+  // twice, and the tab's radius is not worth a duplicated store write.
+  const hasProtrusion = composerHasProtrusion({ mode, hasTargetableWorkspace: cwd !== null });
   const mentionChips = useMemo(() => parseMentionChips(value), [value]);
   const mentionOpen = mentionQuery !== null && mentionResults.length > 0;
   const busy = isStoppable(activeSession?.status);
@@ -2648,6 +2670,31 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     </>
   );
 
+  // U09-2: the bar's controls keyed by slot, so both branches render from
+  // `COMPOSER_BAR_LEADING` / `COMPOSER_BAR_TRAILING` instead of restating the
+  // order in JSX twice (they disagreed once already — the empty bar carried a
+  // status line the session bar did not, and the fix had to be applied in two
+  // places). A `null` slot renders nothing at all: the two reserved positions
+  // must not become empty shells.
+  const barSlotNodes: Record<ComposerBarSlot, ReactNode> = {
+    attach: attachButton,
+    permission: activeSessionId ? (
+      <ComposerPermissionTrigger
+        sessionId={activeSessionId}
+        hostState={hostStatus.state}
+        mode={mode}
+        disabled={disabled}
+        sending={sending}
+      />
+    ) : null,
+    // U06-b / Pi plan T38 — needs `usage.updated` from the runtime.
+    usage: null,
+    modelEffort: modelEffortControls,
+    actions: actionButtons,
+  };
+  const renderBarSlots = (slots: readonly ComposerBarSlot[]) =>
+    slots.map((slot) => <Fragment key={slot}>{barSlotNodes[slot]}</Fragment>);
+
   return (
     // Wraps both the error banner and the composer card so they share the
     // timeline's reading width (T-22 spec §2.13 — "Composer 同栏宽"). The host
@@ -2664,7 +2711,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       )}
       {/* T-28 §3.6: one ComposerTargetBar instance, rendered at one of two
             positions by mode — never both at once. Empty mode keeps the bar
-            above the card (current position); session mode docks it below. */}
+            above the card; session mode docks it below.
+
+            U09-1: in empty mode the bar is now JOINED to the card as a
+            protrusion tab rather than floating 8px above it, so nothing may be
+            inserted between these two elements — a sibling here would open the
+            seam the tab exists to close. The queue strip below is session-only
+            and so cannot land in that gap. */}
       {mode === 'empty' && (
         <ComposerTargetBar
           mode={mode}
@@ -2688,7 +2741,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           onRemove={handleQueueEntryRemove}
         />
       )}
-      <div className={composerCardClass(mode)}>
+      <div className={composerCardClass(mode, { hasProtrusion })}>
         {/* T-07 @ 文件搜索 popup——放 textarea 上方/下方，避免被 overflow-hidden 容器裁掉 */}
         {mentionOpen && (
           <div
@@ -2768,6 +2821,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             </div>
           </div>
         )}
+        {/* U09-2: the bar renders by mapping COMPOSER_BAR_LEADING /
+            COMPOSER_BAR_TRAILING, so the shipped order IS the order those
+            arrays state. Writing the controls out inline here again would put
+            the order back where no test can read it. A slot whose node is null
+            (permission → U12, usage → T38) contributes nothing to the DOM. */}
         {mode === 'session' ? (
           <div className={composerRowsClass()}>
             {/* F6 §6.4: the status line joined this stack. It is the fifth
@@ -2796,9 +2854,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                 the chat, and the two ghost chips' height/inset are
                 cross-asserted against each other. */}
             <div className={composerBarClass('session')}>
-              {attachButton}
-              {modelEffortControls}
-              <div className={composerActionGroupClass()}>{actionButtons}</div>
+              {renderBarSlots(COMPOSER_BAR_LEADING)}
+              <div className={composerActionGroupClass()}>
+                {renderBarSlots(COMPOSER_BAR_TRAILING)}
+              </div>
             </div>
           </div>
         ) : (
@@ -2808,16 +2867,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             {queueNoticeBlock}
             {attachmentChipsBlock}
             {mentionChipsBlock}
-            {/* T-30b2 §5.2: the bottom bar reads left-to-right as ⊕ → model →
-                  status → actions, so the two controls that start a message
-                  sit together at the left and the status text takes whatever
-                  space is left instead of owning the leading position.
-                  Pi-only keeps model/effort as the sole runtime selection. */}
+            {/* U09-2 REPLACES T-30b2 §5.2's "⊕ → model → status → actions".
+                  That order grouped "the two controls that start a message" at
+                  the left; the bar now reads ⊕ → permission → status → usage →
+                  model/effort → send, which groups by WHAT A CONTROL ANSWERS:
+                  what this message carries and what it may do, on the left;
+                  how it will be answered and the send key itself, on the right.
+                  The status line keeps the elastic middle either way. */}
             <div className={composerBarClass('empty')}>
-              {attachButton}
-              {modelEffortControls}
+              {renderBarSlots(COMPOSER_BAR_LEADING)}
               {renderStatusLine('flex min-w-0 flex-1 items-center gap-1.5')}
-              <div className={composerActionGroupClass()}>{actionButtons}</div>
+              <div className={composerActionGroupClass()}>
+                {renderBarSlots(COMPOSER_BAR_TRAILING)}
+              </div>
             </div>
           </>
         )}

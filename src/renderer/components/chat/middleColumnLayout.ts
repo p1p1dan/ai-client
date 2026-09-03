@@ -153,13 +153,27 @@ export const COMPOSER_CONTROL_SIZE = 24;
  * consumer and is gone from the signature; the extras stack still uses
  * `hasComposerExtras` at the call site to decide whether to RENDER, which was
  * always a separate question.
+ *
+ * U09-1 (2026-09-03) reintroduces an options bag, for a different question than
+ * the one F6 retired. `hasExtras` asked "is there content inside" and answered
+ * it with a radius, which is why it went; `hasProtrusion` asks "is another
+ * surface flush against this card's top edge", which a radius is the correct
+ * answer to. When the tab is present the top corners drop to `rounded-xs` (4px)
+ * so the join reads as two surfaces meeting rather than one rounded shape with
+ * something tucked behind it; the bottom corners keep `rounded-md` throughout.
+ * Absent the tab — no targetable workspace — nothing changes, which is what
+ * keeps a fresh install's card looking like it always did.
  */
-export function composerCardClass(mode: MiddleColumnMode): string {
+export function composerCardClass(
+  mode: MiddleColumnMode,
+  opts?: { hasProtrusion?: boolean }
+): string {
   if (mode === 'empty') {
     // T-30b2 §4.1: both modes now share one symmetric 8px inset (`p-2`). The
     // old 12/10 split traced back to A07's eyeballed three-value padding, not
     // to a measurement.
-    return 'relative rounded-md border border-border bg-card focus-within:border-input p-2';
+    const base = 'relative rounded-md border border-border bg-card focus-within:border-input p-2';
+    return opts?.hasProtrusion ? `${base} rounded-t-xs` : base;
   }
   // Resting height contract, T-30b2 §3.3-E1 as re-derived by F6: exactly 74px.
   // The arithmetic is unchanged in KIND — borders + padding + content, done
@@ -266,8 +280,51 @@ export function composerBarClass(mode: MiddleColumnMode): string {
   return 'flex min-w-0 items-center gap-2';
 }
 
+// ---- Bottom bar slot order (U09-2) ----
+
 /**
- * The right-hand action group (round buttons), shared by both modes.
+ * One control position in the Composer's bottom bar.
+ *
+ * `modelEffort` is ONE slot, not two: this repo merged the model name and the
+ * reasoning-effort suffix into a single trigger (`composerModelTriggerClass`),
+ * and evidence-u09 #2 judged pix's split pair "do not adopt". The prototype's
+ * "模型 · 思考" therefore lands here as one chip, in that position.
+ */
+export type ComposerBarSlot = 'attach' | 'permission' | 'usage' | 'modelEffort' | 'actions';
+
+/**
+ * The bar's order, as DATA rather than as JSX reading order (U09-2).
+ *
+ * The acceptance condition for this slice is "the controls appear in this
+ * order", and JSX order is not something a test can state — the T-28 failure
+ * shape exactly: assertions that pass while the composed result is wrong. The
+ * call site renders by mapping these arrays, so the order a test reads here is
+ * the order that ships.
+ *
+ * Two slots are deliberately EMPTY today, and both render nothing rather than a
+ * placeholder — an empty shell contradicts the "利落简约" the whole batch is
+ * chasing:
+ *
+ *  - `permission` — the permission-tier chip, U12. Reserved here so that slice
+ *    fills a position instead of re-litigating the order.
+ *  - `usage` — context-usage share, blocked on the Pi runtime emitting
+ *    `usage.updated` (U06-b, handed to the Pi plan's T38).
+ *
+ * The status line is absent on purpose: it exists only in empty mode, it is
+ * elastic text rather than a control, and it takes whatever width is left
+ * between the two groups. The bar branch places it directly.
+ */
+export const COMPOSER_BAR_LEADING: readonly ComposerBarSlot[] = ['attach', 'permission'];
+
+/** @see COMPOSER_BAR_LEADING — rendered inside the tail-anchored group. */
+export const COMPOSER_BAR_TRAILING: readonly ComposerBarSlot[] = [
+  'usage',
+  'modelEffort',
+  'actions',
+];
+
+/**
+ * The tail-anchored control group, shared by both modes.
  *
  * `ms-auto` rather than a `justify-between` row: what sits to its left is
  * conditional in both cards — the empty bar's status line, and (before F6) the
@@ -280,6 +337,15 @@ export function composerBarClass(mode: MiddleColumnMode): string {
  * `actionButtons` bare, relying on the textarea's `flex-[2]` to eat the free
  * space and push them right; row 2 has no elastic child at all now, so without
  * the auto margin the whole strip would bunch at the left edge.
+ *
+ * U09-2 (2026-09-03) widened what this group HOLDS — it is no longer only the
+ * round keys. The model/effort chip moved in from the leading side, and the
+ * usage share will join it, so the group is now every trailing control
+ * (`COMPOSER_BAR_TRAILING`) rather than the action buttons alone. The class
+ * itself is unchanged: `ms-auto` and `shrink-0` were always about anchoring a
+ * fixed-width cluster at the end, which is still exactly what this is. The
+ * 6px gap stays finer than the bar's own 8px on purpose — controls that read as
+ * one cluster sit tighter than the gap between clusters.
  */
 export function composerActionGroupClass(): string {
   return 'ms-auto flex shrink-0 items-center gap-1.5';
@@ -352,6 +418,21 @@ export function composerAttachButtonClass(): string {
  * before someone remembers to register it), not as a requirement.
  */
 export function composerModelTriggerClass(): string {
+  return [
+    'inline-flex h-6 shrink-0 items-center gap-1 rounded-sm px-2 text-ui',
+    'transition-colors duration-150',
+    'hover:bg-hover',
+    'focus-visible:bg-hover',
+    'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary',
+    'data-[popup-open]:bg-selection',
+    'disabled:pointer-events-none disabled:opacity-64',
+  ].join(' ');
+}
+
+/**
+ * U12: permission tier chip — same ghost-chip language as the model trigger.
+ */
+export function composerPermissionTriggerClass(): string {
   return [
     'inline-flex h-6 shrink-0 items-center gap-1 rounded-sm px-2 text-ui',
     'transition-colors duration-150',
@@ -566,12 +647,71 @@ export function resolveIdleStatusText(input: {
 
 // ---- Target row ----
 
-/** Target row's outer class: empty sits 8px above the card, session sits 8px below it; row height/gap match. */
+/**
+ * Target row's outer class.
+ *
+ * U09-1 (2026-09-03) turns the EMPTY row into a protrusion tab joined to the
+ * top of the card, replacing the free-floating row that used to sit 8px above
+ * it. Three properties carry that, and each one is load-bearing:
+ *
+ *  - **No `mb-2`.** The 8px gap WAS the whole reason the row read as a separate
+ *    element. Joined means zero gap; re-adding any bottom margin here un-joins
+ *    the tab and there is no second owner of that gap to compensate with.
+ *  - **`mx-3` (12px each side).** The tab is narrower than the card, which is
+ *    what makes the card's top edge read as sitting ON the tab rather than
+ *    beside it. pix uses 18px; 12px is this repo's own spacing step and the
+ *    design system bans the arbitrary value that matching 18 exactly would need.
+ *  - **`rounded-t-md` only.** Top corners round, bottom corners stay square so
+ *    the tab meets the card's edge flush. Pairs with `composerCardClass`'s
+ *    `rounded-t-xs` — the card keeps a small top radius so the join reads as two
+ *    surfaces meeting, not one shape with a notch.
+ *
+ * `h-7` (28px) rather than the session row's `h-6`: this is now a filled
+ * CONTAINER around the 24px control tier, not a bare row, so it needs the 2px
+ * of breathing room above and below its chips. 28px is an established step here
+ * (the sidebar row height D03 pinned), not a new one.
+ *
+ * `bg-muted` is the adjacent surface step to the card's `bg-card` in both
+ * themes — deliberately a small delta. The tab is distinguished by SHAPE (top
+ * radius, narrower, flush join); a loud fill would read as a separate panel,
+ * which is the thing being retired. Do not reach for `bg-hover` here: that
+ * token means "pointer is over this" and using it as a resting fill would leave
+ * the real hover state with nowhere to go.
+ *
+ * Session mode is untouched — its row still sits 8px below the card, bare.
+ */
 export function targetRowClass(mode: MiddleColumnMode): string {
   if (mode === 'empty') {
-    return 'mb-2 flex h-6 items-center gap-1';
+    return 'mx-3 flex h-7 items-center gap-1 rounded-t-md bg-muted px-2';
   }
   return 'mt-2 flex h-6 items-center gap-1';
+}
+
+/**
+ * Whether the empty card wears the joined protrusion tab (U09-1).
+ *
+ * Both the tab and the card's top radius read this, and two call sites
+ * spelling the same condition inline is how they drift apart — the failure
+ * mode being a card with a squared-off top edge and no tab above it.
+ *
+ * It narrows `shouldRenderTargetRow` rather than restating it: that function's
+ * empty branch returns true for any targetable workspace regardless of the
+ * branch/run-location slots (those only gate the SESSION row), so a targetable
+ * workspace is the entire condition. Calling through keeps one predicate.
+ */
+export function composerHasProtrusion(input: {
+  mode: MiddleColumnMode;
+  hasTargetableWorkspace: boolean;
+}): boolean {
+  if (input.mode !== 'empty') {
+    return false;
+  }
+  return shouldRenderTargetRow({
+    mode: 'empty',
+    hasTargetableWorkspace: input.hasTargetableWorkspace,
+    showBranchSelect: false,
+    hasRunLocation: false,
+  });
 }
 
 /** Target row slots: session mode drops the folder slot (A07 §08②). */

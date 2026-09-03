@@ -165,6 +165,12 @@ export interface BootstrapPiAgentSessionOptions {
   leafCheckpoint?: PiLeafCheckpoint;
   decidePermissionGate?: (packages: unknown[]) => PermissionPluginDecision;
   onPermissionActivity?: (payload: PermissionActivityPayload) => void;
+  /** U12: additional inline extensions to register alongside the activity observer. */
+  additionalExtensionFactories?: Array<{
+    name: string;
+    factory: (pi: unknown) => void;
+    hidden?: boolean;
+  }>;
   log?: (...args: unknown[]) => void;
 }
 
@@ -346,6 +352,7 @@ export async function bootstrapPiAgentSession(
           : {}),
         extensionFactories: [
           { name: 'aiclient-permission-activity', factory: activityObserver, hidden: true },
+          ...(options.additionalExtensionFactories ?? []),
         ],
       },
     });

@@ -304,6 +304,8 @@ export const IPC_CHANNELS = {
    * runtime plus dialog id, not a session or legacy permission dialect.
    */
   CHAT_RESPOND_EXTENSION_UI: 'chat:respondExtensionUi',
+  /** U12 — set the session-level permission tier on the running Worker. */
+  CHAT_SET_PERMISSION_TIER: 'chat:setPermissionTier',
   CHAT_LIST_SESSIONS: 'chat:listSessions',
   CHAT_RENAME_SESSION: 'chat:renameSession',
   CHAT_ARCHIVE_SESSION: 'chat:archiveSession',

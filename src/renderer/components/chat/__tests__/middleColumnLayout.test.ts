@@ -1,15 +1,19 @@
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import {
+  COMPOSER_BAR_LEADING,
+  COMPOSER_BAR_TRAILING,
   COMPOSER_CONTROL_SIZE,
   composerActionGroupClass,
   composerAttachButtonClass,
   composerBarClass,
   composerCardClass,
   composerFollowHeightBreakdown,
+  composerHasProtrusion,
   composerModelBaseClass,
   composerModelSuffixClass,
   composerModelTriggerClass,
+  composerPermissionTriggerClass,
   composerPlaceholder,
   composerPopupSide,
   composerRowsClass,
@@ -328,6 +332,73 @@ describe('composerCardClass', () => {
     expect(composerCardClass('empty')).not.toContain('rounded-lg');
     expect(composerCardClass('session')).not.toContain('rounded-lg');
   });
+
+  // U09-1: the tab and the card's top radius are one visual join, so they are
+  // asserted against each other rather than each on its own.
+  describe('U09-1 protrusion join', () => {
+    it('drops the top corners to 4px when the tab is present, keeping the bottom at 10px', () => {
+      const cls = composerCardClass('empty', { hasProtrusion: true });
+      expect(cls).toContain('rounded-t-xs');
+      // The base `rounded-md` must survive — it is what the bottom corners
+      // still render at; dropping it would square the whole card.
+      expect(cls).toContain('rounded-md');
+      expect(cls).not.toMatch(/rounded-\[/);
+    });
+
+    it('leaves the card untouched with no tab, which is the fresh-install state', () => {
+      const withoutTab = composerCardClass('empty', { hasProtrusion: false });
+      expect(withoutTab).toBe(composerCardClass('empty'));
+      expect(withoutTab).not.toContain('rounded-t-');
+    });
+
+    // A session card never wears the tab, so the flag must not be able to give
+    // it one — otherwise a future caller passing the option unconditionally
+    // would square the docked card's top edge against nothing.
+    it('ignores the flag in session mode', () => {
+      expect(composerCardClass('session', { hasProtrusion: true })).toBe(
+        composerCardClass('session')
+      );
+    });
+  });
+});
+
+describe('composerHasProtrusion', () => {
+  it('wears the tab in empty mode with a targetable workspace', () => {
+    expect(composerHasProtrusion({ mode: 'empty', hasTargetableWorkspace: true })).toBe(true);
+  });
+
+  // No targetable workspace means `ComposerTargetBar` renders nothing, so a
+  // squared-off top edge would sit above empty space.
+  it('has no tab without a targetable workspace', () => {
+    expect(composerHasProtrusion({ mode: 'empty', hasTargetableWorkspace: false })).toBe(false);
+  });
+
+  // U09-1 acceptance 2: the tab is an empty-state form only. The session card
+  // keeps its bar docked BELOW, which is a different element in a different
+  // place — this asserts the tab form specifically never appears there.
+  it('never wears the tab in session mode, however targetable the workspace', () => {
+    expect(composerHasProtrusion({ mode: 'session', hasTargetableWorkspace: true })).toBe(false);
+  });
+
+  // The predicate must stay tied to `shouldRenderTargetRow`, not drift into a
+  // second opinion about when the bar exists: in empty mode the branch and
+  // run-location slots gate nothing, so they cannot change the answer.
+  it('matches shouldRenderTargetRow regardless of the branch/run-location slots', () => {
+    for (const showBranchSelect of [true, false]) {
+      for (const hasRunLocation of [true, false]) {
+        for (const hasTargetableWorkspace of [true, false]) {
+          expect(composerHasProtrusion({ mode: 'empty', hasTargetableWorkspace })).toBe(
+            shouldRenderTargetRow({
+              mode: 'empty',
+              hasTargetableWorkspace,
+              showBranchSelect,
+              hasRunLocation,
+            })
+          );
+        }
+      }
+    }
+  });
 });
 
 describe('composerBarClass / composerActionGroupClass', () => {
@@ -369,6 +440,42 @@ describe('composerBarClass / composerActionGroupClass', () => {
     const cls = composerActionGroupClass();
     expect(cls).toContain('ms-auto');
     expect(cls).toContain('shrink-0');
+  });
+
+  // U09-2 acceptance 1. The prototype's bar reads
+  // 「＋附件 · 权限管理」 on the left and 「上下文占用 · 模型 · 思考 · 发送」 on the
+  // right; "模型 · 思考" is one merged chip here (evidence-u09 #2), so it is a
+  // single `modelEffort` slot in that position.
+  describe('U09-2 bar order', () => {
+    it('leads with attach then the permission position', () => {
+      expect(COMPOSER_BAR_LEADING).toEqual(['attach', 'permission']);
+    });
+
+    it('trails with usage, then model/effort, then the send key', () => {
+      expect(COMPOSER_BAR_TRAILING).toEqual(['usage', 'modelEffort', 'actions']);
+    });
+
+    // The send key must be last in the bar, full stop: every "Stop replaces
+    // Send in place" guarantee assumes a fixed terminal position.
+    it('keeps the action slot last', () => {
+      expect(COMPOSER_BAR_TRAILING.at(-1)).toBe('actions');
+      expect(COMPOSER_BAR_LEADING).not.toContain('actions');
+    });
+
+    // A slot appearing in both groups would render its control twice.
+    it('assigns every slot to exactly one group', () => {
+      const all = [...COMPOSER_BAR_LEADING, ...COMPOSER_BAR_TRAILING];
+      expect(new Set(all).size).toBe(all.length);
+    });
+
+    // The two reserved positions exist so U12 and T38 fill a slot rather than
+    // reopening the order debate. Losing them is how a later slice ends up
+    // appending its control wherever it happens to be convenient.
+    it('reserves the permission and usage positions', () => {
+      const all = [...COMPOSER_BAR_LEADING, ...COMPOSER_BAR_TRAILING];
+      expect(all).toContain('permission');
+      expect(all).toContain('usage');
+    });
   });
 
   // The two-row mechanism itself. `[F6-4]` proves this class is APPLIED to the
@@ -517,16 +624,42 @@ describe('resolveIdleStatusText (F5a, round-4 Codex NEEDS-FIX #4)', () => {
 });
 
 describe('targetRowClass / targetRowSlots', () => {
-  it('places the full target bar 8px above the card in empty mode', () => {
-    expect(targetRowClass('empty')).toContain('mb-2');
+  // U09-1 (2026-09-03) REPLACES the old "8px above the card" assertion. That
+  // gap was the free-floating row's defining property and is exactly what the
+  // protrusion tab retires: joined means zero gap. Asserting its ABSENCE is
+  // the stronger fact — any bottom margin creeping back un-joins the tab, and
+  // there is no second owner of that space to compensate with.
+  it('joins the empty-mode tab flush to the card, with no gap below it', () => {
+    const cls = targetRowClass('empty');
+    expect(cls).not.toMatch(/(^|\s)mb-/);
+    expect(cls).toContain('rounded-t-md');
+    // Bottom corners must stay square or the tab meets the card on a curve.
+    expect(cls).not.toMatch(/(^|\s)rounded-b/);
+    expect(cls).not.toMatch(/(^|\s)rounded-md(\s|$)/);
+  });
+
+  it('insets the empty-mode tab so the card edge reads as sitting on it', () => {
+    expect(targetRowClass('empty')).toContain('mx-3');
+  });
+
+  it('fills the empty-mode tab with the adjacent surface step, never the hover token', () => {
+    const cls = targetRowClass('empty');
+    expect(cls).toContain('bg-muted');
+    // `bg-hover` means "pointer is over this"; as a resting fill it would
+    // leave the real hover state with nowhere to go.
+    expect(cls).not.toContain('bg-hover');
   });
 
   it('places the target row 8px below the card in session mode', () => {
     expect(targetRowClass('session')).toContain('mt-2');
   });
 
-  it('keeps the 24px row height and 4px gaps in both modes', () => {
-    expect(targetRowClass('empty')).toContain('h-6');
+  // The empty row became a filled CONTAINER around the 24px control tier, so
+  // it carries 28px to give its chips 2px of breathing room. 28px is the
+  // sidebar row step D03 pinned, not a new one. The session row is still bare
+  // and stays at the control height itself.
+  it('keeps 4px gaps in both modes, with 28px for the tab and 24px for the bare row', () => {
+    expect(targetRowClass('empty')).toContain('h-7');
     expect(targetRowClass('empty')).toContain('gap-1');
     expect(targetRowClass('session')).toContain('h-6');
     expect(targetRowClass('session')).toContain('gap-1');
@@ -872,6 +1005,32 @@ describe('composerModelTriggerClass / composerAttachButtonClass / targetTriggerC
         expect(Number(step[1]) * 4).toBe(COMPOSER_CONTROL_SIZE);
       }
     }
+  });
+
+  // U12: the permission trigger sits beside the model trigger in the bar, so
+  // it shares the same ghost-chip language — same height, same radius, same
+  // three interactive states.
+  it('U12: the permission trigger matches the model trigger ghost-chip form', () => {
+    const perm = composerPermissionTriggerClass();
+    const model = composerModelTriggerClass();
+
+    for (const state of [
+      'hover:bg-hover',
+      'focus-visible:bg-hover',
+      'data-[popup-open]:bg-selection',
+    ]) {
+      expect(model).toContain(state);
+      expect(perm).toContain(state);
+    }
+
+    expect(perm).toContain('rounded-sm');
+    expect(perm).not.toContain('border');
+    expect(perm).not.toContain('shadow');
+    expect(perm).toContain('disabled:pointer-events-none');
+    expect(perm).toContain('disabled:opacity-64');
+
+    const heightPattern = /(?:^|\s)h-(\d+(?:\.\d+)?)(?:\s|$)/;
+    expect(stepValue(perm, heightPattern)).toBe(stepValue(model, heightPattern));
   });
 
   it('splits the merged label into a quiet model name and an emphasised effort suffix', () => {
