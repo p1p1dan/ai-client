@@ -3,6 +3,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadPermissionManagerProbe } from '../../../scripts/permission-policy-probe.mjs';
+import { serializeDefaultPermissionPolicy } from '../permissionPolicy.mjs';
 
 type CheckResult = {
   state: 'allow' | 'ask' | 'deny';
@@ -36,10 +37,15 @@ let AccessPath: AccessPathConstructor;
 let posixPathFlavor: unknown;
 let cleanupProbe: () => void;
 const hostRoot = path.resolve('src/agent-host');
-const pluginRoot = path.join(hostRoot, 'node_modules', '@gotgenes', 'pi-permission-system');
-const bundledConfigPath = path.join(pluginRoot, 'config.json');
+const policyRoot = mkdtempSync(path.join(tmpdir(), 'aiclient-bundled-permission-policy-'));
+const bundledConfigPath = path.join(policyRoot, 'config.json');
 
 beforeAll(async () => {
+  // npm's published package intentionally has no root config.json. Production
+  // writes the distributor policy while building the worker artifact; tests
+  // create the same policy explicitly so a stale local node_modules file cannot
+  // make them pass while a clean CI install falls back to builtin ask.
+  writeFileSync(bundledConfigPath, serializeDefaultPermissionPolicy());
   const probe = await loadPermissionManagerProbe(hostRoot);
   PermissionManager = probe.PermissionManager as PermissionManagerConstructor;
   AccessPath = probe.AccessPath as AccessPathConstructor;
@@ -47,7 +53,10 @@ beforeAll(async () => {
   cleanupProbe = probe.cleanup;
 });
 
-afterAll(() => cleanupProbe?.());
+afterAll(() => {
+  cleanupProbe?.();
+  rmSync(policyRoot, { recursive: true, force: true });
+});
 
 function withManager(
   run: (manager: PermissionManagerInstance, cwd: string, agentDir: string) => void

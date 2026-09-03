@@ -57,10 +57,16 @@ describe('build.yml gate wiring (C5)', () => {
     expect(jobs.gate).toBeDefined();
   });
 
-  it('runs all four gates as separate serial steps', () => {
-    // Chaining them into one command has OOM'd (exit 137) before.
+  it('runs all release gates as separate serial steps', () => {
+    // Chaining the heavy gates into one command has OOM'd (exit 137) before.
     const runs = jobs.gate.steps.filter((s) => s.run).map((s) => s.run);
-    for (const cmd of ['pnpm typecheck', 'pnpm typecheck:agent-host', 'pnpm lint', 'pnpm test']) {
+    for (const cmd of [
+      'pnpm typecheck',
+      'pnpm typecheck:agent-host',
+      'pnpm lint',
+      'pnpm test',
+      'pnpm verify:release',
+    ]) {
       expect(runs, cmd).toContain(cmd);
     }
   });
@@ -74,11 +80,11 @@ describe('build.yml gate wiring (C5)', () => {
   });
 
   it('leaves every packaging job transitively gated', () => {
-    for (const job of ['build-windows', 'build-linux']) {
+    for (const job of ['build-windows', 'build-linux', 'build-macos']) {
       expect([jobs[job].needs].flat()).toContain('build-app');
     }
     expect([jobs['generate-release-notes'].needs].flat().sort()).toEqual(
-      ['build-remote-runtime-linux', 'build-linux', 'build-windows'].sort()
+      ['build-remote-runtime-linux', 'build-linux', 'build-macos', 'build-windows'].sort()
     );
   });
 
@@ -98,17 +104,18 @@ describe('build.yml node runtime steps (C6, D36④)', () => {
     expect(workflowText).not.toContain('Setup Node.js 24 (packaged-state verify)');
   });
 
-  it('fetches a bundled runtime on both packaging jobs, each for its platform', () => {
+  it('fetches a bundled runtime on every packaging job for its native platform', () => {
     const fetchRun = (job) =>
       jobs[job].steps.find((s) => s.run?.includes('fetch-node-runtime.mjs'))?.run;
     expect(fetchRun('build-windows')).toContain('--platform win32-x64');
     expect(fetchRun('build-linux')).toContain('--platform linux-x64');
+    expect(fetchRun('build-macos')).toContain(`--platform \${{ steps.target.outputs.platform }}`);
   });
 
   it('keys the runtime cache on the pin file, not a hardcoded version', () => {
     // actions/cache never overwrites an existing key, so a literal key survives
     // a pin bump and keeps restoring the stale runtime forever.
-    for (const job of ['build-windows', 'build-linux']) {
+    for (const job of ['build-windows', 'build-linux', 'build-macos']) {
       // Match on the cached path: these jobs also cache the pnpm store, and
       // picking the first actions/cache step would assert against that one.
       const cacheStep = jobs[job].steps.find(
