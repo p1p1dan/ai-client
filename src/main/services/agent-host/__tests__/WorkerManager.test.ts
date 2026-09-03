@@ -66,6 +66,12 @@ function createHarness(
       piLeaf: { activeEntryId: string | null; fileTailEntryId: string | null };
     }) => Promise<void>;
     createForked?: (entry: SessionIndexEntry) => Promise<SessionIndexEntry>;
+    /**
+     * Which Pi JSONL paths exist on disk. Defaults to "all of them", which is
+     * the state a session reaches as soon as its first assistant message lands;
+     * tests for the not-yet-written window pass their own predicate.
+     */
+    sessionFileExists?: (sessionFile: string) => Promise<boolean>;
     createFailureAfter?: number;
     maxRestartAttempts?: number;
   } = {}
@@ -78,6 +84,7 @@ function createHarness(
   const commitResumed = vi.fn(input.commitResumed ?? (async () => undefined));
   const commitPiLeaf = vi.fn(input.commitPiLeaf ?? (async () => undefined));
   const createForked = vi.fn(input.createForked ?? (async (entry) => entry));
+  const sessionFileExists = vi.fn(input.sessionFileExists ?? (async () => true));
   let createCount = 0;
   const createSlot = vi.fn(async (options: Record<string, unknown>) => {
     createCount += 1;
@@ -258,6 +265,7 @@ function createHarness(
     commitResumed,
     commitPiLeaf,
     createForked,
+    sessionFileExists,
     onEvent: (event) => events.push(event as unknown as Record<string, unknown>),
     capacity: input.capacity ?? 4,
     idleTimeoutMs: 0,
@@ -278,6 +286,7 @@ function createHarness(
     commitResumed,
     commitPiLeaf,
     createForked,
+    sessionFileExists,
   };
 }
 
@@ -859,6 +868,210 @@ describe('WorkerManager Pi history and real resume', () => {
     expect(h.records[0].dispose).toHaveBeenCalledWith('slot-dispose');
     expect(h.manager.getSlotSnapshots()).toEqual([]);
     expect(h.events).toEqual([]);
+  });
+});
+
+/**
+ * Pi reserves a session's JSONL name at creation but writes nothing to it until
+ * the first assistant message lands (SessionManager._persist's `hasAssistant`
+ * guard). Main used to index that reservation as the session's durable runtime
+ * identity straight away, so anything that ended the first turn early — a
+ * killed worker, a user Stop, quitting the app — left a row pointing at a file
+ * that had never existed. Reopening it always failed with
+ * WORKER_SESSION_FILE_NOT_FOUND, which burned the restart budget, parked the
+ * entry in `error` and left the session unusable for the rest of the run.
+ */
+describe('WorkerManager unwritten Pi session files', () => {
+  const rejectSpawn = () => async () => {
+    throw new Error('restart spawn failed');
+  };
+  /** Let the fire-and-forget identity commit settle before asserting it did not repeat. */
+  const sleepTicks = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+  it('publishes no runtime identity while Pi has not written the session file', async () => {
+    const h = createHarness({ sessionFileExists: async () => false });
+
+    const requestId = await create(h.manager, 's1');
+
+    expect(h.bindRuntimeIdentity).not.toHaveBeenCalled();
+    expect(h.events).toContainEqual(
+      expect.objectContaining({
+        type: 'session.created',
+        sessionId: 's1',
+        requestId,
+        payload: { agent: 'pi' },
+      })
+    );
+    // The slot itself is fully usable — only the durable claim is withheld.
+    expect(h.manager.getSlotSnapshots()[0]).toMatchObject({
+      state: 'ready',
+      sessionFile: '/sessions/s1.jsonl',
+    });
+  });
+
+  it('commits and announces the identity the first time the file exists', async () => {
+    let written = false;
+    const h = createHarness({ sessionFileExists: async () => written });
+    await create(h.manager, 's1');
+    expect(h.bindRuntimeIdentity).not.toHaveBeenCalled();
+
+    written = true;
+    h.records[0].emit({
+      type: 'session.completed',
+      sessionId: 's1',
+      requestId: 'turn-1',
+      payload: { status: 'completed' },
+    });
+
+    await vi.waitFor(() =>
+      expect(h.bindRuntimeIdentity).toHaveBeenCalledWith('s1', '/sessions/s1.jsonl')
+    );
+    expect(h.events).toContainEqual(
+      expect.objectContaining({
+        type: 'session.updated',
+        sessionId: 's1',
+        payload: { runtimeIdentity: '/sessions/s1.jsonl' },
+      })
+    );
+    // The leaf commit is what the index rejects for an unbound session, so it
+    // has to land after the identity, not instead of it.
+    await vi.waitFor(() =>
+      expect(h.commitPiLeaf).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 's1', runtimeIdentity: '/sessions/s1.jsonl' })
+      )
+    );
+  });
+
+  it('claims the identity mid-turn, not only when the turn ends', async () => {
+    let written = false;
+    const h = createHarness({ sessionFileExists: async () => written });
+    await create(h.manager, 's1');
+
+    // Pi writes the file on the first completed assistant message. A turn that
+    // then runs tools for minutes must not leave the session unidentified in
+    // the meantime: an app killed there would come back unable to reach a
+    // transcript that is sitting on disk.
+    written = true;
+    h.records[0].emit({
+      type: 'message.completed',
+      sessionId: 's1',
+      requestId: 'turn-1',
+      payload: { messageId: 'm1' },
+    });
+
+    await vi.waitFor(() =>
+      expect(h.bindRuntimeIdentity).toHaveBeenCalledWith('s1', '/sessions/s1.jsonl')
+    );
+    expect(h.events).toContainEqual(
+      expect.objectContaining({
+        type: 'session.updated',
+        sessionId: 's1',
+        payload: { runtimeIdentity: '/sessions/s1.jsonl' },
+      })
+    );
+    // Idempotent: later messages must not re-bind or re-announce.
+    h.records[0].emit({
+      type: 'message.completed',
+      sessionId: 's1',
+      requestId: 'turn-1',
+      payload: { messageId: 'm2' },
+    });
+    await sleepTicks();
+    expect(h.bindRuntimeIdentity).toHaveBeenCalledTimes(1);
+    expect(h.events.filter((event) => event.type === 'session.updated')).toHaveLength(1);
+  });
+
+  it('starts a fresh Pi session when the crashed worker never wrote its file', async () => {
+    const h = createHarness({ sessionFileExists: async () => false });
+    await create(h.manager, 's1');
+    const spawn = h.createSlot.getMockImplementation();
+    h.createSlot.mockImplementationOnce(async (options: Record<string, unknown>) => {
+      const created = await spawn?.(options);
+      if (!created) throw new Error('missing fake slot');
+      return {
+        ...created,
+        bootstrap: { ...created.bootstrap, sessionFile: '/sessions/s1-second.jsonl' },
+      };
+    });
+
+    h.records[0].crash('killed before the first write');
+
+    await vi.waitFor(() =>
+      expect(h.manager.getSlotSnapshots()[0]).toMatchObject({
+        state: 'ready',
+        sessionFile: '/sessions/s1-second.jsonl',
+        key: 'session:/sessions/s1-second.jsonl',
+        generation: 2,
+      })
+    );
+    // Restarted as a new session rather than reopening a file that never was.
+    expect(h.createSlot.mock.calls[1][0]).not.toHaveProperty('sessionFile');
+    expect(h.createSlot.mock.calls[1][0]).not.toHaveProperty('leafCheckpoint');
+    // The replacement is just as unwritten, so it earns its identity the same way.
+    expect(h.bindRuntimeIdentity).not.toHaveBeenCalled();
+    await expect(
+      h.manager.send({ sessionId: 's1', attemptId: 'after-restart', text: 'again' })
+    ).resolves.toMatch(/^send-/);
+  });
+
+  it('still reopens the exact file when a written session goes missing', async () => {
+    const present = new Set(['/sessions/s1.jsonl']);
+    const h = createHarness({ sessionFileExists: async (file) => present.has(file) });
+    await create(h.manager, 's1');
+    expect(h.bindRuntimeIdentity).toHaveBeenCalledWith('s1', '/sessions/s1.jsonl');
+
+    // History that once existed and is now gone is real loss: the restart must
+    // surface it, never paper over it with an empty replacement session.
+    present.clear();
+    h.records[0].crash('boom');
+
+    await vi.waitFor(() => expect(h.createSlot).toHaveBeenCalledTimes(2));
+    expect(h.createSlot.mock.calls[1][0]).toMatchObject({
+      logicalSessionId: 's1',
+      sessionFile: '/sessions/s1.jsonl',
+    });
+  });
+
+  it('lets resume clear a session parked in error instead of failing forever', async () => {
+    const h = createHarness({ maxRestartAttempts: 2 });
+    await create(h.manager, 's1');
+    h.createSlot.mockImplementationOnce(rejectSpawn());
+    h.createSlot.mockImplementationOnce(rejectSpawn());
+
+    h.records[0].crash('boom');
+    await vi.waitFor(() =>
+      expect(h.manager.getSlotSnapshots()[0]).toMatchObject({
+        state: 'error',
+        error: expect.stringContaining('restart budget exhausted'),
+      })
+    );
+
+    await expect(
+      h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: '/sessions/s1.jsonl',
+        workspacePath: '/repo',
+      })
+    ).resolves.toMatch(/^resume-/);
+    expect(h.manager.getSlotSnapshots()).toHaveLength(1);
+    expect(h.manager.getSlotSnapshots()[0]).toMatchObject({
+      logicalSessionId: 's1',
+      state: 'ready',
+    });
+  });
+
+  it('retires a dead slot to make room instead of reporting the pool full', async () => {
+    const h = createHarness({ capacity: 1, maxRestartAttempts: 1 });
+    await create(h.manager, 's1');
+    h.createSlot.mockImplementationOnce(rejectSpawn());
+
+    h.records[0].crash('boom');
+    await vi.waitFor(() =>
+      expect(h.manager.getSlotSnapshots()[0]).toMatchObject({ state: 'error' })
+    );
+
+    await expect(create(h.manager, 's2')).resolves.toMatch(/^create-/);
+    expect(h.manager.getSlotSnapshots().map((slot) => slot.logicalSessionId)).toEqual(['s2']);
   });
 });
 

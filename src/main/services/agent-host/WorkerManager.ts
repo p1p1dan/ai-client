@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { stat } from 'node:fs/promises';
 import os from 'node:os';
 import type { SessionAttachment, SessionEffortLevel } from '@shared/types/agentHost';
 import { PI_AGENT } from '@shared/types/agentWire';
@@ -82,6 +83,18 @@ interface ManagedSlot {
   readonly logicalSessionId: string;
   readonly cwd: string;
   sessionFile: string | null;
+  /**
+   * Has `sessionFile` been written into the durable session index?
+   *
+   * Pi names a session's JSONL when the session is created but writes nothing
+   * to it until the first assistant message lands, so the path Main receives at
+   * bootstrap is a reservation, not a file. Publishing it as the durable
+   * identity is what used to brick sessions: every later reopen — the crash
+   * restart in `restartEntry`, and resume after an app restart — points at a
+   * file Pi never wrote. Main therefore withholds the identity until the file
+   * exists, and `ensureIdentityCommitted` publishes it the moment it does.
+   */
+  identityCommitted: boolean;
   slot: WorkerSlot | null;
   bootstrap: CreatedPiWorkerSlot['bootstrap'] | null;
   state: WorkerManagerEntryState;
@@ -128,6 +141,11 @@ export interface WorkerManagerOptions {
     piLeaf: PiLeafCheckpoint;
   }) => Promise<void>;
   createForked?: (entry: SessionIndexEntry) => Promise<SessionIndexEntry>;
+  /**
+   * Does this Pi JSONL exist on disk right now? Injected so unit tests stay
+   * hermetic; production stats the real path.
+   */
+  sessionFileExists?: (sessionFile: string) => Promise<boolean>;
   createImport?: typeof createPiImport;
   inspectImport?: typeof inspectPiImport;
   reconcileImport?: typeof reconcilePiImport;
@@ -173,6 +191,15 @@ function positiveInteger(value: number, label: string): number {
     throw new Error(`${label} must be a positive safe integer, received ${value}`);
   }
   return value;
+}
+
+/** Production `sessionFileExists`: a missing or non-regular path is "not yet written". */
+async function statSessionFileExists(sessionFile: string): Promise<boolean> {
+  try {
+    return (await stat(sessionFile)).isFile();
+  } catch {
+    return false;
+  }
 }
 
 function nonNegativeFinite(value: number, label: string): number {
@@ -225,6 +252,7 @@ export class WorkerManager {
   private readonly commitResumed: NonNullable<WorkerManagerOptions['commitResumed']>;
   private readonly commitPiLeaf: NonNullable<WorkerManagerOptions['commitPiLeaf']>;
   private readonly createForked: NonNullable<WorkerManagerOptions['createForked']>;
+  private readonly sessionFileExists: (sessionFile: string) => Promise<boolean>;
   private readonly createImport: typeof createPiImport;
   private readonly inspectImport: typeof inspectPiImport;
   private readonly reconcileImport: typeof reconcilePiImport;
@@ -262,6 +290,7 @@ export class WorkerManager {
     this.commitResumed = options.commitResumed ?? (async () => undefined);
     this.commitPiLeaf = options.commitPiLeaf ?? (async () => undefined);
     this.createForked = options.createForked ?? (async (entry) => entry);
+    this.sessionFileExists = options.sessionFileExists ?? statSessionFileExists;
     this.createImport = options.createImport ?? createPiImport;
     this.inspectImport = options.inspectImport ?? inspectPiImport;
     this.reconcileImport = options.reconcileImport ?? reconcilePiImport;
@@ -487,15 +516,29 @@ export class WorkerManager {
     const requestId = nextRequestId('create');
     return this.serialize(async () => {
       const existing = this.entriesBySession.get(input.sessionId);
-      if (existing && existing.state !== 'disposing') {
+      if (existing?.state === 'error') {
+        // `error` is terminal for the worker, never for the session. Leaving the
+        // dead entry in the maps is what made a failed restart permanent: it
+        // answered every later create and resume, held a pool slot no eviction
+        // could reclaim, and had no path back to `ready`. Retire it and take the
+        // cold path below instead.
+        await this.retireAndDispose(existing, 'slot-dispose').catch(() => undefined);
+      } else if (existing && existing.state !== 'disposing') {
         this.claimEntry(existing, input.ownerWebContentsId);
         existing.lastUsedAt = this.now();
         if (existing.state === 'ready' && existing.sessionFile) {
+          // Re-announcing an uncommitted path would put the reservation back in
+          // the index the very next event, undoing the whole point of holding it
+          // back. An unmaterialized session simply reports no identity.
+          const committed = await this.commitIdentityIfMaterialized(existing);
           this.dispatch({
             type: 'session.created',
             sessionId: existing.logicalSessionId,
             requestId,
-            payload: { agent: PI_AGENT, runtimeIdentity: existing.sessionFile },
+            payload: {
+              agent: PI_AGENT,
+              ...(committed ? { runtimeIdentity: existing.sessionFile } : {}),
+            },
           });
           this.dispatch({
             type: 'session.status',
@@ -533,6 +576,7 @@ export class WorkerManager {
         logicalSessionId: input.sessionId,
         cwd,
         sessionFile: null,
+        identityCommitted: false,
         slot: null,
         bootstrap: null,
         state: 'creating',
@@ -601,13 +645,23 @@ export class WorkerManager {
         // send/stop cannot observe it until the durable index commit succeeds.
         // If persistence fails, the catch path removes and disposes it; no
         // success event or turn side effect is published.
-        await this.bindRuntimeIdentity(entry.logicalSessionId, sessionFile);
+        //
+        // A brand-new Pi session usually has no file yet (Pi defers the first
+        // write until an assistant message exists), and then there is no commit
+        // to await and no identity to announce. That is strictly more
+        // conservative than the old unconditional bind: Main still never
+        // advertises an identity the index did not persist, and now it also
+        // never persists one the filesystem cannot back.
+        const materialized = await this.commitIdentityIfMaterialized(entry);
         entry.state = 'ready';
         this.dispatch({
           type: 'session.created',
           sessionId: entry.logicalSessionId,
           requestId,
-          payload: { agent: PI_AGENT, runtimeIdentity: sessionFile },
+          payload: {
+            agent: PI_AGENT,
+            ...(materialized ? { runtimeIdentity: sessionFile } : {}),
+          },
         });
         this.dispatch({
           type: 'session.status',
@@ -664,6 +718,13 @@ export class WorkerManager {
     const requestId = nextRequestId('resume');
     const promise = this.serialize(async () => {
       let entry = this.entriesBySession.get(input.sessionId);
+      if (entry?.state === 'error') {
+        // See createSession: retiring the dead entry is the only way a session
+        // parked in `error` becomes usable again without restarting the app.
+        // Falling through re-spawns it from the durable file below.
+        await this.retireAndDispose(entry, 'slot-dispose').catch(() => undefined);
+        entry = undefined;
+      }
       if (entry && entry.state !== 'disposing') {
         if (!entry.sessionFile || sessionWorkerKey(sessionFile) !== entry.key) {
           throw new WorkerManagerError(
@@ -736,6 +797,9 @@ export class WorkerManager {
         logicalSessionId: input.sessionId,
         cwd,
         sessionFile,
+        // Resume is only reachable through an indexed runtimeIdentity, so the
+        // durable commit already happened — for this file, by definition.
+        identityCommitted: true,
         slot: null,
         bootstrap: null,
         state: 'creating',
@@ -1067,6 +1131,10 @@ export class WorkerManager {
           logicalSessionId: sessionId,
           cwd: source.cwd,
           sessionFile,
+          // Unlike a new session, a fork's JSONL is written eagerly: Pi's
+          // createBranchedSession writes the header plus the copied branch, and
+          // the worker preflights the file before this point.
+          identityCommitted: true,
           slot: null,
           bootstrap: null,
           state: 'creating',
@@ -1402,7 +1470,14 @@ export class WorkerManager {
 
   private async spawnForEntry(
     entry: ManagedSlot,
-    selection: { model?: string; effort?: SessionEffortLevel } = {}
+    selection: { model?: string; effort?: SessionEffortLevel } = {},
+    /**
+     * Spawn a brand-new Pi session and ignore whatever file the entry names.
+     * Used by the re-materialization path, which must not clear
+     * `entry.sessionFile` up front: a failed spawn has to leave the entry
+     * exactly as it found it so the next restart attempt sees the same state.
+     */
+    options: { fresh?: boolean } = {}
   ): Promise<CreatedPiWorkerSlot> {
     let expectedSlot: WorkerSlot | null = null;
     const created = await this.createSlot({
@@ -1410,8 +1485,8 @@ export class WorkerManager {
       logicalSessionId: entry.logicalSessionId,
       cwd: entry.cwd,
       generation: entry.generation,
-      ...(entry.sessionFile ? { sessionFile: entry.sessionFile } : {}),
-      ...(entry.leafCheckpoint ? { leafCheckpoint: entry.leafCheckpoint } : {}),
+      ...(entry.sessionFile && !options.fresh ? { sessionFile: entry.sessionFile } : {}),
+      ...(entry.leafCheckpoint && !options.fresh ? { leafCheckpoint: entry.leafCheckpoint } : {}),
       ...selection,
       onSlotCreated: (slot) => {
         this.ownedSlots.add(slot);
@@ -1652,13 +1727,25 @@ export class WorkerManager {
     const candidates = [...this.entriesBySession.values()].filter((entry) =>
       this.isSafeToEvict(entry)
     );
-    candidates.sort((left, right) => left.lastUsedAt - right.lastUsedAt);
+    // An entry parked in `error` has no live worker left to lose, so retire it
+    // before evicting a healthy idle session.
+    candidates.sort(
+      (left, right) =>
+        Number(right.state === 'error') - Number(left.state === 'error') ||
+        left.lastUsedAt - right.lastUsedAt
+    );
     return candidates[0] ?? null;
   }
 
+  /**
+   * `error` counts as evictable: such an entry can no longer serve anything,
+   * but it still occupied a pool slot against `capacity` that no eviction could
+   * reclaim — enough of them and every new session failed with
+   * `worker_capacity_reached`.
+   */
   private isSafeToEvict(entry: ManagedSlot): boolean {
     return (
-      entry.state === 'ready' &&
+      (entry.state === 'ready' || entry.state === 'error') &&
       entry.ownerWebContentsId === null &&
       entry.activeRequestId === null &&
       entry.pendingBlockingRequests.size === 0 &&
@@ -1763,6 +1850,16 @@ export class WorkerManager {
       this.clearBlockingRequests(entry);
     }
 
+    if (!entry.identityCommitted && event.type === 'message.completed') {
+      // The one moment Pi writes a session it has so far only named: the file
+      // appears with the first completed assistant message. Claiming the
+      // identity here rather than waiting for the turn to end matters because a
+      // long turn can hold a written session hostage for minutes — and an app
+      // killed inside that window would otherwise come back to a chat with no
+      // identity while its transcript sat on disk, unreachable. Costs one stat
+      // per completed message until it lands, and nothing afterwards.
+      void this.ensureIdentityCommitted(entry, message.generation);
+    }
     if (
       event.type === 'session.completed' ||
       event.type === 'session.failed' ||
@@ -1841,6 +1938,18 @@ export class WorkerManager {
     entry.restartAttempts.push(now);
     entry.state = 'restarting';
     const oldSlot = entry.slot;
+    // A session whose identity was never committed has no file on disk to
+    // reopen — Pi reserved the name and died before writing it. Reopening that
+    // path fails with WORKER_SESSION_FILE_NOT_FOUND on every attempt, which is
+    // what used to burn the whole restart budget and park the session in
+    // `error` for the rest of the run. Nothing was written and nothing durable
+    // was ever advertised, so the honest recovery is a fresh Pi session under
+    // the same logical session id. The existence re-check matters: the file can
+    // land between the last commit attempt and the crash, and abandoning a real
+    // file with real content would be data loss.
+    const rematerialize =
+      !entry.identityCommitted &&
+      (entry.sessionFile === null || !(await this.sessionFileExists(entry.sessionFile)));
     try {
       if (oldSlot) {
         // Never open the same JSONL in a replacement until old-process exit is
@@ -1851,20 +1960,47 @@ export class WorkerManager {
       }
       entry.generation += 1;
       entry.slot = null;
-      const created = await this.spawnForEntry(entry, {
-        ...(entry.bootstrap?.model ? { model: entry.bootstrap.model } : {}),
-        ...(entry.bootstrap?.effort ? { effort: entry.bootstrap.effort } : {}),
-      });
+      const created = await this.spawnForEntry(
+        entry,
+        {
+          ...(entry.bootstrap?.model ? { model: entry.bootstrap.model } : {}),
+          ...(entry.bootstrap?.effort ? { effort: entry.bootstrap.effort } : {}),
+        },
+        { fresh: rematerialize }
+      );
       const reopenedFile = created.bootstrap.sessionFile
         ? normalizeWorkerPath(created.bootstrap.sessionFile, 'Pi session file')
         : null;
-      if (!reopenedFile || sessionWorkerKey(reopenedFile) !== entry.key) {
-        try {
-          await created.slot.dispose('slot-dispose');
-          this.ownedSlots.delete(created.slot);
-        } catch {
-          // Retain physical ownership for forceKillAllNow().
-        }
+      if (!reopenedFile) {
+        await this.abandonSpawnedSlot(created.slot);
+        throw new WorkerManagerError(
+          'worker_restart_identity_mismatch',
+          'Restarted worker did not report a Pi session file'
+        );
+      }
+      if (rematerialize) {
+        this.adoptRematerializedFile(entry, reopenedFile);
+        // The replacement session starts at its own root, whatever branch the
+        // dead one had been sitting on.
+        entry.leafCheckpoint = created.bootstrap.leaf;
+        entry.bootstrap = { ...created.bootstrap, sessionFile: reopenedFile };
+        entry.state = 'ready';
+        entry.error = null;
+        entry.lastIdleAt = this.now();
+        this.state = 'ready';
+        // No history triplet: the replacement session is empty, and the turn
+        // that died was never persisted, so there is nothing to replay. The
+        // renderer already saw session.failed for that turn.
+        this.dispatch({
+          type: 'session.status',
+          sessionId: entry.logicalSessionId,
+          requestId: nextRequestId('restart'),
+          payload: { status: 'idle' },
+        });
+        return;
+      }
+      if (sessionWorkerKey(reopenedFile) !== entry.key) {
+        await this.abandonSpawnedSlot(created.slot);
         throw new WorkerManagerError(
           'worker_restart_identity_mismatch',
           'Restarted worker did not reopen the authoritative Pi session file'
@@ -1878,6 +2014,10 @@ export class WorkerManager {
         );
       }
       this.validateHistoryResult(entry, history);
+      // The file exists — the worker just reopened it — so a session that
+      // crashed after its first assistant message finally gets its identity
+      // indexed. commitPiLeaf below requires that row, so this has to precede it.
+      await this.ensureIdentityCommitted(entry, entry.generation);
       await this.commitPiLeaf({
         sessionId: entry.logicalSessionId,
         runtimeIdentity: reopenedFile,
@@ -1904,6 +2044,80 @@ export class WorkerManager {
     }
   }
 
+  /** Drop a replacement slot that failed its identity check; keep it force-killable. */
+  private async abandonSpawnedSlot(slot: WorkerSlot): Promise<void> {
+    try {
+      await slot.dispose('slot-dispose');
+      this.ownedSlots.delete(slot);
+    } catch {
+      // Retain physical ownership for forceKillAllNow().
+    }
+  }
+
+  /**
+   * Rebind a re-materialized session to the file its replacement worker created.
+   *
+   * The logical session id never changes, so this retargets one existing index
+   * row rather than creating a second session: no duplicate rows, no orphans.
+   * The identity stays uncommitted — the new file is as unwritten as the old
+   * one was, and it earns its durable entry the same way, by materializing.
+   */
+  private adoptRematerializedFile(entry: ManagedSlot, sessionFile: string): void {
+    const durableKey = sessionWorkerKey(sessionFile);
+    const conflict = this.entriesByKey.get(durableKey);
+    if (conflict && conflict !== entry) {
+      throw new WorkerManagerError(
+        'worker_session_identity_conflict',
+        `Pi session file is already owned by logical session ${conflict.logicalSessionId}`
+      );
+    }
+    entry.slot?.remapSlotKey(durableKey);
+    this.entriesByKey.delete(entry.key);
+    entry.key = durableKey;
+    entry.sessionFile = sessionFile;
+    this.entriesByKey.set(durableKey, entry);
+  }
+
+  /**
+   * Write `entry.sessionFile` into the durable index, but only once the file
+   * actually exists.
+   *
+   * Returns whether the entry now holds a committed identity. `false` is not a
+   * failure: it means Pi has not written this session yet, so there is nothing
+   * durable to advertise and nothing a later reopen could resume.
+   */
+  private async commitIdentityIfMaterialized(entry: ManagedSlot): Promise<boolean> {
+    if (entry.identityCommitted) return true;
+    const sessionFile = entry.sessionFile;
+    if (!sessionFile || !(await this.sessionFileExists(sessionFile))) return false;
+    await this.bindRuntimeIdentity(entry.logicalSessionId, sessionFile);
+    entry.identityCommitted = true;
+    return true;
+  }
+
+  /**
+   * Publish the durable identity of a session whose JSONL materialized after
+   * creation, so the index and the renderer stop treating it as unbound.
+   *
+   * `session.updated` already exists for exactly this — SessionIndexService and
+   * the renderer store both fold its `runtimeIdentity` in — it simply had no
+   * emitter until the identity stopped being published up front.
+   */
+  private async ensureIdentityCommitted(entry: ManagedSlot, generation: number): Promise<void> {
+    if (entry.identityCommitted) return;
+    const sessionFile = entry.sessionFile;
+    if (!sessionFile) return;
+    if (!(await this.commitIdentityIfMaterialized(entry))) return;
+    // The stat and the index write are both awaited, so re-check that this
+    // entry still owns the same file before announcing it.
+    if (!this.isAuthoritative(entry, generation) || entry.sessionFile !== sessionFile) return;
+    this.dispatch({
+      type: 'session.updated',
+      sessionId: entry.logicalSessionId,
+      payload: { runtimeIdentity: sessionFile },
+    });
+  }
+
   private isAuthoritative(entry: ManagedSlot, generation: number): boolean {
     return (
       entry.acceptEvents &&
@@ -1916,6 +2130,12 @@ export class WorkerManager {
   private async syncLeafCheckpoint(entry: ManagedSlot, generation: number): Promise<void> {
     try {
       if (!this.isAuthoritative(entry, generation) || entry.activeRequestId) return;
+      // A turn that just ended may have materialized this session's JSONL for
+      // the first time. Publish the identity before the leaf commit, which the
+      // index rejects for a session it has no runtimeIdentity for; a session
+      // Pi still has not written has no leaf worth persisting either.
+      await this.ensureIdentityCommitted(entry, generation);
+      if (!entry.identityCommitted) return;
       const tree = await this.readTree(entry);
       if (!this.isAuthoritative(entry, generation)) return;
       const leaf = tree.snapshot.leaf;
