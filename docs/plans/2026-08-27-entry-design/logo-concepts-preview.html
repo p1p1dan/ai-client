@@ -407,7 +407,7 @@
     var out = el('g', {});
     specs.forEach(function (s) {
       if (!byFace[s.face]) {
-        var clip = faceClip(s.face);
+        const clip = faceClip(s.face);
         defs.push(clip.def);
         byFace[s.face] = el('g', { 'clip-path': 'url(#' + clip.id + ')' });
         out.appendChild(byFace[s.face]);
