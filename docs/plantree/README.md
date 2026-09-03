@@ -43,8 +43,8 @@ Renderer → Preload → Electron Main WorkerManager
 
 | Plan | Lifecycle | Current phase | Last landed | Next target |
 |---|---|---|---|---|
-| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **Completed** | Phase H / T37 closed | T37 release packet + manual CI `33714362901`：Windows/Linux/macOS 原生 packaged gates 全绿（macOS unsigned） | 正式发布按 rollout runbook；活动实现转 pix/pi-app UI 对齐 |
-| [pix/pi-app UI 对齐改造](./plans/pix-ui-alignment/README.md) | **Planning → Ready**（等 T37） | 规划已收口：Q01–Q07 全闭，U01–U09 均有取证与拍板 | D02 + 六项取证 + A10 原型（2026-09-03） | T37 收口后按 roadmap 逐切片实施；建议首切 U01 |
+| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **Completed core / T38 active** | Phase H / T37 closed；Phase I / T38 已开立未开工 | T37 release packet + manual CI `33714362901`：Windows/Linux/macOS 原生 packaged gates 全绿（macOS unsigned） | T38 runtime 补字段（`usage.updated` 生产者、`contextWindow` 暴露），由 UI 计划 D03 开立 |
+| [pix/pi-app UI 对齐改造](./plans/pix-ui-alignment/README.md) | **In Progress** | 批次 3 已落地，下一步批次 4 | U02+U03-a 双栏/三栏布局模式 + TUI 收右栏（workspace-shell 363 tests 全绿），[evidence](./plans/pix-ui-alignment/evidence/2026-09-03-u02-u03a-column-mode.md) | U05+U03-b 免绑定开聊（安全敏感、单独成批）；无未决问题 |
 | [Entry and environment](./plans/entry-and-environment/README.md) | Maintenance | 主体完成；只剩 Pi-only 可复用错误面/GUI 复验 | two-entry welcome、spawn gate、git notice、settings ownership | 并入 T37 或另立小维护任务 |
 | [Unified credentials/app state](./plans/unified-credentials/README.md) | Completed foundation | No active work | `~/.pilab/<profile>`、vault、credential mode、Pi arm | Pi config/import/removal 由 active plan 接管 |
 | [OpenChamber product baseline](./plans/openchamber-chat-refactor/README.md) | Completed baseline | No active work | shell/timeline/Composer/files/git/terminal 产品资产 | runtime-neutral assets 由 T31/T36 适配 |
@@ -66,7 +66,9 @@ T28 replacement baseline
 → T37 release candidate
 ```
 
-**T37 Pi-only release gates 已关闭**。T28–T37 全部完成；Claude import、legacy execution final absence、Pi TUI 与 Windows/Linux/macOS 原生 packaged gates 均有 accepted evidence。Codex import仍等待真实本地格式证据，不恢复 legacy execution runtime。当前活动实现入口转向 pix/pi-app UI 对齐计划。
+**T37 Pi-only release gates 已关闭**。T28–T37 全部完成；Claude import、legacy execution final absence、Pi TUI 与 Windows/Linux/macOS 原生 packaged gates 均有 accepted evidence。Codex import仍等待真实本地格式证据，不恢复 legacy execution runtime。
+
+当前活动实现入口是 [pix/pi-app UI 对齐计划](./plans/pix-ui-alignment/README.md)：任务身份看它的 [roadmap](./plans/pix-ui-alignment/roadmap.md)，动手看 [execution-plan](./plans/pix-ui-alignment/topics/execution-plan.md)。
 
 ## Stable evidence and history
 
