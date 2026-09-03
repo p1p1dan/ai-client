@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-09-02T16:53:59.282Z",
+  "startedAt": "2026-09-03T02:18:03.920Z",
   "host": {
     "platform": "linux",
     "node": "v22.23.2"
@@ -11,7 +11,7 @@
       "name": "entry",
       "covers": "startup entry screen → local credential route",
       "status": "pass",
-      "ms": 6789,
+      "ms": 8758,
       "screenshots": [
         "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/01-welcome.png",
         "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/02-shell.png"
@@ -21,7 +21,7 @@
       "name": "models",
       "covers": "real provider catalog reaches the renderer",
       "status": "pass",
-      "ms": 3,
+      "ms": 24,
       "catalog": {
         "source": "local",
         "error": null,
@@ -49,7 +49,7 @@
       "name": "workspace",
       "covers": "repository registered from --open-path",
       "status": "pass",
-      "ms": 90,
+      "ms": 104,
       "state": {
         "workspaces": [
           {
@@ -58,8 +58,8 @@
             "path": "/home/ai/code/ai-client"
           }
         ],
-        "sessions": 54,
-        "activeSessionId": "session-live-1788368049743-4ig78so"
+        "sessions": 66,
+        "activeSessionId": "session-live-1788401896068-gv4khl5"
       },
       "restoredMode": "gui",
       "screenshots": [
@@ -70,38 +70,38 @@
       "name": "multiSession",
       "covers": "three sessions, real turns, queue release on revisit, no cross-session bleed",
       "status": "pass",
-      "ms": 30951,
+      "ms": 24167,
       "sessions": [
         {
-          "sessionId": "session-1788368051228-ffe62vl",
+          "sessionId": "session-1788401898915-g5wen36",
           "reply": "T37C-S1",
           "status": "idle",
-          "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-13-278Z_01a0630a-e41e-741e-97de-2c0c10551b20.jsonl"
+          "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-21-768Z_01a0650f-60c8-7b66-ac66-7c3f4ac63b6a.jsonl"
         },
         {
-          "sessionId": "session-1788368051228-ce1ft0x",
+          "sessionId": "session-1788401898915-6ajhkog",
           "reply": "T37C-S2",
           "status": "idle",
-          "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-23-325Z_01a0630b-0b5d-7aee-80f5-26c9c947e520.jsonl"
+          "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-35-859Z_01a0650f-97d3-7003-982d-0c047bb45cd8.jsonl"
         },
         {
-          "sessionId": "session-1788368051228-tau09co",
+          "sessionId": "session-1788401898915-6sjbby6",
           "reply": "T37C-S3",
           "status": "idle",
-          "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-34-809Z_01a0630b-3839-70ba-98d1-7b50790dc9f3.jsonl"
+          "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-28-975Z_01a0650f-7cef-7069-a460-5fa9508945cd.jsonl"
         }
       ],
       "clicks": [
         {
-          "sessionId": "session-1788368051228-ffe62vl",
+          "sessionId": "session-1788401898915-g5wen36",
           "button": "Send message"
         },
         {
-          "sessionId": "session-1788368051228-ce1ft0x",
+          "sessionId": "session-1788401898915-6ajhkog",
           "button": "Queue message"
         },
         {
-          "sessionId": "session-1788368051228-tau09co",
+          "sessionId": "session-1788401898915-6sjbby6",
           "button": "Queue message"
         }
       ],
@@ -113,44 +113,44 @@
       "name": "queue",
       "covers": "queue three during a live turn, reorder, remove, then Stop",
       "status": "pass",
-      "ms": 1804,
-      "sessionId": "session-1788368051228-tau09co",
+      "ms": 2000,
+      "sessionId": "session-1788401898915-6sjbby6",
       "queue": {
         "before": [
           {
-            "id": "queued-mtkc6jps-3",
+            "id": "queued-mtkwbvjo-3",
             "text": "queued one"
           },
           {
-            "id": "queued-mtkc6k1u-4",
+            "id": "queued-mtkwbvvn-4",
             "text": "queued two"
           },
           {
-            "id": "queued-mtkc6kdd-5",
+            "id": "queued-mtkwbw7i-5",
             "text": "queued three"
           }
         ],
         "afterMove": [
           {
-            "id": "queued-mtkc6k1u-4",
+            "id": "queued-mtkwbvvn-4",
             "text": "queued two"
           },
           {
-            "id": "queued-mtkc6jps-3",
+            "id": "queued-mtkwbvjo-3",
             "text": "queued one"
           },
           {
-            "id": "queued-mtkc6kdd-5",
+            "id": "queued-mtkwbw7i-5",
             "text": "queued three"
           }
         ],
         "afterRemove": [
           {
-            "id": "queued-mtkc6k1u-4",
+            "id": "queued-mtkwbvvn-4",
             "text": "queued two"
           },
           {
-            "id": "queued-mtkc6jps-3",
+            "id": "queued-mtkwbvjo-3",
             "text": "queued one"
           }
         ]
@@ -165,8 +165,8 @@
       "name": "history",
       "covers": "switch away and back, transcript survives, pagination state present",
       "status": "pass",
-      "ms": 3924,
-      "sessionId": "session-1788368051228-ce1ft0x",
+      "ms": 4094,
+      "sessionId": "session-1788401898915-6ajhkog",
       "before": "T37C-S2",
       "after": "T37C-S2",
       "historyError": null,
@@ -179,7 +179,7 @@
       "name": "import",
       "covers": "scan Claude history, import one conversation, verify the report",
       "status": "pass",
-      "ms": 1635,
+      "ms": 1906,
       "projectCount": 1,
       "sessionCount": 25,
       "picked": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402",
@@ -187,8 +187,8 @@
         {
           "status": "imported",
           "error": null,
-          "sessionId": "session-import-08175b24-93c1-4ff3-90e1-7aa58aa39c65",
-          "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-49-319Z_import-d7c6acdf-aa24-4f6c-9354-6ed5892b4ae6.jsonl"
+          "sessionId": "session-import-8c414d42-9dbc-42b6-8907-38351b5d69c0",
+          "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-50-790Z_import-2e3b3c96-ec99-4785-beed-be61dcf6c3a8.jsonl"
         }
       ],
       "screenshots": [
@@ -199,8 +199,8 @@
       "name": "tui",
       "covers": "GUI→TUI hands over this chat's own JSONL, and back",
       "status": "pass",
-      "ms": 4328,
-      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-23-325Z_01a0630b-0b5d-7aee-80f5-26c9c947e520.jsonl",
+      "ms": 4406,
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-35-859Z_01a0650f-97d3-7003-982d-0c047bb45cd8.jsonl",
       "header": "Pi TUI continues this chat",
       "screenshots": [
         "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/08-tui.png",
@@ -208,22 +208,43 @@
       ]
     },
     {
+      "name": "crashUnwritten",
+      "covers": "kill a worker before Pi writes the JSONL: the session must not brick",
+      "status": "pass",
+      "ms": 17179,
+      "sessionId": "session-1788401935498-ly4hg4v",
+      "killedPid": 27164,
+      "identityBeforeKill": null,
+      "filesWrittenBeforeKill": [],
+      "runtimeIdentityAfterRecovery": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-59-779Z_01a0650f-f543-7425-9a3a-db86b3be44a8.jsonl",
+      "recovered": {
+        "sessionId": "session-1788401935498-ly4hg4v",
+        "reply": "T37D-UNWRITTEN",
+        "status": "idle",
+        "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-59-779Z_01a0650f-f543-7425-9a3a-db86b3be44a8.jsonl"
+      },
+      "recoveryAttempts": 1,
+      "screenshots": [
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/21-crash-unwritten.png"
+      ]
+    },
+    {
       "name": "crashWorker",
       "covers": "kill a session worker: failure surfaces, next send self-heals",
       "status": "pass",
-      "ms": 76400,
-      "sessionId": "session-1788368093872-wx1coh4",
-      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-55-949Z_01a0630b-8acd-7449-969d-577e25a8afcf.jsonl",
-      "killedPid": 144108,
-      "workersBefore": [143899, 144000, 144022],
-      "workersAfter": [144000, 144022, 144130],
+      "ms": 74559,
+      "sessionId": "session-1788401952669-m7rgvi4",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-19-14-711Z_01a06510-2f97-70cd-86b1-48ae3eec2d01.jsonl",
+      "killedPid": 27211,
+      "workersBefore": [27055, 27184],
+      "workersAfter": [27184, 27232],
       "statusAfterCrash": "idle",
       "errorAfterCrash": null,
       "recovered": {
-        "sessionId": "session-1788368093872-wx1coh4",
+        "sessionId": "session-1788401952669-m7rgvi4",
         "reply": "T37C-AFTER-CRASH",
         "status": "idle",
-        "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-55-949Z_01a0630b-8acd-7449-969d-577e25a8afcf.jsonl"
+        "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-19-14-711Z_01a06510-2f97-70cd-86b1-48ae3eec2d01.jsonl"
       },
       "recoveryAttempts": 2,
       "screenshots": [
@@ -234,8 +255,8 @@
       "name": "crashTui",
       "covers": "kill the Pi CLI inside the TUI: the app falls back to GUI",
       "status": "pass",
-      "ms": 830,
-      "killedPid": 144160,
+      "ms": 902,
+      "killedPid": 27267,
       "sawNotice": true,
       "screenshots": [
         "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/11-crash-tui.png"
@@ -245,22 +266,22 @@
       "name": "hardKillRestart",
       "covers": "SIGKILL the whole app: no orphans, sessions and history survive",
       "status": "pass",
-      "ms": 15872,
+      "ms": 17097,
       "killedPids": {
-        "main": 143675,
-        "workers": [144000, 144022, 144130],
+        "main": 26814,
+        "workers": [27184, 27232],
         "ptys": []
       },
       "before": {
-        "sessionCount": 58,
-        "probeSessionId": "session-1788368093872-wx1coh4",
+        "sessionCount": 71,
+        "probeSessionId": "session-1788401952669-m7rgvi4",
         "probeReply": "T37C-AFTER-CRASH",
-        "probeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-55-949Z_01a0630b-8acd-7449-969d-577e25a8afcf.jsonl"
+        "probeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-19-14-711Z_01a06510-2f97-70cd-86b1-48ae3eec2d01.jsonl"
       },
       "after": {
-        "sessionCount": 59,
+        "sessionCount": 72,
         "found": true,
-        "identity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-55-949Z_01a0630b-8acd-7449-969d-577e25a8afcf.jsonl",
+        "identity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-19-14-711Z_01a06510-2f97-70cd-86b1-48ae3eec2d01.jsonl",
         "status": "idle"
       },
       "screenshots": [
@@ -268,87 +289,95 @@
       ]
     }
   ],
-  "finishedAt": "2026-09-02T16:56:26.972Z",
+  "finishedAt": "2026-09-03T02:20:45.222Z",
   "rendererProblems": [
     {
       "kind": "console.error",
-      "text": "12:54:04.747 › [window] Showing main window via did-finish-load fallback"
+      "text": "22:18:10.220 › [window] Showing main window via did-finish-load fallback"
     },
     {
       "kind": "console.error",
-      "text": "12:54:04.747 › [window] Showing main window via did-finish-load fallback"
+      "text": "22:18:10.220 › [window] Showing main window via did-finish-load fallback"
     },
     {
       "kind": "console.error",
-      "text": "12:54:09.742 › [workspace-tree] worktrees-absent Object"
+      "text": "22:18:16.067 › [workspace-tree] worktrees-absent Object"
     },
     {
       "kind": "console.error",
-      "text": "12:54:09.758 › [workspace-tree] worktrees-absent Object"
+      "text": "22:18:16.079 › [workspace-tree] worktrees-absent Object"
     },
     {
       "kind": "console.error",
-      "text": "12:54:09.903 › [workspace-tree] worktrees-absent Object"
+      "text": "22:18:16.331 › [workspace-tree] worktrees-absent Object"
     },
     {
       "kind": "console.error",
-      "text": "12:54:10.007 › [workspace-tree] worktrees-absent Object"
+      "text": "22:18:16.429 › [workspace-tree] worktrees-absent Object"
     },
     {
       "kind": "console.error",
-      "text": "12:54:10.130 › [workspace-tree] worktrees-absent Object"
+      "text": "22:18:16.532 › [workspace-tree] worktrees-absent Object"
     },
     {
       "kind": "console.error",
-      "text": "12:54:10.256 › [workspace-tree] worktrees-absent Object"
+      "text": "22:18:16.677 › [workspace-tree] worktrees-absent Object"
     },
     {
       "kind": "console.error",
-      "text": "12:55:02.820 › [pi-worker:session-1788368093872-wx1coh4:g1] crashed: Worker exited (code=9 signal=null); last 1 stderr line(s):\n[pi-worker] permission plugin: bundled"
+      "text": "22:18:58.466 › [pi-worker:session-1788401935498-ly4hg4v:g1] crashed: Worker exited (code=9 signal=null); last 1 stderr line(s):\n[pi-worker] permission plugin: bundled"
     },
     {
       "kind": "console.error",
-      "text": "12:55:02.820 › [pi-worker:session-1788368093872-wx1coh4:g1] crashed: Worker exited (code=9 signal=null); last 1 stderr line(s):\n[pi-worker] permission plugin: bundled"
+      "text": "22:18:58.466 › [pi-worker:session-1788401935498-ly4hg4v:g1] crashed: Worker exited (code=9 signal=null); last 1 stderr line(s):\n[pi-worker] permission plugin: bundled"
     },
     {
       "kind": "console.error",
-      "text": "12:55:03.087 › Error occurred in handler for 'chat:send': WorkerManagerError: No ready Pi WorkerSlot exists for session-1788368093872-wx1coh4\n    at WorkerManager.requireReadySession (file:///home/ai/code/ai-client/out/main/index.js:20893:13)\n    at WorkerManager.send (file:///home/ai/code/ai-client/out/main/index.js:20538:24)\n    at file:///home/ai/code/ai-client/out/main/index.js:21549:45\n    at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)"
+      "text": "22:19:21.136 › [pi-worker:session-1788401952669-m7rgvi4:g1] crashed: Worker exited (code=9 signal=null); last 1 stderr line(s):\n[pi-worker] permission plugin: bundled"
     },
     {
       "kind": "console.error",
-      "text": "12:55:03.087 › Error occurred in handler for 'chat:send': WorkerManagerError: No ready Pi WorkerSlot exists for session-1788368093872-wx1coh4\n    at WorkerManager.requireReadySession (file:///home/ai/code/ai-client/out/main/index.js:20893:13)\n    at WorkerManager.send (file:///home/ai/code/ai-client/out/main/index.js:20538:24)\n    at file:///home/ai/code/ai-client/out/main/index.js:21549:45\n    at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)"
+      "text": "22:19:21.136 › [pi-worker:session-1788401952669-m7rgvi4:g1] crashed: Worker exited (code=9 signal=null); last 1 stderr line(s):\n[pi-worker] permission plugin: bundled"
     },
     {
       "kind": "console.error",
-      "text": "12:56:19.965 › [window] Showing main window via did-finish-load fallback"
+      "text": "22:19:21.401 › Error occurred in handler for 'chat:send': WorkerManagerError: No ready Pi WorkerSlot exists for session-1788401952669-m7rgvi4\n    at WorkerManager.requireReadySession (file:///home/ai/code/ai-client/out/main/index.js:20952:13)\n    at WorkerManager.send (file:///home/ai/code/ai-client/out/main/index.js:20597:24)\n    at file:///home/ai/code/ai-client/out/main/index.js:21736:45\n    at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)"
     },
     {
       "kind": "console.error",
-      "text": "12:56:19.965 › [window] Showing main window via did-finish-load fallback"
+      "text": "22:19:21.401 › Error occurred in handler for 'chat:send': WorkerManagerError: No ready Pi WorkerSlot exists for session-1788401952669-m7rgvi4\n    at WorkerManager.requireReadySession (file:///home/ai/code/ai-client/out/main/index.js:20952:13)\n    at WorkerManager.send (file:///home/ai/code/ai-client/out/main/index.js:20597:24)\n    at file:///home/ai/code/ai-client/out/main/index.js:21736:45\n    at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)"
     },
     {
       "kind": "console.error",
-      "text": "12:56:25.386 › [workspace-tree] worktrees-absent Object"
+      "text": "22:20:37.684 › [window] Showing main window via did-finish-load fallback"
     },
     {
       "kind": "console.error",
-      "text": "12:56:25.398 › [workspace-tree] worktrees-absent Object"
+      "text": "22:20:37.684 › [window] Showing main window via did-finish-load fallback"
     },
     {
       "kind": "console.error",
-      "text": "12:56:25.496 › [workspace-tree] worktrees-absent Object"
+      "text": "22:20:43.216 › [workspace-tree] worktrees-absent Object"
     },
     {
       "kind": "console.error",
-      "text": "12:56:25.583 › [workspace-tree] worktrees-absent Object"
+      "text": "22:20:43.229 › [workspace-tree] worktrees-absent Object"
     },
     {
       "kind": "console.error",
-      "text": "12:56:25.677 › [workspace-tree] worktrees-absent Object"
+      "text": "22:20:43.341 › [workspace-tree] worktrees-absent Object"
     },
     {
       "kind": "console.error",
-      "text": "12:56:25.778 › [workspace-tree] worktrees-absent Object"
+      "text": "22:20:43.473 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "22:20:43.586 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "22:20:43.722 › [workspace-tree] worktrees-absent Object"
     }
   ]
 }

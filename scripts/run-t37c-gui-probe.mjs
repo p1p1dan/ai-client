@@ -396,6 +396,30 @@ async function waitFor(read, timeoutMs, label) {
   throw new Error(`timed out after ${timeoutMs}ms waiting for ${label}`);
 }
 
+/**
+ * Every Pi JSONL under the agent directory this run is pointed at.
+ *
+ * Read straight off disk rather than through the app: the whole point is to
+ * check what Pi has actually written, which is the one thing the renderer's
+ * view of a session cannot answer. The workspace subdirectory name is Pi's own
+ * mangling of the cwd, so walk instead of reconstructing it.
+ */
+function listPiSessionFiles() {
+  const agentDir =
+    process.env.PI_CODING_AGENT_DIR ??
+    fs
+      .readFileSync(path.join(repoRoot, 'dev.env'), 'utf8')
+      .match(/^PI_CODING_AGENT_DIR=(.+)$/m)?.[1] ??
+    '';
+  const root = path.join(agentDir.trim().replace(/^~/, os.homedir()), 'sessions');
+  if (!agentDir.trim() || !fs.existsSync(root)) return [];
+  return fs
+    .readdirSync(root, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.jsonl'))
+    .map((entry) => path.join(entry.parentPath ?? root, entry.name))
+    .sort();
+}
+
 // ---------------------------------------------------------------------------
 // Steps
 // ---------------------------------------------------------------------------
@@ -824,6 +848,128 @@ const steps = [
     },
   },
   {
+    name: 'crashUnwritten',
+    covers: 'kill a worker before Pi writes the JSONL: the session must not brick',
+    async run(cdp) {
+      const mainPid = findAppMainPid();
+      if (!mainPid) throw new Error('could not locate the Electron main process');
+      const filesBefore = listPiSessionFiles();
+
+      const sessionId = await cdp.evalAsync(
+        `${STORES}
+        const workspace = chatStore.getState().workspaces.find((w) => w.path);
+        const id = actions.createChatSessionOnWorkspace(workspace.id);
+        chatStore.getState().selectSession(id);
+        return id;
+      `,
+        { label: 'create the unwritten-crash session' }
+      );
+      await cdp.waitFor(`Boolean(document.querySelector('textarea'))`, {
+        label: 'composer mounted',
+      });
+      await sleep(500);
+
+      const before = findWorkerPids(mainPid);
+      // A long answer keeps the turn in flight while this step works, so the
+      // kill lands inside the window Pi has not written anything in yet.
+      await cdp.evaluate(
+        composeAndSend('Count slowly from 1 to 90, one number per line, no other text.')
+      );
+      const victim = await waitFor(
+        () => findWorkerPids(mainPid).find((pid) => !before.includes(pid)) ?? null,
+        90_000,
+        "the new session's worker"
+      );
+      // Bound and running WITHOUT waiting for a runtime identity: withholding
+      // that identity until the file exists is the fix under test, so waiting
+      // for it here would wait forever.
+      const bound = await cdp.evalAsync(
+        `${STORES}
+        const id = ${JSON.stringify(sessionId)};
+        const deadline = Date.now() + 90000;
+        while (Date.now() < deadline) {
+          const s = chatStore.getState();
+          const session = s.sessions.find((x) => x.id === id);
+          if (s.hostBoundSessionIds.includes(id) && session?.status === 'running') {
+            return { runtimeIdentity: session.runtimeIdentity ?? null };
+          }
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        throw new Error('the turn never reached a bound running state');
+      `,
+        { timeoutMs: 100_000, label: 'await a bound running turn' }
+      );
+      if (bound.runtimeIdentity) {
+        throw new Error(`a session with no file on disk still advertised ${bound.runtimeIdentity}`);
+      }
+
+      process.kill(victim, 'SIGKILL');
+      await waitForPidGone(victim, 15_000);
+      // Nothing new on disk proves the kill really did land before the first
+      // write, which is what makes this a test of the unwritten window rather
+      // than a second copy of crashWorker.
+      const filesAtKill = listPiSessionFiles();
+      const newAtKill = filesAtKill.filter((file) => !filesBefore.includes(file));
+      if (newAtKill.length > 0) {
+        throw new Error(`Pi had already written ${newAtKill.join(', ')} — kill landed too late`);
+      }
+
+      // The session used to be finished at this point: both restarts failed
+      // with WORKER_SESSION_FILE_NOT_FOUND and every later send and resume was
+      // refused for the rest of the run. It must now take a new turn.
+      let healed = null;
+      let attempts = 0;
+      for (let i = 0; i < 3 && !healed?.reply.includes('T37D-UNWRITTEN'); i += 1) {
+        attempts += 1;
+        await cdp.waitFor(`Boolean(document.querySelector('[aria-label="Send message"]'))`, {
+          timeoutMs: 60_000,
+          label: 'composer offers Send again after the crash',
+        });
+        await cdp.evaluate(composeAndSend('Reply with exactly: T37D-UNWRITTEN'));
+        healed = await cdp.evalAsync(
+          `${STORES}${LAST_ASSISTANT}${SETTLED_REPLY}
+          return await settledReply(chatStore, ${JSON.stringify(sessionId)}, 60000, 'T37D-UNWRITTEN');
+        `,
+          { timeoutMs: 80_000, label: `await post-crash reply (attempt ${i + 1})` }
+        );
+      }
+      if (!healed.reply.includes('T37D-UNWRITTEN')) {
+        throw new Error(`session stayed bricked; last reply was "${healed.reply}"`);
+      }
+
+      // Now that a turn produced an assistant message, the identity must appear
+      // — and name a file that is actually there.
+      const identity = await cdp.evalAsync(
+        `${STORES}
+        const id = ${JSON.stringify(sessionId)};
+        const deadline = Date.now() + 30000;
+        while (Date.now() < deadline) {
+          const session = chatStore.getState().sessions.find((x) => x.id === id);
+          if (session?.runtimeIdentity) return session.runtimeIdentity;
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        return null;
+      `,
+        { timeoutMs: 45_000, label: 'await the late runtime identity' }
+      );
+      if (!identity) throw new Error('the recovered session never received a runtime identity');
+      if (!fs.existsSync(identity)) {
+        throw new Error(`the announced identity ${identity} does not exist on disk`);
+      }
+      const shot = await cdp.screenshot('21-crash-unwritten');
+      return {
+        sessionId,
+        killedPid: victim,
+        identityBeforeKill: bound.runtimeIdentity,
+        filesWrittenBeforeKill: newAtKill,
+        runtimeIdentityAfterRecovery: identity,
+        recovered: healed,
+        recoveryAttempts: attempts,
+        screenshots: [shot],
+      };
+    },
+  },
+  {
     name: 'crashWorker',
     covers: 'kill a session worker: failure surfaces, next send self-heals',
     async run(cdp) {
@@ -859,29 +1005,32 @@ const steps = [
         90_000,
         "the new session's worker"
       );
-      // Kill once the session is BOUND and RUNNING. Waiting for the Stop
-      // button alone fires before createSession returns (mid-handshake);
-      // waiting for streamed text overshoots, because a short answer completes
-      // between two polls. Bound + running is the turn actually in flight.
+      // Kill once the session is BOUND, RUNNING and WRITTEN. A runtime identity
+      // now appears only after Pi has actually written the JSONL, so waiting for
+      // one is exactly "the file is on disk" — the state this step needs, since
+      // the crash-before-any-write case is `crashUnwritten`'s job. Waiting for
+      // the Stop button alone fires before createSession returns; waiting for
+      // streamed text overshoots, because a short answer completes between two
+      // polls.
       const identity = await cdp.evalAsync(
         `${STORES}
         const id = ${JSON.stringify(sessionId)};
         const deadline = Date.now() + 90000;
         while (Date.now() < deadline) {
-          const session = chatStore.getState().sessions.find((x) => x.id === id);
-          if (session?.runtimeIdentity && session.status === 'running') return session.runtimeIdentity;
+          const s = chatStore.getState();
+          const session = s.sessions.find((x) => x.id === id);
+          if (session?.runtimeIdentity && s.hostBoundSessionIds.includes(id)) {
+            return session.runtimeIdentity;
+          }
           await new Promise((r) => setTimeout(r, 200));
         }
-        throw new Error('the turn never reached a bound running state');
+        throw new Error('the session never reported a written Pi session file');
       `,
-        { timeoutMs: 100_000, label: 'await a bound running turn' }
+        { timeoutMs: 100_000, label: 'await a bound written session' }
       );
-      // Wait for the JSONL to exist before killing. Pi hands Main the path
-      // before it writes the file, and a worker killed inside that window
-      // cannot be restarted at all — see the T37-c evidence note on
-      // WORKER_SESSION_FILE_NOT_FOUND. That is a separate, reported defect;
-      // this step is here to prove the ORDINARY crash path recovers.
-      await waitFor(() => (fs.existsSync(identity) ? true : null), 60_000, `${identity} to exist`);
+      if (!fs.existsSync(identity)) {
+        throw new Error(`identity ${identity} was announced before the file existed`);
+      }
       process.kill(victim, 'SIGKILL');
       await waitForPidGone(victim, 15_000);
 
@@ -1071,7 +1220,15 @@ function startDevApp() {
       cwd: repoRoot,
       stdio: ['ignore', logFd, logFd],
       detached: true,
-      env: { ...process.env, DISPLAY: process.env.DISPLAY ?? ':0' },
+      env: {
+        ...process.env,
+        DISPLAY: process.env.DISPLAY ?? ':0',
+        // An HTTP(S)_PROXY in the environment makes Chromium send the renderer's
+        // load of the Vite dev server through it, and the app then never shows a
+        // window or answers on the debugging port — it just hangs, silently.
+        // Uppercase NO_PROXY is not enough; Chromium reads the lowercase name.
+        no_proxy: [process.env.no_proxy, 'localhost,127.0.0.1,::1'].filter(Boolean).join(','),
+      },
     }
   );
   return { child, logPath };
