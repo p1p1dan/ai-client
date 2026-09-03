@@ -19,6 +19,7 @@
     "postinstall": "electron-builder install-app-deps",
     "build:agent-host": "node scripts/build-agent-host.mjs",
     "verify:packaged": "node scripts/verify-packaged-app.mjs",
+    "verify:release": "node scripts/verify-release-metadata.mjs",
     "verify:preview-assets": "node scripts/verify-renderer-preview-assets.mjs",
     "verify:preview-probe": "node scripts/verify-preview-build-probe.mjs",
     "smoke:permission-plugin": "node --experimental-strip-types src/agent-host/spikes/t08a-permission-plugin-smoke.ts out-agent-host",

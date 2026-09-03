@@ -74,6 +74,12 @@ asarUnpack:
   - "node_modules/node-pty/**"
 npmRebuild: false
 extraResources:
+  # Distributed legal notices are explicit resources because the application
+  # allow-list excludes dependency Markdown and LICENSE files.
+  - from: LICENSE
+    to: licenses/LICENSE
+  - from: THIRD_PARTY_NOTICES.md
+    to: licenses/THIRD_PARTY_NOTICES.md
   - from: node_modules/node-pty
     to: node_modules/node-pty
     filter:

@@ -1,25 +1,60 @@
-# 待发布 — 用户可见变更
+# AiClient 0.4 — Pi-only release candidate
 
-> 本文件只放**必须写进发布说明**的用户可见项。发布时搬进 Release Notes，然后清空本文件。
-> Release Notes 本身由 Conventional Commits 自动分类生成（见 `CLAUDE.md`），
-> 但「用户看到会当成 bug 报上来」的变更**必须有人工文案**，那就是这里。
+> This curated file is the user-facing body of the next release notes. The tag
+> workflow appends verified download links and the full changelog URL.
 
-## 应用目录改名：`~/.aiclient` → `~/.pilab`
+## Highlights
 
-（plan `unified-credentials` S2 · [D59](../plans/openchamber-chat-refactor-ledger.md) / [D62](../plans/openchamber-chat-refactor-ledger.md)）
+- **Pi is now the only conversation runtime.** New conversations, resume,
+  history, tree/rewind/fork, permission UI, model switching, and the embedded
+  terminal all use the bundled Pi SDK.
+- **Bounded multi-session workers.** Electron Main owns a resource-bounded pool
+  with protected eviction, idle reclamation, crash recovery, and clean process
+  shutdown.
+- **One conversation across GUI and Pi TUI.** Switching presentation modes
+  transfers exclusive ownership of the same Pi session instead of creating a
+  second conversation.
+- **Claude history import.** Selected local Claude conversations are copied into
+  new Pi sessions by a read-only, atomic, deduplicated importer. Source
+  transcripts are never changed. Codex history import is not enabled yet.
 
-**本机：自动迁移，你不需要做任何事。**
+## Reliability and safety
 
-- 设置、会话状态、远程连接的工作文件，以及登录凭据，全部会在第一次启动时自动搬到新目录。
-- **不需要重新登录。**
-- 凭据同时从 `<应用数据目录>/credentials/` 搬进了新目录 —— 现在设置和凭据在同一处，不再分裂在两个地方。
-- 新目录按版本分层（正式版 / 开发版各一份），所以装了两个版本的用户，两边的账号和设置互不干扰。
-- **旧目录 `~/.aiclient` 会原样保留**，不会被删除。这是故意的：它让回退到旧版本仍然可用。
-  确认新版一切正常后，你可以自行删除它。
+- Fixed sessions becoming permanently unusable when the first assistant message
+  had not yet created the Pi JSONL file. Durable identities are now published
+  only after the file exists, historical dangling index rows are repaired, and
+  unwritten sessions can recover after a worker crash.
+- Fixed worker restart, queue settlement, logout cleanup, terminal replay, dev
+  worker startup, and packaged runtime diagnostics found during release gates.
+- Packaged applications verify the Pi worker, bundled Node runtime, permission
+  extension, third-party notices, and clean worker bootstrap/dispose behavior.
 
-**⚠️ 远程连接：已连过的远程机器会像被重置了一次。**
+## Migration: `~/.aiclient` → `~/.pilab`
 
-- 远程机上的旧目录 `~/.aiclient/` **不会**被搬运（这是明确的取舍，见 D62）。
-- 因此第一次用新版连上去时：**远程侧的设置回到默认值**，**远程运行时会重新下载一次**。
-- **不影响功能，也不会丢本地数据。** 下载完成后一切照常，之后不会再发生。
-- 如果远程机上的旧目录你确认不再需要，可以手动删除 `~/.aiclient/`。
+Local state and credentials are copied automatically on first launch. Existing
+files are not overwritten and the old `~/.aiclient` directory is deliberately
+kept, so rolling back to an older version remains possible.
+
+Remote-machine state is not migrated. The first remote connection after upgrade
+may restore defaults and download the remote runtime again; local data is not
+affected.
+
+Read the full [Pi-only migration guide](../pi-only-migration.md) before rollout.
+
+## Breaking changes and known limits
+
+- Claude, Codex, Gemini, Cursor, Droid, Auggie, and custom CLI execution paths
+  are no longer selectable runtimes. Configure providers and models through Pi.
+- Imported Claude sessions continue as independent Pi sessions; they do not
+  reactivate the Claude runtime.
+- Codex history import awaits validated real-world source-format evidence.
+- A fully signed and notarized macOS release still requires Apple credentials
+  and real-Mac Gatekeeper verification. Unsigned CI output is not a general
+  release artifact.
+
+## Rollback
+
+Exit AiClient and any Pi TUI, back up `~/.pilab/<profile>`, and reinstall the
+previous build. Keep both `~/.pilab` and `~/.aiclient`, plus all legacy source
+transcripts. Older builds may not display new Pi sessions, but rollback must not
+delete them. See the [rollout and rollback runbook](../pi-only-rollout-rollback.md).

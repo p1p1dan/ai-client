@@ -1,6 +1,9 @@
 /**
  * Portable Extension UI bridge — T11.
  *
+ * Portions adapted from pix. Copyright (c) 2026 Num Scope.
+ * See THIRD_PARTY_NOTICES.md for the MIT license text.
+ *
  * ## What it is
  *
  * pi extensions are written against a TUI. They call `ui.select(...)`,

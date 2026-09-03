@@ -1,6 +1,9 @@
 /**
  * Session-file ownership for the embedded Pi TUI (Q17).
  *
+ * Portions adapted from pix. Copyright (c) 2026 Num Scope.
+ * See THIRD_PARTY_NOTICES.md for the MIT license text.
+ *
  * Ported from pix (`apps/desktop/src/main/pi-tui-session.ts`), which solved the
  * same problem: a terminal opened for a chat session runs `pi --session <file>`
  * on the SAME durable JSONL the GUI worker writes. Two writers on one file is

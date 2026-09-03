@@ -39,10 +39,10 @@ function firstBytes(file, count) {
   }
 }
 
-function checkNodeRuntime(appDir, failures) {
+function checkNodeRuntime(resourceDir, failures) {
   const pin = nodeRuntimePinFor(process.platform, process.arch);
   if (!pin) return;
-  const binary = path.join(appDir, 'resources', 'node-runtime', pin.outName);
+  const binary = path.join(resourceDir, 'node-runtime', pin.outName);
   if (!fs.existsSync(binary)) {
     failures.push(`missing bundled Node runtime: ${binary}`);
     return;
@@ -60,6 +60,28 @@ function checkNodeRuntime(appDir, failures) {
     }
   } catch (error) {
     failures.push(`bundled Node runtime is not runnable: ${String(error)}`);
+  }
+}
+
+function checkLegalNotices(resourceDir, failures) {
+  const licensePath = path.join(resourceDir, 'licenses', 'LICENSE');
+  const noticesPath = path.join(resourceDir, 'licenses', 'THIRD_PARTY_NOTICES.md');
+
+  if (!fs.existsSync(licensePath)) failures.push(`missing application license: ${licensePath}`);
+  if (!fs.existsSync(noticesPath)) {
+    failures.push(`missing third-party notices: ${noticesPath}`);
+    return;
+  }
+
+  const notices = fs.readFileSync(noticesPath, 'utf8');
+  for (const required of [
+    'Copyright (c) 2026 justhil',
+    'Copyright (c) 2026 Num Scope',
+    '@earendil-works/pi-coding-agent',
+  ]) {
+    if (!notices.includes(required)) {
+      failures.push(`third-party notices are missing required attribution: ${required}`);
+    }
   }
 }
 
@@ -106,11 +128,18 @@ function main() {
   if (process.platform === 'win32' && !fs.existsSync(path.join(args.appDir, 'AiClient.exe'))) {
     failures.push('missing AiClient.exe');
   }
-  if (!fs.existsSync(path.join(args.appDir, 'resources', 'app.asar'))) {
-    failures.push('missing resources/app.asar');
+
+  const resourceDir =
+    process.platform === 'darwin' && args.appDir.endsWith('.app')
+      ? path.join(args.appDir, 'Contents', 'Resources')
+      : path.join(args.appDir, 'resources');
+  if (!fs.existsSync(path.join(resourceDir, 'app.asar'))) {
+    failures.push(`missing packaged app archive: ${path.join(resourceDir, 'app.asar')}`);
   }
 
-  const hostDir = path.join(args.appDir, 'resources', 'agent-host');
+  checkLegalNotices(resourceDir, failures);
+
+  const hostDir = path.join(resourceDir, 'agent-host');
   try {
     verifyArtifact({ outDir: hostDir });
   } catch (error) {
@@ -149,7 +178,7 @@ function main() {
     }
   }
 
-  checkNodeRuntime(args.appDir, failures);
+  checkNodeRuntime(resourceDir, failures);
   if (!args.skipSmoke && failures.length === 0) runWorkerSmoke(workerPath, failures);
   if (args.skipSmoke) console.log('[verify-packaged-app] worker smoke skipped (--skip-smoke)');
 
@@ -157,7 +186,9 @@ function main() {
     console.error(`[verify-packaged-app] FAIL — ${failures.join('\n---\n')}`);
     process.exit(1);
   }
-  console.log('[verify-packaged-app] PASS — worker-only artifact + bootstrap/dispose/exit');
+  console.log(
+    '[verify-packaged-app] PASS — legal notices + worker-only artifact + bootstrap/dispose/exit'
+  );
 }
 
 try {

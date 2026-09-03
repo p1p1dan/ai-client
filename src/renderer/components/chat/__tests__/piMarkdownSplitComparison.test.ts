@@ -38,10 +38,12 @@ import { splitClosedPrefix } from '../chatMarkdownPolicy';
  * sufficient reason to switch", not "theirs is broken".
  *
  * pi-app's algorithm is reproduced verbatim below as the reference under test.
- * It is MIT, and the point is to run it rather than to argue about it.
+ * Copyright (c) 2026 justhil; licensed under MIT. See
+ * THIRD_PARTY_NOTICES.md for the complete license text. The point is to run it
+ * rather than to argue about it.
  */
 
-/** Reference implementation: pi-app `splitStreamingMarkdown` (MIT). */
+/** Reference implementation: pi-app `splitStreamingMarkdown` (MIT, © 2026 justhil). */
 function piAppSplit(text: string): { committed: string; tail: string } {
   if (!text) return { committed: '', tail: '' };
   const minTail = 28;

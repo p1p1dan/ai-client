@@ -11,7 +11,7 @@ permissions:
   packages: read
 
 jobs:
-  # D41 — every packaging path goes through the four gates first. Without this
+  # D41 — every packaging path goes through the release gates first. Without this
   # a red gate still produced a full release: build-app has no dependencies of
   # its own, and build-remote-runtime-linux uploads its asset straight into the
   # release job. Both now hang off `gate`.
@@ -66,19 +66,22 @@ jobs:
         run: npm ci --omit=optional
         working-directory: src/agent-host
 
-      # Four gates run serially, never chained into one command: the combined
+      # Heavy gates run serially, never chained into one command: the combined
       # form has OOM'd (exit 137) before — see baseline/test-and-release-gates.md.
-      - name: Gate 1/4 — typecheck
+      - name: Gate 1/5 — typecheck
         run: pnpm typecheck
 
-      - name: Gate 2/4 — typecheck:agent-host
+      - name: Gate 2/5 — typecheck:agent-host
         run: pnpm typecheck:agent-host
 
-      - name: Gate 3/4 — lint
+      - name: Gate 3/5 — lint
         run: pnpm lint
 
-      - name: Gate 4/4 — test
+      - name: Gate 4/5 — test
         run: pnpm test
+
+      - name: Gate 5/5 — release metadata
+        run: pnpm verify:release
 
   build-app:
     needs: [gate]
@@ -384,6 +387,118 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  build-macos:
+    needs: build-app
+    timeout-minutes: 25
+    # An unsigned x64 artifact closes the structural packaged gate on a native
+    # macOS runner. General release still requires Developer ID signing,
+    # notarization, and Gatekeeper verification on a real Mac.
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download build output
+        uses: actions/download-artifact@v5
+        with:
+          name: app-build
+          path: out/
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@p1p1dan'
+
+      - name: Get pnpm store directory
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - name: Cache Electron
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-electron-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install agent-host dependencies
+        run: npm ci --omit=dev --omit=optional
+        working-directory: src/agent-host
+
+      - name: Build Pi worker artifact
+        run: node scripts/build-agent-host.mjs
+
+      - name: Smoke the packaged permission gate
+        run: node --experimental-strip-types src/agent-host/spikes/t08a-permission-plugin-smoke.ts out-agent-host
+
+      - name: Resolve native macOS target
+        id: target
+        run: |
+          if [ "$(uname -m)" = "arm64" ]; then
+            echo "arch=arm64" >> "$GITHUB_OUTPUT"
+            echo "platform=darwin-arm64" >> "$GITHUB_OUTPUT"
+            echo "app_dir=dist/mac-arm64/AiClient.app" >> "$GITHUB_OUTPUT"
+          else
+            echo "arch=x64" >> "$GITHUB_OUTPUT"
+            echo "platform=darwin-x64" >> "$GITHUB_OUTPUT"
+            echo "app_dir=dist/mac/AiClient.app" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cache bundled Node runtime
+        uses: actions/cache@v5
+        with:
+          path: out-node-runtime
+          key: node-runtime-${{ runner.os }}-${{ steps.target.outputs.arch }}-${{ hashFiles('scripts/node-runtime-pin.mjs') }}
+
+      - name: Fetch bundled Node runtime
+        run: node scripts/fetch-node-runtime.mjs --platform ${{ steps.target.outputs.platform }}
+
+      - name: Build unsigned macOS candidate
+        run: npx electron-builder --mac --${{ steps.target.outputs.arch }} --publish never -c.mac.identity=null -c.mac.notarize=false -c.dmg.sign=false
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Verify packaged Pi worker
+        run: node scripts/verify-packaged-app.mjs --app-dir ${{ steps.target.outputs.app_dir }}
+
+      - name: Upload macOS packages
+        uses: actions/upload-artifact@v5
+        with:
+          name: macos-${{ steps.target.outputs.arch }}-packages-unsigned
+          path: |
+            dist/*.dmg
+            dist/*-mac.zip
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload macOS unpacked app
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v5
+        with:
+          name: macos-${{ steps.target.outputs.arch }}-unpacked-unsigned
+          path: ${{ steps.target.outputs.app_dir }}/**
+          retention-days: 7
+          if-no-files-found: error
+
   build-remote-runtime-linux:
     needs: [gate]
     timeout-minutes: 10
@@ -433,7 +548,7 @@ jobs:
           retention-days: 1
 
   generate-release-notes:
-    needs: [build-windows, build-linux, build-remote-runtime-linux]
+    needs: [build-windows, build-linux, build-macos, build-remote-runtime-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     timeout-minutes: 10
@@ -531,74 +646,39 @@ jobs:
           fi
           echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
 
-      - name: Generate Release Notes
+      - name: Generate curated release notes
         id: notes
         run: |
           TAG="${{ steps.tag.outputs.name }}"
           VERSION="${{ steps.tag.outputs.version }}"
           PREV_TAG="${{ steps.prev_tag.outputs.prev_tag }}"
 
-          # 获取 commits
-          COMMITS=$(git log ${PREV_TAG}..${TAG} --pretty=format:"%s" --no-merges)
+          test -s docs/release-notes/unreleased.md
+          cp docs/release-notes/unreleased.md release-notes.md
+          sed -i \
+            -e "s#(../pi-only-migration.md)#(https://github.com/${{ github.repository }}/blob/${TAG}/docs/pi-only-migration.md)#" \
+            -e "s#(../pi-only-rollout-rollback.md)#(https://github.com/${{ github.repository }}/blob/${TAG}/docs/pi-only-rollout-rollback.md)#" \
+            release-notes.md
 
-          # 分类
-          FEATURES=""
-          FIXES=""
-          CICD=""
+          cat >> release-notes.md <<EOF
 
-          while IFS= read -r line; do
-            [[ -z "$line" ]] && continue
+          ---
 
-            if [[ "$line" =~ ^feat ]]; then
-              DESC=$(echo "$line" | sed 's/^feat[^:]*: //')
-              FEATURES="${FEATURES}\n- **${DESC}**"
-            elif [[ "$line" =~ ^fix ]]; then
-              DESC=$(echo "$line" | sed 's/^fix[^:]*: //')
-              FIXES="${FIXES}\n- **${DESC}**"
-            elif [[ "$line" =~ ^ci ]] || [[ "$line" =~ ^build ]]; then
-              DESC=$(echo "$line" | sed 's/^\(ci\|build\)[^:]*: //')
-              CICD="${CICD}\n- ${DESC}"
-            fi
-          done <<< "$COMMITS"
+          ## Downloads
 
-          # 构建 notes
-          {
-            echo "## 更新内容"
-            echo ""
+          | Platform | File |
+          |---|---|
+          | Windows x64 installer | [AiClient-Setup-${VERSION}.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-Setup-${VERSION}.exe) |
+          | Windows x64 portable | [AiClient-${VERSION}-portable.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-${VERSION}-portable.exe) |
+          | Linux x64 AppImage | [AiClient-${VERSION}.AppImage](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-${VERSION}.AppImage) |
+          | Linux x64 deb | [jyw-ai-client_${VERSION}_amd64.deb](https://github.com/${{ github.repository }}/releases/download/${TAG}/jyw-ai-client_${VERSION}_amd64.deb) |
 
-            if [[ -n "$FEATURES" ]]; then
-              echo "### ✨ 新功能"
-              echo -e "$FEATURES"
-              echo ""
-            fi
+          The macOS CI candidate is unsigned and is intentionally not published
+          as a general-release download. Signing, notarization, and Gatekeeper
+          verification must pass before adding a macOS release link.
 
-            if [[ -n "$FIXES" ]]; then
-              echo "### 🐛 问题修复"
-              echo -e "$FIXES"
-              echo ""
-            fi
-
-            if [[ -n "$CICD" ]]; then
-              echo "### 🔨 CI/CD"
-              echo -e "$CICD"
-              echo ""
-            fi
-
-            echo "---"
-            echo ""
-            echo "## 📦 下载"
-            echo ""
-            echo "| 平台 | 文件 |"
-            echo "|------|------|"
-            echo "| Windows (x64 安装版) | [AiClient-Setup-${VERSION}.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-Setup-${VERSION}.exe) |"
-            echo "| Windows (x64 便携版) | [AiClient-${VERSION}-portable.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-${VERSION}-portable.exe) |"
-            echo "| Linux (x64 AppImage) | [AiClient-${VERSION}.AppImage](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-${VERSION}.AppImage) |"
-            echo "| Linux (x64 deb) | [jyw-ai-client_${VERSION}_amd64.deb](https://github.com/${{ github.repository }}/releases/download/${TAG}/jyw-ai-client_${VERSION}_amd64.deb) |"
-            echo ""
-            echo "---"
-            echo ""
-            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG}"
-          } > release-notes.md
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG}
+          EOF
 
           cat release-notes.md
 
