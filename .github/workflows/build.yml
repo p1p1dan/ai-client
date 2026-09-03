@@ -374,7 +374,9 @@ jobs:
         run: df -h /
 
       - name: Verify packaged Pi worker
-        run: node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked
+        # Electron initializes Ozone even though the helper only exercises a
+        # utilityProcess. Hosted Linux runners are headless, so provide Xvfb.
+        run: xvfb-run -a node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked
 
       - name: Upload Linux packages
         if: github.event_name == 'workflow_dispatch'

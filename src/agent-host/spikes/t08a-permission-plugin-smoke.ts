@@ -38,7 +38,7 @@
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadPermissionManagerProbe } from '../../../scripts/permission-policy-probe.mjs';
 
 interface ExtensionsResult {
@@ -136,7 +136,7 @@ try {
   if (!existsSync(grammar)) fail(`missing bash grammar: ${grammar}`);
   else if (!existsSync(runtime)) fail(`missing tree-sitter runtime: ${runtime}`);
   else {
-    const treeSitter = (await import(runtime)) as unknown as {
+    const treeSitter = (await import(pathToFileURL(runtime).href)) as unknown as {
       Parser: { new (): TsParser; init: () => Promise<void> };
       Language: { load: (wasm: Buffer) => Promise<unknown> };
     };

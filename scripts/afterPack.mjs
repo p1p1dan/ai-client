@@ -56,7 +56,7 @@ function copyAgentHost(context) {
       throw new Error(`[afterPack] obsolete transition artifact still exists: ${obsolete}`);
     }
   }
-  const dest = path.join(context.appOutDir, 'resources', 'agent-host');
+  const dest = path.join(resolveResourcesDir(context), 'agent-host');
   fs.rmSync(dest, { recursive: true, force: true });
   fs.cpSync(src, dest, { recursive: true });
   console.log(`[afterPack] Copied agent-host artifact -> ${dest}`);
@@ -96,7 +96,7 @@ function copyNodeRuntime(context) {
     );
   }
 
-  const dest = path.join(context.appOutDir, 'resources', 'node-runtime');
+  const dest = path.join(resolveResourcesDir(context), 'node-runtime');
   fs.rmSync(dest, { recursive: true, force: true });
   fs.mkdirSync(dest, { recursive: true });
   const destBinary = path.join(dest, pin.outName);
@@ -122,6 +122,16 @@ function copyNodeRuntime(context) {
     `[afterPack] Copied bundled Node runtime v${NODE_RUNTIME_VERSION} ` +
       `(${pin.platformKey}) -> ${dest}`
   );
+}
+
+/** Resolve Electron's platform-specific resources directory. */
+export function resolveResourcesDir(context) {
+  if (context.electronPlatformName !== 'darwin') {
+    return path.join(context.appOutDir, 'resources');
+  }
+  const productFilename = context.packager.appInfo.productFilename;
+  if (!productFilename) throw new Error('[afterPack] missing macOS product filename');
+  return path.join(context.appOutDir, `${productFilename}.app`, 'Contents', 'Resources');
 }
 
 /** electron-builder's Arch enum -> the arch half of our pin keys. */

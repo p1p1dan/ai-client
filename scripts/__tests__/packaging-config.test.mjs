@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import yaml from 'js-yaml';
 import { describe, expect, it } from 'vitest';
+import { resolveResourcesDir } from '../afterPack.mjs';
 
 /**
  * Packaging spec C4 / C5 / C6 — structural assertions on the two config files
@@ -21,6 +22,28 @@ const workflow = yaml.load(workflowText);
 const workerPackage = JSON.parse(
   readFileSync(path.join(repoRoot, 'src', 'agent-host', 'package.json'), 'utf8')
 );
+
+describe('afterPack resource layout', () => {
+  it('copies resources inside the macOS app bundle', () => {
+    expect(
+      resolveResourcesDir({
+        appOutDir: '/tmp/dist/mac-arm64',
+        electronPlatformName: 'darwin',
+        packager: { appInfo: { productFilename: 'AiClient' } },
+      })
+    ).toBe(path.join('/tmp/dist/mac-arm64', 'AiClient.app', 'Contents', 'Resources'));
+  });
+
+  it('keeps the flat resources directory on Windows and Linux', () => {
+    expect(
+      resolveResourcesDir({
+        appOutDir: '/tmp/dist/linux-unpacked',
+        electronPlatformName: 'linux',
+        packager: { appInfo: { productFilename: 'AiClient' } },
+      })
+    ).toBe(path.join('/tmp/dist/linux-unpacked', 'resources'));
+  });
+});
 
 describe('electron-builder.yml (C4)', () => {
   it('contains no legacy Claude/Codex execution packaging rules', () => {
