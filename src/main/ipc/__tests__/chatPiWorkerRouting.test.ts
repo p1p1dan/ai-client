@@ -62,6 +62,7 @@ const closeSession = vi.fn(async () => 'close-1');
 const respondExtensionUi = vi.fn(async () => 'extui-1');
 const ensureReady = vi.fn(async () => undefined);
 const recordCreated = vi.fn(async () => undefined);
+const clearUnwrittenRuntimeIdentity = vi.fn(async () => true);
 const handleRuntimeEvent = vi.fn();
 
 vi.mock('electron', () => ({
@@ -106,7 +107,12 @@ vi.mock('../../services/chat/SessionIndexService', () => ({
       updatedAt: 1,
       archived: false,
       runtimeIdentity: '/session.jsonl',
+      // A row that can be resumed has run at least one turn, so it carries a
+      // leaf checkpoint. Its absence is how the handler recognises a session
+      // whose JSONL Pi never actually wrote.
+      piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
     })),
+    clearUnwrittenRuntimeIdentity,
     recordCreated,
     list: vi.fn(async () => []),
     rename: vi.fn(async () => true),
@@ -221,6 +227,69 @@ describe('Pi WorkerSlot chat routing', () => {
     );
   });
 
+  /**
+   * Pi reserves a session's JSONL name at creation and writes it only when the
+   * first assistant message lands, so older builds could index a path that
+   * never became a file. Resume can only ever fail on such a row, which left
+   * the chat permanently unopenable even though it had lost nothing.
+   */
+  it('repairs a row whose Pi session file was never written instead of resuming it', async () => {
+    const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+    vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
+      sessionId: 's1',
+      agent: 'pi',
+      workspacePath: '/repo',
+      title: 'Never ran a turn',
+      updatedAt: 1,
+      archived: false,
+      // No piLeaf: no turn ever ended, so nothing was ever persisted.
+      runtimeIdentity: '/never-written.jsonl',
+    });
+
+    await expect(
+      invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: '/never-written.jsonl',
+        workspacePath: '/repo',
+      })
+    ).resolves.toEqual({ requestId: 'create-1' });
+
+    expect(clearUnwrittenRuntimeIdentity).toHaveBeenCalledWith('s1', '/never-written.jsonl');
+    expect(resumeSession).not.toHaveBeenCalled();
+    expect(createSession).toHaveBeenCalledWith({
+      sessionId: 's1',
+      workspacePath: '/repo',
+      ownerWebContentsId: 7,
+    });
+  });
+
+  it('still resumes a row that ran a turn, even when its file is now gone', async () => {
+    const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+    vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
+      sessionId: 's1',
+      agent: 'pi',
+      workspacePath: '/repo',
+      title: 'Deleted transcript',
+      updatedAt: 1,
+      archived: false,
+      runtimeIdentity: '/deleted-by-user.jsonl',
+      // A committed leaf proves the file existed, so its absence is real data
+      // loss and must surface as such rather than as a silent empty session.
+      piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+    });
+
+    await expect(
+      invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: '/deleted-by-user.jsonl',
+        workspacePath: '/repo',
+      })
+    ).resolves.toEqual({ requestId: 'resume-1' });
+
+    expect(clearUnwrittenRuntimeIdentity).not.toHaveBeenCalled();
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
   it('refuses a non-Pi index row before WorkerManager can interpret its opaque identity', async () => {
     const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
     vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
@@ -316,6 +385,7 @@ describe('Pi WorkerSlot chat routing', () => {
       workspacePath: '/repo',
       model: 'glm/glm-5',
       effort: 'high',
+      leafCheckpoint: { activeEntryId: 'a', fileTailEntryId: 'c' },
       ownerWebContentsId: 7,
     });
     await expect(

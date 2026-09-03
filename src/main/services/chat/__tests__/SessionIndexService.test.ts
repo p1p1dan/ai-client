@@ -138,6 +138,42 @@ describe('SessionIndexService', () => {
     );
   });
 
+  it('clears an unwritten runtime identity and persists the row without it', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+    await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: PI_AGENT });
+    await service.bindRuntimeIdentity('s1', '/sessions/never-written.jsonl');
+
+    await expect(
+      service.clearUnwrittenRuntimeIdentity('s1', '/sessions/never-written.jsonl')
+    ).resolves.toBe(true);
+
+    // Dropped, not blanked: the row reads exactly like one that has never run.
+    const [row] = await service.list();
+    expect(row).not.toHaveProperty('runtimeIdentity');
+    expect(row).toMatchObject({ sessionId: 's1', workspacePath: '/ws/a', agent: PI_AGENT });
+    const persisted = JSON.parse(
+      readFileSync(join(userDataDir, 'session-index.json'), 'utf8')
+    ) as SessionIndexEntry[];
+    expect(persisted[0]).not.toHaveProperty('runtimeIdentity');
+  });
+
+  it('refuses to clear an identity the row no longer holds', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+    await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: PI_AGENT });
+    await service.bindRuntimeIdentity('s1', '/sessions/live.jsonl');
+
+    // A repair racing a fresh binding must not unbind the winner.
+    await expect(
+      service.clearUnwrittenRuntimeIdentity('s1', '/sessions/stale.jsonl')
+    ).resolves.toBe(false);
+    await expect(service.clearUnwrittenRuntimeIdentity('missing', '/x.jsonl')).resolves.toBe(false);
+    expect((await service.list())[0]).toMatchObject({
+      runtimeIdentity: '/sessions/live.jsonl',
+    });
+  });
+
   it('persists across instances: recordCreated + rename in instance A survive in a fresh instance B', async () => {
     const { SessionIndexService } = await import('../SessionIndexService');
     const serviceA = new SessionIndexService();

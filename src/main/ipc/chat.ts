@@ -3,6 +3,7 @@
  * Forwards Host Runtime Events to all BrowserWindows.
  */
 
+import { stat } from 'node:fs/promises';
 import { IPC_CHANNELS } from '@shared/types';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import { PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
@@ -53,6 +54,26 @@ function claimSessionForSender(
     });
   }
   return webContentsId;
+}
+
+/**
+ * Was this indexed Pi session ever actually written?
+ *
+ * A row can name a JSONL that has never existed: Pi reserves the filename when
+ * a session is created and writes it only when the first assistant message
+ * lands, and builds before that was understood indexed the reservation. Such a
+ * row has no `piLeaf` either — a leaf checkpoint is only committed once a turn
+ * has ended — and that pair is what separates "Pi never wrote this" from "the
+ * user deleted a real transcript", which keeps its leaf and must still fail
+ * loudly rather than be quietly replaced with an empty session.
+ */
+async function isUnwrittenPiSession(row: SessionIndexEntry): Promise<boolean> {
+  if (!row.runtimeIdentity || row.piLeaf) return false;
+  try {
+    return !(await stat(row.runtimeIdentity)).isFile();
+  } catch {
+    return true;
+  }
 }
 
 function broadcastRuntimeEvent(event: RuntimeEvent): void {
@@ -235,6 +256,26 @@ export function registerChatHandlers(): void {
         );
       }
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      if (await isUnwrittenPiSession(row)) {
+        // Repair, not resume: there is no file to reopen and nothing was ever
+        // persisted, so drop the phantom identity and give the chat a real Pi
+        // session. Without this the row stays unopenable for good — resume can
+        // only ever fail on it, and the UI tells the user to abandon a chat
+        // that never lost anything.
+        assertAgentSpawnAllowed();
+        await sessionIndexService.clearUnwrittenRuntimeIdentity(
+          payload.sessionId,
+          row.runtimeIdentity
+        );
+        const repaired = await workerManager.createSession({
+          sessionId: payload.sessionId,
+          workspacePath: payload.workspacePath,
+          ...(payload.model ? { model: payload.model } : {}),
+          ...(payload.effort ? { effort: payload.effort } : {}),
+          ownerWebContentsId,
+        });
+        return { requestId: repaired };
+      }
       const requestId = await workerManager.resumeSession({
         sessionId: payload.sessionId,
         sessionFile: payload.runtimeIdentity,
