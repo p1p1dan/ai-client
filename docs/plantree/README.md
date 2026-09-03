@@ -43,7 +43,7 @@ Renderer → Preload → Electron Main WorkerManager
 
 | Plan | Lifecycle | Current phase | Last landed | Next target |
 |---|---|---|---|---|
-| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **In Progress** | Phase H / T37 release gates | T37-d 会话变砖缺陷修复（不再为未落盘的 Pi 会话发布持久身份，历史坏行就地修复，探针 12/12） | T37-d release notes + CI packaged |
+| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **Completed** | Phase H / T37 closed | T37 release packet + manual CI `33714362901`：Windows/Linux/macOS 原生 packaged gates 全绿（macOS unsigned） | 正式发布按 rollout runbook；活动实现转 pix/pi-app UI 对齐 |
 | [Entry and environment](./plans/entry-and-environment/README.md) | Maintenance | 主体完成；只剩 Pi-only 可复用错误面/GUI 复验 | two-entry welcome、spawn gate、git notice、settings ownership | 并入 T37 或另立小维护任务 |
 | [Unified credentials/app state](./plans/unified-credentials/README.md) | Completed foundation | No active work | `~/.pilab/<profile>`、vault、credential mode、Pi arm | Pi config/import/removal 由 active plan 接管 |
 | [OpenChamber product baseline](./plans/openchamber-chat-refactor/README.md) | Completed baseline | No active work | shell/timeline/Composer/files/git/terminal 产品资产 | runtime-neutral assets 由 T31/T36 适配 |
@@ -65,7 +65,7 @@ T28 replacement baseline
 → T37 release candidate
 ```
 
-当前下一目标是 **T37 Pi-only release gates**。T34/T35/T36 已完成 legacy import、final absence 与 Pi TUI/packaging 收敛；Codex import仍等待真实本地格式证据，不恢复legacy execution runtime。
+**T37 Pi-only release gates 已关闭**。T28–T37 全部完成；Claude import、legacy execution final absence、Pi TUI 与 Windows/Linux/macOS 原生 packaged gates 均有 accepted evidence。Codex import仍等待真实本地格式证据，不恢复 legacy execution runtime。当前活动实现入口转向 pix/pi-app UI 对齐计划。
 
 ## Stable evidence and history
 
@@ -83,6 +83,7 @@ T28 replacement baseline
 - [T37-b resource and longevity gate](./plans/pi-backend-migration/evidence/2026-09-02-t37b-resource-longevity.md)
 - [T37-c GUI and real-account point-check](./plans/pi-backend-migration/evidence/2026-09-02-t37c-gui-packaged.md)
 - [T37-d session-brick defect fix](./plans/pi-backend-migration/evidence/2026-09-02-t37d-session-brick-fix.md)
+- [T37-d release closure](./plans/pi-backend-migration/evidence/2026-09-03-t37d-release-closure.md)
 - [Pre-Pi-only Pi plan snapshot](./plans/pi-backend-migration/history/2026-08-31-pre-pi-only-realignment/)
 - [Pre-Pi-only baseline snapshot](./history/2026-08-31-pre-pi-only-baseline/)
 - [Pre-Pi-only root registry](./history/2026-08-31-pre-pi-only-registry.md)

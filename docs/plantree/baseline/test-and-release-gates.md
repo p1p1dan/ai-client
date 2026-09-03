@@ -56,11 +56,11 @@
 - MIT notices、migration wording、release notes、source immutability 和 rollback docs。
 - 数据损坏、permission bypass、cross-session leakage、double writer、startup failure 为发布 blocker。
 
-## 当前并行环境欠项
+## T37 关闭状态
 
-- Cycle 1 真账号 queue GUI 复点。
-- 高资源主机/CI 的完整 renderer + packaged local-file/Monaco/PDF smoke。
-- 这些不阻塞 T28/T29，但必须在 T37 关闭。
+- 真账号 queue/Stop、history/import、GUI↔TUI、permissions、model switch 与 crash recovery 已由 T37-c/d CDP 探针关闭。
+- Windows x64、Linux x64 与 macOS arm64 原生 packaged worker/runtime/legal smoke 已由 manual Build run `33714362901` 关闭；macOS 为 unsigned candidate。
+- 正式发布的内部观察、macOS signing/notarization/Gatekeeper 与扩大范围由 rollout runbook 管理，不再是活动实现欠项。
 
 ## GUI 开发入口
 

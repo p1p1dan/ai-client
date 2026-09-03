@@ -1,10 +1,10 @@
 # Plan — Pi-only Application Convergence
 
-> **状态**：In Progress
+> **状态**：Completed
 >
 > **分支**：`feat/pi-primary-backend`
 >
-> **当前阶段**：Phase H / T35 closed，T37 release gates。
+> **当前阶段**：Phase H / T37 release candidate closed。
 
 ## 目标
 
@@ -96,4 +96,4 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 
 ## 当前出口
 
-T28–T36 均已完成。T35 final absence gate 已在 `8aafd450` 关闭，活动 conversation、one-shot、TUI、auth/settings、IPC/preload、remote runtime 与 packaging 均为 Pi-only；migration-only reader 和 legacy 单向读取有静态保护，见 [T35 evidence](./evidence/2026-09-02-t35-absence-audit.md)。当前唯一活动阶段为 T37 release gates。
+T28–T37 全部完成。T35 final absence gate 在 `8aafd450` 关闭 legacy execution；T37 在 `f2777d7b` 与 manual Build run [`33714362901`](https://github.com/p1p1dan/ai-client/actions/runs/33714362901) 关闭 release candidate：活动 conversation、one-shot、TUI、auth/settings、IPC/preload、remote runtime 与 packaging 均为 Pi-only，Windows/Linux/macOS 原生 packaged verifier 全绿，migration-only reader 和 legacy 单向读取继续受保护。见 [T37 release closure](./evidence/2026-09-03-t37d-release-closure.md)。正式发布的内部观察、签名/公证和扩大范围按 rollout runbook 执行，不再属于活动实现 roadmap。

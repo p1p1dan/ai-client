@@ -14,7 +14,7 @@
 | Pi-native history/resume | **Done** | T32 exact-file open、branch timeline、pagination、incomplete recovery与race closure |
 | Pi-native tree/rewind/fork | **Done** | T33 bounded tree、confirmed rewind、leaf restart与independent fork |
 | Legacy import/removal/TUI | **Done** | T34/T35/T36 全部关闭；migration-only reader与Pi TUI边界有静态证据 |
-| Release candidate | **In Progress** | T37 自动、资源、packaged 与真机矩阵 |
+| Release candidate | **Done** | T37 自动、资源、真账号 GUI、三平台 packaged 与 release evidence 已关闭 |
 
 ## T00–T27：已落资产与替换影响
 
@@ -150,7 +150,7 @@ D16 将实际删除前移到 T29–T36 各替代切片；最终审计关闭 dead
 
 ## Phase H — Release candidate
 
-### T37 — Pi-only release gates — **In Progress**
+### T37 — Pi-only release gates — **Done**
 
 - **T37-a Automated — Done**：全量 254 files / 3884 tests 全绿，typecheck、Biome、diff check 通过；
   原 20 条 pre-existing 失败已溯源关闭，见 [stale test sweep](./evidence/2026-09-02-t37a-stale-test-sweep.md)。
@@ -162,15 +162,18 @@ D16 将实际删除前移到 T29–T36 各替代切片；最终审计关闭 dead
   强杀 app 重启），11 步全过并留截图。期间修掉三个真缺陷：`pnpm dev` 读已删除文件而完全无法启动、
   dev 模式 worker 因 strip-only 语法与缺扩展名导入启动即死、worker stderr 被丢弃导致崩溃无从诊断。
   packaged 安装包按决定交 CI。见 [T37-c evidence](./evidence/2026-09-02-t37c-gui-packaged.md)。
-- **T37-d Release — In Progress**：
+- **T37-d Release — Done**：
   - **会话变砖缺陷 — Done**：根因是 Pi 只在第一条 assistant 消息落地时才写 JSONL，而 Main 把它
     创建时预留的路径当作持久身份写进索引。实际影响面远超原记录：Stop、退出应用、模型报错都会留下永久坏行
     （本机索引 54 行中有 5 行）。改为文件存在才发布身份、文件出现即补发 `session.updated`、
     未 materialize 的会话崩溃后重建、`error` entry 可被清除与淘汰，并就地修复历史坏行。
     12 步 GUI 探针（新增 `crashUnwritten`）在真账号上全过，索引 dangling 行归零。
-    见 [T37-d evidence](./evidence/2026-09-02-t37d-session-brick-fix.md)。
-  - **剩余**：license notices、migration docs、release notes、内部运行后扩大范围；
-    CI packaged 触发与 macOS 产物欠项。
+    见 [T37-d session evidence](./evidence/2026-09-02-t37d-session-brick-fix.md)。
+  - **Release evidence — Done**：MIT notices、Pi-only migration、curated release notes 与 rollout/rollback
+    runbook 已落地；manual branch run `33714362901` 在 Windows x64、Linux x64、macOS arm64 原生 runner
+    完成打包，三平台 permission/legal/runtime/worker smoke 全过。macOS 以用户拍板的 unsigned CI candidate
+    关闭结构门禁，正式签名、公证与 Gatekeeper 仍由 release operation 负责。
+    见 [T37-d release closure](./evidence/2026-09-03-t37d-release-closure.md)。
 
 ## Dependencies
 

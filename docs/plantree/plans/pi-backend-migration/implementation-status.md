@@ -1,28 +1,29 @@
 # Implementation Status — Pi-only Application Convergence
 
-**Current Phase**：Phase H / T37 Pi-only release gates。
+**Current Phase**：Completed — Phase H / T37 release candidate closed。
 
-**Next Target**：T37-a/T37-b/T37-c 已关闭，T37-d 的会话变砖缺陷已修完；
-[T37-d](./roadmap.md#t37--pi-only-release-gates--in-progress) 剩余：license/migration/release notes、
-CI packaged 触发与 macOS 产物欠项。
+**Next Target**：本计划无活动实现任务。后续正式发布按
+[`docs/pi-only-rollout-rollback.md`](../../../pi-only-rollout-rollback.md) 完成内部观察、限量扩大、
+macOS 签名/公证与 rollback 记录；产品界面改造转入已注册的 pix/pi-app UI 对齐计划。
 
-**Last Landed**：2026-09-02 T37-d 会话变砖缺陷修复：Pi 只在第一条 assistant 消息落地时才写 JSONL，
-Main 却把创建时预留的路径当作持久身份写进索引——任何没拿到首条回复的会话（Stop、退出、模型报错，
-不只是崩溃）都会留下永久不可用的一行，本机索引 54 行里坏了 5 行。改为文件存在才发布身份、
-文件出现即补发 `session.updated`、未 materialize 的会话崩溃后重建同一逻辑会话、`error` entry 可清除也可淘汰，
-并在 resume 时就地修复历史坏行。探针新增 `crashUnwritten` 步，12 步全过，索引 dangling 行归零。
-见 [T37-d evidence](./evidence/2026-09-02-t37d-session-brick-fix.md)。前一批为 T37-c GUI/真账号点验：
-新增 CDP 探针 `scripts/run-t37c-gui-probe.mjs`，
-在真 cx2/maxapi 账号上跑通 11 步 GUI 门禁并留 20 张截图；修掉三个真缺陷——`pnpm dev` 读已删除的
-`RemoteHelperSource.ts` 而完全无法启动、dev 模式 Pi worker 因构造函数参数属性与缺扩展名值导入
-在 strip-only 模式下启动即死、`WorkerManager` 生产单例未接 `log` 导致 worker stderr 被整段丢弃；
-另修 TUI 顶栏与 D19 不符的文案。报出一个未修缺陷：worker 在会话 JSONL 落盘前崩溃会让该会话永久不可用。
-见 [T37-c evidence](./evidence/2026-09-02-t37c-gui-packaged.md)。前一批为 T37-b 资源/长稳门禁：
-新增真 Electron 探针 `scripts/probes/t37b-longevity-probe.ts`，
-并修掉 `WorkerSlot` 一处"dispose 应答输给进程退出 → 关闭/淘汰成功却报错"的缺陷，
-见 [T37-b evidence](./evidence/2026-09-02-t37b-resource-longevity.md)。前一批为 Q17 落地（D19：TUI 接管 GUI 会话文件）与 Todo 看板整体移除；同批修复了一个既有的 `pnpm build` 阻断故障（electron-vite `esm-shim` 把以 `import` 结尾的字符串误读为 import 语句）。前一批为 T37-a stale test sweep：关闭全部 20 条 pre-existing 失败（溯源为 `c954b3e1`/`8aafd450`/T36 三次收敛留下的陈旧断言，零生产缺陷），见 [T37-a stale test sweep](./evidence/2026-09-02-t37a-stale-test-sweep.md)。前一批为 T37 post-T36 review fixes `ddfbbb4a`：修复阻断打包的 `electron-builder.yml` 重复键、自动执行队列只结算首个任务、登出漏掉 Pi TUI 与 utility worker、挂起终端回放丢失、旧版会话跨升级复活；远程 Agent 终端改为显式失败，见 [T37 review-fix evidence](./evidence/2026-09-02-t37-post-t36-review-fixes.md)。
+**Last Landed**：2026-09-03 T37-d release closure：MIT notices、Pi-only migration guide、curated
+release notes、rollout/rollback runbook 与 packaged legal gate 已落地；清除第二个 release-note owner；新增
+native macOS unsigned CI job。CI 实跑发现并修复四类既有门禁问题：legacy HTML Biome error、干净安装下
+permission policy 测试误吃本机旧文件、Windows 盘符 ESM import、Linux headless Electron 与 macOS
+`afterPack` resources 路径。最终提交 `f2777d7b`。
 
-**Last Verified**：2026-09-02 — 全量 `vitest run` **256 files / 3909 tests 全部通过，0 失败**；`pnpm typecheck` 与 `pnpm typecheck:agent-host` pass；Scoped Biome 与 diff check pass；`node scripts/run-t37c-gui-probe.mjs` **12/12 步通过**（真 cx2/maxapi 账号、真模型端点，退出后 `pi`/`electron` 进程数为 0）；`node scripts/run-t37b-longevity-probe.mjs` 连续 6 次通过（含一次 20 轮长稳）。**`pnpm dev` 与 `pnpm build` 均可跑通**；packaged electron-builder 产物仍未验证，按决定交 CI。
+**Last Verified**：2026-09-03 — manual Build run
+[`33714362901`](https://github.com/p1p1dan/ai-client/actions/runs/33714362901) **success**：
+
+- gate：两套 typecheck pass；Biome 960 files；Vitest **256 files / 3911 tests pass**；release metadata pass；
+- Windows x64：installer/portable/unpacked 生成，permission gate 与 packaged legal/runtime/worker smoke pass；
+- Linux x64：AppImage/deb 生成，permission gate 与 Xvfb packaged smoke pass；
+- macOS arm64：unsigned dmg/zip/unpacked 生成，permission gate 与 packaged smoke pass；
+- Linux remote runtime x64/arm64 bundles pass；
+- manual branch run 未打 tag、未发布 release，`generate-release-notes` 按设计 skipped。
+
+完整 artifact ID、archive SHA-256、失败 run 的问题发现链与命令见
+[T37-d release closure evidence](./evidence/2026-09-03-t37d-release-closure.md)。
 
 ## Current architecture decision
 
@@ -31,40 +32,29 @@ Main 却把创建时预留的路径当作持久身份写进索引——任何没
 - [D16](./decisions/016-delete-obsolete-paths-with-replacement.md)：替代即删除；不保留 compatibility facade。
 - [D17](./decisions/017-worker-pool-policy.md)：identity/remap、2/3/4 capacity、protected eviction、same-session bounded restart policy。
 - [D18](./decisions/018-t34-claude-import-semantics.md)：Claude-only 首版 import、线性独立 root、display-only unmapped、不可变 snapshot 与批量报告 UI。
-- [D19](./decisions/019-tui-owns-the-gui-session-file.md)：TUI 以 `pi --session <file>` 接管 GUI 同一份 JSONL；单一所有者锁保证不双写；GUI 发送前硬杀 TUI。取代 T36 的 fresh-session 语义。
+- [D19](./decisions/019-tui-owns-the-gui-session-file.md)：TUI 以 `pi --session <file>` 接管 GUI 同一份 JSONL；单一所有者锁保证不双写；GUI 发送前硬杀 TUI。
 
 ## Last landed summary
 
-T28–T36 已完成。活动 chat、one-shot、TUI、onboarding、settings、IPC/preload、remote runtime 与打包路径均为 Pi-only。保留的 Claude/Codex 名称仅限 migration/import、legacy credential/profile 单向读取、历史显示 provenance、Pi provider metadata 与 obsolete-payload build denylist。
+T28–T37 已完成。活动 chat、one-shot、TUI、onboarding、settings、IPC/preload、remote runtime 与
+packaging 均为 Pi-only。保留的 Claude/Codex 名称仅限 migration/import、legacy credential/profile
+单向读取、历史 provenance、Pi provider metadata 与 obsolete-payload denylist。Windows/Linux/macOS
+原生 CI 已验证 bundled Pi worker、Node runtime、permission policy 和 legal resources。
 
 ## Active TODO
 
-1. ~~**T37-a Automated**~~ — **已完成**：全量 254 files / 3884 tests 全绿，typecheck/Biome/diff 复核通过。原 20 条 pre-existing 失败已溯源关闭（[stale test sweep](./evidence/2026-09-02-t37a-stale-test-sweep.md)）。
-2. ~~**T37-b Resource/longevity**~~ — **已完成**：bounded pool、idle reclaim、reopen、memory、worker/PTY orphan 与长挂起/淘汰均有真进程实测；顺带修掉 dispose 应答竞态（[T37-b evidence](./evidence/2026-09-02-t37b-resource-longevity.md)）。
-3. ~~**T37-c GUI/真账号**~~ — **已完成**：CDP 探针 11 步全过（多会话、队列/Stop、历史、Claude 导入、
-   GUI↔TUI 交接、权限四选项、模型切换、三种崩溃恢复），修掉 dev 启动、dev worker 启动、worker stderr 丢弃
-   三个真缺陷（[T37-c evidence](./evidence/2026-09-02-t37c-gui-packaged.md)）。
-4. ~~**T37-c 遗留的会话变砖缺陷**~~ — **已完成**：根因是 Pi 只在第一条 assistant 消息落地时才写 JSONL，
-   Main 却把创建时预留的路径当作持久身份写进索引。影响面远超原记录（Stop/退出/模型报错都触发，
-   本机 54 行坏 5 行）。已改为文件存在才发布身份 + 出现即补发 + 未 materialize 崩溃后重建 +
-   `error` 可清除可淘汰 + 历史坏行就地修复（[T37-d evidence](./evidence/2026-09-02-t37d-session-brick-fix.md)）。
-5. **T37-d Release**：license notices、migration/release notes、rollout/rollback evidence；
-   并接手：(a) `build.yml` 的 `workflow_dispatch` packaged 门禁尚未触发。(b) macOS 无 CI runner。
-   (c) 未 materialize 的会话被空闲淘汰后再输入会得到 `session_not_found`（既有窟窿，修它要动红线文件
-   `chatSessions.ts`，需独立切片）。(d) 配了 `HTTP_PROXY` 的机器上 `pnpm dev` 会静默挂死，
-   Chromium 只认小写 `no_proxy`；探针已自带绕过，产品侧未处理。
+None — implementation roadmap complete。
 
-## Blocked By / risks
+## Operational follow-ups（不重开 T37）
 
-- packaged artifact 交 CI；本机不跑 electron-builder（磁盘剩 6.7 GiB，`compression: maximum` 在 2 核上过慢）。
-- macOS/Windows/Linux runtime pins 已静态和单元验证，但各平台产物仍需实际解包/启动证明。
-- protected legacy import reader/fixture/evidence 不得因名称扫描被机械删除。
+1. 正式发布前执行 1–2 天内部观察、限量扩大和 rollback rehearsal。
+2. macOS unsigned CI candidate 不得直接分发；先完成 Developer ID signing、notarization 与真实 Mac Gatekeeper 点验。
+3. 未 materialize 会话空闲淘汰后的 renderer binding 与 `HTTP_PROXY` 下直接 `pnpm dev` localhost 代理问题，按独立维护切片处理。
+4. GitHub Actions 的 Node 20 action-runtime deprecation warning 由后续 action 依赖升级处理；项目 job Node 已为 24。
 
 ## Handoff
 
-1. 先读 [T37-c GUI/真账号](./evidence/2026-09-02-t37c-gui-packaged.md)、[T37-b resource/longevity](./evidence/2026-09-02-t37b-resource-longevity.md)、[T37-a stale test sweep](./evidence/2026-09-02-t37a-stale-test-sweep.md)、[T37 review-fix evidence](./evidence/2026-09-02-t37-post-t36-review-fixes.md)、[T35 evidence](./evidence/2026-09-02-t35-absence-audit.md)、[T36 evidence](./evidence/2026-09-02-t36-pi-tui.md) 与 [T28 map](./topics/t28-replacement-map.md)。
+1. 发布证据以 [T37-d release closure](./evidence/2026-09-03-t37d-release-closure.md) 为入口。
 2. 不得恢复 multi-agent picker、CLI detector/installer、Hapi/Happy/Cloudflared、remote Claude plugin、permission posture 或 managed-mode facade。
 3. 保护 `src/main/services/legacyImport/`、`src/agent-host/codexHistoryReader.ts`、`codexItemMapper.ts` 与 import fixtures/evidence。
-4. 下一批只做 T37 release evidence；若发现 functional regression，按最小切片修复并回写对应 gate evidence。
-5. 真账号 GUI 点验要先确认 `dev.env` 的 `PI_CODING_AGENT_DIR` 指向仍存在的目录（当前为 `~/.pilab/t37c-agent`）。
-   `dev.env` 是 gitignored 的本机文件；指向失效路径时应用会没有任何模型，且不会明确报错。
+4. 任何扩大范围必须遵循 rollout/rollback runbook；数据损坏、permission bypass、cross-session leakage、double writer 或 startup failure 立即停止发布。
