@@ -120,17 +120,47 @@ async function assertPiCompatibleIndexRow(sessionId: string): Promise<void> {
  * offers no flush-and-hand-over handshake, so "stop the other writer" is the
  * only guarantee available. Best-effort by design — a send must not fail
  * because a terminal that may not even exist could not be reaped.
+ *
+ * Returns true when a terminal was actually holding this session, which is the
+ * signal that the worker's view of the file is now stale — see the send handler.
  */
-async function releaseTuiOwnership(sessionId: string): Promise<void> {
+async function releaseTuiOwnership(sessionId: string): Promise<boolean> {
   try {
     const row = await sessionIndexService.get(sessionId);
     const sessionFile = row?.runtimeIdentity;
-    if (!sessionFile) return;
+    if (!sessionFile) return false;
     const { releaseSessionForHostPrompt } = await import('./piTui');
-    await releaseSessionForHostPrompt(sessionFile);
+    return await releaseSessionForHostPrompt(sessionFile);
   } catch (error) {
     console.warn('[chat] Failed to release Pi TUI ownership before send:', error);
+    return false;
   }
+}
+
+/**
+ * Bring a live worker's in-memory session back in line with its file on disk.
+ *
+ * Only reachable when the Pi TUI has been driving the same JSONL: pi's
+ * SessionManager caches the file at open, so the worker would otherwise keep
+ * the pre-handover leaf and branch the next turn off it, leaving everything the
+ * terminal wrote on an abandoned path.
+ *
+ * With no live worker there is nothing to correct — a later spawn reads the
+ * file anyway — so this reports `false` rather than forcing one into existence.
+ */
+async function reloadSessionFromDisk(
+  sessionId: string,
+  ownerWebContentsId: number | undefined
+): Promise<boolean> {
+  const row = await sessionIndexService.get(sessionId);
+  if (!row?.runtimeIdentity) return false;
+  if (resolveAgentWireName(row.agent) !== PI_AGENT) return false;
+  const { reloaded } = await workerManager.reloadSession({
+    sessionId,
+    sessionFile: row.runtimeIdentity,
+    ...(ownerWebContentsId !== undefined ? { ownerWebContentsId } : {}),
+  });
+  return reloaded;
 }
 
 /**
@@ -347,6 +377,19 @@ export function registerChatHandlers(): void {
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.CHAT_RELOAD_SESSION,
+    async (e, payload: { sessionId: string }): Promise<{ reloaded: boolean }> => {
+      // Main resolves the session file from the index rather than taking one
+      // from the renderer: the renderer-side resume path gates on a non-empty
+      // workspace path, which an unbound (scratch) chat does not have, and that
+      // chat needs the reload just as much as a bound one.
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      const reloaded = await reloadSessionFromDisk(payload.sessionId, ownerWebContentsId);
+      return { reloaded };
+    }
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.CHAT_SEND,
     async (
       e,
@@ -368,10 +411,17 @@ export function registerChatHandlers(): void {
     ): Promise<{ requestId: string }> => {
       // Q17 — a warm Pi terminal on this session must stop before the worker
       // writes the same JSONL. Terminals on other sessions are untouched.
-      await releaseTuiOwnership(payload.sessionId);
+      const releasedTerminal = await releaseTuiOwnership(payload.sessionId);
       // Ownership follows the most recent driver: a session picked up in a
       // second window must show ITS approval prompts there, not in the first.
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      if (releasedTerminal) {
+        // Killing the other writer is only half of the handover. The worker
+        // still holds the tree it read before the terminal appended to it, so
+        // sending now would branch off the pre-terminal leaf and strand
+        // everything typed in the TUI. Re-read the file first.
+        await reloadSessionFromDisk(payload.sessionId, ownerWebContentsId);
+      }
       const requestId = await workerManager.send({ ...payload, ownerWebContentsId });
       return { requestId };
     }

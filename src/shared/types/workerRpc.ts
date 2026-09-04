@@ -209,6 +209,33 @@ export interface WorkerRewindResult {
   tree: WorkerTreeResult;
 }
 
+/**
+ * Re-open this worker's own session file from disk.
+ *
+ * Exists because a live worker never re-reads its JSONL: pi's SessionManager
+ * caches the whole file at open, so `worker.history` projects whatever was on
+ * disk when the worker started. When the Pi TUI has appended to the same file
+ * in the meantime, the worker is both showing stale history and still pointing
+ * its leaf at the pre-TUI entry — the next turn would branch off there and
+ * strand the terminal's messages on an abandoned path.
+ *
+ * `sessionFile` is the caller's assertion about which file it expects to be
+ * reloaded; the worker refuses when that is not the file it owns.
+ */
+export interface WorkerReloadPayload {
+  logicalSessionId: string;
+  sessionFile: string;
+}
+
+export interface WorkerReloadResult {
+  logicalSessionId: string;
+  sessionFile: string;
+  workspacePath: string;
+  /** Leaf after the reload — pi resets it to the file's last entry. */
+  leaf: PiLeafCheckpoint;
+  history: WorkerHistoryResult;
+}
+
 export interface WorkerForkPayload {
   logicalSessionId: string;
   entryId: string;
@@ -319,6 +346,7 @@ export type WorkerUtilityTerminalEvent = WorkerRpcEvent<
 export type WorkerHistoryRequest = WorkerRpcRequest<'worker.history', WorkerHistoryPayload>;
 export type WorkerTreeRequest = WorkerRpcRequest<'worker.tree', WorkerTreePayload>;
 export type WorkerRewindRequest = WorkerRpcRequest<'worker.rewind', WorkerRewindPayload>;
+export type WorkerReloadRequest = WorkerRpcRequest<'worker.reload', WorkerReloadPayload>;
 export type WorkerForkRequest = WorkerRpcRequest<'worker.fork', WorkerForkPayload>;
 export type WorkerDiscardForkRequest = WorkerRpcRequest<
   'worker.fork.discard',
@@ -676,6 +704,25 @@ export function isWorkerRewindResult(value: unknown): value is WorkerRewindResul
     isPiLeafCheckpoint(value.leaf) &&
     isWorkerHistoryResult(value.history) &&
     isWorkerTreeResult(value.tree)
+  );
+}
+
+export function isWorkerReloadPayload(value: unknown): value is WorkerReloadPayload {
+  return (
+    isLogicalSessionPayload(value) &&
+    typeof value.sessionFile === 'string' &&
+    value.sessionFile.trim().length > 0
+  );
+}
+
+export function isWorkerReloadResult(value: unknown): value is WorkerReloadResult {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    typeof value.sessionFile === 'string' &&
+    typeof value.workspacePath === 'string' &&
+    isPiLeafCheckpoint(value.leaf) &&
+    isWorkerHistoryResult(value.history)
   );
 }
 

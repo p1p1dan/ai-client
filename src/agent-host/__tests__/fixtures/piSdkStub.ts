@@ -48,6 +48,8 @@ export interface StubPiSession {
   dispose(): void;
   setModel(model: { provider: string; id: string; name?: string }): Promise<void>;
   setThinkingLevel?(level: string): void;
+  /** The manager this session was built on — replaced on every switch. */
+  sessionManager?: unknown;
 }
 
 export interface PiSdkStubOptions {
@@ -72,6 +74,10 @@ export interface PiSdkStubOptions {
   abortError?: string;
   /** Exact durable session exposed by SessionManager.open in resume tests. */
   openedSession?: { cwd: string; sessionId: string; sessionFile: string; branch: unknown[] };
+  /** Reject `switchSession` with this message. */
+  switchSessionError?: string;
+  /** Make `switchSession` report the replacement as cancelled. */
+  switchSessionCancelled?: boolean;
 }
 
 export interface PiSdkStub {
@@ -179,12 +185,20 @@ export function createPiSdkStub(options: PiSdkStubOptions = {}): PiSdkStub {
     getAgentDir: () => '/tmp/pi-agent',
     SessionManager: {
       create: (cwd: string) => ({ cwd }),
-      open: (sessionFile: string) => ({
-        getBranch: () => options.openedSession?.branch ?? [],
-        getCwd: () => options.openedSession?.cwd ?? '',
-        getSessionFile: () => options.openedSession?.sessionFile ?? sessionFile,
-        getSessionId: () => options.openedSession?.sessionId ?? '',
-      }),
+      open: (sessionFile: string) => {
+        // Snapshot at open, like the real SessionManager: it reads the whole
+        // JSONL once and never looks at disk again. Tests that append to
+        // `openedSession.branch` afterwards are simulating another writer, and
+        // an already-open manager must not see it — that staleness is the
+        // entire reason `worker.reload` exists.
+        const branch = [...(options.openedSession?.branch ?? [])];
+        return {
+          getBranch: () => branch,
+          getCwd: () => options.openedSession?.cwd ?? '',
+          getSessionFile: () => options.openedSession?.sessionFile ?? sessionFile,
+          getSessionId: () => options.openedSession?.sessionId ?? '',
+        };
+      },
       continueRecent: () => ({}),
       inMemory: () => ({}),
     },
@@ -225,12 +239,49 @@ export function createPiSdkStub(options: PiSdkStubOptions = {}): PiSdkStub {
               sessionFile: options.openedSession.sessionFile,
             }
           : undefined;
-      return { session: makeSession(services.cwd, identity) };
+      const session = makeSession(services.cwd, identity);
+      session.sessionManager = manager;
+      return { session };
     },
+    /**
+     * Models the real runtime host, not just its first result: `session` is a
+     * live getter and `switchSession` REPLACES it by re-running the factory on
+     * a manager freshly opened from the file. Anything that caches the session
+     * or its manager across a switch shows up here as a stale reference, which
+     * is the whole failure mode `worker.reload` has to avoid.
+     */
     createAgentSessionRuntime: async (
       factory: (input: Record<string, unknown>) => Promise<Record<string, unknown>>,
       opts: Record<string, unknown>
-    ) => factory({ cwd: opts.cwd, sessionManager: opts.sessionManager }),
+    ) => {
+      let current = await factory({ cwd: opts.cwd, sessionManager: opts.sessionManager });
+      let rebind: ((session: unknown) => Promise<void> | void) | undefined;
+      let beforeInvalidate: (() => void) | undefined;
+      return {
+        get session() {
+          return current.session;
+        },
+        get services() {
+          return current.services;
+        },
+        setBeforeSessionInvalidate(fn: () => void) {
+          beforeInvalidate = fn;
+        },
+        setRebindSession(fn: (session: unknown) => Promise<void> | void) {
+          rebind = fn;
+        },
+        async switchSession(sessionPath: string) {
+          if (options.switchSessionError) throw new Error(options.switchSessionError);
+          if (options.switchSessionCancelled) return { cancelled: true };
+          const manager = sdk.SessionManager.open(sessionPath);
+          beforeInvalidate?.();
+          (current.session as StubPiSession | undefined)?.dispose();
+          current = await factory({ cwd: opts.cwd, sessionManager: manager });
+          await rebind?.(current.session);
+          return { cancelled: false };
+        },
+      };
+    },
   };
 
   return {

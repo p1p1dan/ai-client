@@ -20,6 +20,7 @@ import {
   isWorkerHistoryPayload,
   isWorkerInspectImportedSessionPayload,
   isWorkerReconcileImportedSessionPayload,
+  isWorkerReloadPayload,
   isWorkerRewindPayload,
   isWorkerRpcRequest,
   isWorkerSendPayload,
@@ -39,6 +40,8 @@ import {
   type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
+  type WorkerReloadPayload,
+  type WorkerReloadResult,
   type WorkerRewindPayload,
   type WorkerRewindResult,
   type WorkerRpcErrorPayload,
@@ -77,6 +80,7 @@ export interface PiWorkerRuntime {
   history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult>;
   tree?(input: WorkerTreePayload): Promise<WorkerTreeResult>;
   rewind?(input: WorkerRewindPayload): Promise<WorkerRewindResult>;
+  reload?(input: WorkerReloadPayload): Promise<WorkerReloadResult>;
   fork?(input: WorkerForkPayload): Promise<WorkerForkResult>;
   discardFork?(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
@@ -265,6 +269,9 @@ export class PiWorkerRpcServer {
           break;
         case 'worker.rewind':
           await this.handleRewind(request);
+          break;
+        case 'worker.reload':
+          await this.handleReload(request);
           break;
         case 'worker.fork':
           await this.handleFork(request);
@@ -550,6 +557,27 @@ export class PiWorkerRpcServer {
       );
     }
     this.respondSuccess(request, await this.runtime.rewind(request.payload));
+  }
+
+  private async handleReload(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerReloadPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.reload requires logicalSessionId and sessionFile',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    if (!this.runtime.reload) {
+      throw new PiWorkerSessionError(
+        'WORKER_RELOAD_UNAVAILABLE',
+        'Worker reload method is unavailable'
+      );
+    }
+    this.respondSuccess(request, await this.runtime.reload(request.payload));
   }
 
   private async handleFork(request: WorkerRpcRequest): Promise<void> {

@@ -24,6 +24,7 @@ import {
   isWorkerExtensionUiResponseResult,
   isWorkerForkResult,
   isWorkerHistoryResult,
+  isWorkerReloadResult,
   isWorkerRewindResult,
   isWorkerSendResult,
   isWorkerStopResult,
@@ -36,6 +37,8 @@ import {
   type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
+  type WorkerReloadPayload,
+  type WorkerReloadResult,
   type WorkerRewindPayload,
   type WorkerRewindResult,
   type WorkerRpcEvent,
@@ -135,7 +138,7 @@ interface ManagedSlot {
   error: string | null;
   leafCheckpoint: PiLeafCheckpoint | null;
   branchRevision: number;
-  mutationInFlight: 'rewind' | 'fork' | null;
+  mutationInFlight: 'rewind' | 'fork' | 'reload' | null;
   /** Bytes after the last newline of this worker's stderr; see hostStderr.ts. */
   stderrPending: string;
   /** Last RECENT_STDERR_LIMIT stderr lines, replayed when the worker dies. */
@@ -1083,6 +1086,109 @@ export class WorkerManager {
           ...(result.editorText !== undefined ? { editorText: result.editorText } : {}),
           tree: result.tree.snapshot,
         };
+      } finally {
+        if (this.entriesBySession.get(entry.logicalSessionId) === entry) {
+          entry.mutationInFlight = null;
+        }
+      }
+    });
+  }
+
+  /**
+   * Re-read a live session's JSONL and republish its history.
+   *
+   * The Pi TUI writes the same file this worker owns, and a live worker never
+   * re-reads it: pi's SessionManager caches the file at open. So after the
+   * terminal has appended, the worker is showing pre-handover history and would
+   * branch its next turn off the pre-handover leaf, stranding the terminal's
+   * messages on an abandoned path.
+   *
+   * `resumeSession` cannot do this job. Its warm path deliberately short-
+   * circuits — same file, same cwd, worker already ready, so it re-publishes
+   * the history the worker already had. Only the cold path (no live entry)
+   * touches disk, and the whole point of the TUI handover is that the worker
+   * stays alive across it.
+   *
+   * Returns `reloaded: false` when there is no live worker to reload; the
+   * caller resumes instead, which spawns and therefore reads the file anyway.
+   */
+  async reloadSession(input: {
+    sessionId: string;
+    sessionFile: string;
+    ownerWebContentsId?: number;
+  }): Promise<{ requestId: string; reloaded: boolean }> {
+    const requestId = nextRequestId('reload');
+    return this.serialize(async () => {
+      const entry = this.entriesBySession.get(input.sessionId);
+      if (!entry || entry.state !== 'ready' || !entry.slot) {
+        return { requestId, reloaded: false };
+      }
+      if (!entry.sessionFile || sessionWorkerKey(input.sessionFile) !== entry.key) {
+        throw new WorkerManagerError(
+          'worker_reload_identity_conflict',
+          `Session ${input.sessionId} is bound to another Pi session file`
+        );
+      }
+      this.assertIdleEntry(entry, 'reload');
+      this.claimEntry(entry, input.ownerWebContentsId);
+      entry.mutationInFlight = 'reload';
+      try {
+        const slot = entry.slot;
+        const generation = entry.generation;
+        const result = await slot.request<WorkerReloadResult, WorkerReloadPayload>(
+          'worker.reload',
+          { logicalSessionId: entry.logicalSessionId, sessionFile: entry.sessionFile }
+        );
+        if (!isWorkerReloadResult(result)) {
+          throw new WorkerManagerError(
+            'worker_invalid_reload_result',
+            'Pi worker returned an invalid reload result'
+          );
+        }
+        this.validateHistoryResult(entry, result.history);
+        if (entry.slot !== slot || !this.isAuthoritative(entry, generation)) {
+          throw new WorkerManagerError(
+            'worker_reload_stale',
+            `Reload for ${input.sessionId} arrived from a retired WorkerSlot`,
+            true
+          );
+        }
+        try {
+          await this.commitPiLeaf({
+            sessionId: entry.logicalSessionId,
+            runtimeIdentity: result.sessionFile,
+            piLeaf: result.leaf,
+          });
+        } catch (error) {
+          await this.retireAndDispose(entry, 'slot-dispose').catch(() => undefined);
+          throw error;
+        }
+        entry.leafCheckpoint = result.leaf;
+        // The active branch can have moved to whatever the other writer
+        // appended, so any tree snapshot or history page still in flight is
+        // describing a branch that is no longer current.
+        entry.branchRevision += 1;
+        entry.lastUsedAt = this.now();
+        entry.lastIdleAt = this.now();
+        this.resetExtensionUi(entry, 'session_replaced');
+        // 'branch', not 'refresh': the file is the authority now, so the
+        // timeline is replaced rather than merged with what the renderer was
+        // showing before the handover.
+        this.dispatchHistory(entry, requestId, result.history, 'branch');
+        this.dispatch({
+          type: 'session.status',
+          sessionId: entry.logicalSessionId,
+          requestId,
+          payload: { status: 'idle' },
+        });
+        return { requestId, reloaded: true };
+      } catch (error) {
+        // worker.reload tears the old Pi session down before building the new
+        // one, so a failure leaves the worker without a usable session. Retire
+        // it: the next request spawns a clean one straight from the file.
+        await this.retireAndDispose(entry, 'slot-dispose').catch(() => undefined);
+        this.updateManagerState();
+        throw error;
       } finally {
         if (this.entriesBySession.get(entry.logicalSessionId) === entry) {
           entry.mutationInFlight = null;
@@ -2301,12 +2407,32 @@ export class WorkerManager {
     entry.extensionRuntimeIds.clear();
   }
 
+  /**
+   * Recompute the manager-level state from the pool.
+   *
+   * An EMPTY pool deliberately leaves the state alone. Workers are spawned
+   * lazily — a freshly created session has no worker until its first send — so
+   * "no entries" is the idle state of a perfectly healthy manager, not a
+   * stopped one. Deriving `stopped` from it made the renderer show
+   * "Pi session service 已停止 · 点击 Retry" on a service that answered the
+   * very next message, which is the one thing a status ribbon must never do.
+   *
+   * `stopped` is therefore only ever set by the two paths that really stop the
+   * manager (`shutdown`, `forceKillAllNow`) and by the initial value before
+   * `ensureReady`. Leaving it untouched here preserves both: a manager that
+   * was never started stays `stopped`, and one that was shut down does not
+   * silently come back as `ready` when a stale disposal recomputes the state.
+   */
   private updateManagerState(): void {
     const entries = [...this.entriesBySession.values()];
-    if (entries.length === 0) this.state = 'stopped';
-    else if (entries.some((entry) => entry.state === 'error' || entry.state === 'crashed')) {
+    if (entries.some((entry) => entry.state === 'error' || entry.state === 'crashed')) {
       this.state = 'degraded';
-    } else this.state = 'ready';
+    } else if (entries.length > 0) {
+      this.state = 'ready';
+    } else if (this.state === 'degraded') {
+      // The last failed worker just left the pool — the manager is usable again.
+      this.state = 'ready';
+    }
   }
 
   private dispatch(event: RuntimeEventDraft): void {

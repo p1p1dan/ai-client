@@ -7,6 +7,8 @@ import {
   isWorkerForkResult,
   isWorkerHistoryPayload,
   isWorkerHistoryResult,
+  isWorkerReloadPayload,
+  isWorkerReloadResult,
   isWorkerRewindPayload,
   isWorkerRewindResult,
   isWorkerRpcEvent,
@@ -214,6 +216,33 @@ describe('worker RPC boundary guards', () => {
         tree: { snapshot },
       })
     ).toBe(true);
+    // A reload names the file it expects to be reloaded, so a worker can
+    // refuse one aimed at a session it does not own.
+    expect(
+      isWorkerReloadPayload({
+        logicalSessionId: 'logical-1',
+        sessionFile: '/sessions/pi-1.jsonl',
+      })
+    ).toBe(true);
+    expect(isWorkerReloadPayload({ logicalSessionId: 'logical-1' })).toBe(false);
+    expect(isWorkerReloadPayload({ logicalSessionId: 'logical-1', sessionFile: '  ' })).toBe(false);
+    expect(
+      isWorkerReloadResult({
+        logicalSessionId: 'logical-1',
+        sessionFile: '/sessions/pi-1.jsonl',
+        workspacePath: '/repo',
+        leaf: snapshot.leaf,
+        history,
+      })
+    ).toBe(true);
+    expect(
+      isWorkerReloadResult({
+        logicalSessionId: 'logical-1',
+        sessionFile: '/sessions/pi-1.jsonl',
+        workspacePath: '/repo',
+        history,
+      })
+    ).toBe(false);
     expect(isWorkerForkPayload({ logicalSessionId: 'logical-1', entryId: 'a' })).toBe(true);
     expect(
       isWorkerForkResult({

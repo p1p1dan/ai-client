@@ -1014,6 +1014,13 @@ const electronAPI = {
       tier?: SessionPermissionTier;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESUME_SESSION, payload),
+    /**
+     * Re-read this session's Pi file after the embedded TUI wrote to it and
+     * replace the timeline with what is on disk. `reloaded: false` means there
+     * was no live worker holding a stale view, so nothing needed correcting.
+     */
+    reloadSession: (payload: { sessionId: string }): Promise<{ reloaded: boolean }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RELOAD_SESSION, payload),
     send: (payload: {
       sessionId: string;
       attemptId: string;

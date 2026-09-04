@@ -302,6 +302,13 @@ export const IPC_CHANNELS = {
    */
   CHAT_ENSURE_SCRATCH_WORKSPACE: 'chat:ensureScratchWorkspace',
   CHAT_RESUME_SESSION: 'chat:resumeSession',
+  /**
+   * Re-read a session's Pi JSONL after the embedded TUI wrote to it, and
+   * replace the timeline with what is on disk. Distinct from resume: resume
+   * short-circuits when the worker is already live, which is exactly the case
+   * here.
+   */
+  CHAT_RELOAD_SESSION: 'chat:reloadSession',
   CHAT_SEND: 'chat:send',
   CHAT_STOP: 'chat:stop',
   CHAT_CLOSE_SESSION: 'chat:closeSession',

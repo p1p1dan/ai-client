@@ -32,6 +32,7 @@ import {
 } from './middleColumnLayout';
 import type { RunSendOrigin } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
+import { isSessionBusy } from './sessionIndex/resumeIntent';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
@@ -88,6 +89,8 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   const presentationMode = useSettingsStore((state) => state.presentationMode);
   const setPresentationMode = useSettingsStore((state) => state.setPresentationMode);
   const [tuiTerminalId, setTuiTerminalId] = useState<string | null>(null);
+  /** True while leaving the TUI, until the session has been re-read from disk. */
+  const [surfaceSwitching, setSurfaceSwitching] = useState(false);
   const previousWorkspacePathRef = useRef(activeWorkspacePath);
 
   // U03-b: the gate used to be "this chat has a bound folder". It is now
@@ -95,6 +98,27 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   // have its directory allocated first, which is why this became async.
   const openTui = useCallback(() => {
     if (!activeSessionId) return;
+    // pix refuses the switch mid-turn instead of killing or waiting on it, and
+    // the same has to hold here for a sharper reason: handing the file to the
+    // terminal while the worker is still writing it would give one JSONL two
+    // live writers. `isSessionBusy` is the same predicate the resume path uses
+    // to decide the Host would reject a request.
+    //
+    // Read the status off the store rather than closing over it, for the same
+    // reason `markSendAttempt` does: a callback captured at render time would
+    // decide with the status that was current then, and "is a turn running" has
+    // to be answered at the moment of the click.
+    const liveStatus = useChatSessionsStore
+      .getState()
+      .sessions.find((session) => session.id === activeSessionId)?.status;
+    if (isSessionBusy(liveStatus ?? 'idle')) {
+      addToast({
+        type: 'warning',
+        title: 'Wait for this turn to finish',
+        description: 'The Pi TUI can take over this chat once the current turn ends.',
+      });
+      return;
+    }
     const start = () => {
       setPresentationMode('tui');
       setTuiTerminalId((current) => current ?? `pi-tui-${crypto.randomUUID()}`);
@@ -113,11 +137,50 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     });
   }, [activeSessionId, effectiveCwd, ensureScratchWorkspace, setPresentationMode]);
 
+  /**
+   * Leave terminal mode the way pix's `leaveTerminalMode()` does: suspend the
+   * TUI, re-read the session from disk, and only then show the timeline.
+   *
+   * The reload is the whole point. The TUI appends to this chat's own JSONL,
+   * but the GUI worker read that file once when it started and never looks
+   * again — so without this step the timeline still shows the pre-TUI
+   * conversation AND the worker's next turn branches off the pre-TUI entry,
+   * leaving everything typed in the terminal on an abandoned path.
+   *
+   * Suspend rather than dispose: the process stays warm so re-entering is
+   * instant. That is safe because the only way the GUI writes this file is
+   * through the send path, which kills terminals on it first — a suspended
+   * terminal can never wake up onto a file the GUI has since written.
+   */
   const openGui = useCallback(() => {
-    if (tuiTerminalId) void window.electronAPI.piTui.dispose(tuiTerminalId).catch(() => {});
-    setTuiTerminalId(null);
+    const terminalId = tuiTerminalId;
+    const sessionId = activeSessionId;
     setPresentationMode('gui');
-  }, [setPresentationMode, tuiTerminalId]);
+    if (!terminalId || !sessionId) return;
+    setSurfaceSwitching(true);
+    void (async () => {
+      try {
+        await window.electronAPI.piTui.suspend(terminalId);
+        await window.electronAPI.chat.reloadSession({ sessionId });
+      } catch (error) {
+        // The timeline may now be behind the file with no way to tell how far,
+        // so drop the terminal rather than leave a warm one that could append
+        // again on top of a history nobody reloaded.
+        void window.electronAPI.piTui.dispose(terminalId).catch(() => {});
+        setTuiTerminalId(null);
+        addToast({
+          type: 'error',
+          title: 'Could not reload this chat',
+          description:
+            error instanceof Error
+              ? error.message
+              : 'The conversation could not be re-read from disk.',
+        });
+      } finally {
+        setSurfaceSwitching(false);
+      }
+    })();
+  }, [activeSessionId, setPresentationMode, tuiTerminalId]);
 
   useEffect(() => {
     if (!tuiTerminalId) return;
@@ -261,7 +324,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   }, [activeSessionId, sessions, selectSession]);
 
   return (
-    <section className={cn('flex min-h-0 flex-col', className)}>
+    <section className={cn('relative flex min-h-0 flex-col', className)}>
       {(activeWorkspacePath || isUnboundSession) && (
         <div className="flex h-9 shrink-0 items-center justify-between border-b px-3">
           <span className="flex min-w-0 items-center gap-2">
@@ -385,6 +448,13 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
           </div>
           <ExtensionUiWidgets sessionId={activeSessionId} placement="belowEditor" />
         </>
+      )}
+      {/* Held over the timeline while the session is re-read from disk, so the
+          pre-handover conversation is never briefly presented as current. */}
+      {surfaceSwitching && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 text-meta text-muted-foreground">
+          Reloading this chat…
+        </div>
       )}
       <ExtensionUiNotificationEffects />
       <ExtensionUiDialog />

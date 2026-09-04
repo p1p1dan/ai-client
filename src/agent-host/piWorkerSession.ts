@@ -12,6 +12,8 @@ import type {
   WorkerForkResult,
   WorkerHistoryPayload,
   WorkerHistoryResult,
+  WorkerReloadPayload,
+  WorkerReloadResult,
   WorkerRewindPayload,
   WorkerRewindResult,
   WorkerSendPayload,
@@ -388,6 +390,97 @@ export class PiWorkerSession {
       leaf: readPiLeafCheckpoint(manager),
       history,
       tree,
+    };
+  }
+
+  /**
+   * Re-open this worker's own session file so the worker sees what another
+   * writer appended (the Pi TUI drives the same JSONL through `pi --session`).
+   *
+   * pi's SessionManager reads the whole file once at open and never looks at
+   * disk again, so without this the worker keeps projecting the history it
+   * started with AND keeps its leaf on the pre-handover entry — the next turn
+   * would branch there and strand the terminal's messages on a dead path.
+   *
+   * `switchSession` is pi's own primitive for this (its RPC mode uses it for
+   * resume): it tears the current session down and rebuilds the runtime through
+   * the same factory with a manager freshly read from disk, whose leaf lands on
+   * the file's last entry. That is the whole leaf-alignment story — no
+   * checkpoint restore is involved, and none should be: the file tail is the
+   * authority precisely because someone else was writing.
+   *
+   * Failure is not recoverable in place: `switchSession` disposes the outgoing
+   * session before it builds the new one, so a throw leaves this worker without
+   * a usable session. It is reported retryable so Main retires the slot and the
+   * next request spawns a clean one.
+   */
+  async reload(input: WorkerReloadPayload): Promise<WorkerReloadResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.assertIdle('reload the session');
+    await this.bootstrap();
+    const handle = this.requireHandle();
+    const currentFile = handle.session.sessionFile;
+    if (!currentFile || !samePiSessionPath(currentFile, input.sessionFile)) {
+      throw new PiWorkerSessionError(
+        'WORKER_RELOAD_IDENTITY_MISMATCH',
+        `Worker owns Pi session file ${currentFile ?? 'none'}, not ${input.sessionFile}`
+      );
+    }
+    if (!handle.switchSession) {
+      throw new PiWorkerSessionError(
+        'WORKER_RELOAD_UNAVAILABLE',
+        'Pi runtime does not expose in-place session switching'
+      );
+    }
+    // Any approval dialog still open belongs to the session being torn down.
+    this.extensionUi.cancelAll('aborted');
+    // The subscription installed by the last turn is bound to the outgoing
+    // session object; the next send re-subscribes on the replacement.
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+
+    let switched: { cancelled: boolean };
+    try {
+      switched = await handle.switchSession(currentFile);
+    } catch (error) {
+      throw new PiWorkerSessionError(
+        'WORKER_RELOAD_FAILED',
+        `Failed to re-open Pi session ${currentFile}: ${error instanceof Error ? error.message : String(error)}`,
+        true
+      );
+    }
+    if (switched.cancelled) {
+      throw new PiWorkerSessionError(
+        'WORKER_RELOAD_CANCELLED',
+        'Pi cancelled the session re-open',
+        true
+      );
+    }
+
+    const manager = handle.session.sessionManager;
+    const sessionFile = handle.session.sessionFile;
+    if (!manager || !sessionFile || !samePiSessionPath(sessionFile, currentFile)) {
+      throw new PiWorkerSessionError(
+        'WORKER_RELOAD_IDENTITY_MISMATCH',
+        'Pi re-opened a different session file than the one this worker owns',
+        true
+      );
+    }
+    if (!samePiSessionPath(manager.getCwd?.() ?? '', this.cwd)) {
+      throw new PiWorkerSessionError(
+        'WORKER_RELOAD_CWD_MISMATCH',
+        `Re-opened Pi session workspace mismatch: expected ${this.cwd}, opened ${manager.getCwd?.() ?? 'unknown'}`,
+        true
+      );
+    }
+    this.sessionManager = manager;
+
+    return {
+      logicalSessionId: this.logicalSessionId,
+      sessionFile,
+      workspacePath: this.cwd,
+      leaf: readPiLeafCheckpoint(manager),
+      history: await this.historyFromOpenedSession(manager, sessionFile),
     };
   }
 

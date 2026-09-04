@@ -451,6 +451,130 @@ describe('PiWorkerSession', () => {
     expect(events.some((event) => event.type === 'session.completed')).toBe(false);
   });
 
+  describe('reload after the Pi TUI wrote to the same file', () => {
+    async function openedSessionFixture() {
+      const dir = await mkdtemp(join(tmpdir(), 'aiclient-worker-reload-'));
+      const sessionFile = join(dir, 'session.jsonl');
+      await writeFile(sessionFile, '{"type":"session","id":"pi-shared","cwd":"/repo"}\n', 'utf8');
+      const openedSession = {
+        cwd: '/repo',
+        sessionId: 'pi-shared',
+        sessionFile,
+        branch: [
+          {
+            type: 'message',
+            id: 'gui-1',
+            message: { role: 'user', content: [{ type: 'text', text: 'from the GUI' }] },
+          },
+        ] as unknown[],
+      };
+      return { dir, sessionFile, openedSession };
+    }
+
+    it('picks up entries appended by the terminal and re-binds the approval UI', async () => {
+      const { dir, sessionFile, openedSession } = await openedSessionFixture();
+      const stub = createPiSdkStub({ openedSession });
+      const session = createSession(stub, [], sessionFile);
+      try {
+        await session.bootstrap();
+        const beforeSwitch = stub.sessionFor('/repo');
+
+        // What the Pi TUI does while the GUI worker sits idle: the file grows,
+        // and nothing tells the worker — its SessionManager read the file once.
+        openedSession.branch.push({
+          type: 'message',
+          id: 'tui-1',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'from the TUI' }] },
+        });
+
+        // Proof the read is stale without a reload: same call, old answer.
+        await expect(session.history({ logicalSessionId: 'logical-1' })).resolves.toMatchObject({
+          page: { totalCount: 1 },
+        });
+
+        await expect(
+          session.reload({ logicalSessionId: 'logical-1', sessionFile })
+        ).resolves.toMatchObject({
+          logicalSessionId: 'logical-1',
+          sessionFile,
+          workspacePath: '/repo',
+          history: {
+            page: {
+              messages: [{ id: 'h:gui-1' }, { id: 'h:tui-1' }],
+              totalCount: 2,
+            },
+          },
+        });
+
+        // The runtime replaced the session object. Two things that survive a
+        // stale reference silently would break here: history now reads through
+        // the NEW manager, and the approval UI is bound to the NEW session —
+        // without the rebind every later permission request would be stranded.
+        const afterSwitch = stub.sessionFor('/repo');
+        expect(afterSwitch).not.toBe(beforeSwitch);
+        expect(beforeSwitch?.disposed).toBe(true);
+        expect(afterSwitch?.boundUiContext).toBeDefined();
+        await expect(session.history({ logicalSessionId: 'logical-1' })).resolves.toMatchObject({
+          page: { totalCount: 2 },
+        });
+      } finally {
+        await session.dispose();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('refuses to reload a file this worker does not own', async () => {
+      const { dir, sessionFile, openedSession } = await openedSessionFixture();
+      const stub = createPiSdkStub({ openedSession });
+      const session = createSession(stub, [], sessionFile);
+      try {
+        await session.bootstrap();
+        await expect(
+          session.reload({ logicalSessionId: 'logical-1', sessionFile: '/elsewhere/other.jsonl' })
+        ).rejects.toMatchObject({ code: 'WORKER_RELOAD_IDENTITY_MISMATCH' });
+      } finally {
+        await session.dispose();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('reports a failed re-open as retryable so the slot can be replaced', async () => {
+      const { dir, sessionFile, openedSession } = await openedSessionFixture();
+      const stub = createPiSdkStub({ openedSession, switchSessionError: 'disk went away' });
+      const session = createSession(stub, [], sessionFile);
+      try {
+        await session.bootstrap();
+        await expect(
+          session.reload({ logicalSessionId: 'logical-1', sessionFile })
+        ).rejects.toMatchObject({ code: 'WORKER_RELOAD_FAILED', retryable: true });
+      } finally {
+        await session.dispose();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('refuses to reload mid-turn rather than pulling the file out from under it', async () => {
+      const { dir, sessionFile, openedSession } = await openedSessionFixture();
+      const stub = createPiSdkStub({ openedSession, manualPrompt: true });
+      const session = createSession(stub, [], sessionFile);
+      try {
+        await session.startSend({
+          logicalSessionId: 'logical-1',
+          requestId: 'turn-1',
+          attemptId: 'attempt-1',
+          text: 'go',
+        });
+        await expect(
+          session.reload({ logicalSessionId: 'logical-1', sessionFile })
+        ).rejects.toMatchObject({ code: 'WORKER_SESSION_BUSY', retryable: true });
+      } finally {
+        stub.finishPrompt('/repo');
+        await session.dispose();
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
   it('rejects mismatched sessions, concurrent sends, and bootstrap after disposal', async () => {
     const stub = createPiSdkStub({ manualPrompt: true });
     const session = createSession(stub, []);

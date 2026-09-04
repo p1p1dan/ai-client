@@ -56,6 +56,10 @@ const forkSession = vi.fn(async () => ({
     archived: false,
   },
 }));
+const reloadSession = vi.fn(async () => ({ requestId: 'reload-1', reloaded: true }));
+/** Whether a Pi terminal was holding the session file when the send arrived. */
+let terminalWasReleased = false;
+const releaseSessionForHostPrompt = vi.fn(async () => terminalWasReleased);
 const send = vi.fn(async () => 'send-1');
 const stop = vi.fn(async () => 'stop-1');
 const closeSession = vi.fn(async () => 'close-1');
@@ -87,6 +91,7 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
     getSessionTree,
     rewindSession,
     forkSession,
+    reloadSession,
     send,
     stop,
     closeSession,
@@ -123,6 +128,11 @@ vi.mock('../../services/chat/SessionIndexService', () => ({
 
 vi.mock('../../services/auth/spawnGate', () => ({ assertAgentSpawnAllowed: vi.fn() }));
 
+vi.mock('../piTui', () => ({
+  releaseSessionForHostPrompt,
+  assertHostPromptAllowed: vi.fn(),
+}));
+
 /**
  * U05-a — Main owns the scratch directories, so the handlers must ask it what
  * counts as one rather than pattern-matching a path themselves. `SCRATCH_DIR`
@@ -147,6 +157,7 @@ beforeEach(async () => {
   handlers.clear();
   runtimeEventHandlers.length = 0;
   fakeWindows = [];
+  terminalWasReleased = false;
   vi.clearAllMocks();
   const { registerChatHandlers } = await import('../chat');
   registerChatHandlers();
@@ -310,6 +321,52 @@ describe('Pi WorkerSlot chat routing', () => {
         })
       ).resolves.toEqual({ requestId: 'create-1' });
       expect(createSession.mock.calls[0][0]).not.toHaveProperty('tier');
+    });
+  });
+
+  describe('handing the session file back from the Pi TUI', () => {
+    it('re-reads the file after killing a terminal, before the turn starts', async () => {
+      terminalWasReleased = true;
+
+      await expect(
+        invoke('chat:send', { sessionId: 's1', attemptId: 'attempt-1', text: 'continue' })
+      ).resolves.toEqual({ requestId: 'send-1' });
+
+      // Killing the other writer is only half a handover: the worker still
+      // holds the tree it read before the terminal appended. Sending first
+      // would branch off the pre-terminal leaf and strand the TUI's messages.
+      expect(reloadSession).toHaveBeenCalledWith({
+        sessionId: 's1',
+        sessionFile: '/session.jsonl',
+        ownerWebContentsId: 7,
+      });
+      expect(reloadSession.mock.invocationCallOrder[0]).toBeLessThan(
+        send.mock.invocationCallOrder[0]
+      );
+    });
+
+    it('does not reload when no terminal was holding the file', async () => {
+      terminalWasReleased = false;
+
+      await expect(
+        invoke('chat:send', { sessionId: 's1', attemptId: 'attempt-1', text: 'hello' })
+      ).resolves.toEqual({ requestId: 'send-1' });
+
+      // Every ordinary GUI send goes through this path. Re-opening the Pi
+      // session on each one would tear down and rebuild the runtime for
+      // nothing.
+      expect(reloadSession).not.toHaveBeenCalled();
+    });
+
+    it('resolves the file to reload from the index, not from the renderer', async () => {
+      await expect(invoke('chat:reloadSession', { sessionId: 's1' })).resolves.toEqual({
+        reloaded: true,
+      });
+      expect(reloadSession).toHaveBeenCalledWith({
+        sessionId: 's1',
+        sessionFile: '/session.jsonl',
+        ownerWebContentsId: 7,
+      });
     });
   });
 

@@ -90,6 +90,11 @@ export interface PiSession {
   dispose?: () => void;
   sessionId: string;
   sessionFile?: string;
+  /**
+   * The manager backing THIS session. A session replacement builds a new one,
+   * so anything holding the manager from bootstrap has to re-read it from here.
+   */
+  sessionManager?: PiSessionManager;
   model?: PiModel;
   thinkingLevel?: PiThinkingLevel;
   setModel?: (model: PiModel, options?: { persist?: boolean }) => Promise<void>;
@@ -103,9 +108,26 @@ export interface PiSession {
 }
 
 export interface PiRuntimeHandle {
+  /** Live getter: after a session replacement this is the NEW session. */
   session: PiSession;
   services: PiServices;
   setBeforeSessionInvalidate?: (fn: () => void) => void;
+  /**
+   * Called by Pi after it has replaced `session`, so the host can re-attach
+   * anything bound to the old object. Pi's own RPC mode uses this slot to
+   * re-run `bindExtensions`; we do the same in `bootstrapPiAgentSession`.
+   */
+  setRebindSession?: (fn: (session: PiSession) => Promise<void> | void) => void;
+  /**
+   * Re-open a session file in place: tears the current session down and
+   * rebuilds the runtime through the same factory, with a SessionManager
+   * freshly read from disk. Passing the file the runtime already owns is how a
+   * worker picks up entries another writer (the Pi TUI) appended.
+   */
+  switchSession?: (
+    sessionPath: string,
+    options?: { cwdOverride?: string }
+  ) => Promise<{ cancelled: boolean }>;
   dispose?: () => Promise<void>;
   [key: string]: unknown;
 }
@@ -418,6 +440,13 @@ export async function bootstrapPiAgentSession(
   }
 
   handle.setBeforeSessionInvalidate?.(() => options.extensionUi.reload());
+  // A session replacement (worker.reload's switchSession) leaves the approval
+  // UI bound to the session that was just torn down, which would strand every
+  // subsequent permission request. Pi's own RPC mode re-binds from this slot;
+  // `handle.session` is a live getter, so this always binds the new session.
+  handle.setRebindSession?.(async () => {
+    await bindExtensionUi(options.extensionUi, handle, log);
+  });
   try {
     await bindExtensionUi(options.extensionUi, handle, log);
   } catch (error) {

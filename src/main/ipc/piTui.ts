@@ -146,13 +146,18 @@ export function registerPiTuiHandlers(): void {
 /**
  * Q17 — the GUI is about to write this session's JSONL, so any terminal on it
  * must stop first. Called by the chat send path before it starts a turn.
+ *
+ * Reports whether a terminal was actually holding the file. The caller needs
+ * that to know its worker's cached view of the session is now behind disk:
+ * killing the writer does not tell the worker what the writer wrote.
  */
-export async function releaseSessionForHostPrompt(sessionFile: string): Promise<void> {
-  if (!sessionFile.trim()) return;
-  await Promise.allSettled(
+export async function releaseSessionForHostPrompt(sessionFile: string): Promise<boolean> {
+  if (!sessionFile.trim()) return false;
+  const results = await Promise.allSettled(
     [...controllers.values()].map((controller) => controller.disposeSession(sessionFile))
   );
   sessionGuard.release(sessionFile);
+  return results.some((result) => result.status === 'fulfilled' && (result.value?.length ?? 0) > 0);
 }
 
 /** Throws while a Pi terminal still owns a session (defence in depth). */

@@ -68,6 +68,8 @@
 | [evidence/2026-09-03-u02-u03a-column-mode.md](./evidence/2026-09-03-u02-u03a-column-mode.md) | U02+U03-a 布局模式落地记录 |
 | [evidence/2026-09-03-u05-u03b-unbound-chat.md](./evidence/2026-09-03-u05-u03b-unbound-chat.md) | U05+U03-b 免绑定开聊落地记录（含两处计划偏差与欠项） |
 | [evidence/2026-09-03-u08-2-thinking-levels.md](./evidence/2026-09-03-u08-2-thinking-levels.md) | U08-2 思考档七档落地记录（含边界处三份五词拷贝与 `off` 的路径不对称） |
+| [evidence/2026-09-04-u12-rev2-cross-directory-and-terminal-rail.md](./evidence/2026-09-04-u12-rev2-cross-directory-and-terminal-rail.md) | U12 rev.2：跨目录门让 full access 放行（hands-off 不动）+ 终端入口下线；含 `user_configured` 路线下档位失效的未修缺口 |
+| [evidence/2026-09-04-host-status-false-stop-and-tui-history-bug.md](./evidence/2026-09-04-host-status-false-stop-and-tui-history-bug.md) | Host 状态误报「已停止」修复（空池 ≠ 停止）+ **TUI↔GUI 历史分叉**：成因、pix 参考实现、施工清单、落地记录与变异验证（已修，待真机回合验证）|
 | [decisions/001-style-depth-and-sequencing.md](./decisions/001-style-depth-and-sequencing.md) | 风格深度与排期拍板 |
 | [decisions/002-layout-cwd-and-evidence-scope.md](./decisions/002-layout-cwd-and-evidence-scope.md) | 双栏语义、免绑定 cwd 边界、取证范围与时机 |
 | [decisions/003-sidebar-density-and-runtime-field-ownership.md](./decisions/003-sidebar-density-and-runtime-field-ownership.md) | 侧栏保留 28px、runtime 补字段挂 Pi 计划 T38、service_tier 取证启动 |
