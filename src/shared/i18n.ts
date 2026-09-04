@@ -1710,13 +1710,14 @@ export const zhTranslations: Record<string, string> = {
   'Shipped defaults — reads are free, changes ask for confirmation.':
     '随包默认——读取免确认，修改需要确认。',
   'Hands-off': '放手',
-  'File edits apply without asking; commands still ask.': '文件修改直接生效；命令仍会询问。',
+  'File edits inside the workspace apply without asking; commands, and anything outside it, still ask.':
+    '工作区内的文件修改直接生效；命令、以及工作区之外的任何操作仍会询问。',
   'Full access': '完全放开',
-  'Approves most actions automatically. Secret-file protection and cross-directory confirmation remain.':
-    '自动批准大部分操作。密钥文件保护与跨目录确认仍然生效。',
+  'Approves most actions automatically, including writes outside the workspace. Secret-file protection remains.':
+    '自动批准大部分操作，包括工作区之外的写入。密钥文件保护仍然生效。',
   'Remove limits on this chat?': '移除当前对话的限制？',
-  'Full access approves most tool calls automatically. Only secret-file protection and cross-directory confirmation remain. This applies to this chat only.':
-    '「完全放开」会自动批准大部分工具调用。仅保留密钥文件保护与跨目录确认。该设置仅作用于当前对话。',
+  'Full access approves most tool calls automatically, including reads and writes outside this workspace. Only secret-file protection remains. This applies to this chat only.':
+    '「完全放开」会自动批准大部分工具调用，包括工作区之外的读写。仅保留密钥文件保护。该设置仅作用于当前对话。',
   Apply: '应用',
   'Host status': 'Host 状态',
   'Process ID': '进程 ID',

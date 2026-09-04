@@ -185,13 +185,15 @@ describe('reduceShellSurface', () => {
   });
 
   it('remembers the closed surface as lastSurfaceId', () => {
+    // Any rail-selectable surface does; `terminal` used to stand in here and
+    // stopped being selectable on 2026-09-04.
     const opened = reduceShellSurface(initialShellSurfaceState, {
       type: 'select',
-      surfaceId: 'terminal',
+      surfaceId: 'editor',
     });
     const closed = reduceShellSurface(opened, { type: 'close' });
     expect(closed.activeSurfaceId).toBeNull();
-    expect(closed.lastSurfaceId).toBe('terminal');
+    expect(closed.lastSurfaceId).toBe('editor');
   });
 
   it('ignores a select for an unknown surface id', () => {

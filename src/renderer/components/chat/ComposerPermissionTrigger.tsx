@@ -40,14 +40,19 @@ const TIER_OPTIONS: readonly TierOption[] = [
   {
     id: 'handsoff',
     labelKey: 'Hands-off',
-    descriptionKey: 'File edits apply without asking; commands still ask.',
+    // Names the workspace boundary on purpose: edits INSIDE it are what this
+    // tier clears, and a file outside it still runs the cross-directory gate
+    // first — which looked like a broken tier while the copy said only
+    // "file edits apply without asking".
+    descriptionKey:
+      'File edits inside the workspace apply without asking; commands, and anything outside it, still ask.',
     icon: ShieldOff,
   },
   {
     id: 'fullopen',
     labelKey: 'Full access',
     descriptionKey:
-      'Approves most actions automatically. Secret-file protection and cross-directory confirmation remain.',
+      'Approves most actions automatically, including writes outside the workspace. Secret-file protection remains.',
     icon: ShieldAlert,
     dangerous: true,
   },
@@ -177,7 +182,7 @@ export function ComposerPermissionTrigger({
             </p>
             <p className="text-meta text-muted-foreground">
               {t(
-                'Full access approves most tool calls automatically. Only secret-file protection and cross-directory confirmation remain. This applies to this chat only.'
+                'Full access approves most tool calls automatically, including reads and writes outside this workspace. Only secret-file protection remains. This applies to this chat only.'
               )}
             </p>
             <div className="flex justify-end gap-2">

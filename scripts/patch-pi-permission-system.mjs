@@ -224,6 +224,57 @@ if (
 )
   changed.push('src/index.ts');
 
+// U12 rev.2 (D-Q13 follow-up, 2026-09-04): exempt AiClient's own session-tier
+// link from the bounded-delegation envelope.
+//
+// Upstream caps every chain link's `allow` on `path` / `external_directory` to
+// `defer` (ADR 0007 §5) because a link is assumed to be a third-party judge —
+// a model, an external service — that the operator did not individually
+// authorize. Ours is neither: `aiclient-session-tier` carries the tier the user
+// picked in this app's own composer, and the only tier that grants those
+// surfaces (`fullopen`) sits behind an explicit "remove the limits on this
+// chat?" confirmation. With the envelope in force, that confirmation bought the
+// user nothing on the surface they actually hit — writing a file outside the
+// workspace still prompted on every single call, which reads as "the tier does
+// not work" rather than "this surface is exempt".
+//
+// Scope is deliberately one name. Every other link — including any the user
+// installs — stays inside the envelope, and `deny` verdicts are untouched, so
+// the secret-file denies in our own `path` policy still cannot be overridden
+// (they resolve before any link is consulted).
+if (
+  patch('src/authority/authorizer-selection.ts', [
+    {
+      before: '      links.push({ name, authorize: encloseInDelegationEnvelope(authorize) });',
+      after: [
+        "      // AiClient distributor patch: this app's own session-tier link is",
+        '      // not a third-party judge — its tier is a user choice made in our UI',
+        '      // behind an explicit dangerous-tier confirmation — so it may grant',
+        '      // the excluded surfaces. Every other link stays enveloped.',
+        '      links.push({',
+        '        name,',
+        '        authorize:',
+        '          name === AICLIENT_UNENVELOPED_LINK',
+        '            ? authorize',
+        '            : encloseInDelegationEnvelope(authorize),',
+        '      });',
+      ].join('\n'),
+      already: 'AICLIENT_UNENVELOPED_LINK',
+    },
+    {
+      before: '} from "./permission-prompter";',
+      after: [
+        '} from "./permission-prompter";',
+        '',
+        '/** AiClient distributor patch: the one link exempt from the envelope. */',
+        'const AICLIENT_UNENVELOPED_LINK = "aiclient-session-tier";',
+      ].join('\n'),
+      already: 'const AICLIENT_UNENVELOPED_LINK',
+    },
+  ])
+)
+  changed.push('src/authority/authorizer-selection.ts');
+
 console.log(
   changed.length > 0
     ? `[patch-pi-permission-system] patched ${changed.join(', ')}`

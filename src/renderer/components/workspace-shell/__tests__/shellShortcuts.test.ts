@@ -46,24 +46,28 @@ describe('resolveShellShortcut', () => {
   });
 
   describe('Ctrl/Cmd+1..4 — select surface', () => {
-    it('maps Digit1..4 to git/editor(files)/context/terminal in rail order on non-mac', () => {
-      // T-32 (D27): rail order is A08's tab order now, so the digits moved with it.
-      const expected = ['git', 'editor', 'context', 'terminal'];
-      for (let digit = 1; digit <= 4; digit++) {
+    // T-32 (D27): rail order is A08's tab order, so the digits follow it.
+    // 2026-09-04: terminal left the rail, so Digit4 now binds to nothing.
+    const expected = ['git', 'editor', 'context'];
+
+    it('maps Digit1..3 to git/editor(files)/context in rail order on non-mac', () => {
+      for (let digit = 1; digit <= expected.length; digit++) {
         const action = resolveShellShortcut(input({ code: `Digit${digit}`, ctrlKey: true }));
         expect(action).toEqual({ type: 'select-surface', surfaceId: expected[digit - 1] });
       }
     });
 
-    it('maps Digit1..4 the same way on mac with metaKey', () => {
-      // T-32 (D27): rail order is A08's tab order now, so the digits moved with it.
-      const expected = ['git', 'editor', 'context', 'terminal'];
-      for (let digit = 1; digit <= 4; digit++) {
+    it('maps Digit1..3 the same way on mac with metaKey', () => {
+      for (let digit = 1; digit <= expected.length; digit++) {
         const action = resolveShellShortcut(
           input({ code: `Digit${digit}`, metaKey: true, isMac: true })
         );
         expect(action).toEqual({ type: 'select-surface', surfaceId: expected[digit - 1] });
       }
+    });
+
+    it('does not resolve Digit4 now that only three surfaces are on the rail', () => {
+      expect(resolveShellShortcut(input({ code: 'Digit4', ctrlKey: true }))).toBeNull();
     });
 
     it('does not resolve Digit5 (only the first four rail surfaces are bound)', () => {
@@ -90,22 +94,16 @@ describe('resolveShellShortcut', () => {
     });
   });
 
-  describe('Ctrl/Cmd+` — open terminal surface', () => {
-    it('resolves on non-mac with ctrlKey', () => {
-      expect(resolveShellShortcut(input({ code: 'Backquote', ctrlKey: true }))).toEqual({
-        type: 'open-terminal',
-      });
+  // 2026-09-04: Ctrl/Cmd+` is unbound — the terminal surface lost its rail
+  // button, and a shortcut that opens something unreachable is a dead key.
+  describe('Ctrl/Cmd+` — no longer bound', () => {
+    it('resolves to nothing on non-mac with ctrlKey', () => {
+      expect(resolveShellShortcut(input({ code: 'Backquote', ctrlKey: true }))).toBeNull();
     });
 
-    it('resolves on mac with metaKey', () => {
+    it('resolves to nothing on mac with metaKey', () => {
       expect(
         resolveShellShortcut(input({ code: 'Backquote', metaKey: true, isMac: true }))
-      ).toEqual({ type: 'open-terminal' });
-    });
-
-    it('is not honored when the target is editable', () => {
-      expect(
-        resolveShellShortcut(input({ code: 'Backquote', ctrlKey: true, targetIsEditable: true }))
       ).toBeNull();
     });
   });

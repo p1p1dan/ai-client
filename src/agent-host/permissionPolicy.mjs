@@ -140,9 +140,12 @@ export const AICLIENT_DEFAULT_PERMISSION_POLICY = {
   yoloMode: false,
 
   // U12: the session-tier authorizer link registered by our inline extension.
-  // The delegation envelope caps `allow` on `path` and `external_directory`
-  // to `defer`, so even the `fullopen` tier cannot bypass secret-file denies
-  // or cross-directory confirmation.
+  // `scripts/patch-pi-permission-system.mjs` exempts this one link from the
+  // bounded-delegation envelope, so `fullopen` also clears `path` and
+  // `external_directory` (D-Q13 follow-up 2026-09-04: cross-directory writes
+  // prompted on every call even at `fullopen`, which read as a broken tier).
+  // Deny rules are unaffected — they resolve before any link is consulted, so
+  // the secret-file denies below still hold at every tier.
   authorizerChain: ['aiclient-session-tier'],
 
   permission: {

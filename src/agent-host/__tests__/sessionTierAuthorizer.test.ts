@@ -95,10 +95,11 @@ describe('verdictForTier', () => {
     }
   });
 
-  // RELEASE BLOCKER: the delegation envelope caps path/external_directory
-  // `allow` to `defer`, but the authorizer itself must never be the only
-  // line of defence — verify that ONLY fullopen emits `allow` on these
-  // surfaces, and the other three tiers never do.
+  // RELEASE BLOCKER: since the 2026-09-04 distributor patch exempts this link
+  // from the bounded-delegation envelope, an `allow` here on path /
+  // external_directory is FINAL — nothing downstream caps it back to a prompt.
+  // Verify that ONLY fullopen (the tier behind the dangerous-tier
+  // confirmation) emits it, and the other three tiers never do.
   it('[release-blocker] only fullopen allows path and external_directory; every other tier defers or denies', () => {
     const excludedSurfaces = ['path', 'external_directory'] as const;
     const nonFullTiers: SessionPermissionTier[] = ['readonly', 'pragmatic', 'handsoff'];
@@ -108,8 +109,8 @@ describe('verdictForTier', () => {
         expect(v.kind, `${tier}/${surface}`).not.toBe('allow');
       }
     }
-    // fullopen does allow — which is fine because the delegation envelope
-    // will cap it to defer. This test documents the contract boundary.
+    // fullopen does allow, and that allow now reaches the gate unchanged.
+    // This test documents the contract boundary.
     for (const surface of excludedSurfaces) {
       expect(verdictForTier('fullopen', surface).kind).toBe('allow');
     }

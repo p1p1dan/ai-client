@@ -80,10 +80,12 @@ export interface ContextSurfaceDescriptor {
 // Order doubles as the panel tab order AND the rail order (decision 10).
 // T-32 (D27) re-ordered the rail-visible four to A08's tab order —
 // `git | files | context` (a08:1259-1262) with `terminal` appended, since D27's
-// exemption ① keeps the terminal in the panel instead of a bottom dock.
+// exemption ① keeps the terminal in the panel instead of a bottom dock. The
+// terminal left the rail again on 2026-09-04 (see its entry below), so the
+// rail-visible set is now the first three.
 // NOTE: this order is also what `Ctrl/Cmd+1..4` maps to (shellShortcuts.ts
 // derives the digits from `railSurfaces(DEFAULT_SURFACE_ORDER).slice(0, 4)`),
-// so reordering here silently rebinds those four shortcuts.
+// so reordering here silently rebinds those shortcuts.
 export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
   {
     id: 'git',
@@ -120,12 +122,20 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     pendingTask: null,
   },
   {
+    // 2026-09-04: taken off the rail at the user's request. The surface itself
+    // still exists (`surfaceViews.tsx` keeps `TerminalSurfaceView`, and a
+    // persisted `lastSurfaceId: 'terminal'` still resolves through
+    // `getSurface`), it simply has no entry point any more — no header button,
+    // no Ctrl/Cmd+`, no rail digit. `registeredOnly` is the registry's own way
+    // of saying "not offered on the rail this round"; it is what every guard
+    // in `shellLayoutModel.ts` already reads, so one flag closes every door at
+    // once rather than leaving a shortcut that silently does nothing.
     id: 'terminal',
     icon: 'square-terminal',
     labelKey: 'Terminal',
     descriptionKey: 'Workspace terminal',
     availability: 'always',
-    registeredOnly: false,
+    registeredOnly: true,
     pendingTask: null,
   },
   {

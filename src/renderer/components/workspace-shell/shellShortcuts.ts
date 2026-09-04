@@ -11,10 +11,13 @@ import {
   type ShellColumnMode,
 } from './surfaceRegistry';
 
+// 2026-09-04: `open-terminal` (Ctrl/Cmd+`) is gone with the terminal's rail
+// button — see `surfaceRegistry.ts`. A shortcut whose target surface is no
+// longer rail-selectable resolves to nothing at the reducer, i.e. a key that
+// looks bound and does nothing, so it leaves with the button rather than after.
 export type ShellShortcutAction =
   | { type: 'toggle-context-panel' }
   | { type: 'select-surface'; surfaceId: ContextSurfaceId }
-  | { type: 'open-terminal' }
   | { type: 'toggle-sidebar' };
 
 export interface ResolveShellShortcutInput {
@@ -106,10 +109,6 @@ export function resolveShellShortcut(input: ResolveShellShortcutInput): ShellSho
 
   if (input.targetIsEditable) {
     return null;
-  }
-
-  if (input.code === 'Backquote') {
-    return { type: 'open-terminal' };
   }
 
   if (input.code === 'KeyB') {

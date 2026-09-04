@@ -16,9 +16,18 @@
  * | handsoff   | allow     | defer | defer           |
  * | fullopen   | allow     | allow | allow           |
  *
- * The delegation envelope (`DELEGATION_EXCLUDED_SURFACES`) caps any `allow`
- * on `path` or `external_directory` to `defer`, so even `fullopen` cannot
- * bypass the secret-file deny rules or cross-directory confirmation.
+ * `fullopen` also covers `path` and `external_directory` — writing a file
+ * outside the workspace runs two gates (`external_directory`, then `write`),
+ * and a tier that cleared only the second one still prompted on every call,
+ * which read as "the tier does not work". Upstream's bounded-delegation
+ * envelope would cap those two surfaces back to `defer`; our distributor patch
+ * (`scripts/patch-pi-permission-system.mjs`) exempts THIS link by name, on the
+ * grounds that the tier is the user's own choice made behind an explicit
+ * dangerous-tier confirmation, not a third-party judge's verdict.
+ *
+ * Deny rules are untouched by any of this: they resolve before a link is
+ * consulted, so the secret-file denies in `permissionPolicy.mjs` still hold at
+ * every tier, `fullopen` included.
  *
  * ## Why an inline extension
  *

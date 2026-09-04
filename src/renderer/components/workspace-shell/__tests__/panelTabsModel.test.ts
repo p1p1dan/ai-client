@@ -11,12 +11,13 @@ import { DEFAULT_SURFACE_ORDER } from '../surfaceRegistry';
 describe('derivePanelTabs', () => {
   const noChanges = { changedFilesCount: 0 };
 
-  it('returns A08 tab order: git | files | context, plus terminal (exemption ①)', () => {
+  // 2026-09-04: `terminal` used to be appended here under D27's exemption ①;
+  // it left the rail (and so the tab strip) when its button was removed.
+  it('returns A08 tab order: git | files | context', () => {
     expect(derivePanelTabs(DEFAULT_SURFACE_ORDER, noChanges).map((tab) => tab.id)).toEqual([
       'git',
       'editor',
       'context',
-      'terminal',
     ]);
   });
 
@@ -37,8 +38,9 @@ describe('derivePanelTabs', () => {
   });
 
   it('honours a persisted reorder and re-appends anything the order omits', () => {
+    // `terminal` leads the persisted order and is dropped as a non-rail
+    // surface; the rest keep their persisted position.
     expect(derivePanelTabs(['terminal', 'context'], noChanges).map((tab) => tab.id)).toEqual([
-      'terminal',
       'context',
       'git',
       'editor',
@@ -69,6 +71,6 @@ describe('derivePanelTabs', () => {
   it('keeps the full tab strip when columnMode is three-column', () => {
     expect(
       derivePanelTabs(DEFAULT_SURFACE_ORDER, noChanges, 'three-column').map((tab) => tab.id)
-    ).toEqual(['git', 'editor', 'context', 'terminal']);
+    ).toEqual(['git', 'editor', 'context']);
   });
 });

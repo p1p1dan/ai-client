@@ -48,11 +48,15 @@ describe('CONTEXT_SURFACES', () => {
     expect(DEFAULT_SURFACE_ORDER).toHaveLength(11);
   });
 
-  it("marks exactly chat/editor/git/terminal/context as this round's five", () => {
+  // 2026-09-04: terminal left this set when its rail button was removed. It is
+  // still WIRED (the view exists and has no pendingTask) — `registeredOnly`
+  // here means "not offered on the rail", which for terminal is now a product
+  // decision rather than a missing implementation.
+  it('marks exactly chat/editor/git/context as the rail-offered surfaces', () => {
     const thisRound = CONTEXT_SURFACES.filter((s) => !s.registeredOnly)
       .map((s) => s.id)
       .sort();
-    expect(thisRound).toEqual(['chat', 'context', 'editor', 'git', 'terminal']);
+    expect(thisRound).toEqual(['chat', 'context', 'editor', 'git']);
   });
 
   it('names a pendingTask for exactly the surfaces that are not wired yet', () => {
@@ -127,15 +131,22 @@ describe('sortSurfaces', () => {
 
 describe('railSurfaces', () => {
   // T-32 (D27): the order IS A08's tab order — `git | files | context`
-  // (a08:1259-1262) with `terminal` appended for exemption ①. It is also what
-  // Ctrl/Cmd+1..4 binds to, so this list is a two-for-one pin.
-  it('shows exactly git/editor(files)/context/terminal in A08 tab order', () => {
+  // (a08:1259-1262). `terminal` used to be appended for exemption ①; it was
+  // taken off the rail on 2026-09-04. This list is also what Ctrl/Cmd+1..4
+  // binds to, so it is a two-for-one pin.
+  it('shows exactly git/editor(files)/context in A08 tab order', () => {
     expect(railSurfaces(DEFAULT_SURFACE_ORDER).map((s) => s.id)).toEqual([
       'git',
       'editor',
       'context',
-      'terminal',
     ]);
+  });
+
+  it('never shows terminal — it has no entry point since 2026-09-04', () => {
+    expect(
+      railSurfaces(DEFAULT_SURFACE_ORDER, { hasContent: () => true }).map((s) => s.id)
+    ).not.toContain('terminal');
+    expect(isRailSelectableSurface('terminal')).toBe(false);
   });
 
   it('hides chat because it is content-driven and MVP has no split sessions', () => {
@@ -155,8 +166,10 @@ describe('railSurfaces', () => {
   });
 
   it('respects the rail order for the visible subset', () => {
+    // `terminal` leads the persisted order and is dropped anyway — a stale
+    // railOrder from before it was removed must not resurrect the button.
     const result = railSurfaces(['terminal', 'git', 'context', 'editor']).map((s) => s.id);
-    expect(result).toEqual(['terminal', 'git', 'context', 'editor']);
+    expect(result).toEqual(['git', 'context', 'editor']);
   });
 
   it('collapses to context alone in two-column mode (U02-b, D02)', () => {
@@ -168,7 +181,7 @@ describe('railSurfaces', () => {
   it('keeps the full rail when columnMode is explicitly three-column', () => {
     expect(
       railSurfaces(DEFAULT_SURFACE_ORDER, { columnMode: 'three-column' }).map((s) => s.id)
-    ).toEqual(['git', 'editor', 'context', 'terminal']);
+    ).toEqual(['git', 'editor', 'context']);
   });
 });
 
