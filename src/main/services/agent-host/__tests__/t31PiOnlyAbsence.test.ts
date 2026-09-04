@@ -16,7 +16,10 @@ const deletedRuntimeFiles = [
   'src/agent-host/questionBridge.ts',
   'src/agent-host/ttftWatchdog.ts',
   'src/renderer/components/chat/ComposerAgentPicker.tsx',
-  'src/renderer/components/chat/ComposerPermissionTrigger.tsx',
+  // `ComposerPermissionTrigger.tsx` was on this list until U12 gave that name
+  // to a Pi-native control (the session permission tier chip). The legacy
+  // permission surface this gate is really about is pinned by channel below,
+  // which is the check that cannot be satisfied by a coincidence of filename.
   'src/renderer/components/chat/PendingQuestionDock.tsx',
   'src/shared/models/familyWhitelist.ts',
   'src/shared/models/seedCatalog.ts',
@@ -70,7 +73,9 @@ describe('T31 Pi-only absence gate', () => {
     expect(preload).not.toContain('listAgentModels:');
     expect(chat).not.toContain('assertModelMatchesAgent');
     expect(composer).not.toContain('ComposerAgentPicker');
-    expect(composer).not.toContain('ComposerPermissionTrigger');
+    for (const legacy of ['chat:respondPermission', 'chat:updatePermission', 'permissionMode']) {
+      expect(composer, legacy).not.toContain(legacy);
+    }
   });
 
   it('preserves migration-only readers without giving them an execution import', () => {

@@ -26,9 +26,17 @@ function compact(value: string): string {
 }
 
 describe('Pi-only model wiring', () => {
-  it('has no Composer agent or legacy permission control', () => {
+  it('has no Composer agent picker or legacy permission control', () => {
     expect(composer).not.toContain('ComposerAgentPicker');
-    expect(composer).not.toContain('ComposerPermissionTrigger');
+    // U12 revived the NAME `ComposerPermissionTrigger` for a Pi-native
+    // control — the session tier chip, which talks to `chat:setPermissionTier`.
+    // What this gate is about is the Claude/Codex-era permission surface, so it
+    // pins that surface's channels rather than a filename the product now uses
+    // for something else. (Asserting the name's absence made this gate red the
+    // moment U12 landed, while proving nothing about the legacy runtime.)
+    for (const legacy of ['chat:respondPermission', 'chat:updatePermission', 'permissionMode']) {
+      expect(composer, legacy).not.toContain(legacy);
+    }
     // The narrowing went past pinning the agent to a Pi constant: the Composer
     // carries no runtime variable at all now. Pin the absence, not the constant.
     expect(composer).not.toContain('composerAgent');
