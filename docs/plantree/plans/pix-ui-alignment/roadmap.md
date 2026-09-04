@@ -9,22 +9,22 @@
 
 | 分组 | 数量 | 说明 |
 |---|---|---|
-| Done | 8 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)） |
+| Done | 9 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)） |
 | In Progress | 0 | — |
-| Ready（已切片，可开工） | 1 | U04 |
-| Ready（部分） | 2 | U06-a、U08-2 可开工 |
+| Ready（已切片，可开工） | 2 | U04、U13 |
+| Ready（部分） | 1 | U06-a 可开工 |
 | Scope 待细化 | 1 | U07（建议在 U06-a 后定范围） |
 | Moved out | 1 | U06-b → Pi 计划 T38（[D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二） |
 | Dropped | 1 | U08-3 请求优先级（[Q12](./open-questions.md) 拍板不做） |
 | Deferred | 2 | U10–U11 |
 
 **执行顺序**（批次，详见 execution-plan）：
-`U01 ✅ → U09 ✅ → U12 ✅ → U02+U03-a ✅ → U05+U03-b ✅ → U08-2 → U06-a+U07 → U04`。批次 5、7 可与 3/4 交错，但都不得与 U01 并行。
+`U01 ✅ → U09 ✅ → U12 ✅ → U02+U03-a ✅ → U05+U03-b ✅ → U08-2 ✅ → U13 → U06-a+U07 → U04`。批次 7 可与其余交错，但都不得与 U01 并行。
 U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排位再插控件，同一块 JSX 只改一次。
 
-**未决：[Q13](./open-questions.md)**（免绑定会话要不要跨应用重启留在侧栏——批次 4 发现的既有缺口，不阻塞后续切片）。
-Q01–Q12 全部关闭（Q08/Q10 见 [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md)；
-Q09 由取证关闭；Q11 布局尺寸维持现值；Q12 请求优先级不做）。
+**无未决问题**：Q01–Q13 全部关闭（Q08/Q10 见 [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md)；
+Q09 由取证关闭；Q11 布局尺寸维持现值；Q12 请求优先级不做；
+Q13 免绑定会话跨重启可见性由 [D04](./decisions/004-unbound-session-index-visibility.md) 拍板走索引标记，落为 U13）。
 
 ## Done
 
@@ -114,7 +114,7 @@ rail 收敛到 `context` 一件（[D02](./decisions/002-layout-cwd-and-evidence-
 **证据**：[U05+U03-b evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)（含变异验证与两处计划偏差说明）。
 **两处偏差**：① 隔离目录落在用户主目录下的临时基路径（用户 2026-09-03 拍板，覆盖 execution-plan 验收①的字面要求）；
 ② 退出会删掉 agent 写在临时目录里的文件（对话历史不受影响）。
-**欠项**：GUI 点验（合并做）；[Q13](./open-questions.md) 跨重启可见性未解决。
+**欠项**：GUI 点验（合并做）；跨重启可见性由 [D04](./decisions/004-unbound-session-index-visibility.md) 拍板后转 **U13** 单独落地。
 
 ### U03-b — TUI 解除目录强绑定 — **Done**（2026-09-03）
 
@@ -123,6 +123,24 @@ rail 收敛到 `context` 一件（[D02](./decisions/002-layout-cwd-and-evidence-
 否则免绑定会话看不到 GUI/TUI 开关。
 
 **证据**：同上 evidence。**欠项**：GUI 点验（合并做）。
+
+### U08-2 — 思考档扩到 Pi 七档 — **Done**（2026-09-03）
+
+思考档词汇从 Claude 的 `EffortLevel`（五档）补齐为 Pi 的 `ThinkingLevel`（七档，加 `off` / `minimal`）。
+
+- `SESSION_EFFORT_LEVELS` 与 `CHAT_EFFORTS` 补两档；后者改为由前者 `map` 派生，成员与顺序不再是第二份手抄。
+- **比计划多改五处**：五词清单在边界校验处还有三份独立拷贝。其中
+  `workerRpc.ts` 的 `isWorkerEffort` 是**发布级**——它返回 false 会让整条 bootstrap 载荷判非法，
+  带 `off` 的会话根本起不来，不是「档位不生效」。另有 `piUtilityRunner` 静默丢档、
+  `PiThinkingLevel` 缺 `off`、`git.ts` 三处未校验强转。三份拷贝现已统一走 `isSessionEffortLevel`。
+- **`off` 在两条路径上不对称**（取证发现）：Pi 依赖树里有两个同名 `ThinkingLevel`——
+  `pi-agent-core` 七档（聊天路径，含 `off`），`pi-ai` 六档（AI 功能的一次性补全，无 `off`）。
+  后者遇 `off` 省略字段而非替换成 `minimal`。
+- **迁移是超集不是迁移**：旧五档是新七档真子集，已存偏好逐字不变，无需翻译、不回写。
+- `off`（发 `effort:'off'`）与 `default`（不发字段，Pi 用 `medium`）语义相反，各有断言守住。
+
+**证据**：[U08-2 evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)（含变异验证、七档门禁数字与三项欠项）。
+**欠项**：GUI 点验（合并做）；真账号回合未验；AI 功能路径的 `off` 需走 Pi 模型配置层才能真正关推理。
 
 ### U03-a — TUI 收起右侧栏 — **Done**（2026-09-03）
 
@@ -159,16 +177,30 @@ rail 收敛到 `context` 一件（[D02](./decisions/002-layout-cwd-and-evidence-
 
 `context` surface 已存在，本项是对照 pi-app 的 `features/context/context-panel.tsx` 做内容层增强（分角色分段、token 估算、逐段展开、手动刷新）。范围待定：不是重建面板。
 
-### U08 — 模型选择器对齐 — U08-1（无需改动）/ U08-2（Ready）/ U08-3（Blocked，见 [Q09](./open-questions.md)）
+### U08 — 模型选择器对齐 — U08-1（无需改动）/ U08-2（**Done**）/ U08-3（Dropped，见 [Q12](./open-questions.md)）
 
 三件事，宜拆成独立切片：
 
 1. 确认二级菜单的分组键（现按 `tags[0]`）。**拍板为保留现状**（用户 2026-09-03：保留使用管理站主页分组标签）——`tags[0]` 本就是管理站主分组标签，不改分组键。
-2. 思考强度词汇改为 Pi 的 `ThinkingLevel`（补 `off` / `minimal`），并按当前模型过滤可用档位。**范围已收窄**（2026-09-03 复核，见 [execution-plan §一](./topics/execution-plan.md)）：按模型过滤与 config 层七档**已经存在**，真缺口只有 `SESSION_EFFORT_LEVELS` 与 `CHAT_EFFORTS` 两个五档常量。**迁移规则已取证**（[evidence-q06](./topics/evidence-q06-migration.md)）：复制 pix 的「纯 mapper + read 时映射」模式；`EffortLevel` 与 `ThinkingLevel` 重叠值（low/medium/high/xhigh/max）保留原样，只教 store 认识 `off`/`minimal`；未知/垃圾值 → `default` 哨兵（不是 `off`）；**不静默重写**已存偏好。
+2. ~~思考强度词汇改为 Pi 的 `ThinkingLevel`~~ — **Done**（见上方 Done · U08-2）。
+   开工前判定的「真缺口只有两个常量」在**显示层**成立，但边界校验处另有三份五词拷贝，
+   其中一份是发布级；落地记录见 [evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)。
 3. ~~新增请求优先级（`flex` / `default` / `priority`）~~ — **Dropped**（[Q12](./open-questions.md) 用户拍板不做）。
    取证（[evidence-q09](./topics/evidence-q09-service-tier.md)）证实透传通道存在但挂在「模型静态默认值」层
    而非「每次请求」层；补那一层的代价、以及该参数只对 OpenAI 系生效的适用面，都撑不起这个次要控件。
    重开时优先走路径 A。
+
+### U13 — 免绑定会话跨重启可见性 — 单切片 — **Ready**
+
+免绑定会话重启后在侧栏消失（索引行还在，`mergeSessionIndex` 判为 orphan 丢弃）。这是**既有**缺口，
+被 U05 从罕见放大为常见。
+
+**拍板**（[D04](./decisions/004-unbound-session-index-visibility.md)，解 [Q13](./open-questions.md)）：
+`SessionIndexEntry` 加可选 `unbound?: boolean`，Main 在 `recordCreated` 按 `isScratchPath` 写入，
+`mergeSessionIndex` 见到它合成临时分组而不丢弃。两个陷阱写在 D04「约束」一节：索引文件是裸数组（只能加可选
+per-entry 字段），`recordCreated` 逐字段重建（新字段必须带 `?? existing?.unbound`）。
+
+**不在范围**：「用户移除文件夹后其会话变 orphan」这条既有行为不改；批次 4 之前的老行不回填标记。
 
 ## Deferred
 
@@ -188,7 +220,8 @@ Pi 计划 T37 收口 ✅ 2026-09-03
       ├→ U09-1 空态摘列 ✅ → U09-2 底栏顺序 ✅ → U12 权限档 chip ✅（占底栏左侧位）
       └→ U02-a 模式字段 ✅ → U02-b 双栏收敛 ✅ → U03-a TUI 收右栏 ✅
                                               → U05-a/b/c/d 免绑定开聊 ✅ → U03-b TUI 解绑 ✅
-  → U08-2 思考档七档（无前置，可交错）
+                                              → U13 免绑定会话跨重启可见性（承 U05 的 unbound 语义）
+  → U08-2 思考档七档 ✅ 2026-09-03（无前置）
   → U06-a Run 面板渲染层（需 U02 的模式语义确定挂载位）→ U07 Context 增强
   → U04 左栏插件入口（无前置，可交错）
 

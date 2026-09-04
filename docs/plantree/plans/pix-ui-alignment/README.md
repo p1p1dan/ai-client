@@ -1,6 +1,6 @@
 # Plan — pix/pi-app UI 对齐改造
 
-> **状态**：In Progress —— 批次 4 / U05+U03-b **已落地**（免绑定开聊 + TUI 解除目录强绑定），下一步批次 5（U08-2 思考档七档）
+> **状态**：In Progress —— 批次 5 / U08-2（思考档补齐 Pi 七档）**已落地**，下一步批次 5.5（U13 免绑定会话跨重启可见性）
 >
 > **前置已满足**：[Pi-only 收敛计划](../pi-backend-migration/README.md) 的 T37 发版门禁已于 2026-09-03 收口
 > （manual CI run `33714362901` 全绿），[D01](./decisions/001-style-depth-and-sequencing.md) 决定二的排期闸门解除。
@@ -8,8 +8,9 @@
 > **当前状态与欠项**：[implementation-status.md](./implementation-status.md)。
 > **执行形态**：[execution-plan](./topics/execution-plan.md) —— 批次顺序、逐片验收标准与门禁。
 >
-> **未决：无。** Q01–Q12 全部关闭。Q08/Q10 见 [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md)；
-> Q09 由取证关闭；Q11 布局尺寸维持现值；Q12 请求优先级不做（U08-3 已 Dropped）。
+> **未决：无。** Q01–Q13 全部关闭。Q08/Q10 见 [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md)；
+> Q09 由取证关闭；Q11 布局尺寸维持现值；Q12 请求优先级不做（U08-3 已 Dropped）；
+> Q13 免绑定会话跨重启可见性见 [D04](./decisions/004-unbound-session-index-visibility.md)（落为 U13）。
 
 ## 目标
 
@@ -53,7 +54,7 @@
 |---|---|
 | [roadmap.md](./roadmap.md) | 任务 ID、状态与顺序的唯一权威 |
 | [topics/execution-plan.md](./topics/execution-plan.md) | **开工入口**：切片、批次顺序、逐片验收标准、门禁、风险、锚点复核 |
-| [open-questions.md](./open-questions.md) | 未解决问题（不是任务）；Q01–Q07 已闭，**Q08–Q10 待拍板** |
+| [open-questions.md](./open-questions.md) | 未解决问题（不是任务）；**Q01–Q13 全部关闭**，保留结论与证据链接 |
 | [topics/current-state-audit.md](./topics/current-state-audit.md) | 开工前实况核查：已有能力 vs 真实缺口，带 `file:line` 证据 |
 | [topics/evidence-q02-q03.md](./topics/evidence-q02-q03.md) | Q02 模型分组键 / Q03 pix Resources 取证结论 |
 | [topics/evidence-q04-runtime-fields.md](./topics/evidence-q04-runtime-fields.md) | Q04 Run 面板字段可用性：占用/usage 需 Pi runtime 补 |
@@ -62,16 +63,23 @@
 | [topics/evidence-u09-component-forms.md](./topics/evidence-u09-component-forms.md) | U09 组件对照表：6 件逐项「搬/不搬/改造后搬」，唯一值得改 #1 Composer 空态摘列 |
 | [topics/evidence-q09-service-tier.md](./topics/evidence-q09-service-tier.md) | Q09 service_tier 透传取证：通道存在但挂在模型静态默认值层，两条路径各有代价 |
 | [evidence/2026-09-03-u01-style-baseline.md](./evidence/2026-09-03-u01-style-baseline.md) | U01 落地记录：改了什么、没改什么、对比度实测数字、门禁结果 |
+| [evidence/2026-09-03-u09-composer-form.md](./evidence/2026-09-03-u09-composer-form.md) | U09 Composer 形态落地记录 |
+| [evidence/2026-09-03-u12-tier-spawn-drift-fix.md](./evidence/2026-09-03-u12-tier-spawn-drift-fix.md) | U12 权限档「显示≠实际」缺陷修复 |
+| [evidence/2026-09-03-u02-u03a-column-mode.md](./evidence/2026-09-03-u02-u03a-column-mode.md) | U02+U03-a 布局模式落地记录 |
+| [evidence/2026-09-03-u05-u03b-unbound-chat.md](./evidence/2026-09-03-u05-u03b-unbound-chat.md) | U05+U03-b 免绑定开聊落地记录（含两处计划偏差与欠项） |
+| [evidence/2026-09-03-u08-2-thinking-levels.md](./evidence/2026-09-03-u08-2-thinking-levels.md) | U08-2 思考档七档落地记录（含边界处三份五词拷贝与 `off` 的路径不对称） |
 | [decisions/001-style-depth-and-sequencing.md](./decisions/001-style-depth-and-sequencing.md) | 风格深度与排期拍板 |
 | [decisions/002-layout-cwd-and-evidence-scope.md](./decisions/002-layout-cwd-and-evidence-scope.md) | 双栏语义、免绑定 cwd 边界、取证范围与时机 |
 | [decisions/003-sidebar-density-and-runtime-field-ownership.md](./decisions/003-sidebar-density-and-runtime-field-ownership.md) | 侧栏保留 28px、runtime 补字段挂 Pi 计划 T38、service_tier 取证启动 |
+| [decisions/004-unbound-session-index-visibility.md](./decisions/004-unbound-session-index-visibility.md) | 免绑定会话跨重启可见性：索引行加 `unbound` 标记，侧栏合成临时分组（落为 U13） |
 | `docs/design/a10-pix-ui-alignment-prototype.html` | 已拍板项的可视化原型（三栏/双栏/TUI × Run/Context；截图在 `refs/a10-shots/`）。原型画面，非施工依据 |
 
 ## 阅读顺序
 
 1. 本文件。
 2. [current-state-audit](./topics/current-state-audit.md) —— 先看清哪些「需求」其实已经有了。
-3. [D01](./decisions/001-style-depth-and-sequencing.md) → [D02](./decisions/002-layout-cwd-and-evidence-scope.md)。
+3. [D01](./decisions/001-style-depth-and-sequencing.md) → [D02](./decisions/002-layout-cwd-and-evidence-scope.md)
+   → [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md) → [D04](./decisions/004-unbound-session-index-visibility.md)。
 4. [roadmap](./roadmap.md) —— 任务身份与状态。
 5. [execution-plan](./topics/execution-plan.md) —— 要动手就读这份。
-6. [open-questions](./open-questions.md) —— Q08–Q10 待拍板。
+6. [open-questions](./open-questions.md) —— 已全部关闭，作为结论索引查阅。

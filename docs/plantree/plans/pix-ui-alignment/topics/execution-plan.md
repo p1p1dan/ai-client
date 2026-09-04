@@ -23,10 +23,12 @@
 | 2.5 | 会话级权限档 | U12 | 批次 2（占 U09-2 留的位） |
 | 3 ✅ | 布局模式 | U02-a/b、U03-a | 批次 1 |
 | 4 ✅ | 免绑定开聊 | U05-a/b/c/d、U03-b | 批次 3（U03-b） |
-| 5 | 控件语义 | U08-2 | — |
+| 5 ✅ | 控件语义 | U08-2 | — |
+| 5.5 | 免绑定会话可见性 | U13 | 批次 4（承 `unbound` 语义） |
 | 6 | 面板 | U06-a、U07 | 批次 3 |
 | 7 | 左栏入口 | U04 | — |
-| — | 挂起 | U06-b、U08-3 | [Q09](../open-questions.md) / [Q10](../open-questions.md) |
+| — | 挂起 | U06-b | Pi 计划 T38（[D03](../decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二） |
+| — | 已放弃 | U08-3 | [Q12](../open-questions.md) 拍板不做 |
 
 批次 5、7 与前序无依赖，资源允许时可与批次 3/4 交错，但**不与批次 1 并行**（会在旧档上落地）。
 
@@ -124,7 +126,8 @@ TUI 作为双栏的专用子模式：左栏 + 右侧整块 TUI，无第三栏。
 > （持久授权无处可写，等价于「授权只对当次生效」）。「写路径默认拒绝」按「不自动放行、每次询问」实现，
 > 而非无提示硬拒——后者会让功能开箱即废。
 >
-> 另发现一个**既有**缺口：免绑定会话跨应用重启后在侧栏不可见，见 [Q13](../open-questions.md)，未在本批解决。
+> 另发现一个**既有**缺口：免绑定会话跨应用重启后在侧栏不可见（原 [Q13](../open-questions.md)）。未在本批解决，
+> 已由 [D04](../decisions/004-unbound-session-index-visibility.md) 拍板走索引标记，落为**批次 5.5 / U13**。
 
 安全敏感批次，单独成批，不与视觉切片混合，便于回归定位。边界已由 [D02](../decisions/002-layout-cwd-and-evidence-scope.md) 决定二定死。
 
@@ -146,7 +149,18 @@ TUI 作为双栏的专用子模式：左栏 + 右侧整块 TUI，无第三栏。
 把 `presentationMode === 'tui' && activeWorkspacePath` 的后半条件换成「已有可用 cwd」，免绑定会话用 U05-a 的隔离目录。
 验收：免绑定会话可进 TUI，且 TUI 的 cwd 就是该会话的隔离目录，不回落到进程 cwd。
 
-### 批次 5 — 控件语义（U08-2）
+### 批次 5 — 控件语义（U08-2）— **已完成 2026-09-03**
+
+> 落地记录、验收对照、变异验证与门禁结果见 [U08-2 evidence](../evidence/2026-09-03-u08-2-thinking-levels.md)。
+>
+> **两处与下文原文的偏差**（均已在 evidence §二/§三 展开）：
+> ① **「真缺口只有两个常量」只对显示层成立**。边界校验处另有三份五词独立拷贝：
+> `workerRpc.ts:340` `isWorkerEffort`（**发布级**——守卫返回 false 会让整条 bootstrap 载荷判非法，
+> 带 `off` 的会话根本起不来，不是「档位不生效」）、`piUtilityRunner.ts:40` `resolveEffort`（静默丢档）、
+> `git.ts` 三处未校验强转；另有 `piAgentSessionBootstrap.ts:71` 的 `PiThinkingLevel` 缺 `off`。
+> 三份拷贝已统一走 `isSessionEffortLevel`。
+> ② **`off` 在两条路径上不对称**：Pi 依赖树里有两个同名 `ThinkingLevel`——`pi-agent-core` 七档（聊天，含 `off`）、
+> `pi-ai` 六档（AI 功能的一次性补全，无 `off`）。后者遇 `off` 省略字段而非替换成 `minimal`。
 
 **U08-2 思考档扩到 Pi 七档**
 复核后真缺口只有两个常量：`SESSION_EFFORT_LEVELS`（`agentHost.ts:7`）与 `CHAT_EFFORTS`（`efforts.ts:25`）补 `off` / `minimal`。按模型过滤与 config 层七档已就绪，无需新建。
@@ -155,6 +169,24 @@ TUI 作为双栏的专用子模式：左栏 + 右侧整块 TUI，无第三栏。
 验收：① 七档按 `thinkingLevelMap` 过滤显示；② 旧偏好 low..max 恒等，无静默重写；③ 未知值落 `default`；④ `off` 与 `default` 的 wire 行为各有测试且互不混淆。
 
 **U08-1 无需改动**：分组键保留 `tags[0]`（[Q02](../open-questions.md) 已拍板）。建议补一条行为锁定测试，不单独占切片。
+
+### 批次 5.5 — 免绑定会话跨重启可见性（U13）
+
+边界由 [D04](../decisions/004-unbound-session-index-visibility.md) 定死（解 [Q13](../open-questions.md)）。三处落点：
+
+1. **共享类型** `SessionIndexEntry` 加**可选** `unbound?: boolean`（`sessionIndex.ts`）。
+   索引文件是裸 JSON 数组，只能加可选 per-entry 字段——不加 envelope、不加版本号。
+2. **Main 写入** `recordCreated`（`SessionIndexService.ts:79`）按
+   `ScratchWorkspaceService.isScratchPath(workspacePath)` 写入。该方法**逐字段重建**，
+   新字段必须带 `?? existing?.unbound`，否则第二次调用抹掉标记（`agent` 栽过同一个坑）。
+3. **渲染器合并** `mergeSessionIndex`（`sessionIndexMerge.ts:139-153`）在 `!workspaceId` 分支之前
+   拦下 `unbound` 行，合成临时分组而不入 `orphans`。
+
+展示形态（分组标题、可否折叠、是否复用 U05-b 已有的 `temporary` chip）实施时定，D04 未锁死。
+
+验收：① 免绑定会话重启后在侧栏可见且能打开；② 连续两次 `recordCreated` 后标记仍在（防逐字段重建抹除）；
+③ 非免绑定的 orphan 行（用户移除文件夹）行为**不变**，仍走 orphan 分支；④ 批次 4 之前的老行不回填、不静默写迁移；
+⑤ 索引文件仍是裸数组，旧 build 解析不抛错。
 
 ### 批次 6 — 面板（U06-a + U07）
 

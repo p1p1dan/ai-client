@@ -1,26 +1,24 @@
 # Implementation Status — pix/pi-app UI 对齐改造
 
-**Current Phase**：批次 3 / U02+U03-a —— 双栏/三栏布局模式 + TUI 收右栏 **已落地（GUI 点验待做）**。
+**Current Phase**：批次 5 / U08-2 **已落地**（思考档补齐 Pi 七档），下一步批次 5.5。
 
-**Next Target**：批次 4 —— U05+U03-b（免绑定开聊 + TUI 解除目录强绑定，安全敏感、单独成批），
-或可交错的 U08-2（思考档七档）/ U04（左栏插件入口）。逐片范围与验收见 [execution-plan](./topics/execution-plan.md)。
+**Next Target**：批次 5.5 —— U13（免绑定会话跨重启可见性，[D04](./decisions/004-unbound-session-index-visibility.md) 已定边界），
+随后批次 6（U06-a+U07）/ 批次 7（U04）。逐片范围与验收见 [execution-plan](./topics/execution-plan.md)。
 
-**Last Landed**：2026-09-03 U02+U03-a —— `PersistedShellLayout` 新增 `shellColumnMode`（`three-column`
-默认 / `two-column`）；双栏 rail 收敛到 `context`，收敛判定下沉 `surfaceRegistry` 后一处过滤即贯穿
-rail 显示 + 快捷键 + reducer guard；`MainHeader` 加模式切换按钮。TUI 在 `WorkspaceShell` 收起右栏与
-editor 列、终端独占 center，未动 `ChatWorkspace` 的 D19 单写者交接。
-证据见 [U02+U03-a evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)。
-（字段名由 execution-plan 原文 `layoutMode` 改为 `shellColumnMode`，避开 settings 既有 `LayoutMode`，见 evidence §二。）
+**Last Landed**：2026-09-03 U08-2 —— 思考档词汇从 Claude 五档补齐为 Pi 七档（加 `off` / `minimal`）。
+`CHAT_EFFORTS` 改由 `SESSION_EFFORT_LEVELS` 派生；边界上另发现并统一了三份五词独立拷贝，
+其中 `workerRpc.ts` 的 `isWorkerEffort` 是发布级（带 `off` 的会话本会起不来）。
+证据见 [U08-2 evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)。
 
-**Last Verified**：2026-09-03 —— workspace-shell `__tests__` **16 files / 363 tests pass**
-（新增：reducer 双栏 guard、`reduceColumnModeChange` 往返、`isSurfaceAvailableInColumnMode`、
-railSurfaces/derivePanelTabs/numberedSurfaceIds 双栏过滤、sanitize 三档；`panelVisibilityStatic`
-按 TUI 新组合更新）；`pnpm typecheck` pass；biome 13 文件干净；`git diff --check` clean。
+**Last Verified**：2026-09-03 —— 全仓 **261 files / 4066 tests pass**；`pnpm typecheck` pass；
+`pnpm typecheck:agent-host` pass；biome 11 文件干净；`git diff --check` clean。
+变异验证：把 `isWorkerEffort` 改回五词手抄，`workerRpc.test.ts` 立即失败。
 
 ## Active TODO
 
-1. **U09 + U12 + U02/U03-a GUI 点验** — 顶盖接合、底栏顺序、权限 chip 四档、双栏/三栏切换与 TUI 收栏，合并一次 CDP 出图肉眼确认（非取证型验收，不阻塞）。
-2. **U08-2** — 思考档补 `off` / `minimal` 两档（无前置，可与批次 4 交错）。
+1. **U13** — 索引行 `unbound` 标记 + 侧栏临时分组，边界见 [D04](./decisions/004-unbound-session-index-visibility.md)。
+2. **U09 + U12 + U02/U03-a + U05/U03-b + U08-2 GUI 点验** — 合并一次 CDP 出图肉眼确认（非取证型验收，不阻塞）。
+3. **U08-2 真账号回合未验** — `off` 走到真实供应商的实际效果未跑；类型链已逐段核实，但不等于每家服务端都认。
 
 ## Blocked By
 
