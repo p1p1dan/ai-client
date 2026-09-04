@@ -984,6 +984,8 @@ const electronAPI = {
       model?: string;
       /** T-20 session default reasoning effort. */
       effort?: SessionEffortLevel;
+      /** U12 fix — permission tier the worker must come up on. */
+      tier?: SessionPermissionTier;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CREATE_SESSION, payload),
     /**
@@ -1008,6 +1010,8 @@ const electronAPI = {
       model?: string;
       /** T-20 session default reasoning effort. */
       effort?: SessionEffortLevel;
+      /** U12 fix — permission tier the worker must come up on. */
+      tier?: SessionPermissionTier;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESUME_SESSION, payload),
     send: (payload: {

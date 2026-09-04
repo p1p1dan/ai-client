@@ -110,6 +110,7 @@ import { ReadingColumn } from './ReadingColumn';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { decideSendPreamble } from './sendPreamble';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
+import { readSessionTier } from './sessionPreferenceStore';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useHostStatus } from './useHostStatus';
 import { useQueueRelease } from './useQueueRelease';
@@ -1083,6 +1084,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     const effort = toWireEffort(
       resolveEffortSelection(getSessionEffort(sessionId), agentDefaultEffort(chatAgentDefaults))
     );
+    // U12 fix: the tier the worker must COME UP on. `chat:setPermissionTier`
+    // only reaches a worker that already exists, so a tier picked before this
+    // first send had nowhere to go and the runtime started on the default
+    // while the chip still showed the user's choice. Read from the same
+    // per-session store the chip writes, so the two cannot disagree; `null`
+    // (never touched) omits the field and keeps the default.
+    const spawnTier = readSessionTier(sessionId) ?? undefined;
     const wireAttachments = toWireAttachments(drafts);
     // F2 (2026-08-18): `sendTimeoutMs(attachmentBytes)` is gone. The wait is no
     // longer a fixed deadline predicted from the payload size — it is a
@@ -1510,6 +1518,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // "field not supported" for the runtime default to apply.
         ...(model ? { model } : {}),
         ...(effort ? { effort } : {}),
+        ...(spawnTier ? { tier: spawnTier } : {}),
       });
       setCurrentRequestId(createResult?.requestId ?? null);
 
@@ -1704,6 +1713,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             // it means the field never existed.
             ...(model ? { model } : {}),
             ...(effort ? { effort } : {}),
+            ...(spawnTier ? { tier: spawnTier } : {}),
           })
           .catch((error: unknown) => {
             resumeDispatchError = error instanceof Error ? error.message : String(error);
@@ -1832,6 +1842,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
               workspacePath,
               ...(model ? { model } : {}),
               ...(effort ? { effort } : {}),
+              ...(spawnTier ? { tier: spawnTier } : {}),
             })
             .catch((error: unknown) => {
               reopenError = error instanceof Error ? error.message : String(error);

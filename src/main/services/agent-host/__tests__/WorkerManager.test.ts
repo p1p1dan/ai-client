@@ -194,6 +194,7 @@ function createHarness(
       if (type === 'worker.fork.discard') return { discarded: true };
       if (type === 'worker.stop') return { stopped: true };
       if (type === 'worker.extensionUi.respond') return { handled: true };
+      if (type === 'worker.setPermissionTier') return { applied: true };
       throw new Error(`unexpected request ${type}`);
     });
     const record: FakeSlotRecord = {
@@ -1061,6 +1062,86 @@ describe('WorkerManager unwritten Pi session files', () => {
     });
     await h.manager.forkSession({ sourceSessionId: 's1', entryId: 'e1', sourceTitle: 'Chat' });
     expect(h.createSlot.mock.calls[1][0]).toMatchObject({ unbound: true });
+  });
+
+  // U12 fix — the composer chip and the runtime used to be able to disagree,
+  // always in the permissive direction. Both drifts are Main's to close,
+  // because Main is the only side that outlives a worker.
+  describe('permission tier survives every spawn', () => {
+    it('carries the tier into the spawn instead of leaving the worker on the default', async () => {
+      const h = createHarness();
+      await h.manager.createSession({ sessionId: 's1', workspacePath: '/repo', tier: 'readonly' });
+      expect(h.createSlot.mock.calls[0][0]).toMatchObject({ tier: 'readonly' });
+    });
+
+    it('omits the tier for an untouched session', async () => {
+      // Omission keeps an untouched session's bootstrap payload identical to
+      // what it was before this fix, so the default stays the worker's own.
+      const h = createHarness();
+      await create(h.manager, 's1');
+      expect(h.createSlot.mock.calls[0][0]).not.toHaveProperty('tier');
+    });
+
+    it('carries the tier through resume', async () => {
+      const h = createHarness();
+      await h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: '/sessions/s1.jsonl',
+        workspacePath: '/repo',
+        tier: 'readonly',
+      });
+      expect(h.createSlot.mock.calls[0][0]).toMatchObject({ tier: 'readonly' });
+    });
+
+    it('accepts a tier for a session that has no worker yet, without pretending it landed', async () => {
+      // Nothing has been sent, so there is no worker to push to. Main does not
+      // keep a second copy of the preference for this case — the renderer owns
+      // it and hands it to `createSession` on the first send, so a copy here
+      // would be a second source of truth with its own eviction problem. What
+      // this pins is that the call is a harmless deferral, not a throw.
+      // The renderer half is covered by `permissionTierWiring.test.ts` and
+      // `chatPiWorkerRouting.test.ts`.
+      const h = createHarness();
+      await expect(h.manager.setPermissionTier('never-sent', 'readonly')).resolves.toMatch(
+        /^permtier-/
+      );
+      await create(h.manager, 'never-sent');
+      expect(h.createSlot.mock.calls[0][0]).not.toHaveProperty('tier');
+    });
+
+    it('[regression] respawns a crashed worker on the tier in force, not the default', async () => {
+      // Defect B. The authorizer is rebuilt per bootstrap, so a restart used to
+      // drop back to the default while the chip still showed the user's tier.
+      const h = createHarness({ sessionFileExists: async () => false });
+      await create(h.manager, 's1');
+      await h.manager.setPermissionTier('s1', 'readonly');
+
+      h.records[0].crash('killed');
+      await vi.waitFor(() => expect(h.createSlot).toHaveBeenCalledTimes(2));
+      expect(h.createSlot.mock.calls[1][0]).toMatchObject({ tier: 'readonly' });
+    });
+
+    it('respawns on the LATEST tier when it changed more than once', async () => {
+      const h = createHarness({ sessionFileExists: async () => false });
+      await create(h.manager, 's1');
+      await h.manager.setPermissionTier('s1', 'fullopen');
+      await h.manager.setPermissionTier('s1', 'readonly');
+
+      h.records[0].crash('killed');
+      await vi.waitFor(() => expect(h.createSlot).toHaveBeenCalledTimes(2));
+      expect(h.createSlot.mock.calls[1][0]).toMatchObject({ tier: 'readonly' });
+    });
+
+    it('does not let a fork inherit its source tier', async () => {
+      // The opposite call from `unbound`, and deliberately so: inheriting the
+      // trust posture is the safe direction, inheriting `fullopen` is not — and
+      // the fork's own (empty) stored preference makes its chip read the
+      // default, so inheriting would recreate the very drift being fixed.
+      const h = createHarness();
+      await h.manager.createSession({ sessionId: 's1', workspacePath: '/repo', tier: 'fullopen' });
+      await h.manager.forkSession({ sourceSessionId: 's1', entryId: 'e1', sourceTitle: 'Chat' });
+      expect(h.createSlot.mock.calls[1][0]).not.toHaveProperty('tier');
+    });
   });
 
   it('still reopens the exact file when a written session goes missing', async () => {

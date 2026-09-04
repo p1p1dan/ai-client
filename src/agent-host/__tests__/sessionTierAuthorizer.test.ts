@@ -122,6 +122,36 @@ describe('createSessionTierAuthorizer', () => {
     expect(state.getTier()).toBe('pragmatic');
   });
 
+  // U12 fix — `setTier` needs a live worker to talk to, so a tier chosen before
+  // the first send, or one in force when a worker crashed, could not be
+  // delivered and the runtime came up on the default while the composer chip
+  // still showed the user's choice. Both drifts erred towards the more
+  // permissive side, which is why the tier is now seeded at construction.
+  it('starts on the tier it was seeded with', () => {
+    expect(createSessionTierAuthorizer({ initialTier: 'readonly' }).state.getTier()).toBe(
+      'readonly'
+    );
+    expect(createSessionTierAuthorizer({ initialTier: 'fullopen' }).state.getTier()).toBe(
+      'fullopen'
+    );
+  });
+
+  it('still defaults when no seed is given', () => {
+    expect(createSessionTierAuthorizer({ initialTier: undefined }).state.getTier()).toBe(
+      'pragmatic'
+    );
+  });
+
+  it('lets setTier override the seed, both ways', () => {
+    // The seed is a starting point, not a lock — the chip stays changeable at
+    // any time, in either direction.
+    const { state } = createSessionTierAuthorizer({ initialTier: 'readonly' });
+    state.setTier('fullopen');
+    expect(state.getTier()).toBe('fullopen');
+    state.setTier('readonly');
+    expect(state.getTier()).toBe('readonly');
+  });
+
   it('setTier changes the tier immediately', () => {
     const { state } = createSessionTierAuthorizer();
     state.setTier('readonly');

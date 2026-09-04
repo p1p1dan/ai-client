@@ -99,6 +99,18 @@ export interface WorkerBootstrapPayload {
    * accumulate persistent project-scoped permission grants.
    */
   unbound?: boolean;
+  /**
+   * U12 fix — the session permission tier this worker must START on.
+   *
+   * `worker.setPermissionTier` can only reach a worker that already exists, so
+   * a tier the user picked BEFORE the first send had nowhere to go, and a
+   * worker respawned after a crash came back on the hardcoded default. Both
+   * left the composer chip claiming a tier the runtime was not enforcing, and
+   * both erred towards the more permissive side. Seeding it here closes the
+   * window entirely: there is no gate the worker can answer before this value
+   * is in place. Absent = the default tier.
+   */
+  tier?: SessionPermissionTier;
 }
 
 export interface WorkerHistoryResult {
@@ -355,6 +367,12 @@ export function isWorkerBootstrapPayload(value: unknown): value is WorkerBootstr
     return false;
   }
   if (value.unbound !== undefined && typeof value.unbound !== 'boolean') return false;
+  if (
+    value.tier !== undefined &&
+    (typeof value.tier !== 'string' || !VALID_TIERS.has(value.tier))
+  ) {
+    return false;
+  }
   return true;
 }
 

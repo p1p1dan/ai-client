@@ -92,6 +92,20 @@ interface ManagedSlot {
    * the same posture instead of silently coming back trusted.
    */
   readonly unbound: boolean;
+  /**
+   * U12 fix — the permission tier this session's worker must run on.
+   *
+   * Mutable, and deliberately held on the entry rather than only inside the
+   * worker: `setPermissionTier` can only reach a worker that exists and is
+   * ready, so a tier picked before the first send used to be dropped on the
+   * floor, and a worker respawned after a crash used to come back on the
+   * default. Keeping it here makes the tier part of what a spawn restores,
+   * so both paths stop drifting from what the composer chip shows.
+   *
+   * `undefined` means "the default tier" and is what an untouched session
+   * carries, so nothing is sent for it.
+   */
+  tier: SessionPermissionTier | undefined;
   sessionFile: string | null;
   /**
    * Has `sessionFile` been written into the durable session index?
@@ -524,6 +538,8 @@ export class WorkerManager {
     ownerWebContentsId?: number;
     /** U05-c — `workspacePath` is a scratch directory; bootstrap untrusted. */
     unbound?: boolean;
+    /** U12 fix — tier the worker starts on; omit for the default. */
+    tier?: SessionPermissionTier;
   }): Promise<string> {
     const requestId = nextRequestId('create');
     return this.serialize(async () => {
@@ -588,6 +604,7 @@ export class WorkerManager {
         logicalSessionId: input.sessionId,
         cwd,
         unbound: input.unbound === true,
+        tier: input.tier,
         sessionFile: null,
         identityCommitted: false,
         slot: null,
@@ -701,6 +718,8 @@ export class WorkerManager {
     ownerWebContentsId?: number;
     /** U05-c — `workspacePath` is a scratch directory; bootstrap untrusted. */
     unbound?: boolean;
+    /** U12 fix — tier the worker starts on; omit for the default. */
+    tier?: SessionPermissionTier;
   }): Promise<string> {
     const sessionFile = normalizeWorkerPath(input.sessionFile, 'Pi session file');
     const cwd = normalizeWorkerPath(input.workspacePath, 'Workspace path');
@@ -812,6 +831,7 @@ export class WorkerManager {
         logicalSessionId: input.sessionId,
         cwd,
         unbound: input.unbound === true,
+        tier: input.tier,
         sessionFile,
         // Resume is only reachable through an indexed runtimeIdentity, so the
         // durable commit already happened — for this file, by definition.
@@ -1150,6 +1170,12 @@ export class WorkerManager {
           // posture too — forking must never launder a scratch session into a
           // trusted one.
           unbound: source.unbound,
+          // Deliberately NOT inherited, unlike `unbound`. Inheriting the trust
+          // posture is the SAFE direction (a scratch fork stays untrusted);
+          // inheriting the tier would be the unsafe one — a fork of a
+          // `fullopen` chat would silently start wide open, while its own
+          // (empty) stored preference makes the composer chip read `pragmatic`.
+          tier: undefined,
           sessionFile,
           // Unlike a new session, a fork's JSONL is written eagerly: Pi's
           // createBranchedSession writes the header plus the copied branch, and
@@ -1404,6 +1430,12 @@ export class WorkerManager {
   async setPermissionTier(sessionId: string, tier: SessionPermissionTier): Promise<string> {
     const requestId = nextRequestId('permtier');
     const entry = this.entriesBySession.get(sessionId);
+    // Recorded before the reachability check on purpose. A session with no
+    // worker yet (nothing sent) or one mid-restart cannot be told anything —
+    // that early return is what used to make the whole call a no-op. Now the
+    // choice survives on the entry and the next spawn comes up on it, so the
+    // unreachable case is a deferral rather than a silent drop.
+    if (entry) entry.tier = tier;
     if (!entry?.slot || entry.state !== 'ready') return requestId;
     const payload: WorkerSetPermissionTierPayload = { logicalSessionId: sessionId, tier };
     await entry.slot.request<WorkerSetPermissionTierResult, WorkerSetPermissionTierPayload>(
@@ -1521,6 +1553,7 @@ export class WorkerManager {
       ...(entry.sessionFile && !options.fresh ? { sessionFile: entry.sessionFile } : {}),
       ...(entry.leafCheckpoint && !options.fresh ? { leafCheckpoint: entry.leafCheckpoint } : {}),
       ...(entry.unbound ? { unbound: true } : {}),
+      ...(entry.tier ? { tier: entry.tier } : {}),
       ...selection,
       onSlotCreated: (slot) => {
         this.ownedSlots.add(slot);

@@ -133,6 +133,24 @@ async function releaseTuiOwnership(sessionId: string): Promise<void> {
   }
 }
 
+/**
+ * U12 fix — validate a renderer-supplied spawn tier, or drop it.
+ *
+ * Dropped rather than rejected: the tier comes from a per-session preference
+ * in the renderer's own storage, and a corrupted entry there must not make the
+ * session impossible to start. Dropping is also the safe direction — the
+ * worker then comes up on the default tier, which asks about everything, so a
+ * bad value can never widen anything.
+ */
+function spawnTier(tier: unknown): { tier?: SessionPermissionTier } {
+  if (tier === undefined) return {};
+  if (!isSessionPermissionTier(tier)) {
+    console.warn('[chat] Ignoring an invalid spawn permission tier:', tier);
+    return {};
+  }
+  return { tier };
+}
+
 async function requireIndexedPiSession(
   sessionId: string
 ): Promise<SessionIndexEntry & { runtimeIdentity: string }> {
@@ -168,6 +186,8 @@ export function registerChatHandlers(): void {
         model?: string;
         /** T-20 reasoning effort; worker validates the Pi vocabulary. */
         effort?: SessionEffortLevel;
+        /** U12 fix — tier the worker must start on; validated below. */
+        tier?: SessionPermissionTier;
       }
     ): Promise<{ requestId: string }> => {
       // D47 S5 §3 — agent-session-only spawn gate. `attach`/resume-of-an-
@@ -189,6 +209,7 @@ export function registerChatHandlers(): void {
         workspacePath: payload.workspacePath,
         ...(payload.model ? { model: payload.model } : {}),
         ...(payload.effort ? { effort: payload.effort } : {}),
+        ...spawnTier(payload.tier),
         ownerWebContentsId,
         // U05-c: Main decides the posture from the path it allocated itself —
         // the renderer never gets to declare a session trusted or untrusted.
@@ -255,6 +276,8 @@ export function registerChatHandlers(): void {
         model?: string;
         /** T-20 reasoning effort; worker validates the Pi vocabulary. */
         effort?: SessionEffortLevel;
+        /** U12 fix — tier the worker must start on; validated below. */
+        tier?: SessionPermissionTier;
       }
     ): Promise<{ requestId: string }> => {
       const row = await sessionIndexService.get(payload.sessionId);
@@ -302,6 +325,7 @@ export function registerChatHandlers(): void {
           workspacePath: payload.workspacePath,
           ...(payload.model ? { model: payload.model } : {}),
           ...(payload.effort ? { effort: payload.effort } : {}),
+          ...spawnTier(payload.tier),
           ownerWebContentsId,
           ...(unbound ? { unbound: true } : {}),
         });
@@ -314,6 +338,7 @@ export function registerChatHandlers(): void {
         ...(payload.model ? { model: payload.model } : {}),
         ...(payload.effort ? { effort: payload.effort } : {}),
         ...(row.piLeaf ? { leafCheckpoint: row.piLeaf } : {}),
+        ...spawnTier(payload.tier),
         ownerWebContentsId,
         ...(unbound ? { unbound: true } : {}),
       });

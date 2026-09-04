@@ -271,6 +271,48 @@ describe('Pi WorkerSlot chat routing', () => {
     });
   });
 
+  // U12 fix — the tier a worker STARTS on. `chat:setPermissionTier` only
+  // reaches a worker that already exists, so a tier picked before the first
+  // send had nowhere to go; it now rides along with the spawn instead.
+  describe('spawn permission tier', () => {
+    it('carries a valid tier into createSession and resumeSession', async () => {
+      await invoke('chat:createSession', {
+        sessionId: 's1',
+        workspacePath: '/repo',
+        tier: 'readonly',
+      });
+      expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ tier: 'readonly' }));
+
+      await invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: '/session.jsonl',
+        workspacePath: '/repo',
+        tier: 'readonly',
+      });
+      expect(resumeSession).toHaveBeenCalledWith(expect.objectContaining({ tier: 'readonly' }));
+    });
+
+    it('omits the tier when the renderer sends none', async () => {
+      await invoke('chat:createSession', { sessionId: 's1', workspacePath: '/repo' });
+      expect(createSession.mock.calls[0][0]).not.toHaveProperty('tier');
+    });
+
+    it('drops a corrupt tier instead of refusing to start the session', async () => {
+      // The value comes from a per-session preference in the renderer's own
+      // storage. A corrupted entry there must not make the chat unusable — and
+      // dropping is the safe direction, since the worker then comes up on the
+      // default tier, which asks about everything.
+      await expect(
+        invoke('chat:createSession', {
+          sessionId: 's1',
+          workspacePath: '/repo',
+          tier: 'root',
+        })
+      ).resolves.toEqual({ requestId: 'create-1' });
+      expect(createSession.mock.calls[0][0]).not.toHaveProperty('tier');
+    });
+  });
+
   it('routes send, stop, close, and Extension UI responses to the Pi authority', async () => {
     await expect(
       invoke('chat:send', {

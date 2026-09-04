@@ -114,6 +114,16 @@ export interface SessionTierAuthorizerState {
 
 export interface SessionTierAuthorizerOptions {
   log?: (...args: unknown[]) => void;
+  /**
+   * Tier this authorizer starts on, before any `setTier` call.
+   *
+   * Exists because `setTier` needs a live worker to talk to: a tier chosen
+   * before the first send, or one in force when a worker crashed and
+   * respawned, could not be delivered and the runtime silently fell back to
+   * the default while the UI still showed the user's choice. Main now carries
+   * the tier into every spawn, so the first permission gate already sees it.
+   */
+  initialTier?: SessionPermissionTier;
 }
 
 /**
@@ -128,7 +138,7 @@ export function createSessionTierAuthorizer(options: SessionTierAuthorizerOption
   state: SessionTierAuthorizerState;
 } {
   const log = options.log ?? (() => undefined);
-  let currentTier: SessionPermissionTier = 'pragmatic';
+  let currentTier: SessionPermissionTier = options.initialTier ?? 'pragmatic';
 
   const state: SessionTierAuthorizerState = {
     setTier(tier) {

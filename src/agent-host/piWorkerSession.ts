@@ -1142,6 +1142,10 @@ export class PiWorkerSession {
     this.sdk = sdk;
     const { factory: tierFactory, state: tierState } = createSessionTierAuthorizer({
       log: this.options.log,
+      // Seeded, not left on the default: a bootstrap that ignored this would
+      // reopen the window where the runtime enforces a laxer tier than the one
+      // the user picked. `undefined` here still means the default tier.
+      ...(this.options.tier ? { initialTier: this.options.tier } : {}),
     });
     this.tierState = tierState;
 
