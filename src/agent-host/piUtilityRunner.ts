@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { getAgentDir, ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 import { parsePiModelRef } from '../shared/piModelConfig.ts';
-import type { SessionEffortLevel } from '../shared/types/agentHost.ts';
+import { isSessionEffortLevel, type SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type {
   WorkerUtilityCancelPayload,
   WorkerUtilityCancelResult,
@@ -27,23 +27,39 @@ export interface PiUtilityRunnerOptions {
   log?: (...args: unknown[]) => void;
 }
 
+/**
+ * The one-shot streaming path takes SIX thinking levels, not seven.
+ *
+ * Pi ships two `ThinkingLevel` unions and they disagree: `pi-agent-core`'s (the
+ * durable AgentSession, used by chat) includes `off`, while `pi-ai`'s
+ * `SimpleStreamOptions.reasoning` (this path) does not — `off` lives there as a
+ * separate `ModelThinkingLevel` used for model config, not for a request. So
+ * `off` cannot be expressed on a utility completion at all.
+ *
+ * Omitting the field is the honest answer: it means "provider default", which
+ * is not what `off` asked for, but inventing `minimal` in its place would put a
+ * level on the wire that the user never chose. This matches what this path
+ * already did before U08-2, so it is not a regression — `minimal` is.
+ */
+type UtilityStreamEffort = Exclude<SessionEffortLevel, 'off'>;
+
+/**
+ * U08-2: the fallback rungs read Pi's own settings, which have always spoken
+ * the full seven-level vocabulary. The narrowing here used to list five words,
+ * so a user whose Pi config pinned `minimal` silently got the provider default
+ * for every AI-feature completion instead.
+ */
 function resolveEffort(
   requested: SessionEffortLevel | undefined,
   settings: SettingsManager,
   provider: string,
   modelId: string
-): SessionEffortLevel | undefined {
+): UtilityStreamEffort | undefined {
   const value =
     requested ??
     settings.getModelThinkingLevel(provider, modelId) ??
     settings.getDefaultThinkingLevel();
-  return value === 'low' ||
-    value === 'medium' ||
-    value === 'high' ||
-    value === 'xhigh' ||
-    value === 'max'
-    ? value
-    : undefined;
+  return isSessionEffortLevel(value) && value !== 'off' ? value : undefined;
 }
 
 /**
@@ -153,7 +169,7 @@ export class PiUtilityRunner {
     active: ActiveOperation,
     modelRuntime: ModelRuntime,
     model: ReturnType<ModelRuntime['getModel']> extends infer T ? Exclude<T, undefined> : never,
-    effort: SessionEffortLevel | undefined
+    effort: UtilityStreamEffort | undefined
   ): Promise<void> {
     try {
       const stream = modelRuntime.streamSimple(

@@ -68,7 +68,12 @@ export interface PiExtensionBindings {
   onError?: (error: unknown) => void;
 }
 
-export type PiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+/**
+ * Structural mirror of the Pi SDK's `ThinkingLevel`. `off` was missing until
+ * U08-2, which made `setThinkingLevel('off', …)` a type error even though the
+ * SDK lists it in `THINKING_LEVEL_OPTIONS`.
+ */
+export type PiThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export interface PiSession {
   bindExtensions?: (bindings: PiExtensionBindings) => Promise<void>;

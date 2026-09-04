@@ -82,6 +82,14 @@ describe('worker RPC boundary guards', () => {
     expect(
       isWorkerBootstrapPayload({ logicalSessionId: 'logical-1', cwd: '/repo', effort: 'ultra' })
     ).toBe(false);
+    // U08-2: the guard used to restate five level words, so a bootstrap
+    // carrying Pi's `off` or `minimal` was rejected WHOLESALE — not just the
+    // effort field — and the session never started.
+    for (const effort of ['off', 'minimal']) {
+      expect(
+        isWorkerBootstrapPayload({ logicalSessionId: 'logical-1', cwd: '/repo', effort })
+      ).toBe(true);
+    }
 
     expect(
       isWorkerBootstrapResult({

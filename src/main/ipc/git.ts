@@ -9,6 +9,7 @@ import {
   type GitStatus,
   IPC_CHANNELS,
 } from '@shared/types';
+import { isSessionEffortLevel } from '@shared/types/agentHost';
 import { ipcMain } from 'electron';
 import {
   generateBranchName,
@@ -432,9 +433,7 @@ export function registerGitHandlers(): void {
         maxDiffLines: options.maxDiffLines,
         timeout: options.timeout,
         ...(options.model ? { model: options.model } : {}),
-        ...(options.effort
-          ? { effort: options.effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
-          : {}),
+        ...(isSessionEffortLevel(options.effort) ? { effort: options.effort } : {}),
         prompt: options.prompt,
       });
     }
@@ -463,9 +462,7 @@ export function registerGitHandlers(): void {
       startCodeReviewService({
         workdir: resolved.path,
         ...(options.model ? { model: options.model } : {}),
-        ...(options.effort
-          ? { effort: options.effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
-          : {}),
+        ...(isSessionEffortLevel(options.effort) ? { effort: options.effort } : {}),
         language: options.language ?? '中文',
         reviewId: options.reviewId,
         prompt: options.prompt,
@@ -577,9 +574,7 @@ export function registerGitHandlers(): void {
         workdir: resolved.path,
         prompt: options.prompt,
         ...(options.model ? { model: options.model } : {}),
-        ...(options.effort
-          ? { effort: options.effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
-          : {}),
+        ...(isSessionEffortLevel(options.effort) ? { effort: options.effort } : {}),
       });
     }
   );

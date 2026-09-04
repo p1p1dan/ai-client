@@ -1,4 +1,11 @@
-import type { SessionAttachment, SessionEffortLevel } from './agentHost';
+// Explicit `.ts` for the same reason as `./sessionHistory.ts` below: this is a
+// VALUE import and the Pi worker loads this file as source under Node's
+// strip-types mode, where the ESM resolver does no extension search.
+import {
+  isSessionEffortLevel,
+  type SessionAttachment,
+  type SessionEffortLevel,
+} from './agentHost.ts';
 import type {
   WorkerDiscardImportedSessionPayload,
   WorkerDiscardImportedSessionResult,
@@ -336,9 +343,12 @@ export interface WorkerDisposeResult {
   disposed: true;
 }
 
-function isWorkerEffort(value: unknown): value is SessionEffortLevel {
-  return typeof value === 'string' && ['low', 'medium', 'high', 'xhigh', 'max'].includes(value);
-}
+/**
+ * U08-2: this used to restate the level words, so a payload carrying Pi's `off`
+ * or `minimal` failed the whole bootstrap guard and the worker never started.
+ * The vocabulary now has exactly one definition.
+ */
+const isWorkerEffort = isSessionEffortLevel;
 
 export function isWorkerBootstrapPayload(value: unknown): value is WorkerBootstrapPayload {
   if (!isRecord(value)) return false;

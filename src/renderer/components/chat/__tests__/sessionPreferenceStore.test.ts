@@ -49,4 +49,35 @@ describe('Pi-only session preferences', () => {
     expect(readSessionModel('s1')).toBeNull();
     expect(readSessionEffort('s1')).toBeNull();
   });
+
+  /**
+   * U08-2. `writeSessionEffort` guards on `isEffortSelection`, which is derived
+   * from the catalog — so this is the assertion that the storage layer widened
+   * along with the menu instead of dropping the user's pick on the floor.
+   */
+  it('accepts the two levels U08-2 added', () => {
+    for (const level of ['off', 'minimal']) {
+      writeSessionEffort('s1', level);
+      expect(readSessionEffort('s1')).toBe(level);
+    }
+  });
+
+  /**
+   * evidence-q06's rule: read maps, it does not write back. A stored value from
+   * before U08-2 must come out byte-identical and must not be rewritten on the
+   * way through, or a user's `high` could silently become something else.
+   */
+  it('returns pre-U08-2 values unchanged and does not rewrite storage on read', () => {
+    storage.set(
+      SESSION_EFFORT_STORAGE_KEY,
+      JSON.stringify({ s1: 'high', s2: 'xhigh', s3: 'ultra' })
+    );
+    const before = storage.get(SESSION_EFFORT_STORAGE_KEY);
+    expect(readSessionEffort('s1')).toBe('high');
+    expect(readSessionEffort('s2')).toBe('xhigh');
+    // An unrecognized word is handed back as-is here; the UI layer is what
+    // resolves it to the Default sentinel (see efforts.test.ts).
+    expect(readSessionEffort('s3')).toBe('ultra');
+    expect(storage.get(SESSION_EFFORT_STORAGE_KEY)).toBe(before);
+  });
 });

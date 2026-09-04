@@ -27,8 +27,12 @@ export interface AgentModelOption {
   tags?: string[];
   /** Pi model capability metadata; absent on legacy/non-Pi catalogs. */
   reasoning?: boolean;
-  /** Reused directly for model-level effort availability; never duplicated into another table. */
-  thinkingLevelMap?: Partial<Record<SessionEffortLevel | 'off' | 'minimal', string | null>>;
+  /**
+   * Reused directly for model-level effort availability; never duplicated into
+   * another table. The `| 'off' | 'minimal'` widening this used to carry is
+   * gone: those two are members of `SessionEffortLevel` since U08-2.
+   */
+  thinkingLevelMap?: Partial<Record<SessionEffortLevel, string | null>>;
 }
 
 /**
