@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useExtensionUiStore } from '@/stores/extensionUi';
 import { useExtensionUiDisplayStore } from '@/stores/extensionUiDisplay';
+import { useScratchWorkspaceStore } from '@/stores/scratchWorkspace';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import { markSessionsLive } from '@/stores/sessionRetirement';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
@@ -74,16 +75,43 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     ? 'Pi TUI continues this chat'
     : 'Pi TUI starts a new session';
   const hasWorkingDirectory = workspaces.some((workspace) => workspace.path.trim().length > 0);
+  // U05-b: this chat has no bound folder, so it runs in an isolated directory
+  // Main allocates for it. `activeWorkspace` being absent and its path being
+  // empty (the demo placeholder) are the same situation here.
+  const isUnboundSession = Boolean(activeSessionId) && !activeWorkspacePath;
+  const scratchCwd = useScratchWorkspaceStore((state) =>
+    activeSessionId ? (state.pathsBySession[activeSessionId] ?? null) : null
+  );
+  const ensureScratchWorkspace = useScratchWorkspaceStore((state) => state.ensure);
+  /** U03-b: the directory the Pi TUI opens in — bound folder, else scratch. */
+  const effectiveCwd = activeWorkspacePath || (scratchCwd ?? '');
   const presentationMode = useSettingsStore((state) => state.presentationMode);
   const setPresentationMode = useSettingsStore((state) => state.setPresentationMode);
   const [tuiTerminalId, setTuiTerminalId] = useState<string | null>(null);
   const previousWorkspacePathRef = useRef(activeWorkspacePath);
 
+  // U03-b: the gate used to be "this chat has a bound folder". It is now
+  // "this chat has a usable cwd" — an unbound chat qualifies, it just has to
+  // have its directory allocated first, which is why this became async.
   const openTui = useCallback(() => {
-    if (!activeWorkspacePath) return;
-    setPresentationMode('tui');
-    setTuiTerminalId((current) => current ?? `pi-tui-${crypto.randomUUID()}`);
-  }, [activeWorkspacePath, setPresentationMode]);
+    if (!activeSessionId) return;
+    const start = () => {
+      setPresentationMode('tui');
+      setTuiTerminalId((current) => current ?? `pi-tui-${crypto.randomUUID()}`);
+    };
+    if (effectiveCwd) {
+      start();
+      return;
+    }
+    void ensureScratchWorkspace(activeSessionId).then(start, (error: unknown) => {
+      addToast({
+        type: 'error',
+        title: 'Could not start the Pi TUI',
+        description:
+          error instanceof Error ? error.message : 'Failed to prepare a temporary folder.',
+      });
+    });
+  }, [activeSessionId, effectiveCwd, ensureScratchWorkspace, setPresentationMode]);
 
   const openGui = useCallback(() => {
     if (tuiTerminalId) void window.electronAPI.piTui.dispose(tuiTerminalId).catch(() => {});
@@ -140,7 +168,12 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     hasHistoryError,
     status: activeSession?.status ?? 'idle',
   });
-  const renderedMode = hasWorkingDirectory ? mode : 'empty';
+  // U05-b: the old `hasWorkingDirectory ? mode : 'empty'` override is gone. It
+  // existed to keep the welcome card on screen when the app had no folders at
+  // all, by forcing the middle column into its empty state; now an unbound
+  // chat can carry a real conversation with no folder anywhere, and pinning it
+  // to 'empty' would undock the composer under its own messages.
+  const renderedMode = mode;
 
   useEffect(() => {
     // chatSessions.initRuntime() only subscribes once (runtimeReady latch).
@@ -229,10 +262,27 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
 
   return (
     <section className={cn('flex min-h-0 flex-col', className)}>
-      {activeWorkspacePath && (
+      {(activeWorkspacePath || isUnboundSession) && (
         <div className="flex h-9 shrink-0 items-center justify-between border-b px-3">
-          <span className="truncate text-meta text-muted-foreground">
-            {presentationMode === 'tui' ? tuiHeaderLabel : repoName}
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-meta text-muted-foreground">
+              {presentationMode === 'tui' ? tuiHeaderLabel : repoName}
+            </span>
+            {/* U05-b ③: the header half of the temporary-chat marker. Says what
+                the state IS (no folder, private scratch space) rather than
+                labelling it an error — this is a supported way to work. */}
+            {isUnboundSession && (
+              <span
+                className="shrink-0 rounded-xs border px-1.5 py-0.5 text-meta text-muted-foreground"
+                title={
+                  scratchCwd
+                    ? `Temporary chat — running in ${scratchCwd}, removed when the app quits.`
+                    : 'Temporary chat — no folder bound. A private folder is created on the first message and removed when the app quits.'
+                }
+              >
+                Temporary
+              </span>
+            )}
           </span>
           <div className="flex h-7 items-center rounded border bg-muted p-0.5" role="group">
             <button
@@ -263,12 +313,16 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
         </div>
       )}
 
-      {presentationMode === 'tui' && activeWorkspacePath ? (
+      {/* U03-b: "has a usable cwd", not "has a bound folder" — an unbound chat
+          enters the TUI in its own isolated directory. `effectiveCwd` is empty
+          only before `openTui` has allocated one, so this never falls back to
+          the process cwd. */}
+      {presentationMode === 'tui' && effectiveCwd ? (
         tuiTerminalId ? (
           <div className="min-h-0 flex-1">
             <AgentTerminal
               id={tuiTerminalId}
-              cwd={activeWorkspacePath}
+              cwd={effectiveCwd}
               // Q17: continue this chat's own JSONL rather than opening a new
               // session. Absent until the first send has bound a runtime, and
               // an unbound chat has no conversation to continue anyway.
@@ -311,19 +365,23 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
           <ExtensionUiUnsupportedNotice sessionId={activeSessionId} onOpenTui={openTui} />
           <ExtensionUiInlineDock sessionId={activeSessionId} />
           <ExtensionUiWidgets sessionId={activeSessionId} placement="aboveEditor" />
+          {/* U05-b ②: the welcome card no longer REPLACES the composer — it
+              sits above it while the app has no folder at all, so a user who
+              wants to bind one still gets the guided path, and a user who just
+              wants to talk can type. Hidden once the chat has messages, where
+              a "pick a folder to start" card would be describing the past. */}
+          {!hasWorkingDirectory && renderedMode === 'empty' && (
+            <ReadingColumn>
+              <ChatWelcomeCard onAddRepository={onAddRepository} />
+            </ReadingColumn>
+          )}
           <div className={middleColumnHostClass(renderedMode)}>
-            {hasWorkingDirectory ? (
-              <ChatComposer
-                mode={renderedMode}
-                disabled={!activeSessionId}
-                onAddRepository={onAddRepository}
-                onSendStart={markSendAttempt}
-              />
-            ) : (
-              <ReadingColumn>
-                <ChatWelcomeCard onAddRepository={onAddRepository} />
-              </ReadingColumn>
-            )}
+            <ChatComposer
+              mode={renderedMode}
+              disabled={!activeSessionId}
+              onAddRepository={onAddRepository}
+              onSendStart={markSendAttempt}
+            />
           </div>
           <ExtensionUiWidgets sessionId={activeSessionId} placement="belowEditor" />
         </>

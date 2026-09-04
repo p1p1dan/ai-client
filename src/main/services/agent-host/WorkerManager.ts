@@ -85,6 +85,13 @@ interface ManagedSlot {
   readonly temporaryKey: string;
   readonly logicalSessionId: string;
   readonly cwd: string;
+  /**
+   * U05-c — `cwd` is a throwaway scratch directory, not a project the user
+   * picked, so this session must bootstrap without project trust. Held on the
+   * entry (not just passed at create time) so a crash restart re-spawns with
+   * the same posture instead of silently coming back trusted.
+   */
+  readonly unbound: boolean;
   sessionFile: string | null;
   /**
    * Has `sessionFile` been written into the durable session index?
@@ -515,6 +522,8 @@ export class WorkerManager {
     model?: string;
     effort?: SessionEffortLevel;
     ownerWebContentsId?: number;
+    /** U05-c — `workspacePath` is a scratch directory; bootstrap untrusted. */
+    unbound?: boolean;
   }): Promise<string> {
     const requestId = nextRequestId('create');
     return this.serialize(async () => {
@@ -578,6 +587,7 @@ export class WorkerManager {
         temporaryKey,
         logicalSessionId: input.sessionId,
         cwd,
+        unbound: input.unbound === true,
         sessionFile: null,
         identityCommitted: false,
         slot: null,
@@ -689,6 +699,8 @@ export class WorkerManager {
     effort?: SessionEffortLevel;
     leafCheckpoint?: PiLeafCheckpoint;
     ownerWebContentsId?: number;
+    /** U05-c — `workspacePath` is a scratch directory; bootstrap untrusted. */
+    unbound?: boolean;
   }): Promise<string> {
     const sessionFile = normalizeWorkerPath(input.sessionFile, 'Pi session file');
     const cwd = normalizeWorkerPath(input.workspacePath, 'Workspace path');
@@ -799,6 +811,7 @@ export class WorkerManager {
         temporaryKey: durableKey,
         logicalSessionId: input.sessionId,
         cwd,
+        unbound: input.unbound === true,
         sessionFile,
         // Resume is only reachable through an indexed runtimeIdentity, so the
         // durable commit already happened — for this file, by definition.
@@ -1133,6 +1146,10 @@ export class WorkerManager {
           temporaryKey: durableKey,
           logicalSessionId: sessionId,
           cwd: source.cwd,
+          // A fork shares its source's directory, so it must share its trust
+          // posture too — forking must never launder a scratch session into a
+          // trusted one.
+          unbound: source.unbound,
           sessionFile,
           // Unlike a new session, a fork's JSONL is written eagerly: Pi's
           // createBranchedSession writes the header plus the copied branch, and
@@ -1503,6 +1520,7 @@ export class WorkerManager {
       generation: entry.generation,
       ...(entry.sessionFile && !options.fresh ? { sessionFile: entry.sessionFile } : {}),
       ...(entry.leafCheckpoint && !options.fresh ? { leafCheckpoint: entry.leafCheckpoint } : {}),
+      ...(entry.unbound ? { unbound: true } : {}),
       ...selection,
       onSlotCreated: (slot) => {
         this.ownedSlots.add(slot);

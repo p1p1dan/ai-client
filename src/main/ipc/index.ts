@@ -44,7 +44,11 @@ import { cleanupTmuxSync, registerTmuxHandlers } from './tmux';
 import { registerUpdaterHandlers } from './updater';
 import { registerUsageHandlers } from './usage';
 import { registerWebInspectorHandlers } from './webInspector';
-import { cleanupWorkerManager, cleanupWorkerManagerSync } from './workerManager';
+import {
+  cleanupWorkerManager,
+  cleanupWorkerManagerSync,
+  sweepScratchWorkspacesOnStartup,
+} from './workerManager';
 import { clearAllWorktreeServices, registerWorktreeHandlers } from './worktree';
 
 export function registerIpcHandlers(): void {
@@ -77,6 +81,7 @@ export function registerIpcHandlers(): void {
   registerPiPermissionHandlers();
   registerUsageHandlers();
   registerPiTuiHandlers();
+  sweepScratchWorkspacesOnStartup();
 }
 
 export async function cleanupAllResources(): Promise<void> {

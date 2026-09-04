@@ -29,6 +29,18 @@ export interface ChatEmptyStateInput {
   hasWorkspace: boolean;
   /** The resolved working directory the agent would run in. */
   hasCwd: boolean;
+  /**
+   * U05-b — this chat runs unbound: the user never picked a folder, and Main
+   * gives it an isolated throwaway directory on the first send instead. "No
+   * folder" is therefore not a setup gap for it, so the welcome surface must
+   * not claim the composer.
+   *
+   * Deliberately a separate input rather than a reinterpretation of
+   * `hasCwd`: the guided welcome surface still has to appear for everyone
+   * else, and D02 decision 2 is explicit that the unbound path does not reuse
+   * welcome's blocking logic.
+   */
+  unbound?: boolean;
 }
 
 export type ChatEmptySurface = 'error-notice' | 'welcome' | 'none';
@@ -43,7 +55,11 @@ export function deriveChatEmptySurface(input: ChatEmptyStateInput): ChatEmptySur
   // can be present but not targetable (the demo placeholder carries an empty
   // path so a fake cwd can never reach spawn), and that state is still just
   // "no folder", not a fault.
-  if (!input.hasWorkspace || !input.hasCwd) return 'welcome';
+  // U05-b: an unbound chat skips the folder check entirely — it has no folder
+  // BY DESIGN, and gets its own isolated directory when it first sends. It
+  // still falls through to the session check below, so a genuinely broken
+  // unbound chat keeps the diagnostic box rather than reading as healthy.
+  if (!input.unbound && (!input.hasWorkspace || !input.hasCwd)) return 'welcome';
 
   // Deliberately AFTER the folder check: a missing session is not something
   // "add a working directory" fixes, so it keeps the diagnostic box — but if

@@ -995,6 +995,12 @@ const electronAPI = {
       workspacePath: string;
       model?: string;
     }): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_REGISTER_SESSION, payload),
+    /**
+     * U05-a — allocate (or return) this chat's isolated scratch directory.
+     * Main owns the path; there is deliberately no way to nominate one.
+     */
+    ensureScratchWorkspace: (payload: { sessionId: string }): Promise<{ path: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_ENSURE_SCRATCH_WORKSPACE, payload),
     resumeSession: (payload: {
       sessionId: string;
       runtimeIdentity: string;

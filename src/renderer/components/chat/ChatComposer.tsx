@@ -29,6 +29,7 @@ import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
+import { useScratchWorkspaceStore } from '@/stores/scratchWorkspace';
 import { useSettingsStore } from '@/stores/settings';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
@@ -515,6 +516,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     workspace: activeWorkspace,
     cwd,
   } = resolveActiveTarget({ activeSessionId, sessions, workspaces });
+  // U05-b: this chat has no folder behind it — either the user never picked
+  // one, or the only workspace it has is the demo placeholder (empty path,
+  // which `resolveActiveTarget` already folds into a null `cwd`). Such a chat
+  // is no longer blocked: it runs in an isolated directory Main allocates on
+  // its first send (D02 decision 2).
+  const isUnboundSession = Boolean(activeSessionId) && cwd === null;
+  // Set once that allocation has happened, so the Pi TUI, the @-file search
+  // and the status line all name the directory the agent is actually in.
+  const scratchCwd = useScratchWorkspaceStore((state) =>
+    activeSessionId ? (state.pathsBySession[activeSessionId] ?? null) : null
+  );
+  /** Where this chat actually runs: its bound folder, else its scratch dir. */
+  const effectiveCwd = cwd ?? scratchCwd;
   // U09-1: does the empty card wear the joined tab? `cwd` is already
   // `workspace && isTargetableWorkspace(workspace) ? path : null` (see
   // `resolveActiveTarget`), which is exactly the predicate `ComposerTargetBar`
@@ -545,7 +559,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // not targetable (demo placeholder's empty path)" into a single null, so
   // every send-gate check below reads that one value instead of re-deriving
   // "is this path usable" ad hoc.
-  const canSend = Boolean(activeSessionId && cwd && !disabled && !canStop);
+  // U05-b widened this: "has a folder" is no longer required, because a chat
+  // without one gets an isolated directory instead of being locked out.
+  const canSend = Boolean(activeSessionId && (cwd || isUnboundSession) && !disabled && !canStop);
+  /** Same target rule as `canSend`, without the busy/disabled terms. */
+  const hasSendTarget = Boolean(activeSessionId && (cwd || isUnboundSession));
   const { getSessionModel } = useSessionModel();
   const { getSessionEffort } = useSessionEffort();
   const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
@@ -669,11 +687,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     ta.setSelectionRange(len, len);
   }, [mode]);
 
+  // U05-b: the two "you have not set this up yet" rungs are skipped for an
+  // unbound chat. Missing workspace and missing cwd are its normal state, not
+  // a fault, and telling that user to pass `--open-path` would be advice for a
+  // problem they do not have.
   const statusHint = !activeSessionId
     ? 'No session selected — pick Live Agent Host in the left nav (or click New).'
-    : !activeWorkspace
+    : !isUnboundSession && !activeWorkspace
       ? 'Active session has no workspace — re-open a repository and refresh.'
-      : !cwd
+      : !isUnboundSession && !cwd
         ? 'No repository registered — launch with --open-path=<repo> (or add a repository) first.'
         : lastError
           ? `Error: ${lastError}`
@@ -681,7 +703,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             ? 'Starting Agent Host / sending…'
             : busy
               ? 'Agent Host running — use Stop to abort'
-              : `Ready · cwd: ${cwd}`;
+              : effectiveCwd
+                ? `Ready · cwd: ${effectiveCwd}`
+                : 'Ready · temporary chat — a private folder is created on the first message.';
 
   // T-27 round-3 (point-check #10): fire-and-forget after ANY `runSend` call
   // site sees a 'committed' outcome (the Host admitted the turn — see
@@ -726,7 +750,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const handleSend = async () => {
     const trimmed = value.trim();
     const action = decideSendAction({
-      hasTarget: Boolean(activeSessionId && cwd),
+      hasTarget: hasSendTarget,
       disabled: Boolean(disabled),
       busy,
       sending,
@@ -787,14 +811,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
   // T-07 @ 文件搜索：150ms 防抖，cwd 缺失或 mention 关闭时清空结果。
   useEffect(() => {
-    if (mentionQuery === null || !cwd) {
+    if (mentionQuery === null || !effectiveCwd) {
       setMentionResults([]);
       setMentionTotal(0);
       return;
     }
     const timer = setTimeout(() => {
       window.electronAPI.search
-        .files({ rootPath: cwd, query: mentionQuery, maxResults: MENTION_PAGE_SIZE })
+        .files({ rootPath: effectiveCwd, query: mentionQuery, maxResults: MENTION_PAGE_SIZE })
         .then((page) => {
           setMentionResults(page.items);
           setMentionTotal(page.total);
@@ -805,13 +829,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         });
     }, 150);
     return () => clearTimeout(timer);
-  }, [mentionQuery, cwd]);
+  }, [mentionQuery, effectiveCwd]);
 
   const handleContentChange = (next: string) => {
     // F4 (round-4 Codex NEEDS-FIX #3): `updateValue` writes `valueRef`
     // synchronously, same tick as `setValue` — see the ref's own comment.
     updateValue(next);
-    if (composingRef.current || !cwd) {
+    if (composingRef.current || !effectiveCwd) {
       setMentionQuery(null);
       return;
     }
@@ -911,7 +935,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // losing it — see `handleRetry` below), so this is defense in depth,
     // not a correctness requirement: it just keeps a doomed-to-no-op Retry
     // click from ever rendering as clickable in the first place.
-    Boolean(activeSessionId && activeWorkspace && cwd) &&
+    // U05-b: an unbound chat has neither `activeWorkspace` nor `cwd` and is
+    // still a legitimate retry target, so it goes through `hasSendTarget`.
+    hasSendTarget &&
     !busy &&
     !sending &&
     attachments.reading === 0;
@@ -1016,11 +1042,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     options: { clearComposerValue?: boolean; origin: RunSendOrigin }
   ): Promise<RunEntryOutcome> => {
     const { origin } = options;
-    // Explicit `cwd` check (independent of canSend): a null cwd is the demo
-    // placeholder or a target with no path — creating a session against it
-    // would persist a fake cwd into session-index.json and die in spawn on
-    // the Host side.
-    if (!canSend || !activeSessionId || !cwd) {
+    // U05-b: the old third term here was an explicit `!cwd` bail, because a
+    // null cwd used to mean "nothing real to spawn in" — the demo placeholder
+    // or a target with no path, either of which would have persisted a fake
+    // cwd into session-index.json and then died in spawn. That is no longer
+    // the only reading: an unbound chat also has a null cwd and DOES have
+    // somewhere real to run, it just has not been allocated yet (see the
+    // `ensure` call inside the handshake below).
+    if (!canSend || !activeSessionId) {
       return 'skipped';
     }
     if (inFlightRef.current) return 'skipped';
@@ -1033,7 +1062,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     const myGeneration = sendGenerationRef.current;
 
     const sessionId = activeSessionId;
-    const workspacePath = cwd;
+    // U05-b: `let`, because an unbound chat's directory does not exist yet.
+    // It is filled in inside the handshake below (after `ensureHost`, so a
+    // failure lands in the same catch every other handshake failure does and
+    // the user's text is preserved by `finalizeOutcome`), never here — this
+    // prologue is deliberately synchronous up to the commit point.
+    let workspacePath = cwd ?? '';
     // R11, D48 S2 form: an explicit per-(session, agent) choice, else this
     // agent's template, else NOTHING — `undefined` means `Automatic`, i.e. the
     // key leaves the payload and the runtime's own default serves the turn
@@ -1625,6 +1659,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // reaches for, so none of them can forget it.
     try {
       await window.electronAPI.chat.ensureHost();
+      if (!workspacePath) {
+        // U05-a/b: allocate this unbound chat's isolated directory now, on its
+        // first send — not when the chat row was created, so a chat the user
+        // never actually uses leaves nothing on disk. Main is idempotent, so a
+        // Retry or a second send reuses the same directory rather than
+        // stranding the first one.
+        workspacePath = await useScratchWorkspaceStore.getState().ensure(sessionId);
+      }
 
       if (preamble.action === 'create') {
         const seq = await runCreateSequence();
@@ -2070,7 +2112,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // not an oversight).
   useQueueRelease({
     sessionId: activeSessionId,
-    hasTarget: Boolean(activeSessionId && cwd),
+    hasTarget: hasSendTarget,
     disabled: Boolean(disabled),
     sending,
     isInFlight: () => inFlightRef.current,
@@ -2283,6 +2325,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     hasSession: Boolean(activeSessionId),
     hasWorkspace: Boolean(activeWorkspace),
     hasCwd: Boolean(cwd),
+    unbound: isUnboundSession,
   });
   const hasStatusError = emptySurface === 'error-notice';
   const readingLine =
@@ -2497,7 +2540,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       onCompositionEnd={(event) => {
         composingRef.current = false;
         const ta = textareaRef.current;
-        if (!cwd || !ta) {
+        if (!effectiveCwd || !ta) {
           setMentionQuery(null);
           return;
         }
@@ -2516,6 +2559,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         hasSession: Boolean(activeSessionId),
         hasWorkspace: Boolean(activeWorkspace),
         hasCwd: Boolean(cwd),
+        unbound: isUnboundSession,
         attachmentCount: attachments.drafts.length,
         pendingQuestion: pendingQuestionHere,
         queuedCount,
@@ -2643,9 +2687,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
               // paste or a torn-down target must disable Enqueue too, not
               // just an empty draft, or the click is silently swallowed by
               // `decideSendAction` returning `'blocked'`.
-              disabled={
-                disabled || spec.disabled || !(activeSessionId && cwd) || attachments.reading > 0
-              }
+              disabled={disabled || spec.disabled || !hasSendTarget || attachments.reading > 0}
               onClick={() => void handleSend()}
             />
           );

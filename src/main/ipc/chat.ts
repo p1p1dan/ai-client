@@ -14,6 +14,7 @@ import {
   type SessionPermissionTier,
 } from '@shared/types/sessionPermissionTier';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
+import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspaceService';
 import { workerManager } from '../services/agent-host/WorkerManager';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { ExtensionUiRouter } from '../services/chat/extensionUiRouting';
@@ -189,8 +190,26 @@ export function registerChatHandlers(): void {
         ...(payload.model ? { model: payload.model } : {}),
         ...(payload.effort ? { effort: payload.effort } : {}),
         ownerWebContentsId,
+        // U05-c: Main decides the posture from the path it allocated itself —
+        // the renderer never gets to declare a session trusted or untrusted.
+        ...(scratchWorkspaceService.isScratchPath(payload.workspacePath) ? { unbound: true } : {}),
       });
       return { requestId };
+    }
+  );
+
+  /**
+   * U05-a — hand an unbound chat its isolated working directory.
+   *
+   * Called on the first send and on the first Pi TUI open, never when the chat
+   * row is created: a chat the user never actually uses must not put a
+   * directory on disk (same rule `chat:registerSession` follows for workers).
+   * Idempotent, so both callers can ask without coordinating.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_ENSURE_SCRATCH_WORKSPACE,
+    async (_e, payload: { sessionId: string }): Promise<{ path: string }> => {
+      return { path: await scratchWorkspaceService.ensure(payload.sessionId) };
     }
   );
 
@@ -260,6 +279,13 @@ export function registerChatHandlers(): void {
         );
       }
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      // U05-a: an unbound chat's directory was wiped when the app last quit,
+      // so recreate it (empty) at the exact path the index still names before
+      // anything tries to spawn Pi in it.
+      const unbound = scratchWorkspaceService.isScratchPath(payload.workspacePath);
+      if (unbound) {
+        await scratchWorkspaceService.adopt(payload.sessionId, payload.workspacePath);
+      }
       if (await isUnwrittenPiSession(row)) {
         // Repair, not resume: there is no file to reopen and nothing was ever
         // persisted, so drop the phantom identity and give the chat a real Pi
@@ -277,6 +303,7 @@ export function registerChatHandlers(): void {
           ...(payload.model ? { model: payload.model } : {}),
           ...(payload.effort ? { effort: payload.effort } : {}),
           ownerWebContentsId,
+          ...(unbound ? { unbound: true } : {}),
         });
         return { requestId: repaired };
       }
@@ -288,6 +315,7 @@ export function registerChatHandlers(): void {
         ...(payload.effort ? { effort: payload.effort } : {}),
         ...(row.piLeaf ? { leafCheckpoint: row.piLeaf } : {}),
         ownerWebContentsId,
+        ...(unbound ? { unbound: true } : {}),
       });
       return { requestId };
     }
@@ -392,7 +420,14 @@ export function registerChatHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.CHAT_ARCHIVE_SESSION,
     async (_e, payload: { sessionId: string; archived: boolean }): Promise<boolean> => {
-      return sessionIndexService.setArchived(payload.sessionId, payload.archived);
+      const result = await sessionIndexService.setArchived(payload.sessionId, payload.archived);
+      // U05-a "session destroyed" cleanup: archiving is how this product
+      // retires a chat, so it is where an unbound chat's throwaway directory
+      // goes away. Un-archiving re-creates it empty through the resume path.
+      if (result && payload.archived) {
+        await scratchWorkspaceService.release(payload.sessionId);
+      }
+      return result;
     }
   );
 

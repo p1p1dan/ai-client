@@ -16,8 +16,14 @@ import { composerMenuItemClass } from './middleColumnLayout';
  *
  * Shape follows pi-app's `ProjectHomeView`: a centred folder button with a
  * menu and a one-line explanation. T12-e′ records the 2026-08-30 field-test
- * reversal: this card now owns the whole empty-repository surface, so no
- * composer is mounted below it until a real working directory exists.
+ * reversal that gave this card the whole empty-repository surface, with no
+ * composer mounted below it.
+ *
+ * U05-b partly undid that last part: the card is still the guided way to pick
+ * a folder, but it no longer REPLACES the composer. A chat with no folder is a
+ * supported way to work now (it runs in an isolated temporary directory), so
+ * the card sits above a live composer and its copy offers the folder rather
+ * than demanding it.
  *
  * The menu offers the same three entries as the folder dropdown's footer
  * (`TargetFolderSelect`) and delegates to the same `onAddRepository` callback.
@@ -82,7 +88,9 @@ export function ChatWelcomeCard({ onAddRepository }: ChatWelcomeCardProps) {
           utilities in chat/, and this is a secondary explanation — the same
           tier as the status line it sits near. */}
       <p className="max-w-sm text-meta text-muted-foreground">
-        {t('Pick a folder first — the agent works inside it.')}
+        {t(
+          'Pick a folder to work on a project — the agent works inside it. Without one, this chat runs in a private temporary folder.'
+        )}
       </p>
     </div>
   );

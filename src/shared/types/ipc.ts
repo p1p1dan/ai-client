@@ -295,6 +295,12 @@ export const IPC_CHANNELS = {
    * before its first message ever reaches the Host.
    */
   CHAT_REGISTER_SESSION: 'chat:registerSession',
+  /**
+   * U05-a — allocate (or return) the isolated working directory of a session
+   * the user never bound to a project folder. Idempotent per session; Main
+   * owns the base path, so the renderer can never nominate one.
+   */
+  CHAT_ENSURE_SCRATCH_WORKSPACE: 'chat:ensureScratchWorkspace',
   CHAT_RESUME_SESSION: 'chat:resumeSession',
   CHAT_SEND: 'chat:send',
   CHAT_STOP: 'chat:stop',

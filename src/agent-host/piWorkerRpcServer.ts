@@ -139,7 +139,11 @@ function sameBootstrap(a: WorkerBootstrapPayload, b: WorkerBootstrapPayload): bo
     a.model === b.model &&
     a.effort === b.effort &&
     a.leafCheckpoint?.activeEntryId === b.leafCheckpoint?.activeEntryId &&
-    a.leafCheckpoint?.fileTailEntryId === b.leafCheckpoint?.fileTailEntryId
+    a.leafCheckpoint?.fileTailEntryId === b.leafCheckpoint?.fileTailEntryId &&
+    // U05-c: a re-bootstrap that flips the trust posture is a DIFFERENT
+    // session, not the same one — otherwise the second call would be answered
+    // by a runtime already built with the first call's trust.
+    a.unbound === b.unbound
   );
 }
 
@@ -415,7 +419,10 @@ export class PiWorkerRpcServer {
         this.options.createRuntime ?? ((options) => new PiWorkerSession(options));
       this.runtime = createRuntime({
         ...request.payload,
-        projectTrusted: this.options.projectTrusted,
+        // U05-c: `unbound` may only take trust AWAY. Written as an AND rather
+        // than a ternary so no future payload field can hand a scratch session
+        // the trusted posture the process was not started with.
+        projectTrusted: this.options.projectTrusted && request.payload.unbound !== true,
         emit: (event) => this.emitRuntimeEvent(event),
         loadSdk: this.options.loadSdk,
         log: this.log,

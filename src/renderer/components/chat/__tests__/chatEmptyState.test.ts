@@ -56,6 +56,36 @@ describe('deriveChatEmptySurface', () => {
     // step the user can actually take.
     expect(deriveChatEmptySurface(input({ hasSession: false, hasCwd: false }))).toBe('welcome');
   });
+
+  // U05-b — an unbound chat has no folder BY DESIGN, so the surface that
+  // exists to say "you still have to pick one" must stand down for it.
+  it('lets an unbound chat send with no workspace and no cwd', () => {
+    expect(
+      deriveChatEmptySurface(input({ hasWorkspace: false, hasCwd: false, unbound: true }))
+    ).toBe('none');
+  });
+
+  it('still shows the welcome surface to a bound chat that has no folder', () => {
+    // The half U05-b must NOT break: a user who wants to work in a project
+    // keeps the guided path. `unbound` is a per-chat fact, not a global switch.
+    expect(
+      deriveChatEmptySurface(input({ hasWorkspace: false, hasCwd: false, unbound: false }))
+    ).toBe('welcome');
+  });
+
+  it('does not let unbound hide a real error', () => {
+    expect(
+      deriveChatEmptySurface(input({ hasError: true, hasWorkspace: false, unbound: true }))
+    ).toBe('error-notice');
+  });
+
+  it('does not let unbound hide a missing session', () => {
+    // The fall-through the unbound branch deliberately keeps: skipping the
+    // folder check must not also skip the checks that follow it.
+    expect(
+      deriveChatEmptySurface(input({ hasSession: false, hasWorkspace: false, unbound: true }))
+    ).toBe('error-notice');
+  });
 });
 
 /**
@@ -83,12 +113,24 @@ describe('[T12-e′ wiring] the workspace owns the no-repository surface', () =>
     expect(SOURCE).not.toContain('lastError || !activeSessionId || !activeWorkspace || !cwd');
   });
 
-  it('renders the welcome card outside ChatComposer and does not mount the composer without a cwd', () => {
+  it('renders the welcome card outside ChatComposer, above it rather than instead of it', () => {
+    // T12-e put the card in the workspace, not the composer; that still holds.
     expect(SOURCE).not.toContain('<ChatWelcomeCard');
-    expect(WORKSPACE_SOURCE).toContain('hasWorkingDirectory ?');
+    // U05-b replaced the either/or. The card used to be the ELSE branch of
+    // `hasWorkingDirectory ? <ChatComposer/> : <ChatWelcomeCard/>`, which is
+    // exactly what made a folderless install unable to type at all. Both must
+    // now be able to be on screen at once, card first.
+    expect(WORKSPACE_SOURCE).not.toMatch(/hasWorkingDirectory \?[\s\S]{0,800}<ChatComposer/);
     expect(WORKSPACE_SOURCE).toMatch(
-      /hasWorkingDirectory \?[\s\S]{0,500}<ChatComposer[\s\S]{0,800}: \([\s\S]{0,500}<ChatWelcomeCard/
+      /!hasWorkingDirectory &&[\s\S]{0,300}<ChatWelcomeCard[\s\S]{0,600}<ChatComposer/
     );
+  });
+
+  it('gates the welcome card on the empty column only, so it cannot sit over a live chat', () => {
+    // Without the mode term the card would hang above the docked composer of
+    // an unbound chat that already has a conversation — telling a user who is
+    // mid-conversation to "pick a folder to start".
+    expect(WORKSPACE_SOURCE).toMatch(/!hasWorkingDirectory && renderedMode === 'empty'/);
   });
 
   it('still renders the red diagnostic box on the error surface', () => {

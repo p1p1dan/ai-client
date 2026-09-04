@@ -1014,6 +1014,55 @@ describe('WorkerManager unwritten Pi session files', () => {
     ).resolves.toMatch(/^send-/);
   });
 
+  // U05-c — the trust posture of an unbound session has to survive everything
+  // that respawns its worker, or a crash silently upgrades a scratch session.
+  it('carries the unbound posture into the spawn, and keeps it across a crash restart', async () => {
+    const h = createHarness({ sessionFileExists: async () => false });
+    await h.manager.createSession({
+      sessionId: 's1',
+      workspacePath: '/tmp/base/unbound-sessions/abc',
+      unbound: true,
+    });
+    expect(h.createSlot.mock.calls[0][0]).toMatchObject({ unbound: true });
+
+    h.records[0].crash('killed');
+    await vi.waitFor(() => expect(h.createSlot).toHaveBeenCalledTimes(2));
+    expect(h.createSlot.mock.calls[1][0]).toMatchObject({ unbound: true });
+  });
+
+  it('omits unbound entirely for a normal session', async () => {
+    // Omission, not `unbound: false`: `sameBootstrap` compares the field by
+    // identity, so a spawn that sends `false` and one that sends nothing would
+    // read as two different sessions to the same worker.
+    const h = createHarness();
+    await create(h.manager, 's1');
+    expect(h.createSlot.mock.calls[0][0]).not.toHaveProperty('unbound');
+  });
+
+  it('carries the unbound posture through resume', async () => {
+    const h = createHarness();
+    await h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: '/sessions/s1.jsonl',
+      workspacePath: '/tmp/base/unbound-sessions/abc',
+      unbound: true,
+    });
+    expect(h.createSlot.mock.calls[0][0]).toMatchObject({ unbound: true });
+  });
+
+  it('[release-blocker] a fork inherits its source posture instead of coming back trusted', async () => {
+    // A fork shares its source's directory. If it did not share the posture,
+    // "fork this chat" would be a one-click trust upgrade on a scratch folder.
+    const h = createHarness();
+    await h.manager.createSession({
+      sessionId: 's1',
+      workspacePath: '/tmp/base/unbound-sessions/abc',
+      unbound: true,
+    });
+    await h.manager.forkSession({ sourceSessionId: 's1', entryId: 'e1', sourceTitle: 'Chat' });
+    expect(h.createSlot.mock.calls[1][0]).toMatchObject({ unbound: true });
+  });
+
   it('still reopens the exact file when a written session goes missing', async () => {
     const present = new Set(['/sessions/s1.jsonl']);
     const h = createHarness({ sessionFileExists: async (file) => present.has(file) });

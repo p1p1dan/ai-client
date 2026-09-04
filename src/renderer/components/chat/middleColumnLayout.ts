@@ -921,6 +921,13 @@ export function composerPlaceholder(input: {
    * rather than silently claiming "no directory".
    */
   hasCwd?: boolean;
+  /**
+   * U05-b: this chat is unbound — it has no workspace and no cwd on purpose,
+   * and gets an isolated directory on its first send. Suppresses the two
+   * "finish setting up" rungs below, which would otherwise tell the user to
+   * fix something that is not broken.
+   */
+  unbound?: boolean;
   attachmentCount: number;
   /** T-05: this session has a pending question dock showing. */
   pendingQuestion?: boolean;
@@ -944,7 +951,11 @@ export function composerPlaceholder(input: {
   // rather than a moved branch so the ONE case where `sending` still wins
   // stays visible: the m9 `hasWorkspace` gate below, where the queue cannot
   // release at all and promising "queued" would be the lie instead.
-  const hasReleasableQueue = (input.queuedCount ?? 0) > 0 && input.hasWorkspace;
+  // U05-b: an unbound chat has no workspace and can still release its queue —
+  // its target is the isolated directory, so the "queue outlived its
+  // workspace" case this guard exists for does not apply to it.
+  const hasReleasableQueue =
+    (input.queuedCount ?? 0) > 0 && (input.hasWorkspace || input.unbound === true);
   if (input.sending && !hasReleasableQueue) {
     if (input.isCreatingSession) {
       return 'Creating session with Agent Host (first message only)…';
@@ -972,14 +983,14 @@ export function composerPlaceholder(input: {
   if (!input.hasSession) {
     return 'Select a session in the left nav before sending…';
   }
-  if (!input.hasWorkspace) {
+  if (!input.unbound && !input.hasWorkspace) {
     return 'Active session has no workspace…';
   }
   // T12-e: a workspace that is present but has no path fell through this
   // ladder to the terminal `Cannot send right now…`, i.e. the least
   // informative string in the function was what a FRESH INSTALL saw. Point at
   // the welcome card's button instead — the two now say the same thing.
-  if (input.hasCwd === false) {
+  if (!input.unbound && input.hasCwd === false) {
     return 'Choose a working directory to start…';
   }
   if (input.canSend) {

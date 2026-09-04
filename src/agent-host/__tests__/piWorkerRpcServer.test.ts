@@ -116,6 +116,97 @@ describe('PiWorkerRpcServer', () => {
     expect(createRuntime).toHaveBeenCalledTimes(1);
   });
 
+  // U05-c — an unbound session runs in a throwaway directory, so it must not
+  // load or write the project-scoped permission config. `unbound` is how Main
+  // says so, and it is one-way by construction.
+  describe('unbound sessions and project trust', () => {
+    function bootstrapWith(projectTrusted: boolean, payload: Record<string, unknown>) {
+      const messages: Array<Record<string, unknown>> = [];
+      const createRuntime = vi.fn((_options: PiWorkerSessionOptions) => runtime());
+      const server = new PiWorkerRpcServer({
+        port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+        generation: 3,
+        projectTrusted,
+        createRuntime,
+      });
+      server.receive(request('rpc-1', 'worker.bootstrap', payload));
+      return { messages, createRuntime, server };
+    }
+
+    it('withholds project trust when the payload says the session is unbound', async () => {
+      const { messages, createRuntime } = bootstrapWith(true, {
+        logicalSessionId: 'logical-1',
+        cwd: '/tmp/base/unbound-sessions/abc',
+        unbound: true,
+      });
+      await vi.waitFor(() => expect(messages).toHaveLength(1));
+      expect(createRuntime.mock.calls[0][0].projectTrusted).toBe(false);
+    });
+
+    it('leaves a normal session on the process posture', async () => {
+      const { messages, createRuntime } = bootstrapWith(true, {
+        logicalSessionId: 'logical-1',
+        cwd: '/repo',
+      });
+      await vi.waitFor(() => expect(messages).toHaveLength(1));
+      expect(createRuntime.mock.calls[0][0].projectTrusted).toBe(true);
+    });
+
+    it('[release-blocker] unbound can only remove trust, never grant it', async () => {
+      // The direction that matters. A process started untrusted (managed
+      // credentials) must stay untrusted no matter what the payload claims.
+      const { messages, createRuntime } = bootstrapWith(false, {
+        logicalSessionId: 'logical-1',
+        cwd: '/repo',
+        unbound: false,
+      });
+      await vi.waitFor(() => expect(messages).toHaveLength(1));
+      expect(createRuntime.mock.calls[0][0].projectTrusted).toBe(false);
+    });
+
+    it('refuses to answer a re-bootstrap that flips the trust posture', async () => {
+      // Without this, the second call would be served by the runtime built for
+      // the first one — i.e. a scratch session answered by a trusted runtime.
+      const messages: Array<Record<string, unknown>> = [];
+      const createRuntime = vi.fn((_options: PiWorkerSessionOptions) => runtime());
+      const server = new PiWorkerRpcServer({
+        port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+        generation: 3,
+        projectTrusted: true,
+        createRuntime,
+      });
+      server.receive(
+        request('first', 'worker.bootstrap', {
+          logicalSessionId: 'logical-1',
+          cwd: '/repo',
+          unbound: true,
+        })
+      );
+      await vi.waitFor(() => expect(messages).toHaveLength(1));
+      server.receive(
+        request('second', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
+      );
+      await vi.waitFor(() => expect(messages).toHaveLength(2));
+      expect(messages[1]).toMatchObject({
+        requestId: 'second',
+        ok: false,
+        error: { code: 'WORKER_ALREADY_BOOTSTRAPPED' },
+      });
+      expect(createRuntime).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a non-boolean unbound rather than coercing it', async () => {
+      const { messages, createRuntime } = bootstrapWith(true, {
+        logicalSessionId: 'logical-1',
+        cwd: '/repo',
+        unbound: 'yes',
+      });
+      await vi.waitFor(() => expect(messages).toHaveLength(1));
+      expect(messages[0]).toMatchObject({ ok: false, error: { code: 'WORKER_INVALID_PAYLOAD' } });
+      expect(createRuntime).not.toHaveBeenCalled();
+    });
+  });
+
   it('ACKs send admission before the held prompt completes and dispatches stop', async () => {
     const messages: Array<Record<string, unknown>> = [];
     let promptFinished = false;

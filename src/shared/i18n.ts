@@ -1774,6 +1774,11 @@ export const zhTranslations: Record<string, string> = {
   'Choose a working directory': '选择工作目录',
   'No working directory yet': '还没有工作目录',
   'Pick a folder first — the agent works inside it.': '先选一个目录，AI 就在这个目录里干活。',
+  // U05-b: the card no longer blocks the composer, so its copy stopped saying
+  // "first" — you can talk right now; picking a folder is what unlocks working
+  // ON something.
+  'Pick a folder to work on a project — the agent works inside it. Without one, this chat runs in a private temporary folder.':
+    '想让 AI 在你的项目里干活，就选一个目录——AI 只在这个目录里操作。不选也能直接聊，这时会用一个私有的临时目录。',
 
   // T-27: Composer target bar (D22) — footer action rows (batch 3).
   // 'New Folder' already exists above (worktree/temp-session UI) — reused as-is.

@@ -92,6 +92,13 @@ export interface WorkerBootstrapPayload {
   effort?: SessionEffortLevel;
   /** Reapply a durable branch only while its recorded physical tail still matches. */
   leafCheckpoint?: PiLeafCheckpoint;
+  /**
+   * U05-c — this session runs in a throwaway scratch directory, not a project
+   * the user chose. Set by Main (never by the renderer) and one-way: it can
+   * only WITHDRAW project trust, never grant it, so a scratch session cannot
+   * accumulate persistent project-scoped permission grants.
+   */
+  unbound?: boolean;
 }
 
 export interface WorkerHistoryResult {
@@ -347,6 +354,7 @@ export function isWorkerBootstrapPayload(value: unknown): value is WorkerBootstr
   if (value.leafCheckpoint !== undefined && !isPiLeafCheckpoint(value.leafCheckpoint)) {
     return false;
   }
+  if (value.unbound !== undefined && typeof value.unbound !== 'boolean') return false;
   return true;
 }
 

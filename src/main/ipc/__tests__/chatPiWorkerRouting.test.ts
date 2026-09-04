@@ -11,8 +11,8 @@ type FakeWindow = {
 const handlers = new Map<string, Handler>();
 const runtimeEventHandlers: Array<(event: RuntimeEvent) => void> = [];
 let fakeWindows: FakeWindow[] = [];
-const createSession = vi.fn(async () => 'create-1');
-const resumeSession = vi.fn(async () => 'resume-1');
+const createSession = vi.fn(async (_payload: Record<string, unknown>) => 'create-1');
+const resumeSession = vi.fn(async (_payload: Record<string, unknown>) => 'resume-1');
 const loadHistoryPage = vi.fn(async () => 'history-1');
 const getSessionTree = vi.fn(async () => ({
   sessionKey: 's1:session:/session.jsonl',
@@ -123,6 +123,25 @@ vi.mock('../../services/chat/SessionIndexService', () => ({
 
 vi.mock('../../services/auth/spawnGate', () => ({ assertAgentSpawnAllowed: vi.fn() }));
 
+/**
+ * U05-a — Main owns the scratch directories, so the handlers must ask it what
+ * counts as one rather than pattern-matching a path themselves. `SCRATCH_DIR`
+ * is the only path this fake recognises.
+ */
+const SCRATCH_DIR = '/tmp/base/unbound-sessions/abc';
+const ensureScratch = vi.fn(async (_sessionId: string) => SCRATCH_DIR);
+const adoptScratch = vi.fn(async (_sessionId: string, target: string) => target);
+const releaseScratch = vi.fn(async (_sessionId: string) => undefined);
+
+vi.mock('../../services/agent-host/ScratchWorkspaceService', () => ({
+  scratchWorkspaceService: {
+    ensure: (sessionId: string) => ensureScratch(sessionId),
+    adopt: (sessionId: string, target: string) => adoptScratch(sessionId, target),
+    release: (sessionId: string) => releaseScratch(sessionId),
+    isScratchPath: (candidate: string) => candidate === SCRATCH_DIR,
+  },
+}));
+
 beforeEach(async () => {
   vi.resetModules();
   handlers.clear();
@@ -169,6 +188,86 @@ describe('Pi WorkerSlot chat routing', () => {
       model: 'glm/glm-5',
       effort: 'high',
       ownerWebContentsId: 7,
+    });
+  });
+
+  // U05 — an unbound chat's directory and its trust posture are both Main's
+  // call. The renderer supplies a path it was given; it never gets to say
+  // whether that path is trusted.
+  describe('unbound chats', () => {
+    it('allocates the isolated directory on request and returns it', async () => {
+      await expect(invoke('chat:ensureScratchWorkspace', { sessionId: 's1' })).resolves.toEqual({
+        path: SCRATCH_DIR,
+      });
+      expect(ensureScratch).toHaveBeenCalledWith('s1');
+    });
+
+    it('marks a session created in a scratch directory as unbound', async () => {
+      await invoke('chat:createSession', { sessionId: 's1', workspacePath: SCRATCH_DIR });
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({ workspacePath: SCRATCH_DIR, unbound: true })
+      );
+    });
+
+    it('leaves a session created in a real folder unmarked', async () => {
+      await invoke('chat:createSession', { sessionId: 's1', workspacePath: '/repo' });
+      expect(createSession.mock.calls[0][0]).not.toHaveProperty('unbound');
+    });
+
+    it('[release-blocker] ignores an unbound flag the renderer tries to send', async () => {
+      // The posture is derived from Main's own record of what it allocated.
+      // A compromised or buggy renderer must not be able to declare a real
+      // project folder "unbound", nor a scratch folder trusted.
+      await invoke('chat:createSession', {
+        sessionId: 's1',
+        workspacePath: SCRATCH_DIR,
+        unbound: false,
+      });
+      expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ unbound: true }));
+    });
+
+    it('recreates the directory before resuming, and keeps the session untrusted', async () => {
+      // Last run's directory was wiped at exit; the index row still names it.
+      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+      vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
+        sessionId: 's1',
+        agent: 'pi',
+        workspacePath: SCRATCH_DIR,
+        title: 'Source',
+        updatedAt: 1,
+        archived: false,
+        runtimeIdentity: '/session.jsonl',
+        piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+      });
+      await invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: '/session.jsonl',
+        workspacePath: SCRATCH_DIR,
+      });
+      expect(adoptScratch).toHaveBeenCalledWith('s1', SCRATCH_DIR);
+      expect(resumeSession).toHaveBeenCalledWith(expect.objectContaining({ unbound: true }));
+    });
+
+    it('does not touch scratch state when resuming a real folder', async () => {
+      // The upgrade path: once a chat is bound to a folder it goes through the
+      // normal trust gate, with nothing left over from its unbound life.
+      await invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: '/session.jsonl',
+        workspacePath: '/repo',
+      });
+      expect(adoptScratch).not.toHaveBeenCalled();
+      expect(resumeSession.mock.calls[0][0]).not.toHaveProperty('unbound');
+    });
+
+    it('releases the directory when the chat is archived', async () => {
+      await invoke('chat:archiveSession', { sessionId: 's1', archived: true });
+      expect(releaseScratch).toHaveBeenCalledWith('s1');
+    });
+
+    it('keeps the directory when a chat is un-archived', async () => {
+      await invoke('chat:archiveSession', { sessionId: 's1', archived: false });
+      expect(releaseScratch).not.toHaveBeenCalled();
     });
   });
 

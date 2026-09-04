@@ -145,9 +145,28 @@ describe('chipForWorkspace', () => {
     expect(chipForWorkspace(workspaces[1])).toEqual({ variant: 'branch', label: 'feat/x' });
   });
 
-  it('never guesses: unknown branch renders no chip', () => {
+  it('never guesses: unknown branch on a real folder renders no chip', () => {
     expect(chipForWorkspace(workspaces[2])).toBeNull();
-    expect(chipForWorkspace(undefined)).toBeNull();
+  });
+
+  // U05-b ③ — "no folder" is a state the user can now be IN, not just a gap
+  // on the way to picking one, so the session list has to say so.
+  it('labels a chat with no folder as temporary', () => {
+    expect(chipForWorkspace(undefined)).toEqual({ variant: 'kind', label: 'temporary' });
+  });
+
+  it('treats the empty-path placeholder as no folder too', () => {
+    // What a fresh install actually sits on: a seeded workspace whose path is
+    // deliberately empty so a fake cwd can never reach spawn.
+    expect(
+      chipForWorkspace({
+        id: 'ws-seed',
+        projectId: 'p-ai',
+        name: 'Main',
+        kind: 'main',
+        path: '',
+      })
+    ).toEqual({ variant: 'kind', label: 'temporary' });
   });
 
   it('shows the kind label for temp and remote workspaces', () => {

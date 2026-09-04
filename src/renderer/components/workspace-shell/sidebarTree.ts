@@ -79,8 +79,13 @@ export function isBusySessionStatus(status: SessionRuntimeStatus): boolean {
  * not a branch and must not be shown as one.
  */
 export function chipForWorkspace(workspace: ChatWorkspace | undefined): SidebarChip | null {
-  if (!workspace) {
-    return null;
+  // U05-b ③: the session-list half of the temporary-chat marker. A missing
+  // workspace, or one carrying no path (the seeded placeholder a fresh install
+  // starts on), both mean the same thing now that unbound chats can run: this
+  // chat has no folder and works in a private throwaway directory instead.
+  // Before U05 that state simply could not send, so it needed no label.
+  if (!workspace || !isUsableWorkspace(workspace)) {
+    return { variant: 'kind', label: 'temporary' };
   }
   if (workspace.kind === 'temp' || workspace.kind === 'remote') {
     return { variant: 'kind', label: workspace.kind };
