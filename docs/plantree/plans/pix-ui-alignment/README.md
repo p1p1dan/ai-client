@@ -1,6 +1,6 @@
 # Plan — pix/pi-app UI 对齐改造
 
-> **状态**：In Progress —— 批次 3 / U02+U03-a **已落地**（双栏/三栏布局 + TUI 收右栏），下一步批次 4（U05+U03-b 免绑定开聊）
+> **状态**：In Progress —— 批次 4 / U05+U03-b **已落地**（免绑定开聊 + TUI 解除目录强绑定），下一步批次 5（U08-2 思考档七档）
 >
 > **前置已满足**：[Pi-only 收敛计划](../pi-backend-migration/README.md) 的 T37 发版门禁已于 2026-09-03 收口
 > （manual CI run `33714362901` 全绿），[D01](./decisions/001-style-depth-and-sequencing.md) 决定二的排期闸门解除。

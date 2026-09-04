@@ -1,8 +1,29 @@
 # Open Questions — pix/pi-app UI 对齐改造
 
 > 只放**未解决的问题**，不放任务。解决后移出本文件，把结论写进 decisions 或对应 topic。
-> **当前没有未解决的问题。** Q01–Q12 全部关闭，结论各自指向 decisions 或 topics/evidence。
+> **当前未决：Q13。** Q01–Q12 全部关闭，结论各自指向 decisions 或 topics/evidence。
 > 新问题请追加在本行下方，并在 [roadmap](./roadmap.md) 的相关任务上标注关联。
+
+## Q13 — 免绑定会话要不要跨应用重启留在侧栏？ — **未决**
+
+批次 4 落地后发现的行为缺口，**不是本批引入的**，但被 U05 放大了。
+
+免绑定会话的索引行里 `workspacePath` 记的是隔离临时目录。重启后，这个路径没有对应的
+`ChatWorkspace`（它本来就不该出现在项目树里），于是 `sessionIndexMerge` 把这一行判为 orphan 直接丢掉——
+对话历史还在 pi 的 JSONL 里，但侧栏看不到它，用户也没有任何入口打开它。
+
+这和「用户移除了一个文件夹，它名下的会话变 orphan」是同一条既有逻辑；区别只是免绑定会话让这种情况从罕见变常见。
+
+三条候选路径：
+
+1. **不管**——临时会话本来就是用完即弃，退出即消失反而语义一致。索引里会攒下看不见的行。
+2. **退出时自动归档**免绑定会话，让它们至少不是「存在但不可见」。会丢掉用户可能还想要的历史。
+3. **让侧栏认得它们**：给 `SessionIndexEntry` 加一个 `unbound` 标记（Main 在 `recordCreated` 时按
+   `isScratchPath` 写入），`sessionIndexMerge` 见到它就合成一个临时分组，而不是丢弃。改动最大但行为最诚实。
+
+倾向 3，但它触及 `sessionIndexMerge` 和索引 schema，超出批次 4 的范围，**留待拍板**。
+
+**关联**：roadmap U05，[U05 evidence §七](./evidence/2026-09-03-u05-u03b-unbound-chat.md)。
 
 ## Q11 — 三个布局尺寸要不要跟 pix 走？ — **已关闭：本轮一律不动**
 

@@ -9,9 +9,9 @@
 
 | 分组 | 数量 | 说明 |
 |---|---|---|
-| Done | 6 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)） |
+| Done | 8 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)） |
 | In Progress | 0 | — |
-| Ready（已切片，可开工） | 3 | U03-b（依赖 U05）、U04、U05 |
+| Ready（已切片，可开工） | 1 | U04 |
 | Ready（部分） | 2 | U06-a、U08-2 可开工 |
 | Scope 待细化 | 1 | U07（建议在 U06-a 后定范围） |
 | Moved out | 1 | U06-b → Pi 计划 T38（[D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二） |
@@ -19,10 +19,11 @@
 | Deferred | 2 | U10–U11 |
 
 **执行顺序**（批次，详见 execution-plan）：
-`U01 ✅ → U09 ✅ → U12 ✅ → U02+U03-a ✅ → U05+U03-b → U08-2 → U06-a+U07 → U04`。批次 5、7 可与 3/4 交错，但都不得与 U01 并行。
+`U01 ✅ → U09 ✅ → U12 ✅ → U02+U03-a ✅ → U05+U03-b ✅ → U08-2 → U06-a+U07 → U04`。批次 5、7 可与 3/4 交错，但都不得与 U01 并行。
 U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排位再插控件，同一块 JSX 只改一次。
 
-**未决：无。** Q01–Q12 全部关闭（Q08/Q10 见 [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md)；
+**未决：[Q13](./open-questions.md)**（免绑定会话要不要跨应用重启留在侧栏——批次 4 发现的既有缺口，不阻塞后续切片）。
+Q01–Q12 全部关闭（Q08/Q10 见 [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md)；
 Q09 由取证关闭；Q11 布局尺寸维持现值；Q12 请求优先级不做）。
 
 ## Done
@@ -77,6 +78,12 @@ Composer 底栏左侧的权限控件，四档（只读/务实/放手/完全放�
 **两条硬边界实测通过**：① delegation envelope 将 `path`/`external_directory` 上的 `allow` 降级为 `defer`；
 ② "完全放开"文案明确声明保留密钥防线与跨目录确认。commit `c17c2e9f`。
 
+**2026-09-03 缺陷修复**（[evidence](./evidence/2026-09-03-u12-tier-spawn-drift-fix.md)）：档位原本只在用户点击那一刻推送一次，
+从未在 worker 建好后重放，导致两处「芯片显示 ≠ 运行时实际」且方向都是**实际更宽松**——
+① 首次发送前设的档位被静默丢弃（那时还没有 worker 可推）；② 崩溃重启后 authorizer 重建，回落默认档。
+修法是把档位并入 spawn（与 U05 的 `unbound` 同路），`ManagedSlot.tier` 让它活过重启；
+fork **不**继承档位（与 `unbound` 相反，理由见 evidence §三）。
+
 **欠项**：GUI 点验未做，建议与 U09 合并做一次（非取证型验收，不阻塞）。
 
 ### U02 — 双栏 / 三栏布局模式开关 — **Done**（2026-09-03）
@@ -89,6 +96,33 @@ rail 收敛到 `context` 一件（[D02](./decisions/002-layout-cwd-and-evidence-
 - **字段命名偏差**：execution-plan 原文 `layoutMode` → 实际 `shellColumnMode`，避开 settings 既有 `LayoutMode`（`columns`/`tree`）。见 [evidence §二](./evidence/2026-09-03-u02-u03a-column-mode.md)。
 
 **证据**：[U02+U03-a evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)。**欠项**：GUI 点验（合并做）。
+
+### U05 — 免绑定工作目录直接开聊 — **Done**（2026-09-03）
+
+新增 `ScratchWorkspaceService`（Main）：逐会话隔离临时目录，首次发送/首次开 TUI 时惰性创建，
+归档即删、退出清空、启动再清一次（覆盖崩溃）。基路径复用「临时会话路径」设置，Main 独占决定，渲染器无从指定。
+
+- **U05-a Done**：`<临时会话基路径>/unbound-sessions/<uuid>`，`mode 0700`；`adopt()` 让跨运行恢复拿到存在的空目录，
+  并拒绝任何越界路径。
+- **U05-b Done**：`deriveChatEmptySurface` 新增 `unbound` 分支（跳过「没目录」但继续下落到会话检查）；
+  `canSend`/`runSend` 的 `!cwd` 硬闸拆除，隔离目录在握手 try 内分配；欢迎卡由「替换输入框」改为「在输入框上方」；
+  头部 `Temporary` 徽标 + 侧栏 `temporary` chip 两处标识。
+- **U05-c Done**：档位默认务实（每次弹窗），项目信任强制关闭（持久授权无处可写）。
+  `unbound` 由 Main 从 `isScratchPath` 推出、**只能减不能加**，且随 `ManagedSlot` 走过崩溃重启、恢复与 fork。
+- **U05-d Done**：全仓 260 files / 4031 tests 全绿。
+
+**证据**：[U05+U03-b evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)（含变异验证与两处计划偏差说明）。
+**两处偏差**：① 隔离目录落在用户主目录下的临时基路径（用户 2026-09-03 拍板，覆盖 execution-plan 验收①的字面要求）；
+② 退出会删掉 agent 写在临时目录里的文件（对话历史不受影响）。
+**欠项**：GUI 点验（合并做）；[Q13](./open-questions.md) 跨重启可见性未解决。
+
+### U03-b — TUI 解除目录强绑定 — **Done**（2026-09-03）
+
+`presentationMode === 'tui' && activeWorkspacePath` 换成 `&& effectiveCwd`，`AgentTerminal` 的 `cwd` 同步；
+`openTui` 先确保隔离目录再切模式，失败弹 toast 而不是开一个没有目录的终端。头部工具条显示条件同步放宽，
+否则免绑定会话看不到 GUI/TUI 开关。
+
+**证据**：同上 evidence。**欠项**：GUI 点验（合并做）。
 
 ### U03-a — TUI 收起右侧栏 — **Done**（2026-09-03）
 
@@ -105,10 +139,7 @@ rail 收敛到 `context` 一件（[D02](./decisions/002-layout-cwd-and-evidence-
 
 ### U02 — 双栏 / 三栏布局模式开关 — **已完成**（见上方 Done · U02）
 
-### U03 — TUI 模式收起右侧栏 — U03-a **已完成**（见上方 Done · U03-a）/ U03-b（依赖 U05，属批次 4）
-
-U03-b 目标：把 `ChatWorkspace.tsx` 的 `presentationMode === 'tui' && activeWorkspacePath` 后半条件换成「已有可用 cwd」，
-让免绑定会话（U05-a 的隔离 cwd）也能进 TUI，且 TUI 的 cwd 就是该会话的隔离目录。与 U05 合并在批次 4 做。
+### U03 — TUI 模式收起右侧栏 — **已完成**（U03-a / U03-b 均见上方 Done）
 
 ### U04 — 左栏插件 / 资源入口 — 单切片 — **已拍板：只保留插件，资源不要**
 
@@ -116,11 +147,7 @@ U03-b 目标：把 `ChatWorkspace.tsx` 的 `presentationMode === 'tui' && active
 
 **拍板**（用户 2026-09-03）：pix 的「插件」是包管理（本地已装插件，可禁用/更新/移除），「资源」是文件清单（index.js / extension.js / agent.md）——**不是重叠，是两个视角**，但资源页目前没用。本轮左栏只加「插件」入口（含 MCP 就绪徽标），**资源入口不做**。证据见 [evidence §Q03](./topics/evidence-q02-q03.md)。
 
-### U05 — 免绑定工作目录直接开聊 — 切片 U05-a/b/c/d
-
-新增不绑定项目即可发送的路径，并保留引导提示：开发场景仍优先绑定工作目录。
-
-**cwd 与信任态已拍板**（[D02](./decisions/002-layout-cwd-and-evidence-scope.md) 决定二）：cwd 落隔离临时目录，默认**不信任**、逐次授权、写路径默认拒绝；UI 上需区别于工作态会话（解决 [Q01](./open-questions.md)）。
+### U05 — 免绑定工作目录直接开聊 — **已完成**（见上方 Done · U05）
 
 ### U06 — Run 面板 — 切片 U06-a（Ready）/ U06-b（已移交 Pi 计划 T38）
 
@@ -160,7 +187,7 @@ Pi 计划 T37 收口 ✅ 2026-09-03
   → U01 样式地基 ✅ 2026-09-03（U01-a/b/d 落地；U01-c 三项转 Q11）
       ├→ U09-1 空态摘列 ✅ → U09-2 底栏顺序 ✅ → U12 权限档 chip ✅（占底栏左侧位）
       └→ U02-a 模式字段 ✅ → U02-b 双栏收敛 ✅ → U03-a TUI 收右栏 ✅
-                                              → U05-a/b/c/d 免绑定开聊 → U03-b TUI 解绑
+                                              → U05-a/b/c/d 免绑定开聊 ✅ → U03-b TUI 解绑 ✅
   → U08-2 思考档七档（无前置，可交错）
   → U06-a Run 面板渲染层（需 U02 的模式语义确定挂载位）→ U07 Context 增强
   → U04 左栏插件入口（无前置，可交错）
