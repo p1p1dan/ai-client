@@ -1,14 +1,37 @@
 # Implementation Status — pix/pi-app UI 对齐改造
 
-**Current Phase**：**批次 9（U17–U20）已落地**——三件用户报障 + 一项欠项清理。
-壳层仍按 [D08](./decisions/008-vscode-dock-shell.md) 的 VSCode 式三栏。
-剩下的仍是一次累计 GUI 点验、外部阻塞的 U06-b（等 Pi 计划 T38）与用户降优先级的 U10/U11。
+**Current Phase**：**U06-b / U21 已落地，外部阻塞清零**。壳层仍按
+[D08](./decisions/008-vscode-dock-shell.md) 的 VSCode 式三栏。
+剩下的只有一次累计 GUI 点验与用户降优先级的 U10/U11。
 
 **Next Target**：**一次性 CDP GUI 点验**——用户 2026-09-04 明确「最后一起点验」，
 所以逐批点验一直后置到现在。批次 8 把点验清单整个换掉了（U14 那五条描述的 chrome 已被 D08 删除），
 新看点见 [roadmap U15/U16](./roadmap.md)。
 
-**Last Landed**：2026-09-05 **U20** `user_configured` 权限档明示降级
+**Last Landed**：2026-09-05 **U21** 下线实时 `↓` 输出 token 计数器
+（[D11](./decisions/011-retire-the-live-output-token-counter.md)）——用户在 U06-b 落地后点名处置
+T38 evidence 里那条欠项。取证给出的答案是**这不是「生产者还没接」**：pi 的 11 种事件里只有
+`turn_end` / `agent_end` 带 usage，流式的 `message_update` 没有 token 字段，
+所以「实时输出 token」在 pi 后端下没有数据源，凑出来只能字符除以 4——正是 U06 一路守的红线。
+整条删除（字段 / 两个 reducer / 选择器 / 两处 `↓` 渲染 / `formatTokenCount` / 20 条断言），
+保留 `readPiUsagePayload` 与 `messageMetadata` 的「估算不得记为账单」守卫，
+并加一条**反向守卫**防止有人把计数器接回来。274 files / **4194** tests 全绿。
+证据见 [D11 evidence](./evidence/2026-09-05-retire-live-token-counter.md)。
+
+**同一天稍早**：2026-09-05 **U06-b** 上下文占用与 usage——随 Pi 计划
+[T38](../pi-backend-migration/roadmap.md) 同批落地，因为 T38 的每个生产者都只有一个消费者，
+分两次落会留下「有字段没人读」的中间态。Run 面板得到占用环 + used/free/window 图例 + usage 行
+（全部标「上一回合」：pi 的 usage 是单回合的账，求和会打印出没人收过的费），
+U09-2 预留的底栏 `usage` 槽由 `ComposerUsageChip` 填上（只显 `68%`，tooltip 给绝对值），
+工具名下方接上 T38-c 的实时状态行。
+**开工取证改了做法**：pi SDK 的 `AgentSession.getContextUsage()` 直接返回
+`{ tokens, contextWindow, percent }`，占用由 worker 报，不是渲染层拿 token 除以目录窗口算——
+后者会把「配置的模型」的窗口套到「实际回答的模型」的 token 上。
+**环形图只有 used/free 两段、不按角色分色**（pi-app 有）：pi-app 的角色份额是字符除以 4 估的，
+照抄会把实测总量与估算切分放进同一个环。全仓 274 files / 4210 tests 全绿。
+证据见 [T38/U06-b evidence](../pi-backend-migration/evidence/2026-09-05-t38-runtime-usage-fields.md)。
+
+**再早一些**：2026-09-05 **U20** `user_configured` 权限档明示降级
 （[D10](./decisions/010-user-configured-gate-explicit-degradation.md)）——原 Active TODO 第 3 项已关闭。
 用户自己的 agentDir 声明了同一个权限插件时我们不注入随包副本（红线），
 `authorizerChain` 因此缺席、档位环永不被咨询，**而界面照常显示四档**。
@@ -67,7 +90,7 @@ worker 上报「这个会话实际加载了什么」（它为校验权限插件�
 重启后必须认领索引里记着的 scratch 目录（否则 resume 撞 workspace 不匹配），
 以及把该路径带在 `ChatSession.unbound` 上供 resume 使用。
 **U06-a**：新 `run` 面板（状态/模型/思考档/耗时/工具），状态映射是全映射 `Record`，
-占用与 usage 一个字段都没建（等 T38），双栏下可见（[D05](./decisions/005-two-column-run-surface.md)，**已被 D07 撤销：双栏现无右列**）。
+占用与 usage 一个字段都没建（等 T38；已于 2026-09-05 由 U06-b 补齐），双栏下可见（[D05](./decisions/005-two-column-run-surface.md)，**已被 D07 撤销：双栏现无右列**）。
 **U07**：Context 面板加「对话构成（已加载）」——分角色字符占比 + 逐段展开；
 token 估算与手动刷新刻意不做，理由在 evidence 里。
 证据见 [U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md) 与
@@ -112,7 +135,11 @@ store 记 `user_configured`、标签「你自己的策略」、菜单只剩两�
    **U15/U16 这六条已在真机验证通过**（真实 app + 真实会话数据，
    截图存 [`evidence/2026-09-05-u15-shots/`](./evidence/2026-09-05-u15-shots/)）；
    起不来的那次是本机 `HTTP_PROXY` 导致的挂死，小写 `no_proxy` 一加就好，与本批次改动无关。
-   **剩下要点验的是更早批次的项**（U09/U12/U05/U08-2/U13/U06-a/U07/U04）。
+   **剩下要点验的是更早批次的项**（U09/U12/U05/U08-2/U13/U06-a/U07/U04），
+   外加 **U06-b 的三个新看点**：① 一回合结束后 Run 面板出现占用环且中心百分比与图例三行自洽；
+   ② Composer 底栏出现 `NN%` chip、hover 给绝对值；③ 跑一个有进度输出的工具时工具名下方出现状态行。
+   再加 **U21 的一条反向看点**：跑一个长回合，状态行只有 `✽` 加计时，**没有第二个数字**
+   （[D11](./decisions/011-retire-the-live-output-token-counter.md)）。
 2. **待真机验证（六件）** —
    ⓪ **U17 的 bootstrap 超时** 原始现场（`worker.bootstrap timed out after 10000ms`）本轮未复现，
    修改按代码路径判定、由单测锁住 60s 预算；下次真遇到冷启动慢时确认它不再中断 resume；
@@ -125,10 +152,11 @@ store 记 `user_configured`、标签「你自己的策略」、菜单只剩两�
    [该缺陷记录](./evidence/2026-09-04-host-status-false-stop-and-tui-history-bug.md) 第三、四节）；
    ③ **U13 跨重启** 「聊天 → 退出 → 重开 → 点开」未在真机走过（索引读写、目录认领、resume 参数均有单测）；
    ④ **U04 的 MCP 徽标** 解析逻辑与 pix 同源，但本仓没有可跑通的 MCP 扩展，只有单测覆盖、没有真机样本。
-3. **`user_configured` 路线下权限档仍无功能，但已不再假装有** — 明示降级已落地
-   （[D10](./decisions/010-user-configured-gate-explicit-degradation.md) / [U20](./evidence/2026-09-05-user-configured-gate-degradation.md)）。
-   **真正恢复功能**要走「始终注入随包副本」，**前置是一个探针**：pi 同时加载两份同名插件时，
-   是否每次问两遍、两份 config 怎么合并、用户的 `deny` 会不会被冲掉。三问没答案前不动。
+3. ~~**`user_configured` 路线下权限档恢复功能**~~ — **已决定不做**（用户 2026-09-05 拍板，
+   [D10 决定三](./decisions/010-user-configured-gate-explicit-degradation.md)）。
+   用户自己装了权限插件，就让他自己去 pi TUI 设置里改自己的策略。
+   「始终注入随包副本」与作为其前置的双插件加载语义探针**一并取消**，不再是欠项。
+   已落地的明示降级（[U20](./evidence/2026-09-05-user-configured-gate-degradation.md)）保留。
 4. **发布前需 `pnpm build:agent-host`** — `out-agent-host/` 里的插件副本与 `config.json` 停留在 09-02，
    连 `authorizerChain` 都没有；dev 不受影响，打包必须重建。
 5. **U15 的两处未验证行为** — ① fullscreen diff 藏掉会话 Tab 条是否可接受（备选方案已写在
@@ -137,7 +165,7 @@ store 记 `user_configured`、标签「你自己的策略」、菜单只剩两�
 
 ## Blocked By
 
-- **U06-b** 等 Pi 计划 [T38-a/b](../pi-backend-migration/roadmap.md) 落地。这是当前唯一的外部阻塞。
+无。~~U06-b 等 Pi 计划 T38-a/b~~ — T38 已于 2026-09-05 关闭，U06-b 同批落地。
 
 ## Handoff
 

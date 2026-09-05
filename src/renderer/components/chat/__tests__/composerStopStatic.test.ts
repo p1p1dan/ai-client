@@ -251,14 +251,19 @@ describe('sendAndWait dispatch guard (2026-08-10 stop-hang fix)', () => {
     );
     expect(cancelReturns).toHaveLength(2);
     const [guard, classification] = cancelReturns;
-    const dispatch = only('const sendResult = await window.electronAPI.chat.send({');
+    // The anchor lost its `.send({` tail when the dispatch grew a `.catch`
+    // for WorkerManager refusals and the formatter broke the member chain
+    // across lines. Ordering, not formatting, is what this guard is about.
+    const dispatch = only('const sendResult = await window.electronAPI.chat');
     const sendAndWaitStart = only('const sendAndWait = async (): Promise<WaitResult> => {');
     expect(classification).toBeGreaterThan(dispatch);
     expect(guard).toBeGreaterThan(sendAndWaitStart);
     expect(guard).toBeLessThan(dispatch);
     // Three dispatch sites, one guard: `sendAndWait` is the only place that
-    // calls `chat.send`, so no caller can route around it.
-    expect(offsets('window.electronAPI.chat.send(')).toHaveLength(1);
+    // calls `chat.send`, so no caller can route around it. (Comments are
+    // stripped before scanning, so prose mentioning `chat.send()` cannot
+    // inflate this count.)
+    expect(offsets('.send({')).toHaveLength(1);
     // Initial send, busy retry, post-create send, and T32 exact-file reopen send.
     expect(offsets('await sendAndWait();')).toHaveLength(4);
   });

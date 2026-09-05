@@ -28,6 +28,13 @@ export interface AgentModelOption {
   /** Pi model capability metadata; absent on legacy/non-Pi catalogs. */
   reasoning?: boolean;
   /**
+   * T38-b: the model's context window in tokens, as the Pi model configuration
+   * declares it. Absent when the configuration does not say — which is why the
+   * occupancy surfaces treat it as unknown rather than defaulting to a common
+   * window size and printing a share of a number nobody stated.
+   */
+  contextWindow?: number;
+  /**
    * Reused directly for model-level effort availability; never duplicated into
    * another table. The `| 'off' | 'minimal'` widening this used to carry is
    * gone: those two are members of `SessionEffortLevel` since U08-2.

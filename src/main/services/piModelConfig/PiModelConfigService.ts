@@ -89,7 +89,10 @@ function readValidatedModels(path: string): PiManagedModelsConfig | null {
 
 function readLocalModelOptions(path: string): Array<{
   providerId: string;
-  model: Pick<PiManagedModelDefinition, 'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap'>;
+  model: Pick<
+    PiManagedModelDefinition,
+    'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap' | 'contextWindow'
+  >;
 }> {
   if (!existsSync(path)) return [];
   try {
@@ -101,7 +104,7 @@ function readLocalModelOptions(path: string): Array<{
       providerId: string;
       model: Pick<
         PiManagedModelDefinition,
-        'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap'
+        'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap' | 'contextWindow'
       >;
     }> = [];
     for (const [providerId, rawProvider] of Object.entries(providers)) {
@@ -138,6 +141,11 @@ function readLocalModelOptions(path: string): Array<{
             ...(tags ? { tags: [...new Set(tags.map((tag) => tag.trim()))] } : {}),
             ...(typeof raw.reasoning === 'boolean' ? { reasoning: raw.reasoning } : {}),
             ...(thinkingLevelMap ? { thinkingLevelMap: { ...thinkingLevelMap } } : {}),
+            // T38-b: `piModelOption` re-checks the range, so this reader only
+            // has to establish that the field is a number at all.
+            ...(typeof raw.contextWindow === 'number' && Number.isFinite(raw.contextWindow)
+              ? { contextWindow: raw.contextWindow }
+              : {}),
           },
         });
       }

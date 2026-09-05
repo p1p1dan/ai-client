@@ -43,8 +43,9 @@ Renderer → Preload → Electron Main WorkerManager
 
 | Plan | Lifecycle | Current phase | Last landed | Next target |
 |---|---|---|---|---|
-| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **Completed core / T38 active** | Phase H / T37 closed；Phase I / T38 已开立未开工 | T37 release packet + manual CI `33714362901`：Windows/Linux/macOS 原生 packaged gates 全绿（macOS unsigned） | T38 runtime 补字段（`usage.updated` 生产者、`contextWindow` 暴露），由 UI 计划 D03 开立 |
-| [pix/pi-app UI 对齐改造](./plans/pix-ui-alignment/README.md) | **In Progress（收尾）** | 批次 1–9 全部落地 | **批次 9（U17–U20）**：三件用户报障 + 关闭 `user_configured` 权限档欠项——`worker.bootstrap` 套用了给暖 RPC 的 10s 预算导致启动 resume 超时（改为单开 60s）；思考强度对无 `thinkingLevelMap` 的模型把七档全给，`minimal` 打到真实供应商 502（改为「没声明就只给 low/medium/high」）；关中栏 Tab 改为**结束对话**（[D09](./plans/pix-ui-alignment/decisions/009-tab-close-ends-conversation.md)：确认框 + 断开运行时，左栏那一行保留）。全仓 271 files / 4162 tests 全绿，[批次 9 evidence](./plans/pix-ui-alignment/evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)。上一批是批次 8（U15+U16）**VSCode 式壳层重排**：左栏成为 `44px 图标轨道 + 面板` 的导航容器（聊天/Git/文件/上下文/运行），右栏只留文件与编辑器，中栏一个已启动会话一个 Tab，**双栏/三栏与「上下文面板」开关整组删除**（[D08](./plans/pix-ui-alignment/decisions/008-vscode-dock-shell.md) 推翻 D07 决定一与决定三，并使 U02 整片作废）；上下文页加角色构成环形图 + 折叠限条。全仓 267 files / 4134 tests 全绿，[U15/U16 evidence](./plans/pix-ui-alignment/evidence/2026-09-05-u15-u16-vscode-dock-shell.md) | 一次性累计 GUI 点验（用户拍板「最后一起点验」；本批次尝试过，真实窗口起不来）；U06-b 仍等 Pi 计划 T38 |
+| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **Completed** | Phase H / T37 closed；Phase I / T38 已关闭（2026-09-05） | **T38 runtime 补字段**：`usage.updated` 生产者挂 `turn_end`（一回合一条、不累加）、目录带出 `contextWindow`、`tool.updated` 补状态行。取证改了做法——pi SDK 的 `getContextUsage()` 直接给 `{ tokens, contextWindow, percent }`，占用由 worker 报而非渲染层算。全仓 274 files / 4210 tests 全绿，[T38 evidence](./plans/pi-backend-migration/evidence/2026-09-05-t38-runtime-usage-fields.md)。T38 欠项 ②（`turnTokensDisplay` 死路）已于同日由 UI 计划 [D11](./plans/pix-ui-alignment/decisions/011-retire-the-live-output-token-counter.md) 关闭 | 无活动 runtime 任务；正式发布仍走 rollout/rollback runbook |
+| [pix/pi-app UI 对齐改造](./plans/pix-ui-alignment/README.md) | **In Progress（收尾）** | 全部切片落地，外部阻塞清零 | **U21（2026-09-05）**：下线 D33 遗留的实时 `↓` 输出 token 计数器（[D11](./plans/pix-ui-alignment/decisions/011-retire-the-live-output-token-counter.md)）。取证结论是**这不是「生产者还没接」**——pi 的 11 种事件里只有 `turn_end` / `agent_end` 带 usage，流式的 `message_update` 没有 token 字段，凑「实时」只能字符除以 4。整条删除并加一条反向守卫；「估算不得记为账单」的两处守卫与 `↑ NNN chars` 保留。274 files / 4194 tests 全绿，[D11 evidence](./plans/pix-ui-alignment/evidence/2026-09-05-retire-live-token-counter.md)。同日稍早是 **U06-b（随 Pi 计划 T38 同批）**：Run 面板占用环 + used/free/window 图例 + usage 行（标「上一回合」），U09-2 预留的底栏 `usage` 槽由 `ComposerUsageChip` 填上，工具名下方接实时状态行。**环只有 used/free 两段、不按角色分色**——pi-app 的角色份额是字符除以 4 估的，混进同一个环会让读者分不清哪半是实测；按角色的图留在 Context 页，单位是字符。[T38/U06-b evidence](./plans/pi-backend-migration/evidence/2026-09-05-t38-runtime-usage-fields.md)。上一批是**批次 9（U17–U20）**：三件用户报障 + 关闭 `user_configured` 权限档欠项——`worker.bootstrap` 套用了给暖 RPC 的 10s 预算导致启动 resume 超时（改为单开 60s）；思考强度对无 `thinkingLevelMap` 的模型把七档全给，`minimal` 打到真实供应商 502（改为「没声明就只给 low/medium/high」）；关中栏 Tab 改为**结束对话**（[D09](./plans/pix-ui-alignment/decisions/009-tab-close-ends-conversation.md)：确认框 + 断开运行时，左栏那一行保留）。全仓 271 files / 4162 tests 全绿，[批次 9 evidence](./plans/pix-ui-alignment/evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)。上一批是批次 8（U15+U16）**VSCode 式壳层重排**：左栏成为 `44px 图标轨道 + 面板` 的导航容器（聊天/Git/文件/上下文/运行），右栏只留文件与编辑器，中栏一个已启动会话一个 Tab，**双栏/三栏与「上下文面板」开关整组删除**（[D08](./plans/pix-ui-alignment/decisions/008-vscode-dock-shell.md) 推翻 D07 决定一与决定三，并使 U02 整片作废）；上下文页加角色构成环形图 + 折叠限条。全仓 267 files / 4134 tests 全绿，[U15/U16 evidence](./plans/pix-ui-alignment/evidence/2026-09-05-u15-u16-vscode-dock-shell.md) | 一次性累计 GUI 点验（用户拍板「最后一起点验」），新增 U06-b 三个看点 + U21 一条反向看点（状态行只有 `✽` 加计时） |
+| [模型配置页迁入 onboard](./plans/model-catalog-admin/README.md) | **Planning（未开工）** | 方向已拍板，M01–M05 全部 Next | — | 先答 [四个 open question](./plans/model-catalog-admin/open-questions.md)，再动 M01。用户 2026-09-05：后续单独开对话执行 |
 | [Entry and environment](./plans/entry-and-environment/README.md) | Maintenance | 主体完成；只剩 Pi-only 可复用错误面/GUI 复验 | two-entry welcome、spawn gate、git notice、settings ownership | 并入 T37 或另立小维护任务 |
 | [Unified credentials/app state](./plans/unified-credentials/README.md) | Completed foundation | No active work | `~/.pilab/<profile>`、vault、credential mode、Pi arm | Pi config/import/removal 由 active plan 接管 |
 | [OpenChamber product baseline](./plans/openchamber-chat-refactor/README.md) | Completed baseline | No active work | shell/timeline/Composer/files/git/terminal 产品资产 | runtime-neutral assets 由 T31/T36 适配 |
@@ -52,7 +53,7 @@ Renderer → Preload → Electron Main WorkerManager
 
 ## Current active task tree
 
-活动任务只看 [Pi roadmap T28–T37](./plans/pi-backend-migration/roadmap.md)：
+任务身份看 [Pi roadmap T28–T38](./plans/pi-backend-migration/roadmap.md)：
 
 ```text
 T28 replacement baseline
@@ -64,9 +65,10 @@ T28 replacement baseline
 ├→ T34 legacy import → T35 remove legacy execution
 └→ T36 pix-based Pi TUI
 → T37 release candidate
+→ T38 runtime field completion
 ```
 
-**T37 Pi-only release gates 已关闭**。T28–T37 全部完成；Claude import、legacy execution final absence、Pi TUI 与 Windows/Linux/macOS 原生 packaged gates 均有 accepted evidence。Codex import仍等待真实本地格式证据，不恢复 legacy execution runtime。
+**T37 Pi-only release gates 已关闭，T38 runtime 补字段亦已关闭（2026-09-05）**。T28–T38 全部完成；Claude import、legacy execution final absence、Pi TUI 与 Windows/Linux/macOS 原生 packaged gates 均有 accepted evidence。Codex import仍等待真实本地格式证据，不恢复 legacy execution runtime。
 
 当前活动实现入口是 [pix/pi-app UI 对齐计划](./plans/pix-ui-alignment/README.md)：任务身份看它的 [roadmap](./plans/pix-ui-alignment/roadmap.md)，动手看 [execution-plan](./plans/pix-ui-alignment/topics/execution-plan.md)。
 
@@ -87,6 +89,7 @@ T28 replacement baseline
 - [T37-c GUI and real-account point-check](./plans/pi-backend-migration/evidence/2026-09-02-t37c-gui-packaged.md)
 - [T37-d session-brick defect fix](./plans/pi-backend-migration/evidence/2026-09-02-t37d-session-brick-fix.md)
 - [T37-d release closure](./plans/pi-backend-migration/evidence/2026-09-03-t37d-release-closure.md)
+- [T38 runtime usage fields + U06-b](./plans/pi-backend-migration/evidence/2026-09-05-t38-runtime-usage-fields.md)
 - [Pre-Pi-only Pi plan snapshot](./plans/pi-backend-migration/history/2026-08-31-pre-pi-only-realignment/)
 - [Pre-Pi-only baseline snapshot](./history/2026-08-31-pre-pi-only-baseline/)
 - [Pre-Pi-only root registry](./history/2026-08-31-pre-pi-only-registry.md)

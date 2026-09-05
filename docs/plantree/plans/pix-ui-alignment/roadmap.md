@@ -9,19 +9,20 @@
 
 | 分组 | 数量 | 说明 |
 |---|---|---|
-| Done | 20 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)）；**U13：免绑定会话跨重启可见性**、**U06-a：Run 面板**、**U07：Context 内容增强**（2026-09-04，[U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md) / [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）；**U04：左栏插件入口**（2026-09-04，[U04 evidence](./evidence/2026-09-04-u04-plugin-entry.md)）；**U14：壳层横条重排与双栏收敛**（2026-09-04，[U14 evidence](./evidence/2026-09-04-u14-shell-chrome-realignment.md)）；**U15：VSCode 式壳层重排**、**U16：上下文页图形化与折叠**（2026-09-05，[U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)）；**U17：bootstrap 冷启动超时**、**U18：思考强度极端档需声明**、**U19：关 Tab 即结束对话**（2026-09-05，[批次 9 evidence](./evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)） |
+| Done | 22 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)）；**U13：免绑定会话跨重启可见性**、**U06-a：Run 面板**、**U07：Context 内容增强**（2026-09-04，[U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md) / [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）；**U04：左栏插件入口**（2026-09-04，[U04 evidence](./evidence/2026-09-04-u04-plugin-entry.md)）；**U14：壳层横条重排与双栏收敛**（2026-09-04，[U14 evidence](./evidence/2026-09-04-u14-shell-chrome-realignment.md)）；**U15：VSCode 式壳层重排**、**U16：上下文页图形化与折叠**（2026-09-05，[U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)）；**U17：bootstrap 冷启动超时**、**U18：思考强度极端档需声明**、**U19：关 Tab 即结束对话**（2026-09-05，[批次 9 evidence](./evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)）；**U06-b：上下文占用 donut + usage 行 + 底栏占用 chip**（2026-09-05，随 Pi 计划 T38 同批，[T38/U06-b evidence](../pi-backend-migration/evidence/2026-09-05-t38-runtime-usage-fields.md)）；**U21：下线实时 ↓ 输出 token 计数器**（2026-09-05，[D11](./decisions/011-retire-the-live-output-token-counter.md) / [evidence](./evidence/2026-09-05-retire-live-token-counter.md)） |
 | In Progress | 0 | — |
-| Moved out | 1 | U06-b → Pi 计划 T38（[D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二） |
+| Moved out | 0 | ~~U06-b → Pi 计划 T38~~ — T38 已关闭，U06-b 同批落地，回到 Done |
 | Dropped | 1 | U08-3 请求优先级（[Q12](./open-questions.md) 拍板不做） |
 | Superseded | 1 | U02 双栏/三栏开关 → 被 [D08](./decisions/008-vscode-dock-shell.md) 决定四整片作废 |
 | Deferred | 2 | U10–U11 |
 
 **执行顺序**（批次，详见 execution-plan）：
 `U01 ✅ → U09 ✅ → U12 ✅ → U02+U03-a ✅ → U05+U03-b ✅ → U08-2 ✅ → U13 ✅ → U06-a+U07 ✅ → U04 ✅ → U14 ✅
-→ 批次 8：U15-a ✅ → U15-b ✅ → U15-c ✅ → U15-d ✅ → U16 ✅`。
-**全部切片已落地**（批次 1–8）；批次 8 由 [D08](./decisions/008-vscode-dock-shell.md) 开立，
+→ 批次 8：U15-a ✅ → U15-b ✅ → U15-c ✅ → U15-d ✅ → U16 ✅ → 批次 10：U17–U19 ✅ → 批次 11：U06-b ✅
+→ 批次 12：U21 ✅`。
+**全部切片已落地**；批次 8 由 [D08](./decisions/008-vscode-dock-shell.md) 开立，
 按 [`docs/design/a11-vscode-shell-prototype.html`](../../../design/a11-vscode-shell-prototype.html) 施工。
-外部阻塞仍只有 U06-b（等 Pi 计划 T38），Deferred 仍是 U10/U11。
+**外部阻塞已清零**——U06-b 随 Pi 计划 T38 于 2026-09-05 同批落地。Deferred 仍是 U10/U11。
 U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排位再插控件，同一块 JSX 只改一次。
 
 **新增决策**：
@@ -32,7 +33,8 @@ U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排
   不在 Main 重实现 pi 的解析（后者是第二份手抄，表现为「界面说 3 个、agent 实际加载 1 个」）。
 - [D10](./decisions/010-user-configured-gate-explicit-degradation.md)——**`user_configured` 明示降级**：
   档位在这条路径上从来没生效过而界面看不出来，改为把 `permissionGate` 送到渲染层并在控件上说明。
-  只说降级、不教修法（用户拍板）。真正恢复功能要走「始终注入随包副本」，前置是双插件加载语义探针。
+  只说降级、不教修法（用户拍板）。**决定三（2026-09-05 追加）：不恢复功能，到此为止**——
+  用户自己装了权限插件就由他自己去 pi TUI 设置里改；「始终注入随包副本」与双插件语义探针一并取消。
 - [D09](./decisions/009-tab-close-ends-conversation.md)——**关 Tab 就是结束对话**：确认后断开该会话的
   运行时，但左栏那一行留着（仓库里三个「关闭」中最轻的那个；另两个是左栏 Close 与 Archive）。
   修正 D08 决定三留下的「关 Tab 只是收起 Tab」。
@@ -50,7 +52,28 @@ U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排
 Q09 由取证关闭；Q11 布局尺寸维持现值；Q12 请求优先级不做；
 Q13 免绑定会话跨重启可见性由 [D04](./decisions/004-unbound-session-index-visibility.md) 拍板走索引标记，落为 U13）。
 
-## Done — 批次 9（最新）
+## Done — 批次 12（最新）
+
+### U21 — 下线实时 `↓` 输出 token 计数器 — **Done**（2026-09-05）
+
+按 [D11](./decisions/011-retire-the-live-output-token-counter.md)，关闭 T38 evidence §七的欠项 ②。
+
+D33（Claude 时代，计划已归档）定的状态行 `✽ 19m 55s · ↓ 38.5k` 里的 `↓`，
+数据来自 Claude host 的中途估算通道；T35 删 legacy host 时生产者一并消失，消费链留了下来。
+
+**取证结论：这不是「还没接」，是没有数据源。**pi 的 `AgentEvent` 共 11 种，
+带 usage 的只有 `turn_end` / `agent_end`（都在回合结束后），流式的 `message_update`
+没有任何 token 字段。要凑出「实时」只剩字符除以 4，与 U06 一路守的红线冲突。
+
+整条删除：字段、两个 reducer、zustand 选择器、两处 `↓` 渲染（回合状态行 + composer 等待行）、
+`formatTokenCount`，以及 20 条相关断言。**保留**「估算不得记为账单」的两处守卫
+（`readPiUsagePayload` / `messageMetadata`）与 `↑ NNN chars`（那是精确值，不是估算）。
+加了一条反向守卫，防止有人拿估算把计数器接回来。
+
+**证据**：[D11 evidence](./evidence/2026-09-05-retire-live-token-counter.md)。
+**欠项**：GUI 点验并入累计那一次，看点是**不该出现的东西**（状态行只有 `✽` 加计时）。
+
+## Done — 批次 9
 
 三件用户报障，一次做完。证据合并在
 [批次 9 evidence](./evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)。
@@ -121,7 +144,8 @@ pi 假定 `off`/`minimal` 处处可用所以 clamp 不拦；本仓 `effortsForMo
 「对话构成」默认折叠 + 展开后限制条数（前 N 条 + 显示更多）。
 
 **边界不变**：数据源仍是本窗口已加载的消息（U07 确立），措辞继续点明；
-真实 token 占用仍等 Pi 计划 T38，不把字符数印成 token 数。
+真实 token 占用已由 U06-b（2026-09-05）落在 **Run 面板**，两张图刻意不合并：单位不同（字符 vs token），
+混在一个环里读者无从分辨哪半是实测。本图仍不把字符数印成 token 数。
 **落地形态**：环形图画的是**角色构成**（`pathLength=100`，弧长即图例百分比），不是窗口占用率；
 折叠与限条数**两条都做**——只折叠挡的是第一眼，300 轮会话展开一次照样渲染 300 行。
 
@@ -298,7 +322,7 @@ Main 按 `isScratchPath` 写入，`mergeSessionIndex` 在 orphan 分支之前拦
 
 下方保留任务身份、范围边界与拍板出处；验收标准与改动落点在
 [execution-plan](./topics/execution-plan.md) 与各自的 evidence 里，**不要**在本文件复制。
-本节的条目全部已落地——U06-b 是唯一例外，它挂在 Pi 计划 T38 上。
+本节的条目全部已落地（含 U06-b，2026-09-05 随 Pi 计划 T38 同批）。
 
 ### U02 — 双栏 / 三栏布局模式开关 — **已完成**（见上方 Done · U02）
 
@@ -318,11 +342,21 @@ MCP 就绪数按 pix 同一套办法，从扩展自己发布的状态行解析�
 
 ### U05 — 免绑定工作目录直接开聊 — **已完成**（见上方 Done · U05）
 
-### U06 — Run 面板 — U06-a **Done**（2026-09-04）/ U06-b（已移交 Pi 计划 T38）
+### U06 — Run 面板 — U06-a **Done**（2026-09-04）/ U06-b **Done**（2026-09-05）
 
 新增 `run` surface，参照 pi-app 的 `features/run/run-panel.tsx` + `context-donut.tsx`：运行态状态机、模型、思考档、回合耗时、上下文占用环形图。
 
 **边界已取证**（[evidence-q04](./topics/evidence-q04-runtime-fields.md)）：状态机/模型/选中 effort/耗时/工具**名称**渲染层可拼（现有 `RuntimeEvent` + store）；**占用 % + usage 行**需 Pi runtime 补 `usage.updated`（schema 已有、worker 不发）且目录剥离 `contextWindow`——**归 Pi-only 计划**。因此 U06 分两半：先做渲染层能拼的，占用 donut/usage 行留待 Pi runtime 补字段后做（或作为 Pi 计划 task）。
+
+**U06-b 落地形态**（2026-09-05，与 [T38](../pi-backend-migration/roadmap.md) 同批，
+[evidence](../pi-backend-migration/evidence/2026-09-05-t38-runtime-usage-fields.md)）：
+占用环 + used/free/window 图例 + usage 行（全部标「上一回合」，因为 pi 的 usage 是单回合的账，
+求和会打印出没人收过的费）；U09-2 预留的底栏 `usage` 槽由 `ComposerUsageChip` 填上（只显 `68%`，
+tooltip 给绝对值）；T38-c 的工具状态行接到工具名下方。
+
+**环形图只有 used/free 两段，不按角色分色**（pi-app 有）——pi-app 的角色份额是字符数除以 4 估的，
+照抄会把实测总量与估算切分放进同一个环。按角色的视图留在 Context 页构成图，那张图单位是**字符**。
+同理 Context 页构成图**没有**改成 token 分母，原处「T38 落地后本图获得真实分母」的注释已改成这条决定。
 
 **U06-a 已落地**（见 [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）：
 新 `run` surface，状态映射是一张全映射 `Record`（加第十个运行时状态会编译失败，不会被默认分支吞掉），

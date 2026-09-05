@@ -80,6 +80,19 @@ vi.mock('electron', () => ({
 }));
 
 vi.mock('../../services/agent-host/WorkerManager', () => ({
+  // `chat.ts` imports this class to decide whether a rejection carries a
+  // `code` worth putting in the message. Declared inside the factory (vi.mock
+  // is hoisted) and re-imported by the tests below, so both sides share the
+  // one constructor `instanceof` actually compares against.
+  WorkerManagerError: class WorkerManagerError extends Error {
+    constructor(
+      readonly code: string,
+      message: string
+    ) {
+      super(message);
+      this.name = 'WorkerManagerError';
+    }
+  },
   workerManager: {
     onEvent: vi.fn((handler: (event: RuntimeEvent) => void) => {
       runtimeEventHandlers.push(handler);
@@ -177,6 +190,31 @@ function invoke<T>(channel: string, payload?: unknown): Promise<T> {
 }
 
 describe('Pi WorkerSlot chat routing', () => {
+  // Electron's `invoke` rejection carries only `error.message`, and nothing in
+  // Main emits a `host.error` runtime event, so a WorkerManager refusal used
+  // to reach the renderer as opaque prose. The composer branches on the code:
+  // without it, an idle-evicted session failed its first send outright.
+  describe('send refusals keep their code', () => {
+    it('prefixes a WorkerManagerError message with its code', async () => {
+      const { WorkerManagerError } = await import('../../services/agent-host/WorkerManager');
+      send.mockRejectedValueOnce(
+        new WorkerManagerError('session_not_found', 'No ready Pi WorkerSlot exists for s1')
+      );
+
+      await expect(
+        invoke('chat:send', { sessionId: 's1', attemptId: 'a1', text: 'hi' })
+      ).rejects.toThrow('session_not_found: No ready Pi WorkerSlot exists for s1');
+    });
+
+    it('leaves a plain Error untouched', async () => {
+      send.mockRejectedValueOnce(new Error('worker transport closed'));
+
+      await expect(
+        invoke('chat:send', { sessionId: 's1', attemptId: 'a1', text: 'hi' })
+      ).rejects.toThrow(/^worker transport closed$/);
+    });
+  });
+
   it('keeps ensureHost as a lightweight ready handshake', async () => {
     await expect(invoke('chat:ensureHost')).resolves.toEqual({
       state: 'ready',

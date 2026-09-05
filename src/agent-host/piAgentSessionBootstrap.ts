@@ -117,6 +117,14 @@ export interface PiSession {
     targetId: string,
     options?: { summarize?: boolean }
   ) => Promise<{ editorText?: string; cancelled: boolean; aborted?: boolean }>;
+  /**
+   * T38-a: Pi's own context occupancy for the active branch — `{ tokens,
+   * contextWindow, percent }`, or `undefined` when the session has no model or
+   * the model declares no window. Left as `unknown` and narrowed by
+   * `readPiUsagePayload`'s helpers: this is an SDK shape read across a version
+   * boundary, same policy as `PiLoadedExtensions`.
+   */
+  getContextUsage?: () => unknown;
   readonly isStreaming?: boolean;
   [key: string]: unknown;
 }

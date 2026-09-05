@@ -1,5 +1,6 @@
 import { unlink } from 'node:fs/promises';
 import { parsePiModelRef } from '../shared/piModelConfig.ts';
+import { buildPiUsagePayload } from '../shared/piUsage.ts';
 import type { SessionAttachment, SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type { ExtensionUiResponse, RuntimeEventDraft } from '../shared/types/runtimeEvents.ts';
 import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
@@ -116,6 +117,58 @@ function readToolOutput(result: unknown): string {
     return typeof content === 'string' ? content : JSON.stringify(content);
   }
   return result === undefined ? '' : JSON.stringify(result);
+}
+
+/** Longest status line the strip will carry; pix/pi-app clamp at the same width. */
+const TOOL_STATUS_MAX_CHARS = 120;
+
+/**
+ * Text out of a partial tool result, by the same three rules pix/pi-app use
+ * (`extractTextFromToolOutput`): a bare string, an SDK content array's `text`
+ * parts, or a `.text` field. Anything else yields `''` — deliberately NOT
+ * `JSON.stringify`, which `readToolOutput` does for the transcript body. A
+ * status strip that printed a serialized object would be noise wearing the
+ * costume of a progress report.
+ */
+function toolStatusText(value: unknown): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value !== 'object') return '';
+  const content = (value as { content?: unknown }).content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) =>
+        part && typeof part === 'object' && typeof (part as { text?: unknown }).text === 'string'
+          ? (part as { text: string }).text
+          : ''
+      )
+      .join('');
+  }
+  const text = (value as { text?: unknown }).text;
+  return typeof text === 'string' ? text : '';
+}
+
+/**
+ * T38-c: one line of live tool status out of a `tool_execution_update`'s
+ * `partialResult`.
+ *
+ * The LAST non-empty line, not the first: a tool that streams progress appends,
+ * so the newest line is the current state and the first is where it started.
+ * (pi-app clamps the whole blob instead, which shows a progress tool's opening
+ * banner forever.) `null` for anything with no text at all — the renderer then
+ * shows the tool name alone rather than an empty strip under it.
+ */
+function toolStatusLine(partialResult: unknown): string | null {
+  const text = toolStatusText(partialResult);
+  if (!text) return null;
+  const lines = text.split('\n');
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    return line.length > TOOL_STATUS_MAX_CHARS ? `${line.slice(0, TOOL_STATUS_MAX_CHARS)}…` : line;
+  }
+  return null;
 }
 
 function numberOr(value: unknown, fallback: number): number {
@@ -763,6 +816,22 @@ export class PiWorkerSession {
     }
   }
 
+  /**
+   * T38-a: Pi's context occupancy for the live session, or `undefined`.
+   *
+   * Wrapped because this reaches into the SDK from inside an event callback: an
+   * older build without the method, or one that throws while the branch is
+   * mid-write, must cost the turn its occupancy figure and nothing more — the
+   * usage totals beside it are still worth emitting.
+   */
+  private readContextUsage(): unknown {
+    try {
+      return this.handle?.session.getContextUsage?.();
+    } catch {
+      return undefined;
+    }
+  }
+
   private projectEvent(turn: ActiveTurn, event: PiAgentEvent): void {
     const sessionId = this.logicalSessionId;
     const requestId = turn.requestId;
@@ -790,6 +859,16 @@ export class PiWorkerSession {
         ) {
           turn.pendingError = last.errorMessage ?? `Model response ${last.stopReason}`;
         }
+        break;
+      }
+      case 'turn_end': {
+        // T38-a: the only `usage.updated` producer. `agent_end` is deliberately
+        // NOT a second one — it carries the whole message list, whose last
+        // assistant message is the one this turn already reported, so emitting
+        // from both would double-count the final turn of every run.
+        const message = event.message as { usage?: unknown } | undefined;
+        const payload = buildPiUsagePayload(message?.usage, this.readContextUsage());
+        if (payload) this.emit({ type: 'usage.updated', sessionId, requestId, payload });
         break;
       }
       case 'agent_settled':
@@ -968,6 +1047,11 @@ export class PiWorkerSession {
       }
       case 'tool_execution_update': {
         const messageId = projection.assistantMessageId ?? this.ensureAssistant(turn);
+        // T38-c: `partialResult` is a tool's own progress report, so the last
+        // line of it is the status ("Downloaded 3/12", "Running tests…").
+        // Forwarded as a clamped single line, never as the growing body — a
+        // status strip is not a second transcript of the tool's output.
+        const status = toolStatusLine(event.partialResult);
         this.emit({
           type: 'tool.updated',
           sessionId,
@@ -976,6 +1060,7 @@ export class PiWorkerSession {
             messageId,
             toolCallId: String(event.toolCallId ?? ''),
             ...(event.args !== undefined ? { input: event.args } : {}),
+            ...(status ? { status } : {}),
           },
         });
         break;

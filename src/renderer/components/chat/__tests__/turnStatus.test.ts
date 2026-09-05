@@ -3,7 +3,6 @@ import { composerSendingLine, SLOW_WAIT_HINT_SECONDS, STALLED_HINT_SECONDS } fro
 import {
   deriveTurnStatus,
   formatElapsedClock,
-  formatTokenCount,
   isFailedCardBodyDuplicate,
   latestErrorNoticeText,
   TURN_FAILED_TEXT,
@@ -65,7 +64,7 @@ describe('deriveTurnStatus (F-B5)', () => {
     );
   });
 
-  it('D33: streaming — elapsed clock only, no verb, when no token estimate has arrived', () => {
+  it('D33: streaming is the elapsed clock alone — no verb, no counter', () => {
     const status = deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: 7 });
     expect(status).toEqual({ kind: 'streaming', text: '7s' });
   });
@@ -73,34 +72,6 @@ describe('deriveTurnStatus (F-B5)', () => {
   it('D33: streaming outranks the slow branch — "Still waiting" is false once tokens arrive', () => {
     const status = deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: 90 });
     expect(status).toEqual({ kind: 'streaming', text: '1m 30s' });
-  });
-
-  it('D33: streaming appends the ↓ token suffix once an estimate is present', () => {
-    const status = deriveTurnStatus({
-      ...base,
-      hasBlocks: true,
-      elapsedSeconds: 7,
-      outputTokensDisplay: 850,
-    });
-    expect(status).toEqual({ kind: 'streaming', text: '7s · ↓ 850' });
-  });
-
-  it('D33: streaming formats a large token estimate in k-notation', () => {
-    const status = deriveTurnStatus({
-      ...base,
-      hasBlocks: true,
-      elapsedSeconds: 7,
-      outputTokensDisplay: 38512,
-    });
-    expect(status).toEqual({ kind: 'streaming', text: '7s · ↓ 38.5k' });
-  });
-
-  it('D33: streaming omits the ↓ suffix for null/undefined outputTokensDisplay', () => {
-    expect(
-      deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: 7, outputTokensDisplay: null })
-        ?.text
-    ).toBe('7s');
-    expect(deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: 7 })?.text).toBe('7s');
   });
 
   it('F-B5: slow at the threshold, still delegating the copy', () => {
@@ -173,19 +144,6 @@ describe('formatElapsedClock (D33)', () => {
   it('floors fractional input and clamps negative input to zero', () => {
     expect(formatElapsedClock(7.9)).toBe('7s');
     expect(formatElapsedClock(-5)).toBe('0s');
-  });
-});
-
-describe('formatTokenCount (D33)', () => {
-  it('renders under 1000 as-is', () => {
-    expect(formatTokenCount(0)).toBe('0');
-    expect(formatTokenCount(850)).toBe('850');
-    expect(formatTokenCount(999)).toBe('999');
-  });
-
-  it('renders 1000 and over as one-decimal k-notation', () => {
-    expect(formatTokenCount(1000)).toBe('1.0k');
-    expect(formatTokenCount(38512)).toBe('38.5k');
   });
 });
 
@@ -387,41 +345,29 @@ describe('[TS-1] the slow/stalled split keeps kind and copy same-sourced (F456 �
 });
 
 /**
- * F456 slice ④ §7.4 / §8.4 `[F4-3]` — the two counters, asserted at the layer
- * that WIRES them rather than the one that formats them.
+ * F456 slice ④ §7.4 / §8.4 `[F4-3]` — the prompt-size counter, asserted at the
+ * layer that WIRES it rather than the one that formats it.
  *
  * `attachments.test.ts` owns the formatting contract. What only this file can
- * see is whether `deriveTurnStatus` actually hands its own inputs down: the
- * `↓` estimate used to be read exclusively by the streaming branch, and a
- * version that keeps it there passes every assertion in the other suite while
- * showing the user nothing.
+ * see is whether `deriveTurnStatus` actually hands its own input down.
+ *
+ * The `↓` reply-size counter this suite used to cover was retired with the
+ * Claude host's interim usage channel (T35): Pi reports usage only at
+ * `turn_end`, so no in-flight statement about a reply's size can be made from
+ * measured data, and this repo does not estimate one from characters.
  */
-describe('[F4-3] deriveTurnStatus feeds both counters into the waiting copy', () => {
-  it('[F4-3] the awaiting tier carries the ↓ token estimate, not just the streaming tier', () => {
-    const status = deriveTurnStatus({
-      ...base,
-      hasBlocks: false,
-      outputTokensDisplay: 1800,
-    });
-    expect(status?.kind).toBe('awaiting');
-    expect(status?.text).toContain('↓ 1.8k');
-  });
-
+describe('[F4-3] deriveTurnStatus feeds the prompt counter into the waiting copy', () => {
   it('[F4-3] the awaiting tier carries the ↑ prompt size from the send snapshot', () => {
     const status = deriveTurnStatus({ ...base, hasBlocks: false, promptChars: 428 });
+    expect(status?.kind).toBe('awaiting');
     expect(status?.text).toContain('↑ 428 chars');
   });
 
-  it('[F4-3] a turn with no snapshot and no estimate shows neither arrow', () => {
+  it('[F4-3] a turn with no snapshot shows no arrow at all', () => {
     // The `?? 0` fallback in `MessageTimeline.tsx` exists for a session that was
     // already running when this window opened. It must read as "unknown", never
     // as a user who sent nothing.
-    const status = deriveTurnStatus({
-      ...base,
-      hasBlocks: false,
-      promptChars: 0,
-      outputTokensDisplay: null,
-    });
+    const status = deriveTurnStatus({ ...base, hasBlocks: false, promptChars: 0 });
     expect(status?.text).not.toContain('↑');
     expect(status?.text).not.toContain('↓');
   });

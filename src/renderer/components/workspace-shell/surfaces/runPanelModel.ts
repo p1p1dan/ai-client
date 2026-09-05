@@ -4,17 +4,23 @@
  * (`session.status`, the message bucket, the in-flight turn snapshot, the
  * resolved model / thinking level).
  *
- * Deliberately NOT here (Q04 取证, [evidence-q04-runtime-fields]): context
- * occupancy, the usage row and tokens-per-second. Pi's worker never emits
- * `usage.updated` and the model catalog strips `contextWindow`, so every one of
- * those numbers would have to be invented. They belong to U06-b, which waits on
- * the Pi plan's T38 — until then this module has no usage shape at all, which
- * is what keeps the panel from growing an empty shell for them.
+ * U06-b adds the two things that used to be missing: the context-occupancy
+ * figures and the usage row. Both now arrive as runtime facts rather than
+ * derivations — Pi's worker emits `usage.updated` on every `turn_end` (T38-a)
+ * and the model catalog carries `contextWindow` (T38-b). Nothing in this module
+ * estimates tokens from characters; when the runtime has not reported a number,
+ * the view says so and the ring does not render.
  *
  * React/electronAPI-free so it runs under the repo's node-env vitest, same as
  * `contextSurfaceModel.ts`.
  */
 
+import {
+  type ContextOccupancy,
+  deriveContextOccupancy,
+  type PiTurnUsage,
+  type PiUsagePayload,
+} from '@shared/piUsage';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { ChatMessage } from '@/stores/chatSessions';
 
@@ -64,6 +70,11 @@ const ACTIVITY_HEADLINE: Record<'tool' | 'thinking', string> = {
 export interface RunToolFacts {
   /** Tool call with no result yet — the one the agent is inside of. */
   activeTool: string | null;
+  /**
+   * T38-c: that tool's own latest progress line, `null` when it published none.
+   * Reported by the runtime, never derived from the tool's output body.
+   */
+  activeToolStatus: string | null;
   /** Tool calls in the last assistant turn. */
   calls: number;
   /** Of those, the ones that came back `ok: false`. */
@@ -97,6 +108,20 @@ export interface RunPanelInput {
   effortLabel: string | null;
   /** Latency of the last completed assistant turn, in ms. */
   lastTurnMs: number | null;
+  /**
+   * U06-b: the last settled `usage.updated` for this session, or `null` before
+   * the first turn settles (which includes a freshly reopened conversation).
+   */
+  usage: PiUsagePayload | null;
+  /** T38-c: the running tool's progress line, from `sessionRuntimeFacts`. */
+  toolStatus: { toolCallId: string; status: string } | null;
+  /**
+   * T38-b: the context window the CONFIGURED model declares in the catalog.
+   * Used only as a standalone fact when the runtime has reported no occupancy
+   * — never as a denominator under runtime token counts, because the configured
+   * model and the model that actually answered are allowed to differ.
+   */
+  configuredContextWindow: number | null;
 }
 
 export interface RunPanelView {
@@ -119,11 +144,24 @@ export interface RunPanelView {
   modelReported: boolean;
   effortLabel: string | null;
   tools: RunToolFacts;
+  /**
+   * U06-b: occupancy the runtime measured, with a `used`/`free` split ready for
+   * the ring. `null` whenever Pi has not reported tokens — after a compaction,
+   * or before the session's first reply. Never synthesized from characters.
+   */
+  occupancy: ContextOccupancy | null;
+  /**
+   * The window with no occupancy against it: shown as a plain fact when
+   * `occupancy` is `null` but a window size IS known. `null` = say nothing.
+   */
+  contextWindowOnly: number | null;
+  /** Token/cost totals of the last settled turn, or `null`. */
+  usage: PiTurnUsage | null;
   /** True when this session has nothing to report yet at all. */
   empty: boolean;
 }
 
-const NO_TOOLS: RunToolFacts = { activeTool: null, calls: 0, failed: 0 };
+const NO_TOOLS: RunToolFacts = { activeTool: null, activeToolStatus: null, calls: 0, failed: 0 };
 
 export function formatRunDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.round(ms / 1000));
@@ -143,7 +181,11 @@ export function formatRunDuration(ms: number): string {
  * `toolCallId` arrives — that pairing is exactly how the store folds
  * `tool.started` / `tool.completed`.
  */
-export function deriveRunTools(messages: readonly ChatMessage[]): RunToolFacts {
+export function deriveRunTools(
+  messages: readonly ChatMessage[],
+  /** T38-c: the runtime's progress line, tied to the call that published it. */
+  toolStatus?: { toolCallId: string; status: string } | null
+): RunToolFacts {
   let lastAssistant: ChatMessage | undefined;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i].role === 'assistant') {
@@ -163,6 +205,7 @@ export function deriveRunTools(messages: readonly ChatMessage[]): RunToolFacts {
 
   let calls = 0;
   let activeTool: string | null = null;
+  let activeToolCallId: string | null = null;
   for (const block of lastAssistant.blocks) {
     if (block.type !== 'tool_call' || !block.toolCallId) continue;
     calls += 1;
@@ -170,9 +213,17 @@ export function deriveRunTools(messages: readonly ChatMessage[]): RunToolFacts {
     // most recent open one is what the agent is inside of right now.
     if (!settled.has(block.toolCallId)) {
       activeTool = block.toolName ?? null;
+      activeToolCallId = block.toolCallId;
     }
   }
-  return { activeTool, calls, failed };
+  // The status is shown only against the call that published it. The store
+  // clears it on completion anyway; this second check is what keeps a line from
+  // appearing under the NEXT tool if those two events ever race.
+  const activeToolStatus =
+    toolStatus && activeToolCallId && toolStatus.toolCallId === activeToolCallId
+      ? toolStatus.status
+      : null;
+  return { activeTool, activeToolStatus, calls, failed };
 }
 
 /** True when the last assistant turn's final block is an open thinking block. */
@@ -187,7 +238,7 @@ function isThinking(messages: readonly ChatMessage[]): boolean {
 
 export function deriveRunPanelView(input: RunPanelInput): RunPanelView {
   const status = input.sessionId ? input.status : null;
-  const tools = input.sessionId ? deriveRunTools(input.messages) : NO_TOOLS;
+  const tools = input.sessionId ? deriveRunTools(input.messages, input.toolStatus) : NO_TOOLS;
   const activity: RunActivity =
     status === 'running'
       ? tools.activeTool
@@ -211,6 +262,25 @@ export function deriveRunPanelView(input: RunPanelInput): RunPanelView {
 
   const model = input.actualModel ?? input.configuredModel;
 
+  const usage = input.sessionId ? input.usage : null;
+  const occupancy = deriveContextOccupancy(usage?.context);
+  // Runtime window first: it belongs to the model that actually answered. The
+  // catalog's is the configured model's, which is only the right answer while
+  // nothing has answered yet.
+  const knownWindow = usage?.context?.contextWindow ?? input.configuredContextWindow;
+  const contextWindowOnly =
+    occupancy === null && input.sessionId && knownWindow && knownWindow > 0 ? knownWindow : null;
+  const turnUsage: PiTurnUsage | null = usage
+    ? {
+        input: usage.input,
+        output: usage.output,
+        cacheRead: usage.cacheRead,
+        cacheWrite: usage.cacheWrite,
+        totalTokens: usage.totalTokens,
+        costUsd: usage.costUsd,
+      }
+    : null;
+
   return {
     status,
     headline: activity ? ACTIVITY_HEADLINE[activity] : (presentation?.headline ?? 'No session'),
@@ -223,10 +293,17 @@ export function deriveRunPanelView(input: RunPanelInput): RunPanelView {
     modelReported: input.actualModel !== null,
     effortLabel: input.sessionId ? input.effortLabel : null,
     tools,
+    occupancy,
+    contextWindowOnly,
+    usage: turnUsage,
     // "Nothing to report" is narrower than "idle": an idle session that has
     // already run a turn still has a model, a clock and a tool count to show.
     empty:
       !input.sessionId ||
-      (model === null && elapsedLabel === null && tools.calls === 0 && status === 'idle'),
+      (model === null &&
+        elapsedLabel === null &&
+        tools.calls === 0 &&
+        turnUsage === null &&
+        status === 'idle'),
   };
 }

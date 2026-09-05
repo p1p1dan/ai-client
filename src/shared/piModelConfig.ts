@@ -108,7 +108,10 @@ export function parsePiModelRef(value: string): { provider: string; modelId: str
 
 export function piModelOption(
   providerId: string,
-  model: Pick<PiManagedModelDefinition, 'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap'>
+  model: Pick<
+    PiManagedModelDefinition,
+    'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap' | 'contextWindow'
+  >
 ): AgentModelOption {
   return {
     id: `${providerId}/${model.id}`,
@@ -116,5 +119,13 @@ export function piModelOption(
     ...(model.tags ? { tags: [...model.tags] } : {}),
     ...(model.reasoning !== undefined ? { reasoning: model.reasoning } : {}),
     ...(model.thinkingLevelMap ? { thinkingLevelMap: { ...model.thinkingLevelMap } } : {}),
+    // T38-b: carried, not dropped. A positive finite window only — a `0` or a
+    // negative one is a broken configuration entry, and passing it on would give
+    // every occupancy consumer a division by zero to defend against.
+    ...(typeof model.contextWindow === 'number' &&
+    Number.isFinite(model.contextWindow) &&
+    model.contextWindow > 0
+      ? { contextWindow: model.contextWindow }
+      : {}),
   };
 }

@@ -205,6 +205,52 @@ describe('PiModelConfigService', () => {
       ],
     });
   });
+
+  // T38-b: the occupancy surfaces need the window the configuration declares.
+  // It used to be parsed and then dropped by `piModelOption`.
+  it('carries contextWindow through both the managed and the user-owned catalog', async () => {
+    const managed = service(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(REMOTE_CONFIG),
+    }));
+    await managed.sync({
+      endpointUrl: 'https://admin.example/config',
+      apiKey: 'key-1',
+      fallbackBaseUrl: 'https://fallback.example/v1',
+    });
+    expect(managed.readCatalog().models).toEqual([
+      expect.objectContaining({ id: 'dan/deepseek-v4', contextWindow: 128000 }),
+    ]);
+
+    writeFileSync(
+      join(dir, 'models.json'),
+      JSON.stringify({
+        providers: {
+          glm: {
+            baseUrl: 'https://glm.example/v1',
+            models: [
+              { id: 'glm-5', contextWindow: 200000 },
+              // Unstated, zero and non-numeric all mean "nobody said" — the
+              // surface must show no denominator rather than guess one.
+              { id: 'glm-5-air' },
+              { id: 'glm-5-flash', contextWindow: 0 },
+              { id: 'glm-5-lite', contextWindow: '128k' },
+            ],
+          },
+        },
+      })
+    );
+    const local = service(async () => ({ ok: false, status: 500, text: async () => '' }));
+    expect(
+      local.readCatalog('local').models.map((model) => [model.id, model.contextWindow])
+    ).toEqual([
+      ['glm/glm-5', 200000],
+      ['glm/glm-5-air', undefined],
+      ['glm/glm-5-flash', undefined],
+      ['glm/glm-5-lite', undefined],
+    ]);
+  });
 });
 
 describe('validatePiManagedModelsConfig', () => {

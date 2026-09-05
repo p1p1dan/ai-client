@@ -61,6 +61,7 @@ import { ComposerModelTrigger } from './ComposerModelTrigger';
 import { ComposerPermissionTrigger } from './ComposerPermissionTrigger';
 import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
+import { ComposerUsageChip } from './ComposerUsageChip';
 import { deriveChatEmptySurface } from './chatEmptyState';
 import { resolveActiveTarget } from './composerTarget';
 import { resolveEffortSelection, toWireEffort } from './efforts';
@@ -108,6 +109,7 @@ import {
 } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
+import { parseSendDispatchErrorCode } from './sendDispatchError';
 import { decideSendPreamble } from './sendPreamble';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
 import { readSessionTier } from './sessionPreferenceStore';
@@ -1570,23 +1572,52 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // whose own requestId is not yet known at dispatch time. See
       // `runCreateSequence`'s identical reset for the full rationale.
       setCurrentRequestId(null);
-      const sendResult = await window.electronAPI.chat.send({
-        sessionId,
-        attemptId,
-        text: trimmed,
-        // Same B11 rule as the create payload above. On the Codex axis this key
-        // is what D40's `turn/start` override rides on, and an override is
-        // STICKY there [实测 06-probes P1] — so sending a model the user did
-        // not pick would silently re-default the whole thread, not just a turn.
-        ...(model ? { model } : {}),
-        ...(effort ? { effort } : {}),
-        ...(wireAttachments ? { attachments: wireAttachments } : {}),
-      });
+      const sendResult = await window.electronAPI.chat
+        .send({
+          sessionId,
+          attemptId,
+          text: trimmed,
+          // Same B11 rule as the create payload above. On the Codex axis this key
+          // is what D40's `turn/start` override rides on, and an override is
+          // STICKY there [实测 06-probes P1] — so sending a model the user did
+          // not pick would silently re-default the whole thread, not just a turn.
+          ...(model ? { model } : {}),
+          ...(effort ? { effort } : {}),
+          ...(wireAttachments ? { attachments: wireAttachments } : {}),
+        })
+        .catch((error: unknown) => {
+          // The WorkerManager can refuse a send outright — an idle-evicted
+          // slot answers `session_not_found`, a slot still tearing down the
+          // previous turn answers `session_busy`. Both arrive as an IPC
+          // REJECTION, never as a `host.error` event, so without this the two
+          // recovery branches below (which read `fatalHostErrorCode`) were
+          // unreachable and the rejection fell through to `runSend`'s catch:
+          // a raw "Error invoking remote method" toast, the user's text
+          // bounced back, and only the NEXT send worked.
+          //
+          // ONLY those two codes are absorbed. Anything else keeps
+          // propagating — a genuine dispatch failure has no recovery branch
+          // here and belongs in `runSend`'s catch exactly as before.
+          const code = parseSendDispatchErrorCode(error);
+          if (!code) throw error;
+          fatalHostErrorCode = code;
+          fatalHostError = error instanceof Error ? error.message : String(error);
+          useChatSessionsStore.setState({ lastError: fatalHostError });
+          return null;
+        });
       // F2: MUST happen synchronously right here — the instant this
       // attempt's own requestId is known — not lazily on next use, or a
       // fast-arriving `host.error` for THIS send (already stashed above)
       // would sit unresolved instead of being admitted immediately.
       setCurrentRequestId(sendResult?.requestId ?? null);
+      if (sendResult === null) {
+        // Refused before dispatch: no requestId, no echo, nothing for the wait
+        // below to observe. Return so the caller can act on the code just
+        // recorded. The value itself is never read on this path — both
+        // recovery branches re-enter `sendAndWait`, and when neither applies
+        // the `fatalHostError` check ahead of the switch returns first.
+        return 'ceiling';
+      }
       // The payload is with the Host now, so the status line may say so — and
       // the displayed clock restarts, because this phase is the one the
       // silence budget actually watches.
@@ -2740,8 +2771,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         sending={sending}
       />
     ) : null,
-    // U06-b / Pi plan T38 — needs `usage.updated` from the runtime.
-    usage: null,
+    // U06-b: renders nothing until the runtime reports occupancy (T38-a).
+    usage: activeSessionId ? <ComposerUsageChip sessionId={activeSessionId} /> : null,
     modelEffort: modelEffortControls,
     actions: actionButtons,
   };

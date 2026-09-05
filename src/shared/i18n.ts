@@ -1816,6 +1816,18 @@ export const zhTranslations: Record<string, string> = {
   'Tool calls': '工具调用',
   'Failed tools': '失败工具',
 
+  // U06-b: context occupancy and the usage row, all runtime-reported (T38).
+  'Context used': '上下文占用',
+  Used: '已占用',
+  Free: '剩余',
+  'Context window': '上下文窗口',
+  'Input (last turn)': '输入（上一回合）',
+  'Output (last turn)': '输出（上一回合）',
+  'Cache read': '缓存读取',
+  'Cache write': '缓存写入',
+  Cost: '费用',
+  '{{used}} of {{window}} context used': '上下文已占用 {{used}} / {{window}}',
+
   // T-12: git surface (GitSurfaceView) — empty states and diff sub-header.
   'No active session': '暂无活动会话',
   'Select a chat session to view its git changes.': '选择一个聊天会话以查看其 Git 变更。',

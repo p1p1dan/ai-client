@@ -301,14 +301,11 @@ export type ComposerBarSlot = 'attach' | 'permission' | 'usage' | 'modelEffort' 
  * call site renders by mapping these arrays, so the order a test reads here is
  * the order that ships.
  *
- * Two slots are deliberately EMPTY today, and both render nothing rather than a
- * placeholder — an empty shell contradicts the "利落简约" the whole batch is
- * chasing:
- *
- *  - `permission` — the permission-tier chip, U12. Reserved here so that slice
- *    fills a position instead of re-litigating the order.
- *  - `usage` — context-usage share, blocked on the Pi runtime emitting
- *    `usage.updated` (U06-b, handed to the Pi plan's T38).
+ * Both reserved slots are now filled — `permission` by U12's tier chip and
+ * `usage` by U06-b's occupancy share, once T38-a gave the runtime a
+ * `usage.updated` producer. Each still renders NOTHING when it has nothing real
+ * to say (no session, no occupancy reported yet) rather than an empty shell,
+ * which is the rule the reservation existed to protect.
  *
  * The status line is absent on purpose: it exists only in empty mode, it is
  * elastic text rather than a control, and it takes whatever width is left

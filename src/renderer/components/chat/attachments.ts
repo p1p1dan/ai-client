@@ -8,7 +8,7 @@
  * §12 verification first: __tests__/attachments.test.ts.
  */
 import type { ChatSendAttachment } from '@/stores/chatSessions';
-import { formatCharCount, formatTokenCount } from './countFormat';
+import { formatCharCount } from './countFormat';
 
 export type AttachmentKind = 'image' | 'text';
 
@@ -445,13 +445,6 @@ export function composerSendingLine(input: {
    * `↑ 0 chars` for a message that was certainly not empty.
    */
   promptChars?: number;
-  /**
-   * D33's live, ESTIMATED output-token count, forwarded from
-   * `deriveTurnStatus`. Previously read only by the streaming branch; the wait
-   * before the first block is exactly when "is anything coming back at all"
-   * is the user's question, so it is answered here too.
-   */
-  outputTokensDisplay?: number | null;
 }): string {
   const elapsed = Math.max(0, Math.floor(input.elapsedSeconds));
   if (input.phase === 'handshake') {
@@ -481,21 +474,17 @@ export function composerSendingLine(input: {
     return `Still waiting · ${elapsed}s${retrySuffix} — gateway latency varies. Stop to abort.`;
   }
   const promptChars = Math.max(0, Math.floor(input.promptChars ?? 0));
-  // The asymmetry in unit words is deliberate. `↑` is an exact figure the
-  // renderer counted from text it holds, so labelling it costs nothing. `↓` is
-  // the Host's mid-turn estimate, which `turnStatus.ts` states must never be
-  // presented as an authoritative token count — appending a `tokens` unit would
-  // raise precisely the air of authority that rule forbids. The two labels also
-  // happen to keep the arrows apart at a glance.
+  // `↑` carries its unit word because it is an exact figure the renderer
+  // counted from text it holds. There is no `↓` counterpart: Pi reports usage
+  // only at `turn_end`, so nothing can state a reply's size while the reply is
+  // still arriving — see the Run surface for the settled per-turn totals.
   const sentCount = promptChars > 0 ? ` · ↑ ${formatCharCount(promptChars)} chars` : '';
-  const replyCount =
-    input.outputTokensDisplay != null ? ` · ↓ ${formatTokenCount(input.outputTokensDisplay)}` : '';
   const verb = waitingVerb(elapsed);
   if (input.attachmentCount > 0) {
     const size = formatAttachmentSize(input.attachmentBytes);
-    return `${verb}…${sentCount}${replyCount} · Sent ${size}${retrySuffix} · ${elapsed}s`;
+    return `${verb}…${sentCount} · Sent ${size}${retrySuffix} · ${elapsed}s`;
   }
-  return `${verb}…${sentCount}${replyCount}${retrySuffix} · ${elapsed}s`;
+  return `${verb}…${sentCount}${retrySuffix} · ${elapsed}s`;
 }
 
 /**

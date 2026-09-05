@@ -4,16 +4,6 @@ import {
   SLOW_WAIT_HINT_SECONDS,
   STALLED_HINT_SECONDS,
 } from './attachments';
-import { formatTokenCount } from './countFormat';
-
-/**
- * F456 §7.4: the formatter moved to `countFormat.ts` so `attachments.ts` can
- * use it too — importing it back from here would be a straight cycle. Re-exported
- * rather than relocated in the callers' eyes: this module has been its address
- * since D33, and moving the address as well as the file would churn imports for
- * no behaviour change.
- */
-export { formatTokenCount } from './countFormat';
 
 /**
  * T-31 turn-head status (reply-anatomy spec §3 / §4.7).
@@ -87,14 +77,6 @@ export interface TurnStatusInput {
   retry?: { attempt: number; maxRetries: number } | null;
   /** The turn already produced at least one block, i.e. tokens are arriving. */
   hasBlocks?: boolean;
-  /**
-   * D33: the Host's live, ESTIMATED output-token count for this turn
-   * (`contextSurfaceModel.ts`'s `turnTokensDisplay`, folded from
-   * `usage.updated`'s interim payload). `undefined`/`null` omits the ` · ↓
-   * …` suffix entirely — a turn that has not received an interim tick yet
-   * (or whose Host build predates the token channel) shows the clock alone.
-   */
-  outputTokensDisplay?: number | null;
   /** The turn ended in failure. */
   failed?: boolean;
 }
@@ -130,26 +112,17 @@ export function deriveTurnStatus(input: TurnStatusInput): TurnStatus | null {
     attachmentCount: input.attachmentCount,
     attachmentBytes: input.attachmentBytes,
     retry: input.retry,
-    // F456 §7.4: both counters are forwarded, not consumed here. The `↓`
-    // estimate used to be read only by the streaming branch below, which meant
-    // it was invisible during exactly the wait where "is anything coming back?"
-    // is the question being asked.
+    // F456 §7.4: forwarded, not consumed here.
     promptChars: input.promptChars,
-    outputTokensDisplay: input.outputTokensDisplay,
   });
 
   if (input.phase === 'handshake') return { kind: 'handshake', text };
   if (input.hasBlocks) {
-    const clock = formatElapsedClock(elapsed);
-    const tokenSuffix =
-      input.outputTokensDisplay != null
-        ? ` · ↓ ${formatTokenCount(input.outputTokensDisplay)}`
-        : '';
-    // No verb, no `✽` here on purpose (D33 / spec §3a): this module stays
-    // text-only (see the file header's copy/decoration split) — the glyph is
-    // the `.tsx` layer's prefix (`TurnStatusContent`, `MessageTimeline.tsx`),
-    // added only once `kind === 'streaming'` reaches render.
-    return { kind: 'streaming', text: `${clock}${tokenSuffix}` };
+    // No verb, no `✽` here on purpose (spec §3a): this module stays text-only
+    // (see the file header's copy/decoration split) — the glyph is the `.tsx`
+    // layer's prefix (`TurnStatusContent`, `MessageTimeline.tsx`), added only
+    // once `kind === 'streaming'` reaches render.
+    return { kind: 'streaming', text: formatElapsedClock(elapsed) };
   }
 
   // Both thresholds are imported, never re-declared, and tested in the SAME

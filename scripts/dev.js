@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureDevPermissionPolicy } from './agent-host-build-lib.mjs';
 import { CREDENTIAL_ENV_KEYS, CREDENTIAL_ENV_PREFIX } from './credential-env-keys.mjs';
+import { withLoopbackProxyBypass } from './dev-proxy-bypass.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
@@ -226,6 +227,22 @@ function buildChildEnv(allowLocal) {
   return env;
 }
 
+/**
+ * Credentials first, then the proxy bypass — the latter only ever ADDS
+ * `no_proxy` entries, so it cannot reintroduce anything `buildChildEnv` just
+ * stripped. Announced when it fires: a silent env rewrite is the same class of
+ * surprise as the hang it prevents.
+ */
+function resolveChildEnv(allowLocal) {
+  const { env, proxyVars, added } = withLoopbackProxyBypass(buildChildEnv(allowLocal));
+  if (added.length > 0) {
+    console.log(
+      `[dev] proxy set (${proxyVars.join(', ')}) — added ${added.join(', ')} to no_proxy/NO_PROXY so Chromium can load the Vite dev server`
+    );
+  }
+  return env;
+}
+
 // T08-c — give the dev Host the same shipped permission policy the packaged app
 // has. The Host resolves its plugin relative to its own entry, which in dev is
 // `src/agent-host/`; without this the two builds enforce different rules and the
@@ -256,7 +273,7 @@ if (passthroughArgs.length > 0) {
 const child = spawn('npx', electronArgs, {
   cwd: root,
   stdio: 'inherit',
-  env: buildChildEnv(allowLocalCredentials),
+  env: resolveChildEnv(allowLocalCredentials),
   shell: process.platform === 'win32', // Use shell on Windows to avoid EINVAL errors
   detached: process.platform !== 'win32', // Create new process group on Unix
 });

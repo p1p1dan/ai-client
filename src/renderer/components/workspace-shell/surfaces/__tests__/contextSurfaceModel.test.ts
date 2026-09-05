@@ -766,136 +766,18 @@ describe('reduceSessionRuntimeFacts — session.stderr (T-35)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// D33: turnTokensDisplay — interim usage.updated writes + clearing
+// Reducer discipline: an event type this reducer does not handle must return
+// the SAME reference, or every unrelated runtime event would re-notify zustand
+// subscribers for free.
 // ---------------------------------------------------------------------------
 
-describe('reduceSessionRuntimeFacts — turnTokensDisplay (D33)', () => {
-  const interimEvent = (display: number) => ({
-    type: 'usage.updated',
-    sessionId: 's1',
-    payload: { interim: true, turn_output_tokens_display: display },
-  });
-
-  it('writes turnTokensDisplay from an interim usage.updated tick', () => {
-    const next = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
-    expect(next.s1.turnTokensDisplay).toBe(850);
-  });
-
-  it('updates turnTokensDisplay across successive interim ticks', () => {
-    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(300));
-    state = reduceSessionRuntimeFacts(state, interimEvent(1200));
-    expect(state.s1.turnTokensDisplay).toBe(1200);
-  });
-
-  it('returns the same reference for a repeated identical interim value', () => {
-    const state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(500));
-    const next = reduceSessionRuntimeFacts(state, interimEvent(500));
-    expect(next).toBe(state);
-  });
-
-  it('does NOT write from a settled (non-interim) usage.updated result payload', () => {
-    const next = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
-      type: 'usage.updated',
+describe('reduceSessionRuntimeFacts — unhandled events', () => {
+  it('returns the exact same reference for an unrelated event type', () => {
+    const prev = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
+      type: 'session.stderr',
       sessionId: 's1',
-      payload: { input_tokens: 10, output_tokens: 850 },
+      payload: { line: 'spawn ENOENT' },
     });
-    expect(next).toBe(initialSessionRuntimeFacts);
-    expect(next.s1).toBeUndefined();
-  });
-
-  it('is a no-op without a sessionId', () => {
-    const prev = initialSessionRuntimeFacts;
-    const next = reduceSessionRuntimeFacts(prev, {
-      type: 'usage.updated',
-      payload: { interim: true, turn_output_tokens_display: 500 },
-    });
-    expect(next).toBe(prev);
-  });
-
-  it('clears turnTokensDisplay to null on session.status idle', () => {
-    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
-    state = reduceSessionRuntimeFacts(state, {
-      type: 'session.status',
-      sessionId: 's1',
-      payload: { status: 'idle' },
-    });
-    expect(state.s1.turnTokensDisplay).toBeNull();
-  });
-
-  it('clears turnTokensDisplay to null on session.status failed', () => {
-    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
-    state = reduceSessionRuntimeFacts(state, {
-      type: 'session.status',
-      sessionId: 's1',
-      payload: { status: 'failed' },
-    });
-    expect(state.s1.turnTokensDisplay).toBeNull();
-  });
-
-  it('leaves turnTokensDisplay untouched on a non-terminal session.status (e.g. running)', () => {
-    const state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
-    const next = reduceSessionRuntimeFacts(state, {
-      type: 'session.status',
-      sessionId: 's1',
-      payload: { status: 'running' },
-    });
-    expect(next).toBe(state);
-    expect(next.s1.turnTokensDisplay).toBe(850);
-  });
-
-  it('clears turnTokensDisplay to null on message.completed', () => {
-    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
-    state = reduceSessionRuntimeFacts(state, {
-      type: 'message.completed',
-      sessionId: 's1',
-      payload: { messageId: 'a1' },
-    });
-    expect(state.s1.turnTokensDisplay).toBeNull();
-  });
-
-  it('clearing is idempotent — returns the same reference once already null/unset', () => {
-    const prev = initialSessionRuntimeFacts;
-    const next = reduceSessionRuntimeFacts(prev, {
-      type: 'session.status',
-      sessionId: 's1',
-      payload: { status: 'idle' },
-    });
-    expect(next).toBe(prev);
-
-    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
-    state = reduceSessionRuntimeFacts(state, {
-      type: 'message.completed',
-      sessionId: 's1',
-      payload: { messageId: 'a1' },
-    });
-    const twiceCleared = reduceSessionRuntimeFacts(state, {
-      type: 'message.completed',
-      sessionId: 's1',
-      payload: { messageId: 'a1' },
-    });
-    expect(twiceCleared).toBe(state);
-  });
-
-  it('isolates sessions — clearing session A never touches session B', () => {
-    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
-    state = reduceSessionRuntimeFacts(state, {
-      type: 'usage.updated',
-      sessionId: 's2',
-      payload: { interim: true, turn_output_tokens_display: 300 },
-    });
-    state = reduceSessionRuntimeFacts(state, {
-      type: 'session.status',
-      sessionId: 's1',
-      payload: { status: 'idle' },
-    });
-    expect(state.s1.turnTokensDisplay).toBeNull();
-    expect(state.s2.turnTokensDisplay).toBe(300);
-  });
-
-  // Regression guard for the reducer's own "unrelated event returns prev
-  // unchanged" discipline (must survive the D33 branches added above it).
-  it('an unrelated event type still returns the exact same reference', () => {
-    const prev = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
     const next = reduceSessionRuntimeFacts(prev, { type: 'permission.requested', sessionId: 's1' });
     expect(next).toBe(prev);
   });
@@ -935,5 +817,135 @@ describe('deriveContextGroups — Host stderr group (T-35)', () => {
     );
     const rows = groups.find((g) => g.id === 'stderr')?.rows;
     expect(rows?.map((r) => r.label)).toEqual(['#29', '#30']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// U06-b / T38: settled usage and the live tool status line
+// ---------------------------------------------------------------------------
+
+describe('reduceSessionRuntimeFacts — settled usage (U06-b)', () => {
+  const settled = (overrides: Record<string, unknown> = {}) => ({
+    type: 'usage.updated',
+    sessionId: 's1',
+    payload: {
+      input: 12_000,
+      output: 480,
+      cacheRead: 9_000,
+      cacheWrite: 1_200,
+      totalTokens: 22_680,
+      costUsd: 0.0504,
+      context: { tokens: 21_400, contextWindow: 200_000, percent: 10.7 },
+      ...overrides,
+    },
+  });
+
+  it('keeps the payload the worker built, context and all', () => {
+    const next = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, settled());
+    expect(next.s1.usage).toEqual({
+      input: 12_000,
+      output: 480,
+      cacheRead: 9_000,
+      cacheWrite: 1_200,
+      totalTokens: 22_680,
+      costUsd: 0.0504,
+      context: { tokens: 21_400, contextWindow: 200_000, percent: 10.7 },
+    });
+  });
+
+  it('replaces rather than accumulates — each turn carries its own bill', () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, settled());
+    state = reduceSessionRuntimeFacts(state, settled({ output: 900, totalTokens: 23_100 }));
+    expect(state.s1.usage?.output).toBe(900);
+    expect(state.s1.usage?.totalTokens).toBe(23_100);
+  });
+
+  // An estimate must never be recorded as if it were a billed total. The
+  // producer is gone (the Claude host's interim channel went with T35), so this
+  // is a guard against reintroducing one, not a live case.
+  it('drops the legacy interim tick entirely — an estimate is not a bill', () => {
+    const next = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
+      type: 'usage.updated',
+      sessionId: 's1',
+      payload: { interim: true, turn_output_tokens_display: 850 },
+    });
+    expect(next).toBe(initialSessionRuntimeFacts);
+    expect(next.s1).toBeUndefined();
+  });
+
+  it('survives a terminal session.status', () => {
+    // The bill of the turn that just ended is exactly what the panel should
+    // still be showing once the turn is over.
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, settled());
+    state = reduceSessionRuntimeFacts(state, {
+      type: 'session.status',
+      sessionId: 's1',
+      payload: { status: 'idle' },
+    });
+    expect(state.s1.usage?.output).toBe(480);
+  });
+
+  it('keeps sessions apart', () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, settled());
+    state = reduceSessionRuntimeFacts(state, { ...settled({ output: 7 }), sessionId: 's2' });
+    expect(state.s1.usage?.output).toBe(480);
+    expect(state.s2.usage?.output).toBe(7);
+  });
+});
+
+describe('reduceSessionRuntimeFacts — active tool status (T38-c)', () => {
+  const update = (toolCallId: string, status?: string) => ({
+    type: 'tool.updated',
+    sessionId: 's1',
+    payload: { messageId: 'm1', toolCallId, ...(status ? { status } : { input: { path: 'a' } }) },
+  });
+
+  it('keeps the newest line, tagged with the call that published it', () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, update('t1', 'Resolving…'));
+    state = reduceSessionRuntimeFacts(state, update('t1', 'Downloaded 3/12'));
+    expect(state.s1.activeToolStatus).toEqual({ toolCallId: 't1', status: 'Downloaded 3/12' });
+  });
+
+  it('leaves the line alone for an input-only update', () => {
+    const state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, update('t1', 'Resolving…'));
+    const next = reduceSessionRuntimeFacts(state, update('t1'));
+    expect(next).toBe(state);
+  });
+
+  it('returns the same reference for a repeated identical line', () => {
+    const state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, update('t1', 'same'));
+    expect(reduceSessionRuntimeFacts(state, update('t1', 'same'))).toBe(state);
+  });
+
+  it('clears only on its own tool.completed, not on the previous call’s', () => {
+    const state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, update('t2', 'Running…'));
+    const other = reduceSessionRuntimeFacts(state, {
+      type: 'tool.completed',
+      sessionId: 's1',
+      payload: { messageId: 'm1', toolCallId: 't1', ok: true },
+    });
+    expect(other).toBe(state);
+    const own = reduceSessionRuntimeFacts(state, {
+      type: 'tool.completed',
+      sessionId: 's1',
+      payload: { messageId: 'm1', toolCallId: 't2', ok: true },
+    });
+    expect(own.s1.activeToolStatus).toBeUndefined();
+  });
+
+  it('clears on a terminal session.status but not on a running one', () => {
+    const state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, update('t1', 'Running…'));
+    const stillRunning = reduceSessionRuntimeFacts(state, {
+      type: 'session.status',
+      sessionId: 's1',
+      payload: { status: 'running' },
+    });
+    expect(stillRunning).toBe(state);
+    const failed = reduceSessionRuntimeFacts(state, {
+      type: 'session.status',
+      sessionId: 's1',
+      payload: { status: 'failed' },
+    });
+    expect(failed.s1.activeToolStatus).toBeUndefined();
   });
 });

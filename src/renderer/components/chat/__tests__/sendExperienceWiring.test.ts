@@ -30,7 +30,11 @@ describe('T24/T26 send experience wiring', () => {
     expect(publish).toBeGreaterThan(sendStart);
     expect(ensureHost).toBeGreaterThan(publish);
     expect(composer).toMatch(/const attemptId = `\$\{sessionId\}:\$\{sendOwner\}`/);
-    expect(composer).toContain('attemptId,\n        text: trimmed');
+    // Indentation-agnostic: the fact under guard is that the SAME attemptId
+    // rides in the send payload next to the text, not how deeply the payload
+    // happens to be nested (it moved a level when the dispatch grew a
+    // `.catch` for WorkerManager refusals).
+    expect(composer).toMatch(/attemptId,\n\s+text: trimmed/);
     expect(composer).toContain("outcome === 'rejected' && pendingAttemptId");
   });
 

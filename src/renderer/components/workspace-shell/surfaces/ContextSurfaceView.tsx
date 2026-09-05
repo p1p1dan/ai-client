@@ -160,14 +160,15 @@ function ConversationSegmentRow({
  *
  * ## Why this is NOT a "context window used" gauge
  *
- * The prototype this batch follows draws a `63% of 128k` ring. That number does
- * not exist here: the model catalog strips `contextWindow` and Pi's worker emits
- * no `usage.updated`, which is precisely what the Pi plan's T38 unlocks (U06-b).
- * Printing a share of a window we cannot measure — or dividing characters by
- * four and calling the result tokens — would put a number on screen that looks
- * like it came from the runtime. So the chart shows what IS measured: how the
- * transcript this window has loaded splits across roles, with the total in
- * characters. When T38 lands, the same chart gains a real denominator.
+ * The prototype this batch follows draws a `63% of 128k` ring. This chart still
+ * does not, and now that is a decision rather than a gap. T38 landed the real
+ * occupancy figures, and they live on the Run surface's ring — measured tokens
+ * against the model's own window. What this chart shows is a different quantity:
+ * how the loaded transcript splits across roles, counted in CHARACTERS, because
+ * the runtime reports no per-role token split. Putting a measured total and an
+ * estimated split inside one ring would leave a reader unable to tell which half
+ * of the picture came from the runtime, so the two stay on separate surfaces
+ * with separate units.
  */
 function CompositionChart({ conversation }: { conversation: ConversationComposition }) {
   const { t } = useI18n();

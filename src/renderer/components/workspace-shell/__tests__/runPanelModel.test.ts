@@ -1,3 +1,4 @@
+import type { PiUsagePayload } from '@shared/piUsage';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
@@ -42,6 +43,23 @@ function input(overrides: Partial<RunPanelInput> = {}): RunPanelInput {
     configuredModel: null,
     effortLabel: null,
     lastTurnMs: null,
+    usage: null,
+    configuredContextWindow: null,
+    toolStatus: null,
+    ...overrides,
+  };
+}
+
+/** A settled `usage.updated` payload as `buildPiUsagePayload` produces one. */
+function usagePayload(overrides: Partial<PiUsagePayload> = {}): PiUsagePayload {
+  return {
+    input: 12_000,
+    output: 480,
+    cacheRead: 9_000,
+    cacheWrite: 1_200,
+    totalTokens: 22_680,
+    costUsd: 0.0504,
+    context: { tokens: 21_400, contextWindow: 200_000, percent: 10.7 },
     ...overrides,
   };
 }
@@ -109,12 +127,18 @@ describe('deriveRunTools', () => {
         'm2'
       ),
     ];
-    expect(deriveRunTools(messages)).toEqual({ activeTool: 'Bash', calls: 3, failed: 1 });
+    expect(deriveRunTools(messages)).toEqual({
+      activeTool: 'Bash',
+      activeToolStatus: null,
+      calls: 3,
+      failed: 1,
+    });
   });
 
   it('reports nothing for a session that has never had an assistant turn', () => {
     expect(deriveRunTools([message('user', [{ id: 'u1', type: 'text', text: 'hi' }])])).toEqual({
       activeTool: null,
+      activeToolStatus: null,
       calls: 0,
       failed: 0,
     });
@@ -168,17 +192,120 @@ describe('deriveRunPanelView — model provenance', () => {
 });
 
 describe('deriveRunPanelView — no usage shell (acceptance ②)', () => {
-  it('exposes no usage/context-occupancy fields at all until T38 lands', () => {
+  // U06-a's rule survives T38 unchanged: the panel must not grow a shell for
+  // numbers it does not have. What changed is only WHEN it has them.
+  it('reports no occupancy, no window and no usage until the runtime says something', () => {
     const view = deriveRunPanelView(input({ status: 'running' }));
-    for (const key of ['usage', 'contextWindow', 'contextPercent', 'tokensPerSecond']) {
-      expect(view).not.toHaveProperty(key);
-    }
+    expect(view.occupancy).toBeNull();
+    expect(view.contextWindowOnly).toBeNull();
+    expect(view.usage).toBeNull();
   });
 
   it('an idle session that has already run is not "empty" — it still has facts', () => {
     expect(deriveRunPanelView(input({ lastTurnMs: 1200 })).empty).toBe(false);
     expect(deriveRunPanelView(input({ configuredModel: 'pi/a' })).empty).toBe(false);
+    expect(deriveRunPanelView(input({ usage: usagePayload() })).empty).toBe(false);
     expect(deriveRunPanelView(input()).empty).toBe(true);
+  });
+});
+
+describe('deriveRunPanelView — occupancy and usage (U06-b)', () => {
+  it('splits the runtime-reported context into used and free', () => {
+    const view = deriveRunPanelView(input({ usage: usagePayload() }));
+    expect(view.occupancy).toEqual({
+      usedTokens: 21_400,
+      contextWindow: 200_000,
+      percent: 10.7,
+      freeTokens: 178_600,
+    });
+    // The window is already printed beside the ring; no second copy.
+    expect(view.contextWindowOnly).toBeNull();
+  });
+
+  it('shows no ring when Pi reports tokens as unknown, but still names the window', () => {
+    const view = deriveRunPanelView(
+      input({
+        usage: usagePayload({ context: { tokens: null, contextWindow: 200_000, percent: null } }),
+      })
+    );
+    // Post-compaction: `tokens: null` is Pi's real answer, not a missing one.
+    expect(view.occupancy).toBeNull();
+    expect(view.contextWindowOnly).toBe(200_000);
+  });
+
+  it('falls back to the configured model window only while nothing has run', () => {
+    expect(deriveRunPanelView(input({ configuredContextWindow: 128_000 })).contextWindowOnly).toBe(
+      128_000
+    );
+    // Once the runtime has answered, its own window wins — the configured model
+    // and the model that actually replied are allowed to differ.
+    const answered = deriveRunPanelView(
+      input({ usage: usagePayload(), configuredContextWindow: 128_000 })
+    );
+    expect(answered.occupancy?.contextWindow).toBe(200_000);
+    expect(answered.contextWindowOnly).toBeNull();
+  });
+
+  it('clamps an over-100% report instead of sweeping the arc past a full circle', () => {
+    const view = deriveRunPanelView(
+      input({
+        usage: usagePayload({
+          context: { tokens: 260_000, contextWindow: 200_000, percent: 130 },
+        }),
+      })
+    );
+    expect(view.occupancy).toEqual({
+      usedTokens: 260_000,
+      contextWindow: 200_000,
+      percent: 100,
+      freeTokens: 0,
+    });
+  });
+
+  it('carries the last turn totals without summing turns together', () => {
+    const view = deriveRunPanelView(input({ usage: usagePayload({ output: 900 }) }));
+    expect(view.usage).toEqual({
+      input: 12_000,
+      output: 900,
+      cacheRead: 9_000,
+      cacheWrite: 1_200,
+      totalTokens: 22_680,
+      costUsd: 0.0504,
+    });
+    // The occupancy fields do not leak into the usage row's own shape.
+    expect(view.usage).not.toHaveProperty('context');
+  });
+
+  it('drops another session’s usage the same way it drops its clock', () => {
+    expect(deriveRunPanelView(input({ sessionId: null, usage: usagePayload() })).usage).toBeNull();
+  });
+});
+
+describe('deriveRunTools — live tool status (T38-c)', () => {
+  const messages = [message('assistant', [toolCall('t1', 'read')])];
+
+  it('shows the status only against the call that published it', () => {
+    expect(deriveRunTools(messages, { toolCallId: 't1', status: 'Downloaded 3/12' })).toMatchObject(
+      {
+        activeTool: 'read',
+        activeToolStatus: 'Downloaded 3/12',
+      }
+    );
+    // A line left over from a previous call must not appear under this one.
+    expect(deriveRunTools(messages, { toolCallId: 't0', status: 'stale' })).toMatchObject({
+      activeTool: 'read',
+      activeToolStatus: null,
+    });
+  });
+
+  it('reports no status when none was published or nothing is running', () => {
+    expect(deriveRunTools(messages).activeToolStatus).toBeNull();
+    expect(
+      deriveRunTools([message('assistant', [toolCall('t1', 'read'), toolResult('t1', true)])], {
+        toolCallId: 't1',
+        status: 'done',
+      }).activeToolStatus
+    ).toBeNull();
   });
 });
 

@@ -30,7 +30,7 @@
 | 8 ✅ | 壳层横条重排与双栏收敛 | U14 | 用户看到实际界面后开的，[D07](../decisions/007-two-column-is-two-columns-and-one-bar-per-column.md) |
 | 9 ✅ | VSCode 式壳层重排 + 上下文页 | U15-a/b/c/d、U16 | [D08](../decisions/008-vscode-dock-shell.md) |
 | 10 ✅ | 缺陷批（用户报障） | U17、U18、U19 | — |
-| — | 挂起 | U06-b | Pi 计划 T38（[D03](../decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二） |
+| 11 ✅ | 占用与 usage | U06-b | 随 Pi 计划 T38 同批（[evidence](../../pi-backend-migration/evidence/2026-09-05-t38-runtime-usage-fields.md)） |
 | — | 已放弃 | U08-3 | [Q12](../open-questions.md) 拍板不做 |
 
 批次 5、7 与前序无依赖，资源允许时可与批次 3/4 交错，但**不与批次 1 并行**（会在旧档上落地）。
@@ -78,6 +78,8 @@ D01 决定：样式层落地后必须同步规范，否则 CLAUDE.md 的强制�
 **U09-2 底栏控件顺序对齐**
 左侧「＋附件 · 权限管理」，右侧「上下文占用 · 模型 · 思考 · 发送」（`Composer.tsx:1618-1770` 顺序已核）。只对齐位置与顺序，控件仍用 24px ghost chip。
 上下文占用 chip 依赖 U06-b 的 usage 数据，**未落地前不渲染**（不放空壳占位——空壳与「利落简约」相悖）。请求优先级不占底栏（U08-3 已 Dropped）。
+**2026-09-05 更新**：该槽已由 `ComposerUsageChip` 填上；「无数据不渲染」这条规则原样保留，
+只是现在的触发条件变成「runtime 还没报过占用」（新开会话、重开会话首次回复前、压缩后未回复）。
 
 **原「信任态移入权限 chip」一条作废**（2026-09-03 复核）：本仓 Composer **从来没有**信任态，
 `ComposerTargetBar` 只有目录/分支/运行位置三格，没有可移的东西。权限 chip 是新建控件，
@@ -220,6 +222,9 @@ TUI 作为双栏的专用子模式：左栏 + 右侧整块 TUI，无第三栏。
 > **U07 的范围本次定死**（原标「Scope 待细化」）：交付分角色构成 + 逐段展开；
 > token 估算与手动刷新**刻意不做**，理由见 evidence §二——前者按计划随 U06-b 解锁，
 > 后者在本仓没有对应语义（数据是实时 store，不是一次性快照拉取），放按钮属装饰。
+>
+> **2026-09-05**：U06-b 已落地（随 T38），但 U07 的 token 估算**仍不做**——理由变了：不再是「没数据」，
+> 而是 runtime 只报总量、不报按角色的 token 切分，Context 页那张图按角色分段，只能用字符。
 
 **U06-a Run 面板（渲染层可拼部分）**
 注册 `run` surface，渲染状态机 / 模型 / 选中 effort / 回合耗时 / 工具名称——这些用现有 `RuntimeEvent` + store 即可（[evidence-q04](./evidence-q04-runtime-fields.md)）。

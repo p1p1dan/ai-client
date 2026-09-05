@@ -1,7 +1,7 @@
 # Plan — pix/pi-app UI 对齐改造
 
 > **状态**：In Progress（收尾）—— **批次 1–9 全部落地**（最后一批：U17–U20，三件用户报障 + 权限档欠项清理）。
-> 剩余工作只有一次累计 GUI 点验，加上外部阻塞的 U06-b（等 Pi 计划 T38）与 Deferred 的 U10/U11。
+> 剩余工作只有一次累计 GUI 点验，加上 Deferred 的 U10/U11。U06-b 已于 2026-09-05 随 Pi 计划 T38 同批落地，外部阻塞清零。
 >
 > **前置已满足**：[Pi-only 收敛计划](../pi-backend-migration/README.md) 的 T37 发版门禁已于 2026-09-03 收口
 > （manual CI run `33714362901` 全绿），[D01](./decisions/001-style-depth-and-sequencing.md) 决定二的排期闸门解除。
@@ -83,9 +83,11 @@
 | [decisions/004-unbound-session-index-visibility.md](./decisions/004-unbound-session-index-visibility.md) | 免绑定会话跨重启可见性：索引行加 `unbound` 标记，侧栏合成临时分组（落为 U13） |
 | [decisions/007-two-column-is-two-columns-and-one-bar-per-column.md](./decisions/007-two-column-is-two-columns-and-one-bar-per-column.md) | **D07**：~~双栏就是两栏~~（决定一/三已被 D08 推翻）；**每栏一条横条**（决定二仍有效） |
 | [decisions/008-vscode-dock-shell.md](./decisions/008-vscode-dock-shell.md) | **D08**：VSCode 式壳层——左栏是图标轨道 + 面板的导航容器，右栏只做文件，中栏一个会话一个 Tab，删掉双栏/三栏与上下文面板开关（决定三「关 Tab 只是收起 Tab」已被 D09 修正） |
+| [decisions/011-retire-the-live-output-token-counter.md](./decisions/011-retire-the-live-output-token-counter.md) | **D11**：整条删除 D33 的实时 `↓` 输出 token 计数器——pi 只在 `turn_end` 报 usage，「实时」在 pi 后端下没有数据源，凑出来只能字符除以 4 |
 | [decisions/010-user-configured-gate-explicit-degradation.md](./decisions/010-user-configured-gate-explicit-degradation.md) | **D10**：`user_configured` 路线下权限档明示降级——把 `permissionGate` 送到渲染层，控件说明档位不生效；只说降级、不教修法 |
 | [decisions/009-tab-close-ends-conversation.md](./decisions/009-tab-close-ends-conversation.md) | **D09**：关中栏 Tab 就是结束对话——确认框 + 断开该会话的运行时，左栏那一行保留（与左栏 Close、Archive 是三个轻重不同的「关闭」） |
 | [evidence/2026-09-04-u14-shell-chrome-realignment.md](./evidence/2026-09-04-u14-shell-chrome-realignment.md) | U14 壳层横条重排落地记录（含「为什么没对齐」的三层答案与四条变异验证）|
+| [evidence/2026-09-05-retire-live-token-counter.md](./evidence/2026-09-05-retire-live-token-counter.md) | U21 下线实时 `↓` 计数器（[D11](./decisions/011-retire-the-live-output-token-counter.md)）：pi 事件里没有回合中的 usage、删了什么、哪三处刻意保留、加了什么反向守卫 |
 | `docs/design/a11-vscode-shell-prototype.html` | **当前壳层的施工基准**（[D08](./decisions/008-vscode-dock-shell.md)，2026-09-05 用户拍板）：图标轨道 + 面板、会话 Tab、右栏只做文件、上下文页构成图。带原型控制条，可切换左栏形态与右栏三态 |
 | `docs/design/a10-pix-ui-alignment-prototype.html` | 上一版原型（三栏/双栏/TUI × Run/Context；截图在 `refs/a10-shots/`）。壳层部分**已被 a11 取代**；Composer 底栏顺序等非壳层部分仍可参考 |
 

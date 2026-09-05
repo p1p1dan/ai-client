@@ -48,6 +48,8 @@ export interface StubPiSession {
   dispose(): void;
   setModel(model: { provider: string; id: string; name?: string }): Promise<void>;
   setThinkingLevel?(level: string): void;
+  /** Present only when the stub was built with `contextUsage` (T38-a). */
+  getContextUsage?(): unknown;
   /** The manager this session was built on — replaced on every switch. */
   sessionManager?: unknown;
 }
@@ -78,6 +80,15 @@ export interface PiSdkStubOptions {
   switchSessionError?: string;
   /** Make `switchSession` report the replacement as cancelled. */
   switchSessionCancelled?: boolean;
+  /**
+   * T38-a: what `AgentSession.getContextUsage()` answers. Omitted entirely =
+   * an SDK build that has no such method, which is the state every test written
+   * before T38 runs in — the worker must stay silent about occupancy there
+   * rather than reporting a zero window.
+   */
+  contextUsage?: unknown;
+  /** Make `getContextUsage()` throw, to prove one turn's usage still lands. */
+  contextUsageThrows?: string;
 }
 
 export interface PiSdkStub {
@@ -167,6 +178,12 @@ export function createPiSdkStub(options: PiSdkStubOptions = {}): PiSdkStub {
         session.thinkingLevels.push(level);
       },
     };
+    if (options.contextUsage !== undefined || options.contextUsageThrows) {
+      session.getContextUsage = () => {
+        if (options.contextUsageThrows) throw new Error(options.contextUsageThrows);
+        return options.contextUsage;
+      };
+    }
     if (!options.noBindExtensions) {
       session.bindExtensions = async (bindings) => {
         if (options.bindThrows) throw new Error(options.bindThrows);

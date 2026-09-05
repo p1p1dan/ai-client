@@ -34,7 +34,6 @@ import {
   pendingUserToChatMessage,
   usePendingUserMessagesStore,
 } from '@/stores/pendingUserMessages';
-import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import {
   type PendingReplyWatch,
   type TurnSendStatus,
@@ -285,15 +284,6 @@ export function MessageTimeline({
   // `deriveTurnStatus` appends it to the same copy the composer used to show.
   const sessionRetry = useChatSessionsStore(
     (state) => state.sessions.find((session) => session.id === sessionId)?.retry ?? null
-  );
-  // D33: the Host's live output-token estimate for THIS session's in-flight
-  // turn. A narrow primitive selector (`number | null`, never the facts
-  // object) — this ticks as often as the interim channel does, so widening it
-  // to the whole per-session facts record would re-render on every stderr
-  // line and permission-mode echo too, not just the token estimate this row
-  // actually needs.
-  const outputTokensDisplay = useSessionRuntimeFactsStore((state) =>
-    sessionId ? (state.factsBySession[sessionId]?.turnTokensDisplay ?? null) : null
   );
   const { get: getMeta } = useMessageMetadata(sessionId);
   const { getThinking } = useTurnTiming(sessionId);
@@ -633,11 +623,6 @@ export function MessageTimeline({
                     // (F7): a retry tick must not break `memo` session-wide.
                     retry={isLastTurn && pendingSendStatus == null ? sessionRetry : null}
                     nowMs={isLastTurn ? nowMs : STATIC_NOW_MS}
-                    // D33: same last-turn-only discipline as `nowMs`/`retry`
-                    // above (F7) — every other turn must keep a byte-identical
-                    // prop across an interim tick, or `memo` on `ChatTurn`
-                    // stops holding session-wide the moment a turn is streaming.
-                    outputTokensDisplay={isLastTurn ? outputTokensDisplay : null}
                     getMetadata={getMeta}
                     thinkingEnabled={thinkingEnabled}
                     repoName={repoName}
@@ -1042,8 +1027,6 @@ interface ChatTurnProps {
   retry: SessionRetryInfo | null;
   /** Whole-second clock, ticking only while a turn is in flight (`useSecondsTick`). `STATIC_NOW_MS` for every turn but the last. */
   nowMs: number;
-  /** D33: the live output-token estimate, `isLastTurn`-gated the same way as `nowMs`/`retry`. `null` for every turn but the last. */
-  outputTokensDisplay: number | null;
   getMetadata: (messageId: string) => MessageMetadata | undefined;
   thinkingEnabled: boolean;
   repoName?: string | null;
@@ -1098,7 +1081,6 @@ const ChatTurn = memo(function ChatTurn({
   baselineMessageId,
   retry,
   nowMs,
-  outputTokensDisplay,
   getMetadata,
   thinkingEnabled,
   repoName,
@@ -1222,7 +1204,6 @@ const ChatTurn = memo(function ChatTurn({
     promptChars: sendStatus?.promptChars ?? 0,
     retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
     hasBlocks: turnHasBlocks,
-    outputTokensDisplay,
     // F4: a session failure belongs to the turn that was actually running when
     // it happened — never to the completed turn that merely happens to be last
     // while the next send's user echo is still in flight, and never to a

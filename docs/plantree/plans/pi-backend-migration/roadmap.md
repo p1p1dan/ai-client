@@ -15,7 +15,7 @@
 | Pi-native tree/rewind/fork | **Done** | T33 bounded tree、confirmed rewind、leaf restart与independent fork |
 | Legacy import/removal/TUI | **Done** | T34/T35/T36 全部关闭；migration-only reader与Pi TUI边界有静态证据 |
 | Release candidate | **Done** | T37 自动、资源、真账号 GUI、三平台 packaged 与 release evidence 已关闭 |
-| Runtime field completion | **Next** | T38 补 `usage.updated` 生产者与 `contextWindow` 暴露；由 UI 计划 [D03](../pix-ui-alignment/decisions/003-sidebar-density-and-runtime-field-ownership.md) 开立，不重开 T37 门禁 |
+| Runtime field completion | **Done** | T38-a/b/c 全部落地：`usage.updated` 生产者（含 SDK 自带的真实上下文占用）、目录 `contextWindow`、`tool.updated` 状态行；见 [T38 evidence](./evidence/2026-09-05-t38-runtime-usage-fields.md)。未重开 T37 门禁 |
 
 ## T00–T27：已落资产与替换影响
 
@@ -178,7 +178,7 @@ D16 将实际删除前移到 T29–T36 各替代切片；最终审计关闭 dead
 
 ## Phase I — Runtime field completion
 
-### T38 — Run 面板所需的 runtime 补字段 — **Next**
+### T38 — Run 面板所需的 runtime 补字段 — **Done**（2026-09-05）
 
 由 UI 对齐计划的 [D03](../pix-ui-alignment/decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二开立。
 **这不是重开 T37 发版门禁**，也不恢复任何 legacy execution 路径；只补既有契约缺失的生产者与目录字段。
@@ -186,13 +186,19 @@ D16 将实际删除前移到 T29–T36 各替代切片；最终审计关闭 dead
 需求方是 UI 计划的 U06-b（上下文占用 donut + usage 行）与 U09-2（Composer 底栏占用 chip）。
 字段缺口的完整取证见 [evidence-q04](../pix-ui-alignment/topics/evidence-q04-runtime-fields.md)。
 
-- **T38-a `usage.updated` 生产者**：Pi worker 从 `turn_end` / `agent_end` 的 `message.usage` 取值并发出
-  `usage.updated`。事件类型在 `runtimeEvents.ts:613` 早已定义，缺的只是生产者——`piWorkerSession.ts:672`
-  当前直接丢弃 usage。
-- **T38-b 暴露 `contextWindow`**：Main 侧已持有该值，被 `piModelConfig.ts:109` 的 `piModelOption` 剥离；
-  需在 `AgentModelOption` 上保留，供渲染层算占用百分比。
-- **T38-c（可选）`tool.updated` 输出转发**：当前只转发 `input`（`runtimeEvents.ts:864`），不含
-  partialResult，故无法渲染活动工具状态行。
+- **T38-a `usage.updated` 生产者** — Done。挂 `turn_end`，一回合一条，**不累加**（pi 的 usage 是
+  单回合的账，带工具的 run 会结算多次）。key 定义与两端读写收在新的 `src/shared/piUsage.ts`。
+  **`agent_end` 刻意不做第二个生产者**：它带的整份 message 列表里最后一条 assistant 就是
+  `turn_end` 刚报过的那条，两处都发会把每个 run 的最后一回合算两遍（有测试守着）。
+- **T38-b 暴露 `contextWindow`** — Done。`AgentModelOption` 加字段，`piModelOption` 与
+  `readLocalModelOptions` 两条路径都补；`0` / 负数 / 非数字一律不带出去（它只作分母用）。
+- **T38-c `tool.updated` 状态行** — Done（原标「可选」）。取 `partialResult` 的最后一条非空行、
+  clamp 120 字符；结构化但无文本的 partialResult 不发（不 JSON.stringify）。
+
+**开工取证改变了 a 的做法**：pi SDK 的 `AgentSession.getContextUsage()` **直接返回**
+`{ tokens, contextWindow, percent }`，占用不需要渲染层拿 token 除以目录窗口去算——那样会把
+「配置的模型」的窗口套到「实际回答的模型」的 token 上。`tokens: null` 是 pi 的真答案
+（压缩后、下次回复前确实不知道），消费端按「未知」渲染，不按 0。
 - **~~T38-d（条件触发）service_tier 注入~~ — 触发条件未成立，不纳入本任务**：Q09 取证
   （[evidence-q09](../pix-ui-alignment/topics/evidence-q09-service-tier.md)）证实 Pi SDK **有**透传通道
   （`Model.samplingParams` 一路进请求体），只是挂在模型静态默认值层而非每次请求层。因此这不是
@@ -210,6 +216,7 @@ T33 + T35 + T36 → T37 → T38
 ```
 
 - T38 只依赖 T37 的已发布基线，不依赖 UI 计划的任何切片；反向而言 UI 计划的 U06-b / U09-2 占用 chip 依赖 T38。
+  两者同批落地（2026-09-05），因为 T38 每个生产者都只有一个消费者，分两次落会留下「有字段没人读」的中间态。
 
 - T34 source-reader inventory 可在 T32/T33 期间研究，但 atomic writer 应复用已验证的 Pi history/session contract。
 - T35 只能在 T34 保留必要 source adapters 后执行。

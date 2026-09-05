@@ -1,14 +1,18 @@
 # Implementation Status — Pi-only Application Convergence
 
-**Current Phase**：Completed core — Phase H / T37 release candidate closed；Phase I / T38 已开立未开工。
+**Current Phase**：Completed — Phase H / T37 release candidate closed；Phase I / T38 runtime 补字段已关闭（2026-09-05）。
 
-**Next Target**：T38 runtime 补字段（`usage.updated` 生产者、`contextWindow` 暴露），由 UI 计划
-[D03](../pix-ui-alignment/decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二开立，
-**不重开 T37 发版门禁**。正式发布仍按
+**Next Target**：无活动 runtime 任务。正式发布仍按
 [`docs/pi-only-rollout-rollback.md`](../../../pi-only-rollout-rollback.md) 完成内部观察、限量扩大、
 macOS 签名/公证与 rollback 记录；产品界面改造在 pix/pi-app UI 对齐计划推进。
 
-**Last Landed**：2026-09-03 T37-d release closure：MIT notices、Pi-only migration guide、curated
+**Last Landed**：2026-09-05 **T38 runtime 补字段**（与 UI 计划 U06-b 同批）：`usage.updated` 生产者挂
+`turn_end`（一回合一条、不累加；`agent_end` 刻意不做第二个生产者），目录带出 `contextWindow`，
+`tool.updated` 补状态行。开工取证改了做法——pi SDK 的 `getContextUsage()` 直接给
+`{ tokens, contextWindow, percent }`，占用由 worker 报而不是渲染层拿 token 除窗口算。
+全仓 274 files / 4210 tests 全绿，见 [T38 evidence](./evidence/2026-09-05-t38-runtime-usage-fields.md)。
+
+**上一次 Landed**：2026-09-03 T37-d release closure：MIT notices、Pi-only migration guide、curated
 release notes、rollout/rollback runbook 与 packaged legal gate 已落地；清除第二个 release-note owner；新增
 native macOS unsigned CI job。CI 实跑发现并修复四类既有门禁问题：legacy HTML Biome error、干净安装下
 permission policy 测试误吃本机旧文件、Windows 盘符 ESM import、Linux headless Electron 与 macOS
@@ -45,17 +49,26 @@ packaging 均为 Pi-only。保留的 Claude/Codex 名称仅限 migration/import�
 
 ## Active TODO
 
-1. T38-a：Pi worker 从 `turn_end`/`agent_end` 的 `message.usage` 发出 `usage.updated`（事件类型已存在，缺生产者）。
-2. T38-b：在 `AgentModelOption` 上保留 `contextWindow`（当前被 `piModelConfig.ts:109` 剥离）。
-3. T38-c（可选）：`tool.updated` 转发 partialResult，供活动工具状态行。
-4. ~~T38-d service_tier 注入~~：触发条件未成立——Q09 取证证实 Pi SDK 有透传通道，不是 runtime 缺字段问题，
-   落地取舍留在 UI 计划 Q12。
+无。T38-a/b/c 已全部落地并有 evidence；~~T38-d service_tier 注入~~ 触发条件未成立（Q09 取证证实
+Pi SDK 有透传通道，不是 runtime 缺字段问题，落地取舍留在 UI 计划 Q12）。
+
+T38 留下三条**已知欠项**，都写在 evidence §七，都不重开本任务：
+① 重开会话在首次回复前没有占用环（pi 只在 `turn_end` 报），退化为只显示上下文窗口一行；
+② ~~`turnTokensDisplay` 实时 ↓ 计数器是死路~~ — **已于同日关闭**，用户拍板整条删除，
+改动全在渲染层，归 UI 计划
+[D11](../pix-ui-alignment/decisions/011-retire-the-live-output-token-counter.md)；
+③ GUI 点验并入 UI 计划那一次累计点验。
 
 ## Operational follow-ups（不重开 T37）
 
 1. 正式发布前执行 1–2 天内部观察、限量扩大和 rollback rehearsal。
 2. macOS unsigned CI candidate 不得直接分发；先完成 Developer ID signing、notarization 与真实 Mac Gatekeeper 点验。
-3. 未 materialize 会话空闲淘汰后的 renderer binding 与 `HTTP_PROXY` 下直接 `pnpm dev` localhost 代理问题，按独立维护切片处理。
+3. ~~未 materialize 会话空闲淘汰后的 renderer binding 与 `HTTP_PROXY` 下直接 `pnpm dev` localhost 代理问题~~
+   — **已修**（2026-09-05，用户拍板「顺手修掉」，不单独立项）。根因是 Main 从不发 `host.error` 事件、
+   且 `WorkerManagerError.code` 不过 IPC 边界，导致渲染层两条恢复分支（淘汰重建、`session_busy` 重试）
+   一直是死代码；dev 侧补小写 `no_proxy` 回环绕过。见
+   [维护切片 evidence](./evidence/2026-09-05-maintenance-eviction-recovery-and-proxy.md)。
+   **两条都未在真机复现原始现场。**
 4. GitHub Actions 的 Node 20 action-runtime deprecation warning 由后续 action 依赖升级处理；项目 job Node 已为 24。
 
 ## Handoff

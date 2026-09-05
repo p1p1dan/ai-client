@@ -622,9 +622,26 @@ export interface ToolUpdatedEvent extends RuntimeEventBase {
     messageId: string;
     toolCallId: string;
     input?: unknown;
+    /**
+     * T38-c: one clamped line of the tool's own progress report, off the SDK's
+     * `partialResult`. Absent when the tool reported no text — that is "no
+     * status", which is not the same as an empty one, so a consumer must not
+     * render a blank strip for it. Never the growing output body: `output`
+     * arrives once, settled, on `tool.completed`.
+     */
+    status?: string;
   };
 }
 
+/**
+ * Token/cost totals for one turn, plus the session's context occupancy.
+ *
+ * `payload` stays `Record<string, unknown>` because this event predates its
+ * current producer: the Claude host emitted interim estimates here under a
+ * different key set. The Pi-only shape is defined and narrowed in
+ * `shared/piUsage.ts` — build it with `buildPiUsagePayload`, read it with
+ * `readPiUsagePayload`, and do not hand-write the keys at either end.
+ */
 export interface UsageUpdatedEvent extends RuntimeEventBase {
   type: 'usage.updated';
   sessionId?: string;

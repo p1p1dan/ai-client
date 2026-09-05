@@ -16,7 +16,7 @@ import {
 import type { WorkerExtensionInfo } from '@shared/types/workerRpc';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspaceService';
-import { workerManager } from '../services/agent-host/WorkerManager';
+import { WorkerManagerError, workerManager } from '../services/agent-host/WorkerManager';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { ExtensionUiRouter } from '../services/chat/extensionUiRouting';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
@@ -180,6 +180,24 @@ function spawnTier(tier: unknown): { tier?: SessionPermissionTier } {
     return {};
   }
   return { tier };
+}
+
+/**
+ * Carry a `WorkerManagerError`'s `code` across the IPC boundary.
+ *
+ * Electron serializes only `error.message` for an `invoke` rejection, so the
+ * `code` field — the thing the renderer branches on — was dropped on the way
+ * out. Nothing in Main emits a `host.error` runtime event either, so a send
+ * refused by the WorkerManager reached the composer as opaque prose: its
+ * `session_not_found` recovery and its bounded `session_busy` retry could
+ * never fire, and the user ate one raw "Error invoking remote method" toast
+ * per evicted session.
+ *
+ * Re-thrown in the `<code>: <message>` shape this file already uses for its
+ * own `pi_session_*` errors, so both sides read the same convention.
+ */
+function withWorkerErrorCode(error: unknown): unknown {
+  return error instanceof WorkerManagerError ? new Error(`${error.code}: ${error.message}`) : error;
 }
 
 async function requireIndexedPiSession(
@@ -448,8 +466,12 @@ export function registerChatHandlers(): void {
         // everything typed in the TUI. Re-read the file first.
         await reloadSessionFromDisk(payload.sessionId, ownerWebContentsId);
       }
-      const requestId = await workerManager.send({ ...payload, ownerWebContentsId });
-      return { requestId };
+      try {
+        const requestId = await workerManager.send({ ...payload, ownerWebContentsId });
+        return { requestId };
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
     }
   );
 

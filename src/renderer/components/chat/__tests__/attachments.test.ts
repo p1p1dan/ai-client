@@ -660,31 +660,34 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
   });
 
   /**
-   * `[F4-3]` The two counters: presence, omission, ORDER and the actual values.
+   * `[F4-3]` The prompt counter: presence, omission and the actual value.
    *
    * The value half is what makes this load-bearing — an implementation that
-   * hard-coded `↑ 1 chars · ↓ 1k` would satisfy every presence/order check.
+   * hard-coded `↑ 1 chars` would satisfy every presence check.
+   *
+   * There is no `↓` reply counter to assert: it was retired with the Claude
+   * host's interim usage channel (T35). Pi reports usage only at `turn_end`,
+   * and this repo does not estimate tokens from character counts, so the line
+   * can state nothing about a reply that is still arriving. The negative
+   * assertions below hold that line.
    */
-  it('[F4-3] the up/down counters appear, omit and format by their own inputs', () => {
+  it('[F4-3] the prompt counter appears, omits and formats by its own input', () => {
     const bare = waitingAt(12);
     expect(bare).not.toContain('↑');
     expect(bare).not.toContain('↓');
 
-    const both = composerSendingLine({
+    const withPrompt = composerSendingLine({
       phase: 'awaiting',
       elapsedSeconds: 12,
       budgetMs: 45_000,
       attachmentCount: 0,
       attachmentBytes: 0,
       promptChars: 428,
-      outputTokensDisplay: 1800,
     });
-    expect(both).toContain('↑ 428 chars');
-    expect(both).toContain('↓ 1.8k');
-    expect(both.indexOf('↑')).toBeLessThan(both.indexOf('↓'));
+    expect(withPrompt).toContain('↑ 428 chars');
+    expect(withPrompt).not.toContain('↓');
 
-    // Both sides of the 1000 boundary for the token count, and the char count
-    // keeps its unit word while the token count deliberately has none (§7.4).
+    // Above the 1000 boundary, still carrying its unit word (§7.4).
     expect(
       composerSendingLine({
         phase: 'awaiting',
@@ -692,9 +695,9 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
         budgetMs: 45_000,
         attachmentCount: 0,
         attachmentBytes: 0,
-        outputTokensDisplay: 850,
+        promptChars: 1800,
       })
-    ).toContain('↓ 850');
+    ).toContain('↑ 1.8k chars');
 
     // A session already running when this window opened has no snapshot, so
     // `promptChars` falls back to 0 — which must read as "unknown", not as a
@@ -707,7 +710,6 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
         attachmentCount: 0,
         attachmentBytes: 0,
         promptChars: 0,
-        outputTokensDisplay: null,
       })
     ).not.toContain('↑');
   });
@@ -719,7 +721,7 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
    *
    * The second half matters as much as the first: proving only that something
    * DISAPPEARED is also satisfied by a function that returns a constant, so the
-   * same assertion re-confirms the six facts that must still be there.
+   * same assertion re-confirms the five facts that must still be there.
    */
   it('[F4-4] budgetMs changes nothing, and the rest of the line is still there', () => {
     const args = {
@@ -728,7 +730,6 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
       attachmentCount: 1,
       attachmentBytes: 155_648,
       promptChars: 428,
-      outputTokensDisplay: 1800,
       retry: { attempt: 3, maxRetries: 10 },
     };
     const cheap = composerSendingLine({ ...args, budgetMs: 45_000 });
@@ -737,14 +738,13 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
     expect(cheap).not.toContain('up to');
     expect(cheap).not.toContain('45');
     expect(cheap).not.toContain('300');
-    // Six positives, in one assertion block, so "simplify the whole line to a
+    // Five positives, in one assertion block, so "simplify the whole line to a
     // constant" cannot pass by deleting content this test only checks for.
     expect(VERBS).toContain(verbOf(cheap));
     expect(cheap).toContain('· 31s');
     expect(cheap).toContain('Sent 152.0 KB');
     expect(cheap).toContain('· Retry 3/10');
     expect(cheap).toContain('↑ 428 chars');
-    expect(cheap).toContain('↓ 1.8k');
   });
 
   /**

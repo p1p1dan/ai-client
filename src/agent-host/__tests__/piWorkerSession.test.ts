@@ -575,6 +575,172 @@ describe('PiWorkerSession', () => {
     });
   });
 
+  // T38-a/T38-c: the two producers the Run surface waits on. Both are read off
+  // events the worker already subscribes to — no new SDK surface, no polling.
+  describe('usage and tool-status producers (T38)', () => {
+    const TURN_USAGE = {
+      input: 12_000,
+      output: 480,
+      cacheRead: 9_000,
+      cacheWrite: 1_200,
+      totalTokens: 22_680,
+      cost: { total: 0.0504 },
+    };
+
+    async function runTurn(
+      stub: ReturnType<typeof createPiSdkStub>,
+      events: RuntimeEventDraft[],
+      emit: (pi: NonNullable<ReturnType<typeof stub.sessionFor>>) => void
+    ) {
+      const session = createSession(stub, events);
+      await session.startSend({
+        logicalSessionId: 'logical-1',
+        requestId: 'turn-1',
+        attemptId: 'attempt-1',
+        text: 'go',
+      });
+      const pi = stub.sessionFor('/repo');
+      if (!pi) throw new Error('stub session missing');
+      emit(pi);
+      return session;
+    }
+
+    it('emits one usage.updated per turn_end, carrying totals and context occupancy', async () => {
+      const stub = createPiSdkStub({
+        manualPrompt: true,
+        contextUsage: { tokens: 21_400, contextWindow: 200_000, percent: 10.7 },
+      });
+      const events: RuntimeEventDraft[] = [];
+      const session = await runTurn(stub, events, (pi) => {
+        pi.emit({ type: 'agent_start' });
+        pi.emit({ type: 'turn_end', message: { role: 'assistant', usage: TURN_USAGE } });
+      });
+
+      expect(events.filter((event) => event.type === 'usage.updated')).toEqual([
+        {
+          type: 'usage.updated',
+          sessionId: 'logical-1',
+          requestId: 'turn-1',
+          payload: {
+            input: 12_000,
+            output: 480,
+            cacheRead: 9_000,
+            cacheWrite: 1_200,
+            totalTokens: 22_680,
+            costUsd: 0.0504,
+            context: { tokens: 21_400, contextWindow: 200_000, percent: 10.7 },
+          },
+        },
+      ]);
+
+      stub.finishPrompt('/repo');
+      await session.dispose();
+    });
+
+    it('reports each tool-calling turn separately and never doubles the last one on agent_end', async () => {
+      const stub = createPiSdkStub({ manualPrompt: true });
+      const events: RuntimeEventDraft[] = [];
+      const session = await runTurn(stub, events, (pi) => {
+        pi.emit({ type: 'agent_start' });
+        pi.emit({ type: 'turn_end', message: { role: 'assistant', usage: TURN_USAGE } });
+        pi.emit({
+          type: 'turn_end',
+          message: { role: 'assistant', usage: { ...TURN_USAGE, output: 900 } },
+        });
+        // `agent_end` carries the whole message list, including the assistant
+        // message the second `turn_end` already reported.
+        pi.emit({
+          type: 'agent_end',
+          willRetry: false,
+          messages: [{ role: 'assistant', usage: { ...TURN_USAGE, output: 900 } }],
+        });
+        pi.emit({ type: 'agent_settled' });
+      });
+
+      const usage = events.filter((event) => event.type === 'usage.updated');
+      expect(usage).toHaveLength(2);
+      expect(usage.map((event) => (event.payload as { output: number }).output)).toEqual([
+        480, 900,
+      ]);
+
+      await session.dispose();
+    });
+
+    it('stays silent when the turn carried no usage at all', async () => {
+      const stub = createPiSdkStub({ manualPrompt: true });
+      const events: RuntimeEventDraft[] = [];
+      const session = await runTurn(stub, events, (pi) => {
+        pi.emit({ type: 'turn_end', message: { role: 'assistant' } });
+      });
+
+      expect(events.filter((event) => event.type === 'usage.updated')).toEqual([]);
+
+      stub.finishPrompt('/repo');
+      await session.dispose();
+    });
+
+    it('still reports the turn totals when getContextUsage throws or is absent', async () => {
+      for (const options of [{ contextUsageThrows: 'branch mid-write' }, {}]) {
+        const stub = createPiSdkStub({ manualPrompt: true, ...options });
+        const events: RuntimeEventDraft[] = [];
+        const session = await runTurn(stub, events, (pi) => {
+          pi.emit({ type: 'turn_end', message: { role: 'assistant', usage: TURN_USAGE } });
+        });
+
+        const [usage] = events.filter((event) => event.type === 'usage.updated');
+        expect(usage?.payload).toMatchObject({ input: 12_000, output: 480 });
+        expect(usage?.payload).not.toHaveProperty('context');
+
+        stub.finishPrompt('/repo');
+        await session.dispose();
+      }
+    });
+
+    it('forwards the newest line of a tool partialResult as a clamped status', async () => {
+      const stub = createPiSdkStub({ manualPrompt: true });
+      const events: RuntimeEventDraft[] = [];
+      const session = await runTurn(stub, events, (pi) => {
+        pi.emit({
+          type: 'tool_execution_start',
+          toolCallId: 'tool-1',
+          toolName: 'fetch',
+          args: {},
+        });
+        pi.emit({
+          type: 'tool_execution_update',
+          toolCallId: 'tool-1',
+          toolName: 'fetch',
+          args: {},
+          partialResult: { content: 'Resolving…\nDownloaded 3/12\n' },
+        });
+        pi.emit({
+          type: 'tool_execution_update',
+          toolCallId: 'tool-1',
+          toolName: 'fetch',
+          args: {},
+          partialResult: { content: `${'x'.repeat(200)}` },
+        });
+        // A structured progress object with no text at all: "no status" is not
+        // an empty one, and a serialized object is not a progress report.
+        pi.emit({
+          type: 'tool_execution_update',
+          toolCallId: 'tool-1',
+          toolName: 'fetch',
+          args: {},
+          partialResult: { details: { bytes: 12 } },
+        });
+      });
+
+      const statuses = events
+        .filter((event) => event.type === 'tool.updated')
+        .map((event) => (event.payload as { status?: string }).status);
+      expect(statuses).toEqual([`Downloaded 3/12`, `${'x'.repeat(120)}…`, undefined]);
+
+      stub.finishPrompt('/repo');
+      await session.dispose();
+    });
+  });
+
   it('rejects mismatched sessions, concurrent sends, and bootstrap after disposal', async () => {
     const stub = createPiSdkStub({ manualPrompt: true });
     const session = createSession(stub, []);
