@@ -124,6 +124,40 @@ describe('createPiWorkerSlot', () => {
     expect(created.bootstrap.sessionFile).toContain('one.jsonl');
   });
 
+  /**
+   * The 2026-09-05 startup defect: bootstrap shared `WorkerSlot`'s 10s warm-RPC
+   * budget, so a cold start that ran long failed `chat:resumeSession` with
+   * `worker.bootstrap timed out after 10000ms` and left the session unopenable.
+   * Asserted through the message the user actually saw, since that string is
+   * what the timeout is measured in.
+   */
+  it('gives bootstrap a cold-start budget instead of the warm request timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = new LoopbackTransport();
+      const creating = createPiWorkerSlot({
+        slotKey: 'workspace:/repo',
+        logicalSessionId: 'logical-1',
+        cwd: '/repo',
+        createTransport: () => transport,
+        // The warm budget the defect used. Bootstrap must not adopt it.
+        requestTimeoutMs: 10_000,
+        disposeTimeoutMs: 100,
+        exitTimeoutMs: 100,
+      });
+      const rejection = expect(creating).rejects.toThrow(
+        /worker\.bootstrap timed out after 60000ms/
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(transport.requests).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(50_000);
+      await vi.advanceTimersByTimeAsync(200);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('disposes the process when bootstrap acknowledgement is invalid', async () => {
     const transport = new LoopbackTransport();
     const creating = createPiWorkerSlot({

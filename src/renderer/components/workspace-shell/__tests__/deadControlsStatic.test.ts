@@ -12,7 +12,8 @@ import { stripComments } from '../../chat/__tests__/stripComments';
  * 1. A positive invariant over every workspace-shell .tsx: each <Button> /
  *    <button> JSX element must carry click semantics — onClick, a literal
  *    type="submit", a disabled state that isn't literally false, a render=
- *    wrapper that owns the click (TooltipTrigger/MenuTrigger idiom), or a
+ *    wrapper that owns the click (TooltipTrigger/MenuTrigger idiom, counted
+ *    from either side of the edge — see `deadButtonViolations`), or a
  *    props spread (a forwarding wrapper owns the handler; the scan cannot see
  *    through it, so the spread is a documented pass, not proof). This is the
  *    general rule — a NEW dead button fails the suite, not just a restored
@@ -85,11 +86,41 @@ function deadButtonViolations(path: string): string[] {
     true,
     ts.ScriptKind.TSX
   );
+  /**
+   * The other half of the render idiom the header allows.
+   *
+   * `hasClickSemantics` recognises the wrapper only when the render prop sits
+   * on the button itself. Written inline — `<AlertDialogClose render={<Button>
+   * Cancel</Button>} />` — the handler-less Button is the ATTRIBUTE VALUE and
+   * the wrapper that clones it with a click handler is its parent: same
+   * ownership, other side of the edge. Only the DIRECT element of the render
+   * expression is excused, so a button buried inside a wrapper's markup still
+   * has to answer for itself.
+   */
+  const renderOwned = new Set<ts.Node>();
+  const collectRenderOwned = (node: ts.Node): void => {
+    if (ts.isJsxAttribute(node) && node.name.getText(source) === 'render') {
+      const initializer = node.initializer;
+      const expression =
+        initializer !== undefined && ts.isJsxExpression(initializer)
+          ? initializer.expression
+          : undefined;
+      if (expression && ts.isJsxElement(expression)) renderOwned.add(expression.openingElement);
+      if (expression && ts.isJsxSelfClosingElement(expression)) renderOwned.add(expression);
+    }
+    ts.forEachChild(node, collectRenderOwned);
+  };
+  collectRenderOwned(source);
+
   const violations: string[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const tag = node.tagName.getText(source);
-      if ((tag === 'Button' || tag === 'button') && !hasClickSemantics(node)) {
+      if (
+        (tag === 'Button' || tag === 'button') &&
+        !renderOwned.has(node) &&
+        !hasClickSemantics(node)
+      ) {
         const { line } = ts.getLineAndCharacterOfPosition(source, node.getStart(source));
         violations.push(`${path}:${line + 1} <${tag}> without click semantics`);
       }

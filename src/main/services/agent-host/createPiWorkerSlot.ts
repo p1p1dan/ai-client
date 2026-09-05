@@ -22,6 +22,8 @@ export interface CreatePiWorkerSlotOptions
     WorkerBootstrapPayload {
   slotKey: string;
   generation?: number;
+  /** Cold-start budget for `worker.bootstrap` only; warm RPCs keep `requestTimeoutMs`. */
+  bootstrapTimeoutMs?: number;
   createTransport?: (input: { generation: number; cwd: string }) => WorkerTransport;
   /** Exposes process ownership before bootstrap awaits, for app-close force kill. */
   onSlotCreated?: (slot: WorkerSlot) => void;
@@ -35,6 +37,24 @@ export interface CreatedPiWorkerSlot {
   slot: WorkerSlot;
   bootstrap: WorkerBootstrapResult;
 }
+
+/**
+ * Bootstrap gets its own, much larger budget than a warm RPC.
+ *
+ * `WorkerSlot`'s 10s default is sized for requests answered by a process that
+ * is already up. `worker.bootstrap` is the opposite: it is the cold start, and
+ * everything that only happens once is inside it — forking the utility process,
+ * loading the agent-host module graph (type-stripped from source in dev),
+ * parsing the session file, loading pi's extensions and binding the approval UI.
+ *
+ * Reusing the warm budget here made a slow-but-healthy cold start indis-
+ * tinguishable from a wedged worker: on a busy machine `chat:resumeSession`
+ * failed with `worker.bootstrap timed out after 10000ms` and left the session
+ * unopenable until the user retried. Losing a healthy session to a 10s cutoff
+ * is worse than waiting longer for a genuinely stuck one, which still fails —
+ * just later.
+ */
+export const BOOTSTRAP_REQUEST_TIMEOUT_MS = 60_000;
 
 /**
  * Spawn and bootstrap one per-slot Pi utility process.
@@ -81,7 +101,8 @@ export async function createPiWorkerSlot(
         // session is on the default, so an untouched session's bootstrap
         // payload is byte-identical to what it was before this fix.
         ...(options.tier ? { tier: options.tier } : {}),
-      }
+      },
+      { timeoutMs: options.bootstrapTimeoutMs ?? BOOTSTRAP_REQUEST_TIMEOUT_MS }
     );
     if (!isWorkerBootstrapResult(result)) {
       throw new Error('Pi worker returned an invalid bootstrap acknowledgement');

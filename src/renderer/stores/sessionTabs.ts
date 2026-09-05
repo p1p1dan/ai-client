@@ -26,7 +26,11 @@ export interface SessionTabsState {
   openSessionIds: string[];
   /** Opens `sessionId` if it is not already open; no-op otherwise. */
   openSession: (sessionId: string | null) => void;
-  /** Closes the tab. Does NOT archive or close the session itself (D08). */
+  /**
+   * Drops the tab from the strip. Does NOT touch the session — detaching its
+   * runtime is `closeSessionTab.ts`, which the X calls alongside this, and
+   * pruning deliberately does not.
+   */
   closeSession: (sessionId: string) => void;
   /** Drops tabs whose session no longer exists. */
   pruneSessions: (knownSessionIds: readonly string[]) => void;

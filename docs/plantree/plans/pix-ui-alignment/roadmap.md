@@ -9,7 +9,7 @@
 
 | 分组 | 数量 | 说明 |
 |---|---|---|
-| Done | 16 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)）；**U13：免绑定会话跨重启可见性**、**U06-a：Run 面板**、**U07：Context 内容增强**（2026-09-04，[U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md) / [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）；**U04：左栏插件入口**（2026-09-04，[U04 evidence](./evidence/2026-09-04-u04-plugin-entry.md)）；**U14：壳层横条重排与双栏收敛**（2026-09-04，[U14 evidence](./evidence/2026-09-04-u14-shell-chrome-realignment.md)）；**U15：VSCode 式壳层重排**、**U16：上下文页图形化与折叠**（2026-09-05，[U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)） |
+| Done | 19 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)）；**U13：免绑定会话跨重启可见性**、**U06-a：Run 面板**、**U07：Context 内容增强**（2026-09-04，[U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md) / [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）；**U04：左栏插件入口**（2026-09-04，[U04 evidence](./evidence/2026-09-04-u04-plugin-entry.md)）；**U14：壳层横条重排与双栏收敛**（2026-09-04，[U14 evidence](./evidence/2026-09-04-u14-shell-chrome-realignment.md)）；**U15：VSCode 式壳层重排**、**U16：上下文页图形化与折叠**（2026-09-05，[U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)）；**U17：bootstrap 冷启动超时**、**U18：思考强度极端档需声明**、**U19：关 Tab 即结束对话**（2026-09-05，[批次 9 evidence](./evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)） |
 | In Progress | 0 | — |
 | Moved out | 1 | U06-b → Pi 计划 T38（[D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二） |
 | Dropped | 1 | U08-3 请求优先级（[Q12](./open-questions.md) 拍板不做） |
@@ -30,6 +30,9 @@ U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排
   双栏已无第三列可挂，Context 与 Run 一并退出双栏。
 - [D06](./decisions/006-plugin-inventory-source.md)——插件清单由 worker 上报「实际加载了什么」，
   不在 Main 重实现 pi 的解析（后者是第二份手抄，表现为「界面说 3 个、agent 实际加载 1 个」）。
+- [D09](./decisions/009-tab-close-ends-conversation.md)——**关 Tab 就是结束对话**：确认后断开该会话的
+  运行时，但左栏那一行留着（仓库里三个「关闭」中最轻的那个；另两个是左栏 Close 与 Archive）。
+  修正 D08 决定三留下的「关 Tab 只是收起 Tab」。
 - [D08](./decisions/008-vscode-dock-shell.md)——**VSCode 式壳层**：左栏是图标轨道 + 面板的导航容器
   （聊天 / Git / 文件 / 上下文 / 运行），右栏只做文件与编辑器，中栏一个已启动会话一个 Tab，
   **删掉双栏/三栏与上下文面板开关**。推翻 D07 决定一与决定三（决定二「每栏一条横条」继续有效），
@@ -44,7 +47,38 @@ U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排
 Q09 由取证关闭；Q11 布局尺寸维持现值；Q12 请求优先级不做；
 Q13 免绑定会话跨重启可见性由 [D04](./decisions/004-unbound-session-index-visibility.md) 拍板走索引标记，落为 U13）。
 
-## Done — 批次 8（最新）
+## Done — 批次 9（最新）
+
+三件用户报障，一次做完。证据合并在
+[批次 9 evidence](./evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)。
+
+### U17 — 启动 resume 的 bootstrap 超时 — **Done**（2026-09-05）
+
+`chat:resumeSession` 报 `worker.bootstrap timed out after 10000ms`：
+`createPiWorkerSlot` 没给 bootstrap 传超时，于是套用了 `WorkerSlot` 给**暖 RPC** 用的 10s 默认值，
+而 bootstrap 是冷启动本身（fork 进程 + dev 下逐模块剥类型加载 agent-host + 解析会话文件 +
+加载 pi 扩展并绑审批 UI）。改为单开 `BOOTSTRAP_REQUEST_TIMEOUT_MS = 60_000`。
+**按代码路径判定，未复现原始现场**——证据是那条单测，不是一次成功启动。
+
+### U18 — 思考强度不再给未声明的极端档 — **Done**（2026-09-05）
+
+Minimal + GPT-5.6 Terra 打回 `502 host_call_failed: level "minimal" not supported,
+valid levels: low, medium, high, xhigh, max`，且被 pi 当网络抖动重试了 3 次。
+根因是三层叠加：models.json 只有 `reasoning: true` 没有 `thinkingLevelMap`；
+pi 假定 `off`/`minimal` 处处可用所以 clamp 不拦；本仓 `effortsForModel` 比 pi 还松，
+无 map 就把七档全给（连 pi 要求声明的 `xhigh`/`max` 也给，而那两档会被 pi 静默降级成 `high`）。
+**用户拍板**：没声明就只给 `low/medium/high`，四个极端档必须在 `thinkingLevelMap` 里点名。
+配套让 `reconcileEffortForModel` 在模型未知（目录未加载完）时保留已存档位，
+否则它会把用户合法的 `xhigh` 抹掉——它的返回值是要写回存储的。
+
+### U19 — 关闭中栏 Tab = 结束对话 — **Done**（2026-09-05）
+
+按 [D09](./decisions/009-tab-close-ends-conversation.md)：X 先弹确认框，确认后调
+`chat.closeSession` 断开运行时并复位渲染层的四处会话状态，**左栏那一行保留**。
+修正了 U15-c「关 Tab ≠ 关闭会话」的定义；U15-c 验收看点 ④ 继续成立
+（变的是它在后台还活不活，不是它在列表里还在不在）。
+
+## Done — 批次 8
 
 ### U15 — VSCode 式壳层重排 — **Done**（2026-09-05）
 

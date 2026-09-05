@@ -1,14 +1,25 @@
 # Implementation Status — pix/pi-app UI 对齐改造
 
-**Current Phase**：**批次 8（U15 + U16）已落地**，壳层按 [D08](./decisions/008-vscode-dock-shell.md)
-重排为 VSCode 式三栏。剩下的仍是一次累计 GUI 点验、外部阻塞的 U06-b（等 Pi 计划 T38）
-与用户降优先级的 U10/U11。
+**Current Phase**：**批次 9（U17 + U18 + U19）已落地**——三件用户报障修完。
+壳层仍按 [D08](./decisions/008-vscode-dock-shell.md) 的 VSCode 式三栏。
+剩下的仍是一次累计 GUI 点验、外部阻塞的 U06-b（等 Pi 计划 T38）与用户降优先级的 U10/U11。
 
 **Next Target**：**一次性 CDP GUI 点验**——用户 2026-09-04 明确「最后一起点验」，
 所以逐批点验一直后置到现在。批次 8 把点验清单整个换掉了（U14 那五条描述的 chrome 已被 D08 删除），
 新看点见 [roadmap U15/U16](./roadmap.md)。
 
-**Last Landed**：2026-09-05 **U15 + U16** VSCode 式壳层重排与上下文页图形化
+**Last Landed**：2026-09-05 **U17 + U18 + U19**（三件用户报障）：
+① `chat:resumeSession` 的 `worker.bootstrap timed out after 10000ms`——bootstrap 套用了
+给暖 RPC 的 10s 预算，冷启动的全部一次性成本都在里面，改为单开 60s；
+**这条按代码路径判定，原始现场未复现**。
+② 思考强度选 Minimal 打回 `502 ... level "minimal" not supported`——本仓对无
+`thinkingLevelMap` 的模型把七档全给，比 pi 自己的规则还松；用户拍板改为
+「没声明就只给 low/medium/high」，四个极端档必须点名。
+③ 关中栏 Tab 改为**结束对话**（[D09](./decisions/009-tab-close-ends-conversation.md)）：
+确认框 + 断开运行时 + 复位渲染层四处会话状态，左栏那一行保留。
+证据见 [批次 9 evidence](./evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)。
+
+**上一批**：2026-09-05 **U15 + U16** VSCode 式壳层重排与上下文页图形化
 （[D08](./decisions/008-vscode-dock-shell.md)，基准 `docs/design/a11-vscode-shell-prototype.html`）。
 左栏成为 `44px 图标轨道 + 面板` 的导航容器（聊天 / Git / 文件 / 上下文 / 运行），
 右栏只剩文件与编辑器（展开覆盖跟着文件走），中栏一个已启动会话一个横向 Tab，
@@ -20,7 +31,7 @@
 上下文环形图画的是**角色构成**不是「窗口占用率」——真实 token 占用仍等 T38。
 证据见 [U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)。
 
-**上一批**：2026-09-04 **U14** 壳层横条重排与双栏收敛（[D07](./decisions/007-two-column-is-two-columns-and-one-bar-per-column.md)）。
+**再上一批**：2026-09-04 **U14** 壳层横条重排与双栏收敛（[D07](./decisions/007-two-column-is-two-columns-and-one-bar-per-column.md)）。
 用户看到实际界面后指出三处 chrome「臃肿不协调」，并以原型
 `docs/design/a10-pix-ui-alignment-prototype.html` 为准。取证给出的答案分三层：
 原型在本计划里的登记身份就是「非施工依据」；壳层结构不在 D01 的样式授权也不在 Q11 的尺寸里，无人认领；
@@ -59,11 +70,15 @@ token 估算与手动刷新刻意不做，理由在 evidence 里。
 并把 hands-off / full access 的档位文案改成点明工作区边界。同批下线顶栏终端按钮与 ``Ctrl/Cmd+` ``。
 证据见 [U12 rev.2 evidence](./evidence/2026-09-04-u12-rev2-cross-directory-and-terminal-rail.md)。
 
-**Last Verified**：2026-09-05（U15/U16 收尾）—— 全仓 **267 files / 4134 tests pass**；
+**Last Verified**：2026-09-05（批次 9 收尾）—— 全仓 **269 files / 4145 tests pass**；
 `tsc --noEmit` pass；`biome check src/` 干净；`git diff --check` 干净。
-**外加真机 GUI 点验**：U15/U16 的六个看点全部在真实 app 里跑通并留图
+批次 9 的真机验证：思考强度下拉只剩 `Default / Low / Medium / High`（持久化的 `Minimal`
+被 reconcile 成 Default）；关 Tab 弹确认框，确认后 Tab 消失、左栏 78 行不变、
+store 里该会话 `status: disconnected` / `hostBound: false` / `messages: 0`、
+打开时新起的两个 worker 进程在 8s 内消失。
+**上一批 U15/U16 的六个看点也仍然有效**，全部在真实 app 里跑通并留图
 （[shots](./evidence/2026-09-05-u15-shots/)）。
-（测试总数比 U14 少 24 条：删掉的是两/三栏模式与已删组件的断言，不是覆盖率倒退——
+（U15/U16 那次测试总数比 U14 少 24 条：删掉的是两/三栏模式与已删组件的断言，不是覆盖率倒退——
 逐条改写理由见 [U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md) 第五节。）
 上一批（U12 rev.2）的真回合验证结论仍然有效：
 真回合验证（`spikes/u12-tier-turn-probe.ts`，真模型，写工作区外文件）：
@@ -71,20 +86,25 @@ token 估算与手动刷新刻意不做，理由在 evidence 里。
 
 ## Active TODO
 
-> 上限五项（root registry 的维护规则）。四件「待真机验证」合并为一项——它们的性质相同：
-> 自动化已绿，缺的是一次真实 pi CLI / 真账号 / 真扩展的手动跑。
+> 上限五项（root registry 的维护规则）。六件「待真机验证」合并为一项——它们的性质相同：
+> 自动化已绿，缺的是一次真实 pi CLI / 真账号 / 真扩展 / 真慢冷启动的手动跑。
 
 1. **累计 GUI 点验（当前唯一的主动任务）** — U09 + U12 + U05/U03-b + U08-2 +
    U13 临时分组 + U06-a Run 面板 + U07 对话构成 + U04 插件入口 + **U15 壳层重排 + U16 上下文页**，
    一次 CDP 出图肉眼确认。U14 那五条看点作废（D08 删掉了它们描述的 chrome）。
-   **本批次的六个看点**：① 轨道五个图标能切换且选中态可辨；② 面板标题行说明当前区；
-   ③ 点左栏会话在中栏新开 Tab、可多开、可关；④ 关 Tab 后会话仍在左栏列表里；
+   **U15/U16 的六个看点**：① 轨道五个图标能切换且选中态可辨；② 面板标题行说明当前区；
+   ③ 点左栏会话在中栏新开 Tab、可多开、可关；④ 关 Tab 后会话仍在左栏列表里
+   （[D09](./decisions/009-tab-close-ends-conversation.md) 后仍成立：变的是它在后台还活不活）；
    ⑤ 顶部再无双栏/三栏与「上下文面板」按钮；⑥ 打开文件才出现右栏，展开能盖住中栏。
    **U15/U16 这六条已在真机验证通过**（真实 app + 真实会话数据，
    截图存 [`evidence/2026-09-05-u15-shots/`](./evidence/2026-09-05-u15-shots/)）；
    起不来的那次是本机 `HTTP_PROXY` 导致的挂死，小写 `no_proxy` 一加就好，与本批次改动无关。
    **剩下要点验的是更早批次的项**（U09/U12/U05/U08-2/U13/U06-a/U07/U04）。
-2. **待真机验证（四件）** —
+2. **待真机验证（六件）** —
+   ⓪ **U17 的 bootstrap 超时** 原始现场（`worker.bootstrap timed out after 10000ms`）本轮未复现，
+   修改按代码路径判定、由单测锁住 60s 预算；下次真遇到冷启动慢时确认它不再中断 resume；
+   ⓪′ **U18 的极端档** 反过来的一半没测：真给某模型声明 `thinkingLevelMap: { minimal: 'minimal' }`
+   之后下拉是否真的多出 Minimal 且能打通——目前只有单测；
    ① **U08-2** `off` 走到真实供应商的实际效果未跑（类型链已逐段核实，不等于每家服务端都认）；
    ② **TUI↔GUI 历史分叉** 已按 pix `leaveTerminalMode()` 修完（`worker.reload` 重载原语 + `chat:reloadSession`，
    离开终端 suspend → 重载 → 揭开；回合进行中拒绝进 TUI），三条变异验证已过，但用户原始复现路径没用真实 pi CLI 跑过

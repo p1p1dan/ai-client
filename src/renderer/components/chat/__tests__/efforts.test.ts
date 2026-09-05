@@ -175,10 +175,38 @@ describe('resolveEffortSelection (§4.3 priority chain)', () => {
 });
 
 describe('T25 model-level effort capability', () => {
-  it('shows the whole catalog for a model with no metadata', () => {
-    expect(effortsForModel(undefined).map((effort) => effort.id)).toEqual(
-      CHAT_EFFORTS.map((effort) => effort.id)
-    );
+  it('shows only the assumed three for a model with no metadata', () => {
+    expect(effortsForModel(undefined).map((effort) => effort.id)).toEqual([
+      'low',
+      'medium',
+      'high',
+    ]);
+  });
+
+  /**
+   * The 2026-09-05 defect, in the exact shape the real catalog produces: every
+   * entry in a hand-written `models.json` carries `reasoning: true` and no
+   * `thinkingLevelMap`, so this is the common case, not an edge one. Offering
+   * `minimal` here sent `minimal` to a provider that answers
+   * `502 host_call_failed: level "minimal" not supported`.
+   */
+  it('does not offer the extremes a reasoning model never declared', () => {
+    const model = { reasoning: true };
+    expect(effortsForModel(model).map((effort) => effort.id)).toEqual(['low', 'medium', 'high']);
+    expect(reconcileEffortForModel('minimal', model)).toBe(EFFORT_DEFAULT_ID);
+    expect(reconcileEffortForModel('off', model)).toBe(EFFORT_DEFAULT_ID);
+    expect(reconcileEffortForModel('xhigh', model)).toBe(EFFORT_DEFAULT_ID);
+  });
+
+  /**
+   * An unknown model is not a verdict. The reconcile result is written back to
+   * the session and agent-template stores, so answering "unsupported" for a
+   * catalog that has not loaded yet would erase a legitimate stored level.
+   */
+  it('keeps the stored level when the model is not in the catalog', () => {
+    expect(reconcileEffortForModel('xhigh', undefined)).toBe('xhigh');
+    expect(reconcileEffortForModel('minimal', undefined)).toBe('minimal');
+    expect(reconcileEffortForModel('not-a-level', undefined)).toBe(EFFORT_DEFAULT_ID);
   });
 
   it('hides all explicit efforts when reasoning is disabled', () => {
@@ -206,7 +234,16 @@ describe('T25 model-level effort capability', () => {
       reasoning: true,
       thinkingLevelMap: { off: 'off', minimal: 'minimal', high: 'high', xhigh: null },
     };
-    expect(effortsForModel(model).map((effort) => effort.id)).toEqual(['off', 'minimal', 'high']);
+    // `low`/`medium` ride along: they are assumed for any reasoning model and
+    // this map does not null them out. What the declaration buys is `off` and
+    // `minimal`, which no undeclared model gets.
+    expect(effortsForModel(model).map((effort) => effort.id)).toEqual([
+      'off',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+    ]);
     expect(reconcileEffortForModel('off', model)).toBe('off');
     expect(reconcileEffortForModel('minimal', model)).toBe('minimal');
   });

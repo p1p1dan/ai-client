@@ -27,10 +27,17 @@
 | 5.5 ✅ | 免绑定会话可见性 | U13 | 批次 4（承 `unbound` 语义） |
 | 6 ✅ | 面板 | U06-a、U07 | 批次 3 |
 | 7 ✅ | 左栏入口 | U04 | — |
+| 8 ✅ | 壳层横条重排与双栏收敛 | U14 | 用户看到实际界面后开的，[D07](../decisions/007-two-column-is-two-columns-and-one-bar-per-column.md) |
+| 9 ✅ | VSCode 式壳层重排 + 上下文页 | U15-a/b/c/d、U16 | [D08](../decisions/008-vscode-dock-shell.md) |
+| 10 ✅ | 缺陷批（用户报障） | U17、U18、U19 | — |
 | — | 挂起 | U06-b | Pi 计划 T38（[D03](../decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二） |
 | — | 已放弃 | U08-3 | [Q12](../open-questions.md) 拍板不做 |
 
 批次 5、7 与前序无依赖，资源允许时可与批次 3/4 交错，但**不与批次 1 并行**（会在旧档上落地）。
+
+> **批次编号在两份文件里对不齐，以本表为准**：[roadmap](../roadmap.md) 把 U15/U16 那批叫「批次 8」、
+> 把本表的批次 10 叫「批次 9」，因为它没给 U14 单独编号。任务身份（U 编号）两边一致，
+> 只有批次这个流水号有偏移；roadmap 仍是任务 ID 与状态的唯一权威。
 
 ## 三、逐切片
 
@@ -261,6 +268,27 @@ TUI 作为双栏的专用子模式：左栏 + 右侧整块 TUI，无第三栏。
   `railOrder` 正是清单漂移的成因）；③ 面板关闭时仍有入口（header 的收/开面板按钮）。
 - **U14-c 控件搬家**：顶栏只留 logo + ⋯ + 窗口按钮；设置与账号胶囊下沉左栏底部；
   宽阅读栏进 Settings › 外观。**面板放大不进设置**——它是动作不是偏好，理由见 D07 决定四。
+
+### 批次 10 — 缺陷批（U17 + U18 + U19）— **已完成 2026-09-05**
+
+> 三件都是用户拿着实际界面报的，不在原执行计划里。落地记录见
+> [批次 9 evidence](../evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)
+> （文件名跟的是 roadmap 的编号）。
+
+- **U17 bootstrap 冷启动预算**：`worker.bootstrap` 不再套用 `WorkerSlot` 给暖 RPC 的 10s 默认值，
+  单开 `BOOTSTRAP_REQUEST_TIMEOUT_MS = 60_000`。
+  验收：① 单测显式传 `requestTimeoutMs: 10_000`，推进 10s 后请求仍在飞、60s 才失败；
+  ② 失败文案仍是用户看到的那句 `worker.bootstrap timed out after …ms`。
+  **未复现原始现场**——这条是按代码路径判定的。
+- **U18 极端档需声明**：`low/medium/high` 是任何 reasoning 模型的默认三档，
+  `off`/`minimal`/`xhigh`/`max` 必须在 `thinkingLevelMap` 里点名（映射到 `null` 一律剔除）。
+  验收：① 无 map 的 `reasoning: true` 模型只出三档；② 模型未知时 `reconcileEffortForModel`
+  **保留**已存档位（它的返回值要写回两个存储，把「还不知道」当「不支持」会抹掉合法设置）；
+  ③ 真机下拉只剩 `Default / Low / Medium / High`。
+- **U19 关 Tab 即结束对话**（[D09](../decisions/009-tab-close-ends-conversation.md)）：
+  确认框 → `chat.closeSession` + 复位 `hostBoundSessionIds` / `messages` / `historyErrors` / 分页 / 分支版本号。
+  验收：① 左栏行数不变；② store 里该会话 `status: disconnected`、`hostBound: false`、`messages: 0`；
+  ③ 打开时新起的 worker 进程在关闭后消失；④ 剪枝路径（`pruneClosedSessions`）仍然一个会话都不碰。
 
 ### 跨计划与挂起项
 

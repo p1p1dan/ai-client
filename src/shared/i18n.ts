@@ -1630,6 +1630,16 @@ export const zhTranslations: Record<string, string> = {
   'Open sessions': '已打开的会话',
   'Close tab': '关闭标签页',
   'Open in a tab': '已在标签页中打开',
+  // Closing a tab ends the conversation, so the copy has to say which parts are
+  // lost (the running turn) and which are not (the row, the history).
+  'End this conversation?': '结束这个对话？',
+  'Closing {{title}} stops its agent and releases it from the background.':
+    '关闭 {{title}} 会停止它的 agent，并把它从后台释放。',
+  'This conversation is still running; its current turn will be cut off.':
+    '这个对话还在运行，当前这一轮会被中断。',
+  'It stays in the chat list and reopening it will load its history again.':
+    '它仍然留在左栏会话列表里，重新打开会再次载入历史。',
+  'End conversation': '结束对话',
   Composition: '构成',
   chars: '字符',
   'Message breakdown': '逐条消息',

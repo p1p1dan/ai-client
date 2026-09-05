@@ -9,9 +9,15 @@
  *   openSessionIds    — the ones started in this window, one tab each   ← here
  *
  * The dependency between them is deliberately ONE-WAY: whatever becomes active
- * must be open, but closing a tab says nothing about the session. That is what
- * lets every existing `selectSession(...)` call site (new chat, resume, dock
- * click, fork) open a tab without being touched — see `ensureOpen`.
+ * must be open, and this module says nothing about the session behind a tab it
+ * drops. That is what lets every existing `selectSession(...)` call site (new
+ * chat, resume, dock click, fork) open a tab without being touched — see
+ * `ensureOpen`.
+ *
+ * Note that the tab strip's X now DOES end the conversation, behind a
+ * confirmation: that is `closeSessionTab.ts`, layered on top of `closeTab`
+ * here. The split is on purpose — pruning a stale tab (`pruneClosedSessions`)
+ * must never detach a runtime.
  *
  * Pure so vitest (node env, `.ts` only) can cover it — `sidebarTree.ts` pattern.
  */

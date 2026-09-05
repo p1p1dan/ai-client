@@ -1,5 +1,16 @@
 import { Monitor, Plus, Terminal, X } from 'lucide-react';
+import { useState } from 'react';
 import type { PresentationSwitch } from '@/components/chat/usePresentationSwitch';
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
@@ -7,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { createChatSessionOnWorkspace } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useSessionTabsStore } from '@/stores/sessionTabs';
+import { endSessionForTab } from './closeSessionTab';
 import { deriveSessionTabs, resolveNextActiveSession, type SessionTab } from './sessionTabsModel';
 import { useActivateSession } from './useActivateSession';
 
@@ -36,7 +48,7 @@ interface SessionTabsProps {
  * control here that has no other home.
  */
 export function SessionTabs({ presentation }: SessionTabsProps) {
-  const { t } = useI18n();
+  const { t, tNode } = useI18n();
 
   const sessions = useChatSessionsStore((state) => state.sessions);
   const projects = useChatSessionsStore((state) => state.projects);
@@ -80,7 +92,11 @@ export function SessionTabs({ presentation }: SessionTabsProps) {
   // target from the folder tree) is the entry point instead.
   const newSessionWorkspaceId = activeWorkspace?.path?.trim() ? activeWorkspace.id : null;
 
-  const handleClose = (sessionId: string) => {
+  // Closing ends the conversation, so it asks first. The dialog holds the tab
+  // it is about to close; `null` means no dialog is up.
+  const [pendingClose, setPendingClose] = useState<SessionTab | null>(null);
+
+  const confirmClose = (sessionId: string) => {
     // Order matters: pick the successor from the list that still contains the
     // tab being closed, then close it. Closing first would make the neighbour
     // lookup miss the index it needs.
@@ -91,58 +107,102 @@ export function SessionTabs({ presentation }: SessionTabsProps) {
       // started, so re-running the resume decision would be a no-op at best.
       selectSession(nextActive);
     }
+    // Fire-and-forget: the tab is already gone from the strip, and a detach
+    // that fails leaves nothing the user can act on here. `endSessionForTab`
+    // resets the local state either way.
+    void endSessionForTab(sessionId);
   };
 
   return (
-    <div className="flex h-9 shrink-0 items-stretch border-b bg-card/40">
-      <div
-        role="tablist"
-        aria-label={t('Open sessions')}
-        className="flex min-w-0 flex-1 items-stretch overflow-x-auto"
-      >
-        {tabs.map((tab) => (
-          <SessionTabButton
-            key={tab.id}
-            tab={tab}
-            contextLine={
-              tab.active
-                ? [activeProject?.name, activeWorkspace?.name].filter(Boolean).join(' · ')
-                : undefined
-            }
-            workspacePath={tab.active ? activeWorkspace?.path : undefined}
-            onSelect={() => activateSession(tab.id)}
-            onClose={() => handleClose(tab.id)}
-          />
-        ))}
-        {newSessionWorkspaceId && (
-          <button
-            type="button"
-            className="flex w-8 shrink-0 items-center justify-center text-muted-foreground hover:bg-hover hover:text-foreground"
-            aria-label={t('New chat')}
-            title={t('New chat')}
-            onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
+    <>
+      <div className="flex h-9 shrink-0 items-stretch border-b bg-card/40">
+        <div
+          role="tablist"
+          aria-label={t('Open sessions')}
+          className="flex min-w-0 flex-1 items-stretch overflow-x-auto"
+        >
+          {tabs.map((tab) => (
+            <SessionTabButton
+              key={tab.id}
+              tab={tab}
+              contextLine={
+                tab.active
+                  ? [activeProject?.name, activeWorkspace?.name].filter(Boolean).join(' · ')
+                  : undefined
+              }
+              workspacePath={tab.active ? activeWorkspace?.path : undefined}
+              onSelect={() => activateSession(tab.id)}
+              onClose={() => setPendingClose(tab)}
+            />
+          ))}
+          {newSessionWorkspaceId && (
+            <button
+              type="button"
+              className="flex w-8 shrink-0 items-center justify-center text-muted-foreground hover:bg-hover hover:text-foreground"
+              aria-label={t('New chat')}
+              title={t('New chat')}
+              onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {presentationSwitchAvailable && (
+          <div
+            className="flex shrink-0 items-center gap-0.5 border-l px-2"
+            role="group"
+            aria-label={t('Presentation mode')}
           >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
+            <PresentationButton
+              label="GUI"
+              icon={Monitor}
+              active={presentationMode === 'gui'}
+              onClick={openGui}
+            />
+            <PresentationButton label="TUI" icon={Terminal} active={isTui} onClick={openTui} />
+          </div>
         )}
       </div>
 
-      {presentationSwitchAvailable && (
-        <div
-          className="flex shrink-0 items-center gap-0.5 border-l px-2"
-          role="group"
-          aria-label={t('Presentation mode')}
-        >
-          <PresentationButton
-            label="GUI"
-            icon={Monitor}
-            active={presentationMode === 'gui'}
-            onClick={openGui}
-          />
-          <PresentationButton label="TUI" icon={Terminal} active={isTui} onClick={openTui} />
-        </div>
-      )}
-    </div>
+      <AlertDialog
+        open={pendingClose !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingClose(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('End this conversation?')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {tNode('Closing {{title}} stops its agent and releases it from the background.', {
+                title: <strong>{pendingClose?.title}</strong>,
+              })}
+              {pendingClose?.busy && (
+                <span className="mt-2 block text-destructive">
+                  {t('This conversation is still running; its current turn will be cut off.')}
+                </span>
+              )}
+              <span className="mt-2 block text-muted-foreground">
+                {t('It stays in the chat list and reopening it will load its history again.')}
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline">{t('Cancel')}</Button>} />
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (pendingClose) confirmClose(pendingClose.id);
+                setPendingClose(null);
+              }}
+            >
+              {t('End conversation')}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+    </>
   );
 }
 

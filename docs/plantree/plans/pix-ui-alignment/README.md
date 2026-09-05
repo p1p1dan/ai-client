@@ -1,6 +1,6 @@
 # Plan — pix/pi-app UI 对齐改造
 
-> **状态**：In Progress（收尾）—— **批次 1–8 全部落地**（最后一批：U15/U16 VSCode 式壳层重排）。
+> **状态**：In Progress（收尾）—— **批次 1–9 全部落地**（最后一批：U17/U18/U19 三件用户报障）。
 > 剩余工作只有一次累计 GUI 点验，加上外部阻塞的 U06-b（等 Pi 计划 T38）与 Deferred 的 U10/U11。
 >
 > **前置已满足**：[Pi-only 收敛计划](../pi-backend-migration/README.md) 的 T37 发版门禁已于 2026-09-03 收口
@@ -82,7 +82,8 @@
 | [decisions/003-sidebar-density-and-runtime-field-ownership.md](./decisions/003-sidebar-density-and-runtime-field-ownership.md) | 侧栏保留 28px、runtime 补字段挂 Pi 计划 T38、service_tier 取证启动 |
 | [decisions/004-unbound-session-index-visibility.md](./decisions/004-unbound-session-index-visibility.md) | 免绑定会话跨重启可见性：索引行加 `unbound` 标记，侧栏合成临时分组（落为 U13） |
 | [decisions/007-two-column-is-two-columns-and-one-bar-per-column.md](./decisions/007-two-column-is-two-columns-and-one-bar-per-column.md) | **D07**：~~双栏就是两栏~~（决定一/三已被 D08 推翻）；**每栏一条横条**（决定二仍有效） |
-| [decisions/008-vscode-dock-shell.md](./decisions/008-vscode-dock-shell.md) | **D08**：VSCode 式壳层——左栏是图标轨道 + 面板的导航容器，右栏只做文件，中栏一个会话一个 Tab，删掉双栏/三栏与上下文面板开关 |
+| [decisions/008-vscode-dock-shell.md](./decisions/008-vscode-dock-shell.md) | **D08**：VSCode 式壳层——左栏是图标轨道 + 面板的导航容器，右栏只做文件，中栏一个会话一个 Tab，删掉双栏/三栏与上下文面板开关（决定三「关 Tab 只是收起 Tab」已被 D09 修正） |
+| [decisions/009-tab-close-ends-conversation.md](./decisions/009-tab-close-ends-conversation.md) | **D09**：关中栏 Tab 就是结束对话——确认框 + 断开该会话的运行时，左栏那一行保留（与左栏 Close、Archive 是三个轻重不同的「关闭」） |
 | [evidence/2026-09-04-u14-shell-chrome-realignment.md](./evidence/2026-09-04-u14-shell-chrome-realignment.md) | U14 壳层横条重排落地记录（含「为什么没对齐」的三层答案与四条变异验证）|
 | `docs/design/a11-vscode-shell-prototype.html` | **当前壳层的施工基准**（[D08](./decisions/008-vscode-dock-shell.md)，2026-09-05 用户拍板）：图标轨道 + 面板、会话 Tab、右栏只做文件、上下文页构成图。带原型控制条，可切换左栏形态与右栏三态 |
 | `docs/design/a10-pix-ui-alignment-prototype.html` | 上一版原型（三栏/双栏/TUI × Run/Context；截图在 `refs/a10-shots/`）。壳层部分**已被 a11 取代**；Composer 底栏顺序等非壳层部分仍可参考 |
