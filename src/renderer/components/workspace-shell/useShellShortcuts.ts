@@ -24,13 +24,10 @@ function isMacPlatform(): boolean {
 }
 
 export function useShellShortcuts(): void {
-  const toggleContextPanel = useShellLayoutStore((state) => state.toggleContextPanel);
+  const toggleDock = useShellLayoutStore((state) => state.toggleContextPanel);
   const selectSurface = useShellLayoutStore((state) => state.selectSurface);
-  const toggleSidebarCollapsed = useShellLayoutStore((state) => state.toggleSidebarCollapsed);
-  // Same order the tab strip and rail render — see `numberedSurfaceIds`.
+  // Same order the dock rail renders — see `numberedSurfaceIds`.
   const railOrder = useShellLayoutStore((state) => state.railOrder);
-  // Two-column narrows the numbered surfaces to `context` alone.
-  const shellColumnMode = useShellLayoutStore((state) => state.shellColumnMode);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -46,21 +43,17 @@ export function useShellShortcuts(): void {
         // m15: IME composition guard (mirrors App/useAppKeyboardShortcuts.ts).
         isComposing: event.isComposing,
         railOrder,
-        columnMode: shellColumnMode,
       });
       if (!action) {
         return;
       }
       event.preventDefault();
       switch (action.type) {
-        case 'toggle-context-panel':
-          toggleContextPanel();
+        case 'toggle-dock':
+          toggleDock();
           break;
         case 'select-surface':
           selectSurface(action.surfaceId);
-          break;
-        case 'toggle-sidebar':
-          toggleSidebarCollapsed();
           break;
         default:
           break;
@@ -72,5 +65,5 @@ export function useShellShortcuts(): void {
     // own element-level handlers can consume the event.
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [toggleContextPanel, selectSurface, toggleSidebarCollapsed, railOrder, shellColumnMode]);
+  }, [toggleDock, selectSurface, railOrder]);
 }

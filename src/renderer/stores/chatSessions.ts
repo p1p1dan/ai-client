@@ -131,6 +131,21 @@ export interface ChatSession {
    */
   agent?: AgentWireName;
   /**
+   * U13 (D04, optional-field addition): this chat has no project folder — it
+   * runs in the isolated scratch directory named here, which Main allocated
+   * for it (U05). Set ONLY by `mergeSessionIndex`, from the index row's
+   * `unbound` marker; a live unbound chat created in this run has no index row
+   * yet and is recognized the way it always was (`resolveActiveTarget().cwd`
+   * is null).
+   *
+   * The path travels with the session because it is the one thing no other
+   * renderer state can supply after a restart: a scratch directory is
+   * deliberately not a `ChatWorkspace`, so resume — which needs an exact
+   * `workspacePath`, checked against the index by Main — would otherwise have
+   * nothing to send.
+   */
+  unbound?: { workspacePath: string };
+  /**
    * a1 (2026-07-30 net-visibility batch, optional-field addition): the CLI's
    * own transport-retry loop, when session.status last carried one. Cleared
    * (set back to undefined) on every session.status WITHOUT a retry payload
@@ -247,7 +262,15 @@ export interface ChatSessionsState {
   /** Latest Main-owned active-branch generation observed for each Pi session. */
   historyBranchRevisions?: Record<string, number>;
 
-  selectSession: (sessionId: string) => void;
+  /**
+   * D08 — type-only widening to `string | null` on this red-line store. No new
+   * field and no behaviour change: `activeSessionId` has always been nullable
+   * and `set` already accepted null at runtime; the parameter simply refused to
+   * say so. Closing the last session tab needs to land back on the welcome
+   * state, and the alternative — leaving a session active with no tab — renders
+   * a conversation the tab strip does not admit exists.
+   */
+  selectSession: (sessionId: string | null) => void;
   /**
    * D48 S1 — approved ADDITIVE change to this red-line store (no new state
    * field: `ChatSession.agent` has existed since S2 (b)).

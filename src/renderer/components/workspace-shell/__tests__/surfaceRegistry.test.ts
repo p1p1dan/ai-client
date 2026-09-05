@@ -8,7 +8,6 @@ import {
   firstAlwaysSurfaceId,
   isContextSurfaceId,
   isRailSelectableSurface,
-  isSurfaceAvailableInColumnMode,
   railSurfaces,
   shouldShowActivityDot,
   sortSurfaces,
@@ -39,24 +38,26 @@ function gitStatus(overrides: Partial<GitStatus> = {}): GitStatus {
  *
  * Empty at S0 (shell prerequisite only); T-12~T-15 each add one line.
  */
-const WIRED: ContextSurfaceId[] = ['context', 'editor', 'git', 'terminal'];
+const WIRED: ContextSurfaceId[] = ['chat', 'context', 'editor', 'git', 'run', 'terminal'];
 
 describe('CONTEXT_SURFACES', () => {
-  it('registers all 11 openchamber surfaces so later rounds only flip flags', () => {
-    expect(CONTEXT_SURFACES).toHaveLength(11);
-    expect(new Set(CONTEXT_SURFACES.map((s) => s.id)).size).toBe(11);
-    expect(DEFAULT_SURFACE_ORDER).toHaveLength(11);
+  // 12 since U06-a added `run`, which openchamber never had: the registry is
+  // this app's surface list, not a frozen copy of that one.
+  it('registers every surface exactly once so later rounds only flip flags', () => {
+    expect(CONTEXT_SURFACES).toHaveLength(12);
+    expect(new Set(CONTEXT_SURFACES.map((s) => s.id)).size).toBe(12);
+    expect(DEFAULT_SURFACE_ORDER).toHaveLength(12);
   });
 
   // 2026-09-04: terminal left this set when its rail button was removed. It is
   // still WIRED (the view exists and has no pendingTask) — `registeredOnly`
   // here means "not offered on the rail", which for terminal is now a product
   // decision rather than a missing implementation.
-  it('marks exactly chat/editor/git/context as the rail-offered surfaces', () => {
+  it('marks exactly chat/editor/git/context/run as the rail-offered surfaces', () => {
     const thisRound = CONTEXT_SURFACES.filter((s) => !s.registeredOnly)
       .map((s) => s.id)
       .sort();
-    expect(thisRound).toEqual(['chat', 'context', 'editor', 'git']);
+    expect(thisRound).toEqual(['chat', 'context', 'editor', 'git', 'run']);
   });
 
   it('names a pendingTask for exactly the surfaces that are not wired yet', () => {
@@ -134,11 +135,13 @@ describe('railSurfaces', () => {
   // (a08:1259-1262). `terminal` used to be appended for exemption ①; it was
   // taken off the rail on 2026-09-04. This list is also what Ctrl/Cmd+1..4
   // binds to, so it is a two-for-one pin.
-  it('shows exactly git/editor(files)/context in A08 tab order', () => {
+  it('shows chat first, then git/files/context/run (D08 dock order)', () => {
     expect(railSurfaces(DEFAULT_SURFACE_ORDER).map((s) => s.id)).toEqual([
+      'chat',
       'git',
       'editor',
       'context',
+      'run',
     ]);
   });
 
@@ -149,13 +152,17 @@ describe('railSurfaces', () => {
     expect(isRailSelectableSurface('terminal')).toBe(false);
   });
 
-  it('hides chat because it is content-driven and MVP has no split sessions', () => {
-    expect(railSurfaces(DEFAULT_SURFACE_ORDER).map((s) => s.id)).not.toContain('chat');
+  // D08 moved `chat` from a deferred 'has-content' slot to the dock's first
+  // always-available entry — the session list is not content-driven.
+  it('always shows chat, with no content signal (D08)', () => {
+    expect(railSurfaces(DEFAULT_SURFACE_ORDER).map((s) => s.id)).toContain('chat');
   });
 
   it('reveals a content-driven surface once hasContent reports true', () => {
-    const result = railSurfaces(DEFAULT_SURFACE_ORDER, { hasContent: (id) => id === 'chat' });
-    expect(result.map((s) => s.id)).toContain('chat');
+    const result = railSurfaces(DEFAULT_SURFACE_ORDER, { hasContent: (id) => id === 'preview' });
+    // `preview` is still registeredOnly, so hasContent alone must not surface
+    // it — the flag, not the signal, is what keeps an unbuilt surface off the rail.
+    expect(result.map((s) => s.id)).not.toContain('preview');
   });
 
   it('never shows registry-only surfaces (pr/diff/plan/notes/browser/preview)', () => {
@@ -168,20 +175,23 @@ describe('railSurfaces', () => {
   it('respects the rail order for the visible subset', () => {
     // `terminal` leads the persisted order and is dropped anyway — a stale
     // railOrder from before it was removed must not resurrect the button.
+    // `run` is absent from this persisted order — `sortSurfaces` appends it,
+    // which is exactly what an existing profile sees after the U06-a upgrade.
+    // D08: `chat` is likewise absent from this pre-D08 order and appended.
     const result = railSurfaces(['terminal', 'git', 'context', 'editor']).map((s) => s.id);
-    expect(result).toEqual(['git', 'context', 'editor']);
+    expect(result).toEqual(['git', 'context', 'editor', 'chat', 'run']);
   });
 
-  it('collapses to context alone in two-column mode (U02-b, D02)', () => {
-    expect(
-      railSurfaces(DEFAULT_SURFACE_ORDER, { columnMode: 'two-column' }).map((s) => s.id)
-    ).toEqual(['context']);
-  });
-
-  it('keeps the full rail when columnMode is explicitly three-column', () => {
-    expect(
-      railSurfaces(DEFAULT_SURFACE_ORDER, { columnMode: 'three-column' }).map((s) => s.id)
-    ).toEqual(['git', 'editor', 'context']);
+  // D08 retires `columnMode` entirely: there is one layout, so the rail always
+  // offers the same five entries and `chat` leads them.
+  it("offers the dock's five entries, chat first (D08)", () => {
+    expect(railSurfaces(DEFAULT_SURFACE_ORDER).map((s) => s.id)).toEqual([
+      'chat',
+      'git',
+      'editor',
+      'context',
+      'run',
+    ]);
   });
 });
 
@@ -194,43 +204,23 @@ describe('isRailSelectableSurface', () => {
     expect(isRailSelectableSurface('pr')).toBe(false);
   });
 
-  it('rejects a content-driven surface without content', () => {
-    expect(isRailSelectableSurface('chat')).toBe(false);
-    expect(isRailSelectableSurface('chat', { hasContent: () => true })).toBe(true);
+  // D08 repurposed `chat` from a deferred 'has-content' slot into the dock's
+  // always-available session list, so it is selectable with no content signal.
+  it('accepts chat unconditionally now that it is the session list (D08)', () => {
+    expect(isRailSelectableSurface('chat')).toBe(true);
   });
 
-  it('rejects every non-context surface in two-column, keeps context (U02-b)', () => {
-    for (const id of ['git', 'editor', 'terminal'] as const) {
-      expect(isRailSelectableSurface(id, { columnMode: 'two-column' })).toBe(false);
-    }
-    expect(isRailSelectableSurface('context', { columnMode: 'two-column' })).toBe(true);
+  it('still rejects a content-driven surface without content', () => {
+    expect(isRailSelectableSurface('preview')).toBe(false);
   });
 });
 
 describe('firstAlwaysSurfaceId', () => {
-  it('returns the first rail-visible surface as the header toggle fallback', () => {
-    // T-32: `git` is first now that the rail follows A08's tab order.
-    expect(firstAlwaysSurfaceId()).toBe('git');
-    expect(firstAlwaysSurfaceId({ hasContent: () => true })).toBe('git');
-  });
-
-  it('falls back to context in two-column mode (U02-b)', () => {
-    expect(firstAlwaysSurfaceId({ columnMode: 'two-column' })).toBe('context');
-  });
-});
-
-describe('isSurfaceAvailableInColumnMode', () => {
-  it('offers every rail surface in three-column', () => {
-    for (const id of ['git', 'editor', 'context', 'terminal'] as const) {
-      expect(isSurfaceAvailableInColumnMode(id, 'three-column')).toBe(true);
-    }
-  });
-
-  it('offers only context in two-column (D02: AI conversation + development only)', () => {
-    expect(isSurfaceAvailableInColumnMode('context', 'two-column')).toBe(true);
-    for (const id of ['git', 'editor', 'terminal'] as const) {
-      expect(isSurfaceAvailableInColumnMode(id, 'two-column')).toBe(false);
-    }
+  it("returns the dock's first entry as the bare-open fallback", () => {
+    // D08: `chat` leads the registry now, so an "open the dock" with nothing
+    // remembered lands on the session list.
+    expect(firstAlwaysSurfaceId()).toBe('chat');
+    expect(firstAlwaysSurfaceId({ hasContent: () => true })).toBe('chat');
   });
 });
 

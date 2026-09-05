@@ -3,22 +3,28 @@
  * so vitest can cover every branch without mounting `WorkspaceShell` — same
  * pattern as `shellLayoutModel.ts`.
  */
-import {
-  type ContextSurfaceId,
-  DEFAULT_SHELL_COLUMN_MODE,
-  DEFAULT_SURFACE_ORDER,
-  railSurfaces,
-  type ShellColumnMode,
-} from './surfaceRegistry';
+import { type ContextSurfaceId, DEFAULT_SURFACE_ORDER, railSurfaces } from './surfaceRegistry';
+
+/**
+ * D08: the dock has FIVE entries (chat/git/files/context/run), so the digit map
+ * grew from 1..4 to 1..5. It is derived from the rendered order, never
+ * hardcoded — see `numberedSurfaceIds`.
+ */
+const NUMBERED_SURFACE_LIMIT = 5;
 
 // 2026-09-04: `open-terminal` (Ctrl/Cmd+`) is gone with the terminal's rail
 // button — see `surfaceRegistry.ts`. A shortcut whose target surface is no
 // longer rail-selectable resolves to nothing at the reducer, i.e. a key that
 // looks bound and does nothing, so it leaves with the button rather than after.
+// D08: `toggle-context-panel` (Ctrl/Cmd+J) and `toggle-sidebar` (Ctrl/Cmd+B)
+// used to be two actions on two columns. There is one column left to toggle —
+// the dock — so they collapse into one action on ONE key. Ctrl/Cmd+B keeps it
+// (VSCode's own sidebar binding, and the one that survives the focus guard
+// below unchanged); Ctrl/Cmd+J leaves rather than becoming a silent alias for a
+// panel that no longer exists.
 export type ShellShortcutAction =
-  | { type: 'toggle-context-panel' }
-  | { type: 'select-surface'; surfaceId: ContextSurfaceId }
-  | { type: 'toggle-sidebar' };
+  | { type: 'toggle-dock' }
+  | { type: 'select-surface'; surfaceId: ContextSurfaceId };
 
 export interface ResolveShellShortcutInput {
   /** `KeyboardEvent.key` — currently unused by resolution (kept for callers/future use). */
@@ -46,16 +52,10 @@ export interface ResolveShellShortcutInput {
    * to the registry order so existing callers and tests keep working.
    */
   railOrder?: readonly string[];
-  /**
-   * Current column mode (the store's `shellColumnMode`). In two-column only
-   * `context` is rail-numbered, so Ctrl/Cmd+2..4 resolve to nothing. Defaults
-   * to three-column so existing callers and tests keep the full digit map.
-   */
-  columnMode?: ShellColumnMode;
 }
 
 /**
- * First four rail-visible surfaces, in the order the UI actually renders.
+ * First five rail-visible surfaces, in the order the UI actually renders.
  *
  * m-T32: this used to hardcode `DEFAULT_SURFACE_ORDER` while the tab strip and
  * rail render the PERSISTED `railOrder`. The two agreed only until T-32
@@ -64,12 +64,9 @@ export interface ResolveShellShortcutInput {
  * `git|files|context|terminal`, i.e. the digits "jumped" to the wrong tabs.
  * Taking the same order the caller renders makes that drift impossible.
  */
-function numberedSurfaceIds(
-  order: readonly string[],
-  columnMode: ShellColumnMode
-): readonly ContextSurfaceId[] {
-  return railSurfaces(order, { columnMode })
-    .slice(0, 4)
+function numberedSurfaceIds(order: readonly string[]): readonly ContextSurfaceId[] {
+  return railSurfaces(order)
+    .slice(0, NUMBERED_SURFACE_LIMIT)
     .map((surface) => surface.id);
 }
 
@@ -87,10 +84,10 @@ function modKeyPressed(input: ResolveShellShortcutInput): boolean {
  * Resolves a `keydown` event into a shell shortcut action, or `null` when the
  * event isn't one of ours and should be left to native/downstream handling.
  *
- * Focus protection: while the target is editable, only Ctrl/Cmd+J is honored.
- * Everything else — including Ctrl/Cmd+B, which collides with Monaco's
- * bold/cursor-left semantics — is left alone so it reaches the editable
- * element untouched.
+ * Focus protection: while the target is editable, NOTHING is honored. D08
+ * removed the one exception (Ctrl/Cmd+J) along with the panel it toggled;
+ * Ctrl/Cmd+B was never exempt because it collides with Monaco's
+ * bold/cursor-left semantics, and the digits collide with editor tab switching.
  */
 export function resolveShellShortcut(input: ResolveShellShortcutInput): ShellShortcutAction | null {
   // m15: composing always wins, even over the Ctrl/Cmd+J focus-protection
@@ -103,25 +100,18 @@ export function resolveShellShortcut(input: ResolveShellShortcutInput): ShellSho
     return null;
   }
 
-  if (input.code === 'KeyJ') {
-    return { type: 'toggle-context-panel' };
-  }
-
   if (input.targetIsEditable) {
     return null;
   }
 
   if (input.code === 'KeyB') {
-    return { type: 'toggle-sidebar' };
+    return { type: 'toggle-dock' };
   }
 
-  const digitMatch = /^Digit([1-4])$/.exec(input.code);
+  const digitMatch = /^Digit([1-5])$/.exec(input.code);
   if (digitMatch) {
     const index = Number(digitMatch[1]) - 1;
-    const surfaceId = numberedSurfaceIds(
-      input.railOrder ?? DEFAULT_SURFACE_ORDER,
-      input.columnMode ?? DEFAULT_SHELL_COLUMN_MODE
-    )[index];
+    const surfaceId = numberedSurfaceIds(input.railOrder ?? DEFAULT_SURFACE_ORDER)[index];
     return surfaceId ? { type: 'select-surface', surfaceId } : null;
   }
 

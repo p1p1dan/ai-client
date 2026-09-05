@@ -72,13 +72,24 @@ describe('D47 S5b auth-gate helper wiring (static)', () => {
     expect(view).toContain('useState(initialEmail');
   });
 
-  it('[AGW-05] WindowTitleBar.tsx drives the three-state chip off deriveUserProfilePresentation', () => {
+  it('[AGW-05] the account chip drives its three states off deriveUserProfilePresentation', () => {
+    // D07 moved the chip from `WindowTitleBar` (now identity + window buttons
+    // only) down to the left column's footer; D08 gave it its own file,
+    // `UserFooterPill.tsx`, so it survives a dock surface switch. The assertion
+    // follows the code rather than the filename — what matters is that whichever
+    // component renders it branches on `presentation.tone` instead of an "is
+    // registered" boolean, so `invalid` / `signed_out` keep their own clickable
+    // affordance.
+    const nav = code('components/workspace-shell/UserFooterPill.tsx').replace(/\s+/g, ' ');
+    expect(nav).toContain("from '@shared/authGate'");
+    expect(nav).toContain('deriveUserProfilePresentation(');
+    expect(nav).toContain('presentation.tone');
+    // Retired: it never reads its own `onboardingState` query — the gate
+    // snapshot is the single source of truth.
+    expect(nav).not.toMatch(/queryKey:\s*\['onboardingState'\]/);
+    // And the title bar must not grow a second copy of it.
     const titleBar = code('components/layout/WindowTitleBar.tsx').replace(/\s+/g, ' ');
-    expect(titleBar).toContain("from '@shared/authGate'");
-    expect(titleBar).toContain('deriveUserProfilePresentation(');
-    expect(titleBar).toContain('presentation.tone');
-    // Retired: WindowTitleBar no longer reads its own `onboardingState` query.
-    expect(titleBar).not.toMatch(/queryKey:\s*\['onboardingState'\]/);
+    expect(titleBar).not.toContain('deriveUserProfilePresentation(');
   });
 
   it('[AGW-06] UserProfileCard.tsx consumes the presentation prop, not a raw email string', () => {

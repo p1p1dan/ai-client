@@ -10,12 +10,9 @@ import {
   FolderOpen,
   FolderPlus,
   ListFilter,
-  PanelLeftClose,
-  PanelLeftOpen,
   Pencil,
   Plus,
   Search,
-  Settings,
   ShieldQuestion,
   Trash2,
   X,
@@ -43,15 +40,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { MenuItem, MenuPopup } from '@/components/ui/menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { createChatSessionOnWorkspace } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useExtensionUiStore } from '@/stores/extensionUi';
-import { useResumeSession } from '../chat/sessionIndex/useResumeSession';
+import { useSessionTabsStore } from '@/stores/sessionTabs';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
-import { useResolvedSessionModel } from '../chat/useResolvedSessionModel';
 import {
   canCreateSessionOnWorkspace,
   shouldShowAddRepositoryEmptyState,
@@ -59,6 +54,7 @@ import {
 import { projectIdForRepo, workspaceIdFor } from './deriveChatWorkspaceTree';
 import {
   buildSidebarFolders,
+  buildUnboundFolder,
   deriveRecentRows,
   formatRelativeAge,
   RECENT_DEFAULT_LIMIT,
@@ -66,12 +62,21 @@ import {
   resolveFolderClickActivation,
   resolveNewSessionTarget,
   type SidebarSessionRow,
+  UNBOUND_FOLDER_ID,
 } from './sidebarTree';
+import { useActivateSession } from './useActivateSession';
 
+/**
+ * D08 (U15-a): this is the `chat` SURFACE's body now, not a column.
+ *
+ * The chrome it used to own moved to `LeftDock`, which hosts it: the h-9 bar
+ * (now the dock's title row), the collapse button (now on that row and on the
+ * rail), the account pill (`UserFooterPill`, so it survives a surface switch)
+ * and the plugin entry + dialog (now the rail's bottom group). What stays is
+ * exactly the session list — search, New / Add repository, Recent, the folder
+ * tree and the temporary-chat group.
+ */
 interface LeftNavProps {
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
-  onOpenSettings?: () => void;
   /** T-24: opens the shared AddRepositoryDialog mounted in App. */
   onAddRepository?: () => void;
   onRemoveRepository?: (repoPath: string) => void;
@@ -85,9 +90,6 @@ interface LeftNavProps {
 }
 
 export function LeftNav({
-  collapsed,
-  onToggleCollapsed,
-  onOpenSettings,
   onAddRepository,
   onRemoveRepository,
   repositories = [],
@@ -154,7 +156,9 @@ export function LeftNav({
   const workspaces = useChatSessionsStore((state) => state.workspaces);
   const sessions = useChatSessionsStore((state) => state.sessions);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
-  const selectSession = useChatSessionsStore((state) => state.selectSession);
+  // D08: which sessions have a center-column tab. Rows show it so "click =
+  // start" does not invite a second click on something already running.
+  const openSessionIds = useSessionTabsStore((state) => state.openSessionIds);
   const extensionUiPending = useExtensionUiStore((state) => state.pending);
   const pendingApprovalCountBySession = useMemo(() => {
     const counts = new Map<string, number>();
@@ -169,42 +173,26 @@ export function LeftNav({
   // renameSession / archiveSession / closeSession).
   const { refresh } = useSessionIndex();
   const { rename, archive, close } = useSessionIndexMutations(refresh);
-  // T-03: replay history when the user opens a session that has a runtime
-  // identity but no timeline yet (Host emits session.history → store folds it
-  // into the timeline; messages carry the `h:` prefix).
-  const { resume } = useResumeSession();
-  // Round-2 P0 fix (model directness): a model-less resume left the Host
-  // registry entry's `model` undefined, which every later 'direct' send
-  // silently inherited — the gateway's own default served the turn instead
-  // of whatever the user picked. Closes the gap at its source instead of
-  // only patching the per-send wire path.
-  // F9 (round-2 review fix), D48 S2 form: resolve the SAME way the Composer's
-  // model trigger does — an explicit per-(session, agent) selection, else that
-  // agent's template, else nothing at all. `undefined` is `Automatic` and drops
-  // the key, replacing the old `defaultModelId(null)` tail that silently
-  // downgraded an unpicked session's resume to `sonnet`.
-  const resolveSessionModel = useResolvedSessionModel();
+
+  // D08: activation (select + resume-if-needed) moved into `useActivateSession`
+  // so the center tab strip can start a session the same way this list does —
+  // a persisted tab reopened after a restart has no timeline either.
+  const activateSession = useActivateSession();
 
   const handleSelectSession = (sessionId: string, persistedRuntimeIdentity?: string) => {
-    selectSession(sessionId);
-    const state = useChatSessionsStore.getState();
-    const session = state.sessions.find((item) => item.id === sessionId);
-    const workspace = state.workspaces.find((ws) => ws.id === session?.workspaceId);
     // D1 (round-5): keep the sidebar's own "New" target in sync with whatever
     // folder the just-selected session actually lives under. Grouped by the
     // workspace's project, not `session.projectId`, matching buildSidebarFolders
     // (a stale session.projectId must not point focus at the wrong folder).
+    // Read fresh state rather than the render-body snapshot: this handler can
+    // fire well after the render that captured it.
+    const state = useChatSessionsStore.getState();
+    const session = state.sessions.find((item) => item.id === sessionId);
+    const workspace = state.workspaces.find((ws) => ws.id === session?.workspaceId);
     if (workspace) {
       setFocusedProjectId(workspace.projectId);
     }
-    const runtimeIdentity = session?.runtimeIdentity ?? persistedRuntimeIdentity;
-    const hasTimeline = (state.messages[sessionId]?.length ?? 0) > 0;
-    if (runtimeIdentity && workspace && !hasTimeline) {
-      void resume(sessionId, {
-        persistedRuntimeIdentity: runtimeIdentity,
-        model: resolveSessionModel(sessionId),
-      });
-    }
+    activateSession(sessionId, persistedRuntimeIdentity);
   };
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
@@ -251,13 +239,19 @@ export function LeftNav({
   // `now` anyway (Recent's 48h window needs a fresh clock every render).
   const now = Date.now();
   const folders = buildSidebarFolders({ projects, workspaces, sessions, query });
+  // U13: rendered next to the repository folders but deliberately NOT part of
+  // `folders` — it has no workspace to create a chat in, so letting the "New"
+  // target resolver see it would only produce a disabled button pointing at a
+  // folder that cannot host anything. `null` when there are no such chats.
+  const unboundFolder = buildUnboundFolder({ sessions, name: t('Temporary chats'), query });
   const recent = deriveRecentRows({ sessions, workspaces, now, showAll: recentShowAll, query });
   const queryActive = query.trim().length > 0;
   // While searching, folders with zero hits collapse away instead of leaving
   // a wall of empty headers; without a query every folder stays visible so
   // its "+ new chat" row remains reachable.
   const visibleFolders = queryActive ? folders.filter((folder) => folder.rows.length > 0) : folders;
-  const noMatches = queryActive && recent.rows.length === 0 && visibleFolders.length === 0;
+  const noMatches =
+    queryActive && recent.rows.length === 0 && visibleFolders.length === 0 && !unboundFolder;
 
   // D1 (round-5): resolved fresh every render from the live `folders` list —
   // never cache `newSessionTarget.workspaceId` itself — so a deleted focused
@@ -289,369 +283,376 @@ export function LeftNav({
     createChatSessionOnWorkspace(effectiveWorkspaceId);
   };
 
-  return (
-    <aside
-      // Width is owned by the shell wrapper (T-22): it hosts the drag handle and
-      // writes px directly during a drag, so the aside must not pin its own width.
-      className="flex h-full w-full min-w-0 shrink-0 flex-col border-r bg-card/40"
-    >
-      <div className="flex h-9 items-center border-b px-2">
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}
-          onClick={onToggleCollapsed}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
+  /**
+   * U13 — the temporary-chat group.
+   *
+   * Rendered from a helper rather than folded into the `visibleFolders` map
+   * because it is shown in BOTH branches below: a machine with no repository
+   * yet still shows the add-repository call to action, and that is exactly the
+   * machine where every chat is unbound — hiding them there would leave the
+   * user with a sidebar that admits to no sessions at all while their history
+   * sits on disk.
+   *
+   * The header only expands/collapses: the cross-folder activation rule
+   * (D29) is about following a repository into its git/file panels, and this
+   * group has no repository behind it.
+   */
+  const renderUnboundSection = () => {
+    if (!unboundFolder) return null;
+    const expanded = isProjectExpanded(UNBOUND_FOLDER_ID);
+    return (
+      <section>
+        <div className="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui hover:bg-hover">
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-1 text-left"
+            onClick={() =>
+              setExpandedProjects((prev) => ({ ...prev, [UNBOUND_FOLDER_ID]: !expanded }))
+            }
+          >
+            {expanded ? (
+              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-folder" />
+            ) : (
+              <Folder className="h-3.5 w-3.5 shrink-0 text-folder" />
+            )}
+            <span className="min-w-0 flex-1 truncate font-semibold">{unboundFolder.name}</span>
+          </button>
+        </div>
+        {expanded && (
+          <div className="mt-1 space-y-0.5 pl-3">
+            {unboundFolder.rows.map((row) => (
+              <SessionRow
+                key={row.sessionId}
+                row={row}
+                now={now}
+                active={activeSessionId === row.sessionId}
+                opened={openSessionIds.includes(row.sessionId)}
+                pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
+                onSelect={() => handleSelectSession(row.sessionId)}
+                onClose={() => void close(row.sessionId)}
+                onRename={(title) => void rename(row.sessionId, title)}
+                onArchive={() => void archive(row.sessionId, true)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    );
+  };
 
-      {collapsed && (
-        // The action row below is hidden while collapsed, so keep one rail
-        // button — otherwise adding a repository needs an expand first.
-        <div className="flex flex-col items-center gap-1 border-b py-2">
+  return (
+    // D08: no width, no border, no bars. `LeftDock` owns the column (and the
+    // drag handle on its right edge); this is one surface inside it, laid out
+    // over the dock's absolutely-positioned mount stack.
+    <aside className="flex h-full w-full min-w-0 flex-col">
+      <div className="space-y-2 border-b p-2">
+        <div className="flex items-center gap-1">
           <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={t('Add Repository')}
+            variant="outline"
+            size="xs"
+            className="h-6"
+            disabled={!canStartNewSession}
+            title={newSessionButtonTitle}
+            onClick={handleNewSession}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New
+          </Button>
+          {/* Replaces a permanently disabled "Workspace" placeholder: the
+                  new shell had no reachable way to register a repository. */}
+          <Button
+            variant="outline"
+            size="xs"
+            className="h-6 min-w-0"
             title={t('Add Repository')}
             onClick={onAddRepository}
           >
-            <FolderPlus className="h-4 w-4" />
+            <FolderPlus className="h-3.5 w-3.5 shrink-0" />
+            <span className="min-w-0 truncate">{t('Add Repository')}</span>
           </Button>
         </div>
-      )}
-
-      {!collapsed && (
-        <>
-          <div className="space-y-2 border-b p-2">
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="xs"
-                className="h-6"
-                disabled={!canStartNewSession}
-                title={newSessionButtonTitle}
-                onClick={handleNewSession}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                New
-              </Button>
-              {/* Replaces a permanently disabled "Workspace" placeholder: the
-                  new shell had no reachable way to register a repository. */}
-              <Button
-                variant="outline"
-                size="xs"
-                className="h-6 min-w-0"
-                title={t('Add Repository')}
-                onClick={onAddRepository}
-              >
-                <FolderPlus className="h-3.5 w-3.5 shrink-0" />
-                <span className="min-w-0 truncate">{t('Add Repository')}</span>
-              </Button>
-            </div>
-            {searchVisible && (
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  size="sm"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder={t('Search sessions')}
-                  className="h-7 pl-7"
-                />
-              </div>
-            )}
+        {searchVisible && (
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              size="sm"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('Search sessions')}
+              className="h-7 pl-7"
+            />
           </div>
+        )}
+      </div>
 
-          <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-3 p-2">
-              {showAddRepositoryEmptyState ? (
-                // Seed sessions point at empty-path workspaces and cannot send,
-                // so surface the entry point instead of a misleading tree.
-                <Empty className="gap-3 border-0 p-2 md:p-2">
-                  <EmptyMedia variant="icon">
-                    <FolderGit2 className="h-4.5 w-4.5" />
-                  </EmptyMedia>
-                  <EmptyHeader>
-                    {/* D25 §3.3: EmptyTitle's shared base now carries a
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-3 p-2">
+          {showAddRepositoryEmptyState ? (
+            <>
+              {/* Seed sessions point at empty-path workspaces and cannot send,
+                      so surface the entry point instead of a misleading tree.
+                      U13: temporary chats are the exception — they run without a
+                      repository, so they are listed below the call to action. */}
+              <Empty className="gap-3 border-0 p-2 md:p-2">
+                <EmptyMedia variant="icon">
+                  <FolderGit2 className="h-4.5 w-4.5" />
+                </EmptyMedia>
+                <EmptyHeader>
+                  {/* D25 §3.3: EmptyTitle's shared base now carries a
                         negative tracking meant for its 18px default — this
                         compact sidebar usage shrinks to 14px (text-ui) and
                         may render CJK, so tracking must be cancelled back to
                         normal (negative tracking + CJK is the banned
                         combination). */}
-                    <EmptyTitle className="text-ui tracking-normal">
-                      {t('Add Repository')}
-                    </EmptyTitle>
-                    <EmptyDescription className="text-meta">
-                      {t('Add a repository to get started.')}
-                    </EmptyDescription>
-                  </EmptyHeader>
-                  <Button variant="outline" size="xs" className="h-6" onClick={onAddRepository}>
-                    <Plus className="h-3.5 w-3.5" />
-                    {t('Add Repository')}
+                  <EmptyTitle className="text-ui tracking-normal">{t('Add Repository')}</EmptyTitle>
+                  <EmptyDescription className="text-meta">
+                    {t('Add a repository to get started.')}
+                  </EmptyDescription>
+                </EmptyHeader>
+                <Button variant="outline" size="xs" className="h-6" onClick={onAddRepository}>
+                  <Plus className="h-3.5 w-3.5" />
+                  {t('Add Repository')}
+                </Button>
+              </Empty>
+              {renderUnboundSection()}
+            </>
+          ) : (
+            <>
+              <section>
+                <div className="flex h-7 items-center px-2">
+                  <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
+                    {t('Recent')}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="ml-auto h-5 w-5"
+                    aria-label={recentCollapsed ? t('Expand Recent') : t('Collapse Recent')}
+                    onClick={toggleRecentCollapsed}
+                  >
+                    {recentCollapsed ? (
+                      <ChevronRight className="h-3 w-3" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3" />
+                    )}
                   </Button>
-                </Empty>
-              ) : (
-                <>
-                  <section>
-                    <div className="flex h-7 items-center px-2">
-                      <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
-                        {t('Recent')}
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="ml-auto h-5 w-5"
-                        aria-label={recentCollapsed ? t('Expand Recent') : t('Collapse Recent')}
-                        onClick={toggleRecentCollapsed}
+                </div>
+                {!recentCollapsed && (
+                  <div className="mt-1 space-y-0.5">
+                    {recent.rows.map((row) => (
+                      <SessionRow
+                        key={`recent-${row.sessionId}`}
+                        row={row}
+                        now={now}
+                        active={activeSessionId === row.sessionId}
+                        opened={openSessionIds.includes(row.sessionId)}
+                        pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
+                        onSelect={() => handleSelectSession(row.sessionId)}
+                        onClose={() => void close(row.sessionId)}
+                        onRename={(title) => void rename(row.sessionId, title)}
+                        onArchive={() => void archive(row.sessionId, true)}
+                      />
+                    ))}
+                    {recent.hiddenCount > 0 ? (
+                      <button
+                        type="button"
+                        className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground hover:bg-hover"
+                        onClick={() => setRecentShowAll(true)}
                       >
-                        {recentCollapsed ? (
-                          <ChevronRight className="h-3 w-3" />
+                        {t('Show more')} (<span className="tabular-nums">{recent.hiddenCount}</span>
+                        )
+                      </button>
+                    ) : (
+                      recentShowAll &&
+                      recent.rows.length > RECENT_DEFAULT_LIMIT && (
+                        <button
+                          type="button"
+                          className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground hover:bg-hover"
+                          onClick={() => setRecentShowAll(false)}
+                        >
+                          {t('Show less')}
+                        </button>
+                      )
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <div className="flex h-7 items-center px-2">
+                <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
+                  {t('Repositories')}
+                </p>
+                <div className="ml-auto flex items-center">
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="h-5 w-5"
+                    aria-label={t('Filter sessions')}
+                    title={t('Filter sessions')}
+                    aria-pressed={searchVisible}
+                    onClick={toggleSearchVisible}
+                  >
+                    <ListFilter className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="h-5 w-5"
+                    aria-label={t('Add Repository')}
+                    title={t('Add Repository')}
+                    onClick={onAddRepository}
+                  >
+                    <FolderPlus className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+
+              {noMatches && (
+                <p className="px-2 py-1 text-meta text-muted-foreground">
+                  {t('No matching sessions')}
+                </p>
+              )}
+
+              {visibleFolders.map((folder) => {
+                const expanded = isProjectExpanded(folder.projectId);
+                const newSessionWorkspaceId = folder.newSessionWorkspaceId;
+                const folderRepo = repoByProjectId.get(folder.projectId);
+                return (
+                  <section key={folder.projectId}>
+                    {/* Toggle and "+ new chat" are sibling buttons in a flex
+                            row — a nested button would be invalid HTML (same
+                            trap as the McpSection fix in d68d3c6). */}
+                    <div
+                      // Project headers have no selected state, so the plain
+                      // hover step is enough; --hover is the semantic alias.
+                      className="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui hover:bg-hover"
+                    >
+                      <button
+                        type="button"
+                        className="flex min-w-0 flex-1 items-center gap-1 text-left"
+                        onClick={() => {
+                          // D1 (round-5): a folder header click also targets
+                          // the global "New" button at this folder, in sync
+                          // with handleSelectSession's session-pick path.
+                          setFocusedProjectId(folder.projectId);
+                          // F3 (D29 adversarial-review, minor): read fresh
+                          // store state at click time rather than the
+                          // render-body `activeSession` snapshot — this
+                          // handler can fire well after the render that
+                          // captured it scheduled this closure.
+                          const activeProjectId = resolveActiveProjectId(
+                            useChatSessionsStore.getState()
+                          );
+                          // D29 (open-q #28 A) + F1 (adversarial-review
+                          // major): activation and expansion are decided
+                          // together by one pure call, so a cross-repo
+                          // click can never toggle the just-activated
+                          // folder closed — the old code toggled expansion
+                          // unconditionally BEFORE deciding activation,
+                          // which could collapse the row it had just
+                          // activated. Routed through the very same
+                          // handler a session row click uses — no second
+                          // activation path.
+                          const { activateSessionId, nextExpanded } = resolveFolderClickActivation({
+                            folder,
+                            activeProjectId,
+                            currentExpanded: expanded,
+                          });
+                          setExpandedProjects((prev) => ({
+                            ...prev,
+                            [folder.projectId]: nextExpanded,
+                          }));
+                          if (activateSessionId) {
+                            handleSelectSession(activateSessionId);
+                          }
+                        }}
+                      >
+                        {expanded ? (
+                          <FolderOpen className="h-3.5 w-3.5 shrink-0 text-folder" />
                         ) : (
-                          <ChevronDown className="h-3 w-3" />
+                          <Folder className="h-3.5 w-3.5 shrink-0 text-folder" />
                         )}
-                      </Button>
+                        <span className="min-w-0 flex-1 truncate font-semibold">{folder.name}</span>
+                      </button>
+                      {onRemoveRepository && folderRepo && (
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="hidden h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive group-hover:flex group-focus-within:flex"
+                          aria-label={t('Remove repository')}
+                          title={t('Remove repository')}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setRepoToRemove(folderRepo);
+                          }}
+                        >
+                          <FolderMinus className="h-3 w-3" />
+                        </Button>
+                      )}
+                      {newSessionWorkspaceId && (
+                        // The header New button targets the active session's
+                        // workspace only, so a repo that already has sessions
+                        // needs its own entry point (T-26 review should-fix).
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="hidden h-5 w-5 shrink-0 group-hover:flex group-focus-within:flex"
+                          aria-label={t('New chat')}
+                          title={t('New chat')}
+                          onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
-                    {!recentCollapsed && (
-                      <div className="mt-1 space-y-0.5">
-                        {recent.rows.map((row) => (
-                          <SessionRow
-                            key={`recent-${row.sessionId}`}
-                            row={row}
-                            now={now}
-                            active={activeSessionId === row.sessionId}
-                            pendingApprovalCount={
-                              pendingApprovalCountBySession.get(row.sessionId) ?? 0
-                            }
-                            onSelect={() => handleSelectSession(row.sessionId)}
-                            onClose={() => void close(row.sessionId)}
-                            onRename={(title) => void rename(row.sessionId, title)}
-                            onArchive={() => void archive(row.sessionId, true)}
-                          />
-                        ))}
-                        {recent.hiddenCount > 0 ? (
+
+                    {expanded && (
+                      <div className="mt-1 space-y-0.5 pl-3">
+                        {folder.rows.map((row) => {
+                          const tempItemId = tempItemIdByWorkspaceId.get(row.workspaceId);
+                          return (
+                            <SessionRow
+                              key={row.sessionId}
+                              row={row}
+                              now={now}
+                              active={activeSessionId === row.sessionId}
+                              opened={openSessionIds.includes(row.sessionId)}
+                              pendingApprovalCount={
+                                pendingApprovalCountBySession.get(row.sessionId) ?? 0
+                              }
+                              onSelect={() => handleSelectSession(row.sessionId)}
+                              onClose={() => void close(row.sessionId)}
+                              onRename={(title) => void rename(row.sessionId, title)}
+                              onArchive={() => void archive(row.sessionId, true)}
+                              onDeleteTemp={
+                                tempItemId && onRequestTempDelete
+                                  ? () => onRequestTempDelete(tempItemId)
+                                  : undefined
+                              }
+                            />
+                          );
+                        })}
+                        {folder.rows.length === 0 && !query.trim() && newSessionWorkspaceId && (
                           <button
                             type="button"
-                            className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground hover:bg-hover"
-                            onClick={() => setRecentShowAll(true)}
+                            className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui text-muted-foreground hover:bg-hover"
+                            onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
                           >
-                            {t('Show more')} (
-                            <span className="tabular-nums">{recent.hiddenCount}</span>)
+                            <Plus className="h-3 w-3 shrink-0" />
+                            {t('New chat')}
                           </button>
-                        ) : (
-                          recentShowAll &&
-                          recent.rows.length > RECENT_DEFAULT_LIMIT && (
-                            <button
-                              type="button"
-                              className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground hover:bg-hover"
-                              onClick={() => setRecentShowAll(false)}
-                            >
-                              {t('Show less')}
-                            </button>
-                          )
                         )}
                       </div>
                     )}
                   </section>
+                );
+              })}
 
-                  <div className="flex h-7 items-center px-2">
-                    <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
-                      {t('Repositories')}
-                    </p>
-                    <div className="ml-auto flex items-center">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="h-5 w-5"
-                        aria-label={t('Filter sessions')}
-                        title={t('Filter sessions')}
-                        aria-pressed={searchVisible}
-                        onClick={toggleSearchVisible}
-                      >
-                        <ListFilter className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="h-5 w-5"
-                        aria-label={t('Add Repository')}
-                        title={t('Add Repository')}
-                        onClick={onAddRepository}
-                      >
-                        <FolderPlus className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {noMatches && (
-                    <p className="px-2 py-1 text-meta text-muted-foreground">
-                      {t('No matching sessions')}
-                    </p>
-                  )}
-
-                  {visibleFolders.map((folder) => {
-                    const expanded = isProjectExpanded(folder.projectId);
-                    const newSessionWorkspaceId = folder.newSessionWorkspaceId;
-                    const folderRepo = repoByProjectId.get(folder.projectId);
-                    return (
-                      <section key={folder.projectId}>
-                        {/* Toggle and "+ new chat" are sibling buttons in a flex
-                            row — a nested button would be invalid HTML (same
-                            trap as the McpSection fix in d68d3c6). */}
-                        <div
-                          // Project headers have no selected state, so the plain
-                          // hover step is enough; --hover is the semantic alias.
-                          className="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui hover:bg-hover"
-                        >
-                          <button
-                            type="button"
-                            className="flex min-w-0 flex-1 items-center gap-1 text-left"
-                            onClick={() => {
-                              // D1 (round-5): a folder header click also targets
-                              // the global "New" button at this folder, in sync
-                              // with handleSelectSession's session-pick path.
-                              setFocusedProjectId(folder.projectId);
-                              // F3 (D29 adversarial-review, minor): read fresh
-                              // store state at click time rather than the
-                              // render-body `activeSession` snapshot — this
-                              // handler can fire well after the render that
-                              // captured it scheduled this closure.
-                              const activeProjectId = resolveActiveProjectId(
-                                useChatSessionsStore.getState()
-                              );
-                              // D29 (open-q #28 A) + F1 (adversarial-review
-                              // major): activation and expansion are decided
-                              // together by one pure call, so a cross-repo
-                              // click can never toggle the just-activated
-                              // folder closed — the old code toggled expansion
-                              // unconditionally BEFORE deciding activation,
-                              // which could collapse the row it had just
-                              // activated. Routed through the very same
-                              // handler a session row click uses — no second
-                              // activation path.
-                              const { activateSessionId, nextExpanded } =
-                                resolveFolderClickActivation({
-                                  folder,
-                                  activeProjectId,
-                                  currentExpanded: expanded,
-                                });
-                              setExpandedProjects((prev) => ({
-                                ...prev,
-                                [folder.projectId]: nextExpanded,
-                              }));
-                              if (activateSessionId) {
-                                handleSelectSession(activateSessionId);
-                              }
-                            }}
-                          >
-                            {expanded ? (
-                              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-folder" />
-                            ) : (
-                              <Folder className="h-3.5 w-3.5 shrink-0 text-folder" />
-                            )}
-                            <span className="min-w-0 flex-1 truncate font-semibold">
-                              {folder.name}
-                            </span>
-                          </button>
-                          {onRemoveRepository && folderRepo && (
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              className="hidden h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive group-hover:flex group-focus-within:flex"
-                              aria-label={t('Remove repository')}
-                              title={t('Remove repository')}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setRepoToRemove(folderRepo);
-                              }}
-                            >
-                              <FolderMinus className="h-3 w-3" />
-                            </Button>
-                          )}
-                          {newSessionWorkspaceId && (
-                            // The header New button targets the active session's
-                            // workspace only, so a repo that already has sessions
-                            // needs its own entry point (T-26 review should-fix).
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              className="hidden h-5 w-5 shrink-0 group-hover:flex group-focus-within:flex"
-                              aria-label={t('New chat')}
-                              title={t('New chat')}
-                              onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
-
-                        {expanded && (
-                          <div className="mt-1 space-y-0.5 pl-3">
-                            {folder.rows.map((row) => {
-                              const tempItemId = tempItemIdByWorkspaceId.get(row.workspaceId);
-                              return (
-                                <SessionRow
-                                  key={row.sessionId}
-                                  row={row}
-                                  now={now}
-                                  active={activeSessionId === row.sessionId}
-                                  pendingApprovalCount={
-                                    pendingApprovalCountBySession.get(row.sessionId) ?? 0
-                                  }
-                                  onSelect={() => handleSelectSession(row.sessionId)}
-                                  onClose={() => void close(row.sessionId)}
-                                  onRename={(title) => void rename(row.sessionId, title)}
-                                  onArchive={() => void archive(row.sessionId, true)}
-                                  onDeleteTemp={
-                                    tempItemId && onRequestTempDelete
-                                      ? () => onRequestTempDelete(tempItemId)
-                                      : undefined
-                                  }
-                                />
-                              );
-                            })}
-                            {folder.rows.length === 0 && !query.trim() && newSessionWorkspaceId && (
-                              <button
-                                type="button"
-                                className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui text-muted-foreground hover:bg-hover"
-                                onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
-                              >
-                                <Plus className="h-3 w-3 shrink-0" />
-                                {t('New chat')}
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </section>
-                    );
-                  })}
-                </>
-              )}
-            </div>
-          </ScrollArea>
-
-          <Separator />
-
-          <div className="flex items-center p-2">
-            {/* Full-width row on purpose (flex-1): the footer is a single
-                Settings entry since T-23 removed the dead Help button. */}
-            <Button
-              variant="ghost"
-              size="xs"
-              className="h-6 flex-1 justify-start"
-              onClick={onOpenSettings}
-            >
-              <Settings className="h-3.5 w-3.5" />
-              {t('Settings')}
-            </Button>
-          </div>
-        </>
-      )}
+              {renderUnboundSection()}
+            </>
+          )}
+        </div>
+      </ScrollArea>
 
       <AlertDialog
         open={!!repoToRemove}
@@ -690,6 +691,13 @@ interface SessionRowProps {
   now: number;
   active: boolean;
   pendingApprovalCount: number;
+  /**
+   * D08: this session has a center-column tab. Clicking a row now STARTS the
+   * session rather than switching to it, so the list has to say which ones are
+   * already started — otherwise the only feedback for "it is already open" is
+   * that nothing visibly happens, and the user clicks again.
+   */
+  opened: boolean;
   onSelect: () => void;
   onClose: () => void;
   onRename: (title: string) => void;
@@ -704,6 +712,7 @@ function SessionRow({
   now,
   active,
   pendingApprovalCount,
+  opened,
   onSelect,
   onClose,
   onRename,
@@ -793,9 +802,23 @@ function SessionRow({
           }}
           title={row.title}
         >
-          {row.busy && (
-            <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-status-running" />
-          )}
+          {/* D08's three-state marker, in one 6px slot so rows never jump:
+              filled = running, ring = started (has a tab), nothing = not started.
+              `busy` wins when both are true — "it is working" is the more urgent
+              of the two facts. */}
+          {row.busy ? (
+            <span
+              aria-hidden
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-status-running"
+              title={t('Running')}
+            />
+          ) : opened ? (
+            <span
+              aria-hidden
+              className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground"
+              title={t('Open in a tab')}
+            />
+          ) : null}
           {/* `min-w-20` is the whole point of this row's sizing (S2 b). The title is
           the row's identity and the only user-authored text on it, so it gets a
           floor and everything else yields to it. Without the floor `flex-1

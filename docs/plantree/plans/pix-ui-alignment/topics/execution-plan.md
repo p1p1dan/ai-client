@@ -24,9 +24,9 @@
 | 3 ✅ | 布局模式 | U02-a/b、U03-a | 批次 1 |
 | 4 ✅ | 免绑定开聊 | U05-a/b/c/d、U03-b | 批次 3（U03-b） |
 | 5 ✅ | 控件语义 | U08-2 | — |
-| 5.5 | 免绑定会话可见性 | U13 | 批次 4（承 `unbound` 语义） |
-| 6 | 面板 | U06-a、U07 | 批次 3 |
-| 7 | 左栏入口 | U04 | — |
+| 5.5 ✅ | 免绑定会话可见性 | U13 | 批次 4（承 `unbound` 语义） |
+| 6 ✅ | 面板 | U06-a、U07 | 批次 3 |
+| 7 ✅ | 左栏入口 | U04 | — |
 | — | 挂起 | U06-b | Pi 计划 T38（[D03](../decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二） |
 | — | 已放弃 | U08-3 | [Q12](../open-questions.md) 拍板不做 |
 
@@ -170,7 +170,20 @@ TUI 作为双栏的专用子模式：左栏 + 右侧整块 TUI，无第三栏。
 
 **U08-1 无需改动**：分组键保留 `tags[0]`（[Q02](../open-questions.md) 已拍板）。建议补一条行为锁定测试，不单独占切片。
 
-### 批次 5.5 — 免绑定会话跨重启可见性（U13）
+### 批次 5.5 — 免绑定会话跨重启可见性（U13）— **已完成 2026-09-04**
+
+> 落地记录、验收对照、变异验证与门禁结果见 [U13 evidence](../evidence/2026-09-04-u13-unbound-session-visibility.md)。
+>
+> **比下文多两处落点**（evidence §三 展开）：D04 的三处只做到「看得见」，没做到「打得开」。
+> ① `chat:ensureScratchWorkspace` 在重启后必须**认领**索引里记着的目录：Main 的分配表是空的，
+> 原实现会新分配一个 uuid 目录并改写索引路径，而 `chat:resumeSession` 拿
+> `row.workspacePath !== payload.workspacePath` 判 `pi_session_workspace_mismatch` 直接抛错。
+> ② `ChatSession` 增加 `unbound?: { workspacePath }`：resume 必须带一个精确路径，
+> 而 scratch 目录按设计不是 `ChatWorkspace`，渲染器无处可取。
+>
+> **写入规则比 D04 严一点**：两个 IPC 入口都从自己即将写入的那个路径推出布尔值传入，
+> 显式 `false` 清除标记、`undefined` 才回退到旧值——只有 `?? existing?.unbound` 的话，
+> 一个后来绑到真实目录的对话会永远粘着「临时」标记。
 
 边界由 [D04](../decisions/004-unbound-session-index-visibility.md) 定死（解 [Q13](../open-questions.md)）。三处落点：
 
@@ -188,7 +201,18 @@ TUI 作为双栏的专用子模式：左栏 + 右侧整块 TUI，无第三栏。
 ③ 非免绑定的 orphan 行（用户移除文件夹）行为**不变**，仍走 orphan 分支；④ 批次 4 之前的老行不回填、不静默写迁移；
 ⑤ 索引文件仍是裸数组，旧 build 解析不抛错。
 
-### 批次 6 — 面板（U06-a + U07）
+### 批次 6 — 面板（U06-a + U07）— **已完成 2026-09-04**
+
+> 落地记录、验收对照、变异验证与门禁结果见
+> [批次 6 evidence](../evidence/2026-09-04-u06a-u07-run-and-context-panels.md)。
+>
+> **双栏可见性已确认为「可见」**，并因此开了 [D05](../decisions/005-two-column-run-surface.md)：
+> D02 决定一划的线是「对话 vs 开发工具」，不是「一件 vs 多件」；Files / Git / Terminal 的排除集合一件没变。
+> 三栏 rail 变成 `git | files | context | run`，`Ctrl/Cmd+4` 由 run 接手终端下线时空出的数字位，前三位没动。
+>
+> **U07 的范围本次定死**（原标「Scope 待细化」）：交付分角色构成 + 逐段展开；
+> token 估算与手动刷新**刻意不做**，理由见 evidence §二——前者按计划随 U06-b 解锁，
+> 后者在本仓没有对应语义（数据是实时 store，不是一次性快照拉取），放按钮属装饰。
 
 **U06-a Run 面板（渲染层可拼部分）**
 注册 `run` surface，渲染状态机 / 模型 / 选中 effort / 回合耗时 / 工具名称——这些用现有 `RuntimeEvent` + store 即可（[evidence-q04](./evidence-q04-runtime-fields.md)）。
@@ -199,10 +223,44 @@ TUI 作为双栏的专用子模式：左栏 + 右侧整块 TUI，无第三栏。
 对照 pi-app 的 `context-panel.tsx` 做内容层增强（分角色分段、token 估算、逐段展开、手动刷新），**不重建面板**。
 范围待细化：token 估算与 U06-b 依赖同一批 usage 字段，故本切片先做不依赖 usage 的部分（分段、展开、刷新），估算部分随 U06-b 一起解锁。**建议在 U06-a 落地后再定范围**。
 
-### 批次 7 — 左栏入口（U04）
+### 批次 7 — 左栏入口（U04）— **已完成 2026-09-04**
+
+> 落地记录、验收对照、变异验证与门禁结果见 [U04 evidence](../evidence/2026-09-04-u04-plugin-entry.md)。
+>
+> **开工前取证改变了这一片的形状**：下文验收①的两个数来源完全不同，其中一个本仓根本没有。
+> ① **MCP 就绪数不是 MCP API**——pix 是扫描扩展自己用 `ui.setStatus` 发布的状态文本、正则抠 `N/M`；
+> 本仓 T09 已经在存这份 `statuses`，所以这半边是纯渲染层。
+> ② **已装插件清单本仓没有数据源**——渲染器和 Main 都不知道装了什么。
+> 用户拍板走 [D06](../decisions/006-plugin-inventory-source.md)：**worker 上报实际加载了什么**
+> （它为校验权限插件本来就调用了 `getExtensions()`），不在 Main 重实现 pi 的解析。
+>
+> **交付边界**：插件**只可见、不可管**。启用/禁用/更新/移除要走 pi 的 `PackageManager`，
+> 属于另一个量级的工作，不在本片范围。
 
 只加「插件」入口，带 MCP 就绪徽标；**资源入口不做**（[Q03](../open-questions.md) 已拍板）。
 验收：① 入口展示已装插件与 MCP 就绪数；② 未新增「资源」入口；③ 侧栏 IA 保持本仓形态，未改成 pix 的一级导航（[evidence-u09](./evidence-u09-component-forms.md) #6 判定为不搬）。
+
+### 批次 8 — 壳层横条重排与双栏收敛（U14）— **已完成 2026-09-04**
+
+> 本批不在原执行计划里。用户看到实际界面后开的，决策落为
+> [D07](../decisions/007-two-column-is-two-columns-and-one-bar-per-column.md)，
+> 落地记录见 [U14 evidence](../evidence/2026-09-04-u14-shell-chrome-realignment.md)。
+>
+> **为什么原计划里没有它**：原型在本计划的引用表里登记为「原型画面，非施工依据」，
+> 全份执行计划只有 U09-2 的验收①引用过它（管 Composer 底栏顺序）；
+> 壳层结构既不在 D01 的样式授权内、也不是 Q11 的尺寸问题——**没有任何一条决策认领**。
+> 加上原型（双栏隐藏右栏）与 D02 决定一（双栏保留 context 右栏）互相矛盾、而代码跟了 D02，
+> 于是「双栏」一直渲染出三列。
+
+- **U14-a 双栏收敛**：`columnModeHasPanel` 为假时**不渲染** `ContextPanel`。
+  验收：① 双栏下 rail / 快捷键 / reducer 三条路都开不出面板；② 往返三栏后 `railOrder` 与
+  `lastSurfaceId` 无损；③ `expanded` 不跨模式携带。
+- **U14-b 每栏一条横条**：删 `ChatWorkspace` 的 h-9 头，`MainHeader` 移入中栏并瘦到 3 个按钮位，
+  surface 切换器改为 `ContextPanel` 自己的文字 tab 条。
+  验收：① 顶栏之下每列恰好一条 h-9；② header 里不得留第二份 `derivePanelTabs`（两处读
+  `railOrder` 正是清单漂移的成因）；③ 面板关闭时仍有入口（header 的收/开面板按钮）。
+- **U14-c 控件搬家**：顶栏只留 logo + ⋯ + 窗口按钮；设置与账号胶囊下沉左栏底部；
+  宽阅读栏进 Settings › 外观。**面板放大不进设置**——它是动作不是偏好，理由见 D07 决定四。
 
 ### 跨计划与挂起项
 

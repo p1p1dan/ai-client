@@ -13,11 +13,13 @@ describe('derivePanelTabs', () => {
 
   // 2026-09-04: `terminal` used to be appended here under D27's exemption ①;
   // it left the rail (and so the tab strip) when its button was removed.
-  it('returns A08 tab order: git | files | context', () => {
+  it('returns D08 dock order: chat | git | files | context | run', () => {
     expect(derivePanelTabs(DEFAULT_SURFACE_ORDER, noChanges).map((tab) => tab.id)).toEqual([
+      'chat',
       'git',
       'editor',
       'context',
+      'run',
     ]);
   });
 
@@ -42,15 +44,18 @@ describe('derivePanelTabs', () => {
     // surface; the rest keep their persisted position.
     expect(derivePanelTabs(['terminal', 'context'], noChanges).map((tab) => tab.id)).toEqual([
       'context',
+      'chat',
       'git',
       'editor',
+      'run',
     ]);
   });
 
   it('drops ids the registry does not expose on the rail', () => {
-    // `chat` is content-driven with no split sessions in MVP; `pr` is a
-    // registry slot only. Neither may reach the tab strip.
-    expect(derivePanelTabs(['chat', 'pr', 'git'], noChanges).map((tab) => tab.id)).not.toContain(
+    // `pr` is a registry slot only and must never reach the rail. `chat` is
+    // deliberately NOT in this list any more — D08 promoted it to the dock's
+    // first entry.
+    expect(derivePanelTabs(['chat', 'pr', 'git'], noChanges).map((tab) => tab.id)).toContain(
       'chat'
     );
     expect(derivePanelTabs(['chat', 'pr', 'git'], noChanges).map((tab) => tab.id)).not.toContain(
@@ -62,15 +67,15 @@ describe('derivePanelTabs', () => {
     expect(derivePanelTabs(['nope', '', 'git'], noChanges)[0]?.id).toBe('git');
   });
 
-  it('collapses to the context tab alone in two-column mode (U02-b, D02)', () => {
-    expect(
-      derivePanelTabs(DEFAULT_SURFACE_ORDER, noChanges, 'two-column').map((tab) => tab.id)
-    ).toEqual(['context']);
-  });
-
-  it('keeps the full tab strip when columnMode is three-column', () => {
-    expect(
-      derivePanelTabs(DEFAULT_SURFACE_ORDER, noChanges, 'three-column').map((tab) => tab.id)
-    ).toEqual(['git', 'editor', 'context']);
+  // D08 retired the column mode; the dock always offers the same five entries,
+  // and this is what `LeftDock`'s rail renders top to bottom.
+  it("yields the dock's five entries in order (D08)", () => {
+    expect(derivePanelTabs(DEFAULT_SURFACE_ORDER, noChanges).map((tab) => tab.id)).toEqual([
+      'chat',
+      'git',
+      'editor',
+      'context',
+      'run',
+    ]);
   });
 });

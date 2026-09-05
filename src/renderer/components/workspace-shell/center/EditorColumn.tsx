@@ -19,7 +19,7 @@
  */
 
 import { normalizePath } from '@shared/utils/path';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, Maximize2, Minimize2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { EditorArea } from '@/components/files/EditorArea';
 import type { UnsavedChangesChoice } from '@/components/files/UnsavedChangesDialog';
@@ -89,9 +89,19 @@ export function isNavigationIntentStillValid(params: {
 }
 
 // D35 (user feedback, 2026-08-14): retired the column's only prop pair
-// (`onHideChat`/`chatVisible`, the "Chat column" head button below) — it took
-// no arguments left after that, so the props type goes with it.
-export function EditorColumn() {
+// (`onHideChat`/`chatVisible`, the "Chat column" head button below).
+//
+// D08 gives it a new one. This is the RIGHT column now, and the expand/restore
+// overlay came with that role — it used to live on `ContextPanel`'s tab strip,
+// which is exactly where the user reads it as belonging: on the bar of the
+// column it enlarges. The state itself stays in the shell store (`expanded`),
+// so nothing here has to remember it.
+interface EditorColumnProps {
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
+}
+
+export function EditorColumn({ expanded, onToggleExpanded }: EditorColumnProps = {}) {
   const { t } = useI18n();
   const rootPath = useWorkspaceRootPath();
   const editorAutoSave = useSettingsStore((state) => state.editorSettings.autoSave);
@@ -355,6 +365,22 @@ export function EditorColumn() {
             // render exactly as before (same discipline as T-12's DiffViewer
             // prop).
             <div className="flex shrink-0 items-center gap-0.5 pr-1">
+              {onToggleExpanded && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="h-6 w-6"
+                  onClick={onToggleExpanded}
+                  aria-label={t(expanded ? 'Restore panel' : 'Expand panel')}
+                  title={t(expanded ? 'Restore panel' : 'Expand panel')}
+                >
+                  {expanded ? (
+                    <Minimize2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <Maximize2 className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon-xs"

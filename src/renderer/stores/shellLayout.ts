@@ -21,15 +21,11 @@ import {
   nextReadingWidthMode,
   type PersistedShellLayout,
   readingColumnClass,
-  reduceColumnModeChange,
   reduceShellSurface,
   type ShellSurfaceState,
   sanitizeShellLayoutPersisted,
 } from '@/components/workspace-shell/shellLayoutModel';
-import type {
-  ContextSurfaceId,
-  ShellColumnMode,
-} from '@/components/workspace-shell/surfaceRegistry';
+import type { ContextSurfaceId } from '@/components/workspace-shell/surfaceRegistry';
 import { sortSurfaces } from '@/components/workspace-shell/surfaceRegistry';
 
 /**
@@ -49,7 +45,6 @@ export const initialSessionOverrides: ShellSessionOverrides = {
 
 export interface ShellLayoutState extends PersistedShellLayout, ShellSessionOverrides {
   // sidebar
-  toggleSidebarCollapsed: () => void;
   setSidebarWidth: (width: number) => void;
   // context panel
   selectSurface: (id: ContextSurfaceId) => void;
@@ -67,9 +62,6 @@ export interface ShellLayoutState extends PersistedShellLayout, ShellSessionOver
   clearManualOverrides: () => void;
   /** Reserved for rail drag-sort (postponed); already sanitized through the registry. */
   setRailOrder: (order: readonly string[]) => void;
-  // column mode (U02): three-column (full rail) vs two-column (context only).
-  setShellColumnMode: (mode: ShellColumnMode) => void;
-  toggleShellColumnMode: () => void;
   // reading column
   toggleReadingWidthMode: () => void;
 }
@@ -97,7 +89,6 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
       ...defaultShellLayout,
       ...initialSessionOverrides,
 
-      toggleSidebarCollapsed: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
 
       // T-32 m2: every EXPLICIT panel action also records a manual override.
@@ -110,21 +101,13 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
       selectSurface: (id) =>
         set((state) =>
           withManualPanel(
-            reduceShellSurface(
-              surfaceStateOf(state),
-              { type: 'select', surfaceId: id },
-              state.shellColumnMode
-            )
+            reduceShellSurface(surfaceStateOf(state), { type: 'select', surfaceId: id })
           )
         ),
       openSurface: (id) =>
         set((state) =>
           withManualPanel(
-            reduceShellSurface(
-              surfaceStateOf(state),
-              { type: 'open', surfaceId: id },
-              state.shellColumnMode
-            )
+            reduceShellSurface(surfaceStateOf(state), { type: 'open', surfaceId: id })
           )
         ),
       closeSurface: () =>
@@ -133,13 +116,7 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
         ),
       toggleContextPanel: () =>
         set((state) =>
-          withManualPanel(
-            reduceShellSurface(
-              surfaceStateOf(state),
-              { type: 'toggle-panel' },
-              state.shellColumnMode
-            )
-          )
+          withManualPanel(reduceShellSurface(surfaceStateOf(state), { type: 'toggle-panel' }))
         ),
       toggleExpanded: () =>
         set((state) => reduceShellSurface(surfaceStateOf(state), { type: 'toggle-expanded' })),
@@ -155,29 +132,15 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
 
       setRailOrder: (order) => set({ railOrder: sortSurfaces(order).map((surface) => surface.id) }),
 
-      setShellColumnMode: (mode) =>
-        set((state) => ({
-          shellColumnMode: mode,
-          // Converge the open surface so two-column never keeps a hidden one active.
-          ...reduceColumnModeChange(surfaceStateOf(state), mode),
-        })),
-      toggleShellColumnMode: () =>
-        set((state) => {
-          const mode: ShellColumnMode =
-            state.shellColumnMode === 'two-column' ? 'three-column' : 'two-column';
-          return { shellColumnMode: mode, ...reduceColumnModeChange(surfaceStateOf(state), mode) };
-        }),
-
       toggleReadingWidthMode: () =>
         set((state) => ({ readingWidthMode: nextReadingWidthMode(state.readingWidthMode) })),
     }),
     {
       name: 'aiclient-shell-layout',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       // Only the persisted data fields — actions are never serialized.
       partialize: (state): PersistedShellLayout => ({
-        sidebarCollapsed: state.sidebarCollapsed,
         sidebarWidth: state.sidebarWidth,
         activeSurfaceId: state.activeSurfaceId,
         lastSurfaceId: state.lastSurfaceId,
@@ -186,18 +149,36 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
         railOrder: state.railOrder,
         readingWidthMode: state.readingWidthMode,
         editorRatio: state.editorRatio,
-        shellColumnMode: state.shellColumnMode,
       }),
       // v1 → v2 (T-32): `railOrder` was persisted before the registry moved to
       // A08's tab order, so a v1 profile pins the OLD order — the tab strip
       // rendered `context|git|editor|terminal` while the digits followed the
       // new one. `widthBySurface` is likewise gone (one panel width now).
-      // Dropping both here lets the sanitiser rebuild them from the registry.
+      //
+      // v2 → v3 (D08): same trap, new cause. `chat` moved to the FRONT of the
+      // registry, but `sortSurfaces` honours a persisted order first and only
+      // appends what is missing — so a v2 profile would render the dock as
+      // `git|files|context|run|chat`, with the session list last. The old
+      // `shellColumnMode` goes too (the mode no longer exists), and the dock is
+      // forced open on `chat`: a v2 user's left column was ALWAYS the session
+      // list, so landing them on a collapsed rail would read as data loss.
       migrate: (persisted, version) => {
         const raw = persisted as Record<string, unknown> | null;
-        if (version < 2 && raw && typeof raw === 'object') {
-          const { railOrder: _staleOrder, widthBySurface: _staleWidths, ...rest } = raw;
-          return sanitizeShellLayoutPersisted(rest);
+        if (version < 3 && raw && typeof raw === 'object') {
+          const {
+            railOrder: _staleOrder,
+            widthBySurface: _staleWidths,
+            shellColumnMode: _retiredMode,
+            ...rest
+          } = raw;
+          return sanitizeShellLayoutPersisted({
+            ...rest,
+            activeSurfaceId: 'chat',
+            lastSurfaceId: 'chat',
+            // `expanded` is only legal while a surface is active; the sanitiser
+            // would keep a stale `true` now that one always is.
+            expanded: false,
+          });
         }
         return sanitizeShellLayoutPersisted(persisted);
       },

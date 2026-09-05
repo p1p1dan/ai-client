@@ -136,6 +136,51 @@ describe('shouldResumeSession (T-03)', () => {
       expect(result.reason).toBe(`busy:${status}`);
     }
   });
+
+  /**
+   * U13 (D04): a temporary chat has no workspace by design. Refusing it here
+   * was what left a restarted one openable but empty — the history was on
+   * disk, and nothing ever asked for it.
+   */
+  describe('unbound sessions (U13)', () => {
+    const unbound = { workspacePath: '/tmp/unbound-sessions/abc' };
+
+    it('resumes into the scratch directory recorded on the session', () => {
+      const result = shouldResumeSession(
+        session({ workspaceId: '', runtimeIdentity: 'rt', unbound }),
+        undefined
+      );
+      expect(result.shouldResume).toBe(true);
+      expect(result.args).toEqual({
+        sessionId: 's1',
+        runtimeIdentity: 'rt',
+        workspacePath: unbound.workspacePath,
+      });
+    });
+
+    it('prefers the scratch path over a workspace that happens to be passed', () => {
+      const result = shouldResumeSession(
+        session({ runtimeIdentity: 'rt', unbound }),
+        workspace({ path: '/repo' })
+      );
+      expect(result.args?.workspacePath).toBe(unbound.workspacePath);
+    });
+
+    it('still refuses a session with no workspace and no scratch path', () => {
+      expect(shouldResumeSession(session({ runtimeIdentity: 'rt' }), undefined).reason).toBe(
+        'no-workspace'
+      );
+    });
+
+    it('applies the ordinary busy and agent guards to unbound sessions too', () => {
+      expect(
+        shouldResumeSession(
+          session({ workspaceId: '', runtimeIdentity: 'rt', unbound, status: 'running' }),
+          undefined
+        ).reason
+      ).toBe('busy:running');
+    });
+  });
 });
 
 describe('shouldApplyResumeResult (F2, D29 adversarial-review)', () => {

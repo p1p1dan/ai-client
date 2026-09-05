@@ -418,6 +418,17 @@ export const zhTranslations: Record<string, string> = {
   'New chat': '新建对话',
   // D1 (round-5): header "New" button title, dynamic target discoverability.
   'New session in {{folder}}': '在 {{folder}} 中新建会话',
+  // U04: sidebar plugin entry. Per session on purpose — pi resolves
+  // project-scoped extensions from the session's own working directory.
+  // 'Plugins' itself is reused from the Claude-era key further down.
+  'Extensions loaded for the active chat.': '当前对话已加载的扩展。',
+  'MCP servers': 'MCP 服务',
+  'Send a message to start this chat and see what it loads.':
+    '发送一条消息启动这个对话后，才能看到它加载了什么。',
+  'This chat loaded no plugins.': '这个对话没有加载任何插件。',
+  // U13: sidebar group for chats that never got a project folder — they run in
+  // a throwaway directory, so they belong to no repository.
+  'Temporary chats': '临时对话',
   'Show more': '显示更多',
   'Show less': '收起',
   'Filter sessions': '筛选会话',
@@ -1612,6 +1623,16 @@ export const zhTranslations: Record<string, string> = {
   'Workspace terminal': '工作区终端',
   'Session context and runtime': '会话上下文与运行时',
   'Context surfaces': '上下文面板切换',
+  // D08: the VSCode-style dock — rail entries, the panel title row, the center
+  // session tab strip, and U16's composition chart.
+  'Primary navigation': '主导航',
+  'Sessions and repositories': '会话与仓库',
+  'Open sessions': '已打开的会话',
+  'Close tab': '关闭标签页',
+  'Open in a tab': '已在标签页中打开',
+  Composition: '构成',
+  chars: '字符',
+  'Message breakdown': '逐条消息',
   'Show context panel': '显示上下文面板',
   'Hide context panel': '隐藏上下文面板',
   'Expand panel': '展开面板',
@@ -1619,9 +1640,19 @@ export const zhTranslations: Record<string, string> = {
   'Close panel': '关闭面板',
   'Wide reading column': '宽阅读栏',
   'Standard reading column': '标准阅读栏',
+  // D07: the reading-width control moved from MainHeader into Settings.
+  'Reading column': '阅读栏宽度',
+  'How wide conversation text is allowed to run': '对话正文允许占据多宽',
+  'Let messages use the full column instead of a fixed reading width':
+    '让消息铺满整栏，而不是限制在固定的阅读宽度内',
   // T-23: single-line MainHeader + LeftNav cleanup strings.
   'Context panel': '上下文面板',
   'No session selected': '未选择会话',
+  // D07: MainHeader absorbed ChatWorkspace's own bar — the two axes it now
+  // carries, plus the temporary-chat marker that came with it.
+  'Two-column layout': '双栏布局',
+  'Presentation mode': '显示方式',
+  Temporary: '临时',
   'Expand sidebar': '展开侧栏',
   'Collapse sidebar': '收起侧栏',
   'Resize sidebar': '调整侧栏宽度',
@@ -1728,6 +1759,43 @@ export const zhTranslations: Record<string, string> = {
   Mentions: '@ 引用',
   'Runtime identity': '运行时身份',
   'No context reported yet.': '暂无可展示的上下文。',
+
+  // U07: context surface — composition of the conversation THIS WINDOW has
+  // loaded. The wording never says "context window": the runtime reports no
+  // usage and the catalog strips the window size, so the panel can only speak
+  // for the transcript it holds.
+  'Conversation (loaded)': '对话构成（已加载）',
+  '{{count}} messages · {{chars}} chars in this window': '本窗口 {{count}} 条消息 · {{chars}} 字符',
+  user: '用户',
+  assistant: '助手',
+  system: '系统',
+  error: '错误',
+  '(no text in this message)': '（该消息没有文本内容）',
+  '… truncated': '…已截断',
+
+  // U06-a: run surface (RunSurfaceView). 'Status', 'Failed', 'Completed',
+  // 'Model (actual)' / 'Model (configured)' and 'No active session' are reused
+  // from the keys above — the Run panel names the same facts the Context panel
+  // does, and a second translation of one word is how the two drift apart.
+  Run: '运行',
+  'Live turn status': '当前回合运行状态',
+  Idle: '空闲',
+  Starting: '启动中',
+  Running: '运行中',
+  'Running a tool': '正在执行工具',
+  Thinking: '思考中',
+  'Waiting for approval': '等待审批',
+  'Waiting for an answer': '等待回答',
+  Stopping: '停止中',
+  // 'Disconnected' already exists above (host status) with the same meaning.
+  'No session': '无会话',
+  'No model configured': '未配置模型',
+  'No active session.': '暂无活动会话。',
+  'Nothing has run yet.': '尚未运行过任何回合。',
+  Elapsed: '已用时',
+  'Last turn': '上一回合',
+  'Tool calls': '工具调用',
+  'Failed tools': '失败工具',
 
   // T-12: git surface (GitSurfaceView) — empty states and diff sub-header.
   'No active session': '暂无活动会话',

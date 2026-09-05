@@ -9,24 +9,80 @@
 
 | 分组 | 数量 | 说明 |
 |---|---|---|
-| Done | 9 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)） |
+| Done | 16 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)）；**U13：免绑定会话跨重启可见性**、**U06-a：Run 面板**、**U07：Context 内容增强**（2026-09-04，[U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md) / [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）；**U04：左栏插件入口**（2026-09-04，[U04 evidence](./evidence/2026-09-04-u04-plugin-entry.md)）；**U14：壳层横条重排与双栏收敛**（2026-09-04，[U14 evidence](./evidence/2026-09-04-u14-shell-chrome-realignment.md)）；**U15：VSCode 式壳层重排**、**U16：上下文页图形化与折叠**（2026-09-05，[U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)） |
 | In Progress | 0 | — |
-| Ready（已切片，可开工） | 2 | U04、U13 |
-| Ready（部分） | 1 | U06-a 可开工 |
-| Scope 待细化 | 1 | U07（建议在 U06-a 后定范围） |
 | Moved out | 1 | U06-b → Pi 计划 T38（[D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二） |
 | Dropped | 1 | U08-3 请求优先级（[Q12](./open-questions.md) 拍板不做） |
+| Superseded | 1 | U02 双栏/三栏开关 → 被 [D08](./decisions/008-vscode-dock-shell.md) 决定四整片作废 |
 | Deferred | 2 | U10–U11 |
 
 **执行顺序**（批次，详见 execution-plan）：
-`U01 ✅ → U09 ✅ → U12 ✅ → U02+U03-a ✅ → U05+U03-b ✅ → U08-2 ✅ → U13 → U06-a+U07 → U04`。批次 7 可与其余交错，但都不得与 U01 并行。
+`U01 ✅ → U09 ✅ → U12 ✅ → U02+U03-a ✅ → U05+U03-b ✅ → U08-2 ✅ → U13 ✅ → U06-a+U07 ✅ → U04 ✅ → U14 ✅
+→ 批次 8：U15-a ✅ → U15-b ✅ → U15-c ✅ → U15-d ✅ → U16 ✅`。
+**全部切片已落地**（批次 1–8）；批次 8 由 [D08](./decisions/008-vscode-dock-shell.md) 开立，
+按 [`docs/design/a11-vscode-shell-prototype.html`](../../../design/a11-vscode-shell-prototype.html) 施工。
+外部阻塞仍只有 U06-b（等 Pi 计划 T38），Deferred 仍是 U10/U11。
 U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排位再插控件，同一块 JSX 只改一次。
+
+**新增决策**：
+- ~~[D05](./decisions/005-two-column-run-surface.md)——双栏 rail 由「只有 Context」扩到「Context + Run」~~
+  **Superseded by [D07](./decisions/007-two-column-is-two-columns-and-one-bar-per-column.md)**：
+  双栏已无第三列可挂，Context 与 Run 一并退出双栏。
+- [D06](./decisions/006-plugin-inventory-source.md)——插件清单由 worker 上报「实际加载了什么」，
+  不在 Main 重实现 pi 的解析（后者是第二份手抄，表现为「界面说 3 个、agent 实际加载 1 个」）。
+- [D08](./decisions/008-vscode-dock-shell.md)——**VSCode 式壳层**：左栏是图标轨道 + 面板的导航容器
+  （聊天 / Git / 文件 / 上下文 / 运行），右栏只做文件与编辑器，中栏一个已启动会话一个 Tab，
+  **删掉双栏/三栏与上下文面板开关**。推翻 D07 决定一与决定三（决定二「每栏一条横条」继续有效），
+  并使 U02 整片作废。基准是 `docs/design/a11-vscode-shell-prototype.html`。
+- ~~[D07](./decisions/007-two-column-is-two-columns-and-one-bar-per-column.md)——**双栏就是两栏**~~
+  **决定一/三 Superseded by D08**（决定二仍有效）：
+  （推翻 D02 决定一与 D05）；**每栏只留一条横条**，三列齐平；GUI/TUI 与列数是两个独立控件，
+  不做成三选一。起因是用户看到实际界面后指出「臃肿不协调」，取证发现原型与 D02 在双栏语义上
+  互相矛盾、而代码跟的是 D02。
 
 **无未决问题**：Q01–Q13 全部关闭（Q08/Q10 见 [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md)；
 Q09 由取证关闭；Q11 布局尺寸维持现值；Q12 请求优先级不做；
 Q13 免绑定会话跨重启可见性由 [D04](./decisions/004-unbound-session-index-visibility.md) 拍板走索引标记，落为 U13）。
 
-## Done
+## Done — 批次 8（最新）
+
+### U15 — VSCode 式壳层重排 — **Done**（2026-09-05）
+
+按 [D08](./decisions/008-vscode-dock-shell.md) 与
+[`a11 原型`](../../../design/a11-vscode-shell-prototype.html) 施工，四片有先后依赖：
+
+- **U15-a 左栏导航容器**：`44px` 纯图标轨道 + 面板（顶部 h-9 标题行）+ 页脚账号胶囊。
+  五个入口 `chat · git · editor(文件) · context · run`，轨道底部 `插件 · 设置`。
+  `chat` 复用既有注册表 id，语义改为「会话列表」；原 `LeftNav` 主体降为该 surface 的视图。
+  `sidebarCollapsed` 语义改为「收起面板、轨道常驻」。
+- **U15-b 右栏收敛**：`ContextPanel` 退役，右栏只剩文件与编辑器 + 展开覆盖；
+  无打开文件时不渲染（不是 0 宽）。
+- **U15-c 中栏会话 Tab**：新增打开态（有序 `openSessionIds`）+ 会话 Tab 条 + `+` 新建，
+  GUI/TUI 移到该条右端。`activeSessionId → 保证在 Tab 列表里` 是单向的，
+  既有 `selectSession` 调用点不改。关 Tab ≠ 归档/关闭会话。
+  左栏列表标出打开态（实心=运行中 / 空心=已启动 / 无=未启动）。
+- **U15-d 删列数开关**：`shellColumnMode` 及其模型、按钮、快捷键分支整体删除；
+  store 版本 v2 → v3（丢弃老 `railOrder` 与 `shellColumnMode`）。
+
+**验收看点**（进累计 GUI 点验）：① 轨道五个图标能切换且选中态可辨；② 面板标题行说明当前区；
+③ 点左栏会话在中栏新开 Tab、可多开、可关；④ 关 Tab 后会话仍在左栏列表里；
+⑤ 顶部再无双栏/三栏与「上下文面板」按钮；⑥ 打开文件才出现右栏，展开能盖住中栏。
+
+### U16 — 上下文页图形化与折叠 — **Done**（2026-09-05）
+
+按 [D08](./decisions/008-vscode-dock-shell.md) 决定五：环形（总占比）+ 堆叠条（分项构成）；
+「对话构成」默认折叠 + 展开后限制条数（前 N 条 + 显示更多）。
+
+**边界不变**：数据源仍是本窗口已加载的消息（U07 确立），措辞继续点明；
+真实 token 占用仍等 Pi 计划 T38，不把字符数印成 token 数。
+**落地形态**：环形图画的是**角色构成**（`pathLength=100`，弧长即图例百分比），不是窗口占用率；
+折叠与限条数**两条都做**——只折叠挡的是第一眼，300 轮会话展开一次照样渲染 300 行。
+
+**证据**：[U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)。
+**欠项**：GUI 点验（本批次尝试过，真实窗口起不来，详见 evidence 第六节）；
+fullscreen diff 会一并藏掉会话 Tab 条（可恢复，备选方案已记录）；多会话并发未在真机验证。
+
+## Done — 批次 1–7
 
 ### U00 — 开工前实况核查 — **Done**
 
@@ -86,7 +142,11 @@ fork **不**继承档位（与 `unbound` 相反，理由见 evidence §三）。
 
 **欠项**：GUI 点验未做，建议与 U09 合并做一次（非取证型验收，不阻塞）。
 
-### U02 — 双栏 / 三栏布局模式开关 — **Done**（2026-09-03）
+### U02 — 双栏 / 三栏布局模式开关 — ~~Done~~ **Superseded by [D08](./decisions/008-vscode-dock-shell.md)**（2026-09-05）
+
+> 整片作废并从代码中删除：surface 迁入左栏容器后，「要不要第三列」这个问题没有第二个答案了。
+> 这是本计划第一次删掉一片已验收的功能，原因是上层布局形态被推翻，不是它做错了。
+> 下方保留原始理由与落地记录。
 
 `PersistedShellLayout` 新增 `shellColumnMode`（默认 `three-column`）。双栏 = 只承担 AI 对话与 AI 开发，
 rail 收敛到 `context` 一件（[D02](./decisions/002-layout-cwd-and-evidence-scope.md) 决定一，解 [Q05](./open-questions.md)）。
@@ -150,32 +210,87 @@ rail 收敛到 `context` 一件（[D02](./decisions/002-layout-cwd-and-evidence-
 
 **证据**：同上 evidence。**欠项**：GUI 点验（合并做）。
 
-## Ready
+### U14 — 壳层横条重排与双栏收敛 — **Done**（2026-09-04）
 
-条目已在 [execution-plan](./topics/execution-plan.md) 里切成可执行片并配了验收标准。下方只保留任务身份、范围边界与拍板出处；
-**不要**在本文件复制验收标准或改动落点。
+用户看到实际界面后提出：顶栏、中右侧横栏、右侧图标栏「十分的不协调，显得软件很臃肿」，
+并以 `docs/design/a10-pix-ui-alignment-prototype.html` 的形态为准。按
+[D07](./decisions/007-two-column-is-two-columns-and-one-bar-per-column.md) 落地。
+
+- **中栏 3 层横条 / 104px → 2 层 / 68px**：`ChatWorkspace` 的 h-9 头整条删除，
+  内容上交 `MainHeader`；`MainHeader` 不再贯通中右，移入中栏。
+- **`MainHeader` 按钮 7 → 3**：surface 切换的四个无标签图标搬进右栏自己的**文字 tab 条**；
+  宽阅读栏进设置；剩「收/开面板 · 双栏⇄三栏 · GUI｜TUI」。
+- **双栏真的只有两列**（推翻 D02 决定一 + D05）：`columnModeHasPanel` 为假时不渲染
+  `ContextPanel`——`visible={false}` 的 0 宽盒子仍会画出 1px 的 `border-l`。
+  **代价**：U06-a / U07 在双栏下不可达，`Ctrl/Cmd+1..4`、`Ctrl/Cmd+J` 在双栏下失效。
+- **顶栏 5 件 → 3 件**：设置与用户胶囊下沉左栏底部（顺带修好 macOS 上胶囊完全不可达的平台缺口）。
+- **GUI/TUI 不与列数合并**：两个 store、两条持久化，合成三选一需要藏一个「上一个非 TUI 档」。
+
+**证据**：[U14 evidence](./evidence/2026-09-04-u14-shell-chrome-realignment.md)（含四条变异验证、
+9 个测试文件 24 条断言的改写理由，以及第一版做法被依赖方向守卫判红的记录）。
+**欠项**：GUI 点验（合并做）。
+
+### U13 — 免绑定会话跨重启可见性 — **Done**（2026-09-04）
+
+免绑定会话重启后在侧栏消失（索引行还在，`mergeSessionIndex` 判为 orphan 丢弃）。既有缺口，被 U05 从罕见放大为常见。
+按 [D04](./decisions/004-unbound-session-index-visibility.md) 走索引标记：`SessionIndexEntry` 加可选 `unbound?: boolean`，
+Main 按 `isScratchPath` 写入，`mergeSessionIndex` 在 orphan 分支之前拦下并合成「临时对话」分组。
+
+- **比 D04 多两处落点**，都是「可见」与「能打开」之间的缺口：
+  ① `chat:ensureScratchWorkspace` 重启后必须**认领**索引里记着的目录——否则新分配的 uuid 目录会让
+  resume 撞上 `pi_session_workspace_mismatch`，会话看得见却打不开；
+  ② `ChatSession` 加 `unbound?: { workspacePath }`，因为 resume 需要一个精确路径，而 scratch 目录**按设计**不是 workspace。
+- **写入规则**：两个 IPC 入口都从自己即将写入的那个路径推出布尔值，显式 `false` 清除标记、`undefined` 才保留旧值——
+  只有 `?? existing?.unbound` 会让改绑真实目录的会话永远粘着标记。
+- **老行不回填**（D04 明确），批次 4 之前的免绑定会话仍不可见，属已知残留。
+
+**证据**：[U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md)（含四条变异验证与五条验收对照）。
+**欠项**：GUI 点验（合并做）；真机「聊天→退出→重开→点开」未跑。
+
+## 已完成切片的范围与拍板出处
+
+下方保留任务身份、范围边界与拍板出处；验收标准与改动落点在
+[execution-plan](./topics/execution-plan.md) 与各自的 evidence 里，**不要**在本文件复制。
+本节的条目全部已落地——U06-b 是唯一例外，它挂在 Pi 计划 T38 上。
 
 ### U02 — 双栏 / 三栏布局模式开关 — **已完成**（见上方 Done · U02）
 
 ### U03 — TUI 模式收起右侧栏 — **已完成**（U03-a / U03-b 均见上方 Done）
 
-### U04 — 左栏插件 / 资源入口 — 单切片 — **已拍板：只保留插件，资源不要**
+### U04 — 左栏插件入口 — **Done**（2026-09-04）
 
 对照 pix 的 `nav-packages`（带 MCP 就绪数徽标）与 `nav-resources`（带计数徽标）。
 
 **拍板**（用户 2026-09-03）：pix 的「插件」是包管理（本地已装插件，可禁用/更新/移除），「资源」是文件清单（index.js / extension.js / agent.md）——**不是重叠，是两个视角**，但资源页目前没用。本轮左栏只加「插件」入口（含 MCP 就绪徽标），**资源入口不做**。证据见 [evidence §Q03](./topics/evidence-q02-q03.md)。
 
+**落地形态**（[U04 evidence](./evidence/2026-09-04-u04-plugin-entry.md)）：入口是底栏 Settings 旁的一枚 chrome 按钮 + 对话框，
+不是 pix 那种一级导航。清单来自 worker 上报的「这个会话实际加载了什么」（[D06](./decisions/006-plugin-inventory-source.md)）；
+MCP 就绪数按 pix 同一套办法，从扩展自己发布的状态行解析（那不是 MCP API）。
+`null`（没人报告过）与 `[]`（报告了、一个都没加载）在 UI 上是两句不同的话；没数据时不渲染徽标。
+**只可见、不可管**：启用/禁用/更新/移除要走 pi 的 `PackageManager`，不在本片范围。
+
 ### U05 — 免绑定工作目录直接开聊 — **已完成**（见上方 Done · U05）
 
-### U06 — Run 面板 — 切片 U06-a（Ready）/ U06-b（已移交 Pi 计划 T38）
+### U06 — Run 面板 — U06-a **Done**（2026-09-04）/ U06-b（已移交 Pi 计划 T38）
 
 新增 `run` surface，参照 pi-app 的 `features/run/run-panel.tsx` + `context-donut.tsx`：运行态状态机、模型、思考档、回合耗时、上下文占用环形图。
 
 **边界已取证**（[evidence-q04](./topics/evidence-q04-runtime-fields.md)）：状态机/模型/选中 effort/耗时/工具**名称**渲染层可拼（现有 `RuntimeEvent` + store）；**占用 % + usage 行**需 Pi runtime 补 `usage.updated`（schema 已有、worker 不发）且目录剥离 `contextWindow`——**归 Pi-only 计划**。因此 U06 分两半：先做渲染层能拼的，占用 donut/usage 行留待 Pi runtime 补字段后做（或作为 Pi 计划 task）。
 
-### U07 — Context 面板内容增强 — Scope 待细化（建议在 U06-a 后定）
+**U06-a 已落地**（见 [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）：
+新 `run` surface，状态映射是一张全映射 `Record`（加第十个运行时状态会编译失败，不会被默认分支吞掉），
+`running` 之上再叠 tool / thinking 一层。跨会话串数据的防线放在纯函数里（单槽 `turnSendStatus` 按 `sessionId` 比对后丢弃）。
+**没有**占用/usage 的任何字段或空壳，等 T38。双栏下可见，见 [D05](./decisions/005-two-column-run-surface.md)。
 
-`context` surface 已存在，本项是对照 pi-app 的 `features/context/context-panel.tsx` 做内容层增强（分角色分段、token 估算、逐段展开、手动刷新）。范围待定：不是重建面板。
+### U07 — Context 面板内容增强 — **Done**（2026-09-04，范围本次定死）
+
+`context` surface 已存在，本项是对照 pi-app 的 `features/context/context-panel.tsx` 做内容层增强。
+**本次交付**：分角色构成（各角色字符数与占比，时间线看不到的信息）+ 逐段展开（一条消息一行，点开看正文，2000 字符封顶）。
+数据源是**本窗口已加载的消息**，措辞处处点明这一点——pi-app 读的是会话文件的 context 条目，那要新增 `context.preview` 对应 IPC，超出本计划边界。
+
+**刻意未做**：① token 估算——execution-plan 已写明随 U06-b 解锁，`字符/4` 印成 `~1.2k tok` 会像运行时报的数；
+② 手动刷新按钮——本仓这份数据是实时 store，不是一次性快照，放按钮是装饰。
+两条理由见 [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md) §二。
 
 ### U08 — 模型选择器对齐 — U08-1（无需改动）/ U08-2（**Done**）/ U08-3（Dropped，见 [Q12](./open-questions.md)）
 
@@ -189,18 +304,6 @@ rail 收敛到 `context` 一件（[D02](./decisions/002-layout-cwd-and-evidence-
    取证（[evidence-q09](./topics/evidence-q09-service-tier.md)）证实透传通道存在但挂在「模型静态默认值」层
    而非「每次请求」层；补那一层的代价、以及该参数只对 OpenAI 系生效的适用面，都撑不起这个次要控件。
    重开时优先走路径 A。
-
-### U13 — 免绑定会话跨重启可见性 — 单切片 — **Ready**
-
-免绑定会话重启后在侧栏消失（索引行还在，`mergeSessionIndex` 判为 orphan 丢弃）。这是**既有**缺口，
-被 U05 从罕见放大为常见。
-
-**拍板**（[D04](./decisions/004-unbound-session-index-visibility.md)，解 [Q13](./open-questions.md)）：
-`SessionIndexEntry` 加可选 `unbound?: boolean`，Main 在 `recordCreated` 按 `isScratchPath` 写入，
-`mergeSessionIndex` 见到它合成临时分组而不丢弃。两个陷阱写在 D04「约束」一节：索引文件是裸数组（只能加可选
-per-entry 字段），`recordCreated` 逐字段重建（新字段必须带 `?? existing?.unbound`）。
-
-**不在范围**：「用户移除文件夹后其会话变 orphan」这条既有行为不改；批次 4 之前的老行不回填标记。
 
 ## Deferred
 
@@ -220,10 +323,10 @@ Pi 计划 T37 收口 ✅ 2026-09-03
       ├→ U09-1 空态摘列 ✅ → U09-2 底栏顺序 ✅ → U12 权限档 chip ✅（占底栏左侧位）
       └→ U02-a 模式字段 ✅ → U02-b 双栏收敛 ✅ → U03-a TUI 收右栏 ✅
                                               → U05-a/b/c/d 免绑定开聊 ✅ → U03-b TUI 解绑 ✅
-                                              → U13 免绑定会话跨重启可见性（承 U05 的 unbound 语义）
+                                              → U13 免绑定会话跨重启可见性 ✅ 2026-09-04（承 U05 的 unbound 语义）
   → U08-2 思考档七档 ✅ 2026-09-03（无前置）
-  → U06-a Run 面板渲染层（需 U02 的模式语义确定挂载位）→ U07 Context 增强
-  → U04 左栏插件入口（无前置，可交错）
+  → U06-a Run 面板渲染层 ✅ 2026-09-04（挂载位由 U02 的模式语义决定，D05）→ U07 Context 增强 ✅ 2026-09-04
+  → U04 左栏插件入口 ✅ 2026-09-04（无前置，可交错；清单来源见 D06）
 
 跨计划：
   U06-b 占用 donut/usage 行 ← Pi 计划 T38-a/b（D03 决定二已移交）

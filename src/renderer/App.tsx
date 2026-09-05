@@ -1399,7 +1399,7 @@ export default function App() {
     <div className="relative z-0 flex h-screen flex-col overflow-hidden">
       <BackgroundLayer />
       {/* Custom Title Bar for Windows/Linux */}
-      <WindowTitleBar onOpenSettings={openSettings} />
+      <WindowTitleBar />
 
       {/* DevTools Overlay for macOS traffic lights protection */}
       <DevToolsOverlay />

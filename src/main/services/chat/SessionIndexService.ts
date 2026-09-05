@@ -75,6 +75,12 @@ export class SessionIndexService {
    * first send re-records with the binding, but a later one that happens not
    * to know it (an older caller, a path that never resolved it) would
    * otherwise erase the row's agent every time.
+   *
+   * U13 gives `unbound` the same treatment for the same reason, with one
+   * difference: an explicit `false` CLEARS it (`??` only falls back on
+   * undefined). A caller that knows the answer — both IPC entry points derive
+   * it from the path they are about to record — must be able to say "this row
+   * is not scratch any more" when a chat is re-recorded against a real folder.
    */
   async recordCreated(input: {
     sessionId: string;
@@ -82,16 +88,22 @@ export class SessionIndexService {
     model?: string;
     /** Loose `string` on purpose — this is the disk side (SessionIndexEntry). */
     agent?: string;
+    /** U13 — `workspacePath` is a scratch directory. Omit when unknown. */
+    unbound?: boolean;
   }): Promise<void> {
     await this.ensureLoaded();
     await this.queueMutation(async () => {
       const existing = this.entries.get(input.sessionId);
+      const unbound = input.unbound ?? existing?.unbound;
       this.entries.set(input.sessionId, {
         sessionId: input.sessionId,
         runtimeIdentity: existing?.runtimeIdentity,
         piLeaf: existing?.piLeaf,
         legacyImport: existing?.legacyImport,
         agent: input.agent ?? existing?.agent,
+        // Written only when true so a bound row never grows the field: the
+        // file is read by older builds too, and `undefined` is not serialized.
+        ...(unbound ? { unbound: true } : {}),
         workspacePath: input.workspacePath,
         title: existing?.title ?? '',
         model: input.model ?? existing?.model,

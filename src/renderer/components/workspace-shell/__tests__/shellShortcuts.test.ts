@@ -17,47 +17,36 @@ function input(overrides: Partial<ResolveShellShortcutInput> = {}): ResolveShell
 }
 
 describe('resolveShellShortcut', () => {
-  describe('Ctrl/Cmd+J — toggle context panel', () => {
-    it('resolves on non-mac with ctrlKey', () => {
-      expect(resolveShellShortcut(input({ code: 'KeyJ', ctrlKey: true }))).toEqual({
-        type: 'toggle-context-panel',
-      });
+  // D08: Ctrl/Cmd+J is UNBOUND. It toggled the right context panel, which no
+  // longer exists; the surfaces moved into the dock, and Ctrl/Cmd+B toggles
+  // that. A key left pointing at a deleted column is a dead key, so it goes
+  // rather than becoming a silent alias.
+  describe('Ctrl/Cmd+J — no longer bound (D08)', () => {
+    it('resolves to nothing on either platform', () => {
+      expect(resolveShellShortcut(input({ code: 'KeyJ', ctrlKey: true }))).toBeNull();
+      expect(resolveShellShortcut(input({ code: 'KeyJ', metaKey: true, isMac: true }))).toBeNull();
     });
 
-    it('resolves on mac with metaKey', () => {
-      expect(resolveShellShortcut(input({ code: 'KeyJ', metaKey: true, isMac: true }))).toEqual({
-        type: 'toggle-context-panel',
-      });
-    });
-
-    it('is honored even when the target is editable (only exception)', () => {
+    it('is not honored while editable either — its focus exemption went with it', () => {
       expect(
         resolveShellShortcut(input({ code: 'KeyJ', ctrlKey: true, targetIsEditable: true }))
-      ).toEqual({ type: 'toggle-context-panel' });
-    });
-
-    it('does not resolve on mac with ctrlKey (wrong mod for the platform)', () => {
-      expect(resolveShellShortcut(input({ code: 'KeyJ', ctrlKey: true, isMac: true }))).toBeNull();
-    });
-
-    it('does not resolve on non-mac with metaKey (wrong mod for the platform)', () => {
-      expect(resolveShellShortcut(input({ code: 'KeyJ', metaKey: true }))).toBeNull();
+      ).toBeNull();
     });
   });
 
-  describe('Ctrl/Cmd+1..4 — select surface', () => {
-    // T-32 (D27): rail order is A08's tab order, so the digits follow it.
-    // 2026-09-04: terminal left the rail, so Digit4 now binds to nothing.
-    const expected = ['git', 'editor', 'context'];
+  describe('Ctrl/Cmd+1..5 — select surface', () => {
+    // D08: the dock has five entries and `chat` leads them, so every digit
+    // shifted by one and Digit5 became bound.
+    const expected = ['chat', 'git', 'editor', 'context', 'run'];
 
-    it('maps Digit1..3 to git/editor(files)/context in rail order on non-mac', () => {
+    it('maps Digit1..5 to chat/git/files/context/run in rail order on non-mac', () => {
       for (let digit = 1; digit <= expected.length; digit++) {
         const action = resolveShellShortcut(input({ code: `Digit${digit}`, ctrlKey: true }));
         expect(action).toEqual({ type: 'select-surface', surfaceId: expected[digit - 1] });
       }
     });
 
-    it('maps Digit1..3 the same way on mac with metaKey', () => {
+    it('maps Digit1..5 the same way on mac with metaKey', () => {
       for (let digit = 1; digit <= expected.length; digit++) {
         const action = resolveShellShortcut(
           input({ code: `Digit${digit}`, metaKey: true, isMac: true })
@@ -66,25 +55,8 @@ describe('resolveShellShortcut', () => {
       }
     });
 
-    it('does not resolve Digit4 now that only three surfaces are on the rail', () => {
-      expect(resolveShellShortcut(input({ code: 'Digit4', ctrlKey: true }))).toBeNull();
-    });
-
-    it('does not resolve Digit5 (only the first four rail surfaces are bound)', () => {
-      expect(resolveShellShortcut(input({ code: 'Digit5', ctrlKey: true }))).toBeNull();
-    });
-
-    it('binds only Digit1→context in two-column; Digit2..4 resolve to nothing (U02-b)', () => {
-      expect(
-        resolveShellShortcut(input({ code: 'Digit1', ctrlKey: true, columnMode: 'two-column' }))
-      ).toEqual({ type: 'select-surface', surfaceId: 'context' });
-      for (const digit of [2, 3, 4]) {
-        expect(
-          resolveShellShortcut(
-            input({ code: `Digit${digit}`, ctrlKey: true, columnMode: 'two-column' })
-          )
-        ).toBeNull();
-      }
+    it('does not resolve Digit6 (only the five dock entries are bound)', () => {
+      expect(resolveShellShortcut(input({ code: 'Digit6', ctrlKey: true }))).toBeNull();
     });
 
     it('is not honored when the target is editable', () => {
@@ -108,16 +80,16 @@ describe('resolveShellShortcut', () => {
     });
   });
 
-  describe('Ctrl/Cmd+B — toggle sidebar collapsed', () => {
+  describe('Ctrl/Cmd+B — toggle the dock panel', () => {
     it('resolves on non-mac with ctrlKey', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB', ctrlKey: true }))).toEqual({
-        type: 'toggle-sidebar',
+        type: 'toggle-dock',
       });
     });
 
     it('resolves on mac with metaKey', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB', metaKey: true, isMac: true }))).toEqual({
-        type: 'toggle-sidebar',
+        type: 'toggle-dock',
       });
     });
 
@@ -158,13 +130,13 @@ describe('resolveShellShortcut', () => {
 
     it('still resolves on non-mac with ctrlKey alone (no metaKey regression)', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB', ctrlKey: true }))).toEqual({
-        type: 'toggle-sidebar',
+        type: 'toggle-dock',
       });
     });
 
     it('still resolves on mac with metaKey alone (no ctrlKey regression)', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB', metaKey: true, isMac: true }))).toEqual({
-        type: 'toggle-sidebar',
+        type: 'toggle-dock',
       });
     });
   });
@@ -172,13 +144,7 @@ describe('resolveShellShortcut', () => {
   // m15: IME composition guard (mirrors App/useAppKeyboardShortcuts.ts's own
   // `e.isComposing` check).
   describe('IME composition guard', () => {
-    it('returns null for Ctrl/Cmd+J while composing — the one shortcut normally exempt from focus protection', () => {
-      expect(
-        resolveShellShortcut(input({ code: 'KeyJ', ctrlKey: true, isComposing: true }))
-      ).toBeNull();
-    });
-
-    it('returns null for every other binding while composing', () => {
+    it('returns null for every binding while composing', () => {
       expect(
         resolveShellShortcut(input({ code: 'Digit1', ctrlKey: true, isComposing: true }))
       ).toBeNull();
@@ -192,8 +158,8 @@ describe('resolveShellShortcut', () => {
 
     it('resolves normally once composition ends', () => {
       expect(
-        resolveShellShortcut(input({ code: 'KeyJ', ctrlKey: true, isComposing: false }))
-      ).toEqual({ type: 'toggle-context-panel' });
+        resolveShellShortcut(input({ code: 'KeyB', ctrlKey: true, isComposing: false }))
+      ).toEqual({ type: 'toggle-dock' });
     });
   });
 

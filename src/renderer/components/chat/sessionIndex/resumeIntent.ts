@@ -78,13 +78,19 @@ export function shouldResumeSession(
   if (!session) {
     return { shouldResume: false, reason: 'no-session' };
   }
-  if (!workspace) {
+  // U13: an unbound chat legitimately has no workspace — its cwd is the
+  // scratch directory recorded on the session itself, and Main re-creates that
+  // exact directory (`adopt`) before resuming into it. Without this the only
+  // way back into a restarted temporary chat was a resume that never fired,
+  // leaving the user staring at an empty timeline.
+  const workspacePath = session.unbound?.workspacePath ?? workspace?.path;
+  if (!session.unbound && !workspace) {
     return { shouldResume: false, reason: 'no-workspace' };
   }
   if (session.agent && session.agent !== PI_AGENT) {
     return { shouldResume: false, reason: `unsupported-agent:${session.agent}` };
   }
-  if (!workspace.path) {
+  if (!workspacePath) {
     // Demo placeholder workspace (path '') — resuming against it would hand
     // the Host an empty cwd. Real workspaces always carry a repository path.
     return { shouldResume: false, reason: 'no-workspace-path' };
@@ -101,7 +107,7 @@ export function shouldResumeSession(
     args: {
       sessionId: session.id,
       runtimeIdentity,
-      workspacePath: workspace.path,
+      workspacePath,
       // D48 S2 (B11): `Automatic` reaches here as `undefined`, and the key is
       // dropped rather than sent with an undefined value — "no model" has to be
       // indistinguishable from "field absent" for the runtime default to apply.

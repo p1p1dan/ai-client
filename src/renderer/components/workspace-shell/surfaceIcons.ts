@@ -12,6 +12,7 @@
  * rendered there (only the four always-available surfaces are).
  */
 import {
+  Activity,
   AppWindow,
   ArrowLeftRight,
   FileCode,
@@ -28,6 +29,7 @@ import {
 import type { SurfaceIconName } from './surfaceRegistry';
 
 export const SURFACE_ICON_MAP: Record<SurfaceIconName, LucideIcon> = {
+  activity: Activity,
   'file-code': FileCode,
   'git-branch': GitBranch,
   'git-pull-request': GitPullRequest,

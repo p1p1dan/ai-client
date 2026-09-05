@@ -17,7 +17,18 @@ import { stripComments } from './stripComments';
  * stripped first, so prose describing the fix cannot satisfy the scan.
  */
 
+// D07: the handover moved out of `ChatWorkspace.tsx` into
+// `usePresentationSwitch.ts` — the GUI/TUI buttons now live in the shell's
+// header bar, and `components/chat` may not import `components/workspace-shell`
+// (guarded in `composerTargetGuards.test.ts`), so the shell owns one instance of
+// the hook and hands it to both. The behaviour asserted below is byte-identical;
+// only the file it lives in changed.
 const WORKSPACE = stripComments(
+  readFileSync(path.join(__dirname, '..', 'usePresentationSwitch.ts'), 'utf8'),
+  'usePresentationSwitch.ts'
+);
+/** The half that still renders the terminal and the timeline it swaps with. */
+const CHAT_COLUMN = stripComments(
   readFileSync(path.join(__dirname, '..', 'ChatWorkspace.tsx'), 'utf8'),
   'ChatWorkspace.tsx'
 );
@@ -49,7 +60,11 @@ describe('leaving the Pi TUI re-reads the session from disk', () => {
   it('holds the chat surface until the reload settles', () => {
     expect(WORKSPACE).toContain('setSurfaceSwitching(true)');
     expect(WORKSPACE).toMatch(/finally \{\s*setSurfaceSwitching\(false\);/);
-    expect(WORKSPACE).toMatch(/surfaceSwitching && \(/);
+    // D07: the flag is raised in the hook but CONSUMED in the chat column,
+    // which still renders the timeline. Asserted on both halves — a flag that
+    // is set and never read would leave the pre-TUI timeline on screen during
+    // the reload, which is the state this whole handover exists to avoid.
+    expect(CHAT_COLUMN).toMatch(/surfaceSwitching && \(/);
   });
 });
 

@@ -1,16 +1,13 @@
-import { Monitor, Play, Terminal } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Play } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { addToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useExtensionUiStore } from '@/stores/extensionUi';
 import { useExtensionUiDisplayStore } from '@/stores/extensionUiDisplay';
-import { useScratchWorkspaceStore } from '@/stores/scratchWorkspace';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import { markSessionsLive } from '@/stores/sessionRetirement';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
-import { useSettingsStore } from '@/stores/settings';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { AgentTerminal } from './AgentTerminal';
 import { ChatComposer } from './ChatComposer';
@@ -32,18 +29,25 @@ import {
 } from './middleColumnLayout';
 import type { RunSendOrigin } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
-import { isSessionBusy } from './sessionIndex/resumeIntent';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
+import type { PresentationSwitch } from './usePresentationSwitch';
 
 interface ChatWorkspaceProps {
   className?: string;
   /** Opens the shared AddRepositoryDialog (owned by App) — threaded down to ComposerTargetBar. */
   onAddRepository?: (mode?: 'local' | 'remote' | 'ssh') => void;
+  /**
+   * D07: the shell owns the GUI/TUI switch now (its buttons live in the header
+   * bar `WorkspaceShell` renders), so this column is handed the same instance
+   * rather than creating a second one — two `usePresentationSwitch` calls would
+   * mean two `tuiTerminalId`s for one terminal.
+   */
+  presentation: PresentationSwitch;
 }
 
-export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps) {
+export function ChatWorkspace({ className, onAddRepository, presentation }: ChatWorkspaceProps) {
   const initRuntime = useChatSessionsStore((state) => state.initRuntime);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
@@ -70,133 +74,23 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
   const activeWorkspacePath = activeWorkspace?.path?.trim() ?? '';
   const repoName = deriveRepoName(activeWorkspacePath);
-  // Q17/D19: the TUI takes over this chat's own JSONL once a runtime is bound.
-  // An unbound chat has no conversation to hand over, so it starts fresh.
-  const tuiHeaderLabel = activeSession?.runtimeIdentity
-    ? 'Pi TUI continues this chat'
-    : 'Pi TUI starts a new session';
   const hasWorkingDirectory = workspaces.some((workspace) => workspace.path.trim().length > 0);
-  // U05-b: this chat has no bound folder, so it runs in an isolated directory
-  // Main allocates for it. `activeWorkspace` being absent and its path being
-  // empty (the demo placeholder) are the same situation here.
-  const isUnboundSession = Boolean(activeSessionId) && !activeWorkspacePath;
-  const scratchCwd = useScratchWorkspaceStore((state) =>
-    activeSessionId ? (state.pathsBySession[activeSessionId] ?? null) : null
-  );
-  const ensureScratchWorkspace = useScratchWorkspaceStore((state) => state.ensure);
-  /** U03-b: the directory the Pi TUI opens in — bound folder, else scratch. */
-  const effectiveCwd = activeWorkspacePath || (scratchCwd ?? '');
-  const presentationMode = useSettingsStore((state) => state.presentationMode);
-  const setPresentationMode = useSettingsStore((state) => state.setPresentationMode);
-  const [tuiTerminalId, setTuiTerminalId] = useState<string | null>(null);
-  /** True while leaving the TUI, until the session has been re-read from disk. */
-  const [surfaceSwitching, setSurfaceSwitching] = useState(false);
-  const previousWorkspacePathRef = useRef(activeWorkspacePath);
-
-  // U03-b: the gate used to be "this chat has a bound folder". It is now
-  // "this chat has a usable cwd" — an unbound chat qualifies, it just has to
-  // have its directory allocated first, which is why this became async.
-  const openTui = useCallback(() => {
-    if (!activeSessionId) return;
-    // pix refuses the switch mid-turn instead of killing or waiting on it, and
-    // the same has to hold here for a sharper reason: handing the file to the
-    // terminal while the worker is still writing it would give one JSONL two
-    // live writers. `isSessionBusy` is the same predicate the resume path uses
-    // to decide the Host would reject a request.
-    //
-    // Read the status off the store rather than closing over it, for the same
-    // reason `markSendAttempt` does: a callback captured at render time would
-    // decide with the status that was current then, and "is a turn running" has
-    // to be answered at the moment of the click.
-    const liveStatus = useChatSessionsStore
-      .getState()
-      .sessions.find((session) => session.id === activeSessionId)?.status;
-    if (isSessionBusy(liveStatus ?? 'idle')) {
-      addToast({
-        type: 'warning',
-        title: 'Wait for this turn to finish',
-        description: 'The Pi TUI can take over this chat once the current turn ends.',
-      });
-      return;
-    }
-    const start = () => {
-      setPresentationMode('tui');
-      setTuiTerminalId((current) => current ?? `pi-tui-${crypto.randomUUID()}`);
-    };
-    if (effectiveCwd) {
-      start();
-      return;
-    }
-    void ensureScratchWorkspace(activeSessionId).then(start, (error: unknown) => {
-      addToast({
-        type: 'error',
-        title: 'Could not start the Pi TUI',
-        description:
-          error instanceof Error ? error.message : 'Failed to prepare a temporary folder.',
-      });
-    });
-  }, [activeSessionId, effectiveCwd, ensureScratchWorkspace, setPresentationMode]);
-
-  /**
-   * Leave terminal mode the way pix's `leaveTerminalMode()` does: suspend the
-   * TUI, re-read the session from disk, and only then show the timeline.
-   *
-   * The reload is the whole point. The TUI appends to this chat's own JSONL,
-   * but the GUI worker read that file once when it started and never looks
-   * again — so without this step the timeline still shows the pre-TUI
-   * conversation AND the worker's next turn branches off the pre-TUI entry,
-   * leaving everything typed in the terminal on an abandoned path.
-   *
-   * Suspend rather than dispose: the process stays warm so re-entering is
-   * instant. That is safe because the only way the GUI writes this file is
-   * through the send path, which kills terminals on it first — a suspended
-   * terminal can never wake up onto a file the GUI has since written.
-   */
-  const openGui = useCallback(() => {
-    const terminalId = tuiTerminalId;
-    const sessionId = activeSessionId;
-    setPresentationMode('gui');
-    if (!terminalId || !sessionId) return;
-    setSurfaceSwitching(true);
-    void (async () => {
-      try {
-        await window.electronAPI.piTui.suspend(terminalId);
-        await window.electronAPI.chat.reloadSession({ sessionId });
-      } catch (error) {
-        // The timeline may now be behind the file with no way to tell how far,
-        // so drop the terminal rather than leave a warm one that could append
-        // again on top of a history nobody reloaded.
-        void window.electronAPI.piTui.dispose(terminalId).catch(() => {});
-        setTuiTerminalId(null);
-        addToast({
-          type: 'error',
-          title: 'Could not reload this chat',
-          description:
-            error instanceof Error
-              ? error.message
-              : 'The conversation could not be re-read from disk.',
-        });
-      } finally {
-        setSurfaceSwitching(false);
-      }
-    })();
-  }, [activeSessionId, setPresentationMode, tuiTerminalId]);
-
-  useEffect(() => {
-    if (!tuiTerminalId) return;
-    return () => {
-      void window.electronAPI.piTui.dispose(tuiTerminalId).catch(() => {});
-    };
-  }, [tuiTerminalId]);
-
-  useEffect(() => {
-    if (previousWorkspacePathRef.current === activeWorkspacePath) return;
-    previousWorkspacePathRef.current = activeWorkspacePath;
-    setTuiTerminalId((current) => {
-      if (current) void window.electronAPI.piTui.dispose(current).catch(() => {});
-      return null;
-    });
-  }, [activeWorkspacePath]);
+  // D07: `tuiHeaderLabel`, the temporary-chat marker and its `scratchCwd` moved
+  // to `MainHeader` with the rest of this column's old bar. They are derived
+  // there from the same stores, not threaded through — this column no longer has
+  // a header to put them in.
+  //
+  // D07: the GUI/TUI switch moved into the shell's header bar, so its state now
+  // lives in `usePresentationSwitch` and the shell hands the result to both
+  // halves. See that hook for why the owner had to change and what did not.
+  const {
+    presentationMode,
+    openTui,
+    handleTuiExit,
+    tuiTerminalId,
+    surfaceSwitching,
+    effectiveCwd,
+  } = presentation;
 
   // T-28: sticky latch of sessions that have started a send this app run —
   // deriveMiddleColumnMode needs this to dock the composer the instant Enter
@@ -325,56 +219,14 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
 
   return (
     <section className={cn('relative flex min-h-0 flex-col', className)}>
-      {(activeWorkspacePath || isUnboundSession) && (
-        <div className="flex h-9 shrink-0 items-center justify-between border-b px-3">
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-meta text-muted-foreground">
-              {presentationMode === 'tui' ? tuiHeaderLabel : repoName}
-            </span>
-            {/* U05-b ③: the header half of the temporary-chat marker. Says what
-                the state IS (no folder, private scratch space) rather than
-                labelling it an error — this is a supported way to work. */}
-            {isUnboundSession && (
-              <span
-                className="shrink-0 rounded-xs border px-1.5 py-0.5 text-meta text-muted-foreground"
-                title={
-                  scratchCwd
-                    ? `Temporary chat — running in ${scratchCwd}, removed when the app quits.`
-                    : 'Temporary chat — no folder bound. A private folder is created on the first message and removed when the app quits.'
-                }
-              >
-                Temporary
-              </span>
-            )}
-          </span>
-          <div className="flex h-7 items-center rounded border bg-muted p-0.5" role="group">
-            <button
-              type="button"
-              className={cn(
-                'flex h-6 items-center gap-1 px-2 text-meta',
-                presentationMode === 'gui' && 'bg-background text-foreground shadow-sm'
-              )}
-              onClick={openGui}
-              aria-pressed={presentationMode === 'gui'}
-            >
-              <Monitor className="size-3.5" />
-              GUI
-            </button>
-            <button
-              type="button"
-              className={cn(
-                'flex h-6 items-center gap-1 px-2 text-meta',
-                presentationMode === 'tui' && 'bg-background text-foreground shadow-sm'
-              )}
-              onClick={openTui}
-              aria-pressed={presentationMode === 'tui'}
-            >
-              <Terminal className="size-3.5" />
-              TUI
-            </button>
-          </div>
-        </div>
-      )}
+      {/*
+        D07: this column no longer draws a header bar of its own. It used to be
+        a second h-9 strip under `MainHeader` carrying only the repo name and the
+        GUI/TUI switch — three stacked bars over the 32px title bar is what read
+        as clutter. Everything it held (repo name, the temporary-chat marker, the
+        GUI/TUI switch) moved up into the one bar the shell renders above this
+        column.
+      */}
 
       {/* U03-b: "has a usable cwd", not "has a bound folder" — an unbound chat
           enters the TUI in its own isolated directory. `effectiveCwd` is empty
@@ -393,15 +245,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
                 ? { sessionFile: activeSession.runtimeIdentity }
                 : {})}
               isActive
-              onExit={() => {
-                setTuiTerminalId(null);
-                setPresentationMode('gui');
-                addToast({
-                  type: 'warning',
-                  title: 'Pi TUI closed',
-                  description: 'Returned to the GUI session.',
-                });
-              }}
+              onExit={handleTuiExit}
             />
           </div>
         ) : (

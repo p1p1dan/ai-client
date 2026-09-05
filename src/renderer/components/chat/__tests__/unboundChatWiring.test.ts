@@ -26,6 +26,19 @@ const WORKSPACE = stripComments(
   readFileSync(path.join(__dirname, '..', 'ChatWorkspace.tsx'), 'utf8'),
   'ChatWorkspace.tsx'
 );
+// D07 moved the temporary-chat marker up into the shell's single header bar and
+// the GUI/TUI switch's state into `usePresentationSwitch`; D08 replaced that
+// header with the session tab strip, which carries both. The chat column still
+// draws no bar of its own, so the U05-b / U03-b guarantees below are asserted
+// where the code now lives.
+const HEADER = stripComments(
+  readFileSync(path.join(__dirname, '..', '..', 'workspace-shell', 'SessionTabs.tsx'), 'utf8'),
+  'SessionTabs.tsx'
+);
+const SWITCH = stripComments(
+  readFileSync(path.join(__dirname, '..', 'usePresentationSwitch.ts'), 'utf8'),
+  'usePresentationSwitch.ts'
+);
 
 describe('[U05-b] the composer can send without a bound folder', () => {
   it('treats "session with no cwd" as unbound rather than unusable', () => {
@@ -66,14 +79,27 @@ describe('[U05-b] the composer can send without a bound folder', () => {
 });
 
 describe('[U05-b] the workspace shows the temporary marker and keeps the welcome path', () => {
-  it('marks an unbound chat in the header', () => {
-    expect(WORKSPACE).toMatch(/isUnboundSession && \([\s\S]{0,400}Temporary/);
+  it('marks an unbound chat on its tab', () => {
+    // D08: the marker rides the tab rather than a header, so it stays visible
+    // with several chats open — which is exactly when confusing a temporary
+    // chat for a bound one costs something.
+    expect(HEADER).toMatch(/tab\.unbound && \([\s\S]{0,400}Temporary/);
   });
 
-  it('still renders the header bar for a chat with no folder', () => {
-    // The bar carries the GUI/TUI switch. Gating it on `activeWorkspacePath`
-    // alone would leave an unbound chat with no way into the TUI at all.
-    expect(WORKSPACE).toContain('{(activeWorkspacePath || isUnboundSession) && (');
+  it('still offers the GUI/TUI switch for a chat with no folder', () => {
+    // Gating the switch on a bound folder alone would leave an unbound chat
+    // with no way into the TUI at all — the reason the old bar was gated on
+    // `activeWorkspacePath || isUnboundSession` rather than the path alone.
+    expect(HEADER).toMatch(
+      /const presentationSwitchAvailable = Boolean\([\s\S]{0,120}activeSession\?\.unbound/
+    );
+    expect(HEADER).toMatch(/presentationSwitchAvailable && \([\s\S]{0,600}TUI/);
+  });
+
+  it('does not leave a second header bar behind in the chat column', () => {
+    // D07's whole point: one bar per column. A `h-9 ... border-b` strip
+    // reappearing here would put the third stacked bar back.
+    expect(WORKSPACE).not.toMatch(/className="flex h-9 shrink-0 items-center[^"]*border-b/);
   });
 });
 
@@ -90,10 +116,10 @@ describe('[U03-b] the Pi TUI runs in the isolated directory', () => {
   });
 
   it('allocates the directory before switching into TUI mode', () => {
-    expect(WORKSPACE).toMatch(/ensureScratchWorkspace\(activeSessionId\)\.then\(start/);
+    expect(SWITCH).toMatch(/ensureScratchWorkspace\(activeSessionId\)\.then\(start/);
   });
 
   it('reports an allocation failure instead of opening a TUI with no directory', () => {
-    expect(WORKSPACE).toMatch(/ensureScratchWorkspace\(activeSessionId\)[\s\S]{0,400}addToast\(/);
+    expect(SWITCH).toMatch(/ensureScratchWorkspace\(activeSessionId\)[\s\S]{0,400}addToast\(/);
   });
 });

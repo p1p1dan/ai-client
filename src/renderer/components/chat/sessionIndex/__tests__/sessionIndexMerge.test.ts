@@ -193,3 +193,63 @@ describe('mergeSessionIndex — empty persisted title never blanks a row', () =>
     expect(sessions[0].title).toBe('Renamed by user');
   });
 });
+
+/**
+ * U13 (D04) — an unbound chat's `workspacePath` is a scratch directory, which
+ * matches no workspace on purpose. Before the marker existed it fell through
+ * to `orphaned` and disappeared from the sidebar on every restart, with its
+ * history still on disk and no way back in.
+ */
+describe('mergeSessionIndex — unbound rows (U13)', () => {
+  const scratch = '/tmp/unbound-sessions/abc';
+
+  it('keeps a marked row as a session and carries its scratch path', () => {
+    const entries = [entry('u1', { workspacePath: scratch, unbound: true })];
+    const { sessions, orphaned } = mergeSessionIndex([], entries, { workspaces });
+    expect(orphaned).toEqual([]);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({
+      id: 'u1',
+      workspaceId: '',
+      projectId: '',
+      unbound: { workspacePath: scratch },
+    });
+  });
+
+  it('leaves an unmarked orphan exactly as before (removed folder)', () => {
+    const entries = [entry('ghost', { workspacePath: '/somewhere-else' })];
+    const { sessions, orphaned } = mergeSessionIndex([], entries, { workspaces });
+    expect(sessions).toEqual([]);
+    expect(orphaned.map((s) => s.id)).toEqual(['ghost']);
+  });
+
+  it('leaves a pre-U13 row (scratch path, no marker) dropped rather than guessed', () => {
+    const entries = [entry('legacy', { workspacePath: scratch })];
+    const { sessions, orphaned } = mergeSessionIndex([], entries, { workspaces });
+    expect(sessions).toEqual([]);
+    expect(orphaned.map((s) => s.id)).toEqual(['legacy']);
+  });
+
+  it('marks a live row whose index entry says unbound', () => {
+    const live = [session('u1', { status: 'running' })];
+    const entries = [entry('u1', { workspacePath: scratch, unbound: true })];
+    const { sessions } = mergeSessionIndex(live, entries, { workspaces });
+    expect(sessions[0].status).toBe('running');
+    expect(sessions[0].unbound).toEqual({ workspacePath: scratch });
+  });
+
+  it('clears the marker when the row moves to a real folder', () => {
+    const live = [session('u1', { unbound: { workspacePath: scratch } })];
+    const entries = [entry('u1', { workspacePath: '/repo' })];
+    const { sessions } = mergeSessionIndex(live, entries, { workspaces });
+    expect(sessions[0].unbound).toBeUndefined();
+    expect(sessions[0].workspaceId).toBe('ws-1');
+  });
+
+  it('does not mark a row that claims unbound without a path', () => {
+    const entries = [entry('u1', { workspacePath: '', unbound: true })];
+    const { sessions, orphaned } = mergeSessionIndex([], entries, { workspaces });
+    expect(sessions).toEqual([]);
+    expect(orphaned.map((s) => s.id)).toEqual(['u1']);
+  });
+});

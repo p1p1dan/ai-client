@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Heart,
   Image as ImageIcon,
+  LayoutGrid,
   LayoutPanelTop,
   Monitor,
   Moon,
@@ -43,6 +44,7 @@ import {
 } from '@/lib/ghosttyTheme';
 import { cn } from '@/lib/utils';
 import { type FontWeight, type Theme, useSettingsStore } from '@/stores/settings';
+import { useShellLayoutStore } from '@/stores/shellLayout';
 import { fontWeightOptions } from './constants';
 
 function TerminalPreview({
@@ -321,6 +323,10 @@ function ThemeCombobox({
 }
 
 export function AppearanceSettings() {
+  // D07: reading width lives in the shell-layout store, not settings — it is
+  // persisted with the rest of the shell geometry. Only its CONTROL moved here.
+  const readingWidthMode = useShellLayoutStore((state) => state.readingWidthMode);
+  const toggleReadingWidthMode = useShellLayoutStore((state) => state.toggleReadingWidthMode);
   const {
     theme,
     setTheme,
@@ -562,6 +568,40 @@ export function AppearanceSettings() {
             <span className="text-sm font-medium">{option.label}</span>
           </button>
         ))}
+      </div>
+
+      {/*
+        D07: the reading-width toggle came here from `MainHeader`. It is a
+        one-time preference — you pick a comfortable line length once and never
+        touch it again — so it did not earn a permanent slot in the chat
+        column's header, which is what made that bar read as cluttered.
+        The store field and its `readingColumnClass` consumer are unchanged;
+        only the control moved.
+      */}
+      <div className="border-t pt-6">
+        <h3 className="text-lg font-medium">{t('Reading column')}</h3>
+        <p className="text-sm text-muted-foreground">
+          {t('How wide conversation text is allowed to run')}
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+            <LayoutGrid className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">{t('Wide reading column')}</p>
+            <p className="text-xs text-muted-foreground">
+              {t('Let messages use the full column instead of a fixed reading width')}
+            </p>
+          </div>
+        </div>
+        <Switch
+          checked={readingWidthMode === 'wide'}
+          onCheckedChange={toggleReadingWidthMode}
+          aria-label={t('Wide reading column')}
+        />
       </div>
 
       {/* Beta Features Section */}

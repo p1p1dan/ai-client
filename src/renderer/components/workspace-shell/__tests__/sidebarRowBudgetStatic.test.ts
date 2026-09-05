@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { stripComments } from '../../chat/__tests__/stripComments';
-import { SIDEBAR_DEFAULT_WIDTH } from '../shellLayoutModel';
+import { DOCK_RAIL_WIDTH, SIDEBAR_DEFAULT_WIDTH } from '../shellLayoutModel';
 
 /**
  * Session rows only render workspace chips; Pi is the sole chat runtime and is
@@ -71,6 +71,10 @@ describe('sidebar session row width budget', () => {
   it('is written against the width the app actually ships with', () => {
     // If the default ever moves, the 236px budget above stops describing
     // reality and this file needs re-deriving rather than silently drifting.
-    expect(SIDEBAR_DEFAULT_WIDTH).toBe(280);
+    //
+    // D08: `SIDEBAR_DEFAULT_WIDTH` measures the whole dock now (rail + panel),
+    // so the number the rows actually live inside is the panel — the rail is
+    // chrome they never see. That is what this asserts.
+    expect(SIDEBAR_DEFAULT_WIDTH - DOCK_RAIL_WIDTH).toBe(280);
   });
 });

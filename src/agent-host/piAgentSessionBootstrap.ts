@@ -2,6 +2,8 @@ import { parsePiModelRef } from '../shared/piModelConfig.ts';
 import type { SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type { RuntimeEvent } from '../shared/types/runtimeEvents.ts';
 import type { PiLeafCheckpoint } from '../shared/types/sessionHistory.ts';
+import type { WorkerExtensionInfo } from '../shared/types/workerRpc.ts';
+import { readLoadedExtensionInventory } from './extensionInventory.ts';
 import type { PortableExtensionUiBridge } from './extensionUiBridge.ts';
 import { createPermissionActivityObserver } from './permissionActivity.ts';
 import {
@@ -29,7 +31,19 @@ export interface PiModel {
 }
 
 export interface PiLoadedExtensions {
-  extensions?: Array<{ path?: unknown; resolvedPath?: unknown }>;
+  /**
+   * U04 widened this beyond the two path fields the permission check needs:
+   * `hidden` marks our own inline factories (not user plugins) and `sourceInfo`
+   * carries where pi resolved it from. Both stay `unknown` — this is an SDK
+   * shape read across a version boundary, so `readLoadedExtensionInventory`
+   * narrows them defensively rather than trusting a declaration here.
+   */
+  extensions?: Array<{
+    path?: unknown;
+    resolvedPath?: unknown;
+    hidden?: unknown;
+    sourceInfo?: unknown;
+  }>;
   errors?: Array<{ path?: unknown; error?: unknown }>;
 }
 
@@ -207,6 +221,8 @@ export interface BootstrapPiAgentSessionResult {
   agentDir: string;
   projectTrusted: boolean;
   permissionGate: 'bundled' | 'user_configured';
+  /** U04 — what pi actually loaded for this session; internals excluded. */
+  extensions: WorkerExtensionInfo[];
 }
 
 function configuredPackages(settings: { packages?: unknown } | undefined): unknown[] {
@@ -345,6 +361,11 @@ export async function bootstrapPiAgentSession(
   }
   let gate: PermissionPluginDecision | undefined;
   let gateVerified = false;
+  // U04: captured per runtime build, not once — `switchSession` runs the
+  // factory again with a different cwd, and a project-scoped extension set
+  // belongs to that cwd. A stale list would name plugins this session is no
+  // longer running.
+  let extensions: WorkerExtensionInfo[] = [];
 
   const createRuntime: PiRuntimeFactory = async ({
     cwd,
@@ -402,6 +423,7 @@ export async function bootstrapPiAgentSession(
       );
     }
     gateVerified = true;
+    extensions = readLoadedExtensionInventory(loadedExtensions);
 
     let model: PiModel | undefined;
     if (options.model) {
@@ -468,5 +490,6 @@ export async function bootstrapPiAgentSession(
     agentDir,
     projectTrusted: options.projectTrusted,
     permissionGate: gate.reason,
+    extensions,
   };
 }

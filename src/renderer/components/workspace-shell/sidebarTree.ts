@@ -50,7 +50,20 @@ export interface SidebarFolder {
   rows: SidebarSessionRow[];
   /** Target for the "+ new chat" row; null hides the row (no usable workspace). */
   newSessionWorkspaceId: string | null;
+  /**
+   * U13: set on the one folder that is not a repository — the group holding
+   * unbound (scratch) chats. Callers render its label from i18n instead of
+   * `name`, and must not offer repository actions on it.
+   */
+  synthetic?: 'unbound';
 }
+
+/**
+ * Project id of the synthetic unbound group. Not a real project: it exists so
+ * the folder has a stable React key and expansion key like every other folder,
+ * and is deliberately unlike any generated project id.
+ */
+export const UNBOUND_FOLDER_ID = '__unbound__';
 
 export interface SidebarTreeInput {
   projects: readonly ChatProject[];
@@ -153,7 +166,12 @@ export function buildSidebarFolders(input: SidebarTreeInput): SidebarFolder[] {
 
   for (const session of input.sessions) {
     const workspace = workspaceById.get(session.workspaceId);
-    if (!workspace || !matchesQuery(session, normalized)) {
+    // U13: unbound chats belong to `buildUnboundFolder`'s group and nowhere
+    // else. Skipped explicitly rather than relying on the workspace lookup
+    // failing — one such chat (a store seed session the user typed into before
+    // adding any repository) does still carry a workspace id, and would
+    // otherwise render twice.
+    if (!workspace || session.unbound || !matchesQuery(session, normalized)) {
       continue;
     }
     // The workspace is authoritative for grouping: a stale session.projectId
@@ -173,6 +191,40 @@ export function buildSidebarFolders(input: SidebarTreeInput): SidebarFolder[] {
     rows: (rowsByProject.get(project.id) ?? []).sort(byUpdatedAtDesc),
     newSessionWorkspaceId: resolveNewSessionWorkspaceId(project.id, input.workspaces),
   }));
+}
+
+/**
+ * U13 (D04) — the synthetic group holding unbound chats, or `null` when there
+ * are none (the sidebar then looks exactly as it did before).
+ *
+ * Separate from `buildSidebarFolders` because these sessions have no workspace
+ * and no project: folding them in would mean giving the loop a second grouping
+ * key and every caller a folder with no repository behind it. They are matched
+ * by the SAME title query, so a search either shows them or hides them along
+ * with everything else.
+ *
+ * `newSessionWorkspaceId` is null on purpose — "+ new chat" needs a workspace
+ * to create against, and this group has none by definition.
+ */
+export function buildUnboundFolder(input: {
+  sessions: readonly ChatSession[];
+  /** Display label; the caller passes a translated string. */
+  name: string;
+  query?: string;
+}): SidebarFolder | null {
+  const normalized = normalizeQuery(input.query);
+  const rows = input.sessions
+    .filter((session) => session.unbound && matchesQuery(session, normalized))
+    .map((session) => toRow(session, undefined))
+    .sort(byUpdatedAtDesc);
+  if (rows.length === 0) return null;
+  return {
+    projectId: UNBOUND_FOLDER_ID,
+    name: input.name,
+    rows,
+    newSessionWorkspaceId: null,
+    synthetic: 'unbound',
+  };
 }
 
 /**
@@ -365,7 +417,8 @@ export interface RecentRowsResult {
  * newest first, 7 rows + "Show more". Archived sessions never reach the store
  * (mergeSessionIndex drops them) and child sessions do not exist in this data
  * model yet (subagent layer deferred, open-q #17), so neither is re-filtered
- * here. Orphan sessions are excluded like in the folder tree.
+ * here. Orphan sessions are excluded like in the folder tree — except unbound
+ * ones (U13), which are not orphans and stay visible.
  */
 export function deriveRecentRows(input: RecentRowsInput): RecentRowsResult {
   const normalized = normalizeQuery(input.query);
@@ -373,14 +426,23 @@ export function deriveRecentRows(input: RecentRowsInput): RecentRowsResult {
 
   const rows = input.sessions
     .filter((session) => {
-      if (!workspaceById.has(session.workspaceId) || !matchesQuery(session, normalized)) {
+      // U13: an unbound chat has no workspace by design and must not be
+      // filtered out with the genuinely orphaned rows — Recent is where the
+      // user looks first, and after a restart it is the fastest way back into
+      // one. Its row renders with the same `temporary` chip as in the tree.
+      if (!session.unbound && !workspaceById.has(session.workspaceId)) {
+        return false;
+      }
+      if (!matchesQuery(session, normalized)) {
         return false;
       }
       return (
         isBusySessionStatus(session.status) || input.now - session.updatedAt <= RECENT_WINDOW_MS
       );
     })
-    .map((session) => toRow(session, workspaceById.get(session.workspaceId)))
+    .map((session) =>
+      toRow(session, session.unbound ? undefined : workspaceById.get(session.workspaceId))
+    )
     .sort(byUpdatedAtDesc);
 
   if (input.showAll || rows.length <= RECENT_DEFAULT_LIMIT) {

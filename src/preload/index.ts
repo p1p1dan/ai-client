@@ -90,6 +90,7 @@ import type { SessionEffortLevel } from '@shared/types/agentHost';
 import type { ExtensionUiResponse } from '@shared/types/runtimeEvents';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
+import type { WorkerExtensionInfo } from '@shared/types/workerRpc';
 import { parseInitialThemeArg } from '@shared/windowTheme';
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
 import pkg from '../../package.json';
@@ -1062,6 +1063,11 @@ const electronAPI = {
     },
     listSessions: (): Promise<SessionIndexEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_SESSIONS),
+    /** U04 — plugins pi loaded for this session; `null` = no live worker. */
+    listSessionExtensions: (payload: {
+      sessionId: string;
+    }): Promise<WorkerExtensionInfo[] | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_SESSION_EXTENSIONS, payload),
     loadHistoryPage: (payload: {
       sessionId: string;
       offset: number;

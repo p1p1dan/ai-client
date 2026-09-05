@@ -127,6 +127,36 @@ export interface WorkerHistoryResult {
   page: SessionHistoryPage;
 }
 
+/**
+ * U04 — one extension pi actually loaded for a session.
+ *
+ * "Actually loaded" is the whole point: pi resolves extensions from its own
+ * settings, package manager and scope rules, and re-deriving that in Main
+ * would be a second implementation that eventually disagrees with the first —
+ * the UI would then report plugins the agent never ran. The worker already
+ * reads this list at bootstrap (it verifies the permission extension against
+ * it), so this only forwards what is already in hand.
+ */
+export interface WorkerExtensionInfo {
+  /** Display name — pi reports no name field, so this is derived from the path. */
+  name: string;
+  /** Absolute path pi resolved, or the configured path when resolution failed. */
+  path: string;
+  /** `sourceInfo.source`: the npm/git/dir source it was configured from. */
+  source?: string;
+  /**
+   * `sourceInfo.scope` — user / project / temporary. Deliberately `string` and
+   * not a union: this crosses a version boundary (an older build must survive a
+   * value a newer pi introduces), and a second copy of pi's vocabulary here is
+   * exactly how a layer starts rejecting words the runtime accepts.
+   */
+  scope?: string;
+  /** False when pi reported a load error for this path. */
+  ok: boolean;
+  /** Present only when `ok` is false. */
+  error?: string;
+}
+
 export interface WorkerBootstrapResult {
   bootstrapped: true;
   logicalSessionId: string;
@@ -141,6 +171,18 @@ export interface WorkerBootstrapResult {
   effort?: SessionEffortLevel;
   projectTrusted: boolean;
   permissionGate: 'bundled' | 'user_configured';
+  /**
+   * U04 — the extensions this session loaded, hidden internals excluded.
+   *
+   * Optional, and NOT validated by `isWorkerBootstrapResult` below. That guard
+   * is release-critical: it decides whether an entire bootstrap payload is
+   * legal, so a strict check here would turn a malformed plugin list into a
+   * session that cannot start at all (the failure mode U08-2 hit with
+   * `isWorkerEffort`). The producer sanitizes instead — see
+   * `readLoadedExtensionInventory` — and consumers treat a missing list as
+   * "this build did not report one" rather than "no plugins".
+   */
+  extensions?: WorkerExtensionInfo[];
 }
 
 export type WorkerBootstrapRequest = WorkerRpcRequest<'worker.bootstrap', WorkerBootstrapPayload>;

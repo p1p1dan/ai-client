@@ -27,6 +27,7 @@ import type { ContextSurfaceId } from './surfaceRegistry';
 import { ContextSurfaceView } from './surfaces/ContextSurfaceView';
 import { FilesSurfaceView } from './surfaces/FilesSurfaceView';
 import { GitSurfaceView } from './surfaces/GitSurfaceView';
+import { RunSurfaceView } from './surfaces/RunSurfaceView';
 import { TerminalSurfaceView } from './surfaces/TerminalSurfaceView';
 
 export interface SurfaceViewProps {
@@ -45,6 +46,9 @@ export const SURFACE_VIEWS: Partial<Record<ContextSurfaceId, SurfaceViewRegistra
   // WorkspaceShell, not by this registry.
   editor: { component: FilesSurfaceView, mountPolicy: 'active' },
   git: { component: GitSurfaceView, mountPolicy: 'active' },
+  // U06-a: 'active' — the panel is a pure projection of stores that keep
+  // updating whether it is mounted or not, so there is nothing to keep alive.
+  run: { component: RunSurfaceView, mountPolicy: 'active' },
   // keep-alive: a surface switch must never tear down the pty (spec §5, R2).
   terminal: { component: TerminalSurfaceView, mountPolicy: 'keep-alive' },
 };

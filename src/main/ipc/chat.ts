@@ -13,6 +13,7 @@ import {
   isSessionPermissionTier,
   type SessionPermissionTier,
 } from '@shared/types/sessionPermissionTier';
+import type { WorkerExtensionInfo } from '@shared/types/workerRpc';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspaceService';
 import { workerManager } from '../services/agent-host/WorkerManager';
@@ -227,12 +228,18 @@ export function registerChatHandlers(): void {
       assertAgentSpawnAllowed();
       await assertPiCompatibleIndexRow(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      // U05-c: Main decides the posture from the path it allocated itself —
+      // the renderer never gets to declare a session trusted or untrusted.
+      // U13 records the same derived fact so the sidebar can still find this
+      // chat after a restart, when nothing else knows the path is scratch.
+      const unbound = scratchWorkspaceService.isScratchPath(payload.workspacePath);
       await sessionIndexService.recordCreated({
         sessionId: payload.sessionId,
         workspacePath: payload.workspacePath,
         ...(payload.model ? { model: payload.model } : {}),
         ...(payload.effort ? { effort: payload.effort } : {}),
         agent: PI_AGENT,
+        unbound,
       });
       const requestId = await workerManager.createSession({
         sessionId: payload.sessionId,
@@ -241,9 +248,7 @@ export function registerChatHandlers(): void {
         ...(payload.effort ? { effort: payload.effort } : {}),
         ...spawnTier(payload.tier),
         ownerWebContentsId,
-        // U05-c: Main decides the posture from the path it allocated itself —
-        // the renderer never gets to declare a session trusted or untrusted.
-        ...(scratchWorkspaceService.isScratchPath(payload.workspacePath) ? { unbound: true } : {}),
+        ...(unbound ? { unbound: true } : {}),
       });
       return { requestId };
     }
@@ -260,6 +265,20 @@ export function registerChatHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.CHAT_ENSURE_SCRATCH_WORKSPACE,
     async (_e, payload: { sessionId: string }): Promise<{ path: string }> => {
+      // U13: after a restart this process has no allocation for the session,
+      // but its index row still names last run's directory. Allocating a fresh
+      // uuid here would silently give the chat a SECOND cwd and rewrite the
+      // indexed path, which resume then rejects as a workspace mismatch — so
+      // re-take the recorded one instead (recreated empty; `adopt` refuses any
+      // path outside the scratch root).
+      if (!scratchWorkspaceService.pathFor(payload.sessionId)) {
+        const row = await sessionIndexService.get(payload.sessionId);
+        if (row?.workspacePath && scratchWorkspaceService.isScratchPath(row.workspacePath)) {
+          return {
+            path: await scratchWorkspaceService.adopt(payload.sessionId, row.workspacePath),
+          };
+        }
+      }
       return { path: await scratchWorkspaceService.ensure(payload.sessionId) };
     }
   );
@@ -286,7 +305,14 @@ export function registerChatHandlers(): void {
     ): Promise<boolean> => {
       try {
         await assertPiCompatibleIndexRow(payload.sessionId);
-        await sessionIndexService.recordCreated({ ...payload, agent: PI_AGENT });
+        await sessionIndexService.recordCreated({
+          ...payload,
+          agent: PI_AGENT,
+          // Normally false here: this runs when the chat row is created, before
+          // any scratch directory exists. Derived anyway so the two entry
+          // points never disagree about what a path means.
+          unbound: scratchWorkspaceService.isScratchPath(payload.workspacePath),
+        });
         return true;
       } catch (error) {
         console.warn('[chat] Failed to register session in the index:', error);
@@ -484,6 +510,21 @@ export function registerChatHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.CHAT_LIST_SESSIONS, async (): Promise<SessionIndexEntry[]> => {
     return sessionIndexService.list();
   });
+
+  /**
+   * U04 — the plugins pi loaded for one session.
+   *
+   * Read-only and worker-free: it answers from the bootstrap result Main
+   * already cached, so opening the panel cannot start a worker, cannot queue
+   * behind a running turn, and returns `null` (not an empty list) when this
+   * session has no live worker to have loaded anything.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_LIST_SESSION_EXTENSIONS,
+    async (_e, payload: { sessionId: string }): Promise<WorkerExtensionInfo[] | null> => {
+      return workerManager.getSessionExtensions(payload.sessionId);
+    }
+  );
 
   ipcMain.handle(
     IPC_CHANNELS.CHAT_RENAME_SESSION,

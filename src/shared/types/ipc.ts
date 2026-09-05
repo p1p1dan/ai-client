@@ -319,6 +319,15 @@ export const IPC_CHANNELS = {
   CHAT_RESPOND_EXTENSION_UI: 'chat:respondExtensionUi',
   /** U12 — set the session-level permission tier on the running Worker. */
   CHAT_SET_PERMISSION_TIER: 'chat:setPermissionTier',
+  /**
+   * U04 — which extensions pi actually loaded for a session.
+   *
+   * A pull rather than an event: the list is fixed for the life of a bootstrap,
+   * so pushing it would add traffic to every session start for a panel that is
+   * usually closed. `null` back means no live worker, which is a different
+   * answer from an empty list.
+   */
+  CHAT_LIST_SESSION_EXTENSIONS: 'chat:listSessionExtensions',
   CHAT_LIST_SESSIONS: 'chat:listSessions',
   CHAT_RENAME_SESSION: 'chat:renameSession',
   CHAT_ARCHIVE_SESSION: 'chat:archiveSession',

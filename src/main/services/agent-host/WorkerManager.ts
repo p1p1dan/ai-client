@@ -31,6 +31,7 @@ import {
   isWorkerTreeResult,
   type WorkerDiscardForkPayload,
   type WorkerDiscardForkResult,
+  type WorkerExtensionInfo,
   type WorkerExtensionUiResponsePayload,
   type WorkerExtensionUiResponseResult,
   type WorkerForkPayload,
@@ -380,6 +381,24 @@ export class WorkerManager {
       errors: entries.filter((entry) => entry.state === 'error' || entry.state === 'crashed')
         .length,
     };
+  }
+
+  /**
+   * U04 — the extensions this session's worker reported at bootstrap.
+   *
+   * `null` distinguishes "no live worker for this session" (the chat has not
+   * been sent yet, or its slot was evicted) from "a worker that loaded no
+   * plugins", which is an empty array. The UI says different things for the
+   * two, and guessing either way would misreport the user's setup.
+   *
+   * Read off the cached bootstrap rather than asked over RPC: the list cannot
+   * change without a new bootstrap, and a round trip to a busy worker to
+   * re-read a constant would put a UI panel in the turn's path.
+   */
+  getSessionExtensions(sessionId: string): WorkerExtensionInfo[] | null {
+    const entry = this.entriesBySession.get(sessionId);
+    if (!entry?.bootstrap) return null;
+    return entry.bootstrap.extensions ?? [];
   }
 
   getSlotSnapshots(): WorkerManagerSlotSnapshot[] {

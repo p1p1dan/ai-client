@@ -30,6 +30,12 @@ import { fallbackSessionTitle } from './sessionTitle';
  *   disconnected only when explicitly requested (resume flow will flip it).
  * - Archived entries are filtered out of the live list entirely (they live
  *   only in the persisted index and can be un-archived later).
+ * - U13 (D04): a row Main marked `unbound` is kept even though its path
+ *   matches no workspace — that is the normal state of a scratch chat, not a
+ *   lost one. Only rows WITHOUT the marker still fall through to `orphaned`,
+ *   so "the user removed the folder this session lived in" behaves exactly as
+ *   before, and pre-U13 rows (no marker) stay dropped rather than being
+ *   guessed into a group.
  * - S2 (b): this is the ONE place a persisted `agent` is read into a live row.
  *   Only an explicit `pi` slug survives; a missing binding predates the field
  *   (it meant Claude back then) and an unknown one was written by a newer
@@ -113,11 +119,17 @@ export function mergeSessionIndex(
     const workspace = workspacesByPath.get(canonicalPathKey(entry.workspacePath));
     const projectId = existing?.projectId ?? workspace?.projectId ?? '';
     const workspaceId = existing?.workspaceId ?? workspace?.id ?? '';
+    // U13 (D04): re-derived from the row on every merge rather than carried
+    // over from the live session, so re-recording a chat against a real folder
+    // clears the marker instead of leaving it stuck on forever.
+    const unbound =
+      entry.unbound && entry.workspacePath ? { workspacePath: entry.workspacePath } : undefined;
 
     if (existing) {
       seenIds.add(existing.id);
       next.push({
         ...existing,
+        unbound,
         // Persisted title is authoritative only when non-empty; an unnamed
         // persisted entry must not blank out the UI seed title.
         title: entry.title || existing.title || fallbackSessionTitle(entry.sessionId),
@@ -132,6 +144,26 @@ export function mergeSessionIndex(
           typeof entry.updatedAt === 'number' && entry.updatedAt > existing.updatedAt
             ? entry.updatedAt
             : existing.updatedAt,
+      });
+      continue;
+    }
+
+    if (!workspaceId && unbound) {
+      // U13 (D04): an unbound chat has no workspace BY DESIGN — its cwd is a
+      // scratch directory that must never appear in the project tree. Before
+      // this branch it fell into the orphan drop below and vanished from the
+      // sidebar on the next restart, while its history sat on disk with no way
+      // in. Kept as a real session instead; the sidebar groups it separately.
+      next.push({
+        id: entry.sessionId,
+        projectId: '',
+        workspaceId: '',
+        title: entry.title || fallbackSessionTitle(entry.sessionId),
+        status: seedStatus,
+        updatedAt: entry.updatedAt,
+        runtimeIdentity: entry.runtimeIdentity,
+        agent,
+        unbound,
       });
       continue;
     }

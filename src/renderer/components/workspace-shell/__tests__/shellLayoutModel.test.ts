@@ -13,7 +13,6 @@ import {
   READING_COLUMN_CLASS,
   type ReadingWidthMode,
   readingColumnClass,
-  reduceColumnModeChange,
   reduceShellSurface,
   resolveContentColumnWidth,
   resolveContextPanelWidth,
@@ -39,7 +38,9 @@ describe('clampSidebarWidth', () => {
   });
 
   it('rounds fractional widths', () => {
-    expect(clampSidebarWidth(300.6)).toBe(301);
+    // D08: 300.6 is now BELOW the 324 dock minimum (280 panel + 44 rail), so a
+    // value inside the range is needed to exercise rounding at all.
+    expect(clampSidebarWidth(400.6)).toBe(401);
   });
 
   it('falls back to the 280 default for NaN and Infinity', () => {
@@ -208,8 +209,10 @@ describe('reduceShellSurface', () => {
     expect(reduceShellSurface(initialShellSurfaceState, { type: 'select', surfaceId: 'pr' })).toBe(
       initialShellSurfaceState
     );
+    // `chat` used to stand alongside `pr` here; D08 promoted it to the dock's
+    // first entry, so `preview` (still registeredOnly) takes its place.
     expect(
-      reduceShellSurface(initialShellSurfaceState, { type: 'select', surfaceId: 'chat' })
+      reduceShellSurface(initialShellSurfaceState, { type: 'select', surfaceId: 'preview' })
     ).toBe(initialShellSurfaceState);
   });
 
@@ -225,8 +228,8 @@ describe('reduceShellSurface', () => {
 
   it('opens the first always-surface when there is no lastSurfaceId', () => {
     const result = reduceShellSurface(initialShellSurfaceState, { type: 'open' });
-    // T-32: the first always-surface is `git` under A08's tab order.
-    expect(result.activeSurfaceId).toBe('git');
+    // D08: the dock's first entry is `chat`.
+    expect(result.activeSurfaceId).toBe('chat');
   });
 
   it('opens the requested surface when open carries an explicit id', () => {
@@ -261,8 +264,8 @@ describe('reduceShellSurface', () => {
 
   it('opens via toggle-panel with the fallback surface when nothing was open', () => {
     const result = reduceShellSurface(initialShellSurfaceState, { type: 'toggle-panel' });
-    // T-32: the first always-surface is `git` under A08's tab order.
-    expect(result.activeSurfaceId).toBe('git');
+    // D08: the dock's first entry is `chat`.
+    expect(result.activeSurfaceId).toBe('chat');
   });
 
   it('drops expanded when the panel closes', () => {
@@ -326,126 +329,62 @@ describe('reduceShellSurface', () => {
   });
 });
 
-describe('reduceShellSurface — two-column guard (U02-b)', () => {
-  it('blocks selecting a non-context surface in two-column', () => {
+/**
+ * D08 replaced the two-column guard block and `reduceColumnModeChange` that
+ * used to sit here.
+ *
+ * `reduceShellSurface` no longer takes a `columnMode`, and the mode reducer is
+ * deleted, because the mode they guarded is gone: the surfaces live in the left
+ * dock, which every layout has. What survives is the ONE remaining guard —
+ * `isRailSelectableSurface` — plus the bare-open fallback, which now lands on
+ * the dock's first entry instead of a `?? 'context'` safety net no caller was
+ * allowed to trust.
+ */
+describe('reduceShellSurface — registry guard (D08)', () => {
+  it('binds every dock surface, including the promoted chat entry', () => {
+    for (const surfaceId of ['chat', 'git', 'editor', 'context', 'run'] as const) {
+      expect(
+        reduceShellSurface(initialShellSurfaceState, { type: 'select', surfaceId }).activeSurfaceId
+      ).toBe(surfaceId);
+    }
+  });
+
+  it('still blocks a registry-only surface', () => {
+    expect(reduceShellSurface(initialShellSurfaceState, { type: 'select', surfaceId: 'pr' })).toBe(
+      initialShellSurfaceState
+    );
     expect(
-      reduceShellSurface(
-        initialShellSurfaceState,
-        { type: 'select', surfaceId: 'git' },
-        'two-column'
-      )
+      reduceShellSurface(initialShellSurfaceState, { type: 'open', surfaceId: 'terminal' })
     ).toBe(initialShellSurfaceState);
   });
 
-  it('allows selecting context in two-column', () => {
+  it('opens the dock on chat when nothing is remembered', () => {
+    expect(reduceShellSurface(initialShellSurfaceState, { type: 'open' }).activeSurfaceId).toBe(
+      'chat'
+    );
     expect(
-      reduceShellSurface(
-        initialShellSurfaceState,
-        { type: 'select', surfaceId: 'context' },
-        'two-column'
-      )
-    ).toEqual({ activeSurfaceId: 'context', lastSurfaceId: 'context', expanded: false });
+      reduceShellSurface(initialShellSurfaceState, { type: 'toggle-panel' }).activeSurfaceId
+    ).toBe('chat');
   });
 
-  it('blocks an explicit open of a hidden surface in two-column', () => {
-    expect(
-      reduceShellSurface(
-        initialShellSurfaceState,
-        { type: 'open', surfaceId: 'terminal' },
-        'two-column'
-      )
-    ).toBe(initialShellSurfaceState);
-  });
-
-  it('opens context on a bare open and on toggle-panel in two-column', () => {
-    expect(
-      reduceShellSurface(initialShellSurfaceState, { type: 'open' }, 'two-column').activeSurfaceId
-    ).toBe('context');
-    expect(
-      reduceShellSurface(initialShellSurfaceState, { type: 'toggle-panel' }, 'two-column')
-        .activeSurfaceId
-    ).toBe('context');
-  });
-
-  it('does not reuse a remembered non-context surface on a bare open in two-column', () => {
+  it('reopens the remembered surface rather than the first entry', () => {
     const prev: ShellSurfaceState = {
       activeSurfaceId: null,
       lastSurfaceId: 'git',
       expanded: false,
     };
-    expect(reduceShellSurface(prev, { type: 'open' }, 'two-column').activeSurfaceId).toBe(
-      'context'
-    );
+    expect(reduceShellSurface(prev, { type: 'open' }).activeSurfaceId).toBe('git');
   });
 
-  it('still binds every rail surface in the default (three-column) mode', () => {
-    expect(
-      reduceShellSurface(initialShellSurfaceState, { type: 'select', surfaceId: 'git' })
-        .activeSurfaceId
-    ).toBe('git');
-  });
-});
-
-describe('reduceColumnModeChange (U02-b)', () => {
-  it('swaps a hidden active surface to context, remembering it as lastSurfaceId', () => {
+  it('falls back to chat when the remembered surface left the rail', () => {
     const prev: ShellSurfaceState = {
-      activeSurfaceId: 'git',
-      lastSurfaceId: 'git',
-      expanded: false,
-    };
-    expect(reduceColumnModeChange(prev, 'two-column')).toEqual({
-      activeSurfaceId: 'context',
-      lastSurfaceId: 'git',
-      expanded: false,
-    });
-  });
-
-  it('preserves the expanded overlay while converging', () => {
-    const prev: ShellSurfaceState = {
-      activeSurfaceId: 'git',
+      activeSurfaceId: null,
+      // `terminal` is registeredOnly since 2026-09-04 — a profile persisted
+      // before that still names it.
       lastSurfaceId: 'terminal',
-      expanded: true,
-    };
-    expect(reduceColumnModeChange(prev, 'two-column')).toEqual({
-      activeSurfaceId: 'context',
-      lastSurfaceId: 'git',
-      expanded: true,
-    });
-  });
-
-  it('leaves an already-context surface untouched', () => {
-    const prev: ShellSurfaceState = {
-      activeSurfaceId: 'context',
-      lastSurfaceId: 'context',
       expanded: false,
     };
-    expect(reduceColumnModeChange(prev, 'two-column')).toBe(prev);
-  });
-
-  it('is a no-op with the panel closed', () => {
-    expect(reduceColumnModeChange(initialShellSurfaceState, 'two-column')).toBe(
-      initialShellSurfaceState
-    );
-  });
-
-  it('never touches surfaces when switching to three-column', () => {
-    const prev: ShellSurfaceState = {
-      activeSurfaceId: 'git',
-      lastSurfaceId: 'git',
-      expanded: true,
-    };
-    expect(reduceColumnModeChange(prev, 'three-column')).toBe(prev);
-  });
-
-  it('round-trips without losing lastSurfaceId (two-column then three-column)', () => {
-    const three: ShellSurfaceState = {
-      activeSurfaceId: 'git',
-      lastSurfaceId: 'git',
-      expanded: false,
-    };
-    const two = reduceColumnModeChange(three, 'two-column');
-    const back = reduceColumnModeChange(two, 'three-column');
-    expect(back.lastSurfaceId).toBe('git');
+    expect(reduceShellSurface(prev, { type: 'open' }).activeSurfaceId).toBe('chat');
   });
 });
 
@@ -481,9 +420,11 @@ describe('sanitizeShellLayoutPersisted', () => {
     expect(sanitizeShellLayoutPersisted([1, 2, 3])).toEqual(defaultShellLayout);
   });
 
-  it('clamps a persisted sidebar width outside 280..500', () => {
-    expect(sanitizeShellLayoutPersisted({ sidebarWidth: 50 }).sidebarWidth).toBe(280);
-    expect(sanitizeShellLayoutPersisted({ sidebarWidth: 9000 }).sidebarWidth).toBe(500);
+  it('clamps a persisted sidebar width outside the dock range', () => {
+    expect(sanitizeShellLayoutPersisted({ sidebarWidth: 50 }).sidebarWidth).toBe(SIDEBAR_MIN_WIDTH);
+    expect(sanitizeShellLayoutPersisted({ sidebarWidth: 9000 }).sidebarWidth).toBe(
+      SIDEBAR_MAX_WIDTH
+    );
   });
 
   it('drops an activeSurfaceId the registry no longer knows', () => {
@@ -533,31 +474,6 @@ describe('sanitizeShellLayoutPersisted', () => {
     );
     expect(sanitizeShellLayoutPersisted({ readingWidthMode: 'wide' }).readingWidthMode).toBe(
       'wide'
-    );
-  });
-
-  it('defaults a column mode absent from an old profile to three-column (U02-a)', () => {
-    // Old persisted layouts predate the field; the sanitiser must supply the
-    // default so no existing user's layout moves.
-    expect(sanitizeShellLayoutPersisted({}).shellColumnMode).toBe('three-column');
-    expect(defaultShellLayout.shellColumnMode).toBe('three-column');
-  });
-
-  it('keeps a persisted two-column mode and a persisted three-column mode (U02-a)', () => {
-    expect(sanitizeShellLayoutPersisted({ shellColumnMode: 'two-column' }).shellColumnMode).toBe(
-      'two-column'
-    );
-    expect(sanitizeShellLayoutPersisted({ shellColumnMode: 'three-column' }).shellColumnMode).toBe(
-      'three-column'
-    );
-  });
-
-  it('normalises an unknown column mode to three-column (U02-a)', () => {
-    expect(sanitizeShellLayoutPersisted({ shellColumnMode: 'four-column' }).shellColumnMode).toBe(
-      'three-column'
-    );
-    expect(sanitizeShellLayoutPersisted({ shellColumnMode: 42 }).shellColumnMode).toBe(
-      'three-column'
     );
   });
 });

@@ -169,7 +169,14 @@ export type ManualOverride = boolean | null;
 export const RAIL_RESERVE = 0;
 /** The panel's PREFERRED width (round-12 demoted it from a hard floor). */
 export const PANEL_MIN_RESERVE = 380;
-export const SIDEBAR_COLLAPSED_RESERVE = 48;
+/**
+ * D08: 44, not 48 — a collapsed dock is exactly its icon rail
+ * (`DOCK_RAIL_WIDTH`), and a reserve wider than the rendered column leaves a
+ * dead 4px gutter that nothing paints. The constant is duplicated rather than
+ * imported because `shellLayoutModel` already imports FROM this module, and
+ * the reverse edge would be a cycle vite has to chunk.
+ */
+export const SIDEBAR_COLLAPSED_RESERVE = 44;
 
 /**
  * Below this the panel yields its width entirely and only the rail represents

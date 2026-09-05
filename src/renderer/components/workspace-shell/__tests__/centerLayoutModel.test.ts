@@ -471,6 +471,8 @@ describe('reserve constants match the shell they describe', () => {
     // this allocator's row — there is nothing left in the content row to
     // reserve width for.
     expect(RAIL_RESERVE).toBe(0);
-    expect(SIDEBAR_COLLAPSED_RESERVE).toBe(48);
+    // D08: 44, matching `DOCK_RAIL_WIDTH` — a collapsed dock is exactly its
+    // icon rail, and the old 48 left a 4px gutter nothing painted.
+    expect(SIDEBAR_COLLAPSED_RESERVE).toBe(44);
   });
 });

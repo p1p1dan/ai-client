@@ -18,16 +18,20 @@ import { stripComments } from '../../chat/__tests__/stripComments';
  * which is why it is pinned here as well as in the component's own comment.
  *
  * Scans read CODE, not prose (shared parser-backed strip): the doc comment in
- * `ContextPanel.tsx` has to spell the banned technique in order to explain the
- * ban, and a scanner that cannot tell the two apart would force a choice
- * between keeping the scan and keeping the explanation.
+ * the dock has to spell the banned technique in order to explain the ban, and a
+ * scanner that cannot tell the two apart would force a choice between keeping
+ * the scan and keeping the explanation.
+ *
+ * D08: the stack moved from `ContextPanel.tsx` (the retired right column) to
+ * `LeftDock.tsx`. Same mechanism, same hazard, same guard — only the file the
+ * surfaces live in changed.
  */
 
-const PANEL_FILE = join(process.cwd(), 'src/renderer/components/workspace-shell/ContextPanel.tsx');
+const PANEL_FILE = join(process.cwd(), 'src/renderer/components/workspace-shell/LeftDock.tsx');
 const RAW = readFileSync(PANEL_FILE, 'utf8');
 const CODE = stripComments(RAW, PANEL_FILE);
 
-describe('ContextPanel keep-alive hiding technique', () => {
+describe('LeftDock keep-alive hiding technique', () => {
   it('hides inactive layers with visibility, not layout removal', () => {
     expect(CODE).toContain('invisible pointer-events-none');
   });
@@ -36,7 +40,7 @@ describe('ContextPanel keep-alive hiding technique', () => {
     expect(CODE).toContain('inert={!visible}');
   });
 
-  it('never uses display:none anywhere in the panel', () => {
+  it('never uses display:none anywhere in the dock', () => {
     expect(CODE).not.toMatch(/display\s*:\s*['"]?\s*none/i);
   });
 

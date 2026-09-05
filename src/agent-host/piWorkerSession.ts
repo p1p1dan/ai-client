@@ -1296,6 +1296,9 @@ export class PiWorkerSession {
       ...(this.options.effort ? { effort: this.options.effort } : {}),
       projectTrusted: bootstrapped.projectTrusted,
       permissionGate: bootstrapped.permissionGate,
+      // U04 — omitted when empty so "reported nothing" and "reported an empty
+      // list" stay distinguishable downstream.
+      ...(bootstrapped.extensions.length > 0 ? { extensions: bootstrapped.extensions } : {}),
     };
   }
 

@@ -601,4 +601,84 @@ describe('SessionIndexService', () => {
       expect(loaded).not.toHaveProperty('agent');
     });
   });
+
+  /**
+   * U13 (D04): the `unbound` marker is what keeps a temporary chat findable
+   * after a restart, so the two ways of losing it — a re-record that does not
+   * mention it, and a load that rewrites old rows — both get a test.
+   */
+  describe('unbound marker (U13)', () => {
+    function readIndexFile(): SessionIndexEntry[] {
+      const raw = readFileSync(join(userDataDir, 'session-index.json'), 'utf8');
+      return JSON.parse(raw) as SessionIndexEntry[];
+    }
+
+    it('keeps the marker across a re-record that does not mention it', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+
+      await service.recordCreated({
+        sessionId: 's1',
+        workspacePath: '/tmp/unbound-sessions/abc',
+        agent: PI_AGENT,
+        unbound: true,
+      });
+      expect((await service.get('s1'))?.unbound).toBe(true);
+
+      // recordCreated rebuilds every field: an older caller that knows nothing
+      // about `unbound` must not silently un-mark the row (`agent` lost this
+      // exact way once).
+      await service.recordCreated({
+        sessionId: 's1',
+        workspacePath: '/tmp/unbound-sessions/abc',
+        model: 'pi-x',
+      });
+
+      expect(await service.get('s1')).toMatchObject({ unbound: true, model: 'pi-x' });
+      expect(readIndexFile()[0]?.unbound).toBe(true);
+    });
+
+    it('clears the marker when the same chat is re-recorded against a real folder', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+
+      await service.recordCreated({
+        sessionId: 's1',
+        workspacePath: '/tmp/unbound-sessions/abc',
+        unbound: true,
+      });
+      // An explicit `false` is a statement, not a missing value: the caller
+      // derived it from the path it is recording.
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/repo', unbound: false });
+
+      expect(await service.get('s1')).not.toHaveProperty('unbound');
+      expect(readIndexFile()[0]).not.toHaveProperty('unbound');
+    });
+
+    it('never writes the field on a bound row, and never backfills a legacy row', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/repo', unbound: false });
+
+      const parsed = readIndexFile();
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed[0]).not.toHaveProperty('unbound');
+
+      // Rows written before U13 stay exactly as they are: normalizing on load
+      // would turn a compatible read into an irreversible write migration.
+      const legacy: SessionIndexEntry[] = [
+        {
+          sessionId: 'old',
+          workspacePath: '/tmp/unbound-sessions/old',
+          title: '',
+          updatedAt: 1,
+          archived: false,
+        },
+      ];
+      writeFileSync(join(userDataDir, 'session-index.json'), JSON.stringify(legacy), 'utf8');
+      const fresh = new SessionIndexService();
+      const [loaded] = await fresh.list();
+      expect(loaded).not.toHaveProperty('unbound');
+    });
+  });
 });

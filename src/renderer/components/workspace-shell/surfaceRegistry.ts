@@ -19,6 +19,7 @@ export type ContextSurfaceId =
   | 'plan'
   | 'notes'
   | 'context'
+  | 'run'
   | 'browser'
   | 'preview'
   | 'chat';
@@ -27,24 +28,17 @@ export type ContextSurfaceId =
 export type SurfaceAvailability = 'always' | 'has-content';
 
 /**
- * U02: the shell's column count.
- * - 'three-column' — the rail offers git/files/context/terminal (default).
- * - 'two-column'   — AI conversation + development only; the rail collapses to
- *   `context` alone. Files/Git/Terminal are deliberately not offered (D02);
- *   switch back to three-column to reach them.
+ * D08 (2026-09-05): `ShellColumnMode` and its four helpers are GONE.
  *
- * Lives here, not in `shellLayoutModel.ts`, so the rail filters (`railSurfaces`,
- * `isRailSelectableSurface`) can honour it without that module importing back
- * into this one (it already imports FROM here) — a cycle vite would then have to
- * chunk. Distinct too from settings' `LayoutMode` ('columns' | 'tree'), which
- * is the OUTER repo/worktree axis, hence the different name.
+ * The two/three-column switch existed to answer "is there a right panel". Under
+ * D08 the surfaces below live in the LEFT dock and the right column only ever
+ * holds files, so the question has no second answer left: the dock is always
+ * there, and the right column appears when a file is open. Deleting the mode
+ * removes `columnModeHasPanel`, `isSurfaceAvailableInColumnMode`,
+ * `DEFAULT_SHELL_COLUMN_MODE` and `reduceColumnModeChange` along with it.
  */
-export type ShellColumnMode = 'two-column' | 'three-column';
-
-/** Default so no existing user's layout moves when the field first appears. */
-export const DEFAULT_SHELL_COLUMN_MODE: ShellColumnMode = 'three-column';
-
 export type SurfaceIconName =
+  | 'activity'
   | 'file-code'
   | 'git-branch'
   | 'git-pull-request'
@@ -78,15 +72,27 @@ export interface ContextSurfaceDescriptor {
 }
 
 // Order doubles as the panel tab order AND the rail order (decision 10).
-// T-32 (D27) re-ordered the rail-visible four to A08's tab order —
-// `git | files | context` (a08:1259-1262) with `terminal` appended, since D27's
-// exemption ① keeps the terminal in the panel instead of a bottom dock. The
-// terminal left the rail again on 2026-09-04 (see its entry below), so the
-// rail-visible set is now the first three.
+// D08 (2026-09-05) puts `chat` FIRST: the left dock's first entry is the
+// session list, matching the prototype's rail order
+// `聊天 · Git · 文件 · 上下文 · 运行`.
 // NOTE: this order is also what `Ctrl/Cmd+1..4` maps to (shellShortcuts.ts
 // derives the digits from `railSurfaces(DEFAULT_SURFACE_ORDER).slice(0, 4)`),
-// so reordering here silently rebinds those shortcuts.
+// so reordering here silently rebinds those shortcuts — which is exactly what
+// D08 intends (digit 1 is now the session list).
 export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
+  {
+    // D08: the id is REUSED, its meaning is not. It used to mean "split chat
+    // sessions (deferred)"; it now means the session list that used to be the
+    // whole left sidebar. Reusing it avoids both a store migration for a new id
+    // and a dead id left behind in persisted `railOrder` / `lastSurfaceId`.
+    id: 'chat',
+    icon: 'message-square',
+    labelKey: 'Chat',
+    descriptionKey: 'Sessions and repositories',
+    availability: 'always',
+    registeredOnly: false,
+    pendingTask: null,
+  },
   {
     id: 'git',
     icon: 'git-branch',
@@ -122,6 +128,20 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     pendingTask: null,
   },
   {
+    // U06-a: the conversation's RUN state — status, model, thinking level, turn
+    // clock, tools. Placed right after `context` so the rail digit it takes is
+    // Ctrl/Cmd+4 (the slot the terminal vacated) and the first three do not
+    // move; a profile with a persisted `railOrder` gets it appended by
+    // `sortSurfaces`, which lands it in the same visible position.
+    id: 'run',
+    icon: 'activity',
+    labelKey: 'Run',
+    descriptionKey: 'Live turn status',
+    availability: 'always',
+    registeredOnly: false,
+    pendingTask: null,
+  },
+  {
     // 2026-09-04: taken off the rail at the user's request. The surface itself
     // still exists (`surfaceViews.tsx` keeps `TerminalSurfaceView`, and a
     // persisted `lastSurfaceId: 'terminal'` still resolves through
@@ -137,15 +157,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     availability: 'always',
     registeredOnly: true,
     pendingTask: null,
-  },
-  {
-    id: 'chat',
-    icon: 'message-square',
-    labelKey: 'Chat',
-    descriptionKey: 'Split chat sessions',
-    availability: 'has-content',
-    registeredOnly: false,
-    pendingTask: '后置（多标签）',
   },
   {
     id: 'pr',
@@ -249,23 +260,6 @@ export function sortSurfaces(order: readonly string[]): ContextSurfaceDescriptor
 export interface RailSurfacesOptions {
   /** MVP: always false. T-12~T-15 pass a real predicate when content-driven surfaces land. */
   hasContent?: (id: ContextSurfaceId) => boolean;
-  /**
-   * U02-b: in 'two-column' mode the rail collapses to `context` alone. Defaults
-   * to 'three-column' (via the caller), so existing callers keep the full rail.
-   */
-  columnMode?: ShellColumnMode;
-}
-
-/**
- * U02-b (D02): which surfaces the rail offers in a given column mode. Two-column
- * is "AI conversation + development only" — Files/Git/Terminal are deliberately
- * unreachable there; switch back to three-column to get them.
- */
-export function isSurfaceAvailableInColumnMode(
-  id: ContextSurfaceId,
-  columnMode: ShellColumnMode
-): boolean {
-  return columnMode === 'two-column' ? id === 'context' : true;
 }
 
 /** True when the rail may select this surface today (used as a reducer guard). */
@@ -275,9 +269,6 @@ export function isRailSelectableSurface(
 ): boolean {
   const surface = getSurface(id);
   if (!surface || surface.registeredOnly) {
-    return false;
-  }
-  if (!isSurfaceAvailableInColumnMode(id, options.columnMode ?? DEFAULT_SHELL_COLUMN_MODE)) {
     return false;
   }
   if (surface.availability === 'has-content') {
@@ -294,10 +285,15 @@ export function railSurfaces(
   return sortSurfaces(order).filter((surface) => isRailSelectableSurface(surface.id, options));
 }
 
-/** Fallback target for "open the panel" when nothing was open before (decision 4). */
+/**
+ * Fallback target for "open the dock" when nothing was open before (decision 4).
+ * D08 moves the safety net from `context` to `chat`: the dock's first entry is
+ * the session list, and an empty registry must not resolve to a surface that is
+ * no longer first.
+ */
 export function firstAlwaysSurfaceId(options: RailSurfacesOptions = {}): ContextSurfaceId {
   const visible = railSurfaces(DEFAULT_SURFACE_ORDER, options);
-  return visible[0]?.id ?? 'context';
+  return visible[0]?.id ?? 'chat';
 }
 
 /** Unique changed paths across staged/modified/deleted/untracked/conflicted. */

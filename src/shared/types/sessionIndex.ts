@@ -34,6 +34,24 @@ export interface SessionIndexEntry {
    * compatible read into an irreversible write migration.
    */
   agent?: string;
+  /**
+   * U13 (D04): this row's `workspacePath` is an isolated scratch directory, not
+   * a project folder the user picked — i.e. an "unbound" chat (U05).
+   *
+   * Written by Main from `ScratchWorkspaceService.isScratchPath`, never by the
+   * renderer, matching U05-c's rule that the renderer cannot declare a session
+   * unbound. Optional and absent-when-false on purpose: the file is a bare JSON
+   * array (see the header), so the only compatible way to add a fact is an
+   * optional per-entry field, and rows written before this field existed keep
+   * meaning "unknown" rather than being backfilled on load (same reasoning as
+   * `agent` above — normalizing on load turns a compatible read into an
+   * irreversible write migration).
+   *
+   * Consumed by the renderer's `mergeSessionIndex`, which would otherwise drop
+   * these rows as orphans: their path matches no `ChatWorkspace`, so the chat
+   * became invisible after a restart even though its history was still on disk.
+   */
+  unbound?: boolean;
   workspacePath: string;
   title: string;
   model?: string;

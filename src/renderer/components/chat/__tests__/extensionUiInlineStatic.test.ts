@@ -28,8 +28,11 @@ describe('T08-b inline Extension UI wiring', () => {
     expect(dialog).not.toContain('focus trap');
   });
 
-  it('shows pending approval badges on both Recent and repository session rows', () => {
-    expect(nav.split('pendingApprovalCount={').length - 1).toBe(2);
+  it('shows pending approval badges on every session row list', () => {
+    // Recent + repository folders + U13's temporary group. A row the user
+    // cannot see the approval badge on is a row whose turn silently stalls, so
+    // this counts render sites rather than naming two of them.
+    expect(nav.split('pendingApprovalCount={').length - 1).toBe(3);
     expect(nav).toContain('{{count}} pending approval requests');
     expect(nav).toContain('<ShieldQuestion className="size-3" />');
   });

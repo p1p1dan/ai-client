@@ -287,6 +287,11 @@ function createHarness(
           : {}),
         projectTrusted: false,
         permissionGate: 'bundled',
+        // U04: what the worker reported it loaded. Present for `s1` only, so
+        // the "no worker" answer stays distinguishable in the tests below.
+        ...(sessionId === 's1'
+          ? { extensions: [{ name: 'pi-mcp', path: '/ext/pi-mcp/index.js', ok: true }] }
+          : {}),
       },
     };
   });
@@ -692,6 +697,28 @@ describe('WorkerManager identity and capacity', () => {
     });
     expect(h.records[0].dispose).not.toHaveBeenCalled();
     expect(h.records[1].dispose).not.toHaveBeenCalled();
+  });
+});
+
+describe('WorkerManager session extensions (U04)', () => {
+  it('answers from the cached bootstrap without touching the worker', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1');
+    expect(h.manager.getSessionExtensions('s1')).toEqual([
+      { name: 'pi-mcp', path: '/ext/pi-mcp/index.js', ok: true },
+    ]);
+    // No RPC: the list cannot change without a new bootstrap, so a UI panel
+    // must never queue behind a running turn to read it.
+    expect(h.records[0].request).not.toHaveBeenCalled();
+  });
+
+  it('reports null for a session with no slot, and [] for a worker that loaded none', async () => {
+    const h = createHarness();
+    // "Nobody has bootstrapped for this chat" is a different sentence from
+    // "this chat loaded no plugins", and the sidebar says different things.
+    expect(h.manager.getSessionExtensions('never-started')).toBeNull();
+    await create(h.manager, 's2');
+    expect(h.manager.getSessionExtensions('s2')).toEqual([]);
   });
 });
 

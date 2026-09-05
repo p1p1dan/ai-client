@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import {
   buildSidebarFolders,
+  buildUnboundFolder,
   chipForWorkspace,
   deriveRecentRows,
   formatRelativeAge,
@@ -11,6 +12,7 @@ import {
   resolveFolderClickActivation,
   resolveNewSessionTarget,
   resolveNewSessionWorkspaceId,
+  UNBOUND_FOLDER_ID,
 } from '../sidebarTree';
 
 const NOW = 1_800_000_000_000;
@@ -505,6 +507,68 @@ describe('sidebar rows are Pi-only', () => {
       ['s2', 'feat/x'],
     ]);
     expect(rows.every((row) => !('agentChip' in row))).toBe(true);
+  });
+});
+
+/**
+ * U13 (D04) — temporary chats have no repository behind them, so they get one
+ * synthetic group instead of being dropped with the genuine orphans.
+ */
+describe('buildUnboundFolder (U13)', () => {
+  const unbound = { workspacePath: '/tmp/unbound-sessions/abc' };
+
+  it('returns null when there is no unbound chat', () => {
+    expect(buildUnboundFolder({ sessions: [session({ id: 's1' })], name: 'Temporary' })).toBeNull();
+  });
+
+  it('collects unbound chats newest first, with the temporary chip and no new-chat target', () => {
+    const folder = buildUnboundFolder({
+      sessions: [
+        session({ id: 'old', workspaceId: '', unbound, updatedAt: NOW - 10_000 }),
+        session({ id: 'new', workspaceId: '', unbound, updatedAt: NOW }),
+      ],
+      name: 'Temporary',
+    });
+    expect(folder?.projectId).toBe(UNBOUND_FOLDER_ID);
+    expect(folder?.synthetic).toBe('unbound');
+    expect(folder?.newSessionWorkspaceId).toBeNull();
+    expect(folder?.rows.map((row) => row.sessionId)).toEqual(['new', 'old']);
+    expect(folder?.rows.every((row) => row.chip?.label === 'temporary')).toBe(true);
+  });
+
+  it('applies the same title query as the repository folders', () => {
+    const sessions = [
+      session({ id: 's1', title: 'Draft plan', workspaceId: '', unbound }),
+      session({ id: 's2', title: 'Other', workspaceId: '', unbound }),
+    ];
+    expect(
+      buildUnboundFolder({ sessions, name: 'Temporary', query: 'draft' })?.rows.map(
+        (row) => row.sessionId
+      )
+    ).toEqual(['s1']);
+    expect(buildUnboundFolder({ sessions, name: 'Temporary', query: 'zzz' })).toBeNull();
+  });
+
+  it('never renders an unbound chat twice — the repository folders skip it', () => {
+    // A store seed session the user typed into before adding any repository
+    // keeps a real workspace id while being unbound.
+    const seeded = session({ id: 's1', workspaceId: 'ws-main', unbound });
+    const folders = buildSidebarFolders({ projects, workspaces, sessions: [seeded] });
+    expect(folders.flatMap((folder) => folder.rows)).toEqual([]);
+    expect(buildUnboundFolder({ sessions: [seeded], name: 'Temporary' })?.rows).toHaveLength(1);
+  });
+
+  it('keeps unbound chats in Recent, where a real orphan is still excluded', () => {
+    const { rows } = deriveRecentRows({
+      sessions: [
+        session({ id: 'u1', workspaceId: '', unbound }),
+        session({ id: 'gone', workspaceId: 'ws-removed' }),
+      ],
+      workspaces,
+      now: NOW,
+    });
+    expect(rows.map((row) => row.sessionId)).toEqual(['u1']);
+    expect(rows[0].chip?.label).toBe('temporary');
   });
 });
 

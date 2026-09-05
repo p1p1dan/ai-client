@@ -6,13 +6,10 @@
 import { clampEditorRatio, DEFAULT_EDITOR_RATIO } from './centerLayoutModel';
 import {
   type ContextSurfaceId,
-  DEFAULT_SHELL_COLUMN_MODE,
   DEFAULT_SURFACE_ORDER,
   firstAlwaysSurfaceId,
   isContextSurfaceId,
   isRailSelectableSurface,
-  isSurfaceAvailableInColumnMode,
-  type ShellColumnMode,
   sortSurfaces,
 } from './surfaceRegistry';
 
@@ -22,10 +19,25 @@ import {
 // dies with it. `centerLayoutModel.ts`'s `RAIL_RESERVE` is a SEPARATE
 // constant (a width-budget reservation, not a rendered column) and is
 // zeroed there rather than removed.
-export const SIDEBAR_MIN_WIDTH = 280;
-export const SIDEBAR_MAX_WIDTH = 500;
-export const SIDEBAR_DEFAULT_WIDTH = 280;
-export const SIDEBAR_COLLAPSED_WIDTH = 48; // = current `w-12`
+/**
+ * D08: the dock's icon rail, in px. The rail is PERMANENT — it is what makes
+ * the left column a VSCode-style activity bar rather than a collapsible
+ * sidebar. `SIDEBAR_COLLAPSED_WIDTH` is therefore exactly the rail width now:
+ * "collapsed" hides the panel beside the rail, it does not hide the column.
+ */
+export const DOCK_RAIL_WIDTH = 44;
+export const SIDEBAR_COLLAPSED_WIDTH = DOCK_RAIL_WIDTH;
+/**
+ * D08: these three now measure the WHOLE dock — rail + panel — because that is
+ * what the allocator grants and what the drag handle commits. Each is the old
+ * panel-only number plus the rail, so the PANEL still defaults to 280 and
+ * `sidebarRowBudgetStatic`'s 236px row budget keeps describing reality.
+ * Deriving them rather than restating 324/544 is deliberate: the row budget is
+ * the thing that breaks silently if the rail and these drift apart.
+ */
+export const SIDEBAR_MIN_WIDTH = 280 + DOCK_RAIL_WIDTH;
+export const SIDEBAR_MAX_WIDTH = 500 + DOCK_RAIL_WIDTH;
+export const SIDEBAR_DEFAULT_WIDTH = 280 + DOCK_RAIL_WIDTH;
 // D34 (user ruling 2026-08-14): the hard floor drops 380 -> 250 so the panel
 // can go narrower than a fixed 380px minimum. The DEFAULT stays 380 (A08's
 // value, unchanged) — the two used to be the same number by coincidence, not
@@ -356,23 +368,19 @@ function closePanel(prev: ShellSurfaceState): ShellSurfaceState {
   };
 }
 
-function bareOpenTarget(prev: ShellSurfaceState, columnMode: ShellColumnMode): ContextSurfaceId {
-  // The remembered surface may be unavailable in this mode (e.g. `git` carried
-  // over from three-column), so guard it before reusing it; otherwise fall back
-  // to the first surface the mode actually offers (two-column → context).
+function bareOpenTarget(prev: ShellSurfaceState): ContextSurfaceId | null {
+  // The remembered surface may have left the registry (e.g. `terminal` after it
+  // was taken off the rail), so guard it before reusing it; otherwise fall back
+  // to the dock's first entry.
   const remembered = prev.activeSurfaceId ?? prev.lastSurfaceId;
-  if (remembered && isRailSelectableSurface(remembered, { columnMode })) {
+  if (remembered && isRailSelectableSurface(remembered)) {
     return remembered;
   }
-  return firstAlwaysSurfaceId({ columnMode });
+  return firstAlwaysSurfaceId();
 }
 
-function applySelect(
-  prev: ShellSurfaceState,
-  id: ContextSurfaceId,
-  columnMode: ShellColumnMode
-): ShellSurfaceState {
-  if (!isRailSelectableSurface(id, { columnMode })) {
+function applySelect(prev: ShellSurfaceState, id: ContextSurfaceId): ShellSurfaceState {
+  if (!isRailSelectableSurface(id)) {
     return prev;
   }
   if (id === prev.activeSurfaceId) {
@@ -382,17 +390,14 @@ function applySelect(
   return openSurface(prev, id);
 }
 
-function applyOpen(
-  prev: ShellSurfaceState,
-  id: ContextSurfaceId | undefined,
-  columnMode: ShellColumnMode
-): ShellSurfaceState {
+function applyOpen(prev: ShellSurfaceState, id: ContextSurfaceId | undefined): ShellSurfaceState {
   if (id === undefined) {
-    // Explicit open never no-ops (decision 4 correction): fall back through
-    // the last surface, then the first surface this mode offers.
-    return openSurface(prev, bareOpenTarget(prev, columnMode));
+    // Explicit open never no-ops (decision 4 correction): fall back through the
+    // last surface, then the dock's first entry.
+    const target = bareOpenTarget(prev);
+    return target ? openSurface(prev, target) : prev;
   }
-  if (!isRailSelectableSurface(id, { columnMode })) {
+  if (!isRailSelectableSurface(id)) {
     return prev;
   }
   // Explicit open is always an open, never a toggle-off — unlike `select`.
@@ -400,27 +405,23 @@ function applyOpen(
 }
 
 /**
- * `columnMode` gates which surfaces `select`/`open` may reach — the SAME guard
- * the rail and shortcuts use (`isRailSelectableSurface`), so no entry point can
- * open a surface the current mode hides. Defaults to three-column so existing
- * callers and tests are unaffected.
+ * D08: the `columnMode` parameter is gone. It existed to stop an entry point
+ * from opening a surface the two-column mode hid; there is no such mode any
+ * more, so `isRailSelectableSurface` is the single remaining guard.
  */
 export function reduceShellSurface(
   prev: ShellSurfaceState,
-  action: ShellSurfaceAction,
-  columnMode: ShellColumnMode = DEFAULT_SHELL_COLUMN_MODE
+  action: ShellSurfaceAction
 ): ShellSurfaceState {
   switch (action.type) {
     case 'select':
-      return applySelect(prev, action.surfaceId, columnMode);
+      return applySelect(prev, action.surfaceId);
     case 'open':
-      return applyOpen(prev, action.surfaceId, columnMode);
+      return applyOpen(prev, action.surfaceId);
     case 'close':
       return closePanel(prev);
     case 'toggle-panel':
-      return prev.activeSurfaceId !== null
-        ? closePanel(prev)
-        : applyOpen(prev, undefined, columnMode);
+      return prev.activeSurfaceId !== null ? closePanel(prev) : applyOpen(prev, undefined);
     case 'toggle-expanded':
       return prev.activeSurfaceId === null ? prev : { ...prev, expanded: !prev.expanded };
     default:
@@ -428,34 +429,14 @@ export function reduceShellSurface(
   }
 }
 
-/**
- * U02-b: converge the surface state when the column mode changes. Two-column
- * offers `context` only, so an active surface it no longer offers (e.g. `git`)
- * is swapped to `context` — while `lastSurfaceId` remembers the three-column
- * surface so a round-trip back to three-column can restore it. Switching TO
- * three-column, or with the panel closed / already on context, is a no-op:
- * `railOrder` is never touched, so the mode toggle cannot damage it.
- */
-export function reduceColumnModeChange(
-  prev: ShellSurfaceState,
-  columnMode: ShellColumnMode
-): ShellSurfaceState {
-  if (columnMode !== 'two-column' || prev.activeSurfaceId === null) {
-    return prev;
-  }
-  if (isSurfaceAvailableInColumnMode(prev.activeSurfaceId, columnMode)) {
-    return prev;
-  }
-  return {
-    activeSurfaceId: 'context',
-    lastSurfaceId: prev.activeSurfaceId,
-    expanded: prev.expanded,
-  };
-}
-
 // ── persistence hygiene ─────────────────────────────────────────────────
 export interface PersistedShellLayout {
-  sidebarCollapsed: boolean;
+  /**
+   * D08: `sidebarCollapsed` is GONE. "Is the left column collapsed" and "which
+   * surface is showing" were two fields for one fact once the rail became
+   * permanent — a collapsed dock is simply `activeSurfaceId === null`, and
+   * keeping both let them disagree (collapsed with a surface still "active").
+   */
   sidebarWidth: number;
   activeSurfaceId: ContextSurfaceId | null;
   lastSurfaceId: ContextSurfaceId | null;
@@ -466,24 +447,20 @@ export interface PersistedShellLayout {
   readingWidthMode: ReadingWidthMode;
   /** T-32: share of the center row given to the editor when a file is open. */
   editorRatio: number;
-  /**
-   * U02: three-column (rail: git/files/context/terminal) vs two-column
-   * (context only). Persisted so the choice survives a restart.
-   */
-  shellColumnMode: ShellColumnMode;
 }
 
 export const defaultShellLayout: PersistedShellLayout = {
-  sidebarCollapsed: false,
   sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
-  activeSurfaceId: null,
-  lastSurfaceId: null,
+  // D08: the dock opens on the session list, not closed. A closed dock on first
+  // run would show a bare 44px rail and nothing else — the app would look empty
+  // on the one screen where the user has not yet learned what the icons are.
+  activeSurfaceId: 'chat',
+  lastSurfaceId: 'chat',
   expanded: false,
   panelWidth: null,
   railOrder: [...DEFAULT_SURFACE_ORDER],
   readingWidthMode: 'normal',
   editorRatio: DEFAULT_EDITOR_RATIO,
-  shellColumnMode: DEFAULT_SHELL_COLUMN_MODE,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -503,11 +480,6 @@ function sanitizePanelWidth(raw: unknown): number | null {
   return isFiniteNumber(raw) ? clampContextPanelWidth(raw) : null;
 }
 
-/** Any value but the explicit 'two-column' opt-in → the three-column default. */
-function sanitizeShellColumnMode(raw: unknown): ShellColumnMode {
-  return raw === 'two-column' ? 'two-column' : DEFAULT_SHELL_COLUMN_MODE;
-}
-
 function sanitizeRailOrder(raw: unknown): ContextSurfaceId[] {
   const order = Array.isArray(raw) ? raw : [];
   return sortSurfaces(order as readonly string[]).map((surface) => surface.id);
@@ -522,7 +494,6 @@ export function sanitizeShellLayoutPersisted(raw: unknown): PersistedShellLayout
   const activeSurfaceId = sanitizeSurfaceIdOrNull(raw.activeSurfaceId);
 
   return {
-    sidebarCollapsed: raw.sidebarCollapsed === true,
     sidebarWidth: clampSidebarWidth(
       typeof raw.sidebarWidth === 'number' ? raw.sidebarWidth : Number.NaN
     ),
@@ -536,6 +507,5 @@ export function sanitizeShellLayoutPersisted(raw: unknown): PersistedShellLayout
     editorRatio: clampEditorRatio(
       typeof raw.editorRatio === 'number' ? raw.editorRatio : Number.NaN
     ),
-    shellColumnMode: sanitizeShellColumnMode(raw.shellColumnMode),
   };
 }

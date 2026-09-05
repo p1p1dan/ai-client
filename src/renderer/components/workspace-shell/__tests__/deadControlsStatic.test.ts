@@ -107,41 +107,41 @@ describe('workspace-shell dead-control invariant (T-23 / A06)', () => {
   });
 });
 
-describe('MainHeader pins (T-23 removals)', () => {
-  const CODE = codeOf(join(SHELL_DIR, 'MainHeader.tsx'));
+/**
+ * D08 replaced `MainHeader.tsx` with `SessionTabs.tsx`. The pins that survive
+ * are the ones about honesty, not about that component's own layout: the
+ * hardcoded usage ring must stay gone, browser/preview must stay rail-entered
+ * registry slots with no center-bar entry, and the workspace context that used
+ * to be a permanent chip must still be REACHABLE (it moved into the active
+ * tab's tooltip rather than being dropped).
+ *
+ * Dropped deliberately: the `HeaderIconButton` / title-tier / chip-shrink pins.
+ * All three described chrome D08 deleted — the center bar has no icon buttons,
+ * no `<h1>` title (each tab is the title) and no folder chip.
+ */
+describe('SessionTabs pins (D08, carried from MainHeader)', () => {
+  const CODE = codeOf(join(SHELL_DIR, 'SessionTabs.tsx'));
 
   it('the hardcoded usage ring stays removed', () => {
     expect(CODE).not.toMatch(/UsageRing/);
   });
 
-  it('browser/preview stay rail-entered surfaces — no header entry in any spelling', () => {
+  it('browser/preview stay rail-entered surfaces — no center-bar entry in any spelling', () => {
     expect(CODE).not.toMatch(/['"`]Browser['"`]/);
     expect(CODE).not.toMatch(/['"`]Window['"`]/);
     expect(CODE).not.toMatch(/\bGlobe\b|\bAppWindow\b/);
   });
 
-  it('keeps HeaderIconButton onClick required so a dead header icon cannot compile', () => {
-    expect(CODE).toMatch(/onClick: \(\) => void/);
-    expect(CODE).not.toMatch(/onClick\?\s*:/);
-  });
-
-  it('workspace context survives the single line: chip with focus-reachable path tooltip (P-22)', () => {
+  it('workspace context survives the move: the active tab carries a path tooltip (P-22)', () => {
     expect(CODE).toMatch(/TooltipTrigger/);
-    expect(CODE).toMatch(/activeWorkspace\.path/);
+    expect(CODE).toMatch(/workspacePath/);
   });
 
-  it('the chip yields in the narrow-window crunch instead of clipping the actions', () => {
-    // Codex final-verify major: a shrink-0 chip pushed the header buttons
-    // past overflow-hidden at the 685px window minimum.
-    expect(CODE).toContain('min-w-0 max-w-48');
-    expect(CODE).not.toMatch(/max-w-48[^"']*shrink-0|shrink-0[^"']*max-w-48/);
-  });
-
-  it('title sits on the body-copy tier with a cross-platform weight (P-19)', () => {
-    expect(CODE).toMatch(/text-markdown/);
-    expect(CODE).toMatch(/leading-normal/);
-    expect(CODE).toMatch(/font-semibold/);
-    expect(CODE).not.toMatch(/text-sm/);
+  it('a tab yields its title before its chrome in the narrow crunch', () => {
+    // Same hazard the retired header chip had: something in the row must be
+    // allowed to shrink, or the close button is pushed past overflow.
+    expect(CODE).toContain('min-w-0 flex-1 truncate');
+    expect(CODE).toContain('max-w-52');
   });
 });
 
@@ -170,11 +170,16 @@ describe('LeftNav pins (T-23 removals)', () => {
 describe('LeftNav activation wiring (D29 / F4)', () => {
   const CODE = codeOf(join(SHELL_DIR, 'LeftNav.tsx'));
 
-  it('calls the raw store selectSession exactly once, and only inside handleSelectSession', () => {
-    expect(CODE.split('selectSession(').length - 1).toBe(1);
-    expect(CODE).toContain(
-      'const handleSelectSession = (sessionId: string, persistedRuntimeIdentity?: string) => {\n    selectSession(sessionId);'
-    );
+  // D08: `selectSession` left this file entirely — activation (select + the
+  // resume decision) is `useActivateSession`, shared with the center tab strip
+  // so a persisted tab reopened after a restart starts the session the same
+  // way. The invariant is unchanged in spirit: ONE activation path.
+  it('never calls the raw store selectSession — activation goes through the shared hook', () => {
+    expect(CODE).not.toContain('selectSession(');
+    expect(CODE).toContain('const activateSession = useActivateSession();');
+    // Exactly one call: `handleSelectSession`'s tail. A second means a row
+    // or menu started activating sessions on its own again.
+    expect(CODE.split('activateSession(').length - 1).toBe(1);
   });
 
   it("feeds resolveFolderClickActivation's activateSessionId into nothing but handleSelectSession", () => {

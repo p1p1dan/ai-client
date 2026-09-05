@@ -66,6 +66,8 @@ const closeSession = vi.fn(async () => 'close-1');
 const respondExtensionUi = vi.fn(async () => 'extui-1');
 const ensureReady = vi.fn(async () => undefined);
 const recordCreated = vi.fn(async () => undefined);
+/** U04 — Main answers from the cached bootstrap; `null` = no live worker. */
+const getSessionExtensions = vi.fn((_sessionId: string) => null as unknown);
 const clearUnwrittenRuntimeIdentity = vi.fn(async () => true);
 const handleRuntimeEvent = vi.fn();
 
@@ -85,6 +87,7 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
     }),
     ensureReady,
     getStatus: vi.fn(() => ({ state: 'ready', driver: 'agent-sdk' })),
+    getSessionExtensions,
     createSession,
     resumeSession,
     loadHistoryPage,
@@ -142,12 +145,15 @@ const SCRATCH_DIR = '/tmp/base/unbound-sessions/abc';
 const ensureScratch = vi.fn(async (_sessionId: string) => SCRATCH_DIR);
 const adoptScratch = vi.fn(async (_sessionId: string, target: string) => target);
 const releaseScratch = vi.fn(async (_sessionId: string) => undefined);
+/** What this app run has already allocated — empty right after a restart. */
+let scratchPathsBySession: Record<string, string> = {};
 
 vi.mock('../../services/agent-host/ScratchWorkspaceService', () => ({
   scratchWorkspaceService: {
     ensure: (sessionId: string) => ensureScratch(sessionId),
     adopt: (sessionId: string, target: string) => adoptScratch(sessionId, target),
     release: (sessionId: string) => releaseScratch(sessionId),
+    pathFor: (sessionId: string) => scratchPathsBySession[sessionId] ?? null,
     isScratchPath: (candidate: string) => candidate === SCRATCH_DIR,
   },
 }));
@@ -158,6 +164,7 @@ beforeEach(async () => {
   runtimeEventHandlers.length = 0;
   fakeWindows = [];
   terminalWasReleased = false;
+  scratchPathsBySession = {};
   vi.clearAllMocks();
   const { registerChatHandlers } = await import('../chat');
   registerChatHandlers();
@@ -211,6 +218,50 @@ describe('Pi WorkerSlot chat routing', () => {
         path: SCRATCH_DIR,
       });
       expect(ensureScratch).toHaveBeenCalledWith('s1');
+      expect(adoptScratch).not.toHaveBeenCalled();
+    });
+
+    // U13 — the same request, one restart later.
+    it('re-takes the recorded directory instead of allocating a second one', async () => {
+      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+      vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
+        sessionId: 's1',
+        agent: 'pi',
+        workspacePath: SCRATCH_DIR,
+        unbound: true,
+        title: 'Source',
+        updatedAt: 1,
+        archived: false,
+        runtimeIdentity: '/session.jsonl',
+      });
+
+      await expect(invoke('chat:ensureScratchWorkspace', { sessionId: 's1' })).resolves.toEqual({
+        path: SCRATCH_DIR,
+      });
+      // A fresh uuid here would give the chat a second cwd and rewrite the
+      // indexed path, which resume then rejects as a workspace mismatch.
+      expect(adoptScratch).toHaveBeenCalledWith('s1', SCRATCH_DIR);
+      expect(ensureScratch).not.toHaveBeenCalled();
+    });
+
+    it('does not re-adopt a directory this run already allocated', async () => {
+      scratchPathsBySession = { s1: SCRATCH_DIR };
+      await invoke('chat:ensureScratchWorkspace', { sessionId: 's1' });
+      expect(ensureScratch).toHaveBeenCalledWith('s1');
+      expect(adoptScratch).not.toHaveBeenCalled();
+    });
+
+    it('records the unbound marker so the chat is still findable after a restart', async () => {
+      await invoke('chat:createSession', { sessionId: 's1', workspacePath: SCRATCH_DIR });
+      expect(recordCreated).toHaveBeenCalledWith(expect.objectContaining({ unbound: true }));
+
+      await invoke('chat:registerSession', { sessionId: 's2', workspacePath: SCRATCH_DIR });
+      expect(recordCreated).toHaveBeenLastCalledWith(expect.objectContaining({ unbound: true }));
+    });
+
+    it('records a real folder as not unbound, so a rebound chat loses the marker', async () => {
+      await invoke('chat:createSession', { sessionId: 's1', workspacePath: '/repo' });
+      expect(recordCreated).toHaveBeenCalledWith(expect.objectContaining({ unbound: false }));
     });
 
     it('marks a session created in a scratch directory as unbound', async () => {
@@ -279,6 +330,27 @@ describe('Pi WorkerSlot chat routing', () => {
     it('keeps the directory when a chat is un-archived', async () => {
       await invoke('chat:archiveSession', { sessionId: 's1', archived: false });
       expect(releaseScratch).not.toHaveBeenCalled();
+    });
+  });
+
+  // U04 — the plugin list is a read of what Main already cached at bootstrap.
+  describe('session extensions', () => {
+    it('passes the worker-reported list straight through', async () => {
+      getSessionExtensions.mockReturnValueOnce([
+        { name: 'pi-mcp', path: '/ext/pi-mcp/index.js', ok: true },
+      ]);
+      await expect(invoke('chat:listSessionExtensions', { sessionId: 's1' })).resolves.toEqual([
+        { name: 'pi-mcp', path: '/ext/pi-mcp/index.js', ok: true },
+      ]);
+      expect(getSessionExtensions).toHaveBeenCalledWith('s1');
+    });
+
+    it('reports null for a session with no live worker, and never starts one', async () => {
+      // "Nobody has loaded anything yet" must stay distinguishable from "loaded
+      // nothing", and opening a panel must not spawn a worker.
+      await expect(invoke('chat:listSessionExtensions', { sessionId: 's1' })).resolves.toBeNull();
+      expect(createSession).not.toHaveBeenCalled();
+      expect(resumeSession).not.toHaveBeenCalled();
     });
   });
 

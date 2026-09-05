@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A11 — VSCode 式三栏重排原型（需求 3 / 4 / 5）</title>
+<style>
+/* =====================================================================
+   A11 — VSCode 式壳层重排原型
+   目的：把用户 2026-09-05 提出的第 3/4/5 条需求做成可点的画面：
+     ③ 左栏变成 Tab 容器：聊天 + 原右栏四个 Tab（Git/文件/上下文/运行）；
+        右栏只留文件与编辑器（保留展开面板）；
+        点会话 = 启动会话，中栏用横向会话 Tab 切换。
+     ④ 不再有双栏/三栏切换，不再有「上下文面板」开关按钮。
+     ⑤ 上下文页有图形化占用展示；「对话构成」默认折叠 + 限制条数。
+   颜色/字号/圆角/行高直接取自 src/renderer/styles/globals.css 的
+   oklch token，浅色深色两套都在。这是原型画面，不是施工依据。
+   ===================================================================== */
+
+/* ---- 顶部原型控制条（不属于产品界面） ---- */
+.proto-bar{flex:0 0 auto;height:38px;display:flex;align-items:center;gap:14px;padding:0 12px;background:#111;color:#e8e8e8;font:12px/1 var(--font-sans);border-bottom:1px solid #333}
+.proto-bar b{font-weight:600;color:#f5b183}
+.proto-bar .grp{display:flex;align-items:center;gap:4px}
+.proto-bar .grp>span{opacity:.6;margin-right:2px}
+.proto-bar button{height:22px;padding:0 8px;border-radius:5px;border:1px solid #3a3a3a;background:#1d1d1d;color:#ccc;font:12px/1 inherit;cursor:pointer}
+.proto-bar button[aria-pressed="true"]{background:#f5b183;border-color:#f5b183;color:#1a1a1a;font-weight:600}
+.proto-note{flex:0 0 auto;padding:6px 12px;background:#111;color:#9a9a9a;font:11px/1.5 var(--font-sans);border-top:1px solid #333}
+
+:root{
+  --font-sans:"Inter","SF Pro Text","Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei UI",sans-serif;
+  --font-mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  /* globals.css 字号档 */
+  --text-2xs:10px; --text-meta:13px; --text-ui:14px; --text-markdown:14px; --text-code:12px; --text-title:18px;
+  /* globals.css 圆角档 */
+  --radius-xs:4px; --radius:6px; --radius-md:10px; --radius-lg:12px;
+  /* 尺寸档：Tab 栏 36 / 树节点 28 / 小按钮 24 */
+  --h-bar:36px; --h-row:28px; --h-btn:24px;
+  --w-left:288px; --w-right:400px; --w-rail:44px;
+}
+/* globals.css :root（浅色） */
+.app[data-theme="light"]{
+  --background:oklch(0.9931 0.012 96.42); --foreground:oklch(0.1696 0.0017 17.32);
+  --card:oklch(0.97 0.0106 100.82); --popover:oklch(0.97 0.0106 100.82);
+  --primary:oklch(0.5665 0.1523 45.02); --primary-foreground:oklch(0.9931 0.012 96.42);
+  --secondary:oklch(0.962 0.0111 89.72);
+  --muted:oklch(0.965 0.0093 99.98); --muted-foreground:oklch(0.4531 0.005 91.5);
+  --accent:oklch(0.935 0.0122 96.43); --accent-primary:oklch(0.8109 0.1131 56.61);
+  --selection:oklch(0.91 0.0109 95.17); --hover:oklch(0.935 0.0122 96.43);
+  --status-running:oklch(0.4818 0.1315 254.79); --destructive:oklch(0.5042 0.1648 27.84);
+  --success:oklch(0.5593 0.1335 122.92); --warning:oklch(0.5665 0.1523 45.02);
+  --info:oklch(0.4818 0.1315 254.79); --folder:oklch(0.6333 0.1295 85.81);
+  --border:oklch(0.875 0.0137 97.46); --input:oklch(0.8463 0.0137 102.05);
+}
+/* globals.css .dark */
+.app[data-theme="dark"]{
+  --background:oklch(0.1981 0.0032 17.43); --foreground:oklch(0.8463 0.0137 102.05);
+  --card:oklch(0.262 0.0037 48.55); --popover:oklch(0.262 0.0037 48.55);
+  --primary:oklch(0.6576 0.1539 49.3); --primary-foreground:oklch(0.1981 0.0032 17.43);
+  --secondary:oklch(0.276 0.0024 67.71);
+  --muted:oklch(0.268 0.0025 67.7); --muted-foreground:oklch(0.6956 0.0103 93.62);
+  --accent:oklch(0.305 0.0029 17.32); --accent-primary:oklch(0.8109 0.1131 56.61);
+  --selection:oklch(0.325 0.0029 17.31); --hover:oklch(0.305 0.0029 17.32);
+  --status-running:oklch(0.5988 0.1104 247); --destructive:oklch(0.597 0.1692 28.38);
+  --success:oklch(0.7227 0.1178 117.2); --warning:oklch(0.6576 0.1539 49.3);
+  --info:oklch(0.5988 0.1104 247); --folder:oklch(0.7346 0.1462 87.46);
+  --border:oklch(0.34 0.0038 84.58); --input:oklch(0.3651 0.0044 67.69);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:#0b0b0b}
+/* 三段纵向 flex：原型条高度会随窗口宽度换行变化，固定定位会压住 app 底部的账号栏。 */
+body{font-family:var(--font-sans);font-size:var(--text-ui);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+svg{display:block}
+.icon{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+.icon-lg{width:17px;height:17px}
+.icon-sm{width:12px;height:12px}
+
+/* ---------------- 应用外框 ---------------- */
+.app{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;
+     background:var(--background);color:var(--foreground);overflow:hidden}
+/* 窗口标题栏：仅身份 + 窗口按钮（D07 现状不变） */
+.titlebar{height:32px;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:0 10px;
+          border-bottom:1px solid var(--border);background:var(--card);font-size:var(--text-meta)}
+.titlebar .brand{display:flex;align-items:center;gap:6px;font-weight:600}
+.titlebar .dot{width:10px;height:10px;border-radius:50%;background:var(--accent-primary)}
+.titlebar .spacer{flex:1}
+.win-btn{width:26px;height:20px;border-radius:var(--radius-xs);display:grid;place-items:center;color:var(--muted-foreground)}
+.win-btn:hover{background:var(--hover)}
+
+.shell{flex:1;min-height:0;display:flex;position:relative;overflow:hidden}
+
+/* ---------------- 左栏 ---------------- */
+.left{flex:0 0 auto;width:var(--w-left);display:flex;min-width:0;border-right:1px solid var(--border);background:color-mix(in oklab,var(--card) 40%,var(--background))}
+/* 形态 A：VSCode 图标轨道 */
+.rail{display:none;flex:0 0 var(--w-rail);width:var(--w-rail);flex-direction:column;align-items:center;
+      gap:2px;padding-top:4px;border-right:1px solid var(--border);background:var(--card)}
+/* 原版 VSCode 活动栏：纯图标，靠 title 提示 + 面板标题行说明当前区。 */
+.rail-btn{position:relative;width:34px;height:34px;border-radius:var(--radius);display:grid;place-items:center;
+          color:var(--muted-foreground);cursor:pointer;border:0;background:none}
+.rail-btn:hover{background:var(--hover);color:var(--foreground)}
+.rail-btn[aria-pressed="true"]{color:var(--foreground);background:var(--selection)}
+.rail-btn[aria-pressed="true"]::before{content:"";position:absolute;left:-5px;top:6px;bottom:6px;width:2px;border-radius:1px;background:var(--primary)}
+.rail-btn .badge{position:absolute;right:2px;top:2px;min-width:14px;height:14px;padding:0 3px;border-radius:7px;
+                 background:var(--primary);color:var(--primary-foreground);font-size:var(--text-2xs);line-height:14px;text-align:center;font-weight:600}
+.rail .spacer{flex:1}
+.app[data-lefttabs="rail"] .rail{display:flex}
+.app[data-lefttabs="rail"] .left-tabs{display:none}
+/* 纯图标轨道靠这行标题说明当前在哪个区（VSCode 的 EXPLORER / SOURCE CONTROL 那一行），
+   同时它就是左栏的横条，和中栏会话 Tab 条、右栏文件 Tab 条对齐同一条水平线。 */
+.app[data-lefttabs="rail"] .left-title{display:flex}
+/* 轨道底部已经有插件/设置，页脚就不再重复一份，只留账号胶囊。 */
+.app[data-lefttabs="rail"] .left-foot .foot-btn{display:none}
+
+.left-panel{flex:1;min-width:0;display:flex;flex-direction:column}
+/* 形态 B：顶部标签条（每栏一条横条，沿用 D07） */
+.left-tabs{height:var(--h-bar);flex:0 0 auto;display:flex;align-items:stretch;gap:0;
+           border-bottom:1px solid var(--border);padding:0 2px;overflow-x:auto;scrollbar-width:none}
+.left-tabs::-webkit-scrollbar{display:none}
+.ltab{position:relative;display:flex;align-items:center;gap:5px;padding:0 9px;border:0;background:none;cursor:pointer;
+      color:var(--muted-foreground);font-size:var(--text-meta);white-space:nowrap}
+.ltab:hover{color:var(--foreground);background:var(--hover)}
+.ltab[aria-selected="true"]{color:var(--foreground);font-weight:600}
+.ltab[aria-selected="true"]::after{content:"";position:absolute;left:6px;right:6px;bottom:0;height:2px;background:var(--primary);border-radius:1px}
+/* 288px 的左栏放不下 5 个带中文标签的 Tab（实测「运行」被裁掉），
+   所以只有选中的那个显示文字，其余退成图标——这样五个都能排进一行。 */
+.ltab .lb{display:none}
+.ltab[aria-selected="true"] .lb{display:inline}
+.ltab .badge{min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:var(--muted);
+             color:var(--muted-foreground);font-size:var(--text-2xs);line-height:15px;font-weight:600}
+/* 轨道形态下，面板顶部改成一条标题横条 */
+.left-title{display:none;height:var(--h-bar);flex:0 0 auto;align-items:center;gap:6px;padding:0 10px;
+            border-bottom:1px solid var(--border);font-size:var(--text-meta);font-weight:600;letter-spacing:.02em}
+.left-title .sub{margin-left:auto;font-weight:400;color:var(--muted-foreground);font-size:var(--text-2xs)}
+
+.left-body{flex:1;min-height:0;overflow-y:auto;padding:8px}
+.left-foot{flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:8px;border-top:1px solid var(--border)}
+.user-pill{flex:1;min-width:0;height:var(--h-btn);display:flex;align-items:center;gap:6px;padding:0 6px;border-radius:var(--radius);
+           color:var(--muted-foreground);font-size:var(--text-meta);cursor:pointer}
+.user-pill:hover{background:var(--hover);color:var(--foreground)}
+.user-pill .av{width:16px;height:16px;border-radius:50%;background:var(--muted);color:var(--foreground);
+               font-size:var(--text-2xs);display:grid;place-items:center;font-weight:600}
+.user-pill .mail{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.foot-btn{height:var(--h-btn);min-width:var(--h-btn);padding:0 5px;border:0;background:none;border-radius:var(--radius);
+          display:flex;align-items:center;gap:4px;color:var(--muted-foreground);cursor:pointer;font-size:var(--text-2xs)}
+.foot-btn:hover{background:var(--hover);color:var(--foreground)}
+
+/* 左栏通用小部件 */
+.btn-row{display:flex;align-items:center;gap:4px;margin-bottom:8px}
+.btn{height:var(--h-btn);padding:0 8px;display:inline-flex;align-items:center;gap:4px;border:1px solid var(--input);
+     border-radius:var(--radius);background:transparent;color:var(--foreground);font-size:var(--text-meta);cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn-primary{background:var(--primary);border-color:var(--primary);color:var(--primary-foreground);font-weight:600}
+.search{position:relative;margin-bottom:10px}
+.search svg{position:absolute;left:7px;top:50%;transform:translateY(-50%);color:var(--muted-foreground)}
+.search input{width:100%;height:var(--h-row);padding:0 8px 0 25px;border-radius:var(--radius);border:1px solid var(--input);
+              background:var(--background);color:var(--foreground);font:var(--text-meta)/1 var(--font-sans);outline:none}
+.search input:focus{border-color:var(--primary)}
+.grp-label{height:var(--h-row);display:flex;align-items:center;padding:0 8px;font-size:var(--text-meta);
+           font-weight:500;letter-spacing:.04em;color:var(--muted-foreground)}
+.grp-label .act{margin-left:auto;display:flex;gap:2px}
+.icon-btn{width:20px;height:20px;border:0;background:none;border-radius:var(--radius-xs);display:grid;place-items:center;
+          color:var(--muted-foreground);cursor:pointer}
+.icon-btn:hover{background:var(--hover);color:var(--foreground)}
+.tree{display:flex;flex-direction:column;gap:2px}
+.node{height:var(--h-row);display:flex;align-items:center;gap:6px;padding:0 8px;border-radius:var(--radius);
+      font-size:var(--text-ui);cursor:pointer;overflow:hidden;color:var(--foreground)}
+.node:hover{background:var(--hover)}
+.node.sel{background:var(--selection)}
+.node .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.node .age{flex:0 0 auto;width:40px;text-align:right;font-size:var(--text-meta);color:var(--muted-foreground);font-variant-numeric:tabular-nums}
+.node .chip{flex:0 0 auto;max-width:96px;height:16px;padding:0 5px;border:1px solid var(--border);border-radius:var(--radius-xs);
+            font-size:var(--text-2xs);line-height:14px;color:var(--muted-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.node .live{width:6px;height:6px;border-radius:50%;background:var(--status-running);flex:0 0 auto}
+.node .open-mark{width:6px;height:6px;border-radius:50%;border:1.5px solid var(--muted-foreground);flex:0 0 auto}
+.indent{padding-left:12px}
+.sect{margin-bottom:10px}
+
+/* ---------------- 中栏 ---------------- */
+.center{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+/* 会话 Tab 横条（新增：一个会话 = 一个 Tab） */
+.session-tabs{height:var(--h-bar);flex:0 0 auto;display:flex;align-items:stretch;border-bottom:1px solid var(--border);background:var(--card)}
+.stabs{flex:1;min-width:0;display:flex;align-items:stretch;overflow-x:auto;scrollbar-width:none}
+.stabs::-webkit-scrollbar{display:none}
+.stab{position:relative;display:flex;align-items:center;gap:6px;max-width:210px;min-width:0;padding:0 8px 0 10px;
+      border-right:1px solid var(--border);background:transparent;color:var(--muted-foreground);cursor:pointer;
+      font-size:var(--text-meta);white-space:nowrap}
+.stab:hover{background:var(--hover)}
+.stab .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.stab[aria-selected="true"]{background:var(--background);color:var(--foreground);font-weight:600}
+.stab[aria-selected="true"]::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:var(--primary)}
+.stab .live{width:6px;height:6px;border-radius:50%;background:var(--status-running);flex:0 0 auto}
+.stab .x{width:16px;height:16px;border-radius:var(--radius-xs);display:grid;place-items:center;flex:0 0 auto;opacity:0;color:var(--muted-foreground)}
+.stab:hover .x,.stab[aria-selected="true"] .x{opacity:1}
+.stab .x:hover{background:var(--accent);color:var(--foreground)}
+.stabs .add{width:30px;flex:0 0 auto;display:grid;place-items:center;color:var(--muted-foreground);border:0;background:none;cursor:pointer}
+.stabs .add:hover{background:var(--hover);color:var(--foreground)}
+.center-actions{flex:0 0 auto;display:flex;align-items:center;gap:2px;padding:0 8px;border-left:1px solid var(--border)}
+.seg{display:flex;align-items:center;gap:2px}
+.seg button{height:var(--h-btn);padding:0 8px;display:flex;align-items:center;gap:4px;border:0;background:none;
+            border-radius:var(--radius-xs);color:var(--muted-foreground);font-size:var(--text-2xs);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--selection);color:var(--foreground)}
+
+.thread{flex:1;min-height:0;overflow-y:auto;padding:18px 0}
+.thread-inner{max-width:720px;margin:0 auto;padding:0 20px;display:flex;flex-direction:column;gap:16px}
+.msg-user{align-self:flex-end;max-width:76%;background:var(--card);border:1px solid var(--border);
+          border-radius:var(--radius-md);padding:8px 12px;font-size:var(--text-markdown);line-height:1.6}
+.msg-ai{font-size:var(--text-markdown);line-height:1.7}
+.msg-ai p{margin:0 0 10px}
+.tool{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.tool-head{height:var(--h-row);display:flex;align-items:center;gap:6px;padding:0 8px;background:var(--muted);font-size:var(--text-meta)}
+.tool-head .name{font-weight:600}
+.tool-head .arg{color:var(--muted-foreground);font-family:var(--font-mono);font-size:var(--text-code);
+                overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tool-head .ok{margin-left:auto;color:var(--success);font-size:var(--text-2xs)}
+.tool-body{padding:6px 10px;font-family:var(--font-mono);font-size:var(--text-code);color:var(--muted-foreground);line-height:1.6}
+
+/* 输入区 */
+.composer-wrap{flex:0 0 auto;padding:0 0 14px}
+.composer{max-width:720px;margin:0 auto;padding:0 20px}
+.target-bar{display:flex;align-items:center;gap:12px;padding:0 4px 6px;font-size:var(--text-meta);color:var(--muted-foreground)}
+.target-bar .it{display:flex;align-items:center;gap:5px}
+.box{border:1px solid var(--input);border-radius:var(--radius-md);background:var(--card);padding:10px 12px 6px}
+.box .ta{min-height:38px;color:var(--muted-foreground);font-size:var(--text-markdown)}
+.box .bar{display:flex;align-items:center;gap:6px;margin-top:4px}
+.box .bar .sp{flex:1}
+.pill{height:22px;padding:0 8px;display:inline-flex;align-items:center;gap:5px;border-radius:var(--radius);
+      color:var(--muted-foreground);font-size:var(--text-meta);cursor:pointer}
+.pill:hover{background:var(--hover);color:var(--foreground)}
+.pill b{color:var(--foreground);font-weight:600}
+.send{width:26px;height:26px;border-radius:50%;background:var(--primary);color:var(--primary-foreground);display:grid;place-items:center;cursor:pointer}
+
+/* ---------------- 右栏（只剩文件 / 编辑器） ---------------- */
+.right{flex:0 0 auto;width:var(--w-right);display:flex;flex-direction:column;min-width:0;
+       border-left:1px solid var(--border);background:var(--background)}
+.app[data-right="off"] .right{display:none}
+.app[data-right="expand"] .right{position:absolute;top:0;bottom:0;right:0;left:var(--w-left);width:auto;z-index:20;
+       box-shadow:-14px 0 40px rgb(0 0 0 / .22)}
+.file-tabs{height:var(--h-bar);flex:0 0 auto;display:flex;align-items:stretch;border-bottom:1px solid var(--border);background:var(--card)}
+.ftabs{flex:1;min-width:0;display:flex;overflow-x:auto;scrollbar-width:none}
+.ftabs::-webkit-scrollbar{display:none}
+.ftab{display:flex;align-items:center;gap:6px;max-width:190px;padding:0 8px 0 10px;border-right:1px solid var(--border);
+      background:transparent;color:var(--muted-foreground);font-size:var(--text-meta);cursor:pointer;white-space:nowrap}
+.ftab .t{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.ftab[aria-selected="true"]{background:var(--background);color:var(--foreground)}
+.ftab .x{width:15px;height:15px;display:grid;place-items:center;border-radius:var(--radius-xs)}
+.ftab .x:hover{background:var(--accent)}
+.right-actions{flex:0 0 auto;display:flex;align-items:center;gap:2px;padding:0 6px;border-left:1px solid var(--border)}
+.editor{flex:1;min-height:0;overflow:auto;padding:10px 0;font-family:var(--font-mono);font-size:var(--text-code);line-height:1.75}
+.eline{display:flex;gap:12px;padding:0 12px}
+.eline:hover{background:var(--hover)}
+.eno{width:26px;text-align:right;color:var(--muted-foreground);opacity:.6;flex:0 0 auto;user-select:none}
+.k{color:oklch(0.62 0.14 300)} .s{color:var(--success)} .c{color:var(--muted-foreground);opacity:.75} .f{color:var(--info)}
+
+/* ---------------- 上下文页（需求 5） ---------------- */
+.ctx-card{border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:10px;background:var(--card)}
+.ctx-title{display:flex;align-items:center;gap:6px;font-size:var(--text-meta);font-weight:600;margin-bottom:8px}
+.ctx-title .r{margin-left:auto;font-weight:400;color:var(--muted-foreground);font-variant-numeric:tabular-nums}
+/* 环形占用。竖排而不是环左图例右：轨道占掉 60px 后左面板只剩约 248px，
+   并排时 flex 会把图例名称压到看不见（实测只剩数字）。 */
+.ring-row{display:flex;flex-direction:column;gap:10px}
+.ring{position:relative;width:84px;height:84px;flex:0 0 auto;align-self:center}
+.ring .lbl{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.ring .lbl b{font-size:var(--text-title);line-height:1.1;font-variant-numeric:tabular-nums}
+.ring .lbl span{font-size:var(--text-2xs);color:var(--muted-foreground)}
+/* 堆叠条 */
+.stack{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--muted);margin:2px 0 10px}
+.stack i{display:block;height:100%}
+.legend{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
+.lg{display:flex;align-items:center;gap:7px;font-size:var(--text-meta)}
+.lg .sw{width:9px;height:9px;border-radius:3px;flex:0 0 auto}
+.lg .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted-foreground)}
+/* 数值和百分比合成一列：拆成两列时 flex 会把名称压到 0 宽（实测图例只剩数字）。 */
+.lg .v{flex:0 0 auto;width:74px;text-align:right;font-variant-numeric:tabular-nums;color:var(--foreground)}
+.lg .v em{font-style:normal;color:var(--muted-foreground)}
+/* 折叠区 */
+.fold{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.fold>summary{height:var(--h-row);display:flex;align-items:center;gap:6px;padding:0 8px;cursor:pointer;
+              font-size:var(--text-meta);font-weight:600;list-style:none;background:var(--muted)}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary .cnt{margin-left:auto;font-weight:400;color:var(--muted-foreground);font-size:var(--text-2xs);font-variant-numeric:tabular-nums}
+.fold>summary .chev{transition:transform .15s}
+.fold[open]>summary .chev{transform:rotate(90deg)}
+.fold-body{padding:6px}
+.turn{display:flex;align-items:center;gap:8px;height:24px;padding:0 6px;border-radius:var(--radius-xs);font-size:var(--text-meta)}
+.turn:hover{background:var(--hover)}
+.turn .role{width:52px;flex:0 0 auto;color:var(--muted-foreground);font-size:var(--text-2xs)}
+.turn .bar{flex:1;min-width:0;height:6px;border-radius:3px;background:var(--muted);overflow:hidden}
+.turn .bar i{display:block;height:100%;background:var(--info);opacity:.75}
+.turn .v{width:52px;text-align:right;flex:0 0 auto;font-variant-numeric:tabular-nums;color:var(--muted-foreground)}
+.more-btn{width:100%;height:var(--h-row);border:0;background:none;border-radius:var(--radius);color:var(--muted-foreground);
+          font-size:var(--text-meta);cursor:pointer;margin-top:2px}
+.more-btn:hover{background:var(--hover);color:var(--foreground)}
+.kv{display:flex;align-items:center;height:22px;font-size:var(--text-meta);gap:8px}
+.kv .k2{color:var(--muted-foreground);flex:0 0 96px}
+.kv .v2{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+.warn{display:flex;gap:6px;align-items:flex-start;padding:7px 9px;border-radius:var(--radius);font-size:var(--text-meta);
+      background:color-mix(in oklab,var(--warning) 14%,transparent);color:var(--foreground);border:1px solid color-mix(in oklab,var(--warning) 40%,transparent)}
+
+.view{display:none}
+.view.on{display:block}
+</style>
+</head>
+<body>
+
+<svg style="display:none">
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-git" viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+  <symbol id="i-act" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-folder-open" viewBox="0 0 24 24"><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H22l-2.55 5.1a2 2 0 0 1-1.79 1.1H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-chev-d" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1"/></symbol>
+  <symbol id="i-blocks" viewBox="0 0 24 24"><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17h7M17.5 13.5v7"/><rect x="3" y="3" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-mon" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m5 12 14 0M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-branch" viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+  <symbol id="i-pc" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+  <symbol id="i-collapse" viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 6h18M7 12h10M11 18h2"/></symbol>
+  <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+</svg>
+
+<div class="proto-bar">
+  <b>A11 原型</b>
+  <span style="opacity:.45">需求 ③④⑤ 可视化</span>
+  <div class="grp"><span>左栏形态</span>
+    <button data-set="lefttabs" data-val="rail" aria-pressed="true">VSCode 图标轨道（已选）</button>
+    <button data-set="lefttabs" data-val="top" aria-pressed="false">顶部标签（备选）</button>
+  </div>
+  <div class="grp"><span>右栏</span>
+    <button data-set="right" data-val="off" aria-pressed="false">未开文件</button>
+    <button data-set="right" data-val="on" aria-pressed="true">停靠</button>
+    <button data-set="right" data-val="expand" aria-pressed="false">展开</button>
+  </div>
+  <div class="grp"><span>主题</span>
+    <button data-set="theme" data-val="light" aria-pressed="true">浅</button>
+    <button data-set="theme" data-val="dark" aria-pressed="false">深</button>
+  </div>
+</div>
+
+<div class="app" id="app" data-theme="light" data-lefttabs="rail" data-right="on">
+
+  <!-- 窗口标题栏：身份 + 窗口按钮，不再承载布局开关 -->
+  <div class="titlebar">
+    <div class="brand"><span class="dot"></span> ai-client</div>
+    <div class="spacer"></div>
+    <div class="win-btn">–</div><div class="win-btn">▢</div><div class="win-btn">✕</div>
+  </div>
+
+  <div class="shell">
+
+    <!-- ============ 左栏 ============ -->
+    <aside class="left">
+      <!-- 形态 A：图标轨道 -->
+      <nav class="rail" aria-label="主导航">
+        <button class="rail-btn" data-tab="chat" aria-pressed="true" title="聊天"><svg class="icon icon-lg"><use href="#i-chat"/></svg></button>
+        <button class="rail-btn" data-tab="git" aria-pressed="false" title="Git"><svg class="icon icon-lg"><use href="#i-git"/></svg><span class="badge">7</span></button>
+        <button class="rail-btn" data-tab="files" aria-pressed="false" title="文件"><svg class="icon icon-lg"><use href="#i-file"/></svg></button>
+        <button class="rail-btn" data-tab="ctx" aria-pressed="false" title="上下文"><svg class="icon icon-lg"><use href="#i-gauge"/></svg></button>
+        <button class="rail-btn" data-tab="run" aria-pressed="false" title="运行"><svg class="icon icon-lg"><use href="#i-act"/></svg></button>
+        <div class="spacer"></div>
+        <button class="rail-btn" title="插件"><svg class="icon icon-lg"><use href="#i-blocks"/></svg></button>
+        <button class="rail-btn" title="设置"><svg class="icon icon-lg"><use href="#i-cog"/></svg></button>
+      </nav>
+
+      <div class="left-panel">
+        <!-- 形态 B：顶部标签条 -->
+        <div class="left-tabs" role="tablist">
+          <button class="ltab" data-tab="chat" aria-selected="true" title="聊天"><svg class="icon"><use href="#i-chat"/></svg><span class="lb">聊天</span></button>
+          <button class="ltab" data-tab="git" aria-selected="false" title="Git"><svg class="icon"><use href="#i-git"/></svg><span class="lb">Git</span><span class="badge">7</span></button>
+          <button class="ltab" data-tab="files" aria-selected="false" title="文件"><svg class="icon"><use href="#i-file"/></svg><span class="lb">文件</span></button>
+          <button class="ltab" data-tab="ctx" aria-selected="false" title="上下文"><svg class="icon"><use href="#i-gauge"/></svg><span class="lb">上下文</span></button>
+          <button class="ltab" data-tab="run" aria-selected="false" title="运行"><svg class="icon"><use href="#i-act"/></svg><span class="lb">运行</span></button>
+        </div>
+        <!-- 轨道形态下用的标题条 -->
+        <div class="left-title"><span id="leftTitle">聊天</span><span class="sub" id="leftSub">3 个会话已启动</span></div>
+
+        <div class="left-body">
+
+          <!-- ---- 聊天 Tab（原左栏全部内容） ---- -->
+          <section class="view on" data-view="chat">
+            <div class="btn-row">
+              <button class="btn btn-primary"><svg class="icon icon-sm"><use href="#i-plus"/></svg>新建会话</button>
+              <button class="btn"><svg class="icon icon-sm"><use href="#i-folder-plus"/></svg>添加仓库</button>
+            </div>
+            <div class="search">
+              <svg class="icon icon-sm"><use href="#i-search"/></svg>
+              <input placeholder="搜索会话">
+            </div>
+
+            <div class="sect">
+              <div class="grp-label">最近
+                <span class="act"><button class="icon-btn"><svg class="icon icon-sm"><use href="#i-chev-d"/></svg></button></span>
+              </div>
+              <div class="tree">
+                <div class="node sel"><span class="live"></span><span class="t">修复 TUI↔GUI 会话历史分叉</span><span class="age">3m</span></div>
+                <div class="node"><span class="open-mark"></span><span class="t">思考强度补齐 Pi 七档</span><span class="age">1h</span></div>
+                <div class="node"><span class="open-mark"></span><span class="t">壳层横条重排 U14</span><span class="age">4h</span></div>
+                <div class="node"><span class="t">WorkerManager 超时排查</span><span class="age">1d</span></div>
+              </div>
+            </div>
+
+            <div class="grp-label">仓库
+              <span class="act">
+                <button class="icon-btn" title="筛选"><svg class="icon icon-sm"><use href="#i-filter"/></svg></button>
+                <button class="icon-btn" title="添加仓库"><svg class="icon icon-sm"><use href="#i-folder-plus"/></svg></button>
+              </span>
+            </div>
+            <div class="tree">
+              <div class="node"><svg class="icon" style="color:var(--folder)"><use href="#i-folder-open"/></svg><span class="t" style="font-weight:600">ai-client</span></div>
+              <div class="tree indent">
+                <div class="node sel"><span class="live"></span><span class="t">修复 TUI↔GUI 会话历史分叉</span><span class="chip">feat/pi-primary</span><span class="age">3m</span></div>
+                <div class="node"><span class="open-mark"></span><span class="t">思考强度补齐 Pi 七档</span><span class="chip">main</span><span class="age">1h</span></div>
+                <div class="node"><span class="t">上下文面板取数</span><span class="chip">main</span><span class="age">2d</span></div>
+              </div>
+              <div class="node"><svg class="icon" style="color:var(--folder)"><use href="#i-folder-open"/></svg><span class="t" style="font-weight:600">pix</span></div>
+              <div class="tree indent">
+                <div class="node"><span class="open-mark"></span><span class="t">壳层横条重排 U14</span><span class="chip">main</span><span class="age">4h</span></div>
+              </div>
+              <div class="node"><svg class="icon" style="color:var(--folder)"><use href="#i-folder"/></svg><span class="t" style="font-weight:600">临时会话</span></div>
+            </div>
+            <p style="margin:10px 2px 0;font-size:var(--text-2xs);color:var(--muted-foreground);line-height:1.6">
+              ● 实心点 = 正在跑；○ 空心点 = 已启动（中栏有 Tab）。点一行 = 启动会话并在中栏新开 Tab。
+            </p>
+          </section>
+
+          <!-- ---- Git Tab ---- -->
+          <section class="view" data-view="git">
+            <div class="btn-row">
+              <button class="btn"><svg class="icon icon-sm"><use href="#i-branch"/></svg>feat/pi-primary-backend</button>
+            </div>
+            <div class="grp-label">已暂存 (2)</div>
+            <div class="tree">
+              <div class="node"><span style="color:var(--success);font-family:var(--font-mono);font-size:var(--text-2xs)">A</span><span class="t">src/renderer/components/workspace-shell/LeftTabs.tsx</span></div>
+              <div class="node"><span style="color:var(--warning);font-family:var(--font-mono);font-size:var(--text-2xs)">M</span><span class="t">src/renderer/stores/shellLayout.ts</span></div>
+            </div>
+            <div class="grp-label">已修改 (5)</div>
+            <div class="tree">
+              <div class="node"><span style="color:var(--warning);font-family:var(--font-mono);font-size:var(--text-2xs)">M</span><span class="t">WorkspaceShell.tsx</span></div>
+              <div class="node"><span style="color:var(--warning);font-family:var(--font-mono);font-size:var(--text-2xs)">M</span><span class="t">MainHeader.tsx</span></div>
+              <div class="node"><span style="color:var(--warning);font-family:var(--font-mono);font-size:var(--text-2xs)">M</span><span class="t">ContextPanel.tsx</span></div>
+              <div class="node"><span style="color:var(--warning);font-family:var(--font-mono);font-size:var(--text-2xs)">M</span><span class="t">surfaceRegistry.ts</span></div>
+              <div class="node"><span style="color:var(--destructive);font-family:var(--font-mono);font-size:var(--text-2xs)">D</span><span class="t">panelTabsModel.ts</span></div>
+            </div>
+          </section>
+
+          <!-- ---- 文件 Tab ---- -->
+          <section class="view" data-view="files">
+            <div class="search">
+              <svg class="icon icon-sm"><use href="#i-search"/></svg>
+              <input placeholder="按文件名查找">
+            </div>
+            <div class="tree">
+              <div class="node"><svg class="icon" style="color:var(--folder)"><use href="#i-folder-open"/></svg><span class="t" style="font-weight:600">src</span></div>
+              <div class="tree indent">
+                <div class="node"><svg class="icon" style="color:var(--folder)"><use href="#i-folder-open"/></svg><span class="t">renderer</span></div>
+                <div class="tree indent">
+                  <div class="node"><svg class="icon" style="color:var(--folder)"><use href="#i-folder"/></svg><span class="t">components</span></div>
+                  <div class="node sel"><svg class="icon" style="color:var(--info)"><use href="#i-file"/></svg><span class="t">WorkspaceShell.tsx</span></div>
+                  <div class="node"><svg class="icon" style="color:var(--info)"><use href="#i-file"/></svg><span class="t">LeftNav.tsx</span></div>
+                  <div class="node"><svg class="icon" style="color:var(--info)"><use href="#i-file"/></svg><span class="t">MainHeader.tsx</span></div>
+                </div>
+                <div class="node"><svg class="icon" style="color:var(--folder)"><use href="#i-folder"/></svg><span class="t">main</span></div>
+                <div class="node"><svg class="icon" style="color:var(--folder)"><use href="#i-folder"/></svg><span class="t">shared</span></div>
+              </div>
+              <div class="node"><svg class="icon" style="color:var(--info)"><use href="#i-file"/></svg><span class="t">package.json</span></div>
+              <div class="node"><svg class="icon"><use href="#i-file"/></svg><span class="t">CLAUDE.md</span></div>
+            </div>
+            <p style="margin:10px 2px 0;font-size:var(--text-2xs);color:var(--muted-foreground);line-height:1.6">
+              点文件 → 在右栏编辑器打开（右栏只做文件与编辑器）。
+            </p>
+          </section>
+
+          <!-- ---- 上下文 Tab（需求 5） ---- -->
+          <section class="view" data-view="ctx">
+            <div class="ctx-card">
+              <div class="ctx-title">上下文占用<span class="r">128 000 窗口</span></div>
+              <div class="ring-row">
+                <div class="ring">
+                  <svg viewBox="0 0 42 42" width="84" height="84">
+                    <circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--muted)" stroke-width="5"/>
+                    <!-- 周长 100：依次 系统 6 / 工具 11 / 对话 34 / 文件 12 -->
+                    <circle cx="21" cy="21" r="15.9" fill="none" stroke="oklch(0.60 0.12 250)" stroke-width="5" stroke-dasharray="6 94"  stroke-dashoffset="0"   transform="rotate(-90 21 21)"/>
+                    <circle cx="21" cy="21" r="15.9" fill="none" stroke="oklch(0.66 0.13 160)" stroke-width="5" stroke-dasharray="11 89" stroke-dashoffset="-6"  transform="rotate(-90 21 21)"/>
+                    <circle cx="21" cy="21" r="15.9" fill="none" stroke="oklch(0.68 0.15 50)"  stroke-width="5" stroke-dasharray="34 66" stroke-dashoffset="-17" transform="rotate(-90 21 21)"/>
+                    <circle cx="21" cy="21" r="15.9" fill="none" stroke="oklch(0.62 0.14 300)" stroke-width="5" stroke-dasharray="12 88" stroke-dashoffset="-51" transform="rotate(-90 21 21)"/>
+                  </svg>
+                  <div class="lbl"><b>63%</b><span>80.6k / 128k</span></div>
+                </div>
+                <div class="stack">
+                  <i style="width:6%;background:oklch(0.60 0.12 250)"></i>
+                  <i style="width:11%;background:oklch(0.66 0.13 160)"></i>
+                  <i style="width:34%;background:oklch(0.68 0.15 50)"></i>
+                  <i style="width:12%;background:oklch(0.62 0.14 300)"></i>
+                </div>
+                <div class="legend">
+                  <div class="lg"><span class="sw" style="background:oklch(0.60 0.12 250)"></span><span class="n">系统提示</span><span class="v">7.7k <em>6%</em></span></div>
+                  <div class="lg"><span class="sw" style="background:oklch(0.66 0.13 160)"></span><span class="n">工具定义</span><span class="v">14.1k <em>11%</em></span></div>
+                  <div class="lg"><span class="sw" style="background:oklch(0.68 0.15 50)"></span><span class="n">对话消息</span><span class="v">43.5k <em>34%</em></span></div>
+                  <div class="lg"><span class="sw" style="background:oklch(0.62 0.14 300)"></span><span class="n">附加文件</span><span class="v">15.3k <em>12%</em></span></div>
+                  <div class="lg"><span class="sw" style="background:var(--muted)"></span><span class="n">剩余可用</span><span class="v">47.4k <em>37%</em></span></div>
+                </div>
+              </div>
+              <div class="warn" style="margin-top:10px"><svg class="icon icon-sm" style="margin-top:2px"><use href="#i-act"/></svg>
+                <span>再增长约 47k tokens 会触发自动压缩。压缩会重写更早的对话，历史仍可在会话树里回看。</span></div>
+            </div>
+
+            <!-- 需求 5：默认折叠 + 限制条数 -->
+            <details class="fold">
+              <summary><svg class="icon icon-sm chev"><use href="#i-chev"/></svg>对话构成<span class="cnt">312 条 · 43.5k tokens</span></summary>
+              <div class="fold-body">
+                <div class="turn"><span class="role">用户</span><span class="bar"><i style="width:8%"></i></span><span class="v">0.4k</span></div>
+                <div class="turn"><span class="role">助手</span><span class="bar"><i style="width:46%"></i></span><span class="v">2.1k</span></div>
+                <div class="turn"><span class="role">工具</span><span class="bar"><i style="width:88%"></i></span><span class="v">4.0k</span></div>
+                <div class="turn"><span class="role">助手</span><span class="bar"><i style="width:31%"></i></span><span class="v">1.4k</span></div>
+                <div class="turn"><span class="role">用户</span><span class="bar"><i style="width:5%"></i></span><span class="v">0.2k</span></div>
+                <div class="turn"><span class="role">工具</span><span class="bar"><i style="width:64%"></i></span><span class="v">2.9k</span></div>
+                <div class="turn"><span class="role">助手</span><span class="bar"><i style="width:22%"></i></span><span class="v">1.0k</span></div>
+                <div class="turn"><span class="role">工具</span><span class="bar"><i style="width:71%"></i></span><span class="v">3.2k</span></div>
+                <div class="turn"><span class="role">助手</span><span class="bar"><i style="width:18%"></i></span><span class="v">0.8k</span></div>
+                <div class="turn"><span class="role">用户</span><span class="bar"><i style="width:11%"></i></span><span class="v">0.5k</span></div>
+                <button class="more-btn">显示更多（还有 302 条）</button>
+              </div>
+            </details>
+
+            <div class="ctx-card" style="margin-top:10px">
+              <div class="ctx-title">会话</div>
+              <div class="kv"><span class="k2">目录</span><span class="v2">~/code/ai-client</span></div>
+              <div class="kv"><span class="k2">分支</span><span class="v2">feat/pi-primary-backend</span></div>
+              <div class="kv"><span class="k2">模型</span><span class="v2">Grok 4.6 · Low</span></div>
+              <div class="kv"><span class="k2">缓存命中</span><span class="v2">71%</span></div>
+            </div>
+          </section>
+
+          <!-- ---- 运行 Tab ---- -->
+          <section class="view" data-view="run">
+            <div class="ctx-card">
+              <div class="ctx-title"><span class="live" style="width:7px;height:7px;border-radius:50%;background:var(--status-running);display:inline-block"></span>正在运行<span class="r">00:13</span></div>
+              <div class="kv"><span class="k2">状态</span><span class="v2">思考中 · 第 3 次重试</span></div>
+              <div class="kv"><span class="k2">模型</span><span class="v2">Grok 4.6</span></div>
+              <div class="kv"><span class="k2">思考强度</span><span class="v2">Low（该模型仅支持 low/medium/high）</span></div>
+              <div class="kv"><span class="k2">本回合</span><span class="v2">↑ 3.1k ↓ 0.9k · $0.014</span></div>
+            </div>
+            <div class="grp-label">本回合工具</div>
+            <div class="tree">
+              <div class="node"><svg class="icon icon-sm" style="color:var(--success)"><use href="#i-act"/></svg><span class="t">read_file · WorkspaceShell.tsx</span><span class="age">0.2s</span></div>
+              <div class="node"><svg class="icon icon-sm" style="color:var(--success)"><use href="#i-act"/></svg><span class="t">grep · shellColumnMode</span><span class="age">0.4s</span></div>
+              <div class="node"><span class="live"></span><span class="t">bash · npm test</span><span class="age">6s</span></div>
+            </div>
+          </section>
+
+        </div>
+
+        <div class="left-foot">
+          <div class="user-pill"><span class="av">D</span><span class="mail">dc6127345@gmail.com</span><span>$0.4213</span></div>
+          <button class="foot-btn" title="设置"><svg class="icon"><use href="#i-cog"/></svg></button>
+          <button class="foot-btn" title="插件"><svg class="icon"><use href="#i-blocks"/></svg>12</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============ 中栏 ============ -->
+    <main class="center">
+      <!-- 需求 3：会话横向 Tab，一个已启动会话 = 一个 Tab -->
+      <div class="session-tabs">
+        <div class="stabs">
+          <button class="stab" aria-selected="true"><span class="live"></span><span class="t">修复 TUI↔GUI 会话历史分叉</span><span class="x"><svg class="icon icon-sm"><use href="#i-x"/></svg></span></button>
+          <button class="stab" aria-selected="false"><span class="t">思考强度补齐 Pi 七档</span><span class="x"><svg class="icon icon-sm"><use href="#i-x"/></svg></span></button>
+          <button class="stab" aria-selected="false"><span class="t">壳层横条重排 U14</span><span class="x"><svg class="icon icon-sm"><use href="#i-x"/></svg></span></button>
+          <button class="add" title="新建会话"><svg class="icon"><use href="#i-plus"/></svg></button>
+        </div>
+        <!-- ④：这里不再有「上下文面板」按钮，也不再有双栏/三栏切换 -->
+        <div class="center-actions">
+          <div class="seg" role="group" aria-label="呈现方式">
+            <button aria-pressed="true"><svg class="icon icon-sm"><use href="#i-mon"/></svg>GUI</button>
+            <button aria-pressed="false"><svg class="icon icon-sm"><use href="#i-term"/></svg>TUI</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="thread">
+        <div class="thread-inner">
+          <div class="msg-user">把左栏改成 VSCode 那种 Tab 容器，右栏只留文件和编辑器。</div>
+          <div class="msg-ai">
+            <p>明白。左栏顶部一条 Tab：<b>聊天 / Git / 文件 / 上下文 / 运行</b>；「聊天」里点会话等于启动它，中栏顶部为每个已启动会话开一个横向 Tab。</p>
+            <div class="tool">
+              <div class="tool-head"><svg class="icon icon-sm"><use href="#i-file"/></svg><span class="name">读取</span><span class="arg">src/renderer/components/workspace-shell/WorkspaceShell.tsx</span><span class="ok">539 行</span></div>
+              <div class="tool-body">shellColumnMode / columnModeHasPanel / ContextPanel …</div>
+            </div>
+            <p style="margin-top:10px">右栏保留展开按钮：停靠时约 400px，展开时盖住中栏做全宽阅读。</p>
+          </div>
+          <div class="msg-user">对，双栏三栏切换就不要了。</div>
+          <div class="msg-ai"><p>已按这个方向画出来，可以左上角切换左栏形态对比。</p></div>
+        </div>
+      </div>
+
+      <div class="composer-wrap">
+        <div class="composer">
+          <div class="target-bar">
+            <span class="it"><svg class="icon icon-sm" style="color:var(--folder)"><use href="#i-folder"/></svg>ai-client</span>
+            <span class="it"><svg class="icon icon-sm"><use href="#i-branch"/></svg>feat/pi-primary-backend</span>
+            <span class="it"><svg class="icon icon-sm"><use href="#i-pc"/></svg>本机</span>
+          </div>
+          <div class="box">
+            <div class="ta">给 Pi 发消息…</div>
+            <div class="bar">
+              <span class="pill"><svg class="icon icon-sm"><use href="#i-plus"/></svg></span>
+              <span class="pill">务实</span>
+              <span class="sp"></span>
+              <span class="pill">Grok 4.6 <b>Low</b> <svg class="icon icon-sm"><use href="#i-chev-d"/></svg></span>
+              <span class="send"><svg class="icon icon-sm"><use href="#i-send"/></svg></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ============ 右栏：只有文件 / 编辑器 ============ -->
+    <aside class="right">
+      <div class="file-tabs">
+        <div class="ftabs">
+          <button class="ftab" aria-selected="true"><svg class="icon icon-sm" style="color:var(--info)"><use href="#i-file"/></svg><span class="t">WorkspaceShell.tsx</span><span class="x"><svg class="icon icon-sm"><use href="#i-x"/></svg></span></button>
+          <button class="ftab" aria-selected="false"><svg class="icon icon-sm" style="color:var(--info)"><use href="#i-file"/></svg><span class="t">LeftNav.tsx</span><span class="x"><svg class="icon icon-sm"><use href="#i-x"/></svg></span></button>
+        </div>
+        <div class="right-actions">
+          <button class="icon-btn" id="btnExpand" title="展开 / 收起面板"><svg class="icon"><use href="#i-expand"/></svg></button>
+          <button class="icon-btn" title="关闭"><svg class="icon"><use href="#i-x"/></svg></button>
+        </div>
+      </div>
+      <div class="editor">
+        <div class="eline"><span class="eno">312</span><span><span class="c">// 左栏是 Tab 容器，右栏只承载文件</span></span></div>
+        <div class="eline"><span class="eno">313</span><span><span class="k">return</span> (</span></div>
+        <div class="eline"><span class="eno">314</span><span>  &lt;<span class="f">div</span> <span class="f">className</span>=<span class="s">"flex h-full"</span>&gt;</span></div>
+        <div class="eline"><span class="eno">315</span><span>    &lt;<span class="f">LeftDock</span> <span class="f">activeTab</span>={activeTab} /&gt;</span></div>
+        <div class="eline"><span class="eno">316</span><span>    &lt;<span class="f">CenterColumn</span>&gt;</span></div>
+        <div class="eline"><span class="eno">317</span><span>      &lt;<span class="f">SessionTabs</span> <span class="f">open</span>={openSessions} /&gt;</span></div>
+        <div class="eline"><span class="eno">318</span><span>      &lt;<span class="f">ChatWorkspace</span> <span class="f">sessionId</span>={activeSessionId} /&gt;</span></div>
+        <div class="eline"><span class="eno">319</span><span>    &lt;/<span class="f">CenterColumn</span>&gt;</span></div>
+        <div class="eline"><span class="eno">320</span><span>    {editorOpen &amp;&amp; &lt;<span class="f">EditorColumn</span> /&gt;}</span></div>
+        <div class="eline"><span class="eno">321</span><span>  &lt;/<span class="f">div</span>&gt;</span></div>
+        <div class="eline"><span class="eno">322</span><span>)</span></div>
+        <div class="eline"><span class="eno">323</span><span></span></div>
+        <div class="eline"><span class="eno">324</span><span><span class="c">// 不再有 shellColumnMode / 上下文面板开关</span></span></div>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<div class="proto-note">
+  原型说明：③ 左栏 = 原版 VSCode 图标轨道（44px 纯图标）+ 面板（顶部标题行说明当前区），五个入口：聊天 / Git / 文件 / 上下文 / 运行；点会话 = 启动，中栏出现会话 Tab。
+  ④ 顶部不再有双栏/三栏与「上下文面板」按钮。⑤ 上下文页有环形 + 堆叠条占用图，「对话构成」默认折叠且只列前 10 条。
+  颜色与字号取自 globals.css，仅为画面参考。
+</div>
+
+<script>
+const app = document.getElementById('app');
+
+// 原型控制条
+document.querySelectorAll('.proto-bar button[data-set]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.set, val = btn.dataset.val;
+    if (key === 'right') {
+      app.dataset.right = val;
+    } else {
+      app.dataset[key] = val;
+    }
+    document.querySelectorAll(`.proto-bar button[data-set="${key}"]`)
+      .forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+  });
+});
+
+// 左栏 Tab 切换（轨道与顶部标签共用一套状态）
+const TITLES = { chat: ['聊天', '3 个会话已启动'], git: ['Git', '7 处改动'], files: ['文件', 'ai-client'], ctx: ['上下文', '63% 已用'], run: ['运行', '进行中'] };
+function selectTab(tab) {
+  document.querySelectorAll('.ltab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  document.querySelectorAll('.rail-btn[data-tab]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tab === tab)));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.dataset.view === tab));
+  const [title, sub] = TITLES[tab] || ['', ''];
+  const t = document.getElementById('leftTitle'); if (t) t.textContent = title;
+  const s = document.getElementById('leftSub'); if (s) s.textContent = sub;
+}
+document.querySelectorAll('.ltab, .rail-btn[data-tab]').forEach(b => {
+  b.addEventListener('click', () => selectTab(b.dataset.tab));
+});
+
+// 会话 Tab / 文件 Tab 切换
+function bindTabs(sel, attr) {
+  document.querySelectorAll(sel).forEach(tab => {
+    tab.addEventListener('click', e => {
+      if (e.target.closest('.x')) { e.stopPropagation(); return; }
+      document.querySelectorAll(sel).forEach(t => t.setAttribute(attr, String(t === tab)));
+    });
+  });
+}
+bindTabs('.stab', 'aria-selected');
+bindTabs('.ftab', 'aria-selected');
+
+// 左栏会话行 → 启动 / 切换
+document.querySelectorAll('[data-view="chat"] .node').forEach(node => {
+  node.addEventListener('click', () => {
+    document.querySelectorAll('[data-view="chat"] .node').forEach(n => n.classList.remove('sel'));
+    node.classList.add('sel');
+  });
+});
+
+// 右栏展开
+document.getElementById('btnExpand').addEventListener('click', () => {
+  const next = app.dataset.right === 'expand' ? 'on' : 'expand';
+  app.dataset.right = next;
+  document.querySelectorAll('.proto-bar button[data-set="right"]')
+    .forEach(b => b.setAttribute('aria-pressed', String(b.dataset.val === next)));
+});
+</script>
+</body>
+</html>
