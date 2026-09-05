@@ -588,6 +588,7 @@ export class WorkerManager {
             payload: {
               agent: PI_AGENT,
               ...(committed ? { runtimeIdentity: existing.sessionFile } : {}),
+              ...this.gatePayload(existing),
             },
           });
           this.dispatch({
@@ -713,6 +714,7 @@ export class WorkerManager {
           payload: {
             agent: PI_AGENT,
             ...(materialized ? { runtimeIdentity: sessionFile } : {}),
+            ...this.gatePayload(entry),
           },
         });
         this.dispatch({
@@ -1372,7 +1374,11 @@ export class WorkerManager {
             type: 'session.created',
             sessionId,
             requestId,
-            payload: { agent: PI_AGENT, runtimeIdentity: sessionFile },
+            payload: {
+              agent: PI_AGENT,
+              runtimeIdentity: sessionFile,
+              ...this.gatePayload(target),
+            },
           });
           this.dispatchHistory(target, requestId, history, 'initial');
           this.dispatch({
@@ -1863,6 +1869,20 @@ export class WorkerManager {
     });
   }
 
+  /**
+   * The permission system this entry's worker actually bootstrapped on, for the
+   * session.created/resumed payload.
+   *
+   * Read from the bootstrap acknowledgement rather than recomputed here: the
+   * decision is made inside the worker, against the agentDir and settings that
+   * worker resolved, and a second copy of that logic in Main would be a second
+   * answer. Omitted (not defaulted) when there is no acknowledgement to read —
+   * "unknown" and "bundled" must not collapse into the same payload.
+   */
+  private gatePayload(entry: ManagedSlot): { permissionGate?: 'bundled' | 'user_configured' } {
+    return entry.bootstrap ? { permissionGate: entry.bootstrap.permissionGate } : {};
+  }
+
   private publishHistoryTriplet(
     entry: ManagedSlot,
     requestId: string,
@@ -1873,7 +1893,11 @@ export class WorkerManager {
       type: 'session.resumed',
       sessionId: entry.logicalSessionId,
       requestId,
-      payload: { agent: PI_AGENT, runtimeIdentity: history.sessionFile },
+      payload: {
+        agent: PI_AGENT,
+        runtimeIdentity: history.sessionFile,
+        ...this.gatePayload(entry),
+      },
     });
     this.dispatchHistory(entry, requestId, history, mode);
     this.dispatch({

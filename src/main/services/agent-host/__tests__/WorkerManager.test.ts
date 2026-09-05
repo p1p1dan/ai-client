@@ -76,6 +76,8 @@ function createHarness(
     maxRestartAttempts?: number;
     /** When set, `worker.reload` rejects with this message. */
     reloadFailure?: string;
+    /** D10: the gate the bootstrap ack reports. Defaults to the injected copy. */
+    permissionGate?: 'bundled' | 'user_configured';
   } = {}
 ) {
   const records: FakeSlotRecord[] = [];
@@ -286,7 +288,7 @@ function createHarness(
             }
           : {}),
         projectTrusted: false,
-        permissionGate: 'bundled',
+        permissionGate: input.permissionGate ?? 'bundled',
         // U04: what the worker reported it loaded. Present for `s1` only, so
         // the "no worker" answer stays distinguishable in the tests below.
         ...(sessionId === 's1'
@@ -556,7 +558,14 @@ describe('WorkerManager identity and capacity', () => {
         type: 'session.created',
         sessionId: 's1',
         requestId,
-        payload: { agent: 'pi', runtimeIdentity: '/sessions/s1.jsonl' },
+        payload: {
+          agent: 'pi',
+          runtimeIdentity: '/sessions/s1.jsonl',
+          // D10: which permission system the worker actually bootstrapped on,
+          // read off the bootstrap ack. The tier control needs it to stop
+          // offering tiers the runtime will ignore.
+          permissionGate: 'bundled',
+        },
       }),
       expect.objectContaining({
         type: 'session.status',
@@ -697,6 +706,45 @@ describe('WorkerManager identity and capacity', () => {
     });
     expect(h.records[0].dispose).not.toHaveBeenCalled();
     expect(h.records[1].dispose).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * D10. The tiers are an `authorizerChain` link in the config.json shipped beside
+ * our bundled plugin copy, and on the `user_configured` path that copy is never
+ * injected — so the link is registered and never consulted. The renderer cannot
+ * see any of that; this payload is the only way it learns the picker is
+ * disconnected, which is why the value must travel on BOTH lifecycle events and
+ * must not be defaulted when nothing reported it.
+ */
+describe('WorkerManager permission gate reporting (D10)', () => {
+  it('reports the degraded gate on session.created', async () => {
+    const h = createHarness({ permissionGate: 'user_configured' });
+    await create(h.manager, 's1');
+    const created = h.events.find((event) => event.type === 'session.created');
+    expect(created?.payload).toMatchObject({ permissionGate: 'user_configured' });
+  });
+
+  it('reports it again on resume, since that is how a restored session learns', async () => {
+    const h = createHarness({ permissionGate: 'user_configured' });
+    await h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: '/sessions/s1.jsonl',
+      workspacePath: '/repo',
+      ownerWebContentsId: 11,
+    });
+    const resumed = h.events.find((event) => event.type === 'session.resumed');
+    expect(resumed?.payload).toMatchObject({ permissionGate: 'user_configured' });
+  });
+
+  it('omits the field entirely when no bootstrap has been acknowledged', () => {
+    // "Unknown" must stay distinguishable from "bundled": a UI that reads an
+    // absent field as bundled would go on promising four working tiers.
+    const h = createHarness();
+    const entry = { bootstrap: null } as never;
+    expect(
+      (h.manager as unknown as { gatePayload: (e: never) => object }).gatePayload(entry)
+    ).toEqual({});
   });
 });
 
@@ -957,7 +1005,7 @@ describe('WorkerManager unwritten Pi session files', () => {
         type: 'session.created',
         sessionId: 's1',
         requestId,
-        payload: { agent: 'pi' },
+        payload: { agent: 'pi', permissionGate: 'bundled' },
       })
     );
     // The slot itself is fully usable — only the durable claim is withheld.

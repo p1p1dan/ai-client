@@ -97,6 +97,7 @@ import { materializeIndexedPiChatSession } from './stores/chatSessionActions';
 import { initCloneProgressListener } from './stores/cloneTasks';
 import { useEditorStore } from './stores/editor';
 import { useInitScriptStore } from './stores/initScript';
+import { startPermissionGateWatch } from './stores/permissionGate';
 import { useSettingsStore } from './stores/settings';
 import { useTempWorkspaceStore } from './stores/tempWorkspace';
 import { useTerminalStore } from './stores/terminal';
@@ -142,6 +143,14 @@ export default function App() {
   // Initialize agent activity listener for tree sidebar status display
   useEffect(() => {
     return initAgentActivityListener();
+  }, []);
+
+  // D10: watch which permission system each worker comes up on. Mounted here,
+  // not in the tier control that reads it — `session.created` for a restored
+  // session can land before the Composer renders, and a gate reported to nobody
+  // is a tier picker that silently keeps promising four tiers.
+  useEffect(() => {
+    return startPermissionGateWatch();
   }, []);
 
   // Listen for auto-fetch completion events to refresh git status

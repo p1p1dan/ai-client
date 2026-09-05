@@ -96,6 +96,13 @@ biome 960 files 干净。补丁脚本二次执行输出 `already applied`（幂�
   `authorizerChain` 名字没人配，我们的链注册了也永不被咨询，四个档位一律等同于「务实」。
   不写用户的 `~/.pi` 是既定红线，所以修法要另想（Host 侧自动应答 / 始终注入随包副本 / 明示降级），
   尚未拍板，也未开任务。
+
+  > **2026-09-05 更正 + 已处理**：上面「一律等同于『务实』」**说错了**。等同的是**用户自己的策略**，
+  > 而本机用户那份 `~/.pi/agent/extensions/pi-permission-system/config.json` 实测是
+  > `{"yoloMode": true, ...}`——比任何一档都宽。用户拍板走**明示降级**
+  > （[D10](../decisions/010-user-configured-gate-explicit-degradation.md)），已落为
+  > [U20](./2026-09-05-user-configured-gate-degradation.md)：界面不再假装四档可用。
+  > 档位在这条路径上**依然没有功能**，真正恢复要走「始终注入随包副本」，前置是双插件加载语义探针。
 - **打包侧需重跑 `pnpm build:agent-host`**：`out-agent-host/` 里的插件副本与 `config.json` 仍是 09-02 的旧版
   （连 `authorizerChain` 都没有）。dev 走 `src/agent-host/`，不受影响；发布前必须重建。
 - GUI 点验仍与 U09/U12/U02/U03-a/U05/U08-2 合并待做。

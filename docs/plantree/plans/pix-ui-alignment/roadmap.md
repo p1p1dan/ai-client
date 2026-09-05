@@ -9,7 +9,7 @@
 
 | 分组 | 数量 | 说明 |
 |---|---|---|
-| Done | 19 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)）；**U13：免绑定会话跨重启可见性**、**U06-a：Run 面板**、**U07：Context 内容增强**（2026-09-04，[U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md) / [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）；**U04：左栏插件入口**（2026-09-04，[U04 evidence](./evidence/2026-09-04-u04-plugin-entry.md)）；**U14：壳层横条重排与双栏收敛**（2026-09-04，[U14 evidence](./evidence/2026-09-04-u14-shell-chrome-realignment.md)）；**U15：VSCode 式壳层重排**、**U16：上下文页图形化与折叠**（2026-09-05，[U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)）；**U17：bootstrap 冷启动超时**、**U18：思考强度极端档需声明**、**U19：关 Tab 即结束对话**（2026-09-05，[批次 9 evidence](./evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)） |
+| Done | 20 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)）；**U13：免绑定会话跨重启可见性**、**U06-a：Run 面板**、**U07：Context 内容增强**（2026-09-04，[U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md) / [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）；**U04：左栏插件入口**（2026-09-04，[U04 evidence](./evidence/2026-09-04-u04-plugin-entry.md)）；**U14：壳层横条重排与双栏收敛**（2026-09-04，[U14 evidence](./evidence/2026-09-04-u14-shell-chrome-realignment.md)）；**U15：VSCode 式壳层重排**、**U16：上下文页图形化与折叠**（2026-09-05，[U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)）；**U17：bootstrap 冷启动超时**、**U18：思考强度极端档需声明**、**U19：关 Tab 即结束对话**（2026-09-05，[批次 9 evidence](./evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)） |
 | In Progress | 0 | — |
 | Moved out | 1 | U06-b → Pi 计划 T38（[D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二） |
 | Dropped | 1 | U08-3 请求优先级（[Q12](./open-questions.md) 拍板不做） |
@@ -30,6 +30,9 @@ U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排
   双栏已无第三列可挂，Context 与 Run 一并退出双栏。
 - [D06](./decisions/006-plugin-inventory-source.md)——插件清单由 worker 上报「实际加载了什么」，
   不在 Main 重实现 pi 的解析（后者是第二份手抄，表现为「界面说 3 个、agent 实际加载 1 个」）。
+- [D10](./decisions/010-user-configured-gate-explicit-degradation.md)——**`user_configured` 明示降级**：
+  档位在这条路径上从来没生效过而界面看不出来，改为把 `permissionGate` 送到渲染层并在控件上说明。
+  只说降级、不教修法（用户拍板）。真正恢复功能要走「始终注入随包副本」，前置是双插件加载语义探针。
 - [D09](./decisions/009-tab-close-ends-conversation.md)——**关 Tab 就是结束对话**：确认后断开该会话的
   运行时，但左栏那一行留着（仓库里三个「关闭」中最轻的那个；另两个是左栏 Close 与 Archive）。
   修正 D08 决定三留下的「关 Tab 只是收起 Tab」。
@@ -70,6 +73,16 @@ pi 假定 `off`/`minimal` 处处可用所以 clamp 不拦；本仓 `effortsForMo
 **用户拍板**：没声明就只给 `low/medium/high`，四个极端档必须在 `thinkingLevelMap` 里点名。
 配套让 `reconcileEffortForModel` 在模型未知（目录未加载完）时保留已存档位，
 否则它会把用户合法的 `xhigh` 抹掉——它的返回值是要写回存储的。
+
+### U20 — `user_configured` 权限档明示降级 — **Done**（2026-09-05）
+
+按 [D10](./decisions/010-user-configured-gate-explicit-degradation.md)，关闭 U12 rev.2 的头号欠项。
+用户自己的 agentDir 声明了同一个权限插件时，我们不注入随包副本（红线），
+于是 `authorizerChain` 缺席、档位环永不被咨询——**界面却照常显示四档**。
+现在把 `permissionGate` 从 bootstrap 应答送到渲染层，降级态下标签改「你自己的策略」、
+菜单换成两行说明。**用户拍板只说降级、不教修法**，补救办法只留在 D10 里。
+顺带更正旧记录：不是「等同务实」，是等同用户自己的策略——本机那份 `yoloMode: true`，
+比任何一档都宽。证据见 [U20 evidence](./evidence/2026-09-05-user-configured-gate-degradation.md)。
 
 ### U19 — 关闭中栏 Tab = 结束对话 — **Done**（2026-09-05）
 

@@ -539,6 +539,21 @@ export interface SessionCreatedEvent extends RuntimeEventBase {
      * absent or unknown bindings rather than guessing.
      */
     agent?: AgentWireName;
+    /**
+     * Which permission system this session's worker actually came up on, as
+     * reported by `worker.bootstrap`.
+     *
+     * `user_configured` means the user's own agentDir already declares
+     * `@gotgenes/pi-permission-system`, so we did NOT inject our bundled copy —
+     * and with it went the `authorizerChain: ['aiclient-session-tier']` line
+     * that makes the permission tiers work at all. The tier control has to know,
+     * because the alternative is a picker that offers four tiers while the
+     * runtime honours none of them.
+     *
+     * Optional: an older Host never sends it, and "not reported" is not the
+     * same claim as "bundled".
+     */
+    permissionGate?: 'bundled' | 'user_configured';
   };
 }
 

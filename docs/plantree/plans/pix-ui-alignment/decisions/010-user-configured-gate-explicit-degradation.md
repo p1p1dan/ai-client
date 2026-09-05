@@ -1,0 +1,70 @@
+# D10 — `user_configured` 路线下权限档明示降级
+
+- **日期**：2026-09-05
+- **状态**：Active
+- **拍板人**：用户（三选一里选「修法 C：明示降级」；面板文案追加拍板「就告诉用户降级了就行，不用告诉他怎么去修改」）
+- **来源**：[U12 rev.2 evidence](../evidence/2026-09-04-u12-rev2-cross-directory-and-terminal-rail.md) 第五节的欠项
+
+## 背景：档位在这条路上从来没生效过，而界面看不出来
+
+四个档位是**权限插件授权链里的一个环**：随包插件目录的 `config.json` 写着
+`authorizerChain: ['aiclient-session-tier']`，`sessionTierAuthorizer.ts` 注册同名环。
+
+`decidePermissionPlugin` 的第一个分支里，用户自己的 agentDir 已在 `packages` 声明
+`@gotgenes/pi-permission-system` 时，`additionalExtensionPaths` 是**空的**——
+我们不注入随包副本（写用户 `~/.pi` 是既定红线）。生效的于是是**用户那份 config**，
+里面没有 `authorizerChain`，我们的环注册了却**永不被咨询**。
+
+**这不是功能缺失，是界面在撒谎**：档位照常显示、可选、切换照常"成功"，运行时一个都不认。
+
+### 更正一处旧记录
+
+U12 rev.2 写的是「四档一律等同『务实』」。**不准确**。等同的是**用户自己的策略**，
+而本机用户的 `~/.pi/agent/extensions/pi-permission-system/config.json` 实测是
+
+```json
+{ "debugLog": false, "permissionReviewLog": true, "yoloMode": true }
+```
+
+`yoloMode: true` 关掉全部权限检查——实际行为**可能比任何一档都宽**。
+说成「等同务实」会让用户以为有一层不存在的防护。**文案因此不允许出现任何档位名。**
+
+## 决定一：把「运行在哪套权限系统上」送到渲染层
+
+`worker.bootstrap` 早就在回 `permissionGate`，但到 `WorkerBootstrapResult` 就停了。
+现在挂到 `session.created` / `session.resumed` 的 payload 上。
+
+- **两个事件都带**：`resumed` 覆盖重启后恢复的会话，那才是这缺陷的常见入口。
+- **没有 bootstrap 应答时整个字段省略，不给默认值**。「还没报告」和「报告了是 bundled」
+  是两句话；把前者当后者，界面就会在 worker 起来前继续承诺四个能用的档位。
+- 值从 bootstrap 应答里读，不在 Main 重算——判断是在 worker 里对着它解析出的
+  agentDir 和 settings 做的，Main 再抄一份就是第二个答案。
+
+## 决定二：档位控件换成一句话，不教怎么修
+
+触发器标签改成「你自己的策略」+ `ShieldQuestion` 图标；菜单**整体替换**为两行：
+
+1. 当前对话的权限档不生效
+2. 它跑在你自己 agent 目录里的权限系统上。
+
+用三元而非 `&&`：说明下面还留着一组可点的档位，等于把「不生效」和「可以选」同时摆出来。
+
+**不给修复指引**（用户拍板）。第二行说的是策略来源，不是修法。
+补救办法（往用户自己的 config 加 `"authorizerChain": ["aiclient-session-tier"]`）
+只记在这份决策里，不进 UI。
+
+标签不写任何档位名：那是不展开菜单时唯一可见的部分，在那里写档位名就是本决定要消除的谎。
+
+## 为什么不选另外两个
+
+- **始终注入随包副本**（唯一能真正恢复功能的路）：会让 pi 同时加载两份同名插件。
+  是否每次问两遍、两份 config 怎么合并、用户的 `deny` 会不会被冲掉——三个问题都没取证。
+  若 pi 是「后加载整份覆盖」，等于我们悄悄替换了用户的权限配置，比现在更糟。
+  **留作后续任务**，前置是一个双插件加载语义的探针。
+- **Host 侧自动应答**：只能把「问」变成「答」，**不能把「允许」变成「询问」**。
+  用户 config 若是 `allow`（`yoloMode` 更是全放），插件根本不问，我们没有介入时机。
+  即**能放松、不能收紧**，而四档里最需要保证的恰恰是「只读」这个收紧方向。
+
+## 代价
+
+这条路径上档位仍然**没有功能**，只是不再假装有。真正恢复要等「始终注入」那条路取证。

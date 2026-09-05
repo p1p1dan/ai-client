@@ -3,10 +3,11 @@ import {
   DEFAULT_SESSION_PERMISSION_TIER,
   type SessionPermissionTier,
 } from '@shared/types/sessionPermissionTier';
-import { Shield, ShieldAlert, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Shield, ShieldAlert, ShieldCheck, ShieldOff, ShieldQuestion } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Menu, MenuPopup, MenuRadioGroup, MenuSeparator } from '@/components/ui/menu';
 import { useI18n } from '@/i18n';
+import { isTierControlDegraded, usePermissionGateStore } from '@/stores/permissionGate';
 import type { HostStatus } from './hostStatus';
 import {
   composerMenuItemClass,
@@ -121,14 +122,29 @@ export function ComposerPermissionTrigger({
     setConfirmingDangerous(false);
   }, [applyTier]);
 
+  // D10: the tiers only exist as an `authorizerChain` link in the config.json we
+  // ship beside our bundled plugin copy. On the `user_configured` path we do not
+  // inject that copy, so the link is registered and never consulted — every tier
+  // resolves to whatever the user's own config says. The control stops offering
+  // a choice it cannot deliver.
+  const degraded = usePermissionGateStore((state) => isTierControlDegraded(state.gates, sessionId));
+
   const currentOption = TIER_OPTIONS.find((o) => o.id === tier) ?? TIER_OPTIONS[1];
-  const Icon = currentOption.icon;
-  const label = t(currentOption.labelKey);
+  const Icon = degraded ? ShieldQuestion : currentOption.icon;
+  // Not the tier name: naming one would be the precise lie this state exists to
+  // remove. It is also NOT safe to say "same as Pragmatic" — the effective
+  // policy is the user's, which may be laxer than any tier here (a `yoloMode`
+  // config disables the checks outright).
+  const label = degraded ? t('Your own policy') : t(currentOption.labelKey);
 
   const isDisabled = disabled || sending || hostState !== 'ready';
-  const title = sending
-    ? t('A turn is running — the tier is fixed for the turn already in flight.')
-    : `${t('Permissions: {{tier}} — click to change ({{scope}})', { tier: label, scope: t('Applies immediately, to this thread.') })}`;
+  const title = degraded
+    ? t(
+        'This chat runs on the permission system in your own agent directory; the tiers here do not apply.'
+      )
+    : sending
+      ? t('A turn is running — the tier is fixed for the turn already in flight.')
+      : `${t('Permissions: {{tier}} — click to change ({{scope}})', { tier: label, scope: t('Applies immediately, to this thread.') })}`;
 
   return (
     <Menu
@@ -151,7 +167,9 @@ export function ComposerPermissionTrigger({
         className="min-w-52 rounded-md before:rounded-[calc(var(--radius-md)-1px)]"
         side={composerPopupSide(mode)}
       >
-        {!confirmingDangerous ? (
+        {degraded ? (
+          <DegradedGateNotice />
+        ) : !confirmingDangerous ? (
           <MenuRadioGroup value={tier} onValueChange={handleSelect}>
             {TIER_OPTIONS.map((option) => {
               const OptionIcon = option.icon;
@@ -203,7 +221,7 @@ export function ComposerPermissionTrigger({
             </div>
           </div>
         )}
-        {!confirmingDangerous && (
+        {!degraded && !confirmingDangerous && (
           <>
             <MenuSeparator />
             <div className="px-2 py-1.5 text-meta text-muted-foreground">
@@ -213,5 +231,28 @@ export function ComposerPermissionTrigger({
         )}
       </MenuPopup>
     </Menu>
+  );
+}
+
+/**
+ * What the menu shows instead of four tiers when the runtime came up on the
+ * user's own permission system (D10).
+ *
+ * Deliberately two lines: state that the tiers are off, and where the policy
+ * actually comes from. It names no tier — the effective policy is the user's
+ * config, which a `yoloMode: true` file makes laxer than every tier listed here,
+ * so "same as Pragmatic" would be a new false claim replacing the old one. The
+ * remedy (adding `authorizerChain` to their own config) lives in D10, not here:
+ * the user asked for the panel to say the one thing and stop.
+ */
+function DegradedGateNotice() {
+  const { t } = useI18n();
+  return (
+    <div className="max-w-64 p-3">
+      <p className="text-ui font-medium">{t('Permission tiers are off for this chat')}</p>
+      <p className="mt-1 text-meta text-muted-foreground">
+        {t('It runs on the permission system in your own agent directory.')}
+      </p>
+    </div>
   );
 }

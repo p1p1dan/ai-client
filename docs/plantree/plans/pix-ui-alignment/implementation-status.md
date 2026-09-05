@@ -1,6 +1,6 @@
 # Implementation Status — pix/pi-app UI 对齐改造
 
-**Current Phase**：**批次 9（U17 + U18 + U19）已落地**——三件用户报障修完。
+**Current Phase**：**批次 9（U17–U20）已落地**——三件用户报障 + 一项欠项清理。
 壳层仍按 [D08](./decisions/008-vscode-dock-shell.md) 的 VSCode 式三栏。
 剩下的仍是一次累计 GUI 点验、外部阻塞的 U06-b（等 Pi 计划 T38）与用户降优先级的 U10/U11。
 
@@ -8,7 +8,17 @@
 所以逐批点验一直后置到现在。批次 8 把点验清单整个换掉了（U14 那五条描述的 chrome 已被 D08 删除），
 新看点见 [roadmap U15/U16](./roadmap.md)。
 
-**Last Landed**：2026-09-05 **U17 + U18 + U19**（三件用户报障）：
+**Last Landed**：2026-09-05 **U20** `user_configured` 权限档明示降级
+（[D10](./decisions/010-user-configured-gate-explicit-degradation.md)）——原 Active TODO 第 3 项已关闭。
+用户自己的 agentDir 声明了同一个权限插件时我们不注入随包副本（红线），
+`authorizerChain` 因此缺席、档位环永不被咨询，**而界面照常显示四档**。
+把 `permissionGate` 从 bootstrap 应答经 `session.created` / `session.resumed` 送到渲染层，
+降级态下标签改「你自己的策略」、菜单换成两行说明。
+**用户拍板只说降级、不教修法**，补救办法只留在 D10。
+**更正旧记录**：不是「四档等同务实」，是等同用户自己的策略——本机那份 `yoloMode: true`，
+比任何一档都宽。证据见 [U20 evidence](./evidence/2026-09-05-user-configured-gate-degradation.md)。
+
+**同一批**：2026-09-05 **U17 + U18 + U19**（三件用户报障）：
 ① `chat:resumeSession` 的 `worker.bootstrap timed out after 10000ms`——bootstrap 套用了
 给暖 RPC 的 10s 预算，冷启动的全部一次性成本都在里面，改为单开 60s；
 **这条按代码路径判定，原始现场未复现**。
@@ -70,12 +80,15 @@ token 估算与手动刷新刻意不做，理由在 evidence 里。
 并把 hands-off / full access 的档位文案改成点明工作区边界。同批下线顶栏终端按钮与 ``Ctrl/Cmd+` ``。
 证据见 [U12 rev.2 evidence](./evidence/2026-09-04-u12-rev2-cross-directory-and-terminal-rail.md)。
 
-**Last Verified**：2026-09-05（批次 9 收尾）—— 全仓 **269 files / 4145 tests pass**；
+**Last Verified**：2026-09-05（批次 9 收尾，含 U20）—— 全仓 **271 files / 4162 tests pass**；
 `tsc --noEmit` pass；`biome check src/` 干净；`git diff --check` 干净。
 批次 9 的真机验证：思考强度下拉只剩 `Default / Low / Medium / High`（持久化的 `Minimal`
 被 reconcile 成 Default）；关 Tab 弹确认框，确认后 Tab 消失、左栏 78 行不变、
 store 里该会话 `status: disconnected` / `hostBound: false` / `messages: 0`、
 打开时新起的两个 worker 进程在 8s 内消失。
+U20 用 `AICLIENT_DEV_ENV_FILE` 指向用户自己的 agentDir 真复现了 `user_configured`：
+store 记 `user_configured`、标签「你自己的策略」、菜单只剩两行说明；
+对照组指向干净目录时报 `bundled`、四档照常。
 **上一批 U15/U16 的六个看点也仍然有效**，全部在真实 app 里跑通并留图
 （[shots](./evidence/2026-09-05-u15-shots/)）。
 （U15/U16 那次测试总数比 U14 少 24 条：删掉的是两/三栏模式与已删组件的断言，不是覆盖率倒退——
@@ -112,10 +125,10 @@ store 里该会话 `status: disconnected` / `hostBound: false` / `messages: 0`�
    [该缺陷记录](./evidence/2026-09-04-host-status-false-stop-and-tui-history-bug.md) 第三、四节）；
    ③ **U13 跨重启** 「聊天 → 退出 → 重开 → 点开」未在真机走过（索引读写、目录认领、resume 参数均有单测）；
    ④ **U04 的 MCP 徽标** 解析逻辑与 pix 同源，但本仓没有可跑通的 MCP 扩展，只有单测覆盖、没有真机样本。
-3. **`user_configured` 路线下权限档完全失效** — 用户自己的 `~/.pi` 装了同一个权限插件时，
-   我们随包 `config.json` 的 `authorizerChain` 整份不参与，四档一律等同「务实」。红线是不写用户的 `~/.pi`，
-   修法未拍板（Host 侧自动应答 / 始终注入随包副本 / 明示降级三选一）。
-   详见 [U12 rev.2 evidence](./evidence/2026-09-04-u12-rev2-cross-directory-and-terminal-rail.md) 第五节。
+3. **`user_configured` 路线下权限档仍无功能，但已不再假装有** — 明示降级已落地
+   （[D10](./decisions/010-user-configured-gate-explicit-degradation.md) / [U20](./evidence/2026-09-05-user-configured-gate-degradation.md)）。
+   **真正恢复功能**要走「始终注入随包副本」，**前置是一个探针**：pi 同时加载两份同名插件时，
+   是否每次问两遍、两份 config 怎么合并、用户的 `deny` 会不会被冲掉。三问没答案前不动。
 4. **发布前需 `pnpm build:agent-host`** — `out-agent-host/` 里的插件副本与 `config.json` 停留在 09-02，
    连 `authorizerChain` 都没有；dev 不受影响，打包必须重建。
 5. **U15 的两处未验证行为** — ① fullscreen diff 藏掉会话 Tab 条是否可接受（备选方案已写在

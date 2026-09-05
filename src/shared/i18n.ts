@@ -1760,6 +1760,15 @@ export const zhTranslations: Record<string, string> = {
   'Full access approves most tool calls automatically, including reads and writes outside this workspace. Only secret-file protection remains. This applies to this chat only.':
     '「完全放开」会自动批准大部分工具调用，包括工作区之外的读写。仅保留密钥文件保护。该设置仅作用于当前对话。',
   Apply: '应用',
+  // D10 explicit degradation. The copy must never name a tier as the effective
+  // policy — on this path it is the user's own config, which a `yoloMode: true`
+  // file makes laxer than every tier the picker lists.
+  'Your own policy': '你自己的策略',
+  'This chat runs on the permission system in your own agent directory; the tiers here do not apply.':
+    '这个对话跑在你自己 agent 目录里的权限系统上，这里的档位不生效。',
+  'Permission tiers are off for this chat': '当前对话的权限档不生效',
+  'It runs on the permission system in your own agent directory.':
+    '它跑在你自己 agent 目录里的权限系统上。',
   'Host status': 'Host 状态',
   'Process ID': '进程 ID',
   Driver: '驱动',
