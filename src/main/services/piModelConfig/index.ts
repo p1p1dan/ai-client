@@ -1,8 +1,8 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
-  DEFAULT_PI_MODEL_MANAGEMENT_URL,
   PI_MANAGED_AGENT_DIR_NAME,
+  PI_MODEL_CONFIG_PATH,
   PI_MODEL_MANAGEMENT_URL_ENV,
   PI_MODEL_MANAGEMENT_URL_SETTING_KEY,
   PI_PROJECT_TRUST_ENV,
@@ -14,6 +14,7 @@ import { net } from 'electron';
 import { getAppStateRoot } from '../appStatePaths';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
+import { getOnboardingServiceUrl } from '../onboarding/serviceUrl';
 import { readSharedSettings, writeSharedSettings } from '../SharedSessionState';
 import { PiModelConfigService } from './PiModelConfigService';
 
@@ -28,13 +29,26 @@ export function getLocalPiAgentDir(): string {
   );
 }
 
+/**
+ * Where the catalog lives when nobody has typed an address (plan D05).
+ *
+ * The endpoint belongs to the onboarding service, so the default is that
+ * service's own address — this build's compile-time constant — plus the
+ * catalog path. Nothing is derived from the CCH gateway, and the old
+ * `http://127.0.0.1:3210` default is gone: in a packaged build it could only
+ * ever fail, and the failure used to be hidden behind a built-in model list.
+ */
+export function defaultPiModelManagementUrl(): string {
+  return `${getOnboardingServiceUrl().trim().replace(/\/+$/, '')}${PI_MODEL_CONFIG_PATH}`;
+}
+
 export function getPiModelManagementUrl(): string {
   const envUrl = process.env[PI_MODEL_MANAGEMENT_URL_ENV]?.trim();
   if (envUrl) return envUrl;
   const stored = readSharedSettings()[PI_MODEL_MANAGEMENT_URL_SETTING_KEY];
   return typeof stored === 'string' && stored.trim()
     ? stored.trim()
-    : DEFAULT_PI_MODEL_MANAGEMENT_URL;
+    : defaultPiModelManagementUrl();
 }
 
 export function setPiModelManagementUrl(endpointUrl: string): string {
@@ -56,6 +70,11 @@ function serviceFor(agentDir: string): PiModelConfigService {
   });
 }
 
+/**
+ * The credentials a provider inherits when it does not carry its own: what this
+ * client received at login. `pi` first (stated by the server since D06), then
+ * the codex derivation older deployments leave us with.
+ */
 function managedCredential(): { apiKey: string; baseUrl: string } | null {
   const result = getCredentialVault().read();
   if (result.status !== 'ok') return null;
@@ -82,7 +101,7 @@ export async function syncManagedPiModels(
   return service.sync({
     endpointUrl,
     apiKey: credential.apiKey,
-    fallbackBaseUrl: credential.baseUrl,
+    inheritedBaseUrl: credential.baseUrl,
     force: options.force,
   });
 }

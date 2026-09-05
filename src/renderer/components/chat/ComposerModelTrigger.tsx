@@ -427,11 +427,12 @@ export function ComposerModelTrigger({
             />
           </div>
         ))}
-        {/* §4.3-5: catalog provenance is a STATUS row, never a radio item — a
-            `source:'seed'` list is the built-in table, and offering it silently
-            alongside real entries is the one thing the `source` discriminant
-            exists to stop. `loading` shows here and nowhere else, which is what
-            keeps the menu on its last value instead of a spinner. */}
+        {/* §4.3-5: catalog provenance is a STATUS row, never a radio item — an
+            unreachable or stale catalog has to say so instead of sitting
+            silently alongside real entries, which is the one thing the `source`
+            discriminant exists to stop. `loading` shows here and nowhere else,
+            which is what keeps the menu on its last value instead of a
+            spinner. */}
         {status.message && (
           <>
             <MenuSeparator />

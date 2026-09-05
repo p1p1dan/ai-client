@@ -1,35 +1,21 @@
 # Open questions — 模型配置页迁入 onboard
 
-四问全部**未答**，都会改变 [M01/M03](./roadmap.md) 的形状，开工前先拍板。
+**四问已于 2026-09-05 全部拍板**，各自的理由与连带改动见对应决策文件。
+本文件只保留问题原文与去向，不再是活动 TODO。
 
-## Q01 — 全部停用（或未登录）时，客户端拿到空配置怎么办？
+| 问题 | 结论 | 决策 |
+|---|---|---|
+| Q01 全部停用（或未登录）时客户端拿到空配置怎么办？ | 空配置合法，客户端区分「拉到了是空的」与「没拉到」；硬编码的三个 `gpt-5.6-*` seed 兜底删除 | [D03](./decisions/003-empty-catalog-is-legal-drop-seed.md) |
+| Q02 onboard 要不要显式返回 `pi: { baseUrl, apiKey }`？ | 要；加字段不改字段，客户端保留从 `codex` 推导作兼容 | [D06](./decisions/006-explicit-pi-block-in-register-response.md) |
+| Q03 管理页自身的登录与权限是什么？ | 静态环境变量口令，未配置则整体 fail closed；留痕记不到人，只记时间/改动/IP | [D04](./decisions/004-admin-page-static-token.md) |
+| Q04 M04 的默认 URL 具体长什么样？ | 端点挂 onboard 域名 `<onboardServiceUrl>/api/v1/models-config`；默认值按 手填 → 登录记录的 `onboarding.serverUrl` → 编译期注入值 取，不做推导 | [D05](./decisions/005-catalog-endpoint-on-onboard-origin.md) |
 
-客户端现在要求 `models` 非空且至少一个 provider，空配置会被判非法，然后落
-`stale-cache`（有旧缓存）或 `seed`（硬编码的三个 `gpt-5.6-*`）。
+## 尚未回答（不阻塞 M01）
 
-[D01](./decisions/001-authenticated-catalog-fetch.md) 让未登录状态也拉不到配置，
-这个分支从「罕见」变成「正常路径之一」。两条路：
+**管理页表单里那四个本仓 schema 没有对应字段的项**——默认思考强度、工具调用、
+仅思考模式、允许关闭思考（见 [topic §四](./topics/wire-contract-and-constraints.md)）。
+要先取证 pi 认不认这些概念、字段叫什么，才能决定是否做进表单；不能照抄截图标签。
 
-- **A**：服务端保证永不返回空配置（至少留一个启用渠道）；
-- **B**：客户端放开空配置语义，明确区分「拉到了，是空的」与「没拉到」——
-  和插件清单 `null` vs `[]` 同一类问题。
-
-顺带要复核：`seed` 兜底那三个硬编码模型在有管理端之后还该不该存在。
-
-## Q02 — onboard 要不要显式返回 `pi: { baseUrl, apiKey }`？
-
-现在注册应答只有 `claude` 与 `codex` 两块，ai-client 从 `codex` 那份推出 `pi`
-（`OnboardingService.saveVaultShadowCopy`）。既然模型配置要按渠道决定用不用「登录拿到的 pi 凭据」，
-让服务端显式声明比让客户端继续猜更稳。改动很小，但属于线上格式变更，要考虑旧客户端。
-
-## Q03 — 管理页自身的登录与权限是什么？
-
-onboard 现在**没有任何管理端鉴权中间件**。`ONBOARDING_SECRET` 是给遗留 `/register` 的，
-`CCH_ADMIN_TOKEN` 是拿去调 cch 的，都不是管理员身份。
-需要定：谁能进管理页、用什么登录、要不要审计谁改了配置。
-
-## Q04 — M04 的默认 URL 具体长什么样？
-
-用户 2026-09-05 明确「后续做配置页 + onboard 打包时再讨论确定需求」。待定的至少有：
-路径形态（`<cch>/api/v1/models-config`？还是挂在 onboard 域名下而非 cch 域名下）、
-手填值与推导值的优先级、以及推导失败时的表现。
+本轮先做 `thinkingLevelMap`（它是唯一卡住既有功能的一项，
+[U18](../pix-ui-alignment/roadmap.md) 之后没在表里点名的档位不会出现在下拉里）。
+取证结果出来后再定其余四项，届时补决策。

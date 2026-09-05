@@ -4,6 +4,15 @@ export const PI_MANAGED_AGENT_DIR_NAME = 'pi-agent';
 export const PI_MODELS_FILE_NAME = 'models.json';
 export const PI_AUTH_FILE_NAME = 'auth.json';
 export const PI_MODEL_SYNC_STATE_FILE_NAME = 'managed-models-state.json';
+/**
+ * Wire-form copy of the last fetched catalog, kept beside pi's `models.json`.
+ *
+ * `models.json` is pi's format — resolved base URLs, no credential sources — so
+ * it cannot say whether a provider's key was the administrator's or this
+ * client's. That answer is needed every time the files are rewritten, so the
+ * response is kept as received (0600, managed agent dir only).
+ */
+export const PI_MODEL_SOURCE_FILE_NAME = 'managed-models-source.json';
 export const PI_MODEL_MANAGEMENT_URL_SETTING_KEY = 'piModelManagementUrl';
 export const PI_MODEL_MANAGEMENT_URL_ENV = 'PILAB_MODEL_CONFIG_URL';
 
@@ -26,7 +35,16 @@ export const PI_MODEL_MANAGEMENT_URL_ENV = 'PILAB_MODEL_CONFIG_URL';
  * is a cloned repo running code.
  */
 export const PI_PROJECT_TRUST_ENV = 'AICLIENT_PI_TRUST_PROJECT_CONFIG';
-export const DEFAULT_PI_MODEL_MANAGEMENT_URL = 'http://127.0.0.1:3210/api/v1/models-config';
+
+/**
+ * Path of the catalog endpoint on the onboarding service (plan D05).
+ *
+ * The default URL is this path joined to the onboarding service address the
+ * build was compiled with — there is no derivation from the cch gateway, and no
+ * hardcoded localhost default: a packaged build pointing at `127.0.0.1` fails
+ * every sync and used to hide that behind a built-in model list.
+ */
+export const PI_MODEL_CONFIG_PATH = '/api/v1/models-config';
 
 export const PI_MODEL_APIS = [
   'openai-completions',
@@ -54,13 +72,35 @@ export interface PiManagedModelDefinition {
   compat?: Record<string, unknown>;
 }
 
+/**
+ * Where a provider's baseUrl / apiKey comes from (plan D01 + wire topic §一).
+ *
+ * `'managed'` — the management site carries the value, and it is present in the
+ * config. `'onboarding'` — inherit the value this client received when it
+ * logged in, so the config carries nothing.
+ *
+ * Stated explicitly per provider. An ABSENT `credentials` block is not a third
+ * answer: it identifies a pre-D01 management endpoint, where everything was
+ * inherited, and is read as both fields being `'onboarding'`.
+ */
+export type PiCredentialSource = 'managed' | 'onboarding';
+
+export interface PiManagedProviderCredentials {
+  baseUrl: PiCredentialSource;
+  apiKey: PiCredentialSource;
+}
+
 export interface PiManagedProviderDefinition {
   name?: string;
-  baseUrl: string;
+  /** Present only when `credentials.baseUrl === 'managed'`; otherwise inherited. */
+  baseUrl?: string;
   api: PiModelApi;
   authHeader?: boolean;
   headers?: Record<string, string>;
   compat?: Record<string, unknown>;
+  credentials?: PiManagedProviderCredentials;
+  /** Present only when `credentials.apiKey === 'managed'`, and only from an authenticated fetch. */
+  apiKey?: string;
   models: PiManagedModelDefinition[];
 }
 
@@ -70,7 +110,17 @@ export interface PiManagedModelsConfig {
   providers: Record<string, PiManagedProviderDefinition>;
 }
 
-export type PiModelSyncSource = 'remote' | 'stale-cache' | 'seed' | 'local';
+/**
+ * Where the models currently on disk came from.
+ *
+ * `'unavailable'` replaced the old `'seed'` (plan D03): there is no built-in
+ * model table any more, so "the fetch failed and nothing is cached" is stated as
+ * such instead of being papered over with three hardcoded ids. Note that it is
+ * NOT the same as a successful fetch that returned zero models — that is
+ * `'remote'` with an empty catalog, which is a legal answer meaning the
+ * administrator has enabled nothing.
+ */
+export type PiModelSyncSource = 'remote' | 'stale-cache' | 'unavailable' | 'local';
 
 export interface PiModelSyncState {
   source: PiModelSyncSource;

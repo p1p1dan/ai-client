@@ -22,6 +22,12 @@ export interface OnboardingRegisterResponse {
     config: {
       claude: { baseUrl: string; authToken: string };
       codex: { baseUrl: string; apiKey: string };
+      /**
+       * Stated by the server since plan D06. Optional because an older
+       * onboarding deployment does not send it, in which case the client keeps
+       * deriving pi's credentials from the codex block as it always did.
+       */
+      pi?: { baseUrl: string; apiKey: string };
     };
     // Verify-only failure context: remaining attempts before code is locked.
     attemptsLeft?: number;

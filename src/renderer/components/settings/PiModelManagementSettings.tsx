@@ -20,8 +20,8 @@ function sourceLabel(source: PiModelManagementSnapshot['state']['source']): stri
       return 'Remote';
     case 'stale-cache':
       return 'Cached';
-    case 'seed':
-      return 'Default';
+    case 'unavailable':
+      return 'Unavailable';
     case 'local':
       return 'Local setup';
   }
@@ -100,7 +100,7 @@ export function PiModelManagementSettings() {
               id="pi-model-management-url"
               value={endpointUrl}
               onChange={(event) => setEndpointUrl(event.target.value)}
-              placeholder="http://127.0.0.1:3210/api/v1/models-config"
+              placeholder="https://onboarding.example.com/api/v1/models-config"
               disabled={!snapshot?.managed || syncing}
             />
             <Button
@@ -163,8 +163,15 @@ export function PiModelManagementSettings() {
       </div>
 
       <div className="rounded-md border p-4 text-meta text-muted-foreground space-y-1">
-        <p>本地管理端：运行 pnpm model-admin，然后访问 http://127.0.0.1:3210。</p>
-        <p>部署到服务器时只需替换上面的 URL；管理接口返回模型元数据，不返回任何 key。</p>
+        <p>
+          默认地址随版本内置，指向 onboard 服务的
+          /api/v1/models-config；填别的地址可指向另一套部署。
+        </p>
+        <p>管理页在同一服务的 /admin 下，进入需要服务端配置的管理口令。</p>
+        <p>
+          拉取会带上你登录拿到的
+          key：配置里可能含管理员为某个渠道填的密钥，所以这个接口只对已登录的客户端开放。
+        </p>
       </div>
     </div>
   );

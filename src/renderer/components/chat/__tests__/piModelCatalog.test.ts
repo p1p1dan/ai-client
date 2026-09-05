@@ -8,10 +8,11 @@ import {
   HOST_NOT_READY_CATALOG_NOTICE,
   hostNotReadyCatalog,
   isCatalogLoaded,
+  MANAGED_EMPTY_CATALOG_NOTICE,
   REFRESHING_CATALOG_NOTICE,
-  SEED_CATALOG_NOTICE,
   STALE_CATALOG_NOTICE,
   shouldRequestCatalog,
+  UNAVAILABLE_CATALOG_NOTICE,
 } from '../piModelCatalog';
 
 const NOW = 1_700_000_000_000;
@@ -35,13 +36,13 @@ describe('Pi model catalog status', () => {
     });
   });
 
-  it('labels seed and stale fallbacks honestly', () => {
+  it('labels unavailable and stale fallbacks honestly', () => {
     expect(
       catalogStatusRow({
-        catalog: catalog({ source: 'seed', stale: true, fetchedAt: null, error: 'http' }),
+        catalog: catalog({ source: 'unavailable', stale: true, fetchedAt: null, error: 'http' }),
         loading: false,
       }).message
-    ).toBe(SEED_CATALOG_NOTICE);
+    ).toBe(UNAVAILABLE_CATALOG_NOTICE);
     expect(
       catalogStatusRow({
         catalog: catalog({ source: 'stale-cache', stale: true, error: 'http' }),
@@ -54,6 +55,15 @@ describe('Pi model catalog status', () => {
     expect(catalogStatusRow({ catalog: catalog({ models: [] }), loading: false }).message).toBe(
       EMPTY_CATALOG_NOTICE
     );
+    // D03: an answered managed catalog with nothing in it has a cause the user
+    // can act on, and must not be worded like an unreachable one.
+    const managedEmpty = catalogStatusRow({
+      catalog: catalog({ source: 'managed', models: [] }),
+      loading: false,
+    });
+    expect(managedEmpty.message).toBe(MANAGED_EMPTY_CATALOG_NOTICE);
+    expect(managedEmpty.reason).toBe('empty');
+    expect(managedEmpty.retryable).toBe(true);
     expect(catalogStatusRow({ catalog: hostNotReadyCatalog(), loading: false }).message).toBe(
       HOST_NOT_READY_CATALOG_NOTICE
     );
@@ -89,7 +99,7 @@ describe('Pi catalog request gate', () => {
       shouldRequestCatalog({
         ...base,
         hostState: 'ready',
-        cached: catalog({ source: 'seed', stale: true }),
+        cached: catalog({ source: 'unavailable', stale: true }),
       })
     ).toBe(true);
   });

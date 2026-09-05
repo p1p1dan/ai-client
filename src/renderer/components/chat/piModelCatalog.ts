@@ -12,14 +12,13 @@
  *
  * ## `source` is not a diagnostic
  *
- * `source:'seed'` means the gateway could not be reached AT ALL and the six ids
- * on screen are the ones this build shipped with. Rendering that as an ordinary
- * menu is how a user picks a model the gateway no longer routes and gets a
- * failure with no explanation — so it MUST carry visible copy (仲裁 §2.2 ∧ B
- * 「不得伪装可用目录」). `source:'proxy'` with an EMPTY list is the opposite
- * case and must NOT be dressed up as an error: the gateway answered, and after
- * family filtering nothing is on the product surface. The honest UI for that is
- * `Automatic` plus a Retry, which is exactly the fourth fallback rung.
+ * `source:'unavailable'` means no catalog could be obtained at all and nothing
+ * is cached — since plan D03 there is no built-in table to show in its place,
+ * so the menu says so rather than pretending (仲裁 §2.2 ∧ B 「不得伪装可用目录」).
+ * An ANSWERED but empty catalog is the opposite case and must NOT be dressed up
+ * as an error: for `managed` it means the administrator has enabled nothing,
+ * and for `proxy` it means nothing survived family filtering. Both get plain
+ * copy plus a Retry, because the answer can change.
  *
  * ## Why `host-not-ready` is produced here and never by Main
  *
@@ -36,8 +35,8 @@ import type {
 } from '@shared/types/agentCatalog';
 import type { HostStatus } from './hostStatus';
 
-/** Shown whenever the models on screen are the built-in table (§4.1). */
-export const SEED_CATALOG_NOTICE = 'Model catalog unreachable — showing built-in models';
+/** Shown when no catalog could be fetched and nothing is cached (§4.1, D03). */
+export const UNAVAILABLE_CATALOG_NOTICE = 'Model catalog unreachable — no models available';
 
 /** Shown when the last refresh failed but a real earlier answer is still on screen. */
 export const STALE_CATALOG_NOTICE = 'Model catalog is out of date — showing the last known list';
@@ -47,6 +46,10 @@ export const HOST_NOT_READY_CATALOG_NOTICE = 'Waiting for Agent Host to become r
 
 /** Shown for the fourth fallback rung: the gateway answered, and nothing qualified. */
 export const EMPTY_CATALOG_NOTICE = 'No models offered for this agent — Automatic will be used';
+
+/** Shown when the management endpoint answered and no model is enabled (D03). */
+export const MANAGED_EMPTY_CATALOG_NOTICE =
+  'No models are enabled by the administrator — Automatic will be used';
 
 /** Shown while a refresh is in flight over an existing list. */
 export const REFRESHING_CATALOG_NOTICE = 'Refreshing…';
@@ -63,7 +66,7 @@ export const CATALOG_REFRESH_TTL_MS = 10 * 60 * 1000;
  */
 const HOST_NOT_READY_CATALOG: AgentModelCatalog = Object.freeze({
   models: [],
-  source: 'seed',
+  source: 'unavailable',
   stale: true,
   fetchedAt: null,
   error: 'host-not-ready',
@@ -93,8 +96,8 @@ export function shouldRequestCatalog(input: {
   if (input.force) return true;
   const cached = input.cached;
   if (!cached) return true;
-  // Proxy, managed and local are authoritative answers. Seed/stale records are
-  // failures and should be retried immediately once the Host is available.
+  // Proxy, managed and local are authoritative answers. Unavailable/stale
+  // records are failures and should be retried once the Host is available.
   if (!['proxy', 'managed', 'local'].includes(cached.source)) return true;
   if (cached.fetchedAt === null) return true;
   return input.now - cached.fetchedAt >= (input.ttlMs ?? CATALOG_REFRESH_TTL_MS);
@@ -106,7 +109,7 @@ export interface CatalogStatusRow {
   /** Whether a Retry/Refresh control belongs next to it. */
   retryable: boolean;
   /** Machine-readable reason, for assertions and for `title` copy. */
-  reason: AgentModelCatalogError | 'seed' | 'stale-cache' | 'empty' | 'refreshing' | null;
+  reason: AgentModelCatalogError | 'unavailable' | 'stale-cache' | 'empty' | 'refreshing' | null;
 }
 
 /**
@@ -129,17 +132,23 @@ export function catalogStatusRow(input: {
   if (catalog.error === 'host-not-ready') {
     return { message: HOST_NOT_READY_CATALOG_NOTICE, retryable: false, reason: 'host-not-ready' };
   }
-  if (catalog.source === 'seed') {
-    return { message: SEED_CATALOG_NOTICE, retryable: true, reason: 'seed' };
+  if (catalog.source === 'unavailable') {
+    return { message: UNAVAILABLE_CATALOG_NOTICE, retryable: true, reason: 'unavailable' };
   }
   if (catalog.source === 'stale-cache') {
     return { message: STALE_CATALOG_NOTICE, retryable: true, reason: 'stale-cache' };
   }
   if (catalog.models.length === 0) {
-    // `source:'proxy'` and empty: the honest fourth rung. NOT an error row —
-    // the gateway answered, so a red "failed" message would be a lie, and the
-    // Retry is offered because the answer can change.
-    return { message: EMPTY_CATALOG_NOTICE, retryable: true, reason: 'empty' };
+    // Answered and empty: the honest fourth rung. NOT an error row — the
+    // endpoint replied, so a red "failed" message would be a lie, and the Retry
+    // is offered because the answer can change. `managed` gets its own sentence
+    // because there the emptiness has a cause the user can act on: an
+    // administrator has enabled nothing (D03).
+    return {
+      message: catalog.source === 'managed' ? MANAGED_EMPTY_CATALOG_NOTICE : EMPTY_CATALOG_NOTICE,
+      retryable: true,
+      reason: 'empty',
+    };
   }
   if (loading) {
     return { message: REFRESHING_CATALOG_NOTICE, retryable: false, reason: 'refreshing' };

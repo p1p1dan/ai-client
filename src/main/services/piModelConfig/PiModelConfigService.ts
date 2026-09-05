@@ -11,6 +11,7 @@ import {
 import { join } from 'node:path';
 import {
   PI_AUTH_FILE_NAME,
+  PI_MODEL_SOURCE_FILE_NAME,
   PI_MODEL_SYNC_STATE_FILE_NAME,
   PI_MODELS_FILE_NAME,
   type PiManagedModelDefinition,
@@ -20,7 +21,11 @@ import {
   piModelOption,
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog, AgentModelCatalogError } from '@shared/types/agentCatalog';
-import { toPiModelsJson, validatePiManagedModelsConfig } from './configValidation';
+import {
+  resolveProviderApiKey,
+  toPiModelsJson,
+  validatePiManagedModelsConfig,
+} from './configValidation';
 
 const MAX_CONFIG_BYTES = 2 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -71,17 +76,20 @@ function safeError(error: unknown): string {
   return String(error).slice(0, 240);
 }
 
-function readValidatedModels(path: string): PiManagedModelsConfig | null {
+/**
+ * The last catalog this client fetched, in WIRE form.
+ *
+ * Kept beside `models.json` rather than parsed back out of it, because
+ * `models.json` is pi's format: it carries a resolved base URL and no
+ * credential sources at all, so it cannot answer "was this provider's key the
+ * administrator's or the login one" — which is exactly what a re-write after a
+ * key rotation has to know. Read with credentials allowed: this file is our own
+ * copy of an authenticated response, written 0600 in the managed agent dir.
+ */
+function readCachedConfig(path: string): PiManagedModelsConfig | null {
   if (!existsSync(path)) return null;
   try {
-    const parsed = readJson(path);
-    return validatePiManagedModelsConfig({
-      version: 1,
-      providers:
-        parsed && typeof parsed === 'object' && 'providers' in parsed
-          ? (parsed as { providers: unknown }).providers
-          : undefined,
-    });
+    return validatePiManagedModelsConfig(readJson(path), { credentialsAllowed: true });
   } catch {
     return null;
   }
@@ -183,15 +191,21 @@ export class PiModelConfigService {
     return join(this.agentDir, PI_MODEL_SYNC_STATE_FILE_NAME);
   }
 
+  /** Wire-form copy of the last fetched catalog; see `readCachedConfig`. */
+  get sourcePath(): string {
+    return join(this.agentDir, PI_MODEL_SOURCE_FILE_NAME);
+  }
+
   async sync(input: {
     endpointUrl: string;
     apiKey: string;
-    fallbackBaseUrl: string;
+    /** Login credentials every provider that inherits will be given. */
+    inheritedBaseUrl: string;
     force?: boolean;
   }): Promise<PiModelSyncResult> {
     const attemptedAt = this.now();
     let remoteError: string | undefined;
-    const cached = readValidatedModels(this.modelsPath);
+    const cached = readCachedConfig(this.sourcePath);
     const previous = this.readState();
     if (
       !input.force &&
@@ -201,13 +215,20 @@ export class PiModelConfigService {
       previous.syncedAt !== null &&
       attemptedAt - previous.syncedAt < 10 * 60 * 1000
     ) {
-      this.writeAuth(cached, input.apiKey);
+      // Still fresh, but the login key may have changed since; rewriting is
+      // cheap and keeps auth.json in step with the vault.
+      this.writeAll(cached, input.apiKey, input.inheritedBaseUrl);
       return { ...previous, ok: true };
     }
     try {
       const response = await this.fetchFn(input.endpointUrl, {
         method: 'GET',
-        headers: { Accept: 'application/json' },
+        headers: {
+          Accept: 'application/json',
+          // D01: the endpoint answers only for a client that proves who it is,
+          // because the answer may carry provider API keys.
+          Authorization: `Bearer ${input.apiKey}`,
+        },
         signal: AbortSignal.timeout(this.timeoutMs),
       });
       const body = await response.text();
@@ -215,8 +236,10 @@ export class PiModelConfigService {
       if (Buffer.byteLength(body, 'utf8') > MAX_CONFIG_BYTES) {
         throw new Error('management response exceeds 2 MiB');
       }
-      const config = validatePiManagedModelsConfig(JSON.parse(body) as unknown);
-      this.writeConfigAndAuth(config, input.apiKey);
+      const config = validatePiManagedModelsConfig(JSON.parse(body) as unknown, {
+        credentialsAllowed: true,
+      });
+      this.writeAll(config, input.apiKey, input.inheritedBaseUrl);
       const counts = modelCounts(config);
       const state: PiModelSyncState = {
         source: 'remote',
@@ -234,7 +257,7 @@ export class PiModelConfigService {
     }
 
     if (cached) {
-      this.writeAuth(cached, input.apiKey);
+      this.writeAll(cached, input.apiKey, input.inheritedBaseUrl);
       const state: PiModelSyncState = {
         source: 'stale-cache',
         endpointUrl: input.endpointUrl,
@@ -248,19 +271,22 @@ export class PiModelConfigService {
       return { ...state, ok: true };
     }
 
-    const fallback = createDefaultManagedConfig(input.fallbackBaseUrl);
-    this.writeConfigAndAuth(fallback, input.apiKey);
+    // D03: no built-in table to fall back to. Say the catalog is unavailable
+    // instead of handing out models nobody configured — a fabricated list makes
+    // a failed fetch look like a successful one, which is how a packaged build
+    // pointing at the wrong URL stayed invisible for so long.
     const state: PiModelSyncState = {
-      source: 'seed',
+      source: 'unavailable',
       endpointUrl: input.endpointUrl,
       agentDir: this.agentDir,
-      ...modelCounts(fallback),
+      providerCount: 0,
+      modelCount: 0,
       lastAttemptAt: attemptedAt,
       syncedAt: null,
       error: remoteError,
     };
     this.writeState(state);
-    return { ...state, ok: true };
+    return { ...state, ok: false };
   }
 
   readState(): PiModelSyncState {
@@ -289,49 +315,46 @@ export class PiModelConfigService {
         // Reconstruct below.
       }
     }
-    const config = readValidatedModels(this.modelsPath);
-    const counts = config ? modelCounts(config) : { providerCount: 0, modelCount: 0 };
+    // No state file: fall back to what is on disk. Models present means a
+    // local pi installation configured them; nothing present means we have no
+    // catalog at all, which is stated rather than filled in.
+    const models = readLocalModelOptions(this.modelsPath);
     return {
-      source: config ? 'local' : 'seed',
+      source: models.length > 0 ? 'local' : 'unavailable',
       endpointUrl: null,
       agentDir: this.agentDir,
-      ...counts,
+      providerCount: new Set(models.map((entry) => entry.providerId)).size,
+      modelCount: models.length,
       lastAttemptAt: null,
       syncedAt: null,
     };
   }
 
   readCatalog(sourceOverride?: 'local'): AgentModelCatalog {
-    const config = sourceOverride ? null : readValidatedModels(this.modelsPath);
-    const localModels = sourceOverride ? readLocalModelOptions(this.modelsPath) : [];
-    if (!config && localModels.length === 0) {
-      return sourceOverride
-        ? {
-            models: [],
-            source: 'local',
-            stale: false,
-            fetchedAt: safeMtime(this.modelsPath),
-          }
-        : {
-            models: [],
-            source: 'seed',
-            stale: true,
-            fetchedAt: null,
-            error: 'invalid-response',
-          };
-    }
-    // Preserve provider/model configuration order. T25 derives primary tag
-    // group order from the first model carrying each tag; alphabetizing here
-    // would silently replace cloud-managed order with locale collation.
-    const models = config
-      ? Object.entries(config.providers).flatMap(([providerId, provider]) =>
-          provider.models.map((model) => piModelOption(providerId, model))
-        )
-      : localModels.map(({ providerId, model }) => piModelOption(providerId, model));
+    // One reader for both routes: `models.json` is pi's own format either way,
+    // and the state file is what says whether we fetched it or found it.
+    const entries = readLocalModelOptions(this.modelsPath);
     const state = this.readState();
     const source = sourceOverride ?? state.source;
     const catalogSource = source === 'remote' ? 'managed' : source === 'local' ? 'local' : source;
-    const stale = catalogSource === 'stale-cache' || catalogSource === 'seed';
+
+    if (catalogSource === 'unavailable') {
+      // D03: distinct from an answered-but-empty catalog. No models, and we say
+      // why rather than rendering an empty menu as if it were the answer.
+      return {
+        models: [],
+        source: 'unavailable',
+        stale: true,
+        fetchedAt: null,
+        ...(state.error ? { error: 'http' as AgentModelCatalogError } : {}),
+      };
+    }
+
+    // Preserve provider/model configuration order. T25 derives primary tag
+    // group order from the first model carrying each tag; alphabetizing here
+    // would silently replace cloud-managed order with locale collation.
+    const models = entries.map(({ providerId, model }) => piModelOption(providerId, model));
+    const stale = catalogSource === 'stale-cache';
     let error: AgentModelCatalogError | undefined;
     if (state.error) error = 'http';
     return {
@@ -351,17 +374,36 @@ export class PiModelConfigService {
     }
   }
 
-  private writeConfigAndAuth(config: PiManagedModelsConfig, apiKey: string): void {
+  /**
+   * Writes all three files from one catalog: the wire-form copy, the
+   * `models.json` pi reads, and the per-provider `auth.json`.
+   */
+  private writeAll(
+    config: PiManagedModelsConfig,
+    inheritedApiKey: string,
+    inheritedBaseUrl: string
+  ): void {
     mkdirSync(this.agentDir, { recursive: true, mode: 0o700 });
     chmodSync(this.agentDir, 0o700);
-    atomicWriteJson(this.modelsPath, toPiModelsJson(config), 0o600);
-    this.writeAuth(config, apiKey);
+    atomicWriteJson(this.sourcePath, config, 0o600);
+    atomicWriteJson(
+      this.modelsPath,
+      toPiModelsJson(config, { inheritedBaseUrl: inheritedBaseUrl.trim().replace(/\/+$/, '') }),
+      0o600
+    );
+    this.writeAuth(config, inheritedApiKey);
   }
 
-  private writeAuth(config: PiManagedModelsConfig, apiKey: string): void {
+  /**
+   * One entry per provider, each with ITS key: the administrator's when that
+   * provider says its key is managed, this client's login key otherwise. The
+   * previous version wrote the login key for every provider, which silently
+   * ignored an administrator-supplied one.
+   */
+  private writeAuth(config: PiManagedModelsConfig, inheritedApiKey: string): void {
     const auth: Record<string, { type: 'api_key'; key: string }> = {};
-    for (const providerId of Object.keys(config.providers)) {
-      auth[providerId] = { type: 'api_key', key: apiKey };
+    for (const [providerId, provider] of Object.entries(config.providers)) {
+      auth[providerId] = { type: 'api_key', key: resolveProviderApiKey(provider, inheritedApiKey) };
     }
     atomicWriteJson(this.authPath, auth, 0o600);
   }
@@ -377,25 +419,4 @@ function safeMtime(path: string): number | null {
   } catch {
     return null;
   }
-}
-
-export function createDefaultManagedConfig(baseUrl: string): PiManagedModelsConfig {
-  const normalized = baseUrl.trim().replace(/\/+$/, '');
-  if (!normalized) throw new Error('managed Pi fallback requires a gateway base URL');
-  return validatePiManagedModelsConfig({
-    version: 1,
-    providers: {
-      pilab: {
-        name: 'PILAB',
-        baseUrl: normalized,
-        api: 'openai-responses',
-        authHeader: true,
-        models: [
-          { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna', reasoning: true, contextWindow: 272000 },
-          { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', reasoning: true, contextWindow: 272000 },
-          { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', reasoning: true, contextWindow: 272000 },
-        ],
-      },
-    },
-  });
 }

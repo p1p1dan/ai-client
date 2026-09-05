@@ -25,11 +25,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { buildAppStateRoot, buildLegacyAppStateRoot } from '@shared/appStateLayout';
+import { getOnboardingServiceUrl } from '../onboarding/serviceUrl';
 import type { VaultPayload, VaultReadResult, VaultSaveResult } from './CredentialVault';
 import { writeManagedFile } from './managedFileWriter';
 
 const ADOPTION_MARKER_FILE_NAME = '.adopted-v1';
-const DEFAULT_ONBOARDING_SERVICE_URL = 'https://onboarding-jyw.pipidan.qzz.io';
 
 interface LegacyAnthropicCredentials {
   baseUrl: string;
@@ -197,11 +197,6 @@ export function deriveCchBaseUrl(claudeBaseUrl: string): string {
 
 export type AdoptionGatewayGuardResult = 'match' | 'mismatch' | 'invalid_url';
 
-function getInjectedOnboardingServiceUrl(): string {
-  const injected = typeof __ONBOARDING_SERVICE_URL__ === 'string' ? __ONBOARDING_SERVICE_URL__ : '';
-  return injected || DEFAULT_ONBOARDING_SERVICE_URL;
-}
-
 /**
  * The "registered domain family" of `__ONBOARDING_SERVICE_URL__` — its
  * hostname with the leftmost label dropped (`onboarding-jyw.pipidan.qzz.io`
@@ -212,7 +207,7 @@ function getInjectedOnboardingServiceUrl(): string {
  */
 function deriveCompanyGatewayFamilySuffix(): string {
   try {
-    const hostname = new URL(getInjectedOnboardingServiceUrl()).hostname;
+    const hostname = new URL(getOnboardingServiceUrl()).hostname;
     const labels = hostname.split('.');
     return labels.length > 2 ? labels.slice(1).join('.') : hostname;
   } catch {

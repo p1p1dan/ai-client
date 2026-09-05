@@ -48,11 +48,16 @@ export interface AgentModelOption {
  * - `proxy` — a live `/v1/models` answer from the gateway, family-filtered (§4.2).
  * - `stale-cache` — the last successful proxy answer for this key; the refresh
  *   that was just attempted failed. Still real data, just not current.
- * - `seed` — the built-in table (`shared/models/seedCatalog.ts`). The UI must say
- *   the catalog is unreachable when it sees this; it must NOT render it as a
- *   normal catalog (arbitration §2.2 ∧ B "不得伪装可用目录").
+ * - `unavailable` — no catalog could be obtained and nothing is cached. The UI
+ *   must say so; it must NOT render an empty menu as if it were an answer
+ *   (arbitration §2.2 ∧ B "不得伪装可用目录"). This replaced the old `seed`
+ *   rung, whose built-in table was deleted with plan D03 — a fabricated list
+ *   made a failed fetch look like a successful one.
+ *
+ * A `managed` result with zero models is NOT this: the endpoint answered and the
+ * administrator has enabled nothing, which the UI states in its own words.
  */
-export type AgentModelCatalogSource = 'proxy' | 'managed' | 'local' | 'stale-cache' | 'seed';
+export type AgentModelCatalogSource = 'proxy' | 'managed' | 'local' | 'stale-cache' | 'unavailable';
 
 /**
  * Why a result is not `proxy`.
@@ -73,7 +78,7 @@ export interface AgentModelCatalog {
   source: AgentModelCatalogSource;
   /** `true` for anything that is not a live proxy answer. */
   stale: boolean;
-  /** When the underlying proxy answer was fetched; `null` for the seed table. */
+  /** When the underlying answer was fetched; `null` when there never was one. */
   fetchedAt: number | null;
   error?: AgentModelCatalogError;
 }

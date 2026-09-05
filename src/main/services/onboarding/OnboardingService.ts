@@ -8,15 +8,10 @@ import { getAppStateRoot } from '../appStatePaths';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled, setCredentialMode } from '../auth/credentialMode';
 import { redactLogArgs } from '../auth/redact';
+import { getOnboardingServiceUrl } from './serviceUrl';
 import type { OnboardingRegisterResponse } from './types';
 
 const ALLOWED_EMAIL_SUFFIXES = ['@jcdz.cc', '@wuhanjingce.com'] as const;
-const DEFAULT_ONBOARDING_SERVICE_URL = 'https://onboarding-jyw.pipidan.qzz.io';
-
-function getInjectedOnboardingServiceUrl(): string {
-  const injected = typeof __ONBOARDING_SERVICE_URL__ === 'string' ? __ONBOARDING_SERVICE_URL__ : '';
-  return injected || DEFAULT_ONBOARDING_SERVICE_URL;
-}
 
 /**
  * D47 S6 §2 (A-M5) — pure surgical removal for the flag-off logout path:
@@ -145,7 +140,7 @@ class OnboardingService {
     }
 
     const normalizedEmail = this.normalizeEmail(email);
-    const serverUrl = this.normalizeServerUrl(getInjectedOnboardingServiceUrl());
+    const serverUrl = this.normalizeServerUrl(getOnboardingServiceUrl());
 
     try {
       const response = await net.fetch(`${serverUrl}/api/onboarding/send-code`, {
@@ -171,7 +166,7 @@ class OnboardingService {
     }
 
     const normalizedEmail = this.normalizeEmail(email);
-    const normalizedServerUrl = this.normalizeServerUrl(getInjectedOnboardingServiceUrl());
+    const normalizedServerUrl = this.normalizeServerUrl(getOnboardingServiceUrl());
 
     let result: OnboardingRegisterResponse;
     try {
@@ -308,7 +303,9 @@ class OnboardingService {
         cchBaseUrl: cchServerUrl,
         claude: { baseUrl: credentials.claudeBaseUrl, authToken: credentials.claudeAuthToken },
         codex: { baseUrl: credentials.codexBaseUrl, apiKey: credentials.codexApiKey },
-        pi: { baseUrl: credentials.codexBaseUrl, apiKey: credentials.codexApiKey },
+        // D06: use what the server states, and only fall back to the codex
+        // derivation for deployments that do not send a pi block yet.
+        pi: { baseUrl: credentials.piBaseUrl, apiKey: credentials.piApiKey },
         receivedAt,
       });
       if (!saveResult.ok) {
@@ -423,6 +420,8 @@ class OnboardingService {
     claudeAuthToken: string;
     codexApiKey: string;
     codexBaseUrl: string;
+    piBaseUrl: string;
+    piApiKey: string;
   } | null {
     const data = result.data;
     if (!data) {
@@ -437,11 +436,16 @@ class OnboardingService {
 
     const claudeBaseUrl = this.buildApiBaseUrl(data.config.claude.baseUrl, normalizedServerUrl);
     const codexBaseUrl = this.buildApiBaseUrl(data.config.codex.baseUrl, normalizedServerUrl);
+    const statedPi = data.config.pi;
     return {
       claudeAuthToken,
       claudeBaseUrl,
       codexApiKey,
       codexBaseUrl,
+      piBaseUrl: statedPi?.baseUrl
+        ? this.buildApiBaseUrl(statedPi.baseUrl, normalizedServerUrl)
+        : codexBaseUrl,
+      piApiKey: statedPi?.apiKey || codexApiKey,
     };
   }
 

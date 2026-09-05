@@ -1,7 +1,8 @@
 # Plan — 模型配置页迁入 onboard 并扩展
 
-> **状态**：Planning（已拍板方向，未开工）。用户 2026-09-05：「先记录，目前我们有别的任务要做，
-> 后续单独开对话任务做这一块。」
+> **状态**：Completed（2026-09-05）。M01–M05 全部落地，取证见
+> [evidence](./evidence/2026-09-05-m01-m05-model-catalog-admin.md)。
+> 两个仓库的分支都只提交未推送，onboard 尚未部署；GUI 点验并入下一次累计点验。
 
 ## 范围
 
@@ -28,10 +29,15 @@
 
 1. 本文件。
 2. [Decisions](./decisions/)：[D01 拉取鉴权](./decisions/001-authenticated-catalog-fetch.md) ·
-   [D02 施工位置](./decisions/002-build-the-admin-page-in-onboard.md)。
+   [D02 施工位置](./decisions/002-build-the-admin-page-in-onboard.md) ·
+   [D03 空配置合法·删 seed](./decisions/003-empty-catalog-is-legal-drop-seed.md) ·
+   [D04 管理页静态口令](./decisions/004-admin-page-static-token.md) ·
+   [D05 端点挂 onboard 域名](./decisions/005-catalog-endpoint-on-onboard-origin.md) ·
+   [D06 显式 `pi` 块](./decisions/006-explicit-pi-block-in-register-response.md)。
 3. [线上格式与约束](./topics/wire-contract-and-constraints.md)——三条硬约束与现状取证。
 4. [Roadmap](./roadmap.md)：任务身份与顺序。
-5. [Open questions](./open-questions.md)：开工前必须先答的四问。
+5. [Open questions](./open-questions.md)：四问已答；表单字段的 pi 取证结论见 evidence。
+6. [Evidence](./evidence/2026-09-05-m01-m05-model-catalog-admin.md)：门禁、真机点验与跨仓联调。
 
 ## 权威
 

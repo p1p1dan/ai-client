@@ -1,13 +1,28 @@
 import {
   PI_MODEL_APIS,
+  type PiCredentialSource,
   type PiManagedModelDefinition,
   type PiManagedModelsConfig,
+  type PiManagedProviderCredentials,
   type PiManagedProviderDefinition,
   type PiModelApi,
 } from '@shared/piModelConfig';
 
 const PROVIDER_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
 const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+/**
+ * Whether this config came from a source allowed to carry provider credentials.
+ *
+ * Plan D01 loosened the old blanket "a provider must never contain a key" rule,
+ * but did not remove it: a key is accepted ONLY from the authenticated fetch
+ * that the management endpoint answers. A config read back off disk, or from
+ * any unauthenticated source, is still rejected outright — the degraded
+ * direction has to be the safe one.
+ */
+export interface PiConfigValidationOptions {
+  credentialsAllowed?: boolean;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -34,8 +49,51 @@ function validateApi(value: unknown, field: string): PiModelApi {
   return value as PiModelApi;
 }
 
+function validateAbsoluteUrl(value: string, field: string): string {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(value);
+  } catch {
+    throw new Error(`${field} must be an absolute URL`);
+  }
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    throw new Error(`${field} must use http or https`);
+  }
+  return value;
+}
+
+function validateCredentialSource(value: unknown, field: string): PiCredentialSource {
+  if (value !== 'managed' && value !== 'onboarding') {
+    throw new Error(`${field} must be managed or onboarding`);
+  }
+  return value;
+}
+
+function validateCredentials(value: unknown, field: string): PiManagedProviderCredentials {
+  if (!isRecord(value)) throw new Error(`${field} must be an object`);
+  return {
+    baseUrl: validateCredentialSource(value.baseUrl, `${field}.baseUrl`),
+    apiKey: validateCredentialSource(value.apiKey, `${field}.apiKey`),
+  };
+}
+
+/**
+ * How to read a provider from an endpoint that predates D01.
+ *
+ * An absent `credentials` block is its own case, not a third source value and
+ * not a default: it identifies an older management site, where a provider's
+ * `baseUrl` was always the value an administrator typed and no provider could
+ * carry a key at all. Read that way, an old endpoint keeps working; treating
+ * the absence as "inherit" would instead reject every provider it serves.
+ */
+function legacyCredentials(hasBaseUrl: boolean): PiManagedProviderCredentials {
+  return { baseUrl: hasBaseUrl ? 'managed' : 'onboarding', apiKey: 'onboarding' };
+}
+
 function validateModel(value: unknown, field: string): PiManagedModelDefinition {
   if (!isRecord(value)) throw new Error(`${field} must be an object`);
+  // Models never carry credentials, from any source: pi authenticates per
+  // provider, so a key here would have nothing to authenticate.
   if ('apiKey' in value || 'key' in value || 'token' in value) {
     throw new Error(`${field} must not contain credentials`);
   }
@@ -109,29 +167,52 @@ function validateModel(value: unknown, field: string): PiManagedModelDefinition 
 function validateProvider(
   providerId: string,
   value: unknown,
-  field: string
+  field: string,
+  options: Required<PiConfigValidationOptions>
 ): PiManagedProviderDefinition {
   if (!PROVIDER_ID_PATTERN.test(providerId)) {
     throw new Error(`${field} has an invalid provider id`);
   }
   if (!isRecord(value)) throw new Error(`${field} must be an object`);
-  if ('apiKey' in value || 'key' in value || 'token' in value || 'oauth' in value) {
+  if ('key' in value || 'token' in value || 'oauth' in value) {
     throw new Error(`${field} must not contain credentials`);
   }
-  const baseUrl = typeof value.baseUrl === 'string' ? value.baseUrl.trim() : '';
-  if (!baseUrl) throw new Error(`${field}.baseUrl is required`);
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(baseUrl);
-  } catch {
-    throw new Error(`${field}.baseUrl must be an absolute URL`);
+
+  const rawBaseUrl = typeof value.baseUrl === 'string' ? value.baseUrl.trim() : '';
+  const stated = value.credentials !== undefined;
+  const credentials = stated
+    ? validateCredentials(value.credentials, `${field}.credentials`)
+    : legacyCredentials(Boolean(rawBaseUrl));
+
+  // With sources stated: a managed value must be present and an inherited one
+  // absent. Accepting "managed but empty" would produce a provider pi cannot
+  // call, and accepting "inherited but filled" would leave two answers to the
+  // same question.
+  if (credentials.baseUrl === 'managed') {
+    if (!rawBaseUrl) throw new Error(`${field}.baseUrl is required when it is managed`);
+    validateAbsoluteUrl(rawBaseUrl, `${field}.baseUrl`);
+  } else if (stated && rawBaseUrl) {
+    throw new Error(`${field}.baseUrl must be absent when it is inherited`);
   }
-  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-    throw new Error(`${field}.baseUrl must use http or https`);
+
+  const rawApiKey = typeof value.apiKey === 'string' ? value.apiKey.trim() : '';
+  if (rawApiKey && !options.credentialsAllowed) {
+    throw new Error(`${field} must not contain credentials`);
   }
+  if (credentials.apiKey === 'managed') {
+    // A config that says "managed" without carrying the key is only reachable
+    // from an unauthenticated source; treat it as the credential violation it is.
+    if (!rawApiKey) throw new Error(`${field}.apiKey is required when it is managed`);
+  } else if (rawApiKey) {
+    throw new Error(`${field}.apiKey must be absent when it is inherited`);
+  }
+
+  // Only stated sources are carried forward; a legacy provider keeps its shape
+  // and gets its sources filled in from what it actually had.
+
   const api = validateApi(value.api, `${field}.api`);
-  if (!Array.isArray(value.models) || value.models.length === 0) {
-    throw new Error(`${field}.models must be a non-empty array`);
+  if (!Array.isArray(value.models)) {
+    throw new Error(`${field}.models must be an array`);
   }
   const models = value.models.map((model, index) =>
     validateModel(model, `${field}.models[${index}]`)
@@ -157,8 +238,10 @@ function validateProvider(
   const name = typeof value.name === 'string' && value.name.trim() ? value.name.trim() : undefined;
   return {
     ...(name ? { name } : {}),
-    baseUrl,
+    ...(rawBaseUrl ? { baseUrl: rawBaseUrl } : {}),
     api,
+    credentials,
+    ...(rawApiKey ? { apiKey: rawApiKey } : {}),
     ...(value.authHeader !== undefined ? { authHeader: Boolean(value.authHeader) } : {}),
     ...(headers ? { headers } : {}),
     ...(value.compat !== undefined
@@ -168,16 +251,29 @@ function validateProvider(
   };
 }
 
-export function validatePiManagedModelsConfig(value: unknown): PiManagedModelsConfig {
+/**
+ * Plan D03: zero providers and zero models are legal.
+ *
+ * "The administrator has enabled nothing" is a real state the endpoint can
+ * report, and rejecting it as malformed is what used to send the client down
+ * the stale-cache / built-in-table path and show models nobody enabled.
+ */
+export function validatePiManagedModelsConfig(
+  value: unknown,
+  options: PiConfigValidationOptions = {}
+): PiManagedModelsConfig {
+  const resolved = { credentialsAllowed: options.credentialsAllowed ?? false };
   if (!isRecord(value)) throw new Error('model config must be an object');
   if (value.version !== 1) throw new Error('model config version must be 1');
   if (!isRecord(value.providers)) throw new Error('model config providers must be an object');
   const providers: Record<string, PiManagedProviderDefinition> = {};
   for (const [providerId, provider] of Object.entries(value.providers)) {
-    providers[providerId] = validateProvider(providerId, provider, `providers.${providerId}`);
-  }
-  if (Object.keys(providers).length === 0) {
-    throw new Error('model config must contain at least one provider');
+    providers[providerId] = validateProvider(
+      providerId,
+      provider,
+      `providers.${providerId}`,
+      resolved
+    );
   }
   return {
     version: 1,
@@ -186,11 +282,34 @@ export function validatePiManagedModelsConfig(value: unknown): PiManagedModelsCo
   };
 }
 
-export function toPiModelsJson(config: PiManagedModelsConfig): Record<string, unknown> {
+/**
+ * The `models.json` pi reads.
+ *
+ * Two fields never survive this step: `credentials` (our vocabulary, not pi's)
+ * and `apiKey` (pi takes credentials from `auth.json`). The inherited base URL
+ * is resolved to the concrete login URL here, because pi needs an address, not
+ * a statement about where one comes from.
+ */
+export function toPiModelsJson(
+  config: PiManagedModelsConfig,
+  resolve: { inheritedBaseUrl: string }
+): Record<string, unknown> {
   const providers: Record<string, unknown> = {};
   for (const [providerId, provider] of Object.entries(config.providers)) {
-    const { name: _name, ...rest } = provider;
-    providers[providerId] = rest;
+    const { name: _name, credentials, apiKey: _apiKey, baseUrl, ...rest } = provider;
+    const resolvedBaseUrl =
+      credentials?.baseUrl === 'managed' && baseUrl ? baseUrl : resolve.inheritedBaseUrl;
+    providers[providerId] = { ...rest, baseUrl: resolvedBaseUrl };
   }
   return { providers };
+}
+
+/** The key pi should present for each provider (plan D01, wire topic §一). */
+export function resolveProviderApiKey(
+  provider: PiManagedProviderDefinition,
+  inheritedApiKey: string
+): string {
+  return provider.credentials?.apiKey === 'managed' && provider.apiKey
+    ? provider.apiKey
+    : inheritedApiKey;
 }
