@@ -22,6 +22,7 @@ import {
 import { Alert, AlertAction, AlertTitle } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { applyAutoSessionTitle, createUnboundChatSession } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
@@ -31,6 +32,7 @@ import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
 import { useScratchWorkspaceStore } from '@/stores/scratchWorkspace';
 import { useSettingsStore } from '@/stores/settings';
+import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
   classifyAssistantProgress,
@@ -112,7 +114,17 @@ import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { parseSendDispatchErrorCode } from './sendDispatchError';
 import { decideSendPreamble } from './sendPreamble';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
+import { archiveSessionIndexEntry } from './sessionIndex/useSessionIndex';
 import { readDefaultTier, readSessionTier } from './sessionPreferenceStore';
+import {
+  buildSlashCatalog,
+  extractSlashQuery,
+  filterSlashCommands,
+  parseSlashLine,
+  replaceSlashCommand,
+  resolveSlashAction,
+  type SlashCatalogItem,
+} from './slashCommands';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useHostStatus } from './useHostStatus';
 import { useQueueRelease } from './useQueueRelease';
@@ -333,6 +345,7 @@ function deadlineAt(durationMs: number): () => boolean {
 }
 
 export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: ChatComposerProps) {
+  const { t } = useI18n();
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
   // T-19 fix review (R5): reverted from batch 3's queue-based "failure
@@ -473,6 +486,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // 恢复通过 setTimeout 在 React 提交后再 setSelectionRange。
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionResults, setMentionResults] = useState<FileSearchResult[]>([]);
+  // R02-c slash commands. Unlike the @ popup above this needs NO cwd: the
+  // commands come from the agent's own configuration, and the start screen —
+  // which has no working directory yet — is exactly where someone reaches for
+  // `/new`.
+  const [slashQuery, setSlashQuery] = useState<string | null>(null);
+  const [slashCatalog, setSlashCatalog] = useState<SlashCatalogItem[]>([]);
+  const [slashIndex, setSlashIndex] = useState(0);
   /** T-07③ pre-truncation match count, so the popup can say "10 / 304". */
   const [mentionTotal, setMentionTotal] = useState(0);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -542,6 +562,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const hasProtrusion = composerHasProtrusion({ mode, hasTargetableWorkspace: cwd !== null });
   const mentionChips = useMemo(() => parseMentionChips(value), [value]);
   const mentionOpen = mentionQuery !== null && mentionResults.length > 0;
+  // pi's commands merged with this window's own. `t` is passed in rather than
+  // read inside, so `buildSlashCatalog` stays pure and testable.
+  const slashResults = useMemo(
+    () =>
+      slashQuery === null
+        ? []
+        : filterSlashCommands(buildSlashCatalog(slashCatalog, t), slashQuery),
+    [slashCatalog, slashQuery, t]
+  );
+  const slashOpen = slashQuery !== null && slashResults.length > 0;
   const busy = isStoppable(activeSession?.status);
   // A Send in flight must also be abortable: the SDK stream can hang (e.g.
   // gateway revoked key) without ever flipping session.status to running, and
@@ -759,8 +789,58 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // this keystroke starts a turn or joins the queue behind one already
   // running. `inFlightRef.current` (not `sending`) is read here on purpose:
   // it is the synchronous latch, `sending` lags a render behind it.
+  /**
+   * R02-c — run a slash command that belongs to this window, if this is one.
+   *
+   * Returns true when the message was consumed. `resolveSlashAction` is given
+   * the catalog's own `source`, so a plugin that registered `new` keeps it and
+   * this returns false, letting the text reach pi untouched.
+   *
+   * Only `/compact` reports back: opening a panel or starting a chat is visible
+   * on screen already, and a "settings opened" line would sit in the transcript
+   * forever. Compaction rewrites the conversation, so pi records it and the
+   * timeline renders that record as a system notice.
+   */
+  const runBuiltinSlash = async (trimmed: string): Promise<boolean> => {
+    const parsed = parseSlashLine(trimmed);
+    if (!parsed || attachments.drafts.length > 0) return false;
+    const source = buildSlashCatalog(slashCatalog, t).find(
+      (item) => item.name === parsed.name
+    )?.source;
+    const action = resolveSlashAction(parsed.name, parsed.args, source);
+    if (action.type === 'runtime') return false;
+
+    switch (action.type) {
+      case 'new':
+        createUnboundChatSession();
+        break;
+      case 'settings':
+        useSettingsIntentStore.getState().requestSettings();
+        break;
+      case 'archive': {
+        if (!activeSessionId) return false;
+        await archiveSessionIndexEntry(activeSessionId, true, async () => undefined);
+        break;
+      }
+      case 'compact': {
+        if (!activeSessionId) return false;
+        await window.electronAPI.chat.compactSession({
+          sessionId: activeSessionId,
+          ...(action.instructions ? { instructions: action.instructions } : {}),
+        });
+        break;
+      }
+    }
+    updateValue('');
+    setSlashQuery(null);
+    return true;
+  };
+
   const handleSend = async () => {
     const trimmed = value.trim();
+    // Before `decideSendAction`: these commands are actions in this window, not
+    // turns, so they must not be queued behind a running one either.
+    if (await runBuiltinSlash(trimmed)) return;
     const action = decideSendAction({
       hasTarget: hasSendTarget,
       disabled: Boolean(disabled),
@@ -848,10 +928,66 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     return () => clearTimeout(timer);
   }, [mentionQuery, effectiveCwd]);
 
+  // R02-c: fetch once per menu opening, not per keystroke — filtering is local.
+  // Deliberately NOT debounced like the file search above: this is one in-process
+  // RPC to a worker that already holds the list, and the menu should be populated
+  // the moment `/` is typed.
+  const slashMenuActive = slashQuery !== null;
+  useEffect(() => {
+    if (!slashMenuActive) return;
+    let cancelled = false;
+    window.electronAPI.chat
+      .getSlashCommands(activeSessionId ? { sessionId: activeSessionId } : {})
+      .then((result) => {
+        // pi reports `description` as optional; the menu always renders a row,
+        // so it is normalised here rather than defended against in every pure
+        // function downstream.
+        if (!cancelled) {
+          setSlashCatalog(
+            result.commands.map((command) => ({
+              ...command,
+              description: command.description ?? '',
+            }))
+          );
+        }
+      })
+      .catch(() => {
+        // The builtins still come through `buildSlashCatalog`, so a worker that
+        // cannot answer costs pi's commands, not the whole menu.
+        if (!cancelled) setSlashCatalog([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slashMenuActive, activeSessionId]);
+
+  /**
+   * Re-read the command prefix after the DOM has the new value.
+   *
+   * The `setTimeout(0)` is the same trick the mention popup uses: `selectionStart`
+   * is only correct after React commits, and the caret position is what decides
+   * whether the menu should still be open.
+   */
+  const syncSlashQuery = (next: string) => {
+    if (composingRef.current) {
+      setSlashQuery(null);
+      return;
+    }
+    setTimeout(() => {
+      const ta = textareaRef.current;
+      setSlashQuery(ta ? extractSlashQuery(next, ta.selectionStart) : null);
+      setSlashIndex(0);
+    }, 0);
+  };
+
   const handleContentChange = (next: string) => {
     // F4 (round-4 Codex NEEDS-FIX #3): `updateValue` writes `valueRef`
     // synchronously, same tick as `setValue` — see the ref's own comment.
     updateValue(next);
+    // R02-c: tracked before the cwd guard below. Slash commands come from the
+    // agent's configuration, not from the workspace, so the start screen — the
+    // very place someone reaches for `/new` — must still get a menu.
+    syncSlashQuery(next);
     if (composingRef.current || !effectiveCwd) {
       setMentionQuery(null);
       return;
@@ -865,6 +1001,18 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       }
       setMentionQuery(extractMentionQuery(next, ta.selectionStart));
       setMentionIndex(0);
+    }, 0);
+  };
+
+  const insertSlash = (item: SlashCatalogItem) => {
+    const out = replaceSlashCommand(value, item.name);
+    updateValue(out.text);
+    setSlashQuery(null);
+    setTimeout(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.setSelectionRange(out.cursor, out.cursor);
     }, 0);
   };
 
@@ -2611,6 +2759,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       onCompositionEnd={(event) => {
         composingRef.current = false;
         const ta = textareaRef.current;
+        // R02-c: same reason as in `handleContentChange` — before the cwd guard.
+        syncSlashQuery(event.currentTarget.value);
         if (!effectiveCwd || !ta) {
           setMentionQuery(null);
           return;
@@ -2653,6 +2803,34 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // textarea.
       disabled={disabled}
       onKeyDown={(event) => {
+        // R02-c: checked before the @ popup. The two cannot both be open — a
+        // slash query only exists inside the first token of a message starting
+        // with `/`, where an `@` has no whitespace before it — but the narrower
+        // condition goes first so the ordering states that rather than relying
+        // on it.
+        if (slashOpen) {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setSlashIndex((i) => (i + 1) % slashResults.length);
+            return;
+          }
+          if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setSlashIndex((i) => (i - 1 + slashResults.length) % slashResults.length);
+            return;
+          }
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            const picked = slashResults[slashIndex];
+            if (picked) insertSlash(picked);
+            return;
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            setSlashQuery(null);
+            return;
+          }
+        }
         // T-07 @ popup：popup 开时拦截方向键 / Enter / Esc，避免误发。
         if (mentionOpen) {
           if (event.key === 'ArrowDown') {
@@ -2876,6 +3054,62 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       )}
       <div className={composerCardClass(mode, { hasProtrusion })}>
         {/* T-07 @ 文件搜索 popup——放 textarea 上方/下方，避免被 overflow-hidden 容器裁掉 */}
+        {slashOpen && (
+          <div
+            className={cn(
+              'absolute left-2 w-96 overflow-hidden rounded-lg border bg-popover shadow-lg',
+              mentionPopupPlacementClass(mode)
+            )}
+          >
+            <div className="max-h-[240px] overflow-y-auto py-1">
+              {slashResults.map((item, i) => (
+                <button
+                  type="button"
+                  key={`${item.source}:${item.name}`}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    insertSlash(item);
+                  }}
+                  onMouseEnter={() => setSlashIndex(i)}
+                  className={cn(
+                    'flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm transition-colors',
+                    i === slashIndex
+                      ? 'bg-accent text-accent-foreground'
+                      : 'text-foreground hover:bg-accent/50'
+                  )}
+                >
+                  <span className="shrink-0 font-mono">/{item.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
+                    {item.description}
+                  </span>
+                  {/* Three kinds share this list — a skill, a prompt template
+                      and a plugin command look identical without this. */}
+                  <span className="shrink-0 text-meta text-muted-foreground">{item.source}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
+                  ↑↓
+                </kbd>
+                {t('Navigate')}
+              </span>
+              <span className="flex items-center gap-1">
+                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
+                  Enter
+                </kbd>
+                {t('Select')}
+              </span>
+              <span className="flex items-center gap-1">
+                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
+                  Esc
+                </kbd>
+                {t('Close')}
+              </span>
+            </div>
+          </div>
+        )}
         {mentionOpen && (
           <div
             className={cn(

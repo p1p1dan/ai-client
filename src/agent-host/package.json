@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.84.3",
-    "@gotgenes/pi-permission-system": "27.0.1"
+    "@gotgenes/pi-permission-system": "27.0.1",
+    "@gotgenes/pi-subagents": "21.4.2",
+    "@juicesharp/rpiv-ask-user-question": "2.9.0"
   },
   "engines": {
     "node": ">=24"

@@ -14,6 +14,7 @@ import { buildRepositoryId } from '@shared/utils/workspace';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PanelLeft } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import {
   ALL_GROUP_ID,
   panelTransition,
@@ -165,6 +166,18 @@ export default function App() {
     wtState.setPreviousTab
   );
   const panelState = usePanelState();
+
+  // R02-c: `/settings` typed in the composer. The composer sits several levels
+  // below this and has no path to `openSettings`; threading a callback down
+  // would put a prop on every component in between purely as a conduit. Same
+  // pending-request shape as `navigation.ts`.
+  const pendingSettingsOpen = useSettingsIntentStore((state) => state.pendingOpen);
+  const openSettingsFromSlash = settingsState.openSettings;
+  useEffect(() => {
+    if (!pendingSettingsOpen) return;
+    useSettingsIntentStore.getState().clearSettingsRequest();
+    openSettingsFromSlash();
+  }, [pendingSettingsOpen, openSettingsFromSlash]);
 
   const {
     repositories,

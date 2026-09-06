@@ -5,7 +5,9 @@ import type { Locale } from '@shared/i18n';
 import type {
   PiModelManagementSettings,
   PiModelSyncResult,
+  PiResourceSettings,
   SyncPiModelsRequest,
+  UpdatePiResourceSettingsRequest,
 } from '@shared/piModelConfig';
 import type {
   PermissionPolicyRequest,
@@ -90,7 +92,7 @@ import type { SessionEffortLevel } from '@shared/types/agentHost';
 import type { ExtensionUiResponse } from '@shared/types/runtimeEvents';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
-import type { WorkerExtensionInfo } from '@shared/types/workerRpc';
+import type { WorkerExtensionInfo, WorkerSlashCommandInfo } from '@shared/types/workerRpc';
 import { parseInitialThemeArg } from '@shared/windowTheme';
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
 import pkg from '../../package.json';
@@ -1074,6 +1076,17 @@ const electronAPI = {
       limit?: number;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LOAD_HISTORY_PAGE, payload),
+    /** R02-b — commands for the composer menu; `sessionId` is a hint, not a requirement. */
+    getSlashCommands: (payload?: {
+      sessionId?: string;
+    }): Promise<{ commands: WorkerSlashCommandInfo[]; truncated: boolean }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_SLASH_COMMANDS, payload ?? {}),
+    /** R02-c — manual context compaction. */
+    compactSession: (payload: {
+      sessionId: string;
+      instructions?: string;
+    }): Promise<{ compacted: true }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_COMPACT_SESSION, payload),
     getSessionTree: (payload: {
       sessionId: string;
       requestSequence: number;
@@ -1120,6 +1133,15 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.PI_MODELS_SYNC, payload),
     openAdmin: (endpointUrl?: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.PI_MODELS_OPEN_ADMIN, endpointUrl),
+  },
+
+  piResources: {
+    getSettings: (): Promise<PiResourceSettings> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_GET_SETTINGS),
+    updateSettings: (payload: UpdatePiResourceSettingsRequest): Promise<PiResourceSettings> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS, payload),
+    openPromptTemplates: (): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_OPEN_PROMPTS),
   },
 
   /**

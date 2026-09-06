@@ -5,7 +5,7 @@
  * bootstraps at most one Pi AgentSession. Pool/session routing remains in Main.
  */
 
-import { PI_PROJECT_TRUST_ENV } from '../shared/piModelConfig.ts';
+import { PI_BORROW_RESOURCES_DIR_ENV, PI_PROJECT_TRUST_ENV } from '../shared/piModelConfig.ts';
 import { PI_WORKER_GENERATION_ENV } from '../shared/types/workerRpc.ts';
 import { PiWorkerRpcServer } from './piWorkerRpcServer.ts';
 
@@ -44,6 +44,9 @@ const server = new PiWorkerRpcServer({
   port: parentPort,
   generation,
   projectTrusted: readProjectTrusted(process.env[PI_PROJECT_TRUST_ENV]),
+  ...(process.env[PI_BORROW_RESOURCES_DIR_ENV]?.trim()
+    ? { borrowResourcesFrom: process.env[PI_BORROW_RESOURCES_DIR_ENV]?.trim() }
+    : {}),
   log: (...args) => console.error('[pi-worker]', ...args),
   onDisposed: () => setImmediate(() => process.exit(0)),
 });

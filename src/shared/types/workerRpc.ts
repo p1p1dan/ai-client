@@ -157,6 +157,71 @@ export interface WorkerExtensionInfo {
   error?: string;
 }
 
+/**
+ * R02-a — one slash command available in a session.
+ *
+ * Three kinds arrive as one list because pi dispatches all three from the same
+ * place: `session.prompt()` expands skills and prompt templates and dispatches
+ * extension commands, and it does so by default (we never pass
+ * `expandPromptTemplates: false`). So the execution path is already live; this
+ * type exists so the UI can *show* what is available.
+ *
+ * Named without the leading slash, matching pi's own `invocationName`. Skills
+ * carry pi's `skill:` prefix in the name itself — that prefix is what
+ * `_expandSkillCommand` matches on, so stripping it here would produce a
+ * command the runtime does not recognise.
+ */
+export interface WorkerSlashCommandInfo {
+  /** Invocation name without the leading slash; skills read `skill:<name>`. */
+  name: string;
+  description?: string;
+  /**
+   * Deliberately `string` and not a union, same reasoning as
+   * {@link WorkerExtensionInfo.scope}: this crosses a version boundary, and a
+   * second copy of pi's vocabulary is how a layer starts rejecting words the
+   * runtime accepts. Known values: `extension`, `prompt`, `skill`.
+   */
+  source: string;
+  /** Absolute path pi resolved it from, when it reported one. */
+  path?: string;
+  /** `sourceInfo.scope` — user / project / temporary. */
+  scope?: string;
+}
+
+/**
+ * Cap so a pathological configuration cannot push an unbounded list over RPC.
+ *
+ * Larger than the extension inventory's own cap (64, in `extensionInventory.ts`)
+ * because skills legitimately outnumber plugins — one package can publish many,
+ * and `~/.agents/skills` is shared across every agent on the machine.
+ */
+export const WORKER_COMMAND_INVENTORY_MAX = 256;
+
+export interface WorkerCommandsPayload {
+  logicalSessionId: string;
+}
+
+/**
+ * R02-c — manual context compaction, the `/compact` command.
+ *
+ * pi's own `compact()` aborts the running turn first and never resumes it, so
+ * this is a mutation like rewind, not a read.
+ */
+export interface WorkerCompactPayload {
+  logicalSessionId: string;
+  instructions?: string;
+}
+
+export interface WorkerCompactResult {
+  compacted: true;
+}
+
+export interface WorkerCommandsResult {
+  commands: WorkerSlashCommandInfo[];
+  /** True when the list was truncated at {@link WORKER_COMMAND_INVENTORY_MAX}. */
+  truncated: boolean;
+}
+
 export interface WorkerBootstrapResult {
   bootstrapped: true;
   logicalSessionId: string;
@@ -387,6 +452,8 @@ export type WorkerUtilityTerminalEvent = WorkerRpcEvent<
 
 export type WorkerHistoryRequest = WorkerRpcRequest<'worker.history', WorkerHistoryPayload>;
 export type WorkerTreeRequest = WorkerRpcRequest<'worker.tree', WorkerTreePayload>;
+export type WorkerCommandsRequest = WorkerRpcRequest<'worker.commands', WorkerCommandsPayload>;
+export type WorkerCompactRequest = WorkerRpcRequest<'worker.compact', WorkerCompactPayload>;
 export type WorkerRewindRequest = WorkerRpcRequest<'worker.rewind', WorkerRewindPayload>;
 export type WorkerReloadRequest = WorkerRpcRequest<'worker.reload', WorkerReloadPayload>;
 export type WorkerForkRequest = WorkerRpcRequest<'worker.fork', WorkerForkPayload>;
@@ -699,6 +766,36 @@ export function isWorkerTreeResult(value: unknown): value is WorkerTreeResult {
   return isRecord(value) && isSessionTreeSnapshot(value.snapshot);
 }
 
+/**
+ * R02-a — shape check for a command list.
+ *
+ * Rows are validated individually and bad ones are DROPPED, not made to fail
+ * the whole response: this list is decoration for a completion menu, and one
+ * malformed entry from a plugin should cost that entry, not the menu.
+ */
+export function isWorkerCommandsResult(value: unknown): value is WorkerCommandsResult {
+  return isRecord(value) && Array.isArray(value.commands) && typeof value.truncated === 'boolean';
+}
+
+export function sanitizeWorkerCommandRows(value: unknown): WorkerSlashCommandInfo[] {
+  if (!Array.isArray(value)) return [];
+  const rows: WorkerSlashCommandInfo[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) continue;
+    const { name, source, description, path, scope } = entry;
+    if (typeof name !== 'string' || name.trim().length === 0) continue;
+    if (typeof source !== 'string' || source.trim().length === 0) continue;
+    rows.push({
+      name,
+      source,
+      ...(typeof description === 'string' && description.length > 0 ? { description } : {}),
+      ...(typeof path === 'string' && path.length > 0 ? { path } : {}),
+      ...(typeof scope === 'string' && scope.length > 0 ? { scope } : {}),
+    });
+  }
+  return rows.slice(0, WORKER_COMMAND_INVENTORY_MAX);
+}
+
 export function isWorkerHistoryPayload(value: unknown): value is WorkerHistoryPayload {
   if (
     !isRecord(value) ||
@@ -724,6 +821,17 @@ export function isWorkerHistoryPayload(value: unknown): value is WorkerHistoryPa
 
 export function isWorkerTreePayload(value: unknown): value is WorkerTreePayload {
   return isLogicalSessionPayload(value);
+}
+
+export function isWorkerCommandsPayload(value: unknown): value is WorkerCommandsPayload {
+  return isLogicalSessionPayload(value);
+}
+
+export function isWorkerCompactPayload(value: unknown): value is WorkerCompactPayload {
+  return (
+    isLogicalSessionPayload(value) &&
+    (value.instructions === undefined || typeof value.instructions === 'string')
+  );
 }
 
 export function isWorkerRewindPayload(value: unknown): value is WorkerRewindPayload {

@@ -4,6 +4,11 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import {
+  BUNDLED_FEATURE_PLUGINS,
+  bundledFeaturePluginCopyPaths,
+  bundledFeaturePluginEntryPaths,
+} from '../../src/agent-host/bundledPlugins.mjs';
 import { serializeDefaultPermissionPolicy } from '../../src/agent-host/permissionPolicy.mjs';
 import {
   containsObsoleteExecutionPackage,
@@ -35,20 +40,19 @@ function writeJson(file, value) {
   writeFile(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+const INSTALLED_VERSIONS = {
+  '@earendil-works/pi-coding-agent': '0.84.3',
+  '@gotgenes/pi-permission-system': '27.0.1',
+  '@gotgenes/pi-subagents': '21.4.2',
+  '@juicesharp/rpiv-ask-user-question': '2.9.0',
+};
+
 function buildInstall(root) {
   const host = path.join(root, 'src', 'agent-host');
-  writeJson(path.join(host, 'package.json'), {
-    dependencies: {
-      '@earendil-works/pi-coding-agent': '0.84.3',
-      '@gotgenes/pi-permission-system': '27.0.1',
-    },
-  });
-  writeJson(path.join(host, 'node_modules', '@earendil-works', 'pi-coding-agent', 'package.json'), {
-    version: '0.84.3',
-  });
-  writeJson(path.join(host, 'node_modules', '@gotgenes', 'pi-permission-system', 'package.json'), {
-    version: '27.0.1',
-  });
+  writeJson(path.join(host, 'package.json'), { dependencies: { ...INSTALLED_VERSIONS } });
+  for (const [name, version] of Object.entries(INSTALLED_VERSIONS)) {
+    writeJson(path.join(host, 'node_modules', ...name.split('/'), 'package.json'), { version });
+  }
   return host;
 }
 
@@ -74,11 +78,18 @@ function buildArtifact(outDir) {
     path.join(outDir, 'node_modules', '@gotgenes', 'pi-permission-system', 'src', 'index.ts')
   );
   writeFile(path.join(outDir, 'node_modules', 'tree-sitter-bash', 'tree-sitter-bash.wasm'));
+  for (const rel of bundledFeaturePluginEntryPaths()) {
+    writeFile(path.join(outDir, ...rel.split('/')));
+  }
   for (const [name, license] of [
     ['@gotgenes/pi-permission-system', 'LICENSE'],
     ['tree-sitter-bash', 'LICENSE'],
     ['web-tree-sitter', 'LICENSE'],
     ['zod', 'LICENSE'],
+    ...BUNDLED_FEATURE_PLUGINS.filter((plugin) => plugin.shipsLicenceFile).map((plugin) => [
+      plugin.package,
+      'LICENSE',
+    ]),
   ]) {
     writeFile(path.join(outDir, 'node_modules', ...name.split('/'), license), 'MIT\n');
   }
@@ -95,12 +106,21 @@ describe('worker-only dependency preflight', () => {
     expect(ESBUILD_EXTERNAL).toEqual(['@earendil-works/pi-coding-agent']);
   });
 
-  it('accepts installed Pi and permission packages', () => {
+  it('accepts installed Pi, permission and bundled feature packages', () => {
     buildInstall(tmp);
-    expect(preflightHostDeps({ root: tmp }).installed).toEqual({
-      '@earendil-works/pi-coding-agent': '0.84.3',
-      '@gotgenes/pi-permission-system': '27.0.1',
+    expect(preflightHostDeps({ root: tmp }).installed).toEqual(INSTALLED_VERSIONS);
+  });
+
+  it('refuses to build when a bundled feature extension is not installed', () => {
+    // R03. Without this the build succeeds and ships an app whose questionnaire
+    // dialog and sub-agents simply never appear.
+    const host = buildInstall(tmp);
+    const missing = BUNDLED_FEATURE_PLUGINS[0].package;
+    fs.rmSync(path.join(host, 'node_modules', ...missing.split('/')), {
+      recursive: true,
+      force: true,
     });
+    expect(() => preflightHostDeps({ root: tmp })).toThrow(`${missing} is not installed`);
   });
 
   it('rejects a ranged worker runtime pin', () => {
@@ -154,6 +174,30 @@ describe('worker-only copy filter', () => {
     expect(shouldCopy('@img/sharp-libvips-linuxmusl-x64/lib/libvips.so', copyOptions)).toBe(true);
     expect(shouldCopy('@img/sharp-darwin-arm64/lib/sharp.node', copyOptions)).toBe(false);
   });
+
+  it('copies each bundled feature extension entry, so it reaches pi', () => {
+    // Paths here are node_modules-RELATIVE, matching the walker root. Handing
+    // shouldCopy the verifier's `node_modules/...` form makes topPackage read
+    // "node_modules" and every package branch stops matching, so the assertion
+    // would pass against any filter.
+    for (const entry of bundledFeaturePluginCopyPaths()) {
+      expect(shouldCopy(entry, copyOptions)).toBe(true);
+    }
+  });
+
+  it('descends into each bundled feature package directory', () => {
+    // The filter is asked about directories on the way down and skips the whole
+    // subtree on a no, so a branch that forgets the package dir itself drops the
+    // package with the entry assertion above still green.
+    for (const entry of bundledFeaturePluginCopyPaths()) {
+      const segments = entry.split('/');
+      const pkg = segments[0].startsWith('@') ? segments.slice(0, 2) : segments.slice(0, 1);
+      for (let i = pkg.length; i < segments.length; i += 1) {
+        const ancestor = segments.slice(0, i).join('/');
+        expect(shouldCopy(ancestor, copyOptions)).toBe(true);
+      }
+    }
+  });
 });
 
 describe('worker-only artifact verification', () => {
@@ -161,6 +205,18 @@ describe('worker-only artifact verification', () => {
     const out = path.join(tmp, 'out');
     buildArtifact(out);
     expect(verifyArtifact({ outDir: out }).totalBytes).toBeGreaterThan(0);
+  });
+
+  it('requires every bundled feature extension entry to survive the copy', () => {
+    // The copy filter walks DIRECTORIES and drops a whole subtree the moment it
+    // answers no, so there is no per-file hook that fails loud. This is the loud
+    // hook: a package whose entry is gone must be a build failure, not a silently
+    // missing questionnaire / sub-agent experience.
+    const out = path.join(tmp, 'out');
+    buildArtifact(out);
+    const entry = bundledFeaturePluginEntryPaths()[0];
+    fs.rmSync(path.join(out, ...entry.split('/')));
+    expect(() => verifyArtifact({ outDir: out })).toThrow(entry);
   });
 
   it('requires worker.js and rejects both transition entries', () => {

@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CREDENTIAL_MODE_SETTING_KEY } from '@shared/credentialMode';
+import { PI_BORROW_USER_RESOURCES_SETTING_KEY } from '@shared/piModelConfig';
 import { IPC_CHANNELS } from '@shared/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -126,6 +127,20 @@ describe('settings.json — Main-owned keys survive a renderer whole-object save
     await vi.advanceTimersByTimeAsync(600);
 
     expect(CREDENTIAL_MODE_SETTING_KEY in readSettingsFile()).toBe(false);
+  });
+
+  it('a resource switch written by Main survives a stale renderer save', async () => {
+    vi.useFakeTimers();
+    const settings = await loadSettingsModule();
+    const read = handlers.get(IPC_CHANNELS.SETTINGS_READ);
+    if (!read) throw new Error('settings handlers not registered');
+    await read({});
+
+    settings.mergeSettingsPatch({ [PI_BORROW_USER_RESOURCES_SETTING_KEY]: false });
+    await rendererSave({ theme: 'light' });
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(readSettingsFile()[PI_BORROW_USER_RESOURCES_SETTING_KEY]).toBe(false);
   });
 
   it('mergeSettingsPatch still sets Main-owned keys — the guard is for renderer writes only', async () => {

@@ -23,6 +23,7 @@ import { registerNotificationHandlers } from './notification';
 import { registerOnboardingHandlers } from './onboarding';
 import { registerPiModelHandlers } from './piModels';
 import { registerPiPermissionHandlers } from './piPermissions';
+import { registerPiResourceHandlers } from './piResources';
 import { registerPiRuntimeHandlers } from './piRuntime';
 import {
   disposeAllPiTuiControllers,
@@ -79,6 +80,7 @@ export function registerIpcHandlers(): void {
   registerOnboardingHandlers();
   registerPiModelHandlers();
   registerPiPermissionHandlers();
+  registerPiResourceHandlers();
   registerUsageHandlers();
   registerPiTuiHandlers();
   sweepScratchWorkspacesOnStartup();

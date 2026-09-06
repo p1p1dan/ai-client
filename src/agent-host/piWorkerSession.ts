@@ -7,6 +7,7 @@ import type { SessionPermissionTier } from '../shared/types/sessionPermissionTie
 import type {
   WorkerBootstrapPayload,
   WorkerBootstrapResult,
+  WorkerCommandsResult,
   WorkerDiscardForkPayload,
   WorkerDiscardForkResult,
   WorkerForkPayload,
@@ -22,6 +23,7 @@ import type {
   WorkerStopPayload,
   WorkerStopResult,
 } from '../shared/types/workerRpc.ts';
+import { type PiCommandSources, readSlashCommandInventory } from './commandInventory.ts';
 import {
   createPortableExtensionUiBridge,
   type PortableExtensionUiBridge,
@@ -84,6 +86,8 @@ interface ActiveTurn {
 
 export interface PiWorkerSessionOptions extends WorkerBootstrapPayload {
   projectTrusted: boolean;
+  /** R01 — the user's own pi agent dir to borrow skills/templates from. */
+  borrowResourcesFrom?: string;
   emit: (event: RuntimeEventDraft) => void;
   loadSdk?: () => Promise<unknown>;
   decidePermissionGate?: (packages: unknown[]) => PermissionPluginDecision;
@@ -379,6 +383,45 @@ export class PiWorkerSession {
     }
     if (!this.bootstrapPromise) this.bootstrapPromise = this.bootstrapInternal();
     return this.bootstrapPromise;
+  }
+
+  /**
+   * R02-a — the slash commands this session can run.
+   *
+   * Deliberately does NOT call `assertIdle`: a command list is read-only and
+   * the composer needs it exactly while the user is typing, which is often
+   * mid-turn. It does bootstrap first, because the extension runner and
+   * resource loader only exist once the runtime is up.
+   */
+  async commands(input: { logicalSessionId: string }): Promise<WorkerCommandsResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    await this.bootstrap();
+    return readSlashCommandInventory(this.handle?.session as PiCommandSources | undefined);
+  }
+
+  /**
+   * R02-c — manual context compaction.
+   *
+   * pi aborts the running turn first and never resumes it, so this is a
+   * mutation and asserts idle, unlike `commands()` above.
+   */
+  async compact(input: { logicalSessionId: string; instructions?: string }): Promise<{
+    compacted: true;
+  }> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.assertIdle('compact the conversation');
+    await this.bootstrap();
+    const session = this.requireHandle().session as {
+      compact?: (instructions?: string) => Promise<unknown>;
+    };
+    if (typeof session.compact !== 'function') {
+      throw new PiWorkerSessionError(
+        'WORKER_COMPACT_UNAVAILABLE',
+        'This Pi build cannot compact a conversation'
+      );
+    }
+    await session.compact(input.instructions);
+    return { compacted: true };
   }
 
   async tree(input: {
@@ -1337,6 +1380,9 @@ export class PiWorkerSession {
       effort: this.options.effort,
       leafCheckpoint: this.options.leafCheckpoint,
       decidePermissionGate: this.options.decidePermissionGate,
+      ...(this.options.borrowResourcesFrom
+        ? { borrowResourcesFrom: this.options.borrowResourcesFrom }
+        : {}),
       additionalExtensionFactories: [
         { name: 'aiclient-session-tier', factory: tierFactory, hidden: true },
       ],

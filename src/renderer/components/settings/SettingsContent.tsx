@@ -2,6 +2,7 @@ import {
   FileCode,
   Globe,
   Keyboard,
+  Library,
   Palette,
   Server,
   Settings,
@@ -20,6 +21,7 @@ import { GeneralSettings } from './GeneralSettings';
 import { KeybindingsSettings } from './KeybindingsSettings';
 import { PermissionPolicySettings } from './PermissionPolicySettings';
 import { PiModelManagementSettings } from './PiModelManagementSettings';
+import { PiResourcesSettings } from './PiResourcesSettings';
 import { RemoteSettings } from './RemoteSettings';
 import { WebInspectorSettings } from './WebInspectorSettings';
 
@@ -56,6 +58,7 @@ export function SettingsContent({
     { id: 'ai', icon: Sparkles, label: t('AI') },
     { id: 'piModels', icon: SlidersHorizontal, label: 'Pi Models' },
     { id: 'piPermissions', icon: ShieldCheck, label: t('Permissions') },
+    { id: 'piResources', icon: Library, label: t('Resources') },
     { id: 'remote', icon: Server, label: t('Remote Connection') },
     { id: 'webInspector', icon: Globe, label: t('Web Inspector') },
   ];
@@ -91,6 +94,7 @@ export function SettingsContent({
         {activeCategory === 'ai' && <AISettings />}
         {activeCategory === 'piModels' && <PiModelManagementSettings />}
         {activeCategory === 'piPermissions' && <PermissionPolicySettings repoPath={repoPath} />}
+        {activeCategory === 'piResources' && <PiResourcesSettings />}
         {activeCategory === 'remote' && <RemoteSettings />}
         {activeCategory === 'webInspector' && <WebInspectorSettings />}
       </div>

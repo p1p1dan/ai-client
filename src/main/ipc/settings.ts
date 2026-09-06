@@ -1,3 +1,4 @@
+import { PI_BORROW_USER_RESOURCES_SETTING_KEY } from '@shared/piModelConfig';
 import { IPC_CHANNELS } from '@shared/types';
 import { app, ipcMain } from 'electron';
 import {
@@ -46,7 +47,11 @@ const MAX_WAIT_MS = 5000;
  * is why the overlay DELETES a key the file no longer has rather than leaving
  * whatever the renderer sent.
  */
-const MAIN_OWNED_SETTING_KEYS: readonly string[] = [CREDENTIAL_MODE_SETTING_KEY, 'onboarding'];
+const MAIN_OWNED_SETTING_KEYS: readonly string[] = [
+  CREDENTIAL_MODE_SETTING_KEY,
+  'onboarding',
+  PI_BORROW_USER_RESOURCES_SETTING_KEY,
+];
 
 /** Take the Main-owned keys from the file as it is NOW, over a renderer payload. */
 function withMainOwnedKeys(data: Record<string, unknown>): Record<string, unknown> {

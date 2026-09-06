@@ -1,6 +1,8 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
+  PI_BORROW_RESOURCES_DIR_ENV,
+  PI_BORROW_USER_RESOURCES_SETTING_KEY,
   PI_MANAGED_AGENT_DIR_NAME,
   PI_MODEL_CONFIG_PATH,
   PI_MODEL_MANAGEMENT_URL_ENV,
@@ -8,6 +10,7 @@ import {
   PI_PROJECT_TRUST_ENV,
   type PiModelSyncResult,
   type PiModelSyncState,
+  type PiResourceSettings,
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { net } from 'electron';
@@ -18,15 +21,21 @@ import { getOnboardingServiceUrl } from '../onboarding/serviceUrl';
 import { readSharedSettings, writeSharedSettings } from '../SharedSessionState';
 import { PiModelConfigService } from './PiModelConfigService';
 
+function getHomeDir(): string {
+  return process.env.HOME || process.env.USERPROFILE || homedir();
+}
+
 export function getManagedPiAgentDir(): string {
   return join(getAppStateRoot(), PI_MANAGED_AGENT_DIR_NAME);
 }
 
+export function getManagedPiPromptTemplatesDir(): string {
+  return join(getManagedPiAgentDir(), 'prompts');
+}
+
 export function getLocalPiAgentDir(): string {
   const inherited = process.env.PI_CODING_AGENT_DIR?.trim();
-  return (
-    inherited || join(process.env.HOME || process.env.USERPROFILE || homedir(), '.pi', 'agent')
-  );
+  return inherited || join(getHomeDir(), '.pi', 'agent');
 }
 
 /**
@@ -134,18 +143,65 @@ export function clearManagedPiCredential(): void {
   serviceFor(getManagedPiAgentDir()).clearCredential();
 }
 
+/**
+ * R01 — whether to lend the Host the user's own skills and prompt templates.
+ *
+ * Default ON. This feature exists for people who installed things where the
+ * documentation told them to and got no indication that it had no effect;
+ * defaulting it off would leave exactly those people in the dark. The borrowed
+ * surface is text resources, never extensions.
+ */
+export function resolveBorrowUserPiResources(): boolean {
+  const stored = readSharedSettings()[PI_BORROW_USER_RESOURCES_SETTING_KEY];
+  return stored !== false;
+}
+
+export function getActivePiPromptTemplatesDir(): string {
+  return resolveManagedCredentialsEnabled()
+    ? getManagedPiPromptTemplatesDir()
+    : join(getLocalPiAgentDir(), 'prompts');
+}
+
+export function getPiResourceSettings(): PiResourceSettings {
+  const userAgentDir = getLocalPiAgentDir();
+  const managedAgentDir = getManagedPiAgentDir();
+  return {
+    managed: resolveManagedCredentialsEnabled(),
+    borrowUserPiResources: resolveBorrowUserPiResources(),
+    paths: {
+      sharedSkills: join(getHomeDir(), '.agents', 'skills'),
+      userSkills: join(userAgentDir, 'skills'),
+      userPromptTemplates: join(userAgentDir, 'prompts'),
+      managedSkills: join(managedAgentDir, 'skills'),
+      managedPromptTemplates: getManagedPiPromptTemplatesDir(),
+    },
+  };
+}
+
 export function resolveManagedPiWorkerEnv(): Record<string, string> {
   const managed = resolveManagedCredentialsEnabled();
+  // Only managed mode moved the agent dir away from the user's own; in local
+  // mode the Host already loads that directory, so lending it again would list
+  // every skill twice. The Host guards this too, but not sending it keeps the
+  // env var honest about what it means.
+  const borrowFrom = managed && resolveBorrowUserPiResources() ? getLocalPiAgentDir() : undefined;
   return {
     // T08-c (D-Q9 decision 4). Sent in BOTH modes, never omitted: an absent key
     // identifies a legacy process build, not either deliberate trust posture.
     [PI_PROJECT_TRUST_ENV]: managed ? '0' : '1',
     ...(managed ? { PI_CODING_AGENT_DIR: getManagedPiAgentDir() } : {}),
+    ...(borrowFrom ? { [PI_BORROW_RESOURCES_DIR_ENV]: borrowFrom } : {}),
   };
 }
 
 export function resolveManagedPiPtyEnv(): Record<string, string> {
-  return resolveManagedPiWorkerEnv();
+  // R01: the borrow directory is dropped here. It is read by OUR Host code, not
+  // by pi, so the real pi CLI in the PTY would ignore it — and leaving it in the
+  // environment would claim a borrow that is not happening. TUI sessions load
+  // only what the agent dir gives them; closing that gap needs a pi-side
+  // mechanism we do not have (Q-R4).
+  const { [PI_BORROW_RESOURCES_DIR_ENV]: _borrowed, ...ptyEnv } = resolveManagedPiWorkerEnv();
+  return ptyEnv;
 }
 
 export { validatePiManagedModelsConfig } from './configValidation';

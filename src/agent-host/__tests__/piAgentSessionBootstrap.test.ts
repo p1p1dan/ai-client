@@ -1,7 +1,8 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { BundledFeaturePluginResolution } from '../bundledFeaturePlugins.ts';
 import { createPortableExtensionUiBridge } from '../extensionUiBridge.ts';
 import type { PermissionPluginDecision } from '../permissionPlugin.ts';
 import {
@@ -16,10 +17,20 @@ const BUNDLED_GATE: PermissionPluginDecision = {
   gated: true,
 };
 
+/**
+ * R03 — every pre-existing case injects this so it keeps asserting on the
+ * permission gate alone. Without the seam these tests would read the REAL
+ * `src/agent-host/node_modules`, and their expectations would depend on which
+ * packages a developer happens to have installed.
+ */
+const NO_FEATURE_PLUGINS: BundledFeaturePluginResolution = { paths: [], skipped: [] };
+
 function harness(
   options: {
     bindExtensions?: boolean;
     loadedPermission?: boolean;
+    /** R03 — exact paths pi reports as loaded, overriding `loadedPermission`. */
+    loadedPaths?: string[];
     verificationAvailable?: boolean;
     gate?: PermissionPluginDecision;
     sessionFile?: string;
@@ -59,10 +70,12 @@ function harness(
       : {
           resourceLoader: {
             getExtensions: () => ({
-              extensions:
-                options.loadedPermission === false
-                  ? [{ path: '/other/extension.ts' }]
-                  : [{ path: '/bundle/pi-permission-system/src/index.ts' }],
+              extensions: (
+                options.loadedPaths ??
+                (options.loadedPermission === false
+                  ? ['/other/extension.ts']
+                  : ['/bundle/pi-permission-system/src/index.ts'])
+              ).map((path) => ({ path })),
             }),
           },
         }),
@@ -141,6 +154,7 @@ describe('bootstrapPiAgentSession', () => {
       model: 'pilab/company-model',
       effort: 'high',
       decidePermissionGate: () => h.gate,
+      resolveFeaturePlugins: () => NO_FEATURE_PLUGINS,
     });
 
     expect(h.calls.sessionManager).toHaveBeenCalledWith('/repo', undefined);
@@ -184,6 +198,7 @@ describe('bootstrapPiAgentSession', () => {
         projectTrusted: false,
         extensionUi: h.extensionUi,
         decidePermissionGate: () => h.gate,
+        resolveFeaturePlugins: () => NO_FEATURE_PLUGINS,
       });
 
       expect(h.calls.sessionManager).not.toHaveBeenCalled();
@@ -201,6 +216,7 @@ describe('bootstrapPiAgentSession', () => {
       projectTrusted: true,
       extensionUi: h.extensionUi,
       decidePermissionGate: () => h.gate,
+      resolveFeaturePlugins: () => NO_FEATURE_PLUGINS,
     });
 
     expect(h.services.modelRuntime.getModel).not.toHaveBeenCalled();
@@ -227,6 +243,7 @@ describe('bootstrapPiAgentSession', () => {
         projectTrusted: false,
         extensionUi: h.extensionUi,
         decidePermissionGate: () => h.gate,
+        resolveFeaturePlugins: () => NO_FEATURE_PLUGINS,
       })
     ).rejects.toMatchObject({
       name: 'PermissionGateUnavailableError',
@@ -244,6 +261,7 @@ describe('bootstrapPiAgentSession', () => {
         projectTrusted: false,
         extensionUi: h.extensionUi,
         decidePermissionGate: () => h.gate,
+        resolveFeaturePlugins: () => NO_FEATURE_PLUGINS,
       })
     ).rejects.toMatchObject({ code: 'permission_plugin_verification_unsupported' });
     expect(h.calls.sessionFromServices).not.toHaveBeenCalled();
@@ -258,6 +276,7 @@ describe('bootstrapPiAgentSession', () => {
         projectTrusted: false,
         extensionUi: h.extensionUi,
         decidePermissionGate: () => h.gate,
+        resolveFeaturePlugins: () => NO_FEATURE_PLUGINS,
       })
     ).rejects.toBeInstanceOf(PermissionGateUnavailableError);
     expect(h.calls.sessionFromServices).not.toHaveBeenCalled();
@@ -272,6 +291,7 @@ describe('bootstrapPiAgentSession', () => {
         projectTrusted: false,
         extensionUi: h.extensionUi,
         decidePermissionGate: () => h.gate,
+        resolveFeaturePlugins: () => NO_FEATURE_PLUGINS,
       })
     ).rejects.toMatchObject({ code: 'extension_bind_unsupported' });
     expect(h.calls.runtimeDispose).toHaveBeenCalledTimes(1);
@@ -281,3 +301,137 @@ describe('bootstrapPiAgentSession', () => {
 function modelShape() {
   return { provider: 'pilab', id: 'company-model' };
 }
+
+/**
+ * R01 — the user's own skills and templates reach the resource loader.
+ *
+ * Real directories, because the module drops paths that do not exist and a stub
+ * would let a wrong one through.
+ */
+describe('bootstrapPiAgentSession — borrowed user resources', () => {
+  const temporaries: string[] = [];
+
+  async function userAgentDir(subdirs: string[]): Promise<string> {
+    const base = await mkdtemp(join(tmpdir(), 'bootstrap-borrow-'));
+    temporaries.push(base);
+    for (const dir of subdirs) await mkdir(join(base, dir), { recursive: true });
+    return base;
+  }
+
+  async function loaderOptions(borrowResourcesFrom?: string) {
+    const h = harness();
+    await bootstrapPiAgentSession({
+      sdk: h.sdk,
+      cwd: '/repo',
+      projectTrusted: false,
+      extensionUi: h.extensionUi,
+      decidePermissionGate: () => h.gate,
+      resolveFeaturePlugins: () => NO_FEATURE_PLUGINS,
+      ...(borrowResourcesFrom ? { borrowResourcesFrom } : {}),
+    });
+    const call = h.calls.services.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    return (call.resourceLoaderOptions ?? {}) as Record<string, unknown>;
+  }
+
+  afterEach(async () => {
+    for (const dir of temporaries.splice(0)) await rm(dir, { recursive: true, force: true });
+  });
+
+  it('adds the user’s skills and prompts directories', async () => {
+    const source = await userAgentDir(['skills', 'prompts']);
+    const options = await loaderOptions(source);
+    expect(options.additionalSkillPaths).toEqual([join(source, 'skills')]);
+    expect(options.additionalPromptTemplatePaths).toEqual([join(source, 'prompts')]);
+  });
+
+  it('never routes borrowed paths into additionalExtensionPaths', async () => {
+    // Load-bearing. Skills and templates are text that enters the context; an
+    // extension is code, and the user's own copy of the permission system would
+    // collide with the patched one this app ships.
+    const source = await userAgentDir(['skills']);
+    const options = await loaderOptions(source);
+    expect(options.additionalExtensionPaths).toEqual(['/bundle/pi-permission-system']);
+  });
+
+  it('omits both fields entirely when nothing is borrowed', async () => {
+    // Passing empty arrays would read as "borrowing, found nothing", which is a
+    // different claim from "not borrowing".
+    const options = await loaderOptions();
+    expect(options).not.toHaveProperty('additionalSkillPaths');
+    expect(options).not.toHaveProperty('additionalPromptTemplatePaths');
+  });
+});
+
+/**
+ * R03 — the bundled feature extensions reach pi, without ever being able to
+ * stand in for the permission system.
+ */
+describe('bootstrapPiAgentSession — bundled feature extensions', () => {
+  const FEATURE: BundledFeaturePluginResolution = {
+    paths: ['/bundle/rpiv-ask-user-question', '/bundle/pi-subagents'],
+    skipped: [],
+  };
+
+  async function servicesCall(
+    features: BundledFeaturePluginResolution,
+    harnessOptions: Parameters<typeof harness>[0] = {}
+  ) {
+    const h = harness(harnessOptions);
+    await bootstrapPiAgentSession({
+      sdk: h.sdk,
+      cwd: '/repo',
+      projectTrusted: false,
+      extensionUi: h.extensionUi,
+      decidePermissionGate: () => h.gate,
+      resolveFeaturePlugins: () => features,
+    });
+    return (h.calls.services.mock.calls.at(-1)?.[0] as Record<string, unknown>)
+      .resourceLoaderOptions as Record<string, unknown>;
+  }
+
+  it('appends them after the permission gate’s own path', async () => {
+    // Order is not cosmetic: the gate's path stays first so a reader of the
+    // Host log can tell the security injection from the feature ones.
+    expect((await servicesCall(FEATURE)).additionalExtensionPaths).toEqual([
+      '/bundle/pi-permission-system',
+      '/bundle/rpiv-ask-user-question',
+      '/bundle/pi-subagents',
+    ]);
+  });
+
+  it('refuses the session when only a feature extension loaded', async () => {
+    // THE fail-open trap. `verifyPermissionExtensionLoaded` accepts any path
+    // under an injected root as proof the approval gate is running, so if the
+    // feature paths were passed to it as well, this session — which loaded a
+    // subagent extension and no permission system — would start and report
+    // itself healthy.
+    await expect(
+      servicesCall(FEATURE, { loadedPaths: ['/bundle/pi-subagents/src/index.ts'] })
+    ).rejects.toThrow(PermissionGateUnavailableError);
+  });
+
+  it('starts normally when a feature extension is missing', async () => {
+    // Opposite posture from the permission system: one feature is gone, and
+    // everything else is exactly as safe as it was.
+    const skipped = {
+      paths: [],
+      skipped: [
+        { package: '@gotgenes/pi-subagents', reason: 'not_present' as const, detail: 'no dir' },
+      ],
+    };
+    const logged: unknown[][] = [];
+    const h = harness();
+    const result = await bootstrapPiAgentSession({
+      sdk: h.sdk,
+      cwd: '/repo',
+      projectTrusted: false,
+      extensionUi: h.extensionUi,
+      decidePermissionGate: () => h.gate,
+      resolveFeaturePlugins: () => skipped,
+      log: (...args) => logged.push(args),
+    });
+    expect(result.permissionGate).toBe('bundled');
+    // Silence here would make "the feature never appeared" undiagnosable.
+    expect(logged.flat().join(' ')).toContain('@gotgenes/pi-subagents');
+  });
+});

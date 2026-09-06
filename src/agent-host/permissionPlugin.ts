@@ -62,18 +62,15 @@ export const PERMISSION_PLUGIN_PACKAGE = '@gotgenes/pi-permission-system';
 const PERMISSION_PLUGIN_UNSCOPED = PERMISSION_PLUGIN_PACKAGE.split('/').pop() as string;
 
 /**
- * Where the bundled copy lives, relative to the Host entry.
+ * The directory holding the running Host entry (bundled or TS source).
  *
- * The same shape in dev and packaged, which is why it is a constant rather than
- * two branches: esbuild emits `out-agent-host/worker.js` beside the pruned
- * `out-agent-host/node_modules/`, and in dev `src/agent-host/worker.ts` sits
- * beside `src/agent-host/node_modules/`. The Pi SDK is already resolved this way
- * (T04) — this is the same sibling-node_modules contract, not a new one.
+ * Exported because every bundled package resolves the same way: esbuild emits
+ * `out-agent-host/worker.js` beside the pruned `out-agent-host/node_modules/`,
+ * and in dev `src/agent-host/worker.ts` sits beside
+ * `src/agent-host/node_modules/`. The Pi SDK is already resolved this way (T04)
+ * — this is the same sibling-node_modules contract, not a new one.
  */
-const BUNDLED_RELATIVE_PATH = ['node_modules', '@gotgenes', 'pi-permission-system'];
-
-/** The directory holding the running Host entry (bundled or TS source). */
-function hostDirectory(): string {
+export function hostDirectory(): string {
   return dirname(fileURLToPath(import.meta.url));
 }
 
@@ -99,7 +96,7 @@ function readPackageName(packageDir: string): string | undefined {
  */
 export type PermissionPluginProblem = 'not_present' | 'half_copied' | 'wrong_package';
 
-export interface BundledPermissionPluginLookup {
+export interface BundledPackageLookup {
   /** Absolute path to hand to `additionalExtensionPaths`, when usable. */
   path?: string;
   problem?: PermissionPluginProblem;
@@ -107,21 +104,30 @@ export interface BundledPermissionPluginLookup {
   detail?: string;
 }
 
+export type BundledPermissionPluginLookup = BundledPackageLookup;
+
 /**
- * Locate the bundled plugin directory and say precisely what is wrong when it
+ * Locate a bundled package directory and say precisely what is wrong when it
  * cannot be used.
  *
  * Verified by READING `package.json` rather than by `existsSync` on the
  * directory: an empty or partially copied directory would otherwise be reported
- * as a working plugin, and the failure would then surface as "no prompts ever
- * appeared" — the one symptom indistinguishable from "nothing needed approval".
+ * as working, and for the permission system that failure surfaces as "no prompts
+ * ever appeared" — the one symptom indistinguishable from "nothing needed
+ * approval".
+ *
+ * Generalised in R03 so the bundled feature plugins resolve through the same
+ * three checks. What differs between callers is only what they DO with a
+ * problem: a missing permission system refuses the session, a missing feature
+ * plugin is logged and skipped.
  */
-export function lookupBundledPermissionPlugin(
+export function lookupBundledPackage(
+  packageName: string,
   baseDir = hostDirectory()
-): BundledPermissionPluginLookup {
-  const root = join(baseDir, ...BUNDLED_RELATIVE_PATH);
+): BundledPackageLookup {
+  const root = join(baseDir, 'node_modules', ...packageName.split('/'));
   if (!existsSync(root)) {
-    return { problem: 'not_present', detail: `no bundled plugin directory at ${root}` };
+    return { problem: 'not_present', detail: `no bundled package directory at ${root}` };
   }
   const name = readPackageName(root);
   if (name === undefined) {
@@ -130,13 +136,19 @@ export function lookupBundledPermissionPlugin(
       detail: `${root} exists but its package.json is missing or unreadable`,
     };
   }
-  if (name !== PERMISSION_PLUGIN_PACKAGE) {
+  if (name !== packageName) {
     return {
       problem: 'wrong_package',
-      detail: `${root} declares itself as "${name}", not ${PERMISSION_PLUGIN_PACKAGE}`,
+      detail: `${root} declares itself as "${name}", not ${packageName}`,
     };
   }
   return { path: root };
+}
+
+export function lookupBundledPermissionPlugin(
+  baseDir = hostDirectory()
+): BundledPermissionPluginLookup {
+  return lookupBundledPackage(PERMISSION_PLUGIN_PACKAGE, baseDir);
 }
 
 /**
@@ -246,24 +258,33 @@ export interface PermissionPluginMatchOptions {
  * gate; see {@link permissionPluginConfiguredByUser}, where a match must ALSO be
  * shown to load extensions.
  */
-export function packageSourceIsPermissionPlugin(
+export function packageSourceMatches(
   source: string,
+  packageName: string,
   options: PermissionPluginMatchOptions = {}
 ): boolean {
+  const unscoped = packageName.split('/').pop() as string;
   const parsed = describePackageSource(source);
   if (parsed.kind === 'npm') {
-    return parsed.name === PERMISSION_PLUGIN_PACKAGE;
+    return parsed.name === packageName;
   }
   if (parsed.kind === 'git') {
-    return parsed.name === PERMISSION_PLUGIN_UNSCOPED;
+    return parsed.name === unscoped;
   }
   const read = options.readPackageName ?? readPackageName;
   const resolved = options.resolveLocalPath?.(parsed.path ?? source);
   if (resolved) {
     const declared = read(resolved);
-    if (declared !== undefined) return declared === PERMISSION_PLUGIN_PACKAGE;
+    if (declared !== undefined) return declared === packageName;
   }
-  return parsed.name === PERMISSION_PLUGIN_UNSCOPED;
+  return parsed.name === unscoped;
+}
+
+export function packageSourceIsPermissionPlugin(
+  source: string,
+  options: PermissionPluginMatchOptions = {}
+): boolean {
+  return packageSourceMatches(source, PERMISSION_PLUGIN_PACKAGE, options);
 }
 
 /**
@@ -330,17 +351,25 @@ function entrySource(entry: unknown): string | undefined {
  * being wrong in this direction is a duplicate prompt; the cost of being wrong
  * in the other direction is no permission system at all.
  */
-export function permissionPluginConfiguredByUser(
+export function packageConfiguredByUser(
   packages: unknown,
+  packageName: string,
   options: PermissionPluginMatchOptions = {}
 ): boolean {
   if (!Array.isArray(packages)) return false;
   return packages.some((entry) => {
     const source = entrySource(entry);
     if (!source) return false;
-    if (!packageSourceIsPermissionPlugin(source, options)) return false;
+    if (!packageSourceMatches(source, packageName, options)) return false;
     return packageEntryLoadsExtensions(entry as PiPackageSource);
   });
+}
+
+export function permissionPluginConfiguredByUser(
+  packages: unknown,
+  options: PermissionPluginMatchOptions = {}
+): boolean {
+  return packageConfiguredByUser(packages, PERMISSION_PLUGIN_PACKAGE, options);
 }
 
 // ─── did it actually load? ───

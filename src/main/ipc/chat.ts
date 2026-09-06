@@ -569,6 +569,42 @@ export function registerChatHandlers(): void {
     }
   );
 
+  /**
+   * R02-b — the composer's command menu.
+   *
+   * No `requireIndexedPiSession` and no `claimSessionForSender`, unlike every
+   * neighbour here. This is a read that happens while the user types, including
+   * on the start screen where no session exists yet, and it does not act on a
+   * session — so gating it on one would turn the ordinary case into an error
+   * the renderer has to translate back into "no commands".
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_GET_SLASH_COMMANDS,
+    async (
+      _e,
+      payload: { sessionId?: string } = {}
+    ): Promise<Awaited<ReturnType<typeof workerManager.getSlashCommands>>> =>
+      workerManager.getSlashCommands({
+        ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
+      })
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_COMPACT_SESSION,
+    async (
+      e,
+      payload: { sessionId: string; instructions?: string }
+    ): Promise<Awaited<ReturnType<typeof workerManager.compactSession>>> => {
+      await requireIndexedPiSession(payload.sessionId);
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      return workerManager.compactSession({
+        sessionId: payload.sessionId,
+        ...(payload.instructions ? { instructions: payload.instructions } : {}),
+        ownerWebContentsId,
+      });
+    }
+  );
+
   ipcMain.handle(
     IPC_CHANNELS.CHAT_GET_SESSION_TREE,
     async (

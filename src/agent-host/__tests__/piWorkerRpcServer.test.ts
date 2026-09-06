@@ -474,3 +474,66 @@ describe('PiWorkerRpcServer', () => {
     expect(onDisposed).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * R02-a — routing the slash-command list.
+ *
+ * Asked by the composer as the user types `/`, so the two states that matter
+ * are "a session exists" and "one does not yet" — the second is the ordinary
+ * case on the start screen, not a fault.
+ */
+describe('PiWorkerRpcServer — worker.commands', () => {
+  function serverWith(overrides: Partial<PiWorkerRuntime> = {}) {
+    const messages: Array<Record<string, unknown>> = [];
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      createRuntime: () => runtime(overrides),
+    });
+    return { messages, server };
+  }
+
+  it('routes to the runtime and returns its list', async () => {
+    const commands = vi.fn(async () => ({
+      commands: [{ name: 'skill:pdf', source: 'skill' }],
+      truncated: false,
+    }));
+    const { messages, server } = serverWith({ commands });
+    server.receive(
+      request('bootstrap', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+
+    server.receive(request('cmds', 'worker.commands', { logicalSessionId: 'logical-1' }));
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(commands).toHaveBeenCalledWith({ logicalSessionId: 'logical-1' });
+    expect(messages[1]).toMatchObject({
+      requestId: 'cmds',
+      result: { commands: [{ name: 'skill:pdf', source: 'skill' }], truncated: false },
+    });
+  });
+
+  it('answers an un-bootstrapped worker with an empty list, not an error', async () => {
+    // The composer asks while the user types, and on the start screen there is
+    // no session yet. An error here would have to be translated back into "no
+    // commands" by every caller.
+    const { messages, server } = serverWith();
+    server.receive(request('cmds', 'worker.commands', { logicalSessionId: 'logical-1' }));
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    expect(messages[0]).toMatchObject({
+      requestId: 'cmds',
+      result: { commands: [], truncated: false },
+    });
+  });
+
+  it('rejects a payload without a session id', async () => {
+    const { messages, server } = serverWith();
+    server.receive(request('cmds', 'worker.commands', {}));
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    expect(messages[0]).toMatchObject({
+      requestId: 'cmds',
+      error: { code: 'WORKER_INVALID_PAYLOAD' },
+    });
+  });
+});

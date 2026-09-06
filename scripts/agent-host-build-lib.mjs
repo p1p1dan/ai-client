@@ -1,6 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import {
+  BUNDLED_FEATURE_PLUGINS,
+  bundledFeaturePluginEntryPaths,
+  bundledFeaturePluginPackages,
+} from '../src/agent-host/bundledPlugins.mjs';
 import { serializeDefaultPermissionPolicy } from '../src/agent-host/permissionPolicy.mjs';
 
 export const ESBUILD_EXTERNAL = ['@earendil-works/pi-coding-agent'];
@@ -8,6 +13,7 @@ export const ESBUILD_EXTERNAL = ['@earendil-works/pi-coding-agent'];
 export const REQUIRED_WORKER_PACKAGES = [
   '@earendil-works/pi-coding-agent',
   '@gotgenes/pi-permission-system',
+  ...bundledFeaturePluginPackages(),
 ];
 
 export const OBSOLETE_EXECUTION_PACKAGES = [
@@ -22,6 +28,9 @@ export const LICENSE_BEARING_PACKAGES = new Set([
   'tree-sitter-bash',
   'web-tree-sitter',
   'zod',
+  ...BUNDLED_FEATURE_PLUGINS.filter((plugin) => plugin.shipsLicenceFile).map(
+    (plugin) => plugin.package
+  ),
 ]);
 
 export const BUNDLED_PERMISSION_POLICY_REL =
@@ -209,6 +218,11 @@ export function verifyArtifact({ outDir }) {
     'node_modules/@gotgenes/pi-permission-system/package.json',
     'node_modules/@gotgenes/pi-permission-system/src/index.ts',
     'node_modules/tree-sitter-bash/tree-sitter-bash.wasm',
+    // R03: each bundled extension's own pi entry. The copy filter is asked about
+    // DIRECTORIES and skips the whole subtree on a no, so a filter mistake drops
+    // a package with every unit test still green. Asserting the entry file is
+    // what makes that failure loud.
+    ...bundledFeaturePluginEntryPaths(),
   ]) {
     mustExist(rel);
   }

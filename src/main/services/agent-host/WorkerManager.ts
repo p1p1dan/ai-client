@@ -20,6 +20,7 @@ import type { PiLeafCheckpoint, SessionTreeSnapshot } from '@shared/types/sessio
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
 import {
+  isWorkerCommandsResult,
   isWorkerDiscardForkResult,
   isWorkerExtensionUiResponseResult,
   isWorkerForkResult,
@@ -29,6 +30,11 @@ import {
   isWorkerSendResult,
   isWorkerStopResult,
   isWorkerTreeResult,
+  sanitizeWorkerCommandRows,
+  type WorkerCommandsPayload,
+  type WorkerCommandsResult,
+  type WorkerCompactPayload,
+  type WorkerCompactResult,
   type WorkerDiscardForkPayload,
   type WorkerDiscardForkResult,
   type WorkerExtensionInfo,
@@ -47,6 +53,7 @@ import {
   type WorkerSendResult,
   type WorkerSetPermissionTierPayload,
   type WorkerSetPermissionTierResult,
+  type WorkerSlashCommandInfo,
   type WorkerStopPayload,
   type WorkerStopResult,
   type WorkerTreePayload,
@@ -1005,6 +1012,81 @@ export class WorkerManager {
     };
     void task.then(clear, clear);
     return task.then(() => requestId);
+  }
+
+  /**
+   * R02-b — the slash commands available to the composer.
+   *
+   * Four ways this deliberately differs from every other read on this class:
+   *
+   *  - **No `requireReadySession`.** The composer asks while the user types,
+   *    and on the start screen there is no session at all. That is the ordinary
+   *    case, so it answers with an empty list instead of throwing.
+   *  - **No `assertIdleEntry`.** Listing commands is read-only, and the moment
+   *    it is needed is often mid-turn.
+   *  - **No `claimEntry`.** Reading a list is not taking ownership of a session.
+   *  - **Any ready worker will do.** In managed mode the command set does not
+   *    vary by working directory — project scope is withheld, and the agent dir
+   *    and `~/.agents` are fixed — so the nearest live worker is authoritative
+   *    for all of them. `sessionId` is honoured when it names a ready worker so
+   *    the answer is exact in local mode too, where project scope IS loaded.
+   *
+   * Not cached. The RPC is in-process message passing and the menu asks once
+   * per open, while a cache would keep a skill the user just installed hidden
+   * until something invalidated it.
+   */
+  async getSlashCommands(
+    input: { sessionId?: string } = {}
+  ): Promise<{ commands: WorkerSlashCommandInfo[]; truncated: boolean }> {
+    const named = input.sessionId ? this.entriesBySession.get(input.sessionId) : undefined;
+    const entry =
+      named?.state === 'ready' && named.slot
+        ? named
+        : [...this.entriesBySession.values()].find(
+            (candidate) => candidate.state === 'ready' && candidate.slot
+          );
+    if (!entry?.slot) return { commands: [], truncated: false };
+
+    const result = await entry.slot.request<WorkerCommandsResult, WorkerCommandsPayload>(
+      'worker.commands',
+      { logicalSessionId: entry.logicalSessionId }
+    );
+    // A malformed list costs the menu, never the session: unlike a tree or a
+    // history page, nothing downstream acts on these rows.
+    if (!isWorkerCommandsResult(result)) return { commands: [], truncated: false };
+    return {
+      commands: sanitizeWorkerCommandRows(result.commands),
+      truncated: result.truncated === true,
+    };
+  }
+
+  /**
+   * R02-c — manual context compaction (`/compact`).
+   *
+   * A mutation, so unlike `getSlashCommands` above it takes the full guard set:
+   * the session must be ready, idle, and claimed by this window. pi aborts the
+   * running turn and never resumes it, so letting this through mid-turn would
+   * silently discard work the user is watching.
+   */
+  async compactSession(input: {
+    sessionId: string;
+    instructions?: string;
+    ownerWebContentsId?: number;
+  }): Promise<WorkerCompactResult> {
+    const entry = this.requireReadySession(input.sessionId);
+    this.assertIdleEntry(entry, 'compact the conversation');
+    this.claimEntry(entry, input.ownerWebContentsId);
+    const result = await entry.slot?.request<WorkerCompactResult, WorkerCompactPayload>(
+      'worker.compact',
+      {
+        logicalSessionId: entry.logicalSessionId,
+        ...(input.instructions ? { instructions: input.instructions } : {}),
+      }
+    );
+    if (!result || result.compacted !== true) {
+      throw new WorkerManagerError('worker_compact_failed', 'Pi worker could not compact');
+    }
+    return result;
   }
 
   async getSessionTree(input: {

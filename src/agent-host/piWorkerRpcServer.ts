@@ -13,6 +13,8 @@ import type { RuntimeEvent, RuntimeEventDraft } from '../shared/types/runtimeEve
 import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
 import {
   isWorkerBootstrapPayload,
+  isWorkerCommandsPayload,
+  isWorkerCompactPayload,
   isWorkerDiscardForkPayload,
   isWorkerDiscardImportedSessionPayload,
   isWorkerExtensionUiResponsePayload,
@@ -32,6 +34,10 @@ import {
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerBootstrapPayload,
   type WorkerBootstrapResult,
+  type WorkerCommandsPayload,
+  type WorkerCommandsResult,
+  type WorkerCompactPayload,
+  type WorkerCompactResult,
   type WorkerDiscardForkPayload,
   type WorkerDiscardForkResult,
   type WorkerDisposeResult,
@@ -79,6 +85,8 @@ export interface PiWorkerRuntime {
   startSend(input: WorkerSendPayload): Promise<WorkerSendResult>;
   history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult>;
   tree?(input: WorkerTreePayload): Promise<WorkerTreeResult>;
+  commands?(input: WorkerCommandsPayload): Promise<WorkerCommandsResult>;
+  compact?(input: WorkerCompactPayload): Promise<WorkerCompactResult>;
   rewind?(input: WorkerRewindPayload): Promise<WorkerRewindResult>;
   reload?(input: WorkerReloadPayload): Promise<WorkerReloadResult>;
   fork?(input: WorkerForkPayload): Promise<WorkerForkResult>;
@@ -99,6 +107,13 @@ export interface PiWorkerRpcServerOptions {
   port: PiWorkerMessagePort;
   generation: number;
   projectTrusted: boolean;
+  /**
+   * R01 — the user's own pi agent dir, whose skills and prompt templates every
+   * session in this process should also load. Process-level like
+   * `projectTrusted`, because it answers "where did this user install things",
+   * which no single session can change.
+   */
+  borrowResourcesFrom?: string;
   createRuntime?: (options: PiWorkerSessionOptions) => PiWorkerRuntime;
   createUtilityRuntime?: () => PiUtilityRuntime;
   loadSdk?: () => Promise<unknown>;
@@ -267,6 +282,12 @@ export class PiWorkerRpcServer {
         case 'worker.tree':
           await this.handleTree(request);
           break;
+        case 'worker.commands':
+          await this.handleCommands(request);
+          break;
+        case 'worker.compact':
+          await this.handleCompact(request);
+          break;
         case 'worker.rewind':
           await this.handleRewind(request);
           break;
@@ -430,6 +451,12 @@ export class PiWorkerRpcServer {
         // than a ternary so no future payload field can hand a scratch session
         // the trusted posture the process was not started with.
         projectTrusted: this.options.projectTrusted && request.payload.unbound !== true,
+        // R01: NOT withdrawn by `unbound`. Project trust is about what a cloned
+        // repo may configure; borrowing is about what this user installed for
+        // themselves, which a scratch directory has no bearing on.
+        ...(this.options.borrowResourcesFrom
+          ? { borrowResourcesFrom: this.options.borrowResourcesFrom }
+          : {}),
         emit: (event) => this.emitRuntimeEvent(event),
         loadSdk: this.options.loadSdk,
         log: this.log,
@@ -536,6 +563,45 @@ export class PiWorkerRpcServer {
       );
     }
     this.respondSuccess(request, await this.runtime.tree(request.payload));
+  }
+
+  /**
+   * R02-a — list the slash commands available in this session.
+   *
+   * A worker that is not bootstrapped answers with an EMPTY list rather than an
+   * error. This is asked by the composer as the user types `/`, and a session
+   * that has not started yet is the ordinary case there, not a fault — the
+   * caller would have to translate the error back into "no commands" anyway.
+   */
+  private async handleCommands(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerCommandsPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.commands requires logicalSessionId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime?.commands) {
+      this.respondSuccess(request, { commands: [], truncated: false });
+      return;
+    }
+    this.respondSuccess(request, await this.runtime.commands(request.payload));
+  }
+
+  private async handleCompact(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerCompactPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.compact requires logicalSessionId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime?.compact) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    this.respondSuccess(request, await this.runtime.compact(request.payload));
   }
 
   private async handleRewind(request: WorkerRpcRequest): Promise<void> {

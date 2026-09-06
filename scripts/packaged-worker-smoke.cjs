@@ -6,6 +6,18 @@ const { app, utilityProcess } = require('electron');
 const workerPath = process.argv.at(-1);
 if (!workerPath) throw new Error('usage: electron scripts/packaged-worker-smoke.cjs <worker.js>');
 
+/**
+ * R03 — kept as a literal rather than imported from `bundledPlugins.mjs`.
+ *
+ * This script is CommonJS and runs under Electron against the BUILT artifact;
+ * importing the source table would make the probe agree with the repo it was
+ * built from instead of checking the thing on disk.
+ */
+const BUNDLED_FEATURE_PLUGIN_PACKAGES = [
+  '@juicesharp/rpiv-ask-user-question',
+  '@gotgenes/pi-subagents',
+];
+
 function pidExists(pid) {
   try {
     process.kill(pid, 0);
@@ -94,6 +106,22 @@ async function main() {
     if (!bootstrap.ok || bootstrap.result?.bootstrapped !== true) {
       throw new Error(`bootstrap failed: ${JSON.stringify(bootstrap)}`);
     }
+
+    // R03 — the bundled feature extensions must be loaded, not merely copied.
+    // The artifact check upstream proves the FILES survived packaging; only pi
+    // itself can say it resolved and ran them, and that is the difference
+    // between "we shipped a plugin" and "the user has the feature". A packaged
+    // build that quietly loses one shows no symptom until a model asks a
+    // question and no dialog appears.
+    const loaded = bootstrap.result.extensions ?? [];
+    const describe = () => JSON.stringify(loaded.map((e) => ({ path: e.path, ok: e.loaded })));
+    for (const pkg of BUNDLED_FEATURE_PLUGIN_PACKAGES) {
+      const hit = loaded.find((entry) => entry.path?.includes(pkg));
+      if (!hit) throw new Error(`bundled extension ${pkg} did not load; got ${describe()}`);
+      if (hit.loaded === false) {
+        throw new Error(`bundled extension ${pkg} reported a load error: ${JSON.stringify(hit)}`);
+      }
+    }
     const workerPid = child.pid;
     if (!workerPid) throw new Error('utility worker has no pid after bootstrap');
 
@@ -113,7 +141,14 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
     if (pidExists(workerPid)) throw new Error(`worker pid ${workerPid} still exists after exit`);
-    console.log(JSON.stringify({ ok: true, workerPid, sessionFile: bootstrap.result.sessionFile }));
+    console.log(
+      JSON.stringify({
+        ok: true,
+        workerPid,
+        sessionFile: bootstrap.result.sessionFile,
+        bundledExtensions: BUNDLED_FEATURE_PLUGIN_PACKAGES.length,
+      })
+    );
   } finally {
     try {
       child?.kill();

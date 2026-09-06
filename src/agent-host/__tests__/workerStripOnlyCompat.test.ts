@@ -57,7 +57,12 @@ function walkWorkerGraph(): { files: string[]; extensionless: GraphProblem[] } {
       const [, clause, specifier] = match;
       if (specifier.startsWith('.')) {
         const typeOnly = /^\s*type[\s{]/.test(clause);
-        const suffixed = specifier.endsWith('.ts') || specifier.endsWith('.js');
+        // A real ESM extension. The rule exists for the CONVERSE (a bare
+        // '`./dog`' that Node would have to search for), not to outlaw
+        // `.mjs`/`.cjs`, which Node's ESM resolver resolves as-is. Loosening
+        // this to `.mjs` is what let R03's `bundledPlugins.mjs` live alongside
+        // the `.ts` files it imports.
+        const suffixed = /\.(ts|js|mjs|cjs)$/.test(specifier);
         if (!typeOnly && !suffixed) {
           extensionless.push({
             file: path.relative(repoRoot, file),
@@ -100,5 +105,17 @@ describe('Pi worker source is loadable under Node strip-only type removal', () =
 
   it('spells out the extension on every relative value import', () => {
     expect(extensionless).toEqual([]);
+  });
+
+  it('resolves a real ESM extension — `.mjs` is not a missing extension', () => {
+    // R03 singled out: `bundledFeaturePlugins.ts` imports `./bundledPlugins.mjs`.
+    // A naive value-import check that only accepts `.ts`/`.js` flags it, yet
+    // Node — including `--experimental-strip-types` in dev — resolves `.mjs`
+    // without any search. This case pins the distinction: the rule bans bare
+    // names, not ESM file types. Walking the graph below re-proves the real
+    // import resolves under strip-only, so the check cannot drift in either
+    // direction.
+    expect(files.some((file) => file.endsWith('bundledFeaturePlugins.ts'))).toBe(true);
+    expect(extensionless.some((p) => p.detail.includes('bundledPlugins.mjs'))).toBe(false);
   });
 });

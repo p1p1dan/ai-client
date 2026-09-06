@@ -223,6 +223,12 @@ function createHarness(
           },
         };
       }
+      if (type === 'worker.commands') {
+        return {
+          commands: [{ name: `skill:from-${sessionId}`, source: 'skill' }],
+          truncated: false,
+        };
+      }
       if (type === 'worker.fork.discard') return { discarded: true };
       if (type === 'worker.stop') return { stopped: true };
       if (type === 'worker.extensionUi.respond') return { handled: true };
@@ -2069,5 +2075,81 @@ describe('WorkerManager manager-level state', () => {
     // A late disposal recomputing the state must not resurrect it as ready.
     await h.manager.closeSession('s1');
     expect(h.manager.getStatus().state).toBe('stopped');
+  });
+});
+
+/**
+ * R02-b — the composer's command menu.
+ *
+ * This read is deliberately unlike every other one on WorkerManager: no ready
+ * session required, no idle assertion, no ownership claim. It is asked while
+ * the user types, including on the start screen where no session exists.
+ */
+describe('WorkerManager slash commands', () => {
+  it('forwards to a ready worker and returns its list', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+
+    await expect(h.manager.getSlashCommands({ sessionId: 's1' })).resolves.toEqual({
+      commands: [{ name: 'skill:from-s1', source: 'skill' }],
+      truncated: false,
+    });
+  });
+
+  it('answers with an empty list when no worker exists at all', async () => {
+    // The start screen. Throwing here would make every caller translate the
+    // error back into "no commands".
+    const h = createHarness();
+    await expect(h.manager.getSlashCommands()).resolves.toEqual({
+      commands: [],
+      truncated: false,
+    });
+  });
+
+  it('falls back to any ready worker when the named session has none', async () => {
+    // In managed mode the command set does not vary by working directory, so
+    // the nearest live worker is authoritative for all of them.
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+
+    await expect(h.manager.getSlashCommands({ sessionId: 'never-started' })).resolves.toEqual({
+      commands: [{ name: 'skill:from-s1', source: 'skill' }],
+      truncated: false,
+    });
+  });
+
+  it('does not require the session to be idle', async () => {
+    // The menu is needed exactly while a turn is running.
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    await h.manager.send({
+      sessionId: 's1',
+      attemptId: 'attempt-1',
+      text: 'hello',
+      ownerWebContentsId: 11,
+    });
+
+    await expect(h.manager.getSlashCommands({ sessionId: 's1' })).resolves.toMatchObject({
+      commands: [{ name: 'skill:from-s1' }],
+    });
+  });
+
+  it('drops a malformed row rather than failing the menu', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    record?.request.mockImplementation(async (type: string) =>
+      type === 'worker.commands'
+        ? {
+            commands: [{ name: 'good', source: 'skill' }, { source: 'nameless' }, null],
+            truncated: false,
+          }
+        : {}
+    );
+
+    await expect(h.manager.getSlashCommands({ sessionId: 's1' })).resolves.toEqual({
+      commands: [{ name: 'good', source: 'skill' }],
+      truncated: false,
+    });
   });
 });

@@ -3,6 +3,10 @@ import type { SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type { RuntimeEvent } from '../shared/types/runtimeEvents.ts';
 import type { PiLeafCheckpoint } from '../shared/types/sessionHistory.ts';
 import type { WorkerExtensionInfo } from '../shared/types/workerRpc.ts';
+import {
+  type BundledFeaturePluginResolution,
+  resolveBundledFeaturePlugins,
+} from './bundledFeaturePlugins.ts';
 import { readLoadedExtensionInventory } from './extensionInventory.ts';
 import type { PortableExtensionUiBridge } from './extensionUiBridge.ts';
 import { createPermissionActivityObserver } from './permissionActivity.ts';
@@ -17,6 +21,7 @@ import {
   samePiSessionPath,
 } from './piSessionPreflight.ts';
 import { PiWorkerSessionError } from './piWorkerErrors.ts';
+import { resolveBorrowedResourcePaths } from './userResourcePaths.ts';
 
 export interface PiSettingsManager {
   getGlobalSettings?: () => { packages?: unknown };
@@ -213,7 +218,15 @@ export interface BootstrapPiAgentSessionOptions {
   effort?: SessionEffortLevel;
   leafCheckpoint?: PiLeafCheckpoint;
   decidePermissionGate?: (packages: unknown[]) => PermissionPluginDecision;
+  /** R03 test seam over the bundled feature extension lookup. */
+  resolveFeaturePlugins?: (packages: unknown[]) => BundledFeaturePluginResolution;
   onPermissionActivity?: (payload: PermissionActivityPayload) => void;
+  /**
+   * R01 — the user's own pi agent dir, whose skills and prompt templates this
+   * session should also load. Absent means borrow nothing; Main sends it only
+   * when managed mode has moved the agent dir away from the user's own.
+   */
+  borrowResourcesFrom?: string;
   /** U12: additional inline extensions to register alongside the activity observer. */
   additionalExtensionFactories?: Array<{
     name: string;
@@ -398,13 +411,31 @@ export async function bootstrapPiAgentSession(
       log,
       onActivity: (payload) => options.onPermissionActivity?.(payload),
     });
+    // R01: resources only — never `additionalExtensionPaths`. Skills and
+    // templates are text that enters the context; an extension is code, and the
+    // user's copy of the permission system would collide with our patched one.
+    const borrowed = resolveBorrowedResourcePaths(options.borrowResourcesFrom, agentDir);
+    // R03: the bundled feature extensions. Kept in their OWN list — see
+    // `bundledFeaturePlugins.ts`: `verifyPermissionExtensionLoaded` accepts any
+    // injected root as proof the approval gate loaded, so merging these into
+    // `gate.additionalExtensionPaths` would let a feature plugin vouch for the
+    // permission system. They are joined here, at the call, and nowhere else.
+    const featurePlugins = (options.resolveFeaturePlugins ?? resolveBundledFeaturePlugins)(
+      packages
+    );
+    for (const skip of featurePlugins.skipped) {
+      log(`[pi] bundled extension skipped: ${skip.package} (${skip.reason})`, skip.detail);
+    }
+    const extensionPaths = [...gate.additionalExtensionPaths, ...featurePlugins.paths];
     const services = await options.sdk.createAgentSessionServices({
       cwd,
       agentDir,
       settingsManager,
       resourceLoaderOptions: {
-        ...(gate.additionalExtensionPaths.length > 0
-          ? { additionalExtensionPaths: gate.additionalExtensionPaths }
+        ...(extensionPaths.length > 0 ? { additionalExtensionPaths: extensionPaths } : {}),
+        ...(borrowed.skills.length > 0 ? { additionalSkillPaths: borrowed.skills } : {}),
+        ...(borrowed.promptTemplates.length > 0
+          ? { additionalPromptTemplatePaths: borrowed.promptTemplates }
           : {}),
         extensionFactories: [
           { name: 'aiclient-permission-activity', factory: activityObserver, hidden: true },

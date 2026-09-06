@@ -356,6 +356,10 @@ export const zhTranslations: Record<string, string> = {
   'Open in IDE': '在 IDE 中打开',
   'Open in {{app}}': '在 {{app}} 打开',
   'Open settings': '打开设置',
+  // R02-c slash command menu.
+  'Start a new conversation': '开始一个新对话',
+  'Archive this conversation': '归档当前对话',
+  'Compact the context of this conversation': '压缩当前对话的上下文',
   'Remote repository is not connected yet': '远程仓库尚未连接',
   'Open terminal': '在终端中打开',
   'Open with': '打开方式',
@@ -426,6 +430,34 @@ export const zhTranslations: Record<string, string> = {
   'Send a message to start this chat and see what it loads.':
     '发送一条消息启动这个对话后，才能看到它加载了什么。',
   'This chat loaded no plugins.': '这个对话没有加载任何插件。',
+  // R04: Settings → Resources. These are installation locations, not the
+  // rejected pix-style Resources navigation entry.
+  Resources: '资源',
+  'Pi Resources': 'Pi 资源',
+  'Install skills and prompt templates where Pi can load them reliably.':
+    '把技能与提示词模板安装到 Pi 能稳定加载的位置。',
+  'Loading resource settings...': '正在读取资源设置…',
+  'Shared skills': '共享技能',
+  Recommended: '推荐',
+  Skills: '技能',
+  'Prompt templates': '提示词模板',
+  'This cross-agent location is always loaded in managed mode, local mode, and the Pi TUI.':
+    '这个跨 Agent 共享位置在托管模式、本机模式与 Pi TUI 中都会加载。',
+  'Personal Pi directory': '个人 Pi 目录',
+  'Local setup reads this directory directly in GUI and Pi TUI. Managed GUI sessions can borrow its text resources without loading its settings, credentials, or plugins.':
+    '本机模式的 GUI 与 Pi TUI 都直接读取这个目录；托管 GUI 会话可以只借用其中的文本资源，不加载设置、凭据或插件。',
+  'Borrow personal Pi resources': '借用个人 Pi 资源',
+  'Applies to GUI sessions. Changing it reloads managed Pi workers; the embedded Pi TUI still uses only the app-managed directory.':
+    '只对 GUI 会话生效。切换后会重新加载托管 Pi worker；内嵌 Pi TUI 仍只使用本应用的托管目录。',
+  'Your current local setup already uses this directory. This switch is saved for managed mode.':
+    '当前本机模式已经直接使用这个目录；此开关会保存下来，供托管模式使用。',
+  'App-managed Pi directory': '本应用托管的 Pi 目录',
+  'Managed mode reads this app-profile directory in both GUI and Pi TUI sessions.':
+    '托管模式的 GUI 与 Pi TUI 会话都会读取这个应用配置档目录。',
+  'This app-profile directory becomes active when managed mode is used.':
+    '切换到托管模式后，这个应用配置档目录才会生效。',
+  'Open prompt templates folder': '打开模板目录',
+  'Opening...': '正在打开…',
   // U13: sidebar group for chats that never got a project folder — they run in
   // a throwaway directory, so they belong to no repository.
   'Temporary chats': '临时对话',

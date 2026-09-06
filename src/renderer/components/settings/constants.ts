@@ -18,6 +18,7 @@ export const SETTINGS_CATEGORIES = [
   'ai',
   'piModels',
   'piPermissions',
+  'piResources',
   'remote',
   'webInspector',
 ] as const;

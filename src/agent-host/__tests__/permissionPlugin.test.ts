@@ -266,7 +266,10 @@ describe('decidePermissionPlugin', () => {
     const decision = decidePermissionPlugin([], join(tmpdir(), 'definitely-not-here'));
     expect(decision.reason).toBe('missing');
     expect(decision.gated).toBe(false);
-    expect(decision.detail).toContain('no bundled plugin directory');
+    expect(decision.detail).toContain('no bundled package directory');
+    // R03 generalised the wording; what the detail has to carry is the path the
+    // reader must go look at, so assert that too rather than the prose alone.
+    expect(decision.detail).toContain(PERMISSION_PLUGIN_PACKAGE);
 
     const half = decidePermissionPlugin([], fixture(null));
     expect(half.gated).toBe(false);

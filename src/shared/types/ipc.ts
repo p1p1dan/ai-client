@@ -233,6 +233,11 @@ export const IPC_CHANNELS = {
   PI_MODELS_SYNC: 'piModels:sync',
   PI_MODELS_OPEN_ADMIN: 'piModels:openAdmin',
 
+  // R04 — Pi skills and prompt-template installation locations.
+  PI_RESOURCES_GET_SETTINGS: 'piResources:getSettings',
+  PI_RESOURCES_UPDATE_SETTINGS: 'piResources:updateSettings',
+  PI_RESOURCES_OPEN_PROMPTS: 'piResources:openPromptTemplates',
+
   // T08-c — the pi permission policy: read every scope, write the one we own.
   PI_PERMISSIONS_GET: 'piPermissions:get',
   PI_PERMISSIONS_UPDATE: 'piPermissions:update',
@@ -333,6 +338,10 @@ export const IPC_CHANNELS = {
   CHAT_ARCHIVE_SESSION: 'chat:archiveSession',
   CHAT_LOAD_HISTORY_PAGE: 'chat:loadHistoryPage',
   CHAT_GET_SESSION_TREE: 'chat:getSessionTree',
+  /** R02-b — slash commands for the composer's completion menu. */
+  CHAT_GET_SLASH_COMMANDS: 'chat:getSlashCommands',
+  /** R02-c — manual context compaction. */
+  CHAT_COMPACT_SESSION: 'chat:compactSession',
   CHAT_REWIND_SESSION: 'chat:rewindSession',
   CHAT_FORK_SESSION: 'chat:forkSession',
   /** Pi-only model catalog; no provider credential or base URL crosses IPC. */

@@ -37,6 +37,31 @@ export const PI_MODEL_MANAGEMENT_URL_ENV = 'PILAB_MODEL_CONFIG_URL';
 export const PI_PROJECT_TRUST_ENV = 'AICLIENT_PI_TRUST_PROJECT_CONFIG';
 
 /**
+ * R01 — the user's own pi agent dir, whose skills and prompt templates the Host
+ * should also load. Absent means borrow nothing.
+ *
+ * Managed mode moves `PI_CODING_AGENT_DIR` to `~/.pilab/pi-agent`, so anything
+ * installed the documented way (under `~/.pi/agent/`) stops being visible, with
+ * no message saying so. This carries the source directory back.
+ *
+ * Deliberately ONE value for both the switch and the target, unlike the
+ * tri-state above: an absent key here needs no separate reading, because "did
+ * not send a directory" and "do not borrow" are the same instruction, and an
+ * older Main build that sends nothing lands on the conservative side. Main owns
+ * the decision because it is the side that knows the credential mode and the
+ * user setting; the Host only resolves the two subdirectories and checks they
+ * exist.
+ *
+ * Scope is resources only. The Host must never turn this into an extension
+ * path: an extension is code, and the user's own copy of the permission system
+ * would collide with the patched one this app ships.
+ */
+export const PI_BORROW_RESOURCES_DIR_ENV = 'AICLIENT_PI_BORROW_RESOURCES_DIR';
+
+/** R01 — user setting behind {@link PI_BORROW_RESOURCES_DIR_ENV}. Absent = on. */
+export const PI_BORROW_USER_RESOURCES_SETTING_KEY = 'borrowUserPiResources';
+
+/**
  * Path of the catalog endpoint on the onboarding service (plan D05).
  *
  * The default URL is this path joined to the onboarding service address the
@@ -145,6 +170,23 @@ export interface PiModelManagementSettings {
   endpointUrl: string;
   state: PiModelSyncState;
   managed: boolean;
+}
+
+/** R04 — the three durable installation locations shown in Settings → Resources. */
+export interface PiResourceSettings {
+  managed: boolean;
+  borrowUserPiResources: boolean;
+  paths: {
+    sharedSkills: string;
+    userSkills: string;
+    userPromptTemplates: string;
+    managedSkills: string;
+    managedPromptTemplates: string;
+  };
+}
+
+export interface UpdatePiResourceSettingsRequest {
+  borrowUserPiResources: boolean;
 }
 
 export function parsePiModelRef(value: string): { provider: string; modelId: string } | null {
