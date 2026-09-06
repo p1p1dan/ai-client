@@ -99,7 +99,13 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     // D08 adds a third state to the same expression — `expanded` promotes the
     // column to an overlay — which is why the class list is now composed with
     // `cn()` instead of a ternary.
-    expect(shell).toContain('{!isTui && (editorOpen || fileIntentPending) && (');
+    //
+    // D13 (U26) drops the `!isTui` term. It was U03-a's, and it made the column
+    // unmountable while the terminal was up — which after D08 (files open ONLY
+    // here) meant clicking a file in TUI did nothing at all, the same
+    // zero-consumer deadlock round-10 ⑥ found. The two invariants this test
+    // exists for are unchanged and still asserted below.
+    expect(shell).toContain('{(editorOpen || fileIntentPending) && (');
     expect(shell).toContain("editorOpen && !expanded && 'min-w-0 shrink-0'");
     expect(shell).toContain("!editorOpen && 'hidden'");
     expect(shell).toContain(
@@ -183,7 +189,7 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
   it('the surface switcher lives on the dock rail, and nowhere else (D08)', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
     const dock = code(join(SHELL_DIR, 'LeftDock.tsx'));
-    const tabs = code(join(SHELL_DIR, 'SessionTabs.tsx'));
+    const bar = code(join(SHELL_DIR, 'SessionBar.tsx'));
     const layoutModel = code(join(SHELL_DIR, 'shellLayoutModel.ts'));
     // History of this one control, because it has moved four times and each
     // move overturned the last: A08 gave the panel a tab strip plus a rail
@@ -197,8 +203,8 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     expect(dock).toContain('selectSurface');
     // The center bar must NOT keep a second copy of the switcher: two readings
     // of `railOrder` is exactly how the two lists drift apart.
-    expect(tabs).not.toContain('derivePanelTabs');
-    expect(tabs).not.toContain('selectSurface');
+    expect(bar).not.toContain('derivePanelTabs');
+    expect(bar).not.toContain('selectSurface');
     // The complement the rail replaced may not creep back under its old name.
     expect(layoutModel).not.toContain('deriveRailVisible');
   });

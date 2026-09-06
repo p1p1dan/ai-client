@@ -1,11 +1,11 @@
 /**
- * Closing a center tab ends the conversation.
+ * Ending a conversation: stop its agent, keep the conversation.
  *
- * D08 shipped the tab strip with `closeSession` meaning "hide the tab": the
- * worker stayed up, the session kept its slot in the bounded pool, and the only
- * way to actually stop it was the dock's own Close item. That reads as a leak —
- * the user closed the thing and it kept running — so the X now detaches the
- * runtime, behind a confirmation.
+ * D09 gave this to the center tab's ✕. D12 deleted the tab strip, so the action
+ * moved to the sidebar row's context menu — but the action itself is unchanged
+ * and is the reason the file survived the strip. The rename (`closeSessionTab`
+ * → `endSessionRuntime`) is the point: with no tabs left, a name saying "tab"
+ * would describe nothing.
  *
  * What it deliberately does NOT do is remove the row from the dock. That is the
  * repo's other close (`closeSessionAndRemoveRow`), and the two are different
@@ -13,7 +13,7 @@
  * find it again; that one also takes it out of the list for the rest of the app
  * run. Permanent removal stays Archive.
  *
- * Kept out of `SessionTabs.tsx` so vitest can cover it: the repo's test
+ * Kept in its own `.ts` module so vitest can cover it: the repo's test
  * environment is `node` and collects `.ts` only.
  */
 import { useChatSessionsStore } from '@/stores/chatSessions';
@@ -47,7 +47,7 @@ function withoutKey<T>(map: Record<string, T> | undefined, key: string): Record<
  * way: a Host that never had the session has nothing to detach, and leaving the
  * renderer pretending otherwise is the worse of the two failures.
  */
-export async function endSessionForTab(sessionId: string): Promise<boolean> {
+export async function endSessionRuntime(sessionId: string): Promise<boolean> {
   let detached = true;
   try {
     await window.electronAPI.chat.closeSession({ sessionId });

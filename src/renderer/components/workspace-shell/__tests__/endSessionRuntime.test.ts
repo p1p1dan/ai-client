@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatProject, ChatWorkspace } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { endSessionForTab } from '../closeSessionTab';
+import { endSessionRuntime } from '../endSessionRuntime';
 import { buildSidebarFolders } from '../sidebarTree';
 
 /**
@@ -54,11 +54,11 @@ beforeEach(() => {
   seedSession();
 });
 
-describe('endSessionForTab', () => {
+describe('endSessionRuntime', () => {
   it('detaches the runtime and reports the acknowledgement', async () => {
     const api = stubChat(Promise.resolve({ requestId: 'req-1' }));
 
-    await expect(endSessionForTab('s1')).resolves.toBe(true);
+    await expect(endSessionRuntime('s1')).resolves.toBe(true);
 
     expect(api.closeSession).toHaveBeenCalledWith({ sessionId: 's1' });
   });
@@ -66,7 +66,7 @@ describe('endSessionForTab', () => {
   it('keeps the row in the dock so the conversation can be reopened', async () => {
     stubChat(Promise.resolve({ requestId: 'req-1' }));
 
-    await endSessionForTab('s1');
+    await endSessionRuntime('s1');
 
     const state = useChatSessionsStore.getState();
     const session = state.sessions.find((item) => item.id === 's1');
@@ -82,7 +82,7 @@ describe('endSessionForTab', () => {
   it('clears exactly the state that would make a reopen skip the resume', async () => {
     stubChat(Promise.resolve({ requestId: 'req-1' }));
 
-    await endSessionForTab('s1');
+    await endSessionRuntime('s1');
 
     const state = useChatSessionsStore.getState();
     // `useActivateSession` resumes only when the timeline is empty, and
@@ -99,7 +99,7 @@ describe('endSessionForTab', () => {
   it('parks the row at a status a later resume is allowed to run from', async () => {
     stubChat(Promise.resolve({ requestId: 'req-1' }));
 
-    await endSessionForTab('s1');
+    await endSessionRuntime('s1');
 
     expect(useChatSessionsStore.getState().sessions[0]?.status).toBe('disconnected');
   });
@@ -107,7 +107,7 @@ describe('endSessionForTab', () => {
   it('still resets local state when the detach IPC fails', async () => {
     stubChat(Promise.reject(new Error('host down')));
 
-    await expect(endSessionForTab('s1')).resolves.toBe(false);
+    await expect(endSessionRuntime('s1')).resolves.toBe(false);
 
     const state = useChatSessionsStore.getState();
     expect(state.hostBoundSessionIds).toEqual(['s2']);

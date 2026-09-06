@@ -14,6 +14,7 @@ import {
   Plus,
   Search,
   ShieldQuestion,
+  Square,
   Trash2,
   X,
 } from 'lucide-react';
@@ -42,16 +43,19 @@ import { MenuItem, MenuPopup } from '@/components/ui/menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { createChatSessionOnWorkspace } from '@/stores/chatSessionActions';
+import {
+  createChatSessionOnWorkspace,
+  createUnboundChatSession,
+} from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useExtensionUiStore } from '@/stores/extensionUi';
-import { useSessionTabsStore } from '@/stores/sessionTabs';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
 import {
   canCreateSessionOnWorkspace,
   shouldShowAddRepositoryEmptyState,
 } from './addRepositoryEntry';
 import { projectIdForRepo, workspaceIdFor } from './deriveChatWorkspaceTree';
+import { endSessionRuntime } from './endSessionRuntime';
 import {
   buildSidebarFolders,
   buildUnboundFolder,
@@ -156,9 +160,13 @@ export function LeftNav({
   const workspaces = useChatSessionsStore((state) => state.workspaces);
   const sessions = useChatSessionsStore((state) => state.sessions);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
-  // D08: which sessions have a center-column tab. Rows show it so "click =
-  // start" does not invite a second click on something already running.
-  const openSessionIds = useSessionTabsStore((state) => state.openSessionIds);
+  // D12 (U24): which sessions have a LIVE WORKER. With the tab strip gone this
+  // list is the only place "what is still running in the background" is stated,
+  // so the marker reads off the real thing (`session.created`/`session.resumed`
+  // add to this; `endSessionRuntime` removes) rather than off which tabs were
+  // open — a tab could outlive its worker, which is the confusion D09 was
+  // opened to fix.
+  const hostBoundSessionIds = useChatSessionsStore((state) => state.hostBoundSessionIds);
   const extensionUiPending = useExtensionUiStore((state) => state.pending);
   const pendingApprovalCountBySession = useMemo(() => {
     const counts = new Map<string, number>();
@@ -272,12 +280,22 @@ export function LeftNav({
   const canStartNewSession = canCreateSessionOnWorkspace(effectiveWorkspaceId, workspaces);
   // No folder selection visual (T-26 decision holds) — the title is the only
   // surface that makes the resolved target discoverable.
-  const newSessionButtonTitle = newSessionTarget.folderName
-    ? t('New session in {{folder}}', { folder: newSessionTarget.folderName })
-    : undefined;
+  // U22: the button is never disabled now, so the title carries the difference —
+  // it names the folder when there is one and says "temporary" when there is not,
+  // rather than leaving the user to guess where the chat landed.
+  const newSessionButtonTitle = !canStartNewSession
+    ? t('New temporary chat (no repository)')
+    : newSessionTarget.folderName
+      ? t('New session in {{folder}}', { folder: newSessionTarget.folderName })
+      : undefined;
 
   const handleNewSession = () => {
+    // U22: no targetable workspace is not "nothing to do" — it is exactly the
+    // unbound case U05 made sendable. This button used to return silently on a
+    // machine with no repository added, which was the only entry point to a
+    // session there, so the composer stayed permanently disabled.
     if (!effectiveWorkspaceId || !canStartNewSession) {
+      createUnboundChatSession();
       return;
     }
     createChatSessionOnWorkspace(effectiveWorkspaceId);
@@ -326,7 +344,7 @@ export function LeftNav({
                 row={row}
                 now={now}
                 active={activeSessionId === row.sessionId}
-                opened={openSessionIds.includes(row.sessionId)}
+                started={hostBoundSessionIds.includes(row.sessionId)}
                 pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
                 onSelect={() => handleSelectSession(row.sessionId)}
                 onClose={() => void close(row.sessionId)}
@@ -351,7 +369,6 @@ export function LeftNav({
             variant="outline"
             size="xs"
             className="h-6"
-            disabled={!canStartNewSession}
             title={newSessionButtonTitle}
             onClick={handleNewSession}
           >
@@ -445,7 +462,7 @@ export function LeftNav({
                         row={row}
                         now={now}
                         active={activeSessionId === row.sessionId}
-                        opened={openSessionIds.includes(row.sessionId)}
+                        started={hostBoundSessionIds.includes(row.sessionId)}
                         pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
                         onSelect={() => handleSelectSession(row.sessionId)}
                         onClose={() => void close(row.sessionId)}
@@ -616,7 +633,7 @@ export function LeftNav({
                               row={row}
                               now={now}
                               active={activeSessionId === row.sessionId}
-                              opened={openSessionIds.includes(row.sessionId)}
+                              started={hostBoundSessionIds.includes(row.sessionId)}
                               pendingApprovalCount={
                                 pendingApprovalCountBySession.get(row.sessionId) ?? 0
                               }
@@ -692,12 +709,12 @@ interface SessionRowProps {
   active: boolean;
   pendingApprovalCount: number;
   /**
-   * D08: this session has a center-column tab. Clicking a row now STARTS the
-   * session rather than switching to it, so the list has to say which ones are
-   * already started — otherwise the only feedback for "it is already open" is
-   * that nothing visibly happens, and the user clicks again.
+   * D12: this session has a live worker — it is started and still attached,
+   * whether or not it is the one on screen. Clicking a row STARTS the session,
+   * so the list has to say which ones already are; without it the only feedback
+   * for "it is already running" is that nothing visibly happens.
    */
-  opened: boolean;
+  started: boolean;
   onSelect: () => void;
   onClose: () => void;
   onRename: (title: string) => void;
@@ -712,7 +729,7 @@ function SessionRow({
   now,
   active,
   pendingApprovalCount,
-  opened,
+  started,
   onSelect,
   onClose,
   onRename,
@@ -723,6 +740,7 @@ function SessionRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(row.title);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false);
 
   const commitRename = () => {
     const trimmed = draft.trim();
@@ -802,21 +820,21 @@ function SessionRow({
           }}
           title={row.title}
         >
-          {/* D08's three-state marker, in one 6px slot so rows never jump:
-              filled = running, ring = started (has a tab), nothing = not started.
-              `busy` wins when both are true — "it is working" is the more urgent
-              of the two facts. */}
+          {/* The three-state marker, in one 6px slot so rows never jump:
+              filled = running, ring = started (a worker is attached in the
+              background), nothing = not started. `busy` wins when both are true
+              — "it is working" is the more urgent of the two facts. */}
           {row.busy ? (
             <span
               aria-hidden
               className="h-1.5 w-1.5 shrink-0 rounded-full bg-status-running"
               title={t('Running')}
             />
-          ) : opened ? (
+          ) : started ? (
             <span
               aria-hidden
               className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground"
-              title={t('Open in a tab')}
+              title={t('Running in the background')}
             />
           ) : null}
           {/* `min-w-20` is the whole point of this row's sizing (S2 b). The title is
@@ -925,12 +943,61 @@ function SessionRow({
             <Pencil className="size-4" />
             {t('Rename')}
           </MenuItem>
+          {/* D12: the home D09's action found after the tab strip was deleted.
+              Placed above Archive so the repo's three closes read in order of
+              severity — end the run, then remove from the list. Only offered
+              when there IS a run: on a session with no worker it would be a
+              menu item that does nothing. */}
+          {started && (
+            <MenuItem onClick={() => setEndConfirmOpen(true)}>
+              <Square className="size-4" />
+              {t('End conversation')}
+            </MenuItem>
+          )}
           <MenuItem variant="destructive" onClick={requestArchive}>
             <Archive className="size-4" />
             {t('Archive')}
           </MenuItem>
         </MenuPopup>
       </ContextMenuPrimitive.Root>
+
+      <AlertDialog open={endConfirmOpen} onOpenChange={setEndConfirmOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('End this conversation?')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('Ending “{{name}}” stops its agent and releases it from the background.', {
+                name: row.title,
+              })}
+              {row.busy && (
+                <span className="mt-2 block text-destructive">
+                  {t('This conversation is still running; its current turn will be cut off.')}
+                </span>
+              )}
+              <span className="mt-2 block text-muted-foreground">
+                {t('It stays in the chat list and reopening it will load its history again.')}
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button variant="outline" onClick={() => setEndConfirmOpen(false)}>
+              {t('Cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setEndConfirmOpen(false);
+                // Fire-and-forget: `endSessionRuntime` resets the local state
+                // whether or not the detach IPC lands, and a failed detach
+                // leaves nothing the user could act on from here.
+                void endSessionRuntime(row.sessionId);
+              }}
+            >
+              {t('End conversation')}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
 
       <AlertDialog open={archiveConfirmOpen} onOpenChange={setArchiveConfirmOpen}>
         <AlertDialogPopup>

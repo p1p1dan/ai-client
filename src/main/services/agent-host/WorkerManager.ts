@@ -237,11 +237,27 @@ function nonNegativeFinite(value: number, label: string): number {
   return value;
 }
 
-/** Product default: 4 normally, 3 on mid-range hosts, 2 on <=4 GiB hosts. */
+/** The ceiling `AICLIENT_PI_WORKER_CAPACITY` may raise the pool to (D12). */
+export const MAX_WORKER_CAPACITY = 10;
+
+/**
+ * Product default: 10 normally, 6 on mid-range hosts, 3 on <=4 GiB hosts.
+ *
+ * D12 raised these from 4 / 3 / 2. The user asked for "about 10 conversations
+ * at once", and the old ceiling made that impossible rather than slow: past
+ * capacity a new session does not queue, it fails with
+ * `worker_capacity_reached`.
+ *
+ * The memory tiers are kept, and are the reason the top number is not applied
+ * everywhere: a slot is a whole utilityProcess plus one model context, so on a
+ * 4 GiB machine ten of them would not be ten working conversations, it would be
+ * ten that swap. Degrading by host size is what makes the raised ceiling safe
+ * to ship as the default rather than an opt-in.
+ */
 export function resolveDefaultWorkerCapacity(totalMemoryBytes = os.totalmem()): number {
-  if (totalMemoryBytes <= 4 * 1024 ** 3) return 2;
-  if (totalMemoryBytes <= 8 * 1024 ** 3) return 3;
-  return 4;
+  if (totalMemoryBytes <= 4 * 1024 ** 3) return 3;
+  if (totalMemoryBytes <= 8 * 1024 ** 3) return 6;
+  return MAX_WORKER_CAPACITY;
 }
 
 /** Startup-only product configuration; the wire protocol never fixes capacity. */
@@ -252,9 +268,9 @@ export function resolveWorkerCapacity(
   const configured = env.AICLIENT_PI_WORKER_CAPACITY?.trim();
   if (!configured) return resolveDefaultWorkerCapacity(totalMemoryBytes);
   const parsed = Number(configured);
-  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 8) {
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > MAX_WORKER_CAPACITY) {
     throw new Error(
-      `AICLIENT_PI_WORKER_CAPACITY must be an integer from 1 to 8, received ${configured}`
+      `AICLIENT_PI_WORKER_CAPACITY must be an integer from 1 to ${MAX_WORKER_CAPACITY}, received ${configured}`
     );
   }
   return parsed;
@@ -611,7 +627,7 @@ export class WorkerManager {
             true
           );
         }
-        await this.retireAndDispose(victim, 'slot-replace');
+        await this.evictForCapacity(victim);
       }
 
       const cwd = normalizeWorkerPath(input.workspacePath, 'Workspace path');
@@ -837,7 +853,7 @@ export class WorkerManager {
             true
           );
         }
-        await this.retireAndDispose(victim, 'slot-replace');
+        await this.evictForCapacity(victim);
       }
 
       const durableKey = sessionWorkerKey(sessionFile);
@@ -1242,7 +1258,7 @@ export class WorkerManager {
               true
             );
           }
-          await this.retireAndDispose(victim, 'slot-replace');
+          await this.evictForCapacity(victim);
         }
 
         const sourceSlot = source.slot;
@@ -2006,6 +2022,32 @@ export class WorkerManager {
     const slot = entry.slot;
     await slot?.dispose(reason);
     if (slot) this.ownedSlots.delete(slot);
+  }
+
+  /**
+   * D12 (U24): reclaim an idle worker for a new session, and SAY SO.
+   *
+   * The reclamation itself is unchanged and predates this method — what was
+   * missing is that it was silent in both directions. The renderer kept the
+   * session in `hostBoundSessionIds`, so its next send would skip
+   * `createSession` and address a worker that no longer exists; and the user
+   * saw a conversation quietly stop being started with nothing to explain it.
+   *
+   * One `session.status` covers both: `disconnected` is the state the renderer
+   * needs, and `capacity_reclaimed` is the sentence it shows once.
+   *
+   * Deliberately NOT used by `reclaimIdleInternal`. The idle sweep is a
+   * separate line (15 minutes with no use, regardless of capacity) and D12
+   * left it alone; announcing it here would attribute a timeout to a full pool.
+   */
+  private async evictForCapacity(victim: ManagedSlot): Promise<void> {
+    const sessionId = victim.logicalSessionId;
+    await this.retireAndDispose(victim, 'slot-replace');
+    this.dispatch({
+      type: 'session.status',
+      sessionId,
+      payload: { status: 'disconnected', disconnectReason: 'capacity_reclaimed' },
+    });
   }
 
   private retireEntry(

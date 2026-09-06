@@ -4,6 +4,7 @@ import { decideSendPreamble } from '@/components/chat/sendPreamble';
 import {
   applyAutoSessionTitle,
   createChatSessionOnWorkspace,
+  createUnboundChatSession,
   materializeForkedChatSession,
   materializeIndexedPiChatSession,
   retargetChatSession,
@@ -228,6 +229,75 @@ describe('createChatSessionOnWorkspace (moved)', () => {
     const id = createChatSessionOnWorkspace('nope');
 
     expect(id).toBeNull();
+  });
+});
+
+describe('createUnboundChatSession (U22)', () => {
+  it('creates and selects a session on a machine with no workspace at all', () => {
+    // The reported dead end: a fresh install has no repository, so
+    // `createChatSessionOnWorkspace` returns null (asserted above) and there was
+    // no other way to get an `activeSessionId` — which `canSend` requires.
+    useChatSessionsStore.setState({ workspaces: [], sessions: [], recentSessionIds: [] });
+
+    const id = createUnboundChatSession();
+
+    const state = useChatSessionsStore.getState();
+    expect(state.sessions[0]?.id).toBe(id);
+    expect(state.activeSessionId).toBe(id);
+    expect(state.recentSessionIds[0]).toBe(id);
+  });
+
+  it('resolves to a null cwd, which is what makes it unbound', () => {
+    // `isUnboundSession` in ChatComposer is `Boolean(activeSessionId) && cwd === null`,
+    // so this null is the whole mechanism — a session that resolved to some
+    // placeholder path would spawn there instead of in its scratch directory.
+    useChatSessionsStore.setState({ workspaces: [], sessions: [] });
+
+    const id = createUnboundChatSession();
+    const state = useChatSessionsStore.getState();
+
+    expect(
+      resolveSendCwd({
+        activeSessionId: id,
+        sessions: state.sessions,
+        workspaces: state.workspaces,
+      })
+    ).toBeNull();
+  });
+
+  it('carries no workspacePath — the scratch directory is allocated on first send', () => {
+    // U13's `unbound.workspacePath` is a RESUME handle for a directory that
+    // already exists. Setting it at creation time would name a directory Main
+    // has not made yet, which is the fake-cwd failure U13 exists to prevent.
+    useChatSessionsStore.setState({ workspaces: [], sessions: [] });
+
+    createUnboundChatSession();
+
+    const session = useChatSessionsStore.getState().sessions[0];
+    expect(session?.workspaceId).toBe('');
+    expect(session?.projectId).toBe('');
+    expect(session?.unbound).toBeUndefined();
+  });
+
+  it('keeps existing sessions and does not disturb an existing workspace', () => {
+    const ws = makeWorkspace({ id: 'ws-a', path: '/a' });
+    const existing = makeSession({ id: 'existing', workspaceId: 'ws-a' });
+    useChatSessionsStore.setState({ workspaces: [ws], sessions: [existing] });
+
+    const id = createUnboundChatSession();
+
+    const state = useChatSessionsStore.getState();
+    expect(state.sessions).toHaveLength(2);
+    expect(state.sessions[1]).toBe(existing);
+    expect(state.workspaces).toEqual([ws]);
+    expect(
+      resolveSendCwd({
+        activeSessionId: 'existing',
+        sessions: state.sessions,
+        workspaces: state.workspaces,
+      })
+    ).toBe('/a');
+    expect(id).not.toBe('existing');
   });
 });
 

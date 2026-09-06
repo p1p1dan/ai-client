@@ -151,9 +151,21 @@ export function LeftDock({
     >
       <nav
         aria-label={t('Primary navigation')}
-        className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card pt-1 pb-2"
+        className="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card pb-2"
         style={{ width: DOCK_RAIL_WIDTH }}
       >
+        {/* U27: the rail starts BELOW the title row, not at the window's top
+            edge. Every other column in this shell opens with an `h-9` bar (the
+            panel's own `DockTitle`, the center's `SessionBar`, the editor's tab
+            strip), so a rail running the full height put its first icon on a
+            line of its own and nothing else lined up with it.
+
+            A spacer of the same `h-9` rather than a padding value: it is the
+            title row's height that this has to track, and reading it from the
+            same token is what keeps the two in step if that row ever changes.
+            The rail's old `pt-1` is dropped — with the spacer it would push the
+            icons 4px below the content they are meant to align with. */}
+        <div aria-hidden className="h-9 shrink-0" />
         {tabs.map((tab) => (
           <RailButton
             key={tab.id}

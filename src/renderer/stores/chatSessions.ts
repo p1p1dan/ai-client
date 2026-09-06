@@ -704,6 +704,17 @@ export function applyRuntimeEvent(
         sessionId,
         ...state.recentSessionIds.filter((id) => id !== sessionId),
       ].slice(0, 8);
+      // D12 (U24): the pool reclaimed this session's idle worker to make room.
+      // Dropping the host binding is the load-bearing half — left in place, the
+      // next send would skip `createSession` and address a worker that no
+      // longer exists. `messages` is deliberately KEPT: unlike ending a
+      // conversation on purpose, the user did not ask for this, and the
+      // transcript they were reading must not blank out under them. It costs a
+      // resume on the next send, which is exactly what reclamation trades away.
+      const hostBoundSessionIds =
+        event.payload.disconnectReason === 'capacity_reclaimed'
+          ? state.hostBoundSessionIds.filter((id) => id !== sessionId)
+          : state.hostBoundSessionIds;
       return {
         sessions: upsertSessionStatus(
           state.sessions,
@@ -711,6 +722,7 @@ export function applyRuntimeEvent(
           event.payload.status,
           event.payload.retry
         ),
+        hostBoundSessionIds,
         recentSessionIds,
       };
     }

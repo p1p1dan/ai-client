@@ -33,9 +33,17 @@ import { composerMenuItemClass } from './middleColumnLayout';
 interface ChatWelcomeCardProps {
   /** Opens the shared AddRepositoryDialog, owned by App. */
   onAddRepository?: (mode?: 'local' | 'remote' | 'ssh') => void;
+  /**
+   * U22 — starts an unbound chat. Passed ONLY when there is no active session,
+   * because that is the one state where this card's second sentence ("without
+   * one, this chat runs in a private temporary folder") described something the
+   * user could not reach: the composer below is disabled without a session, and
+   * on a machine with no repository `+ new` could not make one either.
+   */
+  onStartTemporaryChat?: () => void;
 }
 
-export function ChatWelcomeCard({ onAddRepository }: ChatWelcomeCardProps) {
+export function ChatWelcomeCard({ onAddRepository, onStartTemporaryChat }: ChatWelcomeCardProps) {
   const { t } = useI18n();
 
   return (
@@ -92,6 +100,15 @@ export function ChatWelcomeCard({ onAddRepository }: ChatWelcomeCardProps) {
           'Pick a folder to work on a project — the agent works inside it. Without one, this chat runs in a private temporary folder.'
         )}
       </p>
+      {onStartTemporaryChat && (
+        <button
+          type="button"
+          onClick={onStartTemporaryChat}
+          className="rounded-md px-2 py-1 text-meta text-muted-foreground underline-offset-4 transition-colors hover:bg-accent hover:text-foreground hover:underline"
+        >
+          {t('Just start chatting')}
+        </button>
+      )}
     </div>
   );
 }

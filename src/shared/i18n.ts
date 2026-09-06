@@ -1627,19 +1627,27 @@ export const zhTranslations: Record<string, string> = {
   // session tab strip, and U16's composition chart.
   'Primary navigation': '主导航',
   'Sessions and repositories': '会话与仓库',
-  'Open sessions': '已打开的会话',
-  'Close tab': '关闭标签页',
-  'Open in a tab': '已在标签页中打开',
-  // Closing a tab ends the conversation, so the copy has to say which parts are
-  // lost (the running turn) and which are not (the row, the history).
+  // D12 (U24) retired the tab strip; `Open sessions` / `Close tab` /
+  // `Open in a tab` went with it. The sidebar marker now states the real fact.
+  'Running in the background': '正在后台运行',
+  'No conversation open': '未打开对话',
+  // Ending a conversation has to say which parts are lost (the running turn)
+  // and which are not (the row, the history). Moved from the tab's ✕ to the
+  // sidebar row's context menu, so the copy names the session instead of "this".
   'End this conversation?': '结束这个对话？',
-  'Closing {{title}} stops its agent and releases it from the background.':
-    '关闭 {{title}} 会停止它的 agent，并把它从后台释放。',
+  'Ending “{{name}}” stops its agent and releases it from the background.':
+    '结束「{{name}}」会停止它的 agent，并把它从后台释放。',
   'This conversation is still running; its current turn will be cut off.':
     '这个对话还在运行，当前这一轮会被中断。',
   'It stays in the chat list and reopening it will load its history again.':
     '它仍然留在左栏会话列表里，重新打开会再次载入历史。',
   'End conversation': '结束对话',
+  // D12 decision three: reclamation used to be silent in both directions.
+  'A conversation moved to the background': '有一个对话已转入后台',
+  '“{{name}}” was stopped to make room for a new one. Open it to continue.':
+    '为了给新对话腾出位置，「{{name}}」已停止运行。点开它就能继续。',
+  'An older conversation was stopped to make room for a new one.':
+    '为了给新对话腾出位置，一个较早的对话已停止运行。',
   Composition: '构成',
   chars: '字符',
   'Message breakdown': '逐条消息',
@@ -1879,6 +1887,11 @@ export const zhTranslations: Record<string, string> = {
   // ON something.
   'Pick a folder to work on a project — the agent works inside it. Without one, this chat runs in a private temporary folder.':
     '想让 AI 在你的项目里干活，就选一个目录——AI 只在这个目录里操作。不选也能直接聊，这时会用一个私有的临时目录。',
+
+  // U22: the card said a chat could start without a folder, but with no session
+  // there was no way to start one. This is that way.
+  'Just start chatting': '直接开聊',
+  'New temporary chat (no repository)': '新建临时对话（没有仓库）',
 
   // T-27: Composer target bar (D22) — footer action rows (batch 3).
   // 'New Folder' already exists above (worktree/temp-session UI) — reused as-is.

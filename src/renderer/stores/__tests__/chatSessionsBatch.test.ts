@@ -376,6 +376,52 @@ describe('applyRuntimeEvents — fold semantics', () => {
     expect(applyRuntimeEvents(state, [])).toEqual({});
   });
 
+  it('D12: a capacity reclaim drops the host binding but keeps the transcript', () => {
+    const base = baseState({
+      sessions: [makeSession({ status: 'idle' })],
+      hostBoundSessionIds: [SESSION_ID, 'other'],
+      messages: { [SESSION_ID]: [makeMessage({ id: 'm1', role: 'user' })] },
+    });
+
+    const patch = applyRuntimeEvents(base, [
+      {
+        type: 'session.status',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+        payload: { status: 'disconnected', disconnectReason: 'capacity_reclaimed' },
+      },
+    ]);
+
+    // Load-bearing: a stale binding makes the next send skip `createSession`
+    // and address a worker the pool already disposed of.
+    expect(patch.hostBoundSessionIds).toEqual(['other']);
+    // Deliberately kept — unlike ending a conversation on purpose, the user did
+    // not ask for this, and the transcript they are reading must not blank out.
+    expect(patch.messages).toBeUndefined();
+  });
+
+  it('D12: an ordinary status change leaves the host binding alone', () => {
+    const base = baseState({
+      sessions: [makeSession({ status: 'running' })],
+      hostBoundSessionIds: [SESSION_ID],
+    });
+
+    const patch = applyRuntimeEvents(base, [
+      {
+        type: 'session.status',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+        payload: { status: 'disconnected' },
+      },
+    ]);
+
+    // `disconnected` alone is not a reclaim: a crash and a deliberate end reach
+    // it too, and those paths own their own bookkeeping.
+    expect(patch.hostBoundSessionIds).toEqual([SESSION_ID]);
+  });
+
   it('later session.status wins within one batch; recentSessionIds is not duplicated', () => {
     const base = baseState({
       sessions: [makeSession({ status: 'idle' })],

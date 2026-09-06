@@ -14,11 +14,9 @@ import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { usePresentationSwitch } from '@/components/chat/usePresentationSwitch';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { useChatSessionsStore } from '@/stores/chatSessions';
 import { isDiffTabActive } from '@/stores/diffTabTarget';
 import { useEditorStore } from '@/stores/editor';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
-import { useSessionTabsStore } from '@/stores/sessionTabs';
 import { useSettingsStore } from '@/stores/settings';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { EditorColumn } from './center/EditorColumn';
@@ -30,8 +28,9 @@ import {
   type ShellAllocation,
 } from './centerLayoutModel';
 import { LeftDock } from './LeftDock';
-import { SessionTabs } from './SessionTabs';
+import { SessionBar } from './SessionBar';
 import { ShellResizeHandle } from './ShellResizeHandle';
+import { useCapacityReclaimNotice } from './useCapacityReclaimNotice';
 import { useEditorWorktreeSync } from './useEditorWorktreeSync';
 import { useShellShortcuts } from './useShellShortcuts';
 import { useSyncChatWorkspaceTree } from './useSyncChatWorkspaceTree';
@@ -116,7 +115,7 @@ export function WorkspaceShell({
   const [centerResizing, setCenterResizing] = useState(false);
 
   const temporaryWorkspaceEnabled = useSettingsStore((state) => state.temporaryWorkspaceEnabled);
-  // D07: one instance, two consumers — `SessionTabs` renders the switch, the
+  // D07: one instance, two consumers — `SessionBar` renders the switch, the
   // chat column renders the terminal it switches to. Creating it in both would
   // give one terminal two ids.
   const presentation = usePresentationSwitch();
@@ -135,28 +134,13 @@ export function WorkspaceShell({
   // — see the hook for the deadlock that put it here.
   useEditorWorktreeSync();
 
-  /**
-   * D08 (U15-c): the ONE place `activeSessionId` becomes an open tab.
-   *
-   * Deliberately an effect on the active id rather than a call inside every
-   * activation path: sessions are activated from at least four places (the dock
-   * list, the tab strip, `createChatSessionOnWorkspace`, a fork), and adding an
-   * `openSession()` to each is how one of them ends up forgotten and produces a
-   * chat with no tab. Mirroring the outcome covers all of them, including any
-   * added later.
-   */
-  const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
-  const knownSessionIds = useChatSessionsStore((state) => state.sessions);
-  const openSession = useSessionTabsStore((state) => state.openSession);
-  const pruneSessions = useSessionTabsStore((state) => state.pruneSessions);
-  useEffect(() => {
-    openSession(activeSessionId);
-  }, [activeSessionId, openSession]);
-  useEffect(() => {
-    // Archived/closed sessions leave the list; their tabs must go with them, or
-    // the strip renders a tab whose session cannot be resolved.
-    pruneSessions(knownSessionIds.map((session) => session.id));
-  }, [knownSessionIds, pruneSessions]);
+  // D12: one sentence when the pool reclaims an idle conversation.
+  useCapacityReclaimNotice();
+
+  // D12 (U24): the open-tab mirror and its pruning effect went with the tab
+  // strip. `activeSessionId` is the whole answer to "what is the center column
+  // showing" again, so there is no second list to keep in step with it — which
+  // is what the mirror effect and `pruneSessions` existed to do.
 
   const dockRef = useRef<HTMLDivElement>(null);
   const [sidebarResizing, setSidebarResizing] = useState(false);
@@ -179,11 +163,9 @@ export function WorkspaceShell({
     return () => observer.disconnect();
   }, []);
 
-  // U03-a (D02): TUI is the layout at its limit — dock + one full-bleed
-  // terminal. The editor column collapses so the terminal owns everything right
-  // of the dock. `presentationMode` stays in settings (untouched, so D19's
-  // single-writer TUI handover is intact); this only suppresses the right
-  // column while it is 'tui'.
+  // `presentationMode` stays in settings (untouched, so D19's single-writer TUI
+  // handover is intact); this is only read here for the chrome that depends on
+  // which of the two the chat column is currently showing.
   const isTui = presentationMode === 'tui';
 
   // D08: `sidebarUserCollapsed` is now derived, not stored — a collapsed dock
@@ -197,9 +179,22 @@ export function WorkspaceShell({
     diffTabActive: !isTui && diffTabActive,
   });
   const chatVisible = isTui ? true : chrome.chatVisible;
-  // TUI shows neither the editor nor a pending file intent's hidden column, so
-  // the terminal (in the chat column) gets the whole center row.
-  const editorAllocated = !isTui && editorOpen;
+  /**
+   * D13 (U26): the editor column is allocated in TUI too.
+   *
+   * U03-a suppressed it here, under D02's reading that "TUI is the layout at
+   * its limit — dock plus one full-bleed terminal". That reading was made when
+   * the editor was one of several things the right side could hold; D08 then
+   * made the right column the ONLY place files open. The same line therefore
+   * stopped meaning "give the terminal more room" and started meaning "you
+   * cannot look at a file while the terminal is up" — which is what the user
+   * hit: clicking a file in TUI did nothing at all.
+   *
+   * The terminal still gets the whole center row whenever no file is open,
+   * because `editorOpen` is keyed off `tabs.length` — so the full-bleed case
+   * D02 wanted is still the default, it is just no longer forced.
+   */
+  const editorAllocated = editorOpen;
 
   const allocationInput = {
     shellWidth,
@@ -333,13 +328,13 @@ export function WorkspaceShell({
               style={chatVisible ? { width: 'var(--shell-chat-w)' } : undefined}
             >
               {/*
-                D08: the center column's bar is the session tab strip, and it
-                sits INSIDE the chat column rather than above chat ║ editor.
-                The right column has its own file-tab bar, so a bar spanning
-                both would put two bars on one column — the exact 「臃肿」 D07
-                spent a round removing.
+                D12: one bar for the one conversation on screen, still INSIDE
+                the chat column rather than above chat ║ editor. The right
+                column has its own file-tab bar, so a bar spanning both would
+                put two bars on one column — the exact 「臃肿」 D07 spent a
+                round removing.
               */}
-              <SessionTabs presentation={presentation} />
+              <SessionBar presentation={presentation} />
               <ChatWorkspace
                 className="min-w-0 flex-1"
                 onAddRepository={onAddRepository}
@@ -397,7 +392,7 @@ export function WorkspaceShell({
               the dock stays reachable — the same boundary `ContextPanel`'s
               overlay used.
             */}
-            {!isTui && (editorOpen || fileIntentPending) && (
+            {(editorOpen || fileIntentPending) && (
               <div
                 className={cn(
                   editorOpen && expanded && 'absolute inset-0 z-20 bg-background',

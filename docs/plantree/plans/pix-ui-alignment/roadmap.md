@@ -9,23 +9,34 @@
 
 | 分组 | 数量 | 说明 |
 |---|---|---|
-| Done | 22 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)）；**U13：免绑定会话跨重启可见性**、**U06-a：Run 面板**、**U07：Context 内容增强**（2026-09-04，[U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md) / [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）；**U04：左栏插件入口**（2026-09-04，[U04 evidence](./evidence/2026-09-04-u04-plugin-entry.md)）；**U14：壳层横条重排与双栏收敛**（2026-09-04，[U14 evidence](./evidence/2026-09-04-u14-shell-chrome-realignment.md)）；**U15：VSCode 式壳层重排**、**U16：上下文页图形化与折叠**（2026-09-05，[U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)）；**U17：bootstrap 冷启动超时**、**U18：思考强度极端档需声明**、**U19：关 Tab 即结束对话**（2026-09-05，[批次 9 evidence](./evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)）；**U06-b：上下文占用 donut + usage 行 + 底栏占用 chip**（2026-09-05，随 Pi 计划 T38 同批，[T38/U06-b evidence](../pi-backend-migration/evidence/2026-09-05-t38-runtime-usage-fields.md)）；**U21：下线实时 ↓ 输出 token 计数器**（2026-09-05，[D11](./decisions/011-retire-the-live-output-token-counter.md) / [evidence](./evidence/2026-09-05-retire-live-token-counter.md)） |
-| In Progress | 0 | — |
+| Done | 28 | **U25：窗口最小尺寸**、**U26：TUI 下也能看文件**（[D13](./decisions/013-editor-stays-available-in-tui.md)）、**U27：轨道与标题行对齐**（2026-09-06，[evidence](./evidence/2026-09-06-u25-u26-u27-layout-fixes.md)）；**U24：中栏回到单会话视图 + 后台并发**（2026-09-06，[D12](./decisions/012-single-session-view-and-background-concurrency.md) / [evidence](./evidence/2026-09-06-u24-single-session-view.md)）；**U22：免绑定开聊入口**、**U23：插件清单补听 `session.resumed`**（2026-09-06，[evidence](./evidence/2026-09-06-u22-u23-unbound-entry-and-plugin-resume.md)）；U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)）；**U13：免绑定会话跨重启可见性**、**U06-a：Run 面板**、**U07：Context 内容增强**（2026-09-04，[U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md) / [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）；**U04：左栏插件入口**（2026-09-04，[U04 evidence](./evidence/2026-09-04-u04-plugin-entry.md)）；**U14：壳层横条重排与双栏收敛**（2026-09-04，[U14 evidence](./evidence/2026-09-04-u14-shell-chrome-realignment.md)）；**U15：VSCode 式壳层重排**、**U16：上下文页图形化与折叠**（2026-09-05，[U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)）；**U17：bootstrap 冷启动超时**、**U18：思考强度极端档需声明**、**U19：关 Tab 即结束对话**（2026-09-05，[批次 9 evidence](./evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)）；**U06-b：上下文占用 donut + usage 行 + 底栏占用 chip**（2026-09-05，随 Pi 计划 T38 同批，[T38/U06-b evidence](../pi-backend-migration/evidence/2026-09-05-t38-runtime-usage-fields.md)）；**U21：下线实时 ↓ 输出 token 计数器**（2026-09-05，[D11](./decisions/011-retire-the-live-output-token-counter.md) / [evidence](./evidence/2026-09-05-retire-live-token-counter.md)） |
+| In Progress | 0 | 批次 13 全部落地，只剩一次累计 GUI 点验 |
 | Moved out | 0 | ~~U06-b → Pi 计划 T38~~ — T38 已关闭，U06-b 同批落地，回到 Done |
 | Dropped | 1 | U08-3 请求优先级（[Q12](./open-questions.md) 拍板不做） |
-| Superseded | 1 | U02 双栏/三栏开关 → 被 [D08](./decisions/008-vscode-dock-shell.md) 决定四整片作废 |
+| Superseded | 2 | U02 双栏/三栏开关 → 被 [D08](./decisions/008-vscode-dock-shell.md) 决定四整片作废；U15-c 会话 Tab 条 → 被 [D12](./decisions/012-single-session-view-and-background-concurrency.md) 决定一回退 |
 | Deferred | 2 | U10–U11 |
 
 **执行顺序**（批次，详见 execution-plan）：
 `U01 ✅ → U09 ✅ → U12 ✅ → U02+U03-a ✅ → U05+U03-b ✅ → U08-2 ✅ → U13 ✅ → U06-a+U07 ✅ → U04 ✅ → U14 ✅
 → 批次 8：U15-a ✅ → U15-b ✅ → U15-c ✅ → U15-d ✅ → U16 ✅ → 批次 10：U17–U19 ✅ → 批次 11：U06-b ✅
-→ 批次 12：U21 ✅`。
-**全部切片已落地**；批次 8 由 [D08](./decisions/008-vscode-dock-shell.md) 开立，
+→ 批次 12：U21 ✅ → 批次 13：U22 ✅ + U23 ✅ → U24 ✅ → U26 ✅ + U27 ✅ → U25 ✅`。
+批次 8 由 [D08](./decisions/008-vscode-dock-shell.md) 开立，
 按 [`docs/design/a11-vscode-shell-prototype.html`](../../../design/a11-vscode-shell-prototype.html) 施工。
-**外部阻塞已清零**——U06-b 随 Pi 计划 T38 于 2026-09-05 同批落地。Deferred 仍是 U10/U11。
+**批次 13 是累计 GUI 点验的产出**：用户 2026-09-06 在真实窗口跑完点验，报回五件事，
+其中四件是缺陷、一件是形态回退（[D12](./decisions/012-single-session-view-and-background-concurrency.md)）。
+顺序由用户拍板：先清两条明确缺陷，再动架构，布局调整放最后。
+U27 是 2026-09-06 追加的对齐诉求；U25 同日改为「限制窗口最小尺寸」而非压缩布局。Deferred 仍是 U10/U11。
 U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排位再插控件，同一块 JSX 只改一次。
 
 **新增决策**：
+- [D13](./decisions/013-editor-stays-available-in-tui.md)——**TUI 下也能看文件**：
+  编辑器列不再被 TUI 抑制。推翻 D02「TUI 是布局极限形态」那一条。
+  根因是一行代码的含义被后来的改动换掉了：U03-a 写它时「收右栏」是让宽度给终端，
+  D08 把编辑器搬进右栏后同一行变成了「终端开着就不能看文件」。
+- [D12](./decisions/012-single-session-view-and-background-concurrency.md)——**中栏回到单会话视图**：
+  删 Tab 条，点左栏那一行切换；并发上限 4→**10**（按内存降档保留）；回收空闲会话时提示一次。
+  推翻 D08 决定三与 D09。取证结论是**后台继续执行本就成立**——`isSafeToEvict` 的四条里
+  第二条就是「没有正在执行的回合」，Tab 的有无从未影响它。
 - ~~[D05](./decisions/005-two-column-run-surface.md)——双栏 rail 由「只有 Context」扩到「Context + Run」~~
   **Superseded by [D07](./decisions/007-two-column-is-two-columns-and-one-bar-per-column.md)**：
   双栏已无第三列可挂，Context 与 Run 一并退出双栏。
@@ -52,7 +63,119 @@ U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排
 Q09 由取证关闭；Q11 布局尺寸维持现值；Q12 请求优先级不做；
 Q13 免绑定会话跨重启可见性由 [D04](./decisions/004-unbound-session-index-visibility.md) 拍板走索引标记，落为 U13）。
 
-## Done — 批次 12（最新）
+## 批次 13（2026-09-06）— 全部落地
+
+累计 GUI 点验终于跑了，用户在真实窗口报回五件事。四件缺陷、一件形态回退。
+开工前逐条查过代码，根因都已定位（U25 除外，见该条）。
+
+### U22 — 全新状态下开不了聊 — **Done**（2026-09-06）
+
+用户不选工作目录直接发消息，输入框是禁用的，提示
+`Select a session in the left nav before sending…`；而同屏的欢迎卡写着「不选也能直接聊」。
+
+**根因**：`middleColumnLayout.ts:980` 的判定链里「有没有会话」这道闸排在
+「有没有工作目录」之前，而 `hasSession` 就是 `Boolean(activeSessionId)`
+（`ChatComposer.tsx:2367`）。U05 只拆了后一道闸。
+用户的截图是**全新状态**——左栏一个仓库都没有，也就没有任何会话可选，
+于是欢迎卡承诺的能力在这个状态下根本不存在。
+
+**落地形态**：新增 `createUnboundChatSession()`，形状照抄 U13 在 `sessionIndexMerge` 里
+确立的免绑定会话（空 `projectId`/`workspaceId`，**不设** `unbound.workspacePath`——
+那个字段是已存在目录的 resume 句柄，而目录要到首次发送才分配）。
+`+ New` 去掉 `disabled` 并在无仓库时走这条路；欢迎卡加「直接开聊」，
+**只在没有活动会话时**给出，否则会凭空多建会话。
+证据见 [U22/U23 evidence](./evidence/2026-09-06-u22-u23-unbound-entry-and-plugin-resume.md)。
+
+### U23 — 插件清单永远停在「发送一条消息…」 — **Done**（2026-09-06）
+
+对话已经启动，插件对话框仍显示「发送一条消息启动这个对话后，才能看到它加载了什么」。
+
+**根因**：`useSessionExtensions.ts:52` 只订阅 `session.created`，
+而点开已有会话走的是 resume，发的是 `session.resumed`（`WorkerManager.ts:1893`）。
+挂载时那次主动查询发生在 worker 建好之前，返回 `null`，之后再无第二次机会。
+同仓 `permissionGate.ts:68` 同时监听这两个事件，说明这是既有写法，U04 漏了一个。
+
+**落地形态**：订阅条件补上 `session.resumed`，一处改动。
+证据见 [U22/U23 evidence](./evidence/2026-09-06-u22-u23-unbound-entry-and-plugin-resume.md)。
+
+### U24 — 中栏回到单会话视图 + 后台并发 — **Done**（2026-09-06）
+
+按 [D12](./decisions/012-single-session-view-and-background-concurrency.md) 三条决定落地。
+
+**开工取证**：`isSafeToEvict` 的四条里第三条就是「没有正在执行的回合」，
+而 `claimEntry` 让「切走」只意味着「不再是前台」——**后台继续执行从来就成立**，
+Tab 没参与过这个判定。缺的是启动态提示、够用的上限、回收时的说明。
+
+**落地形态**：删 `SessionTabs.tsx` / `stores/sessionTabs.ts` / `sessionTabsModel.ts`
+与 `WorkspaceShell` 的两个镜像 effect；新增 `SessionBar.tsx`（标题 + 目录 + 新建 + GUI/TUI）。
+左栏启动态标记改读 `hostBoundSessionIds`（有没有活 worker）而非 `openSessionIds`（有没有 Tab）。
+`closeSessionTab.ts` → `endSessionRuntime.ts`，**U19 的确认框挂到左栏右键菜单**，
+排在 Archive 之前、仅在有 worker 时出现。
+并发默认 2/3/4 → **3/6/10**，`AICLIENT_PI_WORKER_CAPACITY` 上限 8 → 10。
+容量回收新增 `session.status` 的 `disconnectReason: 'capacity_reclaimed'`：
+渲染层据此清掉过期的 host 绑定（否则下次发送会寻址一个已消失的 worker）**但保留消息**，
+并弹一条 toast。**空闲扫描刻意不发这条**（另一条线，有反向断言守着）。
+
+276 files / 4219 tests 全绿，改写六个既有测试文件（逐条理由见 evidence 第六节），
+变异验证两条核心改动各自判红。
+证据见 [U24 evidence](./evidence/2026-09-06-u24-single-session-view.md)。
+
+### U25 — 窗口过窄时工具条按钮挤出画幅 — **Done**（2026-09-06）
+
+打开文件、窗口不够宽时，编辑器工具条最右端的展开/关闭按钮到了可视区外。
+
+**定性**：`centerLayoutModel.ts` 给聊天列 400px、编辑器列 520px 设了宽度地板，
+`centerWidth = Math.max(floors, row - panel)` 在空间不足时**故意溢出**而非压缩
+（`overflowWidth` 字段就是记这个）。用户那个窗口 1285px 宽，左栏加轨道约 374px，
+剩 911px 已经低于 920px 的地板。
+
+**方向已改（用户 2026-09-06 拍板）**：**不做复现、不做布局压缩**，改为**限制窗口最小尺寸**——
+在窗口小到会挤兑图标之前就不允许再缩。理由是压缩方案要在每个工具条上重新分配空间，
+而这些地板本来就是「再窄就没法用」的判断；与其让布局在地板以下继续退让，
+不如让窗口不要越过那条线。
+
+**落地形态**：新增 `src/shared/shellMinimums.ts`，
+`SHELL_MIN_WIDTH = 324(左栏展开最小) + 400(聊天) + 520(编辑器) = 1244`，
+`MainWindow.ts` 的 `minWidth: 685` 改为读它。**取左栏展开态而非收起态的 44px 轨道**——
+按轨道算是 964，但用户一打开面板溢出就回来了，地板要取「每种合法布局都放得下」的那个。
+放 `shared/` 是因为推导数字在渲染层、遵守它的窗口在 Main，任一侧留拷贝都会悄悄漂移；
+`shellMinimums.test.ts` 直接读渲染层源码核对。
+**原始现场从未复现**，1244 只有算术保证，留作点验看点。
+证据见 [U25/U26/U27 evidence](./evidence/2026-09-06-u25-u26-u27-layout-fixes.md)。
+
+### U26 — TUI 模式下点文件没有编辑器 — **Done**（2026-09-06）
+
+**根因不是缺陷代码，是一条过期的决定**：`WorkspaceShell.tsx:202`
+`editorAllocated = !isTui && editorOpen` 是 U03-a 按 D02 定的「TUI 是布局极限形态，
+终端独占」。D08 把编辑器搬进右栏之后，「收起右栏」等于「编辑器彻底消失」——
+同一行代码，含义被后来的改动换掉了。
+
+**已拍板（用户 2026-09-06）：TUI 下也能看文件**——编辑器与终端共存，
+终端不再独占中栏右侧。这推翻 U03-a 依据的 [D02](./decisions/002-layout-cwd-and-evidence-scope.md)
+「TUI 是布局极限形态」那一条；施工时补一条决策记录说明推翻理由
+（D08 把编辑器搬进右栏后，「收起右栏」的含义已经从「让终端更宽」变成「看不了文件」）。
+
+**落地形态**：见 [D13](./decisions/013-editor-stays-available-in-tui.md)。
+两处去掉 `isTui` 项（宽度分配与右栏挂载条件）。**D02 想要的形态没丢**——
+`editorOpen` 派生自 `tabs.length`，没开文件时 TUI 仍是「dock + 一整条终端」，只是不再被强制。
+`chatVisible` 与 `diffTabActive` 的 `isTui` 项**保持原样**：终端住在 chat 列里，
+TUI 下藏 chat 等于藏终端本身。
+证据见 [U25/U26/U27 evidence](./evidence/2026-09-06-u25-u26-u27-layout-fixes.md)。
+
+### U27 — 左栏图标轨道与右栏标题行对齐 — **Done**（2026-09-06）
+
+用户 2026-09-06：左侧的 VSCode 式图标轨道希望**整体下移**，
+与右侧栏目的标题栏对齐——轨道顶部从标题行下方开始，与「标题行下方的内容区」齐平。
+
+现状是轨道从窗口顶部一路到底（`44px` 全高），而它右边的面板、以及右栏，
+都各自有一条 `h-9` 标题行。三者顶边不齐。
+
+**落地形态**：`<nav>` 的第一个子元素改为 `h-9` 占位，并**去掉原来的 `pt-1`**
+（4px 内边距叠在 36px 占位上正好是要消除的那种错位）。用与标题行同一个 token
+而不是某个 padding 值——要跟随的就是那条横条的高度。
+证据见 [U25/U26/U27 evidence](./evidence/2026-09-06-u25-u26-u27-layout-fixes.md)。
+
+## Done — 批次 12
 
 ### U21 — 下线实时 `↓` 输出 token 计数器 — **Done**（2026-09-05）
 

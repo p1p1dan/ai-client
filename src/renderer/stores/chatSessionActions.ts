@@ -65,6 +65,54 @@ export function createChatSessionOnWorkspace(
   return sessionId;
 }
 
+/**
+ * U22 — start a chat that is not bound to any repository.
+ *
+ * U05 removed the "no working directory, no send" gate, but `canSend` still
+ * requires an `activeSessionId`, and the only way to get one was
+ * `createChatSessionOnWorkspace` — which needs a targetable workspace. On a
+ * machine with no repository added there is none, so `+ new` returned early and
+ * the welcome card's promise ("不选也能直接聊") had no path behind it at all.
+ *
+ * Shape follows U13's merge branch verbatim: empty `projectId`/`workspaceId` is
+ * what an unbound session looks like everywhere else in this store, so
+ * `resolveActiveTarget` finds no workspace, `cwd` is null, and
+ * `isUnboundSession` is true — the exact state the send path already handles.
+ *
+ * No `unbound.workspacePath` is set here: the scratch directory does not exist
+ * until the first send allocates it (`ensureScratchWorkspace` inside the
+ * handshake). Writing a guess would be a fake cwd of the kind U13 exists to
+ * prevent.
+ */
+export function createUnboundChatSession(title = 'New chat'): string {
+  const state = useChatSessionsStore.getState();
+  const sessionId = uniqueId('session');
+  const session: ChatSession = {
+    id: sessionId,
+    projectId: '',
+    workspaceId: '',
+    title,
+    status: 'idle',
+    updatedAt: Date.now(),
+  };
+
+  markSessionsLive([sessionId]);
+  useChatSessionsStore.setState({
+    sessions: [session, ...state.sessions],
+    activeSessionId: sessionId,
+    recentSessionIds: [sessionId, ...state.recentSessionIds.filter((id) => id !== sessionId)].slice(
+      0,
+      20
+    ),
+    lastError: null,
+  });
+
+  // Same lazy-indexing rule as `createChatSessionOnWorkspace`: nothing is
+  // written to `session-index.json` until the first send commits, so a chat
+  // the user opens and abandons does not survive a restart.
+  return sessionId;
+}
+
 /** Materialize a committed indexed Pi session and select it. */
 export function materializeIndexedPiChatSession(
   entry: SessionIndexEntry,

@@ -517,13 +517,19 @@ describe('WorkerManager identity and capacity', () => {
   });
 
   it('derives a resource-aware default and accepts only bounded startup overrides', () => {
-    expect(resolveDefaultWorkerCapacity(3 * 1024 ** 3)).toBe(2);
-    expect(resolveDefaultWorkerCapacity(6 * 1024 ** 3)).toBe(3);
-    expect(resolveDefaultWorkerCapacity(16 * 1024 ** 3)).toBe(4);
+    // D12 (U24) raised these from 2 / 3 / 4. Past capacity a new session does
+    // not queue — it fails with `worker_capacity_reached` — so the old ceiling
+    // made "about ten conversations at once" impossible rather than slow.
+    // The memory tiers stay: a slot is a whole utilityProcess plus one model
+    // context, so ten of them on a 4 GiB host would swap, not work.
+    expect(resolveDefaultWorkerCapacity(3 * 1024 ** 3)).toBe(3);
+    expect(resolveDefaultWorkerCapacity(6 * 1024 ** 3)).toBe(6);
+    expect(resolveDefaultWorkerCapacity(16 * 1024 ** 3)).toBe(10);
     expect(resolveWorkerCapacity({ AICLIENT_PI_WORKER_CAPACITY: '1' }, 16 * 1024 ** 3)).toBe(1);
+    expect(resolveWorkerCapacity({ AICLIENT_PI_WORKER_CAPACITY: '10' }, 4 * 1024 ** 3)).toBe(10);
     expect(() =>
-      resolveWorkerCapacity({ AICLIENT_PI_WORKER_CAPACITY: '9' }, 16 * 1024 ** 3)
-    ).toThrow(/integer from 1 to 8/);
+      resolveWorkerCapacity({ AICLIENT_PI_WORKER_CAPACITY: '11' }, 16 * 1024 ** 3)
+    ).toThrow(/integer from 1 to 10/);
   });
 
   it('reserves unique temporary keys then atomically remaps and persists identity', async () => {
@@ -651,6 +657,58 @@ describe('WorkerManager identity and capacity', () => {
       code: 'worker_capacity_reached',
       retryable: true,
     });
+  });
+
+  it('D12: announces a capacity eviction so the renderer can drop its stale binding', async () => {
+    let clock = 10;
+    const h = createHarness({ capacity: 2, now: () => clock });
+    await create(h.manager, 's1', 1);
+    clock = 20;
+    await create(h.manager, 's2', 2);
+    h.manager.releaseSession('s1');
+    h.events.length = 0;
+    clock = 30;
+    await create(h.manager, 's3', 3);
+
+    // Without this the renderer keeps `s1` in `hostBoundSessionIds`, so its
+    // next send skips `createSession` and addresses a worker that is gone.
+    const evicted = h.events.find(
+      (event) =>
+        event.type === 'session.status' &&
+        (event.payload as { disconnectReason?: string }).disconnectReason === 'capacity_reclaimed'
+    );
+    expect(evicted).toMatchObject({
+      sessionId: 's1',
+      payload: { status: 'disconnected', disconnectReason: 'capacity_reclaimed' },
+    });
+  });
+
+  it('D12: the idle sweep stays silent — it is a different line from capacity', async () => {
+    // Announcing a 15-minute timeout as `capacity_reclaimed` would tell the user
+    // the pool is full when it is not. D12 left the idle sweep alone.
+    let clock = 0;
+    const base = createHarness({ capacity: 3, now: () => clock });
+    const events: Array<Record<string, unknown>> = [];
+    const manager = new WorkerManager({
+      createSlot: base.createSlot as never,
+      bindRuntimeIdentity: async () => undefined,
+      capacity: 3,
+      idleTimeoutMs: 100,
+      idleSweepIntervalMs: 0,
+      now: () => clock,
+      onEvent: (event) => events.push(event as unknown as Record<string, unknown>),
+    });
+    await create(manager, 'idle');
+    clock = 150;
+    await manager.reclaimIdle();
+
+    expect(
+      events.some(
+        (event) =>
+          (event.payload as { disconnectReason?: string } | undefined)?.disconnectReason ===
+          'capacity_reclaimed'
+      )
+    ).toBe(false);
   });
 
   it('reclaims only expired safe idle slots', async () => {

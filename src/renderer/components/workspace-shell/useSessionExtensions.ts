@@ -47,9 +47,19 @@ export function useSessionExtensions(sessionId: string | null): {
   useEffect(() => {
     if (!sessionId) return () => undefined;
     return subscribeRuntimeEvent((event) => {
-      // `session.created` is the one event that means "a worker just finished
-      // bootstrapping", which is exactly when this list comes into existence.
-      if (event.type === 'session.created' && event.sessionId === sessionId) refresh();
+      // Both events mean "a worker just finished bootstrapping", which is
+      // exactly when this list comes into existence. `session.resumed` was
+      // missing until U23 and it is the one a session opened from the sidebar
+      // actually emits, so the fetch above — fired the moment `sessionId`
+      // changed, before any worker existed — stayed the only attempt and the
+      // panel was stuck on "send a message first" for an already-live chat.
+      // `permissionGate.ts` reads the same pair for the same reason.
+      if (
+        (event.type === 'session.created' || event.type === 'session.resumed') &&
+        event.sessionId === sessionId
+      ) {
+        refresh();
+      }
     });
   }, [sessionId, refresh]);
 

@@ -49,6 +49,21 @@ describe('U04 plugin entry', () => {
     expect(nav).not.toContain('derivePluginInventory');
   });
 
+  it('U23: refreshes on resume, not only on create', () => {
+    // The reported bug: an already-started chat opened from the sidebar sat on
+    // "send a message to start this chat" forever. Opening an existing session
+    // is a RESUME, which emits `session.resumed`; only `session.created` was
+    // subscribed, and the one eager fetch fired before any worker existed. The
+    // hook therefore never got a second chance to ask.
+    const hookPath = path.join(
+      process.cwd(),
+      'src/renderer/components/workspace-shell/useSessionExtensions.ts'
+    );
+    const hook = stripComments(readFileSync(hookPath, 'utf8'), hookPath);
+    expect(hook).toContain("event.type === 'session.created'");
+    expect(hook).toContain("event.type === 'session.resumed'");
+  });
+
   it('renders no badge when there is nothing to count', () => {
     // A `0` beside a plugin name reads as "your plugins are broken"; an absent
     // worker has simply not reported. The dialog says so in words instead.

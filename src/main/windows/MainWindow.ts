@@ -6,6 +6,7 @@ import { is } from '@electron-toolkit/utils';
 import { buildInitialAuthGateArg, resolveGateDecision } from '@shared/authGate';
 import { resolveSkipAuthGate } from '@shared/devFlags';
 import { translate } from '@shared/i18n';
+import { SHELL_MIN_HEIGHT, SHELL_MIN_WIDTH } from '@shared/shellMinimums';
 import type { AppCloseRequestPayload, AppCloseRequestReason } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import {
@@ -175,8 +176,12 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
     height: state.height,
     x: state.x,
     y: state.y,
-    minWidth: 685,
-    minHeight: 600,
+    // U25: derived, not a guess — see `shellMinimums.ts`. The old 685 let the
+    // window get narrow enough that the editor toolbar's expand/close buttons
+    // were laid out past the right edge, because the shell's allocator
+    // deliberately overflows instead of compressing below its content floors.
+    minWidth: SHELL_MIN_WIDTH,
+    minHeight: SHELL_MIN_HEIGHT,
     // macOS: hiddenInset 保留 traffic lights 按钮
     // Windows/Linux: hidden 隐藏标题栏，使用自定义 WindowTitleBar
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',

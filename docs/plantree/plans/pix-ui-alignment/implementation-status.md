@@ -1,14 +1,51 @@
 # Implementation Status — pix/pi-app UI 对齐改造
 
-**Current Phase**：**U06-b / U21 已落地，外部阻塞清零**。壳层仍按
-[D08](./decisions/008-vscode-dock-shell.md) 的 VSCode 式三栏。
-剩下的只有一次累计 GUI 点验与用户降优先级的 U10/U11。
+**Current Phase**：**批次 13 全部落地（U22–U27）**。累计 GUI 点验已于 2026-09-06
+由用户在真实窗口跑完，产出的五条反馈加一条追加诉求都已收口。
+壳层仍按 [D08](./decisions/008-vscode-dock-shell.md)，但它的两条已被本批推翻：
+中栏 Tab（[D12](./decisions/012-single-session-view-and-background-concurrency.md) 决定一）
+与 TUI 独占（[D13](./decisions/013-editor-stays-available-in-tui.md)，实际推翻的是 D02）。
 
-**Next Target**：**一次性 CDP GUI 点验**——用户 2026-09-04 明确「最后一起点验」，
-所以逐批点验一直后置到现在。批次 8 把点验清单整个换掉了（U14 那五条描述的 chrome 已被 D08 删除），
-新看点见 [roadmap U15/U16](./roadmap.md)。
+**Next Target**：**批次 13 的累计 GUI 点验**——六片全部只差真窗口确认，看点见下方 Active TODO 第 1 项。
 
-**Last Landed**：2026-09-05 **U21** 下线实时 `↓` 输出 token 计数器
+**Last Landed**：2026-09-06 **U25 + U26 + U27**（批次 13 收尾）。
+U26（[D13](./decisions/013-editor-stays-available-in-tui.md)）——TUI 下也能看文件。
+根因不是缺陷代码，是**一条过期的决定**：U03-a 写 `!isTui && editorOpen` 时「收右栏」
+的意思是把宽度让给终端，D08 把编辑器搬进右栏后同一行变成了「终端开着就不能看文件」。
+`editorOpen` 派生自 `tabs.length`，所以没开文件时 TUI 仍是「dock + 一整条终端」，
+D02 想要的形态没丢，只是不再被强制。
+U27——轨道第一个子元素改为 `h-9` 占位并去掉 `pt-1`，与面板标题行下方内容齐平。
+U25——**方向由用户改定**：不做复现与压缩，改为限制窗口最小尺寸。
+新增 `shared/shellMinimums.ts`，`SHELL_MIN_WIDTH = 324 + 400 + 520 = 1244`，
+取左栏**展开态**最小宽（按收起态的 44px 轨道算是 964，但用户一打开面板溢出就回来）。
+**278 files / 4227 tests 全绿**，变异验证 U26/U27 各自判红。
+证据见 [U25/U26/U27 evidence](./evidence/2026-09-06-u25-u26-u27-layout-fixes.md)。
+
+**同一天稍早**：2026-09-06 **U24** 中栏回到单会话视图 + 后台并发
+（[D12](./decisions/012-single-session-view-and-background-concurrency.md)）。
+开工取证先回答了用户的疑问：`isSafeToEvict` 的四条里第三条就是「没有正在执行的回合」，
+`claimEntry` 让「切走」只等于「不再是前台」——**后台继续执行一直成立，Tab 从未参与判定**。
+删 Tab 条与两个镜像 effect，新增 `SessionBar`；左栏启动态标记改读 `hostBoundSessionIds`
+（有没有活 worker）而非「有没有 Tab」；U19 的确认框挂到左栏右键菜单，`closeSessionTab.ts`
+随之改名 `endSessionRuntime.ts`。并发默认 2/3/4 → **3/6/10**，env 上限 8 → 10。
+容量回收现在发 `disconnectReason: 'capacity_reclaimed'`，渲染层据此清掉过期 host 绑定
+**但保留消息**，并弹一条 toast；**空闲扫描刻意不发**（另一条线，有反向断言）。
+**276 files / 4219 tests 全绿**，改写六个既有测试文件（逐条理由见 evidence 第六节），
+变异验证两条核心改动各自判红。
+证据见 [U24 evidence](./evidence/2026-09-06-u24-single-session-view.md)。
+
+**同一天稍早**：2026-09-06 **U22 + U23**（批次 13 第一片）。
+U22——`canSend` 的最后一道硬闸是 `activeSessionId`，而全新状态下四个出口全部关闭
+（`createChatSessionOnWorkspace` 返回 null、`handleNewSession` 空转、`+ New` 带 `disabled`、
+欢迎卡只给「选目录」），所以卡上那句「不选也能直接聊」在这个状态下没有任何路径。
+新增 `createUnboundChatSession()`（形状照抄 U13 的免绑定会话，**不预写**
+`unbound.workspacePath`——目录要到首次发送才分配）。
+U23——`useSessionExtensions` 只订 `session.created`，而点开已有会话发的是 `session.resumed`；
+挂载时那次查询早于 worker 建好，返回 null 后再无第二次机会。
+**275 files / 4210 tests 全绿**（新增 8 条），变异验证两条各自判红。
+证据见 [U22/U23 evidence](./evidence/2026-09-06-u22-u23-unbound-entry-and-plugin-resume.md)。
+
+**上一批**：2026-09-05 **U21** 下线实时 `↓` 输出 token 计数器
 （[D11](./decisions/011-retire-the-live-output-token-counter.md)）——用户在 U06-b 落地后点名处置
 T38 evidence 里那条欠项。取证给出的答案是**这不是「生产者还没接」**：pi 的 11 种事件里只有
 `turn_end` / `agent_end` 带 usage，流式的 `message_update` 没有 token 字段，
@@ -103,7 +140,12 @@ token 估算与手动刷新刻意不做，理由在 evidence 里。
 并把 hands-off / full access 的档位文案改成点明工作区边界。同批下线顶栏终端按钮与 ``Ctrl/Cmd+` ``。
 证据见 [U12 rev.2 evidence](./evidence/2026-09-04-u12-rev2-cross-directory-and-terminal-rail.md)。
 
-**Last Verified**：2026-09-05（批次 9 收尾，含 U20）—— 全仓 **271 files / 4162 tests pass**；
+**Last Verified**：2026-09-06（U25 + U26 + U27）—— 全仓 **278 files / 4227 tests pass**；
+`tsc --noEmit` pass；`biome check src/` 干净；`git diff --check` 干净。
+变异验证：回退 U26 的两处与 U27 的占位后两条断言各自判红，恢复后 5 条全绿；
+U25 的漂移守卫按构造即是变异验证（直接比对 Main 与渲染层两侧数值）。
+同日稍早：U24 276 files / 4219 tests；U22+U23 275 files / 4210 tests，变异验证均判红后恢复。
+**下方是上一次验证（2026-09-05 批次 9 收尾，含 U20），结论仍然有效** —— 全仓 **271 files / 4162 tests pass**；
 `tsc --noEmit` pass；`biome check src/` 干净；`git diff --check` 干净。
 批次 9 的真机验证：思考强度下拉只剩 `Default / Low / Medium / High`（持久化的 `Minimal`
 被 reconcile 成 Default）；关 Tab 弹确认框，确认后 Tab 消失、左栏 78 行不变、
@@ -125,22 +167,21 @@ store 记 `user_configured`、标签「你自己的策略」、菜单只剩两�
 > 上限五项（root registry 的维护规则）。六件「待真机验证」合并为一项——它们的性质相同：
 > 自动化已绿，缺的是一次真实 pi CLI / 真账号 / 真扩展 / 真慢冷启动的手动跑。
 
-1. **累计 GUI 点验（当前唯一的主动任务）** — U09 + U12 + U05/U03-b + U08-2 +
-   U13 临时分组 + U06-a Run 面板 + U07 对话构成 + U04 插件入口 + **U15 壳层重排 + U16 上下文页**，
-   一次 CDP 出图肉眼确认。U14 那五条看点作废（D08 删掉了它们描述的 chrome）。
-   **U15/U16 的六个看点**：① 轨道五个图标能切换且选中态可辨；② 面板标题行说明当前区；
-   ③ 点左栏会话在中栏新开 Tab、可多开、可关；④ 关 Tab 后会话仍在左栏列表里
-   （[D09](./decisions/009-tab-close-ends-conversation.md) 后仍成立：变的是它在后台还活不活）；
-   ⑤ 顶部再无双栏/三栏与「上下文面板」按钮；⑥ 打开文件才出现右栏，展开能盖住中栏。
-   **U15/U16 这六条已在真机验证通过**（真实 app + 真实会话数据，
-   截图存 [`evidence/2026-09-05-u15-shots/`](./evidence/2026-09-05-u15-shots/)）；
-   起不来的那次是本机 `HTTP_PROXY` 导致的挂死，小写 `no_proxy` 一加就好，与本批次改动无关。
-   **剩下要点验的是更早批次的项**（U09/U12/U05/U08-2/U13/U06-a/U07/U04），
-   外加 **U06-b 的三个新看点**：① 一回合结束后 Run 面板出现占用环且中心百分比与图例三行自洽；
-   ② Composer 底栏出现 `NN%` chip、hover 给绝对值；③ 跑一个有进度输出的工具时工具名下方出现状态行。
-   再加 **U21 的一条反向看点**：跑一个长回合，状态行只有 `✽` 加计时，**没有第二个数字**
-   （[D11](./decisions/011-retire-the-live-output-token-counter.md)）。
-2. **待真机验证（六件）** —
+1. **批次 13 累计 GUI 点验（当前唯一的主动任务）** — 六片自动化全绿，缺一次真窗口确认：
+   ① U22 全新状态下点 `+ New` 或「直接开聊」后输入框可用、发得出去；
+   ② U23 点开已有会话后插件对话框列出实际加载的插件，不再是「发送一条消息…」；
+   ③ U24 中栏无 Tab 条、点左栏直接切换、空心环出现在已启动但非前台的会话上、
+   右键有「结束对话」、开满 10 个后第 11 个弹出后台提示；
+   ④ U26 TUI 下点文件编辑器与终端并排，关掉最后一个标签终端收回整行；
+   ⑤ U27 左栏第一个图标与面板标题行下方内容齐平；
+   ⑥ U25 窗口拖到最窄时编辑器工具条右端按钮仍完整可见可点。
+2. **U24 的两笔欠账** — ① 10 个 worker 同时在跑时的真机内存占用未实测（自动化只验了
+   上限数字与分档函数）；② 空闲超时（15 分钟）仍不提示，用户撞上时同样会困惑
+   「为什么它自己停了」，D12 明确不动它，留作 open question。
+3. **U25 的两笔欠账** — ① 原始现场从未复现，1244px 只有算术保证；
+   ② `minWidth` 变大的代价未评估：1280×800 一类小屏现在无法把窗口缩窄，
+   退路是让左栏在窄窗口下先被压缩，再把地板降到收起态的 964px。
+4. **待真机验证（六件）** —
    ⓪ **U17 的 bootstrap 超时** 原始现场（`worker.bootstrap timed out after 10000ms`）本轮未复现，
    修改按代码路径判定、由单测锁住 60s 预算；下次真遇到冷启动慢时确认它不再中断 resume；
    ⓪′ **U18 的极端档** 反过来的一半没测：真给某模型声明 `thinkingLevelMap: { minimal: 'minimal' }`
@@ -152,16 +193,14 @@ store 记 `user_configured`、标签「你自己的策略」、菜单只剩两�
    [该缺陷记录](./evidence/2026-09-04-host-status-false-stop-and-tui-history-bug.md) 第三、四节）；
    ③ **U13 跨重启** 「聊天 → 退出 → 重开 → 点开」未在真机走过（索引读写、目录认领、resume 参数均有单测）；
    ④ **U04 的 MCP 徽标** 解析逻辑与 pix 同源，但本仓没有可跑通的 MCP 扩展，只有单测覆盖、没有真机样本。
-3. ~~**`user_configured` 路线下权限档恢复功能**~~ — **已决定不做**（用户 2026-09-05 拍板，
-   [D10 决定三](./decisions/010-user-configured-gate-explicit-degradation.md)）。
-   用户自己装了权限插件，就让他自己去 pi TUI 设置里改自己的策略。
-   「始终注入随包副本」与作为其前置的双插件加载语义探针**一并取消**，不再是欠项。
-   已落地的明示降级（[U20](./evidence/2026-09-05-user-configured-gate-degradation.md)）保留。
-4. **发布前需 `pnpm build:agent-host`** — `out-agent-host/` 里的插件副本与 `config.json` 停留在 09-02，
+5. **发布前需 `pnpm build:agent-host`** — `out-agent-host/` 里的插件副本与 `config.json` 停留在 09-02，
    连 `authorizerChain` 都没有；dev 不受影响，打包必须重建。
-5. **U15 的两处未验证行为** — ① fullscreen diff 藏掉会话 Tab 条是否可接受（备选方案已写在
-   evidence 第六节 §2）；② 多会话并发的真机资源表现未测（Tab 只是打开态，
-   worker 并发上限仍由 `WorkerManager` 的 bounded pool 决定，本批次没碰）。
+
+
+> 两项已出列：`user_configured` 权限档恢复功能于 2026-09-05 拍板不做
+> （[D10 决定三](./decisions/010-user-configured-gate-explicit-degradation.md)）；
+> U15 遗留的「fullscreen diff 藏掉 Tab 条」随 [D12](./decisions/012-single-session-view-and-background-concurrency.md)
+> 删掉 Tab 条一并消失，同条的「多会话并发资源表现」并入 U24。
 
 ## Blocked By
 

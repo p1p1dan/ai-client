@@ -876,13 +876,21 @@ describe('pinned wire facts', () => {
     expect(Object.keys(AGENT_DISPLAY_NAMES).sort()).toEqual([...AGENT_WIRE_NAMES].sort());
   });
 
-  it('[W-1] SessionStatusEvent.payload optional keys stay exactly {retry, liveness}', () => {
+  it('[W-1] SessionStatusEvent.payload optional keys stay exactly {retry, liveness, disconnectReason}', () => {
     // F2 (S0, 2026-08-18 watchdog redesign spec §3.4/§12.1): `liveness` rides
     // this payload as a THIRD optional field, same precedent as `retry`
     // (SessionRetryInfo, E11) — an optional-field addition, protocol version
-    // unchanged. This pins the SET so a later addition that types a fourth
+    // unchanged. This pins the SET so a later addition that types an extra
     // optional key straight onto the literal (instead of asking whether it
     // belongs on a new event type) breaks here first.
+    //
+    // D12 (U24) added a FOURTH, `disconnectReason`, and this pin is where that
+    // question got asked. It rides rather than getting its own event because it
+    // is not independently meaningful: it qualifies a `status` this payload
+    // already carries ("disconnected — and here is the one cause you could not
+    // have accounted for"), and a separate event would have to be correlated
+    // back to the status it explains. Contrast `session.stderr`, which became
+    // its own type precisely because it is an independent stream.
     const source = parse(RUNTIME_EVENTS_MODULE, read(RUNTIME_EVENTS_MODULE));
     let optionalKeys: string[] | undefined;
     eachNode(source, (node) => {
@@ -905,7 +913,7 @@ describe('pinned wire facts', () => {
           .map((m) => (m.name as ts.Identifier).text);
       }
     });
-    expect(optionalKeys?.sort()).toEqual(['liveness', 'retry']);
+    expect(optionalKeys?.sort()).toEqual(['disconnectReason', 'liveness', 'retry']);
   });
 
   it('[W-1a] SessionLivenessNote field set stays exactly {source, budgetMs, reason, degraded}, all required', () => {

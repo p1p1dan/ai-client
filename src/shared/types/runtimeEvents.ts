@@ -159,6 +159,21 @@ export interface SessionLivenessNote {
   degraded: boolean;
 }
 
+/**
+ * D12 (U24): why a session went `disconnected` without the user asking.
+ *
+ * Only ever set alongside `status: 'disconnected'`, and only for the ONE cause
+ * the user cannot otherwise account for: the pool was full and this session's
+ * idle worker was reclaimed to make room. Ending a conversation from the
+ * sidebar, closing the app and a crash all reach `disconnected` too, and none
+ * of them need explaining — the user did them, or already saw an error.
+ *
+ * A rider on `session.status` rather than a new event type, per the convention
+ * `SessionRetryInfo` set: old consumers ignore the extra key and keep reading
+ * the status they already understood.
+ */
+export type SessionDisconnectReason = 'capacity_reclaimed';
+
 export interface SessionStatusEvent extends RuntimeEventBase {
   type: 'session.status';
   sessionId: string;
@@ -166,6 +181,7 @@ export interface SessionStatusEvent extends RuntimeEventBase {
     status: SessionRuntimeStatus;
     retry?: SessionRetryInfo;
     liveness?: SessionLivenessNote;
+    disconnectReason?: SessionDisconnectReason;
   };
 }
 

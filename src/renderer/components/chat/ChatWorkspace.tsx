@@ -2,6 +2,7 @@ import { Play } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { createUnboundChatSession } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useExtensionUiStore } from '@/stores/extensionUi';
 import { useExtensionUiDisplayStore } from '@/stores/extensionUiDisplay';
@@ -279,7 +280,10 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
               a "pick a folder to start" card would be describing the past. */}
           {!hasWorkingDirectory && renderedMode === 'empty' && (
             <ReadingColumn>
-              <ChatWelcomeCard onAddRepository={onAddRepository} />
+              <ChatWelcomeCard
+                onAddRepository={onAddRepository}
+                {...(activeSessionId ? {} : { onStartTemporaryChat: createUnboundChatSession })}
+              />
             </ReadingColumn>
           )}
           <div className={middleColumnHostClass(renderedMode)}>

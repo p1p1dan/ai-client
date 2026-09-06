@@ -139,19 +139,22 @@ describe('workspace-shell dead-control invariant (T-23 / A06)', () => {
 });
 
 /**
- * D08 replaced `MainHeader.tsx` with `SessionTabs.tsx`. The pins that survive
- * are the ones about honesty, not about that component's own layout: the
- * hardcoded usage ring must stay gone, browser/preview must stay rail-entered
- * registry slots with no center-bar entry, and the workspace context that used
- * to be a permanent chip must still be REACHABLE (it moved into the active
- * tab's tooltip rather than being dropped).
+ * D08 replaced `MainHeader.tsx` with `SessionTabs.tsx`; D12 (U24) replaced that
+ * with `SessionBar.tsx`. The pins that survive two moves are the ones about
+ * honesty, not about any one component's layout: the hardcoded usage ring must
+ * stay gone, browser/preview must stay rail-entered registry slots with no
+ * center-bar entry, and the workspace context that used to be a permanent chip
+ * must still be REACHABLE (a path tooltip, first on the active tab and now on
+ * the bar's title).
  *
- * Dropped deliberately: the `HeaderIconButton` / title-tier / chip-shrink pins.
- * All three described chrome D08 deleted — the center bar has no icon buttons,
- * no `<h1>` title (each tab is the title) and no folder chip.
+ * Dropped deliberately, in two rounds: D08 retired the `HeaderIconButton` /
+ * title-tier / chip-shrink pins (that bar had no icon buttons, no `<h1>` and no
+ * chip); D12 retires the `max-w-52` tab-width pin with the tabs themselves. The
+ * shrink hazard it guarded is still pinned below — one bar with one title needs
+ * a truncating title just as much as a strip of them did.
  */
-describe('SessionTabs pins (D08, carried from MainHeader)', () => {
-  const CODE = codeOf(join(SHELL_DIR, 'SessionTabs.tsx'));
+describe('SessionBar pins (D12, carried from SessionTabs and MainHeader)', () => {
+  const CODE = codeOf(join(SHELL_DIR, 'SessionBar.tsx'));
 
   it('the hardcoded usage ring stays removed', () => {
     expect(CODE).not.toMatch(/UsageRing/);
@@ -163,16 +166,17 @@ describe('SessionTabs pins (D08, carried from MainHeader)', () => {
     expect(CODE).not.toMatch(/\bGlobe\b|\bAppWindow\b/);
   });
 
-  it('workspace context survives the move: the active tab carries a path tooltip (P-22)', () => {
+  it('workspace context survives the move: the bar carries a path tooltip (P-22)', () => {
     expect(CODE).toMatch(/TooltipTrigger/);
-    expect(CODE).toMatch(/workspacePath/);
+    expect(CODE).toMatch(/activeWorkspace\.path/);
   });
 
-  it('a tab yields its title before its chrome in the narrow crunch', () => {
+  it('the title yields before the bar chrome in the narrow crunch', () => {
     // Same hazard the retired header chip had: something in the row must be
-    // allowed to shrink, or the close button is pushed past overflow.
-    expect(CODE).toContain('min-w-0 flex-1 truncate');
-    expect(CODE).toContain('max-w-52');
+    // allowed to shrink, or the GUI/TUI switch is pushed past overflow.
+    expect(CODE).toContain('min-w-0 flex-1');
+    expect(CODE).toContain('truncate');
+    expect(CODE).toContain('shrink-0');
   });
 });
 

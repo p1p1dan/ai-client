@@ -28,12 +28,13 @@ const WORKSPACE = stripComments(
 );
 // D07 moved the temporary-chat marker up into the shell's single header bar and
 // the GUI/TUI switch's state into `usePresentationSwitch`; D08 replaced that
-// header with the session tab strip, which carries both. The chat column still
-// draws no bar of its own, so the U05-b / U03-b guarantees below are asserted
-// where the code now lives.
+// header with the session tab strip; D12 replaced the strip with a one-session
+// bar. All three carried both facts, and the chat column still draws no bar of
+// its own, so the U05-b / U03-b guarantees below are asserted where the code
+// now lives.
 const HEADER = stripComments(
-  readFileSync(path.join(__dirname, '..', '..', 'workspace-shell', 'SessionTabs.tsx'), 'utf8'),
-  'SessionTabs.tsx'
+  readFileSync(path.join(__dirname, '..', '..', 'workspace-shell', 'SessionBar.tsx'), 'utf8'),
+  'SessionBar.tsx'
 );
 const SWITCH = stripComments(
   readFileSync(path.join(__dirname, '..', 'usePresentationSwitch.ts'), 'utf8'),
@@ -79,11 +80,13 @@ describe('[U05-b] the composer can send without a bound folder', () => {
 });
 
 describe('[U05-b] the workspace shows the temporary marker and keeps the welcome path', () => {
-  it('marks an unbound chat on its tab', () => {
-    // D08: the marker rides the tab rather than a header, so it stays visible
-    // with several chats open — which is exactly when confusing a temporary
-    // chat for a bound one costs something.
-    expect(HEADER).toMatch(/tab\.unbound && \([\s\S]{0,400}Temporary/);
+  it('marks an unbound chat on the session bar', () => {
+    // The marker has to sit wherever the current chat is NAMED — mistaking a
+    // temporary chat for a bound one is what costs something, and the name is
+    // the only other thing on that bar. D08 put it on the tab; D12 put it back
+    // beside the single title. The sidebar's own `temporary` chip (U05-b) is
+    // unaffected and covered separately.
+    expect(HEADER).toMatch(/activeSession\?\.unbound && \([\s\S]{0,400}Temporary/);
   });
 
   it('still offers the GUI/TUI switch for a chat with no folder', () => {
