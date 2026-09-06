@@ -19,7 +19,10 @@ describe('T13 session context menu wiring', () => {
   it('right-click is owned by a context-menu trigger and has no direct archive handler', () => {
     const trigger = between('<ContextMenuPrimitive.Trigger', '</ContextMenuPrimitive.Trigger>');
 
-    expect(trigger).toContain('onClick={onSelect}');
+    // U31 made the click target mode-dependent: in selection mode it toggles
+    // the checkbox instead of activating the session. `onSelect()` is still the
+    // only thing that activates, and it is still reached from this one handler.
+    expect(trigger).toContain('onToggleSelect(row.sessionId) : onSelect()');
     expect(trigger).not.toContain('onContextMenu=');
     expect(trigger).not.toContain('onArchive()');
   });

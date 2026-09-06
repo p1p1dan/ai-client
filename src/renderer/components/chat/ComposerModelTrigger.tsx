@@ -87,7 +87,15 @@ import { useSessionModel } from './useSessionModel';
  */
 
 interface ComposerModelTriggerProps {
-  sessionId: string;
+  /**
+   * U29: `null` before the conversation exists. The control stays live — pix
+   * never lets its model menu go blank ("survives snapshot gaps so composer
+   * never flashes 未选择模型") — and in that state it reads and writes ONLY
+   * the global template (`chatAgentDefaults`), which is where a pick made now
+   * has to land: there is no chat to attach a per-chat value to, and the
+   * template is already what a new chat inherits.
+   */
+  sessionId: string | null;
   /** Host-reported default model id from `host.ready.settings.model`, if seen. */
   hostDefaultModel?: string | null;
   /** Gates the catalog request — nothing is fetched before the Host is up. */
@@ -227,7 +235,7 @@ export function ComposerModelTrigger({
 
   const [model, setModel] = useState<string>(() =>
     resolveModelSelection({
-      storedModel: getSessionModel(sessionId),
+      storedModel: sessionId ? getSessionModel(sessionId) : null,
       agentDefaultModel: agentDefaultModel(chatAgentDefaults),
       catalog: catalogOptions,
       hostDefaultModel,
@@ -235,8 +243,10 @@ export function ComposerModelTrigger({
   );
   const [effort, setEffort] = useState<string>(
     () =>
-      resolveEffortSelection(getSessionEffort(sessionId), agentDefaultEffort(chatAgentDefaults)) ??
-      EFFORT_DEFAULT_ID
+      resolveEffortSelection(
+        sessionId ? getSessionEffort(sessionId) : null,
+        agentDefaultEffort(chatAgentDefaults)
+      ) ?? EFFORT_DEFAULT_ID
   );
   const [modelQuery, setModelQuery] = useState('');
 
@@ -244,7 +254,7 @@ export function ComposerModelTrigger({
   // is NEVER remounted per session — `ChatWorkspace` renders one `ChatComposer`
   // with no `key` — so without this ref a session switch is indistinguishable
   // from a re-render, and §4.3-6's two triggers collapse into one.
-  const resolvedPairRef = useRef<string>(sessionId);
+  const resolvedPairRef = useRef<string | null>(sessionId);
 
   // §4.3-6: the session, the agent, or the catalog moved. A pair change
   // re-resolves from that pair's own storage unconditionally (anything else
@@ -262,7 +272,7 @@ export function ComposerModelTrigger({
       reconcileModelSelection({
         current,
         pairChanged,
-        storedModel: getSessionModel(sessionId),
+        storedModel: sessionId ? getSessionModel(sessionId) : null,
         agentDefaultModel: agentDefaultModel(chatAgentDefaults),
         catalog: catalogOptions,
         catalogLoaded: loaded,
@@ -276,8 +286,10 @@ export function ComposerModelTrigger({
   // catalog metadata is known.
   useEffect(() => {
     setEffort(
-      resolveEffortSelection(getSessionEffort(sessionId), agentDefaultEffort(chatAgentDefaults)) ??
-        EFFORT_DEFAULT_ID
+      resolveEffortSelection(
+        sessionId ? getSessionEffort(sessionId) : null,
+        agentDefaultEffort(chatAgentDefaults)
+      ) ?? EFFORT_DEFAULT_ID
     );
   }, [sessionId, chatAgentDefaults, getSessionEffort]);
 
@@ -293,7 +305,7 @@ export function ComposerModelTrigger({
     // keeps the next draft from resurrecting the illegal value. The Context
     // mirror and create/send/resume wire read those same two stores.
     setEffort(reconciled);
-    setSessionEffort(sessionId, reconciled);
+    if (sessionId) setSessionEffort(sessionId, reconciled);
     setChatAgentDefaults(withAgentPreference(chatAgentDefaults, { effort: reconciled }));
   }, [
     chatAgentDefaults,
@@ -329,16 +341,18 @@ export function ComposerModelTrigger({
       // writing a sentinel would freeze the session against a later agent
       // template. The effort sentinel is stored, because there `Default` and
       // "never chosen" genuinely differ once a template exists.
-      if (itemId === AUTOMATIC_MODEL_ID) {
-        clearSessionModel(sessionId);
-      } else {
-        setSessionModel(sessionId, itemId);
+      if (sessionId) {
+        if (itemId === AUTOMATIC_MODEL_ID) {
+          clearSessionModel(sessionId);
+        } else {
+          setSessionModel(sessionId, itemId);
+        }
       }
       const nextModel = catalogOptions.find((option) => option.id === itemId);
       const nextEffort = reconcileEffortForModel(effort, nextModel);
       if (nextEffort !== effort) {
         setEffort(nextEffort);
-        setSessionEffort(sessionId, nextEffort);
+        if (sessionId) setSessionEffort(sessionId, nextEffort);
       }
       // §4.3: an explicit pick also becomes this agent's template, so the next
       // new draft on the same agent starts where the user left off. T25 updates
@@ -352,7 +366,10 @@ export function ComposerModelTrigger({
       return;
     }
     setEffort(itemId);
-    setSessionEffort(sessionId, itemId);
+    if (sessionId) setSessionEffort(sessionId, itemId);
+    // Written in BOTH cases, with and without a chat: §4.3 already made an
+    // explicit pick this agent's template so the next draft starts where the
+    // user left off, and with no chat the template is the only place it lands.
     setChatAgentDefaults(withAgentPreference(chatAgentDefaults, { effort: itemId }));
   };
 
@@ -397,8 +414,16 @@ export function ComposerModelTrigger({
       {/* The shared popup's hairline `::before` derives its radius from the
           popup's own, so overriding one without the other leaves a 15px inner
           stroke inside a 12px frame — visible as a doubled corner. */}
+      {/* U30: anchored to the trigger's RIGHT edge, not its left.
+          This trigger's width is its content — a model name plus an effort
+          suffix — so it changes every time either one changes. It sits in the
+          bar's `ms-auto` trailing group, which pins its right edge and lets the
+          left edge float; a left-anchored popup therefore jumped sideways
+          between `Automatic` and `GPT-5.6 Terra High`, and jumped again while
+          the menu was open and a pick changed the label behind it. The right
+          edge is the stable one, so the popup hangs off that. */}
       <MenuPopup
-        align="start"
+        align="end"
         className="min-w-40 rounded-md before:rounded-[calc(var(--radius-md)-1px)]"
         side={composerPopupSide(mode)}
       >

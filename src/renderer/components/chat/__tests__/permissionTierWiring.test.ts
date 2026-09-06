@@ -37,8 +37,15 @@ describe('[U12 fix] the send path carries the stored tier into the spawn', () =>
     // Not from component state: `runSend` can be entered from a queue release
     // or a retry, and the chip's own React state is not in scope there. One
     // store means the two cannot disagree.
+    //
+    // U29 added the global default as a SECOND rung on the same ladder, for the
+    // tier picked on the start screen before this session existed. The order is
+    // load-bearing: a chat's own stored tier still outranks the default, and
+    // both absent still omits the field so Main picks.
     expect(COMPOSER).toContain('readSessionTier');
-    expect(COMPOSER).toContain('const spawnTier = readSessionTier(sessionId) ?? undefined');
+    expect(COMPOSER).toContain(
+      'const spawnTier = readSessionTier(sessionId) ?? readDefaultTier() ?? undefined'
+    );
   });
 
   it('sends it with createSession', () => {

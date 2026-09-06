@@ -1630,6 +1630,19 @@ export const zhTranslations: Record<string, string> = {
   // D12 (U24) retired the tab strip; `Open sessions` / `Close tab` /
   // `Open in a tab` went with it. The sidebar marker now states the real fact.
   'Running in the background': '正在后台运行',
+  // U31: bulk archive from the sidebar.
+  // Pre-existing gap surfaced by U31: the sidebar's own Archive action has read
+  // English since T13 (the Button base class lowercases it, so it showed as
+  // "archive"). The bulk button inherited it; one entry fixes both.
+  Archive: '归档',
+  'Select sessions to archive': '选择要归档的会话',
+  '{{count}} selected': '已选 {{count}} 项',
+  'Archive selected': '归档所选',
+  'Archive selected sessions': '归档所选会话',
+  'Archive {{count}} sessions? They will be removed from the sidebar.':
+    '归档这 {{count}} 个会话？它们会从左栏移除。',
+  'Their history stays on disk; this only clears them out of the list.':
+    '历史记录仍留在磁盘上，这一步只是把它们从列表里清出去。',
   'No conversation open': '未打开对话',
   // Ending a conversation has to say which parts are lost (the running turn)
   // and which are not (the row, the history). Moved from the tab's ✕ to the
@@ -1888,9 +1901,15 @@ export const zhTranslations: Record<string, string> = {
   'Pick a folder to work on a project — the agent works inside it. Without one, this chat runs in a private temporary folder.':
     '想让 AI 在你的项目里干活，就选一个目录——AI 只在这个目录里操作。不选也能直接聊，这时会用一个私有的临时目录。',
 
-  // U22: the card said a chat could start without a folder, but with no session
-  // there was no way to start one. This is that way.
-  'Just start chatting': '直接开聊',
+  // U28: the start screen. `Just start chatting` (U22) is gone with the button
+  // it labelled — the composer below is live now, so there is nothing to click.
+  'Start a conversation': '开始对话',
+  // U29: the scope line the permission chip shows before a chat exists.
+  'Applies to new chats.': '作用于新建的对话。',
+  'The agent will work inside {{folder}} — type what you want done.':
+    'AI 会在 {{folder}} 里干活，直接说你想做什么。',
+  'Just type. This chat runs in a private temporary folder.':
+    '直接输入即可，这次对话会在一个私有的临时目录里进行。',
   'New temporary chat (no repository)': '新建临时对话（没有仓库）',
 
   // T-27: Composer target bar (D22) — footer action rows (batch 3).

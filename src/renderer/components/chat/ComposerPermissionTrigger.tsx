@@ -15,7 +15,17 @@ import {
   composerPopupSide,
   type MiddleColumnMode,
 } from './middleColumnLayout';
-import { readSessionTier, writeSessionTier } from './sessionPreferenceStore';
+import {
+  readDefaultTier,
+  readSessionTier,
+  writeDefaultTier,
+  writeSessionTier,
+} from './sessionPreferenceStore';
+
+/** Per-chat value when there is a chat, the global default before there is. */
+function readTierFor(sessionId: string | null): SessionPermissionTier | null {
+  return sessionId ? (readSessionTier(sessionId) ?? readDefaultTier()) : readDefaultTier();
+}
 
 interface TierOption {
   id: SessionPermissionTier;
@@ -60,7 +70,14 @@ const TIER_OPTIONS: readonly TierOption[] = [
 ];
 
 interface ComposerPermissionTriggerProps {
-  sessionId: string;
+  /**
+   * U29: `null` before the conversation exists. The control still renders —
+   * pix keeps its access menu live at all times, and a tier picked now is what
+   * the first send spawns on. In that state it reads and writes the GLOBAL
+   * default (user ruling, 2026-09-06) rather than a per-chat value, because
+   * there is no chat yet to attach one to.
+   */
+  sessionId: string | null;
   hostState: HostStatus['state'];
   mode: MiddleColumnMode;
   disabled?: boolean;
@@ -77,15 +94,25 @@ export function ComposerPermissionTrigger({
   const { t } = useI18n();
 
   const [tier, setTier] = useState<SessionPermissionTier>(
-    () => readSessionTier(sessionId) ?? DEFAULT_SESSION_PERMISSION_TIER
+    () => readTierFor(sessionId) ?? DEFAULT_SESSION_PERMISSION_TIER
   );
   const [confirmingDangerous, setConfirmingDangerous] = useState(false);
+  /**
+   * U30: controlled so applying a tier can close the menu.
+   *
+   * `MenuPrimitive.RadioItem` deliberately does not close on select — radio
+   * semantics are "keep flipping between these" — which is right for a filter
+   * and wrong here: picking a tier is a decision, and the menu sitting open
+   * afterwards reads as "that did not take". Only `applyTier` closes it, so the
+   * dangerous tier's confirmation step still gets to keep the popup up.
+   */
+  const [open, setOpen] = useState(false);
 
   const resolvedSessionRef = useRef(sessionId);
   useEffect(() => {
     if (resolvedSessionRef.current !== sessionId) {
       resolvedSessionRef.current = sessionId;
-      setTier(readSessionTier(sessionId) ?? DEFAULT_SESSION_PERMISSION_TIER);
+      setTier(readTierFor(sessionId) ?? DEFAULT_SESSION_PERMISSION_TIER);
       setConfirmingDangerous(false);
     }
   }, [sessionId]);
@@ -93,10 +120,17 @@ export function ComposerPermissionTrigger({
   const applyTier = useCallback(
     (newTier: SessionPermissionTier) => {
       setTier(newTier);
-      writeSessionTier(sessionId, newTier);
-      window.electronAPI.chat
-        .setPermissionTier({ sessionId, tier: newTier })
-        .catch(() => undefined);
+      setOpen(false);
+      if (sessionId) {
+        writeSessionTier(sessionId, newTier);
+        // Only a live chat has a worker to tell. Without one the choice is a
+        // preference; `runSend` reads it back when it spawns.
+        window.electronAPI.chat
+          .setPermissionTier({ sessionId, tier: newTier })
+          .catch(() => undefined);
+        return;
+      }
+      writeDefaultTier(newTier);
     },
     [sessionId]
   );
@@ -137,19 +171,24 @@ export function ComposerPermissionTrigger({
   // config disables the checks outright).
   const label = degraded ? t('Your own policy') : t(currentOption.labelKey);
 
-  const isDisabled = disabled || sending || hostState !== 'ready';
+  // U29: the host gate stands down before a chat exists. `hostState` describes
+  // a runtime this control is not talking to yet — leaving it in would grey out
+  // the menu on the start screen for a reason that does not apply to it.
+  const isDisabled = disabled || sending || (sessionId !== null && hostState !== 'ready');
   const title = degraded
     ? t(
         'This chat runs on the permission system in your own agent directory; the tiers here do not apply.'
       )
     : sending
       ? t('A turn is running — the tier is fixed for the turn already in flight.')
-      : `${t('Permissions: {{tier}} — click to change ({{scope}})', { tier: label, scope: t('Applies immediately, to this thread.') })}`;
+      : `${t('Permissions: {{tier}} — click to change ({{scope}})', { tier: label, scope: sessionId ? t('Applies immediately, to this thread.') : t('Applies to new chats.') })}`;
 
   return (
     <Menu
-      onOpenChange={(open) => {
-        if (!open) setConfirmingDangerous(false);
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setConfirmingDangerous(false);
       }}
     >
       <MenuPrimitive.Trigger

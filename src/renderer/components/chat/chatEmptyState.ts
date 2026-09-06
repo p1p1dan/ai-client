@@ -24,7 +24,6 @@
 export interface ChatEmptyStateInput {
   /** A real failure the user should see (`lastError`), not a setup gap. */
   hasError: boolean;
-  hasSession: boolean;
   /** A workspace is selected AND it is targetable (a non-empty path). */
   hasWorkspace: boolean;
   /** The resolved working directory the agent would run in. */
@@ -56,15 +55,17 @@ export function deriveChatEmptySurface(input: ChatEmptyStateInput): ChatEmptySur
   // path so a fake cwd can never reach spawn), and that state is still just
   // "no folder", not a fault.
   // U05-b: an unbound chat skips the folder check entirely — it has no folder
-  // BY DESIGN, and gets its own isolated directory when it first sends. It
-  // still falls through to the session check below, so a genuinely broken
-  // unbound chat keeps the diagnostic box rather than reading as healthy.
+  // BY DESIGN, and gets its own isolated directory when it first sends.
   if (!input.unbound && (!input.hasWorkspace || !input.hasCwd)) return 'welcome';
 
-  // Deliberately AFTER the folder check: a missing session is not something
-  // "add a working directory" fixes, so it keeps the diagnostic box — but if
-  // BOTH are missing, the folder is the step the user can actually take.
-  if (!input.hasSession) return 'error-notice';
-
+  // U28 removed a `!hasSession -> error-notice` branch that used to sit here.
+  //
+  // It was right while a session was a PREREQUISITE for sending: with no
+  // conversation selected there was nothing the composer could do, and saying
+  // so in the diagnostic box was more honest than silence. `runSend` now
+  // creates the conversation on the first send, so "no session yet" is the
+  // ordinary state of a chat about to start — the same state a fresh install
+  // opens in — and painting a red fault box over it was the app calling its own
+  // starting position an error.
   return 'none';
 }

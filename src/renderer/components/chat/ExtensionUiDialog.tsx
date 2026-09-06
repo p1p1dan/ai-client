@@ -128,8 +128,13 @@ function ExtensionUiRequestContent({
         </div>
       ) : null}
 
+      {/* U30: `gap-2`, not `gap-1`. `Button`'s focus ring is a box-shadow drawn
+          3px outside the box (`ring-2` + `ring-offset-1`) and does not occupy
+          layout, so at a 4px gap the autofocused first option's ring reached
+          into its neighbour and the two read as overlapping — which is what the
+          user reported as 错位. 8px clears the ring. */}
       {dialog.method === 'select' ? (
-        <div role="group" aria-label={title} className="grid gap-1 px-3 pb-2">
+        <div role="group" aria-label={title} className="grid gap-2 px-3 pb-2">
           {dialog.options.map((option, index) => (
             <Button
               key={`${index}-${option}`}

@@ -28,6 +28,7 @@ import {
   resolveIdleStatusText,
   roundActionButtonClass,
   roundActionButtonKindClass,
+  START_SCREEN_HOST_CLASS,
   sessionStatusLineWrapperClass,
   shouldRenderTargetRow,
   shouldShowStatusLine,
@@ -167,10 +168,21 @@ describe('rememberSendAttempt', () => {
 });
 
 describe('middleColumnHostClass', () => {
-  it('centers the composer and applies the A07 9% bottom offset in empty mode', () => {
+  it('U28: pins the empty-mode composer to the bottom, with the start screen taking the room above', () => {
+    // Was `flex-1 justify-center pb-[9%]` (A07), which centred the composer in
+    // whatever the start screen left over — so both sat in the top half with a
+    // dead area beneath. The user rejected that on sight; pix pins the composer
+    // and centres the screen above it.
     const cls = middleColumnHostClass('empty');
-    expect(cls).toContain('justify-center');
-    expect(cls).toContain('pb-[9%]');
+    expect(cls).toContain('shrink-0');
+    expect(cls).not.toContain('flex-1');
+    expect(cls).not.toContain('pb-[9%]');
+    expect(cls).toContain('pb-6');
+
+    // The room above is the sibling that takes the leftover height.
+    expect(START_SCREEN_HOST_CLASS).toContain('flex-1');
+    expect(START_SCREEN_HOST_CLASS).toContain('items-center');
+    expect(START_SCREEN_HOST_CLASS).toContain('justify-center');
   });
 
   // F-A10: the 8px gap above the composer card belongs to exactly one owner.
@@ -196,13 +208,19 @@ describe('middleColumnHostClass', () => {
     expect(middleColumnHostClass('session')).toContain('px-6');
   });
 
-  it('never lets the docked host grow (shrink-0) or the centered host collapse (flex-1)', () => {
+  it('never lets a composer host grow — the start screen is what takes the slack', () => {
+    // U28 moved `flex-1` off the empty-mode composer and onto the region ABOVE
+    // it. Both composer hosts are now pinned; exactly one element in the empty
+    // column grows, and it is the one with nothing in it but a title and a
+    // sentence. A `flex-1` reappearing on either host is the old arrangement
+    // (composer floating mid-column, dead space beneath) coming back.
     const empty = middleColumnHostClass('empty');
     const session = middleColumnHostClass('session');
-    expect(empty).toContain('flex-1');
-    expect(empty).not.toContain('shrink-0');
+    expect(empty).toContain('shrink-0');
+    expect(empty).not.toContain('flex-1');
     expect(session).toContain('shrink-0');
     expect(session).not.toContain('flex-1');
+    expect(START_SCREEN_HOST_CLASS).toContain('flex-1');
   });
 });
 
@@ -1105,18 +1123,26 @@ describe('composerPlaceholder', () => {
         })
       ).toBe('Agent Host is running — your message will be queued…');
 
+      // U28: no session is no longer a blocker with its own copy — the first
+      // send creates one. With `unbound` set (which is what ChatComposer passes
+      // in that state) the ladder falls through to the ordinary prompt, and the
+      // user sees an input they can type into rather than an errand.
       expect(
         composerPlaceholder({
           mode,
-          canSend: false,
+          canSend: true,
           busy: false,
           sending: false,
           hasSession: false,
-          hasWorkspace: true,
+          hasWorkspace: false,
+          unbound: true,
           attachmentCount: 0,
         })
-      ).toBe('Select a session in the left nav before sending…');
+      ).toBe(mode === 'session' ? 'Send follow-up…' : 'Message Pi…');
 
+      // The workspace complaint is now scoped to a session that EXISTS: it
+      // describes a broken binding, which a chat that was never created cannot
+      // have.
       expect(
         composerPlaceholder({
           mode,

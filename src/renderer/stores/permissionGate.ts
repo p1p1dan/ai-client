@@ -55,8 +55,13 @@ export const usePermissionGateStore = create<PermissionGateState>()((set) => ({
 /** True only when a worker has reported, and reported the degraded gate. */
 export function isTierControlDegraded(
   gates: Record<string, PermissionGate>,
-  sessionId: string
+  sessionId: string | null
 ): boolean {
+  // U29: `null` is "no chat yet", and a gate is a fact a running worker
+  // reported. Nothing has reported, so nothing is degraded — the control shows
+  // the ordinary tiers, which is also what the chat it is about to create will
+  // get unless that chat's own bootstrap says otherwise.
+  if (!sessionId) return false;
   return gates[sessionId] === 'user_configured';
 }
 

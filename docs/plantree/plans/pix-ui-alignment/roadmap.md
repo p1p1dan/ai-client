@@ -9,8 +9,8 @@
 
 | 分组 | 数量 | 说明 |
 |---|---|---|
-| Done | 28 | **U25：窗口最小尺寸**、**U26：TUI 下也能看文件**（[D13](./decisions/013-editor-stays-available-in-tui.md)）、**U27：轨道与标题行对齐**（2026-09-06，[evidence](./evidence/2026-09-06-u25-u26-u27-layout-fixes.md)）；**U24：中栏回到单会话视图 + 后台并发**（2026-09-06，[D12](./decisions/012-single-session-view-and-background-concurrency.md) / [evidence](./evidence/2026-09-06-u24-single-session-view.md)）；**U22：免绑定开聊入口**、**U23：插件清单补听 `session.resumed`**（2026-09-06，[evidence](./evidence/2026-09-06-u22-u23-unbound-entry-and-plugin-resume.md)）；U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)）；**U13：免绑定会话跨重启可见性**、**U06-a：Run 面板**、**U07：Context 内容增强**（2026-09-04，[U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md) / [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）；**U04：左栏插件入口**（2026-09-04，[U04 evidence](./evidence/2026-09-04-u04-plugin-entry.md)）；**U14：壳层横条重排与双栏收敛**（2026-09-04，[U14 evidence](./evidence/2026-09-04-u14-shell-chrome-realignment.md)）；**U15：VSCode 式壳层重排**、**U16：上下文页图形化与折叠**（2026-09-05，[U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)）；**U17：bootstrap 冷启动超时**、**U18：思考强度极端档需声明**、**U19：关 Tab 即结束对话**（2026-09-05，[批次 9 evidence](./evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)）；**U06-b：上下文占用 donut + usage 行 + 底栏占用 chip**（2026-09-05，随 Pi 计划 T38 同批，[T38/U06-b evidence](../pi-backend-migration/evidence/2026-09-05-t38-runtime-usage-fields.md)）；**U21：下线实时 ↓ 输出 token 计数器**（2026-09-05，[D11](./decisions/011-retire-the-live-output-token-counter.md) / [evidence](./evidence/2026-09-05-retire-live-token-counter.md)） |
-| In Progress | 0 | 批次 13 全部落地，只剩一次累计 GUI 点验 |
+| Done | 32 | **U30：权限菜单收口 + chrome 抖动**、**U31：左栏批量归档**（2026-09-06，[evidence](./evidence/2026-09-06-u30-u31-chrome-and-bulk-archive.md)）；**U29：起始屏底栏不再是空的**（2026-09-06，[evidence](./evidence/2026-09-06-u29-start-screen-bar.md)，关闭 D14 的已知未对齐处）；**U28：起始屏改为可用的输入框**（2026-09-06，[D14](./decisions/014-start-screen-is-a-live-composer.md) / [evidence](./evidence/2026-09-06-u28-start-screen.md)，推翻 U22 的按钮方案）；**U25：窗口最小尺寸**、**U26：TUI 下也能看文件**（[D13](./decisions/013-editor-stays-available-in-tui.md)）、**U27：轨道与标题行对齐**（2026-09-06，[evidence](./evidence/2026-09-06-u25-u26-u27-layout-fixes.md)）；**U24：中栏回到单会话视图 + 后台并发**（2026-09-06，[D12](./decisions/012-single-session-view-and-background-concurrency.md) / [evidence](./evidence/2026-09-06-u24-single-session-view.md)）；**U22：免绑定开聊入口**、**U23：插件清单补听 `session.resumed`**（2026-09-06，[evidence](./evidence/2026-09-06-u22-u23-unbound-entry-and-plugin-resume.md)）；U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03）；**U02：双栏/三栏布局模式**、**U03-a：TUI 收右栏**（[evidence](./evidence/2026-09-03-u02-u03a-column-mode.md)）；**U05：免绑定开聊**、**U03-b：TUI 解绑**（[evidence](./evidence/2026-09-03-u05-u03b-unbound-chat.md)）；**U08-2：思考档七档**（[evidence](./evidence/2026-09-03-u08-2-thinking-levels.md)）；**U13：免绑定会话跨重启可见性**、**U06-a：Run 面板**、**U07：Context 内容增强**（2026-09-04，[U13 evidence](./evidence/2026-09-04-u13-unbound-session-visibility.md) / [批次 6 evidence](./evidence/2026-09-04-u06a-u07-run-and-context-panels.md)）；**U04：左栏插件入口**（2026-09-04，[U04 evidence](./evidence/2026-09-04-u04-plugin-entry.md)）；**U14：壳层横条重排与双栏收敛**（2026-09-04，[U14 evidence](./evidence/2026-09-04-u14-shell-chrome-realignment.md)）；**U15：VSCode 式壳层重排**、**U16：上下文页图形化与折叠**（2026-09-05，[U15/U16 evidence](./evidence/2026-09-05-u15-u16-vscode-dock-shell.md)）；**U17：bootstrap 冷启动超时**、**U18：思考强度极端档需声明**、**U19：关 Tab 即结束对话**（2026-09-05，[批次 9 evidence](./evidence/2026-09-05-startup-timeout-thinking-levels-tab-close.md)）；**U06-b：上下文占用 donut + usage 行 + 底栏占用 chip**（2026-09-05，随 Pi 计划 T38 同批，[T38/U06-b evidence](../pi-backend-migration/evidence/2026-09-05-t38-runtime-usage-fields.md)）；**U21：下线实时 ↓ 输出 token 计数器**（2026-09-05，[D11](./decisions/011-retire-the-live-output-token-counter.md) / [evidence](./evidence/2026-09-05-retire-live-token-counter.md)） |
+| In Progress | 0 | 批次 13/14 全部落地，只剩一次累计 GUI 点验 |
 | Moved out | 0 | ~~U06-b → Pi 计划 T38~~ — T38 已关闭，U06-b 同批落地，回到 Done |
 | Dropped | 1 | U08-3 请求优先级（[Q12](./open-questions.md) 拍板不做） |
 | Superseded | 2 | U02 双栏/三栏开关 → 被 [D08](./decisions/008-vscode-dock-shell.md) 决定四整片作废；U15-c 会话 Tab 条 → 被 [D12](./decisions/012-single-session-view-and-background-concurrency.md) 决定一回退 |
@@ -19,7 +19,7 @@
 **执行顺序**（批次，详见 execution-plan）：
 `U01 ✅ → U09 ✅ → U12 ✅ → U02+U03-a ✅ → U05+U03-b ✅ → U08-2 ✅ → U13 ✅ → U06-a+U07 ✅ → U04 ✅ → U14 ✅
 → 批次 8：U15-a ✅ → U15-b ✅ → U15-c ✅ → U15-d ✅ → U16 ✅ → 批次 10：U17–U19 ✅ → 批次 11：U06-b ✅
-→ 批次 12：U21 ✅ → 批次 13：U22 ✅ + U23 ✅ → U24 ✅ → U26 ✅ + U27 ✅ → U25 ✅`。
+→ 批次 12：U21 ✅ → 批次 13：U22 ✅ + U23 ✅ → U24 ✅ → U26 ✅ + U27 ✅ → U25 ✅ → 批次 14：U28 ✅ → U29 ✅ → 批次 15：U30 ✅ + U31 ✅`。
 批次 8 由 [D08](./decisions/008-vscode-dock-shell.md) 开立，
 按 [`docs/design/a11-vscode-shell-prototype.html`](../../../design/a11-vscode-shell-prototype.html) 施工。
 **批次 13 是累计 GUI 点验的产出**：用户 2026-09-06 在真实窗口跑完点验，报回五件事，
@@ -29,6 +29,10 @@ U27 是 2026-09-06 追加的对齐诉求；U25 同日改为「限制窗口最小
 U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排位再插控件，同一块 JSX 只改一次。
 
 **新增决策**：
+- [D14](./decisions/014-start-screen-is-a-live-composer.md)——**起始屏是一个能用的输入框**：
+  发送即创建会话，「没有会话」不再是故障，起始屏只留标记 + 标题 + 一句话。
+  推翻 U22 的按钮方案（那个按钮还把 React 事件当会话标题，点一下就崩）。
+  基准是 pix 截图；用户原话「太臃肿浮夸」。
 - [D13](./decisions/013-editor-stays-available-in-tui.md)——**TUI 下也能看文件**：
   编辑器列不再被 TUI 抑制。推翻 D02「TUI 是布局极限形态」那一条。
   根因是一行代码的含义被后来的改动换掉了：U03-a 写它时「收右栏」是让宽度给终端，
@@ -59,9 +63,114 @@ U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排
   不做成三选一。起因是用户看到实际界面后指出「臃肿不协调」，取证发现原型与 D02 在双栏语义上
   互相矛盾、而代码跟的是 D02。
 
-**无未决问题**：Q01–Q13 全部关闭（Q08/Q10 见 [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md)；
+**未决问题 1 个**：[Q14](./open-questions.md) 问答卡接还是删（2026-09-06 取证后提出）。
+Q01–Q13 全部关闭（Q08/Q10 见 [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md)；
 Q09 由取证关闭；Q11 布局尺寸维持现值；Q12 请求优先级不做；
 Q13 免绑定会话跨重启可见性由 [D04](./decisions/004-unbound-session-index-visibility.md) 拍板走索引标记，落为 U13）。
+
+## 批次 15（2026-09-06）— U30 chrome 收口 / U31 批量归档
+
+用户第二轮点验四条。第四条（问答卡）不是缺陷，取证结论登记为 [Q14](./open-questions.md)：
+`AskUserQuestion` 在本仓一处都没有，pi 也不内置（那个名字在 pi 仓库里只是一张
+「工具名翻译表」），而**渲染层有完整的消费链**（7 个文件读 `pendingQuestion`）——
+与 [D11](./decisions/011-retire-the-live-output-token-counter.md) 处置的实时 token 计数器同构。
+接还是删要用户拍板。
+
+### U30 — 权限菜单收口与 chrome 抖动 — **Done**（2026-09-06）
+
+**a. 权限菜单选完不关**：`MenuPrimitive.RadioItem` 按设计不关闭（radio 语义是反复切），
+对一次决定是错的。`<Menu>` 改受控，**只在 `applyTier` 里关**——不在 `handleSelect`，
+否则选「完全放开」时菜单会在确认框出现前就关掉。
+
+**b. 底栏「动来动去」**：模型触发器宽度就是内容，而它在 `ms-auto` 尾部组里
+**右边缘钉住、左边缘浮动**。菜单原本 `align="start"` 锚在那条会动的边上 → 改 `align="end"`；
+触发器加 `max-w-56`、模型名加 `min-w-0 truncate`（思考档后缀不截断，它是变得最勤的短半）。
+
+**c. 权限卡选项「重叠」**：不是错位，是 `Button` 的焦点光环
+（`ring-2` + `ring-offset-1`，画在盒外 3px 且不占布局）伸进了 `gap-1` 的 4px 缝里，
+而第一项带 `autoFocus` 所以每次必现。`gap-1` → `gap-2`。
+
+### U31 — 左栏批量归档 — **Done**（2026-09-06）
+
+`archiveMany(ids)`：逐条用 no-op refresh 翻转，**最后只 refetch 一次**——
+在循环里调 `archive` 会把索引整份重取 N 遍，而这功能存在的场景正是「会话太多」。
+串行不并行：Main 写同一个索引文件。
+
+界面：左栏顶栏加选择入口，状态是**一个可空 Set**（布尔加 Set 会有「没在选却有选中」
+这第四种非法状态）；**同一行横条服务两种模式**（第二行会让列表在指针底下移动）；
+行靠**被交给回调**进入选择模式而不是收 flag；**复选框占运行点那个槽**，行高不变；
+归档前确认并报数。
+**顺带修好既有缺陷**：`'Archive'` 在 i18n 里从来没有中文条目，右键菜单一直显示英文
+（还被 `lowercase` 变成 `archive`），一条词条修好两处。
+
+280 files / 4246 tests 全绿。**真机验证**：进选择模式后顶栏变「已选 N 项 ⧉ 归档 取消」，
+点一行后复选框勾上、计数变 1。证据见 [U30/U31 evidence](./evidence/2026-09-06-u30-u31-chrome-and-bulk-archive.md)。
+
+## 批次 14（2026-09-06）— U28 起始屏 / U29 起始屏底栏
+
+### U28 — 起始屏改为「可用的输入框」 — **Done**（2026-09-06）
+
+按 [D14](./decisions/014-start-screen-is-a-live-composer.md)，
+基准是用户提供的 pix 截图 `sharePic/20260906/pix-desktop.png`。
+
+**推翻 U22 的落地形态。** U22 的取证是对的（`canSend` 要求会话、四个入口全死），
+但它加了个「直接开聊」按钮去**补入口**，闸留着——而那个按钮把 React 事件对象
+当成会话标题传了下去，用户点第一下就抛
+`Objects are not valid as a React child`。崩溃是表面，**加按钮本身就说明闸没拆干净**。
+
+**落地形态**：`runSend` 改为 `activeSessionId ?? createUnboundChatSession()`，
+发送即创建会话；连带拆掉 `canSend`/`hasSendTarget`/附件锁/`disabled` 四处旧闸。
+「没有会话」不再判为 `error-notice`，占位符不再说「先去左栏选一个会话」——
+那两处在「会话是发送前提」时是诚实的，前提没了之后就成了
+**应用把自己的起始状态标成红色故障**。
+起始屏收敛为标记 + 「开始对话」+ 一句副文案，**没有任何控件**；
+选目录交给 composer 顶盖，添加仓库交给左栏。
+**适用范围扩大到每一次对话开始**（用户追加）：有目录时副文案点名目录，
+无目录时说明走临时目录。
+**第二轮（同日，用户回报「聊天还是假的」）**：发送闸拆了、占位符也对了，
+但 **textarea 自己**还带着 `disabled={disabled || !activeSessionId}`——
+屏幕上是一个写着「Message Pi…」的**锁住的**输入框。附件按钮同病；
+另外 `runSend` 新建的会话 `handleSend` 的闭包读不到，
+**从空输入框开的会话标题会永远停在「New chat」**（改为回读 store）。
+同批修布局：`middleColumnHostClass('empty')` 原是 A07 的
+`flex-1 justify-center pb-[9%]`，让 composer 在起始屏剩下的空间里居中，
+于是两者一起挤在上半屏、下面一大片空白；改为 composer 钉底、
+新增 `START_SCREEN_HOST_CLASS` 接管上方剩余高度。
+
+278 files / 4228 tests 全绿，两轮变异验证各四条判红。
+**这次自己起 app 验了**：干净 profile 下 `activeSessionId: null` / `workspaces: 0` /
+`textarea.disabled: false` / 无红框，键盘输入 `hello` 实际落进了输入框；
+截图见 [evidence 第七节](./evidence/2026-09-06-u28-start-screen.md)。
+证据见 [U28 evidence](./evidence/2026-09-06-u28-start-screen.md)。
+
+~~**已知未对齐**：底栏三个槽位在无会话时不渲染~~ — **已由 U29 关闭**（同日）。
+
+### U29 — 起始屏底栏不再是空的 — **Done**（2026-09-06）
+
+U28 之后能打字了，但底栏只剩附件与发送键——**第一条消息只能用默认模型发出**。
+
+**先查 pix**：它的 `Composer` 根本不接收 sessionId，模型/思考档写给 **host 进程**
+（`window.pix.models.set()`），权限档是**全局偏好**（`saveAccessMode`），
+占用是只读快照字段。pix 是单 host 单会话，**「没有会话」这个状态在它那里不存在**，
+只有「快照还没到」；对付快照空档的手法是
+`snapshot?.model ?? lastComposerChromeRef.current.model`，
+注释写着「survives snapshot gaps so composer never flashes 未选择模型」。
+
+**抄规则不抄结构**：我们是多会话并发，模型/思考档必须留在会话上（U12/U08-2 的语义）。
+采纳的是「控件永不空白，无会话时用全局模板顶上」。
+
+**落地形态**：两个控件的 `sessionId` 放宽为可空。模型/思考档的全局位
+`chatAgentDefaults` **早就存在且该组件本来就在写它**（§4.3 的模板），
+所以只是把 per-session 读写在无会话时跳过。
+权限档新增独立 key `aiclient:chat:default-tier`（**不在 per-session 映射里占保留 id**——
+那张表由 `removeSessionTier` 清扫，哨兵行离被误删只差一步）；
+spawn 档位变两级 `readSessionTier ?? readDefaultTier ?? undefined`，会话自己的仍优先。
+**占用 chip 刻意不动**：占用是实测量，没跑过回合就没有可测的东西，pix 读法相同，有断言守着。
+
+278 files / 4230 tests 全绿，变异验证两条判红。
+**真机前后对照**：干净 profile 下 `activeSessionId: null`，
+底栏按钮由 `[Attach files, 发送]` 变为 `[Attach files, Pragmatic, Automatic, 发送]`。
+证据见 [U29 evidence](./evidence/2026-09-06-u29-start-screen-bar.md)。
 
 ## 批次 13（2026-09-06）— 全部落地
 
@@ -82,8 +191,10 @@ Q13 免绑定会话跨重启可见性由 [D04](./decisions/004-unbound-session-i
 **落地形态**：新增 `createUnboundChatSession()`，形状照抄 U13 在 `sessionIndexMerge` 里
 确立的免绑定会话（空 `projectId`/`workspaceId`，**不设** `unbound.workspacePath`——
 那个字段是已存在目录的 resume 句柄，而目录要到首次发送才分配）。
-`+ New` 去掉 `disabled` 并在无仓库时走这条路；欢迎卡加「直接开聊」，
-**只在没有活动会话时**给出，否则会凭空多建会话。
+`+ New` 去掉 `disabled` 并在无仓库时走这条路。
+**欢迎卡上那个「直接开聊」按钮已被 [D14](./decisions/014-start-screen-is-a-live-composer.md)
+（U28，同日）删除**——它补的是入口而不是闸，而且把 React 事件对象当会话标题传了下去，
+用户点第一下就崩。`createUnboundChatSession()` 本身保留，现由 `runSend` 在首次发送时调用。
 证据见 [U22/U23 evidence](./evidence/2026-09-06-u22-u23-unbound-entry-and-plugin-resume.md)。
 
 ### U23 — 插件清单永远停在「发送一条消息…」 — **Done**（2026-09-06）

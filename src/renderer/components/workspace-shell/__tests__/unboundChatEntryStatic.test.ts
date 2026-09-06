@@ -48,13 +48,24 @@ describe('U22 unbound chat entry points', () => {
     );
   });
 
-  it('the welcome card offers the temporary chat only when there is no session', () => {
-    expect(card).toContain('onStartTemporaryChat');
-    expect(card).toContain("{t('Just start chatting')}");
-    // With a session already active the composer below is live, so a second
-    // "start chatting" control would create a stray session instead.
-    expect(workspace).toContain(
-      'activeSessionId ? {} : { onStartTemporaryChat: createUnboundChatSession }'
-    );
+  it('U28: the start screen has no button — the composer itself is the entry', () => {
+    // U22 put a "just start chatting" button on the card because the composer
+    // below was disabled without a session. That was a workaround for the gate,
+    // not a fix: `canSend` still required a session, and the button handed its
+    // click event straight to `createUnboundChatSession` as a title, which
+    // React then tried to render as a child (the reported crash).
+    //
+    // U28 removes the gate instead. The button is gone with it.
+    expect(card).not.toContain('onStartTemporaryChat');
+    expect(card).not.toContain('Just start chatting');
+    expect(workspace).not.toContain('onStartTemporaryChat');
+  });
+
+  it('U28: the send gate no longer requires a session', () => {
+    const composerPath = path.join(process.cwd(), 'src/renderer/components/chat/ChatComposer.tsx');
+    const composer = stripComments(readFileSync(composerPath, 'utf8'), composerPath);
+    // The first send is what creates the conversation, the way pix does it.
+    expect(composer).toContain('const sessionId = activeSessionId ?? createUnboundChatSession();');
+    expect(composer).not.toContain('if (!canSend || !activeSessionId) {');
   });
 });

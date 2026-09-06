@@ -23,7 +23,7 @@ import { Alert, AlertAction, AlertTitle } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { applyAutoSessionTitle } from '@/stores/chatSessionActions';
+import { applyAutoSessionTitle, createUnboundChatSession } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useMessageQueueStore } from '@/stores/messageQueue';
@@ -112,7 +112,7 @@ import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { parseSendDispatchErrorCode } from './sendDispatchError';
 import { decideSendPreamble } from './sendPreamble';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
-import { readSessionTier } from './sessionPreferenceStore';
+import { readDefaultTier, readSessionTier } from './sessionPreferenceStore';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useHostStatus } from './useHostStatus';
 import { useQueueRelease } from './useQueueRelease';
@@ -564,9 +564,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // "is this path usable" ad hoc.
   // U05-b widened this: "has a folder" is no longer required, because a chat
   // without one gets an isolated directory instead of being locked out.
-  const canSend = Boolean(activeSessionId && (cwd || isUnboundSession) && !disabled && !canStop);
-  /** Same target rule as `canSend`, without the busy/disabled terms. */
-  const hasSendTarget = Boolean(activeSessionId && (cwd || isUnboundSession));
+  //
+  // U28 widened it again, and this is the last of the three gates the empty
+  // state used to fail: "has a SESSION" is no longer required either. A user
+  // with no repository added had no way to make one (U22 found four dead entry
+  // points), and the button U22 added to work around that was the wrong answer
+  // — pix simply lets you type, and creates the conversation when you send.
+  // `runSend` does exactly that; see its `sessionId` line.
+  const hasSendTarget = Boolean(activeSessionId ? cwd || isUnboundSession : true);
+  const canSend = Boolean(hasSendTarget && !disabled && !canStop);
   const { getSessionModel } = useSessionModel();
   const { getSessionEffort } = useSessionEffort();
   const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
@@ -577,11 +583,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const { status: hostStatus } = useHostStatus();
   // T-18 paste attachments. Reads/encoding stay in the hook; every threshold
   // and format decision is a pure function under __tests__.
-  // T-19 decision 2.1: paste unlocks whenever the textarea does — only
-  // "nowhere to put this draft" (`!activeSessionId`) still locks it. A
-  // running/sending turn no longer does: that draft may need to go on the
+  // T-19 decision 2.1: paste unlocks whenever the textarea does. A
+  // running/sending turn does not lock it: that draft may need to go on the
   // queue, and a queued message must be able to carry attachments too.
-  const attachments = useComposerAttachments({ disabled: Boolean(disabled) || !activeSessionId });
+  // U28: `!activeSessionId` no longer locks it either — "nowhere to put this
+  // draft" stopped being true once the first send creates the session.
+  const attachments = useComposerAttachments({ disabled: Boolean(disabled) });
   const { clearDrafts: clearAttachmentDrafts, dismissNotice: dismissAttachmentNotice } =
     attachments;
 
@@ -694,11 +701,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // unbound chat. Missing workspace and missing cwd are its normal state, not
   // a fault, and telling that user to pass `--open-path` would be advice for a
   // problem they do not have.
-  const statusHint = !activeSessionId
-    ? 'No session selected — pick Live Agent Host in the left nav (or click New).'
-    : !isUnboundSession && !activeWorkspace
+  // U28: no session is no longer one of the rungs. It used to be the first and
+  // most blocking one; now it is the state the app opens in, and the composer
+  // above is live in it.
+  const statusHint =
+    !isUnboundSession && activeSessionId && !activeWorkspace
       ? 'Active session has no workspace — re-open a repository and refresh.'
-      : !isUnboundSession && !cwd
+      : !isUnboundSession && activeSessionId && !cwd
         ? 'No repository registered — launch with --open-path=<repo> (or add a repository) first.'
         : lastError
           ? `Error: ${lastError}`
@@ -777,8 +786,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         clearComposerValue: true,
         origin: 'direct',
       });
-      if (activeSessionId) {
-        maybeApplyFirstMessageTitle(activeSessionId, trimmed, outcome, hadUserMessage);
+      // U28: `runSend` may have created the conversation itself, in which case
+      // the render-time `activeSessionId` closed over above is still null while
+      // the store already points at the new chat. Read it back, or every chat
+      // started from the empty composer would keep the placeholder title.
+      const titledSessionId = activeSessionId ?? useChatSessionsStore.getState().activeSessionId;
+      if (titledSessionId) {
+        maybeApplyFirstMessageTitle(titledSessionId, trimmed, outcome, hadUserMessage);
       }
       return;
     }
@@ -1052,19 +1066,30 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // the only reading: an unbound chat also has a null cwd and DOES have
     // somewhere real to run, it just has not been allocated yet (see the
     // `ensure` call inside the handshake below).
-    if (!canSend || !activeSessionId) {
+    if (!canSend) {
       return 'skipped';
     }
     if (inFlightRef.current) return 'skipped';
+    /**
+     * U28: with no conversation selected, THIS send is the act that creates
+     * one — the same rule pix follows, and the reason its empty state is a
+     * live composer rather than a wall of instructions.
+     *
+     * Resolved here, before anything is committed, so every line below reads
+     * the same `sessionId` whether it was picked in the sidebar or made on
+     * this keystroke. It is an unbound chat because the only way to be in this
+     * state is to have no targetable folder; if one is later bound, the
+     * ordinary retarget path handles it.
+     */
+    const sessionId = activeSessionId ?? createUnboundChatSession();
     inFlightRef.current = true;
-    inFlightSessionIdRef.current = activeSessionId;
+    inFlightSessionIdRef.current = sessionId;
     // F6: this attempt's cancellation token — handleStop bumps the shared
     // ref synchronously; the busy-retry loop below compares against its own
     // snapshot to notice.
     sendGenerationRef.current += 1;
     const myGeneration = sendGenerationRef.current;
 
-    const sessionId = activeSessionId;
     // U05-b: `let`, because an unbound chat's directory does not exist yet.
     // It is filled in inside the handshake below (after `ensureHost`, so a
     // failure lands in the same catch every other handshake failure does and
@@ -1092,7 +1117,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // while the chip still showed the user's choice. Read from the same
     // per-session store the chip writes, so the two cannot disagree; `null`
     // (never touched) omits the field and keeps the default.
-    const spawnTier = readSessionTier(sessionId) ?? undefined;
+    // U29: falls back to the global default, so a tier chosen on the start
+    // screen (before this session existed) is the one it comes up on. `null`
+    // from both still omits the field and lets Main pick, unchanged.
+    const spawnTier = readSessionTier(sessionId) ?? readDefaultTier() ?? undefined;
     const wireAttachments = toWireAttachments(drafts);
     // F2 (2026-08-18): `sendTimeoutMs(attachmentBytes)` is gone. The wait is no
     // longer a fixed deadline predicted from the payload size — it is a
@@ -2364,10 +2392,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // `statusHint`. Deriving both from the same call is what keeps them agreeing.
   const emptySurface = deriveChatEmptySurface({
     hasError: Boolean(lastError),
-    hasSession: Boolean(activeSessionId),
     hasWorkspace: Boolean(activeWorkspace),
     hasCwd: Boolean(cwd),
-    unbound: isUnboundSession,
+    // U28: a chat that has no session yet WILL be unbound — the first send
+    // creates it that way — so it must not be told to pick a folder first.
+    unbound: isUnboundSession || !activeSessionId,
   });
   const hasStatusError = emptySurface === 'error-notice';
   const readingLine =
@@ -2601,7 +2630,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         hasSession: Boolean(activeSessionId),
         hasWorkspace: Boolean(activeWorkspace),
         hasCwd: Boolean(cwd),
-        unbound: isUnboundSession,
+        // Same widening as `emptySurface` above: no session yet means the next
+        // send makes an unbound one, so none of the folder-shaped placeholders
+        // apply to it.
+        unbound: isUnboundSession || !activeSessionId,
         attachmentCount: attachments.drafts.length,
         pendingQuestion: pendingQuestionHere,
         queuedCount,
@@ -2613,7 +2645,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // unlock matrix). Model/Effort selects below keep the OLD gate: they
       // stay disabled while busy/sending because changing them mid-turn has
       // no effect on the turn already running (design §2.1④).
-      disabled={disabled || !activeSessionId}
+      //
+      // U28 fix: `!activeSessionId` stopped being "nowhere to put this draft"
+      // when `runSend` started creating the conversation on the first send. It
+      // was left here in the first pass, which is why the start screen looked
+      // typable and was not — the placeholder said `Message Pi…` over a locked
+      // textarea.
+      disabled={disabled}
       onKeyDown={(event) => {
         // T-07 @ popup：popup 开时拦截方向键 / Enter / Esc，避免误发。
         if (mentionOpen) {
@@ -2655,26 +2693,32 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // Both are still per-session generation settings applied at the next
   // createSession, and both keep the OLD gate — disabled while busy/sending,
   // because changing them mid-turn has no effect on the turn already running.
-  const modelEffortControls = activeSessionId ? (
+  //
+  // U29: rendered with no session too. It used to be `activeSessionId ? … :
+  // null`, which left the start screen's bar with nothing but an attach button
+  // and a send arrow — and meant the very first message could only go out on
+  // the default model, with no way to pick before sending. The control reads
+  // and writes `chatAgentDefaults` in that state (user ruling: global default).
+  const modelEffortControls = (
     <ComposerModelTrigger
       sessionId={activeSessionId}
       hostState={hostStatus.state}
       mode={mode}
       disabled={disabled || busy || sending}
     />
-  ) : null;
+  );
 
   // T-30b2 §4.6 / D4: sits at the far left of the card in both modes. Its
   // disabled gate matches the textarea's exactly — "there is nowhere to put
   // this draft" — and deliberately excludes busy/sending, because T-19 already
   // unlocked composing during a run: attachments collected mid-turn simply
   // ride out with the next message.
+  //
+  // U28: that gate is now just `disabled`, on both. Attaching a file before
+  // the conversation exists is the same act as typing before it exists — the
+  // first send creates it and carries both.
   const attachButton = (
-    <ComposerAttachMenu
-      mode={mode}
-      disabled={disabled || !activeSessionId}
-      onAttachFiles={handleAttachFiles}
-    />
+    <ComposerAttachMenu mode={mode} disabled={disabled} onAttachFiles={handleAttachFiles} />
   );
 
   // T-19 decision 2.5: the button stack is now derived, not hand-assembled —
@@ -2762,7 +2806,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // must not become empty shells.
   const barSlotNodes: Record<ComposerBarSlot, ReactNode> = {
     attach: attachButton,
-    permission: activeSessionId ? (
+    // U29: also rendered with no session — a tier picked now is what the first
+    // send spawns on.
+    permission: (
       <ComposerPermissionTrigger
         sessionId={activeSessionId}
         hostState={hostStatus.state}
@@ -2770,8 +2816,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         disabled={disabled}
         sending={sending}
       />
-    ) : null,
+    ),
     // U06-b: renders nothing until the runtime reports occupancy (T38-a).
+    // Deliberately NOT widened by U29: occupancy is a measurement, and a chat
+    // that has never run a turn has nothing to measure. pix reads the same way
+    // (`snapshot?.usage?.context?.percent ?? undefined`).
     usage: activeSessionId ? <ComposerUsageChip sessionId={activeSessionId} /> : null,
     modelEffort: modelEffortControls,
     actions: actionButtons,

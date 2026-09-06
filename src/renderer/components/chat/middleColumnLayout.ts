@@ -94,10 +94,30 @@ export function rememberSendAttempt(
  */
 export function middleColumnHostClass(mode: MiddleColumnMode): string {
   if (mode === 'empty') {
-    return 'flex min-h-0 flex-1 flex-col justify-center px-6 pb-[9%]';
+    // U28: the composer sits at the BOTTOM of the empty column, not floating in
+    // the middle of it.
+    //
+    // A07's `flex-1 justify-center pb-[9%]` centred the composer in whatever
+    // space the start screen left above it, which put the two of them in the
+    // top half with a large dead area beneath — the arrangement the user
+    // rejected on sight. pix pins its composer to the bottom and centres the
+    // start screen in the room above; `startScreenHostClass` is that room, and
+    // this is the pinned half. Slightly more bottom padding than session mode:
+    // there is no timeline behind it for the card to read against.
+    return 'shrink-0 px-6 pt-0 pb-6';
   }
   return 'shrink-0 px-6 pt-0 pb-3.5';
 }
+
+/**
+ * U28: the region above the empty-mode composer, which the start screen is
+ * centred in.
+ *
+ * A sibling of the composer's host rather than a wrapper around both: the two
+ * have opposite jobs (one takes all the leftover height, one takes none), and
+ * expressing that as one container would need a nested flex column anyway.
+ */
+export const START_SCREEN_HOST_CLASS = 'flex min-h-0 flex-1 items-center justify-center px-6';
 
 /** Timeline scroll area's inner padding (A07 `.tl`: 20/24/8). Padding stays outside `ReadingColumn`. */
 export const TIMELINE_PADDING_CLASS = 'px-6 pt-5 pb-2';
@@ -416,7 +436,13 @@ export function composerAttachButtonClass(): string {
  */
 export function composerModelTriggerClass(): string {
   return [
-    'inline-flex h-6 shrink-0 items-center gap-1 rounded-sm px-2 text-ui',
+    // U30: `max-w-56` caps how far a long model name can push this chip's left
+    // edge. Its width is its content, and the bar pins its right edge, so every
+    // model switch used to slide the whole chip sideways — visible as "the
+    // controls move when I pick something". The cap plus the name's own
+    // `truncate` bounds that travel; the effort suffix is never truncated,
+    // being the short half that changes most often.
+    'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-sm px-2 text-ui',
     'transition-colors duration-150',
     'hover:bg-hover',
     'focus-visible:bg-hover',
@@ -447,7 +473,9 @@ export function composerPermissionTriggerClass(): string {
  * the effort suffix is the value that changes, so it carries the emphasis.
  */
 export function composerModelBaseClass(): string {
-  return 'text-muted-foreground';
+  // `min-w-0` is what makes `truncate` engage inside a flex row: a flex item
+  // defaults to `min-width: auto` and refuses to shrink below its content.
+  return 'min-w-0 truncate text-muted-foreground';
 }
 
 /**
@@ -977,10 +1005,14 @@ export function composerPlaceholder(input: {
   if (input.busy) {
     return 'Agent Host is running — your message will be queued…';
   }
-  if (!input.hasSession) {
-    return 'Select a session in the left nav before sending…';
-  }
-  if (!input.unbound && !input.hasWorkspace) {
+  // U28 removed a `!hasSession -> "Select a session in the left nav"` branch
+  // here. It named a prerequisite that no longer exists: `runSend` creates the
+  // conversation on the first send, so an empty composer with nothing selected
+  // is ready to type into, and telling the user to go find something in the
+  // sidebar first was the instruction that made a fresh install look broken.
+  // `hasSession` stays in the input — the ladder below still distinguishes a
+  // session that HAS a workspace problem from one that never existed.
+  if (input.hasSession && !input.unbound && !input.hasWorkspace) {
     return 'Active session has no workspace…';
   }
   // T12-e: a workspace that is present but has no path fell through this

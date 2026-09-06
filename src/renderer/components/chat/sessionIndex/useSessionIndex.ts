@@ -407,7 +407,35 @@ export function useSessionIndexMutations(refresh: () => Promise<void>) {
     [refresh]
   );
 
-  return { rename, archive, close };
+  /**
+   * U31: archive a selection in one pass, refetching ONCE at the end.
+   *
+   * Calling `archive` in a loop would work and would also refetch the whole
+   * session index per row — the operation the user reaches for when there are
+   * "too many sessions" is exactly the one where that is worst. Each entry is
+   * flipped with a no-op refresh, and the single real refresh lands after.
+   *
+   * Serial, not `Promise.all`: Main writes one index file, and the failure this
+   * ordering avoids (two writes racing over the same document) is worth more
+   * than the latency on an operation nobody runs in a loop.
+   *
+   * Returns how many actually flipped, so the caller can report a partial
+   * result rather than claiming all of them.
+   */
+  const archiveMany = useCallback(
+    async (sessionIds: readonly string[]): Promise<number> => {
+      const withoutRefresh = async () => undefined;
+      let archived = 0;
+      for (const sessionId of sessionIds) {
+        if (await archiveSessionIndexEntry(sessionId, true, withoutRefresh)) archived += 1;
+      }
+      await refresh();
+      return archived;
+    },
+    [refresh]
+  );
+
+  return { rename, archive, archiveMany, close };
 }
 
 /**

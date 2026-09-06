@@ -7,6 +7,18 @@ import { isEffortSelection } from './efforts';
 export const SESSION_MODEL_STORAGE_KEY = 'aiclient:chat:session-models';
 export const SESSION_EFFORT_STORAGE_KEY = 'aiclient:chat:session-efforts';
 export const SESSION_TIER_STORAGE_KEY = 'aiclient:chat:session-tiers';
+/**
+ * U29: the tier a chat starts on when it has never been given one.
+ *
+ * A separate key rather than a reserved id inside the per-session map: that map
+ * is keyed by real session ids and swept by `removeSessionTier`, and a sentinel
+ * living among them is one careless cleanup away from being deleted.
+ *
+ * Model and effort need no equivalent — `chatAgentDefaults` in the settings
+ * store is already exactly this ("Pi-only defaults for new chat sessions"), and
+ * `runSend` already reads it. Only the tier had no global home.
+ */
+export const DEFAULT_TIER_STORAGE_KEY = 'aiclient:chat:default-tier';
 
 type PreferenceMap = Record<string, unknown>;
 
@@ -92,4 +104,30 @@ export function writeSessionTier(sessionId: string, tier: SessionPermissionTier)
 
 export function removeSessionTier(sessionId: string): void {
   removeEntry(SESSION_TIER_STORAGE_KEY, sessionId);
+}
+
+/**
+ * U29 — the tier new chats inherit, and the one the composer shows before a
+ * chat exists.
+ *
+ * `null` (never set) is deliberately distinct from a stored value: it lets the
+ * spawn path fall through to Main's own default instead of this renderer
+ * pinning one, which is the behaviour every chat had before U29.
+ */
+export function readDefaultTier(): SessionPermissionTier | null {
+  try {
+    const raw = localStorage.getItem(DEFAULT_TIER_STORAGE_KEY);
+    return raw && isSessionPermissionTier(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeDefaultTier(tier: SessionPermissionTier): void {
+  if (!isSessionPermissionTier(tier)) return;
+  try {
+    localStorage.setItem(DEFAULT_TIER_STORAGE_KEY, tier);
+  } catch {
+    // Selection remains in the component when storage is unavailable.
+  }
 }

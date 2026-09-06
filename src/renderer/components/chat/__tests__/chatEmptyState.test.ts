@@ -15,7 +15,7 @@ import { stripComments } from './stripComments';
  */
 
 function input(overrides: Partial<ChatEmptyStateInput> = {}): ChatEmptyStateInput {
-  return { hasError: false, hasSession: true, hasWorkspace: true, hasCwd: true, ...overrides };
+  return { hasError: false, hasWorkspace: true, hasCwd: true, ...overrides };
 }
 
 describe('deriveChatEmptySurface', () => {
@@ -45,16 +45,13 @@ describe('deriveChatEmptySurface', () => {
     ).toBe('error-notice');
   });
 
-  it('keeps the diagnostic for a missing session', () => {
-    // "Add a working directory" does not fix a missing session, so this one
-    // stays a diagnostic rather than becoming guidance that cannot help.
-    expect(deriveChatEmptySurface(input({ hasSession: false }))).toBe('error-notice');
-  });
-
-  it('prefers the folder step when both the session and the folder are missing', () => {
-    // Ordering again, the other way round: of the two, picking a folder is the
-    // step the user can actually take.
-    expect(deriveChatEmptySurface(input({ hasSession: false, hasCwd: false }))).toBe('welcome');
+  it('U28: a chat with no session is not a fault — it is the starting position', () => {
+    // This used to return `error-notice`, and it was right while a session was
+    // a PREREQUISITE for sending. `runSend` now creates one on the first send,
+    // so a red diagnostic box here would be the app calling its own empty
+    // state broken — exactly the fresh-install report T12-e was opened for.
+    // `hasSession` left the input entirely; the surface no longer asks.
+    expect(deriveChatEmptySurface(input({ hasWorkspace: true, hasCwd: true }))).toBe('none');
   });
 
   // U05-b — an unbound chat has no folder BY DESIGN, so the surface that
@@ -79,11 +76,12 @@ describe('deriveChatEmptySurface', () => {
     ).toBe('error-notice');
   });
 
-  it('does not let unbound hide a missing session', () => {
+  it('does not let unbound hide a real error', () => {
     // The fall-through the unbound branch deliberately keeps: skipping the
-    // folder check must not also skip the checks that follow it.
+    // folder check must not also skip the check above it. (The companion case
+    // — a missing session — stopped being a fault in U28, see above.)
     expect(
-      deriveChatEmptySurface(input({ hasSession: false, hasWorkspace: false, unbound: true }))
+      deriveChatEmptySurface(input({ hasError: true, hasWorkspace: false, unbound: true }))
     ).toBe('error-notice');
   });
 });
@@ -113,7 +111,7 @@ describe('[T12-e′ wiring] the workspace owns the no-repository surface', () =>
     expect(SOURCE).not.toContain('lastError || !activeSessionId || !activeWorkspace || !cwd');
   });
 
-  it('renders the welcome card outside ChatComposer, above it rather than instead of it', () => {
+  it('renders the start screen outside ChatComposer, above it rather than instead of it', () => {
     // T12-e put the card in the workspace, not the composer; that still holds.
     expect(SOURCE).not.toContain('<ChatWelcomeCard');
     // U05-b replaced the either/or. The card used to be the ELSE branch of
@@ -122,15 +120,19 @@ describe('[T12-e′ wiring] the workspace owns the no-repository surface', () =>
     // now be able to be on screen at once, card first.
     expect(WORKSPACE_SOURCE).not.toMatch(/hasWorkingDirectory \?[\s\S]{0,800}<ChatComposer/);
     expect(WORKSPACE_SOURCE).toMatch(
-      /!hasWorkingDirectory &&[\s\S]{0,300}<ChatWelcomeCard[\s\S]{0,600}<ChatComposer/
+      /renderedMode === 'empty' &&[\s\S]{0,600}<ChatWelcomeCard[\s\S]{0,600}<ChatComposer/
     );
   });
 
-  it('gates the welcome card on the empty column only, so it cannot sit over a live chat', () => {
-    // Without the mode term the card would hang above the docked composer of
-    // an unbound chat that already has a conversation — telling a user who is
-    // mid-conversation to "pick a folder to start".
-    expect(WORKSPACE_SOURCE).toMatch(/!hasWorkingDirectory && renderedMode === 'empty'/);
+  it('gates the start screen on the empty column only, so it cannot sit over a live chat', () => {
+    // Without the mode term the card would hang above the docked composer of a
+    // chat that already has a conversation.
+    //
+    // U28 drops the `!hasWorkingDirectory` half (user, 2026-09-06): a bound
+    // chat that has not started yet is the same moment as an unbound one, and
+    // showing nothing there was why the bound empty column had no start screen
+    // at all. The mode term — the half that does the gating — is unchanged.
+    expect(WORKSPACE_SOURCE).toMatch(/\{renderedMode === 'empty' && \(/);
   });
 
   it('still renders the red diagnostic box on the error surface', () => {
@@ -149,11 +151,20 @@ describe('[T12-e′ wiring] the workspace owns the no-repository surface', () =>
     expect(SOURCE).toContain('hasCwd: Boolean(cwd)');
   });
 
-  it('passes the add-repository handler through, so the button is not dead', () => {
-    // A guided card whose only control does nothing is worse than the red box
-    // it replaced — that box at least told the truth.
-    expect(WORKSPACE_SOURCE).toMatch(
-      /<ChatWelcomeCard[\s\S]{0,200}onAddRepository=\{onAddRepository\}/
+  it('the start screen carries no controls of its own (U28)', () => {
+    // It used to own a folder-picker menu and, briefly, a "just start chatting"
+    // button. Both are gone: the composer's own target bar picks the folder,
+    // and typing is what starts the chat. A screen with a control that
+    // duplicates the composer below it is the 「臃肿」 this batch removed.
+    const card = stripComments(
+      readFileSync(path.join(__dirname, '..', 'ChatWelcomeCard.tsx'), 'utf8'),
+      'ChatWelcomeCard.tsx'
     );
+    expect(card).not.toContain('onAddRepository');
+    expect(card).not.toContain('onStartTemporaryChat');
+    expect(card).not.toContain('<button');
+    expect(card).not.toContain('MenuPrimitive');
+    // What it does carry: one line that names the folder when there is one.
+    expect(card).toContain('workspaceName');
   });
 });

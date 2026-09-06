@@ -2,6 +2,7 @@ import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu
 import type { TempWorkspaceItem } from '@shared/types';
 import {
   Archive,
+  Check,
   ChevronDown,
   ChevronRight,
   Folder,
@@ -9,6 +10,7 @@ import {
   FolderMinus,
   FolderOpen,
   FolderPlus,
+  ListChecks,
   ListFilter,
   Pencil,
   Plus,
@@ -120,6 +122,26 @@ export function LeftNav({
   const [recentShowAll, setRecentShowAll] = useState(false);
   const [searchVisible, setSearchVisible] = useState(true);
   const [repoToRemove, setRepoToRemove] = useState<Repository | null>(null);
+  /**
+   * U31: bulk archive. `null` = not selecting; a Set = selection mode holding
+   * the chosen session ids.
+   *
+   * One nullable Set rather than a boolean plus a Set: those two would have an
+   * illegal fourth state ("not selecting, but things are selected") that every
+   * reader would then have to decide what to do about.
+   */
+  const [selection, setSelection] = useState<ReadonlySet<string> | null>(null);
+  const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false);
+  const selecting = selection !== null;
+
+  const toggleSelected = useCallback((sessionId: string) => {
+    setSelection((current) => {
+      if (!current) return current;
+      const next = new Set(current);
+      if (!next.delete(sessionId)) next.add(sessionId);
+      return next;
+    });
+  }, []);
 
   const handleConfirmRemoveRepo = useCallback(() => {
     if (repoToRemove && onRemoveRepository) {
@@ -180,7 +202,7 @@ export function LeftNav({
   // T-02: hydrate + mutate the persisted session index (chat:listSessions /
   // renameSession / archiveSession / closeSession).
   const { refresh } = useSessionIndex();
-  const { rename, archive, close } = useSessionIndexMutations(refresh);
+  const { rename, archive, archiveMany, close } = useSessionIndexMutations(refresh);
 
   // D08: activation (select + resume-if-needed) moved into `useActivateSession`
   // so the center tab strip can start a session the same way this list does —
@@ -345,6 +367,9 @@ export function LeftNav({
                 now={now}
                 active={activeSessionId === row.sessionId}
                 started={hostBoundSessionIds.includes(row.sessionId)}
+                {...(selecting
+                  ? { selected: selection.has(row.sessionId), onToggleSelect: toggleSelected }
+                  : {})}
                 pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
                 onSelect={() => handleSelectSession(row.sessionId)}
                 onClose={() => void close(row.sessionId)}
@@ -364,30 +389,71 @@ export function LeftNav({
     // over the dock's absolutely-positioned mount stack.
     <aside className="flex h-full w-full min-w-0 flex-col">
       <div className="space-y-2 border-b p-2">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="xs"
-            className="h-6"
-            title={newSessionButtonTitle}
-            onClick={handleNewSession}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New
-          </Button>
-          {/* Replaces a permanently disabled "Workspace" placeholder: the
-                  new shell had no reachable way to register a repository. */}
-          <Button
-            variant="outline"
-            size="xs"
-            className="h-6 min-w-0"
-            title={t('Add Repository')}
-            onClick={onAddRepository}
-          >
-            <FolderPlus className="h-3.5 w-3.5 shrink-0" />
-            <span className="min-w-0 truncate">{t('Add Repository')}</span>
-          </Button>
-        </div>
+        {/* U31: both modes share this one row. A second row appearing only
+            while selecting would push the list down on entry and pull it back
+            on exit — the list is the thing being worked on, so it must not move
+            under the pointer. */}
+        {selecting ? (
+          <div className="flex items-center gap-1">
+            <span className="min-w-0 flex-1 truncate text-ui">
+              {t('{{count}} selected', { count: selection.size })}
+            </span>
+            <Button
+              variant="outline"
+              size="xs"
+              className="h-6 shrink-0"
+              disabled={selection.size === 0}
+              title={t('Archive selected')}
+              onClick={() => setBulkArchiveOpen(true)}
+            >
+              <Archive className="h-3.5 w-3.5" />
+              {t('Archive')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-6 shrink-0"
+              onClick={() => setSelection(null)}
+            >
+              {t('Cancel')}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="xs"
+              className="h-6"
+              title={newSessionButtonTitle}
+              onClick={handleNewSession}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New
+            </Button>
+            {/* Replaces a permanently disabled "Workspace" placeholder: the
+                    new shell had no reachable way to register a repository. */}
+            <Button
+              variant="outline"
+              size="xs"
+              className="h-6 min-w-0"
+              title={t('Add Repository')}
+              onClick={onAddRepository}
+            >
+              <FolderPlus className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 truncate">{t('Add Repository')}</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="ml-auto h-6 w-6 shrink-0"
+              title={t('Select sessions to archive')}
+              aria-label={t('Select sessions to archive')}
+              onClick={() => setSelection(new Set())}
+            >
+              <ListChecks className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
         {searchVisible && (
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -463,6 +529,12 @@ export function LeftNav({
                         now={now}
                         active={activeSessionId === row.sessionId}
                         started={hostBoundSessionIds.includes(row.sessionId)}
+                        {...(selecting
+                          ? {
+                              selected: selection.has(row.sessionId),
+                              onToggleSelect: toggleSelected,
+                            }
+                          : {})}
                         pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
                         onSelect={() => handleSelectSession(row.sessionId)}
                         onClose={() => void close(row.sessionId)}
@@ -634,6 +706,12 @@ export function LeftNav({
                               now={now}
                               active={activeSessionId === row.sessionId}
                               started={hostBoundSessionIds.includes(row.sessionId)}
+                              {...(selecting
+                                ? {
+                                    selected: selection.has(row.sessionId),
+                                    onToggleSelect: toggleSelected,
+                                  }
+                                : {})}
                               pendingApprovalCount={
                                 pendingApprovalCountBySession.get(row.sessionId) ?? 0
                               }
@@ -699,6 +777,45 @@ export function LeftNav({
           </AlertDialogFooter>
         </AlertDialogPopup>
       </AlertDialog>
+
+      {/* U31: archiving a selection is the one bulk action here, and Archive is
+          already the repo's "remove from the nav for good" — so it asks first,
+          and says how many, the same way the single-row confirmation names the
+          one. */}
+      <AlertDialog open={bulkArchiveOpen} onOpenChange={setBulkArchiveOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('Archive selected sessions')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('Archive {{count}} sessions? They will be removed from the sidebar.', {
+                count: selection?.size ?? 0,
+              })}
+              <span className="mt-2 block text-muted-foreground">
+                {t('Their history stays on disk; this only clears them out of the list.')}
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button variant="outline" onClick={() => setBulkArchiveOpen(false)}>
+              {t('Cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                const ids = [...(selection ?? [])];
+                setBulkArchiveOpen(false);
+                // Selection mode ends here rather than after the awaits: the
+                // rows are on their way out, and leaving checkboxes on a list
+                // that is about to change under them reads as unfinished.
+                setSelection(null);
+                void archiveMany(ids);
+              }}
+            >
+              {t('Archive')}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </aside>
   );
 }
@@ -715,6 +832,13 @@ interface SessionRowProps {
    * for "it is already running" is that nothing visibly happens.
    */
   started: boolean;
+  /**
+   * U31: set only while the sidebar is in selection mode. Presence is what puts
+   * the row in that mode — a `selecting` boolean beside them would be a third
+   * source for a fact these two already carry.
+   */
+  selected?: boolean;
+  onToggleSelect?: (sessionId: string) => void;
   onSelect: () => void;
   onClose: () => void;
   onRename: (title: string) => void;
@@ -730,6 +854,8 @@ function SessionRow({
   active,
   pendingApprovalCount,
   started,
+  selected,
+  onToggleSelect,
   onSelect,
   onClose,
   onRename,
@@ -808,23 +934,39 @@ function SessionRow({
             'group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-left text-ui',
             active ? 'bg-selection text-accent-foreground' : 'hover:bg-hover'
           )}
-          onClick={onSelect}
-          onDoubleClick={beginRename}
+          onClick={() => (onToggleSelect ? onToggleSelect(row.sessionId) : onSelect())}
+          onDoubleClick={onToggleSelect ? undefined : beginRename}
           role="button"
           tabIndex={0}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
-              onSelect();
+              if (onToggleSelect) onToggleSelect(row.sessionId);
+              else onSelect();
             }
           }}
           title={row.title}
         >
+          {/* U31: the checkbox replaces the run-state dot rather than joining
+              it. Both want the same 6px slot at the row's head, and while the
+              user is choosing what to archive, "is it selected" is the fact
+              that matters — the dot comes back the moment selection ends. */}
+          {onToggleSelect && (
+            <span
+              aria-hidden
+              className={cn(
+                'flex size-3.5 shrink-0 items-center justify-center rounded-xs border',
+                selected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
+              )}
+            >
+              {selected && <Check className="size-2.5" />}
+            </span>
+          )}
           {/* The three-state marker, in one 6px slot so rows never jump:
               filled = running, ring = started (a worker is attached in the
               background), nothing = not started. `busy` wins when both are true
               — "it is working" is the more urgent of the two facts. */}
-          {row.busy ? (
+          {onToggleSelect ? null : row.busy ? (
             <span
               aria-hidden
               className="h-1.5 w-1.5 shrink-0 rounded-full bg-status-running"

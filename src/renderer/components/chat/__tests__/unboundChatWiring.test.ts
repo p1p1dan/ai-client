@@ -47,7 +47,36 @@ describe('[U05-b] the composer can send without a bound folder', () => {
   });
 
   it('admits an unbound chat through the send gate', () => {
-    expect(COMPOSER).toMatch(/const canSend = Boolean\([^)]*isUnboundSession[^)]*\)/);
+    // U28 split the gate in two: `hasSendTarget` answers "is there somewhere to
+    // send this", `canSend` adds the busy/disabled terms. The unbound term this
+    // pin exists for moved to the first half untouched — a chat with a session
+    // and no cwd is still admitted by `isUnboundSession`.
+    expect(COMPOSER).toMatch(/const hasSendTarget = Boolean\([^)]*isUnboundSession[^)]*\)/);
+    expect(COMPOSER).toContain('const canSend = Boolean(hasSendTarget && !disabled && !canStop)');
+  });
+
+  it('U28: and admits a chat that has no session yet', () => {
+    // The state a fresh install is in. `runSend` creates the conversation on
+    // the first send rather than requiring one to exist first.
+    expect(COMPOSER).toContain('activeSessionId ? cwd || isUnboundSession : true');
+  });
+
+  it('U28: the textarea and attach button are not locked by a missing session', () => {
+    // The gap the first pass left, reported as 「欢迎页面的聊天还是假的」: the
+    // send gate was open and the placeholder read `Message Pi…`, but the
+    // textarea itself still carried `disabled={disabled || !activeSessionId}`,
+    // so the start screen looked typable and was not. A source scan because
+    // these are JSX attributes, which no pure test can reach.
+    expect(COMPOSER).not.toContain('disabled={disabled || !activeSessionId}');
+  });
+
+  it('U28: the first message titles the session runSend actually created', () => {
+    // `activeSessionId` is null in the closure that runs the title step when
+    // the send is what created the chat, so the id is read back off the store.
+    // Without it every chat started from the empty composer keeps `New chat`.
+    expect(COMPOSER).toContain(
+      'const titledSessionId = activeSessionId ?? useChatSessionsStore.getState().activeSessionId;'
+    );
   });
 
   it('no longer bails out of runSend on a null cwd', () => {

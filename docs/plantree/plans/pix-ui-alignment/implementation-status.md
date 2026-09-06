@@ -1,14 +1,70 @@
 # Implementation Status — pix/pi-app UI 对齐改造
 
-**Current Phase**：**批次 13 全部落地（U22–U27）**。累计 GUI 点验已于 2026-09-06
+**Current Phase**：**批次 13/14/15 全部落地（U22–U31）**。累计 GUI 点验已于 2026-09-06
 由用户在真实窗口跑完，产出的五条反馈加一条追加诉求都已收口。
 壳层仍按 [D08](./decisions/008-vscode-dock-shell.md)，但它的两条已被本批推翻：
 中栏 Tab（[D12](./decisions/012-single-session-view-and-background-concurrency.md) 决定一）
 与 TUI 独占（[D13](./decisions/013-editor-stays-available-in-tui.md)，实际推翻的是 D02）。
 
-**Next Target**：**批次 13 的累计 GUI 点验**——六片全部只差真窗口确认，看点见下方 Active TODO 第 1 项。
+**Next Target**：**批次 13/14 的累计 GUI 点验**——七片全部只差真窗口确认，
+其中 U28 有一条是崩溃复现（原「直接开聊」按钮的路径）。看点见下方 Active TODO 第 1 项。
 
-**Last Landed**：2026-09-06 **U25 + U26 + U27**（批次 13 收尾）。
+**Last Landed**：2026-09-06 **U30 + U31**（用户第二轮点验的产出）。
+**U30-a** 权限菜单选完不关——`MenuPrimitive.RadioItem` 按设计不关闭（radio 语义是反复切），
+`<Menu>` 改受控且**只在 `applyTier` 里关**（放 `handleSelect` 会让危险档的确认框来不及出现）。
+**U30-b** 底栏抖动——模型触发器右边缘被 `ms-auto` 钉住、左边缘随标签浮动，
+菜单原本锚在会动的那条边上；改 `align="end"` + `max-w-56` + 名称 `truncate`。
+**U30-c** 权限卡「重叠」不是错位，是 `Button` 焦点光环（盒外 3px、不占布局）
+伸进了 `gap-1` 的 4px 缝，而第一项 `autoFocus` 所以每次必现；改 `gap-2`。
+**U31** 左栏批量归档：`archiveMany` **只 refetch 一次**（循环调 `archive` 会整份重取 N 遍，
+而这功能存在的场景正是「会话太多」）；选择态是**一个可空 Set**；
+同一行横条服务两种模式；复选框占运行点那个槽，行高不变。
+**顺带修好** `'Archive'` 从来没有中文条目这个既有缺陷。
+**280 files / 4246 tests 全绿**。真机验证：顶栏变「已选 N 项 ⧉ 归档 取消」、行首复选框勾上。
+证据见 [U30/U31 evidence](./evidence/2026-09-06-u30-u31-chrome-and-bulk-archive.md)。
+**第四条反馈（问答卡）不是缺陷**，取证结论见 [Q14](./open-questions.md)。
+
+**同一天稍早**：2026-09-06 **U29** 起始屏底栏不再是空的
+（关闭 [D14](./decisions/014-start-screen-is-a-live-composer.md) 的「已知未对齐处」，
+用户拍板「那就全局默认吧」）。
+**先查了 pix**：它的 `Composer` 根本不接收 sessionId——模型/思考档写给 **host 进程**、
+权限档是**全局偏好**、占用是只读快照字段。pix 是单 host 单会话，
+**「没有会话」这个状态在它那里不存在**；它防空白的手法是
+`snapshot?.model ?? lastComposerChromeRef.current.model`，
+注释写着「survives snapshot gaps so composer never flashes 未选择模型」。
+**抄规则不抄结构**：我们多会话并发，模型/思考档必须留在会话上，
+采纳的是「控件永不空白，无会话时用全局模板顶上」。
+模型/思考档的全局位 `chatAgentDefaults` 早就存在且该组件本来就在写它，
+所以只是把 per-session 读写在无会话时跳过；权限档新增独立 key
+（不在 per-session 映射里占保留 id——那张表会被清扫）；
+spawn 档位变两级、会话自己的仍优先。**占用 chip 刻意不动**（实测量，pix 同）。
+**278 files / 4230 tests 全绿**，变异验证两条判红。
+**真机前后对照**：干净 profile 下 `activeSessionId: null`，底栏按钮由
+`[Attach files, 发送]` 变为 `[Attach files, Pragmatic, Automatic, 发送]`。
+证据见 [U29 evidence](./evidence/2026-09-06-u29-start-screen-bar.md)。
+
+**同一天稍早**：2026-09-06 **U28** 起始屏改为「可用的输入框」
+（[D14](./decisions/014-start-screen-is-a-live-composer.md)，基准是用户给的 pix 截图）。
+**推翻 U22 的落地形态**：U22 的取证对（`canSend` 要求会话、四个入口全死），
+但它加按钮去**补入口**而没拆闸——那个按钮把 React 事件对象当成会话标题传下去，
+用户点第一下就抛 `Objects are not valid as a React child`。
+崩溃是表面，加按钮本身就说明闸没拆干净。
+现在 `runSend` 用 `activeSessionId ?? createUnboundChatSession()`，发送即创建会话；
+「没有会话」不再判 `error-notice`、占位符不再说「先去左栏选一个会话」
+（那两处在前提消失后成了**应用把自己的起始状态标成红色故障**）；
+起始屏收敛为标记 + 「开始对话」+ 一句副文案，**没有任何控件**，
+并按用户追加要求扩大到**每一次对话开始**（有目录时点名目录）。
+**第二轮（同日）**：用户回报「聊天还是假的」——发送闸拆了但 **textarea 自己**
+还锁着（`disabled={disabled || !activeSessionId}`），附件按钮同病；
+`runSend` 新建的会话 `handleSend` 闭包读不到，会话标题会永远停在「New chat」。
+同批把 empty 模式布局改成 composer 钉底 + 起始屏在上方剩余空间居中
+（原来是 composer 在起始屏剩下的空间里居中，两者挤在上半屏）。
+**278 files / 4228 tests 全绿**，两轮变异验证各四条判红。
+**这次自己起 app 验了**：干净 profile 下 `activeSessionId: null` / `workspaces: 0` /
+`textarea.disabled: false` / 无红框，键盘输入实际落进了输入框。
+证据见 [U28 evidence](./evidence/2026-09-06-u28-start-screen.md)。
+
+**同一天稍早**：2026-09-06 **U25 + U26 + U27**（批次 13 收尾）。
 U26（[D13](./decisions/013-editor-stays-available-in-tui.md)）——TUI 下也能看文件。
 根因不是缺陷代码，是**一条过期的决定**：U03-a 写 `!isTui && editorOpen` 时「收右栏」
 的意思是把宽度让给终端，D08 把编辑器搬进右栏后同一行变成了「终端开着就不能看文件」。
@@ -140,7 +196,18 @@ token 估算与手动刷新刻意不做，理由在 evidence 里。
 并把 hands-off / full access 的档位文案改成点明工作区边界。同批下线顶栏终端按钮与 ``Ctrl/Cmd+` ``。
 证据见 [U12 rev.2 evidence](./evidence/2026-09-04-u12-rev2-cross-directory-and-terminal-rail.md)。
 
-**Last Verified**：2026-09-06（U25 + U26 + U27）—— 全仓 **278 files / 4227 tests pass**；
+**Last Verified**：2026-09-06（U30 + U31）—— 全仓 **280 files / 4246 tests pass**；
+`tsc --noEmit` pass；`biome check src/` 干净；`git diff --check` 干净。
+真机：进选择模式 → 顶栏「已选 0 项」→ 点一行 → 「已选 1 项」+ 复选框勾上，无渲染层异常。
+同日稍早（U29）—— 全仓 **278 files / 4230 tests pass**；
+`tsc --noEmit` pass；`biome check src/` 干净；`git diff --check` 干净。
+变异验证：把两个槽位改回 `activeSessionId ? … : null` 并撤掉 spawn 的默认档回退后两条判红，
+恢复后 11 条全绿。真机前后对照见 U29 evidence 第八节。
+同日稍早（U28）—— 全仓 **278 files / 4228 tests pass**；
+`tsc --noEmit` pass；`biome check src/` 干净；`git diff --check` 干净。
+变异验证：回退「发送时建会话」「`hasSendTarget` 放宽」「空态不再判故障」三处后四条断言判红，
+恢复后 34 条全绿。
+同日稍早（U25 + U26 + U27）—— 全仓 **278 files / 4227 tests pass**；
 `tsc --noEmit` pass；`biome check src/` 干净；`git diff --check` 干净。
 变异验证：回退 U26 的两处与 U27 的占位后两条断言各自判红，恢复后 5 条全绿；
 U25 的漂移守卫按构造即是变异验证（直接比对 Main 与渲染层两侧数值）。
@@ -167,7 +234,10 @@ store 记 `user_configured`、标签「你自己的策略」、菜单只剩两�
 > 上限五项（root registry 的维护规则）。六件「待真机验证」合并为一项——它们的性质相同：
 > 自动化已绿，缺的是一次真实 pi CLI / 真账号 / 真扩展 / 真慢冷启动的手动跑。
 
-1. **批次 13 累计 GUI 点验（当前唯一的主动任务）** — 六片自动化全绿，缺一次真窗口确认：
+1. **批次 13/14 累计 GUI 点验（当前唯一的主动任务）** — 七片自动化全绿，缺一次真窗口确认：
+   ⓪ **U28 剩下的那半**：起始屏形态、能打字、两种副文案都已由 CDP 探针实测
+   （见 evidence 第七节，截图在 `2026-09-06-u28-shots/`）；**没验的是真的发出去一回合**
+   ——按下发送后会话被创建、消息到达 runtime，需要真账号真模型；
    ① U22 全新状态下点 `+ New` 或「直接开聊」后输入框可用、发得出去；
    ② U23 点开已有会话后插件对话框列出实际加载的插件，不再是「发送一条消息…」；
    ③ U24 中栏无 Tab 条、点左栏直接切换、空心环出现在已启动但非前台的会话上、
@@ -175,13 +245,18 @@ store 记 `user_configured`、标签「你自己的策略」、菜单只剩两�
    ④ U26 TUI 下点文件编辑器与终端并排，关掉最后一个标签终端收回整行；
    ⑤ U27 左栏第一个图标与面板标题行下方内容齐平；
    ⑥ U25 窗口拖到最窄时编辑器工具条右端按钮仍完整可见可点。
-2. **U24 的两笔欠账** — ① 10 个 worker 同时在跑时的真机内存占用未实测（自动化只验了
-   上限数字与分档函数）；② 空闲超时（15 分钟）仍不提示，用户撞上时同样会困惑
-   「为什么它自己停了」，D12 明确不动它，留作 open question。
-3. **U25 的两笔欠账** — ① 原始现场从未复现，1244px 只有算术保证；
-   ② `minWidth` 变大的代价未评估：1280×800 一类小屏现在无法把窗口缩窄，
-   退路是让左栏在窄窗口下先被压缩，再把地板降到收起态的 964px。
-4. **待真机验证（六件）** —
+2. **批次 13/14 的五笔欠账**（性质各异，合并计一项以守住五项上限）——
+   **U30/U31**：三条 chrome 改动只有静态断言，抖动是否「看着还动」要肉眼；
+   批量归档没点确认（那会真改本机索引）；选择模式没有「全选」。
+   **U29**：没验「改完默认再发送，新会话真的用了它」——自动化锁住了 spawn 读取的那条串，
+   真机只验到控件可见可点；另外模型菜单的 scope 文案仍是给有会话的场景写的
+   （权限档那个 tooltip 已说明「作用于新建的对话」）。
+   **U24**：① 10 个 worker 同时在跑时的真机内存占用未实测；
+   ② 空闲超时（15 分钟）仍不提示，D12 明确不动它，留作 open question。
+   **U25**：③ 原始现场从未复现，1244px 只有算术保证；
+   ④ `minWidth` 变大对 1280×800 一类小屏的代价未评估，退路是让左栏先被压缩、
+   再把地板降到收起态的 964px。
+3. **待真机验证（六件）** —
    ⓪ **U17 的 bootstrap 超时** 原始现场（`worker.bootstrap timed out after 10000ms`）本轮未复现，
    修改按代码路径判定、由单测锁住 60s 预算；下次真遇到冷启动慢时确认它不再中断 resume；
    ⓪′ **U18 的极端档** 反过来的一半没测：真给某模型声明 `thinkingLevelMap: { minimal: 'minimal' }`
@@ -193,7 +268,7 @@ store 记 `user_configured`、标签「你自己的策略」、菜单只剩两�
    [该缺陷记录](./evidence/2026-09-04-host-status-false-stop-and-tui-history-bug.md) 第三、四节）；
    ③ **U13 跨重启** 「聊天 → 退出 → 重开 → 点开」未在真机走过（索引读写、目录认领、resume 参数均有单测）；
    ④ **U04 的 MCP 徽标** 解析逻辑与 pix 同源，但本仓没有可跑通的 MCP 扩展，只有单测覆盖、没有真机样本。
-5. **发布前需 `pnpm build:agent-host`** — `out-agent-host/` 里的插件副本与 `config.json` 停留在 09-02，
+4. **发布前需 `pnpm build:agent-host`** — `out-agent-host/` 里的插件副本与 `config.json` 停留在 09-02，
    连 `authorizerChain` 都没有；dev 不受影响，打包必须重建。
 
 

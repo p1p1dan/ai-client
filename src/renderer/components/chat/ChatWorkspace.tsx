@@ -2,7 +2,6 @@ import { Play } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { createUnboundChatSession } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useExtensionUiStore } from '@/stores/extensionUi';
 import { useExtensionUiDisplayStore } from '@/stores/extensionUiDisplay';
@@ -27,9 +26,9 @@ import {
   deriveMiddleColumnMode,
   middleColumnHostClass,
   rememberSendAttempt,
+  START_SCREEN_HOST_CLASS,
 } from './middleColumnLayout';
 import type { RunSendOrigin } from './queueRelease';
-import { ReadingColumn } from './ReadingColumn';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
@@ -75,7 +74,6 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
   const activeWorkspacePath = activeWorkspace?.path?.trim() ?? '';
   const repoName = deriveRepoName(activeWorkspacePath);
-  const hasWorkingDirectory = workspaces.some((workspace) => workspace.path.trim().length > 0);
   // D07: `tuiHeaderLabel`, the temporary-chat marker and its `scratchCwd` moved
   // to `MainHeader` with the rest of this column's old bar. They are derived
   // there from the same stores, not threaded through — this column no longer has
@@ -273,23 +271,26 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
           <ExtensionUiUnsupportedNotice sessionId={activeSessionId} onOpenTui={openTui} />
           <ExtensionUiInlineDock sessionId={activeSessionId} />
           <ExtensionUiWidgets sessionId={activeSessionId} placement="aboveEditor" />
-          {/* U05-b ②: the welcome card no longer REPLACES the composer — it
-              sits above it while the app has no folder at all, so a user who
-              wants to bind one still gets the guided path, and a user who just
-              wants to talk can type. Hidden once the chat has messages, where
-              a "pick a folder to start" card would be describing the past. */}
-          {!hasWorkingDirectory && renderedMode === 'empty' && (
-            <ReadingColumn>
+          {/* U05-b ②: the start screen does not REPLACE the composer, it sits
+              above it — a user who wants to bind a folder still has the
+              composer's own target bar, and a user who just wants to talk can
+              type. Still gated on the empty column, so it cannot hang over a
+              chat that already has messages.
+
+              U28 drops the `!hasWorkingDirectory` term (user, 2026-09-06): a
+              bound chat that has not started yet is the same moment as an
+              unbound one. Only the sentence differs, and it differs by naming
+              the folder — which is why the workspace name is passed in. */}
+          {renderedMode === 'empty' && (
+            <div className={START_SCREEN_HOST_CLASS}>
               <ChatWelcomeCard
-                onAddRepository={onAddRepository}
-                {...(activeSessionId ? {} : { onStartTemporaryChat: createUnboundChatSession })}
+                {...(activeWorkspacePath && repoName ? { workspaceName: repoName } : {})}
               />
-            </ReadingColumn>
+            </div>
           )}
           <div className={middleColumnHostClass(renderedMode)}>
             <ChatComposer
               mode={renderedMode}
-              disabled={!activeSessionId}
               onAddRepository={onAddRepository}
               onSendStart={markSendAttempt}
             />
