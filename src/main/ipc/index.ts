@@ -3,6 +3,7 @@ import { remoteConnectionManager } from '../services/remote/RemoteConnectionMana
 import { webInspectorServer } from '../services/webInspector';
 import { cleanupExecInPtys, cleanupExecInPtysSync } from '../utils/shell';
 import { registerAgentCatalogHandlers } from './agentCatalog';
+import { registerAnnouncementHandlers } from './announcements';
 import { registerAppHandlers } from './app';
 import { registerAuthHandlers } from './auth';
 import { registerChatHandlers } from './chat';
@@ -82,6 +83,7 @@ export function registerIpcHandlers(): void {
   registerPiPermissionHandlers();
   registerPiResourceHandlers();
   registerUsageHandlers();
+  registerAnnouncementHandlers();
   registerPiTuiHandlers();
   sweepScratchWorkspacesOnStartup();
 }

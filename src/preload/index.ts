@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { homedir } from 'node:os';
 import 'electron-log/preload.js';
+import type { AnnouncementsResult } from '@shared/announcements';
 import type { Locale } from '@shared/i18n';
 import type {
   PiModelManagementSettings,
@@ -729,6 +730,20 @@ const electronAPI = {
   // Usage
   usage: {
     getStats: (): Promise<UsageStatsResult> => ipcRenderer.invoke(IPC_CHANNELS.USAGE_GET_STATS),
+  },
+
+  /**
+   * F09 — startup announcements. `get` reads what is already on disk (no
+   * network), `refresh` asks the service, `markRead` records what the user has
+   * seen and answers with the updated snapshot so the caller needs no second
+   * round trip to redraw the unread mark.
+   */
+  announcements: {
+    get: (): Promise<AnnouncementsResult> => ipcRenderer.invoke(IPC_CHANNELS.ANNOUNCEMENTS_GET),
+    refresh: (): Promise<AnnouncementsResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ANNOUNCEMENTS_REFRESH),
+    markRead: (ids: readonly string[]): Promise<AnnouncementsResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ANNOUNCEMENTS_MARK_READ, [...ids]),
   },
 
   // Onboarding

@@ -340,7 +340,16 @@ export const zhTranslations: Record<string, string> = {
   'Delete Worktree': '删除 Worktree',
   Description: '描述',
   'Description (optional)': '描述 (可选)',
-  'Developer Tools': '开发者工具',
+  // F09: `Reload` / `Developer Tools` / `GitHub` / `Exit` were the title bar's
+  // overflow menu, which is gone. `Developer Tools` was the only one with an
+  // entry here, and it is dropped with the control it labelled — a translation
+  // for a string nothing renders is a shell waiting to be mistaken for a live
+  // one. It stays reachable through the platform's own F12.
+  Announcements: '公告',
+  'Announcements (unread)': '公告（有未读）',
+  'Messages from the service operator.': '来自服务方的通知。',
+  'Got it': '知道了',
+  'AI Client': 'AI Client',
   Diffs: '差异',
   Discard: '撤销更改',
   'Discard all': '全部撤销',

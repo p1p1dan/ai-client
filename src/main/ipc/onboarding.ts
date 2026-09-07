@@ -76,6 +76,10 @@ async function clearServerAuthCookie(serverUrl: string): Promise<void> {
  *     entirely different files than ④/⑤.
  *  ⑥ `clearServerAuthCookie(serverUrl)` — `serverUrl` captured BEFORE step's
  *     legacy cleanup wipes `onboarding.serverUrl` from settings.json.
+ *  ⑥b `clearReadState()` (F09) — announcement read state is per-account, so
+ *     the next sign-in on this machine sees the operator's messages as new.
+ *     Ungated and failure-tolerant; the cached announcements are NOT cleared,
+ *     so a signed-out window still shows what it had.
  *  ⑦ `authStateService.refresh()` — the value-changed broadcast of
  *     `signed_out` (D47 S5 §1.2); the vault is already `cleared` (④), so this
  *     lands on `signed_out` and notifies exactly once (assuming the snapshot
@@ -146,6 +150,19 @@ export async function performLogoutSequence(): Promise<boolean> {
   // ⑥
   if (serverUrl) {
     await clearServerAuthCookie(serverUrl);
+  }
+
+  // ⑥b (F09) — announcement read state is per-account: the next person to sign
+  // in on this machine must see the operator's messages as new, not as
+  // already-dismissed by somebody else. Deliberately NOT flag-gated and
+  // deliberately after ⑤: it touches only this app's own state file, it can
+  // never fail the logout, and the cached announcements themselves are left
+  // alone so a signed-out window can still show what it had.
+  try {
+    const { getAnnouncementService } = await import('../services/announcements');
+    getAnnouncementService().clearReadState();
+  } catch (error) {
+    console.warn('[onboarding:logout] Failed to clear announcement read state:', error);
   }
 
   // ⑦ — payload/env already zeroed (④/⑤ landed above), so this is safe to

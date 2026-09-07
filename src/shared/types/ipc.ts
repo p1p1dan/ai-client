@@ -281,6 +281,13 @@ export const IPC_CHANNELS = {
   // Usage
   USAGE_GET_STATS: 'usage:getStats',
 
+  // F09 announcements. `refresh` asks the service; `get` answers from what is
+  // already on disk without a network call, so a renderer that mounts before
+  // the first fetch lands still has something to show.
+  ANNOUNCEMENTS_GET: 'announcements:get',
+  ANNOUNCEMENTS_REFRESH: 'announcements:refresh',
+  ANNOUNCEMENTS_MARK_READ: 'announcements:markRead',
+
   // Onboarding
   ONBOARDING_CHECK: 'onboarding:check',
   ONBOARDING_SEND_CODE: 'onboarding:sendCode',

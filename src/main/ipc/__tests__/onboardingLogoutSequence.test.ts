@@ -73,6 +73,9 @@ const disposeAllPiTuiControllersMock = vi.fn(async () => {
 const utilityInvalidateAllMock = vi.fn(async () => {
   events.push('piUtility.invalidateAll');
 });
+const clearReadStateMock = vi.fn(() => {
+  events.push('announcements.clearReadState');
+});
 
 vi.mock('electron', () => ({
   // D64/S3 — the mode resolver falls through to the settings file when the
@@ -125,6 +128,10 @@ vi.mock('../../services/onboarding/OnboardingService', () => ({
   },
 }));
 
+vi.mock('../../services/announcements', () => ({
+  getAnnouncementService: () => ({ clearReadState: clearReadStateMock }),
+}));
+
 vi.mock('../../services/cli/GitInstaller', () => ({ GitInstaller: vi.fn() }));
 vi.mock('../onboardingHandlers', () => ({ createVerifyAndRegisterHandler: vi.fn() }));
 
@@ -137,6 +144,7 @@ beforeEach(() => {
   for (const mock of [
     beginLogoutMock,
     refreshMock,
+    clearReadStateMock,
     killMock,
     destroyAllLocalAndWaitMock,
     listMock,
@@ -292,5 +300,24 @@ describe('performLogoutSequence — I9 checkpoint order (D47 S5 §3)', () => {
     await sequencePromise;
 
     expect(cookiesRemoveMock).toHaveBeenCalledWith('https://cch.example.com', 'auth-token');
+  });
+
+  it('⑥b clears announcement read state before the signed_out broadcast', async () => {
+    // F09: read state is per-account. If it survived logout, the next person to
+    // sign in on this machine would find the operator's messages pre-dismissed.
+    const { performLogoutSequence } = await import('../onboarding');
+
+    const promise = performLogoutSequence();
+    destroyAllLocalDeferred.resolve();
+    shutdownDeferred.resolve();
+    vaultClearDeferred.resolve();
+    regenerateDeferred.resolve();
+    await promise;
+
+    expect(clearReadStateMock).toHaveBeenCalledTimes(1);
+    expect(events.indexOf('announcements.clearReadState')).toBeGreaterThan(
+      events.indexOf('vault.clear:end')
+    );
+    expect(events.indexOf('announcements.clearReadState')).toBeLessThan(events.indexOf('refresh'));
   });
 });

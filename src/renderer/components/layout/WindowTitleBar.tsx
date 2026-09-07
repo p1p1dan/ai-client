@@ -1,16 +1,5 @@
-import { ExternalLink, MoreHorizontal, RefreshCw, Terminal, X } from 'lucide-react';
-import { useCallback } from 'react';
 import logoImage from '@/assets/logo.png';
-import {
-  Menu,
-  MenuItem,
-  MenuSeparator,
-  MenuShortcut,
-  MenuTrigger,
-  TitleBarMenuPopup,
-} from '@/components/ui/menu';
 import { useI18n } from '@/i18n';
-import { cn } from '@/lib/utils';
 import { WindowControls } from './WindowControls';
 
 // 平台检查在模块级别进行，避免在组件内部违反 Hooks 规则
@@ -25,40 +14,30 @@ const isMac = typeof window !== 'undefined' && window.electronAPI?.env?.platform
  * they are workspace chrome, and stacking them here alongside two more controls
  * is what made this strip read as clutter.
  *
- * The overflow menu stays. Unlike the other two it is app-level (reload,
- * devtools, exit) and this bar is the ONLY chrome the onboarding and welcome
- * shells render — there is no sidebar footer on those screens to move it to.
+ * F09 finished that reduction: the overflow menu is gone too, and nothing
+ * replaced it. Reload, Developer Tools, GitHub and Exit were removed outright
+ * rather than moved (user ruling, 2026-09-07) — every one of them is already
+ * reachable without this menu (F12 and Ctrl+R are the platform's own shortcuts,
+ * Alt+F4 and the window buttons close the window), so the menu was a second
+ * entry point to things that already had one, and a devtools item shipped in
+ * the product chrome besides.
  *
- * `onOpenSettings` is gone with the Settings button; the sidebar footer owns
- * that entry point now.
+ * The bell that the field request asked to put "in the `...` button's place"
+ * did NOT land here. This component returns `null` on macOS, so a control that
+ * lives only in it would be missing on one of the three shipped platforms; the
+ * bell is in `UserFooterPill` instead, which exists everywhere.
+ *
+ * What is left is identity and the window buttons. That is deliberately little:
+ * on Windows and Linux this strip is the frame, and the frame is not a place to
+ * put features.
  */
 export function WindowTitleBar() {
   const { t } = useI18n();
-
-  // 所有 hooks 必须在条件返回之前调用，遵循 React Hooks 规则
-  const handleReload = useCallback(() => {
-    window.location.reload();
-  }, []);
-
-  const handleOpenDevTools = useCallback(() => {
-    window.electronAPI.window.openDevTools();
-  }, []);
-
-  const handleOpenExternal = useCallback((url: string) => {
-    window.electronAPI.shell.openExternal(url);
-  }, []);
 
   // On macOS, we don't need the custom title bar (uses native hiddenInset)
   if (isMac) {
     return null;
   }
-
-  // 更多按钮样式
-  const iconButtonClass = cn(
-    'flex h-7 w-7 items-center justify-center rounded-lg',
-    'text-muted-foreground hover:text-foreground hover:bg-muted/80',
-    'transition-colors duration-150'
-  );
 
   return (
     <div className="relative z-50 flex h-8 shrink-0 items-center justify-between border-b bg-background drag-region select-none">
@@ -68,49 +47,11 @@ export function WindowTitleBar() {
           not have a click target spanning its whole left side. */}
       <div className="flex h-8 items-center gap-1.5 px-2">
         <img src={logoImage} alt="AI Client" className="h-5 w-5" />
-        <span className="text-xs font-medium text-muted-foreground">AI Client</span>
+        <span className="text-xs font-medium text-muted-foreground">{t('AI Client')}</span>
       </div>
 
-      {/* Right: app menu and window controls */}
+      {/* Right: window controls only. */}
       <div className="flex items-center no-drag">
-        {/* More Menu */}
-        <Menu>
-          <MenuTrigger
-            render={
-              <button type="button" className={iconButtonClass} aria-label={t('More')}>
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </button>
-            }
-          />
-          <TitleBarMenuPopup align="end" sideOffset={6} className="min-w-[180px]">
-            <MenuItem onClick={handleReload}>
-              <RefreshCw className="h-3.5 w-3.5" />
-              {t('Reload')}
-              <MenuShortcut>Ctrl+R</MenuShortcut>
-            </MenuItem>
-            <MenuItem onClick={handleOpenDevTools}>
-              <Terminal className="h-3.5 w-3.5" />
-              {t('Developer Tools')}
-              <MenuShortcut>F12</MenuShortcut>
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem onClick={() => handleOpenExternal('https://github.com/jyw-ai/jyw-ai-client')}>
-              <ExternalLink className="h-3.5 w-3.5" />
-              {t('GitHub')}
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem variant="destructive" onClick={() => window.electronAPI.window.close()}>
-              <X className="h-3.5 w-3.5" />
-              {t('Exit')}
-              <MenuShortcut>Alt+F4</MenuShortcut>
-            </MenuItem>
-          </TitleBarMenuPopup>
-        </Menu>
-
-        {/* Separator */}
-        <div className="h-4 w-px bg-border mx-1" />
-
-        {/* Window controls */}
         <WindowControls />
       </div>
     </div>

@@ -9,11 +9,18 @@
  * `signed_out` need a clickable affordance (re-login / login) just as much as
  * the authenticated usage summary does, which is why this is not gated on
  * "is registered".
+ *
+ * F09 added the announcement bell to the right of the pill. It is NOT gated on
+ * sign-in either, and for a stronger version of the same reason: the endpoint
+ * is public precisely so that someone whose login has expired can still read
+ * the message explaining it. The bell renders nothing when there is nothing to
+ * announce, so an ordinary session sees the row exactly as it was.
  */
 import { AUTH_GATE_SNAPSHOT_QUERY_KEY, deriveUserProfilePresentation } from '@shared/authGate';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { AnnouncementBell } from '@/components/announcements/AnnouncementBell';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
 import { UserProfileCard } from '@/components/user/UserProfileCard';
@@ -68,7 +75,7 @@ export function UserFooterPill() {
   }, [isAuthenticated]);
 
   return (
-    <div className="flex shrink-0 items-center border-t p-2">
+    <div className="flex shrink-0 items-center gap-1 border-t p-2">
       <Popover open={profileOpen} onOpenChange={setProfileOpen}>
         <PopoverTrigger
           className={cn(
@@ -115,6 +122,7 @@ export function UserFooterPill() {
           />
         </PopoverPopup>
       </Popover>
+      <AnnouncementBell />
     </div>
   );
 }

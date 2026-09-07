@@ -5,27 +5,27 @@
 
 ## Current phase
 
-**批次一（F07 / F11 / F06）与批次二（F08）已实现，自动化门禁通过；
-GUI 点验与真实 HTTP 请求头未验证，因此四项都还不是 Done。**
-实现细节与执行过的命令见 [批次一证据](./evidence/batch1-f07-f11-f06.md) 与
-[批次二证据](./evidence/batch2-f08.md)。下一步进入批次三 F09。
+**批次一（F07 / F11 / F06）、批次二（F08）与批次三（F09）已实现，自动化门禁通过；
+GUI 点验、真实 HTTP 请求头与公告接口联调均未验证，因此五项都还不是 Done。**
+证据见 [批次一](./evidence/batch1-f07-f11-f06.md) · [批次二](./evidence/batch2-f08.md) ·
+[批次三](./evidence/batch3-f09.md)。下一步进入批次四 F10。
 
 ## Active TODO（最多五项）
 
 1. 批次一并入 UI 对齐计划的累计点验：冷启动模型名、矮窗口 `@` 弹层、流式 `↓`。
 2. F08 的联调段：捕获真实出站请求头，确认 `User-Agent: claude-cli-pilab/<版本>` 生效。
-3. F09：先定铃铛放置位置（`WindowTitleBar` 在 macOS 上整体不渲染），再做 Main 服务与弹窗。
+3. F09 的联调段：onboard 部署 `/api/v1/announcements` 后核对字段与真实启动弹窗。
 4. F10：usage 类型扩展与周限额显示；顺手把 `UserProfileCard` 的四处硬编码中文改走 `t()`。
-5. F09 / F10 的联调段等 onboard 接口就绪，就绪前不标完成。
+5. 全部实现完成后再做一次累计 GUI 点验，届时才谈 Done。
 
 ## Blocker
 
-无代码层阻塞。两项外部依赖：
+无代码层阻塞。外部依赖：
 
 - F09 的公告接口与 F10 的周限额接口都由 onboard 提供，尚未部署。
   两项的**契约段**可以先做完，**联调段**在接口就绪前不能标完成。
-- F09 的铃铛放置位置需先定：`WindowTitleBar` 在 macOS 上整体不渲染，
-  只把铃铛塞进这条 bar 会让 macOS 没有公告入口。
+- F09 的铃铛位置与接口鉴权已由用户 2026-09-07 裁定，不再是阻塞项；结论记在
+  [roadmap](./roadmap.md) 的 F09 条目与[批次三证据](./evidence/batch3-f09.md)。
 
 ## Last verified
 
@@ -48,6 +48,15 @@ GUI 点验与真实 HTTP 请求头未验证，因此四项都还不是 Done。**
 - 整套 `tsc --noEmit` 通过；全仓 `biome check` 0 error。
 - **未捕获真实出站 HTTP 请求头。** 本轮证明的是配置链路（`models.json` 有引用、环境有值），
   最终的头由 pi 自己拼装。
+
+**2026-09-07 · 批次三 F09：**
+
+- 新增三个测试文件共 31 项通过（shared 契约 14、Main 服务 10、renderer 接线与旧菜单缺席 7），
+  另在登出序列测试补 1 项断言 ⑥b 的位置。
+- workspace-shell / App / ipc / settings / shared 五个目录 59 文件 766 项通过；
+  main / shared-types / stores 三个目录 32 文件 394 项通过。
+- 整套 `tsc --noEmit` 通过；全仓 `biome check` 993 文件 0 error。
+- **未跑真实 Electron，未接真实公告接口。** 本轮完成的是客户端契约段。
 
 ## 与其他计划的关系
 
