@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
+import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
@@ -73,12 +74,10 @@ export function PiResourcesSettings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-title font-semibold tracking-[-0.01em]">{t('Pi Resources')}</h3>
-        <p className="text-ui text-muted-foreground">
-          {t('Install skills and prompt templates where Pi can load them reliably.')}
-        </p>
-      </div>
+      <SettingsSectionBlock
+        title={t('Pi Resources')}
+        description={t('Install skills and prompt templates where Pi can load them reliably.')}
+      />
 
       {error && (
         <div
@@ -94,7 +93,7 @@ export function PiResourcesSettings() {
         <p className="text-ui text-muted-foreground">{t('Loading resource settings...')}</p>
       ) : (
         <>
-          <section className="space-y-3 rounded-md border bg-card p-4">
+          <section className="space-y-3 border-t p-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 <Library className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -110,7 +109,7 @@ export function PiResourcesSettings() {
             <ResourcePath label={t('Skills')} path={snapshot.paths.sharedSkills} />
           </section>
 
-          <section className="space-y-4 rounded-md border bg-card p-4">
+          <section className="space-y-4 border-t p-4">
             <div>
               <h4 className="text-ui font-semibold">{t('Personal Pi directory')}</h4>
               <p className="text-meta text-muted-foreground">
@@ -137,7 +136,7 @@ export function PiResourcesSettings() {
                 {opening ? t('Opening...') : t('Open prompt templates folder')}
               </Button>
             )}
-            <div className="flex items-start justify-between gap-4 border-t pt-4">
+            <SettingsRow className="sm:grid-cols-[minmax(0,1fr)_auto]">
               <div className="min-w-0 flex-1">
                 <p className="text-ui font-medium">{t('Borrow personal Pi resources')}</p>
                 <p className="text-meta text-muted-foreground">
@@ -156,15 +155,15 @@ export function PiResourcesSettings() {
                 onCheckedChange={(checked) => void update({ borrowUserPiResources: checked })}
                 aria-label={t('Borrow personal Pi resources')}
               />
-            </div>
+            </SettingsRow>
           </section>
 
-          <section className="space-y-4 rounded-md border bg-card p-4">
+          <section className="space-y-4 border-t p-4">
             <div className="flex min-w-0 items-center gap-2">
               <Boxes className="h-4 w-4 shrink-0 text-muted-foreground" />
               <h4 className="text-ui font-semibold">{t('Bundled extensions')}</h4>
             </div>
-            <div className="flex items-start justify-between gap-4">
+            <SettingsRow className="sm:grid-cols-[minmax(0,1fr)_auto]">
               <div className="min-w-0 flex-1">
                 <p className="text-ui font-medium">{t('Sub-agents')}</p>
                 <p className="text-meta text-muted-foreground">
@@ -179,10 +178,10 @@ export function PiResourcesSettings() {
                 onCheckedChange={(checked) => void update({ enableSubagents: checked })}
                 aria-label={t('Sub-agents')}
               />
-            </div>
+            </SettingsRow>
           </section>
 
-          <section className="space-y-4 rounded-md border bg-card p-4">
+          <section className="space-y-4 border-t p-4">
             <div>
               <h4 className="text-ui font-semibold">{t('App-managed Pi directory')}</h4>
               <p className="text-meta text-muted-foreground">

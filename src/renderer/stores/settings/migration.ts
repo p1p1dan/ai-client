@@ -49,6 +49,20 @@ const LEGACY_AI_FEATURE_KEYS = [
 ] as const;
 
 const REMOVED_SETTING_KEYS = [
+  'layoutMode',
+  'fileTreeDisplayMode',
+  'repositoryListDisplayMode',
+  'quickTerminal',
+  'hideGroups',
+  'hiddenOpenInApps',
+  'openInMenuFilterEnabled',
+  'glowEffectEnabled',
+  'mainTabKeybindings',
+  'globalKeybindings',
+  'workspaceKeybindings',
+  'settingsDisplayMode',
+  'settingsModalPosition',
+  'useOpenChamberShell',
   'agentNotificationEnabled',
   'agentNotificationDelay',
   'agentNotificationEnterDelay',
@@ -192,10 +206,7 @@ export function migrateSettings(
     ...(terminalRenderer && { terminalRenderer }),
     presentationMode: persisted.presentationMode === 'tui' ? 'tui' : 'gui',
     xtermKeybindings: migratedXtermKeybindings,
-    mainTabKeybindings: {
-      ...currentState.mainTabKeybindings,
-      ...persisted.mainTabKeybindings,
-    },
+
     sourceControlKeybindings: {
       ...currentState.sourceControlKeybindings,
       ...persisted.sourceControlKeybindings,
@@ -208,14 +219,7 @@ export function migrateSettings(
       ...currentState.editorKeybindings,
       ...persisted.editorKeybindings,
     },
-    globalKeybindings: {
-      ...currentState.globalKeybindings,
-      ...persisted.globalKeybindings,
-    },
-    workspaceKeybindings: {
-      ...currentState.workspaceKeybindings,
-      ...persisted.workspaceKeybindings,
-    },
+
     backgroundImageEnabled: sanitizedBackgroundImageEnabled,
     backgroundImagePath: sanitizedBackgroundImagePath,
     backgroundUrlPath: migratedBackgroundUrlPath,
@@ -255,10 +259,7 @@ export function migrateSettings(
       ...currentState.proxySettings,
       ...persisted.proxySettings,
     },
-    quickTerminal: {
-      ...currentState.quickTerminal,
-      ...persisted.quickTerminal,
-    },
+
     // D48 S2 §4.3: replaced wholesale rather than shallow-merged. The record's
     // shape is nested (`byAgent[agent].model`), so `{...current, ...persisted}`
     // would keep a `byAgent` from one side and a `lastAgent` from the other; and

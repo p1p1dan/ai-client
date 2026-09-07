@@ -21,8 +21,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardHeader, CardPanel, CardTitle } from '@/components/ui/card';
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -33,6 +32,7 @@ import {
 } from '@/components/ui/select';
 import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
+import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
 interface RemoteProfileFormState {
   name: string;
@@ -457,17 +457,13 @@ export function RemoteSettings() {
           {t('Remote connections currently support Linux x64 and arm64 glibc hosts only.')}
         </p>
       </div>
-
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>{t('SSH Profiles')}</CardTitle>
-          <CardDescription>
-            {t('These profiles reuse your existing SSH configuration and credentials.')}
-          </CardDescription>
-        </CardHeader>
-        <CardPanel className="space-y-6">
+      <SettingsSectionBlock
+        title={t('SSH Profiles')}
+        description={t('These profiles reuse your existing SSH configuration and credentials.')}
+      >
+        <div className="space-y-6">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_248px] xl:items-end">
-            <Field className="min-w-0">
+            <SettingsRow className="sm:grid-cols-1">
               <FieldLabel>{t('Profile')}</FieldLabel>
               <Select
                 value={selectedProfileId}
@@ -494,7 +490,7 @@ export function RemoteSettings() {
                   ? t('No profiles saved yet.')
                   : t('{{count}} saved profiles', { count: profiles.length })}
               </FieldDescription>
-            </Field>
+            </SettingsRow>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <Button
@@ -530,7 +526,7 @@ export function RemoteSettings() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Field className="min-w-0">
+            <SettingsRow className="sm:grid-cols-1">
               <FieldLabel>{t('Profile name')}</FieldLabel>
               <Input
                 value={form.name}
@@ -539,9 +535,9 @@ export function RemoteSettings() {
                 }
                 placeholder={t('My staging server')}
               />
-            </Field>
+            </SettingsRow>
 
-            <Field className="min-w-0">
+            <SettingsRow className="sm:grid-cols-1">
               <FieldLabel>{t('SSH target')}</FieldLabel>
               <Input
                 value={form.sshTarget}
@@ -553,9 +549,9 @@ export function RemoteSettings() {
               <FieldDescription>
                 {t('Use the same target string you would pass to the ssh command.')}
               </FieldDescription>
-            </Field>
+            </SettingsRow>
 
-            <Field className="min-w-0">
+            <SettingsRow className="sm:grid-cols-1">
               <FieldLabel>{t('Runtime install directory')}</FieldLabel>
               <Input
                 value={form.runtimeInstallDir}
@@ -564,7 +560,7 @@ export function RemoteSettings() {
                 }
                 placeholder={t('Optional override, for example ~/.pilab/remote-runtime')}
               />
-            </Field>
+            </SettingsRow>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -610,19 +606,15 @@ export function RemoteSettings() {
               <span>{t('Delete profile')}</span>
             </Button>
           </div>
-        </CardPanel>
-      </Card>
-
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>{t('Managed Remote Runtime')}</CardTitle>
-          <CardDescription>
-            {t(
-              'Install, refresh, update, or remove the managed runtime on the selected remote host.'
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardPanel className="space-y-6">
+        </div>
+      </SettingsSectionBlock>
+      <SettingsSectionBlock
+        title={t('Managed Remote Runtime')}
+        description={t(
+          'Install, refresh, update, or remove the managed runtime on the selected remote host.'
+        )}
+      >
+        <div className="space-y-6">
           {!hasSelectedProfile ? (
             <Alert variant="info">
               <AlertTitle>{t('Select a profile')}</AlertTitle>
@@ -721,16 +713,14 @@ export function RemoteSettings() {
               </div>
             </>
           )}
-        </CardPanel>
-      </Card>
-
+        </div>
+      </SettingsSectionBlock>
       {feedback && (
         <Alert variant={feedback.variant}>
           <AlertTitle>{feedback.title}</AlertTitle>
           <AlertDescription>{feedback.description}</AlertDescription>
         </Alert>
       )}
-
       {testResult?.success && (
         <Alert variant="info">
           <AlertTitle>{t('Remote environment')}</AlertTitle>
@@ -746,7 +736,6 @@ export function RemoteSettings() {
           </AlertDescription>
         </Alert>
       )}
-
       <AlertDialog open={deleteRuntimeDialogOpen} onOpenChange={setDeleteRuntimeDialogOpen}>
         <AlertDialogPopup className="max-w-md">
           <AlertDialogHeader>

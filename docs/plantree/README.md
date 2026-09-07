@@ -57,7 +57,7 @@ Renderer → Preload → Electron Main WorkerManager
 | Plan | Lifecycle | 现在在做什么 | 状态权威 |
 |---|---|---|---|
 | [pix/pi-app UI 对齐改造](./plans/pix-ui-alignment/README.md) | **In Progress（收尾）** | 批次 1–15（U01–U31）全部落地，**只剩一次累计 GUI 点验**；另有五笔欠账与六件待真机验证项，自动化全部已绿（280 files / 4246 tests） | [implementation-status](./plans/pix-ui-alignment/implementation-status.md) · [roadmap](./plans/pix-ui-alignment/roadmap.md) |
-| [设置清单整理与旧壳删除](./plans/settings-cleanup/README.md) | **In Progress** | S04 与 S01/S02/S03 已实现并通过相关回归，待完整门禁与合入；剩余环境依赖待补齐，S05/S06/S07 未开始。**补齐线必须先于删旧壳合入** | [TODO](./plans/settings-cleanup/TODO.md) · [implementation-status](./plans/settings-cleanup/implementation-status.md) · [roadmap](./plans/settings-cleanup/roadmap.md) |
+| [设置清单整理与旧壳删除](./plans/settings-cleanup/README.md) | **In Progress** | S01–S07 已实现；按本轮授权先保存补齐线提交，再完成旧壳删除和九类设置。renderer 分批回归与拆分类型检查通过，完整门禁、GUI/PTY 点验和主分支合入待完成 | [TODO](./plans/settings-cleanup/TODO.md) · [implementation-status](./plans/settings-cleanup/implementation-status.md) · [roadmap](./plans/settings-cleanup/roadmap.md) |
 
 活动计划两条。从归档表恢复任何一条计划都需要真实需求触发，并在本表重新登记。
 

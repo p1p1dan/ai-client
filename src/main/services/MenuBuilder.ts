@@ -2,7 +2,7 @@ import { translate } from '@shared/i18n';
 import { app, BrowserWindow, Menu, shell } from 'electron';
 import { getCurrentLocale } from './i18n';
 
-export type MenuAction = 'open-settings' | 'toggle-devtools' | 'open-action-panel';
+export type MenuAction = 'open-settings' | 'toggle-devtools';
 
 interface MenuOptions {
   onNewWindow?: () => void;
@@ -91,12 +91,6 @@ export function buildAppMenu(options: MenuOptions = {}): Menu {
     {
       label: t('View'),
       submenu: [
-        {
-          label: t('Action Panel'),
-          accelerator: 'CommandOrControl+Shift+P',
-          click: () => sendAction('open-action-panel'),
-        },
-        { type: 'separator' as const },
         ...(app.isPackaged ? [] : [{ role: 'reload' as const }, { role: 'forceReload' as const }]),
         {
           label: t('Developer Tools'),

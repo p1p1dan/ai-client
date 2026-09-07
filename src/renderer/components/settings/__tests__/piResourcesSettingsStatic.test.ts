@@ -38,9 +38,9 @@ describe('R04 Pi resource settings', () => {
     expect(component).toContain('checked={snapshot.enableSubagents}');
   });
 
-  it('is a Settings category, not a new workspace navigation surface', () => {
-    expect(settingsContent).toContain("id: 'piResources'");
-    expect(settingsContent).toContain("activeCategory === 'piResources'");
+  it('lives in the Pi Settings category, not a new workspace navigation surface', () => {
+    expect(settingsContent).toContain("id: 'pi'");
+    expect(settingsContent).toContain("activeCategory === 'pi'");
     expect(settingsContent).toContain('<PiResourcesSettings />');
   });
 });

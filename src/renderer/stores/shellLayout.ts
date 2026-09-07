@@ -49,6 +49,7 @@ export interface ShellLayoutState extends PersistedShellLayout, ShellSessionOver
   // context panel
   selectSurface: (id: ContextSurfaceId) => void;
   openSurface: (id?: ContextSurfaceId) => void;
+  openInitializationTerminal: () => void;
   closeSurface: () => void;
   toggleContextPanel: () => void;
   toggleExpanded: () => void;
@@ -108,6 +109,12 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
         set((state) =>
           withManualPanel(
             reduceShellSurface(surfaceStateOf(state), { type: 'open', surfaceId: id })
+          )
+        ),
+      openInitializationTerminal: () =>
+        set((state) =>
+          withManualPanel(
+            reduceShellSurface(surfaceStateOf(state), { type: 'open-initialization-terminal' })
           )
         ),
       closeSurface: () =>

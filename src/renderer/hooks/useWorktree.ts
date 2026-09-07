@@ -8,7 +8,10 @@ import type {
 } from '@shared/types';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import { getRepositorySettings } from '@/App/storage';
 import { gitQueryKeys } from '@/hooks/gitQueryKeys';
+import { useInitScriptStore } from '@/stores/initScript';
+import { useShellLayoutStore } from '@/stores/shellLayout';
 import { useWorktreeStore } from '@/stores/worktree';
 
 interface WorktreeListOptions {
@@ -153,9 +156,19 @@ export function useWorktreeCreate() {
     }) => {
       await window.electronAPI.worktree.add(workdir, options);
     },
-    onSuccess: (_, { workdir }) => {
+    onSuccess: (_, { workdir, options }) => {
       queryClient.invalidateQueries({ queryKey: ['worktree', 'list', workdir] });
       queryClient.invalidateQueries({ queryKey: ['worktree', 'listMultiple', workdir] });
+      const settings = getRepositorySettings(workdir);
+      if (settings.autoInitWorktree && settings.initScript.trim()) {
+        // TargetBranchSelect selects the created workspace after tree refresh.
+        // TerminalPanel consumes this only when its cwd matches that workspace.
+        useInitScriptStore.getState().setPendingScript({
+          worktreePath: options.path,
+          script: settings.initScript,
+        });
+        useShellLayoutStore.getState().openInitializationTerminal();
+      }
     },
   });
 }

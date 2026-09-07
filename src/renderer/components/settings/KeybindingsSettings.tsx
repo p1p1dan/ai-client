@@ -1,18 +1,20 @@
 import { Keyboard, X } from 'lucide-react';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { codeToKey } from '@/lib/keybinding';
 import { cn } from '@/lib/utils';
 import { type TerminalKeybinding, useSettingsStore } from '@/stores/settings';
+import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
 export function KeybindingInput({
   value,
   onChange,
+  label,
 }: {
   value: TerminalKeybinding;
   onChange: (binding: TerminalKeybinding) => void;
+  label: string;
 }) {
   const { t } = useI18n();
   const [isRecording, setIsRecording] = React.useState(false);
@@ -62,6 +64,7 @@ export function KeybindingInput({
         onKeyDown={handleKeyDown}
         tabIndex={0}
         role="button"
+        aria-label={label}
         data-keybinding-recording={isRecording ? '' : undefined}
       >
         {isRecording ? (
@@ -92,317 +95,86 @@ export function KeybindingInput({
   );
 }
 
+function ShortcutSection<K extends string>({
+  title,
+  bindings,
+  labels,
+  onChange,
+}: {
+  title: string;
+  bindings: Record<K, TerminalKeybinding>;
+  labels: readonly (readonly [K, string])[];
+  onChange: (bindings: Record<K, TerminalKeybinding>) => void;
+}) {
+  return (
+    <SettingsSectionBlock title={title}>
+      {labels.map(([key, label]) => (
+        <SettingsRow key={key}>
+          <span className="text-sm">{label}</span>
+          <KeybindingInput
+            label={label}
+            value={bindings[key]}
+            onChange={(binding) => onChange({ ...bindings, [key]: binding })}
+          />
+        </SettingsRow>
+      ))}
+    </SettingsSectionBlock>
+  );
+}
+
 export function KeybindingsSettings() {
+  const { t } = useI18n();
   const {
     xtermKeybindings,
     setXtermKeybindings,
-    mainTabKeybindings,
-    setMainTabKeybindings,
+    editorKeybindings,
+    setEditorKeybindings,
     sourceControlKeybindings,
     setSourceControlKeybindings,
     searchKeybindings,
     setSearchKeybindings,
-    editorKeybindings,
-    setEditorKeybindings,
-    globalKeybindings,
-    setGlobalKeybindings,
-    terminalOptionIsMeta,
-    setTerminalOptionIsMeta,
-    workspaceKeybindings,
-    setWorkspaceKeybindings,
   } = useSettingsStore();
-  const { t } = useI18n();
 
   return (
     <div className="space-y-6">
-      {/* Global */}
-      <div>
-        <h3 className="text-lg font-medium">{t('Global')}</h3>
-        <p className="text-sm text-muted-foreground mb-4">{t('App-wide shortcuts')}</p>
-        <div className="space-y-3">
-          <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Running Projects')}</span>
-            <KeybindingInput
-              value={globalKeybindings.runningProjects}
-              onChange={(binding) => {
-                setGlobalKeybindings({
-                  ...globalKeybindings,
-                  runningProjects: binding,
-                });
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Workspace */}
-      <div className="border-t pt-6">
-        <h3 className="text-lg font-medium">{t('Workspace')}</h3>
-        <p className="text-sm text-muted-foreground mb-4">{t('Workspace panel shortcuts')}</p>
-        <div className="space-y-3">
-          <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Toggle Repository')}</span>
-            <KeybindingInput
-              value={workspaceKeybindings.toggleRepository}
-              onChange={(binding) => {
-                setWorkspaceKeybindings({
-                  ...workspaceKeybindings,
-                  toggleRepository: binding,
-                });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Toggle Worktree')}</span>
-            <KeybindingInput
-              value={workspaceKeybindings.toggleWorktree}
-              onChange={(binding) => {
-                setWorkspaceKeybindings({
-                  ...workspaceKeybindings,
-                  toggleWorktree: binding,
-                });
-              }}
-            />
-          </div>
-          {/* 新增：切换活跃 Worktree */}
-          <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Switch Active Worktree')}</span>
-            <KeybindingInput
-              value={workspaceKeybindings.switchActiveWorktree}
-              onChange={(binding) => {
-                setWorkspaceKeybindings({
-                  ...workspaceKeybindings,
-                  switchActiveWorktree: binding,
-                });
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Main Tab Switching */}
-      <div className="border-t pt-6">
-        <h3 className="text-lg font-medium">{t('Main tab switching')}</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          {t('Set global main tab shortcuts (Cmd on macOS, Win on Windows)')}
-        </p>
-        <div className="space-y-3">
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Switch to Agent')}</span>
-            <KeybindingInput
-              value={mainTabKeybindings.switchToAgent}
-              onChange={(binding) => {
-                setMainTabKeybindings({
-                  ...mainTabKeybindings,
-                  switchToAgent: binding,
-                });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Switch to File')}</span>
-            <KeybindingInput
-              value={mainTabKeybindings.switchToFile}
-              onChange={(binding) => {
-                setMainTabKeybindings({
-                  ...mainTabKeybindings,
-                  switchToFile: binding,
-                });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Switch to Terminal')}</span>
-            <KeybindingInput
-              value={mainTabKeybindings.switchToTerminal}
-              onChange={(binding) => {
-                setMainTabKeybindings({
-                  ...mainTabKeybindings,
-                  switchToTerminal: binding,
-                });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Switch to Version Control')}</span>
-            <KeybindingInput
-              value={mainTabKeybindings.switchToSourceControl}
-              onChange={(binding) => {
-                setMainTabKeybindings({
-                  ...mainTabKeybindings,
-                  switchToSourceControl: binding,
-                });
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="border-t pt-6">
-        <h3 className="text-lg font-medium">{t('Search')}</h3>
-        <p className="text-sm text-muted-foreground mb-4">{t('File search shortcuts')}</p>
-        <div className="space-y-3">
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Search files')}</span>
-            <KeybindingInput
-              value={searchKeybindings.searchFiles}
-              onChange={(binding) => {
-                setSearchKeybindings({
-                  ...searchKeybindings,
-                  searchFiles: binding,
-                });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Search content')}</span>
-            <KeybindingInput
-              value={searchKeybindings.searchContent}
-              onChange={(binding) => {
-                setSearchKeybindings({
-                  ...searchKeybindings,
-                  searchContent: binding,
-                });
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Editor */}
-      <div className="border-t pt-6">
-        <h3 className="text-lg font-medium">{t('Editor')}</h3>
-        <p className="text-sm text-muted-foreground mb-4">{t('Editor shortcuts')}</p>
-        <div className="space-y-3">
-          <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Show Symbols')}</span>
-            <KeybindingInput
-              value={editorKeybindings.gotoSymbol}
-              onChange={(binding) => {
-                setEditorKeybindings({ ...editorKeybindings, gotoSymbol: binding });
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Terminal (unified xterm keybindings) */}
-      <div className="border-t pt-6">
-        <h3 className="text-lg font-medium">{t('Terminal')}</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          {t('Shortcuts for terminal and agent sessions')}
-        </p>
-        <div className="space-y-3">
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('New Tab')}</span>
-            <KeybindingInput
-              value={xtermKeybindings.newTab}
-              onChange={(binding) => {
-                setXtermKeybindings({ ...xtermKeybindings, newTab: binding });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Close Tab')}</span>
-            <KeybindingInput
-              value={xtermKeybindings.closeTab}
-              onChange={(binding) => {
-                setXtermKeybindings({ ...xtermKeybindings, closeTab: binding });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Next Tab')}</span>
-            <KeybindingInput
-              value={xtermKeybindings.nextTab}
-              onChange={(binding) => {
-                setXtermKeybindings({ ...xtermKeybindings, nextTab: binding });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Previous Tab')}</span>
-            <KeybindingInput
-              value={xtermKeybindings.prevTab}
-              onChange={(binding) => {
-                setXtermKeybindings({ ...xtermKeybindings, prevTab: binding });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Split pane')}</span>
-            <KeybindingInput
-              value={xtermKeybindings.split}
-              onChange={(binding) => {
-                setXtermKeybindings({ ...xtermKeybindings, split: binding });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Merge pane')}</span>
-            <KeybindingInput
-              value={xtermKeybindings.merge}
-              onChange={(binding) => {
-                setXtermKeybindings({ ...xtermKeybindings, merge: binding });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Clear terminal')}</span>
-            <KeybindingInput
-              value={xtermKeybindings.clear}
-              onChange={(binding) => {
-                setXtermKeybindings({ ...xtermKeybindings, clear: binding });
-              }}
-            />
-          </div>
-          {/* Option as Meta Key (macOS only) */}
-          {window.electronAPI?.env?.platform === 'darwin' && (
-            <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-              <span className="text-sm">{t('Option as Meta')}</span>
-              <div className="flex items-center gap-3">
-                <Switch checked={terminalOptionIsMeta} onCheckedChange={setTerminalOptionIsMeta} />
-                <span className="text-xs text-muted-foreground">
-                  {t('Use Option key as Meta instead of composing special characters')}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Version Control */}
-      <div className="border-t pt-6">
-        <h3 className="text-lg font-medium">{t('Version Control')}</h3>
-        <p className="text-sm text-muted-foreground mb-4">{t('Diff navigation shortcuts')}</p>
-        <div className="space-y-3">
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Previous change')}</span>
-            <KeybindingInput
-              value={sourceControlKeybindings.prevDiff}
-              onChange={(binding) => {
-                setSourceControlKeybindings({
-                  ...sourceControlKeybindings,
-                  prevDiff: binding,
-                });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Next change')}</span>
-            <KeybindingInput
-              value={sourceControlKeybindings.nextDiff}
-              onChange={(binding) => {
-                setSourceControlKeybindings({
-                  ...sourceControlKeybindings,
-                  nextDiff: binding,
-                });
-              }}
-            />
-          </div>
-        </div>
-      </div>
+      <ShortcutSection
+        title={t('Terminal')}
+        bindings={xtermKeybindings}
+        onChange={setXtermKeybindings}
+        labels={[
+          ['newTab', t('New Tab')],
+          ['closeTab', t('Close Tab')],
+          ['nextTab', t('Next Tab')],
+          ['prevTab', t('Previous Tab')],
+          ['split', t('Split pane')],
+          ['merge', t('Merge pane')],
+          ['clear', t('Clear terminal')],
+        ]}
+      />
+      <ShortcutSection
+        title={t('Editor')}
+        bindings={editorKeybindings}
+        onChange={setEditorKeybindings}
+        labels={[['gotoSymbol', t('Show Symbols')]]}
+      />
+      <ShortcutSection
+        title={t('Version Control')}
+        bindings={sourceControlKeybindings}
+        onChange={setSourceControlKeybindings}
+        labels={[
+          ['prevDiff', t('Previous change')],
+          ['nextDiff', t('Next change')],
+        ]}
+      />
+      <ShortcutSection
+        title={t('Search')}
+        bindings={searchKeybindings}
+        onChange={setSearchKeybindings}
+        labels={[
+          ['searchFiles', t('Search files')],
+          ['searchContent', t('Search content')],
+        ]}
+      />
     </div>
   );
 }

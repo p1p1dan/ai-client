@@ -11,6 +11,7 @@
  * rows and turns a control movement into a patch; the component owns the IPC.
  */
 
+import { type Locale, translate } from '@shared/i18n';
 import {
   type EffectiveRule,
   type EffectiveSurface,
@@ -43,9 +44,18 @@ export interface ScopeRow {
 }
 
 const SCOPE_COPY: Record<PolicyScopeId, { label: string; summary: string }> = {
-  bundled: { label: '随包默认', summary: '本应用出厂策略，优先级最低，你的设置永远压得过它' },
-  global: { label: '我的设置', summary: '按帐号隔离的 pi 目录，本面板的改动写在这里' },
-  project: { label: '项目配置', summary: '仓库自带的 .pi 配置，优先级最高' },
+  bundled: {
+    label: 'Bundled defaults',
+    summary: 'Bundled policy with the lowest priority; your settings override it',
+  },
+  global: {
+    label: 'My settings',
+    summary: 'Account-specific Pi directory where your changes are saved',
+  },
+  project: {
+    label: 'Project configuration',
+    summary: 'Repository .pi configuration with the highest priority',
+  },
 };
 
 /**
@@ -59,7 +69,7 @@ const SCOPE_COPY: Record<PolicyScopeId, { label: string; summary: string }> = {
  * is the operative fact — but the parse error still travels in `detail`, so a
  * user who later switches routes is not surprised by it.
  */
-export function deriveScopeRows(scopes: readonly PolicyScope[]): ScopeRow[] {
+export function deriveScopeRows(scopes: readonly PolicyScope[], locale: Locale = 'en'): ScopeRow[] {
   return scopes.map((scope) => {
     const copy = SCOPE_COPY[scope.id];
     const base = {
@@ -71,7 +81,10 @@ export function deriveScopeRows(scopes: readonly PolicyScope[]): ScopeRow[] {
     };
     if (scope.withheldReason) {
       const detail = scope.parseError
-        ? `${scope.withheldReason}（该文件另有语法错误：${scope.parseError}）`
+        ? translate(locale, '{{reason}} (syntax error: {{error}})', {
+            reason: scope.withheldReason,
+            error: scope.parseError,
+          })
         : scope.withheldReason;
       return { ...base, status: 'ignored' as const, detail };
     }
@@ -79,7 +92,11 @@ export function deriveScopeRows(scopes: readonly PolicyScope[]): ScopeRow[] {
       return { ...base, status: 'invalid' as const, detail: scope.parseError };
     }
     if (!scope.present) {
-      return { ...base, status: 'missing' as const, detail: '文件不存在，本层不产生任何规则' };
+      return {
+        ...base,
+        status: 'missing' as const,
+        detail: translate(locale, 'File does not exist; this layer contributes no rules'),
+      };
     }
     return {
       ...base,
@@ -121,72 +138,72 @@ export interface SurfaceDefinition {
 export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
   {
     surface: 'read',
-    label: '读取文件',
-    description: '打开单个文件。仍受下方“文件路径”规则约束。',
+    label: 'Read files',
+    description: 'Open individual files, subject to the file path rules below.',
     dangerous: false,
   },
   {
     surface: 'grep',
-    label: '搜索内容',
-    description: '在文件里按内容搜索。',
+    label: 'Search content',
+    description: 'Search file contents.',
     dangerous: false,
   },
   {
     surface: 'ls',
-    label: '列目录',
-    description: '列出目录内容。',
+    label: 'List directories',
+    description: 'List directory contents.',
     dangerous: false,
   },
   {
     surface: 'find',
-    label: '查找文件',
-    description: '按文件名查找。',
+    label: 'Find files',
+    description: 'Find files by name.',
     dangerous: false,
   },
   {
     surface: 'write',
-    label: '写入文件',
-    description: '新建或覆盖文件。设为“直接允许”后，写错的文件没有任何一步可以拦下。',
+    label: 'Write files',
+    description: 'Create or overwrite files. Allowing this skips approval before writing.',
     dangerous: true,
   },
   {
     surface: 'edit',
-    label: '修改文件',
-    description: '改动已有文件。设为“直接允许”后，改错的地方没有任何一步可以拦下。',
+    label: 'Edit files',
+    description: 'Edit existing files. Allowing this skips approval before editing.',
     dangerous: true,
   },
   {
     surface: 'bash',
     pattern: '*',
-    label: '终端命令（默认）',
-    description: '没有被下方白名单命中的命令走这里。设为“直接允许”等于让 agent 可以执行任意命令。',
+    label: 'Terminal commands (default)',
+    description: 'Applies to commands not matched below. Allowing this permits arbitrary commands.',
     dangerous: true,
   },
   {
     surface: 'external_directory',
     pattern: '*',
-    label: '访问工作目录之外',
-    description: '离开当前仓库去读写别处。这是阻止一个仓库的会话动到另一个仓库的那道闸。',
+    label: 'Access outside the working directory',
+    description: 'Controls reading and writing outside the current repository.',
     dangerous: true,
   },
   {
     surface: 'mcp',
     pattern: '*',
-    label: 'MCP 工具调用',
-    description: '调用外部 MCP 服务器提供的工具。',
+    label: 'MCP tool calls',
+    description: 'Call tools provided by external MCP servers.',
     dangerous: true,
   },
   {
     surface: 'skill',
     pattern: '*',
-    label: '技能（Skill）',
-    description: '运行打包好的技能。技能内部可以再调工具。',
+    label: 'Skills',
+    description: 'Run packaged skills, which may call other tools.',
     dangerous: true,
   },
   {
     surface: '*',
-    label: '其它一切（兜底）',
-    description: '上面没有提到的任何工具，包括这个版本还没见过的扩展工具。',
+    label: 'Other tools (fallback)',
+    description: 'Any tool not listed above, including tools provided by new extensions.',
     dangerous: true,
   },
 ];
@@ -298,14 +315,14 @@ export function surfacePatch(
 export const RULE_TABLES: readonly { surface: string; label: string; description: string }[] = [
   {
     surface: 'path',
-    label: '文件路径',
+    label: 'File paths',
     description:
-      '横切所有工具，先于其它规则判定，且这里的“拒绝”不能被单个工具的“允许”覆盖——这就是 cat 可以放行而 cat .env 仍被拒的原因。',
+      'Applies before other rules across all tools. A path denial overrides a tool allowance.',
   },
   {
     surface: 'bash',
-    label: '终端命令白名单',
-    description: '命中的命令不再弹窗。越靠后的规则优先级越高。',
+    label: 'Allowed terminal commands',
+    description: 'Matching commands skip approval. Later rules take precedence.',
   },
 ];
 
@@ -345,20 +362,33 @@ export interface RuleValidation {
   warning?: string;
 }
 
-export function validateNewRule(rules: readonly EffectiveRule[], pattern: string): RuleValidation {
+export function validateNewRule(
+  rules: readonly EffectiveRule[],
+  pattern: string,
+  locale: Locale = 'en'
+): RuleValidation {
   const trimmed = pattern.trim();
-  if (!trimmed) return { ok: false, error: '规则不能为空' };
+  if (!trimmed) return { ok: false, error: translate(locale, 'A rule cannot be empty') };
   // Internal spaces are legal and load-bearing — `git status *` is a bash
   // pattern — so only leading/trailing space is rejected. It is always a typo,
   // and the plugin matches literally, so it would silently never match.
-  if (trimmed !== pattern) return { ok: false, error: '规则首尾不能有空格' };
+  if (trimmed !== pattern)
+    return { ok: false, error: translate(locale, 'A rule cannot start or end with spaces') };
   const existing = rules.find((rule) => rule.pattern === trimmed);
   if (!existing) return { ok: true };
   const later = rules.slice(rules.indexOf(existing) + 1);
-  if (later.length === 0) return { ok: true, warning: '该规则已存在，将被覆盖为新的动作' };
+  if (later.length === 0)
+    return {
+      ok: true,
+      warning: translate(locale, 'This rule exists and its action will be replaced'),
+    };
   return {
     ok: true,
-    warning: `该规则已存在于第 ${rules.indexOf(existing) + 1} 条，改动会保留它原来的位置——它后面还有 ${later.length} 条规则，命中时以后面的为准`,
+    warning: translate(
+      locale,
+      'This rule stays at position {{position}}. The {{count}} later rules take precedence.',
+      { position: rules.indexOf(existing) + 1, count: later.length }
+    ),
   };
 }
 

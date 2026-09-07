@@ -16,25 +16,17 @@ import {
   defaultCommitMessageGeneratorSettings,
   defaultEditorKeybindings,
   defaultEditorSettings,
-  defaultFileTreeDisplayMode,
   defaultGitCloneSettings,
-  defaultGlobalKeybindings,
-  defaultLayoutMode,
-  defaultMainTabKeybindings,
   defaultProxySettings,
-  defaultQuickTerminalSettings,
   defaultRemoteSettings,
-  defaultRepositoryListDisplayMode,
   defaultSearchKeybindings,
   defaultSourceControlKeybindings,
-  defaultWorkspaceKeybindings,
   defaultXtermKeybindings,
   getDefaultLocale,
   getDefaultShellConfig,
 } from './defaults';
 import { cleanupLegacyFields, migrateSettings } from './migration';
 import { readPresentationMode, writePresentationMode } from './presentationModeMirror';
-import { readShellPreference, writeShellPreference } from './shellPreferenceMirror';
 import { electronStorage } from './storage';
 import type {
   BackgroundSizeMode,
@@ -129,9 +121,7 @@ export function getInitialState() {
   return {
     // UI Settings
     theme: 'light' as Theme,
-    layoutMode: defaultLayoutMode,
-    fileTreeDisplayMode: defaultFileTreeDisplayMode,
-    repositoryListDisplayMode: defaultRepositoryListDisplayMode,
+
     language: getDefaultLocale(),
     fontSize: 14,
     fontFamily: 'Inter',
@@ -149,12 +139,10 @@ export function getInitialState() {
 
     // Keybindings
     xtermKeybindings: defaultXtermKeybindings,
-    mainTabKeybindings: defaultMainTabKeybindings,
+
     sourceControlKeybindings: defaultSourceControlKeybindings,
     searchKeybindings: defaultSearchKeybindings,
     editorKeybindings: defaultEditorKeybindings,
-    globalKeybindings: defaultGlobalKeybindings,
-    workspaceKeybindings: defaultWorkspaceKeybindings,
 
     // Editor Settings
     editorSettings: defaultEditorSettings,
@@ -184,15 +172,7 @@ export function getInitialState() {
     gitClone: defaultGitCloneSettings,
 
     // Beta features
-    glowEffectEnabled: false,
-    // T-16: on by default (`DEFAULT_USE_OPENCHAMBER_SHELL`). Until T-16 the
-    // value was irrelevant — Root.tsx force-wrote `true` on every launch — so
-    // every existing profile already persists `true` and flipping the default
-    // changes nothing for them. It is a fresh profile that would otherwise land
-    // in the legacy tab shell, which is the fallback, not the product.
-    // The read goes through the synchronous mirror so the first frame already
-    // shows the chosen shell; `electronStorage` rehydration is async.
-    useOpenChamberShell: readShellPreference(),
+
     temporaryWorkspaceEnabled: false,
     defaultTemporaryPath: '',
     autoCreateSessionOnTempActivate: false,
@@ -213,23 +193,14 @@ export function getInitialState() {
     _backgroundRefreshKey: 0,
 
     // Settings display mode
-    settingsDisplayMode: 'tab' as const,
-    settingsModalPosition: null,
+
     presentationMode: readPresentationMode(),
 
     // Terminal theme favorites
     favoriteTerminalThemes: [] as string[],
 
-    // Quick Terminal defaults
-    quickTerminal: defaultQuickTerminalSettings,
-
     // Web Inspector defaults
     webInspectorEnabled: false,
-
-    // Hide Groups default
-    hideGroups: false,
-    hiddenOpenInApps: [] as string[],
-    openInMenuFilterEnabled: false,
 
     // Logging defaults
     loggingEnabled: false,
@@ -254,13 +225,6 @@ export const useSettingsStore = create<SettingsState>()(
         }
         set({ theme });
       },
-
-      setLayoutMode: (layoutMode) => set({ layoutMode }),
-
-      setFileTreeDisplayMode: (fileTreeDisplayMode) => set({ fileTreeDisplayMode }),
-
-      setRepositoryListDisplayMode: (repositoryListDisplayMode) =>
-        set({ repositoryListDisplayMode }),
 
       setLanguage: (language) => {
         document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
@@ -297,12 +261,10 @@ export const useSettingsStore = create<SettingsState>()(
 
       // Keybinding Setters
       setXtermKeybindings: (xtermKeybindings) => set({ xtermKeybindings }),
-      setMainTabKeybindings: (mainTabKeybindings) => set({ mainTabKeybindings }),
+
       setSourceControlKeybindings: (sourceControlKeybindings) => set({ sourceControlKeybindings }),
       setSearchKeybindings: (searchKeybindings) => set({ searchKeybindings }),
       setEditorKeybindings: (editorKeybindings) => set({ editorKeybindings }),
-      setGlobalKeybindings: (globalKeybindings) => set({ globalKeybindings }),
-      setWorkspaceKeybindings: (workspaceKeybindings) => set({ workspaceKeybindings }),
 
       // Editor Setters
       setEditorSettings: (settings) =>
@@ -415,13 +377,7 @@ export const useSettingsStore = create<SettingsState>()(
         })),
 
       // Beta Feature Setters
-      setGlowEffectEnabled: (glowEffectEnabled) => set({ glowEffectEnabled }),
-      setUseOpenChamberShell: (useOpenChamberShell) => {
-        // Mirror first: the persisted write is async, and this value decides
-        // what the next launch paints before rehydration lands (T-16).
-        writeShellPreference(useOpenChamberShell);
-        set({ useOpenChamberShell });
-      },
+
       setTemporaryWorkspaceEnabled: (temporaryWorkspaceEnabled) =>
         set({ temporaryWorkspaceEnabled }),
       setDefaultTemporaryPath: (defaultTemporaryPath) => set({ defaultTemporaryPath }),
@@ -478,10 +434,6 @@ export const useSettingsStore = create<SettingsState>()(
       triggerBackgroundRefresh: () =>
         set((state) => ({ _backgroundRefreshKey: state._backgroundRefreshKey + 1 })),
 
-      // Settings Display Setters
-      setSettingsDisplayMode: (mode) => set({ settingsDisplayMode: mode }),
-      setSettingsModalPosition: (position) => set({ settingsModalPosition: position }),
-
       // Terminal Theme Favorites Setters
       addFavoriteTerminalTheme: (theme) =>
         set((state) => ({
@@ -502,32 +454,6 @@ export const useSettingsStore = create<SettingsState>()(
             : [...state.favoriteTerminalThemes, theme],
         })),
 
-      // Quick Terminal Setters
-      setQuickTerminalEnabled: (enabled) =>
-        set((state) => ({
-          quickTerminal: { ...state.quickTerminal, enabled },
-        })),
-
-      setQuickTerminalButtonPosition: (position) =>
-        set((state) => ({
-          quickTerminal: { ...state.quickTerminal, buttonPosition: position },
-        })),
-
-      setQuickTerminalModalPosition: (position) =>
-        set((state) => ({
-          quickTerminal: { ...state.quickTerminal, modalPosition: position },
-        })),
-
-      setQuickTerminalModalSize: (size) =>
-        set((state) => ({
-          quickTerminal: { ...state.quickTerminal, modalSize: size },
-        })),
-
-      setQuickTerminalOpen: (open) =>
-        set((state) => ({
-          quickTerminal: { ...state.quickTerminal, isOpen: open },
-        })),
-
       // Web Inspector Setter
       setWebInspectorEnabled: async (enabled) => {
         set({ webInspectorEnabled: enabled });
@@ -541,18 +467,6 @@ export const useSettingsStore = create<SettingsState>()(
           await window.electronAPI.webInspector.stop();
         }
       },
-
-      // Other Setters
-      setHideGroups: (hideGroups) => set({ hideGroups }),
-      toggleHiddenOpenInApp: (bundleId) =>
-        set((state) => ({
-          hiddenOpenInApps: state.hiddenOpenInApps.includes(bundleId)
-            ? state.hiddenOpenInApps.filter((id) => id !== bundleId)
-            : [...state.hiddenOpenInApps, bundleId],
-        })),
-      setOpenInMenuFilterEnabled: (enabled) => set({ openInMenuFilterEnabled: enabled }),
-
-      // File Tree Setters
 
       // Logging Setters
       setLoggingEnabled: (loggingEnabled) => {
@@ -590,10 +504,6 @@ export const useSettingsStore = create<SettingsState>()(
         const effectiveState = state ?? useSettingsStore.getState();
         applyInitialSettings(effectiveState);
 
-        // T-16: settings.json stays the authority — re-point the synchronous
-        // mirror at the hydrated value so an out-of-band edit (or a cleared
-        // localStorage) converges after one launch instead of fighting it.
-        writeShellPreference(effectiveState.useOpenChamberShell);
         writePresentationMode(effectiveState.presentationMode);
 
         // Sync renderer logging configuration after settings are loaded

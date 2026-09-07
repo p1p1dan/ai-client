@@ -148,8 +148,9 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     // `getSurface`), it simply has no entry point any more — no header button,
     // no Ctrl/Cmd+`, no rail digit. `registeredOnly` is the registry's own way
     // of saying "not offered on the rail this round"; it is what every guard
-    // in `shellLayoutModel.ts` already reads, so one flag closes every door at
-    // once rather than leaving a shortcut that silently does nothing.
+    // in `shellLayoutModel.ts` already reads. S05 preserves one non-navigation
+    // use: an explicitly enabled repository init script opens this surface
+    // through openInitializationTerminal after worktree creation succeeds.
     id: 'terminal',
     icon: 'square-terminal',
     labelKey: 'Terminal',

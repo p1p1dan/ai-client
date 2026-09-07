@@ -12,6 +12,20 @@ vi.mock('../storage', () => ({
 }));
 
 const removedKeys = [
+  'layoutMode',
+  'fileTreeDisplayMode',
+  'repositoryListDisplayMode',
+  'quickTerminal',
+  'hideGroups',
+  'hiddenOpenInApps',
+  'openInMenuFilterEnabled',
+  'glowEffectEnabled',
+  'mainTabKeybindings',
+  'globalKeybindings',
+  'workspaceKeybindings',
+  'settingsDisplayMode',
+  'settingsModalPosition',
+  'useOpenChamberShell',
   'agentNotificationEnabled',
   'agentNotificationDelay',
   'agentNotificationEnterDelay',
@@ -20,6 +34,7 @@ const removedKeys = [
 ];
 
 const legacyProfile = {
+  ...Object.fromEntries(removedKeys.map((key) => [key, true])),
   language: 'zh' as const,
   terminalScrollback: 5000,
   agentNotificationEnabled: false,
@@ -32,7 +47,7 @@ const legacyProfile = {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('S04 removed settings', () => {
+describe('S04/S06 removed settings', () => {
   it('cannot reintroduce removed settings through types, defaults, setters or UI', () => {
     for (const file of ['../types.ts', '../defaults.ts', '../index.ts']) {
       const source = readFileSync(new URL(file, import.meta.url), 'utf8');
@@ -55,6 +70,10 @@ describe('S04 removed settings', () => {
       ...legacyProfile,
       editorSettings: { ...current.editorSettings, fontSize: 18 },
       proxySettings: { ...current.proxySettings, enabled: true },
+      searchKeybindings: {
+        searchFiles: { key: 'k', ctrl: true },
+        searchContent: { key: 'j', alt: true },
+      },
       commitMessageGenerator: {
         ...current.commitMessageGenerator,
         model: 'pilab/custom-model',
@@ -70,6 +89,7 @@ describe('S04 removed settings', () => {
     expect(migrated.terminalScrollback).toBe(5000);
     expect(migrated.editorSettings).toEqual(persisted.editorSettings);
     expect(migrated.proxySettings).toEqual(persisted.proxySettings);
+    expect(migrated.searchKeybindings).toEqual(persisted.searchKeybindings);
     expect(migrated.commitMessageGenerator).toEqual(persisted.commitMessageGenerator);
     expect(migrated.setTheme).toBe(current.setTheme);
     expect(persisted).toHaveProperty('terminalInput');

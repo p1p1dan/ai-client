@@ -349,6 +349,7 @@ export const initialShellSurfaceState: ShellSurfaceState = {
 };
 
 export type ShellSurfaceAction =
+  | { type: 'open-initialization-terminal' }
   | { type: 'select'; surfaceId: ContextSurfaceId } // rail click
   | { type: 'open'; surfaceId?: ContextSurfaceId } // header toggle on / T-12~15 entry
   | { type: 'close' }
@@ -414,6 +415,8 @@ export function reduceShellSurface(
   action: ShellSurfaceAction
 ): ShellSurfaceState {
   switch (action.type) {
+    case 'open-initialization-terminal':
+      return openSurface(prev, 'terminal');
     case 'select':
       return applySelect(prev, action.surfaceId);
     case 'open':

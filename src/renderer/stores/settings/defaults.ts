@@ -6,23 +6,12 @@ import type {
   CommitMessageGeneratorSettings,
   EditorKeybindings,
   EditorSettings,
-  FileTreeDisplayMode,
   GitCloneSettings,
-  GlobalKeybindings,
-  LayoutMode,
-  MainTabKeybindings,
-  QuickTerminalSettings,
   RemoteSettings,
-  RepositoryListDisplayMode,
   SearchKeybindings,
   SourceControlKeybindings,
-  WorkspaceKeybindings,
   XtermKeybindings,
 } from './types';
-
-export const defaultLayoutMode: LayoutMode = 'tree';
-export const defaultFileTreeDisplayMode: FileTreeDisplayMode = 'current';
-export const defaultRepositoryListDisplayMode: RepositoryListDisplayMode = 'list';
 
 // Default prompts for different languages
 export const defaultCommitPromptZh = `你是一个 Git commit message 生成助手。请根据以下信息生成规范的 commit message。
@@ -224,13 +213,6 @@ export const defaultXtermKeybindings: XtermKeybindings = {
   clear: { key: 'k', meta: true },
 };
 
-export const defaultMainTabKeybindings: MainTabKeybindings = {
-  switchToAgent: { key: '1', ctrl: true },
-  switchToFile: { key: '2', ctrl: true },
-  switchToTerminal: { key: '3', ctrl: true },
-  switchToSourceControl: { key: '4', ctrl: true },
-};
-
 export const defaultSourceControlKeybindings: SourceControlKeybindings = {
   prevDiff: { key: 'F7' },
   nextDiff: { key: 'F8' },
@@ -245,24 +227,7 @@ export const defaultEditorKeybindings: EditorKeybindings = {
   gotoSymbol: { key: 'o', meta: true },
 };
 
-export const defaultGlobalKeybindings: GlobalKeybindings = {
-  runningProjects: { key: 'l', meta: true },
-};
-
-export const defaultWorkspaceKeybindings: WorkspaceKeybindings = {
-  toggleWorktree: { key: 'w', meta: true, shift: true },
-  toggleRepository: { key: 'r', meta: true, shift: true },
-  switchActiveWorktree: { key: 'CapsLock', ctrl: true },
-};
-
 // Default quick terminal settings
-export const defaultQuickTerminalSettings: QuickTerminalSettings = {
-  enabled: true,
-  buttonPosition: null,
-  modalPosition: null,
-  modalSize: null,
-  isOpen: false,
-};
 
 /**
  * Validate code review prompt template

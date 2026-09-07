@@ -1,53 +1,51 @@
 # Implementation Status — 设置清单整理与旧壳删除
 
 > 当前 phase、Next、blocker 与 last verified 的唯一权威。
-> 任务 ID 与状态见 [roadmap.md](./roadmap.md)；不在此复制第二份任务状态。
+> 任务 ID 与状态见 [roadmap.md](./roadmap.md)。
 
 ## Current phase
 
-**S04 与 S01/S02/S03 已实现，相关回归通过，待完整门禁与合入。** S05/S06/S07 未开始。
-执行进度见 [TODO.md](./TODO.md)，任务状态仍以 roadmap 为准。
+**S01–S07 均已实现，本轮相关回归与拆分检查通过；尚未完成完整验收和主分支合入。**
+S01–S04 已独立保存为本地提交 `deba6cd7`。用户明确允许继续 S05–S07、按实际情况先提交，
+本轮据此调整“补齐线先合入”的执行前置，在同一功能分支继续；不把本地提交记成已合入。
+
+执行清单见 [TODO.md](./TODO.md)，新增实现证据见 [S05–S07](./evidence/s05-s07-implementation.md)。
 
 ## Active TODO（最多五项）
 
-1. 确认是否允许安装主机缺少的 make/g++ 等编译工具；已向用户询问，尚未收到答复。
-2. 补齐 node-pty 原生模块与独立 Agent Host 依赖，复跑剩余四个环境相关失败文件。
-3. 完成待验收项，GUI 点验按原计划并入 UI 对齐累计点验。
-4. S04/S01/S02/S03 满足门禁后更新状态并合入，目前未提交。
-5. **S05 删旧壳** —— S01/S02/S03 全部合入后才允许开工。
-
-S06 / S07 在 S05 之后，暂不进 Active。
+1. 审核本轮独立提交及验证证据，保留未验收标记。
+2. 处理上轮遗留的四个环境相关失败文件与整套类型检查门禁；本轮不将相关/拆分检查写成全仓三绿。
+3. 按 UI 对齐计划累计点验：仓库 → 会话 → 搜索/文件 → Git 分支 → 初始化终端 → 九类设置。
+4. 特别验证新建 worktree 的初始化脚本实际执行，以及配置修改后的新值生效。
+5. 完整验收后再将任务标为 Done、合入主分支。
 
 ## Blocker
 
-完整测试门禁尚未通过：本机没有 make/g++，node-pty 原生模块无法构建；
-`src/agent-host/node_modules` 的独立依赖尚未安装。系统级依赖安装等待用户确认。
-整套 `tsc --noEmit` 在 896 MiB 堆上限退出；生产代码和本次新增测试已拆分检查通过，
-不能把拆分结果写成整套类型检查通过。
+上轮完整门禁尚未关闭：permissionPatchScript、permissionPolicyIntegration、SessionManager、
+PiTuiPty 四个文件依赖未安装的独立 Agent Host 包或 node-pty 原生模块。
+这些文件不属于本轮 renderer 分批回归，不能用本轮结果覆盖掉。
 
-原有 lint 格式问题已做单行等价修正，全仓 lint 已通过。
-顺序纪律保持：S01/S02/S03 未全部合入前不得动 S05。
+上轮整套 tsc 在 896 MiB 堆上限退出。本轮继续用 896 MiB 堆限制拆分生产代码与修改的测试进行检查。
+本机实际约 1.9 GiB RAM，所有重检查串行；不运行整套生产构建。
+
+GUI 与真实 PTY 初始化执行尚未点验。未提交与未合入是不同状态，提交记录不能替代上述验证。
 
 ## Last verified
 
-**2026-09-07 · 实现与验证**：
+**2026-09-07 · S05–S07 实现及回归：**
 
-- S04：旧设置删除与旧 profile 兼容测试通过，见 [S04 证据](./evidence/s04-removed-settings.md)。
-- S01：搜索控制器、快捷键与异步请求测试通过，真实 ripgrep 八项集成测试通过，见 [S01 证据](./evidence/s01-workspace-search.md)。
-- S02：真实 React 表单与 localStorage 保存测试通过，旧会话菜单测试已限定正确范围并通过，见 [S02 证据](./evidence/s02-repository-settings.md)。
-- S03：分支操作四项与缓存键三十一项测试通过，见 [S03 证据](./evidence/s03-branch-switching.md)。
-- 首轮全仓测试：294 个文件分 25 批、每批最多 12 文件、单 worker；4247 个断言通过，10 个失败，8 个跳过；含模块加载失败在内共 12 个失败文件。
-- 补齐 Electron/ripgrep 并修正菜单测试后，已复跑清除其中 8 个失败文件。另补充的搜索空查询测试通过。
-- 剩余环境相关失败文件：permissionPatchScript、permissionPolicyIntegration、SessionManager、PiTuiPty。
-- 全仓 Biome 检查 1035 个文件通过；原有 warning/info 不作为 error。
-- 类型检查拆分为生产代码（排除测试，保持原 Agent Host 排除范围）和本次六个新增测试文件，两部分通过；整套检查仍受堆上限限制。
-- 首轮原始 JSON 报告保留在 `/tmp/settings-cleanup-results-BKQVxy/`；详细验证边界见 [验证记录](./evidence/2026-09-07-validation.md)。
+- 旧壳不变量、旧 profile 水合/磁盘清理与分类迁移测试通过。
+- 真实 React 测试覆盖九类切换、受控分类恢复、权限仓库上下文与 12 项快捷键中的实际录制保存。
+- renderer 176 个测试文件分 22 批执行；首轮 3048 项通过、1 项失败。失败是被删除 EnhancedInput 的字体计数，调整为保留组件的计数后原文件 48 项全部通过。
+- 新增 worktree 初始化 5 项测试通过；连同状态机、隐藏入口、共享终端回归一批共 118 项通过。
+- 生产代码的最终拆分类型检查通过；新增及修改测试的独立类型检查通过，均限制 Node 堆 896 MiB。
+- 全仓 Biome 检查 982 个文件通过，0 error；保留既有 warning/info。
+- 未运行整套生产构建，未启动 Electron GUI；完整边界与最终检查结果见 [本轮验证记录](./evidence/2026-09-07-s05-s07-validation.md)。
 
-未运行整套生产构建或 Agent Host 打包，未启动 `pnpm dev`，未进行真实 Electron GUI 点验。
+前轮 S01–S04 的分批门禁和待验收项保留在 [前轮验证记录](./evidence/2026-09-07-validation.md)。
 
 ## 与其他计划的关系
 
-- [pix/pi-app UI 对齐](../pix-ui-alignment/README.md)：那边管新壳的形态，本计划管旧壳的消亡与设置页的收敛。
-  本计划的 GUI 点验并入那边的累计点验，不单独开轮次。
-- S03 解掉 `GitSurfaceView` 的 Git 动作 ban，是对该计划既有减法决策的**局部松绑**，
-  松绑范围仅限分支切换，落地时需在该文件头注释里写清新边界。
+- [pix/pi-app UI 对齐](../pix-ui-alignment/README.md)：本计划删除旧壳并收敛设置，真实 GUI 继续并入累计点验。
+- 普通终端导航继续隐藏；仅为保留下来的仓库初始化能力提供专用打开动作，不恢复通用入口。
+- 本轮没有扩展 git stash、sync/publish/PR/revert/reset，也没有修改 Pi runtime/worker 迁移边界。

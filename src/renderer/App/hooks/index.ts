@@ -1,7 +1,7 @@
 export { useAppLifecycle } from './useAppLifecycle';
 export { useBackgroundImage } from './useBackgroundImage';
 export { useFileDragDrop } from './useFileDragDrop';
-export { useGroupSync } from './useGroupSync';
+
 export { useMenuActions } from './useMenuActions';
 export { useMergeState } from './useMergeState';
 export { useOpenPathListener } from './useOpenPathListener';

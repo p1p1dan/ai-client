@@ -78,7 +78,7 @@ describe('deriveScopeRows', () => {
   it('explains a missing file rather than hiding the scope', () => {
     const [row] = deriveScopeRows([scope('global', {}, { present: false })]);
     expect(row.status).toBe('missing');
-    expect(row.detail).toContain('不存在');
+    expect(row.detail).toContain('does not exist');
   });
 
   it('reports a broken file with the parser’s own words', () => {
@@ -284,14 +284,14 @@ describe('validateNewRule', () => {
   it('warns that a duplicate keeps its old position when rules follow it', () => {
     const result = validateNewRule(rules(['*.env', '*.env.example']), '*.env');
     expect(result.ok).toBe(true);
-    expect(result.warning).toContain('第 1 条');
-    expect(result.warning).toContain('后面的为准');
+    expect(result.warning).toContain('position 1');
+    expect(result.warning).toContain('take precedence');
   });
 
   it('warns more mildly when nothing follows the duplicate', () => {
     const result = validateNewRule(rules(['*.env']), '*.env');
     expect(result.ok).toBe(true);
-    expect(result.warning).toBe('该规则已存在，将被覆盖为新的动作');
+    expect(result.warning).toBe('This rule exists and its action will be replaced');
   });
 });
 

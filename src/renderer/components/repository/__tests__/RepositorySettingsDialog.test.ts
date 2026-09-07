@@ -80,7 +80,6 @@ describe('repository settings in the new shell', () => {
     expect(
       existsSync(resolve('src/renderer/components/repository/RepositoryManagerDialog.tsx'))
     ).toBe(false);
-    const sidebar = readFileSync(resolve('src/renderer/components/layout/TreeSidebar.tsx'), 'utf8');
-    expect(sidebar).not.toContain('RepositoryManagerDialog');
+    expect(existsSync(resolve('src/renderer/components/layout/TreeSidebar.tsx'))).toBe(false);
   });
 });

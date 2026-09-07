@@ -12,14 +12,12 @@ import {
   Globe,
   Loader2,
   Minus,
-  Plus,
   RefreshCw,
   Server,
 } from 'lucide-react';
 import { matchSorter } from 'match-sorter';
 import * as React from 'react';
-import type { RepositoryGroup } from '@/App/constants';
-import { CreateGroupDialog } from '@/components/group';
+
 import {
   Autocomplete,
   AutocompleteEmpty,
@@ -46,7 +44,6 @@ import {
   Select,
   SelectItem,
   SelectPopup,
-  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -63,12 +60,11 @@ type AddMode = 'local' | 'remote' | 'ssh';
 interface AddRepositoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  groups: RepositoryGroup[];
-  defaultGroupId: string | null;
+
   onAddLocal: (path: string, groupId: string | null) => void;
   onCloneComplete: (path: string, groupId: string | null) => void;
   onAddRemote: (path: string, groupId: string | null, connectionId: string) => Promise<void> | void;
-  onCreateGroup: (name: string, emoji: string, color: string) => RepositoryGroup;
+
   initialLocalPath?: string;
   onClearInitialLocalPath?: () => void;
   /** T-27: opening tab requested by the caller (e.g. the Composer target bar's footer actions). */
@@ -110,27 +106,21 @@ function getRemoteParentPath(value: string): string | null {
 export function AddRepositoryDialog({
   open,
   onOpenChange,
-  groups,
-  defaultGroupId,
   onAddLocal,
   onCloneComplete,
   onAddRemote,
-  onCreateGroup,
   initialLocalPath,
   onClearInitialLocalPath,
   initialMode,
 }: AddRepositoryDialogProps) {
   const { t } = useI18n();
-  const hideGroups = useSettingsStore((s) => s.hideGroups);
+
   const setRemoteProfiles = useSettingsStore((s) => s.setRemoteProfiles);
   const gitClone = useSettingsStore((s) => s.gitClone);
 
   const [mode, setMode] = React.useState<AddMode>('local');
 
-  const [selectedGroupId, setSelectedGroupId] = React.useState<string>('');
   const prevOpenRef = React.useRef(open);
-  const prevDefaultGroupIdRef = React.useRef<string | null>(defaultGroupId);
-  const groupSelectionTouchedRef = React.useRef(false);
 
   const [localPath, setLocalPath] = React.useState('');
   const [recentProjects, setRecentProjects] = React.useState<RecentEditorProject[]>([]);
@@ -170,7 +160,6 @@ export function AddRepositoryDialog({
   });
 
   const [error, setError] = React.useState<string | null>(null);
-  const [createGroupDialogOpen, setCreateGroupDialogOpen] = React.useState(false);
 
   const stageLabels = React.useMemo<Record<string, string>>(
     () => ({
@@ -184,23 +173,13 @@ export function AddRepositoryDialog({
 
   React.useEffect(() => {
     const wasOpen = prevOpenRef.current;
-    const prevDefaultGroupId = prevDefaultGroupIdRef.current;
 
     if (!wasOpen && open) {
-      groupSelectionTouchedRef.current = false;
-      setSelectedGroupId(defaultGroupId || '');
       setMode(initialMode ?? 'local');
-    } else if (
-      open &&
-      !groupSelectionTouchedRef.current &&
-      selectedGroupId === (prevDefaultGroupId || '')
-    ) {
-      setSelectedGroupId(defaultGroupId || '');
     }
 
     prevOpenRef.current = open;
-    prevDefaultGroupIdRef.current = defaultGroupId;
-  }, [defaultGroupId, open, selectedGroupId, initialMode]);
+  }, [open, initialMode]);
 
   React.useEffect(() => {
     if (open && initialLocalPath) {
@@ -474,8 +453,6 @@ export function AddRepositoryDialog({
 
   const resetForm = React.useCallback(() => {
     setMode('local');
-    groupSelectionTouchedRef.current = false;
-    setSelectedGroupId(defaultGroupId || '');
     setLocalPath('');
     setRecentProjects([]);
     setPathValidation(null);
@@ -500,8 +477,7 @@ export function AddRepositoryDialog({
     setIsCloning(false);
     setCloneProgress(null);
     setCloneTaskId(null);
-    setCreateGroupDialogOpen(false);
-  }, [defaultGroupId]);
+  }, []);
 
   const handleClose = React.useCallback(() => {
     if (isCloning || isAddingRemoteRepo) return;
@@ -532,7 +508,7 @@ export function AddRepositoryDialog({
     event.preventDefault();
     setError(null);
 
-    const groupIdToSave = hideGroups ? null : selectedGroupId ? selectedGroupId : null;
+    const groupIdToSave = null;
 
     if (mode === 'local') {
       if (!localPath) {
@@ -652,82 +628,6 @@ export function AddRepositoryDialog({
 
   const selectedProfile = remoteProfiles.find((profile) => profile.id === sshProfileId);
 
-  const selectedGroupLabel = React.useMemo(() => {
-    if (!selectedGroupId) return t('No Group');
-    const group = groups.find((g) => g.id === selectedGroupId);
-    if (!group) return t('No Group');
-    return (
-      <span className="flex min-w-0 items-center gap-2">
-        {group.emoji && <span className="shrink-0 text-base">{group.emoji}</span>}
-        <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full border"
-          style={{ backgroundColor: group.color }}
-          aria-hidden="true"
-        />
-        <span className="min-w-0 flex-1 truncate text-left">{group.name}</span>
-      </span>
-    );
-  }, [groups, selectedGroupId, t]);
-
-  const handleCreateGroup = React.useCallback(
-    (name: string, emoji: string, color: string) => {
-      const newGroup = onCreateGroup(name, emoji, color);
-      groupSelectionTouchedRef.current = true;
-      setSelectedGroupId(newGroup.id);
-      return newGroup;
-    },
-    [onCreateGroup]
-  );
-
-  const groupSelect = (
-    <Field>
-      <FieldLabel>{t('Group')}</FieldLabel>
-      <Select
-        value={selectedGroupId}
-        onValueChange={(value) => {
-          groupSelectionTouchedRef.current = true;
-          setSelectedGroupId(value || '');
-        }}
-        disabled={isCloning || isAddingRemoteRepo}
-      >
-        <div className="flex w-full items-center gap-2">
-          <SelectTrigger className="min-w-0 flex-1 w-auto">
-            <SelectValue>{selectedGroupLabel}</SelectValue>
-          </SelectTrigger>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="shrink-0"
-            onClick={() => setCreateGroupDialogOpen(true)}
-            disabled={isCloning || isAddingRemoteRepo}
-            title={t('New Group')}
-            aria-label={t('New Group')}
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-        <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
-          <SelectItem value="">{t('No Group')}</SelectItem>
-          {groups.length > 0 && <SelectSeparator />}
-          {groups.map((group) => (
-            <SelectItem key={group.id} value={group.id}>
-              <span className="flex min-w-0 items-center gap-2">
-                {group.emoji && <span className="shrink-0 text-base">{group.emoji}</span>}
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full border"
-                  style={{ backgroundColor: group.color }}
-                  aria-hidden="true"
-                />
-                <span className="min-w-0 flex-1 truncate text-left">{group.name}</span>
-              </span>
-            </SelectItem>
-          ))}
-        </SelectPopup>
-      </Select>
-    </Field>
-  );
-
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogPopup>
@@ -842,8 +742,6 @@ export function AddRepositoryDialog({
                     {!localPath && !isValidating && t('Select a local directory on your computer.')}
                   </FieldDescription>
                 </Field>
-
-                {!hideGroups && groupSelect}
               </TabsContent>
 
               <TabsContent value="remote" className="mt-4 space-y-4">
@@ -900,8 +798,6 @@ export function AddRepositoryDialog({
                     {t('The folder name for the cloned repository.')}
                   </FieldDescription>
                 </Field>
-
-                {!hideGroups && groupSelect}
 
                 {isCloning && (
                   <div className="space-y-2">
@@ -1018,8 +914,6 @@ export function AddRepositoryDialog({
                     </div>
                   </div>
                 )}
-
-                {!hideGroups && groupSelect}
               </TabsContent>
             </Tabs>
 
@@ -1205,12 +1099,6 @@ export function AddRepositoryDialog({
           </DialogFooter>
         </DialogPopup>
       </Dialog>
-
-      <CreateGroupDialog
-        open={createGroupDialogOpen}
-        onOpenChange={setCreateGroupDialogOpen}
-        onSubmit={handleCreateGroup}
-      />
     </Dialog>
   );
 }

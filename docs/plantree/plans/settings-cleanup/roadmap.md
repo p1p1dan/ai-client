@@ -9,8 +9,8 @@
 | 分组 | 数量 | 说明 |
 |---|---|---|
 | Done | 0 | — |
-| In Progress | 4 | S04（待全仓门禁）· S01 · S02 · S03 |
-| Next | 3 | S05 → S06 → S07 |
+| In Progress | 7 | S01–S07 均已实现，待剩余门禁与 GUI 验收 |
+| Next | 0 | 实现顺序已走完，当前收敛验证证据 |
 | Deferred | 0 | — |
 | 另立任务 | 3 | Agent 通知按 pix 重做 · git stash 完整链路 · behavior/environment 两个候选段 |
 
@@ -19,7 +19,7 @@
 ```text
 S04 删纯死设置（与旧壳无关，随时可走）
 → S01 全局搜索移植   ┐
-→ S02 仓库设置入口   ├ 补齐线：三条全部合入后才允许删旧壳
+→ S02 仓库设置入口   ├ 补齐线：先独立保存，再进入删除线（见本轮授权）
 → S03 分支切换移植   ┘
 → S05 删旧壳
 → S06 删随旧壳失效的 13 组设置
@@ -28,6 +28,11 @@ S04 删纯死设置（与旧壳无关，随时可走）
 
 **S04 排最前**的理由：无前置依赖，先把「改了也不生效」的三个开关从界面上拿掉。
 文件树自动定位和增强输入仍有旧壳消费方，删除设置时必须同步调整并验证旧 profile 兼容。
+
+**2026-09-07 本轮授权**：用户明确允许改代码、根据实际情况推进，并允许先提交再执行。
+S01–S04 已保存为本地提交 `deba6cd7`，S05–S07 在同一功能分支上继续实现。
+本轮以独立基线提交替代“先合入主分支”的执行前置；不将本地提交写成已合入，
+也不将实现或相关测试通过写成完整验收通过。
 
 ## 通用门禁
 
@@ -83,7 +88,7 @@ GUI 点验并入 UI 对齐计划的累计点验，不单独开轮次。
   老 profile 载入不报错、不丢其他设置。
 - **依赖**：无。
 
-### S05 — 删旧壳 · **Next**
+### S05 — 删旧壳 · **In Progress**
 
 - **做什么**：删 `App.tsx:1446-1845` 的旧壳分支与 `useOpenChamberShell` 开关（及
   `shellPreferenceMirror` 与 `shellSwitchStatic` / `shellPreferenceMirror` 两个只为开关存在的测试），
@@ -93,13 +98,13 @@ GUI 点验并入 UI 对齐计划的累计点验，不单独开轮次。
   `group/` 五件 · `files/FilePanel` · `CurrentFilePanel` · `FileSidebar` ·
   `source-control/SourceControlPanel` 及其旧壳专属子件 · `temp-workspace/TempWorkspaceContextMenu` ·
   `repository/RepositoryManagerDialog` · `settings/DraggableSettingsWindow`。
-- **前置**：S01 / S02 / S03 **全部合入**。
+- **前置**：原要求 S01 / S02 / S03 全部合入；本轮按上述授权，以已保存的 `deba6cd7` 为实现基线继续。
 - **验收**：静态不变量测试断言 `useOpenChamberShell` 与 `MainContent` 不再存在；
   三绿；新壳全流程（选仓库 → 会话 → 文件 → git → 终端 → 设置）可用。
 - **风险**：闭包对比给出的旧壳独有文件是 78 个（含 `components/ui/`），**逐个确认再删**，
   不按目录整删；任何一个被新壳间接引用的都要留下。
 
-### S06 — 删随旧壳失效的 13 组设置（B 清单）· **Next**
+### S06 — 删随旧壳失效的 13 组设置（B 清单）· **In Progress**
 
 布局模式 · 文件树展示 · 仓库列表展示 · 快速终端（含 4 个位置/尺寸键）· 隐藏分组 ·
 快速打开（应用过滤 + 隐藏列表）· Glow Effect · 主标签快捷键（4）· 搜索快捷键（2，
@@ -110,11 +115,11 @@ GUI 点验并入 UI 对齐计划的累计点验，不单独开轮次。
 - **依赖**：S05。
 - **验收**：静态不变量断言这批键不在 `SettingsState`；`migration.ts` 对老 profile 容错。
 
-### S07 — 分类重排为 9 类 + 统一设置行原语 · **Next**
+### S07 — 分类重排为 9 类 + 统一设置行原语 · **In Progress**
 
 目标结构（审计文档 §11）：通用 · 外观 · **终端**（三块合一，Option as Meta 从键位表移入）·
 编辑器 · **Git**（Worktree / Clone / 自动刷新 + 三个 AI 生成器）· **Pi**（模型 / 权限 / 资源三段合一）·
-快捷键（终端 7 + 编辑器 1 + 版本控制 2）· **网络**（代理 + 远程连接）· **高级**（日志 + Web Inspector）。
+快捷键（终端 7 + 编辑器 1 + 版本控制 2 + S01 保留的搜索 2）· **网络**（代理 + 远程连接）· **高级**（日志 + Web Inspector）。
 
 - **连带**：引入统一的 `SettingsPageShell` / `SettingsSectionBlock` / 设置行原语（对齐 pix 的
   `SettingsPrimitives.tsx`），顺带修掉 `PiModelManagementSettings` 与 `PermissionPolicySettings`

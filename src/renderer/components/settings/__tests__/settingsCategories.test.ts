@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { stripComments } from '../../chat/__tests__/stripComments';
-import { isSettingsCategory, SETTINGS_CATEGORIES } from '../constants';
+import { isSettingsCategory, restoreSettingsCategory, SETTINGS_CATEGORIES } from '../constants';
 
 /**
  * Every settings category must have a way in and something to show.
@@ -21,6 +21,39 @@ const SETTINGS_CONTENT = join(__dirname, '..', 'SettingsContent.tsx');
 const source = stripComments(readFileSync(SETTINGS_CONTENT, 'utf8'), SETTINGS_CONTENT);
 
 describe('settings categories', () => {
+  it('uses the nine agreed categories in order', () => {
+    expect(SETTINGS_CATEGORIES).toEqual([
+      'general',
+      'appearance',
+      'terminal',
+      'editor',
+      'git',
+      'pi',
+      'keybindings',
+      'network',
+      'advanced',
+    ]);
+  });
+
+  it.each([
+    ['ai', 'git'],
+    ['piModels', 'pi'],
+    ['piPermissions', 'pi'],
+    ['piResources', 'pi'],
+    ['remote', 'network'],
+    ['webInspector', 'advanced'],
+    [null, 'general'],
+    ['unknown', 'general'],
+  ])('restores old category %s into %s', (old, current) => {
+    expect(restoreSettingsCategory(old)).toBe(current);
+  });
+
+  it('shares category rendering with the dialog and preserves permission scope', () => {
+    const dialog = readFileSync(join(__dirname, '..', 'SettingsDialog.tsx'), 'utf8');
+    expect(dialog).toContain('<SettingsContent');
+    expect(dialog).not.toContain("id: 'general'");
+    expect(source).toContain('<PermissionPolicySettings repoPath={repoPath}');
+  });
   it('gives every category a nav entry', () => {
     for (const category of SETTINGS_CATEGORIES) {
       expect(source).toContain(`id: '${category}'`);

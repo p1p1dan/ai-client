@@ -22,6 +22,7 @@ import {
   defaultCommitPromptZh,
   useSettingsStore,
 } from '@/stores/settings';
+import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
 type FeatureKey = 'commitMessageGenerator' | 'codeReview' | 'branchNameGenerator';
 
@@ -44,6 +45,7 @@ function ModelField({
   onChange: (value: string) => void;
   models: readonly AgentModelOption[];
 }) {
+  const { t } = useI18n();
   const selected = value && models.some((model) => model.id === value) ? value : AUTOMATIC;
   return (
     <Select
@@ -52,11 +54,11 @@ function ModelField({
     >
       <SelectTrigger className="w-64">
         <SelectValue>
-          {models.find((model) => model.id === selected)?.label ?? 'Automatic'}
+          {models.find((model) => model.id === selected)?.label ?? t('Automatic')}
         </SelectValue>
       </SelectTrigger>
       <SelectPopup>
-        <SelectItem value={AUTOMATIC}>Automatic</SelectItem>
+        <SelectItem value={AUTOMATIC}>{t('Automatic')}</SelectItem>
         {models.map((model) => (
           <SelectItem key={model.id} value={model.id}>
             {model.label}
@@ -76,6 +78,7 @@ function EffortField({
   model: AgentModelOption | undefined;
   onChange: (value: SessionEffortLevel | undefined) => void;
 }) {
+  const { t } = useI18n();
   const options = effortsForModel(model);
   const reconciled = reconcileEffortForModel(value, model);
 
@@ -94,10 +97,10 @@ function EffortField({
         <SelectValue />
       </SelectTrigger>
       <SelectPopup>
-        <SelectItem value="default">Automatic</SelectItem>
+        <SelectItem value="default">{t('Automatic')}</SelectItem>
         {options.map((effort) => (
           <SelectItem key={effort.id} value={effort.id}>
-            {effort.label}
+            {t(effort.label)}
           </SelectItem>
         ))}
       </SelectPopup>
@@ -152,92 +155,91 @@ export function AISettings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium">{t('AI Features')}</h3>
-        <p className="text-sm text-muted-foreground">
-          {t('Configure AI-powered features for code generation and review')}
-        </p>
-      </div>
-      {features.map(({ key, title, description }) => {
-        const feature = settings[key] as FeatureSettings;
-        const selectedModel = models.find((model) => model.id === feature.model);
-        return (
-          <section key={key} className="space-y-4 border-t pt-6">
-            <div>
-              <h4 className="text-base font-medium">{title}</h4>
-              <p className="text-sm text-muted-foreground">{description}</p>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">{t('Enable Generator')}</span>
-              <Switch
-                checked={feature.enabled}
-                onCheckedChange={(enabled) => setFeature(key, { enabled })}
-              />
-            </div>
-            {feature.enabled && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-                  <span className="text-sm font-medium">{t('Model')}</span>
-                  <ModelField
-                    value={feature.model ?? ''}
-                    onChange={(model) => setFeature(key, { model, effort: undefined })}
-                    models={models}
-                  />
-                </div>
-                <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-                  <span className="text-sm font-medium">{t('Effort')}</span>
-                  <EffortField
-                    value={feature.effort}
-                    model={selectedModel}
-                    onChange={(effort) => setFeature(key, { effort })}
-                  />
-                </div>
-                {'maxDiffLines' in feature && (
-                  <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-                    <span className="text-sm font-medium">{t('Max Diff Lines')}</span>
-                    <Input
-                      type="number"
-                      className="w-32"
-                      value={feature.maxDiffLines}
-                      onChange={(event) =>
-                        setFeature(key, { maxDiffLines: Number(event.target.value) || 1000 })
-                      }
-                    />
-                  </div>
-                )}
-                {'timeout' in feature && (
-                  <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-                    <span className="text-sm font-medium">{t('Timeout')}</span>
-                    <Input
-                      type="number"
-                      className="w-32"
-                      value={feature.timeout}
-                      onChange={(event) =>
-                        setFeature(key, { timeout: Number(event.target.value) || 60 })
-                      }
-                    />
-                  </div>
-                )}
-                {'language' in feature && (
-                  <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-                    <span className="text-sm font-medium">{t('Language')}</span>
-                    <Input
-                      className="w-40"
-                      value={feature.language}
-                      onChange={(event) => setFeature(key, { language: event.target.value })}
-                    />
-                  </div>
-                )}
-                <textarea
-                  className="min-h-28 w-full rounded-md border bg-transparent p-2 text-sm"
-                  value={feature.prompt || defaults[key].prompt}
-                  onChange={(event) => setFeature(key, { prompt: event.target.value })}
+      <SettingsSectionBlock
+        title={t('AI Features')}
+        description={t('Configure AI-powered features for code generation and review')}
+      >
+        {features.map(({ key, title, description }) => {
+          const feature = settings[key] as FeatureSettings;
+          const selectedModel = models.find((model) => model.id === feature.model);
+          return (
+            <section key={key} className="space-y-4 border-t pt-6">
+              <div>
+                <h4 className="text-base font-medium">{title}</h4>
+                <p className="text-sm text-muted-foreground">{description}</p>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">{t('Enable Generator')}</span>
+                <Switch
+                  checked={feature.enabled}
+                  onCheckedChange={(enabled) => setFeature(key, { enabled })}
                 />
               </div>
-            )}
-          </section>
-        );
-      })}
+              {feature.enabled && (
+                <div className="space-y-4">
+                  <SettingsRow>
+                    <span className="text-sm font-medium">{t('Model')}</span>
+                    <ModelField
+                      value={feature.model ?? ''}
+                      onChange={(model) => setFeature(key, { model, effort: undefined })}
+                      models={models}
+                    />
+                  </SettingsRow>
+                  <SettingsRow>
+                    <span className="text-sm font-medium">{t('Effort')}</span>
+                    <EffortField
+                      value={feature.effort}
+                      model={selectedModel}
+                      onChange={(effort) => setFeature(key, { effort })}
+                    />
+                  </SettingsRow>
+                  {'maxDiffLines' in feature && (
+                    <SettingsRow>
+                      <span className="text-sm font-medium">{t('Max Diff Lines')}</span>
+                      <Input
+                        type="number"
+                        className="w-32"
+                        value={feature.maxDiffLines}
+                        onChange={(event) =>
+                          setFeature(key, { maxDiffLines: Number(event.target.value) || 1000 })
+                        }
+                      />
+                    </SettingsRow>
+                  )}
+                  {'timeout' in feature && (
+                    <SettingsRow>
+                      <span className="text-sm font-medium">{t('Timeout')}</span>
+                      <Input
+                        type="number"
+                        className="w-32"
+                        value={feature.timeout}
+                        onChange={(event) =>
+                          setFeature(key, { timeout: Number(event.target.value) || 60 })
+                        }
+                      />
+                    </SettingsRow>
+                  )}
+                  {'language' in feature && (
+                    <SettingsRow>
+                      <span className="text-sm font-medium">{t('Language')}</span>
+                      <Input
+                        className="w-40"
+                        value={feature.language}
+                        onChange={(event) => setFeature(key, { language: event.target.value })}
+                      />
+                    </SettingsRow>
+                  )}
+                  <textarea
+                    className="min-h-28 w-full rounded-md border bg-transparent p-2 text-sm"
+                    value={feature.prompt || defaults[key].prompt}
+                    onChange={(event) => setFeature(key, { prompt: event.target.value })}
+                  />
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </SettingsSectionBlock>
     </div>
   );
 }

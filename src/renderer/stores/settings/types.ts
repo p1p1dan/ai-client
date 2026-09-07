@@ -6,13 +6,6 @@ import type { CommonAISettings } from '@shared/types/ai';
 // Theme types
 export type Theme = 'light' | 'dark' | 'system' | 'sync-terminal';
 
-export type LayoutMode = 'columns' | 'tree';
-
-export type FileTreeDisplayMode = 'legacy' | 'current';
-
-export type RepositoryListDisplayMode = 'tabs' | 'list';
-
-export type SettingsDisplayMode = 'tab' | 'draggable-modal';
 export type PresentationMode = 'gui' | 'tui';
 
 // Terminal types
@@ -57,13 +50,6 @@ export interface TerminalKeybinding {
   meta?: boolean;
 }
 
-export interface MainTabKeybindings {
-  switchToAgent: TerminalKeybinding;
-  switchToFile: TerminalKeybinding;
-  switchToTerminal: TerminalKeybinding;
-  switchToSourceControl: TerminalKeybinding;
-}
-
 export interface SourceControlKeybindings {
   prevDiff: TerminalKeybinding;
   nextDiff: TerminalKeybinding;
@@ -76,16 +62,6 @@ export interface SearchKeybindings {
 
 export interface EditorKeybindings {
   gotoSymbol: TerminalKeybinding;
-}
-
-export interface GlobalKeybindings {
-  runningProjects: TerminalKeybinding;
-}
-
-export interface WorkspaceKeybindings {
-  toggleWorktree: TerminalKeybinding;
-  toggleRepository: TerminalKeybinding;
-  switchActiveWorktree: TerminalKeybinding;
 }
 
 export interface XtermKeybindings {
@@ -171,15 +147,6 @@ export interface PromptValidationResult {
   warnings: string[];
 }
 
-// Quick Terminal settings
-export interface QuickTerminalSettings {
-  enabled: boolean;
-  buttonPosition: { x: number; y: number } | null;
-  modalPosition: { x: number; y: number } | null;
-  modalSize: { width: number; height: number } | null;
-  isOpen: boolean;
-}
-
 export interface RemoteSettings {
   profiles: ConnectionProfile[];
 }
@@ -202,9 +169,7 @@ export interface GitCloneSettings {
 export interface SettingsState {
   // UI Settings
   theme: Theme;
-  layoutMode: LayoutMode;
-  fileTreeDisplayMode: FileTreeDisplayMode;
-  repositoryListDisplayMode: RepositoryListDisplayMode;
+
   language: Locale;
   fontSize: number;
   fontFamily: string;
@@ -222,12 +187,10 @@ export interface SettingsState {
 
   // Keybindings
   xtermKeybindings: XtermKeybindings;
-  mainTabKeybindings: MainTabKeybindings;
+
   sourceControlKeybindings: SourceControlKeybindings;
   searchKeybindings: SearchKeybindings;
   editorKeybindings: EditorKeybindings;
-  globalKeybindings: GlobalKeybindings;
-  workspaceKeybindings: WorkspaceKeybindings;
 
   // Editor Settings
   editorSettings: EditorSettings;
@@ -264,8 +227,8 @@ export interface SettingsState {
   gitClone: GitCloneSettings;
 
   // Beta features
-  glowEffectEnabled: boolean; // Enable glow animation effect for AI output states (Beta)
-  useOpenChamberShell: boolean; // Enable OpenChamber-style workspace shell (Beta)
+  // Enable glow animation effect for AI output states (Beta)
+  // Enable OpenChamber-style workspace shell (Beta)
   temporaryWorkspaceEnabled: boolean; // Enable Temp Session (Beta)
   defaultTemporaryPath: string; // Default path for temp sessions
   autoCreateSessionOnTempActivate: boolean; // Auto-create agent/terminal session when temp session becomes active
@@ -286,23 +249,14 @@ export interface SettingsState {
   _backgroundRefreshKey: number; // Transient: trigger folder re-scan (not persisted)
 
   // Settings display mode
-  settingsDisplayMode: SettingsDisplayMode;
-  settingsModalPosition: { x: number; y: number } | null;
+
   presentationMode: PresentationMode;
 
   // Terminal theme favorites
   favoriteTerminalThemes: string[];
 
-  // Quick Terminal settings
-  quickTerminal: QuickTerminalSettings;
-
   // Web Inspector settings
   webInspectorEnabled: boolean;
-
-  // Hide Groups setting
-  hideGroups: boolean;
-  hiddenOpenInApps: string[];
-  openInMenuFilterEnabled: boolean;
 
   // Logging
   loggingEnabled: boolean;
@@ -311,9 +265,7 @@ export interface SettingsState {
 
   // Setters - UI
   setTheme: (theme: Theme) => void;
-  setLayoutMode: (mode: LayoutMode) => void;
-  setFileTreeDisplayMode: (mode: FileTreeDisplayMode) => void;
-  setRepositoryListDisplayMode: (mode: RepositoryListDisplayMode) => void;
+
   setLanguage: (language: Locale) => void;
   setFontSize: (size: number) => void;
   setFontFamily: (family: string) => void;
@@ -332,12 +284,10 @@ export interface SettingsState {
 
   // Setters - Keybindings
   setXtermKeybindings: (keybindings: XtermKeybindings) => void;
-  setMainTabKeybindings: (keybindings: MainTabKeybindings) => void;
+
   setSourceControlKeybindings: (keybindings: SourceControlKeybindings) => void;
   setSearchKeybindings: (keybindings: SearchKeybindings) => void;
   setEditorKeybindings: (keybindings: EditorKeybindings) => void;
-  setGlobalKeybindings: (keybindings: GlobalKeybindings) => void;
-  setWorkspaceKeybindings: (keybindings: WorkspaceKeybindings) => void;
 
   // Setters - Editor
   setEditorSettings: (settings: Partial<EditorSettings>) => void;
@@ -375,8 +325,7 @@ export interface SettingsState {
   ) => void;
 
   // Setters - Beta features
-  setGlowEffectEnabled: (enabled: boolean) => void;
-  setUseOpenChamberShell: (enabled: boolean) => void;
+
   setTemporaryWorkspaceEnabled: (enabled: boolean) => void;
   setDefaultTemporaryPath: (path: string) => void;
   setAutoCreateSessionOnTempActivate: (enabled: boolean) => void;
@@ -396,29 +345,13 @@ export interface SettingsState {
   setBackgroundSizeMode: (mode: BackgroundSizeMode) => void;
   triggerBackgroundRefresh: () => void;
 
-  // Setters - Settings display
-  setSettingsDisplayMode: (mode: SettingsDisplayMode) => void;
-  setSettingsModalPosition: (position: { x: number; y: number } | null) => void;
-
   // Setters - Terminal theme favorites
   addFavoriteTerminalTheme: (theme: string) => void;
   removeFavoriteTerminalTheme: (theme: string) => void;
   toggleFavoriteTerminalTheme: (theme: string) => void;
 
-  // Setters - Quick Terminal
-  setQuickTerminalEnabled: (enabled: boolean) => void;
-  setQuickTerminalButtonPosition: (position: { x: number; y: number } | null) => void;
-  setQuickTerminalModalPosition: (position: { x: number; y: number } | null) => void;
-  setQuickTerminalModalSize: (size: { width: number; height: number } | null) => void;
-  setQuickTerminalOpen: (open: boolean) => void;
-
   // Setters - Web Inspector
   setWebInspectorEnabled: (enabled: boolean) => void;
-
-  // Setters - Other
-  setHideGroups: (hide: boolean) => void;
-  toggleHiddenOpenInApp: (bundleId: string) => void;
-  setOpenInMenuFilterEnabled: (enabled: boolean) => void;
 
   // Setters - Logging
   setLoggingEnabled: (enabled: boolean) => void;

@@ -1179,10 +1179,10 @@ describe('T-29 repo-wide: ChatMarkdown has exactly one call site in src/', () =>
  *
  * A presence check ("`leading-relaxed` appears") cannot see either failure. Two
  * counts asserted together can: the positive count catches the missed surface,
- * and the negative count catches the over-applied one. The six that must stay
+ * and the negative count catches the over-applied one. The five that must stay
  * on `leading-normal` are the reverse gate — they are UI elements (`QuestionCard`
- * ×3, `ToolRows`' single-line rows, `turnBodyClass()`'s inherited baseline, and
- * `EnhancedInput`'s textarea), not long-form prose, and D1-b was authorised for
+ * ×3, `ToolRows`' single-line rows, and `turnBodyClass()`'s inherited baseline),
+ * not long-form prose. S05 removed the old `EnhancedInput` textarea. D1-b was authorised for
  * prose only.
  */
 describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest do not', () => {
@@ -1227,11 +1227,11 @@ describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest d
     );
   });
 
-  it('the six non-prose surfaces are still on 1.5, and so is the turn skeleton', () => {
-    // Six kept surfaces + the code block, which D1-b moved UP to 1.5 from
+  it('the five retained non-prose surfaces are still on 1.5, and so is the turn skeleton', () => {
+    // Five kept surfaces + the code block, which D1-b moved UP to 1.5 from
     // `leading-snug` (§1.2 ⑥) and therefore joins this count rather than the
     // one above. Both numbers move if anyone applies the change wholesale.
-    expect(countIn(CHAT_CODE, 'leading-normal'), 'six UI surfaces + the code block').toBe(7);
+    expect(countIn(CHAT_CODE, 'leading-normal'), 'five UI surfaces + the code block').toBe(6);
     // The skeleton itself: `turnBodyClass()` feeds components that set no size
     // of their own, so relaxing it would resize `QuestionCard` and the tool
     // shells — outside D1-b's authorisation.

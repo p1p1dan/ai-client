@@ -87,7 +87,6 @@ function relToRenderer(file: string): string {
 const FONT_MONO_WHITELIST: readonly string[] = [
   'components/ErrorBoundary.tsx',
   'components/chat/ChatComposer.tsx',
-  'components/chat/EnhancedInput.tsx',
   'components/chat/HitListPopover.tsx',
   'components/chat/HostStatusBanner.tsx',
   'components/chat/MessageTimeline.tsx',
@@ -104,13 +103,13 @@ const FONT_MONO_WHITELIST: readonly string[] = [
   'components/sessions/SessionItem.tsx',
   'components/sessions/SessionManagerView.tsx',
   'components/settings/GeneralSettings.tsx',
+  // S07: existing path/URL fields moved out of GeneralSettings.
+  'components/settings/GitSettings.tsx',
+  'components/settings/NetworkSettings.tsx',
+  'components/settings/TerminalSettings.tsx',
   'components/source-control/ChangesList.tsx',
   'components/source-control/ChangesTree.tsx',
   'components/source-control/CodeReviewModal.tsx',
-  'components/source-control/CommitHistoryList.tsx',
-  'components/source-control/DiffReviewModal.tsx',
-  'components/source-control/ResetModeDialog.tsx',
-  'components/source-control/SourceControlPanel.tsx',
   // D34 commit-expand file list: monospace status letters, same rationale as ChangesList.
   'components/workspace-shell/surfaces/GitHistoryList.tsx',
   'components/ui/code-block.tsx',

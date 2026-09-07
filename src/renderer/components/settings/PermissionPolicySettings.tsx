@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { useI18n } from '@/i18n';
 import {
   deriveRuleTables,
   deriveScopeRows,
@@ -41,6 +42,7 @@ import {
   surfacePatch,
   validateNewRule,
 } from './permissionPolicyView';
+import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
 /**
  * T08-c slice 2 — Settings → 权限策略.
@@ -62,6 +64,8 @@ import {
  *     that reports a policy the user does not have.
  */
 export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
+  const { t, locale } = useI18n();
+
   const [snapshot, setSnapshot] = useState<PermissionPolicySnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -124,14 +128,14 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
     return (
       <div className="space-y-6">
         <PanelHeading />
-        <p className="text-ui text-muted-foreground">{error ?? '读取中…'}</p>
+        <p className="text-ui text-muted-foreground">{error ?? t('Loading...')}</p>
       </div>
     );
   }
 
   const controls = deriveSurfaceControls(snapshot);
   const tables = deriveRuleTables(snapshot);
-  const scopes = deriveScopeRows(snapshot.scopes);
+  const scopes = deriveScopeRows(snapshot.scopes, locale);
   const editable = snapshot.editable && !busy;
 
   return (
@@ -149,9 +153,10 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
         <div className="flex gap-3 rounded-md border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span className="min-w-0 flex-1">
-            Yolo 模式已开启，权限闸整体失效——包括对 <Ident>sudo</Ident>、<Ident>bash -c</Ident>{' '}
-            这类命令的兜底限制。本面板不提供开关；请到
-            {originLabel(snapshot.effective.yoloMode.origin)}对应的配置文件里关掉它。
+            {t(
+              'Yolo mode disables all permission checks, including command restrictions. Disable it in the {{source}} configuration file.',
+              { source: t(originLabel(snapshot.effective.yoloMode.origin)) }
+            )}
           </span>
         </div>
       )}
@@ -167,11 +172,13 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
       )}
 
       <section className="space-y-3">
-        <SectionTitle
-          title="各类操作的默认处理"
-          hint="agent 每次调用工具时，闸门按这里的设置决定是直接放行、弹窗询问，还是直接拒绝。"
+        <SettingsSectionBlock
+          title={t('Default actions')}
+          description={t(
+            'Choose whether each tool call is allowed, requires approval, or is denied.'
+          )}
         />
-        <div className="rounded-md border bg-card divide-y">
+        <div className="border-t divide-y">
           {controls.map((control) => (
             <SurfaceRow
               key={`${control.surface}:${control.pattern ?? ''}`}
@@ -193,32 +200,40 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
       ))}
 
       <section className="space-y-3">
-        <SectionTitle title="审批日志" hint="记录每一次放行与拒绝，供事后追查。" />
-        <div className="flex items-center justify-between gap-4 rounded-md border bg-card p-4">
+        <SettingsSectionBlock
+          title={t('Approval log')}
+          description={t('Record allowed and denied actions for review.')}
+        />
+        <div className="flex items-center justify-between gap-4 border-t p-4">
           <div className="min-w-0 flex-1">
-            <p className="text-ui font-medium">记录审批结果</p>
+            <p className="text-ui font-medium">{t('Record approval results')}</p>
             <p className="text-meta text-muted-foreground">
-              写入 <Ident>{'<agentDir>/extensions/pi-permission-system/logs'}</Ident>。
+              {t('Write to')}
+              <Ident>{'<agentDir>/extensions/pi-permission-system/logs'}</Ident>。
               {snapshot.effective.permissionReviewLog.origin
-                ? `当前由「${originLabel(snapshot.effective.permissionReviewLog.origin)}」设定。`
-                : '当前是插件自带的默认值。'}
+                ? t('Currently set by {{source}}.', {
+                    source: t(originLabel(snapshot.effective.permissionReviewLog.origin)),
+                  })
+                : t('Using the plugin default.')}
             </p>
           </div>
           <Switch
             checked={snapshot.effective.permissionReviewLog.value}
             disabled={!editable}
             onCheckedChange={(checked) => void apply({ permissionReviewLog: checked })}
-            aria-label="记录审批结果"
+            aria-label={t('Record approval results')}
           />
         </div>
       </section>
 
       <section className="space-y-3">
-        <SectionTitle
-          title="配置来源"
-          hint="越靠下的层级优先级越高。同一条设置由最后一个写它的层决定。"
+        <SettingsSectionBlock
+          title={t('Configuration sources')}
+          description={t(
+            'Lower entries take precedence. The last layer defining a setting determines its value.'
+          )}
         />
-        <div className="rounded-md border bg-card divide-y">
+        <div className="border-t divide-y">
           {scopes.map((scope) => (
             <ScopeRowView key={scope.id} scope={scope} />
           ))}
@@ -226,7 +241,7 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
         {snapshot.editable && (
           <Button variant="outline" disabled={busy} onClick={() => void reset()}>
             <RotateCcw className="h-4 w-4" />
-            清空我的设置，恢复出厂策略
+            {t('Reset my permission overrides')}
           </Button>
         )}
       </section>
@@ -243,11 +258,14 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              <span className="min-w-0 flex-1">确认取消这一层保护？</span>
+              <span className="min-w-0 flex-1">{t('Remove this protection?')}</span>
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pending
-                ? `“${pending.control.label}”将不再询问，agent 可以直接执行。${pending.control.description}`
+                ? t('{{action}} will run without approval. {{description}}', {
+                    action: t(pending.control.label),
+                    description: t(pending.control.description),
+                  })
                 : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -259,10 +277,10 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
                 setPending(null);
               }}
             >
-              仍然直接允许
+              {t('Allow anyway')}
             </Button>
             <Button variant="ghost" onClick={() => setPending(null)}>
-              取消
+              {t('Cancel')}
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>
@@ -272,29 +290,20 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
 }
 
 function PanelHeading() {
-  return (
-    <div>
-      <h3 className="text-title font-semibold tracking-[-0.01em]">权限策略</h3>
-      <p className="text-ui text-muted-foreground">
-        Pi 后端每次调用工具前都会先过这道闸。这里能看到它当前的判断依据，并修改属于你的那一层。
-      </p>
-    </div>
-  );
-}
+  const { t } = useI18n();
 
-function SectionTitle({ title, hint }: { title: string; hint: string }) {
   return (
-    <div>
-      <h4 className="text-ui font-semibold">{title}</h4>
-      <p className="text-meta text-muted-foreground">{hint}</p>
-    </div>
+    <SettingsSectionBlock
+      title={t('Permission policy')}
+      description={t('Review the policy applied before Pi tool calls and edit your own overrides.')}
+    />
   );
 }
 
 const ACTION_LABELS: Record<PermissionAction, string> = {
-  allow: '直接允许',
-  ask: '每次询问',
-  deny: '直接拒绝',
+  allow: 'Allow',
+  ask: 'Ask every time',
+  deny: 'Deny',
 };
 
 function SurfaceRow({
@@ -306,14 +315,16 @@ function SurfaceRow({
   editable: boolean;
   onChoose: (next: PermissionAction | null) => void;
 }) {
+  const { t } = useI18n();
+
   return (
-    <div className="flex items-start justify-between gap-4 p-4">
+    <SettingsRow className="sm:grid-cols-[minmax(0,1fr)_auto]">
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2">
-          <span className="text-ui font-medium">{control.label}</span>
+          <span className="text-ui font-medium">{t(control.label)}</span>
           <OriginBadge origin={control.origin} overridden={control.overridden} />
         </div>
-        <p className="text-meta text-muted-foreground">{control.description}</p>
+        <p className="text-meta text-muted-foreground">{t(control.description)}</p>
       </div>
       <Select
         value={control.overridden ? control.value : INHERIT_OPTION}
@@ -324,7 +335,7 @@ function SurfaceRow({
           if (choice !== undefined) onChoose(choice);
         }}
       >
-        <SelectTrigger className="w-40 shrink-0" aria-label={control.label}>
+        <SelectTrigger className="w-40 shrink-0" aria-label={t(control.label)}>
           <SelectValue>
             <span
               className={
@@ -332,23 +343,23 @@ function SurfaceRow({
               }
             >
               {control.overridden
-                ? ACTION_LABELS[control.value]
-                : `跟随默认（${ACTION_LABELS[control.value]}）`}
+                ? t(ACTION_LABELS[control.value])
+                : t('Inherit default ({{action}})', { action: t(ACTION_LABELS[control.value]) })}
             </span>
           </SelectValue>
         </SelectTrigger>
         <SelectPopup>
-          <SelectItem value={INHERIT_OPTION}>跟随默认</SelectItem>
+          <SelectItem value={INHERIT_OPTION}>{t('Inherit default')}</SelectItem>
           <SelectItem value="allow">
             <span className={control.dangerous ? 'text-destructive' : undefined}>
-              {ACTION_LABELS.allow}
+              {t(ACTION_LABELS.allow)}
             </span>
           </SelectItem>
-          <SelectItem value="ask">{ACTION_LABELS.ask}</SelectItem>
-          <SelectItem value="deny">{ACTION_LABELS.deny}</SelectItem>
+          <SelectItem value="ask">{t(ACTION_LABELS.ask)}</SelectItem>
+          <SelectItem value="deny">{t(ACTION_LABELS.deny)}</SelectItem>
         </SelectPopup>
       </Select>
-    </div>
+    </SettingsRow>
   );
 }
 
@@ -361,9 +372,11 @@ function RuleTableSection({
   editable: boolean;
   onApply: (patch: PolicyPatch) => void;
 }) {
+  const { t, locale } = useI18n();
+
   const [pattern, setPattern] = useState('');
   const [action, setAction] = useState<PermissionAction>('deny');
-  const validation = pattern ? validateNewRule(table.rules, pattern) : { ok: false };
+  const validation = pattern ? validateNewRule(table.rules, pattern, locale) : { ok: false };
 
   const add = () => {
     if (!validation.ok) return;
@@ -373,10 +386,10 @@ function RuleTableSection({
 
   return (
     <section className="space-y-3">
-      <SectionTitle title={table.label} hint={table.description} />
-      <div className="rounded-md border bg-card">
+      <SettingsSectionBlock title={t(table.label)} description={t(table.description)} />
+      <div className="border-t">
         {table.rules.length === 0 ? (
-          <p className="p-4 text-meta text-muted-foreground">这一类还没有任何规则。</p>
+          <p className="p-4 text-meta text-muted-foreground">{t('No rules in this category.')}</p>
         ) : (
           <ol className="divide-y">
             {table.rules.map((rule, index) => (
@@ -394,15 +407,15 @@ function RuleTableSection({
 
       {editable && (
         <div className="space-y-2">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Input
               value={pattern}
               onChange={(event) => setPattern(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') add();
               }}
-              placeholder={table.surface === 'bash' ? '例如 npm test *' : '例如 ~/secrets/*'}
-              aria-label={`新增${table.label}规则`}
+              placeholder={table.surface === 'bash' ? t('e.g. npm test *') : t('e.g. ~/secrets/*')}
+              aria-label={t('Add a {{category}} rule', { category: t(table.label) })}
             />
             <Select
               value={action}
@@ -411,18 +424,18 @@ function RuleTableSection({
                 if (choice) setAction(choice);
               }}
             >
-              <SelectTrigger className="w-32 shrink-0" aria-label="新规则的处理方式">
-                <SelectValue>{ACTION_LABELS[action]}</SelectValue>
+              <SelectTrigger className="w-32 shrink-0" aria-label={t('Action for the new rule')}>
+                <SelectValue>{t(ACTION_LABELS[action])}</SelectValue>
               </SelectTrigger>
               <SelectPopup>
-                <SelectItem value="allow">{ACTION_LABELS.allow}</SelectItem>
-                <SelectItem value="ask">{ACTION_LABELS.ask}</SelectItem>
-                <SelectItem value="deny">{ACTION_LABELS.deny}</SelectItem>
+                <SelectItem value="allow">{t(ACTION_LABELS.allow)}</SelectItem>
+                <SelectItem value="ask">{t(ACTION_LABELS.ask)}</SelectItem>
+                <SelectItem value="deny">{t(ACTION_LABELS.deny)}</SelectItem>
               </SelectPopup>
             </Select>
             <Button variant="outline" disabled={!validation.ok} onClick={add}>
               <Plus className="h-4 w-4" />
-              添加
+              {t('Add')}
             </Button>
           </div>
           {validation.error && (
@@ -448,19 +461,25 @@ function RuleRow({
   deletable: boolean;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <li className="flex items-center gap-3 p-3">
       <span className="w-6 shrink-0 text-meta tabular-nums text-muted-foreground">{index + 1}</span>
       <Ident className="min-w-0 flex-1 truncate">{rule.pattern}</Ident>
       {rule.repositioned && (
-        <Badge variant="warning" size="sm" title="这条规则被你改过，但仍留在原来的位置上">
-          位置未变
+        <Badge
+          variant="warning"
+          size="sm"
+          title={t('This rule was changed but retains its original position')}
+        >
+          {t('Position unchanged')}
         </Badge>
       )}
       <Badge
         variant={rule.action === 'deny' ? 'error' : rule.action === 'allow' ? 'success' : 'outline'}
       >
-        {ACTION_LABELS[rule.action]}
+        {t(ACTION_LABELS[rule.action])}
       </Badge>
       <OriginBadge origin={rule.origin} overridden={false} />
       {deletable ? (
@@ -468,7 +487,7 @@ function RuleRow({
           variant="ghost"
           size="sm"
           onClick={onDelete}
-          aria-label={`删除规则 ${rule.pattern}`}
+          aria-label={t('Delete rule {{pattern}}', { pattern: rule.pattern })}
         >
           <Trash2 className="h-4 w-4" />
         </Button>
@@ -480,13 +499,13 @@ function RuleRow({
 }
 
 const ORIGIN_LABELS: Record<PolicyScopeId, string> = {
-  bundled: '随包默认',
-  global: '我的设置',
-  project: '项目配置',
+  bundled: 'Bundled defaults',
+  global: 'My settings',
+  project: 'Project configuration',
 };
 
 function originLabel(origin: PolicyScopeId | undefined): string {
-  return origin ? ORIGIN_LABELS[origin] : '插件自带默认';
+  return origin ? ORIGIN_LABELS[origin] : 'Plugin defaults';
 }
 
 function OriginBadge({
@@ -496,9 +515,11 @@ function OriginBadge({
   origin: PolicyScopeId | undefined;
   overridden: boolean;
 }) {
+  const { t } = useI18n();
+
   return (
     <Badge variant={overridden ? 'info' : 'outline'} size="sm">
-      {originLabel(origin)}
+      {t(originLabel(origin))}
     </Badge>
   );
 }
@@ -507,29 +528,31 @@ const SCOPE_STATUS: Record<
   ScopeRow['status'],
   { label: string; variant: 'success' | 'outline' | 'warning' | 'error' }
 > = {
-  active: { label: '生效中', variant: 'success' },
-  missing: { label: '未创建', variant: 'outline' },
-  ignored: { label: '被忽略', variant: 'warning' },
-  invalid: { label: '无法解析', variant: 'error' },
+  active: { label: 'Active', variant: 'success' },
+  missing: { label: 'Not created', variant: 'outline' },
+  ignored: { label: 'Ignored', variant: 'warning' },
+  invalid: { label: 'Invalid', variant: 'error' },
 };
 
 function ScopeRowView({ scope }: { scope: ScopeRow }) {
+  const { t } = useI18n();
+
   const status = SCOPE_STATUS[scope.status];
   return (
     <div className="flex items-start gap-3 p-4">
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2">
-          <span className="text-ui font-medium">{scope.label}</span>
+          <span className="text-ui font-medium">{t(scope.label)}</span>
           <Badge variant={status.variant} size="sm">
-            {status.label}
+            {t(status.label)}
           </Badge>
           {scope.writable && (
             <Badge variant="info" size="sm">
-              本面板写这里
+              {t('Changes are saved here')}
             </Badge>
           )}
         </div>
-        <p className="text-meta text-muted-foreground">{scope.summary}</p>
+        <p className="text-meta text-muted-foreground">{t(scope.summary)}</p>
         <p className="break-all text-meta text-muted-foreground">
           <Ident>{scope.path}</Ident>
         </p>
@@ -540,7 +563,7 @@ function ScopeRowView({ scope }: { scope: ScopeRow }) {
         size="sm"
         className="shrink-0"
         onClick={() => void window.electronAPI.piPermissions.reveal(scope.path)}
-        aria-label={`在文件管理器中显示 ${scope.label}`}
+        aria-label={t('Reveal {{scope}} in file manager', { scope: t(scope.label) })}
       >
         <FolderOpen className="h-4 w-4" />
       </Button>

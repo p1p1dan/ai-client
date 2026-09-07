@@ -17,3 +17,9 @@
 - 静态不变量验证新壳接入与旧管理对话框删除。
 - 旧 `sessionContextMenuWiring.test.ts` 原先抓取文件中第一个 MenuPopup；新增仓库菜单后，将其限定在会话 ContextMenu Trigger 之后，四项回归通过。
 - 真实 Electron 中从仓库行打开对话框、新建 worktree 并执行新脚本，尚未 GUI 验收。
+
+## S05 续行时补齐的消费链路
+
+2026-09-07 删除旧壳时进一步确认：新壳使用 `useWorktreeCreate`，旧 App 创建回调中的初始化调度未被新入口调用。
+本轮已将成功后读取最新仓库配置、排队初始化脚本的逻辑接到共享 hook；终端通过专用初始化动作打开，普通导航入口仍隐藏。
+5 项新增测试通过；详细边界见 [S05–S07 实现证据](./s05-s07-implementation.md)。真实 PTY 执行待 GUI 点验，不能以表单保存测试替代。

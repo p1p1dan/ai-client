@@ -59,17 +59,11 @@ export function GlobalSearchDialog({
   useEffect(() => {
     if (open) {
       setMode(initialMode);
-      // Get pending search query from window (set by FilePanel when opening search)
-      const pendingQuery = window._pendingSearchQuery;
-      if (pendingQuery) {
-        setQuery(pendingQuery);
-        window._pendingSearchQuery = undefined; // Clear after use
-      }
       setTimeout(() => inputRef.current?.focus(), 50);
     } else {
       reset();
     }
-  }, [open, initialMode, setMode, setQuery, reset]);
+  }, [open, initialMode, setMode, reset]);
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback(

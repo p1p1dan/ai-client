@@ -13,20 +13,37 @@ import type { FontWeight } from '@/stores/settings';
 export const SETTINGS_CATEGORIES = [
   'general',
   'appearance',
+  'terminal',
   'editor',
+  'git',
+  'pi',
   'keybindings',
-  'ai',
-  'piModels',
-  'piPermissions',
-  'piResources',
-  'remote',
-  'webInspector',
+  'network',
+  'advanced',
 ] as const;
 
 export type SettingsCategory = (typeof SETTINGS_CATEGORIES)[number];
 
 export function isSettingsCategory(value: unknown): value is SettingsCategory {
   return (SETTINGS_CATEGORIES as readonly unknown[]).includes(value);
+}
+
+export function restoreSettingsCategory(value: string | null): SettingsCategory {
+  if (isSettingsCategory(value)) return value;
+  switch (value) {
+    case 'ai':
+      return 'git';
+    case 'piModels':
+    case 'piPermissions':
+    case 'piResources':
+      return 'pi';
+    case 'remote':
+      return 'network';
+    case 'webInspector':
+      return 'advanced';
+    default:
+      return 'general';
+  }
 }
 
 export const fontWeightOptions: { value: FontWeight; label: string }[] = [

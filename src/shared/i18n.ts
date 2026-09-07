@@ -1,6 +1,127 @@
 export type Locale = 'en' | 'zh';
 
 export const zhTranslations: Record<string, string> = {
+  Automatic: '自动',
+  Media: '媒体',
+  Cover: '铺满',
+  Contain: '完整显示',
+  Repeat: '平铺',
+  Center: '居中',
+  Network: '网络',
+  Advanced: '高级',
+  Pi: 'Pi',
+  'Updated {{providers}} providers and {{models}} models.':
+    '已更新 {{providers}} 个渠道、{{models}} 个模型。',
+  'Yolo mode disables all permission checks, including command restrictions. Disable it in the {{source}} configuration file.':
+    'Yolo 模式已开启，包括命令限制在内的所有权限检查均已失效。请在“{{source}}”对应的配置文件中关闭它。',
+  'Currently set by {{source}}.': '当前由“{{source}}”设定。',
+  '{{action}} will run without approval. {{description}}':
+    '“{{action}}”将不再询问，Agent 可以直接执行。{{description}}',
+  'Inherit default ({{action}})': '跟随默认（{{action}}）',
+  'Add a {{category}} rule': '新增{{category}}规则',
+  'Delete rule {{pattern}}': '删除规则 {{pattern}}',
+  'Reveal {{scope}} in file manager': '在文件管理器中显示{{scope}}',
+  '{{reason}} (syntax error: {{error}})': '{{reason}}（该文件另有语法错误：{{error}}）',
+  'This rule stays at position {{position}}. The {{count}} later rules take precedence.':
+    '该规则保留在第 {{position}} 条，它后面还有 {{count}} 条规则，命中时以后面的为准。',
+  Cached: '缓存',
+  'Local setup': '本地配置',
+  'Pi model management': 'Pi 模型管理',
+  Syncing: '同步中',
+  'Sync now': '立即同步',
+  'Model metadata is synced to the managed directory. Your account supplies the API key.':
+    '登录模式从管理端同步模型元数据到隔离目录；API key 仍由账号登录注入。',
+  'Using your own setup. Pi reads your configuration from ~/.pi/agent.':
+    '当前是 “Use my own setup”，Pi 会直接读取你自己的 ~/.pi/agent 配置。',
+  'Management server': '管理端',
+  'Configuration URL': '配置地址',
+  Providers: '渠道',
+  Models: '模型',
+  'Last successful sync': '上次成功',
+  'Last attempt': '上次尝试',
+  'Managed directory:': '隔离目录：',
+  'The default URL points to /api/v1/models-config on the onboarding service.':
+    '默认地址随版本内置，指向 onboard 服务的 /api/v1/models-config；填别的地址可指向另一套部署。',
+  'The management page is at /admin and requires the server administrator password.':
+    '管理页在同一服务的 /admin 下，进入需要服务端配置的管理口令。',
+  'Sync requires a signed-in account because the configuration may contain provider credentials.':
+    '拉取会带上你登录拿到的 key：配置里可能含管理员为某个渠道填的密钥，所以这个接口只对已登录的客户端开放。',
+  'Default actions': '各类操作的默认处理',
+  'Choose whether each tool call is allowed, requires approval, or is denied.':
+    'agent 每次调用工具时，闸门按这里的设置决定是直接放行、弹窗询问，还是直接拒绝。',
+  'Approval log': '审批日志',
+  'Record allowed and denied actions for review.': '记录每一次放行与拒绝，供事后追查。',
+  'Record approval results': '记录审批结果',
+  'Write to': '写入',
+  'Using the plugin default.': '当前是插件自带的默认值。',
+  'Configuration sources': '配置来源',
+  'Lower entries take precedence. The last layer defining a setting determines its value.':
+    '越靠下的层级优先级越高。同一条设置由最后一个写它的层决定。',
+  'Reset my permission overrides': '清空我的设置，恢复出厂策略',
+  'Remove this protection?': '确认取消这一层保护？',
+  'Allow anyway': '仍然直接允许',
+  'Review the policy applied before Pi tool calls and edit your own overrides.':
+    'Pi 后端每次调用工具前都会先过这道闸。这里能看到它当前的判断依据，并修改属于你的那一层。',
+  Allow: '直接允许',
+  'Ask every time': '每次询问',
+  Deny: '直接拒绝',
+  'Inherit default': '跟随默认',
+  'No rules in this category.': '这一类还没有任何规则。',
+  'e.g. npm test *': '例如 npm test *',
+  'e.g. ~/secrets/*': '例如 ~/secrets/*',
+  'Action for the new rule': '新规则的处理方式',
+  'This rule was changed but retains its original position':
+    '这条规则被你改过，但仍留在原来的位置上',
+  'Position unchanged': '位置未变',
+  'Bundled defaults': '随包默认',
+  'My settings': '我的设置',
+  'Project configuration': '项目配置',
+  'Plugin defaults': '插件自带默认',
+  'Not created': '未创建',
+  Ignored: '被忽略',
+  Invalid: '无法解析',
+  'Changes are saved here': '本面板写这里',
+  'Bundled policy with the lowest priority; your settings override it':
+    '本应用出厂策略，优先级最低，你的设置永远压得过它',
+  'Account-specific Pi directory where your changes are saved':
+    '按帐号隔离的 pi 目录，本面板的改动写在这里',
+  'Repository .pi configuration with the highest priority': '仓库自带的 .pi 配置，优先级最高',
+  'File does not exist; this layer contributes no rules': '文件不存在，本层不产生任何规则',
+  'Read files': '读取文件',
+  'Open individual files, subject to the file path rules below.':
+    '打开单个文件。仍受下方“文件路径”规则约束。',
+  'Search file contents.': '在文件里按内容搜索。',
+  'List directories': '列目录',
+  'List directory contents.': '列出目录内容。',
+  'Find files': '查找文件',
+  'Find files by name.': '按文件名查找。',
+  'Write files': '写入文件',
+  'Create or overwrite files. Allowing this skips approval before writing.':
+    '新建或覆盖文件。设为“直接允许”后，写错的文件没有任何一步可以拦下。',
+  'Edit files': '修改文件',
+  'Edit existing files. Allowing this skips approval before editing.':
+    '改动已有文件。设为“直接允许”后，改错的地方没有任何一步可以拦下。',
+  'Terminal commands (default)': '终端命令（默认）',
+  'Applies to commands not matched below. Allowing this permits arbitrary commands.':
+    '没有被下方白名单命中的命令走这里。设为“直接允许”等于让 agent 可以执行任意命令。',
+  'Access outside the working directory': '访问工作目录之外',
+  'Controls reading and writing outside the current repository.':
+    '离开当前仓库去读写别处。这是阻止一个仓库的会话动到另一个仓库的那道闸。',
+  'MCP tool calls': 'MCP 工具调用',
+  'Call tools provided by external MCP servers.': '调用外部 MCP 服务器提供的工具。',
+  'Run packaged skills, which may call other tools.': '运行打包好的技能。技能内部可以再调工具。',
+  'Other tools (fallback)': '其它一切（兜底）',
+  'Any tool not listed above, including tools provided by new extensions.':
+    '上面没有提到的任何工具，包括这个版本还没见过的扩展工具。',
+  'File paths': '文件路径',
+  'Applies before other rules across all tools. A path denial overrides a tool allowance.':
+    '横切所有工具，先于其它规则判定，且这里的“拒绝”不能被单个工具的“允许”覆盖——这就是 cat 可以放行而 cat .env 仍被拒的原因。',
+  'Allowed terminal commands': '终端命令白名单',
+  'Matching commands skip approval. Later rules take precedence.':
+    '命中的命令不再弹窗。越靠后的规则优先级越高。',
+  'A rule cannot be empty': '规则不能为空',
+  'A rule cannot start or end with spaces': '规则首尾不能有空格',
+  'This rule exists and its action will be replaced': '该规则已存在，将被覆盖为新的动作',
   'Action Panel': '操作面板',
   'Add Repository': '添加仓库',
   'Add a repository to get started.': '添加一个仓库开始使用。',
