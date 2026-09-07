@@ -1,6 +1,6 @@
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { HostStatus } from './hostStatus';
+import { describeHostStatus, type HostStatus } from './hostStatus';
 
 /**
  * Compact diagnostics ribbon (T-09): shown only while the Host is not ready.
@@ -8,8 +8,12 @@ import type { HostStatus } from './hostStatus';
  * Covers: host-not-ready placeholder, Node 24 missing actionable guidance
  * (`AICLIENT_NODE24_PATH`), generic Host error with the fatal message, and a
  * Retry that re-runs `ensureHost`. A small diagnostics line surfaces the
- * Host-reported Node version/path, Cometix version, and settings state when
- * available (so users can see e.g. missing auth token).
+ * Host-reported pool counters when available.
+ *
+ * Which states speak at all is `describeHostStatus` (hostStatus.ts) — a pure
+ * function, because the node-env vitest config cannot render this `.tsx`, and
+ * the rule it encodes ("never claim a stopped service that answers the very
+ * next message") is exactly the kind that needs a real test.
  */
 
 interface HostStatusBannerProps {
@@ -17,24 +21,11 @@ interface HostStatusBannerProps {
   onRetry: () => void;
 }
 
-const STATE_TITLE: Record<HostStatus['state'], string> = {
-  stopped: 'Pi session service 已停止',
-  starting: 'Pi session service 正在启动…',
-  ready: '',
-  error: 'Pi session service 出错',
-};
-
 export function HostStatusBanner({ status, onRetry }: HostStatusBannerProps) {
-  if (status.state === 'ready') return null;
+  const model = describeHostStatus(status);
+  if (!model) return null;
 
-  const isError = status.state === 'error';
-  const title = isError ? (status.lastFatalError ?? STATE_TITLE.error) : STATE_TITLE[status.state];
-  const guidance = isError
-    ? '点击 Retry 重新初始化 Pi session service'
-    : status.state === 'stopped'
-      ? '点击 Retry 初始化 Pi session service'
-      : '';
-
+  const isError = model.tone === 'error';
   const diagnostics = formatDiagnostics(status);
   const Icon = isError ? AlertTriangle : RefreshCw;
 
@@ -49,17 +40,17 @@ export function HostStatusBanner({ status, onRetry }: HostStatusBannerProps) {
     >
       <div className="flex items-center gap-2">
         <Icon className="h-3.5 w-3.5 shrink-0" />
-        <p className="min-w-0 flex-1 truncate font-medium" title={title}>
-          {title}
+        <p className="min-w-0 flex-1 truncate font-medium" title={model.title}>
+          {model.title}
         </p>
-        {status.state !== 'starting' && (
+        {model.showRetry && (
           <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-ui" onClick={onRetry}>
             <RefreshCw className="h-3 w-3" />
             Retry
           </Button>
         )}
       </div>
-      {guidance && <p className="mt-1 break-words opacity-90">{guidance}</p>}
+      {model.guidance && <p className="mt-1 break-words opacity-90">{model.guidance}</p>}
       {diagnostics && (
         <p className="mt-1 break-words font-mono text-code opacity-75">{diagnostics}</p>
       )}

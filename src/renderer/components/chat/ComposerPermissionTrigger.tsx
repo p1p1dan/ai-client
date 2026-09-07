@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Menu, MenuPopup, MenuRadioGroup, MenuSeparator } from '@/components/ui/menu';
 import { useI18n } from '@/i18n';
 import { isTierControlDegraded, usePermissionGateStore } from '@/stores/permissionGate';
-import type { HostStatus } from './hostStatus';
+import { type HostStatus, isHostUsable } from './hostStatus';
 import {
   composerMenuItemClass,
   composerPermissionTriggerClass,
@@ -195,7 +195,12 @@ export function ComposerPermissionTrigger({
   // U29: the host gate stands down before a chat exists. `hostState` describes
   // a runtime this control is not talking to yet — leaving it in would grey out
   // the menu on the start screen for a reason that does not apply to it.
-  const isDisabled = disabled || sending || (sessionId !== null && hostState !== 'ready');
+  // `isHostUsable`, not `=== 'ready'`: a `degraded` manager (one unrelated
+  // pooled worker crashed) still takes this chat's tier change fine, and
+  // greying the control out until that entry is retired punishes every other
+  // session for it. `unknown` stays disabled — the prime has not answered yet,
+  // so nothing is known, which is not the same as knowing it works.
+  const isDisabled = disabled || sending || (sessionId !== null && !isHostUsable(hostState));
   const title = degraded
     ? t(
         'This chat runs on the permission system in your own agent directory; the tiers here do not apply.'

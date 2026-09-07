@@ -1,11 +1,17 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import {
+  describeHostStatus,
+  type HostStatus,
   initialHostStatus,
+  isHostUsable,
   isNode24ResolutionFailure,
   primeHostStatus,
   reduceHostStatus,
 } from '../hostStatus';
+import { stripComments } from './stripComments';
 
 function event(type: string, payload?: Record<string, unknown>): RuntimeEvent {
   return {
@@ -202,5 +208,77 @@ describe('primeHostStatus (S7, round-2 iteration-3 review)', () => {
     expect(next.state).toBe('ready');
     expect(next.driver).toBe('agent-sdk');
     expect(next.cometixVersion).toBe('2.1.212');
+  });
+});
+
+describe('describeHostStatus — what the ribbon may say (field report 2026-09-07)', () => {
+  function status(state: HostStatus['state'], extra: Partial<HostStatus> = {}): HostStatus {
+    return { ...initialHostStatus, state, ...extra };
+  }
+
+  it('starts on `unknown`, not `stopped` — nothing has been asked yet', () => {
+    expect(initialHostStatus.state).toBe('unknown');
+    expect(describeHostStatus(initialHostStatus)).toBeNull();
+  });
+
+  it('says nothing for ready, unknown or degraded', () => {
+    for (const state of ['ready', 'unknown', 'degraded'] as const) {
+      expect(describeHostStatus(status(state)), state).toBeNull();
+    }
+  });
+
+  it('speaks for a Main-confirmed stopped manager and offers Retry', () => {
+    const model = describeHostStatus(status('stopped'));
+    expect(model?.tone).toBe('notice');
+    expect(model?.title).toContain('已停止');
+    expect(model?.showRetry).toBe(true);
+  });
+
+  it('prefers the fatal message over the generic error title, and never renders an empty title', () => {
+    expect(describeHostStatus(status('error', { lastFatalError: 'boom' }))?.title).toBe('boom');
+    expect(describeHostStatus(status('error', { lastFatalError: null }))?.title).toBeTruthy();
+    // The `degraded` hole this replaces: Main reports a state the Renderer's
+    // union did not list, the old `Record` lookup returned undefined, and the
+    // ribbon rendered a titleless bar with a Retry button on it.
+    for (const state of ['stopped', 'starting', 'error'] as const) {
+      expect(describeHostStatus(status(state))?.title, state).toBeTruthy();
+    }
+  });
+
+  it('hides Retry while starting — there is nothing to retry mid-start', () => {
+    expect(describeHostStatus(status('starting'))?.showRetry).toBe(false);
+  });
+});
+
+describe('isHostUsable', () => {
+  it('counts a degraded manager as usable and an unanswered one as not', () => {
+    expect(isHostUsable('ready')).toBe(true);
+    // One crashed pooled worker does not stop the manager serving every other
+    // session: WorkerManager retires that entry on the next create/resume.
+    expect(isHostUsable('degraded')).toBe(true);
+    for (const state of ['unknown', 'stopped', 'starting', 'error'] as const) {
+      expect(isHostUsable(state), state).toBe(false);
+    }
+  });
+});
+
+describe('useHostStatus wiring (node-env: source assertions, the hook needs a renderer)', () => {
+  const source = stripComments(
+    readFileSync(path.join(__dirname, '..', 'useHostStatus.ts'), 'utf8'),
+    'useHostStatus.ts'
+  );
+
+  const compact = source.replace(/\s+/g, '');
+
+  it('primes through ensureHost, falling back to a plain read only if it rejects', () => {
+    // The bug this pins: priming with `getHostStatus` alone raced the
+    // `ensureHost` fired by chatSessions.initRuntime on the same mount, won,
+    // and left the ribbon claiming a stopped service for a full probe period.
+    expect(compact).toContain('.ensureHost().catch(()=>window.electronAPI.chat.getHostStatus())');
+  });
+
+  it('applies the snapshot Retry returns instead of waiting for the next probe', () => {
+    expect(compact).toContain('constsnapshot=awaitwindow.electronAPI.chat.ensureHost();');
+    expect(compact).toContain('setStatus((prev)=>primeHostStatus(prev,snapshot));');
   });
 });

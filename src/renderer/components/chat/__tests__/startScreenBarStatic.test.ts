@@ -74,8 +74,11 @@ describe('U29 the start screen keeps its bar controls', () => {
 
   it('the host-ready gate stands down when there is no session to be ready', () => {
     // `hostState` describes a runtime this control is not talking to yet.
-    expect(PERMISSION).toContain(
-      "const isDisabled = disabled || sending || (sessionId !== null && hostState !== 'ready');"
-    );
+    // Pinned as the two terms that carry the rule (a null session never gates,
+    // and the gate itself is the shared `isHostUsable` predicate) rather than
+    // the whole line — see the U30 lesson about assertions that pin a spelling
+    // and stay green while the behavior breaks.
+    expect(PERMISSION).toContain('sessionId !== null && !isHostUsable(hostState)');
+    expect(PERMISSION).not.toContain("hostState !== 'ready'");
   });
 });

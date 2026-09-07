@@ -1,6 +1,6 @@
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { useCallback, useEffect, useState } from 'react';
-import type { HostStatus } from './hostStatus';
+import { type HostStatus, isHostUsable } from './hostStatus';
 import {
   type CatalogStatusRow,
   catalogStatusRow,
@@ -71,7 +71,7 @@ export function usePiModelCatalog(hostState: HostStatus['state']): UsePiModelCat
     request(false);
   }, [request]);
 
-  const catalog = cachedCatalog ?? (hostState === 'ready' ? null : hostNotReadyCatalog());
+  const catalog = cachedCatalog ?? (isHostUsable(hostState) ? null : hostNotReadyCatalog());
   return {
     catalog,
     loaded: isCatalogLoaded(catalog),

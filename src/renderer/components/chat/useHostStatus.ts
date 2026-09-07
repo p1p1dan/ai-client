@@ -34,8 +34,21 @@ export function useHostStatus(): HostStatusSnapshot {
     // S7 (round-2 iteration-3 review): `primeHostStatus` (hostStatus.ts) now
     // also copies `settings` — a consumer mounting after `host.ready` already
     // fired otherwise never learns the Host's reported default model.
+    //
+    // Field report 2026-09-07: this is `ensureHost`, not `getHostStatus`. The
+    // two return the SAME snapshot shape, but `ensureHost` first flips a
+    // never-started WorkerManager out of its initial `stopped` value. Reading
+    // without ensuring raced the `ensureHost` that `chatSessions.initRuntime`
+    // fires from this very same mount — the read reached Main first, came back
+    // `stopped`, and nothing re-read the status until the 10s probe below. For
+    // those ten seconds the user saw "Pi session service 已停止 · 点击 Retry"
+    // over a service that answered the very next message, the model picker
+    // held its "host not ready" fallback catalog, and the permission control
+    // was greyed out. `ensureReady()` only assigns a field: no process is
+    // spawned by this call, so a status hook may make it.
     void window.electronAPI.chat
-      .getHostStatus()
+      .ensureHost()
+      .catch(() => window.electronAPI.chat.getHostStatus())
       .then((initial) => {
         if (cancelled) return;
         setStatus((prev) => primeHostStatus(prev, initial));
@@ -83,7 +96,11 @@ export function useHostStatus(): HostStatusSnapshot {
 
   const retry = async () => {
     try {
-      await window.electronAPI.chat.ensureHost();
+      // Adopt the snapshot this call returns rather than waiting for the next
+      // probe tick: a Retry that leaves the ribbon untouched for up to 10s
+      // reads as a dead button, and the user presses it again.
+      const snapshot = await window.electronAPI.chat.ensureHost();
+      setStatus((prev) => primeHostStatus(prev, snapshot));
     } catch {
       // ensureHost rejection (e.g. Node 24 missing) is surfaced via state=error
       // through getHostStatus polling; nothing more to do here.

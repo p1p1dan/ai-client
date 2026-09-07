@@ -18,7 +18,13 @@ export interface HostSettingsDiagnostics {
 }
 
 export interface HostStatus {
-  state: 'stopped' | 'starting' | 'ready' | 'error';
+  /**
+   * `stopped` / `ready` / `degraded` are Main's own WorkerManager states,
+   * mirrored verbatim by the `ensureHost` / `getHostStatus` snapshot.
+   * `starting` and `error` only ever come from Runtime Events. `unknown` is
+   * this Renderer's own pre-answer value and is never sent by Main.
+   */
+  state: 'unknown' | 'stopped' | 'starting' | 'ready' | 'degraded' | 'error';
   /** Accepted only when reading an old event; current WorkerManager omits them. */
   pid?: number;
   driver?: string;
@@ -40,9 +46,78 @@ export interface HostStatus {
 }
 
 export const initialHostStatus: HostStatus = {
-  state: 'stopped',
+  // NOT `stopped`: nothing has been asked yet, and the two are only the same
+  // fact if you assume Main answers `stopped`. Rendering the "service stopped ·
+  // Retry" ribbon for a service nobody has queried is the exact misreport
+  // WorkerManager.updateManagerState's own comment warns against.
+  state: 'unknown',
   lastFatalError: null,
 };
+
+/**
+ * Whether the WorkerManager can serve a send right now.
+ *
+ * `degraded` means "one pooled worker died", not "the manager is down": that
+ * entry is retired on the next create/resume for its session and is the first
+ * eviction candidate meanwhile (WorkerManager `isSafeToEvict`). Treating it as
+ * unusable greys out the permission control and pins the model picker to the
+ * "host not ready" fallback for every OTHER session until something happens to
+ * retire it.
+ */
+export function isHostUsable(state: HostStatus['state']): boolean {
+  return state === 'ready' || state === 'degraded';
+}
+
+export interface HostStatusBannerModel {
+  tone: 'error' | 'notice';
+  title: string;
+  guidance: string;
+  showRetry: boolean;
+}
+
+/**
+ * What the diagnostics ribbon should say, or `null` for "say nothing".
+ *
+ * Pure so vitest (node env, `.ts` only) can cover it, like the rest of this
+ * file — the ribbon itself is a `.tsx` the config cannot render, and this is
+ * the decision worth testing. Three states deliberately render nothing:
+ * - `ready`, the ordinary case;
+ * - `unknown`, where the mount-time prime has simply not answered yet — a
+ *   ribbon here is a guess about a service that is almost always up;
+ * - `degraded`, which `isHostUsable` above calls usable. The session whose
+ *   worker died reports its own error in its own timeline; a global ribbon
+ *   claiming the service is down would contradict the composer that keeps
+ *   answering next to it.
+ */
+export function describeHostStatus(status: HostStatus): HostStatusBannerModel | null {
+  switch (status.state) {
+    case 'error':
+      return {
+        tone: 'error',
+        title: status.lastFatalError ?? 'Pi session service 出错',
+        guidance: '点击 Retry 重新初始化 Pi session service',
+        showRetry: true,
+      };
+    case 'stopped':
+      return {
+        tone: 'notice',
+        // Reachable only when Main was asked and answered `stopped` — i.e. the
+        // `ensureHost` prime failed or the app is shutting down.
+        title: 'Pi session service 已停止',
+        guidance: '点击 Retry 初始化 Pi session service',
+        showRetry: true,
+      };
+    case 'starting':
+      return {
+        tone: 'notice',
+        title: 'Pi session service 正在启动…',
+        guidance: '',
+        showRetry: false,
+      };
+    default:
+      return null;
+  }
+}
 
 function readPayload(event: RuntimeEvent): Record<string, unknown> | undefined {
   const payload = (event as { payload?: unknown }).payload;

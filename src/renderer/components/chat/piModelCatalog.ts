@@ -33,7 +33,7 @@ import type {
   AgentModelCatalogError,
   AgentModelOption,
 } from '@shared/types/agentCatalog';
-import type { HostStatus } from './hostStatus';
+import { type HostStatus, isHostUsable } from './hostStatus';
 
 /** Shown when no catalog could be fetched and nothing is cached (§4.1, D03). */
 export const UNAVAILABLE_CATALOG_NOTICE = 'Model catalog unreachable — no models available';
@@ -79,9 +79,13 @@ export function hostNotReadyCatalog(): AgentModelCatalog {
 /**
  * Whether to ask Main for this agent's catalog right now.
  *
- * Lazy, per §4.1's "何时查": only once the Host is ready and only when there is
+ * Lazy, per §4.1's "何时查": only once the Host is usable and only when there is
  * nothing fresh in hand. Requesting during startup turns "not signed in yet" into
  * "this agent has no models", which then has to be un-cached.
+ *
+ * `isHostUsable` rather than `=== 'ready'`: a `degraded` manager (one crashed
+ * pooled worker) still answers `listPiModels`, and refusing to ask would leave
+ * every session on the fallback catalog until that entry is retired.
  */
 export function shouldRequestCatalog(input: {
   hostState: HostStatus['state'];
@@ -91,7 +95,7 @@ export function shouldRequestCatalog(input: {
   now: number;
   ttlMs?: number;
 }): boolean {
-  if (input.hostState !== 'ready') return false;
+  if (!isHostUsable(input.hostState)) return false;
   if (input.inFlight) return false;
   if (input.force) return true;
   const cached = input.cached;

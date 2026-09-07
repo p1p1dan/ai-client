@@ -82,6 +82,14 @@ describe('Pi catalog request gate', () => {
     expect(shouldRequestCatalog({ ...base, hostState: 'ready', inFlight: true })).toBe(false);
   });
 
+  it('asks a degraded manager anyway, and holds off while the state is unknown', () => {
+    // `degraded` is one crashed pooled worker, not a manager that stopped
+    // answering — see `isHostUsable`. `unknown` is the pre-prime value: no
+    // answer yet is not the same as an answer of "ready".
+    expect(shouldRequestCatalog({ ...base, hostState: 'degraded' })).toBe(true);
+    expect(shouldRequestCatalog({ ...base, hostState: 'unknown' })).toBe(false);
+  });
+
   it('holds fresh local/managed data for the TTL and retries fallbacks immediately', () => {
     for (const source of ['local', 'managed'] as const) {
       const cached = catalog({ source });
