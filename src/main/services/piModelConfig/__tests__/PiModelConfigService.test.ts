@@ -1,8 +1,9 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PI_USER_AGENT_ENV, PI_USER_AGENT_HEADER } from '@shared/piModelConfig';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { validatePiManagedModelsConfig } from '../configValidation';
+import { toPiModelsJson, validatePiManagedModelsConfig } from '../configValidation';
 import { type PiModelConfigFetch, PiModelConfigService } from '../PiModelConfigService';
 
 const REMOTE_CONFIG = {
@@ -308,6 +309,50 @@ describe('PiModelConfigService', () => {
     expect(empty.readCatalog()).toMatchObject({ source: 'managed', stale: false, models: [] });
   });
 
+  // F08: the User-Agent header must survive EVERY path that writes models.json,
+  // because the failure is invisible — a request simply goes out identifying
+  // itself as a pi CLI, and nothing in the app says so.
+  it('writes the client User-Agent on all three models.json paths', async () => {
+    const reference = `$${PI_USER_AGENT_ENV}`;
+    const headerOf = () =>
+      JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8')).providers.dan.headers[
+        PI_USER_AGENT_HEADER
+      ];
+
+    // 1. a fresh remote answer.
+    const ok: PiModelConfigFetch = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(REMOTE_CONFIG),
+    });
+    await service(ok, 1000).sync({
+      endpointUrl: 'https://admin.example/config',
+      apiKey: 'key-1',
+      inheritedBaseUrl: 'https://fallback.example/v1',
+    });
+    expect(headerOf()).toBe(reference);
+
+    // 2. the cheap rewrite of a still-fresh cache — no fetch happens at all,
+    // and this path writes models.json anyway to keep auth.json in step.
+    rmSync(join(dir, 'models.json'));
+    await service(ok, 2000).sync({
+      endpointUrl: 'https://admin.example/config',
+      apiKey: 'key-2',
+      inheritedBaseUrl: 'https://fallback.example/v1',
+    });
+    expect(headerOf()).toBe(reference);
+
+    // 3. the stale-cache fallback after the endpoint fails.
+    rmSync(join(dir, 'models.json'));
+    await service(async () => ({ ok: false, status: 503, text: async () => 'down' }), 3000).sync({
+      endpointUrl: 'https://admin.example/config',
+      apiKey: 'key-3',
+      inheritedBaseUrl: 'https://fallback.example/v1',
+      force: true,
+    });
+    expect(headerOf()).toBe(reference);
+  });
+
   it('reads a user-owned models.json without requiring the managed schema envelope', () => {
     writeFileSync(
       join(dir, 'models.json'),
@@ -517,5 +562,57 @@ describe('validatePiManagedModelsConfig', () => {
       },
     });
     expect(emptyProvider.providers.dan.models).toEqual([]);
+  });
+});
+
+describe('F08 provider headers in models.json', () => {
+  const base = {
+    version: 1 as const,
+    providers: {
+      dan: { api: 'openai-responses' as const, models: [{ id: 'm1' }] },
+    },
+  };
+
+  it('writes the User-Agent as an environment reference, never as a literal', () => {
+    const providers = toPiModelsJson(validatePiManagedModelsConfig(base), {
+      inheritedBaseUrl: 'https://fallback.example/v1',
+    }).providers as Record<string, { headers: Record<string, string> }>;
+    expect(providers.dan.headers).toEqual({ [PI_USER_AGENT_HEADER]: `$${PI_USER_AGENT_ENV}` });
+    // Written as `$NAME` because that is the only shape `validateProvider`
+    // accepts for a header — the injection must not be an exception to the
+    // rule the rest of the config obeys.
+    const roundTripped = validatePiManagedModelsConfig({
+      version: 1,
+      providers: { dan: { ...base.providers.dan, headers: providers.dan.headers } },
+    });
+    expect(roundTripped.providers.dan.headers).toEqual(providers.dan.headers);
+  });
+
+  it('keeps an administrator-configured header alongside ours', () => {
+    const providers = toPiModelsJson(
+      validatePiManagedModelsConfig({
+        version: 1,
+        providers: { dan: { ...base.providers.dan, headers: { 'X-Tenant': '$TENANT_ID' } } },
+      }),
+      { inheritedBaseUrl: 'https://fallback.example/v1' }
+    ).providers as Record<string, { headers: Record<string, string> }>;
+    expect(providers.dan.headers).toEqual({
+      'X-Tenant': '$TENANT_ID',
+      [PI_USER_AGENT_HEADER]: `$${PI_USER_AGENT_ENV}`,
+    });
+  });
+
+  it('does not override a User-Agent the management site stated itself', () => {
+    for (const name of ['User-Agent', 'user-agent']) {
+      const providers = toPiModelsJson(
+        validatePiManagedModelsConfig({
+          version: 1,
+          providers: { dan: { ...base.providers.dan, headers: { [name]: '$TENANT_UA' } } },
+        }),
+        { inheritedBaseUrl: 'https://fallback.example/v1' }
+      ).providers as Record<string, { headers: Record<string, string> }>;
+      // Case-insensitive: emitting both spellings would send the field twice.
+      expect(providers.dan.headers).toEqual({ [name]: '$TENANT_UA' });
+    }
   });
 });

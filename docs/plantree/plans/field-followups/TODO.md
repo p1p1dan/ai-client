@@ -28,6 +28,13 @@
 - [x] chat 目录 78 文件 1757 项、相邻三目录 35 文件 507 项通过；整套 tsc 通过；全仓 lint 0 error。
 - [ ] GUI 点验（冷启动模型名 / 矮窗口 `@` 弹层 / 流式 `↓`）——并入 UI 对齐累计点验。
 
+## 批次二明细（[证据](./evidence/batch2-f08.md)）
+
+- [x] F08：`PI_USER_AGENT_ENV` 等常量、Worker/PTY 环境注入、`toPiModelsJson` 补 provider headers。
+- [x] 三条 `models.json` 写入路径都带 header；管理端自带的 `User-Agent`（两种大小写）不被覆盖。
+- [x] piModelConfig 2 文件 40 项、主进程三目录 27 文件 286 项通过；整套 tsc 通过；全仓 lint 0 error。
+- [ ] 联调：捕获真实出站请求头，确认 `User-Agent: claude-cli-pilab/<版本>` 生效。
+
 ## 通用要求
 
 - 每项至少一条纯函数层断言；`.tsx` 里的判断先下沉到纯模块再谈验收。

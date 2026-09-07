@@ -11,12 +11,14 @@ import {
   PI_OPT_IN_EXTENSIONS_ENV,
   PI_PROJECT_TRUST_ENV,
   PI_SUBAGENTS_FEATURE_ID,
+  PI_USER_AGENT_ENV,
   type PiModelSyncResult,
   type PiModelSyncState,
   type PiResourceSettings,
+  piUserAgent,
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
-import { net } from 'electron';
+import { app, net } from 'electron';
 import { getAppStateRoot } from '../appStatePaths';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
@@ -213,6 +215,12 @@ export function resolveManagedPiWorkerEnv(): Record<string, string> {
     // T08-c (D-Q9 decision 4). Sent in BOTH modes, never omitted: an absent key
     // identifies a legacy process build, not either deliberate trust posture.
     [PI_PROJECT_TRUST_ENV]: managed ? '0' : '1',
+    // F08. Sent in BOTH modes for the same reason as the trust flag, and read
+    // from `app` rather than from `package.json` because the packaged app's
+    // version is the one the gateway should see. The `models.json` this app
+    // writes references the variable by name; supplying it here is what makes
+    // that reference resolve to something other than an empty header.
+    [PI_USER_AGENT_ENV]: piUserAgent(app.getVersion()),
     ...(managed ? { PI_CODING_AGENT_DIR: getManagedPiAgentDir() } : {}),
     ...(borrowFrom ? { [PI_BORROW_RESOURCES_DIR_ENV]: borrowFrom } : {}),
     ...(optIn.length > 0 ? { [PI_OPT_IN_EXTENSIONS_ENV]: optIn.join(',') } : {}),
@@ -225,6 +233,11 @@ export function resolveManagedPiPtyEnv(): Record<string, string> {
   // environment would claim a borrow that is not happening. TUI sessions load
   // only what the agent dir gives them; closing that gap needs a pi-side
   // mechanism we do not have (Q-R4).
+  //
+  // F08's User-Agent is deliberately NOT dropped: it is the opposite kind of
+  // variable. pi itself resolves it, out of the `headers` block in the very
+  // `models.json` a managed TUI session reads, so a PTY turn should identify
+  // itself exactly as a worker turn does.
   const {
     [PI_BORROW_RESOURCES_DIR_ENV]: _borrowed,
     [PI_OPT_IN_EXTENSIONS_ENV]: _optIn,

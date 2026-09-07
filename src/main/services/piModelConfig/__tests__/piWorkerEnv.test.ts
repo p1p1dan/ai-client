@@ -6,6 +6,9 @@ import {
   PI_OPT_IN_EXTENSIONS_ENV,
   PI_PROJECT_TRUST_ENV,
   PI_SUBAGENTS_FEATURE_ID,
+  PI_USER_AGENT_ENV,
+  PI_USER_AGENT_PRODUCT,
+  piUserAgent,
 } from '@shared/piModelConfig';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,8 +27,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  *    user's own project-scoped Pi configuration.
  */
 
+const APP_VERSION = '9.9.9-test';
+
 vi.mock('electron', () => ({
-  app: { isPackaged: false, getPath: () => '/tmp/aiclient-test' },
+  app: {
+    isPackaged: false,
+    getPath: () => '/tmp/aiclient-test',
+    getVersion: () => '9.9.9-test',
+  },
   net: { fetch: vi.fn() },
 }));
 
@@ -246,5 +255,52 @@ describe('resolveManagedPiWorkerEnv — opt-in extensions', () => {
     });
     const { resolveManagedPiPtyEnv } = await import('../index');
     expect(resolveManagedPiPtyEnv()).not.toHaveProperty(PI_OPT_IN_EXTENSIONS_ENV);
+  });
+});
+
+/**
+ * F08 — the User-Agent every Pi request presents.
+ *
+ * The `models.json` this client writes references this variable by name, so a
+ * missing or wrong value does not fail loudly: the header simply goes out empty
+ * or, worse, pi's own default (`pi (win32 10.0.26100; x64)`) survives and the
+ * gateway cannot tell an app request from a CLI one.
+ */
+describe('resolveManagedPiWorkerEnv — client User-Agent', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env.AICLIENT_MANAGED_CREDENTIALS;
+    delete process.env.PI_CODING_AGENT_DIR;
+  });
+
+  afterEach(() => {
+    delete process.env.AICLIENT_MANAGED_CREDENTIALS;
+    delete process.env.PI_CODING_AGENT_DIR;
+  });
+
+  it('carries the app version in BOTH credential modes', async () => {
+    for (const managed of [true, false]) {
+      const env = await workerEnv(managed);
+      expect(env[PI_USER_AGENT_ENV]).toBe(`${PI_USER_AGENT_PRODUCT}/${APP_VERSION}`);
+    }
+  });
+
+  it('reaches the PTY too, unlike the borrow dir and the opt-in list', async () => {
+    // Those two are dropped because the real pi CLI does not read them. This
+    // one it DOES read — out of the `headers` block of the same models.json a
+    // managed TUI session loads — so a PTY turn must identify itself the same
+    // way a worker turn does.
+    expect((await ptyEnv(true))[PI_USER_AGENT_ENV]).toBe(`${PI_USER_AGENT_PRODUCT}/${APP_VERSION}`);
+  });
+
+  it('never emits a dangling slash when a version is unavailable', async () => {
+    expect(piUserAgent('')).toBe(PI_USER_AGENT_PRODUCT);
+    expect(piUserAgent('  0.4.0  ')).toBe(`${PI_USER_AGENT_PRODUCT}/0.4.0`);
+  });
+
+  it('does not identify itself as the pi CLI or leak the host platform', async () => {
+    const value = (await workerEnv(true))[PI_USER_AGENT_ENV];
+    expect(value.startsWith('pi ')).toBe(false);
+    expect(value).not.toMatch(/win32|darwin|linux|x64|arm64/);
   });
 });

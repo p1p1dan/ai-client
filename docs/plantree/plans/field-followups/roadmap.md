@@ -9,8 +9,8 @@
 | 分组 | 数量 | 说明 |
 |---|---|---|
 | Done | 0 | — |
-| In Progress | 3 | F07 / F11 / F06 已实现，自动化通过；GUI 点验未做 |
-| Next | 3 | F08 → F09 → F10 |
+| In Progress | 4 | F07 / F11 / F06 / F08 已实现，自动化通过；GUI 与真实请求头未验证 |
+| Next | 2 | F09 → F10 |
 | Deferred | 0 | — |
 | 另立任务 | 0 | — |
 
@@ -131,7 +131,7 @@ does not contain it 不是同一个事实」）；**漏的是标签这一路没�
 
 ## 批次二：Pi 模型配置与请求头
 
-### F08 — Pi 请求带自定义 User-Agent · **Next**
+### F08 — Pi 请求带自定义 User-Agent · **In Progress**
 
 目标请求头 `User-Agent: claude-cli-pilab/<app.getVersion()>`，取代 pi 默认的
 `pi (win32 10.0.26100; x64)`。
@@ -154,6 +154,10 @@ does not contain it 不是同一个事实」）；**漏的是标签这一路没�
   一条断言证明管理端自带的 `User-Agent` 不被覆盖。
   真实 HTTP 头的捕获属联调项，若本机无法执行则如实记录，不写成已验证。
 - **依赖**：无。
+- **落地**：注入点在 `toPiModelsJson` 内部（唯一写 `models.json` 的函数，三条写入路径都过它），
+  写的是 `$AICLIENT_PI_USER_AGENT` 引用而非字面量，因此仍在 `validateProvider` 的规则之内。
+  PTY 环境保留该变量——它是 pi 自己读的，与 borrow / opt-in 两个只有我们读的变量不同。
+  真实 HTTP 头未捕获。证据见 [批次二](./evidence/batch2-f08.md)。
 
 ---
 
