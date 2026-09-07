@@ -195,7 +195,8 @@ does not contain it 不是同一个事实」）；**漏的是标签这一路没�
   网络失败不影响用户信息与退出登录。
 - **验收（联调段）**：真实接口的周期字段与刷新——需 onboard 部署。
 - **依赖**：无代码依赖；联调依赖 onboard。
-- **落地**：新增第三个 action `getMyWeeklyQuota`（不是在 `getMyStatsSummary` 上加字段——
+- **落地**：用 cch 自己的 `POST /api/actions/my-usage/getMyQuota`（2026-09-07 探测坐实存在：
+  该名与 `getMyUsageLogs` 答 401，所有自造名答 404 text/plain），不是在 `getMyStatsSummary` 上加字段——
   那次调用的时间范围是客户端选的，而周期是服务端拥有的），失败一律答 `null` 而非拖垮整张卡片；
   `deriveWeeklyQuotaView` 的四状态里 `no-limit` 时 `percent` 为 `null`，
   让 `NaN%` 在类型层面不可达。紧凑版 pill 经检查无需改动（它从未显示本月调用次数）。

@@ -12,14 +12,35 @@
 两者渲染成同一个样子，正是卡片显示 `$0.00 / $0.00` 或 `NaN%` 的成因。
 验收要求未配置时显示「暂不可用」，那就必须让「缺失」原样穿过整条链路。
 
-## 接口契约
+## 接口契约（2026-09-07 修正：用 cch 自己的端点，不是我们新造的）
 
-新增第三个 action：`POST {serverUrl}/api/actions/my-usage/getMyWeeklyQuota`，
-返回 `data: { usedUsd, limitUsd, periodEnd }`。
+初稿写的是自造的 `getMyWeeklyQuota`。用户指出「cch 应该也有周限额的接口」，实测证实了这一点。
 
-**为什么不是在 `getMyStatsSummary` 上加字段**：那次调用的时间范围是**客户端**选的
-（本月一号到今天），而周限额的周期是**服务端**拥有的。合成一个调用会让客户端选的月份范围
+**探测方法**：D47 S0 E5 已确认真实 cch 上「路径不存在」与「未认证」在 status + content-type
+两个维度可区分。据此对 `my-usage/` 命名空间做无凭据 POST 探测：
+
+| action | 结果 | 判定 |
+|---|---|---|
+| `getMyTodayStats` | `401 application/json {"ok":false,"error":"未认证"}` | 存在（已知对照） |
+| `getMyStatsSummary` | 同上 | 存在（已知对照） |
+| **`getMyQuota`** | **同上** | **存在** |
+| `getMyUsageLogs` | 同上 | 存在 |
+| `getMyWeeklyQuota` · `getMyLimits` · `getMyQuota`(其他命名空间) · `getMyLimit` · `getMyWeeklyStats` · `getMyUsageLimit` · `getMyBudget` · `getMyUserInfo` · `getMyProfile` · 对照乱名 | `404 text/plain` | 不存在 |
+
+**字段词汇**取自 cch 自己的 `/zh-CN/my-usage` 页面文案字典：
+`limitWeeklyUsd`（"周限额 (USD)"，"留空表示无限制"）、`costWeekly`（"周消费"）、`resetAt`（"重置于"）；
+同一模型下还有 `limit5hUsd` / 日 / 月 / `limitTotalUsd` 四个窗口，本轮只取周，其余忽略。
+
+**结论**：周限额是 cch 出，不需要在 onboarding sidecar 上新建，也不需要 fork cch。
+`quotaUrl` 改为 `POST {serverUrl}/api/actions/my-usage/getMyQuota`。
+
+**为什么仍是独立调用而不是在 `getMyStatsSummary` 上加字段**：那次调用的时间范围是**客户端**选的
+（本月一号到今天），而额度窗口是**网关**拥有的。合成一个调用会让客户端选的月份范围
 看起来也选择了那一周。
+
+**解析为什么容错多个字段名**：端点的**存在**已由探测坐实，**响应体**未用真实 key 观测过。
+每个别名指的都是同一个量；钉死一个猜测的代价是——名字对不上时会静默变成「暂不可用」，
+而那与「没配额度」长得一模一样，没人能从界面上分辨。
 
 **为什么是非致命调用**：这个端点是新的，尚未部署的 onboard 会答 404。
 用户自己的邮箱和退出登录按钮不能依赖一次额度查询——失败一律答 `null`，
@@ -80,8 +101,18 @@
 
 ## 未验证项
 
-1. **联调**：onboard 尚未提供 `getMyWeeklyQuota`。字段名、周期语义、以及真实额度数值
-   都未与服务端对齐——本轮实现的是客户端契约段。
+1. **`getMyQuota` 的响应体**：端点存在已坐实，**响应 JSON 的确切形状未观测**——
+   没有真实 cch key 就调不动它。解析器按 cch 的字段词汇加通用别名容错，但这是推断不是观测。
+   一条命令即可坐实（需要一个真实 cch key）：
+
+   ```sh
+   CCH=https://cch-jyw.pipidan.qzz.io
+   TOKEN=$(curl -sS -D- -o/dev/null -X POST "$CCH/api/auth/login" \
+     -H 'Content-Type: application/json' -d '{"key":"<真实 cch key>"}' \
+     | grep -i '^set-cookie' | sed -E 's/.*auth-token=([^;]+).*/\1/')
+   curl -sS -X POST "$CCH/api/actions/my-usage/getMyQuota" \
+     -H "Cookie: auth-token=$TOKEN" -H 'Content-Type: application/json' -d '{}'
+   ```
 2. **登出后清理额度数据**：`UserProfileCard` 的登出已 `invalidateQueries(['usageStats'])`，
    且额度只存在于 query 缓存里（没有独立持久化），所以逻辑上随之失效；但未跑真实登出验证。
 3. **周期更新后刷新**：`useUsageStats` 每 5 分钟轮询，周期翻转会在下一轮拿到新数值。

@@ -17,27 +17,68 @@ function finiteNonNegative(value: unknown): number | null {
 }
 
 /**
- * `null` when the payload carries no usable allowance.
+ * Read the weekly allowance out of a cch `my-usage/getMyQuota` payload.
+ *
+ * ## Whose vocabulary this is
+ *
+ * cch's, not ours. The gateway models several windows per key —
+ * `limit5hUsd` / daily / `limitWeeklyUsd` / `limitMonthlyUsd` / `limitTotalUsd`,
+ * each paired with a `cost*` figure and a reset time, and each documented in
+ * its own admin UI as "留空表示无限制" (blank means unlimited). This function
+ * takes the WEEKLY pair and ignores the rest; the other windows are real, but
+ * the card has room for one and the ruling named the week.
+ *
+ * The field names are read tolerantly (`costWeekly`, `weeklyCostUsd`, `usedUsd`
+ * …) because the exact response envelope of `getMyQuota` has not been observed
+ * against a real key yet — the endpoint's EXISTENCE is confirmed by probe, its
+ * body is not. Tolerance here is not sloppiness: every alias names the same
+ * quantity, and the alternative — pinning one guess — turns a naming mismatch
+ * into a silent `暂不可用` that looks exactly like "no allowance configured".
+ *
+ * ## Why `null` beats a partial figure
  *
  * `usedUsd` is required and `limitUsd` is not: an account can genuinely have
- * spending with no ceiling configured, and that is a state the card must be
- * able to describe ("$12.40 spent, no limit set") rather than a malformed
- * response. What is NOT tolerated is a missing or nonsensical `usedUsd` — with
- * no numerator there is nothing to show, and inventing `0` would report an
- * unused allowance to someone who may have exhausted theirs.
+ * spending with no ceiling configured — that is precisely what cch's blank
+ * `limitWeeklyUsd` means — and the card must be able to say "$12.40 spent, no
+ * limit set" rather than treat it as malformed. What is NOT tolerated is a
+ * missing or nonsensical spend figure: with no numerator there is nothing to
+ * show, and inventing `0` would report an unused allowance to someone who may
+ * have exhausted theirs.
  */
 export function parseWeeklyQuota(payload: unknown): WeeklyQuota | null {
   if (!payload || typeof payload !== 'object') return null;
   const raw = payload as Record<string, unknown>;
-  const usedUsd = finiteNonNegative(raw.usedUsd ?? raw.usedCostUsd ?? raw.used);
+  // cch's own spelling first, then the generic ones.
+  const usedUsd = finiteNonNegative(
+    raw.costWeekly ?? raw.costWeeklyUsd ?? raw.weeklyCostUsd ?? raw.usedUsd ?? raw.used
+  );
   if (usedUsd === null) return null;
-  const limitUsd = finiteNonNegative(raw.limitUsd ?? raw.limit ?? raw.weeklyLimitUsd);
-  const periodEnd = typeof raw.periodEnd === 'string' ? raw.periodEnd.trim() : '';
+  const limitUsd = finiteNonNegative(
+    raw.limitWeeklyUsd ?? raw.weeklyLimitUsd ?? raw.limitUsd ?? raw.limit
+  );
+  const periodEnd = readIsoLike(raw.weeklyResetAt ?? raw.resetAt ?? raw.periodEnd);
   return {
     usedUsd,
     limitUsd,
     ...(periodEnd ? { periodEnd } : {}),
   };
+}
+
+/**
+ * The reset instant as a string, from either an ISO string or an epoch number.
+ *
+ * cch's admin UI labels this `resetAt` / 重置于 and its other timestamps cross
+ * the wire both ways depending on the surface, so accepting a number costs one
+ * branch and saves the card from showing nothing on a perfectly good answer.
+ * Anything else — including a blank string — is treated as "not stated", which
+ * the view layer renders by omitting the line rather than by guessing a date.
+ */
+function readIsoLike(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return new Date(value).toISOString();
+  }
+  return '';
 }
 
 /**

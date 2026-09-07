@@ -254,12 +254,23 @@ class UsageService {
 
       const todayUrl = `${serverUrl}/api/actions/my-usage/getMyTodayStats`;
       const summaryUrl = `${serverUrl}/api/actions/my-usage/getMyStatsSummary`;
-      // F10. A THIRD action on the same API, deliberately not extra fields on
-      // `getMyStatsSummary`: that call is scoped by an explicit date range this
-      // client chooses, and the weekly allowance is scoped by a period the
-      // SERVICE owns. Folding them together would make the client's month range
-      // look like it selected the week too.
-      const quotaUrl = `${serverUrl}/api/actions/my-usage/getMyWeeklyQuota`;
+      // F10. cch's OWN allowance action, on the same API as the two above.
+      //
+      // Discovered rather than invented (2026-09-07 probe against the live
+      // gateway): every made-up name under `my-usage/` answers `404` with a
+      // `text/plain` body, while a real one answers `401 {"ok":false,...}` in
+      // JSON — the same discrimination the D47 S0 E5 auth probe established.
+      // `getMyQuota` and `getMyUsageLogs` answer 401; `getMyWeeklyQuota`,
+      // `getMyLimits`, `getMyBudget` and the rest are 404. So the allowance is
+      // cch's to report, not ours to build, and this is what it is called.
+      //
+      // Deliberately a separate call rather than extra fields on
+      // `getMyStatsSummary`: that call is scoped by an explicit date range THIS
+      // client chooses, while the allowance period is the gateway's own
+      // (cch models `limitWeeklyUsd` / `costWeekly` / `resetAt` per key).
+      // Folding them together would make our month range look like it selected
+      // the week too.
+      const quotaUrl = `${serverUrl}/api/actions/my-usage/getMyQuota`;
 
       /**
        * F10: the allowance is fetched with the SAME auth the stats used, and

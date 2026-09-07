@@ -187,7 +187,8 @@ describe('UsageService', () => {
       status: 200,
       json: async () => ({
         ok: true,
-        data: { usedUsd: 12.4, limitUsd: 50, periodEnd: '2026-04-13T00:00:00Z' },
+        // cch's own spelling — see `parseWeeklyQuota`.
+        data: { costWeekly: 12.4, limitWeeklyUsd: 50, resetAt: '2026-04-13T00:00:00Z' },
       }),
     });
 
@@ -294,7 +295,7 @@ describe('UsageService', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => ({ ok: true, data: { limitUsd: 50 } }),
+      json: async () => ({ ok: true, data: { limitWeeklyUsd: 50 } }),
     });
 
     const { usageService } = await import('../UsageService');
@@ -364,7 +365,7 @@ describe('UsageService', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => ({ ok: true, data: { usedUsd: 12.4, limitUsd: 50 } }),
+      json: async () => ({ ok: true, data: { costWeekly: 12.4, limitWeeklyUsd: 50 } }),
     });
 
     const { usageService } = await import('../UsageService');
@@ -382,7 +383,7 @@ describe('UsageService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,
-      'https://cch.example.com/api/actions/my-usage/getMyWeeklyQuota',
+      'https://cch.example.com/api/actions/my-usage/getMyQuota',
       expect.objectContaining({ headers: expect.objectContaining({ Cookie: expect.any(String) }) })
     );
     expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://cch.example.com/api/auth/login', {

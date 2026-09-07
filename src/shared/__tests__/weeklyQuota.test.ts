@@ -2,10 +2,49 @@ import { describe, expect, it } from 'vitest';
 import { deriveWeeklyQuotaView, formatQuotaUsd, parseWeeklyQuota } from '../weeklyQuota';
 
 describe('F10 parseWeeklyQuota', () => {
-  it('reads the documented shape', () => {
+  it("reads cch's own field names", () => {
+    // The gateway's vocabulary, taken from its admin UI: `limitWeeklyUsd`
+    // (blank = unlimited) paired with `costWeekly` and a `resetAt`.
+    expect(
+      parseWeeklyQuota({
+        costWeekly: 12.4,
+        limitWeeklyUsd: 50,
+        resetAt: '2026-09-14T00:00:00Z',
+        // The other windows cch tracks per key. Present in the same payload and
+        // deliberately ignored — the card shows the week.
+        cost5h: 1.2,
+        limit5hUsd: 5,
+        costMonthly: 40,
+        limitMonthlyUsd: 200,
+      })
+    ).toEqual({ usedUsd: 12.4, limitUsd: 50, periodEnd: '2026-09-14T00:00:00Z' });
+  });
+
+  it('accepts the generic aliases, since the envelope is not yet observed', () => {
     expect(
       parseWeeklyQuota({ usedUsd: 12.4, limitUsd: 50, periodEnd: '2026-09-14T00:00:00Z' })
     ).toEqual({ usedUsd: 12.4, limitUsd: 50, periodEnd: '2026-09-14T00:00:00Z' });
+    expect(parseWeeklyQuota({ weeklyCostUsd: 1, weeklyLimitUsd: 2 })).toEqual({
+      usedUsd: 1,
+      limitUsd: 2,
+    });
+  });
+
+  it('takes a reset time as an epoch number as well as a string', () => {
+    expect(parseWeeklyQuota({ costWeekly: 1, resetAt: 1_789_000_000_000 })?.periodEnd).toBe(
+      new Date(1_789_000_000_000).toISOString()
+    );
+    // Not a usable instant: say nothing rather than render 1970.
+    expect(parseWeeklyQuota({ costWeekly: 1, resetAt: 0 })).not.toHaveProperty('periodEnd');
+  });
+
+  it('reads a blank weekly limit as unlimited, which is what cch means by it', () => {
+    // cch's admin field says 留空表示无限制 — an absent ceiling is a real
+    // configuration, not a broken response.
+    expect(parseWeeklyQuota({ costWeekly: 12.4, limitWeeklyUsd: null })).toEqual({
+      usedUsd: 12.4,
+      limitUsd: null,
+    });
   });
 
   it('answers null when there is no numerator to show', () => {
