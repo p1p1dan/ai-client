@@ -85,10 +85,26 @@ hook 里有 `openedRef` 闩锁：一次启动只自动开一次，晚到的 `ref
 | `NODE_OPTIONS=--max-old-space-size=1200 npx tsc --noEmit` | 通过 |
 | `npx biome check .` | 993 文件，0 error |
 
+## 服务端已落地（2026-09-07 同日）
+
+`jyw-cch-onboarding` 已实现两个端点，提交 `5993d84`：
+
+- `GET /api/v1/announcements`——不鉴权、`no-store`、按 enabled + 时间窗筛选、
+  按 `sortOrder` 再按最新排序、per-IP 限流。
+- `/api/admin/announcements` CRUD——复用 `MODEL_ADMIN_TOKEN`，未配置时 503。
+
+**跨仓契约已验证**：从该服务真实 handler 抓下的响应，作为 fixture 写进
+`shared/__tests__/announcements.test.ts` 的 contract 段，喂给本仓的 `parseAnnouncements`
+与 `shouldOpenAnnouncementsOnStartup`，断言解析结果与「会弹窗」。
+两半在不同运行时、不同测试框架下，这是唯一真正把它们对上的一处。
+
+服务端侧门禁（在装好 Bun 的本机执行）：`bun test` 170 项通过、`bun run typecheck` 通过、
+`bunx biome check .` 65 文件 0 error、`bun run build:web` 成功。
+
 ## 未验证项
 
-1. **联调**：onboard 尚未提供 `/api/v1/announcements`。本轮实现的是**客户端契约段**——
-   真实接口返回时的字段对齐、真实启动弹窗，都未验证。
+1. **真实部署联调**：上述验证用的是服务端 handler 的真实输出，但服务**尚未部署**；
+   真机上「启动 → 拉取 → 弹窗」的整条链路未跑过。
 2. **GUI 点验**：铃铛外观与位置、弹窗在窄窗口与长内容下的表现、
    顶部「...」确实消失，均未跑真实 Electron。
 3. **登出清理**：`clearReadState()` 已接进 `performLogoutSequence` 的 ⑥b 步

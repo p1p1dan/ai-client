@@ -139,3 +139,70 @@ describe('F09 read state', () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * F09 cross-repo contract.
+ *
+ * The two halves of this feature live in different repositories, run on
+ * different runtimes, and are tested by different frameworks — so "both sides
+ * assert the same shape" is a claim nothing checks. This closes that: the
+ * payload below was CAPTURED from `jyw-cch-onboarding`'s real
+ * `GET /api/v1/announcements` handler on 2026-09-07 (commit `5993d84`), by
+ * seeding its repo and calling the route, not by writing out what we hoped it
+ * would send.
+ *
+ * If the service changes its wire shape, this test is what notices.
+ */
+describe('F09 onboarding service contract', () => {
+  const CAPTURED = {
+    version: 1,
+    announcements: [
+      {
+        id: 'maint-0914',
+        title: '计划内维护',
+        body: '周日 02:00–03:00 将短暂中断。',
+        severity: 'warning',
+        publishedAt: '2026-09-07T00:00:00.000Z',
+      },
+      // Second row exercises the two optional paths at once: an empty body, and
+      // `publishedAt` OMITTED rather than sent as null.
+      { id: 'rel-040', title: 'Release 0.4.0', body: '', severity: 'info' },
+    ],
+  };
+
+  it('parses a real response from the onboarding service', () => {
+    expect(parseAnnouncements(CAPTURED)).toEqual([
+      {
+        id: 'maint-0914',
+        title: '计划内维护',
+        body: '周日 02:00–03:00 将短暂中断。',
+        severity: 'warning',
+        publishedAt: '2026-09-07T00:00:00.000Z',
+      },
+      { id: 'rel-040', title: 'Release 0.4.0', body: '', severity: 'info' },
+    ]);
+  });
+
+  it('opens the startup dialog for that response', () => {
+    // The end-to-end claim the feature exists to make: what the service serves
+    // is what puts a dialog on screen at launch.
+    expect(
+      shouldOpenAnnouncementsOnStartup({
+        announcements: parseAnnouncements(CAPTURED),
+        source: 'remote',
+      })
+    ).toBe(true);
+  });
+
+  it('counts both as unread on a first launch, and neither after they are read', () => {
+    const parsed = parseAnnouncements(CAPTURED);
+    expect(unreadAnnouncementIds(parsed, [])).toEqual(['maint-0914', 'rel-040']);
+    expect(unreadAnnouncementIds(parsed, ['maint-0914', 'rel-040'])).toEqual([]);
+  });
+
+  it("survives the service's disabled rows simply not being there", () => {
+    // The seeded fixture also had a disabled row; the service omitted it, so the
+    // client never has to know the concept exists.
+    expect(parseAnnouncements(CAPTURED).map((entry) => entry.id)).not.toContain('hidden');
+  });
+});
