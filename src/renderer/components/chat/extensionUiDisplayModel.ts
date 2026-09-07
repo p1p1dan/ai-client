@@ -351,8 +351,7 @@ const utf8Length = (value: string) => encoder.encode(value).byteLength;
 export function isInapplicablePermissionNotification(message: string): boolean {
   const text = message.trimStart();
   return (
-    text.startsWith('Legacy extension config found at') ||
-    text.includes('project is not trusted')
+    text.startsWith('Legacy extension config found at') || text.includes('project is not trusted')
   );
 }
 

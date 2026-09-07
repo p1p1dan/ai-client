@@ -13,10 +13,11 @@
  * renamed); only its meaning and label changed.
  */
 
-import { FileCode } from 'lucide-react';
+import { FileCode, FileSearch, Search } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { FileTree } from '@/components/files/FileTree';
 import { NewItemDialog } from '@/components/files/NewItemDialog';
+import { Button } from '@/components/ui/button';
 import {
   Empty,
   EmptyDescription,
@@ -37,7 +38,7 @@ const ESCAPE_HOLD_PROPS = { [SURFACE_ESCAPE_HOLD_ATTR]: '' };
 
 type NewItemType = 'file' | 'directory' | null;
 
-export function FilesSurfaceView({ surfaceId }: SurfaceViewProps) {
+export function FilesSurfaceView({ surfaceId, onSearch }: SurfaceViewProps) {
   const { t } = useI18n();
   const rootPath = useWorkspaceRootPath();
 
@@ -133,6 +134,28 @@ export function FilesSurfaceView({ surfaceId }: SurfaceViewProps) {
     // ContextPanel's onKeyDownCapture) before the rename's own handler ran,
     // silently dropping the in-progress rename.
     <div className="flex h-full min-h-0 min-w-0 flex-col" {...ESCAPE_HOLD_PROPS}>
+      <div className="flex h-7 shrink-0 items-center justify-end gap-1 border-b px-2">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={t('Search files')}
+          title={t('Search files')}
+          disabled={!onSearch}
+          onClick={() => onSearch?.('files')}
+        >
+          <FileSearch className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={t('Search content')}
+          title={t('Search content')}
+          disabled={!onSearch}
+          onClick={() => onSearch?.('content')}
+        >
+          <Search className="h-3.5 w-3.5" />
+        </Button>
+      </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         <FileTree
           tree={tree}

@@ -12,6 +12,7 @@ import {
 import type { Repository } from '@/App/constants';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { usePresentationSwitch } from '@/components/chat/usePresentationSwitch';
+import { GlobalSearchDialog } from '@/components/search/GlobalSearchDialog';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { isDiffTabActive } from '@/stores/diffTabTarget';
@@ -34,6 +35,7 @@ import { useCapacityReclaimNotice } from './useCapacityReclaimNotice';
 import { useEditorWorktreeSync } from './useEditorWorktreeSync';
 import { useShellShortcuts } from './useShellShortcuts';
 import { useSyncChatWorkspaceTree } from './useSyncChatWorkspaceTree';
+import { useWorkspaceSearch } from './useWorkspaceSearch';
 
 interface WorkspaceShellProps {
   onOpenSettings?: () => void;
@@ -129,6 +131,7 @@ export function WorkspaceShell({
   // A08: global shell shortcuts (Ctrl/Cmd+B/1-5). Only live while this
   // component is mounted, i.e. only for the new shell.
   useShellShortcuts();
+  const workspaceSearch = useWorkspaceSearch();
 
   // m7: per-workspace editor tab isolation. Must live somewhere ALWAYS mounted
   // — see the hook for the deadlock that put it here.
@@ -294,6 +297,7 @@ export function WorkspaceShell({
         onDragFrame={paintSidebarDrag}
         onResizingChange={setSidebarResizing}
         onOpenSettings={onOpenSettings}
+        onSearch={workspaceSearch.openSearch}
         repositories={repositories}
         onAddRepository={onAddRepository}
         onRemoveRepository={onRemoveRepository}
@@ -407,6 +411,19 @@ export function WorkspaceShell({
           </div>
         </div>
       </div>
+
+      {workspaceSearch.request && (
+        <GlobalSearchDialog
+          key={workspaceSearch.request.rootPath}
+          open
+          onOpenChange={(open) => {
+            if (!open) workspaceSearch.closeSearch();
+          }}
+          rootPath={workspaceSearch.request.rootPath}
+          initialMode={workspaceSearch.request.mode}
+          onOpenFile={workspaceSearch.onOpenFile}
+        />
+      )}
 
       {fileDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-md border-2 border-primary border-dashed bg-primary/5">

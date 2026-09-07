@@ -48,6 +48,14 @@ const LEGACY_AI_FEATURE_KEYS = [
   'branchNameGenerator',
 ] as const;
 
+const REMOVED_SETTING_KEYS = [
+  'agentNotificationEnabled',
+  'agentNotificationDelay',
+  'agentNotificationEnterDelay',
+  'fileTreeAutoReveal',
+  'terminalInput',
+] as const;
+
 export function sanitizeLegacyAiSettings(
   persisted: Partial<SettingsState>
 ): Partial<SettingsState> {
@@ -171,9 +179,10 @@ export function migrateSettings(
   // Migrate xterm keybindings from legacy formats
   const migratedXtermKeybindings = migrateXtermKeybindings(persisted, currentState);
 
-  const migratedTerminalInput = migrateTerminalInput(persisted, currentState);
-
   const sanitizedPersisted = sanitizeLegacyAiSettings(persisted);
+  for (const key of REMOVED_SETTING_KEYS) {
+    delete (sanitizedPersisted as Record<string, unknown>)[key];
+  }
 
   return {
     ...currentState,
@@ -223,7 +232,6 @@ export function migrateSettings(
       ...currentState.editorSettings,
       ...persisted.editorSettings,
     },
-    terminalInput: migratedTerminalInput,
     commitMessageGenerator: {
       ...currentState.commitMessageGenerator,
       ...sanitizedPersisted.commitMessageGenerator,
@@ -323,38 +331,6 @@ function migrateXtermKeybindings(
   };
 }
 
-function migrateTerminalInput(
-  persisted: Partial<SettingsState>,
-  currentState: SettingsState
-): SettingsState['terminalInput'] {
-  const record = persisted as Record<string, unknown>;
-  const legacy = record.claudeCodeIntegration;
-  const legacyRecord =
-    legacy && typeof legacy === 'object' && !Array.isArray(legacy)
-      ? (legacy as Record<string, unknown>)
-      : undefined;
-  const current = persisted.terminalInput ?? legacyRecord;
-  const rawAutoPopup = current?.enhancedInputAutoPopup;
-  const enhancedInputAutoPopup =
-    typeof rawAutoPopup === 'boolean'
-      ? rawAutoPopup
-        ? 'hideWhileRunning'
-        : 'manual'
-      : rawAutoPopup === 'always' ||
-          rawAutoPopup === 'hideWhileRunning' ||
-          rawAutoPopup === 'manual'
-        ? rawAutoPopup
-        : currentState.terminalInput.enhancedInputAutoPopup;
-
-  return {
-    enhancedInputEnabled:
-      typeof current?.enhancedInputEnabled === 'boolean'
-        ? current.enhancedInputEnabled
-        : currentState.terminalInput.enhancedInputEnabled,
-    enhancedInputAutoPopup,
-  };
-}
-
 /**
  * Clean up legacy fields from persisted state
  * TODO: Remove this function after v1.0 release
@@ -369,6 +345,7 @@ export async function cleanupLegacyFields(): Promise<void> {
 
     if (aiclientSettings?.state) {
       const legacyFields = [
+        ...REMOVED_SETTING_KEYS,
         'terminalKeybindings',
         'agentKeybindings',
         'terminalPaneKeybindings',

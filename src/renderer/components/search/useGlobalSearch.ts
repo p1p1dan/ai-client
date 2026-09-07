@@ -49,6 +49,7 @@ export function useGlobalSearch(rootPath: string | undefined) {
 
   const search = useCallback(
     async (query: string, mode: SearchMode, options: SearchOptions) => {
+      abortControllerRef.current?.abort();
       if (!rootPath || !query.trim()) {
         setState((prev) => ({
           ...prev,
@@ -60,11 +61,9 @@ export function useGlobalSearch(rootPath: string | undefined) {
         return;
       }
 
-      // Cancel previous request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      abortControllerRef.current = new AbortController();
+      // IPC cannot be aborted; suppress replies from superseded requests.
+      const request = new AbortController();
+      abortControllerRef.current = request;
 
       setState((prev) => ({ ...prev, isLoading: true }));
 
@@ -76,6 +75,7 @@ export function useGlobalSearch(rootPath: string | undefined) {
             maxResults: 100,
             useGitignore: options.useGitignore,
           });
+          if (request.signal.aborted) return;
           setState((prev) => ({
             ...prev,
             fileResults: results.items,
@@ -94,6 +94,7 @@ export function useGlobalSearch(rootPath: string | undefined) {
             filePattern: options.filePattern || undefined,
             useGitignore: options.useGitignore,
           });
+          if (request.signal.aborted) return;
           setState((prev) => ({
             ...prev,
             fileResults: [],
@@ -103,6 +104,7 @@ export function useGlobalSearch(rootPath: string | undefined) {
           }));
         }
       } catch {
+        if (request.signal.aborted) return;
         setState((prev) => ({ ...prev, isLoading: false }));
       }
     },
@@ -111,6 +113,7 @@ export function useGlobalSearch(rootPath: string | undefined) {
 
   const setQuery = useCallback(
     (query: string) => {
+      abortControllerRef.current?.abort();
       setState((prev) => ({ ...prev, query }));
 
       // Debounce search using stateRef to get latest mode/options
@@ -127,25 +130,23 @@ export function useGlobalSearch(rootPath: string | undefined) {
 
   const setMode = useCallback(
     (mode: SearchMode) => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       setState((prev) => ({ ...prev, mode, selectedIndex: 0 }));
       // Use stateRef to get latest query and options
       const { query, options } = stateRef.current;
-      if (query.trim()) {
-        search(query, mode, options);
-      }
+      search(query, mode, options);
     },
     [search]
   );
 
   const setOptions = useCallback(
     (optionUpdates: Partial<SearchOptions>) => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       const { query, mode, options } = stateRef.current;
       const newOptions = { ...options, ...optionUpdates };
       setState((prev) => ({ ...prev, options: newOptions }));
       // Trigger search with new options
-      if (query.trim()) {
-        search(query, mode, newOptions);
-      }
+      search(query, mode, newOptions);
     },
     [search]
   );

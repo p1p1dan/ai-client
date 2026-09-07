@@ -16,7 +16,6 @@ import type {
   RepositoryListDisplayMode,
   SearchKeybindings,
   SourceControlKeybindings,
-  TerminalInputSettings,
   WorkspaceKeybindings,
   XtermKeybindings,
 } from './types';
@@ -133,11 +132,6 @@ In your output:
 ## Commit History
 
 {git_log}`;
-
-export const defaultTerminalInputSettings: TerminalInputSettings = {
-  enhancedInputEnabled: false,
-  enhancedInputAutoPopup: 'hideWhileRunning',
-};
 
 // Default commit message generator settings
 export const defaultCommitMessageGeneratorSettings: CommitMessageGeneratorSettings = {

@@ -17,7 +17,6 @@ import {
   GitBranch,
   GitMerge,
   History,
-  List,
   PanelLeftClose,
   Plus,
   RefreshCw,
@@ -54,7 +53,6 @@ import {
   GroupSelector,
   MoveToGroupSubmenu,
 } from '@/components/group';
-import { RepositoryManagerDialog } from '@/components/repository/RepositoryManagerDialog';
 import { RepositorySettingsDialog } from '@/components/repository/RepositorySettingsDialog';
 import { TempWorkspaceContextMenu } from '@/components/temp-workspace/TempWorkspaceContextMenu';
 import { ActivityIndicator } from '@/components/ui/activity-indicator';
@@ -273,7 +271,6 @@ export function TreeSidebar({
   const [repoSettingsTarget, setRepoSettingsTarget] = useState<Repository | null>(null);
 
   // Repository manager dialog
-  const [repoManagerOpen, setRepoManagerOpen] = useState(false);
 
   // Cached repository settings to avoid repeated localStorage reads
   const [repoSettingsMap, setRepoSettingsMap] = useState<Record<string, RepositorySettings>>(
@@ -1075,15 +1072,6 @@ export function TreeSidebar({
       {/* Header */}
       <div className="flex h-12 items-center justify-end gap-2 border-b px-3 drag-region">
         <div className="flex items-center gap-1">
-          {/* Manage repositories button */}
-          <button
-            type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-md no-drag text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
-            onClick={() => setRepoManagerOpen(true)}
-            title={t('Manage Repositories')}
-          >
-            <List className="h-4 w-4" />
-          </button>
           {/* Refresh button */}
           <button
             type="button"
@@ -1730,17 +1718,6 @@ export function TreeSidebar({
           repoName={repoSettingsTarget.name}
         />
       )}
-
-      {/* Repository Manager Dialog */}
-      <RepositoryManagerDialog
-        open={repoManagerOpen}
-        onOpenChange={setRepoManagerOpen}
-        repositories={repositories}
-        selectedRepo={selectedRepo}
-        onSelectRepo={onSelectRepo}
-        onRemoveRepository={onRemoveRepository}
-        onSettingsChange={refreshRepoSettings}
-      />
 
       <CreateGroupDialog
         open={createGroupDialogOpen}

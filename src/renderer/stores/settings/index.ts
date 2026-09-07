@@ -27,7 +27,6 @@ import {
   defaultRepositoryListDisplayMode,
   defaultSearchKeybindings,
   defaultSourceControlKeybindings,
-  defaultTerminalInputSettings,
   defaultWorkspaceKeybindings,
   defaultXtermKeybindings,
   getDefaultLocale,
@@ -162,15 +161,9 @@ export function getInitialState() {
 
     // Terminal session settings
     shellConfig: getDefaultShellConfig(),
-    agentNotificationEnabled: true,
-    agentNotificationDelay: 5,
-    agentNotificationEnterDelay: 5,
     // D48 S2 §4.3: empty means "no memory yet" — a new install starts every
     // draft on the legacy binding and every model on `Automatic`.
     chatAgentDefaults: EMPTY_CHAT_AGENT_DEFAULTS,
-
-    // Terminal Input
-    terminalInput: defaultTerminalInputSettings,
 
     // AI Features
     commitMessageGenerator: defaultCommitMessageGeneratorSettings,
@@ -237,9 +230,6 @@ export function getInitialState() {
     hideGroups: false,
     hiddenOpenInApps: [] as string[],
     openInMenuFilterEnabled: false,
-
-    // File Tree defaults
-    fileTreeAutoReveal: true, // Auto-reveal active file in file tree by default (like VSCode)
 
     // Logging defaults
     loggingEnabled: false,
@@ -322,18 +312,8 @@ export const useSettingsStore = create<SettingsState>()(
 
       // Terminal session setters
       setShellConfig: (shellConfig) => set({ shellConfig }),
-      setAgentNotificationEnabled: (agentNotificationEnabled) => set({ agentNotificationEnabled }),
-      setAgentNotificationDelay: (agentNotificationDelay) => set({ agentNotificationDelay }),
-      setAgentNotificationEnterDelay: (agentNotificationEnterDelay) =>
-        set({ agentNotificationEnterDelay }),
 
       setChatAgentDefaults: (chatAgentDefaults) => set({ chatAgentDefaults }),
-
-      // Terminal Input Setters
-      setTerminalInput: (settings) =>
-        set((state) => ({
-          terminalInput: { ...state.terminalInput, ...settings },
-        })),
 
       // AI Feature Setters
       setCommitMessageGenerator: (settings) =>
@@ -573,7 +553,6 @@ export const useSettingsStore = create<SettingsState>()(
       setOpenInMenuFilterEnabled: (enabled) => set({ openInMenuFilterEnabled: enabled }),
 
       // File Tree Setters
-      setFileTreeAutoReveal: (fileTreeAutoReveal) => set({ fileTreeAutoReveal }),
 
       // Logging Setters
       setLoggingEnabled: (loggingEnabled) => {

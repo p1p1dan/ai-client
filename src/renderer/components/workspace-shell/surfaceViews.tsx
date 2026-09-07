@@ -22,6 +22,7 @@
  * `ContextPanel.tsx` (all four rail surfaces are wired as of T-12~T-15).
  */
 import type { ComponentType } from 'react';
+import type { SearchMode } from '@/components/search/useGlobalSearch';
 import type { SurfaceMountPolicy } from './shellLayoutModel';
 import type { ContextSurfaceId } from './surfaceRegistry';
 import { ContextSurfaceView } from './surfaces/ContextSurfaceView';
@@ -32,6 +33,7 @@ import { TerminalSurfaceView } from './surfaces/TerminalSurfaceView';
 
 export interface SurfaceViewProps {
   surfaceId: ContextSurfaceId;
+  onSearch?: (mode: SearchMode) => void;
 }
 
 export interface SurfaceViewRegistration {

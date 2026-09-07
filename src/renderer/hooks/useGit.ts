@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { normalizePath } from '@/App/storage';
 import { useRepositoryStore } from '@/stores/repository';
@@ -85,6 +85,21 @@ export function useGitCommit() {
   });
 }
 
+function invalidateBranchQueries(queryClient: QueryClient, workdir: string) {
+  return Promise.all(
+    [
+      gitQueryKeys.status(workdir),
+      gitQueryKeys.branches(workdir),
+      gitQueryKeys.fileChanges(workdir),
+      gitQueryKeys.fileDiff(workdir),
+      gitQueryKeys.log(workdir),
+      gitQueryKeys.logInfinite(workdir),
+      gitQueryKeys.submodules(workdir),
+      gitQueryKeys.submoduleChanges(workdir),
+    ].map((queryKey) => queryClient.invalidateQueries({ queryKey }))
+  );
+}
+
 export function useGitCheckout() {
   const queryClient = useQueryClient();
 
@@ -93,15 +108,7 @@ export function useGitCheckout() {
       await window.electronAPI.git.checkout(workdir, branch);
     },
     onSuccess: (_, { workdir }) => {
-      // Invalidate all git-related queries after branch switch
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.status(workdir) });
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.branches(workdir) });
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.fileChanges(workdir) });
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.fileDiff(workdir) });
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.log(workdir) });
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.logInfinite(workdir) });
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(workdir) });
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submoduleChanges(workdir) });
+      return invalidateBranchQueries(queryClient, workdir);
     },
   });
 }
@@ -122,7 +129,8 @@ export function useGitCreateBranch() {
       await window.electronAPI.git.createBranch(workdir, name, startPoint);
     },
     onSuccess: (_, { workdir }) => {
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.branches(workdir) });
+      // GitService.createBranch uses checkoutBranch, so HEAD changes here too.
+      return invalidateBranchQueries(queryClient, workdir);
     },
   });
 }

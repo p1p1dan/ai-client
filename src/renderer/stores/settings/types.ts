@@ -143,11 +143,6 @@ export interface EditorSettings {
   gitBlameEnabled: boolean;
 }
 
-export interface TerminalInputSettings {
-  enhancedInputEnabled: boolean;
-  enhancedInputAutoPopup: 'always' | 'hideWhileRunning' | 'manual';
-}
-
 // Commit message generator settings
 export interface CommitMessageGeneratorSettings extends CommonAISettings {
   enabled: boolean;
@@ -239,9 +234,6 @@ export interface SettingsState {
 
   // Terminal session settings
   shellConfig: ShellConfig;
-  agentNotificationEnabled: boolean;
-  agentNotificationDelay: number; // in seconds
-  agentNotificationEnterDelay: number; // delay after Enter before starting idle timer
 
   /**
    * D48 S2 §4.3 — chat-axis agent defaults: the agent a new draft starts on and
@@ -254,9 +246,6 @@ export interface SettingsState {
    * conversion could quietly appear.
    */
   chatAgentDefaults: ChatAgentDefaults;
-
-  // Terminal Input
-  terminalInput: TerminalInputSettings;
 
   // AI Features
   commitMessageGenerator: CommitMessageGeneratorSettings;
@@ -315,9 +304,6 @@ export interface SettingsState {
   hiddenOpenInApps: string[];
   openInMenuFilterEnabled: boolean;
 
-  // File Tree settings
-  fileTreeAutoReveal: boolean; // Auto-reveal active file in file tree (like VSCode)
-
   // Logging
   loggingEnabled: boolean;
   logLevel: 'error' | 'warn' | 'info' | 'debug';
@@ -357,18 +343,12 @@ export interface SettingsState {
   setEditorSettings: (settings: Partial<EditorSettings>) => void;
 
   setShellConfig: (config: ShellConfig) => void;
-  setAgentNotificationEnabled: (enabled: boolean) => void;
-  setAgentNotificationDelay: (delay: number) => void;
-  setAgentNotificationEnterDelay: (delay: number) => void;
   /**
    * D48 S2 §4.3. Takes the WHOLE record rather than field setters: the callers
    * build it through `chatAgentDefaults.ts`'s immutable helpers, so the store
    * never grows a second, subtly different merge rule.
    */
   setChatAgentDefaults: (defaults: ChatAgentDefaults) => void;
-
-  // Setters - Terminal Input
-  setTerminalInput: (settings: Partial<TerminalInputSettings>) => void;
 
   // Setters - AI Features
   setCommitMessageGenerator: (settings: Partial<CommitMessageGeneratorSettings>) => void;
@@ -439,7 +419,6 @@ export interface SettingsState {
   setHideGroups: (hide: boolean) => void;
   toggleHiddenOpenInApp: (bundleId: string) => void;
   setOpenInMenuFilterEnabled: (enabled: boolean) => void;
-  setFileTreeAutoReveal: (enabled: boolean) => void;
 
   // Setters - Logging
   setLoggingEnabled: (enabled: boolean) => void;

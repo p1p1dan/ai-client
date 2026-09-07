@@ -5,39 +5,45 @@
 
 ## Current phase
 
-**取证与拍板已完成，施工未开始。** 2026-09-07 立项当天完成三轮取证与全部边界拍板，
-七个任务全在 Next，无 In Progress。
+**S04 与 S01/S02/S03 已实现，相关回归通过，待完整门禁与合入。** S05/S06/S07 未开始。
+执行进度见 [TODO.md](./TODO.md)，任务状态仍以 roadmap 为准。
 
 ## Active TODO（最多五项）
 
-1. **S04 删纯死设置** —— 零依赖，先走。删 Agent 通知三项 + `fileTreeAutoReveal` + 增强输入两键。
-2. **S01 全局搜索移植** —— 补齐线第一项，S05 的硬前置。
-3. **S02 仓库设置入口** —— 补齐线第二项。
-4. **S03 分支切换移植** —— 补齐线第三项。
-5. **S05 删旧壳** —— 前三项全部合入后才允许开工。
+1. 确认是否允许安装主机缺少的 make/g++ 等编译工具；已向用户询问，尚未收到答复。
+2. 补齐 node-pty 原生模块与独立 Agent Host 依赖，复跑剩余四个环境相关失败文件。
+3. 完成待验收项，GUI 点验按原计划并入 UI 对齐累计点验。
+4. S04/S01/S02/S03 满足门禁后更新状态并合入，目前未提交。
+5. **S05 删旧壳** —— S01/S02/S03 全部合入后才允许开工。
 
 S06 / S07 在 S05 之后，暂不进 Active。
 
 ## Blocker
 
-无外部阻塞。唯一的内部纪律是**顺序**：S01/S02/S03 未全部合入前不得动 S05，
-否则中间态会真丢能力（全局搜索无替代入口、初始化脚本变成不可配置）。
+完整测试门禁尚未通过：本机没有 make/g++，node-pty 原生模块无法构建；
+`src/agent-host/node_modules` 的独立依赖尚未安装。系统级依赖安装等待用户确认。
+整套 `tsc --noEmit` 在 896 MiB 堆上限退出；生产代码和本次新增测试已拆分检查通过，
+不能把拆分结果写成整套类型检查通过。
+
+原有 lint 格式问题已做单行等价修正，全仓 lint 已通过。
+顺序纪律保持：S01/S02/S03 未全部合入前不得动 S05。
 
 ## Last verified
 
-**2026-09-07 · 取证**（静态分析，未运行项目门禁）：
+**2026-09-07 · 实现与验证**：
 
-- 设置项审计：对 `SettingsState` 的 70 个状态字段逐个 grep 消费方，
-  沿 import 链确认默认壳下可达性。结论：5 项纯失效、13 组仅旧壳生效。
-- 壳可达性闭包对比：脚本 BFS 解析 `@/` 与相对 import，
-  `workspace-shell` 可达 279 文件 / 旧壳五入口可达 197 文件 / 旧壳独有 78 文件。
-- 关键边界行：`App.tsx:1434` 分支入口、`App.tsx:1446-1845` 旧壳分支范围、
-  `App.tsx:1422` BackgroundLayer（**在分支之外**，背景图设置不受影响）、
-  `stores/settings/index.ts:202` 开关默认值、`mainTabShortcutGate.ts:20` 主标签快捷键让位、
-  `GitSurfaceView.tsx:15-16` Git 动作 ban。
+- S04：旧设置删除与旧 profile 兼容测试通过，见 [S04 证据](./evidence/s04-removed-settings.md)。
+- S01：搜索控制器、快捷键与异步请求测试通过，真实 ripgrep 八项集成测试通过，见 [S01 证据](./evidence/s01-workspace-search.md)。
+- S02：真实 React 表单与 localStorage 保存测试通过，旧会话菜单测试已限定正确范围并通过，见 [S02 证据](./evidence/s02-repository-settings.md)。
+- S03：分支操作四项与缓存键三十一项测试通过，见 [S03 证据](./evidence/s03-branch-switching.md)。
+- 首轮全仓测试：294 个文件分 25 批、每批最多 12 文件、单 worker；4247 个断言通过，10 个失败，8 个跳过；含模块加载失败在内共 12 个失败文件。
+- 补齐 Electron/ripgrep 并修正菜单测试后，已复跑清除其中 8 个失败文件。另补充的搜索空查询测试通过。
+- 剩余环境相关失败文件：permissionPatchScript、permissionPolicyIntegration、SessionManager、PiTuiPty。
+- 全仓 Biome 检查 1035 个文件通过；原有 warning/info 不作为 error。
+- 类型检查拆分为生产代码（排除测试，保持原 Agent Host 排除范围）和本次六个新增测试文件，两部分通过；整套检查仍受堆上限限制。
+- 首轮原始 JSON 报告保留在 `/tmp/settings-cleanup-results-BKQVxy/`；详细验证边界见 [验证记录](./evidence/2026-09-07-validation.md)。
 
-**尚未运行**：`pnpm lint` / `pnpm typecheck` / `pnpm test`。
-本轮没有代码改动，三绿留到第一个任务落地时取。
+未运行整套生产构建或 Agent Host 打包，未启动 `pnpm dev`，未进行真实 Electron GUI 点验。
 
 ## 与其他计划的关系
 

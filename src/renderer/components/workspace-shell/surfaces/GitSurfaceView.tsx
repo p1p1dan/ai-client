@@ -10,10 +10,10 @@
  * `CommitHistoryList`'s revert/reset context menu, toast wiring, and legacy
  * hardcoded colors dragged in more than the display-only scope asked for, so
  * History renders through a lean, local `GitHistoryList` instead (see that
- * file's header for the reuse-vs-fork rationale). The rest of the original
- * ban is unchanged and still in force: no `SourceControlPanel` /
- * `RepositoryList` / `BranchSwitcher` / other `components/git/` orphans, no
- * branch/PR/sync/stash actions.
+ * file's header for the reuse-vs-fork rationale). Settings-cleanup S03 also
+ * restores branch switching/creation through BranchSwitcher. The remaining
+ * ban stays in force: no SourceControlPanel/RepositoryList, PR, sync, publish,
+ * stash, revert or reset actions.
  *
  * `expanded`: two-column split, left changes+commit / right diff. Never
  * auto-expands (A06 + spec §2 explicit ban). Unchanged by D34-E below.
@@ -64,6 +64,7 @@ import { useEditorStore } from '@/stores/editor';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { SURFACE_ESCAPE_HOLD_ATTR } from '../shellLayoutModel';
 import type { ContextSurfaceId } from '../surfaceRegistry';
+import { GitBranchControl } from './GitBranchControl';
 import { GitHistoryList } from './GitHistoryList';
 import {
   deriveGitSurfacePresentation,
@@ -181,10 +182,8 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
   }, [workdir]);
 
   const fileChangesQuery = useFileChanges(workdir, surfaceActive);
-  // Not consumed directly (the list renders from useFileChanges above) — this
-  // shares gitQueryKeys.status's cache key with the rail dot (useGitChangeCount),
-  // so opening the git surface also keeps the dot's count fresh while active.
-  useGitStatus(workdir, surfaceActive);
+  // Shared with the rail dot and refreshed after branch mutations.
+  const statusQuery = useGitStatus(workdir, surfaceActive);
 
   const partitioned = useMemo(
     () => partitionFileChanges(fileChangesQuery.data),
@@ -334,6 +333,11 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
 
   const changesPane = (
     <div className="flex h-full min-h-0 flex-col">
+      <GitBranchControl
+        key={workdir}
+        workdir={workdir}
+        currentBranch={statusQuery.data?.current ?? null}
+      />
       {/* D34: docked git surface is split 50/50 top-half (Changes + CommitBox)
           vs bottom-half (History) — `flex-1` on both halves, not just the
           top one, so History gets an equal, non-collapsing share of the

@@ -12,9 +12,11 @@ import {
   FolderPlus,
   ListChecks,
   ListFilter,
+  MoreHorizontal,
   Pencil,
   Plus,
   Search,
+  Settings,
   ShieldQuestion,
   Square,
   Trash2,
@@ -23,6 +25,7 @@ import {
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import type { Repository } from '@/App/constants';
 import { STORAGE_KEYS } from '@/App/storage';
+import { RepositorySettingsDialog } from '@/components/repository/RepositorySettingsDialog';
 import {
   AlertDialog,
   AlertDialogDescription,
@@ -41,7 +44,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
-import { MenuItem, MenuPopup } from '@/components/ui/menu';
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from '@/components/ui/menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -122,6 +125,7 @@ export function LeftNav({
   const [recentShowAll, setRecentShowAll] = useState(false);
   const [searchVisible, setSearchVisible] = useState(true);
   const [repoToRemove, setRepoToRemove] = useState<Repository | null>(null);
+  const [repoToConfigure, setRepoToConfigure] = useState<Repository | null>(null);
   /**
    * U31: bulk archive. `null` = not selecting; a Set = selection mode holding
    * the chosen session ids.
@@ -663,20 +667,37 @@ export function LeftNav({
                         )}
                         <span className="min-w-0 flex-1 truncate font-semibold">{folder.name}</span>
                       </button>
-                      {onRemoveRepository && folderRepo && (
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          className="hidden h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive group-hover:flex group-focus-within:flex"
-                          aria-label={t('Remove repository')}
-                          title={t('Remove repository')}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setRepoToRemove(folderRepo);
-                          }}
-                        >
-                          <FolderMinus className="h-3 w-3" />
-                        </Button>
+                      {folderRepo && (
+                        <Menu>
+                          <MenuTrigger
+                            render={
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                className="h-5 w-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 data-popup-open:opacity-100"
+                                aria-label={t('Repository actions')}
+                                title={t('Repository actions')}
+                              />
+                            }
+                          >
+                            <MoreHorizontal className="h-3 w-3" />
+                          </MenuTrigger>
+                          <MenuPopup align="end">
+                            <MenuItem onClick={() => setRepoToConfigure(folderRepo)}>
+                              <Settings />
+                              {t('Repository Settings')}
+                            </MenuItem>
+                            {onRemoveRepository && (
+                              <MenuItem
+                                variant="destructive"
+                                onClick={() => setRepoToRemove(folderRepo)}
+                              >
+                                <FolderMinus />
+                                {t('Remove repository')}
+                              </MenuItem>
+                            )}
+                          </MenuPopup>
+                        </Menu>
                       )}
                       {newSessionWorkspaceId && (
                         // The header New button targets the active session's
@@ -748,6 +769,17 @@ export function LeftNav({
           )}
         </div>
       </ScrollArea>
+
+      {repoToConfigure && (
+        <RepositorySettingsDialog
+          open
+          repoPath={repoToConfigure.path}
+          repoName={repoToConfigure.name}
+          onOpenChange={(open) => {
+            if (!open) setRepoToConfigure(null);
+          }}
+        />
+      )}
 
       <AlertDialog
         open={!!repoToRemove}

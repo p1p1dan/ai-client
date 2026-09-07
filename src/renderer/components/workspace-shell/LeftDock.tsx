@@ -53,7 +53,7 @@ import {
 } from './shellLayoutModel';
 import { SURFACE_ICON_MAP } from './surfaceIcons';
 import { type ContextSurfaceId, getSurface } from './surfaceRegistry';
-import { SURFACE_VIEWS } from './surfaceViews';
+import { SURFACE_VIEWS, type SurfaceViewProps } from './surfaceViews';
 import { UserFooterPill } from './UserFooterPill';
 import { useGitChangeCount } from './useGitChangeCount';
 import { useSessionExtensions } from './useSessionExtensions';
@@ -67,6 +67,7 @@ interface LeftDockProps {
   onDragFrame?: (width: number) => void;
   onResizingChange?: (resizing: boolean) => void;
   onOpenSettings?: () => void;
+  onSearch?: SurfaceViewProps['onSearch'];
   /** Everything below is forwarded straight to the `chat` surface (`LeftNav`). */
   repositories?: Repository[];
   onAddRepository?: () => void;
@@ -83,6 +84,7 @@ export function LeftDock({
   onDragFrame,
   onResizingChange,
   onOpenSettings,
+  onSearch,
   repositories = [],
   onAddRepository,
   onRemoveRepository,
@@ -238,7 +240,7 @@ export function LeftDock({
                     )}
                     inert={!visible}
                   >
-                    <SurfaceView surfaceId={id} />
+                    <SurfaceView surfaceId={id} onSearch={onSearch} />
                   </div>
                 );
               })}

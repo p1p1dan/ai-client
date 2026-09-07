@@ -28,7 +28,7 @@ describe('T13 session context menu wiring', () => {
   });
 
   it('offers Rename and Archive, with no permanent Delete action', () => {
-    const menu = between('<MenuPopup', '</MenuPopup>');
+    const menu = between('</ContextMenuPrimitive.Trigger>', '</MenuPopup>');
 
     expect(menu).toContain('onClick={beginRename}');
     expect(menu).toContain("{t('Rename')}");

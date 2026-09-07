@@ -9,8 +9,8 @@
 | 分组 | 数量 | 说明 |
 |---|---|---|
 | Done | 0 | — |
-| In Progress | 0 | — |
-| Next | 7 | S04 → S01 → S02 → S03 → S05 → S06 → S07 |
+| In Progress | 4 | S04（待全仓门禁）· S01 · S02 · S03 |
+| Next | 3 | S05 → S06 → S07 |
 | Deferred | 0 | — |
 | 另立任务 | 3 | Agent 通知按 pix 重做 · git stash 完整链路 · behavior/environment 两个候选段 |
 
@@ -26,7 +26,8 @@ S04 删纯死设置（与旧壳无关，随时可走）
 → S07 分类重排为 9 类 + 统一设置行原语
 ```
 
-**S04 排最前**的理由：零依赖、零风险、纯删除，先把「改了也不生效」的三个开关从界面上拿掉。
+**S04 排最前**的理由：无前置依赖，先把「改了也不生效」的三个开关从界面上拿掉。
+文件树自动定位和增强输入仍有旧壳消费方，删除设置时必须同步调整并验证旧 profile 兼容。
 
 ## 通用门禁
 
@@ -37,7 +38,7 @@ GUI 点验并入 UI 对齐计划的累计点验，不单独开轮次。
 
 ## 任务
 
-### S01 — 全局搜索移植进新壳 · **Next**
+### S01 — 全局搜索移植进新壳 · **In Progress**
 
 `GlobalSearchDialog` / `useGlobalSearch` / `SearchResultList` / `SearchPreviewPanel` 四件现成，
 入口却只有旧壳的 `FilePanel` / `CurrentFilePanel` / `FileSidebar`；
@@ -47,7 +48,7 @@ GUI 点验并入 UI 对齐计划的累计点验，不单独开轮次。
 - **验收**：新壳下两个快捷键能唤起对话框；文件名与内容两种搜索都能出结果并跳转到编辑器。
 - **阻塞**：S05。这是硬能力，丢了就是产品倒退。
 
-### S02 — 仓库设置入口补进新壳 · **Next**
+### S02 — 仓库设置入口补进新壳 · **In Progress**
 
 `RepositorySettingsDialog` 三项里，**初始化脚本与 worktree 自动初始化的执行链路在新壳仍然生效**
 （`App.tsx:1251` 建 worktree 时读取执行、`TerminalPanel` 也用），只是配置入口在旧壳。
@@ -59,7 +60,7 @@ GUI 点验并入 UI 对齐计划的累计点验，不单独开轮次。
 - **验收**：新壳里能改某仓的初始化脚本；改完新建 worktree 时脚本按新值执行。
 - **阻塞**：S05。
 
-### S03 — 分支切换补进 GitSurfaceView · **Next**
+### S03 — 分支切换补进 GitSurfaceView · **In Progress**
 
 `BranchSwitcher.tsx`（236 行）现成：本地/远程分支列表、搜索、新建分支。
 `GitSurfaceView.tsx:15-16` 的头注释目前**明文禁止**引入它。
@@ -69,7 +70,7 @@ GUI 点验并入 UI 对齐计划的累计点验，不单独开轮次。
 - **验收**：新壳 Git 面板能切换本地与远程分支、能新建分支；切换后改动列表与历史同步刷新。
 - **阻塞**：S05。
 
-### S04 — 删纯死设置（A 清单）· **Next**
+### S04 — 删纯死设置（A 清单）· **In Progress**
 
 | 项 | 判死依据 |
 |---|---|

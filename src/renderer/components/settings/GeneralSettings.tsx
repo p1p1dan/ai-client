@@ -112,12 +112,6 @@ export function GeneralSettings() {
     setTerminalScrollback,
     shellConfig,
     setShellConfig,
-    agentNotificationEnabled,
-    setAgentNotificationEnabled,
-    agentNotificationDelay,
-    setAgentNotificationDelay,
-    agentNotificationEnterDelay,
-    setAgentNotificationEnterDelay,
     autoUpdateEnabled,
     setAutoUpdateEnabled,
     gitAutoFetchEnabled,
@@ -240,26 +234,6 @@ export function GeneralSettings() {
         label: t('{{count}} lines', { count: numberFormatter.format(value) }),
       })),
     [t, numberFormatter]
-  );
-
-  const notificationDelayOptions = React.useMemo(
-    () =>
-      [1, 2, 3, 5, 10].map((value) => ({
-        value,
-        label: t('{{count}} seconds', { count: value }),
-      })),
-    [t]
-  );
-
-  const enterDelayOptions = React.useMemo(
-    () => [
-      { value: 0, label: t('Disabled') },
-      ...[1, 2, 3, 5, 10].map((value) => ({
-        value,
-        label: t('{{count}} seconds', { count: value }),
-      })),
-    ],
-    [t]
   );
 
   const [shells, setShells] = React.useState<ShellInfo[]>([]);
@@ -1031,82 +1005,6 @@ export function GeneralSettings() {
             {t('Automatically copy selected text in the terminal to the clipboard')}
           </p>
           <Switch checked={copyOnSelection} onCheckedChange={setCopyOnSelection} />
-        </div>
-      </div>
-
-      {/* Agent Notification Section */}
-      <div className="pt-4 border-t">
-        <h3 className="text-lg font-medium">{t('Agent Notifications')}</h3>
-        <p className="text-sm text-muted-foreground">{t('Stop output notification')}</p>
-      </div>
-
-      {/* Notification Enable */}
-      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-        <span className="text-sm font-medium">{t('Enable notifications')}</span>
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">{t('Notifications when agent is idle')}</p>
-          <Switch
-            checked={agentNotificationEnabled}
-            onCheckedChange={setAgentNotificationEnabled}
-          />
-        </div>
-      </div>
-
-      {/* Notification Delay */}
-      <div className="grid grid-cols-[100px_1fr] items-start gap-4">
-        <span className="text-sm font-medium mt-2">{t('Idle time')}</span>
-        <div className="space-y-1.5">
-          <Select
-            value={String(agentNotificationDelay)}
-            onValueChange={(v) => setAgentNotificationDelay(Number(v))}
-            disabled={!agentNotificationEnabled}
-          >
-            <SelectTrigger className="w-48">
-              <SelectValue>
-                {notificationDelayOptions.find((o) => o.value === agentNotificationDelay)?.label ??
-                  t('{{count}} seconds', { count: agentNotificationDelay })}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectPopup>
-              {notificationDelayOptions.map((opt) => (
-                <SelectItem key={opt.value} value={String(opt.value)}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            {t('How long to wait before notifying after the agent stops output.')}
-          </p>
-        </div>
-      </div>
-
-      {/* Enter Delay */}
-      <div className="grid grid-cols-[100px_1fr] items-start gap-4">
-        <span className="text-sm font-medium mt-2">{t('Enter delay')}</span>
-        <div className="space-y-1.5">
-          <Select
-            value={String(agentNotificationEnterDelay)}
-            onValueChange={(v) => setAgentNotificationEnterDelay(Number(v))}
-            disabled={!agentNotificationEnabled}
-          >
-            <SelectTrigger className="w-48">
-              <SelectValue>
-                {enterDelayOptions.find((o) => o.value === agentNotificationEnterDelay)?.label ??
-                  t('{{count}} seconds', { count: agentNotificationEnterDelay })}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectPopup>
-              {enterDelayOptions.map((opt) => (
-                <SelectItem key={opt.value} value={String(opt.value)}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            {t('How long to wait after pressing Enter before starting idle timer.')}
-          </p>
         </div>
       </div>
 

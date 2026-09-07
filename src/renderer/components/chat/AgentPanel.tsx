@@ -25,7 +25,6 @@ import { createSession } from '@/utils/agentSession';
 import { AgentGroup } from './AgentGroup';
 import { AgentSessionTabs } from './AgentSessionTabs';
 import { AgentTerminal } from './AgentTerminal';
-import { EnhancedInputContainer } from './EnhancedInputContainer';
 import { QuickTerminalModal } from './QuickTerminalModal';
 import type { TerminalSession as Session } from './terminalSession';
 import type { AgentGroupState, AgentGroup as AgentGroupType } from './types';
@@ -53,49 +52,6 @@ const NewSessionButton = memo(function NewSessionButton({
   );
 });
 
-/**
- * Measures the height of the enhanced-input bottom bar
- * and reports it so the terminal container can leave enough space.
- */
-const GroupBottomBar = memo(function GroupBottomBar({
-  groupId,
-  onHeightChange,
-  children,
-}: {
-  groupId: string;
-  onHeightChange: React.Dispatch<React.SetStateAction<Record<string, number>>>;
-  children: React.ReactNode;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    let last = -1;
-    const report = () => {
-      const height = Math.ceil(el.getBoundingClientRect().height);
-      if (height === last) return;
-      last = height;
-      onHeightChange((prev) => {
-        if (prev[groupId] === height) return prev;
-        return { ...prev, [groupId]: height };
-      });
-    };
-
-    const observer = new ResizeObserver(report);
-    observer.observe(el);
-    report();
-    return () => observer.disconnect();
-  }, [groupId, onHeightChange]);
-
-  return (
-    <div ref={ref} className="mt-auto pointer-events-auto">
-      {children}
-    </div>
-  );
-});
-
 export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }: AgentPanelProps) {
   const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement>(null); // 容器引用
@@ -103,7 +59,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     xtermKeybindings,
     autoCreateSessionOnActivate,
     autoCreateSessionOnTempActivate,
-    terminalInput,
     terminalTheme,
   } = useSettingsStore();
   // 添加 ?? true 回退，兼容老用户可能没有 enabled 字段的情况
@@ -173,23 +128,12 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   // Global session IDs to keep terminals mounted across group moves
   const [globalSessionIds, setGlobalSessionIds] = useState<Set<string>>(new Set());
 
-  // Track bottom-bar height per group to avoid cross-column races.
-  // When split panels render multiple bars, a newly mounted/empty column can report 0
-  // and must not collapse the global terminal offset.
-  const [bottomBarHeightsByGroupId, setBottomBarHeightsByGroupId] = useState<
-    Record<string, number>
-  >({});
-
   // Use zustand store for sessions and group states - state persists even when component unmounts
   const allSessions = useAgentSessionsStore((state) => state.sessions);
   const addSession = useAgentSessionsStore((state) => state.addSession);
   const removeSession = useAgentSessionsStore((state) => state.removeSession);
   const updateSession = useAgentSessionsStore((state) => state.updateSession);
   const setActiveId = useAgentSessionsStore((state) => state.setActiveId);
-
-  // Enhanced input state actions from store
-  const setEnhancedInputOpen = useAgentSessionsStore((state) => state.setEnhancedInputOpen);
-  const getEnhancedInputState = useAgentSessionsStore((state) => state.getEnhancedInputState);
 
   // Group states from store (persists across component remounts)
   const worktreeGroupStates = useAgentSessionsStore((state) => state.groupStates);
@@ -564,11 +508,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     });
     return unsubscribe;
   }, [handleSelectSession, findSessionByNotificationId, cwd, onSwitchWorktree]);
-
-  // Enhanced input sender ref (unchanged)
-  const enhancedInputSenderRef = useRef<
-    Map<string, (content: string, imagePaths: string[]) => void>
-  >(new Map());
 
   const handleNextSession = useCallback(() => {
     const activeGroup = groups.find((g) => g.id === activeGroupId);
@@ -972,14 +911,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isActive, handleToggleQuickTerminal]);
 
-  const maxBottomBarHeight = useMemo(() => {
-    let max = 0;
-    for (const h of Object.values(bottomBarHeightsByGroupId)) {
-      if (h > max) max = h;
-    }
-    return max;
-  }, [bottomBarHeightsByGroupId]);
-
   if (!cwd) return null;
 
   // Check if current worktree has any groups (used for empty state detection)
@@ -1064,11 +995,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       {/* All terminals - rendered in a SINGLE container with stable sessionId keys */}
       {/* This container is NOT inside any worktree-specific wrapper, ensuring stable mounting */}
       {/* All sessions across ALL repos are rendered here to keep them mounted */}
-      {/* bottom is dynamically set from the enhanced-input bar height */}
-      <div
-        className="absolute top-11 left-2 right-2 z-0"
-        style={{ bottom: maxBottomBarHeight + 8 }}
-      >
+      <div className="absolute top-11 bottom-2 left-2 right-2 z-0">
         {Array.from(globalSessionIds).map((sessionId) => {
           const session = allSessions.find((s) => s.id === sessionId);
           if (!session) return null;
@@ -1136,35 +1063,19 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 canMerge={info ? info.groupIndex > 0 : false}
                 onMerge={() => groupId && handleMerge(groupId)}
                 onFocus={() => groupId && handleSelectSession(sessionId, groupId)}
-                enhancedInputOpen={getEnhancedInputState(sessionId).open}
-                onEnhancedInputOpenChange={(open) => {
-                  // EnhancedInput open state is now stored per-session in the store
-                  setEnhancedInputOpen(sessionId, open);
-                }}
-                onRegisterEnhancedInputSender={(senderSessionId, sender) => {
-                  enhancedInputSenderRef.current.set(senderSessionId, sender);
-                }}
-                onUnregisterEnhancedInputSender={(senderSessionId) => {
-                  enhancedInputSenderRef.current.delete(senderSessionId);
-                }}
               />
             </div>
           );
         })}
       </div>
 
-      {/* Group UI (fixed tabs + bottom bar) - rendered for each group in current worktree */}
-      {/* pointer-events-none on container, tabs & bottom bar are pointer-events-auto */}
+      {/* Group UI keeps fixed tabs above each terminal. */}
       <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden">
         {currentGroupState.groups.map((group, index) => {
           const position = currentGroupPositions[index];
           if (!position) return null;
 
           const isActiveGroup = group.id === activeGroupId;
-          const sender =
-            isActiveGroup && group.activeSessionId
-              ? enhancedInputSenderRef.current.get(group.activeSessionId)
-              : undefined;
 
           return (
             <div
@@ -1199,20 +1110,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 sessions={currentWorktreeSessions}
                 onGroupClick={() => handleGroupClick(group.id)}
               />
-              {/* Enhanced-input bar; height is measured for terminal offset */}
-              <GroupBottomBar groupId={group.id} onHeightChange={setBottomBarHeightsByGroupId}>
-                {isActiveGroup &&
-                  terminalInput.enhancedInputEnabled &&
-                  group.activeSessionId != null && (
-                    <EnhancedInputContainer
-                      sessionId={group.activeSessionId}
-                      onSend={(content, imagePaths) => {
-                        sender?.(content, imagePaths);
-                      }}
-                      isActive={isActive}
-                    />
-                  )}
-              </GroupBottomBar>
             </div>
           );
         })}
