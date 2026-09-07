@@ -20,6 +20,28 @@ const BUNDLED_FEATURE_PLUGIN_PACKAGES = [
   '@gotgenes/pi-subagents',
 ];
 
+/**
+ * Opt-in feature ids this probe switches ON before bootstrapping.
+ *
+ * `@gotgenes/pi-subagents` became opt-in and default-OFF in `2f0dd179`, and
+ * this probe went red on the next packaged build: it was still requiring the
+ * extension to be LOADED while the worker, correctly, was not injecting it.
+ *
+ * The fix is to enable it here rather than to drop it from the list, because
+ * the two questions belong to different gates and only one of them is this
+ * script's:
+ *
+ *  - "is it off by default?" is a product decision about
+ *    `resolveManagedPiWorkerEnv`, already truth-tabled in
+ *    `piModelConfig/__tests__/piWorkerEnv.test.ts` under a plain node vitest.
+ *  - "did a working copy survive packaging?" can only be answered by pi, in
+ *    the artifact, and dropping the package from the list would stop asking it
+ *    — an opt-in plugin that shipped broken would then show no symptom until a
+ *    user turned the switch on and found nothing there. The manifest says as
+ *    much: off by default must not become "not shipped".
+ */
+const OPT_IN_FEATURE_IDS = ['subagents'];
+
 function pidExists(pid) {
   try {
     process.kill(pid, 0);
@@ -64,6 +86,9 @@ async function main() {
       PI_CODING_AGENT_DIR: agentDir,
       AICLIENT_PI_TRUST_PROJECT_CONFIG: '0',
       AICLIENT_PI_WORKER_GENERATION: String(generation),
+      // Same variable Main sends (`PI_OPT_IN_EXTENSIONS_ENV`). Set here so the
+      // probe exercises every bundled plugin, opt-in ones included.
+      AICLIENT_PI_OPT_IN_EXTENSIONS: OPT_IN_FEATURE_IDS.join(','),
     });
     child = utilityProcess.fork(workerPath, [], {
       cwd,
@@ -110,6 +135,8 @@ async function main() {
     }
 
     // R03 — the bundled feature extensions must be loaded, not merely copied.
+    // Opt-in ones are switched on above, so this list stays complete: the probe
+    // asks whether the ARTIFACT works, not whether a feature is on by default.
     // The artifact check upstream proves the FILES survived packaging; only pi
     // itself can say it resolved and ran them, and that is the difference
     // between "we shipped a plugin" and "the user has the feature". A packaged
