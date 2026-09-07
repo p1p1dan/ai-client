@@ -67,6 +67,26 @@
 - 整套 `tsc --noEmit` 通过；全仓 `biome check` 996 文件 0 error。
 - **未接真实 `getMyWeeklyQuota`，未跑真实 Electron。**
 
+**2026-09-07 · 全仓收敛回归（六项落地后）：**
+
+| 范围 | 结果 |
+|---|---|
+| `src/renderer` | 179 文件 / 3091 项**全部通过** |
+| `src/main/services` | 54 文件 / 662 项，**3 失败**：`PiTuiPty`（node-pty 原生模块缺失）与 `SessionManager` 两项 |
+| `src/shared` · `src/preload` · `src/agent-host` · `src/main/__tests__` · `src/main/ipc` | 57 文件 / 643 项，**2 失败**：`permissionPolicyIntegration`、`permissionPatchScript` |
+| 整套 `tsc --noEmit`（堆 1200 MiB） | 通过 |
+| 全仓 `biome check` | 996 文件，**0 error**；保留既有 27 warning / 17 info |
+
+五个失败文件全部是[设置清单计划已记录的四个环境相关失败](../settings-cleanup/implementation-status.md)
+（未安装的独立 Agent Host 包与 node-pty 原生模块）。`SessionManager` 的两项已用 `git stash`
+在不含本轮改动的工作区复跑确认同样失败，与本轮无关。
+
+本轮唯一一处**由本轮引起**的测试失败已修复：`vaultIntegration.test.ts` 的 electron mock
+缺 `app.getVersion`（F08 新读了它）。补上 mock 的同时，在这个「凭据不得进入 worker 环境」
+的边界测试里补一条断言：新增的 `AICLIENT_PI_USER_AGENT` 只带版本号，不带任何凭据。
+
+未运行整套生产构建，未启动 Electron GUI。
+
 ## 与其他计划的关系
 
 - GUI 点验并入 [pix/pi-app UI 对齐](../pix-ui-alignment/README.md) 的累计点验。

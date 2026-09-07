@@ -56,6 +56,16 @@
 - [ ] 联调：onboard 部署 `getMyWeeklyQuota` 后核对字段名、周期语义与真实额度数值。
 - [ ] GUI 点验：瓦片布局、进度条、超限配色。
 
+## 收敛回归
+
+- [x] `src/renderer` 179 文件 / 3091 项全部通过。
+- [x] 其余范围共 111 文件，5 个失败文件全部是既有环境相关失败（node-pty 与独立 Agent Host 包）；
+      `SessionManager` 两项已用 `git stash` 在不含本轮改动的工作区复跑确认与本轮无关。
+- [x] 修复本轮引起的唯一失败：`vaultIntegration.test.ts` 的 electron mock 缺 `app.getVersion`；
+      顺带断言新增的 `AICLIENT_PI_USER_AGENT` 只带版本号、不带凭据。
+- [x] 整套 tsc 通过（堆 1200 MiB）；全仓 lint 996 文件 0 error。
+- [ ] 一次累计 GUI 点验 + F08 / F09 / F10 三项 onboard 联调 → 之后才逐项标 Done 并合入主分支。
+
 ## 通用要求
 
 - 每项至少一条纯函数层断言；`.tsx` 里的判断先下沉到纯模块再谈验收。

@@ -21,6 +21,8 @@ vi.mock('electron', () => ({
   net: { fetch: fetchMock },
   app: {
     on: vi.fn(),
+    // F08: `resolveManagedPiWorkerEnv` stamps the client User-Agent with it.
+    getVersion: vi.fn(() => '0.0.0-test'),
     getPath: vi.fn((name: string) => (name === 'userData' ? state.userDataPath : tmpdir())),
     setPath: vi.fn((name: string, value: string) => {
       if (name === 'userData') state.userDataPath = value;
@@ -113,6 +115,10 @@ describe('vault payload ↔ Pi worker bootstrap boundary', () => {
     expect(JSON.stringify(workerEnv)).not.toContain(token);
     expect(Object.keys(workerEnv)).not.toContain('AICLIENT_CLAUDE_AUTH_TOKEN');
     expect(Object.keys(workerEnv)).not.toContain('AICLIENT_CODEX_API_KEY');
+    // F08 added one key to this environment. It carries a version string and
+    // nothing else — asserted here, in the test that owns the "no credential
+    // reaches the worker environment" boundary, rather than left implied.
+    expect(workerEnv.AICLIENT_PI_USER_AGENT).toBe('claude-cli-pilab/0.0.0-test');
   });
 });
 
