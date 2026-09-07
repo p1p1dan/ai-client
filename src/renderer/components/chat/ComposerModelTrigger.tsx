@@ -48,6 +48,7 @@ import {
   groupChatModels,
   modelOptionsFor,
   modelScopeHint,
+  modelVerification,
   reconcileModelSelection,
   resolveModelSelection,
   unverifiedModelLabel,
@@ -230,7 +231,8 @@ export function ComposerModelTrigger({
   const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
   const setChatAgentDefaults = useSettingsStore((state) => state.setChatAgentDefaults);
 
-  const { catalog, loaded, loading, status, refresh, retry } = usePiModelCatalog(hostState);
+  const { catalog, loaded, authoritative, loading, status, refresh, retry } =
+    usePiModelCatalog(hostState);
   const catalogOptions = catalogModels(catalog);
 
   const [model, setModel] = useState<string>(() =>
@@ -315,12 +317,22 @@ export function ComposerModelTrigger({
     setChatAgentDefaults,
     setSessionEffort,
   ]);
-  const inCatalog = catalogOptions.some((option) => option.id === model);
   const isAutomatic = model === AUTOMATIC_MODEL_ID;
+  // F07: three states, not two. `pending` — nothing has answered yet, or the
+  // only answer is a failure — carries NO suffix: during startup the catalog is
+  // simply absent, and the old two-state test (membership alone) turned that
+  // window into a standing `grok/grok-4.6 · unverified`. Which selection is
+  // DISPLAYED is unchanged; only whether this build is willing to make a claim
+  // about it moved.
+  const verification = modelVerification({
+    model,
+    catalog: catalogOptions,
+    catalogAuthoritative: authoritative,
+  });
   // The label the prepended row carries, and the label the TRIGGER carries, are
   // deliberately the same string: a trigger reading `gpt-5.5` next to a menu row
   // reading `gpt-5.5 · unverified` would read as two different selections.
-  const unknownLabel = isAutomatic || inCatalog ? undefined : unverifiedModelLabel(model);
+  const unknownLabel = verification === 'unverified' ? unverifiedModelLabel(model) : undefined;
   const modelLabel = isAutomatic
     ? AUTOMATIC_MODEL_LABEL
     : (options.find((option) => option.id === model)?.label ?? unknownLabel ?? model);

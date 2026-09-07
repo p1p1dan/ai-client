@@ -41,3 +41,22 @@ export function formatCharCount(count: number): string {
   if (count < 1000) return `${count}`;
   return `${(count / 1000).toFixed(1)}k`;
 }
+
+/**
+ * F06: the `↓ 128 chars` clause, or `''` when there is nothing to report.
+ *
+ * Shared because TWO surfaces show it and they are not the same sentence: the
+ * waiting line (`composerSendingLine`) appends it after `↑`, while the
+ * streaming turn head prepends it to its own elapsed clock — the head switches
+ * to a clock-only wording the moment blocks start arriving (`deriveTurnStatus`
+ * §D33), which is precisely when a reply count becomes interesting. Two call
+ * sites, one string: the clause lives here so neither can drift from the other,
+ * exactly as `formatCharCount` itself does.
+ *
+ * The empty string for `0` is what implements "no `↓` until there is assistant
+ * text" at both sites at once — neither caller decides that separately.
+ */
+export function replyCharsLabel(count: number): string {
+  const chars = Math.max(0, Math.floor(count));
+  return chars > 0 ? `↓ ${formatCharCount(chars)} chars` : '';
+}

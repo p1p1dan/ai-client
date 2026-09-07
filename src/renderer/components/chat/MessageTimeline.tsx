@@ -62,6 +62,7 @@ import {
   userBubbleTextClass,
 } from './chatTimelineLayout';
 import {
+  countAssistantReplyChars,
   flattenTurnItems,
   groupMessagesIntoTurns,
   segmentTurnBody,
@@ -1202,6 +1203,12 @@ const ChatTurn = memo(function ChatTurn({
     // prompt. The pending head below needs no such fallback: its snapshot is a
     // required prop.
     promptChars: sendStatus?.promptChars ?? 0,
+    // F06: counted off THIS turn's own body, so it needs no snapshot and no
+    // reset — a new send opens a new turn whose body starts empty. It is
+    // available in the fallback case above too (a session already running when
+    // this window opened has no `sendStatus`, but its reply text is still on
+    // screen and still countable).
+    replyChars: countAssistantReplyChars(turn.body),
     retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
     hasBlocks: turnHasBlocks,
     // F4: a session failure belongs to the turn that was actually running when

@@ -74,6 +74,48 @@ export function unverifiedModelLabel(modelId: string): string {
   return `${modelId} · unverified`;
 }
 
+/**
+ * F07: what the current selection is, RELATIVE TO the catalog.
+ *
+ *  - `verified` — the live catalog listed this id. Also the answer for
+ *    `Automatic`, which is the sentinel for "send no model field": there is no
+ *    id for a catalog to corroborate, so it can never carry the mark.
+ *  - `unverified` — an authoritative catalog answered and does not list it.
+ *    The ONLY state that earns `· unverified`.
+ *  - `pending` — nobody has answered yet, or the only answer available is a
+ *    failure. Show the model's name and say nothing about its standing.
+ */
+export type ModelVerification = 'verified' | 'unverified' | 'pending';
+
+/**
+ * F07: the missing third state on the LABEL side.
+ *
+ * The selection side has had it since D48 S2 — `reconcileModelSelection` gates
+ * its rewrite arm on `catalogLoaded` precisely because "we have not asked yet"
+ * and "the catalog does not contain it" are not the same fact. The label side
+ * never got the same treatment: it tested membership alone, and an empty
+ * `catalog` (the pre-answer state) made every selection a non-member. So for
+ * the entire startup window the trigger read `grok/grok-4.6 · unverified`,
+ * stating as fact something nothing had yet checked.
+ *
+ * `catalogAuthoritative` is passed in as a boolean for the same reason
+ * `catalogLoaded` is: this module stays free of catalog-provenance vocabulary,
+ * and the rule for which sources count lives in one place
+ * (`piModelCatalog.ts`'s `isCatalogAuthoritative`) instead of being re-derived
+ * per call site.
+ */
+export function modelVerification(input: {
+  /** The displayed selection — a model id, or `AUTOMATIC_MODEL_ID`. */
+  model: string;
+  catalog: readonly AgentModelOption[];
+  /** `isCatalogAuthoritative(catalog record)` — NOT `catalogLoaded`. */
+  catalogAuthoritative: boolean;
+}): ModelVerification {
+  if (input.model === AUTOMATIC_MODEL_ID) return 'verified';
+  if (catalogHas(input.catalog, input.model)) return 'verified';
+  return input.catalogAuthoritative ? 'unverified' : 'pending';
+}
+
 export const PI_MODEL_SCOPE_HINT = 'applies to the next turn';
 
 export function modelScopeHint(): string {

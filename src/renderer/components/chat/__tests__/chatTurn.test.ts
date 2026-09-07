@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import {
+  countAssistantReplyChars,
   flattenTurnItems,
   groupMessagesIntoTurns,
   segmentTurnBody,
@@ -396,5 +397,59 @@ describe('stabilizeTurns (F7)', () => {
 
     expect(stabilized.map((turn) => turn.id)).toEqual(next.map((turn) => turn.id));
     expect(stabilizeTurns([], next)).toEqual(next);
+  });
+});
+
+describe('F06 assistant reply character count', () => {
+  const text = (value: string) => block('text', { text: value });
+
+  it('is zero for a turn with no assistant text, so the status line shows no ↓', () => {
+    expect(countAssistantReplyChars([])).toBe(0);
+    expect(countAssistantReplyChars([assistant([])])).toBe(0);
+  });
+
+  it('counts only prose, never thinking or tool traffic', () => {
+    const body = [
+      assistant([
+        block('thinking', { text: 'a very long private deliberation' }),
+        block('tool_call', { toolName: 'read', text: 'read(path)' }),
+        block('tool_result', { text: 'x'.repeat(4000) }),
+        text('Hello'),
+      ]),
+    ];
+    expect(countAssistantReplyChars(body)).toBe(5);
+  });
+
+  it('accumulates across blocks and across messages as the stream grows', () => {
+    const first = assistant([text('abc')]);
+    expect(countAssistantReplyChars([first])).toBe(3);
+    expect(countAssistantReplyChars([assistant([text('abc'), text('de')])])).toBe(5);
+    expect(countAssistantReplyChars([assistant([text('abc')]), assistant([text('de')])])).toBe(5);
+  });
+
+  it('counts code points, the same unit the ↑ count uses', () => {
+    // Four CJK characters and one astral emoji: 5 code points, 7 UTF-16 units.
+    expect(countAssistantReplyChars([assistant([text('你好世界🙂')])])).toBe(5);
+  });
+
+  it('ignores the user side and non-assistant notices', () => {
+    const body = [
+      system([text('session resumed')]),
+      errorMessage([text('something failed')]),
+      assistant([text('ok')]),
+    ];
+    expect(countAssistantReplyChars(body)).toBe(2);
+    expect(countAssistantReplyChars([user([text('a long question')])])).toBe(0);
+  });
+
+  it('excludes replayed history, so a hydration cannot inflate the count', () => {
+    const replayed: ChatMessage = {
+      id: 'h:abc',
+      sessionId: 's1',
+      role: 'assistant',
+      blocks: [text('previous answer')],
+    };
+    expect(countAssistantReplyChars([replayed])).toBe(0);
+    expect(countAssistantReplyChars([replayed, assistant([text('new')])])).toBe(3);
   });
 });

@@ -392,6 +392,51 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
     expect(line).not.toContain('up to');
   });
 
+  // F06. The `↓` is the ONE new fact on this line, so its wording, its unit
+  // word and its position relative to `↑` are pinned; the verb still rotates.
+  it('counts the reply once assistant text starts arriving', () => {
+    const line = composerSendingLine({
+      phase: 'awaiting',
+      elapsedSeconds: 6,
+      budgetMs: 45_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+      promptChars: 2,
+      replyChars: 128,
+    });
+    expect(VERBS).toContain(verbOf(line));
+    expect(line).toContain('↑ 2 chars · ↓ 128 chars');
+    expect(line).toContain('· 6s');
+  });
+
+  it('omits the reply count entirely until there is assistant text', () => {
+    const base = {
+      phase: 'awaiting' as const,
+      elapsedSeconds: 6,
+      budgetMs: 45_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+      promptChars: 2,
+    };
+    // Absent and zero are the same statement — "nothing has arrived" — and
+    // neither may print `↓ 0 chars`, which would read as an empty reply.
+    expect(composerSendingLine(base)).not.toContain('↓');
+    expect(composerSendingLine({ ...base, replyChars: 0 })).not.toContain('↓');
+  });
+
+  it('keeps the attachment clause after both counts', () => {
+    const line = composerSendingLine({
+      phase: 'awaiting',
+      elapsedSeconds: 31,
+      budgetMs: 75_000,
+      attachmentCount: 1,
+      attachmentBytes: 155_648,
+      promptChars: 428,
+      replyChars: 1200,
+    });
+    expect(line).toContain('↑ 428 chars · ↓ 1.2k chars · Sent 152.0 KB');
+  });
+
   // Retired for the same reason; the attachment fact itself is unchanged and
   // stays pinned word for word, because "Sent 152.0 KB" is the one claim on
   // this line that would be a lie if it drifted.

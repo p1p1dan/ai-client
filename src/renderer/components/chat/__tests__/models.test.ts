@@ -7,6 +7,7 @@ import {
   groupChatModels,
   modelOptionsFor,
   modelScopeHint,
+  modelVerification,
   reconcileModelSelection,
   resolveModelSelection,
   resolveResumeModel,
@@ -96,5 +97,59 @@ describe('Pi model selection', () => {
     expect(resolveResumeModel(getStored, 's1', 'dan/model')).toBe('glm/glm-5');
     expect(resolveResumeModel(getEmpty, 's1', 'dan/model')).toBe('dan/model');
     expect(modelScopeHint()).toMatch(/next turn/);
+  });
+});
+
+describe('F07 model verification state', () => {
+  const verify = (model: string, catalogAuthoritative: boolean, list = CATALOG) =>
+    modelVerification({ model, catalog: list, catalogAuthoritative });
+
+  it('says nothing while no catalog has answered', () => {
+    // The reported defect: startup, empty catalog, a stored model. The old
+    // membership-only test made this `unverified`.
+    expect(verify('grok/grok-4.6', false, [])).toBe('pending');
+    expect(verify('grok/grok-4.6', false)).toBe('pending');
+  });
+
+  it('confirms a model the answered catalog lists', () => {
+    expect(verify('glm/glm-5', true)).toBe('verified');
+  });
+
+  it('marks a model only once an answered catalog omits it', () => {
+    expect(verify('missing/model', true)).toBe('unverified');
+    expect(verify('missing/model', true, [])).toBe('unverified');
+  });
+
+  it('never marks the Automatic sentinel — there is no id to corroborate', () => {
+    expect(verify(AUTOMATIC_MODEL_ID, true, [])).toBe('verified');
+    expect(verify(AUTOMATIC_MODEL_ID, false, [])).toBe('verified');
+  });
+
+  it('keeps the displayed selection independent of the verdict', () => {
+    // F07 changes what is CLAIMED, never what is shown or sent: a pre-catalog
+    // reconcile still keeps the same value it always kept.
+    expect(
+      reconcileModelSelection({
+        current: 'grok/grok-4.6',
+        storedModel: 'grok/grok-4.6',
+        catalog: [],
+        catalogLoaded: false,
+        pairChanged: false,
+      })
+    ).toBe('grok/grok-4.6');
+  });
+
+  it('does not carry a verdict across a session switch', () => {
+    // The pair moved, so the value is re-resolved from the NEW pair's storage;
+    // a verdict computed for the previous model can have no bearing on it.
+    const next = reconcileModelSelection({
+      current: 'missing/model',
+      storedModel: 'glm/glm-5',
+      catalog: CATALOG,
+      catalogLoaded: true,
+      pairChanged: true,
+    });
+    expect(next).toBe('glm/glm-5');
+    expect(verify(next, true)).toBe('verified');
   });
 });

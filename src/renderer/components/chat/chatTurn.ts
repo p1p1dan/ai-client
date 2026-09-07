@@ -1,3 +1,4 @@
+import { HISTORY_MESSAGE_ID_PREFIX } from '@shared/types/sessionHistory';
 import type { ChatMessage } from '@/stores/chatSessions';
 import { groupTimeline, joinResolvedPermissions, type TimelineItem } from './toolCard';
 
@@ -256,3 +257,48 @@ export function segmentTurnBody<T extends { kind: TurnItemKind }>(
  * An exported predicate nothing consumes is a shell waiting to be mistaken for
  * a live rule (§13 ①), so they are deleted rather than left standing.
  */
+
+/**
+ * F06: how many characters of assistant PROSE this turn has received so far —
+ * the `↓` half of the send status line.
+ *
+ * ## Why this can exist when `↓ tokens` cannot
+ *
+ * `composerSendingLine` has carried a note saying there is no `↓` counterpart
+ * because "Pi reports usage only at `turn_end`". That is true, and it stays
+ * true — of TOKENS and cost, which only the Host can compute. It was never true
+ * of characters: assistant text arrives here block by block while the turn
+ * runs, and this module is already holding it. So the `↓` this counts is a
+ * figure the renderer measured from text it has, exactly like the `↑` beside
+ * it, and it is labelled `chars` for the same reason.
+ *
+ * ## What counts
+ *
+ * `text` blocks on `assistant` messages, and nothing else. Thinking, tool calls
+ * and their results, permission cards and questions are all excluded — the user
+ * asked for the size of the REPLY, and a counter that jumped by 4 kB because a
+ * file-read tool returned would be measuring the transcript, not the answer.
+ * Code points rather than UTF-16 units, so `↑` and `↓` count the same way and a
+ * CJK reply is not reported at double length.
+ *
+ * Replayed history (`h:` ids) is excluded for the reason
+ * `countAssistantMessagesWithBlocks` excludes it: a hydration folds the whole
+ * transcript back in alongside the runtime messages, and counting both would
+ * make the number jump on an event that produced no new text.
+ *
+ * A new turn starts from an empty `body`, so "clear last turn's count when a
+ * new send starts" needs no code at all — it is what counting the CURRENT
+ * turn's own body already means.
+ */
+export function countAssistantReplyChars(body: readonly ChatMessage[]): number {
+  let total = 0;
+  for (const message of body) {
+    if (message.role !== 'assistant') continue;
+    if (message.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)) continue;
+    for (const block of message.blocks) {
+      if (block.type !== 'text' || !block.text) continue;
+      total += [...block.text].length;
+    }
+  }
+  return total;
+}

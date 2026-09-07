@@ -81,6 +81,7 @@ import {
   composerCardClass,
   composerHasProtrusion,
   composerPlaceholder,
+  composerPopupSide,
   composerRowsClass,
   composerTextareaClass,
   type MiddleColumnMode,
@@ -126,6 +127,7 @@ import {
   type SlashCatalogItem,
 } from './slashCommands';
 import { useComposerAttachments } from './useComposerAttachments';
+import { useComposerPopupPlacement } from './useComposerPopupPlacement';
 import { useHostStatus } from './useHostStatus';
 import { useQueueRelease } from './useQueueRelease';
 import { useSessionEffort } from './useSessionEffort';
@@ -572,6 +574,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     [slashCatalog, slashQuery, t]
   );
   const slashOpen = slashQuery !== null && slashResults.length > 0;
+  // F11: both popups are absolutely positioned inside this card and cannot flip
+  // themselves, so the card is the anchor and one measurement serves both — a
+  // second, independently-resolved placement would let `@` and `/` open toward
+  // opposite sides in the same window. `revision` re-measures when the row
+  // count changes: a list that grew from 2 rows to 10 needs a new verdict even
+  // though nothing scrolled or resized.
+  const composerCardRef = useRef<HTMLDivElement | null>(null);
+  const popupPlacement = useComposerPopupPlacement({
+    anchorRef: composerCardRef,
+    preferred: composerPopupSide(mode),
+    open: mentionOpen || slashOpen,
+    revision: mentionResults.length + slashResults.length,
+  });
   const busy = isStoppable(activeSession?.status);
   // A Send in flight must also be abortable: the SDK stream can hang (e.g.
   // gateway revoked key) without ever flipping session.status to running, and
@@ -3052,16 +3067,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           onRemove={handleQueueEntryRemove}
         />
       )}
-      <div className={composerCardClass(mode, { hasProtrusion })}>
+      <div className={composerCardClass(mode, { hasProtrusion })} ref={composerCardRef}>
         {/* T-07 @ 文件搜索 popup——放 textarea 上方/下方，避免被 overflow-hidden 容器裁掉 */}
         {slashOpen && (
           <div
             className={cn(
-              'absolute left-2 w-96 overflow-hidden rounded-lg border bg-popover shadow-lg',
-              mentionPopupPlacementClass(mode)
+              'absolute left-2 flex w-96 flex-col overflow-hidden rounded-lg border bg-popover shadow-lg',
+              mentionPopupPlacementClass(popupPlacement.side)
             )}
+            style={{ maxHeight: popupPlacement.maxHeight }}
           >
-            <div className="max-h-[240px] overflow-y-auto py-1">
+            <div className="min-h-0 flex-1 overflow-y-auto py-1">
               {slashResults.map((item, i) => (
                 <button
                   type="button"
@@ -3088,7 +3104,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
+            <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
               <span className="flex items-center gap-1">
                 <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                   ↑↓
@@ -3110,14 +3126,20 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             </div>
           </div>
         )}
+        {/* F11: the cap is a measured number now, not `max-h-[240px]`, and it
+            belongs to the WHOLE popup rather than to the list — capping only
+            the list left the footer's ~28px hanging past whatever ceiling was
+            computed. The list is `min-h-0 flex-1` under it, so the footer keeps
+            its height and the scroll happens where it always did. */}
         {mentionOpen && (
           <div
             className={cn(
-              'absolute left-2 w-72 overflow-hidden rounded-lg border bg-popover shadow-lg',
-              mentionPopupPlacementClass(mode)
+              'absolute left-2 flex w-72 flex-col overflow-hidden rounded-lg border bg-popover shadow-lg',
+              mentionPopupPlacementClass(popupPlacement.side)
             )}
+            style={{ maxHeight: popupPlacement.maxHeight }}
           >
-            <div className="max-h-[240px] overflow-y-auto py-1">
+            <div className="min-h-0 flex-1 overflow-y-auto py-1">
               {mentionResults.map((item, i) => {
                 const lastSep = item.relativePath.lastIndexOf('/');
                 const dirPart = lastSep > 0 ? item.relativePath.slice(0, lastSep) : '';
@@ -3159,7 +3181,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                 );
               })}
             </div>
-            <div className="flex items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
+            <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
               <span className="flex items-center gap-1">
                 <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                   ↑↓

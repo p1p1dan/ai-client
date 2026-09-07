@@ -8,7 +8,7 @@
  * §12 verification first: __tests__/attachments.test.ts.
  */
 import type { ChatSendAttachment } from '@/stores/chatSessions';
-import { formatCharCount } from './countFormat';
+import { formatCharCount, replyCharsLabel } from './countFormat';
 
 export type AttachmentKind = 'image' | 'text';
 
@@ -445,6 +445,14 @@ export function composerSendingLine(input: {
    * `↑ 0 chars` for a message that was certainly not empty.
    */
   promptChars?: number;
+  /**
+   * F06: characters of assistant PROSE received so far this turn, counted by
+   * `chatTurn.ts`'s `countAssistantReplyChars`. `0` — no assistant text yet, or
+   * a turn this window did not open — omits the `↓` entirely, for the same
+   * reason `promptChars: 0` omits the `↑`: a printed zero would claim an empty
+   * reply where the truth is that nothing has arrived.
+   */
+  replyChars?: number;
 }): string {
   const elapsed = Math.max(0, Math.floor(input.elapsedSeconds));
   if (input.phase === 'handshake') {
@@ -474,17 +482,28 @@ export function composerSendingLine(input: {
     return `Still waiting · ${elapsed}s${retrySuffix} — gateway latency varies. Stop to abort.`;
   }
   const promptChars = Math.max(0, Math.floor(input.promptChars ?? 0));
-  // `↑` carries its unit word because it is an exact figure the renderer
-  // counted from text it holds. There is no `↓` counterpart: Pi reports usage
-  // only at `turn_end`, so nothing can state a reply's size while the reply is
-  // still arriving — see the Run surface for the settled per-turn totals.
+  const replyChars = Math.max(0, Math.floor(input.replyChars ?? 0));
+  // Both arrows carry their unit word because both are exact figures the
+  // renderer counted from text it holds.
+  //
+  // F06 narrowed a rule that used to be written here as an absolute: "there is
+  // no `↓` counterpart, Pi reports usage only at `turn_end`". That holds for
+  // TOKENS and cost — the Host is the only thing that can compute them, and it
+  // does so once, at the end — so this line still states neither while a turn
+  // runs. It never held for CHARACTERS: assistant prose arrives block by block
+  // and the renderer already has it, so `↓` is as countable mid-turn as `↑` was
+  // at the commit point. The Run surface keeps the settled per-turn totals.
   const sentCount = promptChars > 0 ? ` · ↑ ${formatCharCount(promptChars)} chars` : '';
+  // Ordered `↑` then `↓`, question before answer — the same order the turn
+  // itself happened in, and the order that lets the two be read as a pair.
+  const replyLabel = replyCharsLabel(replyChars);
+  const replyCount = replyLabel ? ` · ${replyLabel}` : '';
   const verb = waitingVerb(elapsed);
   if (input.attachmentCount > 0) {
     const size = formatAttachmentSize(input.attachmentBytes);
-    return `${verb}…${sentCount} · Sent ${size}${retrySuffix} · ${elapsed}s`;
+    return `${verb}…${sentCount}${replyCount} · Sent ${size}${retrySuffix} · ${elapsed}s`;
   }
-  return `${verb}…${sentCount}${retrySuffix} · ${elapsed}s`;
+  return `${verb}…${sentCount}${replyCount}${retrySuffix} · ${elapsed}s`;
 }
 
 /**

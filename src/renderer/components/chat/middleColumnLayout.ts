@@ -830,23 +830,125 @@ export function shouldShowStatusLine(input: {
 // ---- Mention popup ----
 
 /** Mention popup's placement class: the empty card has less headroom above it, so it opens downward. */
-export function mentionPopupPlacementClass(mode: MiddleColumnMode): string {
-  if (mode === 'empty') {
-    return 'top-full mt-1';
+export function mentionPopupPlacementClass(side: PopupSide): string {
+  return side === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1';
+}
+
+/** Which way a popup opens. `top` = above the anchor, `bottom` = below it. */
+export type PopupSide = 'top' | 'bottom';
+
+/**
+ * F11: the `@` / `/` popup's default height, in px — the old hard-coded
+ * `max-h-[240px]` promoted to a named value because it is now an INPUT to a
+ * decision rather than a constant on a div.
+ */
+export const COMPOSER_POPUP_DESIRED_HEIGHT = 240;
+
+/** Distance between anchor and popup (`mt-1` / `mb-1`), in px. */
+export const COMPOSER_POPUP_GAP = 4;
+
+/** Breathing room kept against the viewport edge, in px. */
+export const COMPOSER_POPUP_VIEWPORT_MARGIN = 8;
+
+/**
+ * Below this a list is not worth flipping toward — F11 prefers the side the
+ * mode asked for until it cannot even show a couple of rows there.
+ */
+export const COMPOSER_POPUP_MIN_HEIGHT = 96;
+
+export interface ComposerPopupPlacementInput {
+  /** Anchor's top edge in VIEWPORT coordinates (`getBoundingClientRect().top`). */
+  anchorTop: number;
+  /** Anchor's bottom edge in viewport coordinates. */
+  anchorBottom: number;
+  /** Usable viewport height — `visualViewport.height` when the IME is up. */
+  viewportHeight: number;
+  /** Which side the composer's mode would pick if space were unlimited. */
+  preferred: PopupSide;
+  desiredHeight?: number;
+  gap?: number;
+  margin?: number;
+  minHeight?: number;
+}
+
+export interface ComposerPopupPlacement {
+  side: PopupSide;
+  /** Hard cap in px. Never exceeds the space actually available on `side`. */
+  maxHeight: number;
+}
+
+/**
+ * F11: where the mention / slash popup opens, and how tall it may be.
+ *
+ * ## What this replaces
+ *
+ * `mentionPopupPlacementClass` used to decide from the composer MODE alone —
+ * docked card opens upward, centred card opens downward — and the popup carried
+ * a fixed `max-h-[240px]`. Both halves of that are assumptions about space
+ * nobody measured: a short window, a multi-line draft, or an on-screen keyboard
+ * all shrink the chosen side without changing the mode, and a fixed 240px then
+ * runs straight off the viewport. The mode preference is not WRONG — it is the
+ * right tie-breaker — it just cannot be the whole rule.
+ *
+ * ## The rule
+ *
+ * Fit first, preference second, and the cap is never negotiable:
+ *
+ *  1. the preferred side fits the whole list ⇒ take it (the common case, so
+ *     nothing moves in an ordinary window);
+ *  2. otherwise the other side fits ⇒ flip;
+ *  3. neither fits ⇒ stay on the preferred side while it can still show
+ *     `minHeight`, else take whichever side is larger.
+ *
+ * `maxHeight` is then clamped to the space actually available on the chosen
+ * side, ALWAYS — including in case 3, where the popup ends up shorter than
+ * `minHeight`. "Scroll inside the popup" is a consequence of that clamp, not a
+ * separate feature: the list gets a real ceiling, so its own `overflow-y-auto`
+ * takes over instead of the popup growing past the edge.
+ *
+ * Pure and in this module rather than inline in `ChatComposer.tsx`, for the
+ * reason this whole file exists: the repo's vitest is node-env and collects
+ * only `*.test.ts`, so a placement rule living in the `.tsx` has no automated
+ * coverage of any kind — which is how the fixed 240px survived this long.
+ */
+export function resolveComposerPopupPlacement(
+  input: ComposerPopupPlacementInput
+): ComposerPopupPlacement {
+  const desired = Math.max(0, input.desiredHeight ?? COMPOSER_POPUP_DESIRED_HEIGHT);
+  const gap = input.gap ?? COMPOSER_POPUP_GAP;
+  const margin = input.margin ?? COMPOSER_POPUP_VIEWPORT_MARGIN;
+  const minHeight = Math.min(input.minHeight ?? COMPOSER_POPUP_MIN_HEIGHT, desired);
+
+  const spaceAbove = Math.max(0, input.anchorTop - gap - margin);
+  const spaceBelow = Math.max(0, input.viewportHeight - input.anchorBottom - gap - margin);
+  const spaceFor = (side: PopupSide) => (side === 'top' ? spaceAbove : spaceBelow);
+
+  const preferred = input.preferred;
+  const other: PopupSide = preferred === 'top' ? 'bottom' : 'top';
+
+  let side = preferred;
+  if (spaceFor(preferred) < desired) {
+    if (spaceFor(other) >= desired) {
+      side = other;
+    } else if (spaceFor(preferred) < minHeight && spaceFor(other) > spaceFor(preferred)) {
+      side = other;
+    }
   }
-  return 'bottom-full mb-1';
+
+  return { side, maxHeight: Math.min(desired, spaceFor(side)) };
 }
 
 /**
  * Which side a Composer popup opens toward, as a Base UI `side` value.
  *
- * This is the SAME judgement `mentionPopupPlacementClass` above encodes as
- * Tailwind classes (the docked card has no headroom below it, the centred one
- * has none above it), restated for primitives that position themselves rather
- * than accepting a class. It is deliberately not a second rule — if the mode
- * criterion ever changes, both of these move together.
+ * The mode judgement itself: the docked card has no headroom below it, the
+ * centred one has none above it. Base UI's own primitives take this directly,
+ * because they measure and flip on their own; the mention / slash popups —
+ * which position themselves with Tailwind and cannot flip — feed it to
+ * `resolveComposerPopupPlacement` as the PREFERRED side instead (F11). Either
+ * way there is one mode rule, stated here.
  */
-export function composerPopupSide(mode: MiddleColumnMode): 'top' | 'bottom' {
+export function composerPopupSide(mode: MiddleColumnMode): PopupSide {
   return mode === 'empty' ? 'bottom' : 'top';
 }
 

@@ -7,6 +7,7 @@ import {
   EMPTY_CATALOG_NOTICE,
   HOST_NOT_READY_CATALOG_NOTICE,
   hostNotReadyCatalog,
+  isCatalogAuthoritative,
   isCatalogLoaded,
   MANAGED_EMPTY_CATALOG_NOTICE,
   REFRESHING_CATALOG_NOTICE,
@@ -119,5 +120,31 @@ describe('Pi catalog helpers', () => {
     expect(isCatalogLoaded(hostNotReadyCatalog())).toBe(false);
     expect(isCatalogLoaded(catalog())).toBe(true);
     expect(catalogModels(null)).toBe(catalogModels(null));
+  });
+});
+
+describe('F07 authoritative catalog', () => {
+  it('counts only the three sources that actually answered', () => {
+    expect(isCatalogAuthoritative(catalog({ source: 'proxy' }))).toBe(true);
+    expect(isCatalogAuthoritative(catalog({ source: 'managed' }))).toBe(true);
+    expect(isCatalogAuthoritative(catalog({ source: 'local' }))).toBe(true);
+  });
+
+  it('treats an answered-but-empty catalog as an answer', () => {
+    expect(isCatalogAuthoritative(catalog({ source: 'managed', models: [] }))).toBe(true);
+  });
+
+  it('refuses to read a failure as evidence about a model', () => {
+    // Nothing asked yet.
+    expect(isCatalogAuthoritative(null)).toBe(false);
+    expect(isCatalogAuthoritative(hostNotReadyCatalog())).toBe(false);
+    // Asked and failed. Both are `isCatalogLoaded`, and that is the whole gap:
+    // settled is not the same as answered.
+    const unavailable = catalog({ source: 'unavailable', models: [], stale: true, error: 'http' });
+    const stale = catalog({ source: 'stale-cache', stale: true, error: 'http' });
+    expect(isCatalogLoaded(unavailable)).toBe(true);
+    expect(isCatalogLoaded(stale)).toBe(true);
+    expect(isCatalogAuthoritative(unavailable)).toBe(false);
+    expect(isCatalogAuthoritative(stale)).toBe(false);
   });
 });

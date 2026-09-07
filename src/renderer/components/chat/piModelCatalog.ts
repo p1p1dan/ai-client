@@ -185,3 +185,48 @@ export function catalogModels(catalog: AgentModelCatalog | null): readonly Agent
 export function isCatalogLoaded(catalog: AgentModelCatalog | null): boolean {
   return catalog !== null && catalog.error !== 'host-not-ready';
 }
+
+/**
+ * The sources that constitute an AUTHORITATIVE answer to "which models exist".
+ *
+ * `proxy` / `managed` / `local` are the three rungs where somebody actually
+ * answered: the gateway listed its models, the management endpoint listed the
+ * enabled ones, or a local pi installation's `models.json` was read. An
+ * answered-but-EMPTY catalog is still an answer and still belongs here — that
+ * is the whole point of `EMPTY_CATALOG_NOTICE` existing separately from
+ * `UNAVAILABLE_CATALOG_NOTICE`.
+ */
+const AUTHORITATIVE_CATALOG_SOURCES: ReadonlySet<AgentModelCatalog['source']> = new Set([
+  'proxy',
+  'managed',
+  'local',
+]);
+
+/**
+ * F07: whether this record may be read as "the catalog does not contain that".
+ *
+ * STRICTLY narrower than {@link isCatalogLoaded}, and the two are not
+ * interchangeable — they answer different questions and the gap between them is
+ * the defect this function exists to close:
+ *
+ *  - `isCatalogLoaded` answers "has the request settled", which is what
+ *    `reconcileModelSelection` needs: a settled failure must not keep the
+ *    SELECTION in limbo forever, so a failed fetch still releases its
+ *    conservative keep-arms.
+ *  - this answers "did anyone actually tell us what exists", which is what a
+ *    `· unverified` LABEL needs. `unavailable` (nothing fetched, nothing
+ *    cached) and `stale-cache` (the refresh failed; the list on screen is a
+ *    real but out-of-date earlier answer) are both settled failures, and
+ *    neither is evidence about a model. Labelling off them would state a
+ *    network outcome as a fact about the user's model — exactly what the
+ *    field report asked us to stop doing.
+ *
+ * The conservative direction is deliberate: while the catalog is unreachable a
+ * model that genuinely WAS removed stays unlabelled. The status row under the
+ * menu already says the catalog is unreachable or out of date, so the user is
+ * not told nothing — they are told the true thing instead of a guess.
+ */
+export function isCatalogAuthoritative(catalog: AgentModelCatalog | null): boolean {
+  if (!catalog || catalog.error === 'host-not-ready') return false;
+  return AUTHORITATIVE_CATALOG_SOURCES.has(catalog.source);
+}

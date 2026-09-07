@@ -4,6 +4,7 @@ import {
   SLOW_WAIT_HINT_SECONDS,
   STALLED_HINT_SECONDS,
 } from './attachments';
+import { replyCharsLabel } from './countFormat';
 
 /**
  * T-31 turn-head status (reply-anatomy spec §3 / §4.7).
@@ -73,6 +74,12 @@ export interface TurnStatusInput {
    * would print as fact.
    */
   promptChars?: number;
+  /**
+   * F06: assistant prose received so far this turn, in code points
+   * (`countAssistantReplyChars`). Optional and forwarded, not consumed here —
+   * `0` / absent omits the `↓` rather than printing an empty reply as a fact.
+   */
+  replyChars?: number;
   /** The CLI's transport-retry loop for this turn, if any. */
   retry?: { attempt: number; maxRetries: number } | null;
   /** The turn already produced at least one block, i.e. tokens are arriving. */
@@ -114,6 +121,9 @@ export function deriveTurnStatus(input: TurnStatusInput): TurnStatus | null {
     retry: input.retry,
     // F456 §7.4: forwarded, not consumed here.
     promptChars: input.promptChars,
+    // F06: same treatment — the wording, including whether `↓` appears at all,
+    // stays in `composerSendingLine` so there is still exactly one copy of it.
+    replyChars: input.replyChars,
   });
 
   if (input.phase === 'handshake') return { kind: 'handshake', text };
@@ -122,7 +132,18 @@ export function deriveTurnStatus(input: TurnStatusInput): TurnStatus | null {
     // (see the file header's copy/decoration split) — the glyph is the `.tsx`
     // layer's prefix (`TurnStatusContent`, `MessageTimeline.tsx`), added only
     // once `kind === 'streaming'` reaches render.
-    return { kind: 'streaming', text: formatElapsedClock(elapsed) };
+    //
+    // F06: the reply count belongs HERE, not only in `composerSendingLine`.
+    // `hasBlocks` flips on the first block of ANY kind — a thinking block or a
+    // tool call is enough — so by the time assistant prose is actually
+    // arriving, the head has long since left the waiting wording for this
+    // clock-only one. A `↓` that only ever appeared on the awaiting line would
+    // therefore be a count that is never on screen while the thing it counts is
+    // happening. `replyCharsLabel` keeps it the same clause the waiting line
+    // uses, so the two cannot word it differently.
+    const replyLabel = replyCharsLabel(input.replyChars ?? 0);
+    const clock = formatElapsedClock(elapsed);
+    return { kind: 'streaming', text: replyLabel ? `${replyLabel} · ${clock}` : clock };
   }
 
   // Both thresholds are imported, never re-declared, and tested in the SAME

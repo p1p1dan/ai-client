@@ -5,6 +5,7 @@ import {
   type CatalogStatusRow,
   catalogStatusRow,
   hostNotReadyCatalog,
+  isCatalogAuthoritative,
   isCatalogLoaded,
   shouldRequestCatalog,
 } from './piModelCatalog';
@@ -20,6 +21,12 @@ function publish(): void {
 export interface UsePiModelCatalogResult {
   catalog: AgentModelCatalog | null;
   loaded: boolean;
+  /**
+   * F07: the request settled AND somebody answered what exists. Narrower than
+   * `loaded`, which a failure also satisfies — see `isCatalogAuthoritative`.
+   * Only this may be read as evidence about a model.
+   */
+  authoritative: boolean;
   loading: boolean;
   status: CatalogStatusRow;
   refresh: () => void;
@@ -75,6 +82,7 @@ export function usePiModelCatalog(hostState: HostStatus['state']): UsePiModelCat
   return {
     catalog,
     loaded: isCatalogLoaded(catalog),
+    authoritative: isCatalogAuthoritative(catalog),
     loading: inFlight,
     status: catalogStatusRow({ catalog, loading: inFlight }),
     refresh: useCallback(() => request(false), [request]),

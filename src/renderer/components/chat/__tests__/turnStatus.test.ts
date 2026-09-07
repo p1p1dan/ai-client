@@ -372,3 +372,45 @@ describe('[F4-3] deriveTurnStatus feeds the prompt counter into the waiting copy
     expect(status?.text).not.toContain('↓');
   });
 });
+
+describe('F06 reply count on the turn head', () => {
+  it('shows the ↓ on the streaming turn head and nothing before text arrives', () => {
+    const base = {
+      active: true,
+      phase: 'awaiting' as const,
+      elapsedSeconds: 6,
+      budgetMs: 45_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+      promptChars: 2,
+    };
+    const awaiting = deriveTurnStatus(base);
+    expect(awaiting?.kind).toBe('awaiting');
+    expect(awaiting?.text).not.toContain('↓');
+
+    const streaming = deriveTurnStatus({ ...base, hasBlocks: true, replyChars: 128 });
+    // `hasBlocks` is what makes this `streaming`; the count is what the head
+    // now says about it.
+    expect(streaming?.kind).toBe('streaming');
+    expect(streaming?.text).toContain('↓ 128 chars');
+  });
+
+  it('grows with the stream and keeps the clock beside it', () => {
+    const head = (replyChars: number, elapsedSeconds: number) =>
+      deriveTurnStatus({
+        active: true,
+        phase: 'awaiting',
+        elapsedSeconds,
+        budgetMs: 45_000,
+        attachmentCount: 0,
+        attachmentBytes: 0,
+        hasBlocks: true,
+        replyChars,
+      })?.text;
+    // Blocks are arriving but no prose yet (thinking / a tool call): the head
+    // is the bare clock it has always been.
+    expect(head(0, 3)).toBe('3s');
+    expect(head(128, 6)).toBe('↓ 128 chars · 6s');
+    expect(head(1200, 9)).toBe('↓ 1.2k chars · 9s');
+  });
+});

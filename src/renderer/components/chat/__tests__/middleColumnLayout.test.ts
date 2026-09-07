@@ -4,6 +4,9 @@ import {
   COMPOSER_BAR_LEADING,
   COMPOSER_BAR_TRAILING,
   COMPOSER_CONTROL_SIZE,
+  COMPOSER_POPUP_DESIRED_HEIGHT,
+  COMPOSER_POPUP_GAP,
+  COMPOSER_POPUP_VIEWPORT_MARGIN,
   composerActionGroupClass,
   composerAttachButtonClass,
   composerBarClass,
@@ -25,6 +28,7 @@ import {
   middleColumnHostClass,
   queueStripWrapperClass,
   rememberSendAttempt,
+  resolveComposerPopupPlacement,
   resolveIdleStatusText,
   roundActionButtonClass,
   roundActionButtonKindClass,
@@ -787,12 +791,99 @@ describe('shouldShowStatusLine', () => {
 });
 
 describe('mentionPopupPlacementClass', () => {
-  it('opens upward from the docked composer', () => {
-    expect(mentionPopupPlacementClass('session')).toContain('bottom-full');
+  it('turns a resolved side into the matching anchor classes', () => {
+    expect(mentionPopupPlacementClass('top')).toContain('bottom-full');
+    expect(mentionPopupPlacementClass('bottom')).toContain('top-full');
   });
 
-  it('opens downward from the centered composer', () => {
-    expect(mentionPopupPlacementClass('empty')).toContain('top-full');
+  it('still opens upward from the docked composer and downward from the centered one', () => {
+    // F11 changed the INPUT from a mode to a resolved side; the mode's own
+    // preference is unchanged and still reaches the same classes.
+    expect(mentionPopupPlacementClass(composerPopupSide('session'))).toContain('bottom-full');
+    expect(mentionPopupPlacementClass(composerPopupSide('empty'))).toContain('top-full');
+  });
+});
+
+describe('F11 resolveComposerPopupPlacement', () => {
+  // A 900px window with the composer docked at the bottom: ~700px of headroom
+  // above it, ~40px below.
+  const docked = {
+    anchorTop: 760,
+    anchorBottom: 860,
+    viewportHeight: 900,
+    preferred: 'top' as const,
+  };
+
+  it('keeps the preferred side, at full height, when it fits', () => {
+    expect(resolveComposerPopupPlacement(docked)).toEqual({
+      side: 'top',
+      maxHeight: COMPOSER_POPUP_DESIRED_HEIGHT,
+    });
+  });
+
+  it('flips when the preferred side cannot take the whole list but the other can', () => {
+    // Composer near the TOP of the window: no headroom, plenty below.
+    expect(
+      resolveComposerPopupPlacement({
+        anchorTop: 40,
+        anchorBottom: 140,
+        viewportHeight: 900,
+        preferred: 'top',
+      })
+    ).toEqual({ side: 'bottom', maxHeight: COMPOSER_POPUP_DESIRED_HEIGHT });
+  });
+
+  it('never returns a height the chosen side cannot hold', () => {
+    // The reported defect, as a number: a short window where NEITHER side fits
+    // 240px. Whatever side wins, the cap is the space that exists.
+    const short = resolveComposerPopupPlacement({
+      anchorTop: 150,
+      anchorBottom: 250,
+      viewportHeight: 300,
+      preferred: 'top',
+    });
+    const spaceAbove = 150 - COMPOSER_POPUP_GAP - COMPOSER_POPUP_VIEWPORT_MARGIN;
+    expect(short.maxHeight).toBeLessThan(COMPOSER_POPUP_DESIRED_HEIGHT);
+    expect(short).toEqual({ side: 'top', maxHeight: spaceAbove });
+  });
+
+  it('takes the larger side once the preferred one cannot show a usable list', () => {
+    const placement = resolveComposerPopupPlacement({
+      anchorTop: 30,
+      anchorBottom: 130,
+      viewportHeight: 300,
+      preferred: 'top',
+    });
+    expect(placement.side).toBe('bottom');
+    expect(placement.maxHeight).toBe(
+      300 - 130 - COMPOSER_POPUP_GAP - COMPOSER_POPUP_VIEWPORT_MARGIN
+    );
+  });
+
+  it('clamps a side with no room at all to zero rather than a negative height', () => {
+    // An anchor taller than the viewport (a very short window, a multi-line
+    // draft) put both edges out of range; a negative max-height would render as
+    // no cap at all, which is the failure mode this whole task is about.
+    const placement = resolveComposerPopupPlacement({
+      anchorTop: -50,
+      anchorBottom: 400,
+      viewportHeight: 300,
+      preferred: 'top',
+    });
+    expect(placement.maxHeight).toBe(0);
+  });
+
+  it('respects a shrunken visual viewport, which is how the IME case arrives', () => {
+    // Same anchor, keyboard up: `visualViewport.height` drops and the space
+    // below the composer goes with it.
+    const keyboardUp = resolveComposerPopupPlacement({
+      anchorTop: 300,
+      anchorBottom: 400,
+      viewportHeight: 420,
+      preferred: 'bottom',
+    });
+    expect(keyboardUp.side).toBe('top');
+    expect(keyboardUp.maxHeight).toBe(COMPOSER_POPUP_DESIRED_HEIGHT);
   });
 });
 
@@ -1063,8 +1154,6 @@ describe('composerPopupSide', () => {
   it('opens upward from the docked card and downward from the centered one', () => {
     expect(composerPopupSide('session')).toBe('top');
     expect(composerPopupSide('empty')).toBe('bottom');
-    expect(mentionPopupPlacementClass('session')).toContain('bottom-full');
-    expect(mentionPopupPlacementClass('empty')).toContain('top-full');
   });
 });
 

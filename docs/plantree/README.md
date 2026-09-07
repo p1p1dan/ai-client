@@ -23,7 +23,8 @@ Renderer → Preload → Electron Main WorkerManager
 - pi-app 是 WorkerManager/WorkerSlot/history/tree 主参考；pix 是 Pi TUI/PTY/CLI packaging 主参考。
 
 **runtime 侧没有活动施工任务**：Pi-only 收敛的 T28–T38 已于 2026-09-05 全部关闭，
-正式发布走 [rollout/rollback runbook](../pi-only-rollout-rollback.md)。当前两条活动计划都在界面侧。
+正式发布走 [rollout/rollback runbook](../pi-only-rollout-rollback.md)。
+当前三条活动计划里，两条在界面侧，第三条（现场反馈待办）另有 Pi provider header 与账户额度两块。
 
 ## Resume reading order
 
@@ -35,11 +36,14 @@ Renderer → Preload → Electron Main WorkerManager
 4. 活动计划 [设置清单整理与旧壳删除](./plans/settings-cleanup/README.md)
    → [implementation-status](./plans/settings-cleanup/implementation-status.md)
    → [roadmap](./plans/settings-cleanup/roadmap.md)。
-5. 需要架构边界时：[Pi-only plan](./plans/pi-backend-migration/README.md)
+5. 活动计划 [现场反馈待办 6–11](./plans/field-followups/README.md)
+   → [implementation-status](./plans/field-followups/implementation-status.md)
+   → [roadmap](./plans/field-followups/roadmap.md)。
+6. 需要架构边界时：[Pi-only plan](./plans/pi-backend-migration/README.md)
    → [decision index](./plans/pi-backend-migration/decisions/README.md)
    → [D14](./plans/pi-backend-migration/decisions/014-pi-only-product-and-conversation-import.md)
    / [D15](./plans/pi-backend-migration/decisions/015-main-owned-worker-manager.md)。
-6. 只读当前任务直接链接的 topic/evidence/history。
+7. 只读当前任务直接链接的 topic/evidence/history。
 
 ## Authority order
 
@@ -59,7 +63,9 @@ Renderer → Preload → Electron Main WorkerManager
 | [pix/pi-app UI 对齐改造](./plans/pix-ui-alignment/README.md) | **In Progress（收尾）** | 批次 1–15（U01–U31）全部落地，**只剩一次累计 GUI 点验**；另有五笔欠账与六件待真机验证项，自动化全部已绿（280 files / 4246 tests） | [implementation-status](./plans/pix-ui-alignment/implementation-status.md) · [roadmap](./plans/pix-ui-alignment/roadmap.md) |
 | [设置清单整理与旧壳删除](./plans/settings-cleanup/README.md) | **In Progress** | S01–S07 已实现；按本轮授权先保存补齐线提交，再完成旧壳删除和九类设置。renderer 分批回归与拆分类型检查通过，完整门禁、GUI/PTY 点验和主分支合入待完成 | [TODO](./plans/settings-cleanup/TODO.md) · [implementation-status](./plans/settings-cleanup/implementation-status.md) · [roadmap](./plans/settings-cleanup/roadmap.md) |
 
-活动计划两条。从归档表恢复任何一条计划都需要真实需求触发，并在本表重新登记。
+| [现场反馈待办 6–11](./plans/field-followups/README.md) | **In Progress** | 批次一（启动误报 `unverified`、`@` 弹层超框、流式 `↓` 字符数）已实现且自动化全绿，GUI 点验未做；批次二起为 Pi User-Agent、启动公告与铃铛、周限额金额 | [TODO](./plans/field-followups/TODO.md) · [implementation-status](./plans/field-followups/implementation-status.md) · [roadmap](./plans/field-followups/roadmap.md) |
+
+活动计划三条。从归档表恢复任何一条计划都需要真实需求触发，并在本表重新登记。
 
 ## Archived plans
 
