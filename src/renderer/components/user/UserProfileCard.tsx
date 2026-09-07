@@ -3,9 +3,10 @@ import {
   AUTH_OPEN_ONBOARDING_EVENT,
   type UserProfilePresentation,
 } from '@shared/authGate';
+import { deriveWeeklyQuotaView } from '@shared/weeklyQuota';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, LogIn, LogOut, RefreshCw } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -43,10 +44,16 @@ function UsageMetric({
   label,
   value,
   loading,
+  tone,
+  footer,
 }: {
   label: string;
   value: string;
   loading: boolean;
+  /** F10: `attention` is the over-limit state, the one figure that needs to read differently. */
+  tone?: 'default' | 'attention';
+  /** F10: the progress bar and remaining-amount line under the weekly quota. */
+  footer?: ReactNode;
 }) {
   return (
     <div className="rounded-md border bg-muted/20 px-3 py-2">
@@ -54,8 +61,36 @@ function UsageMetric({
       {loading ? (
         <Skeleton className="mt-1 h-4 w-16" />
       ) : (
-        <div className="mt-1 text-sm font-medium">{value}</div>
+        <div
+          className={cn(
+            'mt-1 text-sm font-medium tabular-nums',
+            tone === 'attention' && 'text-destructive'
+          )}
+        >
+          {value}
+        </div>
       )}
+      {!loading && footer}
+    </div>
+  );
+}
+
+/**
+ * F10 — the weekly allowance bar.
+ *
+ * Rendered ONLY when there is a ceiling to divide by. `deriveWeeklyQuotaView`
+ * returns `percent: null` for both "nothing arrived" and "spending is tracked
+ * but no limit is configured", and both of those must show no bar at all: a
+ * track filled to an invented denominator is the `NaN%` defect wearing a
+ * different costume.
+ */
+function WeeklyQuotaBar({ percent, exceeded }: { percent: number; exceeded: boolean }) {
+  return (
+    <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        className={cn('h-full rounded-full', exceeded ? 'bg-destructive' : 'bg-accent-primary')}
+        style={{ width: `${percent}%` }}
+      />
     </div>
   );
 }
@@ -89,40 +124,38 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
       return '';
     }
     if (!usage.data || 'error' in usage.data) {
-      return '暂不可用';
+      return t('Not available');
     }
     return formatUsageValue(usage.data.todayCount);
-  }, [metricsLoading, usage.data]);
+  }, [metricsLoading, usage.data, t]);
 
   const todayCostText = useMemo(() => {
     if (metricsLoading) {
       return '';
     }
     if (!usage.data || 'error' in usage.data) {
-      return '暂不可用';
+      return t('Not available');
     }
     return formatCostUsd(usage.data.todayCostUsd);
-  }, [metricsLoading, usage.data]);
+  }, [metricsLoading, usage.data, t]);
 
-  const monthCallsText = useMemo(() => {
-    if (metricsLoading) {
-      return '';
-    }
-    if (!usage.data || 'error' in usage.data) {
-      return '暂不可用';
-    }
-    return formatUsageValue(usage.data.monthCount);
-  }, [metricsLoading, usage.data]);
+  // F10: 本月调用次数 retired. A call count is not what runs out — two calls can
+  // differ in cost by three orders of magnitude — so the tile now shows the
+  // allowance that actually constrains the account.
+  const quota = useMemo(() => {
+    if (!usage.data || 'error' in usage.data) return deriveWeeklyQuotaView(null);
+    return deriveWeeklyQuotaView(usage.data.weeklyQuota);
+  }, [usage.data]);
 
   const monthCostText = useMemo(() => {
     if (metricsLoading) {
       return '';
     }
     if (!usage.data || 'error' in usage.data) {
-      return '暂不可用';
+      return t('Not available');
     }
     return formatCostUsd(usage.data.monthCostUsd);
-  }, [metricsLoading, usage.data]);
+  }, [metricsLoading, usage.data, t]);
 
   const handleLogout = useCallback(async () => {
     setLoggingOut(true);
@@ -240,12 +273,34 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
       <div className="grid grid-cols-2 gap-2">
         <UsageMetric label={t('Today calls')} value={todayCallsText} loading={metricsLoading} />
         <UsageMetric label={t('Today cost')} value={todayCostText} loading={metricsLoading} />
-        <UsageMetric
-          label={t('This month calls')}
-          value={monthCallsText}
-          loading={metricsLoading}
-        />
         <UsageMetric label={t('This month cost')} value={monthCostText} loading={metricsLoading} />
+        <UsageMetric
+          label={t('Weekly limit')}
+          // `暂不可用` for BOTH "the endpoint did not answer" and "no allowance
+          // is configured": from the card's side those are the same fact — there
+          // is no allowance to show — and inventing `$0.00 / $0.00` for either
+          // would report an exhausted quota to someone who has none.
+          value={quota.state === 'unavailable' ? t('Not available') : quota.amountText}
+          loading={metricsLoading}
+          tone={quota.state === 'exceeded' ? 'attention' : 'default'}
+          footer={
+            quota.percent === null ? null : (
+              <>
+                <WeeklyQuotaBar percent={quota.percent} exceeded={quota.state === 'exceeded'} />
+                <div
+                  className={cn(
+                    'mt-1 text-meta tabular-nums',
+                    quota.state === 'exceeded' ? 'text-destructive' : 'text-muted-foreground'
+                  )}
+                >
+                  {quota.state === 'exceeded'
+                    ? `${t('Over limit')} ${quota.remainingText}`
+                    : `${t('Remaining')} ${quota.remainingText}`}
+                </div>
+              </>
+            )
+          }
+        />
       </div>
 
       <Separator />

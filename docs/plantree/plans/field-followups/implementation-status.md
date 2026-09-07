@@ -5,18 +5,20 @@
 
 ## Current phase
 
-**批次一（F07 / F11 / F06）、批次二（F08）与批次三（F09）已实现，自动化门禁通过；
-GUI 点验、真实 HTTP 请求头与公告接口联调均未验证，因此五项都还不是 Done。**
+**六项（F06–F11）全部实现，自动化门禁通过；GUI 点验与三项联调均未验证，
+因此没有一项是 Done。**
 证据见 [批次一](./evidence/batch1-f07-f11-f06.md) · [批次二](./evidence/batch2-f08.md) ·
-[批次三](./evidence/batch3-f09.md)。下一步进入批次四 F10。
+[批次三](./evidence/batch3-f09.md) · [批次四](./evidence/batch4-f10.md)。
+下一步是收敛验证：一次累计 GUI 点验，加上三项联调。
 
 ## Active TODO（最多五项）
 
-1. 批次一并入 UI 对齐计划的累计点验：冷启动模型名、矮窗口 `@` 弹层、流式 `↓`。
-2. F08 的联调段：捕获真实出站请求头，确认 `User-Agent: claude-cli-pilab/<版本>` 生效。
-3. F09 的联调段：onboard 部署 `/api/v1/announcements` 后核对字段与真实启动弹窗。
-4. F10：usage 类型扩展与周限额显示；顺手把 `UserProfileCard` 的四处硬编码中文改走 `t()`。
-5. 全部实现完成后再做一次累计 GUI 点验，届时才谈 Done。
+1. 累计 GUI 点验（并入 UI 对齐计划）：冷启动模型名、矮窗口 `@` 弹层、流式 `↓`、
+   铃铛与启动弹窗、顶部「...」确已消失、周限额瓦片与超限配色。
+2. F08 联调：捕获真实出站请求头，确认 `User-Agent: claude-cli-pilab/<版本>` 生效。
+3. F09 联调：onboard 部署 `/api/v1/announcements` 后核对字段与真实启动弹窗。
+4. F10 联调：onboard 部署 `getMyWeeklyQuota` 后核对字段名、周期语义与真实额度数值。
+5. 上述完成后才逐项标 Done 并合入主分支。
 
 ## Blocker
 
@@ -57,6 +59,13 @@ GUI 点验、真实 HTTP 请求头与公告接口联调均未验证，因此五�
   main / shared-types / stores 三个目录 32 文件 394 项通过。
 - 整套 `tsc --noEmit` 通过；全仓 `biome check` 993 文件 0 error。
 - **未跑真实 Electron，未接真实公告接口。** 本轮完成的是客户端契约段。
+
+**2026-09-07 · 批次四 F10：**
+
+- 新增 15 项通过（shared 纯函数 11、真实渲染 4），UsageService 既有测试改 2 增 2 后 20 项通过。
+- shared / usage / user / workspace-shell / settings / ipc 六个目录 60 文件 775 项通过。
+- 整套 `tsc --noEmit` 通过；全仓 `biome check` 996 文件 0 error。
+- **未接真实 `getMyWeeklyQuota`，未跑真实 Electron。**
 
 ## 与其他计划的关系
 

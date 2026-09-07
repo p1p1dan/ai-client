@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { UsageStatsResult } from '@shared/types';
+import type { UsageStatsResult, WeeklyQuota } from '@shared/types';
+import { parseWeeklyQuota } from '@shared/weeklyQuota';
 import { net } from 'electron';
 import { getAuthProbeScheduler, getAuthStateService, getCredentialVault } from '../auth';
 import { classifyAuthLoginResponse } from '../auth/AuthProbeScheduler';
@@ -253,6 +254,29 @@ class UsageService {
 
       const todayUrl = `${serverUrl}/api/actions/my-usage/getMyTodayStats`;
       const summaryUrl = `${serverUrl}/api/actions/my-usage/getMyStatsSummary`;
+      // F10. A THIRD action on the same API, deliberately not extra fields on
+      // `getMyStatsSummary`: that call is scoped by an explicit date range this
+      // client chooses, and the weekly allowance is scoped by a period the
+      // SERVICE owns. Folding them together would make the client's month range
+      // look like it selected the week too.
+      const quotaUrl = `${serverUrl}/api/actions/my-usage/getMyWeeklyQuota`;
+
+      /**
+       * F10: the allowance is fetched with the SAME auth the stats used, and
+       * every failure answers `null`.
+       *
+       * It is a separate, non-fatal call on purpose. The endpoint is new — an
+       * onboard deployment that predates it answers 404 — and the account card
+       * must keep working against those: a user's own email address and their
+       * logout button cannot depend on a quota lookup. `null` is what the card
+       * renders as 暂不可用, which is exactly the honest answer for both "not
+       * deployed yet" and "no allowance configured".
+       */
+      const tryFetchQuota = async (auth?: ActionAuth): Promise<WeeklyQuota | null> => {
+        const response = await postAction(quotaUrl, {}, auth);
+        if (!response.ok) return null;
+        return parseWeeklyQuota(readActionData(response.payload));
+      };
 
       const tryFetchStats = async (
         auth?: ActionAuth
@@ -263,6 +287,7 @@ class UsageService {
             todayCostUsd: number;
             monthCount: number;
             monthCostUsd: number;
+            weeklyQuota: WeeklyQuota | null;
           }
         | { ok: false; error: string; status: number }
       > => {
@@ -292,7 +317,11 @@ class UsageService {
           return { ok: false, error: 'Invalid usage stats response', status: 200 };
         }
 
-        return { ok: true, todayCount, todayCostUsd, monthCount, monthCostUsd };
+        // Last, and after both required calls have succeeded: a failure here
+        // must not cost the user the figures that DID arrive.
+        const weeklyQuota = await tryFetchQuota(auth);
+
+        return { ok: true, todayCount, todayCostUsd, monthCount, monthCostUsd, weeklyQuota };
       };
 
       // Attempt #1: call Actions API with apiKey directly (works in legacy/dual session modes).
@@ -303,6 +332,7 @@ class UsageService {
           todayCostUsd: direct.todayCostUsd,
           monthCount: direct.monthCount,
           monthCostUsd: direct.monthCostUsd,
+          weeklyQuota: direct.weeklyQuota,
         };
       }
 
@@ -324,6 +354,7 @@ class UsageService {
             todayCostUsd: retry.todayCostUsd,
             monthCount: retry.monthCount,
             monthCostUsd: retry.monthCostUsd,
+            weeklyQuota: retry.weeklyQuota,
           };
         }
         return { error: retry.error };

@@ -9,8 +9,8 @@
 | 分组 | 数量 | 说明 |
 |---|---|---|
 | Done | 0 | — |
-| In Progress | 5 | F07 / F11 / F06 / F08 / F09 已实现，自动化通过；GUI、真实请求头与公告联调未验证 |
-| Next | 1 | F10 |
+| In Progress | 6 | 六项全部实现，自动化通过；GUI 点验与三项联调未验证，因此都还不是 Done |
+| Next | 0 | 实现顺序已走完，当前收敛验证证据 |
 | Deferred | 0 | — |
 | 另立任务 | 0 | — |
 
@@ -184,7 +184,7 @@ does not contain it 不是同一个事实」）；**漏的是标签这一路没�
   + 三个 IPC channel + 铃铛与弹窗；登出在 ⑥b 步清已读但**不清缓存**。
   证据见 [批次三](./evidence/batch3-f09.md)。
 
-### F10 — 本月调用次数改为周限额金额 · **Next**
+### F10 — 本月调用次数改为周限额金额 · **In Progress**
 
 - **做什么**：`shared/types/usage.ts` 扩展周限额字段（已用金额 / 上限 / 周期结束时间），
   `UsageService` 适配 onboard 接口，`useUsageStats` 与 `UserProfileCard` 改显示，
@@ -195,3 +195,8 @@ does not contain it 不是同一个事实」）；**漏的是标签这一路没�
   网络失败不影响用户信息与退出登录。
 - **验收（联调段）**：真实接口的周期字段与刷新——需 onboard 部署。
 - **依赖**：无代码依赖；联调依赖 onboard。
+- **落地**：新增第三个 action `getMyWeeklyQuota`（不是在 `getMyStatsSummary` 上加字段——
+  那次调用的时间范围是客户端选的，而周期是服务端拥有的），失败一律答 `null` 而非拖垮整张卡片；
+  `deriveWeeklyQuotaView` 的四状态里 `no-limit` 时 `percent` 为 `null`，
+  让 `NaN%` 在类型层面不可达。紧凑版 pill 经检查无需改动（它从未显示本月调用次数）。
+  证据见 [批次四](./evidence/batch4-f10.md)。

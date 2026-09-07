@@ -46,6 +46,16 @@
 - [ ] 联调：onboard 部署 `/api/v1/announcements` 后核对字段与真实启动弹窗。
 - [ ] GUI 点验：铃铛外观位置、窄窗口与长内容下的弹窗、顶部「...」确已消失。
 
+## 批次四明细（[证据](./evidence/batch4-f10.md)）
+
+- [x] F10：`WeeklyQuota` 类型与 `weeklyQuota` 字段、`shared/weeklyQuota.ts` 四状态、
+      `getMyWeeklyQuota` 非致命调用、卡片瓦片替换与进度条、四处硬编码中文改走 `t()`。
+- [x] 紧凑版 `UserFooterPill` 已检查：只读今日费用，从未显示本月调用次数，无需改动。
+- [x] 新增 15 项 + UsageService 20 项通过；六个目录 60 文件 775 项通过；
+      整套 tsc 通过；全仓 lint 0 error。
+- [ ] 联调：onboard 部署 `getMyWeeklyQuota` 后核对字段名、周期语义与真实额度数值。
+- [ ] GUI 点验：瓦片布局、进度条、超限配色。
+
 ## 通用要求
 
 - 每项至少一条纯函数层断言；`.tsx` 里的判断先下沉到纯模块再谈验收。

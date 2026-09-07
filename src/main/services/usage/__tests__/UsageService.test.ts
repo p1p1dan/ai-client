@@ -182,6 +182,14 @@ describe('UsageService', () => {
       status: 200,
       json: async () => ({ ok: true, data: { totalRequests: 9, totalCost: 0.1324964 } }),
     });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        data: { usedUsd: 12.4, limitUsd: 50, periodEnd: '2026-04-13T00:00:00Z' },
+      }),
+    });
 
     const { usageService } = await import('../UsageService');
     const result = await usageService.getStats();
@@ -193,6 +201,8 @@ describe('UsageService', () => {
       todayCostUsd: 0.0696284,
       monthCount: 9,
       monthCostUsd: 0.1324964,
+      // F10: the allowance call answered, so it rides along on the success arm.
+      weeklyQuota: { usedUsd: 12.4, limitUsd: 50, periodEnd: '2026-04-13T00:00:00Z' },
     });
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -222,6 +232,76 @@ describe('UsageService', () => {
         credentials: 'omit',
       }
     );
+  });
+
+  // F10: the allowance endpoint is NEW. An onboard deployment that predates it
+  // answers 404, and the account card — the user's own email, their logout
+  // button — must keep working against those.
+  it('keeps the rest of the stats when the weekly-quota endpoint is missing', async () => {
+    writeOnboardingState('https://cch.example.com');
+    writeLegacyCodexKey();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 3, 9, 10, 0, 0));
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: { calls: 3, costUsd: 0.07 } }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: { totalRequests: 9, totalCost: 0.13 } }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: 'Not found' }),
+    });
+
+    const { usageService } = await import('../UsageService');
+    const result = await usageService.getStats();
+    vi.useRealTimers();
+
+    // `null`, not an error: the card renders 暂不可用 for the allowance and
+    // shows every other figure normally.
+    expect(result).toEqual({
+      todayCount: 3,
+      todayCostUsd: 0.07,
+      monthCount: 9,
+      monthCostUsd: 0.13,
+      weeklyQuota: null,
+    });
+  });
+
+  it('answers null rather than a half-figure when the quota payload is unusable', async () => {
+    writeOnboardingState('https://cch.example.com');
+    writeLegacyCodexKey();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 3, 9, 10, 0, 0));
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: { calls: 3, costUsd: 0.07 } }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: { totalRequests: 9, totalCost: 0.13 } }),
+    });
+    // A limit with no spending figure: nothing to put in the numerator.
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: { limitUsd: 50 } }),
+    });
+
+    const { usageService } = await import('../UsageService');
+    const result = await usageService.getStats();
+    vi.useRealTimers();
+
+    expect(result).toMatchObject({ weeklyQuota: null, todayCount: 3 });
   });
 
   it('returns { error } when actions API is unauthorized and login fails', async () => {
@@ -280,6 +360,12 @@ describe('UsageService', () => {
       status: 200,
       json: async () => ({ ok: true, data: { totalRequests: 9, totalCost: 0.1324964 } }),
     });
+    // F10: the allowance call rides the SAME cookie auth the retry established.
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: { usedUsd: 12.4, limitUsd: 50 } }),
+    });
 
     const { usageService } = await import('../UsageService');
     const result = await usageService.getStats();
@@ -291,8 +377,14 @@ describe('UsageService', () => {
       todayCostUsd: 0.0696284,
       monthCount: 9,
       monthCostUsd: 0.1324964,
+      weeklyQuota: { usedUsd: 12.4, limitUsd: 50 },
     });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      'https://cch.example.com/api/actions/my-usage/getMyWeeklyQuota',
+      expect.objectContaining({ headers: expect.objectContaining({ Cookie: expect.any(String) }) })
+    );
     expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://cch.example.com/api/auth/login', {
       method: 'POST',
       headers: {

@@ -346,6 +346,12 @@ export const zhTranslations: Record<string, string> = {
   // for a string nothing renders is a shell waiting to be mistaken for a live
   // one. It stays reachable through the platform's own F12.
   Announcements: '公告',
+  // F10: `This month calls` retired with the tile it labelled — a call count is
+  // not what runs out. `Weekly limit` took its place.
+  'Weekly limit': '周限额',
+  'Not available': '暂不可用',
+  Remaining: '剩余',
+  'Over limit': '已超出',
   'Announcements (unread)': '公告（有未读）',
   'Messages from the service operator.': '来自服务方的通知。',
   'Got it': '知道了',
@@ -1761,7 +1767,6 @@ export const zhTranslations: Record<string, string> = {
   // Usage
   'Today calls': '今日调用次数',
   'Today cost': '今日费用',
-  'This month calls': '本月调用次数',
   'This month cost': '本月费用',
   'Refresh usage': '刷新用量',
 
