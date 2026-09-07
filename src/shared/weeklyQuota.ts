@@ -19,59 +19,85 @@ function finiteNonNegative(value: unknown): number | null {
 /**
  * Read the weekly allowance out of a cch `my-usage/getMyQuota` payload.
  *
- * ## Whose vocabulary this is
+ * ## Two scopes, and why the tighter one wins
  *
- * cch's, not ours. The gateway models several windows per key —
- * `limit5hUsd` / daily / `limitWeeklyUsd` / `limitMonthlyUsd` / `limitTotalUsd`,
- * each paired with a `cost*` figure and a reset time, and each documented in
- * its own admin UI as "留空表示无限制" (blank means unlimited). This function
- * takes the WEEKLY pair and ignores the rest; the other windows are real, but
- * the card has room for one and the ruling named the week.
+ * cch tracks every spend window TWICE — once for the API key and once for the
+ * user who owns it — and this app holds one key out of however many that user
+ * has. Observed against the live gateway (2026-09-07): a key with no weekly
+ * ceiling of its own, under a user with `userLimitWeeklyUsd: 1000` and
+ * `userCurrentWeeklyUsd: 0.139`. Reading only the key scope would have reported
+ * "no allowance configured" to someone who very much has one.
  *
- * The field names are read tolerantly (`costWeekly`, `weeklyCostUsd`, `usedUsd`
- * …) because the exact response envelope of `getMyQuota` has not been observed
- * against a real key yet — the endpoint's EXISTENCE is confirmed by probe, its
- * body is not. Tolerance here is not sloppiness: every alias names the same
- * quantity, and the alternative — pinning one guess — turns a naming mismatch
- * into a silent `暂不可用` that looks exactly like "no allowance configured".
+ * So both scopes are candidates and the BINDING one is chosen: whichever will
+ * stop the user first, i.e. has the least headroom. Each candidate carries its
+ * own spend figure, because the two are not interchangeable — the key's weekly
+ * spend counts only this key, the user's counts every key they hold — and
+ * pairing one scope's limit with the other's usage would produce a percentage
+ * of nothing.
  *
- * ## Why `null` beats a partial figure
+ * When neither scope sets a ceiling, the USER's spend is what gets reported
+ * alongside "no limit": it is the figure that describes the person rather than
+ * this one installation.
  *
- * `usedUsd` is required and `limitUsd` is not: an account can genuinely have
- * spending with no ceiling configured — that is precisely what cch's blank
- * `limitWeeklyUsd` means — and the card must be able to say "$12.40 spent, no
- * limit set" rather than treat it as malformed. What is NOT tolerated is a
- * missing or nonsensical spend figure: with no numerator there is nothing to
- * show, and inventing `0` would report an unused allowance to someone who may
- * have exhausted theirs.
+ * ## No period end
+ *
+ * The payload has no weekly reset instant. `dailyResetTime` belongs to the
+ * DAILY window, and `expiresAt` / `userExpiresAt` are account expiry — reading
+ * either as the week's end would put a confident wrong date on the card. So
+ * `periodEnd` is normally absent; the aliases below exist only so a future
+ * gateway that does state one is picked up without another round trip.
  */
 export function parseWeeklyQuota(payload: unknown): WeeklyQuota | null {
   if (!payload || typeof payload !== 'object') return null;
   const raw = payload as Record<string, unknown>;
-  // cch's own spelling first, then the generic ones.
-  const usedUsd = finiteNonNegative(
-    raw.costWeekly ?? raw.costWeeklyUsd ?? raw.weeklyCostUsd ?? raw.usedUsd ?? raw.used
-  );
+
+  const keyUsed = finiteNonNegative(raw.keyCurrentWeeklyUsd);
+  const keyLimit = finiteNonNegative(raw.keyLimitWeeklyUsd);
+  const userUsed = finiteNonNegative(raw.userCurrentWeeklyUsd);
+  const userLimit = finiteNonNegative(raw.userLimitWeeklyUsd);
+
+  // Generic fallbacks, for a caller (or a future gateway) that reports one
+  // unscoped weekly pair instead of cch's two.
+  const flatUsed = finiteNonNegative(raw.costWeekly ?? raw.weeklyCostUsd ?? raw.usedUsd);
+  const flatLimit = finiteNonNegative(raw.limitWeeklyUsd ?? raw.weeklyLimitUsd ?? raw.limitUsd);
+
+  const scoped: Array<{ usedUsd: number; limitUsd: number }> = [];
+  if (keyUsed !== null && keyLimit !== null) scoped.push({ usedUsd: keyUsed, limitUsd: keyLimit });
+  if (userUsed !== null && userLimit !== null) {
+    scoped.push({ usedUsd: userUsed, limitUsd: userLimit });
+  }
+  if (flatUsed !== null && flatLimit !== null) {
+    scoped.push({ usedUsd: flatUsed, limitUsd: flatLimit });
+  }
+
+  const periodEnd = readIsoLike(raw.weeklyResetAt ?? raw.weeklyResetTime ?? raw.periodEnd);
+
+  if (scoped.length > 0) {
+    // Least headroom first; on a tie the lower ceiling, so the answer is stable
+    // rather than dependent on which scope happened to be pushed first.
+    const binding = scoped.reduce((tightest, candidate) => {
+      const a = candidate.limitUsd - candidate.usedUsd;
+      const b = tightest.limitUsd - tightest.usedUsd;
+      if (a !== b) return a < b ? candidate : tightest;
+      return candidate.limitUsd < tightest.limitUsd ? candidate : tightest;
+    });
+    return { ...binding, ...(periodEnd ? { periodEnd } : {}) };
+  }
+
+  // No ceiling anywhere. Report spending if we know any, so the card can say
+  // "$12.40 spent, no limit set" rather than nothing at all.
+  const usedUsd = userUsed ?? keyUsed ?? flatUsed;
   if (usedUsd === null) return null;
-  const limitUsd = finiteNonNegative(
-    raw.limitWeeklyUsd ?? raw.weeklyLimitUsd ?? raw.limitUsd ?? raw.limit
-  );
-  const periodEnd = readIsoLike(raw.weeklyResetAt ?? raw.resetAt ?? raw.periodEnd);
-  return {
-    usedUsd,
-    limitUsd,
-    ...(periodEnd ? { periodEnd } : {}),
-  };
+  return { usedUsd, limitUsd: null, ...(periodEnd ? { periodEnd } : {}) };
 }
 
 /**
  * The reset instant as a string, from either an ISO string or an epoch number.
  *
- * cch's admin UI labels this `resetAt` / 重置于 and its other timestamps cross
- * the wire both ways depending on the surface, so accepting a number costs one
- * branch and saves the card from showing nothing on a perfectly good answer.
- * Anything else — including a blank string — is treated as "not stated", which
- * the view layer renders by omitting the line rather than by guessing a date.
+ * Accepting a number costs one branch and saves the card from showing nothing
+ * on a perfectly good answer. Anything else — including a blank string — is
+ * "not stated", which the view layer renders by omitting the line rather than
+ * by guessing a date.
  */
 function readIsoLike(value: unknown): string {
   if (typeof value === 'string') return value.trim();

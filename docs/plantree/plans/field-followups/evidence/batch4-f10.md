@@ -27,12 +27,31 @@
 | `getMyUsageLogs` | 同上 | 存在 |
 | `getMyWeeklyQuota` · `getMyLimits` · `getMyQuota`(其他命名空间) · `getMyLimit` · `getMyWeeklyStats` · `getMyUsageLimit` · `getMyBudget` · `getMyUserInfo` · `getMyProfile` · 对照乱名 | `404 text/plain` | 不存在 |
 
-**字段词汇**取自 cch 自己的 `/zh-CN/my-usage` 页面文案字典：
-`limitWeeklyUsd`（"周限额 (USD)"，"留空表示无限制"）、`costWeekly`（"周消费"）、`resetAt`（"重置于"）；
-同一模型下还有 `limit5hUsd` / 日 / 月 / `limitTotalUsd` 四个窗口，本轮只取周，其余忽略。
+**响应体已用真实 key 观测**（2026-09-07，`https://cch-jyw.pipidan.qzz.io`，密钥不入库）。
+初稿从管理页文案猜的字段名（`costWeekly` / `limitWeeklyUsd` / `resetAt`）**全部不对**——
+按那份代码跑，解析器会一律返回 null，卡片永远显示「暂不可用」。真实形状是**两层作用域**：
 
-**结论**：周限额是 cch 出，不需要在 onboarding sidecar 上新建，也不需要 fork cch。
-`quotaUrl` 改为 `POST {serverUrl}/api/actions/my-usage/getMyQuota`。
+| | 5h | daily | **weekly** | monthly | total |
+|---|---|---|---|---|---|
+| `keyLimit*Usd` | null | null | **null** | null | null |
+| `keyCurrent*Usd` | 0 | 0 | **0** | 0 | 2.0878 |
+| `userLimit*Usd` | null | null | **1000** | null | null |
+| `userCurrent*Usd` | 0 | 0.139 | **0.139** | 0.139 | 2490.4 |
+
+cch 对每个消费窗口都记两遍：一遍算这把 key，一遍算持有它的 user。本 App 手里只有该 user
+若干把 key 中的一把。**只读 key 作用域，会把一个明明有 $1000 周限额的账号报成「没配额度」。**
+
+因此两个作用域都是候选，取**先卡住用户的那个**（剩余额度更少者；平手取上限更低者），
+且每个候选带自己的已用金额——key 的周消费只算这把 key，user 的算他所有 key，
+把一个作用域的上限配另一个的用量，得到的百分比不是任何东西的百分比。
+两边都没设上限时，报 **user** 的消费额，因为那描述的是这个人而不是这一台安装。
+
+**没有周期重置时间**：`dailyResetTime` 属于日窗口，`expiresAt` / `userExpiresAt` 是账号到期。
+把任何一个读成本周结束，都会在卡片上放一个自信的错日期，所以 `periodEnd` 正常缺失。
+
+**鉴权路径已实测确认**：有效 key 直接当 bearer 打 `getMyQuota` 仍返回
+`401 {"ok":false,"error":"认证无效或已过期"}`；必须先 `POST /api/auth/login` 换 `auth-token`
+cookie 才能读到——`UsageService` 既有的 401→login→cookie 重试链路是必需的，不是历史包袱。
 
 **为什么仍是独立调用而不是在 `getMyStatsSummary` 上加字段**：那次调用的时间范围是**客户端**选的
 （本月一号到今天），而额度窗口是**网关**拥有的。合成一个调用会让客户端选的月份范围
@@ -101,20 +120,12 @@
 
 ## 未验证项
 
-1. **`getMyQuota` 的响应体**：端点存在已坐实，**响应 JSON 的确切形状未观测**——
-   没有真实 cch key 就调不动它。解析器按 cch 的字段词汇加通用别名容错，但这是推断不是观测。
-   一条命令即可坐实（需要一个真实 cch key）：
-
-   ```sh
-   CCH=https://cch-jyw.pipidan.qzz.io
-   TOKEN=$(curl -sS -D- -o/dev/null -X POST "$CCH/api/auth/login" \
-     -H 'Content-Type: application/json' -d '{"key":"<真实 cch key>"}' \
-     | grep -i '^set-cookie' | sed -E 's/.*auth-token=([^;]+).*/\1/')
-   curl -sS -X POST "$CCH/api/actions/my-usage/getMyQuota" \
-     -H "Cookie: auth-token=$TOKEN" -H 'Content-Type: application/json' -d '{}'
-   ```
+1. ~~`getMyQuota` 的响应体~~ —— **已用真实 key 验证**（见上）。
+   端到端跑过一次：live 响应 → `parseWeeklyQuota` → `deriveWeeklyQuotaView`，
+   该账号得到 `{"usedUsd":0.13937024,"limitUsd":1000}` →
+   卡片显示 `$0.1394 / $1000.00`、进度 0%、剩余 `$999.86`。
 2. **登出后清理额度数据**：`UserProfileCard` 的登出已 `invalidateQueries(['usageStats'])`，
    且额度只存在于 query 缓存里（没有独立持久化），所以逻辑上随之失效；但未跑真实登出验证。
 3. **周期更新后刷新**：`useUsageStats` 每 5 分钟轮询，周期翻转会在下一轮拿到新数值。
-   未在跨周期时点验证。
+   未在跨周期时点验证；且 cch 的 payload 不含周期结束时间，界面上无法预告下次重置。
 4. **GUI 点验**：瓦片布局、进度条与超限配色未跑真实 Electron。

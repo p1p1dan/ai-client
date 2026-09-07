@@ -1,28 +1,144 @@
 import { describe, expect, it } from 'vitest';
 import { deriveWeeklyQuotaView, formatQuotaUsd, parseWeeklyQuota } from '../weeklyQuota';
 
-describe('F10 parseWeeklyQuota', () => {
-  it("reads cch's own field names", () => {
-    // The gateway's vocabulary, taken from its admin UI: `limitWeeklyUsd`
-    // (blank = unlimited) paired with `costWeekly` and a `resetAt`.
-    expect(
-      parseWeeklyQuota({
-        costWeekly: 12.4,
-        limitWeeklyUsd: 50,
-        resetAt: '2026-09-14T00:00:00Z',
-        // The other windows cch tracks per key. Present in the same payload and
-        // deliberately ignored — the card shows the week.
-        cost5h: 1.2,
-        limit5hUsd: 5,
-        costMonthly: 40,
-        limitMonthlyUsd: 200,
-      })
-    ).toEqual({ usedUsd: 12.4, limitUsd: 50, periodEnd: '2026-09-14T00:00:00Z' });
+/**
+ * Captured from cch's live `my-usage/getMyQuota` on 2026-09-07 with a real key.
+ *
+ * Account-identifying values are replaced (`userName`, the provider groups, the
+ * key name); every FIELD NAME and every quota number is exactly what the
+ * gateway returned. The unrelated fields are kept on purpose — they are what
+ * proves the parser ignores the other four windows and the account metadata
+ * instead of tripping over them.
+ */
+const CAPTURED_GET_MY_QUOTA = {
+  keyLimit5hUsd: null,
+  keyLimitDailyUsd: null,
+  keyLimitWeeklyUsd: null,
+  keyLimitMonthlyUsd: null,
+  keyLimitTotalUsd: null,
+  keyLimitConcurrentSessions: 0,
+  keyCurrent5hUsd: 0,
+  keyCurrentDailyUsd: 0,
+  keyCurrentWeeklyUsd: 0,
+  keyCurrentMonthlyUsd: 0,
+  keyCurrentTotalUsd: 2.0878065,
+  keyCurrentConcurrentSessions: 0,
+  userLimit5hUsd: null,
+  userLimitWeeklyUsd: 1000,
+  userLimitMonthlyUsd: null,
+  userLimitTotalUsd: null,
+  userLimitConcurrentSessions: null,
+  userRpmLimit: null,
+  userCurrent5hUsd: 0,
+  userCurrentDailyUsd: 0.13937024,
+  userCurrentWeeklyUsd: 0.13937024,
+  userCurrentMonthlyUsd: 0.13937024,
+  userCurrentTotalUsd: 2490.41637794,
+  userCurrentConcurrentSessions: 0,
+  userLimitDailyUsd: null,
+  userExpiresAt: null,
+  userProviderGroup: 'group-a,group-b',
+  userName: 'user@example.test',
+  userIsEnabled: true,
+  keyProviderGroup: 'group-a',
+  keyName: 'key-1',
+  keyIsEnabled: true,
+  userAllowedModels: [],
+  userAllowedClients: [],
+  expiresAt: null,
+  dailyResetMode: 'fixed',
+  dailyResetTime: '00:00',
+};
+
+describe('F10 parseWeeklyQuota — real cch payload', () => {
+  it('reads the binding weekly allowance out of the captured response', () => {
+    // The key has no weekly ceiling; the user does. Reading only the key scope
+    // would have told this account it has no allowance at all.
+    expect(parseWeeklyQuota(CAPTURED_GET_MY_QUOTA)).toEqual({
+      usedUsd: 0.13937024,
+      limitUsd: 1000,
+    });
   });
 
-  it('accepts the generic aliases, since the envelope is not yet observed', () => {
+  it('states no period end, because the payload contains none', () => {
+    // `dailyResetTime` is the DAILY window's and `expiresAt` is account expiry;
+    // reading either as the week's end would put a confident wrong date on the
+    // card.
+    expect(parseWeeklyQuota(CAPTURED_GET_MY_QUOTA)).not.toHaveProperty('periodEnd');
+  });
+
+  it('ignores the other four windows and the account metadata', () => {
+    // `keyCurrentTotalUsd: 2.09` and `userCurrentTotalUsd: 2490.42` are both in
+    // the same payload and neither may leak into a WEEKLY figure.
+    const parsed = parseWeeklyQuota(CAPTURED_GET_MY_QUOTA);
+    expect(parsed?.usedUsd).not.toBe(2.0878065);
+    expect(parsed?.usedUsd).not.toBe(2490.41637794);
+  });
+});
+
+describe('F10 parseWeeklyQuota — scope selection', () => {
+  it('takes the key scope when it is the tighter of the two', () => {
     expect(
-      parseWeeklyQuota({ usedUsd: 12.4, limitUsd: 50, periodEnd: '2026-09-14T00:00:00Z' })
+      parseWeeklyQuota({
+        keyCurrentWeeklyUsd: 9,
+        keyLimitWeeklyUsd: 10,
+        userCurrentWeeklyUsd: 50,
+        userLimitWeeklyUsd: 1000,
+      })
+    ).toEqual({ usedUsd: 9, limitUsd: 10 });
+  });
+
+  it('takes the user scope when the key has more headroom', () => {
+    expect(
+      parseWeeklyQuota({
+        keyCurrentWeeklyUsd: 0,
+        keyLimitWeeklyUsd: 10_000,
+        userCurrentWeeklyUsd: 990,
+        userLimitWeeklyUsd: 1000,
+      })
+    ).toEqual({ usedUsd: 990, limitUsd: 1000 });
+  });
+
+  it('never pairs one scope limit with the other scope usage', () => {
+    // The percentage would be of nothing: the key's weekly spend counts one
+    // key, the user's counts every key they hold.
+    const parsed = parseWeeklyQuota({
+      keyCurrentWeeklyUsd: 1,
+      keyLimitWeeklyUsd: 5,
+      userCurrentWeeklyUsd: 800,
+      userLimitWeeklyUsd: 1000,
+    });
+    expect(parsed).toEqual({ usedUsd: 1, limitUsd: 5 });
+  });
+
+  it('breaks a headroom tie on the lower ceiling, so the answer is stable', () => {
+    expect(
+      parseWeeklyQuota({
+        keyCurrentWeeklyUsd: 5,
+        keyLimitWeeklyUsd: 10,
+        userCurrentWeeklyUsd: 95,
+        userLimitWeeklyUsd: 100,
+      })
+    ).toEqual({ usedUsd: 5, limitUsd: 10 });
+  });
+
+  it("reports the user's spend when neither scope sets a ceiling", () => {
+    // The figure that describes the person, not this one installation.
+    expect(
+      parseWeeklyQuota({
+        keyCurrentWeeklyUsd: 2,
+        keyLimitWeeklyUsd: null,
+        userCurrentWeeklyUsd: 40,
+        userLimitWeeklyUsd: null,
+      })
+    ).toEqual({ usedUsd: 40, limitUsd: null });
+  });
+});
+
+describe('F10 parseWeeklyQuota', () => {
+  it('accepts one unscoped weekly pair, for a gateway that reports it that way', () => {
+    expect(
+      parseWeeklyQuota({ costWeekly: 12.4, limitWeeklyUsd: 50, periodEnd: '2026-09-14T00:00:00Z' })
     ).toEqual({ usedUsd: 12.4, limitUsd: 50, periodEnd: '2026-09-14T00:00:00Z' });
     expect(parseWeeklyQuota({ weeklyCostUsd: 1, weeklyLimitUsd: 2 })).toEqual({
       usedUsd: 1,
@@ -31,45 +147,30 @@ describe('F10 parseWeeklyQuota', () => {
   });
 
   it('takes a reset time as an epoch number as well as a string', () => {
-    expect(parseWeeklyQuota({ costWeekly: 1, resetAt: 1_789_000_000_000 })?.periodEnd).toBe(
+    expect(parseWeeklyQuota({ costWeekly: 1, weeklyResetAt: 1_789_000_000_000 })?.periodEnd).toBe(
       new Date(1_789_000_000_000).toISOString()
     );
     // Not a usable instant: say nothing rather than render 1970.
-    expect(parseWeeklyQuota({ costWeekly: 1, resetAt: 0 })).not.toHaveProperty('periodEnd');
+    expect(parseWeeklyQuota({ costWeekly: 1, weeklyResetAt: 0 })).not.toHaveProperty('periodEnd');
+  });
+
+  it('answers null when there is no numerator anywhere', () => {
+    // Inventing `0` would report an unused allowance to somebody who may have
+    // exhausted theirs.
+    for (const payload of [null, undefined, 'nope', {}, { userLimitWeeklyUsd: 50 }]) {
+      expect(parseWeeklyQuota(payload)).toBeNull();
+    }
+    expect(parseWeeklyQuota({ userCurrentWeeklyUsd: Number.NaN })).toBeNull();
+    expect(parseWeeklyQuota({ userCurrentWeeklyUsd: -1 })).toBeNull();
   });
 
   it('reads a blank weekly limit as unlimited, which is what cch means by it', () => {
     // cch's admin field says 留空表示无限制 — an absent ceiling is a real
     // configuration, not a broken response.
-    expect(parseWeeklyQuota({ costWeekly: 12.4, limitWeeklyUsd: null })).toEqual({
+    expect(parseWeeklyQuota({ userCurrentWeeklyUsd: 12.4, userLimitWeeklyUsd: null })).toEqual({
       usedUsd: 12.4,
       limitUsd: null,
     });
-  });
-
-  it('answers null when there is no numerator to show', () => {
-    // Inventing `0` here would report an unused allowance to somebody who may
-    // have exhausted theirs.
-    for (const payload of [null, undefined, 'nope', {}, { limitUsd: 50 }, { usedUsd: 'x' }]) {
-      expect(parseWeeklyQuota(payload)).toBeNull();
-    }
-    expect(parseWeeklyQuota({ usedUsd: Number.NaN })).toBeNull();
-    expect(parseWeeklyQuota({ usedUsd: -1 })).toBeNull();
-  });
-
-  it('keeps a missing limit missing rather than defaulting it', () => {
-    // "No ceiling configured" is a real state and must survive the trip; a
-    // default would make it indistinguishable from a ceiling of zero.
-    expect(parseWeeklyQuota({ usedUsd: 3 })).toEqual({ usedUsd: 3, limitUsd: null });
-    expect(parseWeeklyQuota({ usedUsd: 3, limitUsd: 'unlimited' })).toEqual({
-      usedUsd: 3,
-      limitUsd: null,
-    });
-  });
-
-  it('omits periodEnd rather than inventing one', () => {
-    expect(parseWeeklyQuota({ usedUsd: 1 })).not.toHaveProperty('periodEnd');
-    expect(parseWeeklyQuota({ usedUsd: 1, periodEnd: '  ' })).not.toHaveProperty('periodEnd');
   });
 });
 

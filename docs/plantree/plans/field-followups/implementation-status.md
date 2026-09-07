@@ -17,7 +17,8 @@
    铃铛与启动弹窗、顶部「...」确已消失、周限额瓦片与超限配色。
 2. F08 联调：捕获真实出站请求头，确认 `User-Agent: claude-cli-pilab/<版本>` 生效。
 3. F09 联调：onboard 部署 `/api/v1/announcements` 后核对字段与真实启动弹窗。
-4. F10 联调：onboard 部署 `getMyWeeklyQuota` 后核对字段名、周期语义与真实额度数值。
+4. F10 联调已完成（用真实 cch key 实测 `getMyQuota`，端到端到卡片文案）；
+   剩 F09 的真实部署联调。
 5. 上述完成后才逐项标 Done 并合入主分支。
 
 ## Blocker

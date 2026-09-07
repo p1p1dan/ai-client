@@ -187,8 +187,13 @@ describe('UsageService', () => {
       status: 200,
       json: async () => ({
         ok: true,
-        // cch's own spelling — see `parseWeeklyQuota`.
-        data: { costWeekly: 12.4, limitWeeklyUsd: 50, resetAt: '2026-04-13T00:00:00Z' },
+        // cch's own two-scope spelling — see `parseWeeklyQuota`.
+        data: {
+          keyCurrentWeeklyUsd: 0,
+          keyLimitWeeklyUsd: null,
+          userCurrentWeeklyUsd: 12.4,
+          userLimitWeeklyUsd: 50,
+        },
       }),
     });
 
@@ -203,7 +208,7 @@ describe('UsageService', () => {
       monthCount: 9,
       monthCostUsd: 0.1324964,
       // F10: the allowance call answered, so it rides along on the success arm.
-      weeklyQuota: { usedUsd: 12.4, limitUsd: 50, periodEnd: '2026-04-13T00:00:00Z' },
+      weeklyQuota: { usedUsd: 12.4, limitUsd: 50 },
     });
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -295,7 +300,7 @@ describe('UsageService', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => ({ ok: true, data: { limitWeeklyUsd: 50 } }),
+      json: async () => ({ ok: true, data: { userLimitWeeklyUsd: 50 } }),
     });
 
     const { usageService } = await import('../UsageService');
@@ -365,7 +370,10 @@ describe('UsageService', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => ({ ok: true, data: { costWeekly: 12.4, limitWeeklyUsd: 50 } }),
+      json: async () => ({
+        ok: true,
+        data: { userCurrentWeeklyUsd: 12.4, userLimitWeeklyUsd: 50 },
+      }),
     });
 
     const { usageService } = await import('../UsageService');
