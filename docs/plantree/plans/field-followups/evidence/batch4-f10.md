@@ -129,3 +129,42 @@ cookie 才能读到——`UsageService` 既有的 401→login→cookie 重试链
 3. **周期更新后刷新**：`useUsageStats` 每 5 分钟轮询，周期翻转会在下一轮拿到新数值。
    未在跨周期时点验证；且 cch 的 payload 不含周期结束时间，界面上无法预告下次重置。
 4. **GUI 点验**：瓦片布局、进度条与超限配色未跑真实 Electron。
+
+## 后续加固（2026-09-08，用户三条反馈）
+
+### 1. 只用登录返回的地址与 key
+
+现状核对后**本来就是对的**：`resolveUsageAuthTarget` 读的是 vault 的 `cchBaseUrl` 与
+`codex.apiKey`，两者都由 `verifyAndRegister` 在登录时写入；非托管路径读的
+`onboarding.serverUrl` 同样是登录记下的 cch 网关地址。**但没有任何东西挡住它漂移**，
+所以补了 `usageCredentialSource.test.ts` 三条静态断言：
+
+- 不得 import `getOnboardingServiceUrl` / `onboarding/serviceUrl` / `piModelConfig` /
+  `managedCredential` / `getPiModelManagementUrl`；
+- 必须直接读 `payload.cchBaseUrl` 与 `payload.codex.apiKey`，**不得**读 `payload.pi`
+  或拼 `${cchBaseUrl}/v1`——那是模型配置的解析方式，回答的是另一个问题；
+- 三个 usage URL 全部挂在同一个 `serverUrl` 上，文件里不得出现任何字面 `http(s)://`。
+
+两条最容易混的：`getOnboardingServiceUrl()` 是 onboarding 边车（供模型目录与公告），
+而 `cchBaseUrl` 是真正计量用量的 cch 网关，指错了就是去问一个从没见过这用户任何请求的服务；
+`managedCredential()` 优先 `payload.pi` 并回退到自造的 `${cchBaseUrl}/v1`，那是代理路径，
+不是 Actions API 的 origin。
+
+### 2. 控制查询频率
+
+改前每次刷新要打 **5 个请求**：bearer 探测（实测**必定** 401）→ login → today → summary → quota，
+每 5 分钟一轮 = **60 次/小时/客户端**。
+
+两处改动：
+
+- `UsageService` 缓存 Actions 会话（内存、按 `serverUrl` + key 作键、30 分钟 TTL）。
+  命中时直接用 cookie 打三个真实调用，省掉注定失败的 bearer 探测和 login。
+  会话过期就静默重走完整握手，不当错误报给用户。**登出时清除**（⑥c），
+  它是被登出账号的 bearer 凭据，留着会让下一次 `getStats()` 用别人的 cookie 读用量。
+- 轮询间隔 5 分钟 → 15 分钟。这三个数字（今日、本月、周额度）没有一个是要盯着跳的；
+  想立刻看用卡片上的手动刷新按钮。
+
+合计 **60 次/小时 → 12 次/小时**。
+
+新增 3 条测试：会话复用把 5 个请求降到 3、会话失效时静默重握手、
+换网关/换 key 时绝不复用上一份会话（那会把别人的数字显示在这个用户的卡片上）。

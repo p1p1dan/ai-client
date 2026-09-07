@@ -310,6 +310,160 @@ describe('UsageService', () => {
     expect(result).toMatchObject({ weeklyQuota: null, todayCount: 3 });
   });
 
+  // F10-b: the cost fix. Against this gateway the bearer probe ALWAYS 401s
+  // (measured 2026-09-07), so it and the login it forces were two wasted
+  // requests on every single poll, forever.
+  it('reuses the session on the next refresh, dropping five requests to three', async () => {
+    writeOnboardingState('https://cch.example.com');
+    writeLegacyCodexKey();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 3, 9, 10, 0, 0));
+
+    const bearer401 = { ok: false, status: 401, json: async () => ({ ok: false }) };
+    const loginOk = {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+      text: async () => '{"ok":true}',
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'set-cookie' ? 'auth-token=session-1; Path=/;' : null,
+      },
+    };
+    const today = {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: { calls: 1, costUsd: 1 } }),
+    };
+    const summary = {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: { totalRequests: 1, totalCost: 1 } }),
+    };
+    const quota = {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: { userCurrentWeeklyUsd: 1, userLimitWeeklyUsd: 10 } }),
+    };
+
+    const { usageService, resetUsageSessionCache } = await import('../UsageService');
+    resetUsageSessionCache();
+
+    // First refresh: bearer probe, login, then the three real calls.
+    fetchMock.mockResolvedValueOnce(bearer401);
+    fetchMock.mockResolvedValueOnce(loginOk);
+    fetchMock.mockResolvedValueOnce(today);
+    fetchMock.mockResolvedValueOnce(summary);
+    fetchMock.mockResolvedValueOnce(quota);
+    expect(await usageService.getStats()).toMatchObject({ todayCount: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+
+    // Second refresh: straight to the three calls on the cached cookie.
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValueOnce(today);
+    fetchMock.mockResolvedValueOnce(summary);
+    fetchMock.mockResolvedValueOnce(quota);
+    expect(await usageService.getStats()).toMatchObject({ todayCount: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://cch.example.com/api/actions/my-usage/getMyTodayStats'
+    );
+    expect((fetchMock.mock.calls[0][1] as { headers: Record<string, string> }).headers.Cookie).toBe(
+      'auth-token=session-1'
+    );
+    vi.useRealTimers();
+  });
+
+  it('re-handshakes silently when the cached session stops working', async () => {
+    writeOnboardingState('https://cch.example.com');
+    writeLegacyCodexKey();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 3, 9, 10, 0, 0));
+
+    const ok = (data: unknown) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data }),
+    });
+    const loginWith = (cookie: string) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+      text: async () => '{"ok":true}',
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'set-cookie' ? `auth-token=${cookie}; Path=/;` : null,
+      },
+    });
+
+    const { usageService, resetUsageSessionCache } = await import('../UsageService');
+    resetUsageSessionCache();
+
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+    fetchMock.mockResolvedValueOnce(loginWith('session-1'));
+    fetchMock.mockResolvedValueOnce(ok({ calls: 1, costUsd: 1 }));
+    fetchMock.mockResolvedValueOnce(ok({ totalRequests: 1, totalCost: 1 }));
+    fetchMock.mockResolvedValueOnce(ok({}));
+    await usageService.getStats();
+
+    // The server has since dropped it. An expired session is an expected
+    // outcome, not something the user should read an error about.
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+    fetchMock.mockResolvedValueOnce(loginWith('session-2'));
+    fetchMock.mockResolvedValueOnce(ok({ calls: 2, costUsd: 2 }));
+    fetchMock.mockResolvedValueOnce(ok({ totalRequests: 2, totalCost: 2 }));
+    fetchMock.mockResolvedValueOnce(ok({}));
+    expect(await usageService.getStats()).toMatchObject({ todayCount: 2 });
+    vi.useRealTimers();
+  });
+
+  it('never serves one account the session of another', async () => {
+    // The failure this key guards against is another user's numbers on this
+    // user's card — worse than any number of extra requests.
+    writeOnboardingState('https://cch.example.com');
+    writeLegacyCodexKey();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 3, 9, 10, 0, 0));
+
+    const ok = (data: unknown) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data }),
+    });
+    const { usageService, resetUsageSessionCache } = await import('../UsageService');
+    resetUsageSessionCache();
+
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+      text: async () => '{"ok":true}',
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'set-cookie' ? 'auth-token=session-a; Path=/;' : null,
+      },
+    });
+    fetchMock.mockResolvedValueOnce(ok({ calls: 1, costUsd: 1 }));
+    fetchMock.mockResolvedValueOnce(ok({ totalRequests: 1, totalCost: 1 }));
+    fetchMock.mockResolvedValueOnce(ok({}));
+    await usageService.getStats();
+
+    // Same process, different gateway: the cached session must not be offered.
+    writeOnboardingState('https://other-cch.example.com');
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+    await usageService.getStats();
+    // First call of the new refresh is the BEARER probe, not a cookie reuse.
+    const firstInit = fetchMock.mock.calls[0][1] as { headers: Record<string, string> };
+    expect(firstInit.headers.Cookie).toBeUndefined();
+    expect(firstInit.headers.Authorization).toBeDefined();
+    vi.useRealTimers();
+  });
+
   it('returns { error } when actions API is unauthorized and login fails', async () => {
     writeOnboardingState('https://cch.example.com');
     writeLegacyCodexKey();

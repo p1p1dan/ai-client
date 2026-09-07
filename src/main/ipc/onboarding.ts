@@ -80,6 +80,9 @@ async function clearServerAuthCookie(serverUrl: string): Promise<void> {
  *     the next sign-in on this machine sees the operator's messages as new.
  *     Ungated and failure-tolerant; the cached announcements are NOT cleared,
  *     so a signed-out window still shows what it had.
+ *  ⑥c `resetUsageSessionCache()` (F10-b) — the cached cch Actions session is a
+ *     bearer credential for the account being logged out. Memory-only, so this
+ *     is the only place it can be dropped.
  *  ⑦ `authStateService.refresh()` — the value-changed broadcast of
  *     `signed_out` (D47 S5 §1.2); the vault is already `cleared` (④), so this
  *     lands on `signed_out` and notifies exactly once (assuming the snapshot
@@ -163,6 +166,17 @@ export async function performLogoutSequence(): Promise<boolean> {
     getAnnouncementService().clearReadState();
   } catch (error) {
     console.warn('[onboarding:logout] Failed to clear announcement read state:', error);
+  }
+
+  // ⑥c (F10-b) — drop the cached Actions session. It is a bearer credential
+  // for the account being logged out, held in memory only; keeping it would
+  // let the next `getStats()` read the previous user's usage with a cookie
+  // nothing else in this process still has a right to.
+  try {
+    const { resetUsageSessionCache } = await import('../services/usage/UsageService');
+    resetUsageSessionCache();
+  } catch (error) {
+    console.warn('[onboarding:logout] Failed to clear usage session cache:', error);
   }
 
   // ⑦ — payload/env already zeroed (④/⑤ landed above), so this is safe to

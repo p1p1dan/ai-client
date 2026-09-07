@@ -236,6 +236,72 @@ async function postAction(
   return { ok: true, payload };
 }
 
+/**
+ * F10-b — the Actions session this process already established.
+ *
+ * ## Why caching it is the whole cost fix
+ *
+ * `getStats()` used to spend FIVE requests per refresh against this gateway: a
+ * bearer attempt that 401s, a login, then the three real calls. Measured, not
+ * assumed — a valid key presented as a bearer token to
+ * `my-usage/getMyTodayStats` answers `401 {"ok":false,"error":"认证无效或已过期"}`
+ * (2026-09-07, live gateway), so the first two were pure overhead on every
+ * single poll, forever.
+ *
+ * With the session cached, a refresh costs three requests and no login. The
+ * bearer-first path is NOT deleted, because a gateway that does accept bearer
+ * (the legacy/dual-session deployments the original comment names) still gets
+ * it — it is simply not paid for again once a cookie is in hand.
+ *
+ * ## Why it is memory-only, and keyed
+ *
+ * Never persisted: a session cookie is a bearer credential in its own right,
+ * and the vault is the only thing in this app allowed to hold one at rest.
+ * Losing it on restart costs exactly one login.
+ *
+ * Keyed by `serverUrl` + apiKey so that a re-login, a key rotation, or a
+ * gateway switch cannot serve the previous account's session — the failure
+ * that would produce is another user's numbers on this user's card, which is
+ * worse than any number of extra requests.
+ *
+ * The TTL is our own, deliberately far shorter than the cookie's real
+ * `Max-Age` (observed: 7 days). We do not control when the server invalidates
+ * a session, so the cache is a cost optimisation with a short leash, not a
+ * claim about validity — and `getStats` re-logs in on a 401 anyway.
+ */
+const SESSION_TTL_MS = 30 * 60 * 1_000;
+
+let cachedSession: { key: string; value: string; expiresAt: number } | null = null;
+
+function sessionCacheKey(serverUrl: string, apiKey: string): string {
+  return `${serverUrl}\u0000${apiKey}`;
+}
+
+function readCachedSession(serverUrl: string, apiKey: string, now: number): string | null {
+  if (!cachedSession) return null;
+  if (cachedSession.key !== sessionCacheKey(serverUrl, apiKey)) return null;
+  if (cachedSession.expiresAt <= now) return null;
+  return cachedSession.value;
+}
+
+function storeSession(serverUrl: string, apiKey: string, value: string, now: number): void {
+  cachedSession = {
+    key: sessionCacheKey(serverUrl, apiKey),
+    value,
+    expiresAt: now + SESSION_TTL_MS,
+  };
+}
+
+/** Drop the cached session — a 401 on it means the server no longer honours it. */
+function clearSession(): void {
+  cachedSession = null;
+}
+
+/** Test seam. Logout and account switches must not leave a session behind. */
+export function resetUsageSessionCache(): void {
+  clearSession();
+}
+
 class UsageService {
   async getStats(): Promise<UsageStatsResult> {
     try {
@@ -335,6 +401,27 @@ class UsageService {
         return { ok: true, todayCount, todayCostUsd, monthCount, monthCostUsd, weeklyQuota };
       };
 
+      // Attempt #0: the session this process already has. Skips both the
+      // doomed bearer probe and the login — the two requests that made every
+      // poll cost five instead of three.
+      const cached = readCachedSession(serverUrl, apiKey, Date.now());
+      if (cached) {
+        const reused = await tryFetchStats({ type: 'cookie', value: cached });
+        if (reused.ok) {
+          return {
+            todayCount: reused.todayCount,
+            todayCostUsd: reused.todayCostUsd,
+            monthCount: reused.monthCount,
+            monthCostUsd: reused.monthCostUsd,
+            weeklyQuota: reused.weeklyQuota,
+          };
+        }
+        // The server stopped honouring it. Fall through to the full handshake
+        // rather than reporting an error: an expired session is an expected
+        // outcome, not a failure the user should read about.
+        clearSession();
+      }
+
       // Attempt #1: call Actions API with apiKey directly (works in legacy/dual session modes).
       const direct = await tryFetchStats({ type: 'bearer', token: apiKey });
       if (direct.ok) {
@@ -360,6 +447,9 @@ class UsageService {
 
         const retry = await tryFetchStats({ type: 'cookie', value: login.sessionId });
         if (retry.ok) {
+          // Stored only after it has actually answered a real call: a cookie
+          // that logs in but cannot read is not worth reusing.
+          storeSession(serverUrl, apiKey, login.sessionId, Date.now());
           return {
             todayCount: retry.todayCount,
             todayCostUsd: retry.todayCostUsd,
