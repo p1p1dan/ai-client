@@ -451,6 +451,10 @@ export const zhTranslations: Record<string, string> = {
     '只对 GUI 会话生效。切换后会重新加载托管 Pi worker；内嵌 Pi TUI 仍只使用本应用的托管目录。',
   'Your current local setup already uses this directory. This switch is saved for managed mode.':
     '当前本机模式已经直接使用这个目录；此开关会保存下来，供托管模式使用。',
+  'Bundled extensions': '随包扩展',
+  'Sub-agents': '子智能体',
+  'Lets the model delegate work to background agents. Off by default: its tool definitions are sent with every request, so it costs tokens on every turn even when unused. Changing it reloads Pi workers.':
+    '让模型把任务派给后台智能体。默认关闭：它的工具定义会随每次请求一起发送，即使用不到也每轮都在花 token。切换后会重新加载 Pi worker。',
   'App-managed Pi directory': '本应用托管的 Pi 目录',
   'Managed mode reads this app-profile directory in both GUI and Pi TUI sessions.':
     '托管模式的 GUI 与 Pi TUI 会话都会读取这个应用配置档目录。',

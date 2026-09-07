@@ -1,5 +1,5 @@
-import type { PiResourceSettings } from '@shared/piModelConfig';
-import { FolderOpen, Library, TriangleAlert } from 'lucide-react';
+import type { PiResourceSettings, UpdatePiResourceSettingsRequest } from '@shared/piModelConfig';
+import { Boxes, FolderOpen, Library, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,11 +40,16 @@ export function PiResourcesSettings() {
     void load();
   }, [load]);
 
-  const updateBorrowing = async (borrowUserPiResources: boolean) => {
+  /**
+   * One writer for both switches. The request is a PARTIAL update, so each
+   * toggle sends only its own field — sending the pair would let a stale
+   * snapshot overwrite whichever switch the user did not touch.
+   */
+  const update = async (patch: UpdatePiResourceSettingsRequest) => {
     setBusy(true);
     setError(null);
     try {
-      setSnapshot(await window.electronAPI.piResources.updateSettings({ borrowUserPiResources }));
+      setSnapshot(await window.electronAPI.piResources.updateSettings(patch));
     } catch (cause) {
       const message = messageOf(cause);
       await load();
@@ -148,8 +153,31 @@ export function PiResourcesSettings() {
               <Switch
                 checked={snapshot.borrowUserPiResources}
                 disabled={busy}
-                onCheckedChange={(checked) => void updateBorrowing(checked)}
+                onCheckedChange={(checked) => void update({ borrowUserPiResources: checked })}
                 aria-label={t('Borrow personal Pi resources')}
+              />
+            </div>
+          </section>
+
+          <section className="space-y-4 rounded-md border bg-card p-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <Boxes className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <h4 className="text-ui font-semibold">{t('Bundled extensions')}</h4>
+            </div>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-ui font-medium">{t('Sub-agents')}</p>
+                <p className="text-meta text-muted-foreground">
+                  {t(
+                    'Lets the model delegate work to background agents. Off by default: its tool definitions are sent with every request, so it costs tokens on every turn even when unused. Changing it reloads Pi workers.'
+                  )}
+                </p>
+              </div>
+              <Switch
+                checked={snapshot.enableSubagents}
+                disabled={busy}
+                onCheckedChange={(checked) => void update({ enableSubagents: checked })}
+                aria-label={t('Sub-agents')}
               />
             </div>
           </section>

@@ -2,7 +2,10 @@ import { join } from 'node:path';
 import {
   PI_BORROW_RESOURCES_DIR_ENV,
   PI_BORROW_USER_RESOURCES_SETTING_KEY,
+  PI_ENABLE_SUBAGENTS_SETTING_KEY,
+  PI_OPT_IN_EXTENSIONS_ENV,
   PI_PROJECT_TRUST_ENV,
+  PI_SUBAGENTS_FEATURE_ID,
 } from '@shared/piModelConfig';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -152,6 +155,9 @@ describe('resolveManagedPiWorkerEnv — borrowed resources', () => {
 
     expect(snapshot.managed).toBe(true);
     expect(snapshot.borrowUserPiResources).toBe(true);
+    // The two switches on this page have OPPOSITE defaults; asserting both here
+    // is what keeps a future "make the defaults consistent" tidy-up honest.
+    expect(snapshot.enableSubagents).toBe(false);
     expect(snapshot.paths.sharedSkills).toMatch(/[/\\]\.agents[/\\]skills$/);
     expect(snapshot.paths.userSkills).toMatch(/[/\\]\.pi[/\\]agent[/\\]skills$/);
     expect(snapshot.paths.userPromptTemplates).toMatch(/[/\\]\.pi[/\\]agent[/\\]prompts$/);
@@ -185,5 +191,60 @@ describe('resolveManagedPiWorkerEnv — borrowed resources', () => {
 
     readSharedSettingsMock.mockReturnValue({ credentialMode: 'local' });
     expect(getActivePiPromptTemplatesDir()).toBe(join('/tmp/custom-pi-agent', 'prompts'));
+  });
+});
+
+/**
+ * Opt-in bundled extensions — the sub-agent switch.
+ *
+ * Default OFF, unlike borrowing. The reason is cost, not safety: the
+ * extension's three tool schemas are written into the cached prefix of every
+ * request, so a session that never delegates still pays for them on every turn
+ * (measured 2026-09-07: 4.8 KB of an 11.4 KB tool payload).
+ */
+describe('resolveManagedPiWorkerEnv — opt-in extensions', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env.AICLIENT_MANAGED_CREDENTIALS;
+    delete process.env.PI_CODING_AGENT_DIR;
+  });
+
+  afterEach(() => {
+    delete process.env.AICLIENT_MANAGED_CREDENTIALS;
+    delete process.env.PI_CODING_AGENT_DIR;
+  });
+
+  it('sends nothing in either mode when the setting is absent', async () => {
+    for (const managed of [true, false]) {
+      expect(await workerEnv(managed)).not.toHaveProperty(PI_OPT_IN_EXTENSIONS_ENV);
+    }
+  });
+
+  it('names the feature in BOTH modes once it is on', async () => {
+    // Unlike the borrow directory, this is not a managed-mode repair: the
+    // bundled copy is injected on the local route too, so the switch has to
+    // reach both.
+    for (const managed of [true, false]) {
+      const env = await workerEnv(managed, { [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true });
+      expect(env[PI_OPT_IN_EXTENSIONS_ENV]).toBe(PI_SUBAGENTS_FEATURE_ID);
+    }
+  });
+
+  it('reads only an explicit true, so a stray value stays off', async () => {
+    for (const stored of [false, 'true', 1, null]) {
+      const env = await workerEnv(true, { [PI_ENABLE_SUBAGENTS_SETTING_KEY]: stored });
+      expect(env).not.toHaveProperty(PI_OPT_IN_EXTENSIONS_ENV);
+    }
+  });
+
+  it('keeps it out of the PTY environment', async () => {
+    // Same rule as the borrow dir: the real pi CLI does not read our env var,
+    // and leaving it there would claim an extension the TUI is not loading.
+    readSharedSettingsMock.mockReturnValue({
+      credentialMode: 'managed',
+      [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true,
+    });
+    const { resolveManagedPiPtyEnv } = await import('../index');
+    expect(resolveManagedPiPtyEnv()).not.toHaveProperty(PI_OPT_IN_EXTENSIONS_ENV);
   });
 });

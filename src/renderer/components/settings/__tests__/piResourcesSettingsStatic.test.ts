@@ -19,12 +19,23 @@ describe('R04 Pi resource settings', () => {
     expect(component).not.toContain("'~/.pi");
   });
 
-  it('wires the borrow switch and managed prompt-folder action through the narrow bridge', () => {
+  it('wires the switches and managed prompt-folder action through the narrow bridge', () => {
     expect(component).toContain('window.electronAPI.piResources.getSettings()');
-    expect(component).toContain('window.electronAPI.piResources.updateSettings({');
-    expect(component).toContain('borrowUserPiResources');
+    expect(component).toContain('window.electronAPI.piResources.updateSettings(patch)');
     expect(component).toContain('window.electronAPI.piResources.openPromptTemplates()');
     expect(component).not.toContain('window.electronAPI.settings.write');
+  });
+
+  /**
+   * Two switches, one writer, one field per call. A toggle that sent the whole
+   * snapshot back would carry the OTHER switch's value from whenever the page
+   * last loaded, so flipping one could silently revert the other.
+   */
+  it('sends one field per toggle rather than the whole snapshot', () => {
+    expect(component).toContain('update({ borrowUserPiResources: checked })');
+    expect(component).toContain('update({ enableSubagents: checked })');
+    expect(component).toContain('checked={snapshot.borrowUserPiResources}');
+    expect(component).toContain('checked={snapshot.enableSubagents}');
   });
 
   it('is a Settings category, not a new workspace navigation surface', () => {

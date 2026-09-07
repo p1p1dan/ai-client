@@ -31,7 +31,8 @@
  * already renders. The renderer has had a complete consumer for this and no
  * producer.
  *
- * `@gotgenes/pi-subagents` is bundled INSTEAD of `tintinweb/pi-subagents`, which
+ * `@gotgenes/pi-subagents` is OPT-IN (see `optIn` below) and is bundled INSTEAD
+ * of `tintinweb/pi-subagents`, which
  * the permission system's own compatibility table
  * (`@gotgenes/pi-permission-system/docs/subagent-integration.md`) records as
  * emitting no lifecycle events: its sub-agents get neither deterministic
@@ -53,6 +54,8 @@
  * @property {string} package npm name, exactly as installed under node_modules.
  * @property {string} entry Path within the package to its `pi.extensions[0]`.
  * @property {boolean} shipsLicenceFile Whether upstream includes a LICENSE file.
+ * @property {string} [optIn] Feature id that must be enabled for this plugin to
+ *   be injected. Absent means "always injected".
  */
 
 /** @type {readonly BundledFeaturePlugin[]} */
@@ -66,8 +69,27 @@ export const BUNDLED_FEATURE_PLUGINS = [
     package: '@gotgenes/pi-subagents',
     entry: 'src/index.ts',
     shipsLicenceFile: true,
+    // Shipped in the artifact, injected only on request. Its three tool
+    // schemas (`subagent`, `get_subagent_result`, `steer_subagent`) measured
+    // 4.8 KB of the 11.4 KB tool payload on a first turn (2026-09-07) — a cost
+    // every session pays in its cached prefix, for a feature most sessions
+    // never use. Off by default is a COST decision, not a security one: the
+    // security reason for choosing this package over `tintinweb/pi-subagents`
+    // (below) still applies whenever it IS on.
+    optIn: 'subagents',
   },
 ];
+
+/**
+ * Feature ids that are injected only when named in the opt-in list.
+ *
+ * Exported so the build's own assertions can state that an opt-in plugin is
+ * still COPIED into the artifact — off by default must not become "not shipped",
+ * or turning the switch on would find nothing there.
+ */
+export function optInFeatureIds() {
+  return BUNDLED_FEATURE_PLUGINS.flatMap((plugin) => (plugin.optIn ? [plugin.optIn] : []));
+}
 
 /** Package names only, for the preflight that refuses to build without them. */
 export function bundledFeaturePluginPackages() {

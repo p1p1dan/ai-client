@@ -14,9 +14,17 @@ export interface BundledFeaturePlugin {
   entry: string;
   /** Whether upstream includes a LICENSE file in its published tarball. */
   shipsLicenceFile: boolean;
+  /**
+   * Feature id that must appear in the session's opt-in list before this plugin
+   * is injected. Absent means "always injected".
+   */
+  optIn?: string;
 }
 
 export declare const BUNDLED_FEATURE_PLUGINS: readonly BundledFeaturePlugin[];
+
+/** Feature ids of the plugins that are shipped but injected only on request. */
+export declare function optInFeatureIds(): string[];
 
 /** Package names only, for the preflight that refuses to build without them. */
 export declare function bundledFeaturePluginPackages(): string[];

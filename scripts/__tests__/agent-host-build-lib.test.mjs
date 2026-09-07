@@ -8,6 +8,7 @@ import {
   BUNDLED_FEATURE_PLUGINS,
   bundledFeaturePluginCopyPaths,
   bundledFeaturePluginEntryPaths,
+  optInFeatureIds,
 } from '../../src/agent-host/bundledPlugins.mjs';
 import { serializeDefaultPermissionPolicy } from '../../src/agent-host/permissionPolicy.mjs';
 import {
@@ -182,6 +183,20 @@ describe('worker-only copy filter', () => {
     // would pass against any filter.
     for (const entry of bundledFeaturePluginCopyPaths()) {
       expect(shouldCopy(entry, copyOptions)).toBe(true);
+    }
+  });
+
+  it('ships the opt-in extensions too, so the switch has something to turn on', () => {
+    // Off by default is an INJECTION decision, not a packaging one. If the copy
+    // filter ever learned about `optIn` and started skipping those packages,
+    // enabling the switch would resolve to a directory that is not in the
+    // artifact — and `resolveBundledFeaturePlugins` would report `not_present`,
+    // which reads like a build accident rather than a deliberate omission.
+    const optIn = BUNDLED_FEATURE_PLUGINS.filter((plugin) => plugin.optIn);
+    expect(optIn.length).toBe(optInFeatureIds().length);
+    expect(optIn.length).toBeGreaterThan(0);
+    for (const plugin of optIn) {
+      expect(shouldCopy(`${plugin.package}/${plugin.entry}`, copyOptions)).toBe(true);
     }
   });
 

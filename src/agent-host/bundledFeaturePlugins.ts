@@ -23,6 +23,15 @@
  * — absent, one feature is gone and everything else is exactly as safe as it
  * was. So a problem is reported for the log and the session proceeds.
  *
+ * ## Opt-in plugins
+ *
+ * A plugin carrying an `optIn` feature id is SHIPPED but not injected until the
+ * session names that id. The cost it avoids is not disk: every extension's tool
+ * schemas sit in the cached prefix of every request, so a feature nobody uses is
+ * still paid for on every turn. `parseOptInFeatures` reads the list Main sends;
+ * an absent list enables nothing, which is the conservative side and the side an
+ * older Main build lands on.
+ *
  * ## Why a user's own copy wins
  *
  * pi merges the settings-derived package list with `additionalExtensionPaths`.
@@ -42,7 +51,7 @@ import {
 
 export interface SkippedFeaturePlugin {
   package: string;
-  reason: 'user_configured' | PermissionPluginProblem;
+  reason: 'user_configured' | 'not_enabled' | PermissionPluginProblem;
   /** Human-readable, for the Host log. */
   detail?: string;
 }
@@ -55,20 +64,57 @@ export interface BundledFeaturePluginResolution {
 }
 
 /**
+ * Parse the comma-separated feature ids Main sends in
+ * `AICLIENT_PI_OPT_IN_EXTENSIONS`.
+ *
+ * `undefined` and an empty string both mean "none". Unknown ids are kept rather
+ * than rejected: this list is written by a newer Main than the Host it may be
+ * talking to, and an id for a plugin this build does not carry simply matches
+ * nothing.
+ */
+export function parseOptInFeatures(value: string | undefined): ReadonlySet<string> {
+  return new Set(
+    (value ?? '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+  );
+}
+
+/**
  * Which bundled feature plugins should this session load?
  *
  * `configuredPackages` is the user's own merged `packages` list, the same value
  * `decidePermissionPlugin` is given.
+ *
+ * The opt-in gate is checked FIRST, before the user's own copy. Both arms end in
+ * "our copy is not injected", and when the feature is off the more accurate
+ * reason to log is that it is off — a `user_configured` line would claim we
+ * stood aside for their version when we were never going to inject ours. A user
+ * who lists the package in their own pi settings still gets pi's own loading
+ * path; this switch only governs the copy we inject.
  */
 export function resolveBundledFeaturePlugins(
   configuredPackages: unknown,
   baseDir = hostDirectory(),
-  options: PermissionPluginMatchOptions = {}
+  options: PermissionPluginMatchOptions & {
+    /** Feature ids the user turned on; anything `optIn` outside it is skipped. */
+    optInFeatures?: ReadonlySet<string>;
+  } = {}
 ): BundledFeaturePluginResolution {
   const paths: string[] = [];
   const skipped: SkippedFeaturePlugin[] = [];
+  const optInFeatures = options.optInFeatures ?? new Set<string>();
 
   for (const plugin of BUNDLED_FEATURE_PLUGINS) {
+    if (plugin.optIn && !optInFeatures.has(plugin.optIn)) {
+      skipped.push({
+        package: plugin.package,
+        reason: 'not_enabled',
+        detail: `${plugin.package} is off by default; enable "${plugin.optIn}" in Settings → Pi Resources to load it`,
+      });
+      continue;
+    }
     if (packageConfiguredByUser(configuredPackages, plugin.package, options)) {
       skipped.push({
         package: plugin.package,

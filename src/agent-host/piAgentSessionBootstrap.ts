@@ -3,10 +3,7 @@ import type { SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type { RuntimeEvent } from '../shared/types/runtimeEvents.ts';
 import type { PiLeafCheckpoint } from '../shared/types/sessionHistory.ts';
 import type { WorkerExtensionInfo } from '../shared/types/workerRpc.ts';
-import {
-  type BundledFeaturePluginResolution,
-  resolveBundledFeaturePlugins,
-} from './bundledFeaturePlugins.ts';
+import { parseOptInFeatures, resolveBundledFeaturePlugins } from './bundledFeaturePlugins.ts';
 import { readLoadedExtensionInventory } from './extensionInventory.ts';
 import type { PortableExtensionUiBridge } from './extensionUiBridge.ts';
 import { createPermissionActivityObserver } from './permissionActivity.ts';
@@ -219,7 +216,13 @@ export interface BootstrapPiAgentSessionOptions {
   leafCheckpoint?: PiLeafCheckpoint;
   decidePermissionGate?: (packages: unknown[]) => PermissionPluginDecision;
   /** R03 test seam over the bundled feature extension lookup. */
-  resolveFeaturePlugins?: (packages: unknown[]) => BundledFeaturePluginResolution;
+  /**
+   * Test seam. Typed as the real resolver rather than a hand-written signature:
+   * the two drifted the moment the resolver grew its opt-in argument, and a
+   * narrower declaration here makes the CALL fail to type-check while every
+   * stub still looks fine.
+   */
+  resolveFeaturePlugins?: typeof resolveBundledFeaturePlugins;
   onPermissionActivity?: (payload: PermissionActivityPayload) => void;
   /**
    * R01 — the user's own pi agent dir, whose skills and prompt templates this
@@ -227,6 +230,12 @@ export interface BootstrapPiAgentSessionOptions {
    * when managed mode has moved the agent dir away from the user's own.
    */
   borrowResourcesFrom?: string;
+  /**
+   * Comma-separated feature ids of the bundled OPT-IN extensions this user
+   * turned on. Absent enables none of them, so a Main build that does not know
+   * about the switch yet gets the default-off posture rather than a guess.
+   */
+  optInExtensions?: string;
   /** U12: additional inline extensions to register alongside the activity observer. */
   additionalExtensionFactories?: Array<{
     name: string;
@@ -421,7 +430,9 @@ export async function bootstrapPiAgentSession(
     // `gate.additionalExtensionPaths` would let a feature plugin vouch for the
     // permission system. They are joined here, at the call, and nowhere else.
     const featurePlugins = (options.resolveFeaturePlugins ?? resolveBundledFeaturePlugins)(
-      packages
+      packages,
+      undefined,
+      { optInFeatures: parseOptInFeatures(options.optInExtensions) }
     );
     for (const skip of featurePlugins.skipped) {
       log(`[pi] bundled extension skipped: ${skip.package} (${skip.reason})`, skip.detail);

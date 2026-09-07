@@ -62,6 +62,37 @@ export const PI_BORROW_RESOURCES_DIR_ENV = 'AICLIENT_PI_BORROW_RESOURCES_DIR';
 export const PI_BORROW_USER_RESOURCES_SETTING_KEY = 'borrowUserPiResources';
 
 /**
+ * Which OPT-IN bundled feature extensions this session may load, as a
+ * comma-separated list of feature ids (see `bundledPlugins.mjs`).
+ *
+ * Shaped exactly like {@link PI_BORROW_RESOURCES_DIR_ENV} and for the same
+ * reason: one value carries both the switch and the target, and an ABSENT key
+ * means "load none of them" — so an older Main build that sends nothing lands on
+ * the conservative side rather than on a second reading of the state.
+ *
+ * It exists because a bundled extension is not free: its tool schemas are part
+ * of every request's cached prefix. Measured on a first turn (2026-09-07,
+ * `claude-sonnet-5`): 11.4 KB of tool JSON, of which `subagent` +
+ * `get_subagent_result` + `steer_subagent` were 4.8 KB — paid on every session
+ * whether or not anyone delegates. `ask_user_question` is NOT opt-in: it is the
+ * producer for a renderer surface that would otherwise never appear.
+ */
+export const PI_OPT_IN_EXTENSIONS_ENV = 'AICLIENT_PI_OPT_IN_EXTENSIONS';
+
+/**
+ * Feature id of the bundled sub-agent extension, and the only member of the
+ * opt-in list today.
+ *
+ * A feature id rather than the npm name on purpose: the package name lives in
+ * `src/agent-host/bundledPlugins.mjs` and must stay there — Main decides whether
+ * the feature is on, the Host decides which package that is.
+ */
+export const PI_SUBAGENTS_FEATURE_ID = 'subagents';
+
+/** User setting behind {@link PI_SUBAGENTS_FEATURE_ID}. Absent = OFF. */
+export const PI_ENABLE_SUBAGENTS_SETTING_KEY = 'enablePiSubagents';
+
+/**
  * Path of the catalog endpoint on the onboarding service (plan D05).
  *
  * The default URL is this path joined to the onboarding service address the
@@ -176,6 +207,8 @@ export interface PiModelManagementSettings {
 export interface PiResourceSettings {
   managed: boolean;
   borrowUserPiResources: boolean;
+  /** Whether the bundled sub-agent extension is injected. Default OFF. */
+  enableSubagents: boolean;
   paths: {
     sharedSkills: string;
     userSkills: string;
@@ -185,8 +218,15 @@ export interface PiResourceSettings {
   };
 }
 
+/**
+ * A partial update: each present field is applied, absent fields are left as
+ * they are. Two independent switches share one settings surface, and a request
+ * that had to carry both would make either toggle able to clobber the other
+ * from a stale snapshot.
+ */
 export interface UpdatePiResourceSettingsRequest {
-  borrowUserPiResources: boolean;
+  borrowUserPiResources?: boolean;
+  enableSubagents?: boolean;
 }
 
 export function parsePiModelRef(value: string): { provider: string; modelId: string } | null {

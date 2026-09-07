@@ -3,11 +3,14 @@ import { join } from 'node:path';
 import {
   PI_BORROW_RESOURCES_DIR_ENV,
   PI_BORROW_USER_RESOURCES_SETTING_KEY,
+  PI_ENABLE_SUBAGENTS_SETTING_KEY,
   PI_MANAGED_AGENT_DIR_NAME,
   PI_MODEL_CONFIG_PATH,
   PI_MODEL_MANAGEMENT_URL_ENV,
   PI_MODEL_MANAGEMENT_URL_SETTING_KEY,
+  PI_OPT_IN_EXTENSIONS_ENV,
   PI_PROJECT_TRUST_ENV,
+  PI_SUBAGENTS_FEATURE_ID,
   type PiModelSyncResult,
   type PiModelSyncState,
   type PiResourceSettings,
@@ -162,12 +165,29 @@ export function getActivePiPromptTemplatesDir(): string {
     : join(getLocalPiAgentDir(), 'prompts');
 }
 
+/**
+ * Whether the bundled sub-agent extension is injected. Default OFF, which is
+ * the opposite default from {@link resolveBorrowUserPiResources}.
+ *
+ * The two switches differ because their silent failures differ. Borrowing is
+ * default-on because someone who installed a skill the documented way would
+ * otherwise get no indication it was ignored. Sub-agents are default-off
+ * because the cost of the feature is paid by everyone on every turn — its three
+ * tool schemas sit in the cached prefix of every request — while the feature is
+ * used by a minority of sessions, and its absence is visible the moment the
+ * model has no `subagent` tool to call.
+ */
+export function resolvePiSubagentsEnabled(): boolean {
+  return readSharedSettings()[PI_ENABLE_SUBAGENTS_SETTING_KEY] === true;
+}
+
 export function getPiResourceSettings(): PiResourceSettings {
   const userAgentDir = getLocalPiAgentDir();
   const managedAgentDir = getManagedPiAgentDir();
   return {
     managed: resolveManagedCredentialsEnabled(),
     borrowUserPiResources: resolveBorrowUserPiResources(),
+    enableSubagents: resolvePiSubagentsEnabled(),
     paths: {
       sharedSkills: join(getHomeDir(), '.agents', 'skills'),
       userSkills: join(userAgentDir, 'skills'),
@@ -185,12 +205,17 @@ export function resolveManagedPiWorkerEnv(): Record<string, string> {
   // every skill twice. The Host guards this too, but not sending it keeps the
   // env var honest about what it means.
   const borrowFrom = managed && resolveBorrowUserPiResources() ? getLocalPiAgentDir() : undefined;
+  // Opt-in bundled extensions. Sent in BOTH modes — unlike the borrow
+  // directory, this one is not a managed-mode repair, it is a cost the user
+  // opted into, and the bundled copy is injected in local mode too.
+  const optIn = resolvePiSubagentsEnabled() ? [PI_SUBAGENTS_FEATURE_ID] : [];
   return {
     // T08-c (D-Q9 decision 4). Sent in BOTH modes, never omitted: an absent key
     // identifies a legacy process build, not either deliberate trust posture.
     [PI_PROJECT_TRUST_ENV]: managed ? '0' : '1',
     ...(managed ? { PI_CODING_AGENT_DIR: getManagedPiAgentDir() } : {}),
     ...(borrowFrom ? { [PI_BORROW_RESOURCES_DIR_ENV]: borrowFrom } : {}),
+    ...(optIn.length > 0 ? { [PI_OPT_IN_EXTENSIONS_ENV]: optIn.join(',') } : {}),
   };
 }
 
@@ -200,7 +225,11 @@ export function resolveManagedPiPtyEnv(): Record<string, string> {
   // environment would claim a borrow that is not happening. TUI sessions load
   // only what the agent dir gives them; closing that gap needs a pi-side
   // mechanism we do not have (Q-R4).
-  const { [PI_BORROW_RESOURCES_DIR_ENV]: _borrowed, ...ptyEnv } = resolveManagedPiWorkerEnv();
+  const {
+    [PI_BORROW_RESOURCES_DIR_ENV]: _borrowed,
+    [PI_OPT_IN_EXTENSIONS_ENV]: _optIn,
+    ...ptyEnv
+  } = resolveManagedPiWorkerEnv();
   return ptyEnv;
 }
 

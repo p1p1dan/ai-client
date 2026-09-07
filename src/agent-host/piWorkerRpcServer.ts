@@ -114,6 +114,13 @@ export interface PiWorkerRpcServerOptions {
    * which no single session can change.
    */
   borrowResourcesFrom?: string;
+  /**
+   * Comma-separated feature ids of the bundled OPT-IN extensions this user
+   * turned on. Process-level for the same reason as `borrowResourcesFrom`: it
+   * is a preference about this installation, not about one conversation.
+   * Absent enables none of them.
+   */
+  optInExtensions?: string;
   createRuntime?: (options: PiWorkerSessionOptions) => PiWorkerRuntime;
   createUtilityRuntime?: () => PiUtilityRuntime;
   loadSdk?: () => Promise<unknown>;
@@ -457,6 +464,8 @@ export class PiWorkerRpcServer {
         ...(this.options.borrowResourcesFrom
           ? { borrowResourcesFrom: this.options.borrowResourcesFrom }
           : {}),
+        // Not withdrawn by `unbound` either, and for the same reason.
+        ...(this.options.optInExtensions ? { optInExtensions: this.options.optInExtensions } : {}),
         emit: (event) => this.emitRuntimeEvent(event),
         loadSdk: this.options.loadSdk,
         log: this.log,

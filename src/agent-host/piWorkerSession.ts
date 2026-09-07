@@ -88,6 +88,8 @@ export interface PiWorkerSessionOptions extends WorkerBootstrapPayload {
   projectTrusted: boolean;
   /** R01 — the user's own pi agent dir to borrow skills/templates from. */
   borrowResourcesFrom?: string;
+  /** Comma-separated feature ids of the OPT-IN bundled extensions to inject. */
+  optInExtensions?: string;
   emit: (event: RuntimeEventDraft) => void;
   loadSdk?: () => Promise<unknown>;
   decidePermissionGate?: (packages: unknown[]) => PermissionPluginDecision;
@@ -1383,6 +1385,7 @@ export class PiWorkerSession {
       ...(this.options.borrowResourcesFrom
         ? { borrowResourcesFrom: this.options.borrowResourcesFrom }
         : {}),
+      ...(this.options.optInExtensions ? { optInExtensions: this.options.optInExtensions } : {}),
       additionalExtensionFactories: [
         { name: 'aiclient-session-tier', factory: tierFactory, hidden: true },
       ],
