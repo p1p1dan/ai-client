@@ -276,7 +276,7 @@ function readNotification(
   identity: Pick<ExtensionUiNotificationEntry, 'id' | 'sessionId' | 'runtimeId' | 'receivedAt'>
 ): ExtensionUiNotificationEntry | undefined {
   const message = readNonEmptyString(args, 'message');
-  if (!message || isMisleadingPermissionLegacyNotification(message)) return undefined;
+  if (!message || isInapplicablePermissionNotification(message)) return undefined;
   const rawKind = readNonEmptyString(args, 'type');
   const kind: ExtensionUiNotificationKind =
     rawKind === 'warning' || rawKind === 'error' ? rawKind : 'info';
@@ -320,8 +320,40 @@ function truncateUtf8(value: string, limit: number): string {
 const encoder = new TextEncoder();
 const utf8Length = (value: string) => encoder.encode(value).byteLength;
 
-export function isMisleadingPermissionLegacyNotification(message: string): boolean {
-  return message.trimStart().startsWith('Legacy extension config found at');
+/**
+ * Permission-plugin warnings that describe a state this app puts the session in
+ * DELIBERATELY, and that name a remedy the user cannot reach from here.
+ *
+ * Both entries are the same shape of mismatch: the extension is written for the
+ * `pi` CLI, where the user owns every one of these decisions, and it warns so
+ * the reduced scope is "never silent". Inside AiClient the scope is not reduced
+ * by accident, so the warning is noise that arrives on every session start —
+ * and, when the window is in the background, as an OS notification.
+ *
+ *  - **Legacy extension config** — the bundled `config.json` beside our patched
+ *    copy is where this app ships its baseline policy on purpose
+ *    (`scripts/patch-pi-permission-system.mjs`); "move it elsewhere" would break
+ *    the gate.
+ *  - **Project not trusted** — managed credential mode withholds pi's
+ *    `projectTrusted` on purpose (T08-c / D-Q9 decision 4, see
+ *    `PI_PROJECT_TRUST_ENV`), so a cloned repository cannot loosen the policy.
+ *    There is no "grant project trust" control to point the user at, and in
+ *    local mode trust is already granted, so this message can only ever appear
+ *    where it is unactionable.
+ *
+ * Matched on the message text because `ui.notify` carries no code or id — only
+ * `{ message, type }` reaches the renderer. Each pattern is the shortest
+ * distinctive fragment of the extension's own constant
+ * (`UNTRUSTED_PROJECT_MESSAGE` in its `src/handlers/lifecycle.ts`), so rewording
+ * around it still filters. A rewrite of the fragment itself surfaces the warning
+ * again rather than hiding something new — the safe direction to fail in.
+ */
+export function isInapplicablePermissionNotification(message: string): boolean {
+  const text = message.trimStart();
+  return (
+    text.startsWith('Legacy extension config found at') ||
+    text.includes('project is not trusted')
+  );
 }
 
 function limitRuntimeEntries<

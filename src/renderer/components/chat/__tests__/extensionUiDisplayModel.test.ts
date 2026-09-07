@@ -138,6 +138,30 @@ describe('extension UI display state', () => {
     expect(state.notifications).toEqual([]);
   });
 
+  // Verbatim `UNTRUSTED_PROJECT_MESSAGE` from
+  // @gotgenes/pi-permission-system@27.0.1 `src/handlers/lifecycle.ts`, em dash
+  // included. Managed mode withholds project trust on purpose, so this fires on
+  // every session start and names a control this app does not have.
+  it('filters the permission plugin untrusted-project warning', () => {
+    const state = fold([
+      request('notify', {
+        message:
+          'pi-permission-system: project is not trusted \u2014 skipping project-scoped ' +
+          'permission configuration. Only global policy applies. Grant project trust ' +
+          "to load this project's permission rules.",
+        type: 'warning',
+      }),
+    ]);
+    expect(state.notifications).toEqual([]);
+  });
+
+  it('keeps permission warnings that are not the two inapplicable ones', () => {
+    const state = fold([
+      request('notify', { message: 'pi-permission-system: policy file is invalid', type: 'error' }),
+    ]);
+    expect(state.notifications).toHaveLength(1);
+  });
+
   it('delivers focused notifications as toast and only escalates background warnings/errors', () => {
     expect(extensionUiNotificationDelivery('info', true)).toBe('toast');
     expect(extensionUiNotificationDelivery('warning', true)).toBe('toast');
