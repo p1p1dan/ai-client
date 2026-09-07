@@ -98,15 +98,33 @@ export function ComposerPermissionTrigger({
   );
   const [confirmingDangerous, setConfirmingDangerous] = useState(false);
   /**
-   * U30: controlled so applying a tier can close the menu.
+   * U30 rev.2 — closing goes through Base UI, never through a controlled `open`.
    *
-   * `MenuPrimitive.RadioItem` deliberately does not close on select — radio
-   * semantics are "keep flipping between these" — which is right for a filter
-   * and wrong here: picking a tier is a decision, and the menu sitting open
-   * afterwards reads as "that did not take". Only `applyTier` closes it, so the
-   * dangerous tier's confirmation step still gets to keep the popup up.
+   * `MenuPrimitive.RadioItem` deliberately does not close on select (radio
+   * semantics are "keep flipping between these"), which is right for a filter
+   * and wrong here: picking a tier is a decision, and a menu sitting open
+   * afterwards reads as "that did not take". U30's first attempt fixed that by
+   * making `<Menu>` controlled and writing `open={false}` from `applyTier`. It
+   * shipped in 0.4.0-test.7 and made the menu WORSE, in a way no static
+   * assertion could see — the user reported the popup stuck open with Escape
+   * and outside-click both dead.
+   *
+   * The cause is `MenuRoot.setOpen`'s first line
+   * (`@base-ui/react@1.1.0`, `menu/root/MenuRoot.js`):
+   *
+   *     if (open === nextOpen && trigger === activeTriggerElement && … ) return;
+   *
+   * Writing the prop moves the store's `open` to `false` WITHOUT running that
+   * function, so none of its close bookkeeping happens — and every later
+   * dismissal (Escape, outside press) hits the guard, sees `open === nextOpen`,
+   * and returns before doing anything. The popup stays mounted with no way out.
+   *
+   * So: no `open` prop. `closeOnClick` lets Base UI close the menu through its
+   * own path for an ordinary tier, and `actionsRef.close()` does the same for
+   * the confirmation step, which is not a menu item and so has no click of its
+   * own to close on.
    */
-  const [open, setOpen] = useState(false);
+  const menuActions = useRef<MenuPrimitive.Root.Actions | null>(null);
 
   const resolvedSessionRef = useRef(sessionId);
   useEffect(() => {
@@ -120,7 +138,6 @@ export function ComposerPermissionTrigger({
   const applyTier = useCallback(
     (newTier: SessionPermissionTier) => {
       setTier(newTier);
-      setOpen(false);
       if (sessionId) {
         writeSessionTier(sessionId, newTier);
         // Only a live chat has a worker to tell. Without one the choice is a
@@ -154,6 +171,10 @@ export function ComposerPermissionTrigger({
   const handleConfirm = useCallback(() => {
     applyTier('fullopen');
     setConfirmingDangerous(false);
+    // The only close in this file. The four tiers close themselves through
+    // `closeOnClick`; this button is plain markup inside the popup, so Base UI
+    // has nothing to hang a close on and has to be asked.
+    menuActions.current?.close();
   }, [applyTier]);
 
   // D10: the tiers only exist as an `authorizerChain` link in the config.json we
@@ -185,9 +206,9 @@ export function ComposerPermissionTrigger({
 
   return (
     <Menu
-      open={open}
+      actionsRef={menuActions}
       onOpenChange={(next) => {
-        setOpen(next);
+        // Reopening must not land straight back on the confirmation panel.
         if (!next) setConfirmingDangerous(false);
       }}
     >
@@ -216,6 +237,11 @@ export function ComposerPermissionTrigger({
                 <MenuPrimitive.RadioItem
                   key={option.id}
                   value={option.id}
+                  // Every tier but the dangerous one is a finished decision, so
+                  // Base UI closes the menu on the press. `fullopen` keeps the
+                  // popup up because `handleSelect` turns it into the
+                  // confirmation panel instead of applying anything.
+                  closeOnClick={!option.dangerous}
                   className={composerMenuItemClass()}
                 >
                   <OptionIcon className="size-3.5 shrink-0" />

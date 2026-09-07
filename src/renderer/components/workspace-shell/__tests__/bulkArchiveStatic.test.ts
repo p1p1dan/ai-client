@@ -22,25 +22,41 @@ const MODEL = read('src/renderer/components/chat/ComposerModelTrigger.tsx');
 const LAYOUT = read('src/renderer/components/chat/middleColumnLayout.ts');
 const EXTENSION_UI = read('src/renderer/components/chat/ExtensionUiDialog.tsx');
 
-describe('U30 the permission menu closes on pick', () => {
-  it('is controlled, and applying a tier closes it', () => {
-    // `MenuPrimitive.RadioItem` does not close on select — radio semantics are
-    // "keep flipping between these". Right for a filter, wrong for a decision:
-    // the menu staying open reads as "that did not take".
-    expect(PERMISSION).toContain('const [open, setOpen] = useState(false);');
-    expect(PERMISSION).toContain('<Menu\n      open={open}');
-    expect(PERMISSION).toContain('setOpen(false);');
+describe('U30 rev.2 the permission menu closes on pick', () => {
+  /**
+   * The regression this replaces shipped in 0.4.0-test.7 and the assertions it
+   * came with were green the whole time: they pinned `open={open}` and
+   * `setOpen(false)`, which is exactly what BROKE it.
+   *
+   * `MenuRoot.setOpen` (`@base-ui/react@1.1.0`) starts with
+   * `if (open === nextOpen && …) return;`. Writing the controlled prop moves the
+   * store's `open` without running that function, so afterwards every Escape and
+   * outside-press hits the guard and returns — the popup stayed on screen with
+   * no way to dismiss it. So the claim worth pinning is the absence of the
+   * controlled prop, not the presence of a close call.
+   */
+  it('never controls `open`, because a prop write bypasses Base UI close bookkeeping', () => {
+    expect(PERMISSION).not.toContain('open={open}');
+    expect(PERMISSION).not.toContain('setOpen(');
+    expect(PERMISSION).toContain('actionsRef={menuActions}');
   });
 
-  it('closes from applyTier, so the dangerous tier keeps its confirmation step', () => {
-    const applyTier = NAV.length > 0 ? PERMISSION.slice(PERMISSION.indexOf('const applyTier')) : '';
-    const body = applyTier.slice(0, applyTier.indexOf('const handleSelect'));
-    expect(body).toContain('setOpen(false);');
-    // If the close moved into `handleSelect`, picking "full access" would shut
-    // the menu before the confirmation could be shown.
+  it('lets Base UI close on an ordinary tier and keeps the dangerous one open', () => {
+    // `closeOnClick` defaults to false on a radio item (radio semantics are
+    // "keep flipping between these"); a tier is a decision, so every tier but
+    // the one that still has to be confirmed closes on the press.
+    expect(PERMISSION).toContain('closeOnClick={!option.dangerous}');
+  });
+
+  it('closes the confirmation step imperatively, since it is not a menu item', () => {
+    const handleConfirm =
+      NAV.length > 0 ? PERMISSION.slice(PERMISSION.indexOf('const handleConfirm')) : '';
+    expect(handleConfirm.slice(0, 400)).toContain('menuActions.current?.close();');
+    // If this moved into `handleSelect`, picking "full access" would shut the
+    // menu before the confirmation could be shown.
     const handleSelect = PERMISSION.slice(PERMISSION.indexOf('const handleSelect'));
     expect(handleSelect.slice(0, handleSelect.indexOf('const handleConfirm'))).not.toContain(
-      'setOpen(false)'
+      'menuActions.current'
     );
   });
 });
