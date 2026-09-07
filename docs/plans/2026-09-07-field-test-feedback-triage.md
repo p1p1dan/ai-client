@@ -1,6 +1,7 @@
 # 现场反馈取证 — 2026-09-07（Windows / 托管模式 / 0.4.0-test.7）
 
-**来源**：用户在 Windows 真机的第三轮点验，四条反馈，第四条附抓包（`infoRecord.txt`）。
+**来源**：用户在 Windows 真机的第三轮点验，四条反馈，第四条附抓包（`infoRecord.txt`）；
+第五条是同一轮之后补报的启动横幅（见下第五节）。
 **环境**：Windows 加密档、已登录（托管凭据模式）、本机装过 pi 与插件、工作目录 `E:/testaaa`。
 **判定构建**：抓包里带 `subagent` / `ask_user_question` 工具，而这两个随包扩展是
 `8948aef2`（2026-09-06，R03）才引入的，所以用户跑的是 **0.4.0-test.7 或其后**——
@@ -214,6 +215,89 @@ clampReasoning(effort) = (effort === "xhigh" || effort === "max") ? "high" : eff
 
 ---
 
+---
+
+## 五、刚启动就报「Pi session service 已停止」而消息发得出去 — 已修
+
+**用户原话**：「在测试机点击使用 xxx@jcdz.cc 后刚启动时还是会提示（发消息可用）：
+Pi session service 已停止 / Retry / 点击 Retry 初始化 Pi session service /
+capacity=10·slots=0·active=0」。
+
+诊断行里 `capacity=10` 说明这个快照**是 Main 真答出来的**（不是占位值），
+`slots=0` 说明池子确实还没有 worker。所以状态本身没错，错的是把它翻译成了「服务已停止」。
+
+### 根因：一个自己造出来的竞态，加一个 10 秒的沉默期
+
+`WorkerManager.state` 的初值是 `'stopped'`，`ensureReady()` 做的事只有一件：
+`if (this.state === 'stopped') this.state = 'ready'`——不拉起任何进程。
+渲染层在同一次挂载里同时发出两个 IPC：
+
+| 发起方 | 调用 | 作用 |
+|---|---|---|
+| `useHostStatus` 的 prime | `getHostStatus()` | 只读，**不会**翻转 `stopped` |
+| `chatSessions.initRuntime` | `ensureHost()` | 翻转成 `ready`，但返回值被丢弃 |
+
+hook 的 effect 注册在前，读先到 Main，于是拿回 `state:'stopped'`；
+随后的 `ensureHost()` 把 Main 翻成 `ready`，**却没有任何东西把这个事实送回横幅**——
+Pi-only 之后 Main 已经不再发 `host.ready` / `host.error` 运行时事件
+（`ipc/chat.ts` 自己的注释就写着这一点），所以渲染层唯一的第二次机会是
+`useHostStatus` 里那个 **10 秒**的轮询探针。用户看到的就是这十秒。
+
+同一个 `state:'stopped'` 在这十秒里还悄悄拖了另外两个控件：
+
+- `piModelCatalog.shouldRequestCatalog` 的第一行是 `hostState !== 'ready'` → 不拉目录，
+  模型菜单先显示「Host 未就绪」的兜底目录；
+- `ComposerPermissionTrigger` 的 `isDisabled` 同样按 `hostState !== 'ready'` → 权限档按钮是灰的。
+
+三处症状、一个根因。
+
+**它不是回归，是上一次修法留下的另一半。** 2026-09-04 修过同一句文案
+（[缺陷记录](../plantree/plans/pix-ui-alignment/evidence/2026-09-04-host-status-false-stop-and-tui-history-bug.md)
+第一节，现象一字不差：「横幅说服务停了、还给了 Retry 按钮，而同一个对话框发消息正常收到回复」），
+`WorkerManager.updateManagerState()` 的注释里至今逐字记着结论：空池子不能推导成 `stopped`。
+但那次改的是**重算**路径，并且明写了「`ensureReady` 之前的初始值」仍然是 `stopped`——
+留下的正是每一次冷启动都会走的那条路径。这一次修的是它。
+
+### 修法
+
+1. **prime 改用 `ensureHost()`**（`useHostStatus.ts`）。两个 IPC 的返回**形状完全一样**
+   （`ipc/chat.ts` 里 `CHAT_ENSURE_HOST` 就是 `await ensureReady()` 后 `return getStatus()`），
+   区别只在于它会先把没启动过的管理器翻成 `ready`。`ensureReady()` 只赋一个字段、不拉进程，
+   所以一个「状态 hook」发这个调用是干净的。失败时 `.catch(() => getHostStatus())` 退回只读，
+   这样「Main 拒绝启动」依然会如实显示成 `stopped`。
+2. **Retry 采用自己的返回值**：原来 `retry()` 把 `ensureHost()` 的快照丢掉，
+   等下一次 10 秒探针才可能变化——按钮按下去十秒不动，读起来就是个死键。
+3. **初值从 `stopped` 改成 `unknown`**（`hostStatus.ts`）。「还没问过」和「问过了，答的是停止」
+   是两件事，只有把它们分开，`stopped` 横幅才重新变得可信——现在它只在
+   prime 真的失败或应用正在退出时出现。
+4. **横幅的显示规则提成纯函数** `describeHostStatus()`。vitest 是 `environment: 'node'` +
+   只收 `.ts`，渲染不了 `.tsx`；而「绝不谎报一个下一条消息就答得上来的服务」这条规则
+   恰恰是最该有真实测试的那种，不能只靠源码字符串断言。
+
+### 顺带修掉的两个同源缺陷
+
+- **`degraded` 从来没在渲染层的联合类型里**。Main 的 `WorkerManagerState` 是
+  `stopped | ready | degraded`，渲染层的 `HostStatus['state']` 是
+  `stopped | starting | ready | error`，中间靠 `as` 强转。于是有 worker 崩过之后
+  横幅会渲染成一条**没有标题**、却带着 Retry 按钮的空条。现在联合类型补齐了
+  `unknown` 与 `degraded`，`describeHostStatus` 对每个分支都给得出标题。
+- **`degraded` 被当成「不可用」**。它的真实含义是「池子里有一个 worker 崩了」，
+  管理器照常服务：那条 entry 会在它自己会话的下一次 create/resume 时被退休
+  （`WorkerManager` 里 `existing?.state === 'error'` 那段），期间还是头号驱逐候选。
+  可原来的 `=== 'ready'` 判定会因为**别的**会话崩过一次，就把当前会话的权限档按钮变灰、
+  把模型菜单钉在兜底目录上，直到那条 entry 被退休为止。两处改用共享的
+  `isHostUsable(state)`（`ready || degraded`），`unknown` 仍然保守地算不可用——
+  没答案不等于知道它能用。
+
+### 验证
+
+`hostStatus.test.ts` 新增两组纯函数用例（横幅规则、`isHostUsable`）与一组
+`useHostStatus.ts` 的接线断言；`piModelCatalog.test.ts` 补 `degraded` / `unknown` 两档。
+`startScreenBarStatic.test.ts` 里那条钉整行 `isDisabled` 的断言改成只钉两个承载规则的片段——
+理由就是第二节 U30 的教训：**钉住写法而没钉住行为的断言，会在行为坏掉时一路全绿**。
+
+**真机复看点**：冷启动后横幅不再出现，且模型菜单与权限档按钮在第一屏就是活的。
+
 ## 门禁
 
 本轮改动在**本机未跑**项目自己的 lint / typecheck / test——本机是资源受限的小服务器，
@@ -221,6 +305,10 @@ clampReasoning(effort) = (effort === "xhigh" || effort === "max") ? "high" : eff
 
 - 每个改动的 `.ts` / `.mjs` 走 `node --experimental-strip-types --check` 语法通过；
 - 新增的消息过滤逻辑用独立脚本对**扩展源码里的原文常量**跑过三例（命中/命中/不命中）；
+- 第五节的两个纯函数用独立脚本实跑：`describeHostStatus` 的六个状态分支（`ready` /
+  `unknown` / `degraded` 静默，`stopped` / `starting` / `error` 各有非空标题与正确的
+  Retry 可见性）、`isHostUsable` 的六个状态、以及 `shouldRequestCatalog` 在六个状态下的
+  取值（只有 `ready` 与 `degraded` 为 `true`）；新增的源码断言片段也逐条对当前源码比对过命中；
 - `git diff --check` 干净；逐行宽度对照 `biome.json` 的 `lineWidth: 100` 核过。
 
 **CI 是权威**。已知需要它复核的点：`bundledFeaturePlugins.test.ts` 里七处调用新增了
