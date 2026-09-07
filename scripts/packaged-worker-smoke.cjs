@@ -3,6 +3,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { app, utilityProcess } = require('electron');
 
+const { checkBundledExtensionsLoaded } = require('./bundled-extension-check.cjs');
+
 const workerPath = process.argv.at(-1);
 if (!workerPath) throw new Error('usage: electron scripts/packaged-worker-smoke.cjs <worker.js>');
 
@@ -113,15 +115,11 @@ async function main() {
     // between "we shipped a plugin" and "the user has the feature". A packaged
     // build that quietly loses one shows no symptom until a model asks a
     // question and no dialog appears.
-    const loaded = bootstrap.result.extensions ?? [];
-    const describe = () => JSON.stringify(loaded.map((e) => ({ path: e.path, ok: e.loaded })));
-    for (const pkg of BUNDLED_FEATURE_PLUGIN_PACKAGES) {
-      const hit = loaded.find((entry) => entry.path?.includes(pkg));
-      if (!hit) throw new Error(`bundled extension ${pkg} did not load; got ${describe()}`);
-      if (hit.loaded === false) {
-        throw new Error(`bundled extension ${pkg} reported a load error: ${JSON.stringify(hit)}`);
-      }
-    }
+    const problems = checkBundledExtensionsLoaded(
+      bootstrap.result.extensions,
+      BUNDLED_FEATURE_PLUGIN_PACKAGES
+    );
+    if (problems.length > 0) throw new Error(problems.join('\n'));
     const workerPid = child.pid;
     if (!workerPid) throw new Error('utility worker has no pid after bootstrap');
 

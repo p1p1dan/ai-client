@@ -178,3 +178,33 @@ extension inventory 里三个包全部 `loaded`：
 - **`pi-workspace-history` 未随包**，已按 [Q-R5](../open-questions.md) 记档等 SDK 升版。
 - **子代理的子代理**（二级）行为未验——只确认 `@gotgenes/pi-subagents` 加载且
   与其权限集成文档一致。
+
+## 八、事后修复：Windows CI 红（2026-09-07）
+
+`0.4.0-test.7`（`542705d0`）的 [Build run 36](https://github.com/p1p1dan/ai-client/actions/runs/34045481074)
+里 `build-windows` 断在 **Verify packaged Pi worker**，同一 commit 的 `build-linux` 同一脚本全绿。
+打包本身成功，产物也是对的——红的是本片加的那条随包扩展断言。
+
+**根因是路径分隔符。** 断言写成
+`entry.path?.includes('@juicesharp/rpiv-ask-user-question')`，
+而 `entry.path` 是 pi 报回的真实路径（`extensionInventory.ts` 取 `resolvedPath ?? path`），
+注入给 pi 的根目录又出自 `lookupBundledPackage` 的
+`join(baseDir, 'node_modules', ...packageName.split('/'))`——Windows 上是
+`...\node_modules\@juicesharp\rpiv-ask-user-question\index.ts`。
+带正斜杠的作用域包名永远不可能是反斜杠路径的子串，于是两个扩展都被判成「没加载」。
+本片 §七只在本机 Linux 上跑过这条冒烟，三个平台的分隔符差异没有被覆盖到。
+
+同处还有第二个洞：判定加载失败读的是 `hit.loaded`，而 RPC 字段叫 `ok`
+（`WorkerExtensionInfo`）。`loaded` 恒为 `undefined`，所以**扩展报了导入错误也照样过闸**，
+只有「完全不在列表里」拦得住；错误信息里打印的 `ok` 同样永远是 `undefined`。
+
+**修法**：匹配逻辑拆到 `scripts/bundled-extension-check.cjs`（纯函数，比较前把路径归一化成
+POSIX 形式，判定改读 `ok`），`packaged-worker-smoke.cjs` 只保留包名字面量并调用它——
+包名不从 `bundledPlugins.mjs` 导入这条约束不变。
+
+**回归**：`scripts/__tests__/bundled-extension-check.test.mjs` 六条，
+其中「Windows 反斜杠路径应判通过」就是这次的事故用例。变异验证两条各自判红：
+去掉归一化 → 反斜杠两条红；`ok` 改回 `loaded` → 「列出但导入失败」那条红。
+
+**欠项**：本机没有 node_modules（无 pnpm），vitest 与 Biome 未在本地跑，
+断言是用等价的 stub runner 执行的；以 CI 的 gate job 为准。
