@@ -1,7 +1,8 @@
 # Plan — pix/pi-app UI 对齐改造
 
-> **状态**：In Progress（收尾）—— **批次 1–9 全部落地**（最后一批：U17–U20，三件用户报障 + 权限档欠项清理）。
-> 剩余工作只有一次累计 GUI 点验，加上 Deferred 的 U10/U11。U06-b 已于 2026-09-05 随 Pi 计划 T38 同批落地，外部阻塞清零。
+> **状态**：In Progress（收尾）—— **批次 1–15（U01–U31）全部落地**（最后一批：U30 + U31，
+> 第二轮 GUI 点验的产出）。剩余工作只有一次累计 GUI 点验，加上五笔欠账、六件待真机验证与 Deferred 的 U10/U11。
+> U06-b 已于 2026-09-05 随 Pi 计划 T38 同批落地，外部阻塞清零。
 >
 > **前置已满足**：[Pi-only 收敛计划](../pi-backend-migration/README.md) 的 T37 发版门禁已于 2026-09-03 收口
 > （manual CI run `33714362901` 全绿），[D01](./decisions/001-style-depth-and-sequencing.md) 决定二的排期闸门解除。
@@ -9,7 +10,7 @@
 > **当前状态与欠项**：[implementation-status.md](./implementation-status.md)。
 > **执行形态**：[execution-plan](./topics/execution-plan.md) —— 批次顺序、逐片验收标准与门禁。
 >
-> **未决：无。** Q01–Q13 全部关闭。Q08/Q10 见 [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md)；
+> **未决：Q14**（问答卡 `AskUserQuestion` 接还是删，见 [open-questions](./open-questions.md)）。Q01–Q13 全部关闭。Q08/Q10 见 [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md)；
 > Q09 由取证关闭；Q11 布局尺寸维持现值；Q12 请求优先级不做（U08-3 已 Dropped）；
 > Q13 免绑定会话跨重启可见性见 [D04](./decisions/004-unbound-session-index-visibility.md)（U13 已于 2026-09-04 落地）。
 >
@@ -61,7 +62,8 @@
 |---|---|
 | [roadmap.md](./roadmap.md) | 任务 ID、状态与顺序的唯一权威 |
 | [topics/execution-plan.md](./topics/execution-plan.md) | **开工入口**：切片、批次顺序、逐片验收标准、门禁、风险、锚点复核 |
-| [open-questions.md](./open-questions.md) | 未解决问题（不是任务）；**Q01–Q13 全部关闭**，保留结论与证据链接 |
+| [open-questions.md](./open-questions.md) | 未解决问题（不是任务）；**只剩 Q14**，Q01–Q13 已关闭并保留结论与证据链接 |
+| [history/2026-09-07-landed-log.md](./history/2026-09-07-landed-log.md) | U12 rev.2 → U29 的逐批落地叙事（2026-09-07 从 implementation-status 移出）；**不是活动状态来源** |
 | [topics/current-state-audit.md](./topics/current-state-audit.md) | 开工前实况核查：已有能力 vs 真实缺口，带 `file:line` 证据 |
 | [topics/evidence-q02-q03.md](./topics/evidence-q02-q03.md) | Q02 模型分组键 / Q03 pix Resources 取证结论 |
 | [topics/evidence-q04-runtime-fields.md](./topics/evidence-q04-runtime-fields.md) | Q04 Run 面板字段可用性：占用/usage 需 Pi runtime 补 |
@@ -99,4 +101,4 @@
    → [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md) → [D04](./decisions/004-unbound-session-index-visibility.md)。
 4. [roadmap](./roadmap.md) —— 任务身份与状态。
 5. [execution-plan](./topics/execution-plan.md) —— 要动手就读这份。
-6. [open-questions](./open-questions.md) —— 已全部关闭，作为结论索引查阅。
+6. [open-questions](./open-questions.md) —— 只剩 Q14 未决，其余作为结论索引查阅。

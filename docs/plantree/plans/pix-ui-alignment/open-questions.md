@@ -1,8 +1,38 @@
 # Open Questions — pix/pi-app UI 对齐改造
 
 > 只放**未解决的问题**，不放任务。解决后移出本文件，把结论写进 decisions 或对应 topic。
-> **当前无未决问题。** Q01–Q13 全部关闭，结论各自指向 decisions 或 topics/evidence。
+> **当前未决：Q14**（问答卡接还是删）。Q01–Q13 全部关闭，结论各自指向 decisions 或 topics/evidence。
 > 新问题请追加在本行下方，并在 [roadmap](./roadmap.md) 的相关任务上标注关联。
+
+## Q14 — 问答卡（AskUserQuestion）要不要接，还是像 U21 一样删掉
+
+**提出**：2026-09-06，用户问「怎么会这样」——在 ai-client 里跑的 agent 回复
+「我这边没有可用的问答卡工具（当前会话只暴露了 Read / Bash / Edit / Write），
+所以没法真正弹出客户端里的 AskUserQuestion 卡」。
+
+**取证结论：agent 说的是对的，而且这是又一条 Claude 时代的遗留死链。**
+
+- `AskUserQuestion` 在本仓自己的代码里**一处都没有**，只出现在 `node_modules`：
+  Claude SDK 的类型定义，以及 pi 的 `examples/extensions/custom-provider-anthropic`。
+- 那个 pi 示例里它也不是工具，而是一张**工具名翻译表**
+  （`claudeCodeTools`，OAuth stealth mode 用来把 pi 的工具名说成 Claude Code 的叫法）。
+  **pi 本身不内置提问工具。**
+- 我们的 `agent-host` 侧**没有任何 `question.requested` 的生产者**。
+- 而渲染层有**完整的消费链**：`question.requested` / `question.resolved` 事件类型、
+  `pendingQuestion` 状态，7 个文件在读它（store、queueRelease、ChatComposer、
+  middleColumnLayout、assistantProgress、useSessionIndex、useSyncChatWorkspaceTree）。
+
+结构与 [D11](./decisions/011-retire-the-live-output-token-counter.md) 处置的实时 token
+计数器**完全同构**：Claude host 删除时生产者一并消失，消费链留了下来。
+
+**待拍板的是方向，不是做法**：
+
+- **接**——需要给 pi 注册一个提问扩展（pi 的提问能力就是扩展提供的），
+  工作量与 U04 的插件清单相当；渲染层不用改，卡片和 reducer 都在。
+- **删**——按 D11 的先例整条摘掉，并加反向守卫。代价是以后要接时得重建 UI。
+
+未决：用户是否需要 agent 主动提问这个能力本身。
+
 
 ## Q13 — 免绑定会话要不要跨应用重启留在侧栏？ — **已关闭：走路径三**
 
@@ -195,31 +225,3 @@ D03 决定三本来就写明「不做空壳实现」，而这两条都算不上�
 
 **关联**：roadmap U09。
 
-## Q14 — 问答卡（AskUserQuestion）要不要接，还是像 U21 一样删掉
-
-**提出**：2026-09-06，用户问「怎么会这样」——在 ai-client 里跑的 agent 回复
-「我这边没有可用的问答卡工具（当前会话只暴露了 Read / Bash / Edit / Write），
-所以没法真正弹出客户端里的 AskUserQuestion 卡」。
-
-**取证结论：agent 说的是对的，而且这是又一条 Claude 时代的遗留死链。**
-
-- `AskUserQuestion` 在本仓自己的代码里**一处都没有**，只出现在 `node_modules`：
-  Claude SDK 的类型定义，以及 pi 的 `examples/extensions/custom-provider-anthropic`。
-- 那个 pi 示例里它也不是工具，而是一张**工具名翻译表**
-  （`claudeCodeTools`，OAuth stealth mode 用来把 pi 的工具名说成 Claude Code 的叫法）。
-  **pi 本身不内置提问工具。**
-- 我们的 `agent-host` 侧**没有任何 `question.requested` 的生产者**。
-- 而渲染层有**完整的消费链**：`question.requested` / `question.resolved` 事件类型、
-  `pendingQuestion` 状态，7 个文件在读它（store、queueRelease、ChatComposer、
-  middleColumnLayout、assistantProgress、useSessionIndex、useSyncChatWorkspaceTree）。
-
-结构与 [D11](./decisions/011-retire-the-live-output-token-counter.md) 处置的实时 token
-计数器**完全同构**：Claude host 删除时生产者一并消失，消费链留了下来。
-
-**待拍板的是方向，不是做法**：
-
-- **接**——需要给 pi 注册一个提问扩展（pi 的提问能力就是扩展提供的），
-  工作量与 U04 的插件清单相当；渲染层不用改，卡片和 reducer 都在。
-- **删**——按 D11 的先例整条摘掉，并加反向守卫。代价是以后要接时得重建 UI。
-
-未决：用户是否需要 agent 主动提问这个能力本身。
