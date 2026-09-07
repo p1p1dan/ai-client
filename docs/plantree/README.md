@@ -23,7 +23,7 @@ Renderer → Preload → Electron Main WorkerManager
 - pi-app 是 WorkerManager/WorkerSlot/history/tree 主参考；pix 是 Pi TUI/PTY/CLI packaging 主参考。
 
 **runtime 侧没有活动施工任务**：Pi-only 收敛的 T28–T38 已于 2026-09-05 全部关闭，
-正式发布走 [rollout/rollback runbook](../pi-only-rollout-rollback.md)。当前唯一的活动计划在界面侧。
+正式发布走 [rollout/rollback runbook](../pi-only-rollout-rollback.md)。当前两条活动计划都在界面侧。
 
 ## Resume reading order
 
@@ -32,11 +32,14 @@ Renderer → Preload → Electron Main WorkerManager
 3. 活动计划 [pix/pi-app UI 对齐](./plans/pix-ui-alignment/README.md)
    → [implementation-status](./plans/pix-ui-alignment/implementation-status.md)
    → [roadmap](./plans/pix-ui-alignment/roadmap.md)。
-4. 需要架构边界时：[Pi-only plan](./plans/pi-backend-migration/README.md)
+4. 活动计划 [设置清单整理与旧壳删除](./plans/settings-cleanup/README.md)
+   → [implementation-status](./plans/settings-cleanup/implementation-status.md)
+   → [roadmap](./plans/settings-cleanup/roadmap.md)。
+5. 需要架构边界时：[Pi-only plan](./plans/pi-backend-migration/README.md)
    → [decision index](./plans/pi-backend-migration/decisions/README.md)
    → [D14](./plans/pi-backend-migration/decisions/014-pi-only-product-and-conversation-import.md)
    / [D15](./plans/pi-backend-migration/decisions/015-main-owned-worker-manager.md)。
-5. 只读当前任务直接链接的 topic/evidence/history。
+6. 只读当前任务直接链接的 topic/evidence/history。
 
 ## Authority order
 
@@ -54,8 +57,9 @@ Renderer → Preload → Electron Main WorkerManager
 | Plan | Lifecycle | 现在在做什么 | 状态权威 |
 |---|---|---|---|
 | [pix/pi-app UI 对齐改造](./plans/pix-ui-alignment/README.md) | **In Progress（收尾）** | 批次 1–15（U01–U31）全部落地，**只剩一次累计 GUI 点验**；另有五笔欠账与六件待真机验证项，自动化全部已绿（280 files / 4246 tests） | [implementation-status](./plans/pix-ui-alignment/implementation-status.md) · [roadmap](./plans/pix-ui-alignment/roadmap.md) |
+| [设置清单整理与旧壳删除](./plans/settings-cleanup/README.md) | **In Progress** | 2026-09-07 立项，取证与拍板完成、施工未开始；七任务 S01–S07 全在 Next，**补齐线（全局搜索/仓库设置入口/分支切换）必须先于删旧壳合入** | [implementation-status](./plans/settings-cleanup/implementation-status.md) · [roadmap](./plans/settings-cleanup/roadmap.md) |
 
-活动计划只有这一条。从归档表恢复任何一条计划都需要真实需求触发，并在本表重新登记。
+活动计划两条。从归档表恢复任何一条计划都需要真实需求触发，并在本表重新登记。
 
 ## Archived plans
 
