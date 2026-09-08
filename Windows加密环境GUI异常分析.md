@@ -47,9 +47,12 @@
 - [x] 用户确认同包 GUI 失败、TUI 与编辑器正常；源代码路径差异已核实。
 - [x] 用户接受 Windows 安装版改用随包 Node。
 - [x] 代码与本地验证完成：主进程改动文件类型检查、worker 类型检查、6 个相关测试文件通过；真实构建 worker 的 Node IPC 与 Electron 两条路径均完成 Read/bash、bootstrap/dispose/exit；Node 父 IPC 断开后真实 worker 退出码为 0。
-- [ ] 新 Windows 安装包的普通 CI 工具验证通过。
+- [x] 新 Windows 安装包的普通 CI 工具验证通过：提交 `45d43db8`，CI [34207032908](https://github.com/p1p1dan/ai-client/actions/runs/34207032908) 全部成功；Windows 包内 Node IPC 的真实 Read/bash、bootstrap/dispose/exit 通过。质量门禁为两套类型检查、Biome、307 个测试文件 / 4600 个测试及 release metadata。
 - [ ] 加密机：同一文件 GUI Read 返回明文；`pwd/ls/echo` 正常；Edit/Write 后编辑器与 TUI 内容一致；关闭程序无残留 worker。
 
 最终恢复正常须以上述现场验收为准；当前报告不将待验证判断写成已解决事实。
 
 本地环境为 Linux，无企业加密驱动。验证只构建 Agent Host 单阶段，不在低资源主机执行整套生产构建。
+
+新包下载：[windows-installer](https://github.com/p1p1dan/ai-client/actions/runs/34207032908/artifacts/10048590787)，安装程序 `AiClient Setup 1.0.0-test.9.exe`。版本号与上一包相同，请按本次 CI 编号区分。只生成 Windows installer；Linux/macOS/remote Linux 打包任务均跳过。
+归档包 SHA-256：`bfbf3c54efe443937b22fa249e5e755a641f53c8acb71af929792d94a6dacfb4`（GitHub artifact zip，不是内部 exe）。

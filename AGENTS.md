@@ -32,7 +32,7 @@ jyw-ai-client/
 | UI 组件 | `src/renderer/components/ui/` | @coss/ui 组件，52 个文件 |
 | Git 操作 | `src/main/services/git/` | simple-git 封装 |
 | 终端 | `src/main/services/terminal/` + `src/renderer/hooks/useXterm.ts` | node-pty + xterm.js |
-| Pi runtime/worker | `src/main/services/agent-host/` + `src/agent-host/` | 过渡态仍含 singleton PiHost 与 Claude/Codex；目标是 Main WorkerManager + per-slot utilityProcess |
+| Pi runtime/worker | `src/main/services/agent-host/` + `src/agent-host/` | Main WorkerManager + per-slot process；Windows 安装版按 D20 使用随包 Node，其余路径使用 utilityProcess |
 | 类型定义 | `src/shared/types/*.ts` | 15 个类型文件，ipc.ts 最重要 |
 | 设计规范 | `docs/design-system.md` | **UI 开发必读** |
 

@@ -2,11 +2,13 @@
 
 **Current Phase**：T39 Windows 加密环境回归修复（2026-09-08）；此前 T28–T38 历史完成状态保留。
 
-**Next Target**：完成 [D20](./decisions/020-windows-bundled-node-worker.md) 的 Windows CI 与新包现场验收；[问题报告](../../../../Windows加密环境GUI异常分析.md) 为当前验证清单。代码、本地类型检查与 6 个相关测试文件已通过；真实 worker 的 Node IPC / Electron 两路 Read/bash 和退出验证通过（Linux，无企业加密驱动）。正式发布仍按
+**Next Target**：完成 [D20](./decisions/020-windows-bundled-node-worker.md) 的加密机新包现场验收；[问题报告](../../../../Windows加密环境GUI异常分析.md) 为当前验证清单和下载入口。代码与本地验证通过，Windows CI 已全部成功，T39 尚不关闭。正式发布仍按
 [`docs/pi-only-rollout-rollback.md`](../../../pi-only-rollout-rollback.md) 完成内部观察、限量扩大、
 macOS 签名/公证与 rollback 记录；产品界面改造在 pix/pi-app UI 对齐计划推进。
 
-**Last Landed**：2026-09-05 **T38 runtime 补字段**（与 UI 计划 U06-b 同批）：`usage.updated` 生产者挂
+**Last Landed / Verified**：2026-09-08，`45d43db8`，Windows 安装版 GUI 使用随包 Node + IPC。CI [34207032908](https://github.com/p1p1dan/ai-client/actions/runs/34207032908) success：两套类型检查、Biome、307 files / 4600 tests、release metadata 与 Windows 包内 Read/bash、bootstrap/dispose/exit 全部通过；仅产出 Windows installer，其他平台跳过。普通 Windows runner 无企业加密驱动，现场兼容性仍待验收。
+
+**T38 历史 Landed**：2026-09-05 **T38 runtime 补字段**（与 UI 计划 U06-b 同批）：`usage.updated` 生产者挂
 `turn_end`（一回合一条、不累加；`agent_end` 刻意不做第二个生产者），目录带出 `contextWindow`，
 `tool.updated` 补状态行。开工取证改了做法——pi SDK 的 `getContextUsage()` 直接给
 `{ tokens, contextWindow, percent }`，占用由 worker 报而不是渲染层拿 token 除窗口算。
@@ -18,7 +20,7 @@ native macOS unsigned CI job。CI 实跑发现并修复四类既有门禁问题�
 permission policy 测试误吃本机旧文件、Windows 盘符 ESM import、Linux headless Electron 与 macOS
 `afterPack` resources 路径。最终提交 `f2777d7b`。
 
-**Last Verified**：2026-09-03 — manual Build run
+**T37 历史 Verified**：2026-09-03 — manual Build run
 [`33714362901`](https://github.com/p1p1dan/ai-client/actions/runs/33714362901) **success**：
 
 - gate：两套 typecheck pass；Biome 960 files；Vitest **256 files / 3911 tests pass**；release metadata pass；
