@@ -38,8 +38,10 @@ import { RuntimeConfigError } from '../../contracts.ts';
  * How often a slot's text can change, which is what fixes its position.
  *
  * - `static`  — identical for every run of a given build. Safe as a cache prefix.
- * - `session` — fixed once a session is configured (its cwd, tier, skills).
- * - `turn`    — may differ between two turns of one session.
+ * - `session` — fixed once a session is configured (its cwd, its skills, the
+ *   instruction files it loaded).
+ * - `turn`    — may differ between two turns of one session, because the user
+ *   can change it mid-session (ARD D14's mode and permission gear both can).
  */
 export type SegmentStability = 'static' | 'session' | 'turn';
 
@@ -63,12 +65,16 @@ export interface PromptSlotDefinition {
  * `runtime.ts:1503` re-composes base → optional tools → project instructions →
  * mode per turn). Two deliberate differences:
  *
- * 1. PI-Desktop's plan/goal/agent mode segment is **not adopted** — this
- *    product has no mode concept (`src/shared/types/workerRpc.ts` has a
- *    permission tier instead), so the analogous slot here is `permission-tier`
- *    and its text is P1's to write alongside the policy it describes.
- * 2. The order is declared rather than implied by call site, for the cache
+ * 1. The order is declared rather than implied by call site, for the cache
  *    reason in this file's header.
+ * 2. ARD D14 splits what this product used to fold into one permission tier
+ *    into two axes: the MODE (`plan` / `agent`) decides which tools exist,
+ *    the GEAR (`ask` / `accept-edits` / `auto`) decides how much the
+ *    remaining calls prompt. Both get a slot, both are P1's to write next to
+ *    the policy they describe, and both sit after the instruction chain
+ *    because a mode constraint has to outrank a project instruction that
+ *    contradicts it — the position PI-Desktop gives its mode block
+ *    (`runtime.ts:1506`).
  */
 export const PROMPT_SLOTS: readonly PromptSlotDefinition[] = [
   { id: 'identity', stability: 'static' },
@@ -92,15 +98,6 @@ export const PROMPT_SLOTS: readonly PromptSlotDefinition[] = [
     },
   },
   {
-    id: 'permission-tier',
-    stability: 'session',
-    deferred: {
-      phase: 'P1',
-      reason:
-        'what the model may attempt follows from the tier the session starts on (`readonly` / `pragmatic` / `handsoff` / `fullopen`). The wording has to match what the policy actually enforces, so it is written with P1-5 rather than guessed here.',
-    },
-  },
-  {
     id: 'skills',
     stability: 'session',
     deferred: {
@@ -116,6 +113,24 @@ export const PROMPT_SLOTS: readonly PromptSlotDefinition[] = [
       phase: 'P2-2',
       reason:
         'CLAUDE.md / AGENTS.md have to be read from disk, and ARD D11 routes every runtime file read through `runtimeHostIo`, which P1-0 lands. Reading them with bare `node:fs` here would be the per-module compatibility patch D11 exists to prevent.',
+    },
+  },
+  {
+    id: 'mode',
+    stability: 'turn',
+    deferred: {
+      phase: 'P1',
+      reason:
+        'ARD D14 defines `plan` (no Write/Edit, bash for inspection, produce a plan for approval) and `agent` (full tool set). The text has to describe the tool set the registry actually hands over in that mode, so it is written with P1-1 rather than ahead of it. Last-but-one position on purpose: a plan-mode constraint must outrank a project instruction that says otherwise.',
+    },
+  },
+  {
+    id: 'permission-gear',
+    stability: 'turn',
+    deferred: {
+      phase: 'P1',
+      reason:
+        'the gear (`ask` / `accept-edits` / `auto`, ARD D14) may not want a segment at all. PI-Desktop keeps the current gear out of any dynamic block and states the rule conditionally inside a static one instead ("...asks for permission unless the effective mode is Auto"), which keeps it inside the cacheable prefix. P1-5 chooses between that and a real segment once it knows what the policy actually prompts on; the slot exists so the choice is recorded rather than made by whoever writes the first string.',
     },
   },
 ] as const;
