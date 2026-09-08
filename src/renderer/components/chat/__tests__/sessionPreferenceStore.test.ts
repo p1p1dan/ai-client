@@ -1,13 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  DEFAULT_PERMISSIONS_STORAGE_KEY,
+  DEFAULT_TIER_STORAGE_KEY,
+  readDefaultPermissions,
   readSessionEffort,
   readSessionModel,
+  readSessionPermissions,
   removeSessionEffort,
   removeSessionModel,
+  removeSessionTier,
   SESSION_EFFORT_STORAGE_KEY,
   SESSION_MODEL_STORAGE_KEY,
+  SESSION_PERMISSIONS_STORAGE_KEY,
+  SESSION_TIER_STORAGE_KEY,
+  writeDefaultPermissions,
   writeSessionEffort,
   writeSessionModel,
+  writeSessionPermissions,
 } from '../sessionPreferenceStore';
 
 const storage = new Map<string, string>();
@@ -79,5 +88,41 @@ describe('Pi-only session preferences', () => {
     // resolves it to the Default sentinel (see efforts.test.ts).
     expect(readSessionEffort('s3')).toBe('ultra');
     expect(storage.get(SESSION_EFFORT_STORAGE_KEY)).toBe(before);
+  });
+});
+
+describe('D14 permission preferences', () => {
+  it.each([
+    ['readonly', 'plan', 'ask'],
+    ['pragmatic', 'agent', 'ask'],
+    ['handsoff', 'agent', 'accept-edits'],
+    ['fullopen', 'agent', 'auto'],
+  ] as const)('migrates %s for existing sessions and new-chat defaults', (tier, mode, gear) => {
+    storage.set(SESSION_TIER_STORAGE_KEY, JSON.stringify({ s1: tier }));
+    storage.set(DEFAULT_TIER_STORAGE_KEY, tier);
+    expect(readSessionPermissions('s1')).toEqual({ mode, gear });
+    expect(readDefaultPermissions()).toEqual({ mode, gear });
+    expect(storage.has(SESSION_PERMISSIONS_STORAGE_KEY)).toBe(false);
+  });
+  it('keeps the two axes independent and gives new settings priority over legacy', () => {
+    storage.set(SESSION_TIER_STORAGE_KEY, JSON.stringify({ s1: 'readonly' }));
+    writeSessionPermissions('s1', { mode: 'plan', gear: 'auto' });
+    writeDefaultPermissions({ mode: 'agent', gear: 'accept-edits' });
+    expect(readSessionPermissions('s1')).toEqual({ mode: 'plan', gear: 'auto' });
+    expect(readDefaultPermissions()).toEqual({ mode: 'agent', gear: 'accept-edits' });
+    removeSessionTier('s1');
+    expect(readSessionPermissions('s1')).toBeNull();
+    expect(readDefaultPermissions()).toEqual({ mode: 'agent', gear: 'accept-edits' });
+  });
+  it('falls back from malformed new settings without dropping old readonly', () => {
+    storage.set(DEFAULT_PERMISSIONS_STORAGE_KEY, '{broken');
+    storage.set(DEFAULT_TIER_STORAGE_KEY, 'readonly');
+    storage.set(
+      SESSION_PERMISSIONS_STORAGE_KEY,
+      JSON.stringify({ s1: { mode: 'goal', gear: 'auto' } })
+    );
+    storage.set(SESSION_TIER_STORAGE_KEY, JSON.stringify({ s1: { pi: 'readonly' } }));
+    expect(readDefaultPermissions()).toEqual({ mode: 'plan', gear: 'ask' });
+    expect(readSessionPermissions('s1')).toEqual({ mode: 'plan', gear: 'ask' });
   });
 });

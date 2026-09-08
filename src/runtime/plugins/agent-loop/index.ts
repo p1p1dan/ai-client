@@ -1,24 +1,4 @@
-/**
- * P0-5 - plugin-agent-loop, the minimal turn driver.
- *
- * This is the plugin that answers ARD risk R1 ("pi-agent-core's Agent class is
- * opaque"): if `Agent` + `pi-ai` can carry one prompt to a complete streamed
- * reply, ARD D3's layering holds and P1/P2/P3 can be built on it in parallel.
- * The wiring below is deliberately the same shape PI-Desktop uses in
- * `subagent.ts` - `streamFn` delegating to `models.streamSimple`, `getApiKey`
- * returning the provider key, `convertToLlm` taken from pi-agent-core - because
- * that shape is the part already proven in production.
- *
- * ## What is NOT here, and why
- *
- * No tools, no permission hook, no compaction, no retry ladder. Each of those
- * is a later phase with its own contract in `contracts.ts`, and a placeholder
- * version of any of them would be an empty shell of exactly the kind
- * `docs/agent-project-engineering.md` A3 rules out. The one thing that IS
- * pinned here is the single-turn boundary, and it is a flag rather than an
- * omission so that P1 flips a documented switch instead of discovering an
- * implicit assumption.
- */
+/** P0/P1 turn driver: optional native tools, bounded turns, permission audit and raw usage. */
 
 import {
   Agent,
@@ -91,13 +71,22 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     });
     trace.note('note', {
       event: 'run_start',
+      system_prompt: request.systemPrompt,
       system_prompt_bytes: Buffer.byteLength(request.systemPrompt, 'utf8'),
       thinking_level: request.thinkingLevel ?? this.config.defaultThinkingLevel,
       single_turn: this.config.singleTurn,
       catalog_source: adapter.source,
+      mode: this.ctx.get('runtimePermissions')?.mode ?? null,
+      permission_gear: this.ctx.get('runtimePermissions')?.gear ?? null,
     });
 
     const collected = new TurnCollector();
+    const toolCalls = new Set<string>();
+    const unsubscribePermissions = this.ctx.get('runtimePermissions')?.onDecision((record) => {
+      if (toolCalls.has(record.request.toolCallId))
+        trace.note('note', { event: 'permission_decision', ...record });
+    });
+    let turnCount = 0;
     const agent = new Agent({
       streamFn: (model, context, options) => resolved.models.streamSimple(model, context, options),
       // Per request rather than captured, so a key rewritten on disk between
@@ -109,14 +98,30 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         systemPrompt: request.systemPrompt,
         model: resolved.model,
         thinkingLevel: request.thinkingLevel ?? this.config.defaultThinkingLevel,
-        tools: [],
+        tools: [...(this.ctx.get('runtimeTools')?.list() ?? [])],
         messages: [],
       },
-      ...(this.config.singleTurn ? { shouldStopAfterTurn: () => true } : {}),
+      shouldStopAfterTurn: () => ++turnCount >= (this.config.singleTurn ? 1 : 64),
     });
 
     const unsubscribe = agent.subscribe((event) => {
       collected.observe(event);
+      if (event.type === 'tool_execution_start') toolCalls.add(event.toolCallId);
+      if (event.type === 'tool_execution_start')
+        trace.note('tool', {
+          event: event.type,
+          tool_call_id: event.toolCallId,
+          tool: event.toolName,
+          args: event.args,
+        });
+      if (event.type === 'tool_execution_end')
+        trace.note('tool', {
+          event: event.type,
+          tool_call_id: event.toolCallId,
+          tool: event.toolName,
+          result: event.result,
+          is_error: event.isError,
+        });
       request.onEvent?.(event);
     });
     const onAbort = () => agent.abort();
@@ -124,6 +129,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
 
     let thrown: Error | undefined;
     try {
+      request.signal?.throwIfAborted();
       await agent.prompt(request.prompt);
       await agent.waitForIdle();
     } catch (error) {
@@ -135,6 +141,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     } finally {
       request.signal?.removeEventListener('abort', onAbort);
       unsubscribe();
+      unsubscribePermissions?.();
     }
 
     for (const turn of collected.turns) {
@@ -148,18 +155,21 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
 
     const aborted = request.signal?.aborted === true;
     const last = collected.turns.at(-1);
-    const error = resolveError({ thrown, aborted, last });
+    const error =
+      turnCount >= 64 && last?.stopReason === 'toolUse'
+        ? { code: 'turn_limit', message: 'tool loop exceeded 64 assistant turns' }
+        : resolveError({ thrown, aborted, last });
     const result: Omit<RuntimeRunResult, 'trace'> = {
       runId: trace.runId,
       success: !error,
       text: collected.text,
       stopReason: aborted ? 'aborted' : (last?.stopReason ?? 'error'),
-      usage: last?.usage ?? null,
+      usage: sumUsage(collected.turns.map((turn) => turn.usage)),
       latencyMs: 0,
       turns: collected.turns.length,
       ...(error ? { error } : {}),
     };
-    const finished = trace.finish({
+    const finished = await trace.finish({
       final_output: result.text,
       usage: result.usage,
       success: result.success,
@@ -233,4 +243,27 @@ function resolveError(input: {
     };
   }
   return undefined;
+}
+
+function sumUsage(values: (Usage | null)[]): Usage | null {
+  const reported = values.filter((usage): usage is Usage => usage !== null);
+  if (!reported.length) return null;
+  const total: Usage = {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
+  for (const usage of reported) {
+    for (const key of ['input', 'output', 'cacheRead', 'cacheWrite', 'totalTokens'] as const)
+      total[key] += usage[key];
+    for (const key of ['input', 'output', 'cacheRead', 'cacheWrite', 'total'] as const)
+      total.cost[key] += usage.cost[key];
+    if (usage.reasoning !== undefined) total.reasoning = (total.reasoning ?? 0) + usage.reasoning;
+    if (usage.cacheWrite1h !== undefined)
+      total.cacheWrite1h = (total.cacheWrite1h ?? 0) + usage.cacheWrite1h;
+  }
+  return total;
 }

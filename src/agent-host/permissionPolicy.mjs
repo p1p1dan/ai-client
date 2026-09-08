@@ -65,48 +65,9 @@ const PATH_RULES = {
   '~/.aws/credentials': 'deny',
 };
 
-/**
- * Read-only shell commands that do not need a prompt.
- *
- * Every entry is a command that observes and does not mutate. The dangerous
- * shapes are handled elsewhere and cannot ride these allows:
- *
- *  - `path` denies run BEFORE this, so `cat .env` is blocked, not prompted.
- *  - `external_directory` is `ask`, and most-restrictive-wins, so `ls /etc`
- *    still prompts even though `ls *` is allowed here.
- *  - Wrapper floors clamp `allow` up to `ask` for `sudo`/`xargs`/`find -exec`/
- *    `bash -c`/`eval`, so `find *` cannot become a way to run anything.
- *
- * The `<verb> *` spelling is deliberate: per the plugin's pattern rules a
- * trailing ` *` also matches the bare command, so `git status *` covers both
- * `git status` and `git status --short`.
- */
-const BASH_RULES = {
-  '*': 'ask',
-  // Inspecting the repo's state is what an agent does between every real step;
-  // prompting for it is the single biggest source of dialog fatigue.
-  'git status *': 'allow',
-  'git diff *': 'allow',
-  'git log *': 'allow',
-  'git show *': 'allow',
-  'git branch *': 'allow',
-  'git rev-parse *': 'allow',
-  // Reading and describing files. Safe because the `path` gate runs first.
-  'ls *': 'allow',
-  'pwd *': 'allow',
-  'cat *': 'allow',
-  'head *': 'allow',
-  'tail *': 'allow',
-  'wc *': 'allow',
-  'file *': 'allow',
-  'stat *': 'allow',
-  // Locating things.
-  'which *': 'allow',
-  'echo *': 'allow',
-  'rg *': 'allow',
-  'grep *': 'allow',
-  'find *': 'allow',
-};
+// D14: every shell call reaches approval in ask. The session authorizer releases
+// workspace bash in accept-edits and auto, after path/external-directory gates.
+const BASH_RULES = { '*': 'ask' };
 
 /**
  * MCP: only the discovery calls, which reveal what is connected and nothing else.

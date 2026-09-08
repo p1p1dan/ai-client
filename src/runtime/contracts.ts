@@ -27,6 +27,8 @@
  * service resolution, which is not something this rc guarantees.
  */
 
+// Load the original module before augmenting its re-exported Context type.
+import 'cordis';
 import type { AgentEvent, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models, Usage } from '@earendil-works/pi-ai';
 
@@ -64,14 +66,6 @@ export interface DeferredServiceDeclaration {
  * graph six weeks from now can tell a deliberate gap from a dropped task.
  */
 export const DEFERRED_SERVICES: Readonly<Record<string, DeferredServiceDeclaration>> = {
-  runtimeTools: {
-    phase: 'P1',
-    reason: `${DEFERRED_REASON_MARKER} the P0 loop runs with an empty tool array by construction (see \`AgentLoopConfig.singleTurn\`), so there is no registry to consult. Registering an empty one would make \`ctx.get('runtimeTools')\` answer, and a P1 plugin injecting it would activate against a registry that can never grow a tool.`,
-  },
-  runtimePermissions: {
-    phase: 'P1',
-    reason: `${DEFERRED_REASON_MARKER} permissions gate tool execution, and P0 executes no tools. An always-allow stub would be indistinguishable at the call site from a real policy that happens to allow, which is the exact confusion ADR-grade permission code must not ship with.`,
-  },
   runtimeContext: {
     phase: 'P2',
     reason: `${DEFERRED_REASON_MARKER} compaction needs a transcript longer than one turn to have anything to compact. P0 is single-turn, so the only honest implementation is the identity function — which would silently pass a real overflow through once P1 makes turns long.`,
@@ -167,6 +161,7 @@ export interface RunTrace {
   error?: { code: string; message: string };
   /** §15 — what was actually running: git commit, flags, pinned package versions. */
   version_stamp: Record<string, string>;
+  persistence_error?: { code: string; message: string };
 }
 
 /** Open trace for one in-flight run. */
@@ -178,11 +173,12 @@ export interface TraceRun {
     usage: Usage | null;
     success: boolean;
     error?: { code: string; message: string };
-  }): RunTrace;
+  }): Promise<RunTrace>;
 }
 
 /** Engineering standard §2. Registered as Cordis service {@link TRACE_SERVICE}. */
 export interface TraceService {
+  flush(): Promise<void>;
   begin(input: { runId?: string; input: string; model: string; provider: string }): TraceRun;
   /** Absolute path traces are written to, or `null` when tracing is memory-only. */
   readonly dir: string | null;
@@ -236,6 +232,8 @@ export interface AgentLoopService {
  */
 declare module 'cordis' {
   interface Context {
+    runtimeHostIo: RuntimeHostIoService;
+    runtimeExec: RuntimeExecService;
     runtimeModel: ModelAdapterService;
     runtimeTrace: TraceService;
     runtimeLoop: AgentLoopService;
@@ -258,3 +256,102 @@ export class RuntimeConfigError extends Error {
     this.code = code;
   }
 }
+
+export const HOST_IO_SERVICE = 'runtimeHostIo';
+export const EXEC_SERVICE = 'runtimeExec';
+
+export type WorkerCarrier = 'bundled-node' | 'electron-utility';
+export type RuntimeCarrier = WorkerCarrier | 'standalone-node';
+
+export interface RuntimeNodeExecutable {
+  path: string;
+  source: 'bundled' | 'explicit' | 'current-process';
+}
+
+export type RuntimeExecPolicy =
+  | { mode: 'pipe' }
+  | { mode: 'host-adapter'; adapter: RuntimeExecAdapter };
+
+export interface RuntimeHostConfig {
+  carrier: RuntimeCarrier;
+  node?: RuntimeNodeExecutable;
+  tsdReadFallback: 'disabled' | 'configured-node';
+  exec: RuntimeExecPolicy;
+  childEnv: Readonly<Record<string, string>>;
+  cleanupTimeoutMs: number;
+}
+
+export type RuntimeFileKind = 'file' | 'directory' | 'symlink' | 'other';
+
+export interface RuntimeFileInfo {
+  kind: RuntimeFileKind;
+  size: number;
+  mtimeMs: number;
+}
+
+export interface RuntimeReadOptions {
+  maxBytes: number;
+  overflow: 'error' | 'truncate';
+  offset?: number;
+  signal?: AbortSignal;
+}
+
+export interface RuntimeReadResult {
+  bytes: Uint8Array;
+  truncated: boolean;
+  source: 'direct' | 'node-fallback';
+}
+
+export interface RuntimeWriteOptions {
+  mode?: number;
+  createOnly?: boolean;
+}
+
+export interface RuntimeHostIoService {
+  readFile(path: string, options: RuntimeReadOptions): Promise<RuntimeReadResult>;
+  writeFile(path: string, bytes: Uint8Array, options?: RuntimeWriteOptions): Promise<void>;
+  appendFile(path: string, bytes: Uint8Array, options?: { mode?: number }): Promise<void>;
+  stat(path: string, options?: { followSymlinks?: boolean }): Promise<RuntimeFileInfo>;
+  realpath(path: string): Promise<string>;
+  readDirectory(path: string): AsyncIterable<{ name: string; kind: RuntimeFileKind }>;
+  mkdir(path: string, options?: { recursive?: boolean; mode?: number }): Promise<void>;
+  rename(from: string, to: string): Promise<void>;
+  unlink(path: string): Promise<void>;
+}
+
+export interface RuntimeExecRequest {
+  command: string;
+  args: readonly string[];
+  cwd: string;
+  env?: Readonly<Record<string, string | undefined>>;
+  stdin?: Uint8Array;
+  timeoutMs: number;
+  maxOutputBytes: number;
+  overflow: 'truncate' | 'terminate';
+  signal?: AbortSignal;
+}
+
+export interface RuntimeExecResult {
+  exitCode: number | null;
+  signal: string | null;
+  termination: 'exit' | 'timeout' | 'aborted' | 'output-limit' | 'disposed';
+  stdout: Uint8Array;
+  stderr: Uint8Array;
+  stdoutBytes: number;
+  stderrBytes: number;
+  truncated: boolean;
+}
+
+export interface RuntimeExecService {
+  readonly mode: 'pipe' | 'host-adapter';
+  readonly adapterId: string;
+  run(request: RuntimeExecRequest): Promise<RuntimeExecResult>;
+}
+
+export interface RuntimeExecAdapter {
+  readonly id: string;
+  run(request: RuntimeExecRequest, cleanupTimeoutMs: number): Promise<RuntimeExecResult>;
+  dispose(cleanupTimeoutMs: number): Promise<void>;
+}
+
+export const RUNTIME_SERVICES = [...P0_SERVICES, HOST_IO_SERVICE, EXEC_SERVICE] as const;

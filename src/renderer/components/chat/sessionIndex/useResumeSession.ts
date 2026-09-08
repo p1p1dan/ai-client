@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { encodePiResumeError } from '../historyError';
-import { readSessionTier } from '../sessionPreferenceStore';
+import { readDefaultPermissions, readSessionPermissions } from '../sessionPreferenceStore';
 import { shouldApplyResumeResult, shouldResumeSession } from './resumeIntent';
 
 /**
@@ -35,11 +35,11 @@ export function useResumeSession(): UseResumeSessionResult {
       // U12 fix: read from the same per-session store the composer chip writes.
       // Without it a sidebar resume spawns a worker on the default tier while
       // the chip still shows the tier the user chose.
-      const storedTier = readSessionTier(sessionId);
+      const storedPermissions = readSessionPermissions(sessionId) ?? readDefaultPermissions();
       const intent = shouldResumeSession(session, workspace, {
         persistedRuntimeIdentity: options.persistedRuntimeIdentity,
         model: options.model,
-        ...(storedTier ? { tier: storedTier } : {}),
+        ...(storedPermissions ? { permissions: storedPermissions } : {}),
       });
       if (!intent.shouldResume || !intent.args) return false;
 

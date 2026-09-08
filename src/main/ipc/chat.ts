@@ -1,3 +1,7 @@
+import {
+  isRuntimePermissionSettings,
+  type RuntimePermissionSettings,
+} from '@shared/types/runtimePermission';
 /**
  * Chat / Runtime IPC — Renderer ↔ Main ↔ Agent Host.
  * Forwards Host Runtime Events to all BrowserWindows.
@@ -173,6 +177,13 @@ async function reloadSessionFromDisk(
  * worker then comes up on the default tier, which asks about everything, so a
  * bad value can never widen anything.
  */
+function spawnPermissions(permissions: unknown): { permissions?: RuntimePermissionSettings } {
+  if (permissions === undefined) return {};
+  if (!isRuntimePermissionSettings(permissions))
+    throw new Error('Invalid runtime permission settings');
+  return { permissions };
+}
+
 function spawnTier(tier: unknown): { tier?: SessionPermissionTier } {
   if (tier === undefined) return {};
   if (!isSessionPermissionTier(tier)) {
@@ -237,6 +248,7 @@ export function registerChatHandlers(): void {
         effort?: SessionEffortLevel;
         /** U12 fix — tier the worker must start on; validated below. */
         tier?: SessionPermissionTier;
+        permissions?: RuntimePermissionSettings;
       }
     ): Promise<{ requestId: string }> => {
       // D47 S5 §3 — agent-session-only spawn gate. `attach`/resume-of-an-
@@ -265,6 +277,7 @@ export function registerChatHandlers(): void {
         ...(payload.model ? { model: payload.model } : {}),
         ...(payload.effort ? { effort: payload.effort } : {}),
         ...spawnTier(payload.tier),
+        ...spawnPermissions(payload.permissions),
         ownerWebContentsId,
         ...(unbound ? { unbound: true } : {}),
       });
@@ -352,6 +365,7 @@ export function registerChatHandlers(): void {
         effort?: SessionEffortLevel;
         /** U12 fix — tier the worker must start on; validated below. */
         tier?: SessionPermissionTier;
+        permissions?: RuntimePermissionSettings;
       }
     ): Promise<{ requestId: string }> => {
       const row = await sessionIndexService.get(payload.sessionId);
@@ -400,6 +414,7 @@ export function registerChatHandlers(): void {
           ...(payload.model ? { model: payload.model } : {}),
           ...(payload.effort ? { effort: payload.effort } : {}),
           ...spawnTier(payload.tier),
+          ...spawnPermissions(payload.permissions),
           ownerWebContentsId,
           ...(unbound ? { unbound: true } : {}),
         });
@@ -413,6 +428,7 @@ export function registerChatHandlers(): void {
         ...(payload.effort ? { effort: payload.effort } : {}),
         ...(row.piLeaf ? { leafCheckpoint: row.piLeaf } : {}),
         ...spawnTier(payload.tier),
+        ...spawnPermissions(payload.permissions),
         ownerWebContentsId,
         ...(unbound ? { unbound: true } : {}),
       });
@@ -511,6 +527,21 @@ export function registerChatHandlers(): void {
       // a transient failure can be retried by the same owner.
       extensionUiRouter.forgetRequest(payload.uiRequestId);
       return { requestId };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_SET_PERMISSIONS,
+    async (
+      e,
+      payload: { sessionId: string; permissions: RuntimePermissionSettings }
+    ): Promise<{ requestId: string }> => {
+      if (!isRuntimePermissionSettings(payload.permissions))
+        throw new Error('Invalid runtime permission settings');
+      claimSessionForSender(e, payload.sessionId);
+      return {
+        requestId: await workerManager.setPermissions(payload.sessionId, payload.permissions),
+      };
     }
   );
 

@@ -66,10 +66,10 @@ describe('U29 the start screen keeps its bar controls', () => {
     // being deleted.
     expect(STORE).toContain("export const DEFAULT_TIER_STORAGE_KEY = 'aiclient:chat:default-tier'");
     expect(STORE).toContain('export function readDefaultTier()');
-    expect(PERMISSION).toContain('writeDefaultTier(newTier);');
+    expect(PERMISSION).toContain('writeDefaultPermissions(next);');
     // …and a live chat still writes its own row plus tells its worker.
-    expect(PERMISSION).toContain('writeSessionTier(sessionId, newTier);');
-    expect(PERMISSION).toContain('.setPermissionTier({ sessionId, tier: newTier })');
+    expect(PERMISSION).toContain('writeSessionPermissions(sessionId, next);');
+    expect(PERMISSION).toContain('.setPermissions({ sessionId, permissions: next })');
   });
 
   it('the host-ready gate stands down when there is no session to be ready', () => {

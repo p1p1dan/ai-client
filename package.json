@@ -24,6 +24,7 @@
     "verify:preview-probe": "node scripts/verify-preview-build-probe.mjs",
     "smoke:permission-plugin": "node --experimental-strip-types src/agent-host/spikes/t08a-permission-plugin-smoke.ts out-agent-host",
     "smoke:runtime": "node --experimental-strip-types src/runtime/smoke/runOnce.ts --offline",
+    "smoke:runtime-tools": "node --experimental-strip-types src/runtime/smoke/p1-standalone.ts",
     "fetch:node-runtime": "node scripts/fetch-node-runtime.mjs",
     "dist:prereq": "pnpm build && node scripts/assert-no-webfonts.mjs && pnpm verify:preview-assets && pnpm build:agent-host && pnpm fetch:node-runtime",
     "build:mac": "node scripts/assert-build-target.mjs darwin && pnpm dist:prereq && electron-builder --mac",

@@ -17,6 +17,10 @@ import type {
   WorkerReconcileImportedSessionResult,
 } from './legacyImport';
 import type { ExtensionUiResponse, RuntimeEvent } from './runtimeEvents';
+import {
+  isRuntimePermissionSettings,
+  type RuntimePermissionSettings,
+} from './runtimePermission.ts';
 // Explicit `.ts`: in dev the Pi worker loads this file as SOURCE under Node's
 // --experimental-strip-types (PiWorkerProcess.resolvePiWorkerEntryPath), and
 // Node's ESM resolver has no extension search. Type-only imports above are
@@ -118,6 +122,7 @@ export interface WorkerBootstrapPayload {
    * is in place. Absent = the default tier.
    */
   tier?: SessionPermissionTier;
+  permissions?: RuntimePermissionSettings;
 }
 
 export interface WorkerHistoryResult {
@@ -513,6 +518,8 @@ export function isWorkerBootstrapPayload(value: unknown): value is WorkerBootstr
   if (value.leafCheckpoint !== undefined && !isPiLeafCheckpoint(value.leafCheckpoint)) {
     return false;
   }
+  if (value.permissions !== undefined && !isRuntimePermissionSettings(value.permissions))
+    return false;
   if (value.unbound !== undefined && typeof value.unbound !== 'boolean') return false;
   if (
     value.tier !== undefined &&
@@ -1093,4 +1100,18 @@ export function isWorkerRpcEvent(value: unknown): value is WorkerRpcEvent {
 
 export function isWorkerRpcMessage(value: unknown): value is WorkerRpcMessage {
   return isWorkerRpcResponse(value) || isWorkerRpcEvent(value);
+}
+
+export interface WorkerSetPermissionsPayload {
+  logicalSessionId: string;
+  permissions: RuntimePermissionSettings;
+}
+export function isWorkerSetPermissionsPayload(
+  value: unknown
+): value is WorkerSetPermissionsPayload {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    isRuntimePermissionSettings(value.permissions)
+  );
 }

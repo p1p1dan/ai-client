@@ -101,6 +101,7 @@ export async function createPiWorkerSlot(
         // session is on the default, so an untouched session's bootstrap
         // payload is byte-identical to what it was before this fix.
         ...(options.tier ? { tier: options.tier } : {}),
+        ...(options.permissions ? { permissions: options.permissions } : {}),
       },
       { timeoutMs: options.bootstrapTimeoutMs ?? BOOTSTRAP_REQUEST_TIMEOUT_MS }
     );

@@ -1,10 +1,15 @@
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
 import {
-  DEFAULT_SESSION_PERMISSION_TIER,
-  type SessionPermissionTier,
-} from '@shared/types/sessionPermissionTier';
-import { Shield, ShieldAlert, ShieldCheck, ShieldOff, ShieldQuestion } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+  DEFAULT_RUNTIME_PERMISSION,
+  isPermissionGear,
+  isRuntimeMode,
+  PERMISSION_GEAR_LABELS,
+  type PermissionGear,
+  RUNTIME_MODE_LABELS,
+  type RuntimePermissionSettings,
+} from '@shared/types/runtimePermission';
+import { Shield, ShieldAlert, ShieldOff, ShieldQuestion } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Menu, MenuPopup, MenuRadioGroup, MenuSeparator } from '@/components/ui/menu';
 import { useI18n } from '@/i18n';
 import { isTierControlDegraded, usePermissionGateStore } from '@/stores/permissionGate';
@@ -16,67 +21,31 @@ import {
   type MiddleColumnMode,
 } from './middleColumnLayout';
 import {
-  readDefaultTier,
-  readSessionTier,
-  writeDefaultTier,
-  writeSessionTier,
+  readDefaultPermissions,
+  readSessionPermissions,
+  writeDefaultPermissions,
+  writeSessionPermissions,
 } from './sessionPreferenceStore';
 
-/** Per-chat value when there is a chat, the global default before there is. */
-function readTierFor(sessionId: string | null): SessionPermissionTier | null {
-  return sessionId ? (readSessionTier(sessionId) ?? readDefaultTier()) : readDefaultTier();
+function readPermissionsFor(sessionId: string | null): RuntimePermissionSettings {
+  return (
+    (sessionId ? readSessionPermissions(sessionId) : null) ??
+    readDefaultPermissions() ??
+    DEFAULT_RUNTIME_PERMISSION
+  );
 }
 
-interface TierOption {
-  id: SessionPermissionTier;
-  labelKey: string;
-  descriptionKey: string;
-  icon: typeof Shield;
-  dangerous?: boolean;
-}
-
-const TIER_OPTIONS: readonly TierOption[] = [
+const GEAR_OPTIONS: readonly { id: PermissionGear; description: string; icon: typeof Shield }[] = [
+  { id: 'ask', description: '写入、编辑和命令逐条询问。', icon: Shield },
   {
-    id: 'readonly',
-    labelKey: 'Read-only',
-    descriptionKey: 'Can read and search, cannot edit files or run commands.',
-    icon: ShieldCheck,
-  },
-  {
-    id: 'pragmatic',
-    labelKey: 'Pragmatic',
-    descriptionKey: 'Shipped defaults — reads are free, changes ask for confirmation.',
-    icon: Shield,
-  },
-  {
-    id: 'handsoff',
-    labelKey: 'Hands-off',
-    // Names the workspace boundary on purpose: edits INSIDE it are what this
-    // tier clears, and a file outside it still runs the cross-directory gate
-    // first — which looked like a broken tier while the copy said only
-    // "file edits apply without asking".
-    descriptionKey:
-      'File edits inside the workspace apply without asking; commands, and anything outside it, still ask.',
+    id: 'accept-edits',
+    description: '工作区内写入、编辑和命令自动执行；外部路径仍询问。',
     icon: ShieldOff,
   },
-  {
-    id: 'fullopen',
-    labelKey: 'Full access',
-    descriptionKey:
-      'Approves most actions automatically, including writes outside the workspace. Secret-file protection remains.',
-    icon: ShieldAlert,
-    dangerous: true,
-  },
+  { id: 'auto', description: '自动执行可用工具；显式拒绝规则仍生效。', icon: ShieldAlert },
 ];
 
 interface ComposerPermissionTriggerProps {
-  /**
-   * U29: `null` before the conversation exists. The control still renders —
-   * pix keeps its access menu live at all times, and a tier picked now is what
-   * the first send spawns on. In that state it reads and writes the GLOBAL
-   * default (user ruling, 2026-09-06) rather than a per-chat value, because
-   * there is no chat yet to attach one to.
-   */
   sessionId: string | null;
   hostState: HostStatus['state'];
   mode: MiddleColumnMode;
@@ -92,129 +61,59 @@ export function ComposerPermissionTrigger({
   sending,
 }: ComposerPermissionTriggerProps) {
   const { t } = useI18n();
-
-  const [tier, setTier] = useState<SessionPermissionTier>(
-    () => readTierFor(sessionId) ?? DEFAULT_SESSION_PERMISSION_TIER
-  );
-  const [confirmingDangerous, setConfirmingDangerous] = useState(false);
-  /**
-   * U30 rev.2 — closing goes through Base UI, never through a controlled `open`.
-   *
-   * `MenuPrimitive.RadioItem` deliberately does not close on select (radio
-   * semantics are "keep flipping between these"), which is right for a filter
-   * and wrong here: picking a tier is a decision, and a menu sitting open
-   * afterwards reads as "that did not take". U30's first attempt fixed that by
-   * making `<Menu>` controlled and writing `open={false}` from `applyTier`. It
-   * shipped in 0.4.0-test.7 and made the menu WORSE, in a way no static
-   * assertion could see — the user reported the popup stuck open with Escape
-   * and outside-click both dead.
-   *
-   * The cause is `MenuRoot.setOpen`'s first line
-   * (`@base-ui/react@1.1.0`, `menu/root/MenuRoot.js`):
-   *
-   *     if (open === nextOpen && trigger === activeTriggerElement && … ) return;
-   *
-   * Writing the prop moves the store's `open` to `false` WITHOUT running that
-   * function, so none of its close bookkeeping happens — and every later
-   * dismissal (Escape, outside press) hits the guard, sees `open === nextOpen`,
-   * and returns before doing anything. The popup stays mounted with no way out.
-   *
-   * So: no `open` prop. `closeOnClick` lets Base UI close the menu through its
-   * own path for an ordinary tier, and `actionsRef.close()` does the same for
-   * the confirmation step, which is not a menu item and so has no click of its
-   * own to close on.
-   */
+  const [settings, setSettings] = useState(() => readPermissionsFor(sessionId));
+  const [confirmingAuto, setConfirmingAuto] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Keep Base UI's own close bookkeeping: never drive its open prop manually.
   const menuActions = useRef<MenuPrimitive.Root.Actions | null>(null);
-
-  const resolvedSessionRef = useRef(sessionId);
+  const currentSession = useRef(sessionId);
+  currentSession.current = sessionId;
   useEffect(() => {
-    if (resolvedSessionRef.current !== sessionId) {
-      resolvedSessionRef.current = sessionId;
-      setTier(readTierFor(sessionId) ?? DEFAULT_SESSION_PERMISSION_TIER);
-      setConfirmingDangerous(false);
-    }
+    setSettings(readPermissionsFor(sessionId));
+    setConfirmingAuto(false);
+    setError(null);
   }, [sessionId]);
 
-  const applyTier = useCallback(
-    (newTier: SessionPermissionTier) => {
-      setTier(newTier);
+  const apply = async (next: RuntimePermissionSettings) => {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    try {
       if (sessionId) {
-        writeSessionTier(sessionId, newTier);
-        // Only a live chat has a worker to tell. Without one the choice is a
-        // preference; `runSend` reads it back when it spawns.
-        window.electronAPI.chat
-          .setPermissionTier({ sessionId, tier: newTier })
-          .catch(() => undefined);
-        return;
+        await window.electronAPI.chat.setPermissions({ sessionId, permissions: next });
+        writeSessionPermissions(sessionId, next);
+      } else {
+        writeDefaultPermissions(next);
       }
-      writeDefaultTier(newTier);
-    },
-    [sessionId]
-  );
-
-  const handleSelect = useCallback(
-    (value: string | number | null) => {
-      if (typeof value !== 'string') return;
-      const selected = value as SessionPermissionTier;
-      const option = TIER_OPTIONS.find((o) => o.id === selected);
-      if (!option) return;
-      if (option.dangerous) {
-        setConfirmingDangerous(true);
-        return;
+      if (currentSession.current === sessionId) {
+        setSettings(next);
+        setConfirmingAuto(false);
+        menuActions.current?.close();
       }
-      applyTier(selected);
-      setConfirmingDangerous(false);
-    },
-    [applyTier]
-  );
-
-  const handleConfirm = useCallback(() => {
-    applyTier('fullopen');
-    setConfirmingDangerous(false);
-    // The only close in this file. The four tiers close themselves through
-    // `closeOnClick`; this button is plain markup inside the popup, so Base UI
-    // has nothing to hang a close on and has to be asked.
-    menuActions.current?.close();
-  }, [applyTier]);
-
-  // D10: the tiers only exist as an `authorizerChain` link in the config.json we
-  // ship beside our bundled plugin copy. On the `user_configured` path we do not
-  // inject that copy, so the link is registered and never consulted — every tier
-  // resolves to whatever the user's own config says. The control stops offering
-  // a choice it cannot deliver.
+    } catch (failure) {
+      if (currentSession.current === sessionId)
+        setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setPending(false);
+    }
+  };
   const degraded = usePermissionGateStore((state) => isTierControlDegraded(state.gates, sessionId));
-
-  const currentOption = TIER_OPTIONS.find((o) => o.id === tier) ?? TIER_OPTIONS[1];
-  const Icon = degraded ? ShieldQuestion : currentOption.icon;
-  // Not the tier name: naming one would be the precise lie this state exists to
-  // remove. It is also NOT safe to say "same as Pragmatic" — the effective
-  // policy is the user's, which may be laxer than any tier here (a `yoloMode`
-  // config disables the checks outright).
-  const label = degraded ? t('Your own policy') : t(currentOption.labelKey);
-
-  // U29: the host gate stands down before a chat exists. `hostState` describes
-  // a runtime this control is not talking to yet — leaving it in would grey out
-  // the menu on the start screen for a reason that does not apply to it.
-  // `isHostUsable`, not `=== 'ready'`: a `degraded` manager (one unrelated
-  // pooled worker crashed) still takes this chat's tier change fine, and
-  // greying the control out until that entry is retired punishes every other
-  // session for it. `unknown` stays disabled — the prime has not answered yet,
-  // so nothing is known, which is not the same as knowing it works.
-  const isDisabled = disabled || sending || (sessionId !== null && !isHostUsable(hostState));
-  const title = degraded
-    ? t(
-        'This chat runs on the permission system in your own agent directory; the tiers here do not apply.'
-      )
-    : sending
-      ? t('A turn is running — the tier is fixed for the turn already in flight.')
-      : `${t('Permissions: {{tier}} — click to change ({{scope}})', { tier: label, scope: sessionId ? t('Applies immediately, to this thread.') : t('Applies to new chats.') })}`;
+  const current = GEAR_OPTIONS.find((option) => option.id === settings.gear) ?? GEAR_OPTIONS[0];
+  const Icon = degraded ? ShieldQuestion : current.icon;
+  const label = degraded
+    ? t('Your own policy')
+    : `${RUNTIME_MODE_LABELS[settings.mode]} · ${PERMISSION_GEAR_LABELS[settings.gear]}`;
+  const scope = sessionId ? t('Applies immediately, to this thread.') : t('Applies to new chats.');
+  const isDisabled =
+    disabled || sending || pending || (sessionId !== null && !isHostUsable(hostState));
+  const title = sending ? '当前轮次结束后可修改模式和权限。' : `${label} — ${scope}`;
 
   return (
     <Menu
       actionsRef={menuActions}
-      onOpenChange={(next) => {
-        // Reopening must not land straight back on the confirmation panel.
-        if (!next) setConfirmingDangerous(false);
+      onOpenChange={(open) => {
+        if (!open) setConfirmingAuto(false);
       }}
     >
       <MenuPrimitive.Trigger
@@ -234,87 +133,106 @@ export function ComposerPermissionTrigger({
       >
         {degraded ? (
           <DegradedGateNotice />
-        ) : !confirmingDangerous ? (
-          <MenuRadioGroup value={tier} onValueChange={handleSelect}>
-            {TIER_OPTIONS.map((option) => {
-              const OptionIcon = option.icon;
-              return (
-                <MenuPrimitive.RadioItem
-                  key={option.id}
-                  value={option.id}
-                  // Every tier but the dangerous one is a finished decision, so
-                  // Base UI closes the menu on the press. `fullopen` keeps the
-                  // popup up because `handleSelect` turns it into the
-                  // confirmation panel instead of applying anything.
-                  closeOnClick={!option.dangerous}
-                  className={composerMenuItemClass()}
-                >
-                  <OptionIcon className="size-3.5 shrink-0" />
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate">{t(option.labelKey)}</span>
-                    <span className="text-meta text-muted-foreground">
-                      {t(option.descriptionKey)}
-                    </span>
-                  </span>
-                  <MenuPrimitive.RadioItemIndicator className="shrink-0">
-                    <span className="size-1.5 rounded-full bg-foreground" />
-                  </MenuPrimitive.RadioItemIndicator>
-                </MenuPrimitive.RadioItem>
-              );
-            })}
-          </MenuRadioGroup>
-        ) : (
-          <div className="flex flex-col gap-2 p-3">
-            <p className="text-ui font-medium text-destructive">
-              {t('Remove limits on this chat?')}
-            </p>
+        ) : confirmingAuto ? (
+          <div className="flex max-w-72 flex-col gap-2 p-3">
+            <p className="text-ui font-medium text-destructive">启用全自动？</p>
             <p className="text-meta text-muted-foreground">
-              {t(
-                'Full access approves most tool calls automatically, including reads and writes outside this workspace. Only secret-file protection remains. This applies to this chat only.'
-              )}
+              自动执行当前模式下的可用工具，包括工作区外操作；显式拒绝规则仍生效。{scope}
             </p>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
-                className="rounded-sm px-2 py-1 text-ui text-muted-foreground hover:bg-hover"
-                onClick={() => setConfirmingDangerous(false)}
+                disabled={pending}
+                className="rounded-sm px-2 py-1 text-ui hover:bg-hover"
+                onClick={() => setConfirmingAuto(false)}
               >
                 {t('Cancel')}
               </button>
               <button
                 type="button"
+                disabled={pending}
                 className="rounded-sm bg-destructive/10 px-2 py-1 text-ui text-destructive hover:bg-destructive/20"
-                onClick={handleConfirm}
+                onClick={() => void apply({ ...settings, gear: 'auto' })}
               >
                 {t('Apply')}
               </button>
             </div>
           </div>
-        )}
-        {!degraded && !confirmingDangerous && (
+        ) : (
           <>
+            <MenuRadioGroup
+              value={settings.mode}
+              onValueChange={(value) => {
+                if (isRuntimeMode(value)) void apply({ ...settings, mode: value });
+              }}
+            >
+              {(['plan', 'agent'] as const).map((runtimeMode) => (
+                <MenuPrimitive.RadioItem
+                  key={runtimeMode}
+                  value={runtimeMode}
+                  disabled={pending}
+                  closeOnClick={false}
+                  className={composerMenuItemClass()}
+                >
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span>{RUNTIME_MODE_LABELS[runtimeMode]}</span>
+                    <span className="text-meta text-muted-foreground">
+                      {runtimeMode === 'plan'
+                        ? '勘察并提交实现计划，等待批准。'
+                        : '执行已批准的工作。'}
+                    </span>
+                  </span>
+                  <MenuPrimitive.RadioItemIndicator>
+                    <span className="size-1.5 rounded-full bg-foreground" />
+                  </MenuPrimitive.RadioItemIndicator>
+                </MenuPrimitive.RadioItem>
+              ))}
+            </MenuRadioGroup>
             <MenuSeparator />
-            <div className="px-2 py-1.5 text-meta text-muted-foreground">
-              {t('Applies immediately, to this thread.')}
-            </div>
+            <MenuRadioGroup
+              value={settings.gear}
+              onValueChange={(value) => {
+                if (!isPermissionGear(value)) return;
+                if (value === 'auto') setConfirmingAuto(true);
+                else void apply({ ...settings, gear: value });
+              }}
+            >
+              {GEAR_OPTIONS.map((option) => {
+                const OptionIcon = option.icon;
+                return (
+                  <MenuPrimitive.RadioItem
+                    key={option.id}
+                    value={option.id}
+                    disabled={pending}
+                    closeOnClick={false}
+                    className={composerMenuItemClass()}
+                  >
+                    <OptionIcon className="size-3.5 shrink-0" />
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span>{PERMISSION_GEAR_LABELS[option.id]}</span>
+                      <span className="text-meta text-muted-foreground">{option.description}</span>
+                    </span>
+                    <MenuPrimitive.RadioItemIndicator>
+                      <span className="size-1.5 rounded-full bg-foreground" />
+                    </MenuPrimitive.RadioItemIndicator>
+                  </MenuPrimitive.RadioItem>
+                );
+              })}
+            </MenuRadioGroup>
+            <MenuSeparator />
+            <div className="px-2 py-1.5 text-meta text-muted-foreground">{scope}</div>
           </>
+        )}
+        {error && (
+          <p role="alert" className="max-w-72 px-3 py-2 text-meta text-destructive">
+            {error}
+          </p>
         )}
       </MenuPopup>
     </Menu>
   );
 }
 
-/**
- * What the menu shows instead of four tiers when the runtime came up on the
- * user's own permission system (D10).
- *
- * Deliberately two lines: state that the tiers are off, and where the policy
- * actually comes from. It names no tier — the effective policy is the user's
- * config, which a `yoloMode: true` file makes laxer than every tier listed here,
- * so "same as Pragmatic" would be a new false claim replacing the old one. The
- * remedy (adding `authorizerChain` to their own config) lives in D10, not here:
- * the user asked for the panel to say the one thing and stop.
- */
 function DegradedGateNotice() {
   const { t } = useI18n();
   return (

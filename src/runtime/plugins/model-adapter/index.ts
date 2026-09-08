@@ -13,6 +13,7 @@ import { createModels, type Models, type Provider } from '@earendil-works/pi-ai'
 import type { Context } from 'cordis';
 import { Service } from 'cordis';
 import {
+  HOST_IO_SERVICE,
   MODEL_SERVICE,
   type ModelAdapterService,
   type ModelCatalogSource,
@@ -21,9 +22,10 @@ import {
   type RuntimeModelRef,
 } from '../../contracts.ts';
 import { buildProviderModels } from './binding.ts';
-import { type CatalogProvider, readPiCatalog } from './catalog.ts';
+import type { CatalogProvider, PiCatalog } from './catalog.ts';
 
 export interface ModelAdapterConfig {
+  catalog?: PiCatalog;
   /** Directory holding `models.json` / `auth.json`. Ignored when `providers` is set. */
   agentDir?: string | null;
   /**
@@ -47,6 +49,7 @@ interface Binding {
 }
 
 export class ModelAdapterPlugin extends Service implements ModelAdapterService {
+  static inject = [HOST_IO_SERVICE];
   readonly source: ModelCatalogSource;
   private readonly bindings = new Map<string, Binding>();
   private readonly order: RuntimeModelRef[] = [];
@@ -55,7 +58,7 @@ export class ModelAdapterPlugin extends Service implements ModelAdapterService {
     super(ctx, MODEL_SERVICE);
     this.source = config.providers
       ? this.bindInjected(config.providers)
-      : this.bindCatalog(config.agentDir ?? null, config.env ?? process.env);
+      : this.bindCatalog(config.catalog);
   }
 
   list(): readonly RuntimeModelRef[] {
@@ -88,14 +91,13 @@ export class ModelAdapterPlugin extends Service implements ModelAdapterService {
     return { ref: binding.ref, model, models: binding.models, requestKey: binding.requestKey };
   }
 
-  private bindCatalog(agentDir: string | null, env: NodeJS.ProcessEnv): ModelCatalogSource {
-    if (!agentDir) {
+  private bindCatalog(catalog: PiCatalog | undefined): ModelCatalogSource {
+    if (!catalog) {
       throw new RuntimeConfigError(
         'agent_dir_unset',
         'no catalog directory - set AICLIENT_RUNTIME_AGENT_DIR or PI_CODING_AGENT_DIR, or pass providers explicitly'
       );
     }
-    const catalog = readPiCatalog(agentDir, env);
     for (const provider of catalog.providers) this.bindProvider(provider);
     return {
       kind: 'agent-dir',

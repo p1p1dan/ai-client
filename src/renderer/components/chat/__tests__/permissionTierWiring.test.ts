@@ -42,30 +42,31 @@ describe('[U12 fix] the send path carries the stored tier into the spawn', () =>
     // tier picked on the start screen before this session existed. The order is
     // load-bearing: a chat's own stored tier still outranks the default, and
     // both absent still omits the field so Main picks.
-    expect(COMPOSER).toContain('readSessionTier');
+    expect(COMPOSER).toContain('readSessionPermissions');
     expect(COMPOSER).toContain(
-      'const spawnTier = readSessionTier(sessionId) ?? readDefaultTier() ?? undefined'
+      'const spawnPermissions = readSessionPermissions(sessionId) ?? readDefaultPermissions() ?? undefined'
     );
   });
 
   it('sends it with createSession', () => {
     expect(COMPOSER).toMatch(
-      /createSession\(\{[\s\S]{0,600}\.\.\.\(spawnTier \? \{ tier: spawnTier \} : \{\}\)/
+      /createSession\(\{[\s\S]{0,600}\.\.\.\(spawnPermissions \? \{ permissions: spawnPermissions \} : \{\}\)/
     );
   });
 
   it('sends it with both resume dispatch sites', () => {
     // Two, not one: the ordinary resume preamble and the `session_not_found`
     // reopen. Either can be the call that spawns the worker for this turn.
-    const occurrences = COMPOSER.split('...(spawnTier ? { tier: spawnTier } : {})').length - 1;
+    const occurrences =
+      COMPOSER.split('...(spawnPermissions ? { permissions: spawnPermissions } : {})').length - 1;
     expect(occurrences).toBe(3);
   });
 
   it('omits the key entirely for an untouched session', () => {
-    // `?? undefined` plus a conditional spread, not `tier: readSessionTier(...)`.
+    // `?? undefined` plus a conditional spread, not `tier: readSessionPermissions(...)`.
     // Sending an explicit `undefined` would still be a present key on some
     // paths, and "no preference" has to stay distinguishable from a choice.
-    expect(COMPOSER).not.toContain('tier: readSessionTier(');
+    expect(COMPOSER).not.toContain('tier: readSessionPermissions(');
   });
 });
 
@@ -74,9 +75,9 @@ describe('[U12 fix] the sidebar resume path carries it too', () => {
     // Opening a session from the sidebar spawns a worker just like a send
     // does, so leaving this one out would reopen the same drift by a different
     // door.
-    expect(RESUME_HOOK).toContain('const storedTier = readSessionTier(sessionId)');
+    expect(RESUME_HOOK).toContain('const storedPermissions = readSessionPermissions(sessionId)');
     expect(RESUME_HOOK).toMatch(
-      /shouldResumeSession\([\s\S]{0,300}storedTier \? \{ tier: storedTier \}/
+      /shouldResumeSession\([\s\S]{0,300}storedPermissions \? \{ permissions: storedPermissions \}/
     );
   });
 });

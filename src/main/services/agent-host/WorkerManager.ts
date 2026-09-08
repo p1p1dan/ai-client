@@ -16,9 +16,14 @@ import {
   type RuntimeEvent,
   type RuntimeEventDraft,
 } from '@shared/types/runtimeEvents';
+import {
+  migratePermissionTier,
+  type RuntimePermissionSettings,
+} from '@shared/types/runtimePermission';
 import type { PiLeafCheckpoint, SessionTreeSnapshot } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
+import type { WorkerSetPermissionsPayload } from '@shared/types/workerRpc';
 import {
   isWorkerCommandsResult,
   isWorkerDiscardForkResult,
@@ -28,6 +33,7 @@ import {
   isWorkerReloadResult,
   isWorkerRewindResult,
   isWorkerSendResult,
+  isWorkerSetPermissionTierResult,
   isWorkerStopResult,
   isWorkerTreeResult,
   sanitizeWorkerCommandRows,
@@ -117,6 +123,7 @@ interface ManagedSlot {
    * carries, so nothing is sent for it.
    */
   tier: SessionPermissionTier | undefined;
+  permissions: RuntimePermissionSettings | undefined;
   sessionFile: string | null;
   /**
    * Has `sessionFile` been written into the durable session index?
@@ -585,6 +592,7 @@ export class WorkerManager {
     unbound?: boolean;
     /** U12 fix — tier the worker starts on; omit for the default. */
     tier?: SessionPermissionTier;
+    permissions?: RuntimePermissionSettings;
   }): Promise<string> {
     const requestId = nextRequestId('create');
     return this.serialize(async () => {
@@ -598,6 +606,12 @@ export class WorkerManager {
         await this.retireAndDispose(existing, 'slot-dispose').catch(() => undefined);
       } else if (existing && existing.state !== 'disposing') {
         this.claimEntry(existing, input.ownerWebContentsId);
+        if (
+          input.permissions &&
+          (existing.permissions?.mode !== input.permissions.mode ||
+            existing.permissions?.gear !== input.permissions.gear)
+        )
+          await this.setPermissions(input.sessionId, input.permissions);
         existing.lastUsedAt = this.now();
         if (existing.state === 'ready' && existing.sessionFile) {
           // Re-announcing an uncommitted path would put the reservation back in
@@ -651,6 +665,7 @@ export class WorkerManager {
         cwd,
         unbound: input.unbound === true,
         tier: input.tier,
+        permissions: input.permissions,
         sessionFile: null,
         identityCommitted: false,
         slot: null,
@@ -767,6 +782,7 @@ export class WorkerManager {
     unbound?: boolean;
     /** U12 fix — tier the worker starts on; omit for the default. */
     tier?: SessionPermissionTier;
+    permissions?: RuntimePermissionSettings;
   }): Promise<string> {
     const sessionFile = normalizeWorkerPath(input.sessionFile, 'Pi session file');
     const cwd = normalizeWorkerPath(input.workspacePath, 'Workspace path');
@@ -834,6 +850,12 @@ export class WorkerManager {
           );
         }
         this.claimEntry(entry, input.ownerWebContentsId);
+        if (
+          input.permissions &&
+          (entry.permissions?.mode !== input.permissions.mode ||
+            entry.permissions?.gear !== input.permissions.gear)
+        )
+          await this.setPermissions(input.sessionId, input.permissions);
         const history = await this.readHistory(entry, 0, 80);
         await this.commitResumed({
           sessionId: input.sessionId,
@@ -879,6 +901,7 @@ export class WorkerManager {
         cwd,
         unbound: input.unbound === true,
         tier: input.tier,
+        permissions: input.permissions,
         sessionFile,
         // Resume is only reachable through an indexed runtimeIdentity, so the
         // durable commit already happened — for this file, by definition.
@@ -1401,6 +1424,7 @@ export class WorkerManager {
           // `fullopen` chat would silently start wide open, while its own
           // (empty) stored preference makes the composer chip read `pragmatic`.
           tier: undefined,
+          permissions: undefined,
           sessionFile,
           // Unlike a new session, a fork's JSONL is written eagerly: Pi's
           // createBranchedSession writes the header plus the copied branch, and
@@ -1656,6 +1680,35 @@ export class WorkerManager {
     return requestId;
   }
 
+  async setPermissions(sessionId: string, permissions: RuntimePermissionSettings): Promise<string> {
+    const requestId = nextRequestId('permissions');
+    const entry = this.entriesBySession.get(sessionId);
+    if (entry && entry.state !== 'ready')
+      throw new WorkerManagerError(
+        'session_not_ready',
+        'Wait for the worker before changing permissions'
+      );
+    if (entry?.activeRequestId)
+      throw new WorkerManagerError(
+        'session_busy',
+        'Permission settings cannot change during a turn'
+      );
+    if (entry?.slot && entry.state === 'ready') {
+      const result = await entry.slot.request<
+        WorkerSetPermissionTierResult,
+        WorkerSetPermissionsPayload
+      >('worker.setPermissions', { logicalSessionId: sessionId, permissions });
+      if (!isWorkerSetPermissionTierResult(result) || !result.applied)
+        throw new WorkerManagerError(
+          'worker_permission_not_applied',
+          'Worker did not apply permission settings'
+        );
+      entry.lastUsedAt = this.now();
+    }
+    if (entry) entry.permissions = { ...permissions };
+    return requestId;
+  }
+
   async setPermissionTier(sessionId: string, tier: SessionPermissionTier): Promise<string> {
     const requestId = nextRequestId('permtier');
     const entry = this.entriesBySession.get(sessionId);
@@ -1664,7 +1717,10 @@ export class WorkerManager {
     // that early return is what used to make the whole call a no-op. Now the
     // choice survives on the entry and the next spawn comes up on it, so the
     // unreachable case is a deferral rather than a silent drop.
-    if (entry) entry.tier = tier;
+    if (entry) {
+      entry.tier = tier;
+      entry.permissions = migratePermissionTier(tier);
+    }
     if (!entry?.slot || entry.state !== 'ready') return requestId;
     const payload: WorkerSetPermissionTierPayload = { logicalSessionId: sessionId, tier };
     await entry.slot.request<WorkerSetPermissionTierResult, WorkerSetPermissionTierPayload>(
@@ -1783,6 +1839,7 @@ export class WorkerManager {
       ...(entry.leafCheckpoint && !options.fresh ? { leafCheckpoint: entry.leafCheckpoint } : {}),
       ...(entry.unbound ? { unbound: true } : {}),
       ...(entry.tier ? { tier: entry.tier } : {}),
+      ...(entry.permissions ? { permissions: entry.permissions } : {}),
       ...selection,
       onSlotCreated: (slot) => {
         this.ownedSlots.add(slot);

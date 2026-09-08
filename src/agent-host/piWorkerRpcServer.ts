@@ -10,6 +10,7 @@ import type {
 } from '../shared/types/legacyImport.ts';
 import { isWorkerImportConversationPayload } from '../shared/types/legacyImport.ts';
 import type { RuntimeEvent, RuntimeEventDraft } from '../shared/types/runtimeEvents.ts';
+import type { RuntimePermissionSettings } from '../shared/types/runtimePermission.ts';
 import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
 import {
   isWorkerBootstrapPayload,
@@ -26,6 +27,7 @@ import {
   isWorkerRewindPayload,
   isWorkerRpcRequest,
   isWorkerSendPayload,
+  isWorkerSetPermissionsPayload,
   isWorkerSetPermissionTierPayload,
   isWorkerStopPayload,
   isWorkerTreePayload,
@@ -93,6 +95,7 @@ export interface PiWorkerRuntime {
   discardFork?(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
   respondExtensionUi(response: Parameters<PiWorkerSession['respondExtensionUi']>[0]): boolean;
+  setPermissions?(permissions: RuntimePermissionSettings): void;
   setPermissionTier?(tier: SessionPermissionTier): void;
   dispose(): Promise<void>;
 }
@@ -169,7 +172,10 @@ function sameBootstrap(a: WorkerBootstrapPayload, b: WorkerBootstrapPayload): bo
     // U05-c: a re-bootstrap that flips the trust posture is a DIFFERENT
     // session, not the same one — otherwise the second call would be answered
     // by a runtime already built with the first call's trust.
-    a.unbound === b.unbound
+    a.unbound === b.unbound &&
+    a.tier === b.tier &&
+    a.permissions?.mode === b.permissions?.mode &&
+    a.permissions?.gear === b.permissions?.gear
   );
 }
 
@@ -312,6 +318,9 @@ export class PiWorkerRpcServer {
           break;
         case 'worker.extensionUi.respond':
           this.handleExtensionUiResponse(request);
+          break;
+        case 'worker.setPermissions':
+          this.handleSetPermissions(request);
           break;
         case 'worker.setPermissionTier':
           this.handleSetPermissionTier(request);
@@ -732,6 +741,23 @@ export class PiWorkerRpcServer {
       handled: this.runtime?.respondExtensionUi(request.payload.response) ?? false,
     };
     this.respondSuccess(request, result);
+  }
+
+  private handleSetPermissions(request: WorkerRpcRequest): void {
+    if (!isWorkerSetPermissionsPayload(request.payload))
+      throw new PiWorkerSessionError('WORKER_INVALID_PAYLOAD', 'Invalid mode or permission gear');
+    if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId)
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_MISMATCH',
+        'Permission settings target another session'
+      );
+    if (!this.runtime?.setPermissions)
+      throw new PiWorkerSessionError(
+        'WORKER_UNSUPPORTED',
+        'Runtime does not support mode and permission gear'
+      );
+    this.runtime.setPermissions(request.payload.permissions);
+    this.respondSuccess(request, { applied: true });
   }
 
   private handleSetPermissionTier(request: WorkerRpcRequest): void {

@@ -11,8 +11,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { Context } from 'cordis';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RuntimeConfigError } from '../contracts.ts';
+import { standaloneHost } from '../host/config.ts';
+import { ExecPlugin } from '../host/exec.ts';
+import { HostIoPlugin } from '../host/io.ts';
 import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_TOKENS,
@@ -21,6 +25,13 @@ import {
 } from '../plugins/model-adapter/catalog.ts';
 
 const dirs: string[] = [];
+let ctx: Context;
+beforeEach(async () => {
+  ctx = new Context();
+  await ctx.plugin(ExecPlugin, standaloneHost({}));
+  const fiber = await ctx.plugin(HostIoPlugin, standaloneHost({}));
+  await fiber.await();
+});
 
 function fixture(files: { models?: unknown; auth?: unknown }): string {
   const dir = mkdtempSync(join(tmpdir(), 'runtime-catalog-'));
@@ -34,25 +45,26 @@ function fixture(files: { models?: unknown; auth?: unknown }): string {
   return dir;
 }
 
-afterEach(() => {
+afterEach(async () => {
+  await ctx.fiber.dispose();
   while (dirs.length > 0) {
     rmSync(dirs.pop() as string, { recursive: true, force: true });
   }
 });
 
 describe('expandHeaders', () => {
-  it('resolves a $NAME reference from the environment', () => {
+  it('resolves a $NAME reference from the environment', async () => {
     expect(expandHeaders({ 'User-Agent': '$UA' }, { UA: 'claude-cli-pilab/1.2.3' })).toEqual({
       'User-Agent': 'claude-cli-pilab/1.2.3',
     });
   });
 
-  it('drops a reference that resolves to nothing rather than sending it empty', () => {
+  it('drops a reference that resolves to nothing rather than sending it empty', async () => {
     expect(expandHeaders({ 'User-Agent': '$UA' }, {})).toEqual({});
     expect(expandHeaders({ 'User-Agent': '$UA' }, { UA: '   ' })).toEqual({});
   });
 
-  it('passes a literal value through, because refusing a hand-written config is not its call', () => {
+  it('passes a literal value through, because refusing a hand-written config is not its call', async () => {
     expect(expandHeaders({ 'X-Trace': 'on' }, {})).toEqual({ 'X-Trace': 'on' });
   });
 });
@@ -69,12 +81,16 @@ describe('readPiCatalog', () => {
     },
   };
 
-  it('joins models.json with the per-provider key from auth.json', () => {
+  it('joins models.json with the per-provider key from auth.json', async () => {
     const dir = fixture({
       models,
       auth: { gateway: { type: 'api_key', key: 'sk-test' } },
     });
-    const catalog = readPiCatalog(dir, { AICLIENT_PI_USER_AGENT: 'claude-cli-pilab/0.4.0' });
+    const catalog = await readPiCatalog(
+      dir,
+      { AICLIENT_PI_USER_AGENT: 'claude-cli-pilab/0.4.0' },
+      ctx.runtimeHostIo
+    );
     expect(catalog.providers).toHaveLength(1);
     const provider = catalog.providers[0];
     expect(provider.apiKey).toBe('sk-test');
@@ -89,12 +105,12 @@ describe('readPiCatalog', () => {
     });
   });
 
-  it('reports an empty key instead of failing, because a provider may need none', () => {
+  it('reports an empty key instead of failing, because a provider may need none', async () => {
     const dir = fixture({ models });
-    expect(readPiCatalog(dir, {}).providers[0].apiKey).toBe('');
+    expect((await readPiCatalog(dir, {}, ctx.runtimeHostIo)).providers[0].apiKey).toBe('');
   });
 
-  it('drops a provider whose rows are all unusable rather than offering an empty choice', () => {
+  it('drops a provider whose rows are all unusable rather than offering an empty choice', async () => {
     const dir = fixture({
       models: {
         providers: {
@@ -103,10 +119,12 @@ describe('readPiCatalog', () => {
         },
       },
     });
-    expect(readPiCatalog(dir, {}).providers.map((p) => p.id)).toEqual(['fine']);
+    expect((await readPiCatalog(dir, {}, ctx.runtimeHostIo)).providers.map((p) => p.id)).toEqual([
+      'fine',
+    ]);
   });
 
-  it('lets a model row override its provider api', () => {
+  it('lets a model row override its provider api', async () => {
     const dir = fixture({
       models: {
         providers: {
@@ -117,25 +135,25 @@ describe('readPiCatalog', () => {
         },
       },
     });
-    const provider = readPiCatalog(dir, {}).providers[0];
+    const provider = (await readPiCatalog(dir, {}, ctx.runtimeHostIo)).providers[0];
     expect(provider.models.map((m) => m.api)).toEqual(['openai-completions', 'openai-responses']);
   });
 
-  it('names the missing file when models.json is absent', () => {
+  it('names the missing file when models.json is absent', async () => {
     const dir = fixture({});
-    expect(() => readPiCatalog(dir, {})).toThrow(RuntimeConfigError);
+    await expect(readPiCatalog(dir, {}, ctx.runtimeHostIo)).rejects.toThrow(RuntimeConfigError);
     try {
-      readPiCatalog(dir, {});
+      await readPiCatalog(dir, {}, ctx.runtimeHostIo);
     } catch (error) {
       expect((error as RuntimeConfigError).code).toBe('models_json_missing');
       expect((error as Error).message).toContain('models.json');
     }
   });
 
-  it('rejects a models.json with no providers object', () => {
+  it('rejects a models.json with no providers object', async () => {
     const dir = fixture({ models: { version: 1 } });
     try {
-      readPiCatalog(dir, {});
+      await readPiCatalog(dir, {}, ctx.runtimeHostIo);
       throw new Error('expected a throw');
     } catch (error) {
       expect((error as RuntimeConfigError).code).toBe('models_json_shape');

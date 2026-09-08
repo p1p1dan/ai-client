@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { homedir } from 'node:os';
+import type { RuntimePermissionSettings } from '@shared/types/runtimePermission';
 import 'electron-log/preload.js';
 import type { AnnouncementsResult } from '@shared/announcements';
 import type { Locale } from '@shared/i18n';
@@ -1008,6 +1009,7 @@ const electronAPI = {
       effort?: SessionEffortLevel;
       /** U12 fix — permission tier the worker must come up on. */
       tier?: SessionPermissionTier;
+      permissions?: RuntimePermissionSettings;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CREATE_SESSION, payload),
     /**
@@ -1034,6 +1036,7 @@ const electronAPI = {
       effort?: SessionEffortLevel;
       /** U12 fix — permission tier the worker must come up on. */
       tier?: SessionPermissionTier;
+      permissions?: RuntimePermissionSettings;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESUME_SESSION, payload),
     /**
@@ -1072,6 +1075,11 @@ const electronAPI = {
      */
     respondExtensionUi: (payload: ExtensionUiResponse): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_EXTENSION_UI, payload),
+    setPermissions: (payload: {
+      sessionId: string;
+      permissions: RuntimePermissionSettings;
+    }): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SET_PERMISSIONS, payload),
     setPermissionTier: (payload: {
       sessionId: string;
       tier: SessionPermissionTier;

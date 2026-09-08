@@ -1,5 +1,6 @@
 import { PI_AGENT } from '@shared/types/agentWire';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import type { RuntimePermissionSettings } from '@shared/types/runtimePermission';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import { isPlaceholderTitle } from './sessionTitle';
@@ -25,6 +26,7 @@ export interface ResumeIntent {
     model?: string;
     /** U12 fix — permission tier the resumed worker must come up on. */
     tier?: SessionPermissionTier;
+    permissions?: RuntimePermissionSettings;
   };
   /** Reason the resume was skipped (for telemetry / diags). */
   reason?: string;
@@ -72,6 +74,7 @@ export function shouldResumeSession(
      * from silently running laxer than the tier its composer chip shows.
      */
     tier?: SessionPermissionTier;
+    permissions?: RuntimePermissionSettings;
   } = {}
 ): ResumeIntent {
   const skipBusy = options.skipBusy ?? true;
@@ -113,6 +116,7 @@ export function shouldResumeSession(
       // indistinguishable from "field absent" for the runtime default to apply.
       ...(options.model ? { model: options.model } : {}),
       ...(options.tier ? { tier: options.tier } : {}),
+      ...(options.permissions ? { permissions: options.permissions } : {}),
     },
   };
 }

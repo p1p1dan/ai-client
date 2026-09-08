@@ -11,6 +11,7 @@ type FakeWindow = {
 const handlers = new Map<string, Handler>();
 const runtimeEventHandlers: Array<(event: RuntimeEvent) => void> = [];
 let fakeWindows: FakeWindow[] = [];
+const setPermissions = vi.fn(async () => 'permissions-1');
 const createSession = vi.fn(async (_payload: Record<string, unknown>) => 'create-1');
 const resumeSession = vi.fn(async (_payload: Record<string, unknown>) => 'resume-1');
 const loadHistoryPage = vi.fn(async () => 'history-1');
@@ -102,6 +103,7 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
     getStatus: vi.fn(() => ({ state: 'ready', driver: 'agent-sdk' })),
     getSessionExtensions,
     createSession,
+    setPermissions,
     resumeSession,
     loadHistoryPage,
     getSessionTree,
@@ -395,6 +397,29 @@ describe('Pi WorkerSlot chat routing', () => {
   // U12 fix — the tier a worker STARTS on. `chat:setPermissionTier` only
   // reaches a worker that already exists, so a tier picked before the first
   // send had nowhere to go; it now rides along with the spawn instead.
+  it('forwards D14 settings through create, resume and live updates', async () => {
+    const permissions = { mode: 'plan', gear: 'auto' };
+    await invoke('chat:createSession', { sessionId: 's1', workspacePath: '/repo', permissions });
+    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ permissions }));
+    await invoke('chat:resumeSession', {
+      sessionId: 's1',
+      runtimeIdentity: '/session.jsonl',
+      workspacePath: '/repo',
+      permissions,
+    });
+    expect(resumeSession).toHaveBeenCalledWith(expect.objectContaining({ permissions }));
+    await expect(invoke('chat:setPermissions', { sessionId: 's1', permissions })).resolves.toEqual({
+      requestId: 'permissions-1',
+    });
+    expect(setPermissions).toHaveBeenCalledWith('s1', permissions);
+    await expect(
+      invoke('chat:setPermissions', {
+        sessionId: 's1',
+        permissions: { mode: 'goal', gear: 'auto' },
+      })
+    ).rejects.toThrow('Invalid runtime permission settings');
+  });
+
   describe('spawn permission tier', () => {
     it('carries a valid tier into createSession and resumeSession', async () => {
       await invoke('chat:createSession', {

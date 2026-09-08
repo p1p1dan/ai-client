@@ -3,7 +3,11 @@ import {
   SESSION_PERMISSION_TIERS,
   type SessionPermissionTier,
 } from '../../shared/types/sessionPermissionTier.ts';
-import { createSessionTierAuthorizer, verdictForTier } from '../sessionTierAuthorizer.ts';
+import {
+  createSessionTierAuthorizer,
+  verdictForPermissions,
+  verdictForTier,
+} from '../sessionTierAuthorizer.ts';
 
 describe('verdictForTier', () => {
   describe('readonly', () => {
@@ -41,21 +45,14 @@ describe('verdictForTier', () => {
   });
 
   describe('handsoff', () => {
-    it('allows write and edit', () => {
+    it('allows write, edit and bash after D14 migration', () => {
+      expect(verdictForTier('handsoff', 'bash')).toEqual({ kind: 'allow' });
       expect(verdictForTier('handsoff', 'write')).toEqual({ kind: 'allow' });
       expect(verdictForTier('handsoff', 'edit')).toEqual({ kind: 'allow' });
     });
 
-    it('defers bash and everything else', () => {
-      for (const surface of [
-        'bash',
-        'read',
-        'skill',
-        'mcp',
-        'path',
-        'external_directory',
-        undefined,
-      ]) {
+    it('defers other surfaces including external directories', () => {
+      for (const surface of ['read', 'skill', 'mcp', 'path', 'external_directory', undefined]) {
         expect(verdictForTier('handsoff', surface)).toEqual({ kind: 'defer' });
       }
     });
@@ -172,5 +169,67 @@ describe('createSessionTierAuthorizer', () => {
     const { factory } = createSessionTierAuthorizer();
     expect(() => factory(null as never)).not.toThrow();
     expect(() => factory(undefined as never)).not.toThrow();
+  });
+});
+
+describe('D14 mode and gear adapter', () => {
+  it('allows inspection in plan but never allows mutation even with auto', () => {
+    expect(verdictForPermissions({ mode: 'plan', gear: 'ask' }, 'bash', 'pwd')).toEqual({
+      kind: 'defer',
+    });
+    expect(verdictForPermissions({ mode: 'plan', gear: 'accept-edits' }, 'bash', 'pwd')).toEqual({
+      kind: 'allow',
+    });
+    for (const surface of ['write', 'edit', 'bash'])
+      expect(
+        verdictForPermissions({ mode: 'plan', gear: 'auto' }, surface, 'touch file').kind
+      ).toBe('deny');
+  });
+  it('crops tools at startup and restores them when switching to agent', () => {
+    const handlers = new Map<
+      string,
+      (event: {
+        toolName?: string;
+        input?: Record<string, unknown>;
+        systemPrompt?: string;
+      }) => unknown
+    >();
+    const all = ['read', 'write', 'edit', 'bash', 'plugin-write'];
+    let active = [...all];
+    const { factory, state } = createSessionTierAuthorizer({
+      permissions: { mode: 'plan', gear: 'auto' },
+    });
+    factory({
+      getActiveTools: () => active,
+      getAllTools: () => all.map((name) => ({ name })),
+      setActiveTools: (names: string[]) => {
+        active = names;
+      },
+      on: (
+        name: string,
+        handler: (event: {
+          toolName?: string;
+          input?: Record<string, unknown>;
+          systemPrompt?: string;
+        }) => unknown
+      ) => handlers.set(name, handler),
+    });
+    handlers.get('session_start')?.({});
+    expect(active).toEqual(['read', 'bash']);
+    expect(handlers.get('tool_call')?.({ toolName: 'plugin-write', input: {} })).toMatchObject({
+      block: true,
+    });
+    expect(
+      handlers.get('tool_call')?.({ toolName: 'bash', input: { command: 'pwd' } })
+    ).toBeUndefined();
+    expect(
+      handlers.get('tool_call')?.({ toolName: 'bash', input: { command: 'touch file' } })
+    ).toMatchObject({ block: true });
+    expect(handlers.get('before_agent_start')?.({ systemPrompt: 'base' })).toMatchObject({
+      systemPrompt: expect.stringContaining('Plan mode'),
+    });
+    state.configure({ mode: 'agent', gear: 'accept-edits' });
+    expect(active).toEqual(all);
+    expect(state.getPermissions()).toEqual({ mode: 'agent', gear: 'accept-edits' });
   });
 });

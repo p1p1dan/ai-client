@@ -394,6 +394,43 @@ describe('PiWorkerRpcServer', () => {
     ]);
   });
 
+  it('validates and forwards both D14 axes, rejecting invalid values', async () => {
+    const messages: Array<Record<string, unknown>> = [];
+    const setPermissions = vi.fn();
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      createRuntime: () => runtime({ setPermissions }),
+    });
+    server.receive(
+      request('boot', 'worker.bootstrap', {
+        logicalSessionId: 'logical-1',
+        cwd: '/repo',
+        permissions: { mode: 'plan', gear: 'ask' },
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    server.receive(
+      request('settings', 'worker.setPermissions', {
+        logicalSessionId: 'logical-1',
+        permissions: { mode: 'plan', gear: 'auto' },
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(setPermissions).toHaveBeenCalledWith({ mode: 'plan', gear: 'auto' });
+    expect(messages[1]).toMatchObject({ ok: true, result: { applied: true } });
+    server.receive(
+      request('bad', 'worker.setPermissions', {
+        logicalSessionId: 'logical-1',
+        permissions: { mode: 'goal', gear: 'auto' },
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(3));
+    expect(messages[2]).toMatchObject({ ok: false, error: { code: 'WORKER_INVALID_PAYLOAD' } });
+    expect(setPermissions).toHaveBeenCalledTimes(1);
+  });
+
   it('forwards setPermissionTier to the runtime and responds success', async () => {
     const messages: Array<Record<string, unknown>> = [];
     const setPermissionTier = vi.fn();

@@ -18,14 +18,15 @@
  * accumulates the same three fields on the legacy side.
  */
 
-import { appendFileSync, mkdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Usage } from '@earendil-works/pi-ai';
 import type { Context } from 'cordis';
 import { Service } from 'cordis';
 import {
+  HOST_IO_SERVICE,
   type RunTrace,
+  type RuntimeHostIoService,
   TRACE_SERVICE,
   type TraceRun,
   type TraceService,
@@ -40,13 +41,18 @@ export interface TracePluginConfig {
   now?: () => number;
   /** Injectable so a test can assert on ids without matching a uuid. */
   newRunId?: () => string;
+  io: RuntimeHostIoService;
 }
 
 export class TracePlugin extends Service implements TraceService {
+  static inject = [HOST_IO_SERVICE];
   readonly dir: string | null;
   private readonly versionStamp: Record<string, string>;
   private readonly now: () => number;
   private readonly newRunId: () => string;
+  private readonly io: RuntimeHostIoService;
+  private persistenceError?: Error;
+  private pending: Promise<void> = Promise.resolve();
   private readonly _runs: RunTrace[] = [];
 
   constructor(ctx: Context, config: TracePluginConfig) {
@@ -55,7 +61,7 @@ export class TracePlugin extends Service implements TraceService {
     this.versionStamp = config.versionStamp;
     this.now = config.now ?? (() => Date.now());
     this.newRunId = config.newRunId ?? (() => `run_${crypto.randomUUID()}`);
-    if (this.dir) mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+    this.io = config.io;
   }
 
   get runs(): readonly RunTrace[] {
@@ -90,38 +96,45 @@ export class TracePlugin extends Service implements TraceService {
           detail,
         });
       },
-      finish(outcome: {
+      async finish(outcome: {
         final_output: string;
         usage: Usage | null;
         success: boolean;
         error?: { code: string; message: string };
-      }): RunTrace {
+      }): Promise<RunTrace> {
         trace.final_output = outcome.final_output;
         trace.usage = outcome.usage;
         trace.success = outcome.success;
         if (outcome.error) trace.error = outcome.error;
         trace.latency_ms = sink.now() - startedAt;
         sink._runs.push(trace);
-        sink.persist(trace);
+        await sink.persist(trace);
         return trace;
       },
     };
   }
 
-  /**
-   * Append-only JSONL, one run per line.
-   *
-   * A write failure is swallowed on purpose: a trace is an observation of the
-   * run, and losing the observation must never turn a working turn into a
-   * failed one. The loss is still visible — `runs` holds the trace in memory,
-   * and the file simply has fewer lines than the process produced.
-   */
-  private persist(trace: RunTrace): void {
+  // Persistence failures stay separate from model outcomes and are surfaced by flush.
+  async flush(): Promise<void> {
+    await this.pending;
+    if (this.persistenceError) throw this.persistenceError;
+  }
+
+  private async persist(trace: RunTrace): Promise<void> {
     if (!this.dir) return;
+    const path = join(this.dir, 'runs.jsonl');
+    const work = this.pending.then(() =>
+      this.io.appendFile(path, Buffer.from(`${JSON.stringify(trace)}\n`), { mode: 0o600 })
+    );
+    this.pending = work.catch(() => {});
     try {
-      appendFileSync(join(this.dir, 'runs.jsonl'), `${JSON.stringify(trace)}\n`, { mode: 0o600 });
-    } catch {
-      // Intentionally ignored — see above.
+      await work;
+    } catch (error) {
+      this.persistenceError = error instanceof Error ? error : new Error(String(error));
+      trace.persistence_error = {
+        code: 'trace_write_failed',
+        message: this.persistenceError.message,
+      };
     }
   }
 }
@@ -134,15 +147,16 @@ export class TracePlugin extends Service implements TraceService {
  * this runs inside a utility worker on a user's machine, where spawning a
  * process per run is both slower and a thing the sandbox may refuse.
  */
-export function buildVersionStamp(options: {
+export async function buildVersionStamp(options: {
+  io: RuntimeHostIoService;
   repoRoot: string;
   configVersion: string;
   extra?: Record<string, string>;
-}): Record<string, string> {
+}): Promise<Record<string, string>> {
   const packageJsonPath = join(fileURLToPath(new URL('.', import.meta.url)), 'package.json');
   const pins: Record<string, string> = {};
   try {
-    const manifest = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+    const manifest = JSON.parse(await readText(options.io, packageJsonPath)) as {
       dependencies?: Record<string, string>;
     };
     for (const [name, range] of Object.entries(manifest.dependencies ?? {})) {
@@ -153,7 +167,7 @@ export function buildVersionStamp(options: {
   }
   return {
     config_version: options.configVersion,
-    git_commit: readGitCommit(options.repoRoot) ?? 'unknown',
+    git_commit: (await readGitCommit(options.repoRoot, options.io)) ?? 'unknown',
     node: process.version,
     ...pins,
     ...(options.extra ?? {}),
@@ -169,21 +183,20 @@ export function buildVersionStamp(options: {
  * would stamp every trace `unknown` — which is precisely the "it worked
  * yesterday, why not today?" that §15 exists to end.
  */
-function readGitCommit(repoRoot: string): string | null {
+async function readGitCommit(repoRoot: string, io: RuntimeHostIoService): Promise<string | null> {
   try {
     const gitPath = join(repoRoot, '.git');
-    const gitDir = statSync(gitPath).isDirectory()
-      ? gitPath
-      : readFileSync(gitPath, 'utf8')
-          .trim()
-          .replace(/^gitdir:\s*/, '');
-    const head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim();
+    const gitDir =
+      (await io.stat(gitPath)).kind === 'directory'
+        ? gitPath
+        : resolve(repoRoot, (await readText(io, gitPath)).trim().replace(/^gitdir:\s*/, ''));
+    const head = (await readText(io, join(gitDir, 'HEAD'))).trim();
     if (!head.startsWith('ref:')) return head;
     const ref = head.slice(4).trim();
     // A worktree's refs live in the SHARED gitdir, not the per-worktree one, so
     // `commondir` is followed when present.
-    const commonDir = readCommonDir(gitDir);
-    return readFileSync(join(commonDir, ref), 'utf8').trim();
+    const commonDir = await readCommonDir(gitDir, io);
+    return (await readText(io, join(commonDir, ref))).trim();
   } catch {
     // No repository at all in a packaged build. Not worth failing a run over;
     // the stamp says `unknown` and the rest of the trace stays usable.
@@ -191,11 +204,17 @@ function readGitCommit(repoRoot: string): string | null {
   }
 }
 
-function readCommonDir(gitDir: string): string {
+async function readCommonDir(gitDir: string, io: RuntimeHostIoService): Promise<string> {
   try {
-    const common = readFileSync(join(gitDir, 'commondir'), 'utf8').trim();
-    return common.startsWith('/') ? common : join(gitDir, common);
+    const common = (await readText(io, join(gitDir, 'commondir'))).trim();
+    return isAbsolute(common) ? common : join(gitDir, common);
   } catch {
     return gitDir;
   }
+}
+
+async function readText(io: RuntimeHostIoService, path: string): Promise<string> {
+  return Buffer.from(
+    (await io.readFile(path, { maxBytes: 1024 * 1024, overflow: 'error' })).bytes
+  ).toString('utf8');
 }

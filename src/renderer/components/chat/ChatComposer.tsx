@@ -116,7 +116,7 @@ import { parseSendDispatchErrorCode } from './sendDispatchError';
 import { decideSendPreamble } from './sendPreamble';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
 import { archiveSessionIndexEntry } from './sessionIndex/useSessionIndex';
-import { readDefaultTier, readSessionTier } from './sessionPreferenceStore';
+import { readDefaultPermissions, readSessionPermissions } from './sessionPreferenceStore';
 import {
   buildSlashCatalog,
   extractSlashQuery,
@@ -1283,7 +1283,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // U29: falls back to the global default, so a tier chosen on the start
     // screen (before this session existed) is the one it comes up on. `null`
     // from both still omits the field and lets Main pick, unchanged.
-    const spawnTier = readSessionTier(sessionId) ?? readDefaultTier() ?? undefined;
+    const spawnPermissions =
+      readSessionPermissions(sessionId) ?? readDefaultPermissions() ?? undefined;
     const wireAttachments = toWireAttachments(drafts);
     // F2 (2026-08-18): `sendTimeoutMs(attachmentBytes)` is gone. The wait is no
     // longer a fixed deadline predicted from the payload size — it is a
@@ -1711,7 +1712,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // "field not supported" for the runtime default to apply.
         ...(model ? { model } : {}),
         ...(effort ? { effort } : {}),
-        ...(spawnTier ? { tier: spawnTier } : {}),
+        ...(spawnPermissions ? { permissions: spawnPermissions } : {}),
       });
       setCurrentRequestId(createResult?.requestId ?? null);
 
@@ -1935,7 +1936,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             // it means the field never existed.
             ...(model ? { model } : {}),
             ...(effort ? { effort } : {}),
-            ...(spawnTier ? { tier: spawnTier } : {}),
+            ...(spawnPermissions ? { permissions: spawnPermissions } : {}),
           })
           .catch((error: unknown) => {
             resumeDispatchError = error instanceof Error ? error.message : String(error);
@@ -2064,7 +2065,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
               workspacePath,
               ...(model ? { model } : {}),
               ...(effort ? { effort } : {}),
-              ...(spawnTier ? { tier: spawnTier } : {}),
+              ...(spawnPermissions ? { permissions: spawnPermissions } : {}),
             })
             .catch((error: unknown) => {
               reopenError = error instanceof Error ? error.message : String(error);

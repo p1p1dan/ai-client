@@ -327,4 +327,4 @@ Q6 在 [未决问题](../open-questions.md) 登记。后续若选择 PTY、文�
 
 ## 实施回写（2026-09-08）
 
-[本机代码及验证证据](../evidence/p1/README.md)已落地，尚未提交。Windows 根进程先退出后的后代清理尚未满足本契约，P1-0 保持进行中。HostIo 为字节窗口，Read 工具为 1 起始行号；补充 `exec_stdio_failed` 错误。TSD 与 OS 沙箱/完整 shell 解析边界见证据文件。Q5 已按 D13 收口，不沿用草案中的待现场确认状态。
+[本机代码及验证证据](../evidence/p1/README.md)已落地，尚未提交。已增加保留进程树根身份的 Node runner，并通过 Linux 根命令先退出后的后代清理测试；Windows 分支仍待实测，P1-0 保持进行中。HostIo 为字节窗口，Read 工具为 1 起始行号；补充 `exec_stdio_failed` 错误。TSD 与 OS 沙箱/完整 shell 解析边界见证据文件。Q5 已按 D13 收口，不沿用草案中的待现场确认状态。

@@ -1,0 +1,28 @@
+P1 D14 continuation validation, 2026-09-08, uncommitted working tree
+All Vitest batches used NODE_OPTIONS=--max-old-space-size=768 and --maxWorkers=1 --no-file-parallelism.
+Below are the final observed results per file (reruns are not added again).
+
+src/agent-host/__tests__/sessionTierAuthorizer.test.ts: 17 passed
+src/agent-host/__tests__/permissionPolicy.test.ts: 17 passed
+src/renderer/components/chat/__tests__/sessionPreferenceStore.test.ts: 11 passed
+src/renderer/components/chat/__tests__/permissionTierWiring.test.ts: 5 passed
+src/main/services/agent-host/__tests__/WorkerManager.test.ts: 75 passed
+src/main/ipc/__tests__/chatPiWorkerRouting.test.ts: 33 passed
+src/agent-host/__tests__/piWorkerRpcServer.test.ts: 19 passed
+src/agent-host/__tests__/permissionPolicyIntegration.test.ts: 8 passed
+src/renderer/components/chat/__tests__/composerPermissions.test.ts: 4 passed
+src/renderer/components/chat/__tests__/permissionGateDegradedStatic.test.ts: 4 passed
+src/renderer/components/chat/__tests__/startScreenBarStatic.test.ts: 6 passed
+src/agent-host/__tests__/piWorkerSession.test.ts: 20 passed
+src/runtime/__tests__/tools.test.ts: 36 passed
+src/runtime/__tests__/newContext.test.ts: 4 passed
+Total: 14 files, 259 tests passed.
+
+Typecheck gates (serial, exit 0):
+NODE_OPTIONS=--max-old-space-size=1536 node_modules/.bin/tsc --noEmit
+NODE_OPTIONS=--max-old-space-size=768 node_modules/.bin/tsc --noEmit -p src/agent-host/tsconfig.json
+NODE_OPTIONS=--max-old-space-size=768 node_modules/.bin/tsc --noEmit -p src/runtime/tsconfig.json
+
+DOM interaction uses happy-dom and the real Base UI Menu. It is not packaged Electron GUI acceptance.
+permissionPolicyIntegration uses the installed pinned permission package with the generated distributor policy, not a policy mock.
+No online model calls, Windows run, remote CI, or production build.

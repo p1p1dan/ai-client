@@ -1,4 +1,9 @@
 import {
+  isRuntimePermissionSettings,
+  migratePermissionTier,
+  type RuntimePermissionSettings,
+} from '@shared/types/runtimePermission';
+import {
   isSessionPermissionTier,
   type SessionPermissionTier,
 } from '@shared/types/sessionPermissionTier';
@@ -103,6 +108,7 @@ export function writeSessionTier(sessionId: string, tier: SessionPermissionTier)
 }
 
 export function removeSessionTier(sessionId: string): void {
+  removeEntry(SESSION_PERMISSIONS_STORAGE_KEY, sessionId);
   removeEntry(SESSION_TIER_STORAGE_KEY, sessionId);
 }
 
@@ -129,5 +135,43 @@ export function writeDefaultTier(tier: SessionPermissionTier): void {
     localStorage.setItem(DEFAULT_TIER_STORAGE_KEY, tier);
   } catch {
     // Selection remains in the component when storage is unavailable.
+  }
+}
+
+export const SESSION_PERMISSIONS_STORAGE_KEY = 'aiclient:chat:session-permissions';
+export const DEFAULT_PERMISSIONS_STORAGE_KEY = 'aiclient:chat:default-permissions';
+
+export function readSessionPermissions(sessionId: string): RuntimePermissionSettings | null {
+  const value = loadMap(SESSION_PERMISSIONS_STORAGE_KEY)[sessionId];
+  if (isRuntimePermissionSettings(value)) return value;
+  const legacy = readSessionTier(sessionId);
+  return legacy ? migratePermissionTier(legacy) : null;
+}
+export function writeSessionPermissions(
+  sessionId: string,
+  settings: RuntimePermissionSettings
+): void {
+  const map = loadMap(SESSION_PERMISSIONS_STORAGE_KEY);
+  map[sessionId] = settings;
+  saveMap(SESSION_PERMISSIONS_STORAGE_KEY, map);
+}
+export function readDefaultPermissions(): RuntimePermissionSettings | null {
+  try {
+    const raw = localStorage.getItem(DEFAULT_PERMISSIONS_STORAGE_KEY);
+    if (raw) {
+      const value: unknown = JSON.parse(raw);
+      if (isRuntimePermissionSettings(value)) return value;
+    }
+  } catch {
+    // Fall back to the old setting when the new storage is unavailable or invalid.
+  }
+  const legacy = readDefaultTier();
+  return legacy ? migratePermissionTier(legacy) : null;
+}
+export function writeDefaultPermissions(settings: RuntimePermissionSettings): void {
+  try {
+    localStorage.setItem(DEFAULT_PERMISSIONS_STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // The current selection remains usable when storage is unavailable.
   }
 }

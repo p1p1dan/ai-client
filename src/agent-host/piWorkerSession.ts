@@ -9,6 +9,7 @@ import {
 import { buildPiUsagePayload } from '../shared/piUsage.ts';
 import type { SessionAttachment, SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type { ExtensionUiResponse, RuntimeEventDraft } from '../shared/types/runtimeEvents.ts';
+import type { RuntimePermissionSettings } from '../shared/types/runtimePermission.ts';
 import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
 import type {
   WorkerBootstrapPayload,
@@ -826,6 +827,13 @@ export class PiWorkerSession {
     return this.extensionUi.respond(response);
   }
 
+  setPermissions(permissions: RuntimePermissionSettings): void {
+    this.assertIdle('change permissions');
+    if (!this.tierState)
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Permission service is not ready');
+    this.tierState.configure(permissions);
+  }
+
   setPermissionTier(tier: SessionPermissionTier): void {
     this.tierState?.setTier(tier);
   }
@@ -1416,6 +1424,7 @@ export class PiWorkerSession {
       // reopen the window where the runtime enforces a laxer tier than the one
       // the user picked. `undefined` here still means the default tier.
       ...(this.options.tier ? { initialTier: this.options.tier } : {}),
+      permissions: this.options.permissions,
     });
     this.tierState = tierState;
 

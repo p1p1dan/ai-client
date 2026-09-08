@@ -232,7 +232,8 @@ function createHarness(
       if (type === 'worker.fork.discard') return { discarded: true };
       if (type === 'worker.stop') return { stopped: true };
       if (type === 'worker.extensionUi.respond') return { handled: true };
-      if (type === 'worker.setPermissionTier') return { applied: true };
+      if (type === 'worker.setPermissionTier' || type === 'worker.setPermissions')
+        return { applied: true };
       throw new Error(`unexpected request ${type}`);
     });
     const record: FakeSlotRecord = {
@@ -1236,6 +1237,73 @@ describe('WorkerManager unwritten Pi session files', () => {
   // U12 fix — the composer chip and the runtime used to be able to disagree,
   // always in the permissive direction. Both drifts are Main's to close,
   // because Main is the only side that outlives a worker.
+  describe('D14 permissions survive worker lifecycle', () => {
+    it('carries both axes on create, updates them through RPC and restores them after crash', async () => {
+      const h = createHarness({ sessionFileExists: async () => false });
+      await h.manager.createSession({
+        sessionId: 's1',
+        workspacePath: '/repo',
+        permissions: { mode: 'plan', gear: 'ask' },
+      });
+      expect(h.createSlot.mock.calls[0][0]).toMatchObject({
+        permissions: { mode: 'plan', gear: 'ask' },
+      });
+      await h.manager.setPermissions('s1', { mode: 'agent', gear: 'accept-edits' });
+      expect(h.records[0].request).toHaveBeenCalledWith('worker.setPermissions', {
+        logicalSessionId: 's1',
+        permissions: { mode: 'agent', gear: 'accept-edits' },
+      });
+      h.records[0].crash('killed');
+      await vi.waitFor(() => expect(h.createSlot).toHaveBeenCalledTimes(2));
+      expect(h.createSlot.mock.calls[1][0]).toMatchObject({
+        permissions: { mode: 'agent', gear: 'accept-edits' },
+      });
+    });
+    it('synchronizes a changed stored preference when create reuses a live worker', async () => {
+      const h = createHarness();
+      await create(h.manager, 's1');
+      await h.manager.createSession({
+        sessionId: 's1',
+        workspacePath: '/repo',
+        permissions: { mode: 'plan', gear: 'ask' },
+      });
+      expect(h.createSlot).toHaveBeenCalledTimes(1);
+      expect(h.records[0].request).toHaveBeenCalledWith('worker.setPermissions', {
+        logicalSessionId: 's1',
+        permissions: { mode: 'plan', gear: 'ask' },
+      });
+    });
+    it('carries plan plus auto through resume without collapsing it into a tier', async () => {
+      const h = createHarness();
+      await h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: '/sessions/s1.jsonl',
+        workspacePath: '/repo',
+        permissions: { mode: 'plan', gear: 'auto' },
+      });
+      expect(h.createSlot.mock.calls[0][0]).toMatchObject({
+        permissions: { mode: 'plan', gear: 'auto' },
+      });
+    });
+    it('does not replace the saved setting when the worker rejects a change', async () => {
+      const h = createHarness({ sessionFileExists: async () => false });
+      await h.manager.createSession({
+        sessionId: 's1',
+        workspacePath: '/repo',
+        permissions: { mode: 'plan', gear: 'ask' },
+      });
+      h.records[0].request.mockRejectedValueOnce(new Error('not applied'));
+      await expect(h.manager.setPermissions('s1', { mode: 'agent', gear: 'auto' })).rejects.toThrow(
+        'not applied'
+      );
+      h.records[0].crash('killed');
+      await vi.waitFor(() => expect(h.createSlot).toHaveBeenCalledTimes(2));
+      expect(h.createSlot.mock.calls[1][0]).toMatchObject({
+        permissions: { mode: 'plan', gear: 'ask' },
+      });
+    });
+  });
+
   describe('permission tier survives every spawn', () => {
     it('carries the tier into the spawn instead of leaving the worker on the default', async () => {
       const h = createHarness();

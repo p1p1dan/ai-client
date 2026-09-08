@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { createRuntime } from '../bootstrap.ts';
 import { RuntimeConfigError, type RuntimeModelRef } from '../contracts.ts';
+import { standaloneHost } from '../host/config.ts';
 import { evaluateCase, type SmokeCase } from './assertions.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -88,6 +89,7 @@ async function main(): Promise<number> {
 
   const providers = options.offline ? [buildFauxProvider(smokeCase)] : undefined;
   const runtime = await createRuntime({
+    host: standaloneHost({}),
     ...(providers ? { providers } : {}),
     ...(options.agentDir ? { agentDir: options.agentDir } : {}),
     ...(options.traceDir ? { traceDir: options.traceDir } : {}),

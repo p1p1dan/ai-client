@@ -332,6 +332,7 @@ export const IPC_CHANNELS = {
   CHAT_RESPOND_EXTENSION_UI: 'chat:respondExtensionUi',
   /** U12 — set the session-level permission tier on the running Worker. */
   CHAT_SET_PERMISSION_TIER: 'chat:setPermissionTier',
+  CHAT_SET_PERMISSIONS: 'chat:setPermissions',
   /**
    * U04 — which extensions pi actually loaded for a session.
    *

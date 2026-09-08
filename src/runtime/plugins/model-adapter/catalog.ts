@@ -21,9 +21,9 @@
  * what F08 added the field to prevent.
  */
 
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { RuntimeConfigError } from '../../contracts.ts';
+import { RuntimeConfigError, type RuntimeHostIoService } from '../../contracts.ts';
+import { errorCode } from '../../host/errors.ts';
 
 export const MODELS_FILE_NAME = 'models.json';
 export const AUTH_FILE_NAME = 'auth.json';
@@ -76,9 +76,13 @@ export interface PiCatalog {
 export const DEFAULT_CONTEXT_WINDOW = 128_000;
 export const DEFAULT_MAX_TOKENS = 8_192;
 
-export function readPiCatalog(dir: string, env: NodeJS.ProcessEnv = process.env): PiCatalog {
-  const models = readJsonFile(join(dir, MODELS_FILE_NAME), 'models_json');
-  const auth = readOptionalJsonFile(join(dir, AUTH_FILE_NAME));
+export async function readPiCatalog(
+  dir: string,
+  env: NodeJS.ProcessEnv,
+  io: RuntimeHostIoService
+): Promise<PiCatalog> {
+  const models = await readJsonFile(join(dir, MODELS_FILE_NAME), 'models_json', io);
+  const auth = await readOptionalJsonFile(join(dir, AUTH_FILE_NAME), io);
   const providersRaw = asRecord(models.providers);
   if (!providersRaw) {
     throw new RuntimeConfigError(
@@ -189,11 +193,18 @@ function readProviderKey(auth: Record<string, unknown> | null, providerId: strin
   return typeof entry?.key === 'string' ? entry.key : '';
 }
 
-function readJsonFile(path: string, code: string): Record<string, unknown> {
+async function readJsonFile(
+  path: string,
+  code: string,
+  io: RuntimeHostIoService
+): Promise<Record<string, unknown>> {
   let text: string;
   try {
-    text = readFileSync(path, 'utf8');
-  } catch {
+    text = Buffer.from(
+      (await io.readFile(path, { maxBytes: 8 * 1024 * 1024, overflow: 'error' })).bytes
+    ).toString('utf8');
+  } catch (error) {
+    if (errorCode(error) !== 'ENOENT') throw error;
     throw new RuntimeConfigError(
       `${code}_missing`,
       `${path} is missing — the app writes it at login; run the model sync first`
@@ -212,9 +223,21 @@ function readJsonFile(path: string, code: string): Record<string, unknown> {
   }
 }
 
-function readOptionalJsonFile(path: string): Record<string, unknown> | null {
+async function readOptionalJsonFile(
+  path: string,
+  io: RuntimeHostIoService
+): Promise<Record<string, unknown> | null> {
+  let text: string;
   try {
-    return asRecord(JSON.parse(readFileSync(path, 'utf8')));
+    text = Buffer.from(
+      (await io.readFile(path, { maxBytes: 8 * 1024 * 1024, overflow: 'error' })).bytes
+    ).toString('utf8');
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') return null;
+    throw error;
+  }
+  try {
+    return asRecord(JSON.parse(text));
   } catch {
     return null;
   }

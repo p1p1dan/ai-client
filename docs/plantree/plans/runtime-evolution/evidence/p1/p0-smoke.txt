@@ -1,11 +1,11 @@
 case      p0_single_turn_offline (offline)
 output    "ready"
-latency   8 ms
-trace     /tmp/aiclient-p1-offline-trace/runs.jsonl
+latency   11 ms
+trace     /tmp/aiclient-p1-policy-trace/runs.jsonl
   PASS  must_succeed  expected=true actual={"success":true,"error":null}
   PASS  must_not_call_tools:*  expected="no tool calls" actual=[]
   PASS  turns  expected=1 actual=1
   PASS  min_output_chars  expected=">= 1" actual=5
   PASS  exact_output  expected="ready" actual="ready"
-  PASS  max_latency_ms  expected="<= 30000" actual=8
+  PASS  max_latency_ms  expected="<= 30000" actual=11
 RESULT    pass

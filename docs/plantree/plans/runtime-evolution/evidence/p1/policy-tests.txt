@@ -1,0 +1,51 @@
+$ NODE_OPTIONS=--max-old-space-size=768 node_modules/.bin/vitest run src/runtime/__tests__/shellPolicy.test.ts src/runtime/__tests__/tools.test.ts src/runtime/__tests__/newContext.test.ts --maxWorkers=1 --no-file-parallelism
+
+ RUN  v3.2.4 /home/pi/code/ai-client-runtime
+
+ ✓ src/runtime/__tests__/tools.test.ts (36 tests) 624ms
+ ✓ src/runtime/__tests__/shellPolicy.test.ts (23 tests) 364ms
+ ✓ src/runtime/__tests__/newContext.test.ts (4 tests) 17ms
+
+ Test Files  3 passed (3)
+      Tests  63 passed (63)
+   Start at  22:00:05
+   Duration  2.08s (transform 198ms, setup 23ms, collect 702ms, tests 1.01s, environment 0ms, prepare 115ms)
+
+
+               total        used        free      shared  buff/cache   available
+Mem:           5.8Gi       2.8Gi       1.3Gi        45Mi       1.9Gi       2.9Gi
+Swap:          2.0Gi          0B       2.0Gi
+$ NODE_OPTIONS=--max-old-space-size=768 node_modules/.bin/vitest run src/runtime/__tests__/host.test.ts src/runtime/__tests__/hostBoundary.test.ts --maxWorkers=1 --no-file-parallelism
+
+ RUN  v3.2.4 /home/pi/code/ai-client-runtime
+
+ ✓ src/runtime/__tests__/host.test.ts (13 tests) 576ms
+ ✓ src/runtime/__tests__/hostBoundary.test.ts (2 tests) 23ms
+
+ Test Files  2 passed (2)
+      Tests  15 passed (15)
+   Start at  22:00:07
+   Duration  1.31s (transform 194ms, setup 23ms, collect 431ms, tests 599ms, environment 0ms, prepare 76ms)
+
+
+               total        used        free      shared  buff/cache   available
+Mem:           5.8Gi       2.7Gi       1.4Gi        45Mi       1.9Gi       3.0Gi
+Swap:          2.0Gi          0B       2.0Gi
+$ NODE_OPTIONS=--max-old-space-size=768 node_modules/.bin/vitest run src/runtime/__tests__/bootstrap.test.ts src/runtime/__tests__/catalog.test.ts src/runtime/__tests__/contracts.test.ts src/runtime/__tests__/agentLoop.test.ts --maxWorkers=1 --no-file-parallelism
+
+ RUN  v3.2.4 /home/pi/code/ai-client-runtime
+
+ ✓ src/runtime/__tests__/bootstrap.test.ts (5 tests) 35ms
+ ✓ src/runtime/__tests__/agentLoop.test.ts (6 tests) 42ms
+ ✓ src/runtime/__tests__/catalog.test.ts (9 tests) 19ms
+ ✓ src/runtime/__tests__/contracts.test.ts (8 tests) 3ms
+
+ Test Files  4 passed (4)
+      Tests  28 passed (28)
+   Start at  22:00:09
+   Duration  1.17s (transform 194ms, setup 31ms, collect 565ms, tests 99ms, environment 0ms, prepare 147ms)
+
+
+               total        used        free      shared  buff/cache   available
+Mem:           5.8Gi       2.7Gi       1.4Gi        45Mi       1.9Gi       3.0Gi
+Swap:          2.0Gi          0B       2.0Gi

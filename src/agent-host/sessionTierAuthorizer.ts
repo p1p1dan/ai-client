@@ -1,41 +1,9 @@
-/**
- * U12 — session-level permission tier authorizer.
- *
- * An inline pi extension that registers an `authorizerChain` link named
- * `aiclient-session-tier`. The link reads the current tier from a mutable
- * state holder exposed to the Worker RPC layer, so a tier change from the
- * renderer takes effect on the very next permission gate — no restart, no
- * re-bootstrap.
- *
- * ## How the four tiers map to verdicts
- *
- * | Tier       | write/edit | bash  | everything else |
- * |------------|-----------|-------|-----------------|
- * | readonly   | deny      | deny  | defer           |
- * | pragmatic  | defer     | defer | defer           |
- * | handsoff   | allow     | defer | defer           |
- * | fullopen   | allow     | allow | allow           |
- *
- * `fullopen` also covers `path` and `external_directory` — writing a file
- * outside the workspace runs two gates (`external_directory`, then `write`),
- * and a tier that cleared only the second one still prompted on every call,
- * which read as "the tier does not work". Upstream's bounded-delegation
- * envelope would cap those two surfaces back to `defer`; our distributor patch
- * (`scripts/patch-pi-permission-system.mjs`) exempts THIS link by name, on the
- * grounds that the tier is the user's own choice made behind an explicit
- * dangerous-tier confirmation, not a third-party judge's verdict.
- *
- * Deny rules are untouched by any of this: they resolve before a link is
- * consulted, so the secret-file denies in `permissionPolicy.mjs` still hold at
- * every tier, `fullopen` included.
- *
- * ## Why an inline extension
- *
- * Same reason as `permissionActivity.ts`: the `registerAuthorizer` API lives
- * on `PermissionsService`, reachable only through the extension event bus.
- * An inline factory needs no file on disk.
- */
-
+import { isExplorationCommand } from '../shared/runtimeShellPolicy.ts';
+import {
+  migratePermissionTier,
+  type RuntimePermissionSettings,
+  resolveRuntimePermission,
+} from '../shared/types/runtimePermission.ts';
 import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
 
 // ── Restated types ──────────────────────────────────────────────────────────
@@ -44,6 +12,17 @@ import type { SessionPermissionTier } from '../shared/types/sessionPermissionTie
 // would break.
 
 interface SessionTierExtensionApi {
+  getActiveTools?(): string[];
+  getAllTools?(): Array<{ name: string }>;
+  setActiveTools?(names: string[]): void;
+  on?(
+    event: 'session_start' | 'before_agent_start' | 'tool_call',
+    handler: (event: {
+      toolName?: string;
+      input?: Record<string, unknown>;
+      systemPrompt?: string;
+    }) => unknown
+  ): void;
   events?: {
     on?: (channel: string, handler: (data: unknown) => void) => (() => void) | undefined;
   };
@@ -53,6 +32,8 @@ type AuthorizerVerdict = { kind: 'allow' } | { kind: 'deny'; reason?: string } |
 
 interface AuthorizerDetails {
   surface?: string | null;
+  command?: string;
+  toolName?: string;
   accessIntent?: { surface?: string | null };
 }
 
@@ -89,35 +70,40 @@ function effectiveSurface(details: AuthorizerDetails): string | undefined {
   return details.accessIntent?.surface ?? details.surface ?? undefined;
 }
 
-/** Pure verdict logic — no side effects, trivially testable. */
+const PLAN_TOOLS = new Set(['read', 'grep', 'find', 'ls', 'glob', 'bash']);
+
+export function verdictForPermissions(
+  settings: RuntimePermissionSettings,
+  surface: string | undefined,
+  command?: string
+): AuthorizerVerdict {
+  if (
+    settings.mode === 'plan' &&
+    (surface === 'write' ||
+      surface === 'edit' ||
+      (surface === 'bash' && (!command || !isExplorationCommand(command))))
+  ) {
+    return { kind: 'deny', reason: 'Plan mode permits inspection only.' };
+  }
+  if (settings.gear === 'auto') return { kind: 'allow' };
+  if (settings.gear === 'accept-edits' && ['write', 'edit', 'bash'].includes(surface ?? ''))
+    return { kind: 'allow' };
+  return { kind: 'defer' };
+}
+
 export function verdictForTier(
   tier: SessionPermissionTier,
   surface: string | undefined
 ): AuthorizerVerdict {
-  switch (tier) {
-    case 'readonly': {
-      if (surface === 'write' || surface === 'edit' || surface === 'bash') {
-        return { kind: 'deny', reason: 'This session is in read-only mode.' };
-      }
-      return { kind: 'defer' };
-    }
-    case 'pragmatic':
-      return { kind: 'defer' };
-    case 'handsoff': {
-      if (surface === 'write' || surface === 'edit') {
-        return { kind: 'allow' };
-      }
-      return { kind: 'defer' };
-    }
-    case 'fullopen':
-      return { kind: 'allow' };
-  }
+  return verdictForPermissions(migratePermissionTier(tier), surface);
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
 export interface SessionTierAuthorizerState {
   setTier(tier: SessionPermissionTier): void;
+  configure(settings: RuntimePermissionSettings): void;
+  getPermissions(): RuntimePermissionSettings;
   getTier(): SessionPermissionTier;
 }
 
@@ -133,6 +119,7 @@ export interface SessionTierAuthorizerOptions {
    * the tier into every spawn, so the first permission gate already sees it.
    */
   initialTier?: SessionPermissionTier;
+  permissions?: RuntimePermissionSettings;
 }
 
 /**
@@ -148,10 +135,21 @@ export function createSessionTierAuthorizer(options: SessionTierAuthorizerOption
 } {
   const log = options.log ?? (() => undefined);
   let currentTier: SessionPermissionTier = options.initialTier ?? 'pragmatic';
+  let settings = resolveRuntimePermission({ tier: currentTier, ...options.permissions });
+  let updateTools = () => {};
 
   const state: SessionTierAuthorizerState = {
     setTier(tier) {
       currentTier = tier;
+      settings = migratePermissionTier(tier);
+      updateTools();
+    },
+    configure(next) {
+      settings = { ...next };
+      updateTools();
+    },
+    getPermissions() {
+      return { ...settings };
     },
     getTier() {
       return currentTier;
@@ -160,6 +158,42 @@ export function createSessionTierAuthorizer(options: SessionTierAuthorizerOption
 
   const factory = (pi: unknown): void => {
     const ext = pi as SessionTierExtensionApi | null | undefined;
+    let fullTools: string[] | undefined;
+    updateTools = () => {
+      if (!ext?.getActiveTools || !ext.setActiveTools) return;
+      fullTools ??= ext.getActiveTools();
+      const available = new Set(ext.getAllTools?.().map((tool) => tool.name) ?? fullTools);
+      ext.setActiveTools(
+        fullTools.filter(
+          (name) => available.has(name) && (settings.mode === 'agent' || PLAN_TOOLS.has(name))
+        )
+      );
+    };
+    ext?.on?.('session_start', () => {
+      fullTools = undefined;
+      updateTools();
+    });
+    ext?.on?.('before_agent_start', (event) => {
+      updateTools();
+      const mode =
+        settings.mode === 'plan'
+          ? 'Plan mode: inspect only, use bash only for inspection, and produce an implementation plan for user approval. Do not modify files.'
+          : 'Agent mode: execute the approved work.';
+      return {
+        systemPrompt: `${event.systemPrompt ?? ''}\n\n${mode} Permission gear: ${settings.gear}. Explicit deny rules always apply.`,
+      };
+    });
+    ext?.on?.('tool_call', (event) => {
+      if (settings.mode !== 'plan') return;
+      if (
+        !event.toolName ||
+        !PLAN_TOOLS.has(event.toolName) ||
+        (event.toolName === 'bash' &&
+          (typeof event.input?.command !== 'string' || !isExplorationCommand(event.input.command)))
+      ) {
+        return { block: true, reason: 'Plan mode permits inspection only.' };
+      }
+    });
     const bus = ext?.events;
     if (typeof bus?.on !== 'function') {
       log('extension event bus unavailable; session-tier authorizer will not register');
@@ -182,10 +216,10 @@ export function createSessionTierAuthorizer(options: SessionTierAuthorizerOption
             return;
           }
           service.registerAuthorizer(LINK_NAME, async (details, _query, authLog) => {
-            const tier = currentTier;
+            const current = { ...settings };
             const surface = effectiveSurface(details);
-            const verdict = verdictForTier(tier, surface);
-            authLog.review('session-tier', { tier, surface, verdict: verdict.kind });
+            const verdict = verdictForPermissions(current, surface, details.command);
+            authLog.review('session-tier', { ...current, surface, verdict: verdict.kind });
             return verdict;
           });
           registered = true;

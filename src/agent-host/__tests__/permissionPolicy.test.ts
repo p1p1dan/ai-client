@@ -101,29 +101,8 @@ describe('shipped permission policy — 务实档 (D-Q9 decision 1)', () => {
     expect(permission.edit).toBe('ask');
   });
 
-  it('allows only read-only shell commands', () => {
-    const allowed = Object.entries(bash)
-      .filter(([, action]) => action === 'allow')
-      .map(([pattern]) => pattern);
-    expect(allowed.length).toBeGreaterThan(0);
-
-    // Nothing that writes, moves, deletes, installs, or reaches the network.
-    const forbidden = /^(rm|mv|cp|chmod|chown|npm|pnpm|yarn|pip|curl|wget|ssh|scp|dd|sudo)\b/;
-    for (const pattern of allowed) {
-      expect(pattern).not.toMatch(forbidden);
-    }
-    // `git` is allowed only per read-only subcommand, never wholesale.
-    expect(allowed).not.toContain('git *');
-    expect(allowed).toContain('git status *');
-  });
-
-  it('spells every allowed command so the bare form is covered too', () => {
-    // The plugin's rule: a trailing ` *` also matches the command with no
-    // arguments. Without it `git status *` would miss a bare `git status`.
-    for (const [pattern, action] of Object.entries(bash)) {
-      if (action !== 'allow') continue;
-      expect(pattern.endsWith(' *')).toBe(true);
-    }
+  it('sends all shell commands through the D14 gear decision', () => {
+    expect(bash).toEqual({ '*': 'ask' });
   });
 
   it('allows only the MCP calls that reveal what is connected', () => {
