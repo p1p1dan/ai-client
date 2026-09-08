@@ -279,6 +279,65 @@ describe('deriveRunPanelView — occupancy and usage (U06-b)', () => {
   it('drops another session’s usage the same way it drops its clock', () => {
     expect(deriveRunPanelView(input({ sessionId: null, usage: usagePayload() })).usage).toBeNull();
   });
+
+  it('keeps the session total separate from the last turn (A2)', () => {
+    const session = {
+      turns: 3,
+      toolResults: 1,
+      input: 40_000,
+      output: 1_500,
+      cacheRead: 27_000,
+      cacheWrite: 3_600,
+      totalTokens: 72_100,
+      costUsd: 0.19,
+    };
+    const view = deriveRunPanelView(input({ usage: usagePayload({ session }) }));
+    // Two numbers, two fields. The view never merges them, so there is no
+    // "Total" for a reader to mistake for a turn figure.
+    expect(view.usage).toMatchObject({ input: 12_000, output: 480 });
+    expect(view.sessionUsage).toEqual(session);
+  });
+
+  it('reports no session total before one exists, or for another session', () => {
+    expect(deriveRunPanelView(input({ usage: usagePayload() })).sessionUsage).toBeNull();
+    expect(deriveRunPanelView(input()).sessionUsage).toBeNull();
+    expect(
+      deriveRunPanelView(
+        input({
+          sessionId: null,
+          usage: usagePayload({
+            session: {
+              turns: 2,
+              toolResults: 0,
+              input: 1,
+              output: 1,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 2,
+              costUsd: 0,
+            },
+          }),
+        })
+      ).sessionUsage
+    ).toBeNull();
+  });
+
+  it('publishes the cache hit rate beside the raw cache counts (A1)', () => {
+    // 9_000 / (12_000 + 9_000), cache writes excluded from the base.
+    expect(deriveRunPanelView(input({ usage: usagePayload() })).cacheHitRate).toBe(43);
+  });
+
+  it('reports no cache hit rate when there is no usage to derive one from', () => {
+    // Both the "nothing has run yet" case and the "another session" case: the
+    // row is absent, not 0%.
+    expect(deriveRunPanelView(input()).cacheHitRate).toBeNull();
+    expect(
+      deriveRunPanelView(input({ sessionId: null, usage: usagePayload() })).cacheHitRate
+    ).toBeNull();
+    expect(
+      deriveRunPanelView(input({ usage: usagePayload({ input: 0, cacheRead: 0 }) })).cacheHitRate
+    ).toBeNull();
+  });
 });
 
 describe('deriveRunTools — live tool status (T38-c)', () => {

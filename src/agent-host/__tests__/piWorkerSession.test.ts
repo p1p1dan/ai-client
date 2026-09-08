@@ -629,6 +629,18 @@ describe('PiWorkerSession', () => {
             totalTokens: 22_680,
             costUsd: 0.0504,
             context: { tokens: 21_400, contextWindow: 200_000, percent: 10.7 },
+            // A2: the conversation total rides beside the turn totals above,
+            // which are byte-for-byte what the provider reported.
+            session: {
+              turns: 1,
+              toolResults: 0,
+              input: 12_000,
+              output: 480,
+              cacheRead: 9_000,
+              cacheWrite: 1_200,
+              totalTokens: 22_680,
+              costUsd: 0.0504,
+            },
           },
         },
       ]);
@@ -662,7 +674,49 @@ describe('PiWorkerSession', () => {
       expect(usage.map((event) => (event.payload as { output: number }).output)).toEqual([
         480, 900,
       ]);
+      // A2: each event still carries THAT turn's own bill, and the session
+      // block beside it climbs. The two must never be conflated — this is the
+      // pair of numbers that makes summing the per-turn figures unnecessary.
+      expect(
+        usage.map((event) => (event.payload as { session?: { turns: number } }).session)
+      ).toEqual([
+        expect.objectContaining({ turns: 1, output: 480 }),
+        expect.objectContaining({ turns: 2, output: 1_380 }),
+      ]);
 
+      await session.dispose();
+    });
+
+    it('folds a tool result’s own usage in as delegated spend (A2)', async () => {
+      // `ToolResultMessage.usage` is documented in the SDK as "not part of main
+      // LLM context accounting", so a sub-agent's tokens arrive here and
+      // nowhere else. They belong in the conversation total and in no single
+      // message.
+      const stub = createPiSdkStub({ manualPrompt: true });
+      const events: RuntimeEventDraft[] = [];
+      const session = await runTurn(stub, events, (pi) => {
+        pi.emit({
+          type: 'turn_end',
+          message: { role: 'assistant', usage: TURN_USAGE },
+          toolResults: [
+            { role: 'toolResult', toolName: 'subagent', usage: { ...TURN_USAGE, output: 5_000 } },
+            { role: 'toolResult', toolName: 'read' },
+          ],
+        });
+      });
+
+      const [event] = events.filter((entry) => entry.type === 'usage.updated');
+      const payload = event?.payload as {
+        output: number;
+        session?: { turns: number; toolResults: number; output: number };
+      };
+      // The message's own figure is untouched by the delegated spend.
+      expect(payload.output).toBe(480);
+      expect(payload.session).toEqual(
+        expect.objectContaining({ turns: 1, toolResults: 1, output: 5_480 })
+      );
+
+      stub.finishPrompt('/repo');
       await session.dispose();
     });
 

@@ -2008,7 +2008,17 @@ export const zhTranslations: Record<string, string> = {
   'Output (last turn)': '输出（上一回合）',
   'Cache read': '缓存读取',
   'Cache write': '缓存写入',
+  // A1: `cacheRead / (input + cacheRead)`, cache writes excluded from the base.
+  'Cache hit rate': '缓存命中率',
   Cost: '费用',
+  // A2: the conversation total, deliberately labelled apart from the
+  // per-turn figures above it — the two are never added together.
+  'Turns (session)': '回合数（本会话）',
+  '{{turns}} + {{delegated}} delegated': '{{turns}} + {{delegated}} 次委派',
+  'Input (session)': '输入（本会话累计）',
+  'Output (session)': '输出（本会话累计）',
+  'Cache read (session)': '缓存读取（本会话累计）',
+  'Cost (session)': '费用（本会话累计）',
   '{{used}} of {{window}} context used': '上下文已占用 {{used}} / {{window}}',
 
   // T-12: git surface (GitSurfaceView) — empty states and diff sub-header.

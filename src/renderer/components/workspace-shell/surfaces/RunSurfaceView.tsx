@@ -334,8 +334,56 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
             {view.usage.cacheWrite > 0 && (
               <RunMetric label={t('Cache write')} value={formatTokenTotal(view.usage.cacheWrite)} />
             )}
+            {/* A1: the two rows above move with prompt size, so the ratio is
+                the one that reads as a signal. Shown whenever it is known,
+                including at 0% — a turn that cached nothing is a measurement,
+                and hiding it would mask a cache that quietly stopped working.
+                `null` (no prompt tokens, or no reported `cacheRead`) prints
+                nothing rather than 0%. */}
+            {view.cacheHitRate !== null && (
+              <RunMetric label={t('Cache hit rate')} value={`${view.cacheHitRate}%`} />
+            )}
             {view.usage.costUsd > 0 && (
               <RunMetric label={t('Cost')} value={`$${view.usage.costUsd.toFixed(4)}`} />
+            )}
+          </div>
+        )}
+        {/* A2: the conversation total, in its own bordered group and with every
+            label saying "session". Never merged with the block above into one
+            "Total" — a reader who took a session figure for a turn figure would
+            misread both. */}
+        {view.sessionUsage && (
+          <div className="mt-1 flex flex-col border-t pt-1">
+            <RunMetric
+              label={t('Turns (session)')}
+              value={
+                view.sessionUsage.toolResults > 0
+                  ? t('{{turns}} + {{delegated}} delegated', {
+                      turns: view.sessionUsage.turns,
+                      delegated: view.sessionUsage.toolResults,
+                    })
+                  : String(view.sessionUsage.turns)
+              }
+            />
+            <RunMetric
+              label={t('Input (session)')}
+              value={formatTokenTotal(view.sessionUsage.input)}
+            />
+            <RunMetric
+              label={t('Output (session)')}
+              value={formatTokenTotal(view.sessionUsage.output)}
+            />
+            {view.sessionUsage.cacheRead > 0 && (
+              <RunMetric
+                label={t('Cache read (session)')}
+                value={formatTokenTotal(view.sessionUsage.cacheRead)}
+              />
+            )}
+            {view.sessionUsage.costUsd > 0 && (
+              <RunMetric
+                label={t('Cost (session)')}
+                value={`$${view.sessionUsage.costUsd.toFixed(4)}`}
+              />
             )}
           </div>
         )}

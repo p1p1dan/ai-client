@@ -1,5 +1,11 @@
 import { unlink } from 'node:fs/promises';
 import { parsePiModelRef } from '../shared/piModelConfig.ts';
+import {
+  applyTurnUsage,
+  initTurnRollup,
+  type PiTurnRollup,
+  viewTurnRollup,
+} from '../shared/piTurnRollup.ts';
 import { buildPiUsagePayload } from '../shared/piUsage.ts';
 import type { SessionAttachment, SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type { ExtensionUiResponse, RuntimeEventDraft } from '../shared/types/runtimeEvents.ts';
@@ -340,11 +346,22 @@ export class PiWorkerSession {
   private assistantSequence = 0;
   private customSequence = 0;
   private disposed = false;
+  /**
+   * A2 — this conversation's running total, in memory for the life of the
+   * worker session.
+   *
+   * Not persisted: A2-b (a durable ledger) is deferred until a need for it
+   * turns up. Seeded from the logical session id in the constructor, which is
+   * `readonly`, so there is no reachable state in which this belongs to a
+   * different conversation than the events being folded into it.
+   */
+  private turnRollup: PiTurnRollup;
 
   constructor(options: PiWorkerSessionOptions) {
     this.options = options;
     this.logicalSessionId = options.logicalSessionId;
     this.cwd = options.cwd;
+    this.turnRollup = initTurnRollup(options.logicalSessionId);
     this.extensionUi = createPortableExtensionUiBridge({
       onRequest: (request) =>
         this.emit({
@@ -912,7 +929,37 @@ export class PiWorkerSession {
         // assistant message is the one this turn already reported, so emitting
         // from both would double-count the final turn of every run.
         const message = event.message as { usage?: unknown } | undefined;
-        const payload = buildPiUsagePayload(message?.usage, this.readContextUsage());
+        const turnUsage = buildPiUsagePayload(message?.usage);
+        // A2: fold this turn into the conversation total. The turn's own
+        // figures below are untouched — the rollup is a second number beside
+        // them, never a correction to them.
+        if (turnUsage) {
+          this.turnRollup = applyTurnUsage(this.turnRollup, {
+            sessionId,
+            usage: turnUsage,
+            source: 'turn',
+          });
+        }
+        // A tool that reports its own `usage` is how a delegated sub-agent's
+        // spend reaches us: the SDK states it is "not part of main LLM context
+        // accounting", so it is an increment by construction — absent from the
+        // assistant message above, and therefore addable here exactly once and
+        // attributable to no single message.
+        const toolResults = Array.isArray(event.toolResults) ? event.toolResults : [];
+        for (const result of toolResults) {
+          const toolUsage = buildPiUsagePayload((result as { usage?: unknown } | null)?.usage);
+          if (!toolUsage) continue;
+          this.turnRollup = applyTurnUsage(this.turnRollup, {
+            sessionId,
+            usage: toolUsage,
+            source: 'tool',
+          });
+        }
+        const payload = buildPiUsagePayload(
+          message?.usage,
+          this.readContextUsage(),
+          viewTurnRollup(this.turnRollup)
+        );
         if (payload) this.emit({ type: 'usage.updated', sessionId, requestId, payload });
         break;
       }

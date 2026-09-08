@@ -27,6 +27,9 @@
  * field rather than deriving one from character counts.
  */
 
+import type { PiSessionUsage } from './piTurnRollup';
+import { readSessionUsage } from './piTurnRollup';
+
 /**
  * Token and cost totals for one turn.
  *
@@ -61,6 +64,16 @@ export type PiContextUsage = {
 export type PiUsagePayload = PiTurnUsage & {
   /** Absent when the session has no model, or the model declares no window. */
   context?: PiContextUsage;
+  /**
+   * A2 — the running total for this conversation, carried BESIDE the turn
+   * totals above and never folded into them.
+   *
+   * The fields at the top level are what the provider billed for one turn and
+   * stay exactly that; this is a second, separately-labelled number. Absent
+   * before anything has settled, and absent from any payload an older build
+   * produced.
+   */
+  session?: PiSessionUsage;
 };
 
 /** The two arcs of an occupancy ring, plus the figures printed beside them. */
@@ -101,6 +114,57 @@ export function deriveContextOccupancy(
     percent: Math.min(100, Math.max(0, percent)),
     freeTokens: Math.max(0, context.contextWindow - usedTokens),
   };
+}
+
+/**
+ * A1 — the provider-reported prompt cache hit rate for one turn, as a whole
+ * percent, or `null` when there is no answer to give.
+ *
+ * ## Why it is worth a row of its own
+ *
+ * The Run panel already prints `cacheRead` and `cacheWrite` as absolute
+ * numbers, and absolute numbers move with prompt size, so they hide the thing
+ * worth watching. The rate is a sentinel: a bundled extension switched on, a
+ * system prompt that starts carrying something variable, a borrowed skill list
+ * that changed — each shows up immediately as the rate falling, where the raw
+ * token counts would only show up later as a bigger bill.
+ *
+ * ## Why the denominator excludes cache writes
+ *
+ * The question is "how much of this prompt was served from cache", so the
+ * denominator is the prompt: `input` (the part billed uncached) plus
+ * `cacheRead` (the part that came from cache). `cacheWrite` is what it cost to
+ * PUT tokens into the cache for some later turn; counting it here would make
+ * the very turn that warms a cache look like it missed twice over. Same formula
+ * and same reasoning as PI-Desktop's `calculateCacheRate`
+ * (`apps/desktop/src/lib/context-usage.ts`).
+ *
+ * ## Why the rounding happens here
+ *
+ * More than one surface can print this, and a percentage rounded separately in
+ * each is how two views of one number end up a point apart. Rounded once, with
+ * `Math.round` on a 0..100 scale — the same operator and scale
+ * `ComposerUsageChip` already uses for occupancy.
+ *
+ * ## `null` versus `0`
+ *
+ * `0` is a measurement: the prompt was billed and none of it came from cache.
+ * `null` is the absence of one — no prompt tokens at all, or a `cacheRead` the
+ * runtime did not report. Callers render `null` as nothing; printing it as `0%`
+ * would assert a cache miss nobody measured. The fields are re-checked at
+ * runtime rather than trusted from the type, because this payload crosses the
+ * `Record<string, unknown>` boundary described at the top of this file.
+ */
+export function deriveCacheHitRate(usage: PiTurnUsage | null | undefined): number | null {
+  if (!usage) return null;
+  const input = finiteNumber(usage.input);
+  const cacheRead = finiteNumber(usage.cacheRead);
+  if (input === null || cacheRead === null || input < 0 || cacheRead < 0) return null;
+  const promptTokens = input + cacheRead;
+  // No prompt at all: nothing was served from cache, but nothing was billed
+  // uncached either, so there is no ratio to report.
+  if (promptTokens <= 0) return null;
+  return Math.round((cacheRead / promptTokens) * 100);
 }
 
 function finiteNumber(value: unknown): number | null {
@@ -145,7 +209,11 @@ function readContextUsage(value: unknown): PiContextUsage | null {
  * Both arguments are `unknown`: they cross a dependency version boundary, same
  * policy as `readLoadedExtensionInventory`.
  */
-export function buildPiUsagePayload(usage: unknown, contextUsage?: unknown): PiUsagePayload | null {
+export function buildPiUsagePayload(
+  usage: unknown,
+  contextUsage?: unknown,
+  sessionUsage?: PiSessionUsage | null
+): PiUsagePayload | null {
   const source = record(usage);
   if (!source) return null;
   const cost = record(source.cost);
@@ -158,6 +226,8 @@ export function buildPiUsagePayload(usage: unknown, contextUsage?: unknown): PiU
     totalTokens: finiteNumber(source.totalTokens) ?? 0,
     costUsd: finiteNumber(cost?.total) ?? 0,
     ...(context ? { context } : {}),
+    // A2: a sibling of the turn totals, never a substitute for them.
+    ...(sessionUsage ? { session: sessionUsage } : {}),
   };
 }
 
@@ -177,6 +247,7 @@ export function readPiUsagePayload(payload: unknown): PiUsagePayload | null {
   const output = finiteNumber(source.output);
   if (input === null || output === null) return null;
   const context = readContextUsage(source.context);
+  const session = readSessionUsage(source.session);
   return {
     input,
     output,
@@ -185,5 +256,6 @@ export function readPiUsagePayload(payload: unknown): PiUsagePayload | null {
     totalTokens: finiteNumber(source.totalTokens) ?? 0,
     costUsd: finiteNumber(source.costUsd) ?? 0,
     ...(context ? { context } : {}),
+    ...(session ? { session } : {}),
   };
 }

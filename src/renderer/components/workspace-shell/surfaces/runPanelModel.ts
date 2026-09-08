@@ -15,8 +15,10 @@
  * `contextSurfaceModel.ts`.
  */
 
+import type { PiSessionUsage } from '@shared/piTurnRollup';
 import {
   type ContextOccupancy,
+  deriveCacheHitRate,
   deriveContextOccupancy,
   type PiTurnUsage,
   type PiUsagePayload,
@@ -157,6 +159,19 @@ export interface RunPanelView {
   contextWindowOnly: number | null;
   /** Token/cost totals of the last settled turn, or `null`. */
   usage: PiTurnUsage | null;
+  /**
+   * A1: `cacheRead / (input + cacheRead)` for that same turn, already rounded
+   * to a whole percent. `null` means the rate is unknown (no prompt tokens, or
+   * an unreported `cacheRead`) and the view prints no row at all — never `0%`,
+   * which would claim a miss that was not measured.
+   */
+  cacheHitRate: number | null;
+  /**
+   * A2: what this conversation has spent in total, or `null` before anything
+   * has settled. A SEPARATE figure from `usage` above, which is the last turn's
+   * own bill — the view must label the two apart and must never add them.
+   */
+  sessionUsage: PiSessionUsage | null;
   /** True when this session has nothing to report yet at all. */
   empty: boolean;
 }
@@ -296,6 +311,8 @@ export function deriveRunPanelView(input: RunPanelInput): RunPanelView {
     occupancy,
     contextWindowOnly,
     usage: turnUsage,
+    cacheHitRate: deriveCacheHitRate(turnUsage),
+    sessionUsage: usage?.session ?? null,
     // "Nothing to report" is narrower than "idle": an idle session that has
     // already run a turn still has a model, a clock and a tool count to show.
     empty:
