@@ -1,11 +1,12 @@
 # Runtime 自主化演进 — 任务看板
 
-> 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D13 生效）。
+> 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D14 生效）。
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
 **当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 本机实现/验证落地，Windows 载体待完成；P2/P3 可接续
 **最近落地**：`8a71c843`（2026-09-08）已提交 P0 骨架与 P2-0 六场景基线，缓存命中率 **95.01%**，[验收与证据](evidence/p2-0/validation.md)；P0 的 R1 关闭证据见 [在线冒烟](evidence/p0/live-smoke.md)
 **下一目标**：按 [P1 TODO](TODO.md) 完成 Windows 清理与载体验收；本机 [69 项测试及探针证据](evidence/p1/README.md) 已归档，P1 代码未提交；P2-1 起及 P3 可并行（Q4 已按 [D12](../../../plans/2026-09-08-runtime-evolution-ard.md) 收口：pin 0.84.4，不回退对齐）
+**2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 用户拍板——废弃四档 tier，改为两根轴：**模式**（`plan` / `agent`）管工具集，**档位**（`ask` / `accept-edits` / `auto`）管打扰程度，且 `accept-edits` 连 bash 一起放行。P1-5 / P1-6 已按旧四档交付，需按 D14 返工；P1-1 需按模式裁剪工具集。
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
 
@@ -68,12 +69,12 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
 | P1-0 IO/exec 出口收敛 | 🟡 | 两 service、TSD helper、P0 catalog/trace 迁移、carrier stamp 已实现且本机验证通过；Windows 根进程先退出后的后代清理仍待完成，[证据/边界](evidence/p1/README.md) |
-| P1-1 工具注册表 | ✅ | 六工具发现、AgentTool schema、调用前 TypeBox 校验、重复注册拒绝；代码未提交 |
+| P1-1 工具注册表 | 🟡 | 六工具发现、AgentTool schema、调用前 TypeBox 校验、重复注册拒绝，本体已完成；**待补**：按 [D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 的模式裁剪工具集（`plan` 不含 Write/Edit 及写类插件工具，`agent` 为完整集） |
 | P1-2 文件工具 | ✅ | read/write/edit、规范路径、限额/截断、同路径写锁；Read 保持 1 起始行号及基线 2101/3 语义；本机验证通过，载体验收归 P1-8 |
 | P1-3 bash 工具 | 🟡 | 配置 cwd/shell、时限/输出上限、Linux 进程组清理通过；Windows 清理边界见 P1-0，不宣称已跨平台签收 |
 | P1-4 搜索工具 | ✅ | glob + 首版字面文本 grep，目录/文件/累计预算、symlink/拒绝 scope 跳过；未实现正则与 gitignore 引擎，行为明确写入工具 schema 描述 |
-| P1-5 权限内核 | ✅ | 本仓四档 tier + 秘密文件拒绝 + canonical scope/工具白名单 + 精确会话授权，矩阵通过；与旧 bash parser/policy loader 的全量兼容留作 P4 前核对，见证据 |
-| P1-6 审批流对接 | ✅ | 复用 Extension UI bridge 的 select/respond/取消；本机集成测试通过，无 renderer 修改；实际 worker RPC 接线与 GUI 签收仍属 P4 |
+| P1-5 权限内核 | 🟡 | 秘密文件拒绝 + canonical scope/工具白名单 + 精确会话授权已完成且矩阵通过；**但档位按已废弃的四档 tier 实现**，须按 [D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 改为 `ask` / `accept-edits` / `auto` 三档（`accept-edits` 放行工作区内写/改/**bash**，工作区外路径仍问；deny 规则不受档位影响），并按 D14 映射表接受旧值。与旧 bash parser/policy loader 的全量兼容留作 P4 前核对，见证据 |
+| P1-6 审批流对接 | 🟡 | 复用 Extension UI bridge 的 select/respond/取消已完成，本机集成测试通过、无 renderer 修改；**待补**：档位控件与文案按 D14 的三档（每次询问 / 自动接受编辑 / 全自动）。实际 worker RPC 接线与 GUI 签收仍属 P4 |
 | P1-7 单测 | ✅ | P1/P0 共 7 文件 69 项通过；另有原始探针报告，见 [验证记录](evidence/p1/README.md) |
 | P1-8 载体兼容矩阵 | 🟡 | Linux electron-utility 同批六项通过；standalone-node 另列通过；已提供 Windows bundled-node 入口，尚未运行，不代签加密机 |
 
@@ -107,7 +108,7 @@ D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立—�
 |---|---|---|
 | P3-1 JSONL 存储 | ⬜ | 格式与 pi / PI-Desktop 兼容的读写（D6） |
 | P3-2 分支与 resume | ⬜ | 分支管理从 PI-Desktop session-context 搬运 |
-| P3-3 旧会话兼容 | ⬜ | pi-coding-agent 产生的会话文件仍可读、可 resume（成功标准 5） |
+| P3-3 旧会话兼容 | ⬜ | pi-coding-agent 产生的会话文件仍可读、可 resume（成功标准 5）；旧 tier 值按 [D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 映射迁移（`pragmatic→ask`、`handsoff→accept-edits`、`fullopen→auto`、`readonly→plan+ask`），不得丢弃 |
 | P3-4 RuntimeEvent 翻译层 | ⬜ | 参考现有 `piWorkerSession.ts`，翻译目标不变、只换数据源（D5） |
 | P3-5 对接 SessionIndexService | ⬜ | Main 层不动，只适配调用面。**跨载体读一致性已定论**（[ARD D13](../../../plans/2026-09-08-runtime-evolution-ard.md)）：加密按文件策略生效，Main 读用户文件得到密文，但会话索引是 Main 自写的 JSON、worker 在白名单内读写会话 JSONL，两者都不受影响；要改的是 `GitService.ts:670` / `:1364` 与 `WorktreeService.ts:648` 的裸读 |
 | P3-6 往返测试 | ⬜ | 写入→读取→resume 快照一致性 |

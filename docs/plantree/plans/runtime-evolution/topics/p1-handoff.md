@@ -4,6 +4,14 @@
 
 ## 当前状态
 
+> **2026-09-08 施工中变更 — 权限模型改向（[ARD D14](../../../../plans/2026-09-08-runtime-evolution-ard.md)）**
+> 用户拍板废弃 `readonly / pragmatic / handsoff / fullopen` 四档，改为两根轴：
+> **模式** `plan` / `agent` 决定工具集（`plan` 不含 Write/Edit，bash 仅用于勘察），
+> **档位** `ask` / `accept-edits` / `auto` 决定打扰程度，且 `accept-edits` **连 bash 一起放行**
+> （旧 `handsoff` 放行写改却仍逐条问 bash，正是用户判定「鸡肋」的来源）。
+> 已按四档交付的 P1-5 / P1-6 需返工，P1-1 需按模式裁剪工具集；旧值按 D14 映射表迁移。
+
+
 P1 本机代码与验证已落地，代码尚未提交。[当前 TODO](../TODO.md) 和 [验证记录](../evidence/p1/README.md)
 是接续入口。P1-0/P1-3 尚有 Windows 后代清理缺口，P1-8 尚缺 Windows 随包 Node 与加密机签收。
 公共 HostIo/Exec 契约和 P0 async 迁移已落地，P2 可按当前代码接入；先核对工作区未提交变更。
