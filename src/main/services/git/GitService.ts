@@ -36,6 +36,23 @@ const MAX_GIT_STATUS_ENTRIES = 5000;
 const MAX_GIT_FILE_CHANGES = 5000;
 const GIT_STATUS_STREAM_TIMEOUT_MS = 15000;
 
+/**
+ * `git status --porcelain=v2 --branch` always emits the `# branch.*` headers
+ * before anything else, so a zero-exit run that produced none of them did not
+ * report on a repository at all — its output was lost. Q7 on the encrypted
+ * Windows host is exactly this shape, and every reader used to turn it into a
+ * confident "clean repo" answer instead of an error.
+ */
+function noStatusOutputError(stderr: string): Error {
+  return new Error(
+    stderr.trim() || 'git status exited 0 without emitting branch headers; its output was lost'
+  );
+}
+
+function statusTimedOutError(): Error {
+  return new Error(`git status timed out after ${GIT_STATUS_STREAM_TIMEOUT_MS}ms`);
+}
+
 type PorcelainBranchInfo = {
   current: string | null;
   tracking: string | null;
@@ -88,6 +105,11 @@ export class GitService {
 
     let entries = 0;
     let truncated = false;
+    // `truncated` used to mean both "hit the entry cap" and "timed out", and the
+    // close handler skipped its reject when either was set — so a timeout came
+    // back as a half-read status that looked successful. Keep them apart.
+    let timedOut = false;
+    let sawBranchHeader = false;
     let remainder = '';
     let stderr = '';
     let pendingRename: { xy: string } | null = null;
@@ -134,6 +156,7 @@ export class GitService {
       if (record.startsWith('# ')) {
         const parts = record.split(' ');
         const key = parts[1];
+        if (key?.startsWith('branch.')) sawBranchHeader = true;
         if (key === 'branch.head') {
           const head = parts.slice(2).join(' ');
           branchInfo.current = head === '(detached)' ? null : head || null;
@@ -218,12 +241,12 @@ export class GitService {
       );
 
       const timeout = setTimeout(() => {
-        truncated = true;
+        timedOut = true;
         if (!proc.killed) proc.kill('SIGKILL');
       }, GIT_STATUS_STREAM_TIMEOUT_MS);
 
       proc.stdout.on('data', (chunk: Buffer) => {
-        if (truncated) return;
+        if (truncated || timedOut) return;
         remainder += chunk.toString('utf8');
         const records = remainder.split('\0');
         remainder = records.pop() ?? '';
@@ -245,8 +268,16 @@ export class GitService {
 
       proc.on('close', (code) => {
         clearTimeout(timeout);
+        if (timedOut) {
+          reject(statusTimedOutError());
+          return;
+        }
         if (!truncated && code && code !== 0) {
           reject(new Error(stderr.trim() || `git status failed (${code})`));
+          return;
+        }
+        if (!truncated && !sawBranchHeader) {
+          reject(noStatusOutputError(stderr));
           return;
         }
         resolve({
@@ -296,10 +327,30 @@ export class GitService {
       label: info.label,
     }));
 
-    // Empty repo (no commits yet) - return placeholder for current branch
     if (branches.length === 0) {
+      // An empty listing has two causes and they need opposite answers: a repo
+      // with no commits yet, or a `git branch -a -v` whose output never made it
+      // back. `symbolic-ref --short HEAD` cannot tell them apart — it succeeds
+      // on any repo with a branch checked out — so using it as the test labelled
+      // healthy repos "(no commits yet)" (Q7). `rev-parse --verify HEAD` fails
+      // only when HEAD is genuinely unborn, which is the actual question.
+      let headResolves = false;
       try {
-        // Use symbolic-ref to get branch name in empty repo (rev-parse fails without commits)
+        await this.git.raw(['rev-parse', '--verify', 'HEAD']);
+        headResolves = true;
+      } catch {
+        // Unborn HEAD: this really is a fresh repo.
+      }
+
+      if (headResolves) {
+        throw new Error(
+          'git branch -a -v returned no branches for a repository that has commits; ' +
+            'its output was lost'
+        );
+      }
+
+      try {
+        // Empty repo: rev-parse cannot name the branch, symbolic-ref can.
         const currentBranch = await this.git.raw(['symbolic-ref', '--short', 'HEAD']);
         return [
           {
@@ -458,6 +509,10 @@ export class GitService {
 
     const changes: FileChange[] = [];
     let truncated = false;
+    // Same split as readPorcelainV2Limited: a timeout is a failure, not a
+    // truncated-but-valid result (Q7).
+    let timedOut = false;
+    let sawBranchHeader = false;
     let remainder = '';
     let stderr = '';
     let pendingRename: { xy: string; originalPath?: string } | null = null;
@@ -510,7 +565,11 @@ export class GitService {
     const processRecord = (recordRaw: string, proc: ReturnType<typeof spawnGit>) => {
       const record = recordRaw.trim();
       if (!record) return;
-      if (record.startsWith('# ') || record.startsWith('! ')) return;
+      if (record.startsWith('# ')) {
+        if (record.startsWith('# branch.')) sawBranchHeader = true;
+        return;
+      }
+      if (record.startsWith('! ')) return;
 
       if (pendingRename) {
         const filePath = record;
@@ -588,12 +647,12 @@ export class GitService {
       );
 
       const timeout = setTimeout(() => {
-        truncated = true;
+        timedOut = true;
         if (!proc.killed) proc.kill('SIGKILL');
       }, GIT_STATUS_STREAM_TIMEOUT_MS);
 
       proc.stdout.on('data', (chunk: Buffer) => {
-        if (truncated) return;
+        if (truncated || timedOut) return;
         remainder += chunk.toString('utf8');
         const records = remainder.split('\0');
         remainder = records.pop() ?? '';
@@ -615,8 +674,16 @@ export class GitService {
 
       proc.on('close', (code) => {
         clearTimeout(timeout);
+        if (timedOut) {
+          reject(statusTimedOutError());
+          return;
+        }
         if (!truncated && code && code !== 0) {
           reject(new Error(stderr.trim() || `git status failed (${code})`));
+          return;
+        }
+        if (!truncated && !sawBranchHeader) {
+          reject(noStatusOutputError(stderr));
           return;
         }
         resolve();
