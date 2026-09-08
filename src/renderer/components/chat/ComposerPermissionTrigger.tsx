@@ -97,33 +97,8 @@ export function ComposerPermissionTrigger({
     () => readTierFor(sessionId) ?? DEFAULT_SESSION_PERMISSION_TIER
   );
   const [confirmingDangerous, setConfirmingDangerous] = useState(false);
-  /**
-   * U30 rev.2 — closing goes through Base UI, never through a controlled `open`.
-   *
-   * `MenuPrimitive.RadioItem` deliberately does not close on select (radio
-   * semantics are "keep flipping between these"), which is right for a filter
-   * and wrong here: picking a tier is a decision, and a menu sitting open
-   * afterwards reads as "that did not take". U30's first attempt fixed that by
-   * making `<Menu>` controlled and writing `open={false}` from `applyTier`. It
-   * shipped in 0.4.0-test.7 and made the menu WORSE, in a way no static
-   * assertion could see — the user reported the popup stuck open with Escape
-   * and outside-click both dead.
-   *
-   * The cause is `MenuRoot.setOpen`'s first line
-   * (`@base-ui/react@1.1.0`, `menu/root/MenuRoot.js`):
-   *
-   *     if (open === nextOpen && trigger === activeTriggerElement && … ) return;
-   *
-   * Writing the prop moves the store's `open` to `false` WITHOUT running that
-   * function, so none of its close bookkeeping happens — and every later
-   * dismissal (Escape, outside press) hits the guard, sees `open === nextOpen`,
-   * and returns before doing anything. The popup stays mounted with no way out.
-   *
-   * So: no `open` prop. `closeOnClick` lets Base UI close the menu through its
-   * own path for an ordinary tier, and `actionsRef.close()` does the same for
-   * the confirmation step, which is not a menu item and so has no click of its
-   * own to close on.
-   */
+  // Ordinary tiers close through closeOnClick; the confirmation's plain button
+  // uses the same Base UI close path through actionsRef.
   const menuActions = useRef<MenuPrimitive.Root.Actions | null>(null);
 
   const resolvedSessionRef = useRef(sessionId);
@@ -171,9 +146,6 @@ export function ComposerPermissionTrigger({
   const handleConfirm = useCallback(() => {
     applyTier('fullopen');
     setConfirmingDangerous(false);
-    // The only close in this file. The four tiers close themselves through
-    // `closeOnClick`; this button is plain markup inside the popup, so Base UI
-    // has nothing to hang a close on and has to be asked.
     menuActions.current?.close();
   }, [applyTier]);
 

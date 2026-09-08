@@ -1,4 +1,5 @@
 import {
+  normalizePiBaseUrl,
   PI_MODEL_APIS,
   PI_USER_AGENT_ENV,
   PI_USER_AGENT_HEADER,
@@ -335,7 +336,12 @@ export function toPiModelsJson(
       credentials?.baseUrl === 'managed' && baseUrl ? baseUrl : resolve.inheritedBaseUrl;
     providers[providerId] = {
       ...rest,
-      baseUrl: resolvedBaseUrl,
+      baseUrl: normalizePiBaseUrl(resolvedBaseUrl, provider.api),
+      models: provider.models.map((model) =>
+        model.api && model.api !== provider.api
+          ? { ...model, baseUrl: normalizePiBaseUrl(resolvedBaseUrl, model.api) }
+          : model
+      ),
       headers: withClientHeaders(headers),
     };
   }

@@ -5,6 +5,15 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      package_target:
+        description: 'Packaging target'
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - windows-installer
 
 permissions:
   contents: write
@@ -236,7 +245,14 @@ jobs:
         run: Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
 
       - name: Build Windows
+        if: inputs.package_target != 'windows-installer'
         run: npx electron-builder --win --x64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Windows installer only
+        if: inputs.package_target == 'windows-installer'
+        run: npx electron-builder --win nsis --x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -254,7 +270,7 @@ jobs:
       # The single artifact swept BOTH exes together, so downloading the
       # installer meant pulling the portable build with it — 522 MB zipped for
       # something the tester only needed half of. The `win` target list is
-      # unchanged: both are still built, they are just fetched separately.
+      # unchanged for full builds; installer-only dispatches select NSIS above.
       - name: Upload Windows installer
         uses: actions/upload-artifact@v5
         with:
@@ -268,6 +284,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload Windows portable
+        if: inputs.package_target != 'windows-installer'
         uses: actions/upload-artifact@v5
         with:
           name: windows-portable
@@ -279,7 +296,7 @@ jobs:
       # (portable re-extracts to a temp dir, so the bundled node.exe path drifts).
       # Only on manual runs — tag runs get the installers from the draft release.
       - name: Upload Windows unpacked directory
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.package_target != 'windows-installer'
         uses: actions/upload-artifact@v5
         with:
           name: windows-unpacked
@@ -288,6 +305,7 @@ jobs:
           if-no-files-found: error
 
   build-linux:
+    if: inputs.package_target != 'windows-installer'
     needs: build-app
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -390,6 +408,7 @@ jobs:
           if-no-files-found: error
 
   build-macos:
+    if: inputs.package_target != 'windows-installer'
     needs: build-app
     timeout-minutes: 25
     # An unsigned x64 artifact closes the structural packaged gate on a native
@@ -502,6 +521,7 @@ jobs:
           if-no-files-found: error
 
   build-remote-runtime-linux:
+    if: inputs.package_target != 'windows-installer'
     needs: [gate]
     timeout-minutes: 10
     strategy:

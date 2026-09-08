@@ -153,6 +153,20 @@ export const PI_MODEL_APIS = [
 
 export type PiModelApi = (typeof PI_MODEL_APIS)[number];
 
+export function normalizePiBaseUrl(baseUrl: string, api: PiModelApi): string {
+  const url = new URL(baseUrl.trim());
+  let pathname = url.pathname.replace(/\/+$/, '');
+  // The Anthropic SDK adds /v1/messages; OpenAI SDKs add /responses or
+  // /chat/completions. Preserve explicitly configured custom path prefixes.
+  if (api === 'anthropic-messages') {
+    pathname = pathname.replace(/\/v1$/i, '');
+  } else if ((api === 'openai-responses' || api === 'openai-completions') && !pathname) {
+    pathname = '/v1';
+  }
+  url.pathname = pathname;
+  return url.toString().replace(/\/$/, '');
+}
+
 export interface PiManagedModelDefinition {
   id: string;
   name?: string;

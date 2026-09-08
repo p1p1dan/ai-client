@@ -6,10 +6,10 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogPanel,
   DialogPopup,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -43,8 +43,8 @@ const SEVERITY_CLASS: Record<AnnouncementSeverity, string> = {
  * `whitespace-pre-wrap` on a plain string. `parseAnnouncements` already carries
  * the body as text and caps its length; rendering it as markdown or HTML would
  * mean interpreting remote content inside the app's own chrome, which is the
- * one thing an announcement channel must not do. `break-words` is what keeps a
- * long unbroken URL from widening the dialog past the window.
+ * one thing an announcement channel must not do. `overflow-wrap: anywhere`
+ * also keeps long titles and URLs within the scroll viewport's intrinsic width.
  */
 export function AnnouncementDialog({
   announcements,
@@ -60,8 +60,12 @@ export function AnnouncementDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="sm:max-w-lg" showCloseButton={false}>
-        <DialogHeader>
+      <DialogPopup
+        className="max-h-[80vh] overflow-hidden sm:max-w-lg"
+        showCloseButton={false}
+        bottomStickOnMobile={false}
+      >
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Megaphone className="size-4 shrink-0" />
             {t('Announcements')}
@@ -70,43 +74,35 @@ export function AnnouncementDialog({
             {t('Messages from the service operator.')}
           </DialogDescription>
         </DialogHeader>
-        {/* Capped rather than free-growing: a long announcement must scroll
-            inside the dialog instead of pushing its footer off-screen, which
-            would take the only close button with it. */}
-        <ScrollArea className="max-h-[50vh]">
-          <div className="flex flex-col gap-4 pr-3">
-            {announcements.map((announcement, index) => {
-              const Icon = SEVERITY_ICON[announcement.severity];
-              return (
-                <div key={announcement.id} className="flex flex-col gap-1.5">
-                  {index > 0 && <Separator className="mb-2" />}
-                  <div className="flex items-start gap-2">
-                    <Icon
-                      className={cn(
-                        'mt-0.5 size-4 shrink-0',
-                        SEVERITY_CLASS[announcement.severity]
-                      )}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium text-sm">{announcement.title}</div>
-                      {announcement.publishedAt && (
-                        <div className="text-meta text-muted-foreground">
-                          {announcement.publishedAt}
-                        </div>
-                      )}
-                    </div>
+        <DialogPanel className="min-w-0 space-y-4 [overflow-wrap:anywhere]">
+          {announcements.map((announcement, index) => {
+            const Icon = SEVERITY_ICON[announcement.severity];
+            return (
+              <article key={announcement.id} className="min-w-0 space-y-2">
+                {index > 0 && <Separator className="mb-2" />}
+                <div className="flex items-start gap-2">
+                  <Icon
+                    className={cn('mt-0.5 size-4 shrink-0', SEVERITY_CLASS[announcement.severity])}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-medium text-sm leading-relaxed">{announcement.title}</h3>
+                    {announcement.publishedAt && (
+                      <div className="text-meta text-muted-foreground">
+                        {announcement.publishedAt}
+                      </div>
+                    )}
                   </div>
-                  {announcement.body && (
-                    <p className="whitespace-pre-wrap break-words text-muted-foreground text-sm">
-                      {announcement.body}
-                    </p>
-                  )}
                 </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
-        <DialogFooter variant="bare">
+                {announcement.body && (
+                  <p className="whitespace-pre-wrap text-muted-foreground text-sm leading-relaxed">
+                    {announcement.body}
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </DialogPanel>
+        <DialogFooter variant="bare" className="shrink-0">
           <Button onClick={() => onOpenChange(false)}>{t('Got it')}</Button>
         </DialogFooter>
       </DialogPopup>

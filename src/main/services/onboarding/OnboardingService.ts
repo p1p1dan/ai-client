@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { normalizePiBaseUrl } from '@shared/piModelConfig';
 import type { OnboardingSendCodeResponse, OnboardingState } from '@shared/types';
 import { net } from 'electron';
 import { mergeSettingsPatch } from '../../ipc/settings';
@@ -434,8 +435,14 @@ class OnboardingService {
       return null;
     }
 
-    const claudeBaseUrl = this.buildApiBaseUrl(data.config.claude.baseUrl, normalizedServerUrl);
-    const codexBaseUrl = this.buildApiBaseUrl(data.config.codex.baseUrl, normalizedServerUrl);
+    const claudeBaseUrl = normalizePiBaseUrl(
+      this.buildApiBaseUrl(data.config.claude.baseUrl, normalizedServerUrl),
+      'anthropic-messages'
+    );
+    const codexBaseUrl = normalizePiBaseUrl(
+      this.buildApiBaseUrl(data.config.codex.baseUrl, normalizedServerUrl),
+      'openai-responses'
+    );
     const statedPi = data.config.pi;
     return {
       claudeAuthToken,

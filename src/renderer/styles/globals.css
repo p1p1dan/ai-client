@@ -368,22 +368,18 @@
    * 菜单组件 no-drag 覆盖规则
    *
    * 在无边框窗口中，标题栏设置了 -webkit-app-region: drag 使其可拖拽。
-   * 但 Portal 渲染的菜单会继承这个属性，导致菜单项无法点击。
-   * 这里使用 !important 和 pointer-events: auto 强制覆盖，确保菜单交互正常。
-   *
-   * 注意：这是 Electron 无边框窗口的已知问题，使用 !important 是必要的。
+   * Portal 菜单与拖拽区域重叠时需要显式声明 no-drag。
+   * 保留 Base UI 对 pointer-events 的控制，避免关闭中的菜单继续截获点击。
    */
   [data-slot="menu-positioner"],
   [data-slot="menu-popup"],
   [data-slot="menu-item"] {
     -webkit-app-region: no-drag !important;
-    pointer-events: auto !important;
   }
 
   /* 确保菜单项内的所有子元素也可以点击 */
   [data-slot="menu-item"] * {
     -webkit-app-region: no-drag !important;
-    pointer-events: auto !important;
   }
 
   /**
