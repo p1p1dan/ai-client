@@ -5,7 +5,7 @@
 
 **当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 主动压缩配对已接通，剩余项全部卡在 Windows 载体与打包 GUI 现场验收；P2/P3 可接续
 **最近落地**：`2ae6f209`（2026-09-08）P1-9 ∥ P2-8 成对落地主动压缩（`runtimeContext` 服务、工具注册、提醒措辞、轮次边界换窗）；此前 `27ff2020` 提交 P1 工具/权限实现与 D14 两轴传递链。P1 现场验收仍未完成，[P1 验证记录](evidence/p1/README.md)。P0/P2-0 的提交仍为 `8a71c843`，旧缓存基线 **95.01%**，[原始证据](evidence/p2-0/validation.md)。
-**下一目标**：**P3（会话与事件）**——它是 P4 唯一还没动的前置，`P2-4` 的持久化 compaction record 也压在它的会话存储上，成功标准第 5 条同样只等它。P1 代码侧无待办，只剩现场验收（Windows 随包 Node 与进程树、打包壳 GUI、真实项目策略），这些归 P4-6/P6-3，不必也无法提前跑；本机 [189 项 runtime 回归及两载体探针](evidence/p1/README.md) 已更新。
+**下一目标**：**先收 P1-0 解锁的两处 P2 尾巴**——`P2-1` 把提示词装配注册成 Cordis service（`contracts.ts` 已归属明确，`runtimePrompt` 可移出 `DEFERRED_SERVICES`）、`P2-2` 把 `runtimeHostIo` 适配到 `InstructionSource` 端口；两者都只等 P1-0，与 P3 无关。**再做 P3（会话与事件）**：它是 P4 唯一还没动的前置，`P2-4` 的持久化 compaction record 压在它的会话存储上，成功标准第 5 条同样只等它。`P2-5/P2-6` 要真实跑才有意义，排在 P3/P4 之后。P1 代码侧无待办，只剩现场验收（Windows 随包 Node 与进程树、打包壳 GUI、真实项目策略），归 P4-6/P6-3，不必也无法提前跑；本机 [189 项 runtime 回归及两载体探针](evidence/p1/README.md) 已更新。
 **2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 两轴分离：模式 `plan/agent` 管工具集，档位 `ask/accept-edits/auto` 管审批，accept-edits 放行工作区 bash。P1-1 裁剪与 P1-5 核心已更新；P1-6 renderer/偏好迁移/两轴传递链已更新，打包 GUI 待签收。
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
