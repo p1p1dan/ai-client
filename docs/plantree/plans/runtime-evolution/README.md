@@ -92,9 +92,9 @@ D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立—�
 | P2-0 现状基线采集 | ✅ | 六个旧后端固定会话通过；28 次普通调用，D9 命中率 **95.01%**；原始会话、来源证明与复核结果已归档，[验收证据](evidence/p2-0/validation.md)（2026-09-08，提交 `8a71c843`） |
 | P2-1 提示词分段组装 | 🟡 | 装配机制与 P2-1 自有段已落地：`plugins/prompt/segments.ts`（固定槽位表 + 确定性装配 + `staticPrefixBytes` 供 D9/P2-7 用）、`baseSegments.ts`（identity / collaboration，适配自 PI-Desktop `mode-prompts.ts` 与 `runtime.ts:1330`），16 项单测。**未完**：注册为 Cordis service 需改 `contracts.ts`，该文件本轮归 P1-0，待其落地后补。PI-Desktop 的 plan/goal/agent mode 段**不采用**——本产品无 mode 概念，对应槽位是 `permission-tier`，文案随 P1-5 一起写 |
 | P2-2 项目指令注入 | ⬜ | 本地读取 CLAUDE.md / AGENTS.md 与自有 resource 体系 |
-| P2-3 压缩策略 | ⬜ | 原样搬运 PI-Desktop `session-context.ts` + runtime 压缩段策略 |
+| P2-3 压缩策略 | 🟡 | 决策层已原样搬运并测试：`plugins/context/budget.ts`（阈值全部由模型窗口推导、`compactionNeeded` 在硬限处触发、保留尾与用户消息上限的双端钳制、两级预算提醒各只发一次），15 项单测。纯函数、不碰盘不调模型。**未完**：真正执行压缩要写 compaction record，依赖 P2-4 与 P3 的会话存储 |
 | P2-4 compaction record | ⬜ | Rust `transcripts.rs` 的 compaction 读写用 TS 重写 |
-| P2-5 缓存命中率达标 | ⬜ | 门禁是 provider 上报的 `cacheRead / (input + cacheRead)`（D9），公式与数据源都已存在，不新增埋点 |
+| P2-5 缓存命中率达标 | ⬜ | 门禁是 provider 上报的 `cacheRead / (input + cacheRead)`（D9），公式与数据源都已存在，不新增埋点。**已知可优化点**：PI-Desktop 把预算提醒追加进 systemPrompt（`runtime.ts:4160`），那正是缓存前缀本身，一次追加即整段失效；改为以尾部消息注入可保持前缀字节不变。P2-3 只产出文案不决定位置，位置在此节点定 |
 | P2-6 对比测试 | ⬜ | 新后端跑 P2-0 的同一批脚本会话，比压缩后表现与命中率；协议依赖 0.84.4 vs 基线 0.84.3 的 patch 差按 D12 记为已知偏差，不回退对齐 |
 | P2-7 前缀稳定性度量 | ⬜ | **可选加强项**，非门禁：落盘每轮请求前缀、比相邻两轮公共前缀占比。PI-Desktop 只展示不优化命中率，此项无参考实现，属自建 |
 
