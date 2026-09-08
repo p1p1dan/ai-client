@@ -24,7 +24,7 @@ Renderer → Preload → Electron Main WorkerManager
 
 **runtime 侧没有活动施工任务**：Pi-only 收敛的 T28–T38 已于 2026-09-05 全部关闭，
 正式发布走 [rollout/rollback runbook](../pi-only-rollout-rollback.md)。
-当前五条活动计划：三条在收尾（界面侧两条 + 现场反馈待办），
+当前五条活动计划：四条在收尾（界面侧两条 + 现场反馈待办 + A 组），
 两条是 2026-09-08 新立的并行组（A 组用量与目录、B 组资源与导入），
 来源是 [PI-Desktop 调研档](../plans/2026-09-08-pi-desktop-study.md)。
 
@@ -71,7 +71,7 @@ Renderer → Preload → Electron Main WorkerManager
 | [pix/pi-app UI 对齐改造](./plans/pix-ui-alignment/README.md) | **In Progress（收尾）** | 批次 1–15（U01–U31）全部落地，**只剩一次累计 GUI 点验**；另有五笔欠账与六件待真机验证项，自动化全部已绿（280 files / 4246 tests） | [implementation-status](./plans/pix-ui-alignment/implementation-status.md) · [roadmap](./plans/pix-ui-alignment/roadmap.md) |
 | [设置清单整理与旧壳删除](./plans/settings-cleanup/README.md) | **In Progress** | S01–S07 已实现；按本轮授权先保存补齐线提交，再完成旧壳删除和九类设置。renderer 分批回归与拆分类型检查通过，完整门禁、GUI/PTY 点验和主分支合入待完成 | [TODO](./plans/settings-cleanup/TODO.md) · [implementation-status](./plans/settings-cleanup/implementation-status.md) · [roadmap](./plans/settings-cleanup/roadmap.md) |
 | [现场反馈待办 6–11](./plans/field-followups/README.md) | **In Progress** | 六项（启动误报 `unverified`、`@` 弹层超框、流式 `↓`、Pi User-Agent、启动公告与铃铛、周限额金额）全部实现且自动化全绿；待一次累计 GUI 点验与三项 onboard 联调 | [TODO](./plans/field-followups/TODO.md) · [implementation-status](./plans/field-followups/implementation-status.md) · [roadmap](./plans/field-followups/roadmap.md) |
-| [A 组 · 用量可见性与目录韧性](./plans/usage-and-catalog/README.md) | **Not Started** | A1 缓存命中率、A2 会话内轮级用量汇总、A3 模型目录随包快照；三项都是「已有数据的可用性」，不新增对外接口 | [TODO](./plans/usage-and-catalog/TODO.md) · [implementation-status](./plans/usage-and-catalog/implementation-status.md) · [roadmap](./plans/usage-and-catalog/roadmap.md) |
+| [A 组 · 用量可见性与目录韧性](./plans/usage-and-catalog/README.md) | **In Progress（收尾）** | A1/A2/A3 代码与自动化全部落地（55 files / 801 tests 绿）；只剩一次累计 GUI 点验、A3 打包实测与首份真实快照 | [TODO](./plans/usage-and-catalog/TODO.md) · [implementation-status](./plans/usage-and-catalog/implementation-status.md) · [roadmap](./plans/usage-and-catalog/roadmap.md) |
 | [B 组 · 资源归位与会话导入](./plans/resource-home-and-import/README.md) | **Not Started** | B1 技能默认安装位（含前置取证）、B2 借读面对齐、B3 随包扩展表驱动、B4 Codex 会话导入 | [TODO](./plans/resource-home-and-import/TODO.md) · [implementation-status](./plans/resource-home-and-import/implementation-status.md) · [roadmap](./plans/resource-home-and-import/roadmap.md) |
 
 活动计划五条。A/B 两组为 2026-09-08 立项的**并行组**，设计为零共享文件，可由两队同时执行；

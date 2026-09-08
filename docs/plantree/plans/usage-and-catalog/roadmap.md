@@ -8,12 +8,14 @@
 
 | 分组 | 数量 | 说明 |
 |---|---|---|
-| Done | 0 | — |
+| Done | 3 | A1 / A2 / A3 —— 代码与自动化全部落地（2026-09-08），逐项证据在 [evidence/](./evidence/) |
 | In Progress | 0 | — |
-| Next | 3 | A1 → A2 → A3；A3 与前两项无依赖，可同时起 |
+| Next | 0 | 只剩一次累计 GUI 点验与计划归档，见 [implementation-status](./implementation-status.md) |
 | Deferred | 1 | A2-b 用量落盘，需求触发再做 |
 
 ## 执行顺序
+
+三项已于 2026-09-08 全部落地。以下顺序保留为历史依据。
 
 ```text
 串行线（同文件，必须按序）
@@ -41,7 +43,7 @@ GUI 点验并入 [UI 对齐计划](../pix-ui-alignment/README.md) 的累计点�
 
 ---
 
-## A1 — 缓存命中率 · **Next**
+## A1 — 缓存命中率 · **Done**（2026-09-08）
 
 **要解决的问题**：`cacheRead` / `cacheWrite` 已经在 `src/shared/piUsage.ts:40` 拿到，
 Run 面板也在显示两个绝对数字（`RunSurfaceView.tsx:331-336`），但**没有比率**。
@@ -74,11 +76,11 @@ Run 面板也在显示两个绝对数字（`RunSurfaceView.tsx:331-336`），但
 
 **参考**：`PI-Desktop/apps/desktop/src/lib/context-usage.ts:250`（同一公式，含分母不含 cache write 的理由）。
 
-**量级**：S（半天）。 **依赖**：无。
+**量级**：S（半天）。 **依赖**：无。 **证据**：[a1-cache-hit-rate](./evidence/a1-cache-hit-rate.md)。
 
 ---
 
-## A2 — 会话内轮级用量汇总 · **Next**
+## A2 — 会话内轮级用量汇总 · **Done**（2026-09-08）
 
 **要解决的问题**：我们只有「上一轮」。`RunSurfaceView.tsx:322` 的注释解释了为什么不能简单相加
 （一次 run 结算多轮，相加会印出没人被收过的费），那个判断是对的——但代价是**我们没有任何总数**。
@@ -108,11 +110,11 @@ Run 面板也在显示两个绝对数字（`RunSurfaceView.tsx:331-336`），但
 3. 会话切换后归零；同一 worker 复用不串号。
 4. 汇总永不写回单条消息（用一条断言钉住：调用 `apply` 前后原 usage 对象逐字段相等）。
 
-**量级**：M（2–3 天）。 **依赖**：A1（同文件 `piUsage.ts`）。
+**量级**：M（2–3 天）。 **依赖**：A1（同文件 `piUsage.ts`）。 **证据**：[a2-turn-rollup](./evidence/a2-turn-rollup.md)，含前置取证结论。
 
 ---
 
-## A3 — 模型目录随包快照 · **Next（可并行）**
+## A3 — 模型目录随包快照 · **Done**（2026-09-08）
 
 **要解决的问题**：启动去 onboarding 拉 `/api/v1/models-config`，失败即 `unavailable`。
 D03 删掉内置模型表之后，网络不佳或管理端不可用 = **用户看到空的模型下拉框**。
@@ -151,6 +153,7 @@ D03 删掉内置模型表之后，网络不佳或管理端不可用 = **用户�
 `scripts/verify-release-metadata.mjs` 的既有形状。
 
 **量级**：M（1–2 天，主要成本在发布脚本与校验）。 **依赖**：无。
+**证据**：[a3-catalog-snapshot](./evidence/a3-catalog-snapshot.md)，含发布流程接入点的选定理由。
 **注意**：当前分支 `feat/model-catalog-admin` 正好是这条线，时机合适。
 
 ---
