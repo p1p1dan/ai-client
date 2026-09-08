@@ -28,7 +28,7 @@
  */
 
 import type { PiSessionUsage } from './piTurnRollup';
-import { readSessionUsage } from './piTurnRollup';
+import { readSessionUsage } from './piTurnRollup.ts';
 
 /**
  * Token and cost totals for one turn.

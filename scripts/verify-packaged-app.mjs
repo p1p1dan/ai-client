@@ -116,7 +116,13 @@ function runWorkerSmoke(workerPath, failures) {
     failures.push(`packaged worker smoke returned invalid JSON: ${result.stdout.slice(-1000)}`);
     return;
   }
-  if (report.ok !== true || !Number.isSafeInteger(report.workerPid)) {
+  if (
+    report.ok !== true ||
+    !Number.isSafeInteger(report.workerPid) ||
+    report.transport !== (process.platform === 'win32' ? 'node-ipc' : 'electron-message-port') ||
+    !report.tools?.includes('read') ||
+    !report.tools?.includes('bash')
+  ) {
     failures.push(`packaged worker smoke returned an invalid result: ${JSON.stringify(report)}`);
   }
 }
@@ -187,7 +193,7 @@ function main() {
     process.exit(1);
   }
   console.log(
-    '[verify-packaged-app] PASS — legal notices + worker-only artifact + bootstrap/dispose/exit'
+    '[verify-packaged-app] PASS — legal notices + worker-only artifact + read/bash + bootstrap/dispose/exit'
   );
 }
 

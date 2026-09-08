@@ -1,8 +1,14 @@
+import { type ChildProcess, spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { PI_WORKER_GENERATION_ENV } from '@shared/types/workerRpc';
 import { app, type UtilityProcess, utilityProcess } from 'electron';
 import { resolveManagedPiWorkerEnv } from '../piModelConfig';
-import { createUtilityProcessWorkerTransport, type WorkerTransport } from './WorkerTransport';
+import {
+  createNodeProcessWorkerTransport,
+  createUtilityProcessWorkerTransport,
+  type WorkerTransport,
+} from './WorkerTransport';
 
 export interface PiWorkerEntryLayout {
   isPackaged: boolean;
@@ -18,7 +24,7 @@ export interface PiWorkerProcessOptions {
 }
 
 export interface ForkedPiWorker {
-  process: UtilityProcess;
+  process: UtilityProcess | ChildProcess;
   transport: WorkerTransport;
 }
 
@@ -53,16 +59,32 @@ export function buildPiWorkerEnvironment(input: {
   return env;
 }
 
-/** Spawn one utility process for one WorkerSlot generation. */
+/** Spawn one isolated process for one WorkerSlot generation. */
 export function forkPiWorkerProcess(options: PiWorkerProcessOptions): ForkedPiWorker {
   const entryPath = options.entryPath ?? resolveCurrentPiWorkerEntryPath();
+  const env = buildPiWorkerEnvironment({
+    generation: options.generation,
+    inheritedEnv: options.inheritedEnv,
+  });
+  if (app.isPackaged && process.platform === 'win32') {
+    // D20: TUI works on the affected encrypted Windows host; GUI utilityProcess does not.
+    // Use the same bundled Node runtime, including for descendant tools.
+    const nodePath = path.join(process.resourcesPath, 'node-runtime', 'node.exe');
+    if (!existsSync(nodePath)) throw new Error(`Pi Node runtime is missing: ${nodePath}`);
+    env.PATH = `${path.dirname(nodePath)};${env.PATH || env.Path || ''}`;
+    env.Path = env.PATH;
+    const processHandle = spawn(nodePath, [entryPath], {
+      cwd: options.cwd,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      windowsHide: true,
+    });
+    return { process: processHandle, transport: createNodeProcessWorkerTransport(processHandle) };
+  }
   const processHandle = utilityProcess.fork(entryPath, [], {
     cwd: options.cwd,
     execArgv: entryPath.endsWith('.ts') ? ['--experimental-strip-types'] : [],
-    env: buildPiWorkerEnvironment({
-      generation: options.generation,
-      inheritedEnv: options.inheritedEnv,
-    }),
+    env,
     stdio: 'pipe',
     serviceName: `AiClient Pi Worker ${options.generation}`,
   });

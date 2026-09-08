@@ -1,7 +1,7 @@
 /**
- * Per-slot Pi utility worker entry.
+ * Per-slot Pi worker entry.
  *
- * One Electron utilityProcess runs this file, owns one PiWorkerRpcServer, and
+ * One isolated process runs this file, owns one PiWorkerRpcServer, and
  * bootstraps at most one Pi AgentSession. Pool/session routing remains in Main.
  */
 
@@ -10,7 +10,10 @@ import {
   PI_OPT_IN_EXTENSIONS_ENV,
   PI_PROJECT_TRUST_ENV,
 } from '../shared/piModelConfig.ts';
-import { PI_WORKER_GENERATION_ENV } from '../shared/types/workerRpc.ts';
+import {
+  PI_WORKER_GENERATION_ENV,
+  WORKER_RPC_PROTOCOL_VERSION,
+} from '../shared/types/workerRpc.ts';
 import { PiWorkerRpcServer } from './piWorkerRpcServer.ts';
 
 interface ElectronParentPort {
@@ -40,8 +43,14 @@ function messageData(value: { data: unknown } | unknown): unknown {
   return value;
 }
 
-const parentPort = (process as NodeJS.Process & { parentPort?: ElectronParentPort }).parentPort;
-if (!parentPort) throw new Error('Pi worker must run as an Electron utility process');
+const electronPort = (process as NodeJS.Process & { parentPort?: ElectronParentPort }).parentPort;
+const send = process.send?.bind(process);
+if (!electronPort && !send) throw new Error('Pi worker requires Electron MessagePort or Node IPC');
+const parentPort = electronPort ?? {
+  postMessage(message: unknown) {
+    if (process.connected) send!(message);
+  },
+};
 
 const generation = readPositiveGeneration(process.env[PI_WORKER_GENERATION_ENV]);
 const server = new PiWorkerRpcServer({
@@ -69,5 +78,21 @@ process.on('unhandledRejection', (reason) => {
   setImmediate(() => process.exit(1));
 });
 
-parentPort.on('message', (event) => server.receive(messageData(event)));
-parentPort.start();
+if (electronPort) {
+  electronPort.on('message', (event) => server.receive(messageData(event)));
+  electronPort.start();
+} else {
+  process.on('message', (message) => server.receive(message));
+  process.once('disconnect', () => {
+    // A crashed Main must not leave a Node worker or an active tool behind.
+    setTimeout(() => process.exit(1), 5000).unref();
+    server.receive({
+      protocolVersion: WORKER_RPC_PROTOCOL_VERSION,
+      kind: 'request',
+      generation,
+      requestId: 'parent-disconnected',
+      type: 'worker.dispose',
+      payload: { reason: 'app-shutdown' },
+    });
+  });
+}
