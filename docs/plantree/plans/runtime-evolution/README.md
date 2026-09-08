@@ -89,7 +89,7 @@ D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立—�
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
 | P2-0 现状基线采集 | ✅ | 六个旧后端固定会话通过；28 次普通调用，D9 命中率 **95.01%**；原始会话、来源证明与复核结果已归档，[验收证据](evidence/p2-0/validation.md)（2026-09-08，提交 `8a71c843`） |
-| P2-1 提示词分段组装 | ⬜ | 搬运 PI-Desktop `prompt-templates.ts` + `mode-prompts.ts`，去掉 host-core RPC |
+| P2-1 提示词分段组装 | 🟡 | 装配机制与 P2-1 自有段已落地：`plugins/prompt/segments.ts`（固定槽位表 + 确定性装配 + `staticPrefixBytes` 供 D9/P2-7 用）、`baseSegments.ts`（identity / collaboration，适配自 PI-Desktop `mode-prompts.ts` 与 `runtime.ts:1330`），16 项单测。**未完**：注册为 Cordis service 需改 `contracts.ts`，该文件本轮归 P1-0，待其落地后补。PI-Desktop 的 plan/goal/agent mode 段**不采用**——本产品无 mode 概念，对应槽位是 `permission-tier`，文案随 P1-5 一起写 |
 | P2-2 项目指令注入 | ⬜ | 本地读取 CLAUDE.md / AGENTS.md 与自有 resource 体系 |
 | P2-3 压缩策略 | ⬜ | 原样搬运 PI-Desktop `session-context.ts` + runtime 压缩段策略 |
 | P2-4 compaction record | ⬜ | Rust `transcripts.rs` 的 compaction 读写用 TS 重写 |
