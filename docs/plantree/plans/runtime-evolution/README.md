@@ -4,8 +4,8 @@
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
 **当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 按 D14 返工中，真实项目签收、主动压缩配对与 Windows 载体待完成；P2/P3 可接续
-**最近落地**：`8a71c843`（2026-09-08）已提交 P0 骨架与 P2-0 六场景基线，缓存命中率 **95.01%**，[验收与证据](evidence/p2-0/validation.md)；P0 的 R1 关闭证据见 [在线冒烟](evidence/p0/live-smoke.md)
-**下一目标**：按 [P1 TODO](TODO.md) 完成真实项目兼容签收、P1-9/P2-8 配对和 Windows 载体验收；本机 [79 项测试及探针证据](evidence/p1/README.md) 已更新，P1 代码未提交；P2/P3 可并行。
+**最近落地**：`27ff2020`（2026-09-08）提交 P1 当前工具/权限实现、D14 两轴 UI 与传递链、测试及载体探针；P1 整体验收仍未完成。[P1 验证记录](evidence/p1/README.md)。P0/P2-0 的提交仍为 `8a71c843`，旧缓存基线 **95.01%**，[原始证据](evidence/p2-0/validation.md)。
+**下一目标**：按 [P1 TODO](TODO.md) 完成真实项目兼容签收、P1-9/P2-8 配对和 Windows 载体验收；本机 [109 项 native 回归及探针证据](evidence/p1/README.md) 已更新，P1 当前实现已提交 `27ff2020`；P2/P3 可并行。
 **2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 两轴分离：模式 `plan/agent` 管工具集，档位 `ask/accept-edits/auto` 管审批，accept-edits 放行工作区 bash。P1-1 裁剪与 P1-5 核心已更新；P1-6 renderer/偏好迁移/两轴传递链已更新，打包 GUI 待签收。
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。

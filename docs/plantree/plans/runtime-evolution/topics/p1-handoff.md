@@ -12,12 +12,12 @@
 > 当前 P1-1 裁剪、P1-5 核心和 P1-6 renderer/传递链已按两轴更新；Bash AST 和全局/可信项目策略导入也已实现，真实项目兼容仍待签收。
 
 
-P1 正按 D14 继续实现，**代码尚未提交，整体未完成**。[当前 TODO](../TODO.md) 与
+P1 正按 D14 继续实现，**当前实现已提交 `27ff2020`，整体验收未完成**。[当前 TODO](../TODO.md) 与
 [验证记录](../evidence/p1/README.md) 是接续入口。P1-6 两模式/三档 UI、偏好迁移和创建/resume/更新/重启传递已实现，
 并有 DOM 交互、IPC/RPC、WorkerManager 生命周期及真实旧权限策略加载测试。下一步是 P1-9 与 P2-8 配对，以及真实项目、Windows 和打包 GUI 验收。
 P1-0/P1-3 已补保留进程树根身份的 Node runner，Linux 后代清理测试通过，Windows 尚未运行。
 P1-8 尚缺 Windows 随包 Node 与加密机签收。HostIo/Exec 契约和 P0 async 迁移已落地，P2 可接入。
-当前本机验证：runtime 类型检查、P1/P0 7 文件 79 项、P0 六项离线冒烟、Node 与真实 Linux
+当前本机验证：runtime 类型检查、native 9 文件 109 项、P0 六项离线冒烟、Node 与真实 Linux
 Electron utilityProcess 六项工具探针通过。没有运行远端 CI 或 P4 GUI 全链路。
 P2-0 正式基线仍为 95.01%，P1 不重复采集；D12 保持 Pi 0.84.4，patch 差在 P2-6 明列。
 

@@ -2,6 +2,8 @@
 
 2026-09-08 · 用户已授权代码修改 · [看板](README.md) · [P1-0 契约](topics/p1-0-host-contracts.md) · [验证记录](evidence/p1/README.md)
 
+当前代码提交：`27ff2020`（2026-09-08，当前实现与证据归档；不代表完整验收）。
+
 ## 当前批次：D14 返工
 
 - [x] 重读 P1 交接、ARD D14 和当前代码；确认旧 69 项测试不能代签新权限模型。
@@ -15,7 +17,7 @@
 - [x] P1-6：创建/resume/存量 worker 复用、空闲时更新、崩溃重启传递 mode + gear；worker 拒绝时 UI 不落盘。
 - [x] P1-6：旧 worker 适配 D14 工具裁剪/授权器，随包 bash 默认询问，accept-edits 由授权器放行；DOM 交互与真实策略加载回归通过。
 - [ ] P1-6/P4：打包壳 GUI 全链路签收；用户自定义策略与复杂 shell 兼容仍按 P1-5 跟踪。
-- [x] 更新新矩阵与载体证据：P1/P0 共 79 项通过，Node 与 Linux Electron 六项探针通过；Windows 和 GUI 仍待验收。
+- [x] 更新新矩阵与载体证据：native runtime 共 109 项通过，Node 与 Linux Electron 六项探针通过；Windows 和 GUI 仍待验收。
 
 ## 新增 P1-9（与 P2-8 成对）
 
@@ -23,7 +25,7 @@
 - [x] 导出 newContextTool({ family, request })；不默认注册。P2 接入时按 read 注册，plan 可用，无普通审批，显式工具白名单仍生效；4 项测试通过。
 - [ ] 与 P2-8 共同接通注册和提醒，P2 在下一轮边界消费意图；未接通前不向模型宣称已支持主动压缩。
 
-## 已落地（旧口径历史，代码未提交）
+## 已落地（旧口径历史，当时尚未提交）
 
 - [x] 收口契约三项建议和 Q6。
 - [x] HostIo/Exec、TSD helper；bootstrap/catalog/trace 异步迁移。
