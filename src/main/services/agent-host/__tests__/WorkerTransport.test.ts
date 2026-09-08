@@ -1,9 +1,16 @@
+import { fork } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { WorkerRpcRequest } from '@shared/types/workerRpc';
 import type { UtilityProcess } from 'electron';
 import { describe, expect, it, vi } from 'vitest';
-import { createUtilityProcessWorkerTransport } from '../WorkerTransport';
+import {
+  createNodeProcessWorkerTransport,
+  createUtilityProcessWorkerTransport,
+} from '../WorkerTransport';
 
 class FakeUtilityProcess extends EventEmitter {
   pid: number | undefined = 4321;
@@ -20,6 +27,44 @@ const request: WorkerRpcRequest = {
   type: 'ping',
   payload: {},
 };
+
+describe('createNodeProcessWorkerTransport', () => {
+  it('round-trips RPC over real Node IPC and observes a clean disconnect exit', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pi-node-transport-'));
+    const entry = join(dir, 'worker.cjs');
+    writeFileSync(
+      entry,
+      `
+      process.on('message', message => {
+        process.stderr.write('node worker log');
+        process.stdout.write('ordinary output is not RPC');
+        process.send({ ...message, data: { nested: true } });
+      });
+      process.on('disconnect', () => process.exit(0));
+    `
+    );
+    const child = fork(entry, [], { execArgv: [], stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+    const transport = createNodeProcessWorkerTransport(child);
+    try {
+      const stderr: string[] = [];
+      transport.onStderr((text) => stderr.push(text));
+      const received = new Promise((resolve, reject) => {
+        transport.onMessage(resolve);
+        transport.onError(reject);
+      });
+      transport.postMessage(request);
+      expect(await received).toEqual({ ...request, data: { nested: true } });
+      expect(transport.pid).toBe(child.pid);
+      const exited = new Promise((resolve) => transport.onExit(resolve));
+      child.disconnect();
+      expect(await exited).toEqual({ code: 0, signal: null });
+      expect(stderr.join('')).toBe('node worker log');
+    } finally {
+      child.kill();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('createUtilityProcessWorkerTransport', () => {
   it('normalizes direct and MessageEvent-like worker messages', () => {

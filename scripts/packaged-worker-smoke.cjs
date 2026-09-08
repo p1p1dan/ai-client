@@ -1,4 +1,6 @@
+const { spawn } = require('node:child_process');
 const fs = require('node:fs');
+const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const { app, utilityProcess } = require('electron');
@@ -59,12 +61,66 @@ async function main() {
   const cwd = path.join(root, 'workspace');
   fs.mkdirSync(agentDir, { recursive: true });
   fs.mkdirSync(cwd, { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'worker-read-probe.md'), '# packaged-worker-read-ok\n');
+  // A local model stub asks the REAL session to run read/bash. No cloud credentials.
+  let completionCount = 0;
+  const modelServer = http.createServer(async (request, response) => {
+    for await (const _chunk of request) {
+      /* Drain the request body. */
+    }
+    const first = completionCount++ === 0;
+    const delta = first
+      ? {
+          role: 'assistant',
+          tool_calls: [
+            {
+              index: 0,
+              id: 'probe_read',
+              type: 'function',
+              function: {
+                name: 'read',
+                arguments: JSON.stringify({ path: 'worker-read-probe.md' }),
+              },
+            },
+            {
+              index: 1,
+              id: 'probe_bash',
+              type: 'function',
+              function: {
+                name: 'bash',
+                arguments: JSON.stringify({
+                  command: 'printf packaged-worker-bash-ok',
+                  timeout: 10,
+                }),
+              },
+            },
+          ],
+        }
+      : { role: 'assistant', content: 'tool probe complete' };
+    response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    for (const [chunk, finish] of [
+      [delta, null],
+      [{}, first ? 'tool_calls' : 'stop'],
+    ]) {
+      response.write(
+        `data: ${JSON.stringify({
+          id: 'packaged-tool-probe',
+          object: 'chat.completion.chunk',
+          model: 'probe-model',
+          created: 1,
+          choices: [{ index: 0, delta: chunk, finish_reason: finish }],
+        })}\n\n`
+      );
+    }
+    response.end('data: [DONE]\n\n');
+  });
+  await new Promise((resolve) => modelServer.listen(0, '127.0.0.1', resolve));
   fs.writeFileSync(
     path.join(agentDir, 'models.json'),
     JSON.stringify({
       providers: {
         probe: {
-          baseUrl: 'http://127.0.0.1:1/v1',
+          baseUrl: `http://127.0.0.1:${modelServer.address().port}/v1`,
           api: 'openai-completions',
           authHeader: true,
           models: [{ id: 'probe-model', name: 'Packaged Worker Probe' }],
@@ -90,17 +146,41 @@ async function main() {
       // probe exercises every bundled plugin, opt-in ones included.
       AICLIENT_PI_OPT_IN_EXTENSIONS: OPT_IN_FEATURE_IDS.join(','),
     });
-    child = utilityProcess.fork(workerPath, [], {
-      cwd,
-      env: childEnv,
-      stdio: 'pipe',
-      serviceName: 'AiClient Packaged Pi Worker Smoke',
-    });
+    // Allows validating Node IPC on a development host without a Windows package.
+    const smokeNodePath = process.env.AICLIENT_WORKER_SMOKE_NODE_PATH;
+    const usesNode = process.platform === 'win32' || Boolean(smokeNodePath);
+    let postMessage;
+    if (usesNode) {
+      const nodePath =
+        smokeNodePath || path.join(path.dirname(workerPath), '..', 'node-runtime', 'node.exe');
+      childEnv.PATH = `${path.dirname(nodePath)}${path.delimiter}${childEnv.PATH || childEnv.Path || ''}`;
+      childEnv.Path = childEnv.PATH;
+      child = spawn(nodePath, [workerPath], {
+        cwd,
+        env: childEnv,
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+        windowsHide: true,
+      });
+      postMessage = (message) => child.send(message);
+    } else {
+      child = utilityProcess.fork(workerPath, [], {
+        cwd,
+        env: childEnv,
+        stdio: 'pipe',
+        serviceName: 'AiClient Packaged Pi Worker Smoke',
+      });
+      postMessage = (message) => child.postMessage(message);
+    }
+    child.stdout?.resume();
     child.stderr?.on('data', (chunk) => process.stderr.write(chunk));
     const responses = new Map();
+    const toolResults = new Map();
     child.on('message', (message) => {
       if (message?.kind === 'response' && typeof message.requestId === 'string') {
         responses.set(message.requestId, message);
+      }
+      if (message?.kind === 'event' && message.payload?.type === 'tool.completed') {
+        toolResults.set(message.payload.payload.toolCallId, message.payload.payload);
       }
     });
     const waitFor = async (requestId, timeoutMs = 15_000) => {
@@ -121,12 +201,13 @@ async function main() {
       payload,
     });
 
-    child.postMessage(
+    postMessage(
       request('bootstrap', 'worker.bootstrap', {
         logicalSessionId: 'packaged-probe',
         cwd,
         model: 'probe/probe-model',
         effort: 'low',
+        tier: 'fullopen',
       })
     );
     const bootstrap = await waitFor('bootstrap');
@@ -147,11 +228,34 @@ async function main() {
       BUNDLED_FEATURE_PLUGIN_PACKAGES
     );
     if (problems.length > 0) throw new Error(problems.join('\n'));
+    postMessage(
+      request('send', 'worker.send', {
+        logicalSessionId: 'packaged-probe',
+        requestId: 'tool-probe',
+        attemptId: 'tool-probe-attempt',
+        text: 'Run the tool probe.',
+      })
+    );
+    const send = await waitFor('send');
+    if (!send.ok) throw new Error(`tool probe send failed: ${JSON.stringify(send)}`);
+    const toolDeadline = Date.now() + 15_000;
+    while (toolResults.size < 2 && Date.now() < toolDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    for (const [id, text] of [
+      ['probe_read', 'packaged-worker-read-ok'],
+      ['probe_bash', 'packaged-worker-bash-ok'],
+    ]) {
+      const result = toolResults.get(id);
+      if (!result?.ok || !result.output.includes(text)) {
+        throw new Error(`tool probe ${id} failed: ${JSON.stringify(result)}`);
+      }
+    }
     const workerPid = child.pid;
-    if (!workerPid) throw new Error('utility worker has no pid after bootstrap');
+    if (!workerPid) throw new Error('worker has no pid after bootstrap');
 
     const exited = new Promise((resolve) => child.once('exit', (code) => resolve(code)));
-    child.postMessage(request('dispose', 'worker.dispose', { reason: 'app-shutdown' }));
+    postMessage(request('dispose', 'worker.dispose', { reason: 'app-shutdown' }));
     const dispose = await waitFor('dispose');
     if (!dispose.ok || dispose.result?.disposed !== true) {
       throw new Error(`dispose failed: ${JSON.stringify(dispose)}`);
@@ -172,6 +276,8 @@ async function main() {
         workerPid,
         sessionFile: bootstrap.result.sessionFile,
         bundledExtensions: BUNDLED_FEATURE_PLUGIN_PACKAGES.length,
+        transport: usesNode ? 'node-ipc' : 'electron-message-port',
+        tools: ['read', 'bash'],
       })
     );
   } finally {
@@ -181,6 +287,8 @@ async function main() {
       // Already exited.
     }
     fs.rmSync(root, { recursive: true, force: true });
+    modelServer.closeAllConnections();
+    modelServer.close();
   }
   app.exit(0);
 }

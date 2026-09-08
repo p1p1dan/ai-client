@@ -15,16 +15,16 @@ ai-client 已收敛为 **Pi-only application**：
 ```text
 Renderer → Preload → Electron Main WorkerManager
 → bounded WorkerSlot pool
-→ one utilityProcess + one Pi AgentSession per slot
+→ one platform worker + one Pi AgentSession per slot
 ```
 
 - Claude/Codex 不再作为可执行 conversation runtime。
 - 原始 Claude/Codex 会话保持只读，通过原子、可去重的 import service 复制为 Pi session。
 - pi-app 是 WorkerManager/WorkerSlot/history/tree 主参考；pix 是 Pi TUI/PTY/CLI packaging 主参考。
 
-**runtime 侧没有活动施工任务**：Pi-only 收敛的 T28–T38 已于 2026-09-05 全部关闭，
+**runtime 侧新增 T39**：Windows 安装版加密环境回归，按 [D20](./plans/pi-backend-migration/decisions/020-windows-bundled-node-worker.md) 改用随包 Node + IPC；其他平台保持 utilityProcess。Pi-only 收敛的 T28–T38 已于 2026-09-05 全部关闭，
 正式发布走 [rollout/rollback runbook](../pi-only-rollout-rollback.md)。
-当前四条活动计划均在收尾（界面侧两条、现场反馈待办及 A 组）。
+原有四条活动计划均在收尾（界面侧两条、现场反馈待办及 A 组），新增 T39 跟踪 runtime 修复与验收。
 B 组资源与导入已完成并归档。A/B 两组最初立项
 来源是 [PI-Desktop 调研档](../plans/2026-09-08-pi-desktop-study.md)。
 
@@ -50,7 +50,8 @@ B 组资源与导入已完成并归档。A/B 两组最初立项
 7. 需要架构边界时：[Pi-only plan](./plans/pi-backend-migration/README.md)
    → [decision index](./plans/pi-backend-migration/decisions/README.md)
    → [D14](./plans/pi-backend-migration/decisions/014-pi-only-product-and-conversation-import.md)
-   / [D15](./plans/pi-backend-migration/decisions/015-main-owned-worker-manager.md)。
+   / [D15](./plans/pi-backend-migration/decisions/015-main-owned-worker-manager.md)
+   / [D20](./plans/pi-backend-migration/decisions/020-windows-bundled-node-worker.md)。
 8. 只读当前任务直接链接的 topic/evidence/history。
 
 ## Authority order
@@ -58,7 +59,7 @@ B 组资源与导入已完成并归档。A/B 两组最初立项
 1. 本 root registry：计划生命周期与唯一入口。
 2. 活动计划的 `roadmap.md`：任务 ID、顺序、依赖和状态的唯一权威。
 3. 活动计划的 `implementation-status.md`：当前 phase、Next、blocker、last verified。
-4. Decision 索引与 Active decisions：稳定方向和边界（架构侧仍以 Pi 计划的 D14/D15/D16 为准）。
+4. Decision 索引与 Active decisions：稳定方向和边界（架构侧以 Pi 计划的 D14/D15/D16 及 D20 平台修订为准）。
 5. Baseline、active topics、evidence。
 6. 已归档计划、`docs/plans/` legacy sources 和 history snapshots。
 
@@ -68,12 +69,13 @@ B 组资源与导入已完成并归档。A/B 两组最初立项
 
 | Plan | Lifecycle | 现在在做什么 | 状态权威 |
 |---|---|---|---|
+| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **In Progress** | T39：Windows GUI 随包 Node 修复、工具打包验证及加密机验收；历史 T28–T38 不重开 | [roadmap](./plans/pi-backend-migration/roadmap.md) · [问题报告](../../Windows加密环境GUI异常分析.md) |
 | [pix/pi-app UI 对齐改造](./plans/pix-ui-alignment/README.md) | **In Progress（收尾）** | 批次 1–15（U01–U31）全部落地，**只剩一次累计 GUI 点验**；另有五笔欠账与六件待真机验证项，自动化全部已绿（280 files / 4246 tests） | [implementation-status](./plans/pix-ui-alignment/implementation-status.md) · [roadmap](./plans/pix-ui-alignment/roadmap.md) |
 | [设置清单整理与旧壳删除](./plans/settings-cleanup/README.md) | **In Progress** | S01–S07 已实现；按本轮授权先保存补齐线提交，再完成旧壳删除和九类设置。renderer 分批回归与拆分类型检查通过，完整门禁、GUI/PTY 点验和主分支合入待完成 | [TODO](./plans/settings-cleanup/TODO.md) · [implementation-status](./plans/settings-cleanup/implementation-status.md) · [roadmap](./plans/settings-cleanup/roadmap.md) |
 | [现场反馈待办 6–11](./plans/field-followups/README.md) | **In Progress** | 六项（启动误报 `unverified`、`@` 弹层超框、流式 `↓`、Pi User-Agent、启动公告与铃铛、周限额金额）全部实现且自动化全绿；待一次累计 GUI 点验与三项 onboard 联调 | [TODO](./plans/field-followups/TODO.md) · [implementation-status](./plans/field-followups/implementation-status.md) · [roadmap](./plans/field-followups/roadmap.md) |
 | [A 组 · 用量可见性与目录韧性](./plans/usage-and-catalog/README.md) | **In Progress（收尾）** | A1/A2/A3 代码与自动化全部落地（55 files / 801 tests 绿）；只剩一次累计 GUI 点验与 A3 打包实测（首份真实快照已落地） | [TODO](./plans/usage-and-catalog/TODO.md) · [implementation-status](./plans/usage-and-catalog/implementation-status.md) · [roadmap](./plans/usage-and-catalog/roadmap.md) |
 
-活动计划四条。A/B 两组最初按并行文件边界立项；B 组已完成，保留两份 README 中的边界登记供 A 组继续执行参考；
+活动计划五条。A/B 两组最初按并行文件边界立项；B 组已完成，保留两份 README 中的边界登记供 A 组继续执行参考；
 三处需要协调的接缝逐条写在两份 README 里。从归档表恢复任何一条计划都需要真实需求触发，并在本表重新登记。
 
 ## Archived plans
@@ -84,7 +86,6 @@ B 组资源与导入已完成并归档。A/B 两组最初立项
 | Plan | Lifecycle | 关闭时的结论 |
 |---|---|---|
 | [B 组 · 资源归位与会话导入](./plans/resource-home-and-import/README.md) | **Completed**（2026-09-08） | B1–B4 全部实现，303 files / 4532 tests 通过；真实 utilityProcess/TUI 与 Codex→Pi 联合取证通过。GUI 已交接累计轮次；源码提交 `40538e1e` 已合入 feat 开发分支 |
-| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **Completed**（2026-09-05） | T28–T38 全部关闭：Pi-only runtime、Claude import、legacy execution absence、Pi TUI 与 Windows/Linux/macOS packaged gate 均有 accepted evidence。**仍是架构边界权威**（D14/D15/D16）。Codex import 后续已由 B 组完成，不恢复 legacy execution runtime |
 | [pi 资源接入与斜杠命令](./plans/pi-resources-and-commands/README.md) | **Completed**（2026-09-06） | R01–R04 全部关闭：托管模式借用用户 `~/.pi` 的技能与模板、斜杠命令补全与内置四条、两个插件随包、资源设置页。Q-R1–Q-R5 是需求触发的候选，不恢复为 roadmap |
 | [模型配置页迁入 onboard](./plans/model-catalog-admin/README.md) | **Completed**（2026-09-05） | M01–M05 全部落地：SQLite 存储 + 鉴权拉取端点、`/admin` 管理页、客户端契约适配；硬编码模型兜底删除，空目录改为合法状态。**两仓分支均未推送、onboard 未部署**，GUI 点验并入累计点验 |
 | [Entry and environment](./plans/entry-and-environment/README.md) | Maintenance（无活动任务） | two-entry welcome、spawn gate、git notice、settings ownership 均已完成；剩余的 credential rejection 分类与 welcome/git-notice GUI 复验是候选项，需要时另立小任务 |

@@ -1,0 +1,55 @@
+# Windows 加密环境下 GUI 工具异常：简要分析
+
+日期：2026-09-08。现场版本：Windows installer，提交 `a2073fae`，CI run `34200881263`。
+
+## 结论
+
+**GUI 与 TUI 的实际进程载体不同，是本次必须修正的兼容性边界。**
+同一安装包、同一机器、同一仓库：用户确认 GUI Read 返回异常内容，bash 报 `Bad file descriptor`，TUI 正常；右侧编辑器也正常。
+这不是“使用 TypeScript/Node API 就一定兼容加密环境”的充分条件。
+
+## 已确认事实
+
+| 路径 | 实际执行方式 | 证据 |
+|---|---|---|
+| GUI Pi worker | `utilityProcess.fork`，运行在 Electron 的进程载体中；Pi Read 默认直接调用 `fs/promises.readFile` | `PiWorkerProcess.ts`；Pi SDK `core/tools/read.js` |
+| TUI | 使用安装包 `resources/node-runtime/node.exe` 启动 Pi CLI，终端使用 PTY | `PiTuiPty.ts`；用户现场确认可用 |
+| 编辑器 | 识别 `%TSD-Header-###%` 后，调用系统 `node` 读取明文 | `previewFileRead.ts` → `tsdSafeRead.ts` |
+| GUI bash | Pi SDK 使用 `child_process.spawn`，stdout/stderr 为管道 | SDK `core/tools/bash.js`；现场错误含 `pwd/ls/echo: write error` |
+| CI 覆盖缺口 | 旧检查验证 worker bootstrap/dispose/exit，以及安装包本身没有 TSD 头；未运行会话内 Read/bash，也没有企业加密驱动 | `verify-packaged-app.mjs`、`packaged-worker-smoke.cjs` |
+
+`Allowed … from bundled` 只表示应用权限插件放行，不能证明操作系统/加密驱动允许该进程读取明文或使用输出句柄。
+
+## 根因判断与证据边界
+
+- **读取异常：高置信度为进程身份导致的加密兼容缺失。** GUI Read 没有编辑器的兼容路径；TUI 通过独立 node.exe 正常。仍需在现场确认异常字节是否包含 TSD 头，以及驱动究竟按进程名、路径、签名还是父进程规则放行。
+- **bash：已确认是命令输出句柄失败，不能归为 Markdown 编码错误。** 无需读文件的 `pwd/echo` 也失败。GUI 与 TUI 除进程身份外还有 pipe/PTY 差异；具体是 Electron、Git Bash/MSYS2 还是企业驱动的组合效应，尚未有现场 A/B 证据定案。[上游也有同类报错记录](https://github.com/anthropics/claude-code/issues/26486)，它不是本机根因的证明。
+- 两种错误可能共享 GUI 执行环境这个触发条件，**目前不能声称已经证明它们是同一个底层缺陷**。
+
+## 已接受的修复边界
+
+用户明确接受：[D20](docs/plantree/plans/pi-backend-migration/decisions/020-windows-bundled-node-worker.md)。
+
+1. Windows **安装版** GUI worker 使用与 TUI 相同的随包 node.exe；不自动回落到已知异常的 Electron worker。
+2. 保持 Main → bounded WorkerManager/WorkerSlot → 一进程一 AgentSession；保留 generation、权限、会话隔离与现有 RPC。通信使用 Node 原生 IPC，不引入 NDJSON 或额外 supervisor。
+3. 同步处理父进程断开、worker 退出和普通 stdout 排空。开发模式及其他平台继续原执行路径。
+4. 既有打包检查改走真实平台后端，并通过本地模型替身驱动真实 Read/bash 工具，不调用线上模型。
+
+## 对后续演进的影响
+
+- 自有 runtime/Cordis 方案可以继续，**执行器必须区分独立 Node 与 Electron 内嵌 Node**。Windows 加密兼容应成为平台执行后端的约束，而不是临时塞进单个 Read 工具。
+- 文件读取、编辑、写入、技能/提示词加载、子进程和会话文件都受执行身份影响。只补 Read 无法覆盖这些路径。
+- 之前“Rust 不可行、Node 不受影响”的结论过宽：现有事实证明的是特定二进制/启动方式在特定机器上的差异，不能仅按实现语言判断。
+- 普通 GitHub runner 的通过不能替代企业加密机验收。今后升级 Electron、随包 Node、Pi SDK 或调整进程拓扑，都应复看同文件的 GUI/TUI/编辑器结果。
+
+## 验证状态
+
+- [x] 用户确认同包 GUI 失败、TUI 与编辑器正常；源代码路径差异已核实。
+- [x] 用户接受 Windows 安装版改用随包 Node。
+- [x] 代码与本地验证完成：主进程改动文件类型检查、worker 类型检查、6 个相关测试文件通过；真实构建 worker 的 Node IPC 与 Electron 两条路径均完成 Read/bash、bootstrap/dispose/exit；Node 父 IPC 断开后真实 worker 退出码为 0。
+- [ ] 新 Windows 安装包的普通 CI 工具验证通过。
+- [ ] 加密机：同一文件 GUI Read 返回明文；`pwd/ls/echo` 正常；Edit/Write 后编辑器与 TUI 内容一致；关闭程序无残留 worker。
+
+最终恢复正常须以上述现场验收为准；当前报告不将待验证判断写成已解决事实。
+
+本地环境为 Linux，无企业加密驱动。验证只构建 Agent Host 单阶段，不在低资源主机执行整套生产构建。

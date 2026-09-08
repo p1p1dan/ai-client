@@ -4,6 +4,9 @@
 
 ## 状态摘要
 
+**T39 — In Progress（2026-09-08）**：Windows 安装版 GUI worker 改为随包 Node + 原生 IPC；补齐真实 Read/bash 打包验证。
+采用 [D20](./decisions/020-windows-bundled-node-worker.md)，[分析与验收](../../../../Windows加密环境GUI异常分析.md)。完成出口：本地检查、Windows CI、加密机同文件读写及无残留进程验收。
+
 | 阶段 | 状态 | 出口 |
 |---|---|---|
 | Cycle 1/2 产品能力 | **Done** | 已有 evidence；按 replacement impact 保留或适配 |

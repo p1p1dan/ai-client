@@ -1,10 +1,10 @@
 # Plan — Pi-only Application Convergence
 
-> **状态**：Completed
+> **状态**：In Progress — T39 Windows 加密环境回归修复（历史 T28–T38 保持完成）
 >
-> **分支**：`feat/pi-primary-backend`
+> **当前修复分支**：`feat/model-catalog-admin`（原迁移分支 `feat/pi-primary-backend`）
 >
-> **当前阶段**：Phase H / T37 release candidate closed。
+> **当前阶段**：[D20](./decisions/020-windows-bundled-node-worker.md) 已接受；[问题报告](../../../../Windows加密环境GUI异常分析.md) 记录事实、修复与现场验收。
 
 ## 目标
 
@@ -13,7 +13,7 @@
 ```text
 Renderer → Preload → Electron Main WorkerManager
 → bounded WorkerSlot pool
-→ one utilityProcess + one Pi AgentSession per slot
+→ one platform worker + one Pi AgentSession per slot
 ```
 
 Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不再作为可执行对话 runtime；原始会话通过只读、原子、可去重的导入服务复制为新的 Pi session 后继续。
@@ -21,10 +21,10 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 ## 已拍板边界
 
 - 产品范围以 [D14](./decisions/014-pi-only-product-and-conversation-import.md) 为准。
-- 进程与 ownership 以 [D15](./decisions/015-main-owned-worker-manager.md) 为准。
+- 进程与 ownership 以 [D15](./decisions/015-main-owned-worker-manager.md) 及 [D20](./decisions/020-windows-bundled-node-worker.md) 平台修订为准。
 - legacy 保留时机以 [D16](./decisions/016-delete-obsolete-paths-with-replacement.md) 为准：替代即删除，Git 负责回退，不维护运行时兼容路径。
 - Main 持有 WorkerManager；Pi SDK 不直接运行在 Main。
-- 每个 WorkerSlot 对应独立 utilityProcess/Pi AgentSession；无额外 singleton supervisor。
+- 每个 WorkerSlot 对应独立进程/Pi AgentSession；Windows 安装版使用随包 Node，其余路径使用 utilityProcess；无额外 singleton supervisor。
 - Cycle 1/2 已完成行为和证据保留；singleton transport/owner 部分适配或替换，不把真实完成记录改回 Pending。
 - legacy source 永不修改；import 不承诺恢复原 runtime 隐藏状态。
 - GUI/TUI 不同时写同一个 Pi session file。

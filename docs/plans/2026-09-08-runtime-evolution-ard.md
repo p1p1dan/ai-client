@@ -2,6 +2,7 @@
 
 > 文档日期：2026-09-08
 > 文档状态：ARD 草案，待用户拍板
+> 2026-09-08 现场修订：Windows 安装版 GUI 的执行载体按 [D20](../plantree/plans/pi-backend-migration/decisions/020-windows-bundled-node-worker.md) 改用随包 Node。原“Node/Electron 文件读写均正常”结论撤回，见[问题报告](../../Windows加密环境GUI异常分析.md)。
 > 触发：用户确定产品进化路线 ai-client → PI-Desktop 形态 → DSH 形态，
 > 核心诉求「内部产品，除协议适配层外其余尽可能可控、方便修改和插入」。
 > 前序调研：[PI-Desktop 调研档](./2026-09-08-pi-desktop-study.md) ·
@@ -20,7 +21,7 @@
 
 ```text
 Renderer → Preload → Main WorkerManager → WorkerSlot
-  → utilityProcess fork → 整包加载 pi-coding-agent
+  → 平台 worker（Windows 安装版：随包 Node；其他：utilityProcess）→ pi-coding-agent
   → Pi AgentSession（黑盒：agent loop + tools + 权限 + 压缩 + prompt + 会话 全在里面）
   → 事件投影为 RuntimeEvent → Main 路由 → renderer reduce
 ```
@@ -31,7 +32,7 @@ Renderer → Preload → Main WorkerManager → WorkerSlot
 
 ```text
 Renderer → Preload → Main WorkerManager → WorkerSlot
-  → utilityProcess fork → 自有 runtime（Cordis 插件图）
+  → 平台 worker（Windows 安装版：随包 Node；其他：utilityProcess）→ 自有 runtime（Cordis 插件图）
     ├─ plugin-model-adapter    ← pi-ai（唯一外部依赖，协议适配）
     ├─ plugin-agent-loop       ← 自建，tool→model→tool 循环
     ├─ plugin-tools            ← 自建，文件/shell/搜索/MCP bridge
@@ -90,8 +91,8 @@ pi-coding-agent→ 完整 coding agent CLI（工具 + 权限 + prompt + 会话 +
 
 ### D4 · 进程拓扑：不变
 
-保持 `utilityProcess fork` 拓扑。新 runtime 在 worker 进程内初始化 Cordis 插件图，
-通过现有 MessagePort 与 Main 通信。WorkerManager/WorkerSlot 逻辑不动。
+保持一槽一隔离进程。Windows 安装版按 D20 使用随包 Node + 原生 IPC，其余平台使用 utilityProcess + MessagePort。
+新 runtime 在 worker 内初始化 Cordis 插件图，由 WorkerTransport 适配通信；WorkerManager/WorkerSlot ownership 不变。
 
 ### D5 · 事件接口：保持 RuntimeEvent 兼容
 
@@ -192,7 +193,7 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
 
 | 项 | 理由 |
 |---|---|
-| Rust 原生模块 | **已验证不可行**（2026-09-08 加密测试机实测）：PI-Desktop 可启动运行，但 Rust host-core 无法直接读写文件系统，仅能通过调用 bash/powershell 等 shell 工具间接操作。推测为加密/硬化环境对非系统进程的 fs syscall 限制。结论：runtime 全栈基于 Node/TS，不引入 Rust 原生模块 |
+| Rust 原生模块 | 当前路线不引入。现场的 PI-Desktop Rust host-core 直接读写失败，但不能据此断言所有 Rust 二进制均不可行；进程名、路径、签名和启动环境的规则仍待确认 |
 | 第三方插件市场 | 内部产品，安全风险不匹配 |
 | 改变进程拓扑 | 现有 WorkerManager/WorkerSlot 已稳定 |
 | 改变凭据体系 | `~/.pilab/<profile>/` 已稳定，与 PI-Desktop 的 `~/.pi-desktop/` 同构 |
@@ -212,10 +213,11 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
 |---|---|---|
 | 2026-09-08 | PI-Desktop 在加密测试机启动运行 | 可运行，agent 对话可启动 |
 | 2026-09-08 | PI-Desktop Rust host-core 直接文件读写 | **不可行**——无法直接读写，仅能通过 bash/powershell 工具间接操作 |
-| — | Node/Electron（ai-client 现有产品）文件读写 | 正常（已部署验证） |
+| 2026-09-08 | ai-client TUI（随包 node.exe）/编辑器（TSD-aware read） | 用户确认正常 |
+| 2026-09-08 | ai-client Windows 安装版 GUI（utilityProcess） | 用户确认 Read 返回异常内容、bash 报 Bad file descriptor |
 
-**结论**：加密/硬化环境对 Rust 编译的二进制有额外 fs 限制，Node 进程不受影响。
-全栈 Node/TS 路线已确认为唯一可行方案。PI-Desktop 的 Rust host-core 代码仅作 TS 重写参考，不直接使用。
+**修订结论**：兼容性应按实际进程载体和启动方式验收，不能按实现语言推断。
+当前继续 Node/TS 路线，Windows GUI 使用现场已正常的随包 Node；其 Read/bash/Edit/Write 仍需新包现场复验。
 
 ## 9. 溯源
 

@@ -19,6 +19,7 @@
 | [D17](./017-worker-pool-policy.md) | Worker pool policy | normalized identity/remap、resource-aware capacity、protected eviction、bounded same-session restart |
 | [D18](./018-t34-claude-import-semantics.md) | T34 Claude import semantics | Claude-only首版、线性root snapshot、display-only unmapped、manifest/dedupe与批量报告UI |
 | [D19](./019-tui-owns-the-gui-session-file.md) | TUI 接管 GUI 会话文件 | `pi --session <file>` 继续同一对话；单一所有者锁；GUI 发送前硬杀 TUI；关闭 Q17 |
+| [D20](./020-windows-bundled-node-worker.md) | Windows 随包 Node worker | 修订 D15 的执行载体：Windows 安装版使用 Node IPC，其余 ownership 与隔离不变 |
 
 ## Revised / partially active
 
@@ -39,7 +40,7 @@
 ## 读取规则
 
 1. 产品范围冲突时，以 D14 为准。
-2. 进程、ownership、pool 或 session runtime 冲突时，以 D15 为准。
+2. ownership、pool 或 session runtime 冲突时，以 D15 为准；Windows 安装版执行载体以 D20 为准。
 3. legacy source、runtime、entry、artifact、dependency 或 compatibility alias 的保留时机冲突时，以 D16 的“替代即删除”为准。
 4. 具体产品行为仍由 D2、D6、D8–D12 与 Cycle 1/2 evidence 约束。
 5. Roadmap 任务状态和顺序只由 [`../roadmap.md`](../roadmap.md) 维护；D13 中的旧排期只保留历史意义。

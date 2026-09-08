@@ -1,3 +1,4 @@
+import type { ChildProcess } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import type { WorkerRpcRequest } from '@shared/types/workerRpc';
 import type { UtilityProcess } from 'electron';
@@ -88,6 +89,39 @@ export function createUtilityProcessWorkerTransport(proc: UtilityProcess): Worke
         // The process may already have exited. The slot still waits for exit.
         return false;
       }
+    },
+  };
+}
+
+export function createNodeProcessWorkerTransport(proc: ChildProcess): WorkerTransport {
+  // RPC uses Node IPC; drain ordinary stdout so tool/extension logs cannot fill its pipe.
+  proc.stdout?.resume();
+  return {
+    get pid() {
+      return proc.pid;
+    },
+    postMessage(message) {
+      proc.send(message);
+    },
+    onMessage(listener) {
+      proc.on('message', listener);
+      return () => proc.off('message', listener);
+    },
+    onError(listener) {
+      proc.on('error', listener);
+      return () => proc.off('error', listener);
+    },
+    onExit(listener) {
+      const onExit = (code: number | null, signal: NodeJS.Signals | null) =>
+        listener({ code, signal });
+      proc.on('exit', onExit);
+      return () => proc.off('exit', onExit);
+    },
+    onStderr(listener) {
+      return subscribeReadable(proc.stderr, listener);
+    },
+    kill() {
+      return proc.kill();
     },
   };
 }

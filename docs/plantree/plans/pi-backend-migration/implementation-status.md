@@ -1,8 +1,8 @@
 # Implementation Status — Pi-only Application Convergence
 
-**Current Phase**：Completed — Phase H / T37 release candidate closed；Phase I / T38 runtime 补字段已关闭（2026-09-05）。
+**Current Phase**：T39 Windows 加密环境回归修复（2026-09-08）；此前 T28–T38 历史完成状态保留。
 
-**Next Target**：无活动 runtime 任务。正式发布仍按
+**Next Target**：完成 [D20](./decisions/020-windows-bundled-node-worker.md) 的 Windows CI 与新包现场验收；[问题报告](../../../../Windows加密环境GUI异常分析.md) 为当前验证清单。代码、本地类型检查与 6 个相关测试文件已通过；真实 worker 的 Node IPC / Electron 两路 Read/bash 和退出验证通过（Linux，无企业加密驱动）。正式发布仍按
 [`docs/pi-only-rollout-rollback.md`](../../../pi-only-rollout-rollback.md) 完成内部观察、限量扩大、
 macOS 签名/公证与 rollback 记录；产品界面改造在 pix/pi-app UI 对齐计划推进。
 
@@ -34,7 +34,8 @@ permission policy 测试误吃本机旧文件、Windows 盘符 ESM import、Linu
 ## Current architecture decision
 
 - [D14](./decisions/014-pi-only-product-and-conversation-import.md)：Claude/Codex execution runtime 已删除；历史只通过只读、原子、可去重 import 保留。
-- [D15](./decisions/015-main-owned-worker-manager.md)：Main 持有 bounded WorkerManager；每 WorkerSlot 一个 utilityProcess/Pi AgentSession；无额外 singleton supervisor。
+- [D15](./decisions/015-main-owned-worker-manager.md)：Main 持有 bounded WorkerManager；每 WorkerSlot 一个独立进程/Pi AgentSession；无额外 singleton supervisor。
+- [D20](./decisions/020-windows-bundled-node-worker.md)：Windows 安装版改用随包 Node + IPC；其他平台与开发模式保持 utilityProcess。
 - [D16](./decisions/016-delete-obsolete-paths-with-replacement.md)：替代即删除；不保留 compatibility facade。
 - [D17](./decisions/017-worker-pool-policy.md)：identity/remap、2/3/4 capacity、protected eviction、same-session bounded restart policy。
 - [D18](./decisions/018-t34-claude-import-semantics.md)：Claude-only 首版 import、线性独立 root、display-only unmapped、不可变 snapshot 与批量报告 UI。
@@ -49,7 +50,9 @@ packaging 均为 Pi-only。保留的 Claude/Codex 名称仅限 migration/import�
 
 ## Active TODO
 
-无。T38-a/b/c 已全部落地并有 evidence；~~T38-d service_tier 注入~~ 触发条件未成立（Q09 取证证实
+1. T39：Windows GUI 随包 Node 修复、普通 CI 工具验证及加密机现场验收，状态见 [roadmap](./roadmap.md)。
+
+T38-a/b/c 已全部落地并有 evidence；~~T38-d service_tier 注入~~ 触发条件未成立（Q09 取证证实
 Pi SDK 有透传通道，不是 runtime 缺字段问题，落地取舍留在 UI 计划 Q12）。
 
 T38 留下三条**已知欠项**，都写在 evidence §七，都不重开本任务：

@@ -2,6 +2,8 @@
 
 **状态**：已拍板（2026-08-31）
 
+> 2026-09-08 修订：[D20](./020-windows-bundled-node-worker.md) 将 Windows 安装版的每槽执行器改为随包 Node + 原生 IPC；本文其余 ownership/pool/隔离约束保留。
+
 **替代**：[D1](./001-architecture-route.md) 的“只借鉴 pi-app 功能、不移植 WorkerManager”与 [D3](./003-process-model.md) 的 singleton host topology。
 
 **保留**：D3 的 utilityProcess、MessagePort、崩溃隔离和不建设一次性 NDJSON bridge。
