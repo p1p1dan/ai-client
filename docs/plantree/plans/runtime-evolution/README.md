@@ -3,10 +3,10 @@
 > 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D14 生效）。
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
-**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 按 D14 返工中，renderer 与 Windows 载体待完成；P2/P3 可接续
+**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 按 D14 返工中，复杂 shell、主动压缩配对与 Windows 载体待完成；P2/P3 可接续
 **最近落地**：`8a71c843`（2026-09-08）已提交 P0 骨架与 P2-0 六场景基线，缓存命中率 **95.01%**，[验收与证据](evidence/p2-0/validation.md)；P0 的 R1 关闭证据见 [在线冒烟](evidence/p0/live-smoke.md)
-**下一目标**：按 [P1 TODO](TODO.md) 完成 P1-6 renderer 三档/模式设置与迁移、复杂 shell 权限兼容和 Windows 载体验收；本机 [79 项测试及探针证据](evidence/p1/README.md) 已更新，P1 代码未提交；P2/P3 可并行。
-**2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 两轴分离：模式 `plan/agent` 管工具集，档位 `ask/accept-edits/auto` 管审批，accept-edits 放行工作区 bash。P1-1 裁剪与 P1-5 核心已更新；P1-6 renderer 和旧 tier 链路仍待收口。
+**下一目标**：按 [P1 TODO](TODO.md) 完成复杂 shell 权限兼容、P1-9/P2-8 配对和 Windows 载体验收；本机 [79 项测试及探针证据](evidence/p1/README.md) 已更新，P1 代码未提交；P2/P3 可并行。
+**2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 两轴分离：模式 `plan/agent` 管工具集，档位 `ask/accept-edits/auto` 管审批，accept-edits 放行工作区 bash。P1-1 裁剪与 P1-5 核心已更新；P1-6 renderer/偏好迁移/两轴传递链已更新，打包 GUI 待签收。
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
 
@@ -74,10 +74,10 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 | P1-3 bash 工具 | 🟡 | 配置 cwd/shell、时限/输出上限、Linux 进程组清理通过；Windows 清理边界见 P1-0，不宣称已跨平台签收 |
 | P1-4 搜索工具 | ✅ | glob + 首版字面文本 grep，目录/文件/累计预算、symlink/拒绝 scope 跳过；未实现正则与 gitignore 引擎，行为明确写入工具 schema 描述 |
 | P1-5 权限内核 | 🟡 | D14 两轴核心、四旧值迁移、deny 优先、scope/白名单及会话授权通过；accept-edits 放行工作区写/改/bash，显式外部路径询问。复杂 shell 动态路径和既有 policy 导入兼容仍需收口，见 [证据](evidence/p1/README.md) |
-| P1-6 审批流对接 | 🟡 | 复用 Extension UI bridge 的 select/respond/取消已完成，本机集成测试通过、无 renderer 修改；**待补**：档位控件与文案按 D14 的三档（每次询问 / 自动接受编辑 / 全自动）。实际 worker RPC 接线与 GUI 签收仍属 P4 |
-| P1-7 单测 | 🟡 | 当前 P1/P0 7 文件 79 项通过，覆盖 D14 核心矩阵与迁移；renderer 返工测试仍待补，旧 69 项不代签新模型；见 [验证记录](evidence/p1/README.md) |
+| P1-6 审批流对接 | 🟡 | Extension UI bridge + renderer 两模式/三档控件、旧值迁移；创建/resume/更新/复用/重启传递两轴，更新失败保留旧值；旧 worker D14 授权器/裁剪已适配。DOM 交互与 IPC/RPC/生命周期测试通过；打包 GUI 全链路仍待 P4 签收 |
+| P1-7 单测 | 🟡 | native 核心原 79 项通过，P1-9 新增 4 项；D14 UI/存储/旧 worker/IPC/重启回归已补，见 [验证记录](evidence/p1/README.md)。P1-5 复杂 shell 及成对压缩接入仍待补验 |
 | P1-8 载体兼容矩阵 | 🟡 | Linux electron-utility 同批六项通过；standalone-node 另列通过；已提供 Windows bundled-node 入口，尚未运行，不代签加密机 |
-| P1-9 `new_context` 工具 | ⬜ | 无参数工具，描述照抄 Codex 原话「Start a new context window. Does not clear, reset, or otherwise affect environment state.」。调用只表达「下一轮开新窗口」的意图，实际压缩交给 P2 的压缩层；回复按压缩家族分两种。**不改动任何环境状态**，故按 [D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 不需要档位放行，`plan` 模式下也应可用——只读勘察一样烧上下文。**与 P2-8 成对上线** |
+| P1-9 `new_context` 工具 | 🟡 | `newContextTool({ family, request })` 已导出并通过 4 项测试；以 read 注册可在 plan 使用，保留显式工具白名单检查。**未默认暴露**，待 P2 消费意图并与 P2-8 成对启用。无参数工具，描述照抄 Codex 原话「Start a new context window. Does not clear, reset, or otherwise affect environment state.」。调用只表达「下一轮开新窗口」的意图，实际压缩交给 P2 的压缩层；回复按压缩家族分两种。**不改动任何环境状态**，故按 [D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 不需要档位放行，`plan` 模式下也应可用——只读勘察一样烧上下文。**与 P2-8 成对上线** |
 
 覆盖 ARD 缓解项：首版 5 个工具覆盖 90% 场景。
 D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立——P1-0 的两个出口是这条约束的落点。
@@ -92,7 +92,7 @@ D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立—�
 |---|---|---|
 | P2-0 现状基线采集 | ✅ | 六个旧后端固定会话通过；28 次普通调用，D9 命中率 **95.01%**；原始会话、来源证明与复核结果已归档，[验收证据](evidence/p2-0/validation.md)（2026-09-08，提交 `8a71c843`） |
 | P2-1 提示词分段组装 | 🟡 | 装配机制与 P2-1 自有段已落地：`plugins/prompt/segments.ts`（固定槽位表 + 确定性装配 + `staticPrefixBytes` 供 D9/P2-7 用）、`baseSegments.ts`（identity / collaboration，适配自 PI-Desktop `mode-prompts.ts` 与 `runtime.ts:1330`），16 项单测。**未完**：注册为 Cordis service 需改 `contracts.ts`，该文件本轮归 P1-0，待其落地后补。D14 已改为 `mode` / `permission-gear` 两个 turn 槽位；P1 导出对应贡献函数，goal 本轮不做 |
-| P2-2 项目指令注入 | ⬜ | 本地读取 CLAUDE.md / AGENTS.md 与自有 resource 体系 |
+| P2-2 项目指令注入 | 🟡 | 纯逻辑已落地：`plugins/prompt/projectInstructions.ts` —— 每目录一份（`AGENTS.override.md` → `AGENTS.md` → `CLAUDE.md` → `.claude/CLAUDE.md`，先命中先用）、root→leaf 走链使就近文件后出且优先、全局文件（managed + borrowed 两处）排在项目文件之前、32 KiB 预算全链共享且按字符边界截断、realpath 越界即跳过。20 项单测跑在内存源上，无 fixture 目录。**未完**：读盘走 `InstructionSource` 端口，待 P1-0 的 `runtimeHostIo` 提交后接上（约十行适配）；接上后本槽位从 `DEFERRED_SLOTS` 移除 |
 | P2-3 压缩策略 | 🟡 | 决策层已原样搬运并测试：`plugins/context/budget.ts`（阈值全部由模型窗口推导、`compactionNeeded` 在硬限处触发、保留尾与用户消息上限的双端钳制、两级预算提醒各只发一次），15 项单测。纯函数、不碰盘不调模型。**未完**：真正执行压缩要写 compaction record，依赖 P2-4 与 P3 的会话存储 |
 | P2-4 compaction record | ⬜ | Rust `transcripts.rs` 的 compaction 读写用 TS 重写 |
 | P2-5 缓存命中率达标 | ⬜ | 门禁是 provider 上报的 `cacheRead / (input + cacheRead)`（D9），公式与数据源都已存在，不新增埋点。**已知可优化点**：PI-Desktop 把预算提醒追加进 systemPrompt（`runtime.ts:4160`），那正是缓存前缀本身，一次追加即整段失效；改为以尾部消息注入可保持前缀字节不变。P2-3 只产出文案不决定位置，位置在此节点定 |
