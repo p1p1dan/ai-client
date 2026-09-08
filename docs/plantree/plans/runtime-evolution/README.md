@@ -1,11 +1,11 @@
 # Runtime 自主化演进 — 任务看板
 
-> 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D12 生效）。
+> 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D13 生效）。
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
-**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1-0 草案待评审；P2-1 起 ∥ P3 可开工
+**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1-0 实施中；P2-1 起 ∥ P3 可开工
 **最近落地**：`8a71c843`（2026-09-08）已提交 P0 骨架与 P2-0 六场景基线，缓存命中率 **95.01%**，[验收与证据](evidence/p2-0/validation.md)；P0 的 R1 关闭证据见 [在线冒烟](evidence/p0/live-smoke.md)
-**下一目标**：评审 [P1-0 契约草案](topics/p1-0-host-contracts.md)，再按 [P1 开工交接](topics/p1-handoff.md) 实施；P2-1 起及 P3 可并行（Q4 已按 [D12](../../../plans/2026-09-08-runtime-evolution-ard.md) 收口：pin 0.84.4，不回退对齐）
+**下一目标**：按已确认的 [P1-0 契约](topics/p1-0-host-contracts.md) 实施，进度见 [P1 TODO](TODO.md)；P2-1 起及 P3 可并行（Q4 已按 [D12](../../../plans/2026-09-08-runtime-evolution-ard.md) 收口：pin 0.84.4，不回退对齐）
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
 
@@ -18,7 +18,7 @@
 | 节点 | 主任务 | 前置 | 状态 | 简要内容 |
 |---|---|---|---|---|
 | **P0** | 骨架 | — | ✅ | `src/runtime/` 落地，离线 + 在线冒烟均通过，风险 R1 关闭 |
-| **P1** | 工具与权限 | P0 | ⬜ | plugin-tools（file/bash/search）+ plugin-permissions（scope 白名单 + 审批流） |
+| **P1** | 工具与权限 | P0 | 🟡 | plugin-tools（file/bash/search）+ plugin-permissions（scope 白名单 + 审批流） |
 | **P2** | 上下文与提示词 | P0（P2-0 除外） | 🟡 | P2-0 基线完成；其余 plugin-context / plugin-prompt 任务可接续 |
 | **P3** | 会话与事件 | P0 | ⬜ | plugin-session（JSONL + 分支 + resume）+ RuntimeEvent 翻译层 |
 | **P4** | 集成 | P1+P2+P3 | ⬜ | worker bootstrap + WorkerSlot 后端开关 + 端到端 + GUI 点验 |
@@ -61,13 +61,13 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 
 ---
 
-## P1 · 工具与权限 ⬜
+## P1 · 工具与权限 🟡
 
 前置：P0 · 文件归属：`src/runtime/plugins/tools/`、`src/runtime/plugins/permissions/`（P1-0 另含 `contracts.ts`）
 
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
-| P1-0 IO/exec 出口收敛 | ⬜ | **P1 的第一件事**（ARD D11）：`contracts.ts` 增 `runtimeHostIo`（fs 唯一出口，含 TSD 头探测与白名单 node 回落挂载点）与 `runtimeExec`（子进程唯一出口，统一 stdio 策略、PATH 前置随包 node、超时清理）两个 service 契约；trace 的 `version_stamp` 加 carrier 字段。P1-2/P1-3/P1-4 一律经这两个出口，不得直接 `node:fs` / `child_process`。已有 [契约草案](topics/p1-0-host-contracts.md)，待评审、未实现；草案另列 P0 catalog/trace 迁移面与 Q6 |
+| P1-0 IO/exec 出口收敛 | 🟡 | **P1 的第一件事**（ARD D11）：`contracts.ts` 增 `runtimeHostIo`（fs 唯一出口，含 TSD 头探测与白名单 node 回落挂载点）与 `runtimeExec`（子进程唯一出口，统一 stdio 策略、PATH 前置随包 node、超时清理）两个 service 契约；trace 的 `version_stamp` 加 carrier 字段。P1-2/P1-3/P1-4 一律经这两个出口，不得直接 `node:fs` / `child_process`。已有 [契约草案](topics/p1-0-host-contracts.md)，用户已确认、实施中；包含 P0 catalog/trace 迁移，Q6 按 pipe + adapter 收口 |
 | P1-1 工具注册表 | ⬜ | 工具注册/发现/JSON schema，复用 pi-agent-core `AgentTool` 定义 |
 | P1-2 文件工具 | ⬜ | read / write / edit，含路径规范化与大文件截断 |
 | P1-3 bash 工具 | ⬜ | cwd、超时、输出截断、进程清理 |
@@ -109,7 +109,7 @@ D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立—�
 | P3-2 分支与 resume | ⬜ | 分支管理从 PI-Desktop session-context 搬运 |
 | P3-3 旧会话兼容 | ⬜ | pi-coding-agent 产生的会话文件仍可读、可 resume（成功标准 5） |
 | P3-4 RuntimeEvent 翻译层 | ⬜ | 参考现有 `piWorkerSession.ts`，翻译目标不变、只换数据源（D5） |
-| P3-5 对接 SessionIndexService | ⬜ | Main 层不动，只适配调用面；**另需核对跨载体读一致性**（D11 反向风险）：worker 写的会话文件 Main 能否读到明文——`SessionIndexService.ts:410` 是裸 `readFile`，全仓仅 `previewFileRead` 与 legacy import 三处 TSD-aware。见 [Q5](open-questions.md) |
+| P3-5 对接 SessionIndexService | ⬜ | Main 层不动，只适配调用面。**跨载体读一致性已定论**（[ARD D13](../../../plans/2026-09-08-runtime-evolution-ard.md)）：加密按文件策略生效，Main 读用户文件得到密文，但会话索引是 Main 自写的 JSON、worker 在白名单内读写会话 JSONL，两者都不受影响；要改的是 `GitService.ts:670` / `:1364` 与 `WorktreeService.ts:648` 的裸读 |
 | P3-6 往返测试 | ⬜ | 写入→读取→resume 快照一致性 |
 
 ---
@@ -125,7 +125,7 @@ D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立—�
 | P4-2 后端开关 | ⬜ | dev 环境变量 `AICLIENT_RUNTIME_BACKEND=legacy\|native`（D8），不进设置页；双后端共存 |
 | P4-3 WorkerTransport 适配 | ⬜ | 沿用现有 RPC 协议，MessagePort 与 Node IPC 两条通道由 `WorkerTransport` 抹平（D11）；事件出口翻译为 RuntimeEvent |
 | P4-4 端到端 | ⬜ | 多轮对话 + 工具调用 + 权限审批 + 压缩全链路（成功标准 1） |
-| P4-5 GUI 点验 | ⬜ | 时间线 / Composer / 权限卡 / 设置页无回归（成功标准 4） |
+| P4-5 GUI 点验 | ⬜ | 时间线 / Composer / 权限卡 / 设置页无回归（成功标准 4）；另验 D13 的 Main 侧读改造。**前置**：[Q7](open-questions.md) 的 `GitService` 主线缺陷需先修复或明确豁免，否则 git 面板在加密机上本就是空的，点验无从判断 |
 | P4-6 打包载体验收 | ⬜ | 在打包壳里用本地模型替身（HTTP SSE stub，不调线上模型）驱动真实 Read/bash，两种 carrier 各跑一遍；复用 runtime 离线 lane 的 `fauxProvider` 用例与 `scripts/packaged-worker-smoke.cjs` 的替身思路 |
 
 ---

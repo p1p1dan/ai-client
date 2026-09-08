@@ -1,7 +1,7 @@
 # Runtime 自主化演进 — 架构需求文档（ARD）
 
 > 文档日期：2026-09-08
-> 文档状态：**已拍板**（2026-09-08 用户确认，D1–D12 生效）· 执行看板见 [plantree](../plantree/plans/runtime-evolution/README.md)
+> 文档状态：**已拍板**（2026-09-08 用户确认，D1–D13 生效）· 执行看板见 [plantree](../plantree/plans/runtime-evolution/README.md)
 > 2026-09-08 现场修订：加密测试机实测推翻「按实现语言判断兼容性」的旧结论，
 > 执行载体上升为一等约束（新增 [D11](#d11--执行载体按进程身份区分不按实现语言推断)，
 > 同时改写 D4、§6、§8）。取证见[问题分析报告](../../Windows加密环境GUI异常分析.md)。
@@ -227,6 +227,25 @@ Electron——`SessionIndexService.ts:410`、`GitService.ts:670` / `:1364`、`Wo
 去凑对照，也不为此补采一轮基线。P2-6 做新旧对比时，把这个 patch 差记为**已知偏差**写进结论，
 不声称两边协议层完全同构。若对比结果出现无法解释的大幅偏离，再回头把版本作为变量单独排查。
 
+### D13 · Main 侧读用户文件一律走 TSD-aware 读
+
+**依据**（2026-09-08 加密机现场，Q5 收口）：加密按**文件策略**生效，不按写入进程——
+agent 用 Write 工具写的 `tracked.txt` 与 git.exe 写的 `.git/HEAD` 都出自白名单内进程，
+但只有前者在盘上是密文（`%TSD-Header-###%`，`stat` 报 8192 字节的容器大小）。
+Main 进程及其派生的子进程不在白名单内，读用户文件得到的就是密文；
+`git status` 一类只读 `.git` 元数据的操作不受影响。
+
+**决策**：Main 侧凡是读**用户工作区文件内容**的地方，统一走 `src/main/utils/tsdSafeRead.ts`
+的 `readFileTsdSafe` / `readFileTsdSafeBounded`，不允许新增裸 `fs.readFile`。
+现存待改点：`GitService.ts:670`、`GitService.ts:1364`（diff 的工作区一侧，读到密文不报错，
+`decodeBuffer` 会静默出乱码）、`WorktreeService.ts:648`。
+已合规的有 `previewFileRead`（编辑器）与 legacy import 的三处。
+
+**不受此约束的**：`SessionIndexService.ts:410` 读的是 Main 自己写的索引 JSON，
+以及 runtime worker 内部的读写——worker 跑在白名单内的随包 node.exe 上，看到的就是明文（D11）。
+
+**归属**：P3-5 与 P4-5 验收此项；改动落在 Main 层，不进 `src/runtime/`。
+
 ## 4. 模块分类：搬运适配 vs 自建
 
 ### 4.1 直接依赖（零自建）
@@ -338,7 +357,9 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
 | 2026-09-08 | ai-client Windows 安装版 GUI（随包 Node worker，D11/D20 后） | 用户确认：Read 得到明文 · `pwd/ls/echo` 正常无 `Bad file descriptor` · Write/Edit 后编辑器显示正常 · 会话标题与 resume 正常 · 退出无残留 `node.exe` |
 | 2026-09-08 | 同上：agent 产物在盘上的加密状态 | 用户在文件管理器确认**两个产物文件均为已加密状态**——白名单内进程看到的明文来自透明解密，不代表文件未加密。Main 侧裸读的后果另行验证（[Q5](../plantree/plans/runtime-evolution/open-questions.md)） |
 | 2026-09-08 | Main 进程派生子进程 + 管道读输出 | **正常**——git 面板报错时 `git.exe` 由 Main 派生、stderr 经管道读回并透传到渲染层（`fatal: not a git repository`）。据此把 GUI bash 的 `Bad file descriptor` 收窄为 **utilityProcess 载体特有**，不能推广到所有 Electron 进程 |
-| 2026-09-08 | 左栏 git 面板全空 | **非缺陷**——指向的目录不是 git 仓库，git 报错正确传回；与加密和 PATH 均无关（git 在系统与用户 PATH 中均存在） |
+| 2026-09-08 | 左栏 git 面板全空 | **两件事**：指向 `E:\testaaa`（非仓库）时报错正确、属正常；但指向真仓库 `git-probe-once` 时 `getStatus` 返回 `current: null` + 空改动、`getBranches` 返回 `(no commits yet)`，而同一 Main 血统下的 PowerShell 里 `git status` 完全正常——是 `GitService` 自身 spawn 参数的主线缺陷，与加密无关（[Q7](../plantree/plans/runtime-evolution/open-questions.md)） |
+| 2026-09-08 | Main 派生 PowerShell 读 `.git\HEAD` 与 `git status` | **正常**——`ref: refs/heads/master`、分支/改动/commit hash 全部正确。`.git` 元数据不在加密策略内 |
+| 2026-09-08 | Main 派生 PowerShell 读 `tracked.txt`（agent 写的工作区文件） | **密文**——`%TSD-Header-###%` 开头；`file.list` 报告 size 为 8192（加密容器块大小），真实内容仅二十余字节。**Q5 由此坐实** |
 
 **修订结论**（撤回旧版「Rust 不可行、Node 不受影响」）：兼容性按**实际执行载体与启动方式**验收，
 不能按实现语言推断。同一份 Node/TS 代码在 Electron 载体里失败、在随包 node.exe 载体里正常，
