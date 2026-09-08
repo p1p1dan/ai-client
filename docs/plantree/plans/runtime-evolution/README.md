@@ -77,6 +77,7 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 | P1-6 审批流对接 | 🟡 | 复用 Extension UI bridge 的 select/respond/取消已完成，本机集成测试通过、无 renderer 修改；**待补**：档位控件与文案按 D14 的三档（每次询问 / 自动接受编辑 / 全自动）。实际 worker RPC 接线与 GUI 签收仍属 P4 |
 | P1-7 单测 | 🟡 | 当前 P1/P0 7 文件 79 项通过，覆盖 D14 核心矩阵与迁移；renderer 返工测试仍待补，旧 69 项不代签新模型；见 [验证记录](evidence/p1/README.md) |
 | P1-8 载体兼容矩阵 | 🟡 | Linux electron-utility 同批六项通过；standalone-node 另列通过；已提供 Windows bundled-node 入口，尚未运行，不代签加密机 |
+| P1-9 `new_context` 工具 | ⬜ | 无参数工具，描述照抄 Codex 原话「Start a new context window. Does not clear, reset, or otherwise affect environment state.」。调用只表达「下一轮开新窗口」的意图，实际压缩交给 P2 的压缩层；回复按压缩家族分两种。**不改动任何环境状态**，故按 [D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 不需要档位放行，`plan` 模式下也应可用——只读勘察一样烧上下文。**与 P2-8 成对上线** |
 
 覆盖 ARD 缓解项：首版 5 个工具覆盖 90% 场景。
 D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立——P1-0 的两个出口是这条约束的落点。
@@ -97,6 +98,11 @@ D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立—�
 | P2-5 缓存命中率达标 | ⬜ | 门禁是 provider 上报的 `cacheRead / (input + cacheRead)`（D9），公式与数据源都已存在，不新增埋点。**已知可优化点**：PI-Desktop 把预算提醒追加进 systemPrompt（`runtime.ts:4160`），那正是缓存前缀本身，一次追加即整段失效；改为以尾部消息注入可保持前缀字节不变。P2-3 只产出文案不决定位置，位置在此节点定 |
 | P2-6 对比测试 | ⬜ | 新后端跑 P2-0 的同一批脚本会话，比压缩后表现与命中率；协议依赖 0.84.4 vs 基线 0.84.3 的 patch 差按 D12 记为已知偏差，不回退对齐 |
 | P2-7 前缀稳定性度量 | ✅ | **可选加强项**，非门禁。`plugins/context/prefixStability.ts`：按块（system / tool / message）位置比对相邻两轮请求，给出公共前缀块数、字节数、占比与**首个冲突位置**——命中率只说miss，这里说 miss 在哪。**只落摘要哈希不落原文**，避免把会话内容写到日志旁。追加与收缩（压缩/回溯）都不算 divergence，用块计数区分形状。13 项单测 |
+| P2-8 主动压缩提醒文案 | ⬜ | 在 `plugins/context/budget.ts` 的 `approachingReminder` 里恢复 PI-Desktop 那一句：「你可以在当前这步到达干净的停止点时自行调用 `new_context` 开新窗口」。**与 P1-9 成对上线** |
+
+**P1-9 ∥ P2-8 为什么必须成对**：默认压缩是被动的——token 越过硬限的那一刻就地压缩，而那一刻落在哪儿全看运气，很可能是多文件改到一半、或刚读完三个文件还没得出结论。模型自己看不到 token 计数，没有任何依据判断「还剩多少」。
+PI-Desktop 因此把两件事配成一对：**预算提醒**告诉它还剩多少，**`new_context` 工具**让它选择什么时候承担这次压缩。收益是质量——在语义边界上生成的摘要，比在半步中间生成的丢得少。
+任一边单独落地都是坏的：只有工具没有文案，等于没人告诉模型它能用；只有文案没有工具，模型会真的去调并拿到 unknown tool 错误，白费一轮且后续行为不可预测——与提示词槽位表推迟 `tool-protocol` / `tool-guidance` 是同一条理由（文案不能描述当前不存在的能力）。
 
 ---
 
