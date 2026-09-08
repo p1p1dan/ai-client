@@ -4,8 +4,9 @@
 
 ## 当前状态
 
-P0 骨架与 P2-0 基线已实现、验证并提交。P1 代码尚未开始，先评审 [P1-0 契约草案](p1-0-host-contracts.md)，
-完成 IO/exec 出口后再进入 P1-1 工具注册表。草案为文档产物，尚不代表接口已可供插件调用。
+P1 本机代码与验证已落地，代码尚未提交。[当前 TODO](../TODO.md) 和 [验证记录](../evidence/p1/README.md)
+是接续入口。P1-0/P1-3 尚有 Windows 后代清理缺口，P1-8 尚缺 Windows 随包 Node 与加密机签收。
+公共 HostIo/Exec 契约和 P0 async 迁移已落地，P2 可按当前代码接入；先核对工作区未提交变更。
 P2-0 的正式基线为 95.01%，六场景原始数据已归档；P1 不需要重复采集。
 本机提交前复验：runtime 类型检查、P0 30 项测试、离线冒烟、采集 5 项单测与基线复核通过。
 这是本机验证记录；没有把尚未运行的远端 CI 或 P4 GUI 验收记为通过。
@@ -17,7 +18,7 @@ P2-0 的正式基线为 95.01%，六场景原始数据已归档；P1 不需要�
    `plugins/agent-loop/` 及 `__tests__/`，先掌握 P0 已有 service 与生命周期。
 3. 按仓库 AGENTS.md 阅读本地参考源码与测试，并注明直接移植/适配移植/不采用；
    PI-Desktop 在 `/home/pi/code/PI-Desktop`，pix 在 `/home/pi/code/pix`，本轮 pi-app 参考
-   checkout 在 `/tmp/aiclient-b-reference-pi-app`，新会话先确认这些路径仍存在。
+   checkout 在 `/tmp/aiclient-p1-reference-pi-app`，新会话先确认这些路径仍存在。
 4. [工程规范](../../../../agent-project-engineering.md)，先定义工具行为和权限矩阵的验收路径。
 5. [P1-0 契约草案](p1-0-host-contracts.md)：两个 service 的类型、P0 async 迁移面、验收及待评审项。
 
@@ -40,8 +41,8 @@ P2-0 的正式基线为 95.01%，六场景原始数据已归档；P1 不需要�
 
 - Q4 已收口为 [ARD D12](../../../../plans/2026-09-08-runtime-evolution-ard.md)：Pi 两包保持 0.84.4，
   不回退到基线用的 0.84.3，patch 差在 P2-6 记为已知偏差。P1 不受影响。
-- [Q6](../open-questions.md)：P1-0 的 stdio 首版实现范围待评审；草案建议 pipe + adapter 接口，
-  未声称非 pipe 适配或加密机 bash 已通过。P0 catalog/trace 的共同文件改动也需按草案确认归属。
+- Q6 已确认 pipe + adapter 挂载点；非 pipe 与加密机验收未完成。
+- P1 已导出 `toolSegments()` / `permissionTierSegment()`，供 P2 贡献对应槽位，未改 P2 装配顺序。
 - [P2-0 验收](../evidence/p2-0/validation.md)记录了模型参数、原始数据口径与重跑方式。
 - Biome 排除了不可变证据目录，防止格式化改变 suite 哈希；原始数据使用专用 verifier 检查。
 - 主机资源有限，测试小批串行并用 `--maxWorkers=1 --no-file-parallelism`；不运行整套生产构建。

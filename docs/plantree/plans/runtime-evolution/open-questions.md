@@ -15,5 +15,4 @@
 | Q3 subagent 进程内还是独立 WorkerSlot | [ARD D10](../../../plans/2026-09-08-runtime-evolution-ard.md) — 同进程第二个 Agent，照搬 PI-Desktop ADR 0062/0119 边界 |
 | Q5 Main 侧裸 `readFile` 读 worker 写的文件会得到什么 | [ARD D13](../../../plans/2026-09-08-runtime-evolution-ard.md) — 2026-09-08 现场坐实为**密文**：加密按文件策略生效，Main 及其派生进程读用户文件得到 `%TSD-Header-###%`。Main 侧统一改走 `readFileTsdSafe` |
 | Q4 新旧后端对比用哪一版 Pi 协议依赖 | [ARD D12](../../../plans/2026-09-08-runtime-evolution-ard.md) — 用户拍板「版本影响不大，用新的」：新 runtime 保持 0.84.4，不回退对齐，版本差异在 P2-6 记为已知偏差 |
-
 | Q6 P1-0 非 pipe stdio 范围 | 用户确认先交付 pipe + adapter 挂载点；不自动重跑命令，真实载体验收仍在 P1-8/P4-6，见 [契约](topics/p1-0-host-contracts.md) |

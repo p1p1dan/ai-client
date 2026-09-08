@@ -3,9 +3,9 @@
 > 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D13 生效）。
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
-**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1-0 实施中；P2-1 起 ∥ P3 可开工
+**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 本机实现/验证落地，Windows 载体待完成；P2/P3 可接续
 **最近落地**：`8a71c843`（2026-09-08）已提交 P0 骨架与 P2-0 六场景基线，缓存命中率 **95.01%**，[验收与证据](evidence/p2-0/validation.md)；P0 的 R1 关闭证据见 [在线冒烟](evidence/p0/live-smoke.md)
-**下一目标**：按已确认的 [P1-0 契约](topics/p1-0-host-contracts.md) 实施，进度见 [P1 TODO](TODO.md)；P2-1 起及 P3 可并行（Q4 已按 [D12](../../../plans/2026-09-08-runtime-evolution-ard.md) 收口：pin 0.84.4，不回退对齐）
+**下一目标**：按 [P1 TODO](TODO.md) 完成 Windows 清理与载体验收；本机 [69 项测试及探针证据](evidence/p1/README.md) 已归档，P1 代码未提交；P2-1 起及 P3 可并行（Q4 已按 [D12](../../../plans/2026-09-08-runtime-evolution-ard.md) 收口：pin 0.84.4，不回退对齐）
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
 
@@ -67,15 +67,15 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
-| P1-0 IO/exec 出口收敛 | 🟡 | **P1 的第一件事**（ARD D11）：`contracts.ts` 增 `runtimeHostIo`（fs 唯一出口，含 TSD 头探测与白名单 node 回落挂载点）与 `runtimeExec`（子进程唯一出口，统一 stdio 策略、PATH 前置随包 node、超时清理）两个 service 契约；trace 的 `version_stamp` 加 carrier 字段。P1-2/P1-3/P1-4 一律经这两个出口，不得直接 `node:fs` / `child_process`。已有 [契约草案](topics/p1-0-host-contracts.md)，用户已确认、实施中；包含 P0 catalog/trace 迁移，Q6 按 pipe + adapter 收口 |
-| P1-1 工具注册表 | ⬜ | 工具注册/发现/JSON schema，复用 pi-agent-core `AgentTool` 定义 |
-| P1-2 文件工具 | ⬜ | read / write / edit，含路径规范化与大文件截断 |
-| P1-3 bash 工具 | ⬜ | cwd、超时、输出截断、进程清理 |
-| P1-4 搜索工具 | ⬜ | grep / glob（PI-Desktop Rust `tools/` → TS 重写） |
-| P1-5 权限内核 | ⬜ | scope 匹配 + 白名单（`permissions.rs` + ADR 0057/0100 → TS） |
-| P1-6 审批流对接 | ⬜ | 复用现有 Extension UI bridge / inline dock 的审批 UI，不改 renderer |
-| P1-7 单测 | ⬜ | 工具行为 + scope 匹配矩阵 + 拒绝路径 |
-| P1-8 载体兼容矩阵 | ⬜ | 同一批工具用例在两种 carrier 各跑一遍（`bundled-node` / `electron-utility`），断言 read 得到明文、bash 拿到 stdout、写入后可被同载体读回 |
+| P1-0 IO/exec 出口收敛 | 🟡 | 两 service、TSD helper、P0 catalog/trace 迁移、carrier stamp 已实现且本机验证通过；Windows 根进程先退出后的后代清理仍待完成，[证据/边界](evidence/p1/README.md) |
+| P1-1 工具注册表 | ✅ | 六工具发现、AgentTool schema、调用前 TypeBox 校验、重复注册拒绝；代码未提交 |
+| P1-2 文件工具 | ✅ | read/write/edit、规范路径、限额/截断、同路径写锁；Read 保持 1 起始行号及基线 2101/3 语义；本机验证通过，载体验收归 P1-8 |
+| P1-3 bash 工具 | 🟡 | 配置 cwd/shell、时限/输出上限、Linux 进程组清理通过；Windows 清理边界见 P1-0，不宣称已跨平台签收 |
+| P1-4 搜索工具 | ✅ | glob + 首版字面文本 grep，目录/文件/累计预算、symlink/拒绝 scope 跳过；未实现正则与 gitignore 引擎，行为明确写入工具 schema 描述 |
+| P1-5 权限内核 | ✅ | 本仓四档 tier + 秘密文件拒绝 + canonical scope/工具白名单 + 精确会话授权，矩阵通过；与旧 bash parser/policy loader 的全量兼容留作 P4 前核对，见证据 |
+| P1-6 审批流对接 | ✅ | 复用 Extension UI bridge 的 select/respond/取消；本机集成测试通过，无 renderer 修改；实际 worker RPC 接线与 GUI 签收仍属 P4 |
+| P1-7 单测 | ✅ | P1/P0 共 7 文件 69 项通过；另有原始探针报告，见 [验证记录](evidence/p1/README.md) |
+| P1-8 载体兼容矩阵 | 🟡 | Linux electron-utility 同批六项通过；standalone-node 另列通过；已提供 Windows bundled-node 入口，尚未运行，不代签加密机 |
 
 覆盖 ARD 缓解项：首版 5 个工具覆盖 90% 场景。
 D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立——P1-0 的两个出口是这条约束的落点。

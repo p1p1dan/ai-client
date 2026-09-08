@@ -14,7 +14,7 @@ ARD 与看板冲突时以 ARD 为准；看板只记录「做到哪了」，不�
 
 | 计划 | 状态 | 当前阶段 | 最近落地 | 下一目标 |
 |---|---|---|---|---|
-| [Runtime 自主化演进](plans/runtime-evolution/README.md) | In Progress | P0、P2-0 已完成并提交；P1-0 草案待评审 | `8a71c843`：P0 骨架、六场景 95.01% 基线及证据（2026-09-08） | [P1-0 契约草案](plans/runtime-evolution/topics/p1-0-host-contracts.md) → [P1 开工交接](plans/runtime-evolution/topics/p1-handoff.md)；P2/P3 可并行，Q4 已按 D12 收口 |
+| [Runtime 自主化演进](plans/runtime-evolution/README.md) | In Progress | P0、P2-0 已完成并提交；P1 本机实现已验证，Windows 待完成 | `8a71c843`：P0 骨架、六场景 95.01% 基线及证据（2026-09-08） | [P1 剩余 TODO](plans/runtime-evolution/TODO.md) / [验证证据](plans/runtime-evolution/evidence/p1/README.md)；P2/P3 可并行，Q4 已按 D12 收口 |
 
 ## 基线
 

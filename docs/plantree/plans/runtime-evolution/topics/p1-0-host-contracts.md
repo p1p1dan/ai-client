@@ -1,7 +1,7 @@
 # P1-0 · IO/exec 出口契约草案
 
 日期：2026-09-08 · 版本：draft v1 · 核对基点：`2eb11bfb`
-状态：**建议已获用户确认，实施中** · 工作模式：`execute-ready`（2026-09-08）。
+状态：**本机实现已验证，Windows 清理/载体验收未完成** · 工作模式：`execute-ready`（2026-09-08）。
 权威：[ARD D11/D12](../../../../plans/2026-09-08-runtime-evolution-ard.md)；节点：[P1-0](../README.md)；交接：[P1](p1-handoff.md)。
 阅读时机：实现 P1-0，或 P1/P2/P3 需要文件、子进程与 trace 接口时。
 
@@ -15,7 +15,7 @@
 - [x] 起草类型、IO/exec 行为、生命周期及错误语义。
 - [x] 列出 P0 迁移面、后续节点边界和确定性验收项。
 - [x] 用户确认第 10 节建议；Q6 按 pipe + adapter 挂载点收口。
-- [ ] 取得代码修改授权后实现并验证 P1-0；届时再更新实现状态。
+- [x] 用户已授权，完成本机实现与验证；Windows 清理/载体剩余项见 [TODO](../TODO.md)。
 
 **已拍板约束**：生产 worker 只有 `bundled-node` / `electron-utility` 两种 carrier；
 Windows 安装版缺少随包 Node 必须失败；worker RPC 仍由 WorkerTransport 负责；普通 stdout 必须排空。
@@ -324,3 +324,7 @@ Q6 在 [未决问题](../open-questions.md) 登记。后续若选择 PTY、文�
 必须先补齐字节语义、资源上限与清理证据再改本契约；不要在工具实现中临时加入回落。
 
 2026-09-08 用户授权：可以改代码，按上述建议收口草案，从 P1-0 开始执行 P1，维护 TODO。第 10 节三项采用建议方案；Q6 不要求首批交付非 pipe 实现。执行状态见 [P1 TODO](../TODO.md)。
+
+## 实施回写（2026-09-08）
+
+[本机代码及验证证据](../evidence/p1/README.md)已落地，尚未提交。Windows 根进程先退出后的后代清理尚未满足本契约，P1-0 保持进行中。HostIo 为字节窗口，Read 工具为 1 起始行号；补充 `exec_stdio_failed` 错误。TSD 与 OS 沙箱/完整 shell 解析边界见证据文件。Q5 已按 D13 收口，不沿用草案中的待现场确认状态。

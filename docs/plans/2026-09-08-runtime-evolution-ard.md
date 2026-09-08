@@ -1,7 +1,7 @@
 # Runtime 自主化演进 — 架构需求文档（ARD）
 
 > 文档日期：2026-09-08
-> 文档状态：**已拍板**（2026-09-08 用户确认，D1–D13 生效）· 执行看板见 [plantree](../plantree/plans/runtime-evolution/README.md)
+> 文档状态：**已拍板**（2026-09-08 用户确认，D1–D14 生效）· 执行看板见 [plantree](../plantree/plans/runtime-evolution/README.md)
 > 2026-09-08 现场修订：加密测试机实测推翻「按实现语言判断兼容性」的旧结论，
 > 执行载体上升为一等约束（新增 [D11](#d11--执行载体按进程身份区分不按实现语言推断)，
 > 同时改写 D4、§6、§8）。取证见[问题分析报告](../../Windows加密环境GUI异常分析.md)。
@@ -245,6 +245,46 @@ Main 进程及其派生的子进程不在白名单内，读用户文件得到的
 以及 runtime worker 内部的读写——worker 跑在白名单内的随包 node.exe 上，看到的就是明文（D11）。
 
 **归属**：P3-5 与 P4-5 验收此项；改动落在 Main 层，不进 `src/runtime/`。
+
+### D14 · 权限与模式分成两根轴：模式管工具集，档位管打扰程度
+
+**触发**（2026-09-08 用户拍板）：现有四档 `readonly / pragmatic / handsoff / fullopen`
+（`src/agent-host/sessionTierAuthorizer.ts:15`）实测「十分鸡肋不好用」。原因不是档位太多，
+而是这张表把两件事压在了一根轴上——`readonly` 靠拒工具实现只读，`handsoff` 靠放行判定减少打扰，
+于是每一档都同时是半个模式和半个权限。PI-Desktop 把两者分开：`Mode`（plan/goal/agent）决定
+**哪些工具存在**，`PermissionMode`（`ask` / `accept-edits` / `auto`）决定**在场的工具问不问**。
+
+**决策：采纳两轴分离。**
+
+**轴一 · 模式**
+
+| 模式 | 工具集 | 说明 |
+|---|---|---|
+| `plan` | 不含 Write / Edit 及任何写类插件工具；bash 在当前档位下可用，仅用于勘察 | 产出实现计划交用户批准。取代旧 `readonly`——同样是「只看不动」，但 bash 可用于勘察，而且有产出 |
+| `agent` | 完整工具集 | 批准后的正常执行 |
+
+`goal`（目标契约：结果 + 可验证的验收标准 + 边界，批准后自主执行）**本轮不做**，
+但模式是枚举而非布尔，将来加它不改结构。
+
+**轴二 · 权限档位**（标识符用英文，UI 用中文）
+
+| 档位 | UI | 语义 |
+|---|---|---|
+| `ask` | 每次询问 | 写 / 改 / shell 逐条询问 |
+| `accept-edits` | 自动接受编辑 | 工作区内的写、改、**bash 一并放行**；工作区外路径与外部目录仍询问 |
+| `auto` | 全自动 | 全部放行 |
+
+**`accept-edits` 放行 bash 是本次修复的核心**（用户拍板）：旧 `handsoff` 放行了写/改却仍逐条问 bash，
+而 agent 干活几乎每步都要 shell，于是「为了少被打扰而选的档位照样一直打扰」——这就是鸡肋的实感来源。
+
+**三档都不影响 deny 规则**：`permissionPolicy.mjs` 的密钥文件等拒绝在链路更早处生效，`auto` 也不例外
+（与旧四档同口径，不变）。
+
+**旧值映射**（P3-3 旧会话与设置迁移必须走这张表，不能丢弃）：
+`pragmatic → ask` · `handsoff → accept-edits` · `fullopen → auto` · `readonly → plan 模式 + ask`。
+
+**归属**：P1-5 按本条实现，不再实现四档矩阵；P1-6 的审批 UI 与 renderer 档位控件按三档改；
+模式的工具集裁剪在 P1-1 的注册表上做；提示词侧新增 `mode` 段与 `permission-gear` 段（P2-1 已留槽位）。
 
 ## 4. 模块分类：搬运适配 vs 自建
 
