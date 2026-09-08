@@ -45,8 +45,22 @@ describe('PiModelConfigService', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  /**
+   * A service with NO bundled snapshot.
+   *
+   * Stated rather than left to the default, which reads the real checked-in
+   * `resources/model-catalog/snapshot.json`: these arms are about the remote →
+   * cache → nothing ladder, and letting a file in the repository decide their
+   * outcome would make them pass or fail on whether someone last ran the
+   * release refresh script. A3's own rungs get their own helper below.
+   */
   function service(fetchFn: PiModelConfigFetch, now = 1234): PiModelConfigService {
-    return new PiModelConfigService({ agentDir: dir, fetchFn, now: () => now });
+    return new PiModelConfigService({
+      agentDir: dir,
+      fetchFn,
+      now: () => now,
+      readBundledCatalog: () => null,
+    });
   }
 
   it('writes validated metadata and provider-scoped auth separately', async () => {

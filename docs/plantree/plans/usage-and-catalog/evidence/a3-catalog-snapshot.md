@@ -92,13 +92,41 @@ PI-Desktop 的快照只需进内存，因为它自己解析模型元数据；**�
 是**来源声明**不是凭据）全部误报——那样的扫描器只会被人关掉。已改为跳过 `credentials` 块，
 并加了正反两条臂。`verify-release-metadata.mjs` 直接复用同一个函数，不另写正则（避免第二份权威）。
 
-## 快照当前内容：空占位
+## 快照当前内容：已是真实目录
 
-`snapshot.json` 目前是 `{"version": 1, "providers": {}}`。**这是刻意的、且是惰性的**：
-管理端（onboard）尚未部署，没有真实目录可快照（根注册表：模型配置页计划「两仓分支均未推送、
-onboard 未部署」）。零模型的快照被读取端当作「没有快照」，所以当前行为与 A3 之前**完全一致**，
-不会有任何虚假的可用性。机制、打包项、发布脚本与门禁都已就位，第一份真实基线在脚本首次
-对着已部署的管理端运行时产生。
+**2026-09-08 补记。** 管理端已部署，首份真实快照已用发布脚本对着线上端点拉取并落库：
+
+```
+node scripts/refresh-model-catalog.mjs --api-key <测试临时 key>
+[model-catalog] fetching https://onboarding-jyw.pipidan.qzz.io/api/v1/models-config
+[model-catalog] wrote resources/model-catalog/snapshot.json — 4 providers, 10 models
+```
+
+内容：`updatedAt: 2026-09-07T06:55:27.909Z`，4 个 provider（`claude` / `gpt` / `grok` /
+`china`），10 个模型。**每个 provider 都是 `credentials: { baseUrl: 'onboarding',
+apiKey: 'onboarding' }`**，文件里没有任何密钥——这正是它能进全局可读的安装包的前提，
+脚本预检与 `verify:release` 都对此有断言。使用的临时 key 只出现在命令行，未写入任何文件。
+
+**onboard 侧一行代码都没改**：`/api/v1/models-config` 返回的就是快照需要的形状
+（`toClientCatalog` 吐裸 catalog 对象，正是 `validatePiManagedModelsConfig` 吃的东西）。
+缺的一直只是部署和数据。
+
+**由此新增一条发布门禁**：`verify:release` 现在拒绝零模型的快照
+（「carries no models, so the offline catalog fallback would be inert」）。
+理由是空快照会被读取端当作没有快照，从而**在其它检查全绿的情况下悄悄让离线兜底失效**。
+只在发布期检查——对一个管理端尚未部署的工作树来说，空占位是合法状态。
+已实测该门禁会失败并给出可执行的修复建议（临时替换成空快照跑了一次，随后还原）。
+
+**格式化例外**：`biome.json` 排除了 `resources/model-catalog/snapshot.json`。
+它是发布脚本逐字写出的生成物（`JSON.stringify(config, null, 2)`），
+让发布步骤去复刻格式化器的数组折叠启发式，只会让下一次 biome 升级把构建搞挂。
+
+**副作用与修复**：真实快照落库后，一条 D03 时代的老用例
+（`reports the catalog as unavailable when neither remote nor cache exists`）开始失败——
+它构造 service 时没注入快照读取器，于是拿到了仓库里真实的那份。这不是回归，而是新行为生效。
+已把该 describe 块共用的 `service()` 助手显式改为 `readBundledCatalog: () => null`：
+那些臂讲的是「remote → cache → 什么都没有」这条梯子，让仓库里的一个文件决定它们的成败，
+等于让它们的结果取决于「上一次有没有人跑过发布刷新脚本」。
 
 ## 门禁执行记录
 
@@ -117,8 +145,8 @@ onboard 未部署」）。零模型的快照被读取端当作「没有快照」
   **「快照真的进了打包产物」只有静态证据**（`electron-builder.yml` 的 extraResources 项 +
   `packaging-config` 风格的 YAML 断言），**没有拆包实测**。这是 A3 最主要的未验证项，
   需要一次真实打包（或 CI 产物）确认 `<resources>/model-catalog/snapshot.json` 存在。
-- **未对真实管理端跑过 `refresh:model-catalog`**（未部署，且本会话没有客户端 key）。
-  脚本的取参、URL 解析、预检、原子写都有单测覆盖；**真实 HTTP 路径未执行过**。
+- ~~未对真实管理端跑过 `refresh:model-catalog`~~ —— **已跑通**（2026-09-08，见上一节）。
+  真实 HTTP 路径、鉴权、预检与原子写全部实测通过。
 - **未启动 Electron GUI**。设置页徽标与菜单状态行的新文案没有渲染层自动化覆盖
   （vitest 是 `environment: 'node'` 且只收 `*.test.ts`）。待点验项：
   拔网启动后模型菜单出现「随包基线」文案而非「缓存」；设置页徽标同上。

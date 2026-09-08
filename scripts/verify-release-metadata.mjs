@@ -74,6 +74,20 @@ if (snapshotText) {
     if (!snapshot?.providers || typeof snapshot.providers !== 'object') {
       failures.push(`${snapshotPath}: providers must be an object`);
     }
+    // A zero-model snapshot is read as no snapshot at all, so shipping one
+    // would disarm the offline fallback while every other check still passed.
+    // Checked at release time only: an empty placeholder is a legitimate state
+    // for a working tree whose management endpoint is not deployed yet.
+    const modelCount = Object.values(snapshot?.providers ?? {}).reduce(
+      (sum, provider) => sum + (Array.isArray(provider?.models) ? provider.models.length : 0),
+      0
+    );
+    if (modelCount === 0) {
+      failures.push(
+        `${snapshotPath}: carries no models, so the offline catalog fallback would be inert — run \`pnpm refresh:model-catalog\``
+      );
+    }
+
     // Reuses the release script's scanner rather than a second regex: a plain
     // key-name match would fire on every provider's `credentials.apiKey`, which
     // states WHERE the key comes from and never carries one.

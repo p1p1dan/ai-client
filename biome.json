@@ -57,7 +57,8 @@
       "!**/*.min.js",
       "!**/*.css",
       "!docs/design",
-      "!docs/plans/**/*.mjs"
+      "!docs/plans/**/*.mjs",
+      "!resources/model-catalog/snapshot.json"
     ]
   }
 }

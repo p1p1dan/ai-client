@@ -21,9 +21,10 @@
 2. **A3 打包实测**：需要一次真实打包（或一份 CI 产物）确认
    `<resources>/model-catalog/snapshot.json` 真的在产物里。目前只有 `electron-builder.yml`
    的静态断言，**没有拆包证据**。
-3. **A3 首份真实快照**：`resources/model-catalog/snapshot.json` 当前是空占位（管理端未部署），
-   被读取端当作「没有快照」，因此行为与 A3 之前完全一致。管理端部署后跑一次
-   `pnpm refresh:model-catalog --api-key <key>`，把结果并入 release commit。
+3. ~~A3 首份真实快照~~ —— **已完成**（2026-09-08）。管理端已部署，
+   `resources/model-catalog/snapshot.json` 现在是真实目录：4 provider / 10 模型，
+   全部 `credentials.apiKey: 'onboarding'`，文件里没有密钥。onboard 侧一行未改。
+   `verify:release` 同步新增「拒绝零模型快照」门禁，防止空快照在其它检查全绿时悄悄让兜底失效。
 4. **A2 的一处未取证项**：随包扩展 `@gotgenes/pi-subagents` 是否**实际填写**
    `ToolResultMessage.usage`。协议层已取证（SDK 明说该字段不在主账里，所以是增量），
    但该扩展本机未安装、未实测。若它不填，`toolResults` 计数恒为 0，其余数字仍正确——降级方向安全。

@@ -36,9 +36,15 @@ result in the release commit.
   and the client stays `unavailable`, because `bundled` with an empty menu would be
   indistinguishable from a management endpoint that answered and had nothing enabled.
 
+## Why it is excluded from the formatter
+
+`biome.json` skips this path. It is a generated artifact written verbatim by the refresh
+script (`JSON.stringify(config, null, 2)`), and making a release step reproduce a
+formatter's array-collapsing heuristics would mean the next Biome release starts failing
+the build on a file no human edits.
+
 ## Current contents
 
-Empty (`providers: {}`), which is deliberately inert: the management endpoint is not
-deployed yet, so there is no real catalog to snapshot. The mechanism, the packaging entry
-and the refresh script are in place, and the first real baseline arrives the first time
-the script is run against a deployed endpoint.
+The live catalog as of 2026-09-07: 4 providers (`claude`, `gpt`, `grok`, `china`), 10 models.
+Every provider inherits its credentials (`credentials.apiKey: "onboarding"`), so the file
+carries no keys — which is what lets it ship inside a world-readable package.
