@@ -3,10 +3,10 @@
 > 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D14 生效）。
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
-**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 本机实现/验证落地，Windows 载体待完成；P2/P3 可接续
+**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 按 D14 返工中，renderer 与 Windows 载体待完成；P2/P3 可接续
 **最近落地**：`8a71c843`（2026-09-08）已提交 P0 骨架与 P2-0 六场景基线，缓存命中率 **95.01%**，[验收与证据](evidence/p2-0/validation.md)；P0 的 R1 关闭证据见 [在线冒烟](evidence/p0/live-smoke.md)
-**下一目标**：按 [P1 TODO](TODO.md) 完成 Windows 清理与载体验收；本机 [69 项测试及探针证据](evidence/p1/README.md) 已归档，P1 代码未提交；P2-1 起及 P3 可并行（Q4 已按 [D12](../../../plans/2026-09-08-runtime-evolution-ard.md) 收口：pin 0.84.4，不回退对齐）
-**2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 用户拍板——废弃四档 tier，改为两根轴：**模式**（`plan` / `agent`）管工具集，**档位**（`ask` / `accept-edits` / `auto`）管打扰程度，且 `accept-edits` 连 bash 一起放行。P1-5 / P1-6 已按旧四档交付，需按 D14 返工；P1-1 需按模式裁剪工具集。
+**下一目标**：按 [P1 TODO](TODO.md) 完成 P1-6 renderer 三档/模式设置与迁移、复杂 shell 权限兼容和 Windows 载体验收；本机 [79 项测试及探针证据](evidence/p1/README.md) 已更新，P1 代码未提交；P2/P3 可并行。
+**2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 两轴分离：模式 `plan/agent` 管工具集，档位 `ask/accept-edits/auto` 管审批，accept-edits 放行工作区 bash。P1-1 裁剪与 P1-5 核心已更新；P1-6 renderer 和旧 tier 链路仍待收口。
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
 
@@ -68,14 +68,14 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
-| P1-0 IO/exec 出口收敛 | 🟡 | 两 service、TSD helper、P0 catalog/trace 迁移、carrier stamp 已实现且本机验证通过；Windows 根进程先退出后的后代清理仍待完成，[证据/边界](evidence/p1/README.md) |
-| P1-1 工具注册表 | 🟡 | 六工具发现、AgentTool schema、调用前 TypeBox 校验、重复注册拒绝，本体已完成；**待补**：按 [D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 的模式裁剪工具集（`plan` 不含 Write/Edit 及写类插件工具，`agent` 为完整集） |
+| P1-0 IO/exec 出口收敛 | 🟡 | 两 service、TSD helper、P0 catalog/trace 迁移、carrier stamp 已实现且本机验证通过；保留进程树根身份的 Node runner 已实现，Linux 后代清理通过，Windows 分支仍待实测，[证据/边界](evidence/p1/README.md) |
+| P1-1 工具注册表 | ✅ | 六工具发现、AgentTool schema、TypeBox 调用校验、重复注册拒绝；D14 plan 裁剪 Write/Edit 及默认写类插件，缓存工具引用也在执行边界拒绝；三档测试通过 |
 | P1-2 文件工具 | ✅ | read/write/edit、规范路径、限额/截断、同路径写锁；Read 保持 1 起始行号及基线 2101/3 语义；本机验证通过，载体验收归 P1-8 |
 | P1-3 bash 工具 | 🟡 | 配置 cwd/shell、时限/输出上限、Linux 进程组清理通过；Windows 清理边界见 P1-0，不宣称已跨平台签收 |
 | P1-4 搜索工具 | ✅ | glob + 首版字面文本 grep，目录/文件/累计预算、symlink/拒绝 scope 跳过；未实现正则与 gitignore 引擎，行为明确写入工具 schema 描述 |
-| P1-5 权限内核 | 🟡 | 秘密文件拒绝 + canonical scope/工具白名单 + 精确会话授权已完成且矩阵通过；**但档位按已废弃的四档 tier 实现**，须按 [D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 改为 `ask` / `accept-edits` / `auto` 三档（`accept-edits` 放行工作区内写/改/**bash**，工作区外路径仍问；deny 规则不受档位影响），并按 D14 映射表接受旧值。与旧 bash parser/policy loader 的全量兼容留作 P4 前核对，见证据 |
+| P1-5 权限内核 | 🟡 | D14 两轴核心、四旧值迁移、deny 优先、scope/白名单及会话授权通过；accept-edits 放行工作区写/改/bash，显式外部路径询问。复杂 shell 动态路径和既有 policy 导入兼容仍需收口，见 [证据](evidence/p1/README.md) |
 | P1-6 审批流对接 | 🟡 | 复用 Extension UI bridge 的 select/respond/取消已完成，本机集成测试通过、无 renderer 修改；**待补**：档位控件与文案按 D14 的三档（每次询问 / 自动接受编辑 / 全自动）。实际 worker RPC 接线与 GUI 签收仍属 P4 |
-| P1-7 单测 | ✅ | P1/P0 共 7 文件 69 项通过；另有原始探针报告，见 [验证记录](evidence/p1/README.md) |
+| P1-7 单测 | 🟡 | 当前 P1/P0 7 文件 79 项通过，覆盖 D14 核心矩阵与迁移；renderer 返工测试仍待补，旧 69 项不代签新模型；见 [验证记录](evidence/p1/README.md) |
 | P1-8 载体兼容矩阵 | 🟡 | Linux electron-utility 同批六项通过；standalone-node 另列通过；已提供 Windows bundled-node 入口，尚未运行，不代签加密机 |
 
 覆盖 ARD 缓解项：首版 5 个工具覆盖 90% 场景。
@@ -90,13 +90,13 @@ D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立—�
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
 | P2-0 现状基线采集 | ✅ | 六个旧后端固定会话通过；28 次普通调用，D9 命中率 **95.01%**；原始会话、来源证明与复核结果已归档，[验收证据](evidence/p2-0/validation.md)（2026-09-08，提交 `8a71c843`） |
-| P2-1 提示词分段组装 | 🟡 | 装配机制与 P2-1 自有段已落地：`plugins/prompt/segments.ts`（固定槽位表 + 确定性装配 + `staticPrefixBytes` 供 D9/P2-7 用）、`baseSegments.ts`（identity / collaboration，适配自 PI-Desktop `mode-prompts.ts` 与 `runtime.ts:1330`），16 项单测。**未完**：注册为 Cordis service 需改 `contracts.ts`，该文件本轮归 P1-0，待其落地后补。PI-Desktop 的 plan/goal/agent mode 段**不采用**——本产品无 mode 概念，对应槽位是 `permission-tier`，文案随 P1-5 一起写 |
+| P2-1 提示词分段组装 | 🟡 | 装配机制与 P2-1 自有段已落地：`plugins/prompt/segments.ts`（固定槽位表 + 确定性装配 + `staticPrefixBytes` 供 D9/P2-7 用）、`baseSegments.ts`（identity / collaboration，适配自 PI-Desktop `mode-prompts.ts` 与 `runtime.ts:1330`），16 项单测。**未完**：注册为 Cordis service 需改 `contracts.ts`，该文件本轮归 P1-0，待其落地后补。D14 已改为 `mode` / `permission-gear` 两个 turn 槽位；P1 导出对应贡献函数，goal 本轮不做 |
 | P2-2 项目指令注入 | ⬜ | 本地读取 CLAUDE.md / AGENTS.md 与自有 resource 体系 |
 | P2-3 压缩策略 | 🟡 | 决策层已原样搬运并测试：`plugins/context/budget.ts`（阈值全部由模型窗口推导、`compactionNeeded` 在硬限处触发、保留尾与用户消息上限的双端钳制、两级预算提醒各只发一次），15 项单测。纯函数、不碰盘不调模型。**未完**：真正执行压缩要写 compaction record，依赖 P2-4 与 P3 的会话存储 |
 | P2-4 compaction record | ⬜ | Rust `transcripts.rs` 的 compaction 读写用 TS 重写 |
 | P2-5 缓存命中率达标 | ⬜ | 门禁是 provider 上报的 `cacheRead / (input + cacheRead)`（D9），公式与数据源都已存在，不新增埋点。**已知可优化点**：PI-Desktop 把预算提醒追加进 systemPrompt（`runtime.ts:4160`），那正是缓存前缀本身，一次追加即整段失效；改为以尾部消息注入可保持前缀字节不变。P2-3 只产出文案不决定位置，位置在此节点定 |
 | P2-6 对比测试 | ⬜ | 新后端跑 P2-0 的同一批脚本会话，比压缩后表现与命中率；协议依赖 0.84.4 vs 基线 0.84.3 的 patch 差按 D12 记为已知偏差，不回退对齐 |
-| P2-7 前缀稳定性度量 | ⬜ | **可选加强项**，非门禁：落盘每轮请求前缀、比相邻两轮公共前缀占比。PI-Desktop 只展示不优化命中率，此项无参考实现，属自建 |
+| P2-7 前缀稳定性度量 | ✅ | **可选加强项**，非门禁。`plugins/context/prefixStability.ts`：按块（system / tool / message）位置比对相邻两轮请求，给出公共前缀块数、字节数、占比与**首个冲突位置**——命中率只说miss，这里说 miss 在哪。**只落摘要哈希不落原文**，避免把会话内容写到日志旁。追加与收缩（压缩/回溯）都不算 divergence，用块计数区分形状。13 项单测 |
 
 ---
 
