@@ -36,8 +36,8 @@ P2-0 的正式基线为 95.01%，六场景原始数据已归档；P1 不需要�
 
 ## 已知交接事项
 
-- [Q4](../open-questions.md)：新 runtime 的 Pi 两包为 0.84.4，P2-0 旧 SDK 实际嵌套依赖为
-  0.84.3。此项须在 P2-6 对比前解决，不阻挡 P1 工具与权限实现。
+- Q4 已收口为 [ARD D12](../../../../plans/2026-09-08-runtime-evolution-ard.md)：Pi 两包保持 0.84.4，
+  不回退到基线用的 0.84.3，patch 差在 P2-6 记为已知偏差。P1 不受影响。
 - [P2-0 验收](../evidence/p2-0/validation.md)记录了模型参数、原始数据口径与重跑方式。
 - Biome 排除了不可变证据目录，防止格式化改变 suite 哈希；原始数据使用专用 verifier 检查。
 - 主机资源有限，测试小批串行并用 `--maxWorkers=1 --no-file-parallelism`；不运行整套生产构建。

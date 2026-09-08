@@ -1,11 +1,11 @@
 # Runtime 自主化演进 — 任务看板
 
-> 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D11 生效）。
+> 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D12 生效）。
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
 **当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 ∥ P2-1 起 ∥ P3 可开工
 **最近落地**：`8a71c843`（2026-09-08）已提交 P0 骨架与 P2-0 六场景基线，缓存命中率 **95.01%**，[验收与证据](evidence/p2-0/validation.md)；P0 的 R1 关闭证据见 [在线冒烟](evidence/p0/live-smoke.md)
-**下一目标**：[P1 开工交接](topics/p1-handoff.md)；P2-1 起及 P3 可并行，P2-6 前处理 [Q4 协议依赖版本对齐](open-questions.md)
+**下一目标**：[P1 开工交接](topics/p1-handoff.md)；P2-1 起及 P3 可并行（Q4 已按 [D12](../../../plans/2026-09-08-runtime-evolution-ard.md) 收口：pin 0.84.4，不回退对齐）
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
 
@@ -37,7 +37,7 @@ P1/P2/P3 三个节点在 P0 落地后可由三个团队并行施工，文件归�
 
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
-| P0-1 依赖落地 | ✅ | `src/runtime/package.json` pin `cordis@4.0.0-rc.9` + `pi-agent-core@0.84.4` + `pi-ai@0.84.4`；P2-0 实测旧 SDK 嵌套依赖为 0.84.3，差异由 Q4 跟踪；根依赖未改，仅增加验证命令 |
+| P0-1 依赖落地 | ✅ | `src/runtime/package.json` pin `cordis@4.0.0-rc.9` + `pi-agent-core@0.84.4` + `pi-ai@0.84.4`；P2-0 实测旧 SDK 嵌套依赖为 0.84.3，差异按 D12 记为已知偏差；根依赖未改，仅增加验证命令 |
 | P0-2 目录与 bootstrap | ✅ | `bootstrap.ts`：Cordis Context 初始化 + 插件注册 + **服务存活断言** + dispose |
 | P0-3 service 接口定义 | ✅ | `contracts.ts`：P0 三个 service 契约 + P1–P5 未实现服务的带原因声明（`DEFERRED_SERVICES`，工程规范 A3），由 `__tests__/contracts.test.ts` 机械把关 |
 | P0-4 plugin-model-adapter | ✅ | `plugins/model-adapter/`：读 `models.json` + `auth.json`（D7 沿用现有凭据布局，不解 vault），展开 `$NAME` header 引用，绑定 pi-ai provider |
@@ -94,7 +94,7 @@ D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立—�
 | P2-3 压缩策略 | ⬜ | 原样搬运 PI-Desktop `session-context.ts` + runtime 压缩段策略 |
 | P2-4 compaction record | ⬜ | Rust `transcripts.rs` 的 compaction 读写用 TS 重写 |
 | P2-5 缓存命中率达标 | ⬜ | 门禁是 provider 上报的 `cacheRead / (input + cacheRead)`（D9），公式与数据源都已存在，不新增埋点 |
-| P2-6 对比测试 | ⬜ | 新后端跑 P2-0 的同一批脚本会话，比压缩后表现与命中率 |
+| P2-6 对比测试 | ⬜ | 新后端跑 P2-0 的同一批脚本会话，比压缩后表现与命中率；协议依赖 0.84.4 vs 基线 0.84.3 的 patch 差按 D12 记为已知偏差，不回退对齐 |
 | P2-7 前缀稳定性度量 | ⬜ | **可选加强项**，非门禁：落盘每轮请求前缀、比相邻两轮公共前缀占比。PI-Desktop 只展示不优化命中率，此项无参考实现，属自建 |
 
 ---

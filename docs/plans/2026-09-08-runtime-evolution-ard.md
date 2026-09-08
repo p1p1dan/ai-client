@@ -1,7 +1,7 @@
 # Runtime 自主化演进 — 架构需求文档（ARD）
 
 > 文档日期：2026-09-08
-> 文档状态：**已拍板**（2026-09-08 用户确认，D1–D11 生效）· 执行看板见 [plantree](../plantree/plans/runtime-evolution/README.md)
+> 文档状态：**已拍板**（2026-09-08 用户确认，D1–D12 生效）· 执行看板见 [plantree](../plantree/plans/runtime-evolution/README.md)
 > 2026-09-08 现场修订：加密测试机实测推翻「按实现语言判断兼容性」的旧结论，
 > 执行载体上升为一等约束（新增 [D11](#d11--执行载体按进程身份区分不按实现语言推断)，
 > 同时改写 D4、§6、§8）。取证见[问题分析报告](../../Windows加密环境GUI异常分析.md)。
@@ -217,6 +217,15 @@ GUI（Electron `utilityProcess` 内的 worker）Read 返回异常内容、`pwd/l
 Electron——`SessionIndexService.ts:410`、`GitService.ts:670` / `:1364`、`WorktreeService.ts:648`
 都是裸 `readFile`，全仓只有 `previewFileRead` 与 legacy import 三处是 TSD-aware。
 这是推断而非已证事实，跟踪见看板 [Q5](../plantree/plans/runtime-evolution/open-questions.md)。
+
+### D12 · 协议依赖版本：pin 新版，不为对比回退
+
+`pi-ai` / `pi-agent-core` 保持 `0.84.4`。P2-0 的旧后端基线实际由 `pi-coding-agent@0.84.3`
+的嵌套依赖跑出（0.84.3），两边差一个 patch。
+
+**决策（2026-09-08 用户拍板）**：「版本影响不大，用新的」——不把新 runtime 回退到 0.84.3
+去凑对照，也不为此补采一轮基线。P2-6 做新旧对比时，把这个 patch 差记为**已知偏差**写进结论，
+不声称两边协议层完全同构。若对比结果出现无法解释的大幅偏离，再回头把版本作为变量单独排查。
 
 ## 4. 模块分类：搬运适配 vs 自建
 
