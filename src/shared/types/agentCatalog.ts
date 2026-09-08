@@ -48,6 +48,12 @@ export interface AgentModelOption {
  * - `proxy` — a live `/v1/models` answer from the gateway, family-filtered (§4.2).
  * - `stale-cache` — the last successful proxy answer for this key; the refresh
  *   that was just attempted failed. Still real data, just not current.
+ * - `bundled` (A3) — nothing could be fetched and nothing is cached, but the
+ *   release artifact carries a catalog snapshot, so the menu is populated from
+ *   that. Distinct from `stale-cache` on purpose: a stale cache was this
+ *   machine's own answer once, a bundled baseline never was, and the UI has to
+ *   be able to say which it is showing. A snapshot with zero models is treated
+ *   as no snapshot at all and stays `unavailable`.
  * - `unavailable` — no catalog could be obtained and nothing is cached. The UI
  *   must say so; it must NOT render an empty menu as if it were an answer
  *   (arbitration §2.2 ∧ B "不得伪装可用目录"). This replaced the old `seed`
@@ -57,7 +63,13 @@ export interface AgentModelOption {
  * A `managed` result with zero models is NOT this: the endpoint answered and the
  * administrator has enabled nothing, which the UI states in its own words.
  */
-export type AgentModelCatalogSource = 'proxy' | 'managed' | 'local' | 'stale-cache' | 'unavailable';
+export type AgentModelCatalogSource =
+  | 'proxy'
+  | 'managed'
+  | 'local'
+  | 'stale-cache'
+  | 'bundled'
+  | 'unavailable';
 
 /**
  * Why a result is not `proxy`.

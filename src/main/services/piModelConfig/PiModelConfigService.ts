@@ -21,6 +21,7 @@ import {
   piModelOption,
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog, AgentModelCatalogError } from '@shared/types/agentCatalog';
+import { type BundledCatalogReader, createBundledCatalogReader } from './catalogSnapshot';
 import {
   resolveProviderApiKey,
   toPiModelsJson,
@@ -48,6 +49,12 @@ export interface PiModelConfigServiceOptions {
   now?: () => number;
   timeoutMs?: number;
   log?: (...args: unknown[]) => void;
+  /**
+   * A3 — the catalog snapshot shipped in the release artifact, injectable so
+   * tests can state one instead of writing into `resources/`. Defaults to the
+   * real packaged/checked-in file.
+   */
+  readBundledCatalog?: BundledCatalogReader;
 }
 
 function readJson(path: string): unknown {
@@ -164,12 +171,27 @@ function readLocalModelOptions(path: string): Array<{
   }
 }
 
+/**
+ * The snapshot's providers as menu options, in configuration order.
+ *
+ * Ordered exactly like every other route through `piModelOption`: T25 derives
+ * the primary tag group from the first model carrying each tag, so sorting here
+ * would replace the administrator's order with locale collation for this one
+ * source only.
+ */
+function bundledCatalogOptions(config: PiManagedModelsConfig): AgentModelCatalog['models'] {
+  return Object.entries(config.providers).flatMap(([providerId, provider]) =>
+    provider.models.map((model) => piModelOption(providerId, model))
+  );
+}
+
 export class PiModelConfigService {
   private readonly agentDir: string;
   private readonly fetchFn: PiModelConfigFetch;
   private readonly now: () => number;
   private readonly timeoutMs: number;
   private readonly log: (...args: unknown[]) => void;
+  private readonly readBundledCatalog: BundledCatalogReader;
 
   constructor(options: PiModelConfigServiceOptions) {
     this.agentDir = options.agentDir;
@@ -177,6 +199,7 @@ export class PiModelConfigService {
     this.now = options.now ?? (() => Date.now());
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.log = options.log ?? (() => {});
+    this.readBundledCatalog = options.readBundledCatalog ?? createBundledCatalogReader();
   }
 
   get modelsPath(): string {
@@ -271,6 +294,41 @@ export class PiModelConfigService {
       return { ...state, ok: true };
     }
 
+    // A3: no live answer and no cache of this client's own, but the release
+    // artifact may carry a snapshot of the same management endpoint. It is a
+    // rung BELOW `stale-cache` (that cache was current for this machine once;
+    // a shipped baseline never was) and above `unavailable`.
+    //
+    // Written to `models.json` / `auth.json` and deliberately NOT to
+    // `managed-models-source.json`. Two reasons, in order: pi reads its models
+    // off disk, so a snapshot that stayed in memory would populate the menu
+    // and then fail every turn the user started from it; and the wire cache
+    // means "the last catalog we fetched", so seeding it with the bundled copy
+    // would make the NEXT failed sync report `stale-cache` and destroy the one
+    // signal that lets the UI say "this is the baseline we shipped with"
+    // (ADR 0134 §3 — the snapshot itself is never written by the runtime, in
+    // the package or in user data).
+    const bundled = this.readBundledCatalog();
+    if (bundled) {
+      this.writeRuntimeConfig(bundled, input.apiKey, input.inheritedBaseUrl);
+      const state: PiModelSyncState = {
+        source: 'bundled',
+        endpointUrl: input.endpointUrl,
+        agentDir: this.agentDir,
+        ...modelCounts(bundled),
+        lastAttemptAt: attemptedAt,
+        // Never fetched, so there is no fetch time to report. The snapshot's
+        // own `updatedAt` is when an administrator last changed the catalog,
+        // which is a different fact and not ours to relabel.
+        syncedAt: null,
+        error: remoteError,
+      };
+      this.writeState(state);
+      // `ok` asks whether the client came away with a usable catalog, not
+      // whether the network worked; `error` still carries the failure.
+      return { ...state, ok: true };
+    }
+
     // D03: no built-in table to fall back to. Say the catalog is unavailable
     // instead of handing out models nobody configured — a fabricated list makes
     // a failed fetch look like a successful one, which is how a packaged build
@@ -289,7 +347,26 @@ export class PiModelConfigService {
     return { ...state, ok: false };
   }
 
+  /**
+   * The sync state, with A3's bundled snapshot standing in wherever the stored
+   * state would otherwise be `unavailable`.
+   *
+   * The substitution happens in ONE place rather than at each producer so that
+   * every route into `unavailable` gets the same floor: the state a failed sync
+   * wrote, a state file that is missing or corrupt, and a first launch with no
+   * `models.json` at all. `endpointUrl`, `lastAttemptAt` and `error` are passed
+   * through untouched — the snapshot changes which catalog the user gets, not
+   * what happened on the wire.
+   */
   readState(): PiModelSyncState {
+    const stored = this.readStoredState();
+    if (stored.source !== 'unavailable') return stored;
+    const bundled = this.readBundledCatalog();
+    if (!bundled) return stored;
+    return { ...stored, source: 'bundled', ...modelCounts(bundled) };
+  }
+
+  private readStoredState(): PiModelSyncState {
     if (existsSync(this.statePath)) {
       try {
         const value = readJson(this.statePath) as Partial<PiModelSyncState>;
@@ -338,7 +415,28 @@ export class PiModelConfigService {
     const source = sourceOverride ?? state.source;
     const catalogSource = source === 'remote' ? 'managed' : source === 'local' ? 'local' : source;
 
-    if (catalogSource === 'unavailable') {
+    if (catalogSource === 'bundled') {
+      // Built from the snapshot rather than from `models.json`, because the
+      // snapshot is what `'bundled'` names and it is readable before any sync
+      // has written a thing — a cold first launch has its menu immediately.
+      // `stale` and a null `fetchedAt` are both literal: this was never a
+      // fetched answer, so there is no time at which it was current here.
+      const bundled = this.readBundledCatalog();
+      if (bundled) {
+        return {
+          models: bundledCatalogOptions(bundled),
+          source: 'bundled',
+          stale: true,
+          fetchedAt: null,
+          ...(state.error ? { error: 'http' as AgentModelCatalogError } : {}),
+        };
+      }
+    }
+
+    // `'bundled'` reaches here only if the snapshot went away between the two
+    // reads — degrade to `unavailable` rather than to a menu built out of
+    // whatever `models.json` happens to hold.
+    if (catalogSource === 'unavailable' || catalogSource === 'bundled') {
       // D03: distinct from an answered-but-empty catalog. No models, and we say
       // why rather than rendering an empty menu as if it were the answer.
       return {
@@ -383,9 +481,24 @@ export class PiModelConfigService {
     inheritedApiKey: string,
     inheritedBaseUrl: string
   ): void {
+    atomicWriteJson(this.sourcePath, config, 0o600);
+    this.writeRuntimeConfig(config, inheritedApiKey, inheritedBaseUrl);
+  }
+
+  /**
+   * Just the two files pi itself reads.
+   *
+   * Split out of {@link writeAll} for A3: the bundled snapshot has to reach pi,
+   * but it must not be filed as the wire-form cache of a catalog this client
+   * fetched — see the comment at that call site.
+   */
+  private writeRuntimeConfig(
+    config: PiManagedModelsConfig,
+    inheritedApiKey: string,
+    inheritedBaseUrl: string
+  ): void {
     mkdirSync(this.agentDir, { recursive: true, mode: 0o700 });
     chmodSync(this.agentDir, 0o700);
-    atomicWriteJson(this.sourcePath, config, 0o600);
     atomicWriteJson(
       this.modelsPath,
       toPiModelsJson(config, { inheritedBaseUrl: inheritedBaseUrl.trim().replace(/\/+$/, '') }),

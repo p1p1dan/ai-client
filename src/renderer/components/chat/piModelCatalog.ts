@@ -41,6 +41,18 @@ export const UNAVAILABLE_CATALOG_NOTICE = 'Model catalog unreachable — no mode
 /** Shown when the last refresh failed but a real earlier answer is still on screen. */
 export const STALE_CATALOG_NOTICE = 'Model catalog is out of date — showing the last known list';
 
+/**
+ * A3 — shown when the catalog could not be reached and the list on screen is
+ * the snapshot this build shipped with.
+ *
+ * Its own sentence rather than the stale-cache one, because the two are not the
+ * same claim: a stale cache was this machine's own answer once, a shipped
+ * baseline never was, and a user deciding whether a missing model is an
+ * administrator change or a network problem needs to be told which.
+ */
+export const BUNDLED_CATALOG_NOTICE =
+  'Model catalog unreachable — showing the list this build shipped with';
+
 /** Shown while the Host is not up yet; no request has been made. */
 export const HOST_NOT_READY_CATALOG_NOTICE = 'Waiting for Agent Host to become ready';
 
@@ -100,8 +112,10 @@ export function shouldRequestCatalog(input: {
   if (input.force) return true;
   const cached = input.cached;
   if (!cached) return true;
-  // Proxy, managed and local are authoritative answers. Unavailable/stale
-  // records are failures and should be retried once the Host is available.
+  // Proxy, managed and local are authoritative answers. Unavailable, stale and
+  // bundled records are failures and should be retried once the Host is
+  // available — a shipped baseline in particular must not pin the menu for the
+  // life of the process just because it happens to be populated.
   if (!['proxy', 'managed', 'local'].includes(cached.source)) return true;
   if (cached.fetchedAt === null) return true;
   return input.now - cached.fetchedAt >= (input.ttlMs ?? CATALOG_REFRESH_TTL_MS);
@@ -113,7 +127,14 @@ export interface CatalogStatusRow {
   /** Whether a Retry/Refresh control belongs next to it. */
   retryable: boolean;
   /** Machine-readable reason, for assertions and for `title` copy. */
-  reason: AgentModelCatalogError | 'unavailable' | 'stale-cache' | 'empty' | 'refreshing' | null;
+  reason:
+    | AgentModelCatalogError
+    | 'unavailable'
+    | 'stale-cache'
+    | 'bundled'
+    | 'empty'
+    | 'refreshing'
+    | null;
 }
 
 /**
@@ -141,6 +162,9 @@ export function catalogStatusRow(input: {
   }
   if (catalog.source === 'stale-cache') {
     return { message: STALE_CATALOG_NOTICE, retryable: true, reason: 'stale-cache' };
+  }
+  if (catalog.source === 'bundled') {
+    return { message: BUNDLED_CATALOG_NOTICE, retryable: true, reason: 'bundled' };
   }
   if (catalog.models.length === 0) {
     // Answered and empty: the honest fourth rung. NOT an error row — the
@@ -215,11 +239,12 @@ const AUTHORITATIVE_CATALOG_SOURCES: ReadonlySet<AgentModelCatalog['source']> = 
  *    conservative keep-arms.
  *  - this answers "did anyone actually tell us what exists", which is what a
  *    `· unverified` LABEL needs. `unavailable` (nothing fetched, nothing
- *    cached) and `stale-cache` (the refresh failed; the list on screen is a
- *    real but out-of-date earlier answer) are both settled failures, and
- *    neither is evidence about a model. Labelling off them would state a
- *    network outcome as a fact about the user's model — exactly what the
- *    field report asked us to stop doing.
+ *    cached), `stale-cache` (the refresh failed; the list on screen is a
+ *    real but out-of-date earlier answer) and `bundled` (A3: the list this
+ *    build shipped with, which no server ever confirmed for this machine) are
+ *    all settled failures, and none is evidence about a model. Labelling off
+ *    them would state a network outcome as a fact about the user's model —
+ *    exactly what the field report asked us to stop doing.
  *
  * The conservative direction is deliberate: while the catalog is unreachable a
  * model that genuinely WAS removed stays unlabelled. The status row under the

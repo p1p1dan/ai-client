@@ -1,7 +1,11 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PI_USER_AGENT_ENV, PI_USER_AGENT_HEADER } from '@shared/piModelConfig';
+import {
+  PI_USER_AGENT_ENV,
+  PI_USER_AGENT_HEADER,
+  type PiManagedModelsConfig,
+} from '@shared/piModelConfig';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { toPiModelsJson, validatePiManagedModelsConfig } from '../configValidation';
 import { type PiModelConfigFetch, PiModelConfigService } from '../PiModelConfigService';
@@ -614,5 +618,213 @@ describe('F08 provider headers in models.json', () => {
       // Case-insensitive: emitting both spellings would send the field twice.
       expect(providers.dan.headers).toEqual({ [name]: '$TENANT_UA' });
     }
+  });
+});
+
+/**
+ * A3 — the release artifact's own catalog, as `catalogSnapshot.ts` returns it.
+ * Injected rather than written into `resources/`, so these arms never depend on
+ * what happens to be checked in.
+ */
+const BUNDLED_SNAPSHOT = {
+  version: 1,
+  updatedAt: '2026-09-01T00:00:00.000Z',
+  providers: {
+    baseline: {
+      name: 'Shipped baseline',
+      api: 'openai-completions',
+      credentials: { baseUrl: 'onboarding', apiKey: 'onboarding' },
+      models: [{ id: 'baseline-mini', name: 'Baseline Mini', contextWindow: 64000 }],
+    },
+  },
+} as const;
+
+describe('PiModelConfigService — bundled catalog snapshot (A3)', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'pi-model-bundled-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const failingFetch: PiModelConfigFetch = async () => ({
+    ok: false,
+    status: 503,
+    text: async () => '',
+  });
+
+  function bundledService(
+    fetchFn: PiModelConfigFetch,
+    readBundledCatalog: () => PiManagedModelsConfig | null = () =>
+      validatePiManagedModelsConfig(BUNDLED_SNAPSHOT, { credentialsAllowed: false })
+  ): PiModelConfigService {
+    return new PiModelConfigService({
+      agentDir: dir,
+      fetchFn,
+      now: () => 1234,
+      readBundledCatalog,
+    });
+  }
+
+  it('falls back to the snapshot when the fetch fails and nothing is cached (arm 2)', async () => {
+    const result = await bundledService(failingFetch).sync({
+      endpointUrl: 'https://onboarding.example/api/v1/models-config',
+      apiKey: 'login-key',
+      inheritedBaseUrl: 'https://gateway.example/v1',
+    });
+
+    expect(result.source).toBe('bundled');
+    expect(result.modelCount).toBe(1);
+    expect(result.providerCount).toBe(1);
+    // The endpoint is still reported as it is, and the failure is still carried:
+    // the snapshot changes which catalog the user gets, not what happened.
+    expect(result.endpointUrl).toBe('https://onboarding.example/api/v1/models-config');
+    expect(result.error).toContain('503');
+    // A usable catalog, so `ok` — same reading as the stale-cache rung.
+    expect(result.ok).toBe(true);
+    // `syncedAt` stays null: nothing was ever fetched. The snapshot's own
+    // `updatedAt` is an administrator's edit time, not a fetch time.
+    expect(result.syncedAt).toBeNull();
+  });
+
+  it('writes the snapshot where pi reads it, but never into the wire cache (arm 5)', async () => {
+    await bundledService(failingFetch).sync({
+      endpointUrl: 'https://onboarding.example/api/v1/models-config',
+      apiKey: 'login-key',
+      inheritedBaseUrl: 'https://gateway.example/v1',
+    });
+
+    // pi reads models off disk, so a snapshot that stayed in memory would fill
+    // the menu and then fail every turn started from it.
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    expect(Object.keys(models.providers)).toEqual(['baseline']);
+    expect(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8'))).toEqual({
+      baseline: { type: 'api_key', key: 'login-key' },
+    });
+
+    // The wire cache means "the last catalog THIS client fetched". Seeding it
+    // with the bundled copy would make the next failed sync report
+    // `stale-cache` and destroy the signal that says "shipped baseline".
+    expect(existsSync(join(dir, 'managed-models-source.json'))).toBe(false);
+
+    const again = await bundledService(failingFetch).sync({
+      endpointUrl: 'https://onboarding.example/api/v1/models-config',
+      apiKey: 'login-key',
+      inheritedBaseUrl: 'https://gateway.example/v1',
+    });
+    expect(again.source).toBe('bundled');
+  });
+
+  it('serves the snapshot as the catalog, labelled as the baseline it is', async () => {
+    await bundledService(failingFetch).sync({
+      endpointUrl: 'https://onboarding.example/api/v1/models-config',
+      apiKey: 'login-key',
+      inheritedBaseUrl: 'https://gateway.example/v1',
+    });
+
+    expect(bundledService(failingFetch).readCatalog()).toMatchObject({
+      source: 'bundled',
+      stale: true,
+      // Never fetched here, so there is no time at which it was current.
+      fetchedAt: null,
+      models: [{ id: 'baseline/baseline-mini', label: 'Baseline Mini', contextWindow: 64000 }],
+    });
+  });
+
+  it('has a catalog before any sync has run at all', () => {
+    // The cold-launch case: no state file, no models.json, no network yet.
+    const state = bundledService(failingFetch).readState();
+    expect(state.source).toBe('bundled');
+    expect(state.modelCount).toBe(1);
+    expect(bundledService(failingFetch).readCatalog().models).toHaveLength(1);
+  });
+
+  it('stays unavailable when there is no snapshot to fall back to (arm 3)', async () => {
+    const result = await bundledService(failingFetch, () => null).sync({
+      endpointUrl: 'https://onboarding.example/api/v1/models-config',
+      apiKey: 'login-key',
+      inheritedBaseUrl: 'https://gateway.example/v1',
+    });
+
+    expect(result.source).toBe('unavailable');
+    expect(result.ok).toBe(false);
+    expect(result.modelCount).toBe(0);
+    expect(bundledService(failingFetch, () => null).readCatalog()).toMatchObject({
+      source: 'unavailable',
+      models: [],
+    });
+    // Nothing was written for pi to read, because there was nothing to write.
+    expect(existsSync(join(dir, 'models.json'))).toBe(false);
+  });
+
+  it('goes back to remote the moment a fetch succeeds (arm 4)', async () => {
+    const fallback = bundledService(failingFetch);
+    expect(
+      (
+        await fallback.sync({
+          endpointUrl: 'https://e/x',
+          apiKey: 'k',
+          inheritedBaseUrl: 'https://g/v1',
+        })
+      ).source
+    ).toBe('bundled');
+
+    const live: PiModelConfigFetch = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(REMOTE_CONFIG),
+    });
+    const refreshed = await bundledService(live).sync({
+      endpointUrl: 'https://e/x',
+      apiKey: 'k',
+      inheritedBaseUrl: 'https://g/v1',
+    });
+
+    expect(refreshed.source).toBe('remote');
+    expect(bundledService(live).readCatalog()).toMatchObject({
+      source: 'managed',
+      stale: false,
+      models: [{ id: 'dan/deepseek-v4' }],
+    });
+    // The live answer becomes the wire cache; the snapshot never did.
+    expect(existsSync(join(dir, 'managed-models-source.json'))).toBe(true);
+  });
+
+  it('prefers this client’s own stale cache over the shipped baseline', async () => {
+    // A cache was current for this machine once; a baseline never was. Order
+    // matters, so it gets an assertion rather than a comment.
+    const live: PiModelConfigFetch = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(REMOTE_CONFIG),
+    });
+    await bundledService(live).sync({
+      endpointUrl: 'https://e/x',
+      apiKey: 'k',
+      inheritedBaseUrl: 'https://g/v1',
+    });
+
+    const degraded = await bundledService(failingFetch).sync({
+      endpointUrl: 'https://e/x',
+      apiKey: 'k',
+      inheritedBaseUrl: 'https://g/v1',
+      force: true,
+    });
+    expect(degraded.source).toBe('stale-cache');
+    expect(bundledService(failingFetch).readCatalog().models).toEqual([
+      expect.objectContaining({ id: 'dan/deepseek-v4' }),
+    ]);
+  });
+
+  it('never lends the shipped baseline to a local pi installation', () => {
+    // Local mode means the user's own `~/.pi/agent` configures the models. Our
+    // managed baseline is not an answer to that question.
+    expect(bundledService(failingFetch).readCatalog('local')).toMatchObject({
+      source: 'local',
+      models: [],
+    });
   });
 });

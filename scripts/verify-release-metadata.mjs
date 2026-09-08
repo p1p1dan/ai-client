@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { findCredentialKeys } from './refresh-model-catalog.mjs';
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
 
@@ -44,8 +46,46 @@ for (const required of [
   'to: licenses/LICENSE',
   'from: THIRD_PARTY_NOTICES.md',
   'to: licenses/THIRD_PARTY_NOTICES.md',
+  // A3: the offline model catalog baseline has to reach the artifact. Without
+  // this entry the snapshot exists only in the repository, and a packaged build
+  // silently loses its fallback for "management endpoint unreachable".
+  'from: resources/model-catalog/snapshot.json',
+  'to: model-catalog/snapshot.json',
 ]) {
   if (!builder.includes(required)) failures.push(`electron-builder.yml missing: ${required}`);
+}
+
+/**
+ * A3 — the bundled catalog snapshot, checked statically because it is packaged.
+ *
+ * Deliberately NOT a fetch: refreshing the catalog needs a client API key and a
+ * reachable management endpoint, so wiring it into `dist:prereq` would make
+ * every offline or CI build fail on a credential it has no business holding.
+ * The refresh is a human release step (`pnpm refresh:model-catalog`); this gate
+ * only checks that whatever is committed is well-formed and carries no
+ * credentials, since the file ships world-readable inside the package.
+ */
+const snapshotPath = 'resources/model-catalog/snapshot.json';
+const snapshotText = read(snapshotPath);
+if (snapshotText) {
+  try {
+    const snapshot = JSON.parse(snapshotText);
+    if (snapshot?.version !== 1) failures.push(`${snapshotPath}: version must be 1`);
+    if (!snapshot?.providers || typeof snapshot.providers !== 'object') {
+      failures.push(`${snapshotPath}: providers must be an object`);
+    }
+    // Reuses the release script's scanner rather than a second regex: a plain
+    // key-name match would fire on every provider's `credentials.apiKey`, which
+    // states WHERE the key comes from and never carries one.
+    const credentials = findCredentialKeys(snapshot);
+    if (credentials.length > 0) {
+      failures.push(
+        `${snapshotPath}: carries credential-shaped keys and must not be packaged: ${credentials.join(', ')}`
+      );
+    }
+  } catch (error) {
+    failures.push(`${snapshotPath}: invalid JSON (${error.message})`);
+  }
 }
 
 const workflow = read('.github/workflows/build.yml');
@@ -65,4 +105,6 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('[verify-release-metadata] PASS — notices, migration, rollback, and release workflow');
+console.log(
+  '[verify-release-metadata] PASS — notices, migration, rollback, release workflow, model catalog snapshot'
+);

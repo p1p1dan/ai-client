@@ -218,7 +218,17 @@ export interface PiManagedModelsConfig {
  * `'remote'` with an empty catalog, which is a legal answer meaning the
  * administrator has enabled nothing.
  */
-export type PiModelSyncSource = 'remote' | 'stale-cache' | 'unavailable' | 'local';
+/**
+ * A3 appends `'bundled'`: the catalog snapshot that shipped inside this release
+ * artifact, read with no network I/O when nothing better is available.
+ *
+ * It is deliberately NOT folded into `'stale-cache'`, which means "the last
+ * answer THIS client fetched". The two age differently and the UI owes the user
+ * different sentences — a stale cache was current for this machine once, a
+ * bundled baseline never was. Appended at the end of the union so the value
+ * order stays stable for anything reading it positionally.
+ */
+export type PiModelSyncSource = 'remote' | 'stale-cache' | 'unavailable' | 'local' | 'bundled';
 
 export interface PiModelSyncState {
   source: PiModelSyncSource;

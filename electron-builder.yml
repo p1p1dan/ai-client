@@ -74,6 +74,13 @@ asarUnpack:
   - "node_modules/node-pty/**"
 npmRebuild: false
 extraResources:
+  # A3 — the offline model catalog baseline. Read with no network I/O at the
+  # point the client would otherwise report `unavailable`; without it a first
+  # launch, a weak network or a management endpoint that is down all leave an
+  # empty model menu. Refreshed only by scripts/refresh-model-catalog.mjs before
+  # a release is tagged; the running app never writes it (ADR 0134 §3).
+  - from: resources/model-catalog/snapshot.json
+    to: model-catalog/snapshot.json
   # Distributed legal notices are explicit resources because the application
   # allow-list excludes dependency Markdown and LICENSE files.
   - from: LICENSE

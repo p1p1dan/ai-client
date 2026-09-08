@@ -1,6 +1,7 @@
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { describe, expect, it } from 'vitest';
 import {
+  BUNDLED_CATALOG_NOTICE,
   CATALOG_REFRESH_TTL_MS,
   catalogModels,
   catalogStatusRow,
@@ -50,6 +51,38 @@ describe('Pi model catalog status', () => {
         loading: false,
       }).message
     ).toBe(STALE_CATALOG_NOTICE);
+  });
+
+  it('says a shipped baseline is a shipped baseline, not a cache (A3)', () => {
+    // The two sentences answer different questions. A user whose model is
+    // missing needs to know whether an administrator removed it or the network
+    // is down, and "the last known list" would claim this machine had it once.
+    const row = catalogStatusRow({
+      catalog: catalog({ source: 'bundled', stale: true, fetchedAt: null, error: 'http' }),
+      loading: false,
+    });
+    expect(row).toEqual({
+      message: BUNDLED_CATALOG_NOTICE,
+      retryable: true,
+      reason: 'bundled',
+    });
+    expect(row.message).not.toBe(STALE_CATALOG_NOTICE);
+  });
+
+  it('keeps asking for a live catalog while showing the shipped baseline', () => {
+    // A populated menu must not pin the process to the baseline: `bundled` is a
+    // failure rung like `unavailable`, not an authoritative answer.
+    const bundled = catalog({ source: 'bundled', stale: true, fetchedAt: null });
+    expect(isCatalogAuthoritative(bundled)).toBe(false);
+    expect(
+      shouldRequestCatalog({
+        hostState: 'ready',
+        cached: bundled,
+        inFlight: false,
+        force: false,
+        now: NOW,
+      })
+    ).toBe(true);
   });
 
   it('distinguishes empty, not-ready, and refreshing states', () => {

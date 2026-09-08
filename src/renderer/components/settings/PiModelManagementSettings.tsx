@@ -22,6 +22,10 @@ function sourceLabel(source: PiModelManagementSnapshot['state']['source']): stri
       return 'Remote';
     case 'stale-cache':
       return 'Cached';
+    // A3: named for what it is. "Cached" would claim this machine fetched it
+    // once, which a shipped baseline never was.
+    case 'bundled':
+      return 'Shipped baseline';
     case 'unavailable':
       return 'Unavailable';
     case 'local':

@@ -25,6 +25,11 @@ export const zhTranslations: Record<string, string> = {
   'This rule stays at position {{position}}. The {{count}} later rules take precedence.':
     '该规则保留在第 {{position}} 条，它后面还有 {{count}} 条规则，命中时以后面的为准。',
   Cached: '缓存',
+  // A3: the catalog that shipped inside this build, distinct from `Cached`
+  // (which this machine fetched once) and from `Unavailable`.
+  'Shipped baseline': '随包基线',
+  'Model catalog unreachable — showing the list this build shipped with':
+    '模型目录不可达 —— 正在显示本次构建随包的基线列表',
   'Local setup': '本地配置',
   'Pi model management': 'Pi 模型管理',
   Syncing: '同步中',
