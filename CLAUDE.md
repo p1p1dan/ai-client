@@ -1,9 +1,13 @@
 # CLAUDE.md
 
-## 规划入口
+## 当前任务
 
-任务规划与进度状态的唯一入口：`docs/plantree/README.md`（注册表 + baseline + 活动计划）。
-恢复工作时先读 plantree，再按其权威链取台账档案（`docs/plans/` 下 ARD / 执行计划 / 三本台账）。
+本 worktree 专注于 **Runtime 自主化演进**（从 pi-coding-agent 整包依赖切换到自有 Cordis 插件式 runtime）。
+
+- **ARD**：`docs/plans/2026-09-08-runtime-evolution-ard.md`
+- **参考**：[PI-Desktop 调研](docs/plans/2026-09-08-pi-desktop-study.md) · [DSH 调研](docs/plans/2026-08-18-deepseek-harness-study.md)
+- **代码入口**：`src/runtime/`（新建）与 `src/agent-host/`（现有，参考用）
+- **主分支上的完整规划体系**（plantree）在本 worktree 中已移除，只保留 runtime 相关文档
 
 ## 工程规范（Agent 项目）
 
