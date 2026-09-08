@@ -1,7 +1,10 @@
 # Runtime 自主化演进 — 架构需求文档（ARD）
 
 > 文档日期：2026-09-08
-> 文档状态：**已拍板**（2026-09-08 用户确认，D1–D7 生效）· 执行看板见 [plantree](../plantree/plans/runtime-evolution/README.md)
+> 文档状态：**已拍板**（2026-09-08 用户确认，D1–D11 生效）· 执行看板见 [plantree](../plantree/plans/runtime-evolution/README.md)
+> 2026-09-08 现场修订：加密测试机实测推翻「按实现语言判断兼容性」的旧结论，
+> 执行载体上升为一等约束（新增 [D11](#d11--执行载体按进程身份区分不按实现语言推断)，
+> 同时改写 D4、§6、§8）。取证见[问题分析报告](../../Windows加密环境GUI异常分析.md)。
 > 触发：用户确定产品进化路线 ai-client → PI-Desktop 形态 → DSH 形态，
 > 核心诉求「内部产品，除协议适配层外其余尽可能可控、方便修改和插入」。
 > 前序调研：[PI-Desktop 调研档](./2026-09-08-pi-desktop-study.md) ·
@@ -20,7 +23,7 @@
 
 ```text
 Renderer → Preload → Main WorkerManager → WorkerSlot
-  → utilityProcess fork → 整包加载 pi-coding-agent
+  → 平台 worker（Windows 安装版：随包 Node；其余：utilityProcess）→ 整包加载 pi-coding-agent
   → Pi AgentSession（黑盒：agent loop + tools + 权限 + 压缩 + prompt + 会话 全在里面）
   → 事件投影为 RuntimeEvent → Main 路由 → renderer reduce
 ```
@@ -31,7 +34,7 @@ Renderer → Preload → Main WorkerManager → WorkerSlot
 
 ```text
 Renderer → Preload → Main WorkerManager → WorkerSlot
-  → utilityProcess fork → 自有 runtime（Cordis 插件图）
+  → 平台 worker（Windows 安装版：随包 Node；其余：utilityProcess）→ 自有 runtime（Cordis 插件图）
     ├─ plugin-model-adapter    ← pi-ai（唯一外部依赖，协议适配）
     ├─ plugin-agent-loop       ← 自建，tool→model→tool 循环
     ├─ plugin-tools            ← 自建，文件/shell/搜索/MCP bridge
@@ -88,10 +91,13 @@ pi-coding-agent→ 完整 coding agent CLI（工具 + 权限 + prompt + 会话 +
 
 依赖链最终态：`pi-agent-core`（循环原语 + 类型）+ `pi-ai`（协议适配），其余全部自建。
 
-### D4 · 进程拓扑：不变
+### D4 · 进程拓扑：一槽一隔离进程不变，载体按平台分两种
 
-保持 `utilityProcess fork` 拓扑。新 runtime 在 worker 进程内初始化 Cordis 插件图，
-通过现有 MessagePort 与 Main 通信。WorkerManager/WorkerSlot 逻辑不动。
+保持「一个 WorkerSlot = 一个隔离进程 = 一个 AgentSession」，WorkerManager/WorkerSlot 的
+ownership、generation、崩溃隔离逻辑不动。**但载体不再固定是 `utilityProcess`**：
+Windows 安装版使用随包 Node + 原生 IPC，其余平台与开发模式使用 utilityProcess + MessagePort，
+由 `WorkerTransport` 适配同一套 RPC 协议。新 runtime 在 worker 进程内初始化 Cordis 插件图，
+对载体无感——具体约束见 D11。
 
 ### D5 · 事件接口：保持 RuntimeEvent 兼容
 
@@ -171,6 +177,46 @@ rate in chat transcript header」），`agent-runtime` 内没有任何缓存优�
 
 **留后路**：执行入口抽成 `SubagentRunner` service（`run(def, prompt, signal): AsyncIterable<Event>`），
 进程内实现是默认 provider；将来真出现 CPU 密集场景，换一个实现即可，调用方不动。
+
+### D11 · 执行载体：按进程身份区分，不按实现语言推断
+
+**触发**：2026-09-08 加密测试机现场发现——同一 Windows 安装包、同一机器、同一仓库，
+GUI（Electron `utilityProcess` 内的 worker）Read 返回异常内容、`pwd/ls/echo` 报
+`Bad file descriptor`；而 TUI（随包 `resources/node-runtime/node.exe`）与编辑器
+（识别 `%TSD-Header-###%` 头后交由白名单内的 node 读取）均正常。
+完整取证与不确定性边界见[问题分析报告](../../Windows加密环境GUI异常分析.md)。
+
+**机制**：企业加密驱动（TEC OCular Agent）按**进程**放行明文，打包出的 Electron exe
+不在白名单里，因此读到的是密文；`src/main/utils/tsdSafeRead.ts` 已按此机制实现编辑器的
+兼容读取。所以兼容性是**执行载体**的属性，不是实现语言的属性。
+
+**决策**：
+
+1. 一槽仍是一个隔离进程、一个 AgentSession；载体分两种，由平台与打包状态决定：
+
+| carrier | 适用 | 通信 |
+|---|---|---|
+| `bundled-node` | Windows 安装版 | 随包 `node.exe` + Node 原生 IPC |
+| `electron-utility` | 其余平台与开发模式 | `utilityProcess` + MessagePort |
+
+2. 随包 Node 缺失时明确失败，不回落到 Electron，也不回落到 PATH 里不确定的 node。
+3. runtime 内部**不得**直接触碰 `process.parentPort` / `process.send`，一律经 worker 入口
+   与 `WorkerTransport` 适配；插件层对载体无感。
+4. runtime 内所有 fs 与子进程调用收敛到两个 service 出口（P1 前置，见看板 P1-0）。
+   载体兼容是这两个出口的职责，**不是逐个工具打补丁**。受影响面：file read/write/edit、
+   bash、grep/glob、skills 与项目指令加载、session JSONL 写、trace 落盘、MCP stdio bridge、subagent。
+5. 子进程的普通 stdout 必须排空，RPC 走独立通道，避免工具日志写满管道；
+   bash 类工具不得假设管道 stdio 一定可用。
+6. **验收按载体矩阵签收**：普通 CI runner 通过不等于加密机通过，两者在看板上是两个状态位。
+
+**本条同时撤回旧版 §6 与 §8 的语言级结论**。路线继续走全栈 Node/TS，
+但理由从「Node 不受影响」换成「随包 node.exe 是现场已验证、且由我们控制的载体」。
+
+**待现场确认的反向风险**：载体从白名单外换到白名单内后，worker 新写的文件
+（会话 JSONL、compaction record、Write/Edit 产物）在盘上的形态可能随之改变，而 Main 仍是
+Electron——`SessionIndexService.ts:410`、`GitService.ts:670` / `:1364`、`WorktreeService.ts:648`
+都是裸 `readFile`，全仓只有 `previewFileRead` 与 legacy import 三处是 TSD-aware。
+这是推断而非已证事实，跟踪见看板 [Q5](../plantree/plans/runtime-evolution/open-questions.md)。
 
 ## 4. 模块分类：搬运适配 vs 自建
 
@@ -255,9 +301,9 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
 
 | 项 | 理由 |
 |---|---|
-| Rust 原生模块 | **已验证不可行**（2026-09-08 加密测试机实测）：PI-Desktop 可启动运行，但 Rust host-core 无法直接读写文件系统，仅能通过调用 bash/powershell 等 shell 工具间接操作。推测为加密/硬化环境对非系统进程的 fs syscall 限制。结论：runtime 全栈基于 Node/TS，不引入 Rust 原生模块 |
+| Rust 原生模块 | 当前路线不引入。现场的 PI-Desktop Rust host-core 直接读写失败，但**不能据此断言所有 Rust 二进制均不可行**——加密驱动按进程名、路径、签名还是父进程放行仍未确认（D11）。不引入的实际理由是：随包 node.exe 是现场已验证且由我们控制的载体，再加一种载体等于再加一份未验证的兼容风险 |
 | 第三方插件市场 | 内部产品，安全风险不匹配 |
-| 改变进程拓扑 | 现有 WorkerManager/WorkerSlot 已稳定 |
+| 改变 WorkerSlot 拓扑 | 一槽一隔离进程一 AgentSession 已稳定；D11 改的是载体，不是拓扑 |
 | 改变凭据体系 | `~/.pilab/<profile>/` 已稳定，与 PI-Desktop 的 `~/.pi-desktop/` 同构 |
 | 改变 renderer/UI | RuntimeEvent 接口兼容，UI 无感切换 |
 
@@ -268,6 +314,9 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
 3. `pi-coding-agent` 从 `package.json` 移除，`pi-agent-core` + `pi-ai` 成为仅有的两个 pi 系依赖。
 4. 现有 GUI 功能无回归（时间线、Composer、权限卡、设置页）。
 5. 旧会话文件仍可读取和 resume。
+6. **加密机现场验收通过**（D11）：同一文件 GUI Read 返回明文、shell 命令输出正常、
+   Edit/Write 后 TUI 与编辑器看到的内容一致、旧会话可 resume、退出无残留 worker。
+   普通 CI runner 通过不计入本条。
 
 ## 8. 加密机实测记录
 
@@ -275,10 +324,14 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
 |---|---|---|
 | 2026-09-08 | PI-Desktop 在加密测试机启动运行 | 可运行，agent 对话可启动 |
 | 2026-09-08 | PI-Desktop Rust host-core 直接文件读写 | **不可行**——无法直接读写，仅能通过 bash/powershell 工具间接操作 |
-| — | Node/Electron（ai-client 现有产品）文件读写 | 正常（已部署验证） |
+| 2026-09-08 | ai-client TUI（随包 node.exe）与编辑器（TSD-aware read） | 用户确认正常 |
+| 2026-09-08 | ai-client Windows 安装版 GUI（Electron utilityProcess） | 用户确认 Read 返回异常内容、`pwd/ls/echo` 报 `Bad file descriptor` |
 
-**结论**：加密/硬化环境对 Rust 编译的二进制有额外 fs 限制，Node 进程不受影响。
-全栈 Node/TS 路线已确认为唯一可行方案。PI-Desktop 的 Rust host-core 代码仅作 TS 重写参考，不直接使用。
+**修订结论**（撤回旧版「Rust 不可行、Node 不受影响」）：兼容性按**实际执行载体与启动方式**验收，
+不能按实现语言推断。同一份 Node/TS 代码在 Electron 载体里失败、在随包 node.exe 载体里正常，
+这条差异就是证据。当前继续 Node/TS 路线，Windows GUI 用现场已正常的随包 Node（D11）；
+其 Read / bash / Edit / Write 仍需新安装包在现场复验，未验收前不写成已解决。
+PI-Desktop 的 Rust host-core 代码仅作 TS 重写参考，不直接使用。
 
 ## 9. 溯源
 

@@ -21,8 +21,14 @@ P2-0 的正式基线为 95.01%，六场景原始数据已归档；P1 不需要�
 
 ## P1 范围
 
-- 文件归属：`src/runtime/plugins/tools/`、`src/runtime/plugins/permissions/`。
-- 按看板执行 P1-1 至 P1-7：注册表、文件工具、bash、搜索、权限内核、审批桥接及单测。
+- 文件归属：`src/runtime/plugins/tools/`、`src/runtime/plugins/permissions/`；P1-0 另含 `contracts.ts`。
+- 按看板执行 **P1-0 至 P1-8**：先做 P1-0（IO/exec 两个 service 出口），再是注册表、文件工具、bash、搜索、
+  权限内核、审批桥接、单测与载体兼容矩阵。
+- **P1-0 先于一切**（2026-09-08 现场修订，[ARD D11](../../../../plans/2026-09-08-runtime-evolution-ard.md)）：
+  加密机上兼容性按进程载体算，不按语言算——同一安装包里 Electron 载体的 Read 拿到密文、bash 报
+  `Bad file descriptor`，而随包 node.exe 载体的 TUI 正常（[问题分析报告](../../../../../Windows加密环境GUI异常分析.md)）。
+  所以工具不得直接 `node:fs` / `child_process`，一律走 `runtimeHostIo` 与 `runtimeExec`；
+  否则后面要在每个工具里各补一遍兼容。
 - 复用 `pi-agent-core` 的工具定义；对接 P0 的 service 契约和 bootstrap。
 - 审批复用现有 Extension UI bridge/inline dock，不另建 renderer 审批流程。
 - P0 的 `singleTurn` 是显式能力开关，P1 加入工具循环时同步核对其语义及既有测试。

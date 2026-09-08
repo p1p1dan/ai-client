@@ -1,11 +1,13 @@
 # Runtime 自主化演进 — 任务看板
 
-> 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D10 生效）。
+> 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D11 生效）。
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
 **当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 ∥ P2-1 起 ∥ P3 可开工
 **最近落地**：`8a71c843`（2026-09-08）已提交 P0 骨架与 P2-0 六场景基线，缓存命中率 **95.01%**，[验收与证据](evidence/p2-0/validation.md)；P0 的 R1 关闭证据见 [在线冒烟](evidence/p0/live-smoke.md)
 **下一目标**：[P1 开工交接](topics/p1-handoff.md)；P2-1 起及 P3 可并行，P2-6 前处理 [Q4 协议依赖版本对齐](open-questions.md)
+**2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
+影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
 
 状态图例：`⬜ 未开始` · `🟡 进行中` · `✅ 已完成` · `⏸ 挂起` · `❌ 已放弃`
 
@@ -61,10 +63,11 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 
 ## P1 · 工具与权限 ⬜
 
-前置：P0 · 文件归属：`src/runtime/plugins/tools/`、`src/runtime/plugins/permissions/`
+前置：P0 · 文件归属：`src/runtime/plugins/tools/`、`src/runtime/plugins/permissions/`（P1-0 另含 `contracts.ts`）
 
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
+| P1-0 IO/exec 出口收敛 | ⬜ | **P1 的第一件事**（ARD D11）：`contracts.ts` 增 `runtimeHostIo`（fs 唯一出口，含 TSD 头探测与白名单 node 回落挂载点）与 `runtimeExec`（子进程唯一出口，统一 stdio 策略、PATH 前置随包 node、超时清理）两个 service 契约；trace 的 `version_stamp` 加 carrier 字段。P1-2/P1-3/P1-4 一律经这两个出口，不得直接 `node:fs` / `child_process` |
 | P1-1 工具注册表 | ⬜ | 工具注册/发现/JSON schema，复用 pi-agent-core `AgentTool` 定义 |
 | P1-2 文件工具 | ⬜ | read / write / edit，含路径规范化与大文件截断 |
 | P1-3 bash 工具 | ⬜ | cwd、超时、输出截断、进程清理 |
@@ -72,8 +75,10 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 | P1-5 权限内核 | ⬜ | scope 匹配 + 白名单（`permissions.rs` + ADR 0057/0100 → TS） |
 | P1-6 审批流对接 | ⬜ | 复用现有 Extension UI bridge / inline dock 的审批 UI，不改 renderer |
 | P1-7 单测 | ⬜ | 工具行为 + scope 匹配矩阵 + 拒绝路径 |
+| P1-8 载体兼容矩阵 | ⬜ | 同一批工具用例在两种 carrier 各跑一遍（`bundled-node` / `electron-utility`），断言 read 得到明文、bash 拿到 stdout、写入后可被同载体读回 |
 
 覆盖 ARD 缓解项：首版 5 个工具覆盖 90% 场景。
+D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立——P1-0 的两个出口是这条约束的落点。
 
 ---
 
@@ -104,7 +109,7 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 | P3-2 分支与 resume | ⬜ | 分支管理从 PI-Desktop session-context 搬运 |
 | P3-3 旧会话兼容 | ⬜ | pi-coding-agent 产生的会话文件仍可读、可 resume（成功标准 5） |
 | P3-4 RuntimeEvent 翻译层 | ⬜ | 参考现有 `piWorkerSession.ts`，翻译目标不变、只换数据源（D5） |
-| P3-5 对接 SessionIndexService | ⬜ | Main 层不动，只适配调用面 |
+| P3-5 对接 SessionIndexService | ⬜ | Main 层不动，只适配调用面；**另需核对跨载体读一致性**（D11 反向风险）：worker 写的会话文件 Main 能否读到明文——`SessionIndexService.ts:410` 是裸 `readFile`，全仓仅 `previewFileRead` 与 legacy import 三处 TSD-aware。见 [Q5](open-questions.md) |
 | P3-6 往返测试 | ⬜ | 写入→读取→resume 快照一致性 |
 
 ---
@@ -115,11 +120,13 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
-| P4-1 worker bootstrap | ⬜ | `agent-host/worker.js` 的启动模式改为 Cordis 插件图初始化 |
+| P4-0 同步平台 worker 改动 | ⬜ | **P4 前置**：把 main 的 `45d43db8`（D20 Windows 随包 Node worker）cherry-pick 进本分支——`PiWorkerProcess.ts` / `WorkerTransport.ts` / `agent-host/worker.ts` + 两个测试 + `packaged-worker-smoke.cjs` / `verify-packaged-app.mjs`。本分支从 `d8b1f521` 分出，不含该提交，当前 worker 代码仍是纯 utilityProcess。ARD 两边分叉编辑，冲突段手工调和（本文件的 D11 已是调和后口径） |
+| P4-1 worker bootstrap | ⬜ | `agent-host/worker.js` 的启动模式改为 Cordis 插件图初始化；两种 carrier 共用同一入口 |
 | P4-2 后端开关 | ⬜ | dev 环境变量 `AICLIENT_RUNTIME_BACKEND=legacy\|native`（D8），不进设置页；双后端共存 |
-| P4-3 MessagePort 通道 | ⬜ | 沿用现有通道，事件出口翻译为 RuntimeEvent |
+| P4-3 WorkerTransport 适配 | ⬜ | 沿用现有 RPC 协议，MessagePort 与 Node IPC 两条通道由 `WorkerTransport` 抹平（D11）；事件出口翻译为 RuntimeEvent |
 | P4-4 端到端 | ⬜ | 多轮对话 + 工具调用 + 权限审批 + 压缩全链路（成功标准 1） |
 | P4-5 GUI 点验 | ⬜ | 时间线 / Composer / 权限卡 / 设置页无回归（成功标准 4） |
+| P4-6 打包载体验收 | ⬜ | 在打包壳里用本地模型替身（HTTP SSE stub，不调线上模型）驱动真实 Read/bash，两种 carrier 各跑一遍；复用 runtime 离线 lane 的 `fauxProvider` 用例与 `scripts/packaged-worker-smoke.cjs` 的替身思路 |
 
 ---
 
@@ -131,7 +138,7 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 |---|---|---|
 | P5-1 plugin-skills | ⬜ | 技能加载 + 模板，路径适配 `~/.pilab` + `~/.agents/` |
 | P5-2 plugin-subagent | ⬜ | 同进程第二个 Agent，不占 WorkerSlot（D10）；照搬 ADR 0062/0119 的并发、超时与隔离边界 |
-| P5-3 MCP bridge | ⬜ | MCP 工具接入自有工具注册表 |
+| P5-3 MCP bridge | ⬜ | MCP 工具接入自有工具注册表；stdio server 的进程启动走 P1-0 的 `runtimeExec`，不自建一套 spawn（D11） |
 | P5-4 会话导入适配 | ⬜ | 现有 `LegacyImportService` 适配新 session 插件接口 |
 | P5-5 模型目录切源 | ⬜ | 随包快照 + 离线回落从 pi-coding-agent 配置切到自有配置 |
 
@@ -151,7 +158,7 @@ P5-2 的照搬清单（数字取自 PI-Desktop ADR 0062 / 0119，不重新拍）
 |---|---|---|
 | P6-1 默认切换 | ⬜ | 新 runtime 设为默认后端 |
 | P6-2 摘除依赖 | ⬜ | `@earendil-works/pi-coding-agent` 移出 package.json（成功标准 3） |
-| P6-3 达标验证 | ⬜ | 缓存命中率 ≥ 现有水平，五条成功标准逐条签收 |
+| P6-3 达标验证 | ⬜ | 缓存命中率 ≥ 现有水平，**六条**成功标准逐条签收；第 6 条是加密机现场清单（GUI Read 明文 / `pwd·ls·echo` 正常 / Edit·Write 后 TUI 与编辑器一致 / 旧会话 resume / 退出无残留 worker），CI 绿不能替代 |
 | P6-4 回退开关 | ⬜ | 旧路径保留一个版本周期，开关可回切 |
 | P6-5 旧集成层退役 | ⬜ | 一个版本周期后移除 `src/agent-host/` 的 pi-coding-agent 路径 |
 
@@ -166,6 +173,7 @@ P5-2 的照搬清单（数字取自 PI-Desktop ADR 0062 / 0119，不重新拍）
 | 3 | pi-coding-agent 移除，只剩 pi-agent-core + pi-ai | P6-2 |
 | 4 | GUI 无回归 | P4-5 |
 | 5 | 旧会话可读可 resume | P3-3 |
+| 6 | 加密机现场验收（D11） | P4-6 跑门禁 → P6-3 现场签收 |
 
 ## 维护约定
 

@@ -32,7 +32,7 @@ jyw-ai-client/
 | UI 组件 | `src/renderer/components/ui/` | @coss/ui 组件，52 个文件 |
 | Git 操作 | `src/main/services/git/` | simple-git 封装 |
 | 终端 | `src/main/services/terminal/` + `src/renderer/hooks/useXterm.ts` | node-pty + xterm.js |
-| Pi runtime/worker | `src/main/services/agent-host/` + `src/agent-host/` | 过渡态仍含 singleton PiHost 与 Claude/Codex；目标是 Main WorkerManager + per-slot utilityProcess |
+| Pi runtime/worker | `src/main/services/agent-host/` + `src/agent-host/` | 过渡态仍含 singleton PiHost 与 Claude/Codex；目标是 Main WorkerManager + 每槽一个隔离进程（载体按平台分：Windows 安装版随包 Node，其余 utilityProcess，见 ARD D11） |
 | 类型定义 | `src/shared/types/*.ts` | 15 个类型文件，ipc.ts 最重要 |
 | 设计规范 | `docs/design-system.md` | **UI 开发必读** |
 
@@ -45,7 +45,7 @@ Pi Backend Migration 不是从零设计。任何相关新会话、实现切片�
 | pi-app | `/home/ai/code/pi-app` | `https://github.com/justhil/pi-app` | **WorkerManager/WorkerSlot 主参考**；Pi-native history/resume、session tree、rewind/fork、时间线与竞态测试 |
 | pix | `/home/ai/code/pix` | `https://github.com/num-scope/pix` | **Pi TUI/PTY/CLI packaging 主参考**；single-writer guard、stale output、资源提取与 terminal tests |
 
-两者均为 MIT。大量直接复制须保留对应 copyright/license notice。详细文件地图与复用规则见 `docs/plantree/plans/pi-backend-migration/topics/reference-repositories.md`。目标边界以 D14/D15 为准：renderer → preload → Electron Main WorkerManager → bounded WorkerSlot → one utilityProcess/Pi AgentSession per slot；Pi SDK 不直接进 Main，不保留额外 singleton supervisor。参考实现冲突时，以本仓已拍板产品语义、安全边界和 Cycle 1/2 已验证行为为准。
+两者均为 MIT。大量直接复制须保留对应 copyright/license notice。详细文件地图与复用规则见 `docs/plantree/plans/pi-backend-migration/topics/reference-repositories.md`。目标边界以 D14/D15 及 [ARD D11](docs/plans/2026-09-08-runtime-evolution-ard.md) 的载体修订为准：renderer → preload → Electron Main WorkerManager → bounded WorkerSlot → one isolated process/Pi AgentSession per slot；Windows 安装版用随包 Node + 原生 IPC，其余路径用 utilityProcess + MessagePort（取证见 `Windows加密环境GUI异常分析.md`）；Pi SDK 不直接进 Main，不保留额外 singleton supervisor。参考实现冲突时，以本仓已拍板产品语义、安全边界和 Cycle 1/2 已验证行为为准。
 
 ## CONVENTIONS
 
