@@ -1,0 +1,42 @@
+{
+  "caseId": "B04",
+  "name": "长文件截断与分页",
+  "passed": true,
+  "latencyMs": 179580,
+  "assertions": [
+    {
+      "stepIndex": 0,
+      "action": "prompt",
+      "passed": true
+    },
+    {
+      "stepIndex": 1,
+      "action": "prompt",
+      "passed": true
+    },
+    {
+      "stepIndex": 2,
+      "action": "prompt",
+      "passed": true
+    }
+  ],
+  "usage": {
+    "calls": 5,
+    "input": 10,
+    "output": 177,
+    "cacheRead": 50089,
+    "cacheWrite": 38539,
+    "totalTokens": 88815,
+    "cacheHitRate": 0.9998003952174694
+  },
+  "compactionUsage": {
+    "calls": 0,
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "totalTokens": 0,
+    "cacheHitRate": null
+  },
+  "toolCalls": 2
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@aiclient/runtime",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Cordis plugin-graph agent runtime (ARD D1-D10) — the replacement for the pi-coding-agent whole-package dependency",
+  "main": "index.ts",
+  "scripts": {
+    "smoke": "node --experimental-strip-types smoke/runOnce.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.84.4",
+    "@earendil-works/pi-ai": "0.84.4",
+    "cordis": "4.0.0-rc.9"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

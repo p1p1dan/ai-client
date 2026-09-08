@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-08T07:01:02Z",
+  "purpose": "Endpoint and legacy SDK preflight only; excluded from the P2-0 baseline",
+  "validBaseline": false,
+  "baseUrl": "https://maxapi.hanyue.xyz",
+  "model": "claude-sonnet-5",
+  "api": "anthropic-messages",
+  "credentialSource": "user-provided for this test; not archived",
+  "modelCatalog": {
+    "path": "/v1/models",
+    "httpStatus": 200,
+    "matchingModel": "claude-sonnet-5",
+    "supportedEndpointTypes": ["anthropic", "openai"]
+  },
+  "directRequest": {
+    "path": "/v1/messages",
+    "httpStatus": 200,
+    "maxTokens": 32,
+    "prompt": "Reply with exactly BASELINE_OK.",
+    "responseText": "BASELINE_OK",
+    "stopReason": "end_turn",
+    "usage": {
+      "input_tokens": 22,
+      "output_tokens": 10,
+      "cache_read_input_tokens": 0,
+      "cache_creation_input_tokens": 0
+    }
+  },
+  "legacySdkRequest": {
+    "sdkPackage": "@earendil-works/pi-coding-agent",
+    "sdkVersion": "0.84.3",
+    "nodeVersion": "v24.20.0",
+    "entry": "createAgentSession",
+    "appBootstrapUsed": false,
+    "thinkingLevel": "off",
+    "tools": [],
+    "extensions": [],
+    "modelConfig": {
+      "contextWindow": 200000,
+      "maxTokens": 512,
+      "metadataSource": "Explicit probe settings, not provider-advertised limits",
+      "costStatus": "unknown; SDK pricing placeholders are zero and must not be interpreted as free usage"
+    },
+    "prompt": "Reply with exactly PI_SDK_OK.",
+    "responseText": "PI_SDK_OK",
+    "event": "turn_end",
+    "stopReason": "stop",
+    "usage": {
+      "input": 13,
+      "output": 5,
+      "cacheRead": 502,
+      "cacheWrite": 202,
+      "totalTokens": 722,
+      "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 },
+      "cacheWrite1h": 0
+    },
+    "cacheHitRate": 0.974757281553398,
+    "cacheState": "provider-managed; no explicit warmup or cold-cache guarantee"
+  },
+  "limitations": [
+    "Two short preflight requests do not replace the six fixed scenario sessions.",
+    "The SDK preflight does not include AiClient bootstrap extensions or prompt additions.",
+    "No trusted model pricing was supplied; actual cost is unknown."
+  ]
+}

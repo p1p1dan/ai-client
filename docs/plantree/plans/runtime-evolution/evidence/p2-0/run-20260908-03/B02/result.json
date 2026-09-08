@@ -1,0 +1,42 @@
+{
+  "caseId": "B02",
+  "name": "多轮文件工具",
+  "passed": true,
+  "latencyMs": 89077,
+  "assertions": [
+    {
+      "stepIndex": 0,
+      "action": "prompt",
+      "passed": true
+    },
+    {
+      "stepIndex": 1,
+      "action": "prompt",
+      "passed": true
+    },
+    {
+      "stepIndex": 2,
+      "action": "prompt",
+      "passed": true
+    }
+  ],
+  "usage": {
+    "calls": 6,
+    "input": 64,
+    "output": 140,
+    "cacheRead": 16880,
+    "cacheWrite": 6408,
+    "totalTokens": 23492,
+    "cacheHitRate": 0.996222851746931
+  },
+  "compactionUsage": {
+    "calls": 0,
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "totalTokens": 0,
+    "cacheHitRate": null
+  },
+  "toolCalls": 3
+}

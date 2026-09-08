@@ -1,0 +1,22 @@
+{
+  "verified": true,
+  "cases": 6,
+  "usage": {
+    "calls": 28,
+    "input": 9599,
+    "output": 565,
+    "cacheRead": 182929,
+    "cacheWrite": 79406,
+    "totalTokens": 272499,
+    "cacheHitRate": 0.9501423169616887
+  },
+  "compactionUsage": {
+    "calls": 1,
+    "input": 2,
+    "output": 539,
+    "cacheRead": 0,
+    "cacheWrite": 15263,
+    "totalTokens": 15804,
+    "cacheHitRate": 0
+  }
+}

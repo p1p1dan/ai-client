@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "validBaseline": false,
+  "suiteVersion": "p2-0-v1",
+  "completedAt": "2026-09-08T08:00:36.542Z",
+  "results": [
+    {
+      "caseId": "B01",
+      "name": "纯对话",
+      "passed": true,
+      "latencyMs": 81374,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 1,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 2,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "usage": {
+        "calls": 3,
+        "input": 9387,
+        "output": 38,
+        "cacheRead": 20167,
+        "cacheWrite": 20603,
+        "totalTokens": 50195,
+        "cacheHitRate": 0.682378019895784
+      },
+      "compactionUsage": {
+        "calls": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cacheHitRate": null
+      },
+      "toolCalls": 0
+    },
+    {
+      "caseId": "B02",
+      "name": "多轮文件工具",
+      "passed": false,
+      "latencyMs": 164051,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "error": "Expected tool was not called\n\n0 !== 1\n",
+      "violations": [
+        "Unexpected edit.oldText\n+ actual - expected\n\n+ undefined\n- 'port=4317'\n",
+        "Tool failed: edit",
+        "Unexpected edit.oldText\n+ actual - expected\n\n+ undefined\n- 'port=4317'\n",
+        "Tool failed: edit"
+      ]
+    }
+  ],
+  "pricing": null,
+  "usage": null,
+  "compactionUsage": null
+}

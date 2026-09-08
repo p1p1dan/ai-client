@@ -1,0 +1,44 @@
+{
+  "purpose": "diagnostic replay only; excluded from baseline",
+  "sourceRun": "run-20260908-03",
+  "case": "B04",
+  "stream": true,
+  "httpStatus": 200,
+  "events": [
+    {
+      "message": {
+        "content": [],
+        "id": "msg_62891e0b65714fd1900890b9cb6cfb21",
+        "model": "claude-sonnet-5",
+        "role": "assistant",
+        "stop_reason": null,
+        "stop_sequence": null,
+        "type": "message",
+        "usage": {
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "input_tokens": 17823,
+          "output_tokens": 0
+        }
+      },
+      "type": "message_start"
+    },
+    {
+      "delta": {
+        "stop_reason": "end_turn",
+        "stop_sequence": null
+      },
+      "type": "message_delta",
+      "usage": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 23054,
+        "input_tokens": 2,
+        "output_tokens": 16
+      }
+    },
+    {
+      "type": "message_stop"
+    }
+  ],
+  "durationSeconds": 20.015
+}

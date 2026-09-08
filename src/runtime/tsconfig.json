@@ -1,0 +1,38 @@
+{
+  // Type-check gate for the self-owned runtime (ARD D1-D10).
+  //
+  // WHY A SEPARATE CONFIG, like `src/agent-host/tsconfig.json`: this directory
+  // is its own npm package with its own `node_modules` (cordis + the two pi
+  // packages, pinned in `package.json`). Folding it into the root gate would
+  // make `pnpm typecheck` fail on any checkout that has not run
+  // `npm ci` in here — including every contributor who never touches the
+  // runtime. Run via `pnpm typecheck:runtime`; the root gate excludes
+  // `src/runtime/**` for exactly this reason.
+  //
+  // No DOM in `lib`: this code runs in a Node utility process. A stray
+  // `window`/`document` must fail here rather than survive into the worker.
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    // Node strips types at runtime, so runtime-internal imports carry `.ts`.
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    // Deliberately NOT `exactOptionalPropertyTypes`: the rest of the repo does
+    // not use it, and P4 moves types across the `src/shared` boundary. One
+    // package on a stricter dialect than its neighbours costs more at that seam
+    // than the `| undefined` confusions it would catch here.
+    "lib": ["ESNext"],
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"],
+  // `spikes/` are throwaway probes that pin down third-party semantics; they
+  // are never imported by the runtime and are excluded for the same reason
+  // `src/agent-host/tsconfig.json` excludes its own.
+  "exclude": ["node_modules", "spikes"]
+}

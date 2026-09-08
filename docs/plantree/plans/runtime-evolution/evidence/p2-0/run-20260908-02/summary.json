@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "validBaseline": false,
+  "suiteVersion": "p2-0-v2",
+  "completedAt": "2026-09-08T08:06:30.321Z",
+  "results": [
+    {
+      "caseId": "B01",
+      "name": "纯对话",
+      "passed": true,
+      "latencyMs": 64066,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 1,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 2,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "usage": {
+        "calls": 3,
+        "input": 9387,
+        "output": 38,
+        "cacheRead": 39179,
+        "cacheWrite": 1591,
+        "totalTokens": 50195,
+        "cacheHitRate": 0.8067166330354569
+      },
+      "compactionUsage": {
+        "calls": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cacheHitRate": null
+      },
+      "toolCalls": 0
+    },
+    {
+      "caseId": "B02",
+      "name": "多轮文件工具",
+      "passed": true,
+      "latencyMs": 66790,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 1,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 2,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "usage": {
+        "calls": 6,
+        "input": 64,
+        "output": 140,
+        "cacheRead": 15402,
+        "cacheWrite": 7886,
+        "totalTokens": 23492,
+        "cacheHitRate": 0.9958618905987328
+      },
+      "compactionUsage": {
+        "calls": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cacheHitRate": null
+      },
+      "toolCalls": 3
+    },
+    {
+      "caseId": "B03",
+      "name": "搜索与读取",
+      "passed": true,
+      "latencyMs": 41399,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 1,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 2,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "usage": {
+        "calls": 5,
+        "input": 57,
+        "output": 93,
+        "cacheRead": 9424,
+        "cacheWrite": 7632,
+        "totalTokens": 17206,
+        "cacheHitRate": 0.9939879759519038
+      },
+      "compactionUsage": {
+        "calls": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cacheHitRate": null
+      },
+      "toolCalls": 2
+    },
+    {
+      "caseId": "B04",
+      "name": "长文件截断与分页",
+      "passed": false,
+      "latencyMs": 82025,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "error": "Missing response marker AMBER",
+      "violations": [
+        "Provider stop: error"
+      ]
+    }
+  ],
+  "pricing": null,
+  "usage": null,
+  "compactionUsage": null
+}

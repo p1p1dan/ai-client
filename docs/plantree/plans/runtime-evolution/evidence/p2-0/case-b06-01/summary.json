@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "validBaseline": false,
+  "suiteVersion": "p2-0-v3",
+  "completedAt": "2026-09-08T08:26:45.633Z",
+  "results": [
+    {
+      "caseId": "B06",
+      "name": "resume 续聊",
+      "passed": true,
+      "latencyMs": 50297,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 1,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 2,
+          "action": "resume",
+          "passed": true
+        },
+        {
+          "stepIndex": 3,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 4,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "usage": {
+        "calls": 4,
+        "input": 37,
+        "output": 48,
+        "cacheRead": 6715,
+        "cacheWrite": 7389,
+        "totalTokens": 14189,
+        "cacheHitRate": 0.9945201421800948
+      },
+      "compactionUsage": {
+        "calls": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cacheHitRate": null
+      },
+      "toolCalls": 0
+    }
+  ],
+  "pricing": null,
+  "usage": null,
+  "compactionUsage": null
+}

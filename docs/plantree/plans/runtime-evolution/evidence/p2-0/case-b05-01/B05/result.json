@@ -1,0 +1,25 @@
+{
+  "caseId": "B05",
+  "name": "压缩后续聊",
+  "passed": false,
+  "latencyMs": 36561,
+  "assertions": [
+    {
+      "stepIndex": 0,
+      "action": "prompt",
+      "passed": true
+    },
+    {
+      "stepIndex": 1,
+      "action": "prompt",
+      "passed": true
+    },
+    {
+      "stepIndex": 2,
+      "action": "prompt",
+      "passed": true
+    }
+  ],
+  "error": "Nothing to compact (session too small)",
+  "violations": []
+}

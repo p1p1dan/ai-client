@@ -1,0 +1,42 @@
+{
+  "caseId": "B01",
+  "name": "纯对话",
+  "passed": true,
+  "latencyMs": 66560,
+  "assertions": [
+    {
+      "stepIndex": 0,
+      "action": "prompt",
+      "passed": true
+    },
+    {
+      "stepIndex": 1,
+      "action": "prompt",
+      "passed": true
+    },
+    {
+      "stepIndex": 2,
+      "action": "prompt",
+      "passed": true
+    }
+  ],
+  "usage": {
+    "calls": 3,
+    "input": 9387,
+    "output": 39,
+    "cacheRead": 20167,
+    "cacheWrite": 20604,
+    "totalTokens": 50197,
+    "cacheHitRate": 0.682378019895784
+  },
+  "compactionUsage": {
+    "calls": 0,
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "totalTokens": 0,
+    "cacheHitRate": null
+  },
+  "toolCalls": 0
+}

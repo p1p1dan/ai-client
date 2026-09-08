@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "suiteVersion": "p2-0-v2",
+  "suiteSha256": "6ecd3fc4bf08ede37be32485980583c8214525644c7c62f85f21cbd7b34b2508",
+  "backend": "legacy",
+  "entry": "bootstrapPiAgentSession",
+  "startedAt": "2026-09-08T08:16:14.693Z",
+  "gitHead": "3ce9702e369463339420106280d42188dd24dbd3",
+  "gitStatus": " M .github/workflows/build.yml\n D CONTEXT.md\n M docs/plans/2026-09-08-runtime-evolution-ard.md\n M package.json\n M tsconfig.json\n D \"\\345\\276\\205\\345\\212\\236\\344\\273\\273\\345\\212\\241\\346\\211\\247\\350\\241\\214\\350\\256\\241\\345\\210\\222.md\"\n D \"\\346\\211\\213\\345\\267\\245\\351\\252\\214\\346\\224\\266\\346\\270\\205\\345\\215\\225.md\"\n?? docs/plantree/\n?? scripts/runtime-baseline/\n?? src/runtime/\n",
+  "nodeVersion": "v24.20.0",
+  "sdkHost": "/home/pi/code/ai-client/src/agent-host",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@earendil-works/pi-agent-core": "0.84.3",
+    "@earendil-works/pi-ai": "0.84.3"
+  },
+  "baseUrl": "https://maxapi.hanyue.xyz",
+  "provider": "p2-baseline",
+  "model": {
+    "id": "claude-sonnet-5",
+    "api": "anthropic-messages",
+    "reasoning": false,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 200000,
+    "maxTokens": 2048
+  },
+  "settings": {
+    "defaultThinkingLevel": "off",
+    "compaction": {
+      "enabled": false,
+      "reserveTokens": 4096,
+      "keepRecentTokens": 1024
+    },
+    "retry": {
+      "enabled": false,
+      "provider": {
+        "maxRetries": 0,
+        "timeoutMs": 90000
+      }
+    },
+    "enableAnalytics": false,
+    "enableInstallTelemetry": false
+  },
+  "work": "/tmp/aiclient-p2-0-work",
+  "caseOrder": [
+    "B04"
+  ],
+  "pricing": null,
+  "pricingNote": "No trusted prices supplied; raw SDK zero prices are placeholders.",
+  "cachePolicy": "SDK default; no explicit warmup, no cold-cache guarantee; all first turns included",
+  "formula": "sum(cacheRead) / (sum(input) + sum(cacheRead)); compaction usage separate",
+  "files": {
+    "src/agent-host/bundledFeaturePlugins.ts": "bb8092ef1a232e0ceeade2215fb8ad51e65c9f0cc93758f3a3c9a68006000b63",
+    "src/agent-host/bundledPlugins.mjs": "542c5f91801c93d6dd5b122c223890abe51086e29e13f7558def1731201ea3f3",
+    "src/agent-host/codexHistoryReader.ts": "aa3ce704b5c4b55b5f8ee1feae76d06a2ff6d2421917e73d38a6d06e4b3d74cc",
+    "src/agent-host/codexItemMapper.ts": "cb5e8589d090cdb75517bd680f77b31f1d29afc609f6ce68508166e241bc5c71",
+    "src/agent-host/commandInventory.ts": "7025a128fa2069ad254d98bd5f8fc254453229fc7cf12e61213e6760afbf0915",
+    "src/agent-host/extensionInventory.ts": "70cea17a7fac3a4fb1eb5a8bbbce718ed71787c518f26539c2f0a9dbce725451",
+    "src/agent-host/extensionUiBridge.ts": "754e85c0db6f68abf77ea6a83b5e4feab74617c9ba7f394d7422ebc737f159c1",
+    "src/agent-host/permissionActivity.ts": "caba09ef1622625555222386854f66c801825f343342e24fcf4ff8ee44837ca2",
+    "src/agent-host/permissionPlugin.ts": "d5b6ba76fab695838c9e7d30036ccb10ba1dc5c47a12774737c969d26684230c",
+    "src/agent-host/permissionPolicy.mjs": "09dbed38f241c15aa48eba5c98346175f69d6481e7ac7bb0b2ef3de090c33685",
+    "src/agent-host/piAgentSessionBootstrap.ts": "6df2ff5555c60f19894928c331ba7196bb885e3b8c48024ce104709ab8ce6a13",
+    "src/agent-host/piLegacyImport.ts": "5079a383e93f87a71cb27e88c8abc4efb78e094b366f07b1102514cfd7057854",
+    "src/agent-host/piSessionPreflight.ts": "2466e82b7983e09bcff1cbb672e3967ae5e88bdebbc9cca3479f996c6926cc71",
+    "src/agent-host/piSessionTimeline.ts": "3ad4107836c8fe5c9cfa78d94d13658b37bc2b34fefc0675496c5e054c4aab1a",
+    "src/agent-host/piSessionTree.ts": "7db0b5ff12776a522b19e33876d4c9661c70b70178a2a7bc9efa320e149d2893",
+    "src/agent-host/piUtilityRunner.ts": "fa687a7930db4984cb3f370264507598bd343bae80385e7998532af862a69dc9",
+    "src/agent-host/piWorkerErrors.ts": "83b4c7fe0b862da466014389ebc81922495a0d6ea87ab689fdc7f66e3ed34ed1",
+    "src/agent-host/piWorkerRpcServer.ts": "bd1e959a1b9f2a2de8a35ef3941eddfc61ad9d9df6d3512aed710288dbcca95c",
+    "src/agent-host/piWorkerSession.ts": "6d8387f450f0cd4dc682777a814d3e8107895579fc60b60d92e7f99e44d3a3c1",
+    "src/agent-host/sessionTierAuthorizer.ts": "bc918a2ceecbed7b3742ce63720c2669ff35284f56f8eb023f4f8d30f5353125",
+    "src/agent-host/stderrRedaction.ts": "1eb8763363297c91b0cf5a1e64f22c8d060cc4bc6eccb8bfab6aaa1e137197ad",
+    "src/agent-host/subagentProjection.ts": "109e1ae8d51e0c523699ba396e737844de3c10877560a8e06f390b8c2ec49e7a",
+    "src/agent-host/userResourcePaths.ts": "deb677272a1306db31e3472dd1f9bcd707e22bfc5b6a0b98c234344a550297e4",
+    "src/agent-host/worker.ts": "b2c769d6a106f8a710601bff7e0ba236bb147071205c93e3b950b230a621df9b",
+    "src/shared/piUsage.ts": "acaae79a9d412e025f80fed39b412ca37c931f08b58901f4ede22af4d46e77af",
+    "src/shared/piTurnRollup.ts": "ff76c609211d599749eb322d3d1d4a7ba70921ffad4fe6f60afd77d51571ae23",
+    "scripts/runtime-baseline/run.mjs": "fc05f3ece291b7ed257185ec39bbdeecc8be7dada6703537e5419db0e9e7ad8a",
+    "scripts/runtime-baseline/suite.mjs": "46e7168d2d2b8a6a1a4b9b849cf18ea46856e2249924317b84ef7853b29944a4",
+    "scripts/runtime-baseline/metrics.mjs": "7e5778dcd8b665a2cf56090ee3570c238ed6d4a5beca6bdd23be859c586eab8f"
+  }
+}

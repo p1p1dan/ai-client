@@ -1,0 +1,42 @@
+{
+  "caseId": "B03",
+  "name": "搜索与读取",
+  "passed": true,
+  "latencyMs": 68713,
+  "assertions": [
+    {
+      "stepIndex": 0,
+      "action": "prompt",
+      "passed": true
+    },
+    {
+      "stepIndex": 1,
+      "action": "prompt",
+      "passed": true
+    },
+    {
+      "stepIndex": 2,
+      "action": "prompt",
+      "passed": true
+    }
+  ],
+  "usage": {
+    "calls": 5,
+    "input": 57,
+    "output": 93,
+    "cacheRead": 8245,
+    "cacheWrite": 8811,
+    "totalTokens": 17206,
+    "cacheHitRate": 0.9931341845338473
+  },
+  "compactionUsage": {
+    "calls": 0,
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "totalTokens": 0,
+    "cacheHitRate": null
+  },
+  "toolCalls": 2
+}

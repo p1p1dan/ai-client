@@ -25,7 +25,8 @@ jobs:
   # ran here). Raise a value if a job legitimately grows, do not delete it.
   gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 10 -> 12 when the runtime package added its own `npm ci` plus two gates.
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -66,21 +67,39 @@ jobs:
         run: npm ci --omit=optional
         working-directory: src/agent-host
 
+      # The self-owned runtime (ARD D1-D10) is its own npm package with its own
+      # pins (cordis + pi-agent-core + pi-ai). Required before `test` as well as
+      # before `typecheck:runtime`: root vitest collects
+      # `src/runtime/__tests__/**`, which import those packages.
+      - name: Install runtime dependencies
+        run: npm ci --omit=optional
+        working-directory: src/runtime
+
       # Heavy gates run serially, never chained into one command: the combined
       # form has OOM'd (exit 137) before — see baseline/test-and-release-gates.md.
-      - name: Gate 1/5 — typecheck
+      - name: Gate 1/7 — typecheck
         run: pnpm typecheck
 
-      - name: Gate 2/5 — typecheck:agent-host
+      - name: Gate 2/7 — typecheck:agent-host
         run: pnpm typecheck:agent-host
 
-      - name: Gate 3/5 — lint
+      - name: Gate 3/7 — typecheck:runtime
+        run: pnpm typecheck:runtime
+
+      - name: Gate 4/7 — lint
         run: pnpm lint
 
-      - name: Gate 4/5 — test
+      - name: Gate 5/7 — test
         run: pnpm test
 
-      - name: Gate 5/5 — release metadata
+      # ARD risk R1's offline half: proves the Cordis graph comes up and that
+      # `Agent` drives a turn to completion against pi-ai's own faux provider.
+      # No credentials, no network — the live lane is run by hand on an install
+      # that has logged in.
+      - name: Gate 6/7 — runtime smoke (offline)
+        run: pnpm smoke:runtime
+
+      - name: Gate 7/7 — release metadata
         run: pnpm verify:release
 
   build-app:

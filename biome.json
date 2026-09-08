@@ -58,6 +58,7 @@
       "!**/*.css",
       "!docs/design",
       "!docs/plans/**/*.mjs",
+      "!docs/plantree/plans/runtime-evolution/evidence",
       "!resources/model-catalog/snapshot.json"
     ]
   }

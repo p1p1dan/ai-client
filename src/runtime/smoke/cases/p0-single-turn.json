@@ -1,0 +1,14 @@
+{
+  "case_id": "p0_single_turn_live",
+  "lane": "live",
+  "input": "Reply with exactly the word: ready",
+  "system_prompt": "You are a connectivity probe. Answer in one short line and call no tools.",
+  "expected_assertions": {
+    "must_succeed": true,
+    "must_not_call_tools": ["*"],
+    "turns": 1,
+    "min_output_chars": 1,
+    "max_latency_ms": 120000
+  },
+  "notes": "Happy path for ARD risk R1: pi-agent-core Agent + pi-ai carry one prompt to a complete streamed reply against a real provider."
+}

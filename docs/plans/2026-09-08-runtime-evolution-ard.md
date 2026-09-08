@@ -1,7 +1,7 @@
 # Runtime 自主化演进 — 架构需求文档（ARD）
 
 > 文档日期：2026-09-08
-> 文档状态：ARD 草案，待用户拍板
+> 文档状态：**已拍板**（2026-09-08 用户确认，D1–D7 生效）· 执行看板见 [plantree](../plantree/plans/runtime-evolution/README.md)
 > 触发：用户确定产品进化路线 ai-client → PI-Desktop 形态 → DSH 形态，
 > 核心诉求「内部产品，除协议适配层外其余尽可能可控、方便修改和插入」。
 > 前序调研：[PI-Desktop 调研档](./2026-09-08-pi-desktop-study.md) ·
@@ -108,6 +108,69 @@ renderer 的 Zustand store 和时间线渲染零改动。后续可逐步扩展 R
 
 凭据体系不动。`plugin-model-adapter` 从现有 credential vault 读取 API key，
 通过 pi-ai 的 `ModelAuth` 接口注入。
+
+### D8 · 后端开关：仅 dev 环境变量
+
+`AICLIENT_RUNTIME_BACKEND=legacy|native`，与现有 `AICLIENT_PI_WORKER_CAPACITY`
+（`src/main/services/agent-host/WorkerManager.ts:271`）同族命名，启动时读取。
+**不进设置页**：切换完成后这个开关就没有用户价值，P6-1 默认切到 native 后连开关一起删除，
+只保留一个版本周期的回退窗口。
+
+### D9 · 缓存命中率：沿用现有公式，用固定脚本会话采基线
+
+**公式不变**：`cacheRead / (input + cacheRead)`，cacheWrite 不进分母。
+我们 `src/shared/piUsage.ts:163` 与 PI-Desktop `apps/desktop/src/lib/context-usage.ts:250`
+的 `calculateCacheRate` 已经是同一个式子——`input` 是未命中的 prompt 部分，
+`cacheRead` 是从缓存取的部分，写缓存的开销不属于这个比值。两边同式意味着迁移前后的数字天然可比。
+
+**数据源不需要新埋点**：`src/shared/piTurnRollup.ts` 的 `PiTurnRollup` 已逐轮累计
+`input / cacheRead / cacheWrite`，且都是 pi 原样上报、不做二次推导。
+
+**基线采集**：5–8 条固定脚本会话（纯对话 / 多轮工具 / 触发压缩 / resume 续聊 / 长文件读），
+同模型同参数，在**旧后端仍然可用时**跑完并存档——成功标准 2 要求「≥ 当前 pi-coding-agent 水平」，
+而 P6-2 会摘掉旧后端，基线不提前采就没有对照物。不用真实用户会话做 A/B：模型不确定导致
+工具调用序列、轮数和上下文长度都不同，两边数字不可比。
+
+**参考实现的边界**：PI-Desktop 只**展示**命中率（`changelog.ts:506`「Show context cache hit
+rate in chat transcript header」），`agent-runtime` 内没有任何缓存优化策略，ADR 也无相关条目。
+所以「请求前缀稳定性的离线度量」没有可搬运的参考实现，属于我们自建，列为 P2 的**可选加强项**
+而非门禁；门禁仍是上面这个 provider 上报的在线比值。
+
+### D10 · Subagent 拓扑：同进程内的第二个 Agent，不占 WorkerSlot
+
+**决策**：subagent 在同一 worker 进程内跑第二个 `Agent`（Cordis fork/isolate 上下文做 service 隔离），
+不为每个 subagent 分配 WorkerSlot。
+
+依据：
+1. PI-Desktop ADR 0062 已稳定运行验证此拓扑——「A `SubagentRun` is a second pi `Agent` in the
+   same sidecar process」，并把「A separate process per delegate」明确列为 **Rejected**：
+   真隔离的收益抵不上重复一份 host 连接、provider 设置和事件管道的代价。
+2. 我方额外理由：WorkerSlot 是被内存分档硬限的稀缺资源（≤4GiB 机器只有 3 个槽，
+   `WorkerManager.ts:250-268`），超限直接 `worker_capacity_reached` 而不是排队。
+   subagent 占槽会挤掉真实用户会话。
+3. subagent 负载是 IO-bound（模型流式 + 文件读 + shell），事件循环不是瓶颈；
+   真正 CPU 密集的 shell 本来就已 fork 出去。
+
+**照搬 ADR 0062 / 0119 的边界**（这些数字是他们跑出来的，不重新拍）：
+
+| 项 | 口径 |
+|---|---|
+| 并发上限 | 4，信号量控制（`MAX_SUBAGENT_CONCURRENCY`） |
+| 报告上限 | 12k 字符（`MAX_SUBAGENT_REPORT_CHARS`），超出截断 |
+| 工具白名单 | 默认 `Read/Glob/Grep`；可声明 `Bash/Edit/Write`；禁止 plugin/skill/mode 工具与嵌套 Task |
+| 权限继承 | 不继承父会话写权限，写能力只来自定义自身声明 |
+| 并行写序 | 按规范化路径的 PathMutex 串行化写操作，不同路径互不等待 |
+| 上下文隔离 | 子行带 `parentToolCallId` + `agentName`，持久化但**重建模型上下文时跳过** |
+| 超时 | 事件驱动的 idle + 总时长看门狗，产出 `timed_out` 结果（ADR 0119） |
+| 终止 | 子代理终止收敛为 Task 工具结果，不触达主进程的 turn 处理 |
+| 定义来源 | `~/.agents/subagents/<name>.md`，上限 16 条，坏文档降级为启动诊断 |
+
+**不照搬的一条**：ADR 0062 花了篇幅把渲染层「每会话一个 pending permission」改成队列——
+我们 `src/renderer/stores/chatSessions.ts:250` 的 `pendingPermissions` 本来就是数组且带去重，
+这块渲染层不用动。
+
+**留后路**：执行入口抽成 `SubagentRunner` service（`run(def, prompt, signal): AsyncIterable<Event>`），
+进程内实现是默认 provider；将来真出现 CPU 密集场景，换一个实现即可，调用方不动。
 
 ## 4. 模块分类：搬运适配 vs 自建
 

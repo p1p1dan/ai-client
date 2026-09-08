@@ -1,0 +1,16 @@
+{
+  "case_id": "p0_single_turn_offline",
+  "lane": "offline",
+  "input": "Reply with exactly the word: ready",
+  "system_prompt": "You are a connectivity probe. Answer in one short line and call no tools.",
+  "scripted_output": "ready",
+  "expected_assertions": {
+    "must_succeed": true,
+    "must_not_call_tools": ["*"],
+    "turns": 1,
+    "min_output_chars": 1,
+    "exact_output": "ready",
+    "max_latency_ms": 30000
+  },
+  "notes": "Same happy path with pi-ai's own faux provider in place of the network. Proves the plugin graph, the streaming fold and the trace, NOT that a real endpoint answers."
+}

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "validBaseline": false,
+  "suiteVersion": "p2-0-v3",
+  "completedAt": "2026-09-08T08:25:03.340Z",
+  "results": [
+    {
+      "caseId": "B05",
+      "name": "压缩后续聊",
+      "passed": true,
+      "latencyMs": 91479,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 1,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 2,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 3,
+          "action": "compact",
+          "passed": true
+        },
+        {
+          "stepIndex": 4,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 5,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "usage": {
+        "calls": 5,
+        "input": 44,
+        "output": 69,
+        "cacheRead": 62120,
+        "cacheWrite": 16369,
+        "totalTokens": 78602,
+        "cacheHitRate": 0.999292194839457
+      },
+      "compactionUsage": {
+        "calls": 1,
+        "input": 2,
+        "output": 539,
+        "cacheRead": 0,
+        "cacheWrite": 15263,
+        "totalTokens": 15804,
+        "cacheHitRate": 0
+      },
+      "toolCalls": 0
+    }
+  ],
+  "pricing": null,
+  "usage": null,
+  "compactionUsage": null
+}

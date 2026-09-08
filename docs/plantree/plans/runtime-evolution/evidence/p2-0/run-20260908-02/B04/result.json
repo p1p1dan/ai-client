@@ -1,0 +1,17 @@
+{
+  "caseId": "B04",
+  "name": "长文件截断与分页",
+  "passed": false,
+  "latencyMs": 82025,
+  "assertions": [
+    {
+      "stepIndex": 0,
+      "action": "prompt",
+      "passed": true
+    }
+  ],
+  "error": "Missing response marker AMBER",
+  "violations": [
+    "Provider stop: error"
+  ]
+}

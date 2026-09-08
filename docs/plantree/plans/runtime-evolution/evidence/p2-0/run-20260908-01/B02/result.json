@@ -1,0 +1,20 @@
+{
+  "caseId": "B02",
+  "name": "多轮文件工具",
+  "passed": false,
+  "latencyMs": 164051,
+  "assertions": [
+    {
+      "stepIndex": 0,
+      "action": "prompt",
+      "passed": true
+    }
+  ],
+  "error": "Expected tool was not called\n\n0 !== 1\n",
+  "violations": [
+    "Unexpected edit.oldText\n+ actual - expected\n\n+ undefined\n- 'port=4317'\n",
+    "Tool failed: edit",
+    "Unexpected edit.oldText\n+ actual - expected\n\n+ undefined\n- 'port=4317'\n",
+    "Tool failed: edit"
+  ]
+}
