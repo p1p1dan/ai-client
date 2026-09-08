@@ -68,3 +68,11 @@
 | 执行清单（勾选视图） | [TODO.md](./TODO.md) |
 | 逐任务落地证据 | [evidence/](./evidence/) |
 | 需求原文 | [PI-Desktop 调研档](../../../plans/2026-09-08-pi-desktop-study.md) |
+
+## 2026-09-08 B 组接缝登记
+
+B1/B2 必须在 `src/agent-host/piAgentSessionBootstrap.ts` 的 `resourceLoaderOptions`
+接入默认技能安装提示与只读全局指令。仅 B 组修改该资源选项和相应 import；
+不改权限 gate、扩展验证、WorkerSession 或 A 组用量链路。
+配套允许追加 `src/preload/index.ts`、`src/shared/types/ipc.ts` 的技能目录 IPC，
+以及 shared i18n 的对应翻译和相关测试。上述登记是本轮明确的文件边界例外。

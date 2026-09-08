@@ -3,6 +3,7 @@ import type {
   LegacyImportBatchResult,
   LegacyImportProject,
   LegacyImportSessionPreview,
+  LegacyImportSourceKind,
 } from '@shared/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -18,13 +19,17 @@ export function useLegacyImportProjects(options?: { enabled?: boolean }) {
   });
 }
 
-export function useLegacyImportSessions(projectId: string | null, options?: { enabled?: boolean }) {
+export function useLegacyImportSessions(
+  projectId: string | null,
+  options?: { enabled?: boolean; sourceKind?: LegacyImportSourceKind }
+) {
+  const sourceKind = options?.sourceKind ?? 'claude-code';
   const enabled = (options?.enabled ?? true) && !!projectId;
   return useQuery({
-    queryKey: ['legacy-import', 'sessions', projectId],
+    queryKey: ['legacy-import', 'sessions', sourceKind, projectId],
     queryFn: async (): Promise<LegacyImportSessionPreview[]> => {
       if (!projectId) return [];
-      return window.electronAPI.legacyImport.listSessions(projectId);
+      return window.electronAPI.legacyImport.listSessions(projectId, sourceKind);
     },
     enabled,
     staleTime: 30_000,

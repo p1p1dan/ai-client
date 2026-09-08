@@ -1,4 +1,13 @@
-import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type {
@@ -8,8 +17,14 @@ import type {
 } from '@shared/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClaudeSessionScanner } from '../ClaudeSessionScanner';
+import { CodexSessionScanner } from '../CodexSessionScanner';
 import { LegacyImportManifest } from '../LegacyImportManifest';
 import { LegacyImportService, type LegacyImportSessionIndex } from '../LegacyImportService';
+import {
+  claudeSourceImporter,
+  codexSourceImporter,
+  type LegacySourceImporter,
+} from '../LegacyImportSources';
 
 let root: string;
 let configDir: string;
@@ -67,6 +82,7 @@ class FakeIndex implements LegacyImportSessionIndex {
 function harness(
   options: {
     manifest?: LegacyImportManifest;
+    importers?: LegacySourceImporter[];
     disposeFails?: boolean;
     mutateSourceAfterImport?: boolean;
   } = {}
@@ -133,6 +149,7 @@ function harness(
       resolveRoots: () => [{ dir: configDir, kind: 'legacy' }],
     }),
     manifest,
+    importers: options.importers,
     sessionIndex: index,
     createImport,
     inspectImport,
@@ -349,5 +366,77 @@ describe('LegacyImportService transaction', () => {
     ).rejects.toMatchObject({ code: 'ENOENT' });
     expect((await h.manifest.list())[0]?.status).toBe('failed');
     expect(h.index.rows.size).toBe(0);
+  });
+});
+
+describe('B4 multi-source import', () => {
+  async function sources() {
+    const codexRoot = path.join(root, 'codex');
+    await mkdir(codexRoot);
+    await copyFile(
+      path.resolve(
+        __dirname,
+        '../../../../agent-host/__tests__/fixtures/codex/codex-rollout-redacted.jsonl'
+      ),
+      path.join(codexRoot, 'rollout.jsonl')
+    );
+    const codex = codexSourceImporter(new CodexSessionScanner(() => codexRoot));
+    const claude = claudeSourceImporter(
+      new ClaudeSessionScanner({ resolveRoots: () => [{ dir: configDir, kind: 'legacy' }] })
+    );
+    return { codex, claude };
+  }
+
+  it('imports Codex once and persists enough manifest state for deduplication', async () => {
+    const { codex, claude } = await sources();
+    const h = harness({ importers: [claude, codex] });
+    const projects = await h.service.listProjects();
+    expect(projects.map((project) => project.sourceKind).sort()).toEqual(['claude-code', 'codex']);
+    const project = projects.find((item) => item.sourceKind === 'codex');
+    if (!project) throw new Error('missing Codex project');
+    const [session] = await h.service.listSessions(project.id, 'codex');
+    const ref = {
+      sourceKind: 'codex' as const,
+      projectId: project.id,
+      sourceSessionId: session.id,
+    };
+    expect((await h.service.importBatch([ref])).results[0].status).toBe('imported');
+    expect((await h.service.importBatch([ref])).results[0].status).toBe('already-imported');
+    expect(h.createImport).toHaveBeenCalledOnce();
+    expect([...h.index.rows.values()][0].legacyImport?.sourceKind).toBe('codex');
+    const reloaded = new LegacyImportManifest({ manifestPath, integrityKey: TEST_INTEGRITY_KEY });
+    expect((await reloaded.list())[0].source.sourceKind).toBe('codex');
+  });
+
+  it('imports matching external ids from two sources as distinct sessions', async () => {
+    const { claude, codex } = await sources();
+    const [codexProject] = (await codex.scan()).projects;
+    const [codexSession] = (await codex.scan(codexProject.id)).sessions;
+    const sameIdFile = path.join(path.dirname(sourceFile), `${codexSession.id}.jsonl`);
+    await rename(sourceFile, sameIdFile);
+    const h = harness({ importers: [claude, codex] });
+    const results = (
+      await h.service.importBatch([
+        { sourceKind: 'claude-code', projectId: 'project-a', sourceSessionId: codexSession.id },
+        { sourceKind: 'codex', projectId: codexProject.id, sourceSessionId: codexSession.id },
+      ])
+    ).results;
+    expect(results.map((result) => result.status)).toEqual(['imported', 'imported']);
+    expect(h.index.rows.size).toBe(2);
+    expect(results[0].session?.sessionId).not.toBe(results[1].session?.sessionId);
+    expect(results[0].session?.legacyImport?.dedupeKey).not.toBe(
+      results[1].session?.legacyImport?.dedupeKey
+    );
+    expect(await readFile(sameIdFile, 'utf8')).toContain('answer:hello');
+  });
+
+  it('keeps Claude projects visible when the Codex root cannot be scanned', async () => {
+    const { claude } = await sources();
+    // A regular file used as the root produces ENOTDIR on every host, including root users.
+    const codex = codexSourceImporter(new CodexSessionScanner(() => sourceFile));
+    const h = harness({ importers: [codex, claude] });
+    const projects = await h.service.listProjects();
+    expect(projects).toHaveLength(1);
+    expect(projects[0].sourceKind).toBe('claude-code');
   });
 });

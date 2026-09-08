@@ -598,6 +598,7 @@ export const zhTranslations: Record<string, string> = {
   'This app-profile directory becomes active when managed mode is used.':
     '切换到托管模式后，这个应用配置档目录才会生效。',
   'Open prompt templates folder': '打开模板目录',
+  'Open skills folder': '打开技能目录',
   'Opening...': '正在打开…',
   // U13: sidebar group for chats that never got a project folder — they run in
   // a throwaway directory, so they belong to no repository.

@@ -268,6 +268,13 @@ export interface PiResourceSettings {
     managedSkills: string;
     managedPromptTemplates: string;
   };
+  bundledFeatures: Array<{
+    id: string;
+    label: string;
+    cost: string;
+    defaultEnabled: boolean;
+    enabled: boolean;
+  }>;
 }
 
 /**
@@ -279,7 +286,10 @@ export interface PiResourceSettings {
 export interface UpdatePiResourceSettingsRequest {
   borrowUserPiResources?: boolean;
   enableSubagents?: boolean;
+  optInFeatures?: Record<string, boolean>;
 }
+
+export const PI_OPT_IN_FEATURE_SETTINGS_KEY = 'piOptInFeatures';
 
 export function parsePiModelRef(value: string): { provider: string; modelId: string } | null {
   const normalized = value.trim();

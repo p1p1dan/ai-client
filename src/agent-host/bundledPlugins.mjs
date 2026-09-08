@@ -56,6 +56,7 @@
  * @property {boolean} shipsLicenceFile Whether upstream includes a LICENSE file.
  * @property {string} [optIn] Feature id that must be enabled for this plugin to
  *   be injected. Absent means "always injected".
+ * @property {{label: string, cost: string, defaultEnabled: boolean, legacySettingKey?: string}} [settings]
  */
 
 /** @type {readonly BundledFeaturePlugin[]} */
@@ -77,8 +78,24 @@ export const BUNDLED_FEATURE_PLUGINS = [
     // security reason for choosing this package over `tintinweb/pi-subagents`
     // (below) still applies whenever it IS on.
     optIn: 'subagents',
+    settings: {
+      label: 'Sub-agents',
+      cost: 'Lets the model delegate work to background agents. Off by default: its tool definitions are sent with every request, so it costs tokens on every turn even when unused. Changing it reloads Pi workers.',
+      defaultEnabled: false,
+      legacySettingKey: 'enablePiSubagents',
+    },
   },
 ];
+
+export function optInFeatureRegistry(plugins = BUNDLED_FEATURE_PLUGINS) {
+  return plugins.flatMap((plugin) => {
+    if (!plugin.optIn) return [];
+    if (!plugin.settings?.cost.trim() || !plugin.settings.label.trim()) {
+      throw new Error(`Missing settings or cost description for ${plugin.optIn}`);
+    }
+    return [{ id: plugin.optIn, ...plugin.settings }];
+  });
+}
 
 /**
  * Feature ids that are injected only when named in the opt-in list.

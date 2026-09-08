@@ -245,7 +245,7 @@ export function readCodexItemId(item: unknown): string | null {
 }
 
 /** Flatten `content` — a bare string, or the `[{type:'text', text}]` array [实测]. */
-function extractContentText(content: unknown): string {
+export function readCodexTextContent(content: unknown, separator = ''): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
   const parts: string[] = [];
@@ -256,11 +256,18 @@ function extractContentText(content: unknown): string {
     }
     if (!isRecord(part)) continue;
     const type = part.type;
-    if ((type === undefined || type === 'text') && typeof part.text === 'string') {
+    if (
+      (type === undefined ||
+        type === 'text' ||
+        type === 'input_text' ||
+        type === 'output_text' ||
+        type === 'summary_text') &&
+      typeof part.text === 'string'
+    ) {
       parts.push(part.text);
     }
   }
-  return parts.join('');
+  return parts.join(separator);
 }
 
 /**
@@ -273,9 +280,9 @@ function extractContentText(content: unknown): string {
  */
 function extractReasoningText(item: Record<string, unknown>): string {
   const chunks: string[] = [];
-  const summary = extractContentText(item.summary);
+  const summary = readCodexTextContent(item.summary);
   if (summary) chunks.push(summary);
-  const content = extractContentText(item.content);
+  const content = readCodexTextContent(item.content);
   if (content) chunks.push(content);
   return chunks.join('\n\n');
 }
@@ -507,7 +514,7 @@ export function mapCodexItem(item: unknown): CodexItemMapping {
 
   switch (rule.mode) {
     case 'user_message': {
-      const { text, truncated } = clampText(extractContentText(item.content));
+      const { text, truncated } = clampText(readCodexTextContent(item.content));
       const block: CodexBlock = { type: 'text', id: `${base}:text`, text };
       if (truncated) block.truncated = true;
       return mapped({

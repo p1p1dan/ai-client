@@ -157,6 +157,18 @@ describe('resolveManagedPiWorkerEnv — borrowed resources', () => {
     expect(pty.PI_CODING_AGENT_DIR).toMatch(/pi-agent$/);
   });
 
+  it('uses an overridden HOME for the shared folder exposed to the open-skills handler', async () => {
+    vi.stubEnv('HOME', '/tmp/b1-home-override');
+    try {
+      const { getPiResourceSettings } = await import('../index');
+      expect(getPiResourceSettings().paths.sharedSkills).toBe(
+        join('/tmp/b1-home-override', '.agents', 'skills')
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('reports the three R04 installation locations from the same path resolvers', async () => {
     readSharedSettingsMock.mockReturnValue({ credentialMode: 'managed' });
     const { getPiResourceSettings } = await import('../index');
@@ -221,6 +233,20 @@ describe('resolveManagedPiWorkerEnv — opt-in extensions', () => {
   afterEach(() => {
     delete process.env.AICLIENT_MANAGED_CREDENTIALS;
     delete process.env.PI_CODING_AGENT_DIR;
+  });
+
+  it('omits the opt-in variable when the bundled registry is empty, even with a legacy opt-in', async () => {
+    const bundledPlugins = await import('../../../../agent-host/bundledPlugins.mjs');
+    const registry = vi.spyOn(bundledPlugins, 'optInFeatureRegistry').mockReturnValue([]);
+    try {
+      for (const managed of [true, false]) {
+        expect(
+          await workerEnv(managed, { [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true })
+        ).not.toHaveProperty(PI_OPT_IN_EXTENSIONS_ENV);
+      }
+    } finally {
+      registry.mockRestore();
+    }
   });
 
   it('sends nothing in either mode when the setting is absent', async () => {

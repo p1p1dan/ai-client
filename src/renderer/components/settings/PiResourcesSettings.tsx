@@ -60,11 +60,12 @@ export function PiResourcesSettings() {
     }
   };
 
-  const openPromptTemplates = async () => {
+  const openResourceFolder = async (kind: 'skills' | 'prompts') => {
     setOpening(true);
     setError(null);
     try {
-      await window.electronAPI.piResources.openPromptTemplates();
+      if (kind === 'skills') await window.electronAPI.piResources.openSkills();
+      else await window.electronAPI.piResources.openPromptTemplates();
     } catch (cause) {
       setError(messageOf(cause));
     } finally {
@@ -99,7 +100,7 @@ export function PiResourcesSettings() {
                 <Library className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <h4 className="text-ui font-semibold">{t('Shared skills')}</h4>
               </div>
-              <Badge variant="success">{t('Recommended')}</Badge>
+              <Badge variant="success">{t('Default')}</Badge>
             </div>
             <p className="text-meta text-muted-foreground">
               {t(
@@ -107,6 +108,15 @@ export function PiResourcesSettings() {
               )}
             </p>
             <ResourcePath label={t('Skills')} path={snapshot.paths.sharedSkills} />
+            <Button
+              variant="outline"
+              onClick={() => void openResourceFolder('skills')}
+              disabled={opening}
+              className="w-fit"
+            >
+              <FolderOpen className="h-4 w-4" />
+              {opening ? t('Opening...') : t('Open skills folder')}
+            </Button>
           </section>
 
           <section className="space-y-4 border-t p-4">
@@ -128,7 +138,7 @@ export function PiResourcesSettings() {
             {!snapshot.managed && (
               <Button
                 variant="outline"
-                onClick={() => void openPromptTemplates()}
+                onClick={() => void openResourceFolder('prompts')}
                 disabled={opening}
                 className="w-fit"
               >
@@ -163,22 +173,22 @@ export function PiResourcesSettings() {
               <Boxes className="h-4 w-4 shrink-0 text-muted-foreground" />
               <h4 className="text-ui font-semibold">{t('Bundled extensions')}</h4>
             </div>
-            <SettingsRow className="sm:grid-cols-[minmax(0,1fr)_auto]">
-              <div className="min-w-0 flex-1">
-                <p className="text-ui font-medium">{t('Sub-agents')}</p>
-                <p className="text-meta text-muted-foreground">
-                  {t(
-                    'Lets the model delegate work to background agents. Off by default: its tool definitions are sent with every request, so it costs tokens on every turn even when unused. Changing it reloads Pi workers.'
-                  )}
-                </p>
-              </div>
-              <Switch
-                checked={snapshot.enableSubagents}
-                disabled={busy}
-                onCheckedChange={(checked) => void update({ enableSubagents: checked })}
-                aria-label={t('Sub-agents')}
-              />
-            </SettingsRow>
+            {snapshot.bundledFeatures.map((feature) => (
+              <SettingsRow key={feature.id} className="sm:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="min-w-0 flex-1">
+                  <p className="text-ui font-medium">{t(feature.label)}</p>
+                  <p className="text-meta text-muted-foreground">{t(feature.cost)}</p>
+                </div>
+                <Switch
+                  checked={feature.enabled}
+                  disabled={busy}
+                  onCheckedChange={(checked) =>
+                    void update({ optInFeatures: { [feature.id]: checked } })
+                  }
+                  aria-label={t(feature.label)}
+                />
+              </SettingsRow>
+            ))}
           </section>
 
           <section className="space-y-4 border-t p-4">
@@ -202,7 +212,7 @@ export function PiResourcesSettings() {
             {snapshot.managed && (
               <Button
                 variant="outline"
-                onClick={() => void openPromptTemplates()}
+                onClick={() => void openResourceFolder('prompts')}
                 disabled={opening}
                 className="w-fit"
               >

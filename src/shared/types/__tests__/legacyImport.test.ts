@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { isLegacyImportBatchRequest, LEGACY_IMPORT_MAX_BATCH } from '../legacyImport';
 
 describe('legacy import boundary guards', () => {
-  it('accepts a bounded Claude source batch', () => {
+  it.each(['claude-code', 'codex'])('accepts a bounded %s source batch', (sourceKind) => {
     expect(
       isLegacyImportBatchRequest({
-        sources: [{ sourceKind: 'claude-code', projectId: 'project', sourceSessionId: 'session' }],
+        sources: [{ sourceKind, projectId: 'project', sourceSessionId: 'session' }],
       })
     ).toBe(true);
   });
@@ -20,7 +20,7 @@ describe('legacy import boundary guards', () => {
       { sources: [{ sourceKind: 'claude-code', projectId: '../tmp', sourceSessionId: 's' }] },
       { sources: [{ sourceKind: 'claude-code', projectId: 'p\\escape', sourceSessionId: 's' }] },
       { sources: [{ sourceKind: 'claude-code', projectId: 'p', sourceSessionId: '../s' }] },
-      { sources: [{ sourceKind: 'codex', projectId: 'p', sourceSessionId: 's' }] },
+      { sources: [{ sourceKind: 'opencode', projectId: 'p', sourceSessionId: 's' }] },
       {
         sources: Array.from({ length: LEGACY_IMPORT_MAX_BATCH + 1 }, () => ({
           sourceKind: 'claude-code',

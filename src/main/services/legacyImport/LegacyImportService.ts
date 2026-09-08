@@ -5,6 +5,7 @@ import type {
   LegacyImportItemResult,
   LegacyImportProject,
   LegacyImportSessionPreview,
+  LegacyImportSourceKind,
   LegacyImportSourceRef,
   SessionIndexEntry,
 } from '@shared/types';
@@ -13,8 +14,14 @@ import { PI_AGENT } from '@shared/types/agentWire';
 import { workerManager } from '../agent-host/WorkerManager';
 import { sessionIndexService } from '../chat/SessionIndexService';
 import { ClaudeSessionScanner, resolveLegacyClaudeSessionRoot } from './ClaudeSessionScanner';
-import { ClaudeSourceAdapter } from './ClaudeSourceAdapter';
 import { LegacyImportManifest, type LegacyImportManifestRecord } from './LegacyImportManifest';
+import {
+  type ConvertedLegacySource,
+  claudeSourceImporter,
+  codexSourceImporter,
+  type LegacySourceImporter,
+  scanAllLegacySources,
+} from './LegacyImportSources';
 import type { createPiImport, inspectPiImport, reconcilePiImport } from './PiImportProcess';
 
 function errorMessage(error: unknown): string {
@@ -41,6 +48,7 @@ export interface LegacyImportSessionIndex {
 
 export interface LegacyImportServiceOptions {
   scanner?: ClaudeSessionScanner;
+  importers?: LegacySourceImporter[];
   manifest?: LegacyImportManifest;
   sessionIndex?: LegacyImportSessionIndex;
   createImport?: typeof createPiImport;
@@ -51,8 +59,7 @@ export interface LegacyImportServiceOptions {
 }
 
 export class LegacyImportService {
-  private readonly scanner: ClaudeSessionScanner;
-  private readonly adapter: ClaudeSourceAdapter;
+  private readonly importers: LegacySourceImporter[];
   private readonly manifest: LegacyImportManifest;
   private readonly sessionIndex: LegacyImportSessionIndex;
   private readonly createImport: typeof createPiImport;
@@ -65,10 +72,13 @@ export class LegacyImportService {
   private reconciled = false;
 
   constructor(options: LegacyImportServiceOptions = {}) {
-    this.scanner =
+    const scanner =
       options.scanner ??
       new ClaudeSessionScanner({ resolveRoots: () => [resolveLegacyClaudeSessionRoot()] });
-    this.adapter = new ClaudeSourceAdapter(this.scanner);
+    this.importers = options.importers ?? [
+      claudeSourceImporter(scanner),
+      ...(options.scanner ? [] : [codexSourceImporter()]),
+    ];
     this.manifest = options.manifest ?? new LegacyImportManifest();
     this.sessionIndex = options.sessionIndex ?? sessionIndexService;
     this.createImport =
@@ -97,24 +107,31 @@ export class LegacyImportService {
 
   async listProjects(): Promise<LegacyImportProject[]> {
     await this.reconcile();
-    return this.scanner.scanProjects();
+    return scanAllLegacySources(this.importers);
   }
 
-  async listSessions(projectId: string): Promise<LegacyImportSessionPreview[]> {
+  async listSessions(
+    projectId: string,
+    sourceKind: LegacyImportSourceKind = 'claude-code'
+  ): Promise<LegacyImportSessionPreview[]> {
     await this.reconcile();
-    const [sessions, records] = await Promise.all([
-      this.scanner.getSessionsForProject(projectId),
-      this.manifest.list(),
-    ]);
+    const importer = this.importers.find((item) => item.source === sourceKind);
+    if (!importer) return [];
+    const [scan, records] = await Promise.all([importer.scan(projectId), this.manifest.list()]);
     const counts = new Map<string, number>();
     for (const record of records) {
-      if (record.status !== 'complete' || record.source.projectId !== projectId) continue;
+      if (
+        record.status !== 'complete' ||
+        record.source.projectId !== projectId ||
+        record.source.sourceKind !== sourceKind
+      )
+        continue;
       counts.set(
         record.source.sourceSessionId,
         (counts.get(record.source.sourceSessionId) ?? 0) + 1
       );
     }
-    return sessions.map((session) => ({
+    return scan.sessions.map((session) => ({
       ...session,
       importedSnapshots: counts.get(session.id) ?? 0,
     }));
@@ -125,7 +142,7 @@ export class LegacyImportService {
     const unique = new Map<string, LegacyImportSourceRef>();
     for (const source of sources) {
       if (
-        source.sourceKind !== 'claude-code' ||
+        !this.importers.some((importer) => importer.source === source.sourceKind) ||
         !source.projectId.trim() ||
         !source.sourceSessionId.trim()
       ) {
@@ -141,9 +158,11 @@ export class LegacyImportService {
   }
 
   private async importOne(source: LegacyImportSourceRef): Promise<LegacyImportItemResult> {
-    let read: Awaited<ReturnType<ClaudeSourceAdapter['read']>>;
+    let read: ConvertedLegacySource;
     try {
-      read = await this.adapter.read(source);
+      const importer = this.importers.find((item) => item.source === source.sourceKind);
+      if (!importer) throw new Error('Unsupported legacy import source');
+      read = await importer.convert(source);
     } catch (error) {
       return { source, status: 'failed', error: errorMessage(error) };
     }
@@ -160,7 +179,7 @@ export class LegacyImportService {
   private async importReadConversation(
     source: LegacyImportSourceRef,
     dedupeKey: string,
-    read: Awaited<ReturnType<ClaudeSourceAdapter['read']>>
+    read: ConvertedLegacySource
   ): Promise<LegacyImportItemResult> {
     const existing = await this.manifest.get(dedupeKey);
     if (existing?.status === 'complete' && existing.targetSessionFile) {
@@ -182,8 +201,8 @@ export class LegacyImportService {
       }
     }
 
-    const logicalSessionId = `session-import-${this.createId()}`;
-    const targetPiSessionId = `import-${this.createId()}`;
+    const logicalSessionId = `session-import-${source.sourceKind}-${this.createId()}`;
+    const targetPiSessionId = `import-${source.sourceKind}-${this.createId()}`;
     const record: LegacyImportManifestRecord = {
       dedupeKey,
       status: 'importing',
@@ -219,13 +238,13 @@ export class LegacyImportService {
       await this.manifest.updateImporting(dedupeKey, {
         targetSessionFile: imported.result.finalSessionFile,
       });
-      await this.adapter.assertUnchanged(read.sourcePath, read.conversation.sourceFingerprint);
+      await read.assertUnchanged();
       const row: SessionIndexEntry = {
         sessionId: logicalSessionId,
         runtimeIdentity: imported.result.finalSessionFile,
         piLeaf: imported.result.leaf,
         legacyImport: {
-          sourceKind: 'claude-code',
+          sourceKind: source.sourceKind,
           targetPiSessionId,
           dedupeKey,
         },

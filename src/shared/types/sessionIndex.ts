@@ -20,7 +20,7 @@ export interface SessionIndexEntry {
   piLeaf?: PiLeafCheckpoint;
   /** T34 immutable import ownership proof used by crash reconciliation. */
   legacyImport?: {
-    sourceKind: 'claude-code';
+    sourceKind: 'claude-code' | 'codex';
     targetPiSessionId: string;
     dedupeKey: string;
   };

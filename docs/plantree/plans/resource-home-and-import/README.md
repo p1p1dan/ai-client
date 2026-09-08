@@ -1,6 +1,6 @@
 # Plan — 资源归位与会话导入（B 组）
 
-> **状态**：Not Started —— 四项（B1–B4）均未动工。
+> **状态**：Completed（2026-09-08）—— B1–B4 实现与自动化验收完成，303 files / 4532 tests 通过。GUI 点验已按计划交接累计轮次，尚未实际执行。
 >
 > **范围**：给用户资源一个**可写的落点**（B1 技能默认安装位、B2 借读面对齐），
 > 把随包扩展从「一个功能一个开关」改成表驱动（B3），以及把会话导入扩到 Codex（B4）。
@@ -71,3 +71,25 @@
 | 逐任务落地证据 | [evidence/](./evidence/) |
 | 需求原文 | [PI-Desktop 调研档](../../../plans/2026-09-08-pi-desktop-study.md) |
 | 资源借读的既有决策 | [pi 资源接入计划 R01](../pi-resources-and-commands/README.md)（已归档，仍是边界来源） |
+
+## 2026-09-08 B 组接缝登记
+
+B1/B2 必须在 `src/agent-host/piAgentSessionBootstrap.ts` 的 `resourceLoaderOptions`
+接入默认技能安装提示与只读全局指令。仅 B 组修改该资源选项和相应 import；
+不改权限 gate、扩展验证、WorkerSession 或 A 组用量链路。
+配套允许追加 `src/preload/index.ts`、`src/shared/types/ipc.ts` 的技能目录 IPC，
+以及 shared i18n 的对应翻译和相关测试。上述登记是本轮明确的文件边界例外。
+
+B3 配套接缝：`src/main/ipc/settings.ts` 的 Main-owned key 列表追加新扩展配置与旧兼容键，避免 renderer 陈旧快照覆盖。
+
+B4 实现落点适配：`{ source, scan(), convert() }` 放在 Main 的 `LegacyImportSources.ts`，
+因为本仓源文件扫描与指纹校验属于 Main；`piLegacyImport.ts` 保持来源无关的原生 Pi writer。
+配套扩展 `src/main/ipc/legacyImport.ts`、`src/preload/index.ts`、
+`src/renderer/hooks/useLegacyImport.ts`、`SessionManagerView.tsx`、sessionIndex provenance 类型及测试。
+不恢复 Codex 执行 runtime。
+
+最终门禁例外：`src/main/services/search/SearchService.ts` 追加 `!.git` 排除规则，
+修复本 worktree 的 `.git` 指针文件泄入结果；仅此一行，不涉及 A 组拥有的文件。
+此项是本轮门禁所需的小修复，按已有代码修改授权处理；此前额外范围确认不再作为阻塞。
+
+关闭证据：[completion](./evidence/completion.md)。用户已明确将顺手发现的 bug 修复纳入本轮，worktree `.git` 一行排除修复已应用并验收。

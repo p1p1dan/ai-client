@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import {
   PI_BORROW_RESOURCES_DIR_ENV,
   PI_BORROW_USER_RESOURCES_SETTING_KEY,
-  PI_ENABLE_SUBAGENTS_SETTING_KEY,
   PI_MANAGED_AGENT_DIR_NAME,
   PI_MODEL_CONFIG_PATH,
   PI_MODEL_MANAGEMENT_URL_ENV,
@@ -19,11 +18,13 @@ import {
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { app, net } from 'electron';
+import { optInFeatureRegistry } from '../../../agent-host/bundledPlugins.mjs';
 import { getAppStateRoot } from '../appStatePaths';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { getOnboardingServiceUrl } from '../onboarding/serviceUrl';
 import { readSharedSettings, writeSharedSettings } from '../SharedSessionState';
+import { resolveOptInFeatures } from './optInFeatures';
 import { PiModelConfigService } from './PiModelConfigService';
 
 function getHomeDir(): string {
@@ -180,16 +181,17 @@ export function getActivePiPromptTemplatesDir(): string {
  * model has no `subagent` tool to call.
  */
 export function resolvePiSubagentsEnabled(): boolean {
-  return readSharedSettings()[PI_ENABLE_SUBAGENTS_SETTING_KEY] === true;
+  return resolveOptInFeatures(readSharedSettings()).includes(PI_SUBAGENTS_FEATURE_ID);
 }
 
 export function getPiResourceSettings(): PiResourceSettings {
   const userAgentDir = getLocalPiAgentDir();
   const managedAgentDir = getManagedPiAgentDir();
+  const enabledFeatures = new Set(resolveOptInFeatures(readSharedSettings()));
   return {
     managed: resolveManagedCredentialsEnabled(),
     borrowUserPiResources: resolveBorrowUserPiResources(),
-    enableSubagents: resolvePiSubagentsEnabled(),
+    enableSubagents: enabledFeatures.has(PI_SUBAGENTS_FEATURE_ID),
     paths: {
       sharedSkills: join(getHomeDir(), '.agents', 'skills'),
       userSkills: join(userAgentDir, 'skills'),
@@ -197,6 +199,10 @@ export function getPiResourceSettings(): PiResourceSettings {
       managedSkills: join(managedAgentDir, 'skills'),
       managedPromptTemplates: getManagedPiPromptTemplatesDir(),
     },
+    bundledFeatures: optInFeatureRegistry().map(({ legacySettingKey: _legacy, ...feature }) => ({
+      ...feature,
+      enabled: enabledFeatures.has(feature.id),
+    })),
   };
 }
 
@@ -210,7 +216,7 @@ export function resolveManagedPiWorkerEnv(): Record<string, string> {
   // Opt-in bundled extensions. Sent in BOTH modes — unlike the borrow
   // directory, this one is not a managed-mode repair, it is a cost the user
   // opted into, and the bundled copy is injected in local mode too.
-  const optIn = resolvePiSubagentsEnabled() ? [PI_SUBAGENTS_FEATURE_ID] : [];
+  const optIn = resolveOptInFeatures(readSharedSettings());
   return {
     // T08-c (D-Q9 decision 4). Sent in BOTH modes, never omitted: an absent key
     // identifies a legacy process build, not either deliberate trust posture.
