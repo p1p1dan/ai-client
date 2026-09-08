@@ -27,8 +27,9 @@ ARD：[`docs/plans/2026-09-08-runtime-evolution-ard.md`](../../docs/plans/2026-0
 和 `src/agent-host/` 一样，本目录自带 `package.json` / `package-lock.json` / `node_modules`，
 pin 三个依赖：`cordis@4.0.0-rc.9`、`@earendil-works/pi-agent-core@0.84.4`、`@earendil-works/pi-ai@0.84.4`。
 
-pi 两个包 pin 在 **0.84.4**，与当前 `pi-coding-agent` 传递解析出来的版本一致——
-新旧后端说同一套协议层，D9 的缓存命中率对比才有可比性。
+pi 两个包 pin 在 **0.84.4**。P2-0 实测旧 `pi-coding-agent` 从自身嵌套依赖加载的是
+**0.84.3**；新旧对比前需按 [Q4](../../docs/plantree/plans/runtime-evolution/open-questions.md)
+对齐版本或补充版本差异验证，不能仅检查顶层依赖版本。
 
 ```bash
 cd src/runtime && npm ci --omit=optional

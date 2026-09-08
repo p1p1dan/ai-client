@@ -4,8 +4,8 @@
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
 **当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 ∥ P2-1 起 ∥ P3 可开工
-**最近落地**：P2-0 六场景在线采集与原始 JSONL 复核通过，整体缓存命中率 **95.01%**（2026-09-08，[验收与证据](evidence/p2-0/validation.md)，尚未提交）；P0 的 R1 关闭证据见 [在线冒烟](evidence/p0/live-smoke.md)
-**下一目标**：P1 ∥ P2-1 起 ∥ P3；P2-6 前处理 [Q4 协议依赖版本对齐](open-questions.md)
+**最近落地**：`8a71c843`（2026-09-08）已提交 P0 骨架与 P2-0 六场景基线，缓存命中率 **95.01%**，[验收与证据](evidence/p2-0/validation.md)；P0 的 R1 关闭证据见 [在线冒烟](evidence/p0/live-smoke.md)
+**下一目标**：[P1 开工交接](topics/p1-handoff.md)；P2-1 起及 P3 可并行，P2-6 前处理 [Q4 协议依赖版本对齐](open-questions.md)
 
 状态图例：`⬜ 未开始` · `🟡 进行中` · `✅ 已完成` · `⏸ 挂起` · `❌ 已放弃`
 
@@ -35,7 +35,7 @@ P1/P2/P3 三个节点在 P0 落地后可由三个团队并行施工，文件归�
 
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
-| P0-1 依赖落地 | ✅ | `src/runtime/package.json` pin `cordis@4.0.0-rc.9` + `pi-agent-core@0.84.4` + `pi-ai@0.84.4`；pi 两包与 pi-coding-agent 当前解析版本一致，D9 对比才可比；根 package.json 未动 |
+| P0-1 依赖落地 | ✅ | `src/runtime/package.json` pin `cordis@4.0.0-rc.9` + `pi-agent-core@0.84.4` + `pi-ai@0.84.4`；P2-0 实测旧 SDK 嵌套依赖为 0.84.3，差异由 Q4 跟踪；根依赖未改，仅增加验证命令 |
 | P0-2 目录与 bootstrap | ✅ | `bootstrap.ts`：Cordis Context 初始化 + 插件注册 + **服务存活断言** + dispose |
 | P0-3 service 接口定义 | ✅ | `contracts.ts`：P0 三个 service 契约 + P1–P5 未实现服务的带原因声明（`DEFERRED_SERVICES`，工程规范 A3），由 `__tests__/contracts.test.ts` 机械把关 |
 | P0-4 plugin-model-adapter | ✅ | `plugins/model-adapter/`：读 `models.json` + `auth.json`（D7 沿用现有凭据布局，不解 vault），展开 `$NAME` header 引用，绑定 pi-ai provider |
@@ -83,7 +83,7 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
-| P2-0 现状基线采集 | ✅ | 六个旧后端固定会话通过；28 次普通调用，D9 命中率 **95.01%**；原始会话、来源证明与复核结果已归档，[验收证据](evidence/p2-0/validation.md)（2026-09-08，未提交） |
+| P2-0 现状基线采集 | ✅ | 六个旧后端固定会话通过；28 次普通调用，D9 命中率 **95.01%**；原始会话、来源证明与复核结果已归档，[验收证据](evidence/p2-0/validation.md)（2026-09-08，提交 `8a71c843`） |
 | P2-1 提示词分段组装 | ⬜ | 搬运 PI-Desktop `prompt-templates.ts` + `mode-prompts.ts`，去掉 host-core RPC |
 | P2-2 项目指令注入 | ⬜ | 本地读取 CLAUDE.md / AGENTS.md 与自有 resource 体系 |
 | P2-3 压缩策略 | ⬜ | 原样搬运 PI-Desktop `session-context.ts` + runtime 压缩段策略 |

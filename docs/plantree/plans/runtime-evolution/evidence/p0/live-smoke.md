@@ -1,6 +1,6 @@
 # P0-6 在线冒烟 — ARD 风险 R1 关闭记录
 
-日期：2026-09-08 · 代码：`3ce9702e` + 本次未提交的 `src/runtime/`（`config_version: runtime_p0_v1`）
+日期：2026-09-08 · 采集时代码：`3ce9702e` + 当时未提交的 `src/runtime/`（`config_version: runtime_p0_v1`）；现已提交至 `8a71c843`
 命令：`node --experimental-strip-types src/runtime/smoke/runOnce.ts --agent-dir <dir> --model <provider>/<id>`
 
 目录取自用户提供的 `~/.pilab/pi-agent/`（4 provider / 10 model，网关 `cch-jyw.pipidan.qzz.io`）。

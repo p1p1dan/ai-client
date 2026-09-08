@@ -1,6 +1,6 @@
 # P2-0 验收与交接
 
-日期：2026-09-08 · 状态：P2-0 完成，尚未提交
+日期：2026-09-08 · 状态：P2-0 完成，已随 P0 提交至 `8a71c843`
 
 正式产物：[基线报告](baseline-20260908/report.md) · [机器汇总](baseline-20260908/summary.json) ·
 [原始数据复核结果](baseline-20260908/verification.json) · [版本与来源](baseline-20260908/manifest.json)
