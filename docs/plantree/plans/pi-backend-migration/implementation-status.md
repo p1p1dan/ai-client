@@ -2,11 +2,11 @@
 
 **Current Phase**：T39 Windows 加密环境回归修复（2026-09-08）；此前 T28–T38 历史完成状态保留。
 
-**Next Target**：完成 [D20](./decisions/020-windows-bundled-node-worker.md) 的加密机新包现场验收；[问题报告](../../../../Windows加密环境GUI异常分析.md) 为当前验证清单和下载入口。代码与本地验证通过，Windows CI 已全部成功，T39 尚不关闭。正式发布仍按
+**Next Target**：完成 [D20](./decisions/020-windows-bundled-node-worker.md) 的加密机 bash、Edit/Write 与退出清理现场验收；用户已确认新包 GUI 可读取内容。[问题报告](../../../../Windows加密环境GUI异常分析.md) 为当前验证清单和下载入口。代码与本地验证通过，Windows CI 已全部成功，T39 尚不关闭。正式发布仍按
 [`docs/pi-only-rollout-rollback.md`](../../../pi-only-rollout-rollback.md) 完成内部观察、限量扩大、
 macOS 签名/公证与 rollback 记录；产品界面改造在 pix/pi-app UI 对齐计划推进。
 
-**Last Landed / Verified**：2026-09-08，`45d43db8`，Windows 安装版 GUI 使用随包 Node + IPC。CI [34207032908](https://github.com/p1p1dan/ai-client/actions/runs/34207032908) success：两套类型检查、Biome、307 files / 4600 tests、release metadata 与 Windows 包内 Read/bash、bootstrap/dispose/exit 全部通过；仅产出 Windows installer，其他平台跳过。普通 Windows runner 无企业加密驱动，现场兼容性仍待验收。
+**Last Landed / Verified**：2026-09-08，`45d43db8`，Windows 安装版 GUI 使用随包 Node + IPC。CI [34207032908](https://github.com/p1p1dan/ai-client/actions/runs/34207032908) success：两套类型检查、Biome、307 files / 4600 tests、release metadata 与 Windows 包内 Read/bash、bootstrap/dispose/exit 全部通过；仅产出 Windows installer，其他平台跳过。同日用户安装修复包后确认 GUI 可以读取内容；其他工具与退出清理的加密机验收待完成。
 
 **T38 历史 Landed**：2026-09-05 **T38 runtime 补字段**（与 UI 计划 U06-b 同批）：`usage.updated` 生产者挂
 `turn_end`（一回合一条、不累加；`agent_end` 刻意不做第二个生产者），目录带出 `contextWindow`，

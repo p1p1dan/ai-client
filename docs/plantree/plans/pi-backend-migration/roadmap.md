@@ -4,7 +4,7 @@
 
 ## 状态摘要
 
-**T39 — In Progress（2026-09-08）**：Windows 安装版 GUI worker 改为随包 Node + 原生 IPC；`45d43db8` 已提交，本地与 [Windows CI 34207032908](https://github.com/p1p1dan/ai-client/actions/runs/34207032908) 真实 Read/bash 验证通过，待加密机现场验收。
+**T39 — In Progress（2026-09-08）**：Windows 安装版 GUI worker 改为随包 Node + 原生 IPC；`45d43db8` 已提交，本地与 [Windows CI 34207032908](https://github.com/p1p1dan/ai-client/actions/runs/34207032908) 真实 Read/bash 验证通过。用户已确认新包 GUI 可读取内容，剩余加密机 bash、Edit/Write 与退出清理待验收。
 采用 [D20](./decisions/020-windows-bundled-node-worker.md)，[分析与验收](../../../../Windows加密环境GUI异常分析.md)。完成出口：本地检查、Windows CI、加密机同文件读写及无残留进程验收。
 
 | 阶段 | 状态 | 出口 |

@@ -215,9 +215,10 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
 | 2026-09-08 | PI-Desktop Rust host-core 直接文件读写 | **不可行**——无法直接读写，仅能通过 bash/powershell 工具间接操作 |
 | 2026-09-08 | ai-client TUI（随包 node.exe）/编辑器（TSD-aware read） | 用户确认正常 |
 | 2026-09-08 | ai-client Windows 安装版 GUI（utilityProcess） | 用户确认 Read 返回异常内容、bash 报 Bad file descriptor |
+| 2026-09-08 | ai-client Windows 安装版 GUI（随包 Node，`45d43db8` / CI `34207032908`） | 用户安装新包后确认 GUI 可以读取内容；其他工具尚待确认 |
 
 **修订结论**：兼容性应按实际进程载体和启动方式验收，不能按实现语言推断。
-当前继续 Node/TS 路线，Windows GUI 使用现场已正常的随包 Node；其 Read/bash/Edit/Write 仍需新包现场复验。
+当前继续 Node/TS 路线，Windows GUI 使用随包 Node，读取恢复已获新包现场确认；bash/Edit/Write 与退出清理仍待现场复验。
 
 ## 9. 溯源
 
