@@ -7,6 +7,7 @@ const { isBinaryFile } = createRequire(import.meta.url)('isbinaryfile') as {
 };
 
 import jschardet from 'jschardet';
+import { isFileTsdEncrypted, readFileTsdSafe } from '../../utils/tsdSafeRead';
 import { spawnGit } from './runtime';
 
 export function decodeBuffer(buffer: Buffer): string {
@@ -14,6 +15,14 @@ export function decodeBuffer(buffer: Buffer): string {
   const detected = jschardet.detect(buffer);
   const encoding = detected?.encoding || 'utf-8';
   return iconv.decode(buffer, encoding);
+}
+
+/**
+ * Read a working-tree file the way Main must (ARD D13): the encrypted Windows
+ * host hands unwhitelisted processes ciphertext, and Main is unwhitelisted.
+ */
+export function readWorkingTreeFile(filePath: string): Promise<Buffer> {
+  return readFileTsdSafe(filePath);
 }
 
 /**
@@ -27,6 +36,13 @@ export async function detectBinaryFile(
   gitRef: string
 ): Promise<boolean> {
   try {
+    // TSD ciphertext looks binary to every sniffer, so a whole text working
+    // tree would render as "binary" (D13). Decrypt first, and only then, so
+    // ordinary files keep the cheap 512-byte path-based probe.
+    if (await isFileTsdEncrypted(filePath)) {
+      const buffer = await readWorkingTreeFile(filePath);
+      return buffer.length > 0 && (await isBinaryFile(buffer, buffer.length));
+    }
     return await isBinaryFile(filePath);
   } catch (err: unknown) {
     // File not on disk (deleted/renamed), fall through to git content

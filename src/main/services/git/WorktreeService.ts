@@ -1,6 +1,6 @@
 import { exec } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type {
@@ -20,7 +20,7 @@ import iconv from 'iconv-lite';
 import jschardet from 'jschardet';
 import type { SimpleGit } from 'simple-git';
 import log from '../../utils/logger';
-import { gitShow } from './encoding';
+import { gitShow, readWorkingTreeFile } from './encoding';
 import {
   createSimpleGit,
   fromGitPath as fromRuntimeGitPath,
@@ -645,7 +645,7 @@ export class WorktreeService {
 
     let encoding = 'utf-8';
     try {
-      const buffer = await readFile(filePath);
+      const buffer = await readWorkingTreeFile(filePath);
       const detected = jschardet.detect(buffer);
       if (detected?.encoding) {
         encoding = detected.encoding.toLowerCase();

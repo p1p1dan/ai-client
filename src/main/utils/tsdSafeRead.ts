@@ -1,13 +1,15 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { open, readFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
 // TEC Solutions OCular Agent (TSD) encrypts files written by Node.js processes.
 // The packaged Electron exe is not in TEC's whitelist, so it reads raw encrypted bytes.
-// Detect the TSD header and fall back to spawning system node.exe (which IS whitelisted)
-// to obtain decrypted bytes.
+// Detect the TSD header and fall back to spawning a whitelisted node.exe to
+// obtain decrypted bytes (see resolveDecryptingNode).
 const TSD_MAGIC = Buffer.from('%TSD-Header-###%');
 
 export function isTsdEncrypted(head: Buffer): boolean {
@@ -26,11 +28,29 @@ async function peekHeader(filePath: string): Promise<Buffer> {
   }
 }
 
+/**
+ * The Node that reads the plaintext. `AICLIENT_TSD_NODE_PATH` overrides
+ * everything (escape hatch when whitelisting names a different binary, and the
+ * seam the tests drive); otherwise prefer the runtime we ship — the same binary
+ * D11/D20 made the Windows worker carrier, so it is the one whitelisting was
+ * verified against — and fall back to PATH `node` for dev and other platforms.
+ */
+function resolveDecryptingNode(): string {
+  const override = process.env.AICLIENT_TSD_NODE_PATH?.trim();
+  if (override) return override;
+  if (process.platform !== 'win32') return 'node';
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  if (!resourcesPath) return 'node';
+  const bundled = join(resourcesPath, 'node-runtime', 'node.exe');
+  return existsSync(bundled) ? bundled : 'node';
+}
+
 async function readViaNodeExe(filePath: string): Promise<Buffer> {
   const script = "process.stdout.write(require('fs').readFileSync(process.argv[1]))";
-  const { stdout } = await execFileAsync('node', ['-e', script, '--', filePath], {
+  const { stdout } = await execFileAsync(resolveDecryptingNode(), ['-e', script, '--', filePath], {
     encoding: 'buffer',
     maxBuffer: 200 * 1024 * 1024,
+    windowsHide: true,
   });
   return Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout as unknown as Uint8Array);
 }

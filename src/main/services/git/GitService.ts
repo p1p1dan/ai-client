@@ -19,7 +19,7 @@ import type {
   SubmoduleStatus,
 } from '@shared/types';
 import type { SimpleGit, StatusResult } from 'simple-git';
-import { decodeBuffer, detectBinaryFile, gitShow } from './encoding';
+import { decodeBuffer, detectBinaryFile, gitShow, readWorkingTreeFile } from './encoding';
 import { GIT_LOG_PRETTY_FORMAT, parseGitLogOutput } from './gitLogFormat';
 import {
   createGitEnv,
@@ -666,8 +666,7 @@ export class GitService {
       if (!original) {
         original = await gitShow(this.workdir, `HEAD:${filePath}`);
       }
-      modified = await fs
-        .readFile(absolutePath)
+      modified = await readWorkingTreeFile(absolutePath)
         .then((buffer) => decodeBuffer(buffer))
         .catch(() => '');
     }
@@ -1361,7 +1360,7 @@ export class GitService {
         modified = await gitShow(fullSubPath, `:${filePath}`);
       } else {
         // 工作区版本
-        modified = await fs.readFile(fullFilePath).then((buffer) => decodeBuffer(buffer));
+        modified = await readWorkingTreeFile(fullFilePath).then((buffer) => decodeBuffer(buffer));
       }
     } catch {
       // 删除的文件
