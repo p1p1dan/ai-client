@@ -128,7 +128,7 @@ PI-Desktop 因此把两件事配成一对：**预算提醒**告诉它还剩多�
 
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
-| P4-0 同步平台 worker 改动 | ⬜ | **P4 前置**：把 main 的 `45d43db8`（D20 Windows 随包 Node worker）cherry-pick 进本分支——`PiWorkerProcess.ts` / `WorkerTransport.ts` / `agent-host/worker.ts` + 两个测试 + `packaged-worker-smoke.cjs` / `verify-packaged-app.mjs`。本分支从 `d8b1f521` 分出，不含该提交，当前 worker 代码仍是纯 utilityProcess。ARD 两边分叉编辑，冲突段手工调和（本文件的 D11 已是调和后口径） |
+| P4-0 同步平台 worker 改动 | ✅ | main 的 `45d43db8`（D20 Windows 随包 Node worker）已取代码部分落地 `78168b4d`：worker 入口同时支持 Electron MessagePort 与 Node IPC，Windows 安装版走随包 `node.exe`，缺失即明确失败不回落（D11）；`WorkerTransport` 增 `createNodeProcessWorkerTransport` 并排空普通 stdout。文档部分在本 worktree 已分叉，未取（D11 已是调和后口径）。顺带取 main 的 `3690ef8f` 修 `piUsage.ts` 对 `piTurnRollup` 的无后缀值导入——否则 dev 路径的 `worker.ts` 在 `--experimental-strip-types` 下加载失败。**刻意不复用 `NodeRuntimeResolver`**：它会回落到 nvm/PATH，与 D11 相反。验证：agent-host 两个目录 36 文件 487 项、`tsc --noEmit`、biome 全通过；打包壳内两种 carrier 的实测仍归 P4-6 |
 | P4-1 worker bootstrap | ⬜ | `agent-host/worker.js` 的启动模式改为 Cordis 插件图初始化；两种 carrier 共用同一入口 |
 | P4-2 后端开关 | ⬜ | dev 环境变量 `AICLIENT_RUNTIME_BACKEND=legacy\|native`（D8），不进设置页；双后端共存 |
 | P4-3 WorkerTransport 适配 | ⬜ | 沿用现有 RPC 协议，MessagePort 与 Node IPC 两条通道由 `WorkerTransport` 抹平（D11）；事件出口翻译为 RuntimeEvent |
