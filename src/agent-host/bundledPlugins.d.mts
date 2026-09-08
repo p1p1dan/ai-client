@@ -19,9 +19,26 @@ export interface BundledFeaturePlugin {
    * is injected. Absent means "always injected".
    */
   optIn?: string;
+  settings?: {
+    label: string;
+    cost: string;
+    defaultEnabled: boolean;
+    legacySettingKey?: string;
+  };
 }
 
 export declare const BUNDLED_FEATURE_PLUGINS: readonly BundledFeaturePlugin[];
+
+export interface OptInFeature {
+  id: string;
+  label: string;
+  cost: string;
+  defaultEnabled: boolean;
+  legacySettingKey?: string;
+}
+export declare function optInFeatureRegistry(
+  plugins?: readonly BundledFeaturePlugin[]
+): OptInFeature[];
 
 /** Feature ids of the plugins that are shipped but injected only on request. */
 export declare function optInFeatureIds(): string[];

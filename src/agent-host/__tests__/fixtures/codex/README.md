@@ -257,3 +257,12 @@ JSON-RPC 会话，非构造样本 —— 见文档头「只做实验，未改动
 **用途**：`codexNormalizer.ts`「三臂必测」——missing 组验证 `error` 通知与 `turn/completed.turn.error`
 双 carrier 携带同一 `Missing environment variable: `AICLIENT_CODEX_API_KEY`.` 错误时只产出一次
 `session.failed`（exactly-once）；present 组验证 `willRetry:true` 的网络重试臂绝不被误判为终态。
+
+## B4 磁盘格式夹具（2026-09-08）
+
+`codex-rollout-redacted.jsonl` 是本机真实 rollout 中抽取的 7 条磁盘记录，
+不是上述 JSON-RPC 报文，也未改动已有抓包文件。包含 session_meta、turn_context、
+user/assistant message、reasoning、custom_tool_call 和 output。
+结构及基本类型保留；正文与其他字符串替换为 `[redacted]`，id/call_id 等使用一致哈希，
+cwd 和 model 改为测试专用值，工具名改为 `fixture_tool`。它是明确脱敏后的格式证据，
+不用于证明原始会话正文、完整历史或全部 Codex 版本兼容性。

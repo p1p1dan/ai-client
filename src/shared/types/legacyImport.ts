@@ -2,7 +2,7 @@ import type { PiLeafCheckpoint, SessionHistoryPage } from './sessionHistory';
 import type { SessionIndexEntry } from './sessionIndex';
 
 export const LEGACY_IMPORT_SCHEMA_VERSION = 1 as const;
-export const LEGACY_IMPORTER_VERSION = 't34-claude-v1' as const;
+export const LEGACY_IMPORTER_VERSION = 'b4-legacy-v2' as const;
 export const LEGACY_IMPORT_MAX_SOURCE_BYTES = 64 * 1024 * 1024;
 export const LEGACY_IMPORT_MAX_ENTRIES = 4_000;
 export const LEGACY_IMPORT_MAX_TEXT_CHARS = 64 * 1024;
@@ -13,7 +13,7 @@ export const LEGACY_IMPORT_MAX_BATCH = 100;
 export const LEGACY_IMPORT_CUSTOM_TYPE_PROVENANCE = 'aiclient.legacy-import.provenance';
 export const LEGACY_IMPORT_CUSTOM_TYPE_DISPLAY = 'aiclient.legacy-import.display';
 
-export type LegacyImportSourceKind = 'claude-code';
+export type LegacyImportSourceKind = 'claude-code' | 'codex';
 
 export interface LegacyImportSourceRef {
   sourceKind: LegacyImportSourceKind;
@@ -22,6 +22,7 @@ export interface LegacyImportSourceRef {
 }
 
 export interface LegacyImportProject {
+  sourceKind?: LegacyImportSourceKind;
   id: string;
   path: string;
   sessionCount: number;
@@ -270,7 +271,7 @@ export function isImportedConversation(value: unknown): value is ImportedConvers
     isRecord(value) &&
     value.schemaVersion === LEGACY_IMPORT_SCHEMA_VERSION &&
     nonEmptyString(value.importerVersion) &&
-    value.sourceKind === 'claude-code' &&
+    (value.sourceKind === 'claude-code' || value.sourceKind === 'codex') &&
     nonEmptyString(value.stableSourceIdentity) &&
     nonEmptyString(value.sourceSessionId) &&
     nonEmptyString(value.workspacePath) &&
@@ -319,7 +320,7 @@ export function isLegacyImportBatchRequest(value: unknown): value is LegacyImpor
   return value.sources.every(
     (source) =>
       isRecord(source) &&
-      source.sourceKind === 'claude-code' &&
+      (source.sourceKind === 'claude-code' || source.sourceKind === 'codex') &&
       isLegacyImportPathSegment(source.projectId) &&
       isLegacyImportPathSegment(source.sourceSessionId)
   );

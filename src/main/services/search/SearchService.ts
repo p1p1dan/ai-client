@@ -26,6 +26,7 @@ const EXCLUDE_GLOBS = [
   '!node_modules/**',
   '!dist/**',
   '!build/**',
+  '!.git',
   '!.git/**',
   '!*.lock',
   '!package-lock.json',

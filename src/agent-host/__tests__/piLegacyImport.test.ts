@@ -100,12 +100,15 @@ async function sdk(): Promise<PiSdkModule> {
 }
 
 describe('PiLegacyImportWriter', () => {
-  it('publishes a native Pi v3 file, validates history, and keeps custom display out of context', async () => {
+  it.each([
+    'claude-code',
+    'codex',
+  ] as const)('publishes %s as native Pi v3, validates history, and keeps custom display out of context', async (sourceKind) => {
     const writer = new PiLegacyImportWriter(sdk);
     const result = await writer.create({
       logicalSessionId: 'logical-import',
       targetPiSessionId: 'import-test-1',
-      conversation: conversation(),
+      conversation: { ...conversation(), sourceKind },
     });
 
     expect(result.finalSessionFile).toContain(targetDir);
@@ -117,6 +120,7 @@ describe('PiLegacyImportWriter', () => {
       ])
     );
     const content = await readFile(result.finalSessionFile, 'utf8');
+    expect(content).toContain(`"sourceKind":"${sourceKind}"`);
     expect(content).toContain(`"customType":"${LEGACY_IMPORT_CUSTOM_TYPE_PROVENANCE}"`);
     expect(content).toContain(`"customType":"${LEGACY_IMPORT_CUSTOM_TYPE_DISPLAY}"`);
 

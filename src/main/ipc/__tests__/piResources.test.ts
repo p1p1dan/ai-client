@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   PI_BORROW_USER_RESOURCES_SETTING_KEY,
   PI_ENABLE_SUBAGENTS_SETTING_KEY,
+  PI_OPT_IN_FEATURE_SETTINGS_KEY,
 } from '@shared/piModelConfig';
 import { IPC_CHANNELS } from '@shared/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,6 +18,7 @@ const state = {
   root: '',
   saveOk: true,
   openError: '',
+  featurePreferences: {} as Record<string, boolean>,
 };
 
 const invalidateAll = vi.fn(async () => undefined);
@@ -33,6 +35,10 @@ const mergeSettingsPatch = vi.fn((patch: Record<string, unknown>) => {
   if (PI_ENABLE_SUBAGENTS_SETTING_KEY in patch) {
     state.enableSubagents = patch[PI_ENABLE_SUBAGENTS_SETTING_KEY] as boolean;
   }
+  if (PI_OPT_IN_FEATURE_SETTINGS_KEY in patch) {
+    state.featurePreferences = patch[PI_OPT_IN_FEATURE_SETTINGS_KEY] as Record<string, boolean>;
+    state.enableSubagents = state.featurePreferences.subagents ?? state.enableSubagents;
+  }
   return true;
 });
 
@@ -41,6 +47,7 @@ function snapshot() {
     managed: state.managed,
     borrowUserPiResources: state.borrowUserPiResources,
     enableSubagents: state.enableSubagents,
+    bundledFeatures: [{ id: 'subagents', enabled: state.enableSubagents }],
     paths: {
       sharedSkills: join(state.root, '.agents', 'skills'),
       userSkills: join(state.root, '.pi', 'agent', 'skills'),
@@ -66,6 +73,10 @@ vi.mock('../../services/piModelConfig', () => ({
   getPiResourceSettings: () => snapshot(),
 }));
 
+vi.mock('../../services/SharedSessionState', () => ({
+  readSharedSettings: () => ({ [PI_OPT_IN_FEATURE_SETTINGS_KEY]: state.featurePreferences }),
+}));
+
 vi.mock('../settings', () => ({ mergeSettingsPatch }));
 
 beforeEach(async () => {
@@ -77,6 +88,7 @@ beforeEach(async () => {
   state.enableSubagents = false;
   state.saveOk = true;
   state.openError = '';
+  state.featurePreferences = {};
   state.root = mkdtempSync(join(tmpdir(), 'aiclient-pi-resources-'));
   const { registerPiResourceHandlers } = await import('../piResources');
   registerPiResourceHandlers();
@@ -93,6 +105,20 @@ function handler(channel: string): Handler {
 }
 
 describe('Pi resource settings IPC', () => {
+  it.each([true, false])('opens the shared skill home in managed=%s mode', async (managed) => {
+    state.managed = managed;
+    await handler(IPC_CHANNELS.PI_RESOURCES_OPEN_SKILLS)({});
+    expect(existsSync(snapshot().paths.sharedSkills)).toBe(true);
+    expect(openPath).toHaveBeenCalledWith(snapshot().paths.sharedSkills);
+  });
+
+  it('reports a failed skills folder open', async () => {
+    state.openError = 'no file manager';
+    await expect(handler(IPC_CHANNELS.PI_RESOURCES_OPEN_SKILLS)({})).rejects.toThrow(
+      'no file manager'
+    );
+  });
+
   it('returns exact Main-resolved installation paths', async () => {
     await expect(handler(IPC_CHANNELS.PI_RESOURCES_GET_SETTINGS)({})).resolves.toEqual(snapshot());
   });
@@ -193,12 +219,58 @@ describe('Pi resource settings IPC', () => {
  * back either way.
  */
 describe('Pi resource settings IPC — sub-agents', () => {
+  it('repeated generic updates do not write or restart the worker again', async () => {
+    const update = handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS);
+    await update({}, { optInFeatures: { subagents: true } });
+    expect(state.enableSubagents).toBe(true);
+    await update({}, { optInFeatures: { subagents: true } });
+    expect(mergeSettingsPatch).toHaveBeenCalledOnce();
+    expect(invalidateAll).toHaveBeenCalledOnce();
+  });
+
+  it('preserves other stored feature preferences when updating a single switch', async () => {
+    state.featurePreferences = { futureFeature: true };
+    await handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS)(
+      {},
+      { optInFeatures: { subagents: true } }
+    );
+    expect(state.featurePreferences).toEqual({ futureFeature: true, subagents: true });
+  });
+
+  it('saves the registry toggle through the generic setting and ignores unknown ids', async () => {
+    await handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS)(
+      {},
+      { optInFeatures: { subagents: true, unknown: true } }
+    );
+    expect(mergeSettingsPatch).toHaveBeenCalledWith({
+      [PI_OPT_IN_FEATURE_SETTINGS_KEY]: { subagents: true },
+    });
+    expect(invalidateAll).toHaveBeenCalledOnce();
+  });
+
+  it('ignores an unknown-only update and rejects malformed known values', async () => {
+    await handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS)(
+      {},
+      { optInFeatures: { unknown: true } }
+    );
+    expect(mergeSettingsPatch).not.toHaveBeenCalled();
+    await expect(
+      handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS)(
+        {},
+        { optInFeatures: { subagents: 'yes' } }
+      )
+    ).rejects.toThrow('Invalid');
+  });
+
   it('saves it and restarts workers in managed mode', async () => {
     await expect(
       handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS)({}, { enableSubagents: true })
     ).resolves.toMatchObject({ enableSubagents: true });
 
-    expect(mergeSettingsPatch).toHaveBeenCalledWith({ [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true });
+    expect(mergeSettingsPatch).toHaveBeenCalledWith({
+      [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true,
+      [PI_OPT_IN_FEATURE_SETTINGS_KEY]: { subagents: true },
+    });
     expect(invalidateAll).toHaveBeenCalledOnce();
   });
 
@@ -216,7 +288,10 @@ describe('Pi resource settings IPC — sub-agents', () => {
       { enableSubagents: true }
     )) as { borrowUserPiResources: boolean; enableSubagents: boolean };
     expect(after).toMatchObject({ borrowUserPiResources: true, enableSubagents: true });
-    expect(mergeSettingsPatch).toHaveBeenCalledWith({ [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true });
+    expect(mergeSettingsPatch).toHaveBeenCalledWith({
+      [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true,
+      [PI_OPT_IN_FEATURE_SETTINGS_KEY]: { subagents: true },
+    });
   });
 
   it('does nothing when the value is already what was asked for', async () => {

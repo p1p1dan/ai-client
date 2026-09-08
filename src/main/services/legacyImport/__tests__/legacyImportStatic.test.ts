@@ -13,6 +13,10 @@ describe('legacy import static boundaries', () => {
     for (const relative of [
       'src/main/services/legacyImport/ClaudeSessionScanner.ts',
       'src/main/services/legacyImport/ClaudeSourceAdapter.ts',
+      'src/main/services/legacyImport/CodexSessionScanner.ts',
+      'src/main/services/legacyImport/CodexSourceAdapter.ts',
+      'src/main/services/legacyImport/CodexRollout.ts',
+      'src/main/services/legacyImport/LegacyImportSources.ts',
     ]) {
       const text = source(relative);
       for (const forbidden of [

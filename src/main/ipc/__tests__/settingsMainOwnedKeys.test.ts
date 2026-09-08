@@ -2,7 +2,10 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CREDENTIAL_MODE_SETTING_KEY } from '@shared/credentialMode';
-import { PI_BORROW_USER_RESOURCES_SETTING_KEY } from '@shared/piModelConfig';
+import {
+  PI_BORROW_USER_RESOURCES_SETTING_KEY,
+  PI_OPT_IN_FEATURE_SETTINGS_KEY,
+} from '@shared/piModelConfig';
 import { IPC_CHANNELS } from '@shared/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -141,6 +144,15 @@ describe('settings.json — Main-owned keys survive a renderer whole-object save
     await vi.advanceTimersByTimeAsync(600);
 
     expect(readSettingsFile()[PI_BORROW_USER_RESOURCES_SETTING_KEY]).toBe(false);
+  });
+
+  it('preserves opt-in feature preferences across stale renderer saves', async () => {
+    vi.useFakeTimers();
+    const settings = await loadSettingsModule();
+    settings.mergeSettingsPatch({ [PI_OPT_IN_FEATURE_SETTINGS_KEY]: { subagents: true } });
+    await rendererSave({ [PI_OPT_IN_FEATURE_SETTINGS_KEY]: { subagents: false }, theme: 'light' });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(readSettingsFile()[PI_OPT_IN_FEATURE_SETTINGS_KEY]).toEqual({ subagents: true });
   });
 
   it('mergeSettingsPatch still sets Main-owned keys — the guard is for renderer writes only', async () => {

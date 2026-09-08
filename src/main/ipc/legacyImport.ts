@@ -10,12 +10,18 @@ export function registerLegacyImportHandlers(): void {
     return legacyImportService.listProjects();
   });
 
-  ipcMain.handle(IPC_CHANNELS.LEGACY_IMPORT_LIST_SESSIONS, async (_event, projectId) => {
-    if (!isLegacyImportPathSegment(projectId)) {
-      throw new Error('Invalid legacy import project id');
+  ipcMain.handle(
+    IPC_CHANNELS.LEGACY_IMPORT_LIST_SESSIONS,
+    async (_event, projectId, sourceKind = 'claude-code') => {
+      if (
+        !isLegacyImportPathSegment(projectId) ||
+        (sourceKind !== 'claude-code' && sourceKind !== 'codex')
+      ) {
+        throw new Error('Invalid legacy import project id');
+      }
+      return legacyImportService.listSessions(projectId, sourceKind);
     }
-    return legacyImportService.listSessions(projectId);
-  });
+  );
 
   ipcMain.handle(IPC_CHANNELS.LEGACY_IMPORT_BATCH, async (_event, request) => {
     if (!isLegacyImportBatchRequest(request)) {

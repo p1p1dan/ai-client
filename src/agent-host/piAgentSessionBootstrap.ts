@@ -18,7 +18,11 @@ import {
   samePiSessionPath,
 } from './piSessionPreflight.ts';
 import { PiWorkerSessionError } from './piWorkerErrors.ts';
-import { resolveBorrowedResourcePaths } from './userResourcePaths.ts';
+import {
+  defaultSkillInstallInstructions,
+  prependBorrowedInstructions,
+  resolveBorrowedResourcePaths,
+} from './userResourcePaths.ts';
 
 export interface PiSettingsManager {
   getGlobalSettings?: () => { packages?: unknown };
@@ -443,6 +447,17 @@ export async function bootstrapPiAgentSession(
       agentDir,
       settingsManager,
       resourceLoaderOptions: {
+        appendSystemPromptOverride: (base: string[]) => [
+          ...base,
+          defaultSkillInstallInstructions(),
+        ],
+        ...(borrowed.globalInstructions.length > 0
+          ? {
+              agentsFilesOverride: (base: {
+                agentsFiles: Array<{ path: string; content: string }>;
+              }) => prependBorrowedInstructions(base, borrowed.globalInstructions),
+            }
+          : {}),
         ...(extensionPaths.length > 0 ? { additionalExtensionPaths: extensionPaths } : {}),
         ...(borrowed.skills.length > 0 ? { additionalSkillPaths: borrowed.skills } : {}),
         ...(borrowed.promptTemplates.length > 0

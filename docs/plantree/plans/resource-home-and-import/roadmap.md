@@ -8,12 +8,12 @@
 
 | 分组 | 数量 | 说明 |
 |---|---|---|
-| Done | 0 | — |
+| Done | 4 | B1–B4 实现与自动化验收完成，见 evidence/completion.md |
 | In Progress | 0 | — |
-| Next | 4 | B1 取证先行；B3、B4 与 B1/B2 零依赖，可同时起 |
+| Next | 0 | — |
 | Deferred | 1 | opencode 导入，需求触发再做 |
 
-## 执行顺序
+## 已执行顺序
 
 ```text
 串行线（B2 依赖 B1 的取证结论）
@@ -44,7 +44,7 @@ GUI 点验并入 [UI 对齐计划](../pix-ui-alignment/README.md) 的累计点�
 
 ---
 
-## B1 — 技能默认安装位 = `~/.agents/skills` · **Next（含前置取证）**
+## B1 — 技能默认安装位 = `~/.agents/skills` · **Done（2026-09-08）**
 
 **要解决的问题**：用户让 App 里的 AI「帮我装一个 skill」时，模型会按官方文档往
 `~/.pi/agent/skills/` 写。托管模式下那要靠借读开关才生效，内嵌 pi TUI 则完全看不到
@@ -88,7 +88,7 @@ GUI 点验并入 [UI 对齐计划](../pix-ui-alignment/README.md) 的累计点�
 
 ---
 
-## B2 — 借读面对齐 · **Next（B1 取证之后）**
+## B2 — 借读面对齐 · **Done（2026-09-08）**
 
 **要解决的问题**：现在只借 `~/.pi/agent/{skills,prompts}`。PI-Desktop 还只读
 `~/.pi/agent/AGENTS.md`（全局指令，`project-instructions.ts:12`）。
@@ -123,7 +123,7 @@ GUI 点验并入 [UI 对齐计划](../pix-ui-alignment/README.md) 的累计点�
 
 ---
 
-## B3 — 随包扩展表驱动 · **Next（可并行）**
+## B3 — 随包扩展表驱动 · **Done（2026-09-08）**
 
 **要解决的问题**：现在是 `enablePiSubagents` 一个布尔 + `PI_OPT_IN_EXTENSIONS_ENV` 一个逗号列表
 + `PiResourcesSettings.tsx` 里一个硬编码的 Switch。加第三、第四个随包扩展时，
@@ -159,7 +159,7 @@ GUI 点验并入 [UI 对齐计划](../pix-ui-alignment/README.md) 的累计点�
 
 ---
 
-## B4 — 会话导入扩到 Codex · **Next（可并行）**
+## B4 — 会话导入扩到 Codex · **Done（2026-09-08）**
 
 **要解决的问题**：`LegacyImportSourceKind` 只有 `'claude-code'`。
 Codex 读取其实已经写了一半——`codexHistoryReader.ts` / `codexItemMapper.ts` 已在 agent-host 里，

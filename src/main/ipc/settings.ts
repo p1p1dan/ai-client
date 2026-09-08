@@ -1,4 +1,8 @@
-import { PI_BORROW_USER_RESOURCES_SETTING_KEY } from '@shared/piModelConfig';
+import {
+  PI_BORROW_USER_RESOURCES_SETTING_KEY,
+  PI_ENABLE_SUBAGENTS_SETTING_KEY,
+  PI_OPT_IN_FEATURE_SETTINGS_KEY,
+} from '@shared/piModelConfig';
 import { IPC_CHANNELS } from '@shared/types';
 import { app, ipcMain } from 'electron';
 import {
@@ -51,6 +55,8 @@ const MAIN_OWNED_SETTING_KEYS: readonly string[] = [
   CREDENTIAL_MODE_SETTING_KEY,
   'onboarding',
   PI_BORROW_USER_RESOURCES_SETTING_KEY,
+  PI_OPT_IN_FEATURE_SETTINGS_KEY,
+  PI_ENABLE_SUBAGENTS_SETTING_KEY,
 ];
 
 /** Take the Main-owned keys from the file as it is NOW, over a renderer payload. */

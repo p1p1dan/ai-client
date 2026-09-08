@@ -11,7 +11,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import { Ident } from '@/components/ui/ident';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useLegacyImportMutation,
@@ -38,10 +37,15 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
 
   const selectedProject = useMemo(() => {
     if (!selectedProjectId) return null;
-    return projects.find((project) => project.id === selectedProjectId) ?? null;
+    return (
+      projects.find(
+        (project) => `${project.sourceKind ?? 'claude-code'}:${project.id}` === selectedProjectId
+      ) ?? null
+    );
   }, [projects, selectedProjectId]);
   const sessionsQuery = useLegacyImportSessions(selectedProject?.id ?? null, {
     enabled: !!selectedProject,
+    sourceKind: selectedProject?.sourceKind,
   });
   const sessions = sessionsQuery.data ?? [];
   const allSelected = sessions.length > 0 && selectedSessionIds.size === sessions.length;
@@ -52,7 +56,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
   );
 
   const chooseProject = (project: LegacyImportProject) => {
-    setSelectedProjectId(project.id);
+    setSelectedProjectId(`${project.sourceKind ?? 'claude-code'}:${project.id}`);
     setSelectedSessionIds(new Set());
     setReport([]);
   };
@@ -73,7 +77,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
       sources: sessions
         .filter((session) => selectedSessionIds.has(session.id))
         .map((session) => ({
-          sourceKind: 'claude-code' as const,
+          sourceKind: selectedProject.sourceKind ?? 'claude-code',
           projectId: selectedProject.id,
           sourceSessionId: session.id,
         })),
@@ -162,7 +166,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                   <Folder className="size-4" />
                 </EmptyMedia>
                 <EmptyTitle>未找到会话</EmptyTitle>
-                <EmptyDescription>该项目下没有可导入的 Claude 会话记录。</EmptyDescription>
+                <EmptyDescription>该项目下没有可导入的会话记录。</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -212,7 +216,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                 导入历史
               </div>
               <div className="mt-1 text-meta text-muted-foreground">
-                从 <Ident>~/.claude/projects/</Ident> 只读复制历史，并在 Pi 中继续
+                从 Claude Code 或 Codex 的本机会话目录只读复制历史，并在 Pi 中继续
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -264,9 +268,9 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                 <EmptyMedia variant="icon">
                   <RefreshCcw className="size-4" />
                 </EmptyMedia>
-                <EmptyTitle>未找到 Claude 会话</EmptyTitle>
+                <EmptyTitle>未找到可导入会话</EmptyTitle>
                 <EmptyDescription>
-                  请确认本机使用过 Claude Code，且会话目录中存在 JSONL 记录。
+                  请确认本机使用过 Claude Code 或 Codex，且会话目录中存在 JSONL 记录。
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -288,7 +292,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                           ? 'flex flex-col gap-3 p-4'
                           : 'flex items-center gap-3 p-3'
                       )}
-                      key={project.id}
+                      key={`${project.sourceKind ?? 'claude-code'}:${project.id}`}
                       onClick={() => chooseProject(project)}
                       type="button"
                     >
@@ -314,7 +318,10 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center justify-between gap-2 text-meta text-muted-foreground tabular-nums">
-                        <span>{project.sessionCount} 个会话</span>
+                        <span>
+                          {project.sourceKind === 'codex' ? 'Codex' : 'Claude Code'} ·{' '}
+                          {project.sessionCount} 个会话
+                        </span>
                         <span>{activityLabel || '-'}</span>
                       </div>
                     </button>

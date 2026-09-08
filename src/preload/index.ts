@@ -47,6 +47,7 @@ import type {
   LegacyImportBatchResult,
   LegacyImportProject,
   LegacyImportSessionPreview,
+  LegacyImportSourceKind,
   MergeConflict,
   MergeConflictContent,
   MergeState,
@@ -927,8 +928,11 @@ const electronAPI = {
   legacyImport: {
     listProjects: (): Promise<LegacyImportProject[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.LEGACY_IMPORT_LIST_PROJECTS),
-    listSessions: (projectId: string): Promise<LegacyImportSessionPreview[]> =>
-      ipcRenderer.invoke(IPC_CHANNELS.LEGACY_IMPORT_LIST_SESSIONS, projectId),
+    listSessions: (
+      projectId: string,
+      sourceKind: LegacyImportSourceKind = 'claude-code'
+    ): Promise<LegacyImportSessionPreview[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.LEGACY_IMPORT_LIST_SESSIONS, projectId, sourceKind),
     importBatch: (request: LegacyImportBatchRequest): Promise<LegacyImportBatchResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.LEGACY_IMPORT_BATCH, request),
   },
@@ -1157,6 +1161,7 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS, payload),
     openPromptTemplates: (): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_OPEN_PROMPTS),
+    openSkills: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_OPEN_SKILLS),
   },
 
   /**

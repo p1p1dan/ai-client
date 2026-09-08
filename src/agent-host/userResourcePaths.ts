@@ -12,7 +12,7 @@
  * ## Why paths and not the directory
  *
  * The resource loader takes absolute paths per resource kind, so we can hand it
- * exactly two directories instead of adopting the user's agent dir. That keeps
+ * skill/template directories and a global instruction file instead of adopting the user's agent dir. That keeps
  * three things out of reach that adopting it (or symlinking) would drag in:
  *
  *  - **`auth.json` / `models.json`** — managed mode exists to use our own
@@ -34,7 +34,8 @@
  * lands on the not-borrowing side, which is the conservative one.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 export interface BorrowedResourcePaths {
@@ -42,9 +43,10 @@ export interface BorrowedResourcePaths {
   skills: string[];
   /** Absolute dirs for `additionalPromptTemplatePaths`. */
   promptTemplates: string[];
+  globalInstructions: string[];
 }
 
-const EMPTY: BorrowedResourcePaths = { skills: [], promptTemplates: [] };
+const EMPTY: BorrowedResourcePaths = { skills: [], promptTemplates: [], globalInstructions: [] };
 
 /** pi's own layout under an agent dir: `<agentDir>/{skills,prompts}`. */
 const SKILLS_DIR = 'skills';
@@ -88,10 +90,32 @@ export function resolveBorrowedResourcePaths(
   return {
     skills: existsSync(skills) ? [skills] : [],
     promptTemplates: existsSync(promptTemplates) ? [promptTemplates] : [],
+    globalInstructions: existsSync(join(source, 'AGENTS.md')) ? [join(source, 'AGENTS.md')] : [],
   };
 }
 
 /** True when there is nothing to add, so the caller can omit the fields entirely. */
 export function hasBorrowedPaths(paths: BorrowedResourcePaths): boolean {
-  return paths.skills.length > 0 || paths.promptTemplates.length > 0;
+  return (
+    paths.skills.length > 0 ||
+    paths.promptTemplates.length > 0 ||
+    paths.globalInstructions.length > 0
+  );
+}
+
+export function defaultSkillInstallInstructions(
+  home = process.env.HOME || process.env.USERPROFILE || homedir()
+): string {
+  return `When asked to install a skill, use ${join(home, '.agents', 'skills')} as the default installation directory, with one <skill-name>/SKILL.md per skill. This shared location is loaded by managed GUI, local GUI, and Pi TUI sessions. Use another destination only when the user explicitly requests it.`;
+}
+
+export function prependBorrowedInstructions(
+  base: { agentsFiles: Array<{ path: string; content: string }> },
+  paths: string[]
+): typeof base {
+  const existing = new Set(base.agentsFiles.map((file) => resolve(file.path)));
+  const borrowed = paths
+    .filter((path) => !existing.has(resolve(path)) && existsSync(path))
+    .map((path) => ({ path, content: readFileSync(path, 'utf8') }));
+  return { agentsFiles: [...borrowed, ...base.agentsFiles] };
 }

@@ -86,7 +86,7 @@ function parseRecord(value: unknown): LegacyImportManifestRecord | null {
   if (
     typeof value.dedupeKey !== 'string' ||
     !['importing', 'complete', 'failed'].includes(String(value.status)) ||
-    value.source.sourceKind !== 'claude-code' ||
+    (value.source.sourceKind !== 'claude-code' && value.source.sourceKind !== 'codex') ||
     !isLegacyImportPathSegment(value.source.projectId) ||
     !isLegacyImportPathSegment(value.source.sourceSessionId) ||
     typeof value.sourcePath !== 'string' ||

@@ -5,6 +5,14 @@ import { describe, expect, it } from 'vitest';
 const source = readFileSync(path.resolve(__dirname, '../SessionManagerView.tsx'), 'utf8');
 
 describe('legacy import UI contract', () => {
+  it('carries the selected source and namespaces project selection across sources', () => {
+    expect(source).toContain("sourceKind: selectedProject.sourceKind ?? 'claude-code'");
+    expect(source).toContain(
+      ['$', "{project.sourceKind ?? 'claude-code'}:", '$', '{project.id}'].join('')
+    );
+    expect(source).toContain("project.sourceKind === 'codex' ? 'Codex' : 'Claude Code'");
+  });
+
   it('starts with no selected sessions and requires explicit checkbox selection', () => {
     expect(source).toContain('useState<Set<string>>(() => new Set())');
     expect(source).toContain('onSelectedChange={(selected) => setSelected(session.id, selected)}');

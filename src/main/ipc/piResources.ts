@@ -2,13 +2,16 @@ import { mkdir } from 'node:fs/promises';
 import {
   PI_BORROW_USER_RESOURCES_SETTING_KEY,
   PI_ENABLE_SUBAGENTS_SETTING_KEY,
+  PI_OPT_IN_FEATURE_SETTINGS_KEY,
   type PiResourceSettings,
   type UpdatePiResourceSettingsRequest,
 } from '@shared/piModelConfig';
 import { IPC_CHANNELS } from '@shared/types';
 import { ipcMain, shell } from 'electron';
+import { optInFeatureRegistry } from '../../agent-host/bundledPlugins.mjs';
 import { workerManager } from '../services/agent-host/WorkerManager';
 import { getActivePiPromptTemplatesDir, getPiResourceSettings } from '../services/piModelConfig';
+import { readSharedSettings } from '../services/SharedSessionState';
 import { mergeSettingsPatch } from './settings';
 
 /**
@@ -31,6 +34,22 @@ function readUpdateRequest(payload: unknown): UpdatePiResourceSettingsRequest {
     if (typeof value !== 'boolean') throw new Error('Invalid Pi resource settings request');
     request[field] = value;
   }
+  if (raw.optInFeatures !== undefined) {
+    if (
+      !raw.optInFeatures ||
+      typeof raw.optInFeatures !== 'object' ||
+      Array.isArray(raw.optInFeatures)
+    ) {
+      throw new Error('Invalid Pi resource settings request');
+    }
+    const ids = new Set(optInFeatureRegistry().map((feature) => feature.id));
+    request.optInFeatures = {};
+    for (const [id, enabled] of Object.entries(raw.optInFeatures)) {
+      if (!ids.has(id)) continue;
+      if (typeof enabled !== 'boolean') throw new Error('Invalid Pi resource settings request');
+      request.optInFeatures[id] = enabled;
+    }
+  }
   if (Object.keys(request).length === 0) {
     throw new Error('Invalid Pi resource settings request');
   }
@@ -49,7 +68,7 @@ export function registerPiResourceHandlers(): void {
       const request = readUpdateRequest(payload);
       const previous = getPiResourceSettings();
 
-      const patch: Record<string, boolean> = {};
+      const patch: Record<string, unknown> = {};
       // The borrow directory is process-level worker configuration. Managed
       // workers must be replaced for the switch to take effect; local mode
       // already reads the user's own Pi directory and needs no restart.
@@ -72,6 +91,23 @@ export function registerPiResourceHandlers(): void {
         patch[PI_ENABLE_SUBAGENTS_SETTING_KEY] = request.enableSubagents;
         restartAllWorkers = true;
       }
+      const featurePatch = { ...request.optInFeatures };
+      if (
+        request.enableSubagents !== undefined &&
+        request.enableSubagents !== previous.enableSubagents &&
+        featurePatch.subagents === undefined
+      ) {
+        featurePatch.subagents = request.enableSubagents;
+      }
+      for (const feature of previous.bundledFeatures) {
+        if (featurePatch[feature.id] === feature.enabled) delete featurePatch[feature.id];
+      }
+      if (Object.keys(featurePatch).length > 0) {
+        const stored = readSharedSettings()[PI_OPT_IN_FEATURE_SETTINGS_KEY];
+        const current = stored && typeof stored === 'object' ? stored : {};
+        patch[PI_OPT_IN_FEATURE_SETTINGS_KEY] = { ...current, ...featurePatch };
+        restartAllWorkers = true;
+      }
       if (Object.keys(patch).length === 0) return previous;
 
       const saved = mergeSettingsPatch(patch);
@@ -89,5 +125,12 @@ export function registerPiResourceHandlers(): void {
     await mkdir(promptTemplatesDir, { recursive: true });
     const error = await shell.openPath(promptTemplatesDir);
     if (error) throw new Error(`Failed to open prompt templates folder: ${error}`);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PI_RESOURCES_OPEN_SKILLS, async (): Promise<void> => {
+    const skillsDir = getPiResourceSettings().paths.sharedSkills;
+    await mkdir(skillsDir, { recursive: true });
+    const error = await shell.openPath(skillsDir);
+    if (error) throw new Error(`Failed to open skills folder: ${error}`);
   });
 }

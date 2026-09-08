@@ -1,37 +1,35 @@
 # Implementation Status — 资源归位与会话导入（B 组）
 
-> 当前 phase、Next、blocker 与 last verified 的唯一权威。
-> 任务 ID 与状态见 [roadmap.md](./roadmap.md)。
+> **Completed，2026-09-08。** 状态权威：[roadmap](./roadmap.md)。
 
 ## Current phase
 
-**Not Started。** 计划于 2026-09-08 立项，来源是
-[PI-Desktop 调研档](../../../plans/2026-09-08-pi-desktop-study.md) 的处置汇总。
-四项均未动工，没有任何代码改动，没有 evidence 文件。
+B1–B4 实现、关键联合取证和自动化门禁完成；根注册表已移入 Archived。
+代码与文档位于当前工作区，未提交、未推送。
 
-## Active TODO（最多五项）
+## Last Landed
 
-1. **B1-a 前置取证**（最先做）：证实 pi 是否原生加载 `~/.agents/skills`。
-   设置页那句「三处始终加载」目前无据，取证结论无论正反都要写进 evidence。
-2. B3 随包扩展表驱动：与 B1 零文件重叠，可同时开工。
-3. B4 Codex 导入：同样可并行；先确认 `__tests__/fixtures/codex/` 的夹具够不够做幂等臂。
-4. B1-b 落点（取证通过后）：模型可达的安装路径 + 设置页文案与「打开技能目录」按钮。
-5. B2 借读面对齐（B1-a 之后，结论决定要不要借 `~/.agents/subagents`）。
+- B1：默认技能安装提示、目录入口；Pi 0.84.3 真实 utilityProcess managed/local 与真实 TUI PTY 取证通过。
+- B2：个人 Pi AGENTS.md 只读借读；`.agents/subagents` 经取证不采用，保持本轮不改 subagent 生命周期的边界。
+- B3：随包扩展表驱动、成本/默认值随清单、旧设置兼容、未知 ID 忽略、空清单不下发、重复保存不重启。
+- B4：Codex rollout 扫描、指纹与事务导入、来源 UI、幂等/跨来源/单源降级、真实 Pi writer 联合验证。
+- 顺手修复：worktree `.git` 指针文件排除、electron-vite esm-shim 文案陷阱；用户已明确将顺手 bug 纳入本轮。
 
-## Blocker
+## Last Verified
 
-无外部阻塞。四项都不依赖未部署的服务，不依赖 A 组。
+- 全仓 303 test files 拆成 38 批，每批最多 8 files、单 Worker：**4532 tests 全部通过**。
+- Root 与 Agent Host tsc --noEmit 以 1200 MiB 堆运行通过。
+- 全仓 Biome 无 error，现有 27 warnings / 17 infos 保留；git diff --check 通过。
+- native 测试使用用户缓存中独立编译的 node-pty；未安装系统包、未覆盖另一 checkout 的共享依赖。
+- 详细命令和逐批清单：[completion](./evidence/completion.md) · [batch gate](./evidence/final-batch-gate.json)。
 
-**两个内部前提**：
+## Next Target / Handoff
 
-- B2 依赖 B1-a 的取证结论。
-- 与 A 组的三处接缝见 [README](./README.md#与-a-组的文件边界并行前提)；
-  尤其 `src/shared/piModelConfig.ts` 两组都要改，**双方都只追加不重排**。
+GUI 点验已按本计划要求并入 [UI 对齐累计轮次](../pix-ui-alignment/implementation-status.md)：
+资源页目录按钮、扩展开关、双来源选择、重复导入与打开继续。实际 GUI 点验仍待该轮次执行。
+本机未运行整套生产构建；不将自动化和真实 PTY 取证当作 GUI/跨平台打包结果。
+本计划没有剩余实现任务；opencode 仍 Deferred，需求触发再立。
 
-## Last verified
+## Blocked By
 
-尚无。首条 evidence 应记录：实际执行的命令、日期、环境，以及**未跑到的门禁**
-（本机不跑整套生产构建、不启动 Electron GUI 时，逐条列出未验证项，不写成全绿）。
-
-B1-a 的取证 evidence 还要额外记：pi 版本（当前 `pi-coding-agent` 0.84.3）、
-探针脚本路径、托管/本地/TUI 三种模式各自的结论。
+无。此前 native 缺失和 worktree 搜索门禁失败已处理，完整批次证据已更新；不再需要额外范围确认。

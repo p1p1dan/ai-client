@@ -337,6 +337,22 @@ describe('bootstrapPiAgentSession — borrowed user resources', () => {
     for (const dir of temporaries.splice(0)) await rm(dir, { recursive: true, force: true });
   });
 
+  it('loads global instructions and appends the default skill home without replacing existing prompts', async () => {
+    const source = await userAgentDir([]);
+    await writeFile(join(source, 'AGENTS.md'), 'Global guidance');
+    const options = await loaderOptions(source);
+    const override = options.agentsFilesOverride as (base: {
+      agentsFiles: Array<{ path: string; content: string }>;
+    }) => { agentsFiles: Array<{ path: string; content: string }> };
+    expect(override({ agentsFiles: [] }).agentsFiles).toEqual([
+      { path: join(source, 'AGENTS.md'), content: 'Global guidance' },
+    ]);
+    const append = options.appendSystemPromptOverride as (base: string[]) => string[];
+    expect(append(['Existing append'])[0]).toBe('Existing append');
+    expect(append([])[0]).toContain('.agents');
+    expect(options.additionalExtensionPaths).toEqual(['/bundle/pi-permission-system']);
+  });
+
   it('adds the user’s skills and prompts directories', async () => {
     const source = await userAgentDir(['skills', 'prompts']);
     const options = await loaderOptions(source);

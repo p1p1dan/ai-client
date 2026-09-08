@@ -134,7 +134,7 @@ function appendConversation(
         }),
         api: 'legacy-import',
         provider: 'legacy-import',
-        model: entry.model || conversation.model || 'claude',
+        model: entry.model || conversation.model || conversation.sourceKind,
         usage: usageZero(),
         stopReason: 'stop',
         timestamp: timestamp(entry.timestamp),

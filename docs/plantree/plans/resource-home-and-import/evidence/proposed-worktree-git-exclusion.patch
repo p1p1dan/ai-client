@@ -1,0 +1,10 @@
+--- a/src/main/services/search/SearchService.ts
++++ b/src/main/services/search/SearchService.ts
+@@ -26,6 +26,7 @@
+   '!node_modules/**',
+   '!dist/**',
+   '!build/**',
++  '!.git',
+   '!.git/**',
+   '!*.lock',
+   '!package-lock.json',

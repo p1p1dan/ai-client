@@ -237,6 +237,7 @@ export const IPC_CHANNELS = {
   PI_RESOURCES_GET_SETTINGS: 'piResources:getSettings',
   PI_RESOURCES_UPDATE_SETTINGS: 'piResources:updateSettings',
   PI_RESOURCES_OPEN_PROMPTS: 'piResources:openPromptTemplates',
+  PI_RESOURCES_OPEN_SKILLS: 'piResources:openSkills',
 
   // T08-c — the pi permission policy: read every scope, write the one we own.
   PI_PERMISSIONS_GET: 'piPermissions:get',

@@ -1,0 +1,730 @@
+{
+  "date": "2026-09-08",
+  "status": "passed",
+  "fileCount": 303,
+  "passedTests": 4532,
+  "command": "NODE_OPTIONS=--max-old-space-size=1200 ./node_modules/.bin/vitest run <files> --maxWorkers=1 --no-file-parallelism",
+  "batches": [
+    {
+      "batch": 1,
+      "files": [
+        "scripts/__tests__/agent-host-build-lib.test.mjs",
+        "scripts/__tests__/bundled-extension-check.test.mjs",
+        "scripts/__tests__/credential-env-keys.test.mjs",
+        "scripts/__tests__/dev-proxy-bypass.test.mjs",
+        "scripts/__tests__/node-runtime-pin.test.mjs",
+        "scripts/__tests__/packaging-budget.test.mjs",
+        "scripts/__tests__/packaging-config.test.mjs",
+        "scripts/__tests__/pi-queue-release-integration.test.mjs"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  74 passed (74)",
+        "Duration  1.33s (transform 240ms, setup 35ms, collect 387ms, tests 87ms, environment 2ms, prepare 268ms)"
+      ]
+    },
+    {
+      "batch": 2,
+      "files": [
+        "src/agent-host/__tests__/bundledFeaturePlugins.test.ts",
+        "src/agent-host/__tests__/codexHistoryReader.test.ts",
+        "src/agent-host/__tests__/codexItemMapper.test.ts",
+        "src/agent-host/__tests__/commandInventory.test.ts",
+        "src/agent-host/__tests__/extensionInventory.test.ts",
+        "src/agent-host/__tests__/extensionUiBridge.test.ts",
+        "src/agent-host/__tests__/permissionActivity.test.ts",
+        "src/agent-host/__tests__/permissionPatchScript.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  135 passed (135)",
+        "Duration  1.19s (transform 158ms, setup 35ms, collect 214ms, tests 106ms, environment 1ms, prepare 263ms)"
+      ]
+    },
+    {
+      "batch": 3,
+      "files": [
+        "src/agent-host/__tests__/permissionPlugin.test.ts",
+        "src/agent-host/__tests__/permissionPolicy.test.ts",
+        "src/agent-host/__tests__/permissionPolicyIntegration.test.ts",
+        "src/agent-host/__tests__/piAgentSessionBootstrap.test.ts",
+        "src/agent-host/__tests__/piLegacyImport.test.ts",
+        "src/agent-host/__tests__/piSessionPreflight.test.ts",
+        "src/agent-host/__tests__/piSessionTimeline.test.ts",
+        "src/agent-host/__tests__/piSessionTree.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  78 passed (78)",
+        "Duration  2.15s (transform 289ms, setup 33ms, collect 270ms, tests 999ms, environment 1ms, prepare 258ms)"
+      ]
+    },
+    {
+      "batch": 4,
+      "files": [
+        "src/agent-host/__tests__/piUtilityRunner.test.ts",
+        "src/agent-host/__tests__/piWorkerBranchActions.test.ts",
+        "src/agent-host/__tests__/piWorkerRpcServer.test.ts",
+        "src/agent-host/__tests__/piWorkerSession.test.ts",
+        "src/agent-host/__tests__/sessionTierAuthorizer.test.ts",
+        "src/agent-host/__tests__/stderrRedaction.test.ts",
+        "src/agent-host/__tests__/subagentProjection.test.ts",
+        "src/agent-host/__tests__/userResourcePaths.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  106 passed (106)",
+        "Duration  3.68s (transform 254ms, setup 36ms, collect 719ms, tests 2.07s, environment 1ms, prepare 277ms)"
+      ]
+    },
+    {
+      "batch": 5,
+      "files": [
+        "src/agent-host/__tests__/workerStripOnlyCompat.test.ts",
+        "src/main/__tests__/electronViteConfig.test.ts",
+        "src/main/__tests__/esmShimStringTrap.test.ts",
+        "src/main/ipc/__tests__/agentCatalogIpc.test.ts",
+        "src/main/ipc/__tests__/agentHostCleanup.test.ts",
+        "src/main/ipc/__tests__/attachmentReadGuard.test.ts",
+        "src/main/ipc/__tests__/auth.test.ts",
+        "src/main/ipc/__tests__/chatEffortPayload.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  49 passed (49)",
+        "Duration  1.87s (transform 277ms, setup 40ms, collect 358ms, tests 488ms, environment 1ms, prepare 266ms)"
+      ]
+    },
+    {
+      "batch": 6,
+      "files": [
+        "src/main/ipc/__tests__/chatPiWorkerRouting.test.ts",
+        "src/main/ipc/__tests__/legacyImport.test.ts",
+        "src/main/ipc/__tests__/onboardingHandlers.test.ts",
+        "src/main/ipc/__tests__/onboardingLogoutSequence.test.ts",
+        "src/main/ipc/__tests__/piResources.test.ts",
+        "src/main/ipc/__tests__/piRuntime.test.ts",
+        "src/main/ipc/__tests__/settingsMainOwnedKeys.test.ts",
+        "src/main/ipc/__tests__/workerCleanupBudgetStatic.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  78 passed (78)",
+        "Duration  2.20s (transform 363ms, setup 37ms, collect 358ms, tests 863ms, environment 1ms, prepare 289ms)"
+      ]
+    },
+    {
+      "batch": 7,
+      "files": [
+        "src/main/services/__tests__/appStateMigration.test.ts",
+        "src/main/services/agent-host/__tests__/NodeRuntimeResolver.test.ts",
+        "src/main/services/agent-host/__tests__/PiUtilityService.test.ts",
+        "src/main/services/agent-host/__tests__/PiWorkerProcess.test.ts",
+        "src/main/services/agent-host/__tests__/ScratchWorkspaceService.test.ts",
+        "src/main/services/agent-host/__tests__/WorkerManager.test.ts",
+        "src/main/services/agent-host/__tests__/WorkerSlot.test.ts",
+        "src/main/services/agent-host/__tests__/WorkerTransport.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  139 passed (139)",
+        "Duration  2.92s (transform 379ms, setup 35ms, collect 603ms, tests 1.33s, environment 1ms, prepare 277ms)"
+      ]
+    },
+    {
+      "batch": 8,
+      "files": [
+        "src/main/services/agent-host/__tests__/createPiWorkerSlot.test.ts",
+        "src/main/services/agent-host/__tests__/hostStderr.test.ts",
+        "src/main/services/agent-host/__tests__/t31PiOnlyAbsence.test.ts",
+        "src/main/services/agent-host/__tests__/workerSessionKey.test.ts",
+        "src/main/services/announcements/__tests__/AnnouncementService.test.ts",
+        "src/main/services/auth/__tests__/AuthProbeScheduler.test.ts",
+        "src/main/services/auth/__tests__/AuthStateService.test.ts",
+        "src/main/services/auth/__tests__/CredentialVault.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  96 passed (96)",
+        "Duration  1.51s (transform 262ms, setup 43ms, collect 380ms, tests 101ms, environment 1ms, prepare 304ms)"
+      ]
+    },
+    {
+      "batch": 9,
+      "files": [
+        "src/main/services/auth/__tests__/adoption.test.ts",
+        "src/main/services/auth/__tests__/adoptionStaticImportBans.test.ts",
+        "src/main/services/auth/__tests__/claudeHomeRedirectStaticScan.test.ts",
+        "src/main/services/auth/__tests__/credentialMode.test.ts",
+        "src/main/services/auth/__tests__/index.test.ts",
+        "src/main/services/auth/__tests__/managedCredentialsStartup.test.ts",
+        "src/main/services/auth/__tests__/redact.test.ts",
+        "src/main/services/auth/__tests__/spawnGate.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  134 passed (134)",
+        "Duration  1.65s (transform 273ms, setup 35ms, collect 162ms, tests 510ms, environment 1ms, prepare 295ms)"
+      ]
+    },
+    {
+      "batch": 10,
+      "files": [
+        "src/main/services/auth/__tests__/startupOrchestrationTrace.test.ts",
+        "src/main/services/auth/__tests__/staticImportBans.test.ts",
+        "src/main/services/auth/__tests__/stopDualWriteMutationTrace.test.ts",
+        "src/main/services/auth/__tests__/vaultIntegration.test.ts",
+        "src/main/services/chat/__tests__/SessionIndexService.test.ts",
+        "src/main/services/chat/__tests__/extensionUiRouting.test.ts",
+        "src/main/services/cli/__tests__/PiRuntimeChecker.test.ts",
+        "src/main/services/files/__tests__/localFileReadGuard.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  58 passed (58)",
+        "Duration  2.19s (transform 389ms, setup 70ms, collect 169ms, tests 955ms, environment 1ms, prepare 276ms)"
+      ]
+    },
+    {
+      "batch": 11,
+      "files": [
+        "src/main/services/files/__tests__/localFileWriteGuard.test.ts",
+        "src/main/services/files/__tests__/pickedAttachmentAccess.test.ts",
+        "src/main/services/files/__tests__/previewFileRead.test.ts",
+        "src/main/services/git/__tests__/gitLogFormat.test.ts",
+        "src/main/services/git/__tests__/worktreeListParse.test.ts",
+        "src/main/services/legacyImport/__tests__/ClaudeSessionScanner.test.ts",
+        "src/main/services/legacyImport/__tests__/ClaudeSourceAdapter.test.ts",
+        "src/main/services/legacyImport/__tests__/CodexImportIntegration.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  67 passed (67)",
+        "Duration  2.23s (transform 322ms, setup 47ms, collect 491ms, tests 679ms, environment 1ms, prepare 297ms)"
+      ]
+    },
+    {
+      "batch": 12,
+      "files": [
+        "src/main/services/legacyImport/__tests__/CodexRollout.test.ts",
+        "src/main/services/legacyImport/__tests__/CodexSessionScanner.test.ts",
+        "src/main/services/legacyImport/__tests__/LegacyImportService.test.ts",
+        "src/main/services/legacyImport/__tests__/legacyImportStatic.test.ts",
+        "src/main/services/onboarding/__tests__/OnboardingService.test.ts",
+        "src/main/services/piModelConfig/__tests__/PiModelConfigService.test.ts",
+        "src/main/services/piModelConfig/__tests__/optInFeatures.test.ts",
+        "src/main/services/piModelConfig/__tests__/piWorkerEnv.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  86 passed (86)",
+        "Duration  2.14s (transform 459ms, setup 45ms, collect 438ms, tests 708ms, environment 1ms, prepare 310ms)"
+      ]
+    },
+    {
+      "batch": 13,
+      "files": [
+        "src/main/services/piPermissionPolicy/__tests__/permissionPolicyService.test.ts",
+        "src/main/services/piPermissionPolicy/__tests__/policyStore.test.ts",
+        "src/main/services/search/__tests__/SearchService.test.ts",
+        "src/main/services/search/__tests__/SearchServiceRipgrep.test.ts",
+        "src/main/services/session/__tests__/SessionManager.test.ts",
+        "src/main/services/terminal/__tests__/PiTuiPty.test.ts",
+        "src/main/services/terminal/__tests__/ShellDetector.test.ts",
+        "src/main/services/terminal/__tests__/piTuiSession.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  83 passed (83)",
+        "Duration  1.92s (transform 474ms, setup 42ms, collect 192ms, tests 700ms, environment 1ms, prepare 295ms)"
+      ]
+    },
+    {
+      "batch": 14,
+      "files": [
+        "src/main/services/terminal/__tests__/t35FinalAbsence.test.ts",
+        "src/main/services/usage/__tests__/UsageService.test.ts",
+        "src/main/services/usage/__tests__/usageCredentialSource.test.ts",
+        "src/renderer/App/__tests__/authGateWiring.test.ts",
+        "src/renderer/App/__tests__/legacyShellAbsence.test.ts",
+        "src/renderer/App/hooks/__tests__/fileDragDrop.test.ts",
+        "src/renderer/App/hooks/__tests__/useWorktreeSync.utils.test.ts",
+        "src/renderer/components/announcements/__tests__/announcementWiring.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  86 passed (86)",
+        "Duration  2.76s (transform 224ms, setup 39ms, collect 631ms, tests 1.22s, environment 1ms, prepare 266ms)"
+      ]
+    },
+    {
+      "batch": 15,
+      "files": [
+        "src/renderer/components/chat/__tests__/assistantProgress.test.ts",
+        "src/renderer/components/chat/__tests__/attachmentLimits.test.ts",
+        "src/renderer/components/chat/__tests__/attachments.test.ts",
+        "src/renderer/components/chat/__tests__/authRequiredError.test.ts",
+        "src/renderer/components/chat/__tests__/chatEmptyState.test.ts",
+        "src/renderer/components/chat/__tests__/chatMarkdownPolicy.test.ts",
+        "src/renderer/components/chat/__tests__/chatMarkdownRender.test.ts",
+        "src/renderer/components/chat/__tests__/chatShiki.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  348 passed (348)",
+        "Duration  11.73s (transform 271ms, setup 40ms, collect 6.23s, tests 4.56s, environment 1ms, prepare 270ms)"
+      ]
+    },
+    {
+      "batch": 16,
+      "files": [
+        "src/renderer/components/chat/__tests__/chatTimelineLayout.test.ts",
+        "src/renderer/components/chat/__tests__/chatTurn.test.ts",
+        "src/renderer/components/chat/__tests__/clipboardAttachments.test.ts",
+        "src/renderer/components/chat/__tests__/composerFormStatic.test.ts",
+        "src/renderer/components/chat/__tests__/composerStopStatic.test.ts",
+        "src/renderer/components/chat/__tests__/composerTarget.test.ts",
+        "src/renderer/components/chat/__tests__/composerTargetGuards.test.ts",
+        "src/renderer/components/chat/__tests__/darkVariant.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  168 passed (168)",
+        "Duration  2.33s (transform 167ms, setup 36ms, collect 773ms, tests 650ms, environment 1ms, prepare 271ms)"
+      ]
+    },
+    {
+      "batch": 17,
+      "files": [
+        "src/renderer/components/chat/__tests__/efforts.test.ts",
+        "src/renderer/components/chat/__tests__/eventRing.test.ts",
+        "src/renderer/components/chat/__tests__/extensionUiDisplayModel.test.ts",
+        "src/renderer/components/chat/__tests__/extensionUiInlineStatic.test.ts",
+        "src/renderer/components/chat/__tests__/extensionUiModel.test.ts",
+        "src/renderer/components/chat/__tests__/extensionUiSurfacesStatic.test.ts",
+        "src/renderer/components/chat/__tests__/f2IncidentTest5.test.ts",
+        "src/renderer/components/chat/__tests__/fileMention.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  123 passed (123)",
+        "Duration  1.52s (transform 174ms, setup 37ms, collect 612ms, tests 36ms, environment 1ms, prepare 270ms)"
+      ]
+    },
+    {
+      "batch": 18,
+      "files": [
+        "src/renderer/components/chat/__tests__/fontDomain.test.ts",
+        "src/renderer/components/chat/__tests__/fontDomainScan.test.ts",
+        "src/renderer/components/chat/__tests__/forkDraftCarry.test.ts",
+        "src/renderer/components/chat/__tests__/historyError.test.ts",
+        "src/renderer/components/chat/__tests__/hostStatus.test.ts",
+        "src/renderer/components/chat/__tests__/imageDimensions.test.ts",
+        "src/renderer/components/chat/__tests__/messageMetadata.test.ts",
+        "src/renderer/components/chat/__tests__/messageQueue.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  173 passed (173)",
+        "Duration  2.24s (transform 214ms, setup 33ms, collect 965ms, tests 374ms, environment 1ms, prepare 263ms)"
+      ]
+    },
+    {
+      "batch": 19,
+      "files": [
+        "src/renderer/components/chat/__tests__/messageTimelinePendingStatic.test.ts",
+        "src/renderer/components/chat/__tests__/messageTimelineScroll.test.ts",
+        "src/renderer/components/chat/__tests__/messageTimelineWiring.test.ts",
+        "src/renderer/components/chat/__tests__/middleColumnLayout.test.ts",
+        "src/renderer/components/chat/__tests__/models.test.ts",
+        "src/renderer/components/chat/__tests__/permissionActivityRow.test.ts",
+        "src/renderer/components/chat/__tests__/permissionGateDegradedStatic.test.ts",
+        "src/renderer/components/chat/__tests__/permissionTierWiring.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  218 passed (218)",
+        "Duration  2.14s (transform 170ms, setup 37ms, collect 1.20s, tests 57ms, environment 1ms, prepare 256ms)"
+      ]
+    },
+    {
+      "batch": 20,
+      "files": [
+        "src/renderer/components/chat/__tests__/piMarkdownSplitComparison.test.ts",
+        "src/renderer/components/chat/__tests__/piModelCatalog.test.ts",
+        "src/renderer/components/chat/__tests__/piModelWiring.test.ts",
+        "src/renderer/components/chat/__tests__/piResumeNoFallback.test.ts",
+        "src/renderer/components/chat/__tests__/piThinkingDuration.test.ts",
+        "src/renderer/components/chat/__tests__/piToolVocabulary.test.ts",
+        "src/renderer/components/chat/__tests__/piTurnItemOrder.test.ts",
+        "src/renderer/components/chat/__tests__/pickedAttachments.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  84 passed (84)",
+        "Duration  1.49s (transform 202ms, setup 36ms, collect 584ms, tests 28ms, environment 1ms, prepare 263ms)"
+      ]
+    },
+    {
+      "batch": 21,
+      "files": [
+        "src/renderer/components/chat/__tests__/pureModuleImports.test.ts",
+        "src/renderer/components/chat/__tests__/questionCardModel.test.ts",
+        "src/renderer/components/chat/__tests__/questionCardWiring.test.ts",
+        "src/renderer/components/chat/__tests__/queueRelease.test.ts",
+        "src/renderer/components/chat/__tests__/queueReleaseTransaction.test.ts",
+        "src/renderer/components/chat/__tests__/retryBanner.test.ts",
+        "src/renderer/components/chat/__tests__/scrollStateCss.test.ts",
+        "src/renderer/components/chat/__tests__/sendBudgets.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  254 passed (254)",
+        "Duration  1.55s (transform 180ms, setup 39ms, collect 586ms, tests 96ms, environment 1ms, prepare 256ms)"
+      ]
+    },
+    {
+      "batch": 22,
+      "files": [
+        "src/renderer/components/chat/__tests__/sendDispatchError.test.ts",
+        "src/renderer/components/chat/__tests__/sendExperienceWiring.test.ts",
+        "src/renderer/components/chat/__tests__/sendPreamble.test.ts",
+        "src/renderer/components/chat/__tests__/sessionPreferenceStore.test.ts",
+        "src/renderer/components/chat/__tests__/sessionTree.test.ts",
+        "src/renderer/components/chat/__tests__/slashCommandWiringStatic.test.ts",
+        "src/renderer/components/chat/__tests__/slashCommands.test.ts",
+        "src/renderer/components/chat/__tests__/startScreenBarStatic.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  53 passed (53)",
+        "Duration  1.78s (transform 119ms, setup 37ms, collect 850ms, tests 25ms, environment 1ms, prepare 273ms)"
+      ]
+    },
+    {
+      "batch": 23,
+      "files": [
+        "src/renderer/components/chat/__tests__/subagentActivityModel.test.ts",
+        "src/renderer/components/chat/__tests__/subagentWiring.test.ts",
+        "src/renderer/components/chat/__tests__/t25ModelPickerStatic.test.ts",
+        "src/renderer/components/chat/__tests__/thinkingCard.test.ts",
+        "src/renderer/components/chat/__tests__/toolCard.test.ts",
+        "src/renderer/components/chat/__tests__/toolDiff.test.ts",
+        "src/renderer/components/chat/__tests__/toolHits.test.ts",
+        "src/renderer/components/chat/__tests__/toolRowArg.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  204 passed (204)",
+        "Duration  2.32s (transform 167ms, setup 36ms, collect 615ms, tests 819ms, environment 1ms, prepare 269ms)"
+      ]
+    },
+    {
+      "batch": 24,
+      "files": [
+        "src/renderer/components/chat/__tests__/tuiHandoverWiring.test.ts",
+        "src/renderer/components/chat/__tests__/turnCopy.test.ts",
+        "src/renderer/components/chat/__tests__/turnHead.test.ts",
+        "src/renderer/components/chat/__tests__/turnStatus.test.ts",
+        "src/renderer/components/chat/__tests__/turnTiming.test.ts",
+        "src/renderer/components/chat/__tests__/unboundChatWiring.test.ts",
+        "src/renderer/components/chat/sessionIndex/__tests__/agentBindingMerge.test.ts",
+        "src/renderer/components/chat/sessionIndex/__tests__/resumeIntent.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  166 passed (166)",
+        "Duration  1.64s (transform 229ms, setup 37ms, collect 736ms, tests 30ms, environment 1ms, prepare 269ms)"
+      ]
+    },
+    {
+      "batch": 25,
+      "files": [
+        "src/renderer/components/chat/sessionIndex/__tests__/sessionIndexMerge.test.ts",
+        "src/renderer/components/chat/sessionIndex/__tests__/sessionIndexMutations.test.ts",
+        "src/renderer/components/chat/sessionIndex/__tests__/sessionTitle.test.ts",
+        "src/renderer/components/files/__tests__/javaFolding.test.ts",
+        "src/renderer/components/files/__tests__/markdownImagePolicy.test.ts",
+        "src/renderer/components/files/__tests__/previewRecoveryStatic.test.ts",
+        "src/renderer/components/files/__tests__/previewResourceLimits.test.ts",
+        "src/renderer/components/repository/__tests__/RepositorySettingsDialog.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  135 passed (135)",
+        "Duration  4.55s (transform 347ms, setup 47ms, collect 3.43s, tests 98ms, environment 109ms, prepare 267ms)"
+      ]
+    },
+    {
+      "batch": 26,
+      "files": [
+        "src/renderer/components/search/__tests__/useGlobalSearch.test.ts",
+        "src/renderer/components/sessions/__tests__/legacyImportUiStatic.test.ts",
+        "src/renderer/components/settings/__tests__/KeybindingsSettings.test.ts",
+        "src/renderer/components/settings/__tests__/SettingsContent.test.ts",
+        "src/renderer/components/settings/__tests__/permissionPolicyView.test.ts",
+        "src/renderer/components/settings/__tests__/piResourcesSettingsStatic.test.ts",
+        "src/renderer/components/settings/__tests__/settingsCategories.test.ts",
+        "src/renderer/components/terminal/__tests__/terminalSurfaceModel.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  78 passed (78)",
+        "Duration  2.17s (transform 215ms, setup 43ms, collect 703ms, tests 232ms, environment 338ms, prepare 273ms)"
+      ]
+    },
+    {
+      "batch": 27,
+      "files": [
+        "src/renderer/components/user/__tests__/userProfileQuota.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/addRepositoryEntry.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/bulkArchiveStatic.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/centerLayoutModel.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/contextPanelMountStatic.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/conversationSegments.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/deadControlsStatic.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/deriveChatWorkspaceTree.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  128 passed (128)",
+        "Duration  2.92s (transform 218ms, setup 40ms, collect 786ms, tests 1.11s, environment 111ms, prepare 276ms)"
+      ]
+    },
+    {
+      "batch": 28,
+      "files": [
+        "src/renderer/components/workspace-shell/__tests__/endConversationWiringStatic.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/endSessionRuntime.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/panelTabsModel.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/panelVisibilityStatic.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/pluginEntryStatic.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/pluginInventoryModel.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/runPanelModel.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/sessionContextMenuWiring.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  69 passed (69)",
+        "Duration  1.98s (transform 160ms, setup 35ms, collect 888ms, tests 203ms, environment 1ms, prepare 258ms)"
+      ]
+    },
+    {
+      "batch": 29,
+      "files": [
+        "src/renderer/components/workspace-shell/__tests__/shellLayoutModel.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/shellShortcuts.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/sidebarRowBudgetStatic.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/sidebarRowRemoval.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/sidebarTree.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/singleSessionViewStatic.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/surfaceRegistry.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/terminalSurfaceStatic.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  210 passed (210)",
+        "Duration  1.98s (transform 332ms, setup 38ms, collect 999ms, tests 81ms, environment 1ms, prepare 269ms)"
+      ]
+    },
+    {
+      "batch": 30,
+      "files": [
+        "src/renderer/components/workspace-shell/__tests__/treeSyncPatch.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/tuiEditorAndRailAlignStatic.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/unboundChatEntryStatic.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/useWorkspaceSearch.test.ts",
+        "src/renderer/components/workspace-shell/__tests__/workspaceSearchShortcuts.test.ts",
+        "src/renderer/components/workspace-shell/surfaces/__tests__/closeEditorTabsSequentially.test.ts",
+        "src/renderer/components/workspace-shell/surfaces/__tests__/contextSurfaceModel.test.ts",
+        "src/renderer/components/workspace-shell/surfaces/__tests__/diffCenterTabsStatic.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  103 passed (103)",
+        "Duration  2.09s (transform 225ms, setup 42ms, collect 926ms, tests 122ms, environment 117ms, prepare 274ms)"
+      ]
+    },
+    {
+      "batch": 31,
+      "files": [
+        "src/renderer/components/workspace-shell/surfaces/__tests__/editorSurfaceIntentGuards.test.ts",
+        "src/renderer/components/workspace-shell/surfaces/__tests__/editorTabCloseDecision.test.ts",
+        "src/renderer/components/workspace-shell/surfaces/__tests__/fileIntentToCursor.test.ts",
+        "src/renderer/components/workspace-shell/surfaces/__tests__/gitSurfaceLayoutStatic.test.ts",
+        "src/renderer/components/workspace-shell/surfaces/__tests__/gitSurfaceModel.test.ts",
+        "src/renderer/components/workspace-shell/surfaces/__tests__/resolveIntentPath.test.ts",
+        "src/renderer/components/workspace-shell/surfaces/__tests__/terminalWorkspace.test.ts",
+        "src/renderer/hooks/__tests__/gitBranchMutations.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  109 passed (109)",
+        "Duration  1.64s (transform 153ms, setup 40ms, collect 595ms, tests 46ms, environment 110ms, prepare 265ms)"
+      ]
+    },
+    {
+      "batch": 32,
+      "files": [
+        "src/renderer/hooks/__tests__/gitQueryKeys.test.ts",
+        "src/renderer/hooks/__tests__/useEditor.test.ts",
+        "src/renderer/hooks/__tests__/useFileDrop.test.ts",
+        "src/renderer/hooks/__tests__/worktreeInitialization.test.ts",
+        "src/renderer/lib/__tests__/deferRootUnmount.test.ts",
+        "src/renderer/lib/__tests__/ghosttyTheme.test.ts",
+        "src/renderer/lib/__tests__/gitClone.test.ts",
+        "src/renderer/lib/__tests__/uniqueId.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  58 passed (58)",
+        "Duration  1.47s (transform 210ms, setup 47ms, collect 399ms, tests 50ms, environment 117ms, prepare 282ms)"
+      ]
+    },
+    {
+      "batch": 33,
+      "files": [
+        "src/renderer/lib/__tests__/utils.test.ts",
+        "src/renderer/stores/__tests__/chatSessionActions.test.ts",
+        "src/renderer/stores/__tests__/chatSessionsAuthGate.test.ts",
+        "src/renderer/stores/__tests__/chatSessionsBatch.test.ts",
+        "src/renderer/stores/__tests__/chatSessionsCore.test.ts",
+        "src/renderer/stores/__tests__/chatSessionsHistory.test.ts",
+        "src/renderer/stores/__tests__/chatSessionsPermissionActivity.test.ts",
+        "src/renderer/stores/__tests__/chatSessionsQuestion.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  150 passed (150)",
+        "Duration  1.46s (transform 326ms, setup 41ms, collect 518ms, tests 52ms, environment 1ms, prepare 277ms)"
+      ]
+    },
+    {
+      "batch": 34,
+      "files": [
+        "src/renderer/stores/__tests__/chatSessionsSendGuard.test.ts",
+        "src/renderer/stores/__tests__/chatSessionsThinking.test.ts",
+        "src/renderer/stores/__tests__/diffTabTarget.test.ts",
+        "src/renderer/stores/__tests__/editorWorkspacePreview.test.ts",
+        "src/renderer/stores/__tests__/extensionUi.test.ts",
+        "src/renderer/stores/__tests__/fileOpenIntent.test.ts",
+        "src/renderer/stores/__tests__/historyReplayMerge.test.ts",
+        "src/renderer/stores/__tests__/openDiffTab.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  106 passed (106)",
+        "Duration  1.19s (transform 175ms, setup 35ms, collect 267ms, tests 33ms, environment 1ms, prepare 278ms)"
+      ]
+    },
+    {
+      "batch": 35,
+      "files": [
+        "src/renderer/stores/__tests__/pendingUserMessages.test.ts",
+        "src/renderer/stores/__tests__/permissionGate.test.ts",
+        "src/renderer/stores/__tests__/runtimeEventBus.test.ts",
+        "src/renderer/stores/__tests__/scratchWorkspace.test.ts",
+        "src/renderer/stores/__tests__/sessionLifecycle.test.ts",
+        "src/renderer/stores/__tests__/sessionRetirement.test.ts",
+        "src/renderer/stores/__tests__/sessionRuntimeFacts.test.ts",
+        "src/renderer/stores/__tests__/storeSelectorStability.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  51 passed (51)",
+        "Duration  2.39s (transform 180ms, setup 33ms, collect 492ms, tests 997ms, environment 1ms, prepare 270ms)"
+      ]
+    },
+    {
+      "batch": 36,
+      "files": [
+        "src/renderer/stores/__tests__/subagentActivity.test.ts",
+        "src/renderer/stores/__tests__/toolExpansion.test.ts",
+        "src/renderer/stores/__tests__/turnSendStatus.test.ts",
+        "src/renderer/stores/settings/__tests__/migration.test.ts",
+        "src/renderer/stores/settings/__tests__/removedSettings.test.ts",
+        "src/renderer/styles/__tests__/tokenValues.test.ts",
+        "src/shared/__tests__/announcements.test.ts",
+        "src/shared/__tests__/appStateLayout.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  77 passed (77)",
+        "Duration  1.25s (transform 215ms, setup 32ms, collect 237ms, tests 131ms, environment 1ms, prepare 264ms)"
+      ]
+    },
+    {
+      "batch": 37,
+      "files": [
+        "src/shared/__tests__/authGate.test.ts",
+        "src/shared/__tests__/chatAgentDefaults.test.ts",
+        "src/shared/__tests__/credentialMode.test.ts",
+        "src/shared/__tests__/defaultPaths.test.ts",
+        "src/shared/__tests__/moduleCaseCollisions.test.ts",
+        "src/shared/__tests__/piPermissionPolicy.test.ts",
+        "src/shared/__tests__/piUsage.test.ts",
+        "src/shared/__tests__/shellMinimums.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  8 passed (8)",
+        "Tests  118 passed (118)",
+        "Duration  1.42s (transform 121ms, setup 38ms, collect 370ms, tests 167ms, environment 1ms, prepare 265ms)"
+      ]
+    },
+    {
+      "batch": 38,
+      "files": [
+        "src/shared/__tests__/weeklyQuota.test.ts",
+        "src/shared/__tests__/windowTheme.test.ts",
+        "src/shared/types/__tests__/agentWireStatic.test.ts",
+        "src/shared/types/__tests__/extensionUiContracts.test.ts",
+        "src/shared/types/__tests__/legacyImport.test.ts",
+        "src/shared/types/__tests__/workerRpc.test.ts",
+        "src/shared/utils/__tests__/path.test.ts"
+      ],
+      "exitCode": 0,
+      "summary": [
+        "Test Files  7 passed (7)",
+        "Tests  80 passed (80)",
+        "Duration  3.36s (transform 143ms, setup 33ms, collect 380ms, tests 2.12s, environment 1ms, prepare 243ms)"
+      ]
+    }
+  ]
+}
