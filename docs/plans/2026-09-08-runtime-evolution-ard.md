@@ -335,6 +335,8 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
 | 2026-09-08 | PI-Desktop Rust host-core 直接文件读写 | **不可行**——无法直接读写，仅能通过 bash/powershell 工具间接操作 |
 | 2026-09-08 | ai-client TUI（随包 node.exe）与编辑器（TSD-aware read） | 用户确认正常 |
 | 2026-09-08 | ai-client Windows 安装版 GUI（Electron utilityProcess） | 用户确认 Read 返回异常内容、`pwd/ls/echo` 报 `Bad file descriptor` |
+| 2026-09-08 | ai-client Windows 安装版 GUI（随包 Node worker，D11/D20 后） | 用户确认：Read 得到明文 · `pwd/ls/echo` 正常无 `Bad file descriptor` · Write/Edit 后编辑器显示正常 · 会话标题与 resume 正常 · 退出无残留 `node.exe` |
+| 2026-09-08 | 同上：agent 产物在盘上的加密状态 | 用户在文件管理器确认**两个产物文件均为已加密状态**——白名单内进程看到的明文来自透明解密，不代表文件未加密。Main 侧裸读的后果另行验证（[Q5](../plantree/plans/runtime-evolution/open-questions.md)） |
 
 **修订结论**（撤回旧版「Rust 不可行、Node 不受影响」）：兼容性按**实际执行载体与启动方式**验收，
 不能按实现语言推断。同一份 Node/TS 代码在 Electron 载体里失败、在随包 node.exe 载体里正常，

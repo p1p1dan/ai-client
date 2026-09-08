@@ -4,7 +4,8 @@
 
 | 问题 | 当前证据 | 处理节点 |
 |---|---|---|
-| Q5 载体切换后 worker 写的文件 Main 能否读到明文 | 加密驱动按进程放行明文（`src/main/utils/tsdSafeRead.ts`）。D11 把 Windows GUI worker 从白名单外的 Electron 换成白名单内的随包 node.exe，worker 新写的会话 JSONL / compaction record / Write·Edit 产物在盘上的形态可能随之改变；而 Main 仍是 Electron，`SessionIndexService.ts:410`、`GitService.ts:670` / `:1364`、`WorktreeService.ts:648` 都是裸 `readFile`，全仓仅 `previewFileRead` 与 legacy import 三处 TSD-aware。**这是推断，不是已证事实** | P3-5 设计前需现场一条确认：worker 写入 → Main 读取 → 内容是否为明文。若为密文，收敛方案是 Main 侧读会话/文件内容统一走 TSD-aware 读，而不是逐处打补丁 |
+| Q5 Main 侧裸 `readFile` 读 worker 写的文件会得到什么 | **第一轮现场探针已跑（2026-09-08，新安装包 + 随包 Node worker）**：worker 自己写、自己读为明文；shell 重定向写的文件同样明文；会话 JSONL 前 16 字节明文；但**用户在文件管理器确认两个产物在盘上均为已加密状态**——六步探针全部透过白名单内的 node.exe 观察，区分不了「未加密」与「透明解密」。两条曾被当作反证的现象已排除：`SessionIndexService.ts:410` 读的是 **Main 自己写的索引 JSON**（非 worker 写的 JSONL），编辑器走的是本就 TSD-aware 的 `previewFileRead`。问题因此收窄到 Main 侧真正的裸读：`GitService.ts:670` / `:1364`（diff 的工作区一侧，读到密文不报错，`decodeBuffer` 静默出乱码）、`WorktreeService.ts:648` | 第二轮探针：一次性 git 仓库里由 agent 改 tracked 文件，在应用 diff 面板看「修改后」一侧是明文还是 `%TSD-Header-###%`；若正常，再从应用界面提交并回读，确认 Main 派生的 `git.exe` 是否把密文写进仓库。结论为密文时，P3-5/P4 把 Main 侧读工作区与会话内容统一走 `readFileTsdSafe`，不逐处打补丁 |
+| Q6 P1-0 是否同时交付非 pipe 的 stdio 实现 | D11 要求不假设管道可用；现场只证明随包 Node + TUI PTY 可用，尚不能证明非交互 bash 管道、文件重定向或无损字节 adapter 在加密机上的效果。[契约草案](topics/p1-0-host-contracts.md)建议先提供 pipe + adapter 挂载点，禁止失败后自动重跑，真实载体验收仍在 P1-8/P4-6 | P1-0 实现前评审交付范围；若首版必须有非 pipe 实现，先做隔离探针，确认字节、资源上限和清理语义后补入契约 |
 
 已收口（2026-09-08）：
 

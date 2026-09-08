@@ -3,9 +3,9 @@
 > 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D12 生效）。
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
-**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 ∥ P2-1 起 ∥ P3 可开工
+**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1-0 草案待评审；P2-1 起 ∥ P3 可开工
 **最近落地**：`8a71c843`（2026-09-08）已提交 P0 骨架与 P2-0 六场景基线，缓存命中率 **95.01%**，[验收与证据](evidence/p2-0/validation.md)；P0 的 R1 关闭证据见 [在线冒烟](evidence/p0/live-smoke.md)
-**下一目标**：[P1 开工交接](topics/p1-handoff.md)；P2-1 起及 P3 可并行（Q4 已按 [D12](../../../plans/2026-09-08-runtime-evolution-ard.md) 收口：pin 0.84.4，不回退对齐）
+**下一目标**：评审 [P1-0 契约草案](topics/p1-0-host-contracts.md)，再按 [P1 开工交接](topics/p1-handoff.md) 实施；P2-1 起及 P3 可并行（Q4 已按 [D12](../../../plans/2026-09-08-runtime-evolution-ard.md) 收口：pin 0.84.4，不回退对齐）
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
 
@@ -67,7 +67,7 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
-| P1-0 IO/exec 出口收敛 | ⬜ | **P1 的第一件事**（ARD D11）：`contracts.ts` 增 `runtimeHostIo`（fs 唯一出口，含 TSD 头探测与白名单 node 回落挂载点）与 `runtimeExec`（子进程唯一出口，统一 stdio 策略、PATH 前置随包 node、超时清理）两个 service 契约；trace 的 `version_stamp` 加 carrier 字段。P1-2/P1-3/P1-4 一律经这两个出口，不得直接 `node:fs` / `child_process` |
+| P1-0 IO/exec 出口收敛 | ⬜ | **P1 的第一件事**（ARD D11）：`contracts.ts` 增 `runtimeHostIo`（fs 唯一出口，含 TSD 头探测与白名单 node 回落挂载点）与 `runtimeExec`（子进程唯一出口，统一 stdio 策略、PATH 前置随包 node、超时清理）两个 service 契约；trace 的 `version_stamp` 加 carrier 字段。P1-2/P1-3/P1-4 一律经这两个出口，不得直接 `node:fs` / `child_process`。已有 [契约草案](topics/p1-0-host-contracts.md)，待评审、未实现；草案另列 P0 catalog/trace 迁移面与 Q6 |
 | P1-1 工具注册表 | ⬜ | 工具注册/发现/JSON schema，复用 pi-agent-core `AgentTool` 定义 |
 | P1-2 文件工具 | ⬜ | read / write / edit，含路径规范化与大文件截断 |
 | P1-3 bash 工具 | ⬜ | cwd、超时、输出截断、进程清理 |
