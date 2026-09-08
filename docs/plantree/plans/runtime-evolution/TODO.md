@@ -1,10 +1,26 @@
-# P1 执行 TODO
+# P1 补修与 P2 执行 TODO
 
 2026-09-08 · 用户已授权代码修改 · [看板](README.md) · [P1-0 契约](topics/p1-0-host-contracts.md) · [验证记录](evidence/p1/README.md)
 
-当前代码提交：`27ff2020` + `2ae6f209`（2026-09-08，实现与证据归档；不代表完整验收）。
+历史代码提交：`27ff2020` + `2ae6f209`（2026-09-08，实现与证据归档；不代表完整验收）。
 
-## 当前批次：D14 返工
+## 当前批次：审查补修 → P2 接线
+
+- [x] 修复内部容量提醒被当作用户任务保留，覆盖提醒后主动换窗的真实工具循环。
+- [x] 首轮模型请求前检查预算；超预算明确失败，不截断用户输入、不调用 provider。
+- [x] P2-1：注册 runtimePrompt，接通固定槽位、工具贡献和 D14 两轴；显式 systemPrompt 保留固定探针入口。
+- [x] P2-2：InstructionSource 适配 HostIo，接入全局与项目指令链并验证真实请求。
+- [x] 小批串行回归、类型检查、离线冒烟；更新看板/交接/证据。P2-4 依赖 P3，P2-5/P2-6 按计划在 P3/P4 后真实验收。
+
+本批代码与证据随本次提交归档（2026-09-09）；[P2 验证记录](evidence/p2/README.md)记录 15 文件 195 项、类型检查与冒烟。
+
+## 下一批与 P2 后续门禁
+
+- [ ] P3-1：JSONL 存储与 Pi/PI-Desktop 兼容契约；为 P2-4 提供唯一持久化出口。
+- [ ] P2-4：随 P3 存储接入 compaction record，覆盖跨 run/resume；当前 checkpoint 仍仅在内存。
+- [ ] P2-5/P2-6：P3/P4 后以 P2-0 同套会话实测，原始 provider 命中率不得低于 95.01%；记录 0.84.4/0.84.3 偏差。
+
+## 已落地：D14 返工
 
 - [x] 重读 P1 交接、ARD D14 和当前代码；确认旧 69 项测试不能代签新权限模型。
 - [x] P1-1：plan/agent 枚举、注册表按模式裁剪，执行边界也拒绝被裁掉的工具。
@@ -22,7 +38,7 @@
 ## 新增 P1-9（与 P2-8 成对）—— 已成对落地
 
 - [x] 阅读 PI-Desktop new_context 源码和测试，适配无参数工具、两种回复及只提交意图语义。
-- [x] 导出 newContextTool({ family, request })；不默认注册。P2 接入时按 read 注册，plan 可用，无普通审批，显式工具白名单仍生效；4 项测试通过。
+- [x] 导出 newContextTool({ family, request })；已由 ContextPlugin 默认按 read 注册，plan 可用，无普通审批，显式工具白名单仍生效。
 - [x] `runtimeContext` 服务落地：注册工具、消费意图、执行换窗（`prepareNextTurnWithContext` 边界）。压缩只换请求上下文，不截断 `Agent.state.messages`。
 - [x] 提醒按注册结果决定是否点名工具，配对规则写进代码而不是靠人记得；提醒以尾部消息注入，保持 D9 缓存前缀不变。
 - [x] 13 项配对/压缩用例 + 2 项措辞用例；runtime 全量 189 项、两个载体探针、离线冒烟通过。
@@ -36,7 +52,7 @@
 - [x] 本机相关 69 项测试、类型检查、P0 离线冒烟、Node 与真实 Electron utilityProcess 探针。
 - [x] P1 工具/权限提示词贡献函数供 P2 装配；保留 P2 的已提交实现。
 
-## 剩余 TODO（全部需要本机没有的环境）
+## P1 剩余现场 TODO
 
 - [x] 增加保留进程树根身份的 Node runner；Linux 验证命令先退出后的后代清理。
 - [ ] Windows 验证 runner + taskkill 的命令树清理；P1-0/P1-3 保持进行中。

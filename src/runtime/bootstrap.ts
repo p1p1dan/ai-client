@@ -1,16 +1,18 @@
 import { createHash } from 'node:crypto';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Context } from 'cordis';
 import type { PortableExtensionUiBridgeOptions } from '../agent-host/extensionUiBridge.ts';
 import {
   type AgentLoopService,
   type ModelAdapterService,
+  PROMPT_SERVICE,
   RUNTIME_SERVICES,
   RuntimeConfigError,
   type RuntimeExecService,
   type RuntimeHostConfig,
   type RuntimeHostIoService,
+  type RuntimePromptService,
   type RuntimeRunRequest,
   type RuntimeRunResult,
   type TraceService,
@@ -44,12 +46,13 @@ import {
   type RuntimePermissionsService,
 } from './plugins/permissions/index.ts';
 import { loadPermissionPolicy } from './plugins/permissions/policy.ts';
+import { type PromptConfig, PromptPlugin } from './plugins/prompt/index.ts';
 import { TOOLS_SERVICE, type ToolsConfig, ToolsPlugin } from './plugins/tools/index.ts';
 import { canonicalPath } from './plugins/tools/paths.ts';
 import { buildVersionStamp, TracePlugin } from './trace.ts';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-export const RUNTIME_CONFIG_VERSION = 'runtime_p1_policy_v3';
+export const RUNTIME_CONFIG_VERSION = 'runtime_p2_prompt_v1';
 
 export interface RuntimeBootstrapOptions {
   env?: NodeJS.ProcessEnv;
@@ -57,6 +60,7 @@ export interface RuntimeBootstrapOptions {
   tools?: ToolsConfig;
   permissions?: Omit<PermissionConfig, 'cwd' | 'policy'>;
   context?: ContextConfig;
+  prompt?: PromptConfig;
   approvalUi?: PortableExtensionUiBridgeOptions;
   agentDir?: string;
   traceDir?: string | null;
@@ -76,6 +80,7 @@ export interface RuntimeHandle {
   exec: RuntimeExecService;
   permissions?: RuntimePermissionsService;
   context?: RuntimeContextService;
+  prompt: RuntimePromptService;
   approval?: RuntimeApprovalBridge;
   run(request: RuntimeRunRequest): Promise<RuntimeRunResult>;
   dispose(): Promise<void>;
@@ -145,6 +150,15 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     // (plan board P1-9 / P2-8) or not at all.
     const contextFiber = await ctx.plugin(ContextPlugin, options.context ?? {});
     await contextFiber.await();
+    const promptFiber = await ctx.plugin(PromptPlugin, {
+      ...options.prompt,
+      root: options.prompt?.root ?? options.tools?.cwd,
+      globals: [
+        ...(agentDir ? [{ path: join(agentDir, 'AGENTS.md'), label: 'Managed AGENTS.md' }] : []),
+        ...(options.prompt?.globals ?? []),
+      ],
+    });
+    await promptFiber.await();
     const traceDir = options.traceDir === undefined ? flags.traceDir : options.traceDir;
     if (traceDir) await io.mkdir(traceDir, { recursive: true, mode: 0o700 });
     const stamp = await buildVersionStamp({
@@ -199,6 +213,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     const required = [
       ...RUNTIME_SERVICES,
       CONTEXT_SERVICE,
+      PROMPT_SERVICE,
       ...(options.tools ? [TOOLS_SERVICE, PERMISSIONS_SERVICE] : []),
     ];
     const missing = required.filter((name) => ctx.get(name) === undefined);
@@ -220,6 +235,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       exec,
       permissions: options.tools ? ctx.runtimePermissions : undefined,
       context: ctx.runtimeContext,
+      prompt: ctx.runtimePrompt,
       approval,
       run: (request) => {
         if (disposal)

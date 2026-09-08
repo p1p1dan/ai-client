@@ -16,6 +16,8 @@ import {
   LOOP_SERVICE,
   MODEL_SERVICE,
   P0_SERVICES,
+  PROMPT_SERVICE,
+  RUNTIME_SERVICES,
   TRACE_SERVICE,
 } from '../contracts.ts';
 
@@ -25,7 +27,9 @@ describe('service contracts', () => {
   });
 
   it('never lists a service as both implemented and deferred', () => {
-    const overlap = P0_SERVICES.filter((name) => name in DEFERRED_SERVICES);
+    const overlap = [...RUNTIME_SERVICES, PROMPT_SERVICE, 'runtimeContext'].filter(
+      (name) => name in DEFERRED_SERVICES
+    );
     expect(overlap).toEqual([]);
   });
 

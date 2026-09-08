@@ -6,7 +6,8 @@ ARD：[`docs/plans/2026-09-08-runtime-evolution-ard.md`](../../docs/plans/2026-0
 替代 `pi-coding-agent` 整包依赖的自有 runtime。与现有 `src/agent-host/` 并存（ARD §5.1），
 后端由 `AICLIENT_RUNTIME_BACKEND` 选择（D8），P4-2 前该开关只被记录、不被消费。
 
-**当前进度：P1 本机代码/验证已落地，Windows 清理和载体矩阵未完成。**
+**当前进度：P1 审查补修、P2-1/P2-2 接线及本机验证已完成；P2 持久化和真实缓存门禁待 P3/P4。**
+见 [P2 验证与后续事项](../../docs/plantree/plans/runtime-evolution/evidence/p2/README.md)。Windows 清理和载体矩阵未完成。
 见 [P1 验证与限制](../../docs/plantree/plans/runtime-evolution/evidence/p1/README.md)。无 tools 配置保留 P0 单轮；配置 tools 后启用六工具与权限。
 
 ## 目录
@@ -22,7 +23,7 @@ ARD：[`docs/plans/2026-09-08-runtime-evolution-ard.md`](../../docs/plans/2026-0
 | `plugins/agent-loop/` | P0-5 · pi-agent-core `Agent` 驱动对话；无工具时单轮，有工具时多轮并在轮次边界调压缩 |
 | `plugins/tools/` | P1-1..P1-4 · 六个原生工具的注册表与实现，另含 P1-9 的 `new_context` |
 | `plugins/permissions/` | P1-5/P1-6 · D14 两轴（模式/档位）、策略加载、Bash AST 与审批桥接 |
-| `plugins/prompt/` | P2-1/P2-2 · 固定槽位装配与项目指令链 |
+| `plugins/prompt/` | P2-1/P2-2 · runtimePrompt service、固定槽位装配、HostIo 指令源与项目指令链 |
 | `plugins/context/` | P2-3 · 预算与提醒（`budget.ts`）、检查点形状（`compaction.ts`）、`runtimeContext` 服务（`index.ts`）；P2-7 的前缀稳定性度量也在此 |
 | `smoke/` | P0-6 · 非 UI 运行入口（§1）+ 用例 + 确定性断言（§4） |
 | `__tests__/` | 单测，由根 `pnpm test`（vitest）收集 |
@@ -54,6 +55,11 @@ rm node_modules
 ```
 
 ## 跑起来
+
+`runtime.run({ prompt })` 自动装配提示词；显式 `systemPrompt` 保留固定探针覆盖入口。
+`createRuntime({ tools: { cwd }, agentDir, prompt: { globals: [{ path, label }] } })` 加载托管与
+显式借用的全局指令；`run({ prompt, targetPath: 'src/file.ts' })` 再按目标目录加载项目指令。
+无 tools 时可用 `prompt.root` 明确项目根；不传根只加载显式全局文件，不猜测当前目录。
 
 ```bash
 # 离线冒烟（无凭据、无网络，CI 门禁跑的就是这条）

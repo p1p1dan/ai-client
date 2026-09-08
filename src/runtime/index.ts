@@ -34,6 +34,7 @@ export type {
   RuntimeHostConfig,
   RuntimeHostIoService,
   RuntimeModelRef,
+  RuntimePromptService,
   RuntimeReadOptions,
   RuntimeReadResult,
   RuntimeRunRequest,
@@ -50,6 +51,7 @@ export {
   LOOP_SERVICE,
   MODEL_SERVICE,
   P0_SERVICES,
+  PROMPT_SERVICE,
   RUNTIME_SERVICES,
   RuntimeConfigError,
   TRACE_SERVICE,
@@ -105,6 +107,8 @@ export type {
 } from './plugins/permissions/index.ts';
 export { PERMISSIONS_SERVICE } from './plugins/permissions/index.ts';
 export { modeSegment, permissionGearSegment } from './plugins/permissions/prompt.ts';
+export type { PromptConfig } from './plugins/prompt/index.ts';
+export type { ComposedPrompt } from './plugins/prompt/segments.ts';
 export type { RuntimeToolsService, ToolsConfig } from './plugins/tools/index.ts';
 export { TOOLS_SERVICE } from './plugins/tools/index.ts';
 export {

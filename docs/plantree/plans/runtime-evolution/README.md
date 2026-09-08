@@ -3,9 +3,10 @@
 > 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D14 生效）。
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
-**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 主动压缩配对已接通，剩余项全部卡在 Windows 载体与打包 GUI 现场验收；P2/P3 可接续
+**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 主动压缩配对与审查补修已实现；P2-1/P2-2 接线及本机验证完成，P2 持久化/真实指标仍待后续阶段；下一步 P3
 **最近落地**：`2ae6f209`（2026-09-08）P1-9 ∥ P2-8 成对落地主动压缩（`runtimeContext` 服务、工具注册、提醒措辞、轮次边界换窗）；此前 `27ff2020` 提交 P1 工具/权限实现与 D14 两轴传递链。P1 现场验收仍未完成，[P1 验证记录](evidence/p1/README.md)。P0/P2-0 的提交仍为 `8a71c843`，旧缓存基线 **95.01%**，[原始证据](evidence/p2-0/validation.md)。
-**下一目标**：**先收 P1-0 解锁的两处 P2 尾巴**——`P2-1` 把提示词装配注册成 Cordis service（`contracts.ts` 已归属明确，`runtimePrompt` 可移出 `DEFERRED_SERVICES`）、`P2-2` 把 `runtimeHostIo` 适配到 `InstructionSource` 端口；两者都只等 P1-0，与 P3 无关。**再做 P3（会话与事件）**：它是 P4 唯一还没动的前置，`P2-4` 的持久化 compaction record 压在它的会话存储上，成功标准第 5 条同样只等它。`P2-5/P2-6` 要真实跑才有意义，排在 P3/P4 之后。P1 代码侧无待办，只剩现场验收（Windows 随包 Node 与进程树、打包壳 GUI、真实项目策略），归 P4-6/P6-3，不必也无法提前跑；本机 [189 项 runtime 回归及两载体探针](evidence/p1/README.md) 已更新。
+**本批实现（随本次提交归档）**：容量提醒改为内部 custom 消息，首轮超预算在 provider 前拒绝；`runtimePrompt` 与 HostIo 指令源接通。15 文件 195 项串行回归、runtime 类型检查和离线冒烟通过，[P2 验证记录](evidence/p2/README.md)。
+**下一目标**：**P3-1 JSONL 存储与兼容契约**，然后推进分支/resume、旧会话兼容与事件翻译。P2-4 随 P3 存储接入，P2-5/P2-6 按计划在 P3/P4 之后做真实缓存与同套会话对比；P2 整体保持进行中。Windows/打包 GUI/真实项目策略现场签收仍归 P4-6/P6-3。
 **2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 两轴分离：模式 `plan/agent` 管工具集，档位 `ask/accept-edits/auto` 管审批，accept-edits 放行工作区 bash。P1-1 裁剪与 P1-5 核心已更新；P1-6 renderer/偏好迁移/两轴传递链已更新，打包 GUI 待签收。
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
@@ -75,7 +76,7 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 | P1-4 搜索工具 | ✅ | glob + 首版字面文本 grep，目录/文件/累计预算、symlink/拒绝 scope 跳过；未实现正则与 gitignore 引擎，行为明确写入工具 schema 描述 |
 | P1-5 权限内核 | 🟡 | D14 两轴、旧值迁移、deny/scope/白名单/会话授权已实现；Bash AST 检查引号/变量/重定向/嵌套/通配符/真实路径，审批后复核；全局/可信项目/旧 JSONC 策略导入及 stamp 已实现。专项测试通过，仍需 P4 真实项目/重载签收；不承诺 OS 沙箱，见 [证据](evidence/p1/README.md) |
 | P1-6 审批流对接 | 🟡 | Extension UI bridge + renderer 两模式/三档控件、旧值迁移；创建/resume/更新/复用/重启传递两轴，更新失败保留旧值；旧 worker D14 授权器/裁剪已适配。DOM 交互与 IPC/RPC/生命周期测试通过；打包 GUI 全链路仍待 P4 签收 |
-| P1-7 单测 | ✅ | native runtime 全量 189 项通过，含 Bash/策略专项、D14 UI/存储/旧 worker/IPC/重启回归，以及本轮的配对与压缩执行用例；批次与计数见 [验证记录](evidence/p1/README.md)。载体探针另计，归 P1-8 |
+| P1-7 单测 | ✅ | 本批 native runtime 15 文件 195 项分四批通过，[P2 验证记录](evidence/p2/README.md)；历史 D14 UI/存储/旧 worker/IPC/重启回归另见 [P1 证据](evidence/p1/README.md)，不混入 runtime 计数。载体探针另计，归 P1-8 |
 | P1-8 载体兼容矩阵 | 🟡 | Linux electron-utility 同批六项通过；standalone-node 另列通过；已提供 Windows bundled-node 入口，尚未运行，不代签加密机 |
 | P1-9 `new_context` 工具 | ✅ | 与 P2-8 成对上线。`ContextPlugin` 构造时以 `read` 注册该工具，注册者即消费者：plan 模式可见、无普通审批、显式工具白名单仍可拒绝；compaction 关闭时不注册。无参数，描述照抄 Codex 原话「Start a new context window. Does not clear, reset, or otherwise affect environment state.」，回复按压缩家族分两种。调用只表达意图，实际换窗在 `prepareNextTurnWithContext` 边界发生 |
 
@@ -91,14 +92,14 @@ D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立—�
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
 | P2-0 现状基线采集 | ✅ | 六个旧后端固定会话通过；28 次普通调用，D9 命中率 **95.01%**；原始会话、来源证明与复核结果已归档，[验收证据](evidence/p2-0/validation.md)（2026-09-08，提交 `8a71c843`） |
-| P2-1 提示词分段组装 | 🟡 | 装配机制与 P2-1 自有段已落地：`plugins/prompt/segments.ts`（固定槽位表 + 确定性装配 + `staticPrefixBytes` 供 D9/P2-7 用）、`baseSegments.ts`（identity / collaboration，适配自 PI-Desktop `mode-prompts.ts` 与 `runtime.ts:1330`），16 项单测。**未完**：注册为 Cordis service 需改 `contracts.ts`，该文件本轮归 P1-0，待其落地后补。D14 已改为 `mode` / `permission-gear` 两个 turn 槽位；P1 导出对应贡献函数，goal 本轮不做 |
-| P2-2 项目指令注入 | 🟡 | 纯逻辑已落地：`plugins/prompt/projectInstructions.ts` —— 每目录一份（`AGENTS.override.md` → `AGENTS.md` → `CLAUDE.md` → `.claude/CLAUDE.md`，先命中先用）、root→leaf 走链使就近文件后出且优先、全局文件（managed + borrowed 两处）排在项目文件之前、32 KiB 预算全链共享且按字符边界截断、realpath 越界即跳过。20 项单测跑在内存源上，无 fixture 目录。**未完**：读盘走 `InstructionSource` 端口，待 P1-0 的 `runtimeHostIo` 提交后接上（约十行适配）；接上后本槽位从 `DEFERRED_SLOTS` 移除 |
-| P2-3 压缩策略 | ✅ | 决策层 `plugins/context/budget.ts`（阈值全部由模型窗口推导、硬限触发、保留尾与用户消息上限的双端钳制、两级提醒各只发一次，17 项单测）＋执行层 `plugins/context/compaction.ts`（PI-Desktop 的 Codex 形状：三段合并为一段摘要范围，保留尾只在 turn 未结束时重建为最近一条用户消息并截断，因此不可能产生孤立 toolCall）＋服务 `plugins/context/index.ts`（`runtimeContext`，模型请求与硬限共用一条路径，`summary` 家族发一次模型请求，`fresh_window` 不发）。压缩只换请求上下文，`Agent.state.messages` 不截断。**持久化记录仍是 P2-4** |
+| P2-1 提示词分段组装 | ✅ | `runtimePrompt` Cordis service、存活断言、公共契约与运行入口已接通；固定槽位装配 base / tools / project / mode / permission-gear。未传 systemPrompt 自动组装，显式值（含空串）保持探针覆盖语义；trace 记录来源、槽位和 staticPrefixBytes。仅 skills 仍 deferred（P5），[本批证据](evidence/p2/README.md) |
+| P2-2 项目指令注入 | ✅ | InstructionSource 已适配 runtimeHostIo：有界读取、UTF-8 边界截断，预期缺失/不可读跳过，TSD/载体错误向上传递。managed 全局 → 显式 borrowed 全局 → root→leaf；每目录首命中、32 KiB 共享预算和 realpath 越界跳过沿用。每 run 重载，targetPath 指定文件链；纯逻辑与真实请求集成测试通过，[本批证据](evidence/p2/README.md) |
+| P2-3 压缩策略 | ✅ | 决策层 `plugins/context/budget.ts`（阈值全部由模型窗口推导、硬限触发、保留尾与用户消息上限的双端钳制、两级提醒各只发一次，17 项单测）＋执行层 `plugins/context/compaction.ts`（PI-Desktop 的 Codex 形状：三段合并为一段摘要范围，保留尾只在 turn 未结束时重建为最近一条用户消息并截断，因此不可能产生孤立 toolCall）＋服务 `plugins/context/index.ts`（`runtimeContext`，模型请求与硬限共用一条路径，`summary` 家族发一次模型请求，`fresh_window` 不发）。压缩只换请求上下文，`Agent.state.messages` 不截断。首轮按输入 + systemPrompt + 工具定义估算预算，超限返回 context_too_large 且不调用 provider；内部容量提醒不参与用户消息保留。**持久化记录仍是 P2-4** |
 | P2-4 compaction record | ⬜ | Rust `transcripts.rs` 的 compaction 读写用 TS 重写。范围已收窄：P2-3 的服务产出的字段就是 `CompactionEntry` 需要的那些（`summary` / `tokensBefore` / `retainedTail` / `usage` / `details`），本节点只负责落盘与跨 run/resume 复用，不改形状 |
 | P2-5 缓存命中率达标 | ⬜ | 门禁是 provider 上报的 `cacheRead / (input + cacheRead)`（D9），公式与数据源都已存在，不新增埋点。**已知可优化点**：PI-Desktop 把预算提醒追加进 systemPrompt（`runtime.ts:4160`），那正是缓存前缀本身，一次追加即整段失效；P2-8 已改为尾部消息注入以保持前缀字节不变，本节点用真实命中率复核该选择 |
 | P2-6 对比测试 | ⬜ | 新后端跑 P2-0 的同一批脚本会话，比压缩后表现与命中率；协议依赖 0.84.4 vs 基线 0.84.3 的 patch 差按 D12 记为已知偏差，不回退对齐 |
 | P2-7 前缀稳定性度量 | ✅ | **可选加强项**，非门禁。`plugins/context/prefixStability.ts`：按块（system / tool / message）位置比对相邻两轮请求，给出公共前缀块数、字节数、占比与**首个冲突位置**——命中率只说miss，这里说 miss 在哪。**只落摘要哈希不落原文**，避免把会话内容写到日志旁。追加与收缩（压缩/回溯）都不算 divergence，用块计数区分形状。13 项单测 |
-| P2-8 主动压缩提醒文案 | ✅ | `approachingReminder(remaining, { compactionTool })` 只有拿到已注册的工具名才追加那一句，不传就不提——配对规则因此是机械的，而不是靠人记得。at-limit 档不重复邀请（那时下一次请求必然压缩）。提醒**以尾部消息注入**而非追加 systemPrompt：systemPrompt 就是 D9 计命中率的缓存前缀，Codex 本身也把提醒写进对话历史；位置的实测复核仍归 P2-5 |
+| P2-8 主动压缩提醒文案 | ✅ | `approachingReminder(remaining, { compactionTool })` 只有拿到已注册的工具名才追加那一句，不传就不提——配对规则因此是机械的，而不是靠人记得。at-limit 档不重复邀请（那时下一次请求必然压缩）。提醒**以内部 custom 消息在尾部注入**（仅 convertToLlm 时映射成 provider user 消息，不会取代压缩时保留的真实用户指令）而非追加 systemPrompt：systemPrompt 就是 D9 计命中率的缓存前缀，Codex 本身也把提醒写进对话历史；位置的实测复核仍归 P2-5 |
 
 **P1-9 ∥ P2-8 为什么必须成对**（2026-09-08 已成对落地，下文保留论证）：默认压缩是被动的——token 越过硬限的那一刻就地压缩，而那一刻落在哪儿全看运气，很可能是多文件改到一半、或刚读完三个文件还没得出结论。模型自己看不到 token 计数，没有任何依据判断「还剩多少」。
 PI-Desktop 因此把两件事配成一对：**预算提醒**告诉它还剩多少，**`new_context` 工具**让它选择什么时候承担这次压缩。收益是质量——在语义边界上生成的摘要，比在半步中间生成的丢得少。

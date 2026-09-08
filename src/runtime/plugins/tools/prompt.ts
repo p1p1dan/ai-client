@@ -8,7 +8,7 @@ export function toolSegments(): readonly PromptSegment[] {
     },
     {
       slot: 'tool-guidance',
-      text: 'Use glob to discover files and grep for literal text search; narrow path and include to keep results bounded. Read uses a one-based line offset and a line limit; follow the reported next line after truncation. Edit takes an edits array of exact, unique oldText/newText replacements. Prefer read/write/edit over shell file operations. Bash requires the configured shell and has a time limit; never retry a failed command automatically when it may already have changed files.',
+      text: 'Use glob to discover files and grep for literal text search; narrow path and include to keep results bounded. Read uses a one-based line offset and a line limit; follow the reported next line after truncation. When Edit is available, it takes an edits array of exact, unique oldText/newText replacements. Prefer the available read/write/edit tools over shell file operations. Bash requires the configured shell and has a time limit; never retry a failed command automatically when it may already have changed files.',
     },
   ];
 }

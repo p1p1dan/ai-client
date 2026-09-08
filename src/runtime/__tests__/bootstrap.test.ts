@@ -71,7 +71,7 @@ describe('createRuntime', () => {
     try {
       await runtime.run({ prompt: 'hi', systemPrompt: 'probe' });
       const stamp = runtime.trace.runs[0].version_stamp;
-      expect(stamp.config_version).toBe('runtime_p1_policy_v3');
+      expect(stamp.config_version).toBe('runtime_p2_prompt_v1');
       expect(stamp.backend).toBe('legacy');
       expect(stamp.single_turn).toBe('true');
       expect(stamp['dep:cordis']).toBe('4.0.0-rc.9');

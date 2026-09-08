@@ -14,7 +14,7 @@ ARD 与看板冲突时以 ARD 为准；看板只记录「做到哪了」，不�
 
 | 计划 | 状态 | 当前阶段 | 最近落地 | 下一目标 |
 |---|---|---|---|---|
-| [Runtime 自主化演进](plans/runtime-evolution/README.md) | In Progress | P0、P2-0 已完成并提交；P1 按 D14 返工中：两轴核心及 UI/传递链已验证，真实项目签收、压缩配对与 Windows 待完成 | `27ff2020`：P1 当前实现与证据；P0/P2-0 基础仍为 `8a71c843`（2026-09-08） | [P1 剩余 TODO](plans/runtime-evolution/TODO.md) / [验证证据](plans/runtime-evolution/evidence/p1/README.md)；P2/P3 可并行，Q4 已按 D12 收口 |
+| [Runtime 自主化演进](plans/runtime-evolution/README.md) | In Progress | P1 审查补修、P2-1/P2-2 接线及本机验证完成；P1 现场与 P2 后续门禁仍待验收 | `2ae6f209` 压缩配对已提交；本次提交的补修与 P2 接线见 [P2 证据](plans/runtime-evolution/evidence/p2/README.md) | P3-1 存储契约/实现，然后接 P2-4；[当前 TODO](plans/runtime-evolution/TODO.md) |
 
 ## 基线
 

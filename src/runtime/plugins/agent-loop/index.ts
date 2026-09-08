@@ -5,6 +5,7 @@ import {
   type AgentEvent,
   type AgentMessage,
   convertToLlm,
+  estimateContextTokens,
   type ThinkingLevel,
 } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Usage } from '@earendil-works/pi-ai';
@@ -14,12 +15,16 @@ import {
   type AgentLoopService,
   LOOP_SERVICE,
   MODEL_SERVICE,
+  PROMPT_SERVICE,
   RuntimeConfigError,
   type RuntimeRunRequest,
   type RuntimeRunResult,
   TRACE_SERVICE,
 } from '../../contracts.ts';
+import { RuntimeHostError } from '../../host/errors.ts';
+import { compactionNeeded, contextBudget } from '../context/budget.ts';
 import { CONTEXT_SERVICE } from '../context/index.ts';
+import type { ComposedPrompt } from '../prompt/segments.ts';
 
 export interface AgentLoopConfig {
   /**
@@ -45,7 +50,7 @@ export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
 };
 
 export class AgentLoopPlugin extends Service implements AgentLoopService {
-  static inject = [MODEL_SERVICE, TRACE_SERVICE];
+  static inject = [MODEL_SERVICE, TRACE_SERVICE, PROMPT_SERVICE];
 
   private readonly config: AgentLoopConfig;
 
@@ -65,6 +70,12 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     }
     const resolved = adapter.resolve(ref);
     const thinkingLevel = request.thinkingLevel ?? this.config.defaultThinkingLevel;
+    let systemPrompt = request.systemPrompt;
+    let composed: ComposedPrompt | undefined;
+    if (systemPrompt === undefined) {
+      composed = await this.ctx.runtimePrompt.compose({ targetPath: request.targetPath });
+      systemPrompt = composed.text;
+    }
     const trace = this.ctx.runtimeTrace.begin({
       runId: request.runId,
       input: request.prompt,
@@ -73,8 +84,12 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     });
     trace.note('note', {
       event: 'run_start',
-      system_prompt: request.systemPrompt,
-      system_prompt_bytes: Buffer.byteLength(request.systemPrompt, 'utf8'),
+      system_prompt: systemPrompt,
+      system_prompt_bytes: Buffer.byteLength(systemPrompt, 'utf8'),
+      prompt_source: composed ? 'assembled' : 'override',
+      ...(composed
+        ? { prompt_segments: composed.segments, static_prefix_bytes: composed.staticPrefixBytes }
+        : {}),
       thinking_level: thinkingLevel,
       single_turn: this.config.singleTurn,
       catalog_source: adapter.source,
@@ -105,7 +120,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       getApiKey: async () => resolved.requestKey || undefined,
       convertToLlm,
       initialState: {
-        systemPrompt: request.systemPrompt,
+        systemPrompt,
         model: resolved.model,
         thinkingLevel,
         tools: [...(this.ctx.get('runtimeTools')?.list() ?? [])],
@@ -173,6 +188,24 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     let thrown: Error | undefined;
     try {
       request.signal?.throwIfAborted();
+      // The next-turn hook never runs before the first request. There is no
+      // history to compact yet; keep an oversized task intact and fail before
+      // calling the provider, as PI-Desktop's prompt entry does.
+      if (context?.enabled) {
+        const messageTokens = estimateContextTokens([
+          { role: 'user', content: request.prompt, timestamp: Date.now() },
+        ]).tokens;
+        const tokens =
+          messageTokens +
+          Math.ceil(systemPrompt.length / 4) +
+          Math.ceil(JSON.stringify(agent.state.tools).length / 4);
+        if (compactionNeeded(contextBudget(resolved.model, tokens))) {
+          throw new RuntimeHostError(
+            'context_too_large',
+            'the pending prompt exceeds the safe model context budget'
+          );
+        }
+      }
       await agent.prompt(request.prompt);
       await agent.waitForIdle();
     } catch (error) {
@@ -274,7 +307,12 @@ function resolveError(input: {
   last?: CollectedTurn;
 }): { code: string; message: string } | undefined {
   if (input.aborted) return { code: 'aborted', message: 'the run was aborted by its caller' };
-  if (input.thrown) return { code: 'loop_threw', message: input.thrown.message };
+  if (input.thrown) {
+    return {
+      code: input.thrown instanceof RuntimeHostError ? input.thrown.code : 'loop_threw',
+      message: input.thrown.message,
+    };
+  }
   if (!input.last) {
     return { code: 'no_assistant_message', message: 'the loop ended without an assistant turn' };
   }

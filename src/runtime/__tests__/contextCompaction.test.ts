@@ -116,6 +116,54 @@ async function prepare(
 }
 
 describe('P1-9 ∥ P2-8: new_context and the boundary that honours it', () => {
+  it.each([
+    'summary',
+    'fresh_window',
+  ] as const)('keeps the real task when a budget reminder precedes %s compaction', async (family) => {
+    const { handle, faux } = await runtime({ tools: { cwd: dir }, context: { family } });
+    const budget = contextBudget(WINDOW, 0);
+    const task = 'ORIGINAL_TASK: finish the requested change';
+    const prompt = `${task}\n${'x'.repeat((budget.hardLimit - reminderThreshold(budget) + 500) * 4)}`;
+    const requests: AgentMessage[][] = [];
+    faux.setResponses([
+      fauxAssistantMessage([fauxToolCall('glob', { pattern: '*' })], { stopReason: 'toolUse' }),
+      (context) => {
+        expect(context.messages.map(text).join('\n')).toContain('<context_budget>');
+        return fauxAssistantMessage([fauxToolCall('new_context', {})], { stopReason: 'toolUse' });
+      },
+      ...(family === 'summary' ? [fauxAssistantMessage('checkpoint summary')] : []),
+      (context) => {
+        requests.push([...context.messages]);
+        return fauxAssistantMessage('done');
+      },
+    ]);
+    const result = await handle.run({ prompt, systemPrompt: 'stable prefix' });
+    expect(result.success).toBe(true);
+    expect(requests).toHaveLength(1);
+    expect(text(requests[0].at(-1) as AgentMessage)).toContain(task);
+    expect(text(requests[0].at(-1) as AgentMessage)).not.toContain('<context_budget>');
+  });
+
+  it('rejects an oversized first prompt before any provider request, preserving the trace', async () => {
+    const { handle, faux } = await runtime({ context: { family: 'summary' } });
+    faux.setResponses([]);
+    const prompt = `OVERSIZED_TASK ${'x'.repeat(160_000)}`;
+    const result = await handle.run({ prompt, systemPrompt: 'probe' });
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('context_too_large');
+    expect(result.turns).toBe(0);
+    expect(faux.state.callCount).toBe(0);
+    expect(result.trace.input).toBe(prompt);
+  });
+
+  it('includes the system prompt in the first-request budget', async () => {
+    const { handle, faux } = await runtime();
+    faux.setResponses([]);
+    const result = await handle.run({ prompt: 'hi', systemPrompt: 'x'.repeat(80_000) });
+    expect(result.error?.code).toBe('context_too_large');
+    expect(faux.state.callCount).toBe(0);
+  });
+
   it('registers the tool with the consumer, and keeps it usable in plan mode', async () => {
     const { handle } = await runtime({
       tools: { cwd: dir },

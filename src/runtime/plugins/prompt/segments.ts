@@ -79,24 +79,8 @@ export interface PromptSlotDefinition {
 export const PROMPT_SLOTS: readonly PromptSlotDefinition[] = [
   { id: 'identity', stability: 'static' },
   { id: 'collaboration', stability: 'static' },
-  {
-    id: 'tool-protocol',
-    stability: 'static',
-    deferred: {
-      phase: 'P1',
-      reason:
-        'the rule "call tools through the native tool-call interface, never as prose" only has meaning once tools are registered; shipping it while the tool array is empty would instruct the model about a capability it does not have.',
-    },
-  },
-  {
-    id: 'tool-guidance',
-    stability: 'static',
-    deferred: {
-      phase: 'P1',
-      reason:
-        'search/edit steering names the concrete tools and their parameters (PI-Desktop steers Read/Grep/Glob away from shell pipelines). The names and parameters are P1-1..P1-4 output, and text that names a tool that does not exist is worse than no text.',
-    },
-  },
+  { id: 'tool-protocol', stability: 'static' },
+  { id: 'tool-guidance', stability: 'static' },
   {
     id: 'skills',
     stability: 'session',
@@ -106,33 +90,9 @@ export const PROMPT_SLOTS: readonly PromptSlotDefinition[] = [
         'the catalog lists ids the model loads through a Skill tool. Both the loader and that tool are P5-1; a catalog without the tool would advertise an unreachable capability.',
     },
   },
-  {
-    id: 'project-instructions',
-    stability: 'session',
-    deferred: {
-      phase: 'P2-2',
-      reason:
-        'CLAUDE.md / AGENTS.md have to be read from disk, and ARD D11 routes every runtime file read through `runtimeHostIo`, which P1-0 lands. Reading them with bare `node:fs` here would be the per-module compatibility patch D11 exists to prevent.',
-    },
-  },
-  {
-    id: 'mode',
-    stability: 'turn',
-    deferred: {
-      phase: 'P1',
-      reason:
-        'ARD D14 defines `plan` (no Write/Edit, bash for inspection, produce a plan for approval) and `agent` (full tool set). The text has to describe the tool set the registry actually hands over in that mode, so it is written with P1-1 rather than ahead of it. Last-but-one position on purpose: a plan-mode constraint must outrank a project instruction that says otherwise.',
-    },
-  },
-  {
-    id: 'permission-gear',
-    stability: 'turn',
-    deferred: {
-      phase: 'P1',
-      reason:
-        'the gear (`ask` / `accept-edits` / `auto`, ARD D14) may not want a segment at all. PI-Desktop keeps the current gear out of any dynamic block and states the rule conditionally inside a static one instead ("...asks for permission unless the effective mode is Auto"), which keeps it inside the cacheable prefix. P1-5 chooses between that and a real segment once it knows what the policy actually prompts on; the slot exists so the choice is recorded rather than made by whoever writes the first string.',
-    },
-  },
+  { id: 'project-instructions', stability: 'session' },
+  { id: 'mode', stability: 'turn' },
+  { id: 'permission-gear', stability: 'turn' },
 ] as const;
 
 export type PromptSlotId = (typeof PROMPT_SLOTS)[number]['id'];

@@ -1,0 +1,13 @@
+
+ RUN  v3.2.4 /home/pi/code/ai-client-runtime
+
+ ✓ src/runtime/__tests__/agentLoop.test.ts (6 tests) 40ms
+ ✓ src/runtime/__tests__/bootstrap.test.ts (5 tests) 57ms
+ ✓ src/runtime/__tests__/catalog.test.ts (9 tests) 31ms
+ ✓ src/runtime/__tests__/contracts.test.ts (6 tests) 4ms
+
+ Test Files  4 passed (4)
+      Tests  26 passed (26)
+   Start at  23:52:45
+   Duration  1.24s (transform 194ms, setup 25ms, collect 604ms, tests 131ms, environment 1ms, prepare 152ms)
+

@@ -34,6 +34,7 @@ import {
   type CompactResult,
   compact,
   createCompactionSummaryMessage,
+  createCustomMessage,
   type Entry,
   estimateContextTokens,
   prepareCompaction,
@@ -377,5 +378,7 @@ export class ContextPlugin extends Service implements RuntimeContextService {
 }
 
 function reminderMessage(text: string): AgentMessage {
-  return { role: 'user', content: [{ type: 'text', text }], timestamp: Date.now() };
+  // Provider conversion uses role=user; checkpoint retention keeps the
+  // internal role so this reminder cannot replace the user's active task.
+  return createCustomMessage('context-budget', text, false, undefined, Date.now());
 }

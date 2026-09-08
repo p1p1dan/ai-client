@@ -31,6 +31,7 @@
 import 'cordis';
 import type { AgentEvent, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models, Usage } from '@earendil-works/pi-ai';
+import type { ComposedPrompt } from './plugins/prompt/segments.ts';
 
 /** Cordis service name of the pi-ai binding (P0-4). */
 export const MODEL_SERVICE = 'runtimeModel' as const;
@@ -38,6 +39,7 @@ export const MODEL_SERVICE = 'runtimeModel' as const;
 export const TRACE_SERVICE = 'runtimeTrace' as const;
 /** Cordis service name of the agent loop (P0-5). */
 export const LOOP_SERVICE = 'runtimeLoop' as const;
+export const PROMPT_SERVICE = 'runtimePrompt' as const;
 
 /** Every service P0 actually registers. `bootstrap.ts` asserts all of them are live. */
 export const P0_SERVICES = [MODEL_SERVICE, TRACE_SERVICE, LOOP_SERVICE] as const;
@@ -72,10 +74,6 @@ export interface DeferredServiceDeclaration {
  * not an absent service.
  */
 export const DEFERRED_SERVICES: Readonly<Record<string, DeferredServiceDeclaration>> = {
-  runtimePrompt: {
-    phase: 'P2',
-    reason: `${DEFERRED_REASON_MARKER} the system prompt is a caller-supplied string at P0 so that the smoke case can pin it and keep the request prefix byte-stable. Assembling it from CLAUDE.md / skills / mode fragments is P2-1..P2-2 and must not be half-done, because a partial prefix is worse for cache hit rate than no assembly at all (ARD D9).`,
-  },
   runtimeSession: {
     phase: 'P3',
     reason: `${DEFERRED_REASON_MARKER} P0 writes a run trace, not a session. The two are different artifacts: the trace is this repo's evaluation record (engineering standard §2), the session is the JSONL pi/PI-Desktop format users resume from (ARD D6). Making the trace pose as a session would create a second, incompatible on-disk history.`,
@@ -190,7 +188,10 @@ export interface TraceService {
 
 export interface RuntimeRunRequest {
   prompt: string;
-  systemPrompt: string;
+  /** Explicit override for fixed probes; omitted uses runtimePrompt assembly. */
+  systemPrompt?: string;
+  /** Workspace-relative file whose directory chain supplies project rules. */
+  targetPath?: string;
   model?: RuntimeModelRef;
   thinkingLevel?: ThinkingLevel;
   runId?: string;
@@ -224,6 +225,10 @@ export interface AgentLoopService {
   run(request: RuntimeRunRequest): Promise<RuntimeRunResult>;
 }
 
+export interface RuntimePromptService {
+  compose(request?: { targetPath?: string }): Promise<ComposedPrompt>;
+}
+
 /**
  * The three services P0 registers, published onto Cordis's global `Context`.
  *
@@ -239,6 +244,7 @@ declare module 'cordis' {
     runtimeModel: ModelAdapterService;
     runtimeTrace: TraceService;
     runtimeLoop: AgentLoopService;
+    runtimePrompt: RuntimePromptService;
   }
 }
 

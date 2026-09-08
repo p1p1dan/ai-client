@@ -1,0 +1,13 @@
+
+ RUN  v3.2.4 /home/pi/code/ai-client-runtime
+
+ ✓ src/runtime/__tests__/contextCompaction.test.ts (17 tests) 159ms
+ ✓ src/runtime/__tests__/newContext.test.ts (5 tests) 25ms
+ ✓ src/runtime/__tests__/contextBudget.test.ts (17 tests) 11ms
+ ✓ src/runtime/__tests__/prefixStability.test.ts (13 tests) 5ms
+
+ Test Files  4 passed (4)
+      Tests  52 passed (52)
+   Start at  23:51:59
+   Duration  1.37s (transform 255ms, setup 32ms, collect 647ms, tests 199ms, environment 0ms, prepare 157ms)
+

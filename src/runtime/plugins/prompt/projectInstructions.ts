@@ -67,8 +67,8 @@ export interface InstructionSource {
 }
 
 export interface InstructionChainOptions {
-  /** Workspace root. Nothing outside it is ever read. */
-  root: string;
+  /** Workspace root. Absent loads only explicitly supplied global files. */
+  root?: string;
   /**
    * File the work is about, if any. Its directory chain is walked so that
    * instructions closer to it are collected; absent means the root only.
@@ -191,6 +191,7 @@ export async function loadInstructionChain(
     remaining -= Buffer.byteLength(limited, 'utf8');
   }
 
+  if (!options.root) return entries;
   const directories = instructionDirectories(options.root, options.targetPath);
   if (!directories) return entries;
   const resolvedRoot = resolve(options.root);
