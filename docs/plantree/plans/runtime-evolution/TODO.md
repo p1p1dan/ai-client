@@ -2,7 +2,7 @@
 
 2026-09-08 · 用户已授权代码修改 · [看板](README.md) · [P1-0 契约](topics/p1-0-host-contracts.md) · [验证记录](evidence/p1/README.md)
 
-当前代码提交：`27ff2020`（2026-09-08，当前实现与证据归档；不代表完整验收）。
+当前代码提交：`27ff2020` + `2ae6f209`（2026-09-08，实现与证据归档；不代表完整验收）。
 
 ## 当前批次：D14 返工
 
@@ -19,11 +19,14 @@
 - [ ] P1-6/P4：打包壳 GUI 全链路签收；用户自定义策略与复杂 shell 兼容仍按 P1-5 跟踪。
 - [x] 更新新矩阵与载体证据：native runtime 共 109 项通过，Node 与 Linux Electron 六项探针通过；Windows 和 GUI 仍待验收。
 
-## 新增 P1-9（与 P2-8 成对）
+## 新增 P1-9（与 P2-8 成对）—— 已成对落地
 
 - [x] 阅读 PI-Desktop new_context 源码和测试，适配无参数工具、两种回复及只提交意图语义。
 - [x] 导出 newContextTool({ family, request })；不默认注册。P2 接入时按 read 注册，plan 可用，无普通审批，显式工具白名单仍生效；4 项测试通过。
-- [ ] 与 P2-8 共同接通注册和提醒，P2 在下一轮边界消费意图；未接通前不向模型宣称已支持主动压缩。
+- [x] `runtimeContext` 服务落地：注册工具、消费意图、执行换窗（`prepareNextTurnWithContext` 边界）。压缩只换请求上下文，不截断 `Agent.state.messages`。
+- [x] 提醒按注册结果决定是否点名工具，配对规则写进代码而不是靠人记得；提醒以尾部消息注入，保持 D9 缓存前缀不变。
+- [x] 13 项配对/压缩用例 + 2 项措辞用例；runtime 全量 189 项、两个载体探针、离线冒烟通过。
+- [ ] 持久化 compaction record（跨 run/resume）归 P2-4；提醒位置的命中率复核归 P2-5/P2-6。
 
 ## 已落地（旧口径历史，当时尚未提交）
 
@@ -33,7 +36,7 @@
 - [x] 本机相关 69 项测试、类型检查、P0 离线冒烟、Node 与真实 Electron utilityProcess 探针。
 - [x] P1 工具/权限提示词贡献函数供 P2 装配；保留 P2 的已提交实现。
 
-## 剩余 TODO
+## 剩余 TODO（全部需要本机没有的环境）
 
 - [x] 增加保留进程树根身份的 Node runner；Linux 验证命令先退出后的后代清理。
 - [ ] Windows 验证 runner + taskkill 的命令树清理；P1-0/P1-3 保持进行中。

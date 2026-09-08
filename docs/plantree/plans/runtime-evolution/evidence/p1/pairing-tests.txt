@@ -1,0 +1,45 @@
+P1-9 ∥ P2-8 pairing validation, 2026-09-08, base HEAD 684a9310 + uncommitted pairing work
+
+Typecheck (exit 0, three projects serial):
+  node --max-old-space-size=768 tsc --noEmit -p src/runtime/tsconfig.json
+  node --max-old-space-size=768 tsc --noEmit -p src/agent-host/tsconfig.json
+  node --max-old-space-size=1536 tsc --noEmit
+
+Lint: node_modules/.bin/biome check src/runtime -> Checked 58 files, no fixes applied
+
+Runtime suite:
+ RUN  v3.2.4 /home/pi/code/ai-client-runtime
+
+ ✓ src/runtime/__tests__/tools.test.ts (36 tests) 524ms
+ ✓ src/runtime/__tests__/host.test.ts (13 tests) 584ms
+ ✓ src/runtime/__tests__/shellPolicy.test.ts (26 tests) 364ms
+ ✓ src/runtime/__tests__/contextCompaction.test.ts (13 tests) 119ms
+ ✓ src/runtime/__tests__/agentLoop.test.ts (6 tests) 38ms
+ ✓ src/runtime/__tests__/bootstrap.test.ts (5 tests) 35ms
+ ✓ src/runtime/__tests__/newContext.test.ts (5 tests) 23ms
+ ✓ src/runtime/__tests__/catalog.test.ts (9 tests) 17ms
+ ✓ src/runtime/__tests__/hostBoundary.test.ts (2 tests) 15ms
+ ✓ src/runtime/__tests__/contextBudget.test.ts (17 tests) 11ms
+ ✓ src/runtime/__tests__/projectInstructions.test.ts (20 tests) 9ms
+ ✓ src/runtime/__tests__/prefixStability.test.ts (13 tests) 5ms
+ ✓ src/runtime/__tests__/promptSegments.test.ts (17 tests) 4ms
+ ✓ src/runtime/__tests__/contracts.test.ts (7 tests) 4ms
+
+ Test Files  14 passed (14)
+      Tests  189 passed (189)
+   Start at  23:16:47
+   Duration  4.57s (transform 257ms, setup 56ms, collect 1.31s, tests 1.75s, environment 1ms, prepare 467ms)
+
+
+Offline smoke (pnpm smoke:runtime):
+case      p0_single_turn_offline (offline)
+output    "ready"
+latency   7 ms
+trace     (memory only)
+  PASS  must_succeed  expected=true actual={"success":true,"error":null}
+  PASS  must_not_call_tools:*  expected="no tool calls" actual=[]
+  PASS  turns  expected=1 actual=1
+  PASS  min_output_chars  expected=">= 1" actual=5
+  PASS  exact_output  expected="ready" actual="ready"
+  PASS  max_latency_ms  expected="<= 30000" actual=7
+RESULT    pass
