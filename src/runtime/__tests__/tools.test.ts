@@ -108,11 +108,14 @@ describe('native tools', () => {
       .list()
       .filter((tool) => ['write', 'edit', 'plugin-write'].includes(tool.name));
     r.permissions?.configure({ mode: 'plan' });
+    // `new_context` survives the crop on purpose: it changes no environment
+    // state, and read-only exploration burns the window like anything else.
     expect(r.ctx.runtimeTools.list().map((tool) => tool.name)).toEqual([
       'read',
       'bash',
       'glob',
       'grep',
+      'new_context',
     ]);
     for (const tool of cached)
       await expect(tool.execute('cached', {})).rejects.toMatchObject({
@@ -120,7 +123,7 @@ describe('native tools', () => {
       });
     expect(writes).toBe(0);
     r.permissions?.configure({ mode: 'agent' });
-    expect(r.ctx.runtimeTools.list()).toHaveLength(7);
+    expect(r.ctx.runtimeTools.list()).toHaveLength(8);
   });
   it('allows workspace bash in accept-edits but asks for external directories', async () => {
     let approvals = 0;
@@ -168,7 +171,7 @@ describe('native tools', () => {
     expect(prompt.text).toContain('Bash is for inspection only');
     expect(prompt.text).toContain('bash calls are allowed without ordinary approval');
   });
-  it('registers six schemas and rejects invalid arguments', async () => {
+  it('registers the six file/shell/search schemas plus new_context, and rejects invalid arguments', async () => {
     const r = await runtime();
     expect(r.ctx.runtimeTools.list().map((tool) => tool.name)).toEqual([
       'read',
@@ -177,6 +180,8 @@ describe('native tools', () => {
       'bash',
       'glob',
       'grep',
+      // Contributed by the compaction service, not this plugin (P1-9 / P2-8).
+      'new_context',
     ]);
     await expect(call(r, 'read', { path: 'a', limit: -1 })).rejects.toMatchObject({
       code: 'invalid_tool_arguments',

@@ -17,8 +17,13 @@ ARD：[`docs/plans/2026-09-08-runtime-evolution-ard.md`](../../docs/plans/2026-0
 | `bootstrap.ts` | P0-2 · Cordis Context 初始化、插件注册、**服务存活断言**、销毁 |
 | `flags.ts` | 特性开关（D8 后端开关、目录与 trace 目录） |
 | `trace.ts` | 结构化 run trace（工程规范 §2 / §15） |
+| `host/` | P1-0 · `runtimeHostIo` / `runtimeExec` 两个出口，TSD helper 与保留进程树根身份的 Node runner |
 | `plugins/model-adapter/` | P0-4 · 读 `models.json` + `auth.json`，绑定 pi-ai provider |
-| `plugins/agent-loop/` | P0-5 · pi-agent-core `Agent` 驱动单轮流式对话 |
+| `plugins/agent-loop/` | P0-5 · pi-agent-core `Agent` 驱动对话；无工具时单轮，有工具时多轮并在轮次边界调压缩 |
+| `plugins/tools/` | P1-1..P1-4 · 六个原生工具的注册表与实现，另含 P1-9 的 `new_context` |
+| `plugins/permissions/` | P1-5/P1-6 · D14 两轴（模式/档位）、策略加载、Bash AST 与审批桥接 |
+| `plugins/prompt/` | P2-1/P2-2 · 固定槽位装配与项目指令链 |
+| `plugins/context/` | P2-3 · 预算与提醒（`budget.ts`）、检查点形状（`compaction.ts`）、`runtimeContext` 服务（`index.ts`）；P2-7 的前缀稳定性度量也在此 |
 | `smoke/` | P0-6 · 非 UI 运行入口（§1）+ 用例 + 确定性断言（§4） |
 | `__tests__/` | 单测，由根 `pnpm test`（vitest）收集 |
 | `spikes/` | 一次性探针，不参与 typecheck |

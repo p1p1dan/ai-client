@@ -64,12 +64,14 @@ export interface DeferredServiceDeclaration {
  * Deliberately not a list of names: A3's point is that "nothing here yet" has to
  * carry the reason WHY this particular module has none, so an agent reading the
  * graph six weeks from now can tell a deliberate gap from a dropped task.
+ *
+ * `runtimeContext` left this table when P2-3's decision layer got a consumer
+ * (`plugins/context/index.ts`): compaction now runs at the turn boundary, so
+ * the name is provided rather than promised. What is still missing there is the
+ * durable compaction record (P2-4), which is a field of that service's output,
+ * not an absent service.
  */
 export const DEFERRED_SERVICES: Readonly<Record<string, DeferredServiceDeclaration>> = {
-  runtimeContext: {
-    phase: 'P2',
-    reason: `${DEFERRED_REASON_MARKER} compaction needs a transcript longer than one turn to have anything to compact. P0 is single-turn, so the only honest implementation is the identity function — which would silently pass a real overflow through once P1 makes turns long.`,
-  },
   runtimePrompt: {
     phase: 'P2',
     reason: `${DEFERRED_REASON_MARKER} the system prompt is a caller-supplied string at P0 so that the smoke case can pin it and keep the request prefix byte-stable. Assembling it from CLAUDE.md / skills / mode fragments is P2-1..P2-2 and must not be half-done, because a partial prefix is worse for cache hit rate than no assembly at all (ARD D9).`,

@@ -181,7 +181,8 @@ export interface ReminderDecision {
  */
 export function selectReminder(
   budget: ContextBudget,
-  state: ReminderState = NO_REMINDERS_CLAIMED
+  state: ReminderState = NO_REMINDERS_CLAIMED,
+  options: ReminderOptions = {}
 ): ReminderDecision | undefined {
   const remaining = remainingTokens(budget);
   if (remaining <= CONTEXT_FALLBACK_REMINDER_TOKENS && !state.atLimitClaimed) {
@@ -195,19 +196,28 @@ export function selectReminder(
   if (remaining > reminderThreshold(budget) || state.approachingClaimed) return undefined;
   return {
     tier: 'approaching',
-    text: approachingReminder(remaining),
+    text: approachingReminder(remaining, options),
     state: { ...state, approachingClaimed: true },
   };
 }
 
 /**
- * Reminder wording.
+ * Options that decide whether the reminder may name the compaction tool.
  *
- * PI-Desktop tells the model it may call a `new_context` tool to start the new
- * window itself. That tool is not ported here: it is a real tool registration,
- * which belongs to P1's registry, and naming a tool the model cannot call is
- * the failure the prompt slot table already refuses (`plugins/prompt/
- * segments.ts`). The wording below therefore stops at "start closing out".
+ * P2-8 exists to restore PI-Desktop's line telling the model it can start the
+ * new window itself, and that line is only true while P1-9's `new_context`
+ * tool is actually registered. Passing the name — rather than hardcoding it —
+ * is what makes the pairing mechanical: a caller with no tool registered gets
+ * wording that promises nothing, which is the same rule the prompt slot table
+ * applies to `tool-protocol` (`plugins/prompt/segments.ts`).
+ */
+export interface ReminderOptions {
+  /** Name of the registered compaction tool, or `undefined` when none is. */
+  compactionTool?: string;
+}
+
+/**
+ * Reminder wording.
  *
  * ## Placement, and why it is not decided here
  *
@@ -216,14 +226,21 @@ export function selectReminder(
  * cached prefix for the request, because the system prompt is the prefix. It
  * costs PI-Desktop at most two cache misses per session (each tier fires once),
  * so it is not a bug there — but ARD D9 makes our hit rate a gate, and
- * appending the same text as a trailing message instead would keep the prefix
- * byte-identical. The caller chooses; this module only says what to say.
+ * carrying the same text as a trailing message keeps the prefix byte-identical
+ * (which is what `plugins/context/index.ts` does, matching Codex, which writes
+ * its reminders into conversation history). The caller chooses; this module
+ * only says what to say.
  */
-export function approachingReminder(remaining: number): string {
+export function approachingReminder(remaining: number, options: ReminderOptions = {}): string {
   return [
     '<context_budget>',
     `About ${remaining.toLocaleString('en-US')} tokens of working context remain before this conversation is compacted.`,
     'Start closing out: write anything durable to files, and prefer targeted reads over broad exploration.',
+    ...(options.compactionTool
+      ? [
+          `You may call ${options.compactionTool} to start the new window yourself once the current step is at a clean stopping point.`,
+        ]
+      : []),
     '</context_budget>',
   ].join('\n');
 }

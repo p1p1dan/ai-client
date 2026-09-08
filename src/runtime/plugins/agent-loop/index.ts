@@ -19,6 +19,7 @@ import {
   type RuntimeRunResult,
   TRACE_SERVICE,
 } from '../../contracts.ts';
+import { CONTEXT_SERVICE } from '../context/index.ts';
 
 export interface AgentLoopConfig {
   /**
@@ -63,6 +64,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       );
     }
     const resolved = adapter.resolve(ref);
+    const thinkingLevel = request.thinkingLevel ?? this.config.defaultThinkingLevel;
     const trace = this.ctx.runtimeTrace.begin({
       runId: request.runId,
       input: request.prompt,
@@ -73,13 +75,21 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       event: 'run_start',
       system_prompt: request.systemPrompt,
       system_prompt_bytes: Buffer.byteLength(request.systemPrompt, 'utf8'),
-      thinking_level: request.thinkingLevel ?? this.config.defaultThinkingLevel,
+      thinking_level: thinkingLevel,
       single_turn: this.config.singleTurn,
       catalog_source: adapter.source,
       mode: this.ctx.get('runtimePermissions')?.mode ?? null,
       permission_gear: this.ctx.get('runtimePermissions')?.gear ?? null,
+      compaction_family: this.ctx.get(CONTEXT_SERVICE)?.enabled
+        ? this.ctx.get(CONTEXT_SERVICE)?.family
+        : null,
+      compaction_tool: this.ctx.get(CONTEXT_SERVICE)?.compactionTool ?? null,
     });
 
+    // Optional: P0 and the tool-less smoke lane run without it, and a run with
+    // no compaction service behaves exactly as it did before P2-3.
+    const context = this.ctx.get(CONTEXT_SERVICE);
+    context?.beginRun();
     const collected = new TurnCollector();
     const toolCalls = new Set<string>();
     const unsubscribePermissions = this.ctx.get('runtimePermissions')?.onDecision((record) => {
@@ -97,11 +107,44 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       initialState: {
         systemPrompt: request.systemPrompt,
         model: resolved.model,
-        thinkingLevel: request.thinkingLevel ?? this.config.defaultThinkingLevel,
+        thinkingLevel,
         tools: [...(this.ctx.get('runtimeTools')?.list() ?? [])],
         messages: [],
       },
       shouldStopAfterTurn: () => ++turnCount >= (this.config.singleTurn ? 1 : 64),
+      // The turn boundary is where compaction is safe: the batch of tool
+      // results that belongs to the turn just finished is already in the
+      // context, so a model that asked for a new window mid-batch does not
+      // lose results it is still holding.
+      prepareNextTurnWithContext: context
+        ? async (turn, signal) => {
+            const prepared = await context.prepareTurn({
+              messages: turn.context.messages,
+              model: resolved.model,
+              models: resolved.models,
+              thinkingLevel,
+              retention:
+                turn.toolResults.length > 0 || turn.message.stopReason === 'toolUse'
+                  ? 'active_turn'
+                  : 'completed_turn',
+              ...(signal ? { signal } : {}),
+            });
+            if (prepared.compaction)
+              trace.note('note', { event: 'compaction', ...prepared.compaction });
+            if (prepared.skipped)
+              trace.note('note', { event: 'compaction_skipped', ...prepared.skipped });
+            if (prepared.reminder)
+              trace.note('note', {
+                event: 'context_reminder',
+                tier: prepared.reminder.tier,
+                names_compaction_tool: prepared.reminder.text.includes(
+                  context.compactionTool ?? '\u0000'
+                ),
+              });
+            if (!prepared.compaction && !prepared.reminder) return undefined;
+            return { context: { ...turn.context, messages: prepared.messages } };
+          }
+        : undefined,
     });
 
     const unsubscribe = agent.subscribe((event) => {

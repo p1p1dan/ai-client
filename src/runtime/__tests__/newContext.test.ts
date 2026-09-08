@@ -29,34 +29,46 @@ describe('P1-9 new_context contribution', () => {
   });
   it('still respects an explicit tool whitelist', async () => {
     const provider = fauxProvider({ provider: 'test', models: [{ id: 'test', name: 'Test' }] });
-    const request = vi.fn();
     runtime = await createRuntime({
       providers: [provider.provider],
       tools: { cwd: process.cwd() },
       permissions: { gear: 'auto', allowedTools: ['read'] },
     });
-    runtime.ctx.runtimeTools.register(newContextTool({ family: 'summary', request }), 'read');
     const tool = runtime.ctx.runtimeTools.list().find((tool) => tool.name === 'new_context');
+    // Registered, but a host that names its allowed tools still decides: a
+    // whitelist that silently gained a tool would not be one.
     await expect(tool?.execute('denied', {})).rejects.toMatchObject({ code: 'tool_denied' });
-    expect(request).not.toHaveBeenCalled();
+    expect(runtime.context?.pendingNewWindow).toBe(false);
   });
-  it('is absent until P2 contributes it, then runs in plan + ask without an approval', async () => {
+
+  it('runs in plan + ask without an approval, and rejects arguments it does not take', async () => {
     const provider = fauxProvider({ provider: 'test', models: [{ id: 'test', name: 'Test' }] });
     provider.setResponses([fauxAssistantMessage('ready')]);
-    const request = vi.fn();
     runtime = await createRuntime({
       providers: [provider.provider],
       tools: { cwd: process.cwd() },
       permissions: { mode: 'plan', gear: 'ask' },
     });
-    expect(runtime.ctx.runtimeTools.list().some((tool) => tool.name === 'new_context')).toBe(false);
-    runtime.ctx.runtimeTools.register(newContextTool({ family: 'summary', request }), 'read');
     const tool = runtime.ctx.runtimeTools.list().find((tool) => tool.name === 'new_context');
+    expect(tool).toBeDefined();
     await expect(
       tool?.execute('bad', { summary: 'cannot steer compaction' })
     ).rejects.toMatchObject({ code: 'invalid_tool_arguments' });
-    expect(request).not.toHaveBeenCalled();
+    expect(runtime.context?.pendingNewWindow).toBe(false);
+    // No approval bridge is configured, so an approval would hang the call:
+    // reaching the intent is the assertion.
     await tool?.execute('valid', {});
-    expect(request).toHaveBeenCalledOnce();
+    expect(runtime.context?.pendingNewWindow).toBe(true);
+  });
+
+  it('is absent when compaction is disabled, so no wording can promise it', async () => {
+    const provider = fauxProvider({ provider: 'test', models: [{ id: 'test', name: 'Test' }] });
+    runtime = await createRuntime({
+      providers: [provider.provider],
+      tools: { cwd: process.cwd() },
+      context: { enabled: false },
+    });
+    expect(runtime.ctx.runtimeTools.list().some((tool) => tool.name === 'new_context')).toBe(false);
+    expect(runtime.context?.compactionTool).toBeUndefined();
   });
 });

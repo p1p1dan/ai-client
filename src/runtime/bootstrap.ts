@@ -25,6 +25,12 @@ import {
   AgentLoopPlugin,
   DEFAULT_AGENT_LOOP_CONFIG,
 } from './plugins/agent-loop/index.ts';
+import {
+  CONTEXT_SERVICE,
+  type ContextConfig,
+  ContextPlugin,
+  type RuntimeContextService,
+} from './plugins/context/index.ts';
 import { readPiCatalog } from './plugins/model-adapter/catalog.ts';
 import { type ModelAdapterConfig, ModelAdapterPlugin } from './plugins/model-adapter/index.ts';
 import {
@@ -50,6 +56,7 @@ export interface RuntimeBootstrapOptions {
   host?: RuntimeHostConfig;
   tools?: ToolsConfig;
   permissions?: Omit<PermissionConfig, 'cwd' | 'policy'>;
+  context?: ContextConfig;
   approvalUi?: PortableExtensionUiBridgeOptions;
   agentDir?: string;
   traceDir?: string | null;
@@ -68,6 +75,7 @@ export interface RuntimeHandle {
   hostIo: RuntimeHostIoService;
   exec: RuntimeExecService;
   permissions?: RuntimePermissionsService;
+  context?: RuntimeContextService;
   approval?: RuntimeApprovalBridge;
   run(request: RuntimeRunRequest): Promise<RuntimeRunResult>;
   dispose(): Promise<void>;
@@ -132,6 +140,11 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       });
       await toolsFiber.await();
     }
+    // After the tools plugin, because this is what registers `new_context`:
+    // the compaction consumer and the tool that requests it land together
+    // (plan board P1-9 / P2-8) or not at all.
+    const contextFiber = await ctx.plugin(ContextPlugin, options.context ?? {});
+    await contextFiber.await();
     const traceDir = options.traceDir === undefined ? flags.traceDir : options.traceDir;
     if (traceDir) await io.mkdir(traceDir, { recursive: true, mode: 0o700 });
     const stamp = await buildVersionStamp({
@@ -155,6 +168,8 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
               permission_policy_notes: JSON.stringify(ctx.runtimePermissions.policy?.notes ?? []),
             }
           : {}),
+        compaction: String(ctx.runtimeContext.enabled),
+        compaction_family: ctx.runtimeContext.family,
         carrier: host.carrier,
         exec_stdio: exec.mode,
         exec_adapter: exec.adapterId,
@@ -183,6 +198,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     await loopFiber.await();
     const required = [
       ...RUNTIME_SERVICES,
+      CONTEXT_SERVICE,
       ...(options.tools ? [TOOLS_SERVICE, PERMISSIONS_SERVICE] : []),
     ];
     const missing = required.filter((name) => ctx.get(name) === undefined);
@@ -203,6 +219,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       hostIo: io,
       exec,
       permissions: options.tools ? ctx.runtimePermissions : undefined,
+      context: ctx.runtimeContext,
       approval,
       run: (request) => {
         if (disposal)

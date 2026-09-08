@@ -13,6 +13,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AT_LIMIT_REMINDER,
+  approachingReminder,
   COMPACTION_MAX_KEEP_RECENT_TOKENS,
   COMPACTION_MIN_KEEP_RECENT_TOKENS,
   COMPACTION_RETAINED_USER_MESSAGE_MAX_TOKENS,
@@ -139,5 +140,28 @@ describe('selectReminder', () => {
   it('does not name a tool the runtime has not registered', () => {
     const decision = selectReminder(at(budget.hardLimit - reminderThreshold(budget)));
     expect(decision?.text).not.toContain('new_context');
+  });
+
+  it('invites the model to rotate the window only when the tool is passed in', () => {
+    // The P1-9 ∥ P2-8 pairing rule, at the level that decides the wording: the
+    // sentence exists exactly when the caller has a registered tool to name.
+    const crossing = at(budget.hardLimit - reminderThreshold(budget));
+    const decision = selectReminder(crossing, NO_REMINDERS_CLAIMED, {
+      compactionTool: 'new_context',
+    });
+    expect(decision?.text).toContain(
+      'You may call new_context to start the new window yourself once the current step is at a clean stopping point.'
+    );
+    // The at-limit tier does not repeat the invitation: at that point the next
+    // request compacts anyway, so a choice is no longer on offer.
+    expect(
+      selectReminder(at(budget.hardLimit), NO_REMINDERS_CLAIMED, { compactionTool: 'new_context' })
+        ?.text
+    ).not.toContain('new_context');
+  });
+
+  it('keeps the invitation out of the default wording', () => {
+    expect(approachingReminder(1_000)).not.toContain('new_context');
+    expect(approachingReminder(1_000, {})).not.toContain('new_context');
   });
 });

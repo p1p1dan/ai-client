@@ -66,6 +66,34 @@ export { standaloneHost } from './host/config.ts';
 export { RuntimeHostError } from './host/errors.ts';
 export type { AgentLoopConfig } from './plugins/agent-loop/index.ts';
 export { DEFAULT_AGENT_LOOP_CONFIG } from './plugins/agent-loop/index.ts';
+export type {
+  ContextBudget,
+  ModelWindow,
+  ReminderDecision,
+  ReminderOptions,
+  ReminderState,
+  ReminderTier,
+} from './plugins/context/budget.ts';
+export {
+  AT_LIMIT_REMINDER,
+  approachingReminder,
+  compactionNeeded,
+  contextBudget,
+  NO_REMINDERS_CLAIMED,
+  remainingTokens,
+  reminderThreshold,
+  retainedUserMessageBudget,
+  selectReminder,
+} from './plugins/context/budget.ts';
+export { CONTEXT_ROLLOVER_SUMMARY } from './plugins/context/compaction.ts';
+export type {
+  CompactionOutcome,
+  ContextConfig,
+  PrepareTurnRequest,
+  RuntimeContextService,
+  TurnPreparation,
+} from './plugins/context/index.ts';
+export { CONTEXT_SERVICE } from './plugins/context/index.ts';
 export type { CatalogModel, CatalogProvider, PiCatalog } from './plugins/model-adapter/catalog.ts';
 export { readPiCatalog } from './plugins/model-adapter/catalog.ts';
 export type { ModelAdapterConfig } from './plugins/model-adapter/index.ts';
@@ -81,6 +109,7 @@ export type { RuntimeToolsService, ToolsConfig } from './plugins/tools/index.ts'
 export { TOOLS_SERVICE } from './plugins/tools/index.ts';
 export {
   type CompactionFamily,
+  NEW_CONTEXT_TOOL_NAME,
   type NewContextOptions,
   newContextTool,
 } from './plugins/tools/new-context.ts';
