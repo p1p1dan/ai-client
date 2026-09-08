@@ -244,6 +244,15 @@ Main 进程及其派生的子进程不在白名单内，读用户文件得到的
 **不受此约束的**：`SessionIndexService.ts:410` 读的是 Main 自己写的索引 JSON，
 以及 runtime worker 内部的读写——worker 跑在白名单内的随包 node.exe 上，看到的就是明文（D11）。
 
+**2026-09-09 补一处漏项**：上面的清单只数了裸 `fs.readFile`，漏了
+`src/main/services/git/encoding.ts` 的 `detectBinaryFile`——它把路径直接交给 `isbinaryfile`，
+而密文容器里的 NUL 填充会让整个工作区的文本文件都被判成二进制，diff 面板连乱码都显示不出来。
+判据不是「谁调了 readFile」，而是「谁按工作区文件的字节做判断」。已随实现改为先探头、
+确认是容器才解密后按内容判定；普通文件仍走只读 512 字节的路径探测。
+
+同批把 `tsdSafeRead` 的解密进程改为优先随包 `node.exe`（D11/D20 已在现场验证白名单的那一个），
+PATH 里的 `node` 退为兜底，并留 `AICLIENT_TSD_NODE_PATH` 覆盖。
+
 **归属**：P3-5 与 P4-5 验收此项；改动落在 Main 层，不进 `src/runtime/`。
 
 ### D14 · 权限与模式分成两根轴：模式管工具集，档位管打扰程度

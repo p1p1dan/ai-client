@@ -117,7 +117,7 @@ PI-Desktop 因此把两件事配成一对：**预算提醒**告诉它还剩多�
 | P3-2 分支与 resume | ⬜ | 分支管理从 PI-Desktop session-context 搬运 |
 | P3-3 旧会话兼容 | ⬜ | pi-coding-agent 产生的会话文件仍可读、可 resume（成功标准 5）；旧 tier 值按 [D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 映射迁移（`pragmatic→ask`、`handsoff→accept-edits`、`fullopen→auto`、`readonly→plan+ask`），不得丢弃 |
 | P3-4 RuntimeEvent 翻译层 | ⬜ | 参考现有 `piWorkerSession.ts`，翻译目标不变、只换数据源（D5） |
-| P3-5 对接 SessionIndexService | ⬜ | Main 层不动，只适配调用面。**跨载体读一致性已定论**（[ARD D13](../../../plans/2026-09-08-runtime-evolution-ard.md)）：加密按文件策略生效，Main 读用户文件得到密文，但会话索引是 Main 自写的 JSON、worker 在白名单内读写会话 JSONL，两者都不受影响；要改的是 `GitService.ts:670` / `:1364` 与 `WorktreeService.ts:648` 的裸读 |
+| P3-5 对接 SessionIndexService | 🟡 | **D13 的 Main 侧改造已落地** `de26eb5e`：`GitService` 两处 diff 工作区侧与 `WorktreeService` 冲突编码探测改走 `readWorkingTreeFile`；**并补上 ARD D13 清单漏掉的 `detectBinaryFile`**——密文容器的 NUL 填充会让整个工作区的文本文件被判成二进制；`tsdSafeRead` 的解密进程改为优先随包 `node.exe`，留 `AICLIENT_TSD_NODE_PATH` 覆盖。6 项测试覆盖容器→明文与二进制判定，驱动本身的解密无法在此复现，现场验收归 P4-5。**剩余**：SessionIndexService 的调用面适配等 P3-1 的 session 插件落地后再接（会话索引是 Main 自写 JSON、worker 在白名单内读写 JSONL，两者都不受加密影响）；`GitService` 的 spawn 主线缺陷仍归 [Q7](open-questions.md) |
 | P3-6 往返测试 | ⬜ | 写入→读取→resume 快照一致性 |
 
 ---
