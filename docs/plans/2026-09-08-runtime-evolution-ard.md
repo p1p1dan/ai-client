@@ -231,6 +231,10 @@ GUI（Electron `utilityProcess` 内的 worker）Read 返回异常内容、`pwd/l
 Main 仍是 Electron，读用户工作区文件拿到的就是密文。已按 D13 统一改走 TSD-aware 读；
 `SessionIndexService.ts:410` 读的是 Main 自写的索引 JSON，不在此列。
 
+**2026-09-09 未决项**：native worker 的 bash 走的是系统 Git for Windows 的 `bash.exe`，
+不在本条论证的随包白名单载体内，且读明文的是它 fork 出的叶子进程。论证、选项与现场判定探针见
+[D1 决策论证 · native worker 的 bash 载体](2026-09-09-bash-carrier-decision.md)。未拍板前不写成已解决。
+
 ### D12 · 协议依赖版本：pin 新版，不为对比回退
 
 `pi-ai` / `pi-agent-core` 保持 `0.84.4`。P2-0 的旧后端基线实际由 `pi-coding-agent@0.84.3`

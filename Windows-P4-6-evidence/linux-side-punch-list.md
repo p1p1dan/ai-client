@@ -34,6 +34,7 @@
 - test.11 用 `resolveWorkerShell` 找系统 `C:\Program Files\Git\bin\bash.exe`，**本仓不打包 git/bash**（`electron-builder.yml` 无此资源；`afterPack.mjs` 只放 agent-host + node-runtime；已装旧 test.9 包也确认无 `resources/git/bin/bash.exe`）。
 - ARD §8 修复动机是"随包 node.exe 是现场已验证的白名单载体"；现在 bash 改走系统路径，**不在随包白名单内**。若企业加密驱动按进程名/签名放行给 `bash.exe`，则 OK；若不是，native bash 在加密机可能重蹈 GUI 的句柄/密文问题。
 - **建议**：Windows 现场验收时**优先测**企业加密策略下的 `bash pwd/ls/echo`；若失败，交回 Linux 侧考虑随包 Git Bash（体积/msys2 依赖代价）或重新评估载体。
+- **Linux 侧已出论证（2026-09-09）**：`docs/plans/2026-09-09-bash-carrier-decision.md`——源码事实、为何不能换 cmd/PowerShell、A/B/C 选项代价，以及 R0–R4 现场判定探针（填结果即可拍板）。倾向 A，等 R1。
 - 交接文档 `p4-6/README.md:31` 已声明"不采用 WSL/sh 隐式回落、不引入新依赖"——该决策是否与加密机现实冲突，需现场数据说话。
 
 ### D2. macOS job 同轮 CI 仍在运行 —— 不能把整次 CI / P4-6 标 Done
@@ -41,22 +42,26 @@
 
 ---
 
-## 🟡 平台敏感 / 可选（不阻塞，但影响 Windows 现场回归干净度）
+## 🟡 平台敏感 / 可选（不阻塞，但影响 Windows 现场回归干净度）—— S1–S4 已由 Linux 侧改造完成，待 Windows 复跑确认
 
 ### S1. `guiEventContract.test.ts` —— 路径分隔符致 1 项红（非逻辑缺陷）
 - 录制 JSON 含 `<workspace>/notes.txt`（Linux 正斜杠），Windows 下 `permission.activity` 的 `value`/`title` 变 `<workspace>\notes.txt`。其余 5 项（P4-5 四处缺口断言）全过。
 - 可选修复：录制/断言路径归一化（`projectInstructions.ts:94 normalizeStablePath` 已有先例），或把录制当结构契约而非字节比对。
+- **已修复（Linux 侧 2026-09-09）**：`normalize` 抽出 `withoutWorkspacePath`，对 `<workspace>` 之后的路径段归一分隔符，且同时吃掉 JSON 转义后的双反斜杠形态（工具输出里内嵌 JSON 的那条）；内容里的反斜杠（`the answer is 42\n`）不动。录制文件未变。
 
 ### S2. `projectInstructions.test.ts` —— POSIX 根路径在 Windows `resolve` 引入盘符
 - `ROOT='/work/repo'`（无盘符），`projectInstructions.ts:132-133` `resolve('/work/repo')` 得 `E:\work\repo`，`fakeSource.realpath` 不匹配 → 误判越界 → 9 项失败。**不影响真实文件系统**（真实路径带盘符）。
 - 可选修复：测试改用平台无关路径构造。
+- **已修复（Linux 侧 2026-09-09）**：`ROOT = resolve('/work/repo')` + `at(...) = join(ROOT, ...)`，内存树的键与加载器 `join` 出来的查找路径同源，Windows 下自带盘符。
 
 ### S3. 多处测试硬编码 `/bin/bash`（Linux 专属）
 - `shellPolicy.test.ts:28`、`tools.test.ts`（3 项）、`nativeWorkerRuntime.test.ts`（极少）报 `spawn /bin/bash ENOENT`。核心逻辑均过。
 - 可选修复：用 `process.env.AICLIENT_PROBE_SHELL` 或 win32 分支给真实 shell，便于 Windows 一并回归。
+- **已修复（Linux 侧 2026-09-09）**：`tools.test.ts` / `shellPolicy.test.ts` 改用 `resolveWorkerShell(process.env)`——与 native worker 同一套选择逻辑，Windows 上落到实际 Git Bash；没装 bash 时报 `shell_unconfigured` 而非 `ENOENT`。未新增 env 开关。
 
 ### S4. `nativeWorkerRuntime.test.ts` 1 项路径分隔符差异
 - 断言 `file:'/agent/sessions/logical-1.jsonl'`，Windows `join` 出反斜杠。可选修复：断言用 `path.join` 或 normalizeStablePath。
+- **已修复（Linux 侧 2026-09-09）**：全文件统一 `const SESSION_FILE = join('/agent', 'sessions', 'logical-1.jsonl')`，与 `sessionFilePath` 同一个 `join`。
 
 ---
 
