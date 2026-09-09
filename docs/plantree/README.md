@@ -26,6 +26,8 @@ P4-5 由 Claude 完成，2026-09-09 已交接 Codex 跟进 P4-6；P5-2 已按用
 
 [`baseline/README.md`](baseline/README.md) — 指向本仓库既有的架构与术语文档，不复制内容。
 
+构建必需交付文档：[测试版迁移](../pi-only-migration.md) · [回退说明](../pi-only-rollout-rollback.md) · [候选说明](../release-notes/unreleased.md)。这些文档不代表现场验收或公开发布完成。
+
 ## 想法池
 
 [`ideas/inbox.md`](ideas/inbox.md) — 未承诺的想法，提升为任务前不进看板。
