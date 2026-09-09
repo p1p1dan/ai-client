@@ -3,13 +3,6 @@ import { create } from 'zustand';
 
 interface WorktreeState {
   worktrees: GitWorktree[];
-  /**
-   * Structurally always `null`: the only writer, `setCurrentWorktree`, had no
-   * callers anywhere in the app and was removed. Kept as a field because
-   * `GitView.tsx` still reads it (and correctly renders its "no worktree"
-   * branch); a real writer belongs with whatever revives that view.
-   */
-  currentWorktree: GitWorktree | null;
   isLoading: boolean;
   error: string | null;
 
@@ -20,7 +13,6 @@ interface WorktreeState {
 
 export const useWorktreeStore = create<WorktreeState>((set) => ({
   worktrees: [],
-  currentWorktree: null,
   isLoading: false,
   error: null,
 

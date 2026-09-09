@@ -1,7 +1,6 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { normalizePath } from '@/App/storage';
-import { useRepositoryStore } from '@/stores/repository';
 import { useSettingsStore } from '@/stores/settings';
 import { gitQueryKeys } from './gitQueryKeys';
 import { useShouldPoll } from './useWindowFocus';
@@ -11,7 +10,6 @@ interface GitQueryOptions {
 }
 
 export function useGitStatus(workdir: string | null, isActive = true) {
-  const setStatus = useRepositoryStore((s) => s.setStatus);
   const shouldPoll = useShouldPoll();
   const gitAutoFetchEnabled = useSettingsStore((s) => s.gitAutoFetchEnabled);
 
@@ -20,7 +18,6 @@ export function useGitStatus(workdir: string | null, isActive = true) {
     queryFn: async () => {
       if (!workdir) return null;
       const status = await window.electronAPI.git.getStatus(workdir);
-      setStatus(status);
       return status;
     },
     enabled: !!workdir,
@@ -33,7 +30,6 @@ export function useGitStatus(workdir: string | null, isActive = true) {
 }
 
 export function useGitBranches(workdir: string | null, options?: GitQueryOptions) {
-  const setBranches = useRepositoryStore((s) => s.setBranches);
   const queryEnabled = options?.enabled ?? true;
 
   return useQuery({
@@ -41,25 +37,9 @@ export function useGitBranches(workdir: string | null, options?: GitQueryOptions
     queryFn: async () => {
       if (!workdir) return [];
       const branches = await window.electronAPI.git.getBranches(workdir);
-      setBranches(branches);
       return branches;
     },
     enabled: !!workdir && queryEnabled,
-  });
-}
-
-export function useGitLog(workdir: string | null, maxCount = 50) {
-  const setLogs = useRepositoryStore((s) => s.setLogs);
-
-  return useQuery({
-    queryKey: gitQueryKeys.log(workdir, maxCount),
-    queryFn: async () => {
-      if (!workdir) return [];
-      const logs = await window.electronAPI.git.getLog(workdir, maxCount);
-      setLogs(logs);
-      return logs;
-    },
-    enabled: !!workdir,
   });
 }
 
@@ -131,53 +111,6 @@ export function useGitCreateBranch() {
     onSuccess: (_, { workdir }) => {
       // GitService.createBranch uses checkoutBranch, so HEAD changes here too.
       return invalidateBranchQueries(queryClient, workdir);
-    },
-  });
-}
-
-export function useGitPush() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      workdir,
-      remote,
-      branch,
-      setUpstream,
-    }: {
-      workdir: string;
-      remote?: string;
-      branch?: string;
-      setUpstream?: boolean;
-    }) => {
-      await window.electronAPI.git.push(workdir, remote, branch, setUpstream);
-    },
-    onSuccess: (_, { workdir }) => {
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.status(workdir) });
-    },
-  });
-}
-
-export function useGitPull() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      workdir,
-      remote,
-      branch,
-    }: {
-      workdir: string;
-      remote?: string;
-      branch?: string;
-    }) => {
-      await window.electronAPI.git.pull(workdir, remote, branch);
-    },
-    onSuccess: (_, { workdir }) => {
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.status(workdir) });
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.branches(workdir) });
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.log(workdir) });
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.logInfinite(workdir) });
     },
   });
 }

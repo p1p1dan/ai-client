@@ -32,6 +32,23 @@ describe('S05 legacy shell removal', () => {
       'components/source-control/SourceControlPanel.tsx',
       'components/settings/DraggableSettingsWindow.tsx',
       'stores/settings/shellPreferenceMirror.ts',
+      // The legacy git view and the components only it mounted. It had no
+      // importer left (nothing imported `@/views`), so it could not be
+      // reached from `WorkspaceShell` — deleted rather than kept as an
+      // unreachable second git panel reading its own global stores.
+      'views/GitView.tsx',
+      'views/index.ts',
+      'components/git/BranchSelector.tsx',
+      'components/git/CommitForm.tsx',
+      'components/git/CommitHistory.tsx',
+      'components/git/FileChanges.tsx',
+      'components/git/SyncStatus.tsx',
+      'components/git/GitSyncButton.tsx',
+      'components/git/CloneTasksPopover.tsx',
+      // Write-only mirror of git status/branches/log: every `useGit` queryFn
+      // wrote it and nothing ever read it, so on multi-workdir sessions it
+      // could only ever hold "whichever repo fetched last".
+      'stores/repository.ts',
     ])
       expect(existsSync(join(renderer, file)), file).toBe(false);
 
