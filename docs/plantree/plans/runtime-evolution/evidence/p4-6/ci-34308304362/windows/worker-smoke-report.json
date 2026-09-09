@@ -1,0 +1,98 @@
+{
+  "appDir": "D:\\a\\ai-client\\ai-client\\dist\\win-unpacked",
+  "reports": [
+    {
+      "ok": true,
+      "backend": "legacy",
+      "workerPath": "D:\\a\\ai-client\\ai-client\\dist\\win-unpacked\\resources\\agent-host\\worker.js",
+      "workerExecutable": "D:\\a\\ai-client\\ai-client\\dist\\win-unpacked\\resources\\node-runtime\\node.exe",
+      "permissionActivity": [
+        {
+          "phase": "decision",
+          "requestId": "perm-b4feb616-1824-44cd-8f65-e6d5f2eb5ee0",
+          "surface": "read",
+          "value": "worker-read-probe.md",
+          "result": "allow",
+          "resolution": "policy_allow",
+          "origin": "bundled",
+          "matchedPattern": "*"
+        },
+        {
+          "phase": "decision",
+          "requestId": "perm-f920a9ff-345e-4383-893b-0c6076d28363",
+          "surface": "bash",
+          "value": "printf packaged-worker-bash-ok",
+          "result": "allow",
+          "resolution": "user_approved",
+          "origin": "bundled",
+          "matchedPattern": "*"
+        }
+      ],
+      "exitCode": 0,
+      "workerPid": 2992,
+      "sessionFile": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\aiclient-packaged-worker-6Xy3o6\\agent\\sessions\\--C--Users-RUNNER~1-AppData-Local-Temp-aiclient-packaged-worker-6Xy3o6-workspace--\\2026-09-09T03-55-51-223Z_01a0844e-ca37-7740-a89f-d438c0c4296a.jsonl",
+      "bundledExtensions": 2,
+      "transport": "node-ipc",
+      "tools": [
+        "read",
+        "bash"
+      ]
+    },
+    {
+      "ok": true,
+      "backend": "native",
+      "workerPath": "D:\\a\\ai-client\\ai-client\\dist\\win-unpacked\\resources\\agent-host\\worker.js",
+      "workerExecutable": "D:\\a\\ai-client\\ai-client\\dist\\win-unpacked\\resources\\node-runtime\\node.exe",
+      "stamp": {
+        "config_version": "runtime_p3_complete_v1",
+        "git_commit": "unknown",
+        "node": "v24.18.0",
+        "backend": "native",
+        "single_turn": "false",
+        "tools": "true",
+        "mode": "agent",
+        "permission_gear": "auto",
+        "permission_policy_sha256": "9fdf8584de66ec9d4bd896a67d776318ebd879b961645ee92f6b12fe3aa51322",
+        "permission_policy_sources": "[]",
+        "permission_policy_notes": "[]",
+        "compaction": "true",
+        "compaction_family": "summary",
+        "carrier": "bundled-node",
+        "exec_stdio": "pipe",
+        "exec_adapter": "node-runner-pipe-v1",
+        "tsd_read_fallback": "disabled",
+        "cleanup_timeout_ms": "2000",
+        "node_source": "bundled",
+        "node_exec_path": "D:\\a\\ai-client\\ai-client\\dist\\win-unpacked\\resources\\node-runtime\\node.exe"
+      },
+      "permissionActivity": [
+        {
+          "phase": "decision",
+          "requestId": "probe_read",
+          "surface": "read",
+          "value": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aiclient-packaged-worker-oyUv8y\\workspace\\worker-read-probe.md",
+          "result": "allow",
+          "resolution": "policy_allow"
+        },
+        {
+          "phase": "decision",
+          "requestId": "probe_bash",
+          "surface": "bash",
+          "value": "printf packaged-worker-bash-ok",
+          "result": "allow",
+          "resolution": "policy_allow"
+        }
+      ],
+      "exitCode": 0,
+      "workerPid": 6944,
+      "sessionFile": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aiclient-packaged-worker-oyUv8y\\agent\\sessions\\packaged-probe.jsonl",
+      "bundledExtensions": 0,
+      "transport": "node-ipc",
+      "tools": [
+        "read",
+        "bash"
+      ]
+    }
+  ],
+  "failures": []
+}

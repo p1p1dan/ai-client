@@ -1,6 +1,8 @@
 # P4-6 接棒状态与现场分工
 
-2026-09-09 · 状态：`1.0.0-test.10` Linux CI 产物通过，Windows 退出断言失败；主线 GUI 修复已引入，准备 `1.0.0-test.11`，未完成现场验收。
+2026-09-09 · 状态：`.11` Windows/Linux 构建产物冒烟通过，Windows installer/unpacked 已交付；完整 GUI、命令树专项与企业加密现场待验收。macOS 同次 CI 仍运行。
+
+最新入口：[CI 34308304362 原始证据、下载与 Windows 操作](ci-34308304362/README.md)。下文保留接棒、失败诊断及修复过程。
 权威：[看板](../../README.md) / [ARD D11、D13、D16](../../../../../plans/2026-09-08-runtime-evolution-ard.md)。
 
 ## 已核实
@@ -68,3 +70,12 @@ CI 补修：`76424efa` 的 [34305837633](https://github.com/p1p1dan/ai-client/ac
 - Windows 同轮两后端均完成工具检查与 dispose 回执，但进程强制退出触发 `UV_HANDLE_CLOSING`，退出码 `3221226505`。正常 Node worker 改为 `process.exitCode=0` + IPC disconnect 后自然退出，断开监听识别主动 dispose；Electron utilityProcess 保持原退出路径。真实 Node IPC 回执与退出测试、源码 HTTP 工具冒烟通过，Windows 真正修复与否待 CI。
 - 对照 [Node 上游同类强制退出问题](https://github.com/nodejs/node/issues/58091)定位，不把上游报告当本仓修复通过证据，也不放宽退出码门禁。
 - 因已有 `.10` Linux 产物且新增主线 GUI 代码，本轮最终候选递增到 `1.0.0-test.11`；Windows AI 应等待包含全部提交的 `.11` 安装包。
+
+## 最终本批出包结果
+
+- `c1f22c11` 修正 Node IPC 可选类型，`65eee950` 修正主线带入的单条格式问题；`b6aa0844` 修复无效问答被活动状态层误记为等待确认，以及三个主线旧静态断言。
+- 本机补修小批 5 文件 81 项通过；全仓 Biome 1131 文件通过，agent-host 类型检查通过。此前本机根 tsc OOM 已由后续 CI 根 tsc 通过补齐。
+- [34308304362](https://github.com/p1p1dan/ai-client/actions/runs/34308304362) 对 `b6aa0844` 完整门禁通过：350 文件 4987 项；Windows/Linux 两后端均 exitCode 0。Windows trace 指向包内 Node 24.18.0，native carrier 为 bundled-node，Linux 为真实 utilityProcess。
+- `1.0.0-test.11` Windows 安装包、portable、unpacked 已上传；证据和 Actions ZIP 摘要见 [最终交付目录](ci-34308304362/README.md)。未下载大型安装包到本机、未本地打包、未创建 tag/Release。
+- native 录制/replay 已适配授权详情折叠，新增真实记录展开 DOM 用例；审计未删除。主线 GUI 清单全部仍待现场签收。
+- macOS 同轮未结束，因此这里只签收已结束 job，不将整次 CI 或 P4-6 标 Done。

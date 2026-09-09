@@ -9,3 +9,5 @@
 - 分支：当前开发主线 feat/model-catalog-admin，未改旧 main 指针，未推送/发布/触发打包。用户截图保持未跟踪。
 
 2026-09-09 同步 runtime 分支：A～E 已全部引入 `feat/runtime-evolution`，打包候选升级为 `1.0.0-test.11`；提交映射、CI 和 native 接缝见 [P4-6 记录](../runtime-evolution/evidence/p4-6/README.md)。本文件上文描述来源分支历史，最终现场按新的安装包提交签收。
+
+`.11` 已出包：`b6aa0844` / [CI 34308304362](https://github.com/p1p1dan/ai-client/actions/runs/34308304362)，完整门禁 350 文件/4987 项、Windows/Linux 双后端产物通过。Windows 现场从 [交付说明](../runtime-evolution/evidence/p4-6/ci-34308304362/README.md)开始，原现场清单仍未签收。

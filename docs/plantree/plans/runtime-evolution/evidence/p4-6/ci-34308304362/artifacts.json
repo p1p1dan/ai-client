@@ -1,0 +1,79 @@
+{
+  "runId": 34308304362,
+  "commit": "b6aa08441eae775f47e8e8829a1e327cbae217e3",
+  "version": "1.0.0-test.11",
+  "artifacts": [
+    {
+      "id": 10087689329,
+      "name": "windows-unpacked",
+      "size_in_bytes": 280739711,
+      "digest": "sha256:ac66c9e32dfa36d54d0e491422c194647a13eead3742037773d0f4c60d6665dc",
+      "expired": false,
+      "expires_at": "2026-09-16T03:56:14Z"
+    },
+    {
+      "id": 10087677251,
+      "name": "windows-portable",
+      "size_in_bytes": 192292285,
+      "digest": "sha256:bc98daf4d719a1e2acb29204deb02a7fef2c6f41cfcdc0e0cef3656ff1a1f088",
+      "expired": false,
+      "expires_at": "2026-09-23T03:56:03Z"
+    },
+    {
+      "id": 10087675018,
+      "name": "windows-installer",
+      "size_in_bytes": 192788317,
+      "digest": "sha256:36dca45b3beb288d4f05802263e5387238813e73984587f14d99d738ec684f0c",
+      "expired": false,
+      "expires_at": "2026-09-23T03:55:57Z"
+    },
+    {
+      "id": 10087672844,
+      "name": "worker-smoke-Windows",
+      "size_in_bytes": 1166,
+      "digest": "sha256:e21b5072c22ed07870800bd12acf88f98c7c8ebb87519059b23f745e02381ce3",
+      "expired": false,
+      "expires_at": "2026-09-23T03:55:56Z"
+    },
+    {
+      "id": 10087626418,
+      "name": "linux-packages",
+      "size_in_bytes": 383435777,
+      "digest": "sha256:d3c5e63030fb47d493d62c3a24bb3c3ffacad6ed0634ca1a53bebea87c7dec4c",
+      "expired": false,
+      "expires_at": "2026-09-16T03:53:34Z"
+    },
+    {
+      "id": 10087623331,
+      "name": "worker-smoke-Linux",
+      "size_in_bytes": 1107,
+      "digest": "sha256:56d0125dd84e20fd2466d04eee508d52787fa1d7725daf70edae87948dda8358",
+      "expired": false,
+      "expires_at": "2026-09-23T03:53:33Z"
+    },
+    {
+      "id": 10087542724,
+      "name": "app-build",
+      "size_in_bytes": 7540376,
+      "digest": "sha256:965a9b0aee3fe3cebb52d952185edd69c0a0c1fa4b7a29978a716224b2789901",
+      "expired": false,
+      "expires_at": "2026-09-10T03:49:44Z"
+    },
+    {
+      "id": 10087527814,
+      "name": "remote-runtime-linux-x64",
+      "size_in_bytes": 47437856,
+      "digest": "sha256:17f67bc12eb99b88e75cb14ccc9f2232bb3c477ed273f239a28534e70122feba",
+      "expired": false,
+      "expires_at": "2026-09-10T03:49:01Z"
+    },
+    {
+      "id": 10087525967,
+      "name": "remote-runtime-linux-arm64",
+      "size_in_bytes": 47186167,
+      "digest": "sha256:a32179ea0addc851a20130671bd68a0e74c98ad96c9cc7106b5f3ce6db7df527",
+      "expired": false,
+      "expires_at": "2026-09-10T03:48:56Z"
+    }
+  ]
+}

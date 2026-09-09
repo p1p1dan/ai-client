@@ -1,0 +1,96 @@
+{
+  "appDir": "/home/runner/work/ai-client/ai-client/dist/linux-unpacked",
+  "reports": [
+    {
+      "ok": true,
+      "backend": "legacy",
+      "workerPath": "/home/runner/work/ai-client/ai-client/dist/linux-unpacked/resources/agent-host/worker.js",
+      "workerExecutable": "/home/runner/work/ai-client/ai-client/node_modules/electron/dist/electron",
+      "permissionActivity": [
+        {
+          "phase": "decision",
+          "requestId": "perm-fc3418ba-a50d-455e-bf1d-ddf7c686000e",
+          "surface": "read",
+          "value": "worker-read-probe.md",
+          "result": "allow",
+          "resolution": "policy_allow",
+          "origin": "bundled",
+          "matchedPattern": "*"
+        },
+        {
+          "phase": "decision",
+          "requestId": "perm-2b62130a-c748-449f-bb92-ebf6b51ef683",
+          "surface": "bash",
+          "value": "printf packaged-worker-bash-ok",
+          "result": "allow",
+          "resolution": "user_approved",
+          "origin": "bundled",
+          "matchedPattern": "*"
+        }
+      ],
+      "exitCode": 0,
+      "workerPid": 3064,
+      "sessionFile": "/tmp/aiclient-packaged-worker-2sKscr/agent/sessions/--tmp-aiclient-packaged-worker-2sKscr-workspace--/2026-09-09T03-53-31-086Z_01a0844c-a6ce-7a95-bcf4-844b2a512df1.jsonl",
+      "bundledExtensions": 2,
+      "transport": "electron-message-port",
+      "tools": [
+        "read",
+        "bash"
+      ]
+    },
+    {
+      "ok": true,
+      "backend": "native",
+      "workerPath": "/home/runner/work/ai-client/ai-client/dist/linux-unpacked/resources/agent-host/worker.js",
+      "workerExecutable": "/home/runner/work/ai-client/ai-client/node_modules/electron/dist/electron",
+      "stamp": {
+        "config_version": "runtime_p3_complete_v1",
+        "git_commit": "unknown",
+        "node": "v22.21.1",
+        "backend": "native",
+        "single_turn": "false",
+        "tools": "true",
+        "mode": "agent",
+        "permission_gear": "auto",
+        "permission_policy_sha256": "9fdf8584de66ec9d4bd896a67d776318ebd879b961645ee92f6b12fe3aa51322",
+        "permission_policy_sources": "[]",
+        "permission_policy_notes": "[]",
+        "compaction": "true",
+        "compaction_family": "summary",
+        "carrier": "electron-utility",
+        "exec_stdio": "pipe",
+        "exec_adapter": "node-direct-pipe-v1",
+        "tsd_read_fallback": "disabled",
+        "cleanup_timeout_ms": "2000"
+      },
+      "permissionActivity": [
+        {
+          "phase": "decision",
+          "requestId": "probe_read",
+          "surface": "read",
+          "value": "/tmp/aiclient-packaged-worker-kY1PJg/workspace/worker-read-probe.md",
+          "result": "allow",
+          "resolution": "policy_allow"
+        },
+        {
+          "phase": "decision",
+          "requestId": "probe_bash",
+          "surface": "bash",
+          "value": "printf packaged-worker-bash-ok",
+          "result": "allow",
+          "resolution": "policy_allow"
+        }
+      ],
+      "exitCode": 0,
+      "workerPid": 3156,
+      "sessionFile": "/tmp/aiclient-packaged-worker-kY1PJg/agent/sessions/packaged-probe.jsonl",
+      "bundledExtensions": 0,
+      "transport": "electron-message-port",
+      "tools": [
+        "read",
+        "bash"
+      ]
+    }
+  ],
+  "failures": []
+}

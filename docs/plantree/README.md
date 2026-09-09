@@ -14,7 +14,7 @@ ARD 与看板冲突时以 ARD 为准；看板只记录「做到哪了」，不�
 
 | 计划 | 状态 | 当前阶段 | 最近落地 | 下一目标 |
 |---|---|---|---|---|
-| [Runtime 自主化演进](plans/runtime-evolution/README.md) | In Progress | P4-6 出包中；Linux CI 通过，Windows 退出修复与主线 GUI 合并待新 CI | `76424efa` native 打包补修及 `d7def5c3`～`80294b63` 主线 GUI；[P4-6 交接与 CI 结果](plans/runtime-evolution/evidence/p4-6/README.md) | 手动 CI 出 1.0.0-test.11 → Windows/加密机累计签收；[TODO](plans/runtime-evolution/TODO.md) |
+| [Runtime 自主化演进](plans/runtime-evolution/README.md) | In Progress | P4-6 `.11` 已出 Windows 包，Windows/Linux CI 通过，现场待签收 | `b6aa0844` 对应 `.11`，含 native 补修与主线 GUI；[P4-6 交接与 CI 结果](plans/runtime-evolution/evidence/p4-6/README.md) | Windows/加密机累计签收；macOS CI 仍运行；[TODO](plans/runtime-evolution/TODO.md) |
 | [Pi SDK GUI 问题与体验](plans/gui-sdk-experience/README.md) | In Progress | A～E 修复已引入；现场验收归 P4-6 同一测试包 | A～E 来源提交见 [状态](plans/gui-sdk-experience/implementation-status.md) | [TODO](plans/gui-sdk-experience/TODO.md) |
 
 ## 当前并行规划
