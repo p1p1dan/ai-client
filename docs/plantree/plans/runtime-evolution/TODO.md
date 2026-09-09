@@ -166,6 +166,19 @@
 1. **给 v4 头加 `type: 'session'` 兼容字段** —— 头能过校验，但后续 entry 形状是否被 TUI 正确渲染仍需逐条核对，可能只是把失败推后。
 2. **TUI 打开前导出一份旧格式副本** —— 单向可读，TUI 里的写入回不到 GUI 会话，双向一致性做不到。
 3. **native 会话暂不提供 TUI 入口**，按能力缺口如实提示 —— 代价是成功标准 6 现场清单里的 GUI/TUI 一致性这条永远签不掉。
+4. ~~升级 pi CLI 到能读 v4 的版本~~ —— **已核实不成立，2026-09-10**。
+
+**核实记录（方向 4 被否）**：npm 上最新为 `0.85.1`（我们 pin 0.84.4）。取 0.85.1 的
+`dist/core/session-manager.js` 核对：`CURRENT_SESSION_VERSION` 仍是 **3**，头校验仍是
+`entry.type !== 'session' || typeof entry.id !== 'string'` 就返回空数组；`dist/core/agent-session.js`
+里也没有任何 v4/JsonlSessionRepo 路径。包边界很清楚：**v4 JSONL 属于 `pi-agent-core`
+（`dist/harness/session/jsonl/codec.js`），而 `pi` CLI/TUI 属于 `pi-coding-agent`，两者各有一套会话格式**。
+升级 CLI 不解决问题，D12 的 pin 也就没有为此松动的理由。
+
+**方向 1 的额外风险（同日核实）**：CLI 看到 `version: 4` 会跳过迁移，所以**打开时不会重写我们的文件**；
+但用户一旦在 TUI 里发言，CLI 会往同一文件追加**只有 `type`、没有 `kind` 的旧格式条目**，
+而我们的 decoder 遇到未知 kind 直接抛 `unsupported JSONL kind` —— GUI 之后就打不开这个会话了。
+所以方向 1 要成立，必须连我们的 reader 一起改成容忍两种条目形状，不是加一个字段那么小。
 
 ## 本轮重读确认的要求
 
