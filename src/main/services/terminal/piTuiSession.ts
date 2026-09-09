@@ -19,6 +19,8 @@
  * pix counterpart.
  */
 
+import type { PiTuiSessionSupport } from '@shared/types';
+
 /**
  * Normalize a session path for equality, ownership and dispose lookups.
  *
@@ -114,5 +116,68 @@ export class PiTuiExclusiveGuard {
     throw new Error(
       'Terminal mode owns this session; close the Pi terminal before sending from the chat view'
     );
+  }
+}
+
+/**
+ * TUI-1: can the bundled `pi` CLI open this chat's JSONL at all?
+ *
+ * The native runtime writes pi-agent-core's v4 session format
+ * (`{"kind":"header","version":4,...}`), but `pi --session <file>` parses with
+ * pi-coding-agent's own SessionManager, which requires the first entry to be
+ * `{"type":"session",...}` and returns nothing otherwise — the CLI then reports
+ * `Session file is not a valid pi session` and the terminal dies on open.
+ * Checked on 0.85.1 as well as the pinned 0.84.4: the CLI's session version is
+ * still 3, so this is a format boundary between two packages, not a version lag.
+ *
+ * Until the two formats are reconciled, the honest answer is to refuse at the
+ * entry point with the reason rather than let the user walk into the CLI error.
+ * Only a POSITIVE v4 identification refuses: an unreadable or unparsable head
+ * (an encrypted container, a truncated file) stays allowed, because guessing
+ * "unsupported" from a failed read would take the TUI away from sessions that
+ * work today.
+ */
+export const PI_TUI_NATIVE_SESSION_REASON =
+  'This chat runs on the native runtime, whose session format the Pi TUI cannot open yet.';
+
+export async function inspectPiTuiSessionSupport(
+  sessionFile: string | undefined | null,
+  readHead: (file: string) => Promise<string> = readSessionHead
+): Promise<PiTuiSessionSupport> {
+  const file = sessionFile?.trim();
+  // No file means "start a fresh pi session", which never touches our format.
+  if (!file) return { supported: true };
+  let head: string;
+  try {
+    head = await readHead(file);
+  } catch {
+    return { supported: true };
+  }
+  const firstLine = head.split('\n', 1)[0]?.trim();
+  if (!firstLine) return { supported: true };
+  let header: unknown;
+  try {
+    header = JSON.parse(firstLine);
+  } catch {
+    return { supported: true };
+  }
+  const record =
+    typeof header === 'object' && header !== null ? (header as Record<string, unknown>) : null;
+  if (record?.kind === 'header' && record.version === 4) {
+    return { supported: false, reason: PI_TUI_NATIVE_SESSION_REASON };
+  }
+  return { supported: true };
+}
+
+/** First chunk of a session file — enough for the header line, never the whole log. */
+async function readSessionHead(file: string): Promise<string> {
+  const { open } = await import('node:fs/promises');
+  const handle = await open(file, 'r');
+  try {
+    const buffer = Buffer.alloc(8192);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    return buffer.subarray(0, bytesRead).toString('utf8');
+  } finally {
+    await handle.close();
   }
 }

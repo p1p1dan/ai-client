@@ -7,7 +7,7 @@ import {
   PiTuiPtyController,
   resolvePiTuiLaunchPlan,
 } from '../services/terminal/PiTuiPty';
-import { PiTuiExclusiveGuard } from '../services/terminal/piTuiSession';
+import { inspectPiTuiSessionSupport, PiTuiExclusiveGuard } from '../services/terminal/piTuiSession';
 
 /**
  * Q17: which chat session (if any) currently has a Pi terminal writing its
@@ -105,6 +105,12 @@ export function registerPiTuiHandlers(): void {
     const controller = await controllerFor(event.sender);
     assertOwner(event.sender, controller);
     if (request.sessionFile) {
+      // TUI-1: refuse a session the CLI cannot parse before taking ownership of
+      // it. Reaching the spawn would hand the user the CLI's own
+      // "not a valid pi session" error and leave the guard holding a file no
+      // terminal ever opened.
+      const support = await inspectPiTuiSessionSupport(request.sessionFile);
+      if (!support.supported) throw new Error(support.reason);
       // Always transfer, never test-and-set: see PiTuiExclusiveGuard.transferTo
       // for the desync failure pix hit with tryAcquire-only.
       const acquired = sessionGuard.transferTo(request.sessionFile);
@@ -112,6 +118,9 @@ export function registerPiTuiHandlers(): void {
     }
     return controller.open(request);
   });
+  ipcMain.handle(IPC_CHANNELS.PI_TUI_SESSION_SUPPORT, async (_event, sessionFile: string | null) =>
+    inspectPiTuiSessionSupport(sessionFile)
+  );
   ipcMain.handle(IPC_CHANNELS.PI_TUI_WRITE, async (event, terminalId: string, data: string) => {
     const controller = await controllerFor(event.sender);
     assertOwner(event.sender, controller);

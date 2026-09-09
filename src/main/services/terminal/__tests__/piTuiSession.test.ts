@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildPiTuiArgs,
+  inspectPiTuiSessionSupport,
   normalizeSessionKey,
+  PI_TUI_NATIVE_SESSION_REASON,
   PiTuiExclusiveGuard,
   sessionKeysMatch,
 } from '../piTuiSession';
@@ -83,5 +85,52 @@ describe('PiTuiExclusiveGuard', () => {
     guard.transferTo('/repo/mine.jsonl');
     guard.release('/repo/someone-else.jsonl');
     expect(guard.owns('/repo/mine.jsonl')).toBe(true);
+  });
+});
+
+describe('inspectPiTuiSessionSupport', () => {
+  const v4 = JSON.stringify({ kind: 'header', version: 4, id: 'a', cwd: '/repo', createdAt: 1 });
+  const legacy = JSON.stringify({ type: 'session', id: 'a', version: 3 });
+
+  it('refuses a native v4 session, which the pi CLI cannot parse', async () => {
+    await expect(
+      inspectPiTuiSessionSupport('/s.jsonl', async () => `${v4}\n{"id":"e1"}\n`)
+    ).resolves.toEqual({
+      supported: false,
+      reason: PI_TUI_NATIVE_SESSION_REASON,
+    });
+  });
+
+  it('allows a legacy pi session', async () => {
+    await expect(
+      inspectPiTuiSessionSupport('/s.jsonl', async () => `${legacy}\n`)
+    ).resolves.toEqual({ supported: true });
+  });
+
+  it('allows a fresh terminal with no session file', async () => {
+    await expect(inspectPiTuiSessionSupport(undefined)).resolves.toEqual({ supported: true });
+    await expect(inspectPiTuiSessionSupport('   ')).resolves.toEqual({ supported: true });
+  });
+
+  it('allows what it cannot read or parse rather than guessing unsupported', async () => {
+    // An encrypted container or a truncated head must not take the TUI away
+    // from sessions that work today; only a positive v4 match refuses.
+    await expect(
+      inspectPiTuiSessionSupport('/s.jsonl', async () => {
+        throw new Error('EACCES');
+      })
+    ).resolves.toEqual({ supported: true });
+    await expect(
+      inspectPiTuiSessionSupport('/s.jsonl', async () => '%TSD-Header-001%\u0000\u0000')
+    ).resolves.toEqual({ supported: true });
+    await expect(inspectPiTuiSessionSupport('/s.jsonl', async () => '')).resolves.toEqual({
+      supported: true,
+    });
+  });
+
+  it('does not refuse a v4-looking body whose header line is legacy', async () => {
+    await expect(
+      inspectPiTuiSessionSupport('/s.jsonl', async () => `${legacy}\n${v4}\n`)
+    ).resolves.toEqual({ supported: true });
   });
 });

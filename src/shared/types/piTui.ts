@@ -24,6 +24,15 @@ export type PiTuiStatus = {
   terminalIds: string[];
 };
 
+/**
+ * TUI-1: whether the bundled pi CLI can open a given chat's session file.
+ *
+ * The native runtime's v4 JSONL is a different package's format from the one
+ * `pi --session` parses, so the answer is a property of the FILE, not of the
+ * backend switch — a legacy chat converted by the native runtime is v4 too.
+ */
+export type PiTuiSessionSupport = { supported: true } | { supported: false; reason: string };
+
 export type PiTuiDataEvent = { terminalId: string; data: string };
 export type PiTuiExitEvent = {
   terminalId: string;

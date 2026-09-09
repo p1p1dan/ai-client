@@ -135,6 +135,8 @@ export const IPC_CHANNELS = {
   PI_TUI_SUSPEND: 'piTui:suspend',
   PI_TUI_DISPOSE: 'piTui:dispose',
   PI_TUI_STATUS: 'piTui:status',
+  /** TUI-1: can the bundled pi CLI open this chat's session file at all? */
+  PI_TUI_SESSION_SUPPORT: 'piTui:sessionSupport',
   PI_TUI_DATA: 'piTui:data',
   PI_TUI_EXIT: 'piTui:exit',
   PI_TUI_STATE: 'piTui:state',

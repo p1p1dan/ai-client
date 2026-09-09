@@ -473,6 +473,10 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_DISPOSE, terminalId),
     status: (): Promise<import('@shared/types').PiTuiStatus> =>
       ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_STATUS),
+    sessionSupport: (
+      sessionFile: string | null
+    ): Promise<import('@shared/types').PiTuiSessionSupport> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_SESSION_SUPPORT, sessionFile),
     onData: (callback: (event: import('@shared/types').PiTuiDataEvent) => void): (() => void) => {
       const handler = (_: unknown, event: import('@shared/types').PiTuiDataEvent) =>
         callback(event);

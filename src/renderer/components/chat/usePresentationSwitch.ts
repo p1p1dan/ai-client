@@ -95,18 +95,38 @@ export function usePresentationSwitch(): PresentationSwitch {
       setPresentationMode('tui');
       setTuiTerminalId((current) => current ?? `pi-tui-${crypto.randomUUID()}`);
     };
-    if (effectiveCwd) {
-      start();
-      return;
-    }
-    void ensureScratchWorkspace(activeSessionId).then(start, (error: unknown) => {
-      addToast({
-        type: 'error',
-        title: 'Could not start the Pi TUI',
-        description:
-          error instanceof Error ? error.message : 'Failed to prepare a temporary folder.',
+    // TUI-1: a native-runtime chat writes a session format the bundled pi CLI
+    // cannot parse. Ask Main (only Main can read the file) and say so here,
+    // rather than switching the whole surface to a terminal that dies on open
+    // with the CLI's own "not a valid pi session".
+    const runtimeIdentity =
+      useChatSessionsStore.getState().sessions.find((session) => session.id === activeSessionId)
+        ?.runtimeIdentity ?? null;
+    void window.electronAPI.piTui
+      .sessionSupport(runtimeIdentity)
+      .catch(() => ({ supported: true }) as const)
+      .then((support) => {
+        if (!support.supported) {
+          addToast({
+            type: 'warning',
+            title: 'The Pi TUI cannot open this chat',
+            description: support.reason,
+          });
+          return;
+        }
+        if (effectiveCwd) {
+          start();
+          return;
+        }
+        return ensureScratchWorkspace(activeSessionId).then(start, (error: unknown) => {
+          addToast({
+            type: 'error',
+            title: 'Could not start the Pi TUI',
+            description:
+              error instanceof Error ? error.message : 'Failed to prepare a temporary folder.',
+          });
+        });
       });
-    });
   }, [activeSessionId, effectiveCwd, ensureScratchWorkspace, setPresentationMode]);
 
   /**
