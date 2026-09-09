@@ -113,7 +113,7 @@
 |---|---|---|---|
 | F2 | 🔴 | 临时工作区目录消失后无法对话（cwd 缺失被误报为 `node.exe ENOENT`）且无法删除 | 已修复 `dbead94b`，待现场复验 |
 | F1 | 🔴 | 设置 → 终端「网络」子项点击报错 | **已修复（本轮）**：`RemoteSettings` 的四处 Field 子部件在 `<Field.Root>` 之外，渲染即抛 `FieldRootContext is missing`，整个网络分类挂掉。非 Windows 特有，Linux 上同样复现。补 `networkPanelMount` 挂载回归测试，待现场复验 |
-| F3 | 🟠 | GUI 起 git 子进程 stdout 丢失，分支列表/状态为空 | **已定性**：载体问题，与 D1 同一个未知量（放行按进程名还是按进程树），[决策文档](../../../plans/2026-09-09-gui-defect-decisions.md#f3--gui-起的-git-子进程输出丢失)。先按现状收，等 D1 的 R2/R3 探针一起拍板 |
+| F3 | 🟠 | GUI 起 git 子进程 stdout 丢失，分支列表/状态为空 | test.12 现场再次复现（[截图](../../../../Windows-P4-6-evidence/test12-f3-git-branch-error.png)）。**已定性**：载体问题，与 D1 同一个未知量（放行按进程名还是按进程树），[决策文档](../../../plans/2026-09-09-gui-defect-decisions.md#f3--gui-起的-git-子进程输出丢失)。先按现状收，等 D1 的 R2/R3 探针一起拍板 |
 | F4 | 🟡 | 503 不重试直接失败（529/429 未触发） | **已定性并修复（本轮）**：native 此前没有自有重试层，跑的是 SDK 默认阶梯。已搬 `createProviderRetryStream` 与错误分类到 `plugins/agent-loop/`——429 一条预算（5 次）、5xx/网络/超时一条（4 次，1s→8s）、`Retry-After` 优先并封顶、内层固定 `maxRetries: 0`；只接管流开始前的失败。31 项测试，[决策文档](../../../plans/2026-09-09-gui-defect-decisions.md#f4--503-不重试直接失败)。待现场复测，F7d 一并复测 |
 | F5 | 🟡 | native 会话无提问工具，QuestionCard/扩展问答无法弹卡 | **已定性**：能力缺口非回归——`question.requested` 全仓无生产者，legacy 同样弹不出；native 的扩展 UI 通道是通的（权限卡在用）。建议加 ask 工具但排进 P5-1 批，不阻塞 P4-6，[决策文档](../../../plans/2026-09-09-gui-defect-decisions.md#f5--无提问工具questioncard--扩展问答弹不出来) |
 | F6 | 🟡 | 文件修改 diff 为单栏 patch，无左右双栏对比 | 待评估：属形态优化，非功能缺陷 |
@@ -121,6 +121,51 @@
 
 另有一项与 F 清单同批交回：[旧会话 resume 身份不匹配](../../../../Windows-P4-6-evidence/old-session-resume-error.md)——所有 `runtimeIdentity` 仍指向 v3 文件的会话（本机 20 条）resume 必失败。
 **已修复（本轮）**：bootstrap 新增 `sessionSourceFile` 声明转换来源，Main 只在 worker 指名「打开的是所请求文件的转换副本」时接受重定向，随即把索引身份迁到副本上（`adoptRematerializedFile` + `bindRuntimeIdentity`）；来源不匹配或未声明仍报 `worker_resume_identity_mismatch`。三项 WorkerManager 用例 + 一项 runtime 上报用例，待现场复验。
+
+## Windows test.12 现场复验结果（2026-09-09）
+
+来源：[现场报告](../../../../Windows-P4-6-evidence/test12-reverify.md)（提交 `5375e1cd`，仅证据，无产品源码改动）。安装登记与 `app.asar` 均为 `1.0.0-test.12`（EXE FileVersion 元数据仍显示 test.11，原因未定，不据此判定安装失败）。
+
+### 通过项
+
+| 项 | 结果 |
+|---|---|
+| F1 网络设置面板 | 通过：代理设置与 SSH Profiles 均正常显示，无空白/报错 |
+| F2 临时工作区主流程 | 通过：目录删除后可继续对话且目录重建；Close/归档后分组与会话正常，重启后仍在。当前界面无「删除」入口，未代签不存在的操作 |
+| 旧 v3 会话 resume | 通过：首次打开后索引指向 v4，92 条消息与原 v3 逐条一致，原 v3 文件未改；重启后再次打开稳定指向同一 `.native-v4.jsonl`，无重复转换 |
+| P1-8 六项工具探针 · bundled-node | 通过：read/edit/bash/glob/grep/trace 六项，`carrier=bundled-node`、`node_source=bundled`，node 为安装目录随包 node.exe |
+| P1-8 六项工具探针 · electron-utility | 通过：六项，`backend=native`、`carrier=electron-utility`，Electron 39.3.0 / Node 22.21.1 |
+| 安装包真实 native worker 冒烟 | 通过：用安装目录的 `resources/agent-host/worker.js` + 随包 Node，read/bash 成功、权限活动有记录、exitCode 0 |
+| 加密文本的 GUI/agent 可用性 | 通过（用户现场确认）：文件被其他软件加密后，AiClient 仍可打开修改，agent 读取正常。**未做容器头差分**，不能据此判断是明文还是各进程都被透明解密 |
+
+### 未能签收
+
+| 项 | 原因 |
+|---|---|
+| F4 重试层现场 | 本轮未自然触发 429/5xx/网络断连，`provider_retry` 记录数为 0，不能签收自动恢复。GPT 单次 run 24.7s 正常完成；用户判断此前慢响应主要与服务器网络有关 |
+| R2 / R3 加密载体判定 | 随包 Node 与改名后的 `bash-probe.exe` 都能读到目标文件，但该文件当前字节无 TSD 头，无法区分「文件是明文」与「读取进程都被透明解密」。**驱动按进程名/路径/签名/父进程放行仍未确定**，F3 与 D1 的选项因此都未拍板 |
+| R4 无 Bash 探针 | 隔离 harness 没能真正让 shell resolver 进入 `shell_unconfigured`，命令仍可执行，该项无效；现场未移动或禁用系统 Git Bash |
+| Main diff / 编码 / 二进制判定 | 桌面探针目录不是 Git 仓库，无 diff 基线；`bmo-m1` 的 Git 面板被 F3 阻断 |
+| GUI/TUI 一致性 | 被 TUI-1 阻断 |
+
+### 新交回缺陷
+
+| 编号 | 严重度 | 问题 | 状态 |
+|---|---|---|---|
+| EFFORT-1 | 🟠 | UI 选 `medium`，平台显示 `none`，trace 里 `thinking_level=off` | **已修复（本轮）**：`nativeWorkerRuntime.startSend` 只传了 model，没传 effort，loop 因此回落到默认 `off`。现改为按 turn 的 effort 优先、bootstrap effort 兜底，两项用例。**另发现待决策**：不选档位时 native 默认 `off`，legacy 由 Pi 取自身默认（`medium`），两条路径不一致 |
+| TUI-1 | 🔴 | native v4 会话点开 TUI 报 `Session file is not a valid pi session` | **根因已定（Linux 侧本地复现）**：`pi-coding-agent` 的 `loadEntriesFromFile` 在读完后校验首条 entry 必须是 `type === 'session'` 且 `id` 为字符串，否则返回空数组；我们的 v4 头是 `{kind:'header',version:4,...}`，于是 SessionManager 判为「非空文件但零条目」并抛该错。**不是加密问题**，纯格式边界。需决策，见下 |
+| PERM-1 | 🟠 | 切到「自动编辑 / 全自动」后权限卡无法关闭，点击外部与 Esc 均无效 | 待复现（renderer 弹层焦点与关闭事件） |
+| F2-a | 🟡 | 实际临时工作区路径与设置中「通用 → 临时工作区」显示的不一致 | 待补两处完整路径后定位 |
+| F2-b | 🟠 | 删除 TEMP 分组中单条对话后整个分组不显示，其余对话落到其他工作区；重启后这些对话不再显示 | 待复现；现场未检查会话文件与索引，不宣称数据被物理删除 |
+| F2-c | 🟠 | 自建目录 `E:\e\test` 结束对话并删除后，resume 报 `Pi worker working directory is missing` | 与 `dbead94b` 修的 cwd 缺失重建**是两条路径**（该错误来自 Main 侧前置校验，不是 spawn ENOENT）；目录是否属于配置的临时根尚未确认 |
+
+### TUI-1 的决策口径（待用户拍板）
+
+我们的 v4 由 `pi-agent-core` 的 `JsonlSessionRepo` 读写，互通测试覆盖的也是它；而 GUI 打开 TUI 走的是 `piTuiSession.ts` 的 `pi --session <file>`，那条路径由 **pi-coding-agent 的 SessionManager** 解析，只认旧格式的 `type: 'session'` 头。三个方向：
+
+1. **给 v4 头加 `type: 'session'` 兼容字段** —— 头能过校验，但后续 entry 形状是否被 TUI 正确渲染仍需逐条核对，可能只是把失败推后。
+2. **TUI 打开前导出一份旧格式副本** —— 单向可读，TUI 里的写入回不到 GUI 会话，双向一致性做不到。
+3. **native 会话暂不提供 TUI 入口**，按能力缺口如实提示 —— 代价是成功标准 6 现场清单里的 GUI/TUI 一致性这条永远签不掉。
 
 ## 本轮重读确认的要求
 

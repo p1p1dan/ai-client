@@ -8,6 +8,7 @@
 **最新验证**：[CI 34354367890](https://github.com/p1p1dan/ai-client/actions/runs/34354367890) **全部 job success**（含上一轮未收尾的 macOS）；Windows 打包冒烟 legacy/native 两条 lane 通过，native 记录 `bundled-node` 载体。`.12` Windows installer/unpacked/portable 已上传，[原始报告与下载](evidence/p4-6/ci-34354367890/README.md)。该冒烟不等于真实安装应用的全链路验收。
 **2026-09-09 Windows 现场进展**：`1.0.0-test.11` 上已执行 GUI A~E 与命令树清理五态并留证。五态清理全部无残留，P1 该项结清；GUI 大项通过但交回 7 组缺陷（F1~F7）与一项 v3 会话 resume 身份不匹配，逐条状态见 [执行 TODO](TODO.md#windows-交回缺陷2026-09-09linux-侧)。F2 已由 `dbead94b` 修复待复验。
 **2026-09-09 Linux 侧本轮**：F1（网络设置面板渲染即抛 `FieldRootContext is missing`，非 Windows 特有）与旧会话 v3 resume 身份不匹配两项 🔴 已修并补测试；F3/F4/F5 三个决策点已定性，见 [GUI 缺陷决策](../../../plans/2026-09-09-gui-defect-decisions.md)。**F4 定性后已落地**：`plugins/agent-loop/providerRetry.ts` 补上自有重试层（429 与 5xx/网络各一条预算、`Retry-After` 优先、内层 `maxRetries: 0`），31 项测试。三项修复均待 Windows 现场复验。
+**2026-09-09 Windows test.12 现场**：F1、F2 主流程、v3 会话 resume、P1-8 两载体六项探针、安装包 native worker 冒烟均通过；F3 再次复现；F4 因未自然触发 5xx/429 无法签收；新交回 TUI-1（🔴 native v4 进不了 Pi TUI）、EFFORT-1（已修）、PERM-1 与 F2-a/b/c，[逐项结果](TODO.md#windows-test12-现场复验结果2026-09-09)。
 **下一目标**：见上「待办」栏。两条 CI worker lane 不代签真实 Main/renderer 安装流程。P2-5/P2-6 真实缓存门槛仍为 95.01%，P5 尚未开工。
 **2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 两轴分离：模式 `plan/agent` 管工具集，档位 `ask/accept-edits/auto` 管审批，accept-edits 放行工作区 bash。P1-1 裁剪与 P1-5 核心已更新；P1-6 renderer/偏好迁移/两轴传递链已更新，打包 GUI 待签收。
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
@@ -19,10 +20,10 @@
 
 | # | 任务 | 状态 | 卡在哪 |
 |---|---|---|---|
-| **当前** | P4-6 修完/定性 Windows 交回缺陷 | 🟡 | F1、旧会话 resume、F4 重试层已修（本轮，待现场复验）；F3/F5 已定性（[决策文档](../../../plans/2026-09-09-gui-defect-decisions.md)）；F6/F7 UI 项待排期 |
-| 下一步 1 | Windows 现场：复验 + 探针一次跑完 | ⬜ | 复验 F1/F2/resume/F4 四项修复；跑 P1-8 六项工具探针与两种 carrier 留证；跑 [D1 的 R0–R4 探针](../../../plans/2026-09-09-bash-carrier-decision.md)，F3 随 R2/R3 一起拍板 |
-| 下一步 2 | 企业加密机签收 | ⬜ | 明文读写、Main diff/编码/二进制判定、GUI/TUI 一致性、退出无残留；逐项回填 P1/P4，不能代签 |
-| 下一步 3 | P2-5/P2-6 真实缓存对比 | ⬜ | P4-6 通过后按 P2-0 同套会话实测，provider 原始命中率不得低于 95.01% |
+| **当前** | 处理 test.12 现场新交回的缺陷 | 🟡 | EFFORT-1 已修（本轮）；**TUI-1 根因已定、待决策**（v4 头缺 `type:'session'`，Pi CLI 判为非法会话）；PERM-1 与 F2-a/b/c 待复现。[现场结果](TODO.md#windows-test12-现场复验结果2026-09-09) |
+| 下一步 1 | 定 TUI-1 方案并实现 | ⬜ | 三个方向（加兼容头 / 导出旧格式副本 / 暂不提供 TUI 入口）代价不同，见执行 TODO；不定则 GUI/TUI 一致性永远签不掉 |
+| 下一步 2 | 复现并修 PERM-1、F2-a/b/c | ⬜ | 权限卡在自动档下关不掉；临时工作区路径不一致、分组消失、`working directory is missing` 三条 |
+| 下一步 3 | 加密载体判定（R2/R3）与 F3 | ⬜ | 本轮探针因目标文件无 TSD 头而无法区分明文与透明解密，需换受策略保护的样本重跑，F3 随之拍板 |
 
 ---
 
