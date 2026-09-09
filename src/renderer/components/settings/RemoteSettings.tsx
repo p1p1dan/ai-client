@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -464,32 +464,34 @@ export function RemoteSettings() {
         <div className="space-y-6">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_248px] xl:items-end">
             <SettingsRow className="sm:grid-cols-1">
-              <FieldLabel>{t('Profile')}</FieldLabel>
-              <Select
-                value={selectedProfileId}
-                onValueChange={(value) => setSelectedProfileId(value ?? '')}
-              >
-                <SelectTrigger className="min-w-0">
-                  <SelectValue>
-                    {selectedProfileId
-                      ? selectedProfile?.name || t('Unknown profile')
-                      : t('Create new profile')}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectItem value="">{t('Create new profile')}</SelectItem>
-                  {profiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profile.name}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-              <FieldDescription>
-                {profiles.length === 0
-                  ? t('No profiles saved yet.')
-                  : t('{{count}} saved profiles', { count: profiles.length })}
-              </FieldDescription>
+              <Field className="contents">
+                <FieldLabel>{t('Profile')}</FieldLabel>
+                <Select
+                  value={selectedProfileId}
+                  onValueChange={(value) => setSelectedProfileId(value ?? '')}
+                >
+                  <SelectTrigger className="min-w-0">
+                    <SelectValue>
+                      {selectedProfileId
+                        ? selectedProfile?.name || t('Unknown profile')
+                        : t('Create new profile')}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="">{t('Create new profile')}</SelectItem>
+                    {profiles.map((profile) => (
+                      <SelectItem key={profile.id} value={profile.id}>
+                        {profile.name}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+                <FieldDescription>
+                  {profiles.length === 0
+                    ? t('No profiles saved yet.')
+                    : t('{{count}} saved profiles', { count: profiles.length })}
+                </FieldDescription>
+              </Field>
             </SettingsRow>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -527,39 +529,45 @@ export function RemoteSettings() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <SettingsRow className="sm:grid-cols-1">
-              <FieldLabel>{t('Profile name')}</FieldLabel>
-              <Input
-                value={form.name}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, name: event.target.value }))
-                }
-                placeholder={t('My staging server')}
-              />
+              <Field className="contents">
+                <FieldLabel>{t('Profile name')}</FieldLabel>
+                <Input
+                  value={form.name}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, name: event.target.value }))
+                  }
+                  placeholder={t('My staging server')}
+                />
+              </Field>
             </SettingsRow>
 
             <SettingsRow className="sm:grid-cols-1">
-              <FieldLabel>{t('SSH target')}</FieldLabel>
-              <Input
-                value={form.sshTarget}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, sshTarget: event.target.value }))
-                }
-                placeholder="user@example.com"
-              />
-              <FieldDescription>
-                {t('Use the same target string you would pass to the ssh command.')}
-              </FieldDescription>
+              <Field className="contents">
+                <FieldLabel>{t('SSH target')}</FieldLabel>
+                <Input
+                  value={form.sshTarget}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, sshTarget: event.target.value }))
+                  }
+                  placeholder="user@example.com"
+                />
+                <FieldDescription>
+                  {t('Use the same target string you would pass to the ssh command.')}
+                </FieldDescription>
+              </Field>
             </SettingsRow>
 
             <SettingsRow className="sm:grid-cols-1">
-              <FieldLabel>{t('Runtime install directory')}</FieldLabel>
-              <Input
-                value={form.runtimeInstallDir}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, runtimeInstallDir: event.target.value }))
-                }
-                placeholder={t('Optional override, for example ~/.pilab/remote-runtime')}
-              />
+              <Field className="contents">
+                <FieldLabel>{t('Runtime install directory')}</FieldLabel>
+                <Input
+                  value={form.runtimeInstallDir}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, runtimeInstallDir: event.target.value }))
+                  }
+                  placeholder={t('Optional override, for example ~/.pilab/remote-runtime')}
+                />
+              </Field>
             </SettingsRow>
           </div>
 
