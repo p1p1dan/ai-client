@@ -19,11 +19,10 @@
  */
 
 import { normalizePath } from '@shared/utils/path';
-import { AlertTriangle, Maximize2, Minimize2, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { Maximize2, Minimize2, X } from 'lucide-react';
+import { useCallback, useEffect } from 'react';
 import { EditorArea } from '@/components/files/EditorArea';
 import type { UnsavedChangesChoice } from '@/components/files/UnsavedChangesDialog';
-import { Alert, AlertAction, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { toastManager } from '@/components/ui/toast';
 import { useEditor } from '@/hooks/useEditor';
@@ -128,7 +127,6 @@ export function EditorColumn({ expanded, onToggleExpanded }: EditorColumnProps =
 
   // ── fileOpenIntent consumption (T-13 spec §3, moved verbatim) ───────────
   const intent = useFileOpenIntentStore((state) => state.intent);
-  const [intentNotice, setIntentNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!intent) return;
@@ -139,13 +137,14 @@ export function EditorColumn({ expanded, onToggleExpanded }: EditorColumnProps =
     const gate = gateFileOpenIntent(pathIsAbsolute, rootPath);
 
     if (gate === 'wait') {
+      toastManager.add({ type: 'info', title: t('Select a Workspace to browse files') });
       // Workspace not resolved YET — do not ack, so a genuinely-relative
       // intent that arrived early is retried when `rootPath` lands.
       return;
     }
 
     if (gate === 'blocked') {
-      setIntentNotice(t('Select a Workspace to browse files'));
+      toastManager.add({ type: 'error', title: t('Select a Workspace to browse files') });
       useFileOpenIntentStore.getState().ackFileOpen(requestId);
       return;
     }
@@ -154,15 +153,17 @@ export function EditorColumn({ expanded, onToggleExpanded }: EditorColumnProps =
 
     const resolved = resolveIntentPath(rawPath, rootPath);
     if (!resolved) {
-      setIntentNotice(
-        t('Could not open "{{path}}" — the path is outside the workspace.', { path: rawPath })
-      );
+      toastManager.add({
+        type: 'error',
+        title: t('Could not open "{{path}}" — the path is outside the workspace.', {
+          path: rawPath,
+        }),
+      });
       useFileOpenIntentStore.getState().ackFileOpen(requestId);
       return;
     }
 
     const cursor = fileIntentToCursor(intent);
-    setIntentNotice(null);
 
     // T-13 Codex major: `cancelled` alone is too late — it is only checked in
     // the `.then()`, by which point `navigateToFile` already ran `openFile`
@@ -187,7 +188,10 @@ export function EditorColumn({ expanded, onToggleExpanded }: EditorColumnProps =
       // effect tells them apart without touching that frozen call chain.
       const opened = useEditorStore.getState().tabs.some((tab) => tab.path === resolved);
       if (!opened) {
-        setIntentNotice(t('Could not open "{{path}}".', { path: rawPath }));
+        toastManager.add({
+          type: 'error',
+          title: t('Could not open "{{path}}".', { path: rawPath }),
+        });
       }
       useFileOpenIntentStore.getState().ackFileOpen(requestId);
     });
@@ -311,24 +315,6 @@ export function EditorColumn({ expanded, onToggleExpanded }: EditorColumnProps =
       {...ESCAPE_HOLD_PROPS}
       data-testid="editor-column"
     >
-      {intentNotice && (
-        <Alert variant="warning" className="m-1 items-center gap-x-2 px-2 py-1 text-meta">
-          <AlertTriangle />
-          <AlertTitle className="min-w-0 truncate font-normal" title={intentNotice}>
-            {intentNotice}
-          </AlertTitle>
-          <AlertAction>
-            <button
-              type="button"
-              onClick={() => setIntentNotice(null)}
-              aria-label={t('Dismiss notice')}
-              className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground"
-            >
-              <X className="size-3" />
-            </button>
-          </AlertAction>
-        </Alert>
-      )}
       <div className="min-h-0 flex-1">
         <EditorArea
           tabs={tabs}

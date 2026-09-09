@@ -119,7 +119,7 @@ export function useEditor() {
       // returns is too late, because by then `openFile` has already run.
       options?: { stillValid?: () => boolean }
     ) => {
-      const existingTab = tabs.find((t) => t.path === path);
+      const existingTab = useEditorStore.getState().tabs.find((t) => t.path === path);
 
       if (existingTab) {
         setActiveFile(path);
@@ -154,7 +154,7 @@ export function useEditor() {
         setPendingCursor({ path, line, column, matchLength, previewMode });
       }
     },
-    [tabs, setActiveFile, openFile, setPendingCursor, refreshFileContent]
+    [setActiveFile, openFile, setPendingCursor, refreshFileContent]
   );
 
   const activeTab = tabs.find((f) => f.path === activeTabPath) || null;

@@ -9,6 +9,7 @@
 import { PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { pathsEqual } from '@/App/storage';
+import { decideTargetChange } from '@/components/chat/composerTarget';
 import {
   deriveSessionTitleFromFirstMessage,
   isPlaceholderTitle,
@@ -16,6 +17,7 @@ import {
 import { renameSessionIndexEntry } from '@/components/chat/sessionIndex/useSessionIndex';
 import { uniqueId } from '@/lib/uniqueId';
 import { type ChatSession, useChatSessionsStore } from './chatSessions';
+import { useScratchWorkspaceStore } from './scratchWorkspace';
 import { markSessionsLive } from './sessionRetirement';
 
 /**
@@ -62,6 +64,33 @@ export function createChatSessionOnWorkspace(
   // `chat.createSession` → `recordCreated`), and Archive's own
   // register-then-retry ladder covers a never-sent chat on demand.
 
+  return sessionId;
+}
+
+export function createChatSessionInCurrentDirectory(sending = false): string | null {
+  const state = useChatSessionsStore.getState();
+  const current = state.sessions.find((session) => session.id === state.activeSessionId);
+  if (
+    decideTargetChange({ status: current?.status, sending, messageCount: 0, hostBound: false }) ===
+    'blocked'
+  ) {
+    return null;
+  }
+  if (current && state.workspaces.some((workspace) => workspace.id === current.workspaceId)) {
+    return createChatSessionOnWorkspace(current.workspaceId);
+  }
+  const sessionId = createUnboundChatSession();
+  const inheritedPath =
+    current?.unbound?.workspacePath ?? useScratchWorkspaceStore.getState().pathFor(current?.id);
+  if (inheritedPath) {
+    useChatSessionsStore.setState((live) => ({
+      sessions: live.sessions.map((session) =>
+        session.id === sessionId
+          ? { ...session, unbound: { workspacePath: inheritedPath } }
+          : session
+      ),
+    }));
+  }
   return sessionId;
 }
 

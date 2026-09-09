@@ -120,7 +120,8 @@ export function registerTempWorkspaceHandlers(): void {
           return baseCheck;
         }
 
-        const baseName = formatTimestamp();
+        const createdAt = Date.now();
+        const baseName = formatTimestamp(new Date(createdAt));
         let folderName = baseName;
         let targetPath = path.join(basePath, folderName);
         let created = false;
@@ -163,7 +164,7 @@ export function registerTempWorkspaceHandlers(): void {
             path: targetPath,
             folderName,
             title: folderName,
-            createdAt: Date.now(),
+            createdAt,
           },
         };
       } catch (err) {

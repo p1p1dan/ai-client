@@ -263,6 +263,7 @@ export function registerChatHandlers(): void {
       // U13 records the same derived fact so the sidebar can still find this
       // chat after a restart, when nothing else knows the path is scratch.
       const unbound = scratchWorkspaceService.isScratchPath(payload.workspacePath);
+      if (unbound) await scratchWorkspaceService.adopt(payload.sessionId, payload.workspacePath);
       await sessionIndexService.recordCreated({
         sessionId: payload.sessionId,
         workspacePath: payload.workspacePath,

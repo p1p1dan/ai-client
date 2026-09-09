@@ -227,3 +227,13 @@ describe('cross-session isolation', () => {
     expect(path.relative(b, a).startsWith('..')).toBe(true);
   });
 });
+
+it('keeps an explicitly inherited directory until both sessions release it', async () => {
+  const inherited = await service.ensure('old');
+  await service.adopt('new', inherited);
+  await service.release('old');
+  expect((await stat(inherited)).isDirectory()).toBe(true);
+  expect(service.pathFor('new')).toBe(inherited);
+  await service.release('new');
+  await expect(stat(inherited)).rejects.toThrow();
+});

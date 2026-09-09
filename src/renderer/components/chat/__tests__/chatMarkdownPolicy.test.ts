@@ -151,7 +151,7 @@ describe('F-C1: sanitizeMarkdownHref', () => {
   it("F-C1: react-markdown's urlTransform gate agrees with the component gate", () => {
     expect(chatMarkdownUrlTransform('https://example.com/')).toBe('https://example.com/');
     expect(chatMarkdownUrlTransform('javascript:alert(1)')).toBe('');
-    expect(chatMarkdownUrlTransform('./relative')).toBe('');
+    expect(chatMarkdownUrlTransform('./relative')).toBe('./relative');
   });
 });
 

@@ -706,9 +706,13 @@ export function LeftNav({
                         <Button
                           variant="ghost"
                           size="icon-xs"
-                          className="hidden h-5 w-5 shrink-0 group-hover:flex group-focus-within:flex"
+                          className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                           aria-label={t('New chat')}
-                          title={t('New chat')}
+                          title={t('New chat in existing directory: {{path}}', {
+                            path:
+                              workspaces.find((workspace) => workspace.id === newSessionWorkspaceId)
+                                ?.path ?? '',
+                          })}
                           onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
                         >
                           <Plus className="h-3 w-3" />

@@ -2088,6 +2088,9 @@ export const zhTranslations: Record<string, string> = {
     'AI 会在 {{folder}} 里干活，直接说你想做什么。',
   'Just type. This chat runs in a private temporary folder.':
     '直接输入即可，这次对话会在一个私有的临时目录里进行。',
+  'New temporary workspace': '新建临时工作区',
+  'New chat in existing directory: {{path}}': '在现有目录新建会话（沿用目录）：{{path}}',
+  'Stop the current turn before starting a new chat': '请先停止当前任务，再新建会话',
   'New temporary chat (no repository)': '新建临时对话（没有仓库）',
 
   // T-27: Composer target bar (D22) — footer action rows (batch 3).

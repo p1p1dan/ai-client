@@ -16,6 +16,8 @@ ARD 与看板冲突时以 ARD 为准；看板只记录「做到哪了」，不�
 |---|---|---|---|---|
 | [Runtime 自主化演进](plans/runtime-evolution/README.md) | In Progress | P4-0～P4-5 已落地；P4-6 准备中，首次 CI 测试门禁失败，尚未出包 | `9edab07c` P4-5 事件录制/reducer 重放；[P4-6 交接与 CI 结果](plans/runtime-evolution/evidence/p4-6/README.md) | 修复 CI 门禁与 native 打包验证接线 → 手动 CI 出包 → Windows/加密机签收；[TODO](plans/runtime-evolution/TODO.md) |
 
+| [Pi SDK GUI 问题与体验](plans/gui-sdk-experience/README.md) | In Progress | 主工作分支修复同步中；现场验收归 P4-6 同一测试包 | A～E 来源提交见 [状态](plans/gui-sdk-experience/implementation-status.md) | [TODO](plans/gui-sdk-experience/TODO.md) |
+
 ## 当前并行规划
 
 P4-5 由 Claude 完成，2026-09-09 已交接 Codex 跟进 P4-6；P5-2 已按用户要求改为**完整复刻 PI-Desktop subagent 子系统，再在整体基础上优化**。

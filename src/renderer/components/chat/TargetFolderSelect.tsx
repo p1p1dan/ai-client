@@ -217,7 +217,7 @@ export function TargetFolderSelect({
               >
                 <span className="flex-1 truncate text-left">{t('New Folder')}</span>
                 <span className="shrink-0 text-meta text-muted-foreground">
-                  {t('Temporary workspace')}
+                  {t('New temporary workspace')}
                 </span>
               </button>
             )}

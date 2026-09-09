@@ -22,9 +22,14 @@ import {
 import { Alert, AlertAction, AlertTitle } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { applyAutoSessionTitle, createUnboundChatSession } from '@/stores/chatSessionActions';
+import {
+  applyAutoSessionTitle,
+  createChatSessionInCurrentDirectory,
+  createUnboundChatSession,
+} from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useMessageQueueStore } from '@/stores/messageQueue';
@@ -553,7 +558,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     activeSessionId ? (state.pathsBySession[activeSessionId] ?? null) : null
   );
   /** Where this chat actually runs: its bound folder, else its scratch dir. */
-  const effectiveCwd = cwd ?? scratchCwd;
+  const effectiveCwd = cwd ?? activeSession?.unbound?.workspacePath ?? scratchCwd;
   // U09-1: does the empty card wear the joined tab? `cwd` is already
   // `workspace && isTargetableWorkspace(workspace) ? path : null` (see
   // `resolveActiveTarget`), which is exactly the predicate `ComposerTargetBar`
@@ -827,7 +832,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
     switch (action.type) {
       case 'new':
-        createUnboundChatSession();
+        if (!createChatSessionInCurrentDirectory(inFlightRef.current)) {
+          toastManager.add({
+            type: 'info',
+            title: t('Stop the current turn before starting a new chat'),
+          });
+          return true;
+        }
         break;
       case 'settings':
         useSettingsIntentStore.getState().requestSettings();
@@ -1258,7 +1269,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // failure lands in the same catch every other handshake failure does and
     // the user's text is preserved by `finalizeOutcome`), never here — this
     // prologue is deliberately synchronous up to the commit point.
-    let workspacePath = cwd ?? '';
+    let workspacePath = cwd ?? activeSession?.unbound?.workspacePath ?? '';
     // R11, D48 S2 form: an explicit per-(session, agent) choice, else this
     // agent's template, else NOTHING — `undefined` means `Automatic`, i.e. the
     // key leaves the payload and the runtime's own default serves the turn

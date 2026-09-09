@@ -1,3 +1,4 @@
+import { parseMarkdownFileLink } from './markdownFileLink';
 /**
  * T-29: the assistant-prose Markdown layer's decision logic and class assembly
  * (execution plan §3 T-29 row, D26 option 1).
@@ -147,7 +148,7 @@ const CHAT_MARKDOWN_HOST_PATTERN = /^(?:[a-z0-9._-]+|\[[0-9a-f:.]+\])$/;
  * consuming — belt and braces on a boundary where the failure is silent.
  */
 export function chatMarkdownUrlTransform(url: string): string {
-  return sanitizeMarkdownHref(url) ?? '';
+  return sanitizeMarkdownHref(url) ?? (parseMarkdownFileLink(url) ? url : '');
 }
 
 // ---------------------------------------------------------------------------

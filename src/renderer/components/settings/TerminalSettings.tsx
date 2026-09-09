@@ -140,7 +140,7 @@ export function TerminalSettings() {
                 value={shellConfig.shellType}
                 onValueChange={(v) => setShellConfig({ ...shellConfig, shellType: v as never })}
               >
-                <SelectTrigger className="w-64">
+                <SelectTrigger className="w-64" aria-label={t('Shell')}>
                   <SelectValue>
                     {isCustomShell ? t('Custom') : currentShell?.name || shellConfig.shellType}
                   </SelectValue>
@@ -198,7 +198,7 @@ export function TerminalSettings() {
               value={terminalRenderer}
               onValueChange={(v) => setTerminalRenderer(v as TerminalRenderer)}
             >
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-48" aria-label={t('Renderer')}>
                 <SelectValue>
                   {rendererOptions.find((o) => o.value === terminalRenderer)?.label}
                 </SelectValue>
@@ -226,7 +226,7 @@ export function TerminalSettings() {
               value={String(terminalScrollback)}
               onValueChange={(v) => setTerminalScrollback(Number(v))}
             >
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-48" aria-label={t('Terminal scrollback')}>
                 <SelectValue>
                   {scrollbackOptions.find((o) => o.value === terminalScrollback)?.label ??
                     t('{{count}} lines', { count: numberFormatter.format(terminalScrollback) })}

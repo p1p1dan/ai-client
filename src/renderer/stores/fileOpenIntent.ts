@@ -18,7 +18,7 @@ export interface FileOpenIntent {
   /** Monotonic counter so re-clicking the same path still fires consumer effects. */
   requestId: number;
   /** Provenance: which UI surface produced this request. */
-  source: 'tool-row' | 'hit-list' | 'mention-chip';
+  source: 'tool-row' | 'hit-list' | 'mention-chip' | 'markdown';
 }
 
 /** Pure reducer — unit testable independent of the store shell. */
@@ -45,6 +45,7 @@ export function ackIntent(
 
 interface FileOpenIntentState {
   intent: FileOpenIntent | null;
+  sequence: number;
   requestFileOpen: (input: Omit<FileOpenIntent, 'requestId'>) => void;
   /** Consumer (T-13 editor surface) reads and clears; an already-consumed requestId never refires. */
   consumeFileOpen: () => FileOpenIntent | null;
@@ -55,8 +56,13 @@ interface FileOpenIntentState {
 
 export const useFileOpenIntentStore = create<FileOpenIntentState>((set, get) => ({
   intent: null,
+  sequence: 0,
 
-  requestFileOpen: (input) => set((state) => ({ intent: nextIntent(state.intent, input) })),
+  requestFileOpen: (input) =>
+    set((state) => ({
+      sequence: state.sequence + 1,
+      intent: { ...input, requestId: state.sequence + 1 },
+    })),
 
   consumeFileOpen: () => {
     const { intent } = get();

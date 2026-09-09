@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { CodeInline } from '@/components/ui/ident';
 import { cn } from '@/lib/utils';
+import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { ChatCodeBlock } from './ChatCodeBlock';
 import {
   chatMarkdownBlockquoteClass,
@@ -26,6 +27,7 @@ import {
   isFencedCodeBlock,
   sanitizeMarkdownHref,
 } from './chatMarkdownPolicy';
+import { parseMarkdownFileLink } from './markdownFileLink';
 
 /**
  * T-29: assistant prose, rendered as Markdown.
@@ -287,6 +289,18 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
    * once unlinked and means nothing without the jump behind it.
    */
   a: ({ node: _node, href, children, title: _title, ...props }) => {
+    const file = parseMarkdownFileLink(href);
+    if (file)
+      return (
+        <button
+          type="button"
+          className={cn(chatMarkdownLinkClass(), 'inline text-left break-all')}
+          title={href}
+          onClick={() => useFileOpenIntentStore.getState().requestFileOpen(file)}
+        >
+          {children}
+        </button>
+      );
     const safe = sanitizeMarkdownHref(href);
     if (!safe) {
       if (isFootnoteBackref(props)) return null;

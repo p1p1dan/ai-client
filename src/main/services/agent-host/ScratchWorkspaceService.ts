@@ -180,7 +180,13 @@ export class ScratchWorkspaceService {
       const target = this.pathsBySession.get(sessionId);
       if (!target) return;
       this.pathsBySession.delete(sessionId);
-      await this.removeQuietly(target);
+      if (
+        ![...this.pathsBySession.values()].some(
+          (candidate) => canonicalPathKey(candidate) === canonicalPathKey(target)
+        )
+      ) {
+        await this.removeQuietly(target);
+      }
     });
   }
 

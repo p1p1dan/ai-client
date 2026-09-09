@@ -3,6 +3,7 @@ import { resolveSendCwd } from '@/components/chat/composerTarget';
 import { decideSendPreamble } from '@/components/chat/sendPreamble';
 import {
   applyAutoSessionTitle,
+  createChatSessionInCurrentDirectory,
   createChatSessionOnWorkspace,
   createUnboundChatSession,
   materializeForkedChatSession,
@@ -560,4 +561,61 @@ describe('applyAutoSessionTitle (T-27 round-3, point-check #10)', () => {
       expect(renameSession).toHaveBeenCalledTimes(2);
     });
   });
+});
+
+describe('/new inherits only the directory', () => {
+  it.each([
+    'main',
+    'worktree',
+    'temp',
+  ] as const)('inherits a %s workspace without modifying old context', (kind) => {
+    const workspace = makeWorkspace({ kind });
+    const old = makeSession({ runtimeIdentity: '/old.jsonl' });
+    useChatSessionsStore.setState({
+      workspaces: [workspace],
+      sessions: [old],
+      activeSessionId: old.id,
+    });
+    const id = createChatSessionInCurrentDirectory();
+    const state = useChatSessionsStore.getState();
+    expect(id).not.toBe(old.id);
+    expect(state.sessions.find((session) => session.id === id)).toMatchObject({
+      workspaceId: workspace.id,
+      status: 'idle',
+    });
+    expect(state.sessions.find((session) => session.id === id)?.runtimeIdentity).toBeUndefined();
+    expect(state.messages[id!]).toBeUndefined();
+    expect(state.sessions.find((session) => session.id === old.id)).toBe(old);
+  });
+  it('inherits restored unbound cwd and creates an unbound chat when no cwd exists', () => {
+    const old = makeSession({
+      workspaceId: '',
+      projectId: '',
+      unbound: { workspacePath: 'C:\\scratch\\old' },
+    });
+    useChatSessionsStore.setState({ sessions: [old], activeSessionId: old.id });
+    const id = createChatSessionInCurrentDirectory();
+    expect(useChatSessionsStore.getState().sessions.find((s) => s.id === id)?.unbound).toEqual(
+      old.unbound
+    );
+    useChatSessionsStore.setState({ sessions: [], activeSessionId: null });
+    const empty = createChatSessionInCurrentDirectory();
+    expect(
+      useChatSessionsStore.getState().sessions.find((s) => s.id === empty)?.unbound
+    ).toBeUndefined();
+  });
+  it.each([
+    'starting',
+    'running',
+    'stopping',
+    'waiting_permission',
+    'waiting_question',
+  ] as const)('refuses %s without changing the current session', (status) => {
+    const old = makeSession({ status });
+    useChatSessionsStore.setState({ sessions: [old], activeSessionId: old.id });
+    expect(createChatSessionInCurrentDirectory()).toBeNull();
+    expect(useChatSessionsStore.getState().activeSessionId).toBe(old.id);
+  });
+  it('refuses a send before the running event', () =>
+    expect(createChatSessionInCurrentDirectory(true)).toBeNull());
 });

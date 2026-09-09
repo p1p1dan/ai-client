@@ -1,5 +1,4 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { Field } from '@/components/ui/field';
 import { cn } from '@/lib/utils';
 
 export function SettingsPageShell({ title, children }: { title: string; children: ReactNode }) {
@@ -31,9 +30,9 @@ export function SettingsSectionBlock({
   );
 }
 
-export function SettingsRow({ className, ...props }: ComponentProps<typeof Field>) {
+export function SettingsRow({ className, ...props }: ComponentProps<'div'>) {
   return (
-    <Field
+    <div
       className={cn(
         'grid min-w-0 grid-cols-1 items-start gap-2 sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-4',
         className

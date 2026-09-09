@@ -1,0 +1,19 @@
+# Pi SDK GUI 问题与体验改进
+
+状态：In Progress；模式：execute-ready。需求依据：2026-09-09 用户十项反馈与 sharePic/20260909 截图。
+
+在当前开发主线 feat/model-catalog-admin（起点 2980ae98）实施，不等待 runtime-evolution。仅 UI/宿主共享层，不迁移 runtime，不改用户旧目录。沿用 [设计规范](../../../design-system.md)、[baseline](../../baseline/README.md)、[既有 UI 计划](../pix-ui-alignment/README.md)、[设置计划](../settings-cleanup/README.md) 和 [现场反馈计划](../field-followups/README.md)。旧计划验收缺口不由本轮自动关闭。
+
+[TODO / 任务状态与验收](TODO.md) 是本计划 roadmap；[当前交接](implementation-status.md)。每批独立中文 Conventional Commit，重测试小批串行，禁止整套生产构建。只暂存本轮明确文件，不碰截图及其他人的改动。
+
+## 实施边界
+
+A：目录菜单真实鼠标/焦点生命周期；终端设置开发栈复现；文件打开完整链路；/new 继承当前 cwd、运行中拒绝并提示；临时工作区创建与复用语义、异步绑定竞态。
+B：基于真实事件统一末尾运行/重试状态，输入区简短提示；不改变用户上翻滚动位置。追加反馈：529/4xx 等重试恢复、完整输出后必须清除输入区上方过期红框，仅真正终止/无法继续时保留失败提示。
+C：自动授权降噪，人工确认/拒绝/失败保留；问答卡真实交互与响应式；复用 toolDiff，加持久化开关。Edit 显示 SDK diff/参数预览，Write 仅内容预览，Bash 不声称完整捕获。
+
+完整 Bash diff 候选方案：工具前后按工作区做受限快照，排除二进制/大文件并限制预算，处理未跟踪文件及并发外部修改；需要宿主生命周期与归因契约扩大范围，另行讨论，本轮不实施。
+
+## 验收规则
+
+实现完成、自动化通过、Linux GUI、Windows/加密机现场验收分别记录。未实际验证不得标 Done。浏览器组件实测不能替代安装版全链路。每批在 evidence 中记录根因、命令、结果、限制与最小现场清单。

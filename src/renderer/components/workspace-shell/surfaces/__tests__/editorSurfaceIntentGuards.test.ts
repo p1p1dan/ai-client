@@ -62,11 +62,11 @@ describe('EditorColumn fileOpenIntent gate (m12)', () => {
   });
 
   it('does not navigate for an absolute-path intent when rootPath is null — notices and acks instead', () => {
-    expect(EDITOR.flat).toContain("setIntentNotice(t('Select a Workspace to browse files'))");
+    expect(EDITOR.flat).toContain("toastManager.add({ type: 'error', title: t('Select a Workspace to browse files') })");
     // Still the SAME i18n key the (now relocated) empty state uses — the
     // split moved that empty state to FilesSurfaceView, so the key now
     // appears once in each file rather than twice in one.
-    expect(EDITOR.flat.match(/t\('Select a Workspace to browse files'\)/g) ?? []).toHaveLength(1);
+    expect(EDITOR.flat.match(/t\('Select a Workspace to browse files'\)/g) ?? []).toHaveLength(2);
     expect(FILES.flat.match(/t\('Select a Workspace to browse files'\)/g) ?? []).toHaveLength(1);
   });
 

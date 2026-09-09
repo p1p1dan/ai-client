@@ -7,7 +7,9 @@
  * pointing at different workspaces for a frame. Same chain as
  * `useGitChangeCount.ts`, which spec §3 named as the pattern to follow.
  */
+
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useScratchWorkspaceStore } from '@/stores/scratchWorkspace';
 
 /** The active session's workspace path, or null when there is no usable one. */
 export function useWorkspaceRootPath(): string | null {
@@ -17,7 +19,8 @@ export function useWorkspaceRootPath(): string | null {
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
-  return activeWorkspace?.path || null;
+  const scratchPath = useScratchWorkspaceStore((state) => state.pathFor(activeSessionId));
+  return activeWorkspace?.path || activeSession?.unbound?.workspacePath || scratchPath;
 }
 
 /**
@@ -28,5 +31,9 @@ export function readWorkspaceRootPath(): string | null {
   const state = useChatSessionsStore.getState();
   const activeSession = state.sessions.find((session) => session.id === state.activeSessionId);
   const activeWorkspace = state.workspaces.find((ws) => ws.id === activeSession?.workspaceId);
-  return activeWorkspace?.path || null;
+  return (
+    activeWorkspace?.path ||
+    activeSession?.unbound?.workspacePath ||
+    useScratchWorkspaceStore.getState().pathFor(state.activeSessionId)
+  );
 }

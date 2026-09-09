@@ -91,6 +91,7 @@ interface PendingTarget {
  */
 function applyPendingTarget(nextWorkspaceId: string, pending: PendingTarget): boolean {
   const state = useChatSessionsStore.getState();
+  if (state.activeSessionId !== pending.sourceSessionId) return true;
   const sourceSession = pending.sourceSessionId
     ? state.sessions.find((session) => session.id === pending.sourceSessionId)
     : undefined;
@@ -341,6 +342,7 @@ export function useComposerTarget(input: {
     // Same derivation as App.tsx:458-461's `effectiveTempBasePath`.
     const basePath = getEffectiveTemporaryBasePath(defaultTemporaryPath, homeDir, pathSep);
 
+    const sourceSessionId = useChatSessionsStore.getState().activeSessionId;
     const result = await window.electronAPI.tempWorkspace.create(basePath);
     if (!result.ok) {
       toastManager.add({
@@ -356,7 +358,7 @@ export function useComposerTarget(input: {
     setPendingTarget({
       path: result.item.path,
       kind: 'temp',
-      sourceSessionId: useChatSessionsStore.getState().activeSessionId,
+      sourceSessionId,
     });
   }, [temporaryWorkspaceEnabled, defaultTemporaryPath, addTempWorkspace, t]);
 
