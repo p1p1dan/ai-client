@@ -123,7 +123,7 @@ const server = new PiWorkerRpcServer({
       // Let Node drain HTTP/IPC handles instead of forcing libuv teardown on
       // Windows. disconnect flushes queued messages, including the dispose ack.
       process.exitCode = 0;
-      if (process.connected) process.disconnect();
+      if (process.connected) process.disconnect!();
     }
   },
 });
