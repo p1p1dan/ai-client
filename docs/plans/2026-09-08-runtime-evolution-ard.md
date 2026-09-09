@@ -487,6 +487,10 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
 | 2026-09-08 | 左栏 git 面板全空 | **两件事**：指向 `E:\testaaa`（非仓库）时报错正确、属正常；但指向真仓库 `git-probe-once` 时 `getStatus` 返回 `current: null` + 空改动、`getBranches` 返回 `(no commits yet)`，而同一 Main 血统下的 PowerShell 里 `git status` 完全正常——是 `GitService` 自身 spawn 参数的主线缺陷，与加密无关（[Q7](../plantree/plans/runtime-evolution/open-questions.md)） |
 | 2026-09-08 | Main 派生 PowerShell 读 `.git\HEAD` 与 `git status` | **正常**——`ref: refs/heads/master`、分支/改动/commit hash 全部正确。`.git` 元数据不在加密策略内 |
 | 2026-09-08 | Main 派生 PowerShell 读 `tracked.txt`（agent 写的工作区文件） | **密文**——`%TSD-Header-###%` 开头；`file.list` 报告 size 为 8192（加密容器块大小），真实内容仅二十余字节。**Q5 由此坐实** |
+| 2026-09-09 | `1.0.0-test.11` native GUI A~E 现场验收 | **大项通过**——文件/会话/权限/上下文/跟随可用；交回 7 组缺陷（F1~F7），详见 [现场结果](../../Windows-P4-6-evidence/gui-a-e-findings.md) |
+| 2026-09-09 | 命令树清理五态（正常/超时/取消/父先退/应用退出） | **全部通过**——`taskkill /PID /T /F` 经 runner leader 终止整树，五态均无残留带 tag 的 `node.exe`（含孙进程），[证据](../../Windows-P4-6-evidence/tree-cleanup-five-states.md) |
+| 2026-09-09 | GUI 起 git 子进程读分支/状态 | **输出丢失**——同一仓库在 Git Bash 与 PowerShell 下 `git branch -a -v` 正常，仅 Electron 起的 git 子进程拿到空输出。与 D11「按载体验收」一致，git 子进程是否改走白名单载体待决策（F3） |
+| 2026-09-09 | 临时工作区目录被手动删除后的会话 | **失败**——spawn 报 `node.exe ENOENT`（实为 cwd 缺失），且列表条目删不掉。三处根因已修（`dbead94b`），现场待复验（F2） |
 
 **修订结论**（撤回旧版「Rust 不可行、Node 不受影响」）：兼容性按**实际执行载体与启动方式**验收，
 不能按实现语言推断。同一份 Node/TS 代码在 Electron 载体里失败、在随包 node.exe 载体里正常，

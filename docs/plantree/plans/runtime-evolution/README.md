@@ -6,7 +6,8 @@
 **当前阶段**：P0/P3 ✅；P1/P2 实现完成、余项等现场签收；**P4-0~P4-5 已落地**，native 后端可由 `AICLIENT_RUNTIME_BACKEND` 选中，本机端到端（多轮工具 + 审批 + 压缩 + 会话）与 GUI 四面点验通过；下一步 P4-6 打包载体验收。
 **最近落地**：测试包源码 `b6aa0844`；包含 native shell/bundle/打包门禁、Windows 正常退出修复及主线 GUI A～E，来源映射见 [P4-6 记录](evidence/p4-6/README.md)。
 **最新验证**：[CI 34308304362](https://github.com/p1p1dan/ai-client/actions/runs/34308304362) 三道 typecheck/lint、350 文件/4987 项测试及 runtime 冒烟全通过；Windows/Linux 打包与 legacy/native 工具/退出验证通过。`.11` Windows installer/unpacked 已上传，[原始报告与下载](evidence/p4-6/ci-34308304362/README.md)。macOS 同轮仍运行，不宣称整次 CI 已完成。
-**下一目标**：Windows AI 使用 **1.0.0-test.11** 签收 P4-6 安装 GUI/进程树/企业加密项目，并携带 [GUI A～E 清单](../gui-sdk-experience/现场验收清单.md)。两条 CI worker lane 不代签真实 Main/renderer 安装流程。P2-5/P2-6 真实缓存门槛仍为 95.01%，P5 尚未开工。
+**2026-09-09 Windows 现场进展**：`1.0.0-test.11` 上已执行 GUI A~E 与命令树清理五态并留证。五态清理全部无残留，P1 该项结清；GUI 大项通过但交回 7 组缺陷（F1~F7）与一项 v3 会话 resume 身份不匹配，逐条状态见 [执行 TODO](TODO.md#windows-交回缺陷2026-09-09linux-侧)。F2 已由 `dbead94b` 修复待复验。
+**下一目标**：修完/定性交回缺陷，并补齐尚未执行的六项工具探针、两种 carrier 留证与企业加密机签收。两条 CI worker lane 不代签真实 Main/renderer 安装流程。P2-5/P2-6 真实缓存门槛仍为 95.01%，P5 尚未开工。
 **2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 两轴分离：模式 `plan/agent` 管工具集，档位 `ask/accept-edits/auto` 管审批，accept-edits 放行工作区 bash。P1-1 裁剪与 P1-5 核心已更新；P1-6 renderer/偏好迁移/两轴传递链已更新，打包 GUI 待签收。
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。

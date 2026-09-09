@@ -2,7 +2,7 @@
 
 2026-09-09 状态同步 · [看板](README.md) · [P4-6 交接与 CI 结果](evidence/p4-6/README.md)
 
-当前阶段：P4-6 的 Windows/Linux CI 构建产物冒烟已通过，`1.0.0-test.11` 安装包可交付 Windows AI。完整门禁 350 文件/4987 项通过；真实安装 GUI、进程树专项和企业加密现场尚未验收。测试包提交 `b6aa0844`，见 [CI 证据/下载/操作说明](evidence/p4-6/ci-34308304362/README.md)。macOS 同一 CI 仍在运行。
+当前阶段：P4-6 的 Windows 现场已执行 GUI A~E 与命令树清理五态，两者均留证；GUI 核心功能在 native 后端可用，但交回 7 组缺陷（见下「Windows 交回缺陷」）。企业加密机签收仍未开始。测试包提交 `b6aa0844`，见 [CI 证据/下载/操作说明](evidence/p4-6/ci-34308304362/README.md)。macOS 同一 CI 仍在运行。
 
 本轮授权：同步状态文档、推送任务分支并手动 CI 打包；测试包名称/版本可递增。不本地打包、不推 tag、不触发自动发布。用户已明确授权本轮代码/工作流修复，与 Windows AI 同步推进。
 
@@ -11,7 +11,8 @@
 - [x] 接棒 `9edab07c`，推送 `feat/runtime-evolution`，手动触发并核对 [CI 34303440949](https://github.com/p1p1dan/ai-client/actions/runs/34303440949)；未出包。
 - [x] 修复 helper 测试样本，补齐打包 job 的 runtime 依赖与双后端冒烟；另补 native shell 接线和 ESM bundle 的 CommonJS 支持。本机小批测试/runtime typecheck 通过，产物待 CI。
 - [x] 手动 [CI 34308304362](https://github.com/p1p1dan/ai-client/actions/runs/34308304362) 生成 `.11` Windows installer/unpacked；包含主线 GUI A～E 与正常退出修复，Windows/Linux 双后端产物冒烟通过，原始报告已归档。macOS 同轮仍运行。
-- [ ] Windows + AI 执行真实随包 Node、六项探针、bash/命令树清理及 GUI；并行签收 [主线 GUI 清单](../gui-sdk-experience/现场验收清单.md)，两种产品 carrier 分别留证。
+- [x] 2026-09-09 Windows 现场执行 GUI A~E 与命令树清理五态：[GUI 结果与缺陷清单](../../../../Windows-P4-6-evidence/gui-a-e-findings.md)、[五态清理证据](../../../../Windows-P4-6-evidence/tree-cleanup-five-states.md)。GUI 大项通过，交回 7 组缺陷。
+- [ ] 六项工具探针与两种 carrier 分别留证仍未执行；[主线 GUI 清单](../gui-sdk-experience/现场验收清单.md)按组回填中，未全部签收。
 - [ ] 企业加密机签收明文读写、Main diff/编码/二进制判定、GUI/TUI 一致性与退出无残留；逐项回填 P1/P4，不能代签。
 
 历史代码提交：`27ff2020` + `2ae6f209`（2026-09-08，实现与证据归档；不代表完整验收）。
@@ -99,10 +100,26 @@
 ## P1 剩余现场 TODO
 
 - [x] 增加保留进程树根身份的 Node runner；Linux 验证命令先退出后的后代清理。
-- [ ] Windows 验证 runner + taskkill 的命令树清理；P1-0/P1-3 保持进行中。
+- [x] Windows 验证 runner + taskkill 的命令树清理：正常/超时/取消/父先退/应用退出五态实测无残留 `node.exe`，见[证据](../../../../Windows-P4-6-evidence/tree-cleanup-five-states.md)。P1-0 该项结清；P1-3 保持进行中。
 - [ ] 用真实 Windows 随包 Node 跑 P1-8 六项工具探针与超时/退出检查。
 - [ ] 在企业加密机签收工具读写明文、bash stdout 和残留进程检查。
 - [x] 旧权限配置导入与两轴 worker RPC 本机回归；仍需 P4 的完整项目/打包链路签收。
+
+## Windows 交回缺陷（2026-09-09，Linux 侧）
+
+来源：[GUI A~E 现场结果](../../../../Windows-P4-6-evidence/gui-a-e-findings.md)。归属 Linux 侧修复或决策；未修完不视为 P4-6 通过。
+
+| 编号 | 严重度 | 问题 | 状态 |
+|---|---|---|---|
+| F2 | 🔴 | 临时工作区目录消失后无法对话（cwd 缺失被误报为 `node.exe ENOENT`）且无法删除 | 已修复 `dbead94b`，待现场复验 |
+| F1 | 🔴 | 设置 → 终端「网络」子项点击报错 | 待复现（需现场完整报错文案） |
+| F3 | 🟠 | GUI 起 git 子进程 stdout 丢失，分支列表/状态为空 | 待决策：git 子进程是否改走白名单载体 |
+| F4 | 🟡 | 503 不重试直接失败（529/429 未触发） | 待决策：503 是否属设计内不重试集合 |
+| F5 | 🟡 | native 会话无提问工具，QuestionCard/扩展问答无法弹卡 | 待决策：native 工具集是否应含 ask |
+| F6 | 🟡 | 文件修改 diff 为单栏 patch，无左右双栏对比 | 待评估：属形态优化，非功能缺陷 |
+| F7 | 🟡 | a 授权详情样式 / b「正在输出」重复显示 / c 卡片尺寸字体 / d GPT 渠道 effort 无效且耗时长 / e 上下文详情需发一句话才显示 / f 输入框增高有限 | 待排期，其中 d 需排查渠道兼容性 |
+
+另有一项与 F 清单同批交回：[旧会话 resume 身份不匹配](../../../../Windows-P4-6-evidence/old-session-resume-error.md)——所有 `runtimeIdentity` 仍指向 v3 文件的会话（本机 20 条）resume 必失败。未开工。
 
 ## 本轮重读确认的要求
 
