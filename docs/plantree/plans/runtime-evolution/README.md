@@ -4,8 +4,8 @@
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
 **当前阶段**：P0/P3 ✅；P1/P2 实现完成、余项等现场签收；**P4-0~P4-5 已落地**，native 后端可由 `AICLIENT_RUNTIME_BACKEND` 选中，本机端到端（多轮工具 + 审批 + 压缩 + 会话）与 GUI 四面点验通过；下一步 P4-6 打包载体验收。
-**最近落地**：测试包源码 `b6aa0844`；包含 native shell/bundle/打包门禁、Windows 正常退出修复及主线 GUI A～E，来源映射见 [P4-6 记录](evidence/p4-6/README.md)。
-**最新验证**：[CI 34308304362](https://github.com/p1p1dan/ai-client/actions/runs/34308304362) 三道 typecheck/lint、350 文件/4987 项测试及 runtime 冒烟全通过；Windows/Linux 打包与 legacy/native 工具/退出验证通过。`.11` Windows installer/unpacked 已上传，[原始报告与下载](evidence/p4-6/ci-34308304362/README.md)。macOS 同轮仍运行，不宣称整次 CI 已完成。
+**最近落地**：测试包源码 `b6dbfe65`（`1.0.0-test.12`）；在 `.11` 之上带 F1、旧会话 v3 resume、F4 重试层三项修复，来源映射见 [P4-6 记录](evidence/p4-6/README.md)。
+**最新验证**：[CI 34354367890](https://github.com/p1p1dan/ai-client/actions/runs/34354367890) **全部 job success**（含上一轮未收尾的 macOS）；Windows 打包冒烟 legacy/native 两条 lane 通过，native 记录 `bundled-node` 载体。`.12` Windows installer/unpacked/portable 已上传，[原始报告与下载](evidence/p4-6/ci-34354367890/README.md)。该冒烟不等于真实安装应用的全链路验收。
 **2026-09-09 Windows 现场进展**：`1.0.0-test.11` 上已执行 GUI A~E 与命令树清理五态并留证。五态清理全部无残留，P1 该项结清；GUI 大项通过但交回 7 组缺陷（F1~F7）与一项 v3 会话 resume 身份不匹配，逐条状态见 [执行 TODO](TODO.md#windows-交回缺陷2026-09-09linux-侧)。F2 已由 `dbead94b` 修复待复验。
 **2026-09-09 Linux 侧本轮**：F1（网络设置面板渲染即抛 `FieldRootContext is missing`，非 Windows 特有）与旧会话 v3 resume 身份不匹配两项 🔴 已修并补测试；F3/F4/F5 三个决策点已定性，见 [GUI 缺陷决策](../../../plans/2026-09-09-gui-defect-decisions.md)。**F4 定性后已落地**：`plugins/agent-loop/providerRetry.ts` 补上自有重试层（429 与 5xx/网络各一条预算、`Retry-After` 优先、内层 `maxRetries: 0`），31 项测试。三项修复均待 Windows 现场复验。
 **下一目标**：见上「待办」栏。两条 CI worker lane 不代签真实 Main/renderer 安装流程。P2-5/P2-6 真实缓存门槛仍为 95.01%，P5 尚未开工。
