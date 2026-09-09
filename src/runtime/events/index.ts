@@ -2,7 +2,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { type Context, Service } from 'cordis';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { EVENTS_SERVICE } from '../contracts.ts';
-import { RuntimeEventProjector } from './projector.ts';
+import { RuntimeEventProjector, type UserTurnEcho } from './projector.ts';
 
 export class EventsPlugin extends Service {
   private readonly listeners = new Set<(event: RuntimeEventDraft) => void>();
@@ -24,14 +24,16 @@ export class EventsPlugin extends Service {
     sessionId: string,
     requestId: string,
     history: readonly AgentMessage[],
-    contextWindow?: number
+    contextWindow?: number,
+    userTurn?: UserTurnEcho
   ) {
     this.active = { sessionId, requestId };
     const projector = new RuntimeEventProjector(
       { sessionId, emit: (event) => this.emit(event) },
       requestId,
       history,
-      contextWindow
+      contextWindow,
+      userTurn
     );
     projector.start();
     return projector;

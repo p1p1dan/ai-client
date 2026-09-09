@@ -104,6 +104,26 @@ Windows 安装版使用随包 Node + 原生 IPC，其余平台与开发模式使
 新 runtime 内部事件格式自定，但出口处翻译为现有 `RuntimeEvent`，
 renderer 的 Zustand store 和时间线渲染零改动。后续可逐步扩展 RuntimeEvent 字段。
 
+**P4-5 补充：「零改动」成立的前提是事件集合也一致，不只是形状一致。**
+点验发现四处缺口，全部表现为**沉默**而非报错——renderer 的 reducer 对认不出的消息
+一律返回 `{}`，所以缺字段既不抛错也不留日志：
+
+- `permission.activity` native 侧完全不发。`policy_allow` 从不弹窗，这行记录是
+  「这次调用被网关判过」的唯一证据，缺了它「权限系统没在跑」和「本来就不需要批准」
+  在界面上完全一样。改为由 `plugin-permissions` 的 `onActivity` 投影（prompt + decision 两相）。
+- 用户 `message.started` 缺 `attemptId`。composer 的乐观气泡靠它与权威回声配对退场，
+  缺了就永远退不掉——用户自己的话在时间线上留两份。
+- `worker.send` 的 `attachments` 被静默丢弃：模型收不到，界面也不报错。
+- **内部记账条目不上线**：`aiclient.permissions` 这类条目该写进 JSONL（分支要记住自己跑在哪档
+  权限下），但不该进时间线——renderer 把每个 `custom.entry` 渲染成可见的系统消息并单独开一轮，
+  泄漏一条就在对话顶部多出一行裸 JSON 和一个空轮次。清单见 `INTERNAL_CUSTOM_ENTRIES`。
+
+回归防线是一份**录制的事件流**（`src/shared/__tests__/fixtures/nativeGuiEventStream.json`）：
+runtime 侧 `guiEventContract.test.ts` 用真实 RPC + 真实插件图录它，renderer 侧
+`nativeStreamReplay.test.ts` 把它喂进真实 reducer 断言用户最终看到什么。
+两侧跨不过各自的 typecheck 边界（`src/runtime` 没有 `@shared` 路径映射也没有 DOM lib），
+所以用 JSON 文件而不是共享模块作为交界。
+
 ### D6 · 会话存储：自有 JSONL + 现有 session-index
 
 沿用 JSONL 格式（与 pi/PI-Desktop 兼容），但由自有 `plugin-session` 读写。

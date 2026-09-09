@@ -46,15 +46,52 @@ export interface PermissionConfig {
   ) => Promise<'allow-once' | 'allow-session' | 'deny'>;
   timeoutMs?: number;
 }
-export interface PermissionDecisionRecord {
-  request: ToolPermissionRequest;
-  decision: 'allow' | 'deny';
-  source: 'policy' | 'session-grant' | 'allow-once' | 'allow-session' | 'error';
-  mode: RuntimeMode;
-  gear: PermissionGear;
-}
+/**
+ * How a gate resolved, in the vocabulary the timeline row already speaks.
+ *
+ * The deny arms are split rather than collapsed into one `error`, because the
+ * transcript row derived from them is the only place a refusal explains itself:
+ * "a rule forbade this" and "you said no" and "the turn was cancelled while the
+ * dialog was open" produce the same missing tool result and are otherwise
+ * indistinguishable after the modal is gone.
+ */
+export type PermissionDecisionSource =
+  | 'policy'
+  | 'session-grant'
+  | 'allow-once'
+  | 'allow-session'
+  | 'policy-deny'
+  | 'user-denied'
+  | 'cancelled'
+  | 'error';
+
+/**
+ * One observation about a gate, for observers that record rather than decide.
+ *
+ * Two phases because the transcript needs both halves: `prompt` says a question
+ * was raised (the row that sits there while the modal is up), `decision` says
+ * how it ended. A gate that never prompts — every `policy` allow — emits only
+ * the second, and that record is the ONLY evidence the call was gated at all
+ * rather than simply unchecked.
+ */
+export type PermissionActivityRecord =
+  | { phase: 'prompt'; request: ToolPermissionRequest; mode: RuntimeMode; gear: PermissionGear }
+  | {
+      phase: 'decision';
+      request: ToolPermissionRequest;
+      decision: 'allow' | 'deny';
+      source: PermissionDecisionSource;
+      mode: RuntimeMode;
+      gear: PermissionGear;
+    };
+
 export interface RuntimePermissionsService {
-  onDecision(listener: (record: PermissionDecisionRecord) => void): () => void;
+  /**
+   * Watch gates resolve. Read-only by contract: a listener never decides,
+   * delays or vetoes anything, and its exceptions are swallowed so a broken
+   * observer cannot take the permission system down with it.
+   */
+  onActivity(listener: (record: PermissionActivityRecord) => void): () => void;
   authorize(request: ToolPermissionRequest, signal?: AbortSignal): Promise<void>;
   evaluate(request: ToolPermissionRequest): PermissionAction;
   isToolAllowed(name: string): boolean;
@@ -78,7 +115,7 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
   private readonly controller = new AbortController();
   private settings: RuntimePermissionSettings;
   private epoch = 0;
-  private readonly listeners = new Set<(record: PermissionDecisionRecord) => void>();
+  private readonly listeners = new Set<(record: PermissionActivityRecord) => void>();
 
   constructor(ctx: Context, config: PermissionConfig) {
     super(ctx, PERMISSIONS_SERVICE);
@@ -185,36 +222,68 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
         [request.path, ...(request.paths ?? [])].some((path) => containsPath(scope.root, path))
     );
   }
-  onDecision(listener: (record: PermissionDecisionRecord) => void): () => void {
+  onActivity(listener: (record: PermissionActivityRecord) => void): () => void {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
   }
+  /**
+   * Tell observers, without letting them affect the gate.
+   *
+   * Errors are contained here rather than at each call site: a listener throwing
+   * inside `authorize` would surface as a denial, which is the one outcome an
+   * observer must never be able to cause.
+   */
+  private notify(record: PermissionActivityRecord): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(record);
+      } catch {
+        // Read-only observer; a failure here is not the gate's problem.
+      }
+    }
+  }
   async authorize(request: ToolPermissionRequest, signal?: AbortSignal): Promise<void> {
-    let record: PermissionDecisionRecord;
+    let source: PermissionDecisionSource;
     try {
-      const source = await this.check(request, signal);
-      record = { request, decision: 'allow', source, mode: this.mode, gear: this.gear };
+      source = await this.check(request, signal);
     } catch (error) {
-      for (const listener of this.listeners)
-        listener({ request, decision: 'deny', source: 'error', mode: this.mode, gear: this.gear });
+      this.notify({
+        phase: 'decision',
+        request,
+        decision: 'deny',
+        source: error instanceof PermissionDenial ? error.source : 'error',
+        mode: this.mode,
+        gear: this.gear,
+      });
       throw error;
     }
-    for (const listener of this.listeners) listener(record);
+    this.notify({
+      phase: 'decision',
+      request,
+      decision: 'allow',
+      source,
+      mode: this.mode,
+      gear: this.gear,
+    });
   }
   private async check(
     request: ToolPermissionRequest,
     signal?: AbortSignal
-  ): Promise<PermissionDecisionRecord['source']> {
+  ): Promise<PermissionDecisionSource> {
     const combined = signal
       ? AbortSignal.any([signal, this.controller.signal])
       : this.controller.signal;
-    if (combined.aborted) throw denied('permission request cancelled');
+    if (combined.aborted) throw denied('cancelled', 'permission request cancelled');
     const action = this.evaluate(request);
-    if (action === 'deny') throw denied(`access denied: ${request.tool} ${request.path}`);
+    if (action === 'deny')
+      throw denied('policy-deny', `access denied: ${request.tool} ${request.path}`);
     if (action === 'allow') return this.grants.has(grantKey(request)) ? 'session-grant' : 'policy';
-    if (!this.config.approve) throw denied('approval UI is not connected');
+    if (!this.config.approve) throw denied('error', 'approval UI is not connected');
+    // Announced before the await, so the transcript can show the gate is open
+    // for as long as the dialog actually is.
+    this.notify({ phase: 'prompt', request, mode: this.mode, gear: this.gear });
     const epoch = this.epoch;
     const controller = new AbortController();
     const approvalSignal = AbortSignal.any([combined, controller.signal]);
@@ -232,8 +301,9 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
         this.config.approve(request, approvalSignal),
         cancelled,
       ]);
-      if (approvalSignal.aborted || epoch !== this.epoch || decision === 'deny')
-        throw denied('permission denied or expired');
+      if (approvalSignal.aborted || epoch !== this.epoch)
+        throw denied('cancelled', 'permission request expired');
+      if (decision === 'deny') throw denied('user-denied', 'permission denied');
       if (decision === 'allow-session') this.grants.add(grantKey(request));
       return decision;
     } finally {
@@ -250,8 +320,22 @@ export function containsPath(root: string, path: string): boolean {
 function grantKey(request: ToolPermissionRequest): string {
   return JSON.stringify([request.tool, request.path, request.command ?? null, request.paths ?? []]);
 }
-function denied(message: string): RuntimeHostError {
-  return new RuntimeHostError('tool_denied', message);
+/**
+ * A refusal that remembers why.
+ *
+ * Still a `tool_denied` `RuntimeHostError`, so every existing `errorCode`
+ * check keeps working; the extra field exists only so `authorize` can report
+ * the reason instead of flattening every path to `error`.
+ */
+class PermissionDenial extends RuntimeHostError {
+  readonly source: PermissionDecisionSource;
+  constructor(source: PermissionDecisionSource, message: string) {
+    super('tool_denied', message);
+    this.source = source;
+  }
+}
+function denied(source: PermissionDecisionSource, message: string): PermissionDenial {
+  return new PermissionDenial(source, message);
 }
 
 export function pathPolicy(path: string): PermissionAction {

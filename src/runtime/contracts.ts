@@ -31,6 +31,7 @@
 import 'cordis';
 import type { AgentEvent, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models, Usage } from '@earendil-works/pi-ai';
+import type { SessionAttachment } from '../shared/types/agentHost.ts';
 import type { EventsPlugin } from './events/index.ts';
 import type { ComposedPrompt } from './plugins/prompt/segments.ts';
 import type { JsonlSessionStore } from './plugins/session/store.ts';
@@ -204,6 +205,24 @@ export interface TraceService {
 
 export interface RuntimeRunRequest {
   prompt: string;
+  /**
+   * Images and text documents the composer sent with this prompt.
+   *
+   * Carried on the request rather than folded into `prompt` by the caller,
+   * because the model needs the images as content blocks and the renderer needs
+   * their metadata on the user message it echoes back. Dropping them silently
+   * is the failure to avoid: the user watches the attachment go up and the
+   * model answers as though it never arrived.
+   */
+  attachments?: readonly SessionAttachment[];
+  /**
+   * The renderer's send attempt this turn answers.
+   *
+   * Round-tripped onto the user `message.started`, which is how the composer's
+   * optimistic bubble is paired with the authoritative echo and retired. Without
+   * it the prompt stays on screen twice, forever.
+   */
+  attemptId?: string;
   /** Explicit override for fixed probes; omitted uses runtimePrompt assembly. */
   systemPrompt?: string;
   /** Workspace-relative file whose directory chain supplies project rules. */

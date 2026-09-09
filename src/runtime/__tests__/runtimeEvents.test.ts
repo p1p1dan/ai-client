@@ -81,7 +81,7 @@ it('reports provider and first-request budget failures as failed sessions', asyn
   expect(events.some((event) => event.type === 'session.completed')).toBe(false);
 });
 
-it('emits durable custom entries with the run identity and preserves cumulative usage after resume', async () => {
+it('keeps its own bookkeeping off the wire, stamps the run identity, and preserves cumulative usage after resume', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'runtime-event-session-'));
   dirs.push(dir);
   const faux = fauxProvider({ provider: 'test', models: [{ id: 'test', name: 'Test' }] });
@@ -97,10 +97,20 @@ it('emits durable custom entries with the run identity and preserves cumulative 
   const events: RuntimeEventDraft[] = [];
   first.events.subscribe((event) => events.push(event));
   await first.run({ prompt: 'one', systemPrompt: 'probe', logicalSessionId: 'logical' });
-  expect(events.find((e) => e.type === 'custom.entry')).toMatchObject({
-    sessionId: 'logical',
-    payload: { customType: 'aiclient.permissions' },
-  });
+  // The permission bookkeeping entry IS written to the file (the branch has to
+  // remember which gate it ran under) but must not travel: the renderer turns
+  // every custom entry into a visible system message and opens a turn around
+  // it, so leaking one heads the transcript with a row of raw JSON (P4-5).
+  expect(events.some((e) => e.type === 'custom.entry')).toBe(false);
+  expect(
+    first.session
+      ?.snapshot()
+      .entries.some(
+        (entry) => entry.type === 'custom' && entry.customType === 'aiclient.permissions'
+      )
+  ).toBe(true);
+  // Everything that DOES travel carries the run identity rather than the
+  // store's internal session id.
   expect(events.every((e) => e.sessionId === 'logical')).toBe(true);
   await first.dispose();
   const second = await createRuntime({

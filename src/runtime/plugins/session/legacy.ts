@@ -13,6 +13,19 @@ import { branchEntries, decodeSession } from './codec.ts';
 import type { SessionConfig } from './store.ts';
 
 export const PERMISSIONS_ENTRY = 'aiclient.permissions';
+/**
+ * Custom entries this runtime writes for ITSELF.
+ *
+ * They belong in the transcript file — `sessionPermissions` reads them back to
+ * restore which gate a branch ran under — but not on the wire: the renderer
+ * turns every `custom.entry` into a visible system message, and a bookkeeping
+ * record would surface as a row of raw JSON that also opens a turn of its own.
+ */
+export const INTERNAL_CUSTOM_ENTRIES: readonly string[] = [
+  PERMISSIONS_ENTRY,
+  'aiclient-session-tier',
+  'permission-tier',
+];
 const TIERS = new Set(['readonly', 'pragmatic', 'handsoff', 'fullopen']);
 export function migratedPermissions(value: unknown): RuntimePermissionSettings | undefined {
   if (isRuntimePermissionSettings(value)) return value;
@@ -27,10 +40,7 @@ export function migratedPermissions(value: unknown): RuntimePermissionSettings |
 export function sessionPermissions(entries: readonly Entry[], fallback?: unknown) {
   let permissions = migratedPermissions(fallback);
   for (const entry of entries) {
-    if (
-      entry.type === 'custom' &&
-      [PERMISSIONS_ENTRY, 'aiclient-session-tier', 'permission-tier'].includes(entry.customType)
-    )
+    if (entry.type === 'custom' && INTERNAL_CUSTOM_ENTRIES.includes(entry.customType))
       permissions = migratedPermissions(entry.data) ?? permissions;
   }
   return permissions;

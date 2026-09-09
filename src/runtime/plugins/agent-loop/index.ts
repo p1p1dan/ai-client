@@ -27,9 +27,11 @@ import {
 import { RuntimeHostError } from '../../host/errors.ts';
 import { compactionNeeded, contextBudget } from '../context/budget.ts';
 import { CONTEXT_SERVICE } from '../context/index.ts';
+import { permissionActivityEvent } from '../permissions/activity.ts';
 import type { ComposedPrompt } from '../prompt/segments.ts';
 import { PERMISSIONS_ENTRY } from '../session/legacy.ts';
 import { interruptedToolResults } from '../session/recovery.ts';
+import { preparePrompt } from './attachments.ts';
 
 export interface AgentLoopConfig {
   /**
@@ -114,17 +116,26 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       composed = await this.ctx.runtimePrompt.compose({ targetPath: request.targetPath });
       systemPrompt = composed.text;
     }
+    // Before the trace and before `startRun`: the text the model is given is the
+    // text that belongs in the trace, and the metadata has to reach the
+    // projector in time to ride the user echo.
+    const prepared = preparePrompt(request.prompt, request.attachments);
     const trace = this.ctx.runtimeTrace.begin({
       runId: request.runId,
-      input: request.prompt,
+      input: prepared.text,
       model: resolved.model.id,
       provider: resolved.ref.provider,
     });
+    const sessionId = request.logicalSessionId ?? snapshot?.id ?? trace.runId;
     const projected = this.ctx.runtimeEvents.startRun(
-      request.logicalSessionId ?? snapshot?.id ?? trace.runId,
+      sessionId,
       trace.runId,
       snapshot?.entries.flatMap((entry) => (entry.type === 'message' ? [entry.message] : [])) ?? [],
-      resolved.model.contextWindow
+      resolved.model.contextWindow,
+      {
+        ...(request.attemptId ? { attemptId: request.attemptId } : {}),
+        ...(prepared.metadata.length ? { attachments: prepared.metadata } : {}),
+      }
     );
     trace.note('note', {
       event: 'run_start',
@@ -151,9 +162,12 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     context?.beginRun(snapshot);
     const collected = new TurnCollector();
     const toolCalls = new Set<string>();
-    const unsubscribePermissions = this.ctx.get('runtimePermissions')?.onDecision((record) => {
-      if (toolCalls.has(record.request.toolCallId))
-        trace.note('note', { event: 'permission_decision', ...record });
+    const unsubscribePermissions = this.ctx.get('runtimePermissions')?.onActivity((record) => {
+      // Gates raised outside this run's tool calls (a probe, a stale session)
+      // belong to no message on screen and no line in this trace.
+      if (!toolCalls.has(record.request.toolCallId)) return;
+      trace.note('note', { event: `permission_${record.phase}`, ...record });
+      this.ctx.runtimeEvents.emit(permissionActivityEvent(sessionId, record));
     });
     let turnCount = 0;
     const agent = new Agent({
@@ -240,7 +254,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // New input must fit on its own; only the completed history can be
       // compacted before the first request of this run.
       const incomingTokens =
-        estimateContextTokens([{ role: 'user', content: request.prompt, timestamp: Date.now() }])
+        estimateContextTokens([{ role: 'user', content: prepared.text, timestamp: Date.now() }])
           .tokens +
         Math.ceil(systemPrompt.length / 4) +
         Math.ceil(JSON.stringify(agent.state.tools).length / 4);
@@ -300,7 +314,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
             data: { mode: permissions.mode, gear: permissions.gear },
           });
       }
-      await agent.prompt(request.prompt);
+      await agent.prompt(prepared.text, prepared.images.length ? prepared.images : undefined);
       await agent.waitForIdle();
       await session?.flush();
     } catch (error) {

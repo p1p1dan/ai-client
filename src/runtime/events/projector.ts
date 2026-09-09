@@ -5,8 +5,21 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { applyTurnUsage, initTurnRollup, viewTurnRollup } from '../../shared/piTurnRollup.ts';
 import { buildPiUsagePayload } from '../../shared/piUsage.ts';
-import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
+import type { MessageAttachmentMeta, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import type { RuntimeRunResult } from '../contracts.ts';
+
+/**
+ * What the composer said about this send, echoed back on the user message.
+ *
+ * Neither field can be recovered from the model stream: `attemptId` is the
+ * renderer's own identity for the send it is optimistically showing, and the
+ * attachment list is metadata the provider is never given. They ride the run
+ * request and are stamped here.
+ */
+export interface UserTurnEcho {
+  attemptId?: string;
+  attachments?: readonly MessageAttachmentMeta[];
+}
 
 export interface RuntimeEventSink {
   sessionId: string;
@@ -40,15 +53,18 @@ export class RuntimeEventProjector {
   private thinkingOpen = false;
   private rollup;
   private readonly contextWindow: number | undefined;
+  private readonly userTurn: UserTurnEcho;
   constructor(
     sink: RuntimeEventSink,
     requestId: string,
     history: readonly AgentMessage[] = [],
-    contextWindow?: number
+    contextWindow?: number,
+    userTurn: UserTurnEcho = {}
   ) {
     this.sink = sink;
     this.contextWindow = contextWindow;
     this.requestId = requestId;
+    this.userTurn = userTurn;
     this.rollup = initTurnRollup(sink.sessionId);
     for (const message of history) {
       if (message.role === 'assistant' || message.role === 'toolResult') {
@@ -156,7 +172,18 @@ export class RuntimeEventProjector {
       case 'message_start':
         if (event.message.role === 'user') {
           const messageId = `user-${this.requestId}-${++this.index}`;
-          this.emit({ type: 'message.started', sessionId, payload: { messageId, role: 'user' } });
+          this.emit({
+            type: 'message.started',
+            sessionId,
+            payload: {
+              messageId,
+              role: 'user',
+              ...(this.userTurn.attemptId ? { attemptId: this.userTurn.attemptId } : {}),
+              ...(this.userTurn.attachments?.length
+                ? { attachments: [...this.userTurn.attachments] }
+                : {}),
+            },
+          });
           const value = text(event.message.content);
           if (value)
             this.emit({

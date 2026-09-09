@@ -41,23 +41,31 @@ describe('U30 rev.2 the permission menu closes on pick', () => {
     expect(PERMISSION).toContain('actionsRef={menuActions}');
   });
 
-  it('lets Base UI close on an ordinary tier and keeps the dangerous one open', () => {
-    // `closeOnClick` defaults to false on a radio item (radio semantics are
-    // "keep flipping between these"); a tier is a decision, so every tier but
-    // the one that still has to be confirmed closes on the press.
-    expect(PERMISSION).toContain('closeOnClick={!option.dangerous}');
+  it('closes only once the change has actually landed', () => {
+    // D14 replaced the four tiers with a mode axis and a gear axis, and moved
+    // the close with them: every radio item now keeps the menu open
+    // (`closeOnClick={false}`) and `apply` shuts it after the write succeeds.
+    // That is stricter than the `closeOnClick={!option.dangerous}` it replaced —
+    // a failed `setPermissions` used to close the menu anyway, leaving the chip
+    // showing a policy the runtime had refused.
+    expect(PERMISSION).not.toContain('closeOnClick={true}');
+    expect(PERMISSION.split('closeOnClick={false}').length - 1).toBeGreaterThanOrEqual(2);
+    const apply = PERMISSION.slice(PERMISSION.indexOf('const apply ='));
+    const close = apply.indexOf('menuActions.current?.close();');
+    expect(close).toBeGreaterThanOrEqual(0);
+    // Inside the success arm: after the store write, before the catch.
+    expect(apply.slice(0, close)).toContain('writeSessionPermissions');
   });
 
-  it('closes the confirmation step imperatively, since it is not a menu item', () => {
-    const handleConfirm =
-      NAV.length > 0 ? PERMISSION.slice(PERMISSION.indexOf('const handleConfirm')) : '';
-    expect(handleConfirm.slice(0, 400)).toContain('menuActions.current?.close();');
-    // If this moved into `handleSelect`, picking "full access" would shut the
-    // menu before the confirmation could be shown.
-    const handleSelect = PERMISSION.slice(PERMISSION.indexOf('const handleSelect'));
-    expect(handleSelect.slice(0, handleSelect.indexOf('const handleConfirm'))).not.toContain(
-      'menuActions.current'
-    );
+  it('sends the dangerous gear to a confirmation step instead of applying it', () => {
+    // `auto` lets tools run without asking, so picking it must open the
+    // confirmation rather than take effect on the press. If this ever called
+    // `apply` directly the menu would close on the same click and the
+    // confirmation would never be seen.
+    const onGearChange = PERMISSION.slice(PERMISSION.indexOf('isPermissionGear(value)'));
+    const body = onGearChange.slice(0, onGearChange.indexOf('}}'));
+    expect(body).toMatch(/value === 'auto'\s*\)?\s*setConfirmingAuto\(true\)/);
+    expect(body.slice(0, body.indexOf('else'))).not.toContain('apply(');
   });
 });
 

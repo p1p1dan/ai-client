@@ -1,0 +1,345 @@
+[
+  {
+    "type": "session.status",
+    "sessionId": "logical-gui",
+    "payload": {
+      "status": "running"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "user-turn-1-1",
+      "role": "user",
+      "attemptId": "attempt-1",
+      "attachments": [
+        {
+          "kind": "text",
+          "mediaType": "text/plain",
+          "name": "spec.md"
+        }
+      ]
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.delta",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "user-turn-1-1",
+      "blockId": "user-turn-1-1-text",
+      "text": "read then write\n\n--- spec.md ---\n# spec\n"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "user-turn-1-1"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-2",
+      "role": "assistant",
+      "model": "faux/faux-e2e"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-2"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-3",
+      "role": "assistant"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "tool.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-3",
+      "toolCallId": "call-1",
+      "name": "read",
+      "input": {
+        "path": "notes.txt"
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "permission.activity",
+    "sessionId": "logical-gui",
+    "payload": {
+      "phase": "decision",
+      "requestId": "call-1",
+      "surface": "read",
+      "value": "<workspace>/notes.txt",
+      "result": "allow",
+      "resolution": "policy_allow"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "tool.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-3",
+      "toolCallId": "call-1",
+      "ok": true,
+      "output": "[{\"type\":\"text\",\"text\":\"the answer is 42\\n\"}]"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-3"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "usage.updated",
+    "sessionId": "logical-gui",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-4",
+      "role": "assistant",
+      "model": "faux/faux-e2e"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-4"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-5",
+      "role": "assistant"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "tool.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-5",
+      "toolCallId": "call-2",
+      "name": "write",
+      "input": {
+        "path": "created.txt",
+        "content": "hi\n"
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "permission.activity",
+    "sessionId": "logical-gui",
+    "payload": {
+      "phase": "prompt",
+      "requestId": "call-2",
+      "surface": "write",
+      "value": "<workspace>/created.txt"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "extensionUi.request",
+    "sessionId": "logical-gui",
+    "payload": {
+      "runtimeId": "id-1",
+      "uiRequestId": "id-2",
+      "method": "select",
+      "args": {
+        "title": "write: <workspace>/created.txt",
+        "options": [
+          "允许一次",
+          "本会话允许此操作",
+          "拒绝"
+        ]
+      },
+      "timeoutMs": 120000
+    }
+  },
+  {
+    "type": "permission.activity",
+    "sessionId": "logical-gui",
+    "payload": {
+      "phase": "decision",
+      "requestId": "call-2",
+      "surface": "write",
+      "value": "<workspace>/created.txt",
+      "result": "allow",
+      "resolution": "user_approved"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "tool.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-5",
+      "toolCallId": "call-2",
+      "ok": true,
+      "output": "[{\"type\":\"text\",\"text\":\"Wrote 3 bytes to <workspace>/created.txt\"}]"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-5"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "usage.updated",
+    "sessionId": "logical-gui",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-6",
+      "role": "assistant",
+      "model": "faux/faux-e2e"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.delta",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-6",
+      "blockId": "asst-turn-1-6-text",
+      "text": "The note says the answer is 42, and I wrote the file."
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-6"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "usage.updated",
+    "sessionId": "logical-gui",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "session.completed",
+    "sessionId": "logical-gui",
+    "payload": {},
+    "requestId": "turn-1"
+  },
+  {
+    "type": "session.status",
+    "sessionId": "logical-gui",
+    "payload": {
+      "status": "idle"
+    },
+    "requestId": "turn-1"
+  }
+]

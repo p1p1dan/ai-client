@@ -255,8 +255,12 @@ export class NativeWorkerRuntime {
       .run({
         prompt: input.text,
         runId: input.requestId,
+        // Round-tripped so the composer can retire its optimistic bubble when
+        // the authoritative user echo lands; without it the prompt shows twice.
+        attemptId: input.attemptId,
         logicalSessionId: this.logicalSessionId,
         signal: controller.signal,
+        ...(input.attachments?.length ? { attachments: input.attachments } : {}),
         ...(input.model ? { model: parseModelRef(input.model) } : {}),
       })
       .then(

@@ -34,18 +34,28 @@ describe('permission tier control under a user-configured gate', () => {
     expect(CODE).toMatch(/degraded\s*\?\s*\(?\s*<DegradedGateNotice\s*\/>/);
   });
 
-  it('never labels the degraded state with a tier name', () => {
+  it('never labels the degraded state with a policy name', () => {
     // The trigger label is the one piece of this control visible without
-    // opening the menu. Naming a tier there is the precise claim that is false.
-    const labelLine = CODE.split('\n').find((line) => line.includes('const label ='));
-    expect(labelLine).toBeDefined();
-    expect(labelLine).toContain('Your own policy');
-    for (const tier of ['Read-only', 'Pragmatic', 'Hands-off', 'Full access']) {
-      expect(labelLine).not.toContain(tier);
+    // opening the menu. Naming a policy there is the precise claim that is
+    // false. Scanned as a STATEMENT rather than a line: D14 made the label a
+    // mode/gear pair, which pushed the ternary across three lines and left the
+    // old single-line scan reading `const label = degraded` and nothing else.
+    const start = CODE.indexOf('const label =');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const label = CODE.slice(start, CODE.indexOf(';', start));
+    expect(label).toContain('degraded');
+    expect(label).toContain('Your own policy');
+    // The two-axis labels are interpolated from the shared maps and reached
+    // only on the NOT-degraded arm; a literal here would be a hard-coded claim
+    // about a policy this chat may not be running under.
+    for (const arm of label.split('?')[1]?.split(':') ?? []) {
+      for (const name of ['Read-only', 'Pragmatic', 'Hands-off', 'Full access']) {
+        expect(arm).not.toContain(name);
+      }
     }
   });
 
-  it('says the tiers are off without naming a tier as the effective policy', () => {
+  it('says the tiers are off without naming one as the effective policy', () => {
     // The panel is deliberately two lines (the user asked for exactly that), so
     // what it must not do is describe the live policy as one of the four —
     // a `yoloMode: true` config is laxer than every tier listed here.

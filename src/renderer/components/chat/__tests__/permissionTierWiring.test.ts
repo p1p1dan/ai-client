@@ -43,7 +43,10 @@ describe('[U12 fix] the send path carries the stored tier into the spawn', () =>
     // load-bearing: a chat's own stored tier still outranks the default, and
     // both absent still omits the field so Main picks.
     expect(COMPOSER).toContain('readSessionPermissions');
-    expect(COMPOSER).toContain(
+    // Matched across normalized whitespace: the D14 rename made the assignment
+    // long enough for the formatter to wrap it, and the exact-text scan then
+    // failed on a wiring that was in fact intact.
+    expect(COMPOSER.replace(/\s+/g, ' ')).toContain(
       'const spawnPermissions = readSessionPermissions(sessionId) ?? readDefaultPermissions() ?? undefined'
     );
   });

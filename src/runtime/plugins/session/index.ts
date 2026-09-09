@@ -2,6 +2,7 @@ import type { AgentMessage, CompactResult } from '@earendil-works/pi-agent-core'
 import { type Context, Service } from 'cordis';
 import { DEFAULT_RUNTIME_PERMISSION } from '../../../shared/types/runtimePermission.ts';
 import { type RuntimeSessionService, SESSION_SERVICE } from '../../contracts.ts';
+import { INTERNAL_CUSTOM_ENTRIES } from './legacy.ts';
 import type { JsonlSessionStore, NewSessionEntry } from './store.ts';
 
 export class SessionPlugin extends Service implements RuntimeSessionService {
@@ -24,7 +25,8 @@ export class SessionPlugin extends Service implements RuntimeSessionService {
   }
   async appendEntry(entry: NewSessionEntry) {
     const stored = await this.store.appendEntry(entry);
-    if (stored.type === 'custom')
+    // Ours stay off the wire: see INTERNAL_CUSTOM_ENTRIES.
+    if (stored.type === 'custom' && !INTERNAL_CUSTOM_ENTRIES.includes(stored.customType))
       this.ctx.runtimeEvents.emit({
         type: 'custom.entry',
         sessionId: this.store.metadata().id,
