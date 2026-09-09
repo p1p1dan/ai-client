@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { constants } from 'node:fs';
+import { constants, type Stats } from 'node:fs';
 import { access, lstat, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -198,7 +198,22 @@ export function registerTempWorkspaceHandlers(): void {
           };
         }
 
-        const dirStat = await lstat(dirPath);
+        // A directory that is already gone is the outcome this handler exists
+        // to produce, so report success instead of failing the symlink guard's
+        // stat on ENOENT. `removeWithRetries` below would have tolerated it
+        // (`rm` with `force: true`), which made this stat the only thing
+        // stopping a user from clearing a stale row for a folder they had
+        // deleted by hand.
+        let dirStat: Stats;
+        try {
+          dirStat = await lstat(dirPath);
+        } catch (err) {
+          if (mapError(err).code === 'ENOENT') {
+            unregisterAuthorizedWorkdir(resolvedDirPath);
+            return { ok: true };
+          }
+          throw err;
+        }
         if (dirStat.isSymbolicLink()) {
           return {
             ok: false,

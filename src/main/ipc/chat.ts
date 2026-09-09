@@ -20,6 +20,7 @@ import {
 import type { WorkerExtensionInfo } from '@shared/types/workerRpc';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspaceService';
+import { adoptTempWorkspace } from '../services/agent-host/TempWorkspaceService';
 import { WorkerManagerError, workerManager } from '../services/agent-host/WorkerManager';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { ExtensionUiRouter } from '../services/chat/extensionUiRouting';
@@ -264,6 +265,10 @@ export function registerChatHandlers(): void {
       // chat after a restart, when nothing else knows the path is scratch.
       const unbound = scratchWorkspaceService.isScratchPath(payload.workspacePath);
       if (unbound) await scratchWorkspaceService.adopt(payload.sessionId, payload.workspacePath);
+      // A temp workspace the user deleted by hand is app-created content, so
+      // put it back at its recorded path instead of letting the spawn fail on a
+      // missing cwd. No-op for every other workspace kind.
+      else await adoptTempWorkspace(payload.workspacePath);
       await sessionIndexService.recordCreated({
         sessionId: payload.sessionId,
         workspacePath: payload.workspacePath,
@@ -397,6 +402,10 @@ export function registerChatHandlers(): void {
       const unbound = scratchWorkspaceService.isScratchPath(payload.workspacePath);
       if (unbound) {
         await scratchWorkspaceService.adopt(payload.sessionId, payload.workspacePath);
+      } else {
+        // Same reason as the unbound branch above, for the other directory kind
+        // this app creates and the user can delete underneath a live row.
+        await adoptTempWorkspace(payload.workspacePath);
       }
       if (await isUnwrittenPiSession(row)) {
         // Repair, not resume: there is no file to reopen and nothing was ever

@@ -163,6 +163,13 @@ const releaseScratch = vi.fn(async (_sessionId: string) => undefined);
 /** What this app run has already allocated — empty right after a restart. */
 let scratchPathsBySession: Record<string, string> = {};
 
+// Mocked for the same reason as ScratchWorkspaceService below, plus one of its
+// own: the real module reaches GitService, and GitService's `runtime.ts` pulls
+// in PtyManager and therefore node-pty, which cannot load in this environment.
+vi.mock('../../services/agent-host/TempWorkspaceService', () => ({
+  isTempWorkspacePath: () => false,
+  adoptTempWorkspace: vi.fn(async () => undefined),
+}));
 vi.mock('../../services/agent-host/ScratchWorkspaceService', () => ({
   scratchWorkspaceService: {
     ensure: (sessionId: string) => ensureScratch(sessionId),

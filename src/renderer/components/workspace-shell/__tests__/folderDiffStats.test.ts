@@ -24,12 +24,12 @@ function folder(projectId: string, rows: SidebarSessionRow[]): SidebarFolder {
 }
 
 const workspaces = [
-  { id: 'w1', projectId: 'p1', name: 'main', kind: 'local' as const, path: '/repo/a' },
-  { id: 'w2', projectId: 'p1', name: 'feat', kind: 'local' as const, path: '/repo/a-feat' },
-  { id: 'w3', projectId: 'p2', name: 'main', kind: 'local' as const, path: '/repo/b' },
+  { id: 'w1', projectId: 'p1', name: 'main', kind: 'main' as const, path: '/repo/a' },
+  { id: 'w2', projectId: 'p1', name: 'feat', kind: 'main' as const, path: '/repo/a-feat' },
+  { id: 'w3', projectId: 'p2', name: 'main', kind: 'main' as const, path: '/repo/b' },
   // The seeded placeholder a fresh install starts on: a real workspace row with
   // no directory behind it.
-  { id: 'w4', projectId: 'p3', name: 'seed', kind: 'local' as const, path: '' },
+  { id: 'w4', projectId: 'p3', name: 'seed', kind: 'main' as const, path: '' },
 ];
 
 describe('collectBusyWorkspacePaths', () => {

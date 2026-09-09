@@ -43,7 +43,14 @@ it('uses the bundled Node executable for packaged Windows workers and fails if i
     );
     expect(utilityProcess.fork).not.toHaveBeenCalled();
     expect(vi.mocked(spawn).mock.calls[0]?.[2]?.env).not.toHaveProperty('ELECTRON_RUN_AS_NODE');
+    // Two `existsSync` probes now, in order: the cwd, then the bundled runtime.
+    // A missing cwd is reported as such instead of surfacing as the `spawn`
+    // ENOENT that names the command and sends readers hunting for node.exe.
     vi.mocked(existsSync).mockReturnValueOnce(false);
+    expect(() =>
+      forkPiWorkerProcess({ generation: 2, cwd: '/gone', entryPath: '/worker.js' })
+    ).toThrow('Pi worker working directory is missing: /gone');
+    vi.mocked(existsSync).mockReturnValueOnce(true).mockReturnValueOnce(false);
     expect(() =>
       forkPiWorkerProcess({ generation: 2, cwd: '/workspace', entryPath: '/worker.js' })
     ).toThrow('Pi Node runtime is missing');

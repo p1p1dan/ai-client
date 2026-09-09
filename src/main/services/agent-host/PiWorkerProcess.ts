@@ -62,6 +62,14 @@ export function buildPiWorkerEnvironment(input: {
 /** Spawn one isolated process for one WorkerSlot generation. */
 export function forkPiWorkerProcess(options: PiWorkerProcessOptions): ForkedPiWorker {
   const entryPath = options.entryPath ?? resolveCurrentPiWorkerEntryPath();
+  // A cwd that no longer exists makes `spawn`/`fork` fail with ENOENT naming
+  // the COMMAND, not the directory — which is how a missing temp workspace
+  // surfaced on the encrypted Windows host as `spawn ...\node.exe ENOENT`
+  // while node.exe was sitting on disk the whole time. Check it here, next to
+  // the runtime check below that already exists for exactly this reason.
+  if (!existsSync(options.cwd)) {
+    throw new Error(`Pi worker working directory is missing: ${options.cwd}`);
+  }
   const env = buildPiWorkerEnvironment({
     generation: options.generation,
     inheritedEnv: options.inheritedEnv,
