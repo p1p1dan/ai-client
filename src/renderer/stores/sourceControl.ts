@@ -1,11 +1,8 @@
 import { create } from 'zustand';
 
-type NavigationDirection = 'next' | 'prev' | null;
 type ViewMode = 'list' | 'tree';
 
 interface SourceControlState {
-  navigationDirection: NavigationDirection;
-  setNavigationDirection: (direction: NavigationDirection) => void;
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
   expandedFolders: Set<string>;
@@ -13,8 +10,6 @@ interface SourceControlState {
 }
 
 export const useSourceControlStore = create<SourceControlState>((set) => ({
-  navigationDirection: null,
-  setNavigationDirection: (navigationDirection) => set({ navigationDirection }),
   viewMode: 'list',
   setViewMode: (viewMode) => set({ viewMode }),
   expandedFolders: new Set<string>(),
