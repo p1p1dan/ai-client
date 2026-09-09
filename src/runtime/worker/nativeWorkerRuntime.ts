@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
+import { samePiSessionPath } from '../../agent-host/piSessionPreflight.ts';
 import { paginatePiSessionHistory } from '../../agent-host/piSessionTimeline.ts';
 import type { ExtensionUiResponse, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import {
@@ -20,6 +21,8 @@ import type {
   WorkerForkResult,
   WorkerHistoryPayload,
   WorkerHistoryResult,
+  WorkerReloadPayload,
+  WorkerReloadResult,
   WorkerRewindPayload,
   WorkerRewindResult,
   WorkerSendPayload,
@@ -31,7 +34,7 @@ import type {
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import type { RuntimeHostConfig } from '../contracts.ts';
 import { RuntimeHostError } from '../host/errors.ts';
-import { JsonlSessionStore } from '../plugins/session/store.ts';
+import { JsonlSessionStore, type SessionConfig } from '../plugins/session/store.ts';
 
 /**
  * The self-owned runtime behind the existing worker RPC surface (ARD P4-1).
@@ -45,11 +48,9 @@ import { JsonlSessionStore } from '../plugins/session/store.ts';
  * choosing `native` does not load `pi-coding-agent`. The worker entry checks the
  * shape at the assignment instead.
  *
- * Still absent: `reload`. It re-opens a worker's own JSONL in place, which pi
- * does with `switchSession`; the native store has no equivalent because its
- * document IS the file it holds a lock on. Leaving the method off makes the RPC
- * server answer `WORKER_RELOAD_UNAVAILABLE`, which is a clearer signal than a
- * reload that silently returns stale history.
+ * Still absent: `commands`, which answers an empty list because slash commands
+ * come from skills and plugins (P5-1). Everything else on `PiWorkerRuntime` is
+ * implemented.
  */
 
 export class NativeWorkerRuntimeError extends Error {
@@ -114,11 +115,14 @@ export class NativeWorkerRuntime {
     }
   }
 
-  private async bootstrapOnce(): Promise<WorkerBootstrapResult> {
-    if (this.disposed) {
-      throw new NativeWorkerRuntimeError('WORKER_SESSION_DISPOSED', 'Worker session is disposed');
-    }
-    const agentDir = this.options.agentDir ?? this.resolveAgentDir();
+  /**
+   * Build the plugin graph over one session file.
+   *
+   * Shared by bootstrap and reload: a reload that constructed the graph
+   * differently from a bootstrap would give the same session two behaviours
+   * depending on how it was last opened.
+   */
+  private async openGraph(agentDir: string, session: SessionConfig): Promise<RuntimeHandle> {
     const create = this.options.create ?? createRuntime;
     const handle = await create({
       ...(this.options.env ? { env: this.options.env } : {}),
@@ -129,9 +133,7 @@ export class NativeWorkerRuntime {
       // the session's cwd, which bootstrap also cross-checks against the
       // session config, so the two can never drift apart.
       tools: { cwd: this.cwd },
-      session: this.options.sessionFile
-        ? { file: this.options.sessionFile, cwd: this.cwd, mode: 'resume' }
-        : { file: this.sessionFilePath(agentDir), cwd: this.cwd, mode: 'create' },
+      session,
       permissions: {
         ...(this.options.permissions?.mode ? { mode: this.options.permissions.mode } : {}),
         ...(this.options.permissions?.gear ? { gear: this.options.permissions.gear } : {}),
@@ -182,6 +184,20 @@ export class NativeWorkerRuntime {
     // on the wire is the RuntimeEvent the renderer already reduces (D5); the
     // RPC server adds `seq` and `timestamp`.
     this.unsubscribe = handle.events.subscribe((event) => this.emit(event));
+    return handle;
+  }
+
+  private async bootstrapOnce(): Promise<WorkerBootstrapResult> {
+    if (this.disposed) {
+      throw new NativeWorkerRuntimeError('WORKER_SESSION_DISPOSED', 'Worker session is disposed');
+    }
+    const agentDir = this.options.agentDir ?? this.resolveAgentDir();
+    await this.openGraph(
+      agentDir,
+      this.options.sessionFile
+        ? { file: this.options.sessionFile, cwd: this.cwd, mode: 'resume' }
+        : { file: this.sessionFilePath(agentDir), cwd: this.cwd, mode: 'create' }
+    );
 
     const session = this.requireSession();
     const metadata = session.metadata();
@@ -393,6 +409,90 @@ export class NativeWorkerRuntime {
         page: paginatePiSessionHistory(session.history()),
       },
       tree: { snapshot: session.tree(this.logicalSessionId) },
+    };
+  }
+
+  /**
+   * Re-read this worker's own session file (R02 / `worker.reload`).
+   *
+   * Not a convenience. `CHAT_SEND` calls this whenever a Pi TUI terminal on the
+   * same session was just released (`src/main/ipc/chat.ts`): the terminal
+   * appended to the same JSONL, and this worker still holds the tree it read
+   * before that. Sending without re-reading would branch the next turn off the
+   * pre-handover leaf and strand everything typed in the terminal on an
+   * abandoned path. Our own writer lock does not prevent this — it is an
+   * advisory lock file, and the bundled pi TUI is a different program that
+   * never looks at it.
+   *
+   * Implemented as tear-down-and-reopen because the store's document IS the
+   * file it holds a lock on; there is no in-place re-read. That is the same
+   * shape as the legacy backend, whose `switchSession` also destroys the old
+   * session before building the new one.
+   */
+  async reload(input: WorkerReloadPayload): Promise<WorkerReloadResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.assertIdle('reload the session');
+    await this.bootstrap();
+    const handle = this.requireHandle();
+    const current = this.requireSession().file;
+    if (!samePiSessionPath(current, input.sessionFile)) {
+      throw new NativeWorkerRuntimeError(
+        'WORKER_RELOAD_IDENTITY_MISMATCH',
+        `Worker owns session file ${current}, not ${input.sessionFile}`
+      );
+    }
+    const agentDir = this.result?.agentDir ?? this.options.agentDir ?? this.resolveAgentDir();
+
+    // Any approval dialog still open belongs to the graph being torn down, and
+    // the event subscription is bound to its events service.
+    handle.approval?.bridge.cancelAll('aborted');
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+    this.handle = null;
+    await handle.dispose();
+
+    try {
+      await this.openGraph(agentDir, { file: current, cwd: this.cwd, mode: 'resume' });
+    } catch (error) {
+      // The old graph is gone and the new one did not come up, so this slot
+      // owns nothing. Clearing the cached bootstrap lets Main's respawn — or a
+      // resent worker.bootstrap — rebuild instead of answering from a result
+      // that no longer has a runtime behind it.
+      this.result = null;
+      this.booting = null;
+      throw new NativeWorkerRuntimeError(
+        'WORKER_RELOAD_FAILED',
+        `Failed to re-open session ${current}: ${error instanceof Error ? error.message : String(error)}`,
+        true
+      );
+    }
+
+    const session = this.requireSession();
+    const metadata = session.metadata();
+    const history = {
+      logicalSessionId: this.logicalSessionId,
+      sessionFile: metadata.file,
+      workspacePath: this.cwd,
+      page: paginatePiSessionHistory(session.history()),
+    };
+    // The cached bootstrap result is what Main reads back on a later reconnect;
+    // leaving the pre-reload leaf in it would reintroduce the exact staleness
+    // this call exists to clear.
+    if (this.result) {
+      this.result = {
+        ...this.result,
+        piSessionId: metadata.id,
+        sessionFile: metadata.file,
+        leaf: metadata.leaf,
+        initialHistory: history,
+      };
+    }
+    return {
+      logicalSessionId: this.logicalSessionId,
+      sessionFile: metadata.file,
+      workspacePath: this.cwd,
+      leaf: metadata.leaf,
+      history,
     };
   }
 

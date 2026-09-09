@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -14,6 +14,7 @@ import type { SessionTreeSnapshot } from '../../shared/types/sessionHistory.ts';
 import {
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerForkResult,
+  type WorkerReloadResult,
   type WorkerRewindResult,
   type WorkerRpcResponse,
 } from '../../shared/types/workerRpc.ts';
@@ -357,11 +358,58 @@ describe('native backend end to end (P4-4)', () => {
     });
     expect(tree.snapshot.logicalSessionId).toBe('logical-e2e');
 
-    // An absent optional method must surface as a named error, never as a
-    // success that quietly did nothing.
+    // A reload naming a file this worker does not own must be refused, not
+    // silently applied to whatever it does own.
     await expect(
       call('worker.reload', { logicalSessionId: 'logical-e2e', sessionFile: 'x' })
-    ).rejects.toMatchObject({ code: 'WORKER_RELOAD_UNAVAILABLE' });
+    ).rejects.toMatchObject({ code: 'WORKER_RELOAD_IDENTITY_MISMATCH' });
+  });
+
+  it('reloads a session another writer appended to', async () => {
+    faux.setResponses([fauxAssistantMessage('first')]);
+    const boot = await bootstrap();
+    await send('hello');
+    await turnIdle();
+
+    const before = await call<{ page: { messages: unknown[] } }>('worker.history', {
+      logicalSessionId: 'logical-e2e',
+    });
+
+    // Stands in for the bundled pi TUI: a different program appending to the
+    // same JSONL while this worker holds it. Our writer lock is advisory and
+    // the TUI never looks at it, so this really can happen.
+    const lines = (await readFile(boot.sessionFile, 'utf8')).split('\n').filter(Boolean);
+    const last = lines
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .findLast((row) => row.kind === 'entry');
+    expect(last).toBeDefined();
+    const appended = {
+      ...last,
+      id: 'entry-from-the-terminal',
+      seq: (last?.seq as number) + 1,
+      parentId: last?.id,
+      type: 'message',
+      message: { role: 'user', content: 'typed in the terminal', timestamp: Date.now() },
+    };
+    await appendFile(boot.sessionFile, `${JSON.stringify(appended)}\n`);
+
+    // Without the reload the next turn would branch off the pre-handover leaf
+    // and strand everything the terminal wrote.
+    const reloaded = await call<WorkerReloadResult>('worker.reload', {
+      logicalSessionId: 'logical-e2e',
+      sessionFile: boot.sessionFile,
+    });
+    expect(reloaded.sessionFile).toBe(boot.sessionFile);
+    expect(reloaded.history.page.messages.length).toBeGreaterThan(before.page.messages.length);
+    expect(JSON.stringify(reloaded.history.page.messages)).toContain('typed in the terminal');
+    expect(reloaded.leaf.activeEntryId).toBe('entry-from-the-terminal');
+
+    // The reopened graph is live: the session still answers and still writes.
+    faux.setResponses([fauxAssistantMessage('after reload')]);
+    outbound = [];
+    await send('still there?', 'turn-2');
+    await turnIdle();
+    expect(await readFile(boot.sessionFile, 'utf8')).toContain('after reload');
   });
 
   it('rewinds to a user turn and hands back the text to re-edit', async () => {
