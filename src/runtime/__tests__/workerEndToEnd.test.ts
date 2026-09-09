@@ -296,23 +296,54 @@ describe('native backend end to end (P4-4)', () => {
     ).toBe(true);
   }, 20_000);
 
-  it('accepts a compaction request and applies it at the next turn boundary', async () => {
-    faux.setResponses([fauxAssistantMessage('first')]);
-    await bootstrap();
+  it('compacts the transcript when asked, and does it there and then', async () => {
+    faux.setResponses([
+      fauxAssistantMessage([fauxToolCall('read', { path: 'notes.txt' }, { id: 'call-1' })], {
+        stopReason: 'toolUse',
+      }),
+      fauxAssistantMessage('first'),
+    ]);
+    const boot = await bootstrap();
     await send('hello');
     await turnIdle();
+    expect(faux.state.callCount).toBe(2);
 
+    // The summary is its own provider request. Asserting the call count is what
+    // catches a /compact that only recorded an intent: the earlier version of
+    // this code set a flag that `beginRun` then cleared, so nothing ever
+    // compacted and the count stayed at 2.
+    faux.setResponses([fauxAssistantMessage('a summary of what happened')]);
     expect(await call('worker.compact', { logicalSessionId: 'logical-e2e' })).toEqual({
       compacted: true,
     });
+    expect(faux.state.callCount).toBe(3);
 
-    // Deferred, not immediate: the window is replaced when the next turn is
-    // prepared, so no summary is ever cut into a half-finished tool batch.
+    // Durable, and durable before the next send: the checkpoint is on disk now.
+    const transcript = await readFile(boot.sessionFile, 'utf8');
+    const compaction = transcript
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { type?: string; summary?: string })
+      .find((row) => row.type === 'compaction');
+    expect(compaction?.summary).toContain('a summary of what happened');
+
+    // And the next turn starts from the shortened window rather than re-running
+    // the compaction.
     faux.setResponses([fauxAssistantMessage('second')]);
     outbound = [];
     await send('and again', 'turn-2');
     await turnIdle();
-    expect(faux.state.callCount).toBe(2);
+    expect(faux.state.callCount).toBe(4);
+  });
+
+  it('refuses to compact an empty conversation instead of claiming it did', async () => {
+    faux.setResponses([]);
+    await bootstrap();
+    await expect(call('worker.compact', { logicalSessionId: 'logical-e2e' })).rejects.toMatchObject(
+      {
+        code: 'WORKER_COMPACT_UNAVAILABLE',
+      }
+    );
   });
 
   it('reports the branch tree and refuses an unsupported reload explicitly', async () => {

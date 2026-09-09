@@ -302,29 +302,65 @@ export class NativeWorkerRuntime {
   }
 
   /**
-   * `/compact` — R02-c.
+   * `/compact` — R02-c, manual context compaction.
    *
-   * Legacy pi compacts immediately and aborts the running turn. The native
-   * runtime cannot: compaction only ever happens at a turn boundary
-   * (`prepareTurn`), which is what keeps a summary from being cut mid-tool-call
-   * (P2-3). So this records the same intent `new_context` records and the next
-   * turn honours it. The user-visible difference is that the transcript changes
-   * on the next send rather than on the click; the model never sees a window
-   * that was rewritten underneath it.
+   * Runs the compaction NOW rather than recording an intent for the next turn.
+   * The intent path (`requestNewWindow`, what the model's `new_context` tool
+   * uses) is run-local: `beginRun` clears it, so a request made between runs —
+   * which is exactly what `/compact` is — would be wiped before any turn could
+   * honour it. Forcing it here also matches what the user asked for: the
+   * transcript is summarized when they click, not on their next message.
+   *
+   * The summary and its retained tail are appended to the session as a
+   * compaction entry, so the next run rebuilds the shortened window from disk.
    */
   async compact(input: WorkerCompactPayload): Promise<WorkerCompactResult> {
     this.assertLogicalSession(input.logicalSessionId);
     this.assertIdle('compact the conversation');
     await this.bootstrap();
-    const context = this.requireHandle().context;
+    const handle = this.requireHandle();
+    const context = handle.context;
     if (!context?.enabled) {
       throw new NativeWorkerRuntimeError(
         'WORKER_COMPACT_UNAVAILABLE',
         'This runtime was built without compaction'
       );
     }
-    context.requestNewWindow();
+    const session = this.requireSession();
+    await session.flush();
+    const snapshot = session.snapshot();
+    const resolved = handle.model.resolve(this.compactionModelRef(snapshot.model));
+    // Restores the persisted checkpoint identity first, so a second /compact
+    // updates the previous summary instead of summarizing the summary.
+    context.beginRun(snapshot);
+    const prepared = await context.prepareTurn({
+      messages: snapshot.messages,
+      model: resolved.model,
+      models: resolved.models,
+      retention: 'completed_turn',
+      force: true,
+      ...(input.instructions ? { instructions: input.instructions } : {}),
+    });
+    if (!prepared.compaction) {
+      throw new NativeWorkerRuntimeError(
+        'WORKER_COMPACT_UNAVAILABLE',
+        prepared.skipped?.message ?? 'there is nothing to compact yet'
+      );
+    }
     return { compacted: true };
+  }
+
+  private compactionModelRef(saved: { provider: string; modelId: string } | undefined) {
+    if (saved) return { provider: saved.provider, id: saved.modelId };
+    if (this.options.model) return parseModelRef(this.options.model);
+    const fallback = this.requireHandle().model.defaultRef();
+    if (!fallback) {
+      throw new NativeWorkerRuntimeError(
+        'WORKER_COMPACT_UNAVAILABLE',
+        'No model is available to summarize the conversation'
+      );
+    }
+    return fallback;
   }
 
   /**

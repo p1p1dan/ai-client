@@ -78,7 +78,7 @@ export interface ContextConfig {
 }
 
 export interface CompactionOutcome {
-  reason: 'model_requested' | 'hard_limit';
+  reason: 'model_requested' | 'hard_limit' | 'user_requested';
   family: CompactionFamily;
   tokensBefore: number;
   tokensAfter: number;
@@ -120,6 +120,17 @@ export interface PrepareTurnRequest {
   signal?: AbortSignal;
   /** Pending user input and request overhead, used only at the first request. */
   additionalTokens?: number;
+  /**
+   * Compact now regardless of the budget, because the user asked (`/compact`).
+   *
+   * Kept off {@link RuntimeContextService.requestNewWindow}: that intent is
+   * run-local and `beginRun` clears it, which is right for the model's
+   * `new_context` call and wrong for a request made BETWEEN runs — the latter
+   * would be wiped before it could ever be honoured.
+   */
+  force?: boolean;
+  /** User's guidance for the summary, passed through to pi's `compact`. */
+  instructions?: string;
 }
 
 export interface RuntimeContextService {
@@ -210,7 +221,7 @@ export class ContextPlugin extends Service implements RuntimeContextService {
     // compact a second time on the next turn for no reason.
     const modelRequested = this.pending;
     this.pending = false;
-    if (!hardLimit && !modelRequested) {
+    if (!hardLimit && !modelRequested && !request.force) {
       const decision = selectReminder(budget, this.reminders, { compactionTool: this.toolName });
       if (!decision) return { messages };
       this.reminders = decision.state;
@@ -226,7 +237,7 @@ export class ContextPlugin extends Service implements RuntimeContextService {
       request,
       messages,
       budget,
-      reason: hardLimit ? 'hard_limit' : 'model_requested',
+      reason: hardLimit ? 'hard_limit' : modelRequested ? 'model_requested' : 'user_requested',
     });
   }
 
@@ -313,7 +324,7 @@ export class ContextPlugin extends Service implements RuntimeContextService {
         preparation,
         request.models,
         request.model,
-        undefined,
+        request.instructions,
         request.signal,
         request.thinkingLevel
       );
