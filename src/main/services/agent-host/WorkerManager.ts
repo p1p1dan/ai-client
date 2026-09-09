@@ -939,11 +939,34 @@ export class WorkerManager {
         const reopenedFile = created.bootstrap.sessionFile
           ? normalizeWorkerPath(created.bootstrap.sessionFile, 'Pi session file')
           : null;
-        if (!reopenedFile || sessionWorkerKey(reopenedFile) !== durableKey) {
+        if (!reopenedFile) {
           throw new WorkerManagerError(
             'worker_resume_identity_mismatch',
             'Pi worker did not open the requested exact session file'
           );
+        }
+        let resumedFile = sessionFile;
+        if (sessionWorkerKey(reopenedFile) !== durableKey) {
+          // A pre-v4 session cannot be resumed where it lies: the native runtime
+          // converts it and opens the copy, so what comes back is legitimately
+          // not the file Main asked for. Accept that only when the worker names
+          // this exact request as the copy's source — anything else is the
+          // silent divergence this check exists to catch.
+          const declaredSource =
+            typeof created.bootstrap.sessionSourceFile === 'string'
+              ? normalizeWorkerPath(created.bootstrap.sessionSourceFile, 'Pi session file')
+              : null;
+          if (!declaredSource || sessionWorkerKey(declaredSource) !== durableKey) {
+            throw new WorkerManagerError(
+              'worker_resume_identity_mismatch',
+              'Pi worker did not open the requested exact session file'
+            );
+          }
+          // Move the durable identity onto the copy. Leaving it on the legacy
+          // file would make every later resume convert and mismatch again.
+          this.adoptRematerializedFile(entry, reopenedFile);
+          await this.bindRuntimeIdentity(input.sessionId, reopenedFile);
+          resumedFile = reopenedFile;
         }
         const history = created.bootstrap.initialHistory;
         if (!isWorkerHistoryResult(history)) {
@@ -956,7 +979,7 @@ export class WorkerManager {
         await this.commitResumed({
           sessionId: input.sessionId,
           workspacePath: cwd,
-          runtimeIdentity: sessionFile,
+          runtimeIdentity: resumedFile,
           ...(input.model ? { model: input.model } : {}),
           piLeaf: created.bootstrap.leaf,
         });

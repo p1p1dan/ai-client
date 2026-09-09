@@ -36,7 +36,9 @@ interface Fake {
   configured: unknown[];
 }
 
-function fakeRuntime(overrides: { history?: unknown[] } = {}): Fake {
+function fakeRuntime(
+  overrides: { history?: unknown[]; file?: string; sourceFile?: string } = {}
+): Fake {
   let listener: ((event: RuntimeEventDraft) => void) | undefined;
   let resolveRun: ((result: RuntimeRunResult) => void) | undefined;
   const fake: Fake = {
@@ -70,14 +72,15 @@ function fakeRuntime(overrides: { history?: unknown[] } = {}): Fake {
       },
     },
     session: {
-      file: SESSION_FILE,
+      file: overrides.file ?? SESSION_FILE,
       metadata: () => ({
         id: 'native-session-1',
-        file: SESSION_FILE,
+        file: overrides.file ?? SESSION_FILE,
         cwd: '/repo',
         title: '',
         model: 'anthropic/claude-opus-5',
         createdAt: 1,
+        ...(overrides.sourceFile ? { sourceFile: overrides.sourceFile } : {}),
         leaf: { activeEntryId: 'e2', fileTailEntryId: 'e2' },
       }),
       history: () => overrides.history ?? [],
@@ -165,6 +168,22 @@ describe('NativeWorkerRuntime bootstrap', () => {
       logicalSessionId: 'logical-1',
       workspacePath: '/repo',
     });
+  });
+
+  it('names the legacy source when it opened a converted copy instead', async () => {
+    // A pre-v4 file is converted on resume, so the file that ends up open is
+    // not the one Main asked for. Main accepts that only against a declared
+    // source, and then moves the indexed identity onto the copy.
+    const fake = fakeRuntime({
+      history: [],
+      file: '/elsewhere/old.jsonl.native-v4.jsonl',
+      sourceFile: '/elsewhere/old.jsonl',
+    });
+    const { runtime } = build(fake, { sessionFile: '/elsewhere/old.jsonl' });
+    live = runtime;
+    const result = await runtime.bootstrap();
+    expect(result.sessionFile).toBe('/elsewhere/old.jsonl.native-v4.jsonl');
+    expect(result.sessionSourceFile).toBe('/elsewhere/old.jsonl');
   });
 
   it('is idempotent and does not build a second Cordis graph', async () => {

@@ -234,6 +234,22 @@ export interface WorkerBootstrapResult {
   cwd: string;
   agentDir: string;
   sessionFile?: string;
+  /**
+   * The file this session was converted from, when bootstrap could not open the
+   * requested file in place.
+   *
+   * A pre-v4 session is not writable as-is: the native runtime converts it and
+   * opens the copy, so `sessionFile` is legitimately not the file Main asked
+   * for. This names the source so Main can tell that declared redirect apart
+   * from a worker that silently opened the wrong session — see
+   * `worker_resume_identity_mismatch`.
+   *
+   * Not validated by `isWorkerBootstrapResult`, for the reason given on
+   * `extensions`: the consumer already rejects anything it cannot normalize,
+   * and a malformed value should fail one legacy resume rather than make the
+   * whole bootstrap payload illegal.
+   */
+  sessionSourceFile?: string;
   /** Present only when bootstrap opened an existing exact Pi session file. */
   initialHistory?: WorkerHistoryResult;
   leaf: PiLeafCheckpoint;

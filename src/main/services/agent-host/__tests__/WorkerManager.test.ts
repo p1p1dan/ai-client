@@ -78,6 +78,15 @@ function createHarness(
     reloadFailure?: string;
     /** D10: the gate the bootstrap ack reports. Defaults to the injected copy. */
     permissionGate?: 'bundled' | 'user_configured';
+    /**
+     * What bootstrap reports it actually opened, given what was requested.
+     *
+     * A legacy (pre-v4) resume cannot open the requested file in place: the
+     * native runtime converts it and opens the copy, so the ack names a
+     * different file and declares the request as its source. Defaults to
+     * "opened exactly what was asked for".
+     */
+    bootstrapFile?: (requested: string) => { sessionFile: string; sessionSourceFile?: string };
   } = {}
 ) {
   const records: FakeSlotRecord[] = [];
@@ -98,6 +107,7 @@ function createHarness(
     const sessionId = String(options.logicalSessionId);
     const generation = Number(options.generation ?? 1);
     const sessionFile = String(options.sessionFile ?? `/sessions/${sessionId}.jsonl`);
+    const opened = input.bootstrapFile?.(sessionFile) ?? { sessionFile };
     const onEvent = options.onEvent as ((event: WorkerRpcEvent) => void) | undefined;
     const onLifecycle = options.onLifecycle as
       | ((event: WorkerSlotLifecycleEvent) => void)
@@ -280,7 +290,8 @@ function createHarness(
         piSessionId: `pi-${sessionId}`,
         cwd: String(options.cwd),
         agentDir: '/agent',
-        sessionFile,
+        sessionFile: opened.sessionFile,
+        ...(opened.sessionSourceFile ? { sessionSourceFile: opened.sessionSourceFile } : {}),
         leaf: (options.leafCheckpoint as
           | { activeEntryId: string | null; fileTailEntryId: string | null }
           | undefined) ?? { activeEntryId: null, fileTailEntryId: null },
@@ -288,7 +299,7 @@ function createHarness(
           ? {
               initialHistory: {
                 logicalSessionId: sessionId,
-                sessionFile,
+                sessionFile: opened.sessionFile,
                 workspacePath: String(options.cwd),
                 page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
               },
@@ -836,6 +847,82 @@ describe('WorkerManager session extensions (U04)', () => {
 });
 
 describe('WorkerManager Pi history and real resume', () => {
+  it('adopts the converted copy a legacy resume opens and moves the durable identity onto it', async () => {
+    // Every session whose indexed identity still names a pre-v4 file used to be
+    // unopenable on the native backend: the runtime converts it, opens
+    // `<file>.native-v4.jsonl`, and the identity check saw a file it had not
+    // asked for. The redirect is legitimate exactly when the worker declares
+    // the requested file as the copy's source.
+    const h = createHarness({
+      bootstrapFile: (requested) => ({
+        sessionFile: `${requested}.native-v4.jsonl`,
+        sessionSourceFile: requested,
+      }),
+    });
+
+    await h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: '/sessions/legacy-v3.jsonl',
+      workspacePath: '/repo',
+      ownerWebContentsId: 11,
+    });
+
+    expect(h.bindRuntimeIdentity).toHaveBeenCalledWith(
+      's1',
+      '/sessions/legacy-v3.jsonl.native-v4.jsonl'
+    );
+    // The index row now names the copy, so the commit that follows must too —
+    // commitResumed rejects an identity that disagrees with the stored one.
+    expect(h.commitResumed).toHaveBeenCalledWith({
+      sessionId: 's1',
+      workspacePath: '/repo',
+      runtimeIdentity: '/sessions/legacy-v3.jsonl.native-v4.jsonl',
+      piLeaf: { activeEntryId: null, fileTailEntryId: null },
+    });
+    expect(h.manager.getSlotSnapshots()).toEqual([
+      expect.objectContaining({
+        logicalSessionId: 's1',
+        sessionFile: '/sessions/legacy-v3.jsonl.native-v4.jsonl',
+      }),
+    ]);
+  });
+
+  it('still rejects a different file when the worker declares no source for it', async () => {
+    const h = createHarness({
+      bootstrapFile: (requested) => ({ sessionFile: `${requested}.other.jsonl` }),
+    });
+
+    await expect(
+      h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: '/sessions/s1.jsonl',
+        workspacePath: '/repo',
+        ownerWebContentsId: 11,
+      })
+    ).rejects.toThrow('did not open the requested exact session file');
+    expect(h.bindRuntimeIdentity).not.toHaveBeenCalled();
+    expect(h.commitResumed).not.toHaveBeenCalled();
+  });
+
+  it('rejects a converted copy whose declared source is not what was requested', async () => {
+    const h = createHarness({
+      bootstrapFile: () => ({
+        sessionFile: '/sessions/someone-else.jsonl.native-v4.jsonl',
+        sessionSourceFile: '/sessions/someone-else.jsonl',
+      }),
+    });
+
+    await expect(
+      h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: '/sessions/s1.jsonl',
+        workspacePath: '/repo',
+        ownerWebContentsId: 11,
+      })
+    ).rejects.toThrow('did not open the requested exact session file');
+    expect(h.bindRuntimeIdentity).not.toHaveBeenCalled();
+  });
+
   it('opens the exact durable file, commits it, then publishes resumed → history → idle', async () => {
     const h = createHarness();
     const requestId = await h.manager.resumeSession({

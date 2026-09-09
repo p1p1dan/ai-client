@@ -218,6 +218,10 @@ export class NativeWorkerRuntime {
       cwd: this.cwd,
       agentDir,
       sessionFile: metadata.file,
+      // A legacy resume opens the converted copy, not the requested file. Main
+      // needs the source to accept that redirect and migrate the index onto the
+      // copy; without it every resume of the same legacy file mismatches again.
+      ...(metadata.sourceFile ? { sessionSourceFile: metadata.sourceFile } : {}),
       ...(history ? { initialHistory: history } : {}),
       leaf: metadata.leaf,
       ...(metadata.model
