@@ -312,7 +312,12 @@ export class SessionIndexService {
       const existing = this.entries.get(sessionId);
       if (!existing) return false;
       this.entries.set(sessionId, { ...existing, title, updatedAt: now() });
-      await this.flush();
+      try {
+        await this.flush();
+      } catch (error) {
+        this.entries.set(sessionId, existing);
+        throw error;
+      }
       return true;
     });
   }

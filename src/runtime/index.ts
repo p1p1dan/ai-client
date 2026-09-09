@@ -27,6 +27,7 @@ export type {
   ResolvedModel,
   RunTrace,
   RuntimeCarrier,
+  RuntimeEventsService,
   RuntimeExecAdapter,
   RuntimeExecRequest,
   RuntimeExecResult,
@@ -39,6 +40,7 @@ export type {
   RuntimeReadResult,
   RuntimeRunRequest,
   RuntimeRunResult,
+  RuntimeSessionService,
   TraceRun,
   TraceService,
   TraceStep,
@@ -46,6 +48,7 @@ export type {
 export {
   DEFERRED_REASON_MARKER,
   DEFERRED_SERVICES,
+  EVENTS_SERVICE,
   EXEC_SERVICE,
   HOST_IO_SERVICE,
   LOOP_SERVICE,
@@ -54,6 +57,7 @@ export {
   PROMPT_SERVICE,
   RUNTIME_SERVICES,
   RuntimeConfigError,
+  SESSION_SERVICE,
   TRACE_SERVICE,
 } from './contracts.ts';
 export type { RuntimeBackend, RuntimeFlags } from './flags.ts';
@@ -109,6 +113,7 @@ export { PERMISSIONS_SERVICE } from './plugins/permissions/index.ts';
 export { modeSegment, permissionGearSegment } from './plugins/permissions/prompt.ts';
 export type { PromptConfig } from './plugins/prompt/index.ts';
 export type { ComposedPrompt } from './plugins/prompt/segments.ts';
+export type { SessionConfig, SessionMetadata, SessionSnapshot } from './plugins/session/store.ts';
 export type { RuntimeToolsService, ToolsConfig } from './plugins/tools/index.ts';
 export { TOOLS_SERVICE } from './plugins/tools/index.ts';
 export {

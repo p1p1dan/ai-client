@@ -1,0 +1,95 @@
+{
+  "date": "2026-09-09",
+  "nodeHeapMiB": 768,
+  "commands": [
+    {
+      "command": "./node_modules/.bin/tsc --noEmit -p src/runtime/tsconfig.json",
+      "exitCode": 0,
+      "scope": "runtime independent package"
+    },
+    {
+      "command": "./node_modules/.bin/tsc --noEmit -p <temporary-config>",
+      "exitCode": 0,
+      "config": {
+        "extends": "/home/pi/code/ai-client-runtime/tsconfig.json",
+        "include": [
+          "/home/pi/code/ai-client-runtime/src/main/services/chat/NativeSessionIndexAdapter.ts",
+          "/home/pi/code/ai-client-runtime/src/shared/types/nativeSession.ts"
+        ],
+        "exclude": [],
+        "compilerOptions": {
+          "noEmit": true,
+          "typeRoots": [
+            "/home/pi/code/ai-client-runtime/node_modules/@types"
+          ]
+        }
+      }
+    },
+    {
+      "command": "./node_modules/.bin/biome check <23 changed TypeScript files>",
+      "exitCode": 0,
+      "log": "biome.txt"
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    },
+    {
+      "command": "node --experimental-strip-types src/runtime/smoke/runOnce.ts --offline --json",
+      "exitCode": 0,
+      "log": "offline-smoke.txt"
+    }
+  ],
+  "tests": [
+    {
+      "log": "session-tests.txt",
+      "result": [
+        "Test Files  3 passed (3)",
+        "Tests  42 passed (42)"
+      ]
+    },
+    {
+      "log": "navigation-legacy-events.txt",
+      "result": [
+        "Test Files  3 passed (3)",
+        "Tests  24 passed (24)"
+      ]
+    },
+    {
+      "log": "runtime-host-tests.txt",
+      "result": [
+        "Test Files  5 passed (5)",
+        "Tests  30 passed (30)"
+      ]
+    },
+    {
+      "log": "prompt-catalog-tests.txt",
+      "result": [
+        "Test Files  4 passed (4)",
+        "Tests  49 passed (49)"
+      ]
+    },
+    {
+      "log": "tools-context-tests.txt",
+      "result": [
+        "Test Files  5 passed (5)",
+        "Tests  97 passed (97)"
+      ]
+    },
+    {
+      "log": "main-index-tests.txt",
+      "result": [
+        "Test Files  2 passed (2)",
+        "Tests  34 passed (34)"
+      ]
+    }
+  ],
+  "markdownLinksMissing": [],
+  "notRun": [
+    "full repository typecheck",
+    "full production build",
+    "remote CI",
+    "Windows/encrypted-machine/packaged GUI",
+    "live provider cache benchmark"
+  ]
+}

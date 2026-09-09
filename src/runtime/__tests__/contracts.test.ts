@@ -13,11 +13,13 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFERRED_REASON_MARKER,
   DEFERRED_SERVICES,
+  EVENTS_SERVICE,
   LOOP_SERVICE,
   MODEL_SERVICE,
   P0_SERVICES,
   PROMPT_SERVICE,
   RUNTIME_SERVICES,
+  SESSION_SERVICE,
   TRACE_SERVICE,
 } from '../contracts.ts';
 
@@ -27,9 +29,13 @@ describe('service contracts', () => {
   });
 
   it('never lists a service as both implemented and deferred', () => {
-    const overlap = [...RUNTIME_SERVICES, PROMPT_SERVICE, 'runtimeContext'].filter(
-      (name) => name in DEFERRED_SERVICES
-    );
+    const overlap = [
+      ...RUNTIME_SERVICES,
+      PROMPT_SERVICE,
+      SESSION_SERVICE,
+      EVENTS_SERVICE,
+      'runtimeContext',
+    ].filter((name) => name in DEFERRED_SERVICES);
     expect(overlap).toEqual([]);
   });
 

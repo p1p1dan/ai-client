@@ -13,18 +13,13 @@
  * registers the tool, claims the reminders, and performs the rollover at the
  * turn boundary the agent loop hands it.
  *
- * ## What is deliberately still missing
+ * With runtimeSession configured, the checkpoint is committed through HostIo
+ * before the request context changes. A new run restores both the persisted
+ * entry and the summary identity, so subsequent compaction updates the prior
+ * summary. Without a session this remains an in-memory smoke lane.
  *
- * The checkpoint lives in memory for the length of a run. Writing it as a
- * durable compaction record — so a resumed session shows the boundary and a
- * later compaction can update the previous summary across runs — is P2-4 on
- * top of P3's session store. The record's fields are already the ones a
- * `CompactionEntry` needs (`summary` / `tokensBefore` / `retainedTail` /
- * `usage` / `details`), so P2-4 persists this shape rather than replacing it.
- *
- * The transcript itself is never truncated: compaction replaces the *request*
- * context, and `Agent.state.messages` keeps every message. That split is what
- * lets P3 write a full session while the provider sees a compacted window.
+ * Full message history lives in the session log; only the provider context is
+ * shortened by compaction. A newly constructed Agent starts from that context.
  */
 
 import {
@@ -42,7 +37,9 @@ import {
 } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models, Usage } from '@earendil-works/pi-ai';
 import { type Context, Service } from 'cordis';
+import { SESSION_SERVICE } from '../../contracts.ts';
 import { RuntimeHostError } from '../../host/errors.ts';
+import type { SessionSnapshot } from '../session/store.ts';
 import { TOOLS_SERVICE } from '../tools/index.ts';
 import {
   type CompactionFamily,
@@ -121,6 +118,8 @@ export interface PrepareTurnRequest {
   /** True while the model is mid-turn (tool results pending), which changes retention. */
   retention?: RetentionMode;
   signal?: AbortSignal;
+  /** Pending user input and request overhead, used only at the first request. */
+  additionalTokens?: number;
 }
 
 export interface RuntimeContextService {
@@ -132,8 +131,8 @@ export interface RuntimeContextService {
   readonly pendingNewWindow: boolean;
   /** The tool's callback. Records an intent only; nothing happens until the turn boundary. */
   requestNewWindow(): void;
-  /** Clears intent, reminder claims and the in-memory checkpoint. Called per run. */
-  beginRun(): void;
+  /** Resets run-local claims and restores the persisted checkpoint, when present. */
+  beginRun(snapshot?: Pick<SessionSnapshot, 'messages' | 'checkpoint'>): void;
   prepareTurn(request: PrepareTurnRequest): Promise<TurnPreparation>;
 }
 
@@ -188,11 +187,12 @@ export class ContextPlugin extends Service implements RuntimeContextService {
     if (this.enabled) this.pending = true;
   }
 
-  beginRun(): void {
+  beginRun(snapshot?: Pick<SessionSnapshot, 'messages' | 'checkpoint'>): void {
     this.pending = false;
     this.reminders = NO_REMINDERS_CLAIMED;
-    this.checkpoint = undefined;
-    this.summaryMessage = undefined;
+    this.checkpoint = snapshot?.checkpoint;
+    this.summaryMessage =
+      snapshot?.messages[0]?.role === 'compactionSummary' ? snapshot.messages[0] : undefined;
   }
 
   async prepareTurn(request: PrepareTurnRequest): Promise<TurnPreparation> {
@@ -201,7 +201,10 @@ export class ContextPlugin extends Service implements RuntimeContextService {
       this.pending = false;
       return { messages };
     }
-    const budget = contextBudget(request.model, estimateContextTokens(messages).tokens);
+    const budget = contextBudget(
+      request.model,
+      estimateContextTokens(messages).tokens + (request.additionalTokens ?? 0)
+    );
     const hardLimit = compactionNeeded(budget);
     // Read and clear together: an intent that survived its own boundary would
     // compact a second time on the next turn for no reason.
@@ -269,16 +272,24 @@ export class ContextPlugin extends Service implements RuntimeContextService {
       }
       result = summarized.value;
     }
-    const next = this.installCheckpoint(result);
-    const tokensAfter = estimateContextTokens(next).tokens;
-    if (reason === 'hard_limit' && tokensAfter >= budget.hardLimit) {
-      // Continuing would issue exactly the request this guard exists to
-      // prevent, so this one is fatal even though the checkpoint was built.
+    const session = this.ctx.get(SESSION_SERVICE);
+    const candidate = [
+      createCompactionSummaryMessage(result.summary, result.tokensBefore, Date.now()),
+      ...result.retainedTail,
+    ];
+    if (
+      estimateContextTokens(candidate).tokens + (request.additionalTokens ?? 0) >=
+      budget.hardLimit
+    ) {
       throw new RuntimeHostError(
         'context_compaction_failed',
         'the checkpoint stayed above the safe model context budget'
       );
     }
+    // Commit the durable boundary before changing what the provider sees.
+    const persisted = session ? await session.appendCompaction(result) : undefined;
+    const next = this.installCheckpoint(result, persisted);
+    const tokensAfter = estimateContextTokens(next).tokens;
     return {
       messages: next,
       compaction: {
@@ -318,10 +329,10 @@ export class ContextPlugin extends Service implements RuntimeContextService {
   }
 
   /** Replace the request context with the checkpoint, and remember it for the next one. */
-  private installCheckpoint(result: CompactResult): AgentMessage[] {
+  private installCheckpoint(result: CompactResult, persisted?: CompactionEntry): AgentMessage[] {
     const timestamp = Date.now();
     const seq = (this.checkpoint?.seq ?? -1) + 1;
-    this.checkpoint = {
+    this.checkpoint = persisted ?? {
       type: 'compaction',
       id: `checkpoint:${seq}`,
       seq,
@@ -336,7 +347,7 @@ export class ContextPlugin extends Service implements RuntimeContextService {
     this.summaryMessage = createCompactionSummaryMessage(
       result.summary,
       result.tokensBefore,
-      timestamp
+      this.checkpoint.timestamp
     );
     // Exactly what pi's own `buildSessionContext` produces from a compaction
     // entry, so P3 replaying a persisted checkpoint rebuilds this same window.

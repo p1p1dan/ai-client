@@ -1,0 +1,11 @@
+
+ RUN  v3.2.4 /home/pi/code/ai-client-runtime
+
+ ✓ src/runtime/__tests__/session.test.ts (17 tests) 238ms
+ ✓ src/runtime/__tests__/contextCompaction.test.ts (17 tests) 175ms
+ ✓ src/runtime/__tests__/sessionCodec.test.ts (8 tests) 4ms
+
+ Test Files  3 passed (3)
+      Tests  42 passed (42)
+   Start at  00:27:19
+   Duration  1.45s (transform 248ms, setup 20ms, collect 656ms, tests 417ms, environment 0ms, prepare 113ms)

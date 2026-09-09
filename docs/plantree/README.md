@@ -14,7 +14,7 @@ ARD 与看板冲突时以 ARD 为准；看板只记录「做到哪了」，不�
 
 | 计划 | 状态 | 当前阶段 | 最近落地 | 下一目标 |
 |---|---|---|---|---|
-| [Runtime 自主化演进](plans/runtime-evolution/README.md) | In Progress | P1 审查补修、P2-1/P2-2 接线及本机验证完成；P1 现场与 P2 后续门禁仍待验收 | `2ae6f209` 压缩配对已提交；本次提交的补修与 P2 接线见 [P2 证据](plans/runtime-evolution/evidence/p2/README.md) | P3-1 存储契约/实现，然后接 P2-4；[当前 TODO](plans/runtime-evolution/TODO.md) |
+| [Runtime 自主化演进](plans/runtime-evolution/README.md) | In Progress | P3/P2-4 实现与本机验证完成，准备 P4 集成 | `fb7cb10b` 补修/P2 接线；P3 代码与证据随本次提交归档，见 [242+34 项及往返证据](plans/runtime-evolution/evidence/p3/completion/README.md)；并行载体/D13 状态保留 | P4-1 bootstrap → P4-2 后端开关 → P4-3 RPC 接线；[TODO](plans/runtime-evolution/TODO.md) |
 
 ## 基线
 

@@ -1,0 +1,2 @@
+{"mode":"create","success":true,"node":"v24.20.0","pid":56825,"entries":6,"checkpointPersisted":true,"title":"process roundtrip"}
+{"mode":"resume","success":true,"node":"v24.20.0","pid":56836,"entries":8,"checkpointPersisted":true,"title":"process roundtrip"}

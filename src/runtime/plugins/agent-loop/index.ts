@@ -1,5 +1,6 @@
 /** P0/P1 turn driver: optional native tools, bounded turns, permission audit and raw usage. */
 
+import { randomUUID } from 'node:crypto';
 import {
   Agent,
   type AgentEvent,
@@ -13,18 +14,22 @@ import type { Context } from 'cordis';
 import { Service } from 'cordis';
 import {
   type AgentLoopService,
+  EVENTS_SERVICE,
   LOOP_SERVICE,
   MODEL_SERVICE,
   PROMPT_SERVICE,
   RuntimeConfigError,
   type RuntimeRunRequest,
   type RuntimeRunResult,
+  SESSION_SERVICE,
   TRACE_SERVICE,
 } from '../../contracts.ts';
 import { RuntimeHostError } from '../../host/errors.ts';
 import { compactionNeeded, contextBudget } from '../context/budget.ts';
 import { CONTEXT_SERVICE } from '../context/index.ts';
 import type { ComposedPrompt } from '../prompt/segments.ts';
+import { PERMISSIONS_ENTRY } from '../session/legacy.ts';
+import { interruptedToolResults } from '../session/recovery.ts';
 
 export interface AgentLoopConfig {
   /**
@@ -50,7 +55,7 @@ export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
 };
 
 export class AgentLoopPlugin extends Service implements AgentLoopService {
-  static inject = [MODEL_SERVICE, TRACE_SERVICE, PROMPT_SERVICE];
+  static inject = [MODEL_SERVICE, TRACE_SERVICE, PROMPT_SERVICE, EVENTS_SERVICE];
 
   private readonly config: AgentLoopConfig;
 
@@ -60,8 +65,40 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
   }
 
   async run(request: RuntimeRunRequest): Promise<RuntimeRunResult> {
+    const runId = request.runId ?? randomUUID();
+    try {
+      return await this.execute({ ...request, runId });
+    } catch (error) {
+      const sessionId =
+        request.logicalSessionId ?? this.ctx.get(SESSION_SERVICE)?.metadata().id ?? runId;
+      this.ctx.runtimeEvents.emit({
+        type: 'session.failed',
+        sessionId,
+        requestId: runId,
+        payload: { error: error instanceof Error ? error.message : String(error) },
+      });
+      this.ctx.runtimeEvents.emit({
+        type: 'session.status',
+        sessionId,
+        requestId: runId,
+        payload: { status: 'idle' },
+      });
+      throw error;
+    }
+  }
+
+  private async execute(request: RuntimeRunRequest): Promise<RuntimeRunResult> {
+    const session = this.ctx.get(SESSION_SERVICE);
+    await session?.flush();
+    const snapshot = session?.snapshot();
     const adapter = this.ctx.runtimeModel;
-    const ref = request.model ?? adapter.defaultRef();
+    const saved = snapshot?.model;
+    const restoredRef =
+      saved &&
+      adapter
+        .list()
+        .find((model) => model.provider === saved.provider && model.id === saved.modelId);
+    const ref = request.model ?? restoredRef ?? adapter.defaultRef();
     if (!ref) {
       throw new RuntimeConfigError(
         'catalog_empty',
@@ -69,7 +106,8 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       );
     }
     const resolved = adapter.resolve(ref);
-    const thinkingLevel = request.thinkingLevel ?? this.config.defaultThinkingLevel;
+    const thinkingLevel =
+      request.thinkingLevel ?? snapshot?.thinkingLevel ?? this.config.defaultThinkingLevel;
     let systemPrompt = request.systemPrompt;
     let composed: ComposedPrompt | undefined;
     if (systemPrompt === undefined) {
@@ -82,6 +120,12 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       model: resolved.model.id,
       provider: resolved.ref.provider,
     });
+    const projected = this.ctx.runtimeEvents.startRun(
+      request.logicalSessionId ?? snapshot?.id ?? trace.runId,
+      trace.runId,
+      snapshot?.entries.flatMap((entry) => (entry.type === 'message' ? [entry.message] : [])) ?? [],
+      resolved.model.contextWindow
+    );
     trace.note('note', {
       event: 'run_start',
       system_prompt: systemPrompt,
@@ -104,7 +148,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // Optional: P0 and the tool-less smoke lane run without it, and a run with
     // no compaction service behaves exactly as it did before P2-3.
     const context = this.ctx.get(CONTEXT_SERVICE);
-    context?.beginRun();
+    context?.beginRun(snapshot);
     const collected = new TurnCollector();
     const toolCalls = new Set<string>();
     const unsubscribePermissions = this.ctx.get('runtimePermissions')?.onDecision((record) => {
@@ -124,7 +168,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         model: resolved.model,
         thinkingLevel,
         tools: [...(this.ctx.get('runtimeTools')?.list() ?? [])],
-        messages: [],
+        messages: snapshot?.messages ?? [],
       },
       shouldStopAfterTurn: () => ++turnCount >= (this.config.singleTurn ? 1 : 64),
       // The turn boundary is where compaction is safe: the batch of tool
@@ -144,8 +188,11 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
                   : 'completed_turn',
               ...(signal ? { signal } : {}),
             });
-            if (prepared.compaction)
+            if (prepared.compaction) {
               trace.note('note', { event: 'compaction', ...prepared.compaction });
+              const summary = prepared.messages[0];
+              if (summary?.role === 'compactionSummary') projected.compaction(summary.summary);
+            }
             if (prepared.skipped)
               trace.note('note', { event: 'compaction_skipped', ...prepared.skipped });
             if (prepared.reminder)
@@ -162,8 +209,10 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         : undefined,
     });
 
-    const unsubscribe = agent.subscribe((event) => {
+    const unsubscribe = agent.subscribe(async (event) => {
+      if (event.type === 'message_end' && session) await session.appendMessage(event.message);
       collected.observe(event);
+      projected.observe(event);
       if (event.type === 'tool_execution_start') toolCalls.add(event.toolCallId);
       if (event.type === 'tool_execution_start')
         trace.note('tool', {
@@ -188,26 +237,72 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     let thrown: Error | undefined;
     try {
       request.signal?.throwIfAborted();
-      // The next-turn hook never runs before the first request. There is no
-      // history to compact yet; keep an oversized task intact and fail before
-      // calling the provider, as PI-Desktop's prompt entry does.
+      // New input must fit on its own; only the completed history can be
+      // compacted before the first request of this run.
+      const incomingTokens =
+        estimateContextTokens([{ role: 'user', content: request.prompt, timestamp: Date.now() }])
+          .tokens +
+        Math.ceil(systemPrompt.length / 4) +
+        Math.ceil(JSON.stringify(agent.state.tools).length / 4);
       if (context?.enabled) {
-        const messageTokens = estimateContextTokens([
-          { role: 'user', content: request.prompt, timestamp: Date.now() },
-        ]).tokens;
-        const tokens =
-          messageTokens +
-          Math.ceil(systemPrompt.length / 4) +
-          Math.ceil(JSON.stringify(agent.state.tools).length / 4);
-        if (compactionNeeded(contextBudget(resolved.model, tokens))) {
+        if (compactionNeeded(contextBudget(resolved.model, incomingTokens))) {
           throw new RuntimeHostError(
             'context_too_large',
             'the pending prompt exceeds the safe model context budget'
           );
         }
       }
+      if (session && snapshot) {
+        for (const recovered of interruptedToolResults(snapshot.messages)) {
+          await session.appendMessage(recovered);
+          agent.state.messages.push(recovered);
+        }
+        if (context?.enabled && agent.state.messages.length > 0) {
+          const prepared = await context.prepareTurn({
+            messages: agent.state.messages,
+            model: resolved.model,
+            models: resolved.models,
+            thinkingLevel,
+            retention: 'completed_turn',
+            additionalTokens: incomingTokens,
+            signal: request.signal,
+          });
+          if (prepared.compaction) {
+            trace.note('note', { event: 'compaction', ...prepared.compaction });
+            const summary = prepared.messages[0];
+            if (summary?.role === 'compactionSummary') projected.compaction(summary.summary);
+          }
+          agent.state.messages = prepared.messages;
+        }
+      }
+      if (session) {
+        if (
+          !snapshot?.model ||
+          snapshot.model.provider !== resolved.ref.provider ||
+          snapshot.model.modelId !== resolved.model.id
+        )
+          await session.appendEntry({
+            type: 'model_change',
+            provider: resolved.ref.provider,
+            modelId: resolved.model.id,
+          });
+        if (snapshot?.thinkingLevel !== thinkingLevel)
+          await session.appendEntry({ type: 'thinking_level_change', thinkingLevel });
+        const permissions = this.ctx.get('runtimePermissions');
+        if (
+          permissions &&
+          (snapshot?.permissions?.mode !== permissions.mode ||
+            snapshot.permissions.gear !== permissions.gear)
+        )
+          await session.appendEntry({
+            type: 'custom',
+            customType: PERMISSIONS_ENTRY,
+            data: { mode: permissions.mode, gear: permissions.gear },
+          });
+      }
       await agent.prompt(request.prompt);
       await agent.waitForIdle();
+      await session?.flush();
     } catch (error) {
       // `Agent` encodes provider failures in the stream rather than throwing,
       // so reaching here means something structural (a bad model object, a
@@ -251,6 +346,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       success: result.success,
       ...(error ? { error } : {}),
     });
+    projected.finish(result);
     return { ...result, latencyMs: finished.latency_ms, trace: finished };
   }
 }

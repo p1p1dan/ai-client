@@ -1,0 +1,13 @@
+
+ RUN  v3.2.4 /home/pi/code/ai-client-runtime
+
+ ✓ src/runtime/__tests__/tools.test.ts (36 tests) 639ms
+ ✓ src/runtime/__tests__/shellPolicy.test.ts (26 tests) 386ms
+ ✓ src/runtime/__tests__/newContext.test.ts (5 tests) 25ms
+ ✓ src/runtime/__tests__/contextBudget.test.ts (17 tests) 11ms
+ ✓ src/runtime/__tests__/prefixStability.test.ts (13 tests) 4ms
+
+ Test Files  5 passed (5)
+      Tests  97 passed (97)
+   Start at  01:31:23
+   Duration  2.42s (transform 253ms, setup 25ms, collect 780ms, tests 1.07s, environment 0ms, prepare 169ms)

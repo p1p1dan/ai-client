@@ -1,0 +1,2 @@
+{"mode":"create","success":true,"node":"v24.20.0","pid":39169,"entries":5,"checkpointPersisted":true}
+{"mode":"resume","success":true,"node":"v24.20.0","pid":39181,"entries":7,"checkpointPersisted":true}

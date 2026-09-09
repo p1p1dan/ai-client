@@ -1,10 +1,28 @@
-# P1 补修与 P2 执行 TODO
+# Runtime 执行 TODO
 
 2026-09-08 · 用户已授权代码修改 · [看板](README.md) · [P1-0 契约](topics/p1-0-host-contracts.md) · [验证记录](evidence/p1/README.md)
 
+本批证据：[P3 完成记录](evidence/p3/completion/README.md)，runtime 20 文件 242 项 + Main 索引 2 文件 34 项、类型分片与跨进程恢复通过。代码与证据随本次提交归档。
+
 历史代码提交：`27ff2020` + `2ae6f209`（2026-09-08，实现与证据归档；不代表完整验收）。
 
-## 当前批次：审查补修 → P2 接线
+## 已完成批次：P3-2 / P3-3 / P3-4 / P3-5（代码与证据已归档）
+
+- [x] P3-2：完整树、导航、确认 rewind、独立 fork、标签与历史恢复。
+- [x] P3-3：Pi v1/v2/v3 / PI-Desktop schema 1 迁移、来源保护、D14 旧值与历史状态恢复。
+- [x] P3-4：既有 RuntimeEvent 翻译并接入 native run。
+- [x] P3-5：Main SessionIndexService adapter 实际联调与持久化。
+- [x] 按 [收尾契约](topics/p3-completion-contracts.md) 逐项验收、回归和证据归档。
+
+## 已完成批次：P3-1 → P2-4（代码与证据已归档）
+
+- [x] 核对 Pi v4 / PI-Desktop schema 1 差异并写入 [存储契约](topics/p3-1-session-contracts.md)。
+- [x] 自有 JSONL 存储、独占 writer、损坏尾行处理、官方 Pi 格式互通。
+- [x] message_end 写入、同 runtime 多 run 串行边界、dispose 排空。
+- [x] 压缩记录持久化、跨 run/resume 恢复及再次压缩。
+- [x] 小批回归、类型检查、证据与看板同步。
+
+## 已完成批次：审查补修 → P2 接线
 
 - [x] 修复内部容量提醒被当作用户任务保留，覆盖提醒后主动换窗的真实工具循环。
 - [x] 首轮模型请求前检查预算；超预算明确失败，不截断用户输入、不调用 provider。
@@ -12,12 +30,21 @@
 - [x] P2-2：InstructionSource 适配 HostIo，接入全局与项目指令链并验证真实请求。
 - [x] 小批串行回归、类型检查、离线冒烟；更新看板/交接/证据。P2-4 依赖 P3，P2-5/P2-6 按计划在 P3/P4 后真实验收。
 
-本批代码与证据随本次提交归档（2026-09-09）；[P2 验证记录](evidence/p2/README.md)记录 15 文件 195 项、类型检查与冒烟。
+该历史批次已提交 `fb7cb10b`（2026-09-09）；[P2 验证记录](evidence/p2/README.md)记录 15 文件 195 项、类型检查与冒烟。
 
-## 下一批与 P2 后续门禁
+## 下一批：P4 集成（尚未开始本批实现）
 
-- [ ] P3-1：JSONL 存储与 Pi/PI-Desktop 兼容契约；为 P2-4 提供唯一持久化出口。
-- [ ] P2-4：随 P3 存储接入 compaction record，覆盖跨 run/resume；当前 checkpoint 仍仅在内存。
+- [ ] P4-1：worker bootstrap 切入 Cordis 插件图入口。
+- [ ] P4-2：消费 legacy/native 开发开关，默认维持既定切换阶段。
+- [ ] P4-3：共享控制端口绑定既有 worker RPC，两种 carrier 共用事件/取消语义。
+- [ ] P4-4/P4-5：多轮/工具/审批/压缩全链路与 GUI、D13 联调。
+- [ ] P4-6：打包载体和 Windows/加密机现场门禁，随后 P2-5/P2-6 真实模型对比。
+
+## P2 后续门禁
+
+- [x] P3-1：Pi v4 自有存储、与 PI-Desktop 不同 wire 格式的兼容契约和官方互通测试完成。
+- [x] P2-4：compaction record 已经 session 存储持久化，跨 run/resume/进程重开与再次摘要通过。
+- [x] P3-2/P3-3：完整分支导航、Pi v1/v2/v3/PI-Desktop schema 1 导入及 D14 旧值迁移；P3-4/P3-5 事件和索引已接通。
 - [ ] P2-5/P2-6：P3/P4 后以 P2-0 同套会话实测，原始 provider 命中率不得低于 95.01%；记录 0.84.4/0.84.3 偏差。
 
 ## 已落地：D14 返工
@@ -39,10 +66,10 @@
 
 - [x] 阅读 PI-Desktop new_context 源码和测试，适配无参数工具、两种回复及只提交意图语义。
 - [x] 导出 newContextTool({ family, request })；已由 ContextPlugin 默认按 read 注册，plan 可用，无普通审批，显式工具白名单仍生效。
-- [x] `runtimeContext` 服务落地：注册工具、消费意图、执行换窗（`prepareNextTurnWithContext` 边界）。压缩只换请求上下文，不截断 `Agent.state.messages`。
+- [x] `runtimeContext` 服务落地：注册工具、消费意图、执行换窗（`prepareNextTurnWithContext` 边界）。压缩只换请求上下文；完整历史保留在 session 日志。
 - [x] 提醒按注册结果决定是否点名工具，配对规则写进代码而不是靠人记得；提醒以尾部消息注入，保持 D9 缓存前缀不变。
 - [x] 13 项配对/压缩用例 + 2 项措辞用例；runtime 全量 189 项、两个载体探针、离线冒烟通过。
-- [ ] 持久化 compaction record（跨 run/resume）归 P2-4；提醒位置的命中率复核归 P2-5/P2-6。
+- [x] P2-4 已完成 v4 compaction record 持久化及跨 run/resume；真实命中率复核仍待 P2-5/P2-6。
 
 ## 已落地（旧口径历史，当时尚未提交）
 

@@ -31,7 +31,9 @@
 import 'cordis';
 import type { AgentEvent, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models, Usage } from '@earendil-works/pi-ai';
+import type { EventsPlugin } from './events/index.ts';
 import type { ComposedPrompt } from './plugins/prompt/segments.ts';
+import type { JsonlSessionStore } from './plugins/session/store.ts';
 
 /** Cordis service name of the pi-ai binding (P0-4). */
 export const MODEL_SERVICE = 'runtimeModel' as const;
@@ -40,6 +42,28 @@ export const TRACE_SERVICE = 'runtimeTrace' as const;
 /** Cordis service name of the agent loop (P0-5). */
 export const LOOP_SERVICE = 'runtimeLoop' as const;
 export const PROMPT_SERVICE = 'runtimePrompt' as const;
+export const SESSION_SERVICE = 'runtimeSession' as const;
+export const EVENTS_SERVICE = 'runtimeEvents' as const;
+export type RuntimeEventsService = Pick<EventsPlugin, 'subscribe' | 'emit' | 'startRun'>;
+export type RuntimeSessionService = Pick<
+  JsonlSessionStore,
+  | 'file'
+  | 'snapshot'
+  | 'appendMessage'
+  | 'appendCompaction'
+  | 'appendEntry'
+  | 'flush'
+  | 'metadata'
+  | 'tree'
+  | 'history'
+  | 'navigate'
+  | 'rewind'
+  | 'fork'
+  | 'rename'
+  | 'label'
+  | 'discardFork'
+  | 'acceptFork'
+>;
 
 /** Every service P0 actually registers. `bootstrap.ts` asserts all of them are live. */
 export const P0_SERVICES = [MODEL_SERVICE, TRACE_SERVICE, LOOP_SERVICE] as const;
@@ -74,14 +98,6 @@ export interface DeferredServiceDeclaration {
  * not an absent service.
  */
 export const DEFERRED_SERVICES: Readonly<Record<string, DeferredServiceDeclaration>> = {
-  runtimeSession: {
-    phase: 'P3',
-    reason: `${DEFERRED_REASON_MARKER} P0 writes a run trace, not a session. The two are different artifacts: the trace is this repo's evaluation record (engineering standard §2), the session is the JSONL pi/PI-Desktop format users resume from (ARD D6). Making the trace pose as a session would create a second, incompatible on-disk history.`,
-  },
-  runtimeEvents: {
-    phase: 'P3',
-    reason: `${DEFERRED_REASON_MARKER} the RuntimeEvent translation layer only has a consumer once the worker bootstrap exists (P4-1). P0 exposes raw \`AgentEvent\`s through \`RuntimeRunRequest.onEvent\` instead, so nothing yet depends on a translation whose target shape P3-4 may still adjust.`,
-  },
   runtimeSubagent: {
     phase: 'P5',
     reason: `${DEFERRED_REASON_MARKER} a subagent is a second \`Agent\` with its own tool whitelist (ARD D10), so it cannot exist before tools do. The \`SubagentRunner\` service seam named in D10 is deliberately not opened yet — an empty seam invites a caller, and the caller would have nothing to delegate.`,
@@ -195,6 +211,7 @@ export interface RuntimeRunRequest {
   model?: RuntimeModelRef;
   thinkingLevel?: ThinkingLevel;
   runId?: string;
+  logicalSessionId?: string;
   signal?: AbortSignal;
   /**
    * Raw pi-agent-core events, unfiltered.
@@ -245,6 +262,8 @@ declare module 'cordis' {
     runtimeTrace: TraceService;
     runtimeLoop: AgentLoopService;
     runtimePrompt: RuntimePromptService;
+    runtimeSession: RuntimeSessionService;
+    runtimeEvents: RuntimeEventsService;
   }
 }
 

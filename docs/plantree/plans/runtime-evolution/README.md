@@ -3,10 +3,10 @@
 > 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D14 生效）。
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
-**当前阶段**：P0 · 骨架 ✅；P2-0 · 旧后端基线 ✅；P1 主动压缩配对与审查补修已实现；P2-1/P2-2 接线及本机验证完成，P2 持久化/真实指标仍待后续阶段；下一步 P3
+**当前阶段**：P3-1 至 P3-5 与 P2-4 已实现，本机 P3-6 往返矩阵已通过；进入 P4 集成准备，生产 worker 切换和现场门禁尚未执行。
 **最近落地**：`2ae6f209`（2026-09-08）P1-9 ∥ P2-8 成对落地主动压缩（`runtimeContext` 服务、工具注册、提醒措辞、轮次边界换窗）；此前 `27ff2020` 提交 P1 工具/权限实现与 D14 两轴传递链。P1 现场验收仍未完成，[P1 验证记录](evidence/p1/README.md)。P0/P2-0 的提交仍为 `8a71c843`，旧缓存基线 **95.01%**，[原始证据](evidence/p2-0/validation.md)。
-**本批实现（随本次提交归档）**：容量提醒改为内部 custom 消息，首轮超预算在 provider 前拒绝；`runtimePrompt` 与 HostIo 指令源接通。15 文件 195 项串行回归、runtime 类型检查和离线冒烟通过，[P2 验证记录](evidence/p2/README.md)。
-**下一目标**：**P3-1 JSONL 存储与兼容契约**，然后推进分支/resume、旧会话兼容与事件翻译。P2-4 随 P3 存储接入，P2-5/P2-6 按计划在 P3/P4 之后做真实缓存与同套会话对比；P2 整体保持进行中。Windows/打包 GUI/真实项目策略现场签收仍归 P4-6/P6-3。
+**本批提交（2026-09-09）**：分支/fork/rewind、Pi v1/v2/v3 与 PI-Desktop 迁移、RuntimeEvent 与 Main 索引 adapter；runtime 20 文件 242 项、Main 2 文件 34 项、类型分片、独立进程恢复通过，[本批证据](evidence/p3/completion/README.md)。此前补修/P2-1/P2-2 已提交 `fb7cb10b`。
+**下一目标**：**P4-1 worker bootstrap → P4-2 后端开关 → P4-3 RPC/载体接线**，随后 P4-4/5/6 联调与现场门禁。P2-5/P2-6 在集成后验证真实缓存和同套会话，门槛仍为 95.01%。
 **2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 两轴分离：模式 `plan/agent` 管工具集，档位 `ask/accept-edits/auto` 管审批，accept-edits 放行工作区 bash。P1-1 裁剪与 P1-5 核心已更新；P1-6 renderer/偏好迁移/两轴传递链已更新，打包 GUI 待签收。
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
@@ -22,7 +22,7 @@
 | **P0** | 骨架 | — | ✅ | `src/runtime/` 落地，离线 + 在线冒烟均通过，风险 R1 关闭 |
 | **P1** | 工具与权限 | P0 | 🟡 | plugin-tools（file/bash/search）+ plugin-permissions（scope 白名单 + 审批流） |
 | **P2** | 上下文与提示词 | P0（P2-0 除外） | 🟡 | P2-0 基线完成；其余 plugin-context / plugin-prompt 任务可接续 |
-| **P3** | 会话与事件 | P0 | ⬜ | plugin-session（JSONL + 分支 + resume）+ RuntimeEvent 翻译层 |
+| **P3** | 会话与事件 | P0 | ✅ | P3-1..P3-5 实现及 P3-6 本机往返矩阵通过；生产载体/GUI 接线归 P4 |
 | **P4** | 集成 | P1+P2+P3 | ⬜ | worker bootstrap + WorkerSlot 后端开关 + 端到端 + GUI 点验 |
 | **P5** | 扩展 | P4 | ⬜ | skills + subagent + MCP bridge + 会话导入适配 + 模型目录切源 |
 | **P6** | 切换 | P5 | ⬜ | 默认新 runtime + 移除 pi-coding-agent + 达标验证 + 回退开关 |
@@ -76,7 +76,7 @@ Happy Path §3 与确定性断言 §4（`smoke/cases/` + `smoke/assertions.ts`�
 | P1-4 搜索工具 | ✅ | glob + 首版字面文本 grep，目录/文件/累计预算、symlink/拒绝 scope 跳过；未实现正则与 gitignore 引擎，行为明确写入工具 schema 描述 |
 | P1-5 权限内核 | 🟡 | D14 两轴、旧值迁移、deny/scope/白名单/会话授权已实现；Bash AST 检查引号/变量/重定向/嵌套/通配符/真实路径，审批后复核；全局/可信项目/旧 JSONC 策略导入及 stamp 已实现。专项测试通过，仍需 P4 真实项目/重载签收；不承诺 OS 沙箱，见 [证据](evidence/p1/README.md) |
 | P1-6 审批流对接 | 🟡 | Extension UI bridge + renderer 两模式/三档控件、旧值迁移；创建/resume/更新/复用/重启传递两轴，更新失败保留旧值；旧 worker D14 授权器/裁剪已适配。DOM 交互与 IPC/RPC/生命周期测试通过；打包 GUI 全链路仍待 P4 签收 |
-| P1-7 单测 | ✅ | 本批 native runtime 15 文件 195 项分四批通过，[P2 验证记录](evidence/p2/README.md)；历史 D14 UI/存储/旧 worker/IPC/重启回归另见 [P1 证据](evidence/p1/README.md)，不混入 runtime 计数。载体探针另计，归 P1-8 |
+| P1-7 单测 | ✅ | 本批 native runtime 20 文件 242 项分批通过，[P3 完成记录](evidence/p3/completion/README.md)；Main 索引 34 项另计，历史 D14 UI/worker 见 [P1 证据](evidence/p1/README.md)。载体探针归 P1-8 |
 | P1-8 载体兼容矩阵 | 🟡 | Linux electron-utility 同批六项通过；standalone-node 另列通过；已提供 Windows bundled-node 入口，尚未运行，不代签加密机 |
 | P1-9 `new_context` 工具 | ✅ | 与 P2-8 成对上线。`ContextPlugin` 构造时以 `read` 注册该工具，注册者即消费者：plan 模式可见、无普通审批、显式工具白名单仍可拒绝；compaction 关闭时不注册。无参数，描述照抄 Codex 原话「Start a new context window. Does not clear, reset, or otherwise affect environment state.」，回复按压缩家族分两种。调用只表达意图，实际换窗在 `prepareNextTurnWithContext` 边界发生 |
 
@@ -94,8 +94,8 @@ D11 提醒：白名单按进程算，所以「只把 Read 修好」不成立—�
 | P2-0 现状基线采集 | ✅ | 六个旧后端固定会话通过；28 次普通调用，D9 命中率 **95.01%**；原始会话、来源证明与复核结果已归档，[验收证据](evidence/p2-0/validation.md)（2026-09-08，提交 `8a71c843`） |
 | P2-1 提示词分段组装 | ✅ | `runtimePrompt` Cordis service、存活断言、公共契约与运行入口已接通；固定槽位装配 base / tools / project / mode / permission-gear。未传 systemPrompt 自动组装，显式值（含空串）保持探针覆盖语义；trace 记录来源、槽位和 staticPrefixBytes。仅 skills 仍 deferred（P5），[本批证据](evidence/p2/README.md) |
 | P2-2 项目指令注入 | ✅ | InstructionSource 已适配 runtimeHostIo：有界读取、UTF-8 边界截断，预期缺失/不可读跳过，TSD/载体错误向上传递。managed 全局 → 显式 borrowed 全局 → root→leaf；每目录首命中、32 KiB 共享预算和 realpath 越界跳过沿用。每 run 重载，targetPath 指定文件链；纯逻辑与真实请求集成测试通过，[本批证据](evidence/p2/README.md) |
-| P2-3 压缩策略 | ✅ | 决策层 `plugins/context/budget.ts`（阈值全部由模型窗口推导、硬限触发、保留尾与用户消息上限的双端钳制、两级提醒各只发一次，17 项单测）＋执行层 `plugins/context/compaction.ts`（PI-Desktop 的 Codex 形状：三段合并为一段摘要范围，保留尾只在 turn 未结束时重建为最近一条用户消息并截断，因此不可能产生孤立 toolCall）＋服务 `plugins/context/index.ts`（`runtimeContext`，模型请求与硬限共用一条路径，`summary` 家族发一次模型请求，`fresh_window` 不发）。压缩只换请求上下文，`Agent.state.messages` 不截断。首轮按输入 + systemPrompt + 工具定义估算预算，超限返回 context_too_large 且不调用 provider；内部容量提醒不参与用户消息保留。**持久化记录仍是 P2-4** |
-| P2-4 compaction record | ⬜ | Rust `transcripts.rs` 的 compaction 读写用 TS 重写。范围已收窄：P2-3 的服务产出的字段就是 `CompactionEntry` 需要的那些（`summary` / `tokensBefore` / `retainedTail` / `usage` / `details`），本节点只负责落盘与跨 run/resume 复用，不改形状 |
+| P2-3 压缩策略 | ✅ | 决策层 `plugins/context/budget.ts`（阈值全部由模型窗口推导、硬限触发、保留尾与用户消息上限的双端钳制、两级提醒各只发一次，17 项单测）＋执行层 `plugins/context/compaction.ts`（PI-Desktop 的 Codex 形状：三段合并为一段摘要范围，保留尾只在 turn 未结束时重建为最近一条用户消息并截断，因此不可能产生孤立 toolCall）＋服务 `plugins/context/index.ts`（`runtimeContext`，模型请求与硬限共用一条路径，`summary` 家族发一次模型请求，`fresh_window` 不发）。压缩只换模型请求上下文；完整历史由 session 日志保留，重建的 Agent 从最新 checkpoint 开始。首轮按输入 + systemPrompt + 工具定义估算预算，超限返回 context_too_large 且不调用 provider；内部容量提醒不参与用户消息保留。**P2-4 已接通可选 session 持久化** |
+| P2-4 compaction record | ✅ | 配置 session 后，完整原始消息和独立 compaction Entry 通过 HostIo 追加；summary/retainedTail/tokensBefore/usage/details 原样保留，写成功后才切请求窗口。新 run/resume 恢复最新 checkpoint，第二次压缩使用 previous-summary；两种家族、跨进程续聊和写失败测试通过，[证据](evidence/p3/README.md)。旧格式迁移已由 P3-3 接通 |
 | P2-5 缓存命中率达标 | ⬜ | 门禁是 provider 上报的 `cacheRead / (input + cacheRead)`（D9），公式与数据源都已存在，不新增埋点。**已知可优化点**：PI-Desktop 把预算提醒追加进 systemPrompt（`runtime.ts:4160`），那正是缓存前缀本身，一次追加即整段失效；P2-8 已改为尾部消息注入以保持前缀字节不变，本节点用真实命中率复核该选择 |
 | P2-6 对比测试 | ⬜ | 新后端跑 P2-0 的同一批脚本会话，比压缩后表现与命中率；协议依赖 0.84.4 vs 基线 0.84.3 的 patch 差按 D12 记为已知偏差，不回退对齐 |
 | P2-7 前缀稳定性度量 | ✅ | **可选加强项**，非门禁。`plugins/context/prefixStability.ts`：按块（system / tool / message）位置比对相邻两轮请求，给出公共前缀块数、字节数、占比与**首个冲突位置**——命中率只说miss，这里说 miss 在哪。**只落摘要哈希不落原文**，避免把会话内容写到日志旁。追加与收缩（压缩/回溯）都不算 divergence，用块计数区分形状。13 项单测 |
@@ -107,18 +107,18 @@ PI-Desktop 因此把两件事配成一对：**预算提醒**告诉它还剩多�
 
 ---
 
-## P3 · 会话与事件 ⬜
+## P3 · 会话与事件 ✅（实现与本机验证）
 
 前置：P0 · 文件归属：`src/runtime/plugins/session/`、`src/runtime/events/`
 
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
-| P3-1 JSONL 存储 | ⬜ | 格式与 pi / PI-Desktop 兼容的读写（D6） |
-| P3-2 分支与 resume | ⬜ | 分支管理从 PI-Desktop session-context 搬运 |
-| P3-3 旧会话兼容 | ⬜ | pi-coding-agent 产生的会话文件仍可读、可 resume（成功标准 5）；旧 tier 值按 [D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 映射迁移（`pragmatic→ask`、`handsoff→accept-edits`、`fullopen→auto`、`readonly→plan+ask`），不得丢弃 |
-| P3-4 RuntimeEvent 翻译层 | ⬜ | 参考现有 `piWorkerSession.ts`，翻译目标不变、只换数据源（D5） |
-| P3-5 对接 SessionIndexService | 🟡 | **D13 的 Main 侧改造已落地** `de26eb5e`：`GitService` 两处 diff 工作区侧与 `WorktreeService` 冲突编码探测改走 `readWorkingTreeFile`；**并补上 ARD D13 清单漏掉的 `detectBinaryFile`**——密文容器的 NUL 填充会让整个工作区的文本文件被判成二进制；`tsdSafeRead` 的解密进程改为优先随包 `node.exe`，留 `AICLIENT_TSD_NODE_PATH` 覆盖。6 项测试覆盖容器→明文与二进制判定，驱动本身的解密无法在此复现，现场验收归 P4-5。**剩余**：SessionIndexService 的调用面适配等 P3-1 的 session 插件落地后再接（会话索引是 Main 自写 JSON、worker 在白名单内读写 JSONL，两者都不受加密影响）；`GitService` 的 spawn 主线缺陷仍归 [Q7](open-questions.md) |
-| P3-6 往返测试 | ⬜ | 写入→读取→resume 快照一致性 |
+| P3-1 JSONL 存储 | ✅ | 自有 plugin-session 读写当前 Pi v4；独占锁、顺序追加、文件限额、尾片恢复、写失败阻止后续追加。Pi 官方 reader/writer 双向互通。PI-Desktop schema 1 与 Pi v4 不是同一 wire 格式，本批适配 checkpoint 恢复语义；旧格式导入由 P3-3 接通，见 [兼容契约](topics/p3-1-session-contracts.md) / [证据](evidence/p3/README.md) |
+| P3-2 分支与 resume | ✅ | main lane 导航/确认 rewind/独立 fork、完整树/历史与标签标题；选中分支恢复 checkpoint、模型/thinking/D14，fork 不修改源；运行期间拒绝导航，dispose 排空 fork，[证据](evidence/p3/completion/README.md) |
+| P3-3 旧会话兼容 | ✅ | Pi v1/v2/v3 与 PI-Desktop schema 1 导入独立 v4；旧权限四值完整迁移，工具/compaction/custom 保留；重复 resume 校验来源并复用副本；六份原始 P2-0 JSONL 离线续聊及重开通过，原文件不变，[证据](evidence/p3/completion/README.md) |
+| P3-4 RuntimeEvent 翻译层 | ✅ | native run 已接消息/思考/工具/usage/status/error/custom/compaction；复用现有 DTO/usage/pagination，累计 usage 跨 resume，Main 统一 host seq；生产 worker RPC 接线归 P4 |
+| P3-5 对接 SessionIndexService | ✅ | **D13 的 Main 侧改造已落地** `de26eb5e`：`GitService` 两处 diff 工作区侧与 `WorktreeService` 冲突编码探测改走 `readWorkingTreeFile`；**并补上 ARD D13 清单漏掉的 `detectBinaryFile`**——密文容器的 NUL 填充会让整个工作区的文本文件被判成二进制；`tsdSafeRead` 的解密进程改为优先随包 `node.exe`，留 `AICLIENT_TSD_NODE_PATH` 覆盖。6 项测试覆盖容器→明文与二进制判定，驱动本身的解密无法在此复现，现场验收归 P4-5。**本批接通**：NativeSessionIndexAdapter 对接现有索引格式；身份/leaf、分页、失败回滚和 fork 清理实际联调通过，并修复索引重命名写失败时的内存回滚；[本批证据](evidence/p3/completion/README.md)。生产 worker 接线归 P4；`GitService` 的 spawn 主线缺陷仍归 [Q7](open-questions.md) |
+| P3-6 往返测试 | ✅ | v4 官方互通、两种压缩与再次摘要、分支往返/fork 隔离、D14 四值与六份旧基线、Main 索引故障回滚及两个 Node 进程恢复通过；GUI/载体现场测试归 P4，[证据](evidence/p3/completion/README.md) |
 
 ---
 
@@ -133,8 +133,8 @@ PI-Desktop 因此把两件事配成一对：**预算提醒**告诉它还剩多�
 | P4-2 后端开关 | ⬜ | dev 环境变量 `AICLIENT_RUNTIME_BACKEND=legacy\|native`（D8），不进设置页；双后端共存 |
 | P4-3 WorkerTransport 适配 | ⬜ | 沿用现有 RPC 协议，MessagePort 与 Node IPC 两条通道由 `WorkerTransport` 抹平（D11）；事件出口翻译为 RuntimeEvent |
 | P4-4 端到端 | ⬜ | 多轮对话 + 工具调用 + 权限审批 + 压缩全链路（成功标准 1） |
-| P4-5 GUI 点验 | ⬜ | 时间线 / Composer / 权限卡 / 设置页无回归（成功标准 4）；另验 D13 的 Main 侧读改造。**前置**：[Q7](open-questions.md) 的 `GitService` 主线缺陷需先修复或明确豁免，否则 git 面板在加密机上本就是空的，点验无从判断 |
-| P4-6 打包载体验收 | ⬜ | 在打包壳里用本地模型替身（HTTP SSE stub，不调线上模型）驱动真实 Read/bash，两种 carrier 各跑一遍；复用 runtime 离线 lane 的 `fauxProvider` 用例与 `scripts/packaged-worker-smoke.cjs` 的替身思路 |
+| P4-5 GUI 点验 | ⬜ | 时间线 / Composer / 权限卡 / 设置页无回归（成功标准 4）；另验 D13 的 Main 侧读改造。**前置已解除**：[Q7](open-questions.md) 的三处判据缺陷已随 `b984b282` 修好——git 面板在加密机上不会再无声地空着，读不到 stdout 时会明确报错 |
+| P4-6 打包载体验收 | ⬜ | 在打包壳里用本地模型替身（HTTP SSE stub，不调线上模型）驱动真实 Read/bash，两种 carrier 各跑一遍；复用 runtime 离线 lane 的 `fauxProvider` 用例与 `scripts/packaged-worker-smoke.cjs` 的替身思路。**本节点同时是唯一一次上机窗口**（[D16](../../../plans/2026-09-08-runtime-evolution-ard.md)）：P1-0 的 runner + taskkill 命令树清理、P1-3 的 bash 跨平台、P1-8 的六项工具探针、P4-0 的随包 Node worker 载体，四条积压的现场项都在这里一次签收，按载体矩阵逐条走，不用「跑通一个会话」代签 |
 
 ---
 
@@ -148,7 +148,7 @@ PI-Desktop 因此把两件事配成一对：**预算提醒**告诉它还剩多�
 | P5-2 plugin-subagent | ⬜ | 同进程第二个 Agent，不占 WorkerSlot（D10）；照搬 ADR 0062/0119 的并发、超时与隔离边界 |
 | P5-3 MCP bridge | ⬜ | MCP 工具接入自有工具注册表；stdio server 的进程启动走 P1-0 的 `runtimeExec`，不自建一套 spawn（D11） |
 | P5-4 会话导入适配 | ⬜ | 现有 `LegacyImportService` 适配新 session 插件接口 |
-| P5-5 模型目录切源 | ⬜ | 随包快照 + 离线回落从 pi-coding-agent 配置切到自有配置 |
+| P5-5 模型目录切源 | ⬜ | 随包快照 + 离线回落从 pi-coding-agent 配置切到自有配置。**baseUrl 按 [D15](../../../plans/2026-09-08-runtime-evolution-ard.md) 由客户端按 wire 协议推导、每个 model 可显式覆盖**——cch 网关按模型族分端点（Anthropic 不带 `/v1`、OpenAI 带 `/v1`），配错表现是 503 而不是 404，所以这条推导要有单测钉住，不联网 |
 
 P5-2 的照搬清单（数字取自 PI-Desktop ADR 0062 / 0119，不重新拍）：并发上限 4（信号量）·
 报告上限 12k 字符 · 工具白名单默认 `Read/Glob/Grep` 且禁止嵌套 Task · 不继承父会话写权限 ·

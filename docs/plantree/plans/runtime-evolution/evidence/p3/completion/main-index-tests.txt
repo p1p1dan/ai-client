@@ -1,0 +1,18 @@
+
+ RUN  v3.2.4 /home/pi/code/ai-client-runtime
+
+stderr | src/main/services/chat/__tests__/SessionIndexService.test.ts > SessionIndexService > starts with an empty index and does not crash when the persisted file is corrupted
+[chat] Failed to read session index, starting empty: SyntaxError: Unexpected token 'o', "not json{{" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at /home/pi/code/ai-client-runtime/src/main/services/chat/SessionIndexService.ts:416:29
+    at SessionIndexService.list (/home/pi/code/ai-client-runtime/src/main/services/chat/SessionIndexService.ts:51:5)
+    at /home/pi/code/ai-client-runtime/src/main/services/chat/__tests__/SessionIndexService.test.ts:388:5
+    at file:///home/pi/code/ai-client/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+ ✓ src/main/services/chat/__tests__/SessionIndexService.test.ts (27 tests) 273ms
+ ✓ src/main/services/chat/__tests__/NativeSessionIndexAdapter.test.ts (7 tests) 76ms
+
+ Test Files  2 passed (2)
+      Tests  34 passed (34)
+   Start at  01:35:44
+   Duration  1.14s (transform 315ms, setup 24ms, collect 536ms, tests 348ms, environment 0ms, prepare 68ms)

@@ -6,9 +6,10 @@ ARD：[`docs/plans/2026-09-08-runtime-evolution-ard.md`](../../docs/plans/2026-0
 替代 `pi-coding-agent` 整包依赖的自有 runtime。与现有 `src/agent-host/` 并存（ARD §5.1），
 后端由 `AICLIENT_RUNTIME_BACKEND` 选择（D8），P4-2 前该开关只被记录、不被消费。
 
-**当前进度：P1 审查补修、P2-1/P2-2 接线及本机验证已完成；P2 持久化和真实缓存门禁待 P3/P4。**
-见 [P2 验证与后续事项](../../docs/plantree/plans/runtime-evolution/evidence/p2/README.md)。Windows 清理和载体矩阵未完成。
-见 [P1 验证与限制](../../docs/plantree/plans/runtime-evolution/evidence/p1/README.md)。无 tools 配置保留 P0 单轮；配置 tools 后启用六工具与权限。
+**当前进度：P3-1 至 P3-5 与 P2-4 已实现，本机验证结果见下方证据；代码与证据随本次提交归档。**
+见 [P3 验证与限制](../../docs/plantree/plans/runtime-evolution/evidence/p3/README.md)。
+分支导航、旧格式迁移、RuntimeEvent 与 Main 索引适配已接通；生产 worker 切换与两种 carrier 集成归 P4，Windows/GUI 仍待现场。
+无 session 配置保持离线独立 run；配置 session 后在同一文件持续记录与恢复。
 
 ## 目录
 
@@ -23,6 +24,9 @@ ARD：[`docs/plans/2026-09-08-runtime-evolution-ard.md`](../../docs/plans/2026-0
 | `plugins/agent-loop/` | P0-5 · pi-agent-core `Agent` 驱动对话；无工具时单轮，有工具时多轮并在轮次边界调压缩 |
 | `plugins/tools/` | P1-1..P1-4 · 六个原生工具的注册表与实现，另含 P1-9 的 `new_context` |
 | `plugins/permissions/` | P1-5/P1-6 · D14 两轴（模式/档位）、策略加载、Bash AST 与审批桥接 |
+| `plugins/session/` | P3-1..P3-3/P2-4 · 自有 v4 JSONL、独占写入、压缩恢复、分支/fork/rewind、旧格式迁移 |
+| `events/` | P3-4 · native AgentEvent → 既有 RuntimeEvent，消息/思考/工具/usage/终态 |
+| `../main/services/chat/NativeSessionIndexAdapter.ts` | P3-5 · 共享类型端口对接 Main 索引、历史分页与操作回滚 |
 | `plugins/prompt/` | P2-1/P2-2 · runtimePrompt service、固定槽位装配、HostIo 指令源与项目指令链 |
 | `plugins/context/` | P2-3 · 预算与提醒（`budget.ts`）、检查点形状（`compaction.ts`）、`runtimeContext` 服务（`index.ts`）；P2-7 的前缀稳定性度量也在此 |
 | `smoke/` | P0-6 · 非 UI 运行入口（§1）+ 用例 + 确定性断言（§4） |
@@ -50,7 +54,7 @@ cd src/runtime && npm ci --omit=optional --ignore-scripts
 
 ```bash
 ln -s /path/to/main-checkout/node_modules node_modules
-./node_modules/.bin/vitest run src/runtime
+./node_modules/.bin/vitest run src/runtime/__tests__/session.test.ts --maxWorkers=1 --no-file-parallelism
 rm node_modules
 ```
 
@@ -60,6 +64,26 @@ rm node_modules
 `createRuntime({ tools: { cwd }, agentDir, prompt: { globals: [{ path, label }] } })` 加载托管与
 显式借用的全局指令；`run({ prompt, targetPath: 'src/file.ts' })` 再按目标目录加载项目指令。
 无 tools 时可用 `prompt.root` 明确项目根；不传根只加载显式全局文件，不猜测当前目录。
+
+会话存储通过 `session: { file, cwd, mode: 'create' | 'resume' }` 显式开启；同一 runtime 的
+后续 run 自动使用已有历史。新进程传入相同 file/cwd 和 resume，可恢复压缩点后续聊。
+正常退出必须等待 `runtime.dispose()`；强杀留下的 writer 锁不自动抢占。
+
+`runtime.session` 提供 `tree()`、`history()`、`navigate(entryId | null)`、`rewind(entryId, confirmed)`、
+`fork(newFile, entryId)`、`rename()` 与 `label()`。导航不删除历史；用户节点 rewind 到其 parent 并返回 editorText，
+fork 必须有 assistant 路径，生成独立文件和 session ID，源文件/leaf 不变。
+选中分支恢复 checkpoint、模型、thinking 和 D14 权限；历史模型不在当前 catalog 时回落到默认模型，显式 run.model 优先。
+
+Pi v1/v2/v3 的 resume 自动创建相邻 `.native-v4.jsonl`；再次 resume 复用副本，并验证来源哈希。
+PI-Desktop schema 1 采用同样迁移路径。显式导入使用 `session: { mode: 'import', sourceFile, file, cwd }`；
+workspace 改动必须传 `allowWorkspaceRelocation: true`。不原地写旧文件，不覆盖已有导入目标。
+迁移要求来源会话已停止写入；官方 Pi writer 不共享本实现的伴随锁。
+
+`runtime.events.subscribe()` 输出 RuntimeEventDraft；Main adapter 统一附加 host 全局 seq/timestamp，
+通过真实 SessionIndexService 提交身份/leaf 后才发布成功终态。Main 导航/回退/重命名失败会回滚 runtime，
+fork 索引失败会清理本次新建且无人持锁的文件。运行、导航和索引提交串行；disconnect 要求 idle。
+现阶段适配器通过 native runtime 联调，P4 负责把共享端口绑定到生产 worker RPC；Main 不导入 Pi SDK。
+
 
 ```bash
 # 离线冒烟（无凭据、无网络，CI 门禁跑的就是这条）
@@ -72,7 +96,7 @@ node --experimental-strip-types src/runtime/smoke/runOnce.ts \
   --trace-dir /tmp/runtime-traces
 
 # 单测
-pnpm test src/runtime
+./node_modules/.bin/vitest run src/runtime/__tests__/session.test.ts --maxWorkers=1 --no-file-parallelism
 ```
 
 两条 lane 的差别写在 `smoke/runOnce.ts` 顶部：离线 lane 用 pi-ai 自带的 `fauxProvider()`
@@ -110,14 +134,14 @@ plan 注册表不含写类工具；accept-edits 放行工作区内写、改和 b
 
 P0 接口变化：`readPiCatalog(dir, env, io)`、`buildVersionStamp`、`TraceRun.finish` 改异步；
 `TraceService.flush()` 等待落盘，失败可见；`RunTrace.persistence_error` 不改变模型成功状态。
-`runtime.run()` 每次创建新的 Agent；真正的多轮会话保留/resume 仍属于 P3。
+`runtime.run()` 每次创建新的 Agent；配置 session 后从所选分支的 checkpoint 和后续消息恢复。
 
 `corepack pnpm smoke:runtime-tools` 执行离线工具冒烟；载体探针命令见 P1 验证记录。
 工具/权限提示词片段由 `toolSegments()` / `modeSegment()` / `permissionGearSegment()` 导出，供 P2 装配。
 
 P1-9 导出 `newContextTool({ family, request })`，family 为 `fresh_window | summary`。
 P2 提供 request 回调并在下一轮边界消费意图，以 `runtimeTools.register(tool, 'read')` 注册；
-必须同时启用 P2-8 提醒，当前 bootstrap 不默认暴露该工具。它不需要普通审批，仍受显式工具白名单约束。
+必须同时启用 P2-8 提醒，启用 compaction 且配置 tools 时 bootstrap 会注册该工具。它不需要普通审批，仍受显式工具白名单约束。
 
 P1-5 使用 Bash AST 检查路径，WASM 资产经过 HostIo 读取。随包依赖保留
 `web-tree-sitter/web-tree-sitter.wasm` 和 `tree-sitter-bash/tree-sitter-bash.wasm`；无需 Bash native binding。

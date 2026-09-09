@@ -1,0 +1,172 @@
+{
+  "report": {
+    "case_id": "p0_single_turn_offline",
+    "passed": true,
+    "outcomes": [
+      {
+        "name": "must_succeed",
+        "passed": true,
+        "expected": true,
+        "actual": {
+          "success": true,
+          "error": null
+        },
+        "tag": "regression"
+      },
+      {
+        "name": "must_not_call_tools:*",
+        "passed": true,
+        "expected": "no tool calls",
+        "actual": [],
+        "tag": "tool_misfire"
+      },
+      {
+        "name": "turns",
+        "passed": true,
+        "expected": 1,
+        "actual": 1,
+        "tag": "loop_error"
+      },
+      {
+        "name": "min_output_chars",
+        "passed": true,
+        "expected": ">= 1",
+        "actual": 5,
+        "tag": "format_error"
+      },
+      {
+        "name": "exact_output",
+        "passed": true,
+        "expected": "ready",
+        "actual": "ready",
+        "tag": "format_error"
+      },
+      {
+        "name": "max_latency_ms",
+        "passed": true,
+        "expected": "<= 30000",
+        "actual": 9,
+        "tag": "timeout"
+      }
+    ]
+  },
+  "result": {
+    "runId": "683b8017-fcc8-4045-b55d-4232ef2eb659",
+    "success": true,
+    "text": "ready",
+    "stopReason": "stop",
+    "usage": {
+      "input": 31,
+      "output": 2,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 33,
+      "cost": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 0
+      }
+    },
+    "latencyMs": 9,
+    "turns": 1,
+    "trace": {
+      "run_id": "683b8017-fcc8-4045-b55d-4232ef2eb659",
+      "timestamp": "2026-09-08T17:33:51.924Z",
+      "input": "Reply with exactly the word: ready",
+      "model": "faux-p0",
+      "provider": "faux",
+      "config_version": "runtime_p3_complete_v1",
+      "steps": [
+        {
+          "step": 1,
+          "type": "note",
+          "at": "2026-09-08T17:33:51.924Z",
+          "detail": {
+            "event": "run_start",
+            "system_prompt": "You are a connectivity probe. Answer in one short line and call no tools.",
+            "system_prompt_bytes": 73,
+            "prompt_source": "override",
+            "thinking_level": "off",
+            "single_turn": true,
+            "catalog_source": {
+              "kind": "injected",
+              "providerCount": 1,
+              "modelCount": 1
+            },
+            "mode": null,
+            "permission_gear": null,
+            "compaction_family": "summary",
+            "compaction_tool": null
+          }
+        },
+        {
+          "step": 2,
+          "type": "llm",
+          "at": "2026-09-08T17:33:51.933Z",
+          "detail": {
+            "stop_reason": "stop",
+            "text_bytes": 5,
+            "usage": {
+              "input": 31,
+              "output": 2,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 33,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            }
+          }
+        }
+      ],
+      "final_output": "ready",
+      "usage": {
+        "input": 31,
+        "output": 2,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 33,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "latency_ms": 9,
+      "success": true,
+      "version_stamp": {
+        "config_version": "runtime_p3_complete_v1",
+        "git_commit": "b984b282da0b0bec618f0ede2559c8ab0a6d1024",
+        "node": "v24.20.0",
+        "dep:@earendil-works/pi-agent-core": "0.84.4",
+        "dep:@earendil-works/pi-ai": "0.84.4",
+        "dep:cordis": "4.0.0-rc.9",
+        "dep:tree-sitter-bash": "0.25.1",
+        "dep:typebox": "1.3.7",
+        "dep:web-tree-sitter": "0.26.13",
+        "backend": "legacy",
+        "single_turn": "true",
+        "tools": "false",
+        "mode": "agent",
+        "permission_gear": "ask",
+        "compaction": "true",
+        "compaction_family": "summary",
+        "carrier": "standalone-node",
+        "exec_stdio": "pipe",
+        "exec_adapter": "node-runner-pipe-v1",
+        "tsd_read_fallback": "disabled",
+        "cleanup_timeout_ms": "2000",
+        "node_source": "current-process",
+        "node_exec_path": "/usr/bin/node"
+      }
+    }
+  }
+}

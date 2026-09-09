@@ -5,18 +5,23 @@ import { Context } from 'cordis';
 import type { PortableExtensionUiBridgeOptions } from '../agent-host/extensionUiBridge.ts';
 import {
   type AgentLoopService,
+  EVENTS_SERVICE,
   type ModelAdapterService,
   PROMPT_SERVICE,
   RUNTIME_SERVICES,
   RuntimeConfigError,
+  type RuntimeEventsService,
   type RuntimeExecService,
   type RuntimeHostConfig,
   type RuntimeHostIoService,
   type RuntimePromptService,
   type RuntimeRunRequest,
   type RuntimeRunResult,
+  type RuntimeSessionService,
+  SESSION_SERVICE,
   type TraceService,
 } from './contracts.ts';
+import { EventsPlugin } from './events/index.ts';
 import { type RuntimeFlags, readRuntimeFlags } from './flags.ts';
 import { standaloneHost, validateHost } from './host/config.ts';
 import { RuntimeHostError } from './host/errors.ts';
@@ -47,12 +52,15 @@ import {
 } from './plugins/permissions/index.ts';
 import { loadPermissionPolicy } from './plugins/permissions/policy.ts';
 import { type PromptConfig, PromptPlugin } from './plugins/prompt/index.ts';
+import { SessionPlugin } from './plugins/session/index.ts';
+import { prepareSessionConfig } from './plugins/session/legacy.ts';
+import { JsonlSessionStore, type SessionConfig } from './plugins/session/store.ts';
 import { TOOLS_SERVICE, type ToolsConfig, ToolsPlugin } from './plugins/tools/index.ts';
 import { canonicalPath } from './plugins/tools/paths.ts';
 import { buildVersionStamp, TracePlugin } from './trace.ts';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-export const RUNTIME_CONFIG_VERSION = 'runtime_p2_prompt_v1';
+export const RUNTIME_CONFIG_VERSION = 'runtime_p3_complete_v1';
 
 export interface RuntimeBootstrapOptions {
   env?: NodeJS.ProcessEnv;
@@ -61,6 +69,7 @@ export interface RuntimeBootstrapOptions {
   permissions?: Omit<PermissionConfig, 'cwd' | 'policy'>;
   context?: ContextConfig;
   prompt?: PromptConfig;
+  session?: SessionConfig;
   approvalUi?: PortableExtensionUiBridgeOptions;
   agentDir?: string;
   traceDir?: string | null;
@@ -81,6 +90,8 @@ export interface RuntimeHandle {
   permissions?: RuntimePermissionsService;
   context?: RuntimeContextService;
   prompt: RuntimePromptService;
+  session?: RuntimeSessionService;
+  events: RuntimeEventsService;
   approval?: RuntimeApprovalBridge;
   run(request: RuntimeRunRequest): Promise<RuntimeRunResult>;
   dispose(): Promise<void>;
@@ -104,12 +115,27 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
   let exec: ExecPlugin | undefined;
   let io: HostIoPlugin | undefined;
   let approval: RuntimeApprovalBridge | undefined;
+  let session: JsonlSessionStore | undefined;
   try {
     await ctx.plugin(ExecPlugin, host);
     exec = ctx.runtimeExec as ExecPlugin;
     const ioFiber = await ctx.plugin(HostIoPlugin, host);
     await ioFiber.await();
     io = ctx.runtimeHostIo as HostIoPlugin;
+    if (options.session) {
+      if (
+        options.tools &&
+        (await io.realpath(options.tools.cwd)) !== (await io.realpath(options.session.cwd))
+      ) {
+        throw new RuntimeConfigError(
+          'session_cwd_mismatch',
+          'tools and session must share a workspace'
+        );
+      }
+      session = await JsonlSessionStore.open(io, await prepareSessionConfig(io, options.session));
+      const sessionFiber = await ctx.plugin(SessionPlugin, session);
+      await sessionFiber.await();
+    }
     const loopConfig = {
       ...DEFAULT_AGENT_LOOP_CONFIG,
       singleTurn: !options.tools,
@@ -127,6 +153,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
         }))
       );
       const permissionsFiber = await ctx.plugin(PermissionsPlugin, {
+        ...session?.snapshot().permissions,
         ...options.permissions,
         cwd,
         scopes,
@@ -148,6 +175,8 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     // After the tools plugin, because this is what registers `new_context`:
     // the compaction consumer and the tool that requests it land together
     // (plan board P1-9 / P2-8) or not at all.
+    const eventsFiber = await ctx.plugin(EventsPlugin);
+    await eventsFiber.await();
     const contextFiber = await ctx.plugin(ContextPlugin, options.context ?? {});
     await contextFiber.await();
     const promptFiber = await ctx.plugin(PromptPlugin, {
@@ -213,6 +242,8 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     const required = [
       ...RUNTIME_SERVICES,
       CONTEXT_SERVICE,
+      EVENTS_SERVICE,
+      ...(session ? [SESSION_SERVICE] : []),
       PROMPT_SERVICE,
       ...(options.tools ? [TOOLS_SERVICE, PERMISSIONS_SERVICE] : []),
     ];
@@ -236,16 +267,26 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       permissions: options.tools ? ctx.runtimePermissions : undefined,
       context: ctx.runtimeContext,
       prompt: ctx.runtimePrompt,
+      events: ctx.runtimeEvents,
+      session: session ? ctx.runtimeSession : undefined,
       approval,
       run: (request) => {
         if (disposal)
           return Promise.reject(new RuntimeHostError('runtime_disposed', 'runtime is disposed'));
+        if (active.size > 0 || session?.busy)
+          return Promise.reject(
+            new RuntimeHostError('runtime_busy', 'a run is already active in this runtime')
+          );
         const signal = request.signal
           ? AbortSignal.any([controller.signal, request.signal])
           : controller.signal;
+        session?.setRunning(true);
         const work = ctx.runtimeLoop.run({ ...request, signal });
         active.add(work);
-        return work.finally(() => active.delete(work));
+        return work.finally(() => {
+          active.delete(work);
+          session?.setRunning(false);
+        });
       },
       dispose: () => {
         disposal ??= (async () => {
@@ -255,8 +296,15 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
           try {
             await ctx.runtimeTrace.flush();
           } finally {
-            await runtimeIo.shutdown();
-            await ctx.fiber.dispose();
+            try {
+              await session?.close();
+            } finally {
+              try {
+                await runtimeIo.shutdown();
+              } finally {
+                await ctx.fiber.dispose();
+              }
+            }
           }
           const failed = outcomes.find((outcome) => outcome.status === 'rejected');
           if (failed?.status === 'rejected') throw failed.reason;
@@ -269,8 +317,15 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     try {
       await exec?.shutdown();
     } finally {
-      await io?.shutdown();
-      await ctx.fiber.dispose();
+      try {
+        await session?.close();
+      } finally {
+        try {
+          await io?.shutdown();
+        } finally {
+          await ctx.fiber.dispose();
+        }
+      }
     }
     throw error;
   }

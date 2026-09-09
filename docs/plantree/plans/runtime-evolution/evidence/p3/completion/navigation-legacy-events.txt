@@ -1,0 +1,11 @@
+
+ RUN  v3.2.4 /home/pi/code/ai-client-runtime
+
+ ✓ src/runtime/__tests__/sessionLegacy.test.ts (13 tests) 150ms
+ ✓ src/runtime/__tests__/sessionNavigation.test.ts (6 tests) 118ms
+ ✓ src/runtime/__tests__/runtimeEvents.test.ts (5 tests) 60ms
+
+ Test Files  3 passed (3)
+      Tests  24 passed (24)
+   Start at  01:34:26
+   Duration  1.45s (transform 236ms, setup 18ms, collect 769ms, tests 329ms, environment 0ms, prepare 111ms)

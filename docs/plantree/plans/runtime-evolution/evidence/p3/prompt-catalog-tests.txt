@@ -1,0 +1,12 @@
+
+ RUN  v3.2.4 /home/pi/code/ai-client-runtime
+
+ ✓ src/runtime/__tests__/promptService.test.ts (8 tests) 81ms
+ ✓ src/runtime/__tests__/catalog.test.ts (9 tests) 35ms
+ ✓ src/runtime/__tests__/projectInstructions.test.ts (20 tests) 8ms
+ ✓ src/runtime/__tests__/promptSegments.test.ts (12 tests) 5ms
+
+ Test Files  4 passed (4)
+      Tests  49 passed (49)
+   Start at  00:27:23
+   Duration  1.17s (transform 263ms, setup 24ms, collect 544ms, tests 129ms, environment 0ms, prepare 151ms)
