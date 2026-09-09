@@ -2100,6 +2100,18 @@ export const zhTranslations: Record<string, string> = {
   'Edit shows modification diffs; Write shows content only. Bash changes are not captured.':
     'Edit 显示修改差异；Write 仅显示写入内容。暂不捕获 Bash 的文件修改。',
   'Show file modification diff': '显示文件修改 diff',
+  'Input tokens': '输入',
+  'Output tokens': '输出',
+  'Total tokens': '合计 tokens',
+  'Not reported': '未上报',
+  '{{count}} tokens remaining': '剩余 {{count}} tokens',
+  'Latest settled model request': '最近一次模型请求（已结算）',
+  'Conversation total since load': '会话累计（本次加载以来）',
+  'model requests': '次模型请求',
+  'Tools in current turn': '本轮工具调用',
+  'No tool calls in this turn': '本轮没有调用工具',
+  'Tool token usage, reasoning tokens and generation speed are not reported with comparable measurements.':
+    '暂无分工具 token、推理 token 和生成速度的同口径计量。',
   'Modification preview': '修改预览',
   'Not applied': '未应用',
   'Written content': '写入内容',
