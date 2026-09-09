@@ -1,8 +1,18 @@
 # Runtime 执行 TODO
 
-2026-09-08 · 用户已授权代码修改 · [看板](README.md) · [P1-0 契约](topics/p1-0-host-contracts.md) · [验证记录](evidence/p1/README.md)
+2026-09-09 状态同步 · [看板](README.md) · [P4-6 交接与 CI 结果](evidence/p4-6/README.md)
 
-本批证据：[P3 完成记录](evidence/p3/completion/README.md)，runtime 20 文件 242 项 + Main 索引 2 文件 34 项、类型分片与跨进程恢复通过。代码与证据随本次提交归档。
+当前阶段：P4-0～P4-5 已落地，最近提交 `9edab07c`；P4-6 准备中、尚未验收。首次手动 CI 三道 typecheck/lint 通过，测试 4924 通过、1 失败，打包全部跳过。P3 历史证据见 [P3 完成记录](evidence/p3/completion/README.md)。
+
+本轮授权：同步状态文档、推送任务分支并手动 CI 打包；测试包名称/版本可递增。不本地打包、不推 tag、不触发自动发布。新增代码/工作流修复仍待明确授权。
+
+## 当前 TODO：P4-6
+
+- [x] 接棒 `9edab07c`，推送 `feat/runtime-evolution`，手动触发并核对 [CI 34303440949](https://github.com/p1p1dan/ai-client/actions/runs/34303440949)；未出包。
+- [ ] 修复 `agent-host-build-lib.test.mjs` 的有效产物样本缺两个 runtime helper，补齐各平台打包任务的 runtime 依赖安装及 native 专项冒烟。
+- [ ] 小批验证后推送同一分支，手动 CI 生成可追溯测试包及运行说明；版本接续主工作分支 `1.0.0-test.9`，下一包拟用 `1.0.0-test.10`（出包前复核，当前 package.json 未改）；不在本机打包。
+- [ ] Windows + AI 执行真实随包 Node、六项探针、bash/命令树清理及 GUI；两种产品 carrier 分别留证。
+- [ ] 企业加密机签收明文读写、Main diff/编码/二进制判定、GUI/TUI 一致性与退出无残留；逐项回填 P1/P4，不能代签。
 
 历史代码提交：`27ff2020` + `2ae6f209`（2026-09-08，实现与证据归档；不代表完整验收）。
 
@@ -32,13 +42,12 @@
 
 该历史批次已提交 `fb7cb10b`（2026-09-09）；[P2 验证记录](evidence/p2/README.md)记录 15 文件 195 项、类型检查与冒烟。
 
-## 下一批：P4 集成（尚未开始本批实现）
+## 已落地：P4-0～P4-5（打包现场验收另列）
 
-- [ ] P4-1：worker bootstrap 切入 Cordis 插件图入口。
-- [ ] P4-2：消费 legacy/native 开发开关，默认维持既定切换阶段。
-- [ ] P4-3：共享控制端口绑定既有 worker RPC，两种 carrier 共用事件/取消语义。
-- [ ] P4-4/P4-5：多轮/工具/审批/压缩全链路与 GUI、D13 联调。
-- [ ] P4-6：打包载体和 Windows/加密机现场门禁，随后 P2-5/P2-6 真实模型对比。
+- [x] P4-0/P4-3：随包 Node / utilityProcess 共用 worker RPC 与事件/取消语义，host 配置按载体生成。
+- [x] P4-1/P4-2：worker bootstrap 切入 Cordis 图；环境变量选 native，默认 legacy。
+- [x] P4-4：多轮工具、审批、压缩、会话 RPC 与 GUI/TUI reload 接线本机通过。
+- [x] P4-5：四处事件缺口已修，真实事件录制 6 项 + renderer reducer 重放 13 项；D13 读路径静态复核完成，驱动解密归 P4-6。
 
 ## P5-2 并行调研与后续完整复刻
 
@@ -99,11 +108,11 @@
 
 - D11：Windows 安装版随包 Node；其他产品路径 electron-utility，独立 Node 探针另列。
 - D12：Pi 保持 0.84.4；旧基线 0.84.3 的 patch 差记录为偏差，不回退、不补采。
-- D13：Main 用户文件读取统一 TSD-aware，属于 P3-5/P4-5；Q7 GitService 由主线处理。
+- D13：Main 用户文件读取统一 TSD-aware，代码与静态复核已完成，驱动现场归 P4-6；Q7 已在本分支由 `b984b282` 修复，现场复测仍待 P4-6。
 - D9：缓存门禁为 provider 原始 cacheRead / (input + cacheRead)，不低于旧基线 95.01%；属于 P2/P6，不用本轮 faux 测试代签。
 - D14：旧 readonly 迁为 plan + ask，其余分别迁为 agent + ask/accept-edits/auto；goal 本轮不做。
 
 ## 验收边界
 
-P1 整体未完成。Linux 的检查不能代签 Windows；没有运行远端 CI 或 GUI 全链路。
-D13 的 Main 读取改造由 P3-5/P4-5 处理；Q7 由主线处理。
+P1/P4 整体未完成。Linux/CI 不能代签 Windows 或企业加密机。远端 CI 已执行但测试门禁失败，尚未进入打包；P4-5 的事件/reducer 检查不代替真实打包 GUI 现场验收。
+D13/Q7 代码已落地，现场复测归 P4-6。P2-5/P2-6 真实模型与缓存对比仍待后续执行。
