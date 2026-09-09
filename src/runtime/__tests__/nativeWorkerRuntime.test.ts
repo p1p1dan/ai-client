@@ -296,6 +296,37 @@ describe('NativeWorkerRuntime turns', () => {
     fake.settle();
   });
 
+  it('carries the effort the composer picked into the run as its thinking level', async () => {
+    // EFFORT-1: the field pass picked `medium` and the trace still recorded
+    // `thinking_level: off`, because the send never reached the loop's request.
+    const fake = fakeRuntime();
+    const { runtime } = build(fake, { effort: 'low' });
+    live = runtime;
+    await runtime.startSend({
+      logicalSessionId: 'logical-1',
+      requestId: 'turn-1',
+      attemptId: 'a1',
+      text: 'hi',
+      effort: 'medium',
+    });
+    expect(fake.runs[0]?.thinkingLevel).toBe('medium');
+    fake.settle();
+  });
+
+  it('falls back to the effort the session bootstrapped with', async () => {
+    const fake = fakeRuntime();
+    const { runtime } = build(fake, { effort: 'high' });
+    live = runtime;
+    await runtime.startSend({
+      logicalSessionId: 'logical-1',
+      requestId: 'turn-1',
+      attemptId: 'a1',
+      text: 'hi',
+    });
+    expect(fake.runs[0]?.thinkingLevel).toBe('high');
+    fake.settle();
+  });
+
   it('stop aborts the run and settles parked approval dialogs', async () => {
     const fake = fakeRuntime();
     const { runtime, events } = build(fake);

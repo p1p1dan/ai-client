@@ -267,6 +267,13 @@ export class NativeWorkerRuntime {
         signal: controller.signal,
         ...(input.attachments?.length ? { attachments: input.attachments } : {}),
         ...(input.model ? { model: parseModelRef(input.model) } : {}),
+        // The composer's effort chip is the turn's thinking level. Dropping it
+        // here is invisible: the loop falls back to its own default and the run
+        // reports `thinking_level: off` no matter what the user picked. The
+        // per-turn value wins over the one the session bootstrapped with.
+        ...((input.effort ?? this.options.effort)
+          ? { thinkingLevel: input.effort ?? this.options.effort }
+          : {}),
       })
       .then(
         () => undefined,
