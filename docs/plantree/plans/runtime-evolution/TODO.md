@@ -114,10 +114,10 @@
 | F2 | 🔴 | 临时工作区目录消失后无法对话（cwd 缺失被误报为 `node.exe ENOENT`）且无法删除 | 已修复 `dbead94b`，待现场复验 |
 | F1 | 🔴 | 设置 → 终端「网络」子项点击报错 | **已修复（本轮）**：`RemoteSettings` 的四处 Field 子部件在 `<Field.Root>` 之外，渲染即抛 `FieldRootContext is missing`，整个网络分类挂掉。非 Windows 特有，Linux 上同样复现。补 `networkPanelMount` 挂载回归测试，待现场复验 |
 | F3 | 🟠 | GUI 起 git 子进程 stdout 丢失，分支列表/状态为空 | **已定性**：载体问题，与 D1 同一个未知量（放行按进程名还是按进程树），[决策文档](../../../plans/2026-09-09-gui-defect-decisions.md#f3--gui-起的-git-子进程输出丢失)。先按现状收，等 D1 的 R2/R3 探针一起拍板 |
-| F4 | 🟡 | 503 不重试直接失败（529/429 未触发） | **已定性**：不是设计内不重试——native 根本没有自有重试层，PI-Desktop 的 `provider-retry.ts` 未搬（看板 P0 段早已记为 P4-4 前置）。补 `createProviderRetryStream` 并按错误类型做单测；F7d 疑似同根因，[决策文档](../../../plans/2026-09-09-gui-defect-decisions.md#f4--503-不重试直接失败) |
+| F4 | 🟡 | 503 不重试直接失败（529/429 未触发） | **已定性并修复（本轮）**：native 此前没有自有重试层，跑的是 SDK 默认阶梯。已搬 `createProviderRetryStream` 与错误分类到 `plugins/agent-loop/`——429 一条预算（5 次）、5xx/网络/超时一条（4 次，1s→8s）、`Retry-After` 优先并封顶、内层固定 `maxRetries: 0`；只接管流开始前的失败。31 项测试，[决策文档](../../../plans/2026-09-09-gui-defect-decisions.md#f4--503-不重试直接失败)。待现场复测，F7d 一并复测 |
 | F5 | 🟡 | native 会话无提问工具，QuestionCard/扩展问答无法弹卡 | **已定性**：能力缺口非回归——`question.requested` 全仓无生产者，legacy 同样弹不出；native 的扩展 UI 通道是通的（权限卡在用）。建议加 ask 工具但排进 P5-1 批，不阻塞 P4-6，[决策文档](../../../plans/2026-09-09-gui-defect-decisions.md#f5--无提问工具questioncard--扩展问答弹不出来) |
 | F6 | 🟡 | 文件修改 diff 为单栏 patch，无左右双栏对比 | 待评估：属形态优化，非功能缺陷 |
-| F7 | 🟡 | a 授权详情样式 / b「正在输出」重复显示 / c 卡片尺寸字体 / d GPT 渠道 effort 无效且耗时长 / e 上下文详情需发一句话才显示 / f 输入框增高有限 | 待排期；d 先等 F4 的重试层补完再复测，不单独排查 |
+| F7 | 🟡 | a 授权详情样式 / b「正在输出」重复显示 / c 卡片尺寸字体 / d GPT 渠道 effort 无效且耗时长 / e 上下文详情需发一句话才显示 / f 输入框增高有限 | 待排期；d 的耗时部分随本轮重试层现场复测，`reasoning_effort` 无效仍待单独排查 |
 
 另有一项与 F 清单同批交回：[旧会话 resume 身份不匹配](../../../../Windows-P4-6-evidence/old-session-resume-error.md)——所有 `runtimeIdentity` 仍指向 v3 文件的会话（本机 20 条）resume 必失败。
 **已修复（本轮）**：bootstrap 新增 `sessionSourceFile` 声明转换来源，Main 只在 worker 指名「打开的是所请求文件的转换副本」时接受重定向，随即把索引身份迁到副本上（`adoptRematerializedFile` + `bindRuntimeIdentity`）；来源不匹配或未声明仍报 `worker_resume_identity_mismatch`。三项 WorkerManager 用例 + 一项 runtime 上报用例，待现场复验。
