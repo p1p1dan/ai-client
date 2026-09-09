@@ -5,6 +5,7 @@
  * bootstraps at most one Pi AgentSession. Pool/session routing remains in Main.
  */
 
+import { readRuntimeFlags } from '../runtime/flags.ts';
 import {
   PI_BORROW_RESOURCES_DIR_ENV,
   PI_OPT_IN_EXTENSIONS_ENV,
@@ -14,7 +15,7 @@ import {
   PI_WORKER_GENERATION_ENV,
   WORKER_RPC_PROTOCOL_VERSION,
 } from '../shared/types/workerRpc.ts';
-import { PiWorkerRpcServer } from './piWorkerRpcServer.ts';
+import { PiWorkerRpcServer, type PiWorkerRpcServerOptions } from './piWorkerRpcServer.ts';
 
 interface ElectronParentPort {
   postMessage(message: unknown): void;
@@ -52,7 +53,55 @@ const parentPort = electronPort ?? {
   },
 };
 
+// D11: the carrier is the process we are, not the platform we are on. Electron
+// gives us a MessagePort; the bundled node.exe Main spawns for packaged Windows
+// gives us Node IPC. Everything the runtime derives from the carrier — which
+// Node may be spawned for a TSD read, whether there is a fallback at all — is
+// decided in `workerHost`, so no plugin below has to know.
+const carrier = electronPort ? 'electron-utility' : 'bundled-node';
+
+// Requests must not be dropped while the native module loads. Electron buffers
+// until `parentPort.start()`, but Node IPC emits on arrival and a message with
+// no listener is simply gone, so both channels are attached now and queued
+// until the server exists.
+const queued: unknown[] = [];
+let deliver = (message: unknown): void => {
+  queued.push(message);
+};
+if (electronPort) {
+  electronPort.on('message', (event) => deliver(messageData(event)));
+  electronPort.start();
+} else {
+  process.on('message', (message) => deliver(message));
+}
+
 const generation = readPositiveGeneration(process.env[PI_WORKER_GENERATION_ENV]);
+
+/**
+ * ARD D8 / P4-2 — which engine this slot runs.
+ *
+ * The switch is a factory choice, not a second dispatcher: `PiWorkerRpcServer`
+ * keeps correlation, generation binding and request serialization for both
+ * backends. `legacy` never loads the native module, so an import-time fault in
+ * the unfinished runtime cannot reach a user's session.
+ */
+const backend = readRuntimeFlags(process.env).backend;
+let createNativeRuntime: PiWorkerRpcServerOptions['createRuntime'];
+if (backend === 'native') {
+  const [{ NativeWorkerRuntime }, { workerHost }] = await Promise.all([
+    import('../runtime/worker/nativeWorkerRuntime.ts'),
+    import('../runtime/host/worker.ts'),
+  ]);
+  // Electron-only; absent when Main spawned us as the bundled node.exe.
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  const host = workerHost({ carrier, ...(resourcesPath ? { resourcesPath } : {}) });
+  // Unannotated on purpose: this assignment is what proves NativeWorkerRuntime
+  // still satisfies PiWorkerRuntime. The adapter does not import the RPC server
+  // (that would drag pi-coding-agent into the native path), so this is the only
+  // place the two shapes meet.
+  createNativeRuntime = (options) => new NativeWorkerRuntime({ ...options, host });
+}
+
 const server = new PiWorkerRpcServer({
   port: parentPort,
   generation,
@@ -63,9 +112,13 @@ const server = new PiWorkerRpcServer({
   ...(process.env[PI_OPT_IN_EXTENSIONS_ENV]?.trim()
     ? { optInExtensions: process.env[PI_OPT_IN_EXTENSIONS_ENV]?.trim() }
     : {}),
+  ...(createNativeRuntime ? { createRuntime: createNativeRuntime } : {}),
   log: (...args) => console.error('[pi-worker]', ...args),
   onDisposed: () => setImmediate(() => process.exit(0)),
 });
+
+deliver = (message) => server.receive(message);
+for (const message of queued.splice(0)) server.receive(message);
 
 process.on('uncaughtException', (error) => {
   console.error('[pi-worker] uncaughtException:', error instanceof Error ? error.stack : error);
@@ -78,11 +131,7 @@ process.on('unhandledRejection', (reason) => {
   setImmediate(() => process.exit(1));
 });
 
-if (electronPort) {
-  electronPort.on('message', (event) => server.receive(messageData(event)));
-  electronPort.start();
-} else {
-  process.on('message', (message) => server.receive(message));
+if (!electronPort) {
   process.once('disconnect', () => {
     // A crashed Main must not leave a Node worker or an active tool behind.
     setTimeout(() => process.exit(1), 5000).unref();

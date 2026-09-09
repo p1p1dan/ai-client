@@ -11,7 +11,6 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { dirname, normalize } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { type Context, Service } from 'cordis';
 import {
   EXEC_SERVICE,
@@ -24,9 +23,16 @@ import {
   type RuntimeWriteOptions,
 } from '../contracts.ts';
 import { absolutePath, positiveInteger, RuntimeHostError } from './errors.ts';
+import { resolveHelper } from './helpers.ts';
 
 const TSD_MAGIC = Buffer.from('%TSD-Header-###%');
-const HELPER = fileURLToPath(new URL('./tsd-read.mjs', import.meta.url));
+// Resolved on first use, not at import: a packaging slip must fail the read
+// that needs the helper, not the load of every worker.
+let helperPath: string | undefined;
+function tsdHelper(): string {
+  helperPath ??= resolveHelper('tsd-read.mjs', import.meta.url);
+  return helperPath;
+}
 const CHUNK_BYTES = 64 * 1024;
 export const TSD_READ_TIMEOUT_MS = 30_000;
 
@@ -115,7 +121,7 @@ export class HostIoPlugin extends Service implements RuntimeHostIoService {
       }
       const output = await this.ctx.runtimeExec.run({
         command: this.config.node.path,
-        args: [HELPER, path, String(offset), String(options.maxBytes + 1)],
+        args: [tsdHelper(), path, String(offset), String(options.maxBytes + 1)],
         cwd: dirname(path),
         timeoutMs: TSD_READ_TIMEOUT_MS,
         maxOutputBytes: options.maxBytes + 1 + 4096,

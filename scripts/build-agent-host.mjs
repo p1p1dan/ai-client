@@ -2,9 +2,10 @@
  * Build the worker-only Pi AgentSession artifact shipped via electron-builder.
  *
  * Output layout (out-agent-host/):
- *   worker.js      per-slot Pi utility worker entry
- *   package.json   ESM marker
- *   node_modules/  pruned Pi SDK + permission-system runtime dependencies
+ *   worker.js          per-slot Pi utility worker entry
+ *   package.json       ESM marker
+ *   node_modules/      pruned Pi SDK + permission-system runtime dependencies
+ *   runtime-helpers/   scripts the native runtime SPAWNS rather than imports
  *
  * The artifact stays as plain files under resources/agent-host so the utility
  * process can load it directly and Windows TSD remediation can inspect it.
@@ -27,6 +28,7 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const hostRoot = path.join(repoRoot, 'src', 'agent-host');
 const hostNodeModules = path.join(hostRoot, 'node_modules');
+const runtimeHostDir = path.join(repoRoot, 'src', 'runtime', 'host');
 const outDir = path.join(repoRoot, 'out-agent-host');
 const platform = process.platform;
 const arch = process.arch;
@@ -61,6 +63,27 @@ async function bundle() {
     sourcemap: false,
     external: ESBUILD_EXTERNAL,
   });
+}
+
+/**
+ * P4-1 — the native runtime spawns `exec-runner.mjs` and `tsd-read.mjs` by
+ * path; nothing imports them, so esbuild cannot see them and they would be
+ * absent from the artifact. In source they sit beside their caller, but the
+ * bundle collapses that directory into `worker.js`, so they are copied to the
+ * sibling directory `src/runtime/host/helpers.ts` falls back to.
+ */
+function copyRuntimeHelpers() {
+  const destDir = path.join(outDir, 'runtime-helpers');
+  fs.mkdirSync(destDir, { recursive: true });
+  const copied = fs
+    .readdirSync(runtimeHostDir)
+    .filter((name) => name.endsWith('.mjs'))
+    .map((name) => {
+      fs.copyFileSync(path.join(runtimeHostDir, name), path.join(destDir, name));
+      return name;
+    });
+  if (copied.length === 0) fail('no runtime helper scripts found to copy');
+  return copied;
 }
 
 function copyNodeModules() {
@@ -109,6 +132,7 @@ async function main() {
     `${JSON.stringify({ name: 'aiclient-pi-worker-artifact', private: true, type: 'module' }, null, 2)}\n`
   );
   copyNodeModules();
+  const helpers = guard('runtime-helpers', () => copyRuntimeHelpers());
   guard('policy', () => writeBundledPermissionPolicy(outDir));
   tsdFixWorkerOnWindows();
   const { totalBytes } = guard('verify', () => verifyArtifact({ outDir }));
@@ -118,7 +142,8 @@ async function main() {
   console.log(
     `[build-agent-host] OK — ${(totalBytes / 1024 / 1024).toFixed(1)}MiB (${totalBytes}B), ` +
       `worker-only, pi ${installed['@earendil-works/pi-coding-agent']}, ` +
-      `permission ${installed['@gotgenes/pi-permission-system']}`
+      `permission ${installed['@gotgenes/pi-permission-system']}, ` +
+      `helpers ${helpers.join('+')}`
   );
   console.log(`[build-agent-host] done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }

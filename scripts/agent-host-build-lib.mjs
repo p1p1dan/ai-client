@@ -223,6 +223,11 @@ export function verifyArtifact({ outDir }) {
     // a package with every unit test still green. Asserting the entry file is
     // what makes that failure loud.
     ...bundledFeaturePluginEntryPaths(),
+    // P4-1: spawned by path, never imported, so esbuild cannot vouch for them
+    // and their absence would only surface as the native backend failing on its
+    // first shell tool inside a packaged app.
+    'runtime-helpers/exec-runner.mjs',
+    'runtime-helpers/tsd-read.mjs',
   ]) {
     mustExist(rel);
   }

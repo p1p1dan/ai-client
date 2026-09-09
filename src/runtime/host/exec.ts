@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
 import { delimiter, dirname, isAbsolute, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { type Context, Service } from 'cordis';
 import {
   EXEC_SERVICE,
@@ -10,6 +9,7 @@ import {
   type RuntimeHostConfig,
 } from '../contracts.ts';
 import { absolutePath, positiveInteger, RuntimeHostError, timerMilliseconds } from './errors.ts';
+import { resolveHelper } from './helpers.ts';
 
 export class ExecPlugin extends Service implements RuntimeExecService {
   readonly mode: 'pipe' | 'host-adapter';
@@ -143,7 +143,7 @@ function runPipe(
     );
   }
   return new Promise((resolve, reject) => {
-    const runnerPath = fileURLToPath(new URL('./exec-runner.mjs', import.meta.url));
+    const runnerPath = resolveHelper('exec-runner.mjs', import.meta.url);
     const child = spawn(nodePath ?? request.command, nodePath ? [runnerPath] : [...request.args], {
       cwd: request.cwd,
       env: request.env,
