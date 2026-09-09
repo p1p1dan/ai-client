@@ -1,12 +1,27 @@
-import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { dirname, join } from 'node:path';
 import { paginatePiSessionHistory } from '../../agent-host/piSessionTimeline.ts';
 import type { ExtensionUiResponse, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
-import type { RuntimePermissionSettings } from '../../shared/types/runtimePermission.ts';
+import {
+  migratePermissionTier,
+  type RuntimePermissionSettings,
+} from '../../shared/types/runtimePermission.ts';
+import type { SessionPermissionTier } from '../../shared/types/sessionPermissionTier.ts';
 import type {
   WorkerBootstrapPayload,
   WorkerBootstrapResult,
+  WorkerCommandsPayload,
+  WorkerCommandsResult,
+  WorkerCompactPayload,
+  WorkerCompactResult,
+  WorkerDiscardForkPayload,
+  WorkerDiscardForkResult,
+  WorkerForkPayload,
+  WorkerForkResult,
   WorkerHistoryPayload,
   WorkerHistoryResult,
+  WorkerRewindPayload,
+  WorkerRewindResult,
   WorkerSendPayload,
   WorkerSendResult,
   WorkerStopPayload,
@@ -16,6 +31,7 @@ import type {
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import type { RuntimeHostConfig } from '../contracts.ts';
 import { RuntimeHostError } from '../host/errors.ts';
+import { JsonlSessionStore } from '../plugins/session/store.ts';
 
 /**
  * The self-owned runtime behind the existing worker RPC surface (ARD P4-1).
@@ -29,10 +45,11 @@ import { RuntimeHostError } from '../host/errors.ts';
  * choosing `native` does not load `pi-coding-agent`. The worker entry checks the
  * shape at the assignment instead.
  *
- * Not implemented here: `compact` / `rewind` / `reload` / `fork` / `discardFork`
- * / `commands` / `setPermissionTier`. Those are P4-4; leaving the methods off
- * makes the RPC server answer `WORKER_*_UNAVAILABLE`, which is a clearer signal
- * than a method that silently does nothing.
+ * Still absent: `reload`. It re-opens a worker's own JSONL in place, which pi
+ * does with `switchSession`; the native store has no equivalent because its
+ * document IS the file it holds a lock on. Leaving the method off makes the RPC
+ * server answer `WORKER_RELOAD_UNAVAILABLE`, which is a clearer signal than a
+ * reload that silently returns stale history.
  */
 
 export class NativeWorkerRuntimeError extends Error {
@@ -74,6 +91,8 @@ export class NativeWorkerRuntime {
   private turn: ActiveTurn | null = null;
   private unsubscribe: (() => void) | null = null;
   private disposed = false;
+  /** Forks this worker created and Main has not adopted: file -> session id. */
+  private readonly stagedForks = new Map<string, string>();
 
   constructor(options: NativeWorkerRuntimeOptions) {
     this.options = options;
@@ -105,6 +124,11 @@ export class NativeWorkerRuntime {
       ...(this.options.env ? { env: this.options.env } : {}),
       host: this.options.host,
       agentDir,
+      // Without this the loop registers no tools and `bootstrap.ts` pins it to
+      // singleTurn — a worker that can only ever answer once. The workspace is
+      // the session's cwd, which bootstrap also cross-checks against the
+      // session config, so the two can never drift apart.
+      tools: { cwd: this.cwd },
       session: this.options.sessionFile
         ? { file: this.options.sessionFile, cwd: this.cwd, mode: 'resume' }
         : { file: this.sessionFilePath(agentDir), cwd: this.cwd, mode: 'create' },
@@ -250,7 +274,12 @@ export class NativeWorkerRuntime {
     // promise the bridge owns, not on the loop.
     this.handle?.approval?.bridge.cancelAll('aborted');
     turn.controller.abort();
-    await turn.done;
+    // Deliberately NOT awaiting the turn. The RPC chain is serialized, so a stop
+    // that waited would hold it for however long the provider takes to notice
+    // the abort — and a second stop, or the dispose behind it, could not get
+    // through. `stopped` reports that the stop was issued; the turn's own
+    // terminal event reports that it finished. `dispose` still waits, because
+    // there the session lock has to be released before the call returns.
     return { stopped: true };
   }
 
@@ -272,18 +301,141 @@ export class NativeWorkerRuntime {
     return { snapshot: this.requireSession().tree(this.logicalSessionId) };
   }
 
+  /**
+   * `/compact` — R02-c.
+   *
+   * Legacy pi compacts immediately and aborts the running turn. The native
+   * runtime cannot: compaction only ever happens at a turn boundary
+   * (`prepareTurn`), which is what keeps a summary from being cut mid-tool-call
+   * (P2-3). So this records the same intent `new_context` records and the next
+   * turn honours it. The user-visible difference is that the transcript changes
+   * on the next send rather than on the click; the model never sees a window
+   * that was rewritten underneath it.
+   */
+  async compact(input: WorkerCompactPayload): Promise<WorkerCompactResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.assertIdle('compact the conversation');
+    await this.bootstrap();
+    const context = this.requireHandle().context;
+    if (!context?.enabled) {
+      throw new NativeWorkerRuntimeError(
+        'WORKER_COMPACT_UNAVAILABLE',
+        'This runtime was built without compaction'
+      );
+    }
+    context.requestNewWindow();
+    return { compacted: true };
+  }
+
+  /**
+   * Slash commands come from skills and plugins, which are P5. An empty list is
+   * the truthful answer for this backend and the one the composer already
+   * handles; an error would make the caller translate it back into "none".
+   */
+  async commands(input: WorkerCommandsPayload): Promise<WorkerCommandsResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    return { commands: [], truncated: false };
+  }
+
+  async rewind(input: WorkerRewindPayload): Promise<WorkerRewindResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.assertIdle('rewind the session');
+    await this.bootstrap();
+    const session = this.requireSession();
+    const rewound = await session.rewind(input.targetEntryId, input.confirmed);
+    return {
+      logicalSessionId: this.logicalSessionId,
+      sessionFile: session.file,
+      workspacePath: this.cwd,
+      targetEntryId: input.targetEntryId,
+      ...(rewound.editorText !== undefined ? { editorText: rewound.editorText } : {}),
+      leaf: rewound.leaf,
+      history: {
+        logicalSessionId: this.logicalSessionId,
+        sessionFile: session.file,
+        workspacePath: this.cwd,
+        page: paginatePiSessionHistory(session.history()),
+      },
+      tree: { snapshot: session.tree(this.logicalSessionId) },
+    };
+  }
+
+  async fork(input: WorkerForkPayload): Promise<WorkerForkResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.assertIdle('fork the session');
+    await this.bootstrap();
+    const session = this.requireSession();
+    const sourceSessionFile = session.file;
+    const file = join(dirname(sourceSessionFile), `${randomUUID()}.jsonl`);
+    const metadata = await session.fork(file, input.entryId);
+    // The fork is staged, not adopted: Main decides whether it becomes a
+    // session, and `worker.fork.discard` must be able to prove the file it is
+    // asked to delete is one we made rather than an unrelated transcript.
+    this.stagedForks.set(metadata.file, metadata.id);
+    return {
+      logicalSessionId: this.logicalSessionId,
+      sourceSessionFile,
+      sessionFile: metadata.file,
+      piSessionId: metadata.id,
+      workspacePath: this.cwd,
+      leaf: metadata.leaf,
+      history: {
+        logicalSessionId: this.logicalSessionId,
+        sessionFile: metadata.file,
+        workspacePath: this.cwd,
+        // Read back rather than projected from the source: the fork is a
+        // separate document from here on, and a history assembled from the
+        // parent would silently disagree with the file the next slot opens.
+        page: paginatePiSessionHistory(await this.readForkHistory(metadata.file)),
+      },
+    };
+  }
+
+  async discardFork(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    const staged = this.stagedForks.get(input.sessionFile);
+    const owned = this.handle?.session?.file === input.sessionFile;
+    if (staged === undefined && !owned) return { discarded: false };
+    if (staged !== undefined) {
+      this.stagedForks.delete(input.sessionFile);
+      await this.requireSession().discardFork(input.sessionFile, staged);
+      return { discarded: true };
+    }
+    // Discarding the file this worker holds open: the lock has to go before the
+    // file can, so the slot ends here either way.
+    const io = this.requireHandle().hostIo;
+    await this.dispose();
+    await io.unlink(input.sessionFile).catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error;
+    });
+    return { discarded: true };
+  }
+
+  private async readForkHistory(file: string) {
+    const store = await JsonlSessionStore.open(this.requireHandle().hostIo, {
+      file,
+      cwd: this.cwd,
+      mode: 'resume',
+    });
+    try {
+      return store.history();
+    } finally {
+      await store.close();
+    }
+  }
+
+  setPermissionTier(tier: SessionPermissionTier): void {
+    // D14: the old four-tier value is migrated, never carried through. A worker
+    // that stored the tier would be enforcing an axis pair nobody chose.
+    this.setPermissions(migratePermissionTier(tier));
+  }
+
   respondExtensionUi(response: ExtensionUiResponse): boolean {
     return this.handle?.approval?.bridge.respond(response) ?? false;
   }
 
   setPermissions(permissions: RuntimePermissionSettings): void {
-    if (this.turn) {
-      throw new NativeWorkerRuntimeError(
-        'WORKER_SESSION_BUSY',
-        'Cannot change permissions while a turn is active',
-        true
-      );
-    }
+    this.assertIdle('change permissions');
     const service = this.handle?.permissions;
     if (!service) {
       throw new NativeWorkerRuntimeError(
@@ -311,6 +463,15 @@ export class NativeWorkerRuntime {
 
   private emit(event: RuntimeEventDraft): void {
     if (!this.disposed) this.options.emit(event);
+  }
+
+  private assertIdle(action: string): void {
+    if (!this.turn) return;
+    throw new NativeWorkerRuntimeError(
+      'WORKER_SESSION_BUSY',
+      `Cannot ${action} while a turn is active`,
+      true
+    );
   }
 
   private assertLogicalSession(id: string): void {
