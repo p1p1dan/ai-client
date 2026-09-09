@@ -45,7 +45,7 @@ it('toggles persisted-setting input and expands actual diff, preserving failure 
     await act(async () =>
       container.querySelector<HTMLElement>('[data-slot="collapsible-trigger"]')!.click()
     );
-    expect(container.textContent).toContain('not applied');
+    expect(container.textContent).toContain('application unconfirmed');
     expect(container.textContent).toContain('permission denied');
   } finally {
     await act(async () => root.unmount());

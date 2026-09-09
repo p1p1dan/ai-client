@@ -3,6 +3,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useExtensionUiStore } from '@/stores/extensionUi';
 
 export function SessionActivityStatus({
   sessionId,
@@ -16,6 +17,9 @@ export function SessionActivityStatus({
   const { t } = useI18n();
   const session = useChatSessionsStore((state) =>
     state.sessions.find((item) => item.id === sessionId)
+  );
+  const pendingExtension = useExtensionUiStore((state) =>
+    state.pending.find((request) => request.sessionId === sessionId)
   );
   const activity = session?.activity;
   const [now, setNow] = useState(Date.now);
@@ -41,18 +45,24 @@ export function SessionActivityStatus({
     failed: 'Failed',
     stopping: 'Stopping',
   } as const;
-  const kind =
-    activity?.phase ?? (session.status.startsWith('waiting_') ? 'confirmation' : 'waiting');
-  const elapsed = activity ? Math.max(0, Math.floor((now - activity.since) / 1000)) : null;
-  const retry = activity?.retry;
+  const kind = pendingExtension
+    ? 'confirmation'
+    : (activity?.phase ?? (session.status.startsWith('waiting_') ? 'confirmation' : 'waiting'));
+  const since = pendingExtension?.receivedAt ?? activity?.since;
+  const elapsed = since !== undefined ? Math.max(0, Math.floor((now - since) / 1000)) : null;
+  const retry = pendingExtension ? undefined : activity?.retry;
   const delay =
     retry?.delayMs && activity
       ? Math.max(0, Math.ceil((activity.since + retry.delayMs - now) / 1000))
       : null;
   const label = [
     t(labels[kind]),
-    activity?.tool,
-    retry ? `${retry.attempt}/${retry.maxRetries}` : null,
+    pendingExtension ? undefined : activity?.tool,
+    retry && retry.attempt > 0
+      ? retry.maxRetries > 0
+        ? `${retry.attempt}/${retry.maxRetries}`
+        : String(retry.attempt)
+      : null,
     delay !== null
       ? delay > 0
         ? t('Retry in {{seconds}}s', { seconds: delay })

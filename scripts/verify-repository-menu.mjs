@@ -62,6 +62,13 @@ async function runBrowserChecks() {
     );
   };
   await open();
+  assert.equal(
+    await evaluate(
+      `document.querySelector('[data-slot="menu-popup"]').contains(document.activeElement)`
+    ),
+    true,
+    'open menu owns focus'
+  );
   await click('[role="menuitem"]');
   assert.equal(await evaluate('window.actions'), 1);
   assert.equal(await evaluate('document.querySelectorAll("[data-slot=menu-popup]").length'), 0);
@@ -70,10 +77,23 @@ async function runBrowserChecks() {
   window.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
   await settle();
   assert.equal(await evaluate('document.querySelectorAll("[data-slot=menu-popup]").length'), 0);
+  assert.equal(
+    await evaluate(
+      `document.activeElement === document.querySelector('[aria-label="Repository actions"]')`
+    ),
+    true,
+    'Escape returns focus to trigger'
+  );
   await open();
   await click('#outside');
   assert.equal(await evaluate('document.querySelectorAll("[data-slot=menu-popup]").length'), 0);
-  results.push('repository mouse down/up, item action, Escape, outside dismissal');
+  assert.equal(
+    await evaluate(
+      'document.querySelectorAll("[data-base-ui-portal], .fixed.inset-0.z-40").length'
+    ),
+    0
+  );
+  results.push('repository focus, mouse down/up, item action, Escape, outside dismissal');
   console.log(JSON.stringify({ passed: results }));
   window.destroy();
   app.quit();

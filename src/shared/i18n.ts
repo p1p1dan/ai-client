@@ -2113,9 +2113,9 @@ export const zhTranslations: Record<string, string> = {
   'Tool token usage, reasoning tokens and generation speed are not reported with comparable measurements.':
     '暂无分工具 token、推理 token 和生成速度的同口径计量。',
   'Modification preview': '修改预览',
-  'Not applied': '未应用',
+  'Modification failed': '修改失败',
   'Written content': '写入内容',
-  'Modification preview — not applied': '修改预览——未应用',
+  'Failed — preview only; application unconfirmed': '修改失败——仅参数预览，未确认应用',
   'Written content — previous content unavailable': '写入内容——无修改前内容可供比较',
   'Applied diff': '已应用的修改差异',
   'Successful edit — argument preview': '修改成功——按参数预览差异',

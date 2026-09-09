@@ -1,8 +1,9 @@
 # 当前交接
 
-- Current Phase：A/B/C/D 已实现并完成分批自动化；进入最终复查与现场交接。
-- Next Target：最终资源/变更/证据核对，累计 GUI/Windows 验收。
-- Last Landed：A `8f4b72b0`；B `7f114608`；C `9c4ea0e2`；D 见 git log。
-- Active TODO：最终复查、逐项状态、最小现场验收清单；详见 [TODO](TODO.md)。
-- Blocked By：Windows/加密机完整验收需现场环境，未标任何产品项 Done。
-- Last Verified：A 菜单、C 两种问答、D 上下文 Tooltip 均已真实 Electron 组件实测；分批自动化和对应类型检查通过。[A](evidence/batch-a.md) · [B](evidence/batch-b.md) · [C](evidence/batch-c.md) · [D](evidence/batch-d-context.md)。
+- Current Phase：A/B/C/D/E 与最终复查已实现并提交，分批自动化通过；等待累计现场验收。
+- Next Target：按 [现场验收清单](现场验收清单.md) 在包含全部提交的安装包上验证。
+- Last Landed：A `8f4b72b0`；B `7f114608`；C `9c4ea0e2`；D `20da96e4`；E 与最终修正见 git log。
+- Active TODO：完整 GUI、Windows、加密机最小现场清单；未将产品任务标 Done。
+- Blocked By：现场环境与包含本轮代码的安装包尚未验证。无未完成的已授权实现切片。
+- Last Verified：[最终复查](evidence/final-review.md)；[A](evidence/batch-a.md) · [B](evidence/batch-b.md) · [C](evidence/batch-c.md) · [D](evidence/batch-d-context.md) · [E](evidence/batch-e-scroll.md)。
+- 分支：当前开发主线 feat/model-catalog-admin，未改旧 main 指针，未推送/发布/触发打包。用户截图保持未跟踪。

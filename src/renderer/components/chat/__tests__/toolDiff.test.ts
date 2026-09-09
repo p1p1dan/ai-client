@@ -200,3 +200,9 @@ it('supports top-level Edit arguments and prefers successful SDK patches includi
   expect(deriveToolDiff({ ...run, result, status: 'failed' })?.source).toBe('arguments');
   expect(deriveToolDiff({ toolName: 'bash', input: { command: 'echo hi > a.ts' } })).toBeNull();
 });
+
+it('does not preview a deletion from incomplete streaming arguments', () => {
+  expect(
+    deriveToolDiff({ toolName: 'edit', input: { path: 'a.ts', oldText: 'before' } })
+  ).toBeNull();
+});

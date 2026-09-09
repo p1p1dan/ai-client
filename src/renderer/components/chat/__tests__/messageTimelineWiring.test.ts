@@ -1168,24 +1168,8 @@ describe('T-29 repo-wide: ChatMarkdown has exactly one call site in src/', () =>
   });
 });
 
-/**
- * F5 D1-b `[INV-D1-1]`: the prose density change is asserted as a pair of
- * counts, because either half alone is blind.
- *
- * There is NO token propagation between the three prose surfaces: `text-markdown`
- * carries the 15px size only, and every line height in this directory is spelled
- * as its own literal class. So changing the markdown root does not drag the user
- * bubble or the streaming fallback along, and nothing stops a future edit from
- * moving one and forgetting the others — or from moving all nine at once.
- *
- * A presence check ("`leading-relaxed` appears") cannot see either failure. Two
- * counts asserted together can: the positive count catches the missed surface,
- * and the negative count catches the over-applied one. The five that must stay
- * on `leading-normal` are the reverse gate — they are UI elements (`QuestionCard`
- * ×3, `ToolRows`' single-line rows, and `turnBodyClass()`'s inherited baseline),
- * not long-form prose. S05 removed the old `EnhancedInput` textarea. D1-b was authorised for
- * prose only.
- */
+/** Preserve prose and tool-row density independently of QuestionCard/extension
+ * dialogs, whose multiline layout is covered by interaction/browser tests. */
 describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest do not', () => {
   const CHAT_DIR = path.dirname(FILE);
 
@@ -1214,10 +1198,22 @@ describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest d
     expect(CHAT_CODE).not.toContain('comes from that same article');
   });
 
+  const DENSITY_CODE = CHAT_FILES.filter((file) =>
+    [
+      'MessageTimeline.tsx',
+      'chatMarkdownPolicy.ts',
+      'ToolRows.tsx',
+      'chatTimelineLayout.ts',
+    ].includes(path.basename(file))
+  )
+    .map((file) => stripComments(readFileSync(file, 'utf8'), file))
+    .join('\n');
+
   it('exactly the three prose surfaces carry the 1.625 tier', () => {
-    expect(countIn(CHAT_CODE, 'leading-relaxed'), 'root + user bubble + streaming fallback').toBe(
-      3
-    );
+    expect(
+      countIn(DENSITY_CODE, 'leading-relaxed'),
+      'root + user bubble + streaming fallback'
+    ).toBe(3);
     // Spelled out so a failure names the surface, not just the count.
     expect(CHAT_CODE).toContain('break-words text-markdown leading-relaxed text-foreground');
     expect(CHAT_CODE).toContain(
@@ -1228,16 +1224,10 @@ describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest d
     );
   });
 
-  it('the five retained non-prose surfaces are still on 1.5, and so is the turn skeleton', () => {
-    // Five kept surfaces + the code block, which D1-b moved UP to 1.5 from
-    // `leading-snug` (§1.2 ⑥) and therefore joins this count rather than the
-    // one above. Both numbers move if anyone applies the change wholesale.
-    expect(countIn(CHAT_CODE, 'leading-normal'), 'five UI surfaces + the code block').toBe(6);
-    // The skeleton itself: `turnBodyClass()` feeds components that set no size
-    // of their own, so relaxing it would resize `QuestionCard` and the tool
-    // shells — outside D1-b's authorisation.
-    expect(CHAT_CODE).toContain('flex flex-col gap-2.5 text-markdown leading-normal');
-    expect(CHAT_CODE).toContain('text-left text-markdown leading-normal');
+  it('the tool rows, code block and turn skeleton retain the 1.5 tier', () => {
+    expect(countIn(DENSITY_CODE, 'leading-normal')).toBe(3);
+    expect(DENSITY_CODE).toContain('flex flex-col gap-2.5 text-markdown leading-normal');
+    expect(DENSITY_CODE).toContain('text-left text-markdown leading-normal');
   });
 });
 /**
@@ -1392,6 +1382,7 @@ describe('T12-d: sessionId reaches the tool rows', () => {
 
   it('the group receives it at the single ToolGroup call site', () => {
     const toolGroupItem = nodeSource(topLevelFunction('ToolGroupItem'));
-    expect(toolGroupItem).toContain('<ToolGroup rows={rows} sessionId={sessionId} />');
+    const element = /<ToolGroup\b[^>]*>/.exec(toolGroupItem);
+    expect(element?.[0]).toContain('sessionId={sessionId}');
   });
 });

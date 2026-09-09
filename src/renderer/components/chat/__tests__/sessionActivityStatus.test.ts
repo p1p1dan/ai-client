@@ -60,3 +60,45 @@ it('renders real retry countdown and switches sessions without stale status or t
     vi.unstubAllGlobals();
   }
 });
+
+it('shows a Pi extension dialog as waiting for confirmation until its actual acknowledgement', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  const { useExtensionUiStore } = await import('@/stores/extensionUi');
+  useChatSessionsStore.setState({
+    sessions: [
+      {
+        id: 's',
+        title: 's',
+        projectId: 'p',
+        workspaceId: 'w',
+        status: 'running',
+        updatedAt: 0,
+        activity: { phase: 'tool', tool: 'ask', since: Date.now() },
+      },
+    ],
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    useExtensionUiStore.setState({
+      pending: [
+        {
+          runtimeId: 'r',
+          uiRequestId: 'q',
+          sessionId: 's',
+          receivedAt: Date.now(),
+          dialog: { method: 'input', title: 'Your answer' },
+        },
+      ],
+    });
+    await act(async () => root.render(createElement(SessionActivityStatus, { sessionId: 's' })));
+    expect(container.textContent).toContain('Waiting for confirmation');
+    await act(async () => useExtensionUiStore.setState({ pending: [] }));
+    expect(container.textContent).toContain('Running tool');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  }
+});

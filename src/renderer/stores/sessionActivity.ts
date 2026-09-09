@@ -13,7 +13,6 @@ export interface SessionActivity {
   since: number;
   tool?: string;
   retry?: SessionRetryInfo;
-  error?: string;
 }
 
 export function nextSessionActivity(
@@ -32,7 +31,7 @@ export function nextSessionActivity(
     case 'session.stopped':
       return undefined;
     case 'session.failed':
-      return { phase: 'failed', since: at, error: event.payload?.error ?? 'Session failed' };
+      return { phase: 'failed', since: at };
     case 'session.status': {
       if (event.payload.retry) return { phase: 'retry', since: at, retry: event.payload.retry };
       switch (event.payload.status) {
@@ -91,8 +90,8 @@ export function isRecoveryEvent(event: RuntimeEvent): boolean {
   return (
     (event.type === 'session.status' && event.payload.status === 'starting') ||
     (event.type === 'message.started' && event.payload.role === 'user') ||
-    event.type === 'message.delta' ||
-    event.type === 'thinking.delta' ||
+    (event.type === 'message.delta' && event.payload.text.length > 0) ||
+    (event.type === 'thinking.delta' && event.payload.text.length > 0) ||
     event.type === 'tool.started' ||
     event.type === 'tool.completed' ||
     event.type === 'session.completed' ||

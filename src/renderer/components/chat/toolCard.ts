@@ -499,11 +499,8 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // A running call's input can still change before it settles, so the input
   // segment only appears once the call is done (T-05 adversarial fix #3).
   const inputBody = running ? undefined : deriveToolInputBody(run);
-  // T12-b slice 2: for `edit`/`write` the arguments ARE the change, so the
-  // diff replaces the raw argument JSON. Same `!running` gate as `inputBody`
-  // and for the same reason — the arguments can still change until the call
-  // settles, and a diff that redraws mid-call reads as the file being edited
-  // twice.
+  // Running Edit/Write arguments are explicitly labelled as a preview;
+  // successful Edit results prefer the SDK patch once the call settles.
   const diff = deriveToolDiff(run);
   const expandable = showOutputBody || Boolean(inputBody) || Boolean(diff);
 

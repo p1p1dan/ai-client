@@ -563,8 +563,16 @@ export function applyRuntimeEvent(
   const patch = applyRuntimeEventCore(state, event);
   const current = state.sessions.find((session) => session.id === event.sessionId);
   if (!current) return patch;
-  const activity = nextSessionActivity(current.activity, event);
-  const recovered = isRecoveryEvent(event);
+  const needsMessage = [
+    'message.delta',
+    'thinking.delta',
+    'thinking.started',
+    'tool.started',
+    'tool.completed',
+  ].includes(event.type);
+  const accepted = !needsMessage || patch.messages !== undefined;
+  const activity = accepted ? nextSessionActivity(current.activity, event) : current.activity;
+  const recovered = accepted && isRecoveryEvent(event);
   const runtimeError =
     event.type === 'session.failed'
       ? (event.payload?.error ?? 'Session failed')

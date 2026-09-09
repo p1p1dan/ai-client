@@ -311,9 +311,13 @@ export function LeftNav({
   // rather than leaving the user to guess where the chat landed.
   const newSessionButtonTitle = !canStartNewSession
     ? t('New temporary chat (no repository)')
-    : newSessionTarget.folderName
-      ? t('New session in {{folder}}', { folder: newSessionTarget.folderName })
-      : undefined;
+    : workspaces.find((workspace) => workspace.id === effectiveWorkspaceId)?.kind === 'temp'
+      ? t('New chat in existing directory: {{path}}', {
+          path: workspaces.find((workspace) => workspace.id === effectiveWorkspaceId)?.path ?? '',
+        })
+      : newSessionTarget.folderName
+        ? t('New session in {{folder}}', { folder: newSessionTarget.folderName })
+        : undefined;
 
   const handleNewSession = () => {
     // U22: no targetable workspace is not "nothing to do" — it is exactly the

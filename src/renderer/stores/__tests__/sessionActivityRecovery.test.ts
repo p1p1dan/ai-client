@@ -79,3 +79,11 @@ it('uses tool, confirmation, thinking events and clears all live state on stop',
   apply(event('session.stopped', {}));
   expect(useChatSessionsStore.getState().sessions[0].activity).toBeUndefined();
 });
+
+it('an unknown-message or empty delta cannot clear a real terminal failure', () => {
+  apply(event('session.failed', { error: 'terminal' }));
+  apply(event('message.delta', { messageId: 'missing', blockId: 'b', text: 'late' }));
+  expect(useChatSessionsStore.getState().lastError).toBe('terminal');
+  apply(event('message.delta', { messageId: 'm', blockId: 'b', text: '' }));
+  expect(useChatSessionsStore.getState().lastError).toBe('terminal');
+});

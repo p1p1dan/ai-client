@@ -132,7 +132,7 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
             view.running
               ? 'Modification preview'
               : view.failed
-                ? 'Not applied'
+                ? 'Modification failed'
                 : view.diff.source === 'write-content'
                   ? 'Written content'
                   : 'Modified'
@@ -382,7 +382,7 @@ function ToolRowDiffSegment({
             running
               ? 'Modification preview'
               : failed
-                ? 'Modification preview — not applied'
+                ? 'Failed — preview only; application unconfirmed'
                 : diff.source === 'write-content'
                   ? 'Written content — previous content unavailable'
                   : diff.source === 'sdk'

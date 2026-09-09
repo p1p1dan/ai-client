@@ -401,6 +401,7 @@ export function MessageTimeline({
   const contentRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const lastScrollHeightRef = useRef(0);
+  const lastScrollTopRef = useRef(0);
 
   // T12-d: the jump-to-bottom affordance. Unlike the follow flag this one has
   // to be state — it paints a button — so it is mirrored in a ref and written
@@ -437,6 +438,7 @@ export function MessageTimeline({
     stickToBottomRef.current = true;
     lastScrollHeightRef.current = viewport.scrollHeight;
     viewport.scrollTop = viewport.scrollHeight;
+    lastScrollTopRef.current = viewport.scrollTop;
     showJumpToBottomRef.current = false;
     setShowJumpToBottom(false);
   }, []);
@@ -460,20 +462,37 @@ export function MessageTimeline({
     // anchoring buys nothing here — and a height change in a stuck band above
     // the anchor node makes anchoring itself drive a collapse/expand loop.
     viewport.style.overflowAnchor = 'none';
+    viewport.style.scrollBehavior = 'auto';
     lastScrollHeightRef.current = viewport.scrollHeight;
+    lastScrollTopRef.current = viewport.scrollTop;
     const handleScroll = () => {
-      stickToBottomRef.current = nextFollowState({
-        scrollTop: viewport.scrollTop,
-        scrollHeight: viewport.scrollHeight,
-        clientHeight: viewport.clientHeight,
-        prevScrollHeight: lastScrollHeightRef.current,
-        following: stickToBottomRef.current,
-      });
+      // A queued scroll event can arrive after text grows but before the
+      // resize follower runs. Growth at an unchanged position is not scroll-up.
+      const grewWithoutMoving =
+        viewport.scrollHeight > lastScrollHeightRef.current &&
+        viewport.scrollTop === lastScrollTopRef.current;
+      if (!grewWithoutMoving)
+        stickToBottomRef.current = nextFollowState({
+          scrollTop: viewport.scrollTop,
+          scrollHeight: viewport.scrollHeight,
+          clientHeight: viewport.clientHeight,
+          prevScrollHeight: lastScrollHeightRef.current,
+          following: stickToBottomRef.current,
+        });
       lastScrollHeightRef.current = viewport.scrollHeight;
-      syncJumpToBottom(viewport);
+      lastScrollTopRef.current = viewport.scrollTop;
+      if (!grewWithoutMoving || !stickToBottomRef.current) syncJumpToBottom(viewport);
+    };
+    // User intent wins before the next resize delivery.
+    const handleWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0) stickToBottomRef.current = false;
     };
     viewport.addEventListener('scroll', handleScroll, { passive: true });
-    return () => viewport.removeEventListener('scroll', handleScroll);
+    viewport.addEventListener('wheel', handleWheel, { passive: true });
+    return () => {
+      viewport.removeEventListener('scroll', handleScroll);
+      viewport.removeEventListener('wheel', handleWheel);
+    };
   }, [sessionId, syncJumpToBottom]);
 
   // Session switch: always jump to the bottom of the new session's history
@@ -490,6 +509,7 @@ export function MessageTimeline({
     const viewport = findViewport(scrollRootRef.current);
     if (viewport) {
       viewport.scrollTop = viewport.scrollHeight;
+      lastScrollTopRef.current = viewport.scrollTop;
       lastScrollHeightRef.current = viewport.scrollHeight;
     }
   }, [sessionId]);
@@ -504,19 +524,21 @@ export function MessageTimeline({
     const viewport = findViewport(scrollRootRef.current);
     const content = contentRef.current;
     if (!viewport || !content) return undefined;
+    // ResizeObserver batches content/viewport changes before paint. Adding a
+    // requestAnimationFrame here delays a large chunk by a visible frame.
     const observer = new ResizeObserver(() => {
+      const height = viewport.scrollHeight;
       if (stickToBottomRef.current) {
-        viewport.scrollTop = viewport.scrollHeight;
+        const bottom = Math.max(0, height - viewport.clientHeight);
+        if (Math.abs(viewport.scrollTop - bottom) > 1) viewport.scrollTop = bottom;
       }
-      // Keep the height record current even when not following, so the next
-      // scroll event's height-change check compares against this frame.
-      lastScrollHeightRef.current = viewport.scrollHeight;
-      // T12-d: growth is the ONLY way the button appears during a stream the
-      // user has scrolled away from — no scroll event fires while the content
-      // grows underneath a stationary viewport.
+      lastScrollHeightRef.current = height;
+      lastScrollTopRef.current = viewport.scrollTop;
       syncJumpToBottom(viewport);
     });
     observer.observe(content);
+    // Composer growth and window resizing also change the visible bottom.
+    observer.observe(viewport);
     return () => observer.disconnect();
   }, [sessionId, syncJumpToBottom]);
 

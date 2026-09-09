@@ -132,8 +132,8 @@ function editPairs(rec: Record<string, unknown> | undefined): Array<[string, str
     if (!edit) continue;
     const before = stringField(edit, 'oldText') ?? stringField(edit, 'old_string');
     const after = stringField(edit, 'newText') ?? stringField(edit, 'new_string');
-    if (before === undefined && after === undefined) continue;
-    pairs.push([before ?? '', after ?? '']);
+    if (before === undefined || after === undefined) continue;
+    pairs.push([before, after]);
   }
   return pairs;
 }

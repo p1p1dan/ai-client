@@ -837,7 +837,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
     switch (action.type) {
       case 'new':
-        if (!createChatSessionInCurrentDirectory(inFlightRef.current)) {
+        if (
+          !createChatSessionInCurrentDirectory(
+            inFlightRef.current && inFlightSessionIdRef.current === activeSessionId
+          )
+        ) {
           toastManager.add({
             type: 'info',
             title: t('Stop the current turn before starting a new chat'),
