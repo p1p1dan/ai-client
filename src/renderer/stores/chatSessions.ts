@@ -569,6 +569,7 @@ export function applyRuntimeEvent(
     'thinking.started',
     'tool.started',
     'tool.completed',
+    'question.requested',
   ].includes(event.type);
   const accepted = !needsMessage || patch.messages !== undefined;
   const activity = accepted ? nextSessionActivity(current.activity, event) : current.activity;

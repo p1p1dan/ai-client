@@ -86,7 +86,7 @@ describe('U30 the composer chrome stops moving', () => {
   it('the extension-ui option list clears the focus ring', () => {
     // `Button`'s ring is drawn 3px outside the box and takes no layout, so at
     // `gap-1` (4px) the autofocused first option overlapped its neighbour.
-    expect(EXTENSION_UI).toContain('className="grid gap-2 px-3 pb-2"');
+    expect(EXTENSION_UI).toContain('className="grid min-w-0 gap-2 px-3 pb-2"');
     expect(EXTENSION_UI).not.toContain('className="grid gap-1 px-3 pb-2"');
   });
 });

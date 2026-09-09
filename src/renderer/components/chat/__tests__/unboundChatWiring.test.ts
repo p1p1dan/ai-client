@@ -94,16 +94,19 @@ describe('[U05-b] the composer can send without a bound folder', () => {
   });
 
   it('never hands an empty workspacePath to createSession', () => {
-    // `workspacePath` starts empty for an unbound chat, and the guard asserted
-    // above is the only thing that fills it before the IPC call below.
-    expect(COMPOSER).toContain("let workspacePath = cwd ?? ''");
+    // Reuse /new's inherited directory before allocating a new scratch folder.
+    expect(COMPOSER).toContain(
+      "let workspacePath = cwd ?? activeSession?.unbound?.workspacePath ?? ''"
+    );
     expect(COMPOSER).toMatch(/createSession\(\{\s*sessionId,\s*workspacePath,/);
   });
 
   it('reads the scratch directory for cwd-dependent features', () => {
     // @-file search, the status line and the TUI must all name the directory
     // the agent is actually in, not the folder the chat does not have.
-    expect(COMPOSER).toContain('const effectiveCwd = cwd ?? scratchCwd');
+    expect(COMPOSER).toContain(
+      'const effectiveCwd = cwd ?? activeSession?.unbound?.workspacePath ?? scratchCwd'
+    );
     expect(COMPOSER).toContain('rootPath: effectiveCwd');
   });
 });
