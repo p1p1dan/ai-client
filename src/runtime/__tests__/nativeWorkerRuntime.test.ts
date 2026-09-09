@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import type { RuntimeBootstrapOptions, RuntimeHandle } from '../bootstrap.ts';
@@ -20,6 +21,9 @@ const HOST: RuntimeHostConfig = {
   childEnv: {},
   cleanupTimeoutMs: 2000,
 };
+// `sessionFilePath` joins this, so the expectation has to as well: the same
+// session file reads `\agent\sessions\logical-1.jsonl` on Windows.
+const SESSION_FILE = join('/agent', 'sessions', 'logical-1.jsonl');
 
 interface Fake {
   handle: RuntimeHandle;
@@ -66,10 +70,10 @@ function fakeRuntime(overrides: { history?: unknown[] } = {}): Fake {
       },
     },
     session: {
-      file: '/agent/sessions/logical-1.jsonl',
+      file: SESSION_FILE,
       metadata: () => ({
         id: 'native-session-1',
-        file: '/agent/sessions/logical-1.jsonl',
+        file: SESSION_FILE,
         cwd: '/repo',
         title: '',
         model: 'anthropic/claude-opus-5',
@@ -132,7 +136,7 @@ describe('NativeWorkerRuntime bootstrap', () => {
       piSessionId: 'native-session-1',
       cwd: '/repo',
       agentDir: '/agent',
-      sessionFile: '/agent/sessions/logical-1.jsonl',
+      sessionFile: SESSION_FILE,
       leaf: { activeEntryId: 'e2', fileTailEntryId: 'e2' },
       model: 'anthropic/claude-opus-5',
       projectTrusted: true,
@@ -141,7 +145,7 @@ describe('NativeWorkerRuntime bootstrap', () => {
     // A fresh session has nothing to replay; only a resume carries history.
     expect(result.initialHistory).toBeUndefined();
     expect(fake.options?.session).toEqual({
-      file: '/agent/sessions/logical-1.jsonl',
+      file: SESSION_FILE,
       cwd: '/repo',
       mode: 'create',
     });
@@ -316,7 +320,7 @@ describe('NativeWorkerRuntime session reads and lifecycle', () => {
     const page = await runtime.history({ logicalSessionId: 'logical-1', offset: 0, limit: 10 });
     expect(page).toMatchObject({
       logicalSessionId: 'logical-1',
-      sessionFile: '/agent/sessions/logical-1.jsonl',
+      sessionFile: SESSION_FILE,
       workspacePath: '/repo',
     });
     expect(page.page.messages).toEqual([]);

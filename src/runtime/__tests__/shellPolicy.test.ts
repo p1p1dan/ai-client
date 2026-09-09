@@ -5,6 +5,7 @@ import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/provid
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
 import { standaloneHost } from '../host/config.ts';
+import { resolveWorkerShell } from '../host/shell.ts';
 
 let dir: string;
 let outside: string;
@@ -25,7 +26,9 @@ async function start(options: Partial<RuntimeBootstrapOptions> = {}) {
   runtime = await createRuntime({
     providers: [provider.provider],
     host: standaloneHost({ PATH: process.env.PATH, HOME: homedir() }),
-    tools: { cwd: dir, shellPath: '/bin/bash' },
+    // The shell the native worker would pick here: /bin/bash on Unix, the
+    // installed Git Bash on Windows, so the AST policy is exercised on both.
+    tools: { cwd: dir, shellPath: resolveWorkerShell(process.env as Record<string, string>) },
     permissions: { gear: 'accept-edits' },
     ...options,
   });

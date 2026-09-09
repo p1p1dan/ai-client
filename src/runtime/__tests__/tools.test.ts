@@ -8,6 +8,7 @@ import type { ExtensionUiRequest } from '../../agent-host/extensionUiBridge.ts';
 import { migratePermissionTier } from '../../shared/types/runtimePermission.ts';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
 import { standaloneHost } from '../host/config.ts';
+import { resolveWorkerShell } from '../host/shell.ts';
 import { modeSegment, permissionGearSegment } from '../plugins/permissions/prompt.ts';
 import { composeSystemPrompt } from '../plugins/prompt/segments.ts';
 
@@ -30,7 +31,9 @@ async function runtime(options: Partial<RuntimeBootstrapOptions> = {}) {
     providers: [faux().provider],
     env: {},
     host: standaloneHost({ PATH: process.env.PATH }),
-    tools: { cwd: dir, shellPath: '/bin/bash' },
+    // The shell the native worker would pick here: /bin/bash on Unix, the
+    // installed Git Bash on Windows, so the bash tool is exercised on both.
+    tools: { cwd: dir, shellPath: resolveWorkerShell(process.env as Record<string, string>) },
     ...options,
   });
   runtimes.push(result);

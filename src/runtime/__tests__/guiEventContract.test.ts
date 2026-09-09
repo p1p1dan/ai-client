@@ -112,6 +112,26 @@ async function waitFor<T>(
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
+ * Replace the temp workspace with `<workspace>`, in both the plain and the
+ * JSON-escaped spelling, and normalize the separators that follow it.
+ *
+ * One recording serves both platforms: Windows emits `<workspace>\notes.txt`
+ * where Linux emits `<workspace>/notes.txt`, and a tool result that embeds JSON
+ * carries the same path with its backslashes doubled. Only the substituted path
+ * run is touched, because a string can hold a backslash of its own — the read
+ * result is literally `the answer is 42\n` — and that one is content, not a
+ * separator.
+ */
+function withoutWorkspacePath(value: string, workspacePath: string): string {
+  return value
+    .split(workspacePath.replace(/\\/g, '\\\\'))
+    .join('<workspace>')
+    .split(workspacePath)
+    .join('<workspace>')
+    .replace(/<workspace>[^\s"]*/g, (path) => path.replace(/\\+/g, '/'));
+}
+
+/**
  * Strip what changes run to run, keep what the renderer reads.
  *
  * Ids are renumbered rather than blanked because the GUI's whole timeline is
@@ -124,7 +144,7 @@ function normalize(stream: readonly RuntimeEvent[], workspacePath: string): unkn
   const walk = (value: unknown, zeroNumbers: boolean): unknown => {
     if (typeof value === 'number') return zeroNumbers ? 0 : value;
     if (typeof value === 'string') {
-      const withoutWorkspace = value.split(workspacePath).join('<workspace>');
+      const withoutWorkspace = withoutWorkspacePath(value, workspacePath);
       if (!UUID.test(withoutWorkspace)) return withoutWorkspace;
       const existing = ids.get(withoutWorkspace);
       if (existing) return existing;
