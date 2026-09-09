@@ -162,10 +162,10 @@ describe('the tool row view carries the diff', () => {
     expect(view.expandable).toBe(true);
   });
 
-  it('withholds the diff while the call is still running', () => {
+  it('offers argument preview while the call is still running', () => {
     // Same reason the raw input segment waits: arguments can still change, and
     // a diff that redraws mid-call reads as the file being edited twice.
-    expect(deriveToolRowView(editRun({ status: 'running' })).diff).toBeUndefined();
+    expect(deriveToolRowView(editRun({ status: 'running' })).diff?.source).toBe('arguments');
   });
 
   it('leaves non-file tools with their ordinary body', () => {
@@ -175,4 +175,28 @@ describe('the tool row view carries the diff', () => {
     expect(view.diff).toBeUndefined();
     expect(view.body).toBe('output');
   });
+});
+
+it('supports top-level Edit arguments and prefers successful SDK patches including header-like body lines', () => {
+  const run = {
+    toolName: 'edit',
+    input: { path: 'a.ts', oldText: 'before', newText: 'after' },
+    status: 'ok',
+  };
+  expect(deriveToolDiff(run)?.source).toBe('arguments');
+  const result = {
+    content: [{ type: 'text', text: 'done' }],
+    details: { patch: '--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n--- old body\n+++ new body\n' },
+  };
+  expect(deriveToolDiff({ ...run, result })).toMatchObject({
+    source: 'sdk',
+    added: 1,
+    removed: 1,
+    rows: [
+      { kind: 'del', text: '-- old body' },
+      { kind: 'add', text: '++ new body' },
+    ],
+  });
+  expect(deriveToolDiff({ ...run, result, status: 'failed' })?.source).toBe('arguments');
+  expect(deriveToolDiff({ toolName: 'bash', input: { command: 'echo hi > a.ts' } })).toBeNull();
 });

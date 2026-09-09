@@ -46,11 +46,17 @@ function ExtensionUiDock({ pending, total }: { pending: ExtensionUiPendingDialog
   const { dialog } = pending;
   const { heading } = splitExtensionUiDialogText(dialog.title);
   return (
-    <div className="shrink-0 px-6 pb-2">
+    <div className="min-w-0 shrink-0 px-2 pb-2 sm:px-6">
       <div className="mx-auto w-full max-w-reading">
         <section
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              void useExtensionUiStore.getState().dismiss(pending.uiRequestId);
+            }
+          }}
           aria-label={heading.trim() || 'Extension request'}
-          className="rounded-md border border-warning/30 bg-warning/8"
+          className="max-h-[min(70vh,36rem)] overflow-auto rounded-md border border-border bg-card"
         >
           <ExtensionUiRequestContent pending={pending} position={1} total={total} />
         </section>
@@ -94,7 +100,9 @@ function ExtensionUiRequestContent({
     <>
       <div className="flex items-start gap-2 px-3 pt-3 pb-2">
         <div className="min-w-0 flex-1">
-          <h2 className="text-ui font-semibold text-foreground">{title}</h2>
+          <h2 className="text-ui font-semibold whitespace-pre-wrap break-words text-foreground">
+            {title}
+          </h2>
           {dialog.method === 'confirm' && dialog.message ? (
             <p className="mt-1 whitespace-pre-wrap text-meta text-muted-foreground">
               {dialog.message}
@@ -134,19 +142,19 @@ function ExtensionUiRequestContent({
           into its neighbour and the two read as overlapping — which is what the
           user reported as 错位. 8px clears the ring. */}
       {dialog.method === 'select' ? (
-        <div role="group" aria-label={title} className="grid gap-2 px-3 pb-2">
+        <div role="group" aria-label={title} className="grid min-w-0 gap-2 px-3 pb-2">
           {dialog.options.map((option, index) => (
             <Button
               key={`${index}-${option}`}
               type="button"
               variant="outline"
               size="sm"
-              className="h-auto w-full justify-start whitespace-normal px-3 py-2 text-left normal-case"
+              className="h-auto min-h-9 w-full min-w-0 justify-start whitespace-normal break-words px-3 py-2 text-left leading-relaxed normal-case sm:h-auto"
               disabled={sending}
               autoFocus={index === 0}
               onClick={() => submit(option)}
             >
-              {option}
+              <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{option}</span>
             </Button>
           ))}
         </div>
@@ -161,7 +169,7 @@ function ExtensionUiRequestContent({
             disabled={sending}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
                 event.preventDefault();
                 submit(text);
               }

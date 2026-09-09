@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useState } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { type FileOpenIntent, useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
@@ -50,7 +51,10 @@ function openFileTarget(target: FileLinkTarget, source: FileOpenIntent['source']
   useFileOpenIntentStore.getState().requestFileOpen({ ...target, source });
 }
 
+const ToolDiffVisibility = createContext(true);
+
 interface ToolGroupProps {
+  showDiff?: boolean;
   rows: ToolRowView[];
   onOpenFile?: (target: FileLinkTarget) => void;
   /**
@@ -63,18 +67,27 @@ interface ToolGroupProps {
 }
 
 /** Renders one `.ct` group — the A07 unit that wraps a contiguous tool/thinking stream. */
-export function ToolGroup({ rows, onOpenFile, sessionId }: ToolGroupProps) {
+export function ToolGroup({ rows, onOpenFile, sessionId, showDiff }: ToolGroupProps) {
+  const inherited = useContext(ToolDiffVisibility);
   if (rows.length === 0) return null;
   return (
     // T-30 P-17: no own margin — the parent `AssistantMessage` article owns
     // the 10px item-to-item gap via `gap-2.5`; a margin here would stack on
     // top of it (and on ReadingColumn's turn-to-turn space-y-5) instead of
     // replacing it.
-    <div className="flex flex-col gap-1">
-      {rows.map((row) => (
-        <ToolRow key={row.key} view={row} depth={0} onOpenFile={onOpenFile} sessionId={sessionId} />
-      ))}
-    </div>
+    <ToolDiffVisibility.Provider value={showDiff ?? inherited}>
+      <div className="flex flex-col gap-1">
+        {rows.map((row) => (
+          <ToolRow
+            key={row.key}
+            view={row}
+            depth={0}
+            onOpenFile={onOpenFile}
+            sessionId={sessionId}
+          />
+        ))}
+      </div>
+    </ToolDiffVisibility.Provider>
   );
 }
 
@@ -89,6 +102,8 @@ interface ToolRowProps {
 
 /** One `.ct-row`: verb + arg, optionally expandable into an output/detail/thinking body. */
 export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
+  const showDiff = useContext(ToolDiffVisibility);
+  const { t } = useI18n();
   // T12-d: the row's opening state, seeded ONCE from the session's memory.
   //
   // Seeded rather than controlled, deliberately. `defaultOpen` is read by the
@@ -111,6 +126,20 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
       <span className={verbClass}>{view.verb}</span>
       <ToolRowArg view={view} onOpenFile={onOpenFile} />
       <ToolRowPermission view={view} />
+      {showDiff && view.diff && (
+        <span className="shrink-0 text-meta">
+          {t(
+            view.running
+              ? 'Modification preview'
+              : view.failed
+                ? 'Not applied'
+                : view.diff.source === 'write-content'
+                  ? 'Written content'
+                  : 'Modified'
+          )}{' '}
+          · +{view.diff.added} −{view.diff.removed}
+        </span>
+      )}
     </>
   );
 
@@ -212,7 +241,8 @@ function SubagentActivity({
  * "denied" (red, badge).
  */
 function ToolRowPermission({ view }: { view: ToolRowView }) {
-  if (!view.permissionVerb) return null;
+  if (!view.permissionVerb || (view.permissionAutoNote && view.permissionVerb === 'Allowed'))
+    return null;
   return (
     <>
       <span className={toolRowPermissionClass()}>· {view.permissionVerb}</span>
@@ -243,6 +273,7 @@ function ToolRowArg({
     return (
       <button
         type="button"
+        title={link.path}
         className={cn(
           argClass,
           'cursor-pointer border-b border-transparent hover:border-primary hover:text-primary'
@@ -288,6 +319,7 @@ function ToolRowBody({
   onOpenFile?: (target: FileLinkTarget) => void;
   sessionId?: string;
 }) {
+  const showDiff = useContext(ToolDiffVisibility);
   // Round-10 inspection ⑤ (user ruling): when a row expands into BOTH an
   // input segment and an output body, they share ONE scroll container — the
   // previous two independent scroll windows (T-05 adversarial fix #3's 240px
@@ -311,7 +343,9 @@ function ToolRowBody({
   }
   return (
     <>
-      {view.diff && <ToolRowDiffSegment diff={view.diff} />}
+      {showDiff && view.diff && (
+        <ToolRowDiffSegment diff={view.diff} failed={view.failed} running={view.running} />
+      )}
       {view.input && (
         <ToolRowInputSegment input={view.input} maxHeightClass={view.inputMaxHeightClass} />
       )}
@@ -330,10 +364,32 @@ function ToolRowBody({
  * would have been both a second vocabulary for the same idea and a violation
  * of the design system's "no raw palette" rule.
  */
-function ToolRowDiffSegment({ diff }: { diff: ToolDiff }) {
+function ToolRowDiffSegment({
+  diff,
+  failed,
+  running,
+}: {
+  diff: ToolDiff;
+  failed: boolean;
+  running: boolean;
+}) {
+  const { t } = useI18n();
   return (
     <div className="ml-0.5 border-l border-border pl-3.5">
       <div className="flex items-center gap-2 pt-1 pb-1 text-meta tabular-nums">
+        <span>
+          {t(
+            running
+              ? 'Modification preview'
+              : failed
+                ? 'Modification preview — not applied'
+                : diff.source === 'write-content'
+                  ? 'Written content — previous content unavailable'
+                  : diff.source === 'sdk'
+                    ? 'Applied diff'
+                    : 'Successful edit — argument preview'
+          )}
+        </span>
         <span className="text-success">+{diff.added}</span>
         <span className="text-destructive">-{diff.removed}</span>
       </div>

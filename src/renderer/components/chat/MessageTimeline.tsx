@@ -34,6 +34,7 @@ import {
   pendingUserToChatMessage,
   usePendingUserMessagesStore,
 } from '@/stores/pendingUserMessages';
+import { useSettingsStore } from '@/stores/settings';
 import {
   type PendingReplyWatch,
   type TurnSendStatus,
@@ -84,7 +85,7 @@ import {
 import { formatAbsoluteTime, type MessageMetadata } from './messageMetadata';
 import { nextFollowState, shouldShowJumpToBottom } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
-import { PermissionActivityRows } from './PermissionActivityRows';
+import { PermissionActivityDetails, PermissionActivityRows } from './PermissionActivityRows';
 import { QuestionCard } from './QuestionCard';
 import {
   canRespondToPermission,
@@ -1375,6 +1376,7 @@ const ChatTurn = memo(function ChatTurn({
             earlier paragraph into the collapsed segment, and a turn that ended
             in an error notice sent ALL of it. */}
         {segments.map(renderSegment)}
+        <PermissionActivityDetails blocks={turn.body.flatMap((message) => message.blocks)} />
         {isLastTurn && (
           <SessionActivityStatus
             sessionId={sessionId}
@@ -1801,6 +1803,7 @@ function ToolGroupItem({
   streamingBlockId: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
 }) {
+  const showToolDiff = useSettingsStore((state) => state.showToolDiff);
   const rows = useMemo(
     () =>
       deriveToolGroupRows(filterThinkingEntries(item.entries, thinkingEnabled), {
@@ -1810,7 +1813,7 @@ function ToolGroupItem({
       }),
     [item.entries, thinkingEnabled, repoName, getThinkingDurationMs, streamingBlockId]
   );
-  return <ToolGroup rows={rows} sessionId={sessionId} />;
+  return <ToolGroup rows={rows} sessionId={sessionId} showDiff={showToolDiff} />;
 }
 
 /*

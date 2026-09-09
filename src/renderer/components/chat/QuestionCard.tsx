@@ -1,14 +1,16 @@
 import type { PermissionDecisionId, QuestionItem } from '@shared/types/runtimeEvents';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
+import { Input } from '@/components/ui/input';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ChatBlock } from '@/stores/chatSessions';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import {
   buildOptionRows,
   buildRespondPayload,
-  CONTINUE_KBD,
   CONTINUE_LABEL,
   canContinue,
   clampPage,
@@ -84,6 +86,7 @@ export function QuestionCard(props: QuestionCardProps) {
   }
   return (
     <InteractiveQaCard
+      key={props.block.questionId ?? props.block.id}
       block={props.block}
       collapsed={Boolean(props.collapsed)}
       onToggleCollapsed={props.onToggleCollapsed}
@@ -108,8 +111,10 @@ interface QaHeadProps {
 /** `.qa-head` — 36px bar: title, optional pager, optional collapse chevron. */
 function QaHead({ title, pager, onPrev, onNext, collapsed, onToggleCollapsed }: QaHeadProps) {
   return (
-    <div className="flex h-9 items-center gap-2 px-3 text-muted-foreground">
-      <span className="min-w-0 flex-1 truncate tracking-[0.01em]">{title}</span>
+    <div className="flex min-h-9 items-start gap-2 border-b border-border px-3 py-2 text-muted-foreground">
+      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words font-medium tracking-[0.01em]">
+        {title}
+      </span>
       {pager?.visible && (
         <span className="flex items-center gap-0.5 text-meta tabular-nums text-muted-foreground">
           <button
@@ -197,20 +202,20 @@ function QaOptionRow({
   return (
     <div
       className={cn(
-        'flex h-7 w-full items-center gap-2.5 rounded-sm px-1.5',
+        'flex min-h-9 w-full flex-wrap items-start gap-2.5 rounded-md border border-border px-2 py-2',
         'hover:bg-hover',
         selected && 'bg-selection',
         disabled && 'pointer-events-none opacity-64'
       )}
     >
-      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: role is dynamic (radio vs checkbox per multiSelect); aria-checked is valid for both */}
-      <button
+      <Button
+        variant="ghost"
         type="button"
         role={multiSelect ? 'checkbox' : 'radio'}
         aria-checked={selected}
         disabled={disabled}
         onClick={onSelect}
-        className="flex min-w-0 flex-1 items-center gap-2.5 text-left text-markdown text-foreground"
+        className="h-auto sm:h-auto whitespace-normal normal-case flex min-w-0 flex-1 items-start gap-2.5 rounded-sm text-left text-ui leading-relaxed text-foreground focus-visible:outline-2 focus-visible:outline-ring"
       >
         <span
           className={cn(
@@ -222,14 +227,24 @@ function QaOptionRow({
         </span>
         {!showOtherInput && (
           <span
-            className={cn('min-w-0 flex-1 truncate', option.isOther && 'text-muted-foreground')}
+            className={cn(
+              'min-w-0 flex-1 whitespace-pre-wrap break-words',
+              option.isOther && 'text-muted-foreground'
+            )}
           >
             {option.label}
+            {option.description && (
+              <span className="mt-1 block text-meta text-muted-foreground">
+                {option.description}
+              </span>
+            )}
           </span>
         )}
-      </button>
+      </Button>
       {showOtherInput && (
-        <input
+        <Input
+          autoFocus
+          aria-label="Your answer"
           type={secret ? 'password' : 'text'}
           value={otherText ?? ''}
           onChange={(event) => onOtherTextChange(event.target.value)}
@@ -251,7 +266,10 @@ function QaFrozenPairs({ pairs }: { pairs: FrozenPair[] }) {
   return (
     <div className="flex flex-col gap-2.5 px-3.5 pb-3">
       {pairs.map((pair) => (
-        <div key={pair.key} className="flex flex-col gap-0.5 text-markdown leading-normal">
+        <div
+          key={pair.key}
+          className="flex flex-col gap-1 break-words whitespace-pre-wrap text-ui leading-relaxed"
+        >
           <span className="text-foreground">{pair.question}</span>
           {pair.skipped ? (
             <span className="italic text-muted-foreground">{SKIPPED_MARK}</span>
@@ -296,10 +314,13 @@ function InteractiveQaCard({
   onSubmit,
   onSkip,
 }: InteractiveQaCardProps) {
+  const { t } = useI18n();
   const items: readonly QuestionItem[] = block.questions ?? [];
   const [sel, setSel] = useState<QuestionSelection>(emptySelection);
   const [page, setPage] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
+  const submitLatch = useRef(false);
   const questionRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   if (items.length === 0) return null;
@@ -318,30 +339,33 @@ function InteractiveQaCard({
   // card again instead of leaving Continue/Skip permanently disabled. A
   // success (`true`/`undefined`) stays locked — the store's `resolved` state
   // repaints this card as frozen once the runtime event lands.
-  const handleContinue = async () => {
-    if (!canSubmit) return;
+  const submitAnswer = async (skip: boolean) => {
+    if (submitLatch.current || (!skip && !canSubmit)) return;
+    submitLatch.current = true;
     setSubmitting(true);
-    const ok = await onSubmit?.(buildRespondPayload(sel, items));
-    if (ok === false) {
+    setSubmitError(false);
+    try {
+      const ok = skip ? await onSkip?.() : await onSubmit?.(buildRespondPayload(sel, items));
+      if (ok === false) throw new Error('answer rejected');
+    } catch {
+      submitLatch.current = false;
       setSubmitting(false);
+      setSubmitError(true);
     }
   };
-
-  const handleSkip = async () => {
-    if (submitting) return;
-    setSubmitting(true);
-    const ok = await onSkip?.();
-    if (ok === false) {
-      setSubmitting(false);
-    }
-  };
+  const handleContinue = () => submitAnswer(false);
+  const handleSkip = () => submitAnswer(true);
 
   return (
     <div
       className={QA_SHELL_CLASS}
       onKeyDown={(event) => {
-        if (collapsed) return;
-        if (event.key === 'Enter' && !event.shiftKey) {
+        if (collapsed || event.nativeEvent.isComposing) return;
+        if (
+          event.key === 'Enter' &&
+          (event.ctrlKey || event.metaKey) &&
+          !event.nativeEvent.isComposing
+        ) {
           event.preventDefault();
           handleContinue();
         } else if (event.key === 'Escape') {
@@ -368,12 +392,32 @@ function InteractiveQaCard({
                   questionRefs.current[index] = el;
                 }}
               >
-                <div className="px-1 pb-1 text-markdown leading-normal text-foreground">
+                <div className="px-1 pb-2 pt-2 whitespace-pre-wrap break-words text-ui font-medium leading-relaxed text-foreground">
                   {item.question}
                 </div>
                 {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: role is dynamic (group vs radiogroup per multiSelect); aria-label is valid for both */}
                 <div
-                  className="flex flex-col gap-0.5"
+                  className="flex flex-col gap-2"
+                  onKeyDown={(event) => {
+                    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+                    const options = Array.from(
+                      event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                        '[role="radio"], [role="checkbox"]'
+                      )
+                    );
+                    const current = options.indexOf(document.activeElement as HTMLButtonElement);
+                    if (current < 0) return;
+                    event.preventDefault();
+                    const next =
+                      event.key === 'Home'
+                        ? 0
+                        : event.key === 'End'
+                          ? options.length - 1
+                          : (current + (event.key === 'ArrowDown' ? 1 : -1) + options.length) %
+                            options.length;
+                    options[next]?.focus();
+                    if (!item.multiSelect) options[next]?.click();
+                  }}
                   role={item.multiSelect ? 'group' : 'radiogroup'}
                   aria-label={item.question}
                 >
@@ -410,24 +454,37 @@ function InteractiveQaCard({
               </div>
             ))}
           </div>
-          <div className="flex items-center justify-end gap-1.5 p-2.5">
-            <button
+          {submitError && (
+            <p role="alert" className="px-3 pt-2 text-meta text-destructive">
+              {t('Could not send your answer. Please try again.')}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border p-2.5">
+            {submitting && (
+              <span role="status" className="mr-auto text-meta text-status-running">
+                {t('Submitting…')}
+              </span>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
               type="button"
               className="inline-flex h-6 items-center rounded-sm px-2 text-muted-foreground hover:bg-hover disabled:pointer-events-none disabled:opacity-64"
               disabled={submitting}
               onClick={handleSkip}
             >
               {SKIP_LABEL}
-            </button>
-            <button
+            </Button>
+            <Button
+              size="sm"
               type="button"
               className="inline-flex h-6 items-center gap-1.5 rounded-sm bg-primary px-2.5 text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary disabled:pointer-events-none disabled:opacity-64"
               disabled={!canSubmit}
               onClick={handleContinue}
             >
               <span>{CONTINUE_LABEL}</span>
-              <span className="text-meta opacity-70">{CONTINUE_KBD}</span>
-            </button>
+              <span className="text-meta opacity-70">Ctrl + Enter</span>
+            </Button>
           </div>
         </>
       )}
@@ -533,7 +590,9 @@ function PermissionQaCard({
       <QaHead title={view.title} />
       {originChip}
       <div className="flex flex-col gap-3 px-2.5 pb-3">
-        <p className="px-1 pb-1 text-markdown leading-normal text-foreground">{view.prompt}</p>
+        <p className="px-1 pb-2 pt-2 whitespace-pre-wrap break-words text-ui font-medium leading-relaxed text-foreground">
+          {view.prompt}
+        </p>
         {view.detail && <PermissionDetailBody detail={view.detail} />}
         {view.waiting ? (
           <p className="px-1 text-markdown text-muted-foreground">{PERMISSION_WAITING}</p>

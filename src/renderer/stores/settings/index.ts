@@ -136,6 +136,7 @@ export function getInitialState() {
     terminalScrollback: 10000,
     terminalOptionIsMeta: true,
     copyOnSelection: false,
+    showToolDiff: false,
 
     // Keybindings
     xtermKeybindings: defaultXtermKeybindings,
@@ -254,6 +255,7 @@ export const useSettingsStore = create<SettingsState>()(
         set({ terminalTheme });
       },
 
+      setShowToolDiff: (showToolDiff) => set({ showToolDiff }),
       setTerminalRenderer: (terminalRenderer) => set({ terminalRenderer }),
       setTerminalScrollback: (terminalScrollback) => set({ terminalScrollback }),
       setTerminalOptionIsMeta: (terminalOptionIsMeta) => set({ terminalOptionIsMeta }),

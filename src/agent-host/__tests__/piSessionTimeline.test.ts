@@ -157,3 +157,44 @@ describe('Pi session timeline projection', () => {
     expect(paginatePiSessionHistory(messages, -1, 0).limit).toBe(1);
   });
 });
+
+it('preserves SDK edit patch on history reload', () => {
+  const patch = '--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new';
+  const history = projectPiSessionHistory(
+    manager([
+      {
+        type: 'message',
+        id: 'a',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'toolCall',
+              id: 't',
+              name: 'edit',
+              arguments: { path: 'file', oldText: 'old', newText: 'new' },
+            },
+          ],
+          stopReason: 'toolUse',
+        },
+      },
+      {
+        type: 'message',
+        id: 'r',
+        message: {
+          role: 'toolResult',
+          toolCallId: 't',
+          toolName: 'edit',
+          content: [{ type: 'text', text: 'done' }],
+          details: { patch },
+          isError: false,
+        },
+      },
+    ])
+  );
+  expect(history[0].blocks.at(-1)).toMatchObject({
+    type: 'tool_result',
+    output: 'done',
+    patch,
+  });
+});

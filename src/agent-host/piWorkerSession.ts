@@ -1171,6 +1171,23 @@ export class PiWorkerSession {
       case 'tool_execution_end': {
         const failed = event.isError === true;
         const output = readToolOutput(event.result);
+        const result = event.result as
+          | {
+              content?: unknown;
+              details?: { diff?: unknown; patch?: unknown; firstChangedLine?: unknown };
+            }
+          | undefined;
+        const details = result?.details;
+        const editResult =
+          !failed && typeof details?.patch === 'string'
+            ? {
+                content: result?.content ?? output,
+                details: {
+                  patch: details.patch,
+                  ...(typeof details.diff === 'string' ? { diff: details.diff } : {}),
+                },
+              }
+            : output;
         const messageId = projection.assistantMessageId ?? this.ensureAssistant(turn);
         this.emit({
           type: 'tool.completed',
@@ -1180,7 +1197,7 @@ export class PiWorkerSession {
             messageId,
             toolCallId: String(event.toolCallId ?? ''),
             ok: !failed,
-            output,
+            output: editResult,
             ...(failed ? { error: output || 'Tool call failed' } : {}),
           },
         });

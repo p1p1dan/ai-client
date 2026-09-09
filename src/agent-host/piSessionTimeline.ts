@@ -330,12 +330,16 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
           }
         }
       }
+      const details = message.details as { patch?: unknown } | undefined;
       const resultBlock: HistoryBlock = {
         type: 'tool_result',
         id: stablePartId(messageId, 'tool-result', toolCallId || 0),
         toolCallId: toolCallId || `${entry.id}-result`,
         ok: message.isError !== true,
         ...(output ? { output } : {}),
+        ...(message.isError !== true && typeof details?.patch === 'string'
+          ? { patch: details.patch }
+          : {}),
         ...(message.isError === true ? { error: output || 'Tool call failed' } : {}),
       };
       if (target && messages[target.messageIndex]) {

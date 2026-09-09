@@ -8,9 +8,8 @@ import { PI_TOOL_NAMES } from './piToolNames';
  * is the least readable presentation of the one tool call users most need to
  * read, because it is the only one that CHANGES their files.
  *
- * Derived from the arguments, not from the tool's output: pi's `edit` returns a
- * success string, not a patch, and the arguments already carry both sides
- * exactly (`edits[].oldText` / `edits[].newText`). That also means the preview
+ * Prefer the SDK result's unified patch for successful edits; arguments supply
+ * a clearly labelled preview when no SDK patch is available. That also means the preview
  * works for a call that is still running, and for one that was DENIED — where
  * showing what would have happened is the whole point.
  *
@@ -36,6 +35,7 @@ export interface ToolDiffRow {
 export interface ToolDiff {
   /** File the change lands in, when the arguments name one. */
   path?: string;
+  source?: 'sdk' | 'arguments' | 'write-content';
   rows: ToolDiffRow[];
   added: number;
   removed: number;
@@ -67,6 +67,13 @@ export function lineDiffRows(oldText: string, newText: string): ToolDiffRow[] {
   // would otherwise yield [''] — a phantom blank line on every new file.
   const a = oldText === '' ? [] : oldText.split('\n');
   const b = newText === '' ? [] : newText.split('\n');
+  // Keep argument previews bounded; large replacements can be shown as a whole hunk.
+  if (a.length * b.length > 1_000_000) {
+    return [
+      ...a.map((text) => ({ kind: 'del' as const, text })),
+      ...b.map((text) => ({ kind: 'add' as const, text })),
+    ];
+  }
   const table = lcsLengths(a, b);
 
   const rows: ToolDiffRow[] = [];
@@ -118,8 +125,7 @@ function stringField(rec: Record<string, unknown> | undefined, field: string): s
  * failure, so it would not get reported.
  */
 function editPairs(rec: Record<string, unknown> | undefined): Array<[string, string]> {
-  const edits = rec?.edits;
-  if (!Array.isArray(edits)) return [];
+  const edits = Array.isArray(rec?.edits) ? rec.edits : rec ? [rec] : [];
   const pairs: Array<[string, string]> = [];
   for (const raw of edits) {
     const edit = asRecord(raw);
@@ -148,7 +154,12 @@ function countRows(rows: readonly ToolDiffRow[]): { added: number; removed: numb
  * `null` is not a failure — it means "no better view than the default", and the
  * row keeps its existing raw input/output body.
  */
-export function deriveToolDiff(run: { toolName: string; input: unknown }): ToolDiff | null {
+export function deriveToolDiff(run: {
+  toolName: string;
+  input: unknown;
+  result?: unknown;
+  status?: string;
+}): ToolDiff | null {
   const rec = asRecord(run.input);
   const path = stringField(rec, 'path') ?? stringField(rec, 'file_path');
 
@@ -163,7 +174,7 @@ export function deriveToolDiff(run: { toolName: string; input: unknown }): ToolD
     // rendering: it puts the new file's contents on screen in reading order
     // instead of as one escaped JSON string.
     const rows = lineDiffRows('', content);
-    return { path, rows, ...countRows(rows) };
+    return { path, rows, ...countRows(rows), source: 'write-content' };
   }
 
   if (
@@ -171,13 +182,36 @@ export function deriveToolDiff(run: { toolName: string; input: unknown }): ToolD
     run.toolName === 'Edit' ||
     run.toolName === 'MultiEdit'
   ) {
+    const output = asRecord(run.result);
+    const details = asRecord(output?.details);
+    const patch = run.status !== 'failed' ? stringField(details, 'patch') : undefined;
+    if (patch) {
+      const rows: ToolDiffRow[] = [];
+      let inHunk = false;
+      for (const line of patch.split('\n')) {
+        if (line.startsWith('@@')) {
+          inHunk = true;
+          continue;
+        }
+        if (line.startsWith('diff ')) {
+          inHunk = false;
+          continue;
+        }
+        if (!inHunk || !/^[ +-]/.test(line)) continue;
+        rows.push({
+          kind: line[0] === '+' ? 'add' : line[0] === '-' ? 'del' : 'same',
+          text: line.slice(1),
+        });
+      }
+      return { path, rows, ...countRows(rows), source: 'sdk' };
+    }
     const pairs = editPairs(rec);
     if (pairs.length === 0) return null;
     // Multiple hunks concatenate. They are separate regions of the file, but
     // pi gives no line numbers to place them by, so inventing a separator with
     // fake positions would be inventing information.
     const rows = pairs.flatMap(([before, after]) => lineDiffRows(before, after));
-    return { path, rows, ...countRows(rows) };
+    return { path, rows, ...countRows(rows), source: 'arguments' };
   }
 
   return null;

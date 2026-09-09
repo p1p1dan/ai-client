@@ -25,6 +25,7 @@ export type HistoryBlock =
       toolCallId: string;
       ok: boolean;
       output?: string;
+      patch?: string;
       error?: string;
       truncated?: boolean;
     };

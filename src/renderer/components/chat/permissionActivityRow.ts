@@ -44,6 +44,10 @@ export interface PermissionActivityRecord {
   requesterAgentName?: string;
 }
 
+export function isQuietPermissionActivity(record: PermissionActivityRecord | undefined): boolean {
+  return record?.result === 'allow' && !record.resolution?.includes('error');
+}
+
 /**
  * How loudly to draw the row.
  *
@@ -92,6 +96,15 @@ export function derivePermissionActivityRow(
     notes.push(requester ? `for subagent ${requester}` : 'for a subagent');
   }
 
+  if (record.resolution?.includes('error')) {
+    return {
+      requestId: record.requestId,
+      tone: 'denied',
+      label: `Permission check failed — ${surface}`,
+      detail: record.value,
+      note: record.resolution,
+    };
+  }
   if (!record.result) {
     return {
       requestId: record.requestId,

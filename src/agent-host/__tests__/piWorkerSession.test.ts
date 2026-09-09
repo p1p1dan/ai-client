@@ -868,3 +868,27 @@ it.each([
   stub.finishPrompt('/repo');
   await session.dispose();
 });
+
+it('forwards the SDK edit patch alongside its text result', async () => {
+  const stub = createPiSdkStub({ manualPrompt: true });
+  const events: RuntimeEventDraft[] = [];
+  const session = createSession(stub, events);
+  await session.startSend({
+    logicalSessionId: 'logical-1',
+    requestId: 'diff-turn',
+    attemptId: 'diff-attempt',
+    text: 'edit',
+  });
+  const patch = '--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-before\n+after';
+  stub.sessionFor('/repo')!.emit({
+    type: 'tool_execution_end',
+    toolCallId: 't',
+    isError: false,
+    result: { content: [{ type: 'text', text: 'done' }], details: { patch } },
+  });
+  expect(events.find((event) => event.type === 'tool.completed')).toMatchObject({
+    payload: { output: { content: [{ type: 'text', text: 'done' }], details: { patch } } },
+  });
+  stub.finishPrompt('/repo');
+  await session.dispose();
+});

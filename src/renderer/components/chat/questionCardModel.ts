@@ -107,6 +107,7 @@ export interface OptionRow {
   letter: string;
   label: string;
   isOther: boolean;
+  description?: string;
   /**
    * Permission rows only: the decision this row sends. Question rows leave it
    * undefined and are unaffected.
@@ -130,6 +131,7 @@ export function buildOptionRows(item: QuestionItem): OptionRow[] {
   const rows: OptionRow[] = item.options.map((option, index) => ({
     letter: optionLetter(index),
     label: option.label,
+    ...(option.description ? { description: option.description } : {}),
     isOther: false,
   }));
   rows.push({ letter: optionLetter(item.options.length), label: OTHER_LABEL, isOther: true });

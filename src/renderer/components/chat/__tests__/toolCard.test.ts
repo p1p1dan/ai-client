@@ -643,8 +643,8 @@ describe('deriveToolRowView', () => {
       { output: undefined }
     );
     const withExtraView = deriveToolRowView(withExtraFields);
-    expect(withExtraView.input).toContain('old_string');
-    expect(withExtraView.inputMaxHeightClass).toBe('max-h-[240px]');
+    expect(withExtraView.diff?.source).toBe('arguments');
+    expect(withExtraView.input).toBeUndefined();
     expect(withExtraView.expandable).toBe(true);
 
     // file_path is the only field Edit's arg summary needs -> no input body,

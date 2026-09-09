@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
+import { isQuietPermissionActivity } from './permissionActivityRow';
 import { PI_TOOL_NAMES } from './piToolNames';
 import { derivePermissionAutoNote, derivePermissionVerb } from './questionCardModel';
 import { deriveToolDiff, type ToolDiff } from './toolDiff';
@@ -41,6 +42,7 @@ export interface ToolRun {
   status: ToolRunStatus;
   /** Normalized `tool_result` output text; undefined when there is no result yet or no body. */
   output?: string;
+  result?: unknown;
   /** Error text for a failed run (store carries it on `tool_result.text`). */
   errorText?: string;
   /**
@@ -86,6 +88,9 @@ export function pairToolBlocks(blocks: readonly ChatBlock[]): ToolRun[] {
       status: !result ? 'running' : failed ? 'failed' : 'ok',
       output: result ? normalizeToolOutput(result.toolOutput, result.text) : undefined,
       errorText: failed ? result?.text : undefined,
+      ...(result?.toolOutput && typeof result.toolOutput === 'object'
+        ? { result: result.toolOutput }
+        : {}),
     });
   });
   return runs;
@@ -119,7 +124,10 @@ function normalizeRawOutput(output: unknown): string | undefined {
     if (texts.length > 0) return texts.join('\n');
     return JSON.stringify(output, null, 2);
   }
-  if (typeof output === 'object') return JSON.stringify(output, null, 2);
+  if (typeof output === 'object') {
+    if ('content' in output) return normalizeRawOutput(output.content);
+    return JSON.stringify(output, null, 2);
+  }
   return String(output);
 }
 
@@ -191,6 +199,7 @@ export function groupTimeline(message: ChatMessage): TimelineItem[] {
         items.push({ kind: 'permission', block, blockIndex });
         break;
       case 'permission_activity': {
+        if (isQuietPermissionActivity(block.permissionActivity)) break;
         // Coalesced with the immediately preceding activity item rather than
         // pushed as its own: the gate fires once per surface, so a bash call
         // with a path check produces two records back to back and two rows
@@ -495,7 +504,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // and for the same reason — the arguments can still change until the call
   // settles, and a diff that redraws mid-call reads as the file being edited
   // twice.
-  const diff = running ? null : deriveToolDiff(run);
+  const diff = deriveToolDiff(run);
   const expandable = showOutputBody || Boolean(inputBody) || Boolean(diff);
 
   return {
@@ -1133,9 +1142,21 @@ export function formatToolArgKind(
 
 /** Read row's clickable target: `{file_path, offset, limit}` -> `{path, line, endLine}`. */
 export function deriveFileLink(run: ToolRun): FileLinkTarget | null {
-  if (run.toolName !== 'Read' && run.toolName !== 'NotebookRead') return null;
+  if (
+    ![
+      'Read',
+      'NotebookRead',
+      'Edit',
+      'Write',
+      'MultiEdit',
+      PI_TOOL_NAMES.read,
+      PI_TOOL_NAMES.edit,
+      PI_TOOL_NAMES.write,
+    ].includes(run.toolName)
+  )
+    return null;
   const rec = asRecord(run.input);
-  const path = stringField(rec, 'file_path');
+  const path = stringField(rec, 'path') ?? stringField(rec, 'file_path');
   if (!path) return null;
 
   const target: FileLinkTarget = { path };

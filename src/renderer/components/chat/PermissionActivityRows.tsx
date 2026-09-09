@@ -1,8 +1,13 @@
 import { ShieldAlert, ShieldCheck, ShieldQuestion, ShieldX } from 'lucide-react';
 import { Ident } from '@/components/ui/ident';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ChatBlock } from '@/stores/chatSessions';
-import { derivePermissionActivityRow, type PermissionActivityTone } from './permissionActivityRow';
+import {
+  derivePermissionActivityRow,
+  isQuietPermissionActivity,
+  type PermissionActivityTone,
+} from './permissionActivityRow';
 
 /**
  * T08-b — the audit line for a gate the permission plugin resolved.
@@ -34,8 +39,29 @@ const TONE_ICON: Record<PermissionActivityTone, typeof ShieldCheck> = {
   auto: ShieldAlert,
 };
 
-export function PermissionActivityRows({ blocks }: { blocks: readonly ChatBlock[] }) {
+export function PermissionActivityDetails({ blocks }: { blocks: readonly ChatBlock[] }) {
+  const { t } = useI18n();
+  const allowed = blocks.filter((block) => isQuietPermissionActivity(block.permissionActivity));
+  if (allowed.length === 0) return null;
+  return (
+    <details className="text-meta text-muted-foreground">
+      <summary className="cursor-pointer">
+        {t('Approval details')} ({allowed.length})
+      </summary>
+      <PermissionActivityRows blocks={allowed} includeAllowed />
+    </details>
+  );
+}
+
+export function PermissionActivityRows({
+  blocks,
+  includeAllowed = false,
+}: {
+  blocks: readonly ChatBlock[];
+  includeAllowed?: boolean;
+}) {
   const views = blocks
+    .filter((block) => includeAllowed || !isQuietPermissionActivity(block.permissionActivity))
     .map((block) => block.permissionActivity)
     .filter((record): record is NonNullable<typeof record> => record !== undefined)
     .map(derivePermissionActivityRow);
