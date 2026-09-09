@@ -161,6 +161,25 @@ async function send(text: string, requestId = 'turn-1') {
 }
 
 describe('native backend end to end (P4-4)', () => {
+  it('executes a real bash command through the worker tool configuration', async () => {
+    faux.setResponses([
+      fauxAssistantMessage(
+        [fauxToolCall('bash', { command: 'printf native-worker-shell-ok' }, { id: 'shell-1' })],
+        { stopReason: 'toolUse' }
+      ),
+      fauxAssistantMessage('Shell completed.'),
+    ]);
+    await bootstrap({ permissions: { mode: 'agent', gear: 'auto' } });
+    await send('Run the shell probe.');
+    await turnIdle();
+    const completed = events().find((event) => event.type === 'tool.completed');
+    expect(completed?.payload).toMatchObject({
+      ok: true,
+      output: expect.stringContaining('native-worker-shell-ok'),
+    });
+    expect(faux.state.callCount).toBe(2);
+  });
+
   it('runs a multi-turn loop that calls a tool and persists the transcript', async () => {
     faux.setResponses([
       fauxAssistantMessage([fauxToolCall('read', { path: 'notes.txt' }, { id: 'call-1' })], {

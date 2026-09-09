@@ -219,6 +219,10 @@ jobs:
         run: npm ci --omit=dev --omit=optional
         working-directory: src/agent-host
 
+      - name: Install native runtime dependencies
+        run: npm ci --omit=dev --omit=optional --ignore-scripts
+        working-directory: src/runtime
+
       # REQ-7 accounting. The cache-entry and disk figures are the inputs for
       # the first run's baseline; they are printed, never gated on.
       # Every filesystem drive, not just C:. The workspace lives on D: on hosted
@@ -267,7 +271,16 @@ jobs:
         run: Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
 
       - name: Verify packaged Pi worker
-        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked
+        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --report-file dist/worker-smoke-report.json
+
+      - name: Upload worker smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: worker-smoke-${{ runner.os }}
+          path: dist/worker-smoke-report.json
+          retention-days: 14
+          if-no-files-found: warn
 
       # Without these, a workflow_dispatch run builds a Windows package and then
       # throws it away — the only way to obtain a test build was a Windows machine.
@@ -365,6 +378,10 @@ jobs:
         run: npm ci --omit=dev --omit=optional
         working-directory: src/agent-host
 
+      - name: Install native runtime dependencies
+        run: npm ci --omit=dev --omit=optional --ignore-scripts
+        working-directory: src/runtime
+
       - name: Report disk after install (REQ-7)
         run: df -h /
 
@@ -398,7 +415,16 @@ jobs:
       - name: Verify packaged Pi worker
         # Electron initializes Ozone even though the helper only exercises a
         # utilityProcess. Hosted Linux runners are headless, so provide Xvfb.
-        run: xvfb-run -a node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked
+        run: xvfb-run -a node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --report-file dist/worker-smoke-report.json
+
+      - name: Upload worker smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: worker-smoke-${{ runner.os }}
+          path: dist/worker-smoke-report.json
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Upload Linux packages
         if: github.event_name == 'workflow_dispatch'
@@ -468,6 +494,10 @@ jobs:
         run: npm ci --omit=dev --omit=optional
         working-directory: src/agent-host
 
+      - name: Install native runtime dependencies
+        run: npm ci --omit=dev --omit=optional --ignore-scripts
+        working-directory: src/runtime
+
       - name: Build Pi worker artifact
         run: node scripts/build-agent-host.mjs
 
@@ -502,7 +532,16 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       - name: Verify packaged Pi worker
-        run: node scripts/verify-packaged-app.mjs --app-dir ${{ steps.target.outputs.app_dir }}
+        run: node scripts/verify-packaged-app.mjs --app-dir ${{ steps.target.outputs.app_dir }} --report-file dist/worker-smoke-report.json
+
+      - name: Upload worker smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: worker-smoke-${{ runner.os }}
+          path: dist/worker-smoke-report.json
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Upload macOS packages
         uses: actions/upload-artifact@v5

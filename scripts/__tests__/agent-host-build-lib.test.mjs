@@ -1,7 +1,8 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-
+import { build } from 'esbuild';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -19,6 +20,7 @@ import {
   shouldCopy,
   verifyArtifact,
   verifyBundledPermissionPolicy,
+  WORKER_BUNDLE_BANNER,
   writeBundledPermissionPolicy,
 } from '../agent-host-build-lib.mjs';
 
@@ -59,6 +61,8 @@ function buildInstall(root) {
 
 function buildArtifact(outDir) {
   writeFile(path.join(outDir, 'worker.js'), '// worker\n');
+  writeFile(path.join(outDir, 'runtime-helpers', 'exec-runner.mjs'));
+  writeFile(path.join(outDir, 'runtime-helpers', 'tsd-read.mjs'));
   writeJson(path.join(outDir, 'package.json'), { type: 'module' });
   writeJson(
     path.join(outDir, 'node_modules', '@earendil-works', 'pi-coding-agent', 'package.json'),
@@ -216,10 +220,34 @@ describe('worker-only copy filter', () => {
 });
 
 describe('worker-only artifact verification', () => {
+  it('runs bundled CommonJS dependencies inside the ESM worker', async () => {
+    const entry = path.join(tmp, 'dependency.cjs');
+    const output = path.join(tmp, 'worker.mjs');
+    writeFile(entry, "console.log(require('node:os').platform())");
+    await build({
+      entryPoints: [entry],
+      outfile: output,
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      banner: { js: WORKER_BUNDLE_BANNER },
+    });
+    expect(execFileSync(process.execPath, [output], { encoding: 'utf8' }).trim()).toBe(
+      process.platform
+    );
+  });
+
   it('accepts a worker-only Pi artifact', () => {
     const out = path.join(tmp, 'out');
     buildArtifact(out);
     expect(verifyArtifact({ outDir: out }).totalBytes).toBeGreaterThan(0);
+  });
+
+  it.each(['exec-runner.mjs', 'tsd-read.mjs'])('rejects a missing native helper %s', (name) => {
+    const out = path.join(tmp, 'out');
+    buildArtifact(out);
+    fs.rmSync(path.join(out, 'runtime-helpers', name));
+    expect(() => verifyArtifact({ outDir: out })).toThrow(`runtime-helpers/${name}`);
   });
 
   it('requires every bundled feature extension entry to survive the copy', () => {

@@ -22,6 +22,7 @@ import {
   preflightHostDeps,
   shouldCopy,
   verifyArtifact,
+  WORKER_BUNDLE_BANNER,
   writeBundledPermissionPolicy,
 } from './agent-host-build-lib.mjs';
 
@@ -62,6 +63,7 @@ async function bundle() {
     target: 'node22',
     sourcemap: false,
     external: ESBUILD_EXTERNAL,
+    banner: { js: WORKER_BUNDLE_BANNER },
   });
 }
 

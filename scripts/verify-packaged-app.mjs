@@ -14,11 +14,17 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const require = createRequire(import.meta.url);
 
 function parseArgs(argv) {
-  const args = { appDir: path.join(repoRoot, 'dist', 'win-unpacked'), skipSmoke: false };
+  const args = {
+    appDir: path.join(repoRoot, 'dist', 'win-unpacked'),
+    skipSmoke: false,
+    reportFile: null,
+  };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--app-dir') {
       args.appDir = path.resolve(argv[i + 1] ?? '');
       i += 1;
+    } else if (argv[i] === '--report-file') {
+      args.reportFile = path.resolve(argv[++i]);
     } else if (argv[i] === '--skip-smoke') {
       args.skipSmoke = true;
     } else {
@@ -85,7 +91,7 @@ function checkLegalNotices(resourceDir, failures) {
   }
 }
 
-function runWorkerSmoke(workerPath, failures) {
+function runWorkerSmoke(workerPath, backend, failures) {
   let electronPath;
   try {
     electronPath = require('electron');
@@ -94,16 +100,20 @@ function runWorkerSmoke(workerPath, failures) {
     return;
   }
   const helper = path.join(repoRoot, 'scripts', 'packaged-worker-smoke.cjs');
-  const result = spawnSync(electronPath, ['--no-sandbox', helper, workerPath], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    timeout: 30_000,
-    windowsHide: true,
-    env: { ...process.env, ELECTRON_DISABLE_SECURITY_WARNINGS: '1' },
-  });
+  const result = spawnSync(
+    electronPath,
+    ['--no-sandbox', helper, '--backend', backend, workerPath],
+    {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      timeout: 30_000,
+      windowsHide: true,
+      env: { ...process.env, ELECTRON_DISABLE_SECURITY_WARNINGS: '1' },
+    }
+  );
   if (result.status !== 0) {
     failures.push(
-      `packaged worker bootstrap/dispose smoke failed (status=${result.status} signal=${result.signal}): ` +
+      `packaged ${backend} worker bootstrap/dispose smoke failed (status=${result.status} signal=${result.signal}): ` +
         `${result.stderr || result.stdout}`.slice(-2000)
     );
     return;
@@ -118,6 +128,7 @@ function runWorkerSmoke(workerPath, failures) {
   }
   if (
     report.ok !== true ||
+    report.backend !== backend ||
     !Number.isSafeInteger(report.workerPid) ||
     report.transport !== (process.platform === 'win32' ? 'node-ipc' : 'electron-message-port') ||
     !report.tools?.includes('read') ||
@@ -125,6 +136,8 @@ function runWorkerSmoke(workerPath, failures) {
   ) {
     failures.push(`packaged worker smoke returned an invalid result: ${JSON.stringify(report)}`);
   }
+  console.log(`[verify-packaged-app] ${backend} smoke: ${JSON.stringify(report)}`);
+  return report;
 }
 
 function main() {
@@ -185,7 +198,16 @@ function main() {
   }
 
   checkNodeRuntime(resourceDir, failures);
-  if (!args.skipSmoke && failures.length === 0) runWorkerSmoke(workerPath, failures);
+  const reports = [];
+  if (!args.skipSmoke && failures.length === 0) {
+    for (const backend of ['legacy', 'native'])
+      reports.push(runWorkerSmoke(workerPath, backend, failures));
+  }
+  if (args.reportFile)
+    fs.writeFileSync(
+      args.reportFile,
+      `${JSON.stringify({ appDir: args.appDir, reports, failures }, null, 2)}\n`
+    );
   if (args.skipSmoke) console.log('[verify-packaged-app] worker smoke skipped (--skip-smoke)');
 
   if (failures.length > 0) {
@@ -193,7 +215,7 @@ function main() {
     process.exit(1);
   }
   console.log(
-    '[verify-packaged-app] PASS — legal notices + worker-only artifact + read/bash + bootstrap/dispose/exit'
+    '[verify-packaged-app] PASS — legal notices + worker-only artifact + legacy/native read/bash + bootstrap/dispose/exit'
   );
 }
 

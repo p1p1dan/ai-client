@@ -4,13 +4,13 @@
 
 当前阶段：P4-0～P4-5 已落地，最近提交 `9edab07c`；P4-6 准备中、尚未验收。首次手动 CI 三道 typecheck/lint 通过，测试 4924 通过、1 失败，打包全部跳过。P3 历史证据见 [P3 完成记录](evidence/p3/completion/README.md)。
 
-本轮授权：同步状态文档、推送任务分支并手动 CI 打包；测试包名称/版本可递增。不本地打包、不推 tag、不触发自动发布。新增代码/工作流修复仍待明确授权。
+本轮授权：同步状态文档、推送任务分支并手动 CI 打包；测试包名称/版本可递增。不本地打包、不推 tag、不触发自动发布。用户已明确授权本轮代码/工作流修复，与 Windows AI 同步推进。
 
 ## 当前 TODO：P4-6
 
 - [x] 接棒 `9edab07c`，推送 `feat/runtime-evolution`，手动触发并核对 [CI 34303440949](https://github.com/p1p1dan/ai-client/actions/runs/34303440949)；未出包。
-- [ ] 修复 `agent-host-build-lib.test.mjs` 的有效产物样本缺两个 runtime helper，补齐各平台打包任务的 runtime 依赖安装及 native 专项冒烟。
-- [ ] 小批验证后推送同一分支，手动 CI 生成可追溯测试包及运行说明；版本接续主工作分支 `1.0.0-test.9`，下一包拟用 `1.0.0-test.10`（出包前复核，当前 package.json 未改）；不在本机打包。
+- [x] 修复 helper 测试样本，补齐打包 job 的 runtime 依赖与双后端冒烟；另补 native shell 接线和 ESM bundle 的 CommonJS 支持。本机小批测试/runtime typecheck 通过，产物待 CI。
+- [ ] 小批验证后推送同一分支，手动 CI 生成可追溯测试包及运行说明；版本接续主工作分支 `1.0.0-test.9`，下一包拟用 `1.0.0-test.10`（出包前复核，package.json 已更新，待提交验证）；不在本机打包。
 - [ ] Windows + AI 执行真实随包 Node、六项探针、bash/命令树清理及 GUI；两种产品 carrier 分别留证。
 - [ ] 企业加密机签收明文读写、Main diff/编码/二进制判定、GUI/TUI 一致性与退出无残留；逐项回填 P1/P4，不能代签。
 

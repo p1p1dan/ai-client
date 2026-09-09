@@ -34,6 +34,7 @@ import type {
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import type { RuntimeHostConfig } from '../contracts.ts';
 import { RuntimeHostError } from '../host/errors.ts';
+import { resolveWorkerShell } from '../host/shell.ts';
 import { JsonlSessionStore, type SessionConfig } from '../plugins/session/store.ts';
 
 /**
@@ -132,7 +133,7 @@ export class NativeWorkerRuntime {
       // singleTurn — a worker that can only ever answer once. The workspace is
       // the session's cwd, which bootstrap also cross-checks against the
       // session config, so the two can never drift apart.
-      tools: { cwd: this.cwd },
+      tools: { cwd: this.cwd, shellPath: resolveWorkerShell(this.options.host.childEnv) },
       session,
       permissions: {
         ...(this.options.permissions?.mode ? { mode: this.options.permissions.mode } : {}),

@@ -9,6 +9,10 @@ import {
 import { serializeDefaultPermissionPolicy } from '../src/agent-host/permissionPolicy.mjs';
 
 export const ESBUILD_EXTERNAL = ['@earendil-works/pi-coding-agent'];
+// Native dependencies include CommonJS modules (for example yaml). Their Node
+// built-in requires must remain callable after bundling into an ESM worker.
+export const WORKER_BUNDLE_BANNER =
+  "import { createRequire as createWorkerRequire } from 'node:module'; const require = createWorkerRequire(import.meta.url);";
 
 export const REQUIRED_WORKER_PACKAGES = [
   '@earendil-works/pi-coding-agent',

@@ -7,6 +7,9 @@ const { app, utilityProcess } = require('electron');
 
 const { checkBundledExtensionsLoaded } = require('./bundled-extension-check.cjs');
 
+const backendIndex = process.argv.indexOf('--backend');
+const backend = backendIndex === -1 ? 'legacy' : process.argv[backendIndex + 1];
+if (!['legacy', 'native'].includes(backend)) throw new Error(`unknown backend: ${backend}`);
 const workerPath = process.argv.at(-1);
 if (!workerPath) throw new Error('usage: electron scripts/packaged-worker-smoke.cjs <worker.js>');
 
@@ -59,15 +62,17 @@ async function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aiclient-packaged-worker-'));
   const agentDir = path.join(root, 'agent');
   const cwd = path.join(root, 'workspace');
+  const traceDir = path.join(root, 'trace');
+  const modelRequests = [];
   fs.mkdirSync(agentDir, { recursive: true });
   fs.mkdirSync(cwd, { recursive: true });
   fs.writeFileSync(path.join(cwd, 'worker-read-probe.md'), '# packaged-worker-read-ok\n');
   // A local model stub asks the REAL session to run read/bash. No cloud credentials.
   let completionCount = 0;
   const modelServer = http.createServer(async (request, response) => {
-    for await (const _chunk of request) {
-      /* Drain the request body. */
-    }
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    modelRequests.push(JSON.parse(Buffer.concat(chunks).toString('utf8')));
     const first = completionCount++ === 0;
     const delta = first
       ? {
@@ -90,7 +95,7 @@ async function main() {
                 name: 'bash',
                 arguments: JSON.stringify({
                   command: 'printf packaged-worker-bash-ok',
-                  timeout: 10,
+                  ...(backend === 'native' ? { timeoutMs: 10_000 } : { timeout: 10 }),
                 }),
               },
             },
@@ -140,6 +145,9 @@ async function main() {
     delete childEnv.ELECTRON_RUN_AS_NODE;
     Object.assign(childEnv, {
       PI_CODING_AGENT_DIR: agentDir,
+      AICLIENT_RUNTIME_BACKEND: backend,
+      AICLIENT_RUNTIME_AGENT_DIR: agentDir,
+      AICLIENT_RUNTIME_TRACE_DIR: traceDir,
       AICLIENT_PI_TRUST_PROJECT_CONFIG: '0',
       AICLIENT_PI_WORKER_GENERATION: String(generation),
       // Same variable Main sends (`PI_OPT_IN_EXTENSIONS_ENV`). Set here so the
@@ -175,7 +183,18 @@ async function main() {
     child.stderr?.on('data', (chunk) => process.stderr.write(chunk));
     const responses = new Map();
     const toolResults = new Map();
+    const permissionActivity = [];
+    let idle = false;
     child.on('message', (message) => {
+      if (message?.kind === 'event' && message.payload?.type === 'permission.activity') {
+        permissionActivity.push(message.payload.payload);
+      }
+      if (
+        message?.kind === 'event' &&
+        message.payload?.type === 'session.status' &&
+        message.payload.payload.status === 'idle'
+      )
+        idle = true;
       if (message?.kind === 'response' && typeof message.requestId === 'string') {
         responses.set(message.requestId, message);
       }
@@ -223,11 +242,15 @@ async function main() {
     // between "we shipped a plugin" and "the user has the feature". A packaged
     // build that quietly loses one shows no symptom until a model asks a
     // question and no dialog appears.
-    const problems = checkBundledExtensionsLoaded(
-      bootstrap.result.extensions,
-      BUNDLED_FEATURE_PLUGIN_PACKAGES
-    );
-    if (problems.length > 0) throw new Error(problems.join('\n'));
+    if (backend === 'legacy') {
+      const problems = checkBundledExtensionsLoaded(
+        bootstrap.result.extensions,
+        BUNDLED_FEATURE_PLUGIN_PACKAGES
+      );
+      if (problems.length > 0) throw new Error(problems.join('\n'));
+    } else if (bootstrap.result.permissionGate !== 'bundled') {
+      throw new Error('native permission gate is missing');
+    }
     postMessage(
       request('send', 'worker.send', {
         logicalSessionId: 'packaged-probe',
@@ -239,7 +262,7 @@ async function main() {
     const send = await waitFor('send');
     if (!send.ok) throw new Error(`tool probe send failed: ${JSON.stringify(send)}`);
     const toolDeadline = Date.now() + 15_000;
-    while (toolResults.size < 2 && Date.now() < toolDeadline) {
+    while ((!idle || toolResults.size < 2) && Date.now() < toolDeadline) {
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
     for (const [id, text] of [
@@ -250,6 +273,14 @@ async function main() {
       if (!result?.ok || !result.output.includes(text)) {
         throw new Error(`tool probe ${id} failed: ${JSON.stringify(result)}`);
       }
+    }
+    if (!idle) throw new Error('tool turn did not return to idle');
+    const toolReplies = modelRequests
+      .flatMap((request) => request.messages ?? [])
+      .filter((message) => message.role === 'tool');
+    for (const id of ['probe_read', 'probe_bash']) {
+      if (!toolReplies.some((message) => message.tool_call_id === id))
+        throw new Error(`model did not receive tool result ${id}`);
     }
     const workerPid = child.pid;
     if (!workerPid) throw new Error('worker has no pid after bootstrap');
@@ -270,12 +301,37 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
     if (pidExists(workerPid)) throw new Error(`worker pid ${workerPid} still exists after exit`);
+    let stamp;
+    if (backend === 'native') {
+      const traces = fs
+        .readFileSync(path.join(traceDir, 'runs.jsonl'), 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      const trace = traces.at(-1);
+      stamp = trace?.version_stamp;
+      if (
+        !trace?.success ||
+        stamp?.backend !== 'native' ||
+        stamp.carrier !== (usesNode ? 'bundled-node' : 'electron-utility')
+      )
+        throw new Error(`unexpected native trace: ${JSON.stringify(trace)}`);
+      if (usesNode && path.resolve(stamp.node_exec_path) !== path.resolve(child.spawnfile))
+        throw new Error('native trace does not identify the launched Node');
+      if (permissionActivity.length < 2) throw new Error('native permission activity is missing');
+    }
     console.log(
       JSON.stringify({
         ok: true,
+        backend,
+        workerPath,
+        workerExecutable: usesNode ? child.spawnfile : process.execPath,
+        stamp,
+        permissionActivity,
+        exitCode,
         workerPid,
         sessionFile: bootstrap.result.sessionFile,
-        bundledExtensions: BUNDLED_FEATURE_PLUGIN_PACKAGES.length,
+        bundledExtensions: backend === 'legacy' ? BUNDLED_FEATURE_PLUGIN_PACKAGES.length : 0,
         transport: usesNode ? 'node-ipc' : 'electron-message-port',
         tools: ['read', 'bash'],
       })
