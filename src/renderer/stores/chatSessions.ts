@@ -40,6 +40,7 @@ import { usePendingUserMessagesStore } from './pendingUserMessages';
 // Refcounted fan-out over preload's single `chat:runtimeEvent` IPC listener —
 // see its header for why every renderer subscriber shares one.
 import { subscribeRuntimeEvent } from './runtimeEventBus';
+import { isRecoveryEvent, nextSessionActivity, type SessionActivity } from './sessionActivity';
 import { isSessionRetired } from './sessionRetirement';
 
 export type WorkspaceKind = 'main' | 'worktree' | 'remote' | 'temp';
@@ -152,6 +153,8 @@ export interface ChatSession {
    * and on every terminal event — see upsertSessionStatus.
    */
   retry?: SessionRetryInfo;
+  activity?: SessionActivity;
+  runtimeError?: string;
 }
 
 export interface ChatBlock {
@@ -549,6 +552,44 @@ function appendTextBlock(
 }
 
 export function applyRuntimeEvent(
+  state: ChatSessionsState,
+  event: RuntimeEvent
+): Partial<ChatSessionsState> {
+  const patch = applyRuntimeEventCore(state, event);
+  const current = state.sessions.find((session) => session.id === event.sessionId);
+  if (!current) return patch;
+  const activity = nextSessionActivity(current.activity, event);
+  const recovered = isRecoveryEvent(event);
+  const runtimeError =
+    event.type === 'session.failed'
+      ? (event.payload?.error ?? 'Session failed')
+      : recovered
+        ? undefined
+        : current.runtimeError;
+  if (
+    activity !== current.activity ||
+    runtimeError !== current.runtimeError ||
+    (recovered && current.retry)
+  ) {
+    patch.sessions = (patch.sessions ?? state.sessions).map((session) =>
+      session.id === event.sessionId
+        ? { ...session, activity, runtimeError, ...(recovered ? { retry: undefined } : {}) }
+        : session
+    );
+  }
+  if (
+    event.type === 'session.failed' &&
+    state.activeSessionId &&
+    state.activeSessionId !== event.sessionId
+  ) {
+    delete patch.lastError;
+  }
+  if (recovered && state.activeSessionId === event.sessionId && state.lastError)
+    patch.lastError = null;
+  return patch;
+}
+
+function applyRuntimeEventCore(
   state: ChatSessionsState,
   event: RuntimeEvent
 ): Partial<ChatSessionsState> {
@@ -1222,7 +1263,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
   historyBranchRevisions: {},
 
   selectSession: (sessionId) => {
-    set({ activeSessionId: sessionId });
+    set({ activeSessionId: sessionId, lastError: null });
   },
 
   /**

@@ -116,6 +116,7 @@ import {
   shouldRevokeRestoredDraft,
 } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
+import { SessionActivityStatus } from './SessionActivityStatus';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { parseSendDispatchErrorCode } from './sendDispatchError';
 import { decideSendPreamble } from './sendPreamble';
@@ -509,7 +510,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
-  const lastError = useChatSessionsStore((state) => state.lastError);
+  const lastError = useChatSessionsStore((state) => {
+    const session = state.sessions.find((item) => item.id === state.activeSessionId);
+    if (session?.activity?.phase === 'retry') return null;
+    return session?.runtimeError ?? state.lastError;
+  });
   const activeMessages = useChatSessionsStore((state) =>
     state.activeSessionId ? state.messages[state.activeSessionId] : undefined
   );
@@ -3039,6 +3044,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // div in ChatWorkspace (`middleColumnHostClass`) owns the padding and the
     // shrink/grow behaviour for both modes now — no border/background here.
     <ReadingColumn>
+      <SessionActivityStatus sessionId={activeSessionId} compact />
       {/* T12-e′ moves the no-repository welcome surface to ChatWorkspace and
             does not mount this component at all in that state. Real failures
             still belong immediately above the composer. */}

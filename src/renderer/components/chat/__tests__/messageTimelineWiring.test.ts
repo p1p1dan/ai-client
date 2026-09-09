@@ -499,7 +499,8 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('deriveTurnStatus(');
     // F2's "lost stopwatch": this row going missing while work continues IS the
     // defect, so the gate must be the status itself, never a completion test.
-    expect(turn).toContain('{status && (');
+    expect(turn).toContain('{status && !(isLastTurn && inFlightSession) && (');
+    expect(turn).toContain('<SessionActivityStatus');
     expect(turn).toContain('<TurnStatusContent status={status} />');
   });
 

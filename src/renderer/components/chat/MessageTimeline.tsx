@@ -93,6 +93,7 @@ import {
 } from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
 import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
+import { SessionActivityStatus } from './SessionActivityStatus';
 import { SessionTreeDialog } from './SessionTreeDialog';
 import { SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { useResumeSession } from './sessionIndex/useResumeSession';
@@ -207,7 +208,11 @@ export function MessageTimeline({
       canRespondToPermission(pendingPermissions, sessionId, permissionId),
     [pendingPermissions, sessionId]
   );
-  const lastError = useChatSessionsStore((state) => state.lastError);
+  const lastError = useChatSessionsStore(
+    (state) =>
+      state.sessions.find((session) => session.id === sessionId)?.runtimeError ??
+      (state.activeSessionId === sessionId ? state.lastError : null)
+  );
   const stopActiveSession = useChatSessionsStore((state) => state.stopActiveSession);
   // Round-10 inspection ③: when the latest error notice in the timeline
   // already carries `lastError`'s text, the session-failed card drops its
@@ -1363,10 +1368,6 @@ const ChatTurn = memo(function ChatTurn({
           10px inside one. */}
       {turn.user && <UserBubble message={turn.user} />}
       <div className={turnBodyClass()}>
-        {/* T-33: top of the turn body, below the pinned bubble band — the
-            banner describes the reply in progress, so it lives in the reply
-            zone, not above the user's own message. */}
-        {retryBanner && <RetryBanner view={retryBanner} />}
         {/* FB4: block order, all the way down. Prose and notices render where
             they happened instead of being scraped to the end of the turn, and
             only tool / thinking / authorization runs go inside a shell. The old
@@ -1374,12 +1375,19 @@ const ChatTurn = memo(function ChatTurn({
             earlier paragraph into the collapsed segment, and a turn that ended
             in an error notice sent ALL of it. */}
         {segments.map(renderSegment)}
+        {isLastTurn && (
+          <SessionActivityStatus
+            sessionId={sessionId}
+            replyChars={countAssistantReplyChars(turn.body)}
+          />
+        )}
+        {retryBanner && <RetryBanner view={retryBanner} />}
         {/* T12-b: the running status, and ONLY while it is running. FB6's
             position is kept — under the output it describes, not above it —
             but the row no longer has a completed state (`Worked for 12s ·
             2 tools` retired with the meta row). A finished turn renders
             nothing here at all, which is the point of the change. */}
-        {status && (
+        {status && !(isLastTurn && inFlightSession) && (
           <div className={turnHeadClass()}>
             <TurnStatusContent status={status} />
           </div>
@@ -1494,7 +1502,12 @@ function RetryBanner({ view }: { view: RetryBannerView }) {
       <RefreshCw className="mt-0.5 size-3.5 shrink-0 animate-spin" />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{view.title}</p>
-        {view.detail && <p className="mt-0.5 opacity-90">{view.detail}</p>}
+        {view.detail && (
+          <details className="mt-1 break-words">
+            <summary className="cursor-pointer">Details</summary>
+            <p className="mt-1 whitespace-pre-wrap">{view.detail}</p>
+          </details>
+        )}
       </div>
     </div>
   );

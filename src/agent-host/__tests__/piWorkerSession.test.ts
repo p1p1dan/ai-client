@@ -819,3 +819,52 @@ describe('PiWorkerSession', () => {
     await expect(session.bootstrap()).rejects.toMatchObject({ code: 'WORKER_SESSION_DISPOSED' });
   });
 });
+
+it.each([
+  true,
+  false,
+])('settles retry success=%s using the final outcome instead of a stale 529', async (success) => {
+  const stub = createPiSdkStub({ manualPrompt: true });
+  const events: RuntimeEventDraft[] = [];
+  const session = createSession(stub, events);
+  await session.startSend({
+    logicalSessionId: 'logical-1',
+    requestId: 'retry-turn',
+    attemptId: 'retry-attempt',
+    text: 'go',
+  });
+  const pi = stub.sessionFor('/repo')!;
+  pi.emit({
+    type: 'message_end',
+    message: { role: 'assistant', stopReason: 'error', errorMessage: 'HTTP 529' },
+  });
+  pi.emit({
+    type: 'auto_retry_start',
+    attempt: 1,
+    maxAttempts: 3,
+    delayMs: 100,
+    errorMessage: 'HTTP 529',
+  });
+  pi.emit({
+    type: 'auto_retry_end',
+    success,
+    ...(!success ? { finalError: 'retries exhausted' } : {}),
+  });
+  if (success) {
+    pi.emit({ type: 'message_start', message: { role: 'assistant' } });
+    pi.emit({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'Recovered result' },
+    });
+    pi.emit({ type: 'message_end', message: { role: 'assistant', stopReason: 'stop' } });
+  }
+  pi.emit({ type: 'agent_settled' });
+  expect(events.filter((e) => ['session.failed', 'session.completed'].includes(e.type))).toEqual([
+    expect.objectContaining({
+      type: success ? 'session.completed' : 'session.failed',
+      ...(!success ? { payload: { error: 'retries exhausted' } } : {}),
+    }),
+  ]);
+  stub.finishPrompt('/repo');
+  await session.dispose();
+});

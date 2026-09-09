@@ -1094,6 +1094,9 @@ export class PiWorkerSession {
         }
         if (message?.role !== 'assistant') break;
         const messageId = projection.proseClosed ? null : projection.assistantMessageId;
+        if (['stop', 'length', 'toolUse'].includes(message.stopReason ?? '')) {
+          turn.pendingError = null;
+        }
         if (messageId && ['stop', 'length', 'toolUse'].includes(message.stopReason ?? '')) {
           this.emit({
             type: 'message.completed',
@@ -1183,6 +1186,19 @@ export class PiWorkerSession {
         });
         break;
       }
+      case 'auto_retry_end':
+        if (event.success === true) {
+          turn.pendingError = null;
+          this.emit({
+            type: 'session.status',
+            sessionId,
+            requestId,
+            payload: { status: 'running' },
+          });
+        } else if (typeof event.finalError === 'string' && event.finalError) {
+          turn.pendingError = event.finalError;
+        }
+        break;
       case 'auto_retry_start':
         this.emit({
           type: 'session.status',

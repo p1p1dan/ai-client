@@ -2088,6 +2088,13 @@ export const zhTranslations: Record<string, string> = {
     'AI 会在 {{folder}} 里干活，直接说你想做什么。',
   'Just type. This chat runs in a private temporary folder.':
     '直接输入即可，这次对话会在一个私有的临时目录里进行。',
+  'Waiting for model': '等待模型响应',
+  'Writing response': '正在输出',
+  'Running tool': '执行工具',
+  'Waiting for confirmation': '等待确认',
+  Retrying: '正在重试',
+  'Retry in {{seconds}}s': '{{seconds}} 秒后重试',
+  'Waiting for retry response': '等待重试响应',
   'New temporary workspace': '新建临时工作区',
   'New chat in existing directory: {{path}}': '在现有目录新建会话（沿用目录）：{{path}}',
   'Stop the current turn before starting a new chat': '请先停止当前任务，再新建会话',
