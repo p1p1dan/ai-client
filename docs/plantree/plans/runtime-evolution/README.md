@@ -3,10 +3,10 @@
 > 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D14 生效）。
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
-**当前阶段**：P3-1 至 P3-5 与 P2-4 已实现，本机 P3-6 往返矩阵已通过；进入 P4 集成准备，生产 worker 切换和现场门禁尚未执行。
+**当前阶段**：P0/P3 ✅；P1/P2 实现完成、余项等现场签收；**P4-0~P4-3 已落地**，native 后端可由 `AICLIENT_RUNTIME_BACKEND` 选中；下一步 P4-4 端到端。
 **最近落地**：`2ae6f209`（2026-09-08）P1-9 ∥ P2-8 成对落地主动压缩（`runtimeContext` 服务、工具注册、提醒措辞、轮次边界换窗）；此前 `27ff2020` 提交 P1 工具/权限实现与 D14 两轴传递链。P1 现场验收仍未完成，[P1 验证记录](evidence/p1/README.md)。P0/P2-0 的提交仍为 `8a71c843`，旧缓存基线 **95.01%**，[原始证据](evidence/p2-0/validation.md)。
 **本批提交（2026-09-09）**：分支/fork/rewind、Pi v1/v2/v3 与 PI-Desktop 迁移、RuntimeEvent 与 Main 索引 adapter；runtime 20 文件 242 项、Main 2 文件 34 项、类型分片、独立进程恢复通过，[本批证据](evidence/p3/completion/README.md)。此前补修/P2-1/P2-2 已提交 `fb7cb10b`。
-**下一目标**：**P4-1 worker bootstrap → P4-2 后端开关 → P4-3 RPC/载体接线**，随后 P4-4/5/6 联调与现场门禁。P2-5/P2-6 在集成后验证真实缓存和同套会话，门槛仍为 95.01%。
+**下一目标**：**P4-4 端到端**（含 P4-1 留下的 compact/rewind/reload/fork/commands RPC 映射）→ P4-5 GUI 点验（Q7 前置已解除）→ P4-6 打包载体验收（按 [D16](../../../plans/2026-09-08-runtime-evolution-ard.md) 一次上机签收 P1 积压的四条现场项）。P2-5/P2-6 在 P4 之后测真实缓存，门槛 95.01%。
 **2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 两轴分离：模式 `plan/agent` 管工具集，档位 `ask/accept-edits/auto` 管审批，accept-edits 放行工作区 bash。P1-1 裁剪与 P1-5 核心已更新；P1-6 renderer/偏好迁移/两轴传递链已更新，打包 GUI 待签收。
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
@@ -129,10 +129,10 @@ PI-Desktop 因此把两件事配成一对：**预算提醒**告诉它还剩多�
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
 | P4-0 同步平台 worker 改动 | ✅ | main 的 `45d43db8`（D20 Windows 随包 Node worker）已取代码部分落地 `78168b4d`：worker 入口同时支持 Electron MessagePort 与 Node IPC，Windows 安装版走随包 `node.exe`，缺失即明确失败不回落（D11）；`WorkerTransport` 增 `createNodeProcessWorkerTransport` 并排空普通 stdout。文档部分在本 worktree 已分叉，未取（D11 已是调和后口径）。顺带取 main 的 `3690ef8f` 修 `piUsage.ts` 对 `piTurnRollup` 的无后缀值导入——否则 dev 路径的 `worker.ts` 在 `--experimental-strip-types` 下加载失败。**刻意不复用 `NodeRuntimeResolver`**：它会回落到 nvm/PATH，与 D11 相反。验证：agent-host 两个目录 36 文件 487 项、`tsc --noEmit`、biome 全通过；打包壳内两种 carrier 的实测仍归 P4-6 |
-| P4-1 worker bootstrap | ⬜ | `agent-host/worker.js` 的启动模式改为 Cordis 插件图初始化；两种 carrier 共用同一入口 |
-| P4-2 后端开关 | ⬜ | dev 环境变量 `AICLIENT_RUNTIME_BACKEND=legacy\|native`（D8），不进设置页；双后端共存 |
-| P4-3 WorkerTransport 适配 | ⬜ | 沿用现有 RPC 协议，MessagePort 与 Node IPC 两条通道由 `WorkerTransport` 抹平（D11）；事件出口翻译为 RuntimeEvent |
-| P4-4 端到端 | ⬜ | 多轮对话 + 工具调用 + 权限审批 + 压缩全链路（成功标准 1） |
+| P4-1 worker bootstrap | ✅ | `87cb8512`：`runtime/worker/nativeWorkerRuntime.ts` 把 Cordis 插件图接到既有 worker RPC 面。`PiWorkerRpcServer` 本就以工厂注入引擎，两个后端共用同一套相关性/generation/串行化，不分叉 dispatcher；适配器**不**引用 `piWorkerRpcServer`（会把 pi-coding-agent 拖进 native 路径），形状由 worker 入口那一处赋值把关。两种 carrier 共用同一入口。`compact`/`rewind`/`reload`/`fork`/`commands` 未实现，缺方法得到 `WORKER_*_UNAVAILABLE`，归 P4-4 |
+| P4-2 后端开关 | ✅ | `87cb8512`：`AICLIENT_RUNTIME_BACKEND=native` 时才动态 import native 模块，legacy 完全不加载 cordis——未完成 runtime 的 import 期故障够不到用户会话。无法识别的取值按 legacy 读（D8）。入口改为先挂监听再排队：Node IPC 到达即派发、没有监听者就丢，动态 import 那段窗口必须有队列。两项测试用**真实 worker 进程**验证开关，不是只测 flag reader |
+| P4-3 WorkerTransport 适配 | ✅ | 通道抹平在 `78168b4d`（P4-0）已落地；本节点补 `runtime/host/worker.ts` 按 D11 产出两种 carrier 的 host 配置。关键约束：electron-utility 下**不得**把 `process.execPath` 当 TSD helper——那正是现场证明会读到密文的 Electron 二进制；只认随包 node，没有就明说没有回落。事件出口沿用 `RuntimeEventDraft`，`seq`/`timestamp` 仍由 RPC server 盖（D5）|
+| P4-4 端到端 | ⬜ | 多轮对话 + 工具调用 + 权限审批 + 压缩全链路（成功标准 1）。**并含 P4-1 未实现的 RPC 方法**：`compact` / `rewind` / `reload` / `fork` / `discardFork` / `commands` / `setPermissionTier`，P3-2 的分支能力已在 store 里，缺的是 RPC 映射 |
 | P4-5 GUI 点验 | ⬜ | 时间线 / Composer / 权限卡 / 设置页无回归（成功标准 4）；另验 D13 的 Main 侧读改造。**前置已解除**：[Q7](open-questions.md) 的三处判据缺陷已随 `b984b282` 修好——git 面板在加密机上不会再无声地空着，读不到 stdout 时会明确报错 |
 | P4-6 打包载体验收 | ⬜ | 在打包壳里用本地模型替身（HTTP SSE stub，不调线上模型）驱动真实 Read/bash，两种 carrier 各跑一遍；复用 runtime 离线 lane 的 `fauxProvider` 用例与 `scripts/packaged-worker-smoke.cjs` 的替身思路。**本节点同时是唯一一次上机窗口**（[D16](../../../plans/2026-09-08-runtime-evolution-ard.md)）：P1-0 的 runner + taskkill 命令树清理、P1-3 的 bash 跨平台、P1-8 的六项工具探针、P4-0 的随包 Node worker 载体，四条积压的现场项都在这里一次签收，按载体矩阵逐条走，不用「跑通一个会话」代签 |
 
