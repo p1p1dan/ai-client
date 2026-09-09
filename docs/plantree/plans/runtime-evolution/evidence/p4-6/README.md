@@ -1,6 +1,6 @@
 # P4-6 接棒状态与现场分工
 
-2026-09-09 · 状态：准备中，未出测试包、未完成载体验收。
+2026-09-09 · 状态：`1.0.0-test.10` Linux CI 产物通过，Windows 退出断言失败；主线 GUI 修复已引入，准备 `1.0.0-test.11`，未完成现场验收。
 权威：[看板](../../README.md) / [ARD D11、D13、D16](../../../../../plans/2026-09-08-runtime-evolution-ard.md)。
 
 ## 已核实
@@ -48,3 +48,23 @@ CI 补修：`76424efa` 的 [34305837633](https://github.com/p1p1dan/ai-client/ac
 - P1-5/P1-6/P4-5：权限两模式/三档及策略重载、审计行、附件、用户气泡去重、会话恢复/压缩、GUI/TUI 交接。
 - D13/Q7：普通 Windows 先验证 Git/工作区行为；企业加密环境另核对明文内容与错误可见性。
 - 每项记录通过/失败/未执行、输入、预期、实际、日志或截图；两种产品载体分别签收，Windows 上 bash 来自实际 Git for Windows 安装，本仓包配置未包含随包 Git/bash，不能把假定的 resources/git 路径当作事实。Windows bundled-node 不替代 Linux/macOS electron-utility。
+
+## 主线 GUI 接入与 Windows CI 退出修复
+
+按用户补充，已按原序 cherry-pick（保留来源）五个提交，源码无冲突；仅规划入口保留 runtime 权威并注册 GUI 计划：
+
+| 来源 | 当前分支提交 |
+|---|---|
+| `8f4b72b0` | `d7def5c3` |
+| `7f114608` | `16f799b7` |
+| `9c4ea0e2` | `0aa27ab0` |
+| `20da96e4` | `7dfe4260` |
+| `84c16231` | `80294b63` |
+
+- native 录制事件仍保留全部权限记录；允许结果按主线规则收进授权详情。重放断言改为新时间线形状，新增真实录制数据 → DOM 点击展开 → 两条审计记录均可见的检查。
+- 当前 native Edit 不返回 SDK patch，GUI 按已实现的多 edits 参数预览显示，不冒充实际 patch；完整 GUI 签收使用 [A～E 现场清单](../../../gui-sdk-experience/现场验收清单.md)。
+- 联合小批：权限/问答/diff/TEMP/replay 6 文件 22 项通过；worker 退出与主线 worker/history 3 文件 31 项通过。根 tsc 在本机 1200 MiB 堆上限 OOM（退出 134），已停止并复查资源，无残留；不算通过，交给下一轮 CI。
+- [CI 34306438655](https://github.com/p1p1dan/ai-client/actions/runs/34306438655) 对 `2397f1ed` 完整门禁通过，Linux 打包及 legacy/native Read/bash/退出通过。该轮不含五个 GUI 提交。
+- Windows 同轮两后端均完成工具检查与 dispose 回执，但进程强制退出触发 `UV_HANDLE_CLOSING`，退出码 `3221226505`。正常 Node worker 改为 `process.exitCode=0` + IPC disconnect 后自然退出，断开监听识别主动 dispose；Electron utilityProcess 保持原退出路径。真实 Node IPC 回执与退出测试、源码 HTTP 工具冒烟通过，Windows 真正修复与否待 CI。
+- 对照 [Node 上游同类强制退出问题](https://github.com/nodejs/node/issues/58091)定位，不把上游报告当本仓修复通过证据，也不放宽退出码门禁。
+- 因已有 `.10` Linux 产物且新增主线 GUI 代码，本轮最终候选递增到 `1.0.0-test.11`；Windows AI 应等待包含全部提交的 `.11` 安装包。

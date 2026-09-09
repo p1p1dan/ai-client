@@ -1,9 +1,13 @@
+// @vitest-environment happy-dom
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flattenTurnItems, groupMessagesIntoTurns } from '@/components/chat/chatTurn';
 import { initialExtensionUi, reduceExtensionUi } from '@/components/chat/extensionUiModel';
+import { PermissionActivityDetails } from '@/components/chat/PermissionActivityRows';
 import { derivePermissionActivityRow } from '@/components/chat/permissionActivityRow';
 import { applyRuntimeEvents, type ChatSession, type ChatSessionsState } from '../chatSessions';
 import { usePendingUserMessagesStore } from '../pendingUserMessages';
@@ -13,6 +17,8 @@ import {
   resetPermissionGateWatchForTests,
   usePermissionGateStore,
 } from '../permissionGate';
+
+vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 
 /**
  * P4-5, renderer half — what the user sees when the native backend drives.
@@ -97,9 +103,7 @@ describe('timeline', () => {
     // exchange into two and heading the transcript with a row of raw JSON.
     expect(flattenTurnItems(turns[0]).map((item) => item.kind)).toEqual([
       'toolGroup',
-      'permissionActivity',
       'toolGroup',
-      'permissionActivity',
       'text',
     ]);
   });
@@ -128,6 +132,28 @@ describe('timeline', () => {
 });
 
 describe('permission trail', () => {
+  it('keeps the recorded allowed gates accessible in the collapsed approval details', async () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+    const blocks = (replay().messages[SESSION_ID] ?? []).flatMap((message) => message.blocks);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => root.render(createElement(PermissionActivityDetails, { blocks })));
+      const details = container.querySelector('details')!;
+      expect(details.open).toBe(false);
+      await act(async () => details.querySelector('summary')!.click());
+      expect(details.open).toBe(true);
+      expect(details.querySelectorAll('li')).toHaveLength(2);
+      expect(details.textContent).toContain('Allowed read');
+      expect(details.textContent).toContain('Allowed write');
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('records both gates — including the one that never raised a dialog', () => {
     const rows = (replay().messages[SESSION_ID] ?? [])
       .flatMap((message) => message.blocks)

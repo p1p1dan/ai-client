@@ -2,7 +2,7 @@
 
 2026-09-09 状态同步 · [看板](README.md) · [P4-6 交接与 CI 结果](evidence/p4-6/README.md)
 
-当前阶段：P4-0～P4-5 已落地，最近提交 `9edab07c`；P4-6 准备中、尚未验收。首次手动 CI 三道 typecheck/lint 通过，测试 4924 通过、1 失败，打包全部跳过。P3 历史证据见 [P3 完成记录](evidence/p3/completion/README.md)。
+当前阶段：P4-6 出包修复与主线 GUI 集成。`76424efa`/`3d14a4b2`/`2397f1ed` 补 CI、native shell/bundle 及交付文档；`34306438655` 完整门禁与 Linux 双后端打包验证通过，Windows 退出断言待本次修复复验。主线 5 个 GUI 提交已引入，当前测试版为 `1.0.0-test.11`。
 
 本轮授权：同步状态文档、推送任务分支并手动 CI 打包；测试包名称/版本可递增。不本地打包、不推 tag、不触发自动发布。用户已明确授权本轮代码/工作流修复，与 Windows AI 同步推进。
 
@@ -10,8 +10,8 @@
 
 - [x] 接棒 `9edab07c`，推送 `feat/runtime-evolution`，手动触发并核对 [CI 34303440949](https://github.com/p1p1dan/ai-client/actions/runs/34303440949)；未出包。
 - [x] 修复 helper 测试样本，补齐打包 job 的 runtime 依赖与双后端冒烟；另补 native shell 接线和 ESM bundle 的 CommonJS 支持。本机小批测试/runtime typecheck 通过，产物待 CI。
-- [ ] 小批验证后推送同一分支，手动 CI 生成可追溯测试包及运行说明；版本接续主工作分支 `1.0.0-test.9`，下一包拟用 `1.0.0-test.10`（出包前复核，package.json 已更新，待提交验证）；不在本机打包。
-- [ ] Windows + AI 执行真实随包 Node、六项探针、bash/命令树清理及 GUI；两种产品 carrier 分别留证。
+- [ ] 小批验证后推送同一分支，手动 CI 生成可追溯测试包及运行说明；已包含主线 GUI A～E 与 Windows 正常退出修复，下一包 `1.0.0-test.11`（package.json 已更新）；不在本机打包。
+- [ ] Windows + AI 执行真实随包 Node、六项探针、bash/命令树清理及 GUI；并行签收 [主线 GUI 清单](../gui-sdk-experience/现场验收清单.md)，两种产品 carrier 分别留证。
 - [ ] 企业加密机签收明文读写、Main diff/编码/二进制判定、GUI/TUI 一致性与退出无残留；逐项回填 P1/P4，不能代签。
 
 历史代码提交：`27ff2020` + `2ae6f209`（2026-09-08，实现与证据归档；不代表完整验收）。

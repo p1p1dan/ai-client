@@ -2,7 +2,9 @@
 
 状态：In Progress；模式：execute-ready。需求依据：2026-09-09 用户十项反馈与 sharePic/20260909 截图。
 
-在当前开发主线 feat/model-catalog-admin（起点 2980ae98）实施，不等待 runtime-evolution。仅 UI/宿主共享层，不迁移 runtime，不改用户旧目录。沿用 [设计规范](../../../design-system.md)、[baseline](../../baseline/README.md)、[既有 UI 计划](../pix-ui-alignment/README.md)、[设置计划](../settings-cleanup/README.md) 和 [现场反馈计划](../field-followups/README.md)。旧计划验收缺口不由本轮自动关闭。
+在当前开发主线 feat/model-catalog-admin（起点 2980ae98）实施，不等待 runtime-evolution。仅 UI/宿主共享层，不迁移 runtime，不改用户旧目录。沿用 [设计规范](../../../design-system.md)、[baseline](../../baseline/README.md)；旧 UI/设置/现场反馈计划保留在来源工作分支，本 worktree 未复制。旧计划验收缺口不由本轮自动关闭。
+
+2026-09-09：A～E 五个提交已适配引入 `feat/runtime-evolution`，共享 P4-6 的 CI 安装包与现场窗口；来源提交和当前提交映射见 [P4-6 记录](../runtime-evolution/evidence/p4-6/README.md)。
 
 [TODO / 任务状态与验收](TODO.md) 是本计划 roadmap；[当前交接](implementation-status.md)。每批独立中文 Conventional Commit，重测试小批串行，禁止整套生产构建。只暂存本轮明确文件，不碰截图及其他人的改动。
 

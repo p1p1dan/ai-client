@@ -102,6 +102,7 @@ if (backend === 'native') {
   createNativeRuntime = (options) => new NativeWorkerRuntime({ ...options, host });
 }
 
+let disposed = false;
 const server = new PiWorkerRpcServer({
   port: parentPort,
   generation,
@@ -114,7 +115,17 @@ const server = new PiWorkerRpcServer({
     : {}),
   ...(createNativeRuntime ? { createRuntime: createNativeRuntime } : {}),
   log: (...args) => console.error('[pi-worker]', ...args),
-  onDisposed: () => setImmediate(() => process.exit(0)),
+  onDisposed: () => {
+    disposed = true;
+    if (electronPort) {
+      setImmediate(() => process.exit(0));
+    } else {
+      // Let Node drain HTTP/IPC handles instead of forcing libuv teardown on
+      // Windows. disconnect flushes queued messages, including the dispose ack.
+      process.exitCode = 0;
+      if (process.connected) process.disconnect();
+    }
+  },
 });
 
 deliver = (message) => server.receive(message);
@@ -133,6 +144,7 @@ process.on('unhandledRejection', (reason) => {
 
 if (!electronPort) {
   process.once('disconnect', () => {
+    if (disposed) return;
     // A crashed Main must not leave a Node worker or an active tool behind.
     setTimeout(() => process.exit(1), 5000).unref();
     server.receive({

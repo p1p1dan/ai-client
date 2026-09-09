@@ -1,6 +1,6 @@
 # Runtime 测试版迁移说明
 
-本说明对应 `feat/runtime-evolution` 的 `1.0.0-test.10` 测试候选。
+本说明对应 `feat/runtime-evolution` 的 `1.0.0-test.11` 测试候选。
 当前状态以 [Runtime 看板](plantree/plans/runtime-evolution/README.md)为准；P4-6 尚未完成现场验收。
 
 - 默认仍使用既有 Pi SDK 后端 `legacy`。这里的 legacy 指旧 Pi 集成，不是 Claude/Codex CLI。

@@ -93,6 +93,32 @@ async function bootstrapOnce(backend: string | undefined): Promise<WorkerRpcResp
 
 describe('worker backend switch (D8)', () => {
   it(
+    'flushes the dispose acknowledgement and exits naturally over Node IPC',
+    async () => {
+      await bootstrapOnce('native');
+      const proc = child!;
+      const messages: WorkerRpcResponse[] = [];
+      proc.on('message', (message) => messages.push(message as WorkerRpcResponse));
+      const exited = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
+        proc.once('exit', (code, signal) => resolve({ code, signal }));
+      });
+      proc.send({
+        protocolVersion: WORKER_RPC_PROTOCOL_VERSION,
+        kind: 'request',
+        generation: 1,
+        requestId: 'dispose-test',
+        type: 'worker.dispose',
+        payload: { reason: 'app-shutdown' },
+      });
+      expect(await exited).toEqual({ code: 0, signal: null });
+      expect(messages).toContainEqual(
+        expect.objectContaining({ requestId: 'dispose-test', ok: true, result: { disposed: true } })
+      );
+    },
+    TIMEOUT_MS
+  );
+
+  it(
     'native routes bootstrap to the self-owned runtime',
     async () => {
       const response = await bootstrapOnce('native');
