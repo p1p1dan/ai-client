@@ -1,6 +1,5 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { normalizePath } from '@/App/storage';
 import { useSettingsStore } from '@/stores/settings';
 import { gitQueryKeys } from './gitQueryKeys';
 import { useShouldPoll } from './useWindowFocus';
@@ -111,34 +110,6 @@ export function useGitCreateBranch() {
     onSuccess: (_, { workdir }) => {
       // GitService.createBranch uses checkoutBranch, so HEAD changes here too.
       return invalidateBranchQueries(queryClient, workdir);
-    },
-  });
-}
-
-export function useGitDiff(workdir: string | null, staged = false) {
-  return useQuery({
-    queryKey: gitQueryKeys.diff(workdir, staged),
-    queryFn: async () => {
-      if (!workdir) return '';
-      return window.electronAPI.git.getDiff(workdir, { staged });
-    },
-    enabled: !!workdir,
-  });
-}
-
-export function useGitInit() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (workdir: string) => {
-      await window.electronAPI.git.init(workdir);
-    },
-    onSuccess: (_, workdir) => {
-      // Invalidate all git-related queries for this workdir
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.status(workdir) });
-      queryClient.invalidateQueries({ queryKey: gitQueryKeys.branches(workdir) });
-      // Not a git key — worktree has its own namespace, out of gitQueryKeys' scope.
-      queryClient.invalidateQueries({ queryKey: ['worktree', 'list', normalizePath(workdir)] });
     },
   });
 }

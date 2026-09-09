@@ -172,11 +172,6 @@ describe('gitQueryKeys', () => {
       ]);
     });
 
-    it('diff() appends staged only when provided', () => {
-      expect(gitQueryKeys.diff('/repo')).toEqual(['git', 'diff', '/repo']);
-      expect(gitQueryKeys.diff('/repo', true)).toEqual(['git', 'diff', '/repo', true]);
-    });
-
     it('logInfinite() is workdir-scoped and appends submodulePath only when provided', () => {
       expect(gitQueryKeys.logInfinite('/repo')).toEqual(['git', 'log-infinite', '/repo']);
       expect(gitQueryKeys.logInfinite('/repo', 'libs/sub')).toEqual([

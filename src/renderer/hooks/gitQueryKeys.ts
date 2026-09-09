@@ -145,14 +145,6 @@ export const gitQueryKeys = {
     return ['git', 'file-diff', w, path, staged];
   },
 
-  /** `diff(workdir)` is a valid invalidate prefix for both `staged` values. */
-  diff: (workdir?: string | null, staged?: boolean): readonly unknown[] => {
-    const w = scopedWorkdir(workdir);
-    if (w === undefined) return ['git', 'diff'];
-    if (staged === undefined) return ['git', 'diff', w];
-    return ['git', 'diff', w, staged];
-  },
-
   /** `submoduleChanges(workdir)` omits `submodulePath` -> a valid invalidate prefix for every submodule. */
   submoduleChanges: (
     workdir?: string | null,
