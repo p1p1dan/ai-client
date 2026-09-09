@@ -456,26 +456,6 @@ export class GitService {
     return result.commit;
   }
 
-  async push(remote = 'origin', branch?: string, setUpstream = false): Promise<void> {
-    const doPush = async () => {
-      if (setUpstream && branch) {
-        await this.git.push(['-u', remote, branch]);
-      } else {
-        await this.git.push(remote, branch);
-      }
-    };
-    await this.smartPush(doPush, () => this.smartPull(this.git));
-  }
-
-  async pull(remote = 'origin', branch?: string): Promise<void> {
-    // 如果指定了 remote/branch，使用原始方式
-    if (branch) {
-      await this.git.pull(remote, branch);
-    } else {
-      await this.smartPull(this.git);
-    }
-  }
-
   async fetch(remote = 'origin'): Promise<void> {
     await this.git.fetch(remote);
   }
@@ -490,13 +470,6 @@ export class GitService {
 
   async createBranch(name: string, startPoint?: string): Promise<void> {
     await this.git.checkoutBranch(name, startPoint || 'HEAD');
-  }
-
-  async getDiff(options?: { staged?: boolean }): Promise<string> {
-    if (options?.staged) {
-      return this.git.diff(['--staged']);
-    }
-    return this.git.diff();
   }
 
   async init(): Promise<void> {

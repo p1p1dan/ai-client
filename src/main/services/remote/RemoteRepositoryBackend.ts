@@ -299,14 +299,6 @@ export class RemoteRepositoryBackend {
     });
   }
 
-  async getDiff(workdir: string, staged?: boolean): Promise<string> {
-    const { connectionId, remotePath } = toRemotePath(workdir);
-    return remoteConnectionManager.call<string>(connectionId, 'git:diff', {
-      rootPath: remotePath,
-      staged: staged ?? false,
-    });
-  }
-
   async getFileChanges(workdir: string): Promise<FileChangesResult> {
     const { connectionId, remotePath } = toRemotePath(workdir);
     return remoteConnectionManager.call<FileChangesResult>(connectionId, 'git:fileChanges', {
@@ -352,30 +344,6 @@ export class RemoteRepositoryBackend {
     return remoteConnectionManager.call<string>(connectionId, 'git:commit', {
       rootPath: remotePath,
       message,
-    });
-  }
-
-  async push(
-    workdir: string,
-    remote?: string,
-    branch?: string,
-    setUpstream?: boolean
-  ): Promise<void> {
-    const { connectionId, remotePath } = toRemotePath(workdir);
-    await remoteConnectionManager.call(connectionId, 'git:push', {
-      rootPath: remotePath,
-      remote,
-      branch,
-      setUpstream,
-    });
-  }
-
-  async pull(workdir: string, remote?: string, branch?: string): Promise<void> {
-    const { connectionId, remotePath } = toRemotePath(workdir);
-    await remoteConnectionManager.call(connectionId, 'git:pull', {
-      rootPath: remotePath,
-      remote,
-      branch,
     });
   }
 

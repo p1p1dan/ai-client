@@ -133,20 +133,8 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.GIT_BRANCH_CHECKOUT, workdir, branch),
     commit: (workdir: string, message: string, files?: string[]): Promise<string> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_COMMIT, workdir, message, files),
-    push: (
-      workdir: string,
-      remote?: string,
-      branch?: string,
-      setUpstream?: boolean
-    ): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.GIT_PUSH, workdir, remote, branch, setUpstream),
-    pull: (workdir: string, remote?: string, branch?: string): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.GIT_PULL, workdir, remote, branch),
     fetch: (workdir: string, remote?: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_FETCH, workdir, remote),
-    getDiff: (workdir: string, options?: { staged?: boolean }): Promise<string> =>
-      ipcRenderer.invoke(IPC_CHANNELS.GIT_DIFF, workdir, options),
-    init: (workdir: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.GIT_INIT, workdir),
     getFileChanges: (workdir: string): Promise<FileChangesResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_FILE_CHANGES, workdir),
     getFileDiff: (workdir: string, filePath: string, staged: boolean): Promise<FileDiff> =>

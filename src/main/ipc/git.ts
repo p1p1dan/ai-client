@@ -211,36 +211,6 @@ export function registerGitHandlers(): void {
     }
   );
 
-  ipcMain.handle(
-    IPC_CHANNELS.GIT_PUSH,
-    async (_, workdir: string, remote?: string, branch?: string, setUpstream?: boolean) => {
-      if (isRemoteWorkdir(workdir)) {
-        await remoteRepositoryBackend.push(workdir, remote, branch, setUpstream);
-        return;
-      }
-      const git = getGitRepoService(workdir);
-      if (!git) {
-        return;
-      }
-      await git.push(remote, branch, setUpstream);
-    }
-  );
-
-  ipcMain.handle(
-    IPC_CHANNELS.GIT_PULL,
-    async (_, workdir: string, remote?: string, branch?: string) => {
-      if (isRemoteWorkdir(workdir)) {
-        await remoteRepositoryBackend.pull(workdir, remote, branch);
-        return;
-      }
-      const git = getGitRepoService(workdir);
-      if (!git) {
-        return;
-      }
-      await git.pull(remote, branch);
-    }
-  );
-
   ipcMain.handle(IPC_CHANNELS.GIT_FETCH, async (_, workdir: string, remote?: string) => {
     if (isRemoteWorkdir(workdir)) {
       await remoteRepositoryBackend.fetch(workdir, remote);
@@ -251,40 +221,6 @@ export function registerGitHandlers(): void {
       return;
     }
     await git.fetch(remote);
-  });
-
-  ipcMain.handle(
-    IPC_CHANNELS.GIT_DIFF,
-    async (_, workdir: string, options?: { staged?: boolean }) => {
-      if (isRemoteWorkdir(workdir)) {
-        return remoteRepositoryBackend.getDiff(workdir, options?.staged);
-      }
-      const git = getGitRepoService(workdir);
-      if (!git) {
-        return '';
-      }
-      return git.getDiff(options);
-    }
-  );
-
-  ipcMain.handle(IPC_CHANNELS.GIT_INIT, async (_, workdir: string) => {
-    if (isRemoteWorkdir(workdir)) {
-      assertRemoteUnsupported('gitInit');
-    }
-    const resolved = path.resolve(workdir);
-
-    // For git init, only validate path exists and is a directory (no .git check)
-    if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
-      throw new Error('Invalid workdir: path does not exist or is not a directory');
-    }
-
-    // Create GitService and init
-    const git = new GitService(resolved);
-    await git.init();
-
-    // Register as authorized and cache the service
-    authorizedWorkdirs.add(resolved);
-    gitServices.set(resolved, git);
   });
 
   ipcMain.handle(IPC_CHANNELS.GIT_FILE_CHANGES, async (_, workdir: string) => {
