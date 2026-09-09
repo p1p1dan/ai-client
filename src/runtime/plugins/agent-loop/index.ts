@@ -32,6 +32,7 @@ import type { ComposedPrompt } from '../prompt/segments.ts';
 import { PERMISSIONS_ENTRY } from '../session/legacy.ts';
 import { interruptedToolResults } from '../session/recovery.ts';
 import { preparePrompt } from './attachments.ts';
+import { createProviderRetryBudget, createProviderRetryStream } from './providerRetry.ts';
 
 export interface AgentLoopConfig {
   /**
@@ -170,8 +171,27 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       this.ctx.runtimeEvents.emit(permissionActivityEvent(sessionId, record));
     });
     let turnCount = 0;
+    // One budget per run: a 429 burst and a later gateway fault each get their
+    // own bounded allowance, and neither may borrow from the other.
+    const retryBudget = createProviderRetryBudget({
+      onRetry: ({ error, attempt, delayMs }) =>
+        trace.note('note', {
+          event: 'provider_retry',
+          code: error.code,
+          attempt,
+          delay_ms: delayMs,
+          ...(error.details ?? {}),
+        }),
+    });
     const agent = new Agent({
-      streamFn: (model, context, options) => resolved.models.streamSimple(model, context, options),
+      streamFn: (model, context, options) =>
+        createProviderRetryStream(
+          model,
+          context,
+          retryBudget.requestOptions(options),
+          (retryOptions) => resolved.models.streamSimple(model, context, retryOptions),
+          retryBudget.controller
+        ),
       // Per request rather than captured, so a key rewritten on disk between
       // turns of a long run is picked up. Empty string means "no key" and must
       // become undefined - pi-ai treats an empty key as a configured one.

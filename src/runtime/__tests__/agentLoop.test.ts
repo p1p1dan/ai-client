@@ -86,6 +86,36 @@ describe('agent loop', () => {
     });
   });
 
+  it('retries a provider failure that arrives before the stream starts', async () => {
+    // F4: pi-ai reports a setup failure as an error EVENT, so without the
+    // retry layer in `streamFn` a gateway 503 ended the run on the first try.
+    // The first scripted step throws before any `start` event, exactly as a
+    // failed request does; the retry must reach the second one.
+    await withRuntime(fauxAssistantMessage('recovered'), async (runtime, faux) => {
+      faux.setResponses([
+        () => {
+          throw new Error('503: service unavailable');
+        },
+        fauxAssistantMessage('recovered'),
+      ]);
+      const result = await runtime.run({ prompt: 'say ready', systemPrompt: 'probe' });
+      expect(result.success).toBe(true);
+      expect(result.text).toBe('recovered');
+      const retryNote = runtime.trace.runs
+        .at(-1)
+        ?.steps.find(
+          (step) =>
+            step.type === 'note' &&
+            (step.detail as { event?: string } | undefined)?.event === 'provider_retry'
+        );
+      expect(retryNote?.detail).toMatchObject({
+        code: 'PROVIDER_ERROR',
+        attempt: 1,
+        delay_ms: 1_000,
+      });
+    });
+  });
+
   it('treats a pre-aborted signal as an aborted run', async () => {
     await withRuntime(fauxAssistantMessage('ready'), async (runtime) => {
       const result = await runtime.run({
