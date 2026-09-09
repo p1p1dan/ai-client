@@ -54,6 +54,7 @@ import {
 } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useExtensionUiStore } from '@/stores/extensionUi';
+import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
 import {
   canCreateSessionOnWorkspace,
@@ -61,6 +62,7 @@ import {
 } from './addRepositoryEntry';
 import { projectIdForRepo, workspaceIdFor } from './deriveChatWorkspaceTree';
 import { endSessionRuntime } from './endSessionRuntime';
+import { sumFolderDiffTotals } from './folderDiffStats';
 import {
   buildSidebarFolders,
   buildUnboundFolder,
@@ -74,6 +76,7 @@ import {
   UNBOUND_FOLDER_ID,
 } from './sidebarTree';
 import { useActivateSession } from './useActivateSession';
+import { useFolderDiffStatsPolling } from './useFolderDiffStats';
 
 /**
  * D08 (U15-a): this is the `chat` SURFACE's body now, not a column.
@@ -277,6 +280,11 @@ export function LeftNav({
   // `folders` — it has no workspace to create a chat in, so letting the "New"
   // target resolver see it would only produce a disabled button pointing at a
   // folder that cannot host anything. `null` when there are no such chats.
+  // Uncommitted-change totals for the folder rows. Polls only the directories
+  // that have a session running (see `useFolderDiffStats.ts`), so an idle
+  // sidebar costs nothing.
+  useFolderDiffStatsPolling(folders, workspaces);
+  const diffStatsByPath = useWorktreeActivityStore((state) => state.diffStats);
   const unboundFolder = buildUnboundFolder({ sessions, name: t('Temporary chats'), query });
   const recent = deriveRecentRows({ sessions, workspaces, now, showAll: recentShowAll, query });
   const queryActive = query.trim().length > 0;
@@ -614,6 +622,7 @@ export function LeftNav({
                 const expanded = isProjectExpanded(folder.projectId);
                 const newSessionWorkspaceId = folder.newSessionWorkspaceId;
                 const folderRepo = repoByProjectId.get(folder.projectId);
+                const diffTotals = sumFolderDiffTotals(folder, workspaces, diffStatsByPath);
                 return (
                   <section key={folder.projectId}>
                     {/* Toggle and "+ new chat" are sibling buttons in a flex
@@ -671,57 +680,83 @@ export function LeftNav({
                         )}
                         <span className="min-w-0 flex-1 truncate font-semibold">{folder.name}</span>
                       </button>
-                      {folderRepo && (
-                        <Menu>
-                          <MenuTrigger
-                            render={
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                className="h-5 w-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 data-popup-open:opacity-100"
-                                aria-label={t('Repository actions')}
-                                title={t('Repository actions')}
-                              />
-                            }
+                      {/* Trailing slot. The totals and the row's two hover
+                          buttons share ONE grid cell, so the cell is as wide as
+                          whichever is wider and the row cannot reflow when the
+                          numbers give way on hover — the same reason the session
+                          row below boxes its age and actions together. */}
+                      <span className="grid shrink-0 justify-items-end">
+                        {diffTotals && (
+                          <span
+                            className="col-start-1 row-start-1 flex items-center gap-1 text-meta tabular-nums group-hover:invisible group-focus-within:invisible"
+                            title={t('Folder diff totals', {
+                              insertions: diffTotals.insertions,
+                              deletions: diffTotals.deletions,
+                            })}
                           >
-                            <MoreHorizontal className="h-3 w-3" />
-                          </MenuTrigger>
-                          <MenuPopup align="end">
-                            <MenuItem onClick={() => setRepoToConfigure(folderRepo)}>
-                              <Settings />
-                              {t('Repository Settings')}
-                            </MenuItem>
-                            {onRemoveRepository && (
-                              <MenuItem
-                                variant="destructive"
-                                onClick={() => setRepoToRemove(folderRepo)}
-                              >
-                                <FolderMinus />
-                                {t('Remove repository')}
-                              </MenuItem>
+                            {diffTotals.insertions > 0 && (
+                              <span className="text-success">+{diffTotals.insertions}</span>
                             )}
-                          </MenuPopup>
-                        </Menu>
-                      )}
-                      {newSessionWorkspaceId && (
-                        // The header New button targets the active session's
-                        // workspace only, so a repo that already has sessions
-                        // needs its own entry point (T-26 review should-fix).
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-                          aria-label={t('New chat')}
-                          title={t('New chat in existing directory: {{path}}', {
-                            path:
-                              workspaces.find((workspace) => workspace.id === newSessionWorkspaceId)
-                                ?.path ?? '',
-                          })}
-                          onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                      )}
+                            {diffTotals.deletions > 0 && (
+                              <span className="text-destructive">-{diffTotals.deletions}</span>
+                            )}
+                          </span>
+                        )}
+                        <span className="col-start-1 row-start-1 flex items-center">
+                          {folderRepo && (
+                            <Menu>
+                              <MenuTrigger
+                                render={
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    className="h-5 w-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 data-popup-open:opacity-100"
+                                    aria-label={t('Repository actions')}
+                                    title={t('Repository actions')}
+                                  />
+                                }
+                              >
+                                <MoreHorizontal className="h-3 w-3" />
+                              </MenuTrigger>
+                              <MenuPopup align="end">
+                                <MenuItem onClick={() => setRepoToConfigure(folderRepo)}>
+                                  <Settings />
+                                  {t('Repository Settings')}
+                                </MenuItem>
+                                {onRemoveRepository && (
+                                  <MenuItem
+                                    variant="destructive"
+                                    onClick={() => setRepoToRemove(folderRepo)}
+                                  >
+                                    <FolderMinus />
+                                    {t('Remove repository')}
+                                  </MenuItem>
+                                )}
+                              </MenuPopup>
+                            </Menu>
+                          )}
+                          {newSessionWorkspaceId && (
+                            // The header New button targets the active session's
+                            // workspace only, so a repo that already has sessions
+                            // needs its own entry point (T-26 review should-fix).
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                              aria-label={t('New chat')}
+                              title={t('New chat in existing directory: {{path}}', {
+                                path:
+                                  workspaces.find(
+                                    (workspace) => workspace.id === newSessionWorkspaceId
+                                  )?.path ?? '',
+                              })}
+                              onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </span>
+                      </span>
                     </div>
 
                     {expanded && (

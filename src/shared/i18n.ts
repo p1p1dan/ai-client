@@ -396,6 +396,7 @@ export const zhTranslations: Record<string, string> = {
   'Font size': '字号',
   'Font weight': '字重',
   'Force delete (ignore uncommitted changes)': '强制删除（忽略未提交的修改）',
+  'Folder diff totals': '该目录未提交：+{{insertions}} 行 / -{{deletions}} 行',
   General: '通用',
   Git: 'Git',
   'Git not initialized': '不是 Git 仓库',
