@@ -7,10 +7,24 @@
 **最近落地**：测试包源码 `b6aa0844`；包含 native shell/bundle/打包门禁、Windows 正常退出修复及主线 GUI A～E，来源映射见 [P4-6 记录](evidence/p4-6/README.md)。
 **最新验证**：[CI 34308304362](https://github.com/p1p1dan/ai-client/actions/runs/34308304362) 三道 typecheck/lint、350 文件/4987 项测试及 runtime 冒烟全通过；Windows/Linux 打包与 legacy/native 工具/退出验证通过。`.11` Windows installer/unpacked 已上传，[原始报告与下载](evidence/p4-6/ci-34308304362/README.md)。macOS 同轮仍运行，不宣称整次 CI 已完成。
 **2026-09-09 Windows 现场进展**：`1.0.0-test.11` 上已执行 GUI A~E 与命令树清理五态并留证。五态清理全部无残留，P1 该项结清；GUI 大项通过但交回 7 组缺陷（F1~F7）与一项 v3 会话 resume 身份不匹配，逐条状态见 [执行 TODO](TODO.md#windows-交回缺陷2026-09-09linux-侧)。F2 已由 `dbead94b` 修复待复验。
-**下一目标**：修完/定性交回缺陷，并补齐尚未执行的六项工具探针、两种 carrier 留证与企业加密机签收。两条 CI worker lane 不代签真实 Main/renderer 安装流程。P2-5/P2-6 真实缓存门槛仍为 95.01%，P5 尚未开工。
+**2026-09-09 Linux 侧本轮**：F1（网络设置面板渲染即抛 `FieldRootContext is missing`，非 Windows 特有）与旧会话 v3 resume 身份不匹配两项 🔴 已修并补测试；F3/F4/F5 三个决策点已定性，见 [GUI 缺陷决策](../../../plans/2026-09-09-gui-defect-decisions.md)。三处修复均待 Windows 现场复验。
+**下一目标**：见上「待办」栏。两条 CI worker lane 不代签真实 Main/renderer 安装流程。P2-5/P2-6 真实缓存门槛仍为 95.01%，P5 尚未开工。
 **2026-09-08 权限模型改向**：[ARD D14](../../../plans/2026-09-08-runtime-evolution-ard.md) 两轴分离：模式 `plan/agent` 管工具集，档位 `ask/accept-edits/auto` 管审批，accept-edits 放行工作区 bash。P1-1 裁剪与 P1-5 核心已更新；P1-6 renderer/偏好迁移/两轴传递链已更新，打包 GUI 待签收。
 **2026-09-08 现场修订**：加密测试机实测 GUI/TUI 载体差异，[ARD D11](../../../plans/2026-09-08-runtime-evolution-ard.md) 把执行载体定为一等约束（[问题分析报告](../../../../Windows加密环境GUI异常分析.md)）。
 影响本看板四处：P1-0（新增，P1 的第一件事）· P3-5（补 Main 侧读一致性）· P4-0/P4-3/P4-6（载体）· P6-3（现场清单）。
+
+## 待办：当前步 + 下三步
+
+只列眼下这一段的工作队列；完整节点树见下面的总览。每次更新看板时同步刷新本栏。
+
+| # | 任务 | 状态 | 卡在哪 |
+|---|---|---|---|
+| **当前** | P4-6 修完/定性 Windows 交回缺陷 | 🟡 | F1 与旧会话 resume 已修（本轮，待现场复验）；F3/F4/F5 已定性（[决策文档](../../../plans/2026-09-09-gui-defect-decisions.md)）；F6/F7 待排期 |
+| 下一步 1 | 补 native 的 provider 重试层（F4） | ⬜ | 搬 PI-Desktop `createProviderRetryStream`，429/503/529 + 连接错误按类型做单测；本就是 P4-4 前置，F7d 疑似同根因 |
+| 下一步 2 | Windows 现场：复验 + 探针一次跑完 | ⬜ | 复验 F1/F2/resume 三项修复；跑 P1-8 六项工具探针与两种 carrier 留证；跑 [D1 的 R0–R4 探针](../../../plans/2026-09-09-bash-carrier-decision.md)，F3 随 R2/R3 一起拍板 |
+| 下一步 3 | 企业加密机签收 | ⬜ | 明文读写、Main diff/编码/二进制判定、GUI/TUI 一致性、退出无残留；逐项回填 P1/P4，不能代签 |
+
+---
 
 状态图例：`⬜ 未开始` · `🟡 进行中` · `✅ 已完成` · `⏸ 挂起` · `❌ 已放弃`
 
