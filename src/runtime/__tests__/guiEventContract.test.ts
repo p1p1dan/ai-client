@@ -174,6 +174,9 @@ beforeEach(async () => {
   await writeFile(join(workspace, 'notes.txt'), 'the answer is 42\n');
   faux = fauxProvider({
     provider: 'faux',
+    // The golden stream compares event boundaries too. Faux defaults to random
+    // token sizes, so even a final punctuation mark can become an extra delta.
+    tokenSize: { min: 128, max: 128 },
     models: [{ id: 'faux-e2e', name: 'Faux GUI', contextWindow: 128_000, maxTokens: 4_096 }],
   });
   requestSequence = 0;

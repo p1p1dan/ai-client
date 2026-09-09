@@ -20,6 +20,10 @@
 5. 新发现并复现 native bundle 启动即报 `Dynamic require of "process" is not supported`：旧产物启动退出码 1；构建入口补 ESM `createRequire` banner，最小 CommonJS bundle 执行回归通过。未在本机重建应用/worker，实际产物由 CI 验证。
 6. 测试版递增到 `1.0.0-test.10`，只推任务分支、手动 CI，不推 tag、不本地打包。
 
+CI 补修：`76424efa` 的 [34305837633](https://github.com/p1p1dan/ai-client/actions/runs/34305837633) 三道类型检查/lint 通过，4933 项通过、1 项失败。`guiEventContract` 的 fauxProvider 默认随机分块，句末标点偶尔单独成为 delta；现固定录制用例 tokenSize，保留原 fixture 和完整事件断言。该次同样未进入打包。
+
+本机源码 Node IPC 冒烟通过：以 `/usr/bin/node` 执行当前 `worker.ts`，HTTP SSE 替身驱动真实 Read/bash，工具结果回传、native trace、权限审计与退出码 0 均确认。`AICLIENT_WORKER_SMOKE_NODE_PATH` 是开发诊断覆盖，此结果不算真实 Windows bundled-node 或打包 GUI 验收。
+
 本机验证：首批 4 文件 54 项通过；补 bundle 回归后第二批 3 文件 50 项通过（含重复测试文件，不累加为独立总数）；runtime typecheck、变更文件 Biome 通过。完整门禁和产物测试待本次 CI。
 
 参考复核：pi-app `/tmp/aiclient-p1-reference-pi-app` 的 WorkerManager 与 session-isolation 测试、pix `/home/pi/code/pix` 的 pi-tui-session 与测试已读，本轮不采用额外 manager/PTY 实现。shell 搜索适配本仓 GitInstaller 和已安装 Pi SDK 的 shell 解析顺序，不引入 pi-coding-agent 新依赖，不采用 WSL/sh 隐式回落。
