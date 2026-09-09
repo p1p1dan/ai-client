@@ -1,0 +1,205 @@
+{
+  "recordedAt": "2026-09-09T01:10:46.548027+00:00",
+  "sourceRoot": "/home/pi/code/PI-Desktop",
+  "sourceCommit": "948ee676bdb7b31d496f6603aa03dd12eb95be35",
+  "sourceUrl": "https://github.com/vastsa/PI-Desktop/tree/948ee676bdb7b31d496f6603aa03dd12eb95be35",
+  "scope": "inspected source entrypoints, ADRs and test files; full upstream suites not executed",
+  "files": {
+    "LICENSE": {
+      "sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/LICENSE"
+    },
+    "README.md": {
+      "sha256": "1de6b11084dec4be7de692f3b4b1ea7d5c1a2b754c359b93d631555654bb5715",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/README.md"
+    },
+    "apps/desktop/electron/main/index.ts": {
+      "sha256": "06dd79a954e8cfa8d7b31e94d15fde4a6b60779626d6a623a4a12040e9095edc",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/apps/desktop/electron/main/index.ts"
+    },
+    "apps/desktop/src/components/ChatTranscript.tsx": {
+      "sha256": "be517a785ce26475693f51eeb260264b6b24429df8039233a5fa062c01f90d31",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/apps/desktop/src/components/ChatTranscript.tsx"
+    },
+    "apps/desktop/src/components/settings/AgentSubagentsPage.tsx": {
+      "sha256": "09b6983fbe5894c164368b06e43406fd4ef1a502eeeca7f6d957b257096393eb",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/apps/desktop/src/components/settings/AgentSubagentsPage.tsx"
+    },
+    "apps/desktop/src/components/settings/SubagentEditorSheet.tsx": {
+      "sha256": "4c8784aa8f3fb77875320d4e229ef81767be85ef885a7ef81a8aee03db1217ed",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/apps/desktop/src/components/settings/SubagentEditorSheet.tsx"
+    },
+    "apps/desktop/src/hooks/use-follow-scroll.ts": {
+      "sha256": "3bcdf6ed7fe90c41728be3b1d12613ffe8ca457d8c982f86e4852b1258d38781",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/apps/desktop/src/hooks/use-follow-scroll.ts"
+    },
+    "apps/desktop/src/lib/subagent-topology.ts": {
+      "sha256": "fa9bb911d5301fea5b9a9d363d53113abfd3514100f061dab25a1d815a5b26a9",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/apps/desktop/src/lib/subagent-topology.ts"
+    },
+    "apps/desktop/src/stores/app-store.ts": {
+      "sha256": "b6ac952d61f65810abcc0947b377b295de5d65754ef094fa1df7dde1caaa988e",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/apps/desktop/src/stores/app-store.ts"
+    },
+    "apps/desktop/test/subagent-topology.test.mjs": {
+      "sha256": "4d433a1a25d8a82e8f8a63b6cd05b554f64eb927f7b039b0dc0e3ccdc9741bed",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/apps/desktop/test/subagent-topology.test.mjs"
+    },
+    "apps/desktop/test/subagent-transcript.test.mjs": {
+      "sha256": "95ab9aaf12e7d6370ff3a9b7340e533a124382f85fbfaea9e91cd3ca15515cb7",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/apps/desktop/test/subagent-transcript.test.mjs"
+    },
+    "apps/desktop/test/subagent-wiring.test.mjs": {
+      "sha256": "7c9376370b76a91e315d5316cf352c1c926364ebb14b5a3129f68a48503d3f69",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/apps/desktop/test/subagent-wiring.test.mjs"
+    },
+    "crates/host-core/src/agent_capabilities.rs": {
+      "sha256": "3fcd5a98cf5187125c623a9255512f4d6f4502f5f596852ac76015c0993c8a6a",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/crates/host-core/src/agent_capabilities.rs"
+    },
+    "crates/host-core/src/rpc/mod.rs": {
+      "sha256": "1087f3bdd1c11de56a1e3d9d826b22f2dd7b49380c27316a8427fa49c005479a",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/crates/host-core/src/rpc/mod.rs"
+    },
+    "crates/host-core/src/sessions.rs": {
+      "sha256": "6fdc188a006a2e170666176e625263d9f843337fee82d45f7929203cb959d7de",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/crates/host-core/src/sessions.rs"
+    },
+    "crates/host-core/src/transcripts.rs": {
+      "sha256": "b941b6b30668434c0ea1b69a7e89481eabffbe813bf2b304f4f937b25e6fe7c9",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/crates/host-core/src/transcripts.rs"
+    },
+    "crates/host-core/src/user_subagents.rs": {
+      "sha256": "8903e2d34b20e7b37e4e81a2db82f82caa905ee0165b94d56ef644850abfea49",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/crates/host-core/src/user_subagents.rs"
+    },
+    "docs/adr/0062-bounded-subagents-behind-a-task-tool.md": {
+      "sha256": "0481532f8888b13a3622d7940f6a40a062a7f8001d6f7eb6fd995a8052ce96b0",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0062-bounded-subagents-behind-a-task-tool.md"
+    },
+    "docs/adr/0063-subagent-management-ui.md": {
+      "sha256": "f6510f068544e5e2d60312d18de9a0938ef765269f2273ad75514c190e836a45",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0063-subagent-management-ui.md"
+    },
+    "docs/adr/0089-proactive-background-subagent-delegation.md": {
+      "sha256": "b27a8504c07ac13cee444984ee2170ed0b20f9708cf4ab946a8960779edcc620",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0089-proactive-background-subagent-delegation.md"
+    },
+    "docs/adr/0091-rate-limit-same-turn-retry.md": {
+      "sha256": "35555e2dbcc6f91296b61f96de07c9ae9c1bd62e4f46c91e09df082c7e4e69fb",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0091-rate-limit-same-turn-retry.md"
+    },
+    "docs/adr/0100-builtin-subagents-inherit-parent-permission-mode.md": {
+      "sha256": "6788461e2019b9c114c7eec7cc0de1344c1eca117473d623f8d44818773bd8bd",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0100-builtin-subagents-inherit-parent-permission-mode.md"
+    },
+    "docs/adr/0112-agent-capability-management-roots-and-settings-ia.md": {
+      "sha256": "f8782065575d80a9e04864c8f7dc790d94456bbe40f667de677d5ff0cf81583b",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0112-agent-capability-management-roots-and-settings-ia.md"
+    },
+    "docs/adr/0119-event-driven-subagent-timeouts.md": {
+      "sha256": "7996651d586f396072a7b29b99ac9e0afa4cb92d5706d6b041b818e06d93656d",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0119-event-driven-subagent-timeouts.md"
+    },
+    "docs/adr/0126-agent-capability-workbench.md": {
+      "sha256": "72dbce02157785c1e4db2ae653045683d0271690f1b72781dfbdd8ba6601bb10",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0126-agent-capability-workbench.md"
+    },
+    "docs/adr/0128-bounded-transient-provider-retry.md": {
+      "sha256": "693cd7cf6cc58fb1428027c75a92c98b4edd1f4a1762c764ae6edbcf19db7830",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0128-bounded-transient-provider-retry.md"
+    },
+    "docs/adr/0129-idle-watchdog-bounds-silence.md": {
+      "sha256": "bce768179bdce2fc5febcb9b00ef8e899f91893dfe75b998444f53ffbeb10a38",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0129-idle-watchdog-bounds-silence.md"
+    },
+    "docs/adr/0138-subagent-peer-messaging.md": {
+      "sha256": "3fe2fcebc37ca8003e61dedeb909bd40b52879befa2228c29db68716035a8a7f",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0138-subagent-peer-messaging.md"
+    },
+    "docs/adr/0140-peer-tool-consolidation.md": {
+      "sha256": "9f7362f5fcfe2911b216db8bf766e2e6cc01a4921f242e34d885496e9cd414df",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0140-peer-tool-consolidation.md"
+    },
+    "docs/adr/0147-a2a-protocol-stack.md": {
+      "sha256": "628d4c1aa643ba880ea37a70e163c041dd1975e01cf52b1e514321919582f821",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0147-a2a-protocol-stack.md"
+    },
+    "docs/adr/0153-inflight-reply-checkpoint.md": {
+      "sha256": "f0ba00921349754dca60a4ad142a4368c5388c9fc134e124149de654b89ac6f5",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0153-inflight-reply-checkpoint.md"
+    },
+    "docs/adr/0165-withdraw-a2a-peer-stack.md": {
+      "sha256": "1df67c2c8e60fac736daeeafb9317a4e146acc4ea0b6864db163360f34997604",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0165-withdraw-a2a-peer-stack.md"
+    },
+    "docs/adr/0166-parent-judged-subagent-lifetime.md": {
+      "sha256": "5839b65768694a87a840c354f4af0c4b3b7f00b24c648150d340684f6ba5e942",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0166-parent-judged-subagent-lifetime.md"
+    },
+    "docs/adr/0170-work-panel-browser-as-bundled-plugin.md": {
+      "sha256": "50bff393fb355569f542457b6107b8cb2d7990786bf73964d007f1e54b214f59",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0170-work-panel-browser-as-bundled-plugin.md"
+    },
+    "docs/adr/0171-host-owned-completed-turn-token-history.md": {
+      "sha256": "5e1d00656cf48991f2154cf48639a13edef9d15aa130cf0f2084f9df27be2df3",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0171-host-owned-completed-turn-token-history.md"
+    },
+    "docs/adr/0174-plugin-host-owned-completion-and-session-context.md": {
+      "sha256": "4e085c64996898ea9ded5ce9e2c32e0a9b8c2c47f1d0eee4db0eb23bf1e5b2e6",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/docs/adr/0174-plugin-host-owned-completion-and-session-context.md"
+    },
+    "packages/agent-runtime/package.json": {
+      "sha256": "0aca5f13451c48f189acbe3f46fe91b1f830c550103368c60f69078279dce7c4",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/packages/agent-runtime/package.json"
+    },
+    "packages/agent-runtime/src/path-lock.test.ts": {
+      "sha256": "1cd915fe682fff9abaee827655fe5f94afc5e122ba33b742e3897a152959bcc8",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/packages/agent-runtime/src/path-lock.test.ts"
+    },
+    "packages/agent-runtime/src/path-lock.ts": {
+      "sha256": "bad4bf156f0c77fe870620e79224190de6fb809e90b2043d37e5b0085ff855ca",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/packages/agent-runtime/src/path-lock.ts"
+    },
+    "packages/agent-runtime/src/provider-retry.ts": {
+      "sha256": "109f6000350b03a9e2b47ffd79f3f2e8ad843b84314de8e21f67f0dd780d27d9",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/packages/agent-runtime/src/provider-retry.ts"
+    },
+    "packages/agent-runtime/src/runtime.test.ts": {
+      "sha256": "6ebfdb457ff20b96aa27a332005ce70a0b0635a513a8f2ad9ba34598288ff80a",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/packages/agent-runtime/src/runtime.test.ts"
+    },
+    "packages/agent-runtime/src/runtime.ts": {
+      "sha256": "242fd2e79133364a3a274da2a05bc3ebd7cb44c8f1f128a7565510a8b7dfc93f",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/packages/agent-runtime/src/runtime.ts"
+    },
+    "packages/agent-runtime/src/subagent-definitions.test.ts": {
+      "sha256": "0639dbafb6d7ca8371135df29a6ef0d6ac610cd4d9c8bde84ea0a9ae2e305c87",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/packages/agent-runtime/src/subagent-definitions.test.ts"
+    },
+    "packages/agent-runtime/src/subagent-definitions.ts": {
+      "sha256": "79d13c1002625bc937af03f262d77ed8f3312f5933c32b54f1961d4423cde328",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/packages/agent-runtime/src/subagent-definitions.ts"
+    },
+    "packages/agent-runtime/src/subagent.test.ts": {
+      "sha256": "ff9667018d4792d4073e6e361039476f1229750e1c15c7d51cbe7671cf07280c",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/packages/agent-runtime/src/subagent.test.ts"
+    },
+    "packages/agent-runtime/src/subagent.ts": {
+      "sha256": "4e25a1bc1af80462760edacd553b7978b6456ae2a5cad051ceeb986a1816ea31",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/packages/agent-runtime/src/subagent.ts"
+    },
+    "packages/shared/src/subagent-definition.test.ts": {
+      "sha256": "0c9190e6cf27f9a8d9dbb530f585cb44d305aff4496cc9dd86fe6d0e1bc4ac61",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/packages/shared/src/subagent-definition.test.ts"
+    },
+    "packages/shared/src/subagent-definition.ts": {
+      "sha256": "37aa412254e9b57f4b2c4768041cc9f09c074f857033c90351b5d6634980dbfb",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/packages/shared/src/subagent-definition.ts"
+    },
+    "scripts/e2e-subagents.mjs": {
+      "sha256": "9bada7421faee6e59702574f733f5b91808d3438c99a5132775dcf0f600494ae",
+      "url": "https://github.com/vastsa/PI-Desktop/blob/948ee676bdb7b31d496f6603aa03dd12eb95be35/scripts/e2e-subagents.mjs"
+    }
+  }
+}

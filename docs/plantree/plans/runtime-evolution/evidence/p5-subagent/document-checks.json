@@ -1,0 +1,92 @@
+{
+  "checkedAt": "2026-09-09T01:33:23.476772+00:00",
+  "mode": "shape-plan",
+  "allowedWrites": "planning Markdown and research evidence only",
+  "documents": [
+    "docs/plans/2026-09-08-runtime-evolution-ard.md",
+    "docs/plans/2026-09-08-pi-desktop-study.md",
+    "docs/plantree/README.md",
+    "docs/plantree/plans/runtime-evolution/README.md",
+    "docs/plantree/plans/runtime-evolution/TODO.md",
+    "docs/plantree/plans/runtime-evolution/open-questions.md",
+    "docs/plantree/plans/runtime-evolution/history/d10-subagent-initial.md",
+    "docs/plantree/plans/runtime-evolution/topics/p5-2-subagent-research.md",
+    "docs/plantree/plans/runtime-evolution/topics/p5-2-subagent-contracts.md",
+    "docs/plantree/plans/runtime-evolution/topics/p5-2-subagent-tasks.md",
+    "docs/plantree/plans/runtime-evolution/evidence/p5-subagent/README.md"
+  ],
+  "newBrokenLocalLinks": [],
+  "preExistingBrokenLocalLinks": [
+    {
+      "file": "docs/plans/2026-09-08-pi-desktop-study.md",
+      "target": "../plantree/plans/usage-and-catalog/README.md"
+    },
+    {
+      "file": "docs/plans/2026-09-08-pi-desktop-study.md",
+      "target": "../plantree/plans/resource-home-and-import/README.md"
+    }
+  ],
+  "referenceHashDrift": [],
+  "taskBatches": [
+    "P5-2-0",
+    "P5-2-1",
+    "P5-2-2",
+    "P5-2-3",
+    "P5-2-4",
+    "P5-2-5",
+    "P5-2-6",
+    "P5-2-7"
+  ],
+  "acceptanceCases": [
+    "SA01",
+    "SA02",
+    "SA03",
+    "SA04",
+    "SA05",
+    "SA06",
+    "SA07",
+    "SA08",
+    "SA09",
+    "SA10",
+    "SA11",
+    "SA12",
+    "SA13",
+    "SA14",
+    "SA15",
+    "SA16",
+    "SA17",
+    "SA18",
+    "SA19",
+    "SA20",
+    "SA21",
+    "SA22"
+  ],
+  "trailingWhitespace": [],
+  "referenceTests": {
+    "files": 3,
+    "tests": 32,
+    "passed": 32,
+    "failed": 0,
+    "behaviorTests": 11,
+    "sourceShapeChecks": 21,
+    "fullAgentOrGuiVerification": false
+  },
+  "concurrentP4Commits": [
+    "dd2f1962 docs(runtime): 看板记录 P4-0~P4-3 落地与 P4-4 的剩余范围",
+    "87cb8512 feat(runtime): P4-1~P4-3 worker 接上自有 runtime 并落地后端开关"
+  ],
+  "documentSha256": {
+    "docs/plans/2026-09-08-runtime-evolution-ard.md": "f2e0564ceba241bfc51783d67ebd2cc92d0749c0ff5373c0901dbdcf1be0d963",
+    "docs/plans/2026-09-08-pi-desktop-study.md": "13805d334639a9c02caaa3bbc84c3189159b3ebc5d8b5091f06bd02923001821",
+    "docs/plantree/README.md": "9484e542878a973809a604fd3ac6d1d18b2df055bf5bce8906ee7050aef01b47",
+    "docs/plantree/plans/runtime-evolution/README.md": "50ec912f94e443c255f51cf481109c0967de099eca8a5ccea4092f137a60fb34",
+    "docs/plantree/plans/runtime-evolution/TODO.md": "0ea75df3a8a3e3f12b5f85624d20f33b0171e538d32fa57b53be2575eb14bc34",
+    "docs/plantree/plans/runtime-evolution/open-questions.md": "a5c273aca8cdf578d7365acb17eff42b5eadb7e91a456d349193e7a9543e9474",
+    "docs/plantree/plans/runtime-evolution/history/d10-subagent-initial.md": "904acbabb6da46d7091d5c4349db9a32dc60bdb2c83547d46d3e766d57687e22",
+    "docs/plantree/plans/runtime-evolution/topics/p5-2-subagent-research.md": "61b3371977bbd1da0496829c70ae71489061d09276987aa5e40d619e875a141b",
+    "docs/plantree/plans/runtime-evolution/topics/p5-2-subagent-contracts.md": "9845d4f5959ec374b70da0b30347472baff89d374f64940d4a70e0342bd1b39b",
+    "docs/plantree/plans/runtime-evolution/topics/p5-2-subagent-tasks.md": "e4ea378f0b7913f30683a2623a51790c5250d1a31f8f861fa5dd42901ed77f98",
+    "docs/plantree/plans/runtime-evolution/evidence/p5-subagent/README.md": "c865394cbc7e71ae13c38cf44307b466c794961b62e762aedc4d15da547d6f3b"
+  },
+  "internalUseClarification": "Internal testing; no additional copyright, license or source-version records during execution; no license approval gate. Department experiments are outside the implementation plan and acceptance criteria."
+}

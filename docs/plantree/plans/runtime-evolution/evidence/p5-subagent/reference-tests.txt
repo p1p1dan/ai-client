@@ -1,0 +1,40 @@
+✔ detects exact delegation activities without absorbing ordinary tools (0.700257ms)
+✔ prefers the structured delegate outcome over the transport status (0.150123ms)
+✔ uses delegation lifecycle timestamps instead of the immediate Task duration (0.57949ms)
+✔ reads settled delegation status from a persisted TaskWait result (0.146148ms)
+✔ reads stopped status from TaskStop, including a running snapshot (0.086707ms)
+✔ a finished turn treats leftover running delegates as aborted (0.086784ms)
+✔ summarizes partial fan-out without deduplicating repeated agent names (0.114718ms)
+✔ a lifecycle row names the subagents it reports on (D268) (0.247488ms)
+✔ a repeated agent is counted, not listed twice (0.102343ms)
+✔ TaskStop reads its roster from `stopped`, and Task has none (0.13997ms)
+✔ topology elapsed bounds follow this card's Task ids, not a later fan-out (0.148523ms)
+✔ a delegation card reads its outcome from the lifecycle rows (0.756576ms)
+✔ a lifecycle row summarizes by agent name, never by delegation id (0.18146ms)
+✔ a live delegate row keeps the attribution its stream carried (0.697247ms)
+✔ a terminal tool event repairs a row lost during renderer reload (0.313865ms)
+✔ delegate rows render under their Task row, one level in (0.482624ms)
+✔ a Task row is expandable and names the delegate it used (0.227341ms)
+✔ the report is printed once: in the body, or as the nested answer (0.336975ms)
+✔ memoized activity rows compare delegate runs by their rows (0.187931ms)
+✔ the nested run is visibly one level inside the call (0.212315ms)
+✔ every Task row renders as one accessible delegation topology (0.676089ms)
+✔ the aggregate label counts, so a lone delegation is not called plural (1.53297ms)
+✔ the topology uses semantic low-noise surfaces and responsive connectors (0.341024ms)
+✔ a delegate's rows scroll in place instead of growing the page (D271) (0.722947ms)
+✔ an expanded delegate run follows the latest output while pinned (D302) (0.287173ms)
+✔ the delegation card keeps inset from its tile and stays live off the tail (D319) (0.144656ms)
+✔ every launch resolves the subagent catalog and its pinned models (0.500607ms)
+✔ the sidecar forwards both subagent params to the runtime (0.233142ms)
+✔ persisted subagent rows keep their attribution (0.237244ms)
+✔ a permission request names the delegate that asked (0.142718ms)
+✔ a dead host transport degrades quietly instead of warning (0.576016ms)
+✔ the subagents page recovers when the host comes back (0.085767ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 225.721379

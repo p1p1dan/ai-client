@@ -142,41 +142,36 @@ rate in chat transcript header」），`agent-runtime` 内没有任何缓存优�
 所以「请求前缀稳定性的离线度量」没有可搬运的参考实现，属于我们自建，列为 P2 的**可选加强项**
 而非门禁；门禁仍是上面这个 provider 上报的在线比值。
 
-### D10 · Subagent 拓扑：同进程内的第二个 Agent，不占 WorkerSlot
+### D10 · Subagent 拓扑与生命周期：同进程后台任务，完整复刻后优化
 
-**决策**：subagent 在同一 worker 进程内跑第二个 `Agent`（Cordis fork/isolate 上下文做 service 隔离），
-不为每个 subagent 分配 WorkerSlot。
+**2026-09-09 修订**：用户明确要求整个复刻 PI-Desktop 的 subagent 工作体，再在完整基础上优化。
+同进程、不占 WorkerSlot 的原拓扑保留；旧 ADR 0062/0119 的并发/终止/权限条款被本次现行基线替代。
+[初始决策快照](../plantree/plans/runtime-evolution/history/d10-subagent-initial.md)保留旧理由；完整范围以 D17 和 [P5-2 契约](../plantree/plans/runtime-evolution/topics/p5-2-subagent-contracts.md) 为准。
 
-依据：
-1. PI-Desktop ADR 0062 已稳定运行验证此拓扑——「A `SubagentRun` is a second pi `Agent` in the
-   same sidecar process」，并把「A separate process per delegate」明确列为 **Rejected**：
-   真隔离的收益抵不上重复一份 host 连接、provider 设置和事件管道的代价。
-2. 我方额外理由：WorkerSlot 是被内存分档硬限的稀缺资源（≤4GiB 机器只有 3 个槽，
-   `WorkerManager.ts:250-268`），超限直接 `worker_capacity_reached` 而不是排队。
-   subagent 占槽会挤掉真实用户会话。
-3. subagent 负载是 IO-bound（模型流式 + 文件读 + shell），事件循环不是瓶颈；
-   真正 CPU 密集的 shell 本来就已 fork 出去。
+**拓扑**：每个用户会话仍占一个 worker；subagent 是该 worker 内独立 Agent，上下文和权限调用隔离，
+共享 HostIo/Exec、会话 writer、规范路径写锁与审批出口。自建 `SubagentRunner` + 会话级 delegation registry，
+不额外申请 WorkerSlot，不增加 singleton supervisor，不引入 Rust host。
 
-**照搬 ADR 0062 / 0119 的边界**（这些数字是他们跑出来的，不重新拍）：
-
-| 项 | 口径 |
+| 项 | 现行决策 |
 |---|---|
-| 并发上限 | 4，信号量控制（`MAX_SUBAGENT_CONCURRENCY`） |
-| 报告上限 | 12k 字符（`MAX_SUBAGENT_REPORT_CHARS`），超出截断 |
-| 工具白名单 | 默认 `Read/Glob/Grep`；可声明 `Bash/Edit/Write`；禁止 plugin/skill/mode 工具与嵌套 Task |
-| 权限继承 | 不继承父会话写权限，写能力只来自定义自身声明 |
-| 并行写序 | 按规范化路径的 PathMutex 串行化写操作，不同路径互不等待 |
-| 上下文隔离 | 子行带 `parentToolCallId` + `agentName`，持久化但**重建模型上下文时跳过** |
-| 超时 | 事件驱动的 idle + 总时长看门狗，产出 `timed_out` 结果（ADR 0119） |
-| 终止 | 子代理终止收敛为 Task 工具结果，不触达主进程的 turn 处理 |
-| 定义来源 | `~/.agents/subagents/<name>.md`，上限 16 条，坏文档降级为启动诊断 |
+| 完整复制基线 | PI-Desktop `948ee676bdb7b31d496f6603aa03dd12eb95be35` 现行源码 + 测试；固定版本，不只按旧 ADR 摘取 |
+| 编排 | Task 立即返回；TaskWait(all/any/minCompleted)、TaskList、TaskStop 全部具备；核心工具与主动委派提示词同步上线 |
+| 父子寿命 | 父 loop idle 不结束逻辑 run、不取消子任务；runtime 等报告并交回父 Agent 继续；用户 Stop、TaskStop、dispose/实际宿主失败取消 |
+| 限额 | 会话并发 10、已结束 registry 100、报告 12k/合并 50k；TaskWait 默认 600s/上限 900s，等待超时不取消任务 |
+| 轮次/超时 | 不武装 idle/duration 杀子任务；兼容旧字段；maxTurns 显式生效、0/none/未声明可不设限，上限 80；工具/provider 自身超时独立存在 |
+| 内置角色 | explorer/code-reviewer/test-runner/fixer 整套迁移，默认工具/提示词/轮数及必要工具适配均有对照证据 |
+| 模式与权限 | plan 无 Task*；agent 中默认 inherit 父 gear，显式定义 gear 独立；工具能力来自定义，deny 与 D14 不被绕过；不临时改全局权限执行子工具 |
+| 定义与管理 | 全局 `.agents/subagents`、user > builtin；管理库存 64、runtime 16、provider 8、32KiB；启停与文档分离，完整管理 UI 必交 |
+| 记录/上下文 | 子行按 delegationId/parentToolCallId 归属、保存并可查历史，不进父模型过程上下文；终态和完整报告不受实时事件裁剪丢弃 |
+| 计费 | 父 message usage 保持原始 provider 值，子 usage 单独结算并计入会话总量；重读/重开不重复累计 |
+| 重试/恢复 | 与父 provider 重试共策略，失败请求恢复不重放工具；重启显示已落盘事实及中断状态，不承诺原子任务继续运行 |
 
-**不照搬的一条**：ADR 0062 花了篇幅把渲染层「每会话一个 pending permission」改成队列——
-我们 `src/renderer/stores/chatSessions.ts:250` 的 `pendingPermissions` 本来就是数组且带去重，
-这块渲染层不用动。
+**必要适配不等于裁剪**：D11 两载体/HostIo/Exec、D12 Pi 0.84.4、D14 两轴、现有 v4 JSONL/RuntimeEvent、
+@coss/ui/资源入口保持本仓体系。BrowserPreview 与长命令接口是完整复制的宿主依赖，列入 P5-2，不能悄悄丢弃。
+定义模型固定失败不得回落父模型；模型目录/凭据复用 D7/D15。明确不复制已由 ADR 0165 撤回的 Peer/A2A。
 
-**留后路**：执行入口抽成 `SubagentRunner` service（`run(def, prompt, signal): AsyncIterable<Event>`），
-进程内实现是默认 provider；将来真出现 CPU 密集场景，换一个实现即可，调用方不动。
+**资源约束**：10 是对标行为上限，非在低资源开发主机同时跑 10 个重任务的授权；用 fake Agent/闸门做并发验收。
+宿主不可接单时明确资源错误。资源自适应调度的进一步优化在完整基线后另案记录。
 
 ### D11 · 执行载体：按进程身份区分，不按实现语言推断
 
@@ -326,6 +321,33 @@ Linux 与 CI 的绿色不得代签（D11 第 6 条）。**风险是明知的**�
 
 测试包用手动 `workflow_dispatch` 出，不推 tag。
 
+### D17 · Subagent 整体复刻与分阶段验收（2026-09-09）
+
+**用户要求**：subagent 是完整庞大的工作体，整体复刻 PI-Desktop，再在整体基础上优化。
+这取代前序调研“本轮不做”和仅参考 ADR 0062/0119 的简化实施范围；P4 由并行执行者继续推进。
+
+**决策**：P5-2 扩为一个完整交付包，包含定义/四角色/模型选择/提示词、Task* 后台编排、权限与重试、
+持久化/计费/取消/退出、管理 UI、运行与历史 UI、旧插件与定义迁移，以及 BrowserPreview/长命令等必要宿主能力。
+第一阶段必须完成现行行为等价矩阵；施工拆批不等于交付裁剪。全部能力签收后再讨论并发、成本和性能优化。
+
+**权威链**：本 ARD → [完整契约](../plantree/plans/runtime-evolution/topics/p5-2-subagent-contracts.md) →
+[P5-2-0～7 任务/SA01～22 验收](../plantree/plans/runtime-evolution/topics/p5-2-subagent-tasks.md)；
+[源码调研](../plantree/plans/runtime-evolution/topics/p5-2-subagent-research.md)和[固定证据](../plantree/plans/runtime-evolution/evidence/p5-subagent/README.md)说明来源与实测强度。
+
+**适配原则**：TS 纯逻辑/提示词/测试向量保留行为语义；Rust 管理/持久化适配为 TS，IO 经 D11 出口，
+UI 适配现有组件体系。**用户补充用途（2026-09-09）**：仅在组织内部测试使用，不对外分发；适合搬用的源码、提示词和测试直接复用，不为重写而重写。
+**执行约束（2026-09-09）**：执行过程中不新增版权、许可证或来源版本记录，不设置许可证审批或阻塞门禁。部门内部实验由用户自行组织，不属于本计划的任务或验收条件。
+
+**P4 衔接**：不要求 Claude 提前实现 P5 或放空服务；P5 基于 P4 的 runtime.run/Stop/dispose/事件与索引边界接入。
+外层 run 才决定会话完成，内部父 Agent idle 可继续；等待子任务时 RPC Stop 必须可达，写入与索引在最终收敛后完成。
+细项见契约 §6；P4 验收不代签 P5 新增任务生命周期，两种 carrier/GUI 要补 subagent 专项。
+
+**版本与完成条件**：上游 Pi 0.85.0 与本仓 0.84.4 做差异探针，不未经决策升级 D12；先过 P5-2-0 再实现。
+每个矩阵项须有行为要求、适配说明和测试证据；缺管理 UI、BrowserPreview、历史恢复或取消路径时不能标 P5-2 Done。
+P5-2 对依赖能力做必要适配，不借此移植 PI-Desktop 整个插件市场、CDP、goal 模式或独立 A2A 系统。
+
+---
+
 ## 4. 模块分类：搬运适配 vs 自建
 
 ### 4.1 直接依赖（零自建）
@@ -343,7 +365,7 @@ Linux 与 CI 的绿色不得代签（D11 第 6 条）。**风险是明知的**�
 | **Provider binding** | PI-Desktop `provider-binding.ts` | ~500 行 | 适配我们的凭据系统（`~/.pilab` vault → pi-ai `ModelAuth`） |
 | **Prompt 组装** | PI-Desktop `prompt-templates.ts` + `project-instructions-prompt.ts` + `plugin-skills-prompt.ts` + `mode-prompts.ts` | 4 文件共 ~1500 行 | 替换 PI-Desktop 的 host-core RPC 为本地读取；融入我们的 CLAUDE.md / resource 体系 |
 | **上下文压缩** | PI-Desktop `session-context.ts` + `runtime.ts` 压缩段 + Rust `transcripts.rs` compaction | TS ~600 行 + 策略逻辑 | 用 TS 实现 compaction record 读写（PI-Desktop 用 Rust）；缓存命中率优化策略直接搬 |
-| **Subagent** | PI-Desktop `subagent.ts` + `subagent-definitions.ts` | ~800 行 | 适配我们的事件投影和 WorkerSlot 模型 |
+| **Subagent** | PI-Desktop subagent/definitions + runtime Task* 编排 + Rust 管理/会话 + renderer + tests | 完整子系统，旧 ~800 行估算已失效 | 按 D10/D17 整体复刻，跨层任务/能力清单见 P5-2 文档；完成后再优化 |
 | **Skills 加载** | PI-Desktop `plugin-skills.ts` + `plugin-skills-prompt.ts` | ~400 行 | 适配我们的资源路径（`~/.pilab` + `~/.agents/`） |
 | **会话存储** | PI-Desktop Rust `transcripts.rs`（JSONL 读写 + compaction + layout index）+ 我们现有 `SessionIndexService` | Rust 668 行 → TS 重写 | 格式兼容，逻辑用 TS 重写；分支管理从 PI-Desktop 的 session-context 搬 |
 | **会话导入** | 我们现有 `LegacyImportService`（已经比 PI-Desktop 更成熟） | 保持 | 只需适配新的 session 插件接口 |
@@ -371,7 +393,8 @@ Linux 与 CI 的绿色不得代签（D11 第 6 条）。**风险是明知的**�
 | **总计** | ~9000-11000 行 | |
 
 对照：我们现有 `src/agent-host/`（非测试）约 8656 行。
-PI-Desktop 的 agent-runtime（TS 部分）约 9715 行 + Rust host-core 34019 行。
+上述行数为初始估算；2026-09-09 D17 扩展后的 subagent 工作量覆盖 runtime/管理/renderer/测试，不再用单个 ~800 行模块估算。
+PI-Desktop 的 agent-runtime（TS 部分）约 9715 行 + Rust host-core 34019 行（初始快照）。
 
 ## 5. 执行策略
 
@@ -390,7 +413,7 @@ PI-Desktop 的 agent-runtime（TS 部分）约 9715 行 + Rust host-core 34019 �
 | **P2 · 上下文** | plugin-context（压缩）+ plugin-prompt（系统提示词组装）+ 缓存命中率 | P0 |
 | **P3 · 会话** | plugin-session（JSONL 存储 + 分支 + resume）+ RuntimeEvent 翻译层 | P0 |
 | **P4 · 集成** | Worker bootstrap + WorkerSlot 后端切换 + 端到端测试 | P1 + P2 + P3 |
-| **P5 · 扩展** | plugin-skills + plugin-subagent + MCP bridge + 导入适配 | P4 |
+| **P5 · 扩展** | plugin-skills + 完整 subagent 工作体（D17 / P5-2-0～7）+ MCP bridge + 导入适配 | P4；subagent 调研可并行 |
 | **P6 · 切换** | 默认使用新 runtime + 移除 pi-coding-agent 依赖 | P5 + GUI 点验 |
 
 P1/P2/P3 可并行施工（三个 agent 团队各领一块）。

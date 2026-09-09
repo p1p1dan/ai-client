@@ -147,7 +147,11 @@ ADR 0133 → 0134 的**演进**值得看：先「models.dev 优先 + pi-ai 兜�
 加提供商表单（ADR 0156）：对话框**只从「服务」一个字段开始**，选定具名服务后仅剩服务 + API key +
 一行地址摘要；名字 / Base URL / API 格式全进「高级」。
 
-### 3.4 Subagent 真正可见（本轮不立项，仅记档）
+### 3.4 Subagent 真正可见（2026-09-08 历史调研）
+
+> **2026-09-09 更新**：用户现已要求整体复刻 subagent，再在完整基础上优化。下文“不做”保留为旧范围记录，
+> 不再作为当前指令。现行权威见 [ARD D10/D17](2026-09-08-runtime-evolution-ard.md)、[完整复刻调研](../plantree/plans/runtime-evolution/topics/p5-2-subagent-research.md) 与 [P5-2 任务](../plantree/plans/runtime-evolution/topics/p5-2-subagent-tasks.md)。
+
 
 ADR 0166 记录了一次完整失败。原设计与常见做法一致：`Task` 非阻塞、父代理 `TaskWait`、
 父 `agent_end` 兜底 abort 遗留子代理、300s 空闲看门狗 + 6h 上限。
@@ -218,7 +222,7 @@ contentHash + size + mode + mtime 指纹、provenance custom entry、逐层字�
 | 借读面对齐 | **做** | 计划 B · B2 |
 | 随包扩展表驱动 | **做** | 计划 B · B3 |
 | Codex 会话导入 | **做** | 计划 B · B4 |
-| Subagent 生命周期 | **不做**（用户 2026-09-08 裁定），记档 | §3.4 |
+| Subagent 生命周期 | 初始不做；2026-09-09 已被用户整体复刻要求替代，纳入 P5-2 全量基线 | §3.4 / ARD D17 |
 | 第三方插件平台 | **不做**，风险性质不同 | §3.1 |
 | 换 `pi-agent-core` 重写产品层 | **不做**，触发条件记档 | §1.1 |
 | 改用 `~/.pi` + 备份还原 | **不做**，三条理由记档 | §2.3 |

@@ -1,6 +1,6 @@
 # Runtime 自主化演进 — 任务看板
 
-> 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D14 生效）。
+> 决策口径见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)（2026-09-08 已拍板，D1–D17 生效，D10/D17 的 subagent 整体复刻于 2026-09-09 修订）。
 > 本文件只记录执行顺序与进度，不重复决策论证。
 
 **当前阶段**：P0/P3 ✅；P1/P2 实现完成、余项等现场签收；**P4-0~P4-3 已落地**，native 后端可由 `AICLIENT_RUNTIME_BACKEND` 选中；下一步 P4-4 端到端。
@@ -132,7 +132,7 @@ PI-Desktop 因此把两件事配成一对：**预算提醒**告诉它还剩多�
 | P4-1 worker bootstrap | ✅ | `87cb8512`：`runtime/worker/nativeWorkerRuntime.ts` 把 Cordis 插件图接到既有 worker RPC 面。`PiWorkerRpcServer` 本就以工厂注入引擎，两个后端共用同一套相关性/generation/串行化，不分叉 dispatcher；适配器**不**引用 `piWorkerRpcServer`（会把 pi-coding-agent 拖进 native 路径），形状由 worker 入口那一处赋值把关。两种 carrier 共用同一入口。`compact`/`rewind`/`reload`/`fork`/`commands` 未实现，缺方法得到 `WORKER_*_UNAVAILABLE`，归 P4-4 |
 | P4-2 后端开关 | ✅ | `87cb8512`：`AICLIENT_RUNTIME_BACKEND=native` 时才动态 import native 模块，legacy 完全不加载 cordis——未完成 runtime 的 import 期故障够不到用户会话。无法识别的取值按 legacy 读（D8）。入口改为先挂监听再排队：Node IPC 到达即派发、没有监听者就丢，动态 import 那段窗口必须有队列。两项测试用**真实 worker 进程**验证开关，不是只测 flag reader |
 | P4-3 WorkerTransport 适配 | ✅ | 通道抹平在 `78168b4d`（P4-0）已落地；本节点补 `runtime/host/worker.ts` 按 D11 产出两种 carrier 的 host 配置。关键约束：electron-utility 下**不得**把 `process.execPath` 当 TSD helper——那正是现场证明会读到密文的 Electron 二进制；只认随包 node，没有就明说没有回落。事件出口沿用 `RuntimeEventDraft`，`seq`/`timestamp` 仍由 RPC server 盖（D5）|
-| P4-4 端到端 | ⬜ | 多轮对话 + 工具调用 + 权限审批 + 压缩全链路（成功标准 1）。**并含 P4-1 未实现的 RPC 方法**：`compact` / `rewind` / `reload` / `fork` / `discardFork` / `commands` / `setPermissionTier`，P3-2 的分支能力已在 store 里，缺的是 RPC 映射 |
+| P4-4 端到端 | ✅ | `e1c557b7` + `8e4fee3d`：补完 P4-1 留下的 `compact` / `commands` / `rewind` / `fork` / `discardFork` / `setPermissionTier`；`reload` 仍不实现（要在原地重开自己的 JSONL，native store 的 document 就是它持锁的那个文件，无等价语义），得到 `WORKER_RELOAD_UNAVAILABLE`。**修 P4-1 三处**：(1) `stop()` 原本 await 整个 turn，会把串行 RPC 链按 provider 注意到 abort 的时长卡住（含 dispose），改为发出 abort 即返回；(2) 适配器漏传 `tools` 配置，而 bootstrap 据此把 loop 钉成 `singleTurn`——native worker 其实只能答一轮且没有工具；(3) `compact` 曾映射成 `requestNewWindow` 记意图，而那是 run 内语义、`beginRun` 每次开跑都清空，两次 run 之间发出的 /compact 直接被抹掉，返回 `{compacted:true}` 却什么都没做——改为立即压缩（`prepareTurn({force:true})`），并把此前硬写 `undefined` 的用户压缩指示接通。端到端 10 项用真实 `PiWorkerRpcServer` + 真实 Cordis 图 + 真实工具/权限/JSONL，只替换 provider（fauxProvider）与消息端口，覆盖多轮工具循环、写入审批放行与拒绝、stop、compact（断言摘要是独立 provider 调用且 compaction 行当场落盘）、tree、rewind、fork/discard、D14 档位迁移。成功标准 1 本机达成，打包壳实测归 P4-6 |
 | P4-5 GUI 点验 | ⬜ | 时间线 / Composer / 权限卡 / 设置页无回归（成功标准 4）；另验 D13 的 Main 侧读改造。**前置已解除**：[Q7](open-questions.md) 的三处判据缺陷已随 `b984b282` 修好——git 面板在加密机上不会再无声地空着，读不到 stdout 时会明确报错 |
 | P4-6 打包载体验收 | ⬜ | 在打包壳里用本地模型替身（HTTP SSE stub，不调线上模型）驱动真实 Read/bash，两种 carrier 各跑一遍；复用 runtime 离线 lane 的 `fauxProvider` 用例与 `scripts/packaged-worker-smoke.cjs` 的替身思路。**本节点同时是唯一一次上机窗口**（[D16](../../../plans/2026-09-08-runtime-evolution-ard.md)）：P1-0 的 runner + taskkill 命令树清理、P1-3 的 bash 跨平台、P1-8 的六项工具探针、P4-0 的随包 Node worker 载体，四条积压的现场项都在这里一次签收，按载体矩阵逐条走，不用「跑通一个会话」代签 |
 
@@ -145,16 +145,16 @@ PI-Desktop 因此把两件事配成一对：**预算提醒**告诉它还剩多�
 | 子任务 | 状态 | 简要内容 |
 |---|---|---|
 | P5-1 plugin-skills | ⬜ | 技能加载 + 模板，路径适配 `~/.pilab` + `~/.agents/` |
-| P5-2 plugin-subagent | ⬜ | 同进程第二个 Agent，不占 WorkerSlot（D10）；照搬 ADR 0062/0119 的并发、超时与隔离边界 |
+| P5-2 subagent 整体复刻 | ⬜（调研/契约已更新） | 按 D10/D17 完整复刻 PI-Desktop 当前子系统，含 Task* 后台编排、四角色、模型/权限/重试、管理/运行 UI、历史/usage/迁移和必要宿主能力；P5-2-0～7 全部签收后再优化。[任务矩阵](topics/p5-2-subagent-tasks.md) |
 | P5-3 MCP bridge | ⬜ | MCP 工具接入自有工具注册表；stdio server 的进程启动走 P1-0 的 `runtimeExec`，不自建一套 spawn（D11） |
 | P5-4 会话导入适配 | ⬜ | 现有 `LegacyImportService` 适配新 session 插件接口 |
 | P5-5 模型目录切源 | ⬜ | 随包快照 + 离线回落从 pi-coding-agent 配置切到自有配置。**baseUrl 按 [D15](../../../plans/2026-09-08-runtime-evolution-ard.md) 由客户端按 wire 协议推导、每个 model 可显式覆盖**——cch 网关按模型族分端点（Anthropic 不带 `/v1`、OpenAI 带 `/v1`），配错表现是 503 而不是 404，所以这条推导要有单测钉住，不联网 |
 
-P5-2 的照搬清单（数字取自 PI-Desktop ADR 0062 / 0119，不重新拍）：并发上限 4（信号量）·
-报告上限 12k 字符 · 工具白名单默认 `Read/Glob/Grep` 且禁止嵌套 Task · 不继承父会话写权限 ·
-按路径 PathMutex 串行化写 · 子行带 `parentToolCallId` 且重建上下文时跳过 · idle + 总时长看门狗 ·
-终止收敛为 Task 工具结果。执行入口抽成 `SubagentRunner` service 留进程隔离的后路。
-渲染层不用动：`chatSessions.ts:250` 的 `pendingPermissions` 已是带去重的队列。
+**P5-2 范围修订（2026-09-09，用户要求整体复刻后优化）**：固定参考 `948ee676`，不再按旧 ADR 0062/0119 只搬基础 runner。
+完整契约采用 Task/TaskWait/TaskList/TaskStop、10 并发、父 idle 不杀子任务与报告自动交回；定义管理和运行/历史 UI 同属必交范围。
+本轮完成文档调研，**未实现子代理**；[调研与迁移地图](topics/p5-2-subagent-research.md) / [契约及 P4 接缝](topics/p5-2-subagent-contracts.md) / [8 批任务、22 项矩阵](topics/p5-2-subagent-tasks.md) / [参考验证证据](evidence/p5-subagent/README.md)。
+P4 由 Claude 继续实施；P5-2-0 核对 Pi 0.85.0→0.84.4 与宿主依赖，禁止未经决策升级 D12。用户确认仅内部测试，适合的源码直接搬用，本轮不新增版权、许可证或来源版本记录，不设许可证审批；部门内部实验不属于本计划的任务或验收条件。
+既有 pendingPermissions 队列可复用，**不代表 subagent 管理与展示层无需实现/验收**。完整基线前不调低并发、削减角色或省略 UI。
 
 ---
 
