@@ -13,6 +13,7 @@ import {
   userBubbleRowClass,
   userBubbleTextClass,
 } from '../chatTimelineLayout';
+import { countProcessSteps, formatProcessDuration } from '../turnProcessFold';
 
 /** Tailwind's spacing scale: one step is 4px (`py-2.5` -> 10px). */
 const SPACING_STEP_PX = 4;
@@ -429,5 +430,29 @@ describe('turnStatusToneClass (F456 §7.5)', () => {
     for (const kind of ['handshake', 'awaiting', 'streaming', 'retrying'] as const) {
       expect(turnStatusToneClass(kind), kind).toBe(false);
     }
+  });
+});
+
+describe('process fold (2026-09-10)', () => {
+  it('counts what happened, not how it was grouped', () => {
+    // A tool group holding four runs is four steps; counting groups would tell
+    // a turn that ran four tools that it took one.
+    const item = (kind: string, extra: Record<string, unknown> = {}) =>
+      ({ kind, blockIndex: 0, messageId: 'm1', ...extra }) as never;
+    expect(
+      countProcessSteps([
+        item('toolGroup', { entries: [{ kind: 'run' }, { kind: 'thinking' }, { kind: 'run' }] }),
+        item('permissionActivity', { blocks: [{}, {}] }),
+        item('permission', { block: {} }),
+      ])
+    ).toBe(6);
+    expect(countProcessSteps([])).toBe(0);
+  });
+
+  it('reads the clock the same way the running status row does', () => {
+    expect(formatProcessDuration(19_000)).toBe('19s');
+    expect(formatProcessDuration(499)).toBe('0s');
+    expect(formatProcessDuration(65_000)).toBe('1m 05s');
+    expect(formatProcessDuration(-1)).toBe('0s');
   });
 });

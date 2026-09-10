@@ -107,6 +107,7 @@ import {
   isTurnInFlight,
   ownsSessionFailure,
 } from './turnHead';
+import { countProcessSteps, formatProcessDuration } from './turnProcessFold';
 import {
   deriveTurnStatus,
   isFailedCardBodyDuplicate,
@@ -1138,6 +1139,42 @@ interface ChatTurnProps {
  * reach the last turn only, and because both lookup callbacks are `useCallback`
  * -stable at their source.
  */
+/**
+ * A finished turn's steps, behind one line.
+ *
+ * `<details>` rather than a state hook: the open/closed bit then lives in the
+ * DOM, so it survives the re-renders a streaming sibling turn causes without
+ * this component having to own — and reset — state of its own.
+ */
+function TurnProcessFold({
+  items,
+  durationMs,
+  children,
+  footer,
+}: {
+  items: readonly TurnItem[];
+  durationMs: number;
+  children: React.ReactNode;
+  /** The quiet approval audit, which belongs with the steps it audited. */
+  footer?: React.ReactNode;
+}) {
+  const steps = countProcessSteps(items);
+  if (steps === 0) return null;
+  return (
+    <details className={turnBodyClass()}>
+      <summary className="cursor-pointer list-none text-meta text-muted-foreground marker:content-none">
+        <span className="underline-offset-2 hover:underline">
+          已处理 {formatProcessDuration(durationMs)} · {steps} 个步骤
+        </span>
+      </summary>
+      <div className={cn(turnProcessShellClass(), 'pt-2.5')}>
+        {children}
+        {footer}
+      </div>
+    </details>
+  );
+}
+
 const ChatTurn = memo(function ChatTurn({
   turn,
   sessionId,
@@ -1373,6 +1410,16 @@ const ChatTurn = memo(function ChatTurn({
     />
   );
 
+  const activityDetails = (
+    <PermissionActivityDetails blocks={turn.body.flatMap((message) => message.blocks)} />
+  );
+  // Which process segment gets the audit appended, if any of them folds.
+  const lastProcessKey = segments
+    .filter((segment) => segment.kind === 'process')
+    .map((segment) => `${segment.kind}:${turnItemKey(segment.items[0])}`)
+    .at(-1);
+  const processFolds = !turnActive && metadata?.latencyMs != null && lastProcessKey !== undefined;
+
   const renderSegment = (segment: TurnSegment<TurnItem>) => {
     // Keyed off the segment's FIRST item, not its index: an index key would
     // remount every later segment the moment a new one opened mid-stream,
@@ -1400,22 +1447,47 @@ const ChatTurn = memo(function ChatTurn({
         </div>
       );
     }
+    /**
+     * The process segment: tool runs, thinking, and authorization cards, in
+     * block order.
+     *
+     * 2026-08-25 ruled this rendered UNCONDITIONALLY, on the grounds that
+     * per-row expansion was the only granularity worth having. 2026-09-10
+     * replaces that after comparing the transcript against PI-Desktop's: a
+     * finished turn there says 「已处理 19s 2 个步骤」 and keeps its steps behind
+     * that one line, which is most of why its transcript reads clean while ours
+     * read 杂乱. So a COMPLETED turn folds.
+     *
+     * Two things still never fold, and they are the same red line as before —
+     * the Allow/Deny card can never be collapsed away:
+     *  - a segment holding an unanswered permission or question card stays open,
+     *    whole, in order (folding only the rest would scramble block order);
+     *  - a turn still in flight stays open, because hiding a tool the model is
+     *    running right now is how a working app looks frozen.
+     *
+     * NO `overflow-hidden` here, ever: it would create a containing block and
+     * silently break the pinned bubble band's `position: sticky`
+     * (`chatTimelineLayout.ts`'s standing prohibition).
+     */
+    const answerable = segment.items.some(
+      (item) =>
+        (item.kind === 'permission' || item.kind === 'question') && item.block.resolved !== true
+    );
+    if (!answerable && !turnActive && metadata?.latencyMs != null) {
+      return (
+        <TurnProcessFold
+          key={key}
+          items={segment.items}
+          durationMs={metadata.latencyMs}
+          // Only the last one carries it: the audit is turn-wide, and repeating
+          // it under every process run would count the same gates twice.
+          {...(key === lastProcessKey ? { footer: activityDetails } : {})}
+        >
+          {segment.items.map(renderItem)}
+        </TurnProcessFold>
+      );
+    }
     return (
-      /**
-       * The process segment: tool runs, thinking, and authorization cards, in
-       * block order.
-       *
-       * Rendered UNCONDITIONALLY (2026-08-25 user decision). There is no
-       * turn-level collapse any more — each tool row expands its own IN/OUT
-       * body, and that turned out to be the only granularity worth having once
-       * FB4 stopped folding prose in here. The authorization red line ("the
-       * Allow/Deny card can never be collapsed away") is satisfied by
-       * construction rather than by a forced-open rule.
-       *
-       * NO `overflow-hidden` here, ever: it would create a containing block and
-       * silently break the pinned bubble band's `position: sticky`
-       * (`chatTimelineLayout.ts`'s standing prohibition).
-       */
       <div key={key} className={cn(turnProcessShellClass(), turnBodyClass())}>
         {segment.items.map(renderItem)}
       </div>
@@ -1439,7 +1511,9 @@ const ChatTurn = memo(function ChatTurn({
             earlier paragraph into the collapsed segment, and a turn that ended
             in an error notice sent ALL of it. */}
         {segments.map(renderSegment)}
-        <PermissionActivityDetails blocks={turn.body.flatMap((message) => message.blocks)} />
+        {/* Inside the fold when there is one — the audit belongs with the steps
+            it audited, not floating under a collapsed summary. */}
+        {!processFolds && activityDetails}
         {isLastTurn && (
           <SessionActivityStatus
             sessionId={sessionId}
