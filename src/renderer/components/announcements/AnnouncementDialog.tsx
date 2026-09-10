@@ -73,7 +73,12 @@ export function AnnouncementDialog({
         {/* Capped rather than free-growing: a long announcement must scroll
             inside the dialog instead of pushing its footer off-screen, which
             would take the only close button with it. */}
-        <ScrollArea className="max-h-[50vh]">
+        {/* `px-6` because `DialogPopup` has none of its own: the header and the
+            footer each carry it, so a body without it sits 24px left of the
+            title it belongs to — which is what the 2026-09-10 screenshot of the
+            launch announcement showed. `pr-3` inside stays as the scrollbar's
+            gutter. */}
+        <ScrollArea className="max-h-[50vh] px-6">
           <div className="flex flex-col gap-4 pr-3">
             {announcements.map((announcement, index) => {
               const Icon = SEVERITY_ICON[announcement.severity];

@@ -44,6 +44,16 @@ describe('F09 announcement bell wiring', () => {
     expect(hook).not.toMatch(/await\s+window\.electronAPI\.announcements/);
   });
 
+  it('indents the body to the same edge as the title', () => {
+    // `DialogPopup` carries no padding of its own — the header and footer each
+    // bring `px-6`. A body that forgets it renders 24px left of the title it
+    // belongs to, which is how the launch announcement looked in the
+    // 2026-09-10 screenshot.
+    const dialog = source('components/announcements/AnnouncementDialog.tsx');
+    const scroll = dialog.slice(dialog.indexOf('<ScrollArea'));
+    expect(scroll.slice(0, scroll.indexOf('>'))).toContain('px-6');
+  });
+
   it('prints announcement bodies as text and never as markup', () => {
     const dialog = source('components/announcements/AnnouncementDialog.tsx');
     expect(dialog).toContain('whitespace-pre-wrap');
