@@ -156,12 +156,12 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | A / 10 | /new 继承 cwd | 🟡 已实现；普通流程有记录，原 TEMP /new 矩阵未完整补签，F2 恢复不等于 /new 全矩阵 |
 | A / 4 | 临时目录复用/创建/绑定 | 🟡 test.12 当前恢复流程通过；F2-b 历史异常待取证 |
 | B / 5 | 重试与异常恢复 | 🟡 F4 已实现；现场未触发 |
-| B / 6 | 运行状态/计时/摘要 | 🟡 原核心现场通过；F7b 去重已提交、在 test.13 之后 |
+| B / 6 | 运行状态/计时/摘要 | 🟡 原核心现场通过；F7b 本地仍复现（见下表）；过程提前折叠已修 `ca6aac0f` |
 | C / 3 | 权限展示降噪 | 🟡 原流程部分通过；结构化权限链与重画已提交，待新包回归 |
 | C / 8 | 问答卡交互 | 🟡 UI 已实现；通用 question 无生产者（F5），不能把权限卡生产者当作通用提问工具 |
-| C / 9 | 当前对话审阅栏 | 🟡 R1/R2 已提交 `6be1d70a`，自动化与隔离 Electron 验证通过；native Edit/Write 执行时差异、旧历史预览；待安装版复验 |
+| C / 9 | 当前对话审阅栏 | ✅ R1/R2 `6be1d70a`、上限 `1f45531f`；2026-09-10 本地真实应用（native + 真实模型）验证通过，[记录](evidence/session-review-and-updates/README.md#本地真实应用验证) |
 | D / 11 | 上下文用量详情 | ✅ 核心现场通过；F7e 归既有行为，增强另排 |
-| E / 12 | 输出跟随 | ✅ 原核心现场通过；F7f 输入框增高已入 test.13，待复验 |
+| E / 12 | 输出跟随 | ✅ 原核心现场通过；F7f 输入框增高本地验证通过 |
 | F / 13 | 目录行变更量 | 🟡 已实现，目标现场受 F3 阻断 |
 | F / 14 | 旧 GitView / IPC 等死代码清理 | ✅ 实现及回归；后续测试包整体 GUI 继续回归 |
 | F / 15 | cwd 缺失与临时目录恢复 | 🟡 test.12 当前恢复流程通过；F2-a/c 后续修复待 test.13 验证，F2-b 单列 |
@@ -181,12 +181,12 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F3 GUI Git 输出丢失 | 故障已复现，根因机制/方案未定；Q7 只修正判错，未修输出 | [事实与方案](../../../plans/2026-09-09-gui-defect-decisions.md#f3--gui-起的-git-子进程输出丢失) |
 | F4 重试 | 🟡 自有重试层已实现，现场未触发；stream 开始后的恢复不在该层范围 | `27d4b7be`；test.12/13 |
 | F5 通用问答缺生产者 | 能力缺口，非 native 回归；归 P5-1 批，不阻塞 P4 原能力 | [功能决策](../../../plans/2026-09-09-gui-defect-decisions.md#f5--无提问工具questioncard--扩展问答弹不出来) |
-| F6 对话修改审阅 | 2026-09-10 采用右侧审阅，R1/R2 本机验证完成并提交 `6be1d70a`，尚未打包 | [R1/R2 与更新 U1](topics/session-review-and-updates.md) |
-| F7a/F7c 权限卡样式/尺寸 | 🟡 结构化事件 `db175931` 与卡片重画 `f62b6af4` 已提交；待验证 | 不在 test.13；通用问答卡仍受 F5 限制 |
-| F7b 重复状态行 | 🟡 已修、待复验；不再要求截图定位 | `a3debdf6`，不在 test.13 |
+| F6 对话修改审阅 | ✅ 2026-09-10 采用右侧审阅，本地真实应用验证通过，尚未打包 | [R1/R2 与更新 U1](topics/session-review-and-updates.md) |
+| F7a/F7c 权限卡样式/尺寸 | 🟡 结构化权限链与重画本地真实应用可用；倒计时原未接通，已补 `baeff487` 并本地验证；视觉口径仍待定 | 不在 test.13；通用问答卡仍受 F5 限制 |
+| F7b 重复状态行 | 🔴 本地复现：时间线末尾与输入框上方各挂一个 `SessionActivityStatus`，`a3debdf6` 守的是另一对；保留哪一处待用户定 | [截图](evidence/session-review-and-updates/local-f7b-duplicate.png) · [open-questions](open-questions.md) |
 | F7d / EFFORT-1 | 🟡 effort 传递与默认 medium 已修；GPT 慢响应本次未证明为本地缺陷 | `4145fa65` / `c0ae2a34`；test.13 |
 | F7e resume 后暂无上下文统计 | 已定性为既有行为；可选恢复快照增强尚未排期 | [功能说明](topics/field-followups.md#f7e-上下文快照) |
-| F7f 输入框增高 | 🟡 八行上限已实现、待复验 | `87f3dc7d`；test.13 |
+| F7f 输入框增高 | ✅ 八行上限本地验证通过（8 行 192px 后滚动） | `87f3dc7d` |
 | PERM-1 权限档弹层不关 | 🟡 已改为选择后立即关闭，待现场复验 | `1e1e4469`；test.13；区别于包后权限审批卡重画 |
 | TUI-1 native v4 进不了 TUI | 方案 C 已实现入口说明，互通能力未实现 | `0644ba3d`；test.13；[范围与后果](topics/field-followups.md#tui-1-能力边界) |
 | v3 resume 身份不匹配 | ✅ 已修，test.12 历史与再次恢复通过 | `d2564e5d` |

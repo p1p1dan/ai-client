@@ -52,6 +52,25 @@ NODE_OPTIONS=--max-old-space-size=1200 ./node_modules/.bin/vitest run <该批文
 
 修复后复跑 12 文件 / 169 测试通过（见 [tests.json](tests.json) 的 `reviewFixRerun`），根目录与 runtime 两套 tsc 通过；agent-host 的类型范围不含改动文件，未重跑。[source-manifest.json](source-manifest.json) 已更新为修复后指纹。隔离 Electron 探针未重跑，上文 18 项结果对应修复前版本。
 
+## 本地真实应用验证
+
+2026-09-10，Linux 本机 `electron-vite dev` 拉起完整应用：`AICLIENT_RUNTIME_BACKEND=native`，模型 Claude Sonnet 5（cch 网关），独立 profile、临时凭据副本与临时 git 仓库，界面为中文，权限档「执行 · 每次询问」。经 CDP 驱动真实鼠标/键盘事件。首次需为 Electron 编译 `node-pty` 与 `sqlite3`（N-API，Node 下同样可加载）。
+
+通过：
+- 审阅栏：Write 新建 test.txt（A，`+pong`）、Edit 追加（M，` pong` / `+abc`）、3000 行 big.txt 改第 1500 行显示真实 hunk `@@ -1497,7 +1497,7 @@`（验证 `1f45531f`）；[截图](local-review-panel.png)。
+- 外部追加文件内容后旧记录不变；重载界面从历史恢复同样 3 条、无重复；切到空会话显示 0 条，切回恢复。
+- 从审阅记录打开文件进入真实 Monaco，内容为磁盘当前值；展开审阅后关闭，编辑器回到并排而非全屏（评审修复第 3 项）。
+- 拒绝的写入不生成文件、不进审阅记录；设置关闭审阅入口后标题栏入口消失，重开恢复计数。
+- Linux 设置页显示用系统包管理器更新，检查按钮禁用。F7f 输入框 8 行（192px）后滚动。
+- 权限卡倒计时（补 `baeff487` 后）：「若 N 秒内未响应将自动拒绝」逐秒递减，归零后卡片变为 Denied、文件未创建；[截图](local-permission-countdown.png)。进行中轮次的过程不再在两条消息之间提前折叠（`ca6aac0f`）。
+
+发现并待定：
+- F7b 仍复现：运行与等待确认时，时间线末尾与输入框上方各一份状态；[截图](local-f7b-duplicate.png)。保留位置见 [open-questions](../../open-questions.md)。
+- 「已处理」耗时取最后一条消息，多段折叠显示同一数值；历史轮次不折叠。见 open-questions。
+- 中文界面下仍有英文：权限卡 Permission / allow / allow for session / deny / Content / Awaiting approval、时间线 Thought / Grepped / Ran / Edited / Read / Editing、输入框占位与排队提示、侧栏 new / branches、模型按钮 aria-label。
+- 重载界面后启动公告再次弹出，并新开一个空会话（`--open-path` 启动参数所致，未单独排查）。
+- trace 不记录推理强度，EFFORT-1 默认 medium 未能从本次运行核对，仍以单元测试为准。
+
 ## 安装版现场待验
 
 - Windows 安装版与加密机的 native Edit/Write、覆盖写入与重启恢复；本机记录链验证不代替加密现场。
