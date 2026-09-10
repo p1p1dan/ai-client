@@ -1,6 +1,6 @@
 # H/19 统一 agent 目录、迁移与插件 —— 验证记录
 
-日期：2026-09-10。范围：[实施计划](../../topics/unified-agent-directory.md) 执行清单 U1～U6。基线提交 `ae38918b`。
+日期：2026-09-10。范围：[实施计划](../../topics/unified-agent-directory.md) 执行清单 U1～U6。基线提交 `ae38918b`，落地提交 `4284c893`。
 
 ## U1 目录解析统一
 

@@ -62,7 +62,7 @@ ADR 0008 的四个目标里，**崩溃非致命我们天然满足**：pi worker 
 
 ## 执行清单
 
-全部实现完成（2026-09-10），[验证记录](../evidence/unified-agent-directory/README.md)。尚未打包、未现场点验。
+全部实现完成并提交（2026-09-10，`4284c893`），[验证记录](../evidence/unified-agent-directory/README.md)。尚未打包、未现场点验。
 
 - [x] U1：agent 目录解析改为两种模式一致；删除 H/17 引入的条件分支。
 - [x] U2：迁移能力（复制）——skills、`AGENTS.md`、模型服务导入 vault 用户组；明确的确认步骤，冲突时不静默覆盖。
