@@ -16,15 +16,15 @@
  * What is NEW: the rail is permanent. `sidebarCollapsed` now hides the PANEL,
  * not the column, so the five entries are always one click away — which is the
  * whole reason the prototype's rail is icon-only and the panel carries a title
- * row (see `DockTitle`).
+ * row (see `DockTitle`), and why H/18 S4 moved the collapse toggle onto the
+ * rail: it is the half of the dock that is always there to click.
  */
 
 import type { TempWorkspaceItem } from '@shared/types';
-import { Blocks, PanelLeftClose, Settings } from 'lucide-react';
+import { Blocks, PanelLeftClose, PanelLeftOpen, Settings } from 'lucide-react';
 import { type Ref, useRef, useState } from 'react';
 import type { Repository } from '@/App/constants';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogDescription,
@@ -99,6 +99,12 @@ export function LeftDock({
   const railOrder = useShellLayoutStore((state) => state.railOrder);
   const selectSurface = useShellLayoutStore((state) => state.selectSurface);
   const closeSurface = useShellLayoutStore((state) => state.closeSurface);
+  // S4 (H/18): the rail's collapse control TOGGLES, where the title row's used
+  // to only close. On the rail it has to — the rail outlives the panel, so a
+  // button that could only close would be dead half the time it is on screen.
+  // Same action Ctrl+B runs (`useShellShortcuts` → `toggle-dock`), so the two
+  // cannot drift into meaning different things.
+  const toggleDock = useShellLayoutStore((state) => state.toggleContextPanel);
 
   const changedFilesCount = useGitChangeCount();
   const tabs = derivePanelTabs(railOrder, { changedFilesCount });
@@ -177,6 +183,16 @@ export function LeftDock({
           />
         ))}
         <div className="flex-1" />
+        {/* S4: the panel's collapse control lives here now, not on the title
+            row it used to share with the section name. The rail is the part
+            that never goes away, so this is the only place the button can sit
+            and still be there to bring the panel BACK. The icon states which
+            way it will go. */}
+        <RailIconButton
+          label={`${isOpen ? t('Collapse sidebar') : t('Expand sidebar')} (Ctrl+B)`}
+          icon={isOpen ? PanelLeftClose : PanelLeftOpen}
+          onClick={toggleDock}
+        />
         <RailIconButton label={t('Plugins')} icon={Blocks} onClick={() => setPluginsOpen(true)} />
         <RailIconButton
           label={`${t('Settings')} (Ctrl+,)`}
@@ -211,7 +227,7 @@ export function LeftDock({
       >
         {descriptor && (
           <>
-            <DockTitle labelKey={descriptor.labelKey} onCollapse={closeSurface} />
+            <DockTitle labelKey={descriptor.labelKey} />
             <div className="relative isolate min-h-0 flex-1">
               {/*
                 Multi-mount stack, carried over from `ContextPanel` unchanged.
@@ -294,24 +310,18 @@ export function LeftDock({
  * 「不行好丑」), so this row is the only place the current section names itself.
  * It is also what keeps the three columns' bars on one horizontal rule, which
  * D07 decision two established and D08 keeps.
+ *
+ * S4 (H/18) took the collapse button off this row and put it on the rail. The
+ * row is gone the moment the panel closes, so the button that closed it went
+ * with it and only Ctrl+B could bring it back.
  */
-function DockTitle({ labelKey, onCollapse }: { labelKey: string; onCollapse: () => void }) {
+function DockTitle({ labelKey }: { labelKey: string }) {
   const { t } = useI18n();
   return (
     <div className="flex h-9 shrink-0 items-center gap-2 border-b px-3">
       <span className="min-w-0 flex-1 truncate text-meta font-semibold tracking-[0.02em]">
         {t(labelKey)}
       </span>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        className="h-5 w-5 shrink-0"
-        aria-label={t('Collapse sidebar')}
-        title={`${t('Collapse sidebar')} (Ctrl+B)`}
-        onClick={onCollapse}
-      >
-        <PanelLeftClose className="h-3.5 w-3.5" />
-      </Button>
     </div>
   );
 }

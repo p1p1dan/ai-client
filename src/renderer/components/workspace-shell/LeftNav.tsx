@@ -82,8 +82,8 @@ import { useFolderDiffStatsPolling } from './useFolderDiffStats';
  * D08 (U15-a): this is the `chat` SURFACE's body now, not a column.
  *
  * The chrome it used to own moved to `LeftDock`, which hosts it: the h-9 bar
- * (now the dock's title row), the collapse button (now on that row and on the
- * rail), the account pill (`UserFooterPill`, so it survives a surface switch)
+ * (now the dock's title row), the collapse button (on the rail since H/18 S4),
+ * the account pill (`UserFooterPill`, so it survives a surface switch)
  * and the plugin entry + dialog (now the rail's bottom group). What stays is
  * exactly the session list — search, New / Add repository, Recent, the folder
  * tree and the temporary-chat group.
@@ -196,6 +196,11 @@ export function LeftNav({
   // open — a tab could outlive its worker, which is the confusion D09 was
   // opened to fix.
   const hostBoundSessionIds = useChatSessionsStore((state) => state.hostBoundSessionIds);
+  // S3 (H/18): sessions that finished or failed while the user was elsewhere.
+  // Passed down like `started` rather than folded into `SidebarSessionRow` —
+  // the row derivations are pure functions of the session list, and "have I
+  // looked at this yet" is not a property of the session.
+  const unreadSessionIds = useChatSessionsStore((state) => state.unreadSessionIds);
   const extensionUiPending = useExtensionUiStore((state) => state.pending);
   const pendingApprovalCountBySession = useMemo(() => {
     const counts = new Map<string, number>();
@@ -357,45 +362,58 @@ export function LeftNav({
     if (!unboundFolder) return null;
     const expanded = isProjectExpanded(UNBOUND_FOLDER_ID);
     return (
-      <section>
-        <div className="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui hover:bg-hover">
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 items-center gap-1 text-left"
-            onClick={() =>
-              setExpandedProjects((prev) => ({ ...prev, [UNBOUND_FOLDER_ID]: !expanded }))
-            }
-          >
-            {expanded ? (
-              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-folder" />
-            ) : (
-              <Folder className="h-3.5 w-3.5 shrink-0 text-folder" />
-            )}
-            <span className="min-w-0 flex-1 truncate font-semibold">{unboundFolder.name}</span>
-          </button>
-        </div>
-        {expanded && (
-          <div className="mt-1 space-y-0.5 pl-3">
-            {unboundFolder.rows.map((row) => (
-              <SessionRow
-                key={row.sessionId}
-                row={row}
-                now={now}
-                active={activeSessionId === row.sessionId}
-                started={hostBoundSessionIds.includes(row.sessionId)}
-                {...(selecting
-                  ? { selected: selection.has(row.sessionId), onToggleSelect: toggleSelected }
-                  : {})}
-                pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
-                onSelect={() => handleSelectSession(row.sessionId)}
-                onClose={() => void close(row.sessionId)}
-                onRename={(title) => void rename(row.sessionId, title)}
-                onArchive={() => void archive(row.sessionId, true)}
-              />
-            ))}
+      // S1 (H/18): the partition's own right-click. It covers the header and
+      // the gaps between rows; a right-click that lands ON a row opens that
+      // row's menu instead, because Base UI's context-menu trigger stops the
+      // event before it reaches this one.
+      <ContextMenuPrimitive.Root>
+        <ContextMenuPrimitive.Trigger render={<section />}>
+          <div className="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui hover:bg-hover">
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-1 text-left"
+              onClick={() =>
+                setExpandedProjects((prev) => ({ ...prev, [UNBOUND_FOLDER_ID]: !expanded }))
+              }
+            >
+              {expanded ? (
+                <FolderOpen className="h-3.5 w-3.5 shrink-0 text-folder" />
+              ) : (
+                <Folder className="h-3.5 w-3.5 shrink-0 text-folder" />
+              )}
+              <span className="min-w-0 flex-1 truncate font-semibold">{unboundFolder.name}</span>
+            </button>
           </div>
-        )}
-      </section>
+          {expanded && (
+            <div className="mt-1 space-y-0.5 pl-3">
+              {unboundFolder.rows.map((row) => (
+                <SessionRow
+                  key={row.sessionId}
+                  row={row}
+                  now={now}
+                  active={activeSessionId === row.sessionId}
+                  started={hostBoundSessionIds.includes(row.sessionId)}
+                  unread={unreadSessionIds.includes(row.sessionId)}
+                  {...(selecting
+                    ? { selected: selection.has(row.sessionId), onToggleSelect: toggleSelected }
+                    : {})}
+                  pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
+                  onSelect={() => handleSelectSession(row.sessionId)}
+                  onClose={() => void close(row.sessionId)}
+                  onRename={(title) => void rename(row.sessionId, title)}
+                  onArchive={() => void archive(row.sessionId, true)}
+                />
+              ))}
+            </div>
+          )}
+        </ContextMenuPrimitive.Trigger>
+        <MenuPopup align="start" side="bottom" className="min-w-40">
+          <MenuItem onClick={() => createUnboundChatSession()}>
+            <Plus className="size-4" />
+            {t('New temporary chat')}
+          </MenuItem>
+        </MenuPopup>
+      </ContextMenuPrimitive.Root>
     );
   };
 
@@ -545,6 +563,7 @@ export function LeftNav({
                         now={now}
                         active={activeSessionId === row.sessionId}
                         started={hostBoundSessionIds.includes(row.sessionId)}
+                        unread={unreadSessionIds.includes(row.sessionId)}
                         {...(selecting
                           ? {
                               selected: selection.has(row.sessionId),
@@ -583,229 +602,274 @@ export function LeftNav({
                 )}
               </section>
 
-              <div className="flex h-7 items-center px-2">
-                <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
-                  {t('Repositories')}
-                </p>
-                <div className="ml-auto flex items-center">
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="h-5 w-5"
-                    aria-label={t('Filter sessions')}
-                    title={t('Filter sessions')}
-                    aria-pressed={searchVisible}
-                    onClick={toggleSearchVisible}
-                  >
-                    <ListFilter className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="h-5 w-5"
-                    aria-label={t('Add Repository')}
-                    title={t('Add Repository')}
-                    onClick={onAddRepository}
-                  >
-                    <FolderPlus className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-
-              {noMatches && (
-                <p className="px-2 py-1 text-meta text-muted-foreground">
-                  {t('No matching sessions')}
-                </p>
-              )}
-
-              {visibleFolders.map((folder) => {
-                const expanded = isProjectExpanded(folder.projectId);
-                const newSessionWorkspaceId = folder.newSessionWorkspaceId;
-                const folderRepo = repoByProjectId.get(folder.projectId);
-                const diffTotals = sumFolderDiffTotals(folder, workspaces, diffStatsByPath);
-                return (
-                  <section key={folder.projectId}>
-                    {/* Toggle and "+ new chat" are sibling buttons in a flex
-                            row — a nested button would be invalid HTML (same
-                            trap as the McpSection fix in d68d3c6). */}
-                    <div
-                      // Project headers have no selected state, so the plain
-                      // hover step is enough; --hover is the semantic alias.
-                      className="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui hover:bg-hover"
-                    >
-                      <button
-                        type="button"
-                        className="flex min-w-0 flex-1 items-center gap-1 text-left"
-                        onClick={() => {
-                          // D1 (round-5): a folder header click also targets
-                          // the global "New" button at this folder, in sync
-                          // with handleSelectSession's session-pick path.
-                          setFocusedProjectId(folder.projectId);
-                          // F3 (D29 adversarial-review, minor): read fresh
-                          // store state at click time rather than the
-                          // render-body `activeSession` snapshot — this
-                          // handler can fire well after the render that
-                          // captured it scheduled this closure.
-                          const activeProjectId = resolveActiveProjectId(
-                            useChatSessionsStore.getState()
-                          );
-                          // D29 (open-q #28 A) + F1 (adversarial-review
-                          // major): activation and expansion are decided
-                          // together by one pure call, so a cross-repo
-                          // click can never toggle the just-activated
-                          // folder closed — the old code toggled expansion
-                          // unconditionally BEFORE deciding activation,
-                          // which could collapse the row it had just
-                          // activated. Routed through the very same
-                          // handler a session row click uses — no second
-                          // activation path.
-                          const { activateSessionId, nextExpanded } = resolveFolderClickActivation({
-                            folder,
-                            activeProjectId,
-                            currentExpanded: expanded,
-                          });
-                          setExpandedProjects((prev) => ({
-                            ...prev,
-                            [folder.projectId]: nextExpanded,
-                          }));
-                          if (activateSessionId) {
-                            handleSelectSession(activateSessionId);
-                          }
-                        }}
+              {/* S1 (H/18): the projects partition's own right-click, covering
+                  its title row, the gaps between folders and any folder header
+                  with no repository behind it. Wrapping several children in one
+                  element costs the parent's `space-y-3` between them, so the
+                  trigger restates it. */}
+              <ContextMenuPrimitive.Root>
+                <ContextMenuPrimitive.Trigger className="space-y-3">
+                  <div className="flex h-7 items-center px-2">
+                    <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
+                      {t('Repositories')}
+                    </p>
+                    <div className="ml-auto flex items-center">
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="h-5 w-5"
+                        aria-label={t('Filter sessions')}
+                        title={t('Filter sessions')}
+                        aria-pressed={searchVisible}
+                        onClick={toggleSearchVisible}
                       >
-                        {expanded ? (
-                          <FolderOpen className="h-3.5 w-3.5 shrink-0 text-folder" />
-                        ) : (
-                          <Folder className="h-3.5 w-3.5 shrink-0 text-folder" />
+                        <ListFilter className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="h-5 w-5"
+                        aria-label={t('Add Repository')}
+                        title={t('Add Repository')}
+                        onClick={onAddRepository}
+                      >
+                        <FolderPlus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {noMatches && (
+                    <p className="px-2 py-1 text-meta text-muted-foreground">
+                      {t('No matching sessions')}
+                    </p>
+                  )}
+
+                  {visibleFolders.map((folder) => {
+                    const expanded = isProjectExpanded(folder.projectId);
+                    const newSessionWorkspaceId = folder.newSessionWorkspaceId;
+                    const folderRepo = repoByProjectId.get(folder.projectId);
+                    const diffTotals = sumFolderDiffTotals(folder, workspaces, diffStatsByPath);
+                    // S2 (H/18): ONE definition of the repository actions, rendered
+                    // from both entry points — the hover "more" button and the
+                    // row's new context menu. Two copies would drift apart the
+                    // first time either gains an action, and "the two give the same
+                    // menu" is the whole acceptance criterion.
+                    const repoMenuItems = folderRepo ? (
+                      <>
+                        <MenuItem onClick={() => setRepoToConfigure(folderRepo)}>
+                          <Settings />
+                          {t('Repository Settings')}
+                        </MenuItem>
+                        {onRemoveRepository && (
+                          <MenuItem
+                            variant="destructive"
+                            onClick={() => setRepoToRemove(folderRepo)}
+                          >
+                            <FolderMinus />
+                            {t('Remove repository')}
+                          </MenuItem>
                         )}
-                        <span className="min-w-0 flex-1 truncate font-semibold">{folder.name}</span>
-                      </button>
-                      {/* Trailing slot. The totals and the row's two hover
+                      </>
+                    ) : null;
+                    // Toggle and "+ new chat" are sibling buttons in a flex row — a
+                    // nested button would be invalid HTML (same trap as the
+                    // McpSection fix in d68d3c6).
+                    const header = (
+                      <div
+                        // Project headers have no selected state, so the plain
+                        // hover step is enough; --hover is the semantic alias.
+                        className="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui hover:bg-hover"
+                      >
+                        <button
+                          type="button"
+                          className="flex min-w-0 flex-1 items-center gap-1 text-left"
+                          onClick={() => {
+                            // D1 (round-5): a folder header click also targets
+                            // the global "New" button at this folder, in sync
+                            // with handleSelectSession's session-pick path.
+                            setFocusedProjectId(folder.projectId);
+                            // F3 (D29 adversarial-review, minor): read fresh
+                            // store state at click time rather than the
+                            // render-body `activeSession` snapshot — this
+                            // handler can fire well after the render that
+                            // captured it scheduled this closure.
+                            const activeProjectId = resolveActiveProjectId(
+                              useChatSessionsStore.getState()
+                            );
+                            // D29 (open-q #28 A) + F1 (adversarial-review
+                            // major): activation and expansion are decided
+                            // together by one pure call, so a cross-repo
+                            // click can never toggle the just-activated
+                            // folder closed — the old code toggled expansion
+                            // unconditionally BEFORE deciding activation,
+                            // which could collapse the row it had just
+                            // activated. Routed through the very same
+                            // handler a session row click uses — no second
+                            // activation path.
+                            const { activateSessionId, nextExpanded } =
+                              resolveFolderClickActivation({
+                                folder,
+                                activeProjectId,
+                                currentExpanded: expanded,
+                              });
+                            setExpandedProjects((prev) => ({
+                              ...prev,
+                              [folder.projectId]: nextExpanded,
+                            }));
+                            if (activateSessionId) {
+                              handleSelectSession(activateSessionId);
+                            }
+                          }}
+                        >
+                          {expanded ? (
+                            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-folder" />
+                          ) : (
+                            <Folder className="h-3.5 w-3.5 shrink-0 text-folder" />
+                          )}
+                          <span className="min-w-0 flex-1 truncate font-semibold">
+                            {folder.name}
+                          </span>
+                        </button>
+                        {/* Trailing slot. The totals and the row's two hover
                           buttons share ONE grid cell, so the cell is as wide as
                           whichever is wider and the row cannot reflow when the
                           numbers give way on hover — the same reason the session
                           row below boxes its age and actions together. */}
-                      <span className="grid shrink-0 justify-items-end">
-                        {diffTotals && (
-                          <span
-                            className="col-start-1 row-start-1 flex items-center gap-1 text-meta tabular-nums group-hover:invisible group-focus-within:invisible"
-                            title={t('Folder diff totals', {
-                              insertions: diffTotals.insertions,
-                              deletions: diffTotals.deletions,
-                            })}
-                          >
-                            {diffTotals.insertions > 0 && (
-                              <span className="text-success">+{diffTotals.insertions}</span>
+                        <span className="grid shrink-0 justify-items-end">
+                          {diffTotals && (
+                            <span
+                              className="col-start-1 row-start-1 flex items-center gap-1 text-meta tabular-nums group-hover:invisible group-focus-within:invisible"
+                              title={t('Folder diff totals', {
+                                insertions: diffTotals.insertions,
+                                deletions: diffTotals.deletions,
+                              })}
+                            >
+                              {diffTotals.insertions > 0 && (
+                                <span className="text-success">+{diffTotals.insertions}</span>
+                              )}
+                              {diffTotals.deletions > 0 && (
+                                <span className="text-destructive">-{diffTotals.deletions}</span>
+                              )}
+                            </span>
+                          )}
+                          <span className="col-start-1 row-start-1 flex items-center">
+                            {folderRepo && (
+                              <Menu>
+                                <MenuTrigger
+                                  render={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      className="h-5 w-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 data-popup-open:opacity-100"
+                                      aria-label={t('Repository actions')}
+                                      title={t('Repository actions')}
+                                    />
+                                  }
+                                >
+                                  <MoreHorizontal className="h-3 w-3" />
+                                </MenuTrigger>
+                                <MenuPopup align="end">{repoMenuItems}</MenuPopup>
+                              </Menu>
                             )}
-                            {diffTotals.deletions > 0 && (
-                              <span className="text-destructive">-{diffTotals.deletions}</span>
+                            {newSessionWorkspaceId && (
+                              // The header New button targets the active session's
+                              // workspace only, so a repo that already has sessions
+                              // needs its own entry point (T-26 review should-fix).
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                                aria-label={t('New chat')}
+                                title={t('New chat in existing directory: {{path}}', {
+                                  path:
+                                    workspaces.find(
+                                      (workspace) => workspace.id === newSessionWorkspaceId
+                                    )?.path ?? '',
+                                })}
+                                onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
                             )}
                           </span>
-                        )}
-                        <span className="col-start-1 row-start-1 flex items-center">
-                          {folderRepo && (
-                            <Menu>
-                              <MenuTrigger
-                                render={
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    className="h-5 w-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 data-popup-open:opacity-100"
-                                    aria-label={t('Repository actions')}
-                                    title={t('Repository actions')}
-                                  />
-                                }
-                              >
-                                <MoreHorizontal className="h-3 w-3" />
-                              </MenuTrigger>
-                              <MenuPopup align="end">
-                                <MenuItem onClick={() => setRepoToConfigure(folderRepo)}>
-                                  <Settings />
-                                  {t('Repository Settings')}
-                                </MenuItem>
-                                {onRemoveRepository && (
-                                  <MenuItem
-                                    variant="destructive"
-                                    onClick={() => setRepoToRemove(folderRepo)}
-                                  >
-                                    <FolderMinus />
-                                    {t('Remove repository')}
-                                  </MenuItem>
-                                )}
-                              </MenuPopup>
-                            </Menu>
-                          )}
-                          {newSessionWorkspaceId && (
-                            // The header New button targets the active session's
-                            // workspace only, so a repo that already has sessions
-                            // needs its own entry point (T-26 review should-fix).
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-                              aria-label={t('New chat')}
-                              title={t('New chat in existing directory: {{path}}', {
-                                path:
-                                  workspaces.find(
-                                    (workspace) => workspace.id === newSessionWorkspaceId
-                                  )?.path ?? '',
-                              })}
-                              onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          )}
                         </span>
-                      </span>
-                    </div>
-
-                    {expanded && (
-                      <div className="mt-1 space-y-0.5 pl-3">
-                        {folder.rows.map((row) => {
-                          const tempItemId = tempItemIdByWorkspaceId.get(row.workspaceId);
-                          return (
-                            <SessionRow
-                              key={row.sessionId}
-                              row={row}
-                              now={now}
-                              active={activeSessionId === row.sessionId}
-                              started={hostBoundSessionIds.includes(row.sessionId)}
-                              {...(selecting
-                                ? {
-                                    selected: selection.has(row.sessionId),
-                                    onToggleSelect: toggleSelected,
-                                  }
-                                : {})}
-                              pendingApprovalCount={
-                                pendingApprovalCountBySession.get(row.sessionId) ?? 0
-                              }
-                              onSelect={() => handleSelectSession(row.sessionId)}
-                              onClose={() => void close(row.sessionId)}
-                              onRename={(title) => void rename(row.sessionId, title)}
-                              onArchive={() => void archive(row.sessionId, true)}
-                              onDeleteTemp={
-                                tempItemId && onRequestTempDelete
-                                  ? () => onRequestTempDelete(tempItemId)
-                                  : undefined
-                              }
-                            />
-                          );
-                        })}
-                        {folder.rows.length === 0 && !query.trim() && newSessionWorkspaceId && (
-                          <button
-                            type="button"
-                            className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui text-muted-foreground hover:bg-hover"
-                            onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
-                          >
-                            <Plus className="h-3 w-3 shrink-0" />
-                            {t('New chat')}
-                          </button>
-                        )}
                       </div>
-                    )}
-                  </section>
-                );
-              })}
+                    );
+                    return (
+                      <section key={folder.projectId}>
+                        {/* S2: right-click gives the same actions as the "more"
+                        button. Only wrapped when there ARE actions — the
+                        synthetic Temp folder has no repository behind it, and a
+                        trigger with an empty menu would swallow the right-click
+                        (Base UI's trigger stops the event) instead of letting it
+                        reach the section menu below. */}
+                        {repoMenuItems ? (
+                          <ContextMenuPrimitive.Root>
+                            <ContextMenuPrimitive.Trigger render={header} />
+                            <MenuPopup align="start" side="bottom" className="min-w-40">
+                              {repoMenuItems}
+                            </MenuPopup>
+                          </ContextMenuPrimitive.Root>
+                        ) : (
+                          header
+                        )}
+
+                        {expanded && (
+                          <div className="mt-1 space-y-0.5 pl-3">
+                            {folder.rows.map((row) => {
+                              const tempItemId = tempItemIdByWorkspaceId.get(row.workspaceId);
+                              return (
+                                <SessionRow
+                                  key={row.sessionId}
+                                  row={row}
+                                  now={now}
+                                  active={activeSessionId === row.sessionId}
+                                  started={hostBoundSessionIds.includes(row.sessionId)}
+                                  unread={unreadSessionIds.includes(row.sessionId)}
+                                  {...(selecting
+                                    ? {
+                                        selected: selection.has(row.sessionId),
+                                        onToggleSelect: toggleSelected,
+                                      }
+                                    : {})}
+                                  pendingApprovalCount={
+                                    pendingApprovalCountBySession.get(row.sessionId) ?? 0
+                                  }
+                                  onSelect={() => handleSelectSession(row.sessionId)}
+                                  onClose={() => void close(row.sessionId)}
+                                  onRename={(title) => void rename(row.sessionId, title)}
+                                  onArchive={() => void archive(row.sessionId, true)}
+                                  onDeleteTemp={
+                                    tempItemId && onRequestTempDelete
+                                      ? () => onRequestTempDelete(tempItemId)
+                                      : undefined
+                                  }
+                                />
+                              );
+                            })}
+                            {folder.rows.length === 0 && !query.trim() && newSessionWorkspaceId && (
+                              <button
+                                type="button"
+                                className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui text-muted-foreground hover:bg-hover"
+                                onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
+                              >
+                                <Plus className="h-3 w-3 shrink-0" />
+                                {t('New chat')}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </section>
+                    );
+                  })}
+                </ContextMenuPrimitive.Trigger>
+                <MenuPopup align="start" side="bottom" className="min-w-40">
+                  <MenuItem onClick={() => onAddRepository?.()}>
+                    <FolderPlus className="size-4" />
+                    {t('Add Repository')}
+                  </MenuItem>
+                </MenuPopup>
+              </ContextMenuPrimitive.Root>
 
               {renderUnboundSection()}
             </>
@@ -908,6 +972,12 @@ interface SessionRowProps {
    */
   started: boolean;
   /**
+   * S3 (H/18): this session's last turn ENDED somewhere the user was not
+   * looking. Cleared the moment the conversation is opened, so it answers
+   * "is there a result here I have not seen", not "did it ever finish".
+   */
+  unread: boolean;
+  /**
    * U31: set only while the sidebar is in selection mode. Presence is what puts
    * the row in that mode — a `selecting` boolean beside them would be a third
    * source for a fact these two already carry.
@@ -929,6 +999,7 @@ function SessionRow({
   active,
   pendingApprovalCount,
   started,
+  unread,
   selected,
   onToggleSelect,
   onSelect,
@@ -942,6 +1013,9 @@ function SessionRow({
   const [draft, setDraft] = useState(row.title);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
+  const unreadLabel = row.failed
+    ? t('Failed while you were away')
+    : t('Finished while you were away');
 
   const commitRename = () => {
     const trimmed = draft.trim();
@@ -1037,15 +1111,36 @@ function SessionRow({
               {selected && <Check className="size-2.5" />}
             </span>
           )}
-          {/* The three-state marker, in one 6px slot so rows never jump:
-              filled = running, ring = started (a worker is attached in the
-              background), nothing = not started. `busy` wins when both are true
-              — "it is working" is the more urgent of the two facts. */}
+          {/* The marker, in one 6px slot so rows never jump: filled accent =
+              running, filled green/red = an unread result (S3), ring = started
+              (a worker is attached in the background), nothing = not started.
+              One slot, not several — a second dot would widen the row and push
+              the title, and only ever one of these is the fact worth acting on.
+
+              Order is urgency, and it is also why nothing is lost by sharing
+              the slot: `busy` outranks `unread` because a session cannot be
+              running and holding an unseen result at the same time (the result
+              is what ends the run), and `unread` outranks `started` because
+              "attached in the background" is exactly the state every unread row
+              is in — showing the ring there would say the less useful half. */}
           {onToggleSelect ? null : row.busy ? (
             <span
               aria-hidden
               className="h-1.5 w-1.5 shrink-0 rounded-full bg-status-running"
               title={t('Running')}
+            />
+          ) : unread ? (
+            // Not `aria-hidden` like its neighbours: the run-state dots restate
+            // something the row's own text already implies, while this one is
+            // the ONLY carrier of "there is a result here you have not seen".
+            <span
+              role="img"
+              aria-label={unreadLabel}
+              title={unreadLabel}
+              className={cn(
+                'h-1.5 w-1.5 shrink-0 rounded-full',
+                row.failed ? 'bg-destructive' : 'bg-success'
+              )}
             />
           ) : started ? (
             <span

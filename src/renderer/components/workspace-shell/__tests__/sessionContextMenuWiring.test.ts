@@ -7,15 +7,34 @@ const source = stripComments(
   readFileSync(path.join(__dirname, '..', 'LeftNav.tsx'), 'utf8'),
   'LeftNav.tsx'
 );
+
+/**
+ * H/18 S1/S2 added two more context menus to this file (the partition menus and
+ * the project-row menu), and both are declared ABOVE `SessionRow`. Scanning the
+ * whole file for "the first context-menu trigger" therefore stopped meaning
+ * "the session row's" — every assertion below is scoped to the row component
+ * instead, and `sidebarSectionMenus.test.ts` covers the other two.
+ */
+const sessionRowSource = source.slice(source.indexOf('function SessionRow('));
+
 function between(start: string, end: string): string {
-  const from = source.indexOf(start);
-  const to = source.indexOf(end, from + start.length);
+  const from = sessionRowSource.indexOf(start);
+  const to = sessionRowSource.indexOf(end, from + start.length);
   expect(from, `missing start token: ${start}`).toBeGreaterThan(-1);
   expect(to, `missing end token: ${end}`).toBeGreaterThan(from);
-  return source.slice(from, to);
+  return sessionRowSource.slice(from, to);
 }
 
 describe('T13 session context menu wiring', () => {
+  it('scopes these assertions to SessionRow, which is not the file s first context menu', () => {
+    expect(sessionRowSource.length).toBeGreaterThan(0);
+    // Non-vacuity: if the row ever became the first trigger again, the scoping
+    // above would be silently pointless.
+    expect(source.indexOf('<ContextMenuPrimitive.Trigger')).toBeLessThan(
+      source.indexOf('function SessionRow(')
+    );
+  });
+
   it('right-click is owned by a context-menu trigger and has no direct archive handler', () => {
     const trigger = between('<ContextMenuPrimitive.Trigger', '</ContextMenuPrimitive.Trigger>');
 
@@ -51,7 +70,7 @@ describe('T13 session context menu wiring', () => {
 
   it('uses the semantic Base UI context-menu trigger and preserves row keyboard focus', () => {
     expect(source).toContain('<ContextMenuPrimitive.Root>');
-    expect(source).toContain('<ContextMenuPrimitive.Trigger');
+    expect(sessionRowSource).toContain('<ContextMenuPrimitive.Trigger');
     const trigger = between('<ContextMenuPrimitive.Trigger', '</ContextMenuPrimitive.Trigger>');
     expect(trigger).toContain('role="button"');
     expect(trigger).toContain('tabIndex={0}');

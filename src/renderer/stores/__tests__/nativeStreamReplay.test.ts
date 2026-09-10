@@ -80,6 +80,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     pendingPermissions: [],
     pendingQuestion: null,
     hostBoundSessionIds: [SESSION_ID],
+    unreadSessionIds: [],
     runtimeReady: true,
     lastError: null,
     historyErrors: {},

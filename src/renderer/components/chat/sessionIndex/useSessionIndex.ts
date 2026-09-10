@@ -29,12 +29,21 @@ export interface UseSessionIndexResult {
 export interface SessionIndexRefreshInput {
   sessions: ChatSession[];
   workspaces: ChatWorkspace[];
+  /** H/18 S3 — see the patch field of the same name. */
+  unreadSessionIds: string[];
 }
 
 /** Store patch `applySessionIndexRefresh` produces. */
 export interface SessionIndexRefreshPatch {
   sessions: ChatSession[];
   recentSessionIds: string[];
+  /**
+   * H/18 S3: unread markers for sessions that no longer have a row. A closed or
+   * archived session leaves nothing on screen to click, so its marker could
+   * never be read again — it would sit in the list for the rest of the run and
+   * come back if the row ever did.
+   */
+  unreadSessionIds: string[];
 }
 
 /**
@@ -59,7 +68,18 @@ export function applySessionIndexRefresh(
   // Rows the user removed in this run must not be resurrected by the very
   // next refresh (Close leaves the index entry in place on purpose).
   const sessions = dropDismissedSessions(merged.sessions);
-  return { sessions, recentSessionIds: recentSessionIdsFromIndex(sessions, 20) };
+  const liveIds = new Set(sessions.map((session) => session.id));
+  const unreadSessionIds = state.unreadSessionIds.filter((id) => liveIds.has(id));
+  return {
+    sessions,
+    recentSessionIds: recentSessionIdsFromIndex(sessions, 20),
+    // Same array identity when nothing was pruned, so an ordinary refresh does
+    // not re-render every row that reads this list.
+    unreadSessionIds:
+      unreadSessionIds.length === state.unreadSessionIds.length
+        ? state.unreadSessionIds
+        : unreadSessionIds,
+  };
 }
 
 export function useSessionIndex(): UseSessionIndexResult {

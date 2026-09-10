@@ -1922,6 +1922,10 @@ export const zhTranslations: Record<string, string> = {
   Temporary: '临时',
   'Expand sidebar': '展开侧栏',
   'Collapse sidebar': '收起侧栏',
+  // H/18 S1 / S3: the sidebar's partition menus and the unread-result marker.
+  'New temporary chat': '新建临时对话',
+  'Finished while you were away': '你不在时已跑完，还没看过',
+  'Failed while you were away': '你不在时失败了，还没看过',
   'Resize sidebar': '调整侧栏宽度',
   'Resize context panel': '调整上下文面板宽度',
   'Not connected yet — {{task}} will wire this surface.':

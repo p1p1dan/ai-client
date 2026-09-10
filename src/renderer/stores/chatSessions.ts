@@ -263,6 +263,20 @@ export interface ChatSessionsState {
   pendingQuestion: PendingQuestion | null;
   /** Sessions already registered with Agent Host. */
   hostBoundSessionIds: string[];
+  /**
+   * H/18 S3: sessions whose LAST TURN ENDED while the user was looking at some
+   * other session — the sidebar's "there is something here you have not seen".
+   *
+   * Only terminal-by-itself events add to this (`session.completed`,
+   * `session.failed`). `session.stopped` deliberately does not: the user
+   * pressed stop, so they already know how it ended.
+   *
+   * Read means ACTIVATED, not rendered: `selectSession` is the single place an
+   * id leaves this list, so a row cannot clear itself just by scrolling past.
+   * The active session is never added in the first place, which is why there is
+   * no "mark read on arrival" path to keep in step with it.
+   */
+  unreadSessionIds: string[];
   runtimeReady: boolean;
   lastError: string | null;
   /** Non-fatal per-session history read errors, keyed by sessionId. Formatted `${code}: ${message}`. */
@@ -431,6 +445,22 @@ function withoutPermission(
   );
   if (next.length === state.pendingPermissions.length) return {};
   return { pendingPermissions: next };
+}
+
+/**
+ * H/18 S3 — add one session to `unreadSessionIds`, or return the list
+ * untouched.
+ *
+ * Same array-identity rule as {@link withoutPermission}: a turn ending on the
+ * session the user is already reading must not hand every subscriber a fresh
+ * array, or `session.completed` — which fires every single turn — would
+ * re-render the whole sidebar for a fact that did not change.
+ */
+function markSessionUnread(state: ChatSessionsState, sessionId: string): string[] {
+  if (state.activeSessionId === sessionId || state.unreadSessionIds.includes(sessionId)) {
+    return state.unreadSessionIds;
+  }
+  return [...state.unreadSessionIds, sessionId];
 }
 
 /** Drop every parked prompt of one session (terminal events). Same identity rule as {@link withoutPermission}. */
@@ -802,6 +832,7 @@ function applyRuntimeEventCore(
       // stays clickable forever (see withoutSessionPermissions).
       return {
         sessions: upsertSessionStatus(state.sessions, sessionId, 'idle'),
+        unreadSessionIds: markSessionUnread(state, sessionId),
         ...withoutSessionPermissions(state, sessionId),
       };
     }
@@ -810,6 +841,7 @@ function applyRuntimeEventCore(
       return {
         sessions: upsertSessionStatus(state.sessions, sessionId, 'failed'),
         lastError: event.payload?.error ?? 'Session failed',
+        unreadSessionIds: markSessionUnread(state, sessionId),
         ...withoutSessionPermissions(state, sessionId),
       };
     }
@@ -1286,6 +1318,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
   pendingPermissions: [],
   pendingQuestion: null,
   hostBoundSessionIds: [],
+  unreadSessionIds: [],
   runtimeReady: false,
   lastError: null,
   historyErrors: {},
@@ -1293,7 +1326,17 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
   historyBranchRevisions: {},
 
   selectSession: (sessionId) => {
-    set({ activeSessionId: sessionId, lastError: null });
+    // H/18 S3: opening a conversation IS reading it. Done here rather than in
+    // the sidebar so every entry point counts — the center tab strip and the
+    // folder-header activation reach this same action.
+    set((state) => ({
+      activeSessionId: sessionId,
+      lastError: null,
+      unreadSessionIds:
+        sessionId && state.unreadSessionIds.includes(sessionId)
+          ? state.unreadSessionIds.filter((id) => id !== sessionId)
+          : state.unreadSessionIds,
+    }));
   },
 
   /**
