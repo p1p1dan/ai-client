@@ -50,7 +50,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
 import { canonicalPathKey } from '@shared/utils/path';
-import { readSharedSettings } from '../SharedSessionState';
+import { readSettings } from '../../ipc/settings';
 
 /**
  * Directory under the user's temporary base that holds every scratch cwd.
@@ -73,7 +73,13 @@ export interface ScratchWorkspaceServiceOptions {
 }
 
 function settingsTemporaryPath(): string {
-  const configured = readSharedSettings()[TEMPORARY_PATH_SETTING_KEY];
+  // F2-a: read the same copy `TempWorkspaceService` does. `readSharedSettings`
+  // only sees what has been flushed to disk, so a base path the user just
+  // changed in Settings sent scratch directories to the OLD root while temp
+  // workspaces already used the new one — two directory kinds disagreeing about
+  // one setting is exactly what the field pass reported as "实际的临时工作区跟
+  // 设置里的不一样".
+  const configured = readSettings()?.[TEMPORARY_PATH_SETTING_KEY];
   return typeof configured === 'string' ? configured : '';
 }
 
