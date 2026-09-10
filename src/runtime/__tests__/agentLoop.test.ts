@@ -86,6 +86,30 @@ describe('agent loop', () => {
     });
   });
 
+  it('asks for medium reasoning when the caller names no level', async () => {
+    // EFFORT-1 follow-up (user decision, 2026-09-10): legacy never sends a level
+    // unless the user picked one, so pi applies its own default of medium. This
+    // loop has to name a value, and naming `off` made an untouched effort chip
+    // mean different things on the two backends.
+    await withRuntime(fauxAssistantMessage('ready'), async (runtime) => {
+      await runtime.run({ prompt: 'say ready', systemPrompt: 'probe' });
+      const header = runtime.trace.runs.at(-1)?.steps.find((step) => step.type === 'note');
+      expect((header?.detail as { thinking_level?: string } | undefined)?.thinking_level).toBe(
+        'medium'
+      );
+    });
+  });
+
+  it('still honours an explicit off', async () => {
+    await withRuntime(fauxAssistantMessage('ready'), async (runtime) => {
+      await runtime.run({ prompt: 'say ready', systemPrompt: 'probe', thinkingLevel: 'off' });
+      const header = runtime.trace.runs.at(-1)?.steps.find((step) => step.type === 'note');
+      expect((header?.detail as { thinking_level?: string } | undefined)?.thinking_level).toBe(
+        'off'
+      );
+    });
+  });
+
   it('retries a provider failure that arrives before the stream starts', async () => {
     // F4: pi-ai reports a setup failure as an error EVENT, so without the
     // retry layer in `streamFn` a gateway 503 ended the run on the first try.

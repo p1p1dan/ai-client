@@ -48,13 +48,23 @@ export interface AgentLoopConfig {
    * P1 sets this false: multi-turn is what a tool loop IS.
    */
   singleTurn: boolean;
-  /** Sent when a caller does not name one. */
+  /**
+   * Sent when a caller does not name one.
+   *
+   * `medium`, matching what the legacy backend ends up with: it never sends a
+   * level unless the user picked one, so pi applies its own
+   * `DEFAULT_THINKING_LEVEL`. This loop has to name a value, and naming `off`
+   * made the same untouched chip mean "no reasoning" on native and "medium" on
+   * legacy — a silent behaviour split between the two backends, which the
+   * 2026-09-09 field pass ran into while checking EFFORT-1. `off` is still a
+   * LEVEL a caller can ask for; it is just no longer what "unspecified" means.
+   */
   defaultThinkingLevel: ThinkingLevel;
 }
 
 export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
   singleTurn: true,
-  defaultThinkingLevel: 'off',
+  defaultThinkingLevel: 'medium',
 };
 
 export class AgentLoopPlugin extends Service implements AgentLoopService {
