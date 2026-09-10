@@ -21,6 +21,16 @@ export interface ToolPermissionRequest {
   toolCallId: string;
   path: string;
   command?: string;
+  /**
+   * What the tool is about to write, for the approval card to show verbatim.
+   *
+   * The decision a person is being asked to make is about CONTENT — "write
+   * these bytes into that file" — and the card that showed only the tool name,
+   * the matched rule and a serialized argument object gave them none of it.
+   * Optional because most tools have nothing to preview: a read or a glob is
+   * fully described by its path.
+   */
+  preview?: { label: string; text: string };
   paths?: readonly string[];
   commands?: readonly string[];
   unresolvedPaths?: boolean;

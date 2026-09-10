@@ -9,7 +9,11 @@ import type {
   WorkerReconcileImportedSessionResult,
 } from '../shared/types/legacyImport.ts';
 import { isWorkerImportConversationPayload } from '../shared/types/legacyImport.ts';
-import type { RuntimeEvent, RuntimeEventDraft } from '../shared/types/runtimeEvents.ts';
+import type {
+  PermissionDecisionId,
+  RuntimeEvent,
+  RuntimeEventDraft,
+} from '../shared/types/runtimeEvents.ts';
 import type { RuntimePermissionSettings } from '../shared/types/runtimePermission.ts';
 import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
 import {
@@ -22,6 +26,7 @@ import {
   isWorkerForkPayload,
   isWorkerHistoryPayload,
   isWorkerInspectImportedSessionPayload,
+  isWorkerPermissionRespondPayload,
   isWorkerReconcileImportedSessionPayload,
   isWorkerReloadPayload,
   isWorkerRewindPayload,
@@ -48,6 +53,7 @@ import {
   type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
+  type WorkerPermissionRespondResult,
   type WorkerReloadPayload,
   type WorkerReloadResult,
   type WorkerRewindPayload,
@@ -95,6 +101,12 @@ export interface PiWorkerRuntime {
   discardFork?(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
   respondExtensionUi(response: Parameters<PiWorkerSession['respondExtensionUi']>[0]): boolean;
+  /**
+   * Answer one `permission.requested`. Optional: only a backend that ASKS
+   * through that event implements it, and a backend that does not must reject
+   * the method rather than silently report the gate as answered.
+   */
+  respondPermission?(input: { permissionId: string; decision: PermissionDecisionId }): boolean;
   setPermissions?(permissions: RuntimePermissionSettings): void;
   setPermissionTier?(tier: SessionPermissionTier): void;
   dispose(): Promise<void>;
@@ -318,6 +330,9 @@ export class PiWorkerRpcServer {
           break;
         case 'worker.extensionUi.respond':
           this.handleExtensionUiResponse(request);
+          break;
+        case 'worker.permission.respond':
+          this.handlePermissionResponse(request);
           break;
         case 'worker.setPermissions':
           this.handleSetPermissions(request);
@@ -739,6 +754,40 @@ export class PiWorkerRpcServer {
     }
     const result: WorkerExtensionUiResponseResult = {
       handled: this.runtime?.respondExtensionUi(request.payload.response) ?? false,
+    };
+    this.respondSuccess(request, result);
+  }
+
+  private handlePermissionResponse(request: WorkerRpcRequest): void {
+    if (!isWorkerPermissionRespondPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.permission.respond requires logicalSessionId, permissionId and a decision',
+        retryable: false,
+      });
+      return;
+    }
+    if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_MISMATCH',
+        'Permission response targets another session'
+      );
+    }
+    if (!this.runtime?.respondPermission) {
+      // The legacy backend asks through the extension UI bridge, so a
+      // permission answer arriving here means the two ends disagree about which
+      // channel is in use — saying so beats reporting `handled: false`, which
+      // reads as "too late" and would hide the mismatch.
+      throw new PiWorkerSessionError(
+        'WORKER_PERMISSION_RESPOND_UNAVAILABLE',
+        'This backend does not answer permissions through worker.permission.respond'
+      );
+    }
+    const result: WorkerPermissionRespondResult = {
+      handled: this.runtime.respondPermission({
+        permissionId: request.payload.permissionId,
+        decision: request.payload.decision,
+      }),
     };
     this.respondSuccess(request, result);
   }

@@ -195,21 +195,42 @@
     "requestId": "turn-1"
   },
   {
-    "type": "extensionUi.request",
+    "type": "permission.requested",
     "sessionId": "logical-gui",
     "payload": {
-      "runtimeId": "id-1",
-      "uiRequestId": "id-2",
-      "method": "select",
-      "args": {
-        "title": "write: <workspace>/created.txt",
-        "options": [
-          "允许一次",
-          "本会话允许此操作",
-          "拒绝"
-        ]
+      "permissionId": "call-2",
+      "toolName": "write",
+      "description": "写入工作区文件",
+      "input": {
+        "path": "<workspace>/created.txt",
+        "content": "hi\n",
+        "contentLabel": "Content",
+        "workspace": "<workspace>"
       },
-      "timeoutMs": 120000
+      "kind": "file_change",
+      "decisions": [
+        "allow",
+        "allow_session",
+        "deny"
+      ],
+      "detail": {
+        "kind": "file_change",
+        "changes": [
+          {
+            "path": "<workspace>/created.txt",
+            "change": "add"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "permission.resolved",
+    "sessionId": "logical-gui",
+    "payload": {
+      "permissionId": "call-2",
+      "allow": true,
+      "decision": "allow"
     }
   },
   {

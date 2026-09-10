@@ -203,7 +203,31 @@ export function MessageTimeline({
       : EMPTY_PENDING_USER_MESSAGES
   );
   const pendingPermissions = useChatSessionsStore((state) => state.pendingPermissions);
-  const respondPermission = async () => false;
+  // The other half of `permission.requested`: the runtime parks the tool call
+  // until this lands. Answering is all this does — the card's own state comes
+  // from the `permission.resolved` the worker emits, so a decision made in one
+  // window is reflected in every other view of the same session.
+  const respondPermission = useCallback(
+    async (permissionId: string, allow: boolean, decision?: PermissionDecisionId) => {
+      if (!sessionId) return false;
+      try {
+        const result = await window.electronAPI.chat.respondPermission({
+          sessionId,
+          // `allow` is the historical two-button answer; a card that offers the
+          // richer set sends which button it was, and that wins.
+          decision: decision ?? (allow ? 'allow' : 'deny'),
+          permissionId,
+        });
+        return result.handled;
+      } catch {
+        // `false` is what the card reads as "not answered" — it keeps the rows
+        // live so the user can try again, which is right for a failed IPC and
+        // right for a gate that timed out while the card was on screen.
+        return false;
+      }
+    },
+    [sessionId]
+  );
   const canRespondPermission = useMemo(
     () => (permissionId: string | undefined) =>
       canRespondToPermission(pendingPermissions, sessionId, permissionId),

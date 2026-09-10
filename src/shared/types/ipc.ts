@@ -328,6 +328,13 @@ export const IPC_CHANNELS = {
    * runtime plus dialog id, not a session or legacy permission dialect.
    */
   CHAT_RESPOND_EXTENSION_UI: 'chat:respondExtensionUi',
+  /**
+   * Answer one `permission.requested`. Addressed by session plus the
+   * `permissionId` the timeline block and the pending queue already carry —
+   * a different question from the extension-UI dialog above, which is keyed by
+   * a bridge-local dialog id.
+   */
+  CHAT_RESPOND_PERMISSION: 'chat:respondPermission',
   /** U12 — set the session-level permission tier on the running Worker. */
   CHAT_SET_PERMISSION_TIER: 'chat:setPermissionTier',
   CHAT_SET_PERMISSIONS: 'chat:setPermissions',

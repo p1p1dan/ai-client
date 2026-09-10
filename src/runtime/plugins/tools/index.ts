@@ -94,7 +94,9 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
     input: string,
     signal?: AbortSignal,
     command?: string,
-    shell?: BashAnalysis
+    shell?: BashAnalysis,
+    /** Content the approval card shows verbatim; see `ToolPermissionRequest`. */
+    preview?: { label: string; text: string }
   ): Promise<string> {
     const io = this.ctx.runtimeHostIo;
     const lexical = resolve(this.config.cwd, input);
@@ -111,6 +113,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
         commands: shell?.commands,
         unresolvedPaths: shell?.unresolvedPaths,
         exploration: shell?.exploration,
+        ...(preview ? { preview } : {}),
       },
       signal
     );
@@ -230,7 +233,10 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       execute: async (id, args, signal) => {
         if (Buffer.byteLength(args.content) > FILE_EDIT_BYTES)
           throw new RuntimeHostError('io_limit', 'write exceeds 8 MiB');
-        const target = await this.target('write', id, args.path, signal);
+        const target = await this.target('write', id, args.path, signal, undefined, undefined, {
+          label: 'Content',
+          text: args.content,
+        });
         return this.locked(target, async () => {
           signal?.throwIfAborted();
           await io.mkdir(dirname(target), { recursive: true });

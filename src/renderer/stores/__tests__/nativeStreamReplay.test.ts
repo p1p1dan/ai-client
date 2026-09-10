@@ -9,6 +9,7 @@ import { flattenTurnItems, groupMessagesIntoTurns } from '@/components/chat/chat
 import { initialExtensionUi, reduceExtensionUi } from '@/components/chat/extensionUiModel';
 import { PermissionActivityDetails } from '@/components/chat/PermissionActivityRows';
 import { derivePermissionActivityRow } from '@/components/chat/permissionActivityRow';
+import { canRespondToPermission } from '@/components/chat/questionCardModel';
 import { applyRuntimeEvents, type ChatSession, type ChatSessionsState } from '../chatSessions';
 import { usePendingUserMessagesStore } from '../pendingUserMessages';
 import {
@@ -189,36 +190,64 @@ describe('permission trail', () => {
       .map((message) => message.blocks.map((block) => block.type));
     expect(owners).toEqual([
       ['tool_call', 'permission_activity', 'tool_result'],
-      ['tool_call', 'permission_activity', 'tool_result'],
+      // The gated write also carries the card the user answered, on the same
+      // message as the call it gates — the trail and the question are one row.
+      ['tool_call', 'permission_activity', 'permission_request', 'tool_result'],
     ]);
   });
 });
 
 describe('permission card', () => {
-  it('opens exactly one answerable dialog for the gated write', () => {
-    let state = initialExtensionUi;
-    for (const event of STREAM) state = reduceExtensionUi(state, event);
-    expect(state.pending).toHaveLength(1);
-    const dialog = state.pending[0]!.dialog;
-    // The renderer never re-parses `args`; a shape `readExtensionUiDialogArgs`
-    // rejects yields no dialog at all, and the turn hangs behind a modal that
-    // was never drawn.
-    expect(dialog.method).toBe('select');
-    expect(dialog.method === 'select' && dialog.options).toEqual([
-      '允许一次',
-      '本会话允许此操作',
-      '拒绝',
-    ]);
-    expect(dialog.title).toContain('write:');
+  /**
+   * The gate used to arrive as a `ui.select` blob, which is why this suite once
+   * asserted a dialog with three option strings. The native backend now asks
+   * with `permission.requested`, so what has to survive the replay is the CARD's
+   * inputs — without them the card is back to printing a serialized argument
+   * object.
+   */
+  it('opens exactly one answerable card for the gated write', () => {
+    const state = replay();
+    const blocks = (state.messages[SESSION_ID] ?? []).flatMap((message) =>
+      message.blocks.filter((block) => block.type === 'permission_request')
+    );
+    expect(blocks).toHaveLength(1);
+    const block = blocks[0]!;
+    expect(block.toolName).toBe('write');
+    expect(block.permissionKind).toBe('file_change');
+    expect(block.permissionDecisions).toEqual(['allow', 'allow_session', 'deny']);
+    // What the user is actually deciding about.
+    expect(block.toolInput).toMatchObject({ content: 'hi\n' });
+    expect(block.permissionDetail).toMatchObject({ kind: 'file_change' });
+    // By the end of the recording the gate has been answered, so the queue is
+    // empty again and the card is frozen — the pending state is asserted below
+    // at the only moment it exists.
+    expect(state.pendingPermissions).toHaveLength(0);
+    expect(block.resolved).toBe(true);
   });
 
-  it('carries the bridge identity the answer has to be sent back with', () => {
+  it('queues the gate as answerable until the answer lands', () => {
+    let state = baseState();
+    for (const event of STREAM) {
+      if (event.type === 'permission.resolved') break;
+      state = { ...state, ...applyRuntimeEvents(state, [event]) };
+    }
+    expect(state.pendingPermissions).toHaveLength(1);
+    const queued = state.pendingPermissions[0]!;
+    expect(queued.sessionId).toBe(SESSION_ID);
+    // The head of the queue is the one the card unlocks; a block whose id is
+    // not the head renders as waiting.
+    expect(canRespondToPermission(state.pendingPermissions, SESSION_ID, queued.permissionId)).toBe(
+      true
+    );
+    expect(canRespondToPermission(state.pendingPermissions, SESSION_ID, 'another-id')).toBe(false);
+  });
+
+  it('no longer opens an extension UI dialog for a permission', () => {
+    // Both channels exist; a gate must travel on exactly one of them, or the
+    // user is asked the same question twice in two different shapes.
     let state = initialExtensionUi;
     for (const event of STREAM) state = reduceExtensionUi(state, event);
-    const pending = state.pending[0]!;
-    expect(pending.runtimeId).toBeTruthy();
-    expect(pending.uiRequestId).toBeTruthy();
-    expect(pending.sessionId).toBe(SESSION_ID);
+    expect(state.pending).toHaveLength(0);
   });
 });
 
@@ -231,7 +260,9 @@ describe('composer', () => {
       const status = state.sessions.find((item) => item.id === SESSION_ID)?.status;
       if (status && seen.at(-1) !== status) seen.push(status);
     }
-    expect(seen).toEqual(['running', 'idle']);
+    // `waiting_permission` between the two: the composer has to show that the
+    // turn is parked on a question rather than still working.
+    expect(seen).toEqual(['running', 'waiting_permission', 'idle']);
   });
 
   it('retires the optimistic bubble once the authoritative echo arrives', () => {

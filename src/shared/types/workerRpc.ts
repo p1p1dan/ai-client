@@ -16,7 +16,7 @@ import type {
   WorkerReconcileImportedSessionPayload,
   WorkerReconcileImportedSessionResult,
 } from './legacyImport';
-import type { ExtensionUiResponse, RuntimeEvent } from './runtimeEvents';
+import type { ExtensionUiResponse, PermissionDecisionId, RuntimeEvent } from './runtimeEvents';
 import {
   isRuntimePermissionSettings,
   type RuntimePermissionSettings,
@@ -406,6 +406,32 @@ export interface WorkerExtensionUiResponseResult {
   handled: boolean;
 }
 
+/**
+ * The user's answer to one `permission.requested` event.
+ *
+ * Separate from `worker.extensionUi.respond` because the two are different
+ * questions with different lifetimes: an extension UI dialog is a pi
+ * extension's blocking call, keyed by a bridge-local `uiRequestId`, while a
+ * permission is the runtime's own gate, keyed by the `permissionId` the
+ * timeline block and the pending queue already carry. Routing permissions
+ * through the dialog channel is what made the card a field dump — see the
+ * permission card work of 2026-09-10.
+ */
+export interface WorkerPermissionRespondPayload {
+  logicalSessionId: string;
+  permissionId: string;
+  decision: PermissionDecisionId;
+}
+
+export interface WorkerPermissionRespondResult {
+  /**
+   * `false` when nothing was waiting on this id — an answer that arrived after
+   * the gate timed out, was aborted, or was already settled. Not an error: the
+   * renderer's card can legitimately be a moment behind the runtime.
+   */
+  handled: boolean;
+}
+
 export interface WorkerSetPermissionTierPayload {
   logicalSessionId: string;
   tier: SessionPermissionTier;
@@ -486,6 +512,10 @@ export type WorkerStopRequest = WorkerRpcRequest<'worker.stop', WorkerStopPayloa
 export type WorkerExtensionUiResponseRequest = WorkerRpcRequest<
   'worker.extensionUi.respond',
   WorkerExtensionUiResponsePayload
+>;
+export type WorkerPermissionRespondRequest = WorkerRpcRequest<
+  'worker.permission.respond',
+  WorkerPermissionRespondPayload
 >;
 export type WorkerSetPermissionTierRequest = WorkerRpcRequest<
   'worker.setPermissionTier',
@@ -1025,6 +1055,27 @@ export function isWorkerExtensionUiResponsePayload(
     typeof value.response.ok === 'boolean' &&
     (value.response.error === undefined || typeof value.response.error === 'string')
   );
+}
+
+const PERMISSION_DECISIONS = new Set(['allow', 'allow_session', 'deny', 'cancel']);
+
+export function isWorkerPermissionRespondPayload(
+  value: unknown
+): value is WorkerPermissionRespondPayload {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    typeof value.permissionId === 'string' &&
+    value.permissionId.trim().length > 0 &&
+    typeof value.decision === 'string' &&
+    PERMISSION_DECISIONS.has(value.decision)
+  );
+}
+
+export function isWorkerPermissionRespondResult(
+  value: unknown
+): value is WorkerPermissionRespondResult {
+  return isRecord(value) && typeof value.handled === 'boolean';
 }
 
 export function isWorkerExtensionUiResponseResult(

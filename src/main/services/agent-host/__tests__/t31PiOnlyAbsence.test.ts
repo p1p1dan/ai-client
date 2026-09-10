@@ -60,11 +60,18 @@ describe('T31 Pi-only absence gate', () => {
     expect(ipc).toContain("PI_RUNTIME_CHECK: 'pi:runtime:check'");
     expect(ipc).toContain("CHAT_LIST_PI_MODELS: 'chat:listPiModels'");
     expect(ipc).toContain("CHAT_RESPOND_EXTENSION_UI: 'chat:respondExtensionUi'");
+    // `CHAT_RESPOND_PERMISSION` is NOT on the list below any more. T31 removed
+    // the Claude-era channel of that name — an agent-specific permission
+    // dialect — and 2026-09-10 reintroduced the name for the native runtime's
+    // own structured gate (`permission.requested` / `worker.permission.respond`),
+    // which is agent-neutral and is what the timeline's card has always been
+    // written against. The absence gate protects the DIALECT, not the string,
+    // so pinning the string here would now block the pi-only path itself.
+    expect(ipc).toContain("CHAT_RESPOND_PERMISSION: 'chat:respondPermission'");
     for (const legacy of [
       'CLAUDE_RUNTIME_CHECK',
       'CHAT_LIST_AGENT_MODELS',
       'CHAT_UPDATE_PERMISSION',
-      'CHAT_RESPOND_PERMISSION',
       'CHAT_RESPOND_QUESTION',
     ]) {
       expect(ipc, legacy).not.toContain(legacy);
@@ -73,6 +80,8 @@ describe('T31 Pi-only absence gate', () => {
     expect(preload).not.toContain('listAgentModels:');
     expect(chat).not.toContain('assertModelMatchesAgent');
     expect(composer).not.toContain('ComposerAgentPicker');
+    // The composer still must not answer permissions: the card in the timeline
+    // owns that, and a second answerer is how one gate gets two replies.
     for (const legacy of ['chat:respondPermission', 'chat:updatePermission', 'permissionMode']) {
       expect(composer, legacy).not.toContain(legacy);
     }

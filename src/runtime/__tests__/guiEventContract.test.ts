@@ -246,19 +246,15 @@ async function runGuiSession(): Promise<RuntimeEvent[]> {
 
   const request = await waitFor(
     () =>
-      events().find((event) => event.type === 'extensionUi.request') as
-        | Extract<RuntimeEvent, { type: 'extensionUi.request' }>
+      events().find((event) => event.type === 'permission.requested') as
+        | Extract<RuntimeEvent, { type: 'permission.requested' }>
         | undefined,
-    'the approval dialog'
+    'the permission request'
   );
-  await call('worker.extensionUi.respond', {
+  await call('worker.permission.respond', {
     logicalSessionId: SESSION,
-    response: {
-      runtimeId: request.payload.runtimeId,
-      uiRequestId: request.payload.uiRequestId,
-      ok: true,
-      value: '允许一次',
-    },
+    permissionId: request.payload.permissionId,
+    decision: 'allow',
   });
   await waitFor(
     () =>

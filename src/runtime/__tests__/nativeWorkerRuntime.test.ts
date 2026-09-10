@@ -221,11 +221,15 @@ describe('NativeWorkerRuntime bootstrap', () => {
     });
     live = runtime;
     await runtime.bootstrap();
-    expect(fake.options?.permissions).toEqual({
+    expect(fake.options?.permissions).toMatchObject({
       mode: 'plan',
       gear: 'accept-edits',
       projectTrusted: false,
     });
+    // The gate itself is handed in with the axes: without it the graph falls
+    // back to the extension UI bridge and the renderer's permission card never
+    // receives a `permission.requested` to draw.
+    expect(typeof fake.options?.permissions?.approve).toBe('function');
   });
 
   it('names the missing variable when no agent dir is configured', async () => {

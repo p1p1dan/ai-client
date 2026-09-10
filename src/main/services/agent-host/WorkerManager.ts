@@ -13,6 +13,7 @@ import type {
 import {
   type ExtensionUiResponse,
   isExtensionUiDialogMethod,
+  type PermissionDecisionId,
   type RuntimeEvent,
   type RuntimeEventDraft,
 } from '@shared/types/runtimeEvents';
@@ -30,6 +31,7 @@ import {
   isWorkerExtensionUiResponseResult,
   isWorkerForkResult,
   isWorkerHistoryResult,
+  isWorkerPermissionRespondResult,
   isWorkerReloadResult,
   isWorkerRewindResult,
   isWorkerSendResult,
@@ -50,6 +52,8 @@ import {
   type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
+  type WorkerPermissionRespondPayload,
+  type WorkerPermissionRespondResult,
   type WorkerReloadPayload,
   type WorkerReloadResult,
   type WorkerRewindPayload,
@@ -1649,6 +1653,46 @@ export class WorkerManager {
       );
     }
     return requestId;
+  }
+
+  /**
+   * Answer one `permission.requested` the native backend asked.
+   *
+   * Deliberately thinner than `respondExtensionUi`: that method guards a
+   * bridge-local `uiRequestId` against runtime and window ownership because an
+   * extension dialog can outlive the generation that opened it. A permission is
+   * keyed by the tool call inside one live turn, so the worker itself is the
+   * authority on whether the id is still parked — it answers `handled: false`
+   * when it is not, and the card treats that as "already settled".
+   */
+  async respondPermission(input: {
+    sessionId: string;
+    permissionId: string;
+    decision: PermissionDecisionId;
+  }): Promise<boolean> {
+    const entry = this.entriesBySession.get(input.sessionId);
+    if (!entry?.slot) {
+      throw new WorkerManagerError(
+        'session_not_ready',
+        `Session ${input.sessionId} has no worker to answer a permission`
+      );
+    }
+    const payload: WorkerPermissionRespondPayload = {
+      logicalSessionId: entry.logicalSessionId,
+      permissionId: input.permissionId,
+      decision: input.decision,
+    };
+    const result = await entry.slot.request<
+      WorkerPermissionRespondResult,
+      WorkerPermissionRespondPayload
+    >('worker.permission.respond', payload);
+    if (!isWorkerPermissionRespondResult(result)) {
+      throw new WorkerManagerError(
+        'worker_invalid_permission_ack',
+        'Pi worker returned an invalid permission acknowledgement'
+      );
+    }
+    return result.handled;
   }
 
   async respondExtensionUi(

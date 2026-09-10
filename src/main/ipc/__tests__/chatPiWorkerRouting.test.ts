@@ -739,7 +739,12 @@ describe('Pi WorkerSlot chat routing', () => {
     });
     expect(handlers.has('chat:listHistory')).toBe(false);
     expect(handlers.has('chat:updatePermission')).toBe(false);
-    expect(handlers.has('chat:respondPermission')).toBe(false);
     expect(handlers.has('chat:respondQuestion')).toBe(false);
+    // Registered again since 2026-09-10, for a different contract than the
+    // legacy one this gate was written against: the native runtime asks with
+    // `permission.requested` and this is the only way back. See
+    // `t31PiOnlyAbsence.test.ts` for why the name returning is not a
+    // regression.
+    expect(handlers.has('chat:respondPermission')).toBe(true);
   });
 });

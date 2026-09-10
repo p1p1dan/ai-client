@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { samePiSessionPath } from '../../agent-host/piSessionPreflight.ts';
 import { paginatePiSessionHistory } from '../../agent-host/piSessionTimeline.ts';
-import type { ExtensionUiResponse, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
+import type {
+  ExtensionUiResponse,
+  PermissionDecisionId,
+  RuntimeEventDraft,
+} from '../../shared/types/runtimeEvents.ts';
 import {
   migratePermissionTier,
   type RuntimePermissionSettings,
@@ -36,6 +40,7 @@ import type { RuntimeHostConfig } from '../contracts.ts';
 import { RuntimeHostError } from '../host/errors.ts';
 import { resolveWorkerShell } from '../host/shell.ts';
 import { JsonlSessionStore, type SessionConfig } from '../plugins/session/store.ts';
+import { createPermissionPrompt, type PermissionPrompt } from './permissionPrompt.ts';
 
 /**
  * The self-owned runtime behind the existing worker RPC surface (ARD P4-1).
@@ -95,11 +100,23 @@ export class NativeWorkerRuntime {
   private disposed = false;
   /** Forks this worker created and Main has not adopted: file -> session id. */
   private readonly stagedForks = new Map<string, string>();
+  /** The structured permission gate; see `permissionPrompt.ts`. */
+  private readonly permissions: PermissionPrompt;
 
   constructor(options: NativeWorkerRuntimeOptions) {
     this.options = options;
     this.logicalSessionId = options.logicalSessionId;
     this.cwd = options.cwd;
+    this.permissions = createPermissionPrompt({
+      sessionId: this.logicalSessionId,
+      cwd: this.cwd,
+      emit: (event) => this.emit(event),
+    });
+  }
+
+  /** RPC entry point for `worker.permission.respond`. */
+  respondPermission(input: { permissionId: string; decision: PermissionDecisionId }): boolean {
+    return this.permissions.respond(input);
   }
 
   async bootstrap(): Promise<WorkerBootstrapResult> {
@@ -142,6 +159,10 @@ export class NativeWorkerRuntime {
         // seeded only with a legacy tier still lands on the right two axes.
         ...(this.options.tier ? { tier: this.options.tier } : {}),
         projectTrusted: this.options.projectTrusted,
+        // Ask through `permission.requested` rather than the extension UI
+        // bridge: the renderer has a card, a queue and a block type for this
+        // question, and none of them can read a `ui.select` blob.
+        approve: this.permissions.approve,
       },
       approvalUi: {
         onRequest: (request) =>
@@ -600,6 +621,11 @@ export class NativeWorkerRuntime {
 
   async dispose(): Promise<void> {
     if (this.disposed) return;
+    // Before the flag: `drain` denies through the same path a user answer
+    // takes, and that path emits — which `emit` drops once disposed. A gate
+    // left parked here would hold the tool call's promise for the life of the
+    // process.
+    this.permissions.drain('session_closed');
     this.disposed = true;
     const turn = this.turn;
     if (turn) {

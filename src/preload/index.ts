@@ -1067,6 +1067,12 @@ const electronAPI = {
      */
     respondExtensionUi: (payload: ExtensionUiResponse): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_EXTENSION_UI, payload),
+    respondPermission: (payload: {
+      sessionId: string;
+      permissionId: string;
+      decision: import('@shared/types/runtimeEvents').PermissionDecisionId;
+    }): Promise<{ handled: boolean }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_PERMISSION, payload),
     setPermissions: (payload: {
       sessionId: string;
       permissions: RuntimePermissionSettings;

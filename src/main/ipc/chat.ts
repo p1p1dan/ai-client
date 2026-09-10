@@ -11,7 +11,11 @@ import { stat } from 'node:fs/promises';
 import { IPC_CHANNELS } from '@shared/types';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import { PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
-import type { ExtensionUiResponse, RuntimeEvent } from '@shared/types/runtimeEvents';
+import type {
+  ExtensionUiResponse,
+  PermissionDecisionId,
+  RuntimeEvent,
+} from '@shared/types/runtimeEvents';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import {
   isSessionPermissionTier,
@@ -538,6 +542,16 @@ export function registerChatHandlers(): void {
       extensionUiRouter.forgetRequest(payload.uiRequestId);
       return { requestId };
     }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_RESPOND_PERMISSION,
+    async (
+      _e,
+      payload: { sessionId: string; permissionId: string; decision: PermissionDecisionId }
+    ): Promise<{ handled: boolean }> => ({
+      handled: await workerManager.respondPermission(payload),
+    })
   );
 
   ipcMain.handle(

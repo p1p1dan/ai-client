@@ -233,22 +233,22 @@ describe('native backend end to end (P4-4)', () => {
 
     const request = await waitFor(
       () =>
-        events().find((event) => event.type === 'extensionUi.request') as
-          | (RuntimeEvent & { payload: ExtensionUiRequest })
+        events().find((event) => event.type === 'permission.requested') as
+          | Extract<RuntimeEvent, { type: 'permission.requested' }>
           | undefined,
-      'the approval dialog'
+      'the permission request'
     );
     // `ask` must actually ask: a gear that silently allowed the write would
-    // still produce a green test without this.
-    expect(request.payload.method).toBe('select');
-    await call('worker.extensionUi.respond', {
+    // still produce a green test without this. The card's own inputs are
+    // asserted here too — an event that named the tool but not what it writes
+    // would render the same field dump this path replaced.
+    expect(request.payload.toolName).toBe('write');
+    expect(request.payload.kind).toBe('file_change');
+    expect(request.payload.input).toMatchObject({ content: 'hi\n' });
+    await call('worker.permission.respond', {
       logicalSessionId: 'logical-e2e',
-      response: {
-        runtimeId: request.payload.runtimeId,
-        uiRequestId: request.payload.uiRequestId,
-        ok: true,
-        value: '允许一次',
-      },
+      permissionId: request.payload.permissionId,
+      decision: 'allow',
     });
     await turnIdle();
     await expect(readFile(join(workspace, 'created.txt'), 'utf8')).resolves.toBe('hi\n');
@@ -266,19 +266,15 @@ describe('native backend end to end (P4-4)', () => {
     await send('Create denied.txt');
     const request = await waitFor(
       () =>
-        events().find((event) => event.type === 'extensionUi.request') as
-          | (RuntimeEvent & { payload: ExtensionUiRequest })
+        events().find((event) => event.type === 'permission.requested') as
+          | Extract<RuntimeEvent, { type: 'permission.requested' }>
           | undefined,
-      'the approval dialog'
+      'the permission request'
     );
-    await call('worker.extensionUi.respond', {
+    await call('worker.permission.respond', {
       logicalSessionId: 'logical-e2e',
-      response: {
-        runtimeId: request.payload.runtimeId,
-        uiRequestId: request.payload.uiRequestId,
-        ok: true,
-        value: '拒绝',
-      },
+      permissionId: request.payload.permissionId,
+      decision: 'deny',
     });
     await turnIdle();
     await expect(readFile(join(workspace, 'denied.txt'), 'utf8')).rejects.toMatchObject({
