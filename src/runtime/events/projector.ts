@@ -34,10 +34,24 @@ function text(content: unknown): string {
     )
     .join('');
 }
-function output(result: unknown): string {
+/**
+ * A tool result as the transcript should read it.
+ *
+ * The content of a pi tool result is usually a block array, and stringifying it
+ * put `[{"type":"text","text":"Successfully wrote 3 bytes to E:/..."}]` on
+ * screen — the 2026-09-10 screenshots caught exactly that line. `text()`
+ * already knows how to read those blocks; JSON stays as the last resort for a
+ * shape nothing here can read, because dropping it would hide a result
+ * entirely, which is worse than showing it raw.
+ */
+export function output(result: unknown): string {
   if (typeof result === 'string') return result;
-  if (result && typeof result === 'object' && 'content' in result)
-    return typeof result.content === 'string' ? result.content : JSON.stringify(result.content);
+  if (result && typeof result === 'object' && 'content' in result) {
+    const content = result.content;
+    if (typeof content === 'string') return content;
+    const rendered = text(content);
+    return rendered || JSON.stringify(content);
+  }
   return result === undefined ? '' : JSON.stringify(result);
 }
 

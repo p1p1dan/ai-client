@@ -224,3 +224,17 @@ it('deduplicates cumulative deltas and keeps overlapping tool results attached t
   });
   projection.finish({ success: true, stopReason: 'stop' });
 });
+
+it('reads a tool result out of its content blocks instead of stringifying them', async () => {
+  // The transcript used to show `[{"type":"text","text":"Successfully wrote…"}]`
+  // because a block array went through JSON.stringify. Only a shape nothing can
+  // read may fall back to JSON — hiding the result would be worse than raw.
+  const { output } = await import('../events/projector.ts');
+  expect(output({ content: [{ type: 'text', text: 'the answer is 42' }] })).toBe(
+    'the answer is 42'
+  );
+  expect(output({ content: 'already text' })).toBe('already text');
+  expect(output('bare string')).toBe('bare string');
+  expect(output(undefined)).toBe('');
+  expect(output({ content: [{ type: 'image', data: 'x' }] })).toBe('[{"type":"image","data":"x"}]');
+});
