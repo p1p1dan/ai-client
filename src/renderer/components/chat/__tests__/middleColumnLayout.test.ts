@@ -526,8 +526,13 @@ describe('composerTextareaClass', () => {
     expect(composerTextareaClass('session')).toContain('[&_textarea]:min-h-6');
   });
 
-  it('caps follow-up growth at the empty-state 56px height instead of inventing a third step', () => {
-    expect(composerTextareaClass('session')).toContain('[&_textarea]:max-h-14');
+  it('caps follow-up growth at eight of its own 24px rows', () => {
+    // F7f: the previous cap was the empty card's 56px, which is 2.3 of these
+    // rows — long enough to look like the box refuses to grow. Eight rows keeps
+    // the cap expressed in the row this branch already pins, and keeps a scroll
+    // boundary so a long draft cannot push the timeline off screen.
+    expect(composerTextareaClass('session')).toContain('[&_textarea]:max-h-48');
+    expect(composerTextareaClass('session')).toContain('[&_textarea]:leading-6');
   });
 
   it('zeroes the inner horizontal padding so the caret lines up with the card edge in both modes', () => {

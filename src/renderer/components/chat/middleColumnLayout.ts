@@ -599,7 +599,15 @@ export function composerTextareaClass(mode: MiddleColumnMode): string {
   // `<Textarea unstyled>` only applies `className` to the outer span
   // (textarea.tsx), so sizing that must reach the real inner element still
   // has to be written this way.
-  return 'w-full p-0 [&_textarea]:min-h-6 [&_textarea]:max-h-14 [&_textarea]:resize-none [&_textarea]:px-0 [&_textarea]:py-0 [&_textarea]:leading-6';
+  // F7f (2026-09-09 Windows field pass): the cap was `max-h-14`, the empty
+  // card's 56px, chosen so growth would not invent a third height step. In use
+  // that is 2.3 rows — a follow-up longer than two lines scrolls inside a box
+  // barely taller than the resting one, which is what the field called
+  // "输入框增高有限". The cap is now eight of the same 24px rows this branch
+  // already pins (`min-h-6` / `leading-6`), so it is still one rule rather than
+  // a new magic number, and the card keeps a scroll boundary instead of pushing
+  // the timeline off screen.
+  return 'w-full p-0 [&_textarea]:min-h-6 [&_textarea]:max-h-48 [&_textarea]:resize-none [&_textarea]:px-0 [&_textarea]:py-0 [&_textarea]:leading-6';
 }
 
 /**
