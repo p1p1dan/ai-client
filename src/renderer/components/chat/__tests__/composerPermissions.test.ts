@@ -11,6 +11,12 @@ vi.mock('@/stores/permissionGate', () => ({
   isTierControlDegraded: () => false,
 }));
 const setPermissions = vi.fn();
+const toasts: Array<{ type?: string; title?: string; description?: string }> = [];
+vi.mock('@/components/ui/toast', () => ({
+  addToast: (toast: { type?: string; title?: string; description?: string }) => {
+    toasts.push(toast);
+  },
+}));
 let root: Root;
 let container: HTMLDivElement;
 beforeEach(() => {
@@ -18,6 +24,7 @@ beforeEach(() => {
   vi.stubGlobal('electronAPI', { chat: { setPermissions } });
   localStorage.clear();
   setPermissions.mockReset();
+  toasts.length = 0;
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -94,8 +101,31 @@ describe('D14 composer permission controls', () => {
     await render('s1');
     await click(container.querySelector('button'));
     await click(choice('自动接受编辑'));
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain('worker busy');
+    // U30 rev.3: the press closes the popup, so the failure has to reach the
+    // user through the toast surface rather than an alert nobody can see.
+    expect(toasts.at(-1)).toMatchObject({ type: 'error', description: 'worker busy' });
     expect(readSessionPermissions('s1')).toBeNull();
     expect(container.textContent).toContain('执行 · 每次询问');
+  });
+
+  it('closes on the press, whatever the worker does with it afterwards', async () => {
+    // U30 rev.2 fixed "menu will not close" once; D14's rework reintroduced it
+    // by making the close wait on the acknowledgement. A gear picked while the
+    // worker is slow (or never answers) must not leave the popup stuck open
+    // with its own trigger disabled underneath.
+    setPermissions.mockImplementation(() => new Promise<void>(() => {}));
+    await render('s1');
+    await click(container.querySelector('button'));
+    expect(document.querySelectorAll('[role="menu"]').length).toBeGreaterThan(0);
+    await click(choice('自动接受编辑'));
+    expect(document.querySelectorAll('[role="menu"]')).toHaveLength(0);
+  });
+
+  it('keeps the popup up for auto, whose next step is the confirmation', async () => {
+    await render(null);
+    await click(container.querySelector('button'));
+    await click(choice('全自动'));
+    expect(document.querySelectorAll('[role="menu"]').length).toBeGreaterThan(0);
+    expect(document.body.textContent).toContain('启用全自动');
   });
 });

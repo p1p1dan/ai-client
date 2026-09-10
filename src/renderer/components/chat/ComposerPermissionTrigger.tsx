@@ -11,6 +11,7 @@ import {
 import { Shield, ShieldAlert, ShieldOff, ShieldQuestion } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Menu, MenuPopup, MenuRadioGroup, MenuSeparator } from '@/components/ui/menu';
+import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { isTierControlDegraded, usePermissionGateStore } from '@/stores/permissionGate';
 import { type HostStatus, isHostUsable } from './hostStatus';
@@ -92,8 +93,15 @@ export function ComposerPermissionTrigger({
         menuActions.current?.close();
       }
     } catch (failure) {
-      if (currentSession.current === sessionId)
-        setError(failure instanceof Error ? failure.message : String(failure));
+      if (currentSession.current === sessionId) {
+        const message = failure instanceof Error ? failure.message : String(failure);
+        // The popup has usually closed by the time this lands (the press closes
+        // it), so an in-popup alert would report the failure to nobody. Keep
+        // both surfaces: the alert for the confirmation panel, which is still
+        // up, and a toast for everything else.
+        setError(message);
+        addToast({ type: 'error', title: '权限未生效', description: message });
+      }
     } finally {
       setPending(false);
     }
@@ -171,7 +179,15 @@ export function ComposerPermissionTrigger({
                   key={runtimeMode}
                   value={runtimeMode}
                   disabled={pending}
-                  closeOnClick={false}
+                  // U30 rev.3 — closing is Base UI's own press handling, never a
+                  // consequence of the worker acknowledging. `closeOnClick={false}`
+                  // (D14's rework) made the popup's fate depend on an await: a
+                  // slow or failed `setPermissions` left it up with the trigger
+                  // disabled underneath, which is the "菜单关不掉" the field pass
+                  // reported for a second time. A picked mode is a finished
+                  // decision; failures are reported by toast, not by a popup
+                  // that refuses to leave.
+                  closeOnClick
                   className={composerMenuItemClass()}
                 >
                   <span className="flex min-w-0 flex-1 flex-col">
@@ -204,7 +220,9 @@ export function ComposerPermissionTrigger({
                     key={option.id}
                     value={option.id}
                     disabled={pending}
-                    closeOnClick={false}
+                    // `auto` keeps the popup up because picking it opens the
+                    // confirmation panel instead of applying anything.
+                    closeOnClick={option.id !== 'auto'}
                     className={composerMenuItemClass()}
                   >
                     <OptionIcon className="size-3.5 shrink-0" />
