@@ -473,7 +473,11 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
    Edit/Write 后 TUI 与编辑器看到的内容一致、旧会话可 resume、退出无残留 worker。
    普通 CI runner 通过不计入本条。
 
+2026-09-10 范围注记：用户已选择 native v4 暂拒绝进入旧 Pi TUI（方案 C），详见[能力边界](../plantree/plans/runtime-evolution/topics/field-followups.md#tui-1-能力边界)。此选择与第 6 条原 GUI/TUI 一致性要求存在冲突；本次维护保留原标准，范围如何收口见[未决问题](../plantree/plans/runtime-evolution/open-questions.md)，不把入口拒绝当作互通验收。
+
 ## 8. 加密机实测记录
+
+本节是形成架构决策的历史证据，不维护实时进度。后续 test.11/test.12 与修复状态只见[核心任务树](../plantree/plans/runtime-evolution/README.md#p4)。用户用于现场验证的 Windows 就是 TEC 加密机。
 
 | 日期 | 测试项 | 结果 |
 |---|---|---|

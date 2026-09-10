@@ -1,8 +1,10 @@
-# P4-6 接棒状态与现场分工
+# P4-6 历史出包与交接证据
 
-2026-09-09 · 状态：`.11` Windows/Linux 构建产物冒烟通过，Windows installer/unpacked 已交付；完整 GUI、命令树专项与企业加密现场待验收。macOS 同次 CI 仍运行。
+当前节点只见[核心任务树](../../README.md#p4)。后续证据：[test.12](ci-34354367890/README.md)、[test.13](ci-34424337205/README.md)、[Windows 加密机实测](../../../../../../Windows-P4-6-evidence/test12-reverify.md)。下文“待验收/仍运行”均为历史时点描述；用户现有 Windows 已确认就是 TEC 加密机。
 
-最新入口：[CI 34308304362 原始证据、下载与 Windows 操作](ci-34308304362/README.md)。下文保留接棒、失败诊断及修复过程。
+.11 出包阶段历史快照（2026-09-09；不是当前状态）：`.11` Windows/Linux 构建产物冒烟通过，Windows installer/unpacked 已交付；完整 GUI、命令树专项与企业加密现场待验收。macOS 同次 CI 仍运行。
+
+该版本入口：[CI 34308304362 原始证据、下载与 Windows 操作](ci-34308304362/README.md)。下文保留接棒、失败诊断及修复过程。
 权威：[看板](../../README.md) / [ARD D11、D13、D16](../../../../../plans/2026-09-08-runtime-evolution-ard.md)。
 
 ## 已核实

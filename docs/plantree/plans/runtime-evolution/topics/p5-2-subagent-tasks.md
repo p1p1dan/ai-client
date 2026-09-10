@@ -1,24 +1,24 @@
 # P5-2 完整复刻任务与验收矩阵
 
-2026-09-09 · Role: implementation-plan · Status: 范围确定、尚未实现
+2026-09-09 · Role: implementation-plan；本文件维护任务范围和验收要求，实际进度仅见[核心任务树 P5](../README.md#p5)
 [看板](../README.md) · [ARD D10/D17](../../../../plans/2026-09-08-runtime-evolution-ard.md) · [调研](p5-2-subagent-research.md) · [契约](p5-2-subagent-contracts.md)
 
 ## 顺序与责任
 
-Claude 当前负责 P4；本次只做 P5 调研/文档。P5-2-0 的只读差异核对可并行；生产实现等 P4 接缝稳定后开展。
+P5-2-0 的只读差异核对可并行；生产实现等 P4 接缝稳定后开展。
 实施按下表逐批落地，但交付目标是**整个 subagent 子系统**。后面的 UI/兼容性/验收是同一工作体，不属于可省略的“优化”。
 P5-1/P5-3/P5-5 独立演进；subagent 的必需定义/模型解析不能等待模型目录最终切源才提供，无需导入整个插件平台。
 
-| 批次 | 状态 | 责任范围/建议落点 | 必交产物与完成条件 |
-|---|---|---|---|
-| P5-2-0 基线冻结与适配勘察 | ⬜（本轮已完成源码调研） | docs + 独立探针 | 固定测试输入与执行配置（不新增版权、许可证或来源版本记录，不设许可证审批）；0.85→0.84.4 的事件/afterToolCall/并行/取消探针；P4 接缝、BrowserPreview/Bash/旧插件差异明确。不得未经记录升级 D12 |
-| P5-2-1 定义与模型目录 | ⬜ | shared 定义协议、runtime/plugins/subagent/definitions、model-adapter | 四内置角色完整迁移；字段/限制/模型优先级/诊断/快照；global > builtin、禁项目自动加载；显式 model 失败不回落 |
-| P5-2-2 子 Agent 与后台编排 | ⬜ | runtime/plugins/subagent、agent-loop、context | 独立 Agent、registry、四工具、10 并发、wait all/any、Stop 收敛、自动报告交回、无 idle/duration 终止、maxTurns、完整提示词 |
-| P5-2-3 权限、工具及重试依赖 | ⬜ | permissions/tools、HostIo/Exec、必要 Main preview 门面 | 七工具适配（含 BrowserPreview 和角色所需正则检索）；长命令显式超时能力；inherit/显式 gear、审批归属/取消、共用写锁；重试共预算、禁止工具重放 |
-| P5-2-4 会话、事件与 usage | ⬜ | session/events、shared DTO、Main 索引桥 | 子行归属/独立结算、父上下文隔离、完整历史与终态、成本恰计一次；关闭/崩溃/重开不伪续跑；内部报告不变成用户任务 |
-| P5-2-5 定义管理与旧资源迁移 | ⬜ | Main 管理服务/IPC/preload、资源管理/设置 UI | 创建/编辑/重命名/删除/启停/搜索/定位；字段往返、原文件保护、下一 run 热加载；旧全局迁移预览，legacy/native 工具互斥 |
-| P5-2-6 运行/历史展示闭环 | ⬜ | subagent.activity store/model、Chat UI/历史投影 | fan-out 与单任务卡、真实状态/时长、权限等待、报告一次、完整历史按需读取、滚动跟随、重载恢复；不能以已有 T34 面板替代验收 |
-| P5-2-7 全量等价门禁 | ⬜ | 本批全部调用面、离线集成、GUI/打包载体 | 下表全部逐项签收；所有适配差异有理由/测试/证据；完成完整基线后才关闭 P5-2 |
+| 批次 | 责任范围/建议落点 | 必交产物与完成条件 |
+|---|---|---|
+| P5-2-0 基线冻结与适配勘察 | docs + 独立探针 | 固定测试输入与执行配置（不新增版权、许可证或来源版本记录，不设许可证审批）；0.85→0.84.4 的事件/afterToolCall/并行/取消探针；P4 接缝、BrowserPreview/Bash/旧插件差异明确。不得未经记录升级 D12 |
+| P5-2-1 定义与模型目录 | shared 定义协议、runtime/plugins/subagent/definitions、model-adapter | 四内置角色完整迁移；字段/限制/模型优先级/诊断/快照；global > builtin、禁项目自动加载；显式 model 失败不回落 |
+| P5-2-2 子 Agent 与后台编排 | runtime/plugins/subagent、agent-loop、context | 独立 Agent、registry、四工具、10 并发、wait all/any、Stop 收敛、自动报告交回、无 idle/duration 终止、maxTurns、完整提示词 |
+| P5-2-3 权限、工具及重试依赖 | permissions/tools、HostIo/Exec、必要 Main preview 门面 | 七工具适配（含 BrowserPreview 和角色所需正则检索）；长命令显式超时能力；inherit/显式 gear、审批归属/取消、共用写锁；重试共预算、禁止工具重放 |
+| P5-2-4 会话、事件与 usage | session/events、shared DTO、Main 索引桥 | 子行归属/独立结算、父上下文隔离、完整历史与终态、成本恰计一次；关闭/崩溃/重开不伪续跑；内部报告不变成用户任务 |
+| P5-2-5 定义管理与旧资源迁移 | Main 管理服务/IPC/preload、资源管理/设置 UI | 创建/编辑/重命名/删除/启停/搜索/定位；字段往返、原文件保护、下一 run 热加载；旧全局迁移预览，legacy/native 工具互斥 |
+| P5-2-6 运行/历史展示闭环 | subagent.activity store/model、Chat UI/历史投影 | fan-out 与单任务卡、真实状态/时长、权限等待、报告一次、完整历史按需读取、滚动跟随、重载恢复；不能以已有 T34 面板替代验收 |
+| P5-2-7 全量等价门禁 | 本批全部调用面、离线集成、GUI/打包载体 | 下表全部逐项签收；所有适配差异有理由/测试/证据；完成完整基线后才关闭 P5-2 |
 
 依赖：0→1→2；3 与 2 的具体工具/权限接线需协调；4 依赖 2/3；5 可在定义协议冻结后独立施工；6 依赖 4；7 等 1–6 全部完成。
 若多人实施必须按文件归属协调，不同时改同一个 bootstrap/contracts/agent-loop；不能以“P4 已有人改”删掉未来必须接通的行为。
@@ -58,7 +58,7 @@ P5-1/P5-3/P5-5 独立演进；subagent 的必需定义/模型解析不能等待�
 4. 管理 UI 与聊天 UI 做实际交互/重载，最后在两载体打包环境补新增 subagent 专项。P4 老结果不能代签 P5 新代码。
 5. 证据逐行标 implemented/tested/GUI/carrier/Done；缓存性能优化和真实多模型成本对比在完整基线后另开批次。
 
-## 下一阶段：完整基线上优化（未开工）
+## 完整基线后的优化范围
 
 整体基线签收后，再讨论并发资源自适应、报告/前缀成本、调度公平性、历史分页性能；不预先改变 10 并发/角色/等待和管理能力。
 优化需提供对照 trace、收益、行为差异和回退；不得把“只实现一部分”包装成优化。

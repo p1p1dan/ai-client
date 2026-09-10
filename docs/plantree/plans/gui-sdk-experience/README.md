@@ -1,12 +1,12 @@
 # Pi SDK GUI 问题与体验改进
 
-状态：In Progress；模式：execute-ready。需求依据：2026-09-09 用户十项反馈与 sharePic/20260909 截图。
+Role: plan-entrypoint；需求依据：2026-09-09 用户十项反馈与 sharePic/20260909 截图。
 
-在当前开发主线 feat/model-catalog-admin（起点 2980ae98）实施，不等待 runtime-evolution。仅 UI/宿主共享层，不迁移 runtime，不改用户旧目录。沿用 [设计规范](../../../design-system.md)、[baseline](../../baseline/README.md)；旧 UI/设置/现场反馈计划保留在来源工作分支，本 worktree 未复制。旧计划验收缺口不由本轮自动关闭。
+来源分支为 feat/model-catalog-admin（起点 2980ae98）；本计划的 runtime 分支进度统一纳入核心任务树。仅 UI/宿主共享层，不迁移 runtime，不改用户旧目录。沿用 [设计规范](../../../design-system.md)、[baseline](../../baseline/README.md)；旧 UI/设置/现场反馈计划保留在来源工作分支，本 worktree 未复制。旧计划验收缺口不由本轮自动关闭。
 
 2026-09-09：A～E 五个提交已适配引入 `feat/runtime-evolution`，共享 P4-6 的 CI 安装包与现场窗口；来源提交和当前提交映射见 [P4-6 记录](../runtime-evolution/evidence/p4-6/README.md)。
 
-[TODO / 任务状态与验收](TODO.md) 是本计划 roadmap；[当前交接](implementation-status.md)。每批独立中文 Conventional Commit，重测试小批串行，禁止整套生产构建。只暂存本轮明确文件，不碰截图及其他人的改动。
+[TODO / 功能编号定义](TODO.md) 保存需求；[核心任务树 / GUI](../runtime-evolution/README.md#gui-任务树)承担 roadmap；[用户进度看板](../../进度看板.md)承担当前交接。每批独立中文 Conventional Commit，重测试小批串行，禁止整套生产构建。只暂存本轮明确文件，不碰截图及其他人的改动。
 
 ## 实施边界
 
@@ -26,4 +26,4 @@ C：自动授权降噪，人工确认/拒绝/失败保留；问答卡真实交�
 
 ## 验收规则
 
-实现完成、自动化通过、Linux GUI、Windows/加密机现场验收分别记录。未实际验证不得标 Done。浏览器组件实测不能替代安装版全链路。每批在 evidence 中记录根因、命令、结果、限制与最小现场清单。
+实现完成、自动化通过、Linux GUI、Windows/加密机现场验收分别记录。按子项已有证据累计签收，未覆盖项单列，不因另一项缺陷重置整批状态。浏览器组件实测不能替代安装版全链路。每批在 evidence 中记录根因、命令、结果、限制与最小现场清单。

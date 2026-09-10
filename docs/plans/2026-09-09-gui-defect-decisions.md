@@ -1,6 +1,6 @@
 # F3 / F4 / F5 决策论证 · test.11 现场交回的三个定性问题
 
-> 状态：**F4 已定性并落地（2026-09-09，重试层已实现）；F5 已定性待排期；F3 待现场探针拍板**
+> Role: decision-and-investigation。以下源码描述是 2026-09-09 定性时的快照；实时进度只见[核心任务树](../plantree/plans/runtime-evolution/README.md#现场缺陷与修复)。包后 native 权限已改为结构化 permission 事件，不能继续把下文旧 ui.select 路径当作当前实现。
 > 来源：`Windows-P4-6-evidence/gui-a-e-findings.md`（2026-09-09 Windows 现场）
 > 相关：ARD [D11 执行载体](2026-09-08-runtime-evolution-ard.md#d11--执行载体按进程身份区分不按实现语言推断) · [D1 bash 载体决策](2026-09-09-bash-carrier-decision.md) · [执行 TODO](../plantree/plans/runtime-evolution/TODO.md)
 
@@ -28,9 +28,9 @@
 
 **不是 `GitService` 的主线缺陷。** Q7 已经修掉了判据问题：健康仓库不再被误报
 `no commits yet`，而是如实报 `output was lost`——错误信息正确，根因未解。
-把三条事实放在一起，唯一自洽的解释是：**`git.exe` 直接由 Electron 主进程派生时不被加密驱动放行，
-经白名单外壳（Git Bash / PowerShell）启动时被放行**。stderr 正常说明丢的不是管道，是 git 自己读不到
-仓库元数据后的空输出——worktree 的 `.git` 是工作区里的一个普通文件（指针），不是 `.git` 目录。
+这些事实支持“启动载体或父进程相关”的调查方向，但尚不能唯一归因于加密驱动放行，也不能证明 git 读不到仓库元数据。
+stderr 可见仅证明该输出通道可用；stdout 丢失的具体位置仍需对照真实 Main→Git 启动链。
+worktree 的 `.git` 是指针文件，这也是待核对的输入之一。
 
 ### 与 D1 是同一个未知量
 

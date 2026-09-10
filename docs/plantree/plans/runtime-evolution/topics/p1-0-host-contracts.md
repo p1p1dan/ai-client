@@ -1,7 +1,7 @@
 # P1-0 · IO/exec 出口契约草案
 
 日期：2026-09-08 · 版本：draft v1 · 核对基点：`2eb11bfb`
-状态：**本机实现已验证，Windows 清理/载体验收未完成** · 工作模式：`execute-ready`（2026-09-08）。
+Role: contract。节点当前状态与现场完成度统一见[核心任务树 P1-0](../README.md#p1)和[用户进度看板](../../../进度看板.md)。
 权威：[ARD D11/D12](../../../../plans/2026-09-08-runtime-evolution-ard.md)；节点：[P1-0](../README.md)；交接：[P1](p1-handoff.md)。
 阅读时机：实现 P1-0，或 P1/P2/P3 需要文件、子进程与 trace 接口时。
 
@@ -15,7 +15,7 @@
 - [x] 起草类型、IO/exec 行为、生命周期及错误语义。
 - [x] 列出 P0 迁移面、后续节点边界和确定性验收项。
 - [x] 用户确认第 10 节建议；Q6 按 pipe + adapter 挂载点收口。
-- [x] 用户已授权，完成本机实现与验证；Windows 清理/载体剩余项见 [TODO](../TODO.md)。
+- 本文件只描述 IO/exec 契约、边界和验收方法；历史实现与现场证据见[核心任务树 P1](../README.md#p1)。
 
 **已拍板约束**：生产 worker 只有 `bundled-node` / `electron-utility` 两种 carrier；
 Windows 安装版缺少随包 Node 必须失败；worker RPC 仍由 WorkerTransport 负责；普通 stdout 必须排空。
