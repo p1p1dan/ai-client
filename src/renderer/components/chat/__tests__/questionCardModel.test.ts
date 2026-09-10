@@ -1000,3 +1000,54 @@ describe('selectPendingQuestionBlock', () => {
     expect(found).toBeUndefined();
   });
 });
+
+describe('permission card body (2026-09-10)', () => {
+  const block = (extra: Record<string, unknown> = {}) =>
+    ({
+      id: 'b1',
+      type: 'permission_request',
+      permissionId: 'call-1',
+      toolName: 'write',
+      permissionKind: 'file_change',
+      toolInput: { path: '/repo/a.txt', content: 'pong', workspace: '/repo' },
+      ...extra,
+      // biome-ignore lint/suspicious/noExplicitAny: block fixture, not the full store type
+    }) as any;
+
+  it('shows what is about to be written, and where', () => {
+    const view = derivePermissionCardView(block(), true);
+    expect(view.content).toEqual({ label: '写入内容', text: 'pong' });
+    expect(view.workspace).toBe('/repo');
+    expect(view.risk).toBe('high');
+  });
+
+  it('does not print the command twice when the exec detail already carries it', () => {
+    const view = derivePermissionCardView(
+      block({
+        toolName: 'bash',
+        permissionKind: 'exec',
+        toolInput: { command: 'ls -la', workspace: '/repo' },
+        permissionDetail: { kind: 'exec', command: 'ls -la', cwd: '/repo' },
+      }),
+      true
+    );
+    expect(view.content).toBeNull();
+  });
+
+  it('falls back to the command when there is no exec detail to carry it', () => {
+    const view = derivePermissionCardView(
+      block({ toolName: 'bash', permissionKind: 'tool', toolInput: { command: 'ls -la' } }),
+      true
+    );
+    expect(view.content).toEqual({ label: '命令', text: 'ls -la' });
+  });
+
+  it('reads quieter for a gate that only touches what it can undo', () => {
+    const view = derivePermissionCardView(
+      block({ toolName: 'read', permissionKind: 'tool', toolInput: { path: '/etc/hosts' } }),
+      true
+    );
+    expect(view.risk).toBe('medium');
+    expect(view.content).toBeNull();
+  });
+});

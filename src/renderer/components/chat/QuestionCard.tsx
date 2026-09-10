@@ -26,6 +26,7 @@ import {
   PERMISSION_DIFF_CLAMPED_MARK,
   PERMISSION_WAITING,
   type PermissionDetailView,
+  type PermissionRisk,
   QUESTION_CARD_BODY_MAX_CLASS,
   QUESTION_TITLE,
   type QuestionSelection,
@@ -70,6 +71,38 @@ interface QuestionCardProps {
 }
 
 const QA_SHELL_CLASS = 'overflow-hidden rounded-md border border-border bg-card';
+
+/**
+ * The permission card's three tiers, as tone rather than decoration: a write or
+ * a command cannot be taken back, so its card carries the destructive edge that
+ * every other card in the timeline deliberately does not.
+ */
+const PERMISSION_RISK_SHELL: Record<PermissionRisk, string> = {
+  high: 'border-destructive/40',
+  medium: 'border-border',
+  low: 'border-border',
+};
+const PERMISSION_RISK_CHIP: Record<PermissionRisk, string> = {
+  high: 'bg-destructive/10 text-destructive',
+  medium: 'bg-muted text-muted-foreground',
+  low: 'bg-muted text-muted-foreground',
+};
+const PERMISSION_RISK_LABEL: Record<PermissionRisk, string> = {
+  high: '高风险',
+  medium: '需确认',
+  low: '低风险',
+};
+/**
+ * Allow is the primary press, refusing is quiet. `cancel` shares deny's shape:
+ * both refuse, and the card must not make aborting the turn look like the
+ * ordinary way out.
+ */
+const PERMISSION_BUTTON_VARIANT: Record<PermissionDecisionId, 'default' | 'secondary' | 'ghost'> = {
+  allow: 'default',
+  allow_session: 'secondary',
+  deny: 'ghost',
+  cancel: 'ghost',
+};
 
 export function QuestionCard(props: QuestionCardProps) {
   if (props.variant === 'permission') {
@@ -586,26 +619,56 @@ function PermissionQaCard({
   }
 
   return (
-    <div className={QA_SHELL_CLASS}>
-      <QaHead title={view.title} />
+    <div className={cn(QA_SHELL_CLASS, PERMISSION_RISK_SHELL[view.risk])}>
+      <div className="flex min-h-9 items-center gap-2 border-b border-border px-3 py-2">
+        <span className="min-w-0 flex-1 font-medium tracking-[0.01em] text-foreground">
+          {view.title}
+        </span>
+        <span
+          className={cn(
+            'shrink-0 rounded-sm px-1.5 py-0.5 text-meta',
+            PERMISSION_RISK_CHIP[view.risk]
+          )}
+        >
+          {PERMISSION_RISK_LABEL[view.risk]}
+        </span>
+      </div>
       {originChip}
       <div className="flex flex-col gap-3 px-2.5 pb-3">
-        <p className="px-1 pb-2 pt-2 whitespace-pre-wrap break-words text-ui font-medium leading-relaxed text-foreground">
+        <p className="px-1 pb-1 pt-2 whitespace-pre-wrap break-words text-ui font-medium leading-relaxed text-foreground">
           {view.prompt}
         </p>
+        {/* The thing being approved, above everything the engine has to say
+            about it: PI-Desktop puts the content first because that is what the
+            answer is about. */}
+        {view.content && (
+          <div className="px-1">
+            <p className="pb-1 text-meta text-muted-foreground">{view.content.label}</p>
+            <Ident className="block max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2.5 text-markdown text-foreground">
+              {view.content.text}
+            </Ident>
+          </div>
+        )}
         {view.detail && <PermissionDetailBody detail={view.detail} />}
+        {view.workspace && (
+          <p className="truncate px-1 text-meta text-muted-foreground" title={view.workspace}>
+            项目：{view.workspace}
+          </p>
+        )}
         {view.waiting ? (
           <p className="px-1 text-markdown text-muted-foreground">{PERMISSION_WAITING}</p>
         ) : (
-          <div className="flex flex-col gap-0.5">
+          // Right-aligned and compact: a decision is one press, not a menu, and
+          // four full-width rows are what made the old card swallow the screen.
+          <div className="flex flex-wrap items-center justify-end gap-2 px-1">
             {view.options.map((option) => (
-              <QaOptionRow
+              <Button
                 key={option.letter}
-                option={option}
-                selected={false}
-                multiSelect={false}
+                type="button"
+                size="sm"
+                variant={PERMISSION_BUTTON_VARIANT[option.decision ?? 'deny']}
                 disabled={submitting}
-                onSelect={async () => {
+                onClick={async () => {
                   // The row carries its own decision. Unreachable when absent
                   // (every permission row is built with one), and doing nothing
                   // is the right failure.
@@ -627,7 +690,9 @@ function PermissionQaCard({
                     setSubmitting(false);
                   }
                 }}
-              />
+              >
+                {option.label}
+              </Button>
             ))}
           </div>
         )}

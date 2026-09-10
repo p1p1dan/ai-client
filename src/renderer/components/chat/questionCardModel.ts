@@ -603,9 +603,22 @@ export function derivePermissionDetailView(block: ChatBlock): PermissionDetailVi
   return isEmptyDetailView(view) ? null : view;
 }
 
+/** How loud the card reads. Derived here, not sent: it is a presentation call. */
+export type PermissionRisk = 'low' | 'medium' | 'high';
+
 export interface PermissionCardView {
   title: string;
   prompt: string;
+  risk: PermissionRisk;
+  /**
+   * The thing being approved, shown verbatim: the content about to be written,
+   * or the command about to run. This is what the decision is ABOUT, and the
+   * card that printed `tool`, `rule` and a serialized argument object instead
+   * is the one the 2026-09-10 screenshots caught.
+   */
+  content: { label: string; text: string } | null;
+  /** Project the request belongs to, for the card's context line. */
+  workspace: string | null;
   state: 'pending' | 'resolved';
   /** One row per offered decision when pending and answerable, otherwise empty. */
   options: OptionRow[];
@@ -621,6 +634,40 @@ export interface PermissionCardView {
 function derivePermissionPrompt(block: ChatBlock): string {
   const toolName = block.toolName ?? '';
   return block.toolDescription ? `${toolName} — ${block.toolDescription}` : toolName;
+}
+
+/**
+ * Writing files and running commands are the two the app cannot take back, so
+ * they read loud; anything else that reached a gate at all is worth showing
+ * without shouting.
+ */
+export function derivePermissionRisk(block: ChatBlock): PermissionRisk {
+  if (block.permissionKind === 'exec' || block.permissionKind === 'file_change') return 'high';
+  const tool = (block.toolName ?? '').toLowerCase();
+  if (tool === 'bash' || tool === 'write' || tool === 'edit') return 'high';
+  return 'medium';
+}
+
+function readInputField(input: unknown, key: string): string | null {
+  if (typeof input !== 'object' || input === null) return null;
+  const value = (input as Record<string, unknown>)[key];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/**
+ * The verbatim body, preferring what the tool is about to WRITE over what it
+ * was called with. A command already appears in the exec detail, so it is only
+ * used here when there is no content — never both, which would print the same
+ * string twice under two labels.
+ */
+export function derivePermissionContent(block: ChatBlock): { label: string; text: string } | null {
+  const content = readInputField(block.toolInput, 'content');
+  if (content) {
+    return { label: readInputField(block.toolInput, 'contentLabel') ?? '写入内容', text: content };
+  }
+  if (block.permissionDetail?.kind === 'exec') return null;
+  const command = readInputField(block.toolInput, 'command');
+  return command ? { label: '命令', text: command } : null;
 }
 
 /**
@@ -651,11 +698,17 @@ export function derivePermissionCardView(
   const prompt = derivePermissionPrompt(block);
   const detail = derivePermissionDetailView(block);
   const omittedNote = derivePermissionOmittedNote(block.omittedDecisionCount);
+  const risk = derivePermissionRisk(block);
+  const content = derivePermissionContent(block);
+  const workspace = readInputField(block.toolInput, 'workspace');
 
   if (block.resolved === true) {
     return {
       title: PERMISSION_TITLE,
       prompt,
+      risk,
+      content,
+      workspace,
       state: 'resolved',
       options: [],
       frozen: [
@@ -676,6 +729,9 @@ export function derivePermissionCardView(
     return {
       title: PERMISSION_TITLE,
       prompt,
+      risk,
+      content,
+      workspace,
       state: 'pending',
       options: buildPermissionOptionRows(resolvePermissionDecisions(block)),
       frozen: [],
@@ -688,6 +744,9 @@ export function derivePermissionCardView(
   return {
     title: PERMISSION_TITLE,
     prompt,
+    risk,
+    content,
+    workspace,
     state: 'pending',
     options: [],
     frozen: [],
