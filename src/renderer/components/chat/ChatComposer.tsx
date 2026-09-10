@@ -3048,7 +3048,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // div in ChatWorkspace (`middleColumnHostClass`) owns the padding and the
     // shrink/grow behaviour for both modes now — no border/background here.
     <ReadingColumn>
-      <SessionActivityStatus sessionId={activeSessionId} compact />
+      <SessionActivityStatus sessionId={activeSessionId} />
       {/* T12-e′ moves the no-repository welcome surface to ChatWorkspace and
             does not mount this component at all in that state. Real failures
             still belong immediately above the composer. */}

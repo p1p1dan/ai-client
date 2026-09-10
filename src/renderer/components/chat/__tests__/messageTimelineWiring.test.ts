@@ -505,7 +505,11 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(turn).toContain(
       '{status && !(isLastTurn && (inFlightSession || statusOwnedByPendingHead)) && ('
     );
-    expect(turn).toContain('<SessionActivityStatus');
+    // F7b (user decision 2026-09-10): the running status lives above the
+    // composer only; a second copy under the last turn is the duplicate.
+    expect(SYNTAX, 'F7b: the composer owns the running status').not.toContain(
+      '<SessionActivityStatus'
+    );
     expect(turn).toContain('<TurnStatusContent status={status} />');
   });
 
@@ -515,10 +519,13 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   it('the process fold waits for the session, not only the last message', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
     expect(turn).toContain(
-      '!turnActive && !(isLastTurn && inFlightSession) ? (metadata?.latencyMs ?? null) : null'
+      'const processSettled = !turnActive && !(isLastTurn && inFlightSession);'
     );
-    expect(turn).toContain('if (!answerable && settledLatencyMs != null) {');
-    expect(turn).toContain('durationMs={settledLatencyMs}');
+    expect(turn).toContain('if (!answerable && processSettled) {');
+    // No duration (user decision 2026-09-10), so a history turn without a
+    // latency folds as well.
+    expect(turn).not.toContain('latencyMs != null && lastProcessKey');
+    expect(SYNTAX).not.toContain('durationMs={');
   });
 
   // F2: the in-flight snapshot is bound by evidence, never by "no latency".

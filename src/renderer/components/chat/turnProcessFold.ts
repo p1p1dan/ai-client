@@ -3,9 +3,12 @@
  *
  * Pure, and in its own `.ts`: the vitest suite runs `environment: node` and
  * only collects `*.test.ts`, so anything living inside `MessageTimeline.tsx`
- * can only be asserted by scanning source. These two answer questions worth a
- * real test — how many steps happened, and how the clock reads — so they live
- * where a test can import them.
+ * can only be asserted by scanning source. How many steps happened is a
+ * question worth a real test, so it lives where a test can import it.
+ *
+ * The label carries no duration (user decision 2026-09-10): the latency on
+ * hand was the last assistant message's, which every fold of a multi-message
+ * turn repeated, and a restored history turn has none at all.
  */
 
 import type { TurnItem } from './chatTurn';
@@ -23,11 +26,4 @@ export function countProcessSteps(items: readonly TurnItem[]): number {
     if (item.kind === 'permissionActivity') return total + item.blocks.length;
     return total + 1;
   }, 0);
-}
-
-/** `19s` / `1m 05s` — the same clock vocabulary the running status row uses. */
-export function formatProcessDuration(ms: number): string {
-  const seconds = Math.max(0, Math.round(ms / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`;
 }

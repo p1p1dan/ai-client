@@ -102,3 +102,45 @@ it('shows a Pi extension dialog as waiting for confirmation until its actual ack
     vi.unstubAllGlobals();
   }
 });
+
+it('counts only the current turn reply, now that the composer carries the one status (F7b)', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  const message = (id: string, role: 'user' | 'assistant', text: string) => ({
+    id,
+    sessionId: 'r',
+    role,
+    blocks: [{ id: `${id}-t`, type: 'text' as const, text }],
+  });
+  useChatSessionsStore.setState({
+    sessions: [
+      {
+        id: 'r',
+        title: 'r',
+        projectId: 'p',
+        workspaceId: 'w',
+        status: 'running',
+        updatedAt: 0,
+        activity: { phase: 'output', since: Date.now() },
+      },
+    ],
+    messages: {
+      r: [
+        message('u1', 'user', 'first'),
+        message('a1', 'assistant', 'earlier reply'),
+        message('u2', 'user', 'second'),
+        message('a2', 'assistant', 'hello 你好'),
+      ],
+    },
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(createElement(SessionActivityStatus, { sessionId: 'r' })));
+    expect(container.textContent).toContain('↓ 8 chars');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  }
+});

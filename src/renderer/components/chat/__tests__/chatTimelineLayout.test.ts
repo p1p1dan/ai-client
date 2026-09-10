@@ -13,7 +13,7 @@ import {
   userBubbleRowClass,
   userBubbleTextClass,
 } from '../chatTimelineLayout';
-import { countProcessSteps, formatProcessDuration } from '../turnProcessFold';
+import { countProcessSteps } from '../turnProcessFold';
 
 /** Tailwind's spacing scale: one step is 4px (`py-2.5` -> 10px). */
 const SPACING_STEP_PX = 4;
@@ -447,12 +447,5 @@ describe('process fold (2026-09-10)', () => {
       ])
     ).toBe(6);
     expect(countProcessSteps([])).toBe(0);
-  });
-
-  it('reads the clock the same way the running status row does', () => {
-    expect(formatProcessDuration(19_000)).toBe('19s');
-    expect(formatProcessDuration(499)).toBe('0s');
-    expect(formatProcessDuration(65_000)).toBe('1m 05s');
-    expect(formatProcessDuration(-1)).toBe('0s');
   });
 });

@@ -93,7 +93,6 @@ import {
 } from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
 import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
-import { SessionActivityStatus } from './SessionActivityStatus';
 import { SessionTreeDialog } from './SessionTreeDialog';
 import { SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { useResumeSession } from './sessionIndex/useResumeSession';
@@ -106,7 +105,7 @@ import {
   isTurnInFlight,
   ownsSessionFailure,
 } from './turnHead';
-import { countProcessSteps, formatProcessDuration } from './turnProcessFold';
+import { countProcessSteps } from './turnProcessFold';
 import {
   deriveTurnStatus,
   isFailedCardBodyDuplicate,
@@ -1147,12 +1146,10 @@ interface ChatTurnProps {
  */
 function TurnProcessFold({
   items,
-  durationMs,
   children,
   footer,
 }: {
   items: readonly TurnItem[];
-  durationMs: number;
   children: React.ReactNode;
   /** The quiet approval audit, which belongs with the steps it audited. */
   footer?: React.ReactNode;
@@ -1162,9 +1159,7 @@ function TurnProcessFold({
   return (
     <details className={turnBodyClass()}>
       <summary className="cursor-pointer list-none text-meta text-muted-foreground marker:content-none">
-        <span className="underline-offset-2 hover:underline">
-          已处理 {formatProcessDuration(durationMs)} · {steps} 个步骤
-        </span>
+        <span className="underline-offset-2 hover:underline">已处理 {steps} 个步骤</span>
       </summary>
       <div className={cn(turnProcessShellClass(), 'pt-2.5')}>
         {children}
@@ -1419,10 +1414,10 @@ const ChatTurn = memo(function ChatTurn({
     .at(-1);
   // Between two assistant messages (a tool result or permission wait splits
   // them) the last one already carries a latency while the turn is still in
-  // flight; only the session status tells those apart.
-  const settledLatencyMs =
-    !turnActive && !(isLastTurn && inFlightSession) ? (metadata?.latencyMs ?? null) : null;
-  const processFolds = settledLatencyMs != null && lastProcessKey !== undefined;
+  // flight; only the session status tells those apart. No latency is needed
+  // otherwise, so a restored history turn folds too.
+  const processSettled = !turnActive && !(isLastTurn && inFlightSession);
+  const processFolds = processSettled && lastProcessKey !== undefined;
 
   const renderSegment = (segment: TurnSegment<TurnItem>) => {
     // Keyed off the segment's FIRST item, not its index: an index key would
@@ -1477,12 +1472,11 @@ const ChatTurn = memo(function ChatTurn({
       (item) =>
         (item.kind === 'permission' || item.kind === 'question') && item.block.resolved !== true
     );
-    if (!answerable && settledLatencyMs != null) {
+    if (!answerable && processSettled) {
       return (
         <TurnProcessFold
           key={key}
           items={segment.items}
-          durationMs={settledLatencyMs}
           // Only the last one carries it: the audit is turn-wide, and repeating
           // it under every process run would count the same gates twice.
           {...(key === lastProcessKey ? { footer: activityDetails } : {})}
@@ -1518,12 +1512,6 @@ const ChatTurn = memo(function ChatTurn({
         {/* Inside the fold when there is one — the audit belongs with the steps
             it audited, not floating under a collapsed summary. */}
         {!processFolds && activityDetails}
-        {isLastTurn && (
-          <SessionActivityStatus
-            sessionId={sessionId}
-            replyChars={countAssistantReplyChars(turn.body)}
-          />
-        )}
         {retryBanner && <RetryBanner view={retryBanner} />}
         {/* T12-b: the running status, and ONLY while it is running. FB6's
             position is kept — under the output it describes, not above it —
