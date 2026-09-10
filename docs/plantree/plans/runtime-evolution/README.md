@@ -184,7 +184,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F6 对话修改审阅 | ✅ 2026-09-10 采用右侧审阅，本地真实应用验证通过，尚未打包 | [R1/R2 与更新 U1](topics/session-review-and-updates.md) |
 | F7a/F7c 权限卡样式/尺寸 | 🟡 结构化权限链与重画本地真实应用可用；倒计时原未接通，已补 `baeff487` 并本地验证；视觉口径仍待定 | 不在 test.13；通用问答卡仍受 F5 限制 |
 | F7b 重复状态行 | ✅ 根因是时间线末尾与输入框上方各挂一个 `SessionActivityStatus`（`a3debdf6` 守的是另一对）；按用户选择只留输入框上方，本地真实应用全程单份 | `225c325e`；[修前截图](evidence/session-review-and-updates/local-f7b-duplicate.png) |
-| 会话写入锁残留 | 🔴 本地发现：应用崩溃或被强制结束后 `.writer.lock` 残留，锁里记录的进程已不存在也照样拒绝，重开会话报 `session_locked`、历史读不出 | `src/runtime/plugins/session/store.ts` 与 `legacy.ts` 同一写法 |
+| 会话写入锁残留 | 🟡 已修：锁记录 `pid`/`host`，`EEXIST` 后判定主进程是否存活，陈旧锁经 rename 独占后接管；活写者与他机锁仍拒绝。7 项新测试含反向对照，未打包、未现场回归 | `src/runtime/plugins/session/writerLock.ts`（`store.ts` 与 `legacy.ts` 共用）；[验证](evidence/session-writer-lock/README.md) |
 | F7d / EFFORT-1 | 🟡 effort 传递与默认 medium 已修；GPT 慢响应本次未证明为本地缺陷 | `4145fa65` / `c0ae2a34`；test.13 |
 | F7e resume 后暂无上下文统计 | 已定性为既有行为；可选恢复快照增强尚未排期 | [功能说明](topics/field-followups.md#f7e-上下文快照) |
 | F7f 输入框增高 | ✅ 八行上限本地验证通过（8 行 192px 后滚动） | `87f3dc7d` |

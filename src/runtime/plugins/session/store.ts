@@ -20,6 +20,7 @@ import {
   type SessionDocument,
 } from './codec.ts';
 import { sessionPermissions } from './legacy.ts';
+import { acquireWriterLock } from './writerLock.ts';
 
 export interface SessionConfig {
   file: string;
@@ -96,18 +97,7 @@ export class JsonlSessionStore {
     } catch (error) {
       if (errorCode(error) !== 'ENOENT') throw error;
     }
-    const lock = `${file}.writer.lock`;
-    try {
-      await io.writeFile(
-        lock,
-        Buffer.from(JSON.stringify({ pid: process.pid, token: randomUUID() })),
-        { createOnly: true, mode: 0o600 }
-      );
-    } catch (error) {
-      if (errorCode(error) === 'EEXIST')
-        throw new RuntimeHostError('session_locked', `session already has a writer: ${file}`);
-      throw error;
-    }
+    const lock = await acquireWriterLock(io, file);
     try {
       let document: SessionDocument;
       let bytes: number;

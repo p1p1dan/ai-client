@@ -11,6 +11,7 @@ import type { RuntimeHostIoService } from '../../contracts.ts';
 import { errorCode, RuntimeHostError } from '../../host/errors.ts';
 import { branchEntries, decodeSession } from './codec.ts';
 import type { SessionConfig } from './store.ts';
+import { acquireWriterLock } from './writerLock.ts';
 
 export const PERMISSIONS_ENTRY = 'aiclient.permissions';
 /**
@@ -460,18 +461,7 @@ export async function prepareSessionConfig(
   );
   if (Buffer.byteLength(converted) > (config.maxBytes ?? 32 * 1024 * 1024))
     throw new RuntimeHostError('session_size_limit', 'converted session exceeds size budget');
-  const lock = `${file}.writer.lock`;
-  try {
-    await io.writeFile(
-      lock,
-      Buffer.from(JSON.stringify({ pid: process.pid, token: randomUUID() })),
-      { createOnly: true, mode: 0o600 }
-    );
-  } catch (error) {
-    if (errorCode(error) === 'EEXIST')
-      throw new RuntimeHostError('session_locked', `session already has a writer: ${file}`);
-    throw error;
-  }
+  const lock = await acquireWriterLock(io, file);
   try {
     let exists = true;
     try {
