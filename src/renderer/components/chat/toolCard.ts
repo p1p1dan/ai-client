@@ -1,3 +1,4 @@
+import { reviewFromToolResult } from '@shared/sessionFileChange';
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import { isQuietPermissionActivity } from './permissionActivityRow';
@@ -498,10 +499,11 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   const showOutputBody = !running && (failed || Boolean(run.output));
   // A running call's input can still change before it settles, so the input
   // segment only appears once the call is done (T-05 adversarial fix #3).
-  const inputBody = running ? undefined : deriveToolInputBody(run);
+  const recordedChange = reviewFromToolResult(run.result);
+  const inputBody = running || recordedChange ? undefined : deriveToolInputBody(run);
   // Running Edit/Write arguments are explicitly labelled as a preview;
   // successful Edit results prefer the SDK patch once the call settles.
-  const diff = deriveToolDiff(run);
+  const diff = recordedChange ? null : deriveToolDiff(run);
   const expandable = showOutputBody || Boolean(inputBody) || Boolean(diff);
 
   return {

@@ -9,12 +9,14 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useShallow } from 'zustand/shallow';
 import type { Repository } from '@/App/constants';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { usePresentationSwitch } from '@/components/chat/usePresentationSwitch';
 import { GlobalSearchDialog } from '@/components/search/GlobalSearchDialog';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { useChatSessionsStore } from '@/stores/chatSessions';
 import { isDiffTabActive } from '@/stores/diffTabTarget';
 import { useEditorStore } from '@/stores/editor';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
@@ -24,18 +26,23 @@ import { EditorColumn } from './center/EditorColumn';
 import {
   chatWidthToEditorRatio,
   deriveEditorOpen,
+  REVIEW_MIN_WIDTH,
   resolveShellAllocation,
   resolveShellChrome,
   type ShellAllocation,
 } from './centerLayoutModel';
 import { LeftDock } from './LeftDock';
 import { SessionBar } from './SessionBar';
+import { SessionReviewPanel } from './SessionReviewPanel';
 import { ShellResizeHandle } from './ShellResizeHandle';
+import { deriveSessionReview, type SessionReviewEntry } from './sessionReview';
 import { useCapacityReclaimNotice } from './useCapacityReclaimNotice';
 import { useEditorWorktreeSync } from './useEditorWorktreeSync';
 import { useShellShortcuts } from './useShellShortcuts';
 import { useSyncChatWorkspaceTree } from './useSyncChatWorkspaceTree';
 import { useWorkspaceSearch } from './useWorkspaceSearch';
+
+const NO_REVIEW_ENTRIES: SessionReviewEntry[] = [];
 
 interface WorkspaceShellProps {
   onOpenSettings?: () => void;
@@ -111,6 +118,38 @@ export function WorkspaceShell({
   // Round-10 ⑥: primitive selector — mounts the intent consumer (below) even
   // before any tab exists. See the EditorColumn wrapper comment.
   const fileIntentPending = useFileOpenIntentStore((state) => state.intent !== null);
+  const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
+  const showSessionReview = useSettingsStore((state) => state.showSessionReview);
+  // Shallow-compared so streaming text deltas do not re-render the shell.
+  const reviewEntries = useChatSessionsStore(
+    useShallow((state) =>
+      showSessionReview && activeSessionId
+        ? deriveSessionReview(state.messages[activeSessionId] ?? [])
+        : NO_REVIEW_ENTRIES
+    )
+  );
+  const [reviewRequested, setReviewRequested] = useState(false);
+  const reviewOpen = showSessionReview && reviewRequested && activeSessionId !== null;
+  const closeReview = useCallback(() => setReviewRequested(false), []);
+  // The expand overlay is shared with the editor; dismissing an expanded
+  // review must not hand a full-bleed overlay to the files underneath.
+  const dismissReview = useCallback(() => {
+    if (expanded) toggleExpanded();
+    closeReview();
+  }, [expanded, toggleExpanded, closeReview]);
+  const toggleReview = useCallback(() => setReviewRequested((open) => !open), []);
+  const activeEditorPath = useEditorStore((state) => state.activeTabPath);
+  const editorWorktreePath = useEditorStore((state) => state.currentWorktreePath);
+  const previousEditor = useRef({ worktreePath: editorWorktreePath, path: activeEditorPath });
+  useEffect(() => {
+    if (
+      fileIntentPending ||
+      (previousEditor.current.worktreePath === editorWorktreePath &&
+        previousEditor.current.path !== activeEditorPath)
+    )
+      closeReview();
+    previousEditor.current = { worktreePath: editorWorktreePath, path: activeEditorPath };
+  }, [fileIntentPending, activeEditorPath, editorWorktreePath, closeReview]);
 
   const centerRowRef = useRef<HTMLDivElement>(null);
   const chatColumnRef = useRef<HTMLDivElement>(null);
@@ -179,7 +218,7 @@ export function WorkspaceShell({
     sidebarUserCollapsed: dockCollapsed,
     panelOpen: false,
     manualChat,
-    diffTabActive: !isTui && diffTabActive,
+    diffTabActive: !isTui && !reviewOpen && diffTabActive,
   });
   const chatVisible = isTui ? true : chrome.chatVisible;
   /**
@@ -197,7 +236,7 @@ export function WorkspaceShell({
    * because `editorOpen` is keyed off `tabs.length` — so the full-bleed case
    * D02 wanted is still the default, it is just no longer forced.
    */
-  const editorAllocated = editorOpen;
+  const editorAllocated = editorOpen || reviewOpen;
 
   const allocationInput = {
     shellWidth,
@@ -205,6 +244,7 @@ export function WorkspaceShell({
     sidebarCollapsed: chrome.sidebarCollapsed,
     chatVisible,
     editorOpen: editorAllocated,
+    editorMinWidth: reviewOpen ? REVIEW_MIN_WIDTH : undefined,
     editorRatio,
     panelVisible: false,
     panelWidth: 0,
@@ -338,7 +378,12 @@ export function WorkspaceShell({
                 put two bars on one column — the exact 「臃肿」 D07 spent a
                 round removing.
               */}
-              <SessionBar presentation={presentation} />
+              <SessionBar
+                presentation={presentation}
+                reviewOpen={reviewOpen}
+                reviewCount={reviewEntries.length}
+                onToggleReview={showSessionReview ? toggleReview : undefined}
+              />
               <ChatWorkspace
                 className="min-w-0 flex-1"
                 onAddRepository={onAddRepository}
@@ -399,13 +444,32 @@ export function WorkspaceShell({
             {(editorOpen || fileIntentPending) && (
               <div
                 className={cn(
-                  editorOpen && expanded && 'absolute inset-0 z-20 bg-background',
-                  editorOpen && !expanded && 'min-w-0 shrink-0',
-                  !editorOpen && 'hidden'
+                  editorOpen && !reviewOpen && expanded && 'absolute inset-0 z-20 bg-background',
+                  editorOpen && !reviewOpen && !expanded && 'min-w-0 shrink-0',
+                  (!editorOpen || reviewOpen) && 'hidden'
                 )}
                 style={editorOpen && !expanded ? { width: 'var(--shell-editor-w)' } : undefined}
               >
                 <EditorColumn expanded={expanded} onToggleExpanded={toggleExpanded} />
+              </div>
+            )}
+            {reviewOpen && (
+              <div
+                className={cn(
+                  expanded ? 'absolute inset-0 z-20 bg-background' : 'min-w-0 shrink-0'
+                )}
+                style={!expanded ? { width: 'var(--shell-editor-w)' } : undefined}
+              >
+                <SessionReviewPanel
+                  key={activeSessionId}
+                  sessionId={activeSessionId}
+                  entries={reviewEntries}
+                  onClose={dismissReview}
+                  onShowFiles={closeReview}
+                  filesOpen={editorOpen}
+                  expanded={expanded}
+                  onToggleExpanded={toggleExpanded}
+                />
               </div>
             )}
           </div>

@@ -475,12 +475,16 @@ function mapHistoryBlock(block: HistoryMessage['blocks'][number]): ChatBlock | n
         type: 'tool_result',
         toolCallId: block.toolCallId,
         toolOk: block.ok,
-        toolOutput: block.patch
-          ? {
-              content: [{ type: 'text', text: block.output ?? '' }],
-              details: { patch: block.patch },
-            }
-          : block.output,
+        toolOutput:
+          block.patch || block.review
+            ? {
+                content: [{ type: 'text', text: block.output ?? '' }],
+                details: {
+                  ...(block.patch ? { patch: block.patch } : {}),
+                  ...(block.review ? { review: block.review } : {}),
+                },
+              }
+            : block.output,
         text: block.error,
       };
     default:

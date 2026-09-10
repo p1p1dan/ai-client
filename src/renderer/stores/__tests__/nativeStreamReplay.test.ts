@@ -10,6 +10,7 @@ import { initialExtensionUi, reduceExtensionUi } from '@/components/chat/extensi
 import { PermissionActivityDetails } from '@/components/chat/PermissionActivityRows';
 import { derivePermissionActivityRow } from '@/components/chat/permissionActivityRow';
 import { canRespondToPermission } from '@/components/chat/questionCardModel';
+import { deriveSessionReview } from '@/components/workspace-shell/sessionReview';
 import { applyRuntimeEvents, type ChatSession, type ChatSessionsState } from '../chatSessions';
 import { usePendingUserMessagesStore } from '../pendingUserMessages';
 import {
@@ -96,6 +97,17 @@ function replay(events: readonly RuntimeEvent[] = STREAM): ChatSessionsState {
 }
 
 describe('timeline', () => {
+  it('projects recorded native writes into the current conversation review', () => {
+    const entries = deriveSessionReview(replay().messages[SESSION_ID] ?? []);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      path: '<workspace>/created.txt',
+      status: 'added',
+      patch: '@@ -0,0 +1,1 @@\n+hi',
+      added: 1,
+      removed: 0,
+    });
+  });
   it('renders one turn: the prompt, the two tool calls, and the answer', () => {
     const turns = groupMessagesIntoTurns(replay().messages[SESSION_ID] ?? []);
     expect(turns).toHaveLength(1);

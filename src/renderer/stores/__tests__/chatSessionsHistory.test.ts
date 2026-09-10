@@ -1,6 +1,7 @@
 import type { RuntimeEvent, SessionHistoryEvent } from '@shared/types/runtimeEvents';
 import type { HistoryMessage } from '@shared/types/sessionHistory';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { deriveSessionReview } from '@/components/workspace-shell/sessionReview';
 import {
   applyRuntimeEvent,
   type ChatMessage,
@@ -135,6 +136,50 @@ const HISTORY_MESSAGES: HistoryMessage[] = [
 ];
 
 describe('applyRuntimeEvent — session.history (C-06)', () => {
+  it('restores recorded diffs without duplicating them on a second hydration', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const event = makeHistoryEvent({
+      messages: [
+        {
+          id: 'h:review',
+          role: 'assistant',
+          blocks: [
+            {
+              id: 'call',
+              type: 'tool_call',
+              toolCallId: 'write-1',
+              name: 'write',
+              input: { path: '/repo/a', content: 'after' },
+            },
+            {
+              id: 'result',
+              type: 'tool_result',
+              toolCallId: 'write-1',
+              ok: true,
+              output: 'written',
+              review: {
+                version: 1,
+                path: '/repo/a',
+                status: 'modified',
+                patch: '@@ -1,1 +1,1 @@\n-before\n+after',
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const first = { ...state, ...applyRuntimeEvent(state, event) };
+    const second = { ...first, ...applyRuntimeEvent(first, event) };
+    const entries = deriveSessionReview(second.messages[SESSION_ID]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      status: 'modified',
+      patch: '@@ -1,1 +1,1 @@\n-before\n+after',
+      added: 1,
+      removed: 1,
+    });
+    expect(entries[0].preview).toBeUndefined();
+  });
   it('preserves exact Pi entry ids and branch replacement drops the abandoned active path', () => {
     const abandoned: ChatMessage = {
       id: 'h:old-branch',

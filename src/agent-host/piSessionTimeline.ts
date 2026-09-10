@@ -1,3 +1,4 @@
+import { reviewFromToolResult } from '../shared/sessionFileChange.ts';
 import {
   LEGACY_IMPORT_CUSTOM_TYPE_DISPLAY,
   LEGACY_IMPORT_CUSTOM_TYPE_PROVENANCE,
@@ -331,12 +332,14 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
         }
       }
       const details = message.details as { patch?: unknown } | undefined;
+      const review = message.isError !== true ? reviewFromToolResult(message) : undefined;
       const resultBlock: HistoryBlock = {
         type: 'tool_result',
         id: stablePartId(messageId, 'tool-result', toolCallId || 0),
         toolCallId: toolCallId || `${entry.id}-result`,
         ok: message.isError !== true,
         ...(output ? { output } : {}),
+        ...(review ? { review } : {}),
         ...(message.isError !== true && typeof details?.patch === 'string'
           ? { patch: details.patch }
           : {}),

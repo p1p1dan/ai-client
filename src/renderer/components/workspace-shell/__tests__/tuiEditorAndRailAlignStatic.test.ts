@@ -20,7 +20,7 @@ const code = (file: string) => stripComments(readFileSync(file, 'utf8'), file);
 describe('U26 (D13) the editor is reachable in TUI', () => {
   it('TUI no longer suppresses the editor column', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
-    expect(shell).toContain('const editorAllocated = editorOpen;');
+    expect(shell).toContain('const editorAllocated = editorOpen || reviewOpen;');
     expect(shell).not.toContain('!isTui && editorOpen');
     expect(shell).not.toContain('{!isTui && (editorOpen || fileIntentPending) && (');
   });
@@ -38,7 +38,7 @@ describe('U26 (D13) the editor is reachable in TUI', () => {
     // so hiding chat in TUI would hide the terminal itself.
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
     expect(shell).toContain('const chatVisible = isTui ? true : chrome.chatVisible;');
-    expect(shell).toContain('diffTabActive: !isTui && diffTabActive,');
+    expect(shell).toContain('diffTabActive: !isTui && !reviewOpen && diffTabActive,');
   });
 });
 

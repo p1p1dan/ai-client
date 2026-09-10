@@ -254,7 +254,22 @@
       "messageId": "asst-turn-1-5",
       "toolCallId": "call-2",
       "ok": true,
-      "output": "Wrote 3 bytes to <workspace>/created.txt"
+      "output": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Wrote 3 bytes to <workspace>/created.txt"
+          }
+        ],
+        "details": {
+          "review": {
+            "version": 1,
+            "path": "<workspace>/created.txt",
+            "status": "added",
+            "patch": "@@ -0,0 +1,1 @@\n+hi"
+          }
+        }
+      }
     },
     "requestId": "turn-1"
   },

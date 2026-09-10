@@ -184,7 +184,7 @@ export interface SettingsState {
   terminalScrollback: number;
   terminalOptionIsMeta: boolean;
   copyOnSelection: boolean;
-  showToolDiff: boolean;
+  showSessionReview: boolean;
 
   // Keybindings
   xtermKeybindings: XtermKeybindings;
@@ -278,7 +278,7 @@ export interface SettingsState {
   setTerminalFontWeight: (weight: FontWeight) => void;
   setTerminalFontWeightBold: (weight: FontWeight) => void;
   setTerminalTheme: (theme: string) => void;
-  setShowToolDiff: (enabled: boolean) => void;
+  setShowSessionReview: (enabled: boolean) => void;
   setTerminalRenderer: (renderer: TerminalRenderer) => void;
   setTerminalScrollback: (scrollback: number) => void;
   setTerminalOptionIsMeta: (enabled: boolean) => void;

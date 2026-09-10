@@ -1,5 +1,6 @@
-import { Monitor, Plus, Terminal } from 'lucide-react';
+import { ArrowLeftRight, Monitor, Plus, Terminal } from 'lucide-react';
 import type { PresentationSwitch } from '@/components/chat/usePresentationSwitch';
+import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
@@ -18,6 +19,9 @@ interface SessionBarProps {
    * two ids.
    */
   presentation: PresentationSwitch;
+  reviewOpen?: boolean;
+  reviewCount?: number;
+  onToggleReview?: () => void;
 }
 
 /**
@@ -38,7 +42,12 @@ interface SessionBarProps {
  * sidebar row's context menu, next to Rename and Archive, so the repo's three
  * closes sit together and can be told apart in one place.
  */
-export function SessionBar({ presentation }: SessionBarProps) {
+export function SessionBar({
+  presentation,
+  reviewOpen,
+  reviewCount = 0,
+  onToggleReview,
+}: SessionBarProps) {
   const { t } = useI18n();
 
   const sessions = useChatSessionsStore((state) => state.sessions);
@@ -109,6 +118,20 @@ export function SessionBar({ presentation }: SessionBarProps) {
         <div className="min-w-0 flex-1">{title}</div>
       )}
 
+      {onToggleReview && activeSessionId && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 shrink-0 gap-1 text-meta tabular-nums"
+          onClick={onToggleReview}
+          aria-pressed={reviewOpen}
+          title={t('Session review')}
+        >
+          <ArrowLeftRight className="size-3.5" />
+          {t('Session review')}
+          {reviewCount > 0 && <span>{reviewCount}</span>}
+        </Button>
+      )}
       <button
         type="button"
         className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-hover hover:text-foreground"

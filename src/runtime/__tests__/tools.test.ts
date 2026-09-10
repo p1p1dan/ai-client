@@ -5,6 +5,7 @@ import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/provid
 import { Type } from 'typebox';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ExtensionUiRequest } from '../../agent-host/extensionUiBridge.ts';
+import { reviewFromToolResult } from '../../shared/sessionFileChange.ts';
 import { migratePermissionTier } from '../../shared/types/runtimePermission.ts';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
 import { standaloneHost } from '../host/config.ts';
@@ -56,6 +57,38 @@ const content = (result: Awaited<ReturnType<typeof call>>) =>
     .join('');
 
 describe('native tools', () => {
+  it('can disable review recording without changing writes', async () => {
+    const r = await runtime({
+      permissions: { gear: 'auto' },
+      tools: { cwd: dir, recordFileChanges: false },
+    });
+    const output = await call(r, 'write', { path: 'flag.txt', content: 'written' });
+    expect(reviewFromToolResult(output)).toBeUndefined();
+    expect(await readFile(join(dir, 'flag.txt'), 'utf8')).toBe('written');
+  });
+  it('records real Write overwrites and Edit contents under the file lock', async () => {
+    const r = await runtime({ permissions: { gear: 'auto' } });
+    const created = await call(r, 'write', { path: 'review.txt', content: 'pong\n' });
+    expect(reviewFromToolResult(created)).toMatchObject({
+      status: 'added',
+      patch: '@@ -0,0 +1,1 @@\n+pong',
+    });
+    const overwritten = await call(r, 'write', { path: 'review.txt', content: 'pong\nabc\n' });
+    expect(reviewFromToolResult(overwritten)).toMatchObject({
+      status: 'modified',
+      patch: '@@ -1,1 +1,2 @@\n pong\n+abc',
+    });
+    const edited = await call(r, 'edit', {
+      path: 'review.txt',
+      edits: [{ oldText: 'abc', newText: 'xyz' }],
+    });
+    expect(reviewFromToolResult(edited)?.patch).toContain('-abc\n+xyz');
+    await expect(
+      call(r, 'edit', { path: 'review.txt', edits: [{ oldText: 'absent', newText: 'oops' }] })
+    ).rejects.toMatchObject({ code: 'edit_not_unique' });
+    expect(await readFile(join(dir, 'review.txt'), 'utf8')).toBe('pong\nxyz\n');
+    expect(reviewFromToolResult(created)?.patch).not.toContain('xyz');
+  });
   it.each([
     ['ask', 'read', 'allow'],
     ['ask', 'write', 'ask'],

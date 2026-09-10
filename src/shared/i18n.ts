@@ -682,6 +682,27 @@ export const zhTranslations: Record<string, string> = {
   'Untracked files': '未跟踪的文件',
   'Up to date': '已是最新',
   'Update ready': '更新已就绪',
+  'Session review': '审阅',
+  'Close review': '关闭审阅',
+  'Recorded {{count}} changes': '记录了 {{count}} 项改动',
+  'Counts include previews; unavailable diffs are excluded.':
+    '统计包含历史预览，不包含无法展示的差异。',
+  'Load earlier changes': '加载更早的修改记录',
+  'Open file': '打开文件',
+  'No file changes recorded in this conversation yet.': '当前对话尚无文件修改记录。',
+  'Changes recorded by Edit and Write in this conversation. Shell and external edits are not tracked.':
+    '记录当前对话中 Edit 和 Write 的修改；不包含命令行及外部编辑。',
+  'Diff exceeds the preview limit.': '差异超过预览大小限制。',
+  'Binary content has no text diff.': '二进制内容无法展示文本差异。',
+  'Previous content could not be read; no diff is available.': '未能读取修改前内容，无法展示差异。',
+  'Historical tool diff': '历史工具差异',
+  'Historical argument preview — full file diff unavailable':
+    '历史修改参数预览，无法还原完整文件差异',
+  'No text differences.': '没有文本差异。',
+  'No newline at end of file': '文件末尾无换行符',
+  'Review file changes from the current conversation in the right panel.':
+    '在右侧审阅栏查看当前对话的文件修改。',
+  'Show session review': '显示审阅入口',
   Updates: '更新',
   'Application update settings': '应用更新设置',
   'Auto update': '自动更新',

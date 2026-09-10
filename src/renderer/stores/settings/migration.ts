@@ -49,6 +49,7 @@ const LEGACY_AI_FEATURE_KEYS = [
 ] as const;
 
 const REMOVED_SETTING_KEYS = [
+  'showToolDiff',
   'layoutMode',
   'fileTreeDisplayMode',
   'repositoryListDisplayMode',

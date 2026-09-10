@@ -32,7 +32,7 @@ describe('D12 single-session view', () => {
     // maintaining nothing.
     expect(shell).not.toContain('openSessionIds');
     expect(shell).not.toContain('useSessionTabsStore');
-    expect(shell).toContain('<SessionBar presentation={presentation} />');
+    expect(shell).toMatch(/<SessionBar\s+presentation=\{presentation\}/);
   });
 
   it("the sidebar marker reads the runtime's own binding, not a tab list", () => {

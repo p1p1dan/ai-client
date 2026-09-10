@@ -34,8 +34,8 @@ interface UpdateStatus {
 
 export function GeneralSettings() {
   const {
-    showToolDiff,
-    setShowToolDiff,
+    showSessionReview,
+    setShowSessionReview,
     language,
     setLanguage,
 
@@ -80,16 +80,14 @@ export function GeneralSettings() {
     <div className="space-y-6">
       <SettingsSectionBlock
         title={t('Chat file changes')}
-        description={t(
-          'Edit shows modification diffs; Write shows content only. Bash changes are not captured.'
-        )}
+        description={t('Review file changes from the current conversation in the right panel.')}
       >
         <SettingsRow>
-          <span className="text-sm">{t('Show file modification diff')}</span>
+          <span className="text-sm">{t('Show session review')}</span>
           <Switch
-            aria-label={t('Show file modification diff')}
-            checked={showToolDiff}
-            onCheckedChange={setShowToolDiff}
+            aria-label={t('Show session review')}
+            checked={showSessionReview}
+            onCheckedChange={setShowSessionReview}
           />
         </SettingsRow>
       </SettingsSectionBlock>

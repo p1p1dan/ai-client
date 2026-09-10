@@ -18,17 +18,19 @@ vi.mock('@/utils/logging', () => ({ updateRendererLogging: vi.fn() }));
 
 import { useSettingsStore } from '../index';
 
-it('defaults off and restores the diff switch from persisted settings', async () => {
+it('defaults on and restores the review switch from persisted settings', async () => {
   await useSettingsStore.persist.rehydrate();
-  expect(useSettingsStore.getState().showToolDiff).toBe(false);
-  useSettingsStore.getState().setShowToolDiff(true);
+  expect(useSettingsStore.getState().showSessionReview).toBe(true);
+  useSettingsStore.getState().setShowSessionReview(false);
   await vi.waitFor(() =>
-    expect(disk.value).toMatchObject({ 'aiclient-settings': { state: { showToolDiff: true } } })
+    expect(disk.value).toMatchObject({
+      'aiclient-settings': { state: { showSessionReview: false } },
+    })
   );
   const saved = disk.value;
-  useSettingsStore.setState({ showToolDiff: false });
+  useSettingsStore.setState({ showSessionReview: true });
   await Promise.resolve();
   disk.value = saved;
   await useSettingsStore.persist.rehydrate();
-  expect(useSettingsStore.getState().showToolDiff).toBe(true);
+  expect(useSettingsStore.getState().showSessionReview).toBe(false);
 });

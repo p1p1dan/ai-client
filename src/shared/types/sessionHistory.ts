@@ -1,3 +1,5 @@
+import type { SessionFileChange } from '../sessionFileChange.ts';
+
 /**
  * Session history shapes for Pi `session.history` hydration and isolated
  * T34 legacy migration-reader adapters.
@@ -26,6 +28,7 @@ export type HistoryBlock =
       ok: boolean;
       output?: string;
       patch?: string;
+      review?: SessionFileChange;
       error?: string;
       truncated?: boolean;
     };

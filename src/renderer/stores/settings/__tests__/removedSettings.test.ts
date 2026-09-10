@@ -12,6 +12,7 @@ vi.mock('../storage', () => ({
 }));
 
 const removedKeys = [
+  'showToolDiff',
   'layoutMode',
   'fileTreeDisplayMode',
   'repositoryListDisplayMode',

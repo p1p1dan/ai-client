@@ -111,6 +111,8 @@ const FONT_MONO_WHITELIST: readonly string[] = [
   'components/source-control/CodeReviewModal.tsx',
   // D34 commit-expand file list: monospace status letters, same rationale as ChangesList.
   'components/workspace-shell/surfaces/GitHistoryList.tsx',
+  // Session-owned patch rows use the same monospace diff domain.
+  'components/workspace-shell/SessionReviewPanel.tsx',
   'components/ui/code-block.tsx',
   'components/ui/ident.tsx',
   'components/ui/mermaid-renderer.tsx',

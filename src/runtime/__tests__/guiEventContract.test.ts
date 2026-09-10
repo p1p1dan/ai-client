@@ -8,6 +8,7 @@ import {
 } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PiWorkerRpcServer } from '../../agent-host/piWorkerRpcServer.ts';
+import { reviewFromToolResult } from '../../shared/sessionFileChange.ts';
 import type { RuntimeEvent } from '../../shared/types/runtimeEvents.ts';
 import {
   WORKER_RPC_PROTOCOL_VERSION,
@@ -265,6 +266,19 @@ async function runGuiSession(): Promise<RuntimeEvent[]> {
 }
 
 describe('the stream the GUI receives from the native backend (P4-5)', () => {
+  it('sends the successful write diff through the actual worker event stream', async () => {
+    const stream = await runGuiSession();
+    const completed = stream.find(
+      (event) => event.type === 'tool.completed' && event.payload.toolCallId === 'call-2'
+    );
+    expect(
+      completed?.type === 'tool.completed' && reviewFromToolResult(completed.payload.output)
+    ).toMatchObject({
+      status: 'added',
+      path: join(workspace, 'created.txt'),
+      patch: '@@ -0,0 +1,1 @@\n+hi',
+    });
+  });
   it('still matches the recording the renderer replays', async () => {
     const recorded = normalize(await runGuiSession(), workspace);
     if (process.env.AICLIENT_UPDATE_FIXTURES) {

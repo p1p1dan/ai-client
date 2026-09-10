@@ -106,8 +106,8 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     // zero-consumer deadlock round-10 ⑥ found. The two invariants this test
     // exists for are unchanged and still asserted below.
     expect(shell).toContain('{(editorOpen || fileIntentPending) && (');
-    expect(shell).toContain("editorOpen && !expanded && 'min-w-0 shrink-0'");
-    expect(shell).toContain("!editorOpen && 'hidden'");
+    expect(shell).toContain("editorOpen && !reviewOpen && !expanded && 'min-w-0 shrink-0'");
+    expect(shell).toContain("(!editorOpen || reviewOpen) && 'hidden'");
     expect(shell).toContain(
       "style={editorOpen && !expanded ? { width: 'var(--shell-editor-w)' } : undefined}"
     );
@@ -118,9 +118,15 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     // The overlay must be opaque or chat shows through it (user round 1,
     // screenshot). It covers the center row, NOT the shell: the dock has to
     // stay reachable, which is the same boundary `ContextPanel`'s overlay used.
-    expect(shell).toContain("editorOpen && expanded && 'absolute inset-0 z-20 bg-background'");
+    expect(shell).toContain(
+      "editorOpen && !reviewOpen && expanded && 'absolute inset-0 z-20 bg-background'"
+    );
     // …and it may not outlive the file that justified it.
     expect(shell).toContain('if (expanded && !editorAllocated) {');
+    // The review shares the overlay: closing it expanded must not promote the
+    // editor underneath to full-bleed over chat.
+    expect(shell).toContain('onClose={dismissReview}');
+    expect(shell).toContain('if (expanded) toggleExpanded();');
   });
 
   /**

@@ -5,6 +5,7 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { applyTurnUsage, initTurnRollup, viewTurnRollup } from '../../shared/piTurnRollup.ts';
 import { buildPiUsagePayload } from '../../shared/piUsage.ts';
+import { reviewFromToolResult } from '../../shared/sessionFileChange.ts';
 import type { MessageAttachmentMeta, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import type { RuntimeRunResult } from '../contracts.ts';
 
@@ -263,7 +264,8 @@ export class RuntimeEventProjector {
         });
         break;
       }
-      case 'tool_execution_end':
+      case 'tool_execution_end': {
+        const review = !event.isError ? reviewFromToolResult(event.result) : undefined;
         this.emit({
           type: 'tool.completed',
           sessionId,
@@ -271,12 +273,15 @@ export class RuntimeEventProjector {
             messageId: this.toolMessages.get(event.toolCallId) ?? this.ensureAssistant(),
             toolCallId: event.toolCallId,
             ok: !event.isError,
-            output: output(event.result),
+            output: review
+              ? { content: [{ type: 'text', text: output(event.result) }], details: { review } }
+              : output(event.result),
             ...(event.isError ? { error: output(event.result) || 'Tool call failed' } : {}),
           },
         });
         this.toolMessages.delete(event.toolCallId);
         break;
+      }
       case 'turn_end': {
         if (event.message.role !== 'assistant') break;
         this.closeAssistant();

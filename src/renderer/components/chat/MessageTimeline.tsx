@@ -34,7 +34,6 @@ import {
   pendingUserToChatMessage,
   usePendingUserMessagesStore,
 } from '@/stores/pendingUserMessages';
-import { useSettingsStore } from '@/stores/settings';
 import {
   type PendingReplyWatch,
   type TurnSendStatus,
@@ -1940,7 +1939,6 @@ function ToolGroupItem({
   streamingBlockId: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
 }) {
-  const showToolDiff = useSettingsStore((state) => state.showToolDiff);
   const rows = useMemo(
     () =>
       deriveToolGroupRows(filterThinkingEntries(item.entries, thinkingEnabled), {
@@ -1950,7 +1948,7 @@ function ToolGroupItem({
       }),
     [item.entries, thinkingEnabled, repoName, getThinkingDurationMs, streamingBlockId]
   );
-  return <ToolGroup rows={rows} sessionId={sessionId} showDiff={showToolDiff} />;
+  return <ToolGroup rows={rows} sessionId={sessionId} showDiff={false} />;
 }
 
 /*

@@ -33,6 +33,22 @@ describe('clampEditorRatio', () => {
 });
 
 describe('resolveChatColumnWidth', () => {
+  it('allows the review column to use its narrower floor without squeezing chat', () => {
+    const allocation = resolveShellAllocation({
+      shellWidth: 1000,
+      sidebarWidth: 280,
+      sidebarCollapsed: false,
+      chatVisible: true,
+      editorOpen: true,
+      editorRatio: 0.5,
+      panelVisible: false,
+      panelWidth: 0,
+      editorMinWidth: 320,
+    });
+    expect(allocation.chatWidth).toBe(400);
+    expect(allocation.editorWidth).toBe(320);
+    expect(allocation.overflowWidth).toBe(0);
+  });
   const roomy = CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH + 400; // 1320
 
   it('splits the row by the ratio when the ratio is reachable', () => {

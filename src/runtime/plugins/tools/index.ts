@@ -8,6 +8,7 @@ import { EXEC_SERVICE, HOST_IO_SERVICE, type RuntimeHostIoService } from '../../
 import { RuntimeHostError } from '../../host/errors.ts';
 import { type BashAnalysis, BashAnalyzer } from '../permissions/bash-analysis.ts';
 import { containsPath, PERMISSIONS_SERVICE, pathPolicy } from '../permissions/index.ts';
+import { createFileChange, readBeforeChange } from './file-change.ts';
 import { canonicalPath } from './paths.ts';
 import { readLines } from './read-lines.ts';
 
@@ -18,6 +19,7 @@ const SEARCH_FILE_BYTES = 1024 * 1024;
 const SEARCH_ENTRIES = 20_000;
 export interface ToolsConfig {
   cwd: string;
+  recordFileChanges?: boolean;
   shellPath?: string;
   shellEnv?: Record<string, string>;
 }
@@ -239,10 +241,16 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
         });
         return this.locked(target, async () => {
           signal?.throwIfAborted();
+          const before =
+            this.config.recordFileChanges !== false
+              ? await readBeforeChange(io, target, signal)
+              : undefined;
+          signal?.throwIfAborted();
           await io.mkdir(dirname(target), { recursive: true });
           await io.writeFile(target, Buffer.from(args.content));
           return result(`Wrote ${Buffer.byteLength(args.content)} bytes to ${target}`, {
             path: target,
+            ...(before ? { review: createFileChange(target, before, args.content) } : {}),
           });
         });
       },
@@ -273,7 +281,8 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
             overflow: 'error',
             signal,
           });
-          let content = new TextDecoder('utf-8', { fatal: true }).decode(data.bytes);
+          const before = new TextDecoder('utf-8', { fatal: true }).decode(data.bytes);
+          let content = before;
           for (const edit of args.edits) {
             const start = content.indexOf(edit.oldText);
             if (start < 0 || content.indexOf(edit.oldText, start + 1) >= 0)
@@ -288,7 +297,12 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
           }
           signal?.throwIfAborted();
           await io.writeFile(target, Buffer.from(content));
-          return result(`Applied ${args.edits.length} edits to ${target}`, { path: target });
+          return result(`Applied ${args.edits.length} edits to ${target}`, {
+            path: target,
+            ...(this.config.recordFileChanges !== false
+              ? { review: createFileChange(target, { text: before }, content) }
+              : {}),
+          });
         });
       },
     });

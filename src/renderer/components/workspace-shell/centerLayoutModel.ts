@@ -10,6 +10,7 @@
 /** A08 a08:1421 — the minimum widths its degradation thresholds are built from. */
 export const CHAT_MIN_WIDTH = 400;
 export const EDITOR_MIN_WIDTH = 520;
+export const REVIEW_MIN_WIDTH = 320;
 
 export const DEFAULT_EDITOR_RATIO = 0.5;
 export const MIN_EDITOR_RATIO = 0.25;
@@ -32,6 +33,7 @@ export function clampEditorRatio(ratio: number): number {
 }
 
 export interface ResolveChatColumnWidthInput {
+  editorMinWidth?: number;
   /** Measured width of chat + editor (NOT including the panel or the rail). */
   centerWidth: number;
   /** Persisted share of the center row given to the editor. */
@@ -56,7 +58,7 @@ export function resolveChatColumnWidth(input: ResolveChatColumnWidthInput): numb
     return CHAT_MIN_WIDTH;
   }
 
-  const max = centerWidth - EDITOR_MIN_WIDTH;
+  const max = centerWidth - (input.editorMinWidth ?? EDITOR_MIN_WIDTH);
   if (max <= CHAT_MIN_WIDTH) {
     // Too narrow for both. Chat keeps its floor and the editor takes the
     // overflow for the frame or two before the ladder hides chat entirely —
@@ -186,8 +188,15 @@ export const SIDEBAR_COLLAPSED_RESERVE = 44;
 export const PANEL_MIN_USEFUL_WIDTH = 150;
 
 /** Content the shell refuses to shrink below, given what is open. */
-export function contentFloor(input: { chatWanted: boolean; editorOpen: boolean }): number {
-  return (input.chatWanted ? CHAT_MIN_WIDTH : 0) + (input.editorOpen ? EDITOR_MIN_WIDTH : 0);
+export function contentFloor(input: {
+  chatWanted: boolean;
+  editorOpen: boolean;
+  editorMinWidth?: number;
+}): number {
+  return (
+    (input.chatWanted ? CHAT_MIN_WIDTH : 0) +
+    (input.editorOpen ? (input.editorMinWidth ?? EDITOR_MIN_WIDTH) : 0)
+  );
 }
 
 export interface ResolveShellChromeInput {
@@ -252,6 +261,7 @@ export function resolveShellChrome(input: ResolveShellChromeInput): ShellChrome 
 }
 
 export interface ResolveShellAllocationInput {
+  editorMinWidth?: number;
   /** Whole shell width. Null before the first measurement. */
   shellWidth: number | null;
   /** The user's sidebar width; ignored while collapsed. */
@@ -328,14 +338,15 @@ export function resolveShellAllocation(input: ResolveShellAllocationInput): Shel
 
   const sidebar = sidebarCollapsed ? SIDEBAR_COLLAPSED_RESERVE : Math.max(0, sidebarWidth);
   const preferred = panelVisible ? Math.max(0, panelWidth) : 0;
-  const floors = contentFloor({ chatWanted: chatVisible, editorOpen });
+  const editorMinWidth = input.editorMinWidth ?? EDITOR_MIN_WIDTH;
+  const floors = contentFloor({ chatWanted: chatVisible, editorOpen, editorMinWidth });
 
   const build = (centerWidth: number, panel: number, overflowWidth: number): ShellAllocation => {
     let chatWidth = 0;
     let editorWidth = 0;
     if (chatVisible && editorOpen) {
-      chatWidth = resolveChatColumnWidth({ centerWidth, editorRatio });
-      editorWidth = Math.max(EDITOR_MIN_WIDTH, centerWidth - chatWidth);
+      chatWidth = resolveChatColumnWidth({ centerWidth, editorRatio, editorMinWidth });
+      editorWidth = Math.max(editorMinWidth, centerWidth - chatWidth);
     } else if (chatVisible) {
       chatWidth = centerWidth;
     } else if (editorOpen) {

@@ -53,6 +53,25 @@ describe('lineDiffRows', () => {
 });
 
 describe('deriveToolDiff', () => {
+  it('keeps recorded native changes in review without rebuilding an argument diff', () => {
+    const row = deriveToolRowView({
+      toolCallId: 'recorded',
+      blockId: 'b',
+      blockIndex: 0,
+      toolName: 'write',
+      status: 'ok',
+      input: { path: '/repo/a', content: 'new\n'.repeat(5000) },
+      output: 'written',
+      result: {
+        details: {
+          review: { version: 1, path: '/repo/a', status: 'modified', unavailable: 'too-large' },
+        },
+      },
+    });
+    expect(row.diff).toBeUndefined();
+    expect(row.input).toBeUndefined();
+    expect(row.output).toBe('written');
+  });
   function run(toolName: string, input: unknown) {
     return { toolName, input };
   }

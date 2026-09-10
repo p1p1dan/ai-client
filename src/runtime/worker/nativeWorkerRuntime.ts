@@ -150,7 +150,11 @@ export class NativeWorkerRuntime {
       // singleTurn — a worker that can only ever answer once. The workspace is
       // the session's cwd, which bootstrap also cross-checks against the
       // session config, so the two can never drift apart.
-      tools: { cwd: this.cwd, shellPath: resolveWorkerShell(this.options.host.childEnv) },
+      tools: {
+        cwd: this.cwd,
+        shellPath: resolveWorkerShell(this.options.host.childEnv),
+        recordFileChanges: process.env.AICLIENT_SESSION_REVIEW !== '0',
+      },
       session,
       permissions: {
         ...(this.options.permissions?.mode ? { mode: this.options.permissions.mode } : {}),

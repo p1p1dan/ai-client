@@ -593,6 +593,7 @@ D25 的四档 + 一个例外：
 | 列宽拖拽把手 | 4px | `w-1` + `cursor-col-resize` |
 | **chat 列（中列左半）** | min 400px | `CHAT_MIN_WIDTH`（`centerLayoutModel.ts`） |
 | **editor 列（中列右半）** | min 520px，仅开文件时存在 | `EDITOR_MIN_WIDTH` |
+| **审阅栏（右列，与 editor 互切）** | min 320px，用户主动打开；聊天仍保留 min 400px | `REVIEW_MIN_WIDTH`（2026-09-10 当前对话修改审阅） |
 | **chat/editor 比例** | 默认 0.5，可拖 0.25–0.75 | `DEFAULT_EDITOR_RATIO` / `MIN_EDITOR_RATIO` / `MAX_EDITOR_RATIO`（持久化 `editorRatio`） |
 
 ### 画幅降级梯（T-32 / D27，A08 §「画幅降级梯」）

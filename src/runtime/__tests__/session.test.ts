@@ -49,6 +49,31 @@ const user = (content: string) => ({ role: 'user' as const, content, timestamp: 
 const text = (value: unknown) => JSON.stringify(value);
 
 describe('P3-1 JSONL session / P2-4 durable compaction', () => {
+  it('restores message-owned diffs after the workspace content has changed', async () => {
+    const { handle, faux } = await runtime('create', { permissions: { gear: 'auto' } });
+    faux.setResponses([
+      fauxAssistantMessage([fauxToolCall('write', { path: 'review.txt', content: 'pong\n' })], {
+        stopReason: 'toolUse',
+      }),
+      fauxAssistantMessage(
+        [fauxToolCall('write', { path: 'review.txt', content: 'pong\nabc\n' })],
+        { stopReason: 'toolUse' }
+      ),
+      fauxAssistantMessage('done'),
+    ]);
+    expect((await handle.run({ prompt: 'write twice', systemPrompt: 'probe' })).success).toBe(true);
+    const history = handle.session!.history();
+    const changes = history.flatMap((message) =>
+      message.blocks.filter((block) => block.type === 'tool_result').map((block) => block.review)
+    );
+    expect(changes).toHaveLength(2);
+    expect(changes[0]).toMatchObject({ status: 'added', patch: '@@ -0,0 +1,1 @@\n+pong' });
+    expect(changes[1]).toMatchObject({ status: 'modified', patch: '@@ -1,1 +1,2 @@\n pong\n+abc' });
+    await close(handle);
+    await writeFile(join(dir, 'review.txt'), 'external change');
+    const resumed = await runtime('resume');
+    expect(resumed.handle.session!.history()).toEqual(history);
+  });
   it('keeps messages between runs and after close/resume', async () => {
     const { handle, faux } = await runtime();
     faux.setResponses([
