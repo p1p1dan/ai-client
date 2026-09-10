@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { homedir } from 'node:os';
 import type { RuntimePermissionSettings } from '@shared/types/runtimePermission';
+import type { UpdateStatus } from '../shared/types/updater';
 import 'electron-log/preload.js';
 import type { AnnouncementsResult } from '@shared/announcements';
 import type { Locale } from '@shared/i18n';
@@ -845,34 +846,9 @@ const electronAPI = {
     downloadUpdate: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.UPDATER_DOWNLOAD_UPDATE),
     setAutoUpdateEnabled: (enabled: boolean): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.UPDATER_SET_AUTO_UPDATE_ENABLED, enabled),
-    onStatus: (
-      callback: (status: {
-        status: 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
-        info?: unknown;
-        progress?: { percent: number; bytesPerSecond: number; total: number; transferred: number };
-        error?: string;
-      }) => void
-    ): (() => void) => {
-      const handler = (
-        _: unknown,
-        status: {
-          status:
-            | 'checking'
-            | 'available'
-            | 'not-available'
-            | 'downloading'
-            | 'downloaded'
-            | 'error';
-          info?: unknown;
-          progress?: {
-            percent: number;
-            bytesPerSecond: number;
-            total: number;
-            transferred: number;
-          };
-          error?: string;
-        }
-      ) => callback(status);
+    getStatus: (): Promise<UpdateStatus> => ipcRenderer.invoke(IPC_CHANNELS.UPDATER_GET_STATUS),
+    onStatus: (callback: (status: UpdateStatus) => void): (() => void) => {
+      const handler = (_: unknown, status: UpdateStatus) => callback(status);
       ipcRenderer.on(IPC_CHANNELS.UPDATER_STATUS, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.UPDATER_STATUS, handler);
     },

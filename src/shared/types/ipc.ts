@@ -251,6 +251,7 @@ export const IPC_CHANNELS = {
   UPDATER_CHECK: 'updater:check',
   UPDATER_QUIT_AND_INSTALL: 'updater:quitAndInstall',
   UPDATER_STATUS: 'updater:status',
+  UPDATER_GET_STATUS: 'updater:getStatus',
   UPDATER_SET_AUTO_UPDATE_ENABLED: 'updater:setAutoUpdateEnabled',
   UPDATER_DOWNLOAD_UPDATE: 'updater:downloadUpdate',
 

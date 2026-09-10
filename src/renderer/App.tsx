@@ -349,8 +349,6 @@ export default function App() {
     setPendingMergeOptions,
   } = useMergeState();
 
-  const autoUpdateEnabled = useSettingsStore((s) => s.autoUpdateEnabled);
-
   const temporaryWorkspaceEnabled = useSettingsStore((s) => s.temporaryWorkspaceEnabled);
   const defaultTemporaryPath = useSettingsStore((s) => s.defaultTemporaryPath);
   const isWindows = window.electronAPI?.env.platform === 'win32';
@@ -1000,7 +998,7 @@ export default function App() {
         />
 
         {/* Update Notification */}
-        <UpdateNotification autoUpdateEnabled={autoUpdateEnabled} />
+        <UpdateNotification />
 
         {/* A3/D65 — git is a real dependency of a worktree manager, so the check
             survives the onboarding probes that were retired; it just no longer

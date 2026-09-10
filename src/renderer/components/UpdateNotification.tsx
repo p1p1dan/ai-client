@@ -1,6 +1,7 @@
 import { Download, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useI18n } from '@/i18n';
+import { useUpdaterStatus } from '@/stores/updater';
 import { Button } from './ui/button';
 import {
   Dialog,
@@ -11,144 +12,108 @@ import {
   DialogTitle,
 } from './ui/dialog';
 
-interface UpdateStatus {
-  status: 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
-  info?: {
-    version?: string;
-    releaseNotes?: string;
-  };
-  progress?: {
-    percent: number;
-    bytesPerSecond: number;
-    total: number;
-    transferred: number;
-  };
-  error?: string;
-}
-
-interface UpdateNotificationProps {
-  autoUpdateEnabled: boolean;
-}
-
-export function UpdateNotification({ autoUpdateEnabled }: UpdateNotificationProps) {
+export function UpdateNotification() {
   const { t } = useI18n();
-  const [status, setStatus] = useState<UpdateStatus | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [availableDialogOpen, setAvailableDialogOpen] = useState(false);
-
+  const status = useUpdaterStatus();
+  const [open, setOpen] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const phase = status?.status;
+  const version = status?.info?.version;
   useEffect(() => {
-    const cleanup = window.electronAPI.updater.onStatus((newStatus) => {
-      setStatus(newStatus as UpdateStatus);
+    if (phase === 'downloaded' && version) setOpen(true);
+  }, [phase, version]);
+  // A failed check (offline, unreachable feed) stays on the settings page; the
+  // reminder only carries errors for a version already found.
+  if (!status?.info || !['available', 'downloading', 'downloaded', 'error'].includes(status.status))
+    return null;
 
-      if (newStatus.status === 'downloaded') {
-        setDialogOpen(true);
-      }
-
-      if (newStatus.status === 'available' && !autoUpdateEnabled) {
-        setAvailableDialogOpen(true);
-      }
-    });
-
-    return cleanup;
-  }, [autoUpdateEnabled]);
-
-  const handleInstall = useCallback(() => {
-    window.electronAPI.updater.quitAndInstall();
-  }, []);
-
-  const handleLater = useCallback(() => {
-    setDialogOpen(false);
-  }, []);
-
-  const handleDownloadNow = useCallback(() => {
-    window.electronAPI.updater.downloadUpdate();
-    setAvailableDialogOpen(false);
-  }, []);
-
-  const handleCancel = useCallback(() => {
-    setAvailableDialogOpen(false);
-  }, []);
-
-  // Format bytes to human readable
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const downloaded = status.status === 'downloaded';
+  const downloading = status.status === 'downloading';
+  const failed = status.status === 'error';
+  const title = t(
+    downloaded
+      ? 'Update ready'
+      : downloading
+        ? 'Downloading update'
+        : failed
+          ? 'Update failed'
+          : 'New version available'
+  );
+  const act = async () => {
+    setActionError('');
+    try {
+      if (downloaded) await window.electronAPI.updater.quitAndInstall();
+      else await window.electronAPI.updater.downloadUpdate();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    }
   };
-
-  if (status?.status === 'downloading' && status.progress) {
-    return (
-      <div className="fixed bottom-4 right-4 z-[60] flex items-center gap-2 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
-        <Download className="h-4 w-4 animate-pulse text-primary" />
-        <div className="flex flex-col">
-          <span className="text-xs text-muted-foreground">{t('Downloading update')}</span>
-          <div className="flex items-center gap-2">
-            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full bg-primary transition-all"
-                style={{ width: `${status.progress.percent}%` }}
-              />
-            </div>
-            <span className="text-xs text-muted-foreground">
-              {formatBytes(status.progress.bytesPerSecond)}/s
-            </span>
-          </div>
-        </div>
+  return (
+    <>
+      <div
+        role="status"
+        className="fixed bottom-4 right-4 z-50 flex max-w-sm items-center gap-2 rounded-lg border bg-background px-3 py-2 shadow-lg"
+      >
+        {downloading ? (
+          <Download className="size-4 shrink-0 text-primary" />
+        ) : (
+          <RefreshCw className="size-4 shrink-0 text-primary" />
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="min-w-0 text-meta tabular-nums"
+          onClick={() => setOpen(true)}
+        >
+          {title}
+          {version ? ` · v${version}` : ''}
+          {status.progress ? ` · ${Math.floor(status.progress.percent)}%` : ''}
+        </Button>
       </div>
-    );
-  }
-
-  if (availableDialogOpen && status?.status === 'available') {
-    return (
-      <Dialog open={availableDialogOpen} onOpenChange={setAvailableDialogOpen}>
+      <Dialog open={open} onOpenChange={setOpen}>
         <DialogPopup className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <RefreshCw className="h-5 w-5 text-primary" />
-              {t('New version available')}
-            </DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
             <DialogDescription>
-              {t('Version {{version}} is available. Do you want to download and update now?', {
-                version: status?.info?.version || '',
-              })}
+              {downloaded
+                ? t('Version {{version}} has been downloaded. Restart now to install?', {
+                    version: version ?? '',
+                  })
+                : downloading
+                  ? t('The update is downloading. You can continue working.')
+                  : failed
+                    ? t('The update could not be completed. You can retry.')
+                    : t(
+                        'Version {{version}} is available. Do you want to download and update now?',
+                        { version: version ?? '' }
+                      )}
             </DialogDescription>
           </DialogHeader>
+          {downloading && status.progress && (
+            <div className="text-meta tabular-nums">{Math.floor(status.progress.percent)}%</div>
+          )}
+          {(actionError || status.error) && (
+            <p role="alert" className="break-words text-meta text-destructive">
+              {actionError || status.error}
+            </p>
+          )}
+          {status.info?.releaseNotes && (
+            <div className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-meta text-muted-foreground">
+              {status.info.releaseNotes}
+            </div>
+          )}
           <DialogFooter variant="bare">
-            <Button variant="outline" onClick={handleCancel}>
-              {t('Cancel')}
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              {t('Later')}
             </Button>
-            <Button onClick={handleDownloadNow}>{t('Update now')}</Button>
+            {!downloading && (
+              <Button onClick={() => void act()}>
+                {t(downloaded ? 'Restart now' : failed ? 'Retry' : 'Download update')}
+              </Button>
+            )}
           </DialogFooter>
         </DialogPopup>
       </Dialog>
-    );
-  }
-
-  if (status?.status !== 'downloaded') {
-    return null;
-  }
-
-  return (
-    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-      <DialogPopup className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <RefreshCw className="h-5 w-5 text-primary" />
-            {t('Update ready')}
-          </DialogTitle>
-          <DialogDescription>
-            {t('Version {{version}} has been downloaded. Restart now to install?', {
-              version: status?.info?.version || '',
-            })}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter variant="bare">
-          <Button variant="outline" onClick={handleLater}>
-            {t('Later')}
-          </Button>
-          <Button onClick={handleInstall}>{t('Restart now')}</Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+    </>
   );
 }

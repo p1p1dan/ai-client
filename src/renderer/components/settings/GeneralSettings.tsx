@@ -22,15 +22,10 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
+import { useUpdaterStatus } from '@/stores/updater';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
 // Parse shell arguments string, supporting single/double quotes for paths with spaces
-
-interface UpdateStatus {
-  status: 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
-  info?: { version?: string };
-  error?: string;
-}
 
 export function GeneralSettings() {
   const {
@@ -52,7 +47,7 @@ export function GeneralSettings() {
   const { t } = useI18n();
 
   const appVersion = window.electronAPI?.env.appVersion || '0.0.0';
-  const [updateStatus, setUpdateStatus] = React.useState<UpdateStatus | null>(null);
+  const updateStatus = useUpdaterStatus();
 
   const [tempPathDialogOpen, setTempPathDialogOpen] = React.useState(false);
 
@@ -66,12 +61,6 @@ export function GeneralSettings() {
     }
     setTempPathDialogOpen(true);
   }, [setDefaultTemporaryPath]);
-  React.useEffect(() => {
-    const cleanup = window.electronAPI.updater.onStatus((status) => {
-      setUpdateStatus(status as UpdateStatus);
-    });
-    return cleanup;
-  }, []);
   const handleCheckForUpdates = React.useCallback(() => {
     window.electronAPI.updater.checkForUpdates();
   }, []);
@@ -170,6 +159,14 @@ export function GeneralSettings() {
                   ({t('New version')}: v{updateStatus.info.version})
                 </span>
               )}
+              {updateStatus?.status === 'downloaded' && (
+                <span className="text-meta text-success">({t('Update ready')})</span>
+              )}
+              {updateStatus?.status === 'unsupported' && (
+                <span className="text-meta text-muted-foreground">
+                  {t('Use your system package manager or install a newer package to update.')}
+                </span>
+              )}
               {updateStatus?.status === 'not-available' && (
                 <span className="text-xs text-muted-foreground">({t('Up to date')})</span>
               )}
@@ -188,7 +185,10 @@ export function GeneralSettings() {
               size="sm"
               onClick={handleCheckForUpdates}
               disabled={
-                updateStatus?.status === 'checking' || updateStatus?.status === 'downloading'
+                updateStatus?.status === 'checking' ||
+                updateStatus?.status === 'downloading' ||
+                updateStatus?.status === 'downloaded' ||
+                updateStatus?.status === 'unsupported'
               }
             >
               <RefreshCw
@@ -202,7 +202,9 @@ export function GeneralSettings() {
           <span className="text-sm font-medium">{t('Auto update')}</span>
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {t('Automatically download and install updates')}
+              {t(
+                'Automatically download and install updates. New version reminders remain enabled when off.'
+              )}
             </p>
             <Switch checked={autoUpdateEnabled} onCheckedChange={setAutoUpdateEnabled} />
           </div>

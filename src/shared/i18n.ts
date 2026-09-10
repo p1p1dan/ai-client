@@ -703,6 +703,14 @@ export const zhTranslations: Record<string, string> = {
   'Review file changes from the current conversation in the right panel.':
     '在右侧审阅栏查看当前对话的文件修改。',
   'Show session review': '显示审阅入口',
+  'Update failed': '更新失败',
+  'The update is downloading. You can continue working.': '正在下载更新，你可以继续工作。',
+  'The update could not be completed. You can retry.': '更新未能完成，可以重试。',
+  'Download update': '下载更新',
+  'Use your system package manager or install a newer package to update.':
+    '请通过系统软件包管理器或安装新版软件包更新。',
+  'Automatically download and install updates. New version reminders remain enabled when off.':
+    '自动下载并安装更新；关闭后仍会提醒发现的新版本。',
   Updates: '更新',
   'Application update settings': '应用更新设置',
   'Auto update': '自动更新',

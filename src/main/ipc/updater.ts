@@ -7,6 +7,11 @@ function isUpdaterEnabled(): boolean {
 }
 
 export function registerUpdaterHandlers(): void {
+  ipcMain.handle(IPC_CHANNELS.UPDATER_GET_STATUS, async () => {
+    if (!isUpdaterEnabled()) return { status: 'unsupported' };
+    const { autoUpdaterService } = await import('../services/updater/AutoUpdater');
+    return autoUpdaterService.getStatus();
+  });
   ipcMain.handle(IPC_CHANNELS.UPDATER_CHECK, async () => {
     if (!isUpdaterEnabled()) return;
     const { autoUpdaterService } = await import('../services/updater/AutoUpdater');
