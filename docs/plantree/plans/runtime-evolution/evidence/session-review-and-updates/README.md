@@ -65,8 +65,9 @@ NODE_OPTIONS=--max-old-space-size=1200 ./node_modules/.bin/vitest run <该批文
 - 权限卡倒计时（补 `baeff487` 后）：「若 N 秒内未响应将自动拒绝」逐秒递减，归零后卡片变为 Denied、文件未创建；[截图](local-permission-countdown.png)。进行中轮次的过程不再在两条消息之间提前折叠（`ca6aac0f`）。
 
 发现并待定：
-- F7b 仍复现：运行与等待确认时，时间线末尾与输入框上方各一份状态；[截图](local-f7b-duplicate.png)。保留位置见 [open-questions](../../open-questions.md)。
-- 「已处理」耗时取最后一条消息，多段折叠显示同一数值；历史轮次不折叠。见 open-questions。
+- F7b 仍复现：运行与等待确认时，时间线末尾与输入框上方各一份状态；[截图](local-f7b-duplicate.png)。用户选保留输入框上方，`225c325e` 修复后含授权等待在内全程 19 次采样均为单份。
+- 「已处理」耗时取最后一条消息，多段折叠显示同一数值；历史轮次不折叠。用户定为只显示「已处理 N 个步骤」，`225c325e` 后重载的历史轮次同样折叠。
+- 强制结束应用后 `.writer.lock` 残留，重开该会话报 `session_locked`、历史读不出；锁内记录的进程已不存在也不放行。已登记到任务树，待修。
 - 中文界面下仍有英文：权限卡 Permission / allow / allow for session / deny / Content / Awaiting approval、时间线 Thought / Grepped / Ran / Edited / Read / Editing、输入框占位与排队提示、侧栏 new / branches、模型按钮 aria-label。
 - 重载界面后启动公告再次弹出，并新开一个空会话（`--open-path` 启动参数所致，未单独排查）。
 - trace 不记录推理强度，EFFORT-1 默认 medium 未能从本次运行核对，仍以单元测试为准。
