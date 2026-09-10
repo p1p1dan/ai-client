@@ -41,20 +41,27 @@ describe('U30 rev.2 the permission menu closes on pick', () => {
     expect(PERMISSION).toContain('actionsRef={menuActions}');
   });
 
-  it('closes only once the change has actually landed', () => {
-    // D14 replaced the four tiers with a mode axis and a gear axis, and moved
-    // the close with them: every radio item now keeps the menu open
-    // (`closeOnClick={false}`) and `apply` shuts it after the write succeeds.
-    // That is stricter than the `closeOnClick={!option.dangerous}` it replaced —
-    // a failed `setPermissions` used to close the menu anyway, leaving the chip
-    // showing a policy the runtime had refused.
+  it('closes on the press, and only the chip waits for the change to land', () => {
+    // D14 made every radio item `closeOnClick={false}` and moved the close into
+    // `apply`, after the await. That is how U30's original defect came back: the
+    // 2026-09-09 Windows pass reported the popup stuck open again, because a
+    // slow or refused `setPermissions` left it up with its own trigger disabled
+    // (`isDisabled` includes `pending`).
+    //
+    // U30 rev.3 separates the two questions. Closing is Base UI's own press
+    // handling — synchronous, independent of the worker. The CHIP still waits:
+    // `setSettings(next)` only runs in the success arm, so a refused policy is
+    // never displayed as active, which is the property D14's version was
+    // protecting. The failure is announced by toast, because the popup it used
+    // to render the alert into is gone by then.
     expect(PERMISSION).not.toContain('closeOnClick={true}');
-    expect(PERMISSION.split('closeOnClick={false}').length - 1).toBeGreaterThanOrEqual(2);
+    // Only `auto` keeps the popup, and it does so to show the confirmation.
+    expect(PERMISSION).toContain("closeOnClick={option.id !== 'auto'}");
     const apply = PERMISSION.slice(PERMISSION.indexOf('const apply ='));
-    const close = apply.indexOf('menuActions.current?.close();');
-    expect(close).toBeGreaterThanOrEqual(0);
-    // Inside the success arm: after the store write, before the catch.
-    expect(apply.slice(0, close)).toContain('writeSessionPermissions');
+    const settingsWrite = apply.indexOf('setSettings(next)');
+    expect(settingsWrite).toBeGreaterThanOrEqual(0);
+    expect(apply.slice(0, settingsWrite)).toContain('setPermissions');
+    expect(apply).toContain('addToast(');
   });
 
   it('sends the dangerous gear to a confirmation step instead of applying it', () => {
