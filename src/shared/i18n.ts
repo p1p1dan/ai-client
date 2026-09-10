@@ -581,26 +581,64 @@ export const zhTranslations: Record<string, string> = {
   'Prompt templates': '提示词模板',
   'This cross-agent location is always loaded in managed mode, local mode, and the Pi TUI.':
     '这个跨 Agent 共享位置在托管模式、本机模式与 Pi TUI 中都会加载。',
-  'Personal Pi directory': '个人 Pi 目录',
-  'Local setup reads this directory directly in GUI and Pi TUI. Managed GUI sessions can borrow its text resources without loading its settings, credentials, or plugins.':
-    '本机模式的 GUI 与 Pi TUI 都直接读取这个目录；托管 GUI 会话可以只借用其中的文本资源，不加载设置、凭据或插件。',
-  'Borrow personal Pi resources': '借用个人 Pi 资源',
-  'Applies to GUI sessions. Changing it reloads managed Pi workers; the embedded Pi TUI still uses only the app-managed directory.':
-    '只对 GUI 会话生效。切换后会重新加载托管 Pi worker；内嵌 Pi TUI 仍只使用本应用的托管目录。',
-  'Your current local setup already uses this directory. This switch is saved for managed mode.':
-    '当前本机模式已经直接使用这个目录；此开关会保存下来，供托管模式使用。',
+  // H/19: 两种模式共用同一个目录，所以这里只剩「本应用的」和「你自己的」两块。
+  // 借用开关连同它的四条文案一起删掉了——机制没了，留着文案会被下一次搜索翻出来当成还在。
+  'This app\u2019s Pi directory': '本应用的 Pi 目录',
+  'Every session in this app — signed in or using your own setup, GUI or Pi TUI — loads skills, prompt templates and plugins from here.':
+    '本应用里的每个会话——无论是登录模式还是「使用我自己的配置」，无论 GUI 还是 Pi TUI——都从这里加载技能、提示词模板和插件。',
+  'Your personal Pi directory': '你自己的 Pi 目录',
+  'Where the Pi CLI in your own terminal reads from. This app never writes here, and no longer loads from here — use the copy step above to bring things over.':
+    '你自己终端里的 Pi CLI 读取的位置。本应用从不写入这里，也不再从这里加载——要把东西搬过来，用上面的复制步骤。',
   'Bundled extensions': '随包扩展',
   'Sub-agents': '子智能体',
   'Lets the model delegate work to background agents. Off by default: its tool definitions are sent with every request, so it costs tokens on every turn even when unused. Changing it reloads Pi workers.':
     '让模型把任务派给后台智能体。默认关闭：它的工具定义会随每次请求一起发送，即使用不到也每轮都在花 token。切换后会重新加载 Pi worker。',
-  'App-managed Pi directory': '本应用托管的 Pi 目录',
-  'Managed mode reads this app-profile directory in both GUI and Pi TUI sessions.':
-    '托管模式的 GUI 与 Pi TUI 会话都会读取这个应用配置档目录。',
-  'This app-profile directory becomes active when managed mode is used.':
-    '切换到托管模式后，这个应用配置档目录才会生效。',
   'Open prompt templates folder': '打开模板目录',
   'Open skills folder': '打开技能目录',
   'Opening...': '正在打开…',
+
+  // H/19 U2：把 ~/.pi/agent 复制到本应用目录的那一段。
+  'Bring over your personal Pi setup': '把你自己的 Pi 配置搬过来',
+  'Copies from your own Pi directory into this app. Your files stay where they are — nothing is moved or changed there.':
+    '从你自己的 Pi 目录复制到本应用。你的文件原地不动——那边不会被移动，也不会被修改。',
+  'Copy from': '来源',
+  'Copy to': '去向',
+  'Conversation history': '历史对话',
+  'AGENTS.md': 'AGENTS.md',
+  'Already here': '已经有了',
+  'Replace items this app already has': '替换本应用已经有的同名项',
+  'Off: anything already here is left alone.': '关闭时：这边已经有的一律保持不动。',
+  'Copy selected': '复制选中项',
+  'Copying...': '正在复制…',
+  'Copy finished': '复制完成',
+  '{{count}} already exist here and will be kept unless you allow replacing.':
+    '有 {{count}} 项这边已经存在；除非你打开替换开关，否则会保持原样。',
+  '{{copied}} copied, {{replaced}} replaced, {{skipped}} left alone':
+    '复制 {{copied}} 项，替换 {{replaced}} 项，保持原样 {{skipped}} 项。',
+
+  // H/19 U4：用户自装的 pi 扩展。
+  'Extensions installed for your account. They run inside the agent process and can add tools, skills and commands.':
+    '装在你账户下的扩展。它们跑在 agent 进程里，可以往会话里加工具、技能和命令。',
+  'npm:package-name, a git URL, or a folder path': 'npm:包名、git 地址，或者一个目录路径',
+  'Package source': '包来源',
+  'Installing downloads from the network and can take a few seconds.':
+    '安装会联网下载，可能要等几秒。',
+  'Project-level plugins are ignored on the managed route, so this app installs to your account only.':
+    '登录模式下项目级插件不会生效，所以本应用只装到你的账户下。',
+  'Installed plugins could not be listed:': '读取已装插件失败：',
+  'Loading plugins...': '正在读取插件…',
+  // 'No plugins installed' and 'Installing...' are already in this file, from
+  // the Claude-era plugin browser. Reusing them rather than adding a second
+  // spelling — a duplicate key silently wins over the first one.
+  'Install one by package name to add tools or commands to your sessions.':
+    '按包名装一个，给会话加上工具或命令。',
+  'Settings file': '设置文件',
+  'Tool approval is handled by the permission system this app ships.':
+    '工具审批由本应用随包的权限系统负责。',
+  'Tool approval is handled by the permission system you installed yourself. This app steps aside, and its approval settings do not apply.':
+    '工具审批由你自己装的权限系统接管。本应用主动让路，它自己的审批设置不再生效。',
+  'This app could not read its plugin settings, so it cannot say which permission system approves tool calls.':
+    '本应用读不到自己的插件设置，因此无法确定是哪一份权限系统在审批工具调用。',
   // U13: sidebar group for chats that never got a project folder — they run in
   // a throwaway directory, so they belong to no repository.
   'Temporary chats': '临时对话',

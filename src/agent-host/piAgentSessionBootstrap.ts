@@ -18,11 +18,7 @@ import {
   samePiSessionPath,
 } from './piSessionPreflight.ts';
 import { PiWorkerSessionError } from './piWorkerErrors.ts';
-import {
-  defaultSkillInstallInstructions,
-  prependBorrowedInstructions,
-  resolveBorrowedResourcePaths,
-} from './userResourcePaths.ts';
+import { defaultSkillInstallInstructions } from './userResourcePaths.ts';
 
 export interface PiSettingsManager {
   getGlobalSettings?: () => { packages?: unknown };
@@ -229,12 +225,6 @@ export interface BootstrapPiAgentSessionOptions {
   resolveFeaturePlugins?: typeof resolveBundledFeaturePlugins;
   onPermissionActivity?: (payload: PermissionActivityPayload) => void;
   /**
-   * R01 — the user's own pi agent dir, whose skills and prompt templates this
-   * session should also load. Absent means borrow nothing; Main sends it only
-   * when managed mode has moved the agent dir away from the user's own.
-   */
-  borrowResourcesFrom?: string;
-  /**
    * Comma-separated feature ids of the bundled OPT-IN extensions this user
    * turned on. Absent enables none of them, so a Main build that does not know
    * about the switch yet gets the default-off posture rather than a guess.
@@ -424,10 +414,6 @@ export async function bootstrapPiAgentSession(
       log,
       onActivity: (payload) => options.onPermissionActivity?.(payload),
     });
-    // R01: resources only — never `additionalExtensionPaths`. Skills and
-    // templates are text that enters the context; an extension is code, and the
-    // user's copy of the permission system would collide with our patched one.
-    const borrowed = resolveBorrowedResourcePaths(options.borrowResourcesFrom, agentDir);
     // R03: the bundled feature extensions. Kept in their OWN list — see
     // `bundledFeaturePlugins.ts`: `verifyPermissionExtensionLoaded` accepts any
     // injected root as proof the approval gate loaded, so merging these into
@@ -451,18 +437,7 @@ export async function bootstrapPiAgentSession(
           ...base,
           defaultSkillInstallInstructions(),
         ],
-        ...(borrowed.globalInstructions.length > 0
-          ? {
-              agentsFilesOverride: (base: {
-                agentsFiles: Array<{ path: string; content: string }>;
-              }) => prependBorrowedInstructions(base, borrowed.globalInstructions),
-            }
-          : {}),
         ...(extensionPaths.length > 0 ? { additionalExtensionPaths: extensionPaths } : {}),
-        ...(borrowed.skills.length > 0 ? { additionalSkillPaths: borrowed.skills } : {}),
-        ...(borrowed.promptTemplates.length > 0
-          ? { additionalPromptTemplatePaths: borrowed.promptTemplates }
-          : {}),
         extensionFactories: [
           { name: 'aiclient-permission-activity', factory: activityObserver, hidden: true },
           ...(options.additionalExtensionFactories ?? []),

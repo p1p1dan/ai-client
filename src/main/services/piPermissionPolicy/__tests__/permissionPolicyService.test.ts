@@ -6,19 +6,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * T08-c slice 2 — which scopes are read, and which single one may be written.
  *
- * The assertion that carries the security weight is the LOCAL-ROUTE REFUSAL.
- * On "use my own setup", the global scope is the user's own `~/.pi/agent` — the
- * directory their `pi` CLI reads — and writing it to make this app behave would
- * change a tool we do not own (the T08-a red line). A silent no-op would be
- * worse than the write: the panel would report success and the user would
- * believe a policy they do not have.
+ * The assertion that carries the security weight is that `~/.pi/agent` is
+ * NEVER the file being written. That was the T08-a red line, and before H/19
+ * it was kept by refusing to write anything at all on the local route, because
+ * the local route's global scope WAS the user's own directory. H/19 moved every
+ * session onto this app's directory, so the red line is now kept by the
+ * directory resolver — and the panel is editable in both modes, because the
+ * file behind it is ours in both.
  */
 
 let root: string;
 let managed: boolean;
 
 const workerEntry = () => join(root, 'worker', 'worker.js');
-const managedAgentDir = () => join(root, 'managed-agent');
+const appAgentDir = () => join(root, 'app-agent');
+/** The user's own directory — still resolvable, and still never written. */
 const localAgentDir = () => join(root, 'user-home', '.pi', 'agent');
 
 vi.mock('../../agent-host/PiWorkerProcess', () => ({
@@ -28,7 +30,7 @@ vi.mock('../../auth/credentialMode', () => ({
   resolveManagedCredentialsEnabled: () => managed,
 }));
 vi.mock('../../piModelConfig', () => ({
-  getManagedPiAgentDir: () => managedAgentDir(),
+  getAppPiAgentDir: () => appAgentDir(),
   getLocalPiAgentDir: () => localAgentDir(),
 }));
 
@@ -54,7 +56,7 @@ afterEach(() => {
 describe('scope locations', () => {
   it('reads the bundled policy from beside the Pi worker entry', async () => {
     const { resolveScopeLocations } = await service();
-    const [bundled] = resolveScopeLocations('managed', managedAgentDir());
+    const [bundled] = resolveScopeLocations('managed', appAgentDir());
     expect(bundled?.path).toBe(
       join(root, 'worker', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json')
     );
@@ -63,19 +65,19 @@ describe('scope locations', () => {
   /** Scope order IS the policy: a later scope overrides an earlier one. */
   it('lists the scopes in the order the plugin merges them', async () => {
     const { resolveScopeLocations } = await service();
-    const locations = resolveScopeLocations('managed', managedAgentDir(), '/repo');
+    const locations = resolveScopeLocations('managed', appAgentDir(), '/repo');
     expect(locations.map((entry) => entry.id)).toEqual(['bundled', 'global', 'project']);
   });
 
   it('omits the project scope when no repository is open', async () => {
     const { resolveScopeLocations } = await service();
-    const locations = resolveScopeLocations('managed', managedAgentDir());
+    const locations = resolveScopeLocations('managed', appAgentDir());
     expect(locations.map((entry) => entry.id)).toEqual(['bundled', 'global']);
   });
 
   it('withholds the project scope on the managed route only', async () => {
     const { resolveScopeLocations, PROJECT_SCOPE_WITHHELD } = await service();
-    const asManaged = resolveScopeLocations('managed', managedAgentDir(), '/repo');
+    const asManaged = resolveScopeLocations('managed', appAgentDir(), '/repo');
     const asLocal = resolveScopeLocations('local', localAgentDir(), '/repo');
     expect(asManaged.at(-1)?.withheldReason).toBe(PROJECT_SCOPE_WITHHELD);
     expect(asLocal.at(-1)?.withheldReason).toBeUndefined();
@@ -99,7 +101,7 @@ describe('readPermissionPolicy', () => {
       join(root, 'worker', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json'),
       { permission: { write: 'ask', read: 'allow' } }
     );
-    writeJson(getGlobalPolicyPath(managedAgentDir()), { permission: { write: 'deny' } });
+    writeJson(getGlobalPolicyPath(appAgentDir()), { permission: { write: 'deny' } });
 
     const snapshot = readPermissionPolicy();
     const write = snapshot.effective.surfaces.find((entry) => entry.surface === 'write');
@@ -138,16 +140,19 @@ describe('readPermissionPolicy', () => {
     });
   });
 
-  it('reports the local route as read-only, and says why', async () => {
+  it('reports the local route as editable, against this app’s own directory', async () => {
     managed = false;
-    const { readPermissionPolicy, LOCAL_ROUTE_READ_ONLY } = await service();
+    const { readPermissionPolicy } = await service();
     const snapshot = readPermissionPolicy();
     expect(snapshot).toMatchObject({
       route: 'local',
-      editable: false,
-      readOnlyReason: LOCAL_ROUTE_READ_ONLY,
-      agentDir: localAgentDir(),
+      editable: true,
+      // The point of the assertion: the local route's policy file is OURS, not
+      // the one the user's own pi CLI reads.
+      agentDir: appAgentDir(),
     });
+    expect(snapshot.agentDir).not.toBe(localAgentDir());
+    expect(snapshot.readOnlyReason).toBeUndefined();
   });
 });
 
@@ -157,7 +162,7 @@ describe('updatePermissionPolicy', () => {
     const snapshot = updatePermissionPolicy({
       entries: [{ surface: 'write', action: 'deny' }],
     });
-    expect(existsSync(getGlobalPolicyPath(managedAgentDir()))).toBe(true);
+    expect(existsSync(getGlobalPolicyPath(appAgentDir()))).toBe(true);
     expect(snapshot.effective.surfaces.find((entry) => entry.surface === 'write')).toMatchObject({
       action: 'deny',
       origin: 'global',
@@ -166,7 +171,7 @@ describe('updatePermissionPolicy', () => {
 
   it('keeps keys it does not model when it rewrites the file', async () => {
     const { updatePermissionPolicy, getGlobalPolicyPath } = await service();
-    const path = getGlobalPolicyPath(managedAgentDir());
+    const path = getGlobalPolicyPath(appAgentDir());
     writeJson(path, { forwardingTimeoutMs: 5000, permission: { read: 'allow' } });
 
     updatePermissionPolicy({ entries: [{ surface: 'write', action: 'deny' }] });
@@ -175,29 +180,33 @@ describe('updatePermissionPolicy', () => {
   });
 
   /**
-   * The red line. A rejection reaches the panel as an error the user reads; a
-   * silent no-op reads as a save that worked.
+   * The red line, as it stands after H/19: a local-route write LANDS, and it
+   * lands in this app's directory. The old test asserted a refusal; asserting
+   * only that now would pass for a build that had quietly started writing
+   * `~/.pi` and then refused, so both halves are checked.
    */
-  it('refuses to write the user’s own ~/.pi on the local route', async () => {
+  it('writes the local route into this app’s directory, never the user’s own', async () => {
     managed = false;
     const { updatePermissionPolicy, getGlobalPolicyPath } = await service();
-    expect(() =>
-      updatePermissionPolicy({ entries: [{ surface: 'write', action: 'allow' }] })
-    ).toThrow(/Read-only/);
+    updatePermissionPolicy({ entries: [{ surface: 'write', action: 'allow' }] });
+    expect(existsSync(getGlobalPolicyPath(appAgentDir()))).toBe(true);
     expect(existsSync(getGlobalPolicyPath(localAgentDir()))).toBe(false);
   });
 
-  it('refuses to reset the user’s own ~/.pi on the local route', async () => {
+  it('resets the local route without touching the user’s own ~/.pi', async () => {
     managed = false;
-    const { resetPermissionPolicy } = await service();
-    expect(() => resetPermissionPolicy()).toThrow(/Read-only/);
+    const { resetPermissionPolicy, getGlobalPolicyPath } = await service();
+    writeJson(getGlobalPolicyPath(appAgentDir()), { permission: { write: 'allow' } });
+    resetPermissionPolicy();
+    expect(existsSync(getGlobalPolicyPath(appAgentDir()))).toBe(false);
+    expect(existsSync(getGlobalPolicyPath(localAgentDir()))).toBe(false);
   });
 });
 
 describe('resetPermissionPolicy', () => {
   it('removes the managed scope entirely, leaving the shipped default', async () => {
     const { resetPermissionPolicy, getGlobalPolicyPath } = await service();
-    const path = getGlobalPolicyPath(managedAgentDir());
+    const path = getGlobalPolicyPath(appAgentDir());
     writeJson(
       join(root, 'worker', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json'),
       { permission: { write: 'ask' } }

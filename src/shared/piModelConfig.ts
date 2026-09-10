@@ -37,38 +37,12 @@ export const PI_MODEL_MANAGEMENT_URL_ENV = 'PILAB_MODEL_CONFIG_URL';
 export const PI_PROJECT_TRUST_ENV = 'AICLIENT_PI_TRUST_PROJECT_CONFIG';
 
 /**
- * R01 — the user's own pi agent dir, whose skills and prompt templates the Host
- * should also load. Absent means borrow nothing.
- *
- * Managed mode moves `PI_CODING_AGENT_DIR` to `~/.pilab/pi-agent`, so anything
- * installed the documented way (under `~/.pi/agent/`) stops being visible, with
- * no message saying so. This carries the source directory back.
- *
- * Deliberately ONE value for both the switch and the target, unlike the
- * tri-state above: an absent key here needs no separate reading, because "did
- * not send a directory" and "do not borrow" are the same instruction, and an
- * older Main build that sends nothing lands on the conservative side. Main owns
- * the decision because it is the side that knows the credential mode and the
- * user setting; the Host only resolves the two subdirectories and checks they
- * exist.
- *
- * Scope is resources only. The Host must never turn this into an extension
- * path: an extension is code, and the user's own copy of the permission system
- * would collide with the patched one this app ships.
- */
-export const PI_BORROW_RESOURCES_DIR_ENV = 'AICLIENT_PI_BORROW_RESOURCES_DIR';
-
-/** R01 — user setting behind {@link PI_BORROW_RESOURCES_DIR_ENV}. Absent = on. */
-export const PI_BORROW_USER_RESOURCES_SETTING_KEY = 'borrowUserPiResources';
-
-/**
  * Which OPT-IN bundled feature extensions this session may load, as a
  * comma-separated list of feature ids (see `bundledPlugins.mjs`).
  *
- * Shaped exactly like {@link PI_BORROW_RESOURCES_DIR_ENV} and for the same
- * reason: one value carries both the switch and the target, and an ABSENT key
- * means "load none of them" — so an older Main build that sends nothing lands on
- * the conservative side rather than on a second reading of the state.
+ * One value carries both the switch and the target: an ABSENT key means "load
+ * none of them", so an older Main build that sends nothing lands on the
+ * conservative side rather than on a second reading of the state.
  *
  * It exists because a bundled extension is not free: its tool schemas are part
  * of every request's cached prefix. Measured on a first turn (2026-09-07,
@@ -258,15 +232,21 @@ export interface PiModelManagementSettings {
 /** R04 — the three durable installation locations shown in Settings → Resources. */
 export interface PiResourceSettings {
   managed: boolean;
-  borrowUserPiResources: boolean;
   /** Whether the bundled sub-agent extension is injected. Default OFF. */
   enableSubagents: boolean;
   paths: {
     sharedSkills: string;
+    /**
+     * H/19 — the user's OWN `~/.pi/agent` subdirectories. Since both modes now
+     * run out of the app's directory these are no longer loaded; they are the
+     * SOURCE the migration copies from, and the settings page shows them as
+     * such.
+     */
     userSkills: string;
     userPromptTemplates: string;
-    managedSkills: string;
-    managedPromptTemplates: string;
+    /** `<appAgentDir>/{skills,prompts}` — what every session actually loads. */
+    appSkills: string;
+    appPromptTemplates: string;
   };
   bundledFeatures: Array<{
     id: string;
@@ -279,12 +259,11 @@ export interface PiResourceSettings {
 
 /**
  * A partial update: each present field is applied, absent fields are left as
- * they are. Two independent switches share one settings surface, and a request
- * that had to carry both would make either toggle able to clobber the other
+ * they are. Independent switches share one settings surface, and a request that
+ * had to carry all of them would make any toggle able to clobber the others
  * from a stale snapshot.
  */
 export interface UpdatePiResourceSettingsRequest {
-  borrowUserPiResources?: boolean;
   enableSubagents?: boolean;
   optInFeatures?: Record<string, boolean>;
 }

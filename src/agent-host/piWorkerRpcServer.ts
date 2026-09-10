@@ -123,17 +123,9 @@ export interface PiWorkerRpcServerOptions {
   generation: number;
   projectTrusted: boolean;
   /**
-   * R01 — the user's own pi agent dir, whose skills and prompt templates every
-   * session in this process should also load. Process-level like
-   * `projectTrusted`, because it answers "where did this user install things",
-   * which no single session can change.
-   */
-  borrowResourcesFrom?: string;
-  /**
    * Comma-separated feature ids of the bundled OPT-IN extensions this user
-   * turned on. Process-level for the same reason as `borrowResourcesFrom`: it
-   * is a preference about this installation, not about one conversation.
-   * Absent enables none of them.
+   * turned on. Process-level like `projectTrusted`: it is a preference about
+   * this installation, not about one conversation. Absent enables none of them.
    */
   optInExtensions?: string;
   createRuntime?: (options: PiWorkerSessionOptions) => PiWorkerRuntime;
@@ -482,13 +474,9 @@ export class PiWorkerRpcServer {
         // than a ternary so no future payload field can hand a scratch session
         // the trusted posture the process was not started with.
         projectTrusted: this.options.projectTrusted && request.payload.unbound !== true,
-        // R01: NOT withdrawn by `unbound`. Project trust is about what a cloned
-        // repo may configure; borrowing is about what this user installed for
-        // themselves, which a scratch directory has no bearing on.
-        ...(this.options.borrowResourcesFrom
-          ? { borrowResourcesFrom: this.options.borrowResourcesFrom }
-          : {}),
-        // Not withdrawn by `unbound` either, and for the same reason.
+        // NOT withdrawn by `unbound`. Project trust is about what a cloned repo
+        // may configure; an opt-in bundled extension is about what this user
+        // turned on, which a scratch directory has no bearing on.
         ...(this.options.optInExtensions ? { optInExtensions: this.options.optInExtensions } : {}),
         emit: (event) => this.emitRuntimeEvent(event),
         loadSdk: this.options.loadSdk,

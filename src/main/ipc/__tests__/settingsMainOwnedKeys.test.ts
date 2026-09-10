@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CREDENTIAL_MODE_SETTING_KEY } from '@shared/credentialMode';
 import {
-  PI_BORROW_USER_RESOURCES_SETTING_KEY,
+  PI_ENABLE_SUBAGENTS_SETTING_KEY,
   PI_OPT_IN_FEATURE_SETTINGS_KEY,
 } from '@shared/piModelConfig';
 import { IPC_CHANNELS } from '@shared/types';
@@ -139,11 +139,11 @@ describe('settings.json — Main-owned keys survive a renderer whole-object save
     if (!read) throw new Error('settings handlers not registered');
     await read({});
 
-    settings.mergeSettingsPatch({ [PI_BORROW_USER_RESOURCES_SETTING_KEY]: false });
+    settings.mergeSettingsPatch({ [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true });
     await rendererSave({ theme: 'light' });
     await vi.advanceTimersByTimeAsync(600);
 
-    expect(readSettingsFile()[PI_BORROW_USER_RESOURCES_SETTING_KEY]).toBe(false);
+    expect(readSettingsFile()[PI_ENABLE_SUBAGENTS_SETTING_KEY]).toBe(true);
   });
 
   it('preserves opt-in feature preferences across stale renderer saves', async () => {

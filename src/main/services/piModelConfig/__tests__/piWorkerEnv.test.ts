@@ -1,7 +1,5 @@
 import { join } from 'node:path';
 import {
-  PI_BORROW_RESOURCES_DIR_ENV,
-  PI_BORROW_USER_RESOURCES_SETTING_KEY,
   PI_ENABLE_SUBAGENTS_SETTING_KEY,
   PI_OPT_IN_EXTENSIONS_ENV,
   PI_PROJECT_TRUST_ENV,
@@ -45,9 +43,11 @@ vi.mock('../../SharedSessionState', () => ({
 }));
 
 /**
- * H/17: `readUserProviders` is stubbed alongside `read` because the worker env
- * now asks whether the local route has moved off `~/.pi/agent`. `absent` keeps
- * every pre-existing case on its original branch — no user service configured.
+ * `readUserProviders` is stubbed alongside `read` because the derived-config
+ * writer asks for the user's services. `absent` is an empty group.
+ *
+ * H/19 note: it no longer decides anything about the agent directory — that
+ * branch is gone. The stub stays because the module still reads the vault.
  */
 const readUserProvidersMock = vi.fn(() => ({ status: 'absent' }) as { status: string });
 vi.mock('../../auth', () => ({
@@ -97,8 +97,10 @@ describe('resolveManagedPiWorkerEnv — project trust', () => {
   it('trusts a repository’s own scope on the local route', async () => {
     const env = await workerEnv(false);
     expect(env[PI_PROJECT_TRUST_ENV]).toBe('1');
-    // The local route injects nothing else: the user's own ~/.pi stays in play.
-    expect(env.PI_CODING_AGENT_DIR).toBeUndefined();
+    // H/19: the local route ALSO runs out of this app's agent directory. Trust
+    // and directory are now independent — the one thing the old conditional
+    // branch made impossible to state separately.
+    expect(env.PI_CODING_AGENT_DIR).toMatch(/pi-agent$/);
   });
 
   it('always sends the key so both trust postures are explicit', async () => {
@@ -109,14 +111,15 @@ describe('resolveManagedPiWorkerEnv — project trust', () => {
 });
 
 /**
- * R01 — lending the Host the user's own skills and prompt templates.
+ * H/19 — one agent directory, in both modes.
  *
- * Managed mode moves the agent dir, so anything installed the documented way
- * (under `~/.pi/agent/`) silently stops applying. This env var carries the
- * source directory back, and it doubles as the on/off switch: Main sends a path
- * only when the answer is yes.
+ * The whole R01 "borrow the user's own skills" mechanism used to live here. It
+ * existed because managed mode moved the agent dir and silently unloaded
+ * everything the user had installed. Both halves of that are gone: the
+ * directory no longer moves per mode, and what the user has is brought over by
+ * an explicit copy (`services/agentMigration`) rather than read through.
  */
-describe('resolveManagedPiWorkerEnv — borrowed resources', () => {
+describe('resolveManagedPiWorkerEnv — agent directory', () => {
   beforeEach(() => {
     vi.resetModules();
     delete process.env.AICLIENT_MANAGED_CREDENTIALS;
@@ -130,40 +133,46 @@ describe('resolveManagedPiWorkerEnv — borrowed resources', () => {
     delete process.env.PI_CODING_AGENT_DIR;
   });
 
-  it('points the managed route at the user’s own agent dir by default', async () => {
-    const env = await workerEnv(true);
-    expect(env[PI_BORROW_RESOURCES_DIR_ENV]).toMatch(/[/\\]\.pi[/\\]agent$/);
-    // It must not be the managed dir — borrowing that would be a no-op that
-    // reads like a working feature.
-    expect(env[PI_BORROW_RESOURCES_DIR_ENV]).not.toBe(env.PI_CODING_AGENT_DIR);
+  it('sends the same directory in both modes', async () => {
+    const managed = await workerEnv(true);
+    const local = await workerEnv(false);
+    expect(managed.PI_CODING_AGENT_DIR).toBe(local.PI_CODING_AGENT_DIR);
+    expect(managed.PI_CODING_AGENT_DIR).toBe(join('/tmp/aiclient-test/.pilab/dev', 'pi-agent'));
   });
 
-  it('sends nothing on the local route, where the agent dir is already the user’s', async () => {
-    // Borrowing the directory the Host already loads would list every skill
-    // twice.
-    expect(await workerEnv(false)).not.toHaveProperty(PI_BORROW_RESOURCES_DIR_ENV);
+  it('never points a session at the user’s own ~/.pi/agent', async () => {
+    for (const managed of [true, false]) {
+      expect((await workerEnv(managed)).PI_CODING_AGENT_DIR).not.toMatch(/[/\\]\.pi[/\\]agent$/);
+    }
   });
 
-  it('sends nothing when the user turned it off', async () => {
-    const env = await workerEnv(true, { [PI_BORROW_USER_RESOURCES_SETTING_KEY]: false });
-    expect(env).not.toHaveProperty(PI_BORROW_RESOURCES_DIR_ENV);
-    // The rest of the managed posture is unaffected.
-    expect(env[PI_PROJECT_TRUST_ENV]).toBe('0');
+  it('sends no borrow directory at all — the mechanism is gone', async () => {
+    for (const managed of [true, false]) {
+      expect(await workerEnv(managed)).not.toHaveProperty('AICLIENT_PI_BORROW_RESOURCES_DIR');
+    }
   });
 
-  it('treats an absent setting as on', async () => {
-    const env = await workerEnv(true, {});
-    expect(env[PI_BORROW_RESOURCES_DIR_ENV]).toBeTruthy();
+  it('gives the PTY the same agent directory as the worker', async () => {
+    // The TUI runs the real pi CLI, which DOES read PI_CODING_AGENT_DIR. That
+    // is what makes GUI and TUI find the same sessions (U3).
+    for (const managed of [true, false]) {
+      const pty = await ptyEnv(managed);
+      const worker = await workerEnv(managed);
+      expect(pty.PI_CODING_AGENT_DIR).toBe(worker.PI_CODING_AGENT_DIR);
+      expect(pty[PI_PROJECT_TRUST_ENV]).toBe(managed ? '0' : '1');
+    }
   });
 
-  it('does not put the borrow dir in the PTY environment', async () => {
-    // The TUI runs the real pi CLI, which does not read our env var. Leaving it
-    // there would claim a borrow that is not happening.
-    const pty = await ptyEnv(true);
-    expect(pty).not.toHaveProperty(PI_BORROW_RESOURCES_DIR_ENV);
-    // The PTY keeps everything else the worker gets.
-    expect(pty[PI_PROJECT_TRUST_ENV]).toBe('0');
-    expect(pty.PI_CODING_AGENT_DIR).toMatch(/pi-agent$/);
+  it('still drops the opt-in extension list from the PTY environment', async () => {
+    // That one IS read by our Host code only, so leaving it in the real CLI's
+    // environment would claim an injection that is not happening.
+    readSharedSettingsMock.mockReturnValue({
+      credentialMode: 'managed',
+      [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true,
+    });
+    const { resolveManagedPiWorkerEnv, resolveManagedPiPtyEnv } = await import('../index');
+    expect(resolveManagedPiWorkerEnv()[PI_OPT_IN_EXTENSIONS_ENV]).toBeTruthy();
+    expect(resolveManagedPiPtyEnv()).not.toHaveProperty(PI_OPT_IN_EXTENSIONS_ENV);
   });
 
   it('uses an overridden HOME for the shared folder exposed to the open-skills handler', async () => {
@@ -184,17 +193,16 @@ describe('resolveManagedPiWorkerEnv — borrowed resources', () => {
     const snapshot = getPiResourceSettings();
 
     expect(snapshot.managed).toBe(true);
-    expect(snapshot.borrowUserPiResources).toBe(true);
-    // The two switches on this page have OPPOSITE defaults; asserting both here
-    // is what keeps a future "make the defaults consistent" tidy-up honest.
     expect(snapshot.enableSubagents).toBe(false);
     expect(snapshot.paths.sharedSkills).toMatch(/[/\\]\.agents[/\\]skills$/);
+    // The user's own directory is still REPORTED — it is the migration source
+    // the settings page names — it is just no longer loaded.
     expect(snapshot.paths.userSkills).toMatch(/[/\\]\.pi[/\\]agent[/\\]skills$/);
     expect(snapshot.paths.userPromptTemplates).toMatch(/[/\\]\.pi[/\\]agent[/\\]prompts$/);
-    expect(snapshot.paths.managedSkills).toBe(
+    expect(snapshot.paths.appSkills).toBe(
       join('/tmp/aiclient-test/.pilab/dev', 'pi-agent', 'skills')
     );
-    expect(snapshot.paths.managedPromptTemplates).toBe(
+    expect(snapshot.paths.appPromptTemplates).toBe(
       join('/tmp/aiclient-test/.pilab/dev', 'pi-agent', 'prompts')
     );
   });
@@ -210,17 +218,18 @@ describe('resolveManagedPiWorkerEnv — borrowed resources', () => {
     });
   });
 
-  it('opens the prompt directory used by the current credential mode', async () => {
+  it('opens this app’s prompt directory in both modes (H/19)', async () => {
+    // It used to open `~/.pi/agent/prompts` on the local route. That folder is
+    // no longer loaded by anything, so opening it would show a user files that
+    // never reach a turn.
     process.env.PI_CODING_AGENT_DIR = '/tmp/custom-pi-agent';
     const { getActivePiPromptTemplatesDir } = await import('../index');
+    const appPrompts = join('/tmp/aiclient-test/.pilab/dev', 'pi-agent', 'prompts');
 
-    readSharedSettingsMock.mockReturnValue({ credentialMode: 'managed' });
-    expect(getActivePiPromptTemplatesDir()).toBe(
-      join('/tmp/aiclient-test/.pilab/dev', 'pi-agent', 'prompts')
-    );
-
-    readSharedSettingsMock.mockReturnValue({ credentialMode: 'local' });
-    expect(getActivePiPromptTemplatesDir()).toBe(join('/tmp/custom-pi-agent', 'prompts'));
+    for (const credentialMode of ['managed', 'local']) {
+      readSharedSettingsMock.mockReturnValue({ credentialMode });
+      expect(getActivePiPromptTemplatesDir()).toBe(appPrompts);
+    }
   });
 });
 
@@ -340,7 +349,7 @@ describe('resolveManagedPiWorkerEnv — client User-Agent', () => {
   });
 });
 
-describe('resolveManagedPiWorkerEnv — local route with user-added services (H/17 L2)', () => {
+describe('resolveManagedPiWorkerEnv — the user service count no longer moves anything (H/19)', () => {
   const userProvider = {
     id: 'svc-1',
     name: 'My DeepSeek',
@@ -355,34 +364,36 @@ describe('resolveManagedPiWorkerEnv — local route with user-added services (H/
     readUserProvidersMock.mockReturnValue({ status: 'absent' });
   });
 
-  it('leaves the local route pointed at the user directory when nothing was added', async () => {
+  /**
+   * The H/17 defect, as a regression test.
+   *
+   * Adding a service used to move `PI_CODING_AGENT_DIR`, which took the model
+   * catalogue, the credentials and the session history with it — silently, and
+   * only for local-mode users who happened to add a service. These four cases
+   * are the same four inputs, and the directory is now the same in all of them.
+   */
+  const APP_AGENT_DIR = '/tmp/aiclient-test/.pilab/dev/pi-agent';
+
+  it('points at the app directory with no services configured', async () => {
     readUserProvidersMock.mockReturnValue({ status: 'ok', providers: [] } as never);
-    const env = await workerEnv(false);
-    expect(env.PI_CODING_AGENT_DIR).toBeUndefined();
+    expect((await workerEnv(false)).PI_CODING_AGENT_DIR).toBe(APP_AGENT_DIR);
   });
 
-  it('moves pi to the app directory once a user service exists, and borrows the user resources', async () => {
+  it('points at the same directory once a service exists', async () => {
     readUserProvidersMock.mockReturnValue({ status: 'ok', providers: [userProvider] } as never);
-    const env = await workerEnv(false);
-
-    // Our own directory — the user's `~/.pi/agent` is never written to.
-    expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/aiclient-test/.pilab/dev/pi-agent');
-    // …which is exactly why the borrow has to switch on here too: otherwise
-    // adding one service silently unloads every skill installed the documented
-    // way.
-    expect(env.AICLIENT_PI_BORROW_RESOURCES_DIR).toBeTruthy();
+    expect((await workerEnv(false)).PI_CODING_AGENT_DIR).toBe(APP_AGENT_DIR);
   });
 
-  it('keeps the local route trusted — moving the directory is not a trust change', async () => {
-    readUserProvidersMock.mockReturnValue({ status: 'ok', providers: [userProvider] } as never);
-    expect((await workerEnv(false)).AICLIENT_PI_TRUST_PROJECT_CONFIG).toBe('1');
-  });
-
-  it('treats a disabled service as nothing to point at', async () => {
+  it('points at the same directory when the only service is disabled', async () => {
     readUserProvidersMock.mockReturnValue({
       status: 'ok',
       providers: [{ ...userProvider, enabled: false }],
     } as never);
-    expect((await workerEnv(false)).PI_CODING_AGENT_DIR).toBeUndefined();
+    expect((await workerEnv(false)).PI_CODING_AGENT_DIR).toBe(APP_AGENT_DIR);
+  });
+
+  it('keeps the local route trusted — the directory is not a trust change', async () => {
+    readUserProvidersMock.mockReturnValue({ status: 'ok', providers: [userProvider] } as never);
+    expect((await workerEnv(false)).AICLIENT_PI_TRUST_PROJECT_CONFIG).toBe('1');
   });
 });

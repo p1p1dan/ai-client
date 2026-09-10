@@ -245,6 +245,16 @@ export const IPC_CHANNELS = {
   PI_RESOURCES_OPEN_PROMPTS: 'piResources:openPromptTemplates',
   PI_RESOURCES_OPEN_SKILLS: 'piResources:openSkills',
 
+  // H/19 U2 — copying `~/.pi/agent` into this app's own agent directory.
+  AGENT_MIGRATION_INSPECT: 'agentMigration:inspect',
+  AGENT_MIGRATION_APPLY: 'agentMigration:apply',
+
+  // H/19 U4 — user-installed pi extensions, run through pi's own package manager.
+  PI_PLUGINS_LIST: 'piPlugins:list',
+  PI_PLUGINS_INSTALL: 'piPlugins:install',
+  PI_PLUGINS_REMOVE: 'piPlugins:remove',
+  PI_PLUGINS_SET_ENABLED: 'piPlugins:setEnabled',
+
   // T08-c — the pi permission policy: read every scope, write the one we own.
   PI_PERMISSIONS_GET: 'piPermissions:get',
   PI_PERMISSIONS_UPDATE: 'piPermissions:update',

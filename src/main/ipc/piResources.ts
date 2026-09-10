@@ -1,6 +1,5 @@
 import { mkdir } from 'node:fs/promises';
 import {
-  PI_BORROW_USER_RESOURCES_SETTING_KEY,
   PI_ENABLE_SUBAGENTS_SETTING_KEY,
   PI_OPT_IN_FEATURE_SETTINGS_KEY,
   type PiResourceSettings,
@@ -28,7 +27,7 @@ function readUpdateRequest(payload: unknown): UpdatePiResourceSettingsRequest {
   }
   const raw = payload as Record<string, unknown>;
   const request: UpdatePiResourceSettingsRequest = {};
-  for (const field of ['borrowUserPiResources', 'enableSubagents'] as const) {
+  for (const field of ['enableSubagents'] as const) {
     const value = raw[field];
     if (value === undefined) continue;
     if (typeof value !== 'boolean') throw new Error('Invalid Pi resource settings request');
@@ -69,21 +68,10 @@ export function registerPiResourceHandlers(): void {
       const previous = getPiResourceSettings();
 
       const patch: Record<string, unknown> = {};
-      // The borrow directory is process-level worker configuration. Managed
-      // workers must be replaced for the switch to take effect; local mode
-      // already reads the user's own Pi directory and needs no restart.
-      let restartManagedWorkers = false;
       // The extension list is read when a runtime is built, in BOTH modes, so
-      // this one always needs the workers back.
+      // any change to it needs the workers back.
       let restartAllWorkers = false;
 
-      if (
-        request.borrowUserPiResources !== undefined &&
-        request.borrowUserPiResources !== previous.borrowUserPiResources
-      ) {
-        patch[PI_BORROW_USER_RESOURCES_SETTING_KEY] = request.borrowUserPiResources;
-        restartManagedWorkers = true;
-      }
       if (
         request.enableSubagents !== undefined &&
         request.enableSubagents !== previous.enableSubagents
@@ -113,9 +101,7 @@ export function registerPiResourceHandlers(): void {
       const saved = mergeSettingsPatch(patch);
       if (!saved) throw new Error('Failed to save Pi resource settings');
 
-      if (restartAllWorkers || (restartManagedWorkers && previous.managed)) {
-        await workerManager.invalidateAll();
-      }
+      if (restartAllWorkers) await workerManager.invalidateAll();
       return getPiResourceSettings();
     }
   );

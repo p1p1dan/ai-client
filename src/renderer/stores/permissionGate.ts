@@ -4,9 +4,10 @@
  * The tiers (`readonly` / `pragmatic` / `handsoff` / `fullopen`) are implemented
  * as a link in the permission plugin's `authorizerChain`, and that line lives in
  * the `config.json` we ship next to our BUNDLED copy of the plugin. When the
- * user's own agentDir already declares `@gotgenes/pi-permission-system`, the
- * worker deliberately does not inject our copy (writing to the user's `~/.pi` is
- * a standing red line) — so their config is the one in force, it has no
+ * agent dir's `settings.json` already declares `@gotgenes/pi-permission-system`
+ * — a copy the user installed themselves — the worker deliberately does not
+ * inject ours, because two live copies means two prompts per tool call. Their
+ * config is then the one in force, it has no
  * `authorizerChain: ['aiclient-session-tier']`, and our link is registered but
  * never consulted. Every tier then behaves exactly like their own policy.
  *

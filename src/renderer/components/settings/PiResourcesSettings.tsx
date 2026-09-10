@@ -42,9 +42,9 @@ export function PiResourcesSettings() {
   }, [load]);
 
   /**
-   * One writer for both switches. The request is a PARTIAL update, so each
-   * toggle sends only its own field — sending the pair would let a stale
-   * snapshot overwrite whichever switch the user did not touch.
+   * The request is a PARTIAL update, so each switch sends only its own field —
+   * sending the whole snapshot would let a stale one overwrite whichever switch
+   * the user did not touch.
    */
   const update = async (patch: UpdatePiResourceSettingsRequest) => {
     setBusy(true);
@@ -121,10 +121,40 @@ export function PiResourcesSettings() {
 
           <section className="space-y-4 border-t p-4">
             <div>
-              <h4 className="text-ui font-semibold">{t('Personal Pi directory')}</h4>
+              <h4 className="text-ui font-semibold">{t('This app’s Pi directory')}</h4>
+              <p className="text-meta text-muted-foreground">
+                {/* H/19: one directory in both modes. Saying "managed mode reads
+                    this" would send a local-mode user looking for a second
+                    location that no longer exists. */}
+                {t(
+                  'Every session in this app — signed in or using your own setup, GUI or Pi TUI — loads skills, prompt templates and plugins from here.'
+                )}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <ResourcePath label={t('Skills')} path={snapshot.paths.appSkills} />
+              <ResourcePath
+                label={t('Prompt templates')}
+                path={snapshot.paths.appPromptTemplates}
+              />
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => void openResourceFolder('prompts')}
+              disabled={opening}
+              className="w-fit"
+            >
+              <FolderOpen className="h-4 w-4" />
+              {opening ? t('Opening...') : t('Open prompt templates folder')}
+            </Button>
+          </section>
+
+          <section className="space-y-4 border-t p-4">
+            <div>
+              <h4 className="text-ui font-semibold">{t('Your personal Pi directory')}</h4>
               <p className="text-meta text-muted-foreground">
                 {t(
-                  'Local setup reads this directory directly in GUI and Pi TUI. Managed GUI sessions can borrow its text resources without loading its settings, credentials, or plugins.'
+                  'Where the Pi CLI in your own terminal reads from. This app never writes here, and no longer loads from here — use the copy step above to bring things over.'
                 )}
               </p>
             </div>
@@ -135,37 +165,6 @@ export function PiResourcesSettings() {
                 path={snapshot.paths.userPromptTemplates}
               />
             </div>
-            {!snapshot.managed && (
-              <Button
-                variant="outline"
-                onClick={() => void openResourceFolder('prompts')}
-                disabled={opening}
-                className="w-fit"
-              >
-                <FolderOpen className="h-4 w-4" />
-                {opening ? t('Opening...') : t('Open prompt templates folder')}
-              </Button>
-            )}
-            <SettingsRow className="sm:grid-cols-[minmax(0,1fr)_auto]">
-              <div className="min-w-0 flex-1">
-                <p className="text-ui font-medium">{t('Borrow personal Pi resources')}</p>
-                <p className="text-meta text-muted-foreground">
-                  {snapshot.managed
-                    ? t(
-                        'Applies to GUI sessions. Changing it reloads managed Pi workers; the embedded Pi TUI still uses only the app-managed directory.'
-                      )
-                    : t(
-                        'Your current local setup already uses this directory. This switch is saved for managed mode.'
-                      )}
-                </p>
-              </div>
-              <Switch
-                checked={snapshot.borrowUserPiResources}
-                disabled={busy}
-                onCheckedChange={(checked) => void update({ borrowUserPiResources: checked })}
-                aria-label={t('Borrow personal Pi resources')}
-              />
-            </SettingsRow>
           </section>
 
           <section className="space-y-4 border-t p-4">
@@ -189,37 +188,6 @@ export function PiResourcesSettings() {
                 />
               </SettingsRow>
             ))}
-          </section>
-
-          <section className="space-y-4 border-t p-4">
-            <div>
-              <h4 className="text-ui font-semibold">{t('App-managed Pi directory')}</h4>
-              <p className="text-meta text-muted-foreground">
-                {snapshot.managed
-                  ? t(
-                      'Managed mode reads this app-profile directory in both GUI and Pi TUI sessions.'
-                    )
-                  : t('This app-profile directory becomes active when managed mode is used.')}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <ResourcePath label={t('Skills')} path={snapshot.paths.managedSkills} />
-              <ResourcePath
-                label={t('Prompt templates')}
-                path={snapshot.paths.managedPromptTemplates}
-              />
-            </div>
-            {snapshot.managed && (
-              <Button
-                variant="outline"
-                onClick={() => void openResourceFolder('prompts')}
-                disabled={opening}
-                className="w-fit"
-              >
-                <FolderOpen className="h-4 w-4" />
-                {opening ? t('Opening...') : t('Open prompt templates folder')}
-              </Button>
-            )}
           </section>
         </>
       )}

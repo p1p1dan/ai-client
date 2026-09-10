@@ -12,7 +12,7 @@ import {
   PiTuiPtyController,
   type PtyHandle,
   type PtySpawnFn,
-  resolvePiTuiLaunchPlan,
+  resolvePiCliLaunchPlan,
 } from '../PiTuiPty';
 
 class FakePty implements PtyHandle {
@@ -87,7 +87,7 @@ function harness(maxLiveTerminals = 2) {
   return { controller, ptys, spawnCalls, data, exits, states };
 }
 
-describe('resolvePiTuiLaunchPlan', () => {
+describe('resolvePiCliLaunchPlan', () => {
   it('uses absolute packaged CLI and bundled Node paths with no resume flag', () => {
     const resourcesPath = mkdtempSync(join(tmpdir(), 'pi-tui-layout-'));
     const cliPath = join(
@@ -100,7 +100,7 @@ describe('resolvePiTuiLaunchPlan', () => {
     writeFileSync(cliPath, '');
     writeFileSync(nodePath, '');
 
-    const plan = resolvePiTuiLaunchPlan(
+    const plan = resolvePiCliLaunchPlan(
       {
         isPackaged: true,
         appPath: '/app',

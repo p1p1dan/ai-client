@@ -1,14 +1,17 @@
 /**
  * T08-c slice 2 — IPC for the permission-policy panel.
  *
- * Three verbs and one affordance. `update` and `reset` throw on the local
- * route rather than returning a "nothing happened" snapshot: an
- * `ipcRenderer.invoke` rejection reaches the panel as an error the user can
- * read, whereas a silently unchanged snapshot reads as a save that worked.
+ * Three verbs and one affordance. `update` and `reset` throw rather than
+ * returning a "nothing happened" snapshot: an `ipcRenderer.invoke` rejection
+ * reaches the panel as an error the user can read, whereas a silently unchanged
+ * snapshot reads as a save that worked.
  *
- * `reveal` exists for the read-only case. Telling someone their policy lives in
- * `~/.pi` and then making them find it by hand is most of the way to not telling
- * them.
+ * `reveal` opens the file behind a scope. Naming a path and then making someone
+ * find it by hand is most of the way to not naming it.
+ *
+ * H/19 note: both writes used to be refused outright on the local route,
+ * because the global scope was then the user's own `~/.pi/agent`. Every session
+ * now runs out of this app's directory, so there is nothing left to refuse.
  */
 
 import type {

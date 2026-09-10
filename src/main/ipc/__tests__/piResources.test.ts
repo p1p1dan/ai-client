@@ -2,7 +2,6 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  PI_BORROW_USER_RESOURCES_SETTING_KEY,
   PI_ENABLE_SUBAGENTS_SETTING_KEY,
   PI_OPT_IN_FEATURE_SETTINGS_KEY,
 } from '@shared/piModelConfig';
@@ -13,7 +12,6 @@ type Handler = (event: unknown, payload?: unknown) => unknown;
 const handlers = new Map<string, Handler>();
 const state = {
   managed: true,
-  borrowUserPiResources: true,
   enableSubagents: false,
   root: '',
   saveOk: true,
@@ -24,14 +22,11 @@ const state = {
 const invalidateAll = vi.fn(async () => undefined);
 const openPath = vi.fn(async () => state.openError);
 // Applies only the keys the patch actually carries. The handler sends a
-// PARTIAL patch, so a mock that read both keys unconditionally would write
+// PARTIAL patch, so a mock that read every key unconditionally would write
 // `undefined` over whichever switch the user did not touch — and the test would
 // pass while the real bug (one toggle clearing the other) went unmodelled.
 const mergeSettingsPatch = vi.fn((patch: Record<string, unknown>) => {
   if (!state.saveOk) return false;
-  if (PI_BORROW_USER_RESOURCES_SETTING_KEY in patch) {
-    state.borrowUserPiResources = patch[PI_BORROW_USER_RESOURCES_SETTING_KEY] as boolean;
-  }
   if (PI_ENABLE_SUBAGENTS_SETTING_KEY in patch) {
     state.enableSubagents = patch[PI_ENABLE_SUBAGENTS_SETTING_KEY] as boolean;
   }
@@ -45,15 +40,14 @@ const mergeSettingsPatch = vi.fn((patch: Record<string, unknown>) => {
 function snapshot() {
   return {
     managed: state.managed,
-    borrowUserPiResources: state.borrowUserPiResources,
     enableSubagents: state.enableSubagents,
     bundledFeatures: [{ id: 'subagents', enabled: state.enableSubagents }],
     paths: {
       sharedSkills: join(state.root, '.agents', 'skills'),
       userSkills: join(state.root, '.pi', 'agent', 'skills'),
       userPromptTemplates: join(state.root, '.pi', 'agent', 'prompts'),
-      managedSkills: join(state.root, '.pilab', 'test', 'pi-agent', 'skills'),
-      managedPromptTemplates: join(state.root, '.pilab', 'test', 'pi-agent', 'prompts'),
+      appSkills: join(state.root, '.pilab', 'test', 'pi-agent', 'skills'),
+      appPromptTemplates: join(state.root, '.pilab', 'test', 'pi-agent', 'prompts'),
     },
   };
 }
@@ -68,8 +62,8 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
 }));
 
 vi.mock('../../services/piModelConfig', () => ({
-  getActivePiPromptTemplatesDir: () =>
-    state.managed ? snapshot().paths.managedPromptTemplates : snapshot().paths.userPromptTemplates,
+  // H/19: one directory, whatever the route.
+  getActivePiPromptTemplatesDir: () => snapshot().paths.appPromptTemplates,
   getPiResourceSettings: () => snapshot(),
 }));
 
@@ -84,7 +78,6 @@ beforeEach(async () => {
   vi.clearAllMocks();
   handlers.clear();
   state.managed = true;
-  state.borrowUserPiResources = true;
   state.enableSubagents = false;
   state.saveOk = true;
   state.openError = '';
@@ -123,43 +116,15 @@ describe('Pi resource settings IPC', () => {
     await expect(handler(IPC_CHANNELS.PI_RESOURCES_GET_SETTINGS)({})).resolves.toEqual(snapshot());
   });
 
-  it('saves the borrow switch through the Main-owned settings path and reloads managed workers', async () => {
-    await expect(
-      handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS)({}, { borrowUserPiResources: false })
-    ).resolves.toMatchObject({ borrowUserPiResources: false });
-
-    expect(mergeSettingsPatch).toHaveBeenCalledWith({
-      [PI_BORROW_USER_RESOURCES_SETTING_KEY]: false,
-    });
-    expect(invalidateAll).toHaveBeenCalledOnce();
-  });
-
-  it('does not restart workers when the value is unchanged or local mode already owns the directory', async () => {
-    await handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS)(
-      {},
-      {
-        borrowUserPiResources: true,
-      }
-    );
-    expect(mergeSettingsPatch).not.toHaveBeenCalled();
-
-    state.managed = false;
-    await handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS)(
-      {},
-      {
-        borrowUserPiResources: false,
-      }
-    );
-    expect(mergeSettingsPatch).toHaveBeenCalledOnce();
-    expect(invalidateAll).not.toHaveBeenCalled();
-  });
-
   it('rejects malformed settings and failed persistence', async () => {
     for (const payload of [
       null,
       {},
-      { borrowUserPiResources: 'yes' },
       { enableSubagents: 'yes' },
+      // H/19 removed this field. It must now be REJECTED rather than ignored,
+      // for the same reason as an unknown one: a stale caller that still sends
+      // it deserves an error, not a no-op that reads as a saved setting.
+      { borrowUserPiResources: false },
       // Named nothing this handler knows: a caller that meant to change
       // something and misspelled the field must hear about it, not get a
       // silent no-op back that looks like a saved setting.
@@ -173,18 +138,13 @@ describe('Pi resource settings IPC', () => {
 
     state.saveOk = false;
     await expect(
-      handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS)(
-        {},
-        {
-          borrowUserPiResources: false,
-        }
-      )
+      handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS)({}, { enableSubagents: true })
     ).rejects.toThrow('Failed to save Pi resource settings');
     expect(invalidateAll).not.toHaveBeenCalled();
   });
 
-  it('creates and opens the app-managed prompt templates directory', async () => {
-    const path = snapshot().paths.managedPromptTemplates;
+  it('creates and opens this app’s prompt templates directory', async () => {
+    const path = snapshot().paths.appPromptTemplates;
     expect(existsSync(path)).toBe(false);
 
     await handler(IPC_CHANNELS.PI_RESOURCES_OPEN_PROMPTS)({});
@@ -193,9 +153,13 @@ describe('Pi resource settings IPC', () => {
     expect(openPath).toHaveBeenCalledWith(path);
   });
 
-  it('opens the personal prompt directory when local setup is active', async () => {
+  it('opens the SAME directory on the local route (H/19)', async () => {
+    // Before H/19 this opened `~/.pi/agent/prompts`. It now opens this app's
+    // own directory in both modes, because that is the only one a session
+    // loads templates from — the old behaviour opened a folder whose contents
+    // no longer reached any turn.
     state.managed = false;
-    const path = snapshot().paths.userPromptTemplates;
+    const path = snapshot().paths.appPromptTemplates;
 
     await handler(IPC_CHANNELS.PI_RESOURCES_OPEN_PROMPTS)({});
 
@@ -212,11 +176,10 @@ describe('Pi resource settings IPC', () => {
 });
 
 /**
- * The sub-agent switch — one settings surface, two independent switches.
+ * The sub-agent switch.
  *
- * Default OFF and, unlike borrowing, it matters in BOTH credential modes: the
- * bundled copy is injected on the local route too, so the workers have to come
- * back either way.
+ * Default OFF, and it matters in BOTH credential modes: the bundled copy is
+ * injected on the local route too, so the workers have to come back either way.
  */
 describe('Pi resource settings IPC — sub-agents', () => {
   it('repeated generic updates do not write or restart the worker again', async () => {
@@ -274,20 +237,20 @@ describe('Pi resource settings IPC — sub-agents', () => {
     expect(invalidateAll).toHaveBeenCalledOnce();
   });
 
-  it('restarts workers in local mode too, where the borrow switch would not', async () => {
+  it('restarts workers in local mode too', async () => {
     state.managed = false;
     await handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS)({}, { enableSubagents: true });
     expect(invalidateAll).toHaveBeenCalledOnce();
   });
 
-  it('leaves the other switch alone', async () => {
-    // The renderer sends one field per toggle. If either end ever sent the pair
-    // from a stale snapshot, this is the assertion that would catch it.
+  it('writes only the field the request carried', async () => {
+    // The renderer sends one field per toggle. If either end ever sent a whole
+    // stale snapshot, this is the assertion that would catch it.
     const after = (await handler(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS)(
       {},
       { enableSubagents: true }
-    )) as { borrowUserPiResources: boolean; enableSubagents: boolean };
-    expect(after).toMatchObject({ borrowUserPiResources: true, enableSubagents: true });
+    )) as { enableSubagents: boolean };
+    expect(after).toMatchObject({ enableSubagents: true });
     expect(mergeSettingsPatch).toHaveBeenCalledWith({
       [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true,
       [PI_OPT_IN_FEATURE_SETTINGS_KEY]: { subagents: true },

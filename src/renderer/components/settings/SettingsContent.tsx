@@ -13,6 +13,7 @@ import { type ElementType, useState } from 'react';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { AdvancedSettings } from './AdvancedSettings';
+import { AgentMigrationSettings } from './AgentMigrationSettings';
 import { AISettings } from './AISettings';
 import { AppearanceSettings } from './AppearanceSettings';
 import type { SettingsCategory } from './constants';
@@ -23,6 +24,7 @@ import { KeybindingsSettings } from './KeybindingsSettings';
 import { NetworkSettings } from './NetworkSettings';
 import { PermissionPolicySettings } from './PermissionPolicySettings';
 import { PiModelManagementSettings } from './PiModelManagementSettings';
+import { PiPluginsSettings } from './PiPluginsSettings';
 import { PiResourcesSettings } from './PiResourcesSettings';
 import { RemoteSettings } from './RemoteSettings';
 import { SettingsPageShell } from './SettingsPrimitives';
@@ -104,9 +106,11 @@ export function SettingsContent({
           )}
           {activeCategory === 'pi' && (
             <>
+              <AgentMigrationSettings />
               <UserProvidersSettings />
               <PiModelManagementSettings />
               <PermissionPolicySettings repoPath={repoPath} />
+              <PiPluginsSettings />
               <PiResourcesSettings />
             </>
           )}

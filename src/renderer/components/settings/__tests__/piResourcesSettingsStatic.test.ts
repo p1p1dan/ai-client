@@ -15,12 +15,12 @@ describe('R04 Pi resource settings', () => {
     expect(component).toContain('window.electronAPI.piResources.openSkills()');
   });
 
-  it('shows the three installation locations using paths resolved by Main', () => {
+  it('shows every installation location using paths resolved by Main', () => {
     expect(component).toContain('snapshot.paths.sharedSkills');
     expect(component).toContain('snapshot.paths.userSkills');
     expect(component).toContain('snapshot.paths.userPromptTemplates');
-    expect(component).toContain('snapshot.paths.managedSkills');
-    expect(component).toContain('snapshot.paths.managedPromptTemplates');
+    expect(component).toContain('snapshot.paths.appSkills');
+    expect(component).toContain('snapshot.paths.appPromptTemplates');
     expect(component).not.toContain("'~/.pilab");
     expect(component).not.toContain("'~/.pi");
   });
@@ -33,20 +33,32 @@ describe('R04 Pi resource settings', () => {
   });
 
   /**
-   * Two switches, one writer, one field per call. A toggle that sent the whole
-   * snapshot back would carry the OTHER switch's value from whenever the page
-   * last loaded, so flipping one could silently revert the other.
+   * One writer, one field per call. A toggle that sent the whole snapshot back
+   * would carry every OTHER switch's value from whenever the page last loaded,
+   * so flipping one could silently revert another.
    */
   it('sends one field per toggle rather than the whole snapshot', () => {
-    expect(component).toContain('update({ borrowUserPiResources: checked })');
     expect(component).toContain('update({ optInFeatures: { [feature.id]: checked } })');
-    expect(component).toContain('checked={snapshot.borrowUserPiResources}');
     expect(component).toContain('checked={feature.enabled}');
+  });
+
+  /**
+   * H/19 removed the borrow switch. The page must not offer a control for a
+   * mechanism that no longer exists — it would save a setting nothing reads.
+   */
+  it('no longer offers the borrow-resources switch', () => {
+    expect(component).not.toContain('borrowUserPiResources');
   });
 
   it('lives in the Pi Settings category, not a new workspace navigation surface', () => {
     expect(settingsContent).toContain("id: 'pi'");
     expect(settingsContent).toContain("activeCategory === 'pi'");
     expect(settingsContent).toContain('<PiResourcesSettings />');
+  });
+
+  /** H/19 U2 and U4 put two more sections on the same page. */
+  it('shows the migration and plugin sections on the Pi page too', () => {
+    expect(settingsContent).toContain('<AgentMigrationSettings />');
+    expect(settingsContent).toContain('<PiPluginsSettings />');
   });
 });

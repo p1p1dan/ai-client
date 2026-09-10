@@ -59,7 +59,16 @@ function boundedDimension(value: number | undefined, minimum: number, fallback: 
   return Math.max(minimum, Math.floor(value ?? fallback));
 }
 
-export function resolvePiTuiLaunchPlan(
+/**
+ * Where the bundled `pi` CLI is, which Node runs it, and the environment it
+ * gets — everything except the arguments.
+ *
+ * Serves the embedded TUI and, since H/19, the plugin manager, which runs the
+ * same binary with `install` / `remove` / `list`. One resolver so a packaged
+ * layout fix cannot land for one caller and not the other; the TUI-specific
+ * part is `buildPiTuiArgs`, not this.
+ */
+export function resolvePiCliLaunchPlan(
   layout: PiTuiLaunchLayout,
   inheritedEnv: NodeJS.ProcessEnv = process.env
 ): PiTuiLaunchPlan {

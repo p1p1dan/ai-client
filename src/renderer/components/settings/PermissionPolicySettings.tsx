@@ -59,9 +59,10 @@ import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
  *     That is what makes cancelling the dangerous-choice confirmation free: no
  *     local copy is left sitting on the value that was not stored, so the Select
  *     snaps back on its own.
- *  2. **A failed save keeps the old snapshot and shows the error.** The write
- *     rejects on the local route by design; swallowing that would leave a panel
- *     that reports a policy the user does not have.
+ *  2. **A failed save keeps the old snapshot and shows the error.** A write can
+ *     fail for ordinary reasons (an unwritable file, a disk that is full);
+ *     swallowing that would leave a panel reporting a policy the user does not
+ *     have.
  */
 export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
   const { t, locale } = useI18n();

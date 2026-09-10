@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import type { RuntimePermissionSettings } from '@shared/types/runtimePermission';
 import type { UpdateStatus } from '../shared/types/updater';
 import 'electron-log/preload.js';
+import type { MigrationPlan, MigrationRequest, MigrationResult } from '@shared/agentMigration';
 import type { AnnouncementsResult } from '@shared/announcements';
 import type { Locale } from '@shared/i18n';
 import type {
@@ -17,6 +18,7 @@ import type {
   PermissionPolicySnapshot,
   UpdatePermissionPolicyRequest,
 } from '@shared/piPermissionPolicy';
+import type { PiPluginCommandResult, PiPluginState } from '@shared/piPlugins';
 import type {
   AppCloseRequestPayload,
   AttachmentReadOptions,
@@ -1171,9 +1173,34 @@ const electronAPI = {
   },
 
   /**
-   * T08-c — the pi permission policy. `update`/`reset` REJECT on the local
-   * route (the policy is the user's own `~/.pi`, which this app does not write),
-   * so callers must surface the error rather than assume a save happened.
+   * H/19 U2 — bringing the user's own `~/.pi/agent` over. `inspect` reads and
+   * changes nothing; `apply` copies, and skips every collision unless the
+   * request says `overwrite`.
+   */
+  agentMigration: {
+    inspect: (): Promise<MigrationPlan> => ipcRenderer.invoke(IPC_CHANNELS.AGENT_MIGRATION_INSPECT),
+    apply: (payload: MigrationRequest): Promise<MigrationResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_MIGRATION_APPLY, payload),
+  },
+
+  /**
+   * H/19 U4 — user-installed pi extensions. `install` reaches the npm registry
+   * and can take seconds or fail, so every caller must treat it as slow and
+   * show the returned output when `ok` is false.
+   */
+  piPlugins: {
+    list: (): Promise<PiPluginState> => ipcRenderer.invoke(IPC_CHANNELS.PI_PLUGINS_LIST),
+    install: (source: string): Promise<PiPluginCommandResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_PLUGINS_INSTALL, source),
+    remove: (source: string): Promise<PiPluginCommandResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_PLUGINS_REMOVE, source),
+    setEnabled: (source: string, enabled: boolean): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_PLUGINS_SET_ENABLED, { source, enabled }),
+  },
+
+  /**
+   * T08-c — the pi permission policy. Since H/19 the global scope is this app's
+   * own file in both modes, so `update`/`reset` are available on both routes.
    */
   piPermissions: {
     get: (payload?: PermissionPolicyRequest): Promise<PermissionPolicySnapshot> =>

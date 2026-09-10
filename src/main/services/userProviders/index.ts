@@ -9,11 +9,11 @@
  * `models.json` / `auth.json` go into this app's own agent directory, and the
  * user's directory is only ever read.
  *
- * The consequence is stated rather than hidden: once a user adds a service,
- * local mode stops pointing pi at `~/.pi/agent` and points it here instead —
- * which is why {@link localRouteUsesAppAgentDir} also turns on the
- * borrow-resources path, so the skills and prompt templates in the user's own
- * directory keep loading. With no user service configured, nothing changes.
+ * H/17 made that a CONDITIONAL move: local mode left `~/.pi/agent` only once a
+ * service existed. H/19 removed the condition — both modes always run out of
+ * this app's directory — so nothing in this module decides where pi points any
+ * more. What the user had in their own directory is brought over once, on
+ * request, by `services/agentMigration`.
  */
 
 import { net } from 'electron';
@@ -48,11 +48,6 @@ function vaultStore(): UserProviderStore {
 export function readUserProvidersForRuntime(): readonly UserProvider[] {
   const read = getCredentialVault().readUserProviders();
   return read.status === 'ok' ? read.providers.filter((provider) => provider.enabled) : [];
-}
-
-/** Whether the local route must be pointed at this app's agent dir — see the file header. */
-export function localRouteUsesAppAgentDir(): boolean {
-  return readUserProvidersForRuntime().length > 0;
 }
 
 let cached: UserProviderService | null = null;

@@ -1,8 +1,6 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
-  PI_BORROW_RESOURCES_DIR_ENV,
-  PI_BORROW_USER_RESOURCES_SETTING_KEY,
   PI_MANAGED_AGENT_DIR_NAME,
   PI_MODEL_CONFIG_PATH,
   PI_MODEL_MANAGEMENT_URL_ENV,
@@ -24,7 +22,7 @@ import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { getOnboardingServiceUrl } from '../onboarding/serviceUrl';
 import { readSharedSettings, writeSharedSettings } from '../SharedSessionState';
-import { localRouteUsesAppAgentDir, readUserProvidersForRuntime } from '../userProviders';
+import { readUserProvidersForRuntime } from '../userProviders';
 import { resolveOptInFeatures } from './optInFeatures';
 import { PiModelConfigService } from './PiModelConfigService';
 
@@ -32,14 +30,28 @@ function getHomeDir(): string {
   return process.env.HOME || process.env.USERPROFILE || homedir();
 }
 
-export function getManagedPiAgentDir(): string {
+/**
+ * The agent directory this app owns, under its own profile root.
+ *
+ * H/19 renamed this from `getManagedPiAgentDir`: it is no longer the managed
+ * route's directory, it is the ONE directory every session runs out of. The
+ * old name would now read as a claim that the local route uses something else.
+ */
+export function getAppPiAgentDir(): string {
   return join(getAppStateRoot(), PI_MANAGED_AGENT_DIR_NAME);
 }
 
-export function getManagedPiPromptTemplatesDir(): string {
-  return join(getManagedPiAgentDir(), 'prompts');
+export function getAppPiPromptTemplatesDir(): string {
+  return join(getAppPiAgentDir(), 'prompts');
 }
 
+/**
+ * The user's OWN pi directory — read-only from here, and no longer loaded.
+ *
+ * It survives H/19 as the migration SOURCE (and as the place the permission
+ * policy page reads a local-route policy from), never as a destination. See
+ * `services/agentMigration` for what gets copied out of it.
+ */
 export function getLocalPiAgentDir(): string {
   const inherited = process.env.PI_CODING_AGENT_DIR?.trim();
   return inherited || join(getHomeDir(), '.pi', 'agent');
@@ -90,16 +102,17 @@ function serviceFor(agentDir: string): PiModelConfigService {
 }
 
 /**
- * The agent directory pi is pointed at.
+ * The agent directory pi is pointed at — the same one in BOTH modes (H/19).
  *
- * Managed mode has always used the app's own directory. The local route joins
- * it only once the user has added a service of their own, because that is the
- * first moment there is anything of ours for pi to read — see the header of
- * `services/userProviders/index.ts` for why we never write into `~/.pi/agent`.
+ * H/17 made this conditional: the local route moved here only once the user had
+ * added a service of their own. That branch was the defect. A directory that
+ * moves when an unrelated setting changes takes the model catalogue, the
+ * credentials and the session history with it, silently, and every repair for
+ * one of those had to be written twice — once for each side of the branch.
+ * There is now one answer.
  */
 export function getActivePiAgentDir(): string {
-  if (resolveManagedCredentialsEnabled()) return getManagedPiAgentDir();
-  return localRouteUsesAppAgentDir() ? getManagedPiAgentDir() : getLocalPiAgentDir();
+  return getAppPiAgentDir();
 }
 
 /**
@@ -112,7 +125,7 @@ export function getActivePiAgentDir(): string {
 export function writeUserProviderRuntimeConfig(): void {
   const credential = managedCredential();
   try {
-    serviceFor(getManagedPiAgentDir()).writeUserProviderConfig({
+    serviceFor(getAppPiAgentDir()).writeUserProviderConfig({
       userProviders: readUserProvidersForRuntime(),
       inheritedApiKey: credential?.apiKey ?? '',
       inheritedBaseUrl: credential?.baseUrl ?? '',
@@ -140,7 +153,7 @@ export async function syncManagedPiModels(
   endpointUrl = getPiModelManagementUrl(),
   options: { force?: boolean } = {}
 ): Promise<PiModelSyncResult> {
-  const service = serviceFor(getManagedPiAgentDir());
+  const service = serviceFor(getAppPiAgentDir());
   if (!resolveManagedCredentialsEnabled()) {
     const state = service.readState();
     return { ...state, ok: false, error: 'Managed credentials are disabled' };
@@ -185,42 +198,27 @@ export function readPiModelCatalog(): AgentModelCatalog {
 }
 
 export function clearManagedPiCredential(): void {
-  serviceFor(getManagedPiAgentDir()).clearCredential();
+  serviceFor(getAppPiAgentDir()).clearCredential();
 }
 
 /**
- * R01 — whether to lend the Host the user's own skills and prompt templates.
+ * Where "open my prompt templates" lands.
  *
- * Default ON. This feature exists for people who installed things where the
- * documentation told them to and got no indication that it had no effect;
- * defaulting it off would leave exactly those people in the dark. The borrowed
- * surface is text resources, never extensions.
+ * H/19: the app directory in both modes, because that is the only directory a
+ * session loads templates from now. Opening `~/.pi/agent/prompts` would show a
+ * folder whose contents no longer reach any turn.
  */
-export function resolveBorrowUserPiResources(): boolean {
-  const stored = readSharedSettings()[PI_BORROW_USER_RESOURCES_SETTING_KEY];
-  return stored !== false;
-}
-
 export function getActivePiPromptTemplatesDir(): string {
-  // Deliberately NOT `getActivePiAgentDir()`: prompt templates are the user's
-  // own authored files. Adding a service must not move where "open my prompt
-  // templates" lands, or the folder that opens would be empty.
-  return resolveManagedCredentialsEnabled()
-    ? getManagedPiPromptTemplatesDir()
-    : join(getLocalPiAgentDir(), 'prompts');
+  return getAppPiPromptTemplatesDir();
 }
 
 /**
- * Whether the bundled sub-agent extension is injected. Default OFF, which is
- * the opposite default from {@link resolveBorrowUserPiResources}.
+ * Whether the bundled sub-agent extension is injected. Default OFF.
  *
- * The two switches differ because their silent failures differ. Borrowing is
- * default-on because someone who installed a skill the documented way would
- * otherwise get no indication it was ignored. Sub-agents are default-off
- * because the cost of the feature is paid by everyone on every turn — its three
- * tool schemas sit in the cached prefix of every request — while the feature is
- * used by a minority of sessions, and its absence is visible the moment the
- * model has no `subagent` tool to call.
+ * Off by default because the cost of the feature is paid by everyone on every
+ * turn — its three tool schemas sit in the cached prefix of every request —
+ * while the feature is used by a minority of sessions, and its absence is
+ * visible the moment the model has no `subagent` tool to call.
  */
 export function resolvePiSubagentsEnabled(): boolean {
   return resolveOptInFeatures(readSharedSettings()).includes(PI_SUBAGENTS_FEATURE_ID);
@@ -228,18 +226,17 @@ export function resolvePiSubagentsEnabled(): boolean {
 
 export function getPiResourceSettings(): PiResourceSettings {
   const userAgentDir = getLocalPiAgentDir();
-  const managedAgentDir = getManagedPiAgentDir();
+  const appAgentDir = getAppPiAgentDir();
   const enabledFeatures = new Set(resolveOptInFeatures(readSharedSettings()));
   return {
     managed: resolveManagedCredentialsEnabled(),
-    borrowUserPiResources: resolveBorrowUserPiResources(),
     enableSubagents: enabledFeatures.has(PI_SUBAGENTS_FEATURE_ID),
     paths: {
       sharedSkills: join(getHomeDir(), '.agents', 'skills'),
       userSkills: join(userAgentDir, 'skills'),
       userPromptTemplates: join(userAgentDir, 'prompts'),
-      managedSkills: join(managedAgentDir, 'skills'),
-      managedPromptTemplates: getManagedPiPromptTemplatesDir(),
+      appSkills: join(appAgentDir, 'skills'),
+      appPromptTemplates: getAppPiPromptTemplatesDir(),
     },
     bundledFeatures: optInFeatureRegistry().map(({ legacySettingKey: _legacy, ...feature }) => ({
       ...feature,
@@ -250,18 +247,7 @@ export function getPiResourceSettings(): PiResourceSettings {
 
 export function resolveManagedPiWorkerEnv(): Record<string, string> {
   const managed = resolveManagedCredentialsEnabled();
-  // Only managed mode moved the agent dir away from the user's own; in local
-  // mode the Host already loads that directory, so lending it again would list
-  // every skill twice. The Host guards this too, but not sending it keeps the
-  // env var honest about what it means.
-  // H/17 widened this: the local route also moves off `~/.pi/agent` once the
-  // user adds a service of their own, so the same repair applies — without it,
-  // adding one service would silently unload every skill and prompt template
-  // the user had installed there.
-  const movedOff = managed || localRouteUsesAppAgentDir();
-  const borrowFrom = movedOff && resolveBorrowUserPiResources() ? getLocalPiAgentDir() : undefined;
-  // Opt-in bundled extensions. Sent in BOTH modes — unlike the borrow
-  // directory, this one is not a managed-mode repair, it is a cost the user
+  // Opt-in bundled extensions. Sent in BOTH modes: this is a cost the user
   // opted into, and the bundled copy is injected in local mode too.
   const optIn = resolveOptInFeatures(readSharedSettings());
   return {
@@ -274,28 +260,25 @@ export function resolveManagedPiWorkerEnv(): Record<string, string> {
     // writes references the variable by name; supplying it here is what makes
     // that reference resolve to something other than an empty header.
     [PI_USER_AGENT_ENV]: piUserAgent(app.getVersion()),
-    ...(movedOff ? { PI_CODING_AGENT_DIR: getManagedPiAgentDir() } : {}),
-    ...(borrowFrom ? { [PI_BORROW_RESOURCES_DIR_ENV]: borrowFrom } : {}),
+    // H/19: unconditional. Both modes run out of this app's directory, so there
+    // is no longer a case where pi should be left on its own default.
+    PI_CODING_AGENT_DIR: getAppPiAgentDir(),
     ...(optIn.length > 0 ? { [PI_OPT_IN_EXTENSIONS_ENV]: optIn.join(',') } : {}),
   };
 }
 
 export function resolveManagedPiPtyEnv(): Record<string, string> {
-  // R01: the borrow directory is dropped here. It is read by OUR Host code, not
+  // The opt-in extension list is dropped here: it is read by OUR Host code, not
   // by pi, so the real pi CLI in the PTY would ignore it — and leaving it in the
-  // environment would claim a borrow that is not happening. TUI sessions load
-  // only what the agent dir gives them; closing that gap needs a pi-side
-  // mechanism we do not have (Q-R4).
+  // environment would claim an injection that is not happening. A TUI session
+  // loads what the agent dir's own `settings.json` gives it, which since H/19 is
+  // the same file the GUI session reads.
   //
-  // F08's User-Agent is deliberately NOT dropped: it is the opposite kind of
-  // variable. pi itself resolves it, out of the `headers` block in the very
-  // `models.json` a managed TUI session reads, so a PTY turn should identify
-  // itself exactly as a worker turn does.
-  const {
-    [PI_BORROW_RESOURCES_DIR_ENV]: _borrowed,
-    [PI_OPT_IN_EXTENSIONS_ENV]: _optIn,
-    ...ptyEnv
-  } = resolveManagedPiWorkerEnv();
+  // `PI_CODING_AGENT_DIR` and F08's User-Agent are deliberately NOT dropped:
+  // they are the opposite kind of variable. pi itself resolves both, so a PTY
+  // turn lands in the same directory and identifies itself the same way a worker
+  // turn does.
+  const { [PI_OPT_IN_EXTENSIONS_ENV]: _optIn, ...ptyEnv } = resolveManagedPiWorkerEnv();
   return ptyEnv;
 }
 

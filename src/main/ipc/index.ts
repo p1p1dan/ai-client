@@ -3,6 +3,7 @@ import { remoteConnectionManager } from '../services/remote/RemoteConnectionMana
 import { webInspectorServer } from '../services/webInspector';
 import { cleanupExecInPtys, cleanupExecInPtysSync } from '../utils/shell';
 import { registerAgentCatalogHandlers } from './agentCatalog';
+import { registerAgentMigrationHandlers } from './agentMigration';
 import { registerAnnouncementHandlers } from './announcements';
 import { registerAppHandlers } from './app';
 import { registerAuthHandlers } from './auth';
@@ -24,6 +25,7 @@ import { registerNotificationHandlers } from './notification';
 import { registerOnboardingHandlers } from './onboarding';
 import { registerPiModelHandlers } from './piModels';
 import { registerPiPermissionHandlers } from './piPermissions';
+import { registerPiPluginHandlers } from './piPlugins';
 import { registerPiResourceHandlers } from './piResources';
 import { registerPiRuntimeHandlers } from './piRuntime';
 import {
@@ -83,6 +85,8 @@ export function registerIpcHandlers(): void {
   registerPiModelHandlers();
   registerPiPermissionHandlers();
   registerPiResourceHandlers();
+  registerPiPluginHandlers();
+  registerAgentMigrationHandlers();
   registerUserProviderHandlers();
   registerUsageHandlers();
   registerAnnouncementHandlers();

@@ -6,11 +6,7 @@
  */
 
 import { readRuntimeFlags } from '../runtime/flags.ts';
-import {
-  PI_BORROW_RESOURCES_DIR_ENV,
-  PI_OPT_IN_EXTENSIONS_ENV,
-  PI_PROJECT_TRUST_ENV,
-} from '../shared/piModelConfig.ts';
+import { PI_OPT_IN_EXTENSIONS_ENV, PI_PROJECT_TRUST_ENV } from '../shared/piModelConfig.ts';
 import {
   PI_WORKER_GENERATION_ENV,
   WORKER_RPC_PROTOCOL_VERSION,
@@ -107,9 +103,6 @@ const server = new PiWorkerRpcServer({
   port: parentPort,
   generation,
   projectTrusted: readProjectTrusted(process.env[PI_PROJECT_TRUST_ENV]),
-  ...(process.env[PI_BORROW_RESOURCES_DIR_ENV]?.trim()
-    ? { borrowResourcesFrom: process.env[PI_BORROW_RESOURCES_DIR_ENV]?.trim() }
-    : {}),
   ...(process.env[PI_OPT_IN_EXTENSIONS_ENV]?.trim()
     ? { optInExtensions: process.env[PI_OPT_IN_EXTENSIONS_ENV]?.trim() }
     : {}),

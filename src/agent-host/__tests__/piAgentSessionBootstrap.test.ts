@@ -1,7 +1,7 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { BundledFeaturePluginResolution } from '../bundledFeaturePlugins.ts';
 import { createPortableExtensionUiBridge } from '../extensionUiBridge.ts';
 import type { PermissionPluginDecision } from '../permissionPlugin.ts';
@@ -303,22 +303,16 @@ function modelShape() {
 }
 
 /**
- * R01 — the user's own skills and templates reach the resource loader.
+ * H/19 — the resource loader gets the agent directory and nothing else.
  *
- * Real directories, because the module drops paths that do not exist and a stub
- * would let a wrong one through.
+ * R01's "borrow the user's own `~/.pi/agent`" paths used to be assembled here.
+ * They are gone: both modes run out of this app's agent directory, and what the
+ * user had is copied over once by `main/services/agentMigration` instead of
+ * read through on every session. These tests are the guard that no borrowed
+ * path comes back by accident.
  */
-describe('bootstrapPiAgentSession — borrowed user resources', () => {
-  const temporaries: string[] = [];
-
-  async function userAgentDir(subdirs: string[]): Promise<string> {
-    const base = await mkdtemp(join(tmpdir(), 'bootstrap-borrow-'));
-    temporaries.push(base);
-    for (const dir of subdirs) await mkdir(join(base, dir), { recursive: true });
-    return base;
-  }
-
-  async function loaderOptions(borrowResourcesFrom?: string) {
+describe('bootstrapPiAgentSession — resource loader options', () => {
+  async function loaderOptions() {
     const h = harness();
     await bootstrapPiAgentSession({
       sdk: h.sdk,
@@ -327,54 +321,30 @@ describe('bootstrapPiAgentSession — borrowed user resources', () => {
       extensionUi: h.extensionUi,
       decidePermissionGate: () => h.gate,
       resolveFeaturePlugins: () => NO_FEATURE_PLUGINS,
-      ...(borrowResourcesFrom ? { borrowResourcesFrom } : {}),
     });
     const call = h.calls.services.mock.calls.at(-1)?.[0] as Record<string, unknown>;
     return (call.resourceLoaderOptions ?? {}) as Record<string, unknown>;
   }
 
-  afterEach(async () => {
-    for (const dir of temporaries.splice(0)) await rm(dir, { recursive: true, force: true });
-  });
-
-  it('loads global instructions and appends the default skill home without replacing existing prompts', async () => {
-    const source = await userAgentDir([]);
-    await writeFile(join(source, 'AGENTS.md'), 'Global guidance');
-    const options = await loaderOptions(source);
-    const override = options.agentsFilesOverride as (base: {
-      agentsFiles: Array<{ path: string; content: string }>;
-    }) => { agentsFiles: Array<{ path: string; content: string }> };
-    expect(override({ agentsFiles: [] }).agentsFiles).toEqual([
-      { path: join(source, 'AGENTS.md'), content: 'Global guidance' },
-    ]);
+  it('appends the default skill home without replacing existing prompts', async () => {
+    const options = await loaderOptions();
     const append = options.appendSystemPromptOverride as (base: string[]) => string[];
     expect(append(['Existing append'])[0]).toBe('Existing append');
     expect(append([])[0]).toContain('.agents');
+  });
+
+  it('passes only the permission gate as an extension path', async () => {
+    // Load-bearing: an extension is code. A resource path that leaked into this
+    // list would let a text directory register extensions.
+    const options = await loaderOptions();
     expect(options.additionalExtensionPaths).toEqual(['/bundle/pi-permission-system']);
   });
 
-  it('adds the user’s skills and prompts directories', async () => {
-    const source = await userAgentDir(['skills', 'prompts']);
-    const options = await loaderOptions(source);
-    expect(options.additionalSkillPaths).toEqual([join(source, 'skills')]);
-    expect(options.additionalPromptTemplatePaths).toEqual([join(source, 'prompts')]);
-  });
-
-  it('never routes borrowed paths into additionalExtensionPaths', async () => {
-    // Load-bearing. Skills and templates are text that enters the context; an
-    // extension is code, and the user's own copy of the permission system would
-    // collide with the patched one this app ships.
-    const source = await userAgentDir(['skills']);
-    const options = await loaderOptions(source);
-    expect(options.additionalExtensionPaths).toEqual(['/bundle/pi-permission-system']);
-  });
-
-  it('omits both fields entirely when nothing is borrowed', async () => {
-    // Passing empty arrays would read as "borrowing, found nothing", which is a
-    // different claim from "not borrowing".
+  it('adds no skill, template or AGENTS.md override at all', async () => {
     const options = await loaderOptions();
     expect(options).not.toHaveProperty('additionalSkillPaths');
     expect(options).not.toHaveProperty('additionalPromptTemplatePaths');
+    expect(options).not.toHaveProperty('agentsFilesOverride');
   });
 });
 

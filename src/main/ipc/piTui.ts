@@ -1,11 +1,12 @@
 import { IPC_CHANNELS, type PiTuiOpenRequest } from '@shared/types';
-import { app, BrowserWindow, ipcMain, type WebContents } from 'electron';
+import { BrowserWindow, ipcMain, type WebContents } from 'electron';
+import { currentPiCliLayout } from '../services/agent-host/piCliLayout';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { isRemoteVirtualPath } from '../services/remote/RemotePath';
 import {
   createNodePtySpawn,
   PiTuiPtyController,
-  resolvePiTuiLaunchPlan,
+  resolvePiCliLaunchPlan,
 } from '../services/terminal/PiTuiPty';
 import { inspectPiTuiSessionSupport, PiTuiExclusiveGuard } from '../services/terminal/piTuiSession';
 
@@ -56,14 +57,7 @@ async function createController(windowId: number): Promise<PiTuiPtyController> {
       },
     },
     spawn,
-    async () =>
-      resolvePiTuiLaunchPlan({
-        isPackaged: app.isPackaged,
-        appPath: app.getAppPath(),
-        resourcesPath: process.resourcesPath,
-        platform: process.platform,
-        electronExecPath: process.execPath,
-      })
+    async () => resolvePiCliLaunchPlan(currentPiCliLayout())
   );
 }
 

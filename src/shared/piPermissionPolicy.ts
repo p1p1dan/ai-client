@@ -459,9 +459,12 @@ export interface PermissionPolicySnapshot {
   /** True when this app may write the global scope. */
   editable: boolean;
   /**
-   * Why the policy is read-only, in words a user can act on. On the local route
-   * this is the T08-a red line: the global scope IS their own `~/.pi`, and this
-   * app will not edit a directory that belongs to their `pi` CLI.
+   * Why the policy is read-only, in words a user can act on.
+   *
+   * No route sets it since H/19: the global scope is this app's own file in
+   * both modes, so both are writable. It is kept because "editable" and "why
+   * not" belong together in this type — a future non-writable case must arrive
+   * with its reason, not as a disabled panel with no explanation.
    */
   readOnlyReason?: string;
   scopes: PolicyScope[];

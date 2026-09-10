@@ -76,11 +76,14 @@ export interface InstructionChainOptions {
   targetPath?: string;
   /**
    * Global instruction files, in the order they should appear, before any
-   * project file. A list rather than PI-Desktop's single `~/.pi/agent/AGENTS.md`
-   * because this product can run against a managed agent dir while also
-   * borrowing the user's own (`src/agent-host/userResourcePaths.ts:93`), which
-   * is two files, and neither this module nor its tests should know where
-   * either lives.
+   * project file. A LIST rather than PI-Desktop's single
+   * `~/.pi/agent/AGENTS.md`: the agent dir's own file is one source, and a
+   * caller may supply others. Neither this module nor its tests should know
+   * where any of them live.
+   *
+   * (It used to name H/17's borrow mechanism as the second source. That is
+   * gone — H/19 copies the user's `AGENTS.md` in rather than reading it
+   * through — but the list shape is still the right one.)
    */
   globals?: readonly { path: string; label: string }[];
   maxBytes?: number;
