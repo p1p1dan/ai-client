@@ -473,7 +473,12 @@ P1/P2/P3 可并行施工（三个 agent 团队各领一块）。
    Edit/Write 后 TUI 与编辑器看到的内容一致、旧会话可 resume、退出无残留 worker。
    普通 CI runner 通过不计入本条。
 
-2026-09-10 范围注记：用户已选择 native v4 暂拒绝进入旧 Pi TUI（方案 C），详见[能力边界](../plantree/plans/runtime-evolution/topics/field-followups.md#tui-1-能力边界)。此选择与第 6 条原 GUI/TUI 一致性要求存在冲突；本次维护保留原标准，范围如何收口见[未决问题](../plantree/plans/runtime-evolution/open-questions.md)，不把入口拒绝当作互通验收。
+2026-09-10 范围注记（当日两次变更，以后者为准）：
+
+- 上午曾选择 native v4 暂拒绝进入旧 Pi TUI（方案 C），与第 6 条的 TUI 验收动作冲突。
+- **下午用户推翻该选择，要求恢复 GUI/TUI 会话互通**，范围冲突随之消解——第 6 条维持原样，不再是待决项。可行性已实测通过（双向读写四轮交替），需补五处格式容忍；见[验证记录](../plantree/plans/runtime-evolution/evidence/gui-tui-session-interop/README.md)与[实施计划](../plantree/plans/runtime-evolution/topics/gui-tui-session-interop.md)。互通成为 P6-1 的前置条件：默认切到 native 之前必须先通，否则切换等于取消 TUI 能力。
+
+第 6 条的 TUI 条款原文是「Edit/Write 后 TUI 与编辑器看到的内容一致」，说的是加密机上同一文件的内容一致性；它与会话格式的关系是间接的——native v4 会话进不了 TUI，这个验收动作就无法执行。互通恢复后该动作重新可做。
 
 ## 8. 加密机实测记录
 

@@ -19,17 +19,19 @@ Role: roadmap。核对日期：2026-09-10；覆盖 runtime-evolution 与已并�
 
 | 序 | 批次 | 内容 | 为什么排这里 |
 |---|---|---|---|
-| 1 | H / 17、H / 18 | [AI 服务管理](topics/local-provider-management.md) + [侧栏对齐](topics/sidebar-pi-desktop-alignment.md) | 用户 2026-09-10 指定，两项一起做。本地模式配不了模型是功能空白，优先级高于既有功能的补齐 |
-| 2 | 本地缺陷 | 中文界面英文残留、重载后重复公告与多开空会话 | 本地可复现可修，不依赖现场机器；与第 1 批同属 renderer/main，可顺带回归 |
-| 3 | P4-6 收口（改在开发机） | F3 启动链、F2-b 取证、F4 触发、PERM-1 与权限链复验 | 用户 2026-09-10 决定：Node 与 Git 已确认在企业白名单内，这些项改在开发机复现与验证，不再逐轮上加密 Windows |
-| 4 | P2-5、P2-6 | 真实缓存命中率达标与新旧对比 | 需真实 provider，本地可做；第 1 批完成后配模型更方便。达到 95.01% 基线才进 P5 |
-| 5 | P5-1、P5-3 | skills / 模板（含 F5 提问能力）、MCP bridge | 两块相互独立、单块体量可控，先把 P5 里能独立验收的做掉 |
-| 6 | P5-2（含 P5-2-0～7） | subagent 整体复刻 | P5 最大一块，八个子节点加 SA01～22 等价门禁，需要前面的工具/权限/会话都稳定 |
-| 7 | P5-4、P5-5 | 会话导入适配、模型目录切源 | P5-5 与第 1 批的服务管理可能重叠，开工前先核对是否已被覆盖，避免重复实现 |
-| 8 | P6-1～P6-5 | 切默认、摘除 pi-coding-agent 依赖、六项成功标准、回退开关、退役旧集成层 | 必须在 P5 齐备后；P6-2 落地时才能删掉第 1 批留下的派生明文文件临时分支 |
-| 9 | 现场实测 | 加密 Windows 一次性全量验收 | 用户 2026-09-10 决定：全部做完后再去现场实测一次，不再分轮上机 |
+| 1 | H / 17 | [AI 服务管理](topics/local-provider-management.md) | 已实现（`3f6a61fd`）。本地模式配不了模型是功能空白。遗留一个缺陷：搬动 agent 目录导致用户原有模型配置与会话失联，修法并入第 2 批 |
+| 2 | H / 19 | [统一 agent 目录、迁移与插件](topics/unified-agent-directory.md) | 用户 2026-09-10 方向变更。它同时是 H / 17 那个缺陷的正解——把「加了服务才搬」的条件分支换成一次显式完整迁移 |
+| 3 | H / 18 | [侧栏对齐 PI-Desktop](topics/sidebar-pi-desktop-alignment.md) | 与 H / 17 同批指定，纯 renderer，不依赖上面两项 |
+| 4 | 本地缺陷 | 中文界面英文残留、重载后重复公告与多开空会话 | 本地可复现可修，与前几批同属 renderer/main，可顺带回归 |
+| 5 | P4-6 收口（改在开发机） | F3 启动链、F2-b 取证、F4 触发、PERM-1 与权限链复验 | 用户 2026-09-10 决定：Node 与 Git 已确认在企业白名单内，这些项改在开发机复现与验证，不再逐轮上加密 Windows |
+| 6 | P2-5、P2-6 | 真实缓存命中率达标与新旧对比 | 需真实 provider，本地可做；第 1 批完成后配模型更方便。达到 95.01% 基线才进 P5 |
+| 7 | P5-1、P5-3 | skills / 模板（含 F5 提问能力）、MCP bridge | 两块相互独立、单块体量可控，先把 P5 里能独立验收的做掉 |
+| 8 | P5-2（含 P5-2-0～7） | subagent 整体复刻 | P5 最大一块，八个子节点加 SA01～22 等价门禁，需要前面的工具/权限/会话都稳定 |
+| 9 | P5-4、P5-5 | 会话导入适配、模型目录切源 | P5-5 与第 1 批的服务管理可能重叠，开工前先核对是否已被覆盖，避免重复实现 |
+| 10 | H / 20 + P6-1～P6-5 | [会话互通](topics/gui-tui-session-interop.md)、切默认、摘除 pi-coding-agent 依赖、六项成功标准、回退开关、退役旧集成层 | 用户 2026-09-10 决定互通排到最后做。但它是 P6-1 的**前置**：默认切到 native 之前必须先通，否则切换等于取消 TUI 能力。P6-2 落地时才能删掉派生明文文件的临时分支 |
+| 11 | 现场实测 | 加密 Windows 一次性全量验收 | 用户 2026-09-10 决定：全部做完后再去现场实测一次，不再分轮上机 |
 
-第 1 批与第 8 批之间有一条明确的债：H / 17 为兼容 legacy 后端要把用户凭据解密后写成明文 `auth.json`，这是共存期措施，P6-2 摘除旧依赖时一并删除。详见[实施计划](topics/local-provider-management.md)的本轮决定第五条。
+第 1 批与第 10 批之间有一条明确的债：H / 17 为兼容 legacy 后端要把用户凭据解密后写成明文 `auth.json`，这是共存期措施，P6-2 摘除旧依赖时一并删除。详见[实施计划](topics/local-provider-management.md)的本轮决定第五条。
 
 ## Runtime 任务树
 
@@ -127,7 +129,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | 旧会话 | ✅ test.12 v3 历史/重启 resume 通过；首次转换生成时点的基线证据有限 |
 | 新权限 UI、档位与状态修复 | 🟡 按“现场缺陷与修复”列出的包边界复验 |
 | 重试 | 🟡 F4 代码已入 test.12/13；现场未触发所需错误 |
-| native GUI/TUI 一致性 | 当前不支持：方案 C 拒绝 v4 进入旧 Pi TUI；入口保护已入 test.13，待复验。原 ARD 成功标准 6 的对应条款存在范围冲突，不能把拒绝入口记成互通通过 |
+| native GUI/TUI 一致性 | 🟡 2026-09-10 改为必须互通（H / 20），范围冲突消解。可行性已实测，实现未落地；在此之前该验收动作仍无法执行 |
 | R4 无 Bash | 可选探针无效（shell 仍被发现）；独立保留，不撤销已通过的 Bash 验证 |
 
 <a id="p5"></a>
@@ -187,6 +189,8 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F / 15 | cwd 缺失与临时目录恢复 | 🟡 test.12 当前恢复流程通过；F2-a/c 后续修复待 test.13 验证，F2-b 单列 |
 | G / 16 | 软件更新提醒 | 🟡 U1 已提交 `b919b1aa`，自动化与隔离弹窗验证通过；真实更新源下载/安装按用户 2026-09-10 决定暂缓验证 |
 | H / 17 | 本地模式 AI 服务管理 | 🟡 L1～L5 已实现：vault 分组存储、主进程服务与 IPC、设置页与添加/编辑弹窗、本地模式首次进入自动打开。全量 5161 测试通过；未打包、未现场回归；[实施计划](topics/local-provider-management.md) |
+| H / 19 | 统一 agent 目录、资源迁移与插件管理 | ⬜ 两种模式一律用本应用目录；skills / `AGENTS.md` / 已有模型服务一次性复制迁移；插件复用 pi 的 install/remove/list；[实施计划](topics/unified-agent-directory.md) |
+| H / 20 | GUI / TUI 会话互通 | ⬜ 单文件双格式，可行性已实测通过、需补五处容忍；P6-1 前置；[实施计划](topics/gui-tui-session-interop.md) · [验证](evidence/gui-tui-session-interop/README.md) |
 | H / 18 | 左侧 Chat 栏对齐 PI-Desktop | ⬜ 上下两分区、分区级与行级右键菜单、未读结果徽标、收起按钮移入 rail；[实施计划](topics/sidebar-pi-desktop-alignment.md) |
 
 [GUI 功能定义](../gui-sdk-experience/TODO.md) · [验收方法](../gui-sdk-experience/现场验收清单.md) · [test.11 现场](../../../../Windows-P4-6-evidence/gui-a-e-findings.md) · [test.12 现场](../../../../Windows-P4-6-evidence/test12-reverify.md)。
@@ -213,7 +217,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F7e resume 后暂无上下文统计 | 已定性为既有行为；可选恢复快照增强尚未排期 | [功能说明](topics/field-followups.md#f7e-上下文快照) |
 | F7f 输入框增高 | ✅ 八行上限本地验证通过（8 行 192px 后滚动） | `87f3dc7d` |
 | PERM-1 权限档弹层不关 | 🟡 已改为选择后立即关闭，待现场复验 | `1e1e4469`；test.13；区别于包后权限审批卡重画 |
-| TUI-1 native v4 进不了 TUI | 方案 C 已实现入口说明，互通能力未实现 | `0644ba3d`；test.13；[范围与后果](topics/field-followups.md#tui-1-能力边界) |
+| TUI-1 native v4 进不了 TUI | 🟡 2026-09-10 用户推翻方案 C，改为必须互通。可行性已实测（双向四轮交替通过），待按 H / 20 落地；方案 C 的入口保护实现保留为格式不兼容时的兜底 | `0644ba3d`；[验证](evidence/gui-tui-session-interop/README.md) · [实施计划](topics/gui-tui-session-interop.md) |
 | v3 resume 身份不匹配 | ✅ 已修，test.12 历史与再次恢复通过 | `d2564e5d` |
 
 ## 相关决策入口

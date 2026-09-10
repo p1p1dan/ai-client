@@ -47,7 +47,8 @@ PI-Desktop 对应实现（`apps/desktop/src/components/settings/`）：`ModelCon
 
 ## 落地后的补充事实
 
-- **派生文件写进本应用的 agent 目录，从不写 `~/.pi/agent`**。本地模式承诺「Pi 读你自己的配置」，那个目录里可能有用户手工维护的 `models.json`，合并进去就是覆盖。代价是：用户一旦加了服务，本地模式的 `PI_CODING_AGENT_DIR` 就指向本应用目录，因此同时打开借用开关，让 `~/.pi/agent` 里的 skills 与 prompt 模板继续加载。没加服务时行为完全不变。
+- **派生文件写进本应用的 agent 目录，从不写 `~/.pi/agent`**。本地模式承诺「Pi 读你自己的配置」，那个目录里可能有用户手工维护的 `models.json`，合并进去就是覆盖。
+- ⚠️ **已知缺陷（2026-09-10 发现，修法归 [H / 19](unified-agent-directory.md)）**：上一条让本地模式在「加了服务」时把 `PI_CODING_AGENT_DIR` 指向本应用目录，而借用机制只搬 skills / prompts / `AGENTS.md`。因此用户原有 `models.json` 里的 provider 会从模型选择器消失，且会话目录随之搬走、用户终端里的 `pi` 找不到这些会话。修法不是运行时合并，而是 H / 19 的一次性完整迁移（复制），并取消「加了服务才搬」这个条件分支。
 - **服务在 `models.json` 里的 id 由显示名 slug 得来**（如 `My DeepSeek` → `my-deepseek`），不是 uuid：这个字符串是模型选择器里 `provider/model` 的左半边。名字 slug 为空时回落到 `user-<uuid 前 8 位>`。同名 slug 覆盖托管 provider，即「用户组优先」。
 - **自定义 header 仅保留 `$` 前缀的环境变量引用**，字面值直接丢弃，界面本轮不提供 header 编辑。
 - **登出只清公司凭据**，用户组保留（用户 2026-09-10 决定），钥匙串锁着时也能安全登出。
