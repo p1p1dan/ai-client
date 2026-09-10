@@ -232,6 +232,10 @@ describe('encodePiResumeError (T32)', () => {
     ['WORKER_SESSION_FILE_NOT_FOUND: missing', 'jsonl_not_found'],
     ['WORKER_SESSION_FILE_CORRUPT: bad header', 'session_file_corrupt'],
     ['WORKER_SESSION_CWD_MISMATCH: wrong repo', 'session_cwd_mismatch'],
+    [
+      'WORKER_WORKSPACE_MISSING: Pi worker working directory is missing: E:\\e\\test',
+      'workspace_missing',
+    ],
     ['WORKER_RPC_TIMEOUT: slow', 'read_failed'],
   ])('maps %s to %s', (message, code) => {
     expect(encodePiResumeError(new Error(message))).toEqual({
@@ -673,5 +677,20 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
         error: selectHistoryError(healed.historyErrors ?? {}, SESSION_ID),
       }).kind
     ).toBe('empty');
+  });
+});
+
+describe('workspace_missing (F2-c)', () => {
+  it('says the app will not recreate a folder the user made, and offers a way out', () => {
+    const view = parseHistoryError(
+      'workspace_missing: WORKER_WORKSPACE_MISSING: Pi worker working directory is missing: E:\\e\\test'
+    );
+    expect(view?.code).toBe('workspace_missing');
+    expect(view?.severity).toBe('error');
+    expect(view?.retryable).toBe(false);
+    // The path is what makes it actionable: the user has to recognise which
+    // folder to restore.
+    expect(view?.message).toContain('E:\\e\\test');
+    expect(view?.continuationHint).toContain('归档');
   });
 });

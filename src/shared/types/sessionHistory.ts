@@ -136,7 +136,17 @@ export type HistoryReadErrorCode =
   | 'read_failed'
   | 'history_unsupported'
   | 'session_file_corrupt'
-  | 'session_cwd_mismatch';
+  | 'session_cwd_mismatch'
+  /**
+   * F2-c: the session names a working directory that is no longer on disk.
+   *
+   * Distinct from the app-managed temp workspace, which is recreated in place
+   * (`TempWorkspaceService`): a folder the USER made and deleted must not be
+   * silently recreated, so the session stays unopenable until the user acts.
+   * The code exists to say which action is available instead of handing them
+   * the raw spawn failure.
+   */
+  | 'workspace_missing';
 
 export interface HistoryReadError {
   code: HistoryReadErrorCode;

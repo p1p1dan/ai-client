@@ -783,6 +783,9 @@ const HISTORY_ERROR_ICON = {
   history_unsupported: FileQuestion,
   session_file_corrupt: TriangleAlert,
   session_cwd_mismatch: FileQuestion,
+  // F2-c: the folder itself is gone, which is a missing-file shape, not a
+  // damaged-content one.
+  workspace_missing: FileSearch,
   unknown: TriangleAlert,
 } as const;
 

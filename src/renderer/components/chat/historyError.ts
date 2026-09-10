@@ -23,7 +23,9 @@ export function encodePiResumeError(error: unknown): { message: string; encoded:
       ? 'session_file_corrupt'
       : message.includes('WORKER_SESSION_CWD_MISMATCH')
         ? 'session_cwd_mismatch'
-        : 'read_failed';
+        : message.includes('WORKER_WORKSPACE_MISSING')
+          ? 'workspace_missing'
+          : 'read_failed';
   return { message, encoded: `${code}: ${message}` };
 }
 
@@ -129,6 +131,14 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
     retryable: false,
     continuationHint: '请从该会话原本的工作区打开，或新建会话继续。',
   },
+  workspace_missing: {
+    severity: 'error',
+    title: 'Workspace folder is gone',
+    guidance:
+      '该会话绑定的工作目录已不在磁盘上，因此无法启动它的 worker。应用不会替你重建自己创建的目录。',
+    retryable: false,
+    continuationHint: '请把该目录恢复到原路径后重试，或归档该会话并新建一个继续工作。',
+  },
   unknown: {
     severity: 'error',
     title: 'Failed to read history',
@@ -144,7 +154,8 @@ function toCode(value: string): HistoryErrorCode {
     value === 'read_failed' ||
     value === 'history_unsupported' ||
     value === 'session_file_corrupt' ||
-    value === 'session_cwd_mismatch'
+    value === 'session_cwd_mismatch' ||
+    value === 'workspace_missing'
     ? value
     : 'unknown';
 }

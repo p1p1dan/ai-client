@@ -68,7 +68,9 @@ export function forkPiWorkerProcess(options: PiWorkerProcessOptions): ForkedPiWo
   // while node.exe was sitting on disk the whole time. Check it here, next to
   // the runtime check below that already exists for exactly this reason.
   if (!existsSync(options.cwd)) {
-    throw new Error(`Pi worker working directory is missing: ${options.cwd}`);
+    throw new Error(
+      `WORKER_WORKSPACE_MISSING: Pi worker working directory is missing: ${options.cwd}`
+    );
   }
   const env = buildPiWorkerEnvironment({
     generation: options.generation,
