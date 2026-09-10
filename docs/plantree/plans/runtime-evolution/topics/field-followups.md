@@ -3,6 +3,8 @@
 Role: investigation-and-contract。状态只见[核心任务树](../README.md#现场缺陷与修复)。
 来源：[test.12 现场](../../../../../Windows-P4-6-evidence/test12-reverify.md)。
 
+2026-09-10 起改在开发机取证：用户确认 Node 与 Git 在企业白名单内，本文的取证要求不再以上加密 Windows 为前提；全部完成后统一现场实测一次。
+
 ## F2-b 取证
 
 删除前、不重启的删除后、重启后三个时点，分别记录 session-index.json 的 sessionId/workspacePath/runtimeIdentity、临时目录是否存在及列表归组。
