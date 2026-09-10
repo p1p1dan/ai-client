@@ -70,6 +70,29 @@ describe('redactLogArgs — positive controls', () => {
   });
 });
 
+describe('redactLogArgs — user-added service group (H/17 L1)', () => {
+  it('redacts every key in the userProviders array, not just the managed arms', () => {
+    const secret = 'USER-KEY-SENTINEL-4b1e7a';
+    const [result] = redactLogArgs([
+      {
+        userProviders: [
+          {
+            id: 'svc-1',
+            name: 'My DeepSeek',
+            baseUrl: 'https://api.deepseek.com/v1',
+            apiKey: secret,
+          },
+        ],
+      },
+    ]);
+
+    expect(JSON.stringify(result)).not.toContain(secret.slice(0, 6));
+    // The non-secret fields must survive — a redacted-to-nothing log line is
+    // as useless as a leaking one.
+    expect(JSON.stringify(result)).toContain('My DeepSeek');
+  });
+});
+
 describe('redactLogArgs — negative controls (bare "key" dropped)', () => {
   it('does not touch ordinary key= vocabulary', () => {
     for (const line of ['key=cache', 'key=ArrowUp', 'public key=ed25519', 'monkey=value']) {

@@ -29,7 +29,15 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSy
 import { join } from 'node:path';
 
 const VAULT_FILE_NAME = 'vault.json';
-const SCHEMA_VERSION = 1;
+/**
+ * v2 (H/17) added the user-added service group. Bumped rather than added as a
+ * tolerated unknown field: `save()` rebuilds the whole envelope, so a v1 build
+ * that read a v2 vault and then saved would silently drop every service the
+ * user configured. A version above what a build knows already makes that build
+ * treat the file as read-only, which turns silent data loss into "this build
+ * asks you to sign in again".
+ */
+const SCHEMA_VERSION = 2;
 
 /** Crypto capability the vault writes/reads through — real adapter is `safeStorage`, injected by `index.ts`. */
 export interface VaultCrypto {
@@ -57,6 +65,34 @@ export interface VaultPayload {
   /** Phase 5 / S4: Pi reuses the company key but keeps its own future-proof arm. */
   pi?: { baseUrl: string; apiKey: string };
   receivedAt: string;
+}
+
+/**
+ * One AI service the USER added, as opposed to one the gateway issued.
+ *
+ * H/17 keeps these in their own envelope group rather than inside
+ * {@link VaultPayload}: `save()` replaces the payload wholesale on every
+ * managed sync and every login, so a service the user typed in by hand would
+ * be destroyed by the next sync if it lived there. The two groups are written
+ * by different paths and neither reads the other's bytes.
+ *
+ * `api` is a bare string, not a union of the styles this build supports. The
+ * catalog of usable styles belongs to the model layer and changes with the
+ * pi-ai version; the vault's job is to round-trip what it was handed, and
+ * narrowing here would silently drop a provider whose style a later build
+ * understands.
+ */
+export interface UserProvider {
+  id: string;
+  name: string;
+  baseUrl: string;
+  api: string;
+  apiKey: string;
+  headers?: Record<string, string>;
+  /** Model ids the user picked for this service; empty means "not chosen yet". */
+  models?: string[];
+  enabled: boolean;
+  createdAt: string;
 }
 
 /** On-disk envelope, `payload` decrypted and parsed. What a `status:'ok'` read hands back. */
@@ -101,6 +137,24 @@ export type VaultSaveResult =
   | { ok: true }
   | { ok: false; reason: 'crypto_not_ready' | 'unsupported_version' };
 
+/**
+ * Read outcome for the user-added group.
+ *
+ * Deliberately NOT folded into {@link VaultReadResult}: that union answers
+ * questions about the COMPANY credential — `rejected` means the gateway key
+ * was refused, `cleared` means someone logged out — and none of those verdicts
+ * says anything about a key the user typed in themselves. Local mode never
+ * logs in at all, so its vault permanently reads `absent`/`cleared` on the
+ * managed side; surfacing user services only through that union would make
+ * them unreadable in exactly the mode they exist for.
+ */
+export type UserProvidersReadResult =
+  | { status: 'ok'; providers: UserProvider[] }
+  | { status: 'absent' }
+  | { status: 'locked' }
+  | { status: 'unsupported' }
+  | { status: 'invalid'; reason: 'malformed_json' | 'schema_invalid' | 'decrypt_failed' };
+
 interface RawEnvelope {
   version: number;
   enc: 'safeStorage' | 'none';
@@ -108,6 +162,15 @@ interface RawEnvelope {
   invalidatedAt: string | null;
   encReason: 'ok' | 'unavailable';
   payload: string | Record<string, unknown> | null;
+  /** Absent in a v1 vault and in any vault with no user-added service yet. */
+  userProviders?: string | UserProvider[] | null;
+  /**
+   * How `userProviders` is encoded, tracked separately from `enc` on purpose.
+   * A shared flag would force whichever group is being written to decrypt and
+   * re-encode the other one so both match — impossible while the keyring is
+   * locked, and a way to corrupt the group nobody was even editing.
+   */
+  userProvidersEnc?: 'safeStorage' | 'none';
 }
 
 function validateEnvelopeShape(
@@ -127,6 +190,15 @@ function validateEnvelopeShape(
     typeof obj.payload === 'string' || (obj.payload && typeof obj.payload === 'object')
       ? (obj.payload as string | Record<string, unknown>)
       : null;
+  // Unlike `payload`, an unreadable user group must stay distinguishable from
+  // an absent one: `undefined` means the field was never written (v1 vault, or
+  // no service added yet), `null` means it was explicitly wiped.
+  const userProviders =
+    obj.userProviders === undefined
+      ? undefined
+      : typeof obj.userProviders === 'string' || Array.isArray(obj.userProviders)
+        ? (obj.userProviders as string | UserProvider[])
+        : null;
   return {
     ok: true,
     envelope: {
@@ -136,8 +208,27 @@ function validateEnvelopeShape(
       invalidatedAt: typeof obj.invalidatedAt === 'string' ? obj.invalidatedAt : null,
       encReason: obj.encReason === 'unavailable' ? 'unavailable' : 'ok',
       payload,
+      ...(userProviders === undefined ? {} : { userProviders }),
+      ...(obj.userProvidersEnc === 'safeStorage' || obj.userProvidersEnc === 'none'
+        ? { userProvidersEnc: obj.userProvidersEnc }
+        : {}),
     },
   };
+}
+
+/** Shape gate for one decoded user service — a row missing an id or a key is not usable. */
+function isUserProvider(value: unknown): value is UserProvider {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.id === 'string' &&
+    typeof row.name === 'string' &&
+    typeof row.baseUrl === 'string' &&
+    typeof row.api === 'string' &&
+    typeof row.apiKey === 'string' &&
+    typeof row.enabled === 'boolean' &&
+    typeof row.createdAt === 'string'
+  );
 }
 
 /** Random-enough, mockable (via `Math.random`) tmp-file suffix — tests use this to force a stale-tmp-permission collision (S1 spec §3-1d). */
@@ -295,6 +386,133 @@ export class CredentialVault {
     };
   }
 
+  /**
+   * The user-added group, independent of every managed-side verdict.
+   *
+   * `invalidatedAt` is deliberately ignored: it records that the COMPANY key
+   * was refused by the gateway, which has no bearing on a key the user pasted
+   * in for their own account.
+   */
+  readUserProviders(): UserProvidersReadResult {
+    if (!existsSync(this.vaultPath)) {
+      return { status: 'absent' };
+    }
+
+    let raw: string;
+    try {
+      raw = readFileSync(this.vaultPath, 'utf-8');
+    } catch {
+      return { status: 'absent' };
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { status: 'invalid', reason: 'malformed_json' };
+    }
+
+    const validation = validateEnvelopeShape(parsed);
+    if (!validation.ok) {
+      return { status: 'invalid', reason: 'schema_invalid' };
+    }
+    const envelope = validation.envelope;
+
+    if (envelope.version > SCHEMA_VERSION) {
+      return { status: 'unsupported' };
+    }
+    // A v1 vault, or one nobody has added a service to yet. Both are "no
+    // services", not an error.
+    if (envelope.userProviders === undefined || envelope.userProviders === null) {
+      return { status: 'ok', providers: [] };
+    }
+
+    let rows: unknown;
+    if (envelope.userProvidersEnc === 'safeStorage') {
+      if (!this.isCryptoAvailable()) {
+        return { status: 'locked' };
+      }
+      if (typeof envelope.userProviders !== 'string') {
+        return { status: 'invalid', reason: 'schema_invalid' };
+      }
+      try {
+        rows = JSON.parse(this.crypto.decrypt(envelope.userProviders));
+      } catch {
+        return { status: 'invalid', reason: 'decrypt_failed' };
+      }
+    } else {
+      rows = envelope.userProviders;
+    }
+
+    if (!Array.isArray(rows)) {
+      return { status: 'invalid', reason: 'schema_invalid' };
+    }
+    // One corrupt row must not take the rest of the list down with it: the
+    // user would lose every service they configured because of a single bad
+    // record. Dropped rows are reported so the caller can say so.
+    return { status: 'ok', providers: rows.filter(isUserProvider) };
+  }
+
+  /**
+   * Replace the user-added group, leaving the managed group's bytes untouched.
+   *
+   * Creates the vault file when none exists — local mode never logs in, so
+   * there is no managed payload to hang these off, and refusing here would
+   * make the whole feature unreachable in exactly the mode it exists for.
+   * `clear()`'s "never create an empty shell" rule does not apply: this call
+   * has real content to store.
+   */
+  saveUserProviders(providers: readonly UserProvider[]): Promise<VaultSaveResult> {
+    return this.runSerialized(() => this.saveUserProvidersInternal(providers));
+  }
+
+  private saveUserProvidersInternal(providers: readonly UserProvider[]): VaultSaveResult {
+    if (!this.promoted) {
+      console.warn(
+        '[CredentialVault] saveUserProviders refused: crypto not promoted yet (crypto_not_ready)'
+      );
+      return { ok: false, reason: 'crypto_not_ready' };
+    }
+
+    const existing = this.readRawEnvelope();
+    if (existing && existing.version > SCHEMA_VERSION) {
+      console.warn(
+        '[CredentialVault] saveUserProviders refused: on-disk vault is a newer, unsupported schema'
+      );
+      return { ok: false, reason: 'unsupported_version' };
+    }
+
+    const available = this.isCryptoAvailable();
+    const serialized = JSON.stringify(providers);
+    const base: RawEnvelope = existing ?? {
+      version: SCHEMA_VERSION,
+      enc: 'none',
+      lastEmail: null,
+      invalidatedAt: null,
+      encReason: available ? 'ok' : 'unavailable',
+      payload: null,
+    };
+
+    this.writeEnvelope({
+      ...base,
+      version: SCHEMA_VERSION,
+      userProviders: available ? this.crypto.encrypt(serialized) : (providers as UserProvider[]),
+      userProvidersEnc: available ? 'safeStorage' : 'none',
+    });
+    return { ok: true };
+  }
+
+  /** The validated on-disk envelope, or `null` when there is nothing usable to carry over. */
+  private readRawEnvelope(): RawEnvelope | null {
+    if (!existsSync(this.vaultPath)) return null;
+    try {
+      const validation = validateEnvelopeShape(JSON.parse(readFileSync(this.vaultPath, 'utf-8')));
+      return validation.ok ? validation.envelope : null;
+    } catch {
+      return null;
+    }
+  }
+
   save(payload: VaultPayload): Promise<VaultSaveResult> {
     return this.runSerialized(() => this.saveInternal(payload));
   }
@@ -314,6 +532,18 @@ export class CredentialVault {
     }
 
     const available = this.isCryptoAvailable();
+    // H/17: every managed sync and every login lands here with a payload built
+    // from the server response alone. The user-added group is carried over
+    // verbatim — re-encoding it is neither needed (it tracks its own `enc`)
+    // nor possible while the keyring is locked.
+    const existing = this.readRawEnvelope();
+    const userGroup: Partial<RawEnvelope> =
+      existing?.userProviders === undefined
+        ? {}
+        : {
+            userProviders: existing.userProviders,
+            ...(existing.userProvidersEnc ? { userProvidersEnc: existing.userProvidersEnc } : {}),
+          };
     const envelope: RawEnvelope = available
       ? {
           version: SCHEMA_VERSION,
@@ -322,6 +552,7 @@ export class CredentialVault {
           invalidatedAt: null,
           encReason: 'ok',
           payload: this.crypto.encrypt(JSON.stringify(payload)),
+          ...userGroup,
         }
       : {
           version: SCHEMA_VERSION,
@@ -330,6 +561,7 @@ export class CredentialVault {
           invalidatedAt: null,
           encReason: 'unavailable',
           payload: payload as unknown as Record<string, unknown>,
+          ...userGroup,
         };
 
     this.writeEnvelope(envelope);
@@ -418,6 +650,10 @@ export class CredentialVault {
       );
     }
 
+    // Logout wipes BOTH groups (H/17 verification case 3): signing out on a
+    // shared machine must not leave the user's own API keys behind. Written as
+    // an explicit `null` rather than an absent field so a later read can tell
+    // "wiped" from "this vault predates the user group".
     const envelope: RawEnvelope = {
       version: SCHEMA_VERSION,
       enc: 'none',
@@ -425,6 +661,8 @@ export class CredentialVault {
       invalidatedAt: null,
       encReason: 'ok',
       payload: null,
+      userProviders: null,
+      userProvidersEnc: 'none',
     };
 
     try {

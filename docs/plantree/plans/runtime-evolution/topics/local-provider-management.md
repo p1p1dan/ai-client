@@ -30,7 +30,7 @@ PI-Desktop 对应实现（`apps/desktop/src/components/settings/`）：`ModelCon
 
 ## 执行清单
 
-- [ ] L1：vault schema 扩展。新增用户组 `providers` 数组与读写路径，托管组不动；补 schema 版本与拒绝降级的测试。
+- [x] L1：vault schema 扩展。envelope 升到 v2，用户组作为独立的 `userProviders` + `userProvidersEnc` 两个字段，与托管 `payload` 各自加密、互不读取；`readUserProviders`/`saveUserProviders` 独立于托管侧的 `rejected`/`cleared` 判定，本地模式（从不登录）也能读写。auth 216 测试通过，含 `save()` 携带用户组的反向对照。
 - [ ] L2：主进程服务。用户组的增删改查、连通性测试、从 `/models` 拉模型列表；合并两组后派生 `models.json`/`auth.json`（0600），登出与切模式时清理。
 - [ ] L3：设置页「AI 服务」区块与添加/编辑表单。预设选择器（过滤掉不支持的 API 风格）、自定义服务、baseURL 规范化、header 编辑、模型选择、默认模型。
 - [ ] L4：本地模式首次进入后自动弹出该设置页；设置菜单里常驻同一入口。

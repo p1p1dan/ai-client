@@ -11,7 +11,12 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CredentialVault, type VaultCrypto, type VaultPayload } from '../CredentialVault';
+import {
+  CredentialVault,
+  type UserProvider,
+  type VaultCrypto,
+  type VaultPayload,
+} from '../CredentialVault';
 
 // ESM module namespaces are not configurable, so `vi.spyOn(fsModule, 'chmodSync')`
 // cannot work directly — `vi.mock` with `importOriginal` replaces module
@@ -189,6 +194,153 @@ describe('CredentialVault — clear (1b)', () => {
   });
 });
 
+describe('CredentialVault — user-added service group (H/17 L1)', () => {
+  function makeProvider(overrides?: Partial<UserProvider>): UserProvider {
+    return {
+      id: 'svc-1',
+      name: 'My DeepSeek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      api: 'openai-completions',
+      apiKey: 'USER-KEY-4b1e7a',
+      enabled: true,
+      createdAt: '2026-09-10T00:00:00.000Z',
+      ...overrides,
+    };
+  }
+
+  function openVault(crypto = fakeAvailableCrypto()): CredentialVault {
+    const vault = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    vault.promoteCrypto(crypto);
+    return vault;
+  }
+
+  it('round-trips user services into a vault that never held a managed payload', async () => {
+    const vault = openVault();
+    expect(vault.readUserProviders()).toEqual({ status: 'absent' });
+
+    expect(await vault.saveUserProviders([makeProvider()])).toEqual({ ok: true });
+
+    // Local mode never signs in: the managed side must stay empty rather than
+    // acquire a fabricated payload.
+    const parsed = JSON.parse(readFileSync(join(baseDir, VAULT_FILE), 'utf-8'));
+    expect(parsed.payload).toBeNull();
+    expect(parsed.userProvidersEnc).toBe('safeStorage');
+    expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [makeProvider()] });
+  });
+
+  it('survives a managed save — the sync path replaces only the managed group', async () => {
+    const vault = openVault();
+    await vault.saveUserProviders([makeProvider()]);
+
+    await vault.save(makePayload());
+
+    expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [makeProvider()] });
+    expect(vault.read().status).toBe('ok');
+  });
+
+  it('survives markInvalidated — a refused company key says nothing about the user key', async () => {
+    const vault = openVault();
+    await vault.save(makePayload());
+    await vault.saveUserProviders([makeProvider()]);
+
+    await vault.markInvalidated('2026-09-10T01:00:00.000Z');
+
+    expect(vault.read().status).toBe('rejected');
+    expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [makeProvider()] });
+  });
+
+  it('is readable while the managed side reads cleared', async () => {
+    const vault = openVault();
+    await vault.save(makePayload());
+    await vault.clear({ keepLastEmail: true });
+    await vault.saveUserProviders([makeProvider()]);
+
+    expect(vault.read().status).toBe('cleared');
+    expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [makeProvider()] });
+  });
+
+  it('logout wipes the user group too, and the secret leaves the file', async () => {
+    const vault = openVault();
+    await vault.saveUserProviders([makeProvider()]);
+
+    await vault.clear({ keepLastEmail: true });
+
+    expect(readFileSync(join(baseDir, VAULT_FILE), 'utf-8')).not.toContain('USER-KEY-4b1e7a');
+    expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [] });
+  });
+
+  it('reads locked, never invalid, when the group was encrypted and the keyring is not open', async () => {
+    const writer = openVault();
+    await writer.saveUserProviders([makeProvider()]);
+
+    const reader = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    expect(reader.readUserProviders()).toEqual({ status: 'locked' });
+  });
+
+  it('stores plaintext and says so when crypto is unavailable', async () => {
+    const vault = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    vault.promoteCrypto(fakeUnavailableCrypto());
+
+    expect(await vault.saveUserProviders([makeProvider()])).toEqual({ ok: true });
+
+    const parsed = JSON.parse(readFileSync(join(baseDir, VAULT_FILE), 'utf-8'));
+    expect(parsed.userProvidersEnc).toBe('none');
+    expect(parsed.userProviders).toEqual([makeProvider()]);
+  });
+
+  it('treats a v1 vault as no services rather than an error', () => {
+    mkdirSync(baseDir, { recursive: true });
+    writeFileSync(
+      join(baseDir, VAULT_FILE),
+      JSON.stringify({
+        version: 1,
+        enc: 'none',
+        lastEmail: 'old@jcdz.cc',
+        invalidatedAt: null,
+        encReason: 'ok',
+        payload: makePayload(),
+      })
+    );
+
+    const vault = new CredentialVault({ baseDir, crypto: fakeAvailableCrypto() });
+    expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [] });
+  });
+
+  it('drops only the malformed rows, never the whole list', async () => {
+    const vault = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    vault.promoteCrypto(fakeUnavailableCrypto());
+    await vault.saveUserProviders([makeProvider()]);
+
+    const parsed = JSON.parse(readFileSync(join(baseDir, VAULT_FILE), 'utf-8'));
+    parsed.userProviders.push({ id: 'broken' });
+    writeFileSync(join(baseDir, VAULT_FILE), JSON.stringify(parsed));
+
+    expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [makeProvider()] });
+  });
+
+  it('refuses to save before crypto promotion, and never overwrites a newer schema', async () => {
+    const unpromoted = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    expect(await unpromoted.saveUserProviders([makeProvider()])).toEqual({
+      ok: false,
+      reason: 'crypto_not_ready',
+    });
+    expect(existsSync(join(baseDir, VAULT_FILE))).toBe(false);
+
+    mkdirSync(baseDir, { recursive: true });
+    writeFileSync(
+      join(baseDir, VAULT_FILE),
+      JSON.stringify({ version: 3, enc: 'none', lastEmail: null, encReason: 'ok', payload: null })
+    );
+    const original = readFileSync(join(baseDir, VAULT_FILE), 'utf-8');
+    const vault = openVault();
+    expect(await vault.saveUserProviders([makeProvider()])).toEqual({
+      ok: false,
+      reason: 'unsupported_version',
+    });
+    expect(readFileSync(join(baseDir, VAULT_FILE), 'utf-8')).toBe(original);
+  });
+});
+
 describe('CredentialVault — file permissions (1c, 1d)', () => {
   it('writes the vault file at 0600 and the directory at 0700, verified both by real statSync and by the chmodSync call arguments', async () => {
     vi.mocked(chmodSync).mockClear();
@@ -276,13 +428,15 @@ describe('CredentialVault — read result union (1e)', () => {
     expect(vault.read()).toEqual({ status: 'locked', lastEmail: 'locked@jcdz.cc' });
   });
 
-  it('version > 1 is unsupported, read-only, and leaves the file bytes untouched', async () => {
+  it('a version above this build is unsupported, read-only, and leaves the file bytes untouched', async () => {
     mkdirSync(baseDir, { recursive: true });
     const vaultPath = join(baseDir, VAULT_FILE);
     writeFileSync(
       vaultPath,
       JSON.stringify({
-        version: 2,
+        // One above the current SCHEMA_VERSION (2 since H/17 added the
+        // user-added service group) — the point is "newer than this build".
+        version: 3,
         enc: 'none',
         lastEmail: 'future@jcdz.cc',
         invalidatedAt: null,
