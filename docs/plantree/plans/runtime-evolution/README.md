@@ -194,7 +194,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 
 ## 相关决策入口
 
-F3、F2-b、TUI 范围冲突分别关联上表节点，具体待答问题只维护在 [open-questions](open-questions.md)。F6 已按用户选择实施右侧审阅（[范围与验证](topics/session-review-and-updates.md)）；F7e 仍为候选增强，不新增为基础功能阻塞。
+F3、F2-b、TUI 范围冲突分别关联上表节点，具体待答问题只维护在 [open-questions](open-questions.md)。F6 已按用户选择实施右侧审阅（[范围与验证](topics/session-review-and-updates.md)）；F7e 仍为候选增强，不新增为基础功能阻塞。默认字体：2026-09-10 用户看过 Maple Mono 对比（[截图](../../../../sharePic/20260910/maple-mono-preview/)）后决定维持系统字体栈（设计规范 D25），不做字体选择器。
 
 ## 证据与维护
 
