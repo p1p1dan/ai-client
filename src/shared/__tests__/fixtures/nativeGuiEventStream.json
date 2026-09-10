@@ -213,6 +213,7 @@
         "allow_session",
         "deny"
       ],
+      "timeoutMs": 120000,
       "detail": {
         "kind": "file_change",
         "changes": [

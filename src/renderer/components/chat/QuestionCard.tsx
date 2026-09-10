@@ -27,6 +27,7 @@ import {
   PERMISSION_WAITING,
   type PermissionDetailView,
   type PermissionRisk,
+  permissionSecondsLeft,
   QUESTION_CARD_BODY_MAX_CLASS,
   QUESTION_TITLE,
   type QuestionSelection,

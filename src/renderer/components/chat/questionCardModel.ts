@@ -655,6 +655,17 @@ function readInputField(input: unknown, key: string): string | null {
 }
 
 /**
+ * Seconds left before the asker stops waiting, or null when it stated no
+ * deadline. Never negative: a card that outlived its gate says zero and the
+ * component answers `deny` once, which is the same answer the engine's own
+ * abort produces — the two agree rather than race.
+ */
+export function permissionSecondsLeft(expiresAt: number | undefined, now: number): number | null {
+  if (expiresAt === undefined) return null;
+  return Math.max(0, Math.ceil((expiresAt - now) / 1000));
+}
+
+/**
  * The verbatim body, preferring what the tool is about to WRITE over what it
  * was called with. A command already appears in the exec detail, so it is only
  * used here when there is no content — never both, which would print the same

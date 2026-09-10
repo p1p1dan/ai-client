@@ -20,7 +20,11 @@ import type {
   PermissionRequestKind,
   RuntimeEventDraft,
 } from '../../shared/types/runtimeEvents.ts';
-import type { PermissionConfig, ToolPermissionRequest } from '../plugins/permissions/index.ts';
+import {
+  PERMISSION_TIMEOUT_MS,
+  type PermissionConfig,
+  type ToolPermissionRequest,
+} from '../plugins/permissions/index.ts';
 
 /** The three answers this runtime can act on; `cancel` is not modelled. */
 const OFFERED: PermissionDecisionId[] = ['allow', 'allow_session', 'deny'];
@@ -29,6 +33,13 @@ export interface PermissionPromptOptions {
   sessionId: string;
   cwd: string;
   emit: (event: RuntimeEventDraft) => void;
+  /**
+   * The deadline the card counts down to, which must be the one the engine
+   * actually enforces — a card promising 120s while the gate aborted at 30s
+   * would be worse than no clock at all. Defaults to the engine's own default,
+   * which is what a worker that configures no override gets.
+   */
+  timeoutMs?: number;
 }
 
 export interface PermissionPrompt {
@@ -145,6 +156,7 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
             },
             kind: kindOf(request.tool),
             decisions: OFFERED,
+            timeoutMs: options.timeoutMs ?? PERMISSION_TIMEOUT_MS,
             ...(detail ? { detail } : {}),
           },
         });

@@ -428,6 +428,17 @@ export interface PermissionRequestedEvent extends RuntimeEventBase {
     /** S2: the agent's own justification, when it sent one. */
     reason?: string;
     /**
+     * How long the asker will wait, in ms from this event's `timestamp`.
+     *
+     * The gate has always had a deadline — the permission engine aborts the
+     * approval and denies — but nothing said so on screen, so a card could sit
+     * there looking answerable after the answer had stopped mattering. With it
+     * the card counts down and denies at zero, which is also PI-Desktop's
+     * behaviour. Absent means "no stated deadline": the card shows no clock
+     * rather than inventing one.
+     */
+    timeoutMs?: number;
+    /**
      * S2: how many offered decisions this build did not model and therefore
      * dropped from `decisions`. Shown at the bottom of the card so a narrowed
      * choice never looks like the whole choice.

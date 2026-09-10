@@ -25,6 +25,7 @@ import {
   PERMISSION_DECISION_LABELS,
   PERMISSION_NO_COMMAND_NOTE,
   permissionDecisionAllows,
+  permissionSecondsLeft,
   questionReactKey,
   SECRET_MASK,
   selectPendingQuestionBlock,
@@ -998,6 +999,25 @@ describe('selectPendingQuestionBlock', () => {
       's1'
     );
     expect(found).toBeUndefined();
+  });
+});
+
+describe('permission countdown (2026-09-10)', () => {
+  const at = Date.parse('2026-09-10T10:00:00Z');
+
+  it('counts whole seconds down to the deadline', () => {
+    expect(permissionSecondsLeft(at + 120_000, at)).toBe(120);
+    expect(permissionSecondsLeft(at + 1_500, at)).toBe(2);
+  });
+
+  it('says zero rather than a negative for a card that outlived its gate', () => {
+    expect(permissionSecondsLeft(at - 5_000, at)).toBe(0);
+  });
+
+  it('shows no clock when the asker stated no deadline', () => {
+    // An older Host sends no `timeoutMs`; inventing 120s here would promise a
+    // deadline nothing enforces.
+    expect(permissionSecondsLeft(undefined, at)).toBeNull();
   });
 });
 

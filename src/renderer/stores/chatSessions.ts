@@ -182,6 +182,15 @@ export interface ChatBlock {
   permissionAutoReason?: PermissionAutoReason;
   /** S2 (c): offered decisions this build could not model and dropped. */
   omittedDecisionCount?: number;
+  /**
+   * Wall-clock ms after which the asker stops waiting and the gate denies.
+   *
+   * Absolute rather than a duration: the card re-renders on every tick and a
+   * duration would have to be re-based against an arrival time nobody kept.
+   * Derived once here from the event's own timestamp, so a replayed history
+   * shows a deadline in the past rather than a fresh two minutes.
+   */
+  permissionExpiresAt?: number;
   /** T08-b: set on `permission_activity` blocks only — the gate and its outcome. */
   permissionActivity?: PermissionActivityRecord;
   questionId?: string;
@@ -1053,6 +1062,9 @@ function applyRuntimeEventCore(
                 permissionKind: event.payload.kind,
                 permissionDetail: event.payload.detail,
                 permissionDecisions: event.payload.decisions,
+                ...(event.payload.timeoutMs !== undefined
+                  ? { permissionExpiresAt: event.timestamp + event.payload.timeoutMs }
+                  : {}),
                 omittedDecisionCount: event.payload.omittedDecisionCount,
               },
             ],
