@@ -1417,7 +1417,12 @@ const ChatTurn = memo(function ChatTurn({
     .filter((segment) => segment.kind === 'process')
     .map((segment) => `${segment.kind}:${turnItemKey(segment.items[0])}`)
     .at(-1);
-  const processFolds = !turnActive && metadata?.latencyMs != null && lastProcessKey !== undefined;
+  // Between two assistant messages (a tool result or permission wait splits
+  // them) the last one already carries a latency while the turn is still in
+  // flight; only the session status tells those apart.
+  const settledLatencyMs =
+    !turnActive && !(isLastTurn && inFlightSession) ? (metadata?.latencyMs ?? null) : null;
+  const processFolds = settledLatencyMs != null && lastProcessKey !== undefined;
 
   const renderSegment = (segment: TurnSegment<TurnItem>) => {
     // Keyed off the segment's FIRST item, not its index: an index key would
@@ -1472,12 +1477,12 @@ const ChatTurn = memo(function ChatTurn({
       (item) =>
         (item.kind === 'permission' || item.kind === 'question') && item.block.resolved !== true
     );
-    if (!answerable && !turnActive && metadata?.latencyMs != null) {
+    if (!answerable && settledLatencyMs != null) {
       return (
         <TurnProcessFold
           key={key}
           items={segment.items}
-          durationMs={metadata.latencyMs}
+          durationMs={settledLatencyMs}
           // Only the last one carries it: the audit is turn-wide, and repeating
           // it under every process run would count the same gates twice.
           {...(key === lastProcessKey ? { footer: activityDetails } : {})}

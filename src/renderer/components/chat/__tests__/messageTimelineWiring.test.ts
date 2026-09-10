@@ -509,6 +509,18 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(turn).toContain('<TurnStatusContent status={status} />');
   });
 
+  // 2026-09-10 local pass: between two assistant messages the last one already
+  // carries a latency while the session still runs, so a fold gated on that
+  // latency alone collapsed the process mid-turn.
+  it('the process fold waits for the session, not only the last message', () => {
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    expect(turn).toContain(
+      '!turnActive && !(isLastTurn && inFlightSession) ? (metadata?.latencyMs ?? null) : null'
+    );
+    expect(turn).toContain('if (!answerable && settledLatencyMs != null) {');
+    expect(turn).toContain('durationMs={settledLatencyMs}');
+  });
+
   // F2: the in-flight snapshot is bound by evidence, never by "no latency".
   it('F2: the send snapshot is bound by deriveSendStatusBinding', () => {
     expectCalled('deriveSendStatusBinding(');
