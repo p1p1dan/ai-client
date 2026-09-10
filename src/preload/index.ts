@@ -97,6 +97,13 @@ import type { ExtensionUiResponse } from '@shared/types/runtimeEvents';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import type { WorkerExtensionInfo, WorkerSlashCommandInfo } from '@shared/types/workerRpc';
+import type {
+  FetchProviderModelsRequest,
+  FetchProviderModelsResult,
+  UserProviderDraft,
+  UserProviderState,
+  UserProviderView,
+} from '@shared/userProviders';
 import { parseInitialThemeArg } from '@shared/windowTheme';
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
 import pkg from '../../package.json';
@@ -1134,6 +1141,23 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.PI_MODELS_SYNC, payload),
     openAdmin: (endpointUrl?: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.PI_MODELS_OPEN_ADMIN, endpointUrl),
+  },
+
+  /**
+   * H/17 — AI services the user added themselves. No stored key ever comes
+   * back across this bridge: `get` answers with `hasApiKey`, and an `upsert`
+   * that omits `apiKey` keeps the one already saved.
+   */
+  userProviders: {
+    get: (): Promise<UserProviderState> => ipcRenderer.invoke(IPC_CHANNELS.USER_PROVIDERS_GET),
+    upsert: (payload: UserProviderDraft): Promise<UserProviderView> =>
+      ipcRenderer.invoke(IPC_CHANNELS.USER_PROVIDERS_UPSERT, payload),
+    remove: (id: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.USER_PROVIDERS_REMOVE, id),
+    setEnabled: (id: string, enabled: boolean): Promise<UserProviderView> =>
+      ipcRenderer.invoke(IPC_CHANNELS.USER_PROVIDERS_SET_ENABLED, { id, enabled }),
+    fetchModels: (payload: FetchProviderModelsRequest): Promise<FetchProviderModelsResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.USER_PROVIDERS_FETCH_MODELS, payload),
   },
 
   piResources: {

@@ -44,8 +44,17 @@ vi.mock('../../SharedSessionState', () => ({
   writeSharedSettings: vi.fn(),
 }));
 
+/**
+ * H/17: `readUserProviders` is stubbed alongside `read` because the worker env
+ * now asks whether the local route has moved off `~/.pi/agent`. `absent` keeps
+ * every pre-existing case on its original branch — no user service configured.
+ */
+const readUserProvidersMock = vi.fn(() => ({ status: 'absent' }) as { status: string });
 vi.mock('../../auth', () => ({
-  getCredentialVault: () => ({ read: () => ({ status: 'missing' }) }),
+  getCredentialVault: () => ({
+    read: () => ({ status: 'missing' }),
+    readUserProviders: () => readUserProvidersMock(),
+  }),
 }));
 
 vi.mock('../../appStatePaths', () => ({ getAppStateRoot: () => '/tmp/aiclient-test/.pilab/dev' }));
@@ -328,5 +337,52 @@ describe('resolveManagedPiWorkerEnv — client User-Agent', () => {
     const value = (await workerEnv(true))[PI_USER_AGENT_ENV];
     expect(value.startsWith('pi ')).toBe(false);
     expect(value).not.toMatch(/win32|darwin|linux|x64|arm64/);
+  });
+});
+
+describe('resolveManagedPiWorkerEnv — local route with user-added services (H/17 L2)', () => {
+  const userProvider = {
+    id: 'svc-1',
+    name: 'My DeepSeek',
+    baseUrl: 'https://api.deepseek.com/v1',
+    api: 'openai-completions',
+    apiKey: 'K',
+    enabled: true,
+    createdAt: '2026-09-10T00:00:00.000Z',
+  };
+
+  afterEach(() => {
+    readUserProvidersMock.mockReturnValue({ status: 'absent' });
+  });
+
+  it('leaves the local route pointed at the user directory when nothing was added', async () => {
+    readUserProvidersMock.mockReturnValue({ status: 'ok', providers: [] } as never);
+    const env = await workerEnv(false);
+    expect(env.PI_CODING_AGENT_DIR).toBeUndefined();
+  });
+
+  it('moves pi to the app directory once a user service exists, and borrows the user resources', async () => {
+    readUserProvidersMock.mockReturnValue({ status: 'ok', providers: [userProvider] } as never);
+    const env = await workerEnv(false);
+
+    // Our own directory — the user's `~/.pi/agent` is never written to.
+    expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/aiclient-test/.pilab/dev/pi-agent');
+    // …which is exactly why the borrow has to switch on here too: otherwise
+    // adding one service silently unloads every skill installed the documented
+    // way.
+    expect(env.AICLIENT_PI_BORROW_RESOURCES_DIR).toBeTruthy();
+  });
+
+  it('keeps the local route trusted — moving the directory is not a trust change', async () => {
+    readUserProvidersMock.mockReturnValue({ status: 'ok', providers: [userProvider] } as never);
+    expect((await workerEnv(false)).AICLIENT_PI_TRUST_PROJECT_CONFIG).toBe('1');
+  });
+
+  it('treats a disabled service as nothing to point at', async () => {
+    readUserProvidersMock.mockReturnValue({
+      status: 'ok',
+      providers: [{ ...userProvider, enabled: false }],
+    } as never);
+    expect((await workerEnv(false)).PI_CODING_AGENT_DIR).toBeUndefined();
   });
 });

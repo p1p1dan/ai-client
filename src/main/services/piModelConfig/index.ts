@@ -24,6 +24,7 @@ import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { getOnboardingServiceUrl } from '../onboarding/serviceUrl';
 import { readSharedSettings, writeSharedSettings } from '../SharedSessionState';
+import { localRouteUsesAppAgentDir, readUserProvidersForRuntime } from '../userProviders';
 import { resolveOptInFeatures } from './optInFeatures';
 import { PiModelConfigService } from './PiModelConfigService';
 
@@ -82,7 +83,43 @@ function serviceFor(agentDir: string): PiModelConfigService {
     agentDir,
     fetchFn: (url, init) => net.fetch(url, init),
     log: (...args) => console.info(...args),
+    // H/17: supplied to EVERY service instance, so a managed sync rebuilding
+    // `models.json` from the server response cannot drop the user's services.
+    userProviders: readUserProvidersForRuntime,
   });
+}
+
+/**
+ * The agent directory pi is pointed at.
+ *
+ * Managed mode has always used the app's own directory. The local route joins
+ * it only once the user has added a service of their own, because that is the
+ * first moment there is anything of ours for pi to read — see the header of
+ * `services/userProviders/index.ts` for why we never write into `~/.pi/agent`.
+ */
+export function getActivePiAgentDir(): string {
+  if (resolveManagedCredentialsEnabled()) return getManagedPiAgentDir();
+  return localRouteUsesAppAgentDir() ? getManagedPiAgentDir() : getLocalPiAgentDir();
+}
+
+/**
+ * Rewrite the two files pi reads so they match the stored user services.
+ *
+ * Called after any change to the user group. In managed mode the cached wire
+ * catalog supplies the other half; on the local route there is no other half
+ * and the file holds user services alone.
+ */
+export function writeUserProviderRuntimeConfig(): void {
+  const credential = managedCredential();
+  try {
+    serviceFor(getManagedPiAgentDir()).writeUserProviderConfig({
+      userProviders: readUserProvidersForRuntime(),
+      inheritedApiKey: credential?.apiKey ?? '',
+      inheritedBaseUrl: credential?.baseUrl ?? '',
+    });
+  } catch (error) {
+    console.warn('[pi-models] failed to write user provider config', error);
+  }
 }
 
 /**
@@ -123,8 +160,7 @@ export async function syncManagedPiModels(
 
 export function getPiModelSyncState(): PiModelSyncState {
   const managed = resolveManagedCredentialsEnabled();
-  const agentDir = managed ? getManagedPiAgentDir() : getLocalPiAgentDir();
-  const service = serviceFor(agentDir);
+  const service = serviceFor(getActivePiAgentDir());
   const state = service.readState();
   if (!managed) {
     const catalog = service.readCatalog('local');
@@ -141,7 +177,10 @@ export function getPiModelSyncState(): PiModelSyncState {
 
 export function readPiModelCatalog(): AgentModelCatalog {
   const managed = resolveManagedCredentialsEnabled();
-  const service = serviceFor(managed ? getManagedPiAgentDir() : getLocalPiAgentDir());
+  const service = serviceFor(getActivePiAgentDir());
+  // The `'local'` source label follows the credential mode, not the directory:
+  // a local-route catalog is still the user's own even once it is assembled in
+  // our directory, and relabelling it 'remote' would claim a sync happened.
   return service.readCatalog(managed ? undefined : 'local');
 }
 
@@ -163,6 +202,9 @@ export function resolveBorrowUserPiResources(): boolean {
 }
 
 export function getActivePiPromptTemplatesDir(): string {
+  // Deliberately NOT `getActivePiAgentDir()`: prompt templates are the user's
+  // own authored files. Adding a service must not move where "open my prompt
+  // templates" lands, or the folder that opens would be empty.
   return resolveManagedCredentialsEnabled()
     ? getManagedPiPromptTemplatesDir()
     : join(getLocalPiAgentDir(), 'prompts');
@@ -212,7 +254,12 @@ export function resolveManagedPiWorkerEnv(): Record<string, string> {
   // mode the Host already loads that directory, so lending it again would list
   // every skill twice. The Host guards this too, but not sending it keeps the
   // env var honest about what it means.
-  const borrowFrom = managed && resolveBorrowUserPiResources() ? getLocalPiAgentDir() : undefined;
+  // H/17 widened this: the local route also moves off `~/.pi/agent` once the
+  // user adds a service of their own, so the same repair applies — without it,
+  // adding one service would silently unload every skill and prompt template
+  // the user had installed there.
+  const movedOff = managed || localRouteUsesAppAgentDir();
+  const borrowFrom = movedOff && resolveBorrowUserPiResources() ? getLocalPiAgentDir() : undefined;
   // Opt-in bundled extensions. Sent in BOTH modes — unlike the borrow
   // directory, this one is not a managed-mode repair, it is a cost the user
   // opted into, and the bundled copy is injected in local mode too.
@@ -227,7 +274,7 @@ export function resolveManagedPiWorkerEnv(): Record<string, string> {
     // writes references the variable by name; supplying it here is what makes
     // that reference resolve to something other than an empty header.
     [PI_USER_AGENT_ENV]: piUserAgent(app.getVersion()),
-    ...(managed ? { PI_CODING_AGENT_DIR: getManagedPiAgentDir() } : {}),
+    ...(movedOff ? { PI_CODING_AGENT_DIR: getManagedPiAgentDir() } : {}),
     ...(borrowFrom ? { [PI_BORROW_RESOURCES_DIR_ENV]: borrowFrom } : {}),
     ...(optIn.length > 0 ? { [PI_OPT_IN_EXTENSIONS_ENV]: optIn.join(',') } : {}),
   };

@@ -130,11 +130,16 @@ export default function App() {
   // pending-request shape as `navigation.ts`.
   const pendingSettingsOpen = useSettingsIntentStore((state) => state.pendingOpen);
   const openSettingsFromSlash = settingsState.openSettings;
+  const selectSettingsCategory = settingsState.handleSettingsCategoryChange;
   useEffect(() => {
     if (!pendingSettingsOpen) return;
+    // Read the category BEFORE clearing, and only override the remembered pane
+    // when the requester named one (H/17 L4 lands on `pi`; `/settings` does not).
+    const { pendingCategory } = useSettingsIntentStore.getState();
     useSettingsIntentStore.getState().clearSettingsRequest();
+    if (pendingCategory) selectSettingsCategory(pendingCategory);
     openSettingsFromSlash();
-  }, [pendingSettingsOpen, openSettingsFromSlash]);
+  }, [pendingSettingsOpen, openSettingsFromSlash, selectSettingsCategory]);
 
   const {
     repositories,

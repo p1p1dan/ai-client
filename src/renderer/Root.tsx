@@ -16,6 +16,7 @@ import { WindowTitleBar } from './components/layout/WindowTitleBar';
 import { OnboardingShell } from './components/onboarding/OnboardingShell';
 import { WelcomeShell } from './components/onboarding/WelcomeShell';
 import { Button } from './components/ui/button';
+import { useSettingsIntentStore } from './stores/settingsIntent';
 
 // Lazy-load the main App so its heavy hooks (session restore, worktree
 // hydration, etc.) do not run until the user is registered.
@@ -290,6 +291,21 @@ function RootWithOnboardingGate() {
         onSignIn={() => setSignInFlow(true)}
         onUseOwnSetup={async () => {
           await window.electronAPI.auth.enterApp('local');
+          // H/17 L4 — the local route has nothing to talk to until the user
+          // configures a service, so the app opens on that page. Gated on
+          // "none configured" rather than firing every launch: the welcome
+          // screen is shown on EVERY start (see `WelcomeView`), so an
+          // ungated version would reopen settings in the face of someone who
+          // finished setting up months ago.
+          try {
+            const { providers } = await window.electronAPI.userProviders.get();
+            if (providers.length === 0) {
+              useSettingsIntentStore.getState().requestSettings('pi');
+            }
+          } catch {
+            // A vault we cannot read is not a reason to block entry; the
+            // settings page states the problem when the user goes there.
+          }
           invalidateGate();
         }}
       />

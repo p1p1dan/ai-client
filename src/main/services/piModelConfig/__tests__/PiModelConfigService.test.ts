@@ -842,3 +842,151 @@ describe('PiModelConfigService — bundled catalog snapshot (A3)', () => {
     });
   });
 });
+
+describe('PiModelConfigService — user-added services (H/17 L2)', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'pi-user-provider-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const userProvider = {
+    id: '3f2a9c11-0000-4000-8000-000000000000',
+    name: 'My DeepSeek',
+    baseUrl: 'https://api.deepseek.com/v1',
+    api: 'pi-messages',
+    apiKey: 'USER-KEY-NEVER-IN-MODELS',
+    models: ['deepseek-chat'],
+    enabled: true,
+    createdAt: '2026-09-10T00:00:00.000Z',
+  };
+
+  function service(
+    userProviders: (typeof userProvider)[],
+    fetchFn: PiModelConfigFetch = async () => ({ ok: false, status: 500, text: async () => '' })
+  ): PiModelConfigService {
+    return new PiModelConfigService({
+      agentDir: dir,
+      fetchFn,
+      now: () => 1234,
+      readBundledCatalog: () => null,
+      userProviders: () => userProviders,
+    });
+  }
+
+  it('writes a user service pi can read, with the key only in auth.json', () => {
+    service([userProvider]).writeUserProviderConfig({
+      userProviders: [userProvider],
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    // Slugged from the display name, not the uuid: this string is the left
+    // half of `provider/model` in the picker.
+    expect(models.providers['my-deepseek']).toEqual({
+      baseUrl: 'https://api.deepseek.com/v1',
+      api: 'pi-messages',
+      headers: { [PI_USER_AGENT_HEADER]: `$${PI_USER_AGENT_ENV}` },
+      models: [{ id: 'deepseek-chat' }],
+    });
+    expect(readFileSync(join(dir, 'models.json'), 'utf8')).not.toContain(userProvider.apiKey);
+    expect(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8'))).toEqual({
+      'my-deepseek': { type: 'api_key', key: userProvider.apiKey },
+    });
+    if (process.platform !== 'win32') {
+      expect(statSync(join(dir, 'auth.json')).mode & 0o777).toBe(0o600);
+    }
+  });
+
+  it('accepts an API style the managed allowlist does not contain', () => {
+    // `pi-messages` is not in PI_MODEL_APIS. A user service must not be
+    // limited by a list that describes what the company gateway sends.
+    service([userProvider]).writeUserProviderConfig({
+      userProviders: [userProvider],
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    expect(models.providers['my-deepseek'].api).toBe('pi-messages');
+  });
+
+  it('a SUCCESSFUL managed sync keeps the user services in the files pi reads', async () => {
+    // The whole reason `userProviders` is a constructor supplier rather than a
+    // write-time argument: `sync` rebuilds models.json from the server response
+    // alone, and nothing in that path knows about the user's own services.
+    // Nothing below calls `writeUserProviderConfig` — the sync must do it.
+    const result = await service([userProvider], async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(REMOTE_CONFIG),
+    })).sync({
+      endpointUrl: 'http://127.0.0.1:3210/api/v1/models-config',
+      apiKey: 'company-key',
+      inheritedBaseUrl: 'https://fallback.example/v1',
+      force: true,
+    });
+    expect(result.source).toBe('remote');
+
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    const auth = JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8'));
+    // Both groups present, each with its own key.
+    expect(Object.keys(models.providers).sort()).toEqual(['dan', 'my-deepseek']);
+    expect(auth.dan).toEqual({ type: 'api_key', key: 'company-key' });
+    expect(auth['my-deepseek']).toEqual({ type: 'api_key', key: userProvider.apiKey });
+  });
+
+  it('a user service shadows a managed provider of the same slug', () => {
+    const collides = { ...userProvider, name: 'dan' };
+    service([collides]).writeUserProviderConfig({
+      userProviders: [collides],
+      inheritedApiKey: 'company-key',
+      inheritedBaseUrl: 'https://fallback.example/v1',
+    });
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    expect(models.providers.dan?.baseUrl).toBe('https://api.deepseek.com/v1');
+  });
+
+  it('omits a disabled service from both files', () => {
+    const disabled = { ...userProvider, enabled: false };
+    service([disabled]).writeUserProviderConfig({
+      userProviders: [disabled],
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+    expect(JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8')).providers).toEqual({});
+    expect(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8'))).toEqual({});
+  });
+
+  it('keeps only $-prefixed custom headers so a literal secret cannot land in models.json', () => {
+    const withHeaders = {
+      ...userProvider,
+      headers: { 'x-ref': '$SOME_ENV', 'x-literal': 'raw-secret-value' },
+    };
+    service([withHeaders]).writeUserProviderConfig({
+      userProviders: [withHeaders],
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+    const headers = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8')).providers[
+      'my-deepseek'
+    ].headers;
+    expect(headers['x-ref']).toBe('$SOME_ENV');
+    expect(headers['x-literal']).toBeUndefined();
+  });
+
+  it('falls back to a uuid-derived id when the name slugifies to nothing', () => {
+    const punctuation = { ...userProvider, name: '???' };
+    service([punctuation]).writeUserProviderConfig({
+      userProviders: [punctuation],
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+    const providers = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8')).providers;
+    expect(Object.keys(providers)).toEqual(['user-3f2a9c11']);
+  });
+});

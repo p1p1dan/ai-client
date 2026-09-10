@@ -14,6 +14,8 @@ import {
   PI_MODEL_SOURCE_FILE_NAME,
   PI_MODEL_SYNC_STATE_FILE_NAME,
   PI_MODELS_FILE_NAME,
+  PI_USER_AGENT_ENV,
+  PI_USER_AGENT_HEADER,
   type PiManagedModelDefinition,
   type PiManagedModelsConfig,
   type PiModelSyncResult,
@@ -21,6 +23,7 @@ import {
   piModelOption,
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog, AgentModelCatalogError } from '@shared/types/agentCatalog';
+import type { UserProvider } from '../auth/CredentialVault';
 import { type BundledCatalogReader, createBundledCatalogReader } from './catalogSnapshot';
 import {
   resolveProviderApiKey,
@@ -55,6 +58,15 @@ export interface PiModelConfigServiceOptions {
    * real packaged/checked-in file.
    */
   readBundledCatalog?: BundledCatalogReader;
+  /**
+   * H/17 — the user's own services, read fresh on every write.
+   *
+   * A supplier on the constructor rather than a parameter on each write call:
+   * a managed sync rebuilds `models.json` from the server response alone, so
+   * any write path that forgot to pass them would delete every user service
+   * from the file pi actually reads. There is no path here that can forget.
+   */
+  userProviders?: () => readonly UserProvider[];
 }
 
 function readJson(path: string): unknown {
@@ -192,8 +204,10 @@ export class PiModelConfigService {
   private readonly timeoutMs: number;
   private readonly log: (...args: unknown[]) => void;
   private readonly readBundledCatalog: BundledCatalogReader;
+  private readonly userProviders: () => readonly UserProvider[];
 
   constructor(options: PiModelConfigServiceOptions) {
+    this.userProviders = options.userProviders ?? (() => []);
     this.agentDir = options.agentDir;
     this.fetchFn = options.fetchFn;
     this.now = options.now ?? (() => Date.now());
@@ -486,6 +500,33 @@ export class PiModelConfigService {
   }
 
   /**
+   * H/17 — rewrite the two files pi reads from the cached managed catalog plus
+   * the user's own services.
+   *
+   * The local route never syncs, so nothing else would ever write these files
+   * there. Managed providers come from the wire-form cache rather than being
+   * re-fetched: this call is triggered by the user editing THEIR service, and
+   * a network round trip for the other group would make a local edit fail when
+   * the gateway is down.
+   *
+   * The managed cache is left untouched on disk — this method never writes
+   * `sourcePath`, so a user edit can never be mistaken for a fetched catalog.
+   */
+  writeUserProviderConfig(input: {
+    userProviders: readonly UserProvider[];
+    inheritedApiKey: string;
+    inheritedBaseUrl: string;
+  }): void {
+    const cached = readCachedConfig(this.sourcePath) ?? { version: 1 as const, providers: {} };
+    this.writeRuntimeConfig(
+      cached,
+      input.inheritedApiKey,
+      input.inheritedBaseUrl,
+      input.userProviders
+    );
+  }
+
+  /**
    * Just the two files pi itself reads.
    *
    * Split out of {@link writeAll} for A3: the bundled snapshot has to reach pi,
@@ -495,16 +536,23 @@ export class PiModelConfigService {
   private writeRuntimeConfig(
     config: PiManagedModelsConfig,
     inheritedApiKey: string,
-    inheritedBaseUrl: string
+    inheritedBaseUrl: string,
+    userProviders: readonly UserProvider[] = this.userProviders()
   ): void {
     mkdirSync(this.agentDir, { recursive: true, mode: 0o700 });
     chmodSync(this.agentDir, 0o700);
-    atomicWriteJson(
-      this.modelsPath,
-      toPiModelsJson(config, { inheritedBaseUrl: inheritedBaseUrl.trim().replace(/\/+$/, '') }),
-      0o600
-    );
-    this.writeAuth(config, inheritedApiKey);
+    const models = toPiModelsJson(config, {
+      inheritedBaseUrl: inheritedBaseUrl.trim().replace(/\/+$/, ''),
+    }) as { providers: Record<string, unknown> };
+    // Merged AFTER the managed providers, which is what makes "同名以用户组
+    // 优先" true: a user service whose slug collides with a managed provider
+    // id replaces it here rather than being dropped.
+    for (const provider of userProviders) {
+      if (!provider.enabled) continue;
+      models.providers[userProviderId(provider)] = toPiUserProvider(provider);
+    }
+    atomicWriteJson(this.modelsPath, models, 0o600);
+    this.writeAuth(config, inheritedApiKey, userProviders);
   }
 
   /**
@@ -513,10 +561,20 @@ export class PiModelConfigService {
    * previous version wrote the login key for every provider, which silently
    * ignored an administrator-supplied one.
    */
-  private writeAuth(config: PiManagedModelsConfig, inheritedApiKey: string): void {
+  private writeAuth(
+    config: PiManagedModelsConfig,
+    inheritedApiKey: string,
+    userProviders: readonly UserProvider[] = []
+  ): void {
     const auth: Record<string, { type: 'api_key'; key: string }> = {};
     for (const [providerId, provider] of Object.entries(config.providers)) {
       auth[providerId] = { type: 'api_key', key: resolveProviderApiKey(provider, inheritedApiKey) };
+    }
+    // A user service always carries its own key — inheriting the company one
+    // would silently bill the gateway for a request the user aimed elsewhere.
+    for (const provider of userProviders) {
+      if (!provider.enabled) continue;
+      auth[userProviderId(provider)] = { type: 'api_key', key: provider.apiKey };
     }
     atomicWriteJson(this.authPath, auth, 0o600);
   }
@@ -524,6 +582,43 @@ export class PiModelConfigService {
   private writeState(state: PiModelSyncState): void {
     atomicWriteJson(this.statePath, state, 0o600);
   }
+}
+
+/**
+ * The id a user service takes in `models.json`, derived from its display name.
+ *
+ * A name rather than the record's uuid because this string is what the model
+ * picker shows on the left of `provider/model`, and `user-3f2a…/gpt-4o` is not
+ * a thing anyone can read. The uuid is the fallback for a name that slugifies
+ * to nothing (all punctuation, or a script this regex does not cover).
+ */
+function userProviderId(provider: UserProvider): string {
+  const slug = provider.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || `user-${provider.id.slice(0, 8)}`;
+}
+
+/**
+ * One user service in `models.json` form.
+ *
+ * `headers` keeps only `$`-prefixed values. `validateProvider` enforces that
+ * rule on the managed side so a literal secret can never land in this file,
+ * and a hand-typed header must not be the hole in it — the app's own
+ * User-Agent reference is added the same way the managed writer adds it.
+ */
+function toPiUserProvider(provider: UserProvider): Record<string, unknown> {
+  const headers: Record<string, string> = { [PI_USER_AGENT_HEADER]: `$${PI_USER_AGENT_ENV}` };
+  for (const [name, value] of Object.entries(provider.headers ?? {})) {
+    if (value.startsWith('$')) headers[name] = value;
+  }
+  return {
+    baseUrl: provider.baseUrl,
+    api: provider.api,
+    headers,
+    models: (provider.models ?? []).map((id) => ({ id })),
+  };
 }
 
 function safeMtime(path: string): number | null {

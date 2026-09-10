@@ -186,7 +186,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F / 14 | 旧 GitView / IPC 等死代码清理 | ✅ 实现及回归；后续测试包整体 GUI 继续回归 |
 | F / 15 | cwd 缺失与临时目录恢复 | 🟡 test.12 当前恢复流程通过；F2-a/c 后续修复待 test.13 验证，F2-b 单列 |
 | G / 16 | 软件更新提醒 | 🟡 U1 已提交 `b919b1aa`，自动化与隔离弹窗验证通过；真实更新源下载/安装按用户 2026-09-10 决定暂缓验证 |
-| H / 17 | 本地模式 AI 服务管理 | ⬜ 本地模式当前无任何添加服务入口；两种模式统一走 `CredentialVault` 分组存储；[实施计划](topics/local-provider-management.md) |
+| H / 17 | 本地模式 AI 服务管理 | 🟡 L1～L5 已实现：vault 分组存储、主进程服务与 IPC、设置页与添加/编辑弹窗、本地模式首次进入自动打开。全量 5161 测试通过；未打包、未现场回归；[实施计划](topics/local-provider-management.md) |
 | H / 18 | 左侧 Chat 栏对齐 PI-Desktop | ⬜ 上下两分区、分区级与行级右键菜单、未读结果徽标、收起按钮移入 rail；[实施计划](topics/sidebar-pi-desktop-alignment.md) |
 
 [GUI 功能定义](../gui-sdk-experience/TODO.md) · [验收方法](../gui-sdk-experience/现场验收清单.md) · [test.11 现场](../../../../Windows-P4-6-evidence/gui-a-e-findings.md) · [test.12 现场](../../../../Windows-P4-6-evidence/test12-reverify.md)。

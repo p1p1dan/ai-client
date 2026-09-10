@@ -31,19 +31,27 @@ PI-Desktop 对应实现（`apps/desktop/src/components/settings/`）：`ModelCon
 ## 执行清单
 
 - [x] L1：vault schema 扩展。envelope 升到 v2，用户组作为独立的 `userProviders` + `userProvidersEnc` 两个字段，与托管 `payload` 各自加密、互不读取；`readUserProviders`/`saveUserProviders` 独立于托管侧的 `rejected`/`cleared` 判定，本地模式（从不登录）也能读写。auth 216 测试通过，含 `save()` 携带用户组的反向对照。
-- [ ] L2：主进程服务。用户组的增删改查、连通性测试、从 `/models` 拉模型列表；合并两组后派生 `models.json`/`auth.json`（0600），登出与切模式时清理。
-- [ ] L3：设置页「AI 服务」区块与添加/编辑表单。预设选择器（过滤掉不支持的 API 风格）、自定义服务、baseURL 规范化、header 编辑、模型选择、默认模型。
-- [ ] L4：本地模式首次进入后自动弹出该设置页；设置菜单里常驻同一入口。
-- [ ] L5：自动化与本机验证，边界与限制如实记录。
+- [x] L2：主进程服务 `UserProviderService`（增删改查、连通性测试兼模型列表拉取）+ IPC。密钥不过 IPC：读只回 `hasApiKey`，编辑不传 key 即沿用。派生写入由 `PiModelConfigService` 的构造期 `userProviders` 供给器统一承担，托管同步无法漏掉用户组。
+- [x] L3：设置页「AI 服务」区块 + 添加/编辑弹窗。16 个预设、自定义服务、pi-ai 十种 API 风格、baseURL 规范化与校验、拉取模型后勾选、启用开关、未加密与钥匙串锁定的提示。
+- [x] L4：本地模式选择后自动打开设置页的 Pi 分页，仅在尚未配置任何服务时触发；设置菜单入口常驻。
+- [x] L5：全量 362 文件 / 5161 测试通过，根目录 tsc 与改动文件 Biome 通过；含两处反向对照。
 
 ## 验证案例
 
 1. 本地模式首次进入弹出设置页；关闭后可从设置菜单重新打开；托管模式不强制弹出但入口同样可用。
 2. 加一个预设服务（填 key）与一个自定义服务（名称/URL/key/API 风格），两者都能拉到模型列表并被选为默认模型；填错 URL、key 无效、服务不可达分别给出可区分的提示。
-3. 托管同步执行后，用户自加的服务仍在；同名冲突时用户组生效并有提示；登出后用户组与托管组都被清掉。
+3. 托管同步执行后，用户自加的服务仍在；同名冲突时用户组生效并有提示。**登出只清公司凭据，用户自加的服务保留**（用户 2026-09-10 决定：那是用户自己的第三方账号，退出工作账号不是销毁它们的理由）；钥匙串锁着时登出也不能碰用户组的密文。
 4. legacy 后端下用户自加的服务真实可用（派生文件生效）；native 后端下同样可用。
 5. safeStorage 不可用时（模拟）仍可保存，但界面明确显示未加密。
 6. pi-ai 支持的 10 种 API 风格都能选中并保存；`opencode_go` 这类 pi-ai 没有的不出现在选择器里。
+
+## 落地后的补充事实
+
+- **派生文件写进本应用的 agent 目录，从不写 `~/.pi/agent`**。本地模式承诺「Pi 读你自己的配置」，那个目录里可能有用户手工维护的 `models.json`，合并进去就是覆盖。代价是：用户一旦加了服务，本地模式的 `PI_CODING_AGENT_DIR` 就指向本应用目录，因此同时打开借用开关，让 `~/.pi/agent` 里的 skills 与 prompt 模板继续加载。没加服务时行为完全不变。
+- **服务在 `models.json` 里的 id 由显示名 slug 得来**（如 `My DeepSeek` → `my-deepseek`），不是 uuid：这个字符串是模型选择器里 `provider/model` 的左半边。名字 slug 为空时回落到 `user-<uuid 前 8 位>`。同名 slug 覆盖托管 provider，即「用户组优先」。
+- **自定义 header 仅保留 `$` 前缀的环境变量引用**，字面值直接丢弃，界面本轮不提供 header 编辑。
+- **登出只清公司凭据**，用户组保留（用户 2026-09-10 决定），钥匙串锁着时也能安全登出。
+- 本 worktree 的根 `node_modules` 与 `src/runtime/node_modules` 此前都不完整，渲染层 DOM 测试因缺 `happy-dom` 完全跑不起来；已分别用 `pnpm install` 与 `npm ci` 装回。
 
 ## 范围外
 

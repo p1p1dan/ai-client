@@ -270,6 +270,17 @@ export class CredentialVault {
     this.cachedAvailable = null;
   }
 
+  /**
+   * Whether a save right now would encrypt.
+   *
+   * Public because the H/17 settings page has to tell the user when their key
+   * is being stored in the clear (constraint 3) — a silent plaintext fallback
+   * is the one outcome nobody should discover by reading the file.
+   */
+  encryptionAvailable(): boolean {
+    return this.isCryptoAvailable();
+  }
+
   private isCryptoAvailable(): boolean {
     if (this.cachedAvailable === null) {
       this.cachedAvailable = this.crypto.available();
@@ -637,11 +648,13 @@ export class CredentialVault {
     }
 
     let lastEmail: string | null = null;
+    let existing: RawEnvelope | null = null;
     try {
       const raw = readFileSync(this.vaultPath, 'utf-8');
       const validation = validateEnvelopeShape(JSON.parse(raw));
-      if (validation.ok && options.keepLastEmail) {
-        lastEmail = validation.envelope.lastEmail;
+      if (validation.ok) {
+        existing = validation.envelope;
+        if (options.keepLastEmail) lastEmail = validation.envelope.lastEmail;
       }
     } catch (error) {
       console.warn(
@@ -650,10 +663,19 @@ export class CredentialVault {
       );
     }
 
-    // Logout wipes BOTH groups (H/17 verification case 3): signing out on a
-    // shared machine must not leave the user's own API keys behind. Written as
-    // an explicit `null` rather than an absent field so a later read can tell
-    // "wiped" from "this vault predates the user group".
+    // Logout clears the COMPANY credential only (user ruling 2026-09-10). The
+    // services in the user group are the person's own third-party accounts,
+    // not the employer's — signing out of the work account is not a reason to
+    // destroy them, and re-entering every API key would be the real surprise.
+    // Carried over verbatim: this path must work with the keyring locked, so
+    // it must never need to decrypt that group.
+    const userGroup: Partial<RawEnvelope> =
+      existing?.userProviders === undefined
+        ? {}
+        : {
+            userProviders: existing.userProviders,
+            ...(existing.userProvidersEnc ? { userProvidersEnc: existing.userProvidersEnc } : {}),
+          };
     const envelope: RawEnvelope = {
       version: SCHEMA_VERSION,
       enc: 'none',
@@ -661,8 +683,7 @@ export class CredentialVault {
       invalidatedAt: null,
       encReason: 'ok',
       payload: null,
-      userProviders: null,
-      userProvidersEnc: 'none',
+      ...userGroup,
     };
 
     try {

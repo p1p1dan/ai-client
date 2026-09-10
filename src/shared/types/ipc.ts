@@ -231,6 +231,14 @@ export const IPC_CHANNELS = {
   PI_MODELS_SYNC: 'piModels:sync',
   PI_MODELS_OPEN_ADMIN: 'piModels:openAdmin',
 
+  // H/17 — AI services the user added themselves. Keys never cross this IPC:
+  // reads answer with `hasApiKey`, and an edit that omits the key keeps it.
+  USER_PROVIDERS_GET: 'userProviders:get',
+  USER_PROVIDERS_UPSERT: 'userProviders:upsert',
+  USER_PROVIDERS_REMOVE: 'userProviders:remove',
+  USER_PROVIDERS_SET_ENABLED: 'userProviders:setEnabled',
+  USER_PROVIDERS_FETCH_MODELS: 'userProviders:fetchModels',
+
   // R04 — Pi skills and prompt-template installation locations.
   PI_RESOURCES_GET_SETTINGS: 'piResources:getSettings',
   PI_RESOURCES_UPDATE_SETTINGS: 'piResources:updateSettings',

@@ -28,6 +28,7 @@ import { RemoteSettings } from './RemoteSettings';
 import { SettingsPageShell } from './SettingsPrimitives';
 import { TerminalAppearanceSettings } from './TerminalAppearanceSettings';
 import { TerminalSettings } from './TerminalSettings';
+import { UserProvidersSettings } from './UserProvidersSettings';
 import { WebInspectorSettings } from './WebInspectorSettings';
 
 interface SettingsContentProps {
@@ -103,6 +104,7 @@ export function SettingsContent({
           )}
           {activeCategory === 'pi' && (
             <>
+              <UserProvidersSettings />
               <PiModelManagementSettings />
               <PermissionPolicySettings repoPath={repoPath} />
               <PiResourcesSettings />

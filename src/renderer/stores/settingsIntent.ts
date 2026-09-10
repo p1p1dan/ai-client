@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { SettingsCategory } from '@/components/settings/constants';
 
 /**
  * R02-c — "open settings", requested from somewhere that cannot open it.
@@ -14,12 +15,18 @@ import { create } from 'zustand';
  */
 interface SettingsIntentState {
   pendingOpen: boolean;
-  requestSettings: () => void;
+  /**
+   * Which pane to land on, when the requester cares (H/17 L4 opens `pi`).
+   * Absent keeps whatever pane was last used, which is what `/settings` wants.
+   */
+  pendingCategory: SettingsCategory | null;
+  requestSettings: (category?: SettingsCategory) => void;
   clearSettingsRequest: () => void;
 }
 
 export const useSettingsIntentStore = create<SettingsIntentState>((set) => ({
   pendingOpen: false,
-  requestSettings: () => set({ pendingOpen: true }),
-  clearSettingsRequest: () => set({ pendingOpen: false }),
+  pendingCategory: null,
+  requestSettings: (category) => set({ pendingOpen: true, pendingCategory: category ?? null }),
+  clearSettingsRequest: () => set({ pendingOpen: false, pendingCategory: null }),
 }));

@@ -45,6 +45,7 @@ import { registerTempWorkspaceHandlers } from './tempWorkspace';
 import { cleanupTmuxSync, registerTmuxHandlers } from './tmux';
 import { registerUpdaterHandlers } from './updater';
 import { registerUsageHandlers } from './usage';
+import { registerUserProviderHandlers } from './userProviders';
 import { registerWebInspectorHandlers } from './webInspector';
 import {
   cleanupWorkerManager,
@@ -82,6 +83,7 @@ export function registerIpcHandlers(): void {
   registerPiModelHandlers();
   registerPiPermissionHandlers();
   registerPiResourceHandlers();
+  registerUserProviderHandlers();
   registerUsageHandlers();
   registerAnnouncementHandlers();
   registerPiTuiHandlers();

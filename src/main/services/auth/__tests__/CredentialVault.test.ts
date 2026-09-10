@@ -259,14 +259,32 @@ describe('CredentialVault — user-added service group (H/17 L1)', () => {
     expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [makeProvider()] });
   });
 
-  it('logout wipes the user group too, and the secret leaves the file', async () => {
+  it('logout clears the company credential and keeps the user services', async () => {
     const vault = openVault();
+    const sentinel = 'CLAUDE-SENTINEL-77a2';
+    await vault.save(
+      makePayload({ claude: { baseUrl: 'https://cch.example.com/v1', authToken: sentinel } })
+    );
     await vault.saveUserProviders([makeProvider()]);
 
     await vault.clear({ keepLastEmail: true });
 
-    expect(readFileSync(join(baseDir, VAULT_FILE), 'utf-8')).not.toContain('USER-KEY-4b1e7a');
-    expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [] });
+    expect(readFileSync(join(baseDir, VAULT_FILE), 'utf-8')).not.toContain(sentinel);
+    expect(vault.read()).toEqual({ status: 'cleared', lastEmail: 'user@jcdz.cc' });
+    expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [makeProvider()] });
+  });
+
+  it('logout keeps the user group even while the keyring is locked', async () => {
+    const writer = openVault();
+    await writer.saveUserProviders([makeProvider()]);
+
+    // A locked reader cannot decrypt the group, so clear() must carry its
+    // bytes across without ever looking inside them.
+    const locked = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    locked.promoteCrypto(fakeUnavailableCrypto());
+    await locked.clear({ keepLastEmail: true });
+
+    expect(openVault().readUserProviders()).toEqual({ status: 'ok', providers: [makeProvider()] });
   });
 
   it('reads locked, never invalid, when the group was encrypted and the keyring is not open', async () => {
