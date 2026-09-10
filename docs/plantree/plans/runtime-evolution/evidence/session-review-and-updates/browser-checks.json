@@ -1,0 +1,23 @@
+{
+  "checks": [
+    "shell mounted",
+    "review displays the second change",
+    "1000px review fits without clipping",
+    "editor mounted",
+    "review reopens beside chat",
+    "files switch closes review",
+    "editor state preserved while review shown",
+    "session switching clears previous change list",
+    "switching back restores change list",
+    "switching editor workspace does not dismiss review",
+    "restoring editor workspace keeps review visible",
+    "update dialog opens",
+    "downloaded state displayed",
+    "Later removes dialog and backdrop",
+    "chat remains focusable after Later",
+    "persistent update entry reopens dialog",
+    "Escape removes dialog and backdrop",
+    "no install without restart click"
+  ],
+  "scope": "Real WorkspaceShell, SessionBar, SessionReviewPanel, UpdateNotification and stores; unrelated hosts and Electron IPC mocked; Chromium mouse and Escape input events in Linux Electron."
+}

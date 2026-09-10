@@ -159,12 +159,13 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | B / 6 | 运行状态/计时/摘要 | 🟡 原核心现场通过；F7b 去重已提交、在 test.13 之后 |
 | C / 3 | 权限展示降噪 | 🟡 原流程部分通过；结构化权限链与重画已提交，待新包回归 |
 | C / 8 | 问答卡交互 | 🟡 UI 已实现；通用 question 无生产者（F5），不能把权限卡生产者当作通用提问工具 |
-| C / 9 | diff 开关/展开 | 🟡 原部分通过；F6 双栏是体验扩展，native 不冒充 SDK patch |
+| C / 9 | 当前对话审阅栏 | 🟡 R1/R2 已提交 `6be1d70a`，自动化与隔离 Electron 验证通过；native Edit/Write 执行时差异、旧历史预览；待安装版复验 |
 | D / 11 | 上下文用量详情 | ✅ 核心现场通过；F7e 归既有行为，增强另排 |
 | E / 12 | 输出跟随 | ✅ 原核心现场通过；F7f 输入框增高已入 test.13，待复验 |
 | F / 13 | 目录行变更量 | 🟡 已实现，目标现场受 F3 阻断 |
 | F / 14 | 旧 GitView / IPC 等死代码清理 | ✅ 实现及回归；后续测试包整体 GUI 继续回归 |
 | F / 15 | cwd 缺失与临时目录恢复 | 🟡 test.12 当前恢复流程通过；F2-a/c 后续修复待 test.13 验证，F2-b 单列 |
+| G / 16 | 软件更新提醒 | 🟡 U1 已提交 `b919b1aa`，自动化与隔离弹窗验证通过；真实更新源下载/安装按用户 2026-09-10 决定暂缓验证 |
 
 [GUI 功能定义](../gui-sdk-experience/TODO.md) · [验收方法](../gui-sdk-experience/现场验收清单.md) · [test.11 现场](../../../../Windows-P4-6-evidence/gui-a-e-findings.md) · [test.12 现场](../../../../Windows-P4-6-evidence/test12-reverify.md)。
 
@@ -180,7 +181,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F3 GUI Git 输出丢失 | 故障已复现，根因机制/方案未定；Q7 只修正判错，未修输出 | [事实与方案](../../../plans/2026-09-09-gui-defect-decisions.md#f3--gui-起的-git-子进程输出丢失) |
 | F4 重试 | 🟡 自有重试层已实现，现场未触发；stream 开始后的恢复不在该层范围 | `27d4b7be`；test.12/13 |
 | F5 通用问答缺生产者 | 能力缺口，非 native 回归；归 P5-1 批，不阻塞 P4 原能力 | [功能决策](../../../plans/2026-09-09-gui-defect-decisions.md#f5--无提问工具questioncard--扩展问答弹不出来) |
-| F6 双栏 diff | 待产品范围/体验决定；现有单栏 patch 不等于功能失败 | GUI 9 |
+| F6 对话修改审阅 | 2026-09-10 采用右侧审阅，R1/R2 本机验证完成并提交 `6be1d70a`，尚未打包 | [R1/R2 与更新 U1](topics/session-review-and-updates.md) |
 | F7a/F7c 权限卡样式/尺寸 | 🟡 结构化事件 `db175931` 与卡片重画 `f62b6af4` 已提交；待验证 | 不在 test.13；通用问答卡仍受 F5 限制 |
 | F7b 重复状态行 | 🟡 已修、待复验；不再要求截图定位 | `a3debdf6`，不在 test.13 |
 | F7d / EFFORT-1 | 🟡 effort 传递与默认 medium 已修；GPT 慢响应本次未证明为本地缺陷 | `4145fa65` / `c0ae2a34`；test.13 |
@@ -192,7 +193,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 
 ## 相关决策入口
 
-F3、F2-b、TUI 范围冲突分别关联上表节点，具体待答问题只维护在 [open-questions](open-questions.md)。F6/F7e 是候选增强，不新增为基础功能阻塞。
+F3、F2-b、TUI 范围冲突分别关联上表节点，具体待答问题只维护在 [open-questions](open-questions.md)。F6 已按用户选择实施右侧审阅（[范围与验证](topics/session-review-and-updates.md)）；F7e 仍为候选增强，不新增为基础功能阻塞。
 
 ## 证据与维护
 

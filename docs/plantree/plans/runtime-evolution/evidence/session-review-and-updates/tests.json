@@ -1,0 +1,211 @@
+{
+  "baseCommit": "80b7e3ab",
+  "source": "uncommitted worktree",
+  "command": "NODE_OPTIONS=--max-old-space-size=1200 ./node_modules/.bin/vitest run <batch files> --maxWorkers=1 --no-file-parallelism",
+  "passed": 364,
+  "failed": 0,
+  "files": 24,
+  "batches": [
+    {
+      "batch": "batch-1",
+      "passed": 63,
+      "failed": 0,
+      "files": [
+        {
+          "path": "src/runtime/__tests__/fileChange.test.ts",
+          "status": "passed",
+          "tests": 7
+        },
+        {
+          "path": "src/runtime/__tests__/session.test.ts",
+          "status": "passed",
+          "tests": 18
+        },
+        {
+          "path": "src/runtime/__tests__/tools.test.ts",
+          "status": "passed",
+          "tests": 38
+        }
+      ]
+    },
+    {
+      "batch": "batch-2",
+      "passed": 50,
+      "failed": 0,
+      "files": [
+        {
+          "path": "src/runtime/__tests__/guiEventContract.test.ts",
+          "status": "passed",
+          "tests": 7
+        },
+        {
+          "path": "src/renderer/stores/__tests__/chatSessionsHistory.test.ts",
+          "status": "passed",
+          "tests": 27
+        },
+        {
+          "path": "src/renderer/stores/__tests__/nativeStreamReplay.test.ts",
+          "status": "passed",
+          "tests": 16
+        }
+      ]
+    },
+    {
+      "batch": "batch-3",
+      "passed": 12,
+      "failed": 0,
+      "files": [
+        {
+          "path": "src/renderer/components/__tests__/updateNotification.test.ts",
+          "status": "passed",
+          "tests": 2
+        },
+        {
+          "path": "src/main/services/updater/__tests__/AutoUpdater.test.ts",
+          "status": "passed",
+          "tests": 4
+        },
+        {
+          "path": "src/renderer/components/workspace-shell/__tests__/sessionReview.test.ts",
+          "status": "passed",
+          "tests": 5
+        },
+        {
+          "path": "src/renderer/components/workspace-shell/__tests__/sessionReviewInteraction.test.ts",
+          "status": "passed",
+          "tests": 1
+        }
+      ]
+    },
+    {
+      "batch": "batch-4",
+      "passed": 67,
+      "failed": 0,
+      "files": [
+        {
+          "path": "src/renderer/components/workspace-shell/__tests__/centerLayoutModel.test.ts",
+          "status": "passed",
+          "tests": 47
+        },
+        {
+          "path": "src/renderer/components/workspace-shell/__tests__/panelVisibilityStatic.test.ts",
+          "status": "passed",
+          "tests": 11
+        },
+        {
+          "path": "src/renderer/components/workspace-shell/__tests__/singleSessionViewStatic.test.ts",
+          "status": "passed",
+          "tests": 4
+        },
+        {
+          "path": "src/renderer/components/workspace-shell/__tests__/tuiEditorAndRailAlignStatic.test.ts",
+          "status": "passed",
+          "tests": 5
+        }
+      ]
+    },
+    {
+      "batch": "batch-5",
+      "passed": 28,
+      "failed": 0,
+      "files": [
+        {
+          "path": "src/renderer/components/chat/__tests__/toolDiff.test.ts",
+          "status": "passed",
+          "tests": 20
+        },
+        {
+          "path": "src/renderer/components/chat/__tests__/toolDiffInteraction.test.ts",
+          "status": "passed",
+          "tests": 4
+        },
+        {
+          "path": "src/renderer/stores/settings/__tests__/removedSettings.test.ts",
+          "status": "passed",
+          "tests": 3
+        },
+        {
+          "path": "src/renderer/stores/settings/__tests__/toolDiffSetting.test.ts",
+          "status": "passed",
+          "tests": 1
+        }
+      ]
+    },
+    {
+      "batch": "batch-6",
+      "passed": 20,
+      "failed": 0,
+      "files": [
+        {
+          "path": "src/agent-host/__tests__/piSessionTimeline.test.ts",
+          "status": "passed",
+          "tests": 5
+        },
+        {
+          "path": "src/agent-host/__tests__/workerStripOnlyCompat.test.ts",
+          "status": "passed",
+          "tests": 4
+        },
+        {
+          "path": "src/renderer/components/chat/__tests__/fontDomainScan.test.ts",
+          "status": "passed",
+          "tests": 11
+        }
+      ]
+    },
+    {
+      "batch": "batch-7",
+      "passed": 124,
+      "failed": 0,
+      "files": [
+        {
+          "path": "src/renderer/components/chat/__tests__/chatTimelineLayout.test.ts",
+          "status": "passed",
+          "tests": 28
+        },
+        {
+          "path": "src/renderer/components/chat/__tests__/timelineRetryInteraction.test.ts",
+          "status": "passed",
+          "tests": 1
+        },
+        {
+          "path": "src/renderer/components/chat/__tests__/toolCard.test.ts",
+          "status": "passed",
+          "tests": 95
+        }
+      ]
+    }
+  ],
+  "reviewFixRerun": {
+    "date": "2026-09-10",
+    "passed": 169,
+    "failed": 0,
+    "files": 12,
+    "batches": [
+      {
+        "passed": 28,
+        "failed": 0,
+        "files": [
+          "src/runtime/__tests__/fileChange.test.ts",
+          "src/renderer/components/workspace-shell/__tests__/sessionReview.test.ts",
+          "src/renderer/components/workspace-shell/__tests__/sessionReviewInteraction.test.ts",
+          "src/renderer/components/workspace-shell/__tests__/panelVisibilityStatic.test.ts",
+          "src/renderer/components/__tests__/updateNotification.test.ts"
+        ]
+      },
+      {
+        "passed": 141,
+        "failed": 0,
+        "files": [
+          "src/runtime/__tests__/tools.test.ts",
+          "src/renderer/stores/__tests__/chatSessionsHistory.test.ts",
+          "src/renderer/stores/__tests__/nativeStreamReplay.test.ts",
+          "src/renderer/components/workspace-shell/__tests__/tuiEditorAndRailAlignStatic.test.ts",
+          "src/renderer/components/workspace-shell/__tests__/singleSessionViewStatic.test.ts",
+          "src/renderer/components/workspace-shell/__tests__/centerLayoutModel.test.ts",
+          "src/main/services/updater/__tests__/AutoUpdater.test.ts"
+        ]
+      }
+    ]
+  }
+}
