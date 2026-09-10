@@ -147,6 +147,22 @@ describe('[F4-9] the pending turn head carries the ↑ prompt count (F456 §7.4)
     return source.slice(start, end === -1 ? undefined : end);
   }
 
+  it('[F7b] the turn head yields to the pending head instead of printing a second copy', () => {
+    // The field pass photographed 「正在输出 · 3s」 twice — once in the timeline,
+    // once above the composer — because the turn head's only guard was
+    // `inFlightSession`, and a send whose user echo has not landed yet arms
+    // `pendingReply` on the last turn while the session status is not yet in
+    // flight. Both terms have to be in the SAME guard; dropping either one
+    // restores a duplicate that no type error and no other test would catch.
+    const guard = source.slice(source.indexOf('{status && !('));
+    const head = guard.slice(0, guard.indexOf('}'));
+    expect(head).toContain('inFlightSession');
+    expect(head).toContain('statusOwnedByPendingHead');
+    // And the parent has to answer that question from the same source the
+    // pending head itself renders from.
+    expect(source).toContain('statusOwnedByPendingHead={pendingSendStatus != null}');
+  });
+
   it('[F4-9] PendingTurnHead passes promptChars from its own required snapshot', () => {
     const body = pendingHeadBody();
     expect(body).toContain('deriveTurnStatus({');

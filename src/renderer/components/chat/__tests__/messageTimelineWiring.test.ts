@@ -499,7 +499,12 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('deriveTurnStatus(');
     // F2's "lost stopwatch": this row going missing while work continues IS the
     // defect, so the gate must be the status itself, never a completion test.
-    expect(turn).toContain('{status && !(isLastTurn && inFlightSession) && (');
+    // F7b widened the gate: the pending head owns the running status while a
+    // send's user echo has not landed, so the turn must yield to it too — see
+    // messageTimelinePendingStatic.test.ts for that half.
+    expect(turn).toContain(
+      '{status && !(isLastTurn && (inFlightSession || statusOwnedByPendingHead)) && ('
+    );
     expect(turn).toContain('<SessionActivityStatus');
     expect(turn).toContain('<TurnStatusContent status={status} />');
   });

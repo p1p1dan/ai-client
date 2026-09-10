@@ -643,6 +643,7 @@ export function MessageTimeline({
                     // F2 §4.5: same last-turn-only discipline as `nowMs` — a
                     // pending reply belongs to the turn the send opened.
                     pendingReply={isLastTurn ? pendingReply : null}
+                    statusOwnedByPendingHead={pendingSendStatus != null}
                     baselineKnown={sendBaseline != null}
                     baselineMessageId={sendBaseline?.messageId ?? null}
                     // T-33: session-scoped retry belongs to the turn actually
@@ -1052,6 +1053,18 @@ interface ChatTurnProps {
   sendStatus: TurnSendStatus | null;
   /** F2 §4.5: the Host still owes a reply this renderer stopped waiting for. `null` for every turn but the last. */
   pendingReply: PendingReplyWatch | null;
+  /**
+   * F7b: `PendingTurnHead` is on screen and already showing this turn's running
+   * status, so this turn must not draw a second copy of it.
+   *
+   * The head's own guard asked `inFlightSession`, which is a different
+   * question — a send whose user echo has not landed yet arms `pendingReply`
+   * on the last turn (making its head render) while the session status has not
+   * become in-flight, and the field pass saw exactly that: 「正在输出 · 3s」and
+   * 「等待确认 · 2s」printed twice, once in the timeline and once above the
+   * composer.
+   */
+  statusOwnedByPendingHead: boolean;
   /** A send-begin baseline exists for this session (`turnSendStatus.baseline`). */
   baselineKnown: boolean;
   /** Last message id in the bucket when this session's last send began. */
@@ -1109,6 +1122,7 @@ const ChatTurn = memo(function ChatTurn({
   inFlightSession,
   sendStatus,
   pendingReply,
+  statusOwnedByPendingHead,
   baselineKnown,
   baselineMessageId,
   retry,
@@ -1414,7 +1428,7 @@ const ChatTurn = memo(function ChatTurn({
             but the row no longer has a completed state (`Worked for 12s ·
             2 tools` retired with the meta row). A finished turn renders
             nothing here at all, which is the point of the change. */}
-        {status && !(isLastTurn && inFlightSession) && (
+        {status && !(isLastTurn && (inFlightSession || statusOwnedByPendingHead)) && (
           <div className={turnHeadClass()}>
             <TurnStatusContent status={status} />
           </div>
