@@ -99,3 +99,45 @@ it('supports selection, keyboard, multi-select, free input, failed submission an
     vi.unstubAllGlobals();
   }
 });
+
+it('counts down on the permission card and denies once at zero', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  vi.useFakeTimers({ now: 1_000_000 });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const respond = vi.fn(async () => true);
+  const permission = {
+    id: 'p',
+    type: 'permission_request',
+    permissionId: 'call-1',
+    toolName: 'write',
+    permissionKind: 'file_change',
+    toolInput: { path: '/repo/a.txt', content: 'pong', workspace: '/repo' },
+    permissionExpiresAt: 1_003_000,
+  } as ChatBlock;
+  try {
+    await act(async () =>
+      root.render(
+        createElement(QuestionCard, {
+          variant: 'permission',
+          block: permission,
+          canRespond: true,
+          onRespondPermission: respond,
+        })
+      )
+    );
+    expect(container.querySelector('[role="timer"]')?.textContent).toBe(
+      '若 3 秒内未响应将自动拒绝'
+    );
+    await act(async () => vi.advanceTimersByTime(3_000));
+    expect(respond).toHaveBeenCalledExactlyOnceWith('deny');
+    await act(async () => vi.advanceTimersByTime(3_000));
+    expect(respond).toHaveBeenCalledOnce();
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  }
+});

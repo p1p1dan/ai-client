@@ -1,6 +1,6 @@
 import type { PermissionDecisionId, QuestionItem } from '@shared/types/runtimeEvents';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { Input } from '@/components/ui/input';
@@ -597,6 +597,27 @@ function PermissionQaCard({
 }) {
   const view = derivePermissionCardView(block, canRespond);
   const [submitting, setSubmitting] = useState(false);
+  // PI-Desktop PermissionCard: tick once a second toward the deadline the
+  // engine enforces, and answer `deny` once at zero — the same answer its own
+  // abort gives, so whichever lands first reports the same outcome.
+  const expiresAt = view.state === 'resolved' ? undefined : block.permissionExpiresAt;
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (expiresAt === undefined) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [expiresAt]);
+  const secondsLeft = permissionSecondsLeft(expiresAt, now);
+  const autoDenied = useRef(false);
+  useEffect(() => {
+    if (secondsLeft !== 0 || view.waiting || submitting || autoDenied.current) return;
+    autoDenied.current = true;
+    setSubmitting(true);
+    void Promise.resolve(onRespond?.('deny')).then((ok) => {
+      if (ok === false) setSubmitting(false);
+    });
+  }, [secondsLeft, view.waiting, submitting, onRespond]);
   // T-34: "from subagent" chip, fed by the adjacent activity store's
   // permissionId → origin index. Null for main-agent requests, old Hosts
   // (no `agentId` on the event) and resolved cards (the index entry is
@@ -651,10 +672,19 @@ function PermissionQaCard({
           </div>
         )}
         {view.detail && <PermissionDetailBody detail={view.detail} />}
-        {view.workspace && (
-          <p className="truncate px-1 text-meta text-muted-foreground" title={view.workspace}>
-            项目：{view.workspace}
-          </p>
+        {(view.workspace || secondsLeft !== null) && (
+          <div className="flex min-w-0 items-center gap-2 px-1 text-meta text-muted-foreground">
+            {view.workspace && (
+              <p className="min-w-0 flex-1 truncate" title={view.workspace}>
+                项目：{view.workspace}
+              </p>
+            )}
+            {secondsLeft !== null && (
+              <span role="timer" className="ml-auto shrink-0 tabular-nums">
+                若 {secondsLeft} 秒内未响应将自动拒绝
+              </span>
+            )}
+          </div>
         )}
         {view.waiting ? (
           <p className="px-1 text-markdown text-muted-foreground">{PERMISSION_WAITING}</p>
