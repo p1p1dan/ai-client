@@ -4,6 +4,7 @@ import type { RuntimeHostIoService } from '../../contracts.ts';
 import { errorCode } from '../../host/errors.ts';
 
 export const REVIEW_FILE_BYTES = 256 * 1024;
+// Per side, as PI-Desktop's review.rs MAX_DIFF_LINES.
 const REVIEW_LINES = 4000;
 
 export type BeforeContent =
@@ -59,7 +60,7 @@ export function createFileChange(
     return { ...base, unavailable: 'binary' };
   const oldLines = lines(before.text ?? '');
   const newLines = lines(after);
-  if (oldLines.length + newLines.length > REVIEW_LINES)
+  if (oldLines.length > REVIEW_LINES || newLines.length > REVIEW_LINES)
     return { ...base, unavailable: 'too-large' };
 
   let prefix = 0;

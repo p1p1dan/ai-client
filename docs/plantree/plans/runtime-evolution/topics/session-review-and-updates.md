@@ -41,5 +41,5 @@ Role: implementation-plan。日期：2026-09-10。依据：用户两张参考图
 
 - 本机验证：[证据](../evidence/session-review-and-updates/README.md)。基线 `80b7e3ab`；实现提交为 `6be1d70a`（R1/R2）与 `b919b1aa`（U1），含提交前评审修复，未打包；上述勾选指实现与本机门禁，不含安装版现场签收。
 - native 记录默认启用，可通过 `AICLIENT_SESSION_REVIEW=0` 在 worker 关闭；对应 `ToolsConfig.recordFileChanges` 已验证关闭仍可写文件。UI 使用持久化 `showSessionReview`，默认只提供入口，不自动打开面板；旧 `showToolDiff` 字段退役。
-- 每侧文本最多 256 KiB、合计 4000 行、LCS 中段最多 100 万单元、patch 最多 64 KiB；超预算保留记录与说明，不返回伪 diff。
+- 每侧文本最多 256 KiB、每侧最多 4000 行（同 PI-Desktop `review.rs` 的 `MAX_DIFF_LINES`）、裁掉首尾相同行后 LCS 中段最多 100 万单元、patch 最多 64 KiB；超预算保留记录与说明，不返回伪 diff。PI-Desktop 另有每侧 512 KiB 与不裁首尾的 200 万单元上限（约 1414 行/侧即超限），pi-coding-agent 的 edit diff 用 Myers 算法且不设上限。
 - 此次按对话记录 Edit/Write，未新增文件回退与 Bash/外部修改归因。旧历史与 legacy runtime 缺执行快照时保留明确预览。

@@ -44,8 +44,13 @@ describe('message-owned file changes', () => {
       });
   });
   it('bounds file sizes, line counts, patch sizes, and comparison work', () => {
+    const large = Array.from({ length: 4000 }, (_, i) => `line ${i}\n`).join('');
+    expect(
+      createFileChange('a', { text: large }, large.replace('line 2000\n', 'x\n')).patch
+    ).toContain('@@ -1998,7 +1998,7 @@');
     for (const [before, after] of [
       ['', 'x'.repeat(REVIEW_FILE_BYTES + 1)],
+      ['a\n', 'a\n'.repeat(4001)],
       ['a\n'.repeat(2100), 'b\n'.repeat(2100)],
       ['a\n'.repeat(1100), 'b\n'.repeat(1100)],
       ['', 'x'.repeat(70_000)],
