@@ -159,7 +159,29 @@
 | F2-b | 🟠 | 删除 TEMP 分组中单条对话后整个分组不显示，其余对话落到其他工作区；重启后这些对话不再显示 | 待复现；现场未检查会话文件与索引，不宣称数据被物理删除 |
 | F2-c | 🟠 | 自建目录 `E:\e\test` 结束对话并删除后，resume 报 `Pi worker working directory is missing` | 与 `dbead94b` 修的 cwd 缺失重建**是两条路径**（该错误来自 Main 侧前置校验，不是 spawn ENOENT）；目录是否属于配置的临时根尚未确认 |
 
-### TUI-1 的决策口径（待用户拍板）
+### Linux 侧本轮处理（2026-09-10）
+
+| 编号 | 处理 | 提交 |
+|---|---|---|
+| EFFORT-1 | 已修：`startSend` 现按 turn 的 effort 优先、bootstrap effort 兜底传 `thinkingLevel` | `4145fa65` |
+| TUI-1 | **按方案 C 落地**：只按会话文件头判定，确认是 v4 才在入口拒绝并说明原因；读不到/解析不出一律放行；Main 侧在取会话所有权之前同样拒绝 | `0644ba3d` |
+| PERM-1 | 已修：权限档按下即关，不再等 worker 回执。D14 返工把 U30 rev.2 的 `closeOnClick` 口径改成了等 await，worker 慢/拒绝时弹层就留着不走 | `1e1e4469` |
+| F2-c | 已修文案链路：新增 `workspace_missing` 错误码，给出「恢复原目录或归档会话」两条出路并保留路径。**目录本身不重建**——用户自建目录不该被悄悄重建 | `3bd3f547` |
+| F2-a | 已修一类：两个目录种类此前读不同的设置副本（`readSharedSettings` vs `readSettings`），改用户刚改还没落盘时两者会给出不同的根 | `e817fc2a` |
+| F7f | 已改：追问输入框上限从 56px（2.3 行）放宽到八行再滚动，用的仍是这条分支自己的 24px 行 | `87f3dc7d` |
+
+### 仍需用户参与的三件事
+
+1. **不选档位时的默认思考强度**：native 落到 loop 默认的 `off`，legacy 是交给 Pi 用它自己的默认（`medium`）。影响每个会话的成本与延迟，属产品决策，本轮未擅自改。
+2. **F7b「正在输出」重复显示**：composer 的状态行在 T-31 已不再显示发送时钟（`shouldShowStatusLine` 只看读附件/错误/大附件），所以第二处不在那里。需要现场截图指认第二处的位置才能修，不猜。
+3. **F7a / F7c 卡片样式与尺寸**：属视觉口径，需要设计判断而不是代码判断。
+
+### F7e 定性：预期行为，不是 native 回归
+
+`usage.updated` 由两个后端各自在**轮次结束**时产生（legacy `piWorkerSession.ts:971`、native `projector.ts:289`），resume 本身不产生用量事件。所以重启后未发消息前上下文详情为空，legacy 同样如此。
+**可选增强（未开工）**：resume 时按恢复出的消息估算上下文占用并补发一次快照。要点是事件顺序——它必须晚于渲染层认定会话激活，否则被丢弃；因此不是一行改动，单独排期。
+
+### TUI-1 的决策口径（2026-09-10 已选 C）
 
 我们的 v4 由 `pi-agent-core` 的 `JsonlSessionRepo` 读写，互通测试覆盖的也是它；而 GUI 打开 TUI 走的是 `piTuiSession.ts` 的 `pi --session <file>`，那条路径由 **pi-coding-agent 的 SessionManager** 解析，只认旧格式的 `type: 'session'` 头。三个方向：
 
