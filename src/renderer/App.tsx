@@ -37,6 +37,7 @@ import { BackgroundLayer } from './components/layout/BackgroundLayer';
 import { GitMissingNotice } from './components/layout/GitMissingNotice';
 import { WindowTitleBar } from './components/layout/WindowTitleBar';
 import { RemoteAuthPromptHost } from './components/remote/RemoteAuthPromptHost';
+import { AgentMigrationPrompt } from './components/settings/AgentMigrationPrompt';
 import { SettingsDialog } from './components/settings/SettingsDialog';
 import { TempWorkspaceDialogs } from './components/temp-workspace/TempWorkspaceDialogs';
 import { UpdateNotification } from './components/UpdateNotification';
@@ -1009,6 +1010,13 @@ export default function App() {
             survives the onboarding probes that were retired; it just no longer
             blocks the way in. */}
         <GitMissingNotice />
+
+        {/* H/21 P1 — the one-time offer to bring an existing `~/.pi/agent`
+            over. Self-gating: it inspects once, renders nothing at all unless
+            there is something to copy, and remembers the answer. Mounted here
+            rather than inside settings because the whole point is reaching the
+            user who never opens settings (H/19 point-check). */}
+        <AgentMigrationPrompt />
 
         {/* Unsaved Prompt Host */}
         <UnsavedPromptHost />

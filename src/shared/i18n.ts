@@ -616,6 +616,19 @@ export const zhTranslations: Record<string, string> = {
   '{{copied}} copied, {{replaced}} replaced, {{skipped}} left alone':
     '复制 {{copied}} 项，替换 {{replaced}} 项，保持原样 {{skipped}} 项。',
 
+  // H/21 P1：首启只弹一次的迁移对话框。
+  'Found an existing Pi setup on this machine. Copying it over takes a moment and changes nothing in your own directory.':
+    '这台机器上有你自己的 Pi 配置。搬过来只要一会儿，你原来的目录不会有任何改动。',
+  'Your AI services include API keys. Copying them stores a copy in this app’s own credential vault. Uncheck that row to leave them out.':
+    '「AI 服务」里带着 API key。复制过来会在本应用自己的密钥库里存一份。不想这样就把那一行的勾去掉。',
+  'Anything this app already has is left alone. You can do this later in Settings.':
+    '本应用这边已经有的一律不动。现在不弄也行，以后在设置里随时可以做。',
+  'Not now': '以后再说',
+  // Not previously in the catalog — a bare English `Done` in a Chinese dialog
+  // is the same residue the field report flagged, so it is added here rather
+  // than created anew.
+  Done: '完成',
+
   // H/19 U4：用户自装的 pi 扩展。
   'Extensions installed for your account. They run inside the agent process and can add tools, skills and commands.':
     '装在你账户下的扩展。它们跑在 agent 进程里，可以往会话里加工具、技能和命令。',

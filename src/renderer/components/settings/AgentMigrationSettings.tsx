@@ -25,26 +25,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Ident } from '@/components/ui/ident';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
+// H/21 P1: label and "would this copy anything" now live with the first-launch
+// prompt's rules, so the dialog and this pane cannot drift apart on either.
+import { defaultMigrationSelection, migrationKindLabel } from './agentMigrationPrompt';
 import { SettingsSectionBlock } from './SettingsPrimitives';
 
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
-}
-
-/** One label per kind. Kept here because it is display text, not a domain fact. */
-function kindLabel(kind: MigrationItemKind): string {
-  switch (kind) {
-    case 'skills':
-      return 'Skills';
-    case 'promptTemplates':
-      return 'Prompt templates';
-    case 'agentsFile':
-      return 'AGENTS.md';
-    case 'providers':
-      return 'AI services';
-    case 'sessions':
-      return 'Conversation history';
-  }
 }
 
 export function AgentMigrationSettings() {
@@ -63,13 +50,7 @@ export function AgentMigrationSettings() {
       // Pre-select everything that would actually copy something. A user who
       // opens this page and presses the button gets the obvious outcome; the
       // checkboxes are there to take things OUT.
-      setSelected(
-        new Set(
-          next.items
-            .filter((item) => item.total > item.conflicts + item.blocked)
-            .map((item) => item.kind)
-        )
-      );
+      setSelected(new Set(defaultMigrationSelection(next)));
       setError(null);
     } catch (cause) {
       setError(messageOf(cause));
@@ -189,12 +170,12 @@ function MigrationRow({
         checked={checked}
         disabled={disabled}
         onCheckedChange={(value) => onCheckedChange(value === true)}
-        aria-label={t(kindLabel(item.kind))}
+        aria-label={t(migrationKindLabel(item.kind))}
         className="mt-0.5"
       />
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="text-ui font-medium">{t(kindLabel(item.kind))}</span>
+          <span className="text-ui font-medium">{t(migrationKindLabel(item.kind))}</span>
           <Badge variant="secondary">{`${item.total}`}</Badge>
           {pending === 0 && <Badge variant="success">{t('Already here')}</Badge>}
         </div>
@@ -236,7 +217,7 @@ function MigrationReport({ outcomes }: { outcomes: MigrationOutcome[] }) {
         <div key={outcome.kind} className="space-y-1">
           <p className="text-meta text-muted-foreground">
             <FolderInput className="mr-1 inline h-3 w-3" />
-            {`${t(kindLabel(outcome.kind))}: `}
+            {`${t(migrationKindLabel(outcome.kind))}: `}
             {t('{{copied}} copied, {{replaced}} replaced, {{skipped}} left alone', {
               copied: outcome.copied,
               replaced: outcome.overwritten,

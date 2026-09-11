@@ -34,6 +34,10 @@ export const STORAGE_KEYS = {
   SC_CHANGES_EXPANDED: 'aiclient-sc-changes-expanded',
   SC_HISTORY_EXPANDED: 'aiclient-sc-history-expanded',
   SIDEBAR_RECENT_COLLAPSED: 'aiclient-sidebar-recent-collapsed', // T-26 sidebar Recent section
+  // H/21 P1: the one-time "bring your Pi setup over" dialog has been shown.
+  // Set whether the user ran the migration or dismissed it — the point is that
+  // we offered, and the settings pane keeps the door open either way.
+  AGENT_MIGRATION_PROMPTED: 'aiclient-agent-migration-prompted',
 } as const;
 
 // Helper to get initial value from localStorage
