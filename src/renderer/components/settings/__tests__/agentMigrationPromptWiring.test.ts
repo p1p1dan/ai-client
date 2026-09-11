@@ -38,10 +38,10 @@ describe('AgentMigrationPrompt wiring (H/21 P1)', () => {
     expect(PROMPT).toContain('defaultMigrationSelection(next)');
   });
 
-  it('[MPW-03] skips the directory scan once the question has been answered', () => {
+  it('[MPW-03] skips the directory scan once the user has opted out', () => {
     // An inspection walks `~/.pi/agent`. Doing it on every launch forever, for
-    // a question already answered, is work nobody asked for.
-    expect(PROMPT).toContain('if (alreadyAsked()) return;');
+    // someone who pressed "Don't ask again", is work nobody asked for.
+    expect(PROMPT).toContain('if (alreadySettled()) return;');
   });
 
   it('[MPW-04] never overwrites from this dialog', () => {
@@ -52,12 +52,22 @@ describe('AgentMigrationPrompt wiring (H/21 P1)', () => {
     expect(PROMPT).not.toContain('setOverwrite');
   });
 
-  it('[MPW-05] remembers the answer whether it was yes or no', () => {
-    // Three ways out of this dialog, and all three have to count as answered,
-    // or it returns next launch to someone who already said no.
-    expect(PROMPT).toContain('const dismiss = useCallback(() => {');
-    expect(PROMPT).toContain('markAsked();');
-    expect(PROMPT).toContain('if (!next) dismiss();');
+  it('[MPW-05] keeps the permanent exit separate from the transient one', () => {
+    // Collapsing these was the first draft's bug: "Not now" promised a later
+    // and never delivered one (user feedback, 2026-09-10).
+    expect(PROMPT).toContain('const notNow = useCallback(() => {');
+    expect(PROMPT).toContain('const neverAsk = useCallback(() => {');
+    // Escape and the backdrop route to the transient one.
+    expect(PROMPT).toContain('if (!next) notNow();');
+  });
+
+  it('[MPW-05b] only the explicit opt-out and a finished copy write the flag', () => {
+    // Two writers, both named here. A third would mean some other exit is
+    // silently permanent — exactly what this split exists to prevent.
+    const writes = PROMPT.match(/markSettled\(\);/g) ?? [];
+    expect(writes).toHaveLength(2);
+    expect(PROMPT).toContain('onClick={neverAsk}');
+    expect(PROMPT).toContain('onClick={notNow}');
   });
 
   it('[MPW-06] shows the API-key consent line only while that row is ticked', () => {

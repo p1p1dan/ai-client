@@ -623,7 +623,10 @@ export const zhTranslations: Record<string, string> = {
     '「AI 服务」里带着 API key。复制过来会在本应用自己的密钥库里存一份。不想这样就把那一行的勾去掉。',
   'Anything this app already has is left alone. You can do this later in Settings.':
     '本应用这边已经有的一律不动。现在不弄也行，以后在设置里随时可以做。',
+  // Three distinct answers. 「以后再说」really does mean later — the offer comes
+  // back next launch — and 「不再询问」is the only permanent one.
   'Not now': '以后再说',
+  'Don’t ask again': '不再询问',
   // Not previously in the catalog — a bare English `Done` in a Chinese dialog
   // is the same residue the field report flagged, so it is added here rather
   // than created anew.

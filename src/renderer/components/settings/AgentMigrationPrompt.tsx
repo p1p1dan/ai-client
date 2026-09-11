@@ -1,9 +1,9 @@
 /**
- * H/21 P1 — the one-time "bring your Pi setup over" dialog.
+ * H/21 P1 — the "bring your Pi setup over" dialog.
  *
- * Shown at most once per install, to the only people it has anything to say to:
- * users with a real `~/.pi/agent` and something in it this app does not have.
- * Everyone else never sees it, and never learns it exists.
+ * Shown to the only people it has anything to say to: users with a real
+ * `~/.pi/agent` holding something this app does not have. Everyone else never
+ * sees it, and never learns it exists.
  *
  * ## Why a dialog and not a silent copy
  *
@@ -11,15 +11,24 @@
  * of the five items is the user's API keys, and copying those into this app's
  * vault is a consent question rather than a technical one. Option C — leave it
  * in settings and wait — is what H/19 shipped, and the point-check proved
- * nobody walks there. So: ask once, default everything on, one button.
+ * nobody walks there. So: offer it up front, default everything on, one button.
  *
- * ## Why it can be dismissed forever
+ * ## Three ways out, and why they are not the same way out
  *
- * Dismissing sets the same flag as running it. A dialog that comes back every
- * launch is a dialog people learn to click through without reading, which
- * would defeat the consent argument that put it here in the first place. The
- * settings pane keeps the door open for anyone who changes their mind, and P0's
- * error copy points at that pane when a stale session actually fails.
+ * The first draft collapsed every exit into one "asked" flag, so "Not now" and
+ * Escape both meant never again. That made the button lie — "Not now" promises
+ * a later, and there was no later — and it left a user who dismissed the dialog
+ * by reflex with no way back except finding the settings pane, which is the
+ * exact failure H/19's point-check recorded.
+ *
+ *  - **Don't ask again** — explicit, permanent, and the only thing that is.
+ *  - **Not now / Escape / backdrop** — this launch only; the offer returns.
+ *  - **A finished copy** — there is nothing left to offer.
+ *
+ * A repeating dialog is normally a dialog people learn to click through without
+ * reading, which would hollow out the consent argument above. It is acceptable
+ * here precisely because the permanent opt-out is one click away and visible on
+ * the same row: the repeat is a reminder, not a trap.
  */
 
 import type {
@@ -56,7 +65,13 @@ function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-function markAsked(): void {
+/**
+ * Remember that this user is done with the offer — for good.
+ *
+ * Written by exactly two things: pressing "Don't ask again", and a copy that
+ * finished. Never by closing the dialog.
+ */
+function markSettled(): void {
   try {
     localStorage.setItem(STORAGE_KEYS.AGENT_MIGRATION_PROMPTED, 'true');
   } catch {
@@ -65,12 +80,12 @@ function markAsked(): void {
   }
 }
 
-function alreadyAsked(): boolean {
+function alreadySettled(): boolean {
   try {
     return localStorage.getItem(STORAGE_KEYS.AGENT_MIGRATION_PROMPTED) !== null;
   } catch {
-    // Unreadable storage reads as "asked": showing the dialog to someone who
-    // already answered is the worse of the two failures.
+    // Unreadable storage reads as settled: pestering someone who already opted
+    // out is the worse of the two failures.
     return true;
   }
 }
@@ -88,7 +103,7 @@ export function AgentMigrationPrompt() {
     // The inspection walks directories, so it is skipped entirely once the
     // question has been answered — which is every launch after the first for
     // everyone, and every launch for a user who never had `pi`.
-    if (alreadyAsked()) return;
+    if (alreadySettled()) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -109,8 +124,14 @@ export function AgentMigrationPrompt() {
     };
   }, []);
 
-  const dismiss = useCallback(() => {
-    markAsked();
+  /** This launch only. The offer comes back, because "Not now" said it would. */
+  const notNow = useCallback(() => {
+    setOpen(false);
+  }, []);
+
+  /** The permanent answer, and the only one that writes the flag by hand. */
+  const neverAsk = useCallback(() => {
+    markSettled();
     setOpen(false);
   }, []);
 
@@ -136,8 +157,9 @@ export function AgentMigrationPrompt() {
         // names, is where `overwrite` belongs.
         onConflict: 'skip',
       });
-      // Written only on success: a failed apply leaves the offer standing.
-      markAsked();
+      // Written only on success: a failed apply leaves the offer standing, so
+      // a transient failure cannot quietly cost the user the whole migration.
+      markSettled();
       setOutcomes(result.outcomes);
     } catch (cause) {
       setError(messageOf(cause));
@@ -155,10 +177,11 @@ export function AgentMigrationPrompt() {
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        // Closing by backdrop or Escape is an answer too — the same one the
-        // "Not now" button gives. Treating it as "ask me again" would bring the
-        // dialog back on the next launch for a user who just said no.
-        if (!next) dismiss();
+        // Escape and the backdrop mean "Not now", never "never". Someone who
+        // dismisses a dialog by reflex has not opted out of anything, and
+        // reading it as permanent would strand them with no way back except
+        // finding the settings pane — the failure H/19's point-check recorded.
+        if (!next) notNow();
         else setOpen(true);
       }}
     >
@@ -229,7 +252,13 @@ export function AgentMigrationPrompt() {
             <Button onClick={() => setOpen(false)}>{t('Done')}</Button>
           ) : (
             <>
-              <Button variant="outline" onClick={dismiss} disabled={busy}>
+              {/* Pushed to the far side: it is the destructive-ish answer of the
+                  three — the only one the user cannot take back from here —
+                  so it does not sit where a reflex click lands. */}
+              <Button variant="ghost" className="mr-auto" onClick={neverAsk} disabled={busy}>
+                {t('Don’t ask again')}
+              </Button>
+              <Button variant="outline" onClick={notNow} disabled={busy}>
                 {t('Not now')}
               </Button>
               <Button onClick={() => void run()} disabled={busy || selected.size === 0}>

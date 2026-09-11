@@ -108,7 +108,8 @@ async function mount(): Promise<void> {
   await settle();
 }
 
-function asked(): boolean {
+/** True once the user is done with the offer for good. */
+function settled(): boolean {
   return localStorage.getItem(STORAGE_KEYS.AGENT_MIGRATION_PROMPTED) !== null;
 }
 
@@ -119,7 +120,7 @@ describe('AgentMigrationPrompt — who sees it (H/21 P1)', () => {
     expect(text()).toContain('/home/u/.pi/agent');
   });
 
-  it('[MPI-02] stays shut, and does not even scan, once the answer is remembered', async () => {
+  it('[MPI-02] stays shut, and does not even scan, once the user has opted out', async () => {
     localStorage.setItem(STORAGE_KEYS.AGENT_MIGRATION_PROMPTED, 'true');
     await mount();
     expect(api.inspect).not.toHaveBeenCalled();
@@ -131,7 +132,7 @@ describe('AgentMigrationPrompt — who sees it (H/21 P1)', () => {
     await mount();
     expect(text()).toBe('');
     // And leaves the flag alone: nothing was asked, so nothing was answered.
-    expect(asked()).toBe(false);
+    expect(settled()).toBe(false);
   });
 
   it('[MPI-04] says nothing when every item would only collide', async () => {
@@ -144,7 +145,7 @@ describe('AgentMigrationPrompt — who sees it (H/21 P1)', () => {
     api.inspect.mockRejectedValue(new Error('EACCES'));
     await mount();
     expect(text()).toBe('');
-    expect(asked()).toBe(false);
+    expect(settled()).toBe(false);
   });
 });
 
@@ -195,15 +196,51 @@ describe('AgentMigrationPrompt — what it offers (H/21 P1)', () => {
 });
 
 describe('AgentMigrationPrompt — answering it (H/21 P1)', () => {
-  it('[MPI-10] "Not now" closes it for good without copying anything', async () => {
+  it('[MPI-10] "Not now" means later — it closes without copying and without opting out', async () => {
+    // The label promises a later. Writing the permanent flag here is the bug
+    // this test exists to prevent (user feedback, 2026-09-10).
     await mount();
     await act(async () => {
       button('Not now')?.click();
     });
 
     expect(api.apply).not.toHaveBeenCalled();
-    expect(asked()).toBe(true);
+    expect(settled()).toBe(false);
     expect(text()).not.toContain('Copy selected');
+  });
+
+  it('[MPI-10b] the offer really does come back after "Not now"', async () => {
+    await mount();
+    await act(async () => {
+      button('Not now')?.click();
+    });
+    // A second launch: same component, same storage, nothing copied in between.
+    await act(() => root.unmount());
+    root = createRoot(container);
+    await mount();
+
+    expect(text()).toContain('Bring over your personal Pi setup');
+  });
+
+  it('[MPI-10c] "Don’t ask again" is the one exit that is permanent', async () => {
+    await mount();
+    await act(async () => {
+      button('Don’t ask again')?.click();
+    });
+
+    expect(api.apply).not.toHaveBeenCalled();
+    expect(settled()).toBe(true);
+  });
+
+  it('[MPI-10d] closing by Escape is "Not now", never "never"', async () => {
+    // Someone who dismisses a dialog by reflex has not opted out of anything.
+    await mount();
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await settle();
+
+    expect(settled()).toBe(false);
   });
 
   it('[MPI-11] copying never overwrites — the user has seen counts, not names', async () => {
@@ -228,7 +265,7 @@ describe('AgentMigrationPrompt — answering it (H/21 P1)', () => {
     });
     await settle();
 
-    expect(asked()).toBe(true);
+    expect(settled()).toBe(true);
     expect(text()).toContain('Copy finished');
   });
 
@@ -242,7 +279,7 @@ describe('AgentMigrationPrompt — answering it (H/21 P1)', () => {
     });
     await settle();
 
-    expect(asked()).toBe(false);
+    expect(settled()).toBe(false);
     expect(text()).toContain('crypto_not_ready');
   });
 
