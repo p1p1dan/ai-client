@@ -90,6 +90,38 @@ function alreadySettled(): boolean {
   }
 }
 
+/**
+ * Whether this offer is about to appear — asked by the entry screen, not by
+ * this component.
+ *
+ * H/21 point-check D7: the local-entry route opens Settings → Pi when no AI
+ * service is configured (H/17 L4, `Root.tsx`), and this dialog opens when there
+ * is a Pi setup worth copying. Those are not two different users — they are the
+ * SAME user, the one who has been running `pi` and has just arrived here. So
+ * both fired, on top of the startup announcement, and the first thing the app
+ * did was stack three modals.
+ *
+ * The settings page is what yields, because this offer is the better answer to
+ * the same question: it configures the service in one click instead of handing
+ * the user an empty form. When there is nothing to migrate, nothing changes and
+ * settings still opens.
+ *
+ * Costs a second `inspect()` on the one launch that asks — a directory walk on
+ * the first local entry of a user with no services. Cheap enough to prefer over
+ * caching a startup decision across two unrelated components.
+ */
+export async function migrationOfferWillOpen(): Promise<boolean> {
+  if (alreadySettled()) return false;
+  try {
+    const plan = await window.electronAPI.agentMigration.inspect();
+    return shouldPromptMigration({ plan, asked: false });
+  } catch {
+    // An inspection that failed is not an offer, so the settings page is still
+    // the right place to send someone with nothing configured.
+    return false;
+  }
+}
+
 export function AgentMigrationPrompt() {
   const { t } = useI18n();
   const [plan, setPlan] = useState<MigrationPlan | null>(null);

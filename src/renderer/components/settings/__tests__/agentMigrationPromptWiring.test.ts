@@ -25,6 +25,7 @@ const read = (relative: string, name: string) =>
 const PROMPT = read('../AgentMigrationPrompt.tsx', 'AgentMigrationPrompt.tsx');
 const APP = read('../../../App.tsx', 'App.tsx');
 const PANE = read('../AgentMigrationSettings.tsx', 'AgentMigrationSettings.tsx');
+const ROOT = read('../../../Root.tsx', 'Root.tsx');
 
 describe('AgentMigrationPrompt wiring (H/21 P1)', () => {
   it('[MPW-01] is mounted at app level, not inside settings', () => {
@@ -81,6 +82,30 @@ describe('AgentMigrationPrompt wiring (H/21 P1)', () => {
 
   it('[MPW-08] shows each item count, which is what makes unticking a huge one possible', () => {
     expect(PROMPT).toContain(`\`\${item.total}\``);
+  });
+});
+
+describe('the entry screen yields to the offer (H/21 point-check D7)', () => {
+  it('[MPW-11] the settings auto-open is gated on there being no migration', () => {
+    // Both features aim at the same person — someone who has been running `pi`
+    // and just arrived here — so both fired, on top of the announcement, and
+    // the app greeted them with three stacked modals.
+    expect(ROOT).toContain('await migrationOfferWillOpen()');
+    expect(ROOT).toContain("requestSettings('pi')");
+  });
+
+  it('[MPW-12] the gate reads the same rule the dialog does', () => {
+    // Two copies of "is there anything to migrate" is how the settings page and
+    // the dialog would start disagreeing about the same user.
+    expect(PROMPT).toContain('export async function migrationOfferWillOpen');
+    expect(PROMPT).toContain('shouldPromptMigration({ plan, asked: false })');
+  });
+
+  it('[MPW-13] someone who opted out still gets the settings page', () => {
+    // `alreadySettled()` short-circuits before the inspection, so a user who
+    // pressed "Don't ask again" is not left with neither surface.
+    const gate = PROMPT.slice(PROMPT.indexOf('export async function migrationOfferWillOpen'));
+    expect(gate).toContain('if (alreadySettled()) return false;');
   });
 });
 

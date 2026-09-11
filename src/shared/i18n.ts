@@ -605,6 +605,11 @@ export const zhTranslations: Record<string, string> = {
   'Copy to': '去向',
   'Conversation history': '历史对话',
   'AGENTS.md': 'AGENTS.md',
+  // H/21 point-check D4: this sat untranslated next to 「历史对话」 and
+  // 「提示词模板」 in the same list — one row English, the next Chinese.
+  // `migrationKindLabel` is the single source for all five kinds; the other
+  // four already had entries.
+  'AI services': 'AI 服务',
   'Already here': '已经有了',
   'Replace items this app already has': '替换本应用已经有的同名项',
   'Off: anything already here is left alone.': '关闭时：这边已经有的一律保持不动。',
@@ -627,6 +632,92 @@ export const zhTranslations: Record<string, string> = {
   // back next launch — and 「不再询问」is the only permanent one.
   'Not now': '以后再说',
   'Don’t ask again': '不再询问',
+
+  // H/21 点验 D4 收尾：一次把渲染层里所有走 t() 却没有词条的字符串补齐。
+  // 此前 57 处散落在设置、Git、差异视图、用户资料等页面，中文界面里直接显示英文；
+  // 同目录的 i18nCoverage 测试从此守住这条线，新增 t() 字面量必须同时加词条。
+  'A key is stored. Leave empty to keep it.': '已存有密钥。留空即保持不变。',
+  'API key': 'API key',
+  'API style': '接口风格',
+  'Accept all ours': '全部用我方',
+  'Accept all theirs': '全部用对方',
+  'Add AI service': '添加 AI 服务',
+  'Add a local repository, clone from Git, or bind a repository on an SSH host.':
+    '添加本地仓库、从 Git 克隆，或绑定 SSH 主机上的仓库。',
+  'Add repository domain': '添加仓库域名',
+  'Adding...': '正在添加…',
+  'Archive session': '归档会话',
+  'Archive “{{name}}”? It will be removed from the sidebar.': '归档「{{name}}」？它会从侧栏移除。',
+  'Arguments (e.g. {{example}})': '启动参数（例如 {{example}}）',
+  'Choose directory': '选择目录',
+  Cloning: '正在克隆',
+  'Confirm logout': '确认退出登录',
+  'Could not reach this service — {{reason}}': '连不上这个服务 —— {{reason}}',
+  Custom: '自定义',
+  'Directory unavailable': '目录不可用',
+  'Edit AI service': '编辑 AI 服务',
+  'Edit file': '编辑文件',
+  'Edit repository domain': '编辑仓库域名',
+  Effort: '思考强度',
+  'Enter a new title': '输入新标题',
+  'Exit edit mode': '退出编辑模式',
+  'Failed to add remote repository': '添加远程仓库失败',
+  'Failed to browse remote directories': '浏览远程目录失败',
+  'Failed to clear onboarding state.': '清除引导状态失败。',
+  'Failed to save file': '保存文件失败',
+  'Fetch models': '获取模型列表',
+  'File is too large to preview': '文件过大，无法预览',
+  'File saved': '文件已保存',
+  'Generate branch names with AI': '用 AI 生成分支名',
+  'Just a really good one to code with ai.': '一个好用的 AI 编程工具。',
+  'Loading Pi...': '正在启动 Pi…',
+  Logout: '退出登录',
+  'Logout failed': '退出登录失败',
+  'No favorite themes yet. Click the heart icon to add favorites.':
+    '还没有收藏的主题。点心形图标即可收藏。',
+  'Open TUI': '打开 TUI',
+  'Pi terminal disconnected': 'Pi 终端已断开',
+  'Preview limit': '预览上限',
+  'Review changes with AI assistance': '用 AI 协助审阅改动',
+  'Save changes (Cmd+S)': '保存改动（Cmd+S）',
+  'Sending…': '正在发送…',
+  Service: '服务',
+  'Service URL': '服务地址',
+  'Shell path (e.g. {{example}})': 'Shell 路径（例如 {{example}}）',
+  'Shown in the model picker': '显示在模型选择器里',
+  'The selected directory will be stored as a repository bound to this SSH profile.':
+    '所选目录会作为绑定到该 SSH 配置的仓库保存。',
+  'This address cannot be used. Remove any query string, or credentials in it.':
+    '这个地址不能用。请去掉其中的查询串或账号密码。',
+  'This directory is not readable or writable. Please choose another location.':
+    '该目录不可读写，请换一个位置。',
+  'This will terminate all active agent and terminal sessions. You will need to register again to continue using AI features.':
+    '这会结束所有正在运行的 agent 与终端会话。要继续使用 AI 功能需要重新注册。',
+  'Use an http or https address.': '请使用 http 或 https 地址。',
+  'User profile': '用户资料',
+  Worktree: '工作树',
+  'You have unsaved changes. Discard them?': '有未保存的改动，要放弃吗？',
+  '{{count}} models available': '有 {{count}} 个模型可用',
+
+  // H/17 L3/L5 的「AI 服务」面板 —— 整片没有词条，中文界面里从标题到按钮
+  // 全是英文（H/21 点验 D4）。`Edit` / `Enabled` / `Remove` 在别处也用，含义
+  // 一致，所以做成通用词条而不是面板专属。
+  'Services you add yourself. Keys are stored on this machine only.':
+    '你自己添加的服务。密钥只存在这台机器上。',
+  Configured: '已配置',
+  'Add service': '添加服务',
+  'No AI services yet': '还没有 AI 服务',
+  'Add one to use your own model provider in this app.': '添加一个，就能在本应用里用你自己的模型。',
+  '{{count}} models': '{{count}} 个模型',
+  'No models selected': '未选择模型',
+  // `Edit` / `Enabled` / `Remove` are already in this catalog and mean the
+  // same thing there, so this pane needs no entries for them.
+  'Unlock the system keyring to see and change your AI services.':
+    '解锁系统密钥环后才能查看和修改你的 AI 服务。',
+  'The system keyring is unavailable, so keys are stored unencrypted on this machine.':
+    '系统密钥环不可用，密钥以明文存在这台机器上。',
+  'Stored AI services could not be read. Adding one again will replace the record.':
+    '读不到已存的 AI 服务。再添加一次会覆盖原记录。',
   // Not previously in the catalog — a bare English `Done` in a Chinese dialog
   // is the same residue the field report flagged, so it is added here rather
   // than created anew.

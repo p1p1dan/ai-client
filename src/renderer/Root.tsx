@@ -15,6 +15,7 @@ import { BackgroundLayer } from './components/layout/BackgroundLayer';
 import { WindowTitleBar } from './components/layout/WindowTitleBar';
 import { OnboardingShell } from './components/onboarding/OnboardingShell';
 import { WelcomeShell } from './components/onboarding/WelcomeShell';
+import { migrationOfferWillOpen } from './components/settings/AgentMigrationPrompt';
 import { Button } from './components/ui/button';
 import { useSettingsIntentStore } from './stores/settingsIntent';
 
@@ -299,7 +300,11 @@ function RootWithOnboardingGate() {
           // finished setting up months ago.
           try {
             const { providers } = await window.electronAPI.userProviders.get();
-            if (providers.length === 0) {
+            // H/21 point-check D7: yield to the migration offer when there is
+            // one. It reaches the same outcome — a configured service — in one
+            // click, and stacking it on top of the settings page and the
+            // startup announcement greeted the user with three modals at once.
+            if (providers.length === 0 && !(await migrationOfferWillOpen())) {
               useSettingsIntentStore.getState().requestSettings('pi');
             }
           } catch {
