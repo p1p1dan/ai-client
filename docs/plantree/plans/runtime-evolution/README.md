@@ -23,7 +23,7 @@ Role: roadmap。核对日期：2026-09-10；覆盖 runtime-evolution 与已并�
 | 2 | H / 19 | [统一 agent 目录、迁移与插件](topics/unified-agent-directory.md) | 用户 2026-09-10 方向变更。它同时是 H / 17 那个缺陷的正解——把「加了服务才搬」的条件分支换成一次显式完整迁移 |
 | 3 | H / 18 | [侧栏对齐 PI-Desktop](topics/sidebar-pi-desktop-alignment.md) | 与 H / 17 同批指定，纯 renderer，不依赖上面两项 |
 | 4 | 本地缺陷 | 中文界面英文残留、重载后重复公告与多开空会话 | ✅ 已完成（2026-09-11）。两项状态不同：英文残留分两批，走 `t()` 的 `d0332939`、硬编码的这批 `4f7dedf7`，均已真机点验；重复公告与多开空会话查证后定性为**非缺陷**，不改代码。[验证](evidence/chinese-ui-residue/README.md) |
-| 5 | P4-6 收口（改在开发机） | F3 启动链、F2-b 取证、F4 触发、PERM-1 与权限链复验 | 用户 2026-09-10 决定：Node 与 Git 已确认在企业白名单内，这些项改在开发机复现与验证，不再逐轮上加密 Windows |
+| 5 | P4-6 收口（改在开发机） | F3 启动链、F2-b 取证、F4 触发、PERM-1 与权限链复验 | 🟡 进行中。用户 2026-09-11 追加规矩：**先把开发机做到完全正常，必须在加密机才能测的留到最后一次上机**，于是本批拆两半——F3 里「加密驱动按什么放行」整体推迟，其余在开发机做完。**F3 开发机侧已完成**（不复现，[记录](evidence/f3-dev-probe/README.md)）；F2-b / F4 / PERM-1 待做 |
 | 6 | P2-5、P2-6 | 真实缓存命中率达标与新旧对比 | 需真实 provider，本地可做；第 1 批完成后配模型更方便。达到 95.01% 基线才进 P5 |
 | 7 | P5-1、P5-3 | skills / 模板（含 F5 提问能力）、MCP bridge | 两块相互独立、单块体量可控，先把 P5 里能独立验收的做掉 |
 | 8 | P5-2（含 P5-2-0～7） | subagent 整体复刻 | P5 最大一块，八个子节点加 SA01～22 等价门禁，需要前面的工具/权限/会话都稳定 |
@@ -185,7 +185,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | C / 9 | 当前对话审阅栏 | ✅ R1/R2 `6be1d70a`、上限 `1f45531f`；2026-09-10 本地真实应用（native + 真实模型）验证通过，[记录](evidence/session-review-and-updates/README.md#本地真实应用验证) |
 | D / 11 | 上下文用量详情 | ✅ 核心现场通过；F7e 归既有行为，增强另排 |
 | E / 12 | 输出跟随 | ✅ 原核心现场通过；F7f 输入框增高本地验证通过 |
-| F / 13 | 目录行变更量 | 🟡 已实现，目标现场受 F3 阻断 |
+| F / 13 | 目录行变更量 | 🟡 接线完好（`useFolderDiffStats.ts` 的轮询 hook 由 `LeftNav.tsx:291` 调用），开发机上 git 已证通、F3 阻断解除。实测驱动抓取侧：IPC 正常、store 写入成功；当时工作区只有未跟踪文件，`git diff --shortstat` 本就不计未跟踪，返回 0/0 行上不显示数字，属正确行为。**仍缺**：真实 busy 会话下数字出现并刷新的现场记录。[记录](evidence/f3-dev-probe/README.md) |
 | F / 14 | 旧 GitView / IPC 等死代码清理 | ✅ 实现及回归；后续测试包整体 GUI 继续回归 |
 | F / 15 | cwd 缺失与临时目录恢复 | 🟡 test.12 当前恢复流程通过；F2-a/c 后续修复待 test.13 验证，F2-b 单列 |
 | G / 16 | 软件更新提醒 | 🟡 U1 已提交 `b919b1aa`，自动化与隔离弹窗验证通过；真实更新源下载/安装按用户 2026-09-10 决定暂缓验证 |
@@ -206,7 +206,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F2-a 临时根设置不同步 | 🟡 已修一类，待复验 | `e817fc2a`；test.13 |
 | F2-b TEMP 删除后归组/消失 | 待复现及索引/目录取证；不宣称数据已物理删除 | [取证要求](topics/field-followups.md#f2-b-取证) |
 | F2-c 用户目录缺失 | 🟡 已提供 workspace_missing 与恢复/归档说明；不自动重建用户目录 | `3bd3f547`；test.13 |
-| F3 GUI Git 输出丢失 | 故障已复现，根因机制/方案未定；Q7 只修正判错，未修输出 | [事实与方案](../../../plans/2026-09-09-gui-defect-decisions.md#f3--gui-起的-git-子进程输出丢失) |
+| F3 GUI Git 输出丢失 | 🟡 **开发机侧已取证：不复现**，三层（纯 Node、Electron 主进程走应用 IPC、Git 面板界面）全部正常，故确认为加密机专属，按用户 2026-09-11 决定整体推迟到最后一次上机。用户提出的根因方向：加密软件认**调用方**，Electron 调 git 在驱动眼里就是 Electron 在操作——若成立，换哪个 git 都没用，只能在中间插一个白名单进程（ARD §8 已记 Main→PowerShell→git 正常，是该方向的直接证据）。根因与修法仍未拍板 | [开发机取证](evidence/f3-dev-probe/README.md) · [事实与方案](../../../plans/2026-09-09-gui-defect-decisions.md#f3--gui-起的-git-子进程输出丢失) |
 | F4 重试 | 🟡 自有重试层已实现，现场未触发；stream 开始后的恢复不在该层范围 | `27d4b7be`；test.12/13 |
 | F5 通用问答缺生产者 | 能力缺口，非 native 回归；归 P5-1 批，不阻塞 P4 原能力 | [功能决策](../../../plans/2026-09-09-gui-defect-decisions.md#f5--无提问工具questioncard--扩展问答弹不出来) |
 | F6 对话修改审阅 | ✅ 2026-09-10 采用右侧审阅，本地真实应用验证通过，尚未打包 | [R1/R2 与更新 U1](topics/session-review-and-updates.md) |

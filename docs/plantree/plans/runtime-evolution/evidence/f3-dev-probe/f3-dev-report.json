@@ -1,0 +1,18 @@
+{
+  "repo": "/home/ai/code/ai-client",
+  "result": {
+    "done": true,
+    "ok": true,
+    "value": {
+      "branchCount": 11,
+      "branchSample": [
+        "feat/model-catalog-admin",
+        "feat/openchamber-chat-refactor",
+        "feat/pi-primary-backend"
+      ],
+      "currentBranch": "feat/runtime-evolution",
+      "logCount": 3
+    }
+  },
+  "rendererProblems": []
+}
