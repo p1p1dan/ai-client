@@ -693,6 +693,19 @@ describe('shouldCloseOnEscape', () => {
     expect(shouldCloseOnEscape({ key: 'Escape', isOpen: true, holdsEscape: true })).toBe(false);
   });
 
+  it('yields Escape to an open popup instead of collapsing the panel under it', () => {
+    // Found in the real app during the H/18 point-check: with a sidebar context
+    // menu open, Escape collapsed the panel and left the menu on screen. The
+    // popup is portaled out of the panel, so `holdsEscape` stays false — this
+    // flag is the only thing that can tell the panel to keep its hands off.
+    expect(
+      shouldCloseOnEscape({ key: 'Escape', isOpen: true, holdsEscape: false, popupOpen: true })
+    ).toBe(false);
+    expect(
+      shouldCloseOnEscape({ key: 'Escape', isOpen: true, holdsEscape: false, popupOpen: false })
+    ).toBe(true);
+  });
+
   it('exposes the opt-out attribute surfaces must spell', () => {
     expect(SURFACE_ESCAPE_HOLD_ATTR).toBe('data-surface-holds-escape');
   });

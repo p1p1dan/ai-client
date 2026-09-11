@@ -3,6 +3,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { ESCAPE_OWNING_POPUP_SELECTOR } from '../shellLayoutModel';
 
 /**
  * H/18 S1 + S2, rendered for real.
@@ -157,6 +158,24 @@ it('gives the row menu on a row and the repository menu on its folder header', a
   expect(folderMenu).toContain('Repository Settings');
   expect(folderMenu).toContain('Remove repository');
   expect(folderMenu).not.toContain('Rename');
+});
+
+it('renders a popup the dock recognizes as the owner of Escape', async () => {
+  // The real-app defect this guards (found 2026-09-10): with a sidebar context
+  // menu open, Escape collapsed the whole dock panel and left the menu on
+  // screen, because the panel's capture-phase handler ran first and swallowed
+  // the key. `LeftDock` now stands down while any such popup is open, and this
+  // asserts the two halves agree on what "such a popup" looks like — a string
+  // mismatch here would restore the bug silently.
+  await act(async () => root.render(createElement(LeftNav, { repositories: [REPO] as never })));
+
+  const title = [...container.querySelectorAll('p')].find(
+    (element) => element.textContent === 'Repositories'
+  );
+  await rightClick(title as Element);
+
+  expect(openMenuItems()).not.toEqual([]);
+  expect(document.querySelectorAll(ESCAPE_OWNING_POPUP_SELECTOR).length).toBeGreaterThan(0);
 });
 
 it('gives the temporary-chat partition its own menu', async () => {

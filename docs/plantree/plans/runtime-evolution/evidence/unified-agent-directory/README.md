@@ -73,6 +73,25 @@
 
 **真实 CLI 冒烟**（2026-09-10，临时 agent 目录 `/tmp/h19-live-agent`，走 `PiPluginService` + `createPiCliRunner` 本体，非 mock）：空列表 → `install npm:pi-jingle`（约 2.5 秒，联网真装）→ list 出包名与绝对路径 → 关闭后 settings 写成 `autoload:false` 且 list 仍列出、状态为关 → 打开后回到裸字符串 → `remove` 后 settings 与 `node_modules` 双双清空 → 装一个不存在的包返回 `ok:false` 且带 npm 自己的报错文本。全部通过。该探针**未留在测试套件里**（联网会让 CI 变脆），仅此记录。
 
+## 点验查出的缺口：迁移没跑之前，旧会话一律 resume 失败
+
+2026-09-10 在真实应用里点开一条 4 天前的会话，报：
+
+```
+Error occurred in handler for 'chat:resumeSession':
+WorkerSlotError: WORKER_REQUEST_FAILED: Pi model not found: maxapi/grok-4.6
+```
+
+不是 bug，是 U1 的**直接后果**，但缺了一层提示：
+
+- `maxapi/grok-4.6` 在 `/home/ai/.pilab/t37c-agent/models.json` 里（本机 `dev.env` 的 `PI_CODING_AGENT_DIR`）。U1 之后那里是「用户自己的目录」＝迁移**来源**，不再被加载。
+- 应用自己的目录 `/home/ai/.pilab/jyw-ai-client-dev/pi-agent/` 里**没有 models.json**，只有两个空的 `auth.json` / `models-store.json`。
+- 于是每一条在切换前创建的会话，模型都指向一个本应用现在看不见的服务。
+
+U2 的迁移正是这条的解药（把 provider 导进 vault 用户组），但**用户没有任何线索知道该去点它**：错误文案只说「Pi model not found: <id>」，不提迁移，也不提设置页。升级到这个版本的用户，第一次打开任何旧会话都会撞上它。
+
+待定的是补救方式（启动时检测到「有旧会话且本应用目录无模型」就提示迁移？还是只把错误文案改成指向设置页？），属于产品取舍，未擅自实现。
+
 ## 未验证
 
 - **未打包，未做安装版/加密 Windows 现场回归**。按用户 2026-09-10 决定，全部做完后再上机一次。

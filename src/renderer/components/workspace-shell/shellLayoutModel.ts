@@ -316,6 +316,25 @@ export function seedVisitedSurfaceIds(
  */
 export const SURFACE_ESCAPE_HOLD_ATTR = 'data-surface-holds-escape';
 
+/**
+ * H/18 point-check fix — an open popup owns Escape, and this is how the panel
+ * recognizes one.
+ *
+ * `SURFACE_ESCAPE_HOLD_ATTR` cannot cover this case: a Base UI popup is
+ * PORTALED to `document.body`, so it is not in the event target's ancestor
+ * chain — the keydown still targets whatever inside the panel opened it, the
+ * panel's capture handler fires first and calls `stopPropagation`, and the
+ * popup's own dismiss listener never sees the key. Measured in the real app on
+ * 2026-09-10: with a sidebar context menu open, Escape collapsed the whole
+ * panel AND left the menu on screen.
+ *
+ * Tooltips are excluded on purpose. They open on hover, so treating one as an
+ * Escape owner would make the key stop working while the pointer merely rests
+ * on a rail icon.
+ */
+export const ESCAPE_OWNING_POPUP_SELECTOR =
+  '[data-slot$="-popup"]:not([data-slot="tooltip-popup"])';
+
 export interface ShouldCloseOnEscapeInput {
   /** `KeyboardEvent.key`. */
   key: string;
@@ -323,14 +342,23 @@ export interface ShouldCloseOnEscapeInput {
   isOpen: boolean;
   /** True when the event target sits inside a `[data-surface-holds-escape]` subtree. */
   holdsEscape: boolean;
+  /**
+   * True when a menu/dialog/popover is open anywhere on screen — see
+   * {@link ESCAPE_OWNING_POPUP_SELECTOR}. Escape belongs to the innermost thing
+   * that can be dismissed, and a popup is always innermost relative to the
+   * panel that contains its trigger.
+   */
+  popupOpen?: boolean;
 }
 
 /**
  * False means BOTH: do not close, and do not `stopPropagation` — swallowing the
- * key without acting on it is what made Escape unusable inside a surface (F-c).
+ * key without acting on it is what made Escape unusable inside a surface (F-c),
+ * and later what left a context menu stranded on screen while the panel behind
+ * it collapsed.
  */
 export function shouldCloseOnEscape(input: ShouldCloseOnEscapeInput): boolean {
-  return input.key === 'Escape' && input.isOpen && !input.holdsEscape;
+  return input.key === 'Escape' && input.isOpen && !input.holdsEscape && !input.popupOpen;
 }
 
 // ── surface state machine (decision 2) ──────────────────────────────────

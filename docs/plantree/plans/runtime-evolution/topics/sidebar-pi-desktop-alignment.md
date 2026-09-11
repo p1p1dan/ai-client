@@ -26,7 +26,7 @@ Role: implementation-plan。日期：2026-09-10。依据：用户 2026-09-10 指
 
 ## 执行清单
 
-全部实现完成（2026-09-10），[验证记录](../evidence/sidebar-pi-desktop-alignment/README.md)。未打包、未在真实应用里点验（本机 CDP 通道不通，原因见验证记录）。
+全部实现完成并已在真实应用点验（2026-09-10），[验证记录](../evidence/sidebar-pi-desktop-alignment/README.md)。未打包。
 
 - [x] S1：分区级右键菜单。临时会话分区 → 新建临时会话；项目分区 → 打开项目。
 - [x] S2：项目行右键菜单。把现有「更多」下拉的动作（仓库设置、移出）改为同时支持右键唤出，保留原按钮。
@@ -38,6 +38,7 @@ Role: implementation-plan。日期：2026-09-10。依据：用户 2026-09-10 指
 
 1. **S4 的按钮从「只关」改成「开关」**。计划只说移入 rail。但 rail 比面板活得久，只能关的按钮在面板已收起时就是死的——而那正是 rail 单独在屏幕上的时候。改后与 Ctrl+B 共用同一个 store action，图标与标签随状态切换。
 2. **S3 的徽标复用会话行已有的 6px 标记槽**，不新开一个。行宽本来就紧张，多一个点会挤掉标题；三态按 `busy → unread → started` 排序，共享槽位不丢信息（跑着的会话不会同时握着未读结果，未读的会话必然是 started）。
+3. **多修了一处 Esc**。点验发现：侧栏右键菜单开着时按 Esc，面板整个收起、菜单反而留着。验证案例 2 要求「Esc 关闭」，所以这属于本轮验收缺口。`shouldCloseOnEscape` 增加 `popupOpen` 判据，弹层开着时面板既不关也不 `stopPropagation`。详见[验证记录](../evidence/sidebar-pi-desktop-alignment/README.md#点验查出并修掉的缺陷esc-收走了整个面板)。
 
 ## 验证案例
 

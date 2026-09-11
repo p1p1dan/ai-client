@@ -47,6 +47,7 @@ import {
   clampSidebarWidth,
   DOCK_RAIL_WIDTH,
   deriveMountedSurfaceIds,
+  ESCAPE_OWNING_POPUP_SELECTOR,
   SURFACE_ESCAPE_HOLD_ATTR,
   seedVisitedSurfaceIds,
   shouldCloseOnEscape,
@@ -218,7 +219,10 @@ export function LeftDock({
         onKeyDownCapture={(event) => {
           const target = event.target as HTMLElement | null;
           const holdsEscape = !!target?.closest?.(`[${SURFACE_ESCAPE_HOLD_ATTR}]`);
-          if (!shouldCloseOnEscape({ key: event.key, isOpen, holdsEscape })) {
+          // Queried on the document, not on the target's ancestors: a popup is
+          // portaled out of this panel, so `closest` can never find it.
+          const popupOpen = !!document.querySelector(ESCAPE_OWNING_POPUP_SELECTOR);
+          if (!shouldCloseOnEscape({ key: event.key, isOpen, holdsEscape, popupOpen })) {
             return;
           }
           closeSurface();

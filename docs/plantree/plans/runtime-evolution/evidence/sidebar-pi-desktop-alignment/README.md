@@ -53,13 +53,40 @@ Escape 关闭面板那条路径没有动。
 
 改写的用例：`sessionContextMenuWiring.test.ts`。它原来按「文件里第一个 context menu trigger」定位会话行，而 S1/S2 在会话行之前又加了两个 trigger，于是它开始断言错的元素。改成先切到 `SessionRow` 再断言，并加了一条反向断言防止这层切分将来变得无意义。
 
+## 真实应用点验（2026-09-10，开发机）
+
+一开始连不上 CDP，查清了是**内存压力**，不是通道坏了。排查过程与结论：
+
+- **已排除代理**。`/proc/<electron pid>/environ` 里实测到 `no_proxy=localhost,127.0.0.1,::1`（`scripts/dev.js` 的 `withLoopbackProxyBypass` 确实生效，日志里有 `[dev] proxy set …`），本机 `127.0.0.1:7890` 的代理也活着（`curl --proxy` 返回 200）。已知的「Chromium 只认小写 `no_proxy`」那条坑不成立。
+- **已排除「CDP 要等窗口」**。冷 Vite 缓存那轮里 CDP 在第 10 秒就回包，窗口第 16 秒才出现。
+- **已排除 Vite 依赖冷缓存**。把 `node_modules/.vite` 移走重跑，只慢了约 6 秒。
+- **复现成功的是内存压力**。本机 **3.3 GB 内存 / 2 核**，排查时 swap 已用掉 1.9 GB（`/proc/vmstat` 累计换出 195 万页）。人为占住 950 MB 后重跑：**CDP 从 10 秒退化到 37 秒、窗口从 1 秒退化到 42 秒**。失败的那三轮正处在「刚跑完全量测试套件 + 有没杀干净的 Electron 实例」的时段，而我当时的探测超时只有 3～8 秒、等待窗口只有 45～70 秒，于是全部读成「端口在听但永不回包」。TCP 能连上是因为握手由内核完成，进程被饿着写不出响应。
+- 连带查出一个自己的操作错误：`pkill -f` / `for p in /proc` 的匹配串里含 `ai-client`、`electron`，会**匹配到执行它的那条 bash 命令行并自杀**，所以旧实例一直没被杀干净。按 `/proc/<pid>/exe` 的真实路径匹配才可靠。
+
+机器缓过来后，用 CDP 的**真实鼠标/键盘事件**（`Input.dispatchMouseEvent` / `dispatchKeyEvent`，不是合成 DOM 事件）走了一遍：
+
+| 验证案例 | 结果 |
+|---|---|
+| 1 两个分区各自的右键菜单 | ✅ 项目分区标题行 → 「添加仓库」；临时对话分区标题 → 「新建临时对话」（[图](temporary-partition-menu.png)） |
+| 1 行上右键弹的是行菜单 | ✅ 仓库分组内会话行、临时分区内会话行，右键都给「重命名 / 归档」，没有串到分区菜单 |
+| 2 项目行右键与「更多」同一组动作 | ✅ 「仓库设置 / 移除仓库」（[图](repo-row-context-menu.png)） |
+| 2 Esc 关闭 | ✅ 修掉一个缺陷之后才成立，见下 |
+| 3 未读徽标出现、点开消失 | ✅ 徽标渲染出来（[图](unread-marker.png)），点开会话后界面上归零、store 的 `unreadSessionIds` 也归零 |
+| 5 收起按钮在 rail 上可点、Ctrl+B 不变 | ✅ 真实点击把面板从 0 展开到 279px，Ctrl+B 再收回 0；标签随状态在「展开侧栏 / 收起侧栏 (Ctrl+B)」之间切 |
+
+### 点验查出并修掉的缺陷：Esc 收走了整个面板
+
+**现象**（实测，修复前）：侧栏里任一右键菜单开着时按 Esc，**面板整个收起（279px → 0），菜单反而留在屏幕上**。
+
+**原因**：`LeftDock` 的面板级 Escape 处理挂在捕获阶段。Base UI 的弹层是 **portal 到 `document.body`** 的，不在事件 target 的祖先链上，所以现有的 `data-surface-holds-escape` opt-out 机制根本认不出它——keydown 的 target 仍是面板里那个触发菜单的元素，面板的处理器先跑、`stopPropagation`，弹层自己的关闭监听再也收不到这个键。
+
+**修法**：`shouldCloseOnEscape` 增加一个 `popupOpen` 判据，由 `document.querySelector(ESCAPE_OWNING_POPUP_SELECTOR)` 给出；为真时面板既不关闭也不 `stopPropagation`（这个函数的语义本来就是「两件事一起不做」），键就落到弹层自己手里。选择器 `[data-slot$="-popup"]:not([data-slot="tooltip-popup"])` 覆盖菜单、对话框、popover——**tooltip 特意排除**，它是 hover 出来的，把它当 Esc 的主人会让指针停在 rail 图标上时这个键直接失效。
+
+**这条在 H/18 之前就存在**（会话行的右键菜单是 T13 就有的），但 H/18 把侧栏的右键菜单从 1 处变成 4 处，撞上的概率高了；而且 H/18 的验证案例 2 明确要求「Esc 关闭」，所以它属于本轮的验收缺口，不是顺手捡的。修复后已在真实应用复测：菜单关掉、面板保持 279px。
+
 ## 未验证
 
-- **未在真实应用里点验**。本机尝试了三轮：`pnpm dev --remote-debugging-port=9222` 能起来、日志打到 `DevTools listening on ws://127.0.0.1:9222/...`、端口在 listen、TCP 能连上，但 HTTP `/json/list` 与 browser WebSocket 都不回包（curl 与 node `ws` 各试过，均超时）；日志固定停在 `Shared state paths` 加一行 vaapi 报错。
-
-  症状与「环境里设了 `HTTP_PROXY` 而 Chromium 只认小写 `no_proxy`」这个已知坑完全一致，**但那条已经不成立**：`scripts/dev.js` 的 `resolveChildEnv` 现在自带 `withLoopbackProxyBypass`，本轮日志里没有它的 `[dev] proxy set …` 提示，说明 `no_proxy` 本来就齐全（本机 env 里 `HTTP_PROXY=http://127.0.0.1:7890`、`NO_PROXY` 与 `no_proxy` 均含 loopback）。所以真实原因未定，下一个人不必再从代理入手。
-
-  因此没有截图和真实点击记录。渲染测试覆盖到了菜单开合与徽标出现/消失，但覆盖不到真实窗口下的定位、层级与视觉。
 - 未打包，未做安装版/加密 Windows 回归。
-- 验证案例 4（两个工作目录会话同时运行、状态互不影响）本轮未测——它验证的是既有能力（计划里已确认「本就支持」），本轮没有改动那条路径。
-- 键盘可达性（验证案例 2 的后半）只在代码层保证：会话行有 `tabIndex={0}`，菜单是 Base UI 的，Esc 关闭在渲染测试里用过一次；没有做完整的 Tab 序列走查。
+- 验证案例 4（两个工作目录会话同时运行、状态互不影响）未测——它验证的是既有能力（计划里已确认「本就支持」），本轮没有改动那条路径。
+- 键盘可达性只验到 Esc 这一半；没有做完整的 Tab 序列走查。
+- 临时对话分区是**往 store 里塞了一条带 `unbound` 标记的会话**才渲染出来的。真实路径上这个标记由 `mergeSessionIndex` 从持久化条目写入，当场新建的临时对话要等落盘后才进这个分组——那是既有行为，本轮没碰。
