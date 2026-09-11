@@ -390,12 +390,20 @@ export function ComposerModelTrigger({
   // 06-probes P1], so per-turn wording would be a false statement about what
   // the control just did — while on Claude every turn restates its options
   // [实测 06-probes P2] and per-turn is the literal truth.
-  const scopeHint = modelScopeHint();
+  const scopeHint = t(modelScopeHint());
+  const selection = `${base}${suffix ? ` ${suffix}` : ''}`;
   // The trigger shows the effort as a bare value ("High") with no category
   // word, so the accessible name has to supply the category that sighted users
-  // read off the menu's own group headings.
-  const spokenLabel = `Model and reasoning effort: ${base}${suffix ? ` ${suffix}` : ''} — ${scopeHint}`;
-  const title = `${base}${suffix ? ` ${suffix}` : ''} — click to change model or reasoning effort (${scopeHint})`;
+  // read off the menu's own group headings. A screen reader announces this in
+  // the UI language, so it goes through the catalog like any other copy.
+  const spokenLabel = t('Model and reasoning effort: {{selection}} — {{scope}}', {
+    selection,
+    scope: scopeHint,
+  });
+  const title = t('{{selection}} — click to change model or reasoning effort ({{scope}})', {
+    selection,
+    scope: scopeHint,
+  });
 
   return (
     <Menu

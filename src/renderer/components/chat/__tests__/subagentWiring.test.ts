@@ -139,7 +139,7 @@ describe('QuestionCard.tsx — permission-origin chip', () => {
   const { callSites } = load('../QuestionCard.tsx', ts.ScriptKind.TSX);
 
   it('derives the chip from the store’s permissionOrigin index', () => {
-    expect(callSites.some((site) => site.includes('derivePermissionOrigin(origin)'))).toBe(true);
+    expect(callSites.some((site) => site.includes('derivePermissionOrigin(origin'))).toBe(true);
     expect(
       callSites.some(
         (site) => site.startsWith('useSubagentActivityStore(') && site.includes('permissionOrigin[')

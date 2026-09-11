@@ -1,3 +1,4 @@
+import { englishTranslate, type Translate } from '@shared/i18n';
 import {
   composerSendingLine,
   type SendPhase,
@@ -107,24 +108,30 @@ export interface TurnStatusInput {
  *     that actually ran. Deeper tier first — the two overlap, and the more
  *     specific statement is the true one.
  */
-export function deriveTurnStatus(input: TurnStatusInput): TurnStatus | null {
-  if (input.failed) return { kind: 'failed', text: TURN_FAILED_TEXT };
+export function deriveTurnStatus(
+  input: TurnStatusInput,
+  t: Translate = englishTranslate
+): TurnStatus | null {
+  if (input.failed) return { kind: 'failed', text: t(TURN_FAILED_TEXT) };
   if (!input.active) return null;
 
   const elapsed = normalizeElapsedSeconds(input.elapsedSeconds);
-  const text = composerSendingLine({
-    phase: input.phase,
-    elapsedSeconds: input.elapsedSeconds,
-    budgetMs: input.budgetMs,
-    attachmentCount: input.attachmentCount,
-    attachmentBytes: input.attachmentBytes,
-    retry: input.retry,
-    // F456 §7.4: forwarded, not consumed here.
-    promptChars: input.promptChars,
-    // F06: same treatment — the wording, including whether `↓` appears at all,
-    // stays in `composerSendingLine` so there is still exactly one copy of it.
-    replyChars: input.replyChars,
-  });
+  const text = composerSendingLine(
+    {
+      phase: input.phase,
+      elapsedSeconds: input.elapsedSeconds,
+      budgetMs: input.budgetMs,
+      attachmentCount: input.attachmentCount,
+      attachmentBytes: input.attachmentBytes,
+      retry: input.retry,
+      // F456 §7.4: forwarded, not consumed here.
+      promptChars: input.promptChars,
+      // F06: same treatment — the wording, including whether `↓` appears at all,
+      // stays in `composerSendingLine` so there is still exactly one copy of it.
+      replyChars: input.replyChars,
+    },
+    t
+  );
 
   if (input.phase === 'handshake') return { kind: 'handshake', text };
   if (input.hasBlocks) {
@@ -141,7 +148,7 @@ export function deriveTurnStatus(input: TurnStatusInput): TurnStatus | null {
     // therefore be a count that is never on screen while the thing it counts is
     // happening. `replyCharsLabel` keeps it the same clause the waiting line
     // uses, so the two cannot word it differently.
-    const replyLabel = replyCharsLabel(input.replyChars ?? 0);
+    const replyLabel = replyCharsLabel(input.replyChars ?? 0, t);
     const clock = formatElapsedClock(elapsed);
     return { kind: 'streaming', text: replyLabel ? `${replyLabel} · ${clock}` : clock };
   }

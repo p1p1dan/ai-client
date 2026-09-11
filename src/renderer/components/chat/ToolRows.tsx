@@ -123,7 +123,11 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
 
   const rowContent = (
     <>
-      <span className={verbClass}>{view.verb}</span>
+      {/* The ONE place a row's verb becomes words. Every builder upstream
+          (`toolCard.ts`, `turnTiming.ts`, `questionCardModel.ts`) emits a
+          catalog key so this single call covers tool rows, thought rows,
+          aggregates and settled permissions alike. */}
+      <span className={verbClass}>{t(view.verb)}</span>
       <ToolRowArg view={view} onOpenFile={onOpenFile} />
       <ToolRowPermission view={view} />
       {showDiff && view.diff && (
@@ -215,10 +219,11 @@ function SubagentActivity({
   parentRunning: boolean;
   sessionId?: string;
 }) {
+  const { t } = useI18n();
   const lane = useSubagentActivityStore((s) => s.lanes[parentToolCallId] ?? null);
   const rows = useMemo(
-    () => deriveSubagentPanelRows(lane, { parentRunning }),
-    [lane, parentRunning]
+    () => deriveSubagentPanelRows(lane, { parentRunning, t }),
+    [lane, parentRunning, t]
   );
   if (rows.length === 0) return null;
   return (
@@ -241,11 +246,14 @@ function SubagentActivity({
  * "denied" (red, badge).
  */
 function ToolRowPermission({ view }: { view: ToolRowView }) {
+  const { t } = useI18n();
+  // Compared against the KEY, not the rendered word — the check has to keep
+  // working in a locale where the row reads 「已允许」.
   if (!view.permissionVerb || (view.permissionAutoNote && view.permissionVerb === 'Allowed'))
     return null;
   return (
     <>
-      <span className={toolRowPermissionClass()}>· {view.permissionVerb}</span>
+      <span className={toolRowPermissionClass()}>· {t(view.permissionVerb)}</span>
       {view.permissionAutoNote ? (
         <span className={toolRowPermissionNoteClass()}>· {view.permissionAutoNote}</span>
       ) : null}

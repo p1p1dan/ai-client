@@ -2817,23 +2817,26 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // move the caret — that is what keeps plain-text paste and IME
       // composition byte-for-byte native.
       onPaste={attachments.handlePaste}
-      placeholder={composerPlaceholder({
-        mode,
-        canSend,
-        busy,
-        sending,
-        hasSession: Boolean(activeSessionId),
-        hasWorkspace: Boolean(activeWorkspace),
-        hasCwd: Boolean(cwd),
-        // Same widening as `emptySurface` above: no session yet means the next
-        // send makes an unbound one, so none of the folder-shaped placeholders
-        // apply to it.
-        unbound: isUnboundSession || !activeSessionId,
-        attachmentCount: attachments.drafts.length,
-        pendingQuestion: pendingQuestionHere,
-        queuedCount,
-        isCreatingSession,
-      })}
+      placeholder={composerPlaceholder(
+        {
+          mode,
+          canSend,
+          busy,
+          sending,
+          hasSession: Boolean(activeSessionId),
+          hasWorkspace: Boolean(activeWorkspace),
+          hasCwd: Boolean(cwd),
+          // Same widening as `emptySurface` above: no session yet means the next
+          // send makes an unbound one, so none of the folder-shaped placeholders
+          // apply to it.
+          unbound: isUnboundSession || !activeSessionId,
+          attachmentCount: attachments.drafts.length,
+          pendingQuestion: pendingQuestionHere,
+          queuedCount,
+          isCreatingSession,
+        },
+        t
+      )}
       className={composerTextareaClass(mode)}
       // T-19 decision 2.1: only "nowhere to put this draft" still locks the
       // textarea — a running/sending turn no longer does (decision 2's

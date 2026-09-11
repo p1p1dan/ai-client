@@ -92,6 +92,7 @@ function QueueEntryRow({
   onMove: (entryId: string, direction: 'up' | 'down') => void;
   onRemove: (entryId: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div
       role="button"
@@ -121,7 +122,7 @@ function QueueEntryRow({
           onMove(entry.id, 'up');
         }}
         disabled={!entry.canMoveUp}
-        aria-label="Move queued message up"
+        aria-label={t('Move queued message up')}
         className={ICON_BUTTON_CLASS}
       >
         <ArrowUp className="size-3" />
@@ -133,7 +134,7 @@ function QueueEntryRow({
           onMove(entry.id, 'down');
         }}
         disabled={!entry.canMoveDown}
-        aria-label="Move queued message down"
+        aria-label={t('Move queued message down')}
         className={ICON_BUTTON_CLASS}
       >
         <ArrowDown className="size-3" />
@@ -144,7 +145,7 @@ function QueueEntryRow({
           event.stopPropagation();
           onEdit(entry.id);
         }}
-        aria-label="Edit queued message"
+        aria-label={t('Edit queued message')}
         className={ICON_BUTTON_CLASS}
       >
         <Pencil className="size-3" />
@@ -155,7 +156,7 @@ function QueueEntryRow({
           event.stopPropagation();
           onRemove(entry.id);
         }}
-        aria-label="Remove queued message"
+        aria-label={t('Remove queued message')}
         className={ICON_BUTTON_CLASS}
       >
         <X className="size-3" />

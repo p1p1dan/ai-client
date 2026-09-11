@@ -1,3 +1,4 @@
+import { englishTranslate, type Translate } from '@shared/i18n';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import { classifyTool, pairToolBlocks, refusedToolCallIds } from './toolCard';
 
@@ -87,6 +88,14 @@ export function reduceTurnTiming(
 /** Short-thought threshold: below this, the row says "briefly" instead of a second count. */
 export const THOUGHT_BRIEF_THRESHOLD_MS = 5_000;
 
+/**
+ * The three row words. English here is the CATALOG KEY, not the copy a Chinese
+ * user sees: a `ToolRowView.verb` is translated once, at the single `.tsx`
+ * render site (`ToolRows.tsx`), so every row that flows through that view —
+ * tool, thought, aggregate, permission — gets the same treatment from one line
+ * of code. Keeping the key here also keeps this module pure and its tests
+ * readable.
+ */
 export const THOUGHT_VERB = 'Thought';
 export const THINKING_VERB = 'Thinking';
 export const THOUGHT_BRIEF_ARG = 'briefly';
@@ -107,11 +116,14 @@ export interface ThoughtRowText {
  * fabricated duration — they show a bare "Thought" with no `arg` rather than
  * guessing a number (A07 :2399).
  */
-export function formatThoughtRow(input: {
-  durationMs?: number | null;
-  streaming?: boolean;
-  briefThresholdMs?: number;
-}): ThoughtRowText {
+export function formatThoughtRow(
+  input: {
+    durationMs?: number | null;
+    streaming?: boolean;
+    briefThresholdMs?: number;
+  },
+  t: Translate = englishTranslate
+): ThoughtRowText {
   if (input.streaming) {
     return { verb: THINKING_VERB };
   }
@@ -120,13 +132,15 @@ export function formatThoughtRow(input: {
   }
   const threshold = input.briefThresholdMs ?? THOUGHT_BRIEF_THRESHOLD_MS;
   if (input.durationMs < threshold) {
-    return { verb: THOUGHT_VERB, arg: THOUGHT_BRIEF_ARG, argKind: 'prose' };
+    // The arg, unlike the verb, is finished text by the time it leaves here —
+    // it interpolates a number, so it cannot be a bare catalog key downstream.
+    return { verb: THOUGHT_VERB, arg: t(THOUGHT_BRIEF_ARG), argKind: 'prose' };
   }
   return {
     verb: THOUGHT_VERB,
     // FB8: share the turn head's duration formatter -- a bare `${seconds}s` here
     // rendered "for 1702s". One definition of "how a minute is written", repo-wide.
-    arg: `for ${formatWorkedForDuration(input.durationMs)}`,
+    arg: t('for {{duration}}', { duration: formatWorkedForDuration(input.durationMs) }),
     argKind: 'prose',
   };
 }
@@ -170,6 +184,8 @@ export function formatWorkedForRow(
   if (latencyMs == null) return null;
   const duration = formatWorkedForDuration(latencyMs);
   const arg = stats ? `${duration} · ${stats}` : duration;
+  // `verb` is a catalog key (see `THOUGHT_VERB`); `arg` is a duration and an
+  // already-translated `stats`, so neither needs `t` here.
   return { verb: WORKED_FOR_VERB, arg, argKind: 'prose' };
 }
 
@@ -191,7 +207,8 @@ const EDIT_TOOL_NAMES = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
  */
 export function deriveTurnStats(
   message: ChatMessage,
-  options: { style?: 'long' | 'compact' } = {}
+  options: { style?: 'long' | 'compact' } = {},
+  t: Translate = englishTranslate
 ): string | null {
   // A refused call never ran, so it is not work this turn did. Counting it made
   // the head say `1 edit` about a write the user had just declined — the same
@@ -206,12 +223,34 @@ export function deriveTurnStats(
 
   const compact = options.style === 'compact';
   const segments: string[] = [];
+  // Singular and plural are separate keys rather than one key plus an `s`:
+  // English needs both spellings and Chinese needs neither, and a catalog that
+  // only knows the plural would render 「1 个工具s」in one of the two.
   if (toolCount > 0) {
-    const noun = compact ? 'tool' : 'tool call';
-    segments.push(`${toolCount} ${noun}${toolCount === 1 ? '' : 's'}`);
+    segments.push(
+      compact
+        ? toolCount === 1
+          ? t('{{count}} tool', { count: toolCount })
+          : t('{{count}} tools', { count: toolCount })
+        : toolCount === 1
+          ? t('{{count}} tool call', { count: toolCount })
+          : t('{{count}} tool calls', { count: toolCount })
+    );
   }
-  if (searchCount > 0) segments.push(`${searchCount} search${searchCount === 1 ? '' : 'es'}`);
-  if (editCount > 0) segments.push(`${editCount} edit${editCount === 1 ? '' : 's'}`);
+  if (searchCount > 0) {
+    segments.push(
+      searchCount === 1
+        ? t('{{count}} search', { count: searchCount })
+        : t('{{count}} searches', { count: searchCount })
+    );
+  }
+  if (editCount > 0) {
+    segments.push(
+      editCount === 1
+        ? t('{{count}} edit', { count: editCount })
+        : t('{{count}} edits', { count: editCount })
+    );
+  }
 
   if (segments.length === 0) return null;
   return segments.join(compact ? ', ' : ' · ');

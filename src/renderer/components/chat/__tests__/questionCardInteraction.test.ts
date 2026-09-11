@@ -1,11 +1,15 @@
 // @vitest-environment happy-dom
+import { englishTranslate } from '@shared/i18n';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 import type { ChatBlock } from '@/stores/chatSessions';
 import { QuestionCard } from '../QuestionCard';
 
-vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+// The real English translator, not an identity stub: the card now passes
+// params (`{{seconds}}`), and a stub that returned the key verbatim would make
+// every interpolated assertion below vacuous.
+vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate }) }));
 const block: ChatBlock = {
   id: 'q',
   type: 'question',
@@ -127,8 +131,10 @@ it('counts down on the permission card and denies once at zero', async () => {
         })
       )
     );
+    // English because the test store carries no language; the Chinese wording
+    // is the catalog's job now, and `i18nCoverage` is what holds the entry.
     expect(container.querySelector('[role="timer"]')?.textContent).toBe(
-      '若 3 秒内未响应将自动拒绝'
+      'Denied automatically if unanswered within 3s'
     );
     await act(async () => vi.advanceTimersByTime(3_000));
     expect(respond).toHaveBeenCalledExactlyOnceWith('deny');

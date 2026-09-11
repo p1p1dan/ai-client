@@ -165,7 +165,10 @@ describe('[F4-9] the pending turn head carries the ↑ prompt count (F456 §7.4)
 
   it('[F4-9] PendingTurnHead passes promptChars from its own required snapshot', () => {
     const body = pendingHeadBody();
-    expect(body).toContain('deriveTurnStatus({');
+    // Not `deriveTurnStatus({`: the call now takes a second argument (`t`), so
+    // the formatter puts the object literal on its own line. The claim here is
+    // "this head calls it", not "the brace is on that column".
+    expect(body).toContain('deriveTurnStatus(');
     expect(body).toContain('promptChars: sendStatus.promptChars');
     // Not the attached turn's optional form: `sendStatus` is a required prop
     // here (the mount site renders this only when the snapshot exists), so a

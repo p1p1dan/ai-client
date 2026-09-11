@@ -20,6 +20,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { materializeForkedChatSession } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
@@ -43,6 +44,7 @@ export function SessionTreeDialog({
   onOpenChange,
   isIdle,
 }: SessionTreeDialogProps) {
+  const { t } = useI18n();
   const [snapshot, setSnapshot] = useState<SessionTreeSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,8 +130,10 @@ export function SessionTreeDialog({
         entryId: node.id,
       });
       if (!materializeForkedChatSession(result.session)) {
+        // Thrown, then caught two lines down and painted into this dialog's own
+        // error line — so it is user copy, not a log message.
         throw new Error(
-          'Fork was created, but its workspace could not be materialized in this window'
+          t('Fork was created, but its workspace could not be materialized in this window')
         );
       }
       onOpenChange(false);
@@ -147,19 +151,23 @@ export function SessionTreeDialog({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <GitBranch className="size-4.5 text-primary" />
-              Session branches
+              {t('Session branches')}
             </DialogTitle>
             <DialogDescription>
-              Rewinding changes the active path. Later messages stay in this tree and are not
-              deleted.
+              {t(
+                'Rewinding changes the active path. Later messages stay in this tree and are not deleted.'
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogPanel className="min-h-64">
             <div className="mb-2 flex items-center justify-between gap-2 text-meta text-muted-foreground">
               <span>
                 {snapshot
-                  ? `${snapshot.returnedNodes} of ${snapshot.totalNodes} nodes`
-                  : 'Load the Pi-native session tree'}
+                  ? t('{{shown}} of {{total}} nodes', {
+                      shown: snapshot.returnedNodes,
+                      total: snapshot.totalNodes,
+                    })
+                  : t('Load the Pi-native session tree')}
               </span>
               <Button
                 type="button"
@@ -169,7 +177,7 @@ export function SessionTreeDialog({
                 onClick={() => setRefreshNonce((value) => value + 1)}
               >
                 <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
-                Refresh
+                {t('Refresh')}
               </Button>
             </div>
             {error && (
@@ -179,7 +187,9 @@ export function SessionTreeDialog({
             )}
             {display.hiddenCount > 0 && (
               <p className="mb-2 text-meta text-muted-foreground">
-                Showing a bounded window; {display.hiddenCount} nodes are hidden.
+                {t('Showing a bounded window; {{count}} nodes are hidden.', {
+                  count: display.hiddenCount,
+                })}
               </p>
             )}
             <div className="flex flex-col gap-1">
@@ -198,13 +208,13 @@ export function SessionTreeDialog({
                   <span className="shrink-0 text-meta text-muted-foreground">
                     {node.role ?? node.entryType}
                   </span>
-                  {node.leaf && <Badge variant="info">active</Badge>}
+                  {node.leaf && <Badge variant="info">{t('active')}</Badge>}
                   <Button
                     type="button"
                     size="icon-xs"
                     variant="ghost"
-                    title="Rewind here"
-                    aria-label="Rewind here"
+                    title={t('Rewind here')}
+                    aria-label={t('Rewind here')}
                     disabled={!isIdle || mutationPending || node.leaf}
                     onClick={() => setRewindTarget(node)}
                   >
@@ -216,10 +226,10 @@ export function SessionTreeDialog({
                     variant="ghost"
                     title={
                       node.forkable
-                        ? 'Fork from here'
-                        : 'Fork becomes available after the first assistant response'
+                        ? t('Fork from here')
+                        : t('Fork becomes available after the first assistant response')
                     }
-                    aria-label="Fork from here"
+                    aria-label={t('Fork from here')}
                     disabled={!isIdle || mutationPending || !node.forkable}
                     onClick={() => void handleFork(node)}
                   >
@@ -229,14 +239,14 @@ export function SessionTreeDialog({
               ))}
               {!loading && display.nodes.length === 0 && !error && (
                 <p className="py-8 text-center text-ui text-muted-foreground">
-                  This session has no persisted tree nodes yet.
+                  {t('This session has no persisted tree nodes yet.')}
                 </p>
               )}
             </div>
           </DialogPanel>
           <DialogFooter variant="bare">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Close
+              {t('Close')}
             </Button>
           </DialogFooter>
         </DialogPopup>
@@ -248,16 +258,17 @@ export function SessionTreeDialog({
       >
         <AlertDialogPopup zIndexLevel="nested">
           <AlertDialogHeader>
-            <AlertDialogTitle>Rewind this session?</AlertDialogTitle>
+            <AlertDialogTitle>{t('Rewind this session?')}</AlertDialogTitle>
             <AlertDialogDescription>
-              The active conversation will move to “
-              {rewindTarget ? sessionTreeNodeTitle(rewindTarget) : ''}”. Later messages remain
-              available as another branch and the Pi session file is not truncated.
+              {t(
+                'The active conversation will move to “{{node}}”. Later messages remain available as another branch and the Pi session file is not truncated.',
+                { node: rewindTarget ? sessionTreeNodeTitle(rewindTarget) : '' }
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <Button type="button" variant="outline" onClick={() => setRewindTarget(null)}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button
               type="button"
@@ -265,7 +276,7 @@ export function SessionTreeDialog({
               onClick={() => void handleRewind()}
             >
               <RotateCcw />
-              Rewind
+              {t('Rewind')}
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>

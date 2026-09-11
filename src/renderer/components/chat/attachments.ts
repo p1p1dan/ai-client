@@ -7,6 +7,7 @@
  *
  * §12 verification first: __tests__/attachments.test.ts.
  */
+import { englishTranslate, type Translate } from '@shared/i18n';
 import type { ChatSendAttachment } from '@/stores/chatSessions';
 import { formatCharCount, replyCharsLabel } from './countFormat';
 
@@ -410,53 +411,56 @@ export type SendPhase = 'handshake' | 'awaiting';
  * and those assertions are exactly what stops the copy from being reimplemented
  * a second time downstream.
  */
-export function composerSendingLine(input: {
-  phase: SendPhase;
-  elapsedSeconds: number;
-  /**
-   * F456 §7.2: ACCEPTED AND IGNORED. The `(up to Ns)` clause it used to print
-   * was retired outright once F2 re-sourced this to a silence ceiling that
-   * expressly does not end the turn — `up to N` reads as "you will have a
-   * result by then", which is the one promise F2 stopped making.
-   *
-   * Kept on the signature rather than deleted, for the same reason
-   * `shouldShowStatusLine` keeps its `sending` input: remove it and "passing a
-   * budget cannot put a deadline on screen" stops being a statable proposition,
-   * and `[F4-4]` is that proposition.
-   */
-  budgetMs: number;
-  attachmentCount: number;
-  attachmentBytes: number;
-  /**
-   * a1 (2026-07-30 net-visibility batch): the CLI's own transport-retry loop
-   * is in progress for this turn (SessionRetryInfo, minus the fields the
-   * status line has no room for). Appended alongside the existing "waiting"
-   * copy rather than replacing it — the user still gets the familiar framing
-   * ("waiting for reply") plus the one new fact that actually explains the
-   * wait, instead of a wording swap that would make every prior screenshot
-   * and design-doc reference stale.
-   */
-  retry?: { attempt: number; maxRetries: number } | null;
-  /**
-   * F456 §7.4: size of the prompt this turn sent, in CODE POINTS, snapshotted
-   * at the commit point (`ChatComposer.tsx`). `0` — the fallback for a session
-   * that was already running when this window opened and therefore has no
-   * snapshot — omits the `↑` entirely rather than printing a truthful-looking
-   * `↑ 0 chars` for a message that was certainly not empty.
-   */
-  promptChars?: number;
-  /**
-   * F06: characters of assistant PROSE received so far this turn, counted by
-   * `chatTurn.ts`'s `countAssistantReplyChars`. `0` — no assistant text yet, or
-   * a turn this window did not open — omits the `↓` entirely, for the same
-   * reason `promptChars: 0` omits the `↑`: a printed zero would claim an empty
-   * reply where the truth is that nothing has arrived.
-   */
-  replyChars?: number;
-}): string {
+export function composerSendingLine(
+  input: {
+    phase: SendPhase;
+    elapsedSeconds: number;
+    /**
+     * F456 §7.2: ACCEPTED AND IGNORED. The `(up to Ns)` clause it used to print
+     * was retired outright once F2 re-sourced this to a silence ceiling that
+     * expressly does not end the turn — `up to N` reads as "you will have a
+     * result by then", which is the one promise F2 stopped making.
+     *
+     * Kept on the signature rather than deleted, for the same reason
+     * `shouldShowStatusLine` keeps its `sending` input: remove it and "passing a
+     * budget cannot put a deadline on screen" stops being a statable proposition,
+     * and `[F4-4]` is that proposition.
+     */
+    budgetMs: number;
+    attachmentCount: number;
+    attachmentBytes: number;
+    /**
+     * a1 (2026-07-30 net-visibility batch): the CLI's own transport-retry loop
+     * is in progress for this turn (SessionRetryInfo, minus the fields the
+     * status line has no room for). Appended alongside the existing "waiting"
+     * copy rather than replacing it — the user still gets the familiar framing
+     * ("waiting for reply") plus the one new fact that actually explains the
+     * wait, instead of a wording swap that would make every prior screenshot
+     * and design-doc reference stale.
+     */
+    retry?: { attempt: number; maxRetries: number } | null;
+    /**
+     * F456 §7.4: size of the prompt this turn sent, in CODE POINTS, snapshotted
+     * at the commit point (`ChatComposer.tsx`). `0` — the fallback for a session
+     * that was already running when this window opened and therefore has no
+     * snapshot — omits the `↑` entirely rather than printing a truthful-looking
+     * `↑ 0 chars` for a message that was certainly not empty.
+     */
+    promptChars?: number;
+    /**
+     * F06: characters of assistant PROSE received so far this turn, counted by
+     * `chatTurn.ts`'s `countAssistantReplyChars`. `0` — no assistant text yet, or
+     * a turn this window did not open — omits the `↓` entirely, for the same
+     * reason `promptChars: 0` omits the `↑`: a printed zero would claim an empty
+     * reply where the truth is that nothing has arrived.
+     */
+    replyChars?: number;
+  },
+  t: Translate = englishTranslate
+): string {
   const elapsed = Math.max(0, Math.floor(input.elapsedSeconds));
   if (input.phase === 'handshake') {
-    return `Starting Agent Host… · ${elapsed}s`;
+    return t('Starting Agent Host… · {{seconds}}s', { seconds: elapsed });
   }
   // Round-10 inspection ④: no "Network" here — this surface has no
   // errorStatus to discriminate transport failures from upstream 5xx (the
@@ -464,7 +468,10 @@ export function composerSendingLine(input: {
   // The banner (retryBanner.ts), which does see the status, carries the
   // cause-specific wording.
   const retrySuffix = input.retry
-    ? ` · Retry ${input.retry.attempt}/${input.retry.maxRetries}`
+    ? ` · ${t('Retry {{attempt}}/{{max}}', {
+        attempt: input.retry.attempt,
+        max: input.retry.maxRetries,
+      })}`
     : '';
   // The two wording tiers, in the same order `deriveTurnStatus` tests its two
   // kinds — same constants, same sequence, so a `kind` can never describe a
@@ -476,10 +483,14 @@ export function composerSendingLine(input: {
     // is true by construction here: `hasBlocks` routes to `streaming` before
     // this point, and `failed` is a higher-priority kind of its own. The
     // threshold's NUMBER stays out of the copy — the constant owns it.
-    return `Still waiting · ${elapsed}s${retrySuffix} — past the usual range; no reply and no error yet. Stop to abort.`;
+    return `${t('Still waiting · {{seconds}}s', { seconds: elapsed })}${retrySuffix} — ${t(
+      'past the usual range; no reply and no error yet. Stop to abort.'
+    )}`;
   }
   if (elapsed >= SLOW_WAIT_HINT_SECONDS) {
-    return `Still waiting · ${elapsed}s${retrySuffix} — gateway latency varies. Stop to abort.`;
+    return `${t('Still waiting · {{seconds}}s', { seconds: elapsed })}${retrySuffix} — ${t(
+      'gateway latency varies. Stop to abort.'
+    )}`;
   }
   const promptChars = Math.max(0, Math.floor(input.promptChars ?? 0));
   const replyChars = Math.max(0, Math.floor(input.replyChars ?? 0));
@@ -493,15 +504,17 @@ export function composerSendingLine(input: {
   // runs. It never held for CHARACTERS: assistant prose arrives block by block
   // and the renderer already has it, so `↓` is as countable mid-turn as `↑` was
   // at the commit point. The Run surface keeps the settled per-turn totals.
-  const sentCount = promptChars > 0 ? ` · ↑ ${formatCharCount(promptChars)} chars` : '';
+  const sentCount = promptChars > 0 ? ` · ↑ ${formatCharCount(promptChars)} ${t('chars')}` : '';
   // Ordered `↑` then `↓`, question before answer — the same order the turn
   // itself happened in, and the order that lets the two be read as a pair.
-  const replyLabel = replyCharsLabel(replyChars);
+  const replyLabel = replyCharsLabel(replyChars, t);
   const replyCount = replyLabel ? ` · ${replyLabel}` : '';
-  const verb = waitingVerb(elapsed);
+  const verb = t(waitingVerb(elapsed));
   if (input.attachmentCount > 0) {
     const size = formatAttachmentSize(input.attachmentBytes);
-    return `${verb}…${sentCount}${replyCount} · Sent ${size}${retrySuffix} · ${elapsed}s`;
+    return `${verb}…${sentCount}${replyCount} · ${t('Sent {{size}}', {
+      size,
+    })}${retrySuffix} · ${elapsed}s`;
   }
   return `${verb}…${sentCount}${replyCount}${retrySuffix} · ${elapsed}s`;
 }

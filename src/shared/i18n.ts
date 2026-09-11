@@ -135,7 +135,7 @@ export const zhTranslations: Record<string, string> = {
   'Add to favorites': '添加收藏',
   'Remove from favorites': '取消收藏',
   Agent: 'Agent',
-  'Agent session shortcuts': '设置 Agent session 管理快捷键',
+  'Agent session shortcuts': '设置 Agent 会话管理快捷键',
   All: '全部',
   'Already at the first change': '已经是第一处差异',
   'Already at the last change': '已经是最后一处差异',
@@ -186,7 +186,7 @@ export const zhTranslations: Record<string, string> = {
   'Default directory for new temp sessions. Leave empty to use ~/JYWAI/temporary':
     '新建临时会话的默认目录。留空则使用 ~/JYWAI/temporary',
   'Automatically create Agent/Terminal Session when activating a temp session':
-    '激活临时会话时自动创建 Agent/Terminal Session',
+    '激活临时会话时自动创建 Agent / 终端会话',
   'No temp sessions': '暂无临时会话',
   'Create a temp session to get started': '点击“新建临时会话”开始一次临时会话',
   'New Temp Session': '新建临时会话',
@@ -273,7 +273,7 @@ export const zhTranslations: Record<string, string> = {
   'Click the selected repository again to connect and load worktrees.':
     '再次点击当前仓库以连接并加载 worktree。',
   Close: '关闭',
-  'Close Session': '关闭 Session',
+  'Close Session': '关闭会话',
   'Close Tab': '关闭标签',
   'Close Others': '关闭其他',
   'Close Tabs to the Left': '关闭左侧所有',
@@ -283,7 +283,7 @@ export const zhTranslations: Record<string, string> = {
   'Collapse all': '折叠所有',
   'Collapse all folders': '折叠所有文件夹',
   'Collapse file tree': '折叠文件树',
-  'Collapse Repository': '折叠 Repository',
+  'Collapse Repository': '折叠仓库',
   'Collapse Worktree': '折叠 Worktree',
   'Color scheme': '配色',
   Command: '命令',
@@ -382,7 +382,7 @@ export const zhTranslations: Record<string, string> = {
   'Error deleting': '删除失败',
   'Expand all': '展开所有',
   'Expand all folders': '展开所有文件夹',
-  'Expand Repository': '展开 Repository',
+  'Expand Repository': '展开仓库',
   'Expand Worktree': '展开 Worktree',
   'Expand File Sidebar': '展开文件侧栏',
   Favorites: '收藏',
@@ -431,7 +431,7 @@ export const zhTranslations: Record<string, string> = {
   'Loading...': '加载中...',
   'Local branches': '本地分支',
   Look: '外观',
-  'Manage Agent sessions': '设置 Agent session 管理快捷键',
+  'Manage Agent sessions': '设置 Agent 会话管理快捷键',
   Main: 'Main',
   Merged: '已合并',
   Modified: '修改',
@@ -443,7 +443,7 @@ export const zhTranslations: Record<string, string> = {
   'New Group': '新建分组',
   'Group Name': '分组名称',
   'New Folder': '新建文件夹',
-  'New Session': '新建 Session',
+  'New Session': '新建会话',
   'New Tab': '新建标签',
   'New Terminal': '新建终端',
   'New Worktree': '新建 Worktree',
@@ -476,11 +476,11 @@ export const zhTranslations: Record<string, string> = {
   'No worktrees. Create one to get started.': '暂无 Worktree，创建一个开始工作',
   'Not installed': '未安装',
   'Not detected': '未检测',
-  'No agent sessions': '暂无 Agent Session',
+  'No agent sessions': '暂无 Agent 会话',
   'No enabled agents': '没有已启用的 Agent',
   'No terminals open': '暂无终端',
   'Create a terminal to start working': '创建终端以开始工作',
-  'Create a session to start using AI Agent': '创建 Session 以开始使用 AI Agent',
+  'Create a session to start using AI Agent': '创建一个会话，开始使用 AI Agent',
   'File Explorer': '文件浏览器',
   'Select a Worktree': '选择 Worktree',
   'Select a Worktree to browse files': '选择 Worktree 以浏览文件',
@@ -548,7 +548,7 @@ export const zhTranslations: Record<string, string> = {
   'Search workspaces...': '搜索工作区...',
   'Search worktrees...': '搜索 worktree...',
   'Search worktrees': '搜索 worktree',
-  'Search sessions': '搜索 Session',
+  'Search sessions': '搜索会话',
   // Shared by the two terminals' scrollback buttons and the chat timeline's
   // bottom anchor (T12-d) — one wording for one gesture, in both places.
   'Scroll to bottom': '滚动到底部',
@@ -913,7 +913,7 @@ export const zhTranslations: Record<string, string> = {
     '目录已存在，请选择其他路径或分支名',
   'Worktree search placeholder': '搜索 worktree...',
   'Toggle Worktree': '折叠/展开 Worktree',
-  'Toggle Repository': '折叠/展开 Repository',
+  'Toggle Repository': '折叠/展开仓库',
   'Tmux Session': 'Tmux 会话',
   'tmux is not installed. Please install tmux first.': 'tmux 未安装，请先安装 tmux。',
   'Yes, remove': '移除',
@@ -1030,14 +1030,14 @@ export const zhTranslations: Record<string, string> = {
   'New version available': '发现新版本',
   'Next change': '下一处差异',
   'Next change (F8, press again to switch file)': '下一处差异 (F8, 再按切换文件)',
-  'Next Session': '下一个 Session',
+  'Next Session': '下一个会话',
   'Next Tab': '下一个标签',
   'Not a Git repository': '不是 Git 仓库',
   'Open in Terminal': '在终端中打开',
   'Press a shortcut...': '按下快捷键...',
   'Previous change': '上一处差异',
   'Previous change (F7, press again to switch file)': '上一处差异 (F7, 再按切换文件)',
-  'Previous Session': '上一个 Session',
+  'Previous Session': '上一个会话',
   'Previous Tab': '上一个标签',
   Pull: '拉取',
   Pulled: '已拉取',
@@ -1095,7 +1095,8 @@ export const zhTranslations: Record<string, string> = {
   'Repository List Display': '仓库列表展示',
   'Choose how repositories and submodules are displayed in source control':
     '选择版本管理中仓库和子模块的展示方式',
-  List: '列表',
+  // 这条同时服务左侧面板的 Plan/List 类标签和工具行的动词态，统一成动词。
+  List: '列出',
   'VSCode-style collapsible list': 'VSCode 风格可折叠列表',
   Tabs: '标签页',
   'Horizontal tabs for quick switching': '水平标签页，快速切换',
@@ -1209,9 +1210,9 @@ export const zhTranslations: Record<string, string> = {
   'Show indentation guides': '显示缩进引导线',
   // Editing section
   Editing: '编辑',
-  'Auto-create session': '自动创建 Session',
+  'Auto-create session': '自动创建会话',
   'Automatically create Agent/Terminal session when activating a worktree':
-    '激活 Worktree 时自动创建 Agent/Terminal Session',
+    '激活 Worktree 时自动创建 Agent / 终端会话',
   'Quick Terminal': '快捷终端',
   'Enable Quick Terminal': '启用快捷终端',
   'Show floating terminal button for quick access': '显示浮动终端按钮以便快速访问',
@@ -2103,7 +2104,7 @@ export const zhTranslations: Record<string, string> = {
   'Accept edits': '自动接受编辑',
   "Don't ask": '不再询问',
   'Bypass permissions': '跳过权限确认',
-  Plan: '规划模式',
+  Plan: '规划',
   // D48 S4 — the Composer's live (mid-session) permission chip.
   'Applies from your next message — a turn already running keeps the tier it started with.':
     '从你的下一条消息起生效——已经在跑的这一回合仍沿用它开始时的档位。',
@@ -2351,6 +2352,176 @@ export const zhTranslations: Record<string, string> = {
   'Not signed in': '未登录',
   'Sign in again': '重新登录',
   'Sign in': '登录',
+
+  // ── 批次 4：硬编码英文残留（2026-09-11）────────────────────────────────
+  //
+  // 上一轮补的是「走了 t() 却没有词条」的那批。这一批不一样：这些字符串
+  // 根本没经过 t()，所以 i18nCoverage 扫不到，中文界面里就一直是英文。
+  //
+  // 时间线的工具动词、思考动词、子 Agent 面板动词。这些词以「键」的形式一路
+  // 传到 ToolRows.tsx 才翻译（见 ToolRowView.verb），所以扫描器看不到它们 —
+  // 同目录的 toolVocabulary 测试专门盯住这三张表。
+  Read: '读取',
+  Reading: '读取中',
+  Edited: '已编辑',
+  Ran: '已运行',
+  Grep: '搜索内容',
+  Grepped: '已搜索内容',
+  Grepping: '搜索内容中',
+  'Searched files': '已搜索文件',
+  'Searching files': '搜索文件中',
+  Listed: '已列出',
+  Listing: '列出中',
+  Searched: '已搜索',
+  Searching: '搜索中',
+  Fetched: '已获取',
+  Fetching: '获取中',
+  Planned: '已规划',
+  Planning: '规划中',
+  Delegate: '委派',
+  Delegated: '已委派',
+  Delegating: '委派中',
+  Explored: '已浏览',
+  Exploring: '浏览中',
+  Thought: '已思考',
+  briefly: '片刻',
+  'Worked for': '耗时',
+  Subagent: '子 Agent',
+  Said: '回复',
+  Capped: '已达上限',
+
+  // 工具行的参数段。这些带占位符，必须在构造时就翻译好。
+  'for {{duration}}': '耗时 {{duration}}',
+  '{{pattern}} in {{repo}}': '{{pattern}}（{{repo}}）',
+  '{{count}} tool call': '{{count}} 次工具调用',
+  '{{count}} tool calls': '{{count}} 次工具调用',
+  '{{count}} tool': '{{count}} 个工具',
+  '{{count}} tools': '{{count}} 个工具',
+  '{{count}} search': '{{count}} 次搜索',
+  '{{count}} searches': '{{count}} 次搜索',
+  '{{count}} edit': '{{count}} 次编辑',
+  '{{count}} edits': '{{count}} 次编辑',
+  '{{count}} file': '{{count}} 个文件',
+  '{{count}} tokens': '{{count}} tokens',
+
+  // 子 Agent 面板。
+  'From subagent': '来自子 Agent',
+  'From subagent · {{detail}}': '来自子 Agent · {{detail}}',
+  'Awaiting permission · {{tool}}': '等待授权 · {{tool}}',
+  '+{{count}} earlier': '另有 {{count}} 条更早的',
+  'activity feed capped — remaining live updates dropped': '活动流已达上限 —— 后续实时更新不再显示',
+
+  // 权限卡。Allow / Deny 复用权限设置页已有的「直接允许 / 直接拒绝」：
+  // 在卡片上按下去就是直接放行/拒绝这一次，两处读法一致。
+  Permission: '权限',
+  'Allow for session': '本会话内允许',
+  'Deny and stop': '拒绝并停止',
+  Allowed: '已允许',
+  'Allowed for session': '本会话内已允许',
+  Denied: '已拒绝',
+  'Denied, turn stopped': '已拒绝，本轮已停止',
+  Waiting: '等待中',
+  'diff clamped': '差异已截断',
+  'High risk': '高风险',
+  'Needs confirmation': '需确认',
+  'Low risk': '低风险',
+  'The runtime reported no command for this request': '运行时未报告命令内容',
+  'The runtime offered {{count}} more options this build cannot show':
+    '运行时还提供了 {{count}} 个本版本未支持的选项，未显示',
+  'This command also asked for extra permissions ({{files}} file entries / network {{network}})':
+    '此命令还申请了额外权限（文件系统 {{files}} 项 / 网络 {{network}}）',
+  'Also grants writes under {{path}} for this session': '同时允许在 {{path}} 下写入，本会话有效',
+  '{{count}} more files are not shown': '另有 {{count}} 个文件未显示',
+  'cwd: {{path}}': '工作目录：{{path}}',
+  'Network: {{target}}': '网络：{{target}}',
+  'auto: {{reason}}': '自动：{{reason}}',
+  'Project: {{name}}': '项目：{{name}}',
+  'Denied automatically if unanswered within {{seconds}}s': '若 {{seconds}} 秒内未响应将自动拒绝',
+  yes: '是',
+  no: '否',
+
+  // 审批记录行（T08-b）。surface / origin / matchedPattern 是插件自己的标识符，
+  // 原样透出；这里翻的是包在它们外面的那层话。
+  request: '请求',
+  'for a subagent': '代子 Agent 请求',
+  'for subagent {{name}}': '代子 Agent {{name}} 请求',
+  'Permission check failed — {{surface}}': '权限检查失败 —— {{surface}}',
+  'Awaiting approval — {{surface}}': '等待审批 —— {{surface}}',
+  'Denied {{surface}}': '已拒绝 {{surface}}',
+  'Allowed {{surface}}': '已允许 {{surface}}',
+  'matched {{pattern}}': '命中规则 {{pattern}}',
+  'from {{origin}}': '来自 {{origin}}',
+  // 插件的 resolution 枚举去掉下划线后当键用：认得的照这里翻，不认得的原样显示。
+  'policy allow': '策略放行',
+  'gate error': '闸门出错',
+
+  // 输入框占位与排队提示。
+  'Creating session with Agent Host (first message only)…':
+    '正在与 Agent Host 建立会话（仅首条消息）…',
+  'Sending to Agent Host…': '正在发送到 Agent Host…',
+  'Sending {{count}} attachment to Agent Host…': '正在向 Agent Host 发送 {{count}} 个附件…',
+  'Sending {{count}} attachments to Agent Host…': '正在向 Agent Host 发送 {{count}} 个附件…',
+  'Add more optional details…': '可以再补充一些信息…',
+  'Queued {{count}} — type another follow-up…': '已排队 {{count}} 条 —— 可以接着输入…',
+  'Agent Host is running — your message will be queued…':
+    'Agent Host 正在运行 —— 你的消息会先排队…',
+  'Active session has no workspace…': '当前会话没有工作区…',
+  'Choose a working directory to start…': '先选一个工作目录…',
+  'Send follow-up…': '继续输入…',
+  'Message Pi…': '给 Pi 发消息…',
+  'Cannot send right now…': '现在无法发送…',
+  'Move queued message up': '把排队消息上移',
+  'Move queued message down': '把排队消息下移',
+  'Edit queued message': '编辑排队消息',
+  'Remove queued message': '移除排队消息',
+
+  // 回合进行中的状态行。等待动词按秒轮换，整张表都要有词条。
+  'Starting Agent Host… · {{seconds}}s': '正在启动 Agent Host… · {{seconds}}s',
+  'Still waiting · {{seconds}}s': '仍在等待 · {{seconds}}s',
+  'past the usual range; no reply and no error yet. Stop to abort.':
+    '已超出常见时长；既没有回复也没有报错。按停止可中止。',
+  'gateway latency varies. Stop to abort.': '网关延迟本身就有波动。按停止可中止。',
+  'Retry {{attempt}}/{{max}}': '重试 {{attempt}}/{{max}}',
+  'Sent {{size}}': '已发送 {{size}}',
+  Pondering: '思索中',
+  Percolating: '酝酿中',
+  Ruminating: '琢磨中',
+  Noodling: '盘算中',
+  Mulling: '掂量中',
+  Simmering: '慢炖中',
+  Marinating: '腌制中',
+  Cogitating: '推敲中',
+  Deliberating: '斟酌中',
+  Brewing: '冲泡中',
+  Puzzling: '解谜中',
+  Contemplating: '沉思中',
+
+  // 会话分支对话框（整个文件此前没有接过 i18n）。
+  'Session branches': '会话分支',
+  'Rewinding changes the active path. Later messages stay in this tree and are not deleted.':
+    '回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。',
+  '{{shown}} of {{total}} nodes': '共 {{total}} 个节点，显示 {{shown}} 个',
+  'Load the Pi-native session tree': '加载 Pi 原生会话树',
+  'Showing a bounded window; {{count}} nodes are hidden.':
+    '只显示有限范围，另有 {{count}} 个节点未显示。',
+  active: '当前',
+  'Rewind here': '回退到这里',
+  Rewind: '回退',
+  'Rewind this session?': '确认回退这个会话？',
+  'The active conversation will move to “{{node}}”. Later messages remain available as another branch and the Pi session file is not truncated.':
+    '当前对话会切到「{{node}}」。之后的消息会保留为另一条分支，Pi 的会话文件不会被截断。',
+  'Fork from here': '从这里分叉',
+  'Fork becomes available after the first assistant response': '要等助手给出第一条回复后才能分叉',
+  'Fork was created, but its workspace could not be materialized in this window':
+    '分叉已创建，但它的工作区无法在这个窗口里装载',
+  'This session has no persisted tree nodes yet.': '这个会话还没有落盘的树节点。',
+
+  // 模型按钮的可访问名与 tooltip。屏幕阅读器按界面语言念，所以也走词条。
+  'applies to the next turn': '对下一轮生效',
+  'Model and reasoning effort: {{selection}} — {{scope}}':
+    '模型与思考强度：{{selection}} —— {{scope}}',
+  '{{selection}} — click to change model or reasoning effort ({{scope}})':
+    '{{selection}} —— 点击可更换模型或思考强度（{{scope}}）',
 };
 
 export function normalizeLocale(input?: string): Locale {
@@ -2377,3 +2548,25 @@ export function translate(
     return value === undefined ? match : String(value);
   });
 }
+
+/**
+ * The shape `useI18n().t` has, restated without React so the renderer's PURE
+ * text modules can take one as a parameter.
+ *
+ * They have no hook to call and no business subscribing to a store: a module
+ * that folds blocks into a view model must stay a function of its inputs. So
+ * the locale arrives the same way every other input does — passed in by the
+ * component that is already holding `t`.
+ */
+export type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+/**
+ * The default for those parameters: English, i.e. the key with its `{{…}}`
+ * filled in.
+ *
+ * This is what makes the parameter safe to add to an existing signature. A call
+ * site that has not been threaded yet keeps producing exactly the bytes it
+ * produced before, which is also the correct output for `locale === 'en'` — so
+ * an un-threaded path is a missing TRANSLATION, never a broken string.
+ */
+export const englishTranslate: Translate = (key, params) => translate('en', key, params);

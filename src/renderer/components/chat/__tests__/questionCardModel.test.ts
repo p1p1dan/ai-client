@@ -681,7 +681,9 @@ describe('permission card body — exec (A8 renderer half)', () => {
     );
     expect(view?.warnings).toHaveLength(1);
     expect(view?.warnings[0]).toContain('3');
-    expect(view?.warnings[0]).toContain('是');
+    // The network flag, in whatever language the passed-in `t` speaks — English
+    // here, since these builders default to it.
+    expect(view?.warnings[0]).toContain('yes');
   });
 
   it('no extra permissions: no warning line at all', () => {
@@ -1036,7 +1038,9 @@ describe('permission card body (2026-09-10)', () => {
 
   it('shows what is about to be written, and where', () => {
     const view = derivePermissionCardView(block(), true);
-    expect(view.content).toEqual({ label: '写入内容', text: 'pong' });
+    // The label is a catalog KEY now (the runtime sends `Content` itself), so
+    // `QuestionCard.tsx` is what turns it into words.
+    expect(view.content).toEqual({ label: 'Content', text: 'pong' });
     expect(view.workspace).toBe('/repo');
     expect(view.risk).toBe('high');
   });
@@ -1059,7 +1063,7 @@ describe('permission card body (2026-09-10)', () => {
       block({ toolName: 'bash', permissionKind: 'tool', toolInput: { command: 'ls -la' } }),
       true
     );
-    expect(view.content).toEqual({ label: '命令', text: 'ls -la' });
+    expect(view.content).toEqual({ label: 'Command', text: 'ls -la' });
   });
 
   it('reads quieter for a gate that only touches what it can undo', () => {

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { englishTranslate } from '@shared/i18n';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -20,7 +21,10 @@ import {
   usePermissionGateStore,
 } from '../permissionGate';
 
-vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+// The real English translator rather than an identity stub: the approval rows
+// interpolate (`Allowed {{surface}}`), and a stub that returned the key
+// verbatim would assert on a string no user ever sees.
+vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate }) }));
 
 /**
  * P4-5, renderer half — what the user sees when the native backend drives.

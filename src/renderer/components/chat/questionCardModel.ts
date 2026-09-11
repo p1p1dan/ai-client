@@ -1,3 +1,4 @@
+import { englishTranslate, type Translate } from '@shared/i18n';
 import type {
   PermissionDecisionId,
   PermissionFileChange,
@@ -301,6 +302,15 @@ export function deriveFrozenPairs(block: ChatBlock): FrozenPair[] {
 
 // ---- Permission thin adapter ----
 
+/**
+ * The card's fixed vocabulary, as TRANSLATION KEYS.
+ *
+ * English is the key, not the copy: a Chinese UI showed literal "Allow" /
+ * "Deny" buttons because these constants went straight to the DOM. They now go
+ * through `t` — at the render site for the ones that reach paint as a bare word
+ * (`ToolRows.tsx` translates a row's `verb`), and inside the builders below for
+ * the ones that get composed into a longer string first.
+ */
 export const PERMISSION_TITLE = 'Permission';
 export const PERMISSION_ALLOW = 'Allow';
 export const PERMISSION_ALLOW_SESSION = 'Allow for session';
@@ -396,12 +406,19 @@ export function buildPermissionOptionRows(decisions: readonly PermissionDecision
  * Card-bottom line for decisions the Host could not model (C9 pins the
  * position): a narrowed choice must never look like the whole choice.
  */
-export function derivePermissionOmittedNote(count: number | undefined): string | null {
+export function derivePermissionOmittedNote(
+  count: number | undefined,
+  t: Translate = englishTranslate
+): string | null {
   if (count === undefined || count <= 0) return null;
-  return `运行时还提供了 ${count} 个本版本未支持的选项，未显示`;
+  return t('The runtime offered {{count}} more options this build cannot show', { count });
 }
 
-/** The verb a settled card shows: the decision when we have one, else the boolean. */
+/**
+ * The verb a settled card shows: the decision when we have one, else the
+ * boolean. Returned as a KEY — its two render sites (`ToolRows.tsx`'s row tail
+ * and the frozen answer below) translate it.
+ */
 export function derivePermissionVerb(block: ChatBlock): string {
   const decision = block.permissionDecision;
   if (isKnownDecision(decision)) return PERMISSION_DECISION_VERBS[decision];
@@ -415,25 +432,33 @@ export function derivePermissionVerb(block: ChatBlock): string {
  * implied and, before this field existed, could not prove: a drained approval
  * was drawn as a plain "Denied", indistinguishable from a real refusal.
  */
-export function derivePermissionAutoNote(block: ChatBlock): string | null {
-  return block.permissionAutoReason ? `auto: ${block.permissionAutoReason}` : null;
+export function derivePermissionAutoNote(
+  block: ChatBlock,
+  t: Translate = englishTranslate
+): string | null {
+  return block.permissionAutoReason
+    ? t('auto: {{reason}}', { reason: block.permissionAutoReason })
+    : null;
 }
 
 /** Provenance always goes at the tail, whichever string carries it. */
-function withAutoNote(text: string, block: ChatBlock): string {
-  const note = derivePermissionAutoNote(block);
+function withAutoNote(text: string, block: ChatBlock, t: Translate): string {
+  const note = derivePermissionAutoNote(block, t);
   return note ? `${text} · ${note}` : text;
 }
 
 // ---- Permission card body ----
 
+/** Key, translated where it renders (`QuestionCard.tsx`'s file row). */
 export const PERMISSION_DIFF_CLAMPED_MARK = 'diff clamped';
 /**
  * A command approval whose `command` is null is a declared shape, not a broken
  * frame — so the card says what it does not know instead of rendering an empty
  * box (and instead of auto-denying a whole class of approval).
+ *
+ * A key like the rest, so the `en` locale stops showing a Chinese sentence.
  */
-export const PERMISSION_NO_COMMAND_NOTE = '运行时未报告命令内容';
+export const PERMISSION_NO_COMMAND_NOTE = 'The runtime reported no command for this request';
 
 const PERMISSION_CHANGE_BADGES: Readonly<Record<PermissionFileChange['change'], string>> = {
   add: 'A',
@@ -544,19 +569,34 @@ function isEmptyDetailView(view: PermissionDetailView): boolean {
   );
 }
 
-export function derivePermissionDetailView(block: ChatBlock): PermissionDetailView | null {
+export function derivePermissionDetailView(
+  block: ChatBlock,
+  t: Translate = englishTranslate
+): PermissionDetailView | null {
   const detail = block.permissionDetail;
   if (!detail) return null;
 
   if (detail.kind === 'exec') {
     const meta: string[] = [];
-    if (detail.cwd) meta.push(`cwd: ${detail.cwd}`);
-    if (detail.network) meta.push(`Network: ${detail.network.protocol}://${detail.network.host}`);
+    if (detail.cwd) meta.push(t('cwd: {{path}}', { path: detail.cwd }));
+    if (detail.network) {
+      meta.push(
+        t('Network: {{target}}', {
+          target: `${detail.network.protocol}://${detail.network.host}`,
+        })
+      );
+    }
     const warnings: string[] = [];
     if (detail.extraPermissions) {
       const { fileSystemEntries, networkRequested } = detail.extraPermissions;
       warnings.push(
-        `此命令还申请了额外权限（文件系统 ${fileSystemEntries} 项 / 网络 ${networkRequested ? '是' : '否'}）`
+        t(
+          'This command also asked for extra permissions ({{files}} file entries / network {{network}})',
+          {
+            files: fileSystemEntries,
+            network: networkRequested ? t('yes') : t('no'),
+          }
+        )
       );
     }
     const command = detail.command ?? null;
@@ -566,7 +606,7 @@ export function derivePermissionDetailView(block: ChatBlock): PermissionDetailVi
       meta,
       files: [],
       warnings,
-      notes: command === null ? [PERMISSION_NO_COMMAND_NOTE] : [],
+      notes: command === null ? [t(PERMISSION_NO_COMMAND_NOTE)] : [],
     };
   }
 
@@ -584,11 +624,13 @@ export function derivePermissionDetailView(block: ChatBlock): PermissionDetailVi
   });
   const warnings: string[] = [];
   if (detail.grantRoot) {
-    warnings.push(`同时允许在 ${detail.grantRoot} 下写入，本会话有效`);
+    warnings.push(
+      t('Also grants writes under {{path}} for this session', { path: detail.grantRoot })
+    );
   }
   const notes: string[] = [];
   if (detail.omittedFileCount !== undefined && detail.omittedFileCount > 0) {
-    notes.push(`另有 ${detail.omittedFileCount} 个文件未显示`);
+    notes.push(t('{{count}} more files are not shown', { count: detail.omittedFileCount }));
   }
   const view: PermissionDetailView = {
     kind: 'file_change',
@@ -674,11 +716,16 @@ export function permissionSecondsLeft(expiresAt: number | undefined, now: number
 export function derivePermissionContent(block: ChatBlock): { label: string; text: string } | null {
   const content = readInputField(block.toolInput, 'content');
   if (content) {
-    return { label: readInputField(block.toolInput, 'contentLabel') ?? '写入内容', text: content };
+    // `contentLabel` is the runtime's own word for this body (`Content` for a
+    // write; `src/runtime/plugins/tools/index.ts`). It is English there because
+    // the worker has no locale, so it is treated as a catalog KEY here and
+    // translated where the card paints it — the same treatment the fallback
+    // gets, so the two cannot drift into different languages on one card.
+    return { label: readInputField(block.toolInput, 'contentLabel') ?? 'Content', text: content };
   }
   if (block.permissionDetail?.kind === 'exec') return null;
   const command = readInputField(block.toolInput, 'command');
-  return command ? { label: '命令', text: command } : null;
+  return command ? { label: 'Command', text: command } : null;
 }
 
 /**
@@ -704,11 +751,12 @@ export function canRespondToPermission(
 
 export function derivePermissionCardView(
   block: ChatBlock,
-  canRespond: boolean
+  canRespond: boolean,
+  t: Translate = englishTranslate
 ): PermissionCardView {
   const prompt = derivePermissionPrompt(block);
-  const detail = derivePermissionDetailView(block);
-  const omittedNote = derivePermissionOmittedNote(block.omittedDecisionCount);
+  const detail = derivePermissionDetailView(block, t);
+  const omittedNote = derivePermissionOmittedNote(block.omittedDecisionCount, t);
   const risk = derivePermissionRisk(block);
   const content = derivePermissionContent(block);
   const workspace = readInputField(block.toolInput, 'workspace');
@@ -726,7 +774,7 @@ export function derivePermissionCardView(
         {
           key: 'permission',
           question: prompt,
-          answer: withAutoNote(derivePermissionVerb(block), block),
+          answer: withAutoNote(t(derivePermissionVerb(block)), block, t),
           skipped: false,
         },
       ],
@@ -778,16 +826,18 @@ export function derivePermissionCardView(
  */
 export function derivePermissionRowView(
   block: ChatBlock,
-  originLabel?: string | null
+  originLabel?: string | null,
+  t: Translate = englishTranslate
 ): ToolRowView | null {
   if (block.resolved !== true) return null;
   const prompt = derivePermissionPrompt(block);
   return {
     key: block.id,
+    // A key, per `ToolRowView.verb` — `ToolRows.tsx` translates it.
     verb: derivePermissionVerb(block),
     // `auto:` sits after the origin chip because both are provenance and the
     // tail is where this row puts it; the verb stays the decision alone.
-    arg: withAutoNote(originLabel ? `${prompt} · ${originLabel}` : prompt, block),
+    arg: withAutoNote(originLabel ? `${prompt} · ${originLabel}` : prompt, block, t),
     argKind: 'prose',
     running: false,
     // Still the boolean: `allow_session` is an allow and `cancel` is a deny,

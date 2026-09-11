@@ -1281,6 +1281,7 @@ const ChatTurn = memo(function ChatTurn({
   canRespondPermission,
   onRespondPermission,
 }: ChatTurnProps) {
+  const { t } = useI18n();
   // One flatten per turn, feeding both the render and the copy payload (F7):
   // the copy builder's `Turn` overload used to re-run `flattenTurnItems` — and
   // through it `groupTimeline`/`pairToolBlocks` over every block — a second
@@ -1382,45 +1383,48 @@ const ChatTurn = memo(function ChatTurn({
   // A turn that is running with NEITHER clock (a session left running before
   // this window opened) gets no status row rather than one frozen at "0s" —
   // the composer showed nothing in that case either, so no information is lost.
-  const status = deriveTurnStatus({
-    active: turnActive,
-    phase: sendStatus?.phase ?? 'awaiting',
-    elapsedSeconds,
-    budgetMs: sendStatus?.budgetMs ?? DEFAULT_REPLY_BUDGET_MS,
-    attachmentCount: sendStatus?.attachmentCount ?? 0,
-    attachmentBytes: sendStatus?.attachmentBytes ?? 0,
-    // F456 §7.4: `?? 0` is the "session already running when this window
-    // opened" path the fallbacks above serve — and 0 omits the `↑` rather than
-    // printing `↑ 0 chars`, so a missing snapshot never reads as an empty
-    // prompt. The pending head below needs no such fallback: its snapshot is a
-    // required prop.
-    promptChars: sendStatus?.promptChars ?? 0,
-    // F06: counted off THIS turn's own body, so it needs no snapshot and no
-    // reset — a new send opens a new turn whose body starts empty. It is
-    // available in the fallback case above too (a session already running when
-    // this window opened has no `sendStatus`, but its reply text is still on
-    // screen and still countable).
-    replyChars: countAssistantReplyChars(turn.body),
-    retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
-    hasBlocks: turnHasBlocks,
-    // F4: a session failure belongs to the turn that was actually running when
-    // it happened — never to the completed turn that merely happens to be last
-    // while the next send's user echo is still in flight, and never to a
-    // restored history turn. `ownsSessionFailure` holds that whole judgement;
-    // a failure with no owning turn stays with the session-level block below
-    // (§9-ζ, position unchanged).
-    failed: ownsSessionFailure({
-      isLastTurn,
-      sessionFailed: sessionStatus === 'failed',
-      hasUser: turn.user != null,
-      bodyEmpty: turn.body.length === 0,
-      userMessageId: turn.user?.id ?? null,
-      baselineKnown,
-      baselineMessageId,
-      turnComplete,
-      hasLiveMessage: hasLiveTurnEvidence(bodyMetadata),
-    }),
-  });
+  const status = deriveTurnStatus(
+    {
+      active: turnActive,
+      phase: sendStatus?.phase ?? 'awaiting',
+      elapsedSeconds,
+      budgetMs: sendStatus?.budgetMs ?? DEFAULT_REPLY_BUDGET_MS,
+      attachmentCount: sendStatus?.attachmentCount ?? 0,
+      attachmentBytes: sendStatus?.attachmentBytes ?? 0,
+      // F456 §7.4: `?? 0` is the "session already running when this window
+      // opened" path the fallbacks above serve — and 0 omits the `↑` rather than
+      // printing `↑ 0 chars`, so a missing snapshot never reads as an empty
+      // prompt. The pending head below needs no such fallback: its snapshot is a
+      // required prop.
+      promptChars: sendStatus?.promptChars ?? 0,
+      // F06: counted off THIS turn's own body, so it needs no snapshot and no
+      // reset — a new send opens a new turn whose body starts empty. It is
+      // available in the fallback case above too (a session already running when
+      // this window opened has no `sendStatus`, but its reply text is still on
+      // screen and still countable).
+      replyChars: countAssistantReplyChars(turn.body),
+      retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
+      hasBlocks: turnHasBlocks,
+      // F4: a session failure belongs to the turn that was actually running when
+      // it happened — never to the completed turn that merely happens to be last
+      // while the next send's user echo is still in flight, and never to a
+      // restored history turn. `ownsSessionFailure` holds that whole judgement;
+      // a failure with no owning turn stays with the session-level block below
+      // (§9-ζ, position unchanged).
+      failed: ownsSessionFailure({
+        isLastTurn,
+        sessionFailed: sessionStatus === 'failed',
+        hasUser: turn.user != null,
+        bodyEmpty: turn.body.length === 0,
+        userMessageId: turn.user?.id ?? null,
+        baselineKnown,
+        baselineMessageId,
+        turnComplete,
+        hasLiveMessage: hasLiveTurnEvidence(bodyMetadata),
+      }),
+    },
+    t
+  );
 
   /*
    * T12-b retired `deriveTurnHeadModel` and the `status -> workedFor -> stats
@@ -1679,20 +1683,24 @@ function PendingTurnHead({
   sendStatus: TurnSendStatus;
   retry: SessionRetryInfo | null;
 }) {
-  const status = deriveTurnStatus({
-    active: true,
-    phase: sendStatus.phase,
-    elapsedSeconds: sendStatus.elapsedSeconds,
-    budgetMs: sendStatus.budgetMs,
-    attachmentCount: sendStatus.attachmentCount,
-    attachmentBytes: sendStatus.attachmentBytes,
-    // F456 §7.4: the EARLIEST window this count can appear in, and the one
-    // where it says the most — no user bubble exists yet, so `↑ 428 chars` is
-    // the only thing on screen describing what was just sent.
-    promptChars: sendStatus.promptChars,
-    retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
-    hasBlocks: false,
-  });
+  const { t } = useI18n();
+  const status = deriveTurnStatus(
+    {
+      active: true,
+      phase: sendStatus.phase,
+      elapsedSeconds: sendStatus.elapsedSeconds,
+      budgetMs: sendStatus.budgetMs,
+      attachmentCount: sendStatus.attachmentCount,
+      attachmentBytes: sendStatus.attachmentBytes,
+      // F456 §7.4: the EARLIEST window this count can appear in, and the one
+      // where it says the most — no user bubble exists yet, so `↑ 428 chars` is
+      // the only thing on screen describing what was just sent.
+      promptChars: sendStatus.promptChars,
+      retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
+      hasBlocks: false,
+    },
+    t
+  );
   // T-33: the pending head's existence is itself the in-flight proof, and no
   // turn exists yet, so the other two gate inputs are literals here.
   const retryBanner = deriveRetryBanner({ retry, inFlight: true, outputSinceRetry: false });
@@ -2024,14 +2032,16 @@ function ToolGroupItem({
   streamingBlockId: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
 }) {
+  const { t } = useI18n();
   const rows = useMemo(
     () =>
       deriveToolGroupRows(filterThinkingEntries(item.entries, thinkingEnabled), {
         repoName,
         thinkingDurationMs: getThinkingDurationMs,
         isStreamingBlockId: streamingBlockId,
+        t,
       }),
-    [item.entries, thinkingEnabled, repoName, getThinkingDurationMs, streamingBlockId]
+    [item.entries, thinkingEnabled, repoName, getThinkingDurationMs, streamingBlockId, t]
   );
   return <ToolGroup rows={rows} sessionId={sessionId} showDiff={false} />;
 }

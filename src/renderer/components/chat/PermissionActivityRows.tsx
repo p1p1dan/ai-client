@@ -60,11 +60,12 @@ export function PermissionActivityRows({
   blocks: readonly ChatBlock[];
   includeAllowed?: boolean;
 }) {
+  const { t } = useI18n();
   const views = blocks
     .filter((block) => includeAllowed || !isQuietPermissionActivity(block.permissionActivity))
     .map((block) => block.permissionActivity)
     .filter((record): record is NonNullable<typeof record> => record !== undefined)
-    .map(derivePermissionActivityRow);
+    .map((record) => derivePermissionActivityRow(record, t));
   if (views.length === 0) return null;
 
   return (

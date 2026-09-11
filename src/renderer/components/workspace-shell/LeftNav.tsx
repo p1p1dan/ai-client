@@ -462,7 +462,7 @@ export function LeftNav({
               onClick={handleNewSession}
             >
               <Plus className="h-3.5 w-3.5" />
-              New
+              {t('New')}
             </Button>
             {/* Replaces a permanently disabled "Workspace" placeholder: the
                     new shell had no reachable way to register a repository. */}

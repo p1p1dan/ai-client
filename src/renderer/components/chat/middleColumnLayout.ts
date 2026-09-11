@@ -11,6 +11,7 @@
  * target bar).
  */
 
+import { englishTranslate, type Translate } from '@shared/i18n';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { isSessionBusy } from './sessionIndex/resumeIntent';
 
@@ -1041,42 +1042,45 @@ export const PENDING_QUESTION_PLACEHOLDER = 'Add more optional details…';
  * copy is simply wrong — it tells the user to do something they no longer
  * need to.
  */
-export function composerPlaceholder(input: {
-  mode: MiddleColumnMode;
-  canSend: boolean;
-  busy: boolean;
-  sending: boolean;
-  hasSession: boolean;
-  hasWorkspace: boolean;
-  /**
-   * T12-e: the resolved working directory. Separate from `hasWorkspace`
-   * because a workspace can be present but not targetable (an empty path, so
-   * a fake cwd can never reach spawn) — the state a fresh install is in.
-   * Optional so callers that genuinely do not know keep their old behaviour
-   * rather than silently claiming "no directory".
-   */
-  hasCwd?: boolean;
-  /**
-   * U05-b: this chat is unbound — it has no workspace and no cwd on purpose,
-   * and gets an isolated directory on its first send. Suppresses the two
-   * "finish setting up" rungs below, which would otherwise tell the user to
-   * fix something that is not broken.
-   */
-  unbound?: boolean;
-  attachmentCount: number;
-  /** T-05: this session has a pending question dock showing. */
-  pendingQuestion?: boolean;
-  /** T-19: messages already queued for this session while a turn runs. */
-  queuedCount?: number;
-  /**
-   * Round-2 P0: this send is a brand-new session's first message, going
-   * through the create-session handshake (close → createSession → wait for
-   * session.created, up to ~5s) rather than the instant 'direct' path an
-   * already-bound session takes. Gets its own copy so a slow first message
-   * doesn't read like an ordinary follow-up sitting in flight.
-   */
-  isCreatingSession?: boolean;
-}): string {
+export function composerPlaceholder(
+  input: {
+    mode: MiddleColumnMode;
+    canSend: boolean;
+    busy: boolean;
+    sending: boolean;
+    hasSession: boolean;
+    hasWorkspace: boolean;
+    /**
+     * T12-e: the resolved working directory. Separate from `hasWorkspace`
+     * because a workspace can be present but not targetable (an empty path, so
+     * a fake cwd can never reach spawn) — the state a fresh install is in.
+     * Optional so callers that genuinely do not know keep their old behaviour
+     * rather than silently claiming "no directory".
+     */
+    hasCwd?: boolean;
+    /**
+     * U05-b: this chat is unbound — it has no workspace and no cwd on purpose,
+     * and gets an isolated directory on its first send. Suppresses the two
+     * "finish setting up" rungs below, which would otherwise tell the user to
+     * fix something that is not broken.
+     */
+    unbound?: boolean;
+    attachmentCount: number;
+    /** T-05: this session has a pending question dock showing. */
+    pendingQuestion?: boolean;
+    /** T-19: messages already queued for this session while a turn runs. */
+    queuedCount?: number;
+    /**
+     * Round-2 P0: this send is a brand-new session's first message, going
+     * through the create-session handshake (close → createSession → wait for
+     * session.created, up to ~5s) rather than the instant 'direct' path an
+     * already-bound session takes. Gets its own copy so a slow first message
+     * doesn't read like an ordinary follow-up sitting in flight.
+     */
+    isCreatingSession?: boolean;
+  },
+  t: Translate = englishTranslate
+): string {
   // Stop-hang fix (2026-08-10): computed up front so the `sending` branch can
   // stand DOWN for it. `sending` used to win outright, so a follow-up typed
   // during a turn was told "Sending to Agent Host…" when `decideSendAction`
@@ -1093,14 +1097,17 @@ export function composerPlaceholder(input: {
     (input.queuedCount ?? 0) > 0 && (input.hasWorkspace || input.unbound === true);
   if (input.sending && !hasReleasableQueue) {
     if (input.isCreatingSession) {
-      return 'Creating session with Agent Host (first message only)…';
+      return t('Creating session with Agent Host (first message only)…');
     }
-    return input.attachmentCount > 0
-      ? `Sending ${input.attachmentCount} attachment${input.attachmentCount > 1 ? 's' : ''} to Agent Host…`
-      : 'Sending to Agent Host…';
+    if (input.attachmentCount > 0) {
+      return input.attachmentCount === 1
+        ? t('Sending {{count}} attachment to Agent Host…', { count: input.attachmentCount })
+        : t('Sending {{count}} attachments to Agent Host…', { count: input.attachmentCount });
+    }
+    return t('Sending to Agent Host…');
   }
   if (input.pendingQuestion) {
-    return PENDING_QUESTION_PLACEHOLDER;
+    return t(PENDING_QUESTION_PLACEHOLDER);
   }
   // m9 fix: `hasWorkspace` must gate this branch too — a queue can outlive
   // its workspace (a bucket is only pruned when its SESSION disappears, not
@@ -1110,10 +1117,10 @@ export function composerPlaceholder(input: {
   // (`hasReleasableQueue` is that same condition, hoisted above for the
   // `sending` stand-down — same predicate, one definition.)
   if (hasReleasableQueue) {
-    return `Queued ${input.queuedCount} — type another follow-up…`;
+    return t('Queued {{count}} — type another follow-up…', { count: input.queuedCount ?? 0 });
   }
   if (input.busy) {
-    return 'Agent Host is running — your message will be queued…';
+    return t('Agent Host is running — your message will be queued…');
   }
   // U28 removed a `!hasSession -> "Select a session in the left nav"` branch
   // here. It named a prerequisite that no longer exists: `runSend` creates the
@@ -1123,17 +1130,17 @@ export function composerPlaceholder(input: {
   // `hasSession` stays in the input — the ladder below still distinguishes a
   // session that HAS a workspace problem from one that never existed.
   if (input.hasSession && !input.unbound && !input.hasWorkspace) {
-    return 'Active session has no workspace…';
+    return t('Active session has no workspace…');
   }
   // T12-e: a workspace that is present but has no path fell through this
   // ladder to the terminal `Cannot send right now…`, i.e. the least
   // informative string in the function was what a FRESH INSTALL saw. Point at
   // the welcome card's button instead — the two now say the same thing.
   if (!input.unbound && input.hasCwd === false) {
-    return 'Choose a working directory to start…';
+    return t('Choose a working directory to start…');
   }
   if (input.canSend) {
-    return input.mode === 'session' ? 'Send follow-up…' : 'Message Pi…';
+    return input.mode === 'session' ? t('Send follow-up…') : t('Message Pi…');
   }
-  return 'Cannot send right now…';
+  return t('Cannot send right now…');
 }

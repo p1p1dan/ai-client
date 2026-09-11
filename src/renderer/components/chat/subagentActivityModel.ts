@@ -1,3 +1,4 @@
+import { englishTranslate, type Translate } from '@shared/i18n';
 import type { SubagentReport, SubagentRunStatus, SubagentUsage } from '@shared/types/runtimeEvents';
 import { deriveToolRowView, type ToolRowView } from './toolCard';
 import { THOUGHT_VERB } from './turnTiming';
@@ -513,6 +514,8 @@ function reduceSessionTerminal(
 export interface SubagentPanelOptions {
   /** The parent delegation row's own running state — the fallback liveness signal. */
   parentRunning: boolean;
+  /** Locale-aware translator for the ARG text; verbs stay keys (`ToolRowView.verb`). */
+  t?: Translate;
 }
 
 const HEADER_VERB = 'Subagent';
@@ -540,7 +543,7 @@ function proseRow(key: string, verb: string, text: string): ToolRowView {
   };
 }
 
-function statsArg(lane: SubagentLane): string | undefined {
+function statsArg(lane: SubagentLane, t: Translate): string | undefined {
   const report = lane.report;
   const toolUses = report?.totalToolUseCount ?? lane.usage?.toolUses;
   const tokens = report?.totalTokens ?? lane.usage?.totalTokens;
@@ -548,8 +551,19 @@ function statsArg(lane: SubagentLane): string | undefined {
   const segments: string[] = [];
   const label = lane.agentType ?? lane.description;
   if (label) segments.push(label);
-  if (toolUses !== undefined) segments.push(`${toolUses} tool${toolUses === 1 ? '' : 's'}`);
-  if (tokens !== undefined) segments.push(`${tokens.toLocaleString('en-US')} tokens`);
+  if (toolUses !== undefined) {
+    segments.push(
+      toolUses === 1
+        ? t('{{count}} tool', { count: toolUses })
+        : t('{{count}} tools', { count: toolUses })
+    );
+  }
+  // The thousands separator stays `en-US` on purpose: this is a machine count
+  // rendered next to other machine counts, and grouping is the same in both
+  // locales here.
+  if (tokens !== undefined) {
+    segments.push(t('{{count}} tokens', { count: tokens.toLocaleString('en-US') }));
+  }
   if (durationMs !== undefined) segments.push(`${(durationMs / 1000).toFixed(1)}s`);
   return segments.length > 0 ? segments.join(' · ') : undefined;
 }
@@ -566,6 +580,7 @@ export function deriveSubagentPanelRows(
 ): ToolRowView[] {
   if (!lane) return [];
 
+  const t = options.t ?? englishTranslate;
   const live = lane.status === null ? options.parentRunning : lane.status === 'running';
 
   // Report present ⇒ the subagent's last text IS the Agent row's own output
@@ -586,16 +601,19 @@ export function deriveSubagentPanelRows(
     if (index === skipRowIndex) return;
     if (row.kind === 'tool') {
       children.push(
-        deriveToolRowView({
-          toolCallId: row.toolCallId,
-          blockIndex: 0,
-          blockId: `sub-${row.toolCallId}`,
-          toolName: row.name,
-          input: row.input,
-          status: row.status,
-          output: row.status === 'failed' ? row.errorText : undefined,
-          errorText: row.status === 'failed' ? row.errorText : undefined,
-        })
+        deriveToolRowView(
+          {
+            toolCallId: row.toolCallId,
+            blockIndex: 0,
+            blockId: `sub-${row.toolCallId}`,
+            toolName: row.name,
+            input: row.input,
+            status: row.status,
+            output: row.status === 'failed' ? row.errorText : undefined,
+            errorText: row.status === 'failed' ? row.errorText : undefined,
+          },
+          { t }
+        )
       );
     } else if (row.kind === 'text') {
       children.push(proseRow(`sub-text-${row.id}`, TEXT_ROW_VERB, row.text));
@@ -608,7 +626,7 @@ export function deriveSubagentPanelRows(
     children.push({
       key: `sub-${lane.parentToolCallId}~capped`,
       verb: 'Capped',
-      arg: 'activity feed capped — remaining live updates dropped',
+      arg: t('activity feed capped — remaining live updates dropped'),
       argKind: 'prose',
       running: false,
       failed: false,
@@ -626,7 +644,7 @@ export function deriveSubagentPanelRows(
 
   let arg: string | undefined;
   if (lane.pendingPermission) {
-    arg = `Awaiting permission · ${lane.pendingPermission.toolName}`;
+    arg = t('Awaiting permission · {{tool}}', { tool: lane.pendingPermission.toolName });
   } else if (live) {
     arg =
       lane.progress?.description ??
@@ -635,10 +653,10 @@ export function deriveSubagentPanelRows(
       lane.description ??
       undefined;
   } else {
-    arg = statsArg(lane);
+    arg = statsArg(lane, t);
   }
   if (lane.droppedRows > 0) {
-    const suffix = `+${lane.droppedRows} earlier`;
+    const suffix = t('+{{count}} earlier', { count: lane.droppedRows });
     arg = arg ? `${arg} · ${suffix}` : suffix;
   }
 
@@ -674,9 +692,12 @@ export interface PermissionOriginView {
 
 /** Null in, null out — the chip renders nothing for main-agent requests. */
 export function derivePermissionOrigin(
-  origin: SubagentPermissionOrigin | null | undefined
+  origin: SubagentPermissionOrigin | null | undefined,
+  t: Translate = englishTranslate
 ): PermissionOriginView | null {
   if (!origin) return null;
   const detail = origin.description ?? origin.agentType;
-  return { label: detail ? `From subagent · ${detail}` : 'From subagent' };
+  return {
+    label: detail ? t('From subagent · {{detail}}', { detail }) : t('From subagent'),
+  };
 }

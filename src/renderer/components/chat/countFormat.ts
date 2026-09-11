@@ -12,6 +12,8 @@
  * source moved one module sideways would otherwise escape the scan entirely.
  */
 
+import { englishTranslate, type Translate } from '@shared/i18n';
+
 /**
  * U06-b: `480` / `21.4k` / `1.05M` — settled token totals off `usage.updated`
  * (`shared/piUsage.ts`), for the Run surface's occupancy ring and usage rows.
@@ -56,7 +58,7 @@ export function formatCharCount(count: number): string {
  * The empty string for `0` is what implements "no `↓` until there is assistant
  * text" at both sites at once — neither caller decides that separately.
  */
-export function replyCharsLabel(count: number): string {
+export function replyCharsLabel(count: number, t: Translate = englishTranslate): string {
   const chars = Math.max(0, Math.floor(count));
-  return chars > 0 ? `↓ ${formatCharCount(chars)} chars` : '';
+  return chars > 0 ? `↓ ${formatCharCount(chars)} ${t('chars')}` : '';
 }

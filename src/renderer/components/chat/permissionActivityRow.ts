@@ -18,7 +18,17 @@
  * Pure, and every string here is DATA that came off a third-party plugin's
  * broadcast. It is returned as plain text for React to escape; nothing in this
  * file or its component may put it into markup directly.
+ *
+ * ## Language
+ *
+ * The words this file adds AROUND that data are copy, and a Chinese UI must not
+ * show them in English. They go through the `t` the component passes in
+ * (defaulting to English, which is what the `en` locale wants anyway). The
+ * plugin's own values — `surface`, `value`, `origin`, `matchedPattern` — are
+ * passed through untouched: they are identifiers from another program, and
+ * translating one would invent a name that program never used.
  */
+import { englishTranslate, type Translate } from '@shared/i18n';
 
 /** One gate, as the plugin described it. Mirrors `PermissionActivityEvent.payload`. */
 export interface PermissionActivityRecord {
@@ -68,9 +78,15 @@ export interface PermissionActivityRowView {
   note?: string;
 }
 
-/** `policy_allow` → `policy allow`. Unknown values pass through unchanged. */
-function humanizeResolution(resolution: string): string {
-  return resolution.replace(/_/g, ' ');
+/**
+ * `policy_allow` → `policy allow`, then through the catalog.
+ *
+ * The de-underscored form is the translation KEY, so a resolution this build
+ * has a word for reads as that word and one it has never seen still prints
+ * something — the plugin's own vocabulary, spaced out — rather than nothing.
+ */
+function humanizeResolution(resolution: string, t: Translate): string {
+  return t(resolution.replace(/_/g, ' '));
 }
 
 /**
@@ -84,23 +100,24 @@ function humanizeResolution(resolution: string): string {
 const USER_RESOLUTIONS = new Set(['user_approved', 'user_denied', 'user_denied_with_reason']);
 
 export function derivePermissionActivityRow(
-  record: PermissionActivityRecord
+  record: PermissionActivityRecord,
+  t: Translate = englishTranslate
 ): PermissionActivityRowView {
-  const surface = record.surface?.trim() || 'request';
+  const surface = record.surface?.trim() || t('request');
   const notes: string[] = [];
 
   if (record.forwarded) {
     const requester = record.requesterAgentName?.trim();
     // Approving a subagent's request is not the same act as approving one's
     // own, and the two are otherwise indistinguishable in the transcript.
-    notes.push(requester ? `for subagent ${requester}` : 'for a subagent');
+    notes.push(requester ? t('for subagent {{name}}', { name: requester }) : t('for a subagent'));
   }
 
   if (record.resolution?.includes('error')) {
     return {
       requestId: record.requestId,
       tone: 'denied',
-      label: `Permission check failed — ${surface}`,
+      label: t('Permission check failed — {{surface}}', { surface }),
       detail: record.value,
       note: record.resolution,
     };
@@ -109,7 +126,7 @@ export function derivePermissionActivityRow(
     return {
       requestId: record.requestId,
       tone: 'pending',
-      label: `Awaiting approval — ${surface}`,
+      label: t('Awaiting approval — {{surface}}', { surface }),
       ...(record.value ? { detail: record.value } : {}),
       ...(notes.length > 0 ? { note: notes.join(' · ') } : {}),
     };
@@ -119,14 +136,18 @@ export function derivePermissionActivityRow(
   const tone: PermissionActivityTone =
     record.result === 'deny' ? 'denied' : byUser ? 'allowed' : 'auto';
 
-  if (record.resolution && !byUser) notes.push(humanizeResolution(record.resolution));
-  if (record.matchedPattern) notes.push(`matched ${record.matchedPattern}`);
-  if (record.origin) notes.push(`from ${record.origin}`);
+  if (record.resolution && !byUser) notes.push(humanizeResolution(record.resolution, t));
+  if (record.matchedPattern)
+    notes.push(t('matched {{pattern}}', { pattern: record.matchedPattern }));
+  if (record.origin) notes.push(t('from {{origin}}', { origin: record.origin }));
 
   return {
     requestId: record.requestId,
     tone,
-    label: `${record.result === 'deny' ? 'Denied' : 'Allowed'} ${surface}`,
+    label:
+      record.result === 'deny'
+        ? t('Denied {{surface}}', { surface })
+        : t('Allowed {{surface}}', { surface }),
     ...(record.value ? { detail: record.value } : {}),
     ...(notes.length > 0 ? { note: notes.join(' · ') } : {}),
   };

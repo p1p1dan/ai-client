@@ -1,3 +1,4 @@
+import { englishTranslate, type Translate } from '@shared/i18n';
 import { reviewFromToolResult } from '@shared/sessionFileChange';
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
@@ -393,7 +394,19 @@ export type ToolRowBody = 'output' | 'detail' | 'thinking' | 'stats';
 export interface ToolRowView {
   /** React key: block id (aggregate rows use `${firstBlockId}~agg`). */
   key: string;
+  /**
+   * The row's leading word, as a TRANSLATION KEY — always one of the closed
+   * vocabularies (`TOOL_VERBS`, `AGGREGATE_VERB`, the thought verbs, the
+   * permission decision words), never free text.
+   *
+   * Splitting it this way is what keeps one `t()` call able to cover every row
+   * shape: `ToolRows.tsx` translates `verb` at the single place a row reaches
+   * paint, so no builder in this module has to hold a translator just to name
+   * an operation. `arg` is the opposite — it interpolates paths and counts, so
+   * it arrives here already finished.
+   */
   verb: string;
+  /** Finished text, already translated by whoever built it. Never a catalog key. */
   arg?: string;
   /**
    * Font-domain classifier for `arg` (D25 §2.4/§2.5): 'ident' renders mono
@@ -445,6 +458,9 @@ export interface ToolRowView {
    * absorbed a resolved permission. Its ABSENCE is load-bearing: it is what
    * tells a red row that was DENIED apart from a red row whose tool simply
    * failed.
+   *
+   * A translation key, like `verb`, and compared as one (`=== 'Allowed'` in
+   * `ToolRows.tsx`) — which is the reason it stays untranslated until paint.
    */
   permissionVerb?: string;
   /**
@@ -474,12 +490,22 @@ export interface FileLinkTarget {
 export interface ToolCardOptions {
   /** Repo name tail ("… in ai-client"). Basename of `workspace.path`; omit to skip the tail. */
   repoName?: string | null;
+  /**
+   * The locale-aware translator, passed down from whichever component is
+   * building these rows. Only the ARG needs it — an arg interpolates counts and
+   * names, so it has to be finished text by the time it leaves this module.
+   * Defaults to English at each use, so an un-threaded caller keeps its old
+   * bytes (see `englishTranslate`).
+   */
+  t?: Translate;
 }
 
 /** Injected thinking-duration lookup, shared by the group/aggregate row builders. */
 interface ThinkingRowOptions {
   thinkingDurationMs?: (blockId: string) => number | null | undefined;
   isStreamingBlockId?: string | null;
+  /** Same translator `ToolCardOptions.t` carries — a thought row has an arg too. */
+  t?: Translate;
 }
 
 /** Single call row. A failed run always forces `body: 'output'` (sign-off ②: failures auto-expand). */
@@ -533,7 +559,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     // two functions.
     permissionVerb: run.permission ? derivePermissionVerb(run.permission) : undefined,
     permissionAutoNote: run.permission
-      ? (derivePermissionAutoNote(run.permission) ?? undefined)
+      ? (derivePermissionAutoNote(run.permission, options.t ?? englishTranslate) ?? undefined)
       : undefined,
   };
 }
@@ -639,9 +665,22 @@ export function deriveAggregateRow(
   const running = runEntries.some((entry) => entry.run.status === 'running');
   const failed = runEntries.some((entry) => entry.run.status === 'failed');
 
+  const t = options.t ?? englishTranslate;
   const segments: string[] = [];
-  if (fileCount > 0) segments.push(`${fileCount} file${fileCount === 1 ? '' : 's'}`);
-  if (searchCount > 0) segments.push(`${searchCount} search${searchCount === 1 ? '' : 'es'}`);
+  if (fileCount > 0) {
+    segments.push(
+      fileCount === 1
+        ? t('{{count}} file', { count: fileCount })
+        : t('{{count}} files', { count: fileCount })
+    );
+  }
+  if (searchCount > 0) {
+    segments.push(
+      searchCount === 1
+        ? t('{{count}} search', { count: searchCount })
+        : t('{{count}} searches', { count: searchCount })
+    );
+  }
   // A third "ran N command(s)" counting segment was withdrawn per T-31 review:
   // unreachable while Bash stays standalone per A07; revisit needs baseline
   // revision.
@@ -693,7 +732,13 @@ export function deriveToolGroupRows(
   options: ToolCardOptions & ThinkingRowOptions = {}
 ): ToolRowView[] {
   const { thinkingDurationMs, isStreamingBlockId, ...cardOptions } = options;
-  const thinkingOptions: ThinkingRowOptions = { thinkingDurationMs, isStreamingBlockId };
+  // `t` belongs to both halves: the rest-spread keeps it on `cardOptions` for
+  // the tool rows, and it is named again here so thought rows get it too.
+  const thinkingOptions: ThinkingRowOptions = {
+    thinkingDurationMs,
+    isStreamingBlockId,
+    t: options.t,
+  };
 
   const rows: ToolRowView[] = [];
   const pushStandaloneRow = (item: ToolGroupEntry) => {
@@ -763,13 +808,13 @@ export function deriveToolGroupRows(
 
 function buildEntryRow(entry: ToolGroupEntry, options: ToolCardOptions): ToolRowView {
   if (entry.kind === 'run') return deriveToolRowView(entry.run, options);
-  return buildThoughtRow(entry.block, {});
+  return buildThoughtRow(entry.block, { t: options.t });
 }
 
 function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRowView {
   const streaming = options.isStreamingBlockId != null && options.isStreamingBlockId === block.id;
   const durationMs = options.thinkingDurationMs ? options.thinkingDurationMs(block.id) : undefined;
-  const { verb, arg, argKind } = formatThoughtRow({ durationMs, streaming });
+  const { verb, arg, argKind } = formatThoughtRow({ durationMs, streaming }, options.t);
   const hasText = Boolean(block.text && block.text.length > 0);
   const showBody = !streaming && hasText;
   // An empty (no-text) block renders as a bare, non-expandable row — no
@@ -997,6 +1042,10 @@ function formatToolArgDetail(
 ): ToolArgDetail | undefined {
   const rec = asRecord(run.input);
   const repoName = options.repoName;
+  const t = options.t ?? englishTranslate;
+  /** "TODO in ai-client" — the one place a search arg names its repo. */
+  const inRepo = (pattern: string) =>
+    repoName ? t('{{pattern}} in {{repo}}', { pattern, repo: repoName }) : pattern;
 
   let raw: string | undefined;
   let kind: ToolArgKind | undefined;
@@ -1032,7 +1081,7 @@ function formatToolArgDetail(
     case PI_TOOL_NAMES.find: {
       // The pattern is the point of the call; `path`/`glob` only narrow it.
       const pattern = stringField(rec, 'pattern');
-      raw = pattern && repoName ? `${pattern} in ${repoName}` : pattern;
+      raw = pattern ? inRepo(pattern) : pattern;
       break;
     }
     case PI_TOOL_NAMES.ls: {
@@ -1070,7 +1119,7 @@ function formatToolArgDetail(
     case 'Grep':
     case 'Glob': {
       const pattern = stringField(rec, 'pattern');
-      raw = pattern && repoName ? `${pattern} in ${repoName}` : pattern;
+      raw = pattern ? inRepo(pattern) : pattern;
       break;
     }
     case 'WebSearch':

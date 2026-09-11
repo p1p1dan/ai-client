@@ -88,10 +88,11 @@ const PERMISSION_RISK_CHIP: Record<PermissionRisk, string> = {
   medium: 'bg-muted text-muted-foreground',
   low: 'bg-muted text-muted-foreground',
 };
+/** Catalog keys — the chip was hard-coded Chinese, i.e. wrong in the other locale. */
 const PERMISSION_RISK_LABEL: Record<PermissionRisk, string> = {
-  high: '高风险',
-  medium: '需确认',
-  low: '低风险',
+  high: 'High risk',
+  medium: 'Needs confirmation',
+  low: 'Low risk',
 };
 /**
  * Allow is the primary press, refusing is quiet. `cancel` shares deny's shape:
@@ -540,6 +541,7 @@ function InteractiveQaCard({
  * what this card honestly has.
  */
 function PermissionDetailBody({ detail }: { detail: PermissionDetailView }) {
+  const { t } = useI18n();
   return (
     <div className="flex min-w-0 flex-col gap-1 px-1">
       {detail.command !== null && (
@@ -562,7 +564,7 @@ function PermissionDetailBody({ detail }: { detail: PermissionDetailView }) {
           )}
           {file.truncated && (
             <span className="shrink-0 text-meta text-muted-foreground">
-              {PERMISSION_DIFF_CLAMPED_MARK}
+              {t(PERMISSION_DIFF_CLAMPED_MARK)}
             </span>
           )}
         </div>
@@ -595,7 +597,8 @@ function PermissionQaCard({
   canRespond: boolean;
   onRespond?: (decision: PermissionDecisionId) => Promise<boolean> | undefined;
 }) {
-  const view = derivePermissionCardView(block, canRespond);
+  const { t } = useI18n();
+  const view = derivePermissionCardView(block, canRespond, t);
   const [submitting, setSubmitting] = useState(false);
   // PI-Desktop PermissionCard: tick once a second toward the deadline the
   // engine enforces, and answer `deny` once at zero — the same answer its own
@@ -626,7 +629,7 @@ function PermissionQaCard({
   const origin = useSubagentActivityStore((s) =>
     block.permissionId ? (s.permissionOrigin[block.permissionId] ?? null) : null
   );
-  const originView = derivePermissionOrigin(origin);
+  const originView = derivePermissionOrigin(origin, t);
   const originChip = originView ? (
     <p className="px-3.5 pb-1 text-meta text-muted-foreground">{originView.label}</p>
   ) : null;
@@ -635,7 +638,7 @@ function PermissionQaCard({
   // (Allowed/Denied + description) instead of keeping the full QA shell —
   // only pending/waiting permissions still render as a QA card below.
   if (view.state === 'resolved') {
-    const rowView = derivePermissionRowView(block, originView?.label ?? null);
+    const rowView = derivePermissionRowView(block, originView?.label ?? null, t);
     if (!rowView) return null;
     return <ToolRow view={rowView} />;
   }
@@ -644,7 +647,7 @@ function PermissionQaCard({
     <div className={cn(QA_SHELL_CLASS, PERMISSION_RISK_SHELL[view.risk])}>
       <div className="flex min-h-9 items-center gap-2 border-b border-border px-3 py-2">
         <span className="min-w-0 flex-1 font-medium tracking-[0.01em] text-foreground">
-          {view.title}
+          {t(view.title)}
         </span>
         <span
           className={cn(
@@ -652,7 +655,7 @@ function PermissionQaCard({
             PERMISSION_RISK_CHIP[view.risk]
           )}
         >
-          {PERMISSION_RISK_LABEL[view.risk]}
+          {t(PERMISSION_RISK_LABEL[view.risk])}
         </span>
       </div>
       {originChip}
@@ -665,7 +668,7 @@ function PermissionQaCard({
             answer is about. */}
         {view.content && (
           <div className="px-1">
-            <p className="pb-1 text-meta text-muted-foreground">{view.content.label}</p>
+            <p className="pb-1 text-meta text-muted-foreground">{t(view.content.label)}</p>
             <Ident className="block max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2.5 text-markdown text-foreground">
               {view.content.text}
             </Ident>
@@ -676,18 +679,20 @@ function PermissionQaCard({
           <div className="flex min-w-0 items-center gap-2 px-1 text-meta text-muted-foreground">
             {view.workspace && (
               <p className="min-w-0 flex-1 truncate" title={view.workspace}>
-                项目：{view.workspace}
+                {t('Project: {{name}}', { name: view.workspace })}
               </p>
             )}
             {secondsLeft !== null && (
               <span role="timer" className="ml-auto shrink-0 tabular-nums">
-                若 {secondsLeft} 秒内未响应将自动拒绝
+                {t('Denied automatically if unanswered within {{seconds}}s', {
+                  seconds: secondsLeft,
+                })}
               </span>
             )}
           </div>
         )}
         {view.waiting ? (
-          <p className="px-1 text-markdown text-muted-foreground">{PERMISSION_WAITING}</p>
+          <p className="px-1 text-markdown text-muted-foreground">{t(PERMISSION_WAITING)}</p>
         ) : (
           // Right-aligned and compact: a decision is one press, not a menu, and
           // four full-width rows are what made the old card swallow the screen.
@@ -722,7 +727,7 @@ function PermissionQaCard({
                   }
                 }}
               >
-                {option.label}
+                {t(option.label)}
               </Button>
             ))}
           </div>
