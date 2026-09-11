@@ -69,11 +69,32 @@ Role: topic-capsule。两项决策已于 2026-09-10 拍板，见下。日期：2
 
 | 层 | 内容 | 状态 |
 |---|---|---|
-| P0 | 错误文案指向迁移入口 | 待做，独立于其它所有选项 |
+| P0 | 错误文案指向迁移入口 | **已落地** `22da278c`（2026-09-10），见下 |
 | P1 | 老用户首启一键迁移（选项 B） | 待做 |
 | P2 | Claude Code 配置迁移 | **不做**（用户 2026-09-10 决定） |
 | P3 | Claude Code 对话导入 | 待做，施工计划见[对话导入](conversation-import.md) |
 | P4 | Codex 对话导入 | 待做。形状已探明（JSONL，非 sqlite），与 P3 同一套机制，合并在[对话导入](conversation-import.md)里 |
+
+## P0 落地记录（2026-09-10，`22da278c`）
+
+判定与文案集中在新建的 `src/renderer/components/chat/modelMissingError.ts`，四个会撞上这个失败的界面都接到它上面，避免两处文案各自漂移：
+
+| 界面 | 触发场景 | 文件 |
+|---|---|---|
+| 时间线的历史错误提示 | resume 失败 | `historyError.ts` 新增 `model_missing` 码 |
+| 会话失败卡片 | 发送失败 | `MessageTimeline.tsx` |
+| 错误气泡 | 发送失败落成 `role:'error'` | `MessageTimeline.tsx` |
+| 内嵌 TUI 启动错误 | H/19 U3 统一目录后 TUI 同样中招 | `AgentTerminal.tsx` |
+
+三条判断值得记下来：
+
+- **判定认两个信号**。`piWorkerSession` 抛的 `PiWorkerSessionError('WORKER_MODEL_NOT_FOUND')` 带码；`piAgentSessionBootstrap:475` 抛的是裸 `Error`，码在 worker 的 `errorPayload` 里被压成 `WORKER_REQUEST_FAILED`，只剩 `Pi model not found` 这段文本可认。只认码会漏掉后者，而后者正是点验时实际撞到的那条。
+- **不给重试按钮**。模型不会在两次点击之间自己出现，能按但必然失败的按钮比没有按钮更糟。`model_missing` 因此是 `retryable: false`，历史提示里的恢复按钮与 Retry 按钮各自独立渲染，不互相吞掉。
+- **按钮落到设置的 Pi 页，文案同时说两条路**。迁移段落在没有 `~/.pi/agent` 时会把自己隐藏掉，只承诺「迁移」会把这部分用户送到一个没有该控件的页面；同一页始终有 AI 服务编辑器，所以文案写成「迁移或补上」。
+
+错误气泡额外保留了原始诊断行——映射文案说清了原因，但丢掉了「是哪个模型」，而那是用户分辨哪些旧会话作废的唯一依据。
+
+验证：`historyError.test.ts` 72 项、新增 `modelMissingWiring.test.ts` 11 项，chat 目录 93 文件 / 1964 项全绿；三套 tsc + Biome 通过。**尚未真机点验**——留到 P1 落地后与 H/19 剩余界面点验一次做完，避免重复启动应用。
 
 ## 范围外（本文不含）
 

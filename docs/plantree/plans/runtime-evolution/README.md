@@ -29,7 +29,7 @@ Role: roadmap。核对日期：2026-09-10；覆盖 runtime-evolution 与已并�
 | 8 | P5-2（含 P5-2-0～7） | subagent 整体复刻 | P5 最大一块，八个子节点加 SA01～22 等价门禁，需要前面的工具/权限/会话都稳定 |
 | 9 | P5-4、P5-5 | 会话导入适配、模型目录切源 | P5-5 与第 1 批的服务管理可能重叠，开工前先核对是否已被覆盖，避免重复实现 |
 | 10 | H / 20 + P6-1～P6-5 | [会话互通](topics/gui-tui-session-interop.md)、切默认、摘除 pi-coding-agent 依赖、六项成功标准、回退开关、退役旧集成层 | 用户 2026-09-10 决定互通排到最后做。但它是 P6-1 的**前置**：默认切到 native 之前必须先通，否则切换等于取消 TUI 能力。P6-2 落地时才能删掉派生明文文件的临时分支 |
-| — | H / 21 | [外部 Agent 迁移](topics/external-agent-migration.md)、[对话导入](topics/conversation-import.md) | 排期未定。P0（错误文案指向迁移入口）与 P1（老用户首启一键迁移）是 H / 19 的收尾，应尽早；对话导入 C1～C6 是独立一摊，开工前先核对与 P5-4 的归属 |
+| — | H / 21 | [外部 Agent 迁移](topics/external-agent-migration.md)、[对话导入](topics/conversation-import.md) | 进行中。P0（错误文案指向迁移入口）已落地 `22da278c`；下一步 P1（老用户首启一键迁移），之后与 H / 19 剩余界面点验一次做完；对话导入 C1～C6 是独立一摊，开工前先核对与 P5-4 的归属 |
 | 11 | 现场实测 | 加密 Windows 一次性全量验收 | 用户 2026-09-10 决定：全部做完后再去现场实测一次，不再分轮上机 |
 
 第 1 批与第 10 批之间有一条明确的债：H / 17 为兼容 legacy 后端要把用户凭据解密后写成明文 `auth.json`，这是共存期措施，P6-2 摘除旧依赖时一并删除。详见[实施计划](topics/local-provider-management.md)的本轮决定第五条。
@@ -193,7 +193,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | H / 19 | 统一 agent 目录、资源迁移与插件管理 | ⬜ 两种模式一律用本应用目录；skills / `AGENTS.md` / 已有模型服务一次性复制迁移；插件复用 pi 的 install/remove/list；[实施计划](topics/unified-agent-directory.md) |
 | H / 20 | GUI / TUI 会话互通 | ⬜ 单文件双格式，可行性已实测通过、需补五处容忍；P6-1 前置；[实施计划](topics/gui-tui-session-interop.md) · [验证](evidence/gui-tui-session-interop/README.md) |
 | H / 18 | 左侧 Chat 栏对齐 PI-Desktop | 🟢 S1～S5 已实现并现场点验通过（`70b9a31d`），点验另修一处 Esc 缺陷（`b92800a7`）；[实施计划](topics/sidebar-pi-desktop-alignment.md) · [验证](evidence/sidebar-pi-desktop-alignment/README.md) |
-| H / 21 | 外部 Agent 迁移（默认迁移策略 + Claude / Codex 对话导入） | ⬜ 两项决策已定（首启一键确认；只做对话导入、可看可续聊）。C1～C6 未开工；[策略](topics/external-agent-migration.md) · [对话导入施工计划](topics/conversation-import.md) |
+| H / 21 | 外部 Agent 迁移（默认迁移策略 + Claude / Codex 对话导入） | 🟡 P0 错误文案已落地 `22da278c`；P1 首启一键迁移、对话导入 C1～C6 未开工。两项决策已定（首启一键确认；只做对话导入、可看可续聊）；[策略](topics/external-agent-migration.md) · [对话导入施工计划](topics/conversation-import.md) |
 
 [GUI 功能定义](../gui-sdk-experience/TODO.md) · [验收方法](../gui-sdk-experience/现场验收清单.md) · [test.11 现场](../../../../Windows-P4-6-evidence/gui-a-e-findings.md) · [test.12 现场](../../../../Windows-P4-6-evidence/test12-reverify.md)。
 
