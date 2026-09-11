@@ -20,6 +20,7 @@ import {
   selectHistoryError,
 } from '../historyError';
 import { deriveMiddleColumnMode } from '../middleColumnLayout';
+import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from '../modelMissingError';
 import { isSessionBusy } from '../sessionIndex/resumeIntent';
 
 const ENCRYPTED_RAW =
@@ -123,6 +124,8 @@ describe('parseHistoryError (T-03)', () => {
       'read_failed',
       'history_unsupported',
       'unknown',
+      // Appended, not inserted: the severity assertions below are positional.
+      'model_missing',
     ];
     const views = codes.map((code) => parseHistoryError(`${code}: x`));
     for (const view of views) {
@@ -237,6 +240,11 @@ describe('encodePiResumeError (T32)', () => {
       'workspace_missing',
     ],
     ['WORKER_RPC_TIMEOUT: slow', 'read_failed'],
+    // H/21 P0, both throw sites. The bootstrap one loses its code on the way
+    // out (`errorPayload` flattens a plain Error to WORKER_REQUEST_FAILED), so
+    // only the message text is left to recognise it by.
+    ['WORKER_MODEL_NOT_FOUND: Pi model not found: maxapi/grok-4.6', 'model_missing'],
+    ['WORKER_REQUEST_FAILED: Pi model not found: maxapi/grok-4.6', 'model_missing'],
   ])('maps %s to %s', (message, code) => {
     expect(encodePiResumeError(new Error(message))).toEqual({
       message,
@@ -693,5 +701,104 @@ describe('workspace_missing (F2-c)', () => {
     // folder to restore.
     expect(view?.message).toContain('E:\\e\\test');
     expect(view?.continuationHint).toContain('归档');
+  });
+});
+
+/**
+ * H/21 P0 — the H/19 point-check finding: after U1 gave this app its own agent
+ * directory, every old session failed to resume with the worker's raw
+ * `Pi model not found`, and nothing on screen mentioned that a migration exists.
+ * These assertions are about that gap, so they check what the user is told and
+ * where they can go, not that a string is non-empty.
+ */
+describe('model_missing (H/21 P0)', () => {
+  const RAW = 'model_missing: WORKER_REQUEST_FAILED: Pi model not found: maxapi/grok-4.6';
+
+  it('[MM-01] is a non-retryable error, because the model will not appear on its own', () => {
+    const view = parseHistoryError(RAW);
+    expect(view?.code).toBe('model_missing');
+    expect(view?.severity).toBe('error');
+    expect(view?.retryable).toBe(false);
+  });
+
+  it('[MM-02] offers no Retry button at all — not a disabled one', () => {
+    const view = parseHistoryError(RAW);
+    const control = deriveRetryControl({
+      retryable: view?.retryable ?? true,
+      status: 'idle',
+      retrying: false,
+      failed: false,
+    });
+    expect(control.visible).toBe(false);
+  });
+
+  it('[MM-03] points at a settings pane the user can actually act in', () => {
+    const view = parseHistoryError(RAW);
+    expect(view?.recovery).toEqual({
+      settingsCategory: 'pi',
+      label: MODEL_MISSING_ERROR_VIEW.actionLabel,
+    });
+  });
+
+  it('[MM-04] no other code offers a recovery action', () => {
+    const others: HistoryErrorCode[] = [
+      'jsonl_not_found',
+      'encrypted_unreadable',
+      'read_failed',
+      'history_unsupported',
+      'session_file_corrupt',
+      'session_cwd_mismatch',
+      'workspace_missing',
+      'unknown',
+    ];
+    for (const code of others) {
+      expect(parseHistoryError(`${code}: x`)?.recovery).toBeUndefined();
+    }
+  });
+
+  it('[MM-05] keeps the model id in the message, so the user knows which model is meant', () => {
+    expect(parseHistoryError(RAW)?.message).toContain('maxapi/grok-4.6');
+  });
+
+  it('[MM-06] does not degrade to read_failed, which would blame the history file', () => {
+    const view = parseHistoryError(RAW);
+    expect(view?.guidance).not.toContain('历史');
+    expect(view?.guidance).toBe(MODEL_MISSING_ERROR_VIEW.message);
+  });
+
+  it('[MM-07] the hint names the second way out as well as the migration', () => {
+    // A user who does not want to migrate anything still needs to know the
+    // session is salvageable by picking a model this app already has.
+    expect(parseHistoryError(RAW)?.continuationHint).toBe(MODEL_MISSING_ERROR_VIEW.hint);
+    expect(MODEL_MISSING_ERROR_VIEW.hint).toContain('模型');
+  });
+
+  it('[MM-08] survives the full resume-failure round trip', () => {
+    const encoded = encodePiResumeError(
+      new Error('WORKER_REQUEST_FAILED: Pi model not found: maxapi/grok-4.6')
+    );
+    expect(parseHistoryError(encoded.encoded)?.code).toBe('model_missing');
+  });
+});
+
+describe('isModelMissingError (H/21 P0)', () => {
+  it.each([
+    'WORKER_MODEL_NOT_FOUND: Pi model not found: a/b',
+    'WORKER_REQUEST_FAILED: Pi model not found: a/b',
+    "Error invoking remote method 'chat:resume': Error: Pi model not found: a/b",
+  ])('recognises %s', (text) => {
+    expect(isModelMissingError(text)).toBe(true);
+  });
+
+  it.each([
+    null,
+    undefined,
+    '',
+    'WORKER_RPC_TIMEOUT: slow',
+    // Adjacent but different: the stored reference is malformed, which no
+    // migration fixes. Must not be swept into the migration copy.
+    'WORKER_REQUEST_FAILED: Invalid Pi model reference: grok. Expected provider/model',
+  ])('rejects %s', (text) => {
+    expect(isModelMissingError(text)).toBe(false);
   });
 });

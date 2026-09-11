@@ -11,8 +11,10 @@ import { useFileDrop } from '@/hooks/useFileDrop';
 import { useTerminalScrollToBottom } from '@/hooks/useTerminalScrollToBottom';
 import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
+import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 import { AUTH_REQUIRED_ERROR_VIEW, isAuthRequiredError } from './authRequiredError';
+import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingError';
 
 interface AgentTerminalProps {
   id: string;
@@ -63,6 +65,8 @@ export function AgentTerminal({
   const searchBarRef = useRef<TerminalSearchBarRef>(null);
   const activatedRef = useRef(false);
   const { register, unregister } = useTerminalWriteStore();
+  // H/21 P0: the "go migrate" action on the model-missing startup failure.
+  const requestSettings = useSettingsIntentStore((state) => state.requestSettings);
   // Pi TUI is a local node-pty launch of the bundled CLI, so a remote virtual
   // cwd has no local directory to spawn in. Keep the terminal dormant and
   // explain why instead of failing on an unusable spawn path.
@@ -194,6 +198,23 @@ export function AgentTerminal({
             onClick={() => window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT))}
           >
             {AUTH_REQUIRED_ERROR_VIEW.actionLabel}
+          </Button>
+        </div>
+      )}
+      {/* H/21 P0: H/19 U3 put the embedded TUI on the same sessions directory as
+          the GUI, so it hits the same wall — an old session whose model this
+          app does not have. Ranked below auth for the same reason as in the
+          timeline: sign-in comes first, the model only matters afterwards. */}
+      {startupError && !isAuthRequiredError(startupError) && isModelMissingError(startupError) && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/90 px-6 text-center text-sm">
+          <strong>{MODEL_MISSING_ERROR_VIEW.title}</strong>
+          <span className="text-muted-foreground">{MODEL_MISSING_ERROR_VIEW.message}</span>
+          <span className="text-muted-foreground">{MODEL_MISSING_ERROR_VIEW.hint}</span>
+          <Button
+            size="sm"
+            onClick={() => requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)}
+          >
+            {MODEL_MISSING_ERROR_VIEW.actionLabel}
           </Button>
         </div>
       )}

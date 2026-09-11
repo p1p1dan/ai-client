@@ -6,6 +6,7 @@ import type {
 } from '@shared/types/runtimeEvents';
 import {
   ArrowDown,
+  ArrowRightLeft,
   Check,
   ChevronRight,
   Copy,
@@ -14,6 +15,7 @@ import {
   FileText,
   GitBranch,
   Image as ImageIcon,
+  PackageSearch,
   RefreshCw,
   ShieldAlert,
   TriangleAlert,
@@ -34,6 +36,7 @@ import {
   pendingUserToChatMessage,
   usePendingUserMessagesStore,
 } from '@/stores/pendingUserMessages';
+import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import {
   type PendingReplyWatch,
   type TurnSendStatus,
@@ -84,6 +87,7 @@ import {
 import { formatAbsoluteTime, type MessageMetadata } from './messageMetadata';
 import { nextFollowState, shouldShowJumpToBottom } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
+import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingError';
 import { PermissionActivityDetails, PermissionActivityRows } from './PermissionActivityRows';
 import { QuestionCard } from './QuestionCard';
 import {
@@ -202,6 +206,9 @@ export function MessageTimeline({
       : EMPTY_PENDING_USER_MESSAGES
   );
   const pendingPermissions = useChatSessionsStore((state) => state.pendingPermissions);
+  // H/21 P0: the session-failed card's "go migrate" action. `requestSettings`
+  // is a stable store action, so subscribing to it does not add a render path.
+  const requestSettings = useSettingsIntentStore((state) => state.requestSettings);
   // The other half of `permission.requested`: the runtime parks the tool call
   // until this lands. Answering is all this does — the card's own state comes
   // from the `permission.resolved` the worker emits, so a decision made in one
@@ -723,6 +730,25 @@ export function MessageTimeline({
                       {AUTH_REQUIRED_ERROR_VIEW.actionLabel}
                     </Button>
                   </>
+                ) : lastError && isModelMissingError(lastError) ? (
+                  // H/21 P0: the session's recorded model is not in this app's
+                  // model directory (H/19 U1 gave the app its own agent dir).
+                  // Same reasoning as the auth branch above — resending cannot
+                  // work until the model exists here, so the generic "可从下方
+                  // 输入框重发上条消息" hint would be wrong, and the only useful
+                  // affordance is the migration that puts the model there.
+                  <>
+                    <p className="mt-1 text-muted-foreground">{MODEL_MISSING_ERROR_VIEW.message}</p>
+                    <p className="mt-1 text-muted-foreground">{MODEL_MISSING_ERROR_VIEW.hint}</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 h-6 text-ui"
+                      onClick={() => requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)}
+                    >
+                      {MODEL_MISSING_ERROR_VIEW.actionLabel}
+                    </Button>
+                  </>
                 ) : (
                   <>
                     {lastError && failedCardShowsError && (
@@ -810,6 +836,9 @@ const HISTORY_ERROR_ICON = {
   // F2-c: the folder itself is gone, which is a missing-file shape, not a
   // damaged-content one.
   workspace_missing: FileSearch,
+  // H/21 P0: nothing on disk is missing or damaged — a model this app does not
+  // have is a configuration gap, so it gets neither of the file icons.
+  model_missing: PackageSearch,
   unknown: TriangleAlert,
 } as const;
 
@@ -831,6 +860,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
   const [retrying, setRetrying] = useState(false);
   const [retryFailed, setRetryFailed] = useState(false);
   const { resume } = useResumeSession();
+  const requestSettings = useSettingsIntentStore((state) => state.requestSettings);
   // Round-2 P0 fix (model directness): this Retry re-runs the same resume
   // path LeftNav's sidebar open does — without a model it leaves the Host
   // registry entry's `model` undefined, and every later 'direct' send
@@ -898,18 +928,35 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
           </Collapsible>
         )}
       </AlertDescription>
-      {retryControl.visible && (
+      {(retryControl.visible || view.recovery) && (
         <AlertAction>
-          <Button
-            size="xs"
-            variant="outline"
-            className="h-6"
-            disabled={retryControl.disabled}
-            onClick={() => void handleRetry()}
-          >
-            <RefreshCw className={cn(retrying && 'animate-spin')} />
-            Retry
-          </Button>
+          {retryControl.visible && (
+            <Button
+              size="xs"
+              variant="outline"
+              className="h-6"
+              disabled={retryControl.disabled}
+              onClick={() => void handleRetry()}
+            >
+              <RefreshCw className={cn(retrying && 'animate-spin')} />
+              Retry
+            </Button>
+          )}
+          {/* H/21 P0: the only code with a recovery today is `model_missing`,
+              and it is never retryable — so these two never stack in practice.
+              Both branches are still written independently: a later code that
+              is both would otherwise silently lose one of its buttons. */}
+          {view.recovery && (
+            <Button
+              size="xs"
+              variant="outline"
+              className="h-6"
+              onClick={() => requestSettings(view.recovery?.settingsCategory)}
+            >
+              <ArrowRightLeft />
+              {view.recovery.label}
+            </Button>
+          )}
         </AlertAction>
       )}
     </Alert>
@@ -1026,6 +1073,16 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
   const authRequired =
     isError &&
     message.blocks.some((block) => block.type === 'text' && isAuthRequiredError(block.text));
+  // H/21 P0: the same in-place swap for "this session's model is not in this
+  // app's model directory". The worker's own text is accurate and useless — it
+  // names the model but never says that a migration is what puts it here.
+  // Ranked below auth on purpose: a session that cannot start for BOTH reasons
+  // has to be signed in before the model matters at all.
+  const modelMissing =
+    isError &&
+    !authRequired &&
+    message.blocks.some((block) => block.type === 'text' && isModelMissingError(block.text));
+  const requestSettings = useSettingsIntentStore((state) => state.requestSettings);
 
   return (
     <Alert variant={isError ? 'error' : 'default'} role={isError ? 'alert' : 'status'}>
@@ -1040,21 +1097,56 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
                   Chinese copy in-place — same paragraph, same class, so this
                   stays the one "notice body" surface T-29 pinned (see the
                   wiring test's exact-count assertion on this class string). */}
-              {authRequired ? AUTH_REQUIRED_ERROR_VIEW.message : block.text}
+              {authRequired
+                ? AUTH_REQUIRED_ERROR_VIEW.message
+                : modelMissing
+                  ? MODEL_MISSING_ERROR_VIEW.message
+                  : block.text}
             </p>
           ) : null
         )}
+        {/* H/21 P0: unlike the auth swap, the replaced text here carried
+            something worth keeping — WHICH model is missing. The mapped copy
+            explains the failure and the raw line below still names the model,
+            so the user can tell one stale session from another. */}
+        {modelMissing && (
+          <>
+            <p className="mt-1 text-meta text-muted-foreground">{MODEL_MISSING_ERROR_VIEW.hint}</p>
+            {message.blocks.map((block) =>
+              block.type === 'text' ? (
+                <p
+                  key={block.id}
+                  className="mt-1 select-text break-words whitespace-pre-wrap font-mono text-code text-muted-foreground"
+                >
+                  {block.text}
+                </p>
+              ) : null
+            )}
+          </>
+        )}
       </AlertDescription>
-      {authRequired && (
+      {(authRequired || modelMissing) && (
         <AlertAction>
-          <Button
-            size="xs"
-            variant="outline"
-            className="h-6"
-            onClick={() => window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT))}
-          >
-            {AUTH_REQUIRED_ERROR_VIEW.actionLabel}
-          </Button>
+          {authRequired ? (
+            <Button
+              size="xs"
+              variant="outline"
+              className="h-6"
+              onClick={() => window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT))}
+            >
+              {AUTH_REQUIRED_ERROR_VIEW.actionLabel}
+            </Button>
+          ) : (
+            <Button
+              size="xs"
+              variant="outline"
+              className="h-6"
+              onClick={() => requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)}
+            >
+              <ArrowRightLeft />
+              {MODEL_MISSING_ERROR_VIEW.actionLabel}
+            </Button>
+          )}
         </AlertAction>
       )}
     </Alert>

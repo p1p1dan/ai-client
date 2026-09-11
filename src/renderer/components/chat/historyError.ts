@@ -1,5 +1,6 @@
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { HistoryReadErrorCode } from '@shared/types/sessionHistory';
+import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingError';
 import { isSessionBusy } from './sessionIndex/resumeIntent';
 
 /**
@@ -12,8 +13,14 @@ import { isSessionBusy } from './sessionIndex/resumeIntent';
  * so anything left inside a `.tsx` cannot be asserted.
  */
 
-/** Contract codes plus a forward-compatible fallback. */
-export type HistoryErrorCode = HistoryReadErrorCode | 'unknown';
+/**
+ * Contract codes, plus a forward-compatible fallback and one code this app
+ * derives itself. `model_missing` is not a history-read outcome the Host
+ * reports — resume simply never got far enough to read anything — but it
+ * arrives through the same failed-resume channel and needs its own copy, so it
+ * rides here rather than in a second parallel notice (see `modelMissingError`).
+ */
+export type HistoryErrorCode = HistoryReadErrorCode | 'unknown' | 'model_missing';
 
 export function encodePiResumeError(error: unknown): { message: string; encoded: string } {
   const message = error instanceof Error ? error.message : String(error);
@@ -25,7 +32,12 @@ export function encodePiResumeError(error: unknown): { message: string; encoded:
         ? 'session_cwd_mismatch'
         : message.includes('WORKER_WORKSPACE_MISSING')
           ? 'workspace_missing'
-          : 'read_failed';
+          : // Checked after the session-file codes (they are disjoint) and
+            // before the fallback, which would otherwise call this a failed
+            // history read — it is not, and the fix is nowhere near retrying.
+            isModelMissingError(message)
+            ? 'model_missing'
+            : 'read_failed';
   return { message, encoded: `${code}: ${message}` };
 }
 
@@ -52,6 +64,13 @@ export interface HistoryErrorView {
    * hint shared by every variant, is what keeps that distinction honest (#30).
    */
   continuationHint: string;
+  /**
+   * H/21 P0: a settings pane that can actually fix this code. Only
+   * `model_missing` has one. Every other code is fixed outside the app or not
+   * at all, and a settings button there would send the user looking for a
+   * control that does not exist.
+   */
+  recovery?: { settingsCategory: 'pi'; label: string };
 }
 
 /** Shown under most variants: a history read failure never kills the session. */
@@ -139,6 +158,21 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
     retryable: false,
     continuationHint: '请把该目录恢复到原路径后重试，或归档该会话并新建一个继续工作。',
   },
+  // H/21 P0. Not retryable: the model directory will not have grown between
+  // one press and the next, so a Retry button here could only fail again.
+  // Copy and action both come from `modelMissingError`, which the session-failed
+  // card also reads — one failure, one wording, two surfaces.
+  model_missing: {
+    severity: 'error',
+    title: MODEL_MISSING_ERROR_VIEW.title,
+    guidance: MODEL_MISSING_ERROR_VIEW.message,
+    retryable: false,
+    continuationHint: MODEL_MISSING_ERROR_VIEW.hint,
+    recovery: {
+      settingsCategory: MODEL_MISSING_ERROR_VIEW.settingsCategory,
+      label: MODEL_MISSING_ERROR_VIEW.actionLabel,
+    },
+  },
   unknown: {
     severity: 'error',
     title: 'Failed to read history',
@@ -155,7 +189,8 @@ function toCode(value: string): HistoryErrorCode {
     value === 'history_unsupported' ||
     value === 'session_file_corrupt' ||
     value === 'session_cwd_mismatch' ||
-    value === 'workspace_missing'
+    value === 'workspace_missing' ||
+    value === 'model_missing'
     ? value
     : 'unknown';
 }
