@@ -47,7 +47,24 @@ D1/D2/D3/D5 已修并**在真机上重跑一遍**：把应用 agent 目录复位
 
 复验中另外确认的两件事：渲染层 `location.reload()` **不重启 worker**，所以造模型故障必须整个重启应用；应用**不会**在启动时从 vault 重建 `models.json`，删掉就是删掉了。
 
-D4（英文残留）、D6（重复公告）、D7（模态堆叠）本轮未动，按原计划归入各自已登记的摊子。
+### 第二轮：D4 / D6 / D7（2026-09-11，`d0332939`）
+
+| 缺陷 | 处理 |
+|---|---|
+| D4 | **修了，且范围比 D4 大**。点验只看到迁移列表一处，量化后全渲染层有 57 处走 `t()` 却无词条。一次补齐并加 `i18nCoverage` 测试（扫 1078 个字面量）。真机验：迁移列表两行都是中文，Pi 设置页六处英文一处不剩 |
+| D7 | **修了**。让 H/17 L4 的「无服务时自动开设置」在有迁移可提供时让位。真机验：入口进去从三层模态变成两层（公告 + 迁移提示） |
+| D6 | **查证后不是缺陷，未改代码**，见下 |
+
+**D6 的查证**（原登记「重载后重复公告与多开空会话」）：
+
+- 公告：`shouldOpenAnnouncementsOnStartup` 明确不看已读状态，注释写着「每次启动都弹」是已确认的产品决定。磁盘上 `announcements-read.json` 确实已记录该条为已读——读状态只驱动铃铛的未读标记。
+- 空会话：`createLiveSession` 只造渲染层对象，不调 Host、不起 worker；会话索引里 `Live Agent Host` 条数为 **0**，证明它从不落盘，重载后重建一个是种子逻辑的正常行为，不累积。
+- 触发条件本身：`MenuBuilder.ts:94` 只在 `!app.isPackaged` 时挂 `reload`/`forceReload`，**打包版里用户够不到重载**。生产唯一路径是渲染进程崩溃后 `ErrorBoundary.tsx:92` 的按钮，那时公告重来一遍本就合理。
+- 原初判的 `--open-path` 方向排除：`APP_TAKE_PENDING_OPEN_PATH` 取一次即清空。
+
+**一条订正**：上一轮我把 D7 里的设置框写成「恢复的上次状态」，那是推断，错的——`useSettingsState` 里是 `useState(false)`，不持久化。真正的来源是 H/17 L4 在本地路线且无已配置服务时主动打开设置 Pi 页。
+
+**另一条顺带发现**：`agentMigrationPrompt.ts` 与 `AgentMigrationPrompt.tsx` 只差首字母大小写，在 Windows/macOS 上互相解析。仓库自带的大小写守卫测试抓到的，已改名 `migrationPromptModel.ts`。
 
 ## 查出的缺陷
 

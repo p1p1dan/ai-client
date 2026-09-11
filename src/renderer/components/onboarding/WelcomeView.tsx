@@ -101,32 +101,26 @@ export function WelcomeView({ entry, onSignIn, onContinue, onUseOwnSetup }: Welc
         <p className="text-sm text-warning">{t('Your session expired. Sign in again.')}</p>
       ) : null}
 
-      <div className="flex w-full flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Button className="w-full" disabled={pending !== null} onClick={handlePrimary} size="lg">
-            {pending === 'primary' ? <Loader2Icon className="animate-spin" /> : null}
-            {primaryLabel}
-          </Button>
-          <p className="text-muted-foreground text-xs">
-            {t('Runs on the managed gateway. Nothing is written to your machine.')}
-          </p>
-        </div>
+      {/* Just the two buttons. The one-line blurbs that used to sit under each
+          one were dropped on the user's call (2026-09-11): they restated what
+          the labels already say, and two paragraphs of grey text on the first
+          screen cost more than they explain. */}
+      <div className="flex w-full flex-col gap-3">
+        <Button className="w-full" disabled={pending !== null} onClick={handlePrimary} size="lg">
+          {pending === 'primary' ? <Loader2Icon className="animate-spin" /> : null}
+          {primaryLabel}
+        </Button>
 
-        <div className="flex flex-col gap-1.5">
-          <Button
-            className="w-full"
-            disabled={pending !== null}
-            onClick={handleLocal}
-            size="lg"
-            variant="outline"
-          >
-            {pending === 'local' ? <Loader2Icon className="animate-spin" /> : null}
-            {t('Use my own setup')}
-          </Button>
-          <p className="text-muted-foreground text-xs">
-            {t('Uses your local Pi models and credentials on this machine.')}
-          </p>
-        </div>
+        <Button
+          className="w-full"
+          disabled={pending !== null}
+          onClick={handleLocal}
+          size="lg"
+          variant="outline"
+        >
+          {pending === 'local' ? <Loader2Icon className="animate-spin" /> : null}
+          {t('Use my own setup')}
+        </Button>
       </div>
     </div>
   );

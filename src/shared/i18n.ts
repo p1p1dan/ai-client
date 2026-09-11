@@ -226,10 +226,9 @@ export const zhTranslations: Record<string, string> = {
   'Continue as {{email}}': '以 {{email}} 继续',
   'Log in with work email': '用工作邮箱登录',
   'Use my own setup': '使用本机已有配置',
-  'Runs on the managed gateway. Nothing is written to your machine.':
-    '走我们托管的网关，不往你的机器上写任何东西。',
-  'Uses your local Pi models and credentials on this machine.':
-    '使用这台机器上的本地 Pi 模型和凭证。',
+  // The two blurbs that used to sit under the entry buttons are gone with them
+  // (2026-09-11), and so are their entries — an orphaned key is a translation
+  // someone will later maintain for a screen that no longer shows it.
   'Your session expired. Sign in again.': '登录已失效，请重新登录。',
   'Git was not found on this computer': '这台电脑上没有找到 Git',
   'Worktrees, branches and source control need Git. Everything else still works.':
