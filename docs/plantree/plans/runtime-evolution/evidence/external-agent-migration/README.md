@@ -124,3 +124,68 @@ WORKER_REQUEST_FAILED: Pi model not found: maxapi/grok-4.6
 - 内嵌 TUI 的模型缺失覆盖层（P0 的第四个界面）——没在本轮切到 TUI。
 - H/19 案例 4/5（插件安装与卸载、托管模式下项目级插件）——插件页本轮只看到「暂无已安装插件」，没有真装一个。
 - H/19 案例 7（GUI 与 TUI 都能列出迁移后的历史对话）——依赖 H/20。
+
+## C1～C6 对话导入（2026-09-11）
+
+对象：[对话导入施工计划](../../topics/conversation-import.md)。两段证据：先用**离线探针**读本机真实历史（不起 Electron、不写任何东西），再用**真机**走完整闭环。驱动：`scripts/run-h21-import-scan-probe.mjs`（离线）+ `scripts/h21-import-check.mjs`（CDP，复用 `h21-cdp.mjs`）。
+
+场地与上一轮相同：dev 沙箱 agent 目录 `~/.pilab/jyw-ai-client-dev/pi-agent`，用户自己的 `~/.pi` 全程未被读写。导入的**源**是用户真实的 `~/.claude` 与 `~/.codex`——只读。
+
+### 离线探针：真实历史读出来是什么样
+
+本机扫出 3 个项目：Claude Code `/home/ai/code/ai-client` 49 条、Codex 同目录 9 条、Codex `/home/ai/code/pi-cli` 1 条。每个项目取最近 3 条转写，逐条检查有没有合成注入漏进正文：
+
+| 结果 | |
+|---|---|
+| 合成注入泄漏 | **0**（查 `<local-command-caveat>` / `<system-reminder>` / `<command-name>` / `# AGENTS.md` / `You are Codex` 五种标记） |
+| 标题 | 修 `ClaudeSourceAdapter` 之前，Claude 最近几条全是 `/clear`；修完取到真实首句（「1.先收尾然后提交H/19…」「开始第 2 批 H/19…」） |
+| 工具调用 | 作为只读 `display` 条目保留，不进模型上下文（`piLegacyImport` 有一条专门的上下文泄漏检查） |
+
+### 真机闭环
+
+| # | 检查 | 结果 |
+|---|---|---|
+| 1 | 设置 · Pi 出现「从 Claude Code / Codex 导入历史对话」，列出三个项目 | ✅ 全中文；`pi-cli` 带「未匹配到仓库」徽标，两个 `ai-client` 没有 |
+| 2 | 进项目后列出会话（首句 / id / 时间 / 模型） | ✅ 9 条 Codex 会话，首句是真实提问 |
+| 3 | 导入一条 | ✅ 报告「新导入 1 个，已存在 0 个，失败 0 个」 |
+| 4 | 文件落在统一 sessions 目录 | ✅ `…/pi-agent/sessions/--home-ai-code-ai-client--/…_import-codex-….jsonl`（与 GUI/TUI 共用目录，验证案例 6） |
+| 5 | 索引行 | ✅ `agent: pi`、`legacyImport.sourceKind: codex`、dedupeKey 带内容指纹 |
+| 6 | **导入后出现在侧栏** | ✅ 置顶「now」，在 `ai-client` 仓库下 |
+| 7 | **打开能看到历史** | ✅ 完整 Codex 对话渲染，工具调用折叠成「已处理 N 个步骤」 |
+| 8 | 重复导入 | ✅ 列表先显示「已导入 1 个快照」，再导报告「新导入 0 个，已存在 1 个」 |
+| 9 | 未匹配仓库的项目 | ✅ 导入前就有警告；导入后索引行 `unbound: true`、workspacePath 在 `…/temporary/unbound-sessions/<uuid>`，侧栏落在「临时对话」组、标「临时」 |
+| 10 | **在导入的会话里发消息** | ✅ 代理修复后复验通过，见下 |
+
+截图：[导入段落](08-import-pane.png) · [导入报告](05-import-pane-report.png) · [导入的会话打开](06-imported-session-open.png) · [未绑定导入](07-unbound-import-open.png)
+
+### 第 10 条：已闭环（2026-09-11 代理修复后复验）
+
+代理恢复后用用户 2026-09-11 指定的新凭据（`vllmproxy` provider + `claude-sonnet-5`）重跑，**两条导入的会话都拿到了真实回复**：
+
+| 会话 | 提问 | 回复 |
+|---|---|---|
+| 绑定仓库的那条（Codex，claude-env-cleanup 安装） | 「用一句中文回答：你刚才在这个会话里做了什么？」 | 模型**引用了导入进来的历史内容**作答，并主动指出那些安装步骤不是它本人在本次会话里执行的——这恰好说明工具调用是以只读条目导入、没有伪装成它自己的行动记录 |
+| 未绑定的那条（Codex，pi-install.sh 报错，落在临时对话组） | 「用一句话说出上面这段对话在讨论什么问题。」 | 「修复 pi-install.sh 脚本因未单独检测 npm、且用 sudo npm 导致 PATH 找不到 npm 而报错的问题」——**准确复述了导入的中文历史** |
+
+所以「可续聊」这条硬验收现在是完整的：resume 成功 → 导入的历史真的进了模型上下文 → 模型据此作答。**未绑定的临时对话同样能续聊**，scratch 目录这条回退路径不影响发送。
+
+截图：[续聊回复](09-continue-chat-reply.png) · [未绑定会话续聊](10-unbound-continue-reply.png)
+
+**这之前那次失败是谁的账户**：失败回合在会话文件里记的是 `provider: maxapi`、`model: grok-4.6`、端点 `https://maxapi.hanyue.xyz/v1`；该 provider 的 key 与用户自己的 `~/.pi/agent/models.json` 完全一致（sha256 前 12 位三处相同），即**用户本人的 maxapi 账户余额用尽**，用户已确认属预期。dev.env 里的 `ANTHROPIC_AUTH_TOKEN` 走的是登录模式，本次点验全程没有参与。
+
+**两条手段上的记录**：
+
+- 换模型这一步，base-ui 的子菜单对不带坐标的合成事件不响应，隔着两次 CDP 调用又会先自行收起。最后走的是应用自己的会话模型偏好（`aiclient:chat:session-models` 里写 `vllmproxy/claude-sonnet-5`，重载后 composer 显示 Claude Sonnet 5），**发送仍走真实的 textarea + 「发送消息」按钮**，没有绕过 composer。
+- worker 只在启动时读一次模型目录：新加 provider 或复制完 AI 服务都必须整个重启应用，`location.reload()` 不够。
+
+### 顺带查出并当场修掉的两条
+
+**D8 导入会话顶部的来源提示是英文。** 「Imported read-only history from codex session …」出现在一整屏中文之上。这行不走 `t()`——它在 worker 里由 `piSessionTimeline.ts` 生成，而 worker 没有渲染层的 locale。已改成中文并复验。**同一类问题还有别的**：同一个文件里的 `Context summary` 也是 worker 直出的英文，`i18nCoverage` 那道守卫扫不到这一层，属于已登记的「硬编码英文残留」。
+
+**D9 旧会话打开时报模型缺失，是环境不是缺陷。** 第一次打开导入的会话弹「这个会话记录的模型不在本应用的模型目录里」，Details 里是 `Pi model not found: maxapi/grok-4.6`——dev 沙箱 agent 目录当时**没有 models.json**（上一轮复验把它删了）。在设置里把「AI 服务」复制过来、**重启应用**后消失。两条可复用的事实：worker 只在启动时读一次模型目录，复制完必须重启；P0 的映射文案在导入会话上同样生效（顺带复验）。
+
+### 本轮未覆盖
+
+- 空机器（没有 `~/.claude` / `~/.codex`）的表现只有单元测试覆盖，本机两份目录都在。
+- Codex 旧格式（裸行）只有构造用例，本机 10 个 rollout 全是新格式。
+- Claude 侧只导了历史里的会话做离线转写校验，真机导入验的是 Codex 两条（一条匹配仓库、一条未匹配）。
