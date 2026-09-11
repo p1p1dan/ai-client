@@ -93,7 +93,7 @@ export const CHAT_MARKDOWN_ALLOWED_PROTOCOLS = ['http:', 'https:'] as const;
  *  - schemes are lower-cased during parsing, so `JavaScript:` is `javascript:`;
  *  - ASCII tab/CR/LF are removed from the input during parsing, so
  *    `java\nscript:alert(1)` is `javascript:alert(1)`;
- *  - leading/trailing C0 controls and spaces are trimmed, so `https://…`
+ *  - leading/trailing C0 controls and spaces are trimmed, so `\x01https://…`
  *    still parses as https while ` javascript:…` still parses as javascript;
  *  - a relative reference (`./x`, `/x`, `x`) and a protocol-relative one
  *    (`//evil.example`) both THROW without a base, and no base is supplied, so
