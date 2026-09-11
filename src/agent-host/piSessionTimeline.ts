@@ -147,7 +147,11 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
             {
               type: 'text',
               id: stablePartId(messageId, 'provenance', 0),
-              text: `Imported read-only history from ${sourceKind} session ${sourceSessionId}. Continue in Pi; the original runtime state was not restored.`,
+              // Chinese, not a `t()` key: this projection runs inside the
+              // worker, which has no renderer locale. The app ships Simplified
+              // Chinese by default and the H/21 point-check caught this line
+              // sitting in English above an otherwise Chinese transcript.
+              text: `这段历史从 ${sourceKind} 会话 ${sourceSessionId} 导入。可以在这里接着聊；原来的运行状态（工具、权限）没有一起带过来。`,
             },
           ],
         });

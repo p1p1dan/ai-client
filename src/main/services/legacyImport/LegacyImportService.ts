@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   LegacyImportBatchResult,
@@ -11,6 +12,7 @@ import type {
 } from '@shared/types';
 import { legacyImportDedupeKey } from '@shared/types';
 import { PI_AGENT } from '@shared/types/agentWire';
+import { scratchWorkspaceService } from '../agent-host/ScratchWorkspaceService';
 import { workerManager } from '../agent-host/WorkerManager';
 import { sessionIndexService } from '../chat/SessionIndexService';
 import { ClaudeSessionScanner, resolveLegacyClaudeSessionRoot } from './ClaudeSessionScanner';
@@ -46,6 +48,20 @@ export interface LegacyImportSessionIndex {
   ): Promise<boolean>;
 }
 
+/**
+ * H/21 C3 — where an imported conversation is allowed to live.
+ *
+ * Kept behind an interface so tests can drive the fallback without touching the
+ * real temp directory, and so the production wiring stays the one service that
+ * owns scratch directories.
+ */
+export interface LegacyImportWorkspaceFallback {
+  /** Allocate (or reuse) this session's isolated scratch directory. */
+  ensure(sessionId: string): Promise<string>;
+  /** Is this path one of ours? Main derives the row's `unbound` flag from it. */
+  isScratchPath(candidate: string): boolean;
+}
+
 export interface LegacyImportServiceOptions {
   scanner?: ClaudeSessionScanner;
   importers?: LegacySourceImporter[];
@@ -56,6 +72,17 @@ export interface LegacyImportServiceOptions {
   reconcileImport?: typeof reconcilePiImport;
   createId?: () => string;
   now?: () => number;
+  workspaceFallback?: LegacyImportWorkspaceFallback;
+  directoryExists?: (candidate: string) => Promise<boolean>;
+}
+
+async function realDirectoryExists(candidate: string): Promise<boolean> {
+  if (!candidate.trim()) return false;
+  try {
+    return (await stat(candidate)).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 export class LegacyImportService {
@@ -67,6 +94,8 @@ export class LegacyImportService {
   private readonly reconcileImport: typeof reconcilePiImport;
   private readonly createId: () => string;
   private readonly now: () => number;
+  private readonly workspaceFallback: LegacyImportWorkspaceFallback;
+  private readonly directoryExists: (candidate: string) => Promise<boolean>;
   private readonly flights = new Map<string, Promise<LegacyImportItemResult>>();
   private reconcilePromise: Promise<void> | null = null;
   private reconciled = false;
@@ -89,6 +118,32 @@ export class LegacyImportService {
       options.reconcileImport ?? ((payload) => workerManager.reconcileLegacyImport(payload));
     this.createId = options.createId ?? randomUUID;
     this.now = options.now ?? Date.now;
+    this.workspaceFallback = options.workspaceFallback ?? scratchWorkspaceService;
+    this.directoryExists = options.directoryExists ?? realDirectoryExists;
+  }
+
+  /**
+   * Decide the working directory the imported session runs in.
+   *
+   * Keeping the recorded directory is the good outcome: the conversation stays
+   * attached to the project it is about. It is only possible when that folder
+   * is still on disk AND the caller matched it to a registered workspace —
+   * otherwise the row would merge into the sidebar with no workspace to hang
+   * off and disappear (`mergeSessionIndex` drops such rows as orphans), which
+   * is the failure this fallback exists to prevent.
+   *
+   * The fallback is an isolated scratch directory, i.e. exactly what an
+   * "unbound" chat already uses. The conversation itself is unaffected — the
+   * JSONL lives under the agent directory, not under the cwd.
+   */
+  private async resolveWorkspace(
+    source: LegacyImportSourceRef,
+    recordedPath: string,
+    logicalSessionId: string
+  ): Promise<string> {
+    const matched = source.workspaceMatched !== false;
+    if (matched && (await this.directoryExists(recordedPath))) return recordedPath;
+    return this.workspaceFallback.ensure(logicalSessionId);
   }
 
   reconcile(): Promise<void> {
@@ -203,13 +258,28 @@ export class LegacyImportService {
 
     const logicalSessionId = `session-import-${source.sourceKind}-${this.createId()}`;
     const targetPiSessionId = `import-${source.sourceKind}-${this.createId()}`;
+    let workspacePath: string;
+    try {
+      workspacePath = await this.resolveWorkspace(
+        source,
+        read.conversation.workspacePath,
+        logicalSessionId
+      );
+    } catch (error) {
+      return { source, status: 'failed', error: errorMessage(error) };
+    }
+    // Everything downstream — the worker cwd, the Pi session directory, the
+    // index row, crash reconciliation — must agree on one path, so the
+    // conversation carries the resolved one from here on.
+    const conversation = { ...read.conversation, workspacePath };
+    const unbound = this.workspaceFallback.isScratchPath(workspacePath);
     const record: LegacyImportManifestRecord = {
       dedupeKey,
       status: 'importing',
       source,
       sourcePath: read.sourcePath,
       sourceFingerprint: read.conversation.sourceFingerprint,
-      workspacePath: read.conversation.workspacePath,
+      workspacePath,
       title: read.conversation.title,
       logicalSessionId,
       targetPiSessionId,
@@ -233,7 +303,7 @@ export class LegacyImportService {
       imported = await this.createImport({
         logicalSessionId,
         targetPiSessionId,
-        conversation: read.conversation,
+        conversation,
       });
       await this.manifest.updateImporting(dedupeKey, {
         targetSessionFile: imported.result.finalSessionFile,
@@ -249,8 +319,11 @@ export class LegacyImportService {
           dedupeKey,
         },
         agent: PI_AGENT,
-        workspacePath: read.conversation.workspacePath,
-        title: read.conversation.title,
+        // U05-c: only Main may call a session unbound, and it says so only
+        // because it is the one that put the session in a scratch directory.
+        ...(unbound ? { unbound: true } : {}),
+        workspacePath,
+        title: conversation.title,
         updatedAt: this.now(),
         archived: false,
       };
@@ -293,7 +366,7 @@ export class LegacyImportService {
       try {
         const reconciled = await this.reconcileImport({
           logicalSessionId,
-          workspacePath: read.conversation.workspacePath,
+          workspacePath,
           targetPiSessionId,
         });
         remainingFiles = reconciled.remainingFiles;

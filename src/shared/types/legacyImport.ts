@@ -19,6 +19,16 @@ export interface LegacyImportSourceRef {
   sourceKind: LegacyImportSourceKind;
   projectId: string;
   sourceSessionId: string;
+  /**
+   * H/21 C3 — does the recorded working directory belong to a folder this app
+   * has registered? Only the renderer holds that list, so it answers; Main
+   * still decides where an unmatched conversation actually lands and remains
+   * the only writer of the row's `unbound` flag (U05-c).
+   *
+   * Absent means "not asked": Main then keeps the recorded directory whenever
+   * it exists on disk, which is the behaviour that shipped before this field.
+   */
+  workspaceMatched?: boolean;
 }
 
 export interface LegacyImportProject {
@@ -322,7 +332,8 @@ export function isLegacyImportBatchRequest(value: unknown): value is LegacyImpor
       isRecord(source) &&
       (source.sourceKind === 'claude-code' || source.sourceKind === 'codex') &&
       isLegacyImportPathSegment(source.projectId) &&
-      isLegacyImportPathSegment(source.sourceSessionId)
+      isLegacyImportPathSegment(source.sourceSessionId) &&
+      (source.workspaceMatched === undefined || typeof source.workspaceMatched === 'boolean')
   );
 }
 

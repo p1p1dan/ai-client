@@ -30,6 +30,23 @@ function timestamp(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+/** Injected repo instructions / environment context, not something the user typed. */
+function isSyntheticCodexUserText(text: string): boolean {
+  return text.startsWith('<') || text.startsWith('# AGENTS.md') || text.startsWith('You are Codex');
+}
+
+/**
+ * Codex writes two on-disk shapes and both are still on users' machines:
+ *
+ * - current: every line is `{timestamp, type, payload}`, the header is
+ *   `session_meta`, and conversation items arrive as `response_item`;
+ * - legacy: the first line is a bare session header (`id` + `timestamp`, no
+ *   `type`) and the items themselves are bare rows (`type: 'message'` etc.).
+ *
+ * The legacy header may carry no `cwd` at all, so `workspacePath` can come back
+ * empty here. That is reported, not invented — the import service decides where
+ * such a conversation lands (see `LegacyImportService.resolveWorkspace`).
+ */
 export function parseCodexRollout(contents: string): CodexRollout {
   if (Buffer.byteLength(contents) > LEGACY_IMPORT_MAX_SOURCE_BYTES)
     throw new Error('Codex source exceeds import size limit');
@@ -38,35 +55,62 @@ export function parseCodexRollout(contents: string): CodexRollout {
   const diagnose = (message: string) => {
     if (result.diagnostics.length < LEGACY_IMPORT_MAX_DIAGNOSTICS) result.diagnostics.push(message);
   };
+  const LEGACY_ITEM_TYPES = [
+    'message',
+    'reasoning',
+    'function_call',
+    'function_call_output',
+    'custom_tool_call',
+    'custom_tool_call_output',
+  ];
   for (const [index, line] of contents.split('\n').entries()) {
     if (!line.trim()) continue;
     if (line.length > LEGACY_IMPORT_MAX_LINE_CHARS)
       throw new Error('Codex source line exceeds import limit');
     const row = record(JSON.parse(line));
     if (!row) throw new Error(`Invalid Codex record at line ${index + 1}`);
-    const payload = record(row.payload);
-    if (row.type === 'session_meta' && payload) {
+    const wrapped = record(row.payload);
+    if (row.type === 'session_meta' && wrapped) {
       if (
-        typeof payload.id !== 'string' ||
-        !payload.id ||
-        typeof payload.cwd !== 'string' ||
-        !payload.cwd
+        typeof wrapped.id !== 'string' ||
+        !wrapped.id ||
+        typeof wrapped.cwd !== 'string' ||
+        !wrapped.cwd
       ) {
         throw new Error('Codex session metadata is incomplete');
       }
-      if (result.sessionId && result.sessionId !== payload.id)
+      if (result.sessionId && result.sessionId !== wrapped.id)
         throw new Error('Conflicting Codex session metadata');
-      result.sessionId = payload.id;
-      result.workspacePath = payload.cwd;
-      result.startedAt = timestamp(payload.timestamp ?? row.timestamp);
+      result.sessionId = wrapped.id;
+      result.workspacePath = wrapped.cwd;
+      result.startedAt = timestamp(wrapped.timestamp ?? row.timestamp);
       continue;
     }
-    if (row.type === 'turn_context' && payload) {
-      if (typeof payload.model === 'string') result.model = payload.model;
+    if (row.type === 'turn_context' && wrapped) {
+      if (typeof wrapped.model === 'string') result.model = wrapped.model;
       continue;
     }
+    // Legacy bare header: no `type`, but an id and a timestamp. Only the first
+    // one counts; a second is a corrupt concatenation, not a second session.
+    if (
+      row.type === undefined &&
+      typeof row.id === 'string' &&
+      row.id &&
+      typeof row.timestamp === 'string'
+    ) {
+      if (result.sessionId && result.sessionId !== row.id)
+        throw new Error('Conflicting Codex session metadata');
+      result.sessionId = row.id;
+      if (typeof row.cwd === 'string' && row.cwd) result.workspacePath = row.cwd;
+      result.startedAt = timestamp(row.timestamp);
+      continue;
+    }
+    // A legacy item is the payload itself; a current one is wrapped.
+    const legacyItem =
+      !wrapped && typeof row.type === 'string' && LEGACY_ITEM_TYPES.includes(row.type);
+    const payload = legacyItem ? row : wrapped;
     // event_msg mirrors response_item content. Reading both duplicates messages.
-    if (row.type !== 'response_item' || !payload) continue;
+    if (!payload || (!legacyItem && row.type !== 'response_item')) continue;
     const at = timestamp(row.timestamp);
     if (at !== undefined) result.endedAt = at;
     const provenance = {
@@ -77,11 +121,10 @@ export function parseCodexRollout(contents: string): CodexRollout {
     if (type === 'message') {
       if (payload.role !== 'user' && payload.role !== 'assistant') continue;
       const text = readCodexTextContent(payload.content, '\n');
-      if (
-        payload.role === 'user' &&
-        /^(# AGENTS\.md instructions|<environment_context>|<permissions instructions>)/.test(text)
-      )
-        continue;
+      // Codex prepends synthetic user turns carrying repo instructions and
+      // environment context. They are noise in a conversation the user reads,
+      // and the first of them would otherwise become the session title.
+      if (payload.role === 'user' && isSyntheticCodexUserText(text)) continue;
       if (!text) {
         diagnose(`Message at line ${index + 1} has no supported text; attachments omitted`);
         continue;
@@ -144,7 +187,8 @@ export function parseCodexRollout(contents: string): CodexRollout {
     if (result.entries.length > LEGACY_IMPORT_MAX_ENTRIES)
       throw new Error('Codex source exceeds import entry limit');
   }
-  if (!result.sessionId || !result.workspacePath)
-    throw new Error('Codex session metadata was not found');
+  if (!result.sessionId) throw new Error('Codex session metadata was not found');
+  if (!result.workspacePath)
+    diagnose('Codex session recorded no working directory; it imports as a temporary chat');
   return result;
 }

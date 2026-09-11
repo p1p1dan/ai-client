@@ -261,6 +261,71 @@ describe('ClaudeSourceAdapter', () => {
     ).rejects.toThrow(/exceeds the .* import limit/);
   });
 
+  // H/21 C6: the probe over this machine's real history found the newest
+  // Claude sessions all titled `/clear` — the command echo is a user turn, and
+  // it was the first one.
+  it('titles the conversation after the first real user message, not a slash command', async () => {
+    const cwd = path.join(root, 'workspace');
+    const source = [
+      line({ type: 'system', subtype: 'init', cwd }),
+      line({
+        type: 'user',
+        uuid: 'u0',
+        cwd,
+        message: {
+          role: 'user',
+          content: '<command-name>/clear</command-name><command-args></command-args>',
+        },
+      }),
+      line({ type: 'user', uuid: 'u1', cwd, message: { role: 'user', content: '真正的问题' } }),
+      line({
+        type: 'assistant',
+        uuid: 'a1',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'answer' }] },
+      }),
+    ].join('\n');
+    await writeFile(sourceFile, `${source}\n`, 'utf8');
+
+    const result = await adapter().read({
+      sourceKind: 'claude-code',
+      projectId: 'project-a',
+      sourceSessionId: 'session-a',
+    });
+
+    expect(result.conversation.title).toBe('真正的问题');
+    // The command turn is history, not noise to erase — it stays readable.
+    expect(result.conversation.entries).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: 'user', text: '/clear' })])
+    );
+  });
+
+  it('falls back to the command label when every user turn was a slash command', async () => {
+    const cwd = path.join(root, 'workspace');
+    const source = [
+      line({ type: 'system', subtype: 'init', cwd }),
+      line({
+        type: 'user',
+        uuid: 'u0',
+        cwd,
+        message: { role: 'user', content: '<command-name>/clear</command-name>' },
+      }),
+      line({
+        type: 'assistant',
+        uuid: 'a1',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'answer' }] },
+      }),
+    ].join('\n');
+    await writeFile(sourceFile, `${source}\n`, 'utf8');
+
+    const result = await adapter().read({
+      sourceKind: 'claude-code',
+      projectId: 'project-a',
+      sourceSessionId: 'session-a',
+    });
+
+    expect(result.conversation.title).toBe('/clear');
+  });
+
   it('fails clearly instead of creating a user-only Pi transcript', async () => {
     const cwd = path.join(root, 'workspace');
     await writeFile(

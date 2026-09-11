@@ -82,6 +82,27 @@ export function applySessionIndexRefresh(
   };
 }
 
+/**
+ * Re-read the index and fold it into the store, outside any component that
+ * owns the hook.
+ *
+ * `useSessionIndex` lives in LeftNav, so a feature elsewhere that adds rows
+ * (H/21's conversation import, in Settings) had no way to make them appear
+ * without waiting for the next LeftNav refresh. Rethrows nothing: the caller
+ * gets `false` and can decide whether a stale sidebar is worth reporting.
+ */
+export async function refreshSessionIndexNow(): Promise<boolean> {
+  try {
+    const entries = await window.electronAPI.chat.listSessions();
+    useChatSessionsStore.setState(
+      applySessionIndexRefresh(entries, useChatSessionsStore.getState())
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function useSessionIndex(): UseSessionIndexResult {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

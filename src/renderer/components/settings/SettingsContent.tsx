@@ -16,6 +16,7 @@ import { AdvancedSettings } from './AdvancedSettings';
 import { AgentMigrationSettings } from './AgentMigrationSettings';
 import { AISettings } from './AISettings';
 import { AppearanceSettings } from './AppearanceSettings';
+import { ConversationImportSettings } from './ConversationImportSettings';
 import type { SettingsCategory } from './constants';
 import { EditorSettings } from './EditorSettings';
 import { GeneralSettings } from './GeneralSettings';
@@ -107,6 +108,7 @@ export function SettingsContent({
           {activeCategory === 'pi' && (
             <>
               <AgentMigrationSettings />
+              <ConversationImportSettings />
               <UserProvidersSettings />
               <PiModelManagementSettings />
               <PermissionPolicySettings repoPath={repoPath} />

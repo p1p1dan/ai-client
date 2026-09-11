@@ -300,6 +300,8 @@ async function parseConversation(
   let sidechainLines = 0;
   let unsupportedItems = 0;
   let firstUserText = '';
+  /** Second choice for the title when every user turn was a slash command. */
+  let firstCommandText = '';
   let startedAt: number | undefined;
   let endedAt: number | undefined;
   let model: string | undefined;
@@ -457,11 +459,19 @@ async function parseConversation(
       }
 
       const rawText = textFromContent(content);
-      const cleaned = rawText ? stripSystemTags(rawText) || commandLabel(rawText) || '' : '';
+      const stripped = rawText ? stripSystemTags(rawText) : '';
+      const cleaned = rawText ? stripped || commandLabel(rawText) || '' : '';
       const attachments = attachmentDiagnostics(content);
       if (cleaned || attachments.length > 0) {
         const bounded = boundedText(cleaned, LEGACY_IMPORT_MAX_TEXT_CHARS);
-        if (!firstUserText && bounded.text) firstUserText = bounded.text;
+        // The title is what the user reads in the sidebar, so it has to be
+        // something they typed. A turn that is only a slash-command echo (the
+        // `/clear` rows Claude writes) stays in the transcript but must not
+        // name the conversation — H/21 C6 found every recent local session
+        // titled `/clear` exactly this way.
+        if (!firstUserText && stripped && bounded.text) firstUserText = bounded.text;
+        else if (!firstUserText && !firstCommandText && bounded.text)
+          firstCommandText = bounded.text;
         pushBounded(entries, {
           kind: 'user',
           ...provenance,
@@ -515,7 +525,8 @@ async function parseConversation(
     stableSourceIdentity: fingerprint.stableSourceIdentity,
     sourceSessionId: source.sessionId,
     workspacePath: source.workspacePath,
-    title: firstUserText.trim().slice(0, 120) || 'Imported Claude conversation',
+    title:
+      (firstUserText || firstCommandText).trim().slice(0, 120) || 'Imported Claude conversation',
     ...(model ? { model } : {}),
     ...(startedAt !== undefined ? { startedAt } : {}),
     ...(endedAt !== undefined ? { endedAt } : {}),

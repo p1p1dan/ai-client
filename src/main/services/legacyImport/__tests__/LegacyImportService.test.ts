@@ -40,6 +40,8 @@ beforeEach(async () => {
   sourceFile = path.join(configDir, 'projects', 'project-a', 'session-a.jsonl');
   manifestPath = path.join(root, 'manifest.json');
   await mkdir(path.dirname(sourceFile), { recursive: true });
+  // The recorded cwd has to exist for the import to keep it (H/21 C3).
+  await mkdir(workspacePath, { recursive: true });
   await writeSource('hello');
 });
 
@@ -144,10 +146,22 @@ function harness(
       return { sessionFiles: [] };
     }
   });
+  // Stands in for ScratchWorkspaceService: same contract (allocate a directory
+  // we own, recognise it later), inside the test's temp root.
+  const scratchRoot = path.join(root, 'unbound-sessions');
+  const workspaceFallback = {
+    ensure: vi.fn(async (sessionId: string) => {
+      const target = path.join(scratchRoot, sessionId);
+      await mkdir(target, { recursive: true });
+      return target;
+    }),
+    isScratchPath: (candidate: string) => candidate.startsWith(`${scratchRoot}${path.sep}`),
+  };
   const service = new LegacyImportService({
     scanner: new ClaudeSessionScanner({
       resolveRoots: () => [{ dir: configDir, kind: 'legacy' }],
     }),
+    workspaceFallback,
     manifest,
     importers: options.importers,
     sessionIndex: index,
@@ -161,7 +175,7 @@ function harness(
     createId: () => `id-${++id}`,
     now: () => 100,
   });
-  return { service, manifest, index, createImport, inspectImport };
+  return { service, manifest, index, createImport, inspectImport, workspaceFallback, scratchRoot };
 }
 
 const source = {
@@ -428,6 +442,43 @@ describe('B4 multi-source import', () => {
       results[1].session?.legacyImport?.dedupeKey
     );
     expect(await readFile(sameIdFile, 'utf8')).toContain('answer:hello');
+  });
+
+  // H/21 C3 — an imported row whose workspace matches nothing the app knows
+  // would merge into the sidebar as an orphan and be dropped, so the import
+  // lands in a scratch directory and says so on the row instead.
+  it('keeps the recorded workspace when the caller matched it and it exists', async () => {
+    const h = harness();
+    const result = (await h.service.importBatch([{ ...source, workspaceMatched: true }]))
+      .results[0];
+    expect(result.status).toBe('imported');
+    expect(result.session?.workspacePath).toBe(workspacePath);
+    expect(result.session?.unbound).toBeUndefined();
+    expect(h.workspaceFallback.ensure).not.toHaveBeenCalled();
+  });
+
+  it('imports into a scratch workspace and marks the row unbound when nothing matched', async () => {
+    const h = harness();
+    const result = (await h.service.importBatch([{ ...source, workspaceMatched: false }]))
+      .results[0];
+    expect(result.status).toBe('imported');
+    expect(result.session?.unbound).toBe(true);
+    expect(result.session?.workspacePath.startsWith(h.scratchRoot)).toBe(true);
+    // The worker, the manifest and the row must all name the same directory.
+    expect(h.createImport.mock.calls[0][0].conversation.workspacePath).toBe(
+      result.session?.workspacePath
+    );
+    const record = (await h.manifest.list())[0];
+    expect(record.workspacePath).toBe(result.session?.workspacePath);
+  });
+
+  it('falls back when the recorded workspace is gone even if the caller matched it', async () => {
+    await rm(workspacePath, { recursive: true, force: true });
+    const h = harness();
+    const result = (await h.service.importBatch([{ ...source, workspaceMatched: true }]))
+      .results[0];
+    expect(result.status).toBe('imported');
+    expect(result.session?.unbound).toBe(true);
   });
 
   it('keeps Claude projects visible when the Codex root cannot be scanned', async () => {

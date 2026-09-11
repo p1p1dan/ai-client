@@ -620,6 +620,27 @@ export const zhTranslations: Record<string, string> = {
   '{{copied}} copied, {{replaced}} replaced, {{skipped}} left alone':
     '复制 {{copied}} 项，替换 {{replaced}} 项，保持原样 {{skipped}} 项。',
 
+  // H/21 C5：从 Claude Code / Codex 导入历史对话。
+  'Import conversations from Claude Code / Codex': '从 Claude Code / Codex 导入历史对话',
+  'Copies conversation history off this machine into this app, where you can read it and keep talking. The original files are only read, never changed.':
+    '把这台机器上的历史对话复制进本应用，进来之后可以看、也可以接着聊。原来的文件只读不改。',
+  'No Claude Code or Codex conversations were found on this machine.':
+    '这台机器上没有找到 Claude Code 或 Codex 的历史对话。',
+  'This project has no conversations to import.': '这个项目下没有可导入的对话。',
+  'No matching folder': '未匹配到仓库',
+  'No working folder was recorded': '没有记录工作目录',
+  'This folder is not one of your projects here, so these conversations import as temporary chats.':
+    '这个目录不在本应用的项目列表里，所以这些对话会作为临时对话导入。',
+  'Import selected ({{count}})': '导入所选（{{count}}）',
+  'Importing...': '正在导入…',
+  Rescan: '重新扫描',
+  Back: '返回',
+  '{{count}} conversations': '{{count}} 个对话',
+  'Imported {{imported}}, already here {{skipped}}, failed {{failed}}.':
+    '新导入 {{imported}} 个，已存在 {{skipped}} 个，失败 {{failed}} 个。',
+  'Imported conversations appear in the sidebar; open one to keep talking.':
+    '导入的对话会出现在侧栏，打开就能接着聊。',
+
   // H/21 P1：首启只弹一次的迁移对话框。
   'Found an existing Pi setup on this machine. Copying it over takes a moment and changes nothing in your own directory.':
     '这台机器上有你自己的 Pi 配置。搬过来只要一会儿，你原来的目录不会有任何改动。',
