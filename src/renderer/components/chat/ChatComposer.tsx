@@ -95,6 +95,7 @@ import {
   sessionStatusLineWrapperClass,
   shouldShowStatusLine,
 } from './middleColumnLayout';
+import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingError';
 import { resolveResumeModel } from './models';
 import { QueuedMessageStrip } from './QueuedMessageStrip';
 import {
@@ -764,15 +765,23 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       ? 'Active session has no workspace — re-open a repository and refresh.'
       : !isUnboundSession && activeSessionId && !cwd
         ? 'No repository registered — launch with --open-path=<repo> (or add a repository) first.'
-        : lastError
-          ? `Error: ${lastError}`
-          : sending
-            ? 'Starting Agent Host / sending…'
-            : busy
-              ? 'Agent Host running — use Stop to abort'
-              : effectiveCwd
-                ? `Ready · cwd: ${effectiveCwd}`
-                : 'Ready · temporary chat — a private folder is created on the first message.';
+        : // H/21 point-check D2: the model-missing failure reached four
+          // surfaces and this fifth one kept printing the worker's raw
+          // `WorkerSlotError: WORKER_REQUEST_FAILED: Pi model not found: …`
+          // directly under the mapped copy, on the same screen. One line here,
+          // because this strip is a status hint and has no room for the full
+          // explanation the notice above already gives.
+          isModelMissingError(lastError)
+          ? MODEL_MISSING_ERROR_VIEW.hint
+          : lastError
+            ? `Error: ${lastError}`
+            : sending
+              ? 'Starting Agent Host / sending…'
+              : busy
+                ? 'Agent Host running — use Stop to abort'
+                : effectiveCwd
+                  ? `Ready · cwd: ${effectiveCwd}`
+                  : 'Ready · temporary chat — a private folder is created on the first message.';
 
   // T-27 round-3 (point-check #10): fire-and-forget after ANY `runSend` call
   // site sees a 'committed' outcome (the Host admitted the turn — see

@@ -26,8 +26,11 @@ const TIMELINE = path.join(
 
 const TERMINAL = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'AgentTerminal.tsx');
 
+const COMPOSER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ChatComposer.tsx');
+
 const SOURCE = stripComments(readFileSync(TIMELINE, 'utf8'), 'MessageTimeline.tsx');
 const TERMINAL_SOURCE = stripComments(readFileSync(TERMINAL, 'utf8'), 'AgentTerminal.tsx');
+const COMPOSER_SOURCE = stripComments(readFileSync(COMPOSER, 'utf8'), 'ChatComposer.tsx');
 
 describe('MessageTimeline wires the model-missing recovery (H/21 P0)', () => {
   it('[MMW-01] imports the shared detector and view rather than re-spelling the needle', () => {
@@ -105,5 +108,21 @@ describe('AgentTerminal wires the model-missing recovery (H/21 P0)', () => {
 
   it('[MMW-11] spells the worker text nowhere — the detector owns it', () => {
     expect(TERMINAL_SOURCE).not.toContain('Pi model not found');
+  });
+});
+
+describe('ChatComposer status strip (H/21 point-check D2)', () => {
+  it('[MMW-12] the strip under the composer stops printing the raw diagnostic', () => {
+    // Found on the real app: the mapped notice at the top of the timeline and
+    // `Error: … WorkerSlotError: WORKER_REQUEST_FAILED: Pi model not found: …`
+    // under the composer, on the same screen at the same time.
+    expect(COMPOSER_SOURCE).toContain('isModelMissingError(lastError)');
+    expect(COMPOSER_SOURCE).toContain('MODEL_MISSING_ERROR_VIEW.hint');
+  });
+
+  it('[MMW-13] the raw fallback survives for every OTHER failure', () => {
+    // This strip is the only place most Host errors are ever shown. Replacing
+    // the fallback instead of ranking above it would hide all of them.
+    expect(COMPOSER_SOURCE).toContain(`\`Error: \${lastError}\``);
   });
 });

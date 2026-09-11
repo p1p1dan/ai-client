@@ -7,7 +7,7 @@ import {
   migrationKindLabel,
   selectionCarriesSecrets,
   shouldPromptMigration,
-} from '../agentMigrationPrompt';
+} from '../migrationPromptModel';
 
 /**
  * H/21 P1. The decision under test is "do we interrupt this user at all", which

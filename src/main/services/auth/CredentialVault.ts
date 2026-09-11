@@ -93,6 +93,20 @@ export interface UserProvider {
   models?: string[];
   enabled: boolean;
   createdAt: string;
+  /**
+   * The key this service MUST keep in `models.json`, when it has one.
+   *
+   * Only migrated services have it, and it is the key their own `models.json`
+   * used before the migration. Without it the id is re-derived from the display
+   * name (`userProviderId`), which renames the provider — `cx2` with the name
+   * "CX2 (GPT-5.6)" comes back as `cx2-gpt-5-6`. Every session that recorded
+   * `cx2/<model>` then stays unopenable AFTER migrating, which is the one thing
+   * the migration exists to fix (H/21 point-check D1, 2026-09-11).
+   *
+   * Absent for services the user typed in here: those were never referenced by
+   * an older session under another id, so the readable slug is the better key.
+   */
+  configKey?: string;
 }
 
 /** On-disk envelope, `payload` decrypted and parsed. What a `status:'ok'` read hands back. */

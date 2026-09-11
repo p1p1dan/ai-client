@@ -120,6 +120,11 @@ export class UserProviderService {
       models: draft.models ?? existing?.models ?? [],
       enabled: draft.enabled ?? existing?.enabled ?? true,
       createdAt: existing?.createdAt ?? this.now().toISOString(),
+      // Carried, never editable. It is the key older sessions recorded, so
+      // losing it on a rename would break exactly the sessions the migration
+      // just repaired — and renaming is the most likely reason to open this
+      // form at all (H/21 point-check D1).
+      ...(existing?.configKey ? { configKey: existing.configKey } : {}),
     };
 
     const merged = existing

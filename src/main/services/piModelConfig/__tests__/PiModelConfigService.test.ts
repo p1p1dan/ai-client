@@ -940,6 +940,41 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
     expect(auth['my-deepseek']).toEqual({ type: 'api_key', key: userProvider.apiKey });
   });
 
+  /**
+   * H/21 point-check D1 (2026-09-11): a migrated service must keep the key its
+   * own `models.json` used, or every session recorded under that key is still
+   * unopenable after the migration that was supposed to fix it.
+   */
+  it('a migrated service keeps its original key instead of a slug of its name', () => {
+    const migrated = { ...userProvider, name: 'CX2 (GPT-5.6)', configKey: 'cx2' };
+    service([migrated]).writeUserProviderConfig({
+      userProviders: [migrated],
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    expect(Object.keys(models.providers)).toContain('cx2');
+    // The slug of the display name is what the bug produced.
+    expect(Object.keys(models.providers)).not.toContain('cx2-gpt-5-6');
+    // auth.json is keyed the same way, or the key reaches a provider that is
+    // no longer there.
+    expect(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8'))).toHaveProperty('cx2');
+  });
+
+  it('a blank configKey falls back to the slug rather than an empty provider id', () => {
+    const odd = { ...userProvider, configKey: '   ' };
+    service([odd]).writeUserProviderConfig({
+      userProviders: [odd],
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    expect(Object.keys(models.providers)).toContain('my-deepseek');
+    expect(Object.keys(models.providers)).not.toContain('');
+  });
+
   it('a user service shadows a managed provider of the same slug', () => {
     const collides = { ...userProvider, name: 'dan' };
     service([collides]).writeUserProviderConfig({

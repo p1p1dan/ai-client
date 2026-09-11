@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * H/21 P1 — the one-time migration dialog, rendered for real against a stubbed
  * bridge.
  *
- * The rules are truth-tabled in `agentMigrationPrompt.test.ts` and the wiring
+ * The rules are truth-tabled in `migrationPromptModel.test.ts` and the wiring
  * is scanned in `agentMigrationPromptWiring.test.ts`; neither can answer the
  * question that actually matters here — does this thing open for the right
  * person, stay shut for everyone else, and remember the answer. That needs a

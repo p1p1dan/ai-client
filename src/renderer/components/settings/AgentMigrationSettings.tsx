@@ -27,7 +27,7 @@ import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 // H/21 P1: label and "would this copy anything" now live with the first-launch
 // prompt's rules, so the dialog and this pane cannot drift apart on either.
-import { defaultMigrationSelection, migrationKindLabel } from './agentMigrationPrompt';
+import { defaultMigrationSelection, migrationKindLabel } from './migrationPromptModel';
 import { SettingsSectionBlock } from './SettingsPrimitives';
 
 function messageOf(cause: unknown): string {

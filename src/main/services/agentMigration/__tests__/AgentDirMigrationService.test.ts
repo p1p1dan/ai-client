@@ -150,6 +150,60 @@ describe('apply — files', () => {
     );
   });
 
+  /**
+   * H/21 point-check D5/D3 (2026-09-11). The count was per project DIRECTORY,
+   * which got both of these wrong at once.
+   */
+  describe('session counting', () => {
+    it('counts conversations, not project directories', () => {
+      // Real numbers from the point-check: 6 directories, 74 conversations.
+      // The user is being asked whether to bring a history over — "6" is not
+      // an answer to that question.
+      write(join(source, 'sessions', '-home-u-a', 'one.jsonl'), 'x');
+      write(join(source, 'sessions', '-home-u-a', 'two.jsonl'), 'x');
+      write(join(source, 'sessions', '-home-u-b', 'three.jsonl'), 'x');
+
+      const sessions = service()
+        .inspect()
+        .items.find((row) => row.kind === 'sessions');
+      expect(sessions?.total).toBe(3);
+    });
+
+    it('still shows the project names, because a uuid file name names nothing', () => {
+      write(join(source, 'sessions', '-home-u-a', 'one.jsonl'), 'x');
+      write(join(source, 'sessions', '-home-u-a', 'two.jsonl'), 'x');
+
+      const sessions = service()
+        .inspect()
+        .items.find((row) => row.kind === 'sessions');
+      expect(sessions?.entries.map((entry) => entry.name)).toEqual(['-home-u-a']);
+    });
+
+    it('an empty source directory offers nothing, forever', () => {
+      // The point-check bug: `permission-forwarding` holds no conversations and
+      // is never copied, yet counted as one pending item — so the first-launch
+      // offer came back on EVERY launch proposing to copy an empty folder.
+      mkdirSync(join(source, 'sessions', 'permission-forwarding'), { recursive: true });
+      write(join(source, 'sessions', '-home-u-a', 'one.jsonl'), 'x');
+      write(join(target, 'sessions', '-home-u-a', 'one.jsonl'), 'x');
+
+      const sessions = service()
+        .inspect()
+        .items.find((row) => row.kind === 'sessions');
+      expect(sessions?.total).toBe(1);
+      // Everything that can be copied already is, so nothing is pending.
+      expect(sessions?.total).toBe(sessions?.conflicts);
+    });
+
+    it('reports nothing at all when every directory is empty', () => {
+      mkdirSync(join(source, 'sessions', 'permission-forwarding'), { recursive: true });
+      const sessions = service()
+        .inspect()
+        .items.find((row) => row.kind === 'sessions');
+      expect(sessions).toBeUndefined();
+    });
+  });
+
   it('refuses to migrate a directory onto itself', () => {
     write(join(source, 'skills', 'reviewer', 'SKILL.md'), '# reviewer');
     const same = new AgentDirMigrationService({
@@ -190,8 +244,69 @@ describe('apply — AI services', () => {
         models: ['gpt-5.6', 'gpt-5.6-mini'],
         enabled: true,
         createdAt: '2026-09-10T00:00:00.000Z',
+        // H/21 point-check D1: the key this provider had in the user's own
+        // models.json, carried so `models.json` keeps calling it `cx2`. Its
+        // display name slugifies to `cx2` here too, which is exactly why the
+        // bug survived review — see the dedicated test below for a name that
+        // does not.
+        configKey: 'cx2',
       },
     ]);
+  });
+
+  /**
+   * H/21 point-check D1 (2026-09-11) — the defect that made the whole migration
+   * pointless for the user it exists to serve.
+   */
+  it('keeps the source key even when the display name slugifies to something else', async () => {
+    // The real case: key `cx2`, display name "CX2 (GPT-5.6)". Deriving the id
+    // from the name produced `cx2-gpt-5-6`, so every session holding
+    // `cx2/gpt-5.6-terra` stayed dead AFTER a migration that said it succeeded.
+    writeModels({
+      cx2: {
+        name: 'CX2 (GPT-5.6)',
+        baseUrl: 'https://cx2.example.com/v1',
+        api: 'openai-responses',
+        apiKey: 'sk-real',
+        models: [{ id: 'gpt-5.6-terra' }],
+      },
+    });
+
+    await service().apply({ kinds: ['providers'], onConflict: 'skip' });
+    expect(stored[0]?.configKey).toBe('cx2');
+    // And the name is untouched — this fix carries an extra field, it does not
+    // rename anything the user sees.
+    expect(stored[0]?.name).toBe('CX2 (GPT-5.6)');
+  });
+
+  it('re-running the migration repairs a service imported before the fix', async () => {
+    // A user who already migrated has a renamed provider on disk. Replacing is
+    // the only route back, so `overwrite` has to set the key too.
+    stored = [
+      {
+        id: 'id-old',
+        name: 'CX2 (GPT-5.6)',
+        baseUrl: 'https://cx2.example.com/v1',
+        api: 'openai-responses',
+        apiKey: 'sk-old',
+        models: ['gpt-5.6-terra'],
+        enabled: true,
+        createdAt: '2026-09-01T00:00:00.000Z',
+      },
+    ];
+    writeModels({
+      cx2: {
+        name: 'CX2 (GPT-5.6)',
+        baseUrl: 'https://cx2.example.com/v1',
+        api: 'openai-responses',
+        apiKey: 'sk-real',
+        models: [{ id: 'gpt-5.6-terra' }],
+      },
+    });
+
+    await service().apply({ kinds: ['providers'], onConflict: 'overwrite' });
+    expect(stored[0]?.configKey).toBe('cx2');
+    expect(stored[0]?.id).toBe('id-old');
   });
 
   it('takes the key from auth.json when the provider carries none', async () => {

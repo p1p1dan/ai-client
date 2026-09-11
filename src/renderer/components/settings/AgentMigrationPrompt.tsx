@@ -59,7 +59,7 @@ import {
   migrationKindLabel,
   selectionCarriesSecrets,
   shouldPromptMigration,
-} from './agentMigrationPrompt';
+} from './migrationPromptModel';
 
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);

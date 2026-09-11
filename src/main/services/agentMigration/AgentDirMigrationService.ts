@@ -152,23 +152,45 @@ export class AgentDirMigrationService {
     ]);
   }
 
+  /**
+   * One entry per CONVERSATION, not per project directory.
+   *
+   * Both counts used to be per directory, and both were wrong for it (H/21
+   * point-check D5/D3, 2026-09-11):
+   *
+   *  - the number the user sees is the one thing telling them whether this is
+   *    a handful of chats or a decade of them, and "6" for 74 conversations
+   *    answers nothing — the point of the checkbox is being able to leave a
+   *    huge history behind;
+   *  - an EMPTY source directory copies nothing, yet counted as one pending
+   *    item forever, so the first-launch offer came back on every launch
+   *    proposing to copy a folder with nothing in it.
+   *
+   * Counting files fixes both: an empty directory contributes zero, and a fully
+   * copied set has every file conflicted, so `total === conflicts` and the item
+   * correctly reads as "already here".
+   */
   private inspectSessions(): MigrationItem | null {
     const sourcePath = join(this.sourceDir, SESSIONS_DIR);
     const targetPath = join(this.targetDir, SESSIONS_DIR);
     const projects = listEntries(sourcePath).filter((name) => isDirectory(join(sourcePath, name)));
-    if (projects.length === 0) return null;
-    // File-level, as the header explains: a project directory that already
-    // exists at the destination is NOT a conflict, only a file inside it that
-    // does. A project counts as conflicted when every one of its files is
-    // already there, because then there is nothing left to copy for it.
-    const entries: MigrationEntry[] = projects.map((project) => {
+    const entries: MigrationEntry[] = [];
+    const display: MigrationEntry[] = [];
+    for (const project of projects) {
       const files = listEntries(join(sourcePath, project)).filter((file) =>
         isFile(join(sourcePath, project, file))
       );
-      const missing = files.filter((file) => !existsSync(join(targetPath, project, file)));
-      return { name: project, conflict: files.length > 0 && missing.length === 0 };
-    });
-    return item('sessions', sourcePath, targetPath, entries);
+      if (files.length === 0) continue;
+      const copied = files.filter((file) => existsSync(join(targetPath, project, file)));
+      for (const file of files) {
+        entries.push({ name: `${project}/${file}`, conflict: copied.includes(file) });
+      }
+      // Shown, not counted: the file names are uuids, so the project directory
+      // is the only part a person recognises.
+      display.push({ name: project, conflict: copied.length === files.length });
+    }
+    if (entries.length === 0) return null;
+    return item('sessions', sourcePath, targetPath, entries, display);
   }
 
   private inspectProviders(): MigrationItem | null {
@@ -396,6 +418,10 @@ export class AgentDirMigrationService {
           api: provider.api,
           apiKey,
           models: provider.models.length > 0 ? provider.models : (previous.models ?? []),
+          // Set on overwrite too: the row being replaced may predate this fix,
+          // so re-running the migration is how an already-renamed service gets
+          // its original key back.
+          ...configKeyOf(provider),
         };
         outcome.overwritten += 1;
       } else {
@@ -408,6 +434,11 @@ export class AgentDirMigrationService {
           models: provider.models,
           enabled: true,
           createdAt: this.now().toISOString(),
+          // The key this provider had in the user's own `models.json`. Dropping
+          // it renames the provider, and every session that recorded the old
+          // name stays broken after a migration that reported success — the
+          // exact failure the migration exists to repair (H/21 point-check D1).
+          ...configKeyOf(provider),
         });
         outcome.copied += 1;
       }
@@ -430,17 +461,39 @@ export class AgentDirMigrationService {
 
 // ─── helpers ───
 
+/**
+ * The `configKey` field for a migrated provider, or nothing when its source key
+ * is unusable.
+ *
+ * A spread rather than a plain value so the field stays absent instead of
+ * present-and-empty: an empty string here would read as "keep this key" and
+ * produce a provider id of `""` in `models.json`.
+ */
+function configKeyOf(provider: ForeignProvider): { configKey?: string } {
+  const key = provider.id.trim();
+  return key ? { configKey: key } : {};
+}
+
+/**
+ * @param entries what is being COUNTED — one per thing that would be copied.
+ * @param display what is being SHOWN, when the two differ. Sessions are the
+ *   only kind that needs this: they are counted one per conversation, because
+ *   that is the number a person can decide about, but listing 74 uuid file
+ *   names tells nobody anything — so the names shown are the project
+ *   directories instead.
+ */
 function item(
   kind: MigrationItemKind,
   sourcePath: string,
   targetPath: string,
-  entries: MigrationEntry[]
+  entries: MigrationEntry[],
+  display: MigrationEntry[] = entries
 ): MigrationItem {
   return {
     kind,
     sourcePath,
     targetPath,
-    entries: entries.slice(0, MIGRATION_ENTRY_DISPLAY_CAP),
+    entries: display.slice(0, MIGRATION_ENTRY_DISPLAY_CAP),
     total: entries.length,
     conflicts: entries.filter((entry) => entry.conflict && !entry.blocked).length,
     blocked: entries.filter((entry) => entry.blocked).length,

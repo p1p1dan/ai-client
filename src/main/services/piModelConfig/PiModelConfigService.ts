@@ -585,14 +585,24 @@ export class PiModelConfigService {
 }
 
 /**
- * The id a user service takes in `models.json`, derived from its display name.
+ * The id a user service takes in `models.json`.
  *
- * A name rather than the record's uuid because this string is what the model
- * picker shows on the left of `provider/model`, and `user-3f2a…/gpt-4o` is not
- * a thing anyone can read. The uuid is the fallback for a name that slugifies
- * to nothing (all punctuation, or a script this regex does not cover).
+ * A migrated service keeps the key its own `models.json` already used
+ * (`configKey`), and that outranks everything else: sessions created before the
+ * migration recorded `<thatKey>/<model>`, so re-deriving the id here renames
+ * the provider out from under them and leaves every one of those sessions
+ * failing with `Pi model not found` — after a migration that reported success.
+ * That was H/21 point-check D1 (2026-09-11): `cx2` came back as `cx2-gpt-5-6`,
+ * because the display name is "CX2 (GPT-5.6)".
+ *
+ * Otherwise the display name, slugified: this string is what the model picker
+ * shows on the left of `provider/model`, and `user-3f2a…/gpt-4o` is not a thing
+ * anyone can read. The uuid is the last resort, for a name that slugifies to
+ * nothing (all punctuation, or a script this regex does not cover).
  */
 function userProviderId(provider: UserProvider): string {
+  const preserved = provider.configKey?.trim();
+  if (preserved) return preserved;
   const slug = provider.name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

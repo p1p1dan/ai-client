@@ -133,6 +133,34 @@ describe('UserProviderService — upsert', () => {
     expect(store.rows[0].createdAt).toBe('2026-09-10T00:00:00.000Z');
   });
 
+  it('a migrated service keeps its original config key across a rename', async () => {
+    // H/21 point-check D1: `configKey` is the id older sessions recorded.
+    // Renaming is the most likely reason to open this form, and dropping the
+    // key there would re-break the sessions the migration just repaired.
+    store.rows = [{ ...makeProvider(), configKey: 'cx2' }];
+    await service().upsert({
+      id: 'svc-1',
+      name: 'Something Else Entirely',
+      baseUrl: 'https://api.deepseek.com/v1',
+      api: 'openai-completions',
+    });
+
+    expect(store.rows[0].configKey).toBe('cx2');
+  });
+
+  it('a service created here gets no config key at all', async () => {
+    // It was never referenced by an older session under another id, so the
+    // readable slug of its name is the better key.
+    await service().upsert({
+      name: 'My DeepSeek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      api: 'openai-completions',
+      apiKey: 'K',
+    });
+
+    expect(store.rows[0].configKey).toBeUndefined();
+  });
+
   it('refuses an explicitly blank key instead of saving a provider that cannot answer', async () => {
     store.rows = [makeProvider()];
     await expect(

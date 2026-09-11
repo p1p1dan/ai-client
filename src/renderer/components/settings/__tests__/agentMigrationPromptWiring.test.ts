@@ -8,7 +8,7 @@ import { stripComments } from '../../chat/__tests__/stripComments';
  * H/21 P1 wiring smoke. BRITTLE BY DESIGN.
  *
  * vitest runs `node` here, so the dialog cannot be rendered and asserted on.
- * `agentMigrationPrompt.test.ts` truth-tables the rules; this file covers the
+ * `migrationPromptModel.test.ts` truth-tables the rules; this file covers the
  * layer above — that the component reaches for them, that the dialog is
  * actually mounted, and that the few properties which only exist in the `.tsx`
  * (never overwrite; remember the answer; skip the scan once answered) are
@@ -86,7 +86,7 @@ describe('AgentMigrationPrompt wiring (H/21 P1)', () => {
 
 describe('AgentMigrationSettings shares the prompt rules (H/21 P1)', () => {
   it('[MPW-09] the pane and the dialog name each kind through one function', () => {
-    expect(PANE).toContain("from './agentMigrationPrompt'");
+    expect(PANE).toContain("from './migrationPromptModel'");
     expect(PANE).toContain('migrationKindLabel');
     // The old private copy is gone — two switch statements over the same five
     // kinds is exactly how two surfaces start calling one thing two names.
