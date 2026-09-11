@@ -32,6 +32,23 @@ Role: evidence。对象：[H/21 P0 + P1](../../topics/external-agent-migration.m
 
 截图：[三个模态堆叠](01-three-modals-stacked.png) · [模型缺失通知](02-model-missing-notice.png)
 
+## 修复与复验（2026-09-11，`b7dacfb0`）
+
+D1/D2/D3/D5 已修并**在真机上重跑一遍**：把应用 agent 目录复位成迁移前状态（删掉 `models.json` 与 `sessions/`、清空 vault 里的用户服务），重新走一遍完整流程。
+
+| 缺陷 | 修复后实测 |
+|---|---|
+| D1 | 迁移后 `models.json` 的键是 `cx2` / `maxapi`（原来是 `cx2-gpt-5-6` / `maxapi-grok`）；**那条旧会话干净打开，映射文案、原始诊断一条不剩** |
+| D5 | 提示框显示「历史对话 **74**」（原来是 6），与复制报告的 74 一致 |
+| D3 | 迁移全部完成后手动清掉标记再重载，提示**不再出现** |
+| D2 | 移走 `models.json` 重启复现故障：上方映射通知在、**下方红带换成了指路文案**，`WORKER_REQUEST_FAILED` 全屏无一处 |
+
+截图：[修复后旧会话正常打开](03-after-fix-session-opens.png) · [composer 提示已映射](04-composer-hint-fixed.png)
+
+复验中另外确认的两件事：渲染层 `location.reload()` **不重启 worker**，所以造模型故障必须整个重启应用；应用**不会**在启动时从 vault 重建 `models.json`，删掉就是删掉了。
+
+D4（英文残留）、D6（重复公告）、D7（模态堆叠）本轮未动，按原计划归入各自已登记的摊子。
+
 ## 查出的缺陷
 
 ### D1（严重）迁移改掉了 provider 的 ID，旧会话迁完照样起不来
