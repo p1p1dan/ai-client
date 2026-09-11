@@ -55,7 +55,11 @@ Escape 关闭面板那条路径没有动。
 
 ## 未验证
 
-- **未在真实应用里点验**。本机尝试过：`pnpm dev --remote-debugging-port=9222` 能起来、DevTools 端口在 listen、TCP 能连上，但 HTTP `/json` 与 browser WebSocket 都不回包（curl 与 node ws 各试一次，均超时）。本环境的 CDP 通道不通，因此没有截图和真实点击记录。渲染测试覆盖到了菜单开合与徽标出现/消失，但覆盖不到真实窗口下的定位、层级与视觉。
+- **未在真实应用里点验**。本机尝试了三轮：`pnpm dev --remote-debugging-port=9222` 能起来、日志打到 `DevTools listening on ws://127.0.0.1:9222/...`、端口在 listen、TCP 能连上，但 HTTP `/json/list` 与 browser WebSocket 都不回包（curl 与 node `ws` 各试过，均超时）；日志固定停在 `Shared state paths` 加一行 vaapi 报错。
+
+  症状与「环境里设了 `HTTP_PROXY` 而 Chromium 只认小写 `no_proxy`」这个已知坑完全一致，**但那条已经不成立**：`scripts/dev.js` 的 `resolveChildEnv` 现在自带 `withLoopbackProxyBypass`，本轮日志里没有它的 `[dev] proxy set …` 提示，说明 `no_proxy` 本来就齐全（本机 env 里 `HTTP_PROXY=http://127.0.0.1:7890`、`NO_PROXY` 与 `no_proxy` 均含 loopback）。所以真实原因未定，下一个人不必再从代理入手。
+
+  因此没有截图和真实点击记录。渲染测试覆盖到了菜单开合与徽标出现/消失，但覆盖不到真实窗口下的定位、层级与视觉。
 - 未打包，未做安装版/加密 Windows 回归。
 - 验证案例 4（两个工作目录会话同时运行、状态互不影响）本轮未测——它验证的是既有能力（计划里已确认「本就支持」），本轮没有改动那条路径。
 - 键盘可达性（验证案例 2 的后半）只在代码层保证：会话行有 `tabIndex={0}`，菜单是 Base UI 的，Esc 关闭在渲染测试里用过一次；没有做完整的 Tab 序列走查。
