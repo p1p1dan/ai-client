@@ -1,0 +1,85 @@
+{
+  "screenshot": "docs/plantree/plans/runtime-evolution/evidence/chinese-ui-residue/batch4-transcript-zh.png",
+  "placeholder": "继续输入…",
+  "modelButton": {
+    "label": "模型与思考强度：grok-4.6 Low —— 对下一轮生效",
+    "title": "grok-4.6 Low —— 点击可更换模型或思考强度（对下一轮生效）"
+  },
+  "asciiRuns": [
+    "83× feat",
+    "83× runtime-evolution",
+    "43× Reply with exactly",
+    "12× Count slowly from",
+    "12× one number per line",
+    "12× no other te",
+    "9× clear",
+    "2× ai-client",
+    "2× Live Agent Host",
+    "2× test",
+    "2× Session",
+    "2× temporary",
+    "1× AI Client",
+    "1× help me install",
+    "1× https",
+    "1× github",
+    "1× pnedfff",
+    "1× claude-env-cleanup",
+    "1× nihao",
+    "1× hello",
+    "1× hey bro",
+    "1× kwoti",
+    "1× Session lwaai",
+    "1× Run the bash command",
+    "1× echo T",
+    "1× C-PERM",
+    "1× C-AFTER-CRASH",
+    "1× PIDPROBE",
+    "1× Session qdotza",
+    "1× Session v",
+    "1× Session g",
+    "1× Session s-send",
+    "1× pi-install",
+    "1× Main",
+    "1× pnpm test",
+    "1× bash rm -rf",
+    "1× write",
+    "1× notes",
+    "1× hello world",
+    "1× repo",
+    "1× grok-"
+  ],
+  "rendererProblems": [
+    {
+      "kind": "console.error",
+      "text": "06:08:39.573 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "06:08:39.573 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "06:08:45.323 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "06:08:45.339 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "06:08:45.473 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "06:08:45.550 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "06:08:45.623 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "06:08:45.753 › [workspace-tree] worktrees-absent Object"
+    }
+  ]
+}

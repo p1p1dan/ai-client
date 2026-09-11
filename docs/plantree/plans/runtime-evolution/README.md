@@ -22,7 +22,7 @@ Role: roadmap。核对日期：2026-09-10；覆盖 runtime-evolution 与已并�
 | 1 | H / 17 | [AI 服务管理](topics/local-provider-management.md) | 已实现（`3f6a61fd`）。本地模式配不了模型是功能空白。遗留一个缺陷：搬动 agent 目录导致用户原有模型配置与会话失联，修法并入第 2 批 |
 | 2 | H / 19 | [统一 agent 目录、迁移与插件](topics/unified-agent-directory.md) | 用户 2026-09-10 方向变更。它同时是 H / 17 那个缺陷的正解——把「加了服务才搬」的条件分支换成一次显式完整迁移 |
 | 3 | H / 18 | [侧栏对齐 PI-Desktop](topics/sidebar-pi-desktop-alignment.md) | 与 H / 17 同批指定，纯 renderer，不依赖上面两项 |
-| 4 | 本地缺陷 | 中文界面英文残留、重载后重复公告与多开空会话 | 本地可复现可修，与前几批同属 renderer/main，可顺带回归 |
+| 4 | 本地缺陷 | 中文界面英文残留、重载后重复公告与多开空会话 | ✅ 已完成（2026-09-11）。两项状态不同：英文残留分两批，走 `t()` 的 `d0332939`、硬编码的这批 `4f7dedf7`，均已真机点验；重复公告与多开空会话查证后定性为**非缺陷**，不改代码。[验证](evidence/chinese-ui-residue/README.md) |
 | 5 | P4-6 收口（改在开发机） | F3 启动链、F2-b 取证、F4 触发、PERM-1 与权限链复验 | 用户 2026-09-10 决定：Node 与 Git 已确认在企业白名单内，这些项改在开发机复现与验证，不再逐轮上加密 Windows |
 | 6 | P2-5、P2-6 | 真实缓存命中率达标与新旧对比 | 需真实 provider，本地可做；第 1 批完成后配模型更方便。达到 95.01% 基线才进 P5 |
 | 7 | P5-1、P5-3 | skills / 模板（含 F5 提问能力）、MCP bridge | 两块相互独立、单块体量可控，先把 P5 里能独立验收的做掉 |
@@ -214,7 +214,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F7b 重复状态行 | ✅ 根因是时间线末尾与输入框上方各挂一个 `SessionActivityStatus`（`a3debdf6` 守的是另一对）；按用户选择只留输入框上方，本地真实应用全程单份 | `225c325e`；[修前截图](evidence/session-review-and-updates/local-f7b-duplicate.png) |
 | 会话写入锁残留 | 🟡 已修：锁记录 `pid`/`host`，`EEXIST` 后判定主进程是否存活，陈旧锁经 rename 独占后接管；活写者与他机锁仍拒绝。7 项新测试含反向对照，未打包、未现场回归 | `280f49fc`；`src/runtime/plugins/session/writerLock.ts`（`store.ts` 与 `legacy.ts` 共用）；[验证](evidence/session-writer-lock/README.md) |
 | 中文界面英文残留（走 t() 的） | ✅ 已修 `d0332939`：全渲染层 1078 个 `t('…')` 字面量逐一比对，补齐 57 处缺失词条（设置、Git、差异视图、用户资料等）。新增 `i18nCoverage` 测试守住这条线，此后新加 `t()` 必须同时加词条 | 起因是 H/21 点验 D4（迁移列表里「AI services」与「历史对话」并排一中一英），量化后一次补齐 |
-| 中文界面英文残留（硬编码的） | 🔴 未修，**与上一行不是同一批**：这些字符串根本不经 `t()`，上面的守卫扫不到。权限卡 Permission / allow / allow for session / deny / Content、`Awaiting approval`（`permissionActivityRow.ts:112`）、时间线 `Thought`（`turnTiming.ts:90`）与 Grepped / Ran / Edited / Read / Editing（`toolCard.ts:852` 起）、输入框占位与排队提示、侧栏 new / branches、模型按钮 aria-label | 来源[本地实测](evidence/session-review-and-updates/README.md#本地真实应用验证)；动词表同时被词汇表测试固定，改动需一并调整 |
+| 中文界面英文残留（硬编码的） | ✅ 已修并真机点验（`4f7dedf7`）。做法：纯函数模块继续吐英文，但那串英文从此是**词典的键**——行首动词一路当键传到 `ToolRows.tsx` 统一 `t(view.verb)` 翻一次；要拼数字路径的参数段则在构造时就翻好，相关函数多收一个 `t`（默认 `englishTranslate`，即英文本身，所以漏接一处只会少一条翻译、不会产生坏字符串）。覆盖工具动词表、思考行、权限卡、审批记录行、子 Agent 面板、输入框占位、回合状态行、排队条、侧栏 New、会话分支对话框、模型按钮 aria-label；另修 15 条词典自身的中英混排值（「搜索 Session」→「搜索会话」） | 来源[本地实测](evidence/session-review-and-updates/README.md#本地真实应用验证)。守卫两条且缺一不可：`toolVocabulary` 查词表有没有词条，`chineseChatSurface` 用真 zh 渲染真组件查屏幕上的词是不是从词典来的（后者已反向验证）。[验证与点验](evidence/chinese-ui-residue/README.md) |
 | 重载后重复公告与多开空会话 | ⚪ **查证后定性为非缺陷，不改代码**（2026-09-11）。公告：`shouldOpenAnnouncementsOnStartup` 明确不看已读状态，「每次启动都弹」是已确认的产品决定。空会话：`createLiveSession` 是纯渲染层占位，不进索引、不起 worker，重载后重建一个是种子逻辑的正常行为，不累积。而 reload 在打包版里够不着——`MenuBuilder.ts:94` 仅在 `!app.isPackaged` 时挂 `reload`/`forceReload`，生产唯一路径是渲染进程崩溃后 `ErrorBoundary.tsx:92` 的按钮，那时重来一遍本就合理。原初判的 `--open-path` 方向也已排除：`APP_TAKE_PENDING_OPEN_PATH` 取一次即清空 | 来源[本地实测](evidence/session-review-and-updates/README.md#本地真实应用验证)；查证见 [H/21 点验记录](evidence/external-agent-migration/README.md) |
 | F7d / EFFORT-1 | 🟡 effort 传递与默认 medium 已修；GPT 慢响应本次未证明为本地缺陷 | `4145fa65` / `c0ae2a34`；test.13 |
 | F7e resume 后暂无上下文统计 | 已定性为既有行为；可选恢复快照增强尚未排期 | [功能说明](topics/field-followups.md#f7e-上下文快照) |
