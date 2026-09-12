@@ -167,6 +167,11 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       compaction_tool: this.ctx.get(CONTEXT_SERVICE)?.compactionTool ?? null,
     });
 
+    // P5-2-4 — delegations started from here belong to this session and this
+    // run. Bound before any tool can fire, because the first thing `Task` does
+    // is write a record that has to name both.
+    this.ctx.get('runtimeSubagents')?.bindRun({ sessionId, runId: trace.runId });
+
     // Optional: P0 and the tool-less smoke lane run without it, and a run with
     // no compaction service behaves exactly as it did before P2-3.
     const context = this.ctx.get(CONTEXT_SERVICE);

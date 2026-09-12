@@ -691,7 +691,30 @@ export interface UsageUpdatedEvent extends RuntimeEventBase {
  *  - subagent tool OUTPUT bodies (only a clamped errorText on failure);
  *  - `task_notification.summary` (duplicates the Agent row's own output).
  */
-export type SubagentRunStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+/**
+ * How a delegation ended.
+ *
+ * The first four are T-34's, from the legacy host's CLI vocabulary. P5-2-4 adds
+ * the last two, which the native runtime can tell apart and the legacy host
+ * never could:
+ *
+ * - `stopped` — the parent model called `TaskStop`, or the user pressed Stop.
+ * - `truncated` — the delegate hit its own `maxTurns` cap with work left.
+ *
+ * They are separate values rather than `failed` on purpose. To a person reading
+ * a transcript, "you stopped this", "it ran out of turns" and "it broke" are
+ * three different things, and the P5-2 contract names collapsing them as a
+ * regression. Consumers that only understand the original four must widen
+ * together with this type — a reducer with a four-value allowlist does not
+ * degrade gracefully, it drops the event.
+ */
+export type SubagentRunStatus =
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'stopped'
+  | 'truncated';
 
 /** Counters shared by `system/task_*` heartbeats and the structured report. */
 export interface SubagentUsage {

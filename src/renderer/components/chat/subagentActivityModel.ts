@@ -123,8 +123,27 @@ function asFiniteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+/** Statuses a lane can end on. Widened with P5-2-4's `stopped`/`truncated`. */
+const TERMINAL_STATUSES: ReadonlySet<SubagentRunStatus> = new Set([
+  'completed',
+  'failed',
+  'cancelled',
+  'stopped',
+  'truncated',
+]);
+
+/** Statuses that mean "this did not finish its work", for no-downgrade. */
+const UNSUCCESSFUL_STATUSES: ReadonlySet<SubagentRunStatus> = new Set([
+  'failed',
+  'cancelled',
+  'stopped',
+  'truncated',
+]);
+
+const KNOWN_STATUSES: ReadonlySet<SubagentRunStatus> = new Set(['running', ...TERMINAL_STATUSES]);
+
 function isTerminal(status: SubagentRunStatus | null): boolean {
-  return status === 'completed' || status === 'failed' || status === 'cancelled';
+  return status !== null && TERMINAL_STATUSES.has(status);
 }
 
 function readUsage(value: unknown): SubagentUsage | null {
@@ -358,20 +377,15 @@ function reduceActivity(
     }
     case 'status': {
       const status = asString(payload.status) as SubagentRunStatus | null;
-      if (
-        status !== 'running' &&
-        status !== 'completed' &&
-        status !== 'failed' &&
-        status !== 'cancelled'
-      ) {
+      if (status === null || !KNOWN_STATUSES.has(status)) {
         return state === prev ? prev : state;
       }
       // Terminal no-downgrade (Codex guardrails, rounds 1+2): a late generic
-      // `completed` must not overwrite an observed failed/cancelled, and NO
-      // terminal may be resurrected to `running` by a straggling heartbeat.
+      // `completed` must not overwrite an observed unsuccessful terminal, and
+      // NO terminal may be resurrected to `running` by a straggling heartbeat.
       const finalStatus =
         (isTerminal(lane.status) && status === 'running') ||
-        ((lane.status === 'failed' || lane.status === 'cancelled') && status === 'completed')
+        (lane.status !== null && UNSUCCESSFUL_STATUSES.has(lane.status) && status === 'completed')
           ? lane.status
           : status;
       return withLane(state, {
@@ -389,13 +403,12 @@ function reduceActivity(
       // Unknown/absent reads as completed — the report IS the terminal
       // artifact in every synchronous run.
       const fromReport: SubagentRunStatus =
-        report.status === 'failed' || report.status === 'cancelled' || report.status === 'running'
+        report.status && report.status !== 'completed' && KNOWN_STATUSES.has(report.status)
           ? report.status
           : 'completed';
       const finalStatus =
         (isTerminal(lane.status) && fromReport === 'running') ||
-        lane.status === 'failed' ||
-        lane.status === 'cancelled'
+        (lane.status !== null && UNSUCCESSFUL_STATUSES.has(lane.status))
           ? lane.status
           : fromReport;
       return withLane(state, {

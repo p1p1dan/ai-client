@@ -33,7 +33,13 @@ import type { AgentTool, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Usage } from '@earendil-works/pi-ai';
 import { type Context, Service } from 'cordis';
 import { type TSchema, Type } from 'typebox';
-import type { ResolvedModel, RuntimeModelRef } from '../../contracts.ts';
+import type { SubagentActivityPayload } from '../../../shared/types/runtimeEvents.ts';
+import {
+  EVENTS_SERVICE,
+  type ResolvedModel,
+  type RuntimeModelRef,
+  SESSION_SERVICE,
+} from '../../contracts.ts';
 import type { DelegateCallScope } from '../permissions/index.ts';
 import { TOOLS_SERVICE } from '../tools/index.ts';
 import { applySubagentActivation, resolveSubagentPin, type SubagentCatalog } from './catalog.ts';
@@ -43,6 +49,12 @@ import {
   resolveDelegateToolNames,
   subagentGuidance,
 } from './prompt.ts';
+import {
+  activityForEvent,
+  activityForSettlement,
+  SUBAGENT_ENTRY,
+  type SubagentRecord,
+} from './records.ts';
 import {
   type DelegationRecord,
   DelegationRegistry,
@@ -98,6 +110,12 @@ export interface SubagentConfig {
   thinkingLevel?: ThinkingLevel;
 }
 
+/** Which run a delegation belongs to, for attribution on records and events. */
+export interface SubagentRunContext {
+  sessionId: string;
+  runId: string;
+}
+
 export interface SubagentService {
   readonly definitions: readonly SubagentDefinition[];
   readonly registry: DelegationRegistry;
@@ -121,6 +139,14 @@ export interface SubagentService {
    * the implementation for why an abort alone is not enough.
    */
   drain(): Promise<void>;
+  /**
+   * Bind the session and run a delegation started from now on belongs to.
+   *
+   * Called by the loop at the top of each run. Without it a record could not
+   * name the run it came from, and a reopened session could not tell one run's
+   * delegations from another's.
+   */
+  bindRun(context: SubagentRunContext): void;
 }
 
 declare module 'cordis' {
@@ -166,6 +192,12 @@ export class SubagentPlugin extends Service implements SubagentService {
   private readonly config: SubagentConfig;
   private readonly listeners = new Set<(envelope: SubagentEventEnvelope) => void>();
   private usage: Usage | undefined;
+  private runContext?: SubagentRunContext;
+  /** Start facts, kept until settlement so one record can carry both ends. */
+  private readonly started = new Map<
+    string,
+    { parentToolCallId: string; model: string; startedAt: number; runId: string }
+  >();
 
   constructor(ctx: Context, config: SubagentConfig) {
     super(ctx, SUBAGENT_SERVICE);
@@ -188,8 +220,38 @@ export class SubagentPlugin extends Service implements SubagentService {
     });
   }
 
+  bindRun(context: SubagentRunContext): void {
+    this.runContext = context;
+  }
+
   get busy(): boolean {
     return this.registry.busy;
+  }
+
+  /**
+   * Write one attributed record, and never let that failure cost the turn.
+   *
+   * A session that cannot be appended to is a real problem, but it is the
+   * session's problem: a delegate that already did the work must still report
+   * it, and failing the delegation because the log write failed would turn a
+   * storage fault into lost work.
+   */
+  private async record(data: SubagentRecord): Promise<void> {
+    const session = this.ctx.get(SESSION_SERVICE);
+    if (!session) return;
+    try {
+      await session.appendEntry({ type: 'custom', customType: SUBAGENT_ENTRY, data });
+    } catch {
+      // Deliberately swallowed; see the note above.
+    }
+  }
+
+  /** Publish one live-projection payload on the session's event channel. */
+  private emitActivity(payload: SubagentActivityPayload): void {
+    const events = this.ctx.get(EVENTS_SERVICE);
+    const sessionId = this.runContext?.sessionId;
+    if (!events || !sessionId) return;
+    events.emit({ type: 'subagent.activity', sessionId, payload });
   }
 
   takeUsage(): Usage | undefined {
@@ -271,6 +333,26 @@ export class SubagentPlugin extends Service implements SubagentService {
         ? { toolName: envelope.event.toolName }
         : {}),
     });
+    const base = {
+      parentToolCallId: envelope.parentToolCallId,
+      agentId: envelope.delegationId,
+    };
+    const activity = activityForEvent(envelope.event, base);
+    if (activity) this.emitActivity(activity);
+    // The delegate's own messages are PERSISTED whole, as custom entries. The
+    // live projection above is a bounded summary of the same thing; this is the
+    // copy a history read gets back.
+    if (envelope.event.type === 'message_end' && this.runContext) {
+      void this.record({
+        kind: 'message',
+        delegationId: envelope.delegationId,
+        agentName: envelope.agentName,
+        parentToolCallId: envelope.parentToolCallId,
+        runId: this.runContext.runId,
+        message: envelope.event.message,
+        at: Date.now(),
+      });
+    }
     for (const listener of this.listeners) listener(envelope);
   }
 
@@ -424,6 +506,33 @@ export class SubagentPlugin extends Service implements SubagentService {
         });
         if (!admitted.ok) return this.toolError(admitted.reason);
         const record = admitted.record;
+        const modelLabel = `${model.model.ref.provider}/${model.model.model.id}`;
+        this.started.set(delegationId, {
+          parentToolCallId: toolCallId,
+          model: modelLabel,
+          startedAt: record.startedAt,
+          runId: this.runContext?.runId ?? '',
+        });
+        if (this.runContext) {
+          void this.record({
+            kind: 'started',
+            delegationId,
+            agentName: definition.name,
+            parentToolCallId: toolCallId,
+            runId: this.runContext.runId,
+            task,
+            ...(label ? { label } : {}),
+            model: { provider: model.model.ref.provider, modelId: model.model.model.id },
+            startedAt: record.startedAt,
+          });
+        }
+        this.emitActivity({
+          parentToolCallId: toolCallId,
+          agentId: delegationId,
+          kind: 'started',
+          agentType: definition.name,
+          ...(label ? { description: label } : {}),
+        });
         const projectInstructions = await this.config.projectInstructions?.();
 
         // Started, then deliberately NOT awaited. Tying the background run to
@@ -533,8 +642,41 @@ export class SubagentPlugin extends Service implements SubagentService {
     const settled = this.registry.settle(record.delegationId, result);
     // Cost is accumulated at settlement and only for the run that actually
     // settled, so a repeated terminal event, a TaskWait re-read or a UI refresh
-    // cannot bill the same delegate twice.
-    if (settled && result.usage) this.usage = addUsage(this.usage, result.usage);
+    // cannot bill the same delegate twice. The same guard is what makes the
+    // records and the terminal events below fire exactly once.
+    if (!settled) return;
+    if (result.usage) this.usage = addUsage(this.usage, result.usage);
+    const start = this.started.get(record.delegationId);
+    this.started.delete(record.delegationId);
+    const completedAt = record.completedAt ?? Date.now();
+    if (start && this.runContext) {
+      void this.record({
+        kind: 'settled',
+        delegationId: record.delegationId,
+        agentName: record.agentName,
+        parentToolCallId: start.parentToolCallId,
+        runId: start.runId,
+        status: record.status === 'running' ? result.status : record.status,
+        turns: result.turns,
+        toolCalls: result.toolCalls,
+        // The FULL report, not the live projection's clamped copy: the event
+        // channel is capped, and a cap must never be why a report is lost.
+        report: result.report,
+        ...(result.usage ? { usage: result.usage } : {}),
+        ...(result.error ? { error: result.error } : {}),
+        completedAt,
+      });
+    }
+    if (start) {
+      for (const payload of activityForSettlement(
+        { ...result, status: record.status === 'running' ? result.status : record.status },
+        { parentToolCallId: start.parentToolCallId, agentId: record.delegationId },
+        { completedAt, durationMs: completedAt - start.startedAt },
+        start.model
+      )) {
+        this.emitActivity(payload);
+      }
+    }
   }
 
   private targetsFor(params: unknown): {
