@@ -11,6 +11,7 @@ import {
   delayWithAbort,
   PROVIDER_RATE_LIMIT_MAX_DELAY_MS,
   PROVIDER_RATE_LIMIT_MAX_RETRIES,
+  PROVIDER_RETRY_DELAYS_MS,
   PROVIDER_SETUP_MAX_RETRY_DELAY_MS,
   PROVIDER_TRANSIENT_MAX_RETRIES,
   providerRateLimitDelayMs,
@@ -164,12 +165,27 @@ describe('provider failure classification', () => {
 });
 
 describe('retry delays', () => {
-  it('doubles the transient schedule and caps it', () => {
-    expect(providerSetupRetryDelayMs(1)).toBe(1_000);
-    expect(providerSetupRetryDelayMs(2)).toBe(2_000);
-    expect(providerSetupRetryDelayMs(3)).toBe(4_000);
-    expect(providerSetupRetryDelayMs(4)).toBe(8_000);
-    expect(providerSetupRetryDelayMs(9)).toBe(PROVIDER_SETUP_MAX_RETRY_DELAY_MS);
+  it('allows three retries per budget, and no more', () => {
+    // Pinned as literals, not read off the ladder's length: the two budget
+    // tests below assert `PROVIDER_*_MAX_RETRIES + 1` attempts, which passes
+    // for any value the constant happens to hold. This is the one place the
+    // COUNT is stated, so a silent change to it fails here.
+    expect(PROVIDER_TRANSIENT_MAX_RETRIES).toBe(3);
+    expect(PROVIDER_RATE_LIMIT_MAX_RETRIES).toBe(3);
+    // 3 + 10 + 30: what a user waits before a persistent outage is reported.
+    expect(PROVIDER_RETRY_DELAYS_MS.reduce((total, ms) => total + ms, 0)).toBe(43_000);
+  });
+
+  it('walks the 3s / 10s / 30s ladder and stays on the last rung', () => {
+    // User ruling 2026-09-11: retries were too frequent. The numbers are the
+    // spec, so they are spelled out here rather than derived from the exported
+    // array — a test that recomputes the schedule from the same constant the
+    // code uses would pass no matter what the schedule became.
+    expect(providerSetupRetryDelayMs(1)).toBe(3_000);
+    expect(providerSetupRetryDelayMs(2)).toBe(10_000);
+    expect(providerSetupRetryDelayMs(3)).toBe(30_000);
+    expect(providerSetupRetryDelayMs(9)).toBe(30_000);
+    expect(PROVIDER_SETUP_MAX_RETRY_DELAY_MS).toBe(30_000);
   });
 
   it('honours Retry-After in seconds, milliseconds, and HTTP-date', () => {
@@ -197,10 +213,13 @@ describe('retry delays', () => {
     );
   });
 
-  it('adds positive jitter to the rate-limit backoff', () => {
-    expect(providerRateLimitDelayMs(1, undefined, Date.now(), 0)).toBe(2_000);
-    expect(providerRateLimitDelayMs(1, undefined, Date.now(), 1)).toBe(2_500);
-    expect(providerRateLimitDelayMs(3, undefined, Date.now(), 0)).toBe(8_000);
+  it('adds positive jitter on top of the same ladder for rate limits', () => {
+    expect(providerRateLimitDelayMs(1, undefined, Date.now(), 0)).toBe(3_000);
+    expect(providerRateLimitDelayMs(1, undefined, Date.now(), 1)).toBe(3_750);
+    expect(providerRateLimitDelayMs(2, undefined, Date.now(), 0)).toBe(10_000);
+    // The cap and the last rung are both 30s, so a fully jittered last wait is
+    // clamped rather than reaching 37.5s.
+    expect(providerRateLimitDelayMs(3, undefined, Date.now(), 1)).toBe(30_000);
   });
 
   it('only keeps headers from statuses that carry a delay', () => {
@@ -232,7 +251,7 @@ describe('createProviderRetryStream', () => {
     const result = await stream.result();
 
     expect(attempts).toBe(3);
-    expect(slept).toEqual([1_000, 2_000]);
+    expect(slept).toEqual([3_000, 10_000]);
     expect(retries.map((entry) => entry.code)).toEqual(['PROVIDER_ERROR', 'PROVIDER_ERROR']);
     // The consumer never sees the failed attempts, only the stream that worked.
     expect(events).toEqual(['start', 'done']);

@@ -135,7 +135,8 @@ describe('agent loop', () => {
       expect(retryNote?.detail).toMatchObject({
         code: 'PROVIDER_ERROR',
         attempt: 1,
-        delay_ms: 1_000,
+        // The first rung of the 3s / 10s / 30s ladder (user ruling 2026-09-11).
+        delay_ms: 3_000,
       });
     });
   });

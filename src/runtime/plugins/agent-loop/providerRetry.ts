@@ -34,26 +34,52 @@ import {
 } from '@earendil-works/pi-ai';
 import { type ClassifiedProviderError, classifyProviderFailure } from './providerErrors.ts';
 
-/** Retries allowed after the first rate-limited request. */
-export const PROVIDER_RATE_LIMIT_MAX_RETRIES = 5;
-export const PROVIDER_RATE_LIMIT_INITIAL_DELAY_MS = 2_000;
+/**
+ * The retry schedule: wait 3s, then 10s, then 30s.
+ *
+ * User ruling 2026-09-11 — retries were too frequent. The old shape was a
+ * doubling formula per budget (1s/2s/4s/8s for gateway faults, 2s upward with
+ * jitter for rate limits), which starts pounding a struggling upstream one
+ * second after it first failed. An explicit ladder replaces both: it says the
+ * schedule outright instead of asking a reader to evaluate `initial * 2 ** n`,
+ * and changing the pacing is now editing three numbers rather than reasoning
+ * about a base, a cap and an exponent at once.
+ *
+ * Both budgets share it. A gateway 503 and a 429 are different faults with
+ * different bookkeeping (see the two counters below), but neither is a reason
+ * to retry faster than the user asked for.
+ */
+export const PROVIDER_RETRY_DELAYS_MS: readonly number[] = [3_000, 10_000, 30_000];
+
+/**
+ * Retries allowed per budget — one per rung, so the ladder's last value is also
+ * the last wait rather than a floor the loop keeps re-using.
+ *
+ * Each budget gets its own count: a 429 burst and a later gateway fault in the
+ * same run may not borrow from each other.
+ */
+export const PROVIDER_RATE_LIMIT_MAX_RETRIES = PROVIDER_RETRY_DELAYS_MS.length;
+export const PROVIDER_TRANSIENT_MAX_RETRIES = PROVIDER_RETRY_DELAYS_MS.length;
+
+/**
+ * Rate-limit waits keep positive jitter; gateway-fault waits do not.
+ *
+ * A 429 burst hits every session at once, so an un-jittered schedule marches
+ * them all back in lockstep and re-creates the burst. A single failed request
+ * to a 503 gateway has nothing to de-synchronize from, and a predictable
+ * schedule is easier to read in a trace.
+ */
 export const PROVIDER_RATE_LIMIT_JITTER_FACTOR = 0.25;
+
 /** Keep an outage bounded even when the server asks for an unusable delay. */
 export const PROVIDER_RATE_LIMIT_MAX_DELAY_MS = 30_000;
-/**
- * Non-rate-limit transient failures wait 1s, 2s, 4s, then 8s. Plain doubling:
- * an upstream outage gets visibly more room each attempt while the whole
- * sequence stays under 15 seconds.
- */
-export const PROVIDER_SETUP_RETRY_INITIAL_DELAY_MS = 1_000;
-export const PROVIDER_SETUP_MAX_RETRY_DELAY_MS = 8_000;
-/**
- * Retries allowed after the first non-rate-limit transient failure, for five
- * provider attempts in total. Gateway faults (502/503/504, dropped sockets)
- * routinely need more than one attempt, so they share one bounded per-run
- * budget the way rate limits do.
- */
-export const PROVIDER_TRANSIENT_MAX_RETRIES = 4;
+export const PROVIDER_SETUP_MAX_RETRY_DELAY_MS = 30_000;
+
+/** The wait for one attempt, before jitter. Past the last rung, stay there. */
+function ladderDelayMs(attempt: number): number {
+  const index = Math.min(PROVIDER_RETRY_DELAYS_MS.length - 1, Math.max(0, Math.floor(attempt) - 1));
+  return PROVIDER_RETRY_DELAYS_MS[index] as number;
+}
 
 /**
  * Codes that may claim the shared non-429 budget. Codes outside this set stay
@@ -162,8 +188,8 @@ function serverRetryDelayMs(
 }
 
 /**
- * Server delay first, then exponential backoff with positive jitter. Header
- * values are capped so a stale or hostile value cannot hold a turn open.
+ * Server delay first, then the ladder plus positive jitter. Header values are
+ * capped so a stale or hostile value cannot hold a turn open.
  */
 export function providerRateLimitDelayMs(
   attempt: number,
@@ -174,8 +200,7 @@ export function providerRateLimitDelayMs(
   const serverDelay = serverRetryDelayMs(headers, PROVIDER_RATE_LIMIT_MAX_DELAY_MS, now);
   if (serverDelay !== undefined) return serverDelay;
 
-  const safeAttempt = Math.max(1, Math.floor(attempt));
-  const base = PROVIDER_RATE_LIMIT_INITIAL_DELAY_MS * 2 ** (safeAttempt - 1);
+  const base = ladderDelayMs(attempt);
   const jitter = Math.min(1, Math.max(0, random));
   return Math.min(
     PROVIDER_RATE_LIMIT_MAX_DELAY_MS,
@@ -184,13 +209,9 @@ export function providerRateLimitDelayMs(
 }
 
 /**
- * Plain doubling: 1s, 2s, 4s, 8s. A gateway that states its own `Retry-After`
- * wins outright — including a delay shorter than our floor, because the
- * gateway knows when it will be ready again.
- *
- * No jitter here on purpose: a predictable schedule is easier to reason about
- * for a single failed request, and these retries are not synchronized across
- * sessions the way a rate-limit burst is.
+ * The ladder, unjittered: 3s, 10s, 30s. A gateway that states its own
+ * `Retry-After` wins outright — including a delay shorter than our floor,
+ * because the gateway knows when it will be ready again.
  */
 export function providerSetupRetryDelayMs(
   attempt: number,
@@ -199,9 +220,7 @@ export function providerSetupRetryDelayMs(
 ): number {
   const serverDelay = serverRetryDelayMs(headers, PROVIDER_SETUP_MAX_RETRY_DELAY_MS, now);
   if (serverDelay !== undefined) return serverDelay;
-  const safeAttempt = Math.max(1, Math.floor(attempt));
-  const base = PROVIDER_SETUP_RETRY_INITIAL_DELAY_MS * 2 ** (safeAttempt - 1);
-  return Math.min(PROVIDER_SETUP_MAX_RETRY_DELAY_MS, base);
+  return ladderDelayMs(attempt);
 }
 
 export function delayWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
