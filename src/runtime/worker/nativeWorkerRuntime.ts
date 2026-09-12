@@ -63,9 +63,9 @@ import {
  * choosing `native` does not load `pi-coding-agent`. The worker entry checks the
  * shape at the assignment instead.
  *
- * Still absent: `commands`, which answers an empty list because slash commands
- * come from skills and plugins (P5-1). Everything else on `PiWorkerRuntime` is
- * implemented.
+ * Every method on `PiWorkerRuntime` is implemented. `commands` was the last
+ * gap — it answered an empty list until P5-1 gave this backend skills and
+ * prompt templates to list.
  */
 
 export class NativeWorkerRuntimeError extends Error {
@@ -186,6 +186,10 @@ export class NativeWorkerRuntime {
       // them again here would be a second place for them to drift from
       // `skillRoots()`. Passing the key at all is what turns discovery on.
       skills: {},
+      // P5-3. Same empty-config reasoning as skills: the roots and the trust
+      // gate are derived. `log` is wired so a server's stderr lands in the
+      // worker log rather than filling its pipe (ARD D11 point 5).
+      mcp: { ...(this.options.log ? { log: this.options.log } : {}) },
       permissions: {
         ...(this.options.permissions?.mode ? { mode: this.options.permissions.mode } : {}),
         ...(this.options.permissions?.gear ? { gear: this.options.permissions.gear } : {}),

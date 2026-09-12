@@ -234,3 +234,191 @@ describe('host exec', () => {
     ).rejects.toMatchObject({ code: 'invalid_host_config' });
   });
 });
+
+/**
+ * P5-3 — the long-lived child the MCP bridge runs on.
+ *
+ * Covered here rather than only through `mcp.test.ts` because the two carriers
+ * behave differently in exactly one way that matters, and it is not visible
+ * from the protocol: with a configured Node runner the leader is the RUNNER,
+ * which outlives the command it started, so the leader's own `close` is not the
+ * child going away. Getting that wrong parks every in-flight request until its
+ * timeout instead of failing it — which is how this was actually found.
+ */
+describe('host exec spawn', () => {
+  const collect = () => {
+    const chunks: Buffer[] = [];
+    return {
+      chunks,
+      sink: (chunk: Uint8Array) => {
+        chunks.push(Buffer.from(chunk));
+      },
+      text: () => Buffer.concat(chunks).toString('utf8'),
+    };
+  };
+
+  async function persistent(script: string, hostConfig = config) {
+    const out = collect();
+    const err = collect();
+    const plugin = hostConfig === config ? exec : undefined;
+    const service = plugin ?? (await freshExec(hostConfig));
+    const child = await service.spawn({
+      command: process.execPath,
+      args: ['-e', script],
+      cwd: dir,
+      onStdout: out.sink,
+      onStderr: err.sink,
+    });
+    return { child, out, err, service };
+  }
+
+  async function freshExec(hostConfig: RuntimeHostConfig) {
+    const local = new Context();
+    await local.plugin(ExecPlugin, hostConfig);
+    const service = local.runtimeExec as ExecPlugin;
+    extraContexts.push({ ctx: local, exec: service });
+    return service;
+  }
+
+  const extraContexts: { ctx: Context; exec: ExecPlugin }[] = [];
+  afterEach(async () => {
+    for (const entry of extraContexts.splice(0)) {
+      await entry.exec.shutdown();
+      await entry.ctx.fiber.dispose();
+    }
+  });
+
+  const ECHO_LOOP = `
+    let buffer = '';
+    process.stdin.on('data', (chunk) => {
+      buffer += chunk.toString();
+      let i = buffer.indexOf('\\n');
+      while (i >= 0) {
+        const line = buffer.slice(0, i);
+        buffer = buffer.slice(i + 1);
+        if (line === 'quit') process.exit(7);
+        process.stdout.write('got:' + line + '\\n');
+        i = buffer.indexOf('\\n');
+      }
+    });
+    process.stderr.write('ready\\n');
+  `;
+
+  it('keeps a child alive across several writes and reads its replies', async () => {
+    const { child, out, err } = await persistent(ECHO_LOOP);
+    await child.write(Buffer.from('one\n'));
+    await child.write(Buffer.from('two\n'));
+    for (let attempt = 0; attempt < 100 && !out.text().includes('got:two'); attempt++)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(out.text()).toBe('got:one\ngot:two\n');
+    // D11 point 5: stderr is drained, not dropped, or the child blocks on it.
+    expect(err.text()).toContain('ready');
+    await child.kill();
+  }, 20_000);
+
+  it('reports the command exiting on its own, not the carrier leader closing', async () => {
+    const { child } = await persistent(ECHO_LOOP);
+    await child.write(Buffer.from('quit\n'));
+    // With a Node runner in front, this resolves only because the runner's IPC
+    // exit message is honoured. Without that it hangs until the caller's own
+    // timeout, and a dead server looks merely slow.
+    await expect(
+      Promise.race([
+        child.exited.then((value) => value.exitCode),
+        new Promise((resolve) => setTimeout(() => resolve('hung'), 5000)),
+      ])
+    ).resolves.toBe(7);
+  }, 20_000);
+
+  it('runs on a carrier with no configured Node runner too', async () => {
+    if (process.platform === 'win32') return; // Windows requires the runner.
+    const direct: RuntimeHostConfig = { ...config, node: undefined };
+    const { child, out } = await persistent(ECHO_LOOP, direct);
+    await child.write(Buffer.from('hi\n'));
+    for (let attempt = 0; attempt < 100 && !out.text().includes('got:hi'); attempt++)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(out.text()).toBe('got:hi\n');
+    await child.write(Buffer.from('quit\n'));
+    await expect(child.exited).resolves.toMatchObject({ exitCode: 7 });
+  }, 20_000);
+
+  it('kill is idempotent and safe after the child already exited', async () => {
+    const { child } = await persistent(ECHO_LOOP);
+    await child.write(Buffer.from('quit\n'));
+    await child.exited;
+    await expect(child.kill()).resolves.toBeUndefined();
+    await expect(child.kill()).resolves.toBeUndefined();
+  }, 20_000);
+
+  it('shutdown reaps a child nobody killed', async () => {
+    const service = await freshExec(config);
+    const out = collect();
+    const child = await service.spawn({
+      command: process.execPath,
+      args: ['-e', ECHO_LOOP],
+      cwd: dir,
+      onStdout: out.sink,
+      onStderr: out.sink,
+    });
+    await service.shutdown();
+    // An orphan here keeps the whole worker process alive after the session
+    // that started it is gone.
+    await expect(
+      Promise.race([
+        child.exited.then(() => 'exited'),
+        new Promise((resolve) => setTimeout(() => resolve('orphaned'), 5000)),
+      ])
+    ).resolves.toBe('exited');
+  }, 20_000);
+
+  it('refuses a disposed exec and a command with a relative path', async () => {
+    const service = await freshExec(config);
+    await expect(
+      service.spawn({
+        command: './relative/thing',
+        args: [],
+        cwd: dir,
+        onStdout: () => undefined,
+        onStderr: () => undefined,
+      })
+    ).rejects.toMatchObject({ code: 'invalid_host_request' });
+    await service.shutdown();
+    await expect(
+      service.spawn({
+        command: process.execPath,
+        args: ['-e', ''],
+        cwd: dir,
+        onStdout: () => undefined,
+        onStderr: () => undefined,
+      })
+    ).rejects.toMatchObject({ code: 'runtime_disposed' });
+  }, 20_000);
+
+  it('says so when the carrier cannot host a long-lived child', async () => {
+    const adapterOnly: RuntimeHostConfig = {
+      ...config,
+      exec: {
+        mode: 'host-adapter',
+        adapter: {
+          id: 'no-spawn-v1',
+          run: async () => {
+            throw new Error('not used');
+          },
+          dispose: async () => undefined,
+        },
+      },
+    };
+    const service = await freshExec(adapterOnly);
+    // Stated, not emulated: a bridge that quietly fell back to one-shot calls
+    // would look connected and lose every server-side session.
+    await expect(
+      service.spawn({
+        command: process.execPath,
+        args: ['-e', ''],
+        cwd: dir,
+        onStdout: () => undefined,
+        onStderr: () => undefined,
+      })
+    ).rejects.toMatchObject({ code: 'exec_spawn_unsupported' });
+  }, 20_000);
+});

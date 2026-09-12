@@ -38,6 +38,14 @@ import {
   ContextPlugin,
   type RuntimeContextService,
 } from './plugins/context/index.ts';
+import {
+  connectMcpServers,
+  MCP_SERVICE,
+  type McpCatalog,
+  type McpConfig,
+  McpPlugin,
+  type RuntimeMcpService,
+} from './plugins/mcp/index.ts';
 import { readPiCatalog } from './plugins/model-adapter/catalog.ts';
 import { type ModelAdapterConfig, ModelAdapterPlugin } from './plugins/model-adapter/index.ts';
 import {
@@ -83,6 +91,13 @@ export interface RuntimeBootstrapOptions {
    * the fixed probes want a prompt with no machine-specific content in it).
    */
   skills?: SkillsConfig;
+  /**
+   * P5-3. Absent starts no servers at all. Opt-in for the same two reasons as
+   * `skills`, plus a third that matters more here: every entry is a program
+   * this runtime would execute, so a probe or a fixed-suite run must not pick
+   * one up from whatever happens to be on the machine.
+   */
+  mcp?: McpConfig;
   session?: SessionConfig;
   approvalUi?: PortableExtensionUiBridgeOptions;
   agentDir?: string;
@@ -106,6 +121,8 @@ export interface RuntimeHandle {
   prompt: RuntimePromptService;
   /** Present only when `options.skills` asked for discovery. */
   skills?: RuntimeSkillsService;
+  /** Present only when `options.mcp` asked for a bridge. */
+  mcp?: RuntimeMcpService;
   session?: RuntimeSessionService;
   events: RuntimeEventsService;
   approval?: RuntimeApprovalBridge;
@@ -133,6 +150,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
   let approval: RuntimeApprovalBridge | undefined;
   let session: JsonlSessionStore | undefined;
   let skillCatalog: SkillCatalog | undefined;
+  let mcpCatalog: McpCatalog | undefined;
   try {
     await ctx.plugin(ExecPlugin, host);
     exec = ctx.runtimeExec as ExecPlugin;
@@ -202,6 +220,19 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
         const skillsFiber = await ctx.plugin(SkillsPlugin, skillCatalog);
         await skillsFiber.await();
       }
+      // P5-3, last of the tool contributors: an MCP server is an external
+      // process, and starting one before the local tools are registered would
+      // let a slow handshake delay the tools that need no handshake at all.
+      if (options.mcp) {
+        mcpCatalog = await connectMcpServers(io, ctx.runtimeExec, {
+          ...(agentDir ? { agentDir } : {}),
+          cwd,
+          projectTrusted: options.permissions?.projectTrusted,
+          ...options.mcp,
+        });
+        const mcpFiber = await ctx.plugin(McpPlugin, { catalog: mcpCatalog, cwd });
+        await mcpFiber.await();
+      }
     }
     // After the tools plugin, because this is what registers `new_context`:
     // the compaction consumer and the tool that requests it land together
@@ -252,6 +283,15 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
               skill_diagnostics: String(skillCatalog.diagnostics.length),
             }
           : {}),
+        ...(mcpCatalog
+          ? {
+              mcp_servers: String(mcpCatalog.connections.length),
+              mcp_failed: String(mcpCatalog.connections.filter((item) => item.error).length),
+              mcp_tools: String(
+                mcpCatalog.connections.reduce((total, item) => total + item.tools.length, 0)
+              ),
+            }
+          : {}),
         compaction: String(ctx.runtimeContext.enabled),
         compaction_family: ctx.runtimeContext.family,
         carrier: host.carrier,
@@ -288,6 +328,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       PROMPT_SERVICE,
       ...(options.tools ? [TOOLS_SERVICE, PERMISSIONS_SERVICE] : []),
       ...(options.skills && options.tools ? [SKILLS_SERVICE] : []),
+      ...(options.mcp && options.tools ? [MCP_SERVICE] : []),
     ];
     const missing = required.filter((name) => ctx.get(name) === undefined);
     if (missing.length)
@@ -310,6 +351,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       context: ctx.runtimeContext,
       prompt: ctx.runtimePrompt,
       skills: ctx.get(SKILLS_SERVICE),
+      mcp: ctx.get(MCP_SERVICE),
       events: ctx.runtimeEvents,
       session: session ? ctx.runtimeSession : undefined,
       approval,

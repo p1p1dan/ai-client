@@ -388,15 +388,61 @@ export interface RuntimeExecResult {
   truncated: boolean;
 }
 
+/**
+ * A child process that outlives one request (P5-3).
+ *
+ * `run` is request/response: it spawns, collects bounded output, and resolves
+ * when the command exits. An MCP server is the opposite shape — one process,
+ * a handshake, then many requests over the same pipes — so it needs its own
+ * entry rather than a flag on `RuntimeExecRequest`. ARD D11 point 4 names the
+ * "MCP stdio bridge" as one of the surfaces that must converge on this service,
+ * which is why this lives here and not in the MCP plugin: the carrier rules
+ * (bundled `node.exe` on Windows, the runner helper, process-tree cleanup) are
+ * the exec exit's job, once, for everyone.
+ */
+export interface RuntimeChildProcess {
+  /** Feed the child's stdin. Rejects once the child is gone. */
+  write(bytes: Uint8Array): Promise<void>;
+  /** Resolves when the child has exited. Never rejects. */
+  readonly exited: Promise<{ exitCode: number | null; signal: string | null }>;
+  /** Terminate the process tree. Idempotent, and safe after a natural exit. */
+  kill(): Promise<void>;
+}
+
+export interface RuntimeSpawnRequest {
+  command: string;
+  args: readonly string[];
+  cwd: string;
+  env?: Readonly<Record<string, string | undefined>>;
+  /** Called with each stdout chunk, in arrival order. Framing is the caller's job. */
+  onStdout: (chunk: Uint8Array) => void;
+  /**
+   * Called with each stderr chunk. Separate because D11 point 5 requires the
+   * ordinary stdout of a child to be drained even when the protocol ignores it:
+   * an unread pipe fills and the child blocks on its own log line.
+   */
+  onStderr: (chunk: Uint8Array) => void;
+  signal?: AbortSignal;
+}
+
 export interface RuntimeExecService {
   readonly mode: 'pipe' | 'host-adapter';
   readonly adapterId: string;
   run(request: RuntimeExecRequest): Promise<RuntimeExecResult>;
+  /**
+   * Start a long-lived child. Rejects with `exec_spawn_unsupported` on a
+   * carrier that cannot host one — stated rather than emulated, because a
+   * bridge that silently degrades to one-shot calls would look connected and
+   * lose every server-side session.
+   */
+  spawn(request: RuntimeSpawnRequest): Promise<RuntimeChildProcess>;
 }
 
 export interface RuntimeExecAdapter {
   readonly id: string;
   run(request: RuntimeExecRequest, cleanupTimeoutMs: number): Promise<RuntimeExecResult>;
+  /** Optional: a carrier that cannot host a long-lived child simply omits it. */
+  spawn?(request: RuntimeSpawnRequest, cleanupTimeoutMs: number): Promise<RuntimeChildProcess>;
   dispose(cleanupTimeoutMs: number): Promise<void>;
 }
 
