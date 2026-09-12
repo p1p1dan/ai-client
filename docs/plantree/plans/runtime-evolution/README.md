@@ -1,6 +1,6 @@
 # Runtime / GUI — 核心任务树
 
-Role: roadmap。核对日期：2026-09-10；覆盖 runtime-evolution 与已并入的 gui-sdk-experience。
+Role: roadmap。核对日期：2026-09-12；覆盖 runtime-evolution 与已并入的 gui-sdk-experience。
 核心功能与架构见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)，[GUI 功能定义](../gui-sdk-experience/TODO.md)。
 本文件是节点完成状态的唯一权威；当前执行窗口、最近提交、包版本、阻塞和下一步只见[进度看板](../../进度看板.md)。[项目基线](../../baseline/README.md)。
 
@@ -15,7 +15,7 @@ Role: roadmap。核对日期：2026-09-10；覆盖 runtime-evolution 与已并�
 
 技术依赖：P0 → P1/P2/P3 → P4 → P5 → P6；P2-0 是先行基线。依赖不等于排期，下面是 2026-09-10 重排后的实际推进顺序。
 
-剩余量（2026-09-12 订正）：**18 个节点未开始**（P5 十三个，P6 五个）。P2-5/P2-6 已于 2026-09-12 完成，P2 整块收口。P5 与 P6 整块未动，是后半程主体，不是收尾。
+剩余量（2026-09-12 第二次订正）：**16 个节点未开始**（P5 十一个，P6 五个）。P2-5/P2-6 与第 7 批（P5-1、P5-3）均已于 2026-09-12 完成。P5 剩下的十一个里有十个是 P5-2 subagent 一整块，它是后半程的主体。
 
 | 序 | 批次 | 内容 | 为什么排这里 |
 |---|---|---|---|
@@ -25,7 +25,7 @@ Role: roadmap。核对日期：2026-09-10；覆盖 runtime-evolution 与已并�
 | 4 | 本地缺陷 | 中文界面英文残留、重载后重复公告与多开空会话 | ✅ 已完成（2026-09-11）。英文残留分两批，走 `t()` 的 `d0332939`、硬编码的这批 `4f7dedf7`，均已真机点验；重复公告与多开空会话查证后定性为**非缺陷**，不改代码。**同日补做了反方向的那一半**：`src/renderer` + `src/shared` 里 15 个文件、82 条硬编码中文（含整个权限档控件）改走词典，108 条新词条，加守卫测试 `noHardcodedChinese.test.ts`。[验证](evidence/chinese-ui-residue/README.md) · [反方向](evidence/chinese-ui-residue/hardcoded-chinese.md) |
 | 5 | P4-6 收口（改在开发机） | F3 启动链、F2-b 取证、F4 触发、PERM-1 与权限链复验 | 🟢 开发机侧已完成。用户 2026-09-11 追加规矩：**先把开发机做到完全正常，必须在加密机才能测的留到最后一次上机**，于是本批拆两半——F3 里「加密驱动按什么放行」整体推迟，其余在开发机做完。**F3 开发机侧已完成**（不复现，[记录](evidence/f3-dev-probe/README.md)），**F4 已完成**（真实 HTTP 四条路通过，[记录](evidence/p4-6/f4-retry/README.md)），**PERM-1 与权限链已完成**（legacy / native 两趟，[记录](evidence/p4-6/perm1/README.md)），**F2-b 三时点取证已完成**（[记录](evidence/p4-6/f2b/README.md)）。**开发机侧四项全部做完**；F3 的「加密驱动按什么放行」那一半按用户决定留到最后一次上机。批次内顺带清掉了 H / 19 的[验证案例 4、5](evidence/unified-agent-directory/README.md#验证案例-45-的真机点验2026-09-11) |
 | 6 | P2-5、P2-6 | 真实缓存命中率达标与新旧对比 | ✅ 已完成（2026-09-12）。用户指定网关，两个后端在同一网关上各跑一遍同套六场景：native **99.97%**、同网关 legacy **99.97%**，差 -0.0073 个百分点，均高于 95.01% 门槛。原基线网关已不供 `claude-sonnet-5`，故 95.01% 退为历史参考值。[记录](evidence/p2-5/README.md) · [对比报告](evidence/p2-5/comparison.md) |
-| 7 | P5-1、P5-3 | skills / 模板（含 F5 提问能力）、MCP bridge | 两块相互独立、单块体量可控，先把 P5 里能独立验收的做掉 |
+| 7 | P5-1、P5-3 | skills / 模板（含 F5 提问能力）、MCP bridge | ✅ 已完成（2026-09-12）。四块分四次提交：技能与模板 `4e0f1f3e`、F5 通用提问 `4916a633`、MCP bridge `d4fcd600`。F5 补的是**整条纵切**，其中可作答卡片的渲染位此前全仓不存在。MCP 顺带给 exec 出口加了长驻子进程能力，并修掉它第一版在 runner 载体下的漏报。[施工计划](topics/p5-1-skills-templates-ask.md) · [记录](evidence/p5-1/README.md) |
 | 8 | P5-2（含 P5-2-0～7） | subagent 整体复刻 | P5 最大一块，八个子节点加 SA01～22 等价门禁，需要前面的工具/权限/会话都稳定 |
 | 9 | P5-4、P5-5 | 会话导入适配、模型目录切源 | P5-5 与第 1 批的服务管理可能重叠，开工前先核对是否已被覆盖，避免重复实现 |
 | 10 | H / 20 + P6-1～P6-5 | [会话互通](topics/gui-tui-session-interop.md)、切默认、摘除 pi-coding-agent 依赖、六项成功标准、回退开关、退役旧集成层 | 用户 2026-09-10 决定互通排到最后做。但它是 P6-1 的**前置**：默认切到 native 之前必须先通，否则切换等于取消 TUI 能力。P6-2 落地时才能删掉派生明文文件的临时分支 |
@@ -79,7 +79,7 @@ P1-8 探针使用源码 runtime + 实际载体；安装包 worker 冒烟是另�
 | 节点 | 功能 | 状态 |
 |---|---|---|
 | P2-0 | 旧后端基线 | ✅，95.01% |
-| P2-1 | 提示词分段组装 | ✅，skills 槽位归 P5 |
+| P2-1 | 提示词分段组装 | ✅；skills 槽已于 2026-09-12 由 P5-1 填上，`deferredSlots()` 现在为空 |
 | P2-2 | 项目指令注入 | ✅ |
 | P2-3 | 压缩策略 | ✅ |
 | P2-4 | compaction record 持久化 | ✅ |
@@ -137,11 +137,11 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 
 <a id="p5"></a>
 
-### P5 扩展 — ⬜ 尚未实现
+### P5 扩展 — 🟡 P5-1 / P5-3 已完成，其余未开始
 
 | 节点 | 功能 | 状态 |
 |---|---|---|
-| P5-1 | skills / 模板；F5 提问能力随此批讨论 | ⬜ |
+| P5-1 | skills / 模板；F5 提问能力 | ✅ 技能发现按 agentskills.io 规则、`skills` 槽的最后一条延期声明已删、`skill` 工具按名加载（不走 `read`，避免每次弹权限卡）、模板 `/name` 与 `/skill:name` 在发送路径展开、`worker.commands` 返回真实行；F5 整条纵切补齐。[记录](evidence/p5-1/README.md) |
 | P5-2 | subagent 整体复刻 | ⬜，调研/契约已完成，产品实现未开始 |
 | P5-2-0 | 版本/宿主适配探针与基线 | ⬜，已有调研不等于门禁通过 |
 | P5-2-1 | 定义与模型目录 | ⬜ |
@@ -151,7 +151,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | P5-2-5 | 定义管理与旧资源迁移 | ⬜ |
 | P5-2-6 | 运行/历史展示 | ⬜ |
 | P5-2-7 | SA01～22 等价门禁 | ⬜ |
-| P5-3 | MCP bridge | ⬜ |
+| P5-3 | MCP bridge | ✅ 自写 stdio JSON-RPC 客户端（不引官方 SDK：它自己 spawn，违反 D11 第 4 条），配置沿用生态 `{"mcpServers":{…}}`，项目文件仅在 projectTrusted 时打开，每次调用过权限门。对真实 stdio 服务器取证。[记录](evidence/p5-1/README.md) |
 | P5-4 | 会话导入适配 | ⬜ |
 | P5-5 | 模型目录切源 | ⬜ |
 
@@ -183,7 +183,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | B / 5 | 重试与异常恢复 | 🟢 F4 已实现并于 2026-09-11 在开发机真实 HTTP 上触发通过（[记录](evidence/p4-6/f4-retry/README.md)）；加密机复测并入最后一次上机 |
 | B / 6 | 运行状态/计时/摘要 | ✅ F7b 只留输入框上方一处、折叠只显示「已处理 N 个步骤」（`225c325e`）、进行中不提前折叠（`ca6aac0f`）；本地真实应用验证 |
 | C / 3 | 权限展示降噪 | 🟡 原流程部分通过；结构化权限链与重画已提交，待新包回归 |
-| C / 8 | 问答卡交互 | 🟡 UI 已实现；通用 question 无生产者（F5），不能把权限卡生产者当作通用提问工具 |
+| C / 8 | 问答卡交互 | 🟢 F5 已落地（`4916a633`）：native 的 `ask` 工具是本仓**第一个** `question.requested` 生产者，可作答卡片的渲染位（`PendingQuestionDock`）此前全仓不存在，本轮一并补上。**未真机点验**，未打包。[记录](evidence/p5-1/README.md) |
 | C / 9 | 当前对话审阅栏 | ✅ R1/R2 `6be1d70a`、上限 `1f45531f`；2026-09-10 本地真实应用（native + 真实模型）验证通过，[记录](evidence/session-review-and-updates/README.md#本地真实应用验证) |
 | D / 11 | 上下文用量详情 | ✅ 核心现场通过；F7e 归既有行为，增强另排 |
 | E / 12 | 输出跟随 | ✅ 原核心现场通过；F7f 输入框增高本地验证通过 |
@@ -210,7 +210,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F2-c 用户目录缺失 | 🟡 已提供 workspace_missing 与恢复/归档说明；不自动重建用户目录 | `3bd3f547`；test.13 |
 | F3 GUI Git 输出丢失 | 🟡 **开发机侧已取证：不复现**，三层（纯 Node、Electron 主进程走应用 IPC、Git 面板界面）全部正常，故确认为加密机专属，按用户 2026-09-11 决定整体推迟到最后一次上机。用户提出的根因方向：加密软件认**调用方**，Electron 调 git 在驱动眼里就是 Electron 在操作——若成立，换哪个 git 都没用，只能在中间插一个白名单进程（ARD §8 已记 Main→PowerShell→git 正常，是该方向的直接证据）。根因与修法仍未拍板 | [开发机取证](evidence/f3-dev-probe/README.md) · [事实与方案](../../../plans/2026-09-09-gui-defect-decisions.md#f3--gui-起的-git-子进程输出丢失) |
 | F4 重试 | 🟢 自有重试层已实现（`27d4b7be`），2026-09-11 在开发机用真实 HTTP 假网关触发通过四条路。**退避节奏按用户当日决定改为 3s → 10s → 30s**（三次重试、四次尝试，持续故障总等 43 秒），替掉原来的两套倍增公式；两条预算仍各记各的次数，限流那条保留抖动，服务端 `Retry-After` 一律优先。实测：503×2 后成功（3 次请求、3s→10s）、一直 503 时 4 次请求耗尽、429 按 `Retry-After` 只等 1s、退避中取消 401ms 结束只发 1 次请求。stream 开始后的恢复仍不在该层范围；GUI 侧观感与加密机复测未做。[记录](evidence/p4-6/f4-retry/README.md) |
-| F5 通用问答缺生产者 | 能力缺口，非 native 回归；归 P5-1 批，不阻塞 P4 原能力 | [功能决策](../../../plans/2026-09-09-gui-defect-decisions.md#f5--无提问工具questioncard--扩展问答弹不出来) |
+| F5 通用问答缺生产者 | 🟢 已实现（2026-09-12，`4916a633`）。runtime `ask` 工具 → `question.requested` → `worker.question.respond` → `chat:respondQuestion` → store → 输入框上方的可作答卡片。工具自己给每一问分配 id（answers 表按问题原文做键时，一次调用里两问同字面会撞键）；不设超时也不做权限门；宿主无处显示时不注册该工具。**仅自动化测试，未真机点验** | [功能决策](../../../plans/2026-09-09-gui-defect-decisions.md#f5--无提问工具questioncard--扩展问答弹不出来) · [记录](evidence/p5-1/README.md) |
 | F6 对话修改审阅 | ✅ 2026-09-10 采用右侧审阅，本地真实应用验证通过，尚未打包 | [R1/R2 与更新 U1](topics/session-review-and-updates.md) |
 | F7a/F7c 权限卡样式/尺寸 | 🟡 结构化权限链与重画本地真实应用可用；倒计时原未接通，已补 `baeff487` 并本地验证；视觉口径仍待定 | 不在 test.13；通用问答卡仍受 F5 限制 |
 | F7b 重复状态行 | ✅ 根因是时间线末尾与输入框上方各挂一个 `SessionActivityStatus`（`a3debdf6` 守的是另一对）；按用户选择只留输入框上方，本地真实应用全程单份 | `225c325e`；[修前截图](evidence/session-review-and-updates/local-f7b-duplicate.png) |

@@ -1,6 +1,7 @@
 # 第 7 批 · skills / 模板 / 通用提问 / MCP bridge（P5-1、P5-3）
 
 Role: implementation-plan。日期：2026-09-12。对应[执行顺序](../README.md#执行顺序)第 7 批。
+**状态：四块全部落地（2026-09-12）**，实际做法与取舍见[记录](../evidence/p5-1/README.md)；本文件保留为当初的施工计划。
 依据：[ARD §5 P5 范围](../../../plans/2026-09-08-runtime-evolution-ard.md)、[F5 定性](../../../plans/2026-09-09-gui-defect-decisions.md#f5--无提问工具questioncard--扩展问答弹不出来)。
 
 ## 这一批要补的是「旧后端有、自有 runtime 没有」的四件事
@@ -51,14 +52,18 @@ Role: implementation-plan。日期：2026-09-12。对应[执行顺序](../README
 - 不引 `@modelcontextprotocol/sdk`：它自己 spawn 子进程，正是 D11 第 4 条要收敛掉的那件事。
 - MCP 工具注册进 `runtimeTools` 时带命名空间前缀，权限按 `write` 档处理（服务端能做什么由服务端决定，本地无法静态判定）。
 
-## 验收
+## 验收与实际结果
 
-每块各自可验收，不互相等：
+每块各自可验收，不互相等。四条的落实情况：
 
-1. K1：真实技能目录扫出目录段；`skill` 工具按名取到内容；工作区外路径不经 `read` 弹卡。
-2. K2：补全菜单在 native 后端下列出技能与模板；`/name` 与 `/skill:name` 真实展开后发送。
-3. K3：真实回合里模型调用 `ask` → 卡片出现 → 作答 → 模型拿到答案继续。
-4. K4：真实 MCP server（stdio）被拉起、`tools/list` 有结果、`tools/call` 真实往返、dispose 后进程不残留。
+| 条 | 计划的验收动作 | 实际做到 |
+|---|---|---|
+| K1 | 真实技能目录扫出目录段；`skill` 工具按名取到内容；工作区外路径不经 `read` 弹卡 | ✅ 全做到。「不弹卡」用的判据是：整个 runtime **不配置 approve 回调**，走到 ask 分支权限内核必抛，所以用例通过本身就是证明 |
+| K2 | 补全菜单在 native 下列出技能与模板；`/name` 与 `/skill:name` 真实展开后发送 | 🟡 `worker.commands` 返回真实行、展开在发送路径且有测试；**补全菜单本身未真机点验**（渲染层零改动，链路复用既有的） |
+| K3 | 真实回合里模型调用 `ask` → 卡片出现 → 作答 → 模型拿到答案继续 | 🟡 分两段各自验到：runtime 侧用假 provider 跑真实回合走通「调用 → 作答 → 模型拿到答案」；渲染侧在 happy-dom 里渲染真组件、点真按钮、断言发给 worker 的载荷。**两段没有在真窗口里连起来跑过** |
+| K4 | 真实 MCP server（stdio）被拉起、`tools/list` 有结果、`tools/call` 真实往返、dispose 后进程不残留 | ✅ 全做到，用的是本仓 fixture 服务器。**未接过第三方真实 MCP 服务器** |
+
+真机点验按 2026-09-11 的规矩并入最后一次上机。
 
 ## 范围外
 
