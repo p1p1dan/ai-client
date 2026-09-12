@@ -554,6 +554,26 @@ export function registerChatHandlers(): void {
     })
   );
 
+  // F5. No `claimSessionForSender`, same as the permission answer above: a
+  // question is parked inside one live turn and the worker is the authority on
+  // whether its id is still waiting. Claiming here would make a second window
+  // watching the same session unable to answer a card it can see.
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_RESPOND_QUESTION,
+    async (
+      _e,
+      payload: {
+        sessionId: string;
+        questionId: string;
+        answers?: Record<string, string>;
+        response?: string;
+        cancel?: boolean;
+      }
+    ): Promise<{ handled: boolean }> => ({
+      handled: await workerManager.respondQuestion(payload),
+    })
+  );
+
   ipcMain.handle(
     IPC_CHANNELS.CHAT_SET_PERMISSIONS,
     async (

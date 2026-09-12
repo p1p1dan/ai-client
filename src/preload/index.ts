@@ -1058,6 +1058,18 @@ const electronAPI = {
       decision: import('@shared/types/runtimeEvents').PermissionDecisionId;
     }): Promise<{ handled: boolean }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_PERMISSION, payload),
+    /**
+     * F5 — answer one `question.requested`. `cancel` is the card's Skip and is
+     * not a refusal: it tells the model to pick a default and say so.
+     */
+    respondQuestion: (payload: {
+      sessionId: string;
+      questionId: string;
+      answers?: Record<string, string>;
+      response?: string;
+      cancel?: boolean;
+    }): Promise<{ handled: boolean }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_QUESTION, payload),
     setPermissions: (payload: {
       sessionId: string;
       permissions: RuntimePermissionSettings;

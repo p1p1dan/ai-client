@@ -326,18 +326,25 @@ export interface ChatSessionsState {
   sendMessage: (text: string, attachments?: ChatSendAttachment[]) => Promise<void>;
   stopActiveSession: () => Promise<void>;
   /**
-   * Answer one specific parked prompt. permissionId is required: several may
-   * be parked at once, and the store must never guess which card the user
-   * clicked.
-   * Resolves `false` (without touching `lastError`) when the id is no longer
-   * parked — a stale click, not a failure — and `false` with `lastError` set
-   * when the IPC call throws, so the card can unlock its submitting state
-   * (T-05 fix #4).
+   * F5 — answer the one parked question.
    *
-   * `decision` (S2 c) is the richer button the user pressed. It is FORWARDED,
-   * never re-derived: `allow` is computed from it once, at the card's call
-   * site, so the two can never contradict each other here.
+   * Addressed by `state.pendingQuestion` rather than by an argument, because
+   * the dock holds exactly one: taking a session id here would let a caller
+   * answer a question belonging to a session the user is not looking at.
+   *
+   * Resolves `false` (without touching `lastError`) when nothing is parked or
+   * the worker says the id has already settled — a stale click, not a failure —
+   * and `false` with `lastError` set when the IPC call throws, so the card can
+   * unlock its submitting state instead of staying submitted forever.
+   *
+   * `cancel` is the card's Skip. It is NOT a refusal: the tool tells the model
+   * to pick a default and say which one, so the turn continues either way.
    */
+  respondQuestion: (payload: {
+    answers?: Record<string, string>;
+    response?: string;
+    cancel?: boolean;
+  }) => Promise<boolean>;
   /** Subscribe to Host Runtime Events; returns unsubscribe. */
   initRuntime: () => () => void;
 }
@@ -1448,6 +1455,28 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       set({
         lastError: err instanceof Error ? err.message : String(err),
       });
+    }
+  },
+
+  respondQuestion: async ({ answers, response, cancel }) => {
+    const pending = get().pendingQuestion;
+    if (!pending) return false;
+    try {
+      const result = await window.electronAPI.chat.respondQuestion({
+        sessionId: pending.sessionId,
+        questionId: pending.questionId,
+        ...(answers ? { answers } : {}),
+        ...(response ? { response } : {}),
+        ...(cancel ? { cancel: true } : {}),
+      });
+      // The dock is NOT cleared here. `question.resolved` is what retires it,
+      // and it is the worker that emits it — so a question answered in one
+      // window disappears in every other view of the same session too.
+      set({ lastError: null });
+      return result.handled;
+    } catch (err) {
+      set({ lastError: err instanceof Error ? err.message : String(err) });
+      return false;
     }
   },
 

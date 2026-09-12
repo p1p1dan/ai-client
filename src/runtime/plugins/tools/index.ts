@@ -8,6 +8,7 @@ import { EXEC_SERVICE, HOST_IO_SERVICE, type RuntimeHostIoService } from '../../
 import { RuntimeHostError } from '../../host/errors.ts';
 import { type BashAnalysis, BashAnalyzer } from '../permissions/bash-analysis.ts';
 import { containsPath, PERMISSIONS_SERVICE, pathPolicy } from '../permissions/index.ts';
+import { type AskUser, askTool } from './ask.ts';
 import { createFileChange, readBeforeChange } from './file-change.ts';
 import { canonicalPath } from './paths.ts';
 import { readLines } from './read-lines.ts';
@@ -22,6 +23,13 @@ export interface ToolsConfig {
   recordFileChanges?: boolean;
   shellPath?: string;
   shellEnv?: Record<string, string>;
+  /**
+   * F5 — how the model reaches the user with a question. Absent registers no
+   * `ask` tool at all, which is the honest state for a host with nowhere to
+   * show one: a tool that always answers "nobody is listening" would still be
+   * advertised, and the model would keep calling it.
+   */
+  ask?: AskUser;
 }
 export interface RuntimeToolsService {
   list(): readonly AgentTool<TSchema, unknown>[];
@@ -189,6 +197,9 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
     const io = this.ctx.runtimeHostIo;
     const path = Type.String({ minLength: 1 });
     const objectOptions = { additionalProperties: false };
+    // `read` access, so plan mode keeps it: a plan is exactly when the model
+    // should be asking rather than deciding for the user.
+    if (this.config.ask) this.register(askTool(this.config.ask), 'read');
     this.register({
       name: 'read',
       label: 'Read',

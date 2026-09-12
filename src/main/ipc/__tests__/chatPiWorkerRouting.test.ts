@@ -709,7 +709,7 @@ describe('Pi WorkerSlot chat routing', () => {
     expect(handleRuntimeEvent).toHaveBeenCalledWith(event);
   });
 
-  it('routes exact-file resume and history pagination without legacy permission/question handlers', async () => {
+  it('routes exact-file resume and history pagination, and keeps the legacy handler names retired', async () => {
     await expect(
       invoke('chat:resumeSession', {
         sessionId: 's1',
@@ -739,12 +739,14 @@ describe('Pi WorkerSlot chat routing', () => {
     });
     expect(handlers.has('chat:listHistory')).toBe(false);
     expect(handlers.has('chat:updatePermission')).toBe(false);
-    expect(handlers.has('chat:respondQuestion')).toBe(false);
-    // Registered again since 2026-09-10, for a different contract than the
-    // legacy one this gate was written against: the native runtime asks with
-    // `permission.requested` and this is the only way back. See
-    // `t31PiOnlyAbsence.test.ts` for why the name returning is not a
-    // regression.
+    // Both names are registered again, each for a contract the legacy one this
+    // gate was written against did not have. `respondPermission` came back on
+    // 2026-09-10 (the native runtime asks with `permission.requested` and this
+    // is the only way back); `respondQuestion` came back with F5 in P5-1 — the
+    // native `ask` tool is the first producer of `question.requested` this
+    // repo has ever had, on either backend. See `t31PiOnlyAbsence.test.ts` for
+    // why a returning name is not a regression.
     expect(handlers.has('chat:respondPermission')).toBe(true);
+    expect(handlers.has('chat:respondQuestion')).toBe(true);
   });
 });

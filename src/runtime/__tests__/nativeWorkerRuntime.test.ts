@@ -560,3 +560,59 @@ describe('NativeWorkerRuntime slash commands (P5-1)', () => {
     fake.settle();
   });
 });
+
+describe('NativeWorkerRuntime questions (F5)', () => {
+  it('gives the graph an ask callback, and answers what that callback parks', async () => {
+    const fake = fakeRuntime();
+    const { runtime, events } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    const ask = fake.options?.tools?.ask;
+    // Without this the `ask` tool is never registered and the model has no way
+    // to reach the user at all — the exact state F5 describes.
+    expect(typeof ask).toBe('function');
+
+    const parked = ask?.(
+      {
+        questionId: 'call-1',
+        questions: [{ id: 'call-1-0', question: 'Which?', options: [{ label: 'A' }] }],
+      },
+      undefined
+    );
+    expect(events.at(-1)).toMatchObject({
+      type: 'question.requested',
+      sessionId: 'logical-1',
+      payload: { questionId: 'call-1' },
+    });
+    expect(runtime.respondQuestion({ questionId: 'call-1', answers: { 'call-1-0': 'A' } })).toBe(
+      true
+    );
+    await expect(parked).resolves.toEqual({ outcome: 'answered', answers: { 'call-1-0': 'A' } });
+    expect(events.at(-1)).toMatchObject({ type: 'question.resolved' });
+  });
+
+  it('reports false for a question nobody is waiting on', async () => {
+    const fake = fakeRuntime();
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    expect(runtime.respondQuestion({ questionId: 'ghost', cancel: true })).toBe(false);
+  });
+
+  it('dispose settles a parked question instead of stranding the tool call', async () => {
+    const fake = fakeRuntime();
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    const parked = fake.options?.tools?.ask?.(
+      {
+        questionId: 'call-1',
+        questions: [{ id: 'call-1-0', question: 'Which?', options: [{ label: 'A' }] }],
+      },
+      undefined
+    );
+    await runtime.dispose();
+    live = undefined;
+    await expect(parked).resolves.toEqual({ outcome: 'cancelled' });
+  });
+});

@@ -32,6 +32,7 @@ import {
   isWorkerForkResult,
   isWorkerHistoryResult,
   isWorkerPermissionRespondResult,
+  isWorkerQuestionRespondResult,
   isWorkerReloadResult,
   isWorkerRewindResult,
   isWorkerSendResult,
@@ -54,6 +55,8 @@ import {
   type WorkerHistoryResult,
   type WorkerPermissionRespondPayload,
   type WorkerPermissionRespondResult,
+  type WorkerQuestionRespondPayload,
+  type WorkerQuestionRespondResult,
   type WorkerReloadPayload,
   type WorkerReloadResult,
   type WorkerRewindPayload,
@@ -1690,6 +1693,47 @@ export class WorkerManager {
       throw new WorkerManagerError(
         'worker_invalid_permission_ack',
         'Pi worker returned an invalid permission acknowledgement'
+      );
+    }
+    return result.handled;
+  }
+
+  /**
+   * F5 — answer one `question.requested`.
+   *
+   * Same thinness and the same reasoning as `respondPermission` above: the
+   * question is parked inside one live turn, so the worker is the authority on
+   * whether the id is still waiting.
+   */
+  async respondQuestion(input: {
+    sessionId: string;
+    questionId: string;
+    answers?: Record<string, string>;
+    response?: string;
+    cancel?: boolean;
+  }): Promise<boolean> {
+    const entry = this.entriesBySession.get(input.sessionId);
+    if (!entry?.slot) {
+      throw new WorkerManagerError(
+        'session_not_ready',
+        `Session ${input.sessionId} has no worker to answer a question`
+      );
+    }
+    const payload: WorkerQuestionRespondPayload = {
+      logicalSessionId: entry.logicalSessionId,
+      questionId: input.questionId,
+      ...(input.answers ? { answers: input.answers } : {}),
+      ...(input.response ? { response: input.response } : {}),
+      ...(input.cancel ? { cancel: true } : {}),
+    };
+    const result = await entry.slot.request<
+      WorkerQuestionRespondResult,
+      WorkerQuestionRespondPayload
+    >('worker.question.respond', payload);
+    if (!isWorkerQuestionRespondResult(result)) {
+      throw new WorkerManagerError(
+        'worker_invalid_question_ack',
+        'Pi worker returned an invalid question acknowledgement'
       );
     }
     return result.handled;

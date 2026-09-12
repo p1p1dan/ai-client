@@ -27,6 +27,7 @@ import {
   isWorkerHistoryPayload,
   isWorkerInspectImportedSessionPayload,
   isWorkerPermissionRespondPayload,
+  isWorkerQuestionRespondPayload,
   isWorkerReconcileImportedSessionPayload,
   isWorkerReloadPayload,
   isWorkerRewindPayload,
@@ -54,6 +55,7 @@ import {
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
   type WorkerPermissionRespondResult,
+  type WorkerQuestionRespondResult,
   type WorkerReloadPayload,
   type WorkerReloadResult,
   type WorkerRewindPayload,
@@ -107,6 +109,18 @@ export interface PiWorkerRuntime {
    * the method rather than silently report the gate as answered.
    */
   respondPermission?(input: { permissionId: string; decision: PermissionDecisionId }): boolean;
+  /**
+   * F5 — answer one `question.requested`. Optional for the same reason as
+   * `respondPermission`: only a backend that registers the `ask` tool can have
+   * a question parked, and the others must reject rather than report an answer
+   * that went nowhere.
+   */
+  respondQuestion?(input: {
+    questionId: string;
+    answers?: Record<string, string>;
+    response?: string;
+    cancel?: boolean;
+  }): boolean;
   setPermissions?(permissions: RuntimePermissionSettings): void;
   setPermissionTier?(tier: SessionPermissionTier): void;
   dispose(): Promise<void>;
@@ -325,6 +339,9 @@ export class PiWorkerRpcServer {
           break;
         case 'worker.permission.respond':
           this.handlePermissionResponse(request);
+          break;
+        case 'worker.question.respond':
+          this.handleQuestionResponse(request);
           break;
         case 'worker.setPermissions':
           this.handleSetPermissions(request);
@@ -775,6 +792,47 @@ export class PiWorkerRpcServer {
       handled: this.runtime.respondPermission({
         permissionId: request.payload.permissionId,
         decision: request.payload.decision,
+      }),
+    };
+    this.respondSuccess(request, result);
+  }
+
+  /**
+   * F5 — answer one `question.requested`.
+   *
+   * Rejects rather than reporting `handled: false` on a backend with no `ask`
+   * tool, for the same reason the permission handler above does: `false` reads
+   * as "too late", and a backend mismatch is not lateness. The legacy backend
+   * has no producer for this event at all, so an answer reaching it means the
+   * two ends disagree about which runtime is running.
+   */
+  private handleQuestionResponse(request: WorkerRpcRequest): void {
+    if (!isWorkerQuestionRespondPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.question.respond requires logicalSessionId and questionId',
+        retryable: false,
+      });
+      return;
+    }
+    if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_MISMATCH',
+        'Question response targets another session'
+      );
+    }
+    if (!this.runtime?.respondQuestion) {
+      throw new PiWorkerSessionError(
+        'WORKER_QUESTION_RESPOND_UNAVAILABLE',
+        'This backend has no question tool to answer'
+      );
+    }
+    const result: WorkerQuestionRespondResult = {
+      handled: this.runtime.respondQuestion({
+        questionId: request.payload.questionId,
+        ...(request.payload.answers ? { answers: request.payload.answers } : {}),
+        ...(request.payload.response ? { response: request.payload.response } : {}),
+        ...(request.payload.cancel ? { cancel: true } : {}),
       }),
     };
     this.respondSuccess(request, result);

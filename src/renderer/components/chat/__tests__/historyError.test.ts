@@ -494,6 +494,7 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
       selectSession: () => {},
       sendMessage: async () => {},
       stopActiveSession: async () => {},
+      respondQuestion: async () => false,
       initRuntime: () => () => {},
     };
   }

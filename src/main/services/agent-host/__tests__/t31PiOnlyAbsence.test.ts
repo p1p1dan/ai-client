@@ -20,7 +20,13 @@ const deletedRuntimeFiles = [
   // to a Pi-native control (the session permission tier chip). The legacy
   // permission surface this gate is really about is pinned by channel below,
   // which is the check that cannot be satisfied by a coincidence of filename.
-  'src/renderer/components/chat/PendingQuestionDock.tsx',
+  //
+  // `PendingQuestionDock.tsx` left the list for the same reason on 2026-09-12:
+  // P5-1's F5 work gave that name to the dock for the NATIVE runtime's `ask`
+  // tool. What the old file was is still gone — `questionBridge.ts` above is
+  // the Claude-era producer and it stays on this list. The surviving check is
+  // the composer one at the bottom: whatever a file is called, the composer
+  // must not be a second answerer.
   'src/shared/models/familyWhitelist.ts',
   'src/shared/models/seedCatalog.ts',
   'src/main/ipc/claudeRuntime.ts',
@@ -68,11 +74,18 @@ describe('T31 Pi-only absence gate', () => {
     // written against. The absence gate protects the DIALECT, not the string,
     // so pinning the string here would now block the pi-only path itself.
     expect(ipc).toContain("CHAT_RESPOND_PERMISSION: 'chat:respondPermission'");
+    // `CHAT_RESPOND_QUESTION` came back on 2026-09-12 by the same argument.
+    // T31 removed the Claude/Codex channel of that name — `AskUserQuestion`
+    // parked through `canUseTool`, an agent-specific dialect with an
+    // agent-specific id space. P5-1's `ask` tool is the native runtime's own,
+    // and the payload it answers (`questionId` + an opaque answers map) is the
+    // one the timeline's card has been written against since T-05. The gate
+    // protects the DIALECT, not the string.
+    expect(ipc).toContain("CHAT_RESPOND_QUESTION: 'chat:respondQuestion'");
     for (const legacy of [
       'CLAUDE_RUNTIME_CHECK',
       'CHAT_LIST_AGENT_MODELS',
       'CHAT_UPDATE_PERMISSION',
-      'CHAT_RESPOND_QUESTION',
     ]) {
       expect(ipc, legacy).not.toContain(legacy);
     }
@@ -82,7 +95,16 @@ describe('T31 Pi-only absence gate', () => {
     expect(composer).not.toContain('ComposerAgentPicker');
     // The composer still must not answer permissions: the card in the timeline
     // owns that, and a second answerer is how one gate gets two replies.
-    for (const legacy of ['chat:respondPermission', 'chat:updatePermission', 'permissionMode']) {
+    for (const legacy of [
+      'chat:respondPermission',
+      'chat:updatePermission',
+      'permissionMode',
+      // Same rule for questions now that one exists: `PendingQuestionDock` is
+      // the single answerer, and a composer that could also reply is how one
+      // question gets two answers.
+      'chat:respondQuestion',
+      'respondQuestion',
+    ]) {
       expect(composer, legacy).not.toContain(legacy);
     }
   });

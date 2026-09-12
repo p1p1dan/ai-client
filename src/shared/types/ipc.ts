@@ -354,6 +354,14 @@ export const IPC_CHANNELS = {
    * a bridge-local dialog id.
    */
   CHAT_RESPOND_PERMISSION: 'chat:respondPermission',
+  /**
+   * F5 — answer one `question.requested`. A third addressee next to the two
+   * above: the `ask` tool's own question, keyed by the `questionId` the card
+   * and the timeline block carry. The name existed once for the legacy
+   * `canUseTool` path and was removed when that path went; it is back for a
+   * different contract, which `chatPiWorkerRouting.test.ts` pins.
+   */
+  CHAT_RESPOND_QUESTION: 'chat:respondQuestion',
   /** U12 — set the session-level permission tier on the running Worker. */
   CHAT_SET_PERMISSION_TIER: 'chat:setPermissionTier',
   CHAT_SET_PERMISSIONS: 'chat:setPermissions',

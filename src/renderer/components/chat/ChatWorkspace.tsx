@@ -28,6 +28,7 @@ import {
   rememberSendAttempt,
   START_SCREEN_HOST_CLASS,
 } from './middleColumnLayout';
+import { PendingQuestionDock } from './PendingQuestionDock';
 import type { RunSendOrigin } from './queueRelease';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
@@ -271,6 +272,10 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
           <ExtensionUiUnsupportedNotice sessionId={activeSessionId} onOpenTui={openTui} />
           <ExtensionUiInlineDock sessionId={activeSessionId} />
           <ExtensionUiWidgets sessionId={activeSessionId} placement="aboveEditor" />
+          {/* F5: the only answerable copy of a live question. Above the
+              composer rather than in the timeline so it cannot scroll away
+              while the session waits on it. */}
+          <PendingQuestionDock sessionId={activeSessionId} />
           {/* U05-b ②: the start screen does not REPLACE the composer, it sits
               above it — a user who wants to bind a folder still has the
               composer's own target bar, and a user who just wants to talk can

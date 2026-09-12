@@ -45,6 +45,11 @@ import { RuntimeHostError } from '../host/errors.ts';
 import { resolveWorkerShell } from '../host/shell.ts';
 import { JsonlSessionStore, type SessionConfig } from '../plugins/session/store.ts';
 import { createPermissionPrompt, type PermissionPrompt } from './permissionPrompt.ts';
+import {
+  createQuestionPrompt,
+  type QuestionPrompt,
+  type QuestionResponse,
+} from './questionPrompt.ts';
 
 /**
  * The self-owned runtime behind the existing worker RPC surface (ARD P4-1).
@@ -106,6 +111,8 @@ export class NativeWorkerRuntime {
   private readonly stagedForks = new Map<string, string>();
   /** The structured permission gate; see `permissionPrompt.ts`. */
   private readonly permissions: PermissionPrompt;
+  /** F5 — the `ask` tool's user-facing end; see `questionPrompt.ts`. */
+  private readonly questions: QuestionPrompt;
 
   constructor(options: NativeWorkerRuntimeOptions) {
     this.options = options;
@@ -116,11 +123,20 @@ export class NativeWorkerRuntime {
       cwd: this.cwd,
       emit: (event) => this.emit(event),
     });
+    this.questions = createQuestionPrompt({
+      sessionId: this.logicalSessionId,
+      emit: (event) => this.emit(event),
+    });
   }
 
   /** RPC entry point for `worker.permission.respond`. */
   respondPermission(input: { permissionId: string; decision: PermissionDecisionId }): boolean {
     return this.permissions.respond(input);
+  }
+
+  /** RPC entry point for `worker.question.respond`. */
+  respondQuestion(input: QuestionResponse): boolean {
+    return this.questions.respond(input);
   }
 
   async bootstrap(): Promise<WorkerBootstrapResult> {
@@ -158,6 +174,11 @@ export class NativeWorkerRuntime {
         cwd: this.cwd,
         shellPath: resolveWorkerShell(this.options.host.childEnv),
         recordFileChanges: process.env.AICLIENT_SESSION_REVIEW !== '0',
+        // F5. Registering `ask` here rather than in the graph's own defaults is
+        // what keeps the tool out of hosts that cannot show a card — a probe or
+        // the baseline harness has no renderer, and advertising a question it
+        // can never answer would park the turn forever.
+        ask: this.questions.ask,
       },
       session,
       // P5-1. Empty config on purpose: the roots are all derived — agent dir,
@@ -700,6 +721,7 @@ export class NativeWorkerRuntime {
     // left parked here would hold the tool call's promise for the life of the
     // process.
     this.permissions.drain('session_closed');
+    this.questions.drain('session_closed');
     this.disposed = true;
     const turn = this.turn;
     if (turn) {

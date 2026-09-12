@@ -432,6 +432,34 @@ export interface WorkerPermissionRespondResult {
   handled: boolean;
 }
 
+/**
+ * F5 — the user's answer to one `question.requested`.
+ *
+ * A third channel next to the permission answer and the extension-UI dialog,
+ * for the same reason those two are separate: different question, different
+ * lifetime, different id space. A question is the `ask` tool's own, keyed by
+ * the `questionId` the card and the timeline block already carry.
+ *
+ * `answers` and `response` are exclusive, and `cancel` beats both — the card's
+ * Skip is not a refusal, it is "decide this yourself", which is why it has to
+ * be distinguishable from an empty answers map.
+ */
+export interface WorkerQuestionRespondPayload {
+  logicalSessionId: string;
+  questionId: string;
+  /** Opaque agent-supplied key -> answer; multi-select joined with ", ". */
+  answers?: Record<string, string>;
+  /** Freeform text typed instead of picking options. */
+  response?: string;
+  /** The card's Skip. Settles the question without an answer. */
+  cancel?: boolean;
+}
+
+export interface WorkerQuestionRespondResult {
+  /** `false` when nothing was waiting on this id. Same meaning as above. */
+  handled: boolean;
+}
+
 export interface WorkerSetPermissionTierPayload {
   logicalSessionId: string;
   tier: SessionPermissionTier;
@@ -1075,6 +1103,29 @@ export function isWorkerPermissionRespondPayload(
 export function isWorkerPermissionRespondResult(
   value: unknown
 ): value is WorkerPermissionRespondResult {
+  return isRecord(value) && typeof value.handled === 'boolean';
+}
+
+export function isWorkerQuestionRespondPayload(
+  value: unknown
+): value is WorkerQuestionRespondPayload {
+  if (!isRecord(value)) return false;
+  if (typeof value.logicalSessionId !== 'string') return false;
+  if (typeof value.questionId !== 'string' || value.questionId.trim().length === 0) return false;
+  if (value.cancel !== undefined && typeof value.cancel !== 'boolean') return false;
+  if (value.response !== undefined && typeof value.response !== 'string') return false;
+  if (value.answers === undefined) return true;
+  // Values only: the KEYS are the agent's own ids, deliberately opaque, and a
+  // shape check on them would be this layer inventing a second id vocabulary.
+  return (
+    isRecord(value.answers) &&
+    Object.values(value.answers).every((entry) => typeof entry === 'string')
+  );
+}
+
+export function isWorkerQuestionRespondResult(
+  value: unknown
+): value is WorkerQuestionRespondResult {
   return isRecord(value) && typeof value.handled === 'boolean';
 }
 
