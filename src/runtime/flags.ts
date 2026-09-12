@@ -9,8 +9,16 @@
  * could change mid-run would make a trace's version stamp a lie.
  */
 
-/** ARD D8. Same naming family as `AICLIENT_PI_WORKER_CAPACITY`. */
-export const RUNTIME_BACKEND_ENV = 'AICLIENT_RUNTIME_BACKEND';
+import { type RuntimeBackend, readRuntimeBackend } from '../shared/runtimeBackend.ts';
+
+/**
+ * ARD D8. Same naming family as `AICLIENT_PI_WORKER_CAPACITY`.
+ *
+ * Re-exported from `shared` rather than declared here: Main has to read the
+ * same variable (P5-5 only assembles a catalog for the native backend) and
+ * cannot import this package — the root tsconfig excludes `src/runtime/**`.
+ */
+export { RUNTIME_BACKEND_ENV } from '../shared/runtimeBackend.ts';
 
 /**
  * Where the pi catalog (`models.json` + `auth.json`) lives.
@@ -28,7 +36,7 @@ export const PI_AGENT_DIR_ENV = 'PI_CODING_AGENT_DIR';
 /** Directory run traces are appended to. Absent = keep traces in memory only. */
 export const RUNTIME_TRACE_DIR_ENV = 'AICLIENT_RUNTIME_TRACE_DIR';
 
-export type RuntimeBackend = 'legacy' | 'native';
+export type { RuntimeBackend } from '../shared/runtimeBackend.ts';
 
 export interface RuntimeFlags {
   /**
@@ -45,12 +53,8 @@ export interface RuntimeFlags {
 }
 
 export function readRuntimeFlags(env: NodeJS.ProcessEnv = process.env): RuntimeFlags {
-  const backend = env[RUNTIME_BACKEND_ENV]?.trim();
   return {
-    // An unrecognised value is read as `legacy`, not as an error: this variable
-    // is set by hand during development, and a typo must not be the thing that
-    // decides a user's session runs on unfinished code.
-    backend: backend === 'native' ? 'native' : 'legacy',
+    backend: readRuntimeBackend(env),
     agentDir: firstNonEmpty(env[RUNTIME_AGENT_DIR_ENV], env[PI_AGENT_DIR_ENV]),
     traceDir: firstNonEmpty(env[RUNTIME_TRACE_DIR_ENV]),
   };
