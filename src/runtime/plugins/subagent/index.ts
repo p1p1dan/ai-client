@@ -34,6 +34,7 @@ import type { Usage } from '@earendil-works/pi-ai';
 import { type Context, Service } from 'cordis';
 import { type TSchema, Type } from 'typebox';
 import type { ResolvedModel, RuntimeModelRef } from '../../contracts.ts';
+import type { DelegateCallScope } from '../permissions/index.ts';
 import { TOOLS_SERVICE } from '../tools/index.ts';
 import { applySubagentActivation, resolveSubagentPin, type SubagentCatalog } from './catalog.ts';
 import { normalizeSubagentName, type SubagentDefinition, subagentModelKey } from './definition.ts';
@@ -401,11 +402,15 @@ export class SubagentPlugin extends Service implements SubagentService {
             `The ${definition.name} subagent declares no tool available in this session (missing: ${unavailable.join(', ')}).`
           );
         }
-        const tools = (this.ctx.get(TOOLS_SERVICE)?.list() ?? []).filter((tool) =>
-          available.includes(tool.name)
-        );
 
         const delegationId = randomUUID();
+        const tools = this.scopeDelegateTools(
+          (this.ctx.get(TOOLS_SERVICE)?.list() ?? []).filter((tool) =>
+            available.includes(tool.name)
+          ),
+          definition,
+          delegationId
+        );
         const controller = new AbortController();
         const label =
           isRecord(params) && typeof params.description === 'string'
@@ -482,6 +487,46 @@ export class SubagentPlugin extends Service implements SubagentService {
         };
       },
     };
+  }
+
+  /**
+   * Wrap a delegate's tools so every call it makes carries its definition's
+   * permission scope and its own identity to the gate.
+   *
+   * Keyed by tool call id and torn down in a `finally`, so two delegates with
+   * different gears running at the same time never cross over, and a delegate
+   * that throws does not leave its gear behind for the parent's next call.
+   *
+   * Note what this does NOT do: it never calls `configure()`. Switching the
+   * session gear for the duration of a delegate's call is the obvious
+   * implementation and the wrong one — delegates are concurrent, so the second
+   * one would run under the first one's gear.
+   */
+  private scopeDelegateTools(
+    tools: readonly AgentTool<TSchema, unknown>[],
+    definition: SubagentDefinition,
+    delegationId: string
+  ): AgentTool<TSchema, unknown>[] {
+    const permissions = this.ctx.get('runtimePermissions');
+    const declared = definition.permission;
+    const scope: DelegateCallScope = {
+      // `inherit` (the default) contributes no gear: the call resolves under
+      // whatever the session is set to, which is the point of inheriting.
+      ...(declared && declared !== 'inherit' ? { gear: declared } : {}),
+      delegation: { delegationId, agentName: definition.name },
+    };
+    if (!permissions) return [...tools];
+    return tools.map((tool) => ({
+      ...tool,
+      execute: async (toolCallId, args, signal, onUpdate) => {
+        const release = permissions.scopeToolCall(toolCallId, scope);
+        try {
+          return await tool.execute(toolCallId, args, signal, onUpdate);
+        } finally {
+          release();
+        }
+      },
+    }));
   }
 
   private settle(record: DelegationRecord, result: Parameters<DelegationRegistry['settle']>[1]) {

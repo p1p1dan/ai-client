@@ -35,6 +35,26 @@ export interface ToolPermissionRequest {
   commands?: readonly string[];
   unresolvedPaths?: boolean;
   exploration?: boolean;
+  /**
+   * P5-2-3. Which delegate made this call, when a delegate made it.
+   *
+   * The approval card has to say so. "Allow bash `rm -rf build`?" is a very
+   * different question depending on whether the agent you are talking to asked
+   * it or a subagent you delegated to twenty seconds ago did, and without this
+   * the two cards are identical. It is also what lets a cancel or a denial stay
+   * with the delegation it belongs to instead of crossing into another.
+   */
+  delegation?: { delegationId: string; agentName: string };
+}
+/**
+ * What a delegate's tool call resolves under.
+ *
+ * `gear` absent means inherit the session's — the default, and the only shape
+ * an `inherit` definition produces.
+ */
+export interface DelegateCallScope {
+  gear?: PermissionGear;
+  delegation?: { delegationId: string; agentName: string };
 }
 export interface PermissionScope {
   root: string;
@@ -106,6 +126,19 @@ export interface RuntimePermissionsService {
   evaluate(request: ToolPermissionRequest): PermissionAction;
   isToolAllowed(name: string): boolean;
   configure(settings: Partial<RuntimePermissionSettings>): void;
+  /**
+   * Resolve one tool call under a delegate's scope, and give back the undo.
+   *
+   * Scoped per `toolCallId` rather than by switching the session gear, because
+   * delegates run concurrently: a global switch would leak one delegate's gear
+   * into another delegate's call, and into the parent's.
+   *
+   * `gear` is absent for a delegate that inherits — it still registers, because
+   * `delegation` is what puts the delegate's name on the approval card, and an
+   * inheriting delegate's card must say who is asking just as much as an
+   * overriding one's.
+   */
+  scopeToolCall(toolCallId: string, scope: DelegateCallScope): () => void;
   readonly mode: RuntimeMode;
   readonly gear: PermissionGear;
   readonly policy: RuntimePermissionPolicy | undefined;
@@ -124,6 +157,8 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
   private readonly grants = new Set<string>();
   private readonly controller = new AbortController();
   private settings: RuntimePermissionSettings;
+  /** Per-call delegate scopes, keyed by tool call id. See `scopeToolCall`. */
+  private readonly scopedGears = new Map<string, DelegateCallScope>();
   private epoch = 0;
   private readonly listeners = new Set<(record: PermissionActivityRecord) => void>();
 
@@ -134,6 +169,7 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     ctx.effect(() => () => {
       this.controller.abort();
       this.grants.clear();
+      this.scopedGears.clear();
       this.listeners.clear();
     });
   }
@@ -150,6 +186,30 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     this.settings = { ...this.settings, ...settings };
     this.epoch++;
     this.grants.clear();
+  }
+  scopeToolCall(toolCallId: string, scope: DelegateCallScope): () => void {
+    this.scopedGears.set(toolCallId, scope);
+    return () => {
+      this.scopedGears.delete(toolCallId);
+    };
+  }
+  /** Stamp the delegate's identity onto the request observers and the approval
+   * card see. Parent calls pass through untouched. */
+  private attribute(request: ToolPermissionRequest): ToolPermissionRequest {
+    const delegation = this.scopedGears.get(request.toolCallId)?.delegation;
+    return delegation ? { ...request, delegation } : request;
+  }
+  /**
+   * The gear this request resolves under.
+   *
+   * A scope can only change which of ask / accept-edits / auto applies. Every
+   * deny — policy, path, scope, plan mode — is decided BEFORE the gear is
+   * consulted in `evaluate`, so a delegate declaring `auto` still cannot cross
+   * a deny rule, reach outside the workspace, widen its tool set, or turn a
+   * parent plan session into an agent one.
+   */
+  private gearFor(request: ToolPermissionRequest): PermissionGear {
+    return this.scopedGears.get(request.toolCallId)?.gear ?? this.settings.gear;
   }
   isToolAllowed(name: string): boolean {
     return !this.config.allowedTools || this.config.allowedTools.includes(name);
@@ -186,7 +246,8 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
         [request.path, ...(request.paths ?? [])].some((path) => containsPath(scope.root, path))
     );
     if (matches.some((scope) => scope.action === 'deny')) return 'deny';
-    if (this.gear === 'auto') return 'allow';
+    const gear = this.gearFor(request);
+    if (gear === 'auto') return 'allow';
     if (matches.some((scope) => scope.action === 'ask'))
       return this.grants.has(grantKey(request)) ? 'allow' : 'ask';
     if (
@@ -212,19 +273,18 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
       return 'ask';
     if (['read', 'grep', 'glob'].includes(request.tool))
       return decisions.includes('ask') ? 'ask' : 'allow';
-    if (this.gear === 'accept-edits' && ['write', 'edit', 'bash'].includes(request.tool))
-      return 'allow';
+    if (gear === 'accept-edits' && ['write', 'edit', 'bash'].includes(request.tool)) return 'allow';
     return 'ask';
   }
   canTraverse(request: ToolPermissionRequest): boolean {
     if (
       this.config.policy &&
       policyAction(this.config.policy, 'path', [request.path], this.config.cwd) === 'ask' &&
-      this.gear !== 'auto'
+      this.gearFor(request) !== 'auto'
     )
       return false;
     if (pathPolicy(request.path) === 'deny' || this.evaluate(request) === 'deny') return false;
-    if (pathPolicy(request.path) === 'ask' && this.gear !== 'auto') return false;
+    if (pathPolicy(request.path) === 'ask' && this.gearFor(request) !== 'auto') return false;
     return !(this.config.scopes ?? []).some(
       (scope) =>
         scope.action !== 'allow' &&
@@ -254,7 +314,8 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
       }
     }
   }
-  async authorize(request: ToolPermissionRequest, signal?: AbortSignal): Promise<void> {
+  async authorize(incoming: ToolPermissionRequest, signal?: AbortSignal): Promise<void> {
+    const request = this.attribute(incoming);
     let source: PermissionDecisionSource;
     try {
       source = await this.check(request, signal);
@@ -265,7 +326,10 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
         decision: 'deny',
         source: error instanceof PermissionDenial ? error.source : 'error',
         mode: this.mode,
-        gear: this.gear,
+        // The gear the call actually resolved under, not the session's. An
+        // audit line that named the session gear for a delegate call would
+        // describe a decision nobody made.
+        gear: this.gearFor(request),
       });
       throw error;
     }
@@ -275,7 +339,7 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
       decision: 'allow',
       source,
       mode: this.mode,
-      gear: this.gear,
+      gear: this.gearFor(request),
     });
   }
   private async check(
@@ -293,7 +357,7 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     if (!this.config.approve) throw denied('error', 'approval UI is not connected');
     // Announced before the await, so the transcript can show the gate is open
     // for as long as the dialog actually is.
-    this.notify({ phase: 'prompt', request, mode: this.mode, gear: this.gear });
+    this.notify({ phase: 'prompt', request, mode: this.mode, gear: this.gearFor(request) });
     const epoch = this.epoch;
     const controller = new AbortController();
     const approvalSignal = AbortSignal.any([combined, controller.signal]);

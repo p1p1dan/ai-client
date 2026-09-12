@@ -15,11 +15,12 @@
  *    stores the capitalised canonical form — that is what a management UI must
  *    write back unchanged. {@link runtimeToolName} is the single adaptation
  *    point where it becomes a name this runtime can look up.
- * 2. **`BrowserPreview` stays assignable even though we have no such tool
- *    yet.** Dropping it at parse time would silently rewrite the user's
- *    document and make a missing capability look like a definition that never
- *    asked for it. It parses, it round-trips, and it resolves to nothing until
- *    P5-2-3 lands the host facade — which is the honest state.
+ * 2. **`BrowserPreview` maps to `browser_preview`, which may not be
+ *    registered.** P5-2-3 landed the facade, but a host with no preview surface
+ *    supplies no callback and the tool does not exist there. Dropping the name
+ *    at parse time would silently rewrite the user's document and make a
+ *    missing capability look like a definition that never asked for it; instead
+ *    it parses, round-trips, and falls out of the live-tool intersection.
  * 3. **`idleTimeout` / `maxDuration` parse but arm nothing.** The reference
  *    withdrew both watchdogs (its D328): the parent's `TaskStop` and the user's
  *    Stop decide a delegate's lifetime, not a timer. The fields stay so old
@@ -131,6 +132,11 @@ export function runtimeToolName(canonical: string): string | undefined {
     Bash: 'bash',
     Edit: 'edit',
     Write: 'write',
+    // P5-2-3. Registered only when the host supplies a preview surface, so a
+    // definition that declares it on a host without one still parses and still
+    // round-trips; the tool simply drops out of the intersection and `Task`
+    // names it in `unavailableTools`.
+    BrowserPreview: 'browser_preview',
   };
   return mapped[canonical];
 }

@@ -9,6 +9,7 @@ import { RuntimeHostError } from '../../host/errors.ts';
 import { type BashAnalysis, BashAnalyzer } from '../permissions/bash-analysis.ts';
 import { containsPath, PERMISSIONS_SERVICE, pathPolicy } from '../permissions/index.ts';
 import { type AskUser, askTool } from './ask.ts';
+import { browserPreviewTool, type PreviewHost } from './browserPreview.ts';
 import { createFileChange, readBeforeChange } from './file-change.ts';
 import { canonicalPath } from './paths.ts';
 import { readLines } from './read-lines.ts';
@@ -18,6 +19,10 @@ export const TOOL_OUTPUT_BYTES = 50 * 1024;
 const FILE_EDIT_BYTES = 8 * 1024 * 1024;
 const SEARCH_FILE_BYTES = 1024 * 1024;
 const SEARCH_ENTRIES = 20_000;
+/** What a command gets when it does not ask for longer. Unchanged by P5-2-3. */
+const DEFAULT_BASH_TIMEOUT_MS = 120_000;
+/** Ceiling for an explicit `timeoutSeconds`, matching the reference's 6 hours. */
+export const MAX_BASH_TIMEOUT_SECONDS = 6 * 60 * 60;
 export interface ToolsConfig {
   cwd: string;
   recordFileChanges?: boolean;
@@ -30,6 +35,12 @@ export interface ToolsConfig {
    * advertised, and the model would keep calling it.
    */
   ask?: AskUser;
+  /**
+   * P5-2-3 — where a previewable file is shown. Absent registers no
+   * `browser_preview` tool, for the same reason `ask` is absent on a host with
+   * nowhere to put a question.
+   */
+  preview?: PreviewHost;
 }
 export interface RuntimeToolsService {
   list(): readonly AgentTool<TSchema, unknown>[];
@@ -200,6 +211,15 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
     // `read` access, so plan mode keeps it: a plan is exactly when the model
     // should be asking rather than deciding for the user.
     if (this.config.ask) this.register(askTool(this.config.ask), 'read');
+    // `read` access: showing a file changes nothing on disk, and the reference
+    // keeps BrowserPreview available in its read-only modes for the same reason.
+    if (this.config.preview)
+      this.register(
+        browserPreviewTool(this.config.preview, (id, input, signal) =>
+          this.target('browser_preview', id, input, signal)
+        ),
+        'read'
+      );
     this.register({
       name: 'read',
       label: 'Read',
@@ -321,10 +341,28 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       name: 'bash',
       label: 'Bash',
       description:
-        'Execute a command with the configured shell in the workspace. Output and runtime are bounded.',
+        'Execute a command with the configured shell in the workspace. Output is bounded. Runtime is bounded too: 120s unless you name a longer one with timeoutSeconds, which a build or a full test run will need.',
       parameters: Type.Object(
         {
           command: Type.String({ minLength: 1, maxLength: 32768 }),
+          /**
+           * P5-2-3. The reference's Bash defaults to 60s and allows up to 6h;
+           * ours defaulted to 120s and CAPPED at 10 minutes, which is shorter
+           * than a real build. `test-runner` and `fixer` exist to run exactly
+           * those commands, so the ceiling had to move.
+           *
+           * Two decisions inside that, both from the contract:
+           *
+           * - The no-argument default stays 120s. A command that did not ask
+           *   for longer does not silently get to hang for six hours.
+           * - The new knob is in SECONDS, matching the reference's interface
+           *   (converted to ms here). `timeoutMs` stays for callers that
+           *   already pass it; when both are given, the explicit seconds win
+           *   because that is the one a model reaches for.
+           */
+          timeoutSeconds: Type.Optional(
+            Type.Integer({ minimum: 1, maximum: MAX_BASH_TIMEOUT_SECONDS })
+          ),
           timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 600_000 })),
         },
         objectOptions
@@ -351,7 +389,9 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
             BASHOPTS: undefined,
           },
           cwd,
-          timeoutMs: args.timeoutMs ?? 120_000,
+          timeoutMs: args.timeoutSeconds
+            ? args.timeoutSeconds * 1000
+            : (args.timeoutMs ?? DEFAULT_BASH_TIMEOUT_MS),
           maxOutputBytes: TOOL_OUTPUT_BYTES,
           overflow: 'truncate',
           signal,
@@ -408,13 +448,25 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       name: 'grep',
       label: 'Grep',
       description:
-        'Search for literal text in UTF-8 files. Skips symlinks, .git, node_modules, binary files and denied paths; bounded to 1 MiB per file.',
+        'Search UTF-8 files for text. Literal by default; set regex:true to treat pattern as a JavaScript regular expression. Skips symlinks, .git, node_modules, binary files and denied paths; bounded to 1 MiB per file.',
       parameters: Type.Object(
         {
           pattern: Type.String({ minLength: 1, maxLength: 1024 }),
           path: Type.Optional(path),
           include: Type.Optional(Type.String({ maxLength: 512 })),
           caseInsensitive: Type.Optional(Type.Boolean()),
+          /**
+           * P5-2-3. The reference's `Grep` is ripgrep, so regex is its default
+           * and the builtin `explorer` prompt tells a delegate to reach for it.
+           * Ours was literal-only, which made that instruction a lie.
+           *
+           * Added as an opt-in flag rather than by flipping the default: a
+           * literal search for `a.b` finding `axb` is a silent behaviour change
+           * to a tool the parent agent and P1-4's cases already rely on. The
+           * capability gap closes either way; the difference is whether closing
+           * it also rewrites what every existing call means.
+           */
+          regex: Type.Optional(Type.Boolean()),
           limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000 })),
         },
         objectOptions
@@ -426,6 +478,26 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
         let totalBytes = 0;
         let skipped = 0;
         const needle = args.caseInsensitive ? args.pattern.toLowerCase() : args.pattern;
+        // Compiled once, outside the walk. A bad pattern must fail the CALL,
+        // not silently match nothing across a whole tree - the model has no way
+        // to tell "no hits" from "your regex was invalid" otherwise.
+        let expression: RegExp | undefined;
+        if (args.regex) {
+          try {
+            expression = new RegExp(args.pattern, args.caseInsensitive ? 'i' : '');
+          } catch (error) {
+            throw new RuntimeHostError(
+              'invalid_tool_arguments',
+              `grep: invalid regular expression ${JSON.stringify(args.pattern)} (${
+                error instanceof Error ? error.message : String(error)
+              })`
+            );
+          }
+        }
+        const hits = (line: string): boolean =>
+          expression
+            ? expression.test(line)
+            : (args.caseInsensitive ? line.toLowerCase() : line).includes(needle);
         for await (const file of walk(
           io,
           root,
@@ -456,7 +528,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
           }
           const lines = Buffer.from(data.bytes).toString('utf8').split('\n');
           for (let line = 0; line < lines.length; line++) {
-            if ((args.caseInsensitive ? lines[line].toLowerCase() : lines[line]).includes(needle)) {
+            if (hits(lines[line])) {
               matches.push(`${file}:${line + 1}:${lines[line].slice(0, 2048)}`);
               if (matches.length >= (args.limit ?? 100)) break;
             }

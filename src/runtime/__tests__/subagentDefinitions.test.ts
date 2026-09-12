@@ -240,7 +240,11 @@ describe('SA01 · the four builtins and full-field parsing', () => {
     );
     expect(parsed.ok && parsed.definition.tools).toEqual(['Read', 'Glob', 'Grep']);
     expect(runtimeToolName('Read')).toBe('read');
-    expect(runtimeToolName('BrowserPreview')).toBeUndefined();
+    // P5-2-3 gave BrowserPreview a runtime name. Whether the tool EXISTS is a
+    // separate question — it is registered only on a host with a preview
+    // surface — and that is settled by the live-registry intersection, not here.
+    expect(runtimeToolName('BrowserPreview')).toBe('browser_preview');
+    expect(runtimeToolName('Telepathy')).toBeUndefined();
   });
 
   it('keeps a block list and ignores unknown tools with a warning', () => {

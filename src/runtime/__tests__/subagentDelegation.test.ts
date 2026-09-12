@@ -574,6 +574,88 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
     expect(result.text).toContain('stopped and moved on');
   });
 
+  it('re-asks a delegate stream that died, without replaying its tools', async () => {
+    // SA13. A stream that fails AFTER it started is not covered by the request
+    // wrapper; recovering from it needs the loop's message state. The property
+    // that matters is in the second half of the name: the delegate already ran
+    // a tool, and a "retry" that restarted it would run that tool twice — for
+    // `fixer` that means writing the same file twice.
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(join(workspace, 'target.txt'), 'contents\n', 'utf8');
+
+    let delegateTurn = 0;
+    const handle = await build({
+      parent: [
+        () =>
+          fauxAssistantMessage([fauxToolCall('Task', { agent: 'explorer', task: 'read it' })], {
+            stopReason: 'toolUse',
+          }),
+        () => fauxAssistantMessage('waiting'),
+        () => fauxAssistantMessage('integrated'),
+      ],
+      delegate: [
+        () => {
+          delegateTurn += 1;
+          if (delegateTurn === 1) {
+            return fauxAssistantMessage(
+              [fauxToolCall('read', { path: 'target.txt' }, { id: 'r1' })],
+              { stopReason: 'toolUse' }
+            );
+          }
+          if (delegateTurn === 2) {
+            return fauxAssistantMessage('', {
+              stopReason: 'error',
+              errorMessage: '503: service unavailable',
+            });
+          }
+          return fauxAssistantMessage('RECOVERED: target.txt says contents');
+        },
+      ],
+    });
+
+    let toolStarts = 0;
+    handle.ctx.runtimeSubagents.onEvent((envelope) => {
+      if (envelope.event.type === 'tool_execution_start') toolStarts += 1;
+    });
+
+    await handle.run({ prompt: 'go' });
+
+    const record = handle.ctx.runtimeSubagents.registry.all()[0];
+    expect(record.status).toBe('completed');
+    expect(record.result?.report).toContain('RECOVERED');
+    // Exactly once. The retry re-asked the failed request; it did not restart
+    // the delegate.
+    expect(toolStarts).toBe(1);
+    // Three provider requests for the delegate: the tool turn, the failed
+    // stream, and the recovered one.
+    expect(delegateTurn).toBe(3);
+  }, 20_000);
+
+  it('fails a delegate on a stream error that re-sending cannot fix', async () => {
+    const handle = await build({
+      parent: [
+        () =>
+          fauxAssistantMessage([fauxToolCall('Task', { agent: 'explorer', task: 'x' })], {
+            stopReason: 'toolUse',
+          }),
+        () => fauxAssistantMessage('waiting'),
+        () => fauxAssistantMessage('noted'),
+      ],
+      delegate: [
+        () =>
+          fauxAssistantMessage('', {
+            stopReason: 'error',
+            errorMessage: '401 Unauthorized: invalid api key',
+          }),
+      ],
+    });
+    await handle.run({ prompt: 'go' });
+    const record = handle.ctx.runtimeSubagents.registry.all()[0];
+    expect(record.status).toBe('failed');
+    // Straight to failure: retrying a bad key just spends the budget.
+    expect(record.result?.turns).toBe(1);
+  });
+
   it('stops a delegate on user Stop rather than leaving it running', async () => {
     // SA08: the run's own abort signal is one of the two doors to a delegate.
     const controller = new AbortController();

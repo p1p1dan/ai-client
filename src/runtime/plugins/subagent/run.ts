@@ -33,8 +33,10 @@
  *    is 3s/10s/30s with three retries per budget, per the 2026-09-11 user
  *    ruling — deliberately not the reference's 5/4, because that ruling
  *    postdates the contract text and applies to every provider call we make.
- *    Stream-phase recovery (rewind + `continue()`) is P5-2-3's line item, and
- *    is the one place this class is knowingly not yet at parity.
+ *    Both phases draw on ONE budget per delegate: the wrapper covers a request
+ *    that never started, `retryPendingStream` covers a stream that died after
+ *    it did, and neither can spend the other's allowance. A recovery re-asks
+ *    the failed request and never replays a tool that already ran.
  */
 
 import {
@@ -49,9 +51,15 @@ import {
 import type { AssistantMessage, Usage } from '@earendil-works/pi-ai';
 import type { TSchema } from 'typebox';
 import type { ResolvedModel } from '../../contracts.ts';
+import type { ClassifiedProviderError } from '../agent-loop/providerErrors.ts';
 import {
+  classifyProviderError,
   createProviderRetryBudget,
   createProviderRetryStream,
+  delayWithAbort,
+  type ProviderRetryBudget,
+  providerRateLimitDelayMs,
+  providerSetupRetryDelayMs,
 } from '../agent-loop/providerRetry.ts';
 import type { SubagentDefinition } from './definition.ts';
 
@@ -177,13 +185,20 @@ export class SubagentRun {
   private usage?: Usage;
   private cappedTurns = false;
   private streamError?: { code: string; message: string };
+  /** A stream failure that claimed a retry and is waiting to be re-asked. */
+  private pendingRetry?: { error: ClassifiedProviderError; attempt: number };
+  private readonly retryBudget: ProviderRetryBudget;
 
   constructor(options: SubagentRunOptions) {
     this.options = options;
     const { model } = options;
-    // One budget per delegate: a 429 burst inside one delegate may not spend
-    // another delegate's allowance, nor the parent's.
+    // One budget per delegate, shared by BOTH phases: a request that never
+    // started and a stream that died halfway draw from the same allowance, so a
+    // delegate cannot spend twice the parent's budget by failing in two
+    // different places. A 429 burst inside one delegate may not spend another
+    // delegate's allowance, nor the parent's.
     const retryBudget = createProviderRetryBudget();
+    this.retryBudget = retryBudget;
     this.agent = new Agent({
       streamFn: (requestModel, context, streamOptions) =>
         createProviderRetryStream(
@@ -222,6 +237,12 @@ export class SubagentRun {
     try {
       await this.agent.prompt(this.options.task);
       await this.agent.waitForIdle();
+      // Stream-phase recovery. `createProviderRetryStream` only covers a
+      // request that never produced a `start` event; a stream that died after
+      // one arrives as an assistant message with `stopReason: "error"`, and
+      // recovering from THAT needs the loop's message state, which only this
+      // class has.
+      while (this.pendingRetry && !signal?.aborted) await this.retryPendingStream();
     } catch (error) {
       thrown = error instanceof Error ? error : new Error(String(error));
     } finally {
@@ -245,6 +266,39 @@ export class SubagentRun {
       });
     }
     return this.result('completed', this.lastReportText);
+  }
+
+  /**
+   * Re-ask the failed request without re-running anything that already ran.
+   *
+   * Drops the failed assistant message and continues from the transcript, which
+   * is what keeps this a RETRY rather than a restart: every tool the delegate
+   * already executed stays executed, and its results stay in context. Restarting
+   * the delegate would re-run them, which for `fixer` means writing the same
+   * files twice.
+   */
+  private async retryPendingStream(): Promise<void> {
+    const pending = this.pendingRetry;
+    if (!pending) return;
+    this.pendingRetry = undefined;
+    const messages = [...this.agent.state.messages];
+    if (messages.at(-1)?.role !== 'assistant') {
+      // Nothing to rewind means the transcript is not in the shape this
+      // recovery assumes; failing loudly beats continuing from a guess.
+      this.streamError = { code: pending.error.code, message: pending.error.message };
+      return;
+    }
+    messages.pop();
+    this.agent.state.messages = messages;
+    const headers = this.retryBudget.controller.headers();
+    const delayMs =
+      pending.error.code === 'PROVIDER_RATE_LIMITED'
+        ? providerRateLimitDelayMs(pending.attempt, headers)
+        : providerSetupRetryDelayMs(pending.attempt, headers);
+    await delayWithAbort(delayMs, this.options.signal);
+    if (this.options.signal?.aborted) return;
+    await this.agent.continue();
+    await this.agent.waitForIdle();
   }
 
   /**
@@ -299,10 +353,18 @@ export class SubagentRun {
           const text = assistantText(message);
           const failed = message.stopReason === 'error';
           if (failed) {
-            this.streamError = {
-              code: 'provider_stream_failed',
-              message: message.errorMessage ?? 'the provider stream failed',
-            };
+            const classified = classifyProviderError(
+              message.errorMessage ?? 'the provider stream failed',
+              this.retryBudget.controller.status()
+            );
+            const attempt = this.retryBudget.controller.claim(classified);
+            if (attempt === undefined) {
+              // Budget spent, or an error re-sending cannot fix. Either way the
+              // delegate fails now rather than looping on it.
+              this.streamError = { code: classified.code, message: classified.message };
+            } else {
+              this.pendingRetry = { error: classified, attempt };
+            }
           }
           this.usage = addUsage(this.usage, message.usage);
           // The report is the last assistant TEXT. A turn that only called
