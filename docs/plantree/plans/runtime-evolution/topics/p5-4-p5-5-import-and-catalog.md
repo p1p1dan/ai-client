@@ -1,6 +1,7 @@
 # 第 9 批 · 会话导入适配与模型目录切源（P5-4、P5-5）
 
 Role: implementation-plan。日期：2026-09-12。对应[执行顺序](../README.md#执行顺序)第 9 批。
+**状态：两个节点全部落地（2026-09-12）**，实际做法、取舍与待现场清单见[记录](../evidence/p5-4-p5-5/README.md)；本文件保留为当初的施工计划。
 依据：[ARD §4.2 搬运表](../../../plans/2026-09-08-runtime-evolution-ard.md)、[D15 baseUrl 推导](../../../plans/2026-09-08-runtime-evolution-ard.md#d15--模型目录的-baseurl客户端按-wire-协议推导允许每个-model-显式覆盖)、[H/17 实施计划](local-provider-management.md)、[P0 在线冒烟的端点事实](../evidence/p0/live-smoke.md)。
 
 ## 开工前的核对：P5-5 是否已被 H / 17 覆盖

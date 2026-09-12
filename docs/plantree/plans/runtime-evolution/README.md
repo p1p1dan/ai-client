@@ -15,7 +15,7 @@ Role: roadmap。核对日期：2026-09-12；覆盖 runtime-evolution 与已并�
 
 技术依赖：P0 → P1/P2/P3 → P4 → P5 → P6；P2-0 是先行基线。依赖不等于排期，下面是 2026-09-10 重排后的实际推进顺序。
 
-剩余量（2026-09-12 第四次订正）：**7 个节点未开始**（P5 两个，P6 五个）。P2-5/P2-6 与第 7 批（P5-1、P5-3）均已于 2026-09-12 完成；同日第 8 批 P5-2 八个子节点全部落地，0～6 已签，P5-2-7 有六行**待现场**（真机点验 + 两载体打包），按契约 §7 P5-2 仍不标 Done。后半程主体转为 P5-4/P5-5 与 P6。
+剩余量（2026-09-12 第五次订正）：**5 个节点未开始**（全在 P6）。P2-5/P2-6、第 7 批（P5-1、P5-3）、第 8 批 P5-2 八个子节点、第 9 批 P5-4/P5-5 均已于 2026-09-12 落地。P5-2-7 有六行**待现场**（真机点验 + 两载体打包），按契约 §7 P5-2 仍不标 Done；P5-4/P5-5 同样只有自动化测试，五行待现场。**后半程只剩 H / 20 与 P6。**
 
 | 序 | 批次 | 内容 | 为什么排这里 |
 |---|---|---|---|
@@ -27,7 +27,7 @@ Role: roadmap。核对日期：2026-09-12；覆盖 runtime-evolution 与已并�
 | 6 | P2-5、P2-6 | 真实缓存命中率达标与新旧对比 | ✅ 已完成（2026-09-12）。用户指定网关，两个后端在同一网关上各跑一遍同套六场景：native **99.97%**、同网关 legacy **99.97%**，差 -0.0073 个百分点，均高于 95.01% 门槛。原基线网关已不供 `claude-sonnet-5`，故 95.01% 退为历史参考值。[记录](evidence/p2-5/README.md) · [对比报告](evidence/p2-5/comparison.md) |
 | 7 | P5-1、P5-3 | skills / 模板（含 F5 提问能力）、MCP bridge | ✅ 已完成（2026-09-12）。四块分四次提交：技能与模板 `4e0f1f3e`、F5 通用提问 `4916a633`、MCP bridge `d4fcd600`。F5 补的是**整条纵切**，其中可作答卡片的渲染位此前全仓不存在。MCP 顺带给 exec 出口加了长驻子进程能力，并修掉它第一版在 runner 载体下的漏报。[施工计划](topics/p5-1-skills-templates-ask.md) · [记录](evidence/p5-1/README.md) |
 | 8 | P5-2（含 P5-2-0～7） | subagent 整体复刻 | 🟡 实现完成 / 现场待验（2026-09-12）。八个子节点全部落地：探针门禁、定义与模型目录、Task* 后台编排、权限与工具能力（含 BrowserPreview 预览窗）、会话/事件/usage、迁移预览与管理界面、运行/历史展示逐条对齐。**SA01～22 中 16 行已签，6 行待现场**——它们共用同一个前提：一次真机会话 + 两种载体的打包产物。[记录](evidence/p5-2/README.md) · [逐项签收](evidence/p5-2/signoff.md) · [基线](topics/p5-2-0-baseline.md) |
-| 9 | P5-4、P5-5 | 会话导入适配、模型目录切源 | P5-5 与第 1 批的服务管理可能重叠，开工前先核对是否已被覆盖，避免重复实现 |
+| 9 | P5-4、P5-5 | 会话导入适配、模型目录切源 | 🟡 实现完成 / 现场待验（2026-09-12）。**开工前的核对结论：P5-5 没有被 H / 17 覆盖**，探针实测到六种用户可选的 API 风格被自有 runtime 静默丢弃、D15 一行未实现、而 H/17 反而加深了对派生明文文件的依赖。三次提交：目录能力与 D15 `3b1bb1e3`、切源 `d8818725`、导入 `6cec5d2c`。顺带修掉 Anthropic 预设多带 `/v1` 的真缺陷。[施工计划](topics/p5-4-p5-5-import-and-catalog.md) · [记录](evidence/p5-4-p5-5/README.md) |
 | 10 | H / 20 + P6-1～P6-5 | [会话互通](topics/gui-tui-session-interop.md)、切默认、摘除 pi-coding-agent 依赖、六项成功标准、回退开关、退役旧集成层 | 用户 2026-09-10 决定互通排到最后做。但它是 P6-1 的**前置**：默认切到 native 之前必须先通，否则切换等于取消 TUI 能力。P6-2 落地时才能删掉派生明文文件的临时分支 |
 | — | H / 21 | [外部 Agent 迁移](topics/external-agent-migration.md)、[对话导入](topics/conversation-import.md) | 🟢 四摊都已落地并真机点验：P0 错误文案 `22da278c`、P1 首启一键迁移 `f147059b`、点验修复 `b7dacfb0`/`d0332939`、对话导入 C1～C6 `2715b9a6`（2026-09-11）。含「可续聊」硬验收：导入的会话里发消息拿到基于导入历史的真实回复 |
 | 11 | 现场实测 | 加密 Windows 一次性全量验收 | 用户 2026-09-10 决定：全部做完后再去现场实测一次，不再分轮上机 |
@@ -137,7 +137,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 
 <a id="p5"></a>
 
-### P5 扩展 — 🟡 P5-1 / P5-2 / P5-3 已实现，P5-2 现场待验
+### P5 扩展 — 🟡 五个节点全部实现，P5-2 / P5-4 / P5-5 现场待验
 
 | 节点 | 功能 | 状态 |
 |---|---|---|
@@ -152,8 +152,8 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | P5-2-6 | 运行/历史展示 | ✅ 逐条比对抓到四处不一致，两处静默：委派记录曾以 `custom.entry` 上线、被渲染成父会话里的系统消息（子代理 transcript 裸 JSON 直接进用户视野）；报告在自动交回路径上被按位置丢掉，「报告一次」成了「报告零次」。另补齐思考投影与工具参数白名单、审批卡的子代理来源、重载按记录重建 lane、面板局部滚动跟随。12+12+2 条 SA14/SA18 |
 | P5-2-7 | SA01～22 等价门禁 | 🟡 16 行已签（自动化测试钉住），6 行待现场：SA16 保存/恢复真机对比、SA17 管理页点验与重启保留、SA18 滚动手感、SA20 预览整链、SA21 两载体打包、SA22 trace 与截图。逐行状态与上机清单见[签收](evidence/p5-2/signoff.md) |
 | P5-3 | MCP bridge | ✅ 自写 stdio JSON-RPC 客户端（不引官方 SDK：它自己 spawn，违反 D11 第 4 条），配置沿用生态 `{"mcpServers":{…}}`，项目文件仅在 projectTrusted 时打开，每次调用过权限门。对真实 stdio 服务器取证。[记录](evidence/p5-1/README.md) |
-| P5-4 | 会话导入适配 | ⬜ |
-| P5-5 | 模型目录切源 | ⬜ |
+| P5-4 | 会话导入适配 | 🟡 实现完成 / 现场待验：导入不再只有 pi 一个实现——`NativeLegacyImportWriter` 写入走 `JsonlSessionStore`（v4），四个动作（create/inspect/reconcile/discard）等价，后端选择在 worker 入口以工厂注入，`PiImportProcess` 与 Main 一行没改。保留 pi 版的三条：暂存后 rename 发布、两个 custom 条目类型、display-only 不进模型上下文。「可续聊」用 faux provider 离线证到「导入的回合真的进了模型上下文」，真模型下未验。[记录](evidence/p5-4-p5-5/README.md) |
+| P5-5 | 模型目录切源 | 🟡 实现完成 / 现场待验：**未被 H / 17 覆盖**（探针实测）。目录从 4 种 API 风格扩到 pi-ai 的全部 10 种（此前另外 6 种被静默丢弃，用户存了却看不见）、认不出的风格进 `dropped` 并带进版本戳；D15 落地在 `toPiModelsJson` 的继承分支，显式地址永不改写，推导规则取自 pi-ai 自己的 provider 表；native 的目录改由 Main 在内存里交付，派生明文文件降为 legacy 专用（P6-2 删）。[记录](evidence/p5-4-p5-5/README.md) |
 
 范围与验收：[P5-2 契约](topics/p5-2-subagent-contracts.md)、[任务定义与 SA01～22](topics/p5-2-subagent-tasks.md)。完整复刻后才做优化。
 
@@ -191,7 +191,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F / 14 | 旧 GitView / IPC 等死代码清理 | ✅ 实现及回归；后续测试包整体 GUI 继续回归 |
 | F / 15 | cwd 缺失与临时目录恢复 | 🟡 test.12 当前恢复流程通过；F2-a/c 后续修复待 test.13 验证；**F2-b 取证已完成**（[记录](evidence/p4-6/f2b/README.md)） |
 | G / 16 | 软件更新提醒 | 🟡 U1 已提交 `b919b1aa`，自动化与隔离弹窗验证通过；真实更新源下载/安装按用户 2026-09-10 决定暂缓验证 |
-| H / 17 | 本地模式 AI 服务管理 | 🟡 L1～L5 已实现：vault 分组存储、主进程服务与 IPC、设置页与添加/编辑弹窗、本地模式首次进入自动打开。全量 5161 测试通过；未打包、未现场回归；[实施计划](topics/local-provider-management.md) |
+| H / 17 | 本地模式 AI 服务管理 | 🟡 L1～L5 已实现：vault 分组存储、主进程服务与 IPC、设置页与添加/编辑弹窗、本地模式首次进入自动打开。全量 5161 测试通过；未打包、未现场回归。**第 9 批查出并修掉两条**：用户可选的十种 API 风格里有六种在 native 后端被静默丢弃、Anthropic 预设多带了一个 `/v1`（见 [P5-5](evidence/p5-4-p5-5/README.md)）。[实施计划](topics/local-provider-management.md) |
 | H / 19 | 统一 agent 目录、资源迁移与插件管理 | 🟢 U1～U6 已落地（`4284c893`）：两种模式一律用本应用目录、五项资源一次性复制迁移、插件复用 pi 的 install/remove/list、借用机制整条删除。**验证案例 2～5 均已真机点验通过**（4、5 于 2026-09-11：真装 `npm:pi-jingle` → 会话扩展清单里 `scope:user` 出现 → 装不存在的包给出 npm 原文 → 卸载后文件与配置双双清空；项目级插件在 `projectTrusted:false` 下不可见，界面两种模式都没有项目级入口）。点验顺带修掉插件面板把随包权限系统显示成 `src`。案例 7 依赖 H / 20；未打包。[实施计划](topics/unified-agent-directory.md) · [验证](evidence/unified-agent-directory/README.md) |
 | H / 20 | GUI / TUI 会话互通 | ⬜ 单文件双格式，可行性已实测通过、需补五处容忍；P6-1 前置；[实施计划](topics/gui-tui-session-interop.md) · [验证](evidence/gui-tui-session-interop/README.md) |
 | H / 18 | 左侧 Chat 栏对齐 PI-Desktop | 🟢 S1～S5 已实现并现场点验通过（`70b9a31d`），点验另修一处 Esc 缺陷（`b92800a7`）；[实施计划](topics/sidebar-pi-desktop-alignment.md) · [验证](evidence/sidebar-pi-desktop-alignment/README.md) |
