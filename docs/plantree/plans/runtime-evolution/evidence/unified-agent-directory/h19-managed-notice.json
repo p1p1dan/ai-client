@@ -1,0 +1,46 @@
+{
+  "devEnvFile": "/tmp/h19-dev-managed.env",
+  "sectionText": "插件\n装在你账户下的扩展。它们跑在 agent 进程里，可以往会话里加工具、技能和命令。\n工具审批由本应用随包的权限系统负责。\n安装\n\n安装会联网下载，可能要等几秒。 登录模式下项目级插件不会生效，所以本应用只装到你的账户下。\n\n暂无已安装插件\n按包名装一个，给会话加上工具或命令。\n设置文件\n/home/ai/.pilab/jyw-ai-client-dev/pi-agent/settings.json",
+  "noticeShown": true,
+  "projectScopeControls": [],
+  "screenshot": "docs/plantree/plans/runtime-evolution/evidence/unified-agent-directory/h19-managed-project-scope-notice.png",
+  "rendererProblems": [
+    {
+      "kind": "console.error",
+      "text": "11:32:21.915 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:32:21.915 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:32:27.064 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:32:27.078 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:32:27.221 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:32:27.305 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:32:27.371 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:32:27.465 › [workspace-tree] worktrees-absent Object"
+    }
+  ],
+  "verdict": {
+    "noticeShown": true,
+    "noProjectScopeControl": true,
+    "pass": true
+  }
+}

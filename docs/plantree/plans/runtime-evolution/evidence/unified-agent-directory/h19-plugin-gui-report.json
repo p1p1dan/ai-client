@@ -1,0 +1,185 @@
+{
+  "attached": false,
+  "steps": {
+    "normalisedToLocal": {
+      "done": true,
+      "result": {
+        "ok": true
+      }
+    },
+    "before": {
+      "ui": {
+        "found": true,
+        "text": "插件\n装在你账户下的扩展。它们跑在 agent 进程里，可以往会话里加工具、技能和命令。\n工具审批由本应用随包的权限系统负责。\n安装\n\n安装会联网下载，可能要等几秒。\n\n暂无已安装插件\n按包名装一个，给会话加上工具或命令。\n设置文件\n/home/ai/.pilab/jyw-ai-client-dev/pi-agent/settings.json",
+        "rows": [],
+        "error": null
+      },
+      "disk": {
+        "settingsPath": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/settings.json",
+        "packages": [],
+        "nodeModules": []
+      }
+    },
+    "projectScopeControls": [],
+    "modeNoticeBefore": false,
+    "afterInstall": {
+      "ui": {
+        "found": true,
+        "text": "插件\n装在你账户下的扩展。它们跑在 agent 进程里，可以往会话里加工具、技能和命令。\n工具审批由本应用随包的权限系统负责。\n安装\n\n安装会联网下载，可能要等几秒。\n\npi-jingle\n\nnpm:pi-jingle\n\n/home/ai/.pilab/jyw-ai-client-dev/pi-agent/npm/node_modules/pi-jingle\n\n设置文件\n/home/ai/.pilab/jyw-ai-client-dev/pi-agent/settings.json",
+        "rows": [
+          {
+            "text": "pi-jingle | npm:pi-jingle | /home/ai/.pilab/jyw-ai-client-dev/pi-agent/npm/node_modules/pi-jingle",
+            "hasSwitch": true,
+            "hasRemove": true
+          }
+        ],
+        "error": null
+      },
+      "disk": {
+        "settingsPath": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/settings.json",
+        "packages": [
+          "npm:pi-jingle"
+        ],
+        "nodeModules": [
+          "pi-jingle"
+        ]
+      }
+    },
+    "sessionExtensions": {
+      "done": true,
+      "sid": "session-live-1789140568519-d9egdw2",
+      "list": [
+        {
+          "name": "src",
+          "path": "/home/ai/code/ai-client/src/agent-host/node_modules/@gotgenes/pi-permission-system/src/index.ts",
+          "source": "cli",
+          "scope": "temporary",
+          "ok": true
+        },
+        {
+          "name": "rpiv-ask-user-question",
+          "path": "/home/ai/code/ai-client/src/agent-host/node_modules/@juicesharp/rpiv-ask-user-question/index.ts",
+          "source": "cli",
+          "scope": "temporary",
+          "ok": true
+        },
+        {
+          "name": "jingle",
+          "path": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/npm/node_modules/pi-jingle/jingle.ts",
+          "source": "npm:pi-jingle",
+          "scope": "user",
+          "ok": true
+        }
+      ]
+    },
+    "afterFailedInstall": {
+      "ui": {
+        "found": true,
+        "text": "插件\n装在你账户下的扩展。它们跑在 agent 进程里，可以往会话里加工具、技能和命令。\n工具审批由本应用随包的权限系统负责。\n安装\n\n安装会联网下载，可能要等几秒。\n\npi-jingle\n\nnpm:pi-jingle\n\n/home/ai/.pilab/jyw-ai-client-dev/pi-agent/npm/node_modules/pi-jingle\n\n设置文件\n/home/ai/.pilab/jyw-ai-client-dev/pi-agent/settings.json\nInstalling npm:aiclient-h19-no-such-package-9f3c1...\nnpm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/aiclient-h19-no-such-package-9f3c1 - Not found\nnpm error 404\nnpm error 404  'aiclient-h19-no-such-package-9f3c1@*' is not in this registry.\nnpm error 404\nnpm error 404 Note that you can also install from a\nnpm error 404 tarball, folder, http url, or git url.\nnpm error A complete log of this run can be found in: /home/ai/.npm/_logs/2026-09-11T15_29_41_475Z-debug-0.log\nError: npm install aiclient-h19-no-such-package-9f3c1 --prefix /home/ai/.pilab/jyw-ai-client-dev/pi-agent/npm --legacy-peer-deps failed with code 1",
+        "rows": [
+          {
+            "text": "pi-jingle | npm:pi-jingle | /home/ai/.pilab/jyw-ai-client-dev/pi-agent/npm/node_modules/pi-jingle",
+            "hasSwitch": true,
+            "hasRemove": true
+          }
+        ],
+        "error": "Installing npm:aiclient-h19-no-such-package-9f3c1...\nnpm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/aiclient-h19-no-such-package-9f3c1 - Not found\nnpm error 404\nnpm error 404  'aiclient-h19-no-such-package-9f3c1@*' is not in this registry.\nnpm error 404\nnpm error 404 Note that you can also install from a\nnpm error 404 tarball, folder, http url, or git url.\nnpm error A complete log of this run can be found in: /home/ai/.npm/_logs/2026-09-11T15_29_41_475Z-debug-0.log\nError: npm install aiclient-h19-no-such-package-9f3c1 --prefix /home/ai/.pilab/jyw-ai-client-dev/pi-agent/npm --legacy-peer-deps failed with code 1"
+      },
+      "disk": {
+        "settingsPath": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/settings.json",
+        "packages": [
+          "npm:pi-jingle"
+        ],
+        "nodeModules": [
+          "pi-jingle"
+        ]
+      }
+    },
+    "afterRemove": {
+      "ui": {
+        "found": true,
+        "text": "插件\n装在你账户下的扩展。它们跑在 agent 进程里，可以往会话里加工具、技能和命令。\n工具审批由本应用随包的权限系统负责。\n安装\n\n安装会联网下载，可能要等几秒。\n\n暂无已安装插件\n按包名装一个，给会话加上工具或命令。\n设置文件\n/home/ai/.pilab/jyw-ai-client-dev/pi-agent/settings.json",
+        "rows": [],
+        "error": null
+      },
+      "disk": {
+        "settingsPath": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/settings.json",
+        "packages": [],
+        "nodeModules": []
+      }
+    },
+    "managedNotice": {
+      "switchToManaged": {
+        "done": true,
+        "result": {
+          "ok": true
+        }
+      },
+      "managedNotice": false,
+      "managedControls": [],
+      "managedSectionText": "插件\n装在你账户下的扩展。它们跑在 agent 进程里，可以往会话里加工具、技能和命令。\n工具审批由本应用随包的权限系统负责。\n安装\n\n安装会联网下载，可能要等几秒。\n\n暂无已安装插件\n按包名装一个，给会话加上工具或命令。\n设置文件\n/home/ai/.pilab/jyw-ai-client-dev/pi-agent/settings.json",
+      "screenshot": "docs/plantree/plans/runtime-evolution/evidence/unified-agent-directory/h19-managed-project-scope-notice.png",
+      "switchToLocal": {
+        "done": true,
+        "result": {
+          "ok": true
+        }
+      },
+      "localNotice": false
+    }
+  },
+  "settingsPath": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/settings.json",
+  "screenshots": {
+    "installed": "docs/plantree/plans/runtime-evolution/evidence/unified-agent-directory/h19-plugin-installed.png",
+    "failed": "docs/plantree/plans/runtime-evolution/evidence/unified-agent-directory/h19-plugin-install-failed.png"
+  },
+  "rendererProblems": [
+    {
+      "kind": "console.error",
+      "text": "11:29:23.387 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:29:23.387 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:29:28.518 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:29:28.531 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:29:28.691 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:29:28.797 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:29:28.906 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "11:29:29.033 › [workspace-tree] worktrees-absent Object"
+    }
+  ],
+  "verdict": {
+    "sectionFound": true,
+    "installedRowShown": true,
+    "installedOnDisk": true,
+    "loadedInSession": true,
+    "failureExplained": true,
+    "failureLeftNoTrace": true,
+    "removedFromDisk": true,
+    "removedFromUi": true,
+    "noProjectScopeControlLocal": true,
+    "noProjectScopeControlManaged": true,
+    "managedNoticeShown": false,
+    "localNoticeHidden": true,
+    "pass": false
+  }
+}

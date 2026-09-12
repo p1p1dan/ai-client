@@ -96,9 +96,116 @@ U2 的迁移正是这条的解药（把 provider 导进 vault 用户组），但
 
 两步都做的理由：跳过、失败或只迁了一部分的用户仍会撞上同一个报错，所以文案不能被首启弹窗吸收掉。
 
+## 验证案例 4、5 的真机点验（2026-09-11）
+
+第 5 批第 2 项。这两条是 H/19 最后剩下的验收项——案例 2、3 已随 H/21 点验一并通过，
+案例 7 依赖 H/20。**两条全部通过**，三个探针：
+
+| 探针 | 回答哪一半 | 结果 |
+|---|---|---|
+| [`run-h19-plugin-gui-probe.mjs`](../../../../../scripts/run-h19-plugin-gui-probe.mjs) | 案例 4 全流程 + 案例 5 的界面（本地模式） | 12 项判据全通过 |
+| [`run-h19-project-scope-probe.mjs`](../../../../../scripts/run-h19-project-scope-probe.mjs) | 案例 5 的机制：项目级插件到底生不生效 | 通过 |
+| [`run-h19-managed-notice-probe.mjs`](../../../../../scripts/run-h19-managed-notice-probe.mjs) | 案例 5 的界面（托管模式） | 通过 |
+
+### 案例 4：装 → 会话里可用 → 装失败 → 卸
+
+原始输出 [h19-plugin-gui-report.json](h19-plugin-gui-report.json)。全程走真实控件——
+往输入框里用原生 setter 派发 `input` 事件（React 的受控 value 直接赋值不触发
+`onChange`，按钮会一直是 disabled），再点真按钮，**不调 `electronAPI.piPlugins.install`**。
+磁盘那一侧由探针自己 `readFileSync`，不借界面的 IPC：界面与磁盘要是同一个信息源，
+两边一致就什么也没证明。目录也不是探针自己算的，取自页面显示给用户的那行
+`settingsPath`（`/home/ai/.pilab/jyw-ai-client-dev/pi-agent/settings.json`）。
+
+- **装**：输入 `npm:pi-jingle` → 列表出现一行 `pi-jingle / npm:pi-jingle /
+  <agentDir>/npm/node_modules/pi-jingle`，带启用开关与移除按钮；磁盘上
+  `settings.json` 的 `packages` 变成 `["npm:pi-jingle"]`，`npm/node_modules/` 里出现
+  `pi-jingle`。[截图](h19-plugin-installed.png)
+- **会话里真的可用**（这条此前从没验过，也是案例 4 里唯一不能靠磁盘回答的）：
+  装完发一轮真实对话把 worker 拉起来，再问 `chat:listSessionExtensions`，拿到
+
+  ```json
+  { "name": "jingle", "path": "<agentDir>/npm/node_modules/pi-jingle/jingle.ts",
+    "source": "npm:pi-jingle", "scope": "user", "ok": true }
+  ```
+
+  这份清单是 pi 自己 `resourceLoader.getExtensions()` 的结果，不是我们照着
+  `settings.json` 二次推导的，所以它回答的确实是「pi 把它加载进会话了」。
+- **装失败说人话**：装 `npm:aiclient-h19-no-such-package-9f3c1`，界面上直接显示 npm
+  自己的原文（`npm error 404 Not Found - GET https://registry.npmjs.org/...`）加上
+  pi 的那行 `npm install ... failed with code 1`；磁盘没留下任何痕迹，已装的
+  `pi-jingle` 不受影响。[截图](h19-plugin-install-failed.png)
+- **卸干净**：点移除后列表回到空态「暂无已安装插件」，`settings.json` 的 `packages`
+  为 `[]`，`npm/node_modules/` 为空。
+
+### 案例 5：托管模式下项目级插件不生效，且界面不提供入口
+
+这条拆成两个独立问题，分别用不同手段回答。
+
+**机制**（[h19-project-scope.json](h19-project-scope.json)）：在临时目录里用
+`pi install -l --approve` **真装**一个项目级插件——不是手写 `.pi/settings.json`，
+因为项目信任判定完全可能落在包解析而不是读文件那一步，手写文件验不到。装完
+`.pi/settings.json` 是 `{"packages":["npm:pi-jingle"]}`、`.pi/npm/node_modules/` 里
+有 `pi-jingle`，而 agent 目录的 `settings.json` 压根没生成（没被污染）。然后拿 pi
+自己的 `SettingsManager.create(cwd, agentDir, { projectTrusted })` 做差分：
+
+| `projectTrusted` | `getProjectSettings().packages` |
+|---|---|
+| `true` | `["npm:pi-jingle"]` |
+| `false` | `[]` |
+
+这正是本应用托管模式下走的那条路：托管时发 `AICLIENT_PI_TRUST_PROJECT_CONFIG=0`
+（`piModelConfig/index.ts`），worker 读成 `projectTrusted: false` 交给
+`piAgentSessionBootstrap` 里的同一个调用。所以差分成立即等于该案例成立。
+
+**界面**（[h19-managed-notice.json](h19-managed-notice.json)）：两种模式下都扫了插件区
+里的全部可交互元素（button / input / select / switch / radio / tab / checkbox），
+按「项目 / project / -l / 本地安装」筛，**两种模式都是空集**——没有项目级入口。
+判据用控件而不是文字是必须的：托管模式那句说明本身就含「项目级」三个字，按文字找
+会把说明当成入口。托管模式下那句说明如期出现：
+
+> 安装会联网下载，可能要等几秒。**登录模式下项目级插件不会生效，所以本应用只装到你的账户下。**
+
+本地模式下它不出现。[截图](h19-managed-project-scope-notice.png)
+
+### 点验里踩到的三件事，都值得单独记
+
+1. **在应用里切换凭据模式，在开发机上是无效操作。** 第一版探针调
+   `auth.enterApp('managed')` 再看界面，什么都没变，差点被读成缺陷。真因是
+   `resolveCredentialMode` 的优先级：未打包构建里**环境变量压过设置文件**，而
+   `dev.js` 会把 `dev.env` 的 `AICLIENT_MANAGED_CREDENTIALS`（开发机写的是 `0`）
+   一路带给子进程。`enterApp` 确实把选择写进了 `settings.json`，但
+   `getCredentialMode()` 读出来仍是 local。这不是缺陷，是那条优先级的直接后果，
+   但它足以让一次点验得出相反的结论。托管模式必须另起一份应用，用
+   `AICLIENT_DEV_ENV_FILE` 指向一份把该键改成 `1` 的副本（顺带
+   `AICLIENT_SKIP_AUTH_GATE=1`，否则托管模式没登录会被挡在主界面外，根本点不到设置）。
+2. **别在 CDP 里直接 remove 弹层的 DOM 节点。** 第一版为了让设置页重新挂载干了这件事，
+   React 的树和真实 DOM 当场对不上，此后无论点标题栏的设置按钮还是走
+   `settingsIntent`，`settingsDialogOpen` 都变 true 了却什么都不渲染——看起来像应用
+   坏了，只能重启（这台机器冷启动数分钟）。正确做法是真点分类导航：`SettingsContent`
+   给内容区挂了 `key={activeCategory}`，换一个分类再换回来，整块自然重新挂载。
+3. **仓库根的 pi SDK 在纯 Node 下 import 不起来。** 根目录那棵树里
+   `pi-coding-agent@0.84.4` 底下嵌着一个过期的 `pi-tui@0.84.3`，Node 先解析到它，
+   `import` 直接抛 `does not provide an export named 'setCapabilityOverrides'`。
+   `src/agent-host/node_modules` 那棵两个包同为 0.84.3、自洽，也正是 worker 实际加载
+   的那份，所以**应用本身不受影响**（这轮真实回合跑通了工具调用就是证据），受影响的
+   只有从仓库根 import SDK 的探针或测试。未改依赖树，仅在探针里指向 agent-host 那份
+   并注明原因。
+
+### 顺带修掉的一个显示缺陷：插件面板把随包权限系统显示成 `src`
+
+不是推测，是从上面那份扩展清单里直接读出来的：随包权限系统解析到
+`.../@gotgenes/pi-permission-system/src/index.ts`，而 `extensionDisplayName` 的规则是
+「入口文件就取上一级目录名」，于是名字成了 `src`。任何按 `src/index.ts` 这种再普通不过
+的布局发布的包都会中招，而这个名字会直接出现在侧栏的插件面板上。
+
+已修：入口文件的上一级若是 `src` / `dist` / `lib` / `build` / `out` / `esm` / `cjs`
+这类构建目录，再往上取一级。**只上一级**——真叫 `src` 的包本来就无从分辨，再往上走
+就该把插件命名成 `node_modules` 或 scope 目录了。补了三条用例，含点验里那条真实路径。
+
 ## 未验证
 
 - **未打包，未做安装版/加密 Windows 现场回归**。按用户 2026-09-10 决定，全部做完后再上机一次。
-- **迁移与插件两个界面未在真实应用里点验**，只有静态与单元覆盖。验证案例 1～3、5～7 的界面部分待现场。
+- 验证案例 7（GUI 与 TUI 都能列出迁移后的历史对话）依赖 H / 20，未开工。
 - 未在真实应用里确认「导入的服务出现在模型选择器里」这一步的端到端（自动化只覆盖到写 vault + 触发派生文件重写）。
-- 未验证 GUI 与 TUI 同时列出迁移后历史对话的现场表现（自动化只证明两者拿到同一个目录）。
+- 案例 4 的「启用/停用开关」这一轮没再点（2026-09-10 的 CLI 冒烟覆盖过，含 `pi list`
+  的 ` (filtered)` 后缀那条修复）；本轮只验了装、可用、失败、卸四步。

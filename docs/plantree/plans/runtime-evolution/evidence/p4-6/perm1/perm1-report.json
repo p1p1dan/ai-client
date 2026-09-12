@@ -1,0 +1,105 @@
+{
+  "steps": {
+    "initialLabel": "执行 · 每次询问",
+    "popupContents": {
+      "text": "规划\n勘察并提交实现计划，等待批准。\n执行\n执行已批准的工作。\n每次询问\n写入、编辑和命令逐条询问。\n自动接受编辑\n工作区内写入、编辑和命令自动执行；外部路径仍询问。\n全自动\n自动执行可用工具；显式拒绝规则仍生效。\n立即生效，作用于当前线程。",
+      "items": [
+        {
+          "text": "规划 | 勘察并提交实现计划，等待批准。",
+          "checked": "false"
+        },
+        {
+          "text": "执行 | 执行已批准的工作。",
+          "checked": "true"
+        },
+        {
+          "text": "每次询问 | 写入、编辑和命令逐条询问。",
+          "checked": "true"
+        },
+        {
+          "text": "自动接受编辑 | 工作区内写入、编辑和命令自动执行；外部路径仍询问。",
+          "checked": "false"
+        },
+        {
+          "text": "全自动 | 自动执行可用工具；显式拒绝规则仍生效。",
+          "checked": "false"
+        }
+      ],
+      "buttons": []
+    },
+    "closedOnPlainGear": true,
+    "labelAfterGear": "执行 · 自动接受编辑",
+    "autoKeepsPopup": true,
+    "labelAfterCancel": "执行 · 自动接受编辑",
+    "closedOnMode": true,
+    "labelAfterMode": "规划 · 自动接受编辑",
+    "labelAfterReset": "执行 · 每次询问",
+    "permissionCard": {
+      "kind": "legacy-extension-ui",
+      "text": "Permission Required",
+      "buttons": []
+    },
+    "allowLabel": "Yes",
+    "afterAllow": {
+      "stillPending": false,
+      "sawOutput": true
+    }
+  },
+  "screenshots": {
+    "popup": "docs/plantree/plans/runtime-evolution/evidence/p4-6/perm1/perm1-popup.png",
+    "autoConfirm": "docs/plantree/plans/runtime-evolution/evidence/p4-6/perm1/perm1-auto-confirm.png",
+    "card": "docs/plantree/plans/runtime-evolution/evidence/p4-6/perm1/perm1-approval-surface.png",
+    "afterAllow": "docs/plantree/plans/runtime-evolution/evidence/p4-6/perm1/perm1-after-allow.png"
+  },
+  "rendererProblems": [
+    {
+      "kind": "console.error",
+      "text": "13:29:48.554 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "13:29:48.554 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "13:29:53.385 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "13:29:53.395 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "13:29:53.532 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "13:29:53.741 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "13:29:53.832 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "13:29:53.931 › [workspace-tree] worktrees-absent Object"
+    }
+  ],
+  "verdict": {
+    "popupHasAllFourGearsAndModes": true,
+    "closesOnPlainGear": true,
+    "labelFollowsGear": true,
+    "autoKeepsPopupOpen": true,
+    "cancelAppliesNothing": true,
+    "closesOnModeChange": true,
+    "labelFollowsMode": true,
+    "resetBackToAsk": true,
+    "approvalSurfaceAppeared": true,
+    "nativeCardIsChinese": null,
+    "allowClearedTheRequest": true,
+    "notMeasured": [
+      "nativeCardIsChinese"
+    ],
+    "pass": false
+  }
+}

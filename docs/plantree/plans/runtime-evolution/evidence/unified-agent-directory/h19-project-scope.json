@@ -1,0 +1,47 @@
+{
+  "agentDir": "/tmp/h19-scope-pjkGdx/agent",
+  "project": "/tmp/h19-scope-pjkGdx/project",
+  "steps": {
+    "install": {
+      "ok": true,
+      "output": "Installing npm:pi-jingle...\n\nadded 1 package, and audited 2 packages in 2s\n\nfound 0 vulnerabilities\nInstalled npm:pi-jingle"
+    },
+    "projectSettingsFile": {
+      "path": "/tmp/h19-scope-pjkGdx/project/.pi/settings.json",
+      "exists": true,
+      "content": {
+        "packages": [
+          "npm:pi-jingle"
+        ]
+      }
+    },
+    "agentSettingsFile": {
+      "path": "/tmp/h19-scope-pjkGdx/agent/settings.json",
+      "exists": false,
+      "content": null
+    },
+    "projectNodeModules": {
+      "path": "/tmp/h19-scope-pjkGdx/project/.pi/npm/node_modules",
+      "entries": [
+        ".package-lock.json",
+        "pi-jingle"
+      ]
+    },
+    "projectTrusted_true": {
+      "projectPackages": [
+        "npm:pi-jingle"
+      ],
+      "globalPackages": []
+    },
+    "projectTrusted_false": {
+      "projectPackages": [],
+      "globalPackages": []
+    }
+  },
+  "verdict": {
+    "installedAtProjectScope": true,
+    "visibleWhenTrusted": true,
+    "hiddenWhenUntrusted": true,
+    "pass": true
+  }
+}

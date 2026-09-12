@@ -1,0 +1,210 @@
+{
+  "indexPath": "/home/ai/.config/jyw-ai-client-dev/session-index.json",
+  "scratchRoot": "/home/ai/JYWAI/temporary/unbound-sessions",
+  "snapshots": [
+    {
+      "label": "T0 删除前",
+      "at": "2026-09-11T16:24:29.267Z",
+      "scratchRoot": {
+        "path": "/home/ai/JYWAI/temporary/unbound-sessions",
+        "entries": [
+          "67fa5e7c-cbee-40cf-a40e-d20bef7ce8ff",
+          "ad521723-aed3-4228-b730-9448fb970fff"
+        ]
+      },
+      "sessions": {
+        "closed": {
+          "sessionId": "session-1789143859808-u6k5w7h",
+          "indexRow": {
+            "sessionId": "session-1789143859808-u6k5w7h",
+            "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/ad521723-aed3-4228-b730-9448fb970fff",
+            "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-JYWAI-temporary-unbound-sessions-ad521723-aed3-4228-b730-9448fb970fff--/2026-09-11T16-24-23-612Z_01a09148-d13c-7ee7-8c60-f67309fe1cdf.jsonl",
+            "unbound": true,
+            "archived": false,
+            "title": ""
+          },
+          "workspaceDirExists": true,
+          "workspaceDirEntries": []
+        },
+        "archived": {
+          "sessionId": "session-1789143862883-il1l2hq",
+          "indexRow": {
+            "sessionId": "session-1789143862883-il1l2hq",
+            "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/67fa5e7c-cbee-40cf-a40e-d20bef7ce8ff",
+            "runtimeIdentity": null,
+            "unbound": true,
+            "archived": false,
+            "title": ""
+          },
+          "workspaceDirExists": true,
+          "workspaceDirEntries": []
+        }
+      }
+    },
+    {
+      "label": "T1 删除后（未重启）",
+      "at": "2026-09-11T16:24:38.336Z",
+      "scratchRoot": {
+        "path": "/home/ai/JYWAI/temporary/unbound-sessions",
+        "entries": [
+          "ad521723-aed3-4228-b730-9448fb970fff"
+        ]
+      },
+      "sessions": {
+        "closed": {
+          "sessionId": "session-1789143859808-u6k5w7h",
+          "indexRow": {
+            "sessionId": "session-1789143859808-u6k5w7h",
+            "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/ad521723-aed3-4228-b730-9448fb970fff",
+            "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-JYWAI-temporary-unbound-sessions-ad521723-aed3-4228-b730-9448fb970fff--/2026-09-11T16-24-23-612Z_01a09148-d13c-7ee7-8c60-f67309fe1cdf.jsonl",
+            "unbound": true,
+            "archived": false,
+            "title": ""
+          },
+          "workspaceDirExists": true,
+          "workspaceDirEntries": []
+        },
+        "archived": {
+          "sessionId": "session-1789143862883-il1l2hq",
+          "indexRow": {
+            "sessionId": "session-1789143862883-il1l2hq",
+            "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/67fa5e7c-cbee-40cf-a40e-d20bef7ce8ff",
+            "runtimeIdentity": null,
+            "unbound": true,
+            "archived": true,
+            "title": ""
+          },
+          "workspaceDirExists": false,
+          "workspaceDirEntries": null
+        }
+      }
+    },
+    {
+      "label": "T1.5 应用已退出（重启前）",
+      "at": "2026-09-11T16:24:44.460Z",
+      "scratchRoot": {
+        "path": "/home/ai/JYWAI/temporary/unbound-sessions",
+        "entries": [
+          "ad521723-aed3-4228-b730-9448fb970fff"
+        ]
+      },
+      "sessions": {
+        "closed": {
+          "sessionId": "session-1789143859808-u6k5w7h",
+          "indexRow": {
+            "sessionId": "session-1789143859808-u6k5w7h",
+            "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/ad521723-aed3-4228-b730-9448fb970fff",
+            "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-JYWAI-temporary-unbound-sessions-ad521723-aed3-4228-b730-9448fb970fff--/2026-09-11T16-24-23-612Z_01a09148-d13c-7ee7-8c60-f67309fe1cdf.jsonl",
+            "unbound": true,
+            "archived": false,
+            "title": ""
+          },
+          "workspaceDirExists": true,
+          "workspaceDirEntries": []
+        },
+        "archived": {
+          "sessionId": "session-1789143862883-il1l2hq",
+          "indexRow": {
+            "sessionId": "session-1789143862883-il1l2hq",
+            "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/67fa5e7c-cbee-40cf-a40e-d20bef7ce8ff",
+            "runtimeIdentity": null,
+            "unbound": true,
+            "archived": true,
+            "title": ""
+          },
+          "workspaceDirExists": false,
+          "workspaceDirEntries": null
+        }
+      }
+    },
+    {
+      "label": "T2 重启后",
+      "at": "2026-09-11T16:25:01.750Z",
+      "scratchRoot": {
+        "path": "/home/ai/JYWAI/temporary/unbound-sessions",
+        "entries": {
+          "missing": true,
+          "code": "ENOENT"
+        }
+      },
+      "sessions": {
+        "closed": {
+          "sessionId": "session-1789143859808-u6k5w7h",
+          "indexRow": {
+            "sessionId": "session-1789143859808-u6k5w7h",
+            "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/ad521723-aed3-4228-b730-9448fb970fff",
+            "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-JYWAI-temporary-unbound-sessions-ad521723-aed3-4228-b730-9448fb970fff--/2026-09-11T16-24-23-612Z_01a09148-d13c-7ee7-8c60-f67309fe1cdf.jsonl",
+            "unbound": true,
+            "archived": false,
+            "title": ""
+          },
+          "workspaceDirExists": false,
+          "workspaceDirEntries": null
+        },
+        "archived": {
+          "sessionId": "session-1789143862883-il1l2hq",
+          "indexRow": {
+            "sessionId": "session-1789143862883-il1l2hq",
+            "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/67fa5e7c-cbee-40cf-a40e-d20bef7ce8ff",
+            "runtimeIdentity": null,
+            "unbound": true,
+            "archived": true,
+            "title": ""
+          },
+          "workspaceDirExists": false,
+          "workspaceDirEntries": null
+        }
+      }
+    }
+  ],
+  "needles": {
+    "closed": "f2bCLOSE",
+    "archived": "f2bARCHIVE"
+  },
+  "entryPoints": {
+    "closed": "Close session（chat:closeSession）",
+    "archived": "Archive session（行内按钮 → 确认框「归档」→ chat:archiveSession + scratch release）"
+  },
+  "steps": {
+    "archiveConfirmShown": true
+  },
+  "sidebarAfterRestart": {
+    "done": true,
+    "rows": [],
+    "total": 94
+  },
+  "rendererProblems": [
+    {
+      "kind": "console.error",
+      "text": "12:24:51.212 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:24:51.212 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:24:56.403 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:24:56.416 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:24:56.533 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:24:56.623 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:24:56.702 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:24:56.801 › [workspace-tree] worktrees-absent Object"
+    }
+  ]
+}

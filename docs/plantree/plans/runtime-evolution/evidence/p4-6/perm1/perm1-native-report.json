@@ -1,0 +1,107 @@
+{
+  "steps": {
+    "initialLabel": "执行 · 每次询问",
+    "popupContents": {
+      "text": "规划\n勘察并提交实现计划，等待批准。\n执行\n执行已批准的工作。\n每次询问\n写入、编辑和命令逐条询问。\n自动接受编辑\n工作区内写入、编辑和命令自动执行；外部路径仍询问。\n全自动\n自动执行可用工具；显式拒绝规则仍生效。\n立即生效，作用于当前线程。",
+      "items": [
+        {
+          "text": "规划 | 勘察并提交实现计划，等待批准。",
+          "checked": "false"
+        },
+        {
+          "text": "执行 | 执行已批准的工作。",
+          "checked": "true"
+        },
+        {
+          "text": "每次询问 | 写入、编辑和命令逐条询问。",
+          "checked": "true"
+        },
+        {
+          "text": "自动接受编辑 | 工作区内写入、编辑和命令自动执行；外部路径仍询问。",
+          "checked": "false"
+        },
+        {
+          "text": "全自动 | 自动执行可用工具；显式拒绝规则仍生效。",
+          "checked": "false"
+        }
+      ],
+      "buttons": []
+    },
+    "closedOnPlainGear": true,
+    "labelAfterGear": "执行 · 自动接受编辑",
+    "autoKeepsPopup": true,
+    "labelAfterCancel": "执行 · 自动接受编辑",
+    "closedOnMode": true,
+    "labelAfterMode": "规划 · 自动接受编辑",
+    "labelAfterReset": "执行 · 每次询问",
+    "permissionCard": {
+      "kind": "native-card",
+      "text": "权限\n高风险\n\nbash — 在工作区运行命令\n\necho perm-probe-ok\n\n工作目录：/home/ai/code/ai-client\n\n项目：/home/ai/code/ai-client\n\n若 119 秒内未响应将自动拒绝\n直接允许\n本会话内允许\n直接拒绝",
+      "buttons": [
+        "直接允许",
+        "本会话内允许",
+        "直接拒绝"
+      ]
+    },
+    "allowLabel": "直接允许",
+    "afterAllow": {
+      "stillPending": false,
+      "sawOutput": true
+    }
+  },
+  "screenshots": {
+    "popup": "docs/plantree/plans/runtime-evolution/evidence/p4-6/perm1/perm1-native-popup.png",
+    "autoConfirm": "docs/plantree/plans/runtime-evolution/evidence/p4-6/perm1/perm1-native-auto-confirm.png",
+    "card": "docs/plantree/plans/runtime-evolution/evidence/p4-6/perm1/perm1-native-approval-surface.png",
+    "afterAllow": "docs/plantree/plans/runtime-evolution/evidence/p4-6/perm1/perm1-native-after-allow.png"
+  },
+  "rendererProblems": [
+    {
+      "kind": "console.error",
+      "text": "12:07:10.327 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:07:10.327 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:07:15.492 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:07:15.506 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:07:15.611 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:07:15.695 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:07:15.767 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:07:15.845 › [workspace-tree] worktrees-absent Object"
+    }
+  ],
+  "verdict": {
+    "popupHasAllFourGearsAndModes": true,
+    "closesOnPlainGear": true,
+    "labelFollowsGear": true,
+    "autoKeepsPopupOpen": true,
+    "cancelAppliesNothing": true,
+    "closesOnModeChange": true,
+    "labelFollowsMode": true,
+    "resetBackToAsk": true,
+    "approvalSurfaceAppeared": true,
+    "nativeCardIsChinese": true,
+    "allowClearedTheRequest": true,
+    "notMeasured": [],
+    "pass": true
+  }
+}

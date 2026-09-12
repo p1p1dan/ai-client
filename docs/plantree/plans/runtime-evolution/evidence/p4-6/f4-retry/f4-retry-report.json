@@ -1,0 +1,104 @@
+{
+  "scenarios": {
+    "retryThenSucceed": {
+      "name": "retry-then-succeed",
+      "elapsedMs": 13103,
+      "requestCount": 3,
+      "retries": [
+        {
+          "code": "PROVIDER_ERROR",
+          "attempt": 1,
+          "delay_ms": 3000
+        },
+        {
+          "code": "PROVIDER_ERROR",
+          "attempt": 2,
+          "delay_ms": 10000
+        }
+      ],
+      "result": {
+        "success": true,
+        "text": "recovered",
+        "stopReason": "stop",
+        "error": null
+      }
+    },
+    "budgetExhausted": {
+      "name": "budget-exhausted",
+      "elapsedMs": 43028,
+      "requestCount": 4,
+      "retries": [
+        {
+          "code": "PROVIDER_ERROR",
+          "attempt": 1,
+          "delay_ms": 3000
+        },
+        {
+          "code": "PROVIDER_ERROR",
+          "attempt": 2,
+          "delay_ms": 10000
+        },
+        {
+          "code": "PROVIDER_ERROR",
+          "attempt": 3,
+          "delay_ms": 30000
+        }
+      ],
+      "result": {
+        "success": false,
+        "text": "",
+        "stopReason": "error",
+        "error": {
+          "code": "stop_error",
+          "message": "503 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"fake gateway 503\"}}"
+        }
+      }
+    },
+    "rateLimited": {
+      "name": "rate-limited",
+      "elapsedMs": 1008,
+      "requestCount": 2,
+      "retries": [
+        {
+          "code": "PROVIDER_RATE_LIMITED",
+          "attempt": 1,
+          "delay_ms": 1000
+        }
+      ],
+      "result": {
+        "success": true,
+        "text": "after rate limit",
+        "stopReason": "stop",
+        "error": null
+      }
+    },
+    "cancelledDuringBackoff": {
+      "name": "cancelled-during-backoff",
+      "elapsedMs": 402,
+      "requestCount": 1,
+      "retries": [
+        {
+          "code": "PROVIDER_ERROR",
+          "attempt": 1,
+          "delay_ms": 3000
+        }
+      ],
+      "result": {
+        "success": false,
+        "text": "",
+        "stopReason": "aborted",
+        "error": {
+          "code": "aborted",
+          "message": "the run was aborted by its caller"
+        }
+      }
+    }
+  },
+  "verdict": {
+    "retriedAndRecovered": true,
+    "exhaustsBudgetThenFails": true,
+    "rateLimitHasItsOwnBudget": true,
+    "cancelStopsTheLadder": true,
+    "pass": true
+  }
+}

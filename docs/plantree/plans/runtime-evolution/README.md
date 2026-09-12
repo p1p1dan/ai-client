@@ -20,10 +20,10 @@ Role: roadmap。核对日期：2026-09-10；覆盖 runtime-evolution 与已并�
 | 序 | 批次 | 内容 | 为什么排这里 |
 |---|---|---|---|
 | 1 | H / 17 | [AI 服务管理](topics/local-provider-management.md) | 已实现（`3f6a61fd`）。本地模式配不了模型是功能空白。遗留一个缺陷：搬动 agent 目录导致用户原有模型配置与会话失联，修法并入第 2 批 |
-| 2 | H / 19 | [统一 agent 目录、迁移与插件](topics/unified-agent-directory.md) | 用户 2026-09-10 方向变更。它同时是 H / 17 那个缺陷的正解——把「加了服务才搬」的条件分支换成一次显式完整迁移 |
+| 2 | H / 19 | [统一 agent 目录、迁移与插件](topics/unified-agent-directory.md) | ✅ 已完成。用户 2026-09-10 方向变更；它同时是 H / 17 那个缺陷的正解——把「加了服务才搬」的条件分支换成一次显式完整迁移。U1～U6 `4284c893`，剩余的[验证案例 4、5 已于 2026-09-11 真机点验通过](evidence/unified-agent-directory/README.md#验证案例-45-的真机点验2026-09-11)（案例 7 依赖 H / 20） |
 | 3 | H / 18 | [侧栏对齐 PI-Desktop](topics/sidebar-pi-desktop-alignment.md) | 与 H / 17 同批指定，纯 renderer，不依赖上面两项 |
-| 4 | 本地缺陷 | 中文界面英文残留、重载后重复公告与多开空会话 | ✅ 已完成（2026-09-11）。两项状态不同：英文残留分两批，走 `t()` 的 `d0332939`、硬编码的这批 `4f7dedf7`，均已真机点验；重复公告与多开空会话查证后定性为**非缺陷**，不改代码。[验证](evidence/chinese-ui-residue/README.md) |
-| 5 | P4-6 收口（改在开发机） | F3 启动链、F2-b 取证、F4 触发、PERM-1 与权限链复验 | 🟡 进行中。用户 2026-09-11 追加规矩：**先把开发机做到完全正常，必须在加密机才能测的留到最后一次上机**，于是本批拆两半——F3 里「加密驱动按什么放行」整体推迟，其余在开发机做完。**F3 开发机侧已完成**（不复现，[记录](evidence/f3-dev-probe/README.md)）；F2-b / F4 / PERM-1 待做 |
+| 4 | 本地缺陷 | 中文界面英文残留、重载后重复公告与多开空会话 | ✅ 已完成（2026-09-11）。英文残留分两批，走 `t()` 的 `d0332939`、硬编码的这批 `4f7dedf7`，均已真机点验；重复公告与多开空会话查证后定性为**非缺陷**，不改代码。**同日补做了反方向的那一半**：`src/renderer` + `src/shared` 里 15 个文件、82 条硬编码中文（含整个权限档控件）改走词典，108 条新词条，加守卫测试 `noHardcodedChinese.test.ts`。[验证](evidence/chinese-ui-residue/README.md) · [反方向](evidence/chinese-ui-residue/hardcoded-chinese.md) |
+| 5 | P4-6 收口（改在开发机） | F3 启动链、F2-b 取证、F4 触发、PERM-1 与权限链复验 | 🟢 开发机侧已完成。用户 2026-09-11 追加规矩：**先把开发机做到完全正常，必须在加密机才能测的留到最后一次上机**，于是本批拆两半——F3 里「加密驱动按什么放行」整体推迟，其余在开发机做完。**F3 开发机侧已完成**（不复现，[记录](evidence/f3-dev-probe/README.md)），**F4 已完成**（真实 HTTP 四条路通过，[记录](evidence/p4-6/f4-retry/README.md)），**PERM-1 与权限链已完成**（legacy / native 两趟，[记录](evidence/p4-6/perm1/README.md)），**F2-b 三时点取证已完成**（[记录](evidence/p4-6/f2b/README.md)）。**开发机侧四项全部做完**；F3 的「加密驱动按什么放行」那一半按用户决定留到最后一次上机。批次内顺带清掉了 H / 19 的[验证案例 4、5](evidence/unified-agent-directory/README.md#验证案例-45-的真机点验2026-09-11) |
 | 6 | P2-5、P2-6 | 真实缓存命中率达标与新旧对比 | 需真实 provider，本地可做；第 1 批完成后配模型更方便。达到 95.01% 基线才进 P5 |
 | 7 | P5-1、P5-3 | skills / 模板（含 F5 提问能力）、MCP bridge | 两块相互独立、单块体量可控，先把 P5 里能独立验收的做掉 |
 | 8 | P5-2（含 P5-2-0～7） | subagent 整体复刻 | P5 最大一块，八个子节点加 SA01～22 等价门禁，需要前面的工具/权限/会话都稳定 |
@@ -63,7 +63,7 @@ Role: roadmap。核对日期：2026-09-10；覆盖 runtime-evolution 与已并�
 | P1-3 | Bash 工具 | ✅ 核心跨平台验证；Windows Bash/工具调用与清理通过，可选无 Bash 场景 R4 另列 |
 | P1-4 | 搜索工具 | ✅；首版字面 grep，无正则/gitignore 引擎承诺 |
 | P1-5 | 权限内核 | 🟡 已实现；真实自定义策略/复杂 shell 与策略重载组合仍缺专项现场记录 |
-| P1-6 | 审批流 | 🟡；PERM-1 已修入 test.13；包后结构化权限链、卡片及倒计时/超时拒绝（9cf6bbde）尚待验证/打包现场回归 |
+| P1-6 | 审批流 | 🟢 开发机侧已验（2026-09-11）：native 后端下结构化权限卡在真实回合中弹出，中文文案齐全、带高风险徽标与「若 119 秒内未响应将自动拒绝」倒计时，点「直接允许」后请求消失且命令真的执行；legacy 后端下审批是 pi 插件自己的英文 `ui.select` 弹窗，两者不是同一张卡。**倒计时走到底的超时拒绝仍只有单测覆盖**；打包现场回归待最后一次上机。[记录](evidence/p4-6/perm1/README.md) |
 | P1-7 | 单测 | ✅ 历史实现门禁；不代表包后新改动测试已执行 |
 | P1-8 | 载体兼容矩阵 | ✅ 核心矩阵：Linux 与 Windows 两载体六项工具探针通过；真实受策略样本的特定链路归 P4-6 |
 | P1-9 | new_context 工具 | ✅，与 P2-8 配对 |
@@ -129,7 +129,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | Main Git / diff / 编码 / 二进制 | 🟡 F3 持续复现；特定编码与真实二进制样本无完整现场结果 |
 | 旧会话 | ✅ test.12 v3 历史/重启 resume 通过；首次转换生成时点的基线证据有限 |
 | 新权限 UI、档位与状态修复 | 🟡 按“现场缺陷与修复”列出的包边界复验 |
-| 重试 | 🟡 F4 代码已入 test.12/13；现场未触发所需错误 |
+| 重试 | 🟢 F4 代码已入 test.12/13；2026-09-11 开发机真实 HTTP 触发四条路通过，[记录](evidence/p4-6/f4-retry/README.md)；加密机复测并入最后一次上机 |
 | native GUI/TUI 一致性 | 🟡 2026-09-10 改为必须互通（H / 20），范围冲突消解。可行性已实测，实现未落地；在此之前该验收动作仍无法执行 |
 | R4 无 Bash | 可选探针无效（shell 仍被发现）；独立保留，不撤销已通过的 Bash 验证 |
 
@@ -177,8 +177,8 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | A / 2 | 终端设置 | ✅ 核心现场及 test.12 F1 网络面板通过；完整 Shell/Custom 组合无逐项记录 |
 | A / 7 | 文件点击与编辑器 | ✅ 核心现场通过；多样路径 2c 缺样本 |
 | A / 10 | /new 继承 cwd | 🟡 已实现；普通流程有记录，原 TEMP /new 矩阵未完整补签，F2 恢复不等于 /new 全矩阵 |
-| A / 4 | 临时目录复用/创建/绑定 | 🟡 test.12 当前恢复流程通过；F2-b 历史异常待取证 |
-| B / 5 | 重试与异常恢复 | 🟡 F4 已实现；现场未触发 |
+| A / 4 | 临时目录复用/创建/绑定 | 🟢 test.12 当前恢复流程通过；F2-b 三时点取证已于 2026-09-11 在开发机完成（[记录](evidence/p4-6/f2b/README.md)），未见索引损坏；加密机回归并入最后一次上机 |
+| B / 5 | 重试与异常恢复 | 🟢 F4 已实现并于 2026-09-11 在开发机真实 HTTP 上触发通过（[记录](evidence/p4-6/f4-retry/README.md)）；加密机复测并入最后一次上机 |
 | B / 6 | 运行状态/计时/摘要 | ✅ F7b 只留输入框上方一处、折叠只显示「已处理 N 个步骤」（`225c325e`）、进行中不提前折叠（`ca6aac0f`）；本地真实应用验证 |
 | C / 3 | 权限展示降噪 | 🟡 原流程部分通过；结构化权限链与重画已提交，待新包回归 |
 | C / 8 | 问答卡交互 | 🟡 UI 已实现；通用 question 无生产者（F5），不能把权限卡生产者当作通用提问工具 |
@@ -187,10 +187,10 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | E / 12 | 输出跟随 | ✅ 原核心现场通过；F7f 输入框增高本地验证通过 |
 | F / 13 | 目录行变更量 | 🟡 接线完好（`useFolderDiffStats.ts` 的轮询 hook 由 `LeftNav.tsx:291` 调用），开发机上 git 已证通、F3 阻断解除。实测驱动抓取侧：IPC 正常、store 写入成功；当时工作区只有未跟踪文件，`git diff --shortstat` 本就不计未跟踪，返回 0/0 行上不显示数字，属正确行为。**仍缺**：真实 busy 会话下数字出现并刷新的现场记录。[记录](evidence/f3-dev-probe/README.md) |
 | F / 14 | 旧 GitView / IPC 等死代码清理 | ✅ 实现及回归；后续测试包整体 GUI 继续回归 |
-| F / 15 | cwd 缺失与临时目录恢复 | 🟡 test.12 当前恢复流程通过；F2-a/c 后续修复待 test.13 验证，F2-b 单列 |
+| F / 15 | cwd 缺失与临时目录恢复 | 🟡 test.12 当前恢复流程通过；F2-a/c 后续修复待 test.13 验证；**F2-b 取证已完成**（[记录](evidence/p4-6/f2b/README.md)） |
 | G / 16 | 软件更新提醒 | 🟡 U1 已提交 `b919b1aa`，自动化与隔离弹窗验证通过；真实更新源下载/安装按用户 2026-09-10 决定暂缓验证 |
 | H / 17 | 本地模式 AI 服务管理 | 🟡 L1～L5 已实现：vault 分组存储、主进程服务与 IPC、设置页与添加/编辑弹窗、本地模式首次进入自动打开。全量 5161 测试通过；未打包、未现场回归；[实施计划](topics/local-provider-management.md) |
-| H / 19 | 统一 agent 目录、资源迁移与插件管理 | ⬜ 两种模式一律用本应用目录；skills / `AGENTS.md` / 已有模型服务一次性复制迁移；插件复用 pi 的 install/remove/list；[实施计划](topics/unified-agent-directory.md) |
+| H / 19 | 统一 agent 目录、资源迁移与插件管理 | 🟢 U1～U6 已落地（`4284c893`）：两种模式一律用本应用目录、五项资源一次性复制迁移、插件复用 pi 的 install/remove/list、借用机制整条删除。**验证案例 2～5 均已真机点验通过**（4、5 于 2026-09-11：真装 `npm:pi-jingle` → 会话扩展清单里 `scope:user` 出现 → 装不存在的包给出 npm 原文 → 卸载后文件与配置双双清空；项目级插件在 `projectTrusted:false` 下不可见，界面两种模式都没有项目级入口）。点验顺带修掉插件面板把随包权限系统显示成 `src`。案例 7 依赖 H / 20；未打包。[实施计划](topics/unified-agent-directory.md) · [验证](evidence/unified-agent-directory/README.md) |
 | H / 20 | GUI / TUI 会话互通 | ⬜ 单文件双格式，可行性已实测通过、需补五处容忍；P6-1 前置；[实施计划](topics/gui-tui-session-interop.md) · [验证](evidence/gui-tui-session-interop/README.md) |
 | H / 18 | 左侧 Chat 栏对齐 PI-Desktop | 🟢 S1～S5 已实现并现场点验通过（`70b9a31d`），点验另修一处 Esc 缺陷（`b92800a7`）；[实施计划](topics/sidebar-pi-desktop-alignment.md) · [验证](evidence/sidebar-pi-desktop-alignment/README.md) |
 | H / 21 | 外部 Agent 迁移（默认迁移策略 + Claude / Codex 对话导入） | 🟢 P0 `22da278c`、P1 `f147059b`、对话导入 C1～C6 `2715b9a6`（2026-09-11）均已落地并真机点验。对话导入的读写链路 T34 就有、只是无人挂载，本轮补的是设置页入口、未匹配仓库落为临时对话、Codex 旧格式、标题不取斜杠命令；[策略](topics/external-agent-migration.md) · [施工计划](topics/conversation-import.md) · [点验](evidence/external-agent-migration/README.md#c1c6-对话导入2026-09-11) |
@@ -204,10 +204,10 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F1 网络面板 | ✅ 已修并现场通过 | `80a8b040`；test.12 |
 | F2 当前临时会话恢复 | ✅ 缺目录重建、Close/归档隔离、重启保留通过；不代签旧 TEMP 异常 | `dbead94b` 在 test.11 现场之后提交，包含于 test.12；旧交付文档“test.11 已含”有误 |
 | F2-a 临时根设置不同步 | 🟡 已修一类，待复验 | `e817fc2a`；test.13 |
-| F2-b TEMP 删除后归组/消失 | 待复现及索引/目录取证；不宣称数据已物理删除 | [取证要求](topics/field-followups.md#f2-b-取证) |
+| F2-b TEMP 删除后归组/消失 | 🟢 2026-09-11 开发机三时点取证完成，索引与目录两侧分别读取。**「关闭」什么都不删**（索引行与目录在未重启时原样不动，只是行离开侧栏——界面消失不等于文件被删）；**「归档」当场删目录**并置 `archived:true`；**重启会把整个 scratch 根目录连锅端**，与用哪个入口无关，因此重启后必然出现「索引行在、`workspacePath` 指向已不存在目录」的状态，这是 U05-a 的设计而非索引损坏。仍未测：临时行第三个「删除」按钮那条 `temp:workspace:*` 链；正常退出（非 kill）时的退出清理 | [记录](evidence/p4-6/f2b/README.md) · [取证要求](topics/field-followups.md#f2-b-取证) |
 | F2-c 用户目录缺失 | 🟡 已提供 workspace_missing 与恢复/归档说明；不自动重建用户目录 | `3bd3f547`；test.13 |
 | F3 GUI Git 输出丢失 | 🟡 **开发机侧已取证：不复现**，三层（纯 Node、Electron 主进程走应用 IPC、Git 面板界面）全部正常，故确认为加密机专属，按用户 2026-09-11 决定整体推迟到最后一次上机。用户提出的根因方向：加密软件认**调用方**，Electron 调 git 在驱动眼里就是 Electron 在操作——若成立，换哪个 git 都没用，只能在中间插一个白名单进程（ARD §8 已记 Main→PowerShell→git 正常，是该方向的直接证据）。根因与修法仍未拍板 | [开发机取证](evidence/f3-dev-probe/README.md) · [事实与方案](../../../plans/2026-09-09-gui-defect-decisions.md#f3--gui-起的-git-子进程输出丢失) |
-| F4 重试 | 🟡 自有重试层已实现，现场未触发；stream 开始后的恢复不在该层范围 | `27d4b7be`；test.12/13 |
+| F4 重试 | 🟢 自有重试层已实现（`27d4b7be`），2026-09-11 在开发机用真实 HTTP 假网关触发通过四条路。**退避节奏按用户当日决定改为 3s → 10s → 30s**（三次重试、四次尝试，持续故障总等 43 秒），替掉原来的两套倍增公式；两条预算仍各记各的次数，限流那条保留抖动，服务端 `Retry-After` 一律优先。实测：503×2 后成功（3 次请求、3s→10s）、一直 503 时 4 次请求耗尽、429 按 `Retry-After` 只等 1s、退避中取消 401ms 结束只发 1 次请求。stream 开始后的恢复仍不在该层范围；GUI 侧观感与加密机复测未做。[记录](evidence/p4-6/f4-retry/README.md) |
 | F5 通用问答缺生产者 | 能力缺口，非 native 回归；归 P5-1 批，不阻塞 P4 原能力 | [功能决策](../../../plans/2026-09-09-gui-defect-decisions.md#f5--无提问工具questioncard--扩展问答弹不出来) |
 | F6 对话修改审阅 | ✅ 2026-09-10 采用右侧审阅，本地真实应用验证通过，尚未打包 | [R1/R2 与更新 U1](topics/session-review-and-updates.md) |
 | F7a/F7c 权限卡样式/尺寸 | 🟡 结构化权限链与重画本地真实应用可用；倒计时原未接通，已补 `baeff487` 并本地验证；视觉口径仍待定 | 不在 test.13；通用问答卡仍受 F5 限制 |
@@ -219,7 +219,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F7d / EFFORT-1 | 🟡 effort 传递与默认 medium 已修；GPT 慢响应本次未证明为本地缺陷 | `4145fa65` / `c0ae2a34`；test.13 |
 | F7e resume 后暂无上下文统计 | 已定性为既有行为；可选恢复快照增强尚未排期 | [功能说明](topics/field-followups.md#f7e-上下文快照) |
 | F7f 输入框增高 | ✅ 八行上限本地验证通过（8 行 192px 后滚动） | `87f3dc7d` |
-| PERM-1 权限档弹层不关 | 🟡 已改为选择后立即关闭，待现场复验 | `1e1e4469`；test.13；区别于包后权限审批卡重画 |
+| PERM-1 权限档弹层不关 | 🟢 2026-09-11 开发机真实点击复验通过（legacy / native 两个后端各一趟）：选普通档与换模式后 `data-open` 在 100ms 内消失，选「全自动」弹层留着换成确认面板，取消后什么都不应用。探针第一版把判据写成「节点从 DOM 消失」量出过假阳性——Base UI 关闭后节点还在，只是换成 `data-closed`。「worker 永不回执也必须关」仍只有单测覆盖 | `1e1e4469`；test.13；[记录](evidence/p4-6/perm1/README.md) |
 | TUI-1 native v4 进不了 TUI | 🟡 2026-09-10 用户推翻方案 C，改为必须互通。可行性已实测（双向四轮交替通过），待按 H / 20 落地；方案 C 的入口保护实现保留为格式不兼容时的兜底 | `0644ba3d`；[验证](evidence/gui-tui-session-interop/README.md) · [实施计划](topics/gui-tui-session-interop.md) |
 | v3 resume 身份不匹配 | ✅ 已修，test.12 历史与再次恢复通过 | `d2564e5d` |
 
