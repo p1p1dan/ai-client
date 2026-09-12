@@ -249,7 +249,7 @@ export class AgentDirMigrationService {
         ? `this app cannot talk to the "${provider.api}" API style`
         : 'the entry names no API style';
     }
-    const issue = checkProviderBaseUrl(normalizeProviderBaseUrl(provider.baseUrl));
+    const issue = checkProviderBaseUrl(normalizeProviderBaseUrl(provider.baseUrl, provider.api));
     if (issue) return `its service URL is ${issue}`;
     const key = this.resolveKey(provider.apiKey);
     if (key === null) {
@@ -404,7 +404,7 @@ export class AgentDirMigrationService {
       }
       // `blockReason` already proved all three of these.
       const apiKey = this.resolveKey(provider.apiKey) as string;
-      const baseUrl = normalizeProviderBaseUrl(provider.baseUrl);
+      const baseUrl = normalizeProviderBaseUrl(provider.baseUrl, provider.api);
       const index = merged.findIndex((row) => sameName(row.name, provider.name));
       if (index >= 0) {
         if (onConflict === 'skip') {

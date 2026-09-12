@@ -100,7 +100,7 @@ export class UserProviderService {
     if (!name) throw new Error('AI service needs a name');
     if (!isUserProviderApi(draft.api)) throw new Error('Unsupported API style');
 
-    const baseUrl = normalizeProviderBaseUrl(draft.baseUrl);
+    const baseUrl = normalizeProviderBaseUrl(draft.baseUrl, draft.api);
     const issue = checkProviderBaseUrl(baseUrl);
     if (issue) throw new Error(`Service URL is not usable: ${issue}`);
 
@@ -161,7 +161,7 @@ export class UserProviderService {
     apiKey?: string;
     id?: string;
   }): Promise<FetchProviderModelsResult> {
-    const baseUrl = normalizeProviderBaseUrl(request.baseUrl);
+    const baseUrl = normalizeProviderBaseUrl(request.baseUrl, request.api);
     const issue = checkProviderBaseUrl(baseUrl);
     if (issue) return { ok: false, error: `Service URL is not usable: ${issue}` };
 

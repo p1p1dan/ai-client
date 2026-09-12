@@ -25,9 +25,15 @@ import {
   type ProviderStreams,
 } from '@earendil-works/pi-ai';
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy';
+import { azureOpenAIResponsesApi } from '@earendil-works/pi-ai/api/azure-openai-responses.lazy';
+import { bedrockConverseStreamApi } from '@earendil-works/pi-ai/api/bedrock-converse-stream.lazy';
 import { googleGenerativeAIApi } from '@earendil-works/pi-ai/api/google-generative-ai.lazy';
+import { googleVertexApi } from '@earendil-works/pi-ai/api/google-vertex.lazy';
+import { mistralConversationsApi } from '@earendil-works/pi-ai/api/mistral-conversations.lazy';
+import { openAICodexResponsesApi } from '@earendil-works/pi-ai/api/openai-codex-responses.lazy';
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';
+import { piMessagesApi } from '@earendil-works/pi-ai/api/pi-messages.lazy';
 import type { CatalogApi, CatalogModel, CatalogProvider } from './catalog.ts';
 
 /**
@@ -42,11 +48,26 @@ import type { CatalogApi, CatalogModel, CatalogProvider } from './catalog.ts';
  */
 const NO_PUBLISHED_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } as const;
 
+/**
+ * One lazy factory per protocol in `CATALOG_APIS`.
+ *
+ * Lazy on purpose: each factory dynamically imports its vendor SDK on first
+ * use, so listing all ten here costs nothing at startup for a user who only
+ * ever talks to one of them. The `Record<CatalogApi, …>` type is what keeps the
+ * two lists in step — adding a protocol to the catalog without an adapter here
+ * is a compile error rather than a provider that vanishes at bind time.
+ */
 const API_ADAPTERS: Record<CatalogApi, () => ProviderStreams> = {
   'openai-completions': openAICompletionsApi,
   'openai-responses': openAIResponsesApi,
+  'openai-codex-responses': openAICodexResponsesApi,
+  'azure-openai-responses': azureOpenAIResponsesApi,
   'anthropic-messages': anthropicMessagesApi,
   'google-generative-ai': googleGenerativeAIApi,
+  'google-vertex': googleVertexApi,
+  'bedrock-converse-stream': bedrockConverseStreamApi,
+  'mistral-conversations': mistralConversationsApi,
+  'pi-messages': piMessagesApi,
 };
 
 export function buildModel(provider: CatalogProvider, model: CatalogModel): Model<Api> {
@@ -55,7 +76,11 @@ export function buildModel(provider: CatalogProvider, model: CatalogModel): Mode
     name: model.name,
     api: model.api,
     provider: provider.id,
-    baseUrl: provider.baseUrl,
+    // ARD D15: the row's own address wins over the provider's. pi-ai reads
+    // `baseUrl` off the MODEL, so a per-model override needs nothing more than
+    // this — which is also why an override has to be applied here and cannot
+    // be expressed on the provider object below.
+    baseUrl: model.baseUrl ?? provider.baseUrl,
     reasoning: model.reasoning,
     input: model.input,
     cost: { ...NO_PUBLISHED_COST },

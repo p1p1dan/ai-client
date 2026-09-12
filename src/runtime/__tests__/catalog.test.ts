@@ -13,11 +13,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Context } from 'cordis';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { USER_PROVIDER_APIS } from '../../shared/userProviders.ts';
 import { RuntimeConfigError } from '../contracts.ts';
 import { standaloneHost } from '../host/config.ts';
 import { ExecPlugin } from '../host/exec.ts';
 import { HostIoPlugin } from '../host/io.ts';
+import { buildModel, buildProviderModels } from '../plugins/model-adapter/binding.ts';
 import {
+  CATALOG_APIS,
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_TOKENS,
   expandHeaders,
@@ -158,5 +161,93 @@ describe('readPiCatalog', () => {
     } catch (error) {
       expect((error as RuntimeConfigError).code).toBe('models_json_shape');
     }
+  });
+
+  /**
+   * P5-5. The regression these guard is not a crash: before this node, a user
+   * service saved under one of the six styles the managed whitelist does not
+   * name was read, found unrecognised, and dropped without a word. The service
+   * was in the settings page and absent from the model picker, with nothing
+   * anywhere saying why.
+   */
+  it('binds every API style the user-service form is allowed to offer', async () => {
+    const providers = Object.fromEntries(
+      USER_PROVIDER_APIS.map((api) => [
+        api,
+        { api, baseUrl: 'https://x.example', models: [{ id: `${api}-m` }] },
+      ])
+    );
+    const catalog = await readPiCatalog(fixture({ models: { providers } }), {}, ctx.runtimeHostIo);
+    expect(catalog.providers.map((p) => p.id).sort()).toEqual([...USER_PROVIDER_APIS].sort());
+    expect(catalog.dropped).toEqual([]);
+  });
+
+  it('has an adapter for every style the catalog accepts', () => {
+    for (const api of CATALOG_APIS) {
+      const provider = {
+        id: api,
+        baseUrl: 'https://x.example',
+        headers: {},
+        api,
+        models: [
+          {
+            id: 'm',
+            name: 'm',
+            api,
+            reasoning: false,
+            input: ['text' as const],
+            contextWindow: 1,
+            maxTokens: 1,
+          },
+        ],
+        apiKey: 'k',
+      };
+      expect(() => buildProviderModels(provider)).not.toThrow();
+    }
+  });
+
+  it('reports a style it cannot speak instead of dropping it in silence', async () => {
+    const dir = fixture({
+      models: {
+        providers: {
+          'my-thing': { api: 'opencode_go', models: [{ id: 'a' }] },
+          fine: { api: 'openai-completions', models: [{ id: 'gpt-x' }] },
+        },
+      },
+    });
+    const catalog = await readPiCatalog(dir, {}, ctx.runtimeHostIo);
+    expect(catalog.providers.map((p) => p.id)).toEqual(['fine']);
+    expect(catalog.dropped).toEqual([
+      { id: 'my-thing', reason: 'unknown_api', detail: 'opencode_go' },
+    ]);
+  });
+
+  it('records the reason for a provider with no usable row', async () => {
+    const dir = fixture({
+      models: { providers: { broken: { api: 'openai-completions', models: [{ name: 'no id' }] } } },
+    });
+    expect((await readPiCatalog(dir, {}, ctx.runtimeHostIo)).dropped).toEqual([
+      { id: 'broken', reason: 'no_usable_model' },
+    ]);
+  });
+
+  it("lets a model row state its own address, overriding the provider's (ARD D15)", async () => {
+    const dir = fixture({
+      models: {
+        providers: {
+          gw: {
+            api: 'openai-completions',
+            baseUrl: 'https://gw.example/v1',
+            models: [{ id: 'shared' }, { id: 'special', baseUrl: 'https://other.example/v2' }],
+          },
+        },
+      },
+    });
+    const provider = (await readPiCatalog(dir, {}, ctx.runtimeHostIo)).providers[0];
+    expect(provider.models.map((m) => m.baseUrl)).toEqual([undefined, 'https://other.example/v2']);
+    expect(provider.models.map((m) => buildModel(provider, m).baseUrl)).toEqual([
+      'https://gw.example/v1',
+      'https://other.example/v2',
+    ]);
   });
 });

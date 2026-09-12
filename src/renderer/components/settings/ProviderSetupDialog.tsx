@@ -100,7 +100,8 @@ export function ProviderSetupDialog({
     setApiKey('');
     if (editing) {
       const matched = PROVIDER_PRESETS.find(
-        (candidate) => normalizeProviderBaseUrl(candidate.baseUrl) === editing.baseUrl
+        (candidate) =>
+          normalizeProviderBaseUrl(candidate.baseUrl, candidate.api) === editing.baseUrl
       );
       setPreset(matched?.id ?? CUSTOM_SERVICE);
       setName(editing.name);
@@ -222,7 +223,7 @@ export function ProviderSetupDialog({
             <Input
               value={baseUrl}
               onChange={(event) => setBaseUrl(event.target.value)}
-              onBlur={(event) => setBaseUrl(normalizeProviderBaseUrl(event.target.value))}
+              onBlur={(event) => setBaseUrl(normalizeProviderBaseUrl(event.target.value, api))}
               placeholder="https://api.example.com/v1"
               spellCheck={false}
             />

@@ -11,6 +11,8 @@
  * different sets of accepted API styles.
  */
 
+import { stripRedundantVersion } from './modelBaseUrl';
+
 /**
  * Every request shape pi-ai can actually stream, taken from the adapters it
  * ships (`@earendil-works/pi-ai/dist/api/*`).
@@ -60,9 +62,14 @@ export interface ProviderPreset {
 export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
   { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', api: 'openai-responses' },
   {
+    // No `/v1`, and that is not an oversight: the Anthropic SDK appends
+    // `/v1/messages` itself, so a base that already carries the segment
+    // produces `/v1/v1/messages`. pi-ai's own provider table and PI-Desktop's
+    // preset list both state the version-less form. The symptom of getting
+    // this wrong is an HTTP 503 that reads like the vendor is down (ARD D15).
     id: 'anthropic',
     label: 'Anthropic',
-    baseUrl: 'https://api.anthropic.com/v1',
+    baseUrl: 'https://api.anthropic.com',
     api: 'anthropic-messages',
   },
   {
@@ -220,7 +227,7 @@ const OPERATION_SUFFIXES = [
  * `…/chat/completions/chat/completions`, and the resulting 404 reads as a bad
  * key. Mirrors PI-Desktop's `normalizeBaseUrlInput`.
  */
-export function normalizeProviderBaseUrl(value: string): string {
+export function normalizeProviderBaseUrl(value: string, api?: string): string {
   let trimmed = value.trim().replace(/\/+$/, '');
   for (const suffix of OPERATION_SUFFIXES) {
     if (trimmed.toLowerCase().endsWith(suffix)) {
@@ -228,7 +235,11 @@ export function normalizeProviderBaseUrl(value: string): string {
       break;
     }
   }
-  return trimmed;
+  // P5-5 / ARD D15. Stripping `/messages` off a pasted Anthropic curl example
+  // leaves `…/v1`, and the SDK then asks for `/v1/v1/messages` — the same class
+  // of mistake this function exists to absorb, one step further along. Only
+  // applied when the caller knows the protocol; the api-less form is unchanged.
+  return api ? stripRedundantVersion(trimmed, api) : trimmed;
 }
 
 export type BaseUrlIssue = 'empty' | 'invalid' | 'insecure';

@@ -28,12 +28,29 @@ import { errorCode } from '../../host/errors.ts';
 export const MODELS_FILE_NAME = 'models.json';
 export const AUTH_FILE_NAME = 'auth.json';
 
-/** Wire APIs the management config may name; mirrors `PI_MODEL_APIS` in `src/shared/piModelConfig.ts`. */
+/**
+ * Every wire protocol this runtime can bind, which is every one pi-ai ships an
+ * adapter for.
+ *
+ * P5-5. This list used to be the four entries of `PI_MODEL_APIS` — the
+ * whitelist that validates what the COMPANY GATEWAY is allowed to send us. The
+ * catalog also carries the services a user added themselves (H/17), and that
+ * form offers all ten (`USER_PROVIDER_APIS` in `src/shared/userProviders.ts`).
+ * Mirroring the managed whitelist here meant six of those ten were dropped by
+ * `asApi` below with no error anywhere: the service was saved, the key was
+ * stored, and the provider simply never appeared in the model picker.
+ */
 export const CATALOG_APIS = [
   'openai-completions',
   'openai-responses',
+  'openai-codex-responses',
+  'azure-openai-responses',
   'anthropic-messages',
   'google-generative-ai',
+  'google-vertex',
+  'bedrock-converse-stream',
+  'mistral-conversations',
+  'pi-messages',
 ] as const;
 export type CatalogApi = (typeof CATALOG_APIS)[number];
 
@@ -41,6 +58,12 @@ export interface CatalogModel {
   id: string;
   name: string;
   api: CatalogApi;
+  /**
+   * ARD D15's escape hatch: an address for THIS model, overriding the
+   * provider's. Present only when the row states one, so a catalog that says
+   * nothing keeps inheriting the provider's address as before.
+   */
+  baseUrl?: string;
   reasoning: boolean;
   input: ('text' | 'image')[];
   contextWindow: number;
@@ -62,9 +85,25 @@ export interface CatalogProvider {
   apiKey: string;
 }
 
+/**
+ * A provider the reader could not bind, and why.
+ *
+ * P5-5. Dropping is still the right outcome — a provider whose protocol this
+ * client cannot speak would only fail at request time — but doing it silently
+ * is not: "I saved the service and it is not in the list" has no other symptom
+ * to go on. The reason travels up to `ModelCatalogSource` so it lands in the
+ * run's version stamp.
+ */
+export interface CatalogDrop {
+  id: string;
+  reason: 'unknown_api' | 'no_usable_model';
+  detail?: string;
+}
+
 export interface PiCatalog {
   dir: string;
   providers: CatalogProvider[];
+  dropped: CatalogDrop[];
 }
 
 /**
@@ -91,11 +130,18 @@ export async function readPiCatalog(
     );
   }
   const providers: CatalogProvider[] = [];
+  const dropped: CatalogDrop[] = [];
   for (const [id, value] of Object.entries(providersRaw)) {
     const provider = asRecord(value);
-    if (!provider) continue;
+    if (!provider) {
+      dropped.push({ id, reason: 'unknown_api', detail: 'not an object' });
+      continue;
+    }
     const api = asApi(provider.api);
-    if (!api) continue;
+    if (!api) {
+      dropped.push({ id, reason: 'unknown_api', detail: String(provider.api) });
+      continue;
+    }
     const modelList = Array.isArray(provider.models) ? provider.models : [];
     const parsedModels = modelList
       .map((entry) => parseModel(entry, api))
@@ -103,7 +149,10 @@ export async function readPiCatalog(
     // A provider with no usable model row is dropped rather than kept empty:
     // `resolve()` can only fail on it, and an empty provider in `list()` would
     // offer the operator a choice that cannot work.
-    if (parsedModels.length === 0) continue;
+    if (parsedModels.length === 0) {
+      dropped.push({ id, reason: 'no_usable_model' });
+      continue;
+    }
     providers.push({
       id,
       baseUrl: typeof provider.baseUrl === 'string' ? provider.baseUrl : '',
@@ -114,7 +163,7 @@ export async function readPiCatalog(
       apiKey: readProviderKey(auth, id),
     });
   }
-  return { dir, providers };
+  return { dir, providers, dropped };
 }
 
 /**
@@ -156,6 +205,7 @@ function parseModel(entry: unknown, providerApi: CatalogApi): CatalogModel | nul
     id: model.id,
     name: typeof model.name === 'string' && model.name ? model.name : model.id,
     api,
+    ...(typeof model.baseUrl === 'string' && model.baseUrl ? { baseUrl: model.baseUrl } : {}),
     reasoning: model.reasoning === true,
     input: parseInputs(model.input),
     contextWindow:

@@ -269,6 +269,54 @@ describe('PiModelConfigService', () => {
     expect(modelsText).not.toContain('other-key');
   });
 
+  /**
+   * ARD D15. One login URL cannot be right for both model families at once:
+   * the gateway answers Anthropic at the root and OpenAI only under `/v1`, and
+   * it answers the wrong one with 503 `所有供应商暂时不可用` — which reads as
+   * an outage, not as a misconfiguration. Both backends read this file, so the
+   * derivation belongs here rather than in either runtime.
+   */
+  it('gives an inheriting provider the suffix its wire protocol needs (D15)', async () => {
+    const config = {
+      version: 1,
+      providers: {
+        claude: {
+          api: 'anthropic-messages',
+          credentials: { baseUrl: 'onboarding', apiKey: 'onboarding' },
+          models: [{ id: 'claude-sonnet-5' }],
+        },
+        codex: {
+          api: 'openai-responses',
+          credentials: { baseUrl: 'onboarding', apiKey: 'onboarding' },
+          models: [{ id: 'gpt-5.6' }],
+        },
+        pinned: {
+          api: 'anthropic-messages',
+          credentials: { baseUrl: 'managed', apiKey: 'onboarding' },
+          baseUrl: 'https://exception.example/v1',
+          models: [{ id: 'claude-opus-5' }],
+        },
+      },
+    };
+
+    await service(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(config),
+    })).sync({
+      endpointUrl: 'https://onboard.example/api/v1/models-config',
+      apiKey: 'login-key',
+      inheritedBaseUrl: 'https://cch.example/v1',
+    });
+
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    expect(models.providers.claude.baseUrl).toBe('https://cch.example');
+    expect(models.providers.codex.baseUrl).toBe('https://cch.example/v1');
+    // The escape hatch D15 keeps: a provider that states an address is never
+    // rewritten, however odd the address looks to us.
+    expect(models.providers.pinned.baseUrl).toBe('https://exception.example/v1');
+  });
+
   it('rewrites an administrator key from cache after the login key rotates', async () => {
     const config = {
       version: 1,

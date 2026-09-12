@@ -1,3 +1,4 @@
+import { deriveInheritedBaseUrl } from '@shared/modelBaseUrl';
 import {
   PI_MODEL_APIS,
   PI_USER_AGENT_ENV,
@@ -331,8 +332,13 @@ export function toPiModelsJson(
   const providers: Record<string, unknown> = {};
   for (const [providerId, provider] of Object.entries(config.providers)) {
     const { name: _name, credentials, apiKey: _apiKey, baseUrl, headers, ...rest } = provider;
+    // ARD D15: a provider that states its own address keeps it verbatim; one
+    // that inherits gets the suffix its wire protocol needs, because the single
+    // inherited URL cannot be right for both model families at once.
     const resolvedBaseUrl =
-      credentials?.baseUrl === 'managed' && baseUrl ? baseUrl : resolve.inheritedBaseUrl;
+      credentials?.baseUrl === 'managed' && baseUrl
+        ? baseUrl
+        : deriveInheritedBaseUrl(resolve.inheritedBaseUrl, provider.api);
     providers[providerId] = {
       ...rest,
       baseUrl: resolvedBaseUrl,

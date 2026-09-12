@@ -145,7 +145,14 @@ export interface ModelAdapterService {
 }
 
 export type ModelCatalogSource =
-  | { kind: 'agent-dir'; dir: string; providerCount: number; modelCount: number }
+  | {
+      kind: 'agent-dir';
+      dir: string;
+      providerCount: number;
+      modelCount: number;
+      /** P5-5: providers the catalog could not bind, `id:reason` each. Empty when all bound. */
+      dropped: string[];
+    }
   | { kind: 'injected'; providerCount: number; modelCount: number };
 
 /** One entry in a run trace's `steps` array (engineering standard §2). */

@@ -104,6 +104,9 @@ export class ModelAdapterPlugin extends Service implements ModelAdapterService {
       dir: catalog.dir,
       providerCount: catalog.providers.length,
       modelCount: this.order.length,
+      // P5-5: carried into the run's version stamp, so "the service I saved is
+      // not in the picker" has something to read instead of nothing.
+      dropped: catalog.dropped.map((drop) => `${drop.id}:${drop.reason}`),
     };
   }
 
