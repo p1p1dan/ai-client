@@ -1,3 +1,5 @@
+import { englishTranslate, type Translate } from '@shared/i18n';
+
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
@@ -5,11 +7,19 @@ function pad2(n: number): string {
 /**
  * Format a session/project activity timestamp (Unix seconds) into a compact label:
  * - Today: `HH:mm`
- * - Yesterday: `昨天`
- * - This year: `M月D日`
+ * - Yesterday: `Yesterday`
+ * - This year: `M/D`
  * - Other years: `YYYY/M/D`
+ *
+ * Two of those four need words, so this takes a translator rather than
+ * returning a key — the month/day form interpolates numbers and cannot be one.
+ * `englishTranslate` is the default, which is the English text itself, so a
+ * caller that has not been wired yet changes not one byte of output.
  */
-export function formatActivityLabel(timestampSeconds: number | null | undefined): string {
+export function formatActivityLabel(
+  timestampSeconds: number | null | undefined,
+  t: Translate = englishTranslate
+): string {
   if (!timestampSeconds || timestampSeconds <= 0) return '';
 
   const tsMs = timestampSeconds * 1000;
@@ -30,10 +40,10 @@ export function formatActivityLabel(timestampSeconds: number | null | undefined)
     date.getFullYear() === yesterday.getFullYear() &&
     date.getMonth() === yesterday.getMonth() &&
     date.getDate() === yesterday.getDate();
-  if (isYesterday) return '昨天';
+  if (isYesterday) return t('Yesterday');
 
   if (date.getFullYear() === now.getFullYear()) {
-    return `${date.getMonth() + 1}月${date.getDate()}日`;
+    return t('{{month}}/{{day}}', { month: date.getMonth() + 1, day: date.getDate() });
   }
 
   return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;

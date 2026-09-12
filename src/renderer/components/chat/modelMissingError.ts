@@ -47,7 +47,7 @@ export interface ModelMissingErrorView {
 }
 
 /**
- * Chinese copy + "go migrate" action, shared by the two surfaces this failure
+ * Copy + "go migrate" action, shared by the two surfaces this failure
  * reaches: the timeline's history notice (resume failed) and the session-failed
  * card (a send failed). One view so the two cannot drift apart.
  *
@@ -57,13 +57,16 @@ export interface ModelMissingErrorView {
  */
 export const MODEL_MISSING_ERROR_VIEW: ModelMissingErrorView = {
   title: 'Model is not available here',
+  // Every string here is a DICTIONARY KEY, not display text: this module is a
+  // plain `.ts` with no translator in scope, so the two surfaces that render
+  // this view call `t()` on each field. Same split as the tool verbs (batch 4).
   message:
-    '这个会话记录的模型不在本应用的模型目录里，所以没能把它启动起来。本应用用自己的 agent 目录，你原先在自己的 Pi 目录里配好的 AI 服务不会自动带过来。',
+    'This chat is pinned to a model this app does not have, so it could not be started. This app uses its own agent directory, and AI services you set up in your own Pi directory do not come across on their own.',
   // Names both ways out on purpose. The migration section hides itself when
   // there is no `~/.pi/agent` to copy from, so copy that promised only a
   // migration would send some users to a pane with no such control. The same
   // pane always carries the AI services editor, which is the other way in.
-  hint: '到「设置 · Pi」把 AI 服务迁移或补上，这个会话就能继续；也可以在输入框上方改用一个本应用已有的模型。',
-  actionLabel: '去 Pi 设置补上模型',
+  hint: 'Migrate or add the AI service under Settings · Pi and this chat can continue; you can also switch to a model this app already has, from above the composer.',
+  actionLabel: 'Add the model in Pi settings',
   settingsCategory: 'pi',
 };

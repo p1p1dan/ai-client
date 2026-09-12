@@ -37,7 +37,9 @@ export function SurfacePlaceholder({ surface }: SurfacePlaceholderProps) {
         <EmptyDescription className="text-meta">
           {surface.pendingTask
             ? t('Not connected yet — {{task}} will wire this surface.', {
-                task: surface.pendingTask,
+                // A task id like `T-13` has no dictionary entry, so `t()`
+                // returns it verbatim; `Deferred` does have one.
+                task: t(surface.pendingTask),
               })
             : t('This surface has no view registered.')}
         </EmptyDescription>

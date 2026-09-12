@@ -17,6 +17,7 @@ import { OnboardingShell } from './components/onboarding/OnboardingShell';
 import { WelcomeShell } from './components/onboarding/WelcomeShell';
 import { migrationOfferWillOpen } from './components/settings/AgentMigrationPrompt';
 import { Button } from './components/ui/button';
+import { useI18n } from './i18n';
 import { useSettingsIntentStore } from './stores/settingsIntent';
 
 // Lazy-load the main App so its heavy hooks (session restore, worktree
@@ -98,6 +99,7 @@ function RuntimeDetectionFailedShell({
   retrying,
   onRetry,
 }: RuntimeDetectionFailedShellProps) {
+  const { t } = useI18n();
   return (
     <div className="relative z-0 flex h-screen flex-col overflow-hidden">
       <BackgroundLayer />
@@ -106,10 +108,13 @@ function RuntimeDetectionFailedShell({
       <div className="flex flex-1 items-center justify-center px-6">
         <div className="flex max-w-md flex-col items-center gap-3 text-center">
           <AlertTriangle className="h-8 w-8 text-yellow-500" />
-          <h2 className="text-base font-medium text-foreground">无法检测 Pi 运行时</h2>
+          <h2 className="text-base font-medium text-foreground">
+            {t('Could not detect the Pi runtime')}
+          </h2>
           <p className="text-xs text-muted-foreground">
-            探测过程出错，可能是
-            IPC、权限或环境问题。请重试；如果反复失败，请查看开发者工具中的错误日志。
+            {t(
+              'The probe failed — it may be an IPC, permission or environment problem. Try again; if it keeps failing, check the error log in developer tools.'
+            )}
           </p>
           {error ? (
             <pre className="max-w-full overflow-x-auto rounded bg-muted px-3 py-2 text-left text-[11px] text-muted-foreground">
@@ -122,7 +127,7 @@ function RuntimeDetectionFailedShell({
             ) : (
               <RefreshCw className="mr-2 h-3.5 w-3.5" />
             )}
-            重试
+            {t('Retry')}
           </Button>
         </div>
       </div>
@@ -152,6 +157,7 @@ function RuntimeDetectionFailedShell({
  * terminal state" this renders instead.
  */
 function RootWithOnboardingGate() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
 
   const gateQuery = useQuery({
@@ -242,7 +248,7 @@ function RootWithOnboardingGate() {
   if (decision.shell === 'runtime-unavailable') {
     return (
       <RuntimeDetectionFailedShell
-        error="没有找到随包的 Pi worker 运行时。"
+        error={t('The bundled Pi worker runtime could not be found.')}
         onRetry={() => {
           setRuntimeOverride(null);
           void runtime.refetch();

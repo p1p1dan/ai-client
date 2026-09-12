@@ -718,7 +718,9 @@ export function MessageTimeline({
                   // login, so this replaces the raw diagnostic + Retry hint
                   // with mapped copy and a re-login action instead.
                   <>
-                    <p className="mt-1 text-muted-foreground">{AUTH_REQUIRED_ERROR_VIEW.message}</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {t(AUTH_REQUIRED_ERROR_VIEW.message)}
+                    </p>
                     <Button
                       size="sm"
                       variant="outline"
@@ -727,7 +729,7 @@ export function MessageTimeline({
                         window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT))
                       }
                     >
-                      {AUTH_REQUIRED_ERROR_VIEW.actionLabel}
+                      {t(AUTH_REQUIRED_ERROR_VIEW.actionLabel)}
                     </Button>
                   </>
                 ) : lastError && isModelMissingError(lastError) ? (
@@ -738,15 +740,17 @@ export function MessageTimeline({
                   // 输入框重发上条消息" hint would be wrong, and the only useful
                   // affordance is the migration that puts the model there.
                   <>
-                    <p className="mt-1 text-muted-foreground">{MODEL_MISSING_ERROR_VIEW.message}</p>
-                    <p className="mt-1 text-muted-foreground">{MODEL_MISSING_ERROR_VIEW.hint}</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {t(MODEL_MISSING_ERROR_VIEW.message)}
+                    </p>
+                    <p className="mt-1 text-muted-foreground">{t(MODEL_MISSING_ERROR_VIEW.hint)}</p>
                     <Button
                       size="sm"
                       variant="outline"
                       className="mt-2 h-6 text-ui"
                       onClick={() => requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)}
                     >
-                      {MODEL_MISSING_ERROR_VIEW.actionLabel}
+                      {t(MODEL_MISSING_ERROR_VIEW.actionLabel)}
                     </Button>
                   </>
                 ) : (
@@ -766,7 +770,9 @@ export function MessageTimeline({
                         outcome — this card cannot see which, so it must not name
                         a button that may not exist (2026-08-17 inspection F2-d). */}
                     <p className="mt-1 text-muted-foreground">
-                      已产内容保留。可从下方输入框重发上条消息。
+                      {t(
+                        'What was produced is kept. You can resend the last message from the composer below.'
+                      )}
                     </p>
                     {pendingPermissions.some((item) => item.sessionId === sessionId) && (
                       <Button
@@ -856,6 +862,7 @@ const HISTORY_ERROR_ICON = {
  * must never look like it did nothing.
  */
 function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps) {
+  const { t } = useI18n();
   const [detailOpen, setDetailOpen] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [retryFailed, setRetryFailed] = useState(false);
@@ -895,10 +902,12 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
   return (
     <Alert variant={view.severity} role={view.severity === 'error' ? 'alert' : 'status'}>
       <Icon />
-      <AlertTitle className="min-w-0 truncate">{view.title}</AlertTitle>
+      {/* Every field on `view` is a dictionary key, not display text — the
+          module that builds it is a plain `.ts` with no translator in scope. */}
+      <AlertTitle className="min-w-0 truncate">{t(view.title)}</AlertTitle>
       <AlertDescription className="gap-1 text-meta">
-        <p className="break-words">{view.guidance}</p>
-        <p>{view.continuationHint}</p>
+        <p className="break-words">{t(view.guidance)}</p>
+        <p>{t(view.continuationHint)}</p>
         {retryControl.hint && (
           <p
             className={cn(
@@ -906,7 +915,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
               retryControl.hintKind === 'failed' && 'font-medium text-destructive'
             )}
           >
-            {retryControl.hint}
+            {t(retryControl.hint)}
           </p>
         )}
         {view.message && (
@@ -918,7 +927,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
                   detailOpen && 'rotate-90'
                 )}
               />
-              Details
+              {t('Details')}
             </CollapsibleTrigger>
             <CollapsibleContent>
               <pre className="max-h-24 select-text overflow-auto whitespace-pre-wrap break-all font-mono text-code">
@@ -954,7 +963,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
               onClick={() => requestSettings(view.recovery?.settingsCategory)}
             >
               <ArrowRightLeft />
-              {view.recovery.label}
+              {t(view.recovery.label)}
             </Button>
           )}
         </AlertAction>
@@ -1066,10 +1075,11 @@ function UserBubble({ message }: { message: ChatMessage }) {
  * every other notice in this file already uses.
  */
 function NoticeMessage({ message }: { message: ChatMessage }) {
+  const { t } = useI18n();
   const isError = message.role === 'error';
   // D47 S5 §3: a spawn-gate rejection (resolveSpawnGateDecision,
   // @shared/authGate) landing in this card as raw text — swap in mapped
-  // Chinese copy + a re-login action instead of the raw diagnostic.
+  // copy + a re-login action instead of the raw diagnostic.
   const authRequired =
     isError &&
     message.blocks.some((block) => block.type === 'text' && isAuthRequiredError(block.text));
@@ -1094,13 +1104,13 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
               className="select-text whitespace-pre-wrap text-markdown text-foreground"
             >
               {/* D47 S5 §3: swap the raw spawn-gate rejection text for mapped
-                  Chinese copy in-place — same paragraph, same class, so this
+                  copy in-place — same paragraph, same class, so this
                   stays the one "notice body" surface T-29 pinned (see the
                   wiring test's exact-count assertion on this class string). */}
               {authRequired
-                ? AUTH_REQUIRED_ERROR_VIEW.message
+                ? t(AUTH_REQUIRED_ERROR_VIEW.message)
                 : modelMissing
-                  ? MODEL_MISSING_ERROR_VIEW.message
+                  ? t(MODEL_MISSING_ERROR_VIEW.message)
                   : block.text}
             </p>
           ) : null
@@ -1111,7 +1121,9 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
             so the user can tell one stale session from another. */}
         {modelMissing && (
           <>
-            <p className="mt-1 text-meta text-muted-foreground">{MODEL_MISSING_ERROR_VIEW.hint}</p>
+            <p className="mt-1 text-meta text-muted-foreground">
+              {t(MODEL_MISSING_ERROR_VIEW.hint)}
+            </p>
             {message.blocks.map((block) =>
               block.type === 'text' ? (
                 <p
@@ -1134,7 +1146,7 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
               className="h-6"
               onClick={() => window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT))}
             >
-              {AUTH_REQUIRED_ERROR_VIEW.actionLabel}
+              {t(AUTH_REQUIRED_ERROR_VIEW.actionLabel)}
             </Button>
           ) : (
             <Button
@@ -1144,7 +1156,7 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
               onClick={() => requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)}
             >
               <ArrowRightLeft />
-              {MODEL_MISSING_ERROR_VIEW.actionLabel}
+              {t(MODEL_MISSING_ERROR_VIEW.actionLabel)}
             </Button>
           )}
         </AlertAction>
@@ -1246,12 +1258,15 @@ function TurnProcessFold({
   /** The quiet approval audit, which belongs with the steps it audited. */
   footer?: React.ReactNode;
 }) {
+  const { t } = useI18n();
   const steps = countProcessSteps(items);
   if (steps === 0) return null;
   return (
     <details className={turnBodyClass()}>
       <summary className="cursor-pointer list-none text-meta text-muted-foreground marker:content-none">
-        <span className="underline-offset-2 hover:underline">已处理 {steps} 个步骤</span>
+        <span className="underline-offset-2 hover:underline">
+          {t('{{count}} steps processed', { count: steps })}
+        </span>
       </summary>
       <div className={cn(turnProcessShellClass(), 'pt-2.5')}>
         {children}

@@ -159,7 +159,9 @@ describe('parseHistoryError (T-03)', () => {
   it('[PHE-14] encrypted_unreadable gets a hint that does not promise success', () => {
     const view = parseHistoryError('encrypted_unreadable: x');
     expect(view?.code).toBe('encrypted_unreadable');
-    expect(view?.continuationHint).toBe('会话或仍可继续发送；若发送同样失败，请新建会话。');
+    expect(view?.continuationHint).toBe(
+      'Sending may still work; if it fails the same way, start a new chat.'
+    );
   });
 
   it('[PHE-15] read_failed gets the shared non-fatal hint, verbatim', () => {
@@ -175,9 +177,9 @@ describe('parseHistoryError (T-03)', () => {
     // P2 (S3 slice 5a): this code means the build never read anything for the
     // session's agent — and on the Codex path it never contacted the agent at
     // all, so nothing verified the session is still live. The shared non-fatal
-    // hint says "可以继续发送消息", a promise this path cannot make.
+    // hint says "you can keep sending", a promise this path cannot make.
     expect(view?.continuationHint).not.toBe(HISTORY_ERROR_NON_FATAL_HINT);
-    expect(HISTORY_ERROR_UNSUPPORTED_HINT).toContain('新建会话');
+    expect(HISTORY_ERROR_UNSUPPORTED_HINT).toContain('start a new chat');
   });
 
   it('[PHE-17] unknown gets the shared non-fatal hint, verbatim', () => {
@@ -187,7 +189,7 @@ describe('parseHistoryError (T-03)', () => {
   });
 
   it('[PHE-11] ships a non-fatal hint stating the session can continue', () => {
-    expect(HISTORY_ERROR_NON_FATAL_HINT).toContain('继续');
+    expect(HISTORY_ERROR_NON_FATAL_HINT).toContain('keep sending');
   });
 
   it('[PHE-18] names no agent-specific file format in the not-found copy', () => {
@@ -198,7 +200,7 @@ describe('parseHistoryError (T-03)', () => {
     expect(view?.guidance).not.toContain('JSONL');
     expect(view?.title).not.toContain('JSONL');
     // Still says WHAT was not found, or the copy degrades to "something failed".
-    expect(view?.guidance).toContain('历史记录');
+    expect(view?.guidance).toContain('No history was found');
   });
 
   it('[PHE-19] quotes no CLI-specific error string in the dead-session hint', () => {
@@ -207,7 +209,7 @@ describe('parseHistoryError (T-03)', () => {
     expect(HISTORY_ERROR_DEAD_SESSION_HINT).not.toContain('No conversation found');
     // Dropping the quote must not soften the verdict back into "keep sending":
     // the record is gone, so resume has nothing to hand the agent (#30 / D32).
-    expect(HISTORY_ERROR_DEAD_SESSION_HINT).toContain('新建会话');
+    expect(HISTORY_ERROR_DEAD_SESSION_HINT).toContain('Start a new chat');
     expect(HISTORY_ERROR_DEAD_SESSION_HINT).not.toBe(HISTORY_ERROR_NON_FATAL_HINT);
   });
 
@@ -607,7 +609,7 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
       // …but the tone is a warning: nothing is broken and nothing was lost.
       expect(notice.error?.severity).toBe('warning');
       expect(notice.error?.guidance).toBe(
-        '当前版本还读不到该 agent 的历史记录，更早的消息没有载入；记录仍在磁盘上。'
+        'This build cannot read history for that agent yet, so earlier messages were not loaded. The record is still on disk.'
       );
       expect(notice.error?.continuationHint).toBe(HISTORY_ERROR_UNSUPPORTED_HINT);
       // The honest half of P2, pinned on the copy the user actually reads.
@@ -700,7 +702,7 @@ describe('workspace_missing (F2-c)', () => {
     // The path is what makes it actionable: the user has to recognise which
     // folder to restore.
     expect(view?.message).toContain('E:\\e\\test');
-    expect(view?.continuationHint).toContain('归档');
+    expect(view?.continuationHint).toContain('archive this chat');
   });
 });
 
@@ -770,7 +772,7 @@ describe('model_missing (H/21 P0)', () => {
     // A user who does not want to migrate anything still needs to know the
     // session is salvageable by picking a model this app already has.
     expect(parseHistoryError(RAW)?.continuationHint).toBe(MODEL_MISSING_ERROR_VIEW.hint);
-    expect(MODEL_MISSING_ERROR_VIEW.hint).toContain('模型');
+    expect(MODEL_MISSING_ERROR_VIEW.hint).toContain('model');
   });
 
   it('[MM-08] survives the full resume-failure round trip', () => {

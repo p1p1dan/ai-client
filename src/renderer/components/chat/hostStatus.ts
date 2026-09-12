@@ -94,8 +94,10 @@ export function describeHostStatus(status: HostStatus): HostStatusBannerModel | 
     case 'error':
       return {
         tone: 'error',
-        title: status.lastFatalError ?? 'Pi session service 出错',
-        guidance: '点击 Retry 重新初始化 Pi session service',
+        // `lastFatalError` is the Host's own text and stays verbatim; the
+        // fallback and every fixed string below are dictionary keys.
+        title: status.lastFatalError ?? 'Pi session service failed',
+        guidance: 'Press Retry to reinitialise the Pi session service',
         showRetry: true,
       };
     case 'stopped':
@@ -103,14 +105,14 @@ export function describeHostStatus(status: HostStatus): HostStatusBannerModel | 
         tone: 'notice',
         // Reachable only when Main was asked and answered `stopped` — i.e. the
         // `ensureHost` prime failed or the app is shutting down.
-        title: 'Pi session service 已停止',
-        guidance: '点击 Retry 初始化 Pi session service',
+        title: 'Pi session service stopped',
+        guidance: 'Press Retry to initialise the Pi session service',
         showRetry: true,
       };
     case 'starting':
       return {
         tone: 'notice',
-        title: 'Pi session service 正在启动…',
+        title: 'Pi session service is starting…',
         guidance: '',
         showRetry: false,
       };

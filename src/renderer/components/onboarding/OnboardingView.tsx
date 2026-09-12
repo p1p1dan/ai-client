@@ -1,4 +1,5 @@
 import type { AuthGateOnboardingReason } from '@shared/authGate';
+import type { Translate } from '@shared/i18n';
 import type {
   OnboardingErrorCode,
   OnboardingRegisterClientResponse,
@@ -9,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 
 /**
@@ -25,40 +27,52 @@ type Step = 'register-email' | 'register-code' | 'result';
 const ALLOWED_EMAIL_SUFFIXES = ['@jcdz.cc', '@wuhanjingce.com'] as const;
 const CODE_LENGTH = 6;
 
-// Map machine-readable server errors to user-facing Chinese strings.
+/**
+ * Map machine-readable server errors to user-facing copy.
+ *
+ * Takes a translator rather than returning a key: three of the messages
+ * interpolate a number or the allowed-suffix list, and those cannot be keys.
+ * Same split as the tool verbs (batch 4) — the fixed ones are keys, the
+ * parameterised ones are built here with `t` already in hand.
+ */
 function describeOnboardingError(
+  t: Translate,
   error: OnboardingErrorCode | string | undefined,
   attemptsLeft?: number
 ): string {
-  if (!error) return '操作失败,请重试。';
+  if (!error) return t('That did not work. Please try again.');
   switch (error) {
     case 'EMAIL_INVALID':
-      return '邮箱格式不正确。';
+      return t('That email address is not valid.');
     case 'EMAIL_DOMAIN_NOT_ALLOWED':
-      return `仅接受 ${ALLOWED_EMAIL_SUFFIXES.join(' / ')} 后缀。`;
+      return t('Only {{suffixes}} addresses are accepted.', {
+        suffixes: ALLOWED_EMAIL_SUFFIXES.join(' / '),
+      });
     case 'INVALID_BODY':
-      return '请求格式错误,请重试。';
+      return t('The request was malformed. Please try again.');
     case 'RATE_LIMITED':
-      return '操作过于频繁,请稍后再试。';
+      return t('Too many attempts. Please try again later.');
     case 'CODE_INVALID':
       return attemptsLeft !== undefined
-        ? `验证码错误,还可重试 ${attemptsLeft} 次。`
-        : '验证码错误。';
+        ? t('Wrong code. {{count}} attempts left.', { count: attemptsLeft })
+        : t('Wrong code.');
     case 'CODE_EXPIRED':
-      return '验证码已过期,请重新发送。';
+      return t('That code has expired. Send a new one.');
     case 'CODE_USED':
-      return '验证码已被使用,请重新发送。';
+      return t('That code has already been used. Send a new one.');
     case 'CODE_LOCKED':
-      return '错误次数过多,请重新发送验证码。';
+      return t('Too many wrong attempts. Send a new code.');
     case 'SMTP_FAILED':
-      return '邮件发送失败,请稍后再试。';
+      return t('The email could not be sent. Please try again later.');
     case 'CCH_FAILED':
     case 'CCH_UNREACHABLE':
     case 'KEY_NOT_READY':
-      return '服务暂时不可用,请稍后再试。';
+      return t('The service is temporarily unavailable. Please try again later.');
     case 'INTERNAL_ERROR':
-      return '服务内部错误,请稍后再试。';
+      return t('The service hit an internal error. Please try again later.');
     default:
+      // A code this build does not know: shown verbatim rather than replaced
+      // with a generic sentence, because the raw string is the only clue left.
       return error;
   }
 }
@@ -95,6 +109,7 @@ export function OnboardingView({
   initialEmail,
   onBack,
 }: OnboardingViewProps) {
+  const { t } = useI18n();
   const [step, setStep] = useState<Step>(initialStep ?? 'register-email');
 
   const [serverUrl] = useState<string>(() => {
@@ -138,7 +153,7 @@ export function OnboardingView({
         });
 
         if (!response.ok) {
-          setSendCodeError(describeOnboardingError(response.error));
+          setSendCodeError(describeOnboardingError(t, response.error));
           if (response.data?.retryAfterSec) {
             setResendCountdown(response.data.retryAfterSec);
           }
@@ -152,12 +167,12 @@ export function OnboardingView({
           setStep('register-code');
         }
       } catch (err) {
-        setSendCodeError(err instanceof Error ? err.message : '未知错误。');
+        setSendCodeError(err instanceof Error ? err.message : t('Unknown error.'));
       } finally {
         setSendingCode(false);
       }
     },
-    [email]
+    [email, t]
   );
 
   const handleVerify = useCallback(async () => {
@@ -173,14 +188,14 @@ export function OnboardingView({
       if (result.ok) {
         setStep('result');
       } else {
-        setVerifyError(describeOnboardingError(result.error, result.data?.attemptsLeft));
+        setVerifyError(describeOnboardingError(t, result.error, result.data?.attemptsLeft));
       }
     } catch (err) {
-      setVerifyError(err instanceof Error ? err.message : '未知错误。');
+      setVerifyError(err instanceof Error ? err.message : t('Unknown error.'));
     } finally {
       setVerifying(false);
     }
-  }, [email, code]);
+  }, [email, code, t]);
 
   const canSendCode = isValidEmailFormat(email) && !sendingCode;
   const canVerify = code.trim().length === CODE_LENGTH && !verifying;
@@ -196,15 +211,17 @@ export function OnboardingView({
         <>
           <SectionHeader
             icon={<ServerIcon className="h-5 w-5 text-muted-foreground" />}
-            title="注册"
+            title={t('Sign up')}
             description={
-              reason === 'expired' ? '登录已失效，请重新验证邮箱。' : '输入邮箱以接收验证码。'
+              reason === 'expired'
+                ? t('Your sign-in has expired. Verify your email again.')
+                : t('Enter your email to receive a verification code.')
             }
           />
           <SectionBody>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="onboarding-server">服务地址</Label>
+                <Label htmlFor="onboarding-server">{t('Server address')}</Label>
                 <Input
                   id="onboarding-server"
                   value={serverUrl}
@@ -213,7 +230,7 @@ export function OnboardingView({
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="onboarding-email">邮箱</Label>
+                <Label htmlFor="onboarding-email">{t('Email')}</Label>
                 <Input
                   id="onboarding-email"
                   type="email"
@@ -229,7 +246,9 @@ export function OnboardingView({
                   }}
                 />
                 <p className="text-xs text-muted-foreground">
-                  仅接受 {ALLOWED_EMAIL_SUFFIXES.join(' / ')} 后缀。
+                  {t('Only {{suffixes}} addresses are accepted.', {
+                    suffixes: ALLOWED_EMAIL_SUFFIXES.join(' / '),
+                  })}
                 </p>
               </div>
               {sendCodeError && (
@@ -245,12 +264,12 @@ export function OnboardingView({
                 this step. Absent when the caller gives it nowhere to go. */}
             {onBack && (
               <Button disabled={sendingCode} onClick={onBack} variant="outline">
-                返回
+                {t('Back')}
               </Button>
             )}
             <Button onClick={() => void handleSendCode()} disabled={!canSendCode}>
               {sendingCode && <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />}
-              发送验证码
+              {t('Send code')}
             </Button>
           </SectionFooter>
         </>
@@ -260,13 +279,15 @@ export function OnboardingView({
         <>
           <SectionHeader
             icon={<MailIcon className="h-5 w-5 text-muted-foreground" />}
-            title="输入验证码"
-            description={`已发送至 ${email.trim()},请查收邮件(含垃圾箱)。`}
+            title={t('Enter the code')}
+            description={t('Sent to {{email}}. Check your inbox, including spam.', {
+              email: email.trim(),
+            })}
           />
           <SectionBody>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="onboarding-code">验证码</Label>
+                <Label htmlFor="onboarding-code">{t('Verification code')}</Label>
                 <Input
                   id="onboarding-code"
                   type="text"
@@ -289,9 +310,11 @@ export function OnboardingView({
                   autoFocus
                 />
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{CODE_LENGTH} 位数字,15 分钟内有效。</span>
+                  <span>
+                    {t('{{count}} digits, valid for 15 minutes.', { count: CODE_LENGTH })}
+                  </span>
                   {resendCountdown > 0 ? (
-                    <span>{resendCountdown}s 后可重发</span>
+                    <span>{t('Resend in {{seconds}}s', { seconds: resendCountdown })}</span>
                   ) : (
                     <button
                       type="button"
@@ -299,7 +322,7 @@ export function OnboardingView({
                       disabled={sendingCode}
                       className="text-primary underline-offset-2 hover:underline disabled:opacity-50"
                     >
-                      {sendingCode ? '重发中...' : '重新发送'}
+                      {sendingCode ? t('Resending...') : t('Resend')}
                     </button>
                   )}
                 </div>
@@ -323,11 +346,11 @@ export function OnboardingView({
               }}
               disabled={verifying}
             >
-              更换邮箱
+              {t('Use a different email')}
             </Button>
             <Button onClick={() => void handleVerify()} disabled={!canVerify}>
               {verifying && <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />}
-              验证并注册
+              {t('Verify and sign up')}
             </Button>
           </SectionFooter>
         </>
@@ -336,28 +359,24 @@ export function OnboardingView({
       {step === 'result' && registerResult?.ok && (
         <>
           <SectionHeader
-            description="Pi 模型与凭据已在本次会话中生效。"
+            description={t('Pi models and credentials are active for this session.')}
             icon={<CheckCircle2Icon className="h-5 w-5 text-success" />}
-            title="登录完成"
+            title={t('Signed in')}
           />
           <SectionBody>
             <div className="flex flex-col gap-2 text-sm text-muted-foreground">
               {registerResult.data?.user && (
-                <p>
-                  欢迎,
-                  <span className="font-medium text-foreground">
-                    {registerResult.data.user.name}
-                  </span>
-                  。
-                </p>
+                <p>{t('Welcome, {{name}}.', { name: registerResult.data.user.name })}</p>
               )}
               {/* Pi and its managed runtime ship with the app, so successful
                   registration can enter the product directly. */}
-              <p>随时可以在设置里切换回使用本机自己的配置。</p>
+              <p>
+                {t('You can switch back to your own local configuration in Settings at any time.')}
+              </p>
             </div>
           </SectionBody>
           <SectionFooter>
-            <Button onClick={onComplete}>开始使用</Button>
+            <Button onClick={onComplete}>{t('Get started')}</Button>
           </SectionFooter>
         </>
       )}

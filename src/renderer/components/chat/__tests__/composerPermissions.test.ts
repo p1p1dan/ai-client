@@ -1,11 +1,23 @@
 // @vitest-environment happy-dom
+import { translate } from '@shared/i18n';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ComposerPermissionTrigger } from '../ComposerPermissionTrigger';
 import { readDefaultPermissions, readSessionPermissions } from '../sessionPreferenceStore';
 
-vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+/**
+ * The REAL zh translator, not `(key) => key`.
+ *
+ * The gear and mode labels moved into the dictionary on 2026-09-11 (they used
+ * to be Chinese literals in `@shared/types/runtimePermission`, which meant an
+ * English UI still showed Chinese). An identity stub would make these
+ * assertions check the keys instead of what a user reads — the same trap batch
+ * 4 found in `questionCardInteraction`. Asserting in Chinese here therefore
+ * also proves the entries exist.
+ */
+const zh = (key: string, params?: Record<string, string | number>) => translate('zh', key, params);
+vi.mock('@/i18n', () => ({ useI18n: () => ({ t: zh }) }));
 vi.mock('@/stores/permissionGate', () => ({
   usePermissionGateStore: () => false,
   isTierControlDegraded: () => false,
@@ -91,7 +103,7 @@ describe('D14 composer permission controls', () => {
     await click(choice('全自动'));
     expect(readDefaultPermissions()).toBeNull();
     const confirm = [...document.querySelectorAll('button')].find(
-      (button) => button.textContent === 'Apply'
+      (button) => button.textContent === '应用'
     );
     await click(confirm ?? null);
     expect(readDefaultPermissions()).toEqual({ mode: 'agent', gear: 'auto' });

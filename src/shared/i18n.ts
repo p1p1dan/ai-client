@@ -2522,6 +2522,147 @@ export const zhTranslations: Record<string, string> = {
     '模型与思考强度：{{selection}} —— {{scope}}',
   '{{selection}} — click to change model or reasoning effort ({{scope}})':
     '{{selection}} —— 点击可更换模型或思考强度（{{scope}}）',
+
+  // --- 硬编码中文改走词典（2026-09-11）------------------------------------
+  // 用户决定：界面上出现英文可以接受，只要意思清楚。于是这批原本写死在组件里的
+  // 中文一律改成「英文即键」，和批次 4 的工具动词同一套办法——纯函数模块吐键，
+  // 渲染那一层统一翻一次。这样切到英文界面时它们才会跟着变。
+  '(no preview)': '（无预览）',
+  'Add the model in Pi settings': '去 Pi 设置补上模型',
+  'Asks before each write, edit and command.': '写入、编辑和命令逐条询问。',
+  'Auto-accept edits': '自动接受编辑',
+  'Carries out approved work.': '执行已批准的工作。',
+  'Check that Claude Code or Codex has been used on this machine and that its session directory holds JSONL records.':
+    '请确认本机使用过 Claude Code 或 Codex，且会话目录中存在 JSONL 记录。',
+  "Copies history read-only from this machine's Claude Code or Codex session directories, so you can carry on in Pi":
+    '从 Claude Code 或 Codex 的本机会话目录只读复制历史，并在 Pi 中继续',
+  'Could not detect the Pi runtime': '无法检测 Pi 运行时',
+  Deferred: '后置',
+  Details: '详情',
+  Email: '邮箱',
+  'Enter the code': '输入验证码',
+  'Enter your email to receive a verification code.': '输入邮箱以接收验证码。',
+  Execute: '执行',
+  'Failed to load the PDF': 'PDF 加载失败',
+  'Failed to read history': '读取历史失败',
+  'Failed to render the page': '页面渲染失败',
+  'Fit width': '适应宽度',
+  'Full auto': '全自动',
+  'Get started': '开始使用',
+  'Grid view': '网格视图',
+  'History is encrypted — unreadable here': '历史已加密，此处读不到',
+  'History not found': '未找到历史',
+  'History unavailable for this agent': '该 agent 的历史暂不可读',
+  'Import history': '导入历史',
+  'Import report: {{imported}} new snapshots, {{existing}} already there, {{failed}} failed. Imported sessions are not opened automatically.':
+    '导入报告：{{imported}} 个新快照，{{existing}} 个已存在，{{failed}} 个失败。导入完成后不会自动打开会话。',
+  'Investigates and submits a plan, then waits for approval.': '勘察并提交实现计划，等待批准。',
+  'Keep the original file for recovery; start a new chat to carry on.':
+    '请保留原文件用于恢复；新建会话后再继续工作。',
+  'Loading Mermaid diagram...': '加载 Mermaid 图表…',
+  'Loading PDF...': '加载 PDF…',
+  'Mermaid render error': 'Mermaid 渲染错误',
+  'Migrate or add the AI service under Settings · Pi and this chat can continue; you can also switch to a model this app already has, from above the composer.':
+    '到「设置 · Pi」把 AI 服务迁移或补上，这个会话就能继续；也可以在输入框上方改用一个本应用已有的模型。',
+  'Mode and permissions can be changed once this turn ends.': '当前轮次结束后可修改模式和权限。',
+  'Model is not available here': '本应用没有这个模型',
+  'No history was found for this chat when resuming it, so no past messages were loaded.':
+    '恢复该会话时没有找到它的历史记录，历史消息没有载入。',
+  'No importable sessions found': '未找到可导入会话',
+  'No sessions found': '未找到会话',
+  'Only {{suffixes}} addresses are accepted.': '仅接受 {{suffixes}} 后缀。',
+  'Open it from the workspace it belongs to, or start a new chat.':
+    '请从该会话原本的工作区打开，或新建会话继续。',
+  'Permission change did not take': '权限未生效',
+  'Pi models and credentials are active for this session.': 'Pi 模型与凭据已在本次会话中生效。',
+  'Pi session service is starting…': 'Pi session service 正在启动…',
+  'Pi session service stopped': 'Pi session service 已停止',
+  'Pi session service failed': 'Pi session service 出错',
+  'Press Retry to initialise the Pi session service': '点击「重试」初始化 Pi session service',
+  'Press Retry to reinitialise the Pi session service': '点击「重试」重新初始化 Pi session service',
+  'Reading or parsing the history file failed, so the history below may be missing or incomplete.':
+    '读取或解析历史文件时出错，下面的历史可能缺失或不完整。',
+  Resend: '重新发送',
+  'Resend in {{seconds}}s': '{{seconds}}s 后可重发',
+  'Resending...': '重发中…',
+  'Restore the directory at its original path and retry, or archive this chat and start a new one.':
+    '请把该目录恢复到原路径后重试，或归档该会话并新建一个继续工作。',
+  'Runs the available tools automatically; explicit deny rules still apply.':
+    '自动执行可用工具；显式拒绝规则仍生效。',
+  'Runs the tools available in the current mode automatically, including operations outside the workspace; explicit deny rules still apply.':
+    '自动执行当前模式下的可用工具，包括工作区外操作；显式拒绝规则仍生效。',
+  'Select all in this project': '全选当前项目',
+  'Send code': '发送验证码',
+  'Sending may or may not still work; if it fails, start a new chat to carry on.':
+    '不保证还能继续发送；若发送失败，请新建会话继续。',
+  'Sending may still work; if it fails the same way, start a new chat.':
+    '会话或仍可继续发送；若发送同样失败，请新建会话。',
+  'Sent to {{email}}. Check your inbox, including spam.':
+    '已发送至 {{email}}，请查收邮件（含垃圾箱）。',
+  'Server address': '服务地址',
+  'Session belongs to another workspace': '该会话属于另一个工作区',
+  'Session history is damaged': '会话历史已损坏',
+  'Sign up': '注册',
+  'Sign-in required': '需要重新登录',
+  'Signed in': '登录完成',
+  'That code has already been used. Send a new one.': '验证码已被使用，请重新发送。',
+  'That code has expired. Send a new one.': '验证码已过期，请重新发送。',
+  'That did not work. Please try again.': '操作失败，请重试。',
+  'That email address is not valid.': '邮箱格式不正确。',
+  'The Pi session file is not a valid session. The app has not modified or replaced the original file.':
+    'Pi 会话文件不是有效会话，应用没有修改或替换原文件。',
+  'The Pi session record belongs to a different workspace than this repository, so a silent rebind was refused.':
+    'Pi 会话记录的工作区与当前仓库不一致，因此已拒绝静默重绑。',
+  'The bundled Pi worker runtime could not be found.': '没有找到随包的 Pi worker 运行时。',
+  'The chat is mid-turn; you can retry reading history once this turn ends.':
+    '会话正在进行中，本轮结束后可重试读取历史。',
+  'The chat is not interrupted; you can keep sending messages.': '会话未中断，可以继续发送消息。',
+  'The email could not be sent. Please try again later.': '邮件发送失败，请稍后再试。',
+  'The history file is encrypted and this process cannot read it as plain text. That does not mean the chat has no history — the record is still on disk, it just cannot be shown here.':
+    '历史文件已加密，本进程读不到明文。这不代表该会话没有历史——记录仍在磁盘上，只是无法在此显示。',
+  'The history read returned an unknown error, so the history below may be missing or incomplete.':
+    '历史读取返回了未知错误，下面的历史可能缺失或不完整。',
+  'The probe failed — it may be an IPC, permission or environment problem. Try again; if it keeps failing, check the error log in developer tools.':
+    '探测过程出错，可能是 IPC、权限或环境问题。请重试；如果反复失败，请查看开发者工具中的错误日志。',
+  'The request was malformed. Please try again.': '请求格式错误，请重试。',
+  'The retry did not take; history still could not be read. You can try again later.':
+    '重试未生效，历史仍未读到，可稍后再试一次。',
+  'The service hit an internal error. Please try again later.': '服务内部错误，请稍后再试。',
+  'The service is temporarily unavailable. Please try again later.': '服务暂时不可用，请稍后再试。',
+  'The working directory this chat is bound to is no longer on disk, so its worker cannot start. The app will not recreate a directory it did not create.':
+    '该会话绑定的工作目录已不在磁盘上，因此无法启动它的 worker。应用不会替你重建自己创建的目录。',
+  'This build cannot read history for that agent yet, so earlier messages were not loaded. The record is still on disk.':
+    '当前版本还读不到该 agent 的历史记录，更早的消息没有载入；记录仍在磁盘上。',
+  'This chat cannot continue: with its history gone, the next send will fail. Start a new chat to carry on.':
+    '该会话已无法继续：历史记录缺失后，继续发送会失败；请新建会话继续工作。',
+  'This chat is pinned to a model this app does not have, so it could not be started. This app uses its own agent directory, and AI services you set up in your own Pi directory do not come across on their own.':
+    '这个会话记录的模型不在本应用的模型目录里，所以没能把它启动起来。本应用用自己的 agent 目录，你原先在自己的 Pi 目录里配好的 AI 服务不会自动带过来。',
+  'This project has no session records to import.': '该项目下没有可导入的会话记录。',
+  'Too many attempts. Please try again later.': '操作过于频繁，请稍后再试。',
+  'Too many wrong attempts. Send a new code.': '错误次数过多，请重新发送验证码。',
+  'Turn on full auto?': '启用全自动？',
+  'Unknown error.': '未知错误。',
+  'Use a different email': '更换邮箱',
+  'Verification code': '验证码',
+  'Verify and sign up': '验证并注册',
+  'Welcome, {{name}}.': '欢迎，{{name}}。',
+  'What was produced is kept. You can resend the last message from the composer below.':
+    '已产内容保留。可从下方输入框重发上条消息。',
+  'Workspace folder is gone': '工作目录已不存在',
+  'Writes, edits and commands inside the workspace run automatically; paths outside it still ask.':
+    '工作区内写入、编辑和命令自动执行；外部路径仍询问。',
+  'Wrong code.': '验证码错误。',
+  'Wrong code. {{count}} attempts left.': '验证码错误，还可重试 {{count}} 次。',
+  Yesterday: '昨天',
+  'You can switch back to your own local configuration in Settings at any time.':
+    '随时可以在设置里切换回使用本机自己的配置。',
+  'Your sign-in has expired. Sign in again and retry.': '登录状态已失效，请重新登录后再试。',
+  'Your sign-in has expired. Verify your email again.': '登录已失效，请重新验证邮箱。',
+  '{{count}} digits, valid for 15 minutes.': '{{count}} 位数字，15 分钟内有效。',
+  '{{count}} sessions': '{{count}} 个会话',
+  '{{count}} snapshots imported': '已导入 {{count}} 个快照',
+  '{{count}} steps processed': '已处理 {{count}} 个步骤',
+  '{{month}}/{{day}}': '{{month}} 月 {{day}} 日',
 };
 
 export function normalizeLocale(input?: string): Locale {

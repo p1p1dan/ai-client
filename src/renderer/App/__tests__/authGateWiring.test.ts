@@ -67,7 +67,7 @@ describe('D47 S5b auth-gate helper wiring (static)', () => {
   it('[AGW-04] OnboardingView.tsx branches register-email copy/CTA on reason === expired (mutation ⑥ surface)', () => {
     const view = code('components/onboarding/OnboardingView.tsx').replace(/\s+/g, ' ');
     expect(view).toContain("reason === 'expired'");
-    expect(view).toContain('登录已失效，请重新验证邮箱');
+    expect(view).toContain('Your sign-in has expired. Verify your email again.');
     // D47 S5: the initialEmail prefill this mutation guards.
     expect(view).toContain('useState(initialEmail');
   });

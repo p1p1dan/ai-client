@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 
@@ -39,6 +40,7 @@ interface MermaidRendererProps {
 }
 
 export function MermaidRenderer({ code, className }: MermaidRendererProps) {
+  const { t } = useI18n();
   const theme = useSettingsStore((s) => s.theme);
   const uniqueId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -119,7 +121,7 @@ export function MermaidRenderer({ code, className }: MermaidRendererProps) {
     return (
       <div className={cn('overflow-x-auto rounded-lg border border-destructive/50', className)}>
         <div className="flex items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          <span>Mermaid 渲染错误</span>
+          <span>{t('Mermaid render error')}</span>
         </div>
         <pre className="p-4 text-sm">
           <code className="block font-mono leading-relaxed text-muted-foreground">{code}</code>
@@ -139,7 +141,7 @@ export function MermaidRenderer({ code, className }: MermaidRendererProps) {
           className
         )}
       >
-        <div className="text-sm text-muted-foreground">加载 Mermaid 图表...</div>
+        <div className="text-sm text-muted-foreground">{t('Loading Mermaid diagram...')}</div>
       </div>
     );
   }

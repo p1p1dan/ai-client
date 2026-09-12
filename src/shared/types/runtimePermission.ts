@@ -7,12 +7,24 @@ export interface RuntimePermissionSettings {
   gear: PermissionGear;
 }
 export const DEFAULT_RUNTIME_PERMISSION: RuntimePermissionSettings = { mode: 'agent', gear: 'ask' };
+/**
+ * Display labels, as DICTIONARY KEYS rather than display text.
+ *
+ * This module is `@shared` and has no translator in scope, and the labels used
+ * to be Chinese literals — which meant the whole permission control stayed
+ * Chinese after a user picked English in Settings · General. Same treatment as
+ * the tool verbs (batch 4): the English string IS the key, and the component
+ * that renders it calls `t()` once.
+ */
 export const PERMISSION_GEAR_LABELS: Record<PermissionGear, string> = {
-  ask: '每次询问',
-  'accept-edits': '自动接受编辑',
-  auto: '全自动',
+  ask: 'Ask every time',
+  'accept-edits': 'Auto-accept edits',
+  auto: 'Full auto',
 };
-export const RUNTIME_MODE_LABELS: Record<RuntimeMode, string> = { plan: '规划', agent: '执行' };
+export const RUNTIME_MODE_LABELS: Record<RuntimeMode, string> = {
+  plan: 'Plan',
+  agent: 'Execute',
+};
 
 export function migratePermissionTier(tier: LegacyPermissionTier): RuntimePermissionSettings {
   switch (tier) {

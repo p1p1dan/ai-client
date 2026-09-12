@@ -48,9 +48,12 @@ export interface HistoryErrorView {
   /** Short English label, matching the timeline's other chrome. */
   title: string;
   /**
-   * Chinese explanation — must keep "read failed" distinguishable from "empty".
-   * The notice outlives the failed read (it survives new messages), so guidance
+   * Explanation — must keep "read failed" distinguishable from "empty". The
+   * notice outlives the failed read (it survives new messages), so guidance
    * describes the read attempt, never what the timeline currently shows.
+   *
+   * A DICTIONARY KEY, like `title`: this module is a plain `.ts` with no
+   * translator in scope, so `MessageTimeline` calls `t()` on it.
    */
   guidance: string;
   /** Raw Host message (paths / errno). Empty when the Host sent none. */
@@ -74,7 +77,8 @@ export interface HistoryErrorView {
 }
 
 /** Shown under most variants: a history read failure never kills the session. */
-export const HISTORY_ERROR_NON_FATAL_HINT = '会话未中断，可以继续发送消息。';
+export const HISTORY_ERROR_NON_FATAL_HINT =
+  'The chat is not interrupted; you can keep sending messages.';
 
 /**
  * `jsonl_not_found` only, and only it: once the agent's record is gone, resume
@@ -87,7 +91,7 @@ export const HISTORY_ERROR_NON_FATAL_HINT = '会话未中断，可以继续发�
  * looking for a message the other never prints.
  */
 export const HISTORY_ERROR_DEAD_SESSION_HINT =
-  '该会话已无法继续：历史记录缺失后，继续发送会失败；请新建会话继续工作。';
+  'This chat cannot continue: with its history gone, the next send will fail. Start a new chat to carry on.';
 
 /**
  * `history_unsupported` only (P2). This build never read anything for the
@@ -95,7 +99,8 @@ export const HISTORY_ERROR_DEAD_SESSION_HINT =
  * "可以继续发送" would be a promise nothing here checked. States the fallback
  * instead, which holds either way.
  */
-export const HISTORY_ERROR_UNSUPPORTED_HINT = '不保证还能继续发送；若发送失败，请新建会话继续。';
+export const HISTORY_ERROR_UNSUPPORTED_HINT =
+  'Sending may or may not still work; if it fails, start a new chat to carry on.';
 
 type HistoryErrorCopy = Omit<HistoryErrorView, 'code' | 'message'>;
 
@@ -107,7 +112,8 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
   jsonl_not_found: {
     severity: 'error',
     title: 'History not found',
-    guidance: '恢复该会话时没有找到它的历史记录，历史消息没有载入。',
+    guidance:
+      'No history was found for this chat when resuming it, so no past messages were loaded.',
     retryable: false,
     continuationHint: HISTORY_ERROR_DEAD_SESSION_HINT,
   },
@@ -115,14 +121,15 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
     severity: 'error',
     title: 'History is encrypted — unreadable here',
     guidance:
-      '历史文件已加密，本进程读不到明文。这不代表该会话没有历史——记录仍在磁盘上，只是无法在此显示。',
+      'The history file is encrypted and this process cannot read it as plain text. That does not mean the chat has no history — the record is still on disk, it just cannot be shown here.',
     retryable: false,
-    continuationHint: '会话或仍可继续发送；若发送同样失败，请新建会话。',
+    continuationHint: 'Sending may still work; if it fails the same way, start a new chat.',
   },
   read_failed: {
     severity: 'error',
     title: 'Failed to read history',
-    guidance: '读取或解析历史文件时出错，下面的历史可能缺失或不完整。',
+    guidance:
+      'Reading or parsing the history file failed, so the history below may be missing or incomplete.',
     retryable: true,
     continuationHint: HISTORY_ERROR_NON_FATAL_HINT,
   },
@@ -132,31 +139,35 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
   history_unsupported: {
     severity: 'warning',
     title: 'History unavailable for this agent',
-    guidance: '当前版本还读不到该 agent 的历史记录，更早的消息没有载入；记录仍在磁盘上。',
+    guidance:
+      'This build cannot read history for that agent yet, so earlier messages were not loaded. The record is still on disk.',
     retryable: false,
     continuationHint: HISTORY_ERROR_UNSUPPORTED_HINT,
   },
   session_file_corrupt: {
     severity: 'error',
     title: 'Session history is damaged',
-    guidance: 'Pi 会话文件不是有效会话，应用没有修改或替换原文件。',
+    guidance:
+      'The Pi session file is not a valid session. The app has not modified or replaced the original file.',
     retryable: false,
-    continuationHint: '请保留原文件用于恢复；新建会话后再继续工作。',
+    continuationHint: 'Keep the original file for recovery; start a new chat to carry on.',
   },
   session_cwd_mismatch: {
     severity: 'error',
     title: 'Session belongs to another workspace',
-    guidance: 'Pi 会话记录的工作区与当前仓库不一致，因此已拒绝静默重绑。',
+    guidance:
+      'The Pi session record belongs to a different workspace than this repository, so a silent rebind was refused.',
     retryable: false,
-    continuationHint: '请从该会话原本的工作区打开，或新建会话继续。',
+    continuationHint: 'Open it from the workspace it belongs to, or start a new chat.',
   },
   workspace_missing: {
     severity: 'error',
     title: 'Workspace folder is gone',
     guidance:
-      '该会话绑定的工作目录已不在磁盘上，因此无法启动它的 worker。应用不会替你重建自己创建的目录。',
+      'The working directory this chat is bound to is no longer on disk, so its worker cannot start. The app will not recreate a directory it did not create.',
     retryable: false,
-    continuationHint: '请把该目录恢复到原路径后重试，或归档该会话并新建一个继续工作。',
+    continuationHint:
+      'Restore the directory at its original path and retry, or archive this chat and start a new one.',
   },
   // H/21 P0. Not retryable: the model directory will not have grown between
   // one press and the next, so a Retry button here could only fail again.
@@ -176,7 +187,8 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
   unknown: {
     severity: 'error',
     title: 'Failed to read history',
-    guidance: '历史读取返回了未知错误，下面的历史可能缺失或不完整。',
+    guidance:
+      'The history read returned an unknown error, so the history below may be missing or incomplete.',
     retryable: true,
     continuationHint: HISTORY_ERROR_NON_FATAL_HINT,
   },
@@ -261,9 +273,11 @@ export function deriveHistoryNotice(input: TimelineHistoryNoticeInput): Timeline
 }
 
 /** Shown when the session is mid-turn, explaining the disabled Retry button. */
-export const HISTORY_RETRY_BUSY_HINT = '会话正在进行中，本轮结束后可重试读取历史。';
+export const HISTORY_RETRY_BUSY_HINT =
+  'The chat is mid-turn; you can retry reading history once this turn ends.';
 /** Shown when a retry resolved without re-reading history (rejected or IPC error). */
-export const HISTORY_RETRY_FAILED_HINT = '重试未生效，历史仍未读到，可稍后再试一次。';
+export const HISTORY_RETRY_FAILED_HINT =
+  'The retry did not take; history still could not be read. You can try again later.';
 
 export interface HistoryRetryControl {
   /** Only transient failures offer a retry at all. */

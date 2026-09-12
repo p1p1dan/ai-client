@@ -36,14 +36,20 @@ function readPermissionsFor(sessionId: string | null): RuntimePermissionSettings
   );
 }
 
+/** `description` is a dictionary key; the menu item translates it. */
 const GEAR_OPTIONS: readonly { id: PermissionGear; description: string; icon: typeof Shield }[] = [
-  { id: 'ask', description: '写入、编辑和命令逐条询问。', icon: Shield },
+  { id: 'ask', description: 'Asks before each write, edit and command.', icon: Shield },
   {
     id: 'accept-edits',
-    description: '工作区内写入、编辑和命令自动执行；外部路径仍询问。',
+    description:
+      'Writes, edits and commands inside the workspace run automatically; paths outside it still ask.',
     icon: ShieldOff,
   },
-  { id: 'auto', description: '自动执行可用工具；显式拒绝规则仍生效。', icon: ShieldAlert },
+  {
+    id: 'auto',
+    description: 'Runs the available tools automatically; explicit deny rules still apply.',
+    icon: ShieldAlert,
+  },
 ];
 
 interface ComposerPermissionTriggerProps {
@@ -100,7 +106,11 @@ export function ComposerPermissionTrigger({
         // both surfaces: the alert for the confirmation panel, which is still
         // up, and a toast for everything else.
         setError(message);
-        addToast({ type: 'error', title: '权限未生效', description: message });
+        addToast({
+          type: 'error',
+          title: t('Permission change did not take'),
+          description: message,
+        });
       }
     } finally {
       setPending(false);
@@ -111,11 +121,13 @@ export function ComposerPermissionTrigger({
   const Icon = degraded ? ShieldQuestion : current.icon;
   const label = degraded
     ? t('Your own policy')
-    : `${RUNTIME_MODE_LABELS[settings.mode]} · ${PERMISSION_GEAR_LABELS[settings.gear]}`;
+    : `${t(RUNTIME_MODE_LABELS[settings.mode])} · ${t(PERMISSION_GEAR_LABELS[settings.gear])}`;
   const scope = sessionId ? t('Applies immediately, to this thread.') : t('Applies to new chats.');
   const isDisabled =
     disabled || sending || pending || (sessionId !== null && !isHostUsable(hostState));
-  const title = sending ? '当前轮次结束后可修改模式和权限。' : `${label} — ${scope}`;
+  const title = sending
+    ? t('Mode and permissions can be changed once this turn ends.')
+    : `${label} — ${scope}`;
 
   return (
     <Menu
@@ -143,9 +155,12 @@ export function ComposerPermissionTrigger({
           <DegradedGateNotice />
         ) : confirmingAuto ? (
           <div className="flex max-w-72 flex-col gap-2 p-3">
-            <p className="text-ui font-medium text-destructive">启用全自动？</p>
+            <p className="text-ui font-medium text-destructive">{t('Turn on full auto?')}</p>
             <p className="text-meta text-muted-foreground">
-              自动执行当前模式下的可用工具，包括工作区外操作；显式拒绝规则仍生效。{scope}
+              {t(
+                'Runs the tools available in the current mode automatically, including operations outside the workspace; explicit deny rules still apply.'
+              )}
+              {scope}
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -191,11 +206,11 @@ export function ComposerPermissionTrigger({
                   className={composerMenuItemClass()}
                 >
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span>{RUNTIME_MODE_LABELS[runtimeMode]}</span>
+                    <span>{t(RUNTIME_MODE_LABELS[runtimeMode])}</span>
                     <span className="text-meta text-muted-foreground">
                       {runtimeMode === 'plan'
-                        ? '勘察并提交实现计划，等待批准。'
-                        : '执行已批准的工作。'}
+                        ? t('Investigates and submits a plan, then waits for approval.')
+                        : t('Carries out approved work.')}
                     </span>
                   </span>
                   <MenuPrimitive.RadioItemIndicator>
@@ -227,8 +242,10 @@ export function ComposerPermissionTrigger({
                   >
                     <OptionIcon className="size-3.5 shrink-0" />
                     <span className="flex min-w-0 flex-1 flex-col">
-                      <span>{PERMISSION_GEAR_LABELS[option.id]}</span>
-                      <span className="text-meta text-muted-foreground">{option.description}</span>
+                      <span>{t(PERMISSION_GEAR_LABELS[option.id])}</span>
+                      <span className="text-meta text-muted-foreground">
+                        {t(option.description)}
+                      </span>
                     </span>
                     <MenuPrimitive.RadioItemIndicator>
                       <span className="size-1.5 rounded-full bg-foreground" />

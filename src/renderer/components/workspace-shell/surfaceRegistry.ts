@@ -166,7 +166,7 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     descriptionKey: 'Review a pull request',
     availability: 'always',
     registeredOnly: true,
-    pendingTask: '后置',
+    pendingTask: 'Deferred',
   },
   {
     id: 'diff',
@@ -175,7 +175,7 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     descriptionKey: 'Compare file changes',
     availability: 'always',
     registeredOnly: true,
-    pendingTask: '后置',
+    pendingTask: 'Deferred',
   },
   {
     id: 'plan',
@@ -184,7 +184,7 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     descriptionKey: 'Session task plan',
     availability: 'always',
     registeredOnly: true,
-    pendingTask: '后置',
+    pendingTask: 'Deferred',
   },
   {
     id: 'notes',
@@ -193,7 +193,7 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     descriptionKey: 'Session notes',
     availability: 'always',
     registeredOnly: true,
-    pendingTask: '后置',
+    pendingTask: 'Deferred',
   },
   {
     id: 'browser',
@@ -202,7 +202,7 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     descriptionKey: 'In-app browser',
     availability: 'always',
     registeredOnly: true,
-    pendingTask: '后置',
+    pendingTask: 'Deferred',
   },
   {
     id: 'preview',
@@ -211,7 +211,7 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     descriptionKey: 'Live app preview',
     availability: 'has-content',
     registeredOnly: true,
-    pendingTask: '后置',
+    pendingTask: 'Deferred',
   },
 ];
 

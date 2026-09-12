@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/i18n';
 import { toLocalFileUrl } from '@/lib/localFileUrl';
 import { cn } from '@/lib/utils';
 import { getPDFJS, type PDFDocumentProxy, type PDFLoadingTask } from './pdfSetup';
@@ -13,6 +14,7 @@ interface PdfPreviewProps {
 type ZoomMode = 'fit-width' | 'fit-page' | 'custom';
 
 export function PdfPreview({ path }: PdfPreviewProps) {
+  const { t } = useI18n();
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [scale, setScale] = useState(1);
@@ -42,7 +44,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
     loadingTaskRef.current = null;
   }, []);
 
-  // 加载 PDF 文档
+  // Load the PDF document
   useEffect(() => {
     let cancelled = false;
     let currentDoc: PDFDocumentProxy | null = null;
@@ -60,7 +62,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
         const pdfjs = await getPDFJS();
         cancelInFlightWork();
 
-        // 使用 local-file:// 协议加载 PDF
+        // Load through the local-file:// protocol
         const loadingTask = pdfjs.getDocument({
           url: pdfUrl,
         });
@@ -82,7 +84,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
         setLoading(false);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'PDF 加载失败');
+          setError(err instanceof Error ? err.message : t('Failed to load the PDF'));
           setLoading(false);
         }
       }
@@ -93,19 +95,19 @@ export function PdfPreview({ path }: PdfPreviewProps) {
     return () => {
       cancelled = true;
       cancelInFlightWork();
-      // 清理旧的 PDF 文档
+      // Release the previous PDF document
       if (currentDoc) {
         void currentDoc.destroy();
       }
     };
-  }, [cancelInFlightWork, pdfUrl]);
+  }, [cancelInFlightWork, pdfUrl, t]);
 
-  // 渲染当前页
+  // Render the current page
   const renderPage = useCallback(
     async (pageNum: number, targetScale?: number) => {
       if (!pdfDoc || !canvasRef.current || !containerRef.current) return;
 
-      // 取消上一次渲染
+      // Cancel the previous render
       if (renderTaskRef.current) {
         renderTaskRef.current.cancel();
         renderTaskRef.current = null;
@@ -119,16 +121,16 @@ export function PdfPreview({ path }: PdfPreviewProps) {
         const context = canvas.getContext('2d');
         if (!context) return;
 
-        // 计算缩放比例
+        // Work out the zoom factor
         let finalScale = targetScale ?? scale;
         const viewport = page.getViewport({ scale: 1 });
 
         if (zoomMode === 'fit-width') {
-          const containerWidth = containerRef.current.clientWidth - 32; // 减去 padding
+          const containerWidth = containerRef.current.clientWidth - 32; // minus padding
           finalScale = containerWidth / viewport.width;
         } else if (zoomMode === 'fit-page') {
           const containerWidth = containerRef.current.clientWidth - 32;
-          const containerHeight = containerRef.current.clientHeight - 100; // 减去工具栏和 padding
+          const containerHeight = containerRef.current.clientHeight - 100; // minus toolbar and padding
           const widthScale = containerWidth / viewport.width;
           const heightScale = containerHeight / viewport.height;
           finalScale = Math.min(widthScale, heightScale);
@@ -137,11 +139,11 @@ export function PdfPreview({ path }: PdfPreviewProps) {
         finalScale = clampPdfScale(viewport.width, viewport.height, finalScale);
         const scaledViewport = page.getViewport({ scale: finalScale });
 
-        // 设置 canvas 尺寸
+        // Size the canvas
         canvas.width = scaledViewport.width;
         canvas.height = scaledViewport.height;
 
-        // 渲染
+        // Render
         const renderTask = page.render({
           canvasContext: context,
           viewport: scaledViewport,
@@ -163,24 +165,24 @@ export function PdfPreview({ path }: PdfPreviewProps) {
           renderTaskRef.current = null;
         }
         if (err instanceof Error && err.message.includes('cancel')) {
-          // 渲染被取消，忽略错误
+          // Render was cancelled; not an error worth showing.
           return;
         }
-        setError(err instanceof Error ? err.message : '页面渲染失败');
+        setError(err instanceof Error ? err.message : t('Failed to render the page'));
         setRendering(false);
       }
     },
-    [pdfDoc, scale, zoomMode]
+    [pdfDoc, scale, zoomMode, t]
   );
 
-  // 当页码或缩放模式变化时重新渲染
+  // Re-render when the page number or zoom mode changes
   useEffect(() => {
     if (pdfDoc && currentPage) {
       renderPage(currentPage);
     }
   }, [currentPage, pdfDoc, renderPage]);
 
-  // 容器尺寸变化时重新渲染（适应宽度模式）
+  // Re-render when the container resizes (fit-width mode)
   useEffect(() => {
     if (!containerRef.current || zoomMode === 'custom') return;
 
@@ -194,14 +196,14 @@ export function PdfPreview({ path }: PdfPreviewProps) {
     return () => observer.disconnect();
   }, [pdfDoc, currentPage, zoomMode, renderPage]);
 
-  // 页面导航
+  // Page navigation
   const goToPage = (page: number) => {
     if (!pdfDoc) return;
     const targetPage = Math.max(1, Math.min(page, pdfDoc.numPages));
     setCurrentPage(targetPage);
   };
 
-  // 缩放控制
+  // Zoom controls
   const handleZoomIn = () => {
     setZoomMode('custom');
     setScale((prev) => Math.min(prev * 1.2, 5));
@@ -223,7 +225,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
       <div className="flex h-full items-center justify-center bg-muted/30">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <div className="text-sm text-muted-foreground">加载 PDF...</div>
+          <div className="text-sm text-muted-foreground">{t('Loading PDF...')}</div>
         </div>
       </div>
     );
@@ -241,7 +243,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
             setRetryKey((value) => value + 1);
           }}
         >
-          重试
+          {t('Retry')}
         </Button>
       </div>
     );
@@ -254,9 +256,9 @@ export function PdfPreview({ path }: PdfPreviewProps) {
       ref={containerRef}
       className="relative flex h-full flex-col items-center bg-muted/30 overflow-hidden"
     >
-      {/* 工具栏 */}
+      {/* Toolbar */}
       <div className="flex h-12 w-full shrink-0 items-center justify-between border-b bg-background px-4">
-        {/* 页码导航 */}
+        {/* Page navigation */}
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -281,7 +283,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
           </Button>
         </div>
 
-        {/* 缩放控制 */}
+        {/* Zoom controls */}
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -299,7 +301,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
             disabled={rendering}
             className="h-7 text-xs"
           >
-            适应宽度
+            {t('Fit width')}
           </Button>
           <div className="text-sm text-muted-foreground">{Math.round(scale * 100)}%</div>
           <Button
@@ -314,7 +316,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
         </div>
       </div>
 
-      {/* PDF 画布 */}
+      {/* PDF canvas */}
       <div className="relative flex-1 overflow-auto p-4">
         <canvas
           ref={canvasRef}

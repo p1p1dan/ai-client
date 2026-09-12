@@ -2,6 +2,7 @@ import type { LegacyImportSessionPreview } from '@shared/types';
 import { CheckCircle2, MessageSquare, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { formatActivityLabel } from './time';
 
@@ -22,8 +23,9 @@ export function SessionItem({
   result,
   error,
 }: SessionItemProps) {
-  const message = session.firstMessage ?? '（无预览）';
-  const activityLabel = formatActivityLabel(session.lastMessageAt ?? session.createdAt);
+  const { t } = useI18n();
+  const message = session.firstMessage ?? t('(no preview)');
+  const activityLabel = formatActivityLabel(session.lastMessageAt ?? session.createdAt, t);
   return (
     <label
       className={cn(
@@ -52,7 +54,7 @@ export function SessionItem({
           <span className="min-w-0 truncate font-mono text-code tracking-normal">{session.id}</span>
           {session.importedSnapshots > 0 ? (
             <Badge size="sm" variant="outline">
-              已导入 {session.importedSnapshots} 个快照
+              {t('{{count}} snapshots imported', { count: session.importedSnapshots })}
             </Badge>
           ) : null}
         </div>

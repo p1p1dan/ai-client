@@ -230,7 +230,7 @@ describe('describeHostStatus — what the ribbon may say (field report 2026-09-0
   it('speaks for a Main-confirmed stopped manager and offers Retry', () => {
     const model = describeHostStatus(status('stopped'));
     expect(model?.tone).toBe('notice');
-    expect(model?.title).toContain('已停止');
+    expect(model?.title).toContain('stopped');
     expect(model?.showRetry).toBe(true);
   });
 

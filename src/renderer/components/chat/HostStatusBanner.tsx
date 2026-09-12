@@ -1,5 +1,6 @@
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/i18n';
 import { describeHostStatus, type HostStatus } from './hostStatus';
 
 /**
@@ -22,6 +23,7 @@ interface HostStatusBannerProps {
 }
 
 export function HostStatusBanner({ status, onRetry }: HostStatusBannerProps) {
+  const { t } = useI18n();
   const model = describeHostStatus(status);
   if (!model) return null;
 
@@ -40,17 +42,20 @@ export function HostStatusBanner({ status, onRetry }: HostStatusBannerProps) {
     >
       <div className="flex items-center gap-2">
         <Icon className="h-3.5 w-3.5 shrink-0" />
-        <p className="min-w-0 flex-1 truncate font-medium" title={model.title}>
-          {model.title}
+        {/* `title` is a dictionary key unless the Host supplied its own fatal
+            error text, in which case `t()` returns it unchanged (a key with no
+            entry IS its own English). */}
+        <p className="min-w-0 flex-1 truncate font-medium" title={t(model.title)}>
+          {t(model.title)}
         </p>
         {model.showRetry && (
           <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-ui" onClick={onRetry}>
             <RefreshCw className="h-3 w-3" />
-            Retry
+            {t('Retry')}
           </Button>
         )}
       </div>
-      {model.guidance && <p className="mt-1 break-words opacity-90">{model.guidance}</p>}
+      {model.guidance && <p className="mt-1 break-words opacity-90">{t(model.guidance)}</p>}
       {diagnostics && (
         <p className="mt-1 break-words font-mono text-code opacity-75">{diagnostics}</p>
       )}

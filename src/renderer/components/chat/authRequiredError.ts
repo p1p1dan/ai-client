@@ -53,9 +53,14 @@ export interface AuthRequiredErrorView {
   actionLabel: string;
 }
 
-/** Chinese copy + re-login action for a detected spawn-gate rejection. */
+/**
+ * Copy + re-login action for a detected spawn-gate rejection.
+ *
+ * The three strings are DICTIONARY KEYS, not display text — this module has no
+ * translator in scope, so the surfaces that render it call `t()` on each field.
+ */
 export const AUTH_REQUIRED_ERROR_VIEW: AuthRequiredErrorView = {
-  title: '需要重新登录',
-  message: '登录状态已失效，请重新登录后再试。',
-  actionLabel: '重新登录',
+  title: 'Sign-in required',
+  message: 'Your sign-in has expired. Sign in again and retry.',
+  actionLabel: 'Sign in again',
 };

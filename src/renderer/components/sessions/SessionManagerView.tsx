@@ -17,6 +17,7 @@ import {
   useLegacyImportProjects,
   useLegacyImportSessions,
 } from '@/hooks/useLegacyImport';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { SessionItem } from './SessionItem';
 import { formatActivityLabel } from './time';
@@ -27,6 +28,7 @@ interface SessionManagerViewProps {
 }
 
 export function SessionManagerView({ className, onOpenImported }: SessionManagerViewProps) {
+  const { t } = useI18n();
   const projectsQuery = useLegacyImportProjects();
   const projects = projectsQuery.data ?? [];
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -102,7 +104,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                 variant="secondary"
               >
                 <ArrowLeft className="size-4" />
-                返回
+                {t('Back')}
               </Button>
               <div className="min-w-0">
                 <div className="min-w-0 truncate font-heading text-title leading-none tracking-[-0.01em]">
@@ -115,7 +117,9 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                   >
                     {selectedProject.path}
                   </span>
-                  <span className="shrink-0 tabular-nums">{sessions.length} 个会话</span>
+                  <span className="shrink-0 tabular-nums">
+                    {t('{{count}} sessions', { count: sessions.length })}
+                  </span>
                 </div>
               </div>
             </div>
@@ -127,7 +131,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                 variant="secondary"
               >
                 <RefreshCcw className="size-4" />
-                刷新
+                {t('Refresh')}
               </Button>
               <Button
                 disabled={selectedSessionIds.size === 0 || importMutation.isPending}
@@ -135,7 +139,9 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                 size="sm"
               >
                 <Upload className="size-4" />
-                {importMutation.isPending ? '正在导入…' : `导入所选 (${selectedSessionIds.size})`}
+                {importMutation.isPending
+                  ? t('Importing...')
+                  : t('Import selected ({{count}})', { count: selectedSessionIds.size })}
               </Button>
             </div>
           </div>
@@ -148,7 +154,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                 indeterminate={someSelected}
                 onCheckedChange={(checked) => toggleAll(checked === true)}
               />
-              全选当前项目
+              {t('Select all in this project')}
             </label>
           ) : null}
 
@@ -165,8 +171,10 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                 <EmptyMedia variant="icon">
                   <Folder className="size-4" />
                 </EmptyMedia>
-                <EmptyTitle>未找到会话</EmptyTitle>
-                <EmptyDescription>该项目下没有可导入的会话记录。</EmptyDescription>
+                <EmptyTitle>{t('No sessions found')}</EmptyTitle>
+                <EmptyDescription>
+                  {t('This project has no session records to import.')}
+                </EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -190,7 +198,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                         size="sm"
                         variant="secondary"
                       >
-                        打开
+                        {t('Open')}
                       </Button>
                     ) : null}
                   </div>
@@ -201,10 +209,14 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
 
           {report.length > 0 ? (
             <div className="rounded-md border bg-card p-3 text-meta">
-              导入报告：{report.filter((item) => item.status === 'imported').length} 个新快照，
-              {report.filter((item) => item.status === 'already-imported').length} 个已存在，
-              {report.filter((item) => item.status === 'failed').length}{' '}
-              个失败。导入完成后不会自动打开会话。
+              {t(
+                'Import report: {{imported}} new snapshots, {{existing}} already there, {{failed}} failed. Imported sessions are not opened automatically.',
+                {
+                  imported: report.filter((item) => item.status === 'imported').length,
+                  existing: report.filter((item) => item.status === 'already-imported').length,
+                  failed: report.filter((item) => item.status === 'failed').length,
+                }
+              )}
             </div>
           ) : null}
         </>
@@ -213,16 +225,18 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="font-heading text-title leading-none tracking-[-0.01em]">
-                导入历史
+                {t('Import history')}
               </div>
               <div className="mt-1 text-meta text-muted-foreground">
-                从 Claude Code 或 Codex 的本机会话目录只读复制历史，并在 Pi 中继续
+                {t(
+                  "Copies history read-only from this machine's Claude Code or Codex session directories, so you can carry on in Pi"
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex items-center rounded-sm bg-muted p-0.5">
                 <Button
-                  aria-label="网格视图"
+                  aria-label={t('Grid view')}
                   onClick={() => setViewMode('grid')}
                   size="icon-sm"
                   variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
@@ -230,7 +244,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                   <LayoutGrid className="size-4" />
                 </Button>
                 <Button
-                  aria-label="列表视图"
+                  aria-label={t('List view')}
                   onClick={() => setViewMode('list')}
                   size="icon-sm"
                   variant={viewMode === 'list' ? 'secondary' : 'ghost'}
@@ -245,7 +259,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                 variant="secondary"
               >
                 <RefreshCcw className="size-4" />
-                刷新
+                {t('Refresh')}
               </Button>
             </div>
           </div>
@@ -268,9 +282,11 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                 <EmptyMedia variant="icon">
                   <RefreshCcw className="size-4" />
                 </EmptyMedia>
-                <EmptyTitle>未找到可导入会话</EmptyTitle>
+                <EmptyTitle>{t('No importable sessions found')}</EmptyTitle>
                 <EmptyDescription>
-                  请确认本机使用过 Claude Code 或 Codex，且会话目录中存在 JSONL 记录。
+                  {t(
+                    'Check that Claude Code or Codex has been used on this machine and that its session directory holds JSONL records.'
+                  )}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -283,7 +299,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                 )}
               >
                 {projects.map((project) => {
-                  const activityLabel = formatActivityLabel(project.lastActivityAt);
+                  const activityLabel = formatActivityLabel(project.lastActivityAt, t);
                   return (
                     <button
                       className={cn(
@@ -320,7 +336,7 @@ export function SessionManagerView({ className, onOpenImported }: SessionManager
                       <div className="flex shrink-0 items-center justify-between gap-2 text-meta text-muted-foreground tabular-nums">
                         <span>
                           {project.sourceKind === 'codex' ? 'Codex' : 'Claude Code'} ·{' '}
-                          {project.sessionCount} 个会话
+                          {t('{{count}} sessions', { count: project.sessionCount })}
                         </span>
                         <span>{activityLabel || '-'}</span>
                       </div>

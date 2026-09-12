@@ -99,7 +99,10 @@ describe('T35 final Pi-only absence gate', () => {
     for (const token of ['Claude Code 运行时', 'Claude Code 与 Codex', 'bundled Claude Code']) {
       expect(productCopy, token).not.toContain(token);
     }
-    expect(productCopy).toContain('无法检测 Pi 运行时');
+    // The copy moved to dictionary keys (2026-09-11); the point of this
+    // assertion is that the runtime named on that screen is Pi, not that the
+    // sentence is Chinese.
+    expect(productCopy).toContain('Could not detect the Pi runtime');
   });
 
   it('uses absolute bundled Pi CLI and packaged Node paths without resume flags', () => {
