@@ -190,6 +190,19 @@ export class NativeWorkerRuntime {
       // gate are derived. `log` is wired so a server's stderr lands in the
       // worker log rather than filling its pipe (ARD D11 point 5).
       mcp: { ...(this.options.log ? { log: this.options.log } : {}) },
+      // P5-2-5. Present unless the host explicitly said no, which is the
+      // contract's "an install with no prior choice gets the full builtin
+      // catalog". An explicit `false` registers no `Task*` at all, so a user who
+      // turned delegation off does not pay for its tool schemas either.
+      ...(this.options.subagents?.enabled === false
+        ? {}
+        : {
+            subagents: {
+              ...(this.options.subagents?.disabled?.length
+                ? { disabled: this.options.subagents.disabled }
+                : {}),
+            },
+          }),
       permissions: {
         ...(this.options.permissions?.mode ? { mode: this.options.permissions.mode } : {}),
         ...(this.options.permissions?.gear ? { gear: this.options.permissions.gear } : {}),

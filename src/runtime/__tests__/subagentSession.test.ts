@@ -18,7 +18,7 @@ import {
   fauxToolCall,
 } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { RuntimeEvent } from '../../shared/types/runtimeEvents.ts';
+import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import {
   readSubagentHistory,
@@ -61,7 +61,7 @@ describe('SA14 / SA15 / SA16 · delegate records, usage and reopening', () => {
 
   async function build(
     script: Parameters<typeof scriptedProvider>[0],
-    events?: RuntimeEvent[]
+    events?: RuntimeEventDraft[]
   ): Promise<RuntimeHandle> {
     const handle = scriptedProvider(script);
     runtime = await createRuntime({
@@ -172,7 +172,7 @@ describe('SA14 / SA15 / SA16 · delegate records, usage and reopening', () => {
   });
 
   it('publishes a live lane on the event channel, terminal status included', async () => {
-    const events: RuntimeEvent[] = [];
+    const events: RuntimeEventDraft[] = [];
     const handle = await build(oneDelegation('report'), events);
     await handle.run({ prompt: 'go' });
 
@@ -193,7 +193,7 @@ describe('SA14 / SA15 / SA16 · delegate records, usage and reopening', () => {
   it('does not end the parent run on a delegate finishing', async () => {
     // SA14's other half. A delegate's own terminal events stay inside its
     // class; the parent's projector must see exactly one run end.
-    const events: RuntimeEvent[] = [];
+    const events: RuntimeEventDraft[] = [];
     const handle = await build(oneDelegation('report'), events);
     await handle.run({ prompt: 'go' });
 

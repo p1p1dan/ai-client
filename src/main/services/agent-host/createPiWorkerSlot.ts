@@ -102,6 +102,10 @@ export async function createPiWorkerSlot(
         // payload is byte-identical to what it was before this fix.
         ...(options.tier ? { tier: options.tier } : {}),
         ...(options.permissions ? { permissions: options.permissions } : {}),
+        // P5-2-5: omitted when the user has made no choice, which the native
+        // runtime reads as "on with the builtin catalog". Only an explicit
+        // setting travels, so an untouched install's payload is unchanged.
+        ...(options.subagents ? { subagents: options.subagents } : {}),
       },
       { timeoutMs: options.bootstrapTimeoutMs ?? BOOTSTRAP_REQUEST_TIMEOUT_MS }
     );

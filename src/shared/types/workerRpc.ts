@@ -123,6 +123,21 @@ export interface WorkerBootstrapPayload {
    */
   tier?: SessionPermissionTier;
   permissions?: RuntimePermissionSettings;
+  /**
+   * P5-2-5 — whether this worker offers delegation, and which definitions the
+   * user switched off.
+   *
+   * Absent means "the host did not say", which the native runtime reads as ON
+   * with the full builtin catalog: that is the P5-2 contract's default for an
+   * install with no prior choice. Only an explicit `enabled: false` removes the
+   * `Task*` tools, because the legacy plugin's opt-in default is about ITS
+   * prompt cost and is not a statement about native delegation.
+   *
+   * `disabled` is per-install app state, keyed by definition name. It is
+   * deliberately not written into the Markdown: a definition document is a
+   * shareable artifact and the switch is this machine's.
+   */
+  subagents?: { enabled: boolean; disabled?: readonly string[] };
 }
 
 export interface WorkerHistoryResult {

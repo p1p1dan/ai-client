@@ -81,6 +81,7 @@ import {
 } from '../legacyImport/PiImportProcess';
 import { type CreatedPiWorkerSlot, createPiWorkerSlot } from './createPiWorkerSlot';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
+import { type NativeSubagentSettings, nativeSubagentSettings } from './nativeSubagentSettings';
 import type { WorkerSlot, WorkerSlotLifecycleEvent } from './WorkerSlot';
 import { normalizeWorkerPath, sessionWorkerKey, workspaceWorkerKey } from './workerSessionKey';
 
@@ -195,6 +196,15 @@ export interface WorkerManagerOptions {
    * hermetic; production stats the real path.
    */
   sessionFileExists?: (sessionFile: string) => Promise<boolean>;
+  /**
+   * P5-2-5 — whether this install offers native delegation, and which
+   * definitions it switched off.
+   *
+   * Injected for the same reason `sessionFileExists` is: production reads the
+   * shared settings file, which needs Electron's `app` paths, and a unit test
+   * that only wants to check slot bookkeeping must not have to stand one up.
+   */
+  readSubagentSettings?: () => NativeSubagentSettings;
   createImport?: typeof createPiImport;
   inspectImport?: typeof inspectPiImport;
   reconcileImport?: typeof reconcilePiImport;
@@ -313,6 +323,7 @@ function readStringArray(payload: unknown, key: string): string[] {
 
 export class WorkerManager {
   private readonly createSlot: typeof createPiWorkerSlot;
+  private readonly readSubagentSettings: () => NativeSubagentSettings;
   private readonly bindRuntimeIdentity: (sessionId: string, sessionFile: string) => Promise<void>;
   private readonly commitResumed: NonNullable<WorkerManagerOptions['commitResumed']>;
   private readonly commitPiLeaf: NonNullable<WorkerManagerOptions['commitPiLeaf']>;
@@ -351,6 +362,11 @@ export class WorkerManager {
 
   constructor(options: WorkerManagerOptions = {}) {
     this.createSlot = options.createSlot ?? createPiWorkerSlot;
+    // The DEFAULT is a constant, not a settings read. Reading the real file
+    // needs Electron's `app` paths, and a manager built without a host — every
+    // unit test in this file — would then fail on something unrelated to what
+    // it is testing. The production singleton below injects the real reader.
+    this.readSubagentSettings = options.readSubagentSettings ?? (() => ({ enabled: true }));
     this.bindRuntimeIdentity = options.bindRuntimeIdentity ?? (async () => undefined);
     this.commitResumed = options.commitResumed ?? (async () => undefined);
     this.commitPiLeaf = options.commitPiLeaf ?? (async () => undefined);
@@ -1951,6 +1967,10 @@ export class WorkerManager {
       ...(entry.unbound ? { unbound: true } : {}),
       ...(entry.tier ? { tier: entry.tier } : {}),
       ...(entry.permissions ? { permissions: entry.permissions } : {}),
+      // P5-2-5: read at spawn time, not cached on the entry, so a user who
+      // switches delegation off gets it off on the next worker rather than only
+      // after a restart.
+      subagents: this.readSubagentSettings(),
       ...selection,
       onSlotCreated: (slot) => {
         this.ownedSlots.add(slot);
@@ -2781,6 +2801,9 @@ export class WorkerManager {
 }
 
 export const workerManager = new WorkerManager({
+  // P5-2-5: the real settings read, injected here rather than defaulted inside
+  // the class. See the constructor note.
+  readSubagentSettings: () => nativeSubagentSettings(),
   bindRuntimeIdentity: (sessionId, sessionFile) =>
     sessionIndexService.bindRuntimeIdentity(sessionId, sessionFile),
   commitResumed: (input) => sessionIndexService.commitResumed(input),

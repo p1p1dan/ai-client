@@ -263,6 +263,37 @@ describe('NativeWorkerRuntime bootstrap', () => {
     expect(typeof fake.options?.permissions?.approve).toBe('function');
   });
 
+  it('offers delegation when the host said nothing about it (P5-2-5)', async () => {
+    // An install with no prior preference gets the builtin catalog. The legacy
+    // plugin's opt-in defaults to OFF for its own prompt-cost reasons, and
+    // reading that as a decision about native delegation would leave every new
+    // install without delegates nobody chose to remove.
+    const fake = fakeRuntime();
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    expect(fake.options?.subagents).toBeDefined();
+    expect(fake.options?.subagents?.disabled).toBeUndefined();
+  });
+
+  it('registers no delegation at all when the host explicitly disabled it (P5-2-5)', async () => {
+    // Not "an empty catalog": no `subagents` key at all, so no `Task*` tool
+    // schemas ride in a request the user does not want to pay for.
+    const fake = fakeRuntime();
+    const { runtime } = build(fake, { subagents: { enabled: false } });
+    live = runtime;
+    await runtime.bootstrap();
+    expect(fake.options?.subagents).toBeUndefined();
+  });
+
+  it('carries the per-install disabled list into the graph (P5-2-5)', async () => {
+    const fake = fakeRuntime();
+    const { runtime } = build(fake, { subagents: { enabled: true, disabled: ['fixer'] } });
+    live = runtime;
+    await runtime.bootstrap();
+    expect(fake.options?.subagents?.disabled).toEqual(['fixer']);
+  });
+
   it('names the missing variable when no agent dir is configured', async () => {
     const fake = fakeRuntime();
     const { runtime } = build(fake, { agentDir: undefined, env: {} });
