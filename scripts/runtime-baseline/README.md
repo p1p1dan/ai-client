@@ -1,4 +1,25 @@
-# P2-0 旧后端基线采集
+# 缓存命中率采集（P2-0 基线 / P2-5 自有 runtime / P2-6 对比）
+
+本目录有四个入口，共用同一份冻结套件 `suite.mjs` 和同一套指标 `metrics.mjs`：
+
+| 脚本 | 作用 |
+|---|---|
+| `run.mjs` | 旧后端（`bootstrapPiAgentSession` + 已装 pi-coding-agent SDK）采集 |
+| `run-native.mjs` | 自有 runtime（`createRuntime`）采集，产出同一种归档形状 |
+| `verify.mjs` / `verify-native.mjs` | 各自的离线复核，不访问网关 |
+| `compare.mjs` | 出 P2-6 新旧对比报告；两份归档不可比时直接报错，不出带脚注的差值 |
+| `preflight.mjs` | 探某个网关到底供不供目标模型（`/v1/models` 不列也会再打一次最小请求） |
+
+**可比性的硬要求**：命中率主要是网关的性质，不是后端的性质。对比的两份归档必须
+同套件、同模型、同网关、同工作目录，`compare.mjs` 会逐项断言；跨网关的历史归档只能作参考值
+传给 `--archive`，不作基准。P2-5/P2-6 的实际执行与结论见
+[证据](../../docs/plantree/plans/runtime-evolution/evidence/p2-5/README.md)。
+
+`run-native.mjs` 在 manifest 里用 `settingDeviations` 声明它无法对齐的基线设置（压缩阈值改为
+按模型窗口推导、工具集不同等）；`compare.mjs` 在这个字段缺失时拒绝出报告，避免把「没对齐」
+写成「完全一致」。
+
+## P2-0 旧后端基线采集
 
 计划与验收口径见 [plantree](../../docs/plantree/plans/runtime-evolution/topics/p2-0-cache-baseline.md)。
 这是独立测试工具，使用现有 `bootstrapPiAgentSession` 和旧版 SDK；无需构建 Electron。

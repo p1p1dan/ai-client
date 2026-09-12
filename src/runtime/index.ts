@@ -70,6 +70,7 @@ export {
 } from './flags.ts';
 export { standaloneHost } from './host/config.ts';
 export { RuntimeHostError } from './host/errors.ts';
+export { resolveWorkerShell } from './host/shell.ts';
 export type { AgentLoopConfig } from './plugins/agent-loop/index.ts';
 export { DEFAULT_AGENT_LOOP_CONFIG } from './plugins/agent-loop/index.ts';
 export type {
