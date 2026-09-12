@@ -55,3 +55,6 @@ bugOutput/
 
 # Dev credentials injected by scripts/dev.js (never commit a real key)
 dev.env
+
+# Pasted terminal transcripts kept while working (scratch only)
+/*.txt
