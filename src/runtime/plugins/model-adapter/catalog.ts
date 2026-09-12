@@ -1,13 +1,22 @@
 /**
- * Reading the pi catalog the app already writes — `models.json` + `auth.json`
- * under the managed agent directory (ARD D7: the credential system does not
- * change, the runtime reads it).
+ * The model catalog — `models.json` + `auth.json` in shape, wherever they came
+ * from.
  *
- * `src/main/services/piModelConfig/PiModelConfigService.ts` is the writer, and
- * `configValidation.ts#toPiModelsJson` is the exact shape landed on disk. This
- * module is deliberately a READER only: nothing here writes, so a runtime bug
- * can never corrupt the files the legacy backend also depends on while both
- * backends coexist (ARD §5.1).
+ * `src/main/services/piModelConfig/PiModelConfigService.ts` builds both, and
+ * `configValidation.ts#toPiModelsJson` is the exact shape. This module is
+ * deliberately a READER only: nothing here writes, so a runtime bug can never
+ * corrupt the files the legacy backend also depends on while both backends
+ * coexist (ARD §5.1).
+ *
+ * ## P5-5: on disk is now the fallback, not the source
+ *
+ * Those files exist because pi can only be configured through files, which
+ * forces the app to decrypt the user's keys and write them out at 0600 — a
+ * coexistence-period measure due for removal with the rest of pi-coding-agent
+ * in P6-2. In the app, Main now assembles the same two documents in memory and
+ * hands them to the native worker in its bootstrap payload; `readPiCatalog`
+ * below is what the smoke runner and the fixed probe suite still use, because
+ * they point at a fixture directory and have no Main to ask.
  *
  * ## The `$NAME` header rule
  *
@@ -101,7 +110,8 @@ export interface CatalogDrop {
 }
 
 export interface PiCatalog {
-  dir: string;
+  /** The directory read, or `null` when the host handed the documents over. */
+  dir: string | null;
   providers: CatalogProvider[];
   dropped: CatalogDrop[];
 }
@@ -122,12 +132,25 @@ export async function readPiCatalog(
 ): Promise<PiCatalog> {
   const models = await readJsonFile(join(dir, MODELS_FILE_NAME), 'models_json', io);
   const auth = await readOptionalJsonFile(join(dir, AUTH_FILE_NAME), io);
+  return parsePiCatalog({ models, auth }, env, { dir, label: join(dir, MODELS_FILE_NAME) });
+}
+
+/**
+ * P5-5 — the one parser, whether the documents came off disk or over the wire.
+ *
+ * Shared rather than reimplemented on the host side: the two sources must
+ * produce the same catalog from the same bytes, and a second implementation
+ * would be a second set of rules about which providers survive.
+ */
+export function parsePiCatalog(
+  documents: { models: Record<string, unknown>; auth?: Record<string, unknown> | null },
+  env: NodeJS.ProcessEnv,
+  origin: { dir: string | null; label: string }
+): PiCatalog {
+  const { models, auth = null } = documents;
   const providersRaw = asRecord(models.providers);
   if (!providersRaw) {
-    throw new RuntimeConfigError(
-      'models_json_shape',
-      `${join(dir, MODELS_FILE_NAME)} has no "providers" object`
-    );
+    throw new RuntimeConfigError('models_json_shape', `${origin.label} has no "providers" object`);
   }
   const providers: CatalogProvider[] = [];
   const dropped: CatalogDrop[] = [];
@@ -163,7 +186,7 @@ export async function readPiCatalog(
       apiKey: readProviderKey(auth, id),
     });
   }
-  return { dir, providers, dropped };
+  return { dir: origin.dir, providers, dropped };
 }
 
 /**

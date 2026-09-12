@@ -46,7 +46,7 @@ import {
   McpPlugin,
   type RuntimeMcpService,
 } from './plugins/mcp/index.ts';
-import { readPiCatalog } from './plugins/model-adapter/catalog.ts';
+import { parsePiCatalog, readPiCatalog } from './plugins/model-adapter/catalog.ts';
 import { type ModelAdapterConfig, ModelAdapterPlugin } from './plugins/model-adapter/index.ts';
 import {
   createRuntimeApprovalBridge,
@@ -128,6 +128,17 @@ export interface RuntimeBootstrapOptions {
   agentDir?: string;
   traceDir?: string | null;
   providers?: ModelAdapterConfig['providers'];
+  /**
+   * P5-5 — the catalog documents, supplied by the host instead of read from
+   * `agentDir`.
+   *
+   * Takes precedence over the directory, which stays as the fallback for the
+   * lanes that have no host to ask: the smoke runner and the fixed probe suite
+   * both point at a fixture directory. `providers` still outranks both — that
+   * one substitutes the pi-ai objects themselves and has to remain visible in
+   * the trace as a run that never touched a real endpoint.
+   */
+  modelCatalog?: { models: Record<string, unknown>; auth?: Record<string, unknown> };
   loop?: Partial<AgentLoopConfig>;
   now?: () => number;
   newRunId?: () => string;
@@ -343,14 +354,19 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       now: options.now,
       newRunId: options.newRunId,
     });
-    if (!options.providers && !agentDir) {
+    if (!options.providers && !options.modelCatalog && !agentDir) {
       throw new RuntimeConfigError(
         'agent_dir_unset',
-        'set AICLIENT_RUNTIME_AGENT_DIR or supply providers explicitly'
+        'set AICLIENT_RUNTIME_AGENT_DIR, supply a model catalog, or supply providers explicitly'
       );
     }
-    const catalog =
-      !options.providers && agentDir ? await readPiCatalog(agentDir, env, io) : undefined;
+    const catalog = options.providers
+      ? undefined
+      : options.modelCatalog
+        ? parsePiCatalog(options.modelCatalog, env, { dir: null, label: 'the supplied catalog' })
+        : agentDir
+          ? await readPiCatalog(agentDir, env, io)
+          : undefined;
     await ctx.plugin(ModelAdapterPlugin, { providers: options.providers, catalog });
     // P5-2-2, after the model adapter because a delegate's pinned model is
     // resolved against the live catalog, and after the tools plugin because it

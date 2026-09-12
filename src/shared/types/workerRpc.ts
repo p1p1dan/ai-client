@@ -139,6 +139,34 @@ export interface WorkerBootstrapPayload {
    * shareable artifact and the switch is this machine's.
    */
   subagents?: { enabled: boolean; disabled?: readonly string[] };
+  /**
+   * P5-5 — the model catalog, handed over rather than read off disk.
+   *
+   * Until this node the native runtime read `models.json` + `auth.json` from
+   * the agent directory. Those two files exist for the LEGACY backend: pi can
+   * only be configured through files, so the app has to decrypt the user's keys
+   * and write them out at 0600 for it. The native backend has no such
+   * constraint, and keeping it on the files meant a coexistence-period measure
+   * (H/17's fifth decision, due for removal in P6-2) was silently load-bearing
+   * for the backend that is supposed to outlive it.
+   *
+   * The shape is `models.json`'s, not a new one, so both paths go through the
+   * same parser and cannot drift. Absent means "read the directory", which is
+   * what the smoke and probe lanes do — they point at a fixture directory and
+   * have no Main to assemble anything.
+   */
+  modelCatalog?: WorkerModelCatalog;
+}
+
+/**
+ * The two documents the catalog is made of, in the exact shape they take on
+ * disk. `auth` is separate for the same reason the file is: `models.json` is a
+ * configuration a user may reasonably look at, and it must never come to hold
+ * a key.
+ */
+export interface WorkerModelCatalog {
+  models: Record<string, unknown>;
+  auth?: Record<string, unknown>;
 }
 
 export interface WorkerHistoryResult {

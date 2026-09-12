@@ -99,6 +99,14 @@ export class ModelAdapterPlugin extends Service implements ModelAdapterService {
       );
     }
     for (const provider of catalog.providers) this.bindProvider(provider);
+    if (catalog.dir === null) {
+      return {
+        kind: 'host',
+        providerCount: catalog.providers.length,
+        modelCount: this.order.length,
+        dropped: catalog.dropped.map((drop) => `${drop.id}:${drop.reason}`),
+      };
+    }
     return {
       kind: 'agent-dir',
       dir: catalog.dir,

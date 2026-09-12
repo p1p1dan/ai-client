@@ -178,7 +178,11 @@ export class NativeWorkerRuntime {
     const handle = await create({
       ...(this.options.env ? { env: this.options.env } : {}),
       host: this.options.host,
+      // Still passed when the host supplied a catalog: the directory is also
+      // where skills, prompts, subagent definitions and the session file live,
+      // and only the MODEL catalog moved off it in P5-5.
       agentDir,
+      ...(this.options.modelCatalog ? { modelCatalog: this.options.modelCatalog } : {}),
       // Without this the loop registers no tools and `bootstrap.ts` pins it to
       // singleTurn — a worker that can only ever answer once. The workspace is
       // the session's cwd, which bootstrap also cross-checks against the

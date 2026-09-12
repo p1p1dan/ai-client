@@ -7,6 +7,9 @@
  * "the runtime is usable". These cases pin the difference.
  */
 
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { describe, expect, it } from 'vitest';
 import { createRuntime } from '../bootstrap.ts';
@@ -57,6 +60,73 @@ describe('createRuntime', () => {
   it('fails with a fixable message when no catalog directory is configured', async () => {
     await expect(createRuntime({ env: {} })).rejects.toThrow(RuntimeConfigError);
     await expect(createRuntime({ env: {} })).rejects.toThrow(/AICLIENT_RUNTIME_AGENT_DIR/);
+  });
+
+  /**
+   * P5-5. `models.json` + `auth.json` exist for the LEGACY backend — pi can
+   * only be configured through files, so the app decrypts the user's keys and
+   * writes them out. Leaving native on the same files made a coexistence-period
+   * measure load-bearing for the backend meant to outlive it.
+   */
+  it('takes the catalog the host supplies instead of reading a directory', async () => {
+    const runtime = await createRuntime({
+      env: {},
+      modelCatalog: {
+        models: {
+          providers: {
+            gw: {
+              api: 'anthropic-messages',
+              baseUrl: 'https://gw.example',
+              models: [{ id: 'claude-sonnet-5' }],
+            },
+          },
+        },
+        auth: { gw: { type: 'api_key', key: 'sk-in-memory' } },
+      },
+    });
+    try {
+      expect(runtime.model.list()).toEqual([{ provider: 'gw', id: 'claude-sonnet-5' }]);
+      expect(runtime.model.source).toEqual({
+        kind: 'host',
+        providerCount: 1,
+        modelCount: 1,
+        dropped: [],
+      });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it('prefers the supplied catalog over a directory that also exists', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'runtime-bootstrap-'));
+    try {
+      await writeFile(
+        join(dir, 'models.json'),
+        JSON.stringify({
+          providers: {
+            onDisk: { api: 'openai-completions', baseUrl: 'https://x', models: [{ id: 'stale' }] },
+          },
+        })
+      );
+      const runtime = await createRuntime({
+        env: {},
+        agentDir: dir,
+        modelCatalog: {
+          models: {
+            providers: {
+              fresh: { api: 'openai-completions', baseUrl: 'https://y', models: [{ id: 'live' }] },
+            },
+          },
+        },
+      });
+      try {
+        expect(runtime.model.list()).toEqual([{ provider: 'fresh', id: 'live' }]);
+      } finally {
+        await runtime.dispose();
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('retracts the services when the context is disposed', async () => {

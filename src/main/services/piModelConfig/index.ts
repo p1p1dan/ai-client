@@ -136,6 +136,33 @@ export function writeUserProviderRuntimeConfig(): void {
 }
 
 /**
+ * P5-5 — the model catalog to hand a native worker, assembled in memory.
+ *
+ * Returns `undefined` when there is nothing to hand over, and the worker then
+ * falls back to reading the agent directory exactly as before. That is not a
+ * theoretical branch: a machine whose keyring is locked cannot read the user
+ * group, and a catalog missing half its providers would be worse than the file
+ * the sync already left on disk.
+ */
+export function resolveNativeModelCatalog():
+  | { models: Record<string, unknown>; auth: Record<string, unknown> }
+  | undefined {
+  try {
+    const credential = managedCredential();
+    const catalog = serviceFor(getAppPiAgentDir()).buildNativeModelCatalog({
+      inheritedApiKey: credential?.apiKey ?? '',
+      inheritedBaseUrl: credential?.baseUrl ?? '',
+    });
+    return Object.keys(catalog.models.providers as Record<string, unknown>).length > 0
+      ? catalog
+      : undefined;
+  } catch (error) {
+    console.warn('[pi-models] failed to assemble the native model catalog', error);
+    return undefined;
+  }
+}
+
+/**
  * The credentials a provider inherits when it does not carry its own: what this
  * client received at login. `pi` first (stated by the server since D06), then
  * the codex derivation older deployments leave us with.

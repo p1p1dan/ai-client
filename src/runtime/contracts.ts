@@ -153,6 +153,13 @@ export type ModelCatalogSource =
       /** P5-5: providers the catalog could not bind, `id:reason` each. Empty when all bound. */
       dropped: string[];
     }
+  /**
+   * P5-5 — the host handed the catalog over instead of leaving it on disk.
+   * Distinct from `injected`, which means a caller supplied ready-made pi-ai
+   * providers (the offline lane): here the documents are the real ones, just
+   * not read through the filesystem.
+   */
+  | { kind: 'host'; providerCount: number; modelCount: number; dropped: string[] }
   | { kind: 'injected'; providerCount: number; modelCount: number };
 
 /** One entry in a run trace's `steps` array (engineering standard §2). */

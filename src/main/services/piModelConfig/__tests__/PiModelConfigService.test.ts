@@ -1073,3 +1073,105 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
     expect(Object.keys(providers)).toEqual(['user-3f2a9c11']);
   });
 });
+
+/**
+ * P5-5 — the catalog handed to a native worker.
+ *
+ * The whole point of the node is that the two plaintext files stop being
+ * load-bearing for the backend that outlives pi. What must NOT happen is the
+ * two paths drifting: one builder, so "what native runs on" and "what legacy
+ * reads" can differ only by when they were assembled.
+ */
+describe('PiModelConfigService — native model catalog (P5-5)', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'pi-model-native-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const userProvider = {
+    id: '3f2a9c11-0000-4000-8000-000000000000',
+    name: 'My Mistral',
+    baseUrl: 'https://api.mistral.ai/v1',
+    api: 'mistral-conversations',
+    apiKey: 'USER-KEY',
+    models: ['mistral-large'],
+    enabled: true,
+    createdAt: '2026-09-10T00:00:00.000Z',
+  };
+
+  function service(options: {
+    userProviders?: (typeof userProvider)[];
+    bundled?: PiManagedModelsConfig | null;
+    fetchFn?: PiModelConfigFetch;
+  }): PiModelConfigService {
+    return new PiModelConfigService({
+      agentDir: dir,
+      fetchFn: options.fetchFn ?? (async () => ({ ok: false, status: 500, text: async () => '' })),
+      now: () => 1234,
+      readBundledCatalog: () => options.bundled ?? null,
+      userProviders: () => options.userProviders ?? [],
+    });
+  }
+
+  it('assembles byte-identical documents to the ones written for legacy', async () => {
+    const built = service({
+      userProviders: [userProvider],
+      fetchFn: async () => ({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(REMOTE_CONFIG),
+      }),
+    });
+    await built.sync({
+      endpointUrl: 'https://onboard.example/api/v1/models-config',
+      apiKey: 'login-key',
+      inheritedBaseUrl: 'https://cch.example/v1',
+    });
+
+    const catalog = built.buildNativeModelCatalog({
+      inheritedApiKey: 'login-key',
+      inheritedBaseUrl: 'https://cch.example/v1',
+    });
+    expect(catalog.models).toEqual(JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8')));
+    expect(catalog.auth).toEqual(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8')));
+  });
+
+  it('carries the user service and its key without either touching disk', () => {
+    const catalog = service({ userProviders: [userProvider] }).buildNativeModelCatalog({
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+    const providers = catalog.models.providers as Record<string, { api: string }>;
+    expect(providers['my-mistral'].api).toBe('mistral-conversations');
+    expect(catalog.auth['my-mistral']).toEqual({ type: 'api_key', key: 'USER-KEY' });
+    // Nothing was written: the sync never ran, and assembling is a read.
+    expect(existsSync(join(dir, 'models.json'))).toBe(false);
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
+  });
+
+  it('falls back to the bundled snapshot, so a cold launch has a catalog (A3/MC05)', () => {
+    const bundled = validatePiManagedModelsConfig(
+      {
+        version: 1,
+        providers: {
+          shipped: {
+            name: 'Shipped',
+            api: 'anthropic-messages',
+            models: [{ id: 'claude-sonnet-5' }],
+          },
+        },
+      },
+      { credentialsAllowed: false }
+    );
+    const catalog = service({ bundled }).buildNativeModelCatalog({
+      inheritedApiKey: 'k',
+      inheritedBaseUrl: 'https://cch.example/v1',
+    });
+    const providers = catalog.models.providers as Record<string, { baseUrl: string }>;
+    // D15 applies here too: the snapshot states no address of its own.
+    expect(providers.shipped.baseUrl).toBe('https://cch.example');
+  });
+});

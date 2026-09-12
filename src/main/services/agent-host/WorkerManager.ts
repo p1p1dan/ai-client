@@ -53,6 +53,7 @@ import {
   type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
+  type WorkerModelCatalog,
   type WorkerPermissionRespondPayload,
   type WorkerPermissionRespondResult,
   type WorkerPreviewRespondPayload,
@@ -81,6 +82,7 @@ import {
   inspectPiImport,
   reconcilePiImport,
 } from '../legacyImport/PiImportProcess';
+import { resolveNativeModelCatalog } from '../piModelConfig';
 import { type PreviewShowRequest, previewWindowManager } from '../preview/PreviewWindowManager';
 import { type CreatedPiWorkerSlot, createPiWorkerSlot } from './createPiWorkerSlot';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
@@ -209,6 +211,15 @@ export interface WorkerManagerOptions {
    */
   readSubagentSettings?: () => NativeSubagentSettings;
   /**
+   * P5-5 — assemble the model catalog for a native worker, or return
+   * `undefined` to let it read the agent directory as before.
+   *
+   * Injected for the same reason as the reader above: the real implementation
+   * reaches the credential vault and Electron's paths, which a unit test of
+   * slot lifecycle has no business starting.
+   */
+  readModelCatalog?: () => WorkerModelCatalog | undefined;
+  /**
    * P5-2-3 — show a workspace page in the preview window.
    *
    * Injected for the same reason as the two above: production opens a real
@@ -336,6 +347,7 @@ function readStringArray(payload: unknown, key: string): string[] {
 export class WorkerManager {
   private readonly createSlot: typeof createPiWorkerSlot;
   private readonly readSubagentSettings: () => NativeSubagentSettings;
+  private readonly readModelCatalog: () => WorkerModelCatalog | undefined;
   private readonly showPreview: (request: PreviewShowRequest) => Promise<void>;
   private readonly bindRuntimeIdentity: (sessionId: string, sessionFile: string) => Promise<void>;
   private readonly commitResumed: NonNullable<WorkerManagerOptions['commitResumed']>;
@@ -380,6 +392,10 @@ export class WorkerManager {
     // unit test in this file — would then fail on something unrelated to what
     // it is testing. The production singleton below injects the real reader.
     this.readSubagentSettings = options.readSubagentSettings ?? (() => ({ enabled: true }));
+    // P5-5: the default hands nothing over, so a manager built without a
+    // host behaves exactly as it did before this node — the worker reads the
+    // agent directory. The production singleton below injects the assembler.
+    this.readModelCatalog = options.readModelCatalog ?? (() => undefined);
     // Same rule, one step further: the DEFAULT refuses. A manager with no host
     // has no window to open, and answering `ok: true` from one would tell the
     // model a page is on screen when nothing is. The production singleton below
@@ -2033,6 +2049,7 @@ export class WorkerManager {
     options: { fresh?: boolean } = {}
   ): Promise<CreatedPiWorkerSlot> {
     let expectedSlot: WorkerSlot | null = null;
+    const modelCatalog = this.readModelCatalog();
     const created = await this.createSlot({
       slotKey: entry.key,
       logicalSessionId: entry.logicalSessionId,
@@ -2047,6 +2064,10 @@ export class WorkerManager {
       // switches delegation off gets it off on the next worker rather than only
       // after a restart.
       subagents: this.readSubagentSettings(),
+      // P5-5: read at spawn time for the same reason as the line above — a key
+      // the user just added, or a sync that just landed, reaches the next
+      // worker without waiting for a restart.
+      ...(modelCatalog ? { modelCatalog } : {}),
       ...selection,
       onSlotCreated: (slot) => {
         this.ownedSlots.add(slot);
@@ -2891,6 +2912,8 @@ export const workerManager = new WorkerManager({
   // P5-2-5: the real settings read, injected here rather than defaulted inside
   // the class. See the constructor note.
   readSubagentSettings: () => nativeSubagentSettings(),
+  // P5-5: the real assembler, injected for the same reason.
+  readModelCatalog: () => resolveNativeModelCatalog(),
   // P5-2-3: the real preview window, injected for the same reason.
   showPreview: (request) => previewWindowManager.show(request),
   bindRuntimeIdentity: (sessionId, sessionFile) =>

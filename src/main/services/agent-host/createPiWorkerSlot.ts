@@ -106,6 +106,10 @@ export async function createPiWorkerSlot(
         // runtime reads as "on with the builtin catalog". Only an explicit
         // setting travels, so an untouched install's payload is unchanged.
         ...(options.subagents ? { subagents: options.subagents } : {}),
+        // P5-5: present only when Main could assemble one. Absent leaves the
+        // native worker reading the agent directory, which is what every
+        // pre-P5-5 build did and what the smoke lanes still do.
+        ...(options.modelCatalog ? { modelCatalog: options.modelCatalog } : {}),
       },
       { timeoutMs: options.bootstrapTimeoutMs ?? BOOTSTRAP_REQUEST_TIMEOUT_MS }
     );

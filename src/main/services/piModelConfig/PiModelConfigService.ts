@@ -541,47 +541,79 @@ export class PiModelConfigService {
   ): void {
     mkdirSync(this.agentDir, { recursive: true, mode: 0o700 });
     chmodSync(this.agentDir, 0o700);
-    const models = toPiModelsJson(config, {
-      inheritedBaseUrl: inheritedBaseUrl.trim().replace(/\/+$/, ''),
-    }) as { providers: Record<string, unknown> };
-    // Merged AFTER the managed providers, which is what makes "同名以用户组
-    // 优先" true: a user service whose slug collides with a managed provider
-    // id replaces it here rather than being dropped.
-    for (const provider of userProviders) {
-      if (!provider.enabled) continue;
-      models.providers[userProviderId(provider)] = toPiUserProvider(provider);
-    }
+    const { models, auth } = buildRuntimeConfig(
+      config,
+      inheritedApiKey,
+      inheritedBaseUrl,
+      userProviders
+    );
     atomicWriteJson(this.modelsPath, models, 0o600);
-    this.writeAuth(config, inheritedApiKey, userProviders);
+    atomicWriteJson(this.authPath, auth, 0o600);
   }
 
   /**
-   * One entry per provider, each with ITS key: the administrator's when that
-   * provider says its key is managed, this client's login key otherwise. The
-   * previous version wrote the login key for every provider, which silently
-   * ignored an administrator-supplied one.
+   * P5-5 — the same two documents, in memory, for a backend that does not need
+   * them on disk.
+   *
+   * Identical inputs and the identical builder, so "what native runs on" and
+   * "what legacy reads" can only ever differ by when they were assembled. The
+   * files stay because pi has no other way in; the native worker is handed this
+   * instead, and the plaintext keys never have to exist outside this process
+   * for it.
    */
-  private writeAuth(
-    config: PiManagedModelsConfig,
-    inheritedApiKey: string,
-    userProviders: readonly UserProvider[] = []
-  ): void {
-    const auth: Record<string, { type: 'api_key'; key: string }> = {};
-    for (const [providerId, provider] of Object.entries(config.providers)) {
-      auth[providerId] = { type: 'api_key', key: resolveProviderApiKey(provider, inheritedApiKey) };
-    }
-    // A user service always carries its own key — inheriting the company one
-    // would silently bill the gateway for a request the user aimed elsewhere.
-    for (const provider of userProviders) {
-      if (!provider.enabled) continue;
-      auth[userProviderId(provider)] = { type: 'api_key', key: provider.apiKey };
-    }
-    atomicWriteJson(this.authPath, auth, 0o600);
+  buildNativeModelCatalog(input: { inheritedApiKey: string; inheritedBaseUrl: string }): {
+    models: Record<string, unknown>;
+    auth: Record<string, unknown>;
+  } {
+    const cached = readCachedConfig(this.sourcePath) ?? this.readBundledCatalog();
+    return buildRuntimeConfig(
+      cached ?? { version: 1 as const, providers: {} },
+      input.inheritedApiKey,
+      input.inheritedBaseUrl,
+      this.userProviders()
+    );
   }
 
   private writeState(state: PiModelSyncState): void {
     atomicWriteJson(this.statePath, state, 0o600);
   }
+}
+
+/**
+ * The two documents a runtime needs, from one catalog plus the user's own
+ * services.
+ *
+ * A pure function so P5-5's in-memory hand-over and the on-disk write for
+ * legacy cannot diverge: there is exactly one place that decides which
+ * providers exist, which address each is reached at and which key it presents.
+ */
+function buildRuntimeConfig(
+  config: PiManagedModelsConfig,
+  inheritedApiKey: string,
+  inheritedBaseUrl: string,
+  userProviders: readonly UserProvider[]
+): { models: Record<string, unknown>; auth: Record<string, unknown> } {
+  const models = toPiModelsJson(config, {
+    inheritedBaseUrl: inheritedBaseUrl.trim().replace(/\/+$/, ''),
+  }) as { providers: Record<string, unknown> };
+  // One entry per provider, each with ITS key: the administrator's when that
+  // provider says its key is managed, this client's login key otherwise.
+  const auth: Record<string, { type: 'api_key'; key: string }> = {};
+  for (const [providerId, provider] of Object.entries(config.providers)) {
+    auth[providerId] = { type: 'api_key', key: resolveProviderApiKey(provider, inheritedApiKey) };
+  }
+  // Merged AFTER the managed providers, which is what makes "同名以用户组
+  // 优先" true: a user service whose slug collides with a managed provider
+  // id replaces it here rather than being dropped.
+  for (const provider of userProviders) {
+    if (!provider.enabled) continue;
+    const id = userProviderId(provider);
+    models.providers[id] = toPiUserProvider(provider);
+    // A user service always carries its own key — inheriting the company one
+    // would silently bill the gateway for a request the user aimed elsewhere.
+    auth[id] = { type: 'api_key', key: provider.apiKey };
+  }
+  return { models, auth };
 }
 
 /**

@@ -109,6 +109,13 @@ node --experimental-strip-types src/runtime/smoke/runOnce.ts \
 |---|---|
 | `AICLIENT_RUNTIME_BACKEND` | `legacy`（默认）/ `native`。D8：只走环境变量，不进设置页 |
 | `AICLIENT_RUNTIME_AGENT_DIR` | 目录覆盖；缺省回落到 `PI_CODING_AGENT_DIR`（Main 已导出） |
+
+P5-5 起，**应用内**的模型目录不再从这个目录读：Main 在内存里拼好
+`models.json` / `auth.json` 两份文档，随 `worker.bootstrap` 交给 native worker
+（`createRuntime` 的 `modelCatalog` 参数）。目录读取保留为回落，smoke 与固定探针
+仍走它——它们指向 fixture 目录，没有 Main 可问。目录本身依然承载技能、提示词模板、
+子代理定义与会话文件，只有模型目录这一项搬走了。
+
 | `AICLIENT_RUNTIME_TRACE_DIR` | trace 落盘目录；不设则只留在内存 |
 
 ## 给下一个 agent 的三条已知事实
