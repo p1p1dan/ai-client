@@ -92,6 +92,10 @@ P6-2 连同 pi-coding-agent 一起删。问题是 native 读的也是这两个�
   目录、没有 Main 可问；钥匙串锁着时也读不出用户组，与其交一份缺了一半的目录，
   不如让 worker 读那份 sync 已经留在盘上的文件。
 - `agentDir` 仍然传：技能、模板、子代理定义、会话文件都还在那儿，搬走的只有模型目录。
+- **只为 native 组装**（`7577099c`）。legacy worker 的目录来自盘上的文件、根本不看这份交付，
+  为它跑一遍解密、再把密钥塞进 IPC 载荷是白费。这道门要 Main 读 `AICLIENT_RUNTIME_BACKEND`，
+  而根 tsconfig 把 `src/runtime/**` 排除在外、Main import 不了 runtime——所以常量搬到
+  `src/shared/runtimeBackend.ts`，`flags.ts` 改为再导出，两边读的必然是同一个字符串。
 
 ## IM01 · 导入此前只有 pi 一个实现
 
