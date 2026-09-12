@@ -44,6 +44,7 @@ import type { RuntimeHostConfig } from '../contracts.ts';
 import { RuntimeHostError } from '../host/errors.ts';
 import { resolveWorkerShell } from '../host/shell.ts';
 import { JsonlSessionStore, type SessionConfig } from '../plugins/session/store.ts';
+import { subagentHistorySummaries } from '../plugins/subagent/records.ts';
 import { createPermissionPrompt, type PermissionPrompt } from './permissionPrompt.ts';
 import { createPreviewPrompt, type PreviewPrompt, type PreviewResponse } from './previewPrompt.ts';
 import {
@@ -292,12 +293,7 @@ export class NativeWorkerRuntime {
     const session = this.requireSession();
     const metadata = session.metadata();
     const history = this.options.sessionFile
-      ? {
-          logicalSessionId: this.logicalSessionId,
-          sessionFile: metadata.file,
-          workspacePath: this.cwd,
-          page: paginatePiSessionHistory(session.history()),
-        }
+      ? this.historyResult(session, metadata.file)
       : undefined;
 
     this.result = {
@@ -436,12 +432,7 @@ export class NativeWorkerRuntime {
     this.assertLogicalSession(input.logicalSessionId);
     await this.bootstrap();
     const session = this.requireSession();
-    return {
-      logicalSessionId: this.logicalSessionId,
-      sessionFile: session.file,
-      workspacePath: this.cwd,
-      page: paginatePiSessionHistory(session.history(), input.offset, input.limit),
-    };
+    return this.historyResult(session, session.file, input.offset, input.limit);
   }
 
   async tree(input: WorkerTreePayload) {
@@ -568,12 +559,7 @@ export class NativeWorkerRuntime {
       targetEntryId: input.targetEntryId,
       ...(rewound.editorText !== undefined ? { editorText: rewound.editorText } : {}),
       leaf: rewound.leaf,
-      history: {
-        logicalSessionId: this.logicalSessionId,
-        sessionFile: session.file,
-        workspacePath: this.cwd,
-        page: paginatePiSessionHistory(session.history()),
-      },
+      history: this.historyResult(session, session.file),
       tree: { snapshot: session.tree(this.logicalSessionId) },
     };
   }
@@ -635,12 +621,7 @@ export class NativeWorkerRuntime {
 
     const session = this.requireSession();
     const metadata = session.metadata();
-    const history = {
-      logicalSessionId: this.logicalSessionId,
-      sessionFile: metadata.file,
-      workspacePath: this.cwd,
-      page: paginatePiSessionHistory(session.history()),
-    };
+    const history = this.historyResult(session, metadata.file);
     // The cached bootstrap result is what Main reads back on a later reconnect;
     // leaving the pre-reload leaf in it would reintroduce the exact staleness
     // this call exists to clear.
@@ -711,6 +692,35 @@ export class NativeWorkerRuntime {
       if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error;
     });
     return { discarded: true };
+  }
+
+  /**
+   * One history answer, built the same way everywhere.
+   *
+   * P5-2-6 added the delegation summaries, and this helper exists because of
+   * it: the four callers (bootstrap, the history RPC, rewind, reload) used to
+   * assemble the same object by hand, and adding a field to three of four is
+   * how a reopened session shows its delegations and a rewound one does not.
+   *
+   * The summaries come off `snapshot().entries`, which is the ACTIVE BRANCH.
+   * A delegation on a branch the user rewound away from is not part of this
+   * conversation any more, and showing it would put a panel under a `Task` row
+   * that no longer exists.
+   */
+  private historyResult(
+    session: ReturnType<NativeWorkerRuntime['requireSession']>,
+    sessionFile: string,
+    offset?: number,
+    limit?: number
+  ): WorkerHistoryResult {
+    const subagents = subagentHistorySummaries(session.snapshot().entries);
+    return {
+      logicalSessionId: this.logicalSessionId,
+      sessionFile,
+      workspacePath: this.cwd,
+      page: paginatePiSessionHistory(session.history(), offset, limit),
+      ...(subagents.length ? { subagents } : {}),
+    };
   }
 
   private async readForkHistory(file: string) {

@@ -155,6 +155,18 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
               workspace: options.cwd,
             },
             kind: kindOf(request.tool),
+            // P5-2-6. Which delegate is asking. The renderer joins on `agentId`
+            // to put "from subagent" on the card and "Awaiting permission" on
+            // the delegation's own panel; without it a delegate's gate looked
+            // like the main agent's, which is the exact confusion T-34 was
+            // built to end. Absent on the parent's own calls, and that absence
+            // is the signal, not a missing field.
+            ...(request.delegation
+              ? {
+                  agentId: request.delegation.delegationId,
+                  agentName: request.delegation.agentName,
+                }
+              : {}),
             decisions: OFFERED,
             timeoutMs: options.timeoutMs ?? PERMISSION_TIMEOUT_MS,
             ...(detail ? { detail } : {}),

@@ -341,8 +341,7 @@ export class SubagentPlugin extends Service implements SubagentService {
       parentToolCallId: envelope.parentToolCallId,
       agentId: envelope.delegationId,
     };
-    const activity = activityForEvent(envelope.event, base);
-    if (activity) this.emitActivity(activity);
+    for (const activity of activityForEvent(envelope.event, base)) this.emitActivity(activity);
     // The delegate's own messages are PERSISTED whole, as custom entries. The
     // live projection above is a bounded summary of the same thing; this is the
     // copy a history read gets back.

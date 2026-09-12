@@ -69,6 +69,24 @@ describe('ToolRows.tsx — subagent panel mount', () => {
     expect(callSites).toContain('parentRunning={view.running}');
   });
 
+  /**
+   * P5-2-6 — the panel scrolls locally and follows its own tail.
+   *
+   * Asserted as wiring rather than as behaviour because the behaviour needs
+   * layout: `scrollHeight` and `clientHeight` are both 0 under happy-dom, so a
+   * mount test could only prove the handler was called, never that it decided
+   * anything. What IS worth pinning here is that the detail body is bounded and
+   * scrollable at all — without that, a 40-row delegation panel pushes the rest
+   * of the conversation off the page and "local scroll" becomes page scroll.
+   */
+  it('gives the delegation panel a bounded, self-scrolling body', () => {
+    expect(callSites).toContain('data-slot="subagent-detail"');
+    expect(syntax).toContain('max-h-72');
+    expect(syntax).toContain('overflow-y-auto');
+    // Follow-the-tail is re-armed by scrolling back down, not by a control.
+    expect(syntax).toContain('following.current');
+  });
+
   it('subscribes only inside the panel component and derives rows from the lane', () => {
     expect(
       callSites.some((site) => site.startsWith('useSubagentActivityStore((s) => s.lanes['))

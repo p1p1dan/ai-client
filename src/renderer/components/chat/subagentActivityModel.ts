@@ -222,6 +222,8 @@ export function reduceSubagentActivity(
       return reducePermissionRequested(prev, event);
     case 'permission.resolved':
       return reducePermissionResolved(prev, event);
+    case 'session.history':
+      return reduceSessionHistory(prev, event);
     case 'session.completed':
     case 'session.failed':
     case 'session.stopped':
@@ -444,7 +446,11 @@ function reducePermissionRequested(
     ...prev.permissionOrigin,
     [permissionId]: {
       parentToolCallId: lane?.parentToolCallId ?? null,
-      agentType: lane?.agentType ?? null,
+      // P5-2-6: the request's own `agentName` first. The native runtime knows
+      // which delegate is asking at the gate, so the card can name it even when
+      // the request outran the lane's `started` — which is precisely the race
+      // the null-parent case below exists for.
+      agentType: asString(payload.agentName) ?? lane?.agentType ?? null,
       description: lane?.description ?? null,
     },
   };
@@ -491,6 +497,133 @@ function reducePermissionResolved(
             [origin.parentToolCallId]: { ...lane, pendingPermission: null },
           }
         : prev.lanes,
+  };
+}
+
+/**
+ * How a recorded delegation's status reads on screen.
+ *
+ * `interrupted` is the one that needs translating: a hard exit leaves a
+ * delegation that started and never settled, and the honest reading is
+ * `cancelled` — it is over, and the process that was running it is gone. The
+ * one thing it must NOT read as is `running`, which would be a reopened
+ * session claiming work is still in flight.
+ */
+function historyStatus(status: string): SubagentRunStatus {
+  switch (status) {
+    case 'completed':
+    case 'failed':
+    case 'stopped':
+    case 'truncated':
+    case 'running':
+      return status;
+    case 'aborted':
+    case 'interrupted':
+      return 'cancelled';
+    default:
+      // `timed_out` and anything a newer runtime invents: it ended, and it did
+      // not end well. Better than dropping the delegation entirely.
+      return 'failed';
+  }
+}
+
+/**
+ * P5-2-6 — rebuild delegation lanes from a history read.
+ *
+ * A reopened session gets no `subagent.activity` events: those are live, and
+ * the conversation being restored already happened. The summaries come off the
+ * session file, so a `Task` row from last week gets its panel back with the
+ * status, the counters and the report that were recorded at the time.
+ *
+ * What it rebuilds is deliberately less than a live lane: one text row holding
+ * the report, plus the terminal status and counters. The delegate's individual
+ * tool calls stay in the session file and are read on demand — the live lane
+ * caps at 40 rows anyway, so replaying a transcript here would be paying a
+ * reload cost for rows the ring would drop.
+ *
+ * An existing lane WINS. A history refresh that arrived while a delegation was
+ * running must not overwrite the live one with its own stale snapshot.
+ */
+function reduceSessionHistory(
+  prev: SubagentActivityState,
+  event: RuntimeEventLike
+): SubagentActivityState {
+  const payload = asRecord(event.payload);
+  const sessionId = asString(event.sessionId);
+  const summaries = payload?.subagents;
+  if (!payload || !sessionId || !Array.isArray(summaries) || summaries.length === 0) return prev;
+
+  let lanes: Record<string, SubagentLane> | null = null;
+  let ordinal = prev.nextOrdinal;
+  let agentIndex: Record<string, string> | null = null;
+
+  // Newest first within the lane budget: a long session can hold more
+  // delegations than the store keeps lanes for, and the ones worth rebuilding
+  // are the recent ones the user is scrolled near — not the oldest, which is
+  // what taking the head would have given.
+  const budget = Math.max(0, SUBAGENT_LANES_MAX - Object.keys(prev.lanes).length);
+  for (const entry of summaries.slice(-budget)) {
+    const summary = asRecord(entry);
+    const parentToolCallId = summary ? asString(summary.parentToolCallId) : null;
+    if (!summary || !parentToolCallId) continue;
+    if (prev.lanes[parentToolCallId]) continue;
+
+    const report = asString(summary.report);
+    const rows: SubagentLaneRow[] = report
+      ? [{ kind: 'text', id: `history-${parentToolCallId}`, text: report }]
+      : [];
+    const usage: SubagentUsage = {};
+    const totalTokens = asFiniteNumber(summary.totalTokens);
+    const toolCalls = asFiniteNumber(summary.toolCalls);
+    const startedAt = asFiniteNumber(summary.startedAt);
+    const completedAt = asFiniteNumber(summary.completedAt);
+    if (totalTokens !== undefined) usage.totalTokens = totalTokens;
+    if (toolCalls !== undefined) usage.toolUses = toolCalls;
+    if (startedAt !== undefined && completedAt !== undefined) {
+      usage.durationMs = Math.max(0, completedAt - startedAt);
+    }
+
+    const agentId = asString(summary.delegationId);
+    const agentType = asString(summary.agentName);
+    const status = historyStatus(String(summary.status ?? ''));
+    if (!lanes) lanes = { ...prev.lanes };
+    lanes[parentToolCallId] = {
+      parentToolCallId,
+      sessionId,
+      agentId,
+      agentType,
+      description: asString(summary.label),
+      status,
+      rows,
+      droppedRows: 0,
+      progress: null,
+      usage: Object.keys(usage).length > 0 ? usage : null,
+      // A report object, so the header renders the finished-run stats line
+      // rather than the live one.
+      report: {
+        status,
+        ...(agentType ? { agentType } : {}),
+        ...(asString(summary.model) ? { resolvedModel: asString(summary.model) as string } : {}),
+        ...(usage.durationMs !== undefined ? { totalDurationMs: usage.durationMs } : {}),
+        ...(totalTokens !== undefined ? { totalTokens } : {}),
+        ...(toolCalls !== undefined ? { totalToolUseCount: toolCalls } : {}),
+      },
+      pendingPermission: null,
+      capped: false,
+      ordinal: ordinal++,
+    };
+    if (agentId) {
+      if (!agentIndex) agentIndex = { ...prev.agentIndex };
+      agentIndex[agentId] = parentToolCallId;
+    }
+  }
+
+  if (!lanes) return prev;
+  return {
+    ...prev,
+    lanes,
+    ...(agentIndex ? { agentIndex } : {}),
+    nextOrdinal: ordinal,
   };
 }
 
@@ -596,22 +729,23 @@ export function deriveSubagentPanelRows(
   const t = options.t ?? englishTranslate;
   const live = lane.status === null ? options.parentRunning : lane.status === 'running';
 
-  // Report present ⇒ the subagent's last text IS the Agent row's own output
-  // body — drop it here instead of rendering the answer twice (positional
-  // rule; the protocol deliberately never carries the report body).
-  let skipRowIndex = -1;
-  if (lane.report) {
-    for (let i = lane.rows.length - 1; i >= 0; i -= 1) {
-      if (lane.rows[i].kind === 'text') {
-        skipRowIndex = i;
-        break;
-      }
-    }
-  }
-
+  // P5-2-6 removed a positional rule that used to live here: when a report
+  // arrived, the lane's LAST text row was dropped, because under the T-34 host
+  // the delegation's tool row carried the subagent's final answer as its own
+  // output and rendering it twice was the defect.
+  //
+  // The native runtime does not work that way. `Task` returns an ack — "the
+  // explorer subagent is working in the background" — and the report reaches
+  // the model either through a later `TaskWait` result or through an internal
+  // resume with no bubble at all. So the rule was dropping the ONE copy of the
+  // delegate's answer the user could see: "report once" had become "report
+  // never" for every delegation the model did not explicitly wait on.
+  //
+  // If a producer ever again puts the report body on the parent row, that
+  // producer must say so on the payload. A renderer guessing from row position
+  // is how this went wrong the first time.
   const children: ToolRowView[] = [];
-  lane.rows.forEach((row, index) => {
-    if (index === skipRowIndex) return;
+  lane.rows.forEach((row) => {
     if (row.kind === 'tool') {
       children.push(
         deriveToolRowView(

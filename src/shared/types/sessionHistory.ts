@@ -33,6 +33,47 @@ export type HistoryBlock =
       truncated?: boolean;
     };
 
+/**
+ * P5-2-6 — one delegation, rebuilt from the session file.
+ *
+ * What a reopened session needs to put a delegation panel back under the `Task`
+ * row that started it: which row it belongs to, what it was, how it ended, and
+ * what it reported. Deliberately a SUMMARY — the delegate's own messages stay
+ * in the session file and are read on demand. The live channel is capped at 40
+ * rows per lane anyway, so replaying a full transcript here would be paying a
+ * bootstrap cost for something the panel would immediately drop.
+ *
+ * `status` carries `interrupted`, which no live run ever produces: it is what a
+ * hard exit leaves behind — a delegation that started and never settled. Saying
+ * so is the point. The alternative, showing it as still running, is a reopened
+ * session claiming work is in flight when the process that was doing it is gone.
+ */
+export interface SubagentHistorySummary {
+  delegationId: string;
+  /** The parent's `Task` tool-call id — the join key for the panel. */
+  parentToolCallId: string;
+  agentName: string;
+  /** The short label the parent gave this delegation, when it gave one. */
+  label?: string;
+  status:
+    | 'completed'
+    | 'failed'
+    | 'aborted'
+    | 'stopped'
+    | 'truncated'
+    | 'timed_out'
+    | 'interrupted'
+    | 'running';
+  startedAt: number;
+  completedAt?: number;
+  turns?: number;
+  toolCalls?: number;
+  totalTokens?: number;
+  /** The delegate's report, clamped for transport. */
+  report?: string;
+  model?: string;
+}
+
 /** Prefix of every history message id — the store's replace semantics key on it. */
 export const HISTORY_MESSAGE_ID_PREFIX = 'h:' as const;
 

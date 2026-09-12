@@ -26,6 +26,29 @@ export const INTERNAL_CUSTOM_ENTRIES: readonly string[] = [
   PERMISSIONS_ENTRY,
   'aiclient-session-tier',
   'permission-tier',
+  // P5-2-6. Delegation records — a delegate's own messages, plus the start and
+  // settlement facts. They are the reason the transcript can be rebuilt after a
+  // restart, and they must never be published as `custom.entry`: the renderer
+  // turns one of those into a system message in the PARENT's timeline, which
+  // would put a delegate's whole transcript (as raw JSON, one row per message)
+  // in front of the user AND in the parent's visible conversation. The live
+  // channel for the same activity is `subagent.activity`, which is bounded,
+  // projected and lands in the delegation's own panel.
+  'aiclient.subagent',
+];
+
+/**
+ * The subset the permission restore actually reads.
+ *
+ * Split from the list above because the two questions are different: "does this
+ * belong on the wire" and "does this carry a gate". Folding them together is
+ * how adding an internal record type to keep it off the wire would quietly
+ * enrol it in permission restoration.
+ */
+const PERMISSION_CUSTOM_ENTRIES: readonly string[] = [
+  PERMISSIONS_ENTRY,
+  'aiclient-session-tier',
+  'permission-tier',
 ];
 const TIERS = new Set(['readonly', 'pragmatic', 'handsoff', 'fullopen']);
 export function migratedPermissions(value: unknown): RuntimePermissionSettings | undefined {
@@ -41,7 +64,7 @@ export function migratedPermissions(value: unknown): RuntimePermissionSettings |
 export function sessionPermissions(entries: readonly Entry[], fallback?: unknown) {
   let permissions = migratedPermissions(fallback);
   for (const entry of entries) {
-    if (entry.type === 'custom' && INTERNAL_CUSTOM_ENTRIES.includes(entry.customType))
+    if (entry.type === 'custom' && PERMISSION_CUSTOM_ENTRIES.includes(entry.customType))
       permissions = migratedPermissions(entry.data) ?? permissions;
   }
   return permissions;

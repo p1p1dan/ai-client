@@ -1,5 +1,13 @@
 import { ChevronDown } from 'lucide-react';
-import { createContext, useContext, useMemo, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -312,6 +320,51 @@ function ToolRowArg({
   return <span className={argClass}>{view.arg}</span>;
 }
 
+/** How close to the bottom still counts as "following the tail", in px. */
+const SUBAGENT_FOLLOW_SLACK_PX = 24;
+
+/**
+ * P5-2-6 — the delegation panel's own scroll area.
+ *
+ * Two behaviours the contract asks for, and they pull against each other:
+ * a running delegate's panel should follow its newest row, and a user who has
+ * scrolled up to read something should be left where they put themselves —
+ * while the rows behind them keep arriving.
+ *
+ * Resolved by only auto-scrolling when the view was ALREADY at the bottom
+ * before this render. Scrolling up is therefore a decision that sticks, and
+ * scrolling back down re-arms the follow without a control to find.
+ *
+ * Bounded height is the other half: without it a 40-row panel pushes the rest
+ * of the conversation off screen, and "local scroll" becomes page scroll. This
+ * is the only `body: 'detail'` producer in the app — the subagent panel — so
+ * the bound belongs to it rather than to a generic row.
+ */
+function SubagentDetail({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const following = useRef(true);
+
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (node && following.current) node.scrollTop = node.scrollHeight;
+  });
+
+  return (
+    <div
+      ref={ref}
+      data-slot="subagent-detail"
+      className="mt-1 flex max-h-72 flex-col gap-1 overflow-y-auto"
+      onScroll={(event) => {
+        const node = event.currentTarget;
+        following.current =
+          node.scrollHeight - node.scrollTop - node.clientHeight <= SUBAGENT_FOLLOW_SLACK_PX;
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /**
  * Expand body: an optional input segment (`.fx-in`, T-05 adversarial fix #3)
  * always renders above whatever `body` produces — `.fx-body`/`.fx-out` for
@@ -485,7 +538,7 @@ function ToolRowOutputSegment({
       );
     case 'detail':
       return (
-        <div className="mt-1 flex flex-col gap-1">
+        <SubagentDetail>
           {(view.detail ?? []).map((row) => (
             <ToolRow
               key={row.key}
@@ -495,7 +548,7 @@ function ToolRowOutputSegment({
               sessionId={sessionId}
             />
           ))}
-        </div>
+        </SubagentDetail>
       );
     case 'thinking':
     case 'stats':

@@ -24,6 +24,7 @@ import type {
   SubagentActivityPayload,
   SubagentRunStatus as WireSubagentStatus,
 } from '../../../shared/types/runtimeEvents.ts';
+import type { SubagentHistorySummary } from '../../../shared/types/sessionHistory.ts';
 import type { SubagentRunResult, SubagentRunStatus } from './run.ts';
 
 /** `customType` of every delegation record. One type, discriminated by `kind`. */
@@ -156,6 +157,42 @@ export function readSubagentHistory(
   return [...byId.values()].sort((left, right) => left.startedAt - right.startedAt);
 }
 
+/** Report text carried on a history summary. The full one stays on disk. */
+const MAX_HISTORY_REPORT_CHARS = 4_000;
+
+/**
+ * The delegation summaries a reopened session needs, off its own entries.
+ *
+ * Pure and read-only, like {@link readSubagentHistory} it builds on: reopening
+ * a session must not start anything, resume anything, or replay a `Task` call.
+ * It reports what the file says happened.
+ */
+export function subagentHistorySummaries(
+  entries: readonly { type: string; customType?: string; data?: unknown }[]
+): SubagentHistorySummary[] {
+  return readSubagentHistory(entries).map((entry) => ({
+    delegationId: entry.delegationId,
+    parentToolCallId: entry.parentToolCallId,
+    agentName: entry.agentName,
+    ...(entry.label ? { label: entry.label } : {}),
+    status: entry.status,
+    startedAt: entry.startedAt,
+    ...(entry.completedAt !== undefined ? { completedAt: entry.completedAt } : {}),
+    ...(entry.turns !== undefined ? { turns: entry.turns } : {}),
+    ...(entry.toolCalls !== undefined ? { toolCalls: entry.toolCalls } : {}),
+    ...(entry.usage ? { totalTokens: entry.usage.totalTokens } : {}),
+    ...(entry.report
+      ? {
+          report:
+            entry.report.length > MAX_HISTORY_REPORT_CHARS
+              ? `${entry.report.slice(0, MAX_HISTORY_REPORT_CHARS)}…`
+              : entry.report,
+        }
+      : {}),
+    ...(entry.model ? { model: `${entry.model.provider}/${entry.model.modelId}` } : {}),
+  }));
+}
+
 /**
  * What this session's delegates cost, summed from settled records only.
  *
@@ -201,50 +238,135 @@ export function wireStatus(status: SubagentRunStatus): WireSubagentStatus {
 }
 
 /**
- * Turn one delegate event into a live-projection payload, or nothing.
+ * Fields of a delegate's tool call the panel may show, by tool.
  *
- * Returns undefined for events the lane store has no slot for, and for empty
- * bodies — an empty text block is a render artifact, not activity.
+ * A whitelist, and the negatives are the point: `content` (write), `oldString`/
+ * `newString` (edit) and every output body stay off this channel entirely. A
+ * delegate writing a file must not push the file through the event stream, and
+ * the panel only ever needs enough to say WHICH file.
+ *
+ * Spelled in OUR tool vocabulary (`path`, `command`, `pattern`), not the
+ * reference CLI's (`file_path`): the names here have to match what our own
+ * tools actually take, or the whitelist silently matches nothing.
+ */
+const TOOL_INPUT_FIELDS: Record<string, readonly string[]> = {
+  read: ['path', 'offset', 'limit'],
+  write: ['path'],
+  edit: ['path'],
+  glob: ['pattern', 'path'],
+  grep: ['pattern', 'path', 'regex'],
+  bash: ['command', 'timeoutSeconds'],
+  browser_preview: ['path', 'focus'],
+};
+
+/** Per-field clamp. One long argument must not become the whole budget. */
+const MAX_TOOL_INPUT_FIELD_CHARS = 240;
+/** Per-message clamp for a delegate's prose or reasoning. */
+const MAX_ACTIVITY_TEXT_CHARS = 4_000;
+
+function clampActivityText(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+function projectToolInput(
+  toolName: string,
+  input: unknown
+): Record<string, string | number> | undefined {
+  const allowed = TOOL_INPUT_FIELDS[toolName];
+  if (!allowed || typeof input !== 'object' || input === null) return undefined;
+  const source = input as Record<string, unknown>;
+  const projected: Record<string, string | number> = {};
+  for (const field of allowed) {
+    const value = source[field];
+    if (typeof value === 'number') projected[field] = value;
+    else if (typeof value === 'boolean') projected[field] = String(value);
+    else if (typeof value === 'string' && value)
+      projected[field] = clampActivityText(value, MAX_TOOL_INPUT_FIELD_CHARS);
+  }
+  return Object.keys(projected).length > 0 ? projected : undefined;
+}
+
+/** Concatenate one kind of block out of an assistant message's content. */
+function blockText(content: readonly unknown[], kind: 'text' | 'thinking'): string {
+  return content
+    .map((block) => {
+      const candidate = block as { type?: unknown; text?: unknown; thinking?: unknown };
+      if (candidate.type !== kind) return '';
+      const value = kind === 'text' ? candidate.text : candidate.thinking;
+      return typeof value === 'string' ? value : '';
+    })
+    .join('');
+}
+
+/**
+ * Turn one delegate event into live-projection payloads.
+ *
+ * Returns an empty array for events the lane store has no slot for, and for
+ * empty bodies — an empty text block is a render artifact, not activity.
+ *
+ * A message can produce TWO payloads, reasoning and prose, which is why this
+ * returns a list. P5-2-6 found reasoning missing entirely: the lane has always
+ * had a `thinking` row and nothing on the native side ever filled it, so a
+ * delegate that spent a minute thinking showed a panel with nothing in it.
  */
 export function activityForEvent(
   event: AgentEvent,
   base: { parentToolCallId: string; agentId: string }
-): SubagentActivityPayload | undefined {
+): SubagentActivityPayload[] {
   switch (event.type) {
     case 'message_end': {
       const message = event.message as { role?: string; content?: unknown };
-      if (message.role !== 'assistant' || !Array.isArray(message.content)) return undefined;
-      const text = message.content
-        .filter((block): block is { type: 'text'; text: string } => {
-          const candidate = block as { type?: unknown; text?: unknown };
-          return candidate.type === 'text' && typeof candidate.text === 'string';
-        })
-        .map((block) => block.text)
-        .join('');
-      if (!text.trim()) return undefined;
+      if (message.role !== 'assistant' || !Array.isArray(message.content)) return [];
       // Whole-message granularity, as the channel's contract states: no char
       // stream, so `message_update` contributes nothing here.
-      return { ...base, kind: 'text', id: `${base.agentId}:${Date.now()}`, text };
+      const id = `${base.agentId}:${Date.now()}`;
+      const payloads: SubagentActivityPayload[] = [];
+      const thinking = blockText(message.content, 'thinking');
+      if (thinking.trim()) {
+        payloads.push({
+          ...base,
+          kind: 'thinking',
+          id: `${id}:thinking`,
+          text: clampActivityText(thinking, MAX_ACTIVITY_TEXT_CHARS),
+        });
+      }
+      const text = blockText(message.content, 'text');
+      if (text.trim()) {
+        payloads.push({
+          ...base,
+          kind: 'text',
+          id,
+          text: clampActivityText(text, MAX_ACTIVITY_TEXT_CHARS),
+        });
+      }
+      return payloads;
     }
-    case 'tool_execution_start':
-      return {
-        ...base,
-        kind: 'tool.started',
-        toolCallId: event.toolCallId,
-        name: event.toolName,
-      };
+    case 'tool_execution_start': {
+      const input = projectToolInput(event.toolName, event.args);
+      return [
+        {
+          ...base,
+          kind: 'tool.started',
+          toolCallId: event.toolCallId,
+          name: event.toolName,
+          ...(input ? { input } : {}),
+        },
+      ];
+    }
     case 'tool_execution_end':
-      return {
-        ...base,
-        kind: 'tool.completed',
-        toolCallId: event.toolCallId,
-        ok: event.isError !== true,
-        // Only a failure carries text, and only the reason. Tool OUTPUT bodies
-        // never travel this channel — that is what the record is for.
-        ...(event.isError === true ? { errorText: 'the tool call failed' } : {}),
-      };
+      return [
+        {
+          ...base,
+          kind: 'tool.completed',
+          toolCallId: event.toolCallId,
+          ok: event.isError !== true,
+          // Only a failure carries text, and only the reason. Tool OUTPUT bodies
+          // never travel this channel — that is what the record is for.
+          ...(event.isError === true ? { errorText: 'the tool call failed' } : {}),
+        },
+      ];
     default:
-      return undefined;
+      return [];
   }
 }
 

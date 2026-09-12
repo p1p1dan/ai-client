@@ -2227,6 +2227,11 @@ export class WorkerManager {
         branchRevision: entry.branchRevision,
         truncated: page.hasMore,
         omittedCount: Math.max(0, page.totalCount - page.messages.length),
+        // P5-2-6: the delegations this branch recorded, so reopening a session
+        // puts their panels back. Forwarded rather than interpreted — Main has
+        // no opinion about a delegation, and the renderer's lane store is the
+        // one consumer.
+        ...(history.subagents?.length ? { subagents: history.subagents } : {}),
       },
     });
   }

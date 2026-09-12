@@ -5,7 +5,12 @@
  */
 
 import type { AgentWireName } from './agentWire';
-import type { HistoryMessage, HistoryParseStats, HistoryReadError } from './sessionHistory';
+import type {
+  HistoryMessage,
+  HistoryParseStats,
+  HistoryReadError,
+  SubagentHistorySummary,
+} from './sessionHistory';
 
 export type RuntimeEventType =
   | 'host.ready'
@@ -417,6 +422,15 @@ export interface PermissionRequestedEvent extends RuntimeEventBase {
      * The key is ABSENT (not undefined-valued) for main-agent requests.
      */
     agentId?: string;
+    /**
+     * P5-2-6: the delegate's NAME, alongside its id.
+     *
+     * The id is the join key and says nothing a person can read. The native
+     * runtime knows the name at the gate, and a card that can say "the explorer
+     * subagent wants to run this" beats one that can only say a delegation
+     * started somewhere. Absent on the legacy backend, which never had it.
+     */
+    agentName?: string;
     /** S2: absent = `'tool'`. */
     kind?: PermissionRequestKind;
     /**
@@ -662,6 +676,16 @@ export interface SessionHistoryEvent extends RuntimeEventBase {
     /** True when messages were dropped by pagination/input/output caps. */
     truncated: boolean;
     omittedCount: number;
+    /**
+     * P5-2-6 — delegations recorded on this branch, for rebuilding their panels.
+     *
+     * Rides the history event because it answers the same question at the same
+     * moment: what did this conversation contain. Absent on the legacy backend
+     * and on a session that delegated nothing — and absent is not "none
+     * reported", it is "nothing to report", which is why the renderer only
+     * rebuilds lanes when the key is present.
+     */
+    subagents?: SubagentHistorySummary[];
     error?: HistoryReadError;
     parseStats?: HistoryParseStats;
   };

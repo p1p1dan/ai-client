@@ -476,7 +476,16 @@ describe('deriveSubagentPanelRows', () => {
     expect(header.defaultOpen).toBeUndefined();
   });
 
-  it('report dedup: the LAST text row (the answer the Agent row already shows) is dropped', () => {
+  it('keeps the delegate’s final answer when a report arrives', () => {
+    // P5-2-6 reversed this case. It used to assert the LAST text row was
+    // dropped, because under the T-34 host the delegation's own tool row
+    // carried the subagent's answer as its output and the panel would have
+    // shown it twice.
+    //
+    // The native runtime returns an ACK from `Task` and delivers the report
+    // either through a later `TaskWait` or through an internal resume with no
+    // bubble. Dropping the last text row therefore deleted the one copy the
+    // user could see — "report once" had quietly become "report never".
     const l = lane([
       started(),
       activity({ kind: 'text', id: 't1', text: 'working on it' }),
@@ -485,8 +494,8 @@ describe('deriveSubagentPanelRows', () => {
       activity({ kind: 'report', report: { status: 'completed' } }),
     ]);
     const detail = deriveSubagentPanelRows(l, { parentRunning: false })[0].detail ?? [];
-    expect(detail.map((r) => r.verb)).toEqual(['Said', 'Reading']);
-    expect(detail[0].arg).toBe('working on it');
+    expect(detail.map((r) => r.verb)).toEqual(['Said', 'Reading', 'Said']);
+    expect(detail.at(-1)?.arg).toBe('final answer text');
   });
 
   it('text rows say Said, thinking rows say Thought; multi-line bodies expand to the full text', () => {
@@ -556,5 +565,168 @@ describe('derivePermissionOrigin', () => {
     expect(
       derivePermissionOrigin({ parentToolCallId: PARENT, agentType: null, description: null })
     ).toEqual({ label: 'From subagent' });
+  });
+});
+
+/**
+ * P5-2-6: a reopened session has no live activity to fold — the conversation
+ * already happened. The delegation summaries come off the session file on the
+ * history read, and these cases pin that the panels come back with the state
+ * that was recorded rather than with a spinner or with nothing.
+ */
+describe('reduceSubagentActivity — history rebuild', () => {
+  const history = (subagents: unknown[], sessionId = SESSION) => ({
+    type: 'session.history',
+    sessionId,
+    payload: { messages: [], truncated: false, omittedCount: 0, subagents },
+  });
+
+  const summary = (extra: Record<string, unknown> = {}) => ({
+    delegationId: 'd1',
+    parentToolCallId: PARENT,
+    agentName: 'explorer',
+    label: 'survey the repo',
+    status: 'completed',
+    startedAt: 1_000,
+    completedAt: 4_000,
+    turns: 4,
+    toolCalls: 7,
+    totalTokens: 30,
+    report: 'Found three config files.',
+    model: 'anthropic/claude-sonnet-5',
+    ...extra,
+  });
+
+  it('rebuilds a finished delegation with its report, counters and duration', () => {
+    const lane = fold([history([summary()])]).lanes[PARENT];
+    expect(lane).toMatchObject({
+      status: 'completed',
+      agentId: 'd1',
+      agentType: 'explorer',
+      description: 'survey the repo',
+      sessionId: SESSION,
+    });
+    expect(lane.rows).toEqual([
+      { kind: 'text', id: `history-${PARENT}`, text: 'Found three config files.' },
+    ]);
+    expect(lane.usage).toEqual({ totalTokens: 30, toolUses: 7, durationMs: 3_000 });
+    expect(lane.report).toMatchObject({
+      totalToolUseCount: 7,
+      resolvedModel: 'anthropic/claude-sonnet-5',
+    });
+  });
+
+  it('renders the rebuilt lane as a finished panel, report and all', () => {
+    const lane = fold([history([summary()])]).lanes[PARENT];
+    const rows = deriveSubagentPanelRows(lane, { parentRunning: false });
+    expect(rows[0].detail?.[0]).toMatchObject({ verb: 'Said', arg: 'Found three config files.' });
+    // The finished-run stats line, not the live one.
+    expect(rows[0].arg).toContain('explorer');
+    expect(rows[0].arg).toContain('7 tools');
+  });
+
+  it('shows a delegation that never settled as cancelled, never as running', () => {
+    // A hard exit records a start with no settlement. Showing it as running
+    // would be a reopened session claiming work is still in flight.
+    const lane = fold([history([summary({ status: 'interrupted', completedAt: undefined })])])
+      .lanes[PARENT];
+    expect(lane.status).toBe('cancelled');
+  });
+
+  it('maps a recorded timeout onto a failure rather than dropping it', () => {
+    expect(fold([history([summary({ status: 'timed_out' })])]).lanes[PARENT].status).toBe('failed');
+  });
+
+  it('keeps stopped and truncated distinct, as the wire type widened for', () => {
+    expect(fold([history([summary({ status: 'stopped' })])]).lanes[PARENT].status).toBe('stopped');
+    expect(fold([history([summary({ status: 'truncated' })])]).lanes[PARENT].status).toBe(
+      'truncated'
+    );
+  });
+
+  it('never overwrites a live lane with a history snapshot', () => {
+    // A refresh can land while a delegation is running; the live lane is the
+    // one with the truth in it.
+    const state = fold([
+      started(),
+      activity({ kind: 'text', id: 't1', text: 'working' }),
+      history([summary()]),
+    ]);
+    expect(state.lanes[PARENT].status).toBe('running');
+    expect(state.lanes[PARENT].rows).toHaveLength(1);
+    expect(state.lanes[PARENT].rows[0]).toMatchObject({ text: 'working' });
+  });
+
+  it('ignores a history read that carries no delegations at all', () => {
+    const before = fold([started()]);
+    expect(reduceSubagentActivity(before, history([]))).toBe(before);
+    expect(
+      reduceSubagentActivity(before, {
+        type: 'session.history',
+        sessionId: SESSION,
+        payload: { messages: [], truncated: false, omittedCount: 0 },
+      })
+    ).toBe(before);
+  });
+
+  it('rebuilds the most recent delegations when there are more than the lane budget', () => {
+    const many = Array.from({ length: SUBAGENT_LANES_MAX + 5 }, (_, index) =>
+      summary({ delegationId: `d${index}`, parentToolCallId: `toolu_${index}` })
+    );
+    const state = fold([history(many)]);
+    expect(Object.keys(state.lanes)).toHaveLength(SUBAGENT_LANES_MAX);
+    // The tail wins the budget: those are the ones near where the user is
+    // reading, and taking the head would rebuild the oldest instead.
+    expect(state.lanes.toolu_4).toBeUndefined();
+    expect(state.lanes[`toolu_${SUBAGENT_LANES_MAX + 4}`]).toBeDefined();
+  });
+
+  it('indexes the rebuilt delegation so a later permission can still find it', () => {
+    const state = fold([history([summary()])]);
+    expect(state.agentIndex.d1).toBe(PARENT);
+  });
+});
+
+/**
+ * P5-2-6: the native runtime knows which delegate is at the gate, so the card
+ * can name it. Before this the payload carried neither id nor name, and a
+ * delegate's approval request was indistinguishable from the main agent's.
+ */
+describe('derivePermissionOrigin — the delegate’s name', () => {
+  it('names the subagent from the request itself, before its lane exists', () => {
+    const state = reduceSubagentActivity(initialSubagentActivity, {
+      type: 'permission.requested',
+      sessionId: SESSION,
+      payload: {
+        permissionId: 'p1',
+        toolName: 'bash',
+        agentId: 'agent-1',
+        agentName: 'test-runner',
+      },
+    });
+    // No lane yet — the gate outran `started`. The chip must still say which
+    // delegate is asking, which is the whole point of carrying the name.
+    expect(derivePermissionOrigin(state.permissionOrigin.p1)).toEqual({
+      label: 'From subagent · test-runner',
+    });
+  });
+
+  it('prefers the lane’s description once there is one', () => {
+    const state = fold([
+      started(),
+      {
+        type: 'permission.requested',
+        sessionId: SESSION,
+        payload: {
+          permissionId: 'p1',
+          toolName: 'bash',
+          agentId: 'agent-1',
+          agentName: 'test-runner',
+        },
+      },
+    ]);
+    expect(derivePermissionOrigin(state.permissionOrigin.p1)?.label).toContain('shape probe');
+    // And the lane itself shows it is waiting.
+    expect(state.lanes[PARENT].pendingPermission).toEqual({ toolName: 'bash' });
   });
 });

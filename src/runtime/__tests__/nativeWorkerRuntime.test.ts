@@ -67,7 +67,13 @@ const SKILLS_SERVICE_FAKE = {
 };
 
 function fakeRuntime(
-  overrides: { history?: unknown[]; file?: string; sourceFile?: string; skills?: unknown } = {}
+  overrides: {
+    history?: unknown[];
+    entries?: unknown[];
+    file?: string;
+    sourceFile?: string;
+    skills?: unknown;
+  } = {}
 ): Fake {
   let listener: ((event: RuntimeEventDraft) => void) | undefined;
   let resolveRun: ((result: RuntimeRunResult) => void) | undefined;
@@ -114,6 +120,10 @@ function fakeRuntime(
         leaf: { activeEntryId: 'e2', fileTailEntryId: 'e2' },
       }),
       history: () => overrides.history ?? [],
+      // P5-2-6: the history answer now also carries delegation summaries, which
+      // are folded out of the branch entries. A fake with no entries reports no
+      // delegations, which is what a session that never delegated looks like.
+      snapshot: () => ({ entries: overrides.entries ?? [] }),
       tree: (id: string) => ({ logicalSessionId: id }),
     },
     permissions: {
@@ -440,6 +450,79 @@ describe('NativeWorkerRuntime session reads and lifecycle', () => {
       workspacePath: '/repo',
     });
     expect(page.page.messages).toEqual([]);
+  });
+
+  /**
+   * P5-2-6 — the history answer carries the delegations this branch recorded,
+   * so a reopened session can put their panels back.
+   *
+   * A reopened session gets no `subagent.activity` events: those are live, and
+   * this conversation already happened. Without this the `Task` rows came back
+   * with empty panels under them, which reads as "nothing happened" rather than
+   * as "this ran last week".
+   */
+  it('reports the delegations recorded on the branch alongside the history page', async () => {
+    const fake = fakeRuntime({
+      entries: [
+        {
+          type: 'custom',
+          customType: 'aiclient.subagent',
+          data: {
+            kind: 'started',
+            delegationId: 'd1',
+            agentName: 'explorer',
+            parentToolCallId: 'toolu_1',
+            runId: 'run-1',
+            task: 'look around',
+            model: { provider: 'anthropic', modelId: 'claude-sonnet-5' },
+            startedAt: 1000,
+          },
+        },
+        {
+          type: 'custom',
+          customType: 'aiclient.subagent',
+          data: {
+            kind: 'settled',
+            delegationId: 'd1',
+            agentName: 'explorer',
+            parentToolCallId: 'toolu_1',
+            runId: 'run-1',
+            status: 'completed',
+            turns: 3,
+            toolCalls: 5,
+            report: 'Three config files.',
+            completedAt: 4000,
+          },
+        },
+      ],
+    });
+    const { runtime } = build(fake);
+    live = runtime;
+    const page = await runtime.history({ logicalSessionId: 'logical-1' });
+    expect(page.subagents).toEqual([
+      {
+        delegationId: 'd1',
+        parentToolCallId: 'toolu_1',
+        agentName: 'explorer',
+        status: 'completed',
+        startedAt: 1000,
+        completedAt: 4000,
+        turns: 3,
+        toolCalls: 5,
+        report: 'Three config files.',
+        model: 'anthropic/claude-sonnet-5',
+      },
+    ]);
+  });
+
+  it('leaves the key off entirely for a session that never delegated', async () => {
+    // Absent means "nothing to report", which is what lets the renderer tell it
+    // apart from a backend that cannot report delegations at all.
+    const { runtime } = build(fakeRuntime());
+    live = runtime;
+    expect(await runtime.history({ logicalSessionId: 'logical-1' })).not.toHaveProperty(
+      'subagents'
+    );
   });
 
   it('refuses requests addressed to another logical session', async () => {

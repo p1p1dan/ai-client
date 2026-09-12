@@ -32,6 +32,7 @@ import {
   type PiLeafCheckpoint,
   type SessionHistoryPage,
   type SessionTreeSnapshot,
+  type SubagentHistorySummary,
 } from './sessionHistory.ts';
 import type { SessionPermissionTier } from './sessionPermissionTier';
 
@@ -145,6 +146,14 @@ export interface WorkerHistoryResult {
   sessionFile: string;
   workspacePath: string;
   page: SessionHistoryPage;
+  /**
+   * P5-2-6 — delegations recorded on this branch.
+   *
+   * Rides the history read rather than a channel of its own because it answers
+   * the same question at the same moment: what did this conversation contain.
+   * Absent on the legacy backend, which records no delegations of its own.
+   */
+  subagents?: SubagentHistorySummary[];
 }
 
 /**
