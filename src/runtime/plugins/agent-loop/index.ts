@@ -275,7 +275,13 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         });
       request.onEvent?.(event);
     });
-    const onAbort = () => agent.abort();
+    // User Stop and dispose reach the delegates through here. `TaskStop` is the
+    // other door; the per-call signal of the `Task` tool is NOT a door at all,
+    // because it is finished the moment `Task` returns.
+    const onAbort = () => {
+      agent.abort();
+      this.ctx.get('runtimeSubagents')?.abortAll();
+    };
     request.signal?.addEventListener('abort', onAbort, { once: true });
 
     let thrown: Error | undefined;
@@ -346,6 +352,29 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       }
       await agent.prompt(prepared.text, prepared.images.length ? prepared.images : undefined);
       await agent.waitForIdle();
+      // P5-2-2 — the parent going idle is not the end of the logical run while
+      // its delegates are still working. This promise IS the run boundary the
+      // worker reports on (`nativeWorkerRuntime.startSend` clears its turn when
+      // it resolves), so resolving here would release the slot, emit `idle`,
+      // and strand every delegate's report with nobody to read it.
+      //
+      // The runtime waits, not the model: a parent that simply stopped calling
+      // tools still gets its delegates' reports and continues toward the user's
+      // original goal, which is the behaviour the reference's D328 settled on.
+      // Looked up by name rather than imported, the way this file already
+      // reaches `runtimePermissions`: the subagent plugin imports the retry
+      // layer that lives next to this file, and an import back would make the
+      // two modules a cycle for the bundler to guess at.
+      const subagents = this.ctx.get('runtimeSubagents');
+      if (subagents) {
+        while (!request.signal?.aborted) {
+          const report = await subagents.collectFinished(request.signal);
+          if (report === undefined) break;
+          trace.note('note', { event: 'delegation_resume', report_bytes: report.length });
+          await agent.prompt(report);
+          await agent.waitForIdle();
+        }
+      }
       await session?.flush();
     } catch (error) {
       // `Agent` encodes provider failures in the stream rather than throwing,
@@ -354,6 +383,11 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // propagating, because a caller that gets a rejection loses the trace.
       thrown = error instanceof Error ? error : new Error(String(error));
     } finally {
+      // Whatever ended this run — a Stop, a structural failure, or a normal
+      // finish — no delegate of it may outlive it. On the normal path the loop
+      // above already emptied the registry and this returns at once; on a Stop
+      // it is what makes "the run ended" mean "nothing is still spending".
+      await this.ctx.get('runtimeSubagents')?.drain();
       request.signal?.removeEventListener('abort', onAbort);
       unsubscribe();
       unsubscribePermissions?.();
@@ -374,12 +408,16 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       turnCount >= 64 && last?.stopReason === 'toolUse'
         ? { code: 'turn_limit', message: 'tool loop exceeded 64 assistant turns' }
         : resolveError({ thrown, aborted, last });
+    // Taken once, here, so a run reports its delegates' spend exactly once even
+    // when the loop above went round several times.
+    const subagentUsage = this.ctx.get('runtimeSubagents')?.takeUsage();
     const result: Omit<RuntimeRunResult, 'trace'> = {
       runId: trace.runId,
       success: !error,
       text: collected.text,
       stopReason: aborted ? 'aborted' : (last?.stopReason ?? 'error'),
       usage: sumUsage(collected.turns.map((turn) => turn.usage)),
+      ...(subagentUsage ? { subagentUsage } : {}),
       latencyMs: 0,
       turns: collected.turns.length,
       ...(error ? { error } : {}),

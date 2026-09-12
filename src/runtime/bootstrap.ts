@@ -60,6 +60,8 @@ import {
 } from './plugins/permissions/index.ts';
 import { loadPermissionPolicy } from './plugins/permissions/policy.ts';
 import { type PromptConfig, PromptPlugin } from './plugins/prompt/index.ts';
+import { instructionSource } from './plugins/prompt/instructionSource.ts';
+import { projectInstructionsText } from './plugins/prompt/projectInstructions.ts';
 import { SessionPlugin } from './plugins/session/index.ts';
 import { prepareSessionConfig } from './plugins/session/legacy.ts';
 import { JsonlSessionStore, type SessionConfig } from './plugins/session/store.ts';
@@ -70,12 +72,27 @@ import {
   type SkillCatalog,
   type SkillsConfig,
   SkillsPlugin,
+  skillSource,
 } from './plugins/skills/index.ts';
+import {
+  loadSubagentCatalog,
+  type SubagentCatalog,
+  type SubagentCatalogConfig,
+} from './plugins/subagent/catalog.ts';
+import {
+  SUBAGENT_SERVICE,
+  type SubagentConfig,
+  SubagentPlugin,
+  type SubagentService,
+} from './plugins/subagent/index.ts';
 import { TOOLS_SERVICE, type ToolsConfig, ToolsPlugin } from './plugins/tools/index.ts';
 import { canonicalPath } from './plugins/tools/paths.ts';
 import { buildVersionStamp, TracePlugin } from './trace.ts';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+/** Definition documents are capped at 32 KiB by the parser; read a little more
+ * so an oversized one is DIAGNOSED rather than silently truncated into shape. */
+const SUBAGENT_SCAN_BYTES = 64 * 1024;
 export const RUNTIME_CONFIG_VERSION = 'runtime_p3_complete_v1';
 
 export interface RuntimeBootstrapOptions {
@@ -98,6 +115,14 @@ export interface RuntimeBootstrapOptions {
    * one up from whatever happens to be on the machine.
    */
   mcp?: McpConfig;
+  /**
+   * P5-2. Absent registers no `Task*` tools at all, for the same reason as
+   * `skills`: the discovered catalog is machine-specific content in a tool
+   * description, and the P2-0 fixed suite needs a request that does not vary by
+   * machine. Present with an empty catalog still registers nothing — a `Task`
+   * tool with no delegates can only ever answer "unknown subagent".
+   */
+  subagents?: Omit<SubagentConfig, 'catalog'> & SubagentCatalogConfig;
   session?: SessionConfig;
   approvalUi?: PortableExtensionUiBridgeOptions;
   agentDir?: string;
@@ -123,6 +148,8 @@ export interface RuntimeHandle {
   skills?: RuntimeSkillsService;
   /** Present only when `options.mcp` asked for a bridge. */
   mcp?: RuntimeMcpService;
+  /** Present only when `options.subagents` asked for delegation. */
+  subagents?: SubagentService;
   session?: RuntimeSessionService;
   events: RuntimeEventsService;
   approval?: RuntimeApprovalBridge;
@@ -151,6 +178,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
   let session: JsonlSessionStore | undefined;
   let skillCatalog: SkillCatalog | undefined;
   let mcpCatalog: McpCatalog | undefined;
+  let subagentCatalog: SubagentCatalog | undefined;
   try {
     await ctx.plugin(ExecPlugin, host);
     exec = ctx.runtimeExec as ExecPlugin;
@@ -283,6 +311,12 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
               skill_diagnostics: String(skillCatalog.diagnostics.length),
             }
           : {}),
+        ...(subagentCatalog
+          ? {
+              subagents: String(subagentCatalog.definitions.length),
+              subagent_diagnostics: String(subagentCatalog.diagnostics.length),
+            }
+          : {}),
         ...(mcpCatalog
           ? {
               mcp_servers: String(mcpCatalog.connections.length),
@@ -318,6 +352,34 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     const catalog =
       !options.providers && agentDir ? await readPiCatalog(agentDir, env, io) : undefined;
     await ctx.plugin(ModelAdapterPlugin, { providers: options.providers, catalog });
+    // P5-2-2, after the model adapter because a delegate's pinned model is
+    // resolved against the live catalog, and after the tools plugin because it
+    // registers `Task*` into that registry. Both are already up by here.
+    if (options.subagents && options.tools) {
+      subagentCatalog = await loadSubagentCatalog(skillSource(io, SUBAGENT_SCAN_BYTES), {
+        ...(agentDir ? { agentDir } : {}),
+        ...(options.subagents.home ? { home: options.subagents.home } : {}),
+      });
+      const subagentFiber = await ctx.plugin(SubagentPlugin, {
+        ...options.subagents,
+        catalog: subagentCatalog,
+        // The same chain the parent's own prompt loads, through the same
+        // loader, read per delegation so a workspace edit between turns reaches
+        // the next delegate.
+        projectInstructions: () =>
+          projectInstructionsText(instructionSource(ctx.runtimeHostIo, options.prompt?.maxBytes), {
+            ...options.prompt,
+            root: options.prompt?.root ?? options.tools?.cwd,
+            globals: [
+              ...(agentDir
+                ? [{ path: join(agentDir, 'AGENTS.md'), label: 'Managed AGENTS.md' }]
+                : []),
+              ...(options.prompt?.globals ?? []),
+            ],
+          }),
+      });
+      await subagentFiber.await();
+    }
     const loopFiber = await ctx.plugin(AgentLoopPlugin, loopConfig);
     await loopFiber.await();
     const required = [
@@ -329,6 +391,9 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       ...(options.tools ? [TOOLS_SERVICE, PERMISSIONS_SERVICE] : []),
       ...(options.skills && options.tools ? [SKILLS_SERVICE] : []),
       ...(options.mcp && options.tools ? [MCP_SERVICE] : []),
+      ...(options.subagents && options.tools && subagentCatalog?.definitions.length
+        ? [SUBAGENT_SERVICE]
+        : []),
     ];
     const missing = required.filter((name) => ctx.get(name) === undefined);
     if (missing.length)
@@ -352,6 +417,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       prompt: ctx.runtimePrompt,
       skills: ctx.get(SKILLS_SERVICE),
       mcp: ctx.get(MCP_SERVICE),
+      subagents: ctx.get(SUBAGENT_SERVICE),
       events: ctx.runtimeEvents,
       session: session ? ctx.runtimeSession : undefined,
       approval,

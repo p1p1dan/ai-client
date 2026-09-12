@@ -249,6 +249,16 @@ export interface RuntimeRunResult {
   text: string;
   stopReason: string;
   usage: Usage | null;
+  /**
+   * P5-2-2. What the run's delegates spent, settled exactly once each.
+   *
+   * Kept OUT of `usage` on purpose: `usage` is what the parent's provider
+   * reported for the parent's own requests, and the parent's context occupancy
+   * is derived from it. Folding a delegate's tokens in would make the session
+   * look like it is carrying context it never loaded. Session and turn totals
+   * are the sum of the two, which is the caller's to compute.
+   */
+  subagentUsage?: Usage;
   latencyMs: number;
   /** Assistant turns the loop completed. P0's single-turn flag pins this at 1 on success. */
   turns: number;

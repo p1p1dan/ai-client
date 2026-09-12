@@ -222,6 +222,24 @@ export async function loadInstructionChain(
  * telling the model how to resolve two instructions that contradict each other,
  * and the order it describes is the order this module produces.
  */
+/**
+ * The rendered chain as plain text, for a consumer that is not building the
+ * parent's prompt.
+ *
+ * P5-2-2's delegates need the workspace's own rules, but not the slot machinery
+ * around them: a delegate's prompt is assembled by
+ * `plugins/subagent/prompt.ts`, not by `composeSystemPrompt`. Sharing the
+ * loader and the rendering — rather than re-deriving the chain there — is what
+ * keeps a delegate reading the same instructions the parent does.
+ */
+export async function projectInstructionsText(
+  source: InstructionSource,
+  options: InstructionChainOptions
+): Promise<string | undefined> {
+  const entries = await loadInstructionChain(source, options);
+  return projectInstructionsSegment(entries)?.text;
+}
+
 export function projectInstructionsSegment(
   entries: readonly ProjectInstruction[]
 ): PromptSegment | undefined {
