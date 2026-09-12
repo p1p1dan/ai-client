@@ -87,6 +87,8 @@ function createHarness(
      * "opened exactly what was asked for".
      */
     bootstrapFile?: (requested: string) => { sessionFile: string; sessionSourceFile?: string };
+    /** P5-2-3: the preview surface. Default refuses, like a manager with no host. */
+    showPreview?: (request: { path: string; focus: boolean }) => Promise<void>;
   } = {}
 ) {
   const records: FakeSlotRecord[] = [];
@@ -242,6 +244,7 @@ function createHarness(
       if (type === 'worker.fork.discard') return { discarded: true };
       if (type === 'worker.stop') return { stopped: true };
       if (type === 'worker.extensionUi.respond') return { handled: true };
+      if (type === 'worker.preview.respond') return { handled: true };
       if (type === 'worker.setPermissionTier' || type === 'worker.setPermissions')
         return { applied: true };
       throw new Error(`unexpected request ${type}`);
@@ -322,6 +325,7 @@ function createHarness(
     commitPiLeaf,
     createForked,
     sessionFileExists,
+    ...(input.showPreview ? { showPreview: input.showPreview } : {}),
     onEvent: (event) => events.push(event as unknown as Record<string, unknown>),
     capacity: input.capacity ?? 4,
     idleTimeoutMs: 0,
@@ -2306,5 +2310,130 @@ describe('WorkerManager slash commands', () => {
       commands: [{ name: 'good', source: 'skill' }],
       truncated: false,
     });
+  });
+});
+
+/**
+ * P5-2-3 — `preview.requested` is answered by Main, not by a card.
+ *
+ * The preview surface is an Electron window, so this event is the one blocking
+ * request in the protocol that never reaches the renderer. What has to hold is
+ * that it is ALWAYS answered: a `browser_preview` call parks on the reply, and
+ * a reply that never comes is a turn the user can only end with Stop.
+ */
+describe('WorkerManager preview requests', () => {
+  function requestedPreview(record: FakeSlotRecord, payload: Record<string, unknown>): void {
+    record.emit({
+      type: 'preview.requested',
+      seq: 1,
+      timestamp: 0,
+      sessionId: record.sessionId,
+      payload,
+    });
+  }
+
+  function previewAcks(record: FakeSlotRecord): Record<string, unknown>[] {
+    return record.request.mock.calls
+      .filter(([type]) => type === 'worker.preview.respond')
+      .map(([, payload]) => payload as Record<string, unknown>);
+  }
+
+  it('opens the preview and reports success back to the worker', async () => {
+    const shown: { path: string; focus: boolean }[] = [];
+    const h = createHarness({
+      showPreview: async (request) => {
+        shown.push(request);
+      },
+    });
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    if (!record) throw new Error('no slot');
+
+    requestedPreview(record, { previewId: 'p1', path: '/repo/demo.html', focus: false });
+    await vi.waitFor(() => expect(previewAcks(record)).toHaveLength(1));
+
+    expect(shown).toEqual([{ path: '/repo/demo.html', focus: false }]);
+    expect(previewAcks(record)[0]).toMatchObject({
+      logicalSessionId: 's1',
+      previewId: 'p1',
+      ok: true,
+    });
+  });
+
+  it('carries the focus flag through unchanged', async () => {
+    const shown: { path: string; focus: boolean }[] = [];
+    const h = createHarness({
+      showPreview: async (request) => {
+        shown.push(request);
+      },
+    });
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    if (!record) throw new Error('no slot');
+
+    requestedPreview(record, { previewId: 'p1', path: '/repo/demo.html', focus: true });
+    await vi.waitFor(() => expect(previewAcks(record)).toHaveLength(1));
+    expect(shown[0].focus).toBe(true);
+  });
+
+  it('reports the failure reason instead of leaving the tool call parked', async () => {
+    const h = createHarness({
+      showPreview: async () => {
+        throw new Error('ERR_FILE_NOT_FOUND');
+      },
+    });
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    if (!record) throw new Error('no slot');
+
+    requestedPreview(record, { previewId: 'p1', path: '/repo/gone.html', focus: false });
+    await vi.waitFor(() => expect(previewAcks(record)).toHaveLength(1));
+    expect(previewAcks(record)[0]).toMatchObject({
+      previewId: 'p1',
+      ok: false,
+      error: 'ERR_FILE_NOT_FOUND',
+    });
+  });
+
+  it('refuses by default, because a manager with no host has no window to open', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    if (!record) throw new Error('no slot');
+
+    requestedPreview(record, { previewId: 'p1', path: '/repo/demo.html', focus: false });
+    await vi.waitFor(() => expect(previewAcks(record)).toHaveLength(1));
+    // Explicitly NOT `ok: true`: answering success from a manager that opened
+    // nothing would tell the model a page is on screen when none is.
+    expect(previewAcks(record)[0]).toMatchObject({ ok: false });
+  });
+
+  it('ignores a request with no id or no path', async () => {
+    const shown: unknown[] = [];
+    const h = createHarness({
+      showPreview: async (request) => {
+        shown.push(request);
+      },
+    });
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    if (!record) throw new Error('no slot');
+
+    requestedPreview(record, { path: '/repo/demo.html', focus: false });
+    requestedPreview(record, { previewId: 'p2', focus: false });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(shown).toEqual([]);
+    expect(previewAcks(record)).toHaveLength(0);
+  });
+
+  it('still forwards the event, so a session trace shows the preview happened', async () => {
+    const h = createHarness({ showPreview: async () => undefined });
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    if (!record) throw new Error('no slot');
+
+    requestedPreview(record, { previewId: 'p1', path: '/repo/demo.html', focus: false });
+    await vi.waitFor(() => expect(previewAcks(record)).toHaveLength(1));
+    expect(h.events.some((event) => event.type === 'preview.requested')).toBe(true);
   });
 });

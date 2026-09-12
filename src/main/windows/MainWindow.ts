@@ -20,6 +20,7 @@ import { getAuthStateService } from '../services/auth';
 import { hasEnteredApp } from '../services/auth/appEntry';
 import { piRuntimeChecker } from '../services/cli/PiRuntimeChecker';
 import { getCurrentLocale } from '../services/i18n';
+import { previewWindowManager } from '../services/preview/PreviewWindowManager';
 import { sessionManager } from '../services/session/SessionManager';
 
 import { autoUpdaterService } from '../services/updater/AutoUpdater';
@@ -522,6 +523,16 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
   win.on('closed', () => {
     disposePiTuiWindow(win.id);
     void sessionManager.detachWindowSessions(win.id);
+    // P5-2-3: a `browser_preview` window is an ordinary BrowserWindow, so one
+    // left open after the last app window would hold `window-all-closed` back
+    // and keep a headless app running. A preview belongs to a session; with no
+    // app window there is no session to belong to. `win` is already out of
+    // `getAllWindows()` by the time `closed` fires, so what is left over being
+    // nothing but previews is the test for "that was the last one".
+    const remaining = BrowserWindow.getAllWindows().filter((other) => !other.isDestroyed());
+    if (previewWindowManager.openCount > 0 && remaining.length === previewWindowManager.openCount) {
+      previewWindowManager.disposeAll();
+    }
   });
 
   return win;

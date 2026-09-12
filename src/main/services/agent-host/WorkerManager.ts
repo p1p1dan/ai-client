@@ -55,6 +55,8 @@ import {
   type WorkerHistoryResult,
   type WorkerPermissionRespondPayload,
   type WorkerPermissionRespondResult,
+  type WorkerPreviewRespondPayload,
+  type WorkerPreviewRespondResult,
   type WorkerQuestionRespondPayload,
   type WorkerQuestionRespondResult,
   type WorkerReloadPayload,
@@ -79,6 +81,7 @@ import {
   inspectPiImport,
   reconcilePiImport,
 } from '../legacyImport/PiImportProcess';
+import { type PreviewShowRequest, previewWindowManager } from '../preview/PreviewWindowManager';
 import { type CreatedPiWorkerSlot, createPiWorkerSlot } from './createPiWorkerSlot';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { type NativeSubagentSettings, nativeSubagentSettings } from './nativeSubagentSettings';
@@ -205,6 +208,15 @@ export interface WorkerManagerOptions {
    * that only wants to check slot bookkeeping must not have to stand one up.
    */
   readSubagentSettings?: () => NativeSubagentSettings;
+  /**
+   * P5-2-3 — show a workspace page in the preview window.
+   *
+   * Injected for the same reason as the two above: production opens a real
+   * Electron window, and a unit test that wants to prove the event is answered
+   * must not have to open one. Rejecting is a real outcome — the reason becomes
+   * the tool error the model reads.
+   */
+  showPreview?: (request: PreviewShowRequest) => Promise<void>;
   createImport?: typeof createPiImport;
   inspectImport?: typeof inspectPiImport;
   reconcileImport?: typeof reconcilePiImport;
@@ -324,6 +336,7 @@ function readStringArray(payload: unknown, key: string): string[] {
 export class WorkerManager {
   private readonly createSlot: typeof createPiWorkerSlot;
   private readonly readSubagentSettings: () => NativeSubagentSettings;
+  private readonly showPreview: (request: PreviewShowRequest) => Promise<void>;
   private readonly bindRuntimeIdentity: (sessionId: string, sessionFile: string) => Promise<void>;
   private readonly commitResumed: NonNullable<WorkerManagerOptions['commitResumed']>;
   private readonly commitPiLeaf: NonNullable<WorkerManagerOptions['commitPiLeaf']>;
@@ -367,6 +380,15 @@ export class WorkerManager {
     // unit test in this file — would then fail on something unrelated to what
     // it is testing. The production singleton below injects the real reader.
     this.readSubagentSettings = options.readSubagentSettings ?? (() => ({ enabled: true }));
+    // Same rule, one step further: the DEFAULT refuses. A manager with no host
+    // has no window to open, and answering `ok: true` from one would tell the
+    // model a page is on screen when nothing is. The production singleton below
+    // injects the real window manager.
+    this.showPreview =
+      options.showPreview ??
+      (async () => {
+        throw new Error('this build has no preview surface');
+      });
     this.bindRuntimeIdentity = options.bindRuntimeIdentity ?? (async () => undefined);
     this.commitResumed = options.commitResumed ?? (async () => undefined);
     this.commitPiLeaf = options.commitPiLeaf ?? (async () => undefined);
@@ -1755,6 +1777,60 @@ export class WorkerManager {
     return result.handled;
   }
 
+  /**
+   * P5-2-3 — open the preview the runtime asked for and tell it what happened.
+   *
+   * Not `async` from the caller's point of view on purpose: `handleWorkerEvent`
+   * is the event pump, and blocking it on a window load would stall every other
+   * event from every session. The tool call is already parked on the answer.
+   *
+   * Failures are reported, never swallowed. A promise that never settles here
+   * is a `browser_preview` call that hangs until the turn is stopped, which is
+   * the one outcome worse than "this build has no preview surface".
+   */
+  private async servePreview(
+    entry: ManagedSlot,
+    generation: number,
+    payload: unknown
+  ): Promise<void> {
+    const previewId = readString(payload, 'previewId');
+    const path = readString(payload, 'path');
+    if (!previewId || !path) return;
+    const focus =
+      !!payload &&
+      typeof payload === 'object' &&
+      (payload as Record<string, unknown>).focus === true;
+
+    let ok = true;
+    let error: string | undefined;
+    try {
+      await this.showPreview({ path, focus });
+    } catch (cause) {
+      ok = false;
+      error = cause instanceof Error ? cause.message : String(cause);
+    }
+    // Re-checked AFTER the await: a window load takes time, and the slot may
+    // have been replaced or disposed meanwhile. Sending into a retired
+    // generation would answer a preview nobody is waiting for.
+    if (!this.isAuthoritative(entry, generation) || !entry.slot) return;
+    const respondPayload: WorkerPreviewRespondPayload = {
+      logicalSessionId: entry.logicalSessionId,
+      previewId,
+      ok,
+      ...(error ? { error } : {}),
+    };
+    try {
+      await entry.slot.request<WorkerPreviewRespondResult, WorkerPreviewRespondPayload>(
+        'worker.preview.respond',
+        respondPayload
+      );
+    } catch (cause) {
+      // The worker went away between the request and the answer. Nothing to
+      // recover: its pending previews are drained by its own dispose.
+      this.log('preview response failed', cause);
+    }
+  }
+
   async respondExtensionUi(
     response: ExtensionUiResponse,
     ownerWebContentsId?: number
@@ -2376,6 +2452,12 @@ export class WorkerManager {
       }
     } else if (event.type === 'extensionUi.reset') {
       this.clearBlockingRequests(entry);
+    } else if (event.type === 'preview.requested') {
+      // P5-2-3. Answered HERE rather than forwarded to a card: the preview
+      // surface is an Electron window, which is Main's to own. It is still
+      // dispatched below, so the event stays visible to anything tracing the
+      // session — it just does not need a renderer to be answered.
+      void this.servePreview(entry, message.generation, event.payload);
     }
 
     if (!entry.identityCommitted && event.type === 'message.completed') {
@@ -2804,6 +2886,8 @@ export const workerManager = new WorkerManager({
   // P5-2-5: the real settings read, injected here rather than defaulted inside
   // the class. See the constructor note.
   readSubagentSettings: () => nativeSubagentSettings(),
+  // P5-2-3: the real preview window, injected for the same reason.
+  showPreview: (request) => previewWindowManager.show(request),
   bindRuntimeIdentity: (sessionId, sessionFile) =>
     sessionIndexService.bindRuntimeIdentity(sessionId, sessionFile),
   commitResumed: (input) => sessionIndexService.commitResumed(input),

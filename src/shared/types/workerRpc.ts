@@ -475,6 +475,28 @@ export interface WorkerQuestionRespondResult {
   handled: boolean;
 }
 
+/**
+ * P5-2-3 — Main telling the worker what happened to one `preview.requested`.
+ *
+ * The only one of these three answers that no human sees: Main opens the window
+ * and reports. `ok: false` with a reason is a real outcome rather than an edge
+ * case — a host with no preview surface, a window the user just closed, a file
+ * Chromium refused — and the reason becomes the tool error the model reads, so
+ * it can stop retrying a preview that cannot work here.
+ */
+export interface WorkerPreviewRespondPayload {
+  logicalSessionId: string;
+  previewId: string;
+  ok: boolean;
+  /** Why it could not be shown. Required in spirit whenever `ok` is false. */
+  error?: string;
+}
+
+export interface WorkerPreviewRespondResult {
+  /** `false` when nothing was waiting on this id. Same meaning as above. */
+  handled: boolean;
+}
+
 export interface WorkerSetPermissionTierPayload {
   logicalSessionId: string;
   tier: SessionPermissionTier;
@@ -559,6 +581,10 @@ export type WorkerExtensionUiResponseRequest = WorkerRpcRequest<
 export type WorkerPermissionRespondRequest = WorkerRpcRequest<
   'worker.permission.respond',
   WorkerPermissionRespondPayload
+>;
+export type WorkerPreviewRespondRequest = WorkerRpcRequest<
+  'worker.preview.respond',
+  WorkerPreviewRespondPayload
 >;
 export type WorkerSetPermissionTierRequest = WorkerRpcRequest<
   'worker.setPermissionTier',
@@ -1136,6 +1162,20 @@ export function isWorkerQuestionRespondPayload(
     isRecord(value.answers) &&
     Object.values(value.answers).every((entry) => typeof entry === 'string')
   );
+}
+
+export function isWorkerPreviewRespondPayload(
+  value: unknown
+): value is WorkerPreviewRespondPayload {
+  if (!isRecord(value)) return false;
+  if (typeof value.logicalSessionId !== 'string') return false;
+  if (typeof value.previewId !== 'string' || value.previewId.trim().length === 0) return false;
+  if (typeof value.ok !== 'boolean') return false;
+  return value.error === undefined || typeof value.error === 'string';
+}
+
+export function isWorkerPreviewRespondResult(value: unknown): value is WorkerPreviewRespondResult {
+  return isRecord(value) && typeof value.handled === 'boolean';
 }
 
 export function isWorkerQuestionRespondResult(

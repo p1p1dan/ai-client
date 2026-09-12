@@ -27,6 +27,7 @@ import {
   isWorkerHistoryPayload,
   isWorkerInspectImportedSessionPayload,
   isWorkerPermissionRespondPayload,
+  isWorkerPreviewRespondPayload,
   isWorkerQuestionRespondPayload,
   isWorkerReconcileImportedSessionPayload,
   isWorkerReloadPayload,
@@ -55,6 +56,7 @@ import {
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
   type WorkerPermissionRespondResult,
+  type WorkerPreviewRespondResult,
   type WorkerQuestionRespondResult,
   type WorkerReloadPayload,
   type WorkerReloadResult,
@@ -121,6 +123,12 @@ export interface PiWorkerRuntime {
     response?: string;
     cancel?: boolean;
   }): boolean;
+  /**
+   * P5-2-3 — report what Main did with one `preview.requested`. Optional for
+   * the same reason again: only a backend that registers `browser_preview` can
+   * have a preview parked.
+   */
+  respondPreview?(input: { previewId: string; ok: boolean; error?: string }): boolean;
   setPermissions?(permissions: RuntimePermissionSettings): void;
   setPermissionTier?(tier: SessionPermissionTier): void;
   dispose(): Promise<void>;
@@ -342,6 +350,9 @@ export class PiWorkerRpcServer {
           break;
         case 'worker.question.respond':
           this.handleQuestionResponse(request);
+          break;
+        case 'worker.preview.respond':
+          this.handlePreviewResponse(request);
           break;
         case 'worker.setPermissions':
           this.handleSetPermissions(request);
@@ -833,6 +844,45 @@ export class PiWorkerRpcServer {
         ...(request.payload.answers ? { answers: request.payload.answers } : {}),
         ...(request.payload.response ? { response: request.payload.response } : {}),
         ...(request.payload.cancel ? { cancel: true } : {}),
+      }),
+    };
+    this.respondSuccess(request, result);
+  }
+
+  /**
+   * P5-2-3 — report the outcome of one `preview.requested`.
+   *
+   * Same rejection rule as the two handlers above: a backend with no
+   * `browser_preview` tool cannot have a preview parked, so an answer arriving
+   * at one means the ends disagree about which runtime is running, and that is
+   * worth an error rather than a quiet `handled: false`.
+   */
+  private handlePreviewResponse(request: WorkerRpcRequest): void {
+    if (!isWorkerPreviewRespondPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.preview.respond requires logicalSessionId, previewId and ok',
+        retryable: false,
+      });
+      return;
+    }
+    if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_MISMATCH',
+        'Preview response targets another session'
+      );
+    }
+    if (!this.runtime?.respondPreview) {
+      throw new PiWorkerSessionError(
+        'WORKER_PREVIEW_RESPOND_UNAVAILABLE',
+        'This backend has no preview tool to answer'
+      );
+    }
+    const result: WorkerPreviewRespondResult = {
+      handled: this.runtime.respondPreview({
+        previewId: request.payload.previewId,
+        ok: request.payload.ok,
+        ...(request.payload.error ? { error: request.payload.error } : {}),
       }),
     };
     this.respondSuccess(request, result);

@@ -1,5 +1,10 @@
 /**
- * P5-2-5 gate — SA19's migration half, plus the native on/off decision.
+ * P5-2-5 gate — SA19's migration half.
+ *
+ * The native on/off decision it used to assert alongside now lives in
+ * `src/main/services/agent-host/__tests__/nativeSubagentSettings.test.ts`:
+ * importing Main code from here pulled `src/main` into the runtime package's
+ * own type-check gate, which has no `@shared/*` aliases.
  *
  * Migration is the one place a silent change does real damage: a delegate that
  * comes across with a different tool set, a different model or a wider approval
@@ -9,7 +14,6 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { nativeSubagentSettings } from '../../main/services/agent-host/nativeSubagentSettings.ts';
 import { parseSubagentDefinition } from '../plugins/subagent/definition.ts';
 import {
   type LegacyDocument,
@@ -213,41 +217,5 @@ describe('SA19 · legacy definitions migrate with every difference on screen', (
       { targetDir: TARGET }
     );
     expect(previews.map((preview) => preview.name)).toEqual(['alpha', 'zeta']);
-  });
-});
-
-describe('P5-2-5 · native delegation is on unless the user turned it off', () => {
-  it('defaults on for an install that has never been asked', () => {
-    expect(nativeSubagentSettings({})).toEqual({ enabled: true });
-  });
-
-  it('reads an explicit opt-in override as the decision', () => {
-    expect(nativeSubagentSettings({ piOptInFeatures: { subagents: false } }).enabled).toBe(false);
-    expect(nativeSubagentSettings({ piOptInFeatures: { subagents: true } }).enabled).toBe(true);
-  });
-
-  it('honours the older boolean when no override exists', () => {
-    expect(nativeSubagentSettings({ enablePiSubagents: false }).enabled).toBe(false);
-  });
-
-  it('lets the override win over the older boolean', () => {
-    expect(
-      nativeSubagentSettings({
-        enablePiSubagents: false,
-        piOptInFeatures: { subagents: true },
-      }).enabled
-    ).toBe(true);
-  });
-
-  it('ignores an unrelated opt-in feature', () => {
-    // `false` for something else is not a statement about delegation.
-    expect(nativeSubagentSettings({ piOptInFeatures: { jingle: false } }).enabled).toBe(true);
-  });
-
-  it('carries the per-install disabled list, and only strings', () => {
-    expect(
-      nativeSubagentSettings({ nativeSubagentsDisabled: ['fixer', 7, 'explorer'] }).disabled
-    ).toEqual(['fixer', 'explorer']);
-    expect(nativeSubagentSettings({ nativeSubagentsDisabled: [] }).disabled).toBeUndefined();
   });
 });

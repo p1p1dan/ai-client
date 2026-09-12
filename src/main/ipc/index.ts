@@ -1,4 +1,5 @@
 import { stopAllCodeReviews } from '../services/ai';
+import { previewWindowManager } from '../services/preview/PreviewWindowManager';
 import { remoteConnectionManager } from '../services/remote/RemoteConnectionManager';
 import { webInspectorServer } from '../services/webInspector';
 import { cleanupExecInPtys, cleanupExecInPtysSync } from '../utils/shell';
@@ -157,6 +158,8 @@ export async function cleanupAllResources(): Promise<void> {
   }
   webInspectorServer.stop();
   stopAllCodeReviews();
+  // P5-2-3: close any `browser_preview` windows (see the sync path for why).
+  previewWindowManager.disposeAll();
   clearAllGitServices();
   clearAllWorktreeServices();
   await remoteConnectionManager.cleanup();
@@ -199,6 +202,11 @@ export function cleanupAllResourcesSync(): void {
 
   // Kill every Pi worker synchronously.
   cleanupWorkerManagerSync();
+
+  // P5-2-3: close any `browser_preview` windows. They are ordinary
+  // BrowserWindows, so one left open would keep the app alive past its last
+  // real window on Windows and Linux.
+  previewWindowManager.disposeAll();
 
   // Clean up temp files (sync)
   cleanupTempFilesSync();

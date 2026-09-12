@@ -31,6 +31,7 @@ export type RuntimeEventType =
   | 'permission.resolved'
   | 'question.requested'
   | 'question.resolved'
+  | 'preview.requested'
   | 'usage.updated'
   | 'extensionUi.request'
   | 'extensionUi.cancelled'
@@ -511,6 +512,39 @@ export interface SessionTerminalEvent extends RuntimeEventBase {
   type: 'session.completed' | 'session.failed' | 'session.stopped';
   sessionId: string;
   payload?: { error?: string };
+}
+
+/**
+ * P5-2-3 — the `browser_preview` tool asking the host to show a workspace file.
+ *
+ * Shaped like `permission.requested` and `question.requested` because it is the
+ * same kind of thing: a tool call parks, something outside the runtime happens,
+ * and one RPC (`worker.preview.respond`) settles it. Two differences:
+ *
+ * - **Main answers this one, not the renderer.** The preview surface is an
+ *   Electron window, so `WorkerManager` handles the event where it arrives
+ *   instead of forwarding a question to a card. It still travels as a runtime
+ *   event so the path is the one already traced, logged and sequenced.
+ * - **`path` is already gated.** The tool resolved and canonicalised it through
+ *   the same permission path `read` uses before emitting, so the host opens a
+ *   file the session was allowed to read rather than re-deciding that itself.
+ */
+export interface PreviewRequestedEvent extends RuntimeEventBase {
+  type: 'preview.requested';
+  sessionId: string;
+  payload: {
+    previewId: string;
+    /** Absolute, canonical, already permission-gated workspace path. */
+    path: string;
+    /**
+     * Bring the preview to the front.
+     *
+     * False is the delegate's case and the reason this field exists: a subagent
+     * working in the background must be able to show a page without pulling the
+     * user out of what they are doing.
+     */
+    focus: boolean;
+  };
 }
 
 export interface PermissionResolvedEvent extends RuntimeEventBase {
@@ -1228,6 +1262,7 @@ export type RuntimeEvent =
   | PermissionResolvedEvent
   | QuestionRequestedEvent
   | QuestionResolvedEvent
+  | PreviewRequestedEvent
   | UsageUpdatedEvent
   | ExtensionUiRequestedEvent
   | ExtensionUiCancelledEvent

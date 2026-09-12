@@ -45,6 +45,7 @@ import { RuntimeHostError } from '../host/errors.ts';
 import { resolveWorkerShell } from '../host/shell.ts';
 import { JsonlSessionStore, type SessionConfig } from '../plugins/session/store.ts';
 import { createPermissionPrompt, type PermissionPrompt } from './permissionPrompt.ts';
+import { createPreviewPrompt, type PreviewPrompt, type PreviewResponse } from './previewPrompt.ts';
 import {
   createQuestionPrompt,
   type QuestionPrompt,
@@ -113,6 +114,8 @@ export class NativeWorkerRuntime {
   private readonly permissions: PermissionPrompt;
   /** F5 — the `ask` tool's user-facing end; see `questionPrompt.ts`. */
   private readonly questions: QuestionPrompt;
+  /** P5-2-3 — `browser_preview`'s host end; see `previewPrompt.ts`. */
+  private readonly previews: PreviewPrompt;
 
   constructor(options: NativeWorkerRuntimeOptions) {
     this.options = options;
@@ -127,6 +130,10 @@ export class NativeWorkerRuntime {
       sessionId: this.logicalSessionId,
       emit: (event) => this.emit(event),
     });
+    this.previews = createPreviewPrompt({
+      sessionId: this.logicalSessionId,
+      emit: (event) => this.emit(event),
+    });
   }
 
   /** RPC entry point for `worker.permission.respond`. */
@@ -137,6 +144,11 @@ export class NativeWorkerRuntime {
   /** RPC entry point for `worker.question.respond`. */
   respondQuestion(input: QuestionResponse): boolean {
     return this.questions.respond(input);
+  }
+
+  /** RPC entry point for `worker.preview.respond`. */
+  respondPreview(input: PreviewResponse): boolean {
+    return this.previews.respond(input);
   }
 
   async bootstrap(): Promise<WorkerBootstrapResult> {
@@ -179,6 +191,11 @@ export class NativeWorkerRuntime {
         // the baseline harness has no renderer, and advertising a question it
         // can never answer would park the turn forever.
         ask: this.questions.ask,
+        // P5-2-3. Same registration rule as `ask`, for the same reason: a host
+        // with no preview surface passes no callback, `browser_preview` is not
+        // registered, and the model can SEE it lacks the capability instead of
+        // being told "not available here" every time it tries.
+        preview: this.previews.preview,
       },
       session,
       // P5-1. Empty config on purpose: the roots are all derived — agent dir,
@@ -739,6 +756,7 @@ export class NativeWorkerRuntime {
     // process.
     this.permissions.drain('session_closed');
     this.questions.drain('session_closed');
+    this.previews.drain('session_closed');
     this.disposed = true;
     const turn = this.turn;
     if (turn) {

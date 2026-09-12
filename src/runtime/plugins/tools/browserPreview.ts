@@ -26,8 +26,18 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { type Static, type TSchema, Type } from 'typebox';
 import { RuntimeHostError } from '../../host/errors.ts';
 
-/** File types a preview surface is expected to render. */
-const PREVIEWABLE = new Set(['.html', '.htm', '.svg', '.md', '.markdown']);
+/**
+ * File types a preview surface is expected to render.
+ *
+ * HTML and SVG, and nothing else. Markdown was on this list until the host side
+ * landed in P5-2-3's second half and made the question concrete: the preview is
+ * a Chromium window, which shows a `.md` file as its own source text or offers
+ * to download it. Accepting a name we can only mis-render is worse than
+ * refusing it, because the model gets a success and the user gets a wall of
+ * `##`. The reference scopes its own tool the same way — "for user-visible HTML
+ * pages" — so this narrows our surface back onto it rather than away.
+ */
+const PREVIEWABLE = new Set(['.html', '.htm', '.svg']);
 
 export interface PreviewRequest {
   /** Absolute, canonical path inside the workspace. */
@@ -50,7 +60,7 @@ const PREVIEW_PARAMETERS = Type.Object(
     path: Type.String({
       minLength: 1,
       maxLength: 4096,
-      description: 'Workspace file to preview (.html, .htm, .svg or .md).',
+      description: 'Workspace page to preview (.html, .htm or .svg).',
     }),
     focus: Type.Optional(
       Type.Boolean({
@@ -74,7 +84,7 @@ export function browserPreviewTool(
     name: 'browser_preview',
     label: 'Browser Preview',
     description:
-      'Show a workspace HTML, SVG or Markdown file in the app preview. The preview reloads by itself when you edit the file, so call this once per file rather than after every change. Does not take focus unless you ask it to.',
+      'Show a workspace HTML or SVG page in the app preview window. The preview reloads by itself when you edit the file, so call this once per page rather than after every change. Does not take focus unless you ask it to.',
     parameters: PREVIEW_PARAMETERS,
     execute: async (id, params, signal): Promise<AgentToolResult<unknown>> => {
       const args = params as Static<typeof PREVIEW_PARAMETERS>;
