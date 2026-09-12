@@ -151,10 +151,51 @@ export interface PiWorkerRpcServerOptions {
    */
   optInExtensions?: string;
   createRuntime?: (options: PiWorkerSessionOptions) => PiWorkerRuntime;
+  /**
+   * P5-4 — the writer a conversation import goes through.
+   *
+   * Supplied by the worker entry on the native backend, for the same structural
+   * reason as `createRuntime` above: this file must not import the native
+   * runtime, and the native runtime must not import this file, so the choice is
+   * made once at the entry point and travels as a factory. Absent means the pi
+   * writer, which is what the legacy backend has always used.
+   *
+   * An import is a pure write job — no model, no tools, no turn — so leaving it
+   * on the pi writer would have loaded `pi-coding-agent` into a native install
+   * for a job that has nothing to do with it.
+   */
+  createImportWriter?: () => PiImportWriter;
   createUtilityRuntime?: () => PiUtilityRuntime;
   loadSdk?: () => Promise<unknown>;
   log?: (...args: unknown[]) => void;
   onDisposed?: () => void;
+}
+
+/**
+ * What an import job needs from a backend, and nothing more.
+ *
+ * Both implementations already had exactly these four methods; naming the shape
+ * is what lets this dispatcher stay one implementation while the write side
+ * differs. `PiLegacyImportWriter` satisfies it structurally, so the legacy path
+ * is unchanged.
+ */
+export interface PiImportWriter {
+  create(input: WorkerImportConversationPayload): Promise<WorkerImportConversationResult>;
+  inspectInterrupted(
+    workspacePath: string,
+    targetPiSessionId: string
+  ): Promise<WorkerInspectImportedSessionResult>;
+  reconcileInterrupted(
+    workspacePath: string,
+    targetPiSessionId: string
+  ): Promise<WorkerReconcileImportedSessionResult>;
+  discard(sessionFile: string): Promise<WorkerDiscardImportedSessionResult>;
+  /**
+   * Release whatever the writer had to start up. Optional: the pi writer holds
+   * only the SDK module, while the native one brings up a host IO service that
+   * owns a subprocess on the encrypted-Windows fallback path.
+   */
+  dispose?(): Promise<void>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -237,7 +278,7 @@ export class PiWorkerRpcServer {
   private bootstrapPayload: WorkerBootstrapPayload | null = null;
   private runtime: PiWorkerRuntime | null = null;
   private utilityRuntime: PiUtilityRuntime | null = null;
-  private importWriter: PiLegacyImportWriter | null = null;
+  private importWriter: PiImportWriter | null = null;
   private disposed = false;
   private eventSequence = 0;
 
@@ -396,14 +437,27 @@ export class PiWorkerRpcServer {
         'A bootstrapped AgentSession worker cannot also perform an import job'
       );
     }
-    if (!this.importWriter) {
-      const loadSdk = this.options.loadSdk ?? (() => import('@earendil-works/pi-coding-agent'));
-      this.importWriter = new PiLegacyImportWriter(loadSdk);
-    }
-    const result: WorkerImportConversationResult = await this.importWriter.create(
+    const result: WorkerImportConversationResult = await this.requireImportWriter().create(
       request.payload as WorkerImportConversationPayload
     );
     this.respondSuccess(request, result);
+  }
+
+  /**
+   * The import writer for this worker's backend, created on first use.
+   *
+   * Lazy because most workers never import anything, and on the legacy side
+   * constructing one means being ready to load `pi-coding-agent`.
+   */
+  private requireImportWriter(): PiImportWriter {
+    if (!this.importWriter) {
+      this.importWriter = this.options.createImportWriter
+        ? this.options.createImportWriter()
+        : new PiLegacyImportWriter(
+            this.options.loadSdk ?? (() => import('@earendil-works/pi-coding-agent'))
+          );
+    }
+    return this.importWriter;
   }
 
   private async handleInspectImport(request: WorkerRpcRequest): Promise<void> {
@@ -415,15 +469,12 @@ export class PiWorkerRpcServer {
       });
       return;
     }
-    if (!this.importWriter) {
-      const loadSdk = this.options.loadSdk ?? (() => import('@earendil-works/pi-coding-agent'));
-      this.importWriter = new PiLegacyImportWriter(loadSdk);
-    }
     const payload = request.payload as WorkerInspectImportedSessionPayload;
-    const result: WorkerInspectImportedSessionResult = await this.importWriter.inspectInterrupted(
-      payload.workspacePath,
-      payload.targetPiSessionId
-    );
+    const result: WorkerInspectImportedSessionResult =
+      await this.requireImportWriter().inspectInterrupted(
+        payload.workspacePath,
+        payload.targetPiSessionId
+      );
     this.respondSuccess(request, result);
   }
 
@@ -436,13 +487,9 @@ export class PiWorkerRpcServer {
       });
       return;
     }
-    if (!this.importWriter) {
-      const loadSdk = this.options.loadSdk ?? (() => import('@earendil-works/pi-coding-agent'));
-      this.importWriter = new PiLegacyImportWriter(loadSdk);
-    }
     const payload = request.payload as WorkerReconcileImportedSessionPayload;
     const result: WorkerReconcileImportedSessionResult =
-      await this.importWriter.reconcileInterrupted(
+      await this.requireImportWriter().reconcileInterrupted(
         payload.workspacePath,
         payload.targetPiSessionId
       );
@@ -930,6 +977,7 @@ export class PiWorkerRpcServer {
       this.disposed = true;
       await this.runtime?.dispose();
       await this.utilityRuntime?.dispose();
+      await this.importWriter?.dispose?.();
       this.runtime = null;
       this.utilityRuntime = null;
       this.importWriter = null;

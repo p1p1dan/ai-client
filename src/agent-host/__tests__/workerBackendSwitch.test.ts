@@ -1,5 +1,5 @@
 import { fork } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -90,6 +90,113 @@ async function bootstrapOnce(backend: string | undefined): Promise<WorkerRpcResp
     proc.send(bootstrapRequest(workdir as string));
   });
 }
+
+/**
+ * P5-4 — drive one `worker.import` through the real entry on the native
+ * backend.
+ *
+ * Same reasoning as the bootstrap cases above: the thing that rots is the
+ * wiring, not the writer. And the two writers are distinguishable from the
+ * outside without inspecting imports — the native one publishes a v4 JSONL
+ * header under `<agentDir>/sessions/<id>.jsonl`, while the pi writer produces a
+ * pi session in a directory its own SDK derives from the workspace.
+ */
+async function importOnce(agentDir: string): Promise<{
+  response: WorkerRpcResponse;
+  workspace: string;
+}> {
+  workdir = mkdtempSync(path.join(tmpdir(), 'aiclient-import-'));
+  const proc = fork(WORKER_ENTRY, [], {
+    execArgv: ['--experimental-strip-types'],
+    cwd: workdir,
+    env: {
+      ...process.env,
+      [PI_WORKER_GENERATION_ENV]: '1',
+      AICLIENT_RUNTIME_BACKEND: 'native',
+      AICLIENT_RUNTIME_AGENT_DIR: agentDir,
+    },
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+  });
+  child = proc;
+  proc.stdout?.resume();
+  proc.stderr?.resume();
+  const workspace = workdir;
+  const response = await new Promise<WorkerRpcResponse>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('worker did not answer')), TIMEOUT_MS - 2000);
+    proc.on('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    proc.on('exit', (code, signal) => {
+      clearTimeout(timer);
+      reject(new Error(`worker exited early (code=${code}, signal=${signal})`));
+    });
+    proc.on('message', (message) => {
+      const answer = message as WorkerRpcResponse;
+      if (answer.kind !== 'response' || answer.requestId !== 'import-1') return;
+      clearTimeout(timer);
+      resolve(answer);
+    });
+    proc.send({
+      protocolVersion: WORKER_RPC_PROTOCOL_VERSION,
+      kind: 'request',
+      generation: 1,
+      requestId: 'import-1',
+      type: 'worker.import',
+      payload: {
+        logicalSessionId: 'logical-1',
+        targetPiSessionId: 'import-claude-code-e2e',
+        conversation: {
+          schemaVersion: 1,
+          importerVersion: 'b4-legacy-v2',
+          sourceKind: 'claude-code',
+          stableSourceIdentity: 'claude:/x:1',
+          sourceSessionId: '1',
+          workspacePath: workspace,
+          title: '导入的会话',
+          sourceFingerprint: {
+            stableSourceIdentity: 'claude:/x:1',
+            contentHash: 'abc',
+            size: 1,
+            mode: 0o600,
+            mtimeMs: 1,
+          },
+          entries: [
+            { kind: 'user', text: '你好' },
+            { kind: 'assistant', blocks: [{ type: 'text', text: '你也好' }] },
+          ],
+          diagnostics: [],
+        },
+      },
+    });
+  });
+  return { response, workspace };
+}
+
+describe('worker conversation import (P5-4)', () => {
+  it(
+    'native writes the imported session itself, without loading pi-coding-agent',
+    async () => {
+      const agentDir = mkdtempSync(path.join(tmpdir(), 'aiclient-import-agent-'));
+      try {
+        const { response } = await importOnce(agentDir);
+        expect(response.ok).toBe(true);
+        if (!response.ok) return;
+        const result = response.result as { finalSessionFile: string; piSessionId: string };
+        expect(result.finalSessionFile).toBe(
+          path.join(agentDir, 'sessions', 'import-claude-code-e2e.jsonl')
+        );
+        const header = JSON.parse(
+          readFileSync(result.finalSessionFile, 'utf8').split('\n')[0] as string
+        );
+        expect(header).toMatchObject({ kind: 'header', version: 4, id: 'import-claude-code-e2e' });
+      } finally {
+        rmSync(agentDir, { recursive: true, force: true });
+      }
+    },
+    TIMEOUT_MS
+  );
+});
 
 describe('worker backend switch (D8)', () => {
   it(

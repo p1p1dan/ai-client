@@ -81,13 +81,18 @@ const generation = readPositiveGeneration(process.env[PI_WORKER_GENERATION_ENV])
  * backends. `legacy` never loads the native module, so an import-time fault in
  * the unfinished runtime cannot reach a user's session.
  */
-const backend = readRuntimeFlags(process.env).backend;
+const flags = readRuntimeFlags(process.env);
+const backend = flags.backend;
 let createNativeRuntime: PiWorkerRpcServerOptions['createRuntime'];
+let createNativeImportWriter: PiWorkerRpcServerOptions['createImportWriter'];
 if (backend === 'native') {
-  const [{ NativeWorkerRuntime }, { workerHost }] = await Promise.all([
-    import('../runtime/worker/nativeWorkerRuntime.ts'),
-    import('../runtime/host/worker.ts'),
-  ]);
+  const [{ NativeWorkerRuntime }, { NativeLegacyImportWriter }, { workerHost }] = await Promise.all(
+    [
+      import('../runtime/worker/nativeWorkerRuntime.ts'),
+      import('../runtime/worker/nativeImport.ts'),
+      import('../runtime/host/worker.ts'),
+    ]
+  );
   // Electron-only; absent when Main spawned us as the bundled node.exe.
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
   const host = workerHost({ carrier, ...(resourcesPath ? { resourcesPath } : {}) });
@@ -96,6 +101,14 @@ if (backend === 'native') {
   // (that would drag pi-coding-agent into the native path), so this is the only
   // place the two shapes meet.
   createNativeRuntime = (options) => new NativeWorkerRuntime({ ...options, host });
+  // P5-4. Same structural rule, same meeting point. The agent directory is
+  // where a native session lives, so an import has to land in the same place a
+  // later resume will look; without one there is nowhere to write, and the pi
+  // writer stays in charge rather than guessing a path.
+  if (flags.agentDir) {
+    const agentDir = flags.agentDir;
+    createNativeImportWriter = () => new NativeLegacyImportWriter(host, agentDir);
+  }
 }
 
 let disposed = false;
@@ -107,6 +120,7 @@ const server = new PiWorkerRpcServer({
     ? { optInExtensions: process.env[PI_OPT_IN_EXTENSIONS_ENV]?.trim() }
     : {}),
   ...(createNativeRuntime ? { createRuntime: createNativeRuntime } : {}),
+  ...(createNativeImportWriter ? { createImportWriter: createNativeImportWriter } : {}),
   log: (...args) => console.error('[pi-worker]', ...args),
   onDisposed: () => {
     disposed = true;

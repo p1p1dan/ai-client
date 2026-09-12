@@ -26,6 +26,16 @@ export interface SessionConfig {
   file: string;
   cwd: string;
   mode: 'create' | 'resume' | 'import';
+  /**
+   * P5-4 — the header id a NEW session must carry, instead of a fresh uuid.
+   *
+   * Only the conversation importer passes one: Main allocates the id before the
+   * worker exists (it is what the manifest, the session index row and any later
+   * reconcile all key on), so a session created with an id of its own choosing
+   * would be unreachable by every one of them. Ignored outside `create`, where
+   * the id is whatever the file already states.
+   */
+  id?: string;
   sourceFile?: string;
   allowWorkspaceRelocation?: boolean;
   /** Bound the in-memory transcript on this host; oversized files fail explicitly. */
@@ -106,7 +116,7 @@ export class JsonlSessionStore {
           header: {
             kind: 'header',
             version: 4,
-            id: randomUUID(),
+            id: config.id ?? randomUUID(),
             createdAt: Date.now(),
             cwd: await io.realpath(config.cwd),
           },
