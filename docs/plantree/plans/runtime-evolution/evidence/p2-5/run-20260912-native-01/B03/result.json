@@ -1,0 +1,9 @@
+{
+  "caseId": "B03",
+  "name": "搜索与读取",
+  "passed": false,
+  "latencyMs": 59987,
+  "assertions": [],
+  "error": "Missing response marker IRIS",
+  "violations": []
+}

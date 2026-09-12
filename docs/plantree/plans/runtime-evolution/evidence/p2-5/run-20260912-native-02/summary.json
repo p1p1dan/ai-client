@@ -1,0 +1,305 @@
+{
+  "schemaVersion": 1,
+  "validBaseline": true,
+  "backend": "native",
+  "suiteVersion": "p2-0-v3",
+  "completedAt": "2026-09-12T04:37:14.749Z",
+  "results": [
+    {
+      "caseId": "B01",
+      "name": "纯对话",
+      "passed": true,
+      "latencyMs": 22422,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 1,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 2,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "usage": {
+        "calls": 3,
+        "input": 6,
+        "output": 65,
+        "cacheRead": 33665,
+        "cacheWrite": 16910,
+        "totalTokens": 50646,
+        "cacheHitRate": 0.9998218051141933
+      },
+      "compactionUsage": {
+        "calls": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cacheHitRate": null
+      },
+      "toolCalls": 0
+    },
+    {
+      "caseId": "B02",
+      "name": "多轮文件工具",
+      "passed": true,
+      "latencyMs": 241657,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 1,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 2,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "usage": {
+        "calls": 6,
+        "input": 12,
+        "output": 60,
+        "cacheRead": 12452,
+        "cacheWrite": 293,
+        "totalTokens": 12817,
+        "cacheHitRate": 0.9990372272143774
+      },
+      "compactionUsage": {
+        "calls": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cacheHitRate": null
+      },
+      "toolCalls": 3
+    },
+    {
+      "caseId": "B03",
+      "name": "搜索与读取",
+      "passed": true,
+      "latencyMs": 144099,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 1,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 2,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "usage": {
+        "calls": 5,
+        "input": 10,
+        "output": 110,
+        "cacheRead": 8421,
+        "cacheWrite": 2229,
+        "totalTokens": 10770,
+        "cacheHitRate": 0.99881390107935
+      },
+      "compactionUsage": {
+        "calls": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cacheHitRate": null
+      },
+      "toolCalls": 2
+    },
+    {
+      "caseId": "B04",
+      "name": "长文件截断与分页",
+      "passed": true,
+      "latencyMs": 140867,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 1,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 2,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "usage": {
+        "calls": 5,
+        "input": 10,
+        "output": 105,
+        "cacheRead": 64107,
+        "cacheWrite": 20850,
+        "totalTokens": 85072,
+        "cacheHitRate": 0.9998440351232902
+      },
+      "compactionUsage": {
+        "calls": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cacheHitRate": null
+      },
+      "toolCalls": 2
+    },
+    {
+      "caseId": "B05",
+      "name": "压缩后续聊",
+      "passed": true,
+      "latencyMs": 120794,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 1,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 2,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 3,
+          "action": "compact",
+          "passed": true
+        },
+        {
+          "stepIndex": 4,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 5,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "usage": {
+        "calls": 5,
+        "input": 10,
+        "output": 93,
+        "cacheRead": 42467,
+        "cacheWrite": 25733,
+        "totalTokens": 68303,
+        "cacheHitRate": 0.9997645784777645
+      },
+      "compactionUsage": {
+        "calls": 1,
+        "input": 2,
+        "output": 818,
+        "cacheRead": 0,
+        "cacheWrite": 21701,
+        "totalTokens": 22521,
+        "cacheHitRate": 0
+      },
+      "toolCalls": 0
+    },
+    {
+      "caseId": "B06",
+      "name": "resume 续聊",
+      "passed": true,
+      "latencyMs": 30534,
+      "assertions": [
+        {
+          "stepIndex": 0,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 1,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 2,
+          "action": "resume",
+          "passed": true
+        },
+        {
+          "stepIndex": 3,
+          "action": "prompt",
+          "passed": true
+        },
+        {
+          "stepIndex": 4,
+          "action": "prompt",
+          "passed": true
+        }
+      ],
+      "usage": {
+        "calls": 4,
+        "input": 8,
+        "output": 59,
+        "cacheRead": 6124,
+        "cacheWrite": 2102,
+        "totalTokens": 8293,
+        "cacheHitRate": 0.9986953685583823
+      },
+      "compactionUsage": {
+        "calls": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cacheHitRate": null
+      },
+      "toolCalls": 0
+    }
+  ],
+  "pricing": null,
+  "usage": {
+    "calls": 28,
+    "input": 56,
+    "output": 492,
+    "cacheRead": 167236,
+    "cacheWrite": 68117,
+    "totalTokens": 235901,
+    "cacheHitRate": 0.9996652559596394
+  },
+  "compactionUsage": {
+    "calls": 1,
+    "input": 2,
+    "output": 818,
+    "cacheRead": 0,
+    "cacheWrite": 21701,
+    "totalTokens": 22521,
+    "cacheHitRate": 0
+  }
+}

@@ -1,0 +1,2 @@
+{"caseId":"B03","source":"turn","ordinal":1,"stepIndex":0,"at":"2026-09-12T04:23:04.514Z","usage":{"input":2,"output":15,"cacheRead":0,"cacheWrite":2003,"totalTokens":2020,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0},"cacheWrite1h":0,"reasoning":0}}
+{"caseId":"B03","source":"turn","ordinal":2,"stepIndex":0,"at":"2026-09-12T04:24:01.509Z","usage":{"input":2,"output":132,"cacheRead":2003,"cacheWrite":74,"totalTokens":2211,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0},"cacheWrite1h":0,"reasoning":0}}
