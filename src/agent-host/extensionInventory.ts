@@ -30,6 +30,16 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 /**
+ * Directory names that are build layout, not a package's identity.
+ *
+ * Found in a point-check, not guessed: the bundled permission system resolves
+ * to `.../@gotgenes/pi-permission-system/src/index.ts`, and naming it after the
+ * directory holding the entry file put a plugin called **`src`** on screen. Any
+ * package that ships `src/index.ts` — a very ordinary layout — hits this.
+ */
+const LAYOUT_DIRS = new Set(['src', 'dist', 'lib', 'build', 'out', 'esm', 'cjs']);
+
+/**
  * A readable name for a path like `/home/u/.pi/extensions/pi-mcp/index.js`.
  *
  * pi's `Extension` carries no name field, so the directory is the closest thing
@@ -37,12 +47,24 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
  * directory name is what the user configured. A bare file falls back to its own
  * stem rather than to a generic label — `extension` on five rows would be worse
  * than a slightly odd but distinct name.
+ *
+ * When the directory holding the entry file is itself build layout, one more
+ * level up is taken. Only one, and only for an entry file: a package genuinely
+ * named `src` would be indistinguishable anyway, and walking further would
+ * start naming extensions after `node_modules` and scope directories.
  */
 export function extensionDisplayName(path: string): string {
   const segments = path.split(/[/\\]/).filter((part) => part.length > 0);
   const last = segments[segments.length - 1] ?? path;
   const isEntryFile = /^(index|extension|main)\.[cm]?[jt]s$/i.test(last);
-  const candidate = isEntryFile ? (segments[segments.length - 2] ?? last) : last;
+  let candidate = last;
+  if (isEntryFile) {
+    const parent = segments[segments.length - 2];
+    candidate =
+      parent && LAYOUT_DIRS.has(parent.toLowerCase())
+        ? (segments[segments.length - 3] ?? parent)
+        : (parent ?? last);
+  }
   return candidate.replace(/\.[cm]?[jt]s$/i, '');
 }
 

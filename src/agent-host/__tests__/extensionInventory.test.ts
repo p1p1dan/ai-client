@@ -17,6 +17,23 @@ describe('extensionDisplayName', () => {
     expect(extensionDisplayName('/opt/plugins/linter.js')).toBe('linter');
     expect(extensionDisplayName('/opt/plugins/linter')).toBe('linter');
   });
+
+  it('skips a build-layout directory instead of naming a plugin after it', () => {
+    // The real path from the 2026-09-11 point-check: this rendered as `src`.
+    expect(
+      extensionDisplayName(
+        '/home/u/src/agent-host/node_modules/@gotgenes/pi-permission-system/src/index.ts'
+      )
+    ).toBe('pi-permission-system');
+    expect(extensionDisplayName('/opt/p/my-plugin/dist/index.js')).toBe('my-plugin');
+    expect(extensionDisplayName('C:\\p\\my-plugin\\lib\\main.mjs')).toBe('my-plugin');
+  });
+
+  it('stops after one level up, so it cannot start naming plugins after node_modules', () => {
+    // No package above the layout directory: the layout name is still better
+    // than climbing into `node_modules` or a scope directory.
+    expect(extensionDisplayName('/src/index.ts')).toBe('src');
+  });
 });
 
 describe('readLoadedExtensionInventory (U04)', () => {
