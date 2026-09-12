@@ -16,13 +16,14 @@
  *   registry is lowercase. The frontmatter keeps the canonical capitalised
  *   spelling so a document still round-trips against the reference format; only
  *   the prose the model reads is adjusted. Nothing else in any body changed.
- * - **`explorer`'s "Prefer grep for text/regex patterns" is kept even though
- *   our `grep` is literal-only today.** The capability gap is real and is
- *   P5-2-3's to close (see `topics/p5-2-0-baseline.md` §3.2). Deleting the line
- *   would hide a missing capability behind a shorter prompt, which the P5-2
- *   contract forbids.
- * - `BrowserPreview` is in no builtin's tool set, so the facade we do not have
- *   yet costs the builtins nothing.
+ * - **`explorer`'s "Prefer grep for text/regex patterns" is kept.** When these
+ *   documents landed our `grep` was literal-only and the line described a
+ *   capability we did not have, which the P5-2 contract says to record rather
+ *   than hide behind a shorter prompt. P5-2-3 closed the gap: `grep` now takes
+ *   `regex: true`, so the line describes what the tool does.
+ * - `BrowserPreview` is in no builtin's tool set. A user definition may declare
+ *   it, and P5-2-3 landed both the tool and its window; the builtins simply
+ *   have no use for it.
  *
  * Turn caps stay at the reference's 60 / 50 / 40 / 80.
  */

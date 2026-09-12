@@ -245,6 +245,14 @@ export const IPC_CHANNELS = {
   PI_RESOURCES_OPEN_PROMPTS: 'piResources:openPromptTemplates',
   PI_RESOURCES_OPEN_SKILLS: 'piResources:openSkills',
 
+  // P5-2-5 — managing the native subagent definitions.
+  PI_SUBAGENTS_LIST: 'piSubagents:list',
+  PI_SUBAGENTS_SAVE: 'piSubagents:save',
+  PI_SUBAGENTS_DELETE: 'piSubagents:delete',
+  PI_SUBAGENTS_SET_ENABLED: 'piSubagents:setEnabled',
+  PI_SUBAGENTS_CLEAR_STALE: 'piSubagents:clearStale',
+  PI_SUBAGENTS_REVEAL: 'piSubagents:reveal',
+
   // H/19 U2 — copying `~/.pi/agent` into this app's own agent directory.
   AGENT_MIGRATION_INSPECT: 'agentMigration:inspect',
   AGENT_MIGRATION_APPLY: 'agentMigration:apply',

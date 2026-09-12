@@ -596,6 +596,44 @@ export const zhTranslations: Record<string, string> = {
   'Open skills folder': '打开技能目录',
   'Opening...': '正在打开…',
 
+  // P5-2-5：原生子代理的管理界面。
+  Subagents: '子代理',
+  'Background delegates the model can start with Task. Each one runs on its own context and reports back when it finishes.':
+    '模型可以用 Task 在后台启动的子代理。每个跑在自己的上下文里，做完再把报告交回来。',
+  'Search by name, description or tool': '按名称、说明或工具搜索',
+  'Search subagents': '搜索子代理',
+  'Open subagents folder': '打开子代理目录',
+  'New subagent': '新建子代理',
+  'Loading subagents...': '正在载入子代理…',
+  'No subagents yet.': '还没有子代理。',
+  'No subagent matches that.': '没有匹配的子代理。',
+  'Built in': '内置',
+  'Switched off': '已关闭',
+  'Enable {{name}}': '启用 {{name}}',
+  'Edit {{name}}': '编辑 {{name}}',
+  'Customise {{name}}': '定制 {{name}}',
+  'Show {{name}} in folder': '在目录中显示 {{name}}',
+  'Delete {{name}}': '删除 {{name}}',
+  'Delete {{name}}?': '删除 {{name}}？',
+  'This removes the definition file. Sessions already running keep the copy they started with.':
+    '这会删掉定义文件。已经在跑的会话仍用它启动时的那份快照。',
+  'These documents do not load': '这些文档加载不了',
+  '{{count}} switched-off names no longer match any subagent — they were renamed or deleted.':
+    '有 {{count}} 个已关闭的名字对不上任何子代理了——它们被改名或删除了。',
+  'Clear them': '清理掉',
+  'When to delegate here': '什么时候派给它',
+  'The model reads this to choose. One line.': '模型靠这句话决定要不要派活。一句话。',
+  Tools: '工具',
+  'Leave empty to follow the session model. Written as provider/model.':
+    '留空则跟随会话模型。写成 provider/model。',
+  'Thinking level': '思考强度',
+  'Follow the session': '跟随会话',
+  'Turn cap': '轮次上限',
+  'Empty means unlimited. Up to {{max}}.': '留空即不限。最多 {{max}}。',
+  unlimited: '不限',
+  Instructions: '指令',
+  'The whole system prompt this subagent runs on.': '这个子代理运行时的完整系统提示词。',
+
   // H/19 U2：把 ~/.pi/agent 复制到本应用目录的那一段。
   'Bring over your personal Pi setup': '把你自己的 Pi 配置搬过来',
   'Copies from your own Pi directory into this app. Your files stay where they are — nothing is moved or changed there.':

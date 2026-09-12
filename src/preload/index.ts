@@ -97,6 +97,7 @@ import type { AgentModelCatalog, ListPiModelsRequest } from '@shared/types/agent
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import type { ExtensionUiResponse } from '@shared/types/runtimeEvents';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
+import type { SubagentCatalogView, SubagentSaveRequest } from '@shared/types/subagentManagement';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import type { WorkerExtensionInfo, WorkerSlashCommandInfo } from '@shared/types/workerRpc';
 import type {
@@ -1182,6 +1183,28 @@ const electronAPI = {
     openPromptTemplates: (): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_OPEN_PROMPTS),
     openSkills: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_OPEN_SKILLS),
+  },
+
+  /**
+   * P5-2-5 — the native subagent catalog.
+   *
+   * Every mutation answers with the whole catalog rather than the row it
+   * touched: a rename can bring a shadowed builtin back, a delete can change
+   * what is stale, and a UI that patched one row would show neither.
+   */
+  piSubagents: {
+    list: (): Promise<SubagentCatalogView> => ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_LIST),
+    save: (request: SubagentSaveRequest): Promise<SubagentCatalogView> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_SAVE, request),
+    remove: (name: string): Promise<SubagentCatalogView> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_DELETE, { name }),
+    setEnabled: (name: string, enabled: boolean): Promise<SubagentCatalogView> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_SET_ENABLED, { name, enabled }),
+    clearStale: (): Promise<SubagentCatalogView> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_CLEAR_STALE),
+    /** No name opens the folder itself — "where do I put one". */
+    reveal: (name?: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_REVEAL, name ? { name } : {}),
   },
 
   /**

@@ -1,10 +1,17 @@
 /**
- * P5-2-1 — the subagent definition document: shape, parser and limits.
+ * P5-2-1 — the subagent definition document: shape, parser, writer and limits.
  *
  * Provenance: adapted from PI-Desktop `packages/shared/src/subagent-definition.ts`
  * at commit `948ee676bdb7b31d496f6603aa03dd12eb95be35`. The format, the
  * frontmatter tolerances, the safety defaults and the caps are kept so a
  * definition written for the reference app parses here unchanged.
+ *
+ * It lives in `src/shared` — as it does in the reference — because THREE
+ * processes need the same answer about this format: the runtime loads
+ * definitions, Electron Main edits them for the management UI, and the renderer
+ * types the rows it shows. P5-2-5 is what forced the move: a management UI that
+ * wrote documents from its own idea of the format is exactly how a saved
+ * definition loses the `permission` field nobody put a control on yet.
  *
  * Three things are ours, and each has a reason that is not taste:
  *
@@ -28,7 +35,7 @@
  *    user already relies on keep their wording.
  */
 
-import type { PermissionGear } from '../../../shared/types/runtimePermission.ts';
+import type { PermissionGear } from './types/runtimePermission.ts';
 
 /**
  * Where a definition came from.
@@ -467,6 +474,72 @@ function parseTimeoutSeconds(
   const clamped = Math.min(maximum, Math.max(minimum, parsed));
   if (clamped !== parsed) warnings.push(`clamping \`${key}\` ${parsed} to ${clamped}`);
   return clamped;
+}
+
+/** Fields a document can carry. The writer emits them in this order. */
+type WritableField =
+  | 'name'
+  | 'description'
+  | 'tools'
+  | 'model'
+  | 'thinkingLevel'
+  | 'permission'
+  | 'maxTurns';
+
+/**
+ * Quote a scalar only when leaving it bare would change what the parser reads.
+ *
+ * A description ending in a colon, starting with a bracket, or wrapped in
+ * quotes the user typed themselves are the three cases; everything else stays
+ * as the user wrote it, because a management UI that re-quoted every
+ * description would make its own diff noise on every save.
+ */
+function writeScalar(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "''";
+  const needsQuotes =
+    /^[[\-#'"]/.test(trimmed) || /:\s*$/.test(trimmed) || /\n/.test(trimmed) || trimmed !== value;
+  if (!needsQuotes) return trimmed;
+  return `'${trimmed.replace(/'/g, "''")}'`;
+}
+
+/**
+ * Render a definition back to a document.
+ *
+ * The round trip this has to survive is the contract's, and it is not about
+ * formatting: "保存需往返保留所有可执行语义字段；UI 尚无某字段控件时也必须保留原值".
+ * So the writer takes the whole parsed definition and emits every executable
+ * field it holds — a management UI that only knows about four of them still
+ * saves all seven, because it hands back the definition it was given with its
+ * four changed.
+ *
+ * What is deliberately NOT written:
+ *
+ * - `idleTimeout` / `maxDuration`, which arm nothing (see the module note).
+ *   Writing them back would preserve a value that does not act, and make the
+ *   document look like it controls a lifetime it does not.
+ * - `enabled`. Enablement is this install's state, kept in app data; a document
+ *   is a shareable artifact and must not carry one machine's switches.
+ * - `permission: inherit`, which is the default. Absent and `inherit` mean the
+ *   same thing, and the shorter one does not invite a reader to wonder.
+ */
+export function formatSubagentDefinition(
+  definition: Pick<SubagentDefinition, WritableField | 'prompt'>
+): string {
+  const lines = ['---', `name: ${definition.name}`];
+  lines.push(`description: ${writeScalar(definition.description)}`);
+  if (definition.tools.length) lines.push(`tools: [${definition.tools.join(', ')}]`);
+  if (definition.model) lines.push(`model: ${subagentModelKey(definition.model)}`);
+  if (definition.thinkingLevel) lines.push(`thinkingLevel: ${definition.thinkingLevel}`);
+  if (definition.permission && definition.permission !== DEFAULT_SUBAGENT_PERMISSION) {
+    lines.push(`permission: ${definition.permission}`);
+  }
+  // `maxTurns` absent means unlimited, and so does `none`. The explicit word is
+  // written because a UI that cleared the cap should leave a document that says
+  // so, rather than one where the line silently disappeared.
+  if (definition.maxTurns !== undefined) lines.push(`maxTurns: ${definition.maxTurns}`);
+  lines.push('---', '', definition.prompt.trim(), '');
+  return lines.join('\n');
 }
 
 /**

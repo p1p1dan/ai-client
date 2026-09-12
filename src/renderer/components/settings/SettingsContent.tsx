@@ -27,6 +27,7 @@ import { PermissionPolicySettings } from './PermissionPolicySettings';
 import { PiModelManagementSettings } from './PiModelManagementSettings';
 import { PiPluginsSettings } from './PiPluginsSettings';
 import { PiResourcesSettings } from './PiResourcesSettings';
+import { PiSubagentsSettings } from './PiSubagentsSettings';
 import { RemoteSettings } from './RemoteSettings';
 import { SettingsPageShell } from './SettingsPrimitives';
 import { TerminalAppearanceSettings } from './TerminalAppearanceSettings';
@@ -114,6 +115,7 @@ export function SettingsContent({
               <PermissionPolicySettings repoPath={repoPath} />
               <PiPluginsSettings />
               <PiResourcesSettings />
+              <PiSubagentsSettings />
             </>
           )}
           {activeCategory === 'keybindings' && <KeybindingsSettings />}

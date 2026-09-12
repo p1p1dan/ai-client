@@ -33,6 +33,11 @@ import type { AgentTool, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Usage } from '@earendil-works/pi-ai';
 import { type Context, Service } from 'cordis';
 import { type TSchema, Type } from 'typebox';
+import {
+  normalizeSubagentName,
+  type SubagentDefinition,
+  subagentModelKey,
+} from '../../../shared/subagentDefinition.ts';
 import type { SubagentActivityPayload } from '../../../shared/types/runtimeEvents.ts';
 import {
   EVENTS_SERVICE,
@@ -43,7 +48,6 @@ import {
 import type { DelegateCallScope } from '../permissions/index.ts';
 import { TOOLS_SERVICE } from '../tools/index.ts';
 import { applySubagentActivation, resolveSubagentPin, type SubagentCatalog } from './catalog.ts';
-import { normalizeSubagentName, type SubagentDefinition, subagentModelKey } from './definition.ts';
 import {
   composeSubagentSystemPrompt,
   resolveDelegateToolNames,

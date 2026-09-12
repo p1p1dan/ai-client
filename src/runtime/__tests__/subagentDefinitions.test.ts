@@ -11,16 +11,7 @@
 
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { RuntimeFileKind, RuntimeModelRef } from '../contracts.ts';
-import { BUILTIN_SUBAGENT_DOCUMENTS } from '../plugins/subagent/builtins.ts';
-import {
-  applySubagentActivation,
-  loadSubagentCatalog,
-  resolveSubagentPin,
-  type SubagentDocumentSource,
-  subagentPinDiagnostics,
-  subagentRoots,
-} from '../plugins/subagent/catalog.ts';
+import { BUILTIN_SUBAGENT_DOCUMENTS } from '../../shared/subagentBuiltins.ts';
 import {
   MAX_SUBAGENT_DEFINITIONS,
   MAX_SUBAGENT_DOCUMENT_BYTES,
@@ -32,7 +23,16 @@ import {
   type SubagentDefinition,
   subagentCanMutate,
   subagentPinnedProviders,
-} from '../plugins/subagent/definition.ts';
+} from '../../shared/subagentDefinition.ts';
+import type { RuntimeFileKind, RuntimeModelRef } from '../contracts.ts';
+import {
+  applySubagentActivation,
+  loadSubagentCatalog,
+  resolveSubagentPin,
+  type SubagentDocumentSource,
+  subagentPinDiagnostics,
+  subagentRoots,
+} from '../plugins/subagent/catalog.ts';
 
 const AGENT_DIR = '/agent';
 const HOME = '/home/probe';

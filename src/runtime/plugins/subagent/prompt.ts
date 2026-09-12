@@ -15,7 +15,11 @@
  * user to talk to, and its report format is set here.
  */
 
-import { runtimeToolName, type SubagentDefinition, subagentCanMutate } from './definition.ts';
+import {
+  runtimeToolName,
+  type SubagentDefinition,
+  subagentCanMutate,
+} from '../../../shared/subagentDefinition.ts';
 
 export interface SubagentPromptInput {
   definition: SubagentDefinition;

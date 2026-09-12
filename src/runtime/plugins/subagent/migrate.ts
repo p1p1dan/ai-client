@@ -30,7 +30,7 @@ import {
   normalizeSubagentName,
   SUBAGENT_THINKING_LEVELS,
   type SubagentAssignableTool,
-} from './definition.ts';
+} from '../../../shared/subagentDefinition.ts';
 
 /** Where a legacy document was found. */
 export type LegacyScope = 'global' | 'project';

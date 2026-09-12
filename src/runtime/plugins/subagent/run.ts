@@ -50,6 +50,7 @@ import {
 } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Usage } from '@earendil-works/pi-ai';
 import type { TSchema } from 'typebox';
+import type { SubagentDefinition } from '../../../shared/subagentDefinition.ts';
 import type { ResolvedModel } from '../../contracts.ts';
 import type { ClassifiedProviderError } from '../agent-loop/providerErrors.ts';
 import {
@@ -61,7 +62,6 @@ import {
   providerRateLimitDelayMs,
   providerSetupRetryDelayMs,
 } from '../agent-loop/providerRetry.ts';
-import type { SubagentDefinition } from './definition.ts';
 
 /**
  * The report is the only thing that enters the parent's context; keep it from

@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { parseSubagentDefinition } from '../plugins/subagent/definition.ts';
+import { parseSubagentDefinition } from '../../shared/subagentDefinition.ts';
 import {
   type LegacyDocument,
   previewLegacyMigration,

@@ -29,6 +29,7 @@ import { registerPiPermissionHandlers } from './piPermissions';
 import { registerPiPluginHandlers } from './piPlugins';
 import { registerPiResourceHandlers } from './piResources';
 import { registerPiRuntimeHandlers } from './piRuntime';
+import { registerPiSubagentHandlers } from './piSubagents';
 import {
   disposeAllPiTuiControllers,
   disposeAllPiTuiControllersSync,
@@ -86,6 +87,7 @@ export function registerIpcHandlers(): void {
   registerPiModelHandlers();
   registerPiPermissionHandlers();
   registerPiResourceHandlers();
+  registerPiSubagentHandlers();
   registerPiPluginHandlers();
   registerAgentMigrationHandlers();
   registerUserProviderHandlers();

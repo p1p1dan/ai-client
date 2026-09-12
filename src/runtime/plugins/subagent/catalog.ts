@@ -29,8 +29,7 @@
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { RuntimeFileKind, RuntimeModelRef } from '../../contracts.ts';
-import { BUILTIN_SUBAGENT_DOCUMENTS } from './builtins.ts';
+import { BUILTIN_SUBAGENT_DOCUMENTS } from '../../../shared/subagentBuiltins.ts';
 import {
   MAX_SUBAGENT_DOCUMENT_BYTES,
   mergeSubagentDefinitions,
@@ -39,7 +38,8 @@ import {
   type SubagentModelPin,
   subagentModelKey,
   subagentPinnedProviders,
-} from './definition.ts';
+} from '../../../shared/subagentDefinition.ts';
+import type { RuntimeFileKind, RuntimeModelRef } from '../../contracts.ts';
 
 /**
  * The file access this module needs, and nothing more.
