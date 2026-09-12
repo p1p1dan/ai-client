@@ -55,6 +55,14 @@ import { type PromptConfig, PromptPlugin } from './plugins/prompt/index.ts';
 import { SessionPlugin } from './plugins/session/index.ts';
 import { prepareSessionConfig } from './plugins/session/legacy.ts';
 import { JsonlSessionStore, type SessionConfig } from './plugins/session/store.ts';
+import {
+  loadSkillCatalog,
+  type RuntimeSkillsService,
+  SKILLS_SERVICE,
+  type SkillCatalog,
+  type SkillsConfig,
+  SkillsPlugin,
+} from './plugins/skills/index.ts';
 import { TOOLS_SERVICE, type ToolsConfig, ToolsPlugin } from './plugins/tools/index.ts';
 import { canonicalPath } from './plugins/tools/paths.ts';
 import { buildVersionStamp, TracePlugin } from './trace.ts';
@@ -69,6 +77,12 @@ export interface RuntimeBootstrapOptions {
   permissions?: Omit<PermissionConfig, 'cwd' | 'policy'>;
   context?: ContextConfig;
   prompt?: PromptConfig;
+  /**
+   * P5-1. Absent disables discovery entirely (`skills: false` is not a separate
+   * flag — a graph with no tools has no `skill` tool to reach them with, and
+   * the fixed probes want a prompt with no machine-specific content in it).
+   */
+  skills?: SkillsConfig;
   session?: SessionConfig;
   approvalUi?: PortableExtensionUiBridgeOptions;
   agentDir?: string;
@@ -90,6 +104,8 @@ export interface RuntimeHandle {
   permissions?: RuntimePermissionsService;
   context?: RuntimeContextService;
   prompt: RuntimePromptService;
+  /** Present only when `options.skills` asked for discovery. */
+  skills?: RuntimeSkillsService;
   session?: RuntimeSessionService;
   events: RuntimeEventsService;
   approval?: RuntimeApprovalBridge;
@@ -116,6 +132,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
   let io: HostIoPlugin | undefined;
   let approval: RuntimeApprovalBridge | undefined;
   let session: JsonlSessionStore | undefined;
+  let skillCatalog: SkillCatalog | undefined;
   try {
     await ctx.plugin(ExecPlugin, host);
     exec = ctx.runtimeExec as ExecPlugin;
@@ -171,6 +188,20 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
         shellEnv: commandEnvironment(host, undefined),
       });
       await toolsFiber.await();
+      // P5-1, after the tools plugin because this registers the `skill` tool
+      // into its registry. Opt-in rather than automatic: what it finds is
+      // machine-specific content in the system prompt, and the P2-0 fixed
+      // suite's whole premise is a prompt that does not vary by machine.
+      if (options.skills) {
+        skillCatalog = await loadSkillCatalog(io, {
+          ...(agentDir ? { agentDir } : {}),
+          cwd,
+          projectTrusted: options.permissions?.projectTrusted,
+          ...options.skills,
+        });
+        const skillsFiber = await ctx.plugin(SkillsPlugin, skillCatalog);
+        await skillsFiber.await();
+      }
     }
     // After the tools plugin, because this is what registers `new_context`:
     // the compaction consumer and the tool that requests it land together
@@ -211,6 +242,16 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
               permission_policy_notes: JSON.stringify(ctx.runtimePermissions.policy?.notes ?? []),
             }
           : {}),
+        // §15: what the prompt actually advertised. A catalog that quietly came
+        // up empty and one that was never asked for read the same in a trace
+        // otherwise, and they are different bugs.
+        ...(skillCatalog
+          ? {
+              skills: String(skillCatalog.skills.length),
+              prompt_templates: String(skillCatalog.templates.length),
+              skill_diagnostics: String(skillCatalog.diagnostics.length),
+            }
+          : {}),
         compaction: String(ctx.runtimeContext.enabled),
         compaction_family: ctx.runtimeContext.family,
         carrier: host.carrier,
@@ -246,6 +287,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       ...(session ? [SESSION_SERVICE] : []),
       PROMPT_SERVICE,
       ...(options.tools ? [TOOLS_SERVICE, PERMISSIONS_SERVICE] : []),
+      ...(options.skills && options.tools ? [SKILLS_SERVICE] : []),
     ];
     const missing = required.filter((name) => ctx.get(name) === undefined);
     if (missing.length)
@@ -267,6 +309,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       permissions: options.tools ? ctx.runtimePermissions : undefined,
       context: ctx.runtimeContext,
       prompt: ctx.runtimePrompt,
+      skills: ctx.get(SKILLS_SERVICE),
       events: ctx.runtimeEvents,
       session: session ? ctx.runtimeSession : undefined,
       approval,

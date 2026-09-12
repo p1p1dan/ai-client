@@ -36,8 +36,38 @@ interface Fake {
   configured: unknown[];
 }
 
+/** What `handle.skills` offers, when P5-1 discovery ran. */
+const SKILLS_SERVICE_FAKE = {
+  skills: [
+    {
+      name: 'pdf',
+      description: 'Extract text',
+      filePath: '/agent/skills/pdf/SKILL.md',
+      scope: 'user',
+    },
+  ],
+  templates: [
+    {
+      name: 'review',
+      description: 'Review staged changes',
+      filePath: '/agent/prompts/review.md',
+      scope: 'user',
+    },
+  ],
+  diagnostics: [],
+  segment: () => undefined,
+  expand: async (text: string) =>
+    text === '/review HEAD'
+      ? {
+          expanded: true as const,
+          text: 'Review HEAD.',
+          invocation: { kind: 'template' as const, name: 'review', args: 'HEAD' },
+        }
+      : { expanded: false as const },
+};
+
 function fakeRuntime(
-  overrides: { history?: unknown[]; file?: string; sourceFile?: string } = {}
+  overrides: { history?: unknown[]; file?: string; sourceFile?: string; skills?: unknown } = {}
 ): Fake {
   let listener: ((event: RuntimeEventDraft) => void) | undefined;
   let resolveRun: ((result: RuntimeRunResult) => void) | undefined;
@@ -89,6 +119,7 @@ function fakeRuntime(
     permissions: {
       configure: (settings: unknown) => fake.configured.push(settings),
     },
+    ...(overrides.skills === undefined ? {} : { skills: overrides.skills }),
     approval: { bridge: { cancelAll: (reason: string) => fake.cancelled.push(reason) } },
     run: (request: RuntimeRunRequest) => {
       fake.runs.push(request);
@@ -427,5 +458,105 @@ describe('NativeWorkerRuntime session reads and lifecycle', () => {
     expect(events.length).toBe(before);
     await runtime.dispose();
     expect(fake.disposed).toBe(1);
+  });
+});
+
+describe('NativeWorkerRuntime slash commands (P5-1)', () => {
+  it('turns discovery on when it builds the graph', async () => {
+    const fake = fakeRuntime({ skills: SKILLS_SERVICE_FAKE });
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    // Empty, not populated: every root is derived inside `skillRoots()`, and a
+    // second copy here is how the worker and the loader start disagreeing about
+    // where a project skill lives.
+    expect(fake.options?.skills).toEqual({});
+  });
+
+  it('lists templates then skills, keeping the skill: prefix that makes them work', async () => {
+    const fake = fakeRuntime({ skills: SKILLS_SERVICE_FAKE });
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    await expect(runtime.commands({ logicalSessionId: 'logical-1' })).resolves.toEqual({
+      truncated: false,
+      commands: [
+        {
+          name: 'review',
+          description: 'Review staged changes',
+          source: 'prompt',
+          path: '/agent/prompts/review.md',
+          scope: 'user',
+        },
+        {
+          name: 'skill:pdf',
+          description: 'Extract text',
+          source: 'skill',
+          path: '/agent/skills/pdf/SKILL.md',
+          scope: 'user',
+        },
+      ],
+    });
+  });
+
+  it('answers an empty list when the graph has no skills service', async () => {
+    const fake = fakeRuntime();
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    await expect(runtime.commands({ logicalSessionId: 'logical-1' })).resolves.toEqual({
+      commands: [],
+      truncated: false,
+    });
+  });
+
+  it('sends the expansion, not what was typed', async () => {
+    const fake = fakeRuntime({ skills: SKILLS_SERVICE_FAKE });
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.startSend({
+      logicalSessionId: 'logical-1',
+      requestId: 'turn-1',
+      attemptId: 'a1',
+      text: '/review HEAD',
+    });
+    expect(fake.runs[0].prompt).toBe('Review HEAD.');
+    fake.settle();
+  });
+
+  it('sends an unknown command through untouched', async () => {
+    const fake = fakeRuntime({ skills: SKILLS_SERVICE_FAKE });
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.startSend({
+      logicalSessionId: 'logical-1',
+      requestId: 'turn-1',
+      attemptId: 'a1',
+      text: '/nothing here',
+    });
+    expect(fake.runs[0].prompt).toBe('/nothing here');
+    fake.settle();
+  });
+
+  it('still sends the turn when expansion throws', async () => {
+    const fake = fakeRuntime({
+      skills: {
+        ...SKILLS_SERVICE_FAKE,
+        expand: async () => {
+          throw new Error('skill file vanished');
+        },
+      },
+    });
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.startSend({
+      logicalSessionId: 'logical-1',
+      requestId: 'turn-1',
+      attemptId: 'a1',
+      text: '/review HEAD',
+    });
+    // A convenience that broke must not cost the user their message.
+    expect(fake.runs[0].prompt).toBe('/review HEAD');
+    fake.settle();
   });
 });

@@ -81,15 +81,11 @@ export const PROMPT_SLOTS: readonly PromptSlotDefinition[] = [
   { id: 'collaboration', stability: 'static' },
   { id: 'tool-protocol', stability: 'static' },
   { id: 'tool-guidance', stability: 'static' },
-  {
-    id: 'skills',
-    stability: 'session',
-    deferred: {
-      phase: 'P5',
-      reason:
-        'the catalog lists ids the model loads through a Skill tool. Both the loader and that tool are P5-1; a catalog without the tool would advertise an unreachable capability.',
-    },
-  },
+  // Filled by P5-1 (`plugins/skills/prompt.ts`). The catalog lists names the
+  // model loads through the `skill` tool, which is registered by the same
+  // plugin — so the slot and the way to reach what it advertises landed
+  // together, which is what the deferral that used to sit here demanded.
+  { id: 'skills', stability: 'session' },
   { id: 'project-instructions', stability: 'session' },
   { id: 'mode', stability: 'turn' },
   { id: 'permission-gear', stability: 'turn' },

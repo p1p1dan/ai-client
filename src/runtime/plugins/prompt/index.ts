@@ -31,6 +31,11 @@ export class PromptPlugin extends Service implements RuntimePromptService {
   async compose(request: { targetPath?: string } = {}) {
     const segments = [...baseSegments()];
     if (this.ctx.get('runtimeTools')) segments.push(...toolSegments());
+    // P5-1. Read through `ctx.get` like the other optional contributors: a
+    // graph built without tools has no `skill` tool either, and a catalog
+    // advertised without it would name capabilities the model cannot reach.
+    const skills = this.ctx.get('runtimeSkills')?.segment();
+    if (skills) segments.push(skills);
     const entries = await loadInstructionChain(
       instructionSource(this.ctx.runtimeHostIo, this.config.maxBytes),
       { ...this.config, targetPath: request.targetPath }

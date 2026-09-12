@@ -35,6 +35,10 @@ import type {
   WorkerStopResult,
   WorkerTreePayload,
 } from '../../shared/types/workerRpc.ts';
+import {
+  WORKER_COMMAND_INVENTORY_MAX,
+  type WorkerSlashCommandInfo,
+} from '../../shared/types/workerRpc.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import type { RuntimeHostConfig } from '../contracts.ts';
 import { RuntimeHostError } from '../host/errors.ts';
@@ -156,6 +160,11 @@ export class NativeWorkerRuntime {
         recordFileChanges: process.env.AICLIENT_SESSION_REVIEW !== '0',
       },
       session,
+      // P5-1. Empty config on purpose: the roots are all derived — agent dir,
+      // the session cwd and whether the user trusted this folder — and naming
+      // them again here would be a second place for them to drift from
+      // `skillRoots()`. Passing the key at all is what turns discovery on.
+      skills: {},
       permissions: {
         ...(this.options.permissions?.mode ? { mode: this.options.permissions.mode } : {}),
         ...(this.options.permissions?.gear ? { gear: this.options.permissions.gear } : {}),
@@ -278,12 +287,19 @@ export class NativeWorkerRuntime {
     await this.bootstrap();
     const handle = this.requireHandle();
     const controller = new AbortController();
+    // P5-1 — `/name` and `/skill:name` become the text they stand for before
+    // the turn starts. The expansion IS the user message, in the session and in
+    // the timeline, which is what the legacy backend does too: pi's
+    // `session.prompt()` stores `expandedText`, not what was typed. Keeping the
+    // two backends different here would make the same transcript read
+    // differently depending on which one wrote it.
+    const prompt = await this.expand(input.text);
     // startSend only admits the turn. Awaiting the run here would hold the
     // server's serialized RPC chain for the whole prompt and make worker.stop
     // unreachable — the same reason the legacy backend starts it out of band.
     const done = handle
       .run({
-        prompt: input.text,
+        prompt,
         runId: input.requestId,
         // Round-tripped so the composer can retire its optimistic bubble when
         // the authoritative user echo lands; without it the prompt shows twice.
@@ -314,6 +330,27 @@ export class NativeWorkerRuntime {
       });
     this.turn = { requestId: input.requestId, controller, done };
     return { accepted: true, requestId: input.requestId };
+  }
+
+  /**
+   * Expand a slash command, or hand back what was typed.
+   *
+   * A failure here must never cost the turn: discovery is a convenience, and a
+   * skill file that has become unreadable since the session started is not a
+   * reason to refuse to send a message. The unexpanded text still reaches the
+   * model, which is the same outcome as a user who typed it before installing
+   * the skill.
+   */
+  private async expand(text: string): Promise<string> {
+    const skills = this.handle?.skills;
+    if (!skills) return text;
+    try {
+      const result = await skills.expand(text);
+      return result.expanded ? result.text : text;
+    } catch (error) {
+      this.options.log?.('[native-runtime] slash expansion failed', error);
+      return text;
+    }
   }
 
   async stop(input: WorkerStopPayload): Promise<WorkerStopResult> {
@@ -421,13 +458,46 @@ export class NativeWorkerRuntime {
   }
 
   /**
-   * Slash commands come from skills and plugins, which are P5. An empty list is
-   * the truthful answer for this backend and the one the composer already
-   * handles; an error would make the caller translate it back into "none".
+   * P5-1 — what the composer's completion menu lists for this backend.
+   *
+   * Two of pi's three kinds, in pi's own order: prompt templates then skills.
+   * The third (extension commands) has no native equivalent and is not faked —
+   * this runtime loads no pi extensions, so a row for one would name something
+   * that cannot run.
+   *
+   * Skills keep the `skill:` prefix in `name`, because that prefix is the
+   * command, not decoration: `parseSlashInvocation` matches on it and a row
+   * without it would send the user's `/pdf` to the model verbatim.
+   *
+   * Not an error when discovery never ran. An empty list is the truthful answer
+   * for a graph built without skills, and the caller already renders it as "no
+   * commands" — an error would make it translate the failure back into the same
+   * empty menu, with a log line nobody reads in between.
    */
   async commands(input: WorkerCommandsPayload): Promise<WorkerCommandsResult> {
     this.assertLogicalSession(input.logicalSessionId);
-    return { commands: [], truncated: false };
+    const skills = this.handle?.skills;
+    if (!skills) return { commands: [], truncated: false };
+    const rows: WorkerSlashCommandInfo[] = [
+      ...skills.templates.map((template) => ({
+        name: template.name,
+        ...(template.description ? { description: template.description } : {}),
+        source: 'prompt',
+        path: template.filePath,
+        scope: template.scope,
+      })),
+      ...skills.skills.map((skill) => ({
+        name: `skill:${skill.name}`,
+        description: skill.description,
+        source: 'skill',
+        path: skill.filePath,
+        scope: skill.scope,
+      })),
+    ];
+    return {
+      commands: rows.slice(0, WORKER_COMMAND_INVENTORY_MAX),
+      truncated: rows.length > WORKER_COMMAND_INVENTORY_MAX,
+    };
   }
 
   async rewind(input: WorkerRewindPayload): Promise<WorkerRewindResult> {

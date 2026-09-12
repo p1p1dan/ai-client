@@ -86,7 +86,9 @@ describe('P2 prompt service and HostIo instruction wiring', () => {
     ).toMatchObject({ prompt_source: 'assembled' });
     expect(handle.ctx.get(PROMPT_SERVICE) !== undefined).toBe(true);
     expect(DEFERRED_SERVICES).not.toHaveProperty(PROMPT_SERVICE);
-    expect(deferredSlots().map((slot) => slot.id)).toEqual(['skills']);
+    // P5-1 filled the last one. Kept as an assertion rather than deleted: it is
+    // what fails if someone adds a slot and forgets to say who fills it.
+    expect(deferredSlots().map((slot) => slot.id)).toEqual([]);
   });
 
   it('keeps the static prefix stable while mode, gear and project rules change between runs', async () => {
