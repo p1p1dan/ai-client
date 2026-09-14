@@ -5,47 +5,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { app, utilityProcess } = require('electron');
 
-const { checkBundledExtensionsLoaded } = require('./bundled-extension-check.cjs');
-
-const backendIndex = process.argv.indexOf('--backend');
-const backend = backendIndex === -1 ? 'legacy' : process.argv[backendIndex + 1];
-if (!['legacy', 'native'].includes(backend)) throw new Error(`unknown backend: ${backend}`);
 const workerPath = process.argv.at(-1);
 if (!workerPath) throw new Error('usage: electron scripts/packaged-worker-smoke.cjs <worker.js>');
-
-/**
- * R03 — kept as a literal rather than imported from `bundledPlugins.mjs`.
- *
- * This script is CommonJS and runs under Electron against the BUILT artifact;
- * importing the source table would make the probe agree with the repo it was
- * built from instead of checking the thing on disk.
- */
-const BUNDLED_FEATURE_PLUGIN_PACKAGES = [
-  '@juicesharp/rpiv-ask-user-question',
-  '@gotgenes/pi-subagents',
-];
-
-/**
- * Opt-in feature ids this probe switches ON before bootstrapping.
- *
- * `@gotgenes/pi-subagents` became opt-in and default-OFF in `2f0dd179`, and
- * this probe went red on the next packaged build: it was still requiring the
- * extension to be LOADED while the worker, correctly, was not injecting it.
- *
- * The fix is to enable it here rather than to drop it from the list, because
- * the two questions belong to different gates and only one of them is this
- * script's:
- *
- *  - "is it off by default?" is a product decision about
- *    `resolveManagedPiWorkerEnv`, already truth-tabled in
- *    `piModelConfig/__tests__/piWorkerEnv.test.ts` under a plain node vitest.
- *  - "did a working copy survive packaging?" can only be answered by pi, in
- *    the artifact, and dropping the package from the list would stop asking it
- *    — an opt-in plugin that shipped broken would then show no symptom until a
- *    user turned the switch on and found nothing there. The manifest says as
- *    much: off by default must not become "not shipped".
- */
-const OPT_IN_FEATURE_IDS = ['subagents'];
 
 function pidExists(pid) {
   try {
@@ -95,7 +56,7 @@ async function main() {
                 name: 'bash',
                 arguments: JSON.stringify({
                   command: 'printf packaged-worker-bash-ok',
-                  ...(backend === 'native' ? { timeoutMs: 10_000 } : { timeout: 10 }),
+                  timeoutMs: 10_000,
                 }),
               },
             },
@@ -145,14 +106,10 @@ async function main() {
     delete childEnv.ELECTRON_RUN_AS_NODE;
     Object.assign(childEnv, {
       PI_CODING_AGENT_DIR: agentDir,
-      AICLIENT_RUNTIME_BACKEND: backend,
       AICLIENT_RUNTIME_AGENT_DIR: agentDir,
       AICLIENT_RUNTIME_TRACE_DIR: traceDir,
       AICLIENT_PI_TRUST_PROJECT_CONFIG: '0',
       AICLIENT_PI_WORKER_GENERATION: String(generation),
-      // Same variable Main sends (`PI_OPT_IN_EXTENSIONS_ENV`). Set here so the
-      // probe exercises every bundled plugin, opt-in ones included.
-      AICLIENT_PI_OPT_IN_EXTENSIONS: OPT_IN_FEATURE_IDS.join(','),
     });
     // Allows validating Node IPC on a development host without a Windows package.
     const smokeNodePath = process.env.AICLIENT_WORKER_SMOKE_NODE_PATH;
@@ -234,21 +191,10 @@ async function main() {
       throw new Error(`bootstrap failed: ${JSON.stringify(bootstrap)}`);
     }
 
-    // R03 — the bundled feature extensions must be loaded, not merely copied.
-    // Opt-in ones are switched on above, so this list stays complete: the probe
-    // asks whether the ARTIFACT works, not whether a feature is on by default.
-    // The artifact check upstream proves the FILES survived packaging; only pi
-    // itself can say it resolved and ran them, and that is the difference
-    // between "we shipped a plugin" and "the user has the feature". A packaged
-    // build that quietly loses one shows no symptom until a model asks a
-    // question and no dialog appears.
-    if (backend === 'legacy') {
-      const problems = checkBundledExtensionsLoaded(
-        bootstrap.result.extensions,
-        BUNDLED_FEATURE_PLUGIN_PACKAGES
-      );
-      if (problems.length > 0) throw new Error(problems.join('\n'));
-    } else if (bootstrap.result.permissionGate !== 'bundled') {
+    // The fail-closed approval gate must be wired into every packaged build,
+    // not merely copied onto disk — this is the runtime's own confirmation
+    // that it is running, not just that the files survived packaging.
+    if (bootstrap.result.permissionGate !== 'bundled') {
       throw new Error('native permission gate is missing');
     }
     postMessage(
@@ -301,29 +247,26 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
     if (pidExists(workerPid)) throw new Error(`worker pid ${workerPid} still exists after exit`);
-    let stamp;
-    if (backend === 'native') {
-      const traces = fs
-        .readFileSync(path.join(traceDir, 'runs.jsonl'), 'utf8')
-        .trim()
-        .split('\n')
-        .map((line) => JSON.parse(line));
-      const trace = traces.at(-1);
-      stamp = trace?.version_stamp;
-      if (
-        !trace?.success ||
-        stamp?.backend !== 'native' ||
-        stamp.carrier !== (usesNode ? 'bundled-node' : 'electron-utility')
-      )
-        throw new Error(`unexpected native trace: ${JSON.stringify(trace)}`);
-      if (usesNode && path.resolve(stamp.node_exec_path) !== path.resolve(child.spawnfile))
-        throw new Error('native trace does not identify the launched Node');
-      if (permissionActivity.length < 2) throw new Error('native permission activity is missing');
-    }
+    const traces = fs
+      .readFileSync(path.join(traceDir, 'runs.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    const trace = traces.at(-1);
+    const stamp = trace?.version_stamp;
+    if (
+      !trace?.success ||
+      stamp?.backend !== 'native' ||
+      stamp.carrier !== (usesNode ? 'bundled-node' : 'electron-utility')
+    )
+      throw new Error(`unexpected native trace: ${JSON.stringify(trace)}`);
+    if (usesNode && path.resolve(stamp.node_exec_path) !== path.resolve(child.spawnfile))
+      throw new Error('native trace does not identify the launched Node');
+    if (permissionActivity.length < 2) throw new Error('native permission activity is missing');
     console.log(
       JSON.stringify({
         ok: true,
-        backend,
+        backend: 'native',
         workerPath,
         workerExecutable: usesNode ? child.spawnfile : process.execPath,
         stamp,
@@ -331,7 +274,6 @@ async function main() {
         exitCode,
         workerPid,
         sessionFile: bootstrap.result.sessionFile,
-        bundledExtensions: backend === 'legacy' ? BUNDLED_FEATURE_PLUGIN_PACKAGES.length : 0,
         transport: usesNode ? 'node-ipc' : 'electron-message-port',
         tools: ['read', 'bash'],
       })

@@ -91,7 +91,7 @@ function checkLegalNotices(resourceDir, failures) {
   }
 }
 
-function runWorkerSmoke(workerPath, backend, failures) {
+function runWorkerSmoke(workerPath, failures) {
   let electronPath;
   try {
     electronPath = require('electron');
@@ -100,20 +100,16 @@ function runWorkerSmoke(workerPath, backend, failures) {
     return;
   }
   const helper = path.join(repoRoot, 'scripts', 'packaged-worker-smoke.cjs');
-  const result = spawnSync(
-    electronPath,
-    ['--no-sandbox', helper, '--backend', backend, workerPath],
-    {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      timeout: 30_000,
-      windowsHide: true,
-      env: { ...process.env, ELECTRON_DISABLE_SECURITY_WARNINGS: '1' },
-    }
-  );
+  const result = spawnSync(electronPath, ['--no-sandbox', helper, workerPath], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    timeout: 30_000,
+    windowsHide: true,
+    env: { ...process.env, ELECTRON_DISABLE_SECURITY_WARNINGS: '1' },
+  });
   if (result.status !== 0) {
     failures.push(
-      `packaged ${backend} worker bootstrap/dispose smoke failed (status=${result.status} signal=${result.signal}): ` +
+      `packaged native worker bootstrap/dispose smoke failed (status=${result.status} signal=${result.signal}): ` +
         `${result.stderr || result.stdout}`.slice(-2000)
     );
     return;
@@ -128,7 +124,9 @@ function runWorkerSmoke(workerPath, backend, failures) {
   }
   if (
     report.ok !== true ||
-    report.backend !== backend ||
+    // Sourced from the run trace the native runtime itself wrote, not an echo
+    // of an argument this script passed in — see cutover-01.
+    report.stamp?.backend !== 'native' ||
     !Number.isSafeInteger(report.workerPid) ||
     report.transport !== (process.platform === 'win32' ? 'node-ipc' : 'electron-message-port') ||
     !report.tools?.includes('read') ||
@@ -136,7 +134,7 @@ function runWorkerSmoke(workerPath, backend, failures) {
   ) {
     failures.push(`packaged worker smoke returned an invalid result: ${JSON.stringify(report)}`);
   }
-  console.log(`[verify-packaged-app] ${backend} smoke: ${JSON.stringify(report)}`);
+  console.log(`[verify-packaged-app] native smoke: ${JSON.stringify(report)}`);
   return report;
 }
 
@@ -200,8 +198,7 @@ function main() {
   checkNodeRuntime(resourceDir, failures);
   const reports = [];
   if (!args.skipSmoke && failures.length === 0) {
-    for (const backend of ['legacy', 'native'])
-      reports.push(runWorkerSmoke(workerPath, backend, failures));
+    reports.push(runWorkerSmoke(workerPath, failures));
   }
   if (args.reportFile)
     fs.writeFileSync(
@@ -215,7 +212,7 @@ function main() {
     process.exit(1);
   }
   console.log(
-    '[verify-packaged-app] PASS — legal notices + worker-only artifact + legacy/native read/bash + bootstrap/dispose/exit'
+    '[verify-packaged-app] PASS — legal notices + worker-only artifact + native read/bash + bootstrap/dispose/exit'
   );
 }
 
