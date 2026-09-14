@@ -23,10 +23,12 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 - ✅ **T027（两件机械活）** signoff SA09/SA12/SA15/SA19 实况标注、P5-2-5 标注 — `95e63960`（2026-09-14）。T027 其余文档回写仍在批次 C。
 - ✅ **T012** 工具输出形状 — `439ab922`（2026-09-14）。tools-02/03/04/05/06/08/09/12/13/14/17 已修；tools.test 41→53 条，13 次反向验证。取舍：read 可见预算固定减 128 字节留给续读尾巴；grep 超时给截断说明而非抛错；JS 正则单行灾难性回溯仍不可中断（需独立线程，记录不做）。
 - ✅ **T015** 会话 store 与写锁 — `ce2a7af8`（2026-09-14）。session-04/05/06/09/10/12 已修（04/05 原判待定，用确定性用例证实成立）；新增 9 条用例。取舍：写失败经 `writeFailure` 取值器观测而不进 contracts；抢占归属用原始字节比对而非 token；输掉竞争把误取的锁写回；无效 label 行丢弃而非报错。
+- ✅ **T018** MCP — `942ee464`（2026-09-14）。skills-mcp-01/02/03/04/05/06/07/14/15/16/21/24 已修；mcp.test 20→35 条，19 次反向验证。取舍：04 用字节缓冲而非 StringDecoder（一处同修 04 与 14）；注册失败记 `connection.toolErrors` 而非 `error`，保住 mcp_failed 计数与 close() 语义；工具名点号替换而非拒绝，config 服务器名校验不收窄；图片最多 8 张且文本块永不为空。resources / prompts / sampling / roots / HTTP-SSE 仍在 P5-3 既有豁免内。
+- ✅ **T019** skills 与模板 — `39afacc8`（2026-09-14）。skills-mcp-08/09/10/17/18/19/20/22/25 与决策 004 已修；skills.test 31→48 条。取舍：悬空 symlink 留诊断比 pi 上游严格；块标量报诊断不解析（模块不引 YAML）；`refresh()` 已实现但 Main 侧无调用方（触发端归 T020 / UI）；`$1` 先展开后参与后续匹配、未闭合引号跨行两条姊妹问题未列入，未动。
 
 ## In Progress
 
-- 🔧 批次 B 第二波：T018（MCP）+ T019（skills 与模板）实现中。逐波记录见 [evidence/batch-b-2026-09-14.md](evidence/batch-b-2026-09-14.md)；批次 A 记录见 [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md)。
+- 🔧 批次 B 第三波：T014（压缩与提示词，含删 `run.targetPath`）+ T016（worker 生命周期与超时，含 agent-host 侧 RPC 处理器）实现中。逐波记录见 [evidence/batch-b-2026-09-14.md](evidence/batch-b-2026-09-14.md)；批次 A 记录见 [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md)。
 
 ## Next
 
