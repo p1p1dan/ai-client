@@ -5,7 +5,7 @@ import { type Context, Service } from 'cordis';
 import { type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
 import { EXEC_SERVICE, HOST_IO_SERVICE, type RuntimeHostIoService } from '../../contracts.ts';
-import { RuntimeHostError } from '../../host/errors.ts';
+import { errorCode, RuntimeHostError } from '../../host/errors.ts';
 import { type BashAnalysis, BashAnalyzer, splitShellPath } from '../permissions/bash-analysis.ts';
 import { containsPath, PERMISSIONS_SERVICE, pathPolicy } from '../permissions/index.ts';
 import { type AskUser, askTool } from './ask.ts';
@@ -23,6 +23,16 @@ const SEARCH_ENTRIES = 20_000;
 const DEFAULT_BASH_TIMEOUT_MS = 120_000;
 /** Ceiling for an explicit `timeoutSeconds`, matching the reference's 6 hours. */
 export const MAX_BASH_TIMEOUT_SECONDS = 6 * 60 * 60;
+/**
+ * Filesystem races a traversal or a shell-path expansion must not fail on: a
+ * dangling/looping symlink, a directory that vanished or was never there, or
+ * one the process cannot read. Same set used elsewhere in this package for
+ * "treat this entry as absent" (e.g. plugins/skills/index.ts).
+ */
+const OPTIONAL_FILE_ERRORS = new Set(['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'EISDIR', 'ELOOP']);
+function isSkippableIoError(error: unknown): boolean {
+  return OPTIONAL_FILE_ERRORS.has(errorCode(error) ?? '');
+}
 export interface ToolsConfig {
   cwd: string;
   recordFileChanges?: boolean;
@@ -193,15 +203,21 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       // Even an unmatched pattern can target denied names after another command creates them.
       if (pathPolicy(path) === 'deny')
         throw new RuntimeHostError('tool_denied', `shell pattern is denied: ${path}`);
-      for await (const entry of this.ctx.runtimeHostIo.readDirectory(parent)) {
-        if (++visits > 20_000)
-          throw new RuntimeHostError(
-            'shell_path_limit',
-            'shell path expansion exceeds 20000 entries'
-          );
-        if (entry.name.startsWith('.') && !parts[wildcard].startsWith('.')) continue;
-        if (!matchesGlob(entry.name, parts[wildcard])) continue;
-        await expand([parent, entry.name, ...parts.slice(wildcard + 1)].join(sep));
+      try {
+        for await (const entry of this.ctx.runtimeHostIo.readDirectory(parent)) {
+          if (++visits > 20_000)
+            throw new RuntimeHostError(
+              'shell_path_limit',
+              'shell path expansion exceeds 20000 entries'
+            );
+          if (entry.name.startsWith('.') && !parts[wildcard].startsWith('.')) continue;
+          if (!matchesGlob(entry.name, parts[wildcard])) continue;
+          await expand([parent, entry.name, ...parts.slice(wildcard + 1)].join(sep));
+        }
+      } catch (error) {
+        // Parent doesn't exist / isn't a directory / isn't readable: a real
+        // shell would just fail to expand the wildcard, not abort the command.
+        if (!isSkippableIoError(error)) throw error;
       }
     };
     for (const path of analysis.paths) await expand(path);
@@ -585,19 +601,34 @@ async function* walk(
     signal?.throwIfAborted();
     const directory = stack.pop();
     if (!directory) break;
-    for await (const entry of io.readDirectory(directory)) {
-      signal?.throwIfAborted();
-      if (++budget.visited > SEARCH_ENTRIES) {
-        budget.truncated = true;
-        return;
+    try {
+      for await (const entry of io.readDirectory(directory)) {
+        signal?.throwIfAborted();
+        if (++budget.visited > SEARCH_ENTRIES) {
+          budget.truncated = true;
+          return;
+        }
+        if (entry.name === '.git' || entry.name === 'node_modules') continue;
+        const path = join(directory, entry.name);
+        if (!allowed(path)) continue;
+        // The dirent already says it's a symlink; realpath would only tell us
+        // whether it's dangling/looping, and we skip it either way.
+        if (entry.kind === 'symlink') continue;
+        let canonical: string;
+        try {
+          canonical = await io.realpath(path);
+        } catch (error) {
+          if (!isSkippableIoError(error)) throw error;
+          continue;
+        }
+        if (!containsPath(root, canonical) || canonical !== path) continue;
+        if (entry.kind === 'directory') stack.push(path);
+        else if (entry.kind === 'file') yield path;
       }
-      if (entry.name === '.git' || entry.name === 'node_modules') continue;
-      const path = join(directory, entry.name);
-      if (!allowed(path)) continue;
-      const canonical = await io.realpath(path);
-      if (!containsPath(root, canonical) || canonical !== path) continue;
-      if (entry.kind === 'directory') stack.push(path);
-      else if (entry.kind === 'file') yield path;
+    } catch (error) {
+      // A directory that vanished mid-walk or one we can't read (EACCES)
+      // shouldn't fail the whole search — skip it and keep going.
+      if (!isSkippableIoError(error)) throw error;
     }
   }
 }

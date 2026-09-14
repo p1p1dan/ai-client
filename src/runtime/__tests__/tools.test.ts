@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
@@ -286,6 +286,34 @@ describe('native tools', () => {
     expect(found).toContain('a.ts:1:hello');
     expect(found).toContain('a.ts:2:HELLO');
     expect(found).not.toContain('secret');
+  });
+  it('skips a dangling symlink instead of failing the whole search (tools-01)', async () => {
+    await writeFile(join(dir, 'real.ts'), 'hello world');
+    // Points at a target that was never created: realpath on this entry throws
+    // ENOENT, which used to abort glob/grep entirely instead of skipping it.
+    await symlink(join(dir, 'does-not-exist'), join(dir, 'dangling.ts'), 'file');
+    const r = await runtime();
+    expect(content(await call(r, 'glob', { pattern: '**/*.ts' }))).toContain('real.ts');
+    expect(content(await call(r, 'grep', { pattern: 'hello' }))).toContain('real.ts:1:hello world');
+  });
+  it('skips a directory it cannot read instead of failing the whole search (tools-01)', async () => {
+    await writeFile(join(dir, 'ok.ts'), 'visible');
+    const blocked = join(dir, 'blocked');
+    await mkdir(blocked);
+    await writeFile(join(blocked, 'secret.ts'), 'hidden');
+    const r = await runtime();
+    // Fake HostIo error: EACCES on one directory, real IO for everything else.
+    // Avoids chmod on a real directory, which a root-run test suite would not
+    // actually deny.
+    const original = r.ctx.runtimeHostIo.readDirectory.bind(r.ctx.runtimeHostIo);
+    const eacces = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+    r.ctx.runtimeHostIo.readDirectory = (path: string) =>
+      path === blocked
+        ? { [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(eacces) }) }
+        : original(path);
+    const found = content(await call(r, 'glob', { pattern: '**/*.ts' }));
+    expect(found).toContain('ok.ts');
+    expect(found).not.toContain('secret.ts');
   });
   it('runs an approved bash command through exec with cwd and timeout', async () => {
     const r = await runtime({ permissions: { approve: async () => 'allow-once' } });

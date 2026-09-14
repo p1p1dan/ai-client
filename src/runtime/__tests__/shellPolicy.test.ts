@@ -83,6 +83,13 @@ describe('Bash AST permission enforcement', () => {
     expect(approvals).toBe(0);
     await expect(bash("rg '.env' sub/file")).resolves.toBeDefined();
   });
+  it('tolerates a bash wildcard whose parent directory does not exist yet (tools-07)', async () => {
+    await start({ permissions: { gear: 'accept-edits' } });
+    // `nosuchdir` was never created: checkShellPaths.expand used to opendir()
+    // the wildcard's parent unconditionally and let the bare ENOENT abort the
+    // whole tool call before a real shell even ran a no-match glob.
+    await expect(bash('cat nosuchdir/*.log')).resolves.toBeDefined();
+  });
   it('requires approval for variable and nested-shell external paths', async () => {
     await start();
     for (const command of [
