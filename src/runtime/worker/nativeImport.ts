@@ -51,6 +51,7 @@ import { errorCode, RuntimeHostError } from '../host/errors.ts';
 import { ExecPlugin } from '../host/exec.ts';
 import { HostIoPlugin } from '../host/io.ts';
 import { JsonlSessionStore } from '../plugins/session/store.ts';
+import { writerLockPath } from '../plugins/session/writerLock.ts';
 
 /** Same directory name the pi writer stages in, so a half-done import from
  * either backend is recognisable as one. */
@@ -59,6 +60,10 @@ const SESSIONS_DIR = 'sessions';
 
 function importError(code: string, message: string): RuntimeHostError {
   return new RuntimeHostError(code, message);
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function timestamp(value: number | undefined): number {
@@ -345,6 +350,12 @@ export class NativeLegacyImportWriter {
    * and renaming it — the two are exactly the states a reconcile has to clean
    * up, and looking in only one of them leaves an orphan that blocks the retry
    * with `import destination already exists`.
+   *
+   * Each directory is checked for the transcript itself AND its writer-lock
+   * sidecar (`writerLockPath`, session/writerLock.ts): `JsonlSessionStore.open`
+   * takes that lock before the transcript exists and only releases it on a
+   * clean `close()`, so a process killed mid-import strands the sidecar right
+   * next to the file it was guarding.
    */
   async inspectInterrupted(
     _workspacePath: string,
@@ -353,32 +364,83 @@ export class NativeLegacyImportWriter {
     const sessionFiles: string[] = [];
     for (const dir of [this.sessionsDir, this.stagingDir]) {
       const candidate = this.fileFor(dir, targetPiSessionId);
-      try {
-        await (await this.io()).stat(candidate);
-        sessionFiles.push(candidate);
-      } catch (error) {
-        if (errorCode(error) !== 'ENOENT') throw error;
+      for (const path of [candidate, writerLockPath(candidate)]) {
+        try {
+          await (await this.io()).stat(path);
+          sessionFiles.push(path);
+        } catch (error) {
+          if (errorCode(error) !== 'ENOENT') throw error;
+        }
       }
     }
     return { sessionFiles };
   }
 
+  /**
+   * Removes everything `inspectInterrupted` found, then the staging directory
+   * itself if that left it empty.
+   *
+   * Every candidate gets an unlink attempt regardless of whether an earlier one
+   * failed — a transcript that was removable but whose lock sidecar was not (or
+   * the reverse) must not leave the removable half behind. Failures are
+   * collected and raised together only after every candidate was tried, so the
+   * caller still sees a single reconcile error to retry against.
+   */
   async reconcileInterrupted(
     workspacePath: string,
     targetPiSessionId: string
   ): Promise<WorkerReconcileImportedSessionResult> {
     const inspected = await this.inspectInterrupted(workspacePath, targetPiSessionId);
     let removedFiles = 0;
+    const failures: string[] = [];
     for (const sessionFile of inspected.sessionFiles) {
       try {
         await (await this.io()).unlink(sessionFile);
         removedFiles += 1;
       } catch (error) {
-        if (errorCode(error) !== 'ENOENT') throw error;
+        if (errorCode(error) === 'ENOENT') continue;
+        failures.push(`${sessionFile}: ${errorText(error)}`);
       }
+    }
+    try {
+      await this.removeStagingDirIfEmpty();
+    } catch (error) {
+      failures.push(`${this.stagingDir}: ${errorText(error)}`);
+    }
+    if (failures.length > 0) {
+      throw importError(
+        'WORKER_IMPORT_RECONCILE_FAILED',
+        `failed to clean up interrupted import: ${failures.join('; ')}`
+      );
     }
     const remaining = await this.inspectInterrupted(workspacePath, targetPiSessionId);
     return { removedFiles, remainingFiles: remaining.sessionFiles.length };
+  }
+
+  /**
+   * Deletes the staging directory only when nothing else is in it.
+   *
+   * Other interrupted imports can be staged alongside this one — each writer
+   * gets its own id-named file(s), not its own directory — so an unconditional
+   * rmdir here would delete a directory a sibling reconcile still needs to find
+   * its own leftovers in.
+   */
+  private async removeStagingDirIfEmpty(): Promise<void> {
+    const io = await this.io();
+    try {
+      for await (const _entry of io.readDirectory(this.stagingDir)) {
+        return;
+      }
+    } catch (error) {
+      if (errorCode(error) === 'ENOENT') return;
+      throw error;
+    }
+    try {
+      await io.rmdir(this.stagingDir);
+    } catch (error) {
+      const code = errorCode(error);
+      if (code !== 'ENOENT' && code !== 'ENOTEMPTY') throw error;
+    }
   }
 
   /**

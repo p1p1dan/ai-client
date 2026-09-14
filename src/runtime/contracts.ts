@@ -387,6 +387,8 @@ export interface RuntimeHostIoService {
   mkdir(path: string, options?: { recursive?: boolean; mode?: number }): Promise<void>;
   rename(from: string, to: string): Promise<void>;
   unlink(path: string): Promise<void>;
+  /** Remove an empty directory. Rejects with `ENOTEMPTY` if entries remain. */
+  rmdir(path: string): Promise<void>;
 }
 
 export interface RuntimeExecRequest {

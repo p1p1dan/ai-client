@@ -241,6 +241,69 @@ describe('NativeLegacyImportWriter', () => {
     });
   });
 
+  it('reconciles a leftover that left both the transcript and its writer-lock sidecar behind', async () => {
+    await withWriter(async ({ writer, agentDir, workspace, io }) => {
+      const staging = join(agentDir, 'sessions', '.aiclient-import-staging');
+      const stagedFile = join(staging, 'import-claude-code-10.jsonl');
+      // Mirrors a process killed right after JsonlSessionStore.open: the writer
+      // lock sidecar exists before close() ever runs, so a killed writer
+      // strands it next to the transcript it was guarding.
+      await JsonlSessionStore.open(io, {
+        file: stagedFile,
+        cwd: workspace,
+        mode: 'create',
+        id: 'import-claude-code-10',
+      });
+
+      const before = (await writer.inspectInterrupted(workspace, 'import-claude-code-10'))
+        .sessionFiles;
+      expect(before.slice().sort()).toEqual([stagedFile, `${stagedFile}.writer.lock`].sort());
+
+      expect(await writer.reconcileInterrupted(workspace, 'import-claude-code-10')).toEqual({
+        removedFiles: 2,
+        remainingFiles: 0,
+      });
+      await expect(stat(stagedFile)).rejects.toThrow();
+      await expect(stat(`${stagedFile}.writer.lock`)).rejects.toThrow();
+      // Nothing else was staged under this id, so the directory itself goes too.
+      await expect(stat(staging)).rejects.toThrow();
+    });
+  });
+
+  it('keeps the staging directory when a different interrupted import still lives there', async () => {
+    await withWriter(async ({ writer, agentDir, workspace, io }) => {
+      const staging = join(agentDir, 'sessions', '.aiclient-import-staging');
+      const stagedA = join(staging, 'import-claude-code-a.jsonl');
+      const stagedB = join(staging, 'import-claude-code-b.jsonl');
+      const a = await JsonlSessionStore.open(io, {
+        file: stagedA,
+        cwd: workspace,
+        mode: 'create',
+        id: 'import-claude-code-a',
+      });
+      await a.close();
+      // B stands in for an unrelated interrupted import sharing the same
+      // staging directory: left open, so both its transcript and lock sidecar
+      // remain on disk.
+      await JsonlSessionStore.open(io, {
+        file: stagedB,
+        cwd: workspace,
+        mode: 'create',
+        id: 'import-claude-code-b',
+      });
+
+      expect(await writer.reconcileInterrupted(workspace, 'import-claude-code-a')).toEqual({
+        removedFiles: 1,
+        remainingFiles: 0,
+      });
+      await expect(stat(stagedA)).rejects.toThrow();
+      // B's leftovers — and the directory holding them — must survive A's reconcile.
+      await expect(stat(stagedB)).resolves.toBeDefined();
+      await expect(stat(`${stagedB}.writer.lock`)).resolves.toBeDefined();
+      await expect(stat(staging)).resolves.toBeDefined();
+    });
+  });
+
   it('discards only the file it published', async () => {
     await withWriter(async ({ writer, workspace }) => {
       const result = await writer.create({

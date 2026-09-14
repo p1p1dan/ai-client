@@ -6,6 +6,7 @@ import {
   opendir,
   realpath,
   rename,
+  rmdir,
   stat,
   unlink,
   writeFile,
@@ -204,6 +205,9 @@ export class HostIoPlugin extends Service implements RuntimeHostIoService {
   }
   unlink(path: string): Promise<void> {
     return this.track(path, () => unlink(path));
+  }
+  rmdir(path: string): Promise<void> {
+    return this.track(path, () => rmdir(path));
   }
 }
 
