@@ -66,6 +66,11 @@ const SKILLS_SERVICE_FAKE = {
       : { expanded: false as const },
 };
 
+/** What `handle.context` answers, when a test exercises `/compact`. */
+type FakePrepareTurn = (request: {
+  signal?: AbortSignal;
+}) => Promise<{ compaction?: unknown; skipped?: { code: string; message: string } }>;
+
 function fakeRuntime(
   overrides: {
     history?: unknown[];
@@ -73,6 +78,10 @@ function fakeRuntime(
     file?: string;
     sourceFile?: string;
     skills?: unknown;
+    /** Make the graph fail to tear down, which bootstrap really can do. */
+    disposeFails?: boolean;
+    /** Present = this graph has compaction; absent = it was built without it. */
+    prepareTurn?: FakePrepareTurn;
   } = {}
 ): Fake {
   let listener: ((event: RuntimeEventDraft) => void) | undefined;
@@ -120,16 +129,30 @@ function fakeRuntime(
         leaf: { activeEntryId: 'e2', fileTailEntryId: 'e2' },
       }),
       history: () => overrides.history ?? [],
+      flush: async () => undefined,
       // P5-2-6: the history answer now also carries delegation summaries, which
       // are folded out of the branch entries. A fake with no entries reports no
       // delegations, which is what a session that never delegated looks like.
-      snapshot: () => ({ entries: overrides.entries ?? [] }),
+      snapshot: () => ({ entries: overrides.entries ?? [], messages: [] }),
       tree: (id: string) => ({ logicalSessionId: id }),
     },
     permissions: {
       configure: (settings: unknown) => fake.configured.push(settings),
     },
     ...(overrides.skills === undefined ? {} : { skills: overrides.skills }),
+    ...(overrides.prepareTurn
+      ? {
+          context: {
+            enabled: true,
+            beginRun: () => undefined,
+            prepareTurn: overrides.prepareTurn,
+          },
+          model: {
+            defaultRef: () => ({ provider: 'faux', id: 'faux-1' }),
+            resolve: () => ({ model: {}, models: {} }),
+          },
+        }
+      : {}),
     approval: { bridge: { cancelAll: (reason: string) => fake.cancelled.push(reason) } },
     run: (request: RuntimeRunRequest) => {
       fake.runs.push(request);
@@ -139,6 +162,7 @@ function fakeRuntime(
     },
     dispose: async () => {
       fake.disposed += 1;
+      if (overrides.disposeFails) throw new Error('graph tear-down failed');
     },
   } as unknown as RuntimeHandle;
   return fake;
@@ -572,6 +596,112 @@ describe('NativeWorkerRuntime session reads and lifecycle', () => {
     expect(events.length).toBe(before);
     await runtime.dispose();
     expect(fake.disposed).toBe(1);
+  });
+
+  it('finishes disposing even when the graph tear-down rejects', async () => {
+    const fake = fakeRuntime({ disposeFails: true });
+    const logged: string[] = [];
+    const { runtime } = build(fake, { log: (...args: unknown[]) => logged.push(String(args[0])) });
+    await runtime.bootstrap();
+    // The worker process exits on the back of this call, so a graph that fails
+    // to shut down must not take the exit path with it. The failure is logged,
+    // not swallowed silently.
+    await expect(runtime.dispose()).resolves.toBeUndefined();
+    expect(fake.disposed).toBe(1);
+    expect(logged.join(' ')).toContain('graph dispose failed');
+    // And the slot is really finished: idempotent, and closed for new work.
+    await runtime.dispose();
+    expect(fake.disposed).toBe(1);
+    await expect(
+      runtime.startSend({
+        logicalSessionId: 'logical-1',
+        requestId: 'turn-1',
+        attemptId: 'a1',
+        text: 'hello',
+      })
+    ).rejects.toMatchObject({ code: 'WORKER_SESSION_DISPOSED' });
+  });
+
+  it('a reload whose tear-down fails leaves the slot refusing reads, not answering from a dead graph', async () => {
+    const fake = fakeRuntime({ disposeFails: true });
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    await expect(
+      runtime.reload({ logicalSessionId: 'logical-1', sessionFile: SESSION_FILE })
+    ).rejects.toThrow(/graph tear-down failed/);
+    // Main retires the slot on any reload failure; what must not happen is this
+    // worker going on to answer history out of the graph it just tore down.
+    await expect(runtime.history({ logicalSessionId: 'logical-1' })).rejects.toMatchObject({
+      code: 'WORKER_NOT_BOOTSTRAPPED',
+    });
+  });
+});
+
+/**
+ * R02-c — `/compact` holds the serialized RPC chain for one provider request,
+ * so its clock is part of its contract: Main waits on a budget of its own, and
+ * a worker that outlived that budget would write a summary the user had already
+ * been told had failed.
+ */
+describe('NativeWorkerRuntime compaction', () => {
+  const compactInput = { logicalSessionId: 'logical-1' };
+
+  it('carries an abort signal into the summary and gives up on its own clock', async () => {
+    const seen: (AbortSignal | undefined)[] = [];
+    const fake = fakeRuntime({
+      prepareTurn: async (request) => {
+        seen.push(request.signal);
+        // Stands in for a provider that is still thinking: it answers only when
+        // the request is cancelled, which is what the signal is for.
+        await new Promise<void>((resolve) => {
+          request.signal?.addEventListener('abort', () => resolve());
+        });
+        return {};
+      },
+    });
+    const { runtime } = build(fake, { compactTimeoutMs: 20 });
+    live = runtime;
+    await runtime.bootstrap();
+    await expect(runtime.compact(compactInput)).rejects.toMatchObject({
+      code: 'WORKER_COMPACT_TIMEOUT',
+      retryable: true,
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.aborted).toBe(true);
+  });
+
+  it('still reports an empty conversation as nothing to compact, not as a timeout', async () => {
+    const fake = fakeRuntime({
+      prepareTurn: async () => ({
+        skipped: { code: 'compaction_empty_range', message: 'there is nothing to compact yet' },
+      }),
+    });
+    const { runtime } = build(fake, { compactTimeoutMs: 5_000 });
+    live = runtime;
+    await runtime.bootstrap();
+    await expect(runtime.compact(compactInput)).rejects.toMatchObject({
+      code: 'WORKER_COMPACT_UNAVAILABLE',
+      message: 'there is nothing to compact yet',
+    });
+  });
+
+  it('reports a compaction that finished inside the budget', async () => {
+    const fake = fakeRuntime({ prepareTurn: async () => ({ compaction: { reason: 'user' } }) });
+    const { runtime } = build(fake, { compactTimeoutMs: 5_000 });
+    live = runtime;
+    await runtime.bootstrap();
+    await expect(runtime.compact(compactInput)).resolves.toEqual({ compacted: true });
+  });
+
+  it('says so when the graph was built without compaction at all', async () => {
+    const fake = fakeRuntime();
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    await expect(runtime.compact(compactInput)).rejects.toMatchObject({
+      code: 'WORKER_COMPACT_UNAVAILABLE',
+    });
   });
 });
 

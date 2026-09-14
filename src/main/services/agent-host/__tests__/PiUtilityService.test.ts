@@ -1,5 +1,6 @@
 import {
   WORKER_RPC_PROTOCOL_VERSION,
+  type WorkerModelCatalog,
   type WorkerRpcEvent,
   type WorkerRpcRequest,
 } from '@shared/types/workerRpc';
@@ -71,11 +72,12 @@ class UtilityTransport implements WorkerTransport {
   }
 }
 
-function harness(capacity = 2) {
+function harness(capacity = 2, options: { readModelCatalog?: () => WorkerModelCatalog } = {}) {
   const transports: UtilityTransport[] = [];
   const service = new PiUtilityService({
     capacity,
     createOperationId: () => `operation-${transports.length + 1}`,
+    ...(options.readModelCatalog ? { readModelCatalog: options.readModelCatalog } : {}),
     createSlot: ({ generation, cwd, onEvent, onLifecycle }) => {
       const transport = new UtilityTransport();
       transports.push(transport);
@@ -196,6 +198,58 @@ describe('PiUtilityService', () => {
     );
     await expect(next).resolves.toEqual({ text: 'done' });
     await acknowledgeDispose(transports[1]);
+  });
+
+  it('hands the one-shot worker a catalog instead of leaving it to read the agent directory', async () => {
+    const modelCatalog: WorkerModelCatalog = {
+      models: { providers: { wire: { api: 'openai-completions' } } },
+      auth: { wire: { type: 'api_key', key: 'k' } },
+    };
+    const readModelCatalog = vi.fn(() => modelCatalog);
+    const { service, transports } = harness(2, { readModelCatalog });
+    const completion = service.complete({
+      operationId: 'review-5',
+      cwd: '/repo',
+      prompt: 'review',
+      timeoutMs: 1_000,
+    });
+    await vi.waitFor(() => expect(transports).toHaveLength(1));
+    const transport = transports[0];
+    await acknowledgeStart(transport);
+    // Assembled per operation, not once at construction: a key the user just
+    // added, or a keyring that just unlocked, reaches the next completion.
+    expect(readModelCatalog).toHaveBeenCalledTimes(1);
+    expect(transport.requests[0]?.payload).toMatchObject({ modelCatalog });
+    transport.event('utility.terminal', {
+      operationId: 'review-5',
+      state: 'completed',
+      text: 'done',
+    });
+    await expect(completion).resolves.toEqual({ text: 'done' });
+    await acknowledgeDispose(transport);
+  });
+
+  it('leaves the field off when there is no catalog to hand over', async () => {
+    const { service, transports } = harness();
+    const completion = service.complete({
+      operationId: 'review-6',
+      cwd: '/repo',
+      prompt: 'review',
+      timeoutMs: 1_000,
+    });
+    await vi.waitFor(() => expect(transports).toHaveLength(1));
+    const transport = transports[0];
+    await acknowledgeStart(transport);
+    // A locked keyring assembles nothing, and the worker then reads the agent
+    // directory exactly as it did before P5-5.
+    expect(transport.requests[0]?.payload).not.toHaveProperty('modelCatalog');
+    transport.event('utility.terminal', {
+      operationId: 'review-6',
+      state: 'completed',
+      text: 'done',
+    });
+    await expect(completion).resolves.toEqual({ text: 'done' });
+    await acknowledgeDispose(transport);
   });
 
   it('enforces its explicit process bound', async () => {

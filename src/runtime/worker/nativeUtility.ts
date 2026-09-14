@@ -101,8 +101,16 @@ export class NativeUtilityRuntime {
       model: `${ref.provider}/${ref.id}`,
     };
     this.active = active;
+    // `off` is a choice, not a gap. pi-ai has no per-request "off", so the
+    // field is omitted either way — but omitting it must not send the request
+    // on to the level pinned in the agent directory, which is how a user who
+    // switched reasoning off ended up paying for `high`. Only an ABSENT effort
+    // falls back to configuration.
     const effort =
-      requestEffort(input.effort) ?? (await this.configuredEffort(runtime, ref.provider, ref.id));
+      input.effort === 'off'
+        ? undefined
+        : (requestEffort(input.effort) ??
+          (await this.configuredEffort(runtime, ref.provider, ref.id)));
     void this.run(active, resolved, effort);
     return { accepted: true, operationId: input.operationId };
   }

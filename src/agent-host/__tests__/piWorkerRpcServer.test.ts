@@ -8,6 +8,7 @@ import {
 import {
   type PiImportWriter,
   type PiUtilityRuntime,
+  type PiUtilityRuntimeOptions,
   PiWorkerRpcServer,
   type PiWorkerRuntime,
   type PiWorkerRuntimeOptions,
@@ -508,6 +509,160 @@ describe('PiWorkerRpcServer', () => {
       ok: false,
       error: { code: 'WORKER_INVALID_PAYLOAD' },
     });
+  });
+
+  it('hands the delivered model catalog to the one-shot engine', async () => {
+    const messages: Array<Record<string, unknown>> = [];
+    const createUtilityRuntime = vi.fn((_options: PiUtilityRuntimeOptions) => ({
+      start: async (input: WorkerUtilityStartPayload) => ({
+        accepted: true as const,
+        operationId: input.operationId,
+      }),
+      cancel: async () => ({ cancelled: true }),
+      dispose: async () => undefined,
+    }));
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      ...engineFactories,
+      createRuntime: () => runtime(),
+      createUtilityRuntime,
+    });
+    const modelCatalog = { models: { providers: {} }, auth: { wire: { key: 'k' } } };
+    server.receive(
+      request('utility-start', 'utility.start', {
+        operationId: 'utility-1',
+        cwd: '/repo',
+        prompt: 'summarize',
+        timeoutMs: 60_000,
+        modelCatalog,
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    // Without this the one-shot engine has nothing but the agent directory to
+    // go on, which is the last path still reading models.json + auth.json.
+    expect(createUtilityRuntime.mock.calls[0]?.[0]).toMatchObject({ modelCatalog });
+  });
+
+  it('refuses a permission tier the runtime cannot apply instead of reporting success', async () => {
+    const messages: Array<Record<string, unknown>> = [];
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      ...engineFactories,
+      // A runtime with no `setPermissionTier`: the method is optional on the
+      // interface, so this is a shape the dispatcher really can be handed.
+      createRuntime: () => runtime(),
+    });
+    server.receive(
+      request('bootstrap', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    server.receive(
+      request('tier', 'worker.setPermissionTier', {
+        logicalSessionId: 'logical-1',
+        tier: 'readonly',
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    // The tier is a security axis: Main records it and the chip shows it, so
+    // `applied: true` for an engine that did nothing is worse than an error.
+    expect(messages[1]).toMatchObject({
+      requestId: 'tier',
+      ok: false,
+      error: { code: 'WORKER_UNSUPPORTED' },
+    });
+    expect(messages[1]).not.toMatchObject({ result: { applied: true } });
+  });
+
+  it('separates a compact nobody can serve from a worker that never started', async () => {
+    const messages: Array<Record<string, unknown>> = [];
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      ...engineFactories,
+      createRuntime: () => runtime(),
+    });
+    server.receive(request('early', 'worker.compact', { logicalSessionId: 'logical-1' }));
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    expect(messages[0]).toMatchObject({ error: { code: 'WORKER_NOT_BOOTSTRAPPED' } });
+
+    server.receive(
+      request('bootstrap', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    server.receive(request('compact', 'worker.compact', { logicalSessionId: 'logical-1' }));
+    await vi.waitFor(() => expect(messages).toHaveLength(3));
+    // Same answer shape as tree/rewind/reload/fork: a bootstrapped worker whose
+    // engine has no compaction is not an un-started worker.
+    expect(messages[2]).toMatchObject({ error: { code: 'WORKER_COMPACT_UNAVAILABLE' } });
+  });
+
+  it('finishes the tear-down and still exits when the engine fails to dispose', async () => {
+    const messages: Array<Record<string, unknown>> = [];
+    const onDisposed = vi.fn();
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      ...engineFactories,
+      createRuntime: () =>
+        runtime({
+          dispose: async () => {
+            throw new Error('exec shutdown never confirmed');
+          },
+        }),
+      onDisposed,
+    });
+    server.receive(
+      request('bootstrap', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    server.receive(request('dispose', 'worker.dispose', { reason: 'slot-dispose' }));
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    // The failure is reported to Main...
+    expect(messages[1]).toMatchObject({ requestId: 'dispose', ok: false });
+    // ...and everything else still happened. `onDisposed` is the only way this
+    // process ever exits, and the slot really is finished rather than stuck
+    // half torn down with its engine references still held.
+    expect(onDisposed).toHaveBeenCalledTimes(1);
+    server.receive(request('after', 'worker.history', { logicalSessionId: 'logical-1' }));
+    await vi.waitFor(() => expect(messages).toHaveLength(3));
+    expect(messages[2]).toMatchObject({ error: { code: 'WORKER_DISPOSED' } });
+  });
+
+  it('lets the events a tear-down emits out before the port closes', async () => {
+    const messages: Array<Record<string, unknown>> = [];
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      ...engineFactories,
+      createRuntime: (options) =>
+        runtime({
+          dispose: async () => {
+            // What the engine really does here: deny every parked permission
+            // gate, question and preview through the path a user answer takes,
+            // which emits. Dropping these strands the dialogs Main is showing.
+            options.emit({
+              type: 'session.status',
+              sessionId: 'logical-1',
+              payload: { status: 'idle' },
+            });
+          },
+        }),
+    });
+    server.receive(
+      request('bootstrap', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    server.receive(request('dispose', 'worker.dispose', { reason: 'slot-dispose' }));
+    await vi.waitFor(() => expect(messages).toHaveLength(3));
+    expect(messages[1]).toMatchObject({ kind: 'event', type: 'runtime.event' });
+    expect(messages[2]).toMatchObject({ requestId: 'dispose', result: { disposed: true } });
   });
 
   it('waits for disposal before ACK and exit hook', async () => {

@@ -6,7 +6,8 @@ import {
   isWorkerUtilityTerminalEvent,
 } from '@shared/types';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
-import type { WorkerUtilityTerminalPayload } from '@shared/types/workerRpc';
+import type { WorkerModelCatalog, WorkerUtilityTerminalPayload } from '@shared/types/workerRpc';
+import { resolveNativeModelCatalog } from '../piModelConfig';
 import { forkPiWorkerProcess } from './PiWorkerProcess';
 import { WorkerSlot, type WorkerSlotLifecycleEvent } from './WorkerSlot';
 
@@ -55,6 +56,16 @@ interface ActiveUtilityOperation {
 export interface PiUtilityServiceOptions {
   capacity?: number;
   createOperationId?: () => string;
+  /**
+   * P5-5 — assemble the model catalog to hand the one-shot worker.
+   *
+   * Injected rather than called inside the class for the same reason
+   * `WorkerManager` injects it: production reads the user's keyring, and a test
+   * must not have to. Returning `undefined` leaves the worker reading the agent
+   * directory, which is the pre-P5-5 behaviour and what a locked keyring still
+   * falls back to.
+   */
+  readModelCatalog?: () => WorkerModelCatalog | undefined;
   createSlot?: (input: {
     generation: number;
     cwd: string;
@@ -84,6 +95,7 @@ export class PiUtilityService {
   private readonly capacity: number;
   private readonly createOperationId: () => string;
   private readonly createSlot: NonNullable<PiUtilityServiceOptions['createSlot']>;
+  private readonly readModelCatalog: () => WorkerModelCatalog | undefined;
   private readonly log: (...args: unknown[]) => void;
   private readonly operations = new Map<string, ActiveUtilityOperation>();
   private readonly ownedSlots = new Set<WorkerSlot>();
@@ -93,6 +105,7 @@ export class PiUtilityService {
   constructor(options: PiUtilityServiceOptions = {}) {
     this.capacity = positiveInteger(options.capacity ?? 2, 'Pi utility capacity');
     this.createOperationId = options.createOperationId ?? randomUUID;
+    this.readModelCatalog = options.readModelCatalog ?? (() => undefined);
     this.log = options.log ?? (() => undefined);
     this.createSlot =
       options.createSlot ??
@@ -172,6 +185,9 @@ export class PiUtilityService {
       this.operations.set(id, record);
     });
 
+    // Read per operation, not cached: a key the user just added, or a keyring
+    // that just unlocked, reaches the next completion without an app restart.
+    const modelCatalog = this.readModelCatalog();
     try {
       const acknowledgement = await slot.request('utility.start', {
         operationId: id,
@@ -180,6 +196,7 @@ export class PiUtilityService {
         ...(input.model ? { model: input.model } : {}),
         ...(input.effort ? { effort: input.effort } : {}),
         timeoutMs: input.timeoutMs,
+        ...(modelCatalog ? { modelCatalog } : {}),
       });
       if (!isWorkerUtilityStartResult(acknowledgement) || acknowledgement.operationId !== id) {
         throw new PiUtilityServiceError(
@@ -374,4 +391,9 @@ export class PiUtilityService {
   }
 }
 
-export const piUtilityService = new PiUtilityService();
+export const piUtilityService = new PiUtilityService({
+  // P5-5: the real assembler, injected here rather than defaulted inside the
+  // class. Without it the one-shot path was the last one still reading the
+  // agent directory's models.json and auth.json.
+  readModelCatalog: () => resolveNativeModelCatalog(),
+});

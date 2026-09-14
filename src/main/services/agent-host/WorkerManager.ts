@@ -40,6 +40,7 @@ import {
   isWorkerStopResult,
   isWorkerTreeResult,
   sanitizeWorkerCommandRows,
+  WORKER_COMPACT_REQUEST_TIMEOUT_MS,
   type WorkerCommandsPayload,
   type WorkerCommandsResult,
   type WorkerCompactPayload,
@@ -84,7 +85,11 @@ import {
 } from '../legacyImport/PiImportProcess';
 import { resolveNativeModelCatalog } from '../piModelConfig';
 import { type PreviewShowRequest, previewWindowManager } from '../preview/PreviewWindowManager';
-import { type CreatedPiWorkerSlot, createPiWorkerSlot } from './createPiWorkerSlot';
+import {
+  BOOTSTRAP_REQUEST_TIMEOUT_MS,
+  type CreatedPiWorkerSlot,
+  createPiWorkerSlot,
+} from './createPiWorkerSlot';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { type NativeSubagentSettings, nativeSubagentSettings } from './nativeSubagentSettings';
 import type { WorkerSlot, WorkerSlotLifecycleEvent } from './WorkerSlot';
@@ -1188,7 +1193,13 @@ export class WorkerManager {
       {
         logicalSessionId: entry.logicalSessionId,
         ...(input.instructions ? { instructions: input.instructions } : {}),
-      }
+      },
+      // A summary is a full provider request, so the warm 10s default is the
+      // wrong clock: it expired while the worker was still summarizing, and
+      // because a timeout only rejects the pending promise, the worker went on
+      // to write the compaction the user had just been told had failed. The
+      // worker now aborts itself first — this budget only has to outlast that.
+      { timeoutMs: WORKER_COMPACT_REQUEST_TIMEOUT_MS }
     );
     if (!result || result.compacted !== true) {
       throw new WorkerManagerError('worker_compact_failed', 'Pi worker could not compact');
@@ -1363,7 +1374,13 @@ export class WorkerManager {
         const generation = entry.generation;
         const result = await slot.request<WorkerReloadResult, WorkerReloadPayload>(
           'worker.reload',
-          { logicalSessionId: entry.logicalSessionId, sessionFile: entry.sessionFile }
+          { logicalSessionId: entry.logicalSessionId, sessionFile: entry.sessionFile },
+          // Reload rebuilds the whole plugin graph, MCP handshakes included —
+          // the same work `worker.bootstrap` does, and it gets the same budget.
+          // On the warm 10s default a user with one stdio MCP server could lose
+          // a healthy session to the handover: the reload timed out, Main
+          // retired the slot, and the message that triggered it failed.
+          { timeoutMs: BOOTSTRAP_REQUEST_TIMEOUT_MS }
         );
         if (!isWorkerReloadResult(result)) {
           throw new WorkerManagerError(

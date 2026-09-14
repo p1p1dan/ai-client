@@ -49,6 +49,8 @@ let agentDir: string;
 let server: PiWorkerRpcServer | undefined;
 let faux: ReturnType<typeof fauxProvider>;
 let outbound: unknown[];
+/** Set before `bootstrap()` by the test that exercises the compaction cutoff. */
+let compactTimeoutMs: number | undefined;
 
 /** Everything the port received, split the way the caller cares about it. */
 function responses(): WorkerRpcResponse[] {
@@ -123,6 +125,7 @@ function startServer(): void {
         ...options,
         host: HOST,
         agentDir,
+        ...(compactTimeoutMs ? { compactTimeoutMs } : {}),
         // The only substitution: pi-ai's faux provider in place of the network.
         create: (bootstrapOptions) =>
           createRuntime({ ...bootstrapOptions, providers: [faux.provider] }),
@@ -139,6 +142,7 @@ beforeEach(async () => {
     models: [{ id: 'faux-e2e', name: 'Faux E2E', contextWindow: 128_000, maxTokens: 4_096 }],
   });
   requestSequence = 0;
+  compactTimeoutMs = undefined;
   startServer();
 });
 
@@ -370,6 +374,33 @@ describe('native backend end to end (P4-4)', () => {
     );
   });
 
+  it('abandons a compaction that outruns its budget without leaving a summary behind', async () => {
+    compactTimeoutMs = 50;
+    faux.setResponses([fauxAssistantMessage('first')]);
+    const boot = await bootstrap();
+    await send('hello');
+    await turnIdle();
+
+    // A summary request that only ever answers when it is cancelled. This is
+    // the shape of the bug: Main's timeout merely rejects its own promise, so a
+    // worker that kept going would append the compaction AFTER the user was
+    // told it had failed, and the next resume would show it.
+    faux.setResponses([
+      ((_context: unknown, streamOptions: { signal?: AbortSignal }) =>
+        new Promise((resolve) => {
+          const late = () => resolve(fauxAssistantMessage('a summary nobody waited for'));
+          if (streamOptions.signal?.aborted) late();
+          else streamOptions.signal?.addEventListener('abort', late);
+        })) as never,
+    ]);
+    await expect(call('worker.compact', { logicalSessionId: 'logical-e2e' })).rejects.toMatchObject(
+      {
+        code: 'WORKER_COMPACT_TIMEOUT',
+      }
+    );
+    expect(await readFile(boot.sessionFile, 'utf8')).not.toContain('"type":"compaction"');
+  }, 20_000);
+
   it('reports the branch tree and refuses an unsupported reload explicitly', async () => {
     faux.setResponses([fauxAssistantMessage('first')]);
     await bootstrap();
@@ -504,6 +535,30 @@ describe('native backend end to end (P4-4)', () => {
       })
     ).toEqual({ discarded: false });
   });
+
+  it('discards the session file it holds open itself', async () => {
+    faux.setResponses([fauxAssistantMessage('first')]);
+    const boot = await bootstrap();
+    await send('hello');
+    await turnIdle();
+
+    // What Main does when adopting a fork fails: it asks the slot that HOLDS
+    // the file to discard it. The delete has to happen while the graph's host
+    // IO is still up — after `dispose()` every IO call is refused, so this used
+    // to report success on the RPC and leave the file on disk.
+    expect(
+      await call('worker.fork.discard', {
+        logicalSessionId: 'logical-e2e',
+        sessionFile: boot.sessionFile,
+      })
+    ).toEqual({ discarded: true });
+    await expect(readFile(boot.sessionFile, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    // The slot ends with the file: the graph is gone, so a later send is not
+    // answered out of a session that no longer exists.
+    await expect(send('anyone there?', 'turn-2')).rejects.toMatchObject({
+      code: 'WORKER_SESSION_DISPOSED',
+    });
+  }, 20_000);
 
   it('migrates a legacy tier onto the two D14 axes', async () => {
     faux.setResponses([fauxAssistantMessage('ok')]);

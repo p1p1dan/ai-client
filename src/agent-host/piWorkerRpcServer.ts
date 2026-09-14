@@ -56,6 +56,7 @@ import {
   type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
+  type WorkerModelCatalog,
   type WorkerPermissionRespondResult,
   type WorkerPreviewRespondResult,
   type WorkerQuestionRespondResult,
@@ -157,6 +158,12 @@ export interface PiUtilityRuntimeOptions {
   emitDelta: (payload: WorkerUtilityDeltaPayload) => void;
   emitTerminal: (payload: WorkerUtilityTerminalPayload) => void;
   log?: (...args: unknown[]) => void;
+  /**
+   * P5-5 — the catalog the first `utility.start` handed over, when Main could
+   * assemble one. Read at construction because the engine builds its model
+   * graph once and keeps it for the slot's remaining operations.
+   */
+  modelCatalog?: WorkerModelCatalog;
 }
 
 export interface PiWorkerRpcServerOptions {
@@ -618,6 +625,7 @@ export class PiWorkerRpcServer {
         emitDelta: (payload) => this.emitUtilityEvent('utility.delta', payload),
         emitTerminal: (payload) => this.emitUtilityEvent('utility.terminal', payload),
         ...(this.log ? { log: this.log } : {}),
+        ...(request.payload.modelCatalog ? { modelCatalog: request.payload.modelCatalog } : {}),
       };
       this.utilityRuntime = this.options.createUtilityRuntime(utilityOptions);
     }
@@ -709,8 +717,14 @@ export class PiWorkerRpcServer {
       });
       return;
     }
-    if (!this.runtime?.compact) {
+    if (!this.runtime) {
       throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    if (!this.runtime.compact) {
+      throw new PiWorkerSessionError(
+        'WORKER_COMPACT_UNAVAILABLE',
+        'Worker compact method is unavailable'
+      );
     }
     this.respondSuccess(request, await this.runtime.compact(request.payload));
   }
@@ -982,23 +996,60 @@ export class PiWorkerRpcServer {
         'Permission tier change targets another session'
       );
     }
-    this.runtime?.setPermissionTier?.(request.payload.tier);
+    // `applied: true` has to mean it. The tier is a security axis: Main records
+    // it and the composer chip shows it, so answering "applied" for a runtime
+    // that implements nothing would leave the UI claiming a posture the engine
+    // never took. Same answer `worker.setPermissions` gives for the same
+    // situation.
+    if (!this.runtime?.setPermissionTier) {
+      throw new PiWorkerSessionError(
+        'WORKER_UNSUPPORTED',
+        'Runtime does not support the session permission tier'
+      );
+    }
+    this.runtime.setPermissionTier(request.payload.tier);
     const result: WorkerSetPermissionTierResult = { applied: true };
     this.respondSuccess(request, result);
   }
 
+  /**
+   * Tear the worker down, then say so.
+   *
+   * Two orderings matter here and both used to be wrong.
+   *
+   * `disposed` goes up AFTER the runtime is torn down, not before: it is the
+   * gate on `emitRuntimeEvent`, and the engine emits while it drains parked
+   * permission gates, questions and previews. Setting it first dropped exactly
+   * the events those drains exist to deliver, so Main never learned that the
+   * dialogs it was showing had been answered for it.
+   *
+   * Each release is independent of the others' failure. `onDisposed` is this
+   * process's only way to exit, and one rejecting dispose used to skip the
+   * other two releases, the three null-outs and the exit hook together —
+   * turning a cleanup error into a worker that stays alive forever. The error
+   * still reaches Main, as the response to this request.
+   */
   private async handleDispose(request: WorkerRpcRequest): Promise<void> {
+    let failure: unknown;
     if (!this.disposed) {
+      for (const release of [
+        () => this.runtime?.dispose(),
+        () => this.utilityRuntime?.dispose(),
+        () => this.importWriter?.dispose?.(),
+      ]) {
+        try {
+          await release();
+        } catch (error) {
+          failure ??= error;
+        }
+      }
       this.disposed = true;
-      await this.runtime?.dispose();
-      await this.utilityRuntime?.dispose();
-      await this.importWriter?.dispose?.();
       this.runtime = null;
       this.utilityRuntime = null;
       this.importWriter = null;
     }
-    const result: WorkerDisposeResult = { disposed: true };
-    this.respondSuccess(request, result);
+    if (failure) this.respondError(request, errorPayload(failure));
+    else this.respondSuccess(request, { disposed: true } satisfies WorkerDisposeResult);
     this.options.onDisposed?.();
   }
 

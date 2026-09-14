@@ -37,6 +37,7 @@ import type {
 } from '../../shared/types/workerRpc.ts';
 import {
   WORKER_COMMAND_INVENTORY_MAX,
+  WORKER_COMPACT_BUDGET_MS,
   type WorkerSlashCommandInfo,
 } from '../../shared/types/workerRpc.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
@@ -91,6 +92,13 @@ export interface NativeWorkerRuntimeOptions extends WorkerBootstrapPayload {
   log?: (...args: unknown[]) => void;
   /** Injectable for tests; defaults to the real Cordis bootstrap. */
   create?: typeof createRuntime;
+  /**
+   * How long one `/compact` may spend on its summary request.
+   *
+   * Injectable so a test can exercise the cutoff without waiting for the real
+   * budget; production leaves it at {@link WORKER_COMPACT_BUDGET_MS}.
+   */
+  compactTimeoutMs?: number;
 }
 
 interface ActiveTurn {
@@ -457,6 +465,13 @@ export class NativeWorkerRuntime {
    *
    * The summary and its retained tail are appended to the session as a
    * compaction entry, so the next run rebuilds the shortened window from disk.
+   *
+   * Bounded by its own clock, and the bound is the point. This call holds the
+   * serialized RPC chain for a full provider request, and Main waits on it with
+   * a timeout of its own; if Main's cutoff came first it would report "compact
+   * failed" to the user while this worker went on to write the summary to disk.
+   * Aborting here instead means the answer Main gets is the outcome the file
+   * actually has. See {@link WORKER_COMPACT_BUDGET_MS}.
    */
   async compact(input: WorkerCompactPayload): Promise<WorkerCompactResult> {
     this.assertLogicalSession(input.logicalSessionId);
@@ -477,15 +492,34 @@ export class NativeWorkerRuntime {
     // Restores the persisted checkpoint identity first, so a second /compact
     // updates the previous summary instead of summarizing the summary.
     context.beginRun(snapshot);
-    const prepared = await context.prepareTurn({
-      messages: snapshot.messages,
-      model: resolved.model,
-      models: resolved.models,
-      retention: 'completed_turn',
-      force: true,
-      ...(input.instructions ? { instructions: input.instructions } : {}),
-    });
+    const budgetMs = this.options.compactTimeoutMs ?? WORKER_COMPACT_BUDGET_MS;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), budgetMs);
+    let prepared: Awaited<ReturnType<typeof context.prepareTurn>>;
+    try {
+      prepared = await context.prepareTurn({
+        messages: snapshot.messages,
+        model: resolved.model,
+        models: resolved.models,
+        retention: 'completed_turn',
+        force: true,
+        signal: controller.signal,
+        ...(input.instructions ? { instructions: input.instructions } : {}),
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!prepared.compaction) {
+      // Aborted is its own answer: the summary request was cut off, so nothing
+      // was written and retrying is reasonable. Reporting it as "nothing to
+      // compact" would tell the user the opposite of what happened.
+      if (controller.signal.aborted) {
+        throw new NativeWorkerRuntimeError(
+          'WORKER_COMPACT_TIMEOUT',
+          `summarizing the conversation took longer than ${budgetMs}ms; nothing was written`,
+          true
+        );
+      }
       throw new NativeWorkerRuntimeError(
         'WORKER_COMPACT_UNAVAILABLE',
         prepared.skipped?.message ?? 'there is nothing to compact yet'
@@ -688,13 +722,29 @@ export class NativeWorkerRuntime {
       await this.requireSession().discardFork(input.sessionFile, staged);
       return { discarded: true };
     }
-    // Discarding the file this worker holds open: the lock has to go before the
-    // file can, so the slot ends here either way.
-    const io = this.requireHandle().hostIo;
-    await this.dispose();
-    await io.unlink(input.sessionFile).catch((error: unknown) => {
-      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error;
-    });
+    // Discarding the file this worker holds open. The unlink goes FIRST,
+    // because `dispose()` shuts the host IO plugin down and every call after
+    // that rejects with `runtime_disposed` — a delete issued afterwards could
+    // never succeed. Stopping the turn and draining the write queue first is
+    // what makes deleting a live file safe: the store keeps no open handle (it
+    // appends and closes), so once nothing is queued nothing can recreate the
+    // file behind us. The slot ends here either way, which is why the dispose
+    // is in a `finally`.
+    const handle = this.requireHandle();
+    const io = handle.hostIo;
+    try {
+      const turn = this.turn;
+      if (turn) {
+        turn.controller.abort();
+        await turn.done.catch(() => undefined);
+      }
+      await handle.session?.flush().catch(() => undefined);
+      await io.unlink(input.sessionFile).catch((error: unknown) => {
+        if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error;
+      });
+    } finally {
+      await this.dispose();
+    }
     return { discarded: true };
   }
 
@@ -781,7 +831,14 @@ export class NativeWorkerRuntime {
     this.unsubscribe = null;
     const handle = this.handle;
     this.handle = null;
-    await handle?.dispose();
+    // Reported, not rethrown. Everything this class owns is already released
+    // by here, and the only caller left is `worker.dispose`, whose ACK is what
+    // lets the worker process exit; a graph that failed to tear down must not
+    // turn into a slot that never goes away. The failure stays visible in the
+    // worker log, which Main forwards as stderr.
+    await handle?.dispose().catch((error: unknown) => {
+      this.options.log?.('[native-runtime] graph dispose failed', error);
+    });
   }
 
   private emit(event: RuntimeEventDraft): void {

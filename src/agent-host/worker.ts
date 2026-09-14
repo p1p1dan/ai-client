@@ -125,6 +125,10 @@ const createUtilityRuntime: PiWorkerRpcServerOptions['createUtilityRuntime'] = (
     emitDelta: options.emitDelta,
     emitTerminal: options.emitTerminal,
     ...(options.log ? { log: options.log } : {}),
+    // P5-5: with a catalog from Main this path stops reading models.json and
+    // auth.json. The agent directory above stays for the thinking-level
+    // preference, which is a settings file and not a credential.
+    ...(options.modelCatalog ? { modelCatalog: options.modelCatalog } : {}),
   });
 
 let disposed = false;

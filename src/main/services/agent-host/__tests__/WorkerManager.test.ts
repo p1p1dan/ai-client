@@ -1,7 +1,13 @@
 import type { WorkerImportConversationPayload } from '@shared/types/legacyImport';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
-import { WORKER_RPC_PROTOCOL_VERSION, type WorkerRpcEvent } from '@shared/types/workerRpc';
+import {
+  WORKER_COMPACT_BUDGET_MS,
+  WORKER_COMPACT_REQUEST_TIMEOUT_MS,
+  WORKER_RPC_PROTOCOL_VERSION,
+  type WorkerRpcEvent,
+} from '@shared/types/workerRpc';
 import { describe, expect, it, vi } from 'vitest';
+import { BOOTSTRAP_REQUEST_TIMEOUT_MS } from '../createPiWorkerSlot';
 import {
   resolveDefaultWorkerCapacity,
   resolveWorkerCapacity,
@@ -241,6 +247,7 @@ function createHarness(
           truncated: false,
         };
       }
+      if (type === 'worker.compact') return { compacted: true };
       if (type === 'worker.fork.discard') return { discarded: true };
       if (type === 'worker.stop') return { stopped: true };
       if (type === 'worker.extensionUi.respond') return { handled: true };
@@ -2153,6 +2160,11 @@ describe('WorkerManager reload after an external writer', () => {
       logicalSessionId: 's1',
       sessionFile: '/sessions/s1.jsonl',
     });
+    // Reload rebuilds the whole plugin graph, MCP handshakes included — the
+    // same work bootstrap does. On the warm 10s default a user with one stdio
+    // MCP server lost a healthy session here: the reload timed out, the slot
+    // was retired, and the message that triggered it failed.
+    expect(reloadCalls?.[0]?.[2]).toEqual({ timeoutMs: BOOTSTRAP_REQUEST_TIMEOUT_MS });
 
     // 'branch', not 'refresh': the file replaces the timeline outright.
     expect(h.events.map((event) => event.type)).toEqual(['session.history', 'session.status']);
@@ -2164,6 +2176,23 @@ describe('WorkerManager reload after an external writer', () => {
       runtimeIdentity: '/sessions/s1.jsonl',
       piLeaf: { activeEntryId: 'tui-tail', fileTailEntryId: 'tui-tail' },
     });
+  });
+
+  it("gives a compaction a model-sized budget, and waits out the worker's own cutoff", async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+
+    await expect(h.manager.compactSession({ sessionId: 's1' })).resolves.toEqual({
+      compacted: true,
+    });
+    const compactCall = h.records[0]?.request.mock.calls.find(
+      ([type]) => type === 'worker.compact'
+    );
+    expect(compactCall?.[2]).toEqual({ timeoutMs: WORKER_COMPACT_REQUEST_TIMEOUT_MS });
+    // The order is the contract: the worker aborts its own summary first, so
+    // the answer Main reports is the outcome the session file actually has. A
+    // timeout here only rejects this promise — it does not stop the worker.
+    expect(WORKER_COMPACT_BUDGET_MS).toBeLessThan(WORKER_COMPACT_REQUEST_TIMEOUT_MS);
   });
 
   it('reports nothing to reload when no worker is holding the session', async () => {

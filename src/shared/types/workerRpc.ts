@@ -273,6 +273,21 @@ export interface WorkerCompactPayload {
   instructions?: string;
 }
 
+/**
+ * The two halves of `/compact`'s clock, kept together so they cannot drift.
+ *
+ * Compaction is one full provider request made inside the worker's serialized
+ * RPC chain, so it needs a budget of the same order as a cold start rather than
+ * the 10s warm-request default. The order of the two numbers is the contract:
+ * the worker aborts its own summary FIRST, and only then does Main stop
+ * waiting. If Main gave up first it would tell the user the compaction failed
+ * while the worker was still on its way to writing the summary to the session
+ * file — a disagreement between the screen and the disk that survives into the
+ * next resume.
+ */
+export const WORKER_COMPACT_BUDGET_MS = 45_000;
+export const WORKER_COMPACT_REQUEST_TIMEOUT_MS = 60_000;
+
 export interface WorkerCompactResult {
   compacted: true;
 }
@@ -560,6 +575,16 @@ export interface WorkerUtilityStartPayload {
   model?: string;
   effort?: SessionEffortLevel;
   timeoutMs: number;
+  /**
+   * P5-5 — the same handed-over catalog a session worker bootstraps with.
+   *
+   * Without it this path was the last one still reading `models.json` and
+   * `auth.json` out of the agent directory: those two files exist for the
+   * legacy backend, and leaving the "AI features" on them made a coexistence
+   * measure load-bearing for the backend meant to outlive it. Absent still
+   * means "read the directory", which is what a smoke lane with no Main does.
+   */
+  modelCatalog?: WorkerModelCatalog;
 }
 
 export interface WorkerUtilityStartResult {

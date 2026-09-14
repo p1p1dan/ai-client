@@ -171,4 +171,112 @@ describe('P6-2 native one-shot completions', () => {
     await settled;
     expect(seen).toEqual(['minimal']);
   });
+
+  it('keeps an explicit off off rather than substituting the pinned level', async () => {
+    await writeFile(
+      join(dir, 'settings.json'),
+      JSON.stringify({ defaultThinkingLevel: 'low', modelThinkingLevels: { 'test/test': 'high' } }),
+      'utf8'
+    );
+    const seen: (string | undefined)[] = [];
+    const { settled, runtime } = harness({
+      agentDir: dir,
+      responses: [
+        ((_context: unknown, streamOptions: { reasoning?: string } | undefined) => {
+          seen.push(streamOptions?.reasoning);
+          return fauxAssistantMessage('ok');
+        }) as never,
+      ],
+    });
+    // `off` is a decision, not a missing value: pi-ai has no per-request "off",
+    // so the field is omitted — but it must not fall through to the level the
+    // agent directory pinned, or the user pays for reasoning they switched off.
+    await runtime.start(request({ effort: 'off' }));
+    await settled;
+    expect(seen).toEqual([undefined]);
+  });
+});
+
+/**
+ * P5-5 / MC04 — the catalog comes from Main, not from the agent directory.
+ *
+ * These build the model adapter for real (no injected `create`), because what
+ * is under test is which documents the catalog was parsed from.
+ */
+describe('P6-2 one-shot completions take the catalog Main hands over', () => {
+  const WIRE_CATALOG = {
+    models: {
+      providers: {
+        wire: {
+          api: 'openai-completions',
+          // Nothing is ever reachable here: these tests assert which catalog was
+          // used, and stop before a request can matter.
+          baseUrl: 'http://127.0.0.1:1/v1',
+          models: [{ id: 'only-on-wire' }],
+        },
+      },
+    },
+    auth: { wire: { type: 'api_key', key: 'k' } },
+  };
+
+  function real(options: { modelCatalog?: typeof WIRE_CATALOG } = {}) {
+    const terminals: WorkerUtilityTerminalPayload[] = [];
+    const runtime = new NativeUtilityRuntime({
+      host: standaloneHost({}),
+      agentDir: dir,
+      env: {},
+      emitDelta: () => undefined,
+      emitTerminal: (payload) => terminals.push(payload),
+      ...(options.modelCatalog ? { modelCatalog: options.modelCatalog } : {}),
+    });
+    live.push(runtime);
+    return { runtime, terminals };
+  }
+
+  /** A models.json whose rows would be offered if this path still read it. */
+  async function writeDiskCatalog(): Promise<void> {
+    await writeFile(
+      join(dir, 'models.json'),
+      JSON.stringify({
+        providers: {
+          disk: {
+            api: 'openai-completions',
+            baseUrl: 'http://127.0.0.1:1/v1',
+            models: [{ id: 'only-on-disk' }],
+          },
+        },
+      }),
+      'utf8'
+    );
+    await writeFile(
+      join(dir, 'auth.json'),
+      JSON.stringify({ disk: { type: 'api_key', key: 'from-disk' } }),
+      'utf8'
+    );
+  }
+
+  it('offers the delivered rows and not the ones on disk', async () => {
+    await writeDiskCatalog();
+    const { runtime } = real({ modelCatalog: WIRE_CATALOG });
+    // The proof is the pair: the row only models.json knows about is unknown to
+    // this runtime, and the row only Main sent is accepted.
+    await expect(runtime.start(request({ model: 'disk/only-on-disk' }))).rejects.toThrow(
+      /model is unavailable/
+    );
+    await expect(runtime.start(request({ model: 'wire/only-on-wire' }))).resolves.toMatchObject({
+      accepted: true,
+    });
+    await runtime.cancel({ operationId: 'op-1', reason: 'user' });
+  });
+
+  it('still reads the directory when Main had no catalog to hand over', async () => {
+    await writeDiskCatalog();
+    const { runtime } = real();
+    // The fallback is not dead code: a locked keyring leaves Main with nothing
+    // to assemble, and the smoke lanes have no Main at all.
+    await expect(runtime.start(request({ model: 'disk/only-on-disk' }))).resolves.toMatchObject({
+      accepted: true,
+    });
+    await runtime.cancel({ operationId: 'op-1', reason: 'user' });
+  });
 });
