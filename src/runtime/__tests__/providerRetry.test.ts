@@ -123,6 +123,10 @@ describe('provider failure classification', () => {
     ['fetch failed', 'NETWORK_ERROR', true],
     ['401: invalid api key', 'PROVIDER_UNAUTHORIZED', false],
     ['403: forbidden', 'PROVIDER_UNAUTHORIZED', false],
+    // loop-model-04: pi-ai's own words for a key that is not there, thrown
+    // before a request exists. It carries no status and used to reach the
+    // retriable bucket, costing the user 43 seconds of local failures.
+    ['No API key for provider: gateway', 'PROVIDER_UNAUTHORIZED', false],
     ['404: unknown model', 'MODEL_NOT_CONFIGURED', false],
     ['413: payload too large', 'CONTEXT_TOO_LARGE', false],
     ['400: prompt is too long', 'CONTEXT_TOO_LARGE', false],

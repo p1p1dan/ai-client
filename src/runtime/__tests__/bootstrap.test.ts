@@ -119,6 +119,7 @@ describe('createRuntime', () => {
               fresh: { api: 'openai-completions', baseUrl: 'https://y', models: [{ id: 'live' }] },
             },
           },
+          auth: { fresh: { type: 'api_key', key: 'sk-fresh' } },
         },
       });
       try {

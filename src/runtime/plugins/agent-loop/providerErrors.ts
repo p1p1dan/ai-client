@@ -155,8 +155,14 @@ export function classifyProviderFailure(error: unknown): ClassifiedProviderError
     return result('PROVIDER_ERROR', true);
   }
 
+  // `no api key` is pi-ai's own wording for a credential that is not there at
+  // all (`No API key for provider: <id>`), thrown at the top of `streamSimple`
+  // before any request exists. It used to reach the retriable bucket at the
+  // bottom of this function, so a provider with no key cost the user 3+10+30
+  // seconds of local failures before naming its cause. Nothing about a second
+  // attempt can produce a key the process does not hold.
   if (
-    /invalid[ _]api[ _]key|api key not valid|unauthorized|authentication|permission denied/i.test(
+    /invalid[ _]api[ _]key|api key not valid|no api key|api key (is )?(missing|not set|required)|unauthorized|authentication|permission denied/i.test(
       rawMessage
     )
   ) {

@@ -96,18 +96,42 @@ export function buildModel(provider: CatalogProvider, model: CatalogModel): Mode
   } as Model<Api>;
 }
 
+/**
+ * One adapter per protocol this provider's rows actually speak.
+ *
+ * ARD D15 lets a model row override its provider's `api`, and pi-ai only
+ * honours that when `api` is a MAP: `createProvider` treats a single
+ * `ProviderStreams` as "this streams every row" and never looks at `model.api`
+ * again (`models.js#createProvider`, `apiFor`). Handing it the provider's one
+ * adapter therefore sent an `openai-responses` row through the provider's
+ * `openai-completions` client — a request the catalog said should not be made.
+ * The provider's own style is included even when no row names it, so a
+ * provider whose rows all override still has a default to dispatch on.
+ */
+function apiAdapters(provider: CatalogProvider): Partial<Record<Api, ProviderStreams>> {
+  const adapters: Partial<Record<Api, ProviderStreams>> = {};
+  for (const api of new Set<CatalogApi>([provider.api, ...provider.models.map((m) => m.api)])) {
+    adapters[api] = API_ADAPTERS[api]();
+  }
+  return adapters;
+}
+
 /** A pi-ai registry holding one catalog provider and all of its models. */
 export function buildProviderModels(provider: CatalogProvider): Models {
   const models = createModels();
+  const headers = provider.headers;
+  const hasHeaders = Object.keys(headers).length > 0;
   models.setProvider(
     createProvider({
       id: provider.id,
       name: provider.id,
       baseUrl: provider.baseUrl,
-      // Provider headers ride on the provider, not on each model: they are the
-      // same for every row and duplicating them per model would make a header
-      // change a per-model edit.
-      ...(Object.keys(provider.headers).length > 0 ? { headers: provider.headers } : {}),
+      // Declared metadata, NOT the delivery path. pi-ai stores `Provider.headers`
+      // and never reads it again on a request: `applyAuth` builds the request's
+      // headers from the auth resolution plus the caller's options only
+      // (`models.js#applyAuth`). Kept so a provider still describes itself, but
+      // the copy that ships is the one in `resolve()` below.
+      ...(hasHeaders ? { headers } : {}),
       auth: {
         apiKey: {
           name: `${provider.id} API key`,
@@ -115,11 +139,23 @@ export function buildProviderModels(provider: CatalogProvider): Models {
           // (Bearer for OpenAI-style, x-api-key for Anthropic). Returning the
           // key from a callback rather than baking it in means nothing here
           // holds a decrypted secret for longer than a request.
-          resolve: async () => ({ auth: { apiKey: provider.apiKey } }),
+          //
+          // The expanded `$NAME` headers ride here because this is the only
+          // provider-level route pi-ai actually sends: `getAuth` merges them
+          // into `auth.headers`, `applyAuth` merges that into the request
+          // options, and every adapter applies request options last. It is
+          // also the route pi-ai's own factories use (`providers/anthropic.js`
+          // returns `{ auth: { headers } }`). The alternative — a `headers`
+          // field on every `Model` — reaches the same place through
+          // `getAuth`'s model branch, but would make one provider-wide header
+          // change a per-row edit.
+          resolve: async () => ({
+            auth: { apiKey: provider.apiKey, ...(hasHeaders ? { headers } : {}) },
+          }),
         },
       },
       models: provider.models.map((model) => buildModel(provider, model)),
-      api: API_ADAPTERS[provider.api](),
+      api: apiAdapters(provider),
     })
   );
   return models;

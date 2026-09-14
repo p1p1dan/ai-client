@@ -166,6 +166,34 @@ describe('agent loop', () => {
     });
   });
 
+  /**
+   * cross-06. The drop reasons had exactly one reader — the `run_start` trace
+   * note — and an empty catalog throws before the trace begins, so the one run
+   * that needs them was the one run that could not write them. The user was
+   * told the catalog was empty and nothing about why.
+   */
+  it('names the dropped providers when the catalog is empty', async () => {
+    const runtime = await createRuntime({
+      modelCatalog: {
+        models: {
+          providers: {
+            'my-thing': { api: 'opencode_go', baseUrl: 'https://x.example', models: [{ id: 'a' }] },
+            gw: { api: 'openai-completions', baseUrl: 'https://x.example', models: [{ id: 'b' }] },
+          },
+        },
+        auth: {},
+      },
+      env: {},
+    });
+    try {
+      await expect(runtime.run({ prompt: 'hi', systemPrompt: 'probe' })).rejects.toThrow(
+        /my-thing:unknown_api.*gw:no_api_key/
+      );
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it('appends every run to the trace sink in order', async () => {
     await withRuntime(fauxAssistantMessage('first'), async (runtime, faux) => {
       faux.appendResponses([fauxAssistantMessage('second')]);

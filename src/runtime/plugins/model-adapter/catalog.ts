@@ -100,19 +100,53 @@ export interface CatalogProvider {
 }
 
 /**
- * A provider the reader could not bind, and why.
+ * Something the reader could not bind, and why.
  *
  * P5-5. Dropping is still the right outcome — a provider whose protocol this
  * client cannot speak would only fail at request time — but doing it silently
  * is not: "I saved the service and it is not in the list" has no other symptom
  * to go on. The reason travels up to `ModelCatalogSource` so it lands in the
- * run's version stamp.
+ * run's version stamp, and into the `catalog_empty` error when dropping is why
+ * there is nothing left to run against.
+ *
+ * `id` is the provider's. An entry does NOT always mean the whole provider is
+ * gone: `no_base_url` and `no_api_key` are judged per row (ARD D15 lets a row
+ * state its own address), so a provider that keeps some rows can still leave a
+ * record naming the ones it lost in `detail`. A drop with no surviving row is
+ * what removes a provider from `list()`.
  */
 export interface CatalogDrop {
   id: string;
-  reason: 'unknown_api' | 'no_usable_model';
+  reason: 'unknown_api' | 'no_usable_model' | 'no_base_url' | 'no_api_key';
   detail?: string;
 }
+
+/**
+ * Protocols whose pi-ai adapter refuses to build a request without a key.
+ *
+ * The three left out are not an oversight: `bedrock-converse-stream` and
+ * `google-vertex` authenticate from ambient AWS/ADC credentials, and
+ * `pi-messages` carries no key check, so for those an empty `auth.json` entry
+ * is a working configuration rather than a missing one. Everything else throws
+ * `No API key for provider: <id>` at the top of `streamSimple`, which is a
+ * local certainty — the request cannot be attempted, let alone retried.
+ */
+const APIS_REQUIRING_KEY: ReadonlySet<CatalogApi> = new Set<CatalogApi>([
+  'openai-completions',
+  'openai-responses',
+  'openai-codex-responses',
+  'azure-openai-responses',
+  'anthropic-messages',
+  'google-generative-ai',
+  'mistral-conversations',
+]);
+
+/**
+ * Headers pi-ai accepts INSTEAD of an api key (`getClientApiKey` /
+ * `assertRequestAuth`). A provider that presents one of these is configured,
+ * even with no entry in `auth.json`.
+ */
+const AUTH_HEADER_NAMES: readonly string[] = ['authorization', 'x-api-key', 'cf-aig-authorization'];
 
 export interface PiCatalog {
   /** The directory read, or `null` when the host handed the documents over. */
@@ -136,7 +170,7 @@ export async function readPiCatalog(
   io: RuntimeHostIoService
 ): Promise<PiCatalog> {
   const models = await readJsonFile(join(dir, MODELS_FILE_NAME), 'models_json', io);
-  const auth = await readOptionalJsonFile(join(dir, AUTH_FILE_NAME), io);
+  const auth = await readOptionalJsonFile(join(dir, AUTH_FILE_NAME), 'auth_json', io);
   return parsePiCatalog({ models, auth }, env, { dir, label: join(dir, MODELS_FILE_NAME) });
 }
 
@@ -181,14 +215,45 @@ export function parsePiCatalog(
       dropped.push({ id, reason: 'no_usable_model' });
       continue;
     }
+    const baseUrl = typeof provider.baseUrl === 'string' ? provider.baseUrl : '';
+    const headers = expandHeaders(provider.headers, env);
+    const apiKey = readProviderKey(auth, id);
+    // A key is a key wherever it comes from: an admin-configured `Authorization`
+    // header is what pi-ai checks when `apiKey` is empty, so a provider that
+    // carries one is configured.
+    const credentialled =
+      apiKey !== '' ||
+      Object.keys(headers).some((name) => AUTH_HEADER_NAMES.includes(name.toLowerCase()));
+    const usable: CatalogModel[] = [];
+    const unaddressed: string[] = [];
+    const unauthenticated: string[] = [];
+    for (const model of parsedModels) {
+      // Both checks are local certainties, which is the whole reason to make
+      // them here. An empty address does NOT fail at request time — the OpenAI
+      // and Anthropic SDKs fall back to their vendor's public endpoint, so this
+      // row would quietly send an administrator's key to api.openai.com. A
+      // missing key fails at the top of the adapter, before a request exists,
+      // which the loop cannot tell from a transient fault and so retries for
+      // 43 seconds.
+      if ((model.baseUrl ?? baseUrl) === '') unaddressed.push(model.id);
+      else if (!credentialled && APIS_REQUIRING_KEY.has(model.api)) unauthenticated.push(model.id);
+      else usable.push(model);
+    }
+    if (unaddressed.length > 0) {
+      dropped.push({ id, reason: 'no_base_url', detail: unaddressed.join(', ') });
+    }
+    if (unauthenticated.length > 0) {
+      dropped.push({ id, reason: 'no_api_key', detail: unauthenticated.join(', ') });
+    }
+    if (usable.length === 0) continue;
     providers.push({
       id,
-      baseUrl: typeof provider.baseUrl === 'string' ? provider.baseUrl : '',
-      headers: expandHeaders(provider.headers, env),
+      baseUrl,
+      headers,
       api,
       compat: asRecord(provider.compat) ?? undefined,
-      models: parsedModels,
-      apiKey: readProviderKey(auth, id),
+      models: usable,
+      apiKey,
     });
   }
   return { dir: origin.dir, providers, dropped };
@@ -262,9 +327,10 @@ function parseInputs(value: unknown): ('text' | 'image')[] {
  * `auth.json` is one `{ type: 'api_key', key }` per provider id.
  *
  * A missing entry yields `''` rather than throwing: a provider may legitimately
- * need no key (a local server), and the failure for one that does need a key
- * belongs at request time, where the provider's own error message says which
- * credential was rejected.
+ * need no key, and only its protocol knows whether that is true — which is what
+ * {@link APIS_REQUIRING_KEY} decides for it above. A key that is present and
+ * REJECTED is still a request-time matter, where the provider's own message
+ * says which credential it refused.
  */
 function readProviderKey(auth: Record<string, unknown> | null, providerId: string): string {
   const entry = asRecord(auth?.[providerId]);
@@ -288,21 +354,22 @@ async function readJsonFile(
       `${path} is missing — the app writes it at login; run the model sync first`
     );
   }
-  try {
-    const parsed: unknown = JSON.parse(text);
-    const record = asRecord(parsed);
-    if (!record) throw new Error('not an object');
-    return record;
-  } catch (error) {
-    throw new RuntimeConfigError(
-      `${code}_unparsable`,
-      `${path} is not readable JSON: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
+  return parseJsonRecord(text, path, code);
 }
 
+/**
+ * Absent is a state; unreadable is a fault.
+ *
+ * `auth.json` legitimately does not exist before the first sync, so ENOENT
+ * yields `null` and every provider reports an empty key. A file that IS there
+ * and cannot be parsed is a different thing entirely, and swallowing it used to
+ * produce the exact symptom of a key that never synced: every provider keyless,
+ * with nothing anywhere naming the file. It now fails the way `models.json`
+ * already did, naming the path and the parser's complaint.
+ */
 async function readOptionalJsonFile(
   path: string,
+  code: string,
   io: RuntimeHostIoService
 ): Promise<Record<string, unknown> | null> {
   let text: string;
@@ -314,10 +381,20 @@ async function readOptionalJsonFile(
     if (errorCode(error) === 'ENOENT') return null;
     throw error;
   }
+  return parseJsonRecord(text, path, code);
+}
+
+function parseJsonRecord(text: string, path: string, code: string): Record<string, unknown> {
   try {
-    return asRecord(JSON.parse(text));
-  } catch {
-    return null;
+    const parsed: unknown = JSON.parse(text);
+    const record = asRecord(parsed);
+    if (!record) throw new Error('not an object');
+    return record;
+  } catch (error) {
+    throw new RuntimeConfigError(
+      `${code}_unparsable`,
+      `${path} is not readable JSON: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 

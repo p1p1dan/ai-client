@@ -114,9 +114,18 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         .find((model) => model.provider === saved.provider && model.id === saved.modelId);
     const ref = request.model ?? restoredRef ?? adapter.defaultRef();
     if (!ref) {
+      // cross-06: the drop reasons have exactly one reader — the `run_start`
+      // note twenty lines below — and this throw is before `trace.begin()`, so
+      // the one run that NEEDS them is the one run that never writes them. They
+      // go in the message instead: an empty catalog is almost always an empty
+      // catalog BECAUSE of these, and "gateway:no_api_key" is the difference
+      // between a fixable config and a mystery.
+      const dropped = 'dropped' in adapter.source ? adapter.source.dropped : [];
       throw new RuntimeConfigError(
         'catalog_empty',
-        'the model catalog is empty, so there is nothing to run against'
+        `the model catalog is empty, so there is nothing to run against${
+          dropped.length > 0 ? ` (dropped: ${dropped.join(', ')})` : ''
+        }`
       );
     }
     const resolved = adapter.resolve(ref);
