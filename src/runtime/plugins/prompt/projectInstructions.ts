@@ -5,11 +5,23 @@
  * Provenance (AGENTS.md requires stating it): **adapted** from PI-Desktop's
  * `packages/agent-runtime/src/project-instructions.ts` and
  * `project-instructions-prompt.ts`. The file-name list, the 32 KiB shared
- * budget, the root→leaf walk, the "nested files get the last word" order and
- * the symlink containment guard are theirs and are kept as-is. Three things
- * differ, each noted at the point it appears: global files are a list rather
- * than one hardcoded path, reading goes through a port instead of `node:fs`,
- * and the assembled block is returned as a prompt segment rather than a string.
+ * budget and the symlink containment guard are theirs and are kept as-is. Four
+ * things differ, each noted at the point it appears: global files are a list
+ * rather than one hardcoded path, reading goes through a port instead of
+ * `node:fs`, the assembled block is returned as a prompt segment rather than a
+ * string, and only the workspace root's own file is loaded.
+ *
+ * ## Why there is no directory walk (decision 007)
+ *
+ * The reference walks root→leaf from a `targetPath` the caller supplies, and
+ * this module was ported with that walk intact. No caller ever supplied one:
+ * the parameter reached `RuntimeRunRequest` and stopped there, in this product
+ * and in the reference alike (context-prompt-03). Decision 007 removed it
+ * rather than wiring it, because the tier rule it half-implemented is not the
+ * official one either — the official rule loads the workspace root and every
+ * parent directory at session start, and subdirectories on demand as the agent
+ * reads into them. T035 implements that; until it lands this module loads the
+ * workspace root only, which is what the product has always actually done.
  *
  * ## Why reading is a port
  *
@@ -22,7 +34,7 @@
  * chain is testable against an in-memory source, with no fixture tree on disk.
  */
 
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import type { PromptSegment } from './segments.ts';
 
 /**
@@ -70,11 +82,6 @@ export interface InstructionChainOptions {
   /** Workspace root. Absent loads only explicitly supplied global files. */
   root?: string;
   /**
-   * File the work is about, if any. Its directory chain is walked so that
-   * instructions closer to it are collected; absent means the root only.
-   */
-  targetPath?: string;
-  /**
    * Global instruction files, in the order they should appear, before any
    * project file. A LIST rather than PI-Desktop's single
    * `~/.pi/agent/AGENTS.md`: the agent dir's own file is one source, and a
@@ -89,8 +96,20 @@ export interface InstructionChainOptions {
   maxBytes?: number;
 }
 
+/**
+ * Containment, by relative path rather than string prefix.
+ *
+ * context-prompt-13: `path.startsWith(root + sep)` cannot be true when `root`
+ * already ends in a separator, which is what `resolve` returns for a filesystem
+ * root (`/`, `C:\`). A workspace opened at one of those had its whole
+ * instruction chain silently vanish — including the symlink guard's verdict on
+ * a file that was in fact contained. `relative` handles both shapes, and
+ * answers `''` for the root itself.
+ */
 function isWithinRoot(root: string, path: string): boolean {
-  return path === root || path.startsWith(`${root}${sep}`);
+  if (path === root) return true;
+  const offset = relative(root, path);
+  return offset !== '' && !offset.startsWith('..') && !isAbsolute(offset);
 }
 
 /** Windows separators normalized so a recorded source path reads the same everywhere. */
@@ -119,35 +138,6 @@ export function limitUtf8(content: string, maxBytes: number): string {
   return content.slice(0, end);
 }
 
-/**
- * The directories to consult, root first and the target's own directory last.
- *
- * Order is the precedence rule: later entries end up later in the prompt, and
- * the block tells the model that later entries win. `undefined` means the
- * target escapes the root, which is not a chain to be trimmed but a request to
- * refuse.
- */
-export function instructionDirectories(
-  root: string,
-  targetPath?: string
-): readonly string[] | undefined {
-  const resolvedRoot = resolve(root);
-  const target = targetPath?.trim() ? resolve(resolvedRoot, targetPath) : resolvedRoot;
-  if (!isWithinRoot(resolvedRoot, target)) return undefined;
-
-  const directories: string[] = [];
-  for (
-    let current = targetPath?.trim() ? dirname(target) : resolvedRoot;
-    ;
-    current = dirname(current)
-  ) {
-    if (!isWithinRoot(resolvedRoot, current)) return undefined;
-    directories.unshift(current);
-    if (current === resolvedRoot) break;
-  }
-  return directories;
-}
-
 async function readDirectoryInstruction(
   source: InstructionSource,
   root: string,
@@ -172,10 +162,9 @@ async function readDirectoryInstruction(
 }
 
 /**
- * Load globals then the project chain, sharing one byte budget.
+ * Load globals then the workspace root's own file, sharing one byte budget.
  *
- * Globals go first so a project file, being later, can contradict them — the
- * same reason nested files come after their parents.
+ * Globals go first so a project file, being later, can contradict them.
  */
 export async function loadInstructionChain(
   source: InstructionSource,
@@ -194,34 +183,20 @@ export async function loadInstructionChain(
     remaining -= Buffer.byteLength(limited, 'utf8');
   }
 
-  if (!options.root) return entries;
-  const directories = instructionDirectories(options.root, options.targetPath);
-  if (!directories) return entries;
+  if (!options.root || remaining <= 0) return entries;
   const resolvedRoot = resolve(options.root);
   const canonicalRoot = (await source.realpath(resolvedRoot)) ?? resolvedRoot;
-  for (const directory of directories) {
-    if (remaining <= 0) break;
-    const entry = await readDirectoryInstruction(
-      source,
-      resolvedRoot,
-      canonicalRoot,
-      directory,
-      remaining
-    );
-    if (!entry?.content) continue;
-    entries.push(entry);
-    remaining -= Buffer.byteLength(entry.content, 'utf8');
-  }
+  const entry = await readDirectoryInstruction(
+    source,
+    resolvedRoot,
+    canonicalRoot,
+    resolvedRoot,
+    remaining
+  );
+  if (entry?.content) entries.push(entry);
   return entries;
 }
 
-/**
- * Render the chain for the `project-instructions` slot.
- *
- * The precedence sentence is PI-Desktop's, kept because it is the only thing
- * telling the model how to resolve two instructions that contradict each other,
- * and the order it describes is the order this module produces.
- */
 /**
  * The rendered chain as plain text, for a consumer that is not building the
  * parent's prompt.
@@ -247,7 +222,7 @@ export function projectInstructionsSegment(
   const text = [
     '# Project instructions',
     '',
-    'The following instructions are loaded from the workspace. Follow them when they apply to the task; entries later in this section are closer to the file being worked on and take precedence.',
+    'The following instructions are loaded from the workspace. Follow them when they apply to the task; where two entries conflict, the more specific file says so itself.',
     '',
     ...entries.flatMap((entry) => [`## ${entry.source}`, '', entry.content, '']),
   ]

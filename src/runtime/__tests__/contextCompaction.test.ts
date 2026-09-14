@@ -12,7 +12,11 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { AgentMessage, CompactionEntry } from '@earendil-works/pi-agent-core';
+import {
+  createCompactionSummaryMessage,
+  estimateContextTokens,
+} from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import {
   fauxAssistantMessage,
@@ -103,7 +107,7 @@ function text(message: AgentMessage): string {
 async function prepare(
   handle: RuntimeHandle,
   messages: AgentMessage[],
-  extra: { retention?: 'active_turn' | 'completed_turn' } = {}
+  extra: { retention?: 'active_turn' | 'completed_turn'; additionalTokens?: number } = {}
 ) {
   const service = handle.context;
   if (!service) throw new Error('the context service is not registered');
@@ -374,5 +378,270 @@ describe('P1-9 ∥ P2-8: new_context and the boundary that honours it', () => {
     expect(text(last?.messages[0] as AgentMessage)).toContain(
       family === 'fresh_window' ? CONTEXT_ROLLOVER_SUMMARY : 'summary of the run so far'
     );
+  });
+});
+
+/**
+ * T014 — the failure modes the P2-3 suite above could not see, because each one
+ * needs a SECOND pass over the same window: a second `prompt()` in one run, a
+ * second compaction over an imported checkpoint, a second run in one session.
+ */
+describe('T014 · compaction across a second pass', () => {
+  it('re-prompts the same run on the compacted context, not the history it replaced', async () => {
+    // context-prompt-01, and the acceptance case on the T014 roadmap row. The
+    // boundary hook only replaced the LOOP's context; `agent.state.messages`
+    // kept the full history, and `prompt()` rebuilds from that — so the
+    // delegation report below started a request carrying everything the
+    // compaction had just bought back.
+    const faux = fauxProvider({
+      provider: 'test',
+      models: [{ id: 'test', name: 'Test', ...WINDOW }],
+    });
+    let parentTurn = 0;
+    const resumed: AgentMessage[][] = [];
+    const route = async (context: { systemPrompt?: string; messages: unknown[] }) => {
+      if (/You are the "[a-z0-9-]+" subagent/.test(context.systemPrompt ?? '')) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return fauxAssistantMessage('EXPLORER-REPORT: it is at src/app.ts');
+      }
+      parentTurn += 1;
+      if (parentTurn === 1) {
+        return fauxAssistantMessage(
+          [
+            fauxToolCall('Task', { agent: 'explorer', task: 'look around' }, { id: 't1' }),
+            fauxToolCall('new_context', {}, { id: 't2' }),
+          ],
+          { stopReason: 'toolUse' }
+        );
+      }
+      if (parentTurn === 2) return fauxAssistantMessage('started the explorer');
+      resumed.push([...(context.messages as AgentMessage[])]);
+      return fauxAssistantMessage('integrated the report');
+    };
+    faux.setResponses(Array.from({ length: 16 }, () => route));
+    const { handle } = await runtime({
+      faux,
+      tools: { cwd: dir },
+      permissions: { gear: 'auto' },
+      subagents: { home: join(dir, 'home') },
+      loop: { singleTurn: false, defaultThinkingLevel: 'medium' },
+      context: { family: 'fresh_window' },
+    });
+    const result = await handle.run({ prompt: 'find the thing', systemPrompt: 'probe' });
+    expect(result.success).toBe(true);
+    expect(resumed).toHaveLength(1);
+    // The provider sees the checkpoint already converted to a user message, so
+    // the head is identified by its text rather than by `role`.
+    const request = resumed[0];
+    expect(text(request[0])).toContain(CONTEXT_ROLLOVER_SUMMARY);
+    // The tool calls and their results went with the history they belonged to.
+    expect(request.some((message) => message.role === 'toolResult')).toBe(false);
+    expect(request.filter((message) => message.role === 'assistant')).toHaveLength(1);
+    expect(text(request.at(-1) as AgentMessage)).toContain('EXPLORER-REPORT');
+  });
+
+  it('records the files a merged retained tail touched in the checkpoint details', async () => {
+    // context-prompt-02. pi derives `fileOps` from the messages before its own
+    // cut point; everything after it was supposed to stay in the context. This
+    // runtime merges that tail into the summarized range instead, so an edit
+    // made in the last few thousand tokens disappeared from the checkpoint and
+    // the model was told, right after editing, that it had touched nothing.
+    const faux = provider();
+    const { handle } = await runtime({ faux, tools: { cwd: dir }, context: { family: 'summary' } });
+    faux.setResponses([fauxAssistantMessage('a summary of the work so far')]);
+    handle.context?.requestNewWindow();
+    const edited = fauxAssistantMessage(
+      [fauxToolCall('edit', { path: 'src/b.ts' }, { id: 'e1' })],
+      {
+        stopReason: 'toolUse',
+      }
+    ) as unknown as AgentMessage;
+    const prepared = await prepare(handle, [sized(50, 'u'), edited]);
+    expect(prepared.compaction).toBeDefined();
+    const summary = text(prepared.messages[0]);
+    expect(summary).toContain('<modified-files>');
+    expect(summary).toContain('src/b.ts');
+  });
+
+  it('sheds the previous checkpoint tail when there is nothing new to compact', async () => {
+    // context-prompt-04. Right after a `/compact` or a resume the context IS a
+    // checkpoint, so pi has nothing to compact and used to end the run with
+    // "there is nothing between the last checkpoint and now" — a message that
+    // names neither the real cause nor anything the user can act on.
+    const { handle } = await runtime({ tools: { cwd: dir }, context: { family: 'fresh_window' } });
+    const budget = contextBudget(WINDOW, 0);
+    handle.context?.requestNewWindow();
+    const first = await prepare(handle, [sized(budget.hardLimit)], { retention: 'active_turn' });
+    expect(first.compaction?.retained).toBe(1);
+    const second = await prepare(handle, first.messages, {
+      additionalTokens: budget.hardLimit - 2_000,
+    });
+    expect(second.compaction).toMatchObject({
+      reason: 'hard_limit',
+      retained: 0,
+      shedRetainedTail: true,
+    });
+    expect(second.messages).toHaveLength(1);
+  });
+
+  it('blames the pending input, not compaction, when shedding the tail is not enough', async () => {
+    const { handle } = await runtime({ tools: { cwd: dir }, context: { family: 'fresh_window' } });
+    const budget = contextBudget(WINDOW, 0);
+    handle.context?.requestNewWindow();
+    const first = await prepare(handle, [sized(budget.hardLimit)], { retention: 'active_turn' });
+    await expect(
+      prepare(handle, first.messages, { additionalTokens: budget.hardLimit + 1_000 })
+    ).rejects.toMatchObject({ code: 'context_too_large' });
+  });
+
+  it('holds the summarization request itself inside the model window', async () => {
+    // context-prompt-05. pi caps the summary's OUTPUT and truncates each tool
+    // result to 2000 characters, but user text, assistant text and tool-call
+    // ARGUMENTS are serialized verbatim — so a turn that overshoots the limit
+    // produces the one request that can buy the window back in a size the
+    // provider will refuse, and at the hard limit there is no second try.
+    const faux = provider();
+    const { handle } = await runtime({ faux, tools: { cwd: dir }, context: { family: 'summary' } });
+    const asked: AgentMessage[][] = [];
+    faux.setResponses([
+      (context) => {
+        asked.push([...(context.messages as AgentMessage[])]);
+        return fauxAssistantMessage('a bounded summary');
+      },
+    ]);
+    const budget = contextBudget(WINDOW, 0);
+    const prepared = await prepare(handle, [sized(20_000, 'a'), sized(20_000, 'b')]);
+    expect(prepared.compaction?.reason).toBe('hard_limit');
+    // The oldest message did not fit and is reported rather than dropped silently.
+    expect(prepared.compaction?.summaryInputDropped).toBe(1);
+    expect(asked).toHaveLength(1);
+    const tokens = estimateContextTokens(asked[0]).tokens;
+    expect(tokens).toBeLessThan(WINDOW.contextWindow);
+    // The output pi reserves rides on top of the input; both have to fit.
+    expect(tokens + Math.floor(0.8 * budget.requestHeadroom)).toBeLessThan(WINDOW.contextWindow);
+    expect(text(asked[0][0])).toContain('did not fit this summarization request');
+  });
+
+  it('keeps the message after an imported checkpoint whose tail lost a filtered entry', async () => {
+    // context-prompt-08. `snapshot.messages` is filtered for failed assistant
+    // messages; `checkpoint.retainedTail` is not. A pi CLI session where the
+    // user interrupted a turn leaves exactly that mismatch, and counting the
+    // stored length ate the first real message after the checkpoint — which
+    // then reached neither the summary nor the retained tail.
+    const faux = provider();
+    const { handle } = await runtime({ faux, tools: { cwd: dir }, context: { family: 'summary' } });
+    const prompts: string[] = [];
+    faux.setResponses([
+      (context) => {
+        prompts.push((context.messages as AgentMessage[]).map(text).join('\n'));
+        return fauxAssistantMessage('a second summary');
+      },
+    ]);
+    const summary = createCompactionSummaryMessage('earlier work', 1_000, 1);
+    const ghost: AgentMessage = {
+      role: 'user',
+      content: [{ type: 'text', text: 'INTERRUPTED_TURN' }],
+      timestamp: 1,
+    };
+    const kept: AgentMessage = {
+      role: 'user',
+      content: [{ type: 'text', text: 'KEPT_TAIL' }],
+      timestamp: 2,
+    };
+    const after: AgentMessage = {
+      role: 'user',
+      content: [{ type: 'text', text: 'AFTER_CHECKPOINT_MARKER' }],
+      timestamp: 3,
+    };
+    const checkpoint: CompactionEntry = {
+      type: 'compaction',
+      id: 'c0',
+      seq: 0,
+      parentId: null,
+      timestamp: 1,
+      summary: 'earlier work',
+      retainedTail: [ghost, kept],
+      tokensBefore: 1_000,
+    };
+    const carried = [summary, kept, after];
+    handle.context?.beginRun({ messages: carried, checkpoint });
+    handle.context?.requestNewWindow();
+    const prepared = await prepare(handle, carried);
+    // Not the "nothing to compact" path: there IS something after the checkpoint.
+    expect(prepared.skipped).toBeUndefined();
+    expect(prepared.compaction?.shedRetainedTail).toBeUndefined();
+    expect(prompts.join('\n')).toContain('AFTER_CHECKPOINT_MARKER');
+  });
+
+  it('claims each reminder tier once per session, not once per run', async () => {
+    // context-prompt-10. `beginRun` runs on every user message and every
+    // `/compact`, so clearing the claims there told a conversation parked in
+    // the reminder band to "start closing out" on every single message.
+    const { handle } = await runtime({ tools: { cwd: dir }, context: { family: 'fresh_window' } });
+    const budget = contextBudget(WINDOW, 0);
+    const inTier = budget.hardLimit - reminderThreshold(budget) + 500;
+    expect((await prepare(handle, [sized(inTier)])).reminder?.tier).toBe('approaching');
+    handle.context?.beginRun();
+    expect((await prepare(handle, [sized(inTier)])).reminder).toBeUndefined();
+    // A compaction moves the window, which is the one event that makes "you are
+    // running out of room" false again.
+    handle.context?.requestNewWindow();
+    expect((await prepare(handle, [sized(inTier)])).compaction).toBeDefined();
+    expect((await prepare(handle, [sized(inTier)])).reminder?.tier).toBe('approaching');
+  });
+
+  it('writes the pre-run reminder into the trace, not only into the request', async () => {
+    // context-prompt-11. The pre-run path traced compactions only, so a
+    // reminder it put into `agent.state.messages` — where it then rode every
+    // later request of that run — left nothing in `runs.jsonl` to explain the
+    // extra message, and a compaction it asked for and did not get left nothing
+    // at all.
+    const faux = provider();
+    const file = join(dir, 'session.jsonl');
+    const { handle } = await runtime({
+      faux,
+      tools: { cwd: dir },
+      session: { file, cwd: dir, mode: 'create' },
+      context: { family: 'fresh_window' },
+    });
+    const budget = contextBudget(WINDOW, 0);
+    faux.setResponses([fauxAssistantMessage('noted'), fauxAssistantMessage('noted again')]);
+    await handle.run({
+      prompt: 'x'.repeat((budget.hardLimit - reminderThreshold(budget) + 500) * 4),
+      systemPrompt: 'probe',
+    });
+    const second = await handle.run({ prompt: 'a short follow-up', systemPrompt: 'probe' });
+    expect(second.success).toBe(true);
+    const reminder = second.trace.steps.find(
+      (step) => step.detail.event === 'context_reminder'
+    )?.detail;
+    expect(reminder).toMatchObject({ tier: 'approaching' });
+  });
+
+  it('skips rather than fails when the new checkpoint is itself over budget', async () => {
+    // context-prompt-12. `TurnPreparation.skipped` promises that a compaction
+    // which cannot be completed below the hard limit leaves the run alone; this
+    // branch threw without looking at the reason, so a runaway summary turned
+    // a courtesy `new_context` into a failed run.
+    const faux = provider();
+    const { handle } = await runtime({ faux, tools: { cwd: dir }, context: { family: 'summary' } });
+    const budget = contextBudget(WINDOW, 0);
+    faux.setResponses([fauxAssistantMessage('S'.repeat(budget.hardLimit * 4 + 4_000))]);
+    handle.context?.requestNewWindow();
+    const messages = [sized(200)];
+    const prepared = await prepare(handle, messages);
+    expect(prepared.compaction).toBeUndefined();
+    expect(prepared.skipped?.code).toBe('compaction_over_budget');
+    expect(prepared.messages).toEqual(messages);
+  });
+
+  it('still fails the turn when the same oversized checkpoint lands at the hard limit', async () => {
+    const faux = provider();
+    const { handle } = await runtime({ faux, tools: { cwd: dir }, context: { family: 'summary' } });
+    const budget = contextBudget(WINDOW, 0);
+    faux.setResponses([fauxAssistantMessage('S'.repeat(budget.hardLimit * 4 + 4_000))]);
+    await expect(prepare(handle, [sized(budget.hardLimit + 1_000)])).rejects.toMatchObject({
+      code: 'context_compaction_failed',
+    });
   });
 });

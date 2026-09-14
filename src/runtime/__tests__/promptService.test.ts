@@ -39,7 +39,7 @@ async function runtime(options: Partial<RuntimeBootstrapOptions> = {}) {
 }
 
 describe('P2 prompt service and HostIo instruction wiring', () => {
-  it('assembles managed, borrowed, root and nested instructions in the actual request', async () => {
+  it('assembles managed, borrowed and root instructions in the actual request', async () => {
     const agentDir = join(dir, 'managed');
     const borrowed = join(dir, 'borrowed.md');
     await mkdir(agentDir);
@@ -47,8 +47,7 @@ describe('P2 prompt service and HostIo instruction wiring', () => {
     await writeFile(join(agentDir, 'AGENTS.md'), 'MANAGED_RULE');
     await writeFile(borrowed, 'BORROWED_RULE');
     await writeFile(join(root, 'AGENTS.md'), 'ROOT_RULE');
-    await writeFile(join(root, 'src', 'AGENTS.md'), 'SHADOWED_RULE');
-    await writeFile(join(root, 'src', 'AGENTS.override.md'), 'NESTED_RULE');
+    await writeFile(join(root, 'src', 'AGENTS.md'), 'SUBDIR_RULE');
     const { handle, faux } = await runtime({
       agentDir,
       prompt: { globals: [{ path: borrowed, label: 'Borrowed' }] },
@@ -61,14 +60,13 @@ describe('P2 prompt service and HostIo instruction wiring', () => {
         return fauxAssistantMessage('done');
       },
     ]);
-    const result = await handle.run({ prompt: 'inspect', targetPath: 'src/file.ts' });
+    const result = await handle.run({ prompt: 'inspect' });
     expect(result.success).toBe(true);
     const prompt = prompts[0];
     const order = [
       'MANAGED_RULE',
       'BORROWED_RULE',
       'ROOT_RULE',
-      'NESTED_RULE',
       'Mode: agent',
       'Permission gear: ask',
     ];
@@ -76,7 +74,10 @@ describe('P2 prompt service and HostIo instruction wiring', () => {
     expect(order.map((part) => prompt.indexOf(part))).toEqual(
       order.map((part) => prompt.indexOf(part)).sort((a, b) => a - b)
     );
-    expect(prompt).not.toContain('SHADOWED_RULE');
+    // context-prompt-03 / decision 007: `run.targetPath` is gone, so there is no
+    // longer any way to ask for a subdirectory's file, and the run must not
+    // invent one.
+    expect(prompt).not.toContain('SUBDIR_RULE');
     expect(reads).toHaveBeenCalledWith(join(root, 'AGENTS.md'), {
       maxBytes: 32_768,
       overflow: 'truncate',
@@ -158,6 +159,56 @@ describe('P2 prompt service and HostIo instruction wiring', () => {
     const reads = vi.spyOn(handle.hostIo, 'readFile');
     expect((await handle.prompt.compose()).text).not.toContain('OUTSIDE_SECRET');
     expect(reads).not.toHaveBeenCalled();
+  });
+
+  it('skips a directory that is named like an instruction file', async () => {
+    // context-prompt-06. HostIo refuses a non-regular file with its own
+    // `invalid_host_request`, which is not an errno and so never matched the
+    // optional-file set: a workspace where `AGENTS.md` happens to be a
+    // DIRECTORY failed every single run, with an error mentioning neither the
+    // file nor the workspace.
+    await mkdir(join(root, 'AGENTS.md'));
+    await writeFile(join(root, 'CLAUDE.md'), 'FALLBACK_RULE');
+    const { handle } = await runtime();
+    const composed = await handle.prompt.compose();
+    // Skipped, not fatal — and the next name in the list still gets its turn.
+    expect(composed.text).toContain('FALLBACK_RULE');
+  });
+
+  it.each([
+    'utf-16le',
+    'utf-16be',
+  ] as const)('decodes a %s instruction file instead of injecting mojibake', async (encoding) => {
+    // context-prompt-15. Notepad's default "Unicode" save is UTF-16LE; read as
+    // UTF-8 it becomes kilobytes of U+FFFD and NUL that a non-fatal decoder
+    // reports as complete success, so it went into the system prompt and stayed
+    // there for the whole session, spending the 32 KiB budget on noise.
+    const text = 'UTF16_RULE';
+    const little = Buffer.from(`\uFEFF${text}`, 'utf16le');
+    const bytes = Buffer.from(little);
+    if (encoding === 'utf-16be') {
+      for (let index = 0; index + 1 < bytes.length; index += 2) {
+        const low = bytes[index];
+        bytes[index] = bytes[index + 1];
+        bytes[index + 1] = low;
+      }
+    }
+    await writeFile(join(root, 'AGENTS.md'), bytes);
+    const { handle } = await runtime();
+    const composed = await handle.prompt.compose();
+    expect(composed.text).toContain(text);
+    expect(composed.text).not.toContain('\uFFFD');
+  });
+
+  it('reports an instruction file it cannot decode instead of guessing at it', async () => {
+    // GBK, Latin-1, or a binary file that happens to be called CLAUDE.md. A
+    // single-byte guess is indistinguishable from the UTF-16 case above, so the
+    // heading says why the file is not there rather than showing rubbish.
+    await writeFile(join(root, 'AGENTS.md'), Buffer.from([0xc4, 0xe3, 0xba, 0xc3, 0x0a]));
+    const { handle } = await runtime();
+    const composed = await handle.prompt.compose();
+    expect(composed.text).toContain('not UTF-8 or UTF-16 text');
+    expect(composed.text).not.toContain('\uFFFD');
   });
 
   it('ignores absent instruction files but propagates a TSD read failure', async () => {

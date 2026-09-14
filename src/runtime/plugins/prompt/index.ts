@@ -28,7 +28,7 @@ export class PromptPlugin extends Service implements RuntimePromptService {
     this.config = config;
   }
 
-  async compose(request: { targetPath?: string } = {}) {
+  async compose() {
     const segments = [...baseSegments()];
     if (this.ctx.get('runtimeTools')) segments.push(...toolSegments());
     // P5-1. Read through `ctx.get` like the other optional contributors: a
@@ -38,7 +38,7 @@ export class PromptPlugin extends Service implements RuntimePromptService {
     if (skills) segments.push(skills);
     const entries = await loadInstructionChain(
       instructionSource(this.ctx.runtimeHostIo, this.config.maxBytes),
-      { ...this.config, targetPath: request.targetPath }
+      this.config
     );
     const instructions = projectInstructionsSegment(entries);
     if (instructions) segments.push(instructions);

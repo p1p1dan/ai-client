@@ -47,6 +47,7 @@ import {
   newContextTool,
 } from '../tools/new-context.ts';
 import {
+  CONTEXT_BUDGET_CHANNEL,
   compactionNeeded,
   contextBudget,
   NO_REMINDERS_CLAIMED,
@@ -54,8 +55,10 @@ import {
   type ReminderTier,
   retainedUserMessageBudget,
   selectReminder,
+  summaryInputBudget,
 } from './budget.ts';
 import {
+  boundSummaryInput,
   CONTEXT_ROLLOVER_SUMMARY,
   type RetentionMode,
   shapeForCheckpoint,
@@ -87,6 +90,17 @@ export interface CompactionOutcome {
   summaryBytes: number;
   /** Provider usage the summary request itself cost, absent for a rollover. */
   usage?: Usage;
+  /**
+   * Messages left out of the summary request because it would not have fit the
+   * window. Absent on the normal path; present means the checkpoint describes
+   * less than it replaced, which is the one thing a reader has to know.
+   */
+  summaryInputDropped?: number;
+  /**
+   * The compaction shed the previous checkpoint's retained tail rather than
+   * summarizing anything new, because there was nothing new to summarize.
+   */
+  shedRetainedTail?: true;
 }
 
 export interface TurnReminder {
@@ -183,6 +197,9 @@ export class ContextPlugin extends Service implements RuntimeContextService {
       this.pending = false;
       this.checkpoint = undefined;
       this.summaryMessage = undefined;
+      // Disposal ends the session, which is the scope the reminder claims are
+      // held at (context-prompt-10); nothing else clears them.
+      this.reminders = NO_REMINDERS_CLAIMED;
     });
   }
 
@@ -200,7 +217,12 @@ export class ContextPlugin extends Service implements RuntimeContextService {
 
   beginRun(snapshot?: Pick<SessionSnapshot, 'messages' | 'checkpoint'>): void {
     this.pending = false;
-    this.reminders = NO_REMINDERS_CLAIMED;
+    // `reminders` is deliberately NOT cleared here (context-prompt-10).
+    // `beginRun` fires on every user message and on every `/compact`, so
+    // clearing it turned "once per session" into "once per message": a
+    // conversation parked inside the reminder band told the model to start
+    // closing out, again, every time the user said anything. Only a successful
+    // compaction resets it, in `compactNow`.
     this.checkpoint = snapshot?.checkpoint;
     this.summaryMessage =
       snapshot?.messages[0]?.role === 'compactionSummary' ? snapshot.messages[0] : undefined;
@@ -257,11 +279,21 @@ export class ContextPlugin extends Service implements RuntimeContextService {
       return this.giveUp(reason, messages, 'compaction_prepare_failed', prepared.error.message);
     }
     if (!prepared.value) {
+      // context-prompt-04. "Nothing between the last checkpoint and now" is a
+      // real state — it is what a session looks like right after `/compact` or
+      // a resume — and at the hard limit it used to end the run with a message
+      // that named the wrong cause. There is one thing left to shed in that
+      // state, the tail the previous checkpoint carried; when shedding it buys
+      // enough room the run continues, and when it does not, the honest answer
+      // is that the pending input does not fit, not that compaction broke.
+      const shed = await this.shedRetainedTail(input);
+      if (shed) return shed;
       return this.giveUp(
         reason,
         messages,
         'compaction_empty_range',
-        'there is nothing between the last checkpoint and now to compact'
+        'the pending input does not fit even with the whole history replaced by its checkpoint',
+        'context_too_large'
       );
     }
     const preparation = shapeForCheckpoint(
@@ -270,6 +302,7 @@ export class ContextPlugin extends Service implements RuntimeContextService {
       request.retention ?? 'completed_turn'
     );
     let result: CompactResult;
+    let summaryInputDropped = 0;
     if (this.family === 'fresh_window') {
       result = {
         summary: CONTEXT_ROLLOVER_SUMMARY,
@@ -277,7 +310,14 @@ export class ContextPlugin extends Service implements RuntimeContextService {
         retainedTail: preparation.retainedTail,
       };
     } else {
-      const summarized = await this.summarize(preparation, request);
+      // context-prompt-05: the one request that buys the window back must fit
+      // in that window, and nothing upstream guarantees it does.
+      const bounded = boundSummaryInput(
+        preparation,
+        summaryInputBudget(budget, Math.ceil((preparation.previousSummary?.length ?? 0) / 4))
+      );
+      summaryInputDropped = bounded.droppedMessages;
+      const summarized = await this.summarize(bounded.preparation, request);
       if (!summarized.ok) {
         return this.giveUp(reason, messages, 'compaction_summary_failed', summarized.message);
       }
@@ -292,8 +332,14 @@ export class ContextPlugin extends Service implements RuntimeContextService {
       estimateContextTokens(candidate).tokens + (request.additionalTokens ?? 0) >=
       budget.hardLimit
     ) {
-      throw new RuntimeHostError(
-        'context_compaction_failed',
+      // context-prompt-12: `giveUp`, not `throw`. `TurnPreparation.skipped`
+      // promises that a compaction which cannot be completed below the hard
+      // limit leaves the run alone; an unconditional throw here turned a
+      // runaway summary into a failed `/compact` and a failed `new_context`.
+      return this.giveUp(
+        reason,
+        messages,
+        'compaction_over_budget',
         'the checkpoint stayed above the safe model context budget'
       );
     }
@@ -301,6 +347,9 @@ export class ContextPlugin extends Service implements RuntimeContextService {
     const persisted = session ? await session.appendCompaction(result) : undefined;
     const next = this.installCheckpoint(result, persisted);
     const tokensAfter = estimateContextTokens(next).tokens;
+    // The window just moved, so "you are running out of room" is false again
+    // and both tiers may fire once more (context-prompt-10).
+    this.reminders = NO_REMINDERS_CLAIMED;
     return {
       messages: next,
       compaction: {
@@ -310,7 +359,65 @@ export class ContextPlugin extends Service implements RuntimeContextService {
         tokensAfter,
         retained: result.retainedTail.length,
         summaryBytes: Buffer.byteLength(result.summary, 'utf8'),
+        ...(summaryInputDropped > 0 ? { summaryInputDropped } : {}),
         ...(result.usage ? { usage: result.usage } : {}),
+      },
+    };
+  }
+
+  /**
+   * The one degradation available when there is no new history to summarize.
+   *
+   * The context is `[summary, ...retainedTail]` and the summary already covers
+   * everything before it, so dropping the tail costs no coverage — the model
+   * loses the verbatim copy of an instruction the summary describes. Two
+   * conditions on doing it at all:
+   *
+   * - **Only at the hard limit.** Below it nothing is wrong, so a `/compact`
+   *   or a `new_context` on an already-compacted session keeps answering
+   *   "nothing to compact" rather than quietly spending the retained tail.
+   * - **Only when it works.** Persisting a checkpoint that does not get the
+   *   request under the limit would add a session entry and still fail.
+   */
+  private async shedRetainedTail(input: {
+    request: PrepareTurnRequest;
+    messages: AgentMessage[];
+    budget: ReturnType<typeof contextBudget>;
+    reason: CompactionOutcome['reason'];
+  }): Promise<TurnPreparation | undefined> {
+    const { request, messages, budget, reason } = input;
+    const checkpoint = this.checkpoint;
+    if (reason !== 'hard_limit') return undefined;
+    if (!checkpoint || messages[0] !== this.summaryMessage || messages.length < 2) return undefined;
+    const result: CompactResult = {
+      summary: checkpoint.summary,
+      tokensBefore: estimateContextTokens(messages).tokens,
+      retainedTail: [],
+      ...(checkpoint.details === undefined ? {} : { details: checkpoint.details }),
+    };
+    const candidate = [
+      createCompactionSummaryMessage(result.summary, result.tokensBefore, Date.now()),
+    ];
+    if (
+      estimateContextTokens(candidate).tokens + (request.additionalTokens ?? 0) >=
+      budget.hardLimit
+    ) {
+      return undefined;
+    }
+    const session = this.ctx.get(SESSION_SERVICE);
+    const persisted = session ? await session.appendCompaction(result) : undefined;
+    const next = this.installCheckpoint(result, persisted);
+    this.reminders = NO_REMINDERS_CLAIMED;
+    return {
+      messages: next,
+      compaction: {
+        reason,
+        family: this.family,
+        tokensBefore: result.tokensBefore,
+        tokensAfter: estimateContextTokens(next).tokens,
+        retained: 0,
+        summaryBytes: Buffer.byteLength(result.summary, 'utf8'),
+        shedRetainedTail: true,
       },
     };
   }
@@ -377,7 +484,7 @@ export class ContextPlugin extends Service implements RuntimeContextService {
   private entriesFor(messages: AgentMessage[]): Entry[] {
     const checkpoint = this.checkpoint;
     if (!checkpoint || messages[0] !== this.summaryMessage) return toMessageEntries(messages);
-    const rest = messages.slice(1 + checkpoint.retainedTail.length);
+    const rest = messages.slice(1 + retainedTailLength(messages, checkpoint.retainedTail));
     return [
       checkpoint,
       ...toMessageEntries(rest, {
@@ -392,15 +499,47 @@ export class ContextPlugin extends Service implements RuntimeContextService {
     reason: CompactionOutcome['reason'],
     messages: AgentMessage[],
     code: string,
-    message: string
+    message: string,
+    /** Error code when the hard limit makes this fatal. */
+    errorCode = 'context_compaction_failed'
   ): TurnPreparation {
-    if (reason === 'hard_limit') throw new RuntimeHostError('context_compaction_failed', message);
+    if (reason === 'hard_limit') throw new RuntimeHostError(errorCode, message);
     return { messages, skipped: { code, message } };
   }
+}
+
+/**
+ * How many of the messages after the summary are the checkpoint's retained tail.
+ *
+ * context-prompt-08: counting `checkpoint.retainedTail.length` assumes the two
+ * lists were filtered the same way, and they are not — `JsonlSessionStore`
+ * drops failed assistant messages from the context it hands back but not from
+ * the entry's own tail, and D6 requires reading checkpoints written by the pi
+ * CLI, whose tail can contain exactly such a message. One extra entry in the
+ * stored tail made the slice eat the first real message after the checkpoint,
+ * which then reached neither the summary nor the retained tail.
+ *
+ * Matched on role and timestamp, the same identity `JsonlSessionStore`'s own
+ * compaction anchor uses (session-03): a truncated copy of a message keeps both.
+ */
+function retainedTailLength(
+  messages: readonly AgentMessage[],
+  retainedTail: readonly AgentMessage[]
+): number {
+  let carried = 0;
+  for (const stored of retainedTail) {
+    const candidate = messages[1 + carried];
+    if (!candidate) break;
+    // A stored entry with no match here is one the snapshot filtered out;
+    // skipping it keeps the remaining pairs aligned instead of shifting every
+    // one of them by the number of dropped entries.
+    if (candidate.role === stored.role && candidate.timestamp === stored.timestamp) carried += 1;
+  }
+  return carried;
 }
 
 function reminderMessage(text: string): AgentMessage {
   // Provider conversion uses role=user; checkpoint retention keeps the
   // internal role so this reminder cannot replace the user's active task.
-  return createCustomMessage('context-budget', text, false, undefined, Date.now());
+  return createCustomMessage(CONTEXT_BUDGET_CHANNEL, text, false, undefined, Date.now());
 }

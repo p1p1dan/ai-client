@@ -22,6 +22,7 @@ import {
   PROMPT_SLOTS,
   type PromptSegment,
 } from '../plugins/prompt/segments.ts';
+import { toolSegments } from '../plugins/tools/prompt.ts';
 
 describe('prompt slot table', () => {
   it('has unique slot ids', () => {
@@ -112,5 +113,60 @@ describe('composeSystemPrompt', () => {
   it('composes nothing from no contributions', () => {
     const composed = composeSystemPrompt([]);
     expect(composed).toEqual({ text: '', segments: [], bytes: 0, staticPrefixBytes: 0 });
+  });
+
+  it('counts only the leading static system-prompt segments in staticPrefixBytes', () => {
+    // context-prompt-16. The number used to be described as "the floor of what
+    // a provider could serve from cache", which it is not: the tool DEFINITIONS
+    // sit ahead of the system prompt in the request and change with the mode,
+    // so a stable number here says nothing about the cache on its own. What it
+    // does mean — bytes of system prompt that never vary within a build — is
+    // what this pins, including that a session or turn slot never counts even
+    // when the static ones are all present.
+    const statics: PromptSegment[] = [
+      { slot: 'identity', text: 'IDENT' },
+      { slot: 'collaboration', text: 'COLLAB' },
+    ];
+    const bare = composeSystemPrompt(statics);
+    const withLater = composeSystemPrompt([
+      ...statics,
+      { slot: 'project-instructions', text: 'PROJECT' },
+      { slot: 'mode', text: 'MODE' },
+    ]);
+    expect(bare.staticPrefixBytes).toBe(bare.bytes);
+    expect(withLater.staticPrefixBytes).toBe(bare.bytes);
+    expect(withLater.bytes).toBeGreaterThan(withLater.staticPrefixBytes);
+  });
+});
+
+describe('tool guidance', () => {
+  /** Exactly the names `plugins/tools/index.ts` registers. */
+  const REGISTERED = ['read', 'write', 'edit', 'bash', 'glob', 'grep'];
+
+  it('names every tool the way the registry spells it', () => {
+    // context-prompt-14. The block wrote `Read`, `Edit` and `Bash` next to a
+    // correctly lower-cased `glob`/`grep`, inviting the model to call a name
+    // the registry does not have and lose a turn to the miss. This block is in
+    // the cached prefix, so the invitation was in every request of every run.
+    const guidance = toolSegments().find((segment) => segment.slot === 'tool-guidance');
+    expect(guidance).toBeDefined();
+    for (const name of REGISTERED) {
+      const capitalized = `${name[0].toUpperCase()}${name.slice(1)}`;
+      expect(guidance?.text).not.toMatch(new RegExp(`\\b${capitalized}\\b`));
+    }
+    expect(guidance?.text).toContain('read');
+    expect(guidance?.text).toContain('edit');
+    expect(guidance?.text).toContain('bash');
+  });
+
+  it('never states that a write-capable tool exists', () => {
+    // Plan mode removes `write` and `edit` from the registry (ARD D14), and
+    // this text is in the `static` band, so it cannot know which mode is
+    // active. Every mention has to be conditional; the `mode` segment is where
+    // the authoritative statement lives.
+    const guidance = toolSegments().find((segment) => segment.slot === 'tool-guidance');
+    expect(guidance?.text).toContain('When edit is available');
+    expect(guidance?.text).toContain('whichever of read, write and edit are available');
+    expect(guidance?.text).not.toMatch(/Prefer the available read\/write\/edit tools/);
   });
 });

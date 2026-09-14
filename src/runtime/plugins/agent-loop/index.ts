@@ -27,7 +27,7 @@ import {
 } from '../../contracts.ts';
 import { RuntimeHostError } from '../../host/errors.ts';
 import { compactionNeeded, contextBudget } from '../context/budget.ts';
-import { CONTEXT_SERVICE } from '../context/index.ts';
+import { CONTEXT_SERVICE, type TurnPreparation } from '../context/index.ts';
 import { permissionActivityEvent } from '../permissions/activity.ts';
 import type { PermissionActivityRecord } from '../permissions/index.ts';
 import type { ComposedPrompt } from '../prompt/segments.ts';
@@ -162,7 +162,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     let systemPrompt = request.systemPrompt;
     let composed: ComposedPrompt | undefined;
     if (systemPrompt === undefined) {
-      composed = await this.ctx.runtimePrompt.compose({ targetPath: request.targetPath });
+      composed = await this.ctx.runtimePrompt.compose();
       systemPrompt = composed.text;
     }
     // Before the trace and before `startRun`: the text the model is given is the
@@ -222,6 +222,32 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // no compaction service behaves exactly as it did before P2-3.
     const context = this.ctx.get(CONTEXT_SERVICE);
     context?.beginRun(snapshot);
+    /**
+     * Every outcome of a `prepareTurn`, written the same way wherever it ran.
+     *
+     * context-prompt-11: the two call sites had drifted. The pre-run one
+     * recorded compactions and nothing else, so a reminder it injected into
+     * `agent.state.messages` — where it then rode every later request — left no
+     * line explaining where that message came from, and a compaction it asked
+     * for and did not get left none at all.
+     */
+    const noteTurnPreparation = (prepared: TurnPreparation) => {
+      if (prepared.compaction) {
+        trace.note('note', { event: 'compaction', ...prepared.compaction });
+        const summary = prepared.messages[0];
+        if (summary?.role === 'compactionSummary') projected.compaction(summary.summary);
+      }
+      if (prepared.skipped)
+        trace.note('note', { event: 'compaction_skipped', ...prepared.skipped });
+      if (prepared.reminder)
+        trace.note('note', {
+          event: 'context_reminder',
+          tier: prepared.reminder.tier,
+          names_compaction_tool: prepared.reminder.text.includes(
+            context?.compactionTool ?? '\u0000'
+          ),
+        });
+    };
     const collected = new TurnCollector();
     const toolCalls = new Set<string>();
     const delegations = this.ctx.get('runtimeSubagents')?.registry;
@@ -296,21 +322,19 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
                   : 'completed_turn',
               ...(signal ? { signal } : {}),
             });
+            noteTurnPreparation(prepared);
             if (prepared.compaction) {
-              trace.note('note', { event: 'compaction', ...prepared.compaction });
-              const summary = prepared.messages[0];
-              if (summary?.role === 'compactionSummary') projected.compaction(summary.summary);
+              // context-prompt-01. Replacing only the loop's `currentContext`
+              // leaves `agent.state.messages` holding the whole uncompacted
+              // history, and every `prompt()` rebuilds its context from THAT.
+              // The delegation resume below calls `prompt()` again inside this
+              // same run, so the window this compaction just bought was handed
+              // straight back: at best one full-size request with a missed
+              // cache prefix, at worst the overflow compaction exists to
+              // avoid. pi only re-prepares between turns of one `prompt()`
+              // call, so nothing downstream would have corrected it.
+              agent.state.messages = prepared.messages;
             }
-            if (prepared.skipped)
-              trace.note('note', { event: 'compaction_skipped', ...prepared.skipped });
-            if (prepared.reminder)
-              trace.note('note', {
-                event: 'context_reminder',
-                tier: prepared.reminder.tier,
-                names_compaction_tool: prepared.reminder.text.includes(
-                  context.compactionTool ?? '\u0000'
-                ),
-              });
             if (!prepared.compaction && !prepared.reminder) return undefined;
             return { context: { ...turn.context, messages: prepared.messages } };
           }
@@ -381,11 +405,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
             additionalTokens: incomingTokens,
             signal: request.signal,
           });
-          if (prepared.compaction) {
-            trace.note('note', { event: 'compaction', ...prepared.compaction });
-            const summary = prepared.messages[0];
-            if (summary?.role === 'compactionSummary') projected.compaction(summary.summary);
-          }
+          noteTurnPreparation(prepared);
           agent.state.messages = prepared.messages;
         }
       }

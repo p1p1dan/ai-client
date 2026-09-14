@@ -16,7 +16,6 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   type InstructionSource,
-  instructionDirectories,
   limitUtf8,
   loadInstructionChain,
   MAX_INSTRUCTION_BYTES,
@@ -48,26 +47,6 @@ function fakeSource(files: Record<string, string>, links: Record<string, string>
   return { source, calls };
 }
 
-describe('instructionDirectories', () => {
-  it('walks root first and the target directory last', () => {
-    expect(instructionDirectories(ROOT, 'src/main/app.ts')).toEqual([
-      ROOT,
-      at('src'),
-      at('src', 'main'),
-    ]);
-  });
-
-  it('is just the root when no target file is named', () => {
-    expect(instructionDirectories(ROOT)).toEqual([ROOT]);
-    expect(instructionDirectories(ROOT, '   ')).toEqual([ROOT]);
-  });
-
-  it('refuses a target that climbs out of the workspace', () => {
-    expect(instructionDirectories(ROOT, '../secrets/app.ts')).toBeUndefined();
-    expect(instructionDirectories(ROOT, '/etc/passwd')).toBeUndefined();
-  });
-});
-
 describe('limitUtf8', () => {
   it('never splits a multi-byte character', () => {
     // 中 is three bytes; a byte-wise cut at 4 would leave half of the second.
@@ -85,13 +64,31 @@ describe('limitUtf8', () => {
 });
 
 describe('loadInstructionChain', () => {
-  it('gives nested files the last word', async () => {
-    const { source } = fakeSource({
+  it('loads the workspace root only, and never walks into a subdirectory', async () => {
+    // context-prompt-03 / decision 007. The root→leaf walk was driven by a
+    // `targetPath` no caller ever supplied, so the nested order this suite used
+    // to pin was a capability the product did not have. Loading subdirectories
+    // comes back in T035 as the official on-demand rule; until then a nested
+    // file must not be read at all, and no read must be attempted for one.
+    const { source, calls } = fakeSource({
       [at('AGENTS.md')]: 'root rule',
       [at('src', 'AGENTS.md')]: 'src rule',
     });
-    const entries = await loadInstructionChain(source, { root: ROOT, targetPath: 'src/app.ts' });
-    expect(entries.map((entry) => entry.source)).toEqual(['AGENTS.md', 'src/AGENTS.md']);
+    const entries = await loadInstructionChain(source, { root: ROOT });
+    expect(entries.map((entry) => entry.source)).toEqual(['AGENTS.md']);
+    expect(calls).not.toContain(at('src', 'AGENTS.md'));
+  });
+
+  it('finds the instruction file when the workspace IS the filesystem root', async () => {
+    // context-prompt-13. `resolve('/')` keeps its trailing separator, so the
+    // old `startsWith(root + sep)` containment test built the prefix '//' and
+    // matched nothing: the symlink guard rejected a file that was plainly
+    // inside the workspace, and the whole section vanished with no diagnostic.
+    const fsRoot = resolve('/');
+    const file = join(fsRoot, 'AGENTS.md');
+    const { source } = fakeSource({ [file]: 'root-of-the-world rule' });
+    const entries = await loadInstructionChain(source, { root: fsRoot });
+    expect(entries.map((entry) => entry.content)).toEqual(['root-of-the-world rule']);
   });
 
   it('takes one file per directory, override first', async () => {
@@ -155,17 +152,17 @@ describe('loadInstructionChain', () => {
 
   it('shares one budget across the chain and stops when it runs out', async () => {
     const { source } = fakeSource({
-      [at('AGENTS.md')]: 'a'.repeat(40),
-      [at('src', 'AGENTS.md')]: 'b'.repeat(40),
+      '/g/AGENTS.md': 'a'.repeat(40),
+      [at('AGENTS.md')]: 'b'.repeat(40),
     });
     const entries = await loadInstructionChain(source, {
       root: ROOT,
-      targetPath: 'src/app.ts',
+      globals: [{ path: '/g/AGENTS.md', label: 'global' }],
       maxBytes: 50,
     });
     expect(entries).toHaveLength(2);
     expect(entries[0]?.content).toHaveLength(40);
-    // The second file only gets what the first left behind.
+    // The project file only gets what the global left behind.
     expect(entries[1]?.content).toHaveLength(10);
   });
 
@@ -181,13 +178,6 @@ describe('loadInstructionChain', () => {
     });
     expect(entries.map((entry) => entry.source)).toEqual(['global']);
     expect(calls).not.toContain(at('AGENTS.md'));
-  });
-
-  it('returns nothing rather than the root chain when the target escapes', async () => {
-    const { source } = fakeSource({ [at('AGENTS.md')]: 'root rule' });
-    expect(
-      await loadInstructionChain(source, { root: ROOT, targetPath: '../other/app.ts' })
-    ).toEqual([]);
   });
 
   it('defaults to the 32 KiB budget', async () => {
@@ -212,7 +202,7 @@ describe('projectInstructionsSegment', () => {
       segment?.text.indexOf('src rule') ?? -1
     );
     // Without this sentence the model has no rule for two contradicting files.
-    expect(segment?.text).toContain('take precedence');
+    expect(segment?.text).toContain('the more specific file says so itself');
     expect(segment?.text).toMatch(/## src\/AGENTS\.md/);
   });
 

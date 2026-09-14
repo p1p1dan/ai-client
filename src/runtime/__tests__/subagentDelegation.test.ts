@@ -222,10 +222,16 @@ describe('SA05 · waiting for delegations', () => {
  * "<name>" subagent`, which is exactly the framing `composeSubagentSystemPrompt`
  * writes and nothing else in the graph produces.
  */
-type ScriptStep = () => AssistantMessage | Promise<AssistantMessage>;
+type ScriptStep = (context: PiContext) => AssistantMessage | Promise<AssistantMessage>;
 
-function scriptedProvider(script: { parent: ScriptStep[]; delegate: ScriptStep[] }) {
-  const handle = fauxProvider({ provider: 'faux', models: [{ id: 'faux-p52', name: 'P52' }] });
+function scriptedProvider(
+  script: { parent: ScriptStep[]; delegate: ScriptStep[] },
+  window: { contextWindow?: number; maxTokens?: number } = {}
+) {
+  const handle = fauxProvider({
+    provider: 'faux',
+    models: [{ id: 'faux-p52', name: 'P52', ...window }],
+  });
   let parentIndex = 0;
   let delegateIndex = 0;
   const route = async (context: PiContext) => {
@@ -234,7 +240,7 @@ function scriptedProvider(script: { parent: ScriptStep[]; delegate: ScriptStep[]
     const index = isDelegate ? delegateIndex++ : parentIndex++;
     const step = steps[Math.min(index, steps.length - 1)];
     if (!step) throw new Error(`no scripted ${isDelegate ? 'delegate' : 'parent'} response`);
-    return step();
+    return step(context);
   };
   // The faux provider SHIFTS one entry per request, so a single router entry
   // would answer once and then report "no more responses queued". Seeding many
@@ -260,9 +266,10 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
 
   async function build(
     script: Parameters<typeof scriptedProvider>[0],
-    subagents: { projectInstructions?: () => Promise<string | undefined> } = {}
+    subagents: { projectInstructions?: () => Promise<string | undefined> } = {},
+    window: { contextWindow?: number; maxTokens?: number } = {}
   ): Promise<RuntimeHandle> {
-    const handle = scriptedProvider(script);
+    const handle = scriptedProvider(script, window);
     runtime = await createRuntime({
       env: {},
       providers: [handle.provider],
@@ -272,6 +279,21 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
       loop: { singleTurn: false },
     });
     return runtime;
+  }
+
+  /** Plain text of one request's messages, for asserting on what was sent. */
+  function messageTexts(context: PiContext): string[] {
+    return context.messages.map((message) => {
+      const content = (message as { content?: unknown }).content;
+      if (typeof content === 'string') return content;
+      return (Array.isArray(content) ? content : [])
+        .map((block) =>
+          (block as { type?: string }).type === 'text'
+            ? ((block as { text?: string }).text ?? '')
+            : ''
+        )
+        .join('');
+    });
   }
 
   /**
@@ -474,6 +496,100 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
     expect(record.status).toBe('truncated');
     expect(record.result?.report).toContain('turn limit');
     expect(record.result?.report).toContain('partial finding');
+  });
+
+  it("warns a delegate that is running out of context, in the parent's own wording", async () => {
+    // context-prompt-17. A delegate had no budget wiring at all — no reminder,
+    // no guard, no compaction — with up to 80 turns to spend. On a small window
+    // the very first turn boundary is already inside the reminder band, which
+    // is the point: the delegate is told while it can still act on it.
+    const delegateRequests: string[][] = [];
+    const handle = await build(
+      {
+        parent: [
+          () =>
+            fauxAssistantMessage([fauxToolCall('Task', { agent: 'explorer', task: 'x' })], {
+              stopReason: 'toolUse',
+            }),
+          () => fauxAssistantMessage('waiting'),
+          () => fauxAssistantMessage('noted'),
+        ],
+        delegate: [
+          (context) => {
+            delegateRequests.push(messageTexts(context));
+            return fauxAssistantMessage(
+              [
+                { type: 'text', text: 'looked around' },
+                fauxToolCall('read', { path: 'nope.txt' }, { id: 'r1' }),
+              ],
+              { stopReason: 'toolUse' }
+            );
+          },
+          (context) => {
+            delegateRequests.push(messageTexts(context));
+            return fauxAssistantMessage('DELEGATE-REPORT');
+          },
+        ],
+      },
+      {},
+      { contextWindow: 8_000, maxTokens: 1_000 }
+    );
+    await handle.run({ prompt: 'go' });
+    const record = handle.ctx.runtimeSubagents.registry.all()[0];
+    expect(record.status).toBe('completed');
+    expect(delegateRequests).toHaveLength(2);
+    // The first request predates any boundary, so it carries no reminder; the
+    // second does, and it is the same `<context_budget>` block the parent uses.
+    expect(delegateRequests[0].join('\n')).not.toContain('<context_budget>');
+    expect(delegateRequests[1].join('\n')).toContain('<context_budget>');
+  });
+
+  it('stops a delegate at the hard limit instead of sending the request that cannot be served', async () => {
+    // context-prompt-17, the other half. A delegate cannot compact — a
+    // checkpoint is a session-level object and a delegate has no session — so
+    // the guard has to end it while it still has a report to hand back, rather
+    // than let it walk into a provider-side context overflow whose only trace
+    // is one line of failure text in the parent's context.
+    const big = join(workspace, 'big.txt');
+    await writeFile(big, 'x'.repeat(200_000), 'utf8');
+    let delegateTurn = 0;
+    const handle = await build(
+      {
+        parent: [
+          () =>
+            fauxAssistantMessage([fauxToolCall('Task', { agent: 'explorer', task: 'x' })], {
+              stopReason: 'toolUse',
+            }),
+          () => fauxAssistantMessage('waiting'),
+          () => fauxAssistantMessage('noted the truncation'),
+        ],
+        delegate: [
+          () => {
+            delegateTurn += 1;
+            if (delegateTurn === 1)
+              return fauxAssistantMessage(
+                [
+                  { type: 'text', text: 'PARTIAL-FINDING: the config lives in big.txt' },
+                  fauxToolCall('read', { path: big }, { id: 'r1' }),
+                ],
+                { stopReason: 'toolUse' }
+              );
+            return fauxAssistantMessage('should never be reached');
+          },
+        ],
+      },
+      {},
+      { contextWindow: 8_000, maxTokens: 1_000 }
+    );
+    await handle.run({ prompt: 'go' });
+    const record = handle.ctx.runtimeSubagents.registry.all()[0];
+    expect(record.status).toBe('truncated');
+    // Named for what actually ran out, not for the turn cap it never reached.
+    expect(record.result?.report).toContain('ran out of context window');
+    expect(record.result?.report).not.toContain('turn limit');
+    // Whatever it did find still reaches the parent.
+    expect(record.result?.report).toContain('PARTIAL-FINDING');
+    expect(delegateTurn).toBe(1);
   });
 
   it('offers no delegation at all in plan mode', async () => {

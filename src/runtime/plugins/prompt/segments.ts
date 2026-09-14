@@ -116,10 +116,22 @@ export interface ComposedPrompt {
   /**
    * Byte length of the leading run of `static` segments, separator included.
    *
-   * This is the part of the prompt that is identical across every session on a
-   * given build, so it is the floor of what a provider could serve from cache.
-   * Recorded per run so P2-7's prefix-stability measurement has a number to
-   * compare without re-deriving the assembly.
+   * Scope is the SYSTEM PROMPT, and only it (context-prompt-16). This used to
+   * be described as "the floor of what a provider could serve from cache",
+   * which it is not: an anthropic-messages request puts the tool definitions
+   * before the system prompt, and that set changes with the mode (plan filters
+   * out the write-capable tools) and with whatever MCP and skills registered.
+   * When the tools change, every byte after them — this prefix included — is a
+   * cache miss too, so a stable number here says nothing about the cache on its
+   * own.
+   *
+   * What it does say is how much of the system prompt is identical across every
+   * session on a given build, which is what the slot table's static band is
+   * for and what `__tests__/promptService.test.ts` pins across a mode switch.
+   * A real cacheable-prefix measurement has to include the serialized tool
+   * definitions; that is `plugins/context/prefixStability.ts`'s `kind: 'tool'`
+   * entries, and it has no caller yet (ARD D9 keeps the offline metric
+   * optional, the gate being the provider's own reported hit rate).
    */
   staticPrefixBytes: number;
 }

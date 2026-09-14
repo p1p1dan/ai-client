@@ -239,8 +239,6 @@ export interface RuntimeRunRequest {
   attemptId?: string;
   /** Explicit override for fixed probes; omitted uses runtimePrompt assembly. */
   systemPrompt?: string;
-  /** Workspace-relative file whose directory chain supplies project rules. */
-  targetPath?: string;
   model?: RuntimeModelRef;
   thinkingLevel?: ThinkingLevel;
   runId?: string;
@@ -286,7 +284,7 @@ export interface AgentLoopService {
 }
 
 export interface RuntimePromptService {
-  compose(request?: { targetPath?: string }): Promise<ComposedPrompt>;
+  compose(): Promise<ComposedPrompt>;
 }
 
 /**

@@ -28,7 +28,19 @@
  *    D328). Carrying dead timer code that reads `idleTimeoutSeconds` into a new
  *    file would be an invitation to "fix" it back on. The definition fields are
  *    still parsed; nothing here arms a timer.
- * 3. **Retry reuses the parent's budget layer** (`agent-loop/providerRetry.ts`),
+ * 3. **The context budget is a GUARD, not compaction.** context-prompt-17: a
+ *    delegate had no window management at all, so an explore-shaped delegation
+ *    reading its way through a directory simply ran into the provider's context
+ *    limit and came back as one line of failure. It now shares the parent's
+ *    thresholds (`plugins/context/budget.ts`) and the parent's two-tier
+ *    reminder wording, and stops itself at the hard limit instead of issuing
+ *    the request that cannot be served. It does NOT compact: a checkpoint is a
+ *    session-level object (it is persisted, it owns a summary identity, the
+ *    next run replays it) and a delegate has no session of its own, so giving
+ *    it `ContextPlugin` would write the parent's checkpoint chain from a
+ *    conversation the parent never sees. The remaining gap is recorded on the
+ *    plan board rather than papered over here.
+ * 4. **Retry reuses the parent's budget layer** (`agent-loop/providerRetry.ts`),
  *    which is itself the port of the reference's `provider-retry.ts`. Our ladder
  *    is 3s/10s/30s with three retries per budget, per the 2026-09-11 user
  *    ruling — deliberately not the reference's 5/4, because that ruling
@@ -44,8 +56,11 @@ import {
   type AfterToolCallResult,
   Agent,
   type AgentEvent,
+  type AgentMessage,
   type AgentTool,
   convertToLlm,
+  createCustomMessage,
+  estimateContextTokens,
   type ThinkingLevel,
 } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Usage } from '@earendil-works/pi-ai';
@@ -62,6 +77,14 @@ import {
   providerRateLimitDelayMs,
   providerSetupRetryDelayMs,
 } from '../agent-loop/providerRetry.ts';
+import {
+  CONTEXT_BUDGET_CHANNEL,
+  compactionNeeded,
+  contextBudget,
+  NO_REMINDERS_CLAIMED,
+  type ReminderState,
+  selectReminder,
+} from '../context/budget.ts';
 
 /**
  * The report is the only thing that enters the parent's context; keep it from
@@ -84,6 +107,9 @@ export type SubagentRunStatus =
   | 'stopped'
   | 'truncated'
   | 'timed_out';
+
+/** What ran out: the delegate's turn allowance, or its context window. */
+type TruncationReason = 'turns' | 'context';
 
 export interface SubagentRunResult {
   agentName: string;
@@ -193,7 +219,10 @@ export class SubagentRun {
   private turns = 0;
   private toolCalls = 0;
   private usage?: Usage;
-  private cappedTurns = false;
+  /** Set once something stopped the delegate early; decides what the report says. */
+  private truncationReason?: TruncationReason;
+  /** This delegate's own claims. Never the parent's: they are different windows. */
+  private reminders: ReminderState = NO_REMINDERS_CLAIMED;
   private streamError?: { code: string; message: string };
   /** A stream failure that claimed a retry and is waiting to be re-asked. */
   private pendingRetry?: { error: ClassifiedProviderError; attempt: number };
@@ -233,6 +262,13 @@ export class SubagentRun {
       // A delegate is a worker, not a fan-out point: its own tool calls run one
       // at a time, and it has no Task tool to nest further.
       toolExecution: 'sequential',
+      // The same place the parent loop reads the window: after the completed
+      // turn's tool results are in, before the next request is built.
+      prepareNextTurnWithContext: async (turn) => {
+        const reminder = this.budgetReminder(turn.context.messages);
+        if (!reminder) return undefined;
+        return { context: { ...turn.context, messages: [...turn.context.messages, reminder] } };
+      },
     });
     this.agent.subscribe((event) => this.handleEvent(event));
   }
@@ -268,7 +304,7 @@ export class SubagentRun {
     if (thrown)
       return this.result('failed', '', { code: 'delegate_threw', message: thrown.message });
     if (this.streamError) return this.result('failed', '', this.streamError);
-    if (this.cappedTurns) return this.result('truncated', this.lastReportText);
+    if (this.truncationReason) return this.result('truncated', this.lastReportText);
     if (!this.lastReportText.trim()) {
       // A delegate that produced no text did not do the job, whatever its stop
       // reason says: the report IS the deliverable.
@@ -325,13 +361,47 @@ export class SubagentRun {
     const parent = this.options.resolveToolOutcome?.(context);
     const { maxTurns } = this.options.definition;
     const capped = maxTurns !== undefined && this.turns >= maxTurns;
-    if (capped) this.cappedTurns = true;
-    const terminate = parent?.terminate === true || capped;
+    if (capped) this.truncationReason ??= 'turns';
+    // The hard limit is checked HERE rather than at the turn boundary because
+    // this is the only hook that can stop the loop: `prepareNextTurnWithContext`
+    // can rewrite the next request but cannot decline to make it, and the
+    // request it would make at this point is the one the provider refuses. The
+    // result about to be appended is counted in, since it is the growth that
+    // usually crosses the line.
+    if (!this.truncationReason && this.overHardLimit(context)) this.truncationReason = 'context';
+    const terminate = parent?.terminate === true || this.truncationReason !== undefined;
     if (!parent?.isError && !terminate) return undefined;
     return {
       ...(parent?.isError ? { isError: true } : {}),
       ...(terminate ? { terminate: true } : {}),
     };
+  }
+
+  /** Would the next request be built on a context already past the safe limit? */
+  private overHardLimit(context: AfterToolCallContext): boolean {
+    const pending = estimateContextTokens([
+      ...context.context.messages,
+      { role: 'toolResult', content: context.result.content, timestamp: Date.now() },
+    ] as AgentMessage[]).tokens;
+    return compactionNeeded(contextBudget(this.options.model.model, pending));
+  }
+
+  /**
+   * The parent's two-tier warning, claimed per delegate.
+   *
+   * Carried as a trailing message and never written into `state.messages`, for
+   * the reason the parent loop has: the reminder is about THIS request, and a
+   * copy that outlived it would ride every later one.
+   */
+  private budgetReminder(messages: readonly AgentMessage[]): AgentMessage | undefined {
+    const budget = contextBudget(
+      this.options.model.model,
+      estimateContextTokens([...messages]).tokens
+    );
+    const decision = selectReminder(budget, this.reminders);
+    if (!decision) return undefined;
+    this.reminders = decision.state;
+    return createCustomMessage(CONTEXT_BUDGET_CHANNEL, decision.text, false, undefined, Date.now());
   }
 
   private emit(event: AgentEvent): void {
@@ -417,7 +487,8 @@ export class SubagentRun {
       body,
       this.turns,
       this.options.definition.maxTurns,
-      error
+      error,
+      this.truncationReason
     );
     return {
       agentName: name,
@@ -444,7 +515,8 @@ function describeOutcome(
   body: string,
   turns: number,
   maxTurns: number | undefined,
-  error?: { code: string; message: string }
+  error?: { code: string; message: string },
+  truncation?: TruncationReason
 ): string {
   if (status === 'completed') return body;
   const withBody = (lead: string, label: string): string =>
@@ -452,7 +524,9 @@ function describeOutcome(
   switch (status) {
     case 'truncated':
       return withBody(
-        `The ${name} subagent hit its ${maxTurns ?? 'configured'}-turn limit before finishing.`,
+        truncation === 'context'
+          ? `The ${name} subagent ran out of context window after ${turns} turn(s) and was stopped before finishing. Delegating a narrower task is more likely to succeed than repeating this one.`
+          : `The ${name} subagent hit its ${maxTurns ?? 'configured'}-turn limit before finishing.`,
         'Its last report was:'
       );
     case 'aborted':

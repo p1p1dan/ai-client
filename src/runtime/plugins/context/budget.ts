@@ -39,9 +39,18 @@
 export const COMPACTION_RESERVE_FLOOR_TOKENS = 16_384;
 
 /**
- * Retained-tail target as a share of the safe budget, bounded so a 32K window
- * still keeps a usable tail and a 1M window does not carry the whole session
- * forward.
+ * Cut-point hint handed to pi's `prepareCompaction`, as a share of the safe
+ * budget and bounded so a 32K window still keeps a usable tail and a 1M window
+ * does not carry the whole session forward.
+ *
+ * NOT the control on what this runtime retains, despite the name pi gives it
+ * (context-prompt-02). `plugins/context/compaction.ts` merges pi's three
+ * ranges into one summarized range and rebuilds the retained tail from the
+ * latest user message, and it now recomputes `fileOps` over that merged range
+ * too — so where pi puts its cut point no longer changes what survives a
+ * checkpoint or what its details record. It stays because `prepareCompaction`
+ * requires a value, and the value should still be window-proportional in case
+ * that merge is ever undone.
  */
 export const COMPACTION_KEEP_RECENT_RATIO = 0.2;
 export const COMPACTION_MIN_KEEP_RECENT_TOKENS = 8_000;
@@ -65,6 +74,24 @@ export const CONTEXT_FALLBACK_REMINDER_TOKENS = 2_000;
 /** Used when a catalog entry declares no window. Same defaults PI-Desktop falls back to. */
 export const DEFAULT_CONTEXT_WINDOW = 128_000;
 export const DEFAULT_MAX_TOKENS = 8_192;
+
+/**
+ * Allowance for the summarization prompt's own template.
+ *
+ * pi wraps the serialized conversation in `<conversation>` plus one of two
+ * instruction blocks of roughly 1.5 KiB; 512 tokens covers either with room to
+ * spare, and over-reserving here only costs a little summary fidelity.
+ */
+export const SUMMARY_PROMPT_OVERHEAD_TOKENS = 512;
+
+/**
+ * Custom-message channel the budget reminder is carried on.
+ *
+ * Named here, next to the wording, because two loops now send it — the session
+ * loop and each delegate (context-prompt-17) — and a channel that drifted
+ * between them would quietly stop being recognisable as a reminder.
+ */
+export const CONTEXT_BUDGET_CHANNEL = 'context-budget';
 
 export interface ModelWindow {
   /** Total context window of the active model, in tokens. */
@@ -132,6 +159,22 @@ export function retainedUserMessageBudget(budget: ContextBudget): number {
   );
 }
 
+/**
+ * Tokens the summarization request's `<conversation>` block may occupy.
+ *
+ * The same `hardLimit` the conversation itself is held to, less the prompt
+ * template and the previous summary that ride along with it. Sized that way so
+ * the request plus the output it reserves (pi uses `0.8 * requestHeadroom`)
+ * still fits the window — which is exactly what the unbounded version did not
+ * guarantee once a single turn overshot the limit (context-prompt-05).
+ */
+export function summaryInputBudget(budget: ContextBudget, previousSummaryTokens = 0): number {
+  return Math.max(
+    1,
+    budget.hardLimit - SUMMARY_PROMPT_OVERHEAD_TOKENS - Math.max(0, previousSummaryTokens)
+  );
+}
+
 /** Tokens left before the hard limit. Never negative — past the limit reads as 0. */
 export function remainingTokens(budget: ContextBudget): number {
   return Math.max(0, budget.hardLimit - budget.tokens);
@@ -154,6 +197,12 @@ export type ReminderTier = 'approaching' | 'at-limit';
  * on the runtime instance, and a module-level flag would leak between two
  * sessions running in the same worker — which is exactly the topology ARD D10
  * puts subagents into.
+ *
+ * "Session" is now literal (context-prompt-10). The holder used to clear this
+ * at the top of every run, which made a conversation parked inside the
+ * reminder band tell the model to start wrapping up on every single message.
+ * The only reset is a successful compaction, because that is the one event
+ * after which "you are running out of room" becomes false again.
  */
 export interface ReminderState {
   approachingClaimed: boolean;
@@ -175,9 +224,9 @@ export interface ReminderDecision {
 /**
  * Decide whether this request carries a budget warning.
  *
- * Each tier fires once per session, and reaching the second tier marks the
- * first as spent — a "you have room to wrap up" notice after "you are out of
- * room" would be noise.
+ * Each tier fires once per session (until a compaction resets the state), and
+ * reaching the second tier marks the first as spent — a "you have room to wrap
+ * up" notice after "you are out of room" would be noise.
  */
 export function selectReminder(
   budget: ContextBudget,

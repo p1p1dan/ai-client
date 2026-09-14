@@ -29,10 +29,11 @@
  * summary covering it.
  */
 
-import type { MessageEntry } from '@earendil-works/pi-agent-core';
+import type { FileOperations, MessageEntry } from '@earendil-works/pi-agent-core';
 import {
   type AgentMessage,
   type CompactionPreparation,
+  estimateContextTokens,
   estimateTokens,
 } from '@earendil-works/pi-agent-core';
 import type { UserMessage } from '@earendil-works/pi-ai';
@@ -54,21 +55,30 @@ export const CONTEXT_ROLLOVER_SUMMARY = [
 export const CHECKPOINT_TRUNCATION_MARKER =
   '\n\n[... truncated for the context checkpoint ...]\n\n';
 
+/**
+ * Marker for content shortened so the SUMMARY REQUEST fits, which is a
+ * different event from shortening the retained tail and has to read as one:
+ * the checkpoint marker would tell the model its instruction was clipped when
+ * what was clipped is the summarizer's own input.
+ */
+export const SUMMARY_TRUNCATION_MARKER =
+  '\n\n[... truncated to fit the summarization request ...]\n\n';
+
 /** Whether the boundary falls inside a turn the model is still working through. */
 export type RetentionMode = 'active_turn' | 'completed_turn';
 
 /** Keep the head and a smaller tail, so both the instruction and its ending survive. */
-export function truncateTextForCheckpoint(text: string, maxChars: number): string {
+export function truncateTextForCheckpoint(
+  text: string,
+  maxChars: number,
+  marker: string = CHECKPOINT_TRUNCATION_MARKER
+): string {
   if (text.length <= maxChars) return text;
-  if (maxChars <= CHECKPOINT_TRUNCATION_MARKER.length) {
-    return CHECKPOINT_TRUNCATION_MARKER.trim().slice(0, maxChars);
-  }
-  const retainedChars = maxChars - CHECKPOINT_TRUNCATION_MARKER.length;
+  if (maxChars <= marker.length) return marker.trim().slice(0, maxChars);
+  const retainedChars = maxChars - marker.length;
   const headChars = Math.ceil(retainedChars * 0.75);
   const tailChars = retainedChars - headChars;
-  return `${text.slice(0, headChars)}${CHECKPOINT_TRUNCATION_MARKER}${
-    tailChars > 0 ? text.slice(-tailChars) : ''
-  }`;
+  return `${text.slice(0, headChars)}${marker}${tailChars > 0 ? text.slice(-tailChars) : ''}`;
 }
 
 /**
@@ -132,11 +142,18 @@ export function shapeForCheckpoint(
   retainedUserTokens: number,
   retentionMode: RetentionMode
 ): CompactionPreparation {
-  const messagesToSummarize = [
-    ...preparation.messagesToSummarize,
-    ...preparation.turnPrefixMessages,
-    ...preparation.retainedTail,
-  ];
+  const merged = [...preparation.turnPrefixMessages, ...preparation.retainedTail];
+  const messagesToSummarize = [...preparation.messagesToSummarize, ...merged];
+  // context-prompt-02: pi extracted `fileOps` from the messages BEFORE its own
+  // cut point, because everything after it was going to stay in the context.
+  // Merging those messages into the summarized range means they leave the
+  // context too, so the files they touched have to reach the checkpoint's
+  // details as well — otherwise the model is told, right after editing them,
+  // that it never touched them. The accumulator is cloned rather than mutated:
+  // pi seeded it from the previous checkpoint's details, and this module is
+  // pure by construction.
+  const fileOps = cloneFileOps(preparation.fileOps);
+  for (const message of merged) addFileOps(message, fileOps);
   const latestUser = messagesToSummarize
     // A delegation report the runtime fed back is stored as a user message.
     // Retaining it here would promote it to the sole surviving instruction
@@ -155,8 +172,102 @@ export function shapeForCheckpoint(
     messagesToSummarize,
     turnPrefixMessages: [],
     isSplitTurn: false,
+    fileOps,
     retainedTail: selectRetainedUserMessages(candidates, retainedUserTokens),
   };
+}
+
+/**
+ * File operations this runtime's own tools record, by the names they are
+ * registered under (`plugins/tools/index.ts`).
+ *
+ * pi has the same extractor, but it is not part of the package's public
+ * surface, and copying twenty lines beats reaching into `dist/`. Keyed on OUR
+ * tool names on purpose: if `read`/`write`/`edit` are ever renamed, this is the
+ * file that has to be renamed with them.
+ */
+function addFileOps(message: AgentMessage, fileOps: FileOperations): void {
+  if (message.role !== 'assistant' || !Array.isArray(message.content)) return;
+  for (const block of message.content) {
+    if (block?.type !== 'toolCall') continue;
+    const path = (block.arguments as { path?: unknown } | undefined)?.path;
+    if (typeof path !== 'string' || !path) continue;
+    if (block.name === 'read') fileOps.read.add(path);
+    else if (block.name === 'write') fileOps.written.add(path);
+    else if (block.name === 'edit') fileOps.edited.add(path);
+  }
+}
+
+function cloneFileOps(fileOps: FileOperations): FileOperations {
+  return {
+    read: new Set(fileOps.read),
+    written: new Set(fileOps.written),
+    edited: new Set(fileOps.edited),
+  };
+}
+
+/**
+ * Hold the summarization request's own input to a token budget.
+ *
+ * context-prompt-05. pi bounds the summary's OUTPUT (`maxTokens`) and truncates
+ * each tool result to 2000 characters when it serializes the conversation, but
+ * nothing bounds the input as a whole: user text, assistant text and — the one
+ * that actually overshoots — tool-call ARGUMENTS are serialized verbatim. A
+ * turn that pushes the context past the window therefore produces a summary
+ * request that cannot be served, and at the hard limit that request is the only
+ * way out of the window, so failing it fails the run with no second try.
+ *
+ * Newest first, because the summary of recent work is what the next window
+ * needs most. The message that crosses the budget is truncated rather than
+ * dropped, and anything older is replaced by one line saying how much went
+ * unsummarized — a silent gap would read as "nothing happened before this".
+ */
+export function boundSummaryInput(
+  preparation: CompactionPreparation,
+  maxTokens: number
+): { preparation: CompactionPreparation; droppedMessages: number } {
+  const messages = preparation.messagesToSummarize;
+  const budget = Math.max(1, maxTokens);
+  if (messages.length === 0 || estimateContextTokens(messages).tokens <= budget) {
+    return { preparation, droppedMessages: 0 };
+  }
+  const kept: AgentMessage[] = [];
+  let remaining = budget;
+  let index = messages.length - 1;
+  for (; index >= 0; index -= 1) {
+    const message = messages[index];
+    const tokens = estimateTokens(message);
+    if (tokens <= remaining) {
+      kept.push(message);
+      remaining -= tokens;
+      continue;
+    }
+    // Only a user message can be shortened without inventing a shape: an
+    // assistant message carries toolCall blocks whose ids pair with results,
+    // and a half-written argument list is worse input than none.
+    if (message.role === 'user' && remaining > 0) {
+      kept.push({
+        ...message,
+        content: truncateTextForCheckpoint(
+          userMessageTextForCheckpoint(message),
+          remaining * 4,
+          SUMMARY_TRUNCATION_MARKER
+        ),
+      });
+      index -= 1;
+    }
+    break;
+  }
+  kept.reverse();
+  const droppedMessages = index + 1;
+  if (droppedMessages > 0) {
+    kept.unshift({
+      role: 'user',
+      content: `[${droppedMessages} earlier message(s) did not fit this summarization request and are not described below]`,
+      timestamp: messages[0]?.timestamp ?? Date.now(),
+    });
+  }
+  return { preparation: { ...preparation, messagesToSummarize: kept }, droppedMessages };
 }
 
 /**
