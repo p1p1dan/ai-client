@@ -86,6 +86,45 @@ describe('agent loop', () => {
     });
   });
 
+  it('redacts a bearer token out of a provider error before it reaches the trace or the run result (core-host-03)', async () => {
+    // pi-ai folds the raw HTTP response body into `errorMessage`; a gateway
+    // that echoes request headers back in its error body would otherwise
+    // write the credential straight into runs.jsonl (0600, but plaintext).
+    const secret = 'sk-live-verysecret-1234567890';
+    const failed = fauxAssistantMessage('', {
+      stopReason: 'error',
+      errorMessage: `502 upstream body: {"detail":"Authorization: Bearer ${secret}"}`,
+    });
+    await withRuntime(failed, async (runtime) => {
+      const result = await runtime.run({ prompt: 'say ready', systemPrompt: 'probe' });
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('[REDACTED]');
+      expect(result.error?.message).not.toContain(secret);
+      const llmStep = result.trace.steps.find((step) => step.type === 'llm');
+      const traceMessage = (llmStep?.detail as { error_message?: string } | undefined)
+        ?.error_message;
+      expect(traceMessage).toContain('[REDACTED]');
+      expect(traceMessage).not.toContain(secret);
+    });
+  });
+
+  it('caps an oversized provider error at 600 characters before it reaches the trace', async () => {
+    const failed = fauxAssistantMessage('', {
+      stopReason: 'error',
+      errorMessage: `502: ${'x'.repeat(5000)}`,
+    });
+    await withRuntime(failed, async (runtime) => {
+      const result = await runtime.run({ prompt: 'say ready', systemPrompt: 'probe' });
+      const message = result.error?.message ?? '';
+      expect(message.length).toBeLessThanOrEqual(601);
+      expect(message.endsWith('…')).toBe(true);
+      const llmStep = result.trace.steps.find((step) => step.type === 'llm');
+      const traceMessage =
+        (llmStep?.detail as { error_message?: string } | undefined)?.error_message ?? '';
+      expect(traceMessage.length).toBeLessThanOrEqual(601);
+    });
+  });
+
   it('asks for medium reasoning when the caller names no level', async () => {
     // EFFORT-1 follow-up (user decision, 2026-09-10): legacy never sends a level
     // unless the user picked one, so pi applies its own default of medium. This

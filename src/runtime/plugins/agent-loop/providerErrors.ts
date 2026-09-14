@@ -20,7 +20,7 @@ export interface ClassifiedProviderError {
 }
 
 /** Keep trace rows small; provider bodies can be huge. */
-const MAX_ERROR_MESSAGE_CHARS = 600;
+export const MAX_ERROR_MESSAGE_CHARS = 600;
 
 const NETWORK_PATTERN =
   /ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EPIPE|ENETUNREACH|EHOSTUNREACH|UND_ERR|fetch failed|socket hang up|network error|connection error|connection refused|dns/i;
@@ -36,7 +36,7 @@ const STREAM_TERMINATION_PATTERN =
 // biome-ignore lint/suspicious/noControlCharactersInRegex: matching them is the point
 const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 
-function redactSensitiveErrorText(message: string): string {
+export function redactSensitiveErrorText(message: string): string {
   return message
     .replace(/(["']?authorization["']?\s*[:=]\s*["']?\s*bearer\s+)[^\s,"'}]+/gi, '$1[REDACTED]')
     .replace(
@@ -44,6 +44,25 @@ function redactSensitiveErrorText(message: string): string {
       '$1[REDACTED]'
     )
     .replace(CONTROL_CHARACTERS, '');
+}
+
+/**
+ * Redact secrets and cap length before a provider error string reaches a
+ * trace file or a caller.
+ *
+ * `classifyProviderFailure` below is the original consumer (its retry-budget
+ * message). core-host-03 found a second, unsanitized path: the final
+ * assistant message's `errorMessage` — set directly by pi-ai's stream adapter
+ * or by this file's own retry-setup fallback — reaches the agent loop's trace
+ * and `RuntimeRunResult.error.message` without going through classification
+ * at all. Exported so the loop can sanitize that path with the exact same
+ * rule instead of a second, drifting copy of it.
+ */
+export function sanitizeProviderErrorText(message: string): string {
+  const redacted = redactSensitiveErrorText(message);
+  return redacted.length > MAX_ERROR_MESSAGE_CHARS
+    ? `${redacted.slice(0, MAX_ERROR_MESSAGE_CHARS)}…`
+    : redacted;
 }
 
 interface ErrorLike {
@@ -115,11 +134,7 @@ function extractErrorCode(error: unknown): string | number | undefined {
 export function classifyProviderFailure(error: unknown): ClassifiedProviderError {
   const rawMessage =
     typeof error === 'string' ? error : error instanceof Error ? error.message : String(error);
-  const safeMessage = redactSensitiveErrorText(rawMessage);
-  const message =
-    safeMessage.length > MAX_ERROR_MESSAGE_CHARS
-      ? `${safeMessage.slice(0, MAX_ERROR_MESSAGE_CHARS)}…`
-      : safeMessage;
+  const message = sanitizeProviderErrorText(rawMessage);
   const status = extractStatus(error, rawMessage);
   const providerCode = extractErrorCode(error);
   const details = {

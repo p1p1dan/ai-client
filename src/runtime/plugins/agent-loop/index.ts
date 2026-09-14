@@ -29,11 +29,39 @@ import { RuntimeHostError } from '../../host/errors.ts';
 import { compactionNeeded, contextBudget } from '../context/budget.ts';
 import { CONTEXT_SERVICE } from '../context/index.ts';
 import { permissionActivityEvent } from '../permissions/activity.ts';
+import type { PermissionActivityRecord } from '../permissions/index.ts';
 import type { ComposedPrompt } from '../prompt/segments.ts';
 import { PERMISSIONS_ENTRY } from '../session/legacy.ts';
 import { interruptedToolResults } from '../session/recovery.ts';
 import { preparePrompt } from './attachments.ts';
+import { sanitizeProviderErrorText } from './providerErrors.ts';
 import { createProviderRetryBudget, createProviderRetryStream } from './providerRetry.ts';
+
+/**
+ * Cap on a permission-activity preview once it reaches the trace.
+ *
+ * `ToolPermissionRequest.preview` is meant to show a person the content
+ * verbatim on the approval card, so `write` sends the whole file (up to 8
+ * MiB) and never truncates it there (permissions-12). The trace has no such
+ * reason to keep the whole thing — it exists to reconstruct what happened,
+ * not to reproduce the file — so this listener caps its own copy before
+ * `trace.note`. Matches the MCP bridge's existing preview cap
+ * (`plugins/mcp/index.ts`), so an MCP preview that already fits is never
+ * truncated a second time more aggressively than it already was.
+ */
+const MAX_TRACE_PREVIEW_CHARS = 4000;
+
+function traceSafeActivity(record: PermissionActivityRecord): PermissionActivityRecord {
+  const preview = record.request.preview;
+  if (!preview || preview.text.length <= MAX_TRACE_PREVIEW_CHARS) return record;
+  return {
+    ...record,
+    request: {
+      ...record.request,
+      preview: { ...preview, text: `${preview.text.slice(0, MAX_TRACE_PREVIEW_CHARS)}…` },
+    },
+  };
+}
 
 export interface AgentLoopConfig {
   /**
@@ -213,7 +241,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         toolCalls.has(record.request.toolCallId) ||
         (delegation !== undefined && delegations?.has(delegation.delegationId) === true);
       if (!mine) return;
-      trace.note('note', { event: `permission_${record.phase}`, ...record });
+      trace.note('note', { event: `permission_${record.phase}`, ...traceSafeActivity(record) });
       this.ctx.runtimeEvents.emit(permissionActivityEvent(sessionId, record));
     });
     let turnCount = 0;
@@ -511,7 +539,15 @@ class TurnCollector {
       text: assistantText(message),
       stopReason: message.stopReason,
       usage: message.usage ?? null,
-      ...(message.errorMessage ? { errorMessage: message.errorMessage } : {}),
+      // core-host-03: pi-ai folds raw HTTP response bodies into this field
+      // (up to 4000 chars, unredacted) before this collector ever sees it.
+      // Sanitized once here so both consumers below — the `llm` trace note
+      // and `resolveError`'s `RuntimeRunResult.error.message` — get the same
+      // redacted, capped text instead of one going through classification
+      // and the other bypassing it.
+      ...(message.errorMessage
+        ? { errorMessage: sanitizeProviderErrorText(message.errorMessage) }
+        : {}),
     });
   }
 

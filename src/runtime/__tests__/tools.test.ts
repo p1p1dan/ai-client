@@ -419,6 +419,36 @@ describe('native tools', () => {
     expect(decision?.detail).toMatchObject({ mode: 'agent', gear: 'ask' });
     expect(result.trace.version_stamp).toMatchObject({ mode: 'agent', permission_gear: 'ask' });
   });
+  it('caps a write tool permission preview before it reaches the trace (permissions-12)', async () => {
+    // The approval card is meant to show the write verbatim (up to 8 MiB), so
+    // `write` never truncates its own preview. The trace copy the agent loop's
+    // activity listener writes must cap it independently.
+    const provider = faux();
+    const bigContent = `${'A'.repeat(5000)}TAIL_MARKER`;
+    const toolMessage = fauxAssistantMessage('');
+    toolMessage.content = [
+      {
+        type: 'toolCall',
+        id: 'write-1',
+        name: 'write',
+        arguments: { path: 'big.txt', content: bigContent },
+      },
+    ];
+    toolMessage.stopReason = 'toolUse';
+    const answer = fauxAssistantMessage('done');
+    provider.setResponses([toolMessage, answer]);
+    const r = await runtime({ providers: [provider.provider], permissions: { gear: 'auto' } });
+    const result = await r.run({ prompt: 'write a big file', systemPrompt: 'Use write.' });
+    expect(result.success).toBe(true);
+    // The tool itself still got — and wrote — the full, untruncated content.
+    expect(await readFile(join(dir, 'big.txt'), 'utf8')).toBe(bigContent);
+    const decision = result.trace.steps.find((step) => step.detail.event === 'permission_decision');
+    const preview = (decision?.detail as { request?: { preview?: { text: string } } } | undefined)
+      ?.request?.preview?.text;
+    expect(preview).toBeDefined();
+    expect((preview as string).length).toBeLessThanOrEqual(4001);
+    expect(preview).not.toContain('TAIL_MARKER');
+  });
   it('preserves the baseline line 2101 pagination and reports truncation', async () => {
     await writeFile(
       join(dir, 'archive'),
