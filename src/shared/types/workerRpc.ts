@@ -6,16 +6,20 @@ import {
   type SessionAttachment,
   type SessionEffortLevel,
 } from './agentHost.ts';
-import type {
-  WorkerDiscardImportedSessionPayload,
-  WorkerDiscardImportedSessionResult,
-  WorkerImportConversationPayload,
-  WorkerImportConversationResult,
-  WorkerInspectImportedSessionPayload,
-  WorkerInspectImportedSessionResult,
-  WorkerReconcileImportedSessionPayload,
-  WorkerReconcileImportedSessionResult,
-} from './legacyImport';
+// Value import (not type-only): isLegacyImportPathSegment below is a runtime
+// check, so this file needs the explicit `.ts` suffix (see the note further
+// down about the Pi worker loading this file as source).
+import {
+  isLegacyImportPathSegment,
+  type WorkerDiscardImportedSessionPayload,
+  type WorkerDiscardImportedSessionResult,
+  type WorkerImportConversationPayload,
+  type WorkerImportConversationResult,
+  type WorkerInspectImportedSessionPayload,
+  type WorkerInspectImportedSessionResult,
+  type WorkerReconcileImportedSessionPayload,
+  type WorkerReconcileImportedSessionResult,
+} from './legacyImport.ts';
 import type { ExtensionUiResponse, PermissionDecisionId, RuntimeEvent } from './runtimeEvents';
 import {
   isRuntimePermissionSettings,
@@ -1075,7 +1079,8 @@ export function isWorkerInspectImportedSessionPayload(
   return (
     isLogicalSessionPayload(value) &&
     nonEmptyString(value.workspacePath) &&
-    nonEmptyString(value.targetPiSessionId)
+    // import-catalog-07: see the matching note on isWorkerImportConversationPayload.
+    isLegacyImportPathSegment(value.targetPiSessionId)
   );
 }
 
@@ -1093,7 +1098,8 @@ export function isWorkerReconcileImportedSessionPayload(
   return (
     isLogicalSessionPayload(value) &&
     nonEmptyString(value.workspacePath) &&
-    nonEmptyString(value.targetPiSessionId)
+    // import-catalog-07: see the matching note on isWorkerImportConversationPayload.
+    isLegacyImportPathSegment(value.targetPiSessionId)
   );
 }
 

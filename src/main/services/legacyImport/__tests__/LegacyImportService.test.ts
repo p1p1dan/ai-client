@@ -5,6 +5,7 @@ import {
   readFile,
   rename,
   rm,
+  stat,
   unlink,
   writeFile,
 } from 'node:fs/promises';
@@ -95,7 +96,11 @@ function harness(
     new LegacyImportManifest({ manifestPath, integrityKey: TEST_INTEGRITY_KEY });
   let id = 0;
   const createImport = vi.fn(async (payload: WorkerImportConversationPayload) => {
-    const finalSessionFile = path.join(root, `probe_${payload.targetPiSessionId}.jsonl`);
+    // Native naming (NativeLegacyImportWriter.fileFor): bare `${id}.jsonl`, no
+    // timestamp prefix. import-catalog-01/-11: a `probe_` prefix here used to
+    // accidentally satisfy the manifest's pi-era `_<id>.jsonl` suffix check
+    // and hide the fact that real native output never does.
+    const finalSessionFile = path.join(root, `${payload.targetPiSessionId}.jsonl`);
     await writeFile(finalSessionFile, 'native-pi-session\n', 'utf8');
     if (options.mutateSourceAfterImport) {
       await writeFile(
@@ -138,7 +143,7 @@ function harness(
     };
   });
   const inspectImport = vi.fn(async (payload: { targetPiSessionId: string }) => {
-    const candidate = path.join(root, `probe_${payload.targetPiSessionId}.jsonl`);
+    const candidate = path.join(root, `${payload.targetPiSessionId}.jsonl`);
     try {
       await import('node:fs/promises').then(({ stat }) => stat(candidate));
       return { sessionFiles: [candidate] };
@@ -202,6 +207,41 @@ describe('LegacyImportService transaction', () => {
     expect(h.createImport).toHaveBeenCalledTimes(2);
   });
 
+  it('stays deduped across a restart: publish, reload the manifest in a fresh instance, already-imported (import-catalog-01/-11)', async () => {
+    const h = harness();
+    const first = await h.service.importBatch([source]);
+    expect(first.results[0]?.status).toBe('imported');
+    expect(h.createImport).toHaveBeenCalledTimes(1);
+
+    // A brand-new LegacyImportManifest reading the same file back is what a
+    // process restart looks like. import-catalog-01: the manifest's naming
+    // check required pi's `_<id>.jsonl` suffix, but NativeLegacyImportWriter
+    // writes a bare `${id}.jsonl` — so every completed record vanished on
+    // reload, silently, and a re-import would have gone through again.
+    const reloadedManifest = new LegacyImportManifest({
+      manifestPath,
+      integrityKey: TEST_INTEGRITY_KEY,
+    });
+    const reloadedRecords = await reloadedManifest.list();
+    expect(reloadedRecords).toHaveLength(1);
+    expect(reloadedRecords[0]?.status).toBe('complete');
+    expect(reloadedRecords[0]?.dedupeKey).toBe((await h.manifest.list())[0]?.dedupeKey);
+
+    const restarted = new LegacyImportService({
+      scanner: new ClaudeSessionScanner({
+        resolveRoots: () => [{ dir: configDir, kind: 'legacy' }],
+      }),
+      manifest: reloadedManifest,
+      sessionIndex: h.index,
+      createImport: h.createImport,
+      inspectImport: h.inspectImport,
+      reconcileImport: vi.fn(async () => ({ removedFiles: 0, remainingFiles: 0 })),
+    });
+    const second = await restarted.importBatch([source]);
+    expect(second.results[0]?.status).toBe('already-imported');
+    expect(h.createImport).toHaveBeenCalledTimes(1);
+  });
+
   it('single-flights concurrent requests for the same snapshot', async () => {
     const h = harness();
     const [left, right] = await Promise.all([
@@ -210,6 +250,45 @@ describe('LegacyImportService transaction', () => {
     ]);
     expect(h.createImport).toHaveBeenCalledTimes(1);
     expect(left.results[0]?.session?.sessionId).toBe(right.results[0]?.session?.sessionId);
+  });
+
+  it('warns instead of silently dropping a manifest record that fails to parse (import-catalog-01)', async () => {
+    const manifest = new LegacyImportManifest({ manifestPath, integrityKey: TEST_INTEGRITY_KEY });
+    const record = {
+      dedupeKey: 'unparseable-key',
+      status: 'importing' as const,
+      source,
+      sourcePath: sourceFile,
+      sourceFingerprint: {
+        stableSourceIdentity: 'x',
+        contentHash: 'y',
+        size: 1,
+        mode: 0o100644,
+        mtimeMs: 1,
+      },
+      workspacePath,
+      title: 'broken',
+      logicalSessionId: 'session-broken',
+      targetPiSessionId: 'import-broken',
+      startedAt: 1,
+    };
+    await manifest.reserve(record);
+    // Matches neither the native `${id}.jsonl` nor the pi-era `_${id}.jsonl`
+    // naming — parseRecord must reject the whole record shape.
+    await manifest.updateImporting(record.dedupeKey, {
+      targetSessionFile: path.join(root, 'totally-unrelated-name.jsonl'),
+    });
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const reloaded = new LegacyImportManifest({ manifestPath, integrityKey: TEST_INTEGRITY_KEY });
+      expect(await reloaded.list()).toHaveLength(0);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('failed to parse (dedupeKey=unparseable-key)')
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it('completes an interrupted manifest when the target and index row were already committed', async () => {
@@ -280,6 +359,92 @@ describe('LegacyImportService transaction', () => {
     await recovered.reconcile();
     expect(h.index.rows.size).toBe(0);
     expect((await manifest.list())[0]?.error).toContain('Recovered and cleaned');
+  });
+
+  it('reconciles every unresolved record even when an earlier one can never be cleaned up (import-catalog-10)', async () => {
+    // Two independently-interrupted imports, reserved in this order so record
+    // A sorts first in manifest.list() (Map insertion order) — that ordering
+    // is exactly what let the old fail-closed throw inside the loop wedge B
+    // behind A forever.
+    const manifest = new LegacyImportManifest({ manifestPath, integrityKey: TEST_INTEGRITY_KEY });
+    const recordBase = {
+      source,
+      sourcePath: sourceFile,
+      sourceFingerprint: {
+        stableSourceIdentity: 'x',
+        contentHash: 'y',
+        size: 1,
+        mode: 0o100644,
+        mtimeMs: 1,
+      },
+      workspacePath,
+      title: 'interrupted',
+      startedAt: 1,
+    };
+    const recordA = {
+      ...recordBase,
+      dedupeKey: 'dedupe-a',
+      status: 'importing' as const,
+      logicalSessionId: 'session-a',
+      targetPiSessionId: 'import-a',
+    };
+    const recordB = {
+      ...recordBase,
+      dedupeKey: 'dedupe-b',
+      status: 'importing' as const,
+      logicalSessionId: 'session-b',
+      targetPiSessionId: 'import-b',
+    };
+    await manifest.reserve(recordA);
+    await manifest.reserve(recordB);
+
+    // B left an orphaned file behind (as if the process died between staging
+    // and reconcile); a working reconcile removes it.
+    const orphanB = path.join(root, `${recordB.targetPiSessionId}.jsonl`);
+    await writeFile(orphanB, 'orphaned', 'utf8');
+
+    const index = new FakeIndex();
+    const service = new LegacyImportService({
+      scanner: new ClaudeSessionScanner({
+        resolveRoots: () => [{ dir: configDir, kind: 'legacy' }],
+      }),
+      manifest,
+      sessionIndex: index,
+      createImport: async () => {
+        throw new Error('unused');
+      },
+      // A's worker inspection never comes back — permanently unresolvable.
+      inspectImport: vi.fn(async (payload: { targetPiSessionId: string }) => {
+        if (payload.targetPiSessionId === recordA.targetPiSessionId) {
+          throw new Error('worker unavailable for A');
+        }
+        try {
+          await stat(orphanB);
+          return { sessionFiles: [orphanB] };
+        } catch {
+          return { sessionFiles: [] };
+        }
+      }),
+      reconcileImport: vi.fn(async (payload: { targetPiSessionId: string }) => {
+        if (payload.targetPiSessionId === recordB.targetPiSessionId) {
+          await unlink(orphanB).catch(() => undefined);
+          return { removedFiles: 1, remainingFiles: 0 };
+        }
+        return { removedFiles: 0, remainingFiles: 0 };
+      }),
+    });
+
+    await expect(service.reconcile()).rejects.toThrow(/cleanup pending/);
+
+    const records = await manifest.list();
+    const a = records.find((record) => record.dedupeKey === 'dedupe-a');
+    const b = records.find((record) => record.dedupeKey === 'dedupe-b');
+    expect(a?.status).toBe('failed');
+    expect(a?.cleanupPending).toBe(true);
+    // The point of the fix: B is fully reconciled despite A being stuck.
+    expect(b?.status).toBe('failed');
+    expect(b?.cleanupPending).toBe(false);
+    await expect(stat(orphanB)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('cleans the target when the source changes before publish commit', async () => {

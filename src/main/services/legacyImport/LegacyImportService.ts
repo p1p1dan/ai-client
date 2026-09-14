@@ -385,8 +385,21 @@ export class LegacyImportService {
     }
   }
 
+  /**
+   * Reconciles every unresolved record, not just the first one.
+   *
+   * import-catalog-10: this used to `throw` from inside the loop, so a single
+   * record that could never be cleaned up (e.g. a persistently read-only index
+   * row) wedged every later record behind it forever — each retry replayed the
+   * list in the same order and re-failed on the same first record. Failures
+   * are now collected per record and the loop always runs to completion; the
+   * fail-closed behaviour (subsequent imports stay blocked while anything is
+   * unresolved) is preserved by throwing once, after every record had its
+   * chance to clean up.
+   */
   private async reconcileInternal(): Promise<void> {
     const records = await this.manifest.list();
+    const unresolved: string[] = [];
     for (const record of records) {
       if (
         record.status === 'complete' ||
@@ -404,9 +417,10 @@ export class LegacyImportService {
         });
         ownedFiles = inspected.sessionFiles;
       } catch (error) {
-        const message = `Import cleanup pending: worker inspection: ${errorMessage(error)}`;
-        await this.manifest.fail(record.dedupeKey, message, true);
-        throw new Error(message);
+        const detail = `worker inspection: ${errorMessage(error)}`;
+        await this.manifest.fail(record.dedupeKey, `Import cleanup pending: ${detail}`, true);
+        unresolved.push(`${record.dedupeKey}: ${detail}`);
+        continue;
       }
       const ownsFile = (candidate: string | undefined): candidate is string =>
         typeof candidate === 'string' && ownedFiles.some((owned) => sameFilePath(owned, candidate));
@@ -465,7 +479,12 @@ export class LegacyImportService {
         ? `Import cleanup pending: ${cleanupErrors.join('; ')}`
         : 'Recovered and cleaned an interrupted legacy import run';
       await this.manifest.fail(record.dedupeKey, cleanupMessage, cleanupErrors.length > 0);
-      if (cleanupErrors.length) throw new Error(cleanupMessage);
+      if (cleanupErrors.length) {
+        unresolved.push(`${record.dedupeKey}: ${cleanupErrors.join('; ')}`);
+      }
+    }
+    if (unresolved.length) {
+      throw new Error(`Import cleanup pending: ${unresolved.join('; ')}`);
     }
   }
 }

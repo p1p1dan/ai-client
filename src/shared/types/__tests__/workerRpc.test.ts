@@ -7,6 +7,8 @@ import {
   isWorkerForkResult,
   isWorkerHistoryPayload,
   isWorkerHistoryResult,
+  isWorkerInspectImportedSessionPayload,
+  isWorkerReconcileImportedSessionPayload,
   isWorkerReloadPayload,
   isWorkerReloadResult,
   isWorkerRewindPayload,
@@ -349,6 +351,43 @@ describe('worker RPC boundary guards', () => {
         },
       })
     ).toBe(true);
+  });
+
+  it('rejects a targetPiSessionId that is not a safe path segment on the import inspect/reconcile RPCs', () => {
+    // import-catalog-07: both handlers join targetPiSessionId straight into a
+    // session file path in the worker process.
+    expect(
+      isWorkerInspectImportedSessionPayload({
+        logicalSessionId: 'logical-1',
+        workspacePath: '/repo',
+        targetPiSessionId: 'import-1',
+      })
+    ).toBe(true);
+    expect(
+      isWorkerReconcileImportedSessionPayload({
+        logicalSessionId: 'logical-1',
+        workspacePath: '/repo',
+        targetPiSessionId: 'import-1',
+      })
+    ).toBe(true);
+    for (const targetPiSessionId of ['', '.', '..', '../escape', 'a/b', 'a\\b']) {
+      expect(
+        isWorkerInspectImportedSessionPayload({
+          logicalSessionId: 'logical-1',
+          workspacePath: '/repo',
+          targetPiSessionId,
+        }),
+        targetPiSessionId
+      ).toBe(false);
+      expect(
+        isWorkerReconcileImportedSessionPayload({
+          logicalSessionId: 'logical-1',
+          workspacePath: '/repo',
+          targetPiSessionId,
+        }),
+        targetPiSessionId
+      ).toBe(false);
+    }
   });
 
   it('keeps transport request identity separate from product turn identity', () => {

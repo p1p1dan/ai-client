@@ -307,7 +307,13 @@ export function isWorkerImportConversationPayload(
   return (
     isRecord(value) &&
     nonEmptyString(value.logicalSessionId) &&
-    nonEmptyString(value.targetPiSessionId) &&
+    // import-catalog-07: the worker is an isolated process that trusts its RPC
+    // payload, and NativeLegacyImportWriter.fileFor joins this id straight
+    // into a session file path. A bare non-empty check lets a `../` id escape
+    // the sessions directory; isLegacyImportPathSegment is the same guard
+    // already used to load a manifest record (LegacyImportManifest.ts) and to
+    // validate the projectId/sourceSessionId pair on the batch request.
+    isLegacyImportPathSegment(value.targetPiSessionId) &&
     isImportedConversation(value.conversation)
   );
 }

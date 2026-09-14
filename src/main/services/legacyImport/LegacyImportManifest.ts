@@ -80,6 +80,18 @@ function integrityPayload(record: LegacyImportManifestRecord): string {
   return JSON.stringify(stableValue(unsigned));
 }
 
+/**
+ * Accepts both session-file naming schemes seen in the wild: pi's writer used
+ * `${fileTimestamp}_${id}.jsonl`, the native writer (NativeLegacyImportWriter)
+ * uses a bare `${id}.jsonl`. A manifest written by either backend must still
+ * load after a restart, or every cross-restart guarantee (dedupe, interrupted
+ * cleanup) silently stops applying to whichever backend wrote the record.
+ */
+function matchesImportSessionFileName(basename: string, targetPiSessionId: unknown): boolean {
+  const id = String(targetPiSessionId);
+  return basename === `${id}.jsonl` || basename.endsWith(`_${id}.jsonl`);
+}
+
 function parseRecord(value: unknown): LegacyImportManifestRecord | null {
   if (!isRecord(value) || !isRecord(value.source) || !isRecord(value.sourceFingerprint))
     return null;
@@ -103,7 +115,10 @@ function parseRecord(value: unknown): LegacyImportManifestRecord | null {
     (value.targetSessionFile !== undefined &&
       (typeof value.targetSessionFile !== 'string' ||
         !path.isAbsolute(value.targetSessionFile) ||
-        !path.basename(value.targetSessionFile).endsWith(`_${value.targetPiSessionId}.jsonl`)))
+        !matchesImportSessionFileName(
+          path.basename(value.targetSessionFile),
+          value.targetPiSessionId
+        )))
   ) {
     return null;
   }
@@ -254,6 +269,15 @@ export class LegacyImportManifest {
             this.records.set(record.dedupeKey, record);
           } else if (record) {
             console.warn('[legacy-import] Ignored a manifest record with invalid integrity');
+          } else {
+            // parseRecord failed shape validation entirely — previously silent,
+            // which let a naming-scheme mismatch (see matchesImportSessionFileName)
+            // drop a whole record on every restart with no trace anywhere.
+            const dedupeKey =
+              isRecord(item) && typeof item.dedupeKey === 'string' ? item.dedupeKey : 'unknown';
+            console.warn(
+              `[legacy-import] Ignored a manifest record that failed to parse (dedupeKey=${dedupeKey})`
+            );
           }
         }
       }
