@@ -92,12 +92,12 @@ Runtime 任务树的功能面确实做齐了，但「完成质量」明显低于
 | P1-6 | 🟢 | 完成（小瑕疵） | timed_out 永不产出；write 覆盖显示为新增 |
 | P1-8 | ✅ | 完成（证据陈旧） | 证据落后 HEAD 94/147 个提交 |
 | P1-9 | ✅ | 完成 | 无 |
-| P2-1 | ✅ | 完成（小瑕疵） | tool-guidance 大小写 |
-| P2-2 | ✅ | 有缺口 | `run.targetPath` 无生产者（部分取舍）；目录形态 AGENTS.md 让 run 失败 |
-| P2-3 | ✅ | 有缺口 | 不回写 agent 状态、fileOps 丢失 |
-| P2-4 | ✅ | 完成（小瑕疵） | /compact 无 signal；entriesFor 切片 |
+| P2-1 | ✅ | 完成（小瑕疵） | tool-guidance 大小写。已修（T014，`2c0eb30c`） |
+| P2-2 | ✅ | 有缺口 | `run.targetPath` 无生产者（部分取舍）；目录形态 AGENTS.md 让 run 失败。已修（T014，`2c0eb30c`：targetPath 删除，分级加载归 T035） |
+| P2-3 | ✅ | 有缺口 | 不回写 agent 状态、fileOps 丢失。已修（T014，`2c0eb30c`）；子代理压缩仍不做，只有预算守卫 |
+| P2-4 | ✅ | 完成（小瑕疵） | /compact 无 signal；entriesFor 切片。已修（signal 由 T016 `a9ea7230`；切片由 T014 `2c0eb30c`） |
 | P2-7 | ✅ | 完成（D9 可选项） | 模块无运行时调用方（文档取舍） |
-| P2-8 | ✅ | 完成（小瑕疵） | per-run 而非 per-session |
+| P2-8 | ✅ | 完成（小瑕疵） | per-run 而非 per-session。已修（T014，`2c0eb30c`） |
 | P3-1 | ✅ | 有缺口 | close() 永久 reject；写锁 TOCTOU（待定）。均已修（T015，`ce2a7af8`；TOCTOU 用确定性用例证实成立） |
 | P3-2 | ✅ | 完成 | piSessionTree.ts 未被读过 |
 | P3-3 | ✅ | 完成（小瑕疵） | 旧 label 行不校验；裸 SyntaxError。已修（T015，`ce2a7af8`） |
@@ -105,10 +105,10 @@ Runtime 任务树的功能面确实做齐了，但「完成质量」明显低于
 | P3-5 | ✅ | 完成（证据不足） | NativeSessionIndexAdapter 零生产引用 |
 | P3-6 | ✅ | 完成（小瑕疵） | 关键边界无反例测试 |
 | P4-0 | ✅ | 完成 | 无 |
-| P4-1 | ✅ | 有缺口 | discardFork owned 恒失败；dispose 抛错不自退 |
+| P4-1 | ✅ | 有缺口 | discardFork owned 恒失败；dispose 抛错不自退。已修（T016，`a9ea7230`） |
 | P4-2 | ✅ | 完成 | 残留只有注释与文档 |
-| P4-3 | ✅ | 完成（小瑕疵） | reload/compact 超时预算不对称；死分支 |
-| P4-4 | ✅ | 有缺口 | effort off、compact 分叉、缺 key 重试 43 秒。缺 key 已修（T007，`780dd9c1`）；其余归 T016 |
+| P4-3 | ✅ | 完成（小瑕疵） | reload/compact 超时预算不对称；死分支。已修（T016，`a9ea7230`） |
+| P4-4 | ✅ | 有缺口 | effort off、compact 分叉、缺 key 重试 43 秒。缺 key 已修（T007，`780dd9c1`）；其余已修（T016，`a9ea7230`） |
 | P4-5 | ✅ | 有缺口 | 录制只覆盖 11 种事件；两处真实回归；工具动词表漂移 |
 | P4-6 | 🟡 | 未评估 | 现场节点 |
 | P5-1 | ✅ | 有缺口 | symlink、disable-model-invocation、YAML、skill 不过门。skill 过门已修（T002，`10581139`）；其余已修（T019，`39afacc8`） |
@@ -122,7 +122,7 @@ Runtime 任务树的功能面确实做齐了，但「完成质量」明显低于
 | P5-2-7 | 🟡 | 有缺口 | SA02/SA15/SA19 签收与代码不符；SA09 假时钟用例不存在。SA09/SA12/SA15/SA19 已标注实况（T027，`95e63960`） |
 | P5-3 | ✅ | 有缺口 | 十条 MCP 缺陷。已修（T018，`942ee464`；mcp 面权限由 T002）。resources / prompts / sampling 仍在既有豁免内 |
 | P5-4 | 🟡 | 有缺口 | 清单命名（high）、display-only 恒真、写锁旁车。清单命名与写锁旁车已修（T008，`23ac5df5` / `36389d1d`）；display-only 归 T021 |
-| P5-5 | 🟡 | 有缺口 | 钥匙串回落、两条路规则、utility 仍读明文 |
+| P5-5 | 🟡 | 有缺口 | 钥匙串回落、两条路规则、utility 仍读明文。utility 已修（T016，`a9ea7230`）；前两项归 T021 |
 | P6-1 | ✅ | 完成 | 无 |
 | P6-2 | ✅ | 完成（小瑕疵） | 守卫只认整包说明符 |
 | P6-3 | 🟡 | 第 4 条存疑 | GUI 无回归未覆盖退役改变的界面；门禁脚本不可运行（已修，T009） |

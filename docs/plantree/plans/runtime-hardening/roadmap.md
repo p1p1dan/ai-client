@@ -25,10 +25,12 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 - ✅ **T015** 会话 store 与写锁 — `ce2a7af8`（2026-09-14）。session-04/05/06/09/10/12 已修（04/05 原判待定，用确定性用例证实成立）；新增 9 条用例。取舍：写失败经 `writeFailure` 取值器观测而不进 contracts；抢占归属用原始字节比对而非 token；输掉竞争把误取的锁写回；无效 label 行丢弃而非报错。
 - ✅ **T018** MCP — `942ee464`（2026-09-14）。skills-mcp-01/02/03/04/05/06/07/14/15/16/21/24 已修；mcp.test 20→35 条，19 次反向验证。取舍：04 用字节缓冲而非 StringDecoder（一处同修 04 与 14）；注册失败记 `connection.toolErrors` 而非 `error`，保住 mcp_failed 计数与 close() 语义；工具名点号替换而非拒绝，config 服务器名校验不收窄；图片最多 8 张且文本块永不为空。resources / prompts / sampling / roots / HTTP-SSE 仍在 P5-3 既有豁免内。
 - ✅ **T019** skills 与模板 — `39afacc8`（2026-09-14）。skills-mcp-08/09/10/17/18/19/20/22/25 与决策 004 已修；skills.test 31→48 条。取舍：悬空 symlink 留诊断比 pi 上游严格；块标量报诊断不解析（模块不引 YAML）；`refresh()` 已实现但 Main 侧无调用方（触发端归 T020 / UI）；`$1` 先展开后参与后续匹配、未闭合引号跨行两条姊妹问题未列入，未动。
+- ✅ **T014** 压缩与提示词 — `2c0eb30c`（2026-09-14）。context-prompt-01/02/03/04/05/06/08/10/11/12/13/14/15/16/17 已处理（05 / 12 复核后成立）；`run.targetPath` 与 root→leaf 走法已删（决策 007），提示块措辞改为「冲突以更具体文件自述为准」；新增 21 条用例、删 3 条，15 次反向验证。取舍：hard limit 下先丢保留尾重装 checkpoint、仍不够报 `context_too_large`（不是纯 skipped）；tool-guidance 不随 mode 变（保静态前缀）；`staticPrefixBytes` 改描述不改口径；子代理只做预算守卫 + 硬上限 truncated，不做压缩（理由在 run.ts 模块注释）。`subagent/migrate.ts` 与 `shared/types/nativeSession.ts` 的同名 `targetPath` 是迁移预览目标路径，未删，后者归 T025。
+- ✅ **T016** worker 生命周期与超时 — `a9ea7230`（2026-09-14）。worker-runtime-01/02/05/06/07/09/12、rpc-projector-05/06/08/10、import-catalog-04、context-prompt-07 已修；新增 18 条用例，10 次反向验证。取舍：compact 预算用 `WORKER_COMPACT_BUDGET_MS`（worker 45 秒）< `WORKER_COMPACT_REQUEST_TIMEOUT_MS`（Main 60 秒）两个共享常量而非新增 RPC 字段；`handle.dispose()` 失败吞掉并记日志（上抛会顶掉 worker 退出路径）；reload 拆除失败只加特征化测试（worker-runtime-03 已被驳回）。`src/agent-host/worker.ts` 转交 modelCatalog 那一行无直接用例（只有 30 秒级真进程测试覆盖），由 RPC 层用例 + typecheck 保证。
 
 ## In Progress
 
-- 🔧 批次 B 第三波：T014（压缩与提示词，含删 `run.targetPath`）+ T016（worker 生命周期与超时，含 agent-host 侧 RPC 处理器）实现中。逐波记录见 [evidence/batch-b-2026-09-14.md](evidence/batch-b-2026-09-14.md)；批次 A 记录见 [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md)。
+- 🔧 批次 B 第四波：T017（事件投影与 golden 录制）+ T022（host exec 与 bootstrap）实现中。逐波记录见 [evidence/batch-b-2026-09-14.md](evidence/batch-b-2026-09-14.md)；批次 A 记录见 [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md)。
 
 ## Next
 
