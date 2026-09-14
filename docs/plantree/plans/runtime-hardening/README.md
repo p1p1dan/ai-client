@@ -1,6 +1,6 @@
 # Runtime 加固与收口
 
-Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批次 A 第一波进行中）。
+Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批次 A 已落地，批次 B 待开工）。
 
 ## 范围
 
@@ -26,6 +26,7 @@ Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批�
 |---|---|
 | [roadmap.md](roadmap.md) | 任务树 T001～T033，五个批次，Done / In Progress / Next / Deferred |
 | [open-questions.md](open-questions.md) | 修补前要拍板的问题 |
+| [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md) | 批次 A 落地记录：提交、偏离、转移项、逐波记录 |
 | [decisions/](decisions/) | 001 开第二个计划根；002 修补顺序与取舍计数规则；003 allow-session 保持会话级（答 Q003） |
 | [../runtime-evolution/evidence/runtime-audit-2026-09-14/](../runtime-evolution/evidence/runtime-audit-2026-09-14/README.md) | 审计报告、235 条发现全文、区域总评、接缝与批评者、结构化数据 |
 | [../../进度看板.md](../../进度看板.md) | 用户看板（implementation-status） |

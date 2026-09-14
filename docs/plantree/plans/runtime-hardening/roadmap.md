@@ -24,19 +24,7 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 ## In Progress
 
-- 批次 B 待开工（待用户确认派遣方案）。
-
-### 批次 A 记录
-
-- 2026-09-14 批次 A 第一波 **已提交（c4e2b2e4 / 89c73e5b / 95e63960）**：T001（bash 静态分析，shellPolicy.test 26→60 条，七类发现各有反向验证；permissions-04 改为 auto 放行加 `!unresolvedPaths` 条件而非整行下移，避免顺带改动 scope/grants 语义；here-string 字面量按审计要求登记为路径，属保守取舍；PERM-1 探针需真机与真实模型，留到批次 E）、T009（两脚本只剩 native lane，`report.stamp.backend` 改读 trace 自证；CI workflow 无需改）、T027 两件机械回写（signoff SA09/SA12/SA15/SA19、P5-2-5 标注）。全量 397 文件 / 5644 测试、三套 tsc、Biome 通过。
-- 2026-09-14 批次 A 第二波 **已提交（0332214c / 4e80f9ff / 06ea395d）**：
-  - T003：CLI 行不计入我方 seq 空间，对老文件保留「不超过此前 CLI 行数」的兼容额度；紧跟 CLI 行之后一行豁免一次 lane 链校验（审计未提、同一缺陷的另一面）；TUI 退出（含 pi 自行退出）无条件 reload，靠记录「终端可能写过的会话」；send / compact / rewind 共用「释放 → 过闸 → reload」；`assertHostPromptAllowed` 改为按会话键判断（无参会误伤切会话发送，与审计建议不同）；compactionAnchor 从 retainedTail 按 role+timestamp 反查，查不到不写锚点。Q005 结案：session-02 用真实 SessionManager 证明可达并修「CLI 打开未再写」形态，中段坏行形态记 Q008。
-  - T004：admit 后整段 try/catch（`delegation_start_failed`）；drain 30 秒兜底（`delegation_drain_timeout`，强制 settle 为 timed_out）；TaskStop 对已完成目标把报告放进返回文本；prune 只淘汰已交付项；cancelReason 单一真相源区分 stopped / timed_out 并带 lastReportText。顺带让 `subagents.projectInstructions` 选项真正生效。
-  - T005：交回消息打 `aiclientInternal` 标记（`src/shared/internalMessage.ts`），projector 不铸用户气泡、重开不当最新用户任务、compaction 的 latestUser 排除它（额外一条，契约 §3 明写）；权限活动过滤放宽为父调用或已登记委派，payload 带 delegationId / agentName，授权语义按决策 003 不变；新增独立 golden 录制 `nativeGuiSubagentEventStream.json`（28 条），原录制未重录。渲染层只补类型，归属展示留 UI 批次。
-  - 全量 398 文件 / 5680 测试、三套 tsc、Biome 通过。
-- 2026-09-14 批次 A 第三波 **已提交（10581139 / d71eb2ec）**：全量 398 文件 / 5694 测试、三套 tsc 通过；Biome 仅剩 questionCardModel.test 一条 HEAD 已有的 suppressions/unused 警告。
-- 2026-09-14 批次 A 第四波 **已提交（780dd9c1 / 1262e3b0）**：全量 398 文件 / 5708 测试、三套 tsc、Biome 通过。
-- 2026-09-14 批次 A 第五波 **已提交（b714a925 / 23ac5df5）**：全量 398 文件 / 5716 测试、三套 tsc、Biome 通过。残项 import-catalog-09 已提交 `36389d1d`（全量 398 / 5718 通过）。**批次 A 全部落地。**
+（空）— 批次 A 全部落地，批次 B 在新对话开工。逐波记录见 [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md)。
 
 ## Next
 
