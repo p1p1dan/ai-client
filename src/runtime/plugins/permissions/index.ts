@@ -247,7 +247,11 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     );
     if (matches.some((scope) => scope.action === 'deny')) return 'deny';
     const gear = this.gearFor(request);
-    if (gear === 'auto') return 'allow';
+    // An operand the shell analysis could not read has passed no path, scope or
+    // deny judgement at all, so no gear may wave it through: `auto` has to fall
+    // to the `unresolvedPaths` check below. A session grant for this exact
+    // command still applies, which is why the check stays after `grants`.
+    if (gear === 'auto' && !request.unresolvedPaths) return 'allow';
     if (matches.some((scope) => scope.action === 'ask'))
       return this.grants.has(grantKey(request)) ? 'allow' : 'ask';
     if (

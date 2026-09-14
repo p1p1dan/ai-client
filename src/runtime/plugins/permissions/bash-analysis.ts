@@ -18,6 +18,70 @@ interface ShellState {
 }
 const require = createRequire(import.meta.url);
 
+/**
+ * Words that always exec another command with the rest of the line as its
+ * arguments. The command that matters for policy is the one behind them, so
+ * they are peeled off before the verb is judged.
+ */
+const WRAPPER_VERBS = [
+  'command',
+  'builtin',
+  'exec',
+  'timeout',
+  'nice',
+  'nohup',
+  'time',
+  'stdbuf',
+  'setsid',
+  'doas',
+  'ionice',
+  'chrt',
+];
+/**
+ * Peel wrapper words off a command line.
+ *
+ * Returns the inner verb and how many arguments were consumed, or `undefined`
+ * when the wrapped command cannot be read statically — the caller then marks
+ * the whole command unresolved instead of judging the wrapper's own name.
+ */
+function unwrap(
+  verb: string,
+  args: readonly (string | undefined)[]
+): { verb: string; offset: number } | undefined {
+  let current = verb;
+  let offset = 0;
+  for (let rounds = 0; WRAPPER_VERBS.includes(current); rounds++) {
+    if (rounds >= 4) return undefined;
+    let index = offset;
+    // A wrapper's own switches, plus the bare duration or priority `timeout`
+    // and `nice` take, sit between it and the command it runs.
+    while (index < args.length) {
+      const word = args[index];
+      if (word === undefined) return undefined;
+      if (!word.startsWith('-') && !/^\d+(?:\.\d+)?[smhd]?$/.test(word)) break;
+      index++;
+    }
+    const inner = args[index];
+    if (inner === undefined) return undefined;
+    current = basename(inner);
+    offset = index + 1;
+  }
+  return { verb: current, offset };
+}
+
+/**
+ * Bash commands are written with '/' even where node's `sep` is '\\' (Windows
+ * plus Git Bash). Fold a command's separators onto the platform one so a
+ * wildcard segment such as `conf/*` is still a single segment downstream.
+ */
+export function normalizeShellPath(path: string, separator: string = sep): string {
+  return separator === '/' ? path : path.replaceAll('/', separator);
+}
+/** Split a path on the platform separator, tolerating the other one. */
+export function splitShellPath(path: string, separator: string = sep): string[] {
+  return separator === '/' ? path.split('/') : path.split(/[\\/]/);
+}
+
 let sharedLanguage: Promise<Language> | undefined;
 async function loadLanguage(io: RuntimeHostIoService): Promise<Language> {
   try {
@@ -112,16 +176,32 @@ export class BashAnalyzer {
           return undefined;
       }
     }
+    function register(text: string, state: ShellState) {
+      if (!text) return;
+      // Keep wildcard's static parent; glob expansion is handled by the caller.
+      paths.add(normalizeShellPath(isAbsolute(text) ? text : `${state.cwd}${sep}${text}`));
+    }
     function addPath(text: string | undefined, state: ShellState) {
       if (!text || /^[a-z][a-z\d+.-]*:\/\//i.test(text)) return;
       if (text.startsWith('-')) {
         const equals = text.indexOf('=');
-        if (equals >= 0) text = text.slice(equals + 1);
-        else if (/^-[CILof].+/.test(text)) text = text.slice(2);
-        else return;
+        // `--file=x`, `-C/path`, `-tDIR`: a value glued to a switch is still an
+        // operand. Register any single-letter switch with content behind it
+        // rather than a fixed letter set; an extra in-workspace candidate costs
+        // nothing, a dropped one escapes every deny and scope check.
+        if (equals >= 0) register(text.slice(equals + 1), state);
+        else if (/^-[A-Za-z].+/.test(text)) register(text.slice(2), state);
+        return;
       }
-      // Keep wildcard's static parent; glob expansion is handled by the caller.
-      paths.add(isAbsolute(text) ? text : `${state.cwd}${sep}${text}`);
+      register(text, state);
+      // `of=/outside/x` (dd), `TARGET=/outside` (make): without splitting the
+      // value off, the whole word is joined onto cwd and a target outside the
+      // workspace reads as one inside it.
+      const equals = text.indexOf('=');
+      if (equals > 0 && /^[A-Za-z_][\w.-]*=/.test(text)) {
+        const operand = text.slice(equals + 1);
+        if (!operand.startsWith('-')) register(operand, state);
+      }
     }
     function assignment(node: SyntaxNode, state: ShellState) {
       const name = node.childForFieldName('name');
@@ -156,6 +236,9 @@ export class BashAnalyzer {
       if (node.type === 'command') {
         const nameNode = node.childForFieldName('name');
         const name = nameNode ? value(nameNode, state) : undefined;
+        // `$(which rm) -rf x` resolves to nothing statically, but the inner
+        // command's own operands still have to reach the judgement.
+        if (nameNode) visitSubstitutions(nameNode, state, depth);
         for (const prefix of node.namedChildren.filter(
           (child) => child.type === 'variable_assignment'
         ))
@@ -168,24 +251,41 @@ export class BashAnalyzer {
           Boolean(name) && args.every((arg) => arg !== undefined) && isExplorationCommand(unit);
         if (!name) result.unresolvedPaths = true;
         const verb = name ? basename(name) : '';
-        const nestedIndex = ['bash', 'sh', 'zsh', 'dash'].includes(verb)
-          ? args.findIndex((arg) => arg !== undefined && /^-[a-z]*c[a-z]*$/.test(arg)) + 1
-          : 0;
-        if (nestedIndex > 0 && args[nestedIndex] !== undefined) {
+        // Policy rules are written against the bare verb (`rm *`), so the real
+        // command has to be judged under that spelling however it was reached:
+        // `/bin/rm`, `command rm`, `timeout 5 rm`.
+        const inner = unwrap(verb, args);
+        if (!inner) result.unresolvedPaths = true;
+        const effectiveVerb = inner ? inner.verb : verb;
+        const effectiveArgs = inner ? args.slice(inner.offset) : args;
+        const normalized = [effectiveVerb, ...effectiveArgs]
+          .filter((word) => word !== undefined)
+          .join(' ');
+        if (effectiveVerb && normalized !== unit) result.commands.push(normalized);
+        const shellVerb = ['bash', 'sh', 'zsh', 'dash'].includes(effectiveVerb);
+        const switchIndex = shellVerb
+          ? effectiveArgs.findIndex((arg) => arg !== undefined && /^-[a-z]*c[a-z]*$/.test(arg))
+          : -1;
+        const nestedIndex = switchIndex < 0 ? 0 : switchIndex + 1;
+        const nestedScript = nestedIndex > 0 ? effectiveArgs[nestedIndex] : undefined;
+        // A shell without `-c` runs a script file (or a terminal) whose contents
+        // this analysis never sees; nothing about its operands is resolved.
+        if (shellVerb && nestedScript === undefined) result.unresolvedPaths = true;
+        if (nestedScript !== undefined) {
           const nestedState = { cwd: state.cwd, variables: { ...state.variables } };
           for (const child of node.namedChildren.filter(
             (child) => child.type === 'variable_assignment'
           ))
             assignment(child, nestedState);
-          parse(args[nestedIndex], nestedState, depth + 1);
+          parse(nestedScript, nestedState, depth + 1);
         }
         // Patterns and embedded programs are not themselves filesystem operands.
-        const patternFirst = ['grep', 'rg', 'sed', 'awk'].includes(verb);
+        const patternFirst = ['grep', 'rg', 'sed', 'awk'].includes(effectiveVerb);
         let skippedPattern = false;
-        args.forEach((arg, index) => {
+        effectiveArgs.forEach((arg, index) => {
           if (index === nestedIndex && nestedIndex > 0) return;
           if (patternFirst && arg !== undefined) {
-            const previous = args[index - 1];
+            const previous = effectiveArgs[index - 1];
             if (previous === '-f' || previous === '--file') {
               skippedPattern = true;
               addPath(arg, state);
@@ -227,12 +327,12 @@ export class BashAnalyzer {
             'node',
             'perl',
             'ruby',
-          ].includes(verb)
+          ].includes(effectiveVerb)
         )
           result.unresolvedPaths = true;
-        if (verb === 'cd') {
-          const target = args.filter((arg) => arg !== '--')[0] ?? state.variables.HOME;
-          if (!target || target === '-' || args.some((arg) => arg === undefined))
+        if (effectiveVerb === 'cd') {
+          const target = effectiveArgs.filter((arg) => arg !== '--')[0] ?? state.variables.HOME;
+          if (!target || target === '-' || effectiveArgs.some((arg) => arg === undefined))
             result.unresolvedPaths = true;
           else {
             state.cwd = resolve(state.cwd, target);
@@ -240,6 +340,10 @@ export class BashAnalyzer {
             paths.add(state.cwd);
           }
         }
+        // A leading redirect (`> out echo hi`) and a here-string both hang off
+        // the command's own `redirect` field rather than `argument`, so the
+        // generic recursion below never reaches them.
+        for (const redirect of node.childrenForFieldName('redirect')) walk(redirect, state, depth);
         for (const child of argumentNodes) visitSubstitutions(child, state, depth);
         return;
       }
@@ -247,6 +351,16 @@ export class BashAnalyzer {
         for (const child of node.childrenForFieldName('destination'))
           addPath(value(child, state), state);
         result.exploration = false;
+      }
+      if (node.type === 'herestring_redirect') {
+        // The word is stdin data rather than a file, but register it anyway: a
+        // denied name must not reach a command through this door, and
+        // `<<< "$(cat .env)"` hides a whole command inside the operand.
+        for (const child of node.namedChildren)
+          if (child.type !== 'file_descriptor') addPath(value(child, state), state);
+        result.exploration = false;
+        visitSubstitutions(node, state, depth);
+        return;
       }
       if (['subshell', 'command_substitution', 'process_substitution'].includes(node.type)) {
         result.exploration = false;

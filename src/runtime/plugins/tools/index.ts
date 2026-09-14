@@ -6,7 +6,7 @@ import { type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
 import { EXEC_SERVICE, HOST_IO_SERVICE, type RuntimeHostIoService } from '../../contracts.ts';
 import { RuntimeHostError } from '../../host/errors.ts';
-import { type BashAnalysis, BashAnalyzer } from '../permissions/bash-analysis.ts';
+import { type BashAnalysis, BashAnalyzer, splitShellPath } from '../permissions/bash-analysis.ts';
 import { containsPath, PERMISSIONS_SERVICE, pathPolicy } from '../permissions/index.ts';
 import { type AskUser, askTool } from './ask.ts';
 import { browserPreviewTool, type PreviewHost } from './browserPreview.ts';
@@ -182,7 +182,10 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       paths.add(canonical);
     };
     const expand = async (path: string): Promise<void> => {
-      const parts = path.split(sep);
+      // Split on either separator: a command writes `conf/*` even on Windows,
+      // where splitting on `sep` alone leaves the wildcard glued to its parent
+      // and every entry fails to match, so nothing gets checked.
+      const parts = splitShellPath(path);
       const wildcard = parts.findIndex((part) => /[*?[]/.test(part));
       if (wildcard < 0) return check(path);
       const parent = parts.slice(0, wildcard).join(sep) || sep;
