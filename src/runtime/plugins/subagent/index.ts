@@ -93,6 +93,16 @@ const TASKWAIT_MAX_TIMEOUT_SECONDS = 900;
 /** A `TaskWait` result IS the parent's context; bound it like a report. */
 const MAX_TASKWAIT_RESULT_CHARS = 50_000;
 
+/**
+ * How long `drain()` waits for an aborted delegate before settling it itself.
+ *
+ * Generous on purpose: the measured cost of aborting a delegate mid-tool is one
+ * more provider request, and cutting a delegate off before that lands would
+ * throw away a report it was about to write. This is the backstop for a
+ * delegate that never converges at all, not a scheduling knob.
+ */
+const DRAIN_TIMEOUT_MS = 30_000;
+
 const DELEGATION_RESUME_PROMPT =
   'The following subagents have finished. Integrate their reports and continue the ' +
   "user's original task. Call TaskStop only if you have decided a still-running " +
@@ -140,9 +150,11 @@ export interface SubagentService {
    * Stop everything still running and wait for it to actually converge.
    *
    * What separates "the run ended" from "the run stopped being watched". See
-   * the implementation for why an abort alone is not enough.
+   * the implementation for why an abort alone is not enough, and why the wait
+   * is nonetheless bounded. `timeoutMs` exists so a test can drive the deadline
+   * without spending it.
    */
-  drain(): Promise<void>;
+  drain(timeoutMs?: number): Promise<void>;
   /**
    * Bind the session and run a delegation started from now on belongs to.
    *
@@ -283,12 +295,45 @@ export class SubagentPlugin extends Service implements SubagentService {
    * the session writer would already be closing. Bounded by the same thing
    * that bounds `TaskStop`: the delegate's own abort path, which the probe
    * showed does converge.
+   *
+   * Bounded anyway. "Does converge" is a measurement, not a guarantee: a
+   * delegate wedged on a host call that never answers would make this wait
+   * forever, and this wait sits in the run's `finally` and in `dispose()`. An
+   * unbounded one turns "I cannot stop this" into "I cannot close this either",
+   * which is the difference between a bad turn and a process the user has to
+   * kill. Past the deadline the stragglers are settled here, as `timed_out`, so
+   * everyone waiting on their `completion` is released and the registry says
+   * plainly what happened instead of showing them running forever.
    */
-  async drain(): Promise<void> {
+  async drain(timeoutMs: number = DRAIN_TIMEOUT_MS): Promise<void> {
     const running = this.registry.running();
     if (running.length === 0) return;
     this.registry.abortAllRunning();
-    await Promise.all(running.map((record) => record.completion));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const converged = await Promise.race([
+      Promise.all(running.map((record) => record.completion)).then(() => true),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+      }),
+    ]).finally(() => {
+      if (timer !== undefined) clearTimeout(timer);
+    });
+    if (converged) return;
+    const seconds = Math.max(1, Math.round(timeoutMs / 1000));
+    for (const record of this.registry.running()) {
+      this.registry.requestStop(record, 'timed_out');
+      this.settle(record, {
+        agentName: record.agentName,
+        status: 'timed_out',
+        report: `The ${record.agentName} subagent did not converge within ${seconds}s of being asked to stop; the session stopped waiting for it.`,
+        turns: record.turns,
+        toolCalls: record.toolCalls,
+        error: {
+          code: 'delegation_drain_timeout',
+          message: `delegate did not settle within ${seconds}s of abort`,
+        },
+      });
+    }
   }
 
   /**
@@ -509,94 +554,173 @@ export class SubagentPlugin extends Service implements SubagentService {
         });
         if (!admitted.ok) return this.toolError(admitted.reason);
         const record = admitted.record;
-        const modelLabel = `${model.model.ref.provider}/${model.model.model.id}`;
-        this.started.set(delegationId, {
-          parentToolCallId: toolCallId,
-          model: modelLabel,
-          startedAt: record.startedAt,
-          runId: this.runContext?.runId ?? '',
-        });
-        if (this.runContext) {
-          void this.record({
-            kind: 'started',
-            delegationId,
-            agentName: definition.name,
-            parentToolCallId: toolCallId,
-            runId: this.runContext.runId,
-            task,
-            ...(label ? { label } : {}),
-            model: { provider: model.model.ref.provider, modelId: model.model.model.id },
-            startedAt: record.startedAt,
-          });
-        }
-        this.emitActivity({
-          parentToolCallId: toolCallId,
-          agentId: delegationId,
-          kind: 'started',
-          agentType: definition.name,
-          ...(label ? { description: label } : {}),
-        });
-        const projectInstructions = await this.config.projectInstructions?.();
-
-        // Started, then deliberately NOT awaited. Tying the background run to
-        // this tool call's signal would kill the delegate the moment the parent
-        // loop went idle, which is the whole failure D328 withdrew.
-        void new SubagentRun({
-          definition,
-          delegationId,
-          parentToolCallId: toolCallId,
-          task,
-          systemPrompt: composeSubagentSystemPrompt({
+        // Everything from here to the handover is inside the guard below.
+        //
+        // `admit()` has already registered a RUNNING delegation and handed the
+        // registry the only resolve handle for its `completion` promise. Until
+        // `SubagentRun.run()` is attached, nothing else can ever settle it — so
+        // a throw anywhere in this window (the instruction chain read, the
+        // activity listeners, the `new Agent(...)` inside the run) leaves a
+        // record that is running forever. Three separate things then wait on it
+        // with no timeout: the auto-resume pass, `drain()` after a Stop, and
+        // `dispose()`. The session becomes unstoppable and uncloseable, and the
+        // only exit is killing the process.
+        try {
+          return await this.startDelegation({
+            record,
             definition,
-            toolNames: available,
-            guidance: subagentGuidance({
-              toolNames: available,
-              ...(projectInstructions ? { projectInstructions } : {}),
-            }),
-          }),
-          model: model.model,
-          thinkingLevel: (definition.thinkingLevel ??
-            this.config.thinkingLevel ??
-            'medium') as ThinkingLevel,
-          tools,
-          onEvent: (envelope) => this.publish(envelope),
-          signal: controller.signal,
-        })
-          .run()
-          .then(
-            (result) => this.settle(record, result),
-            // `run()` settles its own failures into results; this guard only
-            // keeps an unexpected rejection from leaving a delegation stuck in
-            // "running" forever, which would hold the parent run open.
-            (error: unknown) =>
-              this.settle(record, {
-                agentName: definition.name,
-                status: 'failed',
-                report: `The ${definition.name} subagent failed before it could report.`,
-                turns: 0,
-                toolCalls: 0,
-                error: {
-                  code: 'unexpected_delegation_rejection',
-                  message: error instanceof Error ? error.message : String(error),
-                },
-              })
+            toolCallId,
+            task,
+            label,
+            model: model.model,
+            available,
+            unavailable,
+            tools,
+            signal: controller.signal,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.settle(record, {
+            agentName: definition.name,
+            status: 'failed',
+            report: `The ${definition.name} subagent could not be started: ${message}`,
+            turns: 0,
+            toolCalls: 0,
+            error: { code: 'delegation_start_failed', message },
+          });
+          // Delivered because the model is reading the failure right now, as
+          // this call's result. Leaving it undelivered would make the
+          // auto-resume pass tell it the same thing a second time.
+          this.registry.markDelivered([record]);
+          return this.toolError(
+            `Delegating to ${definition.name} failed before the subagent started: ${message}`
           );
+        }
+      },
+    };
+  }
 
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Delegation ${delegationId} started: the ${definition.name} subagent is working in the background${label ? ` (${label})` : ''}. Continue your own independent work, then call TaskWait with this delegationId to converge, or TaskStop to stop it.`,
+  /**
+   * Everything between admission and the delegate's own run taking over.
+   *
+   * Split out so the guard around it in `Task.execute` covers ALL of it,
+   * including the `new SubagentRun(...)` constructor, rather than just the one
+   * `await` that happens to be visible.
+   */
+  private async startDelegation(start: {
+    record: DelegationRecord;
+    definition: SubagentDefinition;
+    toolCallId: string;
+    task: string;
+    label: string;
+    model: ResolvedModel;
+    available: readonly string[];
+    unavailable: readonly string[];
+    tools: AgentTool<TSchema, unknown>[];
+    signal: AbortSignal;
+  }) {
+    const {
+      record,
+      definition,
+      toolCallId,
+      task,
+      label,
+      model,
+      available,
+      unavailable,
+      tools,
+      signal,
+    } = start;
+    const delegationId = record.delegationId;
+    const modelLabel = `${model.ref.provider}/${model.model.id}`;
+    this.started.set(delegationId, {
+      parentToolCallId: toolCallId,
+      model: modelLabel,
+      startedAt: record.startedAt,
+      runId: this.runContext?.runId ?? '',
+    });
+    if (this.runContext) {
+      void this.record({
+        kind: 'started',
+        delegationId,
+        agentName: definition.name,
+        parentToolCallId: toolCallId,
+        runId: this.runContext.runId,
+        task,
+        ...(label ? { label } : {}),
+        model: { provider: model.ref.provider, modelId: model.model.id },
+        startedAt: record.startedAt,
+      });
+    }
+    this.emitActivity({
+      parentToolCallId: toolCallId,
+      agentId: delegationId,
+      kind: 'started',
+      agentType: definition.name,
+      ...(label ? { description: label } : {}),
+    });
+    const projectInstructions = await this.config.projectInstructions?.();
+
+    // Started, then deliberately NOT awaited. Tying the background run to
+    // this tool call's signal would kill the delegate the moment the parent
+    // loop went idle, which is the whole failure D328 withdrew.
+    void new SubagentRun({
+      definition,
+      delegationId,
+      parentToolCallId: toolCallId,
+      task,
+      systemPrompt: composeSubagentSystemPrompt({
+        definition,
+        toolNames: available,
+        guidance: subagentGuidance({
+          toolNames: available,
+          ...(projectInstructions ? { projectInstructions } : {}),
+        }),
+      }),
+      model,
+      thinkingLevel: (definition.thinkingLevel ??
+        this.config.thinkingLevel ??
+        'medium') as ThinkingLevel,
+      tools,
+      onEvent: (envelope) => this.publish(envelope),
+      signal,
+      // Read at settlement, not now: `requestStop` writes the reason onto the
+      // record while the delegate's loop is still closing.
+      cancelReason: () => record.cancelReason,
+    })
+      .run()
+      .then(
+        (result) => this.settle(record, result),
+        // `run()` settles its own failures into results; this guard only
+        // keeps an unexpected rejection from leaving a delegation stuck in
+        // "running" forever, which would hold the parent run open.
+        (error: unknown) =>
+          this.settle(record, {
+            agentName: definition.name,
+            status: 'failed',
+            report: `The ${definition.name} subagent failed before it could report.`,
+            turns: 0,
+            toolCalls: 0,
+            error: {
+              code: 'unexpected_delegation_rejection',
+              message: error instanceof Error ? error.message : String(error),
             },
-          ],
-          details: {
-            delegationId,
-            agent: definition.name,
-            status: 'running',
-            startedAt: record.startedAt,
-            ...(unavailable.length ? { unavailableTools: unavailable } : {}),
-          },
-        };
+          })
+      );
+
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `Delegation ${delegationId} started: the ${definition.name} subagent is working in the background${label ? ` (${label})` : ''}. Continue your own independent work, then call TaskWait with this delegationId to converge, or TaskStop to stop it.`,
+        },
+      ],
+      details: {
+        delegationId,
+        agent: definition.name,
+        status: 'running',
+        startedAt: record.startedAt,
+        ...(unavailable.length ? { unavailableTools: unavailable } : {}),
       },
     };
   }
@@ -853,22 +977,59 @@ export class SubagentPlugin extends Service implements SubagentService {
       executionMode: 'sequential',
       execute: async (_toolCallId, params) => {
         const { targets } = this.targetsFor(params);
-        for (const record of targets) this.registry.requestStop(record);
+        // Only what is still running can be stopped. A named id that had
+        // already settled is not a stop at all, and the distinction is the
+        // whole point of the split below.
+        const running = targets.filter((record) => record.status === 'running');
+        for (const record of running) this.registry.requestStop(record);
         // Awaited on purpose. The P5-2-0 probe measured that aborting an
         // in-flight tool costs one more provider request before the loop
         // closes, so returning here without waiting would report "stopped"
         // while the delegate was still spending.
-        await Promise.all(targets.map((record) => record.completion));
-        // The model asked for these to stop and is being told they did. Feeding
-        // their partial output back through the auto-resume pass afterwards
-        // would re-open work the model just decided to abandon.
+        await Promise.all(running.map((record) => record.completion));
+        const stopped = targets.filter(
+          (record) =>
+            record.stopRequested && (record.status === 'stopped' || record.status === 'aborted')
+        );
+        // Everything else the model named had FINISHED — either before this
+        // call, or naturally while it was waiting. Its report is real work the
+        // parent has not read, and the reason for stopping ("the model gave up
+        // on it") does not apply to it. So it is answered here rather than
+        // dropped: marking it delivered without showing it is how a whole
+        // delegate run used to vanish from the parent's side of the session.
+        const finished = targets.filter(
+          (record) => record.status !== 'running' && !stopped.includes(record)
+        );
+        const results = finished.map((record) => ({
+          delegationId: record.delegationId,
+          agent: record.agentName,
+          status: record.status,
+          report: record.result?.report ?? `(${record.status} without a report)`,
+        }));
+        // Delivered now because BOTH halves are in front of the model: the
+        // stopped ones as the count they asked for, the finished ones as their
+        // reports. The auto-resume pass must not repeat either.
         this.registry.markDelivered(targets);
-        const text = targets.length
-          ? `Stopped ${targets.length} subagent${targets.length === 1 ? '' : 's'}.`
-          : 'No matching running subagents to stop.';
+        const head = stopped.length
+          ? `Stopped ${stopped.length} subagent${stopped.length === 1 ? '' : 's'}.`
+          : targets.length
+            ? 'Nothing was still running to stop.'
+            : 'No matching running subagents to stop.';
+        const text = results.length
+          ? [
+              head,
+              formatDelegationResults(
+                results,
+                `${results.length} of the delegation${results.length === 1 ? '' : 's'} you named had already finished. ${results.length === 1 ? 'Its report follows' : 'Their reports follow'}; nothing else will deliver ${results.length === 1 ? 'it' : 'them'}.`
+              ),
+            ].join('\n\n')
+          : head;
         return {
           content: [{ type: 'text' as const, text }],
-          details: { stopped: targets.map(delegationSummary) },
+          details: {
+            stopped: stopped.map(delegationSummary),
+            ...(finished.length ? { alreadyFinished: finished.map(delegationSummary) } : {}),
+          },
         };
       },
     };

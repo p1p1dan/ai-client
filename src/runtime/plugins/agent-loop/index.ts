@@ -12,6 +12,7 @@ import {
 import type { AssistantMessage, Usage } from '@earendil-works/pi-ai';
 import type { Context } from 'cordis';
 import { Service } from 'cordis';
+import { markInternalMessage } from '../../../shared/internalMessage.ts';
 import {
   type AgentLoopService,
   EVENTS_SERVICE,
@@ -178,10 +179,23 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     context?.beginRun(snapshot);
     const collected = new TurnCollector();
     const toolCalls = new Set<string>();
+    const delegations = this.ctx.get('runtimeSubagents')?.registry;
     const unsubscribePermissions = this.ctx.get('runtimePermissions')?.onActivity((record) => {
       // Gates raised outside this run's tool calls (a probe, a stale session)
       // belong to no message on screen and no line in this trace.
-      if (!toolCalls.has(record.request.toolCallId)) return;
+      //
+      // A delegate's calls ARE this run's, and `toolCalls` alone cannot see
+      // that: a delegate has its own `Agent`, so its tool call ids never reach
+      // the subscription below. Filtering on ids alone dropped every gate a
+      // subagent passed — including every `policy` auto-allow, whose activity
+      // row is the only evidence anywhere that the call was checked at all. So
+      // the second arm asks the question the ids cannot: is this delegation one
+      // this run started?
+      const delegation = record.request.delegation;
+      const mine =
+        toolCalls.has(record.request.toolCallId) ||
+        (delegation !== undefined && delegations?.has(delegation.delegationId) === true);
+      if (!mine) return;
       trace.note('note', { event: `permission_${record.phase}`, ...record });
       this.ctx.runtimeEvents.emit(permissionActivityEvent(sessionId, record));
     });
@@ -376,7 +390,23 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
           const report = await subagents.collectFinished(request.signal);
           if (report === undefined) break;
           trace.note('note', { event: 'delegation_resume', report_bytes: report.length });
-          await agent.prompt(report);
+          // Marked, not plain text. pi wraps any prompt as `role: 'user'`, and
+          // an unmarked one is indistinguishable from something the person
+          // typed: the projector drew it as a user bubble carrying the real
+          // send's attemptId and attachments, and the session file kept it as
+          // the newest user message. The model still gets the report — that is
+          // the point of feeding it back — it just no longer claims to be the
+          // user's next instruction.
+          await agent.prompt(
+            markInternalMessage(
+              {
+                role: 'user',
+                content: [{ type: 'text', text: report }],
+                timestamp: Date.now(),
+              } satisfies AgentMessage,
+              'subagent-report'
+            )
+          );
           await agent.waitForIdle();
         }
       }

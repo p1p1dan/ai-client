@@ -47,6 +47,16 @@ const FIXTURE = join(
   'fixtures',
   'nativeGuiEventStream.json'
 );
+/** The P5-2 delegation surface, recorded on its own. See `runGuiSubagentSession`. */
+const SUBAGENT_FIXTURE = join(
+  import.meta.dirname,
+  '..',
+  '..',
+  'shared',
+  '__tests__',
+  'fixtures',
+  'nativeGuiSubagentEventStream.json'
+);
 const HOST: RuntimeHostConfig = {
   carrier: 'electron-utility',
   tsdReadFallback: 'disabled',
@@ -110,7 +120,17 @@ async function waitFor<T>(
   }
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * Matched ANYWHERE in a string, not anchored.
+ *
+ * A delegation id does not only arrive as a field of its own: `Task` answers
+ * the model with "Delegation <uuid> started…", and the renderer's lane store
+ * keys off ids that embed one. Anchoring the match left those spellings raw, so
+ * the recording changed every run for reasons that mean nothing.
+ */
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+/** Wall-clock milliseconds embedded in an id, e.g. `<agentId>:1757…`. */
+const EPOCH_MS = /\b\d{13}\b/g;
 
 /**
  * Replace the temp workspace with `<workspace>`, in both the plain and the
@@ -146,12 +166,15 @@ function normalize(stream: readonly RuntimeEvent[], workspacePath: string): unkn
     if (typeof value === 'number') return zeroNumbers ? 0 : value;
     if (typeof value === 'string') {
       const withoutWorkspace = withoutWorkspacePath(value, workspacePath);
-      if (!UUID.test(withoutWorkspace)) return withoutWorkspace;
-      const existing = ids.get(withoutWorkspace);
-      if (existing) return existing;
-      const minted = `id-${ids.size + 1}`;
-      ids.set(withoutWorkspace, minted);
-      return minted;
+      return withoutWorkspace
+        .replace(UUID, (uuid) => {
+          const existing = ids.get(uuid);
+          if (existing) return existing;
+          const minted = `id-${ids.size + 1}`;
+          ids.set(uuid, minted);
+          return minted;
+        })
+        .replace(EPOCH_MS, '<ms>');
     }
     if (Array.isArray(value)) return value.map((item) => walk(item, zeroNumbers));
     if (value && typeof value === 'object') {
@@ -168,7 +191,11 @@ function normalize(stream: readonly RuntimeEvent[], workspacePath: string): unkn
     // Token counts move whenever the system prompt or the tool list does, and a
     // prompt edit in a later phase must not fail a timeline test. The SHAPE is
     // what the renderer's metadata row reads, so that is what is kept.
-    return walk(rest, event.type === 'usage.updated');
+    //
+    // `subagent.activity` is here for the same reason twice over: its terminal
+    // payload carries a wall-clock `endedAt` and a measured `durationMs`, and
+    // neither is a thing the panel's correctness depends on.
+    return walk(rest, event.type === 'usage.updated' || event.type === 'subagent.activity');
   });
 }
 
@@ -272,6 +299,154 @@ async function runGuiSession(): Promise<RuntimeEvent[]> {
   );
   return events();
 }
+
+/**
+ * A second session, for the delegation surface only.
+ *
+ * Recorded separately rather than folded into `runGuiSession`: that recording
+ * is the sign-off for P4-5's surfaces and re-cutting all of it to add subagent
+ * rows would renumber every id in it, hiding any real change in the noise. This
+ * one adds what P5-2 put on the wire — `subagent.activity` — and pins the two
+ * things the delegation path is supposed NOT to put there: a user bubble for
+ * the report the runtime feeds back, and a permission row with no owner.
+ *
+ * Ordering is made deterministic by the parent's second turn waiting for the
+ * delegate's terminal activity. That is not an artificial serialization of a
+ * race: the parent is idle at that point either way, and the runtime — not the
+ * model — is what waits for delegates. Recording the interleaving instead would
+ * pin timing, which is the one thing here that carries no meaning.
+ */
+async function runGuiSubagentSession(): Promise<RuntimeEvent[]> {
+  let parentTurn = 0;
+  let delegateTurn = 0;
+  const route = async (context: { systemPrompt?: string }) => {
+    if (/You are the "[a-z0-9-]+" subagent/.test(context.systemPrompt ?? '')) {
+      delegateTurn += 1;
+      return delegateTurn === 1
+        ? fauxAssistantMessage([fauxToolCall('read', { path: 'notes.txt' }, { id: 'sub-read' })], {
+            stopReason: 'toolUse',
+          })
+        : fauxAssistantMessage('EXPLORER-REPORT: notes.txt says the answer is 42.');
+    }
+    parentTurn += 1;
+    if (parentTurn === 1) {
+      return fauxAssistantMessage(
+        [
+          fauxToolCall(
+            'Task',
+            {
+              agent: 'explorer',
+              task: 'read notes.txt and report the answer',
+              description: 'survey notes',
+            },
+            { id: 'call-task' }
+          ),
+        ],
+        { stopReason: 'toolUse' }
+      );
+    }
+    if (parentTurn === 2) {
+      await waitFor(
+        () =>
+          events().find(
+            (event) => event.type === 'subagent.activity' && event.payload.kind === 'report'
+          ),
+        'the delegate to settle'
+      );
+      return fauxAssistantMessage('The explorer is on it.');
+    }
+    return fauxAssistantMessage('The explorer says the answer is 42.');
+  };
+  faux.setResponses(Array.from({ length: 16 }, () => route));
+  await call('worker.bootstrap', {
+    logicalSessionId: SESSION,
+    cwd: workspace,
+    permissions: { mode: 'agent', gear: 'ask' },
+  });
+  await call('worker.send', {
+    logicalSessionId: SESSION,
+    requestId: 'turn-1',
+    attemptId: 'attempt-1',
+    text: 'find out what the notes say',
+    model: MODEL,
+  });
+  await waitFor(
+    () =>
+      events().find((event) => event.type === 'session.status' && event.payload.status === 'idle'),
+    'the turn to go idle',
+    30_000
+  );
+  return events();
+}
+
+describe('the delegation stream the GUI receives (P5-2)', () => {
+  it('still matches the recording of a session that delegated', async () => {
+    const recorded = normalize(await runGuiSubagentSession(), workspace);
+    if (process.env.AICLIENT_UPDATE_FIXTURES) {
+      await writeFile(SUBAGENT_FIXTURE, `${JSON.stringify(recorded, null, 2)}\n`);
+    }
+    expect(recorded).toEqual(JSON.parse(await readFile(SUBAGENT_FIXTURE, 'utf8')));
+  }, 60_000);
+
+  it('gives the delegate its own lane, from start to report', async () => {
+    const lane = (await runGuiSubagentSession()).filter(
+      (event) => event.type === 'subagent.activity'
+    );
+    expect(lane.map((event) => event.payload.kind)).toEqual([
+      'started',
+      'tool.started',
+      'tool.completed',
+      'text',
+      'status',
+      'report',
+    ]);
+    // One delegation, and every row says which parent call owns it.
+    const owners = new Set(lane.map((event) => event.payload.parentToolCallId));
+    expect([...owners]).toEqual(['call-task']);
+    expect(new Set(lane.map((event) => event.payload.agentId)).size).toBe(1);
+  }, 60_000);
+
+  it('draws no user bubble for the report the runtime feeds back', async () => {
+    // The auto-resume hands the delegate's report to the parent as a prompt, and
+    // pi shapes any prompt as a user message. Unmarked, the user sees a message
+    // they never wrote — carrying their own send's attemptId — and the reopened
+    // session keeps it as their newest request.
+    const stream = await runGuiSubagentSession();
+    const users = stream.filter(
+      (event) => event.type === 'message.started' && event.payload.role === 'user'
+    );
+    expect(users).toHaveLength(1);
+    expect(users[0].type === 'message.started' && users[0].payload.attemptId).toBe('attempt-1');
+    expect(
+      JSON.stringify(stream.filter((event) => event.type.startsWith('message.')))
+    ).not.toContain('EXPLORER-REPORT');
+  }, 60_000);
+
+  it('records the delegate own gate, named for the delegate', async () => {
+    // `read` under the ask gear is a policy allow: no card, no dialog. This row
+    // is the only evidence the call was gated at all, and before P5-2 hardening
+    // every one a subagent raised was filtered out of the run it belonged to.
+    const stream = await runGuiSubagentSession();
+    const activity = stream.filter((event) => event.type === 'permission.activity');
+    expect(activity.map((event) => event.payload)).toContainEqual(
+      expect.objectContaining({
+        phase: 'decision',
+        requestId: 'sub-read',
+        surface: 'read',
+        result: 'allow',
+        resolution: 'policy_allow',
+        agentName: 'explorer',
+      })
+    );
+    // Attribution, not authorization: the row names the delegation so the
+    // transcript can say who was checked (decision 003 keeps the grant itself
+    // session scoped).
+    const delegate = activity.find(
+      (event) => event.type === 'permission.activity' && event.payload.requestId === 'sub-read'
+    );
+    expect(delegate?.type === 'permission.activity' && delegate.payload.delegationId).toBeTruthy();
+  }, 60_000);
+});
 
 describe('the stream the GUI receives from the native backend (P4-5)', () => {
   it('sends the successful write diff through the actual worker event stream', async () => {

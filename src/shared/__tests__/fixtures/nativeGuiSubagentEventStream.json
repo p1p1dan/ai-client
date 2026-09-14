@@ -1,0 +1,354 @@
+[
+  {
+    "type": "session.status",
+    "sessionId": "logical-gui",
+    "payload": {
+      "status": "running"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "user-turn-1-1",
+      "role": "user",
+      "attemptId": "attempt-1"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.delta",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "user-turn-1-1",
+      "blockId": "user-turn-1-1-text",
+      "text": "find out what the notes say"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "user-turn-1-1"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-2",
+      "role": "assistant",
+      "model": "faux/faux-e2e"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-2"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-3",
+      "role": "assistant"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "tool.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-3",
+      "toolCallId": "call-task",
+      "name": "Task",
+      "input": {
+        "agent": "explorer",
+        "task": "read notes.txt and report the answer",
+        "description": "survey notes"
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "subagent.activity",
+    "sessionId": "logical-gui",
+    "payload": {
+      "parentToolCallId": "call-task",
+      "agentId": "id-1",
+      "kind": "started",
+      "agentType": "explorer",
+      "description": "survey notes"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "tool.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-3",
+      "toolCallId": "call-task",
+      "ok": true,
+      "output": "Delegation id-1 started: the explorer subagent is working in the background (survey notes). Continue your own independent work, then call TaskWait with this delegationId to converge, or TaskStop to stop it."
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "subagent.activity",
+    "sessionId": "logical-gui",
+    "payload": {
+      "parentToolCallId": "call-task",
+      "agentId": "id-1",
+      "kind": "tool.started",
+      "toolCallId": "sub-read",
+      "name": "read",
+      "input": {
+        "path": "notes.txt"
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "permission.activity",
+    "sessionId": "logical-gui",
+    "payload": {
+      "phase": "decision",
+      "requestId": "sub-read",
+      "surface": "read",
+      "value": "<workspace>/notes.txt",
+      "delegationId": "id-1",
+      "agentName": "explorer",
+      "result": "allow",
+      "resolution": "policy_allow"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-3"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "usage.updated",
+    "sessionId": "logical-gui",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "subagent.activity",
+    "sessionId": "logical-gui",
+    "payload": {
+      "parentToolCallId": "call-task",
+      "agentId": "id-1",
+      "kind": "tool.completed",
+      "toolCallId": "sub-read",
+      "ok": true
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "subagent.activity",
+    "sessionId": "logical-gui",
+    "payload": {
+      "parentToolCallId": "call-task",
+      "agentId": "id-1",
+      "kind": "text",
+      "id": "id-1:<ms>",
+      "text": "EXPLORER-REPORT: notes.txt says the answer is 42."
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "subagent.activity",
+    "sessionId": "logical-gui",
+    "payload": {
+      "parentToolCallId": "call-task",
+      "agentId": "id-1",
+      "kind": "status",
+      "status": "completed",
+      "endedAt": 0,
+      "usage": {
+        "totalTokens": 0,
+        "toolUses": 0,
+        "durationMs": 0
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "subagent.activity",
+    "sessionId": "logical-gui",
+    "payload": {
+      "parentToolCallId": "call-task",
+      "agentId": "id-1",
+      "kind": "report",
+      "report": {
+        "status": "completed",
+        "agentType": "explorer",
+        "resolvedModel": "faux/faux-e2e",
+        "totalDurationMs": 0,
+        "totalTokens": 0,
+        "totalToolUseCount": 0
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-4",
+      "role": "assistant",
+      "model": "faux/faux-e2e"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.delta",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-4",
+      "blockId": "asst-turn-1-4-text",
+      "text": "The explorer is on it."
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-4"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "usage.updated",
+    "sessionId": "logical-gui",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-5",
+      "role": "assistant",
+      "model": "faux/faux-e2e"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.delta",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-5",
+      "blockId": "asst-turn-1-5-text",
+      "text": "The explorer says the answer is 42."
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-5"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "usage.updated",
+    "sessionId": "logical-gui",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "session.completed",
+    "sessionId": "logical-gui",
+    "payload": {},
+    "requestId": "turn-1"
+  },
+  {
+    "type": "session.status",
+    "sessionId": "logical-gui",
+    "payload": {
+      "status": "idle"
+    },
+    "requestId": "turn-1"
+  }
+]

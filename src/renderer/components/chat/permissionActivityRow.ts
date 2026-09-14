@@ -44,6 +44,12 @@ export interface PermissionActivityRecord {
   surface?: string;
   /** The command / path / tool name that was evaluated. */
   value?: string;
+  /**
+   * The subagent delegation this gate was raised for, when one was. Declared
+   * because the store folds the payload verbatim; it is attribution only and
+   * says nothing about how widely the decision applies.
+   */
+  delegationId?: string;
   agentName?: string;
   result?: 'allow' | 'deny';
   /** The plugin's own vocabulary — `user_approved`, `policy_allow`, `gate_error`, … */

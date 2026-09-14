@@ -3,6 +3,7 @@ import {
   type AgentMessage,
   estimateContextTokens,
 } from '@earendil-works/pi-agent-core';
+import { isInternalMessage } from '../../shared/internalMessage.ts';
 import { applyTurnUsage, initTurnRollup, viewTurnRollup } from '../../shared/piTurnRollup.ts';
 import { buildPiUsagePayload } from '../../shared/piUsage.ts';
 import { reviewFromToolResult } from '../../shared/sessionFileChange.ts';
@@ -186,6 +187,14 @@ export class RuntimeEventProjector {
     switch (event.type) {
       case 'message_start':
         if (event.message.role === 'user') {
+          // Not every `role: 'user'` message came from the user. The runtime
+          // feeds a delegation report back through the same door, and pi wraps
+          // it as a user message; projecting it would put a bubble the person
+          // never wrote into their own conversation, stamped with the attemptId
+          // and attachment chips of the send they DID write. It stays in the
+          // model's context and in the session file, and off the screen: the
+          // report already has a visible channel in the delegation panel.
+          if (isInternalMessage(event.message)) break;
           const messageId = `user-${this.requestId}-${++this.index}`;
           this.emit({
             type: 'message.started',

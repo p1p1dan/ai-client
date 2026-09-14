@@ -18,6 +18,7 @@ import {
   fauxToolCall,
 } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { isInternalMessage } from '../../shared/internalMessage.ts';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import {
@@ -108,6 +109,52 @@ describe('SA14 / SA15 / SA16 · delegate records, usage and reopening', () => {
     const raw = await readFile(join(workspace, 'session.jsonl'), 'utf8');
     expect(raw).toContain(SUBAGENT_ENTRY);
     expect(raw).toContain('DELEGATE-ONLY-TEXT');
+  });
+
+  it('hands the report back to the model without drawing a user bubble for it', async () => {
+    // The auto-resume feeds the report to the parent through `agent.prompt`,
+    // and pi wraps any prompt as `role: 'user'`. Unmarked, that is
+    // indistinguishable from typing: the projector drew a bubble the person
+    // never wrote, stamped with the attemptId and attachments of the send they
+    // DID write, and the session file kept it as the newest user message.
+    const events: RuntimeEventDraft[] = [];
+    const handle = await build(oneDelegation('REPORT-FED-BACK-TO-PARENT'), events);
+    await handle.run({ prompt: 'go', attemptId: 'attempt-1' });
+    await handle.session?.flush();
+
+    const userStarts = events.filter(
+      (event) => event.type === 'message.started' && event.payload.role === 'user'
+    );
+    // Exactly one: the send the user actually made.
+    expect(userStarts).toHaveLength(1);
+    expect(userStarts[0].payload).toMatchObject({ attemptId: 'attempt-1' });
+    // And no part of the report reached the message channel at all.
+    const messageEvents = events.filter((event) => event.type.startsWith('message.'));
+    expect(JSON.stringify(messageEvents)).not.toContain('REPORT-FED-BACK-TO-PARENT');
+
+    // The model DID get it: that is the entire point of feeding it back.
+    const messages = handle.session?.snapshot().messages ?? [];
+    const users = messages.filter((message) => message.role === 'user');
+    expect(users).toHaveLength(2);
+    expect(JSON.stringify(users[1])).toContain('REPORT-FED-BACK-TO-PARENT');
+    // Kept on disk WITH its mark, because the reopen is where it used to be
+    // mistaken for the latest user task.
+    expect(isInternalMessage(users[0])).toBe(false);
+    expect(isInternalMessage(users[1])).toBe(true);
+  });
+
+  it('does not restore the internal report as a user message when the session reopens', async () => {
+    const handle = await build(oneDelegation('REPORT-ON-RELOAD'));
+    await handle.run({ prompt: 'the real question', attemptId: 'attempt-1' });
+    await handle.session?.flush();
+
+    const history = handle.session?.history() ?? [];
+    const users = history.filter((message) => message.role === 'user');
+    expect(users).toHaveLength(1);
+    expect(JSON.stringify(users)).toContain('the real question');
+    // A second user bubble here is the reopened-session form of the same bug:
+    // the report comes back as the newest thing the user appears to have asked.
+    expect(JSON.stringify(history)).not.toContain('REPORT-ON-RELOAD');
   });
 
   it('rebuilds the delegation from the saved records, report and all', async () => {

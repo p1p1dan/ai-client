@@ -133,6 +133,16 @@ export interface SubagentRunOptions {
    * moment `Task` returns.
    */
   signal?: AbortSignal;
+  /**
+   * Why this delegate was cancelled, asked once its loop has actually closed.
+   *
+   * An `AbortSignal` carries no reason anyone here can read, so without this
+   * every cancellation settles as `aborted` — and the registry then has to
+   * rewrite the STATUS while the report text still says "was aborted", which is
+   * how a stopped delegate ended up described two contradictory ways at once.
+   * Returning undefined means "cancelled by something that did not say why".
+   */
+  cancelReason?: () => SubagentRunStatus | undefined;
 }
 
 function boundedReport(value: string): string {
@@ -229,8 +239,7 @@ export class SubagentRun {
 
   async run(): Promise<SubagentRunResult> {
     const { signal } = this.options;
-    if (signal?.aborted)
-      return this.result('aborted', 'The delegated task was aborted before it started.');
+    if (signal?.aborted) return this.result(this.cancelStatus(), this.lastReportText);
     const onAbort = () => this.agent.abort();
     signal?.addEventListener('abort', onAbort, { once: true });
     let thrown: Error | undefined;
@@ -252,7 +261,10 @@ export class SubagentRun {
     // Checked after `waitForIdle`, not at abort time: the P5-2-0 probe measured
     // that aborting an in-flight tool costs one more provider request before
     // the loop closes, so "aborted" is only true once the loop is actually done.
-    if (signal?.aborted) return this.result('aborted', 'The delegated task was aborted.');
+    // Whatever partial text the delegate did produce goes back with it: the
+    // parent has to decide whether to redo this work, and half an answer is
+    // more use than a status word.
+    if (signal?.aborted) return this.result(this.cancelStatus(), this.lastReportText);
     if (thrown)
       return this.result('failed', '', { code: 'delegate_threw', message: thrown.message });
     if (this.streamError) return this.result('failed', '', this.streamError);
@@ -387,6 +399,11 @@ export class SubagentRun {
     }
   }
 
+  /** The terminal status a cancellation should settle in; see `cancelReason`. */
+  private cancelStatus(): SubagentRunStatus {
+    return this.options.cancelReason?.() ?? 'aborted';
+  }
+
   private result(
     status: SubagentRunStatus,
     report: string,
@@ -439,7 +456,10 @@ function describeOutcome(
         'Its last report was:'
       );
     case 'aborted':
-      return `The ${name} subagent was aborted after ${turns} turn(s).`;
+      return withBody(
+        `The ${name} subagent was aborted after ${turns} turn(s).`,
+        'Its last output was:'
+      );
     case 'stopped':
       return withBody(
         `The ${name} subagent was stopped after ${turns} turn(s).`,

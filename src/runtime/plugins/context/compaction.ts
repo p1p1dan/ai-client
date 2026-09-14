@@ -36,6 +36,7 @@ import {
   estimateTokens,
 } from '@earendil-works/pi-agent-core';
 import type { UserMessage } from '@earendil-works/pi-ai';
+import { isInternalMessage } from '../../../shared/internalMessage.ts';
 
 /**
  * Stands in for the summary a rollover deliberately does not generate.
@@ -137,7 +138,14 @@ export function shapeForCheckpoint(
     ...preparation.retainedTail,
   ];
   const latestUser = messagesToSummarize
-    .filter((message): message is UserMessage => message.role === 'user')
+    // A delegation report the runtime fed back is stored as a user message.
+    // Retaining it here would promote it to the sole surviving instruction
+    // after the checkpoint, which is exactly the P5-2 contract's "an internal
+    // report must not be mistaken by compaction for a new user requirement".
+    // Nothing is lost: it is summarized with everything else in the range.
+    .filter(
+      (message): message is UserMessage => message.role === 'user' && !isInternalMessage(message)
+    )
     .at(-1);
   // A completed turn keeps nothing: its summary is authoritative and the next
   // prompt becomes the sole new instruction after the checkpoint.

@@ -1244,6 +1244,15 @@ export interface PermissionActivityEvent extends RuntimeEventBase {
     toolSurface?: string;
     /** The command / path / tool name that was evaluated. */
     value?: string;
+    /**
+     * The delegation whose tool call raised this gate, when a subagent's did.
+     *
+     * Attribution, not authorization. A "for this session" grant stays session
+     * scoped no matter which agent earned it (runtime-hardening decision 003),
+     * so this answers "who was this checked for" and never narrows what the
+     * check permits.
+     */
+    delegationId?: string;
     agentName?: string;
     /** `decision` phase only. */
     result?: 'allow' | 'deny';

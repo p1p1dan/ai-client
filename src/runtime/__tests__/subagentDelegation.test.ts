@@ -14,9 +14,10 @@
  *   and that the run does not end while a delegate is still working.
  */
 
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { AgentEvent } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Context as PiContext } from '@earendil-works/pi-ai';
 import {
   fauxAssistantMessage,
@@ -24,6 +25,7 @@ import {
   fauxToolCall,
 } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import {
   SUBAGENT_LIST_TOOL_NAME,
@@ -32,6 +34,7 @@ import {
   SUBAGENT_WAIT_TOOL_NAME,
 } from '../plugins/subagent/index.ts';
 import {
+  type DelegationRecord,
   DelegationRegistry,
   MAX_RETAINED_DELEGATIONS,
   MAX_SUBAGENT_CONCURRENCY,
@@ -88,6 +91,10 @@ describe('SA04 · admission, slots and retention', () => {
     for (let index = 0; index < MAX_RETAINED_DELEGATIONS + 5; index += 1) {
       registry.admit({ delegationId: `d${index}`, agentName: 'explorer', abort: () => {} });
       registry.settle(`d${index}`, settledResult(), 1_000 + index);
+      // Delivered as the real flow delivers them, on the auto-resume pass that
+      // follows each settlement. Only a record the parent has READ is history,
+      // and only history is evictable — see the case below.
+      registry.markDelivered([registry.get(`d${index}`) as DelegationRecord]);
     }
     expect(registry.has('live')).toBe(true);
     expect(registry.running()).toHaveLength(1);
@@ -97,6 +104,28 @@ describe('SA04 · admission, slots and retention', () => {
     expect(registry.all().filter((record) => record.status !== 'running')).toHaveLength(
       MAX_RETAINED_DELEGATIONS
     );
+  });
+
+  it('never evicts a settled report the parent has not read, even past the cap', () => {
+    // The retention cap is about HISTORY — re-reading a report by id. A report
+    // nobody has read yet is not history, and dropping it took a delegate's
+    // whole run with it: out of `undelivered()`, so the auto-resume pass never
+    // hands it over, with no log line anywhere. That is the exact class
+    // `deliveredAt` was introduced to protect.
+    const registry = new DelegationRegistry();
+    registry.admit({ delegationId: 'unread', agentName: 'explorer', abort: () => {} });
+    registry.settle('unread', settledResult({ report: 'REPORT-NOBODY-READ' }), 1);
+    for (let index = 0; index < MAX_RETAINED_DELEGATIONS + 5; index += 1) {
+      registry.admit({ delegationId: `d${index}`, agentName: 'explorer', abort: () => {} });
+      registry.settle(`d${index}`, settledResult(), 1_000 + index);
+      registry.markDelivered([registry.get(`d${index}`) as DelegationRecord]);
+    }
+    // It is the OLDEST settled record, so an eviction by age takes it first.
+    expect(registry.has('unread')).toBe(true);
+    expect(registry.get('unread')?.result?.report).toBe('REPORT-NOBODY-READ');
+    expect(registry.undelivered().map((record) => record.delegationId)).toEqual(['unread']);
+    // Delivered history still went, so the protection did not disable the cap.
+    expect(registry.has('d0')).toBe(false);
   });
 
   it('settles exactly once, so a stop racing a completion cannot double-settle', () => {
@@ -229,17 +258,40 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
     await rm(workspace, { recursive: true, force: true });
   });
 
-  async function build(script: Parameters<typeof scriptedProvider>[0]): Promise<RuntimeHandle> {
+  async function build(
+    script: Parameters<typeof scriptedProvider>[0],
+    subagents: { projectInstructions?: () => Promise<string | undefined> } = {}
+  ): Promise<RuntimeHandle> {
     const handle = scriptedProvider(script);
     runtime = await createRuntime({
       env: {},
       providers: [handle.provider],
       tools: { cwd: workspace },
       permissions: { gear: 'auto' },
-      subagents: { home: join(workspace, 'home') },
+      subagents: { home: join(workspace, 'home'), ...subagents },
       loop: { singleTurn: false },
     });
     return runtime;
+  }
+
+  /**
+   * Records every tool result the parent's MODEL was handed.
+   *
+   * Asserting on the registry is not enough for the `TaskStop` cases: the whole
+   * question there is what the model was told, and a report that exists in the
+   * registry but never reaches the model is precisely the defect.
+   */
+  function toolResultCollector(into: { tool: string; text: string }[]) {
+    return (event: AgentEvent) => {
+      if (event.type !== 'tool_execution_end') return;
+      const result = event.result as { content?: { type: string; text?: string }[] } | undefined;
+      into.push({
+        tool: event.toolName,
+        text: (result?.content ?? [])
+          .map((block) => (block.type === 'text' ? (block.text ?? '') : ''))
+          .join(''),
+      });
+    };
   }
 
   it('registers all four Task tools with Task alone parallel', async () => {
@@ -371,7 +423,7 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
     // SA09. `explorer` is capped at 60, so the case pins its own cap through a
     // user document is out of scope here; instead the delegate is driven past a
     // small cap with a definition written for this test.
-    const { mkdir, writeFile } = await import('node:fs/promises');
+    const { mkdir } = await import('node:fs/promises');
     const root = join(workspace, 'home', '.agents', 'subagents');
     await mkdir(root, { recursive: true });
     await writeFile(
@@ -580,7 +632,6 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
     // that matters is in the second half of the name: the delegate already ran
     // a tool, and a "retry" that restarted it would run that tool twice — for
     // `fixer` that means writing the same file twice.
-    const { writeFile } = await import('node:fs/promises');
     await writeFile(join(workspace, 'target.txt'), 'contents\n', 'utf8');
 
     let delegateTurn = 0;
@@ -655,6 +706,222 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
     // Straight to failure: retrying a bad key just spends the budget.
     expect(record.result?.turns).toBe(1);
   });
+
+  it('records the gates a delegate passed, including the one nobody was asked about', async () => {
+    // The parent loop is the only consumer of `onActivity`, and it used to keep
+    // only records whose toolCallId was in its own set. A delegate has its own
+    // `Agent`, so its ids never get there — every gate a subagent passed was
+    // dropped: no timeline row, no trace note. `policy` allows raise no dialog
+    // at all, so that row is the only evidence anywhere that the call was
+    // checked rather than simply unchecked.
+    await writeFile(join(workspace, 'target.txt'), 'contents\n', 'utf8');
+    const events: RuntimeEventDraft[] = [];
+    const handle = await build({
+      parent: [
+        () =>
+          fauxAssistantMessage([fauxToolCall('Task', { agent: 'explorer', task: 'read it' })], {
+            stopReason: 'toolUse',
+          }),
+        () => fauxAssistantMessage('waiting'),
+        () => fauxAssistantMessage('integrated'),
+      ],
+      delegate: [
+        (() => {
+          let turn = 0;
+          return () => {
+            turn += 1;
+            return turn === 1
+              ? fauxAssistantMessage([fauxToolCall('read', { path: 'target.txt' }, { id: 'r1' })], {
+                  stopReason: 'toolUse',
+                })
+              : fauxAssistantMessage('DELEGATE-REPORT');
+          };
+        })(),
+      ],
+    });
+    handle.events.subscribe((event) => events.push(event));
+
+    const result = await handle.run({ prompt: 'go' });
+
+    const delegationId = handle.ctx.runtimeSubagents.registry.all()[0].delegationId;
+    const activity = events.filter((event) => event.type === 'permission.activity');
+    const delegateRows = activity.filter(
+      (event) => (event.payload as { delegationId?: string }).delegationId !== undefined
+    );
+    expect(delegateRows.length).toBeGreaterThan(0);
+    expect(delegateRows.map((event) => event.payload)).toContainEqual(
+      expect.objectContaining({
+        phase: 'decision',
+        requestId: 'r1',
+        surface: 'read',
+        result: 'allow',
+        // Attribution only. A session grant stays session scoped whoever earned
+        // it (runtime-hardening decision 003); these fields say who was checked.
+        delegationId,
+        agentName: 'explorer',
+      })
+    );
+    // The trace half of the same evidence: without it there is no answer to
+    // "which rule let the subagent read that file" after the fact.
+    const notes = (result.trace?.steps ?? []).filter(
+      (step) => typeof step.detail.event === 'string' && step.detail.event.startsWith('permission_')
+    );
+    expect(JSON.stringify(notes)).toContain(delegationId);
+  }, 15_000);
+
+  it('settles a delegation whose start failed after admission, instead of hanging on it', async () => {
+    // The window between `admit()` and `SubagentRun.run()`. `projectInstructions`
+    // is the realistic thrower: it reads the workspace instruction chain through
+    // the host, and a TSD-unavailable or transport failure propagates BY DESIGN
+    // ("ciphertext is never an instruction"). Admission has already registered a
+    // running delegation whose `completion` only `run()` can resolve, so an
+    // unguarded throw leaves it running forever — and the auto-resume pass,
+    // `drain()` after a Stop and `dispose()` all wait on it with no timeout.
+    // The observable symptom is this test never finishing.
+    const handle = await build(
+      {
+        parent: [
+          () =>
+            fauxAssistantMessage([fauxToolCall('Task', { agent: 'explorer', task: 'x' })], {
+              stopReason: 'toolUse',
+            }),
+          () => fauxAssistantMessage('understood, doing it myself'),
+        ],
+        delegate: [],
+      },
+      {
+        projectInstructions: async () => {
+          throw new Error('io_tsd_unavailable');
+        },
+      }
+    );
+
+    const results: { tool: string; text: string }[] = [];
+    const result = await handle.run({ prompt: 'go', onEvent: toolResultCollector(results) });
+
+    expect(result.success).toBe(true);
+    const record = handle.ctx.runtimeSubagents.registry.all()[0];
+    expect(record.status).toBe('failed');
+    expect(record.result?.error?.code).toBe('delegation_start_failed');
+    // Nothing is left running or owed, so the run could end at all.
+    expect(handle.ctx.runtimeSubagents.registry.running()).toHaveLength(0);
+    expect(handle.ctx.runtimeSubagents.busy).toBe(false);
+    // And the model was told why, in the result of the call it made.
+    expect(results.find((entry) => entry.tool === 'Task')?.text).toContain('io_tsd_unavailable');
+  }, 15_000);
+
+  it('gives TaskStop a report for a delegation that had already finished', async () => {
+    // The model calls TaskList, decides to wrap up, and names ids that include
+    // one that finished in between. Marking that one delivered without showing
+    // its report makes a whole delegate run — real tokens, real work — vanish
+    // from the parent's side of the session: the registry and the panel still
+    // have it, the model never sees it.
+    const handle = await build({
+      parent: [
+        () =>
+          fauxAssistantMessage([fauxToolCall('Task', { agent: 'explorer', task: 'quick' })], {
+            stopReason: 'toolUse',
+          }),
+        async () => {
+          // Let the (instant) delegate settle, then stop it by id anyway.
+          await new Promise((resolve) => setTimeout(resolve, 60));
+          const id = runtime?.ctx.runtimeSubagents.registry.all()[0]?.delegationId ?? 'none';
+          return fauxAssistantMessage(
+            [fauxToolCall('TaskStop', { delegationIds: [id] }, { id: 's1' })],
+            { stopReason: 'toolUse' }
+          );
+        },
+        () => fauxAssistantMessage('wrapped up'),
+        () => fauxAssistantMessage('SHOULD NOT HAPPEN: delivered again'),
+      ],
+      delegate: [() => fauxAssistantMessage('FINISHED-BEFORE-STOP')],
+    });
+
+    const results: { tool: string; text: string }[] = [];
+    const result = await handle.run({ prompt: 'go', onEvent: toolResultCollector(results) });
+
+    const stopResult = results.find((entry) => entry.tool === 'TaskStop');
+    expect(stopResult?.text).toContain('FINISHED-BEFORE-STOP');
+    expect(stopResult?.text).toContain('already finished');
+    // It was a completion, not a stop, and the answer says so.
+    expect(stopResult?.text).not.toContain('Stopped 1 subagent');
+    expect(handle.ctx.runtimeSubagents.registry.all()[0].status).toBe('completed');
+    // Shown once: TaskStop answered with it, so auto-resume must not repeat it.
+    expect(result.text).not.toContain('SHOULD NOT HAPPEN');
+  }, 15_000);
+
+  it('settles a delegate that never converges rather than letting drain wait forever', async () => {
+    // `drain()` runs in the run's `finally` and again in `dispose()`. Waiting
+    // on a delegate that never settles turns "I cannot stop this" into "I
+    // cannot close this either", and the only way out is killing the process.
+    // A no-op `abort` is what a wedged delegate looks like from here.
+    const handle = await build({ parent: [() => fauxAssistantMessage('ok')], delegate: [] });
+    const registry = handle.ctx.runtimeSubagents.registry;
+    registry.admit({ delegationId: 'wedged', agentName: 'explorer', abort: () => {} });
+
+    await handle.ctx.runtimeSubagents.drain(20);
+
+    expect(registry.running()).toHaveLength(0);
+    // Named for what happened, not collapsed into `failed`: it was asked to
+    // stop and did not answer in time.
+    expect(registry.get('wedged')?.status).toBe('timed_out');
+    expect(registry.get('wedged')?.result?.error?.code).toBe('delegation_drain_timeout');
+    // The completion promise everyone waits on is resolved, so nothing hangs.
+    await expect(registry.get('wedged')?.completion).resolves.toBeUndefined();
+  });
+
+  it('tells the parent a stopped delegate was stopped, and hands back what it had', async () => {
+    // Two halves of one defect. `run()` could only ever return `aborted`, so a
+    // record the registry showed as `stopped` carried a report that read "was
+    // aborted" — and the branch written to return the partial work was
+    // unreachable, so a stopped delegate's findings were thrown away.
+    await writeFile(join(workspace, 'target.txt'), 'contents\n', 'utf8');
+    let delegateTurn = 0;
+    const handle = await build({
+      parent: [
+        () =>
+          fauxAssistantMessage([fauxToolCall('Task', { agent: 'explorer', task: 'survey' })], {
+            stopReason: 'toolUse',
+          }),
+        async () => {
+          // Long enough for the delegate's first turn (text + a tool call) to
+          // land, short enough that its second is still in flight.
+          await new Promise((resolve) => setTimeout(resolve, 120));
+          return fauxAssistantMessage([fauxToolCall('TaskStop', {}, { id: 's1' })], {
+            stopReason: 'toolUse',
+          });
+        },
+        () => fauxAssistantMessage('stopped it'),
+      ],
+      delegate: [
+        async () => {
+          delegateTurn += 1;
+          if (delegateTurn === 1) {
+            return fauxAssistantMessage(
+              [
+                { type: 'text', text: 'PARTIAL-FINDING: target.txt exists' },
+                fauxToolCall('read', { path: 'target.txt' }, { id: 'r1' }),
+              ],
+              { stopReason: 'toolUse' }
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          return fauxAssistantMessage('too late to matter');
+        },
+      ],
+    });
+
+    await handle.run({ prompt: 'go' });
+
+    const record = handle.ctx.runtimeSubagents.registry.all()[0];
+    expect(record.status).toBe('stopped');
+    // The status and the prose agree...
+    expect(record.result?.status).toBe('stopped');
+    expect(record.result?.report).toContain('was stopped after');
+    expect(record.result?.report).not.toContain('was aborted');
+    // ...and the work it did get done comes back with it.
+    expect(record.result?.report).toContain('PARTIAL-FINDING');
+  }, 20_000);
 
   it('stops a delegate on user Stop rather than leaving it running', async () => {
     // SA08: the run's own abort signal is one of the two doors to a delegate.

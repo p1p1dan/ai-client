@@ -28,6 +28,16 @@ export const MAX_RETAINED_DELEGATIONS = 100;
 
 export type DelegationStatus = 'running' | SubagentRunStatus;
 
+/**
+ * Why a delegate was asked to stop, as the terminal status it should settle in.
+ *
+ * The delegate's own loop only sees an `AbortSignal`, which says THAT it was
+ * cancelled and never WHY. Without this the run could only ever report
+ * `aborted`, so "you stopped this" and "this never converged after being asked
+ * to" arrived at the reader — and at the parent model — as the same sentence.
+ */
+export type DelegationCancelReason = Extract<SubagentRunStatus, 'stopped' | 'timed_out'>;
+
 export interface DelegationRecord {
   delegationId: string;
   agentName: string;
@@ -47,6 +57,11 @@ export interface DelegationRecord {
    * say "you stopped this" instead of "this broke".
    */
   stopRequested: boolean;
+  /**
+   * The terminal status the stop asked for, read by the delegate's own run once
+   * its loop has closed. Absent until something asks it to stop.
+   */
+  cancelReason?: DelegationCancelReason;
   /**
    * When this delegation's outcome was handed to the parent model.
    *
@@ -226,7 +241,13 @@ export class DelegationRegistry {
   settle(delegationId: string, result: SubagentRunResult, now = Date.now()): boolean {
     const record = this.records.get(delegationId);
     if (!record || record.status !== 'running') return false;
-    record.status = record.stopRequested && result.status === 'aborted' ? 'stopped' : result.status;
+    // A run that knew why it was cancelled already returned the right status.
+    // This only covers an `aborted` that reached us some other way — a rejected
+    // run, a settlement forced from outside — and names it after what asked.
+    record.status =
+      result.status === 'aborted' && record.stopRequested
+        ? (record.cancelReason ?? 'stopped')
+        : result.status;
     record.result = result;
     record.completedAt = now;
     this.settleHandles.get(delegationId)?.();
@@ -235,9 +256,15 @@ export class DelegationRegistry {
     return true;
   }
 
-  /** Ask a delegate to stop. Repeated calls are harmless. */
-  requestStop(record: DelegationRecord): void {
+  /**
+   * Ask a delegate to stop. Repeated calls are harmless.
+   *
+   * The first reason wins: a drain deadline that lands on a delegate already
+   * asked to stop does not rewrite what the user did into a timeout.
+   */
+  requestStop(record: DelegationRecord, reason: DelegationCancelReason = 'stopped'): void {
     record.stopRequested = true;
+    record.cancelReason ??= reason;
     record.abort();
   }
 
@@ -267,14 +294,26 @@ export class DelegationRegistry {
   /**
    * Cap retained history. Settled records go oldest-first; running ones never
    * go at all, because evicting one would lose the only handle that can stop it.
+   *
+   * Neither does an UNDELIVERED one. Retention is about history — re-reading a
+   * report by id — and a report the parent model has not seen yet is not
+   * history, it is work in progress. Evicting it drops it out of
+   * `undelivered()`, so the auto-resume pass never hands it over and a delegate
+   * that ran to completion disappears with no log line anywhere. `deliveredAt`
+   * exists precisely to hold that class of record; letting the cap delete them
+   * would undo it.
+   *
+   * The cap is still counted over every settled record, so delivery — not the
+   * protection — is what keeps history bounded in the normal case.
    */
   private prune(): void {
-    const finished = [...this.records.values()]
-      .filter((record) => record.status !== 'running')
+    const settled = [...this.records.values()].filter((record) => record.status !== 'running');
+    const excess = settled.length - MAX_RETAINED_DELEGATIONS;
+    if (excess <= 0) return;
+    const evictable = settled
+      .filter((record) => record.deliveredAt !== undefined)
       .sort((left, right) => (left.completedAt ?? 0) - (right.completedAt ?? 0));
-    const excess = finished.length - MAX_RETAINED_DELEGATIONS;
-    for (const record of finished.slice(0, Math.max(0, excess)))
-      this.records.delete(record.delegationId);
+    for (const record of evictable.slice(0, excess)) this.records.delete(record.delegationId);
   }
 }
 

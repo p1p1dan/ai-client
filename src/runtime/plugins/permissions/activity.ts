@@ -45,6 +45,10 @@ export function permissionActivityEvent(
   // so the prompt and the decision have to agree on this or the transcript
   // grows two rows for one question.
   const detail = request.command ?? request.path;
+  // Who the gate was raised for. Attribution only: a delegate's call resolves
+  // under the same session-scoped grants as anyone else's (decision 003), so
+  // these two fields change what the row SAYS and never what it allows.
+  const delegation = request.delegation;
   return {
     type: 'permission.activity',
     sessionId,
@@ -53,6 +57,9 @@ export function permissionActivityEvent(
       requestId: request.toolCallId,
       surface: request.tool,
       ...(detail ? { value: detail } : {}),
+      ...(delegation
+        ? { delegationId: delegation.delegationId, agentName: delegation.agentName }
+        : {}),
       ...(record.phase === 'decision'
         ? { result: record.decision, resolution: RESOLUTION[record.source] }
         : {}),

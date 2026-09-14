@@ -381,18 +381,25 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
         catalog: subagentCatalog,
         // The same chain the parent's own prompt loads, through the same
         // loader, read per delegation so a workspace edit between turns reaches
-        // the next delegate.
-        projectInstructions: () =>
-          projectInstructionsText(instructionSource(ctx.runtimeHostIo, options.prompt?.maxBytes), {
-            ...options.prompt,
-            root: options.prompt?.root ?? options.tools?.cwd,
-            globals: [
-              ...(agentDir
-                ? [{ path: join(agentDir, 'AGENTS.md'), label: 'Managed AGENTS.md' }]
-                : []),
-              ...(options.prompt?.globals ?? []),
-            ],
-          }),
+        // the next delegate. A caller that supplies its own wins: the field is
+        // part of `SubagentConfig`, and overwriting it unconditionally made it a
+        // declared option nothing could ever set.
+        projectInstructions:
+          options.subagents.projectInstructions ??
+          (() =>
+            projectInstructionsText(
+              instructionSource(ctx.runtimeHostIo, options.prompt?.maxBytes),
+              {
+                ...options.prompt,
+                root: options.prompt?.root ?? options.tools?.cwd,
+                globals: [
+                  ...(agentDir
+                    ? [{ path: join(agentDir, 'AGENTS.md'), label: 'Managed AGENTS.md' }]
+                    : []),
+                  ...(options.prompt?.globals ?? []),
+                ],
+              }
+            )),
       });
       await subagentFiber.await();
     }

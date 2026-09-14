@@ -1,3 +1,4 @@
+import { isInternalMessage } from '../shared/internalMessage.ts';
 import { reviewFromToolResult } from '../shared/sessionFileChange.ts';
 import {
   LEGACY_IMPORT_CUSTOM_TYPE_DISPLAY,
@@ -229,6 +230,13 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
     const content = message.content;
 
     if (message.role === 'user') {
+      // A delegation report the runtime fed back to the model is stored as a
+      // user message because that is the only shape pi has for it. Live, the
+      // projector already keeps it off the timeline; a reopened session has to
+      // agree, or the bubble the user never wrote comes back on reload — as the
+      // newest thing they appear to have asked for. Legacy sessions never carry
+      // the mark, so this is inert for them.
+      if (isInternalMessage(message)) continue;
       const text = textFromContent(content);
       const attachments = attachmentMetadata(content);
       messages.push({
