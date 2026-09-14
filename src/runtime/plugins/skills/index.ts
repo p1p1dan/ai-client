@@ -22,7 +22,7 @@
  */
 
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { type Context, Service } from 'cordis';
 import { Type } from 'typebox';
 import {
@@ -79,6 +79,15 @@ export interface RuntimeSkillsService {
   segment(): PromptSegment | undefined;
   /** `/name` and `/skill:name` → the text actually sent. See `expand.ts`. */
   expand(text: string): Promise<ExpansionResult>;
+  /**
+   * skills-mcp-20 — re-scan the same roots the catalog was built from and
+   * replace it in place. The catalog is otherwise a snapshot taken once at
+   * worker start; this is the capability a caller (e.g. a "reload skills"
+   * action) needs so a newly installed skill can become visible without a
+   * worker restart. Nothing in this plugin calls it automatically — the
+   * trigger belongs to whoever surfaces that action.
+   */
+  refresh(): Promise<void>;
 }
 
 declare module 'cordis' {
@@ -114,6 +123,16 @@ export function skillSource(io: RuntimeHostIoService, maxBytes: number): SkillSo
         throw error;
       }
     },
+    async stat(path) {
+      try {
+        // Default `followSymlinks` (unlike `list`'s Dirent) resolves the link.
+        const info = await io.stat(path);
+        return { kind: info.kind };
+      } catch (error) {
+        if (OPTIONAL_FILE_ERRORS.has(errorCode(error) ?? '')) return undefined;
+        throw error;
+      }
+    },
   };
 }
 
@@ -136,6 +155,40 @@ export interface SkillsConfig {
   home?: string;
 }
 
+/** Safety bound on the ancestor climb (decision 004); a real filesystem never gets close. */
+const MAX_ANCESTOR_LEVELS = 64;
+
+/**
+ * Decision 004 — `cwd` and every ancestor up to and including the repo root,
+ * closest first. The repo root is the first ancestor whose `.git` stats
+ * successfully (a worktree's `.git` is a file, not a directory, so this only
+ * needs the stat to succeed, not a particular kind). No `.git` anywhere in
+ * the climb answers `[cwd]`, which is the pre-decision-004 behaviour.
+ */
+async function projectSkillDirectories(
+  io: Pick<RuntimeHostIoService, 'stat'>,
+  cwd: string
+): Promise<readonly string[]> {
+  const chain: string[] = [];
+  let dir = cwd;
+  for (let level = 0; level < MAX_ANCESTOR_LEVELS; level++) {
+    chain.push(dir);
+    let atRepoRoot: boolean;
+    try {
+      await io.stat(join(dir, '.git'));
+      atRepoRoot = true;
+    } catch (error) {
+      if (!OPTIONAL_FILE_ERRORS.has(errorCode(error) ?? '')) throw error;
+      atRepoRoot = false;
+    }
+    if (atRepoRoot) return chain;
+    const parent = dirname(dir);
+    if (parent === dir) break; // filesystem root reached, no `.git` found
+    dir = parent;
+  }
+  return [cwd];
+}
+
 /**
  * The roots to scan, least specific first.
  *
@@ -143,7 +196,10 @@ export interface SkillsConfig {
  * earlier one, which is how a project overrides a user-wide skill. It mirrors
  * `loadInstructionChain`'s globals-then-project order for the same reason.
  */
-export function skillRoots(config: SkillsConfig): readonly SkillRoot[] {
+export async function skillRoots(
+  io: Pick<RuntimeHostIoService, 'stat'>,
+  config: SkillsConfig
+): Promise<readonly SkillRoot[]> {
   const home = config.home ?? homedir();
   const roots: SkillRoot[] = [];
   if (config.agentDir)
@@ -151,11 +207,14 @@ export function skillRoots(config: SkillsConfig): readonly SkillRoot[] {
   roots.push({ path: join(home, '.agents', 'skills'), scope: 'user', rootMarkdown: false });
   if (config.cwd && config.projectTrusted) {
     roots.push({ path: join(config.cwd, '.pi', 'skills'), scope: 'project', rootMarkdown: true });
-    roots.push({
-      path: join(config.cwd, '.agents', 'skills'),
-      scope: 'project',
-      rootMarkdown: false,
-    });
+    // Decision 004: `.agents/skills` is looked up from cwd through every
+    // ancestor to the repo root, same as pi. Repo-root first (least
+    // specific), cwd last — `loadSkills` is last-wins, so a name declared
+    // closer to the work overrides one declared further away.
+    const chain = await projectSkillDirectories(io, config.cwd);
+    for (const dir of [...chain].reverse()) {
+      roots.push({ path: join(dir, '.agents', 'skills'), scope: 'project', rootMarkdown: false });
+    }
   }
   roots.push(...(config.extraSkillRoots ?? []));
   return roots;
@@ -174,6 +233,9 @@ export interface SkillCatalog {
   skills: readonly RuntimeSkill[];
   templates: readonly RuntimePromptTemplate[];
   diagnostics: readonly SkillDiagnostic[];
+  /** skills-mcp-20 — kept so `SkillsPlugin.refresh()` can re-scan without recomputing config. */
+  resolvedSkillRoots: readonly SkillRoot[];
+  resolvedTemplateRoots: readonly TemplateRoot[];
 }
 
 export async function loadSkillCatalog(
@@ -182,18 +244,23 @@ export async function loadSkillCatalog(
 ): Promise<SkillCatalog> {
   // Descriptions only at scan time; bodies are read on demand by the tool.
   const source = skillSource(io, MAX_SCAN_BYTES);
-  const skills = await loadSkills(source, skillRoots(config));
-  const templates = await loadPromptTemplates(source, templateRoots(config));
+  const resolvedSkillRoots = await skillRoots(io, config);
+  const resolvedTemplateRoots = templateRoots(config);
+  const skills = await loadSkills(source, resolvedSkillRoots);
+  const templates = await loadPromptTemplates(source, resolvedTemplateRoots);
   return {
     skills: skills.skills,
     templates: templates.templates,
     diagnostics: [...skills.diagnostics, ...templates.diagnostics],
+    resolvedSkillRoots,
+    resolvedTemplateRoots,
   };
 }
 
 export class SkillsPlugin extends Service implements RuntimeSkillsService {
   static inject = [HOST_IO_SERVICE, TOOLS_SERVICE, PERMISSIONS_SERVICE];
-  private readonly catalog: SkillCatalog;
+  /** Not `readonly` — {@link refresh} replaces it wholesale after a re-scan. */
+  private catalog: SkillCatalog;
 
   constructor(ctx: Context, catalog: SkillCatalog) {
     super(ctx, SKILLS_SERVICE);
@@ -273,6 +340,21 @@ export class SkillsPlugin extends Service implements RuntimeSkillsService {
       readBody: (filePath) => this.body(filePath),
       authorizeSkill: (skill) => this.authorizeSkill(skill, `skill-expand:${skill.name}`),
     });
+  }
+
+  async refresh(): Promise<void> {
+    const source = skillSource(this.ctx.runtimeHostIo, MAX_SCAN_BYTES);
+    const [skills, templates] = await Promise.all([
+      loadSkills(source, this.catalog.resolvedSkillRoots),
+      loadPromptTemplates(source, this.catalog.resolvedTemplateRoots),
+    ]);
+    this.catalog = {
+      skills: skills.skills,
+      templates: templates.templates,
+      diagnostics: [...skills.diagnostics, ...templates.diagnostics],
+      resolvedSkillRoots: this.catalog.resolvedSkillRoots,
+      resolvedTemplateRoots: this.catalog.resolvedTemplateRoots,
+    };
   }
 
   /**

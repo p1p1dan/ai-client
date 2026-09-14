@@ -57,8 +57,11 @@ export function substituteArgs(content: string, args: readonly string[]): string
       return args.slice(start).join(' ');
     }
   );
+  // skills-mcp-18 — a string replacement value lets String.replace interpret
+  // `$&`, `$'`, `` $` `` and `$1` inside `allArgs` as replacement patterns. A
+  // function replacer returns the string literally, whatever it contains.
   const allArgs = args.join(' ');
-  return result.replace(/\$ARGUMENTS/g, allArgs).replace(/\$@/g, allArgs);
+  return result.replace(/\$ARGUMENTS/g, () => allArgs).replace(/\$@/g, () => allArgs);
 }
 
 export interface SlashInvocation {

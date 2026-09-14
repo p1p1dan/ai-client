@@ -14,8 +14,10 @@
  */
 
 import { basename, extname, join } from 'node:path';
+import type { RuntimeFileKind } from '../../contracts.ts';
 import {
   parseFrontmatter,
+  resolveEntryKind,
   type SkillDiagnostic,
   type SkillScope,
   type SkillSource,
@@ -49,10 +51,17 @@ export function templateBody(text: string): string {
   return (match ? text.slice(match[0].length) : text).trim();
 }
 
+/** skills-mcp-19 — capped like pi's fallback (`firstLine.slice(0, 60)` + `...`). */
+const FALLBACK_DESCRIPTION_LIMIT = 60;
+
 function firstLine(body: string): string {
   for (const line of body.split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (trimmed) return trimmed.replace(/\s+/g, ' ');
+    if (!trimmed) continue;
+    const collapsed = trimmed.replace(/\s+/g, ' ');
+    return collapsed.length > FALLBACK_DESCRIPTION_LIMIT
+      ? `${collapsed.slice(0, FALLBACK_DESCRIPTION_LIMIT)}...`
+      : collapsed;
   }
   return '';
 }
@@ -84,7 +93,7 @@ export async function loadPromptTemplates(
       });
       continue;
     }
-    let entries: readonly { name: string; kind: string }[] | undefined;
+    let entries: readonly { name: string; kind: RuntimeFileKind }[] | undefined;
     try {
       entries = await source.list(root.path);
     } catch (error) {
@@ -99,8 +108,17 @@ export async function loadPromptTemplates(
     const ordered = [...entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     for (const entry of ordered) {
       if (found.length >= MAX_TEMPLATES) break;
-      if (entry.kind !== 'file' || entry.name.startsWith('.')) continue;
+      if (entry.name.startsWith('.')) continue;
       if (extname(entry.name).toLowerCase() !== '.md') continue;
+      // skills-mcp-08 — a symlinked prompt template needs the same resolution
+      // skills get: `list()`'s kind never follows a link.
+      const effectiveKind = await resolveEntryKind(
+        source,
+        join(root.path, entry.name),
+        entry.kind,
+        diagnostics
+      );
+      if (effectiveKind !== 'file') continue;
       const name = basename(entry.name, extname(entry.name));
       if (!isValidName(name)) {
         diagnostics.push({
@@ -132,7 +150,7 @@ export async function loadPromptTemplates(
         });
         continue;
       }
-      const front = parseFrontmatter(text);
+      const front = parseFrontmatter(text, { diagnostics, path: filePath });
       found.push({
         name,
         description: front?.description?.replace(/\s+/g, ' ').trim() || firstLine(body),

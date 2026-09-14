@@ -18,10 +18,11 @@
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
+import type { RuntimeFileKind, RuntimeHostIoService } from '../contracts.ts';
 import {
   expandPrompt,
   formatSkillInvocation,
@@ -29,21 +30,32 @@ import {
   parseSlashInvocation,
   substituteArgs,
 } from '../plugins/skills/expand.ts';
-import { skillRoots, templateRoots } from '../plugins/skills/index.ts';
+import { skillRoots, skillSource, templateRoots } from '../plugins/skills/index.ts';
 import {
   loadSkills,
   MAX_DESCRIPTION_BYTES,
+  MAX_SKILL_DEPTH,
+  MAX_SKILLS,
   parseFrontmatter,
+  type SkillDiagnostic,
   type SkillRoot,
   type SkillSource,
 } from '../plugins/skills/loader.ts';
 import { skillsSegment } from '../plugins/skills/prompt.ts';
 import { loadPromptTemplates, templateBody } from '../plugins/skills/templates.ts';
 
-/** In-memory tree. Directories are implied by the keys, as on a real filesystem. */
-function fakeSource(files: Record<string, string>): SkillSource {
+/**
+ * In-memory tree. Directories are implied by the keys, as on a real filesystem.
+ * `symlinks` maps a symlink's own path to the path it points at (which may or
+ * may not exist, and chains of symlinks are followed) — enough to exercise
+ * skills-mcp-08 without a real filesystem.
+ */
+function fakeSource(
+  files: Record<string, string>,
+  symlinks: Record<string, string> = {}
+): SkillSource {
   const directories = new Set<string>();
-  for (const path of Object.keys(files)) {
+  const addAncestors = (path: string) => {
     for (
       let parent = join(path, '..');
       parent !== join(parent, '..');
@@ -51,21 +63,76 @@ function fakeSource(files: Record<string, string>): SkillSource {
     ) {
       directories.add(parent);
     }
-  }
+  };
+  for (const path of Object.keys(files)) addAncestors(path);
+  for (const path of Object.keys(symlinks)) addAncestors(path);
+  const exists = (path: string) => directories.has(path) || Object.hasOwn(files, path);
+
+  /**
+   * Real symlink transparency: a path whose PREFIX (not just the whole path)
+   * is a symlink still resolves, e.g. `<link-to-dir>/SKILL.md`. Walk from the
+   * full path up to shorter prefixes; the first prefix found in `symlinks` is
+   * substituted and the walk restarts from the rebuilt path (for chains and
+   * nested links). No symlink anywhere in the chain: return `path` as-is,
+   * which may legitimately not exist. A cycle or a dangling target: give up
+   * and return the original `path` too, which then correctly fails `exists`.
+   */
+  const resolveFullPath = (path: string, seen = new Set<string>()): string => {
+    if (exists(path)) return path;
+    if (seen.has(path)) return path; // cycle guard
+    seen.add(path);
+    const suffix: string[] = [];
+    let prefix = path;
+    while (prefix !== join(prefix, '..')) {
+      if (symlinks[prefix] !== undefined) {
+        const rebuilt = suffix.length
+          ? join(symlinks[prefix], ...[...suffix].reverse())
+          : symlinks[prefix];
+        return resolveFullPath(rebuilt, seen);
+      }
+      suffix.push(basename(prefix));
+      prefix = join(prefix, '..');
+    }
+    return path;
+  };
+
+  const childrenOf = (dir: string) => {
+    const children = new Map<string, RuntimeFileKind>();
+    for (const file of Object.keys(files)) {
+      if (!file.startsWith(`${dir}/`)) continue;
+      const rest = file.slice(dir.length + 1);
+      const slash = rest.indexOf('/');
+      children.set(slash < 0 ? rest : rest.slice(0, slash), slash < 0 ? 'file' : 'directory');
+    }
+    // A directory that exists only to hold a nested symlink (no real file of
+    // its own directly under `dir`) still needs to show up as a child, e.g.
+    // `linked/` in `agent/skills/linked/SKILL.md` when only the `.md` is a
+    // symlink and `linked/` itself is an ordinary directory.
+    for (const candidate of directories) {
+      if (join(candidate, '..') !== dir || symlinks[candidate] !== undefined) continue;
+      if (!children.has(basename(candidate))) children.set(basename(candidate), 'directory');
+    }
+    for (const link of Object.keys(symlinks)) {
+      if (join(link, '..') !== dir) continue;
+      children.set(basename(link), 'symlink');
+    }
+    return children;
+  };
+
   return {
     async readText(path) {
-      return files[path];
+      return files[resolveFullPath(path)];
     },
     async list(path) {
-      if (!directories.has(path)) return undefined;
-      const children = new Map<string, 'file' | 'directory'>();
-      for (const file of Object.keys(files)) {
-        if (!file.startsWith(`${path}/`)) continue;
-        const rest = file.slice(path.length + 1);
-        const slash = rest.indexOf('/');
-        children.set(slash < 0 ? rest : rest.slice(0, slash), slash < 0 ? 'file' : 'directory');
-      }
-      return [...children].map(([name, kind]) => ({ name, kind }));
+      const dir = resolveFullPath(path);
+      if (!directories.has(dir)) return undefined;
+      return [...childrenOf(dir)].map(([name, kind]) => ({ name, kind }));
+    },
+    async stat(path) {
+      const resolved = resolveFullPath(path);
+      if (directories.has(resolved)) return { kind: 'directory' };
+      if (Object.hasOwn(files, resolved)) return { kind: 'file' };
+      return undefined;
     },
   };
 }
@@ -111,6 +178,38 @@ describe('P5-1 frontmatter', () => {
       name: 'a',
       description: 'd',
     });
+  });
+
+  it('parses disable-model-invocation as a boolean', () => {
+    expect(
+      parseFrontmatter('---\nname: a\ndescription: d\ndisable-model-invocation: true\n---\nbody')
+    ).toEqual({ name: 'a', description: 'd', disableModelInvocation: true });
+    expect(
+      parseFrontmatter('---\nname: a\ndescription: d\ndisable-model-invocation: false\n---\nbody')
+    ).toEqual({ name: 'a', description: 'd', disableModelInvocation: false });
+  });
+
+  // skills-mcp-10 — a folded (`>`) or literal (`|`) block scalar leaves only
+  // the indicator on the key's own line; this reader must not read that
+  // character as the actual value, and must report it when asked to.
+  it('drops a YAML block-scalar value instead of reading the indicator as the value', () => {
+    const folded = parseFrontmatter(
+      '---\nname: a\ndescription: >\n  Extract text\n  from PDFs.\n---\nbody'
+    );
+    expect(folded).toEqual({ name: 'a' });
+    const diagnostics: SkillDiagnostic[] = [];
+    const reported = parseFrontmatter('---\nname: a\ndescription: |-\n  Literal text.\n---\nbody', {
+      diagnostics,
+      path: '/agent/skills/a/SKILL.md',
+    });
+    expect(reported).toEqual({ name: 'a' });
+    expect(diagnostics).toEqual([
+      {
+        code: 'invalid_metadata',
+        path: '/agent/skills/a/SKILL.md',
+        message: expect.stringContaining('description'),
+      },
+    ]);
   });
 });
 
@@ -212,16 +311,122 @@ describe('P5-1 skill discovery', () => {
     expect(skills).toEqual([]);
     expect(diagnostics).toEqual([]);
   });
+
+  // skills-mcp-08 — a symlinked skill directory or SKILL.md loads exactly
+  // like a real one; `list()`'s Dirent kind does not follow the link, so
+  // this exercises the `stat()`-based resolution added for it.
+  it('follows a symlinked skill directory to its SKILL.md', async () => {
+    const source = fakeSource(
+      { '/real/pdf-tools/SKILL.md': front('pdf-tools', 'Extract text from PDFs') },
+      { '/home/.agents/skills/pdf-tools': '/real/pdf-tools' }
+    );
+    const { skills, diagnostics } = await loadSkills(source, [AGENTS]);
+    expect(skills.map((skill) => skill.name)).toEqual(['pdf-tools']);
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('follows a symlinked SKILL.md file', async () => {
+    const source = fakeSource(
+      { '/real/SKILL.md': front('linked', 'The real file lives elsewhere') },
+      { '/agent/skills/linked/SKILL.md': '/real/SKILL.md' }
+    );
+    const { skills } = await loadSkills(source, [USER]);
+    expect(skills.map((skill) => skill.name)).toEqual(['linked']);
+  });
+
+  it('reports a dangling symlink with a diagnostic instead of skipping it silently', async () => {
+    const source = fakeSource(
+      {},
+      { '/home/.agents/skills/broken-link': '/nowhere/does-not-exist' }
+    );
+    const { skills, diagnostics } = await loadSkills(source, [AGENTS]);
+    expect(skills).toEqual([]);
+    expect(diagnostics).toEqual([
+      {
+        code: 'read_failed',
+        path: join('/home/.agents/skills', 'broken-link'),
+        message: expect.stringContaining('symlink'),
+      },
+    ]);
+  });
+
+  it('drops skills past MAX_SKILLS with a diagnostic for the root that was not scanned', async () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < MAX_SKILLS; i++) {
+      files[`/agent/skills/s${i}/SKILL.md`] = front(`s${i}`, `Skill number ${i}`);
+    }
+    files['/home/.agents/skills/overflow/SKILL.md'] = front('overflow', 'One too many');
+    const { skills, diagnostics } = await loadSkills(fakeSource(files), [USER, AGENTS]);
+    expect(skills).toHaveLength(MAX_SKILLS);
+    expect(diagnostics).toEqual([
+      {
+        code: 'too_many',
+        path: AGENTS.path,
+        message: `stopped after ${MAX_SKILLS} skills; this root was not scanned`,
+      },
+    ]);
+  });
+
+  it('does not descend past MAX_SKILL_DEPTH', async () => {
+    const segment = (n: number) => Array.from({ length: n }, (_, i) => `d${i}`).join('/');
+    const shallow = `/agent/skills/${segment(MAX_SKILL_DEPTH)}`;
+    const deep = `/agent/skills/${segment(MAX_SKILL_DEPTH + 1)}`;
+    const source = fakeSource({
+      [`${shallow}/SKILL.md`]: front('shallow', 'Within the depth budget'),
+      [`${deep}/SKILL.md`]: front('deep', 'One level past the budget'),
+    });
+    const { skills } = await loadSkills(source, [USER]);
+    expect(skills.map((skill) => skill.name)).toEqual(['shallow']);
+  });
+
+  // Decision 004 — same-name skills at two project levels: the one closer to
+  // cwd (later in the roots array, per `skillRoots`'s ordering) wins.
+  it('lets a project skill closer to cwd override one from an ancestor directory', async () => {
+    const ANCESTOR: SkillRoot = {
+      path: '/repo/.agents/skills',
+      scope: 'project',
+      rootMarkdown: false,
+    };
+    const CLOSER: SkillRoot = {
+      path: '/repo/packages/app/.agents/skills',
+      scope: 'project',
+      rootMarkdown: false,
+    };
+    const source = fakeSource({
+      '/repo/.agents/skills/review/SKILL.md': front('review', 'Ancestor version'),
+      '/repo/packages/app/.agents/skills/review/SKILL.md': front('review', 'Closest version'),
+    });
+    const { skills } = await loadSkills(source, [ANCESTOR, CLOSER]);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]).toMatchObject({ description: 'Closest version', scope: 'project' });
+  });
 });
 
+/** No path ever has a `.git`, i.e. "not inside a git checkout at all". */
+const NO_GIT: Pick<RuntimeHostIoService, 'stat'> = {
+  async stat() {
+    throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+  },
+};
+
+/** `.git` exists at exactly `repoRoot` and nowhere else in the climb. */
+function gitAt(repoRoot: string): Pick<RuntimeHostIoService, 'stat'> {
+  return {
+    async stat(path: string) {
+      if (path === join(repoRoot, '.git')) return { kind: 'directory', size: 0, mtimeMs: 0 };
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    },
+  };
+}
+
 describe('P5-1 root selection', () => {
-  it('withholds project roots until the folder is trusted', () => {
-    const untrusted = skillRoots({ agentDir: '/agent', cwd: '/work', home: '/home' });
+  it('withholds project roots until the folder is trusted', async () => {
+    const untrusted = await skillRoots(NO_GIT, { agentDir: '/agent', cwd: '/work', home: '/home' });
     expect(untrusted.map((root) => root.path)).toEqual([
       join('/agent', 'skills'),
       join('/home', '.agents', 'skills'),
     ]);
-    const trusted = skillRoots({
+    const trusted = await skillRoots(NO_GIT, {
       agentDir: '/agent',
       cwd: '/work',
       home: '/home',
@@ -236,6 +441,51 @@ describe('P5-1 root selection', () => {
     expect(templateRoots({ agentDir: '/agent', cwd: '/work' }).map((root) => root.path)).toEqual([
       join('/agent', 'prompts'),
     ]);
+  });
+
+  // Decision 004 — `.agents/skills` is looked up from cwd through every
+  // ancestor up to (and including) the repo root, not cwd alone.
+  it('walks cwd up through ancestors to the repo root for .agents/skills', async () => {
+    const cwd = join('/repo', 'packages', 'app');
+    const roots = await skillRoots(gitAt('/repo'), { cwd, projectTrusted: true });
+    const agentsRoots = roots.filter(
+      (root) => root.scope === 'project' && root.path.endsWith(join('.agents', 'skills'))
+    );
+    // Repo root first (least specific), cwd last — last-wins in `loadSkills`
+    // means the level closest to cwd overrides one declared further away.
+    expect(agentsRoots.map((root) => root.path)).toEqual([
+      join('/repo', '.agents', 'skills'),
+      join('/repo', 'packages', '.agents', 'skills'),
+      join('/repo', 'packages', 'app', '.agents', 'skills'),
+    ]);
+    // `.pi/skills` is unaffected by decision 004: still cwd only.
+    expect(roots.filter((root) => root.path.includes(join('.pi', 'skills')))).toHaveLength(1);
+  });
+
+  it('falls back to cwd alone when no ancestor has a .git', async () => {
+    const roots = await skillRoots(NO_GIT, { cwd: '/work/nested', projectTrusted: true });
+    const projectAgentsRoots = roots.filter(
+      (root) => root.scope === 'project' && root.path.endsWith(join('.agents', 'skills'))
+    );
+    expect(projectAgentsRoots).toEqual([
+      { path: join('/work', 'nested', '.agents', 'skills'), scope: 'project', rootMarkdown: false },
+    ]);
+  });
+});
+
+describe('P5-1 skillSource adapter', () => {
+  // skills-mcp-25 — a permission error while scanning is not the same fact as
+  // "no skills directory"; it must not fail the catalog build. This is the
+  // one path `fakeSource` (a plain in-memory map) cannot exercise, because it
+  // never throws: only the real `skillSource()` adapter has the try/catch
+  // that turns a host EACCES into `undefined`.
+  it('treats a readText EACCES the same as a missing file, not an error', async () => {
+    const io = {
+      async readFile() {
+        throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      },
+    } as unknown as RuntimeHostIoService;
+    await expect(skillSource(io, 1024).readText('/locked/SKILL.md')).resolves.toBeUndefined();
   });
 });
 
@@ -279,6 +529,20 @@ describe('P5-1 prompt templates', () => {
     expect(templateBody('---\ndescription: d\n---\nthe body\n')).toBe('the body');
     expect(templateBody('no frontmatter\n')).toBe('no frontmatter');
   });
+
+  it('strips CRLF and a BOM-prefixed frontmatter block the same as LF', () => {
+    expect(templateBody('﻿---\r\ndescription: d\r\n---\r\nthe body\r\n')).toBe('the body');
+  });
+
+  // skills-mcp-19 — the first-line fallback is capped, same length pi uses.
+  it('caps the first-line fallback description at 60 characters', async () => {
+    const long = 'x'.repeat(80);
+    const source = fakeSource({ '/agent/prompts/long.md': `${long}\nmore text\n` });
+    const { templates } = await loadPromptTemplates(source, [
+      { path: '/agent/prompts', scope: 'user' },
+    ]);
+    expect(templates[0].description).toBe(`${'x'.repeat(60)}...`);
+  });
 });
 
 describe('P5-1 slash expansion', () => {
@@ -315,12 +579,23 @@ describe('P5-1 slash expansion', () => {
     );
   });
 
+  // skills-mcp-18 — a string replacement value lets String.replace read `$&`,
+  // `$'`, `` $` `` and `$1` inside the argument text as replacement patterns
+  // instead of literal characters. A user pasting a `$1` or `$&` as an
+  // argument must see it come back unchanged.
+  it('treats special replacement patterns in $ARGUMENTS and $@ as literal text', () => {
+    const args = parseCommandArgs('$& $1 literal');
+    expect(substituteArgs('before [$ARGUMENTS] after', args)).toBe('before [$& $1 literal] after');
+    expect(substituteArgs('before [$@] after', args)).toBe('before [$& $1 literal] after');
+  });
+
   it('expands a template and a skill, and passes unknown commands through untouched', async () => {
     const skill = {
       name: 'pdf',
       description: 'd',
       filePath: '/agent/skills/pdf/SKILL.md',
       scope: 'user' as const,
+      disableModelInvocation: false,
     };
     const catalog = {
       skills: [skill],
@@ -363,12 +638,41 @@ describe('P5-1 prompt block', () => {
   it('emits nothing for an empty catalog and escapes what it emits', () => {
     expect(skillsSegment([])).toBeUndefined();
     const segment = skillsSegment([
-      { name: 'a&b', description: '<danger>', filePath: '/x/SKILL.md', scope: 'user' },
+      {
+        name: 'a&b',
+        description: '<danger>',
+        filePath: '/x/SKILL.md',
+        scope: 'user',
+        disableModelInvocation: false,
+      },
     ]);
     expect(segment?.slot).toBe('skills');
     expect(segment?.text).toContain('<name>a&amp;b</name>');
     expect(segment?.text).toContain('<description>&lt;danger&gt;</description>');
     expect(segment?.text).toContain('<location>/x/SKILL.md</location>');
+  });
+
+  // skills-mcp-09 — the author's opt-out removes the skill from the prompt
+  // segment entirely; it does not just hide the description.
+  it('drops a disable-model-invocation skill from the segment', () => {
+    const hidden = {
+      name: 'hidden',
+      description: 'd',
+      filePath: '/x/SKILL.md',
+      scope: 'user' as const,
+      disableModelInvocation: true,
+    };
+    expect(skillsSegment([hidden])).toBeUndefined();
+    const shown = {
+      name: 'shown',
+      description: 'd',
+      filePath: '/y/SKILL.md',
+      scope: 'user' as const,
+      disableModelInvocation: false,
+    };
+    const segment = skillsSegment([hidden, shown]);
+    expect(segment?.text).not.toContain('<name>hidden</name>');
+    expect(segment?.text).toContain('<name>shown</name>');
   });
 });
 
@@ -558,5 +862,67 @@ describe('P5-1 wired into a real runtime', () => {
     const skill = await handle.skills?.expand('/skill:pdf');
     expect(skill).toMatchObject({ expanded: true });
     if (skill?.expanded) expect(skill.text).toContain('STEP ONE: open the file.');
+  });
+
+  // skills-mcp-25 — the catalog knows about a skill (it was there at scan
+  // time) but the file is gone by the time the tool reads it; the fallback
+  // text at index.ts:225-235 was never covered.
+  it('answers the skill tool fallback text when the catalog file can no longer be read', async () => {
+    const { handle, faux } = await runtime();
+    await rm(join(agentDir, 'skills', 'pdf', 'SKILL.md'));
+    faux.setResponses([skillCall('pdf'), fauxAssistantMessage('done')]);
+    const texts: string[] = [];
+    let errored = false;
+    const result = await handle.run({
+      prompt: 'use the pdf skill',
+      onEvent: (event) => {
+        if (event.type === 'tool_execution_end' && event.toolName === 'skill') {
+          errored = event.isError;
+          for (const part of event.result.content) if (part.type === 'text') texts.push(part.text);
+        }
+      },
+    });
+    expect(result.success).toBe(true);
+    expect(errored).toBeFalsy();
+    expect(texts.join('\n')).toContain('could not be read from');
+  });
+
+  // skills-mcp-20 — the catalog is a snapshot from worker start; `refresh()`
+  // is the missing capability that lets a newly installed skill (or template)
+  // become visible without a worker restart.
+  it('picks up a newly installed skill and template after refresh()', async () => {
+    const { handle, faux } = await runtime();
+    let prompt = '';
+    faux.setResponses([
+      (context) => {
+        prompt = context.systemPrompt ?? '';
+        return fauxAssistantMessage('done');
+      },
+    ]);
+    await handle.run({ prompt: 'hello' });
+    expect(prompt).not.toContain('<name>new-skill</name>');
+    expect(handle.skills?.templates.map((item) => item.name)).not.toContain('new-template');
+
+    await mkdir(join(agentDir, 'skills', 'new-skill'), { recursive: true });
+    await writeFile(
+      join(agentDir, 'skills', 'new-skill', 'SKILL.md'),
+      front('new-skill', 'Installed after the worker started')
+    );
+    await writeFile(
+      join(agentDir, 'prompts', 'new-template.md'),
+      '---\ndescription: Installed after the worker started\n---\nBody.\n'
+    );
+    await handle.skills?.refresh();
+
+    let prompt2 = '';
+    faux.setResponses([
+      (context) => {
+        prompt2 = context.systemPrompt ?? '';
+        return fauxAssistantMessage('done');
+      },
+    ]);
+    await handle.run({ prompt: 'hello again' });
+    expect(prompt2).toContain('<name>new-skill</name>');
+    expect(handle.skills?.templates.map((item) => item.name)).toContain('new-template');
   });
 });

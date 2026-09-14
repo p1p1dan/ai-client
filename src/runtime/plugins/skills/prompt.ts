@@ -30,7 +30,11 @@ function escapeXml(value: string): string {
 }
 
 export function skillsSegment(skills: readonly RuntimeSkill[]): PromptSegment | undefined {
-  if (skills.length === 0) return undefined;
+  // skills-mcp-09 — the author's `disable-model-invocation: true` opts a
+  // skill out of autonomous use; it stays reachable by name through the
+  // `skill` tool and `/skill:name`, it just does not advertise itself here.
+  const listed = skills.filter((skill) => !skill.disableModelInvocation);
+  if (listed.length === 0) return undefined;
   const lines = [
     'The following skills provide specialized instructions for specific tasks.',
     'Call the `skill` tool with a skill name to load its full instructions when the task matches its description.',
@@ -38,7 +42,7 @@ export function skillsSegment(skills: readonly RuntimeSkill[]): PromptSegment | 
     '',
     '<available_skills>',
   ];
-  for (const skill of skills) {
+  for (const skill of listed) {
     lines.push('  <skill>');
     lines.push(`    <name>${escapeXml(skill.name)}</name>`);
     lines.push(`    <description>${escapeXml(skill.description)}</description>`);

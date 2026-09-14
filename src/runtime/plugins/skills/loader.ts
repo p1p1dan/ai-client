@@ -38,6 +38,13 @@ export interface RuntimeSkill {
   filePath: string;
   /** Which root it came from, for the command list's scope column. */
   scope: SkillScope;
+  /**
+   * skills-mcp-09 — the author's own `disable-model-invocation: true`. It only
+   * removes the skill from the system prompt segment (see `prompt.ts`); the
+   * `skill` tool and `/skill:name` expansion still honour an explicit request,
+   * matching pi's `disableModelInvocation` semantics.
+   */
+  disableModelInvocation: boolean;
 }
 
 export type SkillScope = 'user' | 'project';
@@ -76,6 +83,14 @@ export interface SkillRoot {
 export interface SkillSource {
   readText(path: string): Promise<string | undefined>;
   list(path: string): Promise<readonly { name: string; kind: RuntimeFileKind }[] | undefined>;
+  /**
+   * skills-mcp-08 — resolve what a `symlink` directory entry points at.
+   * `list()` uses the OS's Dirent, which never follows a link, so a symlinked
+   * skill directory or file needs this to learn its real kind. `undefined`
+   * covers every expected absence a stat can hit: broken link, a symlink
+   * loop, or the target vanishing between the listing and this call.
+   */
+  stat(path: string): Promise<{ kind: RuntimeFileKind } | undefined>;
 }
 
 /** Skills past this are dropped with a diagnostic rather than silently trimmed. */
@@ -90,11 +105,28 @@ const SKILL_FILE = 'SKILL.md';
 /** Frontmatter delimiters, tolerant of a BOM and CRLF the way pi is. */
 const FRONTMATTER = /^﻿?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
+/**
+ * skills-mcp-10 — a bare YAML block-scalar indicator (`|`, `>`), optionally
+ * with a chomping (`+`/`-`) and/or indentation digit, and nothing else. This
+ * is what a folded/literal value (`description: >`) looks like to this
+ * reader: the real content lives on the indented lines below, which are
+ * skipped by design, so the key's own line has only the indicator left.
+ */
+const BLOCK_SCALAR_INDICATOR = /^[|>][+-]?\d?[+-]?$/;
+
 export interface SkillFrontmatter {
   name?: string;
   description?: string;
   /** Prompt templates use it; parsed here because both share this reader. */
   argumentHint?: string;
+  /** skills-mcp-09 — `true` only when the frontmatter literally says so. */
+  disableModelInvocation?: boolean;
+}
+
+/** Where a frontmatter diagnostic should land. Optional: pure callers (tests) skip reporting. */
+export interface FrontmatterReport {
+  diagnostics: SkillDiagnostic[];
+  path: string;
 }
 
 /**
@@ -104,9 +136,15 @@ export interface SkillFrontmatter {
  * scalars, and pulling a YAML dependency into the runtime subpackage to read
  * three of them would add a parser — and its failure modes — to the trusted
  * path that composes the system prompt. A file whose frontmatter needs real
- * YAML simply does not declare a description, and is reported as such.
+ * YAML simply does not declare a description, and is reported as such: a key
+ * whose value is a bare block-scalar indicator is dropped (never returned as
+ * if `>` or `|` were the actual value) and, when `report` is supplied, logged
+ * as an `invalid_metadata` diagnostic naming the key.
  */
-export function parseFrontmatter(text: string): SkillFrontmatter | undefined {
+export function parseFrontmatter(
+  text: string,
+  report?: FrontmatterReport
+): SkillFrontmatter | undefined {
   const match = FRONTMATTER.exec(text);
   if (!match) return undefined;
   const fields: Record<string, string> = {};
@@ -124,12 +162,24 @@ export function parseFrontmatter(text: string): SkillFrontmatter | undefined {
     ) {
       value = value.slice(1, -1);
     }
-    if (key) fields[key] = value;
+    if (!key) continue;
+    if (BLOCK_SCALAR_INDICATOR.test(value)) {
+      report?.diagnostics.push({
+        code: 'invalid_metadata',
+        path: report.path,
+        message: `frontmatter key "${key}" uses a YAML block scalar ("${value}"), which this reader does not parse; use a one-line value instead`,
+      });
+      continue;
+    }
+    fields[key] = value;
   }
   return {
     ...(fields.name ? { name: fields.name } : {}),
     ...(fields.description ? { description: fields.description } : {}),
     ...(fields['argument-hint'] ? { argumentHint: fields['argument-hint'] } : {}),
+    ...(fields['disable-model-invocation'] !== undefined
+      ? { disableModelInvocation: fields['disable-model-invocation'].toLowerCase() === 'true' }
+      : {}),
   };
 }
 
@@ -184,7 +234,7 @@ async function readSkillFile(
     return undefined;
   }
   if (text === undefined) return undefined;
-  const front = parseFrontmatter(text);
+  const front = parseFrontmatter(text, { diagnostics, path: filePath });
   if (!front) {
     // Silent for an undeclared file — pi ignores those on purpose, and a
     // README.md next to a skill is not a mistake worth reporting.
@@ -222,7 +272,51 @@ async function readSkillFile(
     description: limitBytes(description, MAX_DESCRIPTION_BYTES),
     filePath,
     scope,
+    disableModelInvocation: front.disableModelInvocation === true,
   };
+}
+
+/**
+ * skills-mcp-08 — learn what a directory entry actually is before deciding
+ * whether it is a skill directory, a skill file, or neither.
+ *
+ * `list()`'s Dirent kind never follows a symlink, so a symlink entry is
+ * resolved with a `stat()` (which does follow it). `file`/`directory` entries
+ * are already known and skip the extra call; `other` (sockets, devices, ...)
+ * is never a skill and needs no diagnostic. A symlink whose target cannot be
+ * resolved — broken, a loop, or vanished — gets a `read_failed` diagnostic
+ * instead of vanishing silently, because from the user's side the skill
+ * "does nothing" with no clue why.
+ */
+export async function resolveEntryKind(
+  source: SkillSource,
+  path: string,
+  kind: RuntimeFileKind,
+  diagnostics: SkillDiagnostic[]
+): Promise<'file' | 'directory' | undefined> {
+  if (kind === 'file' || kind === 'directory') return kind;
+  if (kind !== 'symlink') return undefined;
+  let resolved: { kind: RuntimeFileKind } | undefined;
+  try {
+    resolved = await source.stat(path);
+  } catch (error) {
+    diagnostics.push({
+      code: 'read_failed',
+      path,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+  if (resolved?.kind !== 'file' && resolved?.kind !== 'directory') {
+    diagnostics.push({
+      code: 'read_failed',
+      path,
+      message:
+        'symlink target could not be resolved (broken link, a loop, or not a file/directory)',
+    });
+    return undefined;
+  }
+  return resolved.kind;
 }
 
 async function walkRoot(
@@ -249,19 +343,32 @@ async function walkRoot(
     // therefore the same cacheable system prompt prefix (ARD D9).
     const ordered = [...entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
-    const skillFile = ordered.find((entry) => entry.name === SKILL_FILE && entry.kind === 'file');
-    if (skillFile && !atRoot) {
+    const skillFileEntry = ordered.find(
+      (entry) => entry.name === SKILL_FILE && (entry.kind === 'file' || entry.kind === 'symlink')
+    );
+    if (skillFileEntry && !atRoot) {
       // A directory with SKILL.md IS the skill; its subdirectories are that
-      // skill's assets, not more skills.
-      const skill = await readSkillFile(
+      // skill's assets, not more skills. This is decisive even if the entry
+      // turns out to be an unresolvable symlink: it is still not a directory
+      // of more skills.
+      const skillFilePath = join(directory, SKILL_FILE);
+      const resolvedKind = await resolveEntryKind(
         source,
-        join(directory, SKILL_FILE),
-        basename(directory),
-        root.scope,
-        true,
+        skillFilePath,
+        skillFileEntry.kind,
         diagnostics
       );
-      if (skill) found.push(skill);
+      if (resolvedKind === 'file') {
+        const skill = await readSkillFile(
+          source,
+          skillFilePath,
+          basename(directory),
+          root.scope,
+          true,
+          diagnostics
+        );
+        if (skill) found.push(skill);
+      }
       return;
     }
 
@@ -269,11 +376,12 @@ async function walkRoot(
       if (found.length >= MAX_SKILLS) return;
       if (entry.name.startsWith('.')) continue;
       const path = join(directory, entry.name);
-      if (entry.kind === 'directory') {
+      const effectiveKind = await resolveEntryKind(source, path, entry.kind, diagnostics);
+      if (effectiveKind === 'directory') {
         await visit(path, depth + 1, false);
         continue;
       }
-      if (entry.kind !== 'file' || extname(entry.name).toLowerCase() !== '.md') continue;
+      if (effectiveKind !== 'file' || extname(entry.name).toLowerCase() !== '.md') continue;
       // Below the root a `SKILL.md` was already consumed by the branch above as
       // the whole directory's skill. At the root there is no directory to name
       // it after, so it is just another loose `.md` and follows that rule.
@@ -301,7 +409,7 @@ export interface LoadedSkills {
 }
 
 /**
- * Scan every root in order and resolve name collisions by first-wins.
+ * Scan every root in order and resolve name collisions by last-wins.
  *
  * Roots are passed most-general first (user before project), and the LAST one
  * to claim a name wins — the same precedence the instruction chain uses, where
