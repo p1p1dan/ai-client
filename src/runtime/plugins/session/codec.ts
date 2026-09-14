@@ -74,6 +74,25 @@ function invalid(message: string): never {
   throw new RuntimeHostError('session_invalid', message);
 }
 
+/**
+ * session-02 — a write cut short, as opposed to a complete row that is invalid.
+ *
+ * The tail repair used to key off "the file does not end in a newline", which
+ * stopped being a reliable signal once `pi --session` shares the file: the CLI
+ * appends the missing newline itself the first time it opens a torn file
+ * (`session-manager.js` `loadEntriesFromFile`), turning a fragment we could
+ * still truncate into a "complete" line we refused forever. Shape answers the
+ * same question without depending on the byte after it: every row either side
+ * writes ends in `}`, so a line that does not is an interrupted append.
+ *
+ * Deliberately one-directional. A fragment that happens to break after a nested
+ * `}` reads as complete and is still refused — a loud failure on a file we might
+ * have salvaged, which is the safe way round for a check that deletes a line.
+ */
+function tornRow(line: string): boolean {
+  return !line.trimEnd().endsWith('}');
+}
+
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) invalid('expected JSON object');
   return value as Record<string, unknown>;
@@ -324,12 +343,20 @@ export function decodeSession(content: string): SessionDocument {
   const lanes = new Map<string, string | null>([['main', null]]);
   const alias = new Map<string, string | null>();
   const context: CliContext = { document: result, ids, alias };
+  // Last line carrying data: trailing blank lines are separators, not rows.
+  let lastRow = lines.length - 1;
+  while (lastRow > 0 && lines[lastRow].trim() === '') lastRow--;
+  // session-01 — CLI rows a WRITER BEFORE US may have counted into `seq`.
+  // See the seq check below for why the allowance exists and why it shrinks.
+  let cliRows = 0;
+  /** Whether the CLI, not us, put the current row at the tip of the main lane. */
+  let cliTip = false;
   for (let index = 1; index < lines.length; index++) {
     let parsed: unknown;
     try {
       parsed = JSON.parse(lines[index]);
     } catch {
-      if (index === lines.length - 1 && !content.endsWith('\n')) {
+      if (index >= lastRow && (!content.endsWith('\n') || tornRow(lines[index]))) {
         result.repair = `${lines.slice(0, index).join('\n')}\n`;
         break;
       }
@@ -340,7 +367,7 @@ export function decodeSession(content: string): SessionDocument {
       // H/20 — a row the CLI appended. It carries neither `kind` nor `seq`
       // (both are v4's), so the position in the file IS the sequence. Tolerated
       // in memory: the file keeps the rows exactly as the CLI wrote them.
-      result.seq++;
+      cliRows++;
       const item = entry(cliEntry(row, context));
       if (
         ids.has(item.id) ||
@@ -352,10 +379,25 @@ export function decodeSession(content: string): SessionDocument {
       result.entries.push(item);
       // The CLI has no lanes; it always appends to the conversation's tip.
       lanes.set('main', item.id);
+      cliTip = true;
       continue;
     }
-    if (row.seq !== result.seq + 1) invalid(`non-consecutive seq at line ${index + 1}`);
-    result.seq++;
+    // session-01 — `seq` numbers OUR rows, not positions in the file.
+    //
+    // It used to count every line, CLI rows included, so a worker that had the
+    // session open while a terminal appended to it wrote its next row with a
+    // number the file could no longer justify — and from then on the file threw
+    // `session_invalid` on every open, for good. Counting only our own rows is
+    // what makes the two writers independent.
+    //
+    // The allowance covers files already written under the old rule: those rows
+    // are ahead by exactly the CLI rows before them, so a jump is accepted up to
+    // that many and the allowance is spent as it is used. A larger jump is still
+    // a row that went missing, and still refused.
+    const skew = Number.isSafeInteger(row.seq) ? (row.seq as number) - (result.seq + 1) : -1;
+    if (skew < 0 || skew > cliRows) invalid(`non-consecutive seq at line ${index + 1}`);
+    cliRows -= skew;
+    result.seq = row.seq as number;
     switch (row.kind) {
       case 'entry': {
         const item = entry(row);
@@ -366,12 +408,19 @@ export function decodeSession(content: string): SessionDocument {
         )
           invalid('duplicate id or missing parent');
         if (row.lane !== undefined) {
-          if (
-            typeof row.lane !== 'string' ||
-            !lanes.has(row.lane) ||
-            lanes.get(row.lane) !== item.parentId
-          )
+          if (typeof row.lane !== 'string' || !lanes.has(row.lane))
             invalid('entry does not chain to lane');
+          // session-01 — the same interleaving the seq check allows for, seen
+          // from the branch side. The CLI knows nothing about lanes and always
+          // appends to the tip, so a row our writer produced while holding the
+          // pre-CLI leaf hangs off that leaf instead of the CLI's last row. It
+          // is a branch, not corruption: every id involved is in the file, and
+          // the CLI reads the file the same way (it walks back from the last
+          // row). Only the one row that follows the CLI's is forgiven; from
+          // there on the lane is ours again and the check is strict.
+          if (lanes.get(row.lane) !== item.parentId && !(row.lane === 'main' && cliTip))
+            invalid('entry does not chain to lane');
+          cliTip = false;
           lanes.set(row.lane, item.id);
         }
         ids.add(item.id);
@@ -385,6 +434,8 @@ export function decodeSession(content: string): SessionDocument {
         )
           invalid('invalid lane pointer');
         lanes.set(row.lane, row.leafId as string | null);
+        // An explicit tip; whatever the CLI left is no longer what "main" means.
+        if (row.lane === 'main') cliTip = false;
         if (typeof row.id === 'string' && row.id) alias.set(row.id, row.leafId as string | null);
         break;
       case 'record':

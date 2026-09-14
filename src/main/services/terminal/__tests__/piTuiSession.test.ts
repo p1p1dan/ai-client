@@ -53,6 +53,28 @@ describe('PiTuiExclusiveGuard', () => {
     expect(() => guard.assertHostPromptAllowed()).not.toThrow();
   });
 
+  // cutover-04: leaving terminal mode SUSPENDS the terminal, so ownership is
+  // still held while the user works in another chat. Asked about that other
+  // chat, the gate has to let the write through — the file it names is not the
+  // one a terminal is holding.
+  it('answers about the chat being written, not about the app as a whole', () => {
+    const guard = new PiTuiExclusiveGuard();
+    guard.transferTo('/repo/warm.jsonl');
+
+    expect(() => guard.assertHostPromptAllowed('/repo/warm.jsonl')).toThrow(
+      /close the Pi terminal/
+    );
+    expect(() => guard.assertHostPromptAllowed('/repo/other.jsonl')).not.toThrow();
+    // The same file under the spellings `normalizeSessionKey` exists to collapse
+    // still counts as owned; a gate fooled by a firmlink is not a gate.
+    expect(() => guard.assertHostPromptAllowed('/private/repo/warm.jsonl')).toThrow(
+      /close the Pi terminal/
+    );
+    expect(() => guard.assertHostPromptAllowed('/REPO/WARM.JSONL')).toThrow(
+      /close the Pi terminal/
+    );
+  });
+
   // The pix lesson: tryAcquire-only left a stale owner key after a key desync
   // and the UI could then never open a terminal again.
   it('transfers ownership between sessions instead of refusing the second one', () => {

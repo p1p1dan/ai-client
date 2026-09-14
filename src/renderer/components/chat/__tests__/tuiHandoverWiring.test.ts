@@ -57,6 +57,21 @@ describe('leaving the Pi TUI re-reads the session from disk', () => {
     expect(openGui).toMatch(/catch \(error\) \{[\s\S]{0,400}piTui\.dispose\(terminalId\)/);
   });
 
+  it('reloads when pi exited on its own, not only when the user left the terminal', () => {
+    // session-01: this path used to drop the id and flip the mode, on the
+    // reasoning that there was nothing left to suspend. The reload is the half
+    // that still applies — the worker is alive holding the tree it read before
+    // the terminal appended, so the next GUI write continues from a sequence
+    // the file no longer justifies and the file stops opening at all.
+    const handleExit = WORKSPACE.slice(
+      WORKSPACE.indexOf('const handleTuiExit'),
+      WORKSPACE.indexOf('useEffect(() => {', WORKSPACE.indexOf('const handleTuiExit'))
+    );
+    expect(handleExit).toContain('reloadSession({ sessionId })');
+    // Unconditional: this side cannot tell whether the terminal wrote anything.
+    expect(handleExit).not.toMatch(/if \([^)]*wrote|if \([^)]*released/);
+  });
+
   it('holds the chat surface until the reload settles', () => {
     expect(WORKSPACE).toContain('setSurfaceSwitching(true)');
     expect(WORKSPACE).toMatch(/finally \{\s*setSurfaceSwitching\(false\);/);

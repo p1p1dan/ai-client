@@ -107,12 +107,20 @@ export class PiTuiExclusiveGuard {
   }
 
   /**
-   * Gate for the GUI send path. Throws while terminal mode owns a session, so a
-   * caller that skipped the dispose fails loudly instead of quietly becoming a
-   * second writer on the same file.
+   * Gate for the GUI write paths. Throws while terminal mode owns a session, so
+   * a caller that skipped the dispose fails loudly instead of quietly becoming
+   * a second writer on the same file.
+   *
+   * cutover-04 — scoped to the chat about to be written when a key is given.
+   * Ownership is not a statement about the whole app: leaving terminal mode
+   * SUSPENDS the terminal rather than disposing it, so a warm terminal keeps
+   * chat A's file while the user sends in chat B, and that send is legitimate.
+   * "Is any terminal alive" would refuse it; "does a terminal hold the file I
+   * am about to write" is the question this gate exists to ask.
    */
-  assertHostPromptAllowed(): void {
+  assertHostPromptAllowed(sessionKey?: string): void {
     if (this.#ownerKey === null) return;
+    if (sessionKey !== undefined && !this.owns(sessionKey)) return;
     throw new Error(
       'Terminal mode owns this session; close the Pi terminal before sending from the chat view'
     );

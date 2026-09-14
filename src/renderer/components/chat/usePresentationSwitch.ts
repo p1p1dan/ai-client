@@ -174,7 +174,18 @@ export function usePresentationSwitch(): PresentationSwitch {
     })();
   }, [activeSessionId, setPresentationMode, tuiTerminalId]);
 
+  /**
+   * session-01 — the terminal is gone, but what it typed is still only on disk.
+   *
+   * There is nothing to suspend on this path, which is why the reload used to be
+   * skipped here. That was the wrong half to drop: the worker is still alive
+   * holding the tree it read before the terminal appended, so the timeline stays
+   * behind the file and the next GUI write continues from a sequence the file no
+   * longer justifies. The reload is unconditional for the same reason `openGui`
+   * does it — this side cannot know whether the terminal wrote anything.
+   */
   const handleTuiExit = useCallback(() => {
+    const sessionId = activeSessionId;
     setTuiTerminalId(null);
     setPresentationMode('gui');
     addToast({
@@ -182,7 +193,24 @@ export function usePresentationSwitch(): PresentationSwitch {
       title: 'Pi TUI closed',
       description: 'Returned to the GUI session.',
     });
-  }, [setPresentationMode]);
+    if (!sessionId) return;
+    setSurfaceSwitching(true);
+    void window.electronAPI.chat
+      .reloadSession({ sessionId })
+      .catch((error: unknown) => {
+        addToast({
+          type: 'error',
+          title: 'Could not reload this chat',
+          description:
+            error instanceof Error
+              ? error.message
+              : 'The conversation could not be re-read from disk.',
+        });
+      })
+      .finally(() => {
+        setSurfaceSwitching(false);
+      });
+  }, [activeSessionId, setPresentationMode]);
 
   useEffect(() => {
     if (!tuiTerminalId) return;

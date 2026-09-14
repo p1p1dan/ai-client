@@ -210,11 +210,15 @@ export class JsonlSessionStore {
   }
 
   appendCompaction(result: CompactResult): Promise<CompactionEntry> {
-    const payload = { type: 'compaction', ...structuredClone(result) };
-    const anchor = this.compactionAnchor(result.retainedTail.length);
-    return this.appendEntry(
-      (anchor === undefined ? payload : { ...payload, firstKeptEntryId: anchor }) as NewSessionEntry
-    ) as Promise<CompactionEntry>;
+    const payload = structuredClone({ type: 'compaction', ...result });
+    // Resolved inside the queue rather than here: an append still waiting to be
+    // written would move the branch the anchor is looked up in.
+    return this.appendEntry(() => {
+      const anchor = this.compactionAnchor(result.retainedTail);
+      return (
+        anchor === undefined ? payload : { ...payload, firstKeptEntryId: anchor }
+      ) as NewSessionEntry;
+    }) as Promise<CompactionEntry>;
   }
 
   /**
@@ -223,18 +227,37 @@ export class JsonlSessionStore {
    * v4 stores the kept messages inside the entry itself, so this is written for
    * the CLI only: without it `pi --session` shows the summary and everything
    * after it, silently dropping the tail we deliberately retained.
+   *
+   * session-03 — found by identity, not by counting back N entries. This runtime
+   * does not keep pi's tail: `context/compaction.ts` rebuilds it from the latest
+   * user message, so the kept messages are NOT the last N on the branch, and
+   * counting landed on whatever ended the turn — after a tool call, a toolResult.
+   * The CLI would then open the conversation on a tool result whose tool call it
+   * never sees, which providers reject as a malformed request. The timestamp
+   * survives the rebuild (a truncated copy keeps it), so it is what identifies
+   * the message; no single match means no anchor, and the CLI shows the summary
+   * alone — a smaller context, not a broken one.
    */
-  private compactionAnchor(retained: number): string | undefined {
-    if (retained <= 0) return undefined;
-    const carried = branchEntries(this.document).filter((entry) => entry.type === 'message');
-    return carried.length < retained ? undefined : carried[carried.length - retained]?.id;
+  private compactionAnchor(retainedTail: readonly AgentMessage[]): string | undefined {
+    const first = retainedTail[0];
+    if (!first) return undefined;
+    const matches = branchEntries(this.document).filter(
+      (item) =>
+        item.type === 'message' &&
+        item.message.role === first.role &&
+        item.message.timestamp === first.timestamp
+    );
+    return matches.length === 1 ? matches[0]?.id : undefined;
   }
 
-  appendEntry(payload: NewSessionEntry): Promise<Entry> {
-    const entry = structuredClone(payload);
+  appendEntry(payload: NewSessionEntry | (() => NewSessionEntry)): Promise<Entry> {
+    // Copied now so a caller cannot mutate what is about to be written. A
+    // function instead of a value defers that to the queue, for a payload whose
+    // content depends on the branch the write will extend.
+    const entry = typeof payload === 'function' ? payload : structuredClone(payload);
     return this.enqueue(async () => {
       const item: Entry = {
-        ...entry,
+        ...(typeof entry === 'function' ? entry() : entry),
         id: randomUUID(),
         seq: this.document.seq + 1,
         parentId: this.document.leafId,

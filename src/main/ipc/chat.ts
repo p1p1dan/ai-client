@@ -128,23 +128,40 @@ async function assertPiCompatibleIndexRow(sessionId: string): Promise<void> {
  *
  * Deliberately kills the terminal rather than negotiating with it: the Pi CLI
  * offers no flush-and-hand-over handshake, so "stop the other writer" is the
- * only guarantee available. Best-effort by design — a send must not fail
+ * only guarantee available. Best-effort by design — a write must not fail
  * because a terminal that may not even exist could not be reaped.
  *
- * Returns true when a terminal was actually holding this session, which is the
- * signal that the worker's view of the file is now stale — see the send handler.
+ * Three steps, in this order. Release the terminal; refuse to continue if one
+ * still holds the file (cutover-04 — the gate was written for this and then
+ * never called); and re-read the file when a terminal has written it, because
+ * killing the other writer says nothing about what it wrote. Skipping that last
+ * step is what session-01 turned into a permanently unopenable session: the
+ * worker kept the sequence it read before the terminal appended and wrote its
+ * next row with a number the file could no longer justify.
+ *
+ * Every GUI path that appends to the JSONL calls this — send, compact, rewind.
  */
-async function releaseTuiOwnership(sessionId: string): Promise<boolean> {
+async function handOverFromTui(
+  sessionId: string,
+  ownerWebContentsId: number | undefined
+): Promise<void> {
+  let sessionFile: string | undefined;
   try {
-    const row = await sessionIndexService.get(sessionId);
-    const sessionFile = row?.runtimeIdentity;
-    if (!sessionFile) return false;
-    const { releaseSessionForHostPrompt } = await import('./piTui');
-    return await releaseSessionForHostPrompt(sessionFile);
+    sessionFile = (await sessionIndexService.get(sessionId))?.runtimeIdentity;
   } catch (error) {
-    console.warn('[chat] Failed to release Pi TUI ownership before send:', error);
-    return false;
+    console.warn('[chat] Failed to read the session row before a GUI write:', error);
+    return;
   }
+  if (!sessionFile) return;
+  const { assertHostPromptAllowed, releaseSessionForHostPrompt } = await import('./piTui');
+  let terminalWrote = false;
+  try {
+    terminalWrote = await releaseSessionForHostPrompt(sessionFile);
+  } catch (error) {
+    console.warn('[chat] Failed to release Pi TUI ownership before a GUI write:', error);
+  }
+  assertHostPromptAllowed(sessionFile);
+  if (terminalWrote) await reloadSessionFromDisk(sessionId, ownerWebContentsId);
 }
 
 /**
@@ -483,19 +500,13 @@ export function registerChatHandlers(): void {
         model?: string;
       }
     ): Promise<{ requestId: string }> => {
-      // Q17 — a warm Pi terminal on this session must stop before the worker
-      // writes the same JSONL. Terminals on other sessions are untouched.
-      const releasedTerminal = await releaseTuiOwnership(payload.sessionId);
       // Ownership follows the most recent driver: a session picked up in a
       // second window must show ITS approval prompts there, not in the first.
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      if (releasedTerminal) {
-        // Killing the other writer is only half of the handover. The worker
-        // still holds the tree it read before the terminal appended to it, so
-        // sending now would branch off the pre-terminal leaf and strand
-        // everything typed in the TUI. Re-read the file first.
-        await reloadSessionFromDisk(payload.sessionId, ownerWebContentsId);
-      }
+      // Q17 — a warm Pi terminal on this session must stop, and whatever it
+      // wrote must be read back, before the worker writes the same JSONL.
+      // Terminals on other sessions are untouched.
+      await handOverFromTui(payload.sessionId, ownerWebContentsId);
       try {
         const requestId = await workerManager.send({ ...payload, ownerWebContentsId });
         return { requestId };
@@ -672,6 +683,10 @@ export function registerChatHandlers(): void {
     ): Promise<Awaited<ReturnType<typeof workerManager.compactSession>>> => {
       await requireIndexedPiSession(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      // session-01 — compaction appends to the JSONL just as a turn does, so it
+      // needs the same handover. Without it a compaction written on top of what
+      // a terminal appended is the write that makes the file unopenable.
+      await handOverFromTui(payload.sessionId, ownerWebContentsId);
       return workerManager.compactSession({
         sessionId: payload.sessionId,
         ...(payload.instructions ? { instructions: payload.instructions } : {}),
@@ -712,11 +727,15 @@ export function registerChatHandlers(): void {
       if (payload.confirmed !== true) {
         throw new Error('rewind_confirmation_required: Rewind requires explicit confirmation');
       }
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      // session-01 — a rewind moves the branch by appending a lane row, which is
+      // a write to the shared file and needs the same handover as a send.
+      await handOverFromTui(payload.sessionId, ownerWebContentsId);
       return workerManager.rewindSession({
         sessionId: payload.sessionId,
         entryId: payload.entryId,
         confirmed: true,
-        ownerWebContentsId: claimSessionForSender(e, payload.sessionId),
+        ownerWebContentsId,
       });
     }
   );

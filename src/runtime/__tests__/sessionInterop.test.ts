@@ -84,19 +84,52 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
+/**
+ * A distinct timestamp per message.
+ *
+ * `Date.now()` is not good enough here since session-03: the compaction anchor
+ * identifies the retained message by role and timestamp, and a whole fixture
+ * conversation built inside one millisecond would be genuinely ambiguous.
+ */
+let clock = 1_700_000_000_000;
+const stamp = () => ++clock;
+
 const user = (text: string): AgentMessage =>
-  ({ role: 'user', content: text, timestamp: Date.now() }) as unknown as AgentMessage;
+  ({ role: 'user', content: text, timestamp: stamp() }) as unknown as AgentMessage;
 
 const assistant = (text: string): AgentMessage =>
   ({
     role: 'assistant',
     content: [{ type: 'text', text }],
-    timestamp: Date.now(),
+    timestamp: stamp(),
     api: 'anthropic-messages',
     provider: 'test',
     model: 'test',
     stopReason: 'stop',
     usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+  }) as unknown as AgentMessage;
+
+/** The turn shape that makes session-03 visible: a tool call and its result. */
+const toolCall = (id: string, name: string): AgentMessage =>
+  ({
+    role: 'assistant',
+    content: [{ type: 'toolCall', id, name, arguments: {} }],
+    timestamp: stamp(),
+    api: 'anthropic-messages',
+    provider: 'test',
+    model: 'test',
+    stopReason: 'toolUse',
+    usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+  }) as unknown as AgentMessage;
+
+const toolResult = (id: string, name: string, text: string): AgentMessage =>
+  ({
+    role: 'toolResult',
+    toolCallId: id,
+    toolName: name,
+    content: [{ type: 'text', text }],
+    timestamp: stamp(),
+    isError: false,
   }) as unknown as AgentMessage;
 
 /** Plain text of a conversation, whichever side produced the messages. */
@@ -187,12 +220,17 @@ describe('H/20 · the CLI reads what the GUI wrote', () => {
     const store = await open(file, 'create');
     await store.appendMessage(user('old one'));
     await store.appendMessage(assistant('old reply'));
-    await store.appendMessage(user('kept one'));
+    // session-13: the retained tail is the message that was APPENDED, not a
+    // lookalike built for the fixture. Handing `appendCompaction` fresh objects
+    // that happen to sit at the end of the branch made the old anchor (count
+    // back N entries) correct by construction and hid session-03 entirely.
+    const kept = user('kept one');
+    await store.appendMessage(kept);
     await store.appendMessage(assistant('kept reply'));
     const result: CompactResult = {
       summary: 'summary of the old turns',
       tokensBefore: 1234,
-      retainedTail: [user('kept one'), assistant('kept reply')],
+      retainedTail: [kept],
     };
     await store.appendCompaction(result);
     await store.close();
@@ -204,6 +242,56 @@ describe('H/20 · the CLI reads what the GUI wrote', () => {
     expect(spokenAfterCompaction).toContain('kept one');
     expect(spokenAfterCompaction).toContain('kept reply');
     expect(spokenAfterCompaction).not.toContain('old one');
+  });
+
+  it('anchors a compaction to the kept message, not to the tool result that ended the turn', async () => {
+    // session-03 — the shape `context/compaction.ts` actually produces: one
+    // retained user message, on a branch whose last entry is a toolResult.
+    // Anchoring by position pointed the CLI at that toolResult, whose tool call
+    // sits before the anchor and therefore never reaches the provider — an
+    // unpaired tool result, which is a request-level error, not a quality one.
+    const file = chat();
+    const store = await open(file, 'create');
+    await store.appendMessage(user('summarized instruction'));
+    const kept = user('the instruction the checkpoint keeps');
+    await store.appendMessage(kept);
+    await store.appendMessage(toolCall('call-1', 'read'));
+    await store.appendMessage(toolResult('call-1', 'read', 'file contents'));
+    await store.appendCompaction({
+      summary: 'summary of the turn so far',
+      tokensBefore: 4321,
+      retainedTail: [kept],
+    });
+    await store.close();
+
+    const cli = openCliSession(file);
+    const messages = cli.buildSessionContext().messages as Array<{ role?: string }>;
+    expect(spoken(messages)).toContain('the instruction the checkpoint keeps');
+    // The tool result may be carried, but only behind the call it answers.
+    const call = messages.findIndex((message) => message.role === 'assistant');
+    const answer = messages.findIndex((message) => message.role === 'toolResult');
+    if (answer >= 0) expect(call).toBeGreaterThanOrEqual(0);
+    if (answer >= 0) expect(call).toBeLessThan(answer);
+  });
+
+  it('writes no anchor when the retained tail is not a message in this file', async () => {
+    // Degrading to "summary only" is the safe direction: a wrong anchor gives
+    // the CLI a context the provider rejects, a missing one gives it a shorter
+    // one it can still use.
+    const file = chat();
+    const store = await open(file, 'create');
+    await store.appendMessage(user('old one'));
+    await store.appendMessage(assistant('old reply'));
+    await store.appendCompaction({
+      summary: 'summary of the old turns',
+      tokensBefore: 1234,
+      retainedTail: [user('never written to this file')],
+    });
+    await store.close();
+
+    const compaction = (await document(file)).entries.at(-1) as { firstKeptEntryId?: string };
+    expect(compaction.firstKeptEntryId).toBeUndefined();
+    expect(spoken(openCliSession(file).buildSessionContext().messages)).not.toContain('old one');
   });
 });
 
@@ -303,6 +391,68 @@ describe('H/20 · the GUI reads what the CLI wrote', () => {
       })}\n`
     );
     await expect(document(file)).rejects.toThrow(/duplicate id or missing parent/);
+  });
+});
+
+describe('H/20 · the two writers take turns on one file', () => {
+  it('keeps the file readable when our worker appends with the seq it held before the CLI wrote', async () => {
+    // session-01 — the worker stays open across a terminal session (nothing
+    // closes it when the user switches surface), so its `seq` counts only the
+    // rows IT has written. It used to be read back as a position in the file,
+    // and this append — the first one after the CLI's — made every later open
+    // throw `session_invalid`, permanently.
+    const file = chat();
+    const store = await open(file, 'create');
+    await store.appendMessage(user('GUI-1'));
+    await store.appendMessage(assistant('GUI-1 reply'));
+    const guiLeaf = store.snapshot().entries.at(-1)?.id as string;
+
+    const cli = openCliSession(file);
+    cli.appendMessage(user('TUI-1'));
+    cli.appendMessage(assistant('TUI-1 reply'));
+
+    // No reload in between: this is the send path that skipped it.
+    await store.appendMessage(user('GUI-2'));
+    await store.close();
+
+    const doc = await document(file);
+    // Every row survives, the CLI's included — they are simply on the branch
+    // the worker did not know it had left.
+    expect(doc.entries).toHaveLength(5);
+    expect(
+      spoken(branchEntries(doc).map((item) => (item as { message?: unknown }).message))
+    ).toEqual(['GUI-1', 'GUI-1 reply', 'GUI-2']);
+    expect(doc.entries.find((item) => item.id === guiLeaf)).toBeDefined();
+
+    const resumed = await open(file, 'resume');
+    await resumed.appendMessage(user('GUI-3'));
+    await resumed.close();
+    expect(spoken((await open(file, 'resume')).snapshot().messages)).toContain('GUI-3');
+  });
+
+  it('reopens after the CLI completed a torn line with the newline it was missing', async () => {
+    // session-02 / Q005 — a torn tail is repairable by truncating it, but only
+    // while it is still recognisable as one. `pi --session` appends the missing
+    // newline the moment it opens the file, which used to turn the fragment
+    // into a "complete" line and the repair into a permanent refusal.
+    const file = chat();
+    const store = await open(file, 'create');
+    await store.appendMessage(user('written before the crash'));
+    await store.close();
+    await appendFile(file, '{"kind":"entry","seq":');
+
+    openCliSession(file).buildSessionContext();
+    expect(await readFile(file, 'utf8')).toMatch(/\{"kind":"entry","seq":\n$/);
+
+    const resumed = await open(file, 'resume');
+    expect(spoken(resumed.snapshot().messages)).toEqual(['written before the crash']);
+    await resumed.appendMessage(user('after the repair'));
+    await resumed.close();
+    expect(await readFile(file, 'utf8')).not.toContain('{"kind":"entry","seq":\n');
+    expect(spoken(openCliSession(file).buildSessionContext().messages)).toEqual([
+      'written before the crash',
+      'after the repair',
+    ]);
   });
 });
 

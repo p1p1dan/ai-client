@@ -58,9 +58,12 @@ const forkSession = vi.fn(async () => ({
   },
 }));
 const reloadSession = vi.fn(async () => ({ requestId: 'reload-1', reloaded: true }));
-/** Whether a Pi terminal was holding the session file when the send arrived. */
+/** Whether a Pi terminal had written the session file when the GUI write arrived. */
 let terminalWasReleased = false;
 const releaseSessionForHostPrompt = vi.fn(async () => terminalWasReleased);
+/** cutover-04 — the gate between the handover and the write. */
+const assertHostPromptAllowed = vi.fn();
+const compactSession = vi.fn(async () => ({ requestId: 'compact-1' }));
 const send = vi.fn(async () => 'send-1');
 const stop = vi.fn(async () => 'stop-1');
 const closeSession = vi.fn(async () => 'close-1');
@@ -110,6 +113,7 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
     rewindSession,
     forkSession,
     reloadSession,
+    compactSession,
     send,
     stop,
     closeSession,
@@ -148,7 +152,7 @@ vi.mock('../../services/auth/spawnGate', () => ({ assertAgentSpawnAllowed: vi.fn
 
 vi.mock('../piTui', () => ({
   releaseSessionForHostPrompt,
-  assertHostPromptAllowed: vi.fn(),
+  assertHostPromptAllowed,
 }));
 
 /**
@@ -188,6 +192,9 @@ beforeEach(async () => {
   terminalWasReleased = false;
   scratchPathsBySession = {};
   vi.clearAllMocks();
+  // `clearAllMocks` forgets calls, not implementations, and one case here makes
+  // the gate throw.
+  assertHostPromptAllowed.mockReset();
   const { registerChatHandlers } = await import('../chat');
   registerChatHandlers();
 });
@@ -509,6 +516,47 @@ describe('Pi WorkerSlot chat routing', () => {
         sessionFile: '/session.jsonl',
         ownerWebContentsId: 7,
       });
+    });
+
+    // session-01 — compaction and rewind append to the same JSONL a send does.
+    // Neither asked for the handover, so either one could be the write that
+    // lands on top of what a terminal appended and makes the file unopenable.
+    it.each([
+      ['chat:compactSession', { sessionId: 's1' }, compactSession],
+      ['chat:rewindSession', { sessionId: 's1', entryId: 'e1', confirmed: true }, rewindSession],
+    ])('hands the file back before %s writes it', async (channel, payload, worker) => {
+      terminalWasReleased = true;
+
+      await invoke(channel, payload);
+
+      expect(releaseSessionForHostPrompt).toHaveBeenCalledWith('/session.jsonl');
+      expect(reloadSession).toHaveBeenCalledWith({
+        sessionId: 's1',
+        sessionFile: '/session.jsonl',
+        ownerWebContentsId: 7,
+      });
+      expect(reloadSession.mock.invocationCallOrder[0]).toBeLessThan(
+        worker.mock.invocationCallOrder[0]
+      );
+    });
+
+    // cutover-04 — the gate was written as "the last check before a GUI write"
+    // and then never called, so a handover that silently failed simply became a
+    // second writer on the file.
+    it.each([
+      ['chat:send', { sessionId: 's1', attemptId: 'a1', text: 'hi' }],
+      ['chat:compactSession', { sessionId: 's1' }],
+      ['chat:rewindSession', { sessionId: 's1', entryId: 'e1', confirmed: true }],
+    ])('refuses %s while a terminal still owns the file', async (channel, payload) => {
+      assertHostPromptAllowed.mockImplementation(() => {
+        throw new Error('Terminal mode owns this session');
+      });
+
+      await expect(invoke(channel, payload)).rejects.toThrow(/Terminal mode owns this session/);
+      expect(assertHostPromptAllowed).toHaveBeenCalledWith('/session.jsonl');
+      expect(send).not.toHaveBeenCalled();
+      expect(compactSession).not.toHaveBeenCalled();
+      expect(rewindSession).not.toHaveBeenCalled();
     });
   });
 

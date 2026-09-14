@@ -8,7 +8,11 @@ import {
   PiTuiPtyController,
   resolvePiCliLaunchPlan,
 } from '../services/terminal/PiTuiPty';
-import { inspectPiTuiSessionSupport, PiTuiExclusiveGuard } from '../services/terminal/piTuiSession';
+import {
+  inspectPiTuiSessionSupport,
+  normalizeSessionKey,
+  PiTuiExclusiveGuard,
+} from '../services/terminal/piTuiSession';
 
 /**
  * Q17: which chat session (if any) currently has a Pi terminal writing its
@@ -17,6 +21,24 @@ import { inspectPiTuiSessionSupport, PiTuiExclusiveGuard } from '../services/ter
  * be the second writer is process-wide too.
  */
 const sessionGuard = new PiTuiExclusiveGuard();
+
+/**
+ * session-01: chats a Pi terminal has been handed, and that the GUI has not
+ * re-read since.
+ *
+ * Ownership above is released the moment the terminal dies, which is too early
+ * to answer the question the send path actually asks — "is my worker's cached
+ * tree behind this file". A TUI the user quit from inside pi is already gone by
+ * then (`onExit` drops its record and releases the guard), so `disposeSession`
+ * reports nothing to kill and the reload was skipped in exactly the case that
+ * needed it: the worker then appended with the sequence it held BEFORE the
+ * terminal wrote, which made the file unopenable from that point on.
+ *
+ * Remembered until a GUI write claims the file back, because that is when the
+ * reload happens. Keyed like everything else here, so `/private/var` drift
+ * cannot make an entry unfindable.
+ */
+const tuiWrittenSessions = new Set<string>();
 
 const controllers = new Map<number, PiTuiPtyController>();
 const controllerPromises = new Map<number, Promise<PiTuiPtyController>>();
@@ -109,6 +131,10 @@ export function registerPiTuiHandlers(): void {
       // for the desync failure pix hit with tryAcquire-only.
       const acquired = sessionGuard.transferTo(request.sessionFile);
       if (!acquired.ok) throw new Error(acquired.reason);
+      // Marked on the way in, not on the way out: however this terminal ends —
+      // disposed, crashed, or quit from inside pi — the GUI has to re-read the
+      // file before it writes it again.
+      tuiWrittenSessions.add(normalizeSessionKey(request.sessionFile));
     }
     return controller.open(request);
   });
@@ -150,22 +176,35 @@ export function registerPiTuiHandlers(): void {
  * Q17 — the GUI is about to write this session's JSONL, so any terminal on it
  * must stop first. Called by the chat send path before it starts a turn.
  *
- * Reports whether a terminal was actually holding the file. The caller needs
- * that to know its worker's cached view of the session is now behind disk:
- * killing the writer does not tell the worker what the writer wrote.
+ * Reports whether the worker's cached view of this session may now be behind
+ * the file. That is true when a terminal was still holding it AND when one held
+ * it earlier in this run (see `tuiWrittenSessions`) — killing a writer does not
+ * tell the worker what the writer wrote, and neither does a writer that left on
+ * its own before anyone asked it to.
  */
 export async function releaseSessionForHostPrompt(sessionFile: string): Promise<boolean> {
   if (!sessionFile.trim()) return false;
+  const written = tuiWrittenSessions.delete(normalizeSessionKey(sessionFile));
   const results = await Promise.allSettled(
     [...controllers.values()].map((controller) => controller.disposeSession(sessionFile))
   );
   sessionGuard.release(sessionFile);
-  return results.some((result) => result.status === 'fulfilled' && (result.value?.length ?? 0) > 0);
+  return (
+    written ||
+    results.some((result) => result.status === 'fulfilled' && (result.value?.length ?? 0) > 0)
+  );
 }
 
-/** Throws while a Pi terminal still owns a session (defence in depth). */
-export function assertHostPromptAllowed(): void {
-  sessionGuard.assertHostPromptAllowed();
+/**
+ * Throws while a Pi terminal still owns this chat's JSONL (defence in depth).
+ *
+ * cutover-04 — called by every GUI path that writes the file, after it has asked
+ * for the handover. Reaching here with the terminal still holding the file means
+ * the release did not happen (an index read that failed, a caller that skipped
+ * it), and failing the write is better than becoming its second writer.
+ */
+export function assertHostPromptAllowed(sessionFile?: string): void {
+  sessionGuard.assertHostPromptAllowed(sessionFile);
 }
 
 export async function disposeAllPiTuiControllers(): Promise<void> {
