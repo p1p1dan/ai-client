@@ -19,10 +19,14 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 - ✅ **T007** 模型绑定与目录诊断 — `780dd9c1`（2026-09-14）。loop-model-01/02/04/07/08、cross-06 已修。取舍：`no_api_key` 只对需要 key 的 7 种协议且无 Authorization 类头时生效，bedrock / vertex / pi-messages 不受影响。**待盯**：凭据库未解锁时 Main 下发空 key，该 provider 现在会从目录消失（之前是 43 秒后报错），只剩 catalog_empty 消息里的 `id:no_api_key` 可诊断——归 T021 钥匙串 locked 场景与 T032 上机检查单。auth.json 损坏诊断只覆盖读盘路径。
 - ✅ **T010** 搜索遍历容错 — `1262e3b0`（2026-09-14）。tools-01/07 已修；错误码集合含 EPERM/EISDIR/ELOOP，与 skills / mcp / prompt 三处一致。
 - ✅ **T011** trace 脱敏与体积 — `b714a925`（2026-09-14）。core-host-03、permissions-12 已修；tools-11 复核后不做（驻留点在渲染层，卡片设计即显示完整内容）。
-- ✅ **T008** 导入清单与路径 — `23ac5df5`（2026-09-14）。import-catalog-01/07/10/11 已修；「四个 RPC」实际只有三个带 targetPiSessionId，discard 传完整路径。import-catalog-09（写锁旁车与暂存目录清理，在 `src/runtime/worker/nativeImport.ts`）作为残项补做中。
+- ✅ **T008** 导入清单与路径 — `23ac5df5`（2026-09-14）。import-catalog-01/07/10/11 已修；「四个 RPC」实际只有三个带 targetPiSessionId，discard 传完整路径。import-catalog-09 残项 `36389d1d`：旁车清理、空暂存目录删除、单条失败不阻断；`RuntimeHostIoService` 新增 `rmdir`（host.test 未单独覆盖，归 T022）。
 - ✅ **T027（两件机械活）** signoff SA09/SA12/SA15/SA19 实况标注、P5-2-5 标注 — `95e63960`（2026-09-14）。T027 其余文档回写仍在批次 C。
 
 ## In Progress
+
+- 批次 B 待开工（待用户确认派遣方案）。
+
+### 批次 A 记录
 
 - 2026-09-14 批次 A 第一波 **已提交（c4e2b2e4 / 89c73e5b / 95e63960）**：T001（bash 静态分析，shellPolicy.test 26→60 条，七类发现各有反向验证；permissions-04 改为 auto 放行加 `!unresolvedPaths` 条件而非整行下移，避免顺带改动 scope/grants 语义；here-string 字面量按审计要求登记为路径，属保守取舍；PERM-1 探针需真机与真实模型，留到批次 E）、T009（两脚本只剩 native lane，`report.stamp.backend` 改读 trace 自证；CI workflow 无需改）、T027 两件机械回写（signoff SA09/SA12/SA15/SA19、P5-2-5 标注）。全量 397 文件 / 5644 测试、三套 tsc、Biome 通过。
 - 2026-09-14 批次 A 第二波 **已提交（0332214c / 4e80f9ff / 06ea395d）**：
@@ -32,7 +36,7 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
   - 全量 398 文件 / 5680 测试、三套 tsc、Biome 通过。
 - 2026-09-14 批次 A 第三波 **已提交（10581139 / d71eb2ec）**：全量 398 文件 / 5694 测试、三套 tsc 通过；Biome 仅剩 questionCardModel.test 一条 HEAD 已有的 suppressions/unused 警告。
 - 2026-09-14 批次 A 第四波 **已提交（780dd9c1 / 1262e3b0）**：全量 398 文件 / 5708 测试、三套 tsc、Biome 通过。
-- 2026-09-14 批次 A 第五波 **已提交（b714a925 / 23ac5df5）**：全量 398 文件 / 5716 测试、三套 tsc、Biome 通过。残项 import-catalog-09 补做中。
+- 2026-09-14 批次 A 第五波 **已提交（b714a925 / 23ac5df5）**：全量 398 文件 / 5716 测试、三套 tsc、Biome 通过。残项 import-catalog-09 已提交 `36389d1d`（全量 398 / 5718 通过）。**批次 A 全部落地。**
 
 ## Next
 
@@ -66,7 +70,7 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 | T019 | skills 与模板：symlink 条目 stat 后再判；解析 disable-model-invocation 并在提示词过滤；YAML 块标量报诊断；$ARGUMENTS 用函数替换值；描述回退截 60 字；目录扫描可刷新或文档改口；祖先目录按 Q004 | P5-1 | skills-mcp-08/09/10/17/18/19/20/22/25 | skills.test 新增 symlink、disable、块标量用例 |
 | T020 | 子代理数据与展示：迁移预览接 IPC + 设置页入口或改签收；定义每个顶层 run 重读；subagentUsage 经事件送到 Main 并入会话总量；事件条数上限与 capped；转录写入限额；渲染层动词/参数表补 glob、browser_preview、ask、skill、new_context、Task*、mcp__*；定义写回转义对称；迁移器原型链键与带引号布尔；诊断出口；usage 求和复用 addUsage；turn 计数转发；截断保代理对；BOM 文档两读者一致 | P5-2-1/4/5/6 | subagent-data-01～17、subagent-core-06/12/13 | 定义编辑后下一 run 生效的用例；面板与主时间线工具行渲染的跨层用例 |
 | T021 | 模型目录 Main 侧：T007 之后凭据库未解锁会让 provider 从目录消失而非 43 秒后报错，locked 场景用例要断言这一行为或改为延迟绑定；resolveNativeModelCatalog 在凭据不可读或用户组读失败时返回 undefined 走读盘回落；托管半边选取抽成共用函数并按凭据模式判定；model 级 baseUrl 在 Main 组装路径可达；补 resolveNativeModelCatalog 单测 | P5-5 | import-catalog-02/03/06/12 | 钥匙串 locked 场景用例 |
-| T022 | host exec 与 bootstrap：dispose 里 trace flush 失败不吞 exec 清理失败；长驻子进程 kill 宽限用尽报 exec_cleanup_failed；Windows killTree 加重入保护并跟踪 taskkill；spawn/shutdown 并发回收；abort 监听器摘除；readDirectory 校验前置；runner 助手路径缓存；EventsPlugin 订阅者隔离 | P1-0 / P0-3 | core-host-04/06/07/08/09/10/11/14/20 | host.test 新增运行中取消与清理失败路径 |
+| T022 | host exec 与 bootstrap：`HostIoPlugin.rmdir` 补单测（T008 残项新增，非空目录 ENOTEMPTY）；dispose 里 trace flush 失败不吞 exec 清理失败；长驻子进程 kill 宽限用尽报 exec_cleanup_failed；Windows killTree 加重入保护并跟踪 taskkill；spawn/shutdown 并发回收；abort 监听器摘除；readDirectory 校验前置；runner 助手路径缓存；EventsPlugin 订阅者隔离 | P1-0 / P0-3 | core-host-04/06/07/08/09/10/11/14/20 | host.test 新增运行中取消与清理失败路径 |
 | T023 | i18n：runtime 产出的用户可见文案改为结构化标识、渲染层查词典；noHardcodedChinese 扫描根加 runtime 与 agent-host | P1-6 | 批评者 i18n 缺口、cutover-17 | 守卫反向验证 |
 | T024 | 容量对账：按来源列出写进会话文件与 trace 的最大字节（工具结果、审批 preview、子代理转录、MCP 响应），与 32 MiB 预算对账并给 runs.jsonl 轮转 | P3-1 | 批评者容量缺口、subagent-data-05、tools-06 | 一份对账表 + 至少一处限额落地 |
 
