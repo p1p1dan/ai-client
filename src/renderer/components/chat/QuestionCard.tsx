@@ -732,6 +732,12 @@ function PermissionQaCard({
             ))}
           </div>
         )}
+        {/* T002 — decision 003: the grant behind "Allow for session" is
+            session-scoped, not delegate-scoped, so it also covers the parent
+            and every other subagent. The button text alone cannot say that. */}
+        {view.sessionScopeNote && (
+          <p className="px-1 text-right text-meta text-muted-foreground">{view.sessionScopeNote}</p>
+        )}
         {/* C9: the "decisions we could not model" line is pinned to the card
             bottom, so a narrowed choice never reads as the whole choice. */}
         {view.omittedNote && (

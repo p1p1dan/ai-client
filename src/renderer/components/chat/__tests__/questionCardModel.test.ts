@@ -18,10 +18,12 @@ import {
   derivePermissionDetailView,
   derivePermissionOmittedNote,
   derivePermissionRowView,
+  derivePermissionSessionScopeNote,
   derivePermissionVerb,
   deriveQuestionCardState,
   emptySelection,
   isMaskedAnswer,
+  PERMISSION_ALLOW_SESSION_NOTE,
   PERMISSION_DECISION_LABELS,
   PERMISSION_NO_COMMAND_NOTE,
   permissionDecisionAllows,
@@ -595,6 +597,59 @@ describe('permission card regressions (A21)', () => {
     // The note is its own field rather than an extra option row: a decision
     // the build cannot model must never become something a user can press.
     expect(view.options).toHaveLength(2);
+  });
+});
+
+// T002 — decision 003 kept "Allow for session" session-scoped rather than
+// narrowing it to the delegate that asked, so the card has to say so wherever
+// the button itself can appear.
+describe('permission card session-scope note (T002)', () => {
+  it('no allow_session offered (the historical Allow/Deny pair): no note', () => {
+    const view = derivePermissionCardView(permissionBlock(), true);
+    expect(view.options.map((row) => row.decision)).toEqual(['allow', 'deny']);
+    expect(view.sessionScopeNote).toBeNull();
+  });
+
+  it('allow_session offered and answerable: the note is present', () => {
+    const view = derivePermissionCardView(
+      permissionBlock({ permissionDecisions: ['allow', 'allow_session', 'deny'] }),
+      true
+    );
+    expect(view.sessionScopeNote).toBe(PERMISSION_ALLOW_SESSION_NOTE);
+  });
+
+  it('allow_session offered but not answerable (waiting): no note — there is no button to explain', () => {
+    const view = derivePermissionCardView(
+      permissionBlock({ permissionDecisions: ['allow', 'allow_session', 'deny'] }),
+      false
+    );
+    expect(view.waiting).toBe(true);
+    expect(view.sessionScopeNote).toBeNull();
+  });
+
+  it('resolved card: no note regardless of which decision was offered', () => {
+    const view = derivePermissionCardView(
+      permissionBlock({
+        resolved: true,
+        allowed: true,
+        permissionDecision: 'allow_session',
+        permissionDecisions: ['allow', 'allow_session', 'deny'],
+      }),
+      false
+    );
+    expect(view.state).toBe('resolved');
+    expect(view.sessionScopeNote).toBeNull();
+  });
+
+  it('derivePermissionSessionScopeNote: null without an allow_session row, the note with one', () => {
+    expect(
+      derivePermissionSessionScopeNote(buildPermissionOptionRows(['allow', 'deny']))
+    ).toBeNull();
+    expect(
+      derivePermissionSessionScopeNote(
+        buildPermissionOptionRows(['allow', 'allow_session', 'deny'])
+      )
+    ).toBe(PERMISSION_ALLOW_SESSION_NOTE);
   });
 });
 

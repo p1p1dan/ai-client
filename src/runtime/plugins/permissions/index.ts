@@ -36,6 +36,34 @@ export interface ToolPermissionRequest {
   unresolvedPaths?: boolean;
   exploration?: boolean;
   /**
+   * T002. The policy surface to match this call's rules against, when `tool`
+   * itself is not that vocabulary's surface name. `mcp__<server>__<tool>` is
+   * one tool per server-tool pair, but the ecosystem's policy schema writes
+   * MCP rules under a single `mcp` surface — so the MCP bridge passes `'mcp'`
+   * here while `tool` stays the specific name (grants, scopes and
+   * `isToolAllowed` still need to key on the specific tool). Defaults to
+   * `tool`, which is correct for every built-in.
+   */
+  policySurface?: string;
+  /**
+   * T002. The value matched against `policySurface`'s patterns, when it is
+   * not `path` (or `command`/`commands` for bash). An MCP call matches on
+   * `server:tool`, the shape the ecosystem's example configs already use; a
+   * skill call matches on the skill's NAME, not its file path, because a
+   * policy author writes `"skill": {"librarian": "allow"}` against the name
+   * the model sees, never the path on disk. Defaults to `path`.
+   */
+  policyValue?: string;
+  /**
+   * T002. This path was not chosen by the model — it was resolved from a
+   * catalog the host already scanned and trusts (skills, currently). Skips
+   * the workspace-boundary `ask` a path outside cwd would otherwise get,
+   * because there is no argument here that reaches an arbitrary path for a
+   * user to be asked about. An explicit `deny` — bundled, global, project —
+   * still blocks it; this only removes the unconditional `ask`.
+   */
+  trustedPath?: boolean;
+  /**
    * P5-2-3. Which delegate made this call, when a delegate made it.
    *
    * The approval card has to say so. "Allow bash `rm -rf build`?" is a very
@@ -223,8 +251,10 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
           ...inspectedPaths.map((path) => policyAction(policy, 'path', [path], this.config.cwd)),
           ...(request.tool === 'bash'
             ? [request.command ?? '', ...(request.commands ?? [])]
-            : [request.path]
-          ).map((value) => policyAction(policy, request.tool, [value], this.config.cwd)),
+            : [request.policyValue ?? request.path]
+          ).map((value) =>
+            policyAction(policy, request.policySurface ?? request.tool, [value], this.config.cwd)
+          ),
           ...inspectedPaths
             .filter((path) => !containsPath(this.config.cwd, path))
             .map((path) => policyAction(policy, 'external_directory', [path], this.config.cwd)),
@@ -236,7 +266,12 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     if ((request.paths ?? []).some((path) => pathPolicy(path) === 'deny')) return 'deny';
     if (
       this.mode === 'plan' &&
-      (!['read', 'glob', 'grep', 'bash'].includes(request.tool) ||
+      // `skill` is registered with `read` access (`plugins/skills/index.ts`)
+      // and is now gated through this same `evaluate`, so it has to stay
+      // callable wherever it stays listed — a plan session that can see the
+      // tool but has every call throw would be a contract the registration
+      // does not keep.
+      (!['read', 'glob', 'grep', 'bash', 'skill'].includes(request.tool) ||
         (request.tool === 'bash' && !request.exploration))
     )
       return 'deny';
@@ -262,15 +297,21 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
       return 'allow';
     if (this.grants.has(grantKey(request))) return 'allow';
     if (request.unresolvedPaths) return 'ask';
+    // A trusted path skips straight past the workspace-boundary checks below:
+    // every deny above (policy, bundled secrets, scope) has already had its
+    // say, and what remains is only "this is outside cwd", which does not
+    // apply to a path the model never supplied.
     if (
-      pathAction === 'ask' ||
-      !containsPath(this.config.cwd, request.path) ||
-      (request.paths ?? []).some(
-        (path) => !containsPath(this.config.cwd, path) || pathPolicy(path) === 'ask'
-      )
+      !request.trustedPath &&
+      (pathAction === 'ask' ||
+        !containsPath(this.config.cwd, request.path) ||
+        (request.paths ?? []).some(
+          (path) => !containsPath(this.config.cwd, path) || pathPolicy(path) === 'ask'
+        ))
     )
       return 'ask';
     if (
+      !request.trustedPath &&
       policy &&
       inspectedPaths.some((path) => policyAction(policy, 'path', [path], this.config.cwd) === 'ask')
     )
@@ -278,7 +319,7 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     if (['read', 'grep', 'glob'].includes(request.tool))
       return decisions.includes('ask') ? 'ask' : 'allow';
     if (gear === 'accept-edits' && ['write', 'edit', 'bash'].includes(request.tool)) return 'allow';
-    return 'ask';
+    return request.trustedPath ? 'allow' : 'ask';
   }
   canTraverse(request: ToolPermissionRequest): boolean {
     if (

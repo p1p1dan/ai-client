@@ -115,10 +115,13 @@ export const AICLIENT_DEFAULT_PERMISSION_POLICY = {
     '*': 'ask',
     path: PATH_RULES,
     // Reading and searching: allowed. The `path` denies above still apply.
+    // No `ls` entry: native has no `ls` tool (see `ToolsPlugin.install`) and
+    // no code path ever queries an `ls` policy surface, so the key had no
+    // producer and no reader — T002 removed it rather than ship a rule that
+    // looks like protection and does nothing.
     read: 'allow',
     grep: 'allow',
     find: 'allow',
-    ls: 'allow',
     // Changing the tree: confirmed. NOT `deny` — the plugin's own example uses
     // deny here, which for a coding agent means it cannot do its job at all.
     write: 'ask',

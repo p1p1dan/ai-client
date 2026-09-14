@@ -147,6 +147,13 @@ describe('P5-3 bridge against a real stdio server', () => {
     );
   }
 
+  /** T002 — writes a global policy override, same location `shellPolicy.test.ts` uses. */
+  async function policy(document: unknown) {
+    const path = join(agentDir, 'extensions', 'pi-permission-system', 'config.json');
+    await mkdir(join(path, '..'), { recursive: true });
+    await writeFile(path, JSON.stringify(document));
+  }
+
   async function runtime(options: Partial<RuntimeBootstrapOptions> = {}) {
     const faux = fauxProvider({
       provider: 'test',
@@ -288,6 +295,46 @@ describe('P5-3 bridge against a real stdio server', () => {
     // An MCP tool can do anything its server can do and has nothing local to
     // inspect, so it must not inherit the trust granted to local edits.
     expect(asked).toEqual(['mcp__echo__echo']);
+    expect(errored).toBe(true);
+  }, 30_000);
+
+  // T002/permissions-09/skills-mcp-12 — `mcp/index.ts` passed `request.tool`
+  // (the sanitized `mcp__<server>__<tool>` name) as the policy surface, which
+  // never equals the ecosystem's `mcp` surface key, so a written `mcp` rule —
+  // including a `deny` — was silently never consulted and `auto` allowed the
+  // call regardless of it.
+  it('lets an mcp deny policy rule actually block a call under auto', async () => {
+    await declare();
+    await policy({ permission: { mcp: 'deny' } });
+    const { handle, faux } = await runtime({ permissions: { gear: 'auto' } });
+    faux.setResponses([call('mcp__echo__echo', { text: 'hello' }), fauxAssistantMessage('ok')]);
+    let errored = false;
+    await handle.run({
+      prompt: 'use it',
+      onEvent: (event) => {
+        if (event.type === 'tool_execution_end' && event.toolName === 'mcp__echo__echo')
+          errored = event.isError;
+      },
+    });
+    expect(errored).toBe(true);
+  }, 30_000);
+
+  it("matches an mcp policy rule by server:tool, the ecosystem's own shape", async () => {
+    await declare();
+    // Only this server's `echo` tool is denied; the catch-all stays `ask`
+    // which `auto` would otherwise clear, so a pass here proves the specific
+    // pattern was consulted, not just the surface's presence.
+    await policy({ permission: { mcp: { '*': 'ask', 'echo:echo': 'deny' } } });
+    const { handle, faux } = await runtime({ permissions: { gear: 'auto' } });
+    faux.setResponses([call('mcp__echo__echo', { text: 'hello' }), fauxAssistantMessage('ok')]);
+    let errored = false;
+    await handle.run({
+      prompt: 'use it',
+      onEvent: (event) => {
+        if (event.type === 'tool_execution_end' && event.toolName === 'mcp__echo__echo')
+          errored = event.isError;
+      },
+    });
     expect(errored).toBe(true);
   }, 30_000);
 

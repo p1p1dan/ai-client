@@ -314,6 +314,15 @@ export function deriveFrozenPairs(block: ChatBlock): FrozenPair[] {
 export const PERMISSION_TITLE = 'Permission';
 export const PERMISSION_ALLOW = 'Allow';
 export const PERMISSION_ALLOW_SESSION = 'Allow for session';
+/**
+ * T002 — decision 003 kept the grant session-scoped rather than narrowing it
+ * to the delegate that asked (cross-05): a subagent's "Allow for session"
+ * also covers the parent and every other subagent for the same tool and
+ * path. The button itself cannot say that in three words, so this is the
+ * line under it.
+ */
+export const PERMISSION_ALLOW_SESSION_NOTE =
+  'Applies to every agent in this session, including subagents';
 export const PERMISSION_DENY = 'Deny';
 /**
  * Deliberately not a synonym for Deny. The contract says this decision also
@@ -412,6 +421,19 @@ export function derivePermissionOmittedNote(
 ): string | null {
   if (count === undefined || count <= 0) return null;
   return t('The runtime offered {{count}} more options this build cannot show', { count });
+}
+
+/**
+ * T002 — shown only when the card actually offers "Allow for session": a row
+ * that never renders the button has nothing to explain the scope of.
+ */
+export function derivePermissionSessionScopeNote(
+  options: readonly OptionRow[],
+  t: Translate = englishTranslate
+): string | null {
+  return options.some((option) => option.decision === 'allow_session')
+    ? t(PERMISSION_ALLOW_SESSION_NOTE)
+    : null;
 }
 
 /**
@@ -671,6 +693,8 @@ export interface PermissionCardView {
   detail: PermissionDetailView | null;
   /** Card-bottom line when the Host dropped decisions it could not model. */
   omittedNote: string | null;
+  /** T002 — scope reminder, present only when `options` offers `allow_session`. */
+  sessionScopeNote: string | null;
 }
 
 function derivePermissionPrompt(block: ChatBlock): string {
@@ -781,10 +805,12 @@ export function derivePermissionCardView(
       waiting: false,
       detail,
       omittedNote,
+      sessionScopeNote: null,
     };
   }
 
   if (canRespond) {
+    const options = buildPermissionOptionRows(resolvePermissionDecisions(block));
     return {
       title: PERMISSION_TITLE,
       prompt,
@@ -792,11 +818,12 @@ export function derivePermissionCardView(
       content,
       workspace,
       state: 'pending',
-      options: buildPermissionOptionRows(resolvePermissionDecisions(block)),
+      options,
       frozen: [],
       waiting: false,
       detail,
       omittedNote,
+      sessionScopeNote: derivePermissionSessionScopeNote(options, t),
     };
   }
 
@@ -812,6 +839,7 @@ export function derivePermissionCardView(
     waiting: true,
     detail,
     omittedNote,
+    sessionScopeNote: null,
   };
 }
 

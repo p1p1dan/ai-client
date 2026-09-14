@@ -203,6 +203,14 @@ export class McpPlugin extends Service implements RuntimeMcpService {
             tool: name,
             toolCallId: id,
             path: this.cwd,
+            // T002 — `name` is `mcp__<server>__<tool>`, sanitized and clamped
+            // for the model's tool-name alphabet; it is not the ecosystem's
+            // `mcp` policy surface, nor is it the `server:tool` shape a policy
+            // author writes rules against. Both are passed explicitly so a
+            // rule like `"mcp": "deny"` or `"mcp": {"echo:*": "deny"}` is
+            // actually consulted instead of silently never matching.
+            policySurface: 'mcp',
+            policyValue: `${connection.server.name}:${tool.name}`,
             preview: { label: 'Arguments', text: JSON.stringify(args, null, 2).slice(0, 4000) },
           },
           signal

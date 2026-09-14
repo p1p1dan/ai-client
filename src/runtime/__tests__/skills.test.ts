@@ -400,6 +400,13 @@ describe('P5-1 wired into a real runtime', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
+  /** T002 — writes a global policy override, same location `shellPolicy.test.ts` uses. */
+  async function policy(document: unknown) {
+    const path = join(agentDir, 'extensions', 'pi-permission-system', 'config.json');
+    await mkdir(join(path, '..'), { recursive: true });
+    await writeFile(path, JSON.stringify(document));
+  }
+
   async function runtime(options: Partial<RuntimeBootstrapOptions> = {}) {
     const faux = fauxProvider({
       provider: 'test',
@@ -475,6 +482,52 @@ describe('P5-1 wired into a real runtime', () => {
     expect(result.success).toBe(true);
     expect(results.join('\n')).toContain('STEP ONE: open the file.');
     expect(results.join('\n')).toContain('location=');
+  });
+
+  // T002/skills-mcp-11 — before the fix, the `skill` tool never called
+  // `authorize` at all, so `permission.activity` had no row proving a skill
+  // load was ever gated. `source: 'policy'` (not `'session-grant'`) also
+  // proves this was the bundled default's `allow`, not a leftover grant.
+  it('records a permission.activity row for the skill tool', async () => {
+    const { handle, faux } = await runtime({ permissions: { gear: 'ask' } });
+    const decisions: Array<{ decision: string; source: string }> = [];
+    const unsubscribe = handle.ctx.runtimePermissions.onActivity((record) => {
+      if (record.phase === 'decision' && record.request.tool === 'skill')
+        decisions.push({ decision: record.decision, source: record.source });
+    });
+    faux.setResponses([skillCall('pdf'), fauxAssistantMessage('loaded')]);
+    await handle.run({ prompt: 'use the pdf skill' });
+    unsubscribe();
+    expect(decisions).toEqual([{ decision: 'allow', source: 'policy' }]);
+  });
+
+  // T002/skills-mcp-11 — before the fix, the `skill` tool read the file
+  // straight off the catalog with no gate at all, so a managed environment's
+  // `"skill": "deny"` (or a per-name deny) could not stop it.
+  it('lets an explicit skill deny policy rule actually block the tool call', async () => {
+    await policy({ permission: { skill: 'deny' } });
+    const { handle, faux } = await runtime({ permissions: { gear: 'auto' } });
+    faux.setResponses([skillCall('pdf'), fauxAssistantMessage('blocked')]);
+    let errored = false;
+    const result = await handle.run({
+      prompt: 'use the pdf skill',
+      onEvent: (event) => {
+        if (event.type === 'tool_execution_end' && event.toolName === 'skill')
+          errored = event.isError;
+      },
+    });
+    expect(result.success).toBe(true);
+    expect(errored).toBe(true);
+  });
+
+  // T002/skills-mcp-11 — `/skill:name` expansion read the body through the
+  // exact same unguarded path as the tool; a deny rule has to reach it too.
+  it('lets an explicit skill deny policy rule block /skill:name expansion', async () => {
+    await policy({ permission: { skill: { pdf: 'deny' } } });
+    const { handle } = await runtime({ permissions: { gear: 'auto' } });
+    await expect(handle.skills?.expand('/skill:pdf')).rejects.toMatchObject({
+      code: 'tool_denied',
+    });
   });
 
   it('answers an unknown skill name with the list instead of failing the turn', async () => {

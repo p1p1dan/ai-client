@@ -86,9 +86,17 @@ describe('shipped permission policy — the path approval/deny face (D11 rev.2)'
 
 describe('shipped permission policy — 务实档 (D-Q9 decision 1)', () => {
   it('lets the agent read and search without asking', () => {
-    for (const surface of ['read', 'grep', 'find', 'ls']) {
+    for (const surface of ['read', 'grep', 'find']) {
       expect(permission[surface]).toBe('allow');
     }
+  });
+
+  // T002 — native has no `ls` tool and no code path ever queries an `ls`
+  // policy surface (only `read`/`write`/`edit`/`bash`/`glob`/`grep`/`ask`/
+  // `browser_preview`/`mcp__*`/`skill` are registered); a rule for it would
+  // look like protection and do nothing.
+  it('ships no rule for the ls surface, which has no producer', () => {
+    expect(Object.hasOwn(permission, 'ls')).toBe(false);
   });
 
   /**

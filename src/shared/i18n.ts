@@ -2453,6 +2453,9 @@ export const zhTranslations: Record<string, string> = {
   // 在卡片上按下去就是直接放行/拒绝这一次，两处读法一致。
   Permission: '权限',
   'Allow for session': '本会话内允许',
+  // T002 — decision 003:授权按会话生效，不按委派归属收敛，卡片上要把这一点说清楚。
+  'Applies to every agent in this session, including subagents':
+    '对本次会话内的所有代理生效，含子代理',
   'Deny and stop': '拒绝并停止',
   Allowed: '已允许',
   'Allowed for session': '本会话内已允许',

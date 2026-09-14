@@ -31,6 +31,7 @@ import {
   type RuntimeHostIoService,
 } from '../../contracts.ts';
 import { errorCode } from '../../host/errors.ts';
+import { PERMISSIONS_SERVICE } from '../permissions/index.ts';
 import type { PromptSegment } from '../prompt/segments.ts';
 import { TOOLS_SERVICE } from '../tools/index.ts';
 import {
@@ -191,7 +192,7 @@ export async function loadSkillCatalog(
 }
 
 export class SkillsPlugin extends Service implements RuntimeSkillsService {
-  static inject = [HOST_IO_SERVICE, TOOLS_SERVICE];
+  static inject = [HOST_IO_SERVICE, TOOLS_SERVICE, PERMISSIONS_SERVICE];
   private readonly catalog: SkillCatalog;
 
   constructor(ctx: Context, catalog: SkillCatalog) {
@@ -207,7 +208,7 @@ export class SkillsPlugin extends Service implements RuntimeSkillsService {
           { name: Type.String({ minLength: 1, maxLength: 64 }) },
           { additionalProperties: false }
         ),
-        execute: async (_id, args) => {
+        execute: async (id, args, signal) => {
           const skill = this.catalog.skills.find((item) => item.name === args.name);
           if (!skill) {
             const known = this.catalog.skills.map((item) => item.name).join(', ');
@@ -221,6 +222,7 @@ export class SkillsPlugin extends Service implements RuntimeSkillsService {
               details: { name: args.name, found: false },
             };
           }
+          await this.authorizeSkill(skill, id, signal);
           const body = await this.body(skill.filePath);
           if (body === undefined) {
             return {
@@ -269,7 +271,37 @@ export class SkillsPlugin extends Service implements RuntimeSkillsService {
       skills: this.catalog.skills,
       templates: this.catalog.templates,
       readBody: (filePath) => this.body(filePath),
+      authorizeSkill: (skill) => this.authorizeSkill(skill, `skill-expand:${skill.name}`),
     });
+  }
+
+  /**
+   * T002 — the gate both `/skill:name` and the `skill` tool call before a
+   * body is read. `path` is the file's location, for the approval card and
+   * the audit row; `policyValue` is the skill's NAME, because a policy is
+   * authored against the name the model sees (`"skill": {"librarian":
+   * "allow"}`), never the path on disk. `trustedPath: true` is what keeps
+   * this from asking by default: the only paths that ever reach here came
+   * from `this.catalog`, built by scanning roots the host already trusts, so
+   * there is no argument here that reaches an arbitrary file — an explicit
+   * `deny` still blocks it, an unconfigured `ask` does not.
+   */
+  private async authorizeSkill(
+    skill: RuntimeSkill,
+    toolCallId: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    await this.ctx.runtimePermissions.authorize(
+      {
+        tool: 'skill',
+        toolCallId,
+        path: skill.filePath,
+        policyValue: skill.name,
+        trustedPath: true,
+        preview: { label: 'Skill', text: skill.name },
+      },
+      signal
+    );
   }
 
   /** Body of a catalog file, frontmatter stripped. Only catalog paths reach here. */

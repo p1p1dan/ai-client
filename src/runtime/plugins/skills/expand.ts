@@ -96,6 +96,13 @@ export interface ExpansionCatalog {
   templates: readonly RuntimePromptTemplate[];
   /** Reads a skill or template body. Bounded by the caller. */
   readBody(filePath: string): Promise<string | undefined>;
+  /**
+   * T002 — gate a `/skill:name` invocation the same way the `skill` tool is
+   * gated, before its body is read. Absent means unchecked, which is only
+   * correct for a caller that has no permission system to consult (tests,
+   * previews); the runtime wiring in `index.ts` always supplies this.
+   */
+  authorizeSkill?(skill: RuntimeSkill): Promise<void>;
 }
 
 export type ExpansionResult =
@@ -121,6 +128,7 @@ export async function expandPrompt(
   if (invocation.kind === 'skill') {
     const skill = catalog.skills.find((item) => item.name === invocation.name);
     if (!skill) return { expanded: false, reason: 'unknown_command' };
+    await catalog.authorizeSkill?.(skill);
     const content = await catalog.readBody(skill.filePath);
     if (content === undefined) return { expanded: false, reason: 'unreadable' };
     return {
