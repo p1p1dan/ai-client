@@ -21,10 +21,12 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 - ✅ **T011** trace 脱敏与体积 — `b714a925`（2026-09-14）。core-host-03、permissions-12 已修；tools-11 复核后不做（驻留点在渲染层，卡片设计即显示完整内容）。
 - ✅ **T008** 导入清单与路径 — `23ac5df5`（2026-09-14）。import-catalog-01/07/10/11 已修；「四个 RPC」实际只有三个带 targetPiSessionId，discard 传完整路径。import-catalog-09 残项 `36389d1d`：旁车清理、空暂存目录删除、单条失败不阻断；`RuntimeHostIoService` 新增 `rmdir`（host.test 未单独覆盖，归 T022）。
 - ✅ **T027（两件机械活）** signoff SA09/SA12/SA15/SA19 实况标注、P5-2-5 标注 — `95e63960`（2026-09-14）。T027 其余文档回写仍在批次 C。
+- ✅ **T012** 工具输出形状 — `439ab922`（2026-09-14）。tools-02/03/04/05/06/08/09/12/13/14/17 已修；tools.test 41→53 条，13 次反向验证。取舍：read 可见预算固定减 128 字节留给续读尾巴；grep 超时给截断说明而非抛错；JS 正则单行灾难性回溯仍不可中断（需独立线程，记录不做）。
+- ✅ **T015** 会话 store 与写锁 — `ce2a7af8`（2026-09-14）。session-04/05/06/09/10/12 已修（04/05 原判待定，用确定性用例证实成立）；新增 9 条用例。取舍：写失败经 `writeFailure` 取值器观测而不进 contracts；抢占归属用原始字节比对而非 token；输掉竞争把误取的锁写回；无效 label 行丢弃而非报错。
 
 ## In Progress
 
-（空）— 批次 A 全部落地，批次 B 在新对话开工。逐波记录见 [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md)。
+- 🔧 批次 B 第二波：T018（MCP）+ T019（skills 与模板）实现中。逐波记录见 [evidence/batch-b-2026-09-14.md](evidence/batch-b-2026-09-14.md)；批次 A 记录见 [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md)。
 
 ## Next
 
