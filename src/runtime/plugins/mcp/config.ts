@@ -82,7 +82,14 @@ export function mcpConfigFiles(
   return files;
 }
 
-/** Server names address tools, so they share the tool-name character rule. */
+/**
+ * What may appear as a server name in a config file.
+ *
+ * Wider than the alphabet a provider accepts in a tool name, on purpose: the
+ * name written here is also what a permission rule matches (`server:tool`) and
+ * what a diagnostic prints, and dotted names are common in the ecosystem's own
+ * files. `mcpToolName` is what narrows it for the model's benefit.
+ */
 function isValidName(name: string): boolean {
   return /^[\w.-]{1,48}$/.test(name);
 }
@@ -148,7 +155,14 @@ export async function loadMcpConfig(
         type?: unknown;
         url?: unknown;
       };
-      if (entry?.disabled === true) continue;
+      if (entry?.disabled === true) {
+        // Not merely "skip this entry": the later file wins on every other
+        // field, so it has to win here too. Without the delete, a project that
+        // turns a server off leaves the user file's copy of it running — the
+        // opposite of what this function's own doc promises.
+        byName.delete(name);
+        continue;
+      }
       if (!isValidName(name)) {
         diagnostics.push({
           code: 'invalid_entry',
@@ -188,12 +202,17 @@ export async function loadMcpConfig(
     }
   }
 
-  const servers = [...byName.values()].sort((a, b) => (a.name < b.name ? -1 : 1));
+  // Declaration order, not alphabetical: a `Map` keeps the position of the
+  // first file that named a server, so "the first N" means the N the user
+  // wrote first. Sorting by name made the surviving set depend on spelling,
+  // which is not something anyone edits a config file expecting to matter.
+  const servers = [...byName.values()];
   if (servers.length > MAX_SERVERS) {
+    const dropped = servers.slice(MAX_SERVERS).map((item) => item.name);
     diagnostics.push({
       code: 'invalid_entry',
       path: '',
-      message: `only the first ${MAX_SERVERS} servers are started; ${servers.length} were declared`,
+      message: `only the first ${MAX_SERVERS} servers declared are started; ${servers.length} were declared, so ${dropped.join(', ')} did not start`,
     });
   }
   return { servers: servers.slice(0, MAX_SERVERS), diagnostics };

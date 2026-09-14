@@ -14,6 +14,10 @@
  *   --paged        returns its tools across two `tools/list` pages
  *   --silent       never answers, to exercise the handshake timeout
  *   --crash-on-call exits during `tools/call`
+ *   --slow-list    answers `initialize` and then never answers `tools/list`
+ *   --dupes        repeats a tool across pages and offers two names that clamp alike
+ *   --hang-on-call answers everything but `tools/call`, and reports cancellations
+ *   --ask          sends the client a request of its own, to see if it is answered
  */
 
 import process from 'node:process';
@@ -42,6 +46,28 @@ const TOOLS = [
     description: 'Always reports a tool-level error',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
+  {
+    name: 'shot',
+    description: 'Returns an image the way a screenshot server does',
+    inputSchema: {
+      type: 'object',
+      properties: { count: { type: 'number' }, silent: { type: 'boolean' } },
+      additionalProperties: false,
+    },
+  },
+];
+
+/** A 1x1 PNG. Small enough to inline, real enough to be a base64 image payload. */
+const PIXEL =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+/**
+ * Two tool names that differ only past the point where `mcp__<server>__<tool>`
+ * gets clamped to 64 characters, so they reach the registry as one name.
+ */
+const CLAMP_COLLISION = [
+  { name: `${'z'.repeat(60)}a`, description: 'first', inputSchema: { type: 'object' } },
+  { name: `${'z'.repeat(60)}b`, description: 'second', inputSchema: { type: 'object' } },
 ];
 
 let buffer = '';
@@ -58,6 +84,10 @@ process.stdin.on('data', (chunk) => {
 
 function handle(message) {
   if (flags.has('--silent')) return;
+  if (message.id === 'srv-1' && message.error) {
+    process.stderr.write(`[fixture] refused ${message.error.code}\n`);
+    return;
+  }
   if (message.method === 'initialize') {
     send({
       jsonrpc: '2.0',
@@ -70,8 +100,29 @@ function handle(message) {
     });
     return;
   }
-  if (message.method === 'notifications/initialized') return;
+  if (message.method === 'notifications/initialized') {
+    // Servers must not do this; the point of the flag is what happens when one
+    // does. The client declares no capabilities, so the honest answer is a
+    // JSON-RPC "method not found" rather than silence the server waits out.
+    if (flags.has('--ask'))
+      send({ jsonrpc: '2.0', id: 'srv-1', method: 'sampling/createMessage', params: {} });
+    return;
+  }
+  if (message.method === 'notifications/cancelled') {
+    process.stderr.write(`[fixture] cancelled ${message.params?.requestId}\n`);
+    return;
+  }
   if (message.method === 'tools/list') {
+    if (flags.has('--slow-list')) return;
+    if (flags.has('--dupes')) {
+      send(
+        message.params?.cursor
+          ? // Page two repeats page one's tool and adds the clamp collision.
+            { jsonrpc: '2.0', id: message.id, result: { tools: [TOOLS[0], ...CLAMP_COLLISION] } }
+          : { jsonrpc: '2.0', id: message.id, result: { tools: [TOOLS[0]], nextCursor: 'page-2' } }
+      );
+      return;
+    }
     if (!flags.has('--paged')) {
       send({ jsonrpc: '2.0', id: message.id, result: { tools: TOOLS } });
       return;
@@ -85,6 +136,15 @@ function handle(message) {
   }
   if (message.method === 'tools/call') {
     if (flags.has('--crash-on-call')) process.exit(3);
+    if (flags.has('--hang-on-call')) return;
+    if (message.params?.name === 'shot') {
+      const args = message.params.arguments ?? {};
+      const content = args.silent ? [] : [{ type: 'text', text: 'here is the page' }];
+      for (let i = 0; i < Number(args.count ?? 1); i += 1)
+        content.push({ type: 'image', data: PIXEL, mimeType: 'image/png' });
+      send({ jsonrpc: '2.0', id: message.id, result: { content } });
+      return;
+    }
     if (message.params?.name === 'fail') {
       send({
         jsonrpc: '2.0',
