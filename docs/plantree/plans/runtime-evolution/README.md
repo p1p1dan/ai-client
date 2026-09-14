@@ -1,13 +1,16 @@
 # Runtime / GUI — 核心任务树
 
-Role: roadmap。核对日期：2026-09-12；覆盖 runtime-evolution 与已并入的 gui-sdk-experience。
+Role: roadmap（2026-09-14 起为历史基线）。核对日期：2026-09-13；覆盖 runtime-evolution 与已并入的 gui-sdk-experience。
 核心功能与架构见 [ARD](../../../plans/2026-09-08-runtime-evolution-ard.md)，[GUI 功能定义](../gui-sdk-experience/TODO.md)。
-本文件是节点完成状态的唯一权威；当前执行窗口、最近提交、包版本、阻塞和下一步只见[进度看板](../../进度看板.md)。[项目基线](../../baseline/README.md)。
+本文件记录节点在 2026-09-13 的完成状态；当前执行窗口只见根级[进度看板](../../进度看板.md)。[项目基线](../../baseline/README.md)。
+
+**2026-09-14 收口说明**：代码侧节点全部执行完后做了一次只读审计（[审计证据](evidence/runtime-audit-2026-09-14/README.md)），确认 185 条缺陷、对 22 个节点的 ✅ 提出异议（证据第五节有裁决后的逐节点表）。修补、补审与最后一次现场由 [Runtime 加固与收口](../runtime-hardening/README.md) 承接；本文件不再更新节点状态，只在修补落地后由新计划回写「已修」引用。最后一版看板存为[收口快照](history/2026-09-14-进度看板-收口快照.md)。决策见[新计划决策 001](../runtime-hardening/decisions/001-open-hardening-plan-root.md)。
 
 ## 状态口径
 
 ✅ = 本节点定义范围已实现并有验证证据；🟡 = 实现已有、列明剩余验证/修复；⬜ = 尚未实现。
 “核心验证通过”不覆盖新增代码或所有特殊文件样本。通过项累计保留，新增缺陷单独关联，不把已测项目重新写成“未开始”。
+2026-09-14 审计后，✅ 只表示「当时按节点定义实现并有证据」，不表示无缺陷；缺陷清单以审计证据为准。
 
 <a id="执行顺序"></a>
 
@@ -15,7 +18,8 @@ Role: roadmap。核对日期：2026-09-12；覆盖 runtime-evolution 与已并�
 
 技术依赖：P0 → P1/P2/P3 → P4 → P5 → P6；P2-0 是先行基线。依赖不等于排期，下面是 2026-09-10 重排后的实际推进顺序。
 
-剩余量（2026-09-12 第五次订正）：**5 个节点未开始**（全在 P6）。P2-5/P2-6、第 7 批（P5-1、P5-3）、第 8 批 P5-2 八个子节点、第 9 批 P5-4/P5-5 均已于 2026-09-12 落地。P5-2-7 有六行**待现场**（真机点验 + 两载体打包），按契约 §7 P5-2 仍不标 Done；P5-4/P5-5 同样只有自动化测试，五行待现场。**后半程只剩 H / 20 与 P6。**
+剩余量（2026-09-13 第七次订正）：**全部节点已执行完**。第 10 批把 H/20 与 P6 五个节点一次做完——含用户当日拍板的两件事：pi-coding-agent 按口径 A 保留为随包可执行文件，以及**不等一个版本周期、当天就退役旧集成层**。
+真正未完的只剩**现场**：P5-2 六行、P5-4/P5-5 五行、P6-3 第 6 条（加密机），以及 F3 的根因与修法，全部并入最后一次上机。H/20 已在开发机点验（含内嵌终端真开），只差「在 TUI 里续聊再回 GUI」这一圈。
 
 | 序 | 批次 | 内容 | 为什么排这里 |
 |---|---|---|---|
@@ -28,11 +32,12 @@ Role: roadmap。核对日期：2026-09-12；覆盖 runtime-evolution 与已并�
 | 7 | P5-1、P5-3 | skills / 模板（含 F5 提问能力）、MCP bridge | ✅ 已完成（2026-09-12）。四块分四次提交：技能与模板 `4e0f1f3e`、F5 通用提问 `4916a633`、MCP bridge `d4fcd600`。F5 补的是**整条纵切**，其中可作答卡片的渲染位此前全仓不存在。MCP 顺带给 exec 出口加了长驻子进程能力，并修掉它第一版在 runner 载体下的漏报。[施工计划](topics/p5-1-skills-templates-ask.md) · [记录](evidence/p5-1/README.md) |
 | 8 | P5-2（含 P5-2-0～7） | subagent 整体复刻 | 🟡 实现完成 / 现场待验（2026-09-12）。八个子节点全部落地：探针门禁、定义与模型目录、Task* 后台编排、权限与工具能力（含 BrowserPreview 预览窗）、会话/事件/usage、迁移预览与管理界面、运行/历史展示逐条对齐。**SA01～22 中 16 行已签，6 行待现场**——它们共用同一个前提：一次真机会话 + 两种载体的打包产物。[记录](evidence/p5-2/README.md) · [逐项签收](evidence/p5-2/signoff.md) · [基线](topics/p5-2-0-baseline.md) |
 | 9 | P5-4、P5-5 | 会话导入适配、模型目录切源 | 🟡 实现完成 / 现场待验（2026-09-12）。**开工前的核对结论：P5-5 没有被 H / 17 覆盖**，探针实测到六种用户可选的 API 风格被自有 runtime 静默丢弃、D15 一行未实现、而 H/17 反而加深了对派生明文文件的依赖。三次提交：目录能力与 D15 `3b1bb1e3`、切源 `d8818725`、导入 `6cec5d2c`。顺带修掉 Anthropic 预设多带 `/v1` 的真缺陷。[施工计划](topics/p5-4-p5-5-import-and-catalog.md) · [记录](evidence/p5-4-p5-5/README.md) |
-| 10 | H / 20 + P6-1～P6-5 | [会话互通](topics/gui-tui-session-interop.md)、切默认、摘除 pi-coding-agent 依赖、六项成功标准、回退开关、退役旧集成层 | 用户 2026-09-10 决定互通排到最后做。但它是 P6-1 的**前置**：默认切到 native 之前必须先通，否则切换等于取消 TUI 能力。P6-2 落地时才能删掉派生明文文件的临时分支 |
+| 10 | H / 20 + P6-1～P6-5 | [会话互通](topics/gui-tui-session-interop.md)、切默认、摘除 pi-coding-agent 依赖、六项成功标准、回退开关、退役旧集成层 | 🟢 **六项全部完成**（2026-09-13，含开发机真机点验）。P6-3 六条签下五条，只剩加密机现场那条。当天用户拍了两次板：**口径 A**（pi-coding-agent 保留为随包可执行文件，库角色收回）与**提前退役**（不等一个版本周期，当天删掉旧引擎与后端开关，回退改为装回上一个安装包）。[施工计划](topics/p6-cutover.md) · [记录](evidence/p6/README.md) |
 | — | H / 21 | [外部 Agent 迁移](topics/external-agent-migration.md)、[对话导入](topics/conversation-import.md) | 🟢 四摊都已落地并真机点验：P0 错误文案 `22da278c`、P1 首启一键迁移 `f147059b`、点验修复 `b7dacfb0`/`d0332939`、对话导入 C1～C6 `2715b9a6`（2026-09-11）。含「可续聊」硬验收：导入的会话里发消息拿到基于导入历史的真实回复 |
 | 11 | 现场实测 | 加密 Windows 一次性全量验收 | 用户 2026-09-10 决定：全部做完后再去现场实测一次，不再分轮上机 |
 
-第 1 批与第 10 批之间有一条明确的债：H / 17 为兼容 legacy 后端要把用户凭据解密后写成明文 `auth.json`，这是共存期措施，P6-2 摘除旧依赖时一并删除。详见[实施计划](topics/local-provider-management.md)的本轮决定第五条。
+第 1 批与第 10 批之间曾记着一条债：H / 17 为兼容 legacy 后端要把用户凭据解密后写成明文 `auth.json`，当时定为共存期措施、随旧依赖一并删除。
+**第 10 批查清后这条债改判、不再挂在 P6 名下**：旧后端是没了，但**随包的 `pi` 可执行文件自己就要读 `<agentDir>/models.json` + `auth.json`**（`ModelRuntime` 默认路径），而内嵌终端与插件管理按口径 A 继续存在。所以这两个文件现在服务的是终端，不是旧引擎——停写会让 TUI 一个模型都看不到。要消掉明文落盘，得另开一条「终端凭据怎么给」的题，不能靠删旧后端顺带解决。详见[实施计划](topics/local-provider-management.md)的本轮决定第五条与 [P6 施工计划](topics/p6-cutover.md)。
 
 ## Runtime 任务树
 
@@ -106,7 +111,8 @@ P1-8 探针使用源码 runtime + 实际载体；安装包 worker 冒烟是另�
 | P3-6 | 往返测试 | ✅ |
 
 证据：[P3 收尾](evidence/p3/completion/README.md)、[test.12 v3 恢复](../../../../Windows-P4-6-evidence/test12-reverify.md)。
-v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 CLI/TUI 能读 v4。
+P3 阶段的 v4 互通对象只是 pi-agent-core 的 JSONL，当时不能据此宣称 pi-coding-agent 的 CLI/TUI 能读 v4。
+**这条限制已由 H/20 解除**（2026-09-13）：会话文件的头一行同时满足两种格式，`pi --session` 能打开、能追加，我们也能读回它写的行。
 
 <a id="p4"></a>
 
@@ -116,7 +122,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 |---|---|---|
 | P4-0 | 同步平台 worker | ✅ |
 | P4-1 | worker bootstrap | ✅ |
-| P4-2 | 后端开关 | ✅，默认 legacy，native 显式选择 |
+| P4-2 | 后端开关 | ✅ 历史节点；开关已随 P6-5 删除（2026-09-13），应用只有一个引擎，`AICLIENT_RUNTIME_BACKEND` 不再有任何效果 |
 | P4-3 | WorkerTransport | ✅ |
 | P4-4 | 多轮工具/审批/压缩/会话端到端 | ✅ 本机基线；F4 重试现场单列 |
 | P4-5 | GUI 点验 | ✅ 原实现点验；后续状态/权限 UI 改动须回归 |
@@ -132,7 +138,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | 旧会话 | ✅ test.12 v3 历史/重启 resume 通过；首次转换生成时点的基线证据有限 |
 | 新权限 UI、档位与状态修复 | 🟡 按“现场缺陷与修复”列出的包边界复验 |
 | 重试 | 🟢 F4 代码已入 test.12/13；2026-09-11 开发机真实 HTTP 触发四条路通过，[记录](evidence/p4-6/f4-retry/README.md)；加密机复测并入最后一次上机 |
-| native GUI/TUI 一致性 | 🟡 2026-09-10 改为必须互通（H / 20），范围冲突消解。可行性已实测，实现未落地；在此之前该验收动作仍无法执行 |
+| native GUI/TUI 一致性 | 🟢 H/20 已落地（2026-09-13），native 会话可被 `pi --session` 打开、双向追加，旧会话在 resume 时自动升级头一行。**该验收动作重新可执行**，真机那一趟（含 Edit/Write 后 TUI 与编辑器比对）并入最后一次上机 |
 | R4 无 Bash | 可选探针无效（shell 仍被发现）；独立保留，不撤销已通过的 Bash 验证 |
 
 <a id="p5"></a>
@@ -159,15 +165,17 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 
 <a id="p6"></a>
 
-### P6 切换 — ⬜ 尚未实现
+### P6 切换 — 🟢 五个节点全部落地
+
+范围与决策见[施工计划](topics/p6-cutover.md)，逐条验收见[记录](evidence/p6/README.md)。
 
 | 节点 | 功能 | 状态 |
 |---|---|---|
-| P6-1 | 默认新 runtime | ⬜ |
-| P6-2 | 摘除 pi-coding-agent 依赖 | ⬜ |
-| P6-3 | 六项成功标准达标 | ⬜，包括缓存与 TUI 范围冲突的明确处理 |
-| P6-4 | 一个版本周期的回退开关 | ⬜ |
-| P6-5 | 周期后退役旧集成层 | ⬜ |
+| P6-1 | 默认新 runtime | ✅ 2026-09-13。`readRuntimeBackend` 反转：只有精确的 `legacy` 走旧引擎，其余（不设 / 打错字）一律 native。用真实 worker 进程验三种取值；trace 版本戳随之记 native。前置已核对：`PI_CODING_AGENT_DIR` 自 H/19 起无条件下发，模型目录由 Main 在内存交付 |
+| P6-2 | 摘除 pi-coding-agent 依赖 | ✅ **按用户 2026-09-13 拍板的口径 A 完成，且已走到终点**：应用代码里**一处都不再 import 它**（P6-5 同日退役旧引擎后，守卫的允许名单已清空），只保留它的可执行文件角色——终端与插件管理跑它的 `cli.js`。native 装机的 worker **实测一行都不加载它**——修掉「入口 → RPC server → `piUtilityRunner` → 整包 pi」这条与后端无关的加载链，并把最后一个真用户（一次性补全）搬到自有 runtime（`nativeUtility.ts`）。四道守卫：静态导入图、进程级模块加载实测 + legacy 阳性对照、越界 import 点名（`piCliIsBundledToolOnly.test.ts`）。`package.json` 里保留这个名字是这条口径的**结果**；旧引擎退役（P6-5）后允许名单清空 |
+| P6-3 | 六项成功标准达标 | 🟡 **第 1/2/3/4/5 条已签**：第 3 条按用户拍板的口径 A 以「实质达成」签收（agent 不跑在旧包上，进程实测零加载）；第 4 条 2026-09-13 在开发机真实应用点验（默认 native 起得来、一整回合跑通、权限卡与时间线正常，打包回归仍待上机）。**只剩第 6 条**——加密机现场验收，按用户决定并入最后一次上机。[逐条](evidence/p6/README.md#p6-3-六项成功标准) |
+| P6-4 | 一个版本周期的回退开关 | ✅ 已落地，**窗口由用户当日主动关闭**。当天先按本节点交付：开关保留、方向反转（要显式写 `legacy`）、期限写明、回退路径有真实 worker 进程测试。随后用户决定提前执行 P6-5，旧引擎与开关一并删除，回退方式改为**装回上一个安装包**。代价是明写的：出问题不能靠环境变量切回去。[回退说明](../../../pi-only-rollout-rollback.md) |
+| P6-5 | 周期后退役旧集成层 | ✅ **2026-09-13 提前执行**（用户当日决定不等一个版本周期）。删掉 `piWorkerSession.ts`、`piAgentSessionBootstrap.ts`、`piLegacyImport.ts`、`piUtilityRunner.ts` 与三个只服务旧引擎的 spike，以及后端开关 `src/shared/runtimeBackend.ts`；RPC server 的三个引擎工厂改为**必填**（没有第二个后端可回落）。保留的是两边都在用的部分：`piSessionPreflight.ts`（自有 runtime 也在用）、会话时间线/树投影、`bundledFeaturePlugins`。两处测试跟着搬家而不是删掉：排队释放的端到端用例移到 runtime 侧、Codex 导入集成用例收敛为 Main 侧那一半 |
 
 ## GUI 任务树
 
@@ -193,7 +201,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | G / 16 | 软件更新提醒 | 🟡 U1 已提交 `b919b1aa`，自动化与隔离弹窗验证通过；真实更新源下载/安装按用户 2026-09-10 决定暂缓验证 |
 | H / 17 | 本地模式 AI 服务管理 | 🟡 L1～L5 已实现：vault 分组存储、主进程服务与 IPC、设置页与添加/编辑弹窗、本地模式首次进入自动打开。全量 5161 测试通过；未打包、未现场回归。**第 9 批查出并修掉两条**：用户可选的十种 API 风格里有六种在 native 后端被静默丢弃、Anthropic 预设多带了一个 `/v1`（见 [P5-5](evidence/p5-4-p5-5/README.md)）。[实施计划](topics/local-provider-management.md) |
 | H / 19 | 统一 agent 目录、资源迁移与插件管理 | 🟢 U1～U6 已落地（`4284c893`）：两种模式一律用本应用目录、五项资源一次性复制迁移、插件复用 pi 的 install/remove/list、借用机制整条删除。**验证案例 2～5 均已真机点验通过**（4、5 于 2026-09-11：真装 `npm:pi-jingle` → 会话扩展清单里 `scope:user` 出现 → 装不存在的包给出 npm 原文 → 卸载后文件与配置双双清空；项目级插件在 `projectTrusted:false` 下不可见，界面两种模式都没有项目级入口）。点验顺带修掉插件面板把随包权限系统显示成 `src`。案例 7 依赖 H / 20；未打包。[实施计划](topics/unified-agent-directory.md) · [验证](evidence/unified-agent-directory/README.md) |
-| H / 20 | GUI / TUI 会话互通 | ⬜ 单文件双格式，可行性已实测通过、需补五处容忍；P6-1 前置；[实施计划](topics/gui-tui-session-interop.md) · [验证](evidence/gui-tui-session-interop/README.md) |
+| H / 20 | GUI / TUI 会话互通 | 🟢 已落地并真机点验（2026-09-13）。单文件双格式：头一行同时满足 v4 与 v3，读 CLI 追加的行时在内存里补齐、不回写不重排。**开发机实测**：应用默认以 native 起、跑完一回合，写出的会话文件被内嵌 Pi 终端真实打开（真 PTY 跑 `pi --session`，回流 35KB 终端输出且画出了这段对话）。**可行性探针漏了两处结构性问题**，施工时才暴露：① 改名/切分支写的 `fact`/`lane` 行没有 id 与父链，CLI 拿最后一行当对话末端，于是整段对话在 TUI 里是空的（导入的会话必中）；② 压缩在两种格式里表达方式不同，不互译则 TUI 只看得见摘要。旧的纯 v4 会话在 resume 时就地升级头一行。7 条用例两边都用真实读写器，五处反向验证判红。**仍未验**：在 TUI 里继续聊、再回 GUI 看是否接上的完整一圈；以及用户点右上角 GUI/TUI 开关那一下（探针驱动不了那个控件）。[实施计划](topics/gui-tui-session-interop.md) · [可行性](evidence/gui-tui-session-interop/README.md) · [落地记录](evidence/p6/README.md#h20-会话互通) |
 | H / 18 | 左侧 Chat 栏对齐 PI-Desktop | 🟢 S1～S5 已实现并现场点验通过（`70b9a31d`），点验另修一处 Esc 缺陷（`b92800a7`）；[实施计划](topics/sidebar-pi-desktop-alignment.md) · [验证](evidence/sidebar-pi-desktop-alignment/README.md) |
 | H / 21 | 外部 Agent 迁移（默认迁移策略 + Claude / Codex 对话导入） | 🟢 P0 `22da278c`、P1 `f147059b`、对话导入 C1～C6 `2715b9a6`（2026-09-11）均已落地并真机点验。对话导入的读写链路 T34 就有、只是无人挂载，本轮补的是设置页入口、未匹配仓库落为临时对话、Codex 旧格式、标题不取斜杠命令；[策略](topics/external-agent-migration.md) · [施工计划](topics/conversation-import.md) · [点验](evidence/external-agent-migration/README.md#c1c6-对话导入2026-09-11) |
 
@@ -222,7 +230,7 @@ v4 互通对象是 pi-agent-core JSONL；不能据此宣称 pi-coding-agent 的 
 | F7e resume 后暂无上下文统计 | 已定性为既有行为；可选恢复快照增强尚未排期 | [功能说明](topics/field-followups.md#f7e-上下文快照) |
 | F7f 输入框增高 | ✅ 八行上限本地验证通过（8 行 192px 后滚动） | `87f3dc7d` |
 | PERM-1 权限档弹层不关 | 🟢 2026-09-11 开发机真实点击复验通过（legacy / native 两个后端各一趟）：选普通档与换模式后 `data-open` 在 100ms 内消失，选「全自动」弹层留着换成确认面板，取消后什么都不应用。探针第一版把判据写成「节点从 DOM 消失」量出过假阳性——Base UI 关闭后节点还在，只是换成 `data-closed`。「worker 永不回执也必须关」仍只有单测覆盖 | `1e1e4469`；test.13；[记录](evidence/p4-6/perm1/README.md) |
-| TUI-1 native v4 进不了 TUI | 🟡 2026-09-10 用户推翻方案 C，改为必须互通。可行性已实测（双向四轮交替通过），待按 H / 20 落地；方案 C 的入口保护实现保留为格式不兼容时的兜底 | `0644ba3d`；[验证](evidence/gui-tui-session-interop/README.md) · [实施计划](topics/gui-tui-session-interop.md) |
+| TUI-1 native v4 进不了 TUI | ✅ 已修（2026-09-13，H/20）。单文件双格式，双向可读可写；方案 C 的入口保护保留下来，现在只拦「还没升级过的旧 v4 头」，并告诉用户在 app 里打开一次即可。**未真机点验** | `0644ba3d` + 本批；[落地记录](evidence/p6/README.md#h20-会话互通) · [实施计划](topics/gui-tui-session-interop.md) |
 | v3 resume 身份不匹配 | ✅ 已修，test.12 历史与再次恢复通过 | `d2564e5d` |
 
 ## 相关决策入口
