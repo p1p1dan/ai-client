@@ -14,7 +14,8 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 ## In Progress
 
-（空）
+- 2026-09-14 批次 A 第一波 **代码完成、待提交**：T001（bash 静态分析，shellPolicy.test 26→60 条，七类发现各有反向验证；permissions-04 改为 auto 放行加 `!unresolvedPaths` 条件而非整行下移，避免顺带改动 scope/grants 语义；here-string 字面量按审计要求登记为路径，属保守取舍；PERM-1 探针需真机与真实模型，留到批次 E）、T009（两脚本只剩 native lane，`report.stamp.backend` 改读 trace 自证；CI workflow 无需改）、T027 两件机械回写（signoff SA09/SA12/SA15/SA19、P5-2-5 标注）。全量 397 文件 / 5644 测试、三套 tsc、Biome 通过。
+- 2026-09-14 批次 A 第二波开工：T003（H/20 交叉写入）、T004+T005（子代理错误路径 + 内部报告投影，合并派单）。
 
 ## Next
 
@@ -23,7 +24,7 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 | ID | 任务 | 节点 | 覆盖的发现 | 验收 |
 |---|---|---|---|---|
 | T001 | bash 静态分析补全：遍历 command 节点的 redirect 子节点（前置重定向、here-string）；命令名 basename 归一并把 timeout/nice/nohup/time/stdbuf/command 一类包装词按剥壳或 unresolved 处理；`bash/sh/zsh/dash script` 无 -c 时置 unresolvedPaths；命令名位置的命令替换走 visitSubstitutions；贴合选项与 `key=value` 操作数登记为路径；auto 档改到 unresolvedPaths 判定之后；addPath/expand 统一路径分隔符 | P1-5 | permissions-01/02/03/04/05/06/19 | shellPolicy.test 新增每类形态的正反用例；PERM-1 探针复跑；混合分隔符用例不需真 Windows |
-| T002 | 权限 surface 映射：`mcp__server__tool` 授权时以 `mcp` 为 surface、`server:tool` 为匹配值；skill 工具与 `/skill:name` 展开过 authorize（surface `skill`，目录已信任的路径判 allow 不弹卡）；删随包策略里无生产者的 `ls` 规则；是否让 allow-session 带委派归属见 Q003 | P1-5 / P5-1 / P5-3 | permissions-09、skills-mcp-11/12、cross-05 | 策略里写 `mcp: deny` / `skill: deny` 在 auto 档真的拦住；permission.activity 出现 skill 行 |
+| T002 | 权限 surface 映射：`mcp__server__tool` 授权时以 `mcp` 为 surface、`server:tool` 为匹配值；skill 工具与 `/skill:name` 展开过 authorize（surface `skill`，目录已信任的路径判 allow 不弹卡）；删随包策略里无生产者的 `ls` 规则；allow-session 保持会话级不收敛（决策 003），审批卡文案注明对本会话所有代理生效 | P1-5 / P5-1 / P5-3 | permissions-09、skills-mcp-11/12、cross-05 | 策略里写 `mcp: deny` / `skill: deny` 在 auto 档真的拦住；permission.activity 出现 skill 行 |
 | T003 | H/20 交叉写入：解码端不把 CLI 行计入 seq 空间或对陈旧 seq 按位置容忍；TUI 退出（含 pi 自行退出）无条件 reload；CHAT_COMPACT / CHAT_REWIND 前做 TUI 释放；`assertHostPromptAllowed` 接到发送路径；compactionAnchor 改为从 retainedTail 反查条目 id，查不到退化为 undefined；先补「CLI 追加后我方以陈旧 seq 再写」「CLI 补换行后再打开」两条用例把 session-02 从待定推到结论 | H/20 / P3-1 | session-01/02/03/13、cutover-04 | sessionInterop.test 新增交替写入用例；真机 GUI→TUI→GUI 一圈留到批次 E |
 | T004 | 子代理编排错误路径：admit 之后到 SubagentRun 接手之间整段 try/catch，失败即 settle 为 failed；drain() 加兜底超时；TaskStop 只对真正被停掉的记录 markDelivered，已完成目标把报告放进返回文本；prune 不淘汰未交付项；run() 区分 stopped/timed_out 并带 lastReportText | P5-2-2 | subagent-core-01/03/04/05 | 新增 projectInstructions 拒绝、TaskStop 传已完成 id、registry 满 100 条淘汰三条用例 |
 | T005 | 内部报告与审计投影：交回 prompt 打内部标记，projector 不投影为用户气泡、不盖 attemptId/附件（落盘保留但标记）；权限活动过滤条件放宽为「本 run 父调用或已登记的委派调用」，payload 带 delegationId/agentName | P3-4 / P5-2-4 | rpc-projector-01/04、subagent-core-02、loop-model-06 | 一条带子代理的 run 端到端事件流用例；guiEventContract 录制扩到子代理 |
@@ -56,10 +57,10 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 | ID | 任务 | 节点 | 覆盖的发现 | 验收 |
 |---|---|---|---|---|
-| T025 | 死代码与死字段：sessionTierAuthorizer、permissionActivity、bundledFeaturePlugins、extensionInventory、commandInventory、subagentProjection、extensionUiBridge 链路、permissionPlugin 注入决策、sessionKeysMatch、leafCheckpoint、`*_UNAVAILABLE` 死分支、worker 侧 seq 逐一确认后删除或改注释；PiWorkerRuntime 可选方法收紧为必填 | P6-5 / P4-3 | cutover-05/06/07/20、permissions-11、subagent-data-13、cross-07、rpc-projector-09/15、permissions-15 | 删除后三套 tsc 与全量测试绿；守卫注释同步 |
+| T025 | 死代码与死字段：随包 `@juicesharp/rpiv-ask-user-question` 与 `@gotgenes/pi-subagents` 为纯载荷（cutover-16 经 T009 拆解，约 1.7MB），从 bundledPlugins / REQUIRED_WORKER_PACKAGES / verifyArtifact 删除，`@gotgenes/pi-permission-system` 的 config.json 位置仍被 native 读取需保留；sessionTierAuthorizer、permissionActivity、bundledFeaturePlugins、extensionInventory、commandInventory、subagentProjection、extensionUiBridge 链路、permissionPlugin 注入决策、sessionKeysMatch、leafCheckpoint、`*_UNAVAILABLE` 死分支、worker 侧 seq 逐一确认后删除或改注释；PiWorkerRuntime 可选方法收紧为必填 | P6-5 / P4-3 | cutover-05/06/07/20、permissions-11、subagent-data-13、cross-07、rpc-projector-09/15、permissions-15 | 删除后三套 tsc 与全量测试绿；守卫注释同步 |
 | T026 | 用户可见的退役残留：插件页权限归属文案改为「审批由本应用自有权限系统负责，自装扩展只影响内嵌终端」；侧栏插件清单与 MCP 徽标改从自有能力投影；opt-in 链路删除或消费，Sub-agents 开关与 native 默认一致 | P6-5 / P6-3 | cutover-02/03/10 | 开发机点验三处界面 |
 | T027 | 文档回写：runtime README 与 P4-6 现场清单去掉已删除的开关；README P5-5 行与 p6-cutover 对派生明文文件的结论统一；piSessionPreflight 保留理由改写；evidence/p1 的 Windows 说法与任务树一致；signoff 的 SA09/SA12/SA15/SA19 改为实际状态；P5-2-5 在旧树标注「迁移预览未接入口」；四个跨区域冲突节点的裁决记入审计证据；被推翻的发现从各区域 rationale 里清掉 | 文档 | cutover-08/12/18、core-host-15/16/17/18、subagent-core-16、审计第五节 | 链接全部可解析 |
-| T028 | 守卫与基线：口径 A 守卫认子路径 import；workerEntryWiring 用例名与实际一致或补真实进程用例；DEFERRED_SERVICES 与门禁修正；config_version 解冻并写明分代规则；runtime-baseline 脚本在只剩 native 采集器后能独立跑通，compare.mjs 对缺失 legacy 归档的处理写明 | P6-2 / P0-3 / P0-6 / P2-5 | cutover-11/13、core-host-01/02、批评者 P2-5/P2-6 缺口 | 守卫反向验证；基线脚本一次干跑 |
+| T028 | 守卫与基线：打包门禁补「native bootstrap 结果不带 extensions 字段」与 `report.workerExecutable` / `exitCode` 断言（T009 审查建议）；口径 A 守卫认子路径 import；workerEntryWiring 用例名与实际一致或补真实进程用例；DEFERRED_SERVICES 与门禁修正；config_version 解冻并写明分代规则；runtime-baseline 脚本在只剩 native 采集器后能独立跑通，compare.mjs 对缺失 legacy 归档的处理写明 | P6-2 / P0-3 / P0-6 / P2-5 | cutover-11/13、core-host-01/02、批评者 P2-5/P2-6 缺口 | 守卫反向验证；基线脚本一次干跑 |
 
 ### 批次 D：审计覆盖补全（只读）
 
@@ -82,4 +83,4 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 |---|---|
 | 前缀稳定性模块（P2-7）保留或删除 | ARD D9 明写为可选加强项；见 Q002 |
 | 父循环流中失败恢复 | F4 记录明写只接管流开始前的失败（文档取舍） |
-| 「本次会话允许」按委派归属收敛 | 产品取舍，见 Q003 |
+| 「本次会话允许」按委派归属收敛 | 已决不做：保持会话级，见[决策 003](decisions/003-allow-session-stays-session-scoped.md) |
