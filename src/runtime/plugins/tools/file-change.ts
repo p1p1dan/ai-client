@@ -2,6 +2,7 @@ import { REVIEW_PATCH_BYTES, type SessionFileChange } from '../../../shared/sess
 import { diffLineArrays, type ToolDiffRow } from '../../../shared/textDiff.ts';
 import type { RuntimeHostIoService } from '../../contracts.ts';
 import { errorCode } from '../../host/errors.ts';
+import { utf8FileDecoder } from './read-lines.ts';
 
 export const REVIEW_FILE_BYTES = 256 * 1024;
 // Per side, as PI-Desktop's review.rs MAX_DIFF_LINES.
@@ -24,7 +25,9 @@ export async function readBeforeChange(
     });
     if (data.truncated) return { unavailable: 'too-large' };
     if (data.bytes.includes(0)) return { unavailable: 'binary' };
-    return { text: new TextDecoder('utf-8', { fatal: true }).decode(data.bytes) };
+    // Same decoder as `edit`: the BOM stays in the text so the review sees the
+    // file the way the tool sees it (tools-05).
+    return { text: utf8FileDecoder().decode(data.bytes) };
   } catch (error) {
     signal?.throwIfAborted();
     if (errorCode(error) === 'ENOENT') return { text: null };

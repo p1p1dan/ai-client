@@ -12,6 +12,7 @@ import { standaloneHost } from '../host/config.ts';
 import { resolveWorkerShell } from '../host/shell.ts';
 import { modeSegment, permissionGearSegment } from '../plugins/permissions/prompt.ts';
 import { composeSystemPrompt } from '../plugins/prompt/segments.ts';
+import { TOOL_OUTPUT_BYTES } from '../plugins/tools/index.ts';
 
 let dir: string;
 const runtimes: RuntimeHandle[] = [];
@@ -462,6 +463,179 @@ describe('native tools', () => {
     expect(content(await call(r, 'read', { path: 'archive', offset: 2101, limit: 3 }))).toContain(
       'TAIL_MARKER=AMBER'
     );
+  });
+  it('keeps the read continuation line when the byte budget is full (tools-03/13)', async () => {
+    await writeFile(
+      join(dir, 'archive'),
+      Array.from({ length: 2200 }, (_, i) => `line ${i + 1}: ${'x'.repeat(80)}`).join('\n')
+    );
+    const r = await runtime();
+    const first = await call(r, 'read', { path: 'archive' });
+    const text = content(first);
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(TOOL_OUTPUT_BYTES);
+    // The body filled the window, so the old code cut this tail off entirely.
+    expect(text).not.toContain('[output truncated]');
+    const tail = text.match(/\n\[truncated; next line=(\d+)([^\]]*)\]$/);
+    expect(tail).not.toBeNull();
+    const next = Number((tail as RegExpMatchArray)[1]);
+    expect(next).toBeGreaterThan(400);
+    expect(first.details).toMatchObject({ truncated: true, nextOffset: next });
+    // tools-13: nothing in this fixture is a long line — every row is 89 bytes.
+    expect((tail as RegExpMatchArray)[2]).toContain('byte budget filled mid-line');
+    expect(text).not.toContain('single line exceeds byte budget');
+    expect(content(await call(r, 'read', { path: 'archive', offset: next, limit: 1 }))).toContain(
+      `line ${next}: `
+    );
+  });
+  it('keeps the bash exit tail when output fills the budget (tools-03)', async () => {
+    await writeFile(join(dir, 'big.txt'), 'a'.repeat(60 * 1024));
+    const r = await runtime({ permissions: { gear: 'auto' } });
+    const output = await call(r, 'bash', { command: 'cat big.txt' });
+    const text = content(output);
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(TOOL_OUTPUT_BYTES);
+    expect(text).toContain('[output truncated]');
+    expect(text.trimEnd().endsWith(']')).toBe(true);
+    expect(text).toMatch(/\n\[exit=0; [a-z-]+; output truncated\]$/);
+    expect(output.details).toMatchObject({ exitCode: 0, truncated: true });
+  });
+  it('advances past a line larger than the whole budget (tools-04)', async () => {
+    await writeFile(join(dir, 'min.js'), `${'x'.repeat(60 * 1024)}\nsecond line\n`);
+    const r = await runtime();
+    const first = await call(r, 'read', { path: 'min.js' });
+    // Pointing back at line 1 would hand out the same bytes forever.
+    expect(first.details).toMatchObject({ truncated: true, longLine: true, nextOffset: 2 });
+    expect(content(first)).toContain('line 1 alone exceeds the byte budget');
+    expect(content(await call(r, 'read', { path: 'min.js', offset: 2 }))).toContain('second line');
+  });
+  it('says so instead of returning an empty text block (tools-02)', async () => {
+    await writeFile(join(dir, 'empty.txt'), '');
+    const r = await runtime();
+    expect(content(await call(r, 'read', { path: 'empty.txt' }))).toBe('(empty file)');
+    expect(content(await call(r, 'grep', { pattern: 'absent-needle' }))).toBe('No matches found.');
+    expect(content(await call(r, 'glob', { pattern: '*.nope' }))).toBe('No files matched.');
+  });
+  it('puts only scalars in bash details and no second copy of read text (tools-06)', async () => {
+    await writeFile(join(dir, 'a.txt'), 'amber\n');
+    const r = await runtime({ permissions: { gear: 'auto' } });
+    const shell = await call(r, 'bash', { command: 'printf hello' });
+    expect(shell.details).toMatchObject({
+      exitCode: 0,
+      termination: 'exit',
+      stdoutBytes: 5,
+      stderrBytes: 0,
+      truncated: false,
+    });
+    expect(shell.details).not.toHaveProperty('stdout');
+    expect(shell.details).not.toHaveProperty('stderr');
+    // A Uint8Array survives JSON as one key per byte; this is what guards it.
+    expect(JSON.stringify(shell.details)).not.toContain('"0"');
+    const read = await call(r, 'read', { path: 'a.txt' });
+    expect(read.details).not.toHaveProperty('text');
+    expect(read.details).toMatchObject({ bytes: 6, truncated: false });
+  });
+  it('matches a separator-free glob at any depth, including a file root (tools-08)', async () => {
+    await mkdir(join(dir, 'src'));
+    await writeFile(join(dir, 'src', 'a.ts'), 'needle here\n');
+    const r = await runtime();
+    expect(content(await call(r, 'glob', { pattern: '*.ts' }))).toContain(join('src', 'a.ts'));
+    expect(content(await call(r, 'grep', { pattern: 'needle', include: '*.ts' }))).toContain(
+      'a.ts:1:needle here'
+    );
+    // The search root itself is the file: relative() is empty, matching nothing.
+    expect(content(await call(r, 'glob', { path: 'src/a.ts', pattern: '*.ts' }))).toContain('a.ts');
+    expect(
+      content(await call(r, 'grep', { path: 'src/a.ts', pattern: 'needle', include: '*.ts' }))
+    ).toContain('a.ts:1:needle here');
+  });
+  it('checks for cancellation inside the grep line scan (tools-09)', async () => {
+    // One file only: walk checks the signal per directory entry, so a second
+    // file would abort the search without the scan ever looking.
+    await writeFile(
+      join(dir, 'only.txt'),
+      Array.from({ length: 50 }, (_, i) => `l${i}`).join('\n')
+    );
+    const r = await runtime();
+    const controller = new AbortController();
+    const signal = controller.signal;
+    const throwIfAborted = signal.throwIfAborted.bind(signal);
+    let scanning = false;
+    const readFile = r.ctx.runtimeHostIo.readFile.bind(r.ctx.runtimeHostIo);
+    r.ctx.runtimeHostIo.readFile = async (path, options) => {
+      const data = await readFile(path, options);
+      if (path.endsWith('only.txt')) scanning = true;
+      return data;
+    };
+    // Stop pressed once the file's bytes are in hand: the next check that can
+    // observe it is the one inside the line loop.
+    Object.defineProperty(signal, 'throwIfAborted', {
+      value: () => {
+        if (scanning) controller.abort();
+        throwIfAborted();
+      },
+    });
+    await expect(call(r, 'grep', { pattern: 'l1' }, signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+  });
+  it('stops a backtracking regular expression on its time budget (tools-09)', async () => {
+    // Each line costs tens of milliseconds to reject; unbounded, the scan runs
+    // for the better part of a minute and nothing can interrupt it.
+    await writeFile(
+      join(dir, 'slow.txt'),
+      Array.from({ length: 800 }, () => `${'a'.repeat(22)}!`).join('\n')
+    );
+    const r = await runtime();
+    const started = Date.now();
+    const output = await call(r, 'grep', { pattern: '^(a+)+$', regex: true });
+    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(output.details).toMatchObject({ timedOut: true, truncated: true });
+    expect(content(output)).toContain('too slow');
+  }, 60_000);
+  it('keeps the BOM an edit never asked to remove (tools-05)', async () => {
+    await writeFile(join(dir, 'bom.ts'), '﻿const a = 1;\n');
+    const r = await runtime({ permissions: { gear: 'auto' } });
+    const edited = await call(r, 'edit', {
+      path: 'bom.ts',
+      edits: [{ oldText: 'const a = 1;', newText: 'const a = 2;' }],
+    });
+    const bytes = await readFile(join(dir, 'bom.ts'));
+    expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    expect(bytes.toString('utf8')).toBe('﻿const a = 2;\n');
+    // The review sees the same text the tool wrote, BOM included.
+    expect(reviewFromToolResult(edited)?.patch).toContain('const a = 2;');
+  });
+  it('reports a non-UTF-8 file with a code instead of a platform TypeError (tools-12)', async () => {
+    await writeFile(join(dir, 'logo.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe, 0x0a]));
+    const r = await runtime({ permissions: { gear: 'auto' } });
+    await expect(call(r, 'read', { path: 'logo.png' })).rejects.toMatchObject({
+      code: 'io_not_utf8',
+    });
+    await expect(
+      call(r, 'edit', { path: 'logo.png', edits: [{ oldText: 'a', newText: 'b' }] })
+    ).rejects.toMatchObject({ code: 'io_not_utf8' });
+  });
+  it('drops the carriage return of a CRLF file before matching (tools-17)', async () => {
+    await writeFile(join(dir, 'crlf.txt'), 'first TODO\r\nsecond line\r\n');
+    const r = await runtime();
+    const found = content(await call(r, 'grep', { pattern: 'TODO$', regex: true }));
+    expect(found).toContain('crlf.txt:1:first TODO');
+    expect(found).not.toContain('\r');
+  });
+  it('does not call a search truncated when it exactly fills the limit (tools-14)', async () => {
+    for (const name of ['a.ts', 'b.ts', 'c.ts']) await writeFile(join(dir, name), 'needle here\n');
+    const r = await runtime();
+    const exact = await call(r, 'glob', { pattern: '*.ts', limit: 3 });
+    expect(exact.details).toMatchObject({ truncated: false });
+    expect(content(exact)).not.toContain('search truncated');
+    const capped = await call(r, 'glob', { pattern: '*.ts', limit: 2 });
+    expect(capped.details).toMatchObject({ truncated: true });
+    expect(content(capped)).toContain('search truncated');
+    const exactGrep = await call(r, 'grep', { pattern: 'needle', limit: 3 });
+    expect(exactGrep.details).toMatchObject({ truncated: false });
+    expect(content(exactGrep).split('\n')).toHaveLength(3);
+    const cappedGrep = await call(r, 'grep', { pattern: 'needle', limit: 2 });
+    expect(cappedGrep.details).toMatchObject({ truncated: true });
+    expect(content(cappedGrep)).toContain('search truncated');
   });
   it('applies deny scopes inside recursive grep instead of only checking the root', async () => {
     await writeFile(join(dir, 'private.txt'), 'hidden');

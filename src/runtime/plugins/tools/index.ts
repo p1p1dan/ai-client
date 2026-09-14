@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { dirname, join, matchesGlob, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, matchesGlob, relative, resolve, sep } from 'node:path';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { type Context, Service } from 'cordis';
 import { type Static, type TSchema, Type } from 'typebox';
@@ -12,13 +12,29 @@ import { type AskUser, askTool } from './ask.ts';
 import { browserPreviewTool, type PreviewHost } from './browserPreview.ts';
 import { createFileChange, readBeforeChange } from './file-change.ts';
 import { canonicalPath } from './paths.ts';
-import { readLines } from './read-lines.ts';
+import { decodeFileText, readLines, utf8FileDecoder } from './read-lines.ts';
 
 export const TOOLS_SERVICE = 'runtimeTools';
 export const TOOL_OUTPUT_BYTES = 50 * 1024;
 const FILE_EDIT_BYTES = 8 * 1024 * 1024;
 const SEARCH_FILE_BYTES = 1024 * 1024;
 const SEARCH_ENTRIES = 20_000;
+/**
+ * Room `read` keeps inside TOOL_OUTPUT_BYTES for its own continuation line, so
+ * the line number survives a full window instead of being cut off by the
+ * generic truncation in `result` (tools-03).
+ */
+const READ_STATUS_BYTES = 128;
+/**
+ * Wall clock a model-authored regular expression gets for one file, and for the
+ * whole search. JS regex execution is not interruptible, so these are checked
+ * between lines: they bound a pattern that is merely slow on many lines, and
+ * they are the only thing that lets Stop land during a long scan (tools-09).
+ */
+const GREP_FILE_SCAN_MS = 1_000;
+const GREP_TOTAL_SCAN_MS = 5_000;
+/** How often the line scan checks for cancellation. */
+const GREP_SCAN_CHECK_LINES = 256;
 /** What a command gets when it does not ask for longer. Unchanged by P5-2-3. */
 const DEFAULT_BASH_TIMEOUT_MS = 120_000;
 /** Ceiling for an explicit `timeoutSeconds`, matching the reference's 6 hours. */
@@ -256,20 +272,29 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
         const target = await this.target('read', id, args.path, signal);
         if ((await io.stat(target)).kind !== 'file')
           throw new RuntimeHostError('invalid_tool_arguments', 'read requires a regular file');
-        const data = await readLines(
+        const offset = args.offset ?? 1;
+        const { text, ...data } = await readLines(
           io,
           target,
-          args.offset ?? 1,
+          offset,
           args.limit ?? 2000,
-          TOOL_OUTPUT_BYTES,
+          TOOL_OUTPUT_BYTES - READ_STATUS_BYTES,
           signal
         );
+        // Each truncation reason gets its own wording: "one line is too long"
+        // sends the model hunting for that line, which is wrong advice when the
+        // window simply filled up (tools-13).
+        const reason = data.longLine
+          ? `; line ${data.nextOffset - 1} alone exceeds the byte budget and the rest of it was skipped`
+          : data.partialLine
+            ? '; the byte budget filled mid-line, so that line is re-read'
+            : '';
         return result(
-          data.text +
-            (data.truncated
-              ? `\n[truncated; next line=${data.nextOffset}${data.partialLine ? '; single line exceeds byte budget' : ''}]`
-              : ''),
-          { path: target, ...data }
+          text || (offset > 1 ? `(no lines at offset ${offset})` : '(empty file)'),
+          // Not `text`: the content block already carries it, and a second copy
+          // is persisted into the session and the trace (tools-06).
+          { path: target, bytes: Buffer.byteLength(text), ...data },
+          data.truncated ? `\n[truncated; next line=${data.nextOffset}${reason}]` : ''
         );
       },
     });
@@ -331,7 +356,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
             overflow: 'error',
             signal,
           });
-          const before = new TextDecoder('utf-8', { fatal: true }).decode(data.bytes);
+          const before = decodeFileText(utf8FileDecoder(), data.bytes, false, target);
           let content = before;
           for (const edit of args.edits) {
             const start = content.indexOf(edit.oldText);
@@ -416,8 +441,19 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
           signal,
         });
         return result(
-          `${Buffer.from(output.stdout).toString('utf8')}${output.stderr.length ? `\n[stderr]\n${Buffer.from(output.stderr).toString('utf8')}` : ''}\n[exit=${output.exitCode}; ${output.termination}${output.truncated ? '; output truncated' : ''}]`,
-          output
+          `${Buffer.from(output.stdout).toString('utf8')}${output.stderr.length ? `\n[stderr]\n${Buffer.from(output.stderr).toString('utf8')}` : ''}`,
+          // Scalars only. The raw result carries stdout/stderr as Uint8Array,
+          // which JSON.stringify writes to the session and the trace as one
+          // object key per byte (tools-06).
+          {
+            exitCode: output.exitCode,
+            signal: output.signal,
+            termination: output.termination,
+            stdoutBytes: output.stdoutBytes,
+            stderrBytes: output.stderrBytes,
+            truncated: output.truncated,
+          },
+          `\n[exit=${output.exitCode}; ${output.termination}${output.truncated ? '; output truncated' : ''}]`
         );
       },
     });
@@ -425,7 +461,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       name: 'glob',
       label: 'Glob',
       description:
-        'Find files using a glob pattern. Skips symlinks, .git and node_modules; does not read file contents.',
+        'Find files using a glob pattern. A pattern without "/" matches a file name at any depth, so *.ts finds src/a.ts. Skips symlinks, .git and node_modules; does not read file contents.',
       parameters: Type.Object(
         {
           pattern: Type.String({ minLength: 1, maxLength: 512 }),
@@ -437,6 +473,8 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       execute: async (id, args, signal) => {
         const root = await this.target('glob', id, args.path ?? '.', signal);
         const found: string[] = [];
+        const limit = args.limit ?? 100;
+        const matches = globMatcher(root, args.pattern);
         const budget = { visited: 0, truncated: false };
         for await (const file of walk(
           io,
@@ -446,20 +484,27 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
             this.ctx.runtimePermissions.canTraverse({ tool: 'glob', toolCallId: id, path: file }),
           signal
         )) {
-          if (matchesGlob(relative(root, file), args.pattern)) found.push(file);
-          if (found.length >= (args.limit ?? 100)) {
+          if (!matches(file)) continue;
+          found.push(file);
+          // One hit past the limit is what proves there was more to return;
+          // stopping AT the limit cannot tell "there is more" from "that was
+          // all", and the model pays for a second full walk (tools-14).
+          if (found.length > limit) {
+            found.pop();
             budget.truncated = true;
             break;
           }
         }
         return result(
-          found.join('\n') +
-            (budget.truncated ? '\n[search truncated; narrow the search or increase limit]' : ''),
+          // Never an empty text block: "searched, found nothing" has to read
+          // differently from "the tool did nothing" (tools-02).
+          found.join('\n') || 'No files matched.',
           {
             files: found,
             truncated: budget.truncated,
             visited: budget.visited,
-          }
+          },
+          budget.truncated ? '\n[search truncated; narrow the search or increase limit]' : ''
         );
       },
     });
@@ -467,7 +512,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       name: 'grep',
       label: 'Grep',
       description:
-        'Search UTF-8 files for text. Literal by default; set regex:true to treat pattern as a JavaScript regular expression. Skips symlinks, .git, node_modules, binary files and denied paths; bounded to 1 MiB per file.',
+        'Search UTF-8 files for text. Literal by default; set regex:true to treat pattern as a JavaScript regular expression. include is a glob; without "/" it matches a file name at any depth, so *.ts covers src/a.ts. Skips symlinks, .git, node_modules, binary files and denied paths; bounded to 1 MiB per file.',
       parameters: Type.Object(
         {
           pattern: Type.String({ minLength: 1, maxLength: 1024 }),
@@ -494,8 +539,12 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
         const root = await this.target('grep', id, args.path ?? '.', signal);
         const matches: string[] = [];
         const budget = { visited: 0, truncated: false };
+        const limit = args.limit ?? 100;
+        const included = args.include ? globMatcher(root, args.include) : undefined;
         let totalBytes = 0;
         let skipped = 0;
+        let scanMs = 0;
+        let timedOut = false;
         const needle = args.caseInsensitive ? args.pattern.toLowerCase() : args.pattern;
         // Compiled once, outside the walk. A bad pattern must fail the CALL,
         // not silently match nothing across a whole tree - the model has no way
@@ -525,7 +574,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
             this.ctx.runtimePermissions.canTraverse({ tool: 'grep', toolCallId: id, path: file }),
           signal
         )) {
-          if (args.include && !matchesGlob(relative(root, file), args.include)) continue;
+          if (included && !included(file)) continue;
           if (pathPolicy(file) !== 'allow') {
             skipped++;
             continue;
@@ -545,35 +594,93 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
             skipped++;
             continue;
           }
-          const lines = Buffer.from(data.bytes).toString('utf8').split('\n');
+          // Splitting on '\n' alone leaves the carriage return of a CRLF file on
+          // every line: a `$` anchor then never matches, and the reported text
+          // carries the stray byte (tools-17).
+          const lines = Buffer.from(data.bytes).toString('utf8').split(/\r?\n/);
+          const startedAt = Date.now();
+          let overflow = false;
           for (let line = 0; line < lines.length; line++) {
-            if (hits(lines[line])) {
-              matches.push(`${file}:${line + 1}:${lines[line].slice(0, 2048)}`);
-              if (matches.length >= (args.limit ?? 100)) break;
+            // A regex runs synchronously, so Stop can only land between lines.
+            if (line % GREP_SCAN_CHECK_LINES === 0) signal?.throwIfAborted();
+            if (expression && Date.now() - startedAt > GREP_FILE_SCAN_MS) {
+              timedOut = true;
+              break;
+            }
+            if (!hits(lines[line])) continue;
+            matches.push(`${file}:${line + 1}:${lines[line].slice(0, 2048)}`);
+            if (matches.length > limit) {
+              matches.pop();
+              overflow = true;
+              break;
             }
           }
-          if (matches.length >= (args.limit ?? 100)) {
+          scanMs += Date.now() - startedAt;
+          // A pattern that blew one file's budget would blow the next 20 000
+          // too, so the search stops rather than paying that per file.
+          if (timedOut || scanMs > GREP_TOTAL_SCAN_MS) {
+            timedOut = true;
+            budget.truncated = true;
+            break;
+          }
+          if (overflow) {
             budget.truncated = true;
             break;
           }
         }
         return result(
-          matches.join('\n') + (budget.truncated ? '\n[search truncated; narrow the search]' : ''),
+          matches.join('\n') || 'No matches found.',
           {
             truncated: budget.truncated,
             skipped,
             visited: budget.visited,
-          }
+            ...(timedOut ? { timedOut: true } : {}),
+          },
+          timedOut
+            ? '\n[search stopped: the pattern is too slow over this tree; simplify the regular expression]'
+            : budget.truncated
+              ? '\n[search truncated; narrow the search]'
+              : ''
         );
       },
     });
   }
 }
-function result(text: string, details: unknown): AgentToolResult<unknown> {
+const OUTPUT_TRUNCATED_NOTE = '\n[output truncated]';
+/**
+ * `status` is what the tool appends about itself — the continuation line, the
+ * exit code, the truncation notice. It gets its budget reserved BEFORE the body
+ * is cut, because a body that fills the window would otherwise push the one
+ * part the model needs past the truncation point (tools-03).
+ */
+function result(text: string, details: unknown, status = ''): AgentToolResult<unknown> {
   const bytes = Buffer.from(text);
-  if (bytes.length > TOOL_OUTPUT_BYTES)
-    text = `${decodeUtf8(bytes.subarray(0, TOOL_OUTPUT_BYTES), true).text}\n[output truncated]`;
-  return { content: [{ type: 'text', text }], details };
+  const reserved = Buffer.byteLength(status);
+  if (bytes.length + reserved > TOOL_OUTPUT_BYTES) {
+    const room = Math.max(
+      0,
+      TOOL_OUTPUT_BYTES - reserved - Buffer.byteLength(OUTPUT_TRUNCATED_NOTE)
+    );
+    text = `${decodeUtf8(bytes.subarray(0, room), true).text}${OUTPUT_TRUNCATED_NOTE}`;
+  }
+  // A tool that produced nothing still says so; an empty text block reads as
+  // "the tool did nothing" to the model and to the timeline (tools-02).
+  return { content: [{ type: 'text', text: `${text || '(no output)'}${status}` }], details };
+}
+/**
+ * A pattern with no separator names a file rather than a path, so it has to
+ * match at any depth — that is what ripgrep's `--glob` and the legacy backend
+ * do, and `*.ts` is what a model writes. `relative` is empty when the search
+ * root IS the file, so fall back to its name there too (tools-08).
+ */
+function globMatcher(root: string, pattern: string): (file: string) => boolean {
+  const anyDepth = !pattern.includes('/') && !pattern.includes(sep);
+  return (file) => {
+    const candidate = relative(root, file) || basename(file);
+    return (
+      matchesGlob(candidate, pattern) || (anyDepth && matchesGlob(basename(candidate), pattern))
+    );
+  };
 }
 function decodeUtf8(bytes: Uint8Array, truncated: boolean): { text: string; bytes: number } {
   const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
