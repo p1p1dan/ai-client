@@ -16,6 +16,8 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 - ✅ **T004 + T005** 子代理错误路径与内部报告投影 — `4e80f9ff`（2026-09-14）。subagent-core-01/02/03/04/05、rpc-projector-01/04、loop-model-06 已修；新增 golden 录制 `nativeGuiSubagentEventStream.json`。权限行的委派归属展示留 UI 批次。
 - ✅ **T002** 权限 surface 映射 — `10581139`（2026-09-14）。permissions-09、skills-mcp-11/12、cross-05 已修。取舍：`trustedPath` 让已信任技能目录默认 allow，任何层级写的 `skill: ask` 都不会弹卡，只有显式 deny 能拦（贴合 K1「不弹卡」与 headless 约束）；随包 `skill: {'*': 'ask'}` 保留作可覆盖占位。skill 顺带进 plan 模式白名单。
 - ✅ **T006** 子代理继承父回合 — `d71eb2ec`（2026-09-14）。cross-01/02 已修；`SubagentConfig.thinkingLevel` 保留为未经 bindRun 调用方的兜底。
+- ✅ **T007** 模型绑定与目录诊断 — `780dd9c1`（2026-09-14）。loop-model-01/02/04/07/08、cross-06 已修。取舍：`no_api_key` 只对需要 key 的 7 种协议且无 Authorization 类头时生效，bedrock / vertex / pi-messages 不受影响。**待盯**：凭据库未解锁时 Main 下发空 key，该 provider 现在会从目录消失（之前是 43 秒后报错），只剩 catalog_empty 消息里的 `id:no_api_key` 可诊断——归 T021 钥匙串 locked 场景与 T032 上机检查单。auth.json 损坏诊断只覆盖读盘路径。
+- ✅ **T010** 搜索遍历容错 — `1262e3b0`（2026-09-14）。tools-01/07 已修；错误码集合含 EPERM/EISDIR/ELOOP，与 skills / mcp / prompt 三处一致。
 - ✅ **T027（两件机械活）** signoff SA09/SA12/SA15/SA19 实况标注、P5-2-5 标注 — `95e63960`（2026-09-14）。T027 其余文档回写仍在批次 C。
 
 ## In Progress
@@ -27,7 +29,8 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
   - T005：交回消息打 `aiclientInternal` 标记（`src/shared/internalMessage.ts`），projector 不铸用户气泡、重开不当最新用户任务、compaction 的 latestUser 排除它（额外一条，契约 §3 明写）；权限活动过滤放宽为父调用或已登记委派，payload 带 delegationId / agentName，授权语义按决策 003 不变；新增独立 golden 录制 `nativeGuiSubagentEventStream.json`（28 条），原录制未重录。渲染层只补类型，归属展示留 UI 批次。
   - 全量 398 文件 / 5680 测试、三套 tsc、Biome 通过。
 - 2026-09-14 批次 A 第三波 **已提交（10581139 / d71eb2ec）**：全量 398 文件 / 5694 测试、三套 tsc 通过；Biome 仅剩 questionCardModel.test 一条 HEAD 已有的 suppressions/unused 警告。
-- 2026-09-14 批次 A 第四波开工：T007（模型绑定与目录诊断）、T010（搜索遍历容错）。第五波计划 T011 + T008（T011 与 T007 都改 agent-loop，错开）。
+- 2026-09-14 批次 A 第四波 **已提交（780dd9c1 / 1262e3b0）**：全量 398 文件 / 5708 测试、三套 tsc、Biome 通过。
+- 2026-09-14 批次 A 第五波开工：T011（trace 脱敏与体积）、T008（导入清单与路径）。
 
 ## Next
 
@@ -60,7 +63,7 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 | T018 | MCP：tools/list 留在连接预算内且 connectMcpServers 有小于 60 秒的总预算；listTools 去重、register 包 try/catch 记进 connection.error；工具名白名单收窄到 `[A-Za-z0-9_-]`；StringDecoder 跨 chunk；image part 透传；request 接 AbortSignal 并发 notifications/cancelled；项目 disabled 覆盖用户同名；帧长按字节计且超限杀进程；spawn 失败不伪造 client；未实现方法回 method not found；MAX_SERVERS 截断按声明顺序 | P5-3 | skills-mcp-01/02/03/04/05/06/07/14/15/16/21/24 | mcp.test 新增分帧、重名、慢 tools/list、取消四类 |
 | T019 | skills 与模板：symlink 条目 stat 后再判；解析 disable-model-invocation 并在提示词过滤；YAML 块标量报诊断；$ARGUMENTS 用函数替换值；描述回退截 60 字；目录扫描可刷新或文档改口；祖先目录按 Q004 | P5-1 | skills-mcp-08/09/10/17/18/19/20/22/25 | skills.test 新增 symlink、disable、块标量用例 |
 | T020 | 子代理数据与展示：迁移预览接 IPC + 设置页入口或改签收；定义每个顶层 run 重读；subagentUsage 经事件送到 Main 并入会话总量；事件条数上限与 capped；转录写入限额；渲染层动词/参数表补 glob、browser_preview、ask、skill、new_context、Task*、mcp__*；定义写回转义对称；迁移器原型链键与带引号布尔；诊断出口；usage 求和复用 addUsage；turn 计数转发；截断保代理对；BOM 文档两读者一致 | P5-2-1/4/5/6 | subagent-data-01～17、subagent-core-06/12/13 | 定义编辑后下一 run 生效的用例；面板与主时间线工具行渲染的跨层用例 |
-| T021 | 模型目录 Main 侧：resolveNativeModelCatalog 在凭据不可读或用户组读失败时返回 undefined 走读盘回落；托管半边选取抽成共用函数并按凭据模式判定；model 级 baseUrl 在 Main 组装路径可达；补 resolveNativeModelCatalog 单测 | P5-5 | import-catalog-02/03/06/12 | 钥匙串 locked 场景用例 |
+| T021 | 模型目录 Main 侧：T007 之后凭据库未解锁会让 provider 从目录消失而非 43 秒后报错，locked 场景用例要断言这一行为或改为延迟绑定；resolveNativeModelCatalog 在凭据不可读或用户组读失败时返回 undefined 走读盘回落；托管半边选取抽成共用函数并按凭据模式判定；model 级 baseUrl 在 Main 组装路径可达；补 resolveNativeModelCatalog 单测 | P5-5 | import-catalog-02/03/06/12 | 钥匙串 locked 场景用例 |
 | T022 | host exec 与 bootstrap：dispose 里 trace flush 失败不吞 exec 清理失败；长驻子进程 kill 宽限用尽报 exec_cleanup_failed；Windows killTree 加重入保护并跟踪 taskkill；spawn/shutdown 并发回收；abort 监听器摘除；readDirectory 校验前置；runner 助手路径缓存；EventsPlugin 订阅者隔离 | P1-0 / P0-3 | core-host-04/06/07/08/09/10/11/14/20 | host.test 新增运行中取消与清理失败路径 |
 | T023 | i18n：runtime 产出的用户可见文案改为结构化标识、渲染层查词典；noHardcodedChinese 扫描根加 runtime 与 agent-host | P1-6 | 批评者 i18n 缺口、cutover-17 | 守卫反向验证 |
 | T024 | 容量对账：按来源列出写进会话文件与 trace 的最大字节（工具结果、审批 preview、子代理转录、MCP 响应），与 32 MiB 预算对账并给 runs.jsonl 轮转 | P3-1 | 批评者容量缺口、subagent-data-05、tools-06 | 一份对账表 + 至少一处限额落地 |

@@ -80,14 +80,14 @@ Runtime 任务树的功能面确实做齐了，但「完成质量」明显低于
 | P0-1 | ✅ | 完成 | 无 |
 | P0-2 | ✅ | 完成（小瑕疵） | ExecPlugin 注册未 await fiber |
 | P0-3 | ✅ | 完成（小瑕疵） | DEFERRED_SERVICES 门禁失灵 |
-| P0-4 | ✅ | 有缺口 | 请求头不发出（high）；model 行 api 覆盖被忽略 |
+| P0-4 | ✅ | 有缺口 | 请求头不发出（high）；model 行 api 覆盖被忽略。已修（T007，`780dd9c1`） |
 | P0-5 | ✅ | 完成 | 子代理审批过滤归 P3-4 |
 | P0-6 | ✅ | 完成（小瑕疵） | config_version 冻结；失败分支错误正文进 trace |
 | P1-0 | ✅ | 完成（小瑕疵） | 长驻子进程路径成熟度低；dispose 错误屏蔽 |
 | P1-1 | ✅ | 完成 | 无 |
 | P1-2 | ✅ | 有缺口 | 截断尾巴、单行死循环、空结果、BOM、TSD O(n²) |
 | P1-3 | ✅ | 有缺口 | 通配符父目录、退出码被切、details 膨胀 |
-| P1-4 | ✅ | 有缺口 | 悬空 symlink（high）、include 语义、正则无取消 |
+| P1-4 | ✅ | 有缺口 | 悬空 symlink（high）、include 语义、正则无取消。symlink 已修（T010，`1262e3b0`）；其余归 T012 |
 | P1-5 | 🟡 | 有缺口（不宜升 ✅） | 6 条可静态复现的绕过。已修（T001，`c4e2b2e4`；permissions-09 由 T002 `10581139`） |
 | P1-6 | 🟢 | 完成（小瑕疵） | timed_out 永不产出；write 覆盖显示为新增 |
 | P1-8 | ✅ | 完成（证据陈旧） | 证据落后 HEAD 94/147 个提交 |
@@ -108,7 +108,7 @@ Runtime 任务树的功能面确实做齐了，但「完成质量」明显低于
 | P4-1 | ✅ | 有缺口 | discardFork owned 恒失败；dispose 抛错不自退 |
 | P4-2 | ✅ | 完成 | 残留只有注释与文档 |
 | P4-3 | ✅ | 完成（小瑕疵） | reload/compact 超时预算不对称；死分支 |
-| P4-4 | ✅ | 有缺口 | effort off、compact 分叉、缺 key 重试 43 秒 |
+| P4-4 | ✅ | 有缺口 | effort off、compact 分叉、缺 key 重试 43 秒。缺 key 已修（T007，`780dd9c1`）；其余归 T016 |
 | P4-5 | ✅ | 有缺口 | 录制只覆盖 11 种事件；两处真实回归；工具动词表漂移 |
 | P4-6 | 🟡 | 未评估 | 现场节点 |
 | P5-1 | ✅ | 有缺口 | symlink、disable-model-invocation、YAML、skill 不过门。skill 过门已修（T002，`10581139`）；其余归 T019 |
