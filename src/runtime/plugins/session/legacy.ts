@@ -9,9 +9,15 @@ import {
 } from '../../../shared/types/runtimePermission.ts';
 import type { RuntimeHostIoService } from '../../contracts.ts';
 import { errorCode, RuntimeHostError } from '../../host/errors.ts';
-import { branchEntries, cliBookkeeping, decodeSession, interopHeader } from './codec.ts';
+import {
+  branchEntries,
+  cliBookkeeping,
+  decodeSession,
+  interopHeader,
+  SESSION_MAX_BYTES,
+} from './codec.ts';
 import type { SessionConfig } from './store.ts';
-import { acquireWriterLock } from './writerLock.ts';
+import { acquireWriterLock, releaseWriterLock } from './writerLock.ts';
 
 export const PERMISSIONS_ENTRY = 'aiclient.permissions';
 /**
@@ -322,7 +328,18 @@ export function convertLegacySession(
         seq: ++seq,
         ...cliBookkeeping(randomUUID(), leafId, common.timestamp),
       });
-    if (row.type === 'label')
+    // session-10 — a label is dropped, never fatal. Its `targetId` comes from
+    // the old file and names a row we may never have converted (skipped,
+    // renamed into a carrier, or simply absent), and the strict decode at the
+    // end of this function rejects a label pointing at an unknown id — which
+    // would fail the whole import over a piece of decoration. What survives is
+    // checked here against the ids we actually produced.
+    if (
+      row.type === 'label' &&
+      typeof row.targetId === 'string' &&
+      ids.has(row.targetId) &&
+      (row.label === undefined || typeof row.label === 'string')
+    )
       output.push({
         kind: 'fact',
         fact: 'label',
@@ -470,6 +487,31 @@ function desktopMessage(row: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
+/**
+ * The first non-blank row of a session file, whatever format it claims to be.
+ *
+ * session-09 — wrapped, because this is the one place a session file is read
+ * before anything knows what it is, and `JSON.parse` on its own reports a bare
+ * `SyntaxError` with no code. A zero-byte `.jsonl` is a reachable state (the
+ * file is created before its header is written, so a kill in between leaves
+ * one), and the host contract is that a session that cannot be opened says so
+ * with a code the caller can act on.
+ */
+function firstRow(content: string, file: string): Record<string, unknown> {
+  const line = content.split('\n').find((entry) => entry.trim());
+  try {
+    if (line === undefined) throw new SyntaxError('file is empty');
+    return record(JSON.parse(line));
+  } catch (error) {
+    if (error instanceof RuntimeHostError) throw error;
+    throw new RuntimeHostError(
+      'session_invalid',
+      `session file does not begin with a JSON record: ${file}`,
+      { cause: error }
+    );
+  }
+}
+
 export async function prepareSessionConfig(
   io: RuntimeHostIoService,
   config: SessionConfig
@@ -477,13 +519,13 @@ export async function prepareSessionConfig(
   if (config.mode === 'create') return config;
   const sourceFile = await io.realpath(resolve(config.sourceFile ?? config.file));
   const read = await io.readFile(sourceFile, {
-    maxBytes: config.maxBytes ?? 32 * 1024 * 1024,
+    maxBytes: config.maxBytes ?? SESSION_MAX_BYTES,
     overflow: 'error',
   });
   const content = new TextDecoder('utf-8', { fatal: true }).decode(read.bytes, {
     stream: read.bytes.at(-1) !== 10,
   });
-  const first = record(JSON.parse(content.split('\n').find((line) => line.trim()) ?? ''));
+  const first = firstRow(content, sourceFile);
   if (config.mode === 'resume' && first?.kind === 'header' && first.version === 4) return config;
   const requested =
     config.mode === 'import' ? resolve(config.file) : `${sourceFile}.native-v4.jsonl`;
@@ -505,7 +547,7 @@ export async function prepareSessionConfig(
     sourceFile,
     config.allowWorkspaceRelocation
   );
-  if (Buffer.byteLength(converted) > (config.maxBytes ?? 32 * 1024 * 1024))
+  if (Buffer.byteLength(converted) > (config.maxBytes ?? SESSION_MAX_BYTES))
     throw new RuntimeHostError('session_size_limit', 'converted session exceeds size budget');
   const lock = await acquireWriterLock(io, file);
   try {
@@ -534,7 +576,7 @@ export async function prepareSessionConfig(
       new TextDecoder().decode(
         (
           await io.readFile(file, {
-            maxBytes: config.maxBytes ?? 32 * 1024 * 1024,
+            maxBytes: config.maxBytes ?? SESSION_MAX_BYTES,
             overflow: 'error',
           })
         ).bytes
@@ -549,7 +591,7 @@ export async function prepareSessionConfig(
         'legacy source changed since the native copy was created'
       );
   } finally {
-    await io.unlink(lock);
+    await releaseWriterLock(io, lock);
   }
   return { ...config, file, mode: 'resume' };
 }

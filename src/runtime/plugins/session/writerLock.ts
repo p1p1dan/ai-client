@@ -30,6 +30,25 @@ export interface WriterLockOwner {
   acquiredAt?: number;
 }
 
+/**
+ * A lock this process holds.
+ *
+ * The token is carried rather than recomputed: it is the only thing that tells
+ * the lock we created apart from one that replaced it, and releasing is the
+ * moment that distinction matters.
+ */
+export interface WriterLock {
+  path: string;
+  token: string;
+}
+
+/** The sidecar as it was on disk, kept verbatim so a takeover can prove identity. */
+interface LockFile {
+  bytes: Buffer;
+  /** Absent when the content is torn, oversized, or otherwise not an owner record. */
+  owner?: WriterLockOwner;
+}
+
 /** A lock file is a single small JSON object; anything larger is not one of ours. */
 const MAX_LOCK_BYTES = 4096;
 
@@ -72,24 +91,25 @@ function parseOwner(text: string): WriterLockOwner | undefined {
 }
 
 /**
- * Who holds `lock`, or `undefined` when the file names nobody we can identify —
- * it vanished between calls, or its contents are not a readable owner record
- * (a torn write from the crash that stranded it).
+ * Read `lock`, or `undefined` when there is no file there.
+ *
+ * The raw bytes come back alongside the parsed owner because the takeover below
+ * compares them: a lock with no readable owner (a torn write from the crash
+ * that stranded it) still has an identity we must not confuse with another
+ * process's fresh claim.
  */
-async function readOwner(
-  io: RuntimeHostIoService,
-  lock: string
-): Promise<WriterLockOwner | undefined> {
-  let bytes: Uint8Array;
+async function readLock(io: RuntimeHostIoService, lock: string): Promise<LockFile | undefined> {
+  let read: { bytes: Uint8Array; truncated: boolean };
   try {
-    const read = await io.readFile(lock, { maxBytes: MAX_LOCK_BYTES, overflow: 'truncate' });
-    if (read.truncated) return undefined;
-    bytes = read.bytes;
+    read = await io.readFile(lock, { maxBytes: MAX_LOCK_BYTES, overflow: 'truncate' });
   } catch (error) {
     if (errorCode(error) === 'ENOENT') return undefined;
     throw error;
   }
-  return parseOwner(new TextDecoder().decode(bytes));
+  const bytes = Buffer.from(read.bytes);
+  // Oversized content is not a lock of ours, so it names no owner; the prefix
+  // still serves as the identity the takeover compares.
+  return read.truncated ? { bytes } : { bytes, owner: parseOwner(bytes.toString('utf8')) };
 }
 
 /**
@@ -101,7 +121,8 @@ async function readOwner(
  * what they always were — they can only have been written by this app against
  * its own per-machine session directory.
  */
-function stale(owner: WriterLockOwner | undefined): boolean {
+function stale(held: LockFile): boolean {
+  const owner = held.owner;
   if (owner === undefined) return true;
   if (owner.host !== undefined && owner.host !== hostname()) return false;
   return !processAlive(owner.pid);
@@ -115,57 +136,105 @@ function locked(file: string, owner: WriterLockOwner | undefined): RuntimeHostEr
   return new RuntimeHostError('session_locked', `session already has a writer: ${file}${held}`);
 }
 
+async function unlinkQuiet(io: RuntimeHostIoService, path: string): Promise<void> {
+  await io.unlink(path).catch((error) => {
+    if (errorCode(error) !== 'ENOENT') throw error;
+  });
+}
+
 /**
- * Remove a lock we judged stale, exclusively.
+ * Remove the stale lock we read, exclusively.
  *
- * Renaming aside rather than unlinking is what makes the takeover safe under a
- * race: two processes can both unlink, and the second one would delete the
- * fresh lock the first just created. Only one rename of a given name can
- * succeed, so the loser sees `ENOENT`, falls through to the create below, and
- * is rejected there if the winner already owns the session.
+ * Renaming aside rather than unlinking keeps two processes from both deleting
+ * and both creating: only one rename of a given name can succeed.
+ *
+ * session-04 — but a rename moves a NAME, not the file we judged. Between our
+ * read and our rename another process can finish the same takeover and create
+ * its own lock under that name, and renaming that one aside would leave two
+ * writers convinced they hold the session. So what we moved is checked against
+ * what we read: anything else means we lost the race, and we put it back
+ * (exclusively, in case the winner has already replaced it again) and report
+ * the loss instead of creating a second claim.
  */
-async function clearStale(io: RuntimeHostIoService, lock: string): Promise<void> {
+async function clearStale(
+  io: RuntimeHostIoService,
+  lock: string,
+  expected: Buffer
+): Promise<{ cleared: true } | { cleared: false; owner?: WriterLockOwner }> {
   const aside = `${lock}.${randomUUID()}.stale`;
   try {
     await io.rename(lock, aside);
   } catch (error) {
-    if (errorCode(error) === 'ENOENT') return;
+    if (errorCode(error) === 'ENOENT') return { cleared: true };
     throw error;
   }
-  await io.unlink(aside).catch((error) => {
-    if (errorCode(error) !== 'ENOENT') throw error;
-  });
+  const moved = await readLock(io, aside);
+  if (moved !== undefined && !moved.bytes.equals(expected)) {
+    await io.writeFile(lock, moved.bytes, { createOnly: true, mode: 0o600 }).catch((error) => {
+      if (errorCode(error) !== 'EEXIST') throw error;
+    });
+    await unlinkQuiet(io, aside);
+    return moved.owner === undefined ? { cleared: false } : { cleared: false, owner: moved.owner };
+  }
+  await unlinkQuiet(io, aside);
+  return { cleared: true };
 }
 
 /**
  * Take the writer lock for `file`, reclaiming it from a dead owner if needed.
  *
  * Throws `session_locked` when a live writer holds it, or when another process
- * won the same takeover race. Returns the lock path the caller must `unlink`
- * on close.
+ * won the same takeover race. Returns the handle the caller must pass to
+ * `releaseWriterLock` on close.
  */
-export async function acquireWriterLock(io: RuntimeHostIoService, file: string): Promise<string> {
-  const lock = writerLockPath(file);
+export async function acquireWriterLock(
+  io: RuntimeHostIoService,
+  file: string
+): Promise<WriterLock> {
+  const path = writerLockPath(file);
+  const token = randomUUID();
   const claim = Buffer.from(
     JSON.stringify({
       pid: process.pid,
       host: hostname(),
-      token: randomUUID(),
+      token,
       acquiredAt: Date.now(),
     } satisfies WriterLockOwner)
   );
   // Attempt 0 claims a free lock; attempt 1 claims one we just cleared.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      await io.writeFile(lock, claim, { createOnly: true, mode: 0o600 });
-      return lock;
+      await io.writeFile(path, claim, { createOnly: true, mode: 0o600 });
+      return { path, token };
     } catch (error) {
       if (errorCode(error) !== 'EEXIST') throw error;
     }
     if (attempt > 0) break;
-    const owner = await readOwner(io, lock);
-    if (!stale(owner)) throw locked(file, owner);
-    await clearStale(io, lock);
+    const held = await readLock(io, path);
+    // Gone between the create and the read: nothing to take over, just retry.
+    if (held === undefined) continue;
+    if (!stale(held)) throw locked(file, held.owner);
+    const takeover = await clearStale(io, path, held.bytes);
+    if (!takeover.cleared) throw locked(file, takeover.owner);
   }
   throw locked(file, undefined);
+}
+
+/**
+ * Give up a lock we hold.
+ *
+ * session-05 — the token is verified instead of assumed. The sidecar sitting
+ * under our path is not necessarily the one we created: a takeover race or a
+ * hand cleanup can have replaced it, and unlinking someone else's lock would
+ * hand the session to a third process while its writer is still running. A
+ * lock that is no longer ours is left exactly as found; `false` says so.
+ */
+export async function releaseWriterLock(
+  io: RuntimeHostIoService,
+  lock: WriterLock
+): Promise<boolean> {
+  const held = await readLock(io, lock.path);
+  if (held?.owner?.token !== lock.token) return false;
+  await unlinkQuiet(io, lock.path);
+  return true;
 }

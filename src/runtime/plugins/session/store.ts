@@ -20,10 +20,11 @@ import {
   interopHeader,
   isInteropHeader,
   isSuccessfulMessage,
+  SESSION_MAX_BYTES,
   type SessionDocument,
 } from './codec.ts';
 import { sessionPermissions } from './legacy.ts';
-import { acquireWriterLock } from './writerLock.ts';
+import { acquireWriterLock, releaseWriterLock, type WriterLock } from './writerLock.ts';
 
 export interface SessionConfig {
   file: string;
@@ -75,17 +76,18 @@ export class JsonlSessionStore {
   private navigationWork?: Promise<unknown>;
   private readonly stagedForks = new Map<string, string>();
   private closing: Promise<void> | undefined;
+  private failure: unknown;
   readonly file: string;
   private readonly io: RuntimeHostIoService;
   private readonly document: SessionDocument;
-  private readonly lock: string;
+  private readonly lock: WriterLock;
   private readonly maxBytes: number;
   private bytes: number;
   private constructor(
     file: string,
     io: RuntimeHostIoService,
     document: SessionDocument,
-    lock: string,
+    lock: WriterLock,
     maxBytes: number,
     bytes: number
   ) {
@@ -98,7 +100,7 @@ export class JsonlSessionStore {
   }
 
   static async open(io: RuntimeHostIoService, config: SessionConfig): Promise<JsonlSessionStore> {
-    const maxBytes = config.maxBytes ?? 32 * 1024 * 1024;
+    const maxBytes = config.maxBytes ?? SESSION_MAX_BYTES;
     positiveInteger(maxBytes, 'session.maxBytes');
     const requested = resolve(config.file);
     if (config.mode === 'create')
@@ -177,7 +179,7 @@ export class JsonlSessionStore {
       }
       return new JsonlSessionStore(file, io, document, lock, maxBytes, bytes);
     } catch (error) {
-      await io.unlink(lock);
+      await releaseWriterLock(io, lock);
       throw error;
     }
   }
@@ -289,12 +291,21 @@ export class JsonlSessionStore {
       return Promise.reject(new RuntimeHostError('session_closed', 'session is closed'));
     const work = this.tail.then(operation);
     this.tail = work.then(() => {});
-    void this.tail.catch(() => {});
+    void this.tail.catch((error) => {
+      // session-06 — the queue keeps its failed state to refuse further writes,
+      // but close() no longer reports it, so the first failure is kept here for
+      // the host to read back.
+      if (this.failure === undefined) this.failure = error;
+    });
     return work;
   }
 
   get busy(): boolean {
     return this.running || this.navigating;
+  }
+  /** The first write rejection, if any; see `close`. Also still thrown by `flush`. */
+  get writeFailure(): unknown {
+    return this.failure;
   }
   setRunning(running: boolean): void {
     this.running = running;
@@ -528,11 +539,21 @@ export class JsonlSessionStore {
     return this.tail;
   }
 
+  /**
+   * Drain the queue and release the lock.
+   *
+   * session-06 — settled, not awaited for success. A write that failed (a full
+   * disk, a size budget) leaves the queue permanently rejected, which is how
+   * further writes are refused; making close() rethrow it turned every later
+   * shutdown into a failure the host reported as if closing had gone wrong,
+   * while the lock and the file handles had in fact been released cleanly. The
+   * failure stays visible through `writeFailure` and `flush`.
+   */
   close(): Promise<void> {
     this.closed = true;
     this.closing ??= (async () => {
-      await Promise.allSettled([this.navigationWork]);
-      await this.tail.finally(() => this.io.unlink(this.lock));
+      await Promise.allSettled([this.navigationWork, this.tail]);
+      await releaseWriterLock(this.io, this.lock);
     })();
     return this.closing;
   }

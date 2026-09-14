@@ -6,6 +6,19 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { RuntimeHostError } from '../../host/errors.ts';
 
+/**
+ * session-12 — the one byte budget every session path reads and writes under.
+ *
+ * It bounds four different decisions (how much of a file we open, how large a
+ * converted copy may be, how much of an existing native copy we re-read, and
+ * the store's own running total), and they only stay consistent while they name
+ * the same number: a file that opens but cannot be converted, or converts but
+ * cannot be reopened, is the shape the divergence takes. It lives here because
+ * both `store.ts` and `legacy.ts` already depend on this module, and neither
+ * may depend on the other.
+ */
+export const SESSION_MAX_BYTES = 32 * 1024 * 1024;
+
 export interface SessionDocument {
   header: JsonlV4Header;
   entries: Entry[];

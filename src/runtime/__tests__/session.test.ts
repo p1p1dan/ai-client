@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { JsonlSessionRepo } from '@earendil-works/pi-agent-core';
@@ -11,6 +11,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
 import { decodeSession } from '../plugins/session/codec.ts';
+import { JsonlSessionStore } from '../plugins/session/store.ts';
 
 let dir: string;
 const live = new Set<RuntimeHandle>();
@@ -345,6 +346,34 @@ describe('P3-1 JSONL session / P2-4 durable compaction', () => {
     );
     expect(handle.session?.snapshot().entries).toHaveLength(0);
     expect(writes).toHaveBeenCalledTimes(1);
+  });
+
+  it('completes dispose after a write failed and still releases the lock', async () => {
+    const { handle } = await runtime();
+    vi.spyOn(handle.hostIo, 'appendFile').mockRejectedValue(new Error('disk full'));
+    await expect(handle.session?.appendMessage(user('lost'))).rejects.toThrow('disk full');
+
+    // session-06 — the queue stays poisoned, but shutting the session down is a
+    // success: the lock is gone and the host has nothing to report as a failure.
+    await expect(close(handle)).resolves.toBeUndefined();
+    expect(await readdir(dir)).toEqual(['session.jsonl']);
+    await expect(handle.dispose()).resolves.toBeUndefined();
+  });
+
+  it('keeps a failed write observable after close resolved', async () => {
+    const { handle } = await runtime();
+    const store = await JsonlSessionStore.open(handle.hostIo, {
+      file: join(dir, 'observed.jsonl'),
+      cwd: dir,
+      mode: 'create',
+    });
+    vi.spyOn(handle.hostIo, 'appendFile').mockRejectedValue(new Error('disk full'));
+    await expect(store.appendMessage(user('lost'))).rejects.toThrow('disk full');
+    await expect(store.close()).resolves.toBeUndefined();
+
+    expect((store.writeFailure as Error | undefined)?.message).toBe('disk full');
+    await expect(store.flush()).rejects.toThrow('disk full');
+    expect(await readdir(dir)).not.toContain('observed.jsonl.writer.lock');
   });
 
   it('returns failure when message persistence fails before model execution', async () => {

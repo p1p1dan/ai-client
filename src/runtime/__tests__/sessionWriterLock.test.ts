@@ -4,7 +4,13 @@ import { join } from 'node:path';
 import { fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
+import type { RuntimeHostIoService } from '../contracts.ts';
 import { prepareSessionConfig } from '../plugins/session/legacy.ts';
+import {
+  acquireWriterLock,
+  releaseWriterLock,
+  type WriterLock,
+} from '../plugins/session/writerLock.ts';
 
 let dir: string;
 const live = new Set<RuntimeHandle>();
@@ -65,6 +71,40 @@ function vacantPid(): number {
 /** Leave a lock behind the way a crash does: the file stays, its writer does not. */
 async function strandLock(owner: Record<string, unknown> | string): Promise<void> {
   await writeFile(lockPath(), typeof owner === 'string' ? owner : JSON.stringify(owner));
+}
+
+/** A runtime with no session of its own, borrowed for its host IO. */
+async function hostIo(): Promise<RuntimeHostIoService> {
+  const faux = fauxProvider({ provider: 'test', models: [{ id: 'test', name: 'Test' }] });
+  const handle = await createRuntime({ env: {}, providers: [faux.provider] });
+  live.add(handle);
+  return handle.hostIo;
+}
+
+/**
+ * Host IO that runs `hook` once, right after the first read completes.
+ *
+ * That instant is the takeover race: the caller has the owner record in hand
+ * and has not yet acted on it, which is exactly where a second process gets to
+ * finish the same takeover.
+ */
+function afterFirstRead(io: RuntimeHostIoService, hook: () => Promise<void>): RuntimeHostIoService {
+  let pending: (() => Promise<void>) | undefined = hook;
+  return new Proxy(io, {
+    get(target, key) {
+      const value = Reflect.get(target, key) as unknown;
+      if (typeof value !== 'function') return value;
+      const method = value.bind(target) as (...args: unknown[]) => unknown;
+      if (key !== 'readFile') return method;
+      return async (...args: unknown[]) => {
+        const result = await method(...args);
+        const once = pending;
+        pending = undefined;
+        await once?.();
+        return result;
+      };
+    },
+  });
 }
 
 async function seededSession(): Promise<void> {
@@ -154,5 +194,79 @@ describe('session writer lock — a live writer still wins', () => {
 
     await expect(runtime('resume')).rejects.toMatchObject({ code: 'session_locked' });
     expect(JSON.parse(await readFile(lockPath(), 'utf8')).token).toBe('remote');
+  });
+});
+
+describe('session writer lock — release is by ownership', () => {
+  it('leaves a lock that is no longer ours where it is', async () => {
+    const io = await hostIo();
+    const target = join(dir, 'owned.jsonl');
+    const lock = await acquireWriterLock(io, target);
+    // What a takeover race, or a hand cleanup and a new writer, leaves behind.
+    await writeFile(
+      `${target}.writer.lock`,
+      JSON.stringify({ pid: process.pid, host: hostname(), token: 'someone-else' })
+    );
+
+    expect(await releaseWriterLock(io, lock)).toBe(false);
+    expect(JSON.parse(await readFile(`${target}.writer.lock`, 'utf8')).token).toBe('someone-else');
+  });
+
+  it('releases the lock it does own', async () => {
+    const io = await hostIo();
+    const target = join(dir, 'owned.jsonl');
+    const lock = await acquireWriterLock(io, target);
+
+    expect(await releaseWriterLock(io, lock)).toBe(true);
+    expect((await readdir(dir)).filter((name) => name.endsWith('.writer.lock'))).toEqual([]);
+    // Releasing twice is not an error; the second call simply owns nothing.
+    expect(await releaseWriterLock(io, lock)).toBe(false);
+  });
+});
+
+describe('session writer lock — two takeovers of one stale lock', () => {
+  it('refuses the slow claimant instead of displacing the winner', async () => {
+    const io = await hostIo();
+    const target = join(dir, 'raced.jsonl');
+    await writeFile(
+      `${target}.writer.lock`,
+      JSON.stringify({ pid: vacantPid(), host: hostname(), token: 'stale' })
+    );
+    // The fast process completes the whole takeover inside the slow one's
+    // window between reading the stale owner and acting on it.
+    let winner: WriterLock | undefined;
+    const slow = afterFirstRead(io, async () => {
+      winner = await acquireWriterLock(io, target);
+    });
+
+    await expect(acquireWriterLock(slow, target)).rejects.toMatchObject({
+      code: 'session_locked',
+    });
+    expect(winner).toBeDefined();
+    expect(JSON.parse(await readFile(`${target}.writer.lock`, 'utf8')).token).toBe(winner?.token);
+    expect((await readdir(dir)).filter((name) => name.endsWith('.stale'))).toEqual([]);
+  });
+
+  it('lets exactly one of two concurrent claimants take the lock', async () => {
+    const io = await hostIo();
+    const target = join(dir, 'raced.jsonl');
+    await writeFile(
+      `${target}.writer.lock`,
+      JSON.stringify({ pid: vacantPid(), host: hostname(), token: 'stale' })
+    );
+
+    const outcomes = await Promise.allSettled([
+      acquireWriterLock(io, target),
+      acquireWriterLock(io, target),
+    ]);
+    const held = outcomes.flatMap((outcome) =>
+      outcome.status === 'fulfilled' ? [outcome.value] : []
+    );
+    expect(held).toHaveLength(1);
+    for (const outcome of outcomes)
+      if (outcome.status === 'rejected')
+        expect(outcome.reason).toMatchObject({ code: 'session_locked' });
+    expect(JSON.parse(await readFile(`${target}.writer.lock`, 'utf8')).token).toBe(held[0]?.token);
+    expect((await readdir(dir)).filter((name) => name.endsWith('.stale'))).toEqual([]);
   });
 });

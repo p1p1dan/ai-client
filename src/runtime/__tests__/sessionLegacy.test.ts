@@ -5,8 +5,10 @@ import { buildSessionContext } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
-import { branchEntries, decodeSession } from '../plugins/session/codec.ts';
+import type { RuntimeHostIoService } from '../contracts.ts';
+import { branchEntries, decodeSession, SESSION_MAX_BYTES } from '../plugins/session/codec.ts';
 import { convertLegacySession, prepareSessionConfig } from '../plugins/session/legacy.ts';
+import { JsonlSessionStore } from '../plugins/session/store.ts';
 
 let dir: string;
 const runtimes: RuntimeHandle[] = [];
@@ -367,4 +369,87 @@ it('keeps messages after a desktop checkpoint boundary when checkpoints were wri
   const messages = buildSessionContext(branchEntries(doc)).messages;
   expect(JSON.stringify(messages)).toContain('AFTER_CHECKPOINT');
   expect(JSON.stringify(messages)).not.toContain('old answer');
+});
+
+/** A v3 file carrying one label we can honour and one we cannot. */
+function labelled(): string {
+  return `${[
+    { type: 'session', version: 3, id: 'legacy-labels', timestamp: stamp, cwd: dir },
+    {
+      type: 'message',
+      id: 'u',
+      parentId: null,
+      timestamp: stamp,
+      message: { role: 'user', content: 'OLD_TASK', timestamp: Date.parse(stamp) },
+    },
+    {
+      type: 'message',
+      id: 'a',
+      parentId: 'u',
+      timestamp: stamp,
+      message: fauxAssistantMessage('OLD_REPLY'),
+    },
+    { type: 'label', id: 'l1', parentId: 'a', timestamp: stamp, targetId: 'a', label: 'kept' },
+    { type: 'label', id: 'l2', parentId: 'a', timestamp: stamp, targetId: 'ghost', label: 'lost' },
+    { type: 'label', id: 'l3', parentId: 'a', timestamp: stamp, label: 'no target' },
+  ]
+    .map((row) => JSON.stringify(row))
+    .join('\n')}\n`;
+}
+
+it('imports a session whose labels point at rows the conversion never produced', () => {
+  const document = decodeSession(convertLegacySession(labelled(), dir, join(dir, 'old.jsonl')));
+  // session-10 — the import survives; only the labels that resolve come with it.
+  expect(document.labels).toEqual({ a: 'kept' });
+});
+
+it('reports an unreadable first row with a code instead of a bare SyntaxError', async () => {
+  const faux = fauxProvider({ provider: 'test', models: [{ id: 'test', name: 'Test' }] });
+  const runtime = await createRuntime({ env: {}, providers: [faux.provider] });
+  runtimes.push(runtime);
+  // session-09 — a zero-byte file is what a kill between create and header write
+  // leaves behind, and `pi` sessions can be empty for the same reason.
+  const empty = join(dir, 'empty.jsonl');
+  await writeFile(empty, '');
+  await expect(
+    prepareSessionConfig(runtime.hostIo, { file: empty, cwd: dir, mode: 'resume' })
+  ).rejects.toMatchObject({ code: 'session_invalid' });
+
+  const garbage = join(dir, 'garbage.jsonl');
+  await writeFile(garbage, 'not json at all\n');
+  await expect(
+    prepareSessionConfig(runtime.hostIo, { file: garbage, cwd: dir, mode: 'resume' })
+  ).rejects.toMatchObject({ code: 'session_invalid' });
+});
+
+it('reads the legacy source, the native copy and the store under one byte budget', async () => {
+  const faux = fauxProvider({ provider: 'test', models: [{ id: 'test', name: 'Test' }] });
+  const runtime = await createRuntime({ env: {}, providers: [faux.provider] });
+  runtimes.push(runtime);
+  // session-12 — every session read must ask for the same number; the lock
+  // sidecar has a budget of its own and is filtered out by size.
+  const budgets: number[] = [];
+  const io = new Proxy(runtime.hostIo, {
+    get(target, key) {
+      const value = Reflect.get(target, key) as unknown;
+      if (typeof value !== 'function') return value;
+      const method = value.bind(target) as (...args: never[]) => unknown;
+      if (key !== 'readFile') return method;
+      return (path: string, options: { maxBytes: number }) => {
+        budgets.push(options.maxBytes);
+        return method(...([path, options] as never[]));
+      };
+    },
+  }) as RuntimeHostIoService;
+
+  const source = join(dir, 'old.jsonl');
+  await writeFile(source, legacy('pragmatic'));
+  const created = await prepareSessionConfig(io, { file: source, cwd: dir, mode: 'resume' });
+  // Again, now that the native copy exists: that is a different read site.
+  const reused = await prepareSessionConfig(io, { file: source, cwd: dir, mode: 'resume' });
+  const store = await JsonlSessionStore.open(io, reused);
+  await store.close();
+
+  expect(created.file).toBe(reused.file);
+  expect([...new Set(budgets.filter((bytes) => bytes > 1024 * 1024))]).toEqual([SESSION_MAX_BYTES]);
 });
