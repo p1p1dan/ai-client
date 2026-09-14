@@ -14,6 +14,8 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 - ✅ **T009** 打包门禁 native-only — `89c73e5b`（2026-09-14）。cutover-01 已修；CI 三平台绿灯待推送后的打包作业确认。cutover-16 拆解结论记入 T025，门禁新增断言建议记入 T028。
 - ✅ **T003** H/20 交叉写入 — `0332214c`（2026-09-14）。session-01/02/03/13、cutover-04 已修；Q005 结案（可达，已修「CLI 打开未再写」形态），中段坏行记 Q008。真机一圈归 T032。
 - ✅ **T004 + T005** 子代理错误路径与内部报告投影 — `4e80f9ff`（2026-09-14）。subagent-core-01/02/03/04/05、rpc-projector-01/04、loop-model-06 已修；新增 golden 录制 `nativeGuiSubagentEventStream.json`。权限行的委派归属展示留 UI 批次。
+- ✅ **T002** 权限 surface 映射 — `10581139`（2026-09-14）。permissions-09、skills-mcp-11/12、cross-05 已修。取舍：`trustedPath` 让已信任技能目录默认 allow，任何层级写的 `skill: ask` 都不会弹卡，只有显式 deny 能拦（贴合 K1「不弹卡」与 headless 约束）；随包 `skill: {'*': 'ask'}` 保留作可覆盖占位。skill 顺带进 plan 模式白名单。
+- ✅ **T006** 子代理继承父回合 — `d71eb2ec`（2026-09-14）。cross-01/02 已修；`SubagentConfig.thinkingLevel` 保留为未经 bindRun 调用方的兜底。
 - ✅ **T027（两件机械活）** signoff SA09/SA12/SA15/SA19 实况标注、P5-2-5 标注 — `95e63960`（2026-09-14）。T027 其余文档回写仍在批次 C。
 
 ## In Progress
@@ -24,7 +26,8 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
   - T004：admit 后整段 try/catch（`delegation_start_failed`）；drain 30 秒兜底（`delegation_drain_timeout`，强制 settle 为 timed_out）；TaskStop 对已完成目标把报告放进返回文本；prune 只淘汰已交付项；cancelReason 单一真相源区分 stopped / timed_out 并带 lastReportText。顺带让 `subagents.projectInstructions` 选项真正生效。
   - T005：交回消息打 `aiclientInternal` 标记（`src/shared/internalMessage.ts`），projector 不铸用户气泡、重开不当最新用户任务、compaction 的 latestUser 排除它（额外一条，契约 §3 明写）；权限活动过滤放宽为父调用或已登记委派，payload 带 delegationId / agentName，授权语义按决策 003 不变；新增独立 golden 录制 `nativeGuiSubagentEventStream.json`（28 条），原录制未重录。渲染层只补类型，归属展示留 UI 批次。
   - 全量 398 文件 / 5680 测试、三套 tsc、Biome 通过。
-- 2026-09-14 批次 A 第三波开工：T002（权限 surface 映射）、T006（子代理继承父回合）。
+- 2026-09-14 批次 A 第三波 **已提交（10581139 / d71eb2ec）**：全量 398 文件 / 5694 测试、三套 tsc 通过；Biome 仅剩 questionCardModel.test 一条 HEAD 已有的 suppressions/unused 警告。
+- 2026-09-14 批次 A 第四波开工：T007（模型绑定与目录诊断）、T010（搜索遍历容错）。第五波计划 T011 + T008（T011 与 T007 都改 agent-loop，错开）。
 
 ## Next
 
