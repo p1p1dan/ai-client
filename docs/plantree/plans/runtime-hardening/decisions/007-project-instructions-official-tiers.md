@@ -14,7 +14,7 @@
    - cwd 子目录：代理读到该子树中的文件时按需加载，每份一次，会话内持续有效。
    - 用户级 `~/.claude/CLAUDE.md`：继续由宿主经 `prompt.globals` 传入。
    - 各级累加，没有硬优先级；提示块只声明「各级累加，冲突以更具体文件自述为准」，不再写「后者优先」。
-3. 暂不做：`.claude/rules/*.md`、`CLAUDE.local.md`、`~/.claude/rules/*.md`、`settingSources` 开关。
+3. 暂不做：`.claude/rules/*.md`、`~/.claude/rules/*.md`。（原「不做 settingSources 与 CLAUDE.local.md」已被[决策 008](008-setting-sources-switch.md) 修订：两者都做。）
 
 ## 影响
 
