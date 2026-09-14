@@ -18,6 +18,8 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 - ✅ **T006** 子代理继承父回合 — `d71eb2ec`（2026-09-14）。cross-01/02 已修；`SubagentConfig.thinkingLevel` 保留为未经 bindRun 调用方的兜底。
 - ✅ **T007** 模型绑定与目录诊断 — `780dd9c1`（2026-09-14）。loop-model-01/02/04/07/08、cross-06 已修。取舍：`no_api_key` 只对需要 key 的 7 种协议且无 Authorization 类头时生效，bedrock / vertex / pi-messages 不受影响。**待盯**：凭据库未解锁时 Main 下发空 key，该 provider 现在会从目录消失（之前是 43 秒后报错），只剩 catalog_empty 消息里的 `id:no_api_key` 可诊断——归 T021 钥匙串 locked 场景与 T032 上机检查单。auth.json 损坏诊断只覆盖读盘路径。
 - ✅ **T010** 搜索遍历容错 — `1262e3b0`（2026-09-14）。tools-01/07 已修；错误码集合含 EPERM/EISDIR/ELOOP，与 skills / mcp / prompt 三处一致。
+- ✅ **T011** trace 脱敏与体积 — `b714a925`（2026-09-14）。core-host-03、permissions-12 已修；tools-11 复核后不做（驻留点在渲染层，卡片设计即显示完整内容）。
+- ✅ **T008** 导入清单与路径 — `23ac5df5`（2026-09-14）。import-catalog-01/07/10/11 已修；「四个 RPC」实际只有三个带 targetPiSessionId，discard 传完整路径。import-catalog-09（写锁旁车与暂存目录清理，在 `src/runtime/worker/nativeImport.ts`）作为残项补做中。
 - ✅ **T027（两件机械活）** signoff SA09/SA12/SA15/SA19 实况标注、P5-2-5 标注 — `95e63960`（2026-09-14）。T027 其余文档回写仍在批次 C。
 
 ## In Progress
@@ -30,7 +32,7 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
   - 全量 398 文件 / 5680 测试、三套 tsc、Biome 通过。
 - 2026-09-14 批次 A 第三波 **已提交（10581139 / d71eb2ec）**：全量 398 文件 / 5694 测试、三套 tsc 通过；Biome 仅剩 questionCardModel.test 一条 HEAD 已有的 suppressions/unused 警告。
 - 2026-09-14 批次 A 第四波 **已提交（780dd9c1 / 1262e3b0）**：全量 398 文件 / 5708 测试、三套 tsc、Biome 通过。
-- 2026-09-14 批次 A 第五波开工：T011（trace 脱敏与体积）、T008（导入清单与路径）。
+- 2026-09-14 批次 A 第五波 **已提交（b714a925 / 23ac5df5）**：全量 398 文件 / 5716 测试、三套 tsc、Biome 通过。残项 import-catalog-09 补做中。
 
 ## Next
 
