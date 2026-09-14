@@ -8,10 +8,14 @@
  * the context it should, or quietly loses the work a delegate did.
  */
 
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AssistantMessage, Context as PiContext } from '@earendil-works/pi-ai';
+import type {
+  AssistantMessage,
+  Context as PiContext,
+  SimpleStreamOptions,
+} from '@earendil-works/pi-ai';
 import {
   fauxAssistantMessage,
   fauxProvider,
@@ -279,6 +283,164 @@ describe('SA14 / SA15 / SA16 · delegate records, usage and reopening', () => {
     expect(orphan?.report).toBeUndefined();
     // Reopening starts nothing: the live registry knows nothing about it.
     expect(handle.ctx.runtimeSubagents.registry.has('orphan')).toBe(false);
+  });
+});
+
+/**
+ * T006 — cross-01/cross-02. A delegate with no pin of its own must inherit
+ * what the PARENT RUN actually used, not the catalog's registration order and
+ * not a config field nobody ever writes.
+ */
+describe("T006 · a delegate's model and thinking level follow the parent run", () => {
+  let workspace: string;
+  let runtime: RuntimeHandle | undefined;
+
+  beforeEach(async () => {
+    workspace = await mkdtemp(join(tmpdir(), 'p52-t006-'));
+  });
+  afterEach(async () => {
+    await runtime?.dispose();
+    runtime = undefined;
+    await rm(workspace, { recursive: true, force: true });
+  });
+
+  const oneDelegation = (report: string) => ({
+    parent: [
+      () =>
+        fauxAssistantMessage([fauxToolCall('Task', { agent: 'explorer', task: 'look' })], {
+          stopReason: 'toolUse',
+        }),
+      () => fauxAssistantMessage('waiting'),
+      () => fauxAssistantMessage('integrated'),
+    ],
+    delegate: [() => fauxAssistantMessage(report)],
+  });
+
+  function router(
+    script: { parent: (() => AssistantMessage)[]; delegate: (() => AssistantMessage)[] },
+    onDelegateOptions?: (options: SimpleStreamOptions | undefined) => void
+  ) {
+    let parentIndex = 0;
+    let delegateIndex = 0;
+    return async (context: PiContext, options?: SimpleStreamOptions) => {
+      const isDelegate = /You are the "[a-z0-9-]+" subagent/.test(context.systemPrompt ?? '');
+      if (isDelegate) onDelegateOptions?.(options);
+      const steps = isDelegate ? script.delegate : script.parent;
+      const index = isDelegate ? delegateIndex++ : parentIndex++;
+      const step = steps[Math.min(index, steps.length - 1)];
+      if (!step) throw new Error('no scripted response');
+      return step();
+    };
+  }
+
+  it("cross-01: a delegate resolves to the parent's actual model, not the catalog's first entry", async () => {
+    // Registration order makes `faux-a` the catalog default (`defaultRef()`).
+    // The parent run explicitly picks `faux-b` — the second, non-default
+    // entry — so a pass that fell back to `defaultRef()` would still name the
+    // wrong model here.
+    const handle = fauxProvider({
+      provider: 'faux',
+      models: [
+        { id: 'faux-a', name: 'A' },
+        { id: 'faux-b', name: 'B' },
+      ],
+    });
+    const route = router(oneDelegation('done inheriting the model'));
+    handle.setResponses(Array.from({ length: 8 }, () => route));
+    runtime = await createRuntime({
+      env: {},
+      providers: [handle.provider],
+      tools: { cwd: workspace },
+      permissions: { gear: 'auto' },
+      subagents: { home: join(workspace, 'home') },
+      session: { cwd: workspace, mode: 'create', file: join(workspace, 'session.jsonl') },
+      loop: { singleTurn: false },
+    });
+    await runtime.run({ prompt: 'go', model: { provider: 'faux', id: 'faux-b' } });
+    await runtime.session?.flush();
+
+    const history = readSubagentHistory(runtime.session?.snapshot().entries ?? []);
+    expect(history).toHaveLength(1);
+    expect(history[0].model).toEqual({ provider: 'faux', modelId: 'faux-b' });
+  });
+
+  it('cross-02: a delegate resolves to the parent effort, not a hardcoded medium', async () => {
+    const handle = fauxProvider({ provider: 'faux', models: [{ id: 'faux-p524', name: 'P524' }] });
+    let delegateReasoning: SimpleStreamOptions['reasoning'] | 'UNSET' = 'UNSET';
+    const route = router(oneDelegation('done inheriting the effort'), (options) => {
+      if (delegateReasoning === 'UNSET') delegateReasoning = options?.reasoning;
+    });
+    handle.setResponses(Array.from({ length: 8 }, () => route));
+    runtime = await createRuntime({
+      env: {},
+      providers: [handle.provider],
+      tools: { cwd: workspace },
+      permissions: { gear: 'auto' },
+      subagents: { home: join(workspace, 'home') },
+      loop: { singleTurn: false },
+    });
+    await runtime.run({ prompt: 'go', thinkingLevel: 'off' });
+
+    // pi-agent-core turns 'off' into an ABSENT `reasoning` option; 'medium'
+    // (what the dead `SubagentConfig.thinkingLevel` fallback used to produce)
+    // would arrive as the literal string 'medium', which is truthy and would
+    // fail this assertion instead of just being the wrong level.
+    expect(delegateReasoning).toBeUndefined();
+  });
+
+  it("cross-01 guard: a definition's own model pin still wins over the parent's model", async () => {
+    const handle = fauxProvider({
+      provider: 'faux',
+      models: [
+        { id: 'faux-a', name: 'A' },
+        { id: 'faux-b', name: 'B' },
+      ],
+    });
+    const route = router({
+      parent: [
+        () =>
+          fauxAssistantMessage([fauxToolCall('Task', { agent: 'pinned', task: 'look' })], {
+            stopReason: 'toolUse',
+          }),
+        () => fauxAssistantMessage('waiting'),
+        () => fauxAssistantMessage('integrated'),
+      ],
+      delegate: [() => fauxAssistantMessage('done, pinned')],
+    });
+    handle.setResponses(Array.from({ length: 8 }, () => route));
+    const definitionsDir = join(workspace, 'home', '.agents', 'subagents');
+    await mkdir(definitionsDir, { recursive: true });
+    // Pins `faux-a` while the parent run below uses `faux-b`: if the pin ever
+    // lost to the parent ref, this delegation would come back on `faux-b`.
+    await writeFile(
+      join(definitionsDir, 'pinned.md'),
+      [
+        '---',
+        'name: pinned',
+        'description: pins its own model regardless of the parent',
+        'tools: [Read]',
+        'model: faux/faux-a',
+        '---',
+        '',
+        'Report back a short summary.',
+      ].join('\n'),
+      'utf8'
+    );
+    runtime = await createRuntime({
+      env: {},
+      providers: [handle.provider],
+      tools: { cwd: workspace },
+      permissions: { gear: 'auto' },
+      subagents: { home: join(workspace, 'home') },
+      session: { cwd: workspace, mode: 'create', file: join(workspace, 'session.jsonl') },
+      loop: { singleTurn: false },
+    });
+    await runtime.run({ prompt: 'go', model: { provider: 'faux', id: 'faux-b' } });
+    await runtime.session?.flush();
+
+    const history = readSubagentHistory(runtime.session?.snapshot().entries ?? []);
+    expect(history).toHaveLength(1);
+    expect(history[0].model).toEqual({ provider: 'faux', modelId: 'faux-a' });
   });
 });
 

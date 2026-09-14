@@ -171,7 +171,15 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // P5-2-4 — delegations started from here belong to this session and this
     // run. Bound before any tool can fire, because the first thing `Task` does
     // is write a record that has to name both.
-    this.ctx.get('runtimeSubagents')?.bindRun({ sessionId, runId: trace.runId });
+    // cross-01/cross-02: the ref actually resolved for this run, not the
+    // catalog's default and not a stale config field, is what a delegate
+    // without its own pin must inherit.
+    this.ctx.get('runtimeSubagents')?.bindRun({
+      sessionId,
+      runId: trace.runId,
+      model: resolved.ref,
+      thinkingLevel,
+    });
 
     // Optional: P0 and the tool-less smoke lane run without it, and a run with
     // no compaction service behaves exactly as it did before P2-3.

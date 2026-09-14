@@ -120,7 +120,14 @@ export interface SubagentConfig {
    * says now, the same as the parent's own prompt does.
    */
   projectInstructions?: () => Promise<string | undefined>;
-  /** Parent thinking level, used when a definition pins none. */
+  /**
+   * Static fallback thinking level, used only when a run never bound one.
+   *
+   * `bindRun()`'s `thinkingLevel` is the live source — it carries the actual
+   * parent run's effort, which can change between runs of the same session.
+   * This field exists for a caller that never calls `bindRun()` at all (an
+   * embedding with no agent loop in front of it).
+   */
   thinkingLevel?: ThinkingLevel;
 }
 
@@ -128,6 +135,17 @@ export interface SubagentConfig {
 export interface SubagentRunContext {
   sessionId: string;
   runId: string;
+  /**
+   * The parent run's resolved model, cross-01's fix: `resolveModel`'s third
+   * tier reads this instead of `adapter.defaultRef()` (catalog order, unrelated
+   * to what the parent is actually running).
+   */
+  model?: RuntimeModelRef;
+  /**
+   * The parent run's actual thinking level, cross-02's fix: `Task.execute`'s
+   * third tier reads this instead of the dead `SubagentConfig.thinkingLevel`.
+   */
+  thinkingLevel?: ThinkingLevel;
 }
 
 export interface SubagentService {
@@ -454,9 +472,33 @@ export class SubagentPlugin extends Service implements SubagentService {
       }
       return { ok: true, model: adapter.resolve(ref) };
     }
-    const parent: RuntimeModelRef | undefined = adapter.defaultRef();
-    if (!parent) return { ok: false, text: 'No model is configured for delegation.' };
-    return { ok: true, model: adapter.resolve(parent) };
+    const parentRef = this.runContext?.model;
+    if (parentRef) {
+      // The parent's ref has to still be in THIS catalog before it is trusted,
+      // the same rule an override or a definition pin already follows: SA12
+      // promises "unavailable fails with a menu", never a silent fallback to
+      // some other model. A mismatch here would mean the catalog changed under
+      // a resumed session between the parent's turn and this delegation.
+      const stillAvailable = available.some(
+        (entry) => entry.provider === parentRef.provider && entry.id === parentRef.id
+      );
+      if (!stillAvailable) {
+        const menu = available.map((entry) => `${entry.provider}/${entry.id}`).join(', ');
+        return {
+          ok: false,
+          text: `The parent session's model "${parentRef.provider}/${parentRef.id}" is not available for delegation.${
+            menu ? ` Available: ${menu}.` : ' No models are configured for delegation.'
+          }`,
+        };
+      }
+      return { ok: true, model: adapter.resolve(parentRef) };
+    }
+    // No run context bound at all (a caller that never reached `bindRun()`,
+    // e.g. a probe run directly against the plugin): fall back to the
+    // catalog's first entry rather than refusing every delegation outright.
+    const fallback = adapter.defaultRef();
+    if (!fallback) return { ok: false, text: 'No model is configured for delegation.' };
+    return { ok: true, model: adapter.resolve(fallback) };
   }
 
   private buildTaskTool(): AgentTool<TSchema, unknown> {
@@ -679,6 +721,7 @@ export class SubagentPlugin extends Service implements SubagentService {
       }),
       model,
       thinkingLevel: (definition.thinkingLevel ??
+        this.runContext?.thinkingLevel ??
         this.config.thinkingLevel ??
         'medium') as ThinkingLevel,
       tools,
