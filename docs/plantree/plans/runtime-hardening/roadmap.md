@@ -10,11 +10,13 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 ## Done
 
-（空）
+- ✅ **T001** bash 静态分析补全 — `c4e2b2e4`（2026-09-14）。permissions-01/02/03/04/05/06/19 已修；shellPolicy.test 26→60 条，每类反向验证记录在提交说明。PERM-1 探针需真机与真实模型，转入 T032 检查单。
+- ✅ **T009** 打包门禁 native-only — `89c73e5b`（2026-09-14）。cutover-01 已修；CI 三平台绿灯待推送后的打包作业确认。cutover-16 拆解结论记入 T025，门禁新增断言建议记入 T028。
+- ✅ **T027（两件机械活）** signoff SA09/SA12/SA15/SA19 实况标注、P5-2-5 标注 — `95e63960`（2026-09-14）。T027 其余文档回写仍在批次 C。
 
 ## In Progress
 
-- 2026-09-14 批次 A 第一波 **代码完成、待提交**：T001（bash 静态分析，shellPolicy.test 26→60 条，七类发现各有反向验证；permissions-04 改为 auto 放行加 `!unresolvedPaths` 条件而非整行下移，避免顺带改动 scope/grants 语义；here-string 字面量按审计要求登记为路径，属保守取舍；PERM-1 探针需真机与真实模型，留到批次 E）、T009（两脚本只剩 native lane，`report.stamp.backend` 改读 trace 自证；CI workflow 无需改）、T027 两件机械回写（signoff SA09/SA12/SA15/SA19、P5-2-5 标注）。全量 397 文件 / 5644 测试、三套 tsc、Biome 通过。
+- 2026-09-14 批次 A 第一波 **已提交（c4e2b2e4 / 89c73e5b / 95e63960）**：T001（bash 静态分析，shellPolicy.test 26→60 条，七类发现各有反向验证；permissions-04 改为 auto 放行加 `!unresolvedPaths` 条件而非整行下移，避免顺带改动 scope/grants 语义；here-string 字面量按审计要求登记为路径，属保守取舍；PERM-1 探针需真机与真实模型，留到批次 E）、T009（两脚本只剩 native lane，`report.stamp.backend` 改读 trace 自证；CI workflow 无需改）、T027 两件机械回写（signoff SA09/SA12/SA15/SA19、P5-2-5 标注）。全量 397 文件 / 5644 测试、三套 tsc、Biome 通过。
 - 2026-09-14 批次 A 第二波开工：T003（H/20 交叉写入）、T004+T005（子代理错误路径 + 内部报告投影，合并派单）。
 
 ## Next
@@ -74,7 +76,7 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 | ID | 任务 | 范围 | 验收 |
 |---|---|---|---|
-| T032 | 上机检查单：合并旧树待现场项（P5-2 六行、P5-4/P5-5 五行、P6-3 第 4/6 条、H/20 I5、F3 根因）与审计静态推断项（permissions-19、core-host-05/07、tools-10、cutover-03、P1-8 证据重采、P6-4 旧版产物互读） | 旧树第 11 批 + 审计 | 检查单每项有判据与取证方式 |
+| T032 | 上机检查单：合并旧树待现场项（P5-2 六行、P5-4/P5-5 五行、P6-3 第 4/6 条、H/20 I5、F3 根因）、T001 后的 PERM-1 探针复跑（`scripts/run-perm1-probe.mjs`，需真实模型回合）与审计静态推断项（permissions-19、core-host-05/07、tools-10、cutover-03、P1-8 证据重采、P6-4 旧版产物互读） | 旧树第 11 批 + 审计 | 检查单每项有判据与取证方式 |
 | T033 | 最后一次上机：加密 Windows 一次性全量验收 | T032 | 逐项取证进 evidence |
 
 ## Deferred
