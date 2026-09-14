@@ -42,18 +42,20 @@ describe('createRuntime', () => {
     }
   });
 
-  it('reports the backend flag it read, defaulting to legacy until P6-1', async () => {
-    const legacy = await createRuntime({ providers: [faux().provider], env: {} });
-    const native = await createRuntime({
+  it('stamps the engine as native whatever the environment says (P6-5)', async () => {
+    const byDefault = await createRuntime({ providers: [faux().provider], env: {} });
+    // The variable that used to select an engine was deleted with that engine.
+    // Setting it must be inert, not a way to ask for something that is gone.
+    const stale = await createRuntime({
       providers: [faux().provider],
-      env: { AICLIENT_RUNTIME_BACKEND: 'native' },
+      env: { AICLIENT_RUNTIME_BACKEND: 'legacy' },
     });
     try {
-      expect(legacy.flags.backend).toBe('legacy');
-      expect(native.flags.backend).toBe('native');
+      expect(byDefault.flags.backend).toBe('native');
+      expect(stale.flags.backend).toBe('native');
     } finally {
-      await legacy.dispose();
-      await native.dispose();
+      await byDefault.dispose();
+      await stale.dispose();
     }
   });
 
@@ -142,7 +144,7 @@ describe('createRuntime', () => {
       await runtime.run({ prompt: 'hi', systemPrompt: 'probe' });
       const stamp = runtime.trace.runs[0].version_stamp;
       expect(stamp.config_version).toBe('runtime_p3_complete_v1');
-      expect(stamp.backend).toBe('legacy');
+      expect(stamp.backend).toBe('native');
       expect(stamp.single_turn).toBe('true');
       expect(stamp['dep:cordis']).toBe('4.0.0-rc.9');
       expect(stamp['dep:@earendil-works/pi-ai']).toBe('0.84.4');

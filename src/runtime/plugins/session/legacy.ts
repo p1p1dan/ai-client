@@ -9,7 +9,7 @@ import {
 } from '../../../shared/types/runtimePermission.ts';
 import type { RuntimeHostIoService } from '../../contracts.ts';
 import { errorCode, RuntimeHostError } from '../../host/errors.ts';
-import { branchEntries, decodeSession } from './codec.ts';
+import { branchEntries, cliBookkeeping, decodeSession, interopHeader } from './codec.ts';
 import type { SessionConfig } from './store.ts';
 import { acquireWriterLock } from './writerLock.ts';
 
@@ -106,6 +106,13 @@ export function convertLegacySession(
   const first = rows[0];
   if (!first || first.type !== 'session')
     throw new RuntimeHostError('session_format_unsupported', 'missing legacy session header');
+  // H/20 gave v4 files a v3 header too, so `type:"session"` alone no longer
+  // means "legacy": a native session would otherwise be re-imported as one.
+  if (first.kind === 'header')
+    throw new RuntimeHostError(
+      'session_format_unsupported',
+      'already a Pi JSONL v4 session; import expects a legacy file'
+    );
   if (first.schema !== undefined && first.schema !== 1)
     throw new RuntimeHostError('session_format_unsupported', 'unsupported desktop session schema');
   const originalHeader = structuredClone(first);
@@ -143,7 +150,7 @@ export function convertLegacySession(
       'session_cwd_mismatch',
       'legacy workspace relocation must be explicit'
     );
-  const header: JsonlV4Header = {
+  const header: JsonlV4Header = interopHeader({
     kind: 'header',
     version: 4,
     id: randomUUID(),
@@ -158,7 +165,7 @@ export function convertLegacySession(
       legacyHeader: JSON.parse(JSON.stringify(originalHeader)),
       ...(initialPermissions ? { permissions: { ...initialPermissions } } : {}),
     },
-  };
+  });
   const entries: Entry[] = [];
   const ids = new Set<string>();
   let leafId: string | null = null;
@@ -308,7 +315,13 @@ export function convertLegacySession(
       append({ ...common, type: 'custom', customType: `legacy:${String(row.type)}`, data: row });
     }
     if (row.type === 'session_info' && typeof row.name === 'string')
-      output.push({ kind: 'fact', fact: 'name', name: row.name, seq: ++seq });
+      output.push({
+        kind: 'fact',
+        fact: 'name',
+        name: row.name,
+        seq: ++seq,
+        ...cliBookkeeping(randomUUID(), leafId, common.timestamp),
+      });
     if (row.type === 'label')
       output.push({
         kind: 'fact',
@@ -316,6 +329,7 @@ export function convertLegacySession(
         targetId: row.targetId,
         label: row.label,
         seq: ++seq,
+        ...cliBookkeeping(randomUUID(), leafId, common.timestamp),
       });
   }
   const permissions = sessionPermissions(
@@ -331,7 +345,16 @@ export function convertLegacySession(
       timestamp: Date.now(),
       parentId: leafId,
     });
-  output.push({ kind: 'lane', lane: 'main', leafId, seq: ++seq });
+  // The lane row is the last line of every converted file, so it is exactly the
+  // row the CLI would take as the conversation's tip. Chaining it keeps an
+  // imported session readable in the TUI instead of showing up empty.
+  output.push({
+    kind: 'lane',
+    lane: 'main',
+    leafId,
+    seq: ++seq,
+    ...cliBookkeeping(randomUUID(), leafId, header.createdAt),
+  });
   const result = `${output.map((row) => JSON.stringify(row)).join('\n')}\n`;
   decodeSession(result);
   return result;

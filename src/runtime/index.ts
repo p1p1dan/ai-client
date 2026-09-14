@@ -60,11 +60,10 @@ export {
   SESSION_SERVICE,
   TRACE_SERVICE,
 } from './contracts.ts';
-export type { RuntimeBackend, RuntimeFlags } from './flags.ts';
+export type { RuntimeFlags } from './flags.ts';
 export {
   PI_AGENT_DIR_ENV,
   RUNTIME_AGENT_DIR_ENV,
-  RUNTIME_BACKEND_ENV,
   RUNTIME_TRACE_DIR_ENV,
   readRuntimeFlags,
 } from './flags.ts';

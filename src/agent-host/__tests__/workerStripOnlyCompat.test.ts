@@ -40,7 +40,7 @@ interface GraphProblem {
   detail: string;
 }
 
-function walkWorkerGraph(): { files: string[]; extensionless: GraphProblem[] } {
+function walkGraphFrom(entry: string): { files: string[]; extensionless: GraphProblem[] } {
   const seen = new Set<string>();
   const extensionless: GraphProblem[] = [];
   // `import`/`export ... from '...'`; the clause is captured so type-only
@@ -76,12 +76,12 @@ function walkWorkerGraph(): { files: string[]; extensionless: GraphProblem[] } {
     }
   };
 
-  visit(workerEntry);
+  visit(entry);
   return { files: [...seen], extensionless };
 }
 
 describe('Pi worker source is loadable under Node strip-only type removal', () => {
-  const { files, extensionless } = walkWorkerGraph();
+  const { files, extensionless } = walkGraphFrom(workerEntry);
 
   it('reaches the worker entry and its dependencies', () => {
     expect(files).toContain(workerEntry);
@@ -112,10 +112,16 @@ describe('Pi worker source is loadable under Node strip-only type removal', () =
     // A naive value-import check that only accepts `.ts`/`.js` flags it, yet
     // Node — including `--experimental-strip-types` in dev — resolves `.mjs`
     // without any search. This case pins the distinction: the rule bans bare
-    // names, not ESM file types. Walking the graph below re-proves the real
-    // import resolves under strip-only, so the check cannot drift in either
-    // direction.
-    expect(files.some((file) => file.endsWith('bundledFeaturePlugins.ts'))).toBe(true);
+    // names, not ESM file types.
+    //
+    // Checked by walking that file directly since P6-5: it used to be reachable
+    // from the worker entry through the legacy engine, and the retirement took
+    // that path out. The file is still shipped and still loaded — by Main, for
+    // the opt-in bundled extensions — so the rule still has to hold for it.
+    const featurePlugins = path.join(repoRoot, 'src/agent-host/bundledFeaturePlugins.ts');
+    expect(fs.existsSync(featurePlugins)).toBe(true);
+    const { extensionless: featureProblems } = walkGraphFrom(featurePlugins);
+    expect(featureProblems.some((p) => p.detail.includes('bundledPlugins.mjs'))).toBe(false);
     expect(extensionless.some((p) => p.detail.includes('bundledPlugins.mjs'))).toBe(false);
   });
 });

@@ -4,7 +4,7 @@
 
 | 脚本 | 作用 |
 |---|---|
-| `run.mjs` | 旧后端（`bootstrapPiAgentSession` + 已装 pi-coding-agent SDK）采集 |
+| ~~`run.mjs`~~ | **已随 P6-5 删除**：旧后端采集器，而旧后端 2026-09-13 退役。它采的基线（`baseline-20260908`、P2-5 的同网关重采）原样留档，但**无法再跑第二遍**——ARD §5 当初要求「趁旧后端还在时把基线采完」，正是为了这一天 |
 | `run-native.mjs` | 自有 runtime（`createRuntime`）采集，产出同一种归档形状 |
 | `verify.mjs` / `verify-native.mjs` | 各自的离线复核，不访问网关 |
 | `compare.mjs` | 出 P2-6 新旧对比报告；两份归档不可比时直接报错，不出带脚注的差值 |
@@ -19,22 +19,14 @@
 按模型窗口推导、工具集不同等）；`compare.mjs` 在这个字段缺失时拒绝出报告，避免把「没对齐」
 写成「完全一致」。
 
-## P2-0 旧后端基线采集
+## P2-0 旧后端基线采集（已归档，采集器已删）
 
 计划与验收口径见 [plantree](../../docs/plantree/plans/runtime-evolution/topics/p2-0-cache-baseline.md)。
-这是独立测试工具，使用现有 `bootstrapPiAgentSession` 和旧版 SDK；无需构建 Electron。
+采集器 `run.mjs` 随 **P6-5 旧集成层退役**一起删除（2026-09-13）——它跑的就是那个引擎。
+已采到的归档（`baseline-20260908` 与 P2-5 的同网关重采）原样保留，`verify.mjs` 仍可离线复核；
+**但不能再采新的一份**。这正是 ARD §5 当初要求「趁旧后端还在时把基线采完」的原因。
 
-Node 24 下运行，`--sdk-host` 指向已安装依赖的 `src/agent-host` 目录：
-
-```bash
-read -rsp 'Test API key: ' P20_BASELINE_API_KEY
-export P20_BASELINE_API_KEY
-NODE_OPTIONS=--max-old-space-size=768 node scripts/runtime-baseline/run.mjs \
-  --sdk-host /home/pi/code/ai-client/src/agent-host \
-  --base-url https://maxapi.hanyue.xyz \
-  --out docs/plantree/plans/runtime-evolution/evidence/p2-0/NEW_RUN_ID
-unset P20_BASELINE_API_KEY
-```
+下面的采集流程只适用于 `run-native.mjs`。
 
 六场景按顺序串行执行；失败立即结束并留下 `validBaseline: false` 的证据。输出目录必须是
 新目录，不能覆盖原有 run。`--case B01` 可单独诊断，该结果永远不会成为六场景完整基线。

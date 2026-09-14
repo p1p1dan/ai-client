@@ -14,7 +14,26 @@
  */
 
 import type { WorkerExtensionInfo } from '../shared/types/workerRpc.ts';
-import type { PiLoadedExtensions } from './piAgentSessionBootstrap.ts';
+
+/**
+ * What pi's resource loader hands back.
+ *
+ * Declared here since P6-5: it used to live in the legacy bootstrap, which is
+ * gone, but the shape still crosses a version boundary — the embedded Pi CLI
+ * writes the settings this list is read from. Fields stay `unknown` on purpose;
+ * `readLoadedExtensionInventory` narrows them defensively rather than trusting
+ * a declaration.
+ */
+export interface PiLoadedExtensions {
+  extensions?: Array<{
+    path?: unknown;
+    resolvedPath?: unknown;
+    hidden?: unknown;
+    sourceInfo?: unknown;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+}
 
 /** Cap so a pathological settings file cannot push an unbounded list over RPC. */
 export const EXTENSION_INVENTORY_MAX = 64;

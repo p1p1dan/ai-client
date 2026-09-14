@@ -41,12 +41,9 @@ const ATTACH = process.env.PERM1_ATTACH === '1';
 /**
  * 用 native 后端起应用。
  *
- * 结构化权限卡只在 native 上存在；legacy 后端下审批是 pi 的 permission-system 插件
- * 自己用 `ui.select` 提的问，经扩展 UI 通道原样渲染。两张不是同一张卡，点验要分两次。
- *
- * 开发机的 dev.env 没写 `AICLIENT_RUNTIME_BACKEND`，而 `readRuntimeFlags` 把「不是
- * native」一律读成 legacy，所以这里换一份 dev.env 副本（`AICLIENT_DEV_ENV_FILE`），
- * 加上那一行；`dev.js` 会把副本里的键原样带给子进程。
+ * **P6-5 之后这个开关没有意义了**：旧引擎已退役，`AICLIENT_RUNTIME_BACKEND` 连同它一起
+ * 删除，应用只有一个引擎。下面这段复制 dev.env 的代码因此是空操作，保留只是为了让
+ * `PERM1_NATIVE=1` 这个老命令行仍然能跑通；结构化权限卡本来就是现在唯一的那张。
  */
 const NATIVE = process.env.PERM1_NATIVE === '1';
 const REPORT_NAME = NATIVE ? 'perm1-native-report.json' : 'perm1-report.json';

@@ -9,16 +9,14 @@
  * could change mid-run would make a trace's version stamp a lie.
  */
 
-import { type RuntimeBackend, readRuntimeBackend } from '../shared/runtimeBackend.ts';
-
 /**
- * ARD D8. Same naming family as `AICLIENT_PI_WORKER_CAPACITY`.
+ * P6-5 removed `AICLIENT_RUNTIME_BACKEND` along with the engine it could select.
  *
- * Re-exported from `shared` rather than declared here: Main has to read the
- * same variable (P5-5 only assembles a catalog for the native backend) and
- * cannot import this package — the root tsconfig excludes `src/runtime/**`.
+ * ARD D8 always said the switch would be deleted once the old path retired; the
+ * user brought that forward on 2026-09-13. A rollback is now「装回上一个安装包」,
+ * which is stated in `docs/pi-only-rollout-rollback.md`. Nothing reads the
+ * variable any more — setting it has no effect at all.
  */
-export { RUNTIME_BACKEND_ENV } from '../shared/runtimeBackend.ts';
 
 /**
  * Where the pi catalog (`models.json` + `auth.json`) lives.
@@ -36,17 +34,15 @@ export const PI_AGENT_DIR_ENV = 'PI_CODING_AGENT_DIR';
 /** Directory run traces are appended to. Absent = keep traces in memory only. */
 export const RUNTIME_TRACE_DIR_ENV = 'AICLIENT_RUNTIME_TRACE_DIR';
 
-export type { RuntimeBackend } from '../shared/runtimeBackend.ts';
-
 export interface RuntimeFlags {
   /**
-   * Which engine a WorkerSlot should start (P4-2 reads this; P0 only reports
-   * it, so the value shows up in traces from the first run onward).
+   * The engine that produced a run, carried into every trace's version stamp.
    *
-   * Defaults to `legacy` because the native runtime is incomplete until P4.
-   * P6-1 flips the default and P6-4 keeps the switch for one release cycle.
+   * A constant since P6-5 — there is only one engine. Kept as a field rather
+   * than inlined at the stamp so an archived trace and a current one can still
+   * be compared field by field.
    */
-  backend: RuntimeBackend;
+  backend: 'native';
   /** Resolved catalog directory, or `null` when neither variable is set. */
   agentDir: string | null;
   traceDir: string | null;
@@ -54,7 +50,7 @@ export interface RuntimeFlags {
 
 export function readRuntimeFlags(env: NodeJS.ProcessEnv = process.env): RuntimeFlags {
   return {
-    backend: readRuntimeBackend(env),
+    backend: 'native',
     agentDir: firstNonEmpty(env[RUNTIME_AGENT_DIR_ENV], env[PI_AGENT_DIR_ENV]),
     traceDir: firstNonEmpty(env[RUNTIME_TRACE_DIR_ENV]),
   };

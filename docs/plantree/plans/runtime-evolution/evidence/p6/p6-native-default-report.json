@@ -1,0 +1,102 @@
+{
+  "startedAt": "2026-09-14T01:04:27.666Z",
+  "backendEnv": null,
+  "steps": {
+    "onboarding": "clicked",
+    "approvalSurface": {
+      "kind": "native-card",
+      "text": "直接允许\n本会话内允许\n直接拒绝",
+      "buttons": [
+        "直接允许",
+        "本会话内允许",
+        "直接拒绝"
+      ]
+    },
+    "allowLabel": "直接允许",
+    "sawCommandOutput": true,
+    "tuiSessionFile": "../../.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789347889296-ltrxsgm.jsonl",
+    "tuiSupport": {
+      "supported": true
+    },
+    "tui": {
+      "open": {
+        "terminalId": "p6-probe-terminal",
+        "generation": 1,
+        "resumed": false
+      },
+      "bytes": 22274,
+      "refused": false,
+      "showsConversation": true,
+      "tail": "[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[38;2;80;80;80m─\u001b[39m\u001b[0m\u001b]8;;\u0007\r\r\n\u001b[2K\u001b[38;2;102;102;102m~/code/ai-client (feat/runtime-evolution)\u001b[39m\u001b[0m\u001b]8;;\u0007\r\r\n\u001b[2K\u001b[38;2;102;102;102m↑5.9k ↓63 R128 CH2.1% 4.7%/128k (auto)\u001b[39m\u001b[38;2;102;102;102m                                                                 (maxapi) grok-4.6\u001b[39m\u001b[0m\u001b]8;;\u0007\u001b[?2026l\u001b[3A\u001b[1G\u001b[?25l"
+    },
+    "sessionFile": "../../.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789347889296-ltrxsgm.jsonl",
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "type": "session",
+      "hasIsoTimestamp": true
+    },
+    "cliRead": {
+      "ok": true,
+      "messageCount": 4
+    }
+  },
+  "screenshots": {
+    "start": "docs/plantree/plans/runtime-evolution/evidence/p6/p6-native-default-start.png",
+    "approval": "docs/plantree/plans/runtime-evolution/evidence/p6/p6-native-default-approval.png",
+    "afterTurn": "docs/plantree/plans/runtime-evolution/evidence/p6/p6-native-default-after-turn.png",
+    "tui": "docs/plantree/plans/runtime-evolution/evidence/p6/p6-native-default-tui.png"
+  },
+  "rendererProblems": [
+    {
+      "kind": "console.error",
+      "text": "21:04:39.956 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:04:39.956 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:04:49.295 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:04:49.308 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:04:49.418 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:04:49.553 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:04:49.714 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:04:49.797 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:04:49.840 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:04:49.857 › [workspace-tree] worktrees-absent Object"
+    }
+  ],
+  "verdict": {
+    "defaultBackendIsNative": true,
+    "turnCompleted": true,
+    "sessionHeaderIsDualFormat": true,
+    "piCliCanOpenThatFile": true,
+    "tuiOpenedTheNativeSession": true,
+    "notMeasured": [],
+    "pass": true
+  },
+  "devLogTail": "  ➜  Network: use --host to expose\n\nstarting electron app...\n\n\nDevTools listening on ws://127.0.0.1:9222/devtools/browser/a49712f1-e8e5-47ef-b5c1-369eed7ed1bf\n[files] Cleaned up temp directory: /tmp/aiclient-input\n21:04:36.972 › Shared state paths {\n  root: '/home/ai/.pilab/jyw-ai-client-dev',\n  settingsPath: '/home/ai/.pilab/jyw-ai-client-dev/settings.json',\n  sessionPath: '/home/ai/.pilab/jyw-ai-client-dev/session-state.json',\n  settingsMarkerPath: '/home/ai/.pilab/jyw-ai-client-dev/.local-settings-migrated',\n  localStorageMarkerPath: '/home/ai/.pilab/jyw-ai-client-dev/.local-localstorage-migrated'\n}\n[476086:0913/210437.459362:ERROR:media/gpu/vaapi/vaapi_wrapper.cc:1631] vaInitialize failed: unknown libva error\n[476122:0913/210438.494508:ERROR:gpu/ipc/client/command_buffer_proxy_impl.cc:128] ContextResult::kTransientFailure: Failed to send GpuControl.CreateCommandBuffer.\n[21:04:39.956] [error] [window] Showing main window via did-finish-load fallback\n[21:04:49.295] [error] [workspace-tree] worktrees-absent {\n  kind: 'worktrees-absent',\n  repoPath: '/home/ai/code/ai-client',\n  neverQueried: true\n}\n[21:04:49.308] [error] [workspace-tree] worktrees-absent {\n  kind: 'worktrees-absent',\n  repoPath: '/home/ai/code/ai-client',\n  neverQueried: true\n}\n[21:04:49.418] [error] [workspace-tree] worktrees-absent {\n  kind: 'worktrees-absent',\n  repoPath: '/home/ai/code/ai-client',\n  neverQueried: true\n}\n[21:04:49.553] [error] [workspace-tree] worktrees-absent {\n  kind: 'worktrees-absent',\n  repoPath: '/home/ai/code/ai-client',\n  neverQueried: true\n}\n[21:04:49.714] [error] [workspace-tree] worktrees-absent {\n  kind: 'worktrees-absent',\n  repoPath: '/home/ai/code/ai-client',\n  neverQueried: true\n}\n[21:04:49.797] [error] [workspace-tree] worktrees-absent {\n  kind: 'worktrees-absent',\n  repoPath: '/home/ai/code/ai-client',\n  neverQueried: true\n}\n[21:04:49.840] [error] [workspace-tree] worktrees-absent {\n  kind: 'worktrees-absent',\n  repoPath: '/home/ai/code/ai-client',\n  neverQueried: true\n}\n[21:04:49.857] [error] [workspace-tree] worktrees-absent {\n  kind: 'worktrees-absent',\n  repoPath: '/home/ai/code/ai-client',\n  neverQueried: true\n}\n\n[dev] SIGTERM - shutting down...\n"
+}

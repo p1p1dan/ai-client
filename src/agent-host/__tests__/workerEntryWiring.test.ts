@@ -10,17 +10,16 @@ import {
 } from '../../shared/types/workerRpc.ts';
 
 /**
- * ARD D8 / P4-2 — `AICLIENT_RUNTIME_BACKEND` decides which engine a slot runs.
+ * The worker entry's wiring, driven through the real process.
  *
- * Driven through the real worker entry rather than by unit-testing the flag
- * reader, because the thing that can silently rot is the wiring: the entry
- * loads the native module behind a dynamic import and hands the RPC server a
- * factory, and none of that is exercised by importing `readRuntimeFlags`.
+ * This file was the backend-switch test until P6-5 retired the second engine.
+ * What is left is the part that could always rot silently: the entry loads the
+ * runtime behind a dynamic import and hands the RPC server three factories, and
+ * none of that is exercised by importing `readRuntimeFlags`.
  *
- * The native engine is identified by an error only it can produce — it needs an
- * agent directory, and says which variable supplies it. Reaching that message
- * proves the native factory was constructed and called; the legacy backend has
- * no such requirement and never mentions the variable.
+ * The engine is identified by an error only it can produce — it needs an agent
+ * directory, and names the variable that supplies one. Reaching that message
+ * proves the factory was constructed and called rather than merely defined.
  */
 
 const WORKER_ENTRY = path.resolve(__dirname, '..', 'worker.ts');
@@ -48,15 +47,14 @@ function bootstrapRequest(cwd: string) {
 }
 
 /** Start the real worker entry over Node IPC and answer one bootstrap. */
-async function bootstrapOnce(backend: string | undefined): Promise<WorkerRpcResponse> {
-  workdir = mkdtempSync(path.join(tmpdir(), 'aiclient-backend-'));
+async function bootstrapOnce(): Promise<WorkerRpcResponse> {
+  workdir = mkdtempSync(path.join(tmpdir(), 'aiclient-entry-'));
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     [PI_WORKER_GENERATION_ENV]: '1',
   };
-  if (backend) env.AICLIENT_RUNTIME_BACKEND = backend;
-  else delete env.AICLIENT_RUNTIME_BACKEND;
-  // Deleted so the native path cannot pick one up from the developer's shell
+  delete env.AICLIENT_RUNTIME_BACKEND;
+  // Deleted so the runtime cannot pick one up from the developer's shell
   // and answer with a real bootstrap instead of the expected complaint.
   delete env.AICLIENT_RUNTIME_AGENT_DIR;
   delete env.PI_CODING_AGENT_DIR;
@@ -92,14 +90,69 @@ async function bootstrapOnce(backend: string | undefined): Promise<WorkerRpcResp
 }
 
 /**
- * P5-4 — drive one `worker.import` through the real entry on the native
- * backend.
+ * P6-2 — drive one `utility.start` through the real entry.
+ *
+ * Same identification trick as the bootstrap case: the runtime complains about
+ * a missing catalog directory by name, which the deleted pi runner never did —
+ * it resolved its own agent directory and failed, if at all, about models or
+ * authentication.
+ */
+async function utilityOnce(): Promise<WorkerRpcResponse> {
+  workdir = mkdtempSync(path.join(tmpdir(), 'aiclient-utility-'));
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    [PI_WORKER_GENERATION_ENV]: '1',
+  };
+  delete env.AICLIENT_RUNTIME_BACKEND;
+  delete env.AICLIENT_RUNTIME_AGENT_DIR;
+  delete env.PI_CODING_AGENT_DIR;
+
+  const proc = fork(WORKER_ENTRY, [], {
+    execArgv: ['--experimental-strip-types'],
+    cwd: workdir,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+  });
+  child = proc;
+  proc.stdout?.resume();
+  proc.stderr?.resume();
+
+  return await new Promise<WorkerRpcResponse>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('worker did not answer')), TIMEOUT_MS - 2000);
+    proc.on('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    proc.on('message', (message) => {
+      const response = message as WorkerRpcResponse;
+      if (response.kind !== 'response' || response.requestId !== 'util-1') return;
+      clearTimeout(timer);
+      resolve(response);
+    });
+    proc.send({
+      protocolVersion: WORKER_RPC_PROTOCOL_VERSION,
+      kind: 'request',
+      generation: 1,
+      requestId: 'util-1',
+      type: 'utility.start',
+      payload: {
+        operationId: 'op-1',
+        cwd: workdir,
+        prompt: 'name this conversation',
+        timeoutMs: 5000,
+      },
+    });
+  });
+}
+
+/**
+ * P5-4 — drive one `worker.import` through the real entry.
  *
  * Same reasoning as the bootstrap cases above: the thing that rots is the
- * wiring, not the writer. And the two writers are distinguishable from the
- * outside without inspecting imports — the native one publishes a v4 JSONL
- * header under `<agentDir>/sessions/<id>.jsonl`, while the pi writer produces a
- * pi session in a directory its own SDK derives from the workspace.
+ * wiring, not the writer. The assertion stays written the way it was when there
+ * were two writers to tell apart — a v4 header under
+ * `<agentDir>/sessions/<id>.jsonl` — because that is still the contract Main
+ * keys on when it goes looking for what the import produced.
  */
 async function importOnce(agentDir: string): Promise<{
   response: WorkerRpcResponse;
@@ -112,7 +165,6 @@ async function importOnce(agentDir: string): Promise<{
     env: {
       ...process.env,
       [PI_WORKER_GENERATION_ENV]: '1',
-      AICLIENT_RUNTIME_BACKEND: 'native',
       AICLIENT_RUNTIME_AGENT_DIR: agentDir,
     },
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -175,7 +227,7 @@ async function importOnce(agentDir: string): Promise<{
 
 describe('worker conversation import (P5-4)', () => {
   it(
-    'native writes the imported session itself, without loading pi-coding-agent',
+    'writes the imported session under the agent directory Main will look in',
     async () => {
       const agentDir = mkdtempSync(path.join(tmpdir(), 'aiclient-import-agent-'));
       try {
@@ -198,11 +250,11 @@ describe('worker conversation import (P5-4)', () => {
   );
 });
 
-describe('worker backend switch (D8)', () => {
+describe('worker entry wiring', () => {
   it(
     'flushes the dispose acknowledgement and exits naturally over Node IPC',
     async () => {
-      await bootstrapOnce('native');
+      await bootstrapOnce();
       const proc = child!;
       const messages: WorkerRpcResponse[] = [];
       proc.on('message', (message) => messages.push(message as WorkerRpcResponse));
@@ -226,9 +278,9 @@ describe('worker backend switch (D8)', () => {
   );
 
   it(
-    'native routes bootstrap to the self-owned runtime',
+    'routes bootstrap to the self-owned runtime, with or without a stale variable',
     async () => {
-      const response = await bootstrapOnce('native');
+      const response = await bootstrapOnce();
       expect(response.ok).toBe(false);
       if (response.ok) return;
       expect(response.error.message).toMatch(/AICLIENT_RUNTIME_AGENT_DIR/);
@@ -237,14 +289,12 @@ describe('worker backend switch (D8)', () => {
   );
 
   it(
-    'an unrecognised value falls back to legacy rather than to unfinished code',
+    'runs one-shot completions on the native runtime too (P6-2)',
     async () => {
-      // Typos are expected on a hand-set dev variable; the safe reading is the
-      // shipped engine, so the native runtime must not answer here.
-      const response = await bootstrapOnce('nativ');
-      if (!response.ok) {
-        expect(response.error.message).not.toMatch(/AICLIENT_RUNTIME_AGENT_DIR/);
-      }
+      const response = await utilityOnce();
+      expect(response.ok).toBe(false);
+      if (response.ok) return;
+      expect(response.error.message).toMatch(/AICLIENT_RUNTIME_AGENT_DIR/);
     },
     TIMEOUT_MS
   );

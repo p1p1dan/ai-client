@@ -5,15 +5,20 @@
  * `src/main/services/piModelConfig/PiModelConfigService.ts` builds both, and
  * `configValidation.ts#toPiModelsJson` is the exact shape. This module is
  * deliberately a READER only: nothing here writes, so a runtime bug can never
- * corrupt the files the legacy backend also depends on while both backends
- * coexist (ARD §5.1).
+ * corrupt those files. That mattered while the legacy backend read them too
+ * (ARD §5.1); it still matters after P6-5 retired that backend, because the
+ * bundled `pi` CLI behind the embedded terminal reads the same two paths.
  *
  * ## P5-5: on disk is now the fallback, not the source
  *
  * Those files exist because pi can only be configured through files, which
- * forces the app to decrypt the user's keys and write them out at 0600 — a
- * coexistence-period measure due for removal with the rest of pi-coding-agent
- * in P6-2. In the app, Main now assembles the same two documents in memory and
+ * forces the app to decrypt the user's keys and write them out at 0600. That
+ * was booked as a coexistence-period measure due to die with the legacy
+ * backend; P6-5 retired that backend and the files stayed, because what reads
+ * them now is the bundled CLI the embedded terminal runs. Removing the
+ * plaintext write is therefore its own question — "how does the terminal get
+ * credentials" — not a leftover of the old engine.
+ * In the app, Main now assembles the same two documents in memory and
  * hands them to the native worker in its bootstrap payload; `readPiCatalog`
  * below is what the smoke runner and the fixed probe suite still use, because
  * they point at a fixture directory and have no Main to ask.

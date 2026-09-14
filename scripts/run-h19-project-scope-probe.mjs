@@ -9,7 +9,8 @@
  *   分别看得见什么。
  *
  * 本应用在托管模式下发 `AICLIENT_PI_TRUST_PROJECT_CONFIG=0`，worker 把它读成
- * `projectTrusted: false` 再交给上面这个调用（`piAgentSessionBootstrap.ts`）。
+ * `projectTrusted: false` 再交给上面这个调用（P6-5 之前这一步在 `piAgentSessionBootstrap.ts`，
+ * 旧引擎退役后由自有 runtime 的 bootstrap 承担）。
  * 所以这条差分跑通，就等于跑通了「托管模式下项目级插件不生效」。
  *
  * 插件是真装的（`pi install -l` 走 npm），不是造出来的 settings.json —— 项目级

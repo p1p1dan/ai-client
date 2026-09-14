@@ -5,12 +5,13 @@
  * bootstraps at most one Pi AgentSession. Pool/session routing remains in Main.
  */
 
-import { readRuntimeFlags } from '../runtime/flags.ts';
+import { PI_AGENT_DIR_ENV, RUNTIME_AGENT_DIR_ENV, readRuntimeFlags } from '../runtime/flags.ts';
 import { PI_OPT_IN_EXTENSIONS_ENV, PI_PROJECT_TRUST_ENV } from '../shared/piModelConfig.ts';
 import {
   PI_WORKER_GENERATION_ENV,
   WORKER_RPC_PROTOCOL_VERSION,
 } from '../shared/types/workerRpc.ts';
+import { PiWorkerSessionError } from './piWorkerErrors.ts';
 import { PiWorkerRpcServer, type PiWorkerRpcServerOptions } from './piWorkerRpcServer.ts';
 
 interface ElectronParentPort {
@@ -74,42 +75,57 @@ if (electronPort) {
 const generation = readPositiveGeneration(process.env[PI_WORKER_GENERATION_ENV]);
 
 /**
- * ARD D8 / P4-2 — which engine this slot runs.
+ * The engine this slot runs.
  *
- * The switch is a factory choice, not a second dispatcher: `PiWorkerRpcServer`
- * keeps correlation, generation binding and request serialization for both
- * backends. `legacy` never loads the native module, so an import-time fault in
- * the unfinished runtime cannot reach a user's session.
+ * P6-5 retired the second one. What used to be a backend switch is now just the
+ * wiring: this file is the only place that knows both the RPC server and the
+ * runtime, and it hands the server three factories so neither side has to
+ * import the other.
  */
 const flags = readRuntimeFlags(process.env);
-const backend = flags.backend;
-let createNativeRuntime: PiWorkerRpcServerOptions['createRuntime'];
-let createNativeImportWriter: PiWorkerRpcServerOptions['createImportWriter'];
-if (backend === 'native') {
-  const [{ NativeWorkerRuntime }, { NativeLegacyImportWriter }, { workerHost }] = await Promise.all(
-    [
-      import('../runtime/worker/nativeWorkerRuntime.ts'),
-      import('../runtime/worker/nativeImport.ts'),
-      import('../runtime/host/worker.ts'),
-    ]
-  );
-  // Electron-only; absent when Main spawned us as the bundled node.exe.
-  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
-  const host = workerHost({ carrier, ...(resourcesPath ? { resourcesPath } : {}) });
-  // Unannotated on purpose: this assignment is what proves NativeWorkerRuntime
-  // still satisfies PiWorkerRuntime. The adapter does not import the RPC server
-  // (that would drag pi-coding-agent into the native path), so this is the only
-  // place the two shapes meet.
-  createNativeRuntime = (options) => new NativeWorkerRuntime({ ...options, host });
-  // P5-4. Same structural rule, same meeting point. The agent directory is
-  // where a native session lives, so an import has to land in the same place a
-  // later resume will look; without one there is nowhere to write, and the pi
-  // writer stays in charge rather than guessing a path.
-  if (flags.agentDir) {
-    const agentDir = flags.agentDir;
-    createNativeImportWriter = () => new NativeLegacyImportWriter(host, agentDir);
+const [
+  { NativeWorkerRuntime },
+  { NativeLegacyImportWriter },
+  { NativeUtilityRuntime },
+  { workerHost },
+] = await Promise.all([
+  import('../runtime/worker/nativeWorkerRuntime.ts'),
+  import('../runtime/worker/nativeImport.ts'),
+  import('../runtime/worker/nativeUtility.ts'),
+  import('../runtime/host/worker.ts'),
+]);
+// Electron-only; absent when Main spawned us as the bundled node.exe.
+const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+const host = workerHost({ carrier, ...(resourcesPath ? { resourcesPath } : {}) });
+// Unannotated on purpose: this assignment is what proves NativeWorkerRuntime
+// still satisfies PiWorkerRuntime. The runtime does not import the RPC server
+// and the RPC server does not import the runtime, so this is the only place the
+// two shapes meet.
+const createRuntime: PiWorkerRpcServerOptions['createRuntime'] = (options) =>
+  new NativeWorkerRuntime({ ...options, host });
+// P5-4. An import has to land where a later resume will look, so it needs the
+// agent directory. Without one there is nowhere to write — and since P6-5 there
+// is no other writer to hand the job to, so this fails loudly at call time
+// rather than quietly doing nothing.
+const createImportWriter: PiWorkerRpcServerOptions['createImportWriter'] = () => {
+  if (!flags.agentDir) {
+    throw new PiWorkerSessionError(
+      'WORKER_AGENT_DIR_UNSET',
+      `conversation import needs an agent directory: set ${RUNTIME_AGENT_DIR_ENV} or ${PI_AGENT_DIR_ENV}`
+    );
   }
-}
+  return new NativeLegacyImportWriter(host, flags.agentDir);
+};
+// P6-2. One-shot completions ("AI features"), tool-free and session-free.
+const createUtilityRuntime: PiWorkerRpcServerOptions['createUtilityRuntime'] = (options) =>
+  new NativeUtilityRuntime({
+    host,
+    ...(flags.agentDir ? { agentDir: flags.agentDir } : {}),
+    env: process.env,
+    emitDelta: options.emitDelta,
+    emitTerminal: options.emitTerminal,
+    ...(options.log ? { log: options.log } : {}),
+  });
 
 let disposed = false;
 const server = new PiWorkerRpcServer({
@@ -119,8 +135,9 @@ const server = new PiWorkerRpcServer({
   ...(process.env[PI_OPT_IN_EXTENSIONS_ENV]?.trim()
     ? { optInExtensions: process.env[PI_OPT_IN_EXTENSIONS_ENV]?.trim() }
     : {}),
-  ...(createNativeRuntime ? { createRuntime: createNativeRuntime } : {}),
-  ...(createNativeImportWriter ? { createImportWriter: createNativeImportWriter } : {}),
+  createRuntime,
+  createImportWriter,
+  createUtilityRuntime,
   log: (...args) => console.error('[pi-worker]', ...args),
   onDisposed: () => {
     disposed = true;

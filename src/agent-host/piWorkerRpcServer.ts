@@ -10,6 +10,7 @@ import type {
 } from '../shared/types/legacyImport.ts';
 import { isWorkerImportConversationPayload } from '../shared/types/legacyImport.ts';
 import type {
+  ExtensionUiResponse,
   PermissionDecisionId,
   RuntimeEvent,
   RuntimeEventDraft,
@@ -76,17 +77,12 @@ import {
   type WorkerTreeResult,
   type WorkerUtilityCancelPayload,
   type WorkerUtilityCancelResult,
+  type WorkerUtilityDeltaPayload,
   type WorkerUtilityStartPayload,
   type WorkerUtilityStartResult,
+  type WorkerUtilityTerminalPayload,
 } from '../shared/types/workerRpc.ts';
-import { PermissionGateUnavailableError } from './piAgentSessionBootstrap.ts';
-import { PiLegacyImportWriter } from './piLegacyImport.ts';
-import { PiUtilityRunner } from './piUtilityRunner.ts';
-import {
-  PiWorkerSession,
-  PiWorkerSessionError,
-  type PiWorkerSessionOptions,
-} from './piWorkerSession.ts';
+import { PiWorkerSessionError } from './piWorkerErrors.ts';
 
 export interface PiWorkerMessagePort {
   postMessage(message: unknown): void;
@@ -104,7 +100,7 @@ export interface PiWorkerRuntime {
   fork?(input: WorkerForkPayload): Promise<WorkerForkResult>;
   discardFork?(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
-  respondExtensionUi(response: Parameters<PiWorkerSession['respondExtensionUi']>[0]): boolean;
+  respondExtensionUi(response: ExtensionUiResponse): boolean;
   /**
    * Answer one `permission.requested`. Optional: only a backend that ASKS
    * through that event implements it, and a backend that does not must reject
@@ -134,10 +130,33 @@ export interface PiWorkerRuntime {
   dispose(): Promise<void>;
 }
 
+/**
+ * What a worker runtime is constructed with.
+ *
+ * P6-5: this used to be `PiWorkerSessionOptions`, exported by the legacy engine
+ * that no longer exists. The two legacy-only fields went with it — `loadSdk`
+ * (the pi-coding-agent import) and `decidePermissionGate` (that engine's plugin
+ * arbitration).
+ */
+export interface PiWorkerRuntimeOptions extends WorkerBootstrapPayload {
+  projectTrusted: boolean;
+  /** Comma-separated feature ids of the OPT-IN bundled extensions to inject. */
+  optInExtensions?: string;
+  emit: (event: RuntimeEventDraft) => void;
+  log?: (...args: unknown[]) => void;
+}
+
 export interface PiUtilityRuntime {
   start(input: WorkerUtilityStartPayload): Promise<WorkerUtilityStartResult>;
   cancel(input: WorkerUtilityCancelPayload): Promise<WorkerUtilityCancelResult>;
   dispose(): Promise<void>;
+}
+
+export interface PiUtilityRuntimeOptions {
+  projectTrusted: boolean;
+  emitDelta: (payload: WorkerUtilityDeltaPayload) => void;
+  emitTerminal: (payload: WorkerUtilityTerminalPayload) => void;
+  log?: (...args: unknown[]) => void;
 }
 
 export interface PiWorkerRpcServerOptions {
@@ -150,23 +169,34 @@ export interface PiWorkerRpcServerOptions {
    * this installation, not about one conversation. Absent enables none of them.
    */
   optInExtensions?: string;
-  createRuntime?: (options: PiWorkerSessionOptions) => PiWorkerRuntime;
+  /**
+   * The engine this worker runs. Required since P6-5: the legacy fallback was
+   * the other backend, and it is gone. Supplied by the worker entry so this
+   * file and the runtime never import each other.
+   */
+  createRuntime: (options: PiWorkerRuntimeOptions) => PiWorkerRuntime;
   /**
    * P5-4 — the writer a conversation import goes through.
    *
-   * Supplied by the worker entry on the native backend, for the same structural
-   * reason as `createRuntime` above: this file must not import the native
-   * runtime, and the native runtime must not import this file, so the choice is
-   * made once at the entry point and travels as a factory. Absent means the pi
-   * writer, which is what the legacy backend has always used.
+   * Supplied by the worker entry for the same structural reason as
+   * `createRuntime` above: this file must not import the runtime, and the
+   * runtime must not import this file, so the choice is made once at the entry
+   * point and travels as a factory.
    *
-   * An import is a pure write job — no model, no tools, no turn — so leaving it
-   * on the pi writer would have loaded `pi-coding-agent` into a native install
-   * for a job that has nothing to do with it.
+   * It was optional until P6-5, defaulting to pi's writer. An import is a pure
+   * write job — no model, no tools, no turn — and leaving it on that writer
+   * loaded `pi-coding-agent` for a job that had nothing to do with it. With the
+   * legacy engine retired there is nothing to default to, so it is required.
    */
-  createImportWriter?: () => PiImportWriter;
-  createUtilityRuntime?: () => PiUtilityRuntime;
-  loadSdk?: () => Promise<unknown>;
+  createImportWriter: () => PiImportWriter;
+  /**
+   * P6-2 — the engine behind a one-shot completion, same seam as the two above.
+   *
+   * Takes the emitters rather than reaching for them: the runtime that streams
+   * the answer lives on the other side of the backend boundary and cannot know
+   * how this server frames an event.
+   */
+  createUtilityRuntime: (options: PiUtilityRuntimeOptions) => PiUtilityRuntime;
   log?: (...args: unknown[]) => void;
   onDisposed?: () => void;
 }
@@ -176,8 +206,8 @@ export interface PiWorkerRpcServerOptions {
  *
  * Both implementations already had exactly these four methods; naming the shape
  * is what lets this dispatcher stay one implementation while the write side
- * differs. `PiLegacyImportWriter` satisfies it structurally, so the legacy path
- * is unchanged.
+ * differs. Both implementations satisfied it structurally; since P6-5 the only
+ * one left is the native writer.
  */
 export interface PiImportWriter {
   create(input: WorkerImportConversationPayload): Promise<WorkerImportConversationResult>;
@@ -247,9 +277,9 @@ function sameBootstrap(a: WorkerBootstrapPayload, b: WorkerBootstrapPayload): bo
 }
 
 function errorPayload(error: unknown): WorkerRpcErrorPayload {
-  if (error instanceof PermissionGateUnavailableError) {
-    return { code: error.code, message: error.message, retryable: false };
-  }
+  // P6-5 removed a branch for the legacy engine's PermissionGateUnavailableError.
+  // Nothing is lost: it carried a string `code` and no `retryable`, which is
+  // exactly what the generic Error branch below reports.
   if (error instanceof PiWorkerSessionError) {
     return { code: error.code, message: error.message, retryable: error.retryable };
   }
@@ -443,20 +473,9 @@ export class PiWorkerRpcServer {
     this.respondSuccess(request, result);
   }
 
-  /**
-   * The import writer for this worker's backend, created on first use.
-   *
-   * Lazy because most workers never import anything, and on the legacy side
-   * constructing one means being ready to load `pi-coding-agent`.
-   */
+  /** The import writer, created on first use — most workers never import. */
   private requireImportWriter(): PiImportWriter {
-    if (!this.importWriter) {
-      this.importWriter = this.options.createImportWriter
-        ? this.options.createImportWriter()
-        : new PiLegacyImportWriter(
-            this.options.loadSdk ?? (() => import('@earendil-works/pi-coding-agent'))
-          );
-    }
+    if (!this.importWriter) this.importWriter = this.options.createImportWriter();
     return this.importWriter;
   }
 
@@ -541,9 +560,7 @@ export class PiWorkerRpcServer {
 
     if (!this.runtime) {
       this.bootstrapPayload = { ...request.payload };
-      const createRuntime =
-        this.options.createRuntime ?? ((options) => new PiWorkerSession(options));
-      this.runtime = createRuntime({
+      this.runtime = this.options.createRuntime({
         ...request.payload,
         // U05-c: `unbound` may only take trust AWAY. Written as an AND rather
         // than a ternary so no future payload field can hand a scratch session
@@ -554,7 +571,6 @@ export class PiWorkerRpcServer {
         // turned on, which a scratch directory has no bearing on.
         ...(this.options.optInExtensions ? { optInExtensions: this.options.optInExtensions } : {}),
         emit: (event) => this.emitRuntimeEvent(event),
-        loadSdk: this.options.loadSdk,
         log: this.log,
       });
     }
@@ -597,14 +613,13 @@ export class PiWorkerRpcServer {
       );
     }
     if (!this.utilityRuntime) {
-      this.utilityRuntime =
-        this.options.createUtilityRuntime?.() ??
-        new PiUtilityRunner({
-          projectTrusted: this.options.projectTrusted,
-          emitDelta: (payload) => this.emitUtilityEvent('utility.delta', payload),
-          emitTerminal: (payload) => this.emitUtilityEvent('utility.terminal', payload),
-          log: this.log,
-        });
+      const utilityOptions: PiUtilityRuntimeOptions = {
+        projectTrusted: this.options.projectTrusted,
+        emitDelta: (payload) => this.emitUtilityEvent('utility.delta', payload),
+        emitTerminal: (payload) => this.emitUtilityEvent('utility.terminal', payload),
+        ...(this.log ? { log: this.log } : {}),
+      };
+      this.utilityRuntime = this.options.createUtilityRuntime(utilityOptions);
     }
     this.respondSuccess(request, await this.utilityRuntime.start(request.payload));
   }

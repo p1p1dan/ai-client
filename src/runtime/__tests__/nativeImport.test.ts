@@ -153,8 +153,10 @@ describe('NativeLegacyImportWriter', () => {
         targetPiSessionId: 'import-claude-code-1234',
         conversation: conversation(workspace),
       });
+      // `kind` first: since H/20 the bookkeeping rows carry a v3 `custom` type
+      // of their own so the CLI can chain through them.
       const customTypes = (await entriesOf(result.finalSessionFile))
-        .filter((row) => row.type === 'custom')
+        .filter((row) => row.kind === 'entry' && row.type === 'custom')
         .map((row) => row.customType);
       expect(customTypes).toEqual([
         LEGACY_IMPORT_CUSTOM_TYPE_PROVENANCE,

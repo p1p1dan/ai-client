@@ -14,7 +14,6 @@ import {
   type PiResourceSettings,
   piUserAgent,
 } from '@shared/piModelConfig';
-import { readRuntimeBackend } from '@shared/runtimeBackend';
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { app, net } from 'electron';
 import { optInFeatureRegistry } from '../../../agent-host/bundledPlugins.mjs';
@@ -148,10 +147,6 @@ export function writeUserProviderRuntimeConfig(): void {
 export function resolveNativeModelCatalog():
   | { models: Record<string, unknown>; auth: Record<string, unknown> }
   | undefined {
-  // Only for the backend that reads it. A legacy worker takes its catalog from
-  // the files on disk and would ignore this one, so assembling it there would
-  // decrypt the user's keys and put them in an IPC payload for nothing.
-  if (readRuntimeBackend() !== 'native') return undefined;
   try {
     const credential = managedCredential();
     const catalog = serviceFor(getAppPiAgentDir()).buildNativeModelCatalog({

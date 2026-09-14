@@ -178,6 +178,14 @@ function startServer(): void {
     port: { postMessage: (message: unknown) => outbound.push(message) },
     generation: 1,
     projectTrusted: true,
+    // P6-5 made these required: the server has no second backend to fall back
+    // to. This test drives sessions only, so reaching either is a bug.
+    createImportWriter: () => {
+      throw new Error('this test supplies no import writer');
+    },
+    createUtilityRuntime: () => {
+      throw new Error('this test supplies no utility runtime');
+    },
     createRuntime: (options) =>
       new NativeWorkerRuntime({
         ...options,

@@ -23,11 +23,22 @@ Role: implementation-plan。日期：2026-09-10。依据：用户 2026-09-10 决
 
 ## 执行清单
 
-- [ ] I1：写入端头一行补 `type:"session"`（含 `timestamp` 等 v3 头字段），不改 entry 行形状。
-- [ ] I2：解码端补五处容忍——字符串 `timestamp` 转毫秒；缺 `kind`+`seq` 的行按 main lane 的 entry 处理并推导 `seq`、前进 lane 游标；`session_info` 映射为 `fact:'name'`。
-- [ ] I3：撤下 TUI 入口对 v4 的主动拒绝（`piTuiSession.ts` 的 `inspectPiTuiSessionSupport`），改为只拒绝真正打不开的形态。
-- [ ] I4：复杂形态验证——压缩、分支、工具调用在双向下的表现。
-- [ ] I5：真实回合验证——真实 provider 跑一轮，GUI↔TUI 交替，确认时间线渲染正确。
+2026-09-13 落地，[验收记录](../evidence/p6/README.md#h20-会话互通)。
+
+- [x] I1：写入端头一行补 `type:"session"`（含 `timestamp` 等 v3 头字段），不改 entry 行形状。**另加两件计划外但必须做的**：① `lane` / `fact` 行补 v3 的 `id`/`parentId`/`type:"custom"`（见下「计划漏掉的两处」）；② 旧的纯 v4 会话在 resume 时就地升级头一行，否则互通只对新会话生效。
+- [x] I2：解码端容忍 CLI 追加的 v3 行。实际比计划多：除字符串 `timestamp`、缺 `kind`+`seq`、`session_info` 外，还要处理 `label`、`custom_message`、没有 `retainedTail` 的压缩、以及**认不出的行型**（丢一行会断掉它之后的所有行）。
+- [x] I3：TUI 入口改为只拒绝「还没升级过的 v4 头」，文案改为告诉用户怎么办。
+- [x] I4：复杂形态——压缩双向可读（含 v3 锚点 ↔ v4 保留尾巴的互译）、分支切换后 CLI 仍读得到、工具调用天然同构（两边的消息类型都来自 pi-agent-core）。
+- [ ] I5：真实回合验证——真实 provider 跑一轮，GUI↔TUI 交替，确认时间线渲染正确。**并入最后一次上机**。
+
+## 计划漏掉的两处（施工时才暴露）
+
+写这份计划时依据的是 2026-09-10 的可行性探针，而那轮只跑了纯文本消息，于是：
+
+1. **不是 entry 的行会把 CLI 带到空对话**。v4 用 `fact` / `lane` 行表达改名与切分支，这些行没有 `id`、没有 `parentId`；而 CLI 把每一行都当条目、并把最后一行的 id 当对话末端，于是末端成了 `undefined`，父链一步都走不通。导入的会话必中——转换出来的文件最后一行永远是 `lane` 行。
+2. **压缩在两种格式里的表达方式不同**（v3 指锚点、v4 存整段保留消息），不互译的话 TUI 只看得见摘要。
+
+两处都已按「容忍而非改写」的原则解决，文件仍是 append-only。
 
 ## 验证案例
 

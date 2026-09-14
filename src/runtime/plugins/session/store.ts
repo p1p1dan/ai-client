@@ -15,7 +15,10 @@ import type { RuntimeHostIoService } from '../../contracts.ts';
 import { errorCode, positiveInteger, RuntimeHostError } from '../../host/errors.ts';
 import {
   branchEntries,
+  cliBookkeeping,
   decodeSession,
+  interopHeader,
+  isInteropHeader,
   isSuccessfulMessage,
   type SessionDocument,
 } from './codec.ts';
@@ -113,13 +116,13 @@ export class JsonlSessionStore {
       let bytes: number;
       if (config.mode === 'create') {
         document = {
-          header: {
+          header: interopHeader({
             kind: 'header',
             version: 4,
             id: config.id ?? randomUUID(),
             createdAt: Date.now(),
             cwd: await io.realpath(config.cwd),
-          },
+          }),
           entries: [],
           leafId: null,
           seq: 0,
@@ -146,6 +149,16 @@ export class JsonlSessionStore {
             'resume cwd differs from the session workspace'
           );
         bytes = result.bytes.length;
+        // H/20 — sessions written before the dual header still declare v4 only,
+        // and `pi --session` refuses those outright. Upgrading the one line here
+        // (atomically, under the writer lock we already hold) is what makes the
+        // interop apply to a user's existing conversations instead of only to
+        // the ones created from now on. Nothing else in the file is touched.
+        if (!isInteropHeader(document.header)) {
+          document.header = interopHeader(document.header);
+          const body = document.repair ?? content;
+          document.repair = `${JSON.stringify(document.header)}\n${body.slice(body.indexOf('\n') + 1)}`;
+        }
         if (document.repair !== undefined) {
           const temporary = `${file}.${randomUUID()}.tmp`;
           try {
@@ -197,10 +210,24 @@ export class JsonlSessionStore {
   }
 
   appendCompaction(result: CompactResult): Promise<CompactionEntry> {
-    return this.appendEntry({
-      type: 'compaction',
-      ...structuredClone(result),
-    }) as Promise<CompactionEntry>;
+    const payload = { type: 'compaction', ...structuredClone(result) };
+    const anchor = this.compactionAnchor(result.retainedTail.length);
+    return this.appendEntry(
+      (anchor === undefined ? payload : { ...payload, firstKeptEntryId: anchor }) as NewSessionEntry
+    ) as Promise<CompactionEntry>;
+  }
+
+  /**
+   * v3's way of saying where a compaction's kept tail begins.
+   *
+   * v4 stores the kept messages inside the entry itself, so this is written for
+   * the CLI only: without it `pi --session` shows the summary and everything
+   * after it, silently dropping the tail we deliberately retained.
+   */
+  private compactionAnchor(retained: number): string | undefined {
+    if (retained <= 0) return undefined;
+    const carried = branchEntries(this.document).filter((entry) => entry.type === 'message');
+    return carried.length < retained ? undefined : carried[carried.length - retained]?.id;
   }
 
   appendEntry(payload: NewSessionEntry): Promise<Entry> {
@@ -456,7 +483,14 @@ export class JsonlSessionStore {
 
   private mutate(row: Record<string, unknown>, apply: () => void): Promise<void> {
     return this.enqueue(async () => {
-      const line = `${JSON.stringify({ ...row, seq: this.document.seq + 1 })}\n`;
+      // A lane row states the new tip; a fact row hangs off the current one.
+      const parentId =
+        row.kind === 'lane' ? ((row.leafId as string | null) ?? null) : this.document.leafId;
+      const line = `${JSON.stringify({
+        ...row,
+        seq: this.document.seq + 1,
+        ...cliBookkeeping(randomUUID(), parentId, Date.now()),
+      })}\n`;
       const bytes = Buffer.byteLength(line);
       if (this.bytes + bytes > this.maxBytes)
         throw new RuntimeHostError('session_size_limit', 'session exceeds size budget');

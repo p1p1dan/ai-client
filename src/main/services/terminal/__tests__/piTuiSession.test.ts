@@ -92,13 +92,30 @@ describe('inspectPiTuiSessionSupport', () => {
   const v4 = JSON.stringify({ kind: 'header', version: 4, id: 'a', cwd: '/repo', createdAt: 1 });
   const legacy = JSON.stringify({ type: 'session', id: 'a', version: 3 });
 
-  it('refuses a native v4 session, which the pi CLI cannot parse', async () => {
+  it('refuses a v4 session saved before the dual header, which the pi CLI cannot parse', async () => {
     await expect(
       inspectPiTuiSessionSupport('/s.jsonl', async () => `${v4}\n{"id":"e1"}\n`)
     ).resolves.toEqual({
       supported: false,
       reason: PI_TUI_NATIVE_SESSION_REASON,
     });
+  });
+
+  it('allows a v4 session whose header also states the v3 shape (H/20)', async () => {
+    // One file, two formats: `type:"session"` is the field the CLI keys on, and
+    // the session keeps every v4 field next to it.
+    const interop = JSON.stringify({
+      kind: 'header',
+      version: 4,
+      id: 'a',
+      cwd: '/repo',
+      createdAt: 1,
+      type: 'session',
+      timestamp: '2026-09-12T00:00:00.000Z',
+    });
+    await expect(
+      inspectPiTuiSessionSupport('/s.jsonl', async () => `${interop}\n{"id":"e1"}\n`)
+    ).resolves.toEqual({ supported: true });
   });
 
   it('allows a legacy pi session', async () => {

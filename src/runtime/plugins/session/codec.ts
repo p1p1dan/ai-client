@@ -1,4 +1,9 @@
-import type { AgentMessage, Entry, JsonlV4Header } from '@earendil-works/pi-agent-core';
+import {
+  type AgentMessage,
+  buildSessionContext,
+  type Entry,
+  type JsonlV4Header,
+} from '@earendil-works/pi-agent-core';
 import { RuntimeHostError } from '../../host/errors.ts';
 
 export interface SessionDocument {
@@ -10,6 +15,59 @@ export interface SessionDocument {
   labels?: Record<string, string>;
   /** Valid prefix, only used while holding the writer lock to repair a torn tail. */
   repair?: string;
+}
+
+/**
+ * H/20 — one file, two formats.
+ *
+ * `pi --session <file>` parses with pi-coding-agent's SessionManager, whose
+ * format (v3) is a different package's format, not an older version of ours:
+ * it requires the first row to be `{"type":"session",...}` and reports
+ * `Session file is not a valid pi session` for anything else. Our header keeps
+ * every v4 field and adds the two v3 ones, so ONE file satisfies both readers.
+ * Two files was the alternative and it is strictly worse: two writers, two
+ * divergent transcripts, and whichever one the user sees depends on the door
+ * they came in through.
+ *
+ * `version: 4` is deliberately left as is. The CLI only migrates (and rewrites)
+ * a file whose header version is BELOW its own 3, so declaring 4 is what keeps
+ * it from reformatting our rows out of existence.
+ */
+export interface SessionFileHeader extends JsonlV4Header {
+  /** v3 discriminator. Without it the CLI refuses the file outright. */
+  type: 'session';
+  /** v3 header time (ISO). The session list reads this one, not `createdAt`. */
+  timestamp: string;
+}
+
+export function interopHeader(header: JsonlV4Header): SessionFileHeader {
+  return {
+    ...header,
+    type: 'session',
+    timestamp: new Date(header.createdAt).toISOString(),
+  };
+}
+
+export function isInteropHeader(header: JsonlV4Header): header is SessionFileHeader {
+  const row = header as unknown as Record<string, unknown>;
+  return row.type === 'session' && typeof row.timestamp === 'string';
+}
+
+/**
+ * v3 fields on the rows that are NOT entries (`lane` / `fact`).
+ *
+ * The CLI keeps every JSON row it can parse and walks `parentId` from the last
+ * one, so a bookkeeping row at the tail with no chain would make it fall back
+ * to that row alone — an empty conversation where a full one exists. Giving the
+ * row an id, a parent and an inert `custom` type puts it IN the chain instead:
+ * the CLI renders nothing for it (custom entries carry no context) and any
+ * later CLI entry hangs off it, which `chainTarget` maps back to the real entry
+ * when we read the file again.
+ */
+export const CLI_BOOKKEEPING_TYPE = 'aiclient.v4';
+
+export function cliBookkeeping(id: string, parentId: string | null, timestamp: number) {
+  return { type: 'custom', customType: CLI_BOOKKEEPING_TYPE, id, parentId, timestamp } as const;
 }
 
 function invalid(message: string): never {
@@ -103,6 +161,135 @@ function entry(value: Record<string, unknown>): Entry {
   return fields as unknown as Entry;
 }
 
+/** Milliseconds from either spelling: v4 writes an integer, the CLI an ISO string. */
+function millis(value: unknown): number {
+  const time =
+    typeof value === 'number' ? value : typeof value === 'string' ? Date.parse(value) : NaN;
+  if (!Number.isFinite(time)) invalid('invalid entry identity');
+  return Math.trunc(time);
+}
+
+interface CliContext {
+  document: SessionDocument;
+  ids: Set<string>;
+  /** Bookkeeping row id -> the real entry it stands for, so CLI parents resolve. */
+  alias: Map<string, string | null>;
+}
+
+/** Follow bookkeeping rows back to the entry a v3 parent pointer really means. */
+function chainTarget(alias: Map<string, string | null>, value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string' || !value) invalid('invalid entry identity');
+  let id: string | null = value;
+  const seen = new Set<string>();
+  while (id !== null && alias.has(id)) {
+    if (seen.has(id)) invalid('cyclic session bookkeeping reference');
+    seen.add(id);
+    id = alias.get(id) ?? null;
+  }
+  return id;
+}
+
+/**
+ * v3 states a compaction by anchor id; v4 stores the kept messages themselves.
+ *
+ * Rebuilt from the branch the CLI compacted, and deliberately degraded to an
+ * empty tail when that cannot be done: a summary with no retained tail still
+ * opens and still reads correctly, whereas refusing the file would cost the
+ * user the whole conversation over a detail the CLI itself treats as optional.
+ */
+function cliRetainedTail(
+  row: Record<string, unknown>,
+  context: CliContext,
+  parentId: string | null
+): AgentMessage[] {
+  const anchor = row.firstKeptEntryId ?? row.firstKeptMessageId;
+  if (typeof anchor !== 'string') return [];
+  try {
+    const path = branchEntries(context.document, parentId);
+    const index = path.findIndex((item) => item.id === anchor);
+    if (index < 0) return [];
+    const messages = buildSessionContext(path.slice(index)).messages;
+    messages.forEach(message);
+    return messages;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * One row the CLI appended, expressed in v4 — in memory only.
+ *
+ * What the two formats share passes through untouched. The v3-only shapes are
+ * translated (`custom_message` is v4's custom-role message; `session_info` and
+ * `label` are v4 facts, which are not entries — so the row also stays in the
+ * chain as an inert entry, because the CLI's next row hangs off its id).
+ * Anything unrecognized is kept as an inert entry for the same reason: dropping
+ * it would break every row after it.
+ */
+function cliEntry(row: Record<string, unknown>, context: CliContext): Record<string, unknown> {
+  const timestamp = millis(row.timestamp);
+  const base = { id: row.id, parentId: chainTarget(context.alias, row.parentId), timestamp };
+  const inert = (type: string) => ({
+    ...base,
+    type: 'custom',
+    customType: `pi-cli:${type}`,
+    data: row,
+  });
+  switch (row.type) {
+    case 'message': {
+      const carried = object(row.message);
+      return {
+        ...base,
+        type: 'message',
+        message: { ...carried, timestamp: millis(carried.timestamp ?? timestamp) },
+      };
+    }
+    case 'custom_message':
+      return {
+        ...base,
+        type: 'message',
+        message: {
+          role: 'custom',
+          customType: String(row.customType ?? 'custom'),
+          content: row.content ?? [],
+          display: row.display !== false,
+          ...(row.details === undefined ? {} : { details: row.details }),
+          timestamp,
+        },
+      };
+    case 'compaction':
+      return {
+        ...row,
+        ...base,
+        type: 'compaction',
+        summary: String(row.summary ?? ''),
+        tokensBefore: typeof row.tokensBefore === 'number' ? row.tokensBefore : 0,
+        retainedTail: cliRetainedTail(row, context, base.parentId),
+      };
+    case 'session_info': {
+      if (row.name !== undefined && typeof row.name !== 'string') invalid('invalid session name');
+      context.document.name = row.name as string | undefined;
+      return inert('session_info');
+    }
+    case 'label': {
+      if (typeof row.targetId === 'string' && context.ids.has(row.targetId)) {
+        context.document.labels ??= {};
+        if (row.label === undefined) delete context.document.labels[row.targetId];
+        else if (typeof row.label === 'string') context.document.labels[row.targetId] = row.label;
+      }
+      return inert('label');
+    }
+    case 'branch_summary':
+    case 'model_change':
+    case 'thinking_level_change':
+    case 'custom':
+      return { ...row, ...base };
+    default:
+      return inert(String(row.type));
+  }
+}
+
 // Adapt pi 0.84.4's v4 codec and state invariants; IO remains entirely ours.
 export function decodeSession(content: string): SessionDocument {
   const lines = content.split('\n');
@@ -135,6 +322,8 @@ export function decodeSession(content: string): SessionDocument {
   const recordIds = new Set<string>();
   const openOperations = new Set<string>();
   const lanes = new Map<string, string | null>([['main', null]]);
+  const alias = new Map<string, string | null>();
+  const context: CliContext = { document: result, ids, alias };
   for (let index = 1; index < lines.length; index++) {
     let parsed: unknown;
     try {
@@ -147,6 +336,24 @@ export function decodeSession(content: string): SessionDocument {
       invalid(`invalid JSON at line ${index + 1}`);
     }
     const row = object(parsed);
+    if (row.kind === undefined && row.seq === undefined) {
+      // H/20 — a row the CLI appended. It carries neither `kind` nor `seq`
+      // (both are v4's), so the position in the file IS the sequence. Tolerated
+      // in memory: the file keeps the rows exactly as the CLI wrote them.
+      result.seq++;
+      const item = entry(cliEntry(row, context));
+      if (
+        ids.has(item.id) ||
+        recordIds.has(item.id) ||
+        (item.parentId !== null && !ids.has(item.parentId))
+      )
+        invalid('duplicate id or missing parent');
+      ids.add(item.id);
+      result.entries.push(item);
+      // The CLI has no lanes; it always appends to the conversation's tip.
+      lanes.set('main', item.id);
+      continue;
+    }
     if (row.seq !== result.seq + 1) invalid(`non-consecutive seq at line ${index + 1}`);
     result.seq++;
     switch (row.kind) {
@@ -178,6 +385,7 @@ export function decodeSession(content: string): SessionDocument {
         )
           invalid('invalid lane pointer');
         lanes.set(row.lane, row.leafId as string | null);
+        if (typeof row.id === 'string' && row.id) alias.set(row.id, row.leafId as string | null);
         break;
       case 'record':
         if (
@@ -204,6 +412,7 @@ export function decodeSession(content: string): SessionDocument {
         )
           invalid('unsupported record type');
         recordIds.add(row.id);
+        alias.set(row.id, lanes.get(String(row.lane)) ?? null);
         if (row.type === 'operation_started') openOperations.add(row.id);
         if (row.type === 'operation_finished') {
           if (typeof row.runId !== 'string') invalid('missing finished operation id');
@@ -226,6 +435,7 @@ export function decodeSession(content: string): SessionDocument {
           if (row.label === undefined) delete result.labels[row.targetId as string];
           else result.labels[row.targetId as string] = row.label as string;
         } else invalid('unsupported fact');
+        if (typeof row.id === 'string' && row.id) alias.set(row.id, lanes.get('main') ?? null);
         break;
       default:
         invalid(`unsupported JSONL kind: ${String(row.kind)}`);

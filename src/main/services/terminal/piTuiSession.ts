@@ -120,25 +120,29 @@ export class PiTuiExclusiveGuard {
 }
 
 /**
- * TUI-1: can the bundled `pi` CLI open this chat's JSONL at all?
+ * TUI-1 / H/20: can the bundled `pi` CLI open this chat's JSONL at all?
  *
- * The native runtime writes pi-agent-core's v4 session format
- * (`{"kind":"header","version":4,...}`), but `pi --session <file>` parses with
- * pi-coding-agent's own SessionManager, which requires the first entry to be
- * `{"type":"session",...}` and returns nothing otherwise — the CLI then reports
- * `Session file is not a valid pi session` and the terminal dies on open.
- * Checked on 0.85.1 as well as the pinned 0.84.4: the CLI's session version is
- * still 3, so this is a format boundary between two packages, not a version lag.
+ * `pi --session <file>` parses with pi-coding-agent's own SessionManager, which
+ * requires the first row to be `{"type":"session",...}` and returns nothing
+ * otherwise — the CLI then reports `Session file is not a valid pi session` and
+ * the terminal dies on open. Checked on 0.85.1 as well as the pinned 0.84.4:
+ * the CLI's session version is still 3, so this is a format boundary between
+ * two packages, not a version lag.
  *
- * Until the two formats are reconciled, the honest answer is to refuse at the
- * entry point with the reason rather than let the user walk into the CLI error.
- * Only a POSITIVE v4 identification refuses: an unreadable or unparsable head
- * (an encrypted container, a truncated file) stays allowed, because guessing
+ * Since H/20 the native runtime writes a header carrying BOTH formats, so those
+ * sessions open in the TUI and this gate lets them through. What is left to
+ * refuse is a v4 header written before that change and not yet reopened here:
+ * the store upgrades the header the next time the app resumes the session, and
+ * doing it from Main instead would make this process a second writer on a file
+ * a worker may be holding.
+ *
+ * Only a POSITIVE identification refuses: an unreadable or unparsable head (an
+ * encrypted container, a truncated file) stays allowed, because guessing
  * "unsupported" from a failed read would take the TUI away from sessions that
  * work today.
  */
 export const PI_TUI_NATIVE_SESSION_REASON =
-  'This chat runs on the native runtime, whose session format the Pi TUI cannot open yet.';
+  'This chat was saved in an older native format. Open it in the app once to upgrade it, then the Pi terminal can open it.';
 
 export async function inspectPiTuiSessionSupport(
   sessionFile: string | undefined | null,
@@ -163,7 +167,7 @@ export async function inspectPiTuiSessionSupport(
   }
   const record =
     typeof header === 'object' && header !== null ? (header as Record<string, unknown>) : null;
-  if (record?.kind === 'header' && record.version === 4) {
+  if (record?.kind === 'header' && record.version === 4 && record.type !== 'session') {
     return { supported: false, reason: PI_TUI_NATIVE_SESSION_REASON };
   }
   return { supported: true };

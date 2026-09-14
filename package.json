@@ -22,7 +22,6 @@
     "refresh:model-catalog": "node scripts/refresh-model-catalog.mjs",
     "verify:preview-assets": "node scripts/verify-renderer-preview-assets.mjs",
     "verify:preview-probe": "node scripts/verify-preview-build-probe.mjs",
-    "smoke:permission-plugin": "node --experimental-strip-types src/agent-host/spikes/t08a-permission-plugin-smoke.ts out-agent-host",
     "smoke:runtime": "node --experimental-strip-types src/runtime/smoke/runOnce.ts --offline",
     "smoke:runtime-tools": "node --experimental-strip-types src/runtime/smoke/p1-standalone.ts",
     "fetch:node-runtime": "node scripts/fetch-node-runtime.mjs",

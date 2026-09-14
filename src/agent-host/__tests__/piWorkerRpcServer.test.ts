@@ -6,11 +6,26 @@ import {
   type WorkerUtilityStartPayload,
 } from '../../shared/types/workerRpc.ts';
 import {
+  type PiImportWriter,
   type PiUtilityRuntime,
   PiWorkerRpcServer,
   type PiWorkerRuntime,
+  type PiWorkerRuntimeOptions,
 } from '../piWorkerRpcServer.ts';
-import type { PiWorkerSessionOptions } from '../piWorkerSession.ts';
+
+/**
+ * P6-5 made the three engine factories required: the server is plumbing now,
+ * with no second backend to fall back to. A test that only cares about one of
+ * them fills the others with a factory that fails if it is ever reached —
+ * louder than a stub that quietly succeeds.
+ */
+const unavailable = (what: string) => () => {
+  throw new Error(`this test supplies no ${what} factory`);
+};
+const engineFactories = {
+  createImportWriter: unavailable('import') as unknown as () => PiImportWriter,
+  createUtilityRuntime: unavailable('utility') as unknown as () => PiUtilityRuntime,
+};
 
 function request(
   requestId: string,
@@ -38,6 +53,7 @@ function bootstrapResult(): WorkerBootstrapResult {
     sessionFile: '/managed/pi-agent/sessions/one.jsonl',
     leaf: { activeEntryId: null, fileTailEntryId: null },
     projectTrusted: false,
+    ...engineFactories,
     permissionGate: 'bundled',
   };
 }
@@ -68,11 +84,12 @@ function runtime(overrides: Partial<PiWorkerRuntime> = {}): PiWorkerRuntime {
 describe('PiWorkerRpcServer', () => {
   it('echoes correlation and constructs only one runtime for duplicate bootstrap', async () => {
     const messages: Array<Record<string, unknown>> = [];
-    const createRuntime = vi.fn((_options: PiWorkerSessionOptions) => runtime());
+    const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
     const server = new PiWorkerRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
+      ...engineFactories,
       createRuntime,
     });
     const payload = { logicalSessionId: 'logical-1', cwd: '/repo' };
@@ -85,11 +102,12 @@ describe('PiWorkerRpcServer', () => {
 
   it('rejects a duplicate bootstrap that targets a different exact session file', async () => {
     const messages: Array<Record<string, unknown>> = [];
-    const createRuntime = vi.fn((_options: PiWorkerSessionOptions) => runtime());
+    const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
     const server = new PiWorkerRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
+      ...engineFactories,
       createRuntime,
     });
     server.receive(
@@ -122,11 +140,12 @@ describe('PiWorkerRpcServer', () => {
   describe('unbound sessions and project trust', () => {
     function bootstrapWith(projectTrusted: boolean, payload: Record<string, unknown>) {
       const messages: Array<Record<string, unknown>> = [];
-      const createRuntime = vi.fn((_options: PiWorkerSessionOptions) => runtime());
+      const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
       const server = new PiWorkerRpcServer({
         port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
         generation: 3,
         projectTrusted,
+        ...engineFactories,
         createRuntime,
       });
       server.receive(request('rpc-1', 'worker.bootstrap', payload));
@@ -168,11 +187,12 @@ describe('PiWorkerRpcServer', () => {
       // Without this, the second call would be served by the runtime built for
       // the first one — i.e. a scratch session answered by a trusted runtime.
       const messages: Array<Record<string, unknown>> = [];
-      const createRuntime = vi.fn((_options: PiWorkerSessionOptions) => runtime());
+      const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
       const server = new PiWorkerRpcServer({
         port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
         generation: 3,
         projectTrusted: true,
+        ...engineFactories,
         createRuntime,
       });
       server.receive(
@@ -221,6 +241,7 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
+      ...engineFactories,
       createRuntime: () => runtime({ startSend, stop }),
     });
     server.receive(
@@ -261,6 +282,7 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: true,
+      ...engineFactories,
       createRuntime: (options) =>
         runtime({
           bootstrap: async () => {
@@ -292,6 +314,7 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
+      ...engineFactories,
       createRuntime: () => runtime({ respondExtensionUi }),
     });
     server.receive(
@@ -319,11 +342,12 @@ describe('PiWorkerRpcServer', () => {
       cancel: vi.fn(async () => ({ cancelled: true })),
       dispose: vi.fn(async () => undefined),
     };
-    const createRuntime = vi.fn((_options: PiWorkerSessionOptions) => runtime());
+    const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
     const server = new PiWorkerRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
+      ...engineFactories,
       createRuntime,
       createUtilityRuntime: () => utility,
     });
@@ -373,6 +397,8 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
+      ...engineFactories,
+      createRuntime: () => runtime(),
     });
     server.receive(request('stale', 'worker.bootstrap', {}, 2));
     server.receive(request('invalid', 'worker.send', { text: 'x' }));
@@ -401,6 +427,7 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
+      ...engineFactories,
       createRuntime: () => runtime({ setPermissions }),
     });
     server.receive(
@@ -438,6 +465,7 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
+      ...engineFactories,
       createRuntime: () => runtime({ setPermissionTier }),
     });
     server.receive(
@@ -461,6 +489,7 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
+      ...engineFactories,
       createRuntime: () => runtime(),
     });
     server.receive(
@@ -495,6 +524,7 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
+      ...engineFactories,
       createRuntime: () => runtime({ dispose }),
       onDisposed,
     });
@@ -526,6 +556,7 @@ describe('PiWorkerRpcServer — worker.commands', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
+      ...engineFactories,
       createRuntime: () => runtime(overrides),
     });
     return { messages, server };
