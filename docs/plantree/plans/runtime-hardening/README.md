@@ -27,7 +27,7 @@ Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批�
 | [roadmap.md](roadmap.md) | 任务树 T001～T033，五个批次，Done / In Progress / Next / Deferred |
 | [open-questions.md](open-questions.md) | 修补前要拍板的问题 |
 | [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md) | 批次 A 落地记录：提交、偏离、转移项、逐波记录 |
-| [decisions/](decisions/) | 001 开第二个计划根；002 修补顺序与取舍计数规则；003 allow-session 保持会话级（答 Q003）；004 技能目录找到仓库根（答 Q004）；005 子代理 usage 并入 usage.updated（答 Q007）；006 中段坏行跳过重写（答 Q008，新开 T034） |
+| [decisions/](decisions/) | 001 开第二个计划根；002 修补顺序与取舍计数规则；003 allow-session 保持会话级（答 Q003）；004 技能目录找到仓库根（答 Q004）；005 子代理 usage 并入 usage.updated（答 Q007）；006 中段坏行跳过重写（答 Q008，新开 T034）；007 删 targetPath、指令按官方分级只认 CLAUDE.md / AGENTS.md（答 Q001，新开 T035） |
 | [../runtime-evolution/evidence/runtime-audit-2026-09-14/](../runtime-evolution/evidence/runtime-audit-2026-09-14/README.md) | 审计报告、235 条发现全文、区域总评、接缝与批评者、结构化数据 |
 | [../../进度看板.md](../../进度看板.md) | 用户看板（implementation-status） |
 
