@@ -18,7 +18,18 @@ export class EventsPlugin extends Service {
   emit(event: RuntimeEventDraft): void {
     const projected = this.active ? { ...event, ...this.active } : event;
     if (event.type === 'session.status' && event.payload.status === 'idle') this.active = undefined;
-    for (const listener of this.listeners) listener(projected);
+    // Snapshot, and isolate each delivery. A sink that throws — a closed RPC
+    // port is the realistic one — must not cut the rest of the subscribers out
+    // of this event, and must not travel back up to the emitter, which is the
+    // agent loop mid-turn: the turn would end with an error about the transport
+    // instead of the model.
+    for (const listener of [...this.listeners]) {
+      try {
+        listener(projected);
+      } catch (error) {
+        console.error(`[runtime-events] subscriber failed on ${event.type}`, error);
+      }
+    }
   }
   startRun(
     sessionId: string,

@@ -31,6 +31,9 @@ const RESOLUTION: Record<PermissionDecisionSource, string> = {
   'allow-session': 'user_approved',
   'policy-deny': 'policy_deny',
   'user-denied': 'user_denied',
+  // Not in `USER_RESOLUTIONS`, and that is the point: a countdown running out
+  // is not a decision anybody made, so the row must not be drawn as one.
+  'timed-out': 'timed_out',
   cancelled: 'cancelled',
   error: 'gate_error',
 };

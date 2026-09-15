@@ -119,7 +119,22 @@ export interface ProviderRetryController {
   headers: () => Readonly<Record<string, string>> | undefined;
   /** Status captured even when the provider body omits the HTTP code. */
   status: () => number | undefined;
-  onRetry?: (input: { error: ClassifiedProviderError; attempt: number; delayMs: number }) => void;
+  /**
+   * About to wait `delayMs` before attempt `attempt`.
+   *
+   * `status` is the HTTP code captured from the failed response when there was
+   * one, because the user-facing wording turns on it: an upstream that answered
+   * `503` is a different diagnosis from a socket that never connected, and the
+   * banner says so. Undefined for a transport-level failure.
+   */
+  onRetry?: (input: {
+    error: ClassifiedProviderError;
+    attempt: number;
+    delayMs: number;
+    status?: number;
+  }) => void;
+  /** A retried request produced its first event, so the wait is over. */
+  onRetrySettled?: () => void;
   /** Test hook; production uses the abortable timer below. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
@@ -284,6 +299,7 @@ export interface ProviderRetryBudget {
 export function createProviderRetryBudget(
   options: {
     onRetry?: ProviderRetryController['onRetry'];
+    onRetrySettled?: ProviderRetryController['onRetrySettled'];
     sleep?: ProviderRetryController['sleep'];
   } = {}
 ): ProviderRetryBudget {
@@ -314,6 +330,7 @@ export function createProviderRetryBudget(
       headers: () => headers,
       status: () => status,
       ...(options.onRetry ? { onRetry: options.onRetry } : {}),
+      ...(options.onRetrySettled ? { onRetrySettled: options.onRetrySettled } : {}),
       ...(options.sleep ? { sleep: options.sleep } : {}),
     },
   };
@@ -367,6 +384,7 @@ export function createProviderRetryStream(
   const outer = createAssistantMessageEventStream();
   const sleep = controller.sleep ?? delayWithAbort;
 
+  let waiting = false;
   void (async () => {
     for (;;) {
       // maxRetries: 0 — the SDK's own ladder is what made a failed request
@@ -376,7 +394,17 @@ export function createProviderRetryStream(
       let retry: { error: ClassifiedProviderError; attempt: number } | undefined;
 
       for await (const event of inner) {
-        if (event.type === 'start') sawStart = true;
+        if (event.type === 'start') {
+          sawStart = true;
+          // The request the last wait was for is now streaming. Announced here
+          // rather than after the loop because that is the moment the wait
+          // stops being true, and anything reporting it to a user has to stop
+          // saying it then and not when the turn eventually ends.
+          if (waiting) {
+            waiting = false;
+            controller.onRetrySettled?.();
+          }
+        }
         if (!sawStart && event.type === 'error' && event.reason === 'error') {
           const errorMessage =
             typeof event.error.errorMessage === 'string' ? event.error.errorMessage : event.error;
@@ -411,7 +439,14 @@ export function createProviderRetryStream(
         retry.error.code === 'PROVIDER_RATE_LIMITED'
           ? providerRateLimitDelayMs(retry.attempt, controller.headers())
           : providerSetupRetryDelayMs(retry.attempt, controller.headers());
-      controller.onRetry?.({ error: retry.error, attempt: retry.attempt, delayMs });
+      waiting = true;
+      const status = controller.status();
+      controller.onRetry?.({
+        error: retry.error,
+        attempt: retry.attempt,
+        delayMs,
+        ...(status !== undefined ? { status } : {}),
+      });
       await sleep(delayMs, options.signal);
     }
   })().catch((error) => {

@@ -55,8 +55,19 @@ export class HostIoPlugin extends Service implements RuntimeHostIoService {
   private track<T>(path: string, operation: () => Promise<T>): Promise<T> {
     if (this.disposed)
       return Promise.reject(new RuntimeHostError('runtime_disposed', 'host IO is disposed'));
-    absolutePath(path);
-    const work = operation();
+    try {
+      absolutePath(path);
+    } catch (error) {
+      // Rejected rather than thrown, like every other exit from this service
+      // and like the exec side: a caller that built a batch with `.catch()`
+      // instead of `await` would otherwise see this one escape the batch.
+      return Promise.reject(error);
+    }
+    return this.trackWork(operation());
+  }
+
+  /** Registered so `shutdown` waits for the operation instead of racing it. */
+  private trackWork<T>(work: Promise<T>): Promise<T> {
     this.pending.add(work);
     return work.finally(() => this.pending.delete(work));
   }
@@ -175,16 +186,28 @@ export class HostIoPlugin extends Service implements RuntimeHostIoService {
   realpath(path: string): Promise<string> {
     return this.track(path, () => realpath(path));
   }
-  async *readDirectory(
+  /**
+   * Validated here rather than in the generator body, which does not run until
+   * something pulls it: a relative path or a disposed runtime must be reported
+   * by the call that made the mistake, not by a later `for await` line.
+   */
+  readDirectory(path: string): AsyncIterable<{ name: string; kind: RuntimeFileInfo['kind'] }> {
+    if (this.disposed) throw new RuntimeHostError('runtime_disposed', 'host IO is disposed');
+    absolutePath(path);
+    return this.iterateDirectory(path);
+  }
+
+  private async *iterateDirectory(
     path: string
   ): AsyncIterable<{ name: string; kind: RuntimeFileInfo['kind'] }> {
-    absolutePath(path);
-    if (this.disposed) throw new RuntimeHostError('runtime_disposed', 'host IO is disposed');
-    const directory = await opendir(path);
+    const directory = await this.trackWork(opendir(path));
     this.directories.add(directory);
     try {
       while (!this.disposed) {
-        const entry = await directory.read();
+        // Each step is tracked, not the whole iteration: `shutdown` must wait
+        // for the read in flight before closing the handle under it, but it
+        // cannot wait for a consumer that stopped pulling.
+        const entry = await this.trackWork(directory.read());
         if (!entry) return;
         yield { name: entry.name, kind: kind(entry) };
       }
@@ -200,8 +223,10 @@ export class HostIoPlugin extends Service implements RuntimeHostIoService {
     });
   }
   rename(from: string, to: string): Promise<void> {
-    absolutePath(to);
-    return this.track(from, () => rename(from, to));
+    return this.track(from, async () => {
+      absolutePath(to);
+      await rename(from, to);
+    });
   }
   unlink(path: string): Promise<void> {
     return this.track(path, () => unlink(path));

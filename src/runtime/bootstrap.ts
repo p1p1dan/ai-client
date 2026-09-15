@@ -466,22 +466,34 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
         disposal ??= (async () => {
           controller.abort();
           approval?.bridge.dispose();
-          const outcomes = await Promise.allSettled([runtimeExec.shutdown(), ...active]);
-          try {
-            await ctx.runtimeTrace.flush();
-          } finally {
+          // Every step runs, and every failure is collected rather than
+          // replaced. A trace flush that throws used to leave the function
+          // before the exec outcomes were read, and TracePlugin's persistence
+          // error is sticky — so one failed trace append hid every hung child
+          // for the rest of the session. P1-0 section 5: a cleanup failure has
+          // to stay visible.
+          const failures: unknown[] = [];
+          const step = async (work: () => Promise<unknown> | undefined) => {
             try {
-              await session?.close();
-            } finally {
-              try {
-                await runtimeIo.shutdown();
-              } finally {
-                await ctx.fiber.dispose();
-              }
+              await work();
+            } catch (error) {
+              failures.push(error);
             }
+          };
+          const outcomes = await Promise.allSettled([runtimeExec.shutdown(), ...active]);
+          for (const outcome of outcomes)
+            if (outcome.status === 'rejected') failures.push(outcome.reason);
+          await step(() => ctx.runtimeTrace.flush());
+          await step(() => session?.close());
+          await step(() => runtimeIo.shutdown());
+          await step(() => ctx.fiber.dispose());
+          if (failures.length === 1) throw failures[0];
+          if (failures.length > 1) {
+            throw new AggregateError(
+              failures,
+              `runtime dispose failed: ${failures.map(disposeFailureLabel).join(', ')}`
+            );
           }
-          const failed = outcomes.find((outcome) => outcome.status === 'rejected');
-          if (failed?.status === 'rejected') throw failed.reason;
         })();
         return disposal;
       },
@@ -503,4 +515,11 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     }
     throw error;
   }
+}
+
+/** Codes, not stack traces: the aggregate message is what a log line shows. */
+function disposeFailureLabel(error: unknown): string {
+  if (error instanceof Error)
+    return 'code' in error && typeof error.code === 'string' ? error.code : error.message;
+  return String(error);
 }

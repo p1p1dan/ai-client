@@ -15,6 +15,17 @@ import { policyAction, type RuntimePermissionPolicy } from './policy.ts';
 
 export const PERMISSIONS_SERVICE = 'runtimePermissions';
 export const PERMISSION_TIMEOUT_MS = 120_000;
+/**
+ * The abort reason the gate's own deadline uses.
+ *
+ * The deadline is enforced by aborting the same signal a cancel aborts, so
+ * without a reason on it "you ran out of time" and "you pressed stop" arrive as
+ * the identical event — and the card reported the countdown running out as
+ * `aborted`, or the renderer wrote it down as a denial the user made
+ * (permissions-08, rpc-projector-18). Compared by value, not identity: the
+ * signal crosses `AbortSignal.any`, which forwards the reason as given.
+ */
+export const PERMISSION_TIMEOUT_REASON = 'permission_timed_out';
 export type PermissionAction = 'allow' | 'ask' | 'deny';
 export interface ToolPermissionRequest {
   tool: string;
@@ -120,6 +131,9 @@ export type PermissionDecisionSource =
   | 'allow-session'
   | 'policy-deny'
   | 'user-denied'
+  /** Nobody answered before the gate's own deadline; split from `cancelled`
+   * because the audit row is the only place that difference survives. */
+  | 'timed-out'
   | 'cancelled'
   | 'error';
 
@@ -407,7 +421,7 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     const controller = new AbortController();
     const approvalSignal = AbortSignal.any([combined, controller.signal]);
     const timeout = setTimeout(
-      () => controller.abort(),
+      () => controller.abort(PERMISSION_TIMEOUT_REASON),
       this.config.timeoutMs ?? PERMISSION_TIMEOUT_MS
     );
     let abort: (() => void) | undefined;
@@ -421,7 +435,9 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
         cancelled,
       ]);
       if (approvalSignal.aborted || epoch !== this.epoch)
-        throw denied('cancelled', 'permission request expired');
+        throw approvalSignal.reason === PERMISSION_TIMEOUT_REASON
+          ? denied('timed-out', 'nobody answered the permission request in time')
+          : denied('cancelled', 'permission request expired');
       if (decision === 'deny') throw denied('user-denied', 'permission denied');
       if (decision === 'allow-session') this.grants.add(grantKey(request));
       return decision;

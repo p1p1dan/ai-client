@@ -99,6 +99,16 @@ export class ExecPlugin extends Service implements RuntimeExecService {
                 `exec adapter ${this.adapterId} cannot host a long-lived child`
               );
             })();
+    // Re-checked after the await: `stop` takes a snapshot of `children`, so a
+    // child that finishes starting after that snapshot would be tracked by a
+    // set nobody reads again — an orphan that outlives the session.
+    if (this.disposed) {
+      const cleanup = await child.kill().then(
+        () => undefined,
+        (error: unknown) => error
+      );
+      throw new RuntimeHostError('runtime_disposed', 'exec is disposed', { cause: cleanup });
+    }
     // Tracked so `shutdown` reaps it: a long-lived child is precisely the kind
     // that survives its creator and keeps the worker process alive.
     this.children.add(child);
@@ -148,17 +158,23 @@ function spawnPersistent(
     );
   }
   return new Promise((resolve, reject) => {
-    const runnerPath = resolveHelper('exec-runner.mjs', import.meta.url);
-    const child = spawn(nodePath ?? request.command, nodePath ? [runnerPath] : [...request.args], {
-      cwd: request.cwd,
-      env: request.env,
-      shell: false,
-      windowsHide: true,
-      detached: process.platform !== 'win32',
-      stdio: nodePath ? ['pipe', 'pipe', 'pipe', 'ipc'] : ['pipe', 'pipe', 'pipe'],
-    });
+    const child = spawn(
+      nodePath ?? request.command,
+      nodePath ? [execRunnerPath()] : [...request.args],
+      {
+        cwd: request.cwd,
+        env: request.env,
+        shell: false,
+        windowsHide: true,
+        detached: process.platform !== 'win32',
+        stdio: nodePath ? ['pipe', 'pipe', 'pipe', 'ipc'] : ['pipe', 'pipe', 'pipe'],
+      }
+    );
+    const killer = createTreeKiller(child);
     let settled = false;
     let killing: Promise<void> | undefined;
+    /** Set when the grace period ran out: the tree is NOT known to be gone. */
+    let killTimedOut = false;
     /** Set on the runner carrier, where the leader's exit code is not the command's. */
     let reportedExit: { exitCode: number | null; signal: string | null } | undefined;
     let resolveExit: (value: { exitCode: number | null; signal: string | null }) => void = () =>
@@ -214,7 +230,7 @@ function spawnPersistent(
           // "slow". Reported first, then the runner is torn down.
           reportedExit = { exitCode: message.code ?? null, signal: message.signal ?? null };
           resolveExit(reportedExit);
-          killTree(child, true);
+          killer.kill(true);
         }
       );
       child.send?.({
@@ -242,16 +258,21 @@ function spawnPersistent(
         }),
       kill: () => {
         killing ??= (async () => {
-          killTree(child, false);
+          killer.kill(false);
           const escalation = setTimeout(
-            () => killTree(child, true),
+            () => killer.kill(true),
             Math.max(1, Math.floor(cleanupTimeoutMs / 2))
           );
           const deadline = setTimeout(() => {
-            killTree(child, true);
+            killer.kill(true);
             child.stdin?.destroy();
             child.stdout?.destroy();
             child.stderr?.destroy();
+            // `exited` still settles, or every caller waiting on it is parked
+            // forever. But the grace period ran out with the tree unaccounted
+            // for, so `kill` reports that instead of a clean reap: a hung MCP
+            // server counted as collected keeps the worker process alive.
+            killTimedOut = true;
             resolveExit({ exitCode: null, signal: null });
           }, cleanupTimeoutMs);
           try {
@@ -260,13 +281,25 @@ function spawnPersistent(
             clearTimeout(escalation);
             clearTimeout(deadline);
           }
+          const failure = killTimedOut
+            ? new RuntimeHostError(
+                'exec_cleanup_failed',
+                `child did not exit within ${cleanupTimeoutMs} ms of being killed`
+              )
+            : killer.error;
+          killer.dispose();
+          if (failure) throw failure;
         })();
         return killing;
       },
     };
 
-    if (request.signal?.aborted) void handle.kill();
-    else request.signal?.addEventListener('abort', () => void handle.kill(), { once: true });
+    // Named and dropped on exit: a session-lived signal would otherwise collect
+    // one listener — and one dead child's closure — per restart.
+    const onAbort = () => void handle.kill().catch(() => undefined);
+    if (request.signal?.aborted) onAbort();
+    else request.signal?.addEventListener('abort', onAbort, { once: true });
+    void exited.then(() => request.signal?.removeEventListener('abort', onAbort));
 
     // Resolved on the next tick rather than immediately, so a command that
     // cannot start at all reports `exec_spawn_failed` instead of handing back a
@@ -279,24 +312,91 @@ function spawnPersistent(
   });
 }
 
-function killTree(child: ReturnType<typeof spawn>, force: boolean): void {
-  if (!child.pid) return;
-  if (process.platform === 'win32') {
-    const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
-    const killer = spawn(taskkill, ['/PID', String(child.pid), '/T', '/F'], {
-      windowsHide: true,
-      stdio: 'ignore',
-    });
-    killer.on('error', () => child.kill());
-    return;
-  }
-  try {
-    process.kill(-child.pid, force ? 'SIGKILL' : 'SIGTERM');
-  } catch (error) {
-    // Already gone is the expected outcome of a second kill, not a failure.
-    if (error instanceof Error && 'code' in error && error.code === 'ESRCH') return;
-    child.kill(force ? 'SIGKILL' : 'SIGTERM');
-  }
+export interface TreeKiller {
+  /** Terminate the tree. Repeat calls escalate; on Windows only the first runs. */
+  kill(force: boolean): void;
+  /** Set when an attempt failed — the tree may still be running. */
+  readonly error: Error | undefined;
+  /** Reap `taskkill` processes that outlived the child. */
+  dispose(): void;
+}
+
+/**
+ * Terminate one child's process tree and remember whether that failed.
+ *
+ * Extracted so the long-lived path gets what `runPipe` already had: at most one
+ * `taskkill` per child on Windows (`kill` runs up to four times — immediately,
+ * at half the grace period, at the deadline, and on the runner's IPC exit),
+ * every `taskkill` tracked so it can be reaped, and its failure recorded rather
+ * than dropped. `platform` and `spawnProcess` are injectable because the
+ * Windows branch is the one that cannot be exercised on the build machines.
+ */
+export function createTreeKiller(
+  child: Pick<ReturnType<typeof spawn>, 'pid' | 'kill'>,
+  options: { platform?: NodeJS.Platform; spawnProcess?: typeof spawn } = {}
+): TreeKiller {
+  const platform = options.platform ?? process.platform;
+  const spawnProcess = options.spawnProcess ?? spawn;
+  const cleaners = new Set<ReturnType<typeof spawn>>();
+  let windowsKillStarted = false;
+  let reaped = false;
+  let error: Error | undefined;
+  return {
+    get error() {
+      return error;
+    },
+    dispose(): void {
+      reaped = true;
+      for (const cleaner of cleaners) cleaner.kill();
+      cleaners.clear();
+    },
+    kill(force: boolean): void {
+      if (!child.pid) return;
+      if (platform === 'win32') {
+        if (windowsKillStarted) return;
+        windowsKillStarted = true;
+        const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
+        const killer = spawnProcess(taskkill, ['/PID', String(child.pid), '/T', '/F'], {
+          windowsHide: true,
+          stdio: 'ignore',
+        });
+        cleaners.add(killer);
+        killer.on('error', (cause: Error) => {
+          cleaners.delete(killer);
+          error ??= new RuntimeHostError('exec_cleanup_failed', 'taskkill could not start', {
+            cause,
+          });
+          child.kill();
+        });
+        killer.on('close', (code: number | null) => {
+          cleaners.delete(killer);
+          // A taskkill WE killed in `dispose` is not a cleanup failure.
+          if (!reaped && code !== 0)
+            error ??= new RuntimeHostError('exec_cleanup_failed', `taskkill exited ${code}`);
+        });
+        return;
+      }
+      try {
+        process.kill(-child.pid, force ? 'SIGKILL' : 'SIGTERM');
+      } catch (cause) {
+        // Already gone is the expected outcome of a second kill, not a failure.
+        if (cause instanceof Error && 'code' in cause && cause.code === 'ESRCH') return;
+        error ??= new RuntimeHostError('exec_cleanup_failed', 'could not terminate child group', {
+          cause,
+        });
+        child.kill(force ? 'SIGKILL' : 'SIGTERM');
+      }
+    },
+  };
+}
+
+// Resolved on first use and kept, like io.ts does for its own helper: this sits
+// on the synchronous path before every spawn, and the answer cannot change
+// within a process.
+let runnerPath: string | undefined;
+export function execRunnerPath(exists?: (path: string) => boolean): string {
+  runnerPath ??= resolveHelper('exec-runner.mjs', import.meta.url, exists);
+  return runnerPath;
 }
 
 export function commandEnvironment(
@@ -352,17 +452,20 @@ function runPipe(
     );
   }
   return new Promise((resolve, reject) => {
-    const runnerPath = resolveHelper('exec-runner.mjs', import.meta.url);
-    const child = spawn(nodePath ?? request.command, nodePath ? [runnerPath] : [...request.args], {
-      cwd: request.cwd,
-      env: request.env,
-      shell: false,
-      windowsHide: true,
-      detached: process.platform !== 'win32',
-      stdio: nodePath
-        ? [request.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe', 'ipc']
-        : [request.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
-    });
+    const child = spawn(
+      nodePath ?? request.command,
+      nodePath ? [execRunnerPath()] : [...request.args],
+      {
+        cwd: request.cwd,
+        env: request.env,
+        shell: false,
+        windowsHide: true,
+        detached: process.platform !== 'win32',
+        stdio: nodePath
+          ? [request.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe', 'ipc']
+          : [request.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+      }
+    );
     const chunks = { stdout: [] as Buffer[], stderr: [] as Buffer[] };
     let retained = 0;
     let settled = false;

@@ -35,7 +35,12 @@ import { PERMISSIONS_ENTRY } from '../session/legacy.ts';
 import { interruptedToolResults } from '../session/recovery.ts';
 import { preparePrompt } from './attachments.ts';
 import { sanitizeProviderErrorText } from './providerErrors.ts';
-import { createProviderRetryBudget, createProviderRetryStream } from './providerRetry.ts';
+import {
+  createProviderRetryBudget,
+  createProviderRetryStream,
+  PROVIDER_RATE_LIMIT_MAX_RETRIES,
+  PROVIDER_TRANSIENT_MAX_RETRIES,
+} from './providerRetry.ts';
 
 /**
  * Cap on a permission-activity preview once it reaches the trace.
@@ -274,14 +279,32 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // One budget per run: a 429 burst and a later gateway fault each get their
     // own bounded allowance, and neither may borrow from the other.
     const retryBudget = createProviderRetryBudget({
-      onRetry: ({ error, attempt, delayMs }) =>
+      onRetry: ({ error, attempt, delayMs, status }) => {
         trace.note('note', {
           event: 'provider_retry',
           code: error.code,
           attempt,
           delay_ms: delayMs,
           ...(error.details ?? {}),
-        }),
+        });
+        // rpc-projector-02: the trace file is not a user surface. The renderer
+        // has drawn a retry banner off `session.status.retry` since T-33 and
+        // the native backend never sent one, so a run spent its whole backoff
+        // looking identical to a slow model.
+        projected.retry({
+          attempt,
+          maxRetries:
+            error.code === 'PROVIDER_RATE_LIMITED'
+              ? PROVIDER_RATE_LIMIT_MAX_RETRIES
+              : PROVIDER_TRANSIENT_MAX_RETRIES,
+          delayMs,
+          // The banner's own contract: a status means the upstream answered and
+          // is named as such; `null` is its sentinel for a transport failure.
+          errorStatus: status === undefined ? null : String(status),
+          error: error.code,
+        });
+      },
+      onRetrySettled: () => projected.recovered(),
     });
     const agent = new Agent({
       streamFn: (model, context, options) =>

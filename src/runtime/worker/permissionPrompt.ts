@@ -22,6 +22,7 @@ import type {
 } from '../../shared/types/runtimeEvents.ts';
 import {
   PERMISSION_TIMEOUT_MS,
+  PERMISSION_TIMEOUT_REASON,
   type PermissionConfig,
   type ToolPermissionRequest,
 } from '../plugins/permissions/index.ts';
@@ -187,12 +188,19 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
           resolve(allow ? (decision === 'allow_session' ? 'allow-session' : 'allow-once') : 'deny');
         };
         // The engine's own timeout aborts this signal, so the card disappearing
-        // and the gate denying are one event rather than two racing ones.
+        // and the gate denying are one event rather than two racing ones — and
+        // the reason on the signal is what says WHICH of the two happened.
+        // Without it the countdown running out reached the renderer as
+        // `aborted`, indistinguishable from the user pressing stop, and
+        // `timed_out` had no producer anywhere despite the card being built to
+        // show it (permissions-08, rpc-projector-18).
+        const reason = (): 'aborted' | 'timed_out' =>
+          signal.reason === PERMISSION_TIMEOUT_REASON ? 'timed_out' : 'aborted';
         function onAbort() {
-          settle('deny', 'aborted');
+          settle('deny', reason());
         }
         if (signal.aborted) {
-          settle('deny', 'aborted');
+          settle('deny', reason());
           return;
         }
         signal.addEventListener('abort', onAbort, { once: true });

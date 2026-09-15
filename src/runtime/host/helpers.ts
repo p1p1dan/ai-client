@@ -17,12 +17,16 @@ import { fileURLToPath } from 'node:url';
  */
 export const BUNDLED_HELPER_DIR = 'runtime-helpers';
 
-export function resolveHelper(name: string, base: string): string {
+export function resolveHelper(
+  name: string,
+  base: string,
+  exists: (path: string) => boolean = existsSync
+): string {
   const candidates = [new URL(name, base), new URL(`${BUNDLED_HELPER_DIR}/${name}`, base)].map(
     (url) => fileURLToPath(url)
   );
   for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
+    if (exists(candidate)) return candidate;
   }
   throw new Error(`Runtime helper ${name} is missing; looked in ${candidates.join(' and ')}`);
 }

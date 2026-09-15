@@ -7,13 +7,21 @@
  * "the runtime is usable". These cases pin the difference.
  */
 
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { describe, expect, it } from 'vitest';
 import { createRuntime } from '../bootstrap.ts';
-import { LOOP_SERVICE, MODEL_SERVICE, RuntimeConfigError, TRACE_SERVICE } from '../contracts.ts';
+import {
+  LOOP_SERVICE,
+  MODEL_SERVICE,
+  RuntimeConfigError,
+  type RuntimeHostConfig,
+  TRACE_SERVICE,
+} from '../contracts.ts';
+import { standaloneHost } from '../host/config.ts';
+import { RuntimeHostError } from '../host/errors.ts';
 
 function faux(reply = 'ready') {
   const handle = fauxProvider({
@@ -137,6 +145,56 @@ describe('createRuntime', () => {
     await runtime.dispose();
     expect(runtime.ctx.get(LOOP_SERVICE)).toBeUndefined();
     expect(runtime.ctx.get(MODEL_SERVICE)).toBeUndefined();
+  });
+
+  /**
+   * P1-0 section 5: a cleanup failure has to stay visible. TracePlugin's
+   * persistence error is sticky, so a single failed trace append used to make
+   * every later `dispose` leave through `flush()` — before the exec outcomes
+   * were read at all. A child that survived teardown went unreported for the
+   * rest of the session.
+   */
+  it('reports the trace flush failure and the exec cleanup failure from one dispose', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'runtime-dispose-failure-'));
+    // A directory where the trace file goes: every append fails from here on.
+    await mkdir(join(dir, 'runs.jsonl'));
+    const host: RuntimeHostConfig = {
+      ...standaloneHost({}),
+      exec: {
+        mode: 'host-adapter',
+        adapter: {
+          id: 'stuck-child-v1',
+          run: async () => {
+            throw new Error('not used');
+          },
+          dispose: async () => {
+            throw new RuntimeHostError('exec_cleanup_failed', 'a child outlived the grace period');
+          },
+        },
+      },
+    };
+    const runtime = await createRuntime({
+      providers: [faux().provider],
+      traceDir: dir,
+      env: {},
+      host,
+    });
+    try {
+      await runtime.run({ prompt: 'hi', systemPrompt: 'probe' });
+      const failure = await runtime.dispose().then(
+        () => undefined,
+        (error: unknown) => error
+      );
+      expect(failure).toBeInstanceOf(AggregateError);
+      const errors = (failure as AggregateError).errors as Error[];
+      expect(errors.map((error) => (error as { code?: string }).code)).toEqual(
+        expect.arrayContaining(['exec_cleanup_failed', 'EISDIR'])
+      );
+      expect((failure as AggregateError).message).toContain('exec_cleanup_failed');
+      expect((failure as AggregateError).message).toContain('EISDIR');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('stamps every trace with the commit, the pins and the flags that produced it', async () => {

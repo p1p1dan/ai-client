@@ -1,13 +1,26 @@
+import type { spawn } from 'node:child_process';
+import { getEventListeners } from 'node:events';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Context } from 'cordis';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeExecRequest, RuntimeHostConfig } from '../contracts.ts';
 import { standaloneHost, validateHost } from '../host/config.ts';
-import { ExecPlugin } from '../host/exec.ts';
+import { createTreeKiller, ExecPlugin, execRunnerPath } from '../host/exec.ts';
 import { HostIoPlugin } from '../host/io.ts';
+
+const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
+function caught(work: () => unknown): unknown {
+  try {
+    work();
+    return undefined;
+  } catch (error) {
+    return error;
+  }
+}
 
 let dir: string;
 let ctx: Context;
@@ -150,6 +163,66 @@ describe('host IO', () => {
     await io.unlink(join(dir, 'a'));
     expect(await io.stat(dir)).toMatchObject({ kind: 'directory' });
   });
+  /** T008 added `rmdir` for interrupted-import cleanup without covering it. */
+  it('removes an empty directory and refuses one that still has entries', async () => {
+    const empty = join(dir, 'empty');
+    await io.mkdir(empty);
+    await io.rmdir(empty);
+    await expect(io.stat(empty)).rejects.toMatchObject({ code: 'ENOENT' });
+    const staging = join(dir, 'staging');
+    await io.mkdir(staging);
+    await io.writeFile(join(staging, 'leftover.jsonl'), Buffer.from('{}'));
+    await expect(io.rmdir(staging)).rejects.toMatchObject({ code: 'ENOTEMPTY' });
+    expect(await io.stat(staging)).toMatchObject({ kind: 'directory' });
+    await expect(io.rmdir(join(dir, 'absent'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(io.rmdir('staging')).rejects.toMatchObject({ code: 'invalid_host_request' });
+    await io.shutdown();
+    await expect(io.rmdir(staging)).rejects.toMatchObject({ code: 'runtime_disposed' });
+  });
+  it('rejects a relative path instead of throwing out of the call', async () => {
+    const seen: unknown[] = [];
+    const settle = (work: Promise<unknown>) => {
+      void work.catch((error: unknown) => seen.push(error));
+    };
+    // Built with `.catch` rather than `await` on purpose: a synchronous throw
+    // escapes a batch like this one and surfaces far from its cause.
+    expect(
+      caught(() => {
+        settle(io.readFile('a', { maxBytes: 1, overflow: 'error' }));
+        settle(io.writeFile('a', Buffer.from('x')));
+        settle(io.appendFile('a', Buffer.from('x')));
+        settle(io.stat('a'));
+        settle(io.realpath('a'));
+        settle(io.mkdir('a'));
+        settle(io.unlink('a'));
+        settle(io.rmdir('a'));
+        settle(io.rename(join(dir, 'from'), 'to'));
+      })
+    ).toBeUndefined();
+    await sleep(0);
+    expect(seen).toHaveLength(9);
+    expect(seen.map((error) => (error as { code: string }).code)).toEqual(
+      Array(9).fill('invalid_host_request')
+    );
+  });
+  it('reports a bad directory path at the call, not at the first pull', async () => {
+    expect(caught(() => io.readDirectory('relative'))).toMatchObject({
+      code: 'invalid_host_request',
+    });
+    await io.shutdown();
+    expect(caught(() => io.readDirectory(dir))).toMatchObject({ code: 'runtime_disposed' });
+  });
+  it('shuts down while a directory iteration is parked on a yield', async () => {
+    await io.writeFile(join(dir, 'a'), Buffer.from('x'));
+    const iterator = io.readDirectory(dir)[Symbol.asyncIterator]();
+    expect((await iterator.next()).value).toMatchObject({ name: 'a' });
+    // Shutdown waits for the read in flight, never for a consumer that stopped
+    // pulling: tracking the whole iteration would park teardown forever.
+    await expect(
+      Promise.race([io.shutdown().then(() => 'done'), sleep(2000).then(() => 'hung')])
+    ).resolves.toBe('done');
+    await expect(iterator.next()).rejects.toMatchObject({ code: 'runtime_disposed' });
+  });
 });
 
 describe('host exec', () => {
@@ -198,6 +271,40 @@ describe('host exec', () => {
     await expect(command('', { command: join(dir, 'absent') })).rejects.toMatchObject({
       code: 'exec_spawn_failed',
     });
+  });
+  it('cancels a command that is already running and stops its tree', async () => {
+    const controller = new AbortController();
+    const marker = join(dir, 'tick');
+    const script = `const fs=require('fs');setInterval(()=>fs.writeFileSync(${JSON.stringify(marker)},String(Date.now())),10)`;
+    const work = command(script, { signal: controller.signal, timeoutMs: 5000 });
+    for (let attempt = 0; attempt < 200 && !existsSync(marker); attempt++) await sleep(10);
+    expect(existsSync(marker)).toBe(true);
+    controller.abort();
+    expect((await work).termination).toBe('aborted');
+    const last = await readFile(marker, 'utf8');
+    await sleep(150);
+    // Cancelling the run has to stop the tree, not just stop reading from it.
+    expect(await readFile(marker, 'utf8')).toBe(last);
+  }, 20_000);
+  it('resolves the runner helper once and reuses it for every later command', async () => {
+    expect((await command("process.stdout.write('ok')")).exitCode).toBe(0);
+    // The command above resolved the helper; the production path shares this
+    // cache, so nothing may probe the filesystem for it a second time.
+    expect(
+      execRunnerPath(() => {
+        throw new Error('probed again');
+      })
+    ).toContain('exec-runner.mjs');
+    vi.resetModules();
+    const fresh = await import('../host/exec.ts');
+    const probed: string[] = [];
+    const exists = (path: string) => {
+      probed.push(path);
+      return existsSync(path);
+    };
+    expect(fresh.execRunnerPath(exists)).toContain('exec-runner.mjs');
+    expect(fresh.execRunnerPath(exists)).toContain('exec-runner.mjs');
+    expect(probed).toHaveLength(1);
   });
   it('prepends Node PATH and does not mutate the parent environment', async () => {
     const previous = process.env.PATH;
@@ -257,7 +364,7 @@ describe('host exec spawn', () => {
     };
   };
 
-  async function persistent(script: string, hostConfig = config) {
+  async function persistent(script: string, hostConfig = config, signal?: AbortSignal) {
     const out = collect();
     const err = collect();
     const plugin = hostConfig === config ? exec : undefined;
@@ -268,6 +375,7 @@ describe('host exec spawn', () => {
       cwd: dir,
       onStdout: out.sink,
       onStderr: err.sink,
+      ...(signal ? { signal } : {}),
     });
     return { child, out, err, service };
   }
@@ -283,7 +391,9 @@ describe('host exec spawn', () => {
   const extraContexts: { ctx: Context; exec: ExecPlugin }[] = [];
   afterEach(async () => {
     for (const entry of extraContexts.splice(0)) {
-      await entry.exec.shutdown();
+      // Swallowed here only: a case that asserts on a cleanup failure would
+      // otherwise fail again in teardown, where `shutdown` replays it.
+      await entry.exec.shutdown().catch(() => undefined);
       await entry.ctx.fiber.dispose();
     }
   });
@@ -394,6 +504,95 @@ describe('host exec spawn', () => {
     ).rejects.toMatchObject({ code: 'runtime_disposed' });
   }, 20_000);
 
+  it('kills a long-lived child when the caller aborts mid-run', async () => {
+    const controller = new AbortController();
+    const { child } = await persistent(ECHO_LOOP, config, controller.signal);
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(1);
+    controller.abort();
+    await expect(
+      Promise.race([child.exited.then(() => 'exited'), sleep(5000).then(() => 'orphaned')])
+    ).resolves.toBe('exited');
+  }, 20_000);
+
+  it('drops the abort listener once the child is gone', async () => {
+    const controller = new AbortController();
+    const { child } = await persistent(ECHO_LOOP, config, controller.signal);
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(1);
+    await child.write(Buffer.from('quit\n'));
+    await child.exited;
+    await sleep(0);
+    // A session-lived signal would otherwise keep one listener — and one dead
+    // child's closure — per server restart.
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
+  }, 20_000);
+
+  it('does not lose a child that finishes starting during shutdown', async () => {
+    let release = () => undefined as void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let killed = 0;
+    const late: RuntimeHostConfig = {
+      ...config,
+      exec: {
+        mode: 'host-adapter',
+        adapter: {
+          id: 'late-spawn-v1',
+          run: async () => {
+            throw new Error('not used');
+          },
+          dispose: async () => undefined,
+          spawn: async () => {
+            await gate;
+            return {
+              exited: new Promise<{ exitCode: number | null; signal: string | null }>(
+                () => undefined
+              ),
+              write: async () => undefined,
+              kill: async () => {
+                killed++;
+              },
+            };
+          },
+        },
+      },
+    };
+    const service = await freshExec(late);
+    const pending = service.spawn({
+      command: process.execPath,
+      args: ['-e', ''],
+      cwd: dir,
+      onStdout: () => undefined,
+      onStderr: () => undefined,
+    });
+    // `stop` snapshots the tracked children; one that lands after the snapshot
+    // is in a set nobody reads again, so it has to be reaped on the spot.
+    await service.shutdown();
+    release();
+    await expect(pending).rejects.toMatchObject({ code: 'runtime_disposed' });
+    expect(killed).toBe(1);
+  }, 20_000);
+
+  it('reports a child that outlived the kill grace instead of claiming it exited', async () => {
+    const impatient: RuntimeHostConfig = { ...config, cleanupTimeoutMs: 1 };
+    const service = await freshExec(impatient);
+    const out = collect();
+    const child = await service.spawn({
+      command: process.execPath,
+      args: ['-e', "process.on('SIGTERM',()=>{});setInterval(()=>{},1000)"],
+      cwd: dir,
+      onStdout: out.sink,
+      onStderr: out.sink,
+    });
+    // Nobody killed it first: reaping a long-lived child is what shutdown is
+    // for, and a tree still unaccounted for when the grace runs out must be
+    // reported, not counted as collected.
+    await expect(service.shutdown()).rejects.toMatchObject({ code: 'exec_cleanup_failed' });
+    await expect(child.kill()).rejects.toMatchObject({ code: 'exec_cleanup_failed' });
+    // `exited` still settles, or every caller waiting on the server is parked.
+    await expect(child.exited).resolves.toMatchObject({ exitCode: null, signal: null });
+  }, 20_000);
+
   it('says so when the carrier cannot host a long-lived child', async () => {
     const adapterOnly: RuntimeHostConfig = {
       ...config,
@@ -421,4 +620,129 @@ describe('host exec spawn', () => {
       })
     ).rejects.toMatchObject({ code: 'exec_spawn_unsupported' });
   }, 20_000);
+});
+
+/**
+ * The Windows half of process-tree cleanup, on a machine that is not Windows.
+ *
+ * `taskkill` is the only way a tree dies there, and the long-lived path never
+ * ran on Windows at all: `spawn` support landed after the last field session.
+ * So the platform and the spawner are injected, and the cases pin the three
+ * properties the one-shot path already had — one taskkill per child, every
+ * taskkill tracked, and its failure recorded rather than dropped.
+ */
+describe('exec tree killer', () => {
+  function fakeSpawner() {
+    const calls: { command: string; args: readonly string[] }[] = [];
+    const started: {
+      emit: (event: string, value?: unknown) => void;
+      killed: number;
+    }[] = [];
+    const spawnProcess = ((command: string, args: readonly string[]) => {
+      calls.push({ command, args });
+      const handlers = new Map<string, (value?: unknown) => void>();
+      const entry = {
+        emit: (event: string, value?: unknown) => handlers.get(event)?.(value),
+        killed: 0,
+      };
+      started.push(entry);
+      const child = {
+        on(event: string, handler: (value?: unknown) => void) {
+          handlers.set(event, handler);
+          return child;
+        },
+        kill() {
+          entry.killed++;
+          return true;
+        },
+      };
+      return child;
+    }) as unknown as typeof spawn;
+    return { calls, started, spawnProcess };
+  }
+  function fakeChild() {
+    const signals: (string | number | undefined)[] = [];
+    return {
+      pid: 4242,
+      signals,
+      kill(signal?: string | number) {
+        signals.push(signal);
+        return true;
+      },
+    };
+  }
+
+  it('starts one taskkill per child however often kill is called', () => {
+    const spawner = fakeSpawner();
+    const killer = createTreeKiller(fakeChild(), {
+      platform: 'win32',
+      spawnProcess: spawner.spawnProcess,
+    });
+    killer.kill(false);
+    killer.kill(true);
+    killer.kill(true);
+    expect(spawner.calls).toHaveLength(1);
+    expect(spawner.calls[0].command.endsWith('taskkill.exe')).toBe(true);
+    expect(spawner.calls[0].args).toEqual(['/PID', '4242', '/T', '/F']);
+    expect(killer.error).toBeUndefined();
+  });
+
+  it('records a taskkill that could not start, and falls back to the child', () => {
+    const spawner = fakeSpawner();
+    const child = fakeChild();
+    const killer = createTreeKiller(child, {
+      platform: 'win32',
+      spawnProcess: spawner.spawnProcess,
+    });
+    killer.kill(true);
+    spawner.started[0].emit('error', new Error('EPERM'));
+    expect(killer.error).toMatchObject({ code: 'exec_cleanup_failed' });
+    expect(child.signals).toHaveLength(1);
+  });
+
+  it('records a nonzero taskkill exit and accepts a clean one', () => {
+    const failing = fakeSpawner();
+    const failed = createTreeKiller(fakeChild(), {
+      platform: 'win32',
+      spawnProcess: failing.spawnProcess,
+    });
+    failed.kill(true);
+    failing.started[0].emit('close', 1);
+    expect(failed.error).toMatchObject({ code: 'exec_cleanup_failed' });
+    expect((failed.error as Error).message).toContain('1');
+    const clean = fakeSpawner();
+    const reaped = createTreeKiller(fakeChild(), {
+      platform: 'win32',
+      spawnProcess: clean.spawnProcess,
+    });
+    reaped.kill(true);
+    clean.started[0].emit('close', 0);
+    expect(reaped.error).toBeUndefined();
+  });
+
+  it('reaps a taskkill still running at dispose without calling that a failure', () => {
+    const spawner = fakeSpawner();
+    const killer = createTreeKiller(fakeChild(), {
+      platform: 'win32',
+      spawnProcess: spawner.spawnProcess,
+    });
+    killer.kill(true);
+    killer.dispose();
+    expect(spawner.started[0].killed).toBe(1);
+    spawner.started[0].emit('close', null);
+    expect(killer.error).toBeUndefined();
+  });
+
+  it('reports a POSIX group that could not be signalled', () => {
+    const child = fakeChild();
+    const killer = createTreeKiller(child, { platform: 'linux' });
+    // pid 1 is never this process's group leader: the group kill fails with
+    // EPERM, which is exactly the case that must not pass as cleaned up.
+    const denied = createTreeKiller({ ...child, pid: 1 }, { platform: 'linux' });
+    denied.kill(true);
+    expect(denied.error).toMatchObject({ code: 'exec_cleanup_failed' });
+    // A tree that is already gone is the expected second kill, not a failure.
+    killer.kill(true);
+    expect(killer.error).toBeUndefined();
+  });
 });

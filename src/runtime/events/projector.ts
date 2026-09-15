@@ -7,7 +7,11 @@ import { isInternalMessage } from '../../shared/internalMessage.ts';
 import { applyTurnUsage, initTurnRollup, viewTurnRollup } from '../../shared/piTurnRollup.ts';
 import { buildPiUsagePayload } from '../../shared/piUsage.ts';
 import { reviewFromToolResult } from '../../shared/sessionFileChange.ts';
-import type { MessageAttachmentMeta, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
+import type {
+  MessageAttachmentMeta,
+  RuntimeEventDraft,
+  SessionRetryInfo,
+} from '../../shared/types/runtimeEvents.ts';
 import type { RuntimeRunResult } from '../contracts.ts';
 
 /**
@@ -57,11 +61,44 @@ export function output(result: unknown): string {
   return result === undefined ? '' : JSON.stringify(result);
 }
 
+/**
+ * The new text in a cumulative snapshot, and where the cursor lands after it.
+ *
+ * Snapshots normally grow, and the growth IS the delta. Two shapes are not
+ * growth. A snapshot that repeats — or truncates — what was already sent adds
+ * nothing, and the longer cursor stands: that text is on screen and a transcript
+ * cannot un-say it. A snapshot that DIVERGES is a rewrite; pi-ai's Responses
+ * adapter replaces a whole text or thinking block when its output item
+ * finalizes (`api/openai-responses-shared.js`), so this is reachable rather
+ * than hypothetical. A rewrite cannot be replayed into an append-only
+ * transcript either, but it must still move the cursor — leaving the cursor on
+ * text the provider has abandoned made every later snapshot diverge too, which
+ * silently muted the rest of the message, `message_end`'s final flush included.
+ */
+function advance(cursor: string, snapshot: string): { text?: string; cursor: string } {
+  if (snapshot.startsWith(cursor))
+    return snapshot.length > cursor.length
+      ? { text: snapshot.slice(cursor.length), cursor: snapshot }
+      : { cursor };
+  if (cursor.startsWith(snapshot)) return { cursor };
+  return { cursor: snapshot };
+}
+
 /** Adapt PiWorkerSession's projection to typed native AgentEvents; same wire DTOs. */
 export class RuntimeEventProjector {
   private readonly sink: RuntimeEventSink;
   private readonly requestId: string;
   private assistant: string | undefined;
+  /**
+   * The model announced by `message_start`, held until a message is minted.
+   *
+   * An assistant message is opened by its first CONTENT, not by its
+   * announcement, so the id and the model part company for as long as the
+   * message stays empty. Kept because the model belongs on `message.started`:
+   * the renderer's metadata row reads it off the last opened assistant message
+   * and showed `null` for every turn whose message was minted by a tool row.
+   */
+  private model: string | undefined;
   private readonly toolMessages = new Map<string, string>();
   private index = 0;
   private prose = '';
@@ -104,31 +141,47 @@ export class RuntimeEventProjector {
       payload: { status: 'running' },
     });
   }
-  private ensureAssistant(model?: string): string {
+  /**
+   * A new assistant message was announced: close the previous one, remember the
+   * model, and reset the delta cursors. Nothing is emitted — see `model`.
+   */
+  private announceAssistant(model: string): void {
+    this.closeAssistant();
+    this.model = model;
+    this.prose = '';
+    this.thinking = '';
+    this.thinkingOpen = false;
+  }
+  /** Mint the message on its first content, stamped with the announced model. */
+  private ensureAssistant(): string {
     if (!this.assistant) {
       this.assistant = `asst-${this.requestId}-${++this.index}`;
-      this.prose = '';
-      this.thinking = '';
-      this.thinkingOpen = false;
       this.emit({
         type: 'message.started',
         sessionId: this.sink.sessionId,
-        payload: { messageId: this.assistant, role: 'assistant', ...(model ? { model } : {}) },
+        payload: {
+          messageId: this.assistant,
+          role: 'assistant',
+          ...(this.model ? { model: this.model } : {}),
+        },
       });
     }
     return this.assistant;
   }
   private deltas(message: AgentMessage): void {
     if (message.role !== 'assistant') return;
-    const messageId = this.ensureAssistant(`${message.provider}/${message.model}`);
     const prose = text(message.content);
     const thinking = message.content
       .filter((block) => block.type === 'thinking')
       .map((block) => block.thinking)
       .join('');
-    // Pi native events carry cumulative snapshots. Equal or stale snapshots
-    // contribute nothing; final message_end flushes providers without deltas.
-    if (thinking.startsWith(this.thinking) && thinking.length > this.thinking.length) {
+    // Pi native events carry cumulative snapshots; `advance` says what part of
+    // one is actually new. Read BEFORE the message is minted, so a snapshot
+    // that adds nothing does not open a message that would stay empty.
+    const nextThinking = advance(this.thinking, thinking);
+    this.thinking = nextThinking.cursor;
+    if (nextThinking.text !== undefined) {
+      const messageId = this.ensureAssistant();
       if (!this.thinkingOpen) {
         this.emit({
           type: 'thinking.started',
@@ -140,15 +193,13 @@ export class RuntimeEventProjector {
       this.emit({
         type: 'thinking.delta',
         sessionId: this.sink.sessionId,
-        payload: {
-          messageId,
-          blockId: `${messageId}-thinking`,
-          text: thinking.slice(this.thinking.length),
-        },
+        payload: { messageId, blockId: `${messageId}-thinking`, text: nextThinking.text },
       });
-      this.thinking = thinking;
     }
-    if (prose.startsWith(this.prose) && prose.length > this.prose.length) {
+    const nextProse = advance(this.prose, prose);
+    this.prose = nextProse.cursor;
+    if (nextProse.text !== undefined) {
+      const messageId = this.ensureAssistant();
       if (this.thinkingOpen) {
         this.emit({
           type: 'thinking.completed',
@@ -160,20 +211,22 @@ export class RuntimeEventProjector {
       this.emit({
         type: 'message.delta',
         sessionId: this.sink.sessionId,
-        payload: { messageId, blockId: `${messageId}-text`, text: prose.slice(this.prose.length) },
+        payload: { messageId, blockId: `${messageId}-text`, text: nextProse.text },
       });
-      this.prose = prose;
     }
   }
   private closeAssistant(completed = true): void {
+    this.model = undefined;
     if (!this.assistant) return;
     const messageId = this.assistant;
-    if (this.thinkingOpen)
+    if (this.thinkingOpen) {
       this.emit({
         type: 'thinking.completed',
         sessionId: this.sink.sessionId,
         payload: { messageId, blockId: `${messageId}-thinking` },
       });
+      this.thinkingOpen = false;
+    }
     if (completed)
       this.emit({
         type: 'message.completed',
@@ -217,7 +270,7 @@ export class RuntimeEventProjector {
             });
           this.emit({ type: 'message.completed', sessionId, payload: { messageId } });
         } else if (event.message.role === 'assistant')
-          this.ensureAssistant(`${event.message.provider}/${event.message.model}`);
+          this.announceAssistant(`${event.message.provider}/${event.message.model}`);
         break;
       case 'message_update':
         this.deltas(event.message);
@@ -225,7 +278,14 @@ export class RuntimeEventProjector {
       case 'message_end':
         if (event.message.role === 'assistant') {
           this.deltas(event.message);
-          this.closeAssistant(['stop', 'length', 'toolUse'].includes(event.message.stopReason));
+          // A turn that ends in tool calls is not over. pi emits the tool rows
+          // AFTER this event, so closing here minted a second, model-less
+          // message to carry them and left this one — the message that asked
+          // for the tools, and the one a pure tool-call turn leaves empty —
+          // completed with nothing in it. `turn_end` closes what the rows hang
+          // on, once the round they belong to is actually finished.
+          if (event.message.stopReason !== 'toolUse')
+            this.closeAssistant(['stop', 'length'].includes(event.message.stopReason));
         } else if (event.message.role === 'custom' && event.message.display !== false) {
           this.emit({
             type: 'custom.message',
@@ -268,6 +328,13 @@ export class RuntimeEventProjector {
           payload: {
             messageId: this.toolMessages.get(event.toolCallId) ?? this.ensureAssistant(),
             toolCallId: event.toolCallId,
+            // The arguments as they stand now. A tool row is drawn from its
+            // input, and the renderer's reducer bails on the first line when
+            // this is absent — so every native `tool.updated` used to be a
+            // no-op there, and a tool that revises its arguments mid-run (or
+            // whose `tool.started` raced ahead of the final ones) left the
+            // card showing the older set for the life of the turn.
+            input: event.args,
             ...(line ? { status: line.slice(0, 120) } : {}),
           },
         });
@@ -318,6 +385,39 @@ export class RuntimeEventProjector {
         break;
       }
     }
+  }
+  /**
+   * The turn is waiting out a provider retry, not stalled.
+   *
+   * The renderer has carried this banner since T-33 — `session.retry` in the
+   * store, `deriveRetryBanner` above the turn head, a "network retry" note in
+   * the composer — and the native backend never produced it: the retry ladder
+   * wrote to the trace file and nothing else, so a 429 burst showed as up to
+   * ~43s of `status: 'running'` with no explanation. Status stays `'running'`
+   * on purpose (the turn IS alive); `retry` rides along as an optional field,
+   * the compatibility shape `SessionRetryInfo` established.
+   */
+  retry(info: SessionRetryInfo): void {
+    this.emit({
+      type: 'session.status',
+      sessionId: this.sink.sessionId,
+      payload: { status: 'running', retry: info },
+    });
+  }
+  /**
+   * The retried request started streaming: take the banner down.
+   *
+   * The store clears `retry` on the next `session.status` that carries none, so
+   * this plain one is the end of the retry the event above announced. Without
+   * it the banner would sit there promising a next attempt that already
+   * happened, until the turn ended or output resumed.
+   */
+  recovered(): void {
+    this.emit({
+      type: 'session.status',
+      sessionId: this.sink.sessionId,
+      payload: { status: 'running' },
+    });
   }
   compaction(summary: string): void {
     this.closeAssistant();
