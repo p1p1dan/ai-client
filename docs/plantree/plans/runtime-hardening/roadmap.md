@@ -87,6 +87,12 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 T025～T028 已全部落地，任务描述与验收见上方 Done 段对应行；逐波记录、提交与覆盖、与字面不同的做法、转移与待盯项见 [evidence/batch-c-2026-09-15.md](evidence/batch-c-2026-09-15.md)。
 
+### 批次 C 追加（决策 012，2026-09-15）
+
+| ID | 任务 | 节点 | 覆盖的发现 | 验收 |
+|---|---|---|---|---|
+| T036 | extensionUi 整链退役：删 `extensionUiBridge`、`extensionUiRouting`、渲染层 `ExtensionUiDialog` / `ExtensionUiSurfaces` / `extensionUiModel` / `extensionUiDisplayModel` 与两个 store 及其测试；摘除 WorkerManager / chat IPC / preload / shared 类型 / ChatWorkspace / sessionLifecycle / LeftNav / LeftDock / SessionActivityStatus 的触点；删 `createRuntimeApprovalBridge` 与 `ExtensionUiRequest`，bootstrap 的 `permissions.approve` 改必填；旧会话里残留的 `extensionUi.*` 事件回放时静默忽略；i18n 孤儿键与 `verify-question-layout.mjs` 探针同步 | P6-5 | cutover-06、[决策 012](decisions/012-retire-extension-ui-chain.md) | 三套 tsc 与相关用例绿；旧事件回放用例；批次收口全量一次 |
+
 ### 批次 D：审计覆盖补全（只读）
 
 | ID | 任务 | 范围 | 验收 |
