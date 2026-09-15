@@ -67,7 +67,22 @@ export interface PiModelConfigServiceOptions {
    * from the file pi actually reads. There is no path here that can forget.
    */
   userProviders?: () => readonly UserProvider[];
+  /**
+   * import-catalog-03 — whether this installation is on the managed route.
+   *
+   * Injected rather than read from `auth/credentialMode` directly: that module
+   * needs `electron`, and this service is constructed against a temp directory
+   * in tests. Defaults to the managed route, which is what every caller that
+   * does not state a mode has always behaved as.
+   *
+   * It exists so ONE function can decide what the managed half of the catalog
+   * is — see {@link PiModelConfigService.managedHalf}.
+   */
+  managedCredentialsEnabled?: () => boolean;
 }
+
+/** No managed providers at all. Not an error: plan D03 makes it a legal answer. */
+const EMPTY_CONFIG: PiManagedModelsConfig = { version: 1, providers: {} };
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8')) as unknown;
@@ -205,9 +220,11 @@ export class PiModelConfigService {
   private readonly log: (...args: unknown[]) => void;
   private readonly readBundledCatalog: BundledCatalogReader;
   private readonly userProviders: () => readonly UserProvider[];
+  private readonly managedCredentialsEnabled: () => boolean;
 
   constructor(options: PiModelConfigServiceOptions) {
     this.userProviders = options.userProviders ?? (() => []);
+    this.managedCredentialsEnabled = options.managedCredentialsEnabled ?? (() => true);
     this.agentDir = options.agentDir;
     this.fetchFn = options.fetchFn;
     this.now = options.now ?? (() => Date.now());
@@ -517,13 +534,44 @@ export class PiModelConfigService {
     inheritedApiKey: string;
     inheritedBaseUrl: string;
   }): void {
-    const cached = readCachedConfig(this.sourcePath) ?? { version: 1 as const, providers: {} };
     this.writeRuntimeConfig(
-      cached,
+      this.managedHalf(),
       input.inheritedApiKey,
       input.inheritedBaseUrl,
       input.userProviders
     );
+  }
+
+  /**
+   * import-catalog-03 — which catalog is the MANAGED half, for both assembly
+   * paths.
+   *
+   * It has to be one function. The two callers used to answer differently when
+   * there was no wire cache: the writer started from an empty catalog, the
+   * in-memory build from the shipped snapshot. That is a difference in RULE, not
+   * in timing, and it showed up as two concrete disagreements — a managed client
+   * whose first launch was offline had A3's snapshot written into `models.json`,
+   * and then the user's next service edit erased those providers from the file
+   * while the native worker still had them; and a local-route installation,
+   * which the on-disk side has always refused to lend the shipped baseline to,
+   * got it anyway through the in-memory side.
+   *
+   * The snapshot, not an empty catalog, is the right no-cache answer: A3 has
+   * already written it to `models.json` on a cold managed launch, so starting
+   * from empty would make a routine user edit delete the only catalog that
+   * client has. An empty catalog is only correct where there is no managed half
+   * at all, which is the local route.
+   *
+   * The wire cache is kept in BOTH modes. It records a catalog this client
+   * really fetched while it was managed, and dropping it when the mode flips
+   * would silently rewrite `models.json` — a bigger claim than "do not lend the
+   * baseline", and not one this fix makes.
+   */
+  private managedHalf(): PiManagedModelsConfig {
+    const cached = readCachedConfig(this.sourcePath);
+    if (cached) return cached;
+    if (!this.managedCredentialsEnabled()) return EMPTY_CONFIG;
+    return this.readBundledCatalog() ?? EMPTY_CONFIG;
   }
 
   /**
@@ -555,22 +603,33 @@ export class PiModelConfigService {
    * P5-5 — the same two documents, in memory, for a backend that does not need
    * them on disk.
    *
-   * Identical inputs and the identical builder, so "what native runs on" and
-   * "what legacy reads" can only ever differ by when they were assembled. The
-   * files stay because pi has no other way in; the native worker is handed this
-   * instead, and the plaintext keys never have to exist outside this process
-   * for it.
+   * The same builder AND the same input selection as the on-disk write — both
+   * take the managed half from {@link PiModelConfigService.managedHalf} — so
+   * "what native runs on" and "what legacy reads" can only differ by when they
+   * were assembled. Before import-catalog-03 that claim was written here but not
+   * implemented: the two sides picked different inputs whenever the wire cache
+   * was missing. The files stay because pi has no other way in; the native
+   * worker is handed this instead, and the plaintext keys never have to exist
+   * outside this process for it.
+   *
+   * `userProviders` may be supplied by the caller. The Main-side wiring reads
+   * the vault itself (it has to distinguish "no services" from "could not be
+   * read" — import-catalog-02) and passes the group it already has, rather than
+   * making this method read the same vault a second time.
    */
-  buildNativeModelCatalog(input: { inheritedApiKey: string; inheritedBaseUrl: string }): {
+  buildNativeModelCatalog(input: {
+    inheritedApiKey: string;
+    inheritedBaseUrl: string;
+    userProviders?: readonly UserProvider[];
+  }): {
     models: Record<string, unknown>;
     auth: Record<string, unknown>;
   } {
-    const cached = readCachedConfig(this.sourcePath) ?? this.readBundledCatalog();
     return buildRuntimeConfig(
-      cached ?? { version: 1 as const, providers: {} },
+      this.managedHalf(),
       input.inheritedApiKey,
       input.inheritedBaseUrl,
-      this.userProviders()
+      input.userProviders ?? this.userProviders()
     );
   }
 

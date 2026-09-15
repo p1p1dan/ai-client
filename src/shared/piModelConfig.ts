@@ -133,6 +133,21 @@ export interface PiManagedModelDefinition {
   /** Ordered labels from the management site; the first is the primary group. */
   tags?: string[];
   api?: PiModelApi;
+  /**
+   * import-catalog-06 — ARD D15's per-model escape hatch, as a field.
+   *
+   * The runtime has always honoured it (`model-adapter/catalog.ts` keeps it and
+   * `binding.ts` lets the row's own address beat the provider's), but the Main
+   * side dropped it on the floor: `validateModel` builds its result field by
+   * field, so an address an administrator wrote on one model never reached
+   * `models.json` and never reached the in-memory catalog either. Declared here
+   * so the whitelist has something to carry it in.
+   *
+   * Used VERBATIM, never suffixed: D15 states that an explicit override must not
+   * be rewritten by the wire-protocol derivation — that derivation is the thing
+   * it exists to escape from.
+   */
+  baseUrl?: string;
   reasoning?: boolean;
   input?: Array<'text' | 'image'>;
   contextWindow?: number;

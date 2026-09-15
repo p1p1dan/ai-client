@@ -22,7 +22,8 @@ import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { getOnboardingServiceUrl } from '../onboarding/serviceUrl';
 import { readSharedSettings, writeSharedSettings } from '../SharedSessionState';
-import { readUserProvidersForRuntime } from '../userProviders';
+import { readUserProviderGroupForRuntime, readUserProvidersForRuntime } from '../userProviders';
+import { type NativeModelCatalog, resolveNativeModelCatalogWith } from './nativeCatalog';
 import { resolveOptInFeatures } from './optInFeatures';
 import { PiModelConfigService } from './PiModelConfigService';
 
@@ -98,6 +99,11 @@ function serviceFor(agentDir: string): PiModelConfigService {
     // H/17: supplied to EVERY service instance, so a managed sync rebuilding
     // `models.json` from the server response cannot drop the user's services.
     userProviders: readUserProvidersForRuntime,
+    // import-catalog-03: supplied to EVERY instance for the same reason. The
+    // "do not lend the shipped baseline to a local installation" rule belongs
+    // to the catalog, so it has to be answerable wherever the catalog is built
+    // — not only in the one reader that used to be handed a `'local'` override.
+    managedCredentialsEnabled: resolveManagedCredentialsEnabled,
   });
 }
 
@@ -118,9 +124,11 @@ export function getActivePiAgentDir(): string {
 /**
  * Rewrite the two files pi reads so they match the stored user services.
  *
- * Called after any change to the user group. In managed mode the cached wire
- * catalog supplies the other half; on the local route there is no other half
- * and the file holds user services alone.
+ * Called after any change to the user group. The other half of the file comes
+ * from `managedHalf()` — the same function the in-memory hand-over uses, so a
+ * user edit cannot make the file disagree with what a native worker is running
+ * on (import-catalog-03). On the local route with nothing ever fetched there is
+ * no other half, and the file holds user services alone.
  */
 export function writeUserProviderRuntimeConfig(): void {
   const credential = managedCredential();
@@ -138,28 +146,18 @@ export function writeUserProviderRuntimeConfig(): void {
 /**
  * P5-5 — the model catalog to hand a native worker, assembled in memory.
  *
- * Returns `undefined` when there is nothing to hand over, and the worker then
- * falls back to reading the agent directory exactly as before. That is not a
- * theoretical branch: a machine whose keyring is locked cannot read the user
- * group, and a catalog missing half its providers would be worse than the file
- * the sync already left on disk.
+ * The rule lives in `nativeCatalog.ts`; this is only the wiring that reads the
+ * four real inputs it needs. See that module for why the split exists and what
+ * `undefined` means.
  */
-export function resolveNativeModelCatalog():
-  | { models: Record<string, unknown>; auth: Record<string, unknown> }
-  | undefined {
-  try {
-    const credential = managedCredential();
-    const catalog = serviceFor(getAppPiAgentDir()).buildNativeModelCatalog({
-      inheritedApiKey: credential?.apiKey ?? '',
-      inheritedBaseUrl: credential?.baseUrl ?? '',
-    });
-    return Object.keys(catalog.models.providers as Record<string, unknown>).length > 0
-      ? catalog
-      : undefined;
-  } catch (error) {
-    console.warn('[pi-models] failed to assemble the native model catalog', error);
-    return undefined;
-  }
+export function resolveNativeModelCatalog(): NativeModelCatalog | undefined {
+  return resolveNativeModelCatalogWith({
+    managedCredentialsEnabled: resolveManagedCredentialsEnabled,
+    managedCredential,
+    readUserProviderGroup: readUserProviderGroupForRuntime,
+    buildCatalog: (input) => serviceFor(getAppPiAgentDir()).buildNativeModelCatalog(input),
+    warn: (...args) => console.warn(...args),
+  });
 }
 
 /**

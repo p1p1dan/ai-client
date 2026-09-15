@@ -115,6 +115,17 @@ function validateModel(value: unknown, field: string): PiManagedModelDefinition 
     tags = [...new Set(normalized)];
   }
   const api = value.api === undefined ? undefined : validateApi(value.api, `${field}.api`);
+  // import-catalog-06 — the per-model address D15 promises. Checked by the same
+  // validator the provider-level field uses, because a model that states a
+  // malformed address must fail here rather than at the first turn: this value
+  // is used verbatim, so nothing downstream gets another chance to notice.
+  let baseUrl: string | undefined;
+  if (value.baseUrl !== undefined) {
+    if (typeof value.baseUrl !== 'string' || !value.baseUrl.trim()) {
+      throw new Error(`${field}.baseUrl must be a non-empty string`);
+    }
+    baseUrl = validateAbsoluteUrl(value.baseUrl.trim(), `${field}.baseUrl`);
+  }
   const reasoning = value.reasoning === undefined ? undefined : Boolean(value.reasoning);
 
   let input: Array<'text' | 'image'> | undefined;
@@ -149,6 +160,7 @@ function validateModel(value: unknown, field: string): PiManagedModelDefinition 
     ...(name ? { name } : {}),
     ...(tags ? { tags } : {}),
     ...(api ? { api } : {}),
+    ...(baseUrl ? { baseUrl } : {}),
     ...(value.reasoning !== undefined ? { reasoning } : {}),
     ...(input ? { input } : {}),
     ...(value.contextWindow !== undefined
@@ -335,6 +347,12 @@ export function toPiModelsJson(
     // ARD D15: a provider that states its own address keeps it verbatim; one
     // that inherits gets the suffix its wire protocol needs, because the single
     // inherited URL cannot be right for both model families at once.
+    //
+    // import-catalog-06: a model that states its OWN address needs nothing here
+    // — the validated models travel in `rest` and are copied through untouched,
+    // which is exactly what D15 asks for ("an explicit override must not be
+    // rewritten by the derivation"). The derivation below is provider-level and
+    // stays that way; the runtime picks the model's address over it.
     const resolvedBaseUrl =
       credentials?.baseUrl === 'managed' && baseUrl
         ? baseUrl

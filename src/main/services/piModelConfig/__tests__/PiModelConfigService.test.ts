@@ -317,6 +317,43 @@ describe('PiModelConfigService', () => {
     expect(models.providers.pinned.baseUrl).toBe('https://exception.example/v1');
   });
 
+  it('carries a single model’s own address all the way to models.json (D15 / MC02)', async () => {
+    // import-catalog-06: the provider still gets the derived suffix, and the one
+    // model that states an exception keeps it verbatim beside it. The runtime
+    // reads `models.json` this way round too (`binding.ts`: the row's own
+    // address wins over the provider's).
+    const config = {
+      version: 1,
+      providers: {
+        claude: {
+          api: 'anthropic-messages',
+          credentials: { baseUrl: 'onboarding', apiKey: 'onboarding' },
+          models: [
+            { id: 'claude-sonnet-5' },
+            { id: 'claude-opus-5', baseUrl: 'https://exception.example/anthropic' },
+          ],
+        },
+      },
+    };
+
+    await service(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(config),
+    })).sync({
+      endpointUrl: 'https://onboard.example/api/v1/models-config',
+      apiKey: 'login-key',
+      inheritedBaseUrl: 'https://cch.example/v1',
+    });
+
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    expect(models.providers.claude.baseUrl).toBe('https://cch.example');
+    expect(models.providers.claude.models).toEqual([
+      { id: 'claude-sonnet-5' },
+      { id: 'claude-opus-5', baseUrl: 'https://exception.example/anthropic' },
+    ]);
+  });
+
   it('rewrites an administrator key from cache after the login key rotates', async () => {
     const config = {
       version: 1,
@@ -611,6 +648,57 @@ describe('validatePiManagedModelsConfig', () => {
       },
     };
     expect(() => validatePiManagedModelsConfig(inheritedWithValue)).toThrow(/must be absent/);
+  });
+
+  /**
+   * import-catalog-06 — D15 promises an override on every MODEL as well as on
+   * every provider, and the runtime has always honoured it. The validator built
+   * its result field by field, so the field an administrator wrote was dropped
+   * without a word on its way to `models.json`.
+   */
+  it('keeps an address a single model states for itself (D15 / MC02)', () => {
+    const config = validatePiManagedModelsConfig({
+      version: 1,
+      providers: {
+        dan: {
+          api: 'openai-responses',
+          credentials: { baseUrl: 'onboarding', apiKey: 'onboarding' },
+          models: [
+            { id: 'normal' },
+            { id: 'exception', baseUrl: 'https://other-gateway.example/v1' },
+          ],
+        },
+      },
+    });
+    expect(config.providers.dan.models[0].baseUrl).toBeUndefined();
+    expect(config.providers.dan.models[1].baseUrl).toBe('https://other-gateway.example/v1');
+  });
+
+  it('rejects a model address that is not an absolute http(s) URL', () => {
+    // Loudly, because this value is used verbatim: nothing downstream derives
+    // anything from it, so nothing downstream gets a chance to notice.
+    const relative = {
+      version: 1,
+      providers: {
+        dan: {
+          api: 'openai-responses',
+          credentials: { baseUrl: 'onboarding', apiKey: 'onboarding' },
+          models: [{ id: 'exception', baseUrl: '/v1' }],
+        },
+      },
+    };
+    expect(() => validatePiManagedModelsConfig(relative)).toThrow(/must be an absolute URL/);
+    const blank = {
+      version: 1,
+      providers: {
+        dan: {
+          api: 'openai-responses',
+          credentials: { baseUrl: 'onboarding', apiKey: 'onboarding' },
+          models: [{ id: 'exception', baseUrl: '   ' }],
+        },
+      },
+    };
+    expect(() => validatePiManagedModelsConfig(blank)).toThrow(/must be a non-empty string/);
   });
 
   // D03: rejecting these as malformed is what used to push the client onto the
@@ -1106,6 +1194,7 @@ describe('PiModelConfigService — native model catalog (P5-5)', () => {
     userProviders?: (typeof userProvider)[];
     bundled?: PiManagedModelsConfig | null;
     fetchFn?: PiModelConfigFetch;
+    managedCredentialsEnabled?: boolean;
   }): PiModelConfigService {
     return new PiModelConfigService({
       agentDir: dir,
@@ -1113,8 +1202,12 @@ describe('PiModelConfigService — native model catalog (P5-5)', () => {
       now: () => 1234,
       readBundledCatalog: () => options.bundled ?? null,
       userProviders: () => options.userProviders ?? [],
+      managedCredentialsEnabled: () => options.managedCredentialsEnabled ?? true,
     });
   }
+
+  const shippedBaseline = () =>
+    validatePiManagedModelsConfig(BUNDLED_SNAPSHOT, { credentialsAllowed: false });
 
   it('assembles byte-identical documents to the ones written for legacy', async () => {
     const built = service({
@@ -1173,5 +1266,71 @@ describe('PiModelConfigService — native model catalog (P5-5)', () => {
     const providers = catalog.models.providers as Record<string, { baseUrl: string }>;
     // D15 applies here too: the snapshot states no address of its own.
     expect(providers.shipped.baseUrl).toBe('https://cch.example');
+  });
+
+  /**
+   * import-catalog-03 — the "same builder" claim used to be tested only on the
+   * one input where the two paths happened to agree (a client that had just
+   * synced). With no wire cache they picked DIFFERENT managed halves: the
+   * writer an empty catalog, the in-memory build the shipped snapshot.
+   */
+  it('assembles the same documents as the file when there is no wire cache', () => {
+    const built = service({ userProviders: [userProvider], bundled: shippedBaseline() });
+    built.writeUserProviderConfig({
+      userProviders: [userProvider],
+      inheritedApiKey: 'login-key',
+      inheritedBaseUrl: 'https://cch.example/v1',
+    });
+
+    const catalog = built.buildNativeModelCatalog({
+      inheritedApiKey: 'login-key',
+      inheritedBaseUrl: 'https://cch.example/v1',
+    });
+    expect(catalog.models).toEqual(JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8')));
+    expect(catalog.auth).toEqual(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8')));
+    // Both halves are really there — an equality of two empty catalogs would
+    // pass this test while proving nothing.
+    expect(Object.keys(catalog.models.providers as object).sort()).toEqual([
+      'baseline',
+      'my-mistral',
+    ]);
+  });
+
+  it('a user service edit does not erase the snapshot the offline first launch wrote', async () => {
+    // The concrete report: managed mode, first launch offline, A3 writes the
+    // shipped baseline into `models.json`; the user then adds a service and the
+    // rewrite started from an empty catalog, deleting every shipped provider
+    // from the file the embedded pi CLI reads — while the native worker still
+    // had them in memory.
+    const offline = service({ userProviders: [userProvider], bundled: shippedBaseline() });
+    const synced = await offline.sync({
+      endpointUrl: 'https://onboard.example/api/v1/models-config',
+      apiKey: 'login-key',
+      inheritedBaseUrl: 'https://cch.example/v1',
+    });
+    expect(synced.source).toBe('bundled');
+    expect(existsSync(join(dir, 'managed-models-source.json'))).toBe(false);
+
+    offline.writeUserProviderConfig({
+      userProviders: [userProvider],
+      inheritedApiKey: 'login-key',
+      inheritedBaseUrl: 'https://cch.example/v1',
+    });
+
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    expect(Object.keys(models.providers).sort()).toEqual(['baseline', 'my-mistral']);
+  });
+
+  it('never lends the shipped baseline to a local installation, in memory either', () => {
+    // `readCatalog('local')` has always refused this. The in-memory path had no
+    // such door, so a user who turned managed credentials off still got the
+    // company catalog handed to their worker — and, because managed providers
+    // are written first, its first provider was the default model.
+    const catalog = service({
+      userProviders: [userProvider],
+      bundled: shippedBaseline(),
+      managedCredentialsEnabled: false,
+    }).buildNativeModelCatalog({ inheritedApiKey: '', inheritedBaseUrl: '' });
+    expect(Object.keys(catalog.models.providers as object)).toEqual(['my-mistral']);
   });
 });

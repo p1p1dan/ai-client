@@ -46,8 +46,32 @@ function vaultStore(): UserProviderStore {
  * starting from a wrongly-empty list would persist the deletion.
  */
 export function readUserProvidersForRuntime(): readonly UserProvider[] {
+  return readUserProviderGroupForRuntime().providers;
+}
+
+/**
+ * The same group, with the vault's verdict kept instead of flattened.
+ *
+ * import-catalog-02 — "the user has no services" and "the vault could not be
+ * opened" are the same empty list to the writer above, and that is fine there:
+ * the next successful read rewrites the file. It is NOT fine for the catalog
+ * handed to a native worker, which is assembled once and then lives for the
+ * whole session — a locked keyring would hand that worker a catalog with the
+ * user's whole service group missing, permanently, while the file the last
+ * successful write left on disk still has them.
+ *
+ * `absent` counts as readable: no vault file means the user has genuinely added
+ * nothing, which is an answer rather than a failure to get one.
+ */
+export function readUserProviderGroupForRuntime(): {
+  readable: boolean;
+  providers: readonly UserProvider[];
+} {
   const read = getCredentialVault().readUserProviders();
-  return read.status === 'ok' ? read.providers.filter((provider) => provider.enabled) : [];
+  if (read.status === 'ok') {
+    return { readable: true, providers: read.providers.filter((provider) => provider.enabled) };
+  }
+  return { readable: read.status === 'absent', providers: [] };
 }
 
 let cached: UserProviderService | null = null;
