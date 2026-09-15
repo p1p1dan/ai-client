@@ -79,18 +79,18 @@ Runtime 任务树的功能面确实做齐了，但「完成质量」明显低于
 |---|---|---|---|
 | P0-1 | ✅ | 完成 | 无 |
 | P0-2 | ✅ | 完成（小瑕疵） | ExecPlugin 注册未 await fiber |
-| P0-3 | ✅ | 完成（小瑕疵） | DEFERRED_SERVICES 门禁失灵。core-host-14 订阅者隔离已修（T022，`84ac35e0` + `117d97a9`） |
+| P0-3 | ✅ | 完成（小瑕疵） | DEFERRED_SERVICES 门禁失灵。core-host-14 订阅者隔离已修（T022，`84ac35e0` + `117d97a9`）；core-host-01（表仍把已实现的 runtimeSubagents 列为未实现）已修（T028，`a11ccbe0`：表清空、门禁改读 runtime 源码正反双向校验） |
 | P0-4 | ✅ | 有缺口 | 请求头不发出（high）；model 行 api 覆盖被忽略。已修（T007，`780dd9c1`） |
 | P0-5 | ✅ | 完成 | 子代理审批过滤归 P3-4 |
-| P0-6 | ✅ | 完成（小瑕疵） | config_version 冻结；失败分支错误正文进 trace。后者已修（T011，`b714a925`）；前者归 T028 |
-| P1-0 | ✅ | 完成（小瑕疵） | 长驻子进程路径成熟度低；dispose 错误屏蔽。已修（T022，`84ac35e0` + `117d97a9`）；core-host-05 stderr 预算已修（T013，`19f9e888`） |
+| P0-6 | ✅ | 完成（小瑕疵） | config_version 冻结；失败分支错误正文进 trace。后者已修（T011，`b714a925`）；前者（core-host-02）已修（T028，`a11ccbe0`：RUNTIME_CONFIG_VERSION 从 runtime_p3_complete_v1 解冻到 runtime_p6_hardening_v1 并写分代规则） |
+| P1-0 | ✅ | 完成（小瑕疵） | 长驻子进程路径成熟度低；dispose 错误屏蔽。已修（T022，`84ac35e0` + `117d97a9`）；core-host-05 stderr 预算已修（T013，`19f9e888`）；core-host-17（evidence/p1/README.md 的 Windows 说法与任务树矛盾）已修（T027，`1b7c55fd`：补注 2026-09-09 现场五态清理与两载体探针证据） |
 | P1-1 | ✅ | 完成 | 无 |
 | P1-2 | ✅ | 有缺口 | 截断尾巴、单行死循环、空结果、BOM、TSD O(n²)。前四项已修（T012，`439ab922`）；TSD O(n²) 已修（T013，`19f9e888`） |
 | P1-3 | ✅ | 有缺口 | 通配符父目录、退出码被切、details 膨胀。已修（通配符 T010 `1262e3b0`；其余 T012 `439ab922`） |
 | P1-4 | ✅ | 有缺口 | 悬空 symlink（high）、include 语义、正则无取消。symlink 已修（T010，`1262e3b0`）；其余已修（T012，`439ab922`） |
-| P1-5 | 🟡 | 有缺口（不宜升 ✅） | 6 条可静态复现的绕过。已修（T001，`c4e2b2e4`；permissions-09 由 T002 `10581139`） |
-| P1-6 | 🟢 | 完成（小瑕疵） | timed_out 永不产出（已修：T017，`84ac35e0` + `83a9d0f8`）；write 覆盖显示为新增。批评者 i18n 缺口与 cutover-17 已修（T023，`a28b3f93`：权限卡文案结构化、守卫扩到 runtime / agent-host） |
-| P1-8 | ✅ | 完成（证据陈旧） | 证据落后 HEAD 94/147 个提交 |
+| P1-5 | 🟡 | 有缺口（不宜升 ✅） | 6 条可静态复现的绕过。已修（T001，`c4e2b2e4`；permissions-09 由 T002 `10581139`）；permissions-11（sessionTierAuthorizer 死代码）已修（T025，`45a7a347`：模块删除） |
+| P1-6 | 🟢 | 完成（小瑕疵） | timed_out 永不产出（已修：T017，`84ac35e0` + `83a9d0f8`）；write 覆盖显示为新增。批评者 i18n 缺口与 cutover-17 已修（T023，`a28b3f93`：权限卡文案结构化、守卫扩到 runtime / agent-host）；permissions-15（ui.select 审批桥超时硬编码）已修（T025，`45a7a347`：保留 approve 臂但超时改可配置） |
+| P1-8 | ✅ | 完成（证据陈旧，已复核） | core-host-18：证据落后 HEAD 150 个提交（其中 21 个动过 runtime/host、plugins/tools 或 bootstrap.ts），T027 复核实况（`1b7c55fd`，比审计原文 94/147 个更严重）；RUNTIME_CONFIG_VERSION 已在 T028（`a11ccbe0`）解冻为 runtime_p6_hardening_v1，新旧证据今后可按版本戳分代 |
 | P1-9 | ✅ | 完成 | 无 |
 | P2-1 | ✅ | 完成（小瑕疵） | tool-guidance 大小写。已修（T014，`2c0eb30c`） |
 | P2-2 | ✅ | 有缺口 | `run.targetPath` 无生产者（部分取舍）；目录形态 AGENTS.md 让 run 失败。已修（T014，`2c0eb30c`：targetPath 删除；分级加载 T035，`5b305fdb`） |
@@ -106,8 +106,8 @@ Runtime 任务树的功能面确实做齐了，但「完成质量」明显低于
 | P3-6 | ✅ | 完成（小瑕疵） | 关键边界无反例测试 |
 | P4-0 | ✅ | 完成 | 无 |
 | P4-1 | ✅ | 有缺口 | discardFork owned 恒失败；dispose 抛错不自退。已修（T016，`a9ea7230`） |
-| P4-2 | ✅ | 完成 | 残留只有注释与文档 |
-| P4-3 | ✅ | 完成（小瑕疵） | reload/compact 超时预算不对称；死分支。已修（T016，`a9ea7230`） |
+| P4-2 | ✅ | 完成 | 残留只有注释与文档。cutover-08（runtime README 仍写已删除的 AICLIENT_RUNTIME_BACKEND 开关）与 core-host-16（p4-6 现场清单同一开关的文档半边）已修（T027，`1b7c55fd`）；core-host-15（flags.ts 孤立 JSDoc）与 core-host-16 涉及的探针脚本死分支（代码半边）已修（T028，`a11ccbe0`） |
+| P4-3 | ✅ | 完成（小瑕疵） | reload/compact 超时预算不对称；死分支。已修（T016，`a9ea7230`）；rpc-projector-09（9 处 `*_UNAVAILABLE` 死分支）与 rpc-projector-15（worker 侧 seq 重编号说明，partial-waiver）已修（T025，`45a7a347`） |
 | P4-4 | ✅ | 有缺口 | effort off、compact 分叉、缺 key 重试 43 秒。缺 key 已修（T007，`780dd9c1`）；其余已修（T016，`a9ea7230`） |
 | P4-5 | ✅ | 有缺口 | 录制只覆盖 11 种事件；两处真实回归；工具动词表漂移。录制已扩到五类、session.stderr 接上生产者（T017，`84ac35e0` + `83a9d0f8`）；工具动词表漂移归 T020 |
 | P4-6 | 🟡 | 未评估 | 现场节点 |
@@ -118,16 +118,16 @@ Runtime 任务树的功能面确实做齐了，但「完成质量」明显低于
 | P5-2-3 | ✅ | 完成（小瑕疵） | scopeDelegateTools 无端到端用例；guidance 分块与 regex 已修（T020，`60b250f3`） |
 | P5-2-4 | ✅ | 有缺口 | 报告成用户消息（high）、子花费无消费者、事件无条数上限。第一项已修（T005，`4e80f9ff`）；后两项已修（T020，`60b250f3`；转录限额同批） |
 | P5-2-5 | ✅ | 未完成 | 迁移预览无入口，SA19 签收不实。入口已接（T020，`60b250f3`：IPC + 设置页），真机点验待现场 |
-| P5-2-6 | ✅ | 完成（小瑕疵） | glob 行显示错参数。已修并扩到 browser_preview / Task* / mcp__*（T020，`60b250f3`） |
-| P5-2-7 | 🟡 | 有缺口 | SA02/SA15/SA19 签收与代码不符；SA09 假时钟用例不存在。SA09/SA12/SA15/SA19 已标注实况（T027，`95e63960`） |
+| P5-2-6 | ✅ | 完成（小瑕疵） | glob 行显示错参数。已修并扩到 browser_preview / Task* / mcp__*（T020，`60b250f3`）；subagent-data-13（subagentProjection.ts 孤儿模块）经 T025（`45a7a347`）复核确认已随 T020 删除，仓内零残留 |
+| P5-2-7 | 🟡 | 有缺口 | SA02/SA15/SA19 签收与代码不符；SA09 假时钟用例不存在。SA09/SA12/SA15/SA19 已标注实况（T027，`95e63960`）；subagent-core-16 在批次 C 进一步核实并改写：SA09 改为准确描述（idle/duration 计时器是设计性移除，不是未测的 bug，仍无假时钟用例）、SA12 改为「✅ 已修（cross-01，T006）」（T027，`1b7c55fd`） |
 | P5-3 | ✅ | 有缺口 | 十条 MCP 缺陷。已修（T018，`942ee464`；mcp 面权限由 T002）。resources / prompts / sampling 仍在既有豁免内 |
 | P5-4 | 🟡 | 有缺口 | 清单命名（high）、display-only 恒真、写锁旁车。清单命名与写锁旁车已修（T008，`23ac5df5` / `36389d1d`）；display-only 归 T021 |
 | P5-5 | 🟡 | 有缺口 | 钥匙串回落、两条路规则、utility 仍读明文。utility 已修（T016，`a9ea7230`）；前两项已修（T021，`d3949e84`） |
-| P6-1 | ✅ | 完成 | 无 |
-| P6-2 | ✅ | 完成（小瑕疵） | 守卫只认整包说明符 |
+| P6-1 | ✅ | 完成 | 无。cutover-13（workerEntryWiring 用例名与实际不符）已修（T028，`a11ccbe0`：改名并补两条真实子进程用例） |
+| P6-2 | ✅ | 完成（小瑕疵） | 守卫只认整包说明符。cutover-11 已修（T028，`a11ccbe0`：改认子路径 import 并加阳性对照 fixture）；cutover-18（README P5-5 行与 p6-cutover.md 结论矛盾）已修（T027，`1b7c55fd`：统一为「不删」）；cutover-16（打包仍强制携带死插件，uncertain）已随 T009 / T025 拆解处理（`89c73e5b` / `45a7a347`） |
 | P6-3 | 🟡 | 第 4 条存疑 | GUI 无回归未覆盖退役改变的界面；门禁脚本不可运行（已修，T009） |
 | P6-4 | ✅ | 完成 | 无 |
-| P6-5 | ✅ | 有缺口 | 只删了跑 legacy 的代码，没清失去消费者的一层。打包门禁已修（T009，`89c73e5b`）；清扫归 T025 |
+| P6-5 | ✅ | 完成（小瑕疵） | 只删了跑 legacy 的代码，没清失去消费者的一层。打包门禁已修（T009，`89c73e5b`）；死代码清扫已修（T025，`45a7a347`：cutover-05/07/20 删除，cutover-06 改注释保留、整链退役见 [Q012](../../../runtime-hardening/open-questions.md)；cross-07 leafCheckpoint 已删）；用户可见残留已修（T026，`2cfed556`：cutover-02/03/10）；piSessionPreflight（cutover-12）保留理由由 T027 改写（`1b7c55fd`），主体由 T028 就地收窄为 44 行（`a11ccbe0`） |
 | H/20 | 🟢 | 有缺口 | seq 陈旧（high）、压缩锚点、CLI 补换行（待定）。已修（T003，`0332214c`）；CLI 补换行判可达并修尾片形态；中段形态按决策 006 已修（T034，`1f1f40d0`） |
 
 ## 六、low 级与质量问题（126 条，按主题）
@@ -154,7 +154,7 @@ Runtime 任务树的功能面确实做齐了，但「完成质量」明显低于
 
 1. 先做两件机械回写：P5-2-5 不宜按 ✅ 计；signoff 的 SA09/SA12/SA15/SA19 签收文字与代码不符。
 2. 补审 Main 侧与渲染层：agent-host 一半模块与 13 个测试、SessionIndexService、导入上游六模块、终端三模块、chat 词汇表。
-3. 补审未认领节点：P4-6、P2-5/P2-6（`compare.mjs` 仍要求 legacy 归档而采集脚本已删，加上 config_version 冻结，「可对比」这条规范在缓存命中率维度已断）、H/17、H/19、H/21、F 缺陷。
+3. 补审未认领节点：P4-6、P2-5/P2-6（`compare.mjs` 仍要求 legacy 归档而采集脚本已删，加上 config_version 冻结，「可对比」这条规范在缓存命中率维度已断——已修，T028，`a11ccbe0`：`compare.mjs` 改收 `--baseline`〔任意后端参考〕或 `--legacy`，不再强制要求 legacy 归档；RUNTIME_CONFIG_VERSION 解冻至 runtime_p6_hardening_v1）、H/17、H/19、H/21、F 缺陷（P4-6、H/17、H/19、H/21、F 缺陷仍待补审，归批次 D）。
 4. 把静态推断的 Windows / 加密机 / utility 载体项收敛成上机检查单。
 5. 容量对账：bash details、子代理转录、write preview、MCP 响应四条都往 32 MiB 会话预算与无轮转的 runs.jsonl 写。
 6. P6-5 清扫的另一半：按「哪些代码因为 legacy 走了而失去消费者」重新画线。
