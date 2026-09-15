@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import { verifyArtifact } from './agent-host-build-lib.mjs';
 import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
+import { evaluateWorkerSmokeReport } from './packaged-worker-report.mjs';
 import { evaluateWorkerArtifactSize, formatBytes, topDirectories } from './packaging-budget.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -122,17 +123,13 @@ function runWorkerSmoke(workerPath, failures) {
     failures.push(`packaged worker smoke returned invalid JSON: ${result.stdout.slice(-1000)}`);
     return;
   }
-  if (
-    report.ok !== true ||
-    // Sourced from the run trace the native runtime itself wrote, not an echo
-    // of an argument this script passed in — see cutover-01.
-    report.stamp?.backend !== 'native' ||
-    !Number.isSafeInteger(report.workerPid) ||
-    report.transport !== (process.platform === 'win32' ? 'node-ipc' : 'electron-message-port') ||
-    !report.tools?.includes('read') ||
-    !report.tools?.includes('bash')
-  ) {
-    failures.push(`packaged worker smoke returned an invalid result: ${JSON.stringify(report)}`);
+  // The verdict itself lives in `packaged-worker-report.mjs` so a unit test can
+  // feed it the reports a broken package would print (T009 review, T028).
+  const verdict = evaluateWorkerSmokeReport(report, { platform: process.platform });
+  if (verdict.length > 0) {
+    failures.push(
+      `packaged worker smoke returned an invalid result — ${verdict.join('; ')}: ${JSON.stringify(report)}`
+    );
   }
   console.log(`[verify-packaged-app] native smoke: ${JSON.stringify(report)}`);
   return report;

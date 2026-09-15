@@ -17,9 +17,9 @@ ARD：[`docs/plans/2026-09-08-runtime-evolution-ard.md`](../../docs/plans/2026-0
 
 | 路径 | 内容 |
 |---|---|
-| `contracts.ts` | P0-3 · 所有 service 契约 + `declare module 'cordis'`；P1–P5 未实现的服务在 `DEFERRED_SERVICES` 里带原因声明 |
+| `contracts.ts` | P0-3 · 所有 service 契约 + `declare module 'cordis'`；`DEFERRED_SERVICES` 声明「契约已定、实现未落」的服务，T028 起为空表（P1–P5 全部落地），门禁见 `__tests__/contracts.test.ts` |
 | `bootstrap.ts` | P0-2 · Cordis Context 初始化、插件注册、**服务存活断言**、销毁 |
-| `flags.ts` | 特性开关（目录与 trace 目录；D8 后端开关已随 P6-5 删除，`backend` 现为常量 `'native'`） |
+| `flags.ts` | 环境变量旋钮（目录与 trace 目录）；D8 的后端开关已随 P6-5 删除，`backend` 现为常量 `'native'`，设该变量无任何效果 |
 | `trace.ts` | 结构化 run trace（工程规范 §2 / §15） |
 | `host/` | P1-0 · `runtimeHostIo` / `runtimeExec` 两个出口，TSD helper 与保留进程树根身份的 Node runner |
 | `plugins/model-adapter/` | P0-4 · 读 `models.json` + `auth.json`，绑定 pi-ai provider |
@@ -118,6 +118,31 @@ P5-5 起，**应用内**的模型目录不再从这个目录读：Main 在内存
 子代理定义与会话文件，只有模型目录这一项搬走了。
 
 | `AICLIENT_RUNTIME_TRACE_DIR` | trace 落盘目录；不设则只留在内存 |
+
+## trace 的分代戳 `config_version`
+
+`RUNTIME_CONFIG_VERSION`（`bootstrap.ts`）会写进每条 trace 的 `version_stamp.config_version`，
+用途只有一个：让两份归档能按**模型看到了什么、这次 run 被允许做什么**区分开，而不是按时间猜。
+
+**什么变化必须升版**（任一即可）：系统提示的段落 / 模板 / 项目指令装配；工具集增删改名或
+schema 变化；压缩阈值、保留策略或跨边界携带的内容；权限语义（模式 / 档位 / 自动放行与拒绝）；
+模型绑定与目录解析（含 effort / thinking 默认值）；子代理契约（预算、工具白名单、报告形状）。
+**不必升版**：无行为变化的重构、只动渲染层、只动测试、依赖升级（`dep:*` 已单列在同一个戳里）。
+
+**谁来升**：落地该变化的那一批，在同一个提交里升，并把旧值追加到下面的清单。
+命名沿用 `runtime_<阶段>_<主题>_v<n>`。
+
+| 取值 | 覆盖范围 |
+|---|---|
+| `runtime_p0_v1` | P0 首个 Cordis 图 |
+| `runtime_p1_policy_v3` | P1 工具与权限策略 |
+| `runtime_p2_prompt_v1` | P2 提示装配与压缩 |
+| `runtime_p3_complete_v1` | P3 会话与事件。**此后被冻结**，P5-1～P5-5 与 P6 的行为变化全部沿用它——这正是审计 core-host-02 的缺陷 |
+| `runtime_p6_hardening_v1` | P6 单引擎 + 加固批次 A/B（技能与提示模板、子代理与 `Task*`、MCP 工具、模型目录换源、bash 静态分析、权限 surface 映射、压缩排除内部消息、分级指令），T028 解冻 |
+
+基线归档（`scripts/runtime-baseline/`）自 T028 起把这个值记进 `manifest.configVersion`：
+`compare.mjs` 在两份归档分代不同时**直接判不可比**（不出差值），T028 之前采的归档没有这个
+字段，报告里写「分代不可判」而不是当作相同。
 
 ## 给下一个 agent 的三条已知事实
 

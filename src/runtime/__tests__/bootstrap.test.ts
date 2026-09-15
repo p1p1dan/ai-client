@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { describe, expect, it } from 'vitest';
-import { createRuntime } from '../bootstrap.ts';
+import { createRuntime, RUNTIME_CONFIG_VERSION } from '../bootstrap.ts';
 import {
   LOOP_SERVICE,
   MODEL_SERVICE,
@@ -202,7 +202,11 @@ describe('createRuntime', () => {
     try {
       await runtime.run({ prompt: 'hi', systemPrompt: 'probe' });
       const stamp = runtime.trace.runs[0].version_stamp;
-      expect(stamp.config_version).toBe('runtime_p3_complete_v1');
+      expect(stamp.config_version).toBe(RUNTIME_CONFIG_VERSION);
+      // Pinned as a literal too: a generation nobody ever raises is the defect
+      // this assertion is here for (audit core-host-02), and a test that only
+      // compares the constant to itself cannot see it.
+      expect(stamp.config_version).toBe('runtime_p6_hardening_v1');
       expect(stamp.backend).toBe('native');
       expect(stamp.single_turn).toBe('true');
       expect(stamp['dep:cordis']).toBe('4.0.0-rc.9');

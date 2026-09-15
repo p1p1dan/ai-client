@@ -7,13 +7,26 @@
 | ~~`run.mjs`~~ | **已随 P6-5 删除**：旧后端采集器，而旧后端 2026-09-13 退役。它采的基线（`baseline-20260908`、P2-5 的同网关重采）原样留档，但**无法再跑第二遍**——ARD §5 当初要求「趁旧后端还在时把基线采完」，正是为了这一天 |
 | `run-native.mjs` | 自有 runtime（`createRuntime`）采集，产出同一种归档形状 |
 | `verify.mjs` / `verify-native.mjs` | 各自的离线复核，不访问网关 |
-| `compare.mjs` | 出 P2-6 新旧对比报告；两份归档不可比时直接报错，不出带脚注的差值 |
+| `compare.mjs` | 出对比报告；两份归档不可比时直接报错，不出带脚注的差值。可比性规则在 `archive.mjs`，有单测 |
+| `archive.mjs` | 归档读取、分代取值、可比性判定与骨架校验（纯函数，`scripts/__tests__/runtime-baseline-archive.test.mjs`） |
 | `preflight.mjs` | 探某个网关到底供不供目标模型（`/v1/models` 不列也会再打一次最小请求） |
 
 **可比性的硬要求**：命中率主要是网关的性质，不是后端的性质。对比的两份归档必须
-同套件、同模型、同网关、同工作目录，`compare.mjs` 会逐项断言；跨网关的历史归档只能作参考值
+同套件、同模型、同网关、同工作目录、同分代，`compare.mjs` 会逐项检查并**一次把所有不可比原因
+列全**（旧版是逐条 assert，修一条才看见下一条）；跨网关的历史归档只能作参考值
 传给 `--archive`，不作基准。P2-5/P2-6 的实际执行与结论见
 [证据](../../docs/plantree/plans/runtime-evolution/evidence/p2-5/README.md)。
+
+**没有 legacy 归档时怎么办**（T028 写明）：`--legacy` 仍然可用，含义仍是「这份参考归档必须是
+legacy 采集」——已存的两份永远可以再读。但采它的 `run.mjs` 已随旧引擎删除，**不可能再采新的**。
+所以从今往后的形式是 `--baseline <任意后端的参考归档> --native <本次>`，实际就是
+native 对 native：钉一份早先的 native 采集当基准，和新采的比。两个参数都不给时，脚本报的是
+这段话而不是「缺少参数」。
+
+**分代 `configVersion`**：`run-native.mjs` 把 `RUNTIME_CONFIG_VERSION`（`src/runtime/bootstrap.ts`，
+同一个值也写进每条 trace）记进 manifest。两份归档分代不同 = 不可比，直接报错；
+T028 之前采的归档没有这个字段，报告里写「分代不可判」，不当作相同。升版规则见
+[`src/runtime/README.md`](../../src/runtime/README.md)。
 
 `run-native.mjs` 在 manifest 里用 `settingDeviations` 声明它无法对齐的基线设置（压缩阈值改为
 按模型窗口推导、工具集不同等）；`compare.mjs` 在这个字段缺失时拒绝出报告，避免把「没对齐」
@@ -37,12 +50,27 @@
 运行结束在 `finally` 中清理此目录；若强制终止留下目录，先确认无进程占用、保留需要的失败
 证据再清理。可以通过 `--work` 改路径，但该路径会进入系统提示，P2-6 对比必须使用同一路径。
 
-独立验证：
+独立验证（都不访问网关，可在开发机跑）：
 
 ```bash
+# 指标口径
 node --test --test-concurrency=1 scripts/runtime-baseline/metrics.test.mjs
+# 可比性规则（vitest，根配置已包含 scripts/__tests__）
+pnpm vitest run scripts/__tests__/runtime-baseline-archive.test.mjs
+# 采集器的全部管线，只差真实回合：参数解析、拒绝复用目录、工作区准备、
+# 写 manifest + suite.json、按 compare 的同一套规则校验归档骨架
+node scripts/runtime-baseline/run-native.mjs --dry-run --out /tmp/p2-dry --work /tmp/p2-dry-work
+# 离线复核一份现成归档
+node scripts/runtime-baseline/verify-native.mjs docs/plantree/plans/runtime-evolution/evidence/p2-5/run-20260912-native-02
 node scripts/runtime-baseline/verify.mjs docs/plantree/plans/runtime-evolution/evidence/p2-0/RUN_ID
+# 两份现成归档的对比（legacy 参考 / native 参考两种形式都跑得通）
+node scripts/runtime-baseline/compare.mjs \
+  --legacy docs/plantree/plans/runtime-evolution/evidence/p2-5/run-20260912-legacy-01 \
+  --native docs/plantree/plans/runtime-evolution/evidence/p2-5/run-20260912-native-02
 ```
+
+`--dry-run` 产出的目录带 `manifest.dryRun: true` 与 `summary.validBaseline: false`，
+`compare.mjs` 会拒绝它当作对比的任一侧——干跑本身就会先断言这一点，免得干跑被当成结果。
 
 网关不稳定时，可用 `--case B04` 等参数在新目录重跑独立场景。六场景齐备后收集：
 

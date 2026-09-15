@@ -14,10 +14,15 @@
  * module that contributes nothing must SAY why rather than exist as a silent
  * no-op that later reads as "already done". A registered stub service would be
  * exactly that — `ctx.get('runtimeTools')` would answer with something, and a
- * plugin that injects it would activate against a lie. So the deferred services
- * appear here as types plus a machine-checked entry in {@link DEFERRED_SERVICES},
- * and are absent from the Cordis context until their phase lands. A plugin that
- * injects one stays PENDING, which is the honest state.
+ * plugin that injects it would activate against a lie. So a service whose phase
+ * has not landed appears here as types plus a machine-checked entry in
+ * {@link DEFERRED_SERVICES}, and is absent from the Cordis context until then. A
+ * plugin that injects one stays PENDING, which is the honest state.
+ *
+ * As of T028 that table is empty — P1 through P5 all landed, so every declared
+ * service is registered. It stays in the file because the rule outlives the
+ * list, and because the gate that guards it also catches the opposite drift: a
+ * table entry for a name that is already live, or for a name nothing declares.
  *
  * ## Why service names are flat and prefixed
  *
@@ -96,18 +101,19 @@ export interface DeferredServiceDeclaration {
  * carry the reason WHY this particular module has none, so an agent reading the
  * graph six weeks from now can tell a deliberate gap from a dropped task.
  *
- * `runtimeContext` left this table when P2-3's decision layer got a consumer
- * (`plugins/context/index.ts`): compaction now runs at the turn boundary, so
- * the name is provided rather than promised. What is still missing there is the
- * durable compaction record (P2-4), which is a field of that service's output,
- * not an absent service.
+ * **Empty since T028 (2026-09-15), and that is the honest state**: every service
+ * this file declares is now registered. `runtimeContext` left when P2-3's
+ * decision layer got a consumer; the last entry, the subagent seam, left because
+ * P5-2 opened it — the registered name is `runtimeSubagents`
+ * (`plugins/subagent/index.ts`), and the table had gone on promising a
+ * misspelled singular that no phase would ever land (audit core-host-01).
+ *
+ * Adding an entry back is allowed; it has to survive `__tests__/contracts.test.ts`,
+ * which rejects a name that some plugin already registers and a name that no
+ * `declare module 'cordis'` block in `src/runtime` declares. The second rule is
+ * what a typo trips.
  */
-export const DEFERRED_SERVICES: Readonly<Record<string, DeferredServiceDeclaration>> = {
-  runtimeSubagent: {
-    phase: 'P5',
-    reason: `${DEFERRED_REASON_MARKER} a subagent is a second \`Agent\` with its own tool whitelist (ARD D10), so it cannot exist before tools do. The \`SubagentRunner\` service seam named in D10 is deliberately not opened yet — an empty seam invites a caller, and the caller would have nothing to delegate.`,
-  },
-};
+export const DEFERRED_SERVICES: Readonly<Record<string, DeferredServiceDeclaration>> = {};
 
 /** How a caller names a model. Resolution against the catalog is the adapter's job. */
 export interface RuntimeModelRef {
@@ -187,6 +193,14 @@ export interface RunTrace {
   input: string;
   model: string;
   provider: string;
+  /**
+   * The behaviour generation this run belongs to — `RUNTIME_CONFIG_VERSION` in
+   * `bootstrap.ts`, where the rule for raising it lives: anything that changes
+   * what the model saw or what the run was allowed to do (prompt, tool set,
+   * compaction, permission semantics, model binding, subagent contract) makes
+   * new traces non-comparable to old ones and must raise it in the same commit.
+   * Two archives with different values are not two measurements of one thing.
+   */
   config_version: string;
   steps: TraceStep[];
   final_output: string;

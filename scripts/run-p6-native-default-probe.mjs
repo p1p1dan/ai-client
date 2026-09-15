@@ -5,9 +5,9 @@
  *
  *   1. **默认真的是 native 了吗。** 判据不是读代码，是看审批界面长什么样：native 是
  *      结构化中文权限卡，legacy 是 pi 插件自己的英文 `ui.select` 弹窗。两张不是同一张
- *      卡（2026-09-11 PERM-1 点验实测过），所以它是后端的可靠指纹。
- *      **故意不设 `AICLIENT_RUNTIME_BACKEND`**——开发机 dev.env 里也没有这一行，这样
- *      跑出来的就是「什么都不配时用户会得到什么」。
+ *      卡（2026-09-11 PERM-1 点验实测过），所以它是后端的可靠指纹。P6-5 之后引擎只剩一个，
+ *      连同 `AICLIENT_RUNTIME_BACKEND` 一起删了（T028 把探针里记录该变量的那行也清掉），
+ *      所以这里跑出来的就是「什么都不配时用户会得到什么」。
  *   2. **一整回合还能跑通吗**（成功标准第 4 条在开发机这一半）：发一条要用 bash 的
  *      指令、等权限卡、放行、看命令输出有没有回到时间线。
  *   3. **H/20 在真实应用里生效了吗**：把这次会话真正写到磁盘的那个文件捡起来，头一行
@@ -36,7 +36,6 @@ fs.mkdirSync(outDir, { recursive: true });
 
 const report = {
   startedAt: new Date().toISOString(),
-  backendEnv: process.env.AICLIENT_RUNTIME_BACKEND ?? null,
   steps: {},
   screenshots: {},
 };

@@ -269,6 +269,10 @@ async function main() {
         backend: 'native',
         workerPath,
         workerExecutable: usesNode ? child.spawnfile : process.execPath,
+        // Names only, never values: the gate asserts the native bootstrap
+        // result grew no `extensions` inventory, and a session file path or a
+        // leaf checkpoint has no business in a build log.
+        bootstrapResultKeys: Object.keys(bootstrap.result).sort(),
         stamp,
         permissionActivity,
         exitCode,

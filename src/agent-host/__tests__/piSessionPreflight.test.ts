@@ -1,71 +1,54 @@
-import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { assertPiSessionFileIdentity, preflightPiSessionFile } from '../piSessionPreflight.ts';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { samePiSessionPath } from '../piSessionPreflight.ts';
 
-const dirs: string[] = [];
+/**
+ * All that is left of the pi session preflight (audit cutover-12, T028).
+ *
+ * The header scan, the JSON validation and the dev/ino identity check went with
+ * the engine that needed them — the pi SDK's `SessionManager.open()` would
+ * create a session for a missing or foreign path, and nothing hands it a path
+ * any more. These cases cover the one helper the native runtime still imports,
+ * `NativeWorkerRuntime.resume()`'s "is this the session I already have open?"
+ * question, where a wrong answer means answering a request against the wrong
+ * conversation.
+ */
 
-async function tempFile(content: string): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'aiclient-pi-history-'));
-  dirs.push(dir);
-  const file = join(dir, 'session.jsonl');
-  await writeFile(file, content, 'utf8');
-  return file;
-}
-
-afterEach(async () => {
-  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
-
-describe('Pi session exact-file preflight', () => {
-  it('reads a valid leading-blank header without modifying the source', async () => {
-    const content = `\n{"type":"session","id":"pi-1","cwd":"/repo"}\n{"type":"message","id":"u1"}\n`;
-    const file = await tempFile(content);
-
-    const metadata = await preflightPiSessionFile(file, '/repo');
-    expect(metadata).toMatchObject({ sessionId: 'pi-1', cwd: '/repo' });
-    expect(typeof metadata.fileIdentity.dev).toBe('bigint');
-    expect(typeof metadata.fileIdentity.ino).toBe('bigint');
-    expect(await readFile(file, 'utf8')).toBe(content);
+describe('samePiSessionPath', () => {
+  it('sees through separator noise and relative segments', () => {
+    const base = path.resolve('/repo/.pi/sessions');
+    expect(
+      samePiSessionPath(path.join(base, 'a.jsonl'), path.join(base, 'x', '..', 'a.jsonl'))
+    ).toBe(true);
+    expect(
+      samePiSessionPath(path.join(base, 'a.jsonl'), `${path.join(base, 'a.jsonl')}${path.sep}`)
+    ).toBe(true);
+    // A path that does not exist yet still compares: pi writes the session file
+    // lazily, so `resume` routinely asks about a file nobody has created.
+    expect(
+      samePiSessionPath(
+        path.join(base, 'never-written.jsonl'),
+        path.join(base, 'never-written.jsonl')
+      )
+    ).toBe(true);
   });
 
-  it('accepts a valid single-record JSONL file without a trailing newline', async () => {
-    const file = await tempFile('{"type":"session","id":"pi-one-line","cwd":"/repo"}');
-    await expect(preflightPiSessionFile(file, '/repo')).resolves.toMatchObject({
-      sessionId: 'pi-one-line',
-      cwd: '/repo',
-    });
+  it('keeps two different sessions apart', () => {
+    const base = path.resolve('/repo/.pi/sessions');
+    expect(samePiSessionPath(path.join(base, 'a.jsonl'), path.join(base, 'b.jsonl'))).toBe(false);
+    expect(
+      samePiSessionPath(path.join(base, 'a.jsonl'), path.join(base, 'nested', 'a.jsonl'))
+    ).toBe(false);
   });
 
-  it('detects a pathname replacement between preflight and SDK open', async () => {
-    const file = await tempFile('{"type":"session","id":"pi-old","cwd":"/repo"}\n');
-    const metadata = await preflightPiSessionFile(file, '/repo');
-    await rename(file, `${file}.old`);
-    await writeFile(file, '{"type":"session","id":"pi-new","cwd":"/repo"}\n', 'utf8');
-    await expect(assertPiSessionFileIdentity(file, metadata.fileIdentity)).rejects.toMatchObject({
-      code: 'WORKER_SESSION_IDENTITY_MISMATCH',
-    });
+  it('resolves a relative path against the current directory, as the runtime does', () => {
+    expect(samePiSessionPath('session.jsonl', path.resolve('session.jsonl'))).toBe(true);
+    expect(samePiSessionPath('session.jsonl', path.resolve('other', 'session.jsonl'))).toBe(false);
   });
 
-  it('classifies missing, corrupt, and cross-cwd files without creating replacements', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'aiclient-pi-history-'));
-    dirs.push(dir);
-    const missing = join(dir, 'missing.jsonl');
-    await expect(preflightPiSessionFile(missing, '/repo')).rejects.toMatchObject({
-      code: 'WORKER_SESSION_FILE_NOT_FOUND',
-    });
-    await expect(readFile(missing, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
-
-    const corrupt = await tempFile('{not json}\n');
-    await expect(preflightPiSessionFile(corrupt, '/repo')).rejects.toMatchObject({
-      code: 'WORKER_SESSION_FILE_CORRUPT',
-    });
-
-    const other = await tempFile('{"type":"session","id":"pi-2","cwd":"/other"}\n');
-    await expect(preflightPiSessionFile(other, '/repo')).rejects.toMatchObject({
-      code: 'WORKER_SESSION_CWD_MISMATCH',
-      message: expect.stringContaining('file declares /other'),
-    });
+  it('follows the platform on case, which is the whole reason it is not ===', () => {
+    const upper = path.resolve('/Repo/A.jsonl');
+    const lower = path.resolve('/repo/a.jsonl');
+    expect(samePiSessionPath(upper, lower)).toBe(process.platform === 'win32');
   });
 });

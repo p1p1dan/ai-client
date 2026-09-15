@@ -22,7 +22,6 @@
  */
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import {
@@ -39,29 +38,17 @@ import {
 const outDir = path.join(repoRoot, 'docs/plantree/plans/runtime-evolution/evidence/p4-6/perm1');
 const ATTACH = process.env.PERM1_ATTACH === '1';
 /**
- * 用 native 后端起应用。
+ * Report and screenshot names.
  *
- * **P6-5 之后这个开关没有意义了**：旧引擎已退役，`AICLIENT_RUNTIME_BACKEND` 连同它一起
- * 删除，应用只有一个引擎。下面这段复制 dev.env 的代码因此是空操作，保留只是为了让
- * `PERM1_NATIVE=1` 这个老命令行仍然能跑通；结构化权限卡本来就是现在唯一的那张。
+ * T028 deleted the `PERM1_NATIVE=1` variant. It used to rewrite `dev.env` so the
+ * app started on the native engine and then filed its output under a separate
+ * name; P6-5 retired the other engine and `AICLIENT_RUNTIME_BACKEND` with it, so
+ * the rewrite was a self-declared no-op and the two name sets described one and
+ * the same run. The old command line still works, it just files under the one
+ * name now.
  */
-const NATIVE = process.env.PERM1_NATIVE === '1';
-const REPORT_NAME = NATIVE ? 'perm1-native-report.json' : 'perm1-report.json';
-const SHOT_PREFIX = NATIVE ? 'perm1-native' : 'perm1';
-
-if (NATIVE) {
-  const source = path.join(repoRoot, 'dev.env');
-  const file = path.join(os.tmpdir(), 'perm1-dev-native.env');
-  fs.writeFileSync(
-    file,
-    `${fs
-      .readFileSync(source, 'utf8')
-      .split(/\r?\n/)
-      .filter((line) => !/^\s*AICLIENT_RUNTIME_BACKEND\s*=/.test(line))
-      .join('\n')}\nAICLIENT_RUNTIME_BACKEND=native\n`
-  );
-  process.env.AICLIENT_DEV_ENV_FILE = file;
-}
+const REPORT_NAME = 'perm1-report.json';
+const SHOT_PREFIX = 'perm1';
 
 /** 输入框旁边那个权限档触发器。标签形如「执行 · 每次询问」。 */
 const TRIGGER = `(() => {

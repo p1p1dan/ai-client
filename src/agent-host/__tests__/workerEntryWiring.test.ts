@@ -20,6 +20,13 @@ import {
  * The engine is identified by an error only it can produce — it needs an agent
  * directory, and names the variable that supplies one. Reaching that message
  * proves the factory was constructed and called rather than merely defined.
+ *
+ * P6-1's acceptance asked for three values of the retired `AICLIENT_RUNTIME_BACKEND`
+ * — unset, misspelled, and the old `legacy` — driven through a real process.
+ * Until T028 one case claimed to cover them ("with or without a stale variable")
+ * while both helpers deleted the variable, so nothing ever proved that a machine
+ * still carrying it in a shell profile or a dev.env gets the same engine (audit
+ * cutover-13). `bootstrapOnce` now takes the value to plant.
  */
 
 const WORKER_ENTRY = path.resolve(__dirname, '..', 'worker.ts');
@@ -46,14 +53,21 @@ function bootstrapRequest(cwd: string) {
   };
 }
 
-/** Start the real worker entry over Node IPC and answer one bootstrap. */
-async function bootstrapOnce(): Promise<WorkerRpcResponse> {
+/**
+ * Start the real worker entry over Node IPC and answer one bootstrap.
+ *
+ * `staleBackend` plants the variable P6-5 deleted. Any value is equally dead —
+ * that is the claim under test — so the cases pass the two that would have
+ * meant something: the old engine's name, and a typo.
+ */
+async function bootstrapOnce(staleBackend?: string): Promise<WorkerRpcResponse> {
   workdir = mkdtempSync(path.join(tmpdir(), 'aiclient-entry-'));
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     [PI_WORKER_GENERATION_ENV]: '1',
   };
-  delete env.AICLIENT_RUNTIME_BACKEND;
+  if (staleBackend === undefined) delete env.AICLIENT_RUNTIME_BACKEND;
+  else env.AICLIENT_RUNTIME_BACKEND = staleBackend;
   // Deleted so the runtime cannot pick one up from the developer's shell
   // and answer with a real bootstrap instead of the expected complaint.
   delete env.AICLIENT_RUNTIME_AGENT_DIR;
@@ -278,11 +292,29 @@ describe('worker entry wiring', () => {
   );
 
   it(
-    'routes bootstrap to the self-owned runtime, with or without a stale variable',
+    'routes bootstrap to the self-owned runtime when no backend variable is set',
     async () => {
       const response = await bootstrapOnce();
       expect(response.ok).toBe(false);
       if (response.ok) return;
+      expect(response.error.message).toMatch(/AICLIENT_RUNTIME_AGENT_DIR/);
+    },
+    TIMEOUT_MS
+  );
+
+  // One process per case rather than a loop in one case: `afterEach` kills the
+  // child, and this development machine cannot afford two real workers at once.
+  it.each([
+    ['legacy', 'the retired engine by name'],
+    ['natvie', 'a typo'],
+  ])(
+    'ignores AICLIENT_RUNTIME_BACKEND=%s (%s) and still routes to the self-owned runtime',
+    async (value) => {
+      const response = await bootstrapOnce(value);
+      expect(response.ok).toBe(false);
+      if (response.ok) return;
+      // Same engine, same complaint. A surviving switch would either boot a
+      // different engine or reject the value; neither happens.
       expect(response.error.message).toMatch(/AICLIENT_RUNTIME_AGENT_DIR/);
     },
     TIMEOUT_MS

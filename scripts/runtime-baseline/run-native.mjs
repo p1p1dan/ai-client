@@ -46,7 +46,13 @@ import {
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { createRuntime, resolveWorkerShell, standaloneHost } from '../../src/runtime/index.ts';
+import {
+  createRuntime,
+  RUNTIME_CONFIG_VERSION,
+  resolveWorkerShell,
+  standaloneHost,
+} from '../../src/runtime/index.ts';
+import { archiveSkeletonFailures, comparabilityReport, readArchive } from './archive.mjs';
 import { assertToolCall, summarizeUsage } from './metrics.mjs';
 import { suite } from './suite.mjs';
 
@@ -57,17 +63,38 @@ const { values } = parseArgs({
     out: { type: 'string' },
     work: { type: 'string', default: '/tmp/aiclient-p2-0-work' },
     case: { type: 'string' },
+    'dry-run': { type: 'boolean' },
     help: { type: 'boolean' },
   },
 });
 if (values.help) {
   console.log(
-    'P20_BASELINE_API_KEY=<secret> node scripts/runtime-baseline/run-native.mjs --base-url URL --out NEW_DIR [--case B01] [--work /tmp/aiclient-p2-0-work]'
+    [
+      'P20_BASELINE_API_KEY=<secret> node scripts/runtime-baseline/run-native.mjs --base-url URL --out NEW_DIR [--case B01] [--work /tmp/aiclient-p2-0-work]',
+      'node scripts/runtime-baseline/run-native.mjs --dry-run --out NEW_DIR   # no gateway, no key, no model call',
+    ].join('\n')
   );
   process.exit(0);
 }
-assert(values.out && values['base-url'], '--out and --base-url are required');
-const apiKey = process.env.P20_BASELINE_API_KEY;
+
+/**
+ * `--dry-run` — everything except the six scenarios (T028).
+ *
+ * A collection needs a gateway, a key and real model turns, so the plumbing
+ * around it — argument parsing, the refusal to reuse a directory, the workspace
+ * preparation, the manifest the comparison later depends on — was code nobody
+ * could run on a development machine. This mode runs exactly that part, writes
+ * the archive skeleton, checks it against the same comparability rules
+ * `compare.mjs` uses, and stops before the first provider call.
+ *
+ * The archive it leaves behind is marked `dryRun: true` and its summary says
+ * `validBaseline: false`, so neither the verifier nor the comparison can ever
+ * mistake it for a measurement.
+ */
+const dryRun = values['dry-run'] === true;
+assert(values.out, '--out is required');
+assert(dryRun || values['base-url'], '--base-url is required unless --dry-run');
+const apiKey = process.env.P20_BASELINE_API_KEY ?? (dryRun ? 'dry-run-no-key' : undefined);
 assert(apiKey, 'Set P20_BASELINE_API_KEY; credentials are never CLI arguments or artifacts');
 delete process.env.P20_BASELINE_API_KEY;
 const out = resolve(values.out);
@@ -143,8 +170,15 @@ const manifest = {
       packageVersion(name),
     ])
   ),
-  baseUrl: values['base-url'],
+  baseUrl: values['base-url'] ?? 'dry-run://no-gateway',
   provider: PROVIDER_ID,
+  /**
+   * The runtime behaviour generation this collection was taken on, same value
+   * every trace carries. `compare.mjs` refuses two archives from different
+   * generations: a prompt, tool, compaction or permission change makes the two
+   * runs different work rather than the same work measured twice (core-host-02).
+   */
+  configVersion: RUNTIME_CONFIG_VERSION,
   model: suite.model,
   settings: suite.settings,
   /**
@@ -169,6 +203,7 @@ const manifest = {
   cachePolicy:
     'Gateway default; no explicit warmup, no cold-cache guarantee; all first turns included',
   formula: 'sum(cacheRead) / (sum(input) + sum(cacheRead)); compaction usage separate',
+  ...(dryRun ? { dryRun: true } : {}),
   files: {},
 };
 for (const name of [
@@ -183,6 +218,42 @@ for (const name of [
 }
 save(join(out, 'manifest.json'), manifest);
 save(join(out, 'suite.json'), suite);
+
+if (dryRun) {
+  save(join(out, 'summary.json'), {
+    schemaVersion: 1,
+    validBaseline: false,
+    dryRun: true,
+    backend: 'native',
+    suiteVersion: suite.version,
+    completedAt: new Date().toISOString(),
+    results: [],
+    pricing: null,
+    usage: null,
+    compactionUsage: null,
+    note: 'Dry run: plumbing only, no gateway and no model calls. Not a measurement.',
+  });
+  const skeleton = readArchive(out);
+  const shape = archiveSkeletonFailures(skeleton);
+  assert.deepEqual(shape, [], `Archive skeleton is incomplete: ${shape.join('; ')}`);
+  // The other half of the same claim: this directory must be UNUSABLE as a
+  // comparison side. If compare.mjs ever accepted it, a dry run would look like
+  // a result.
+  const { failures } = comparabilityReport(skeleton, skeleton);
+  assert(failures.length > 0, 'compare.mjs would accept a dry-run archive as a measurement');
+  rmSync(work, { recursive: true, force: true });
+  console.log(
+    [
+      `[dry-run] archive skeleton written to ${out}`,
+      `[dry-run] suite ${suite.version} · ${cases.length} case(s): ${cases.map((item) => item.id).join(', ')}`,
+      `[dry-run] generation ${RUNTIME_CONFIG_VERSION} · model ${suite.model.id} · work ${work} (prepared, then removed)`,
+      `[dry-run] manifest hashes ${Object.keys(manifest.files).length} source files`,
+      `[dry-run] refused as a comparison side, as it must be: ${failures[0]}`,
+      '[dry-run] stopped before the first provider call; no gateway was contacted',
+    ].join('\n')
+  );
+  process.exit(0);
+}
 
 const { createProvider } = await load('@earendil-works/pi-ai');
 const { anthropicMessagesApi } = await load(

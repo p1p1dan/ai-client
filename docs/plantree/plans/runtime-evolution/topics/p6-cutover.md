@@ -77,12 +77,12 @@ ARD D8 同时写着「开关保留一个版本周期后再删」。当天用户�
 
 ### 执行时查出来的三件事（都和原计划不一样）
 
-1. **`piSessionPreflight.ts` 不能整体删，但清单原写「只服务 legacy worker」也不准确**。`src/runtime/worker/nativeWorkerRuntime.ts` 只 import 了其中的 `samePiSessionPath`——一个 3 行的路径比较助手；文件主体 `preflightPiSessionFile`（64KB 分块头部扫描、JSON 校验、dev/ino 身份校验，共 106 行）与 `assertPiSessionFileIdentity` 原本服务旧集成层的调用方（`piWorkerSession.ts` 等），P6-5 删掉这些调用方后，两者在全仓已无任何生产调用方，只剩自身测试。按原清单整体删会打断 native 需要的 `samePiSessionPath`，但保留整份文件的说法（README.md「自有 runtime 也在用」）过度夸大——真正需要保留的只是那一个路径比较助手；文件其余部分是否删除评估留给 T025（审计 cutover-12，T027 改写此句）。
+1. **`piSessionPreflight.ts` 不能整体删，但清单原写「只服务 legacy worker」也不准确**。`src/runtime/worker/nativeWorkerRuntime.ts` 只 import 了其中的 `samePiSessionPath`——一个 3 行的路径比较助手；文件主体 `preflightPiSessionFile`（64KB 分块头部扫描、JSON 校验、dev/ino 身份校验，共 106 行）与 `assertPiSessionFileIdentity` 原本服务旧集成层的调用方（`piWorkerSession.ts` 等），P6-5 删掉这些调用方后，两者在全仓已无任何生产调用方，只剩自身测试。按原清单整体删会打断 native 需要的 `samePiSessionPath`，但保留整份文件的说法（README.md「自有 runtime 也在用」）过度夸大——真正需要保留的只是那一个路径比较助手。**T028（2026-09-15）已删除主体**：`preflightPiSessionFile` 与 `assertPiSessionFileIdentity` 连同它们的用例一并删除，文件就地收窄为 `samePiSessionPath`（文件名保留，避免改动 `nativeWorkerRuntime.ts` 的 import 行），用例改为覆盖这一个助手。副作用记录：这四个 `WORKER_SESSION_*` 错误码在 src/ 内已无生产产出方，渲染层 `historyError.ts` 的对应分支相应变成死支（审计 cutover-12，T027 改写此句，T028 落地）。
 2. **派生明文文件不能删**，理由见上（随包 CLI 自己要读）。这条债从 P6 名下移出，改判为「终端凭据怎么给」的独立题。
 3. **两处测试要搬家，不是删**：
    - 排队释放的端到端用例（原 `scripts/__tests__/pi-queue-release-integration.test.mjs`）驱动的是旧引擎，已移到 `src/runtime/__tests__/queueReleaseIntegration.test.ts`，改用真实 RPC server + NativeWorkerRuntime。**渲染层那两个排队模块没有一起 import**：它们经 `attachments.ts` 牵进 `@shared/*` 与 `@/` 两套路径别名，而 `src/runtime` 是独立子包、tsconfig 里没有这些别名；释放顺序在测试里按同样的步骤手写，排队模块自身的行为由渲染层单测钉住。
    - Codex 导入集成用例（`CodexImportIntegration.test.ts`）原本「转写 + 用旧写入方落盘 + 用 pi 读回」，现收敛为 Main 侧那一半（转写正确、源文件零改动）；落盘与读回那一半由 `nativeImport.test.ts` 与 `sessionInterop.test.ts` 覆盖。
-4. **P2-0 的旧后端采集器 `scripts/runtime-baseline/run.mjs` 一并删除**——它跑的就是这个引擎。已采的基线原样留档、`verify.mjs` 仍能离线复核，但**再也采不了第二份**。ARD §5 当初要求「趁旧后端还在时把基线采完」，正是为了这一天。
+4. **P2-0 的旧后端采集器 `scripts/runtime-baseline/run.mjs` 一并删除**——它跑的就是这个引擎。已采的基线原样留档、`verify.mjs` 仍能离线复核，但**再也采不了第二份**。ARD §5 当初要求「趁旧后端还在时把基线采完」，正是为了这一天。**T028（2026-09-15）补上了后续**：`compare.mjs` 不再硬性要求一份 legacy 归档——`--baseline` 收任意后端的参考归档（实际就是 native 对 native），两个参数都不给时报的是这段来龙去脉；`run-native.mjs` 加了 `--dry-run`（不碰网关跑完除真实回合以外的全部管线）；manifest 记 `configVersion`，分代不同直接判不可比（审计批评者 P2-5/P2-6 缺口、core-host-02）。
 
 ### RPC server 的形状变化
 

@@ -28,11 +28,17 @@ const srcRoot = path.join(repoRoot, 'src');
 const PACKAGE = '@earendil-works/pi-coding-agent';
 
 /**
- * Nobody. P6-5 retired the legacy engine on 2026-09-13, so the allow-list that
- * carried it through the rollback window is empty — the package is a bundled
- * executable and nothing more.
+ * P6-5 retired the legacy engine on 2026-09-13, so the allow-list that carried
+ * it through the rollback window holds no application code at all — the package
+ * is a bundled executable and nothing more.
+ *
+ * The one entry is a test control, not a consumer: `loadPiCliProbe.mjs` is the
+ * process `nativeWorkerModuleLoads.test.ts` forks to prove its module recorder
+ * reports a load WHEN ONE HAPPENS. Deleting its import would make that guard
+ * pass for the wrong reason. The app never loads this file — it only exists
+ * under `__tests__/fixtures/`.
  */
-const LIBRARY_ALLOWED: readonly string[] = [];
+const LIBRARY_ALLOWED: readonly string[] = ['src/agent-host/__tests__/fixtures/loadPiCliProbe.mjs'];
 
 function sourceFiles(dir: string, found: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -50,16 +56,26 @@ function sourceFiles(dir: string, found: string[] = []): string[] {
  * A comment naming the package, or a test that loads the shipped file by path
  * (which is what `sessionInterop.test.ts` does — the CLI there is the subject
  * under test, not a dependency), is not a library import and must not trip this.
+ *
+ * Deep imports count (audit cutover-11). Until T028 all three patterns demanded
+ * a closing quote right after the package name, so
+ * `'@earendil-works/pi-coding-agent/dist/core/session-manager.js'` — the exact
+ * form the package is actually reachable in, and the form the fixture control
+ * uses — walked straight past the only defence the package has left.
  */
 function importsPackageAsLibrary(source: string): boolean {
   const withoutComments = source
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
   const escaped = PACKAGE.replace(/[/-]/g, '\\$&');
+  // The package name, then either the closing quote or a subpath. Anchored at
+  // the quote so a filesystem path that merely CONTAINS the name
+  // (`node_modules/@earendil-works/...`) is still not an import.
+  const specifier = `['"]${escaped}(?:/[^'"]*)?['"]`;
   return (
-    new RegExp(`from\\s*['"]${escaped}['"]`).test(withoutComments) ||
-    new RegExp(`import\\s*\\(\\s*['"]${escaped}['"]\\s*\\)`).test(withoutComments) ||
-    new RegExp(`require\\s*\\(\\s*['"]${escaped}['"]\\s*\\)`).test(withoutComments)
+    new RegExp(`from\\s*${specifier}`).test(withoutComments) ||
+    new RegExp(`import\\s*\\(\\s*${specifier}\\s*\\)`).test(withoutComments) ||
+    new RegExp(`require\\s*\\(\\s*${specifier}\\s*\\)`).test(withoutComments)
   );
 }
 
@@ -70,15 +86,27 @@ describe('P6-2 · pi-coding-agent is a bundled tool, not our library', () => {
     .sort();
 
   it('walks a real source tree and recognises an import when there is one', () => {
-    // Guards the gate itself. With the allow-list empty, "no importers" is the
-    // expected answer — so a walker that visited nothing, or a matcher that
-    // recognises nothing, would pass the rule below for the wrong reason.
+    // Guards the gate itself. The only importer left is the fixture control, so
+    // "nothing to report" is the expected answer below — and a walker that
+    // visited nothing, or a matcher that recognises nothing, would produce that
+    // same answer for the wrong reason.
     expect(sourceFiles(srcRoot).length).toBeGreaterThan(200);
     expect(importsPackageAsLibrary(`import { x } from '${PACKAGE}';`)).toBe(true);
     expect(importsPackageAsLibrary(`await import('${PACKAGE}')`)).toBe(true);
+    // cutover-11: the deep form, which is how the package is really reachable.
+    expect(
+      importsPackageAsLibrary(`import { S } from '${PACKAGE}/dist/core/session-manager.js';`)
+    ).toBe(true);
+    expect(importsPackageAsLibrary(`await import('${PACKAGE}/dist/bundle/cli.js')`)).toBe(true);
+    expect(importsPackageAsLibrary(`require('${PACKAGE}/dist/index.js')`)).toBe(true);
     // A path to the shipped file is how the terminal uses it, and is not an
     // import of the package; `sessionInterop.test.ts` loads it exactly so.
     expect(importsPackageAsLibrary(`resolve('node_modules/${PACKAGE}/dist/x.js')`)).toBe(false);
+    // The allow-list may only name files that exist; a stale entry would be a
+    // hole nobody can see.
+    for (const allowed of LIBRARY_ALLOWED) {
+      expect(sourceFiles(srcRoot).map((file) => path.relative(repoRoot, file))).toContain(allowed);
+    }
   });
 
   it('is imported nowhere in the app', () => {

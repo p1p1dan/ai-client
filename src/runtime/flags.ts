@@ -1,21 +1,19 @@
 /**
- * Runtime feature flags — engineering standard §6 (every new capability ships
- * behind a switch) and ARD D8 (the backend switch is a dev environment
- * variable, never a settings-page control).
+ * Runtime environment knobs — engineering standard §6 (a new capability ships
+ * behind a switch) and ARD D8 as it actually landed.
+ *
+ * D8 said the engine switch would be a dev environment variable and never a
+ * settings-page control, and that it would be deleted once the old engine
+ * retired. P6-5 did exactly that on 2026-09-13: `AICLIENT_RUNTIME_BACKEND` is
+ * gone along with the engine it could select, setting it has no effect, and a
+ * rollback is now "install the previous package" (`docs/pi-only-rollout-
+ * rollback.md`). What is left here selects no engine — it only tells the single
+ * runtime where to read the model catalog and where to write traces.
  *
  * All of these are read from a supplied `env` rather than `process.env`
  * directly, so a test can exercise both sides of a flag without mutating the
  * process. `bootstrap.ts` reads them exactly once, at construction: a flag that
  * could change mid-run would make a trace's version stamp a lie.
- */
-
-/**
- * P6-5 removed `AICLIENT_RUNTIME_BACKEND` along with the engine it could select.
- *
- * ARD D8 always said the switch would be deleted once the old path retired; the
- * user brought that forward on 2026-09-13. A rollback is now「装回上一个安装包」,
- * which is stated in `docs/pi-only-rollout-rollback.md`. Nothing reads the
- * variable any more — setting it has no effect at all.
  */
 
 /**

@@ -11,6 +11,19 @@
  *
  * Invoked by src/agent-host/package.json postinstall so every npm ci (dev/CI)
  * produces the same source tree that build-agent-host copies into the artifact.
+ *
+ * ## Why this still exists after P6-5 (T028)
+ *
+ * Nothing in the shipped app LOADS this package any more: the native runtime
+ * decides permissions itself (`src/runtime/plugins/permissions/`), and the
+ * package travels only because the build writes the distributor policy into its
+ * `config.json`, which Main reads as the bundled scope of the policy panel
+ * (`src/main/services/piPermissionPolicy/index.ts`). What the patch still buys
+ * is a check: `src/agent-host/__tests__/permissionPolicyIntegration.test.ts`
+ * runs our shipped policy through the REAL upstream PermissionManager, and the
+ * bundled scope this patch adds is the only way that file can be loaded as
+ * policy rather than as a runtime knob. Drop the patch and that test stops
+ * proving anything about the file we ship.
  */
 
 import fs from 'node:fs';
@@ -224,56 +237,21 @@ if (
 )
   changed.push('src/index.ts');
 
-// U12 rev.2 (D-Q13 follow-up, 2026-09-04): exempt AiClient's own session-tier
-// link from the bounded-delegation envelope.
+// T028 removed the fifth patch group, which exempted the link named
+// `aiclient-session-tier` from upstream's bounded-delegation envelope
+// (U12 rev.2, D-Q13 follow-up, 2026-09-04).
 //
-// Upstream caps every chain link's `allow` on `path` / `external_directory` to
-// `defer` (ADR 0007 §5) because a link is assumed to be a third-party judge —
-// a model, an external service — that the operator did not individually
-// authorize. Ours is neither: `aiclient-session-tier` carries the tier the user
-// picked in this app's own composer, and the only tier that grants those
-// surfaces (`fullopen`) sits behind an explicit "remove the limits on this
-// chat?" confirmation. With the envelope in force, that confirmation bought the
-// user nothing on the surface they actually hit — writing a file outside the
-// workspace still prompted on every single call, which reads as "the tier does
-// not work" rather than "this surface is exempt".
+// The exemption only ever applied to a policy that declared
+// `authorizerChain: ['aiclient-session-tier']`, and to the inline pi extension
+// that registered that link. P6-5 retired the engine that loaded the extension
+// and T025 deleted the chain line from the shipped policy
+// (`src/agent-host/permissionPolicy.mjs`), so the patched branch could no
+// longer be reached by anything: the tiers it existed for are decided in
+// `src/runtime/plugins/permissions/`, which consults no chain at all.
 //
-// Scope is deliberately one name. Every other link — including any the user
-// installs — stays inside the envelope, and `deny` verdicts are untouched, so
-// the secret-file denies in our own `path` policy still cannot be overridden
-// (they resolve before any link is consulted).
-if (
-  patch('src/authority/authorizer-selection.ts', [
-    {
-      before: '      links.push({ name, authorize: encloseInDelegationEnvelope(authorize) });',
-      after: [
-        "      // AiClient distributor patch: this app's own session-tier link is",
-        '      // not a third-party judge — its tier is a user choice made in our UI',
-        '      // behind an explicit dangerous-tier confirmation — so it may grant',
-        '      // the excluded surfaces. Every other link stays enveloped.',
-        '      links.push({',
-        '        name,',
-        '        authorize:',
-        '          name === AICLIENT_UNENVELOPED_LINK',
-        '            ? authorize',
-        '            : encloseInDelegationEnvelope(authorize),',
-        '      });',
-      ].join('\n'),
-      already: 'AICLIENT_UNENVELOPED_LINK',
-    },
-    {
-      before: '} from "./permission-prompter";',
-      after: [
-        '} from "./permission-prompter";',
-        '',
-        '/** AiClient distributor patch: the one link exempt from the envelope. */',
-        'const AICLIENT_UNENVELOPED_LINK = "aiclient-session-tier";',
-      ].join('\n'),
-      already: 'const AICLIENT_UNENVELOPED_LINK',
-    },
-  ])
-)
-  changed.push('src/authority/authorizer-selection.ts');
+// `src/agent-host/__tests__/permissionPatchScript.test.ts` keeps the two ends
+// tied together — if a shipped policy ever declares an `authorizerChain` again,
+// it fails and points back here.
 
 console.log(
   changed.length > 0

@@ -36,7 +36,9 @@ const runs = readdirSync(root)
     manifest: json(join(root, name, 'manifest.json')),
     suite: json(join(root, name, 'suite.json')),
   }))
-  .filter((run) => !run.manifest.sourceRuns)
+  // Skip earlier collections (`sourceRuns`) and plumbing dry runs (`dryRun`),
+  // neither of which is a measurement of a scenario.
+  .filter((run) => !run.manifest.sourceRuns && !run.manifest.dryRun)
   .sort((a, b) => a.manifest.startedAt.localeCompare(b.manifest.startedAt));
 const reference = runs.find((run) => run.manifest.suiteVersion === suite.version)?.manifest;
 assert(reference, 'No run for the current suite');

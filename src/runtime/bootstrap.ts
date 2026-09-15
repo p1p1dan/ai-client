@@ -94,7 +94,47 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** Definition documents are capped at 32 KiB by the parser; read a little more
  * so an oversized one is DIAGNOSED rather than silently truncated into shape. */
 const SUBAGENT_SCAN_BYTES = 64 * 1024;
-export const RUNTIME_CONFIG_VERSION = 'runtime_p3_complete_v1';
+/**
+ * The generation of THIS runtime's behaviour, stamped into every trace.
+ *
+ * It exists so two archived runs can be told apart by what the model saw and
+ * what the run was allowed to do, not by their timestamps. Freezing it makes
+ * every comparison since the freeze a guess, which is what happened between P3
+ * and T028 (audit core-host-02): five batches of prompt, tool, compaction and
+ * permission changes all stamped `runtime_p3_complete_v1`.
+ *
+ * ## When it must be raised
+ *
+ * Any change that makes a new trace non-comparable to an old one:
+ *
+ *  - the system prompt — segments, templates, project-instruction loading;
+ *  - the tool set — a tool added, removed, renamed, or its schema changed;
+ *  - compaction — thresholds, retention, what is carried across the boundary;
+ *  - permission semantics — gears, tiers, what is auto-allowed or denied;
+ *  - model binding and catalog resolution, including effort/thinking defaults;
+ *  - the subagent contract — delegate budget, tool whitelist, report shape.
+ *
+ * Not: refactors with no behaviour change, renderer-only work, test-only work,
+ * or a dependency bump (the stamp already carries `dep:*` pins separately).
+ *
+ * ## Who raises it
+ *
+ * Whoever lands such a change, in the same commit, and they append the old
+ * value below. Naming is `runtime_<phase>_<theme>_v<n>`.
+ *
+ * ## Values so far
+ *
+ *  - `runtime_p0_v1` — first Cordis graph (P0).
+ *  - `runtime_p1_policy_v3` — tools plus the permission policy (P1).
+ *  - `runtime_p2_prompt_v1` — prompt assembly and compaction (P2).
+ *  - `runtime_p3_complete_v1` — sessions and events (P3). Stayed frozen through
+ *    P5-1..P5-5 and P6, which it should not have.
+ *  - `runtime_p6_hardening_v1` — native-only engine (P6) plus hardening batches
+ *    A and B: skills and prompt templates, subagents and the `Task*` tools, MCP
+ *    tools, the model catalog rebind, bash static analysis, permission surface
+ *    mapping, compaction's internal-message exclusion, layered instructions.
+ */
+export const RUNTIME_CONFIG_VERSION = 'runtime_p6_hardening_v1';
 
 export interface RuntimeBootstrapOptions {
   env?: NodeJS.ProcessEnv;
