@@ -51,7 +51,11 @@ const TOOLS = [
     description: 'Returns an image the way a screenshot server does',
     inputSchema: {
       type: 'object',
-      properties: { count: { type: 'number' }, silent: { type: 'boolean' } },
+      properties: {
+        count: { type: 'number' },
+        silent: { type: 'boolean' },
+        bytes: { type: 'number' },
+      },
       additionalProperties: false,
     },
   },
@@ -140,8 +144,11 @@ function handle(message) {
     if (message.params?.name === 'shot') {
       const args = message.params.arguments ?? {};
       const content = args.silent ? [] : [{ type: 'text', text: 'here is the page' }];
+      // `bytes` pads the payload so a test can ask for an image that is too
+      // large to forward; the padding is base64 alphabet, nobody decodes it.
+      const data = args.bytes ? PIXEL.padEnd(Number(args.bytes), 'A') : PIXEL;
       for (let i = 0; i < Number(args.count ?? 1); i += 1)
-        content.push({ type: 'image', data: PIXEL, mimeType: 'image/png' });
+        content.push({ type: 'image', data, mimeType: 'image/png' });
       send({ jsonrpc: '2.0', id: message.id, result: { content } });
       return;
     }

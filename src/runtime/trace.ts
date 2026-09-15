@@ -32,6 +32,25 @@ import {
   type TraceService,
   type TraceStep,
 } from './contracts.ts';
+import { errorCode } from './host/errors.ts';
+
+/**
+ * Ceiling for one `runs.jsonl` before it is rotated, and how many rotated
+ * generations are kept beside it. Total on disk is bounded by
+ * `(TRACE_FILE_GENERATIONS + 1) * TRACE_FILE_MAX_BYTES` — 32 MiB at these
+ * values, the same order as one session file, which is the number the capacity
+ * reconciliation budgets against.
+ */
+export const TRACE_FILE_MAX_BYTES = 8 * 1024 * 1024;
+export const TRACE_FILE_GENERATIONS = 3;
+/**
+ * permissions-12 — ceilings for `runs`, the in-memory mirror of what was
+ * written. Two of them because either one alone is escapable: a hundred runs of
+ * a one-line prompt are nothing, and one run that read a large file is not
+ * bounded by a count at all.
+ */
+export const TRACE_MEMORY_MAX_RUNS = 100;
+export const TRACE_MEMORY_MAX_BYTES = 4 * 1024 * 1024;
 
 export interface TracePluginConfig {
   /** Absolute directory for `runs.jsonl`. `null` keeps traces in memory only. */
@@ -42,6 +61,13 @@ export interface TracePluginConfig {
   /** Injectable so a test can assert on ids without matching a uuid. */
   newRunId?: () => string;
   io: RuntimeHostIoService;
+  /** Bytes one `runs.jsonl` may reach before rotating. `0` disables rotation. */
+  maxFileBytes?: number;
+  /** Rotated generations kept: `runs.1.jsonl` … `runs.<n>.jsonl`. `0` deletes instead. */
+  fileGenerations?: number;
+  /** Ceilings for the in-memory mirror; the newest run is never evicted. */
+  maxMemoryRuns?: number;
+  maxMemoryBytes?: number;
 }
 
 export class TracePlugin extends Service implements TraceService {
@@ -54,6 +80,14 @@ export class TracePlugin extends Service implements TraceService {
   private persistenceError?: Error;
   private pending: Promise<void> = Promise.resolve();
   private readonly _runs: RunTrace[] = [];
+  /** Serialized size of each entry in `_runs`, same order. */
+  private readonly runSizes: number[] = [];
+  private runsBytes = 0;
+  private _evictedRuns = 0;
+  private readonly maxFileBytes: number;
+  private readonly fileGenerations: number;
+  private readonly maxMemoryRuns: number;
+  private readonly maxMemoryBytes: number;
 
   constructor(ctx: Context, config: TracePluginConfig) {
     super(ctx, TRACE_SERVICE);
@@ -62,10 +96,25 @@ export class TracePlugin extends Service implements TraceService {
     this.now = config.now ?? (() => Date.now());
     this.newRunId = config.newRunId ?? (() => `run_${crypto.randomUUID()}`);
     this.io = config.io;
+    this.maxFileBytes = config.maxFileBytes ?? TRACE_FILE_MAX_BYTES;
+    this.fileGenerations = config.fileGenerations ?? TRACE_FILE_GENERATIONS;
+    this.maxMemoryRuns = config.maxMemoryRuns ?? TRACE_MEMORY_MAX_RUNS;
+    this.maxMemoryBytes = config.maxMemoryBytes ?? TRACE_MEMORY_MAX_BYTES;
   }
 
   get runs(): readonly RunTrace[] {
     return this._runs;
+  }
+
+  /**
+   * How many runs `runs` has dropped to stay inside its ceilings.
+   *
+   * Non-zero means the mirror is no longer the whole session, which an
+   * in-process assertion over `runs` has to know before it concludes "that run
+   * never happened". The file is the complete record; this array is not.
+   */
+  get evictedRuns(): number {
+    return this._evictedRuns;
   }
 
   begin(input: { runId?: string; input: string; model: string; provider: string }): TraceRun {
@@ -107,8 +156,12 @@ export class TracePlugin extends Service implements TraceService {
         trace.success = outcome.success;
         if (outcome.error) trace.error = outcome.error;
         trace.latency_ms = sink.now() - startedAt;
-        sink._runs.push(trace);
-        await sink.persist(trace);
+        // Serialized once and reused: the line that goes to disk is also what
+        // the memory ceiling is measured in, so the two can never disagree
+        // about how big this run was.
+        const line = Buffer.from(`${JSON.stringify(trace)}\n`);
+        sink.remember(trace, line.byteLength);
+        await sink.persist(trace, line);
         return trace;
       },
     };
@@ -120,22 +173,132 @@ export class TracePlugin extends Service implements TraceService {
     if (this.persistenceError) throw this.persistenceError;
   }
 
-  private async persist(trace: RunTrace): Promise<void> {
+  /**
+   * permissions-12 — keep `runs` bounded, newest wins.
+   *
+   * Without this the array is a second, unbounded copy of every trace the
+   * process ever wrote: prompts, step details and final answers all stay
+   * reachable for the life of the worker, and a long session pays for it in
+   * resident memory with nothing reading it. Eviction is oldest-first because
+   * the run anybody asks about is the last one; the complete record is the
+   * file, and `evictedRuns` says when the array stopped being it.
+   */
+  private remember(trace: RunTrace, bytes: number): void {
+    this._runs.push(trace);
+    this.runSizes.push(bytes);
+    this.runsBytes += bytes;
+    while (
+      // The newest run survives whatever its size: dropping the trace of the
+      // run that just finished would defeat the point of keeping any.
+      this._runs.length > 1 &&
+      (this._runs.length > this.maxMemoryRuns || this.runsBytes > this.maxMemoryBytes)
+    ) {
+      this._runs.shift();
+      this.runsBytes -= this.runSizes.shift() ?? 0;
+      this._evictedRuns++;
+    }
+  }
+
+  private async persist(trace: RunTrace, line: Buffer): Promise<void> {
     if (!this.dir) return;
-    const path = join(this.dir, 'runs.jsonl');
-    const work = this.pending.then(() =>
-      this.io.appendFile(path, Buffer.from(`${JSON.stringify(trace)}\n`), { mode: 0o600 })
-    );
+    const dir = this.dir;
+    const path = join(dir, 'runs.jsonl');
+    const work = this.pending.then(async () => {
+      // Rotation runs inside the same serialized chain as the append, so a
+      // rename can never land between another run's size check and its write.
+      const rotation = await this.rotate(dir, path, line.byteLength);
+      await this.io.appendFile(path, line, { mode: 0o600 });
+      // Reported only after the trace is safely on disk. Housekeeping that
+      // failed must not cost the run its record, but it also must not stay
+      // invisible — an unrotatable directory grows without bound.
+      if (rotation) throw rotation;
+    });
     this.pending = work.catch(() => {});
     try {
       await work;
     } catch (error) {
       this.persistenceError = error instanceof Error ? error : new Error(String(error));
       trace.persistence_error = {
-        code: 'trace_write_failed',
+        code: error instanceof RotationError ? 'trace_rotate_failed' : 'trace_write_failed',
         message: this.persistenceError.message,
       };
     }
+  }
+
+  /**
+   * Bound `runs.jsonl` by renaming it, not by rewriting it.
+   *
+   * The file is append-only JSONL, and the two obvious alternatives both cost
+   * more than they are worth inside a worker: dropping the oldest lines means
+   * reading and rewriting the whole file on every run, and truncating in place
+   * cuts a line in half and leaves the remainder unparseable. A rename is one
+   * cheap step, it keeps recent history readable in `runs.1.jsonl`, and a
+   * reader only needs to know that older runs live in higher-numbered files.
+   *
+   * The size is read from disk rather than counted in process, because the file
+   * outlives the process — a fresh worker appending to yesterday's 8 MiB file
+   * would otherwise believe it was empty.
+   *
+   * Returns the failure instead of throwing it, so the caller can still write.
+   */
+  private async rotate(dir: string, path: string, incoming: number): Promise<Error | undefined> {
+    if (this.maxFileBytes <= 0) return undefined;
+    try {
+      const size = await this.size(path);
+      // A line larger than the whole budget is still written whole: a trace
+      // split across generations is worse than one oversized file, and the
+      // next run rotates it away.
+      if (size === 0 || size + incoming <= this.maxFileBytes) return undefined;
+      if (this.fileGenerations <= 0) {
+        await this.remove(path);
+        return undefined;
+      }
+      // Oldest first, so nothing is overwritten before it has been shifted up.
+      // `rename` replaces the destination, which is what retires generation N.
+      for (let index = this.fileGenerations; index >= 1; index--) {
+        const from = index === 1 ? path : join(dir, `runs.${index - 1}.jsonl`);
+        await this.move(from, join(dir, `runs.${index}.jsonl`));
+      }
+      return undefined;
+    } catch (error) {
+      return new RotationError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  private async size(path: string): Promise<number> {
+    try {
+      return (await this.io.stat(path)).size;
+    } catch (error) {
+      // Nothing written yet is the normal first-run state, not a failure.
+      if (errorCode(error) === 'ENOENT') return 0;
+      throw error;
+    }
+  }
+
+  private async move(from: string, to: string): Promise<void> {
+    try {
+      await this.io.rename(from, to);
+    } catch (error) {
+      // A generation that does not exist yet is the normal state until the
+      // file has rotated that many times.
+      if (errorCode(error) !== 'ENOENT') throw error;
+    }
+  }
+
+  private async remove(path: string): Promise<void> {
+    try {
+      await this.io.unlink(path);
+    } catch (error) {
+      if (errorCode(error) !== 'ENOENT') throw error;
+    }
+  }
+}
+
+/** Marks a failure of trace housekeeping, as opposed to a lost trace. */
+class RotationError extends Error {
+  constructor(message: string) {
+    super(`runs.jsonl rotation failed: ${message}`);
+    this.name = 'RotationError';
   }
 }
 

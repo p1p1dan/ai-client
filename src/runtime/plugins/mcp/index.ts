@@ -71,6 +71,24 @@ export const MCP_CALL_TIMEOUT_MS = 120_000;
 export const MCP_OUTPUT_BYTES = 50 * 1024;
 /** Images bypass the text budget entirely, so their count is what is capped. */
 export const MCP_MAX_IMAGES = 8;
+/**
+ * T024 — byte ceilings for the images one call may forward.
+ *
+ * A count alone does not bound anything: the base64 payload of every forwarded
+ * image is written into the session file verbatim, and the only other limit on
+ * it is the 8 MiB transport frame, so eight images could add most of that to a
+ * single JSONL line. Unlike a tool's text output — which the model produced and
+ * is therefore bounded by its own output budget — this size is chosen entirely
+ * by a third-party server, which makes it the one session-file source a user
+ * cannot influence. Per-image and per-call are both needed: one ceiling alone
+ * is escapable by splitting one big image into eight merely large ones.
+ *
+ * The numbers: 1 MiB of base64 is roughly 768 KiB of PNG, generous for a
+ * screenshot, and 2 MiB per call keeps the worst call at 1/16 of the session
+ * budget instead of 1/4.
+ */
+export const MCP_IMAGE_BYTES = 1024 * 1024;
+export const MCP_IMAGE_TOTAL_BYTES = 2 * 1024 * 1024;
 
 export interface McpConnection {
   server: McpServerConfig;
@@ -261,6 +279,8 @@ function contentOf(result: McpToolResult): {
   const texts: string[] = [];
   const images: ImageContent[] = [];
   let dropped = 0;
+  let oversized = 0;
+  let imageBytes = 0;
   for (const part of result.content) {
     if (part.type === 'text' && typeof part.text === 'string') {
       if (part.text) texts.push(part.text);
@@ -271,6 +291,14 @@ function contentOf(result: McpToolResult): {
         dropped += 1;
         continue;
       }
+      // T024 — measured before the payload is kept, not after: an image that
+      // does not fit must never reach the session file at all.
+      const bytes = Buffer.byteLength(part.data);
+      if (bytes > MCP_IMAGE_BYTES || imageBytes + bytes > MCP_IMAGE_TOTAL_BYTES) {
+        oversized += 1;
+        continue;
+      }
+      imageBytes += bytes;
       images.push({
         type: 'image',
         data: part.data,
@@ -283,15 +311,36 @@ function contentOf(result: McpToolResult): {
     texts.push(`[${part.type}]`);
   }
   if (dropped > 0) texts.push(`[${dropped} more image(s) not forwarded]`);
+  // Said separately from the count overflow: "too many" is answered by asking
+  // for fewer, "too large" is not, and a model told the wrong one retries the
+  // call forever.
+  if (oversized > 0) texts.push(`[${oversized} image(s) dropped: over the size budget]`);
   const joined = texts.join('\n');
+  // T024 — cut on bytes, which is what the budget is named in and what the
+  // session file is measured in. `String.length` counts UTF-16 units, so the
+  // same "50 KiB" admitted up to three times that in CJK or emoji text.
+  const encoded = Buffer.from(joined);
   const text =
-    joined.length > MCP_OUTPUT_BYTES
-      ? `${joined.slice(0, MCP_OUTPUT_BYTES)}\n[output truncated]`
+    encoded.byteLength > MCP_OUTPUT_BYTES
+      ? `${truncateUtf8(encoded, MCP_OUTPUT_BYTES)}\n[output truncated]`
       : joined;
   return {
     content: [{ type: 'text', text: text || summarize(images.length) }, ...images],
     images: images.length,
   };
+}
+
+/**
+ * Cut UTF-8 bytes without producing a replacement character.
+ *
+ * `stream: true` makes the decoder hold back an incomplete trailing sequence
+ * rather than emit U+FFFD for it, so the cut lands on a character boundary and
+ * the dropped bytes are at most three.
+ */
+function truncateUtf8(bytes: Buffer, limit: number): string {
+  return new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes.subarray(0, limit), {
+    stream: true,
+  });
 }
 
 /** The text block is never empty: a transcript renders it, and JSON of a base64 image is not a transcript line. */

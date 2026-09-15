@@ -28,7 +28,13 @@ import {
   type McpConfigSource,
   mcpConfigFiles,
 } from '../plugins/mcp/config.ts';
-import { MCP_CONNECT_ALL_TIMEOUT_MS, mcpToolName } from '../plugins/mcp/index.ts';
+import {
+  MCP_CONNECT_ALL_TIMEOUT_MS,
+  MCP_IMAGE_BYTES,
+  MCP_IMAGE_TOTAL_BYTES,
+  MCP_OUTPUT_BYTES,
+  mcpToolName,
+} from '../plugins/mcp/index.ts';
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'mcp-echo-server.mjs');
 
@@ -668,6 +674,88 @@ describe('P5-3 bridge against a real stdio server', () => {
     const one = await parts({ count: 1, silent: true });
     expect(one.map((part) => part.type)).toEqual(['text', 'image']);
     expect(one[0].text).toBe('(1 image)');
+  }, 30_000);
+
+  /**
+   * T024 — a server's answer is the one thing written into the session file
+   * whose size neither the user nor the model chose.
+   *
+   * The count cap said nothing about bytes, so eight images bounded only by the
+   * 8 MiB transport frame could land in one JSONL line, and the 32 MiB session
+   * budget is a hard wall: once the file is over it, the session cannot be
+   * opened again at all.
+   */
+  it('drops an image that is over the per-image byte budget and says why', async () => {
+    await declare();
+    const { handle, faux } = await runtime();
+    faux.setResponses([
+      call('mcp__echo__shot', { count: 1, silent: true, bytes: MCP_IMAGE_BYTES + 1 }),
+      fauxAssistantMessage('seen'),
+    ]);
+    let content: { type: string; text?: string }[] = [];
+    await handle.run({
+      prompt: 'use it',
+      onEvent: (event) => {
+        if (event.type === 'tool_execution_end' && event.toolName === 'mcp__echo__shot')
+          content = event.result.content as typeof content;
+      },
+    });
+    expect(content.filter((part) => part.type === 'image')).toHaveLength(0);
+    // "Too many" and "too large" are different instructions to the model.
+    expect(content[0].text).toContain('1 image(s) dropped: over the size budget');
+    expect(content[0].text).not.toContain('not forwarded');
+  }, 30_000);
+
+  it('stops forwarding images once the per-call byte budget is spent', async () => {
+    await declare();
+    const { handle, faux } = await runtime();
+    // Each one fits on its own; three of them do not fit together, which is
+    // exactly what a per-image ceiling alone would have let through.
+    const each = Math.floor(MCP_IMAGE_TOTAL_BYTES / 2) - 1;
+    faux.setResponses([
+      call('mcp__echo__shot', { count: 3, silent: true, bytes: each }),
+      fauxAssistantMessage('seen'),
+    ]);
+    let content: { type: string; text?: string; data?: string }[] = [];
+    await handle.run({
+      prompt: 'use it',
+      onEvent: (event) => {
+        if (event.type === 'tool_execution_end' && event.toolName === 'mcp__echo__shot')
+          content = event.result.content as typeof content;
+      },
+    });
+    const images = content.filter((part) => part.type === 'image');
+    expect(images).toHaveLength(2);
+    expect(images.reduce((sum, part) => sum + (part.data?.length ?? 0), 0)).toBeLessThanOrEqual(
+      MCP_IMAGE_TOTAL_BYTES
+    );
+    expect(content[0].text).toContain('1 image(s) dropped: over the size budget');
+  }, 30_000);
+
+  /**
+   * T024 — the budget is named in bytes and the session file is measured in
+   * bytes, but the check counted UTF-16 units: the same 50 KiB admitted three
+   * times that much CJK text, and nothing downstream cut it again.
+   */
+  it('measures the text budget in bytes, not UTF-16 units', async () => {
+    await declare();
+    const { handle, faux } = await runtime();
+    // Under the old ceiling by `length`, well over it by bytes.
+    const text = '\u6c49'.repeat(MCP_OUTPUT_BYTES / 2);
+    faux.setResponses([call('mcp__echo__echo', { text }), fauxAssistantMessage('seen')]);
+    let content: { type: string; text?: string }[] = [];
+    await handle.run({
+      prompt: 'use it',
+      onEvent: (event) => {
+        if (event.type === 'tool_execution_end' && event.toolName === 'mcp__echo__echo')
+          content = event.result.content as typeof content;
+      },
+    });
+    const returned = content[0].text ?? '';
+    expect(returned).toContain('[output truncated]');
+    expect(Buffer.byteLength(returned)).toBeLessThanOrEqual(MCP_OUTPUT_BYTES + 32);
+    // Cut on a character boundary: no replacement character at the seam.
+    expect(returned).not.toContain('\ufffd');
   }, 30_000);
 
   // skills-mcp-15 — a failed spawn left `client` undefined behind a cast that
