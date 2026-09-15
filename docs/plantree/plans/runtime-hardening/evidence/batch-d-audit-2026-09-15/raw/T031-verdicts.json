@@ -1,0 +1,1010 @@
+{
+  "task": "T031",
+  "head": "ebc82f16",
+  "areas": [
+    {
+      "key": "concurrency",
+      "task": "T031",
+      "title": "并发多会话静态面",
+      "summary": "审「同时开 N 个会话」的静态并发面。前提核实清楚：一个会话 = 一个独立 worker 进程，容量按内存分档（≤4 GiB 三个 / ≤8 GiB 六个 / 其余十个）；同一会话文件不被两个 worker 打开这条由 Main 的 entriesByKey 加 Electron 单实例锁保证，不是由写锁保证；真正跨进程共享的只有会话 JSONL、runs.jsonl、agent 目录下的定义文件、以及每会话各拉一套的 MCP 子进程。T015 之后写锁主干成立（创建即互斥、按 pid 判陈旧、跨机器不偷、释放校验 token、两进程抢陈旧锁有确定性用例），残留两洞：一是抢占陈旧锁时锁名会短暂空缺，第三个申领者能在窗口里直接建锁，失败方还会删掉赢家的锁文件，造成同一 JSONL 两个写者（产品可达性凑不齐三个竞争者，按模块契约反例记）；二是陈旧判定只看 pid 在不在，pid 被复用后会话永久打不开，acquiredAt 记了没人读、界面无补救入口。runs.jsonl 是 T024 明确移交本任务的：轮转跨进程无协调，两个 worker 前后脚各做一轮三次 rename 会提前挤掉一整代并留下代号空洞——打包态不触发（没有生产代码设 AICLIENT_RUNTIME_TRACE_DIR），但现场取证正是先设这个变量再起应用、worker 又整份继承 env，于是恰好在最需要 trace 可信的场景里出现。MCP 是预算问题：每会话 16 个服务器 × 最多 10 个会话 = 最多 160 个常驻子进程，内存分档注释只算了 worker 自身；且子进程是 detached 起的，worker 被强杀时无人回收，只能指望服务器自己认 stdin EOF。子代理定义是截断式 writeFile 而读者是每个顶层 run 全目录重扫的 N 个 worker，撞上读到半截文档，这一轮菜单里就少一个子代理。技能目录的 refresh() 全仓无生产调用方，多会话快照长期分叉。Main 侧没有并发正确性问题（创建/恢复/驱逐全在一条串行链上，session-index 原子写 + 队列 + 单实例锁，scratch 每会话一个 uuid 目录），唯一账面出入是导入 worker 另起进程但不计容量。共 9 条发现（5 medium / 4 low）、11 条可确定性复现的并发用例、8 项上机检查。",
+      "confidence": "medium",
+      "raw_report_path": "docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/concurrency.md",
+      "files_read_count": 42,
+      "node_verdicts": [
+        {
+          "node": "P3-1",
+          "verdict": "complete-with-gaps",
+          "rationale": "单写者在两进程视角下成立且有确定性用例（T015，session-04/05 已修）。残留三条：抢占陈旧锁时锁名空缺让第三方能建锁（concurrency-01）、pid 复用使陈旧锁永久判不成陈旧且界面无补救（concurrency-02）、跨进程 trace 轮转丢代（concurrency-03，按 T024 的移交口径记在本节点）。",
+          "findings": ["concurrency-01", "concurrency-02", "concurrency-03"]
+        },
+        {
+          "node": "P3-3",
+          "verdict": "complete",
+          "rationale": "旧格式判定、v4 双头升级与坏行剔除的原子重写都在已持有的写锁内完成（store.ts:169-196 明确说明「我们持锁，这是唯一不与自己的追加竞争的时刻」），legacy 迁移路径的陈旧锁清理也有用例（sessionWriterLock.test.ts:159）。并发面未发现残留。",
+          "findings": []
+        },
+        {
+          "node": "P5-1",
+          "verdict": "complete-with-gaps",
+          "rationale": "技能目录扫描没有跨进程写者，快照语义在插件注释里是诚实的（明说本插件不自动刷新）。缺的是触发端：refresh() 全仓零生产调用方，导致多会话的技能菜单长期分叉（concurrency-08）。",
+          "findings": ["concurrency-08"]
+        },
+        {
+          "node": "P5-3",
+          "verdict": "complete-with-gaps",
+          "rationale": "单会话内的连接预算、共享秒表、取消与 close 语义完整（T018）。并发面缺两块：没有跨会话的全局 MCP 进程预算且分档注释未把它算进内存账（concurrency-04）；worker 被强杀时 detached 子进程无人回收（concurrency-05）。",
+          "findings": ["concurrency-04", "concurrency-05"]
+        },
+        {
+          "node": "P4-0",
+          "verdict": "complete-with-gaps",
+          "rationale": "一会话一进程的假设两侧都有守卫：Main 的 entriesByKey 双向查冲突且全在 serialize 链内，worker 侧有 WORKER_ALREADY_BOOTSTRAPPED 与 bootstrap 幂等缓存；未发现同一会话被两个 worker 打开的路径。账面出入是导入 worker 不计容量（concurrency-09），以及强杀载体时后代进程无人收（concurrency-05 的 Windows 半边）。",
+          "findings": ["concurrency-09", "concurrency-05"]
+        }
+      ],
+      "checklist_items": [
+        {
+          "item": "加密目录下写锁的取 / 读 / 接管是否可用，代价多少",
+          "judge": ".writer.lock 在盘上是不是 TSD 容器；正常打开会话的耗时；人为留一把 pid 不存在的陈旧锁后接管是否在 60 秒 bootstrap 预算内完成",
+          "method": "在受策略目录下开一个会话，读锁文件前 16 字节看是否为 %TSD-Header-###%；再手写一把陈旧锁，重开会话并计时",
+          "target": "encrypted"
+        },
+        {
+          "item": "worker 被强杀后 MCP 子进程是否残留",
+          "judge": "杀掉 worker 进程后，它拉起的 MCP 服务器进程是否在 10 秒内消失",
+          "method": "配一个真实 stdio MCP 服务器，开会话待其就绪，记下子进程 pid，然后 taskkill /PID <worker> /F（Windows）或 kill -9（Linux），10 秒后查 pid",
+          "target": "windows"
+        },
+        {
+          "item": "Windows 上 node 运行器孙进程的回收",
+          "judge": "node.exe（exec 运行器）与它下面的 MCP 进程是否都消失",
+          "method": "同上场景，用 wmic process where ParentProcessId=<worker> 逐层看进程树",
+          "target": "windows"
+        },
+        {
+          "item": "三个会话并发时的真实进程数与内存",
+          "judge": "进程数 = 3 个 worker + 每会话 MCP 数；常驻内存是否仍在机器可承受范围",
+          "method": "起 Electron 开三个会话各跑一轮，ps -o pid,rss,comm --ppid / 任务管理器截图",
+          "target": "utility"
+        },
+        {
+          "item": "现场取证时 runs.jsonl 的代号完整性",
+          "judge": "设 AICLIENT_RUNTIME_TRACE_DIR 后开 3 个会话跑到至少两次轮转，runs.1/2/3.jsonl 是否连续无空洞、行数是否守恒",
+          "method": "按 evidence/p4-6 的脚本设变量起应用，跑完后 wc -l runs*.jsonl 并比对 run_id 并集",
+          "target": "utility"
+        },
+        {
+          "item": "导入时的进程峰值",
+          "judge": "在容量 3 的机器上开满 3 个会话后发起旧对话导入，是否出现第 4 个 worker 进程",
+          "method": "起 Electron，导入前后各数一次 worker 进程",
+          "target": "utility"
+        },
+        {
+          "item": "回合进行中切 TUI 的实际行为",
+          "judge": "点终端按钮是否只弹「等这一轮结束」提示，且 writer.lock 与会话文件均未被第二个进程触碰",
+          "method": "起 Electron 发一条长回合，回合中点 TUI 切换；随后 ls -la 会话目录看有无新写者痕迹",
+          "target": "real-model"
+        },
+        {
+          "item": "会话被强杀后 pid 复用的实际形态",
+          "judge": "强杀应用后留下的锁，重启应用能否打开该会话",
+          "method": "现场机器上强制结束应用进程，记下锁里的 pid，等待或制造 pid 回绕后重开该会话",
+          "target": "windows"
+        }
+      ],
+      "test_gaps": [
+        "sessionWriterLock.test.ts —「抢占的放回窗口里不允许第三方建锁」：用已有 afterFirstRead 同款钩子，在 clearStale 的 rename 成功之后、writeFile 放回之前注入第三个 acquireWriterLock；断言三次调用中至多一次 fulfilled、盘上锁文件 token 等于唯一 fulfilled 的那个、目录无 .stale 残留（当前会有两个 fulfilled）",
+        "sessionWriterLock.test.ts —「输掉抢占的一方不得删除赢家的锁文件」：断言 clearStale 放回撞 EEXIST 之后，赢家的锁文件仍存在且内容与赢家 token 一致",
+        "sessionWriterLock.test.ts —「pid 被复用的陈旧锁仍可接管」：写一把 owner 为 process.pid（活着但不是我们的 worker）且 acquiredAt 为 48 小时前的锁，断言 acquireWriterLock 成功接管而非永久 session_locked（先于 concurrency-02 的修法落地会红）",
+        "sessionWriterLock.test.ts —「释放时发现锁已易主要能被观测到」：断言 releaseWriterLock 返回 false 的那一次，JsonlSessionStore.close() 之后 writeFailure（或新增的观测出口）非空",
+        "trace.test.ts —「两个 TracePlugin 实例共用一个目录轮转时不丢代」：同一 dir 建两个实例（maxFileBytes 调到几百字节），交错 finish() 触发轮转，断言 runs.1/2/3.jsonl 在存在的代号上连续无空洞，且三代文件里的 run_id 集合包含所有应保留的 run",
+        "trace.test.ts —「轮转期间另一实例的追加不丢行」：两个实例交错写 N 行，断言 runs*.jsonl 全部文件里 run_id 并集大小为 N（若采纳 per-pid 文件方案则改为断言两个文件各自守恒）",
+        "subagentCatalog.test.ts（Main）—「保存定义时并发读只会看到旧文档或新文档」：保存过程中并发跑一次目录扫描 + 解析，断言结果要么旧定义要么新定义，不会是「该定义缺席」",
+        "subagentDefinitions.test.ts —「重载读到缺人的目录时保留旧列表」：让 reloadCatalog 返回一份少了一个定义且带解析类诊断的目录，断言 definitions 不变且记了日志",
+        "WorkerManager.test.ts —「导入槽计入容量」：容量设为 1，已有一个就绪会话时发起 inspectLegacyImport，断言要么先驱逐要么拒绝，同一时刻不存在两个 fork 出来的进程（当前会有两个）",
+        "chatPiWorkerRouting / piTui 的 Main 侧用例 —「回合进行中 Main 拒绝 TUI 接管」：构造 activeRequestId 非空的会话，直接调 PI_TUI_OPEN 处理函数，断言抛错且 sessionGuard 未易主（当前会成功接管）",
+        "mcp.test.ts / exec 层 —「载体被强杀时 detached 子进程不受保护」：用一个忽略 stdin EOF 的替身服务器脚本，断言 detached 下父进程退出后替身仍存活，把 concurrency-05 的前提用替身固化，真机形态留批次 E"
+      ],
+      "unverified_claims": [
+        "concurrency-01 在产品里的可达性没有构造出来：模块级窗口确定，但要凑齐三个同时抢同一会话文件的进程，需绕过 WorkerManager.entriesByKey（同一 Main 内一个会话文件只有一个 worker）与 app.requestSingleInstanceLock()（第二个应用实例起不来）。按「模块契约的反例 + 未来出现第二个取锁方（CLI、外部工具、多实例开发构建）时立即成立」来读",
+        "多个 worker 同时 appendFile 同一个 runs.jsonl 会不会写出半行：O_APPEND 下对常规文件的单次 write 通常原子，只有 Node 写循环遇短写拆成多次系统调用时才可能交织。机制成立，无实测样本，也没量出典型 trace 行的大小分布，故未立成发现",
+        "加密机上 .writer.lock 是否会成为 TSD 容器：若会，readLock 走 io.readFile 的 TSD 分支去拉 helper 子进程（单次预算 30 秒），一次陈旧接管要读两次锁，最坏 60 秒，正好等于 Main 的 BOOTSTRAP_REQUEST_TIMEOUT_MS。策略文件覆盖范围无法静态判定，只进上机检查单",
+        "MCP 服务器在 worker 被杀后是否真的退出，取决于每个服务器自己认不认 stdin EOF；未实测任何真实服务器的行为，concurrency-05 的后果段按「不认 EOF 的服务器存在」写",
+        "多窗口下渲染层的 isSessionBusy 是否在所有窗口都能看到「运行中」：未核对 SharedSessionState 的广播范围，因此 concurrency-07 的场景没有写成「第二个窗口一定能触发」",
+        "Windows pid 回绕的实际速度与 concurrency-02 的现场概率没有量化，只标了方向",
+        "本轮未执行任何构建、tsc、vitest、打包或 Electron；所有结论来自源码与测试文件的阅读"
+      ],
+      "findings": [
+        {
+          "id": "concurrency-01",
+          "status": "confirmed",
+          "severity": "medium",
+          "reviewer_severity": "medium",
+          "category": "concurrency",
+          "node": "P3-1",
+          "file": "src/runtime/plugins/session/writerLock.ts",
+          "line": 173,
+          "title": "抢占陈旧锁时锁名短暂空缺，第三个申领者可在此窗口建锁，造成同一会话两个写者",
+          "static_inference": false,
+          "refuter_reason": "代码属实且未被 T015 覆盖。/home/ai/code/ai-client/src/runtime/plugins/session/writerLock.ts:162-180 的 clearStale 先 `await io.rename(lock, aside)`（此刻锁名在盘上真空），再 `const moved = await readLock(io, aside)`；当 `!moved.bytes.equals(expected)`（即自己已输掉竞争、移走的是赢家的锁）时执行 `await io.writeFile(lock, moved.bytes, { createOnly: true, mode: 0o600 }).catch((error) => { if (errorCode(error) !== 'EEXIST') throw error; })`，EEXIST 被静默吞掉后紧接 `await unlinkQuiet(io, aside)` —— 赢家的锁文件就此被删。对照同文件 205-212 行的第 0 次尝试 `await io.writeFile(path, claim, { createOnly: true, mode: 0o600 }); return { path, token };`，它不读盘不判陈旧，只要撞上真空窗口就直接成锁。因此「陈旧锁 + 抢占赢家 + 窗口内第三个申领者」三方竞争后，赢家与第三者会同时持有对同一 JSONL 的写权；赢家后续 releaseWriterLock（writerLock.ts:236-238 `if (held?.owner?.token !== lock.token) return false;`）返回 false，而 store.ts:583-589 的 close() 只 `await releaseWriterLock(this.io, this.lock);` 丢弃返回值，无日志无事件。git log -- writerLock.ts 只有 280f49fc 与 T015 的 ce2a7af8 两次改动，当前代码即 T015 之后态。测试 /home/ai/code/ai-client/src/runtime/__tests__/sessionWriterLock.test.ts:228-272 只钉住两方竞争（afterFirstRead 的慢进程、两个并发 acquire），没有覆盖「写回撞 EEXIST」分支。严重级给 medium 而非 high：触发需先有陈旧锁、再有一方抢占失败、且第三方恰好落在 rename 与写回之间的微秒窗口；应用有 single-instance 锁（src/main/index.ts:269），同一会话三个写者只能靠 worker 交替期的churn 凑出，可达性很低，但缺口与后果（两写者交织同一 JSONL）真实存在。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md 第101行（roadmap 任务表 T031 行）",
+          "waiver_quote": "T031 | 并发、容量与 Windows 静态面：多会话写锁/runs.jsonl/技能缓存/MCP 进程数；NodeRuntimeResolver、taskkill 路径、路径拼接与 glob 展开、会话文件路径；TSD helper 契约用替身固化 | 批评者缺口 12/13/14/15/16 | 形成批次 E 的检查单"
+        },
+        {
+          "id": "concurrency-02",
+          "status": "confirmed",
+          "severity": "medium",
+          "reviewer_severity": "medium",
+          "category": "robustness",
+          "node": "P3-1",
+          "file": "src/runtime/plugins/session/writerLock.ts",
+          "line": 128,
+          "title": "pid 被复用后陈旧锁永远判不成陈旧，会话永久打不开且界面无补救入口",
+          "static_inference": true,
+          "refuter_reason": "静态推断，但代码事实全部核对属实。/home/ai/code/ai-client/src/runtime/plugins/session/writerLock.ts:127-132：`function stale(held: LockFile): boolean { const owner = held.owner; if (owner === undefined) return true; if (owner.host !== undefined && owner.host !== hostname()) return false; return !processAlive(owner.pid); }`，唯一判据就是 pid 是否存在；processAlive（同文件 65-73）用 `process.kill(pid, 0)`，EPERM 也算活。acquiredAt 在 201 行写入、89 行解析，但 grep acquiredAt 全 runtime 只有 writerLock.ts:30/89/201 与测试 sessionWriterLock.test.ts:122 四处，没有任何判定读它 —— 「记了但无人用」成立。session_locked 的消费者：grep 全仓（src/ 去掉 node_modules）只命中 writerLock.ts 自身与 runtime 测试，Main 与渲染层没有任何「强制打开 / 清理锁」入口，recovery.ts 也不碰锁（其中 'lock' 命中只是 'block'）。所以 pid 回绕后该会话每次打开都抛 session_locked，用户只能手删 sidecar。严重级维持 medium：后果是单条会话永久打不开（数据仍在盘上，未损坏），概率取决于平台 pid 回绕，未实测。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md 第101行（T031 行）；相邻但不等同的旧文档：docs/plantree/plans/runtime-evolution/evidence/p3/completion/README.md「已知限制与下一步」",
+          "waiver_quote": "T031 | 并发、容量与 Windows 静态面：多会话写锁/runs.jsonl/技能缓存/MCP 进程数…"
+        },
+        {
+          "id": "concurrency-03",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "concurrency",
+          "node": "P3-1",
+          "file": "src/runtime/trace.ts",
+          "line": 258,
+          "title": "多个 worker 共用一个 traceDir 时会双重轮转，提前丢掉一整代 trace 并在代号上留空洞",
+          "static_inference": false,
+          "refuter_reason": "代码事实成立，且计划文档已自认未落地。/home/ai/code/ai-client/src/runtime/trace.ts:244-262：rotate 先 `const size = await this.size(path)`（size() 走 `this.io.stat(path)`，读盘真实大小），超限后 `for (let index = this.fileGenerations; index >= 1; index--) { const from = index === 1 ? path : join(dir, 'runs.'+(index-1)+'.jsonl'); await this.move(from, join(dir, 'runs.'+index+'.jsonl')); }`，move() 在 ENOENT 时静默跳过（trace.ts:284-291）。串行只到进程内：trace.ts:205-208 注释明说 `Rotation runs inside the same serialized chain as the append`，this.pending 是实例字段。路径固定 `join(dir, 'runs.jsonl')`（trace.ts:203），dir 来自 bootstrap.ts:399 的 flags.traceDir，flags.ts:33/53 直接读单个环境变量 AICLIENT_RUNTIME_TRACE_DIR，无按会话/进程分路径；worker 继承整份 process.env（PiWorkerProcess.ts:53-56 `for (const [key, value] of Object.entries(input.inheritedEnv ?? process.env))`），所以取证时多 worker 共用同一文件。两进程各跑一轮三次 rename，第二轮把第一轮刚上移的一代再上移覆盖、runs.1 因源已不在被跳过 —— 丢一代 + 代号空洞成立。该条与既有 evidence/batch-d-raw/capacity-leftovers.md:161 的 capacity-05 是同一条，roadmap.md:36 的 T024 收口明写「多 worker 并发轮转归 T031」，即已识别未修。降为 low：全仓无生产代码设置该环境变量（只有 flags.ts 定义与文档），仅影响手工取证时的 trace 历史完整性，不损坏会话数据、不影响用户可见功能。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md 第36行（Done 段 T024 行）",
+          "waiver_quote": "待落地（禁区文件，记在对账表）：用户附件无体积上限、`tool_execution_start` 把工具参数全文写进 trace、compaction 摘要正文无上限、会话文件缺单行最大字节兜底；多 worker 并发轮转归 T031。"
+        },
+        {
+          "id": "concurrency-04",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "capacity",
+          "node": "P5-3",
+          "file": "src/runtime/plugins/mcp/config.ts",
+          "line": 227,
+          "title": "MCP 服务器数量只有每会话上限，没有全局预算，也没有进入 worker 内存分档的账",
+          "static_inference": true,
+          "refuter_reason": "事实核对无误，但属容量设计缺口而非缺陷行为。/home/ai/code/ai-client/src/runtime/plugins/mcp/config.ts:40 `export const MAX_SERVERS = 16;`，227-235 行 `if (servers.length > MAX_SERVERS) {...} return { servers: servers.slice(0, MAX_SERVERS), diagnostics };` —— 这是在 worker 内对本会话配置做的截断，没有任何跨会话/跨进程的余额概念（grep MAX_SERVERS 只有 config.ts 四处命中）。每个 native worker 都会开 MCP：src/runtime/worker/nativeWorkerRuntime.ts:219 `mcp: { ...(this.options.log ? { log: this.options.log } : {}) }`，且每台服务器都是独立子进程（mcp/index.ts:210 `const child = await exec.spawn({ command: server.command, ... })`）。容量分档注释（WorkerManager.ts:314-320「a slot is a whole utilityProcess plus one model context」）确实只算 worker 与模型上下文，没有把 MCP 子进程计入，resolveDefaultWorkerCapacity（:322-326）返回 3/6/10。所以「16 × 容量」的乘积无人记账成立，属静态推断。降为 low：没有错误行为，是用户自行配置多服务器 + 多会话时的资源压力与注释口径不全，最坏后果是机器变慢，不涉及数据或安全。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md 第101行（T031 行）",
+          "waiver_quote": "T031 | 并发、容量与 Windows 静态面：多会话写锁/runs.jsonl/技能缓存/MCP 进程数…"
+        },
+        {
+          "id": "concurrency-05",
+          "status": "confirmed",
+          "severity": "medium",
+          "reviewer_severity": "medium",
+          "category": "robustness",
+          "node": "P5-3",
+          "file": "src/runtime/host/exec.ts",
+          "line": 171,
+          "title": "worker 被强杀时 MCP 子进程不随之退出，回收只能指望服务器自己认 stdin EOF",
+          "static_inference": true,
+          "refuter_reason": "静态推断，链路核对属实。/home/ai/code/ai-client/src/runtime/host/exec.ts:162-173 的 spawnPersistent（MCP 走这条，见 mcp/index.ts:210 的 exec.spawn）以 `detached: process.platform !== 'win32'` 起子进程，非 Windows 自成进程组、不随父进程被杀；Windows 上必须经 node 运行器（exec.ts:156-160 无 nodePath 直接拒绝），MCP 服务器是孙进程。清理只挂在优雅路径：mcp/index.ts:383 `ctx.effect(() => () => this.close());`，close()（:451-457）只关 client。Main 的强杀不经过这些：WorkerSlot.ts:600-604 `const exitPromise = this.waitForTransportExit(transport, generation); this.detachCurrentTransport(); this.killCurrentTransport();` 在 DEFAULT_DISPOSE_TIMEOUT_MS = 3_000（WorkerSlot.ts:93）耗尽后无条件执行，另在崩溃路径 :584 同样直接杀；killCurrentTransport 只终止 worker 进程本身，POSIX 下杀父不会连带杀子，更不会杀已 detached 的进程组，Windows 的 taskkill /T 只出现在 exec.ts:371-372 与 :521-522 自己的 kill 路径里。于是 worker 被强杀后，MCP 子进程唯一的退出机制是它自己识别 stdin EOF —— 规范建议但不保证。维持 medium：后果是孤儿进程与端口/内存不释放，重复驱逐会累积，用户可见（任务管理器里一堆无父进程），但不损坏数据；Windows 孙进程形态未上机验证。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md 第101行（T031 行）；节点判定见 docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/concurrency.md 第67行",
+          "waiver_quote": "P5-3（MCP bridge）| complete-with-gaps | 连接预算、取消、关闭在单会话内是完整的；并发面缺全局进程预算（concurrency-04）与异常终止时的子进程回收（concurrency-05）。"
+        },
+        {
+          "id": "concurrency-06",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "concurrency",
+          "node": "P5-2-1",
+          "file": "src/main/services/agent-host/subagentCatalog.ts",
+          "line": 236,
+          "title": "子代理定义文件是截断式写入，而读者是每个顶层 run 全目录重扫的 N 个 worker，撞上就读到半截文档",
+          "static_inference": false,
+          "refuter_reason": "两侧代码与时序都核对属实，未被 T020 修。写侧 /home/ai/code/ai-client/src/main/services/agent-host/subagentCatalog.ts:235-236 `await mkdir(this.directory(), { recursive: true }); await writeFile(this.pathFor(name), document, 'utf8');`（导入路径 :385-386 同样），是截断式写，没有 tmp+rename —— 同仓其他地方明明有原子写范式（src/main/services/chat/SessionIndexService.ts:21 writeJsonAtomically）。读侧确实在 worker 进程里直接读同一目录：bootstrap.ts:339-346 `readSubagentCatalog = () => loadSubagentCatalog(skillSource(ctx.runtimeHostIo, SUBAGENT_SCAN_BYTES), { ...(agentDir ? { agentDir } : {}) ... })`，bootstrap.ts:489 把它接成 reloadCatalog；agent-loop/index.ts:244 `await subagents?.refresh();` 在每个顶层 run 开头触发（T020 落的行为），subagent/index.ts:409-419 里 `catch { ...; return; }` 只在抛错时保旧表，解析失败降级成 diagnostics（catalog.ts:154 `diagnostics.push({ code: 'parse_failed', ... })`）后目录少人也照单全收。目录一致：Main 写 `join(agentDir(), 'subagents')`（subagentCatalog.ts:78-80），runtime 按 agentDir 读同一根。改名保存的 `writeFile 新 → rm 旧`（:236 与 :240-242）之间确有「两条同内容定义」窗口。降为 low：窗口是一次小文件 writeFile 的持续时间（亚毫秒级），要恰好与某个 worker 的 refresh 扫描撞上；后果是一轮里少一个 subagent 的幽灵现象，可自愈，不损坏数据。定性为缺口（原子写缺失 + 无测试覆盖）而非可复现的功能错误。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md 第47行（批次 D 状态行）；docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/concurrency.md 报头",
+          "waiver_quote": "下一步批次 D（审计覆盖补全，只读，T029～T031）待派"
+        },
+        {
+          "id": "concurrency-07",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "contract-gap",
+          "node": "H/20",
+          "file": "src/main/ipc/piTui.ts",
+          "line": 114,
+          "title": "「TUI 接管会话前不能有正在跑的回合」只由渲染层把关，Main 的 IPC 入口不复核",
+          "static_inference": false,
+          "refuter_reason": "推不翻，但要把「可触发性」钉死。事实核对：(1) src/main/ipc/piTui.ts:114-136 的 PI_TUI_OPEN 处理器全文只有四道检查——assertAgentSpawnAllowed()、isRemoteVirtualPath 拒绝、`const support = await inspectPiTuiSessionSupport(request.sessionFile); if (!support.supported) throw`、`const acquired = sessionGuard.transferTo(request.sessionFile)`，确实没有任何一处问 WorkerManager「这个会话有没有在跑的回合」。(2) transferTo 在 src/main/services/terminal/piTuiSession.ts:85-89 就是无条件赋值：`const key = normalizeSessionKey(sessionKey); if (!key) return {ok:false...}; this.#ownerKey = key; return {ok:true};`，注释自己写明「Deliberately a transfer, not a test-and-set」，所以它不是门。(3) 反方向确有硬门：src/main/ipc/chat.ts:125-146 的 handOverFromTui 先 releaseSessionForHostPrompt 杀终端、再 assertHostPromptAllowed(sessionFile)、terminalWrote 时 reloadSessionFromDisk。(4) 唯一 busy 门确在渲染层 src/renderer/components/chat/usePresentationSwitch.ts:86 `if (isSessionBusy(liveStatus ?? 'idle')) { addToast(...'Wait for this turn to finish'); return; }`。(5) 会写坏的物理前提也成立：native 会话现在写双格式头，piTuiSession.ts:158-161 只对 `kind==='header' && version===4 && type!=='session'` 的旧头拒绝，其余一律 supported，所以 native 会话真会被 TUI 接管；而 src/runtime/plugins/session/store.ts:129 的 acquireWriterLock 是 worker 侧 open 到 close 全程持有的建议锁，`grep -rl \"writer.lock\" node_modules/@earendil-works/pi-coding-agent` 零命中，证实 CLI 不取这把锁。(6) 现有测试无覆盖：src/main/ipc/__tests__/piTuiHandover.test.ts 152 行里 grep busy/running/active/WorkerManager 全为空。降级理由（比审查员更保守地确认在 low）：产品内暂无绕过路径——piTui.open 全仓只有 src/preload/index.ts:480 的透传与 src/renderer/hooks/useXterm.ts:758 一处调用，而 useXterm 那个 create effect 的依赖数组（useXterm.ts:825-836）只含 piTuiTerminalId 而不含 piTuiSessionFile，所以「TUI 模式下切到另一个正在跑的会话」不会重新 open；Main 也只造一个主窗口（src/main/windows/MainWindow.ts:175）。因此这是一条确凿的信任边界外置（防御纵深缺口 + 测试缺口），不是当前可复现的数据损坏。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/concurrency.md 报头与节点判定对象列表",
+          "waiver_quote": "任务：T031（批评者缺口 15，`cross-and-critic.md:78` GAP [并发多会话]）… 节点判定对象：P3-1、P3-3、P5-1、P5-3、P4-0 的并发面"
+        },
+        {
+          "id": "concurrency-08",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "dead-code",
+          "node": "P5-1",
+          "file": "src/runtime/plugins/skills/index.ts",
+          "line": 363,
+          "title": "SkillsPlugin.refresh() 全仓无生产调用方，多会话的技能快照只能靠各自重启对齐",
+          "static_inference": false,
+          "refuter_reason": "逐条复核全部属实。(1) src/runtime/plugins/skills/index.ts:363-376 的 refresh() 实现存在且会整体替换 this.catalog；接口注释 index.ts:83-90 自陈「Nothing in this plugin calls it automatically — the trigger belongs to whoever surfaces that action」。(2) 调用方核查：`grep -rn '\\.refresh()' src/runtime --include=*.ts` 只命中 plugins/agent-loop/index.ts:244 `await subagents?.refresh();`（那是子代理，不是技能）、以及两处测试（__tests__/skills.test.ts:917、__tests__/subagentHardening.test.ts:366）；`grep -rn 'runtimeSkills' src/ --include=*.ts` 在 plugins/skills 之外只有 src/runtime/plugins/prompt/index.ts:69 `const skills = this.ctx.get('runtimeSkills')?.segment();`。(3) Main 侧无触发端：`grep -rn 'worker.skills|skills.refresh|refreshSkills' src/` 零命中，没有对应 RPC 也没有 IPC。(4) 快照语义成立：目录只在 loadSkillCatalog（index.ts:258-275）里扫一次，由 SkillsPlugin 构造函数收下（index.ts:281-283），之后只有 refresh() 能换，所以 worker 存活期间技能列表就是它启动那一刻的版本，多个 worker 之间可以长期分叉。(5) 这是项目已知并记录在案的缺口：docs/plantree/plans/runtime-hardening/roadmap.md:27（T019 行）原文写「`refresh()` 已实现但 Main 侧无调用方（触发端归 T020 / UI）」，而 roadmap.md:37 的 T020 落地记录只写了子代理「定义每个顶层 run 经 refresh() 重读」，没接技能。已记录 ≠ 已修，故不判 refuted。严重级维持 low：形态是无触发端的活代码 + 未兑现的契约，用户可见后果（新装技能要新开会话才生效）需要用户手动往技能目录放文件才会遇到。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md 第101行（T031 行）",
+          "waiver_quote": "T031 | 并发、容量与 Windows 静态面：多会话写锁/runs.jsonl/技能缓存/MCP 进程数…"
+        },
+        {
+          "id": "concurrency-09",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "capacity",
+          "node": "P4-0",
+          "file": "src/main/services/legacyImport/PiImportProcess.ts",
+          "line": 34,
+          "title": "导入 worker 另起一个进程，但不计入 worker 容量",
+          "static_inference": false,
+          "refuter_reason": "账目缺口成立，但审查员对后果的描述有一处夸大，我按缩小后的形态确认。(1) 导入确实另起进程且自建 slot：src/main/services/legacyImport/PiImportProcess.ts:33-40 `const { transport } = forkPiWorkerProcess({ generation, cwd: payload.workspacePath }); const slot = new WorkerSlot({ slotKey: `import-inspect:${payload.logicalSessionId}`, ... })`，reconcilePiImport（:60-67）与 createPiImport（:90-98）三处同构。(2) 它确实不进容量账：容量判断三处（WorkerManager.ts:707、935、1447）一律是 `if (this.entriesBySession.size >= this.capacity)`，而导入 slot 只被记进 this.activeImportSlot / this.activeImport，从不写 entriesBySession 或 entriesByKey；并发保护只有 WorkerManager.ts:517/591/622 的 `if (this.importSlotActive) throw new WorkerManagerError('worker_import_busy', ...)` 这一个布尔。(3) stats()/slots 也看不到它：WorkerManager.ts:465-475 的 entries 取自 `[...this.entriesBySession.values()]`，:501-513 的槽位列表同源，所以「现在有几个 worker 进程」这个数字在导入期间偏小 1。(4) 分档数字属实：resolveDefaultWorkerCapacity（WorkerManager.ts:322-326）`if (totalMemoryBytes <= 4 * 1024 ** 3) return 3;`，注释 :308-321 明说分档是按内存卡的，所以 3+1 = 33% 超额成立。夸大之处：导入 RPC 由 src/agent-host/piWorkerRpcServer.ts:371-380 的 'worker.import' / '.inspect' / '.reconcile' / '.discard' 分支直接处理，不需要 worker.bootstrap 建整套插件图，所以「带着自己一整套插件图与 Node 堆」偏重；真实增量只是一个未 bootstrap 的 fork 进程。综合判 low：缺陷的实质是容量与 stats 的口径不一致（资源账目 / 可观测性），不是可靠的 OOM 触发路径。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/concurrency.md 报头与节点判定表",
+          "waiver_quote": "P4-0（同步平台 worker）| complete-with-gaps | 一会话一进程的假设在 Main 与 worker 两侧都有守卫，未发现同一会话被两个 worker 打开的路径；账面出入是导入 worker 不计容量（concurrency-09）…"
+        }
+      ],
+      "stats": {
+        "confirmed": 9
+      }
+    },
+    {
+      "key": "windows-static",
+      "task": "T031",
+      "title": "Windows 静态面与上机检查单",
+      "summary": "Windows 面有三处做得扎实（taskkill 重入保护 T022、分隔符折叠 T001、env 大小写合并），但「Windows 上真实出现的输入形态」这一层几乎无人系统审过。最要紧的是 Git Bash 的 /c/... 盘符记法让 ~/.ssh/* 这条被策略文件明确承诺不可覆盖的 deny 失效，而现场 trace 里模型自己就在用这种写法；其次是 Windows 上 runPipe 的唯一成功出口挂在一个外部 taskkill.exe 进程 2 秒内跑完，而现场那台机器装着四层安全软件；再次是 stdio MCP（npx/.cmd）在 Windows 上根本起不来。全部结论均为静态推断，核心产出是 16 项可一次跑完的批次 E Windows 检查单。",
+      "confidence": "medium",
+      "raw_report_path": "docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/windows-static.md",
+      "files_read_count": 41,
+      "node_verdicts": [
+        {
+          "node": "P1-8",
+          "verdict": "complete-with-gaps",
+          "rationale": "两载体六项探针确实在真机跑过并全绿（test12-reverify.md:547 bundled-node、:570 electron-utility），矩阵本身建立过。但证据钉在提交 8115ebe1，到 HEAD ebc82f16 已隔 158 个提交、其中 24 个动过 src/runtime/host 与 plugins/tools 与 bootstrap.ts（本机 git rev-list 实测）。任务树 P1-8 行对此的描述还带着一条已被 T028 推翻的陈述（windows-08）。缺的是重采，不是矩阵本身。",
+          "findings": ["windows-08"]
+        },
+        {
+          "node": "P4-0",
+          "verdict": "complete-with-gaps",
+          "rationale": "打包 Windows 的 bundled-node 载体有现场 trace 确认（test12-reverify.md:500，carrier=bundled-node、node_source=bundled、node_exec_path 指向安装目录），这一条成立。缺口三条：windows-02（Windows 上 exec 的成功出口挂在外部 taskkill 进程上、2 秒预算、零用例）、windows-03（stdio MCP 在 Windows 起不来）、以及未打包 Windows 开发态无随包 node 导致 runPipe 直接 invalid_host_config（只作静态确认，列在未验证声明与检查单里，因为开发态是否属验收范围是计划问题）。另：名义上属 P4-0 的 NodeRuntimeResolver.ts 无生产调用方，该事实由 main-host-aux 区域立项，此处只作为上机日不必测它的依据。",
+          "findings": ["windows-02", "windows-03"]
+        },
+        {
+          "node": "P4-6",
+          "verdict": "incomplete",
+          "rationale": "Windows 面有三条用户可见行为缺陷（windows-01 安全绕过、windows-04 无 Git Bash 时 bash 工具仍登记、windows-05 CRLF 编辑）与三条环境相关缺陷（windows-06 写锁 PID 复用、windows-07 注册表 PATH 解码、windows-09 OEM 代码页输出），全部没有现场结论。任务树 P4-6 验收表里 R2/R3/R4 三行在 test12-reverify.md:583-585 就写着未执行，其中 R4 恰好就是 windows-04 要测的那件事。节点当前标黄，判 incomplete 与之一致。",
+          "findings": [
+            "windows-01",
+            "windows-04",
+            "windows-05",
+            "windows-06",
+            "windows-07",
+            "windows-09"
+          ]
+        }
+      ],
+      "checklist_items": [
+        {
+          "item": "W1 P1-8 六项探针在当前 HEAD 上重采（bundled-node 载体）",
+          "judge": "passed 为 true 且 assertions 六项全 true；stamp.config_version 为 runtime_p6_hardening_v1（旧证据是 runtime_p3_complete_v1，据此确认是新采）",
+          "method": "Windows 上拉到当前 HEAD，src/runtime 跑 npm ci，按 test12-reverify.md:541 的原命令用安装目录随包 node.exe 执行 src/runtime/smoke/p1-bundled-node.ts，保存完整 JSON",
+          "target": "windows"
+        },
+        {
+          "item": "W2 P1-8 六项探针重采（electron-utility 载体）",
+          "judge": "同 W1，且 stamp.carrier 为 electron-utility",
+          "method": "按 test12-reverify.md:562 的 electron-carrier.cjs 原命令重跑，保存 stdout 与 stderr",
+          "target": "windows"
+        },
+        {
+          "item": "W3 windows-01：MSYS 盘符记法是否绕过 ~/.ssh/* 的 deny",
+          "judge": "三种拼法在同一档位下的判定必须一致：波浪号写法、原生盘符反斜杠写法、MSYS 的 /c/ 写法。若第三种被放行（auto 档无卡片，或其他档降级成普通 ask 卡）即为复现",
+          "method": "建一个内容是哨兵串的假 id_ed25519；auto 档下依次让模型跑三条命令，记录是否弹卡、是否返回文件内容；同时看 trace 的权限审计行",
+          "target": "real-model"
+        },
+        {
+          "item": "W4 windows-02：taskkill 缺失或变慢时 bash 是否仍能成功回报",
+          "judge": "一条 echo hello 必须返回 hello 且退出码 0，不得出现 exec_cleanup_failed",
+          "method": "两种造法任选：用 AppLocker 或 EDR 策略临时拦 taskkill.exe；或在 worker 环境里把 SystemRoot 指到不存在的目录后起会话。跑一条 bash，抓 trace 里的 tool_execution 事件与错误码",
+          "target": "windows"
+        },
+        {
+          "item": "W5 windows-02：正常路径下每条 bash 的 taskkill 耗时",
+          "judge": "从 runner 发出 IPC exit 到 runPipe resolve 的间隔持续超过 1000 毫秒，即说明 2000 毫秒预算不安全",
+          "method": "加密机上连跑 20 条短命令，从 trace 时间戳取 tool_execution_start 到 tool_execution_end 的差值分布；同时用 Process Monitor 看 taskkill.exe 的创建耗时",
+          "target": "encrypted"
+        },
+        {
+          "item": "W6 windows-04：无 Git for Windows 时的表现（旧树 R4，一直未执行）",
+          "judge": "期望 bash 工具不出现在工具列表里，且应用给出一条可操作的中文提示。当前实现预期会失败，记录实际文案原文",
+          "method": "临时把 Git 安装目录改名，或在一台没装 Git 的 Windows 上装包；起会话让模型执行一条命令，截图并抓 trace",
+          "target": "windows"
+        },
+        {
+          "item": "W7 windows-03：stdio MCP 在 Windows 上能否起来",
+          "judge": "把 command 配成 npx、args 配成 -y 加一个官方 server 包名，期望服务器连上且工具出现在列表里",
+          "method": "写进 MCP 配置起会话，看 mcp_status 与侧栏徽标与 worker stderr 日志；再用绝对 npx.cmd 路径试一次，记录两次的错误原文",
+          "target": "windows"
+        },
+        {
+          "item": "W8 windows-05：CRLF 工作区的 edit 行为",
+          "judge": "对一个 CRLF 文件做一次三行内的 edit，期望成功且文件行尾仍是 CRLF。失败形态要记录两件事：错误码原文、模型是否退回整文件 write",
+          "method": "用 core.autocrlf 为 true 克隆一个小仓，确认文件是 CRLF，让模型改一处；改完跑 git diff --stat 看是不是全文件",
+          "target": "real-model"
+        },
+        {
+          "item": "W9 windows-06：写锁在 PID 复用下的表现",
+          "judge": "伪造一份 writer.lock，pid 填一个当前存活的无关进程、host 填本机名，打开该会话：期望能打开或至少给用户接管出口；报 session_locked 即复现",
+          "method": "在会话目录里造 sidecar（先备份），点开会话截图；测完删除 sidecar",
+          "target": "windows"
+        },
+        {
+          "item": "W10 windows-07：注册表 PATH 解码",
+          "judge": "在用户级 PATH 里加一个带中文的目录，起应用后在内嵌终端里打印 PATH，该条目必须与注册表原文逐字节一致",
+          "method": "改用户环境变量、重启应用、终端打印 PATH，与 reg query 的原文对比截图",
+          "target": "windows"
+        },
+        {
+          "item": "W11 windows-09：原生工具的 OEM 代码页输出",
+          "judge": "工作区里建一个中文名目录，让模型用 bash 跑 cmd 的 dir，工具结果里的中文必须可读",
+          "method": "真实模型回合，抓工具结果原文与 trace",
+          "target": "real-model"
+        },
+        {
+          "item": "W12 长路径（MAX_PATH）边界",
+          "judge": "工作区里造一条总长超过 300 字符的路径并放一个 ts 文件，跑 glob 与 read 该文件，期望都成功",
+          "method": "用 PowerShell 逐级 New-Item 造深目录，然后跑模型回合或探针",
+          "target": "windows"
+        },
+        {
+          "item": "W13 保留文件名与尾随点",
+          "judge": "让模型 write 到工作区下的 nul 与一个以点结尾的文件名：期望要么明确报错，要么真的落盘且随后 read 能读回；不得出现报告写入成功但文件不存在",
+          "method": "真实模型回合，写完立刻用 PowerShell Test-Path 核对",
+          "target": "real-model"
+        },
+        {
+          "item": "W14 映射网络盘或 junction 工作区的 glob 与 grep",
+          "judge": "在 subst 出来的虚拟盘或映射网络盘上开工作区，glob 必须返回非空",
+          "method": "用 subst 把工作区映射成一个新盘符，用新盘符打开工作区跑一次 glob，比对原路径下的结果数",
+          "target": "windows"
+        },
+        {
+          "item": "W15 命令树清理（旧树 P1-0 与 P1-3 仍待现场）",
+          "judge": "正常退出、超时、取消、父命令先退出四种形态下，taskkill 之后无残留进程",
+          "method": "每种形态跑一条命令，之后用 Get-Process 比对基线快照；同时看 trace 的 termination 字段",
+          "target": "windows"
+        },
+        {
+          "item": "W16 随包 node.exe 缺失时的用户可见文案",
+          "judge": "期望出现一条可操作的中文提示；当前预期只有 Pi Node runtime is missing 加路径",
+          "method": "打包态把 resources 下 node-runtime 里的 node.exe 改名，起应用发一条消息，截图横幅（与 main-host-aux 区域的同名检查项合并执行，不要跑两遍）",
+          "target": "windows"
+        }
+      ],
+      "test_gaps": [
+        "runPipe 的 Windows killTree（exec.ts:516-552）零用例：createTreeKiller 有 5 条注入式用例（host.test.ts:752-810），但 bash 工具实际走的是 runPipe 里的内联副本，它硬编码 process.platform 且无 spawn 注入点，无法在 Linux 上覆盖；Windows 上只有 taskkill 的 close 才能 resolve 这条关键性质没有任何断言守着",
+        "没有一条 Windows 路径形态的端到端用例：shellPolicy.test.ts:459-476 用纯函数钉住了分隔符折叠（T001，做法正确），但只覆盖分隔符；MSYS 盘符记法（windows-01）、UNC 路径、盘符根、8.3 短名、保留文件名一律没有",
+        "pathPolicy 全仓零直接用例（在 src/runtime/__tests__ 下 grep 无命中）：它是唯一执行 deny 规则的函数，内部还有一个平台分支，却只被间接覆盖",
+        "edit 与 write 没有 CRLF 用例：tools.test.ts:599 只为 grep 加了一条（tools-17）",
+        "MCP 没有 Windows 可执行形态用例：.cmd 启动器、裸名字加 PATHEXT、带空格的路径一条都没有；mcp-echo-server.mjs fixture 走的是绝对 node 路径",
+        "writerLock 没有 acquiredAt 相关用例，因为没有读取方可测，这本身就是 windows-06 的症状",
+        "getWindowsRegistryPath 零用例（PtyManager 的 __tests__ 里没有对应 describe），编码与正则解析两部分都没有",
+        "长路径（超过 260 字符）、保留设备名（nul/con/COM1）、尾随点与空格的文件名：零处理、零用例"
+      ],
+      "unverified_claims": [
+        "Windows 长路径（MAX_PATH 260）：全仓没有长路径前缀处理，也没有 longPathAware 相关配置或说明。工作区嵌套深时 walk 与 glob 与 write 是否失败，取决于随包 node.exe 与 Electron 的清单是否声明了 long-path aware 以及机器上的注册表开关，无法从代码确定",
+        "保留设备名（nul、con、COM1）与尾随点或空格的文件名：理论上 write 到工作区下的 nul 会被 Windows 重定向到空设备、工具报已写入 N 字节而文件不存在，但我无法确认 canonicalPath 里的 realpath 对设备名返回什么，也无法确认 path_changed 的二次校验是否会先拦住它",
+        "taskkill /T 与 PID 复用的误杀：/T 按 ParentProcessId 枚举子孙，而 Windows 不清理已退出父进程的 PPID 字段。目标 PID（runner）在调用时确定存活，误杀只可能发生在子孙枚举层，概率与机器负载相关，无法静态判定",
+        "walk 的 canonical 与 path 严格字符串比较（tools/index.ts:768）在映射网络盘、Dev Drive、junction 上的表现：理论上 realpath 返回不同前缀会让每个条目都判不等从而整棵树静默返回空。但我核实了 root 来自 target 到 canonicalPath 到 realpath，链条上每一级目录入栈前都已通过同一比较，形态是自洽的；需要真机在映射盘工作区跑一次 glob 才能定论",
+        "非打包 Windows 开发态 exec 全线不可用：workerHost 在 electron-utility 载体下只有随包 node.exe 存在时才给出 node（host/worker.ts:72-74），而 runPipe 在 Windows 上无 node 就直接 invalid_host_config（exec.ts:462-466）。推断是 Windows 上以开发模式起的应用每次 bash 与 MCP 与 TSD 都会被拒；打包 Windows 走 PiWorkerProcess.ts:79-92 的 bundled-node 分支不受影响，所以这条是否算缺陷取决于 Windows 开发态是否在支持范围内，是计划问题不是代码问题",
+        "Git Bash 收到 Windows 形态的 HOME（tools/index.ts:458 传 homedir 的结果，且 bash 以 noprofile 与 norc 启动不会被 /etc/profile 覆盖）：MSYS 对 Windows 形态 HOME 的容忍度、波浪号展开结果里混合分隔符能否被 MSYS 工具接受，只能推测能用（现场 R1 与 R2 成功说明基本路径可用），不能确认全部情形",
+        "内嵌终端的控制台代码页：全仓无 chcp 与 65001，原本怀疑中文 Windows 上 cmd 与 PowerShell 输出会在 xterm.js 里乱码，但 node-pty 在 Windows 走 ConPTY，ConPTY 从 UTF-16 控制台缓冲区产出 UTF-8 VT 流，很可能已消解这个问题，无法静态定论",
+        "NodeRuntimeResolver.ts 的 Windows 发现分支（nvm4w、volta、fnm）是否正确：我读了，Windows 布局看起来是对的，POSIX 分支反而可疑（在 .nvm 下直接列版本目录、node 不在 bin 下）。但该模块在产品里零调用方（该事实由 main-host-aux 区域立项，我不重复立发现），正确与否都不影响产品，建议上机日不要花时间测它"
+      ],
+      "findings": [
+        {
+          "id": "windows-01",
+          "status": "confirmed",
+          "severity": "high",
+          "reviewer_severity": "high",
+          "category": "security",
+          "node": "P4-6",
+          "file": "src/runtime/plugins/permissions/index.ts",
+          "line": 490,
+          "title": "Git Bash 的 /c/... 盘符写法绕过 ~/.ssh/* 与 ~/.aws/credentials 的不可覆盖 deny",
+          "static_inference": true,
+          "refuter_reason": "尽力反驳未成功，三条反驳路线都走不通。(1) 主检查点确实漏：src/runtime/plugins/permissions/index.ts:477 `const candidate = path.replaceAll('\\\\', '/')`、:480 遍历 `AICLIENT_DEFAULT_PERMISSION_POLICY.permission.path`、:481-483 `pattern.startsWith('~/') ? resolve(homedir(), pattern.slice(2))`、:490 `regex.test(candidate) || (!expanded.includes('/') && regex.test(basename(path)))`。deny 项只有 `~/.ssh/*`（src/agent-host/permissionPolicy.mjs:61）与 `~/.aws/credentials`（:65）展开后含 `/`，所以 basename 兜底不适用，审查员的「只有这两条受影响」判断准确。(2) 我本机用 node:path/win32 实测：isAbsolute('/c/Users/JC/.ssh/id_ed25519')=true；折斜杠得 '\\c\\Users\\JC\\.ssh\\id_ed25519'；win32.resolve 得 'C:\\c\\Users\\JC\\.ssh\\id_ed25519'；展开后的 deny 正则 ^C:/Users/JC/\\.ssh/.*$ 对 msys 写法 false、对原生写法 true。bash-analysis.ts:182 `paths.add(normalizeShellPath(isAbsolute(text) ? text : ...))` 正是这条折叠，normalizeShellPath（同文件:77-79）只做 `/`→`\\`，无盘符归一。(3) 我另查了第二道独立闸门 policyAction（plugins/permissions/policy.ts:165-167 `values.flatMap(v => [v, relative(cwd, resolve(v)), basename(v)])`，matches() 在 :130 展开 `~`、:132-133 折斜杠），三个候选（msys 原串 / 相对 cwd 的 ../../c/... / basename 'id_ed25519'）没有一个能命中 `~/.ssh/*` 或 `id_rsa*`，所以第二道闸门同样漏。tools/index.ts:218-234 的 checkShellPaths 两次 pathPolicy（lexical 与 canonical）吃的都是同一串，canonicalPath（plugins/tools/paths.ts:11-18）对不存在路径逐级回退拼出多一层 c 的路径，也匹配不上。auto 档在 index.ts:303 `if (gear === 'auto' && !request.unresolvedPaths) return 'allow'` 之前只拦 deny，故直接放行。全仓 grep 无 cygdrive/msys 任何归一（git log -S\"cygdrive\" 为空），与 T001 的 permissions-19（分隔符折叠，shellPolicy.test.ts:459-476 钉住）确为两件事。静态推断：端到端需 Windows + Git Bash，但路径语义部分已在 Linux 上用 node:path/win32 实测复现。严重级 high：不可覆盖的 deny 被换一种拼法绕过，属安全绕过。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plans/2026-09-08-runtime-evolution-ard.md D16；docs/plantree/plans/runtime-evolution/evidence/runtime-audit-2026-09-14/findings.json waivers[node=P1-8, kind=deferred]；docs/plantree/plans/runtime-hardening/decisions/002-remediation-order-and-waiver-rule.md",
+          "waiver_quote": "Windows/加密机现场验收攒到 P4-6 一次上机，不分批；签收前一律记为进行中/未验收，Linux 与 CI 的绿色不得代签 /「待现场验证」「待复验」只豁免缺现场证据，不豁免代码本身的缺陷"
+        },
+        {
+          "id": "windows-02",
+          "status": "confirmed",
+          "severity": "medium",
+          "reviewer_severity": "medium",
+          "category": "robustness",
+          "node": "P4-0",
+          "file": "src/runtime/host/exec.ts",
+          "line": 518,
+          "title": "Windows 上一条已跑完的命令能否成功回报，取决于一个外部 taskkill 进程是否在 2 秒内退出",
+          "static_inference": true,
+          "refuter_reason": "代码事实逐条核对无误。src/runtime/host/exec.ts:462-466 `if (process.platform === 'win32' && !nodePath) return Promise.reject(...)`，Windows 必走 runner；:642 IPC exit 后 `stop('exit')` → :557 `killTree(false)` → :518-526 win32 分支 spawn taskkill 并 `cleaners.add(killer)`；:610-618 `child.on('close')` 里 `if (process.platform !== 'win32') killTree(true); if (!cleaners.size) finish(cleanupError)`——cleaners 非空即不 finish；唯一补位是 :533-538 `killer.on('close')` 里 `if (childClosed) finish(cleanupError)`。所以 Windows 上成功回报确实挂在外部 taskkill.exe 的退出上，Linux 对应位置只是 :541 一次 process.kill。坏路二成立：:559-570 cleanupDeadline 到点 finish(new RuntimeHostError('exec_cleanup_failed','command streams did not close before cleanup deadline'))，是 reject；产品值 2000ms 已核（host/config.ts:16 `cleanupTimeoutMs: 2000`、host/worker.ts:44 `input.cleanupTimeoutMs ?? 2000`，agent-host/worker.ts:93 `workerHost({ carrier, ... })` 未传覆盖）。坏路一成立：:527-532 error 处理器设 cleanupError 并 child.kill()，随后 close 走到 finish(cleanupError)。我特意查了一条可能的反驳——runner 送出 exit 后是否立刻退出导致 taskkill 必然返回非 0：exec-runner.mjs:6 的 `process.on('message')` 保持 IPC 通道引用，runner 会一直活到被 taskkill 杀掉，所以常态下 code 0，这条反驳不成立但也说明这条路对时序敏感。重复实现也属实：createTreeKiller（:336-404，T022 于 84ac35e0 落地）只在 :175 spawnPersistent 用；runPipe 的内联版 :527 缺 `cleaners.delete(killer)`（对比 :378）、用直接赋值而非 `??=`（对比 :379），host.test.ts:754-864 的 5 条注入式用例一条都覆盖不到 runPipe 这条路。静态推断：taskkill 被 EDR 拖慢/拦截是环境假设，代码依赖关系是确定的。严重级 medium（已成功的命令被报成工具错误，用户可见功能错误，非卡死）。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-evolution/evidence/runtime-audit-2026-09-14/findings.json waivers[node=P1-0, kind=field-only]；docs/plantree/plans/runtime-hardening/decisions/002-remediation-order-and-waiver-rule.md",
+          "waiver_quote": "Windows 分支调用 taskkill /PID /T /F 并等待关闭，尚未在 Windows 实测，尤其要核对中间命令进程已退出时的后代发现 /「待现场验证」「待复验」只豁免缺现场证据，不豁免代码本身的缺陷"
+        },
+        {
+          "id": "windows-03",
+          "status": "confirmed",
+          "severity": "medium",
+          "reviewer_severity": "medium",
+          "category": "windows",
+          "node": "P4-0",
+          "file": "src/runtime/plugins/mcp/index.ts",
+          "line": 211,
+          "title": "stdio 型 MCP 服务器在 Windows 上起不来：npx 与 uvx 与 npm 都是 .cmd，而链路上两次 spawn 都是 shell false",
+          "static_inference": true,
+          "refuter_reason": "链路与结论核实无误，找不到任何一层做 Windows 可执行名解析。mcp/index.ts:207-213 `const child = await exec.spawn({ command: server.command, args: server.args, ... })`；mcp/config.ts:213 `command: entry.command.trim()` 是唯一加工；exec.ts:86-91 的入参校验 `if (!request.command || (!isAbsolute(request.command) && /[\\/\\\\]/.test(request.command)))` 对裸 `npx` 放行；exec.ts:98-102 Windows 强制 runner；exec.ts:104-114 父侧 `shell: false`；exec-runner.mjs:10-16 `spawn(request.command, request.args, { ..., shell: false, ... })`。全仓 grep `npx|PATHEXT|cmd.exe` 在 src/runtime 无任何命中（cmd.exe 只出现在 src/main 的 GitInstaller/PtyManager/ShellDetector，与 MCP 无关），bootstrap.ts:352-361 证明这条路在产品里真的会跑。平台事实侧：libuv 的 path_search 只补 .com/.exe 不读 PATHEXT，Node 18.20.2/20.12.2 起（CVE-2024-27980）无 shell 直接 spawn .bat/.cmd 会抛错，这两条是既定行为；本仓也确实没有任何 .cmd 形态用例。静态推断：无 Windows 执行证据。严重级 medium（Windows 上 stdio 型 MCP 服务器整类不可用，同一份配置在 Linux/macOS 可用）。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md（无相关行）；docs/plantree/plans/runtime-hardening/decisions/002-remediation-order-and-waiver-rule.md",
+          "waiver_quote": ""
+        },
+        {
+          "id": "windows-04",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "contract-gap",
+          "node": "P4-6",
+          "file": "src/runtime/plugins/tools/index.ts",
+          "line": 413,
+          "title": "Windows 上没装 Git for Windows 时 bash 工具照样登记给模型，每次调用返回一句指责宿主的英文错误",
+          "static_inference": true,
+          "refuter_reason": "代码事实成立，但审查员的核心论据之一被推翻，故我下调严重级。成立部分：tools/index.ts:412-415 无条件 `this.register({ name: 'bash', ... })`，:449-453 才 `if (!this.config.shellPath) throw new RuntimeHostError('shell_unconfigured','host must configure the shell executable')`；与同文件 :62-66（ask）、:68-72（browser_preview）写明「没有展示面就不注册」的规则确实相反；shellPath 来自 worker/nativeWorkerRuntime.ts:197 `shellPath: resolveWorkerShell(this.options.host.childEnv)`，host/shell.ts:14-35 在 Windows 只找 Git for Windows 的 bash.exe，找不到返回 undefined（:35 `return candidates.find(exists)`）；全仓 grep `shell_unconfigured` 只有 tools/index.ts:451 抛出点一处，确无翻译层。被推翻部分：「用户既不知道该装什么也没有入口去装」不成立——src/renderer/App.tsx:1012 挂载了 `<GitMissingNotice />`，该组件 GitMissingNotice.tsx:52-62 启动即调 `onboarding.checkPrerequisites()`，:50 `const canInstall = window.electronAPI.env.platform === 'win32'`，:72 `window.electronAPI.onboarding.installGit()`，Main 侧 src/main/ipc/onboarding.ts:235-256 真的会下载并静默安装 Git for Windows（GitInstaller.ts:9 的 GIT_INSTALLER_URL、:229-244），非 Windows 给 git-scm 下载链接（:7）。所以「干净 Windows 未装 Git」这个场景其实有横幅加一键安装。残留真缺口有两处：一是登记不对称导致模型反复调一个必失败的工具并拿到英文宿主向错误；二是 GitInstaller.ts:291-309 的 detectGit 以 `git --version` 成功即判 installed=true，而 resolveWorkerShell 认的是 bash.exe，所以「有 git 无 Git-Bash」时横幅不出、bash 工具照样坏。严重级 low：能力确实不存在，差别只在优雅与否，且已有并行的用户可见补救面。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-evolution/evidence/runtime-audit-2026-09-14/findings.json waivers[node=P1-6, kind=field-only]；docs/plantree/plans/runtime-hardening/decisions/002-remediation-order-and-waiver-rule.md",
+          "waiver_quote": "未打包，未在加密 Windows 上回归；按用户 2026-09-11 的规矩并入最后一次上机 /「待现场验证」「待复验」只豁免缺现场证据，不豁免代码本身的缺陷"
+        },
+        {
+          "id": "windows-05",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "correctness",
+          "node": "P4-6",
+          "file": "src/runtime/plugins/tools/index.ts",
+          "line": 384,
+          "title": "edit 对 CRLF 文件做逐字节精确匹配，失败时的错误不提行尾，模型会退回整文件 write 从而把全文行尾改成 LF",
+          "static_inference": true,
+          "refuter_reason": "确定的代码事实成立，推断的损害链未能证实也未能排除，综合按 low。成立：tools/index.ts:380-390 `const start = content.indexOf(edit.oldText); if (start < 0 || content.indexOf(edit.oldText, start + 1) >= 0) throw new RuntimeHostError('edit_not_unique','oldText must match exactly once; file was not changed')`，全链路无行尾归一；write 在 :350 `await io.writeFile(target, Buffer.from(args.content))` 原样落盘；对照 :630 `const lines = Buffer.from(data.bytes).toString('utf8').split(/\\r?\\n/)` 证明 grep 已为 CRLF 修过（tools-17）而 edit/write 未跟上；read 侧 plugins/tools/read-lines.ts 无任何去 \\r 处理，回车确实保留。测试缺口也属实：CRLF 相关用例只有 tools.test.ts:599-600（grep）与 skills.test.ts:177/534（frontmatter），edit/write 零覆盖。我尝试的反驳有两点值得记：其一，严格逐字复制 read 输出的模型是能命中的，`edit_not_unique` 在这种情形下是「诚实的失败」而非错判；其二，「模型退回整文件 write 从而把全文行尾改成 LF」这一步是行为推断，本仓无任何真实回合证据，Windows-P4-6-evidence/test12-reverify.md:748 只证明探针文件含 CRLF，没有证明模型真的这么退化。因此我把它降为 low（错误文案不提行尾 + 测试缺口 + 与 grep 的处理不一致），而把数据损坏那一段记为未证实。静态推断。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md T012 行；docs/plantree/plans/runtime-hardening/decisions/002-remediation-order-and-waiver-rule.md",
+          "waiver_quote": "工具输出形状：……CRLF 去 `\\r`……"
+        },
+        {
+          "id": "windows-06",
+          "status": "confirmed-partial-waiver",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "robustness",
+          "node": "P4-6",
+          "file": "src/runtime/plugins/session/writerLock.ts",
+          "line": 128,
+          "title": "会话写锁只靠 PID 存活判定陈旧，Windows 的 PID 复用会把一把死锁永久锁死；记了 acquiredAt 却从没人读",
+          "static_inference": true,
+          "refuter_reason": "代码事实全部核实，但危害概率无法在此界定，故我给 low（审查员给 medium）。成立：session/writerLock.ts:124-129 `function stale(held) { ... return !processAlive(owner.pid); }` 是唯一的陈旧判据；:65-73 `processAlive` 就是 `process.kill(pid, 0)`，EPERM 记为存活；:190-221 acquireWriterLock 里 :216 `if (!stale(held)) throw locked(file, held.owner)`，无年龄兜底、无强制接管出口。死字段属实：`acquiredAt` 在 :30 声明、:89 解析、:201 写入，全仓 grep 只剩 __tests__/sessionWriterLock.test.ts:122 在造数据时用了一次，生产代码零读取点——这一条是确定的死代码。用户可见面也确实没人翻译：grep `session_locked` 在 src/main 与 src/renderer 零命中，只有 runtime 抛出点与四个测试断言。模块开场注释（:6-16）自陈这把锁存在的理由就是「只测存在性会永远拒绝这个会话」，而在 Windows 上 PID 校验本身是不可靠环节，这层自相矛盾成立。未能证实的部分：Windows PID 复用到底多快撞上、以及 worker 被强杀留下 sidecar 的频率，本仓无任何观测数据，我也无法在 Linux 上构造；且该风险并非 Windows 独有（Linux 同样可能复用，只是概率低）。综合按 low（死字段 + 健壮性缺口 + 无强制接管出口），若上机日能观察到一次误锁应升为 medium。静态推断。",
+          "already_fixed_by": "",
+          "waiver": "partial",
+          "waiver_source": "docs/plantree/plans/runtime-evolution/evidence/runtime-audit-2026-09-14/findings.json waivers[node=会话写入锁, kind=accepted-limitation]",
+          "waiver_quote": "不接管的两类：host 与本机不符（网络盘上的会话目录可能属于另一台机器）；锁内容无法读成一条 owner 记录以外的错误（EACCES 等直接抛出）"
+        },
+        {
+          "id": "windows-07",
+          "status": "confirmed",
+          "severity": "medium",
+          "reviewer_severity": "medium",
+          "category": "windows",
+          "node": "P4-6",
+          "file": "src/main/services/terminal/PtyManager.ts",
+          "line": 126,
+          "title": "用 utf8 编码读 reg query 的输出，中文 Windows 上会把含非 ASCII 的 PATH 条目解码坏",
+          "static_inference": true,
+          "refuter_reason": "推翻失败，代码事实成立且未被任何批次修过。src/main/services/terminal/PtyManager.ts:126-128 原文 `const userOutput = execSync('reg query \"HKCU\\\\Environment\" /v Path 2>nul', { encoding: 'utf8', timeout: 3000 });`，系统级同样写法在 :140-142。审查员引用的原文少了路径两侧引号（实际带引号），仅此一处抄录差异，行号 122-134 与实际 117-160 的函数体一致，未读错行、未读错分支（HEAD ebc82f16 即为当前工作树内容）。触发路径真实存在且是活代码：PtyManager.ts:223-230 `export function getEnhancedPath()` 在 `isWindows` 分支里 `return getWindowsRegistryPath();`，其调用方为 src/main/utils/shell.ts:139 `PATH: getEnhancedPath()` 与 src/main/services/git/runtime.ts:110 同名用法，即 Windows 上终端/Git 子进程的 PATH 完全由这段注册表读取结果替换掉 process.env.PATH（后者由 Node 从 UTF-16 正确解码，反而被丢弃）。结果缓存在模块级 `cachedWindowsPath`（:16、:155），进程生命周期内不重算，只有 `clearPathCache()`（:27-31）能清。同一缺陷面比发现描述的更宽：:66-68 与 :78-80 的 `getWindowsRegistryEnvVars` 读全量环境变量时也写死 `encoding:'utf8'`，其值还被 `expandWindowsEnvVars`（:97-111）用于 %VAR% 展开。是否已修：`git log --oneline -- src/main/services/terminal/PtyManager.ts` 最近 8 条（8aafd450、19848abf、368559c3 …）无一涉及编码；全仓 grep `chcp|65001|OEMCP|codepage` 在 src 下只命中 src/main/ipc/files.ts:41 的 `gbk:'gbk'`（文件读取的编码表，与此无关），说明没有任何代码页处理。测试也没钉住：src/main/services/terminal/__tests__ 下只有 PiTuiPty/ShellDetector/piTui*/t35FinalAbsence，两处 git 测试（gitStatusFailureModes.test.ts:11、tsdWorkingTreeRead.test.ts:11）反而把 `getEnhancedPath` 直接 mock 成 `process.env.PATH`，注册表解码路径零覆盖。现场佐证方向与发现一致：Windows-P4-6-evidence/test12-reverify.md:278 记录该机控制台不是 UTF-8（cp1252 报 UnicodeEncodeError），只是那台机器用户名是 ASCII（JC），所以没暴露。静态推断：reg.exe 走管道时按控制台输出代码页写字节（中文 Windows 936），需一台中文 Windows 且 PATH 内含非 ASCII 字面路径（如 scoop 写入的 `C:\\Users\\张三\\scoop\\shims`）才能实测；`toString('utf8')` 对非 UTF-8 字节静默产出 U+FFFD 则是确定的语言事实。严重级与审查员一致取 medium：属于用户可见的功能错误（内嵌终端里该条 PATH 下的工具全部找不到），不构成安全绕过或数据损坏。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-evolution/evidence/runtime-audit-2026-09-14/findings.json（全文检索 reg query/PtyManager/PATH 编码，均无匹配）；docs/plantree/plans/runtime-hardening/decisions/002-remediation-order-and-waiver-rule.md",
+          "waiver_quote": ""
+        },
+        {
+          "id": "windows-09",
+          "status": "confirmed",
+          "severity": "medium",
+          "reviewer_severity": "medium",
+          "category": "i18n",
+          "node": "P4-6",
+          "file": "src/runtime/plugins/tools/index.ts",
+          "line": 474,
+          "title": "bash 工具把子进程输出一律按 UTF-8 解码，Windows 原生工具的 OEM 代码页输出会变成一串替换字符进模型上下文",
+          "static_inference": true,
+          "refuter_reason": "推翻失败。src/runtime/plugins/tools/index.ts:473 原文 `` `${Buffer.from(output.stdout).toString('utf8')}${output.stderr.length ? `\\n[stderr]\\n${Buffer.from(output.stderr).toString('utf8')}` : ''}` ``（审查员写 :474，实际 :473，属一行内的行号偏差，不影响结论）。`output.stdout/stderr` 是字节（同一处注释写明「The raw result carries stdout/stderr as Uint8Array」），`toString('utf8')` 对非法序列静默替换为 U+FFFD，不抛错、不标记，结构化元数据里只有 exitCode/termination/stdoutBytes 等标量，没有任何「输出不是合法 UTF-8」的信号。对照成立：src/runtime/plugins/tools/read-lines.ts:18-19 `new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })` 与 :27-41 `decodeFileText` 抛 `RuntimeHostError('io_not_utf8', ...)`，同仓 policy.ts:84、session/store.ts:156、instructionSource.ts:45 也都用 fatal 解码，唯独 bash 输出这条路没有。Windows 触发路径真实：src/runtime/worker/nativeWorkerRuntime.ts:197 `shellPath: resolveWorkerShell(this.options.host.childEnv)`，src/runtime/host/shell.ts 的候选清单是 `ProgramFiles/Git/bin/bash.exe` 等 Git Bash（MSYS），模型在其中调 cmd 的 dir、python、java 等原生程序时输出按 ANSI/OEM 代码页（中文 Windows 936）写管道，经此处按 UTF-8 解码即成替换字符并进入模型上下文与会话文件。是否已修：`git log -- src/runtime/plugins/tools/index.ts` 中与输出形态相关的是 T012（439ab922「工具输出形状」）与 tools-06 的标量化注释，均未触及解码；grep 全仓无代码页处理；批次 A～C 的 roadmap Done 段（T001～T036）无对应条目。测试未钉住该行为。静态推断：需中文 Windows 跑一次带中文输出的原生命令才能实测，但有损且无检测是确定的代码事实。一个反向提醒（不改变判定，影响修法）：该调用用 `maxOutputBytes: TOOL_OUTPUT_BYTES` 且 `overflow:'truncate'`，截断可能落在多字节字符中间，若照建议直接换成 fatal 解码，会把合法 UTF-8 的长输出误判为非 UTF-8，修复需先按截断边界处理再判定。严重级维持 medium：用户可见的错误行为（模型拿到乱码并据此推理），不属安全绕过或数据损坏。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md（无相关行）；docs/plantree/plans/runtime-hardening/decisions/002-remediation-order-and-waiver-rule.md",
+          "waiver_quote": ""
+        },
+        {
+          "id": "windows-08",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "docs",
+          "node": "P1-8",
+          "file": "docs/plantree/plans/runtime-evolution/README.md",
+          "line": 73,
+          "title": "P1-8 行仍断言 RUNTIME_CONFIG_VERSION 冻结在 runtime_p3_complete_v1，而 T028 已把它解冻",
+          "static_inference": false,
+          "refuter_reason": "推翻失败，两处文档确实互相矛盾且陈述已被代码推翻。docs/plantree/plans/runtime-evolution/README.md:73 原文仍是「…到本次复核的 HEAD（`559c9790`）已隔 150 个提交，其中 21 个动过 `src/runtime/host`、`plugins/tools` 或 `bootstrap.ts`；`RUNTIME_CONFIG_VERSION` 仍冻结在 `runtime_p3_complete_v1`，新旧 stamp 无法据此区分陈旧程度…」。代码实况相反：src/runtime/bootstrap.ts:132 `export const RUNTIME_CONFIG_VERSION = 'runtime_p6_hardening_v1';`，且 :125-131 的 JSDoc 明确写了分代规则；`git log -S\"runtime_p6_hardening_v1\" -- src/runtime/bootstrap.ts` 只有一条 `a11ccbe0`，即 roadmap.md:41 记录的 T028。同一份计划体系的另一处已同步：docs/plantree/plans/runtime-evolution/evidence/runtime-audit-2026-09-14/README.md:93 写「RUNTIME_CONFIG_VERSION 已在 T028（`a11ccbe0`）解冻为 runtime_p6_hardening_v1，新旧证据今后可按版本戳分代」，与 README.md:73 直接冲突，任务树这一行是 T027（1b7c55fd）写下、T028 之后未回写。快照数字我也复算过：`git rev-list --count 8115ebe1..HEAD` = 158，限定三处路径 = 24，与审查员实测一致，文中的 150/21 是按旧 HEAD 559c9790 的快照，属陈旧而非笔误。注意该 README 页位于 runtime-evolution 计划下、不是 runtime-hardening（审查员描述里混称「加固计划的审计 README」，实际该审计 README 归档在 runtime-evolution/evidence 下，只是措辞不准，引文与行号都对）。严重级 low：纯文档不一致，影响的是批次 E 上机重采时的判据选择，不产生运行期错误。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md T032 行",
+          "waiver_quote": "T032 | 上机检查单：合并旧树待现场项……与审计静态推断项（permissions-19、core-host-05/07、tools-10、cutover-03、P1-8 证据重采、P6-4 旧版产物互读）"
+        }
+      ],
+      "stats": {
+        "confirmed": 8,
+        "confirmed-partial-waiver": 1
+      }
+    },
+    {
+      "key": "tsd-utility",
+      "task": "T031",
+      "title": "加密文件系统（TSD）回落与 Electron utility 载体",
+      "summary": "T013 对 core-host-05 与 tools-10 是真修（stderr 预算独立且有真子进程用例，readLines 块增长有计数替身用例），但核对触发条件后发现一件比任何单条缺陷都重要的事：按当前接线，TSD 回落分支在任何出厂形态下都跑不到——有密文的 Windows 安装版走 bundled-node 载体、`workerHost` 对它硬编码 `tsdReadFallback: 'disabled'`；开启回落的是打包 macOS/Linux（随包 Node 三平台都有），而那两个平台没有加密驱动，魔数永不出现。因此 `source: 'node-fallback'` 在产品里从不产生，tsd-read.mjs 与 T013 的 node-fallback 分支只在单测里活着，批次 E 加密机那天也无法通过产品操作触发它（tsd-01）。2026-09-09 的现场证据（随包 node 在白名单内、读到明文）与这一判断互相印证。utility 载体一侧，批评者缺口 14 的两条在 HEAD 上一条未改：探针仍手写 host 配置（source:'explicit'）不走 workerHost 推导，且 p1-host-tools.ts:49 的 carrier 断言是拿版本戳比产出它的同一个配置对象——同义反复（tsd-06）；唯一的真实子进程用例 workerEntryWiring 用的是 fork()，即 bundled-node 形状，utilityProcess 半边零真实进程覆盖。协议面逐项对表捞出一条硬不对称：node 载体显式 `proc.stdout?.resume()`，utility 载体没有，违反 D11 第 5 条「普通 stdout 必须排空」（tsd-03）。另有两条与加密无关、今天就能复现的读出口问题：grep 的逐文件 readFile 裸奔，一个 chmod 000 的文件让整次搜索失败（tsd-02）；首 16 字节恰为魔数的明文文件在所有载体上都读不出来且无逃生出口（tsd-07）。",
+      "confidence": "medium",
+      "raw_report_path": "docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/tsd-utility.md",
+      "files_read_count": 40,
+      "node_verdicts": [
+        {
+          "node": "P1-0",
+          "verdict": "complete-with-gaps",
+          "rationale": "两个 service 的契约面基本齐整，core-host-05 已修（T013，`19f9e888`）且 host.test.ts:148 用真子进程覆盖了「stderr 刷 8 KiB + stdout 满窗」这一组合，不是纸面断言。缺口是 helper 的 stdout 无框且子进程环境整份继承（tsd-04），以及回落分支本身没有出厂载体（tsd-01）。",
+          "findings": ["tsd-01", "tsd-04"]
+        },
+        {
+          "node": "P1-2",
+          "verdict": "complete-with-gaps",
+          "rationale": "tools-10 已修（T013）且 tools.test.ts:654 有计数替身用例守护块增长；残留三条：2 MiB 封顶后重读量重新二次化且注释/落地记录称「约线性」不准（tsd-05）、TSD 魔数误判无逃生出口（tsd-07）、读出口错误在批量读取侧无容错（tsd-02，落点在 P1-4 的 grep 但根因是 P1-2 读出口的错误形态未被纳入可跳过集合）。",
+          "findings": ["tsd-05", "tsd-07", "tsd-02"]
+        },
+        {
+          "node": "P1-8",
+          "verdict": "complete-with-gaps",
+          "rationale": "六项断言的探针仍在仓里可重跑，T027（`1b7c55fd`）也已补注证据陈旧的实况。但 utility 探针不走 workerHost 产品推导、carrier 断言同义反复（tsd-06），加密机那一半按当前接线无法通过产品触发回落（tsd-01），所以「两载体验收」目前只能算「两载体各跑过一次工具冒烟」，不构成载体兼容性证据。要升到 complete 必须先做 tsd-06 的 (a)(b) 再上机跑 U1。",
+          "findings": ["tsd-06", "tsd-01"]
+        },
+        {
+          "node": "P4-0",
+          "verdict": "complete-with-gaps",
+          "rationale": "两种载体确实共用一套 RPC 形状，Main 侧分支清楚（PiWorkerProcess.ts:79 按 `app.isPackaged && win32` 分流），worker 侧 carrier 推导集中在 agent-host/worker.ts:52 一处。但协议面有四处实现差异从未对过表（消息序列化、stdout 排空、退出信号、error 事件形状），其中 utility 载体 worker stdout 从不排空直接违反 D11 第 5 条（tsd-03）；utilityProcess 半边零真实进程用例，唯一的真子进程用例 workerEntryWiring.test.ts 走的是 fork()，即 bundled-node 形状（tsd-06）。",
+          "findings": ["tsd-03", "tsd-06"]
+        }
+      ],
+      "checklist_items": [
+        {
+          "item": "E1 随包 node.exe 仍在驱动白名单内",
+          "judge": "安装版 GUI 里 read 一个受策略文件返回明文；不出现 io_tsd_unavailable",
+          "method": "读工具输出截图 + 同一次 run 的 runs.jsonl 版本戳（应为 carrier=bundled-node、tsd_read_fallback=disabled、node_exec_path=…\\node-runtime\\node.exe）",
+          "target": "encrypted"
+        },
+        {
+          "item": "E2 Write→Read 明文往返（p1-0 契约 §3「写后密文风险」点名由 P1-8/P4-6 验证；与 encryption-special.md 的未决项合并执行）",
+          "judge": "write 写出的文件在盘上是密文容器（非白名单进程看到 %TSD-Header-###% 与容器大小），而 GUI read 读回原文",
+          "method": "在加密域目录用工具写 tracked.txt，再用 PowerShell 原生 [IO.File] 读头 16 字节，再用 GUI 读回",
+          "target": "encrypted"
+        },
+        {
+          "item": "E3 edit 的读-改-写不破坏加密",
+          "judge": "对受策略文件 edit 一次后，文件仍是密文容器，GUI 再读内容正确，非白名单进程仍看到密文",
+          "method": "同 E2 的取头方式，edit 前后各取一次",
+          "target": "encrypted"
+        },
+        {
+          "item": "E4 单个读不了的文件不打垮 grep（tsd-02 的现场判据）",
+          "judge": "工作区里存在当前进程读不了的受策略文件时，grep 仍返回其余命中并报出 skipped 条数",
+          "method": "构造一个驱动拒绝的文件（或 icacls 去掉读权限），跑一次 grep，保存工具输出",
+          "target": "encrypted"
+        },
+        {
+          "item": "E5 bash 叶子进程读到的是明文还是密文（D11 未决项 F3；复核 2026-09-09「Git Bash 在白名单内」在当前机器/驱动版本是否仍成立）",
+          "judge": "bash 执行 type/cat 受策略文件的输出与 GUI read 一致",
+          "method": "同一文件两条路径各取一次输出并 diff",
+          "target": "encrypted"
+        },
+        {
+          "item": "E6 TSD 魔数误判的现场形态（tsd-07）",
+          "judge": "手写一个以 %TSD-Header-###% 开头的明文 txt，read 它",
+          "method": "期望当前报 io_tsd_unavailable；记录原始文案，作为 FIX 后的对照",
+          "target": "encrypted"
+        },
+        {
+          "item": "E7 仅当 tsd-01 按「接通回落」修法推进时才需要跑：helper 端到端",
+          "judge": "一次 read 起两个进程（exec-runner + helper）、30 秒内返回明文；连续分页读的进程数与耗时记录在案",
+          "method": "临时构建打开 configured-node，用 Process Monitor 记进程创建次数与耗时",
+          "target": "encrypted"
+        },
+        {
+          "item": "U1 utility 探针走产品路径推导（批评者缺口 14 的收口判据）",
+          "judge": "carrier=electron-utility 且 node.source==='bundled'、node.path !== process.execPath、tsdReadFallback==='configured-node'，六项工具断言全通过，报告里带 Electron 版本与 HEAD 版本戳",
+          "method": "改造后的 src/runtime/smoke/p1-utility-worker.ts 经 scripts/runtime-smoke/electron-carrier.cjs 运行，输出与提交号一起归档",
+          "target": "utility"
+        },
+        {
+          "item": "U2 utility worker 的 stdout 压力（tsd-03 判据）",
+          "judge": "临时探针在 utility worker 里向 stdout 写 4 MiB 后，RPC 仍能应答一次 bootstrap；worker RSS 增长 < 数 MiB",
+          "method": "起 Electron，观察探针应答与 worker 进程 RSS；修复后重跑对照",
+          "target": "utility"
+        },
+        {
+          "item": "U3 两载体同一报文形状对比",
+          "judge": "同一次 bootstrap + 一次 run 的 worker→Main 消息，在 utilityProcess 与 fork() 两条通道下逐字段等价（尤其无 undefined 键差异）",
+          "method": "两条通道各录一份消息序列 JSON，跑一次 diff，差异逐条解释",
+          "target": "utility"
+        },
+        {
+          "item": "U4 退出码与信号语义在两载体下的差别",
+          "judge": "外部 SIGKILL / taskkill 掉 worker 后，Main 记录的 `Worker exited (code=? signal=?)` 两个载体各是什么；确认 isLostDisposeAck（WorkerSlot.ts:118-125，要求 code===0 && signal===null）不会把崩溃误判成「dispose ACK 丢了」",
+          "method": "两个载体各杀一次，抓 main.log 对应行",
+          "target": "utility"
+        },
+        {
+          "item": "U5 打包 macOS/Linux 上 bash 工具的 PATH 首位是随包 Node",
+          "judge": "bash 里 node -v 与 which node 指向 resources/node-runtime；确认这是否是想要的行为（契约第 4 节写了规则但没写非 Windows 上的意图）",
+          "method": "打包产物里跑两条 bash 命令截输出，结论回写契约或 ARD",
+          "target": "utility"
+        }
+      ],
+      "test_gaps": [
+        "【TSD helper 替身用例清单 · 可在普通开发机上跑，不需要加密机或 Electron】以下 T01～T14 除 T09 外都建在 host.test.ts 已有的 host-adapter 替身模式上（host.test.ts:102 与 :148 是现成样板），T09 建在 tools.test.ts 的 countingIo 上。已覆盖、不必重复的有：无回落时抛 io_tsd_unavailable、真 helper 直跑 offset/limit 与含空格/$ 的路径、adapter 恰好被调用一次且 argv 形状正确、stderr 刷 8 KiB 不影响满窗 stdout、helper 非零退出 → io_tsd_unreadable。",
+        "T01 `helper timeout is an unreadable file, not a partial read` — 替身返回 termination:'timeout'、exitCode:null、stdout 带半截明文 — 断言：抛 io_tsd_unreadable、错误 message 含 timeout、不返回任何字节给调用方。",
+        "T02 `a short helper read is a complete file, not a failure` — 替身 exit 0、stdout 只有 maxBytes/2 字节 — 断言：正常返回、truncated===false、source==='node-fallback'、字节与替身写入完全一致。",
+        "T03 `stdout noise ahead of the plaintext must not become file content` — 替身 exit 0、stdout = '[corp] ready\\n' + 明文 — 断言：修 tsd-04 前这条应判红（当前会把噪声当内容），作为回归锚点；修后期望抛带 code 的错误或剥离框外字节。",
+        "T04 `stdout past the window is never a complete file` — 替身 exit 0、stdout 写 maxBytes+2 字节触发 terminate — 断言：抛 io_tsd_unreadable，不得把前 maxBytes 字节当成功读取返回。",
+        "T05 `binary plaintext survives the fallback unchanged` — 替身 exit 0、stdout 含 NUL 与非 UTF-8 字节 — 断言：HostIo 原样返回字节不解码；随后 read 工具对同样字节报 io_not_utf8（两段分开断言）。",
+        "T06 `abort during the helper run reports io_aborted` — 替身在 run 中等待，用例在途中 abort 外部 signal — 断言：抛 io_aborted 而非 io_tsd_unreadable，且 adapter 收到的 request.signal 与调用方传入的是同一次中止。",
+        "T07 `offset past EOF returns empty bytes on the fallback path too` — 替身 exit 0、stdout 零字节 — 断言：bytes.length===0、truncated===false，与明文路径（host.test.ts:72 已有同形断言）一致，守住契约「偏移超过 EOF 返回空字节且不截断」。",
+        "T08 `the helper does not inherit NODE_OPTIONS` — 替身只记录 request.env — 断言：request.env.NODE_OPTIONS === undefined（修 tsd-04 后应绿，修前判红）。",
+        "T09 `fallback windows stay capped past 2 MiB` — countingIo('node-fallback')、样本 >8 MiB — 断言：windows 触顶后恒为 2 MiB、调用次数 ≤ ceil(n/2MiB)+6、与 'direct' 同参结果逐字段相等（补上 tools.test.ts:654 因样本只有 1 MB 而没覆盖的封顶区间）。",
+        "T10 `a plaintext file that starts with the magic is skipped by grep, not fatal` — 真实临时文件内容 = 魔数 + 文本，grep 跑整个临时目录 — 断言：grep 正常返回其他文件的命中、skipped 计数 +1（修 tsd-02 后应绿）；同目录的 read 抛带可自救文案的错误。",
+        "T11 `an unreadable file does not fail the whole grep` — 真实临时文件 chmod 000（POSIX 下用 it.skipIf(process.platform==='win32')）— 断言：其余命中照常返回、不抛（tsd-02 的主回归锚点）。",
+        "T12 `without maxStderrBytes the budget is still shared` — 替身透传给真 exec：stdout 写 N 字节、stderr 写 M 字节、不给 maxStderrBytes — 断言：stdout.length + stderr.length <= maxOutputBytes，守住契约第 4 节的旧语义，防止 T013 的新语义被误扩大。",
+        "T13 `stderr overflow alone never sets truncated` — stdout 只写半窗、stderr 写 TSD_STDERR_BYTES*2 — 断言：truncated===false、termination==='exit'、stderrBytes 等于真实写入总量、stderr.length===TSD_STDERR_BYTES。现有 host.test.ts:148 那条因为 stdout 满窗，truncated 恒真，这一面从未被断言过。",
+        "T14 `real helper: limit=1 / offset past EOF / non-UTF-8 bytes` — 直跑 tsd-read.mjs（沿用 host.test.ts:94 的形态）— 断言：limit=1 只吐 1 字节；offset 超过文件长度吐 0 字节且 exit 0；非 UTF-8 字节原样透传（证明 helper 不做文本处理）。",
+        "【非 helper 替身的两条】WorkerTransport 两个工厂各一条「stdout 处于 flowing 模式」断言（readable.readableFlowing===true），是 tsd-03 的回归锚点。",
+        "【非 helper 替身的两条】utilityProcess 半边缺任何真实进程用例：workerEntryWiring.test.ts 只覆盖 fork()（Node IPC / bundled-node 形状），utility 载体的 bootstrap 往返与 dispose 退出无自动化覆盖（tsd-06）。"
+      ],
+      "unverified_claims": [
+        "tsd-01 的「产品里从不产生 node-fallback」是三段代码 + 打包脚本组合推出的，没有在 Windows / macOS 打包产物上实跑；尤其「打包 macOS/Linux 的 resources/node-runtime/node 一定存在」我只看到 node-runtime-pin.mjs 三平台都有 pin 与 afterPack.mjs 按 pin 复制，没有验证过产物。",
+        "tsd-03 的后果链（内存排队而非阻塞）按 Node/libuv 对管道 stdout 的异步写语义推断；未在 Electron utilityProcess 里实测，也没有确认 Electron 对 utility 子进程 stdout 是否有额外缓冲策略。「未排空」这一代码事实本身是确定的。",
+        "tsd-04 的触发依赖「企业预载脚本会往 stdout 打字」，这是威胁模型不是观测；契约第 4 节自己点名了 NODE_OPTIONS 这个来源，但仓内没有任何现场样本。",
+        "两种载体的 RPC 消息序列化差异（utility 是结构化克隆、node IPC 默认是 JSON）机制确认，但在 src/shared/types/workerRpc.ts 里没找到二进制/Date/Map/Set 字段，因此没有构造出具体的失败路径，不立为发现。仍有一类未排除的差异：值为 undefined 的键在 JSON 序列化下会消失、在结构化克隆下会保留，任何用 `'key' in payload` 判断的消费者会在两个载体上行为不同。",
+        "commandEnvironment（exec.ts:433）把 dirname(config.node.path) 放到 PATH 首位，在打包 macOS/Linux 上意味着 bash 工具里的 node 解析到随包 Node 24 而不是用户的 nvm/fnm 版本。p1-0 契约第 4 节明写了这条规则（「随后把已配置 Node 的目录放到 PATH 首位」），所以不立为发现；但它在非 Windows 上是否是想要的行为没有任何记录，列进检查单 U5。",
+        "Windows 上 spawnPersistent / runPipe 的 taskkill 路径、exec-runner.mjs 的 disconnect → taskkill /T /F 自杀分支，本区域只做静态阅读未执行（与 windows-static 区域检查项重叠，不要跑两遍）。",
+        "加密驱动在「非白名单进程写入受策略文件」时的实际行为（拒绝？写成明文？仍然加密？）没有任何仓内证据；D13 只记录了「加密按文件策略生效，不按写入进程」，encryption-special.md 记录的是白名单进程写出的文件在非加密域目录下落盘为明文。edit / write 的读-改-写往返只能上机验证（E2/E3）。",
+        "encryption-special.md 记录的「系统 Git Bash 也在白名单内」是 2026-09-09 那台机器、那个驱动版本的实测；D11 的 F3 未决项据此被判低风险，但换机器/换驱动版本需重验（E5）。",
+        "tsd-02 的 chmod 000 触发路径我按 walk() 与 grep 主循环的代码推演并核对了 isSkippableIoError 的错误码集合，但没有实际跑过 vitest 或产品来复现（本任务禁止执行测试）。"
+      ],
+      "findings": [
+        {
+          "id": "tsd-01",
+          "status": "confirmed-partial-waiver",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "contract-gap",
+          "node": "P1-0 / P1-8",
+          "file": "src/runtime/host/worker.ts",
+          "line": 82,
+          "title": "TSD 回落只在不可能命中的平台上启用，在唯一有密文的平台上按设计关闭，整条链路无出厂触发路径",
+          "static_inference": true,
+          "refuter_reason": "三段接线逐字复核成立，未被任何批次修改。src/runtime/host/worker.ts:60-66 的 bundled-node 分支硬写 `tsdReadFallback: 'disabled'`（注释原文：'This carrier exists precisely because the security driver whitelists this binary'）；:78-82 的 electron-utility 分支是 `const node = bundled && existsSync(bundled) ? {...} : undefined;` 与 `tsdReadFallback: node ? 'configured-node' : 'disabled'`。载体推导在 src/agent-host/worker.ts:52 `const carrier = electronPort ? 'electron-utility' : 'bundled-node'`，而 src/main/services/agent-host/PiWorkerProcess.ts:79-92 `if (app.isPackaged && process.platform === 'win32')` 用 `spawn(nodePath, [entryPath], { stdio: ['ignore','pipe','pipe','ipc'] })`，没有 parentPort→bundled-node。打包脚本侧 scripts/node-runtime-pin.mjs 的 NODE_RUNTIME_PINS 含 win32-x64 / darwin-arm64 / darwin-x64 / linux-x64，scripts/afterPack.mjs:78-103 copyNodeRuntime 按 pin 装，故打包 mac/Linux 得 configured-node、未打包开发态（Electron resourcesPath 下无 node-runtime）得 disabled。git log -S 未见任何批次改过这两处（workerCarrier.test.ts:35-70 四条断言正是把当前行为钉死的）。我另找到一条把结论钉得更死的证据：src/runtime/host/tsd-read.mjs 在 `if (first.bytesRead === head.length && head.equals(magic)) throw new Error('configured Node still reads TSD ciphertext')`，而 io.ts:113-134 只在命中魔数时才调 helper——所以在没有解密驱动的机器上 `source: 'node-fallback'` 的成功返回物理上不可能发生，dead-path 判断比审查员写的更强。静态推断（三段代码 + 打包脚本组合，未在 Windows/加密机执行）。严重级我从 medium 下调为 low：按本次评级口径这属于死代码 + 契约/验收口径缺口（docs/plantree/plans/runtime-evolution/topics/p1-0-host-contracts.md:58-59 只写 '配置本身不能证明企业驱动已放行'，没写'当前无出厂载体会给出 configured-node'），当前出厂形态下没有任何用户可见的错误行为，审查员的失败场景依赖'白名单失效'这一尚未发生的环境变化。补充：roadmap.md:107 的 T032 已把 'tools-10、P1-8 证据重采、core-host-05/07 等静态推断项'列为待现场项，这条与之同源但未被具体记下。",
+          "already_fixed_by": "",
+          "waiver": "partial",
+          "waiver_source": "docs/plans/2026-09-08-runtime-evolution-ard.md D11「执行载体：按进程身份区分，不按实现语言推断」；另见 findings.json waivers[43]（node P1-0，kind field-only，source: docs/plantree/plans/runtime-evolution/evidence/p1/README.md 仍需完成的载体验收 第3条）",
+          "waiver_quote": "企业加密驱动（TEC OCular Agent）按进程放行明文，打包出的 Electron exe 不在白名单里，因此读到的是密文……所以兼容性是执行载体的属性，不是实现语言的属性。| bundled-node | Windows 安装版 | 随包 node.exe + Node 原生 IPC |（另：waivers[43] 原文「企业加密机验证 Read 明文、Write/Edit 回读、bash stdout 及退出后无残留，本机无法执行」）"
+        },
+        {
+          "id": "tsd-02",
+          "status": "confirmed",
+          "severity": "medium",
+          "reviewer_severity": "medium",
+          "category": "robustness",
+          "node": "P1-4（经 P1-2 的读出口触发）",
+          "file": "src/runtime/plugins/tools/index.ts",
+          "line": 612,
+          "title": "grep 的逐文件 readFile 没有容错，一个读不了的文件让整次搜索失败",
+          "static_inference": false,
+          "refuter_reason": "成立，T010 只修了遍历层没修读取层。src/runtime/plugins/tools/index.ts:604-614：`for await (const file of walk(...)) { if (included && !included(file)) continue; if (pathPolicy(file) !== 'allow') { skipped++; continue; } const data = await io.readFile(file, { maxBytes: SEARCH_FILE_BYTES, overflow: 'truncate', signal });` —— 这句没有 try/catch，从 :575 到 :672 之间唯一的 try 是 :578-592 包 `new RegExp` 的那个。对照 walk 内部 :772-775 `catch (error) { if (!isSkippableIoError(error)) throw error; }`（T010 `1262e3b0` 的修法，roadmap.md:20/64 记为 tools-01/07）。错误不会被改写：src/runtime/host/io.ts:61-73 的 track() 只在 disposed 与非绝对路径两种情况构造 RuntimeHostError，其余 fs 拒绝原样透出，故 chmod 000 文件在 `open(path,'r')`（io.ts:110）抛 EACCES 直接冒出 execute，整次 grep 变一条工具错误，已命中的 matches 全丢。触发不依赖加密环境（stat 对 chmod 000 文件仍成功、dirent 报 file，walk 会 yield 它）。测试未钉住：tools.test.ts:310-327 那条 EACCES 用例替身的是 `r.ctx.runtimeHostIo.readDirectory`，注释写明 'Fake HostIo error: EACCES on one directory'，readFile 半边没有对应用例。严重级维持 medium：功能错误、模型可见的错误行为，无数据损坏与卡死。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "已查 docs/plantree/plans/runtime-hardening/roadmap.md T010/T012 条目、docs/plantree/plans/runtime-evolution/topics/p1-0-host-contracts.md、findings.json waivers（P1-4 相关两条：index 3、53）",
+          "waiver_quote": ""
+        },
+        {
+          "id": "tsd-03",
+          "status": "confirmed",
+          "severity": "medium",
+          "reviewer_severity": "medium",
+          "category": "robustness",
+          "node": "P4-0",
+          "file": "src/main/services/agent-host/WorkerTransport.ts",
+          "line": 56,
+          "title": "utility 载体的 worker stdout 从不排空，node 载体排空——D11 第 5 条只落实了一半",
+          "static_inference": true,
+          "refuter_reason": "成立且是 100% 确定的代码事实。src/main/services/agent-host/WorkerTransport.ts:96-98 node 半边有 `// RPC uses Node IPC; drain ordinary stdout so tool/extension logs cannot fill its pipe.` + `proc.stdout?.resume();`；:56-93 的 createUtilityProcessWorkerTransport 从 `get pid()` 到 `kill()` 逐行看过，只有 :81-83 `onStderr(listener) { return subscribeReadable(proc.stderr, listener); }`，全函数不出现 stdout。`grep -rn stdout src/main/services/agent-host/` 仅命中 NodeRuntimeResolver.ts（execFile 取版本）与这一行 :98。管道确实存在：PiWorkerProcess.ts:94-100 `utilityProcess.fork(entryPath, [], { ..., stdio: 'pipe', ... })`。这违反 ARD 硬约束——docs/plans/2026-09-08-runtime-evolution-ard.md:231 D11 第 5 条原文『子进程的普通 stdout 必须排空，RPC 走独立通道，避免工具日志写满管道』，p1-0 契约 docs/plantree/plans/runtime-evolution/topics/p1-0-host-contracts.md:21 亦有『普通 stdout 必须排空』、:300 验收点『真实 stdout 不混进 worker RPC』。git log -S'stdout?.resume' 只出 78168b4d（P4-0 加 node 半边），批次 A～C 未碰。测试未钉住：__tests__/WorkerTransport.test.ts:15-20 的 FakeUtilityProcess 只有 `stderr = new PassThrough()`，根本没有 stdout 字段；node 半边反而有真子进程用例（:36-66，worker 里写了 `process.stdout.write('ordinary output is not RPC')`）。冒烟也发现不了：scripts/runtime-smoke/electron-carrier.cjs:31 `child.stdout.on('data', data => process.stdout.write(data))` 自己把管道读走了。后果按 Node/libuv 语义推断（写入端排队于 worker 内存、日志永久丢失），未在 Electron 实测——此半为静态推断。严重级维持 medium：触发要靠第三方库往 stdout 打日志（我们自己的 agent-host/worker.ts 全用 console.error），但一旦发生是长会话内存单调增长 + 排查证据缺失。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-evolution/topics/p1-0-host-contracts.md 第21行；docs/plans/2026-09-08-runtime-evolution-ard.md D11 第5条",
+          "waiver_quote": "Windows 安装版缺少随包 Node 必须失败；worker RPC 仍由 WorkerTransport 负责；普通 stdout 必须排空。（D11 第5条：子进程的普通 stdout 必须排空，RPC 走独立通道，避免工具日志写满管道）"
+        },
+        {
+          "id": "tsd-04",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "correctness",
+          "node": "P1-0",
+          "file": "src/runtime/host/io.ts",
+          "line": 148,
+          "title": "helper 的 stdout 是无框字节协议，而子进程环境整份继承：一条 stdout 启动噪声会把文件内容悄悄改写",
+          "static_inference": true,
+          "refuter_reason": "两个前提都成立。(1) 无框协议：src/runtime/host/io.ts:140-150 调 helper 时只给 `args: [tsdHelper(), path, String(offset), String(options.maxBytes + 1)]`，**没有传 env**；:168 `return readResult(Buffer.from(output.stdout), options, 'node-fallback');` 直接把 stdout 全量当文件内容。helper 侧 src/runtime/host/tsd-read.mjs 也只有 `process.stdout.write(data)`，无任何帧头。(2) 环境整份继承：src/runtime/host/worker.ts:38-40 `const childEnv = Object.fromEntries(Object.entries(env).filter(...))`，src/runtime/host/exec.ts:415-436 commandEnvironment 只重写 PATH（`env.PATH = config.node ? [dirname(config.node.path), previous].join(delimiter) : previous`），全仓 `grep -rn NODE_OPTIONS src scripts` 除 host.test.ts:167 的注释外零命中，确实不剔除。契约缺口也属实：p1-0 第 4 节 docs/plantree/plans/runtime-evolution/topics/p1-0-host-contracts.md:204-206 只写到独立 stderr 预算使启动告警『不能把一次成功读取变成失败』，:129 写『业务报错写 stderr，stdout 保持原始字节』，没有一句覆盖『stdout 上的额外输出会被当成文件内容』。静态推断。严重级维持 low，理由比审查员给的更强：如 tsd-01 所述，helper 只有在文件头对它已是明文时才会成功输出，而那要求解密驱动放行——在当前出厂形态里 configured-node 与解密驱动不同时存在，所以污染路径当前不可达，是纯潜伏缺陷；一旦按 tsd-01 的 (c) 把回落接到 Windows，它立刻升为数据正确性问题。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md T013 行；docs/plantree/plans/runtime-evolution/topics/p1-0-host-contracts.md 第129行",
+          "waiver_quote": "T013 取舍：……stderr 预算放 exec 而非 HostIo 自收；明文路径保持 32 KiB；helper 顺序读语义未动。真实加密机链路仍未跑。（契约：helper 的路径不得拼进脚本文本或 shell 命令；业务报错写 stderr，stdout 保持原始字节）"
+        },
+        {
+          "id": "tsd-05",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "perf",
+          "node": "P1-2",
+          "file": "src/runtime/plugins/tools/read-lines.ts",
+          "line": 52,
+          "title": "块大小封顶 2 MiB 之后重读量重新变成二次，注释与落地记录的「约线性」不成立",
+          "static_inference": true,
+          "refuter_reason": "算术可复现，注释与落地记录确有过头之处。src/runtime/plugins/tools/read-lines.ts:45-52 注释原文『Doubling the window after each fallback chunk keeps both roughly linear in the bytes actually scanned; the cap bounds what a single step may buffer.』，紧接 `const FALLBACK_CHUNK_MAX_BYTES = 2 * 1024 * 1024;`；:111-112 `if (chunk.source === 'node-fallback') chunkBytes = Math.min(Math.max(chunkBytes * 2, maxBytes), FALLBACK_CHUNK_MAX_BYTES);`；扫描上限是 :96 `while (position < 64 * 1024 * 1024)`。helper 每次从头解密（tsd-read.mjs 顺序读并 skip offset，无句柄复用），故封顶后每块付 offset+cap，是等差和。我用 node 单跑这段纯算术（不执行产品代码，maxBytes 取 TOOL_OUTPUT_BYTES=50 KiB 量级）得 **38 次 readFile、约 1121 MiB 重读**，与审查员数字逐位一致，相对 64 MiB 线性下限放大 17.5 倍。roadmap.md:33 的 T013 行写『总重读量 O(n²)→约线性、进程创建上百次→个位数』，在封顶生效后不成立。回归确实不守护封顶后的形态：tools.test.ts:634-636 样本是 `LINE_BYTES=200 × LINES=5000` 约 1 MB，:667 断言 `helper.windows.length` ≤ 6、:669 `Math.max(...helper.windows) <= 2*1024*1024`，全落在触顶之前。静态推断。严重级维持 low：注释/记录不符 + 性能，且按 tsd-01 该路径当前在产品里不可达，慢而不错。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md T013 行",
+          "waiver_quote": "readLines 在 node-fallback 下扫描块几何倍增（首块 32 KiB，下限对齐输出预算，封顶 2 MiB），总重读量 O(n²)→约线性、进程创建上百次→个位数……取舍：块大小几何倍增而非固定放大（固定倍数仍是 O(n²)）"
+        },
+        {
+          "id": "tsd-06",
+          "status": "confirmed-partial-waiver",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "test-gap",
+          "node": "P1-8 / P4-0",
+          "file": "src/runtime/smoke/p1-utility-worker.ts",
+          "line": 10,
+          "title": "utility 载体探针不走产品路径推导，且它的 carrier 断言是同义反复",
+          "static_inference": false,
+          "refuter_reason": "两件事在 HEAD 上一件都没变。(1) src/runtime/smoke/p1-utility-worker.ts:7-16 原文 `runHostToolsProbe({ carrier: 'electron-utility', node: { path: nodePath, source: 'explicit' }, tsdReadFallback: 'disabled', exec: { mode: 'pipe' }, childEnv: { PATH: ... }, cleanupTimeoutMs: 2000 }, cwd, shellPath)` —— 手写常量，不经 workerHost；产品路径 src/agent-host/worker.ts:93 是 `const host = workerHost({ carrier, ...(resourcesPath ? { resourcesPath } : {}) })`，推导结果应是 `source: 'bundled'` + `configured-node`（contracts.ts:366 的联合类型 `'bundled' | 'explicit' | 'current-process'` 里 explicit 是另一支）。p1-bundled-node.ts:20-31 同样手写。(2) 同义反复属实：src/runtime/smoke/p1-host-tools.ts:49 `trace: run.trace.version_stamp.carrier === host.carrier && !run.trace.persistence_error`，而版本戳的来源就是同一对象——src/runtime/bootstrap.ts:449 `carrier: host.carrier`（同段 :452 `tsd_read_fallback: host.tsdReadFallback`、:454 `node_source: host.node.source` 同理），故该断言恒真；报告里 :55-58 已带 `execPath` / `electron: process.versions.electron ?? null` 却无一条断言用它们。这正撞上契约的明文要求：docs/plantree/plans/runtime-evolution/topics/p1-0-host-contracts.md:302 P1-8 验收原文『真 bundled-node 与真 electron-utility 各跑工具用例……仅修改 carrier 字符串的替身不计通过』。utilityProcess 半边确无真子进程用例（workerCarrier.test.ts 全是纯函数断言；真子进程端到端的 agent-host/__tests__/workerEntryWiring.test.ts:83/131/187 用 fork + `proc.stdout?.resume()`，即 Node IPC 形状）。严重级维持 low（测试缺口）。附注：roadmap.md:107 的 T032 已把『P1-8 证据重采』列入上机检查单，属同源但未落到这两条具体断言上，不构成已修。",
+          "already_fixed_by": "",
+          "waiver": "partial",
+          "waiver_source": "findings.json waivers[64]（node P1-8，kind 未标注，source: docs/plantree/plans/runtime-evolution/README.md P1-8 行）",
+          "waiver_quote": "Windows/加密机现场验收攒到 P4-6 一次上机，不分批；签收前一律记为进行中/未验收，Linux 与 CI 的绿色不得代签"
+        },
+        {
+          "id": "tsd-07",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "correctness",
+          "node": "P1-2",
+          "file": "src/runtime/host/io.ts",
+          "line": 115,
+          "title": "首 16 字节恰为 TSD 魔数的明文文件，在所有载体上都读不出来且没有任何出口",
+          "static_inference": false,
+          "refuter_reason": "无法推翻。(1) 判定唯一依据属实：src/runtime/host/io.ts:113-115 `const { bytesRead } = await file.read(head, 0, head.length, 0); encrypted = bytesRead === head.length && head.equals(TSD_MAGIC);` 之后没有任何二次判据或明文退路，encrypted 为真即跳过明文分支。(2) 两条出口都堵死：io.ts:134-138 在无回落时抛 `io_tsd_unavailable`（'TSD read requires configured Node'）；有回落时 helper 在 src/runtime/host/tsd-read.mjs:22-24 `if (first.bytesRead === head.length && head.equals(magic)) throw new Error('configured Node still reads TSD ciphertext')`，经 io.ts:158-166 变成 `io_tsd_unreadable`。(3) 所有出厂载体覆盖：src/runtime/host/worker.ts:66 bundled-node 写死 tsdReadFallback:'disabled'，worker.ts:82 electron-utility 仅在随包 node 存在时为 'configured-node'，src/runtime/host/config.ts:14 standalone 为 'disabled'——无一条路径能读出该文件。(4) 现有测试非但没钉住反而自证误判：src/runtime/__tests__/host.test.ts:83-92 的『密文』夹具是 `await writeFile(path, '%TSD-Header-###%secret')` 写出的普通明文，测试却期望 io_tsd_unavailable / io_tsd_unreadable。(5) 非批次 A~C 已修：git log -- src/runtime/host/io.ts src/runtime/host/tsd-read.mjs 最新一次为 T013(19f9e888，块几何倍增与 stderr 独立预算)，此后判定逻辑未改。(6) 不是固有代价：Main 侧同机制 src/main/utils/tsdSafeRead.ts:62-68 魔数命中后走 readViaNodeExe（脚本仅 readFileSync 原样输出），同一输入能正常返回原始字节，说明 runtime helper 的二次魔数硬错误是自加的。保留两点：触发为构造性——我扫过全部 git ls-files，当前无任何文件前 16 字节等于该魔数；且审查员建议的二次判据有事实错误——Windows-P4-6-evidence/encryption-special.md:16,18 记录的容器为 20480 / 45056，均非 8192 的整数倍（是 4096 的倍数）。严重级取 low：影响面仅限以该 16 字节开头的文件，后果为罕见的读取失败与误导性文案，不构成安全绕过或数据损坏。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-evolution/topics/p1-0-host-contracts.md 第123-129行（TSD 回落判据段落）",
+          "waiver_quote": "TSD 回落。无论 offset 是否为 0，先检查文件起始 %TSD-Header-###%；……helper 读到的文件头仍是 TSD 视为失败，不能返回给模型，也不能继续换别的 Node 重试。"
+        }
+      ],
+      "stats": {
+        "confirmed-partial-waiver": 2,
+        "confirmed": 5
+      }
+    },
+    {
+      "key": "capacity-leftovers",
+      "task": "T031",
+      "title": "容量对账的余项",
+      "summary": "对 T024 容量对账表（2026-09-15）留下的「待落地」五项在当前 HEAD（ebc82f16）逐一复核：MCP 响应、子代理转录、trace 文件与内存镜像四条主要落盘来源已在 T024/T020 落地限额，站得住；但用户附件（图片/文本）、trace 里的工具调用参数全文、压缩摘要正文、会话文件单行安全网、多进程并发轮转 runs.jsonl 这五条仍全部敞口。其中用户附件一项最严重：整条链路（preload→Main IPC→WorkerManager→runtime 的 preparePrompt）没有任何一层做服务端校验，唯一的限制是渲染层一个可被绕过的前端函数；而且触发不需要绕过界面——渲染层自己允许的单次发送上限（约 13~14 MB 落盘量）本身就足以在两三条正常的「发图」消息内耗尽 32 MiB 会话预算，耗尽后会话文件按现状代码会永久打不开（T034 的中段坏行自愈救不了这种情况）。",
+      "confidence": "medium",
+      "raw_report_path": "docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/capacity-leftovers.md",
+      "files_read_count": 26,
+      "node_verdicts": [
+        {
+          "node": "P3-1（容量面，T031 范围内）",
+          "verdict": "complete-with-gaps",
+          "rationale": "MCP 工具响应、子代理转录、trace 文件/内存镜像四条主要来源（T024、T020）已限额并有测试，是本节点主体，站得住。但对账表明确列出的五项「待落地」在当前 HEAD 上全部依旧敞口：用户附件无服务端体积上限（capacity-01，high，正常使用即可触发会话文件永久打不开）、trace 工具调用参数全文无截断（capacity-02，medium）、压缩摘要正文无显式字节上限（capacity-03，medium）、会话文件缺单行最大字节安全网（capacity-04，low）、多进程并发轮转同一 runs.jsonl 无互斥（capacity-05，medium，仅在手工设置 AICLIENT_RUNTIME_TRACE_DIR 时可达）。capacity-01 后果等级与既往审计 high 级的 session-01（会话文件永久打不开）相同，故不能判 complete。"
+        }
+      ],
+      "checklist_items": [
+        {
+          "item": "附件顶满会话文件后打不开的端到端复现",
+          "judge": "连续发送 2~3 条各含多张图片附件的消息后，会话文件字节数是否逼近/超过 32 MiB；重开该会话是否抛 io_limit",
+          "method": "用真实 Electron GUI 走一遍 Composer 发送流程观察结果；或在 runtime 包内写构造用例模拟同等字节量",
+          "target": "dev-box"
+        },
+        {
+          "item": "Main IPC 层缺失附件校验的直接验证",
+          "judge": "绕开 Composer 直接向 CHAT_SEND 传超限 attachments payload，确认 Main 不拒绝、请求原样送达 worker",
+          "method": "起 Electron 应用，在渲染层 devtools 控制台直接调用 window.api 发送接口并传构造好的超限 payload",
+          "target": "dev-box"
+        },
+        {
+          "item": "多进程并发轮转同一 runs.jsonl",
+          "judge": "两个独立 worker 进程共享同一 AICLIENT_RUNTIME_TRACE_DIR 并几乎同时 finish() 时，是否出现代际丢失或写入交织/损坏",
+          "method": "用两个 Node 子进程直接跑 runtime 包 bootstrap（不需要 Electron），共享同一 traceDir",
+          "target": "dev-box"
+        },
+        {
+          "item": "压缩摘要真实体积上限",
+          "judge": "大上下文窗口真实模型触发 /compact 后，summary 实际字节数是否需要独立硬顶",
+          "method": "真实模型回合 + 读会话文件里 compaction 条目字节数",
+          "target": "real-model"
+        },
+        {
+          "item": "MCP 图片字节假设（T024 遗留未验证项，本区域一并确认仍未验证）",
+          "judge": "1 MiB/张、2 MiB/次的假设是否贴合真实 MCP 截图服务器的输出分布",
+          "method": "接入真实 MCP 截图/图片服务器观察实际返回图片字节分布",
+          "target": "real-model"
+        }
+      ],
+      "test_gaps": [
+        "没有测试把附件体积链路从 IPC 层串到 session 落盘层验证；attachmentLimits.test.ts 只测纯函数 admitAttachment",
+        "preparePrompt() 本身没有任何尺寸相关测试",
+        "trace.test.ts 没有验证运行中 steps 数组累积超大 args 后的内存/序列化行为，也没有验证多 TracePlugin 实例并发写同一文件的交织结果",
+        "context 压缩流程没有 summary 超大触发 compaction_over_budget 的直接构造用例",
+        "session/store.ts 没有文件几乎为空、单条写入本身逼近 maxBytes 的直接构造用例"
+      ],
+      "unverified_claims": [
+        "capacity-01「两三条消息即可顶满会话」是按渲染层限额与 base64 膨胀系数估算，没有真实端到端复现过",
+        "capacity-01「渲染层是唯一防线」基于代码路径追踪，没有实际发起过绕开 Composer 的 CHAT_SEND 调用去验证 Main 确实放行",
+        "capacity-05「最坏情况是丢一代历史、不损坏正在写的文件」沿用 T024 对账表的静态结论，本轮未用两个真实 Node 进程复验",
+        "capacity-03「大上下文窗口模型可能产出远超其它来源量级的摘要」依赖产品实际模型目录中存在这类模型这一前提，未核实"
+      ],
+      "findings": [
+        {
+          "id": "capacity-01",
+          "status": "confirmed",
+          "severity": "medium",
+          "reviewer_severity": "high",
+          "category": "capacity",
+          "node": "P3-1",
+          "file": "src/runtime/plugins/agent-loop/attachments.ts",
+          "line": 34,
+          "title": "用户附件无任何服务端体积上限，正常使用即可在个位数消息内顶满 32 MiB 会话预算",
+          "static_inference": false,
+          "refuter_reason": "机制属实，但最坏后果被夸大，故降一级。逐行核对：(1) runtime 侧确实只判 kind 不判大小 —— src/runtime/plugins/agent-loop/attachments.ts:34-39 `if (attachment.kind === 'image') { images.push({ type: 'image', data: attachment.data, mimeType: attachment.mediaType || 'image/png' }); }`；对比 src/runtime/plugins/mcp/index.ts:290-297 的 `MCP_MAX_IMAGES=8` 与 `if (bytes > MCP_IMAGE_BYTES || imageBytes + bytes > MCP_IMAGE_TOTAL_BYTES)`，双重上限确实只给了 MCP 图片。(2) Main 侧无字节校验：src/main/ipc/chat.ts:471-488 声明 attachments 类型后直接 `const requestId = await workerManager.send({ ...payload, ownerWebContentsId })`；WorkerManager.ts:1673 `...(input.attachments ? { attachments: input.attachments } : {})`；preload/index.ts:1045 `ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, payload)`；contracts.ts:249 `attachments?: readonly SessionAttachment[]` 也无校验。Main 唯一的 5 MiB 闸门在另一条路上（shared/types/attachmentIo.ts:35 `MAX_ATTACHMENT_READ_BYTES = 5*1024*1024`，只管 file:readAttachment 的读盘，粘贴路径不经过它）。(3) 确实落盘：pi-agent-core/dist/agent-loop.js:52-53 对每条 prompt `await emit({ type: 'message_end', message: prompt })`，agent-loop/index.ts:463 `if (event.type === 'message_end' && session) await session.appendMessage(event.message)`，store.ts:230-232 `appendEntry({ type:'message', message: structuredClone(message) })` 原样写入 base64。渲染层 DEFAULT_ATTACHMENT_LIMITS（attachmentLimits.ts:40-45，5 张 / 单图 5 MiB / 单次 10 MiB 原始字节）base64 后约 13.4 MiB/条，2~3 条即可顶满 codec.ts:20 `SESSION_MAX_BYTES = 32*1024*1024`。反驳到的部分：审查员说「会话从此永久打不开」不成立于应用自身写入路径 —— store.ts:290、499、561 三处写入前都判 maxBytes，io.ts:264-266 只在 `bytes.length > options.maxBytes` 才抛 io_limit，恰好等于上限仍能打开，所以自伤不会越过 32 MiB（唯一未校验的重写是 store.ts:170-198 的 open 期 interop 头升级 `document.repair` 直接 writeFile，旧格式会话恰好顶满时才可能越界，条件很窄）。真实后果是会话变只读：store.ts:290-293 抛 session_size_limit 后 enqueue（store.ts:308-320）把 tail 永久置为 rejected，后续写入一律拒绝——records.ts:345 自己的注释就写着「throws `session_size_limit` and the conversation becomes a read-only artifact」。属用户可见的功能性损坏，非数据丢失/安全绕过，定 medium。未被批次 A～C 修：git log 显示 attachments.ts 最近一次改动是 2c0eb30c（T014），T024 的对账表第六节把它列为「待落地（禁改）」。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/evidence/capacity-reconciliation-2026-09-15.md 第六节「待落地」表格第一行；docs/plantree/plans/runtime-hardening/roadmap.md T024 行",
+          "waiver_quote": "用户附件（图片与文本）无任何体积上限 | plugins/agent-loop/attachments.ts:34-42 | T024 禁改 agent-loop。体积由用户选文件决定，比 MCP 可控，但同样绕过所有闸门直接落盘"
+        },
+        {
+          "id": "capacity-02",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "capacity",
+          "node": "P3-1",
+          "file": "src/runtime/plugins/agent-loop/index.ts",
+          "line": 468,
+          "title": "trace 把每次工具调用的完整参数原文写入，唯一没有走预览截断模式的落盘点",
+          "static_inference": false,
+          "refuter_reason": "代码事实成立，但「唯一」一词是错的，且默认配置下不落盘，故降到 low。核对：src/runtime/plugins/agent-loop/index.ts:467-473 确为 `if (event.type === 'tool_execution_start') trace.note('tool', { event: event.type, tool_call_id: event.toolCallId, tool: event.toolName, args: event.args });`，无截断；同文件 58 行 `const MAX_TRACE_PREVIEW_CHARS = 4000` 只用在 traceSafeActivity（61-70 行，审批活动的 preview）。trace.note 确实只往内存数组 push：trace.ts:139-146 `note(type, detail) { steps.push({ step: steps.length + 1, type, at: ..., detail }); }`；T024 的两道上限只在 finish 时生效 —— trace.ts:161-163 `const line = Buffer.from(...); sink.remember(trace, line.byteLength); await sink.persist(trace, line);`，remember()（trace.ts:186-203）还明文保证最新一条永不淘汰（`this._runs.length > 1 &&`），所以本 run 的大 args 必然留在内存。轮转也确实不截断：trace.ts:250-252 `// A line larger than the whole budget is still written whole`。反驳到的部分：`args` 不是唯一没走截断的落盘字段 —— index.ts:181 `trace.begin({ ..., input: prepared.text })` 写入用户提示全文（含最大 512 KiB 的文本附件），index.ts:195-197 `trace.note('note', { event: 'run_start', system_prompt: systemPrompt, ... })` 写入系统提示全文；tool_execution_end 的 `result`（index.ts:475-481）另有工具侧 50 KiB 预算兜着。影响面也有限：flags.ts:53 `traceDir: firstNonEmpty(env[RUNTIME_TRACE_DIR_ENV])` + bootstrap.ts:399-400，打包默认不设该变量 → dir 为 null，trace.ts:201 `if (!this.dir) return;` 直接不写盘，只剩内存里几 MB。属纵深防御与口径一致性缺口，无用户可见错误行为。未被修：trace.ts 最近一次改动即 T024 的 8564ba41，对账表第六节把这条明列为待落地。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/evidence/capacity-reconciliation-2026-09-15.md 第六节「待落地」表格第二行；docs/plantree/plans/runtime-hardening/roadmap.md T024 行",
+          "waiver_quote": "tool_execution_start 把工具参数全文写进 runs.jsonl | plugins/agent-loop/index.ts:432-437 | 同上。write 的 8 MiB 内容会整份进一行 trace，比 4 000 字符的审批预览大三个数量级；建议沿用 MAX_TRACE_PREVIEW_CHARS 的口径"
+        },
+        {
+          "id": "capacity-03",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "capacity",
+          "node": "P3-1",
+          "file": "src/runtime/plugins/context/index.ts",
+          "line": 317,
+          "title": "压缩摘要正文没有显式字节上限，唯一约束是模型 hardLimit 间接决定的事后检查",
+          "static_inference": false,
+          "refuter_reason": "「无显式字节常量」属实，但「可能产出远大于其它落盘来源量级的摘要」是夸大，故降到 low。核对 src/runtime/plugins/context/index.ts:320 `const summarized = await this.summarize(bounded.preparation, request);`、331-333 `if (estimateContextTokens(candidate).tokens + (request.additionalTokens ?? 0) >= budget.hardLimit)` → giveUp('compaction_over_budget')、345 `const persisted = session ? await session.appendCompaction(result) : undefined;`——确实没有任何 MAX_*_BYTES 常量，事后 token 检查是唯一闸门，与 MCP 50 KiB、工具 50 KiB 这些有名常量的模式不一致，这点成立。但输出侧并非「只靠 provider 心情」：src/runtime/node_modules/@earendil-works/pi-agent-core/dist/harness/compaction/compaction.js:388 `const maxTokens = Math.min(Math.floor(0.8 * reserveTokens), model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY);` 直接作为 provider 的 maxTokens 下发，而 reserveTokens 又由 budget.ts:124-133 的 `modelOutputBudget = min(model.maxTokens||DEFAULT, floor(contextWindow*0.25))` 收着。即便 1M 窗口模型，摘要也就是几十万 token 量级（数百 KB），要顶满 32 MiB 需要上百次压缩，且每次压缩本身就在回收上下文。属纵深防御缺口，无可构造的用户可见失败。未被修：T024 对账表第六节原文把 `plugins/context/index.ts:347` 列为待落地（context 插件不在 T024 可改范围）。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/evidence/capacity-reconciliation-2026-09-15.md 第六节「待落地」表格第三行及正文第64行；docs/plantree/plans/runtime-hardening/roadmap.md T024 行",
+          "waiver_quote": "compaction 摘要正文无上限 | plugins/context/index.ts:347 | context 插件不在本任务可改范围。输入侧已有 summaryInputBudget，输出侧只靠 provider 的 maxTokens"
+        },
+        {
+          "id": "capacity-04",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "capacity",
+          "node": "P3-1",
+          "file": "src/runtime/plugins/session/store.ts",
+          "line": 290,
+          "title": "会话文件缺少单行最大字节安全网，只有聚合字节检查",
+          "static_inference": false,
+          "refuter_reason": "代码原文逐字属实，当前 HEAD 依旧只有聚合检查：src/runtime/plugins/session/store.ts:288-295 `const line = ...; const bytes = Buffer.byteLength(line); if (this.bytes + bytes > this.maxBytes) throw new RuntimeHostError('session_size_limit', 'session exceeds the configured size budget');`；另两处写入（store.ts:499 fork 全量、store.ts:561 mutate 行）同样只比聚合值，没有任何单行常量（grep `SESSION_MAX` 在 runtime 下只有 codec.ts:20 的 32 MiB 一个）。这条本身不构成独立故障——它是兜底而非缺陷路径，缺的是「未来某个新来源忘了限额」时的最后一道拦网，对账表第六节自己也写「有了以上各条上限后是冗余防线……建议作为独立小任务评估」。审查员给的 low 与我一致。未被批次 A～C 落地：git log 该文件无相关改动，T024 提交 8564ba41 只动了 trace.ts 与 mcp/index.ts。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/evidence/capacity-reconciliation-2026-09-15.md 第六节「待落地」表格第四行及正文第47行；docs/plantree/plans/runtime-hardening/roadmap.md T024 行",
+          "waiver_quote": "会话文件缺「单行最大字节」 | plugins/session/store.ts:288-295 | 有了以上各条上限后是冗余防线；但它是唯一能挡住「未来某个新来源忘了限额」的兜底。建议作为独立小任务评估"
+        },
+        {
+          "id": "capacity-05",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "concurrency",
+          "node": "P3-1",
+          "file": "src/runtime/trace.ts",
+          "line": 81,
+          "title": "多个 worker 进程共享同一 traceDir 时，runs.jsonl 的轮转没有跨进程互斥",
+          "static_inference": true,
+          "refuter_reason": "静态推断成立，但影响只限调试产物，故从 medium 降到 low。引用核对无误：trace.ts:81 `private pending: Promise<void> = Promise.resolve();`（进程内串行化）；flags.ts:53 `traceDir: firstNonEmpty(env[RUNTIME_TRACE_DIR_ENV])`，bootstrap.ts:399-400 直接用该目录、trace.ts:203 `const path = join(dir, 'runs.jsonl')`，不按会话或 pid 分子路径；rotate()（trace.ts:244-262）`const size = await this.size(path); ... if (size === 0 || size + incoming <= this.maxFileBytes) return undefined; ... for (let index = this.fileGenerations; index >= 1; index--) await this.move(from, join(dir, \\`runs.${index}.jsonl\\`))`，判断源是磁盘 stat，无任何跨进程锁（会话侧有 writerLock.ts，trace 侧没有对应物）。worker 确为独立进程：PiWorkerProcess.ts:94 `utilityProcess.fork(entryPath, [], {...})`，每进程各有一个 TracePlugin 实例，环境变量随父进程继承。可达性比审查员说的更高一点：本仓自己的取证脚本就会造出这个场景 —— Windows-P4-6-evidence/launch-gui-a-e.ps1:19 `$env:AICLIENT_RUNTIME_TRACE_DIR = $trace` 后跑 A~E 五个 GUI 场景。但后果只到「多轮转一次、丢一代 trace 历史」或「append 落进刚被 rename 的文件」，用户数据与会话文件不受影响（appendFile 按路径打开，写入内容不丢，只是进了 runs.1.jsonl）。未被修：trace.ts 最近改动即 T024（8564ba41），对账表第六节与 roadmap.md:101 把这条明确归给尚未派工的 T031。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/evidence/capacity-reconciliation-2026-09-15.md 第六节「待落地」表格第五行；docs/plantree/plans/runtime-hardening/roadmap.md T024 行、T031 行",
+          "waiver_quote": "多个 worker 同时向同一 traceDir 追加 / 轮转 runs.jsonl | trace.ts | 批评者「并发多会话」缺口，归 T031。本波的轮转用 rename 实现，并发下两个进程可能各自判定要轮转，结果是多轮转一次（丢一代历史），不会损坏正在写的文件"
+        }
+      ],
+      "stats": {
+        "confirmed": 5
+      }
+    }
+  ],
+  "missing": [],
+  "total": {
+    "confirmed": 27,
+    "confirmed-partial-waiver": 3
+  }
+}

@@ -158,3 +158,40 @@ Runtime 任务树的功能面确实做齐了，但「完成质量」明显低于
 4. 把静态推断的 Windows / 加密机 / utility 载体项收敛成上机检查单。
 5. 容量对账：bash details、子代理转录、write preview、MCP 响应四条都往 32 MiB 会话预算与无轮转的 runs.jsonl 写。
 6. P6-5 清扫的另一半：按「哪些代码因为 legacy 走了而失去消费者」重新画线。
+
+## 九、批次 D 补审（2026-09-15）后的节点判定更新
+
+补审证据在 [runtime-hardening/evidence/batch-d-audit-2026-09-15/](../../../runtime-hardening/evidence/batch-d-audit-2026-09-15/README.md)（129 条发现，确认 121；接缝审查员裁决 22 个节点）。第五节表保持 2026-09-14 原判 + 批次 A～C「已修」标注不动；本节只列本轮**改判**与**首次判定**的节点，以本节为准。发现编号指向批次 D 证据。
+
+| 节点 | 第五节判定 | 批次 D 裁决 | 主要依据 |
+|---|---|---|---|
+| P4-0 | 完成 | complete-with-gaps | 5 个区域一致；09-14 判「完成」时 Main 侧一半模块未读。utility 载体 stdout 不排空（tsd-03 ← main-host-04）、导入 worker 不计容量（concurrency-09）、NodeRuntimeResolver 无生产调用方（main-aux-04，取舍） |
+| P4-3 / P4-4 | 完成（小瑕疵）/ 有缺口 | complete-with-gaps | Main 半边：dispose 前关事件闸丢排空事件（main-host-03）、关机拆除顺序（main-host-02）、跨工作区斜杠命令回退（main-host-01）、tier 通道与诊断死代码（main-host-05/07/08） |
+| P4-6 | 未评估 | **incomplete**（接缝裁决；field-nodes 判 complete-with-gaps、windows-static 判 incomplete） | 全树唯一现场验收节点，验收表 R2/R3/R4 三行从未执行；Windows 面压着 high 级 windows-01；看板把拒签的 R2/R3 写成结论（field-01） |
+| P3-5 | 完成（证据不足） | complete-with-gaps | 索引读坏与不存在同分支、下次写入覆盖成空（session-index-01，high）；fork 只实现丢弃半边（session-index-02/04/09）；NativeSessionIndexAdapter 仍零生产引用（session-index-03）；session-07 维持 refuted |
+| P3-2 | 完成 | complete-with-gaps | piSessionTree / piSessionTimeline 被 runtime 直接消费但缺关键用例（ah-lib-06）；两套脱敏并存（main-aux-06 ← ah-lib-01/02） |
+| P3-1 | 有缺口（已修） | complete-with-gaps | 并发面：抢占陈旧锁窗口（concurrency-01）、pid 复用永久锁死（concurrency-02 ← windows-06）、trace 跨进程轮转（concurrency-03 ← capacity-05）；容量面：附件无服务端上限（capacity-01）等四项余项 |
+| P3-3 | 完成（小瑕疵，已修） | complete | 并发面未发现残留 |
+| P4-5 | 有缺口（部分已修） | complete-with-gaps | 工具词汇：native grep / glob 无命中列表（chat-tool-01）等 9 条；事件词汇：tool.updated 在 native 下无生产者、T017 的 input 半边未生效（chat-event-04）、回放只还原四类 block（chat-event-12 / d-cross-04） |
+| P3-4 渲染半边 | 有缺口（已修） | complete-with-gaps | waiting_* 无回程（chat-event-02）、审批行枚举直出（chat-event-07）、五个无生产者字段（chat-event-06） |
+| P5-1 | 有缺口（已修） | complete-with-gaps | 并发面：refresh() 无生产调用方（concurrency-08）；诊断无出口（d-cross-01） |
+| P5-3 | 有缺口（已修） | complete-with-gaps | 无全局 MCP 进程预算（concurrency-04）、强杀后子进程不回收（concurrency-05）、Windows 上 .cmd 起不来（windows-03）、超限服务器静默消失（d-cross-03） |
+| P5-2-6 | 完成（小瑕疵，已修） | complete-with-gaps | 子代理面板直出原始工具名（chat-tool-05）；管理界面漏掉 16 条上限（d-cross-02） |
+| P6-2 | 完成（小瑕疵，已修） | complete-with-gaps（产品消费者面） | utility 通道冷启动用热请求预算（utility-01 ← utility-07）、超时设置无上界（utility-02）、评审超时顶掉正文（utility-06）等 10 条 |
+| P6-5 尾巴 | 完成（小瑕疵，已修） | complete-with-gaps | historyError 仍查 pi 词汇（ah-lib-03）、userResourcePaths 零消费者（ah-lib-04）；缺口 19 的注释已由 T028 改正 |
+| P1-0 / P1-2 / P1-8 | 完成（小瑕疵）/ 有缺口（已修）/ 完成（证据陈旧） | complete-with-gaps | TSD 回落只在不可能命中的平台启用（tsd-01，部分取舍）、grep 逐文件读无容错（tsd-02）、helper 无框协议受 stdout 噪声影响（tsd-04）、块大小封顶后重读仍二次（tsd-05）；P1-8 行仍写 config_version 冻结（windows-08） |
+| P0-2 / D1 | 完成（小瑕疵） | complete-with-gaps | D1 承诺的四项 Cordis 能力只兑现一项且无注记（spike-01）；plugin_graph_incomplete 路径无测试（spike-02）；core-host-19 维持推翻 |
+| P0-6 | 完成（小瑕疵，已修） | complete-with-gaps | 冒烟存档落后 HEAD 227 个提交且仍写 legacy 后端（smoke-01）；代码本身无缺陷 |
+| P1-7 | 未评估 | **incomplete**（首次判定） | 日常提交与 PR 不触发任何自动化测试，只有 tag 推送 / 手动触发（baseline-01，部分取舍）；D9 命中率公式单测被 vitest 排除（baseline-02） |
+| P2-0 | 未评估 | complete（首次判定） | 旧后端基线在退役前完整归档，替代路径 --baseline 已由 T028 给出 |
+| P2-5 / P2-6 | 未评估 | complete-with-gaps（首次判定） | 复现命令引用已删脚本（baseline-03，取舍）、collect.mjs 标题硬编码旧后端（baseline-04，取舍）；结论本身正确 |
+| P5-2-0 | 未评估 | complete（首次判定） | D12 pin 0.84.4 在 HEAD 精确成立，探针门禁仍在 vitest 范围内 |
+| H/17 / H/19 / H/21 | 未评估 | complete-with-gaps（首次判定） | H/17 明文派生已改判为终端消费的正当设计；H/19 子代理目录删除 / 改名的影子问题（main-aux-09）、管理界面漏上限（d-cross-02）；H/21 导入现场证据仍写 pi 时代路径（import-up-10）、Codex 上游 8 条（import-up-01～08） |
+| H/20 Main 半边 | 有缺口（已修） | complete-with-gaps | kill 发出即当成功（terminal-01）、TUI 接管把关只在渲染层（concurrency-07）、dispose 不带 terminalId 报废控制器（terminal-10） |
+| F1 | 已修（现场通过） | complete | 无残留 |
+| F2（a/b/c） | 🟡 / 🟢 / 🟡 | complete-with-gaps | 代码侧：scratch 越界（main-aux-01，high）、归档顺序（main-aux-02）、改临时根旧目录不清理（main-aux-03）、归属判定不规范化（main-aux-07） |
+| F3 | 🟡 开发机不复现 | **incomplete** | 根因与修法未拍板；看板与决策文档对 R2/R3 的状态互相矛盾（field-01/02） |
+| F4 / F5 / F6 / F7 | 🟢 / 🟢 / ✅ / 🟡 | complete-with-gaps | 代码与声称一致；缺现场；F5 问答卡单槽位（chat-event-01）；F7a/c 行与 F5 行自相矛盾（field-03） |
+| P5-2（父节点） | 未评估 | 仍无人认领 | 批评者剩余缺口，归 T032 前补一次汇总 |
+
+09-14 批评者 21 条覆盖缺口的逐条对账（8 covered、6 partial、7 closed-by-fix）与本轮之后仍未覆盖的 9 个面见批次 D 证据的 [cross-and-critic.md](../../../runtime-hardening/evidence/batch-d-audit-2026-09-15/cross-and-critic.md)。

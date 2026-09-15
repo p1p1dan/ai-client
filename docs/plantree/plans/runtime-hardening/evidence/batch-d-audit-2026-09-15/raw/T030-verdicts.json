@@ -1,0 +1,759 @@
+{
+  "task": "T030",
+  "head": "ebc82f16",
+  "areas": [
+    {
+      "key": "smoke-p0-6",
+      "task": "T030",
+      "title": "P0-6 冒烟通道（runOnce / assertions / cases）",
+      "summary": "P0-6 冒烟通道（runOnce.ts / assertions.ts / cases）本身代码没有问题：六项断言各自检查真实信号（没有恒真项），--offline/--model 两条 lane 用独立用例文件、差异合理，T009/T025/T028/T036 之后所有 import 与类型仍能静态解析，且 runOnce.ts 不传 tools，天然绕开了决策 012「tools 存在必须有 permissions.approve」的强制检查。真正的残留问题是「说了但没兑现」的两处：一是 P0-6 唯一的存档证据（offline-smoke-trace.jsonl、live-smoke.md）落后 HEAD 227~228 个提交，横跨了 P6 退役旧引擎与 T028 解冻 config_version 两次大改，trace 里仍写着已经不存在的 \"backend\":\"legacy\"，且该 jsonl 只是原始 runs.jsonl，并不包含此前审计声称\"可查\"的六项断言 pass/fail 记录；二是 assertions.ts 注释声称\"P1..P3 可复用\"，但 P1 的宿主工具探针实际另起了一套不共享类型的手写布尔断言表，全仓没有第二个文件 import evaluateCase。两条都是文档/证据层面的缺口，不是代码缺陷，因此 P0-6 判定维持\"complete-with-gaps\"。",
+      "confidence": "high",
+      "raw_report_path": "docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/smoke-p0-6.md",
+      "files_read_count": 24,
+      "node_verdicts": [
+        {
+          "node": "P0-6",
+          "verdict": "complete-with-gaps",
+          "rationale": "冒烟通道代码实现读下来正确、断言非恒真、两条 lane 差异合理，且在 T009/T025/T028/T036 之后仍能静态解析、不受决策012新规则影响（smoke-01/smoke-02 之外未发现代码级缺陷）；但唯一的存档证据严重过期且不含断言明细（smoke-01），且 assertions.ts 关于 P1..P3 复用的承诺在 P1 侧未兑现（smoke-02），两条残留缺口使得当前「完成」结论缺少现行执行证据支撑",
+          "findings": ["smoke-01", "smoke-02"]
+        }
+      ],
+      "checklist_items": [
+        {
+          "item": "offline lane 现行可跑：执行 node --experimental-strip-types src/runtime/smoke/runOnce.ts --offline",
+          "judge": "退出码 0，六项断言全部 PASS，新 trace 的 version_stamp.backend==='native'、config_version==='runtime_p6_hardening_v1'",
+          "method": "实际执行命令，存档 stdout 与新生成的 runs.jsonl",
+          "target": "dev-box"
+        },
+        {
+          "item": "live lane 现行可跑，确认 P0-6 判定依赖的 R1（真实端点关闭风险）结论在当前 HEAD 仍成立",
+          "judge": "至少一个真实供应商的 --model provider/id 调用返回 must_succeed=true 且不超过 max_latency_ms",
+          "method": "用登录后的 ~/.pilab/pi-agent/ 目录跑 --model，比对新旧 trace 的 version_stamp 差异",
+          "target": "real-model"
+        },
+        {
+          "item": "新证据同时存档 report.outcomes（逐条断言名与 pass/fail）与 runs.jsonl",
+          "judge": "新存档文件里能直接读到六项断言各自的通过状态，而不是只有裸 trace",
+          "method": "执行时加 --json，把 stdout 与 trace 一起写入 evidence 目录",
+          "target": "dev-box"
+        }
+      ],
+      "test_gaps": [
+        "evaluateCase 的六个断言分支（must_succeed / must_call_tools / must_not_call_tools 含 '*' 特例 / turns / min_output_chars / exact_output / max_latency_ms）没有 vitest/node --test 级别的单元测试覆盖边界情况（例如恰好调用一次工具时 must_not_call_tools:[\"*\"] 是否正确判失败、exact_output 前导空白的 trim 行为），目前只靠人读源码确认正确性。",
+        "p1-host-tools.ts 的手写断言表没有失败路径用例（例如让 bash 返回非零退出码时断言是否正确判 false），只有脚本手动跑一次的隐式覆盖。"
+      ],
+      "unverified_claims": [
+        "pnpm smoke:runtime（node --experimental-strip-types src/runtime/smoke/runOnce.ts --offline）在当前 HEAD 上能否实际跑通、六项断言是否全部 PASS——本次只做了静态导入与类型核对，未执行。",
+        "--model 在线 lane 在当前 HEAD 上对真实供应商是否仍然端到端可用——live-smoke.md 的结果是 2026-09-08 当时的，依赖用户提供的 ~/.pilab/pi-agent/ 目录与网关凭据，本次无法复核。"
+      ],
+      "findings": [
+        {
+          "id": "smoke-01",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "test-gap",
+          "node": "P0-6",
+          "file": "docs/plantree/plans/runtime-evolution/evidence/p0/offline-smoke-trace.jsonl",
+          "line": 1,
+          "title": "P0-6 存档冒烟证据落后 HEAD 227~228 个提交，横跨一次引擎整体退役",
+          "static_inference": true,
+          "refuter_reason": "主体成立，但审查员的第三个子论点被推翻，且证据面比他说的宽。(1) 形态不符属实：docs/plantree/plans/runtime-evolution/evidence/p0/offline-smoke-trace.jsonl:1 的版本戳原文为 \"version_stamp\":{\"config_version\":\"runtime_p0_v1\",...,\"backend\":\"legacy\",...}；而 src/runtime/flags.ts:43 现在是接口字段 `backend: 'native';`，src/runtime/flags.ts:50-52 的 readRuntimeFlags 直接返回字面量 `backend: 'native'`；src/runtime/bootstrap.ts:132 是 `export const RUNTIME_CONFIG_VERSION = 'runtime_p6_hardening_v1';`（注释第 125-127 行自述 runtime_p3_complete_v1「Stayed frozen through P5-1..P5-5 and P6, which it should not have」，即 T028 解冻）。(2)「P6/T028 之后从未重跑存档」我尽力找了反例但没找到：全仓最晚的一份冒烟存档是 docs/plantree/plans/runtime-evolution/evidence/p3/completion/offline-smoke.txt（git log 显示唯一提交 78298463，2026-09-09），其 version_stamp 仍是 config_version: runtime_p3_complete_v1 / backend: legacy；evidence/p6/ 目录只有四张截图与 p6-native-default-report.json，grep smoke/冒烟/runOnce 零命中；批次 A/B/C 三份证据里唯一含 smoke 的一行是 batch-c-2026-09-15.md:98，讲的是改 approve fixture，不是重跑。(3) 但审查员说「6 项离线断言的记录在这份文件里查不到」只对那份 jsonl 成立，结论不能推广：p1/p0-smoke.txt、p2/offline-smoke.txt、p3/offline-smoke.txt、p3/completion/offline-smoke.txt 四份存档都是 evaluateCase 的输出，前三份是 `PASS must_succeed ... PASS max_latency_ms` 六行加 `RESULT pass`，第四份是完整 JSON 的 AssertionReport（case_id/passed/outcomes 带 name/expected/actual/tag）。所以上一轮审计「6 项离线断言的记录可查」这句话本身不假，只是指错了文件。(4) 无回归防线：全仓 grep evaluateCase/ExpectedAssertions/SmokeCase/AssertionReport 只命中 assertions.ts 自身与 runOnce.ts，没有任何 vitest/node --test 文件引用它们，offline lane 确实没被自动化钉住。静态推断：我未运行 runOnce（只读约束），但静态看 runOnce.ts:88-96 不传 tools，故不触发 bootstrap.ts:223 的「permissions.approve is required whenever tools are enabled」守卫，offline lane 大概率仍能跑——即存档过时属于证据卫生问题，不等于通道已坏。级别维持 low（证据与测试缺口，无用户可见错误行为）。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md 第100行（批次D，T030）",
+          "waiver_quote": "T030 | 未认领节点：P4-6 现场口径、P2-5/P2-6 可比性、H/17、H/19、H/21、F1～F7 复核；P0-6 的 smoke/runOnce 与 assertions；D1 的 cordis spike"
+        },
+        {
+          "id": "smoke-02",
+          "status": "refuted",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "docs",
+          "node": "P0-6",
+          "file": "src/runtime/smoke/assertions.ts",
+          "line": 10,
+          "title": "注释承诺「P1..P3 可复用」断言层，但 P1 探针实际未复用",
+          "static_inference": false,
+          "refuter_reason": "注释承诺已经兑现，审查员只按 import 图判断「复用」，漏掉了运行层面的实际复用。(1) 注释原文（src/runtime/smoke/assertions.ts:10-11）是「Kept separate from the runner so P1..P3 can reuse it: a case file's `expected_assertions` block is the same shape whatever phase produced the run.」——主语是 case file 与 expected_assertions 块，讲的是「后续阶段跑同一份用例时报告形状不变」，不是「后续阶段的每个探针都要 import evaluateCase」。(2) 这件事实际发生了：P1、P2、P3 三个阶段各自跑过 runOnce.ts --offline 并存档了同一份 p0_single_turn_offline 用例的六条断言——docs/plantree/plans/runtime-evolution/evidence/p1/p0-smoke.txt 开头即 `case p0_single_turn_offline (offline)` 后接 `PASS must_succeed ... PASS max_latency_ms` 与 `RESULT pass`，p2/offline-smoke.txt、p3/offline-smoke.txt、p3/completion/offline-smoke.txt 同形（最后一份是完整 AssertionReport JSON）。跨阶段复用同一断言层正是注释所指。(3) 审查员拿来对照的 p1-host-tools.ts 不是同类东西：它不读 case 文件、不跑 SmokeCase，而是直接从 runtime.ctx.runtimeTools.list() 取工具逐个 execute，断言的是 `read === 'amber\\n'`、`bash.includes('host-ok') && bash.includes('exit=0')`、`run.trace.version_stamp.carrier === host.carrier` 这类载体/工具能力事实（p1-host-tools.ts:43-50），输出是 evidence/p1/electron-utility.txt 里的 `P1_CARRIER_REPORT {...}` 载体报告。ExpectedAssertions 的七个字段（must_succeed/must_call_tools/must_not_call_tools/turns/min_output_chars/exact_output/max_latency_ms，assertions.ts:16-24）里没有一个能表达「read 回来的内容等于 amber」，套 evaluateCase 表达不了，所以不是「没复用」而是场景不适用。(4) 审查员的时间线论据也不成立：他称 p1-host-tools.ts 的创建提交 27ff2020 晚于 assertions.ts 的 8a71c843，暗示作者写完注释后又另起一套；但 git show 27ff2020 --stat -- src/runtime/smoke/ 显示该提交只改了四个 p1-*.ts 加 runOnce.ts 两行，根本没碰 assertions.ts——assertions.ts 自 8a71c843 起从未被修改，注释与 P1 手写探针之间没有「先承诺后违背」的关系。剩余的只是「注释可以写得更精确」这种主观润色空间，不构成注释与代码不符。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md 第100行（批次D，T030）",
+          "waiver_quote": "T030 | 未认领节点：P4-6 现场口径、P2-5/P2-6 可比性、H/17、H/19、H/21、F1～F7 复核；P0-6 的 smoke/runOnce 与 assertions；D1 的 cordis spike"
+        }
+      ],
+      "stats": {
+        "confirmed": 1,
+        "refuted": 1
+      }
+    },
+    {
+      "key": "cordis-spike-d1",
+      "task": "T030",
+      "title": "D1 Cordis 选型 spike 与 core-host-19",
+      "summary": "本区域只读复核了 D1（选型 Cordis 作为插件内核）与它唯一的实验证据 src/runtime/spikes/p0-cordis-semantics.ts，以及批评者缺口 7 指名的 core-host-19。结论：spike 只验证了 D1 承诺的四项 Cordis 能力里的一项（依赖注入的推迟激活/fiber 稳定时机/dispose 连带收回），生产代码（bootstrap.ts 的注册顺序、10 处 static inject、8 处 fiber.await()）与这一项完全对应、用得对。D1 另外承诺的三项能力（响应式属性/accept、Fork/Isolate 隔离、热插拔/动态 scope）在生产代码里是零使用，全仓 grep 确认，且没有任何决策文档记录这是放弃还是推迟。core-host-19 这条旧发现，我复核同意前一轮反驳者的 REFUTED 结论——它最重的论断\"没有机械约束\"是错的，static inject 本身就是机械约束——但它指出的\"三项能力确实一处没用\"这个事实性残渣是真的，此前没人把这条残渣单独记录下来，本轮补了两条低严重度发现。spike 文件本身：不进类型检查、不被任何生产代码或测试导入、也不在打包产物里（打包文件白名单只含 out/ 与 node_modules，spike 也不在 worker.js 的 esbuild 可达图里），建议保留为证据，不建议删除。",
+      "confidence": "high",
+      "raw_report_path": "docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/cordis-spike-d1.md",
+      "files_read_count": 42,
+      "node_verdicts": [
+        {
+          "node": "P0-2",
+          "verdict": "complete-with-gaps",
+          "rationale": "Cordis 插件图本体（依赖推导、生命周期、dispose 清理、effect 释放钩子）落地正确，与 spike 验证的语义、与 bootstrap.ts 的实际写法三方一致。缺口：(1) D1 承诺的三项能力零落地且无注记（spike-01）；(2) plugin_graph_incomplete 失败路径缺测试（spike-02）。此前 P0-2 的 rationale 引用 core-host-19 作为缺口，但该发现整体已 REFUTED；本轮建议不要整条删除引用，而应改写为「core-host-19 整体已 refuted（static inject 已提供等价机械约束）；其残留的三项能力未用且无落地注记子结论仍成立，见 spike-01」。",
+          "findings": ["spike-01", "spike-02"]
+        },
+        {
+          "node": "D1",
+          "verdict": "complete-with-gaps",
+          "rationale": "Cordis 作为插件内核的选型结论站得住：spike 实测确认的依赖推导/fiber 稳定/dispose 连带收回语义与生产代码（10 处 static inject、8 处 fiber.await()）完全对应。但决策文本四项能力承诺只兑现一项，另外三项（响应式属性/accept、Fork/Isolate、热插拔/动态 scope）从落笔到现在零代码、零注记；其中响应式属性援引的具体机制在选型时锁定的 cordis@4.0.0-rc.9 里查无此 API，说明这条卖点从一开始就没有可验证的实现路径。",
+          "findings": ["spike-01"]
+        }
+      ],
+      "checklist_items": [
+        {
+          "item": "为 plugin_graph_incomplete 失败路径补测试后确认通过",
+          "judge": "新增 vitest 用例断言 code:'plugin_graph_incomplete' 且缺失服务名单正确，不影响既有用例",
+          "method": "运行 pnpm typecheck:runtime 与对应 vitest 文件",
+          "target": "dev-box"
+        },
+        {
+          "item": "cordis 版本升级时重跑 p0-cordis-semantics.ts 确认三条语义不变",
+          "judge": "三行 console.log 布尔值（deferred activation / fiber settle / dispose retraction）与升级前一致",
+          "method": "手动执行 node --experimental-strip-types src/runtime/spikes/p0-cordis-semantics.ts，比对升级前后输出",
+          "target": "dev-box"
+        }
+      ],
+      "test_gaps": [
+        "plugin_graph_incomplete 失败兜底路径无测试覆盖（见 spike-02）",
+        "spike 本身不接入 CI（tsconfig 排除、无 npm script），cordis 版本升级不会自动触发重跑，它验证的三条语义目前完全靠人工记忆维护"
+      ],
+      "unverified_claims": [],
+      "findings": [
+        {
+          "id": "spike-01",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "docs",
+          "node": "P0-2 / D1",
+          "file": "docs/plans/2026-09-08-runtime-evolution-ard.md",
+          "line": 58,
+          "title": "D1 承诺的三项 Cordis 能力零落地且无任何落地注记",
+          "static_inference": false,
+          "refuter_reason": "事实全部复核成立，仅一处措辞需打折。(1) 承诺文本仍在：docs/plans/2026-09-08-runtime-evolution-ard.md:57-61「作为完整框架使用，不预先排除任何能力……热插拔在开发调试阶段有价值（改工具定义不用重启 app）；Fork/Isolate 上下文自动执行插件间 service 接口隔离纪律；响应式属性用于 worker 内插件间状态传播（如权限配置变更→工具注册表更新）」；git log 显示该文件最后一次改动是 fe246bd6（P6 批），批次 A～C 的 T001～T036 未触碰。(2) 代码零落地：grep '\\.isolate(|\\.accept(|reactive' src/runtime --include=*.ts 零命中；全仓生产路径只有 bootstrap.ts:239 一个 new Context()（另两处在 spikes/p0-cordis-semantics.ts:41 与 worker/nativeImport.ts:229 的独立图）；权限→工具确为拉模式，现读点在 plugins/tools/index.ts:109 `this.ctx.runtimePermissions.mode !== 'plan' || this.access.get(tool.name) !== 'write'` 与 :126/:128（审查员引的 :78/97 是 09-14 审计的旧行号，T012/T035 之后已漂移，事实不变）；无任何 cordis 热插拔接入点（src/runtime 内无 fiber.update / ctx.registry 使用，permissions/index.ts:367 的 notify 是插件自有方法）。(3) 文档零裁决：decisions/001~012、open-questions.md、roadmap.md、README.md 对 isolate/响应式/热插拔/Fork 全部零命中，全仓仅 ARD 这两行提及。(4) 未被前一轮吃掉：core-host-19 虽判 REFUTED，但 findings.json 的反驳正文自己写明「真正剩下的残渣只有两条且都很轻：ctx.isolate 与热插拔确实没用，且没有落地注记说明为何不用」，本条正是该残渣。打折处：「rc.9 甚至没有 accept/reactive 相关 API」过头——ctx.accept 确实零命中，但 node_modules/cordis/lib/index.js:1173 的 ReflectService.notify（按 `name in fiber.inject` 挑依赖方）与 :269-276/:1017-1026 的 internal/update + fiber.update→restart 就是 rc.9 的响应式等价物，准确说法是「无 v3 的 ctx.accept，等价物是服务重挂后重启依赖 fiber」。严重级维持 low（文档与实现不符，无运行期后果）。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md:100（T030：未认领节点……D1 的 cordis spike）；docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/cordis-spike-d1.md 第五节 [spike-01]",
+          "waiver_quote": "T030 | 未认领节点：P4-6 现场口径、P2-5/P2-6 可比性、H/17、H/19、H/21、F1～F7 复核；P0-6 的 smoke/runOnce 与 assertions；D1 的 cordis spike"
+        },
+        {
+          "id": "spike-02",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "test-gap",
+          "node": "P0-2",
+          "file": "src/runtime/bootstrap.ts",
+          "line": 519,
+          "title": "plugin_graph_incomplete 失败兜底路径没有任何测试覆盖",
+          "static_inference": false,
+          "refuter_reason": "测试缺口属实且路径可达。(1) 兜底代码原文 src/runtime/bootstrap.ts:519-524：`const missing = required.filter((name) => ctx.get(name) === undefined); if (missing.length) throw new RuntimeConfigError('plugin_graph_incomplete', `missing services: ${missing.join(', ')}`)`。(2) 覆盖为零：全仓 grep 'plugin_graph_incomplete' 只命中 bootstrap.ts:523 与批次 D 的证据 md，__tests__ 下零引用；src/runtime/__tests__/bootstrap.test.ts 只有 9 条用例（:47 runtime_approval_missing、:76 P0 服务齐全、:93 engine 戳、:110/:121/:150 catalog、:183 dispose retract、:197 dispose 双失败、:240 trace 戳），无缺服务用例。(3) 不是死代码：cordis/lib/index.js:1003-1009 的 `async await(){ while(this.inertia) await this.inertia; if(this._error) throw this._error; return this; }` 表明 inject 未满足的 fiber 停在 PENDING、await 立即返回且不抛，服务因此不上 ctx，正好落到 :519 的 filter；src/runtime/contracts.ts:17-20 也把这套语义写成约定（「A plugin that injects one stays PENDING, which is the honest state」）。(4) 唯一验证过该语义的是一次性探针 src/runtime/spikes/p0-cordis-semantics.ts（文件头自述 throwaway、明确排除在类型检查门禁外，除 evidence/sources.json 的哈希外无人引用），不构成回归防护。(5) 未被批次 A～C 修：该缺口在 09-14 审计 area-assessments.md 的 TEST GAPS 已与 session_cwd_mismatch 并列点名，roadmap Done 段 T001～T036 无一条覆盖，批次 D（T029～T031）本身是只读。严重级 low（纯测试缺口，无当前错误行为）。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md:100（T030：……D1 的 cordis spike）；docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/cordis-spike-d1.md 第五节 [spike-02]",
+          "waiver_quote": "T030 | 未认领节点：……D1 的 cordis spike"
+        }
+      ],
+      "stats": {
+        "confirmed": 2
+      }
+    },
+    {
+      "key": "field-nodes",
+      "task": "T030",
+      "title": "现场口径复核（P4-6 与 F1～F7）",
+      "summary": "现场口径复核（P4-6 与 F1～F7，含 GUI A/4、A/10、B/5、C/8、F/13、F/15）的结论是：代码侧站得住，口径侧有窟窿。凡看板写「已修 / 已实现」的，在 HEAD 上都能逐条对上——F4 的 3s→10s→30s 阶梯与两条独立预算、F2-b 的启动 sweep 与退出 wipe、F2-a 的两处临时根同一读取口、F2-c 的 WORKER_WORKSPACE_MISSING 生产者、F5 的 ask 工具整链（abort 与 drain 两条结算出口齐全）、F7a/c 的倒计时从 timeoutMs 接到卡片、F7b 全仓单处状态行、F7f 的八行上限、F1 的 Field 根上下文修复、F/13 的轮询 hook 调用点，本轮没有查到任何一条「文档说修了、代码其实没修」。问题全在另一面：最后一次上机要照着的那几份文字比证据更强或已经过期。六条发现全部是口径/文档类：看板把现场明确拒签的 R2/R3 写成载体对照结论并宣告放行规则结案（F3 的唯一判别器因此不会被安排）；D1 决策文档的 R0～R4 结果栏全空，等于把已被证明无效的 R4 方法原样留给下一次上机；现场表 F7a/F7c 行仍写「通用问答卡仍受 F5 限制」与同表 F5 行矛盾；已删除的 AICLIENT_RUNTIME_BACKEND 在两个上机启动脚本与两份清单里还剩四处且会回显成假确认；PERM-1 探针复跑会覆盖被标为 legacy 的历史证据文件；T032 口号是「合并旧树待现场项」但枚举漏掉本区域十余条。P4-6 表第 137 行「特定编码与真实二进制样本无完整现场结果」经核仍然准确。证据时效：三份开发机取证落后 HEAD 89～94 个提交，Windows 现场两份落后 157／172 个，期间 agent-loop 改过 11 次、权限链改过 10 次（含 T023 把权限卡文案整体改成结构化标识）。",
+      "confidence": "high",
+      "raw_report_path": "docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/field-nodes.md",
+      "files_read_count": 61,
+      "node_verdicts": [
+        {
+          "node": "P4-6",
+          "verdict": "complete-with-gaps",
+          "rationale": "十一行验收项里代码可核的部分在 HEAD 上都成立；第 137 行的精确缺口「特定编码与真实二进制样本无完整现场结果」经核仍然准确（test12-reverify.md:816/817 原话如此，且 src/main/services/git/encoding.ts、src/main/utils/tsdSafeRead.ts、src/main/services/git/ 自 test.12 起零提交）。缺口在口径：第 136 行把被现场明确拒签的 R2/R3 写成已得结论（field-01），配套 D1 决策文档结果栏全空（field-02），上机启动口径还留着已删开关（field-04）。「包与载体」引用的 test.13 CI 停在 c0ae2a34、距 HEAD 144 个提交，其间打包门禁被 T009、T028 改过两次，那份绿灯已不覆盖当前门禁形状。",
+          "findings": ["field-01", "field-02", "field-04"]
+        },
+        {
+          "node": "F1 网络面板",
+          "verdict": "complete",
+          "rationale": "RemoteSettings.tsx 四处 <Field className=\"contents\"> 仍在，networkPanelMount.test.ts 守卫仍在，现场 test.12 已通过；无残留。"
+        },
+        {
+          "node": "F2 临时会话恢复（含 F2-a/b/c）",
+          "verdict": "complete-with-gaps",
+          "rationale": "代码三条全部成立：启动 sweep（src/main/ipc/index.ts:97）与退出 wipe（:147）都有真实调用方；ScratchWorkspaceService 与 TempWorkspaceService 都走 readSettings() 且键同为 defaultTemporaryPath；WORKER_WORKSPACE_MISSING 由 PiWorkerProcess.ts:72 产出并被渲染层映射成 workspace_missing。缺口在现场半边：F2-a/c 待新包复验、F2-b 自陈两条未测（第三个「删除」按钮真机、正常退出而非 kill 时的退出清理），外加 F2-b 顺手记的「临时会话索引 title 为空」无人认领、无用例。",
+          "findings": ["field-06"]
+        },
+        {
+          "node": "F3 GUI Git 输出丢失",
+          "verdict": "incomplete",
+          "rationale": "开发机三层取证「不复现」成立，确认为加密机专属；兜底口径（选项 A：如实报 output was lost）在 GitService.ts:48/348 仍在。但根因与修法仍未拍板，而拍板依赖的 R2/R3 在看板与决策文档两处被写成互相矛盾的状态，且看板那一处宣告其已结案，会导致最后一次上机不安排该探针。",
+          "findings": ["field-01", "field-02"]
+        },
+        {
+          "node": "F4 重试",
+          "verdict": "complete-with-gaps",
+          "rationale": "providerRetry.ts 与声称逐条对上：PROVIDER_RETRY_DELAYS_MS = [3_000,10_000,30_000]、两条预算各自计数、抖动只加在限流那条（PROVIDER_RATE_LIMIT_JITTER_FACTOR）、Retry-After 上限 30 秒、退避 sleep 可被取消打断。缺口只在证据时效与现场：证据停在 8b75b646，其后 plugins/agent-loop/ 被改过 11 次；GUI 侧观感与加密机复测按设计未做，且真实 HTTP 那一趟没有任何自动化回归接手。",
+          "findings": ["field-06"]
+        },
+        {
+          "node": "F5 通用问答",
+          "verdict": "complete-with-gaps",
+          "rationale": "整链在 HEAD 成立：tools/index.ts:274 按 config.ask 条件注册、ask.ts 自行分配 per-item id、questionPrompt.ts 的 abort/drain/重复 settle 守卫齐全、ChatWorkspace.tsx:250 挂 PendingQuestionDock；askQuestion.test.ts 与 pendingQuestionDock.test.ts 两侧都有用例。缺口是「仅自动化测试，未真机点验」，且同表 F7a/c 行的备注仍在替它说反话。",
+          "findings": ["field-03", "field-06"]
+        },
+        {
+          "node": "F6 对话修改审阅",
+          "verdict": "complete-with-gaps",
+          "rationale": "SessionReviewPanel.tsx 与 sessionReview.ts 在 HEAD 接进 WorkspaceShell。缺口：只有本地真实应用验证、未打包；现场原诉求是左右双栏红绿对比，交付的是右侧审阅栏，属已记录的产品取舍而非未修。",
+          "findings": ["field-06"]
+        },
+        {
+          "node": "F7（a/b/c/d/e/f）",
+          "verdict": "complete-with-gaps",
+          "rationale": "F7b 全仓只剩 ChatComposer.tsx:3063 一处 SessionActivityStatus；F7f 的 max-h-48（8 × 24px）在 middleColumnLayout.ts:611；F7a/c 倒计时链完整（chatSessions.ts:1159 写 permissionExpiresAt → QuestionCard.tsx:606 读 → questionCardModel.ts:760 算秒）。缺口：视觉口径未定、倒计时走到底只有单测、F7a/c 行的问答卡备注已过时。",
+          "findings": ["field-03", "field-06"]
+        },
+        {
+          "node": "GUI A/4 临时目录复用/创建/绑定",
+          "verdict": "complete-with-gaps",
+          "rationale": "chat.ts 的 adopt / ensure / release 三条路与 scratch 服务对得上；SCRATCH_ROOT_DIR = 'unbound-sessions' 的「嵌一层以免两个功能互删」在 tempWorkspaceRecovery.test.ts 的 rejects a nested grandchild 有用例。缺口：加密机回归未做。",
+          "findings": ["field-06"]
+        },
+        {
+          "node": "GUI A/10 /new 继承 cwd",
+          "verdict": "complete-with-gaps",
+          "rationale": "继承逻辑在 chatSessionActions.ts:83-89，找不到工作区时 cwd 为 null 而不是编一个。缺口：原 TEMP /new 矩阵未完整补签，F2 恢复不等于 /new 全矩阵。",
+          "findings": ["field-06"]
+        },
+        {
+          "node": "GUI B/5 重试与异常恢复",
+          "verdict": "complete-with-gaps",
+          "rationale": "与 F4 同源：代码可核部分全部成立，缺 GUI 观感与加密机复测，且现有真实 HTTP 证据落后 11 个 agent-loop 提交。",
+          "findings": ["field-06"]
+        },
+        {
+          "node": "GUI C/8 问答卡交互",
+          "verdict": "complete-with-gaps",
+          "rationale": "与 F5 同源：生产者与渲染位都在 HEAD 上，未真机点验、未打包；F7a/c 行的过时备注会让这一项在上机清单里被跳过。",
+          "findings": ["field-03", "field-06"]
+        },
+        {
+          "node": "GUI F/13 目录行变更量",
+          "verdict": "complete-with-gaps",
+          "rationale": "接线在 HEAD：useFolderDiffStats.ts 的 useFolderDiffStatsPolling 由 LeftNav.tsx:294 调用（看板写 :291，已漂移 3 行，不单独立发现）。缺口：真实 busy 会话下数字出现并刷新的现场记录仍缺，轮询条件只有单测。",
+          "findings": ["field-06"]
+        },
+        {
+          "node": "GUI F/15 cwd 缺失与临时目录恢复",
+          "verdict": "complete-with-gaps",
+          "rationale": "workspace_missing 链完整（PiWorkerProcess.ts:72 → historyError.ts:33），adoptTempWorkspace 有用例。缺口：F2-a/c 待 test.13 之后的新包复验。",
+          "findings": ["field-06"]
+        }
+      ],
+      "checklist_items": [
+        {
+          "item": "R2/R3 用真实加密容器重跑（GUI bash 工具 → 随包 node 读同一受策略文件；随包 node 改名副本再读一次）",
+          "judge": "样本先被非白名单进程读出 %TSD-Header-###% 头并存证；两次读取的明文/密文两态可区分，据此唯一映射到「按进程名/路径」或「按签名/目录」或「按父进程」",
+          "method": "在受策略目录准备样本，先用非白名单进程读出容器头留档，再走 GUI bash 工具的真实链路，两次结果连同 SHA256 一并记录",
+          "target": "encrypted"
+        },
+        {
+          "item": "R0 bash 进程映像取证",
+          "judge": "拿到 Windows 映像绝对路径与父进程链，而不是 shell 自报的 MSYS 路径（test.12 只拿到后者）",
+          "method": "Get-Process bash | Select Path 加父进程查询，与 src/runtime/host/shell.ts 的候选顺序逐条对照",
+          "target": "windows"
+        },
+        {
+          "item": "R4 有效的无 Bash 探针",
+          "judge": "worker 的 shell resolver 真正落到 shell_unconfigured，且应用不崩不挂",
+          "method": "覆写 resolveWorkerShell 会查的全部候选路径后调 bash 工具；现场记录必须写明覆盖了哪几个候选（test.12 那次因未覆盖默认安装目录而无效）",
+          "target": "windows"
+        },
+        {
+          "item": "F3 根因拍板",
+          "judge": "由 R0/R2/R3 的结果唯一映射到 A（维持现状）/ B（随包 node 包一层）/ C（走 Git Bash）之一",
+          "method": "结果回填 docs/plans/2026-09-09-bash-carrier-decision.md 第 6 节表并写结论，同步改写 README 的 F3 行与 P4-6 表第 136 行",
+          "target": "encrypted"
+        },
+        {
+          "item": "F4 重试在加密机复测",
+          "judge": "503×2 后成功、持续 503 四次尝试共 43 秒耗尽、429 听 Retry-After、退避中取消立即结束",
+          "method": "复跑 scripts/run-f4-retry-probe.mjs（需 Node 24），trace 的 provider_retry 与假网关实到请求数两侧都看",
+          "target": "encrypted"
+        },
+        {
+          "item": "F4 的 GUI 观感",
+          "judge": "重试期间时间线出现重试提示；预算耗尽后错误卡文案完整可读且带网关原文",
+          "method": "起 Electron 加假网关，走真实会话触发并截图",
+          "target": "dev-box"
+        },
+        {
+          "item": "F5 / GUI C/8 问答卡真机一圈",
+          "judge": "模型调 ask → 输入框上方出现可作答卡 → 选项与 Skip 各走一次 → 模型收到对应文本（skip 走「自行选默认并说明」那条）",
+          "method": "真实模型回合，CDP 读回整张卡并截图",
+          "target": "real-model"
+        },
+        {
+          "item": "F7a/F7c 视觉口径",
+          "judge": "权限卡与问答卡的尺寸、字号、间距按 docs/design-system.md 的 Token 分档复核并留截图",
+          "method": "真实回合触发两张卡后逐项比对",
+          "target": "dev-box"
+        },
+        {
+          "item": "权限卡倒计时走到底",
+          "judge": "不响应满 119 秒后自动拒绝，卡片状态变为已拒绝，工具调用按拒绝结算",
+          "method": "真实回合触发审批卡后不响应，等满倒计时并记录事件流",
+          "target": "real-model"
+        },
+        {
+          "item": "PERM-1 探针复跑（T001 之后）",
+          "judge": "七条判据全通过；权限卡文案经词典而非硬编码；触发器选择器能命中当前 aria-label",
+          "method": "node scripts/run-perm1-probe.mjs；复跑前先按 field-05 处理产物命名，避免覆盖 2026-09-11 的记录",
+          "target": "real-model"
+        },
+        {
+          "item": "F2-b 正常退出时的 scratch 清理",
+          "judge": "从界面正常退出（非 kill）后，本次的 scratch 目录即被删；与 kill 那次的差异有记录",
+          "method": "三时点各读一次 session-index.json 与目录，沿用 scripts/run-f2b-probe.mjs 的两侧读法",
+          "target": "dev-box"
+        },
+        {
+          "item": "F2-b 临时行第三个「删除」按钮",
+          "judge": "temp:workspace:remove 只删临时基目录的直接子目录，删不到 unbound-sessions/ 下的 scratch 目录",
+          "method": "真机点按，两侧读目录",
+          "target": "dev-box"
+        },
+        {
+          "item": "临时会话索引 title 为空的复现与定性",
+          "judge": "发完第一句后索引行 title 非空且与侧栏显示一致",
+          "method": "直接读 session-index.json，不看界面",
+          "target": "dev-box"
+        },
+        {
+          "item": "GUI A/4 加密机回归",
+          "judge": "临时目录复用/创建/绑定三条路在受策略目录下与开发机结果一致",
+          "method": "按 F2-b 的三时点法在加密目录重跑",
+          "target": "encrypted"
+        },
+        {
+          "item": "GUI A/10 TEMP /new 矩阵",
+          "judge": "从普通目录、TEMP 会话、无工作区三种起点各开 /new，cwd 继承结果逐格记录",
+          "method": "真机点按，逐格记",
+          "target": "dev-box"
+        },
+        {
+          "item": "GUI F/13 真实 busy 会话下的数字",
+          "judge": "busy 会话所在目录行出现 +N -M 并随改动刷新；非 busy 目录不轮询",
+          "method": "起一个会真的改文件的会话，观察侧栏并抓 IPC 调用次数",
+          "target": "real-model"
+        },
+        {
+          "item": "GUI F/15 的 F2-a/c 新包复验",
+          "judge": "临时根改设置后两处解析一致；用户目录缺失时给 workspace_missing 而非裸 ENOENT",
+          "method": "在新包上按现场清单复验",
+          "target": "windows"
+        },
+        {
+          "item": "TUI-1 / H/20 真机一圈",
+          "judge": "GUI 跑一回合 → pi --session 打开 → 在 TUI 里续聊 → 回 GUI 接得上；右上角 GUI/TUI 开关那一下也点一次",
+          "method": "内嵌终端真开，前后各读一次会话文件并比对头一行与条目链",
+          "target": "dev-box"
+        },
+        {
+          "item": "加密域 GUI 读 / Edit 后一致性",
+          "judge": "受策略目录里 Read 得明文、Edit/Write 后 GUI·TUI·外部编辑器三者内容一致",
+          "method": "在加密域目录做一次完整读写，三处各读一次",
+          "target": "encrypted"
+        },
+        {
+          "item": "特定编码与真实二进制样本（P4-6 表第 137 行的精确缺口）",
+          "judge": "GBK/UTF-16/带 BOM 各一份、真实二进制一份，Main diff 与编码判定逐样本记通过或失败",
+          "method": "准备四份样本后逐个在 Git 面板与编辑器打开",
+          "target": "encrypted"
+        },
+        {
+          "item": "Electron utility 载体的现行探针",
+          "judge": "carrier=electron-utility 且 node_source 由产品路径推导（不是 explicit），六项工具断言全通过",
+          "method": "沿用 src/runtime/smoke/p1-utility-worker.ts，host 配置改走产品路径推导，结果与 HEAD 版本戳绑定",
+          "target": "utility"
+        },
+        {
+          "item": "打包门禁改 native-only 后的三平台绿灯",
+          "judge": "三平台 Verify packaged Pi worker 步骤成功，stamp.backend=native、carrier=bundled-node、权限审计行存在",
+          "method": "推一次构建并收三份 worker-smoke-*.json（现有 test.13 绿灯停在 c0ae2a34，距 HEAD 144 个提交，门禁已被 T009/T028 改过两次）",
+          "target": "windows"
+        },
+        {
+          "item": "F6 右侧审阅栏打包后回归",
+          "judge": "安装包里右侧审阅栏能记录 Edit/Write 修改，上限行为与本地一致",
+          "method": "新包上开一个会改文件的会话并对照本地结果",
+          "target": "windows"
+        }
+      ],
+      "test_gaps": [
+        "正常退出（而非 kill）时的 scratch 退出清理没有端到端覆盖：ScratchWorkspaceService.test.ts 直接调 wipeAll()，agentHostCleanup.test.ts 只验 cleanupWorkerManager 内部顺序（先 dispose worker 再 wipe），「用户从界面正常退出 → before-quit → cleanupWorkerManager → 目录真的没了」这条链既无用例也无现场记录——F2-b 那一轮用 pkill 停应用，只能证明被杀掉时清理不跑。",
+        "临时会话索引 title 为空这条现场观察既无用例也无任务：SessionIndexService.ts:108 建行时默认 ''，自动标题走渲染层 applyAutoSessionTitle → chat:renameSession 这条独立路径，没有任何测试断言「临时会话发完第一句后索引行有标题」。",
+        "权限卡倒计时走到底自动拒绝只有单测：perm1 记录自陈「本轮在倒计时走完前就点了允许」，真实回合里 119 秒到点的那条路没有现场证据。",
+        "F4 的真实 HTTP 四条路没有进 CI：providerRetry.test.ts 钉的是分类与阶梯，真实 HTTP 那趟是一次性探针 scripts/run-f4-retry-probe.mjs，其后 plugins/agent-loop/ 改过 11 次，没有任何自动化回归会发现探针结论失效。",
+        "GUI F/13「真实 busy 会话下数字出现并刷新」无覆盖：轮询条件由 folderDiffStats.test.ts 覆盖，但从 busy 会话到侧栏出现 +N -M 的那一段只在开发机手工驱动过一次，且当时工作区只有未跟踪文件，量到的是正确的 null。",
+        "F3 的加密机行为没有任何可在普通机器上跑的替身：GitService 的「输出丢失」兜底有 Q7 用例，但「Main 派生 git 拿到空 stdout」这一形态没有被 mock 成用例，导致这条路只能靠上机。"
+      ],
+      "unverified_claims": [
+        "「重启会把整个 scratch 根连锅端」在当前 HEAD 是否仍与 F2-b 实测一致：sweepScratchWorkspacesOnStartup() 在 src/main/ipc/index.ts:97 是 fire-and-forget，而 ensure() 可能在同一轮启动里被更早调用，两者先后在代码上没有显式序；不起应用无法判断是否存在「刚建的 scratch 目录被启动 sweep 抹掉」的窗口。",
+        "加密机上 %TSD-Header-###% 容器与 isFileTsdEncrypted 探针的实际命中率：tsdSafeRead.ts 与 git/encoding.ts 自 test.12 以来零提交，逻辑读起来成立，但真实受策略文件从未被任何现行证据覆盖。",
+        "F3 根因方向（加密驱动按调用方/进程身份放行）是否成立：ARD §8 记的「Main→PowerShell→git 正常」是支持性证据但不排他，本轮无法在 Linux 上复现任何一半。",
+        "PERM-1 探针在英文界面下是否仍能命中触发器：探针选择器写死 /(执行|规划)\\s·\\s(每次询问|自动接受编辑|全自动)/，而 T023 之后这些标签是 t() 查词典的结果（PERMISSION_GEAR_LABELS 现在是英文键）。词典里 Execute/Plan/Ask every time 等条目齐全，中文界面下仍匹配；英文界面或 getDefaultLocale() 返回非 zh 的机器上会匹配不到。未执行，不确定上机机器的语言设置。",
+        "test.13 CI 绿灯对当前打包门禁的覆盖度：c0ae2a34 之后 scripts/verify-packaged-app.mjs 被 T009、T028 改过，逻辑上那份绿灯已不覆盖当前形状，但没有触发构建确认现在是否仍绿。"
+      ],
+      "findings": [
+        {
+          "id": "field-01",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "docs",
+          "node": "P4-6",
+          "file": "docs/plantree/plans/runtime-evolution/README.md",
+          "line": 136,
+          "title": "看板把现场明确拒签的 R2/R3 写成载体对照结论，并据此宣告放行规则结案",
+          "static_inference": true,
+          "refuter_reason": "逐字核对成立，推不翻。看板 docs/plantree/plans/runtime-evolution/README.md:136 原文：`| 加密载体对照 | test.11 已有真实密文三读取者差分；test.12 R2/R3 都读到明文。用户 2026-09-10 确认 Node 与 Git 本身在企业白名单内，放行规则不再作为待查项 |`。而同一趟现场的记录 Windows-P4-6-evidence/test12-reverify.md 三处否定它的证明力：`…作为预检保留，不签原定 R2/R3。`（约 786 行）、`限制：目标当前读取结果无 TSD 头，不能区分明文文件与透明解密；R2/R3 不能据此拍板放行按路径/签名/父进程。R3 只改变文件名并保留目录，仍需真实加密容器才能作决策。`（806 行附近）、`D1/F3 仍待真实加密样本与有效无 Bash 探针。`（808 行附近）。判别器确实还开着：docs/plans/2026-09-09-bash-carrier-decision.md:69/71 的结论映射把「按进程名 / 按路径 / 按签名 / 受父进程影响」分别映射到修法 B 可行与否，而 docs/plans/2026-09-09-gui-defect-decisions.md:43 明写 `因此 F3 不单独设探针：R2/R3 的结果一到，F3 与 D1 一起拍板。`。批次 A～C 未动这一行：git log -S'放行规则不再作为待查项' 只返回引入它的 ff08f264，T027（1b7c55fd）改的是 evidence/p4-6/README.md 的后端开关那句，不是这行。缓解（不影响判定，只影响后果严重度）：roadmap.md:107 的 T032 范围里仍单列了「F3 根因」，同一 README 的 F3 行（README.md:216 附近）也写着「根因与修法仍未拍板」，所以上机清单未必真会漏掉 F3；但第 136 行本身把未签收的读数写成了已关闭结论，属实。静态推断（需加密 Windows 才能验证放行维度）。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md 批次D T030行、批次E T032行",
+          "waiver_quote": "T030 | 未认领节点：P4-6 现场口径、P2-5/P2-6 可比性、H/17、H/19、H/21、F1～F7 复核…｜T032 | 上机检查单：合并旧树待现场项（…F3 根因）…"
+        },
+        {
+          "id": "field-02",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "docs",
+          "node": "P4-6",
+          "file": "docs/plans/2026-09-09-bash-carrier-decision.md",
+          "line": 3,
+          "title": "D1 决策文档的现场结果栏全空，等于把已被证明无效的 R4 方法原样留给下一次上机",
+          "static_inference": true,
+          "refuter_reason": "成立。docs/plans/2026-09-09-bash-carrier-decision.md:3 仍是 `> 状态：**待现场数据拍板**（Linux 侧论证完成，判定探针已就绪）`；第 6 节表头在 63 行 `| 编号 | 步骤 | 观察 | 结论映射 | 现场结果 |`，R0/R1/R2/R3/R4 分别在 65、66、69、71、73 行，最后一列全是 `⬜`，其中 73 行 R4 的步骤仍写 `临时把 Git 从 PATH 与默认目录移开后调用 bash 工具`。而现场早已跑过并否掉该方法：test12-reverify.md 结论段 `R4 结果无效：隔离环境下命令仍执行成功，说明 harness 没有真正让 worker 的 shell resolver 进入 shell_unconfigured；不能据此签 R4。`，R0 只拿到 shell 自报路径 `C:\\Program Files\\Git\\usr\\bin\\bash.exe`、无进程映像取证。我在该文件内 grep `回填|test12|2026-09-1` 无任何命中，确认全文没有任何回填节。该文件历史只有一次提交（git log -- 该文件：55b4b893），批次 A～C 从未碰过，所以不存在「已修」。看板侧确有一行部分对冲（README.md:142 `| R4 无 Bash | 可选探针无效（shell 仍被发现）；独立保留…`），但下一次上机的操作文档是这份决策文档，它自己没回填。静态推断（R4 的替代做法有效性要在 Windows 上确认）。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md T032行",
+          "waiver_quote": "T032 | 上机检查单：合并旧树待现场项（…F3 根因）、T001 后的 PERM-1 探针复跑…"
+        },
+        {
+          "id": "field-03",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "docs",
+          "node": "F5 / F7 / GUI C/8",
+          "file": "docs/plantree/plans/runtime-evolution/README.md",
+          "line": 223,
+          "title": "现场表 F7a/F7c 行仍写「通用问答卡仍受 F5 限制」，与同表 F5 行自相矛盾",
+          "static_inference": false,
+          "refuter_reason": "成立，且能给出时点证据。README.md:223 原文 `| F7a/F7c 权限卡样式/尺寸 | 🟡 结构化权限链与重画本地真实应用可用；倒计时原未接通，已补 `baeff487` 并本地验证；视觉口径仍待定 | 不在 test.13；通用问答卡仍受 F5 限制 |`，同表 221 行 `| F5 通用问答缺生产者 | 🟢 已实现（2026-09-12，`4916a633`）…**仅自动化测试，未真机点验** |`。HEAD 上生产者与渲染位都在：src/runtime/plugins/tools/index.ts:274 `if (this.config.ask) this.register(askTool(this.config.ask), 'read');`，src/renderer/components/chat/ChatWorkspace.tsx:250 `<PendingQuestionDock sessionId={activeSessionId} />`。时点也对得上：223 行那句由 5117bbd4（2026-09-10）写入，F5 落地提交 4916a633 是 2026-09-12，之后无人回改（git log -S'通用问答卡仍受 F5 限制' 只有 5117bbd4 一条）。唯一可为它辩护的读法是把「F5 限制」理解成 F5 行现在那句「未真机点验」，但原句写于 F5 尚无生产者时，字面是「弹不出来所以没法验」，作为下一次上机的排单依据会误导。严重级维持 low（文档陈旧，非行为缺陷）。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md T030行",
+          "waiver_quote": "T030 | 未认领节点：P4-6 现场口径、P2-5/P2-6 可比性、H/17、H/19、H/21、F1～F7 复核…"
+        },
+        {
+          "id": "field-04",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "docs",
+          "node": "P4-6",
+          "file": "Windows-P4-6-evidence/launch-native.ps1",
+          "line": 3,
+          "title": "已删除的后端开关在现场启动脚本与清单里还剩四处，脚本还会把它回显成一条假确认",
+          "static_inference": true,
+          "refuter_reason": "成立，残留比报告说的还多一处。Windows-P4-6-evidence/launch-native.ps1 第 1～7 行仍是 `# …确保 AICLIENT_RUNTIME_BACKEND 真正进入 worker` / `$env:AICLIENT_RUNTIME_BACKEND   = 'native'` / `Write-Host \"backend=$env:AICLIENT_RUNTIME_BACKEND agent=… trace=…\"`；launch-gui-a-e.ps1:17 赋值、:22 回显同形；gui-a-e-checklist.md:12 启动命令 `$env:AICLIENT_RUNTIME_BACKEND='native'; …`；linux-side-punch-list.md:73 `| 启动与载体 | 退出旧应用；`AICLIENT_RUNTIME_BACKEND=native` 启动；…`。报告漏列的第五处：Windows-P4-6-evidence/launch-resume-repro.ps1:2 与 :6（同样赋值 + 回显）。变量确已无生产消费者：全仓 grep 后 src/ 下唯一命中是注释 src/runtime/flags.ts:7 `P6-5 did exactly that on 2026-09-13: `AICLIENT_RUNTIME_BACKEND` is gone along with the engine it could select, setting it has no effect`，flags.ts 只导出 AGENT_DIR / PI_AGENT_DIR 等仍有效的键。批次 A～C 确实没碰这些文件：git log -- launch-native.ps1 只有 8f4a838f，launch-gui-a-e.ps1 / gui-a-e-checklist.md 只有 b3a8f778，linux-side-punch-list.md 最新是 55b4b893，均早于加固批次；被 T027 改写的是另一份 evidence/p4-6/README.md:49。静态推断（实际误导效果要现场执行才观察得到）。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "无匹配（已检索 ARD、README、topics、evidence README、roadmap Deferred/Done、decisions 001-012、open-questions）",
+          "waiver_quote": ""
+        },
+        {
+          "id": "field-05",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "docs",
+          "node": "P4-6 / PERM-1",
+          "file": "docs/plantree/plans/runtime-evolution/evidence/p4-6/perm1/README.md",
+          "line": 6,
+          "title": "PERM-1 证据的复现命令已失真，而 T032 要求的复跑会就地覆盖被标为 legacy 的历史证据",
+          "static_inference": false,
+          "refuter_reason": "成立。docs/plantree/plans/runtime-evolution/evidence/p4-6/perm1/README.md:6 `\\`node scripts/run-perm1-probe.mjs\\`（legacy 后端）与 \\`PERM1_NATIVE=1 node scripts/run-perm1-probe.mjs\\`（native 后端）。`，:39 `原始输出：[perm1-report.json](perm1-report.json)（legacy）、[perm1-native-report.json](perm1-native-report.json)（native）。`。探针侧 T028 已把变体删掉并只留一套名字：scripts/run-perm1-probe.mjs:44-49 注释 `T028 deleted the \\`PERM1_NATIVE=1\\` variant. … the two name sets described one and the same run.`，:50 `const REPORT_NAME = 'perm1-report.json';`、:51 `const SHOT_PREFIX = 'perm1';`。覆盖路径是硬编码的固定目录，不是临时目录：:38 `const outDir = path.join(repoRoot, 'docs/plantree/plans/runtime-evolution/evidence/p4-6/perm1');`，:138 `const file = path.join(outDir, \\`${SHOT_PREFIX}-${name}.png\\`);`，:314 `fs.writeFileSync(path.join(outDir, REPORT_NAME), …)`。目录里现存 perm1-*.png / perm1-report.json 与 perm1-native-* 两套共 10 个文件，而 roadmap.md:107 的 T032 明确要求 `T001 后的 PERM-1 探针复跑（\\`scripts/run-perm1-probe.mjs\\`，需真实模型回合）`，复跑即就地覆盖被标为 legacy 的那五个文件。另外 README:101-104 的未决项（legacy 英文弹窗是否接管）在 T036 删掉扩展 UI 后已经没有对象，佐证这份证据 README 的时点注记确实缺失。文件历史 git log -- 该 README 只有 8b75b646，批次 A～C 未回写。严重级 low（证据可追溯性受损，非行为缺陷）。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md T032行",
+          "waiver_quote": "T032 | 上机检查单：…T001 后的 PERM-1 探针复跑（`scripts/run-perm1-probe.mjs`，需真实模型回合）…"
+        },
+        {
+          "id": "field-06",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "contract-gap",
+          "node": "P4-6 / F1～F7",
+          "file": "docs/plantree/plans/runtime-hardening/roadmap.md",
+          "line": 107,
+          "title": "T032 声称合并旧树待现场项，枚举却漏掉本区域全部十余条",
+          "static_inference": false,
+          "refuter_reason": "枚举不全属实。docs/plantree/plans/runtime-hardening/roadmap.md:107 原文范围列 `上机检查单：合并旧树待现场项（P5-2 六行、P5-4/P5-5 五行、P6-3 第 4/6 条、H/20 I5、F3 根因）、T001 后的 PERM-1 探针复跑…与审计静态推断项（permissions-19、core-host-05/07、tools-10、cutover-03、P1-8 证据重采、P6-4 旧版产物互读）`，括号内确实不含本区域十余条看板上仍标未验的项，逐条我都在看板上核到了原文：README.md:220 F4 行 `GUI 侧观感与加密机复测未做`、:221 F5 行 `**仅自动化测试，未真机点验**`、:194 GUI C/8 行 `**未真机点验**，未打包`、:190 A/4 行 `加密机回归并入最后一次上机`、:189 A/10 行 `原 TEMP /new 矩阵未完整补签`、:198 F/13 行 `**仍缺**：真实 busy 会话下数字出现并刷新的现场记录`、:200 F/15 行 `F2-a/c 后续修复待 test.13 验证`、:233 TUI-1 行 `**未真机点验**`、:215 F2-b 行 `仍未测：临时行第三个「删除」按钮…；正常退出（非 kill）时的退出清理`。上机只有一次也属实：README.md:37 `用户 2026-09-10 决定：全部做完后再去现场实测一次，不再分轮上机`，roadmap.md:9 `E（现场）最后一次上机，合并 A～D 的现场项`。唯一的对冲是流程本身留了口子——roadmap.md:93 的 T031 验收写 `形成批次 E 的检查单`、T029/T030 验收写「发现进本 roadmap」，即批次 D 的报告本来就该并进 T032；但按当前文本，T032 范围列里的括号枚举是写单人唯一的现成清单，不补就会漏。严重级 low（规划文档缺口，可在批次 D 收口时一并补）。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/roadmap.md 顶部“顺序与依赖”一行、T030行",
+          "waiver_quote": "D（补审）与 A/B 并行，只读不冲突；E（现场）最后一次上机，合并 A～D 的现场项。｜T030 | 未认领节点：P4-6 现场口径、…、F1～F7 复核…"
+        }
+      ],
+      "stats": {
+        "confirmed": 6
+      }
+    },
+    {
+      "key": "baseline-comparability",
+      "task": "T030",
+      "title": "可比性与单测门禁（P2-0 / P2-5 / P2-6 / P1-7）",
+      "summary": "对批次 D 审计任务 T030（P2-0 / P2-5 / P2-6 真实缓存命中率可比性链路 与 P1-7 单测门禁）在 HEAD ebc82f16 上做了只读复核。P2-0/P2-5/P2-6 的测量结果本身扎实：批次 C 的 T028 已把 2026-09-14 审计批评者指出的两个硬伤（compare.mjs 强制要求已无法再采的 legacy 归档、RUNTIME_CONFIG_VERSION 冻结导致新旧证据无法分代）修好，archive.mjs 把可比性规则收成有单测的纯函数。但本轮发现四条残留问题：(1) P1-7\"单测门禁\"不是字面意义上的门禁——.github/workflows/build.yml 只在推送 v* 标签或手动 workflow_dispatch 时才跑 pnpm test/typecheck/lint/verify:packaged，日常提交和 PR 完全不触发任何自动化测试，本地 pre-commit 钩子只做格式化，没有 pre-push 钩子，这与项目自己的工程规范文档\"Main regression: ... before every merge\"正面冲突；(2) 支撑 P2-0/P2-5/P2-6 命中率数字的核心公式单测 metrics.test.mjs 用 node --test 写、放在不匹配 vitest include glob 的目录下，pnpm test 和 CI 永远不会执行它；(3) evidence/p2-5/README.md 的\"复现\"命令仍照抄一条已在 2026-09-13 随旧引擎删除的采集器 run.mjs；(4) collect.mjs 生成的报告标题硬编码为\"P2-0 旧后端正式基线\"，不看 manifest.backend，若走 README 文档化的\"native 部分重跑 + collect.mjs 收尾\"这条恢复路径会产出误标后端的证据，且该路径从未端到端跑通过一次（批次 C 自认）。P1-7 与 P2-5/P2-6 都是 2026-09-14 审计明确列出的\"未认领节点\"，本轮是首次实测评估。",
+      "confidence": "high",
+      "raw_report_path": "docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/baseline-comparability.md",
+      "files_read_count": 28,
+      "node_verdicts": [
+        {
+          "node": "P2-0",
+          "verdict": "complete",
+          "rationale": "旧后端基线已在引擎退役前完整采集归档（2026-09-08，六场景 28 次真实调用），不可再采这件事在 archive.mjs 与 README 里写得清楚，并给出明确替代路径（--baseline）。未发现残留缺陷。"
+        },
+        {
+          "node": "P2-5",
+          "verdict": "complete-with-gaps",
+          "rationale": "真实网关下 99.97% 达标、28 次调用全绿，口径偏差交代完整。残留 baseline-03（复现命令引用已删除脚本，低）与 baseline-02（核心公式单测不在自动化流水线里，中），均不影响已发布结论正确性，但影响可回归能力。"
+        },
+        {
+          "node": "P2-6",
+          "verdict": "complete-with-gaps",
+          "rationale": "对比方法论扎实，comparison.md 本身无误。残留 baseline-04：collect.mjs 报告标题不看 backend，若走文档化的 native 部分重跑恢复路径会误标证据来源，且该路径从未端到端跑通（批次 C 自认）。"
+        },
+        {
+          "node": "P1-7",
+          "verdict": "incomplete",
+          "rationale": "2026-09-14 审计 12 个未认领节点之一，本轮首次实测。baseline-01 证实日常提交/PR 无任何自动测试执行，pre-commit 仅 lint；baseline-02 证实即使 tag 触发的那道门也漏掉 P2-0/P2-5/P2-6 自己的公式单测。'单测门禁'目前只是'存在会被跑一次的测试'，不是'新改动会被机械拦截'。"
+        }
+      ],
+      "checklist_items": [
+        {
+          "item": "CI 在日常 push/PR 上确实不触发任何测试 job",
+          "judge": "向非 tag 分支推送一次提交或开一个测试 PR，GitHub Actions 页面除 code-review.yml/claude.yml 外没有任何 workflow run 被创建",
+          "method": "用有仓库权限的账号实际推送/开 PR 并观察 Actions 列表；或 gh run list --branch <分支>",
+          "target": "dev-box"
+        },
+        {
+          "item": "run-native.mjs --case 部分重跑 + collect.mjs 收尾这条恢复路径端到端可用且标题正确",
+          "judge": "真实网关下故意只跑 1-2 个 --case，其余用别的目录跑完，collect.mjs 收尾产出的 summary.json/report.md 字段正确、标题反映真实 backend",
+          "method": "需要 P20_BASELINE_API_KEY 与可用网关，实跑一次并人工核对产物",
+          "target": "real-model"
+        },
+        {
+          "item": "archive.mjs 的分代拒绝逻辑在两次真实 native 采集（跨一次 RUNTIME_CONFIG_VERSION 升级）之间确实产出不可比而非误判为可比",
+          "judge": "升级 RUNTIME_CONFIG_VERSION 前后各真实采集一次，compare.mjs --baseline <升级前> --native <升级后> 必须在 failures 里报 behaviour generation differs",
+          "method": "需要两次真实网关采集，跨一次代码升级",
+          "target": "real-model"
+        }
+      ],
+      "test_gaps": [
+        "scripts/runtime-baseline/preflight.mjs 无离线形态，run-native.mjs --dry-run 不覆盖它；批次 C 已记录为接受不做，本轮复核现状未变。",
+        "scripts/runtime-baseline/collect.mjs 的主路径（多次 --case 部分重跑后挑选首次完整成功记录并汇总）从未在真实网关下端到端跑通过一次，baseline-04 是这个盲区里能靠静态阅读定位的一个具体后果。",
+        "scripts/__tests__/runtime-baseline-archive.test.mjs 硬编码 evidence/p2-5 下两份真实归档路径作为测试夹具，证据目录搬家会致该用例变红；批次 C 已记录，本轮确认现状未变。",
+        "metrics.test.mjs 不在 pnpm test 范围内（见 baseline-02），D9 公式目前没有任何自动化回归覆盖。"
+      ],
+      "unverified_claims": [
+        "无法确认 GitHub 仓库分支保护规则是否要求任何状态检查才能合并 main——本地只能读工作流定义文件，读不到仓库 Settings；baseline-01 的结论仅限于现有工作流在什么事件上触发。",
+        "collect.mjs 收尾 native 部分重跑路径除标题 bug 外是否还有其它未暴露问题（如 comparable() 筛选字段是否适配 native 归档实际形状），受限于不执行脚本的规则，只做了字段级静态核对。",
+        "仓库里没有任何 run-* 目录是通过 '--case 部分重跑 + collect.mjs' 路径产出的，无法确认这条路径此前是否被真实使用过一次。"
+      ],
+      "findings": [
+        {
+          "id": "baseline-01",
+          "status": "confirmed-partial-waiver",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "contract-gap",
+          "node": "P1-7",
+          "file": ".github/workflows/build.yml",
+          "line": 3,
+          "title": "测试执行只挂在 tag 推送/手动 dispatch 上，日常提交与 PR 完全不触发任何自动化测试",
+          "static_inference": false,
+          "refuter_reason": "事实全部核对属实，推翻不掉。.github/workflows/build.yml:3-7 原文 `on:\\n  push:\\n    tags:\\n      - 'v*'\\n  workflow_dispatch:`，没有 pull_request / push-branch 触发；`grep -rn \"pnpm test\" .github/workflows/` 只命中 build.yml:93（Gate 5/7 — test），另两个工作流 code-review.yml:4 `pull_request_target` 与 claude.yml:3-10（issue_comment / pull_request_review 等）都只调 LLM 审读、不跑任何测试命令。本地钩子 .husky/ 下只有 pre-commit，全文件一行 `pnpm exec lint-staged`，package.json:121-125 的 lint-staged 只跑 `biome check --write --no-errors-on-unmatched`，没有 pre-push。docs/agent-project-engineering.md:104 原文 'Main regression: covers main functional paths, daily / before every merge'，确实对不上。`git log -- .github/workflows/build.yml` 最近一次是 76424efa，批次 A～C（T001～T036）没动过触发器，未被修掉。降级到 low 的理由：这属于门禁/测试缺口而非功能错误，且项目有成文的人工补偿纪律——docs/plantree/进度看板.md:62 记录批次收口跑全量 `pnpm test`（409 文件 / 6023 条）并做反向验证，是用户明确要求的做法（开发机 2 核 3.3GB，全量只在批次收口跑一次），所以「坏改动几周无人发现」的场景被大幅削弱；建议仍成立（补 PR 触发，或在 P1-7 证据里把『仅 tag/手动两种触发』写成已知限制）。",
+          "already_fixed_by": "",
+          "waiver": "partial",
+          "waiver_source": "docs/plantree/plans/runtime-evolution/README.md 第72行（P1-7 行）",
+          "waiver_quote": "P1-7 | 单测 | ✅ 历史实现门禁；不代表包后新改动测试已执行"
+        },
+        {
+          "id": "baseline-02",
+          "status": "confirmed",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "test-gap",
+          "node": "P2-5",
+          "file": "vitest.config.ts",
+          "line": 13,
+          "title": "支撑 D9 缓存命中率公式的单测被排除在 vitest / CI 之外",
+          "static_inference": false,
+          "refuter_reason": "路径不匹配是硬事实。vitest.config.ts:13 原文 `include: ['src/**/__tests__/**/*.test.ts', 'scripts/__tests__/**/*.test.mjs']`；被测文件在 scripts/runtime-baseline/metrics.test.mjs（不在 scripts/__tests__/ 下，ls scripts/__tests__/ 里是 agent-host-build-lib / runtime-baseline-archive 等 9 个文件，不含它），因此 `pnpm test`（package.json:35 `vitest run`）与 build.yml:93 的 Gate 5/7 都收不到它。该文件用 node:test 写（metrics.test.mjs:1-2 `import assert from 'node:assert/strict'; import { test } from 'node:test';`），全仓没有任何 npm script 或 CI 步骤调 `node --test` 跑它——`grep -rn \"metrics.test\"` 只命中三处文档：scripts/runtime-baseline/README.md:57、docs/plantree/plans/runtime-evolution/evidence/p2-0/validation.md:24、以及批次 C 的落地记录。`git log -- scripts/runtime-baseline/metrics.test.mjs` 只有 8a71c843 一次（P0 骨架），批次 A～C 未迁移。降级到 low：属于自动化缺口（rubric 的『测试缺口』档），且并非从未跑过——docs/plantree/plans/runtime-hardening/evidence/batch-c-2026-09-15.md:20 与 roadmap.md:41 都记录 T028 手工 `node --test` 跑了这 5 条并全绿，只是没进机械门禁。修复要与 baseline-01 一起做，否则加了步骤在日常提交上仍不执行。",
+          "already_fixed_by": "",
+          "waiver": "none",
+          "waiver_source": "",
+          "waiver_quote": ""
+        },
+        {
+          "id": "baseline-04",
+          "status": "waived",
+          "severity": "low",
+          "reviewer_severity": "medium",
+          "category": "correctness",
+          "node": "P2-6",
+          "file": "scripts/runtime-baseline/collect.mjs",
+          "line": 143,
+          "title": "收集脚本产出的报告标题硬编码为旧后端，不看归档的实际 backend 字段",
+          "static_inference": false,
+          "refuter_reason": "代码事实成立但『失败场景』被我推翻，实际问题比标题更大、形态不同。硬编码确在：scripts/runtime-baseline/collect.mjs:143 原文 `\\`# P2-0 旧后端正式基线\\\\n\\\\n六个独立固定会话已通过原始 JSONL 和 trace 复核。…\\``，同文件 collect.mjs:19 的 comparable() 确实已在读 `backend: manifest.backend`，两者矛盾。README 的定位也如审查员所说：scripts/runtime-baseline/README.md「P2-0 旧后端基线采集」节写明『下面的采集流程只适用于 run-native.mjs』，随后给的正是 `--case B04` 补采 + `node collect.mjs` 收尾。但审查员描述的场景（native 归档跑出顶部写着『P2-0 旧后端正式基线』的 report.md）不可能发生：collect.mjs:129-139 在写 report.md 之前先 `execFileSync(process.execPath, [join(..., 'verify.mjs'), out])`，写死调用 legacy 的 verify.mjs（不是 verify-native.mjs），而 verify.mjs:122 原文 `assert(bootstraps.every((item) => item.extensions.length >= 2 && item.systemPrompt.length > 0));` —— 我实测读了真实 native 归档 docs/plantree/plans/runtime-evolution/evidence/p2-5/run-20260912-native-02/B05/trace.jsonl，其 bootstrap 事件字段为 ['at','stepIndex','type','sessionId','sessionFile','mode','systemPrompt','tools','versionStamp']，没有 extensions，因此该行会抛 TypeError；verify.mjs:160-162 对 B04 读 `details.truncation.truncated`，而 native 侧是 `details.truncated`（见 verify-native.mjs 对应段），同样对不上。结果是 collect.mjs 在 catch 里把 summary.json 改写成 validBaseline:false 并抛出，report.md 根本不会生成。所以真正的缺陷是『collect.mjs 与 verifier 绑死在 legacy 形态，却被 README 写进 native 的 --case 恢复路径，该路径整条跑不通』，硬编码标题只是同一处未跟进的表征、且在 native 下是不可达字符串。按 rubric 归 low（错误形态/死字符串）；若按『文档化的恢复路径实际会崩』重新立项则应是 medium。批次 C 未修：a11ccbe0 只在 collect.mjs:38-40 加了 dryRun 过滤，batch-c-2026-09-15.md:66-67 自认 collect.mjs『未被本次干跑整体覆盖…记录，不做』。",
+          "already_fixed_by": "",
+          "waiver": "full",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/evidence/batch-c-2026-09-15.md 第67行（转移项表格）",
+          "waiver_quote": "`scripts/runtime-baseline/collect.mjs` 未被本次干跑整体覆盖（只加了一行 `dryRun` 过滤） | 记录，不做"
+        },
+        {
+          "id": "baseline-03",
+          "status": "waived",
+          "severity": "low",
+          "reviewer_severity": "low",
+          "category": "docs",
+          "node": "P2-5",
+          "file": "docs/plantree/plans/runtime-evolution/evidence/p2-5/README.md",
+          "line": 121,
+          "title": "「复现」小节的命令引用了已删除的采集器 run.mjs",
+          "static_inference": false,
+          "refuter_reason": "核对无误。docs/plantree/plans/runtime-evolution/evidence/p2-5/README.md:119-122 原文 `# 旧后端同网关重采` + `P20_BASELINE_API_KEY=<secret> node scripts/runtime-baseline/run.mjs \\\\` + `  --sdk-host src/agent-host --base-url http://107.173.157.208:23000 --out <新目录>`。`git log --diff-filter=D -- scripts/runtime-baseline/run.mjs` 显示该文件在 fe246bd6（『第 10 批——…退役旧引擎（H/20 + P6-1～P6-5）』）被删，工作区确认已不存在（ls scripts/runtime-baseline/ 只有 archive/collect/compare/metrics/metrics.test/preflight/run-native/suite/verify/verify-native + README）。同目录 scripts/runtime-baseline/README.md 表格首行已用 `~~run.mjs~~` 划掉并写『已随 P6-5 删除…无法再跑第二遍』，但证据侧没跟上：`git log -- .../evidence/p2-5/README.md` 只有一次改动 07f9152e（2026-09-12），早于 fe246bd6。我另外把整份 147 行通读/grep 了一遍（grep 『run.mjs|已删|退役|P6-5』只命中第 121 行那条命令本身），文件里没有任何别处的失效提示，第 133-139 行只谈归档哈希与两个 verifier，所以读者确实得不到主动告知。批次 A～C 未触碰该文件。严重级维持 low（文档失配）。",
+          "already_fixed_by": "",
+          "waiver": "full",
+          "waiver_source": "docs/plantree/plans/runtime-hardening/decisions/001-open-hardening-plan-root.md 「后果」一节",
+          "waiver_quote": "旧树不再更新，除非是修补落地后回写「已修」的一行引用。"
+        }
+      ],
+      "stats": {
+        "confirmed-partial-waiver": 1,
+        "confirmed": 1,
+        "waived": 2
+      }
+    },
+    {
+      "key": "h-nodes",
+      "task": "T030",
+      "title": "H/17、H/19、H/21 与 P5-2-0",
+      "summary": "只读复核了 H/17（本地模式 AI 服务管理）、H/19（统一 agent 目录/迁移/插件）、H/21（外部 Agent 迁移与对话导入）、P5-2-0（子代理宿主探针基线）四个此前无人认领的节点。结论：四个节点在当前 HEAD（ebc82f16）上都可判为 complete 或 complete-with-gaps，此前文档记录的已知缺陷（H/17 明文派生文件的定位、H/19 迁移丢失 provider 原始 ID、H/21 错误文案与首启迁移）均已在批次 A~C 修完并有提交号可查；P6-2/P6-5/T036 三次架构级退役改动之后，H/19 插件管理的实际作用范围收窄为「只影响内嵌终端，不影响 GUI 会话」，但代码文案、IPC 契约（chat:listSessionExtensions 被 chat:listSessionCapabilities 取代）均已同步收窄，不是遗留的文档/代码脱节。深挖了七条最可能藏新缺陷的线索（明文文件读写路径收窄、插件管理用途收窄、迁移 provider ID 是否撞名托管固定 arm、Main 侧模型目录磁盘回落触发条件、权限系统两份都缺失的报错路径、探针门禁的版本 pin 与是否被跳过），均已被既有修复覆盖或本来就是设计内行为，没有找到一条可独立立案的新缺陷，因此本轮没有产出 hnode 发现。剩余缺口集中在「现场未验证」这一类：未打包、未在 Windows/加密文件系统上跑过，H/19 验证案例 7 依赖 H/20 完整闭环未做，H/21 的 Codex 旧格式导入只有构造用例没有真实旧样本，内嵌 TUI 的模型缺失覆盖层未点验。这些都已列入上机检查单。",
+      "confidence": "medium",
+      "raw_report_path": "docs/plantree/plans/runtime-hardening/evidence/batch-d-raw/h-nodes.md",
+      "files_read_count": 37,
+      "node_verdicts": [
+        {
+          "node": "H/17",
+          "verdict": "complete-with-gaps",
+          "rationale": "L1~L5 已实现；明文派生 auth.json/models.json 的定位已从「共存期债务」主动改判为「终端消费的正当设计」，代码注释（catalog.ts）与 README 39-40 行一致；T021 已修凭据锁定回落、baseUrl 可达性等已知缺口。差的是未打包、未在真机/Windows/加密机上回归，归入批次 E。"
+        },
+        {
+          "node": "H/19",
+          "verdict": "complete-with-gaps",
+          "rationale": "U1~U6 全部落地且 2026-09-10/11 真机点验通过；D1（迁移丢 provider ID）已修（configKeyOf）。P6-2/P6-5/T036 收窄了插件管理的实际作用（只剩内嵌终端），T026 已同步收窄代码文案与 IPC 契约（chat:listSessionCapabilities 取代 chat:listSessionExtensions），不是脱节。差的是验证案例 7 依赖 H/20 完整闭环未做，且 2026-09-10/11 的点验先于三次架构改动，缺一次「结论仍成立」的复核。"
+        },
+        {
+          "node": "H/21",
+          "verdict": "complete-with-gaps",
+          "rationale": "P0/P1/C1~C6 均已落地并于 2026-09-11 真机点验通过，含「可续聊」硬验收闭环；四个错误文案出口与迁移/导入入口在当前 HEAD 均未被后续改动破坏。差的是 Codex 旧格式导入只有构造用例、内嵌 TUI 模型缺失覆盖层未点验、打包/加密机/Windows 现场未做。"
+        },
+        {
+          "node": "P5-2-0",
+          "verdict": "complete",
+          "rationale": "门禁性质的一次性判定：10 条探针全部实测通过并已固化进 P5-2-1~7 的实现约束；D12（pin 0.84.4）在当前 HEAD 精确成立（package.json 与已装 node_modules 版本一致）；探针测试文件仍在标准 vitest include 范围内、未被跳过。没有需要现场验证的残留项。"
+        }
+      ],
+      "checklist_items": [
+        {
+          "item": "H/17 本地模式 AI 服务在打包产物里可用",
+          "judge": "添加自定义服务后模型选择器能拉到模型列表并可对话；safeStorage 不可用时界面如实显示未加密",
+          "method": "打包应用 + CDP/手工点验",
+          "target": "windows"
+        },
+        {
+          "item": "H/19 插件安装在打包产物里的路径解析正确",
+          "judge": "currentPiCliLayout() 在打包布局下解析出的 pi 可执行文件路径存在且可跑；安装/卸载后 settings.json 与 node_modules 增减正确",
+          "method": "打包应用真实调用 pi install/remove/list",
+          "target": "windows"
+        },
+        {
+          "item": "H/19 验证案例 7",
+          "judge": "GUI 与内嵌 TUI 都能列出迁移/导入后的历史会话；在 TUI 里续聊一轮再回 GUI，历史接得上",
+          "method": "真实 Electron + 内嵌 PTY，走完整一圈",
+          "target": "dev-box"
+        },
+        {
+          "item": "H/21 Codex 旧格式导入",
+          "judge": "用一份真实的旧格式 Codex rollout（裸 header、裸行）跑导入，标题/正文/幂等三项与新格式一致",
+          "method": "需要一份真实旧格式样本文件（当前开发机没有）",
+          "target": "real-model"
+        },
+        {
+          "item": "H/21 内嵌 TUI 模型缺失覆盖层",
+          "judge": "打开一条模型已被迁移覆盖的旧会话，TUI 侧同样给出可读的「模型缺失」提示而不是裸错误",
+          "method": "真实 Electron，切到内嵌 TUI 视图",
+          "target": "dev-box"
+        },
+        {
+          "item": "H/17 + H/19 打包与加密机联合回归",
+          "judge": "本地模式首次进入、加服务、统一目录迁移、插件安装卸载，全链路在加密文件系统与 Windows 上各跑一遍",
+          "method": "现场实测（并入最后一次上机）",
+          "target": "encrypted"
+        },
+        {
+          "item": "P5-2-0 探针跨平台",
+          "judge": "subagentHostProbe.test.ts 10 条在 Windows 与 Electron utility 载体上同样全绿",
+          "method": "随批次 E 常规测试套件跑一次，无需专门驱动",
+          "target": "utility"
+        }
+      ],
+      "test_gaps": [
+        "H/21：Codex 旧格式（裸 header、裸行）导入只有构造用例，本机没有真实旧格式样本跑过（external-agent-migration/README.md 自陈）",
+        "H/19：验证案例 7（GUI 与 TUI 都能列出迁移/导入后的历史对话）无自动化用例，也未在 H/20 完整闭环后真机点验",
+        "H/17、H/19：均无打包产物、Windows、加密文件系统上的自动化或真机用例（pnpm verify:packaged 之外）",
+        "H/21：内嵌 TUI 的模型缺失覆盖层（modelMissingError.ts 第四个界面）没有点验记录，只验证过 GUI 三个出口"
+      ],
+      "unverified_claims": [
+        "evidence/unified-agent-directory/README.md 与 evidence/external-agent-migration/README.md 里 2026-09-10/11 的真机点验结论产生于 P6-2/P6-5（09-13）与 T036（09-15）之前，这些改动之后被替换/收窄的具体行为只做了静态代码与单测层面核实，没有重新真机复核",
+        "P5-2-0 探针（subagentHostProbe.test.ts）在 Windows / Electron utility 载体上是否同样通过没有现行证据，理论上跨平台但从未在非 Linux 环境实跑过"
+      ],
+      "findings": [],
+      "stats": {}
+    }
+  ],
+  "missing": [],
+  "total": {
+    "confirmed": 10,
+    "refuted": 1,
+    "confirmed-partial-waiver": 1,
+    "waived": 2
+  }
+}
