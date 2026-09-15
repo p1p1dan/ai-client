@@ -10,12 +10,10 @@ import type {
   WorkerReconcileImportedSessionPayload,
   WorkerReconcileImportedSessionResult,
 } from '@shared/types/legacyImport';
-import {
-  type ExtensionUiResponse,
-  isExtensionUiDialogMethod,
-  type PermissionDecisionId,
-  type RuntimeEvent,
-  type RuntimeEventDraft,
+import type {
+  PermissionDecisionId,
+  RuntimeEvent,
+  RuntimeEventDraft,
 } from '@shared/types/runtimeEvents';
 import {
   migratePermissionTier,
@@ -28,7 +26,6 @@ import type { WorkerSetPermissionsPayload } from '@shared/types/workerRpc';
 import {
   isWorkerCommandsResult,
   isWorkerDiscardForkResult,
-  isWorkerExtensionUiResponseResult,
   isWorkerForkResult,
   isWorkerHistoryResult,
   isWorkerPermissionRespondResult,
@@ -49,8 +46,6 @@ import {
   type WorkerCompactResult,
   type WorkerDiscardForkPayload,
   type WorkerDiscardForkResult,
-  type WorkerExtensionUiResponsePayload,
-  type WorkerExtensionUiResponseResult,
   type WorkerForkPayload,
   type WorkerForkResult,
   type WorkerHistoryPayload,
@@ -166,8 +161,6 @@ interface ManagedSlot {
   activeRequestId: string | null;
   ownerWebContentsId: number | null;
   acceptEvents: boolean;
-  pendingBlockingRequests: Set<string>;
-  extensionRuntimeIds: Set<string>;
   lastUsedAt: number;
   lastIdleAt: number;
   restartAttempts: number[];
@@ -197,13 +190,6 @@ interface ManagedSlot {
    */
   stderrForwarded?: number;
   stderrForwardTurn?: string | null;
-}
-
-interface BlockingRequestOrigin {
-  entry: ManagedSlot;
-  generation: number;
-  ownerWebContentsId: number | null;
-  runtimeId: string;
 }
 
 export interface WorkerManagerOptions {
@@ -277,7 +263,6 @@ export interface WorkerManagerSlotSnapshot {
   generation: number;
   active: boolean;
   foreground: boolean;
-  pendingBlockingRequests: number;
   lastUsedAt: number;
   lastIdleAt: number;
   error: string | null;
@@ -362,14 +347,6 @@ function readString(payload: unknown, key: string): string | undefined {
   return typeof value === 'string' && value ? value : undefined;
 }
 
-function readStringArray(payload: unknown, key: string): string[] {
-  if (!payload || typeof payload !== 'object') return [];
-  const value = (payload as Record<string, unknown>)[key];
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
-    : [];
-}
-
 export class WorkerManager {
   private readonly createSlot: typeof createPiWorkerSlot;
   private readonly readSubagentSettings: () => NativeSubagentSettings;
@@ -396,8 +373,6 @@ export class WorkerManager {
   private readonly restartWindowMs: number;
   private readonly entriesByKey = new Map<string, ManagedSlot>();
   private readonly entriesBySession = new Map<string, ManagedSlot>();
-  private readonly blockingRequests = new Map<string, BlockingRequestOrigin>();
-  private readonly closingBlockingRequests = new Set<string>();
   private readonly resumeFlights = new Map<
     string,
     { fingerprint: string; promise: Promise<string>; ownerWebContentsId?: number }
@@ -532,7 +507,6 @@ export class WorkerManager {
       generation: entry.generation,
       active: entry.activeRequestId !== null,
       foreground: entry.ownerWebContentsId !== null,
-      pendingBlockingRequests: entry.pendingBlockingRequests.size,
       lastUsedAt: entry.lastUsedAt,
       lastIdleAt: entry.lastIdleAt,
       error: entry.error,
@@ -765,8 +739,6 @@ export class WorkerManager {
         activeRequestId: null,
         ownerWebContentsId: null,
         acceptEvents: true,
-        pendingBlockingRequests: new Set(),
-        extensionRuntimeIds: new Set(),
         lastUsedAt: timestamp,
         lastIdleAt: timestamp,
         restartAttempts: [],
@@ -929,7 +901,7 @@ export class WorkerManager {
             true
           );
         }
-        if (entry.activeRequestId || entry.pendingBlockingRequests.size > 0) {
+        if (entry.activeRequestId) {
           throw new WorkerManagerError(
             'session_busy',
             `Session ${input.sessionId} cannot resume while active`,
@@ -999,8 +971,6 @@ export class WorkerManager {
         activeRequestId: null,
         ownerWebContentsId: null,
         acceptEvents: true,
-        pendingBlockingRequests: new Set(),
-        extensionRuntimeIds: new Set(),
         lastUsedAt: timestamp,
         lastIdleAt: timestamp,
         restartAttempts: [],
@@ -1329,7 +1299,6 @@ export class WorkerManager {
         entry.branchRevision += 1;
         entry.lastUsedAt = this.now();
         entry.lastIdleAt = this.now();
-        this.resetExtensionUi(entry, 'session_replaced');
         this.dispatchHistory(entry, requestId, result.history, 'branch');
         this.dispatch({
           type: 'session.status',
@@ -1434,7 +1403,6 @@ export class WorkerManager {
         entry.branchRevision += 1;
         entry.lastUsedAt = this.now();
         entry.lastIdleAt = this.now();
-        this.resetExtensionUi(entry, 'session_replaced');
         // 'branch', not 'refresh': the file is the authority now, so the
         // timeline is replaced rather than merged with what the renderer was
         // showing before the handover.
@@ -1558,8 +1526,6 @@ export class WorkerManager {
           activeRequestId: null,
           ownerWebContentsId: null,
           acceptEvents: true,
-          pendingBlockingRequests: new Set(),
-          extensionRuntimeIds: new Set(),
           lastUsedAt: timestamp,
           lastIdleAt: timestamp,
           restartAttempts: [],
@@ -1753,12 +1719,10 @@ export class WorkerManager {
   /**
    * Answer one `permission.requested` the native backend asked.
    *
-   * Deliberately thinner than `respondExtensionUi`: that method guards a
-   * bridge-local `uiRequestId` against runtime and window ownership because an
-   * extension dialog can outlive the generation that opened it. A permission is
-   * keyed by the tool call inside one live turn, so the worker itself is the
-   * authority on whether the id is still parked — it answers `handled: false`
-   * when it is not, and the card treats that as "already settled".
+   * No ownership or generation guard of its own: a permission is keyed by the
+   * tool call inside one live turn, so the worker itself is the authority on
+   * whether the id is still parked — it answers `handled: false` when it is
+   * not, and the card treats that as "already settled".
    */
   async respondPermission(input: {
     sessionId: string;
@@ -1885,58 +1849,6 @@ export class WorkerManager {
     }
   }
 
-  async respondExtensionUi(
-    response: ExtensionUiResponse,
-    ownerWebContentsId?: number
-  ): Promise<string> {
-    const requestId = nextRequestId('extui');
-    const origin = this.blockingRequests.get(response.uiRequestId);
-    if (
-      this.closingBlockingRequests.has(response.uiRequestId) ||
-      !origin ||
-      !this.isAuthoritative(origin.entry, origin.generation)
-    ) {
-      throw new WorkerManagerError(
-        'extension_ui_request_not_found',
-        `Extension UI request ${response.uiRequestId} is no longer active`
-      );
-    }
-    if (
-      origin.ownerWebContentsId !== null &&
-      ownerWebContentsId !== undefined &&
-      origin.ownerWebContentsId !== ownerWebContentsId
-    ) {
-      throw new WorkerManagerError(
-        'extension_ui_owner_mismatch',
-        `Window ${ownerWebContentsId} does not own Extension UI request ${response.uiRequestId}`
-      );
-    }
-    if (response.runtimeId !== origin.runtimeId) {
-      throw new WorkerManagerError(
-        'extension_ui_runtime_mismatch',
-        `Extension UI request ${response.uiRequestId} belongs to another runtime`
-      );
-    }
-    const entry = origin.entry;
-    const payload: WorkerExtensionUiResponsePayload = {
-      logicalSessionId: entry.logicalSessionId,
-      response,
-    };
-    const result = await entry.slot?.request<
-      WorkerExtensionUiResponseResult,
-      WorkerExtensionUiResponsePayload
-    >('worker.extensionUi.respond', payload);
-    if (!isWorkerExtensionUiResponseResult(result)) {
-      throw new WorkerManagerError(
-        'worker_invalid_extension_ui_ack',
-        'Pi worker returned an invalid Extension UI acknowledgement'
-      );
-    }
-    this.forgetBlockingRequest(response.uiRequestId);
-    entry.lastUsedAt = this.now();
-    return requestId;
-  }
-
   async setPermissions(sessionId: string, permissions: RuntimePermissionSettings): Promise<string> {
     const requestId = nextRequestId('permissions');
     const entry = this.entriesBySession.get(sessionId);
@@ -2007,11 +1919,6 @@ export class WorkerManager {
     for (const entry of this.entriesBySession.values()) {
       if (entry.ownerWebContentsId === ownerWebContentsId) entry.ownerWebContentsId = null;
     }
-    for (const [uiRequestId, origin] of [...this.blockingRequests]) {
-      if (origin.ownerWebContentsId !== ownerWebContentsId) continue;
-      this.closingBlockingRequests.add(uiRequestId);
-      void this.dismissBlockingRequestForClosedOwner(uiRequestId, origin);
-    }
   }
 
   releaseSession(sessionId: string): void {
@@ -2063,8 +1970,6 @@ export class WorkerManager {
     this.importSlotActive = false;
     this.entriesByKey.clear();
     this.entriesBySession.clear();
-    this.blockingRequests.clear();
-    this.closingBlockingRequests.clear();
     this.state = 'stopped';
     for (const entry of entries) {
       entry.acceptEvents = false;
@@ -2213,11 +2118,7 @@ export class WorkerManager {
   }
 
   private assertIdleEntry(entry: ManagedSlot, action: string): void {
-    if (
-      entry.activeRequestId ||
-      entry.pendingBlockingRequests.size > 0 ||
-      entry.mutationInFlight !== null
-    ) {
+    if (entry.activeRequestId || entry.mutationInFlight !== null) {
       throw new WorkerManagerError(
         'session_busy',
         `Session ${entry.logicalSessionId} cannot ${action} while active`,
@@ -2433,7 +2334,6 @@ export class WorkerManager {
       (entry.state === 'ready' || entry.state === 'error') &&
       entry.ownerWebContentsId === null &&
       entry.activeRequestId === null &&
-      entry.pendingBlockingRequests.size === 0 &&
       entry.mutationInFlight === null
     );
   }
@@ -2453,7 +2353,7 @@ export class WorkerManager {
     reason: 'app-shutdown' | 'slot-dispose' | 'slot-replace'
   ): Promise<void> {
     const unique = [...new Set(entries)];
-    for (const entry of unique) this.retireEntry(entry, reason);
+    for (const entry of unique) this.retireEntry(entry);
     const results = await Promise.allSettled(
       unique.map(async (entry) => {
         const slot = entry.slot;
@@ -2471,7 +2371,7 @@ export class WorkerManager {
     entry: ManagedSlot,
     reason: 'app-shutdown' | 'slot-dispose' | 'slot-replace'
   ): Promise<void> {
-    this.retireEntry(entry, reason);
+    this.retireEntry(entry);
     const slot = entry.slot;
     await slot?.dispose(reason);
     if (slot) this.ownedSlots.delete(slot);
@@ -2503,18 +2403,15 @@ export class WorkerManager {
     });
   }
 
-  private retireEntry(
-    entry: ManagedSlot,
-    reason: 'app-shutdown' | 'slot-dispose' | 'slot-replace'
-  ): void {
-    this.resetExtensionUi(
-      entry,
-      reason === 'app-shutdown'
-        ? 'host_shutdown'
-        : reason === 'slot-dispose'
-          ? 'session_closed'
-          : 'session_replaced'
-    );
+  /**
+   * Unbook one slot from the pool.
+   *
+   * Took the disposal reason until T036: it existed only to pick which flavour
+   * of dialog cancellation to announce on the retired Extension UI chain
+   * (decision 012). `slot.dispose(reason)` still carries it, which is where it
+   * belongs.
+   */
+  private retireEntry(entry: ManagedSlot): void {
     entry.acceptEvents = false;
     entry.state = 'disposing';
     if (this.entriesByKey.get(entry.key) === entry) this.entriesByKey.delete(entry.key);
@@ -2536,30 +2433,7 @@ export class WorkerManager {
     if (event.sessionId && event.sessionId !== entry.logicalSessionId) return;
 
     entry.lastUsedAt = this.now();
-    const extensionRuntimeId = readString(event.payload, 'runtimeId');
-    if (extensionRuntimeId && event.type.startsWith('extensionUi.')) {
-      entry.extensionRuntimeIds.add(extensionRuntimeId);
-    }
-    if (event.type === 'extensionUi.request') {
-      const method = readString(event.payload, 'method');
-      const uiRequestId = readString(event.payload, 'uiRequestId');
-      const runtimeId = extensionRuntimeId;
-      if (uiRequestId && runtimeId && isExtensionUiDialogMethod(method)) {
-        entry.pendingBlockingRequests.add(uiRequestId);
-        this.blockingRequests.set(uiRequestId, {
-          entry,
-          generation: message.generation,
-          ownerWebContentsId: entry.ownerWebContentsId,
-          runtimeId,
-        });
-      }
-    } else if (event.type === 'extensionUi.cancelled') {
-      for (const id of readStringArray(event.payload, 'uiRequestIds')) {
-        this.forgetBlockingRequest(id);
-      }
-    } else if (event.type === 'extensionUi.reset') {
-      this.clearBlockingRequests(entry);
-    } else if (event.type === 'preview.requested') {
+    if (event.type === 'preview.requested') {
       // P5-2-3. Answered HERE rather than forwarded to a card: the preview
       // surface is an Electron window, which is Main's to own. It is still
       // dispatched below, so the event stays visible to anything tracing the
@@ -2605,7 +2479,6 @@ export class WorkerManager {
     entry.state = 'crashed';
     entry.error = event.error.message;
     this.dumpWorkerStderr(entry, `crashed: ${event.error.message}`);
-    this.resetExtensionUi(entry, 'host_shutdown');
     const activeRequestId = entry.activeRequestId;
     entry.activeRequestId = null;
     entry.lastIdleAt = this.now();
@@ -2871,84 +2744,6 @@ export class WorkerManager {
     } catch (error) {
       this.log('[worker-manager] failed to persist Pi leaf checkpoint', error);
     }
-  }
-
-  private async dismissBlockingRequestForClosedOwner(
-    uiRequestId: string,
-    origin: BlockingRequestOrigin
-  ): Promise<void> {
-    try {
-      if (this.isAuthoritative(origin.entry, origin.generation)) {
-        await origin.entry.slot?.request<
-          WorkerExtensionUiResponseResult,
-          WorkerExtensionUiResponsePayload
-        >('worker.extensionUi.respond', {
-          logicalSessionId: origin.entry.logicalSessionId,
-          response: {
-            runtimeId: origin.runtimeId,
-            uiRequestId,
-            ok: false,
-            error: 'Owning window closed',
-          },
-        });
-      }
-    } catch (error) {
-      this.log('[worker-manager] failed to dismiss closed-window Extension UI', error);
-    } finally {
-      if (this.blockingRequests.get(uiRequestId) === origin) {
-        this.dispatch({
-          type: 'extensionUi.cancelled',
-          sessionId: origin.entry.logicalSessionId,
-          payload: { runtimeId: origin.runtimeId, uiRequestIds: [uiRequestId], reason: 'aborted' },
-        });
-        this.forgetBlockingRequest(uiRequestId);
-      }
-    }
-  }
-
-  private forgetBlockingRequest(uiRequestId: string): void {
-    const origin = this.blockingRequests.get(uiRequestId);
-    this.blockingRequests.delete(uiRequestId);
-    this.closingBlockingRequests.delete(uiRequestId);
-    origin?.entry.pendingBlockingRequests.delete(uiRequestId);
-  }
-
-  private clearBlockingRequests(entry: ManagedSlot): void {
-    for (const uiRequestId of [...entry.pendingBlockingRequests]) {
-      this.blockingRequests.delete(uiRequestId);
-      this.closingBlockingRequests.delete(uiRequestId);
-      entry.pendingBlockingRequests.delete(uiRequestId);
-    }
-  }
-
-  private resetExtensionUi(
-    entry: ManagedSlot,
-    reason: 'session_replaced' | 'session_closed' | 'host_shutdown'
-  ): void {
-    const requestsByRuntime = new Map<string, string[]>();
-    for (const uiRequestId of entry.pendingBlockingRequests) {
-      const origin = this.blockingRequests.get(uiRequestId);
-      if (!origin) continue;
-      const ids = requestsByRuntime.get(origin.runtimeId) ?? [];
-      ids.push(uiRequestId);
-      requestsByRuntime.set(origin.runtimeId, ids);
-    }
-    for (const [runtimeId, uiRequestIds] of requestsByRuntime) {
-      this.dispatch({
-        type: 'extensionUi.cancelled',
-        sessionId: entry.logicalSessionId,
-        payload: { runtimeId, uiRequestIds, reason },
-      });
-    }
-    for (const runtimeId of entry.extensionRuntimeIds) {
-      this.dispatch({
-        type: 'extensionUi.reset',
-        sessionId: entry.logicalSessionId,
-        payload: { runtimeId, reason },
-      });
-    }
-    this.clearBlockingRequests(entry);
-    entry.extensionRuntimeIds.clear();
   }
 
   /**

@@ -67,7 +67,12 @@ const MIN_FILES_PER_ROOT: Record<string, number> = {
   renderer: 300,
   shared: 50,
   runtime: 60,
-  'agent-host': 15,
+  // T036 deleted the retired dialog bridge module, the one walked file this
+  // root lost (its test and the orphaned pi SDK stub live under `__tests__`,
+  // which this walker skips), so the floor moves down by exactly one. These
+  // are `toBeGreaterThan` tripwires for "did the walker stop walking", kept
+  // one below the real count so the next deletion is a conscious edit.
+  'agent-host': 14,
 };
 
 /**

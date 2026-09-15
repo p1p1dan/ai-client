@@ -53,7 +53,6 @@ import {
   createUnboundChatSession,
 } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { useExtensionUiStore } from '@/stores/extensionUi';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
 import {
@@ -201,15 +200,19 @@ export function LeftNav({
   // the row derivations are pure functions of the session list, and "have I
   // looked at this yet" is not a property of the session.
   const unreadSessionIds = useChatSessionsStore((state) => state.unreadSessionIds);
-  const extensionUiPending = useExtensionUiStore((state) => state.pending);
+  // decision 012: the badge used to count parked Extension UI dialogs, the
+  // pi-era approval surface. Its replacement is this app's own permission
+  // queue — the same list the permission card answers — so a session waiting
+  // on an Allow/Deny still shows a count in the sidebar.
+  const pendingPermissions = useChatSessionsStore((state) => state.pendingPermissions);
   const pendingApprovalCountBySession = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const request of extensionUiPending) {
+    for (const request of pendingPermissions) {
       if (!request.sessionId) continue;
       counts.set(request.sessionId, (counts.get(request.sessionId) ?? 0) + 1);
     }
     return counts;
-  }, [extensionUiPending]);
+  }, [pendingPermissions]);
 
   // T-02: hydrate + mutate the persisted session index (chat:listSessions /
   // renameSession / archiveSession / closeSession).

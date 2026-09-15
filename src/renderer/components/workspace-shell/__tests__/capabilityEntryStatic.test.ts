@@ -37,7 +37,6 @@ describe('sidebar capability entry', () => {
   it('reads neither the pi extension list nor extension status lines', () => {
     expect(dock).not.toContain('useSessionExtensions');
     expect(dock).not.toContain('derivePluginInventory');
-    expect(dock).not.toContain('useExtensionUiDisplayStore');
     expect(dock).not.toContain('mcpReadiness');
   });
 

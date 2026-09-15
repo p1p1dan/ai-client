@@ -61,9 +61,12 @@ it('renders real retry countdown and switches sessions without stale status or t
   }
 });
 
-it('shows a Pi extension dialog as waiting for confirmation until its actual acknowledgement', async () => {
+it('shows a parked permission gate as waiting for confirmation', async () => {
+  // decision 012 — the Pi extension dialog was a second, separate way to be
+  // "waiting for confirmation" and forced the label on its own. What is left is
+  // the session's own gate: `permission.requested` puts the activity in the
+  // `confirmation` phase, and answering it moves the phase on.
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-  const { useExtensionUiStore } = await import('@/stores/extensionUi');
   useChatSessionsStore.setState({
     sessions: [
       {
@@ -71,9 +74,9 @@ it('shows a Pi extension dialog as waiting for confirmation until its actual ack
         title: 's',
         projectId: 'p',
         workspaceId: 'w',
-        status: 'running',
+        status: 'waiting_permission',
         updatedAt: 0,
-        activity: { phase: 'tool', tool: 'ask', since: Date.now() },
+        activity: { phase: 'confirmation', since: Date.now() },
       },
     ],
   });
@@ -81,20 +84,23 @@ it('shows a Pi extension dialog as waiting for confirmation until its actual ack
   document.body.append(container);
   const root = createRoot(container);
   try {
-    useExtensionUiStore.setState({
-      pending: [
-        {
-          runtimeId: 'r',
-          uiRequestId: 'q',
-          sessionId: 's',
-          receivedAt: Date.now(),
-          dialog: { method: 'input', title: 'Your answer' },
-        },
-      ],
-    });
     await act(async () => root.render(createElement(SessionActivityStatus, { sessionId: 's' })));
     expect(container.textContent).toContain('Waiting for confirmation');
-    await act(async () => useExtensionUiStore.setState({ pending: [] }));
+    await act(async () =>
+      useChatSessionsStore.setState({
+        sessions: [
+          {
+            id: 's',
+            title: 's',
+            projectId: 'p',
+            workspaceId: 'w',
+            status: 'running',
+            updatedAt: 0,
+            activity: { phase: 'tool', tool: 'ask', since: Date.now() },
+          },
+        ],
+      })
+    );
     expect(container.textContent).toContain('Running tool');
   } finally {
     await act(async () => root.unmount());

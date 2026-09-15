@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   isWorkerBootstrapPayload,
   isWorkerBootstrapResult,
-  isWorkerExtensionUiResponsePayload,
   isWorkerForkPayload,
   isWorkerForkResult,
   isWorkerHistoryPayload,
@@ -291,12 +290,6 @@ describe('worker RPC boundary guards', () => {
     expect(isWorkerStopPayload({ logicalSessionId: 'logical-1', reason: 'user' })).toBe(true);
     expect(isWorkerStopPayload({ logicalSessionId: 'logical-1', reason: 'later' })).toBe(false);
     expect(isWorkerStopResult({ stopped: false })).toBe(true);
-    expect(
-      isWorkerExtensionUiResponsePayload({
-        logicalSessionId: 'logical-1',
-        response: { runtimeId: 'runtime-1', uiRequestId: 'ui-1', ok: false },
-      })
-    ).toBe(true);
   });
 
   it('validates sessionless utility requests and terminal events', () => {

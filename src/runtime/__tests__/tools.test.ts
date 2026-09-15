@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { Type } from 'typebox';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ExtensionUiRequest } from '../../agent-host/extensionUiBridge.ts';
 import { reviewFromToolResult } from '../../shared/sessionFileChange.ts';
 import { migratePermissionTier } from '../../shared/types/runtimePermission.ts';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
@@ -15,6 +14,7 @@ import { modeSegment, permissionGearSegment } from '../plugins/permissions/promp
 import { composeSystemPrompt } from '../plugins/prompt/segments.ts';
 import { TOOL_OUTPUT_BYTES } from '../plugins/tools/index.ts';
 import { readLines } from '../plugins/tools/read-lines.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 let dir: string;
 const runtimes: RuntimeHandle[] = [];
@@ -39,6 +39,7 @@ async function runtime(options: Partial<RuntimeBootstrapOptions> = {}) {
     // installed Git Bash on Windows, so the bash tool is exercised on both.
     tools: { cwd: dir, shellPath: resolveWorkerShell(process.env as Record<string, string>) },
     ...options,
+    permissions: { approve: neverAsked, ...options.permissions },
   });
   runtimes.push(result);
   return result;
@@ -252,7 +253,9 @@ describe('native tools', () => {
     expect(content(await call(r, 'read', { path: 'a', offset: 2, limit: 1 }))).toContain('second');
   });
   it('requires approval for writes, denies secrets in auto, and crops plan mutation', async () => {
-    const r = await runtime();
+    // An approver that always refuses: the claim is that the write REACHES the
+    // gate, and a refusal is the visible half of that.
+    const r = await runtime({ permissions: { approve: async () => 'deny' } });
     await expect(call(r, 'write', { path: 'a', content: 'no' })).rejects.toMatchObject({
       code: 'tool_denied',
     });
@@ -271,7 +274,12 @@ describe('native tools', () => {
     const outside = await mkdtemp(join(tmpdir(), 'runtime-outside-'));
     try {
       await symlink(outside, join(dir, 'link'), 'dir');
-      const r = await runtime({ permissions: { gear: 'accept-edits' } });
+      // `accept-edits` waves through writes inside the workspace, so a write
+      // that lands outside it through a symlink has to be the one thing that
+      // still asks — and this approver refuses it.
+      const r = await runtime({
+        permissions: { gear: 'accept-edits', approve: async () => 'deny' },
+      });
       await expect(call(r, 'write', { path: 'link/new', content: 'no' })).rejects.toMatchObject({
         code: 'tool_denied',
       });
@@ -352,60 +360,6 @@ describe('native tools', () => {
     await expect(call(r, 'write', { path: 'a', content: 'no' })).rejects.toMatchObject({
       code: 'tool_denied',
     });
-  });
-  it('reuses Extension UI request/respond and cancellation without renderer changes', async () => {
-    const requests: ExtensionUiRequest[] = [];
-    const r = await runtime({
-      approvalUi: {
-        onRequest: (request) => {
-          requests.push(request);
-        },
-      },
-    });
-    const writing = call(r, 'write', { path: 'a', content: 'yes' });
-    await expect.poll(() => requests.length).toBe(1);
-    const request = requests[0];
-    expect(request.method).toBe('select');
-    r.approval?.bridge.respond({
-      runtimeId: request.runtimeId,
-      uiRequestId: request.uiRequestId,
-      ok: true,
-      value: 'Allow once',
-    });
-    await writing;
-    expect(await readFile(join(dir, 'a'), 'utf8')).toBe('yes');
-    const controller = new AbortController();
-    const next = call(r, 'write', { path: 'b', content: 'no' }, controller.signal);
-    await expect.poll(() => requests.length).toBe(2);
-    controller.abort();
-    await expect(next).rejects.toMatchObject({ code: 'tool_denied' });
-    expect(r.approval?.bridge.pendingCount()).toBe(0);
-  });
-  it('gives the Extension UI dialog the same deadline the engine will enforce', async () => {
-    // permissions-15: the approval bridge used to hardcode 120 s while the
-    // engine used `PermissionConfig.timeoutMs`. They happened to agree on the
-    // default, so a shortened timeout would have left the dialog counting down
-    // long after the request was already denied — visible only to whoever was
-    // staring at it.
-    const requests: ExtensionUiRequest[] = [];
-    const r = await runtime({
-      permissions: { timeoutMs: 45_000 },
-      approvalUi: {
-        onRequest: (request) => {
-          requests.push(request);
-        },
-      },
-    });
-    const writing = call(r, 'write', { path: 'a', content: 'yes' });
-    await expect.poll(() => requests.length).toBe(1);
-    expect(requests[0].timeoutMs).toBe(45_000);
-    r.approval?.bridge.respond({
-      runtimeId: requests[0].runtimeId,
-      uiRequestId: requests[0].uiRequestId,
-      ok: true,
-      value: 'Deny',
-    });
-    await expect(writing).rejects.toMatchObject({ code: 'tool_denied' });
   });
   it('enforces tool whitelist and path deny scopes before grants', async () => {
     const r = await runtime({

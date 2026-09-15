@@ -57,7 +57,7 @@ describe('T31 Pi-only absence gate', () => {
     expect(rootManifest.dependencies?.['@agentclientprotocol/sdk']).toBeUndefined();
   });
 
-  it('exposes only Pi model and portable Extension UI execution channels', () => {
+  it('exposes only Pi model and native runtime execution channels', () => {
     const ipc = readFileSync(at('src/shared/types/ipc.ts'), 'utf8');
     const preload = readFileSync(at('src/preload/index.ts'), 'utf8');
     const chat = readFileSync(at('src/main/ipc/chat.ts'), 'utf8');
@@ -65,7 +65,6 @@ describe('T31 Pi-only absence gate', () => {
 
     expect(ipc).toContain("PI_RUNTIME_CHECK: 'pi:runtime:check'");
     expect(ipc).toContain("CHAT_LIST_PI_MODELS: 'chat:listPiModels'");
-    expect(ipc).toContain("CHAT_RESPOND_EXTENSION_UI: 'chat:respondExtensionUi'");
     // `CHAT_RESPOND_PERMISSION` is NOT on the list below any more. T31 removed
     // the Claude-era channel of that name — an agent-specific permission
     // dialect — and 2026-09-10 reintroduced the name for the native runtime's

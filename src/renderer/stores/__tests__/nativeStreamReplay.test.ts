@@ -7,7 +7,6 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flattenTurnItems, groupMessagesIntoTurns } from '@/components/chat/chatTurn';
-import { initialExtensionUi, reduceExtensionUi } from '@/components/chat/extensionUiModel';
 import { PermissionActivityDetails } from '@/components/chat/PermissionActivityRows';
 import { derivePermissionActivityRow } from '@/components/chat/permissionActivityRow';
 import { canRespondToPermission } from '@/components/chat/questionCardModel';
@@ -17,7 +16,12 @@ import {
   reduceSubagentActivity,
 } from '@/components/chat/subagentActivityModel';
 import { deriveSessionReview } from '@/components/workspace-shell/sessionReview';
-import { applyRuntimeEvents, type ChatSession, type ChatSessionsState } from '../chatSessions';
+import {
+  applyRuntimeEvents,
+  type ChatSession,
+  type ChatSessionsState,
+  filterRetiredRuntimeEvents,
+} from '../chatSessions';
 import { usePendingUserMessagesStore } from '../pendingUserMessages';
 import {
   applyRuntimeEventToGates,
@@ -272,14 +276,6 @@ describe('permission card', () => {
     );
     expect(canRespondToPermission(state.pendingPermissions, SESSION_ID, 'another-id')).toBe(false);
   });
-
-  it('no longer opens an extension UI dialog for a permission', () => {
-    // Both channels exist; a gate must travel on exactly one of them, or the
-    // user is asked the same question twice in two different shapes.
-    let state = initialExtensionUi;
-    for (const event of STREAM) state = reduceExtensionUi(state, event);
-    expect(state.pending).toHaveLength(0);
-  });
 });
 
 describe('composer', () => {
@@ -485,5 +481,69 @@ describe('the delegation lane', () => {
         .map((block) => block.text ?? '')
         .join('')
     ).not.toContain('EXPLORER-REPORT');
+  });
+});
+
+describe('an older session that still carries a retired event', () => {
+  /**
+   * decision 012 — `extensionUi.request` / `.cancelled` / `.reset` were deleted
+   * from the event union with the rest of the Extension UI chain. A stream
+   * recorded before that can still reach these decoders (an archived recording,
+   * a worker from an older build), and every one of them has to DROP it: not
+   * throw, not draw a row for it, not report it as a session error.
+   *
+   * The assertion is that the noisy replay is indistinguishable from the clean
+   * one, which is stronger than "it did not throw" — a decoder that folded the
+   * unknown event into some catch-all row would still pass a try/catch test.
+   */
+  const LEGACY_REQUEST = {
+    type: 'extensionUi.request',
+    sessionId: SESSION_ID,
+    seq: 0,
+    timestamp: 0,
+    payload: {
+      runtimeId: 'bridge-1',
+      uiRequestId: 'ui-1',
+      method: 'select',
+      args: { title: 'Pick a branch', options: ['main', 'next'] },
+    },
+  } as unknown as RuntimeEvent;
+
+  /** Same recording with the retired event spliced mid-turn, seq re-stamped. */
+  const WITH_LEGACY = [...STREAM.slice(0, 3), LEGACY_REQUEST, ...STREAM.slice(3)].map(
+    (event, index) => ({ ...event, seq: index + 1, timestamp: 1_000 + index })
+  ) as RuntimeEvent[];
+
+  const shape = (state: ChatSessionsState) => {
+    const messages = state.messages[SESSION_ID] ?? [];
+    return {
+      items: groupMessagesIntoTurns(messages).flatMap((turn) =>
+        flattenTurnItems(turn).map((item) => item.kind)
+      ),
+      text: messages
+        .flatMap((message) => message.blocks)
+        .map((block) => block.text ?? '')
+        .join(''),
+      status: state.sessions.find((item) => item.id === SESSION_ID)?.status,
+    };
+  };
+
+  it('replays past it without throwing, and puts nothing on the timeline', () => {
+    let noisy: ChatSessionsState | undefined;
+    expect(() => {
+      noisy = replay(WITH_LEGACY);
+    }).not.toThrow();
+    expect(shape(noisy as ChatSessionsState)).toEqual(shape(replay()));
+    expect(noisy?.lastError ?? null).toBeNull();
+  });
+
+  it('is not an error to the adjacent decoders either', () => {
+    expect(() => applyRuntimeEventToGates(LEGACY_REQUEST)).not.toThrow();
+    expect(() => filterRetiredRuntimeEvents([LEGACY_REQUEST], () => false)).not.toThrow();
+    let lanes = initialSubagentActivity;
+    expect(() => {
+      lanes = reduceSubagentActivity(lanes, LEGACY_REQUEST);
+    }).not.toThrow();
+    expect(lanes).toEqual(initialSubagentActivity);
   });
 });

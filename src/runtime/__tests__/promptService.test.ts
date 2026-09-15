@@ -8,6 +8,7 @@ import { DEFERRED_SERVICES, PROMPT_SERVICE } from '../contracts.ts';
 import { RuntimeHostError } from '../host/errors.ts';
 import { instructionSource } from '../plugins/prompt/instructionSource.ts';
 import { deferredSlots } from '../plugins/prompt/segments.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 let dir: string;
 let root: string;
@@ -32,11 +33,11 @@ async function runtime(options: Partial<RuntimeBootstrapOptions> = {}) {
     traceDir: null,
     providers: [faux.provider],
     tools: { cwd: root },
+    ...options,
     // decision 007 / 008 — project instructions are a trusted-workspace tier
     // now, so the suite's default workspace has to be one. The untrusted case
     // is its own test below.
-    permissions: { projectTrusted: true },
-    ...options,
+    permissions: { approve: neverAsked, ...(options.permissions ?? { projectTrusted: true }) },
   });
   runtimes.push(handle);
   return { handle, faux };

@@ -32,6 +32,7 @@ import {
   wireStatus,
 } from '../plugins/subagent/records.ts';
 import { MAX_SUBAGENT_REPORT_CHARS, type SubagentRunStatus } from '../plugins/subagent/run.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 type ScriptStep = () => AssistantMessage | Promise<AssistantMessage>;
 
@@ -73,7 +74,7 @@ describe('SA14 / SA15 / SA16 · delegate records, usage and reopening', () => {
       env: {},
       providers: [handle.provider],
       tools: { cwd: workspace },
-      permissions: { gear: 'auto' },
+      permissions: { approve: neverAsked, gear: 'auto' },
       subagents: { home: join(workspace, 'home') },
       session: { cwd: workspace, mode: 'create', file: join(workspace, 'session.jsonl') },
       loop: { singleTurn: false },
@@ -352,7 +353,7 @@ describe("T006 · a delegate's model and thinking level follow the parent run", 
       env: {},
       providers: [handle.provider],
       tools: { cwd: workspace },
-      permissions: { gear: 'auto' },
+      permissions: { approve: neverAsked, gear: 'auto' },
       subagents: { home: join(workspace, 'home') },
       session: { cwd: workspace, mode: 'create', file: join(workspace, 'session.jsonl') },
       loop: { singleTurn: false },
@@ -376,7 +377,7 @@ describe("T006 · a delegate's model and thinking level follow the parent run", 
       env: {},
       providers: [handle.provider],
       tools: { cwd: workspace },
-      permissions: { gear: 'auto' },
+      permissions: { approve: neverAsked, gear: 'auto' },
       subagents: { home: join(workspace, 'home') },
       loop: { singleTurn: false },
     });
@@ -431,7 +432,7 @@ describe("T006 · a delegate's model and thinking level follow the parent run", 
       env: {},
       providers: [handle.provider],
       tools: { cwd: workspace },
-      permissions: { gear: 'auto' },
+      permissions: { approve: neverAsked, gear: 'auto' },
       subagents: { home: join(workspace, 'home') },
       session: { cwd: workspace, mode: 'create', file: join(workspace, 'session.jsonl') },
       loop: { singleTurn: false },

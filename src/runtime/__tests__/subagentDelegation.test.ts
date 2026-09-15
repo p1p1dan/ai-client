@@ -41,6 +41,7 @@ import {
   waitForDelegations,
 } from '../plugins/subagent/registry.ts';
 import type { SubagentRunResult } from '../plugins/subagent/run.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 function settledResult(overrides: Partial<SubagentRunResult> = {}): SubagentRunResult {
   return {
@@ -274,7 +275,7 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
       env: {},
       providers: [handle.provider],
       tools: { cwd: workspace },
-      permissions: { gear: 'auto' },
+      permissions: { approve: neverAsked, gear: 'auto' },
       subagents: { home: join(workspace, 'home'), ...subagents },
       loop: { singleTurn: false },
     });
@@ -604,7 +605,7 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
       env: {},
       providers: [handleForPlan.provider],
       tools: { cwd: workspace },
-      permissions: { mode: 'plan' },
+      permissions: { approve: neverAsked, mode: 'plan' },
       subagents: { home: join(workspace, 'home') },
       loop: { singleTurn: false },
     });

@@ -156,13 +156,15 @@ schema 变化；压缩阈值、保留策略或跨边界携带的内容；权限�
 
 ## P1 调用与公共接口
 
-`createRuntime({ host, tools: { cwd, shellPath }, permissions, approvalUi, ... })`：
+`createRuntime({ host, tools: { cwd, shellPath }, permissions, ... })`：
 `cwd` 使用绝对工作区路径，`shellPath` 是明确的 bash 可执行路径；生产 worker 必须显式传 host carrier。
 `hostIo` / `exec` 是唯一 IO/子进程 service。无 tools 配置时不注册工具与权限服务。
 权限按 D14 分为 `mode: plan | agent` 与 `gear: ask | accept-edits | auto`，默认 agent + ask。
 plan 注册表不含写类工具；accept-edits 放行工作区内写、改和 bash，显式外部路径仍问；deny 优先。
-旧 `tier` 输入经迁移映射兼容，readonly 保留为 plan + ask；无审批回调时需审批的请求拒绝。
-`approvalUi` 接受现有 Extension UI bridge callbacks，`runtime.approval.bridge.respond()` 接用户响应。
+旧 `tier` 输入经迁移映射兼容，readonly 保留为 plan + ask。
+`permissions.approve` 在传了 `tools` 时**必填**：它是唯一的审批面，缺了就在 `createRuntime()`
+当场抛 `runtime_approval_missing`，不再等到第一次审批才以「工具被拒」的形式暴露
+（决策 012：原来的兜底审批面 Extension UI bridge 已整链退役）。
 `permissions.configure({ mode, gear })` 清空会话授权；一份 runtime 只服务同一会话，不用 grant 跨会话复用。
 
 P0 接口变化：`readPiCatalog(dir, env, io)`、`buildVersionStamp`、`TraceRun.finish` 改异步；

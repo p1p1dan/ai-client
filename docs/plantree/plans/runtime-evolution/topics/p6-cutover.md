@@ -73,6 +73,8 @@ ARD D8 同时写着「开关保留一个版本周期后再删」。当天用户�
 | `worker.ts` 入口、`workerHost` 载体、RPC 协议与类型、`piWorkerErrors.ts` | `piWorkerSession.ts`、`piAgentSessionBootstrap.ts`、`piLegacyImport.ts`、`piUtilityRunner.ts`、三个只服务旧引擎的 spike |
 | 会话时间线/树的投影（`piSessionTimeline.ts`、`piSessionTree.ts`）、`permissionPlugin` 的用户配置判定等 Main 在用的部分 | 后端开关 `src/shared/runtimeBackend.ts` 与 `RUNTIME_BACKEND_ENV` |
 
+> **2026-09-15 更正（T036 / 决策 012 / 审计 cutover-06）**：上表「保留」一栏的「RPC 协议与类型」当时把 Extension UI 那条链也裹了进去——`extensionUiBridge.ts` 以及 `extensionUi.request/cancelled/reset` 三个事件、`worker.extensionUi.respond` 命令、`chat:respondExtensionUi` 通道、渲染层两个 store 与四个组件。P6-5 之后 GUI 会话跑自有 runtime、不加载 pi 扩展，这条链全程没有生产者。**已于 T036 整链删除**，`createRuntimeApprovalBridge` 与 `bootstrap` 的 `?? approval?.approve` 回退一并删除，`permissions.approve` 改为必填。旧会话里残留的 `extensionUi.*` 事件回放时静默忽略（用例在 `nativeStreamReplay.test.ts`）。
+
 > **2026-09-15 更正（T025 / 审计 cutover-05、cutover-07）**：上表「保留」一栏当时把 `bundledFeaturePlugins`、`extensionInventory` 也列了进去，这是错的——两者在 P6-5 之后就只剩自己的测试在 import，Main 读的是 `bundledPlugins.mjs` 那张表。它们连同 `commandInventory` 已在 T025 删除。`permissionPlugin` 确实还有一个生产消费者，但只剩 `permissionPluginConfiguredByUser`（插件页读用户自己的 pi 配置）；同文件的注入决策与加载校验同批删除。
 
 ### 执行时查出来的三件事（都和原计划不一样）

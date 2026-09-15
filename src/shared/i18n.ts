@@ -202,14 +202,6 @@ export const zhTranslations: Record<string, string> = {
   'Branch already exists. Choose a different name.': '该分支已存在，请使用其他分支名',
   'Branch name': '新分支名',
   Cancel: '取消',
-  'Extension request': '扩展请求',
-  'Extension notification': '扩展通知',
-  'Extension warning': '扩展警告',
-  'Extension error': '扩展错误',
-  'This extension needs the Pi TUI': '此扩展需要 Pi TUI',
-  'The GUI does not support: {{methods}}. You can use these features in the TUI.':
-    'GUI 不支持：{{methods}}。你可以在 TUI 中使用这些功能。',
-  Request: '请求',
   '{{count}} pending approval requests': '{{count}} 个待审批请求',
   'Could not send your answer. Please try again.': '无法发送你的回答，请重试。',
   'Cancel staging all': '全部取消暂存',
@@ -1294,7 +1286,6 @@ export const zhTranslations: Record<string, string> = {
   'Language defined': '跟随语言',
   'Before whitespace': '空白字符前',
   Confirm: '确定',
-  // T08 — extension UI input/editor dialogs.
   Submit: '提交',
   'Image too large': '图片过大',
   'Max image size is {{size}}MB': '单张图片最大 {{size}}MB',

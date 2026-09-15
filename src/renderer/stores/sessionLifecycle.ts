@@ -1,12 +1,5 @@
-import {
-  type ExtensionUiDisplayState,
-  pruneExtensionUiDisplayState,
-} from '@/components/chat/extensionUiDisplayModel';
-import type { ExtensionUiState } from '@/components/chat/extensionUiModel';
 import type { SubagentActivityState } from '@/components/chat/subagentActivityModel';
 import type { SessionRuntimeFactsState } from '@/components/workspace-shell/surfaces/contextSurfaceModel';
-import { useExtensionUiStore } from './extensionUi';
-import { useExtensionUiDisplayStore } from './extensionUiDisplay';
 import { useMessageQueueStore } from './messageQueue';
 import { usePendingUserMessagesStore } from './pendingUserMessages';
 import { useSessionRuntimeFactsStore } from './sessionRuntimeFacts';
@@ -20,24 +13,6 @@ export function pruneRecordBySession<T>(
 ): Record<string, T> {
   const live = new Set(sessionIds);
   return Object.fromEntries(Object.entries(record).filter(([sessionId]) => live.has(sessionId)));
-}
-
-export function pruneExtensionUiState(
-  state: ExtensionUiState,
-  sessionIds: readonly string[]
-): ExtensionUiState {
-  const live = new Set(sessionIds);
-  const pending = state.pending.filter((dialog) =>
-    dialog.sessionId == null ? sessionIds.length > 0 : live.has(dialog.sessionId)
-  );
-  const pendingIds = new Set(pending.map((dialog) => dialog.uiRequestId));
-  return {
-    pending,
-    sending: state.sending.filter((id) => pendingIds.has(id)),
-    sendErrors: Object.fromEntries(
-      Object.entries(state.sendErrors).filter(([id]) => pendingIds.has(id))
-    ),
-  };
 }
 
 export function pruneSubagentActivityState(
@@ -86,29 +61,6 @@ export function resetSessionScopedRendererState(sessionId: string): void {
   useToolExpansionStore.setState((state) => ({
     bySession: omitSession(state.bySession, sessionId),
   }));
-  useExtensionUiStore.setState((state) => {
-    const pending = state.pending.filter((dialog) => dialog.sessionId !== sessionId);
-    const pendingIds = new Set(pending.map((dialog) => dialog.uiRequestId));
-    return {
-      pending,
-      sending: state.sending.filter((id) => pendingIds.has(id)),
-      sendErrors: Object.fromEntries(
-        Object.entries(state.sendErrors).filter(([id]) => pendingIds.has(id))
-      ),
-    };
-  });
-  useExtensionUiDisplayStore.setState((state) => ({
-    statuses: Object.fromEntries(
-      Object.entries(state.statuses).filter(([, item]) => item.sessionId !== sessionId)
-    ),
-    widgets: Object.fromEntries(
-      Object.entries(state.widgets).filter(([, item]) => item.sessionId !== sessionId)
-    ),
-    unsupported: Object.fromEntries(
-      Object.entries(state.unsupported).filter(([, item]) => item.sessionId !== sessionId)
-    ),
-    notifications: state.notifications.filter((item) => item.sessionId !== sessionId),
-  }));
   useSubagentActivityStore.setState((state) => {
     const liveSessionIds = [
       ...new Set(
@@ -141,9 +93,5 @@ export function pruneSessionScopedRendererState(sessionIds: readonly string[]): 
   useToolExpansionStore.setState((state) => ({
     bySession: pruneRecordBySession(state.bySession, sessionIds),
   }));
-  useExtensionUiStore.setState((state) => pruneExtensionUiState(state, sessionIds));
-  useExtensionUiDisplayStore.setState((state) =>
-    pruneExtensionUiDisplayState(state as ExtensionUiDisplayState, sessionIds)
-  );
   useSubagentActivityStore.setState((state) => pruneSubagentActivityState(state, sessionIds));
 }

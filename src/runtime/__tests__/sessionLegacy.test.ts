@@ -9,6 +9,7 @@ import type { RuntimeHostIoService } from '../contracts.ts';
 import { branchEntries, decodeSession, SESSION_MAX_BYTES } from '../plugins/session/codec.ts';
 import { convertLegacySession, prepareSessionConfig } from '../plugins/session/legacy.ts';
 import { JsonlSessionStore } from '../plugins/session/store.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 let dir: string;
 const runtimes: RuntimeHandle[] = [];
@@ -63,6 +64,7 @@ describe('P3-3 legacy session compatibility', () => {
       env: {},
       providers: [faux.provider],
       tools: { cwd: dir },
+      permissions: { approve: neverAsked },
       session: { file, cwd: dir, mode: 'resume' },
     });
     runtimes.push(runtime);

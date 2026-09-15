@@ -34,6 +34,7 @@ import {
   shapeForCheckpoint,
 } from '../plugins/context/compaction.ts';
 import type { CompactionFamily } from '../plugins/tools/new-context.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 const WINDOW = { contextWindow: 32_000, maxTokens: 4_096 };
 
@@ -64,6 +65,11 @@ async function runtime(
     env: {},
     host: standaloneHost({ PATH: process.env.PATH }),
     ...rest,
+    ...(rest.tools
+      ? { permissions: { approve: neverAsked, ...rest.permissions } }
+      : rest.permissions
+        ? { permissions: rest.permissions }
+        : {}),
   });
   runtimes.push(handle);
   return { handle, faux };

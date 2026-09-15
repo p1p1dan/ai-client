@@ -12,7 +12,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { describe, expect, it } from 'vitest';
-import { createRuntime, RUNTIME_CONFIG_VERSION } from '../bootstrap.ts';
+import {
+  createRuntime,
+  RUNTIME_CONFIG_VERSION,
+  type RuntimeBootstrapOptions,
+} from '../bootstrap.ts';
 import {
   LOOP_SERVICE,
   MODEL_SERVICE,
@@ -33,6 +37,42 @@ function faux(reply = 'ready') {
 }
 
 describe('createRuntime', () => {
+  /**
+   * decision 012 — the Extension UI bridge was the fallback approver, so
+   * `bootstrap` used to read `options.permissions?.approve ?? approval?.approve`
+   * and a host that supplied neither still got a runtime. It only failed at the
+   * first gate, mid-turn, as an opaque tool denial with no hint of the missing
+   * wiring. Tools imply a gate, so the refusal moved to construction.
+   */
+  it('refuses to build a runtime with tools and no way to answer a permission gate', async () => {
+    /**
+     * Reported as a plain value rather than asserted on the rejection: without
+     * the guard this call SUCCEEDS, and a `rejects` matcher would then try to
+     * print a live `RuntimeHandle` — whose Cordis context throws on the probes
+     * the pretty-printer makes, burying the real failure. This also disposes
+     * the runtime that should never have existed.
+     */
+    const build = (options: Partial<RuntimeBootstrapOptions>) =>
+      createRuntime({ providers: [faux().provider], env: {}, traceDir: null, ...options }).then(
+        async (handle) => {
+          await handle.dispose();
+          return { built: true, code: undefined, isHostError: false };
+        },
+        (error: unknown) => ({
+          built: false,
+          code: (error as { code?: string }).code,
+          isHostError: error instanceof RuntimeHostError,
+        })
+      );
+    const refused = { built: false, code: 'runtime_approval_missing', isHostError: true };
+
+    expect(await build({ tools: { cwd: process.cwd() }, permissions: {} })).toEqual(refused);
+    // Omitting the whole section is the same mistake, not a different one.
+    expect(await build({ tools: { cwd: process.cwd() } })).toEqual(refused);
+    // A runtime with no tools has no gate to answer, so it still builds.
+    expect(await build({})).toMatchObject({ built: true });
+  });
+
   it('brings up every P0 service and exposes them on the context', async () => {
     const runtime = await createRuntime({ providers: [faux().provider], env: {} });
     try {

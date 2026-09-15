@@ -7,6 +7,7 @@ import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from 
 import { standaloneHost } from '../host/config.ts';
 import { resolveWorkerShell } from '../host/shell.ts';
 import { normalizeShellPath, splitShellPath } from '../plugins/permissions/bash-analysis.ts';
+import { alwaysDenied } from './fixtures/approval.ts';
 
 let dir: string;
 let outside: string;
@@ -30,8 +31,10 @@ async function start(options: Partial<RuntimeBootstrapOptions> = {}) {
     // The shell the native worker would pick here: /bin/bash on Unix, the
     // installed Git Bash on Windows, so the AST policy is exercised on both.
     tools: { cwd: dir, shellPath: resolveWorkerShell(process.env as Record<string, string>) },
-    permissions: { gear: 'accept-edits' },
     ...options,
+    // The subject of this suite is the shell path gate, so the default approver
+    // refuses: a `tool_denied` below then means the command REACHED the gate.
+    permissions: { approve: alwaysDenied, ...(options.permissions ?? { gear: 'accept-edits' }) },
   });
   return runtime;
 }

@@ -12,7 +12,16 @@ export async function runHostToolsProbe(host: RuntimeHostConfig, cwd: string, sh
     host,
     tools: { cwd, shellPath },
     providers: [provider.provider],
-    permissions: { mode: 'agent', gear: 'accept-edits' },
+    permissions: {
+      mode: 'agent',
+      gear: 'accept-edits',
+      // decision 012 — `approve` is required with `tools`. The probe only
+      // touches its own workspace, so `accept-edits` answers everything it
+      // does; being asked here means the probe stopped proving that.
+      approve: (request) => {
+        throw new Error(`host tools probe was asked to approve ${request.tool}`);
+      },
+    },
     traceDir: cwd,
   });
   const text = (blocks: { type: string; text?: string }[]) =>

@@ -18,6 +18,7 @@ import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import type { AskUser, RuntimeQuestionAnswer } from '../plugins/tools/ask.ts';
 import { createQuestionPrompt } from '../worker/questionPrompt.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 function collector() {
   const events: RuntimeEventDraft[] = [];
@@ -142,6 +143,7 @@ describe('F5 ask tool', () => {
       traceDir: null,
       providers: [faux.provider],
       tools: { cwd: dir, ...(ask ? { ask } : {}) },
+      permissions: { approve: neverAsked },
     });
     runtimes.push(handle);
     return { handle, faux };

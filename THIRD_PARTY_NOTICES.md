@@ -44,7 +44,6 @@ Source: https://github.com/num-scope/pix
 
 AiClient includes adapted source from pix, notably:
 
-- `src/agent-host/extensionUiBridge.ts`
 - `src/main/services/terminal/piTuiSession.ts`
 
 MIT License

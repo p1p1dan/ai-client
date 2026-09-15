@@ -254,7 +254,6 @@ function createHarness(
       if (type === 'worker.compact') return { compacted: true };
       if (type === 'worker.fork.discard') return { discarded: true };
       if (type === 'worker.stop') return { stopped: true };
-      if (type === 'worker.extensionUi.respond') return { handled: true };
       if (type === 'worker.preview.respond') return { handled: true };
       if (type === 'worker.setPermissionTier' || type === 'worker.setPermissions')
         return { applied: true };
@@ -790,21 +789,12 @@ describe('WorkerManager identity and capacity', () => {
     expect(h.records[0].request).not.toHaveBeenCalled();
   });
 
-  it('protects active turns and blocking Extension UI requests from eviction', async () => {
+  it('protects active turns from eviction', async () => {
     const h = createHarness({ capacity: 2 });
     await create(h.manager, 'active');
-    await create(h.manager, 'blocking');
+    await create(h.manager, 'second');
     await h.manager.send({ sessionId: 'active', attemptId: 'attempt-active', text: 'hello' });
-    h.records[1].emit({
-      type: 'extensionUi.request',
-      sessionId: 'blocking',
-      payload: {
-        runtimeId: 'runtime-b',
-        uiRequestId: 'ui-b',
-        method: 'confirm',
-        args: { message: 'allow?' },
-      },
-    });
+    await h.manager.send({ sessionId: 'second', attemptId: 'attempt-second', text: 'hello' });
 
     await expect(create(h.manager, 'third')).rejects.toMatchObject({
       code: 'worker_capacity_reached',
@@ -1083,29 +1073,6 @@ describe('WorkerManager Pi history and real resume', () => {
     expect(await first).toBe(await duplicate);
     expect(h.createSlot).toHaveBeenCalledTimes(1);
     expect(h.events.filter((event) => event.type === 'session.resumed')).toHaveLength(1);
-
-    h.records[0].emit({
-      type: 'extensionUi.request',
-      sessionId: 's1',
-      payload: {
-        runtimeId: 'runtime-owner',
-        uiRequestId: 'ui-owner',
-        method: 'confirm',
-        args: { message: 'owner?' },
-      },
-    });
-    await expect(
-      h.manager.respondExtensionUi(
-        { runtimeId: 'runtime-owner', uiRequestId: 'ui-owner', ok: true, value: true },
-        11
-      )
-    ).rejects.toMatchObject({ code: 'extension_ui_owner_mismatch' });
-    await expect(
-      h.manager.respondExtensionUi(
-        { runtimeId: 'runtime-owner', uiRequestId: 'ui-owner', ok: true, value: true },
-        22
-      )
-    ).resolves.toMatch(/^extui-/);
   });
 
   it('reuses a ready exact slot for fresh history and paginates older rows without spawning', async () => {
@@ -1689,175 +1656,24 @@ describe('WorkerManager isolation and crash recovery', () => {
     expect(h.manager.getSlotSnapshots().every((slot) => !slot.foreground)).toBe(true);
   });
 
-  it('dismisses a blocking request when its owning window closes', async () => {
-    const h = createHarness();
-    await create(h.manager, 's1', 11);
-    const dismissGate: { finish?: () => void } = {};
-    h.records[0].request.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          dismissGate.finish = () => resolve({ handled: true });
-        })
-    );
-    h.records[0].emit({
-      type: 'extensionUi.request',
-      sessionId: 's1',
-      payload: {
-        runtimeId: 'runtime-1',
-        uiRequestId: 'ui-close',
-        method: 'confirm',
-        args: { message: 'allow?' },
-      },
-    });
-
-    h.manager.releaseWindow(11);
-    await vi.waitFor(() =>
-      expect(h.records[0].request).toHaveBeenCalledWith(
-        'worker.extensionUi.respond',
-        expect.objectContaining({
-          logicalSessionId: 's1',
-          response: expect.objectContaining({ uiRequestId: 'ui-close', ok: false }),
-        })
-      )
-    );
-    await expect(
-      h.manager.respondExtensionUi(
-        { runtimeId: 'runtime-1', uiRequestId: 'ui-close', ok: true, value: true },
-        22
-      )
-    ).rejects.toMatchObject({ code: 'extension_ui_request_not_found' });
-    dismissGate.finish?.();
-    await vi.waitFor(() =>
-      expect(h.manager.getSlotSnapshots()[0]?.pendingBlockingRequests).toBe(0)
-    );
-    expect(h.events.at(-1)).toMatchObject({
-      type: 'extensionUi.cancelled',
-      sessionId: 's1',
-      payload: { uiRequestIds: ['ui-close'], reason: 'aborted' },
-    });
-  });
-
-  it('keeps display events non-blocking and resets each runtime on config invalidation', async () => {
+  it('replaces every slot on config invalidation', async () => {
     const h = createHarness();
     await create(h.manager, 's1', 11);
     await create(h.manager, 's2', 22);
-    h.records[0].emit({
-      type: 'extensionUi.request',
-      sessionId: 's1',
-      payload: {
-        runtimeId: 'runtime-a',
-        uiRequestId: 'status-a',
-        method: 'setStatus',
-        args: { key: 'lint', text: 'running' },
-      },
-    });
-    h.records[1].emit({
-      type: 'extensionUi.request',
-      sessionId: 's2',
-      payload: {
-        runtimeId: 'runtime-b',
-        uiRequestId: 'widget-b',
-        method: 'setWidget',
-        args: { key: 'tests', content: ['running'] },
-      },
-    });
 
-    expect(h.manager.getSlotSnapshots().map((slot) => slot.pendingBlockingRequests)).toEqual([
-      0, 0,
-    ]);
     await h.manager.invalidateAll();
 
-    expect(h.events).toContainEqual(
-      expect.objectContaining({
-        type: 'extensionUi.reset',
-        sessionId: 's1',
-        payload: { runtimeId: 'runtime-a', reason: 'session_replaced' },
-      })
-    );
-    expect(h.events).toContainEqual(
-      expect.objectContaining({
-        type: 'extensionUi.reset',
-        sessionId: 's2',
-        payload: { runtimeId: 'runtime-b', reason: 'session_replaced' },
-      })
-    );
     expect(h.records[0].dispose).toHaveBeenCalledWith('slot-replace');
     expect(h.records[1].dispose).toHaveBeenCalledWith('slot-replace');
   });
 
-  it('routes a blocking response to its exact slot and rejects another window', async () => {
+  it('closes one session without touching another slot', async () => {
     const h = createHarness();
     await create(h.manager, 's1', 11);
     await create(h.manager, 's2', 22);
-    h.records[0].emit({
-      type: 'extensionUi.request',
-      sessionId: 's1',
-      payload: {
-        runtimeId: 'runtime-1',
-        uiRequestId: 'ui-1',
-        method: 'select',
-        args: { options: ['a'] },
-      },
-    });
-
-    await expect(
-      h.manager.respondExtensionUi(
-        { runtimeId: 'runtime-1', uiRequestId: 'ui-1', ok: true, value: 'a' },
-        22
-      )
-    ).rejects.toMatchObject({ code: 'extension_ui_owner_mismatch' });
-    await h.manager.respondExtensionUi(
-      { runtimeId: 'runtime-1', uiRequestId: 'ui-1', ok: true, value: 'a' },
-      11
-    );
-    expect(h.records[0].request).toHaveBeenCalledWith(
-      'worker.extensionUi.respond',
-      expect.objectContaining({ logicalSessionId: 's1' })
-    );
-    expect(h.records[1].request).not.toHaveBeenCalled();
-  });
-
-  it('closes one session with cancel/reset and rejects a stale response without touching another slot', async () => {
-    const h = createHarness();
-    await create(h.manager, 's1', 11);
-    await create(h.manager, 's2', 22);
-    h.records[0].emit({
-      type: 'extensionUi.request',
-      sessionId: 's1',
-      payload: {
-        runtimeId: 'runtime-a',
-        uiRequestId: 'ui-a',
-        method: 'confirm',
-        args: { message: 'allow?' },
-      },
-    });
 
     await h.manager.closeSession('s1');
 
-    expect(h.events).toContainEqual(
-      expect.objectContaining({
-        type: 'extensionUi.cancelled',
-        sessionId: 's1',
-        payload: {
-          runtimeId: 'runtime-a',
-          uiRequestIds: ['ui-a'],
-          reason: 'session_closed',
-        },
-      })
-    );
-    expect(h.events).toContainEqual(
-      expect.objectContaining({
-        type: 'extensionUi.reset',
-        sessionId: 's1',
-        payload: { runtimeId: 'runtime-a', reason: 'session_closed' },
-      })
-    );
-    await expect(
-      h.manager.respondExtensionUi(
-        { runtimeId: 'runtime-a', uiRequestId: 'ui-a', ok: true, value: true },
-        11
-      )
-    ).rejects.toMatchObject({ code: 'extension_ui_request_not_found' });
     expect(h.records[1].request).not.toHaveBeenCalled();
     expect(h.manager.getSlotSnapshots()).toEqual([
       expect.objectContaining({ logicalSessionId: 's2', state: 'ready' }),
@@ -1873,16 +1689,6 @@ describe('WorkerManager isolation and crash recovery', () => {
       attemptId: 'attempt-s1',
       text: 'hello',
     });
-    h.records[0].emit({
-      type: 'extensionUi.request',
-      sessionId: 's1',
-      payload: {
-        runtimeId: 'runtime-crash',
-        uiRequestId: 'ui-crash',
-        method: 'confirm',
-        args: { message: 'allow?' },
-      },
-    });
     h.records[0].crash('boom');
 
     await vi.waitFor(() => expect(h.records).toHaveLength(3));
@@ -1895,24 +1701,6 @@ describe('WorkerManager isolation and crash recovery', () => {
       (event) => event.type === 'session.failed' && event.requestId === turnId
     );
     expect(terminal).toHaveLength(1);
-    expect(h.events).toContainEqual(
-      expect.objectContaining({
-        type: 'extensionUi.cancelled',
-        sessionId: 's1',
-        payload: expect.objectContaining({
-          runtimeId: 'runtime-crash',
-          uiRequestIds: ['ui-crash'],
-          reason: 'host_shutdown',
-        }),
-      })
-    );
-    expect(h.events).toContainEqual(
-      expect.objectContaining({
-        type: 'extensionUi.reset',
-        sessionId: 's1',
-        payload: { runtimeId: 'runtime-crash', reason: 'host_shutdown' },
-      })
-    );
     expect(h.createSlot.mock.calls[2][0]).toMatchObject({
       logicalSessionId: 's1',
       sessionFile: '/sessions/s1.jsonl',

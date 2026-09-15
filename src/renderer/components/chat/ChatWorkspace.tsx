@@ -3,8 +3,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { useExtensionUiStore } from '@/stores/extensionUi';
-import { useExtensionUiDisplayStore } from '@/stores/extensionUiDisplay';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import { markSessionsLive } from '@/stores/sessionRetirement';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
@@ -12,13 +10,6 @@ import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { AgentTerminal } from './AgentTerminal';
 import { ChatComposer } from './ChatComposer';
 import { ChatWelcomeCard } from './ChatWelcomeCard';
-import { ExtensionUiDialog, ExtensionUiInlineDock } from './ExtensionUiDialog';
-import {
-  ExtensionUiNotificationEffects,
-  ExtensionUiStatusChips,
-  ExtensionUiUnsupportedNotice,
-  ExtensionUiWidgets,
-} from './ExtensionUiSurfaces';
 import { HostStatusBanner } from './HostStatusBanner';
 import { selectHistoryError } from './historyError';
 import { MessageTimeline } from './MessageTimeline';
@@ -172,21 +163,6 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
     return useSubagentActivityStore.getState().init();
   }, []);
 
-  useEffect(() => {
-    // T11: same latch discipline as the two above. Owned at app level and not
-    // by the dialog component, which by definition is not mounted until a
-    // request has already arrived — a listener installed there could never see
-    // the event that would have created its own dialog.
-    return useExtensionUiStore.getState().init();
-  }, []);
-
-  useEffect(() => {
-    // T10: fire-and-forget status/widget/unsupported events need the same
-    // app-lifetime listener ownership. A leaf chip cannot install this listener:
-    // the event that creates the first chip would already have passed.
-    return useExtensionUiDisplayStore.getState().init();
-  }, []);
-
   // Review fix: the latch would otherwise grow unbounded across a long run —
   // prune ids whose sessions no longer exist (removed / retired by tree sync).
   useEffect(() => {
@@ -268,10 +244,6 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
               jumpToBottomRequest={sendJumpRequest}
             />
           )}
-          <ExtensionUiStatusChips sessionId={activeSessionId} />
-          <ExtensionUiUnsupportedNotice sessionId={activeSessionId} onOpenTui={openTui} />
-          <ExtensionUiInlineDock sessionId={activeSessionId} />
-          <ExtensionUiWidgets sessionId={activeSessionId} placement="aboveEditor" />
           {/* F5: the only answerable copy of a live question. Above the
               composer rather than in the timeline so it cannot scroll away
               while the session waits on it. */}
@@ -300,7 +272,6 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
               onSendStart={markSendAttempt}
             />
           </div>
-          <ExtensionUiWidgets sessionId={activeSessionId} placement="belowEditor" />
         </>
       )}
       {/* Held over the timeline while the session is re-read from disk, so the
@@ -310,8 +281,6 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
           Reloading this chat…
         </div>
       )}
-      <ExtensionUiNotificationEffects />
-      <ExtensionUiDialog />
     </section>
   );
 }

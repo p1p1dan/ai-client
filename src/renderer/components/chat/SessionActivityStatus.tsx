@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Spinner } from '@/components/ui/spinner';
 import { useI18n } from '@/i18n';
 import { type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
-import { useExtensionUiStore } from '@/stores/extensionUi';
 import { countAssistantReplyChars } from './chatTurn';
 
 /** The current turn is everything after the last user prompt. */
@@ -25,9 +24,6 @@ export function SessionActivityStatus({ sessionId }: { sessionId: string | null 
   );
   const replyChars = useChatSessionsStore((state) =>
     sessionId ? currentReplyChars(state.messages[sessionId]) : 0
-  );
-  const pendingExtension = useExtensionUiStore((state) =>
-    state.pending.find((request) => request.sessionId === sessionId)
   );
   const activity = session?.activity;
   const [now, setNow] = useState(Date.now);
@@ -53,19 +49,21 @@ export function SessionActivityStatus({ sessionId }: { sessionId: string | null 
     failed: 'Failed',
     stopping: 'Stopping',
   } as const;
-  const kind = pendingExtension
-    ? 'confirmation'
-    : (activity?.phase ?? (session.status.startsWith('waiting_') ? 'confirmation' : 'waiting'));
-  const since = pendingExtension?.receivedAt ?? activity?.since;
+  // decision 012 — the Extension UI dialog used to be a third way to be
+  // "waiting for confirmation"; what is left is the session's own
+  // `waiting_permission` / `waiting_question` status.
+  const kind =
+    activity?.phase ?? (session.status.startsWith('waiting_') ? 'confirmation' : 'waiting');
+  const since = activity?.since;
   const elapsed = since !== undefined ? Math.max(0, Math.floor((now - since) / 1000)) : null;
-  const retry = pendingExtension ? undefined : activity?.retry;
+  const retry = activity?.retry;
   const delay =
     retry?.delayMs && activity
       ? Math.max(0, Math.ceil((activity.since + retry.delayMs - now) / 1000))
       : null;
   const label = [
     t(labels[kind]),
-    pendingExtension ? undefined : activity?.tool,
+    activity?.tool,
     retry && retry.attempt > 0
       ? retry.maxRetries > 0
         ? `${retry.attempt}/${retry.maxRetries}`

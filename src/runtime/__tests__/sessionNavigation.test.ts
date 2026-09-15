@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 let dir: string;
 const handles: RuntimeHandle[] = [];
@@ -118,6 +119,7 @@ it('restores checkpoint, model, thinking and D14 permissions of the selected bra
     env: {},
     providers: [faux.provider],
     tools: { cwd: dir },
+    permissions: { approve: neverAsked },
     session: { file, cwd: dir, mode: 'create' },
   });
   handles.push(handle);
@@ -155,6 +157,7 @@ it('restores checkpoint, model, thinking and D14 permissions of the selected bra
     env: {},
     providers: [faux.provider],
     tools: { cwd: dir },
+    permissions: { approve: neverAsked },
     session: { file, cwd: dir, mode: 'resume' },
   });
   handles.push(reopened);

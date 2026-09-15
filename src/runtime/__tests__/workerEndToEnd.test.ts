@@ -7,7 +7,6 @@ import {
   fauxToolCall,
 } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ExtensionUiRequest } from '../../agent-host/extensionUiBridge.ts';
 import { PiWorkerRpcServer } from '../../agent-host/piWorkerRpcServer.ts';
 import type { RuntimeEvent } from '../../shared/types/runtimeEvents.ts';
 import type { SessionTreeSnapshot } from '../../shared/types/sessionHistory.ts';
@@ -579,7 +578,10 @@ describe('native backend end to end (P4-4)', () => {
     outbound = [];
     await send('write auto.txt', 'turn-2');
     await turnIdle();
-    expect(events().some((event) => event.type === 'extensionUi.request')).toBe(false);
+    // decision 012 — the Extension UI dialog was the old way to be asked; the
+    // only ask channel left is `permission.requested`, and this tier must not
+    // raise one.
+    expect(events().some((event) => event.type === 'permission.requested')).toBe(false);
     await expect(readFile(join(workspace, 'auto.txt'), 'utf8')).resolves.toBe('ok\n');
   });
 });

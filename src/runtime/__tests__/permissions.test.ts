@@ -17,11 +17,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import type { ExtensionUiRequest } from '../../agent-host/extensionUiBridge.ts';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import { permissionActivityEvent } from '../plugins/permissions/activity.ts';
-import { createRuntimeApprovalBridge } from '../plugins/permissions/bridge.ts';
 import {
   PERMISSION_TIMEOUT_REASON,
   type PermissionActivityRecord,
@@ -190,61 +188,4 @@ it('sends no action at all for a tool it has no sentence for', async () => {
   expect(events[0]?.payload).not.toHaveProperty('action');
   controller.abort();
   await pending;
-});
-
-/**
- * cutover-17 — the Extension UI fallback gate.
- *
- * This arm is unreachable from the app (`nativeWorkerRuntime` always supplies
- * its own `approve`, so `bootstrap`'s `??` never falls through) but it is a
- * supported way to embed the runtime, and it had two defects worth a test:
- * three hardcoded Chinese options, and an answer mapped back by comparing the
- * returned string to those literals — so any re-wording turned "allow" into
- * "deny" silently. Both assertions below fail on the old code.
- */
-async function offeredChoices() {
-  const requests: ExtensionUiRequest[] = [];
-  const approval = createRuntimeApprovalBridge({
-    runtimeId: 'bridge-1',
-    onRequest: (request) => requests.push(request),
-  });
-  const controller = new AbortController();
-  const decision = approval.approve(
-    { tool: 'write', toolCallId: 'call-1', path: join(dir, 'note.txt') },
-    controller.signal
-  );
-  // The select is emitted synchronously by `ui.select`, so one microtask turn
-  // is enough; no polling helper needed here.
-  await Promise.resolve();
-  const args = requests[0]?.args as { options?: string[] } | undefined;
-  return { approval, requests, decision, values: args?.options ?? [] };
-}
-
-it('offers the fallback approval options in the catalog language, not Chinese', async () => {
-  const { approval, requests, decision, values } = await offeredChoices();
-  expect(values).toEqual(['Allow once', 'Allow for this session', 'Deny']);
-  expect(values.some((value) => /[一-鿿]/.test(value))).toBe(false);
-  approval.bridge.respond({
-    runtimeId: requests[0].runtimeId,
-    uiRequestId: requests[0].uiRequestId,
-    ok: true,
-    value: values[1],
-  });
-  await expect(decision).resolves.toBe('allow-session');
-  approval.bridge.dispose();
-});
-
-it('denies a fallback answer it did not offer rather than guessing at it', async () => {
-  const { approval, requests, decision } = await offeredChoices();
-  approval.bridge.respond({
-    runtimeId: requests[0].runtimeId,
-    uiRequestId: requests[0].uiRequestId,
-    ok: true,
-    // What a translated or re-worded dialog would send back. Position in the
-    // array we sent is the mapping now, so an unknown string is unknown —
-    // it cannot accidentally be position 0 and allow the write.
-    value: '允许一次',
-  });
-  await expect(decision).resolves.toBe('deny');
-  approval.bridge.dispose();
 });

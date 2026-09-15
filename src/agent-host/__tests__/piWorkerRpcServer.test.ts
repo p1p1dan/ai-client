@@ -99,7 +99,6 @@ function runtime(overrides: Partial<PiWorkerRuntime> = {}): PiWorkerRuntime {
     fork: notCalled('fork') as PiWorkerRuntime['fork'],
     discardFork: notCalled('discardFork') as PiWorkerRuntime['discardFork'],
     stop: async () => ({ stopped: true }),
-    respondExtensionUi: () => true,
     respondPermission: notCalled('respondPermission') as PiWorkerRuntime['respondPermission'],
     respondQuestion: notCalled('respondQuestion') as PiWorkerRuntime['respondQuestion'],
     respondPreview: notCalled('respondPreview') as PiWorkerRuntime['respondPreview'],
@@ -374,31 +373,6 @@ describe('PiWorkerRpcServer', () => {
       type: 'runtime.event',
       payload: { type: 'session.status', sessionId: 'logical-1', seq: 1 },
     });
-  });
-
-  it('routes Extension UI responses to the owned runtime', async () => {
-    const messages: Array<Record<string, unknown>> = [];
-    const respondExtensionUi = vi.fn(() => true);
-    const server = new PiWorkerRpcServer({
-      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
-      generation: 3,
-      projectTrusted: false,
-      ...engineFactories,
-      createRuntime: () => runtime({ respondExtensionUi }),
-    });
-    server.receive(
-      request('bootstrap', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
-    );
-    await vi.waitFor(() => expect(messages).toHaveLength(1));
-    server.receive(
-      request('ui', 'worker.extensionUi.respond', {
-        logicalSessionId: 'logical-1',
-        response: { runtimeId: 'runtime-1', uiRequestId: 'ui-1', ok: false },
-      })
-    );
-    await vi.waitFor(() => expect(messages).toHaveLength(2));
-    expect(respondExtensionUi).toHaveBeenCalledTimes(1);
-    expect(messages[1]).toMatchObject({ result: { handled: true } });
   });
 
   it('routes one-shot utility start and cancellation without constructing a session runtime', async () => {

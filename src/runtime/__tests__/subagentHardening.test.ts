@@ -43,6 +43,7 @@ import {
   subagentHistorySummaries,
   subagentHistoryUsage,
 } from '../plugins/subagent/records.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 function usage(overrides: Partial<Usage> = {}): Usage {
   return {
@@ -314,7 +315,7 @@ describe('T020 · wired', () => {
       env: {},
       providers: [handle.provider],
       tools: { cwd: workspace },
-      permissions: { gear: 'auto' },
+      permissions: { approve: neverAsked, gear: 'auto' },
       session: { cwd: workspace, mode: 'create', file: join(workspace, 'session.jsonl') },
       subagents: {
         home: join(workspace, 'home'),

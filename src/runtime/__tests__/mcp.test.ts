@@ -35,6 +35,7 @@ import {
   MCP_OUTPUT_BYTES,
   mcpToolName,
 } from '../plugins/mcp/index.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'mcp-echo-server.mjs');
 
@@ -364,11 +365,11 @@ describe('P5-3 bridge against a real stdio server', () => {
       providers: [faux.provider],
       tools: { cwd: root },
       agentDir,
-      // `auto` so the gate resolves without a card; the gate itself has its own
-      // assertion below.
-      permissions: { gear: 'auto' },
       mcp: { connectTimeoutMs: 15_000 },
       ...options,
+      // `auto` so the gate resolves without a card; the gate itself has its own
+      // assertion below.
+      permissions: { approve: neverAsked, ...(options.permissions ?? { gear: 'auto' }) },
     });
     runtimes.push(handle);
     return { handle, faux };

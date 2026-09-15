@@ -11,11 +11,7 @@ import { stat } from 'node:fs/promises';
 import { IPC_CHANNELS } from '@shared/types';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import { PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
-import type {
-  ExtensionUiResponse,
-  PermissionDecisionId,
-  RuntimeEvent,
-} from '@shared/types/runtimeEvents';
+import type { PermissionDecisionId, RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import {
   isSessionPermissionTier,
@@ -27,19 +23,7 @@ import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspace
 import { adoptTempWorkspace } from '../services/agent-host/TempWorkspaceService';
 import { WorkerManagerError, workerManager } from '../services/agent-host/WorkerManager';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
-import { ExtensionUiRouter } from '../services/chat/extensionUiRouting';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
-
-/**
- * Which window drove which session — see `extensionUiRouting.ts` for why a
- * blocking dialog must not be broadcast.
- */
-const extensionUiRouter = new ExtensionUiRouter({
-  isWindowAlive: (webContentsId) =>
-    BrowserWindow.getAllWindows().some(
-      (win) => !win.isDestroyed() && win.webContents.id === webContentsId
-    ),
-});
 
 /** The window that sent this IPC call, when it still exists. */
 const windowCleanupAttached = new Set<number>();
@@ -58,13 +42,11 @@ function claimSessionForSender(
   // session create because it could not work out which window asked.
   const webContentsId = ownerIdFor(event);
   if (!sessionId || webContentsId === undefined) return webContentsId;
-  extensionUiRouter.claimSession(sessionId, webContentsId);
   workerManager.claimSession(sessionId, webContentsId);
   if (!windowCleanupAttached.has(webContentsId) && typeof event?.sender?.once === 'function') {
     windowCleanupAttached.add(webContentsId);
     event.sender.once('destroyed', () => {
       windowCleanupAttached.delete(webContentsId);
-      extensionUiRouter.releaseWindow(webContentsId);
       workerManager.releaseWindow(webContentsId);
     });
   }
@@ -92,13 +74,12 @@ async function isUnwrittenPiSession(row: SessionIndexEntry): Promise<boolean> {
 }
 
 function broadcastRuntimeEvent(event: RuntimeEvent): void {
-  // `undefined` = every window, which is the rule for everything except a
-  // blocking Extension UI dialog. Narrowing the whole stream would break a
-  // second window that legitimately mirrors the same session.
-  const targets = extensionUiRouter.targetsFor(event);
+  // Every window. The one event that was ever narrowed to a single window was
+  // the blocking Extension UI dialog, retired by decision 012; narrowing any of
+  // what is left would break a second window that legitimately mirrors the same
+  // session.
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue;
-    if (targets && !targets.includes(win.webContents.id)) continue;
     try {
       win.webContents.send(IPC_CHANNELS.CHAT_RUNTIME_EVENT, event);
     } catch {
@@ -527,29 +508,8 @@ export function registerChatHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.CHAT_CLOSE_SESSION,
     async (_e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
-      extensionUiRouter.releaseSession(payload.sessionId);
       workerManager.releaseSession(payload.sessionId);
       const requestId = await workerManager.closeSession(payload.sessionId);
-      return { requestId };
-    }
-  );
-
-  /**
-   * T11 — the renderer's answer to one extension UI dialog.
-   *
-   * Main is a passthrough here, deliberately: it cannot validate the answer
-   * because it does not know what the extension asked or what it will do with
-   * the reply. The Host's bridge owns every check that matters (right bridge
-   * instance, dialog still pending, fallback on a dismissal), and duplicating
-   * half of them here would create a second place for them to drift.
-   */
-  ipcMain.handle(
-    IPC_CHANNELS.CHAT_RESPOND_EXTENSION_UI,
-    async (e, payload: ExtensionUiResponse): Promise<{ requestId: string }> => {
-      const requestId = await workerManager.respondExtensionUi(payload, ownerIdFor(e));
-      // Forget only after the authoritative slot acknowledges the response so
-      // a transient failure can be retried by the same owner.
-      extensionUiRouter.forgetRequest(payload.uiRequestId);
       return { requestId };
     }
   );

@@ -71,7 +71,7 @@ run on their matching OS or through the Build workflow.
 - Provider and model selection through Pi configuration
 - Streaming messages, tool/thinking timeline, queue and Stop
 - Persistent history, branch tree, rewind, and fork
-- Extension UI permission prompts rendered in the desktop GUI
+- Structured permission prompts rendered in the desktop GUI
 - GUI ↔ Pi TUI handoff with a single-writer session guard
 - Worker crash recovery, idle reclamation, and clean process shutdown
 

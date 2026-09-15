@@ -103,7 +103,6 @@ export { CONTEXT_SERVICE } from './plugins/context/index.ts';
 export type { CatalogModel, CatalogProvider, PiCatalog } from './plugins/model-adapter/catalog.ts';
 export { readPiCatalog } from './plugins/model-adapter/catalog.ts';
 export type { ModelAdapterConfig } from './plugins/model-adapter/index.ts';
-export { createRuntimeApprovalBridge } from './plugins/permissions/bridge.ts';
 export type {
   PermissionConfig,
   PermissionScope,

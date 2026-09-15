@@ -11,6 +11,7 @@ import {
   releaseWriterLock,
   type WriterLock,
 } from '../plugins/session/writerLock.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 let dir: string;
 const live = new Set<RuntimeHandle>();
@@ -41,6 +42,7 @@ async function runtime(
     tools: { cwd: dir },
     session: { file: file(), cwd: dir, mode },
     ...options,
+    permissions: { approve: neverAsked, ...options.permissions },
   });
   live.add(handle);
   return handle;

@@ -31,7 +31,6 @@ interface Fake {
   runs: RuntimeRunRequest[];
   emit(event: RuntimeEventDraft): void;
   settle(result?: Partial<RuntimeRunResult>): void;
-  cancelled: string[];
   disposed: number;
   configured: unknown[];
 }
@@ -93,7 +92,6 @@ function fakeRuntime(
   const fake: Fake = {
     options: null,
     runs: [],
-    cancelled: [],
     disposed: 0,
     configured: [],
     emit: (event) => listener?.(event),
@@ -159,7 +157,6 @@ function fakeRuntime(
           },
         }
       : {}),
-    approval: { bridge: { cancelAll: (reason: string) => fake.cancelled.push(reason) } },
     run: (request: RuntimeRunRequest) => {
       fake.runs.push(request);
       return new Promise<RuntimeRunResult>((resolve) => {
@@ -494,7 +491,7 @@ describe('NativeWorkerRuntime turns', () => {
     fake.settle();
   });
 
-  it('stop aborts the run and settles parked approval dialogs', async () => {
+  it('stop aborts the run, which is what settles a parked permission gate', async () => {
     const fake = fakeRuntime();
     const { runtime, events } = build(fake);
     live = runtime;
@@ -508,10 +505,11 @@ describe('NativeWorkerRuntime turns', () => {
       fake.runs[0]?.signal?.addEventListener('abort', () => resolve());
     });
     const stopping = runtime.stop({ logicalSessionId: 'logical-1', reason: 'user' });
+    // decision 012 — this used to need a second step. A tool parked on the
+    // Extension UI bridge was waiting on a promise the abort did not reach, so
+    // `stop` had to cancel that bridge by hand. The only gate left parks on the
+    // tool's own signal, which is the run signal this abort carries.
     await aborted;
-    // Aborting only unblocks the model loop; a tool waiting on a permission
-    // answer is waiting on the bridge, which has to be settled separately.
-    expect(fake.cancelled).toEqual(['aborted']);
     fake.settle({ success: false, stopReason: 'aborted' });
     await expect(stopping).resolves.toEqual({ stopped: true });
     expect(events).toContainEqual(

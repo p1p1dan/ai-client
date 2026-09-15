@@ -20,7 +20,7 @@ import {
   type WorkerReconcileImportedSessionPayload,
   type WorkerReconcileImportedSessionResult,
 } from './legacyImport.ts';
-import type { ExtensionUiResponse, PermissionDecisionId, RuntimeEvent } from './runtimeEvents';
+import type { PermissionDecisionId, RuntimeEvent } from './runtimeEvents';
 import {
   isRuntimePermissionSettings,
   type RuntimePermissionSettings,
@@ -497,25 +497,14 @@ export interface WorkerStopResult {
   stopped: boolean;
 }
 
-export interface WorkerExtensionUiResponsePayload {
-  logicalSessionId: string;
-  response: ExtensionUiResponse;
-}
-
-export interface WorkerExtensionUiResponseResult {
-  handled: boolean;
-}
-
 /**
  * The user's answer to one `permission.requested` event.
  *
- * Separate from `worker.extensionUi.respond` because the two are different
- * questions with different lifetimes: an extension UI dialog is a pi
- * extension's blocking call, keyed by a bridge-local `uiRequestId`, while a
- * permission is the runtime's own gate, keyed by the `permissionId` the
- * timeline block and the pending queue already carry. Routing permissions
- * through the dialog channel is what made the card a field dump — see the
- * permission card work of 2026-09-10.
+ * Keyed by the `permissionId` the timeline block and the pending queue already
+ * carry, because a permission is the runtime's own gate. It used to share this
+ * lane with the Extension UI dialog channel (retired by decision 012), and
+ * routing permissions through that channel is what made the card a field dump —
+ * see the permission card work of 2026-09-10.
  */
 export interface WorkerPermissionRespondPayload {
   logicalSessionId: string;
@@ -535,10 +524,10 @@ export interface WorkerPermissionRespondResult {
 /**
  * F5 — the user's answer to one `question.requested`.
  *
- * A third channel next to the permission answer and the extension-UI dialog,
- * for the same reason those two are separate: different question, different
- * lifetime, different id space. A question is the `ask` tool's own, keyed by
- * the `questionId` the card and the timeline block already carry.
+ * A separate channel from the permission answer, for the same reason the two
+ * are separate: different question, different lifetime, different id space. A
+ * question is the `ask` tool's own, keyed by the `questionId` the card and the
+ * timeline block already carry.
  *
  * `answers` and `response` are exclusive, and `cancel` beats both — the card's
  * Skip is not a refusal, it is "decide this yourself", which is why it has to
@@ -669,10 +658,6 @@ export type WorkerDiscardForkRequest = WorkerRpcRequest<
   WorkerDiscardForkPayload
 >;
 export type WorkerStopRequest = WorkerRpcRequest<'worker.stop', WorkerStopPayload>;
-export type WorkerExtensionUiResponseRequest = WorkerRpcRequest<
-  'worker.extensionUi.respond',
-  WorkerExtensionUiResponsePayload
->;
 export type WorkerPermissionRespondRequest = WorkerRpcRequest<
   'worker.permission.respond',
   WorkerPermissionRespondPayload
@@ -1260,19 +1245,6 @@ export function isWorkerStopResult(value: unknown): value is WorkerStopResult {
   return isRecord(value) && typeof value.stopped === 'boolean';
 }
 
-export function isWorkerExtensionUiResponsePayload(
-  value: unknown
-): value is WorkerExtensionUiResponsePayload {
-  if (!isRecord(value) || typeof value.logicalSessionId !== 'string') return false;
-  if (!isRecord(value.response)) return false;
-  return (
-    typeof value.response.runtimeId === 'string' &&
-    typeof value.response.uiRequestId === 'string' &&
-    typeof value.response.ok === 'boolean' &&
-    (value.response.error === undefined || typeof value.response.error === 'string')
-  );
-}
-
 const PERMISSION_DECISIONS = new Set(['allow', 'allow_session', 'deny', 'cancel']);
 
 export function isWorkerPermissionRespondPayload(
@@ -1328,12 +1300,6 @@ export function isWorkerPreviewRespondResult(value: unknown): value is WorkerPre
 export function isWorkerQuestionRespondResult(
   value: unknown
 ): value is WorkerQuestionRespondResult {
-  return isRecord(value) && typeof value.handled === 'boolean';
-}
-
-export function isWorkerExtensionUiResponseResult(
-  value: unknown
-): value is WorkerExtensionUiResponseResult {
   return isRecord(value) && typeof value.handled === 'boolean';
 }
 

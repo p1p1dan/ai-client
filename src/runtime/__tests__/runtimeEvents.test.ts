@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import { RuntimeEventProjector } from '../events/projector.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 const runtimes: RuntimeHandle[] = [];
 const dirs: string[] = [];
@@ -33,7 +34,12 @@ it('projects a real tool run with text, thinking, tool result, usage and termina
     ),
     fauxAssistantMessage('Done.'),
   ]);
-  const r = await createRuntime({ env: {}, providers: [faux.provider], tools: { cwd: dir } });
+  const r = await createRuntime({
+    env: {},
+    providers: [faux.provider],
+    tools: { cwd: dir },
+    permissions: { approve: neverAsked },
+  });
   runtimes.push(r);
   const events: RuntimeEventDraft[] = [];
   r.events.subscribe((event) => events.push(event));
@@ -92,6 +98,7 @@ it('keeps its own bookkeeping off the wire, stamps the run identity, and preserv
     env: {},
     providers: [faux.provider],
     tools: { cwd: dir },
+    permissions: { approve: neverAsked },
     session: { file, cwd: dir, mode: 'create' },
   });
   runtimes.push(first);

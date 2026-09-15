@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
 import { decodeSession } from '../plugins/session/codec.ts';
 import { JsonlSessionStore } from '../plugins/session/store.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 let dir: string;
 const live = new Set<RuntimeHandle>();
@@ -38,6 +39,7 @@ async function runtime(
     tools: { cwd: dir },
     session: { file: join(dir, 'session.jsonl'), cwd: dir, mode },
     ...options,
+    permissions: { approve: neverAsked, ...options.permissions },
   });
   live.add(handle);
   return { handle, faux };

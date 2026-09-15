@@ -67,7 +67,6 @@ const compactSession = vi.fn(async () => ({ requestId: 'compact-1' }));
 const send = vi.fn(async () => 'send-1');
 const stop = vi.fn(async () => 'stop-1');
 const closeSession = vi.fn(async () => 'close-1');
-const respondExtensionUi = vi.fn(async () => 'extui-1');
 const ensureReady = vi.fn(async () => undefined);
 const recordCreated = vi.fn(async () => undefined);
 /** U04 — Main answers from the cached bootstrap; `null` = no live worker. */
@@ -117,7 +116,6 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
     send,
     stop,
     closeSession,
-    respondExtensionUi,
     claimSession: vi.fn(),
     releaseSession: vi.fn(),
     releaseWindow: vi.fn(),
@@ -587,14 +585,6 @@ describe('Pi WorkerSlot chat routing', () => {
     await expect(invoke('chat:closeSession', { sessionId: 's1' })).resolves.toEqual({
       requestId: 'close-1',
     });
-    await expect(
-      invoke('chat:respondExtensionUi', {
-        runtimeId: 'runtime-1',
-        uiRequestId: 'ui-1',
-        ok: false,
-      })
-    ).resolves.toEqual({ requestId: 'extui-1' });
-
     expect(send).toHaveBeenCalledWith({
       sessionId: 's1',
       attemptId: 'attempt-s1',
@@ -604,14 +594,6 @@ describe('Pi WorkerSlot chat routing', () => {
     });
     expect(stop).toHaveBeenCalledWith('s1');
     expect(closeSession).toHaveBeenCalledWith('s1');
-    expect(respondExtensionUi).toHaveBeenCalledWith(
-      {
-        runtimeId: 'runtime-1',
-        uiRequestId: 'ui-1',
-        ok: false,
-      },
-      7
-    );
   });
 
   it('refuses a renderer workspace that disagrees with the indexed Pi row', async () => {

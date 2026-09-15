@@ -2,11 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { samePiSessionPath } from '../../agent-host/piSessionPreflight.ts';
 import { paginatePiSessionHistory } from '../../agent-host/piSessionTimeline.ts';
-import type {
-  ExtensionUiResponse,
-  PermissionDecisionId,
-  RuntimeEventDraft,
-} from '../../shared/types/runtimeEvents.ts';
+import type { PermissionDecisionId, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import {
   migratePermissionTier,
   type RuntimePermissionSettings,
@@ -246,40 +242,9 @@ export class NativeWorkerRuntime {
         // seeded only with a legacy tier still lands on the right two axes.
         ...(this.options.tier ? { tier: this.options.tier } : {}),
         projectTrusted: this.options.projectTrusted,
-        // Ask through `permission.requested` rather than the extension UI
-        // bridge: the renderer has a card, a queue and a block type for this
-        // question, and none of them can read a `ui.select` blob.
+        // Ask through `permission.requested`: the renderer has a card, a
+        // queue and a block type for this question.
         approve: this.permissions.approve,
-      },
-      approvalUi: {
-        onRequest: (request) =>
-          this.emit({
-            type: 'extensionUi.request',
-            sessionId: this.logicalSessionId,
-            payload: {
-              runtimeId: request.runtimeId,
-              uiRequestId: request.uiRequestId,
-              method: request.method,
-              args: request.args,
-              ...(request.timeoutMs !== undefined ? { timeoutMs: request.timeoutMs } : {}),
-            },
-          }),
-        onCancel: (cancel) =>
-          this.emit({
-            type: 'extensionUi.cancelled',
-            sessionId: this.logicalSessionId,
-            payload: {
-              runtimeId: cancel.runtimeId,
-              uiRequestIds: cancel.uiRequestIds,
-              reason: cancel.reason,
-            },
-          }),
-        onReset: (reset) =>
-          this.emit({
-            type: 'extensionUi.reset',
-            sessionId: this.logicalSessionId,
-            payload: { runtimeId: reset.runtimeId, reason: reset.reason },
-          }),
       },
     });
 
@@ -463,10 +428,10 @@ export class NativeWorkerRuntime {
       requestId: turn.requestId,
       payload: { status: 'stopping' },
     });
-    // Cancel parked approval dialogs too: aborting the model loop unblocks the
-    // provider call, but a tool waiting on a permission answer is waiting on a
-    // promise the bridge owns, not on the loop.
-    this.handle?.approval?.bridge.cancelAll('aborted');
+    // The permission gate settles on this same abort: its `approve` promise is
+    // parked on the tool's signal, which the run controller owns. (Until
+    // decision 012 there was a second, separate parking lot — the Extension UI
+    // bridge — that the abort did not reach and that had to be cancelled here.)
     turn.controller.abort();
     // Deliberately NOT awaiting the turn. The RPC chain is serialized, so a stop
     // that waited would hold it for however long the provider takes to notice
@@ -670,9 +635,10 @@ export class NativeWorkerRuntime {
     }
     const agentDir = this.result?.agentDir ?? this.options.agentDir ?? this.resolveAgentDir();
 
-    // Any approval dialog still open belongs to the graph being torn down, and
-    // the event subscription is bound to its events service.
-    handle.approval?.bridge.cancelAll('aborted');
+    // Any permission gate still parked belongs to the graph being torn down, and
+    // the event subscription is bound to its events service. Denying them here
+    // is what keeps a card on screen from outliving the run it was asked for.
+    this.permissions.drain('aborted');
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.handle = null;
@@ -831,10 +797,6 @@ export class NativeWorkerRuntime {
     // D14: the old four-tier value is migrated, never carried through. A worker
     // that stored the tier would be enforcing an axis pair nobody chose.
     this.setPermissions(migratePermissionTier(tier));
-  }
-
-  respondExtensionUi(response: ExtensionUiResponse): boolean {
-    return this.handle?.approval?.bridge.respond(response) ?? false;
   }
 
   setPermissions(permissions: RuntimePermissionSettings): void {

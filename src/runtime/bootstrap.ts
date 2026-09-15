@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Context } from 'cordis';
-import type { PortableExtensionUiBridgeOptions } from '../agent-host/extensionUiBridge.ts';
 import {
   type AgentLoopService,
   EVENTS_SERVICE,
@@ -48,10 +47,6 @@ import {
 } from './plugins/mcp/index.ts';
 import { parsePiCatalog, readPiCatalog } from './plugins/model-adapter/catalog.ts';
 import { type ModelAdapterConfig, ModelAdapterPlugin } from './plugins/model-adapter/index.ts';
-import {
-  createRuntimeApprovalBridge,
-  type RuntimeApprovalBridge,
-} from './plugins/permissions/bridge.ts';
 import {
   PERMISSIONS_SERVICE,
   type PermissionConfig,
@@ -165,7 +160,6 @@ export interface RuntimeBootstrapOptions {
    */
   subagents?: Omit<SubagentConfig, 'catalog'> & SubagentCatalogConfig;
   session?: SessionConfig;
-  approvalUi?: PortableExtensionUiBridgeOptions;
   agentDir?: string;
   traceDir?: string | null;
   providers?: ModelAdapterConfig['providers'];
@@ -216,12 +210,22 @@ export interface RuntimeHandle {
   subagents?: SubagentService;
   session?: RuntimeSessionService;
   events: RuntimeEventsService;
-  approval?: RuntimeApprovalBridge;
   run(request: RuntimeRunRequest): Promise<RuntimeRunResult>;
   dispose(): Promise<void>;
 }
 
 export async function createRuntime(options: RuntimeBootstrapOptions = {}): Promise<RuntimeHandle> {
+  // decision 012 — `permissions.approve` is the ONLY approval surface now. The
+  // Extension UI bridge used to stand in for a host that had none, and
+  // `?? approval?.approve` hid a missing one until the first gate fired, which
+  // surfaced mid-turn as an opaque tool denial. Tools imply a permission gate,
+  // so refuse to build a runtime that has no way to answer one.
+  if (options.tools && !options.permissions?.approve) {
+    throw new RuntimeHostError(
+      'runtime_approval_missing',
+      'permissions.approve is required whenever tools are enabled: nothing else can answer a permission gate'
+    );
+  }
   const env = options.env ?? process.env;
   const flags = readRuntimeFlags(env);
   // Only the standalone entry may infer its carrier. Electron must supply one.
@@ -238,7 +242,6 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
   let disposal: Promise<void> | undefined;
   let exec: ExecPlugin | undefined;
   let io: HostIoPlugin | undefined;
-  let approval: RuntimeApprovalBridge | undefined;
   let session: JsonlSessionStore | undefined;
   let skillCatalog: SkillCatalog | undefined;
   let mcpCatalog: McpCatalog | undefined;
@@ -284,12 +287,6 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     if (options.tools) {
       const cwd = await io.realpath(options.tools.cwd);
       workspace = cwd;
-      if (options.approvalUi) {
-        // permissions-15: hand the bridge the same deadline the permissions
-        // plugin will enforce, so an embedder that shortens `timeoutMs` does
-        // not get a dialog still counting down after the engine aborted.
-        approval = createRuntimeApprovalBridge(options.approvalUi, options.permissions?.timeoutMs);
-      }
       const scopes = await Promise.all(
         (options.permissions?.scopes ?? []).map(async (scope) => ({
           ...scope,
@@ -308,7 +305,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
           projectTrusted: options.permissions?.projectTrusted,
           ...(options.settingSources ? { settingSources: options.settingSources } : {}),
         }),
-        approve: options.permissions?.approve ?? approval?.approve,
+        approve: options.permissions?.approve,
       });
       await permissionsFiber.await();
       const toolsFiber = await ctx.plugin(ToolsPlugin, {
@@ -545,7 +542,6 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       subagents: ctx.get(SUBAGENT_SERVICE),
       events: ctx.runtimeEvents,
       session: session ? ctx.runtimeSession : undefined,
-      approval,
       run: (request) => {
         if (disposal)
           return Promise.reject(new RuntimeHostError('runtime_disposed', 'runtime is disposed'));
@@ -567,7 +563,6 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       dispose: () => {
         disposal ??= (async () => {
           controller.abort();
-          approval?.bridge.dispose();
           // Every step runs, and every failure is collected rather than
           // replaced. A trace flush that throws used to leave the function
           // before the exec outcomes were read, and TracePlugin's persistence
@@ -601,7 +596,6 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       },
     };
   } catch (error) {
-    approval?.bridge.dispose();
     try {
       await exec?.shutdown();
     } finally {

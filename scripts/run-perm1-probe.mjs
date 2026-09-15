@@ -105,13 +105,13 @@ const openTrigger = `(() => {
 /**
  * 这一轮的审批界面，不管它是哪一种。
  *
- * 两个后端给的东西不一样，点验必须分得开：
- *  - **native**：结构化权限卡，标题「权限」，按钮是词典里的「直接允许 / 本会话内允许
- *    / 直接拒绝 / 拒绝并停止」——第 4 批刚接进词典的就是这一张。
- *  - **legacy**：pi 的 permission-system 插件自己用 `ui.select` 提的问，经扩展 UI 通道
- *    原样渲染，整块是英文（`Permission Required` / `tool` / `rule` / `Yes` / `No`）。
+ * 正常只有一种：**native** 结构化权限卡，标题「权限」，按钮是词典里的「直接允许 /
+ * 本会话内允许 / 直接拒绝 / 拒绝并停止」。
  *
- * 只找「权限」两个字的话，legacy 那张会被读成「压根没弹审批」，那是个会误导人的结论。
+ * 英文兜底那一支留着，但含义变了。它原本抓的是 pi permission-system 插件自己用
+ * `ui.select` 提的英文问句——那条通道（扩展 UI）已于决策 012 整链退役，本应用再也
+ * 渲染不出它。所以现在抓到英文弹窗只说明「弹了一张不认识的」，要当异常看，不是
+ * 第二种正常形态；只找「权限」两个字会把它读成「压根没弹审批」，那是个会误导人的结论。
  */
 const APPROVAL_SURFACE = `(() => {
   const read = (node, kind) => node ? {
@@ -126,7 +126,7 @@ const APPROVAL_SURFACE = `(() => {
   const en = [...document.querySelectorAll('*')]
     .find((n) => n.children.length === 0 && n.textContent.trim() === 'Permission Required');
   const legacy = en?.closest('div[class*="rounded"]') ?? en?.parentElement?.parentElement ?? null;
-  return read(legacy, 'legacy-extension-ui');
+  return read(legacy, 'unexpected-english-dialog');
 })()`;
 
 async function screenshot(cdp, name) {
@@ -267,7 +267,7 @@ async function main() {
     report.steps.permissionCard = card;
     if (card) {
       report.screenshots.card = await screenshot(cdp, 'approval-surface');
-      // 允许那一下：native 卡上是「直接允许」，legacy 那张是插件自己写的 `Yes`。
+      // 允许那一下：native 卡上是「直接允许」；抓到别的弹窗时按英文 `Yes` 试一次。
       const allowLabel = card.kind === 'native-card' ? '直接允许' : 'Yes';
       report.steps.allowLabel = allowLabel;
       await cdp.evaluate(clickByText(allowLabel));
@@ -296,7 +296,7 @@ async function main() {
       labelFollowsMode: (s.labelAfterMode ?? '').includes('规划'),
       resetBackToAsk: (s.labelAfterReset ?? '').includes('执行 · 每次询问'),
       approvalSurfaceAppeared: card !== null,
-      // 只有 native 后端才给结构化中文卡；legacy 下这一格记为 null（没测到），不记为通过。
+      // 只有结构化中文卡算数；抓到别的弹窗这一格记为 null（没测到），不记为通过。
       nativeCardIsChinese:
         card?.kind === 'native-card'
           ? /权限/.test(card.text) && card.buttons.some((b) => b.includes('允许'))

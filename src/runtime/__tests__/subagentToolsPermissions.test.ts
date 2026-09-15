@@ -21,6 +21,7 @@ import type {
 } from '../plugins/permissions/index.ts';
 import type { PreviewRequest } from '../plugins/tools/browserPreview.ts';
 import { MAX_BASH_TIMEOUT_SECONDS } from '../plugins/tools/index.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 describe('the two capability gaps P5-2-0 required closing', () => {
   let workspace: string;
@@ -44,8 +45,8 @@ describe('the two capability gaps P5-2-0 required closing', () => {
       env: {},
       providers: [faux.provider],
       tools: { cwd: workspace },
-      permissions: { gear: 'auto' },
       ...extra,
+      permissions: { approve: neverAsked, ...(extra.permissions ?? { gear: 'auto' }) },
     });
     return runtime;
   }
@@ -356,7 +357,7 @@ describe('SA11 · parent and delegate share one write lock per path', () => {
       env: {},
       providers: [faux.provider],
       tools: { cwd: workspace },
-      permissions: { gear: 'auto' },
+      permissions: { approve: neverAsked, gear: 'auto' },
     });
     const write = runtime.ctx.runtimeTools.list().find((tool) => tool.name === 'write');
     if (!write) throw new Error('no write tool');

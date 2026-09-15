@@ -20,7 +20,6 @@ const INDEX = read('src/renderer/components/chat/sessionIndex/useSessionIndex.ts
 const PERMISSION = read('src/renderer/components/chat/ComposerPermissionTrigger.tsx');
 const MODEL = read('src/renderer/components/chat/ComposerModelTrigger.tsx');
 const LAYOUT = read('src/renderer/components/chat/middleColumnLayout.ts');
-const EXTENSION_UI = read('src/renderer/components/chat/ExtensionUiDialog.tsx');
 
 describe('U30 rev.2 the permission menu closes on pick', () => {
   /**
@@ -88,13 +87,6 @@ describe('U30 the composer chrome stops moving', () => {
   it('the model label is width-capped and truncates', () => {
     expect(LAYOUT).toContain('inline-flex h-6 max-w-56 shrink-0 items-center gap-1');
     expect(LAYOUT).toContain("return 'min-w-0 truncate text-muted-foreground';");
-  });
-
-  it('the extension-ui option list clears the focus ring', () => {
-    // `Button`'s ring is drawn 3px outside the box and takes no layout, so at
-    // `gap-1` (4px) the autofocused first option overlapped its neighbour.
-    expect(EXTENSION_UI).toContain('className="grid min-w-0 gap-2 px-3 pb-2"');
-    expect(EXTENSION_UI).not.toContain('className="grid gap-1 px-3 pb-2"');
   });
 });
 

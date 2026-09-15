@@ -43,6 +43,7 @@ import {
 } from '../plugins/skills/loader.ts';
 import { skillsSegment } from '../plugins/skills/prompt.ts';
 import { loadPromptTemplates, templateBody } from '../plugins/skills/templates.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 /**
  * In-memory tree. Directories are implied by the keys, as on a real filesystem.
@@ -726,6 +727,7 @@ describe('P5-1 wired into a real runtime', () => {
       // `~/.agents/skills` cannot leak into the assertion.
       skills: { home: join(dir, 'empty-home') },
       ...options,
+      permissions: { approve: neverAsked, ...options.permissions },
     });
     runtimes.push(handle);
     return { handle, faux };

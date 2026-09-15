@@ -354,19 +354,12 @@ export const IPC_CHANNELS = {
   CHAT_STOP: 'chat:stop',
   CHAT_CLOSE_SESSION: 'chat:closeSession',
   /**
-   * T11 — answer one portable `extensionUi.request`. The addressee is a bridge
-   * runtime plus dialog id, not a session or legacy permission dialect.
-   */
-  CHAT_RESPOND_EXTENSION_UI: 'chat:respondExtensionUi',
-  /**
    * Answer one `permission.requested`. Addressed by session plus the
-   * `permissionId` the timeline block and the pending queue already carry —
-   * a different question from the extension-UI dialog above, which is keyed by
-   * a bridge-local dialog id.
+   * `permissionId` the timeline block and the pending queue already carry.
    */
   CHAT_RESPOND_PERMISSION: 'chat:respondPermission',
   /**
-   * F5 — answer one `question.requested`. A third addressee next to the two
+   * F5 — answer one `question.requested`. A second addressee next to the one
    * above: the `ask` tool's own question, keyed by the `questionId` the card
    * and the timeline block carry. The name existed once for the legacy
    * `canUseTool` path and was removed when that path went; it is back for a

@@ -10,7 +10,6 @@ import type {
 } from '../shared/types/legacyImport.ts';
 import { isWorkerImportConversationPayload } from '../shared/types/legacyImport.ts';
 import type {
-  ExtensionUiResponse,
   PermissionDecisionId,
   RuntimeEvent,
   RuntimeEventDraft,
@@ -23,7 +22,6 @@ import {
   isWorkerCompactPayload,
   isWorkerDiscardForkPayload,
   isWorkerDiscardImportedSessionPayload,
-  isWorkerExtensionUiResponsePayload,
   isWorkerForkPayload,
   isWorkerHistoryPayload,
   isWorkerInspectImportedSessionPayload,
@@ -51,7 +49,6 @@ import {
   type WorkerDiscardForkPayload,
   type WorkerDiscardForkResult,
   type WorkerDisposeResult,
-  type WorkerExtensionUiResponseResult,
   type WorkerForkPayload,
   type WorkerForkResult,
   type WorkerHistoryPayload,
@@ -112,7 +109,6 @@ export interface PiWorkerRuntime {
   fork(input: WorkerForkPayload): Promise<WorkerForkResult>;
   discardFork(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
-  respondExtensionUi(response: ExtensionUiResponse): boolean;
   /** Answer one `permission.requested`. */
   respondPermission(input: { permissionId: string; decision: PermissionDecisionId }): boolean;
   /** F5 — answer one `question.requested`. */
@@ -419,9 +415,6 @@ export class PiWorkerRpcServer {
           break;
         case 'worker.stop':
           await this.handleStop(request);
-          break;
-        case 'worker.extensionUi.respond':
-          this.handleExtensionUiResponse(request);
           break;
         case 'worker.permission.respond':
           this.handlePermissionResponse(request);
@@ -787,27 +780,6 @@ export class PiWorkerRpcServer {
       return;
     }
     this.respondSuccess(request, await this.runtime.stop(request.payload));
-  }
-
-  private handleExtensionUiResponse(request: WorkerRpcRequest): void {
-    if (!isWorkerExtensionUiResponsePayload(request.payload)) {
-      this.respondError(request, {
-        code: 'WORKER_INVALID_PAYLOAD',
-        message: 'worker.extensionUi.respond requires logicalSessionId and a valid response',
-        retryable: false,
-      });
-      return;
-    }
-    if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId) {
-      throw new PiWorkerSessionError(
-        'WORKER_SESSION_MISMATCH',
-        'Extension UI response targets another session'
-      );
-    }
-    const result: WorkerExtensionUiResponseResult = {
-      handled: this.runtime?.respondExtensionUi(request.payload.response) ?? false,
-    };
-    this.respondSuccess(request, result);
   }
 
   private handlePermissionResponse(request: WorkerRpcRequest): void {

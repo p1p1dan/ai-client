@@ -2,6 +2,7 @@ import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/provid
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import { newContextTool } from '../plugins/tools/new-context.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 let runtime: RuntimeHandle | undefined;
 afterEach(async () => {
@@ -32,7 +33,7 @@ describe('P1-9 new_context contribution', () => {
     runtime = await createRuntime({
       providers: [provider.provider],
       tools: { cwd: process.cwd() },
-      permissions: { gear: 'auto', allowedTools: ['read'] },
+      permissions: { approve: neverAsked, gear: 'auto', allowedTools: ['read'] },
     });
     const tool = runtime.ctx.runtimeTools.list().find((tool) => tool.name === 'new_context');
     // Registered, but a host that names its allowed tools still decides: a
@@ -47,7 +48,7 @@ describe('P1-9 new_context contribution', () => {
     runtime = await createRuntime({
       providers: [provider.provider],
       tools: { cwd: process.cwd() },
-      permissions: { mode: 'plan', gear: 'ask' },
+      permissions: { approve: neverAsked, mode: 'plan', gear: 'ask' },
     });
     const tool = runtime.ctx.runtimeTools.list().find((tool) => tool.name === 'new_context');
     expect(tool).toBeDefined();
@@ -66,6 +67,7 @@ describe('P1-9 new_context contribution', () => {
     runtime = await createRuntime({
       providers: [provider.provider],
       tools: { cwd: process.cwd() },
+      permissions: { approve: neverAsked },
       context: { enabled: false },
     });
     expect(runtime.ctx.runtimeTools.list().some((tool) => tool.name === 'new_context')).toBe(false);

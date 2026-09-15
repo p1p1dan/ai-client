@@ -29,6 +29,7 @@ import { isInternalMessage } from '../../shared/internalMessage.ts';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
 import { standaloneHost } from '../host/config.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 let workspace: string;
 let outside: string;
@@ -61,10 +62,13 @@ async function runtime(options: Partial<RuntimeBootstrapOptions> = {}) {
     providers: [faux.provider],
     host: standaloneHost({ PATH: process.env.PATH }),
     tools: { cwd: workspace },
+    ...options,
     // `auto` so a write or a read outside the workspace is not waiting on an
     // approval this suite has no one to answer.
-    permissions: { gear: 'auto', projectTrusted: true },
-    ...options,
+    permissions: {
+      approve: neverAsked,
+      ...(options.permissions ?? { gear: 'auto', projectTrusted: true }),
+    },
   });
   runtimes.push(handle);
   return { handle, faux };
@@ -189,7 +193,7 @@ describe('on-demand project instructions · the loop half', () => {
       providers: [faux.provider],
       host: standaloneHost({ PATH: process.env.PATH }),
       tools: { cwd: workspace },
-      permissions: { gear: 'auto', projectTrusted: true },
+      permissions: { approve: neverAsked, gear: 'auto', projectTrusted: true },
       session: { cwd: workspace, mode: 'create', file: join(workspace, 'session.jsonl') },
       loop: { singleTurn: false },
     });

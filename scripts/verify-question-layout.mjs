@@ -61,15 +61,6 @@ async function runBrowserChecks() {
     );
     await click('#submit');
     assert.equal(await evaluate('window.answers.length'), width === 360 ? 1 : 2);
-    await evaluate('window.showExtension()');
-    await settle();
-    const extension = await evaluate(
-      `(() => {const e=document.querySelector('[role=group] button');const r=e.getBoundingClientRect();return {height:r.height,client:e.clientWidth,scroll:e.scrollWidth};})()`
-    );
-    assert.ok(extension.height > 40, 'extension options must grow at desktop breakpoints too');
-    assert.ok(extension.scroll <= extension.client + 2, 'extension option must wrap');
-    await click('[role=group] button');
-    assert.equal(await evaluate('window.extensionAnswers.length'), width === 360 ? 1 : 2);
     results.push(`real mouse selection/submission and wrapped layout at ${width}px`);
   }
   await evaluate("window.showQuestion();document.getElementById('root').style.width='360px'");
@@ -87,7 +78,6 @@ try {
   const sourceFiles = [
     'src/renderer/components/ui/button.tsx',
     'src/renderer/components/chat/QuestionCard.tsx',
-    'src/renderer/components/chat/ExtensionUiDialog.tsx',
     'src/renderer/components/chat/questionCardModel.ts',
     'src/renderer/components/ui/input.tsx',
   ];
@@ -106,14 +96,10 @@ try {
       contents: `
         import { createRoot } from 'react-dom/client';
         import {QuestionCard} from '@/components/chat/QuestionCard';
-        import {ExtensionUiInlineDock} from '@/components/chat/ExtensionUiDialog';
-        import {useExtensionUiStore} from '@/stores/extensionUi';
         const root=createRoot(document.getElementById('root'));
-        window.answers=[];window.extensionAnswers=[];
-        window.electronAPI={chat:{respondExtensionUi:async value=>window.extensionAnswers.push(value)}};
+        window.answers=[];
         let id=0;
         window.showQuestion=()=>root.render(<QuestionCard key={++id} variant="interactive" block={{id:'q',questionId:'q',type:'question',questions:[{question:'请选择当前项目采用的技术方案，并说明后续迁移约束。'.repeat(2),options:[{label:'保留 Qt 6.8 + QML —— 维持现有接口、部署与现场验证方式，工作模式画面保持可读。'.repeat(4),description:'现有代码可以继续复用，后续另行安排迁移。'},{label:'其他方案'}]}]}} onSubmit={async value=>{window.answers.push(value);return false;}} onSkip={async()=>false} />);
-        window.showExtension=()=>{useExtensionUiStore.setState({pending:[{runtimeId:'r',sessionId:'s',uiRequestId:'q'+(++id),receivedAt:0,dialog:{method:'select',title:'[UI 技术栈] 当前项目采用哪种方案？',options:['保持 Qt 6.8 + QML（推荐）—— 保留现有工具链和部署方式。'.repeat(8),'自由输入其他方案']}}],sending:[],sendErrors:{}});root.render(<ExtensionUiInlineDock sessionId="s"/>);};
         window.showQuestion();
       `,
       resolveDir: repo,
