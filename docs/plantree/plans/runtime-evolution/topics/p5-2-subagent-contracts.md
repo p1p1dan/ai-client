@@ -43,6 +43,7 @@ Read with：[固定版本调研](p5-2-subagent-research.md) · [任务与验收�
 - 保持参考的等待集合语义；加入稳定交付标识，覆盖任务在父 idle 前已完成、TaskWait 已读、再一次自动继续等路径，防止漏报/重复整合；不要把 wait-all 优化成新调度算法塞入基线。
 - 用户 Stop、TaskStop、dispose/宿主失败取消；父暂时结束不取消；Task.execute 的局部 signal 不拥有后台任务。用户 Stop 与完成同时发生时取消优先阻止再次调用父模型。
 - 不启用 idle/duration 杀子任务；显式 maxTurns 仍生效，缺省/none/0 可无限轮。命令/provider 各自的超时仍有效，不能把“Agent 不超时”解释为取消底层 IO 保护。
+- **delegate 只做预算守卫 + maxTurns 兜底，不做压缩**：context 只共享父的两级阈值提醒并在硬上限处截断自己，不接入 `ContextPlugin` 的 checkpoint 链、不注册 `new_context`、不支持跨 run 恢复——checkpoint 是持久化、拥有摘要身份、下一次 run 会重放的会话级对象，delegate 没有自己的会话，接入等于用父从未见过的对话写父的 checkpoint 链。理由与取舍见 `src/runtime/plugins/subagent/run.ts` 模块注释第 3 条（P5-2 转移项，随 T014 `2c0eb30c` 落地，T027 把它显式记入契约，2026-09-15）。
 - 子任务失败只结算其结果，父仍可整合/补救；未产生非空报告不能算成功。生命周期状态至少保留 running/completed/failed/aborted/stopped/truncated 和旧 timed_out 的恢复含义。
 - registry 保留最多 100 条已结束项，绝不淘汰运行项；报告 12k、单次合并文本 50k。UI/details/持久化分开限额，不能仅截 text 却把完整大对象塞入 IPC。
 

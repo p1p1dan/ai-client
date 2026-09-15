@@ -46,7 +46,7 @@ CI 补修：`76424efa` 的 [34305837633](https://github.com/p1p1dan/ai-client/ac
 ## Windows 交接范围（待产物成功后补精确命令）
 
 - 安装包与源码提交一致；记录版本、CI run、实际 exe/node.exe/Git Bash 路径。
-- 关闭已有应用后，从设置了 `AICLIENT_RUNTIME_BACKEND=native` 的启动环境打开测试包；以 worker 证据确认实际后端，不能只看能否聊天。
+- 关闭已有应用后打开测试包；以 worker trace 证据确认实际后端（`stamp.backend` 现恒为 `native`——`AICLIENT_RUNTIME_BACKEND` 已随 P6-5〔2026-09-13〕连同旧引擎一起删除，设置它不再有任何效果，见 [pi-only-rollout-rollback.md](../../../../../pi-only-rollout-rollback.md)），不能只看能否聊天（审计 core-host-16，T027 改写此行）。
 - P1-8 复用六项断言：read、edit、bash、glob、grep、trace；write 是探针前置动作。现有入口为 `src/runtime/smoke/p1-bundled-node.ts`，依赖源码及 runtime 包，不是复制一条命令即可在裸安装包旁运行。
 - P1-0/P1-3：正常退出、超时、取消和父命令先退出的命令树清理，核对 runner/taskkill 与残留进程。
 - P1-5/P1-6/P4-5：权限两模式/三档及策略重载、审计行、附件、用户气泡去重、会话恢复/压缩、GUI/TUI 交接。

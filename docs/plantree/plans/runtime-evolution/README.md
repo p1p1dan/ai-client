@@ -70,7 +70,7 @@ Role: roadmap（2026-09-14 起为历史基线）。核对日期：2026-09-13；�
 | P1-5 | 权限内核 | 🟡 已实现；真实自定义策略/复杂 shell 与策略重载组合仍缺专项现场记录 |
 | P1-6 | 审批流 | 🟢 开发机侧已验（2026-09-11）：native 后端下结构化权限卡在真实回合中弹出，中文文案齐全、带高风险徽标与「若 119 秒内未响应将自动拒绝」倒计时，点「直接允许」后请求消失且命令真的执行；legacy 后端下审批是 pi 插件自己的英文 `ui.select` 弹窗，两者不是同一张卡。**倒计时走到底的超时拒绝仍只有单测覆盖**；打包现场回归待最后一次上机。[记录](evidence/p4-6/perm1/README.md) |
 | P1-7 | 单测 | ✅ 历史实现门禁；不代表包后新改动测试已执行 |
-| P1-8 | 载体兼容矩阵 | ✅ 核心矩阵：Linux 与 Windows 两载体六项工具探针通过；真实受策略样本的特定链路归 P4-6 |
+| P1-8 | 载体兼容矩阵 | ✅ 核心矩阵：Linux 与 Windows 两载体六项工具探针通过；真实受策略样本的特定链路归 P4-6。**现场证据已过期未重跑**：test12-reverify.md 的 stamp 停在提交 `8115ebe1`，到本次复核的 HEAD（`559c9790`）已隔 150 个提交，其中 21 个动过 `src/runtime/host`、`plugins/tools` 或 `bootstrap.ts`；`RUNTIME_CONFIG_VERSION` 仍冻结在 `runtime_p3_complete_v1`，新旧 stamp 无法据此区分陈旧程度，六项探针尚未在当前代码上复跑（审计 core-host-18，T027 标注实况） |
 | P1-9 | new_context 工具 | ✅，与 P2-8 配对 |
 
 证据：[P1 本机](evidence/p1/README.md)、[TEC Windows 五态清理](../../../../Windows-P4-6-evidence/tree-cleanup-five-states.md)、[test.12 两载体及现场结果](../../../../Windows-P4-6-evidence/test12-reverify.md)、[test.11 密文载体对照](../../../../Windows-P4-6-evidence/encryption-special.md)。
@@ -154,12 +154,12 @@ P3 阶段的 v4 互通对象只是 pi-agent-core 的 JSONL，当时不能据此�
 | P5-2-2 | 子 Agent / Task* 后台编排 | ✅ 四工具、10 并发、registry 100、wait all/any、Stop 真收敛、自动交回。**run() 的 promise 现在等子任务结算**。修了两个真缺陷：Stop 后提前 resolve、子任务早完成则报告丢失（补 `deliveredAt`）。26 条 SA03～SA09 |
 | P5-2-3 | 权限、工具与重试依赖 | ✅ grep 正则、bash `timeoutSeconds`（上限 6h，默认不变）、按调用隔离的权限档与审批归属、父子共用写锁、流中失败重试不重放工具；BrowserPreview 接通独立预览窗（按文件复用、监听父目录扛住「写临时文件再改名」、`showInactive` 不抢前台）。可预览类型收窄回 `.html/.htm/.svg`——Chromium 只会把 `.md` 当源码显示。17+9+12+6 条 SA10/SA11/SA13/SA20 |
 | P5-2-4 | 会话、事件与 usage | ✅ 子代理消息存为带归属的 `custom` 条目——隔离是条目类型的性质，不是靠人记得加的过滤；事件通道只是有上限的实时摘要，终态/usage/完整报告都从记录来。状态枚举扩到六值（`stopped`/`truncated`），否则渲染层四值白名单会直接丢弃。8 条 SA14/SA15/SA16 |
-| P5-2-5 | 定义管理与旧资源迁移 | ✅ 迁移预览 + native 委派开关 + 管理界面。定义格式搬到 `src/shared`（三个进程要同一个答案，参考仓本来也放那儿），新增 `formatSubagentDefinition` 按整份定义回写——UI 没有控件的字段照样落盘，这就是「保存后 permission 不见了」的堵法。内置永不被写入：「定制」写同名用户文档，删掉它内置就回来。13+18+6+19+6 条 SA17/SA19。审计 2026-09-14：迁移预览未接入口（subagent-data-01，修补 T020），详见[审计报告](evidence/runtime-audit-2026-09-14/README.md) |
+| P5-2-5 | 定义管理与旧资源迁移 | ✅ 迁移预览 + native 委派开关 + 管理界面。定义格式搬到 `src/shared`（三个进程要同一个答案，参考仓本来也放那儿），新增 `formatSubagentDefinition` 按整份定义回写——UI 没有控件的字段照样落盘，这就是「保存后 permission 不见了」的堵法。内置永不被写入：「定制」写同名用户文档，删掉它内置就回来。13+18+6+19+6 条 SA17/SA19。审计 2026-09-14：迁移预览未接入口（subagent-data-01）——已修（T020，`60b250f3`，2026-09-15）：IPC（importPreview / importApply）+ 设置页「导入旧定义」入口已落地，逐字段差异、冲突阻断、同名不覆盖、原文件保留均有 Main 侧用例；真机点验待现场，详见[审计报告](evidence/runtime-audit-2026-09-14/README.md) |
 | P5-2-6 | 运行/历史展示 | ✅ 逐条比对抓到四处不一致，两处静默：委派记录曾以 `custom.entry` 上线、被渲染成父会话里的系统消息（子代理 transcript 裸 JSON 直接进用户视野）；报告在自动交回路径上被按位置丢掉，「报告一次」成了「报告零次」。另补齐思考投影与工具参数白名单、审批卡的子代理来源、重载按记录重建 lane、面板局部滚动跟随。12+12+2 条 SA14/SA18 |
 | P5-2-7 | SA01～22 等价门禁 | 🟡 16 行已签（自动化测试钉住），6 行待现场：SA16 保存/恢复真机对比、SA17 管理页点验与重启保留、SA18 滚动手感、SA20 预览整链、SA21 两载体打包、SA22 trace 与截图。逐行状态与上机清单见[签收](evidence/p5-2/signoff.md) |
 | P5-3 | MCP bridge | ✅ 自写 stdio JSON-RPC 客户端（不引官方 SDK：它自己 spawn，违反 D11 第 4 条），配置沿用生态 `{"mcpServers":{…}}`，项目文件仅在 projectTrusted 时打开，每次调用过权限门。对真实 stdio 服务器取证。[记录](evidence/p5-1/README.md) |
 | P5-4 | 会话导入适配 | 🟡 实现完成 / 现场待验：导入不再只有 pi 一个实现——`NativeLegacyImportWriter` 写入走 `JsonlSessionStore`（v4），四个动作（create/inspect/reconcile/discard）等价，后端选择在 worker 入口以工厂注入，`PiImportProcess` 与 Main 一行没改。保留 pi 版的三条：暂存后 rename 发布、两个 custom 条目类型、display-only 不进模型上下文。「可续聊」用 faux provider 离线证到「导入的回合真的进了模型上下文」，真模型下未验。[记录](evidence/p5-4-p5-5/README.md) |
-| P5-5 | 模型目录切源 | 🟡 实现完成 / 现场待验：**未被 H / 17 覆盖**（探针实测）。目录从 4 种 API 风格扩到 pi-ai 的全部 10 种（此前另外 6 种被静默丢弃，用户存了却看不见）、认不出的风格进 `dropped` 并带进版本戳；D15 落地在 `toPiModelsJson` 的继承分支，显式地址永不改写，推导规则取自 pi-ai 自己的 provider 表；native 的目录改由 Main 在内存里交付，派生明文文件降为 legacy 专用（P6-2 删）。[记录](evidence/p5-4-p5-5/README.md) |
+| P5-5 | 模型目录切源 | 🟡 实现完成 / 现场待验：**未被 H / 17 覆盖**（探针实测）。目录从 4 种 API 风格扩到 pi-ai 的全部 10 种（此前另外 6 种被静默丢弃，用户存了却看不见）、认不出的风格进 `dropped` 并带进版本戳；D15 落地在 `toPiModelsJson` 的继承分支，显式地址永不改写，推导规则取自 pi-ai 自己的 provider 表；native 的目录改由 Main 在内存里交付；派生明文文件（`models.json`/`auth.json`）**未删**——P6-2 执行时改判：随包 `pi` CLI 的 `ModelRuntime` 自己要读这两个文件，停写会让 TUI 没有模型可用，理由见 [p6-cutover.md](topics/p6-cutover.md) 第 3 条（审计 cutover-18，T027 统一结论）。[记录](evidence/p5-4-p5-5/README.md) |
 
 范围与验收：[P5-2 契约](topics/p5-2-subagent-contracts.md)、[任务定义与 SA01～22](topics/p5-2-subagent-tasks.md)。完整复刻后才做优化。
 
@@ -175,7 +175,7 @@ P3 阶段的 v4 互通对象只是 pi-agent-core 的 JSONL，当时不能据此�
 | P6-2 | 摘除 pi-coding-agent 依赖 | ✅ **按用户 2026-09-13 拍板的口径 A 完成，且已走到终点**：应用代码里**一处都不再 import 它**（P6-5 同日退役旧引擎后，守卫的允许名单已清空），只保留它的可执行文件角色——终端与插件管理跑它的 `cli.js`。native 装机的 worker **实测一行都不加载它**——修掉「入口 → RPC server → `piUtilityRunner` → 整包 pi」这条与后端无关的加载链，并把最后一个真用户（一次性补全）搬到自有 runtime（`nativeUtility.ts`）。四道守卫：静态导入图、进程级模块加载实测 + legacy 阳性对照、越界 import 点名（`piCliIsBundledToolOnly.test.ts`）。`package.json` 里保留这个名字是这条口径的**结果**；旧引擎退役（P6-5）后允许名单清空 |
 | P6-3 | 六项成功标准达标 | 🟡 **第 1/2/3/4/5 条已签**：第 3 条按用户拍板的口径 A 以「实质达成」签收（agent 不跑在旧包上，进程实测零加载）；第 4 条 2026-09-13 在开发机真实应用点验（默认 native 起得来、一整回合跑通、权限卡与时间线正常，打包回归仍待上机）。**只剩第 6 条**——加密机现场验收，按用户决定并入最后一次上机。[逐条](evidence/p6/README.md#p6-3-六项成功标准) |
 | P6-4 | 一个版本周期的回退开关 | ✅ 已落地，**窗口由用户当日主动关闭**。当天先按本节点交付：开关保留、方向反转（要显式写 `legacy`）、期限写明、回退路径有真实 worker 进程测试。随后用户决定提前执行 P6-5，旧引擎与开关一并删除，回退方式改为**装回上一个安装包**。代价是明写的：出问题不能靠环境变量切回去。[回退说明](../../../pi-only-rollout-rollback.md) |
-| P6-5 | 周期后退役旧集成层 | ✅ **2026-09-13 提前执行**（用户当日决定不等一个版本周期）。删掉 `piWorkerSession.ts`、`piAgentSessionBootstrap.ts`、`piLegacyImport.ts`、`piUtilityRunner.ts` 与三个只服务旧引擎的 spike，以及后端开关 `src/shared/runtimeBackend.ts`；RPC server 的三个引擎工厂改为**必填**（没有第二个后端可回落）。保留的是两边都在用的部分：`piSessionPreflight.ts`（自有 runtime 也在用）、会话时间线/树投影、`bundledFeaturePlugins`。两处测试跟着搬家而不是删掉：排队释放的端到端用例移到 runtime 侧、Codex 导入集成用例收敛为 Main 侧那一半 |
+| P6-5 | 周期后退役旧集成层 | ✅ **2026-09-13 提前执行**（用户当日决定不等一个版本周期）。删掉 `piWorkerSession.ts`、`piAgentSessionBootstrap.ts`、`piLegacyImport.ts`、`piUtilityRunner.ts` 与三个只服务旧引擎的 spike，以及后端开关 `src/shared/runtimeBackend.ts`；RPC server 的三个引擎工厂改为**必填**（没有第二个后端可回落）。保留的是两边都在用（或还有生产调用方）的部分：`piSessionPreflight.ts`——native 只 import 其中的 `samePiSessionPath`（3 行路径比较），文件主体 `preflightPiSessionFile`/`assertPiSessionFileIdentity` 在旧集成层删除后已无生产调用方，整体删除评估留给 T025（审计 cutover-12，T027 改写此句）；会话时间线/树投影。（**2026-09-15 T025 更正**：本行原来还把 `bundledFeaturePlugins` 列为保留项，属误记——它在 P6-5 之后已无任何生产调用方，与 `extensionInventory`、`commandInventory` 一并由 T025 删除。）两处测试跟着搬家而不是删掉：排队释放的端到端用例移到 runtime 侧、Codex 导入集成用例收敛为 Main 侧那一半 |
 
 ## GUI 任务树
 

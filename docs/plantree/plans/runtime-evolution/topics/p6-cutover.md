@@ -71,11 +71,13 @@ ARD D8 同时写着「开关保留一个版本周期后再删」。当天用户�
 | 保留 | 删除 |
 |---|---|
 | `worker.ts` 入口、`workerHost` 载体、RPC 协议与类型、`piWorkerErrors.ts` | `piWorkerSession.ts`、`piAgentSessionBootstrap.ts`、`piLegacyImport.ts`、`piUtilityRunner.ts`、三个只服务旧引擎的 spike |
-| 会话时间线/树的投影（`piSessionTimeline.ts`、`piSessionTree.ts`）、`bundledFeaturePlugins`、`extensionInventory`、`permissionPlugin` 等两边都用或 Main 在用的部分 | 后端开关 `src/shared/runtimeBackend.ts` 与 `RUNTIME_BACKEND_ENV` |
+| 会话时间线/树的投影（`piSessionTimeline.ts`、`piSessionTree.ts`）、`permissionPlugin` 的用户配置判定等 Main 在用的部分 | 后端开关 `src/shared/runtimeBackend.ts` 与 `RUNTIME_BACKEND_ENV` |
+
+> **2026-09-15 更正（T025 / 审计 cutover-05、cutover-07）**：上表「保留」一栏当时把 `bundledFeaturePlugins`、`extensionInventory` 也列了进去，这是错的——两者在 P6-5 之后就只剩自己的测试在 import，Main 读的是 `bundledPlugins.mjs` 那张表。它们连同 `commandInventory` 已在 T025 删除。`permissionPlugin` 确实还有一个生产消费者，但只剩 `permissionPluginConfiguredByUser`（插件页读用户自己的 pi 配置）；同文件的注入决策与加载校验同批删除。
 
 ### 执行时查出来的三件事（都和原计划不一样）
 
-1. **`piSessionPreflight.ts` 不能删**。清单原写「只服务 legacy worker」——错的，`src/runtime/worker/nativeWorkerRuntime.ts` 也在用它。按原清单删会当场打断自有 runtime。
+1. **`piSessionPreflight.ts` 不能整体删，但清单原写「只服务 legacy worker」也不准确**。`src/runtime/worker/nativeWorkerRuntime.ts` 只 import 了其中的 `samePiSessionPath`——一个 3 行的路径比较助手；文件主体 `preflightPiSessionFile`（64KB 分块头部扫描、JSON 校验、dev/ino 身份校验，共 106 行）与 `assertPiSessionFileIdentity` 原本服务旧集成层的调用方（`piWorkerSession.ts` 等），P6-5 删掉这些调用方后，两者在全仓已无任何生产调用方，只剩自身测试。按原清单整体删会打断 native 需要的 `samePiSessionPath`，但保留整份文件的说法（README.md「自有 runtime 也在用」）过度夸大——真正需要保留的只是那一个路径比较助手；文件其余部分是否删除评估留给 T025（审计 cutover-12，T027 改写此句）。
 2. **派生明文文件不能删**，理由见上（随包 CLI 自己要读）。这条债从 P6 名下移出，改判为「终端凭据怎么给」的独立题。
 3. **两处测试要搬家，不是删**：
    - 排队释放的端到端用例（原 `scripts/__tests__/pi-queue-release-integration.test.mjs`）驱动的是旧引擎，已移到 `src/runtime/__tests__/queueReleaseIntegration.test.ts`，改用真实 RPC server + NativeWorkerRuntime。**渲染层那两个排队模块没有一起 import**：它们经 `attachments.ts` 牵进 `@shared/*` 与 `@/` 两套路径别名，而 `src/runtime` 是独立子包、tsconfig 里没有这些别名；释放顺序在测试里按同样的步骤手写，排队模块自身的行为由渲染层单测钉住。

@@ -3,6 +3,11 @@
 日期：2026-09-08 · 本轮探针基础 HEAD：`684a9310`，代码已提交 `2ae6f209` · **P1-9 ∥ P2-8 配对已落地，整体验收未完成**。
 [执行 TODO](../../TODO.md) · [看板](../../README.md) · [契约](../../topics/p1-0-host-contracts.md)
 
+> **T027 更新（2026-09-15，审计 core-host-17）**：本文件冻结在 2026-09-08，当时 Windows 随包 Node、
+> 进程树清理均未执行；两者已分别于 2026-09-09 test.12 / test.11 在 Windows 实机补上（见下方表格与
+> 「仍需完成的载体验收」的标注），与[任务树](../../README.md) P1-0/P1-8 行的 ✅ 一致。仍未执行的只剩
+> 企业加密机验证，归批次 E（[runtime-hardening T033](../../../runtime-hardening/roadmap.md)）。
+
 ## 结论
 
 P1-0 出口和 P0 迁移、六工具及审批桥接已实现；按 D14 返工了工具裁剪、权限核心、旧值映射
@@ -22,8 +27,9 @@ P1-0 出口和 P0 迁移、六工具及审批桥接已实现；按 D14 返工了
 | P0 fauxProvider 离线冒烟 | 6 项断言通过 | [p0-smoke.txt](p0-smoke.txt)、[本次 trace](offline-trace.jsonl) |
 | 独立 Node 工具探针 | Read/Edit/bash/Glob/Grep/trace 全通过（本轮重跑） | [standalone.json](standalone.json)，Node 24.20.0，**不等同随包 Node** |
 | 真 Electron utilityProcess | 同一组 6 项断言通过，worker 退出 0（本轮重跑） | [electron-utility.txt](electron-utility.txt)，Linux Electron 39.2.7 / 内置 Node 22.21.1 |
-| Windows 随包 Node | 未执行 | 本机没有 Windows 安装包及执行环境，提供 `p1-bundled-node.ts` 入口 |
-| Windows 进程树/加密机 | 未执行 | 见下一节；不能用 Linux 或替身结果代签 |
+| Windows 随包 Node | 本轮（2026-09-08）未执行；**已于 2026-09-09 test.12 现场补上**（T027 标注，2026-09-15） | 当时本机没有 Windows 安装包及执行环境，提供 `p1-bundled-node.ts` 入口；两种 carrier（bundled-node / electron-utility）六项断言均 true，见 [test12-reverify.md](../../../../../../Windows-P4-6-evidence/test12-reverify.md) |
+| Windows 进程树 | 本轮（2026-09-08）未执行；**已于 2026-09-09 test.11 现场补上**（T027 标注，2026-09-15） | 五态命令树清理在 Windows 实机通过，无残留 `node.exe`，见 [tree-cleanup-five-states.md](../../../../../../Windows-P4-6-evidence/tree-cleanup-five-states.md) |
+| 加密机 | 未执行 | 企业加密 Windows 现场验证并入最后一次上机（批次 E T033），不能用 Linux 或替身结果代签 |
 | 远端 CI / P4 GUI 全链路 | 未执行 | CI 增加 `smoke:runtime-tools` 门禁，未推送或触发远端工作流 |
 
 代码与探针来源哈希见 [sources.json](sources.json)，采于 `27ff2020` 那一轮，未随本轮重算。
@@ -34,10 +40,15 @@ P1-0 出口和 P0 迁移、六工具及审批桥接已实现；按 D14 返工了
 
 1. `ExecPlugin` 已改为保留 Node runner 的进程树根身份，命令结果经独立 IPC 回报；
    父服务随后按 runner PID 请求清理整树。Linux 后代 heartbeat 停止测试通过。
-   Windows 分支调用 `taskkill /PID /T /F` 并等待关闭，**尚未在 Windows 实测**，
+   Windows 分支调用 `taskkill /PID /T /F` 并等待关闭，本轮（2026-09-08）**尚未在 Windows 实测**，
    尤其要核对中间命令进程已退出时的后代发现；保留 runner 不能替代这项验收，必要时仍需 Job Object。
-   P1-0/P1-3 与 P1-8 仍保持进行中，不能用 Linux 协议验证代签 Windows ownership。
+   **已于 2026-09-09 test.11 现场补上**：五态（正常/超时/父先退/取消/应用退出）在 Windows 实机全部无残留
+   `node.exe`，见[记录](../../../../../../Windows-P4-6-evidence/tree-cleanup-five-states.md)（T027 标注，2026-09-15）。
+   P1-8 的两载体六项探针也已现场跑通，见下一条。
 2. 用实际 Windows 安装包中的 Node 和 bash 跑下方入口，保留 stdout、退出码和源哈希。
+   **已于 2026-09-09 test.12 现场补上**：bundled-node / electron-utility 两种 carrier 各自
+   read/edit/bash/glob/grep/trace 六项断言均 true，见[记录](../../../../../../Windows-P4-6-evidence/test12-reverify.md)
+   （T027 标注，2026-09-15）。
 3. 企业加密机验证 Read 明文、Write/Edit 回读、bash stdout，以及退出后无残留。
    `host-adapter` 只提供接入契约，尚无非 pipe 实现；Q6 已确认不要求首批交付非 pipe。
 4. D13 的 Main 读取改造由 P3-5/P4-5 处理，Q7 由主线处理；此次不改这些归属。

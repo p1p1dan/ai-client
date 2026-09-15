@@ -3,8 +3,10 @@
 ARD：[`docs/plans/2026-09-08-runtime-evolution-ard.md`](../../docs/plans/2026-09-08-runtime-evolution-ard.md) ·
 看板：[`docs/plantree/plans/runtime-evolution/README.md`](../../docs/plantree/plans/runtime-evolution/README.md)
 
-替代 `pi-coding-agent` 整包依赖的自有 runtime。与现有 `src/agent-host/` 并存（ARD §5.1），
-后端由 `AICLIENT_RUNTIME_BACKEND` 选择（D8），P4-2 前该开关只被记录、不被消费。
+替代 `pi-coding-agent` 整包依赖的自有 runtime。曾与 `src/agent-host/` 并存并由
+`AICLIENT_RUNTIME_BACKEND`（D8）选择后端；P6-5（2026-09-13）已删掉旧引擎与这个开关，
+`backend` 现在是 `flags.ts` 里的常量 `'native'`，只有唯一引擎，设该环境变量不再有任何效果
+（审计 cutover-08，T027 改写此段）。
 
 **当前进度：P3-1 至 P3-5 与 P2-4 已实现，本机验证结果见下方证据；代码与证据随本次提交归档。**
 见 [P3 验证与限制](../../docs/plantree/plans/runtime-evolution/evidence/p3/README.md)。
@@ -17,7 +19,7 @@ ARD：[`docs/plans/2026-09-08-runtime-evolution-ard.md`](../../docs/plans/2026-0
 |---|---|
 | `contracts.ts` | P0-3 · 所有 service 契约 + `declare module 'cordis'`；P1–P5 未实现的服务在 `DEFERRED_SERVICES` 里带原因声明 |
 | `bootstrap.ts` | P0-2 · Cordis Context 初始化、插件注册、**服务存活断言**、销毁 |
-| `flags.ts` | 特性开关（D8 后端开关、目录与 trace 目录） |
+| `flags.ts` | 特性开关（目录与 trace 目录；D8 后端开关已随 P6-5 删除，`backend` 现为常量 `'native'`） |
 | `trace.ts` | 结构化 run trace（工程规范 §2 / §15） |
 | `host/` | P1-0 · `runtimeHostIo` / `runtimeExec` 两个出口，TSD helper 与保留进程树根身份的 Node runner |
 | `plugins/model-adapter/` | P0-4 · 读 `models.json` + `auth.json`，绑定 pi-ai provider |
@@ -107,7 +109,6 @@ node --experimental-strip-types src/runtime/smoke/runOnce.ts \
 
 | 变量 | 作用 |
 |---|---|
-| `AICLIENT_RUNTIME_BACKEND` | `legacy`（默认）/ `native`。D8：只走环境变量，不进设置页 |
 | `AICLIENT_RUNTIME_AGENT_DIR` | 目录覆盖；缺省回落到 `PI_CODING_AGENT_DIR`（Main 已导出） |
 
 P5-5 起，**应用内**的模型目录不再从这个目录读：Main 在内存里拼好
