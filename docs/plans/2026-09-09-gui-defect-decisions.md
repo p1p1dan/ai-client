@@ -93,7 +93,7 @@ worktree 的 `.git` 是指针文件，这也是待核对的输入之一。
 
 | 通道 | 谁产生 | legacy | native |
 |---|---|---|---|
-| `extensionUi.request`（select / confirm / input / editor） | pi 扩展调用 `ui.*`，经 [`extensionUiBridge.ts`](../../src/agent-host/extensionUiBridge.ts) 转事件 | 有（pi 扩展在） | **只有权限审批在用**（`src/runtime/plugins/permissions/bridge.ts` 用 `ui.select` 做三选一），没有别的调用方 |
+| `extensionUi.request`（select / confirm / input / editor） | pi 扩展调用 `ui.*`，经 `extensionUiBridge.ts` 转事件（2026-09-15 注：该链路已按决策 012 在 T036 删除，本表保留为当时记录） | 有（pi 扩展在） | **只有权限审批在用**（`src/runtime/plugins/permissions/bridge.ts` 用 `ui.select` 做三选一），没有别的调用方 |
 | `question.requested` → QuestionCard | —— | **全仓没有任何生产者** | 同左 |
 
 `grep` 全仓 `question.requested`：只有渲染层消费方（`chatSessions.ts` / `sessionActivity.ts` /

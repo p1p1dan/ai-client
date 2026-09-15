@@ -127,7 +127,7 @@ Runtime 任务树的功能面确实做齐了，但「完成质量」明显低于
 | P6-2 | ✅ | 完成（小瑕疵） | 守卫只认整包说明符。cutover-11 已修（T028，`a11ccbe0`：改认子路径 import 并加阳性对照 fixture）；cutover-18（README P5-5 行与 p6-cutover.md 结论矛盾）已修（T027，`1b7c55fd`：统一为「不删」）；cutover-16（打包仍强制携带死插件，uncertain）已随 T009 / T025 拆解处理（`89c73e5b` / `45a7a347`） |
 | P6-3 | 🟡 | 第 4 条存疑 | GUI 无回归未覆盖退役改变的界面；门禁脚本不可运行（已修，T009） |
 | P6-4 | ✅ | 完成 | 无 |
-| P6-5 | ✅ | 完成（小瑕疵） | 只删了跑 legacy 的代码，没清失去消费者的一层。打包门禁已修（T009，`89c73e5b`）；死代码清扫已修（T025，`45a7a347`：cutover-05/07/20 删除，cutover-06 改注释保留、整链退役见 [Q012](../../../runtime-hardening/open-questions.md)；cross-07 leafCheckpoint 已删）；用户可见残留已修（T026，`2cfed556`：cutover-02/03/10）；piSessionPreflight（cutover-12）保留理由由 T027 改写（`1b7c55fd`），主体由 T028 就地收窄为 44 行（`a11ccbe0`） |
+| P6-5 | ✅ | 完成（小瑕疵） | 只删了跑 legacy 的代码，没清失去消费者的一层。打包门禁已修（T009，`89c73e5b`）；死代码清扫已修（T025，`45a7a347`：cutover-05/07/20 删除，cutover-06 先改注释、后已删（T036，`ce7f3b3a`，[决策 012](../../../runtime-hardening/decisions/012-retire-extension-ui-chain.md)）；Q012 已结案；cross-07 leafCheckpoint 已删）；用户可见残留已修（T026，`2cfed556`：cutover-02/03/10）；piSessionPreflight（cutover-12）保留理由由 T027 改写（`1b7c55fd`），主体由 T028 就地收窄为 44 行（`a11ccbe0`） |
 | H/20 | 🟢 | 有缺口 | seq 陈旧（high）、压缩锚点、CLI 补换行（待定）。已修（T003，`0332214c`）；CLI 补换行判可达并修尾片形态；中段形态按决策 006 已修（T034，`1f1f40d0`） |
 
 ## 六、low 级与质量问题（126 条，按主题）
