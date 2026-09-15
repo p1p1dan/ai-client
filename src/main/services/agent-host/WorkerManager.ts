@@ -39,15 +39,16 @@ import {
   isWorkerSetPermissionTierResult,
   isWorkerStopResult,
   isWorkerTreeResult,
+  normalizeWorkerCapabilities,
   sanitizeWorkerCommandRows,
   WORKER_COMPACT_REQUEST_TIMEOUT_MS,
+  type WorkerCapabilityInventory,
   type WorkerCommandsPayload,
   type WorkerCommandsResult,
   type WorkerCompactPayload,
   type WorkerCompactResult,
   type WorkerDiscardForkPayload,
   type WorkerDiscardForkResult,
-  type WorkerExtensionInfo,
   type WorkerExtensionUiResponsePayload,
   type WorkerExtensionUiResponseResult,
   type WorkerForkPayload,
@@ -500,21 +501,25 @@ export class WorkerManager {
   }
 
   /**
-   * U04 — the extensions this session's worker reported at bootstrap.
+   * T026 — what this session's worker brought up, as it reported at bootstrap.
    *
-   * `null` distinguishes "no live worker for this session" (the chat has not
-   * been sent yet, or its slot was evicted) from "a worker that loaded no
-   * plugins", which is an empty array. The UI says different things for the
-   * two, and guessing either way would misreport the user's setup.
+   * `null` is "nobody has reported": no live worker (the chat has not been sent
+   * yet, or its slot was evicted), or a worker whose build reports no inventory
+   * at all. It is NOT "this session has nothing" — the panel says those two
+   * differently, and guessing either way would misreport the user's setup.
    *
-   * Read off the cached bootstrap rather than asked over RPC: the list cannot
-   * change without a new bootstrap, and a round trip to a busy worker to
+   * Replaces `getSessionExtensions`, which answered from a `extensions` field
+   * no backend has written since P6-5 and so reported "0 plugins" for every
+   * session (cutover-03).
+   *
+   * Read off the cached bootstrap rather than asked over RPC: the inventory
+   * cannot change without a new bootstrap, and a round trip to a busy worker to
    * re-read a constant would put a UI panel in the turn's path.
    */
-  getSessionExtensions(sessionId: string): WorkerExtensionInfo[] | null {
+  getSessionCapabilities(sessionId: string): WorkerCapabilityInventory | null {
     const entry = this.entriesBySession.get(sessionId);
     if (!entry?.bootstrap) return null;
-    return entry.bootstrap.extensions ?? [];
+    return normalizeWorkerCapabilities(entry.bootstrap.capabilities);
   }
 
   getSlotSnapshots(): WorkerManagerSlotSnapshot[] {

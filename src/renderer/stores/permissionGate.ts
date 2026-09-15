@@ -1,19 +1,31 @@
 /**
  * Which permission system each session's worker actually came up on.
  *
- * The tiers (`readonly` / `pragmatic` / `handsoff` / `fullopen`) are implemented
- * as a link in the permission plugin's `authorizerChain`, and that line lives in
- * the `config.json` we ship next to our BUNDLED copy of the plugin. When the
- * agent dir's `settings.json` already declares `@gotgenes/pi-permission-system`
- * — a copy the user installed themselves — the worker deliberately does not
- * inject ours, because two live copies means two prompts per tool call. Their
- * config is then the one in force, it has no
- * `authorizerChain: ['aiclient-session-tier']`, and our link is registered but
- * never consulted. Every tier then behaves exactly like their own policy.
+ * Reads `session.created` / `session.resumed`'s `permissionGate`, and says the
+ * same thing that field's own note in `@shared/types/runtimeEvents` says.
  *
- * That failure is invisible: the picker still lists four tiers and still lets
- * you pick one. This store exists so the picker can stop making a promise the
- * runtime is not keeping (D10 — explicit degradation).
+ * ## What it used to mean, and what it means now
+ *
+ * The tiers were once a link in a pi permission extension's `authorizerChain`,
+ * shipped in the `config.json` next to our bundled copy. An agent dir that
+ * already declared `@gotgenes/pi-permission-system` made the worker skip
+ * injecting ours (two live copies = two prompts per tool call), which left the
+ * picker offering four tiers that all behaved like the user's own policy — an
+ * invisible failure, and the reason this store exists (D10 — explicit
+ * degradation).
+ *
+ * T025 / T026: that arrangement is gone. Nothing has injected a pi permission
+ * extension since P6-5; every decision is made by
+ * `src/runtime/plugins/permissions/` whatever the user has installed, and the
+ * native runtime reports `bundled` unconditionally. A pi permission extension
+ * a user installs now reaches the built-in Pi TERMINAL only — which the plugins
+ * page states in words (`PiPluginsSettings`) rather than through this gate. So
+ * `user_configured` has no producer left, and the degraded branch this store
+ * feeds is unreachable by construction rather than merely unlikely.
+ *
+ * Kept, not deleted, because the wire field is optional and cross-version: a
+ * Host that does send `user_configured` must still be reported honestly rather
+ * than read as `bundled`.
  *
  * A separate store rather than a field on `ChatSession`: `chatSessions.ts` is a
  * red-line file, and nothing here needs to be in it — this is read by exactly

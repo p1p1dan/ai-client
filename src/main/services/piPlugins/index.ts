@@ -38,30 +38,41 @@ function service(): PiPluginService {
 }
 
 /**
- * Which permission system the next session will run.
+ * Which permission system the built-in Pi terminal will run.
  *
- * Read from `<agentDir>/settings.json` with pi's OWN matching rules — the same
- * exported function the worker calls at bootstrap, not a second copy of the
- * logic. Only the global scope is read: project-scoped packages are the
- * repository's, they change per workspace, and in managed mode they are ignored
- * entirely.
+ * Read from `<agentDir>/settings.json` with pi's OWN matching rules, not a
+ * second copy of them. Only the global scope is read: project-scoped packages
+ * are the repository's, they change per workspace, and in managed mode they are
+ * ignored entirely.
  *
- * `unknown` when the file cannot be read. That is not the same as `bundled`,
- * and a page that printed "the app's own" for an unreadable file would be
+ * cutover-02: this used to be read as "which permission system approves this
+ * app's tool calls", and the comment here claimed the worker called the same
+ * function at bootstrap. Neither survived P6-5 — a chat is approved by
+ * `src/runtime/plugins/permissions/` no matter what is installed, and no worker
+ * calls this. What a user installs does still decide the TERMINAL, which runs
+ * the real pi CLI out of this same directory, so that is what this answers now.
+ *
+ * `unknown` when the file cannot be read — not the same as `none`, and a page
+ * that printed "no permission extension" for an unreadable file would be
  * stating something it did not check.
+ *
+ * Exported for its own test: everything else in this module needs a real pi CLI
+ * on disk, and the answer this one gives is the sentence the plugins page
+ * prints.
  */
-function permissionSystemOwner(agentDir: string): PermissionSystemOwner {
+export function terminalPermissionSystemOwner(agentDir: string): PermissionSystemOwner {
   try {
     const parsed: unknown = JSON.parse(readFileSync(join(agentDir, 'settings.json'), 'utf8'));
     const packages =
       parsed && typeof parsed === 'object'
         ? (parsed as { packages?: unknown }).packages
         : undefined;
-    return permissionPluginConfiguredByUser(packages) ? 'user_configured' : 'bundled';
+    return permissionPluginConfiguredByUser(packages) ? 'user_configured' : 'none';
   } catch (error) {
-    // A missing file is the ordinary first-run state, and it means the bundled
-    // copy is what loads. Anything else is a file we failed to read.
-    return (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? 'bundled' : 'unknown';
+    // A missing file is the ordinary first-run state: nothing is declared, so
+    // the terminal loads no permission extension at all. Anything else is a
+    // file we failed to read.
+    return (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? 'none' : 'unknown';
   }
 }
 
@@ -91,7 +102,7 @@ export function getPiPluginState(): Promise<PiPluginState> {
       plugins,
       settingsPath: instance.settingsPath,
       projectScopeAvailable: !managed,
-      permissionSystem: permissionSystemOwner(getAppPiAgentDir()),
+      terminalPermissionSystem: terminalPermissionSystemOwner(getAppPiAgentDir()),
       ...(error ? { error } : {}),
     };
   });
@@ -100,10 +111,11 @@ export function getPiPluginState(): Promise<PiPluginState> {
 /**
  * Install or remove, then drop the workers.
  *
- * The extension list is read when a runtime is built, so a session that is
- * already up keeps running the old set. Replacing the workers is what makes an
- * installed plugin usable in the next turn instead of after a restart — the same
- * reason the opt-in bundled extensions do it in `ipc/piResources.ts`.
+ * cutover-02 / cutover-03: a chat loads none of these packages any more, so the
+ * restart is no longer what makes an installed plugin usable. It is kept
+ * because `<agentDir>/settings.json` is also read for other things at bootstrap
+ * and a stale worker would answer the plugins page from a file that has since
+ * changed; it costs one reload of an idle slot.
  */
 export function installPiPlugin(source: string): Promise<PiPluginCommandResult> {
   return serialise(async () => {

@@ -5,7 +5,6 @@ import {
   PI_MODEL_CONFIG_PATH,
   PI_MODEL_MANAGEMENT_URL_ENV,
   PI_MODEL_MANAGEMENT_URL_SETTING_KEY,
-  PI_OPT_IN_EXTENSIONS_ENV,
   PI_PROJECT_TRUST_ENV,
   PI_SUBAGENTS_FEATURE_ID,
   PI_USER_AGENT_ENV,
@@ -16,7 +15,8 @@ import {
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { app, net } from 'electron';
-import { optInFeatureRegistry } from '../../../agent-host/bundledPlugins.mjs';
+import { nativeFeatureRegistry } from '../../../agent-host/bundledPlugins.mjs';
+import { nativeSubagentSettings } from '../agent-host/nativeSubagentSettings';
 import { getAppStateRoot } from '../appStatePaths';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
@@ -24,7 +24,6 @@ import { getOnboardingServiceUrl } from '../onboarding/serviceUrl';
 import { readSharedSettings, writeSharedSettings } from '../SharedSessionState';
 import { readUserProviderGroupForRuntime, readUserProvidersForRuntime } from '../userProviders';
 import { type NativeModelCatalog, resolveNativeModelCatalogWith } from './nativeCatalog';
-import { resolveOptInFeatures } from './optInFeatures';
 import { PiModelConfigService } from './PiModelConfigService';
 
 function getHomeDir(): string {
@@ -238,24 +237,27 @@ export function getActivePiPromptTemplatesDir(): string {
 }
 
 /**
- * Whether the bundled sub-agent extension is injected. Default OFF.
+ * The settings page's view of the native feature switches.
  *
- * Off by default because the cost of the feature is paid by everyone on every
- * turn — its three tool schemas sit in the cached prefix of every request —
- * while the feature is used by a minority of sessions, and its absence is
- * visible the moment the model has no `subagent` tool to call.
+ * cutover-10: `enabled` comes from `nativeSubagentSettings`, which is the same
+ * function `WorkerManager` asks before it builds a graph. The page used to
+ * answer from a separate resolver whose "nobody chose" was OFF while the
+ * runtime's was ON, so a fresh install saw a switch that said the opposite of
+ * what every turn was doing.
  */
-export function resolvePiSubagentsEnabled(): boolean {
-  return resolveOptInFeatures(readSharedSettings()).includes(PI_SUBAGENTS_FEATURE_ID);
+function nativeFeatureEnabled(id: string): boolean {
+  // One switch, one reader. A second feature added here needs its own reader
+  // rather than a default parked in the registry — that split is what produced
+  // cutover-10.
+  return id === PI_SUBAGENTS_FEATURE_ID ? nativeSubagentSettings().enabled : false;
 }
 
 export function getPiResourceSettings(): PiResourceSettings {
   const userAgentDir = getLocalPiAgentDir();
   const appAgentDir = getAppPiAgentDir();
-  const enabledFeatures = new Set(resolveOptInFeatures(readSharedSettings()));
   return {
     managed: resolveManagedCredentialsEnabled(),
-    enableSubagents: enabledFeatures.has(PI_SUBAGENTS_FEATURE_ID),
+    enableSubagents: nativeFeatureEnabled(PI_SUBAGENTS_FEATURE_ID),
     paths: {
       sharedSkills: join(getHomeDir(), '.agents', 'skills'),
       userSkills: join(userAgentDir, 'skills'),
@@ -263,18 +265,15 @@ export function getPiResourceSettings(): PiResourceSettings {
       appSkills: join(appAgentDir, 'skills'),
       appPromptTemplates: getAppPiPromptTemplatesDir(),
     },
-    bundledFeatures: optInFeatureRegistry().map(({ legacySettingKey: _legacy, ...feature }) => ({
+    features: nativeFeatureRegistry().map(({ legacySettingKey: _legacy, ...feature }) => ({
       ...feature,
-      enabled: enabledFeatures.has(feature.id),
+      enabled: nativeFeatureEnabled(feature.id),
     })),
   };
 }
 
 export function resolveManagedPiWorkerEnv(): Record<string, string> {
   const managed = resolveManagedCredentialsEnabled();
-  // Opt-in bundled extensions. Sent in BOTH modes: this is a cost the user
-  // opted into, and the bundled copy is injected in local mode too.
-  const optIn = resolveOptInFeatures(readSharedSettings());
   return {
     // T08-c (D-Q9 decision 4). Sent in BOTH modes, never omitted: an absent key
     // identifies a legacy process build, not either deliberate trust posture.
@@ -294,23 +293,26 @@ export function resolveManagedPiWorkerEnv(): Record<string, string> {
     // H/19: unconditional. Both modes run out of this app's directory, so there
     // is no longer a case where pi should be left on its own default.
     PI_CODING_AGENT_DIR: getAppPiAgentDir(),
-    ...(optIn.length > 0 ? { [PI_OPT_IN_EXTENSIONS_ENV]: optIn.join(',') } : {}),
   };
 }
 
+/**
+ * What the real pi CLI in a PTY is handed.
+ *
+ * cutover-10 emptied the difference: the only key this used to drop was the
+ * opt-in extension list, which was read by OUR Host code and would have claimed
+ * an injection the CLI never performed. That list is gone, so a TUI now gets
+ * exactly what a worker gets.
+ *
+ * Kept as its own name rather than collapsed into the caller, because the three
+ * keys left are ALL ones pi itself resolves — `PI_CODING_AGENT_DIR` puts the TUI
+ * in the same directory as the GUI (U3), F08's User-Agent makes the header the
+ * gateway sees correct, and the managed marker is what `PiTuiPty` reads before
+ * it strips inherited credentials. The next worker-only variable needs a place
+ * to be dropped, and this is that place.
+ */
 export function resolveManagedPiPtyEnv(): Record<string, string> {
-  // The opt-in extension list is dropped here: it is read by OUR Host code, not
-  // by pi, so the real pi CLI in the PTY would ignore it — and leaving it in the
-  // environment would claim an injection that is not happening. A TUI session
-  // loads what the agent dir's own `settings.json` gives it, which since H/19 is
-  // the same file the GUI session reads.
-  //
-  // `PI_CODING_AGENT_DIR` and F08's User-Agent are deliberately NOT dropped:
-  // they are the opposite kind of variable. pi itself resolves both, so a PTY
-  // turn lands in the same directory and identifies itself the same way a worker
-  // turn does.
-  const { [PI_OPT_IN_EXTENSIONS_ENV]: _optIn, ...ptyEnv } = resolveManagedPiWorkerEnv();
-  return ptyEnv;
+  return { ...resolveManagedPiWorkerEnv() };
 }
 
 export { validatePiManagedModelsConfig } from './configValidation';

@@ -125,9 +125,11 @@ export function PiResourcesSettings() {
               <p className="text-meta text-muted-foreground">
                 {/* H/19: one directory in both modes. Saying "managed mode reads
                     this" would send a local-mode user looking for a second
-                    location that no longer exists. */}
+                    location that no longer exists. cutover-03 split the
+                    sentence: pi extensions live here too, but since P6-5 only
+                    the TUI loads them. */}
                 {t(
-                  'Every session in this app — signed in or using your own setup, GUI or Pi TUI — loads skills, prompt templates and plugins from here.'
+                  'Every session in this app — signed in or using your own setup, GUI or Pi TUI — loads skills and prompt templates from here. Installed pi extensions are loaded from here by the Pi TUI only.'
                 )}
               </p>
             </div>
@@ -167,12 +169,16 @@ export function PiResourcesSettings() {
             </div>
           </section>
 
+          {/* cutover-10: these switch features of THIS app's own runtime, not
+              bundled pi extensions — those were retired in T025 — and each one
+              reads the same state the runtime reads, so the page cannot show
+              "off" for a session that has the feature on. */}
           <section className="space-y-4 border-t p-4">
             <div className="flex min-w-0 items-center gap-2">
               <Boxes className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <h4 className="text-ui font-semibold">{t('Bundled extensions')}</h4>
+              <h4 className="text-ui font-semibold">{t('Agent features')}</h4>
             </div>
-            {snapshot.bundledFeatures.map((feature) => (
+            {snapshot.features.map((feature) => (
               <SettingsRow key={feature.id} className="sm:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="min-w-0 flex-1">
                   <p className="text-ui font-medium">{t(feature.label)}</p>

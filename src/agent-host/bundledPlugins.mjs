@@ -1,6 +1,6 @@
 /**
  * Feature switches this app offers, and the pi extension packages it refuses to
- * ship — R03, rewritten by T025.
+ * ship — R03, rewritten by T025 and T026.
  *
  * ## Nothing is bundled any more
  *
@@ -25,14 +25,20 @@
  * bundled scope of the permission-policy panel, and the build writes that file.
  * It is payload plus a file location, not a loaded extension.
  *
- * ## What the opt-in table is for now
+ * ## What the switch table is for now
  *
- * {@link OPT_IN_FEATURE_PLUGINS} still drives the Settings → Pi Resources
- * switches (Main reads it through {@link optInFeatureRegistry}). The one entry
- * left, `subagents`, no longer enables a package — the native runtime always
- * has delegation. Reconciling that switch with what native actually does is
- * T026's job; T025 only stopped shipping the package behind it, and left the
- * user-visible switch exactly as it was.
+ * {@link NATIVE_FEATURE_SWITCHES} drives the Settings → Pi Resources switches
+ * (Main reads it through {@link nativeFeatureRegistry}). The one entry left,
+ * `subagents`, no longer enables a package — it turns a feature of this app's
+ * OWN runtime on and off, which is why T026 renamed it off the "opt-in bundled
+ * extension" vocabulary.
+ *
+ * There is no `defaultEnabled` here any more. The default is not this table's
+ * to state: the native runtime's contract is that an install which never
+ * expressed a preference gets the full builtin catalog, and the single reader
+ * of that rule is `nativeSubagentSettings` in Main. A second copy here is
+ * exactly how the page came to show "off" for a session that was registering
+ * delegation tools on every turn (cutover-10).
  */
 
 /**
@@ -47,30 +53,29 @@ export const RETIRED_BUNDLED_PLUGIN_PACKAGES = [
 ];
 
 /**
- * @typedef {object} OptInFeaturePlugin
- * @property {string} optIn Feature id the user turns on.
- * @property {{label: string, cost: string, defaultEnabled: boolean, legacySettingKey?: string}} [settings]
+ * @typedef {object} NativeFeatureSwitch
+ * @property {string} id Feature id the user turns on or off.
+ * @property {{label: string, cost: string, legacySettingKey?: string}} [settings]
  */
 
-/** @type {readonly OptInFeaturePlugin[]} */
-export const OPT_IN_FEATURE_PLUGINS = [
+/** @type {readonly NativeFeatureSwitch[]} */
+export const NATIVE_FEATURE_SWITCHES = [
   {
-    optIn: 'subagents',
+    id: 'subagents',
     settings: {
       label: 'Sub-agents',
-      cost: 'Lets the model delegate work to background agents. Off by default: its tool definitions are sent with every request, so it costs tokens on every turn even when unused. Changing it reloads Pi workers.',
-      defaultEnabled: false,
+      cost: 'Lets the model delegate work to background agents. On unless you turn it off: its tool definitions are sent with every request, so it costs tokens on every turn even when unused. Changing it reloads workers.',
       legacySettingKey: 'enablePiSubagents',
     },
   },
 ];
 
-export function optInFeatureRegistry(plugins = OPT_IN_FEATURE_PLUGINS) {
-  return plugins.flatMap((plugin) => {
-    if (!plugin.optIn) return [];
-    if (!plugin.settings?.cost.trim() || !plugin.settings.label.trim()) {
-      throw new Error(`Missing settings or cost description for ${plugin.optIn}`);
+export function nativeFeatureRegistry(switches = NATIVE_FEATURE_SWITCHES) {
+  return switches.flatMap((entry) => {
+    if (!entry.id) return [];
+    if (!entry.settings?.cost.trim() || !entry.settings.label.trim()) {
+      throw new Error(`Missing settings or cost description for ${entry.id}`);
     }
-    return [{ id: plugin.optIn, ...plugin.settings }];
+    return [{ id: entry.id, ...entry.settings }];
   });
 }

@@ -377,14 +377,20 @@ export const IPC_CHANNELS = {
   CHAT_SET_PERMISSION_TIER: 'chat:setPermissionTier',
   CHAT_SET_PERMISSIONS: 'chat:setPermissions',
   /**
-   * U04 — which extensions pi actually loaded for a session.
+   * T026 — what one session's own runtime brought up: MCP servers and their
+   * connection state, skill and prompt-template counts, sub-agent definitions.
    *
-   * A pull rather than an event: the list is fixed for the life of a bootstrap,
-   * so pushing it would add traffic to every session start for a panel that is
-   * usually closed. `null` back means no live worker, which is a different
-   * answer from an empty list.
+   * Replaced `chat:listSessionExtensions`, which answered with the pi extension
+   * list — a field with no producer since P6-5, so the sidebar reported "0
+   * plugins" for every session (cutover-03).
+   *
+   * A pull rather than an event: the inventory is fixed for the life of a
+   * bootstrap, so pushing it would add traffic to every session start for a
+   * panel that is usually closed. `null` back means nobody has reported —
+   * no live worker, or a build that reports no inventory — which is a different
+   * answer from an inventory whose members are empty.
    */
-  CHAT_LIST_SESSION_EXTENSIONS: 'chat:listSessionExtensions',
+  CHAT_LIST_SESSION_CAPABILITIES: 'chat:listSessionCapabilities',
   CHAT_LIST_SESSIONS: 'chat:listSessions',
   CHAT_RENAME_SESSION: 'chat:renameSession',
   CHAT_ARCHIVE_SESSION: 'chat:archiveSession',

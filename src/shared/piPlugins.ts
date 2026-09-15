@@ -34,14 +34,20 @@ export interface PiPluginView {
 }
 
 /**
- * Which permission system this app's sessions are actually running.
+ * Which permission system the BUILT-IN PI TERMINAL will run.
  *
- * Not a control — a statement. A user who installs their own copy of the
- * permission system takes over tool approval for every session, and they are
- * entitled to see that they did (H/19: conflicts are the user's responsibility,
- * which only works if the handover is visible).
+ * Not a control — a statement, and cutover-02 narrowed what it is a statement
+ * about. It used to answer "who approves this app's tool calls", which since
+ * P6-5 has one answer for every session: our own permissions plugin. What is
+ * still variable is the terminal, where the real pi CLI loads whatever the
+ * agent directory declares.
+ *
+ * `none` means the agent directory declares no permission extension, so the
+ * terminal runs pi's own defaults — deliberately not called `bundled`: the copy
+ * this app ships is payload for the permission-policy panel and a worker
+ * directory file, and the CLI never loads it.
  */
-export type PermissionSystemOwner = 'bundled' | 'user_configured' | 'unknown';
+export type PermissionSystemOwner = 'none' | 'user_configured' | 'unknown';
 
 export interface PiPluginState {
   plugins: PiPluginView[];
@@ -59,7 +65,8 @@ export interface PiPluginState {
    * it has not trusted, and it decides that for itself.
    */
   projectScopeAvailable: boolean;
-  permissionSystem: PermissionSystemOwner;
+  /** cutover-02 — about the built-in terminal, not about this app's chats. */
+  terminalPermissionSystem: PermissionSystemOwner;
   /**
    * Present when the listing itself failed. `plugins` is then empty, and the
    * page says so rather than rendering an empty list as "you have none" — the

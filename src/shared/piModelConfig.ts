@@ -67,23 +67,6 @@ export const PI_PROJECT_TRUST_ENV = 'AICLIENT_PI_TRUST_PROJECT_CONFIG';
 export const NATIVE_PROJECT_TRUSTED = true;
 
 /**
- * Which OPT-IN bundled feature extensions this session may load, as a
- * comma-separated list of feature ids (see `bundledPlugins.mjs`).
- *
- * One value carries both the switch and the target: an ABSENT key means "load
- * none of them", so an older Main build that sends nothing lands on the
- * conservative side rather than on a second reading of the state.
- *
- * It exists because a bundled extension is not free: its tool schemas are part
- * of every request's cached prefix. Measured on a first turn (2026-09-07,
- * `claude-sonnet-5`): 11.4 KB of tool JSON, of which `subagent` +
- * `get_subagent_result` + `steer_subagent` were 4.8 KB — paid on every session
- * whether or not anyone delegates. `ask_user_question` is NOT opt-in: it is the
- * producer for a renderer surface that would otherwise never appear.
- */
-export const PI_OPT_IN_EXTENSIONS_ENV = 'AICLIENT_PI_OPT_IN_EXTENSIONS';
-
-/**
  * F08 — the environment variable every generated provider's `User-Agent`
  * header references.
  *
@@ -126,16 +109,19 @@ export function piUserAgent(appVersion: string): string {
 export const PI_USER_AGENT_HEADER = 'User-Agent';
 
 /**
- * Feature id of the bundled sub-agent extension, and the only member of the
- * opt-in list today.
+ * Feature id of delegation, and the only native feature switch there is today.
  *
- * A feature id rather than the npm name on purpose: the package name lives in
- * `src/agent-host/bundledPlugins.mjs` and must stay there — Main decides whether
- * the feature is on, the Host decides which package that is.
+ * A feature id rather than a package name: T026 retired the package this used
+ * to enable, and what the switch turns on now is `src/runtime/plugins/subagent`
+ * — this app's own delegation, which every session has unless this says no.
  */
 export const PI_SUBAGENTS_FEATURE_ID = 'subagents';
 
-/** User setting behind {@link PI_SUBAGENTS_FEATURE_ID}. Absent = OFF. */
+/**
+ * The older boolean behind {@link PI_SUBAGENTS_FEATURE_ID}, still read so an
+ * install that set it keeps its choice. Absent is "never chose", which is ON —
+ * see `nativeSubagentSettings`, the single reader of that rule.
+ */
 export const PI_ENABLE_SUBAGENTS_SETTING_KEY = 'enablePiSubagents';
 
 /**
@@ -277,7 +263,13 @@ export interface PiModelManagementSettings {
 /** R04 — the three durable installation locations shown in Settings → Resources. */
 export interface PiResourceSettings {
   managed: boolean;
-  /** Whether the bundled sub-agent extension is injected. Default OFF. */
+  /**
+   * Whether this app's own delegation is offered to the model.
+   *
+   * cutover-10: read from `nativeSubagentSettings`, the same function the
+   * worker's own wiring reads, so the page cannot say "off" for a session that
+   * registers `Task*` anyway. An install that never chose gets it ON.
+   */
   enableSubagents: boolean;
   paths: {
     sharedSkills: string;
@@ -293,11 +285,14 @@ export interface PiResourceSettings {
     appSkills: string;
     appPromptTemplates: string;
   };
-  bundledFeatures: Array<{
+  /**
+   * The native feature switches, as `src/agent-host/bundledPlugins.mjs`
+   * declares them, each with what this install has it set to.
+   */
+  features: Array<{
     id: string;
     label: string;
     cost: string;
-    defaultEnabled: boolean;
     enabled: boolean;
   }>;
 }

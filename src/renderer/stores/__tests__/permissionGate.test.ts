@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -91,5 +93,55 @@ describe('forgetSession', () => {
     applyRuntimeEventToGates(event({ sessionId: 's2', payload: { permissionGate: 'bundled' } }));
     usePermissionGateStore.getState().forgetSession('s1');
     expect(usePermissionGateStore.getState().gates).toEqual({ s2: 'bundled' });
+  });
+});
+
+/**
+ * T025 / T026 — the store's note and the wire field's note must say one thing.
+ *
+ * The behaviour above is unchanged and correct; what went stale is the reason
+ * it exists. The module used to explain that a worker "deliberately does not
+ * inject ours" when the agent directory already declared
+ * `@gotgenes/pi-permission-system`, leaving the user's own policy in force.
+ * Nothing has injected a pi permission extension since P6-5, and the native
+ * runtime reports `bundled` unconditionally, so a reader who took that note at
+ * face value would go looking for a handover that cannot happen.
+ *
+ * T025 rewrote the shared-type half and T026 the renderer half; these checks
+ * are what stop the two from drifting apart again, and what pins the producer
+ * claim they both rest on.
+ */
+describe('permission gate notes and their producer', () => {
+  const read = (...parts: string[]) =>
+    readFileSync(join(__dirname, '..', '..', '..', ...parts), 'utf8');
+  // Only the module docblock — everything before the first import. An import
+  // line names the other module too, and an assertion a bare `import` already
+  // satisfies would pass however the prose drifts.
+  const note = (source: string) => source.slice(0, source.indexOf('\nimport '));
+  const store = note(read('renderer', 'stores', 'permissionGate.ts'));
+  const wire = read('shared', 'types', 'runtimeEvents.ts');
+  const native = read('runtime', 'worker', 'nativeWorkerRuntime.ts');
+
+  it('the native runtime is the producer, and it only ever says bundled', () => {
+    expect(native).toContain("permissionGate: 'bundled'");
+    expect(native).not.toContain('user_configured');
+  });
+
+  it('each note points at the other, so neither can be updated alone', () => {
+    expect(store).toContain('@shared/types/runtimeEvents');
+    expect(wire).toContain('stores/permissionGate.ts');
+  });
+
+  it('neither still describes the injection handover in the present tense', () => {
+    // Recounting the history is fine and useful; the sentence that has to be
+    // gone is the one that said it is what happens now.
+    for (const source of [store, wire]) {
+      expect(source).not.toContain('the worker deliberately does not inject ours');
+      expect(source).not.toContain('Their config is then the one in force');
+    }
+  });
+
+  it('the renderer note says where an installed permission extension does reach', () => {
+    expect(store).toMatch(/built-in Pi TERMINAL|built-in terminal/);
   });
 });

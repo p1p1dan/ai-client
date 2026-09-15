@@ -43,6 +43,23 @@ describe('R04 Pi resource settings', () => {
   });
 
   /**
+   * cutover-10 — the switch renders what Main reports and nothing else.
+   *
+   * `enabled` is resolved by the same function the worker's wiring asks, so the
+   * page cannot disagree with the runtime. A `defaultEnabled` read here, or a
+   * section still called "bundled extensions", would be the reintroduction of
+   * the split that made a fresh install see "off" while every turn registered
+   * the delegation tools.
+   */
+  it('renders the native feature switches without a second idea of the default', () => {
+    expect(component).toContain('snapshot.features.map');
+    expect(component).not.toContain('bundledFeatures');
+    expect(component).not.toContain('defaultEnabled');
+    expect(component).toContain("t('Agent features')");
+    expect(component).not.toContain("t('Bundled extensions')");
+  });
+
+  /**
    * H/19 removed the borrow switch. The page must not offer a control for a
    * mechanism that no longer exists — it would save a setting nothing reads.
    */

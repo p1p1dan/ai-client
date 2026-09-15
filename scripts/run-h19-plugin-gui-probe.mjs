@@ -8,8 +8,11 @@
  *
  *  - 装和卸都走真实控件（原生 setter 触发 React 的 onChange，再点真按钮），
  *    不调 `window.electronAPI.piPlugins.install`；
- *  - 「会话里真的可用」用 `chat.listSessionExtensions` 判定。它读的是 bootstrap
- *    当时的结果，也就是 pi 自己解析出来的那份，不是我们二次推导的；
+ *  - 「会话里真的可用」这一问，2026-09-15 起已经没有肯定的答案：P6-5 退役了会
+ *    加载 pi 扩展的引擎，`chat.listSessionExtensions` 随之被
+ *    `chat.listSessionCapabilities` 取代（cutover-03）。这一步现在读的是会话自
+ *    己的能力清单（MCP / 技能 / 子代理），用来记录「装的扩展不在里面」这个事实
+ *    ——扩展只对内嵌 Pi 终端生效，验它得去终端那条路；
  *  - 失败路径用一个确实不存在的包名，判据是界面上出现 npm 自己的报错文本。
  *
  * 案例 5 这里只验界面那一半（托管模式下说明文案出现、且始终没有项目级入口）。
@@ -322,10 +325,10 @@ async function main() {
     };
     report.screenshots = { installed: await screenshot(cdp, 'h19-plugin-installed') };
 
-    // ---- 案例 4 ②：会话里真的可用 ----
+    // ---- 案例 4 ②：会话自己的能力清单 ----
     // 装完 Main 会 invalidateAll，所以要一个装完之后才 bootstrap 的 worker。
-    // 真发一轮，因为 listSessionExtensions 只在有活 worker 时才有答案。
-    report.steps.sessionExtensions = await sessionExtensionCheck(cdp);
+    // 真发一轮，因为这份清单只在有活 worker 时才有答案。
+    report.steps.sessionCapabilities = await sessionCapabilityCheck(cdp);
 
     // ---- 案例 4 ③：装一个不存在的包 ----
     await openPiSettings(cdp);
@@ -383,7 +386,7 @@ async function main() {
  * 不用合成数据：合成的 store 里没有 worker，而这条判据的全部意义就在于「pi 真的
  * 把它加载进了会话」。回合内容无所谓，只要能让 worker bootstrap 一次。
  */
-async function sessionExtensionCheck(cdp) {
+async function sessionCapabilityCheck(cdp) {
   await cdp.evaluate(`(() => {
     window.__h19ext = null;
     Promise.resolve().then(async () => {
@@ -394,7 +397,7 @@ async function sessionExtensionCheck(cdp) {
       return sid;
     }).then(async (sid) => {
       // 先看有没有现成的活 worker；没有就发一轮把它拉起来。
-      let list = await window.electronAPI.chat.listSessionExtensions({ sessionId: sid });
+      let list = await window.electronAPI.chat.listSessionCapabilities({ sessionId: sid });
       return { sid, before: list };
     }).then((value) => { window.__h19ext = { done: true, value }; })
      .catch((error) => { window.__h19ext = { done: true, error: String(error?.message ?? error) }; });
@@ -402,7 +405,7 @@ async function sessionExtensionCheck(cdp) {
   })()`);
   const probed = await cdp.waitFor(`window.__h19ext?.done ? window.__h19ext : null`, {
     timeoutMs: 60_000,
-    label: 'session extensions probed',
+    label: 'session capabilities probed',
   });
   if (probed.error) return { error: probed.error };
 
@@ -428,7 +431,7 @@ async function sessionExtensionCheck(cdp) {
         Promise.resolve().then(async () => {
           const chat = await import(/* @vite-ignore */ '/stores/chatSessions.ts');
           const sid = chat.useChatSessionsStore.getState().activeSessionId;
-          const list = await window.electronAPI.chat.listSessionExtensions({ sessionId: sid });
+          const list = await window.electronAPI.chat.listSessionCapabilities({ sessionId: sid });
           window.__h19ext2 = { done: true, sid, list };
         }).catch((e) => { window.__h19ext2 = { done: true, error: String(e?.message ?? e) }; });
       }
@@ -436,7 +439,7 @@ async function sessionExtensionCheck(cdp) {
       if (value && value.done && value.list === null) { window.__h19ext2 = null; return null; }
       return value && value.done ? value : null;
     })()`,
-    { timeoutMs: 240_000, label: 'session extensions after turn' }
+    { timeoutMs: 240_000, label: 'session capabilities after turn' }
   );
   return after;
 }

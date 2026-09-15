@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   WORKER_RPC_PROTOCOL_VERSION,
@@ -159,6 +161,46 @@ describe('PiWorkerRpcServer', () => {
       error: { code: 'WORKER_ALREADY_BOOTSTRAPPED' },
     });
     expect(createRuntime).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * cutover-10 — the opt-in extension parameter is gone, not merely unused.
+   *
+   * Main filled `AICLIENT_PI_OPT_IN_EXTENSIONS`, the entry read it, this server
+   * forwarded it as `optInExtensions`, and no runtime ever declared the field.
+   * A dead parameter on a construction call reads as configuration, which is
+   * why it survived P6-5 unnoticed; these two checks are what make it come back
+   * loudly rather than silently.
+   */
+  describe('no opt-in extension transport', () => {
+    it('hands the runtime factory nothing named after opt-in extensions', async () => {
+      const messages: Array<Record<string, unknown>> = [];
+      const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
+      const server = new PiWorkerRpcServer({
+        port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+        generation: 3,
+        projectTrusted: true,
+        ...engineFactories,
+        createRuntime,
+        // A caller from an older build may still pass it; it must not survive
+        // into the runtime options either way.
+        ...({ optInExtensions: 'subagents' } as Record<string, unknown>),
+      });
+      server.receive(
+        request('rpc-1', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
+      );
+      await vi.waitFor(() => expect(messages).toHaveLength(1));
+      const options = createRuntime.mock.calls[0][0] as unknown as Record<string, unknown>;
+      expect(Object.keys(options).some((key) => /optIn/i.test(key))).toBe(false);
+    });
+
+    it('leaves no reader of the opt-in variable in the worker entry or this server', () => {
+      for (const file of ['../worker.ts', '../piWorkerRpcServer.ts']) {
+        const source = readFileSync(join(__dirname, file), 'utf8');
+        expect(source).not.toContain('PI_OPT_IN_EXTENSIONS_ENV');
+        expect(source).not.toContain('AICLIENT_PI_OPT_IN_EXTENSIONS');
+      }
+    });
   });
 
   // U05-c — an unbound session runs in a throwaway directory, so it must not

@@ -7,7 +7,7 @@ import {
 } from '@shared/piModelConfig';
 import { IPC_CHANNELS } from '@shared/types';
 import { ipcMain, shell } from 'electron';
-import { optInFeatureRegistry } from '../../agent-host/bundledPlugins.mjs';
+import { nativeFeatureRegistry } from '../../agent-host/bundledPlugins.mjs';
 import { workerManager } from '../services/agent-host/WorkerManager';
 import { getActivePiPromptTemplatesDir, getPiResourceSettings } from '../services/piModelConfig';
 import { readSharedSettings } from '../services/SharedSessionState';
@@ -33,6 +33,10 @@ function readUpdateRequest(payload: unknown): UpdatePiResourceSettingsRequest {
     if (typeof value !== 'boolean') throw new Error('Invalid Pi resource settings request');
     request[field] = value;
   }
+  // The wire field and the stored key keep the `optInFeatures` name on purpose:
+  // it is the key installs already have written in their settings file, and
+  // renaming it would read every existing choice as "never chose" — which since
+  // cutover-10 means ON. Only the vocabulary around it changed.
   if (raw.optInFeatures !== undefined) {
     if (
       !raw.optInFeatures ||
@@ -41,7 +45,7 @@ function readUpdateRequest(payload: unknown): UpdatePiResourceSettingsRequest {
     ) {
       throw new Error('Invalid Pi resource settings request');
     }
-    const ids = new Set(optInFeatureRegistry().map((feature) => feature.id));
+    const ids = new Set(nativeFeatureRegistry().map((feature) => feature.id));
     request.optInFeatures = {};
     for (const [id, enabled] of Object.entries(raw.optInFeatures)) {
       if (!ids.has(id)) continue;
@@ -68,8 +72,9 @@ export function registerPiResourceHandlers(): void {
       const previous = getPiResourceSettings();
 
       const patch: Record<string, unknown> = {};
-      // The extension list is read when a runtime is built, in BOTH modes, so
-      // any change to it needs the workers back.
+      // A feature switch is read when a runtime is BUILT — the native graph
+      // decides then whether to register delegation — so a change to one only
+      // reaches a session after its worker is replaced.
       let restartAllWorkers = false;
 
       if (
@@ -87,7 +92,7 @@ export function registerPiResourceHandlers(): void {
       ) {
         featurePatch.subagents = request.enableSubagents;
       }
-      for (const feature of previous.bundledFeatures) {
+      for (const feature of previous.features) {
         if (featurePatch[feature.id] === feature.enabled) delete featurePatch[feature.id];
       }
       if (Object.keys(featurePatch).length > 0) {

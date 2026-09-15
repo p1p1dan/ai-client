@@ -78,6 +78,10 @@ function fakeRuntime(
     file?: string;
     sourceFile?: string;
     skills?: unknown;
+    /** Present = this graph was built with the MCP bridge; absent = without. */
+    mcp?: unknown;
+    /** Present = delegation is registered for this install. */
+    subagents?: unknown;
     /** Make the graph fail to tear down, which bootstrap really can do. */
     disposeFails?: boolean;
     /** Present = this graph has compaction; absent = it was built without it. */
@@ -140,6 +144,8 @@ function fakeRuntime(
       configure: (settings: unknown) => fake.configured.push(settings),
     },
     ...(overrides.skills === undefined ? {} : { skills: overrides.skills }),
+    ...(overrides.mcp === undefined ? {} : { mcp: overrides.mcp }),
+    ...(overrides.subagents === undefined ? {} : { subagents: overrides.subagents }),
     ...(overrides.prepareTurn
       ? {
           context: {
@@ -216,6 +222,67 @@ describe('NativeWorkerRuntime bootstrap', () => {
       file: SESSION_FILE,
       cwd: '/repo',
       mode: 'create',
+    });
+  });
+
+  /**
+   * cutover-03 — the sidebar panel's producer.
+   *
+   * The panel used to be fed `extensions`: the pi extensions a worker had
+   * loaded. P6-5 retired the loader, so the field had nobody writing it and the
+   * panel reported "0 plugins" for every session while the MCP servers the
+   * session really had went unmentioned. Bootstrap reports OUR services now, and
+   * the rule that keeps it honest is that a service the graph was built WITHOUT
+   * is omitted rather than counted as zero.
+   */
+  describe('capability inventory', () => {
+    it('projects the services the graph actually holds', async () => {
+      const fake = fakeRuntime({
+        skills: SKILLS_SERVICE_FAKE,
+        mcp: {
+          connections: [
+            { server: { name: 'files' }, tools: [{}, {}, {}] },
+            { server: { name: 'down' }, tools: [], error: 'ECONNREFUSED' },
+          ],
+        },
+        subagents: { definitions: [{ name: 'reviewer' }, { name: 'tester' }] },
+      });
+      const { runtime } = build(fake);
+      live = runtime;
+      expect((await runtime.bootstrap()).capabilities).toEqual({
+        mcpServers: [
+          { name: 'files', ok: true, toolCount: 3 },
+          { name: 'down', ok: false, toolCount: 0, error: 'ECONNREFUSED' },
+        ],
+        skills: 1,
+        promptTemplates: 1,
+        subagents: 2,
+      });
+    });
+
+    it('omits a service this graph was built without, rather than reporting zero', async () => {
+      // "No MCP bridge" and "a bridge that found no servers" are different
+      // facts, and the panel says each of them differently.
+      const fake = fakeRuntime();
+      const { runtime } = build(fake);
+      live = runtime;
+      expect((await runtime.bootstrap()).capabilities).toEqual({});
+    });
+
+    it('reports an empty bridge as an empty list, which is not the same as absent', async () => {
+      const fake = fakeRuntime({ mcp: { connections: [] } });
+      const { runtime } = build(fake);
+      live = runtime;
+      expect((await runtime.bootstrap()).capabilities).toEqual({ mcpServers: [] });
+    });
+
+    it('never answers with the retired extension field', async () => {
+      // T028's packaging gate asserts the same absence on a real packaged
+      // bootstrap; this is the unit-level half of that claim.
+      const fake = fakeRuntime({ skills: SKILLS_SERVICE_FAKE });
+      const { runtime } = build(fake);
+      live = runtime;
+      expect(await runtime.bootstrap()).not.toHaveProperty('extensions');
     });
   });
 

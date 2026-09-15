@@ -9,26 +9,24 @@
 /** pi extension packages this app used to bundle and must not bundle again. */
 export declare const RETIRED_BUNDLED_PLUGIN_PACKAGES: readonly string[];
 
-export interface OptInFeaturePlugin {
-  /** Feature id the user turns on. */
-  optIn: string;
+export interface NativeFeatureSwitch {
+  /** Feature id the user turns on or off. */
+  id: string;
   settings?: {
     label: string;
     cost: string;
-    defaultEnabled: boolean;
     legacySettingKey?: string;
   };
 }
 
-export declare const OPT_IN_FEATURE_PLUGINS: readonly OptInFeaturePlugin[];
+export declare const NATIVE_FEATURE_SWITCHES: readonly NativeFeatureSwitch[];
 
-export interface OptInFeature {
+export interface NativeFeature {
   id: string;
   label: string;
   cost: string;
-  defaultEnabled: boolean;
   legacySettingKey?: string;
 }
-export declare function optInFeatureRegistry(
-  plugins?: readonly OptInFeaturePlugin[]
-): OptInFeature[];
+export declare function nativeFeatureRegistry(
+  switches?: readonly NativeFeatureSwitch[]
+): NativeFeature[];

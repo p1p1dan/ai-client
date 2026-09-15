@@ -36,13 +36,12 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { useExtensionUiDisplayStore } from '@/stores/extensionUiDisplay';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { LeftNav } from './LeftNav';
 import { derivePanelTabs, type PanelTab } from './panelTabsModel';
-import { derivePluginInventory } from './pluginInventoryModel';
 import { ShellResizeHandle } from './ShellResizeHandle';
 import { SurfacePlaceholder } from './SurfacePlaceholder';
+import { deriveSessionCapabilities } from './sessionCapabilityModel';
 import {
   clampSidebarWidth,
   DOCK_RAIL_WIDTH,
@@ -57,7 +56,7 @@ import { type ContextSurfaceId, getSurface } from './surfaceRegistry';
 import { SURFACE_VIEWS, type SurfaceViewProps } from './surfaceViews';
 import { UserFooterPill } from './UserFooterPill';
 import { useGitChangeCount } from './useGitChangeCount';
-import { useSessionExtensions } from './useSessionExtensions';
+import { useSessionCapabilities } from './useSessionCapabilities';
 
 interface LeftDockProps {
   /** Allocated TOTAL dock width (rail + panel), straight from the allocator. */
@@ -110,7 +109,7 @@ export function LeftDock({
   const changedFilesCount = useGitChangeCount();
   const tabs = derivePanelTabs(railOrder, { changedFilesCount });
 
-  const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelResizing, setPanelResizing] = useState(false);
@@ -194,7 +193,11 @@ export function LeftDock({
           icon={isOpen ? PanelLeftClose : PanelLeftOpen}
           onClick={toggleDock}
         />
-        <RailIconButton label={t('Plugins')} icon={Blocks} onClick={() => setPluginsOpen(true)} />
+        <RailIconButton
+          label={t('Capabilities')}
+          icon={Blocks}
+          onClick={() => setCapabilitiesOpen(true)}
+        />
         <RailIconButton
           label={`${t('Settings')} (Ctrl+,)`}
           icon={Settings}
@@ -302,7 +305,7 @@ export function LeftDock({
         )}
       </div>
 
-      <PluginsDialog open={pluginsOpen} onOpenChange={setPluginsOpen} />
+      <CapabilitiesDialog open={capabilitiesOpen} onOpenChange={setCapabilitiesOpen} />
     </div>
   );
 }
@@ -413,13 +416,19 @@ function RailIconButton({
 }
 
 /**
- * U04's plugin inventory dialog, moved here with its entry point: the button
- * used to sit in `LeftNav`'s footer, which D08 replaced with the rail's bottom
- * group. The inventory itself is unchanged — still "what this session's worker
- * actually loaded" (D06), and `null` (nobody reported) still reads differently
- * from `[]` (reported, loaded nothing).
+ * T026 — what the active chat's own runtime brought up, with its entry point.
+ *
+ * This used to be U04's pi extension inventory. P6-5 retired the engine that
+ * loaded pi extensions, which left the panel reporting "0 plugins" for every
+ * session while the MCP servers, skills and sub-agents the session really had
+ * went unmentioned (cutover-03). It now projects those instead, straight off
+ * the bootstrap result — and says where installed pi extensions DO apply, which
+ * is the built-in terminal.
+ *
+ * `null` (nobody reported) still reads differently from `0` (reported none):
+ * see `sessionCapabilityModel`.
  */
-function PluginsDialog({
+function CapabilitiesDialog({
   open,
   onOpenChange,
 }: {
@@ -428,13 +437,8 @@ function PluginsDialog({
 }) {
   const { t } = useI18n();
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
-  const { extensions: sessionExtensions } = useSessionExtensions(activeSessionId);
-  const extensionStatuses = useExtensionUiDisplayStore((state) => state.statuses);
-  const inventory = derivePluginInventory({
-    extensions: sessionExtensions,
-    statuses: extensionStatuses,
-    sessionId: activeSessionId,
-  });
+  const { capabilities } = useSessionCapabilities(activeSessionId);
+  const view = deriveSessionCapabilities(capabilities);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -442,60 +446,85 @@ function PluginsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Blocks className="h-4 w-4" />
-            {t('Plugins')}
+            {t('Capabilities')}
           </DialogTitle>
           <DialogDescription>
-            {/* Says whose plugins these are. The list is per session because pi
-                resolves project-scoped extensions from the session's cwd — an
-                app-wide list would be wrong for any second workspace. */}
-            {t('Extensions loaded for the active chat.')}
+            {/* Per session because every one of these is resolved from the
+                session's own working directory and settings — an app-wide list
+                would be wrong for any second workspace. */}
+            {t('MCP servers, skills and sub-agents this chat brought up.')}
           </DialogDescription>
         </DialogHeader>
-        {inventory.mcp && (
-          <div className="flex h-7 items-center gap-2 rounded-md bg-muted px-2">
-            <span className="shrink-0 text-meta text-muted-foreground">{t('MCP servers')}</span>
-            <span className="min-w-0 flex-1 truncate text-right text-ui tabular-nums">
-              {inventory.mcp.detail}
-            </span>
-          </div>
-        )}
-        <div className="flex max-h-80 flex-col overflow-y-auto">
-          {!inventory.reported ? (
-            // Not "no plugins": nothing has been asked yet, because this chat
-            // has no running worker to have loaded any.
-            <p className="px-1 py-2 text-meta text-muted-foreground">
-              {t('Send a message to start this chat and see what it loads.')}
-            </p>
-          ) : inventory.plugins.length === 0 ? (
-            <p className="px-1 py-2 text-meta text-muted-foreground">
-              {t('This chat loaded no plugins.')}
-            </p>
-          ) : (
-            inventory.plugins.map((plugin) => (
-              <div key={plugin.path} className="flex flex-col px-1 py-1">
+        {!view.reported ? (
+          // Not "nothing": nothing has been asked yet, because this chat has no
+          // running worker to have brought anything up.
+          <p className="px-1 py-2 text-meta text-muted-foreground">
+            {t('Send a message to start this chat and see what it brings up.')}
+          </p>
+        ) : (
+          <div className="flex max-h-80 flex-col gap-1 overflow-y-auto">
+            <CapabilityRow
+              label={t('MCP servers')}
+              value={
+                view.mcp
+                  ? view.mcp.badge
+                  : view.mcpServers
+                    ? t('No MCP servers configured')
+                    : t('Not reported')
+              }
+            />
+            {view.mcpServers?.map((server) => (
+              <div key={server.name} className="flex flex-col px-2 py-1">
                 <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-ui" title={plugin.path}>
-                    {plugin.name}
-                  </span>
-                  {plugin.scope && (
-                    <Badge variant="outline" size="sm" className="shrink-0">
-                      {plugin.scope}
-                    </Badge>
-                  )}
-                  {!plugin.ok && (
+                  <span className="min-w-0 flex-1 truncate text-ui">{server.name}</span>
+                  {server.ok ? (
+                    <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
+                      {t('{{count}} tools', { count: server.toolCount })}
+                    </span>
+                  ) : (
                     <Badge variant="error" size="sm" className="shrink-0">
                       {t('Failed')}
                     </Badge>
                   )}
                 </div>
-                <span className="truncate text-meta text-muted-foreground" title={plugin.path}>
-                  {plugin.error ?? plugin.source ?? plugin.path}
-                </span>
+                {server.error && (
+                  <span className="truncate text-meta text-muted-foreground" title={server.error}>
+                    {server.error}
+                  </span>
+                )}
               </div>
-            ))
-          )}
-        </div>
+            ))}
+            <CapabilityRow
+              label={t('Skills')}
+              value={view.skills === null ? t('Not reported') : String(view.skills)}
+            />
+            <CapabilityRow
+              label={t('Prompt templates')}
+              value={
+                view.promptTemplates === null ? t('Not reported') : String(view.promptTemplates)
+              }
+            />
+            <CapabilityRow
+              label={t('Sub-agents')}
+              value={view.subagents === null ? t('Not reported') : String(view.subagents)}
+            />
+            {/* cutover-03: the sentence that stops someone reinstalling a pi
+                extension because this panel never names it. */}
+            <p className="px-2 pt-2 text-meta text-muted-foreground">
+              {t('Pi extensions you install are loaded only by the built-in terminal.')}
+            </p>
+          </div>
+        )}
       </DialogPopup>
     </Dialog>
+  );
+}
+
+function CapabilityRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex h-7 items-center gap-2 rounded-md bg-muted px-2">
+      <span className="shrink-0 text-meta text-muted-foreground">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-right text-ui tabular-nums">{value}</span>
+    </div>
   );
 }

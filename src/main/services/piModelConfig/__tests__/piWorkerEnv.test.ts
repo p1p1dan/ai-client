@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import {
   PI_ENABLE_SUBAGENTS_SETTING_KEY,
-  PI_OPT_IN_EXTENSIONS_ENV,
+  PI_OPT_IN_FEATURE_SETTINGS_KEY,
   PI_PROJECT_TRUST_ENV,
   PI_SUBAGENTS_FEATURE_ID,
   PI_USER_AGENT_ENV,
@@ -168,18 +168,6 @@ describe('resolveManagedPiWorkerEnv — agent directory', () => {
     }
   });
 
-  it('still drops the opt-in extension list from the PTY environment', async () => {
-    // That one IS read by our Host code only, so leaving it in the real CLI's
-    // environment would claim an injection that is not happening.
-    readSharedSettingsMock.mockReturnValue({
-      credentialMode: 'managed',
-      [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true,
-    });
-    const { resolveManagedPiWorkerEnv, resolveManagedPiPtyEnv } = await import('../index');
-    expect(resolveManagedPiWorkerEnv()[PI_OPT_IN_EXTENSIONS_ENV]).toBeTruthy();
-    expect(resolveManagedPiPtyEnv()).not.toHaveProperty(PI_OPT_IN_EXTENSIONS_ENV);
-  });
-
   it('uses an overridden HOME for the shared folder exposed to the open-skills handler', async () => {
     vi.stubEnv('HOME', '/tmp/b1-home-override');
     try {
@@ -198,7 +186,9 @@ describe('resolveManagedPiWorkerEnv — agent directory', () => {
     const snapshot = getPiResourceSettings();
 
     expect(snapshot.managed).toBe(true);
-    expect(snapshot.enableSubagents).toBe(false);
+    // cutover-10: an install that never chose gets delegation, and the page now
+    // reports what the runtime does rather than a registry default of its own.
+    expect(snapshot.enableSubagents).toBe(true);
     expect(snapshot.paths.sharedSkills).toMatch(/[/\\]\.agents[/\\]skills$/);
     // The user's own directory is still REPORTED — it is the migration source
     // the settings page names — it is just no longer loaded.
@@ -239,14 +229,20 @@ describe('resolveManagedPiWorkerEnv — agent directory', () => {
 });
 
 /**
- * Opt-in bundled extensions — the sub-agent switch.
+ * cutover-10 — the opt-in extension chain, and what replaced it.
  *
- * Default OFF, unlike borrowing. The reason is cost, not safety: the
- * extension's three tool schemas are written into the cached prefix of every
- * request, so a session that never delegates still pays for them on every turn
- * (measured 2026-09-07: 4.8 KB of an 11.4 KB tool payload).
+ * Main used to read a list of opt-in feature ids, join them into
+ * `AICLIENT_PI_OPT_IN_EXTENSIONS`, and hand it to the worker so the Host could
+ * inject the matching bundled pi extension. P6-5 retired the engine that did
+ * the injecting and T025 stopped shipping the packages, which left every link
+ * of that chain carrying a value nobody read. T026 deleted it.
+ *
+ * What is left is a switch over THIS app's own delegation, and the rule that
+ * broke before: exactly one function decides whether it is on, and the settings
+ * page asks that same function instead of a second resolver with its own
+ * default.
  */
-describe('resolveManagedPiWorkerEnv — opt-in extensions', () => {
+describe('native feature switches — one reader, no transport', () => {
   beforeEach(() => {
     vi.resetModules();
     delete process.env.AICLIENT_MANAGED_CREDENTIALS;
@@ -258,52 +254,68 @@ describe('resolveManagedPiWorkerEnv — opt-in extensions', () => {
     delete process.env.PI_CODING_AGENT_DIR;
   });
 
-  it('omits the opt-in variable when the bundled registry is empty, even with a legacy opt-in', async () => {
-    const bundledPlugins = await import('../../../../agent-host/bundledPlugins.mjs');
-    const registry = vi.spyOn(bundledPlugins, 'optInFeatureRegistry').mockReturnValue([]);
-    try {
-      for (const managed of [true, false]) {
-        expect(
-          await workerEnv(managed, { [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true })
-        ).not.toHaveProperty(PI_OPT_IN_EXTENSIONS_ENV);
+  it('sends no opt-in extension variable in either mode, whatever is switched on', async () => {
+    for (const managed of [true, false]) {
+      for (const settings of [
+        {},
+        { [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true },
+        { [PI_OPT_IN_FEATURE_SETTINGS_KEY]: { [PI_SUBAGENTS_FEATURE_ID]: true } },
+      ]) {
+        const env = await workerEnv(managed, settings);
+        // By name, because the constant it used to come from is deleted: a
+        // reintroduced transport would most likely bring the old key back.
+        expect(env).not.toHaveProperty('AICLIENT_PI_OPT_IN_EXTENSIONS');
+        expect(Object.keys(env).some((key) => /OPT_IN/i.test(key))).toBe(false);
       }
-    } finally {
-      registry.mockRestore();
     }
   });
 
-  it('sends nothing in either mode when the setting is absent', async () => {
-    for (const managed of [true, false]) {
-      expect(await workerEnv(managed)).not.toHaveProperty(PI_OPT_IN_EXTENSIONS_ENV);
-    }
-  });
-
-  it('names the feature in BOTH modes once it is on', async () => {
-    // Unlike the borrow directory, this is not a managed-mode repair: the
-    // bundled copy is injected on the local route too, so the switch has to
-    // reach both.
-    for (const managed of [true, false]) {
-      const env = await workerEnv(managed, { [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true });
-      expect(env[PI_OPT_IN_EXTENSIONS_ENV]).toBe(PI_SUBAGENTS_FEATURE_ID);
-    }
-  });
-
-  it('reads only an explicit true, so a stray value stays off', async () => {
-    for (const stored of [false, 'true', 1, null]) {
-      const env = await workerEnv(true, { [PI_ENABLE_SUBAGENTS_SETTING_KEY]: stored });
-      expect(env).not.toHaveProperty(PI_OPT_IN_EXTENSIONS_ENV);
-    }
-  });
-
-  it('keeps it out of the PTY environment', async () => {
-    // Same rule as the borrow dir: the real pi CLI does not read our env var,
-    // and leaving it there would claim an extension the TUI is not loading.
+  it('hands the PTY the same environment as the worker, now that nothing is worker-only', async () => {
     readSharedSettingsMock.mockReturnValue({
       credentialMode: 'managed',
       [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true,
     });
-    const { resolveManagedPiPtyEnv } = await import('../index');
-    expect(resolveManagedPiPtyEnv()).not.toHaveProperty(PI_OPT_IN_EXTENSIONS_ENV);
+    const { resolveManagedPiWorkerEnv, resolveManagedPiPtyEnv } = await import('../index');
+    expect(resolveManagedPiPtyEnv()).toEqual(resolveManagedPiWorkerEnv());
+  });
+
+  it('shows the switch ON for an install that never chose, which is what native does', async () => {
+    // The whole of cutover-10's user-visible half: a fresh install saw "off"
+    // while every turn registered the delegation tools.
+    readSharedSettingsMock.mockReturnValue({ credentialMode: 'local' });
+    const { getPiResourceSettings } = await import('../index');
+    const snapshot = getPiResourceSettings();
+    expect(snapshot.enableSubagents).toBe(true);
+    expect(snapshot.features).toEqual([
+      expect.objectContaining({ id: PI_SUBAGENTS_FEATURE_ID, enabled: true }),
+    ]);
+    // Never the switch's own idea of a default — there is no longer one to have.
+    expect(snapshot.features[0]).not.toHaveProperty('defaultEnabled');
+  });
+
+  it('agrees with nativeSubagentSettings for every shape of stored preference', async () => {
+    const cases: Array<[Record<string, unknown>, boolean]> = [
+      [{}, true],
+      [{ [PI_ENABLE_SUBAGENTS_SETTING_KEY]: false }, false],
+      [{ [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true }, true],
+      [{ [PI_OPT_IN_FEATURE_SETTINGS_KEY]: { [PI_SUBAGENTS_FEATURE_ID]: false } }, false],
+      [
+        {
+          [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true,
+          [PI_OPT_IN_FEATURE_SETTINGS_KEY]: { [PI_SUBAGENTS_FEATURE_ID]: false },
+        },
+        false,
+      ],
+      // A non-boolean is not a choice, so it falls back to "never chose" = ON.
+      [{ [PI_ENABLE_SUBAGENTS_SETTING_KEY]: 'true' }, true],
+    ];
+    for (const [settings, expected] of cases) {
+      readSharedSettingsMock.mockReturnValue({ credentialMode: 'local', ...settings });
+      const { getPiResourceSettings } = await import('../index');
+      const { nativeSubagentSettings } = await import('../../agent-host/nativeSubagentSettings');
+      expect(getPiResourceSettings().enableSubagents).toBe(expected);
+      expect(nativeSubagentSettings({ ...settings }).enabled).toBe(expected);
+    }
   });
 });
 
@@ -334,11 +346,12 @@ describe('resolveManagedPiWorkerEnv — client User-Agent', () => {
     }
   });
 
-  it('reaches the PTY too, unlike the borrow dir and the opt-in list', async () => {
-    // Those two are dropped because the real pi CLI does not read them. This
-    // one it DOES read — out of the `headers` block of the same models.json a
-    // managed TUI session loads — so a PTY turn must identify itself the same
-    // way a worker turn does.
+  it('reaches the PTY too, unlike the borrow dir it replaced', async () => {
+    // The borrow dir was dropped because the real pi CLI does not read it (and
+    // the opt-in list, dropped for the same reason, no longer exists at all —
+    // cutover-10). This one the CLI DOES read — out of the `headers` block of
+    // the same models.json a managed TUI session loads — so a PTY turn must
+    // identify itself the same way a worker turn does.
     expect((await ptyEnv(true))[PI_USER_AGENT_ENV]).toBe(`${PI_USER_AGENT_PRODUCT}/${APP_VERSION}`);
   });
 

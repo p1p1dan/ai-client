@@ -71,7 +71,7 @@ const respondExtensionUi = vi.fn(async () => 'extui-1');
 const ensureReady = vi.fn(async () => undefined);
 const recordCreated = vi.fn(async () => undefined);
 /** U04 — Main answers from the cached bootstrap; `null` = no live worker. */
-const getSessionExtensions = vi.fn((_sessionId: string) => null as unknown);
+const getSessionCapabilities = vi.fn((_sessionId: string) => null as unknown);
 const clearUnwrittenRuntimeIdentity = vi.fn(async () => true);
 const handleRuntimeEvent = vi.fn();
 
@@ -104,7 +104,7 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
     }),
     ensureReady,
     getStatus: vi.fn(() => ({ state: 'ready', driver: 'agent-sdk' })),
-    getSessionExtensions,
+    getSessionCapabilities,
     createSession,
     setPermissions,
     resumeSession,
@@ -387,24 +387,36 @@ describe('Pi WorkerSlot chat routing', () => {
     });
   });
 
-  // U04 — the plugin list is a read of what Main already cached at bootstrap.
-  describe('session extensions', () => {
-    it('passes the worker-reported list straight through', async () => {
-      getSessionExtensions.mockReturnValueOnce([
-        { name: 'pi-mcp', path: '/ext/pi-mcp/index.js', ok: true },
-      ]);
-      await expect(invoke('chat:listSessionExtensions', { sessionId: 's1' })).resolves.toEqual([
-        { name: 'pi-mcp', path: '/ext/pi-mcp/index.js', ok: true },
-      ]);
-      expect(getSessionExtensions).toHaveBeenCalledWith('s1');
+  // cutover-03 — the panel reads what Main already cached at bootstrap, and it
+  // is this session's OWN capabilities now, not the pi extension list that has
+  // had no producer since P6-5.
+  describe('session capabilities', () => {
+    it('passes the worker-reported inventory straight through', async () => {
+      getSessionCapabilities.mockReturnValueOnce({
+        mcpServers: [{ name: 'files', ok: true, toolCount: 3 }],
+        skills: 1,
+      });
+      await expect(invoke('chat:listSessionCapabilities', { sessionId: 's1' })).resolves.toEqual({
+        mcpServers: [{ name: 'files', ok: true, toolCount: 3 }],
+        skills: 1,
+      });
+      expect(getSessionCapabilities).toHaveBeenCalledWith('s1');
     });
 
     it('reports null for a session with no live worker, and never starts one', async () => {
-      // "Nobody has loaded anything yet" must stay distinguishable from "loaded
+      // "Nobody has reported" must stay distinguishable from "brought up
       // nothing", and opening a panel must not spawn a worker.
-      await expect(invoke('chat:listSessionExtensions', { sessionId: 's1' })).resolves.toBeNull();
+      await expect(invoke('chat:listSessionCapabilities', { sessionId: 's1' })).resolves.toBeNull();
       expect(createSession).not.toHaveBeenCalled();
       expect(resumeSession).not.toHaveBeenCalled();
+    });
+
+    it('no longer registers the retired extension channel', () => {
+      // A renderer still asking for it must fail loudly rather than be answered
+      // with an empty list that reads as "you have no plugins".
+      expect(() => invoke('chat:listSessionExtensions', { sessionId: 's1' })).toThrow(
+        'missing handler'
+      );
     });
   });
 

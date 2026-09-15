@@ -197,33 +197,54 @@ export interface WorkerHistoryResult {
 }
 
 /**
- * U04 — one extension pi actually loaded for a session.
+ * T026 — one MCP server this session's OWN bridge declared.
  *
- * "Actually loaded" is the whole point: pi resolves extensions from its own
- * settings, package manager and scope rules, and re-deriving that in Main
- * would be a second implementation that eventually disagrees with the first —
- * the UI would then report plugins the agent never ran. The worker already
- * reads this list at bootstrap (it verifies the permission extension against
- * it), so this only forwards what is already in hand.
+ * Reported from `runtimeMcp.connections`, which is the same list the tools were
+ * registered from, so a server named here is a server whose tools the model can
+ * actually call. A failed one is kept rather than dropped: "declared and did
+ * not come up" is the fact a user needs, and omitting it would render the same
+ * as never having configured it.
  */
-export interface WorkerExtensionInfo {
-  /** Display name — pi reports no name field, so this is derived from the path. */
+export interface WorkerMcpServerInfo {
+  /** The name the server is declared under; also the `mcp__<name>__` prefix. */
   name: string;
-  /** Absolute path pi resolved, or the configured path when resolution failed. */
-  path: string;
-  /** `sourceInfo.source`: the npm/git/dir source it was configured from. */
-  source?: string;
-  /**
-   * `sourceInfo.scope` — user / project / temporary. Deliberately `string` and
-   * not a union: this crosses a version boundary (an older build must survive a
-   * value a newer pi introduces), and a second copy of pi's vocabulary here is
-   * exactly how a layer starts rejecting words the runtime accepts.
-   */
-  scope?: string;
-  /** False when pi reported a load error for this path. */
+  /** False when the server never started or never introduced itself. */
   ok: boolean;
+  /** Tools it published. `0` for a server that failed. */
+  toolCount: number;
   /** Present only when `ok` is false. */
   error?: string;
+}
+
+/**
+ * T026 — what this session's own runtime brought up, for the sidebar panel.
+ *
+ * ## Why this replaced the pi extension list
+ *
+ * The panel used to show `extensions`: what pi loaded from the user's
+ * `settings.json`. P6-5 retired the engine that loaded them, so the field had
+ * no producer left and the panel reported "0 plugins" for every session
+ * (cutover-03) while the user's installed extensions kept working in the
+ * built-in terminal. This reports OUR capabilities instead — the ones a session
+ * really has.
+ *
+ * ## Every member is optional, and absent is not zero
+ *
+ * A graph built without MCP has no MCP producer at all, which is a different
+ * statement from "MCP ran and found no servers". The first must render as "not
+ * reported", the second as "none configured"; collapsing them is how a panel
+ * tells someone their working setup is empty. Consumers get that distinction
+ * from `undefined` vs `[]` / `0`.
+ */
+export interface WorkerCapabilityInventory {
+  /** Absent when this graph has no MCP bridge; `[]` when it found no servers. */
+  mcpServers?: WorkerMcpServerInfo[];
+  /** Discovered skills. Absent when discovery never ran. */
+  skills?: number;
+  /** Discovered prompt templates. Absent when discovery never ran. */
+  promptTemplates?: number;
+  /** Sub-agent definitions. Absent when delegation is switched off. */
+  subagents?: number;
 }
 
 /**
@@ -245,10 +266,10 @@ export interface WorkerSlashCommandInfo {
   name: string;
   description?: string;
   /**
-   * Deliberately `string` and not a union, same reasoning as
-   * {@link WorkerExtensionInfo.scope}: this crosses a version boundary, and a
-   * second copy of pi's vocabulary is how a layer starts rejecting words the
-   * runtime accepts. Known values: `extension`, `prompt`, `skill`.
+   * Deliberately `string` and not a union: this crosses a version boundary (an
+   * older build must survive a value a newer runtime introduces), and a second
+   * copy of the runtime's vocabulary here is how a layer starts rejecting words
+   * the runtime accepts. Known values: `extension`, `prompt`, `skill`.
    */
   source: string;
   /** Absolute path pi resolved it from, when it reported one. */
@@ -324,7 +345,7 @@ export interface WorkerBootstrapResult {
    * `worker_resume_identity_mismatch`.
    *
    * Not validated by `isWorkerBootstrapResult`, for the reason given on
-   * `extensions`: the consumer already rejects anything it cannot normalize,
+   * `capabilities`: the consumer already rejects anything it cannot normalize,
    * and a malformed value should fail one legacy resume rather than make the
    * whole bootstrap payload illegal.
    */
@@ -337,17 +358,17 @@ export interface WorkerBootstrapResult {
   projectTrusted: boolean;
   permissionGate: 'bundled' | 'user_configured';
   /**
-   * U04 — the extensions this session loaded, hidden internals excluded.
+   * T026 — what this session's own runtime brought up.
    *
    * Optional, and NOT validated by `isWorkerBootstrapResult` below. That guard
    * is release-critical: it decides whether an entire bootstrap payload is
-   * legal, so a strict check here would turn a malformed plugin list into a
+   * legal, so a strict check here would turn a malformed panel list into a
    * session that cannot start at all (the failure mode U08-2 hit with
-   * `isWorkerEffort`). The producer sanitizes instead — see
-   * `readLoadedExtensionInventory` — and consumers treat a missing list as
-   * "this build did not report one" rather than "no plugins".
+   * `isWorkerEffort`). {@link normalizeWorkerCapabilities} is the check
+   * instead: it runs where the value is READ, drops anything it cannot make
+   * sense of, and leaves the session alone.
    */
-  extensions?: WorkerExtensionInfo[];
+  capabilities?: WorkerCapabilityInventory;
 }
 
 export type WorkerBootstrapRequest = WorkerRpcRequest<'worker.bootstrap', WorkerBootstrapPayload>;
@@ -787,7 +808,60 @@ export function isWorkerBootstrapResult(value: unknown): value is WorkerBootstra
   if (value.initialHistory !== undefined && !isWorkerHistoryResult(value.initialHistory)) {
     return false;
   }
+  // `capabilities` is deliberately not checked here — see the field's own note.
+  // A panel list that cannot be parsed must cost the panel, not the session.
   return true;
+}
+
+function normalizeMcpServer(value: unknown): WorkerMcpServerInfo | null {
+  if (!isRecord(value)) return null;
+  const name = typeof value.name === 'string' ? value.name.trim() : '';
+  if (!name) return null;
+  const ok = value.ok === true;
+  // A failed server publishes nothing, whatever it claimed. Trusting the number
+  // would put "9 tools" next to a Failed badge and leave a reader to decide
+  // which half of one row to believe.
+  const declared =
+    typeof value.toolCount === 'number' && Number.isFinite(value.toolCount)
+      ? Math.max(0, Math.trunc(value.toolCount))
+      : 0;
+  const error =
+    typeof value.error === 'string' && value.error.trim().length > 0 ? value.error : undefined;
+  return { name, ok, toolCount: ok ? declared : 0, ...(!ok && error ? { error } : {}) };
+}
+
+function normalizeCount(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return undefined;
+  return Math.trunc(value);
+}
+
+/**
+ * T026 — read a bootstrap result's capability inventory, or `null`.
+ *
+ * `null` means "nothing reported one", which every consumer renders as "not
+ * reported" rather than as an empty setup. Members that cannot be parsed are
+ * dropped INDIVIDUALLY: a garbled server row must not take the skill count with
+ * it, and neither may abort the session — which is why this lives here and not
+ * in {@link isWorkerBootstrapResult}.
+ */
+export function normalizeWorkerCapabilities(value: unknown): WorkerCapabilityInventory | null {
+  if (!isRecord(value)) return null;
+  const servers = Array.isArray(value.mcpServers)
+    ? value.mcpServers
+        .map(normalizeMcpServer)
+        .filter((item): item is WorkerMcpServerInfo => item !== null)
+    : undefined;
+  const skills = normalizeCount(value.skills);
+  const promptTemplates = normalizeCount(value.promptTemplates);
+  const subagents = normalizeCount(value.subagents);
+  const inventory: WorkerCapabilityInventory = {
+    ...(servers ? { mcpServers: servers } : {}),
+    ...(skills !== undefined ? { skills } : {}),
+    ...(promptTemplates !== undefined ? { promptTemplates } : {}),
+    ...(subagents !== undefined ? { subagents } : {}),
+  };
+  // An object with nothing readable in it is not a report.
+  return Object.keys(inventory).length > 0 ? inventory : null;
 }
 
 function isAttachment(value: unknown): value is SessionAttachment {

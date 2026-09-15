@@ -15,6 +15,7 @@ import type { SessionPermissionTier } from '../../shared/types/sessionPermission
 import type {
   WorkerBootstrapPayload,
   WorkerBootstrapResult,
+  WorkerCapabilityInventory,
   WorkerCommandsPayload,
   WorkerCommandsResult,
   WorkerCompactPayload,
@@ -336,8 +337,39 @@ export class NativeWorkerRuntime {
       // The native runtime enforces D14 in its own permissions plugin; there is
       // no pi permission extension to be replaced by a user-configured one.
       permissionGate: 'bundled',
+      capabilities: this.capabilities(),
     };
     return this.result;
+  }
+
+  /**
+   * T026 — what this graph actually brought up, for the sidebar panel.
+   *
+   * Read off the services the graph already holds, so it costs nothing and
+   * cannot disagree with what the model was given. A service that is absent is
+   * OMITTED rather than reported as zero: `mcp` is undefined when this graph
+   * was built without a bridge, and "no bridge" is a different statement from
+   * "a bridge that found no servers" — the panel says each of them differently.
+   */
+  private capabilities(): WorkerCapabilityInventory {
+    const handle = this.handle;
+    const mcp = handle?.mcp;
+    const skills = handle?.skills;
+    const subagents = handle?.subagents;
+    return {
+      ...(mcp
+        ? {
+            mcpServers: mcp.connections.map((connection) => ({
+              name: connection.server.name,
+              ok: !connection.error,
+              toolCount: connection.error ? 0 : connection.tools.length,
+              ...(connection.error ? { error: connection.error } : {}),
+            })),
+          }
+        : {}),
+      ...(skills ? { skills: skills.skills.length, promptTemplates: skills.templates.length } : {}),
+      ...(subagents ? { subagents: subagents.definitions.length } : {}),
+    };
   }
 
   async startSend(input: WorkerSendPayload): Promise<WorkerSendResult> {

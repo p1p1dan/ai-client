@@ -136,11 +136,15 @@ export interface PiWorkerRuntime {
  * that no longer exists. The two legacy-only fields went with it — `loadSdk`
  * (the pi-coding-agent import) and `decidePermissionGate` (that engine's plugin
  * arbitration).
+ *
+ * cutover-10: `optInExtensions` went the same way. It named which bundled pi
+ * extensions to inject, which nothing has injected since P6-5 — Main filled it,
+ * the entry forwarded it, this file passed it on, and the runtime never
+ * declared it. A parameter no implementation reads is not a contract, it is a
+ * claim that something is being configured.
  */
 export interface PiWorkerRuntimeOptions extends WorkerBootstrapPayload {
   projectTrusted: boolean;
-  /** Comma-separated feature ids of the OPT-IN bundled extensions to inject. */
-  optInExtensions?: string;
   emit: (event: RuntimeEventDraft) => void;
   log?: (...args: unknown[]) => void;
 }
@@ -168,12 +172,6 @@ export interface PiWorkerRpcServerOptions {
   port: PiWorkerMessagePort;
   generation: number;
   projectTrusted: boolean;
-  /**
-   * Comma-separated feature ids of the bundled OPT-IN extensions this user
-   * turned on. Process-level like `projectTrusted`: it is a preference about
-   * this installation, not about one conversation. Absent enables none of them.
-   */
-  optInExtensions?: string;
   /**
    * The engine this worker runs. Required since P6-5: the legacy fallback was
    * the other backend, and it is gone. Supplied by the worker entry so this
@@ -575,10 +573,6 @@ export class PiWorkerRpcServer {
         // than a ternary so no future payload field can hand a scratch session
         // the trusted posture the process was not started with.
         projectTrusted: this.options.projectTrusted && request.payload.unbound !== true,
-        // NOT withdrawn by `unbound`. Project trust is about what a cloned repo
-        // may configure; an opt-in bundled extension is about what this user
-        // turned on, which a scratch directory has no bearing on.
-        ...(this.options.optInExtensions ? { optInExtensions: this.options.optInExtensions } : {}),
         emit: (event) => this.emitRuntimeEvent(event),
         log: this.log,
       });

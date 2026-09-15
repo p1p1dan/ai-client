@@ -21,7 +21,7 @@ import {
   isSessionPermissionTier,
   type SessionPermissionTier,
 } from '@shared/types/sessionPermissionTier';
-import type { WorkerExtensionInfo } from '@shared/types/workerRpc';
+import type { WorkerCapabilityInventory } from '@shared/types/workerRpc';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspaceService';
 import { adoptTempWorkspace } from '../services/agent-host/TempWorkspaceService';
@@ -619,17 +619,19 @@ export function registerChatHandlers(): void {
   });
 
   /**
-   * U04 — the plugins pi loaded for one session.
+   * T026 — what one session's own runtime brought up (MCP servers, skills,
+   * sub-agents). Replaces the pi extension list, which has had no producer
+   * since P6-5.
    *
    * Read-only and worker-free: it answers from the bootstrap result Main
    * already cached, so opening the panel cannot start a worker, cannot queue
-   * behind a running turn, and returns `null` (not an empty list) when this
-   * session has no live worker to have loaded anything.
+   * behind a running turn, and returns `null` (not an empty inventory) when
+   * nothing has reported for this session.
    */
   ipcMain.handle(
-    IPC_CHANNELS.CHAT_LIST_SESSION_EXTENSIONS,
-    async (_e, payload: { sessionId: string }): Promise<WorkerExtensionInfo[] | null> => {
-      return workerManager.getSessionExtensions(payload.sessionId);
+    IPC_CHANNELS.CHAT_LIST_SESSION_CAPABILITIES,
+    async (_e, payload: { sessionId: string }): Promise<WorkerCapabilityInventory | null> => {
+      return workerManager.getSessionCapabilities(payload.sessionId);
     }
   );
 

@@ -559,14 +559,17 @@ export const zhTranslations: Record<string, string> = {
   'New chat': '新建对话',
   // D1 (round-5): header "New" button title, dynamic target discoverability.
   'New session in {{folder}}': '在 {{folder}} 中新建会话',
-  // U04: sidebar plugin entry. Per session on purpose — pi resolves
-  // project-scoped extensions from the session's own working directory.
-  // 'Plugins' itself is reused from the Claude-era key further down.
-  'Extensions loaded for the active chat.': '当前对话已加载的扩展。',
+  // T026: sidebar capability entry. Per session on purpose — MCP servers,
+  // skills and sub-agents are all resolved from the session's own working
+  // directory. It replaced U04's pi extension list, which P6-5 left empty.
+  Capabilities: '能力',
+  'MCP servers, skills and sub-agents this chat brought up.':
+    '这个对话启用的 MCP 服务、技能与子智能体。',
   'MCP servers': 'MCP 服务',
-  'Send a message to start this chat and see what it loads.':
-    '发送一条消息启动这个对话后，才能看到它加载了什么。',
-  'This chat loaded no plugins.': '这个对话没有加载任何插件。',
+  'Send a message to start this chat and see what it brings up.':
+    '发送一条消息启动这个对话后，才能看到它启用了什么。',
+  'Pi extensions you install are loaded only by the built-in terminal.':
+    '你安装的 pi 扩展只会被内嵌终端加载。',
   // R04: Settings → Resources. These are installation locations, not the
   // rejected pix-style Resources navigation entry.
   Resources: '资源',
@@ -583,15 +586,18 @@ export const zhTranslations: Record<string, string> = {
   // H/19: 两种模式共用同一个目录，所以这里只剩「本应用的」和「你自己的」两块。
   // 借用开关连同它的四条文案一起删掉了——机制没了，留着文案会被下一次搜索翻出来当成还在。
   'This app\u2019s Pi directory': '本应用的 Pi 目录',
-  'Every session in this app — signed in or using your own setup, GUI or Pi TUI — loads skills, prompt templates and plugins from here.':
-    '本应用里的每个会话——无论是登录模式还是「使用我自己的配置」，无论 GUI 还是 Pi TUI——都从这里加载技能、提示词模板和插件。',
+  'Every session in this app — signed in or using your own setup, GUI or Pi TUI — loads skills and prompt templates from here. Installed pi extensions are loaded from here by the Pi TUI only.':
+    '本应用里的每个会话——无论是登录模式还是「使用我自己的配置」，无论 GUI 还是 Pi TUI——都从这里加载技能与提示词模板；已安装的 pi 扩展只有 Pi TUI 会从这里加载。',
   'Your personal Pi directory': '你自己的 Pi 目录',
   'Where the Pi CLI in your own terminal reads from. This app never writes here, and no longer loads from here — use the copy step above to bring things over.':
     '你自己终端里的 Pi CLI 读取的位置。本应用从不写入这里，也不再从这里加载——要把东西搬过来，用上面的复制步骤。',
-  'Bundled extensions': '随包扩展',
+  // cutover-10: no longer "bundled extensions" — the packages behind this
+  // section were retired in T025, and the one switch left turns a feature of
+  // this app's own runtime on and off.
+  'Agent features': '智能体功能',
   'Sub-agents': '子智能体',
-  'Lets the model delegate work to background agents. Off by default: its tool definitions are sent with every request, so it costs tokens on every turn even when unused. Changing it reloads Pi workers.':
-    '让模型把任务派给后台智能体。默认关闭：它的工具定义会随每次请求一起发送，即使用不到也每轮都在花 token。切换后会重新加载 Pi worker。',
+  'Lets the model delegate work to background agents. On unless you turn it off: its tool definitions are sent with every request, so it costs tokens on every turn even when unused. Changing it reloads workers.':
+    '让模型把任务派给后台智能体。默认开启，除非你自己关掉：它的工具定义会随每次请求一起发送，即使用不到也每轮都在花 token。切换后会重新加载 worker。',
   'Open prompt templates folder': '打开模板目录',
   'Open skills folder': '打开技能目录',
   'Opening...': '正在打开…',
@@ -790,15 +796,15 @@ export const zhTranslations: Record<string, string> = {
   // than created anew.
   Done: '完成',
 
-  // H/19 U4：用户自装的 pi 扩展。
-  'Extensions installed for your account. They run inside the agent process and can add tools, skills and commands.':
-    '装在你账户下的扩展。它们跑在 agent 进程里，可以往会话里加工具、技能和命令。',
+  // H/19 U4：用户自装的 pi 扩展。cutover-02 / cutover-03：它们不再进 GUI 会话。
   'npm:package-name, a git URL, or a folder path': 'npm:包名、git 地址，或者一个目录路径',
   'Package source': '包来源',
   'Installing downloads from the network and can take a few seconds.':
     '安装会联网下载，可能要等几秒。',
   'Project-level plugins are ignored on the managed route, so this app installs to your account only.':
     '登录模式下项目级插件不会生效，所以本应用只装到你的账户下。',
+  'Extensions installed for your account. Only the built-in Pi terminal loads them; chats in this app do not.':
+    '装在你账户下的扩展。只有内嵌的 Pi 终端会加载它们，本应用里的对话不会。',
   'Installed plugins could not be listed:': '读取已装插件失败：',
   'Loading plugins...': '正在读取插件…',
   // 'No plugins installed' and 'Installing...' are already in this file, from
@@ -807,12 +813,16 @@ export const zhTranslations: Record<string, string> = {
   'Install one by package name to add tools or commands to your sessions.':
     '按包名装一个，给会话加上工具或命令。',
   'Settings file': '设置文件',
-  'Tool approval is handled by the permission system this app ships.':
-    '工具审批由本应用随包的权限系统负责。',
-  'Tool approval is handled by the permission system you installed yourself. This app steps aside, and its approval settings do not apply.':
-    '工具审批由你自己装的权限系统接管。本应用主动让路，它自己的审批设置不再生效。',
-  'This app could not read its plugin settings, so it cannot say which permission system approves tool calls.':
-    '本应用读不到自己的插件设置，因此无法确定是哪一份权限系统在审批工具调用。',
+  // cutover-02: the page used to say this app steps aside for a permission
+  // system the user installed. Since P6-5 nothing of the sort is loaded in a
+  // chat — approval is always ours — and an installed one only reaches the
+  // built-in terminal.
+  'This app approves tool calls with its own permission system in every chat.':
+    '本应用的每个对话，都由它自带的权限系统审批工具调用。',
+  'The pi permission system you installed applies to the built-in terminal only, not to chats in this app.':
+    '你自己安装的 pi 权限系统只对内嵌终端生效，管不到本应用里的对话。',
+  'This app could not read its plugin settings, so it cannot say which permission system the built-in terminal runs.':
+    '本应用读不到自己的插件设置，因此无法确定内嵌终端会运行哪一份权限系统。',
   // U13: sidebar group for chats that never got a project folder — they run in
   // a throwaway directory, so they belong to no repository.
   'Temporary chats': '临时对话',

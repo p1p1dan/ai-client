@@ -41,7 +41,7 @@ function snapshot() {
   return {
     managed: state.managed,
     enableSubagents: state.enableSubagents,
-    bundledFeatures: [{ id: 'subagents', enabled: state.enableSubagents }],
+    features: [{ id: 'subagents', enabled: state.enableSubagents }],
     paths: {
       sharedSkills: join(state.root, '.agents', 'skills'),
       userSkills: join(state.root, '.pi', 'agent', 'skills'),

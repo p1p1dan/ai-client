@@ -680,8 +680,12 @@ export interface SessionCreatedEvent extends RuntimeEventBase {
      * T025: that reasoning no longer holds. Nothing injects a pi permission
      * extension since P6-5 — every decision is made by
      * `src/runtime/plugins/permissions/`, whatever the user has installed — so
-     * the flag now only reports what the user's own pi config declares. Making
-     * the control and the plugins page say that instead is T026's.
+     * the flag now only reports what the user's own pi config declares.
+     *
+     * T026: the native runtime therefore sends `bundled` unconditionally, and
+     * `user_configured` has no producer left. What a user installs decides the
+     * built-in Pi TERMINAL instead, which the plugins page now says in words.
+     * The renderer half of this note is `stores/permissionGate.ts`.
      *
      * Optional: an older Host never sends it, and "not reported" is not the
      * same claim as "bundled".

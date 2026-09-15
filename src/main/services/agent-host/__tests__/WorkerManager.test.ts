@@ -328,10 +328,17 @@ function createHarness(
           : {}),
         projectTrusted: false,
         permissionGate: input.permissionGate ?? 'bundled',
-        // U04: what the worker reported it loaded. Present for `s1` only, so
-        // the "no worker" answer stays distinguishable in the tests below.
+        // T026: what the worker reported it brought up. Present for `s1` only,
+        // so "this build reported nothing" stays distinguishable in the tests
+        // below.
         ...(sessionId === 's1'
-          ? { extensions: [{ name: 'pi-mcp', path: '/ext/pi-mcp/index.js', ok: true }] }
+          ? {
+              capabilities: {
+                mcpServers: [{ name: 'files', ok: true, toolCount: 3 }],
+                skills: 2,
+                promptTemplates: 0,
+              },
+            }
           : {}),
       },
     };
@@ -893,25 +900,36 @@ describe('WorkerManager permission gate reporting (D10)', () => {
   });
 });
 
-describe('WorkerManager session extensions (U04)', () => {
+/**
+ * cutover-03 — the sidebar panel's data, after `getSessionExtensions` went.
+ *
+ * That method answered from `bootstrap.extensions`, a field no backend has
+ * written since P6-5, and folded a missing value into `[]` — so the sidebar
+ * reported a definite "0 plugins" for every session while the MCP servers and
+ * skills the session really had went unmentioned. The replacement reports the
+ * session's own capabilities and keeps "nobody reported" as `null`.
+ */
+describe('WorkerManager session capabilities', () => {
   it('answers from the cached bootstrap without touching the worker', async () => {
     const h = createHarness();
     await create(h.manager, 's1');
-    expect(h.manager.getSessionExtensions('s1')).toEqual([
-      { name: 'pi-mcp', path: '/ext/pi-mcp/index.js', ok: true },
-    ]);
-    // No RPC: the list cannot change without a new bootstrap, so a UI panel
-    // must never queue behind a running turn to read it.
+    expect(h.manager.getSessionCapabilities('s1')).toEqual({
+      mcpServers: [{ name: 'files', ok: true, toolCount: 3 }],
+      skills: 2,
+      promptTemplates: 0,
+    });
+    // No RPC: the inventory cannot change without a new bootstrap, so a UI
+    // panel must never queue behind a running turn to read it.
     expect(h.records[0].request).not.toHaveBeenCalled();
   });
 
-  it('reports null for a session with no slot, and [] for a worker that loaded none', async () => {
+  it('reports null both for no slot and for a build that reported nothing', async () => {
     const h = createHarness();
-    // "Nobody has bootstrapped for this chat" is a different sentence from
-    // "this chat loaded no plugins", and the sidebar says different things.
-    expect(h.manager.getSessionExtensions('never-started')).toBeNull();
+    // Both are "nobody has told us", which the sidebar renders in words. The
+    // one thing it must never do is turn either into a zero.
+    expect(h.manager.getSessionCapabilities('never-started')).toBeNull();
     await create(h.manager, 's2');
-    expect(h.manager.getSessionExtensions('s2')).toEqual([]);
+    expect(h.manager.getSessionCapabilities('s2')).toBeNull();
   });
 });
 

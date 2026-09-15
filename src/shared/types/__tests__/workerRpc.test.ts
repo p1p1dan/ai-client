@@ -28,6 +28,7 @@ import {
   isWorkerUtilityStartPayload,
   isWorkerUtilityStartResult,
   isWorkerUtilityTerminalEvent,
+  normalizeWorkerCapabilities,
   WORKER_RPC_PROTOCOL_VERSION,
 } from '../workerRpc';
 
@@ -456,5 +457,83 @@ describe('worker RPC boundary guards', () => {
         error: { code: 'BAD_REQUEST', message: 'nope', retryable: 'yes' },
       })
     ).toBe(false);
+  });
+});
+
+/**
+ * T026 — the capability inventory is normalized where it is READ, not where the
+ * bootstrap payload is judged legal.
+ *
+ * The field replaced `extensions`, which fed a sidebar panel; a panel list that
+ * arrives garbled must cost the panel and nothing else. Putting it in
+ * `isWorkerBootstrapResult` would make a malformed server row fail the whole
+ * bootstrap — the U08-2 failure mode — so these two properties are tested
+ * together on purpose.
+ */
+describe('normalizeWorkerCapabilities', () => {
+  const bootstrap = {
+    bootstrapped: true,
+    logicalSessionId: 'logical-1',
+    piSessionId: 'pi-1',
+    cwd: '/repo',
+    agentDir: '/agent',
+    projectTrusted: true,
+    permissionGate: 'bundled' as const,
+    leaf: { activeEntryId: null, fileTailEntryId: null },
+  };
+
+  it('returns null when nothing reported one', () => {
+    expect(normalizeWorkerCapabilities(undefined)).toBeNull();
+    expect(normalizeWorkerCapabilities(null)).toBeNull();
+    expect(normalizeWorkerCapabilities('mcp')).toBeNull();
+    // An object with nothing readable in it is not a report either.
+    expect(normalizeWorkerCapabilities({})).toBeNull();
+    expect(normalizeWorkerCapabilities({ skills: 'many', mcpServers: 'two' })).toBeNull();
+  });
+
+  it('keeps an empty server list apart from an absent one', () => {
+    // The distinction the panel renders as "none configured" vs "not reported".
+    expect(normalizeWorkerCapabilities({ mcpServers: [] })).toEqual({ mcpServers: [] });
+    expect(normalizeWorkerCapabilities({ skills: 0 })).toEqual({ skills: 0 });
+    expect(normalizeWorkerCapabilities({ skills: 2 })?.mcpServers).toBeUndefined();
+  });
+
+  it('drops one unreadable member without taking the others with it', () => {
+    expect(
+      normalizeWorkerCapabilities({
+        mcpServers: [{ name: 'good', ok: true, toolCount: 3 }, { ok: true }, null, 'nope'],
+        skills: 4,
+        promptTemplates: -1,
+        subagents: 2.7,
+      })
+    ).toEqual({
+      mcpServers: [{ name: 'good', ok: true, toolCount: 3 }],
+      skills: 4,
+      // A negative count is not a count; a fractional one is truncated.
+      subagents: 2,
+    });
+  });
+
+  it('reports a failed server rather than omitting it', () => {
+    // "Declared and did not come up" is the fact a user needs; dropping it
+    // would render the same as never having configured the server at all.
+    expect(
+      normalizeWorkerCapabilities({
+        mcpServers: [{ name: 'broken', ok: false, toolCount: 9, error: 'ECONNREFUSED' }],
+      })
+    ).toEqual({ mcpServers: [{ name: 'broken', ok: false, toolCount: 0, error: 'ECONNREFUSED' }] });
+    // An error on a healthy server is not carried: it would render a Failed
+    // badge next to working tools.
+    expect(
+      normalizeWorkerCapabilities({ mcpServers: [{ name: 'ok', ok: true, error: 'stale' }] })
+    ).toEqual({ mcpServers: [{ name: 'ok', ok: true, toolCount: 0 }] });
+  });
+
+  it('never lets a malformed inventory fail the bootstrap payload itself', () => {
+    expect(isWorkerBootstrapResult({ ...bootstrap, capabilities: 'nonsense' })).toBe(true);
+    expect(isWorkerBootstrapResult({ ...bootstrap, capabilities: { mcpServers: [{}] } })).toBe(
+      true
+    );
+    expect(isWorkerBootstrapResult(bootstrap)).toBe(true);
   });
 });

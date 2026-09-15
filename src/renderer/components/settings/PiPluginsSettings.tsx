@@ -7,9 +7,17 @@
  *
  * `install` reaches the npm registry, so it is async with a visible pending
  * state and the CLI's own failure text — never a spinner that ends in silence.
+ *
+ * ## What these extensions reach (cutover-02 / cutover-03)
+ *
+ * The built-in Pi terminal, and nothing else. P6-5 retired the engine that
+ * loaded pi extensions into a chat, so the page says that in two places — the
+ * section description and the approval notice — rather than leaving someone to
+ * conclude it from a sidebar panel that never names what they installed.
  */
 
 import {
+  type PermissionSystemOwner,
   type PiPluginCommandResult,
   type PiPluginState,
   type PiPluginView,
@@ -91,11 +99,11 @@ export function PiPluginsSettings() {
       <SettingsSectionBlock
         title={t('Plugins')}
         description={t(
-          'Extensions installed for your account. They run inside the agent process and can add tools, skills and commands.'
+          'Extensions installed for your account. Only the built-in Pi terminal loads them; chats in this app do not.'
         )}
       />
 
-      {state && <PermissionSystemNotice owner={state.permissionSystem} />}
+      <PermissionSystemNotice owner={state?.terminalPermissionSystem} />
 
       <div className="flex flex-wrap items-center gap-2">
         <Input
@@ -221,41 +229,43 @@ function PluginRow({
 }
 
 /**
- * Who is approving tool calls.
+ * Who approves tool calls, and where an installed permission system reaches.
  *
- * Shown always, not only when it is the user's own copy: "the app's own" is
- * information too, and a notice that appears only in the unusual case is one
- * nobody knows to look for. H/19 made plugin conflicts the user's
- * responsibility — this line is what makes that a fair deal.
+ * cutover-02: this used to read "this app steps aside, and its approval
+ * settings do not apply" whenever the agent directory declared a permission
+ * extension. That was never true after P6-5 — a chat is approved by
+ * `src/runtime/plugins/permissions/` whatever is installed — and it told users
+ * their own deny rules were in force when they were not.
+ *
+ * The first line is unconditional, because "ours, always" is the fact people
+ * come here to check. The second appears only when the user really does have
+ * their own copy, and says the one place it does apply: the built-in terminal,
+ * which runs the real pi CLI and loads whatever the agent directory declares.
  */
-function PermissionSystemNotice({ owner }: { owner: PiPluginState['permissionSystem'] }) {
+function PermissionSystemNotice({ owner }: { owner: PermissionSystemOwner | undefined }) {
   const { t } = useI18n();
-  if (owner === 'unknown') {
-    return (
-      <div className="flex gap-3 rounded-md border border-warning/30 bg-warning/10 p-3 text-ui text-warning">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-        {t(
-          'This app could not read its plugin settings, so it cannot say which permission system approves tool calls.'
-        )}
-      </div>
-    );
-  }
-  const own = owner === 'user_configured';
   return (
-    <div
-      className={cn(
-        'flex gap-3 rounded-md border p-3 text-ui',
-        own ? 'border-warning/30 bg-warning/10 text-warning' : 'border-info/30 bg-info/10 text-info'
+    <div className="space-y-2">
+      <div className="flex gap-3 rounded-md border border-info/30 bg-info/10 p-3 text-ui text-info">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+        <span className="min-w-0 flex-1">
+          {t('This app approves tool calls with its own permission system in every chat.')}
+        </span>
+      </div>
+      {(owner === 'user_configured' || owner === 'unknown') && (
+        <div className="flex gap-3 rounded-md border border-warning/30 bg-warning/10 p-3 text-ui text-warning">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1">
+            {owner === 'user_configured'
+              ? t(
+                  'The pi permission system you installed applies to the built-in terminal only, not to chats in this app.'
+                )
+              : t(
+                  'This app could not read its plugin settings, so it cannot say which permission system the built-in terminal runs.'
+                )}
+          </span>
+        </div>
       )}
-    >
-      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-      <span className="min-w-0 flex-1">
-        {own
-          ? t(
-              'Tool approval is handled by the permission system you installed yourself. This app steps aside, and its approval settings do not apply.'
-            )
-          : t('Tool approval is handled by the permission system this app ships.')}
-      </span>
     </div>
   );
 }

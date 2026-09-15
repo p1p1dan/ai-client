@@ -6,7 +6,7 @@
  */
 
 import { PI_AGENT_DIR_ENV, RUNTIME_AGENT_DIR_ENV, readRuntimeFlags } from '../runtime/flags.ts';
-import { NATIVE_PROJECT_TRUSTED, PI_OPT_IN_EXTENSIONS_ENV } from '../shared/piModelConfig.ts';
+import { NATIVE_PROJECT_TRUSTED } from '../shared/piModelConfig.ts';
 import {
   PI_WORKER_GENERATION_ENV,
   WORKER_RPC_PROTOCOL_VERSION,
@@ -136,9 +136,6 @@ const server = new PiWorkerRpcServer({
   // `AICLIENT_PI_TRUST_PROJECT_CONFIG` again would silently re-close all four
   // layers for every company-account session.
   projectTrusted: NATIVE_PROJECT_TRUSTED,
-  ...(process.env[PI_OPT_IN_EXTENSIONS_ENV]?.trim()
-    ? { optInExtensions: process.env[PI_OPT_IN_EXTENSIONS_ENV]?.trim() }
-    : {}),
   createRuntime,
   createImportWriter,
   createUtilityRuntime,

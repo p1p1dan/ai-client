@@ -104,7 +104,7 @@ import type {
   SubagentSaveRequest,
 } from '@shared/types/subagentManagement';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
-import type { WorkerExtensionInfo, WorkerSlashCommandInfo } from '@shared/types/workerRpc';
+import type { WorkerCapabilityInventory, WorkerSlashCommandInfo } from '@shared/types/workerRpc';
 import type {
   FetchProviderModelsRequest,
   FetchProviderModelsResult,
@@ -1093,11 +1093,11 @@ const electronAPI = {
     },
     listSessions: (): Promise<SessionIndexEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_SESSIONS),
-    /** U04 — plugins pi loaded for this session; `null` = no live worker. */
-    listSessionExtensions: (payload: {
+    /** T026 — what this session's runtime brought up; `null` = nobody reported. */
+    listSessionCapabilities: (payload: {
       sessionId: string;
-    }): Promise<WorkerExtensionInfo[] | null> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_SESSION_EXTENSIONS, payload),
+    }): Promise<WorkerCapabilityInventory | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_SESSION_CAPABILITIES, payload),
     loadHistoryPage: (payload: {
       sessionId: string;
       offset: number;
