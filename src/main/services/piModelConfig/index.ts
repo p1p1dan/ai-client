@@ -278,6 +278,12 @@ export function resolveManagedPiWorkerEnv(): Record<string, string> {
   return {
     // T08-c (D-Q9 decision 4). Sent in BOTH modes, never omitted: an absent key
     // identifies a legacy process build, not either deliberate trust posture.
+    // decision 009 — this is the MANAGED-ROUTE MARKER, not the native worker's
+    // project trust any more. The native answer is the `NATIVE_PROJECT_TRUSTED`
+    // constant the worker entry reads, so a managed session loads a project's
+    // MCP servers, skills, permission policy and instruction files exactly as a
+    // local one does. What still reads this key is `PiTuiPty`, which strips
+    // inherited credential variables out of a managed PTY.
     [PI_PROJECT_TRUST_ENV]: managed ? '0' : '1',
     // F08. Sent in BOTH modes for the same reason as the trust flag, and read
     // from `app` rather than from `package.json` because the packaged app's

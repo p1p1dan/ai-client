@@ -11,18 +11,23 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * T08-c (D-Q9 decision 4) — what each Pi worker is told about project trust.
+ * T08-c (D-Q9 decision 4) — the managed-route marker each child process is
+ * handed.
  *
- * The worker runs in its own process and cannot see the credential mode, so this
- * env var is the whole channel. Two things it must get right, and both are
- * silent when wrong:
+ * decision 009 narrowed what this variable decides, and the docblock is worth
+ * keeping honest about it. It is no longer the native worker's project trust:
+ * that is a constant now (`NATIVE_PROJECT_TRUSTED`), so a company-account
+ * session reads the repository's MCP servers, skills, permission policy and
+ * instruction files exactly as a personal one does. Nor is it read by the `pi`
+ * CLI — that package has no such variable, and resolves project trust from its
+ * own `--approve` flag, `trust.json` and `defaultProjectTrust` setting.
  *
- *  - The managed route must send `'0'`. Sending `'1'` (or nothing) lets a
- *    repository the user cloned ship a `.pi/` config that turns the permission
- *    gate off, and nothing on screen would say so.
- *  - The key must be sent in BOTH modes. The per-slot worker treats absence as
- *    untrusted, but local mode still needs an explicit `'1'` to preserve the
- *    user's own project-scoped Pi configuration.
+ * What is left is a marker of the credential route, and one consumer:
+ * `PiTuiPty` strips inherited credential variables out of a PTY when it reads
+ * `'0'`. The value is still pinned here because that consumer is a security
+ * behaviour — a company-account terminal must not inherit the gateway key —
+ * and because sending the key in BOTH modes is what keeps an absent key
+ * meaning "old Main build" rather than "local route".
  */
 
 const APP_VERSION = '9.9.9-test';
@@ -87,14 +92,14 @@ describe('resolveManagedPiWorkerEnv — project trust', () => {
     delete process.env.AICLIENT_MANAGED_CREDENTIALS;
   });
 
-  it('withholds a repository’s own scope on the managed route', async () => {
+  it('marks the managed route, which is what strips PTY credentials', async () => {
     const env = await workerEnv(true);
     expect(env[PI_PROJECT_TRUST_ENV]).toBe('0');
     // The managed route also isolates the agent directory — both keys travel.
     expect(env.PI_CODING_AGENT_DIR).toMatch(/pi-agent$/);
   });
 
-  it('trusts a repository’s own scope on the local route', async () => {
+  it('marks the local route, which keeps a PTY’s inherited environment', async () => {
     const env = await workerEnv(false);
     expect(env[PI_PROJECT_TRUST_ENV]).toBe('1');
     // H/19: the local route ALSO runs out of this app's agent directory. Trust
@@ -103,7 +108,7 @@ describe('resolveManagedPiWorkerEnv — project trust', () => {
     expect(env.PI_CODING_AGENT_DIR).toMatch(/pi-agent$/);
   });
 
-  it('always sends the key so both trust postures are explicit', async () => {
+  it('always sends the key so an absent one can only mean an old build', async () => {
     for (const managed of [true, false]) {
       expect(Object.keys(await workerEnv(managed))).toContain(PI_PROJECT_TRUST_ENV);
     }
@@ -392,7 +397,7 @@ describe('resolveManagedPiWorkerEnv — the user service count no longer moves a
     expect((await workerEnv(false)).PI_CODING_AGENT_DIR).toBe(APP_AGENT_DIR);
   });
 
-  it('keeps the local route trusted — the directory is not a trust change', async () => {
+  it('keeps the local route’s marker — the directory is not a route change', async () => {
     readUserProvidersMock.mockReturnValue({ status: 'ok', providers: [userProvider] } as never);
     expect((await workerEnv(false)).AICLIENT_PI_TRUST_PROJECT_CONFIG).toBe('1');
   });

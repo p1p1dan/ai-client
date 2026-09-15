@@ -106,6 +106,11 @@ export function resolvePiCliLaunchPlan(
   }
 
   const managedEnv = resolveManagedPiPtyEnv();
+  // decision 009 — read as the managed-route marker it is, not as a project
+  // trust flag: the bundled pi CLI has no such variable and decides project
+  // trust on its own (`--approve`, its `trust.json`, `defaultProjectTrust`).
+  // The branch is about credentials only — a company-account terminal must not
+  // inherit the gateway key from this process.
   if (managedEnv[PI_PROJECT_TRUST_ENV] === '0') {
     for (const key of Object.keys(env)) {
       if (isCredentialEnvKey(key)) delete env[key];

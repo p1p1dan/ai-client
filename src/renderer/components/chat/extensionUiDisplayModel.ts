@@ -334,12 +334,12 @@ const utf8Length = (value: string) => encoder.encode(value).byteLength;
  *    copy is where this app ships its baseline policy on purpose
  *    (`scripts/patch-pi-permission-system.mjs`); "move it elsewhere" would break
  *    the gate.
- *  - **Project not trusted** — managed credential mode withholds pi's
- *    `projectTrusted` on purpose (T08-c / D-Q9 decision 4, see
- *    `PI_PROJECT_TRUST_ENV`), so a cloned repository cannot loosen the policy.
- *    There is no "grant project trust" control to point the user at, and in
- *    local mode trust is already granted, so this message can only ever appear
- *    where it is unactionable.
+ *  - **Project not trusted** — the extension warns when the session it is
+ *    running in withheld the workspace, and there is no "grant project trust"
+ *    control in this app to point the user at. decision 009 narrowed when that
+ *    can happen at all: both credential routes now trust a project, so the only
+ *    session that still withholds it is an `unbound` scratch one, which has no
+ *    repository policy to load in the first place. Unactionable either way.
  *
  * Matched on the message text because `ui.notify` carries no code or id — only
  * `{ message, type }` reaches the renderer. Each pattern is the shortest

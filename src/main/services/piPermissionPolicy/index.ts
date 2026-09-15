@@ -50,18 +50,6 @@ import { readRawDocument, readScopes, type ScopeLocation, writeScopeDocument } f
 const EXTENSION_ID = 'pi-permission-system';
 const CONFIG_FILE = 'config.json';
 
-/**
- * The reason the project scope is ignored on the managed route, in the user's
- * words rather than pi's.
- *
- * D11 decision 4 sends `projectTrusted: false` to the Host in managed mode, so
- * a cloned repository cannot loosen the company posture. The panel still lists
- * the file, because a policy that exists and does nothing is exactly the state
- * someone would otherwise spend an afternoon on.
- */
-export const PROJECT_SCOPE_WITHHELD =
-  'Ignored on the managed route: a repository cannot change the permission policy.';
-
 /** The directory holding the bundled plugin — the same one the Host injects. */
 export function getBundledPluginDir(): string {
   return join(
@@ -87,45 +75,34 @@ function currentRoute(): PermissionPolicyRoute {
 }
 
 /**
- * H/19: no longer route-dependent. Both modes read and write the policy in this
- * app's own agent directory, which is the directory both modes' sessions load.
- * The parameter stays so the scope list can still say what the ROUTE means for
- * the project scope (see {@link PROJECT_SCOPE_WITHHELD}).
- */
-function agentDirFor(_route: PermissionPolicyRoute): string {
-  return getAppPiAgentDir();
-}
-
-/**
  * The scope files to read, in the order the plugin merges them.
  *
  * Exported so the tests can assert the ORDER as well as the paths: the order is
  * the policy, and a scope list that put `project` before `global` would show a
  * user a posture their agent never runs under.
+ *
+ * decision 009 — no longer route-dependent. The managed route used to mark the
+ * project scope as withheld, because the worker was started with
+ * `projectTrusted: false` and really did drop it. It no longer is: a managed
+ * session loads `<repo>/.pi/extensions/pi-permission-system/config.json` the
+ * same way a local one does, so the panel must show that file as contributing
+ * or it would be describing a session nobody runs.
  */
-export function resolveScopeLocations(
-  route: PermissionPolicyRoute,
-  agentDir: string,
-  repoPath?: string
-): ScopeLocation[] {
+export function resolveScopeLocations(agentDir: string, repoPath?: string): ScopeLocation[] {
   const locations: ScopeLocation[] = [
     { id: 'bundled', path: join(getBundledPluginDir(), CONFIG_FILE) },
     { id: 'global', path: getGlobalPolicyPath(agentDir) },
   ];
   if (repoPath) {
-    locations.push({
-      id: 'project',
-      path: getProjectPolicyPath(repoPath),
-      ...(route === 'managed' ? { withheldReason: PROJECT_SCOPE_WITHHELD } : {}),
-    });
+    locations.push({ id: 'project', path: getProjectPolicyPath(repoPath) });
   }
   return locations;
 }
 
 export function readPermissionPolicy(repoPath?: string): PermissionPolicySnapshot {
   const route = currentRoute();
-  const agentDir = agentDirFor(route);
-  const scopes = readScopes(resolveScopeLocations(route, agentDir, repoPath));
+  const agentDir = getAppPiAgentDir();
+  const scopes = readScopes(resolveScopeLocations(agentDir, repoPath));
   return {
     route,
     agentDir,
@@ -142,8 +119,7 @@ export function updatePermissionPolicy(
   patch: PolicyPatch,
   repoPath?: string
 ): PermissionPolicySnapshot {
-  const route = currentRoute();
-  const path = getGlobalPolicyPath(agentDirFor(route));
+  const path = getGlobalPolicyPath(getAppPiAgentDir());
   writeScopeDocument(path, applyPolicyPatch(readRawDocument(path), patch));
   return readPermissionPolicy(repoPath);
 }
@@ -155,7 +131,6 @@ export function updatePermissionPolicy(
  * still makes the panel report a scope, and "reset" should leave no trace.
  */
 export function resetPermissionPolicy(repoPath?: string): PermissionPolicySnapshot {
-  const route = currentRoute();
-  writeScopeDocument(getGlobalPolicyPath(agentDirFor(route)), {});
+  writeScopeDocument(getGlobalPolicyPath(getAppPiAgentDir()), {});
   return readPermissionPolicy(repoPath);
 }

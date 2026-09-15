@@ -56,7 +56,7 @@ afterEach(() => {
 describe('scope locations', () => {
   it('reads the bundled policy from beside the Pi worker entry', async () => {
     const { resolveScopeLocations } = await service();
-    const [bundled] = resolveScopeLocations('managed', appAgentDir());
+    const [bundled] = resolveScopeLocations(appAgentDir());
     expect(bundled?.path).toBe(
       join(root, 'worker', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json')
     );
@@ -65,21 +65,28 @@ describe('scope locations', () => {
   /** Scope order IS the policy: a later scope overrides an earlier one. */
   it('lists the scopes in the order the plugin merges them', async () => {
     const { resolveScopeLocations } = await service();
-    const locations = resolveScopeLocations('managed', appAgentDir(), '/repo');
+    const locations = resolveScopeLocations(appAgentDir(), '/repo');
     expect(locations.map((entry) => entry.id)).toEqual(['bundled', 'global', 'project']);
   });
 
   it('omits the project scope when no repository is open', async () => {
     const { resolveScopeLocations } = await service();
-    const locations = resolveScopeLocations('managed', appAgentDir());
+    const locations = resolveScopeLocations(appAgentDir());
     expect(locations.map((entry) => entry.id)).toEqual(['bundled', 'global']);
   });
 
-  it('withholds the project scope on the managed route only', async () => {
-    const { resolveScopeLocations, PROJECT_SCOPE_WITHHELD } = await service();
-    const asManaged = resolveScopeLocations('managed', appAgentDir(), '/repo');
-    const asLocal = resolveScopeLocations('local', localAgentDir(), '/repo');
-    expect(asManaged.at(-1)?.withheldReason).toBe(PROJECT_SCOPE_WITHHELD);
+  /**
+   * decision 009 — the managed route used to mark this scope "ignored", because
+   * the worker really was started with `projectTrusted: false`. It is not any
+   * more, so a marker here would be the panel lying about a file the session
+   * loads.
+   */
+  it('marks the project scope as withheld on neither route', async () => {
+    const { resolveScopeLocations } = await service();
+    const asManaged = resolveScopeLocations(appAgentDir(), '/repo');
+    managed = false;
+    const asLocal = resolveScopeLocations(localAgentDir(), '/repo');
+    expect(asManaged.at(-1)?.withheldReason).toBeUndefined();
     expect(asLocal.at(-1)?.withheldReason).toBeUndefined();
   });
 
@@ -110,7 +117,14 @@ describe('readPermissionPolicy', () => {
     expect(snapshot.readOnlyReason).toBeUndefined();
   });
 
-  it('reads a repository’s policy but keeps it out of the merge on the managed route', async () => {
+  /**
+   * decision 009 — the managed route's project policy now counts.
+   *
+   * This case is the inverse of what it asserted before the decision, and that
+   * is the point: the panel's job is to describe the session the user is about
+   * to run, and a managed session reads this file.
+   */
+  it('lets a repository’s policy into the merge on the managed route', async () => {
     const { readPermissionPolicy } = await service();
     const repo = join(root, 'repo');
     writeJson(join(repo, '.pi', 'extensions', 'pi-permission-system', 'config.json'), {
@@ -119,10 +133,13 @@ describe('readPermissionPolicy', () => {
 
     const snapshot = readPermissionPolicy(repo);
     const project = snapshot.scopes.find((scope) => scope.id === 'project');
+    expect(snapshot.route).toBe('managed');
     expect(project?.present).toBe(true);
-    expect(project?.withheldReason).toBeTruthy();
-    // Read for display, absent from the answer.
-    expect(snapshot.effective.surfaces.find((entry) => entry.surface === 'write')).toBeUndefined();
+    expect(project?.withheldReason).toBeUndefined();
+    expect(snapshot.effective.surfaces.find((entry) => entry.surface === 'write')).toMatchObject({
+      action: 'allow',
+      origin: 'project',
+    });
   });
 
   it('lets a repository’s policy through on the local route', async () => {

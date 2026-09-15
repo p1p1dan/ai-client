@@ -175,9 +175,15 @@ export interface PolicyScope {
   /** Non-fatal complaints from {@link parsePermissionConfig}. */
   issues?: string[];
   /**
-   * Set when the scope is deliberately NOT consulted — today only the untrusted
-   * project scope (D11 decision 4). A withheld scope is still shown, because
-   * "your repo has a policy file and it is being ignored" is information.
+   * Set when the scope is deliberately NOT consulted. A withheld scope is still
+   * shown, because "your repo has a policy file and it is being ignored" is
+   * information.
+   *
+   * decision 009 left this channel with no producer: the managed route used to
+   * withhold the project scope, and it no longer does. Kept rather than deleted
+   * because it is the only way the panel can say "read, but not counted", and
+   * the next thing that needs to say it — an explicit `settingSources` list
+   * closing the project tier — is already a supported runtime option.
    */
   withheldReason?: string;
 }

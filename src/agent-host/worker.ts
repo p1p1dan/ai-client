@@ -6,7 +6,7 @@
  */
 
 import { PI_AGENT_DIR_ENV, RUNTIME_AGENT_DIR_ENV, readRuntimeFlags } from '../runtime/flags.ts';
-import { PI_OPT_IN_EXTENSIONS_ENV, PI_PROJECT_TRUST_ENV } from '../shared/piModelConfig.ts';
+import { NATIVE_PROJECT_TRUSTED, PI_OPT_IN_EXTENSIONS_ENV } from '../shared/piModelConfig.ts';
 import {
   PI_WORKER_GENERATION_ENV,
   WORKER_RPC_PROTOCOL_VERSION,
@@ -26,12 +26,6 @@ function readPositiveGeneration(value: string | undefined): number {
     throw new Error(`Missing or invalid ${PI_WORKER_GENERATION_ENV}: ${String(value)}`);
   }
   return generation;
-}
-
-function readProjectTrusted(value: string | undefined): boolean {
-  if (value === '1') return true;
-  if (value === '0') return false;
-  return false;
 }
 
 function messageData(value: { data: unknown } | unknown): unknown {
@@ -135,7 +129,13 @@ let disposed = false;
 const server = new PiWorkerRpcServer({
   port: parentPort,
   generation,
-  projectTrusted: readProjectTrusted(process.env[PI_PROJECT_TRUST_ENV]),
+  // decision 009 — a constant, not the managed flag. The managed route trusts a
+  // project's MCP, skills, permission policy and instruction files exactly as
+  // the local route does; the only project-scoped thing it withholds is model
+  // settings, and this runtime has no path that reads those. Deriving it from
+  // `AICLIENT_PI_TRUST_PROJECT_CONFIG` again would silently re-close all four
+  // layers for every company-account session.
+  projectTrusted: NATIVE_PROJECT_TRUSTED,
   ...(process.env[PI_OPT_IN_EXTENSIONS_ENV]?.trim()
     ? { optInExtensions: process.env[PI_OPT_IN_EXTENSIONS_ENV]?.trim() }
     : {}),

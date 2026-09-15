@@ -48,10 +48,15 @@ export interface PiPluginState {
   /** `<agentDir>/settings.json` — shown so the user can find the file. */
   settingsPath: string;
   /**
-   * Absent on the managed route. Project-level installs (`pi install -l`) are
-   * ignored there because `AICLIENT_PI_TRUST_PROJECT_CONFIG=0` disables project
-   * config wholesale, so this app never offers that option — see
-   * {@link PROJECT_SCOPE_UNAVAILABLE}.
+   * Absent on the managed route: this app does not offer project-level installs
+   * (`pi install -l`) there — see {@link PROJECT_SCOPE_UNAVAILABLE}.
+   *
+   * decision 009 kept this as it was while the rest of the project sources were
+   * opened up, because it is a different question. The other four are files a
+   * session READS; a project-scoped package install is a repository putting
+   * executable code on this machine, which is what the managed route exists to
+   * answer for. It is pi's own scope besides — `pi` refuses `-l` on a project
+   * it has not trusted, and it decides that for itself.
    */
   projectScopeAvailable: boolean;
   permissionSystem: PermissionSystemOwner;

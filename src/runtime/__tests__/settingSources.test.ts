@@ -13,10 +13,15 @@
 
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { NATIVE_PROJECT_TRUSTED } from '../../shared/piModelConfig.ts';
 import type { RuntimeHostIoService } from '../contracts.ts';
 import { RuntimeHostError } from '../host/errors.ts';
 import { loadMcpConfig, type McpConfigSource, mcpConfigFiles } from '../plugins/mcp/config.ts';
 import { loadPermissionPolicy } from '../plugins/permissions/policy.ts';
+import {
+  type InstructionSource,
+  loadInstructionChain,
+} from '../plugins/prompt/projectInstructions.ts';
 import { skillRoots, templateRoots } from '../plugins/skills/index.ts';
 import { resolveSettingSources } from '../settingSources.ts';
 
@@ -256,5 +261,84 @@ describe('skills and prompt templates under settingSources', () => {
         settingSources: ['project'],
       }).map((root) => root.path)
     ).toEqual([join(CWD, '.pi', 'prompts')]);
+  });
+});
+
+/**
+ * decision 009 — what a company-account session actually loads.
+ *
+ * Until this decision the managed route started its worker with
+ * `projectTrusted: false`, and all four readers below quietly skipped the
+ * repository. Nothing failed: the policy merged one scope fewer, the MCP
+ * servers were not there to be missed, the skills menu was shorter, and the
+ * repo's own CLAUDE.md never reached the prompt. That is the whole reason this
+ * block drives the real constant rather than a literal `true` — flipping
+ * {@link NATIVE_PROJECT_TRUSTED} back has to turn something red here, or the
+ * decision has no test at all.
+ *
+ * The one project-scoped thing that stays out is model settings, and it is
+ * absent by construction rather than by a switch: no reader in this runtime
+ * takes a model catalogue from the workspace. The catalogue arrives from Main's
+ * hand-over or from the agent directory (`plugins/model-adapter/catalog.ts`),
+ * which is why there is no fifth case below.
+ */
+describe('decision 009 — a trusted project, through every project-scoped reader', () => {
+  const PROJECT_MCP = join(CWD, '.pi', 'mcp.json');
+  const CLAUDE_MD = join(CWD, 'CLAUDE.md');
+
+  it('merges the repository permission policy over the agent directory', async () => {
+    const { io } = policyIo({
+      [GLOBAL_POLICY]: { permission: { bash: { 'git *': 'ask' } } },
+      [PROJECT_POLICY]: { permission: { bash: { 'git *': 'allow' } } },
+    });
+    const policy = await loadPermissionPolicy(io, {
+      cwd: CWD,
+      agentDir: AGENT_DIR,
+      projectTrusted: NATIVE_PROJECT_TRUSTED,
+    });
+    expect(policy.sources).toContain(PROJECT_POLICY);
+    expect(policy.config.permission?.bash).toMatchObject({ 'git *': 'allow' });
+  });
+
+  it('connects the servers the repository declares', async () => {
+    const loaded = await loadMcpConfig(
+      mcpSource({ [PROJECT_MCP]: { mcpServers: { files: { command: 'project.mjs' } } } }),
+      { agentDir: AGENT_DIR, cwd: CWD, projectTrusted: NATIVE_PROJECT_TRUSTED }
+    );
+    expect(loaded.servers[0]).toMatchObject({ command: 'project.mjs', scope: 'project' });
+  });
+
+  it('scans the repository skill and prompt-template roots', async () => {
+    const roots = await skillRoots(noGit, {
+      agentDir: AGENT_DIR,
+      cwd: CWD,
+      home: HOME,
+      projectTrusted: NATIVE_PROJECT_TRUSTED,
+    });
+    expect(roots.some((root) => root.scope === 'project')).toBe(true);
+    expect(
+      templateRoots({
+        agentDir: AGENT_DIR,
+        cwd: CWD,
+        projectTrusted: NATIVE_PROJECT_TRUSTED,
+      }).map((root) => root.path)
+    ).toContain(join(CWD, '.pi', 'prompts'));
+  });
+
+  it('puts the repository’s own instructions in the prompt', async () => {
+    const files: Record<string, string> = { [CLAUDE_MD]: 'repo house rules' };
+    const source: InstructionSource = {
+      async readText(path) {
+        return files[path];
+      },
+      async realpath(path) {
+        return path in files || path === CWD ? path : undefined;
+      },
+    };
+    const chain = await loadInstructionChain(source, {
+      root: CWD,
+      projectTrusted: NATIVE_PROJECT_TRUSTED,
+    });
+    expect(chain.map((entry) => entry.content)).toEqual(['repo house rules']);
   });
 });

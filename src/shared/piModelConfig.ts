@@ -17,24 +17,54 @@ export const PI_MODEL_MANAGEMENT_URL_SETTING_KEY = 'piModelManagementUrl';
 export const PI_MODEL_MANAGEMENT_URL_ENV = 'PILAB_MODEL_CONFIG_URL';
 
 /**
- * T08-c (D-Q9 decision 4) — whether the pi Host may load a repository's own
- * `.pi/` scope.
+ * T08-c (D-Q9 decision 4) — the managed route's "a cloned repo may not
+ * configure this machine" marker. `'0'` on the managed route, `'1'` on the
+ * local one, sent in BOTH modes so an ABSENT key can only mean an old Main
+ * build.
  *
- * `'1'` = trusted (the local-environment route: the machine is the user's, and
- * what a repo they cloned is allowed to configure is their call).
- * `'0'` = withheld (the managed route: we promise this build works and answer
- * for what it permits, so a cloned repo may not loosen the policy).
+ * Two corrections worth carrying, because the name promises more than the
+ * variable delivers:
  *
- * Carried as an env var because the Host is a separate process that has no
- * access to the credential mode. Read as an explicit tri-state — an ABSENT key
- * means an old Main build, which must not be read as either answer.
- *
- * Blast radius worth knowing: this is pi's own `projectTrusted`, so `'0'` also
- * stops a repo's `.pi/settings.json` from contributing packages and models —
- * not just permission rules. That is deliberate: a cloned repo adding a package
- * is a cloned repo running code.
+ *  - **The name is ours, not pi's.** The `pi` CLI has no such variable
+ *    (verified against the bundled `dist/`: it resolves project trust from
+ *    `--approve` / `--no-approve`, its own `trust.json`, the global
+ *    `defaultProjectTrust` setting, or an interactive prompt). Exporting this
+ *    key into a PTY therefore changes nothing about what the TUI loads — the
+ *    embedded pi CLI decides that for itself. The one thing the value still
+ *    does on that path is tell `PiTuiPty` it is on the managed route, which is
+ *    when inherited credential variables are stripped out of the terminal.
+ *  - **decision 009 took the native route off it.** It used to be the native
+ *    worker's `projectTrusted` as well, and that is what made a managed
+ *    session ignore the repository's MCP servers, skills, permission policy and
+ *    instruction files. The native answer is now {@link NATIVE_PROJECT_TRUSTED}
+ *    — a constant, because the managed route trusts a project for everything
+ *    except its model settings, which the runtime never reads from a workspace.
  */
 export const PI_PROJECT_TRUST_ENV = 'AICLIENT_PI_TRUST_PROJECT_CONFIG';
+
+/**
+ * decision 009 — whether a NATIVE worker may read the repository's own
+ * configuration layers.
+ *
+ * Those layers are project MCP (`.pi/mcp.json`, `.pi/mcp.local.json`), project
+ * skills and prompt templates, the project permission policy
+ * (`.pi/agent/pi-permissions.jsonc` and `.local.jsonc`), and the project
+ * instruction files (CLAUDE.md / AGENTS.md / CLAUDE.local.md).
+ *
+ * A constant rather than a second environment variable, because the answer no
+ * longer varies by anything Main knows. The managed route trusts the project
+ * too (user ruling, 2026-09-15), and the one project-scoped thing it still
+ * refuses — model settings — is not something the native runtime has any code
+ * path to read: its catalog arrives from Main's hand-over or from the agent
+ * directory, never from the workspace. A variable that is always `'1'` would
+ * read as a switch and invite the same question to be answered twice.
+ *
+ * Two things can still withdraw it, and neither is a credential mode: an
+ * `unbound` scratch session ANDs it away in `piWorkerRpcServer`, and an
+ * explicit `settingSources` list can close the project and local tiers
+ * (decision 008).
+ */
+export const NATIVE_PROJECT_TRUSTED = true;
 
 /**
  * Which OPT-IN bundled feature extensions this session may load, as a
