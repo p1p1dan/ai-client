@@ -40,6 +40,17 @@ export function decodeFileText(
   }
 }
 
+/** First scan window: enough for a short read to finish in one call. */
+const SCAN_CHUNK_BYTES = 32 * 1024;
+/**
+ * tools-10 — a TSD file is served by a helper process that starts over and
+ * decrypts from byte 0 on every `readFile`, so scanning one in fixed 32 KiB
+ * steps costs one process per step and a quadratic number of decrypted bytes.
+ * Doubling the window after each fallback chunk keeps both roughly linear in
+ * the bytes actually scanned; the cap bounds what a single step may buffer.
+ */
+const FALLBACK_CHUNK_MAX_BYTES = 2 * 1024 * 1024;
+
 // HostIo uses byte windows; the model-facing read tool uses one-based lines.
 export async function readLines(
   io: RuntimeHostIoService,
@@ -85,15 +96,20 @@ export async function readLines(
       ? { text: output.join(''), truncated: true, nextOffset: line, longLine: true }
       : { text: output.join(''), truncated: true, nextOffset: line - 1, partialLine: true };
   }
+  let chunkBytes = SCAN_CHUNK_BYTES;
   while (position < 64 * 1024 * 1024) {
     signal?.throwIfAborted();
     const chunk = await io.readFile(path, {
       offset: position,
-      maxBytes: 32 * 1024,
+      maxBytes: chunkBytes,
       overflow: 'truncate',
       signal,
     });
     position += chunk.bytes.length;
+    // Only the helper-backed path grows: a plaintext read pays one cheap
+    // open/stat per step, and a bigger buffer would just cost memory.
+    if (chunk.source === 'node-fallback')
+      chunkBytes = Math.min(Math.max(chunkBytes * 2, maxBytes), FALLBACK_CHUNK_MAX_BYTES);
     let text = decodeFileText(decoder, chunk.bytes, chunk.truncated, path);
     if (skippingLongLine) {
       const end = text.indexOf('\n');

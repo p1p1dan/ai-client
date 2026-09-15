@@ -36,6 +36,12 @@ function tsdHelper(): string {
 }
 const CHUNK_BYTES = 64 * 1024;
 export const TSD_READ_TIMEOUT_MS = 30_000;
+/**
+ * core-host-05 — room for the helper's own error line plus whatever the
+ * configured Node prints on startup, kept apart from the stdout quota so that
+ * noise cannot be mistaken for an unreadable file.
+ */
+const TSD_STDERR_BYTES = 4096;
 
 export class HostIoPlugin extends Service implements RuntimeHostIoService {
   static inject = [EXEC_SERVICE];
@@ -136,7 +142,11 @@ export class HostIoPlugin extends Service implements RuntimeHostIoService {
         args: [tsdHelper(), path, String(offset), String(options.maxBytes + 1)],
         cwd: dirname(path),
         timeoutMs: TSD_READ_TIMEOUT_MS,
-        maxOutputBytes: options.maxBytes + 1 + 4096,
+        // The window the helper may print, and no more: stderr has its own
+        // budget, so a warning-happy Node no longer spends the plaintext quota
+        // and gets a working read reported as io_tsd_unreadable (core-host-05).
+        maxOutputBytes: options.maxBytes + 1,
+        maxStderrBytes: TSD_STDERR_BYTES,
         overflow: 'terminate',
         signal,
       });

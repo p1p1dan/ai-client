@@ -397,6 +397,18 @@ export interface RuntimeExecRequest {
   stdin?: Uint8Array;
   timeoutMs: number;
   maxOutputBytes: number;
+  /**
+   * A budget for stderr on its own (core-host-05).
+   *
+   * Without it `maxOutputBytes` caps the two streams together, so whichever
+   * arrives first takes the room: a child that greets stderr with startup
+   * warnings pushes a byte-exact stdout protocol over the shared limit and
+   * `terminate` kills a command that was working. With it, stdout keeps all of
+   * `maxOutputBytes`, stderr beyond this budget is dropped instead of ending
+   * the command or raising `truncated`, and `stderrBytes` still reports what
+   * the child produced. An adapter must honour it when present.
+   */
+  maxStderrBytes?: number;
   overflow: 'truncate' | 'terminate';
   signal?: AbortSignal;
 }

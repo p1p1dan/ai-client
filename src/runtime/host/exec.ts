@@ -43,6 +43,8 @@ export class ExecPlugin extends Service implements RuntimeExecService {
     absolutePath(request.cwd);
     timerMilliseconds(request.timeoutMs, 'timeoutMs');
     positiveInteger(request.maxOutputBytes, 'maxOutputBytes');
+    if (request.maxStderrBytes !== undefined)
+      positiveInteger(request.maxStderrBytes, 'maxStderrBytes');
     if (!request.command || (!isAbsolute(request.command) && /[/\\]/.test(request.command))) {
       throw new RuntimeHostError(
         'invalid_host_request',
@@ -479,6 +481,7 @@ function runPipe(
     );
     const chunks = { stdout: [] as Buffer[], stderr: [] as Buffer[] };
     let retained = 0;
+    let retainedStderr = 0;
     let settled = false;
     let stopping = false;
     let streamError: Error | undefined;
@@ -568,6 +571,17 @@ function runPipe(
     }
     function consume(stream: 'stdout' | 'stderr', data: Buffer): void {
       result[stream === 'stdout' ? 'stdoutBytes' : 'stderrBytes'] += data.length;
+      const stderrBudget = stream === 'stderr' ? request.maxStderrBytes : undefined;
+      if (stderrBudget !== undefined) {
+        // core-host-05 — a caller that asked for a separate stderr budget reads
+        // stdout as a complete byte protocol. Chatter on stderr is dropped past
+        // its own window instead of spending the stdout quota and terminating
+        // the command; `stderrBytes` keeps the true count for diagnostics.
+        const kept = Math.min(data.length, stderrBudget - retainedStderr);
+        if (kept > 0) chunks.stderr.push(Buffer.from(data.subarray(0, kept)));
+        retainedStderr += kept;
+        return;
+      }
       const count = Math.min(data.length, request.maxOutputBytes - retained);
       if (count > 0) chunks[stream].push(Buffer.from(data.subarray(0, count)));
       retained += count;

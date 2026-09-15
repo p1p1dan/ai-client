@@ -8,11 +8,13 @@ import type { ExtensionUiRequest } from '../../agent-host/extensionUiBridge.ts';
 import { reviewFromToolResult } from '../../shared/sessionFileChange.ts';
 import { migratePermissionTier } from '../../shared/types/runtimePermission.ts';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
+import type { RuntimeHostIoService, RuntimeReadOptions, RuntimeReadResult } from '../contracts.ts';
 import { standaloneHost } from '../host/config.ts';
 import { resolveWorkerShell } from '../host/shell.ts';
 import { modeSegment, permissionGearSegment } from '../plugins/permissions/prompt.ts';
 import { composeSystemPrompt } from '../plugins/prompt/segments.ts';
 import { TOOL_OUTPUT_BYTES } from '../plugins/tools/index.ts';
+import { readLines } from '../plugins/tools/read-lines.ts';
 
 let dir: string;
 const runtimes: RuntimeHandle[] = [];
@@ -645,5 +647,51 @@ describe('native tools', () => {
       },
     });
     expect(content(await call(r, 'grep', { pattern: 'hidden' }))).not.toContain('hidden');
+  });
+});
+
+describe('read line scanning', () => {
+  const LINE_BYTES = 200;
+  const LINES = 5000;
+  const BUDGET = TOOL_OUTPUT_BYTES - 128;
+  const file = Buffer.from(`${'x'.repeat(LINE_BYTES - 1)}\n`.repeat(LINES));
+  /** Counts the windows `readLines` asks for, and labels every answer `source`. */
+  function countingIo(source: RuntimeReadResult['source']) {
+    const windows: number[] = [];
+    const io = {
+      readFile: (_path: string, options: RuntimeReadOptions): Promise<RuntimeReadResult> => {
+        windows.push(options.maxBytes);
+        const offset = options.offset ?? 0;
+        const slice = file.subarray(offset, offset + options.maxBytes + 1);
+        return Promise.resolve({
+          bytes: slice.subarray(0, options.maxBytes),
+          truncated: slice.length > options.maxBytes,
+          source,
+        });
+      },
+    } as unknown as RuntimeHostIoService;
+    return { io, windows };
+  }
+  it('widens the window for helper-backed reads only (tools-10)', async () => {
+    const plain = countingIo('direct');
+    const helper = countingIo('node-fallback');
+    // Skipping to a late line is the case that scans: every chunk before the
+    // first printed line is pure overhead, and on a TSD file each one restarts
+    // the helper process and re-decrypts the file from byte 0.
+    const expected = await readLines(plain.io, '/scan', 4500, 2000, BUDGET);
+    const actual = await readLines(helper.io, '/scan', 4500, 2000, BUDGET);
+    expect(actual).toEqual(expected);
+    expect(expected.truncated).toBe(true);
+    expect(new Set(plain.windows)).toEqual(new Set([32 * 1024]));
+    expect(plain.windows.length).toBeGreaterThan(25);
+    expect(helper.windows[0]).toBe(32 * 1024);
+    expect(helper.windows.length).toBeLessThanOrEqual(6);
+    expect(Math.max(...helper.windows)).toBeLessThanOrEqual(2 * 1024 * 1024);
+    // Paging on with nextOffset is what the read tool tells the model to do, so
+    // the second page must stay bounded too rather than rescan in 32 KiB steps.
+    const next = countingIo('node-fallback');
+    const page = await readLines(next.io, '/scan', actual.nextOffset, 2000, BUDGET);
+    expect(page.text).not.toBe(actual.text);
+    expect(next.windows.length).toBeLessThanOrEqual(6);
   });
 });

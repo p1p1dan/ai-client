@@ -148,6 +148,7 @@ export interface RuntimeExecRequest {
   stdin?: Uint8Array;
   timeoutMs: number;
   maxOutputBytes: number;
+  maxStderrBytes?: number;
   overflow: 'truncate' | 'terminate';
   signal?: AbortSignal;
 }
@@ -194,12 +195,15 @@ adapter 收到已合成环境的请求，履行相同的字节、时限、退出
 不根据 `Bad file descriptor` 文本自动重跑命令，因为第一次可能已产生写入副作用。
 pipe 单测通过只能证明该实现；不能据此签收加密机 bash。
 
-**输出。** `maxOutputBytes` 为每次调用 stdout 与 stderr **合计保留**的正整数上限，
+**输出。** 未给 `maxStderrBytes` 时，`maxOutputBytes` 为每次调用 stdout 与 stderr **合计保留**的正整数上限，
 按收到数据的顺序保留每个流的前缀，不保证两个流之间的业务时间顺序。
-`stdoutBytes` / `stderrBytes` 是出口实际消费的字节数；强制终止时不代表进程本来会产生的全部输出。
+给出 `maxStderrBytes`（正整数）则两个流各有预算：stdout 独占 `maxOutputBytes`，stderr 写满自己的预算后丢弃多余字节，
+既不占用 stdout 额度，也不置 `truncated`、不触发 `terminate`；adapter 收到该字段时必须履行同一语义。
+`stdoutBytes` / `stderrBytes` 是出口实际消费的字节数，据此仍能看出 stderr 是否被丢弃；强制终止时不代表进程本来会产生的全部输出。
 `truncate` 到上限后继续排空两个流但不再保留数据；`terminate` 超限触发清理，适用于读取 helper 等完整字节协议。
-TSD helper 自身只输出至多 `maxBytes + 1` 字节，exec 为其设置匹配的 stdout 加有限 stderr 预算；
-helper 非零退出/输出超限均不能被 HostIo 当作完整文件。长期 MCP 协议流不能采用静默截断。
+TSD helper 自身只输出至多 `maxBytes + 1` 字节，exec 为其设置匹配的 stdout（`maxOutputBytes = maxBytes + 1`）
+加独立的有限 stderr 预算，使配置 Node 的启动告警（NODE_OPTIONS、企业预载脚本）不能把一次成功读取变成失败；
+helper 非零退出/stdout 超限均不能被 HostIo 当作完整文件。长期 MCP 协议流不能采用静默截断。
 
 **时限与返回。** `timeoutMs` 是正的有限整数，从受理请求开始计时，包括启动和 stdin 写入。
 已取消的请求不得 spawn。进程的正常非零退出通过 `exitCode` 返回，不包装成启动失败；

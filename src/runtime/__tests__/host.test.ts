@@ -145,6 +145,57 @@ describe('host IO', () => {
       await alternate.fiber.dispose();
     }
   });
+  it('reads plaintext through a helper whose Node greets stderr (core-host-05)', async () => {
+    const encrypted = join(dir, 'encrypted');
+    await writeFile(encrypted, '%TSD-Header-###%opaque');
+    const maxBytes = 64;
+    // Enough plaintext to fill the helper's whole window, which is the case the
+    // shared budget used to lose: a full stdout plus any stderr overflowed it.
+    let script = `process.stderr.write('w'.repeat(8192));process.stdout.write('p'.repeat(${maxBytes + 1}))`;
+    const seen: RuntimeExecRequest[] = [];
+    const alternate = new Context();
+    const noisy: RuntimeHostConfig = {
+      ...config,
+      tsdReadFallback: 'configured-node',
+      exec: {
+        mode: 'host-adapter',
+        adapter: {
+          id: 'tsd-noisy-fixture-v1',
+          dispose: async () => {},
+          // Stands in for the bundled Node of an encrypted box: the real pipe
+          // collection and the budgets HostIo asked for, but a startup that
+          // prints warnings (NODE_OPTIONS, an injected preload) before the
+          // plaintext. The real helper cannot be exercised here — it refuses a
+          // file whose header is still TSD.
+          run: (request) => {
+            seen.push(request);
+            return exec.run({ ...request, command: process.execPath, args: ['-e', script] });
+          },
+        },
+      },
+    };
+    await alternate.plugin(ExecPlugin, noisy);
+    const fiber = await alternate.plugin(HostIoPlugin, noisy);
+    await fiber.await();
+    try {
+      const data = await alternate.runtimeHostIo.readFile(encrypted, {
+        maxBytes,
+        overflow: 'truncate',
+      });
+      expect(data.source).toBe('node-fallback');
+      expect(text(data.bytes)).toBe('p'.repeat(maxBytes));
+      expect(data.truncated).toBe(true);
+      expect(seen[0]?.maxOutputBytes).toBe(maxBytes + 1);
+      expect(seen[0]?.maxStderrBytes).toBeGreaterThan(0);
+      // A helper that genuinely fails still reads as an unreadable file.
+      script = "process.stderr.write('driver refused');process.exitCode=1";
+      await expect(
+        alternate.runtimeHostIo.readFile(encrypted, { maxBytes, overflow: 'truncate' })
+      ).rejects.toMatchObject({ code: 'io_tsd_unreadable' });
+    } finally {
+      await alternate.fiber.dispose();
+    }
+  });
   it('rejects pre-aborted IO and closes early directory iteration', async () => {
     const controller = new AbortController();
     controller.abort();
@@ -252,6 +303,23 @@ describe('host exec', () => {
     });
     expect(result.termination).toBe('output-limit');
     expect(result.truncated).toBe(true);
+  });
+  it('spends a dedicated stderr budget instead of the stdout quota (core-host-05)', async () => {
+    // stderr first, and far past its own window: a child that greets the run
+    // with warnings must not cost the byte-exact stdout protocol a single byte.
+    const result = await command(
+      "process.stderr.write('y'.repeat(8192));process.stdout.write('x'.repeat(32))",
+      { maxOutputBytes: 32, maxStderrBytes: 4096, overflow: 'terminate' }
+    );
+    expect(result.termination).toBe('exit');
+    expect(result.exitCode).toBe(0);
+    expect(result.truncated).toBe(false);
+    expect(text(result.stdout)).toBe('x'.repeat(32));
+    expect(result.stderr.length).toBe(4096);
+    expect(result.stderrBytes).toBe(8192);
+    await expect(command('', { maxStderrBytes: 0 })).rejects.toMatchObject({
+      code: 'invalid_host_request',
+    });
   });
   it('times out, aborts before spawn, and rejects missing executables', async () => {
     expect((await command('setInterval(()=>{},1000)', { timeoutMs: 100 })).termination).toBe(
