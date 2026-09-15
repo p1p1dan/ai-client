@@ -180,6 +180,27 @@ export interface SessionLivenessNote {
  */
 export type SessionDisconnectReason = 'capacity_reclaimed';
 
+/**
+ * T034 (session-02): this session's file was rewritten when it was opened,
+ * because it held rows no reader could parse (decision 006).
+ *
+ * The user paid for the repair — a dropped row is a message, or a branch
+ * pointer, that is gone — so the fact is not allowed to live only in a trace
+ * file. Another rider on `session.status`, for the compatibility reason
+ * `SessionRetryInfo` established: an old renderer ignores the extra key.
+ *
+ * Unlike `retry`, this is a fact about the FILE and not about the current turn,
+ * so the store keeps it instead of clearing it on the next status.
+ *
+ * Line numbers only. The dropped text may be a half-written prompt, and a
+ * diagnostic that ships the user's own content to every consumer of the event
+ * stream is a worse trade than one that says which line to go and look at.
+ */
+export interface SessionRecoveryNote {
+  /** 1-based line numbers dropped from the session file, in file order. */
+  skippedLines: number[];
+}
+
 export interface SessionStatusEvent extends RuntimeEventBase {
   type: 'session.status';
   sessionId: string;
@@ -188,6 +209,7 @@ export interface SessionStatusEvent extends RuntimeEventBase {
     retry?: SessionRetryInfo;
     liveness?: SessionLivenessNote;
     disconnectReason?: SessionDisconnectReason;
+    recovery?: SessionRecoveryNote;
   };
 }
 

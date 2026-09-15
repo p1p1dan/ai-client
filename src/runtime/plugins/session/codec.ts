@@ -19,6 +19,36 @@ import { RuntimeHostError } from '../../host/errors.ts';
  */
 export const SESSION_MAX_BYTES = 32 * 1024 * 1024;
 
+/**
+ * session-02 — one row of the file that no reader could parse.
+ *
+ * A diagnostic, not the data: the row is gone from the rewritten file, and the
+ * preview is a clamped head of it so "what did this session lose?" has an
+ * answer without the dropped bytes being carried around in full.
+ */
+export interface SessionSkippedRow {
+  /** 1-based line number, counted in the file as it was read. */
+  line: number;
+  /** Clamped head of the dropped row. */
+  preview: string;
+}
+
+/** How much of a dropped row is worth keeping to identify it later. */
+const SKIPPED_PREVIEW_CHARS = 120;
+
+/**
+ * How many unparseable rows still read as damage rather than as another file.
+ *
+ * A bound, not a policy: decision 006 is about the row a crash left behind, and
+ * a handful of those is the whole realistic range. Without a ceiling, a file
+ * whose header happens to parse and whose body is not JSONL at all would be
+ * "repaired" one line at a time — millions of previews held in memory on a
+ * machine with 3 GB of it, and a `seq` allowance grown so wide the sequence
+ * check stops meaning anything. Past this many, the file is refused and left
+ * untouched, which is the answer a human needs to see.
+ */
+const MAX_SKIPPED_ROWS = 64;
+
 export interface SessionDocument {
   header: JsonlV4Header;
   entries: Entry[];
@@ -28,6 +58,15 @@ export interface SessionDocument {
   labels?: Record<string, string>;
   /** Valid prefix, only used while holding the writer lock to repair a torn tail. */
   repair?: string;
+  /**
+   * session-02 — rows dropped to make this file readable, in file order.
+   *
+   * Set only when `repair` also drops them, so a caller that rewrites the file
+   * and one that does not never disagree about what the file contains. Survives
+   * the rewrite (unlike `repair`, which is consumed) because it is the only
+   * evidence anywhere that the session was healed.
+   */
+  skipped?: SessionSkippedRow[];
 }
 
 /**
@@ -364,16 +403,63 @@ export function decodeSession(content: string): SessionDocument {
   let cliRows = 0;
   /** Whether the CLI, not us, put the current row at the tip of the main lane. */
   let cliTip = false;
+  /** Line indexes the rewrite must leave out, and what to say about them. */
+  const dropped = new Set<number>();
+  const skipped: SessionSkippedRow[] = [];
+  /** Where the torn tail begins, if there is one; everything from here is cut. */
+  let truncateAt: number | undefined;
+  /**
+   * session-02 — name the dropped lines on any failure a drop could have caused.
+   *
+   * A row that points at a parent we no longer have is not itself corrupt, so a
+   * bare `missing parent` sends the reader looking at the wrong line.
+   */
+  const afterSkip = (message: string) =>
+    skipped.length
+      ? `${message}; line ${skipped.map((row) => row.line).join(', ')} was skipped as unparseable`
+      : message;
   for (let index = 1; index < lines.length; index++) {
     let parsed: unknown;
     try {
       parsed = JSON.parse(lines[index]);
     } catch {
-      if (index >= lastRow && (!content.endsWith('\n') || tornRow(lines[index]))) {
-        result.repair = `${lines.slice(0, index).join('\n')}\n`;
-        break;
+      // The LAST data row keeps the rule it has had since T003: an interrupted
+      // append is truncated, a complete row that is merely invalid is refused,
+      // because at the tail we are the only writer who can still be mid-write.
+      if (index >= lastRow) {
+        if (!content.endsWith('\n') || tornRow(lines[index])) {
+          truncateAt = index;
+          break;
+        }
+        invalid(`invalid JSON at line ${index + 1}`);
       }
-      invalid(`invalid JSON at line ${index + 1}`);
+      // session-02 — a row in the MIDDLE is past saving and refusing it costs
+      // the whole conversation, so it is dropped and the file rewritten without
+      // it (decision 006). This is also the only way the two readers can agree:
+      // `pi --session` already skips exactly these rows (`parseSessionEntryLine`
+      // returns null on a JSON error), so refusing them meant the CLI could open
+      // a file the GUI called invalid forever.
+      //
+      // Scope is deliberately JSON.parse failures only. A row that parses but
+      // fails the structure checks below is still refused: the CLI KEEPS such a
+      // row, so dropping it would make the two readers disagree about a line
+      // that is completely present on disk — the opposite of what this is for.
+      //
+      // Blank lines carry nothing and both readers ignore them, so they are
+      // passed over without being reported or rewritten away.
+      if (lines[index].trim()) {
+        if (skipped.length >= MAX_SKIPPED_ROWS)
+          invalid(
+            `more than ${MAX_SKIPPED_ROWS} unparseable rows, first at line ${skipped[0].line}`
+          );
+        dropped.add(index);
+        skipped.push({ line: index + 1, preview: lines[index].slice(0, SKIPPED_PREVIEW_CHARS) });
+        // A dropped row of ours may have spent a `seq` number. The allowance the
+        // check below already keeps for rows we cannot account for is exactly
+        // the right budget, so the gap it leaves is forgiven once, not forever.
+        cliRows++;
+      }
+      continue;
     }
     const row = object(parsed);
     if (row.kind === undefined && row.seq === undefined) {
@@ -387,7 +473,7 @@ export function decodeSession(content: string): SessionDocument {
         recordIds.has(item.id) ||
         (item.parentId !== null && !ids.has(item.parentId))
       )
-        invalid('duplicate id or missing parent');
+        invalid(afterSkip('duplicate id or missing parent'));
       ids.add(item.id);
       result.entries.push(item);
       // The CLI has no lanes; it always appends to the conversation's tip.
@@ -408,7 +494,7 @@ export function decodeSession(content: string): SessionDocument {
     // that many and the allowance is spent as it is used. A larger jump is still
     // a row that went missing, and still refused.
     const skew = Number.isSafeInteger(row.seq) ? (row.seq as number) - (result.seq + 1) : -1;
-    if (skew < 0 || skew > cliRows) invalid(`non-consecutive seq at line ${index + 1}`);
+    if (skew < 0 || skew > cliRows) invalid(afterSkip(`non-consecutive seq at line ${index + 1}`));
     cliRows -= skew;
     result.seq = row.seq as number;
     switch (row.kind) {
@@ -419,10 +505,10 @@ export function decodeSession(content: string): SessionDocument {
           recordIds.has(item.id) ||
           (item.parentId !== null && !ids.has(item.parentId))
         )
-          invalid('duplicate id or missing parent');
+          invalid(afterSkip('duplicate id or missing parent'));
         if (row.lane !== undefined) {
           if (typeof row.lane !== 'string' || !lanes.has(row.lane))
-            invalid('entry does not chain to lane');
+            invalid(afterSkip('entry does not chain to lane'));
           // session-01 — the same interleaving the seq check allows for, seen
           // from the branch side. The CLI knows nothing about lanes and always
           // appends to the tip, so a row our writer produced while holding the
@@ -432,7 +518,7 @@ export function decodeSession(content: string): SessionDocument {
           // row). Only the one row that follows the CLI's is forgiven; from
           // there on the lane is ours again and the check is strict.
           if (lanes.get(row.lane) !== item.parentId && !(row.lane === 'main' && cliTip))
-            invalid('entry does not chain to lane');
+            invalid(afterSkip('entry does not chain to lane'));
           cliTip = false;
           lanes.set(row.lane, item.id);
         }
@@ -445,7 +531,7 @@ export function decodeSession(content: string): SessionDocument {
           typeof row.lane !== 'string' ||
           (row.leafId !== null && (typeof row.leafId !== 'string' || !ids.has(row.leafId)))
         )
-          invalid('invalid lane pointer');
+          invalid(afterSkip('invalid lane pointer'));
         lanes.set(row.lane, row.leafId as string | null);
         // An explicit tip; whatever the CLI left is no longer what "main" means.
         if (row.lane === 'main') cliTip = false;
@@ -511,6 +597,16 @@ export function decodeSession(content: string): SessionDocument {
       'session_operation_unfinished',
       'unfinished SDK operations require explicit recovery before native resume'
     );
+  // One rewrite covers both cuts: the torn tail and every dropped middle row.
+  // Built from the surviving lines rather than by splicing the original text so
+  // the file on disk is exactly what this decode just read back.
+  if (truncateAt !== undefined || dropped.size) {
+    const kept = (truncateAt === undefined ? lines : lines.slice(0, truncateAt)).filter(
+      (_, index) => !dropped.has(index)
+    );
+    result.repair = `${kept.join('\n')}\n`;
+  }
+  if (skipped.length) result.skipped = skipped;
   if (!result.repair && !content.endsWith('\n')) result.repair = `${content}\n`;
   return result;
 }

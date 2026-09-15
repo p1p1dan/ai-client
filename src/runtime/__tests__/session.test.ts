@@ -48,6 +48,8 @@ async function close(handle: RuntimeHandle) {
 }
 const user = (content: string) => ({ role: 'user' as const, content, timestamp: Date.now() });
 const text = (value: unknown) => JSON.stringify(value);
+/** Half a row, as an interrupted append leaves it. */
+const TORN_ROW = '{"kind":"record","type":"usage"';
 
 describe('P3-1 JSONL session / P2-4 durable compaction', () => {
   it('restores message-owned diffs after the workspace content has changed', async () => {
@@ -321,6 +323,71 @@ describe('P3-1 JSONL session / P2-4 durable compaction', () => {
     expect(next.handle.session?.snapshot().entries).toHaveLength(1);
     await next.handle.session?.appendMessage(user('after repair'));
     expect(decodeSession(await readFile(file, 'utf8')).entries).toHaveLength(2);
+  });
+
+  /**
+   * T034 / session-02 — a crash left half a row behind and a later writer
+   * appended past it, so the damage is in the MIDDLE of the file.
+   *
+   * Spliced in rather than produced by a real crash because the point under
+   * test is what `open` does with the file, and a crash gives no control over
+   * which line ends up broken.
+   */
+  const damagedSession = async () => {
+    const { handle } = await runtime();
+    await handle.session?.appendMessage(user('first'));
+    await handle.session?.appendMessage(user('second'));
+    await close(handle);
+    const file = join(dir, 'session.jsonl');
+    const lines = (await readFile(file, 'utf8')).split('\n');
+    lines.splice(2, 0, TORN_ROW);
+    await writeFile(file, lines.join('\n'));
+    return file;
+  };
+
+  it('drops an unreadable middle row on open instead of refusing the conversation', async () => {
+    const file = await damagedSession();
+    const next = await runtime('resume');
+
+    // The turns either side of the damage are both still there — this file used
+    // to throw `session_invalid` on every open, for good.
+    expect(
+      next.handle.session
+        ?.snapshot()
+        .messages.map((message) => (message.role === 'user' ? message.content : undefined))
+    ).toEqual(['first', 'second']);
+    expect(next.handle.session?.recovery?.skipped).toEqual([{ line: 3, preview: TORN_ROW }]);
+    // Rewritten under the writer lock `open` holds, so the next reader of this
+    // file — ours or `pi --session` — sees the same conversation this one did.
+    expect(await readFile(file, 'utf8')).not.toContain(TORN_ROW);
+    expect(decodeSession(await readFile(file, 'utf8')).entries).toHaveLength(2);
+  });
+
+  it('names the dropped lines in the trace of the run that follows the repair', async () => {
+    await damagedSession();
+    const next = await runtime('resume');
+    next.faux.setResponses([fauxAssistantMessage('ok')]);
+    const result = await next.handle.run({ prompt: 'continue', systemPrompt: 'probe' });
+
+    const note = result.trace.steps.find(
+      (step) => (step.detail as { event?: string }).event === 'session_recovered'
+    );
+    expect(note?.detail).toMatchObject({ skipped_lines: [3], skipped_previews: [TORN_ROW] });
+  });
+
+  it('puts the repaired lines on the wire, riding the status the renderer reads', async () => {
+    await damagedSession();
+    const next = await runtime('resume');
+    const statuses: unknown[] = [];
+    next.handle.events.subscribe((event) => {
+      if (event.type === 'session.status') statuses.push(event.payload);
+    });
+    next.faux.setResponses([fauxAssistantMessage('ok')]);
+    await next.handle.run({ prompt: 'continue', systemPrompt: 'probe' });
+
+    // Line numbers only — the dropped text may be half a prompt, and the trace
+    // is where the preview belongs.
+    expect(statuses).toContainEqual({ status: 'running', recovery: { skippedLines: [3] } });
   });
 
   it('rejects corrupt complete lines and unsupported old formats without rewriting them', async () => {

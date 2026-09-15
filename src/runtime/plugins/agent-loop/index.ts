@@ -210,6 +210,25 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       compaction_tool: this.ctx.get(CONTEXT_SERVICE)?.compactionTool ?? null,
     });
 
+    // session-02 — the file this run reads was rewritten at open, with rows no
+    // reader could parse dropped (decision 006). Every run for the life of this
+    // worker says so, not just the first: the trace is where "why is a turn
+    // missing from my conversation?" gets answered, and whichever run gets
+    // asked about has to be able to answer it.
+    const recovered = session?.recovery;
+    if (recovered) {
+      trace.note('note', {
+        event: 'session_recovered',
+        skipped_lines: recovered.skipped.map((row) => row.line),
+        skipped_previews: recovered.skipped.map((row) => row.preview),
+      });
+      // The trace file is not a user surface (rpc-projector-02's point about the
+      // retry banner, and the same is true here): a dropped row is a turn the
+      // user can no longer see, so the renderer is told too. Line numbers only —
+      // the dropped text may be half a prompt.
+      projected.recovery({ skippedLines: recovered.skipped.map((row) => row.line) });
+    }
+
     // P5-2-4 — delegations started from here belong to this session and this
     // run. Bound before any tool can fire, because the first thing `Task` does
     // is write a record that has to name both.

@@ -876,7 +876,7 @@ describe('pinned wire facts', () => {
     expect(Object.keys(AGENT_DISPLAY_NAMES).sort()).toEqual([...AGENT_WIRE_NAMES].sort());
   });
 
-  it('[W-1] SessionStatusEvent.payload optional keys stay exactly {retry, liveness, disconnectReason}', () => {
+  it('[W-1] SessionStatusEvent.payload optional keys stay exactly {retry, liveness, disconnectReason, recovery}', () => {
     // F2 (S0, 2026-08-18 watchdog redesign spec §3.4/§12.1): `liveness` rides
     // this payload as a THIRD optional field, same precedent as `retry`
     // (SessionRetryInfo, E11) — an optional-field addition, protocol version
@@ -891,6 +891,13 @@ describe('pinned wire facts', () => {
     // have accounted for"), and a separate event would have to be correlated
     // back to the status it explains. Contrast `session.stderr`, which became
     // its own type precisely because it is an independent stream.
+    //
+    // T034 (session-02, decision 006) added a FIFTH, `recovery`. Same answer as
+    // `retry`: it is a note on a status the run emits anyway ("running — and
+    // the file this turn appends to was repaired at open"), carried per run
+    // because a worker's open-time events are dropped while Main still has the
+    // slot in `creating`. The renderer keeps it across later statuses; see
+    // SessionRecoveryNote for why it is line numbers only.
     const source = parse(RUNTIME_EVENTS_MODULE, read(RUNTIME_EVENTS_MODULE));
     let optionalKeys: string[] | undefined;
     eachNode(source, (node) => {
@@ -913,7 +920,7 @@ describe('pinned wire facts', () => {
           .map((m) => (m.name as ts.Identifier).text);
       }
     });
-    expect(optionalKeys?.sort()).toEqual(['disconnectReason', 'liveness', 'retry']);
+    expect(optionalKeys?.sort()).toEqual(['disconnectReason', 'liveness', 'recovery', 'retry']);
   });
 
   it('[W-1a] SessionLivenessNote field set stays exactly {source, budgetMs, reason, degraded}, all required', () => {
@@ -934,6 +941,25 @@ describe('pinned wire facts', () => {
         .map((m) => ({ name: (m.name as ts.Identifier).text, optional: !!m.questionToken }));
     });
     expect(fields?.map((f) => f.name).sort()).toEqual(['budgetMs', 'degraded', 'reason', 'source']);
+    expect(fields?.every((f) => !f.optional)).toBe(true);
+  });
+
+  it('[W-1b] SessionRecoveryNote field set stays exactly {skippedLines}, required', () => {
+    // Companion pin to [W-1] for the fifth rider. The note deliberately carries
+    // line numbers and nothing else: a `preview` or the dropped text itself
+    // would ship half-written user content to every consumer of the event
+    // stream, which the trace already holds for whoever needs it.
+    const source = parse(RUNTIME_EVENTS_MODULE, read(RUNTIME_EVENTS_MODULE));
+    let fields: Array<{ name: string; optional: boolean }> | undefined;
+    eachNode(source, (node) => {
+      if (!ts.isInterfaceDeclaration(node) || node.name.text !== 'SessionRecoveryNote') return;
+      fields = node.members
+        .filter(
+          (m): m is ts.PropertySignature => ts.isPropertySignature(m) && ts.isIdentifier(m.name)
+        )
+        .map((m) => ({ name: (m.name as ts.Identifier).text, optional: !!m.questionToken }));
+    });
+    expect(fields?.map((f) => f.name)).toEqual(['skippedLines']);
     expect(fields?.every((f) => !f.optional)).toBe(true);
   });
 

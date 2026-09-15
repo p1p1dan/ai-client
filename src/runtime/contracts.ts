@@ -64,6 +64,9 @@ export type RuntimeSessionService = Pick<
   | 'label'
   | 'discardFork'
   | 'acceptFork'
+  // session-02: whether this file had to be healed at open, for the trace and
+  // the status rider. A fact about the open, not part of the conversation.
+  | 'recovery'
 >;
 
 /** Every service P0 actually registers. `bootstrap.ts` asserts all of them are live. */

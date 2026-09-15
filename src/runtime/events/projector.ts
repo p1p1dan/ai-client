@@ -10,6 +10,7 @@ import { reviewFromToolResult } from '../../shared/sessionFileChange.ts';
 import type {
   MessageAttachmentMeta,
   RuntimeEventDraft,
+  SessionRecoveryNote,
   SessionRetryInfo,
 } from '../../shared/types/runtimeEvents.ts';
 import type { RuntimeRunResult } from '../contracts.ts';
@@ -402,6 +403,28 @@ export class RuntimeEventProjector {
       type: 'session.status',
       sessionId: this.sink.sessionId,
       payload: { status: 'running', retry: info },
+    });
+  }
+  /**
+   * T034 (session-02): this session's file was repaired when it was opened.
+   *
+   * Same shape and same road as `retry` directly above — a rider on a
+   * `session.status` the run emits anyway, because that event already reaches
+   * the renderer and a new type would need a compatibility argument this note
+   * does not need. Status stays `'running'`: nothing about the turn changed,
+   * only what is known about the file it is being appended to.
+   *
+   * Emitted per RUN rather than once at open. A worker emits during bootstrap
+   * while Main still has the session in `creating`, and `handleWorkerEvent`
+   * drops everything that arrives before the slot is `ready` — so an open-time
+   * event would be correct and invisible. The store keeps this note instead of
+   * clearing it on the next status, so saying it again costs nothing.
+   */
+  recovery(note: SessionRecoveryNote): void {
+    this.emit({
+      type: 'session.status',
+      sessionId: this.sink.sessionId,
+      payload: { status: 'running', recovery: note },
     });
   }
   /**

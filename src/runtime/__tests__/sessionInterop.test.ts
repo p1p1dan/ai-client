@@ -454,6 +454,65 @@ describe('H/20 · the two writers take turns on one file', () => {
       'after the repair',
     ]);
   });
+
+  it('reopens after the CLI wrote a turn past a line our crash left half written', async () => {
+    // T034 / session-02 — the combination the tail repair alone cannot survive.
+    // `pi --session` completes the missing newline AND then appends its own
+    // rows, which moves our fragment into the middle of the file, where the
+    // tail rule no longer applies. Before decision 006 that was a permanent
+    // refusal on a file the CLI was still happily reading.
+    const file = chat();
+    const store = await open(file, 'create');
+    await store.appendMessage(user('before the crash'));
+    await store.close();
+    await appendFile(file, '{"kind":"entry","seq":');
+
+    const cli = openCliSession(file);
+    cli.appendMessage(user('TUI after the crash'));
+    const asTheCliReadsIt = spoken(openCliSession(file).buildSessionContext().messages);
+
+    const resumed = await open(file, 'resume');
+    expect(spoken(resumed.snapshot().messages)).toEqual(asTheCliReadsIt);
+    expect(resumed.recovery?.skipped.map((row) => row.line)).toEqual([3]);
+    await resumed.appendMessage(user('GUI after the repair'));
+    await resumed.close();
+
+    expect(await readFile(file, 'utf8')).not.toContain('{"kind":"entry","seq":\n');
+    expect(spoken(openCliSession(file).buildSessionContext().messages)).toEqual([
+      'before the crash',
+      'TUI after the crash',
+      'GUI after the repair',
+    ]);
+  });
+
+  it('drops exactly the rows the CLI drops, so neither reader sees a turn the other does not', async () => {
+    const file = chat();
+    const store = await open(file, 'create');
+    await store.appendMessage(user('one'));
+    await store.appendMessage(assistant('two'));
+    await store.appendMessage(user('three'));
+    await store.close();
+
+    const wrecked = '{"kind":"record","type":"usage","seq":';
+    const lines = (await readFile(file, 'utf8')).split('\n');
+    lines.splice(3, 0, wrecked);
+    await writeFile(file, lines.join('\n'));
+
+    // The CLI's reading of the damaged file is the reference: it skipped the
+    // same row, and agreeing with it is the whole point of dropping ours.
+    const asTheCliReadsIt = spoken(openCliSession(file).buildSessionContext().messages);
+    expect(asTheCliReadsIt).toEqual(['one', 'two', 'three']);
+
+    const resumed = await open(file, 'resume');
+    expect(spoken(resumed.snapshot().messages)).toEqual(asTheCliReadsIt);
+    expect(resumed.recovery?.skipped).toEqual([{ line: 4, preview: wrecked }]);
+    await resumed.close();
+
+    // And after our rewrite the CLI still reads the same conversation, which is
+    // what makes the repair safe to perform behind the other reader's back.
+    expect(spoken(openCliSession(file).buildSessionContext().messages)).toEqual(asTheCliReadsIt);
+    expect(await readFile(file, 'utf8')).not.toContain(wrecked);
+  });
 });
 
 describe('H/20 · sessions written before the dual header', () => {

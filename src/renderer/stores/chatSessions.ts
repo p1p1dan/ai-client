@@ -6,6 +6,7 @@ import type {
   PermissionRequestKind,
   QuestionItem,
   RuntimeEvent,
+  SessionRecoveryNote,
   SessionRetryInfo,
   SessionRuntimeStatus,
 } from '@shared/types/runtimeEvents';
@@ -153,6 +154,16 @@ export interface ChatSession {
    * and on every terminal event — see upsertSessionStatus.
    */
   retry?: SessionRetryInfo;
+  /**
+   * T034 (session-02, optional-field addition): the session file was repaired
+   * when this session was opened, and these lines were dropped from it.
+   *
+   * Sticky, which is exactly where it differs from `retry`: `retry` describes
+   * the turn happening right now and is cleared by the next status without one,
+   * while this describes damage the file already took. Clearing it on the next
+   * status would blank it within milliseconds of the first send.
+   */
+  recovery?: SessionRecoveryNote;
   activity?: SessionActivity;
   runtimeError?: string;
 }
@@ -820,13 +831,21 @@ function applyRuntimeEventCore(
         event.payload.disconnectReason === 'capacity_reclaimed'
           ? state.hostBoundSessionIds.filter((id) => id !== sessionId)
           : state.hostBoundSessionIds;
+      const status = upsertSessionStatus(
+        state.sessions,
+        sessionId,
+        event.payload.status,
+        event.payload.retry
+      );
+      // T034 (session-02): the file this session was opened from had to be
+      // repaired. Applied as a second pass rather than as another
+      // `upsertSessionStatus` argument precisely so it is NOT cleared when the
+      // next status carries none — see the field's own comment.
+      const recovery = event.payload.recovery;
       return {
-        sessions: upsertSessionStatus(
-          state.sessions,
-          sessionId,
-          event.payload.status,
-          event.payload.retry
-        ),
+        sessions: recovery
+          ? status.map((session) => (session.id === sessionId ? { ...session, recovery } : session))
+          : status,
         hostBoundSessionIds,
         recentSessionIds,
       };

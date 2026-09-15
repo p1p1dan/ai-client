@@ -14,6 +14,9 @@ export class SessionPlugin extends Service implements RuntimeSessionService {
   get file() {
     return this.store.file;
   }
+  get recovery() {
+    return this.store.recovery;
+  }
   snapshot() {
     return this.store.snapshot();
   }

@@ -22,6 +22,7 @@ import {
   isSuccessfulMessage,
   SESSION_MAX_BYTES,
   type SessionDocument,
+  type SessionSkippedRow,
 } from './codec.ts';
 import { sessionPermissions } from './legacy.ts';
 import { acquireWriterLock, releaseWriterLock, type WriterLock } from './writerLock.ts';
@@ -58,6 +59,19 @@ export interface SessionMetadata {
   createdAt: number;
   leaf: { activeEntryId: string | null; fileTailEntryId: string | null };
 }
+/**
+ * session-02 — what opening this file had to drop to make it readable.
+ *
+ * Present only when the file was actually rewritten, so `recovery !== undefined`
+ * is itself the statement "this session healed on this open". Deliberately NOT
+ * folded into `metadata()`: metadata is a value the worker copies into its
+ * bootstrap result and Main persists into the session index, and a one-time
+ * repair note has no business being stored as a property of the session.
+ */
+export interface SessionRecovery {
+  skipped: readonly SessionSkippedRow[];
+}
+
 export interface SessionSnapshot {
   id: string;
   entries: Entry[];
@@ -161,6 +175,12 @@ export class JsonlSessionStore {
           const body = document.repair ?? content;
           document.repair = `${JSON.stringify(document.header)}\n${body.slice(body.indexOf('\n') + 1)}`;
         }
+        // session-02 — the same atomic rewrite now also lands the decoder's
+        // drop of unparseable middle rows (decision 006). It has to happen here
+        // and nowhere else: we hold the writer lock, so this is the only moment
+        // at which the file can be replaced without racing our own appends, and
+        // leaving the rows in place would mean re-deciding to drop them on
+        // every future open, with `pi --session` silently doing the same.
         if (document.repair !== undefined) {
           const temporary = `${file}.${randomUUID()}.tmp`;
           try {
@@ -302,6 +322,18 @@ export class JsonlSessionStore {
 
   get busy(): boolean {
     return this.running || this.navigating;
+  }
+  /**
+   * session-02 — the rows `open` dropped, for whoever can show or log them.
+   *
+   * Read off the document rather than stored separately: the decoder is the one
+   * place that knows what it could not parse, and the rewrite that removed the
+   * rows happened under the writer lock this store still holds, so there is no
+   * window in which this answer and the file disagree.
+   */
+  get recovery(): SessionRecovery | undefined {
+    const skipped = this.document.skipped;
+    return skipped?.length ? { skipped } : undefined;
   }
   /** The first write rejection, if any; see `close`. Also still thrown by `flush`. */
   get writeFailure(): unknown {

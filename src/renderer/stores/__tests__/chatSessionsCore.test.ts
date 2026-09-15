@@ -1434,6 +1434,41 @@ describe('applyRuntimeEvent — session.status retry (a1)', () => {
   });
 });
 
+// T034 (session-02): session.status also carries a one-time note that this
+// session's file was repaired when it was opened.
+describe('applyRuntimeEvent — session.status recovery (T034)', () => {
+  const status = (payload: Extract<RuntimeEvent, { type: 'session.status' }>['payload']) =>
+    ({ type: 'session.status', seq: 1, sessionId: SESSION_ID, timestamp: 1, payload }) as const;
+
+  it('stores which lines the session file lost when session.status carries them', () => {
+    const state = baseState({ sessions: [makeSession({ status: 'idle' })] });
+
+    const patch = applyRuntimeEvent(
+      state,
+      status({ status: 'idle', recovery: { skippedLines: [3, 7] } })
+    );
+
+    expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.recovery).toEqual({
+      skippedLines: [3, 7],
+    });
+  });
+
+  it('keeps the note when a later session.status carries none — unlike retry', () => {
+    // The difference that matters: `retry` describes the turn happening now,
+    // this describes damage the file already took. Clearing it on the next
+    // status would blank it milliseconds after the first send.
+    const state = baseState({
+      sessions: [makeSession({ status: 'idle', recovery: { skippedLines: [3] } })],
+    });
+
+    const patch = applyRuntimeEvent(state, status({ status: 'running' }));
+    const session = patch.sessions?.find((item) => item.id === SESSION_ID);
+
+    expect(session?.recovery).toEqual({ skippedLines: [3] });
+    expect(session?.status).toBe('running');
+  });
+});
+
 describe('applyRuntimeEvent — session.created / session.resumed', () => {
   it('adds sessionId to hostBoundSessionIds exactly once and enriches runtimeIdentity', () => {
     const state = baseState({
