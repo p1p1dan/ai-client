@@ -17,9 +17,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, expect, it } from 'vitest';
+import type { ExtensionUiRequest } from '../../agent-host/extensionUiBridge.ts';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import { permissionActivityEvent } from '../plugins/permissions/activity.ts';
+import { createRuntimeApprovalBridge } from '../plugins/permissions/bridge.ts';
 import {
   PERMISSION_TIMEOUT_REASON,
   type PermissionActivityRecord,
@@ -122,4 +124,127 @@ it('reads the reason off the signal even when the card is asked after it aborted
     expect(decision).toBe('deny');
     expect(events.at(-1)?.payload).toMatchObject({ autoReason: 'timed_out' });
   });
+});
+
+/**
+ * T023 — the gate describes itself with an id, never with a sentence.
+ *
+ * Until 2026-09-15 the four tools below emitted finished Chinese copy from a
+ * worker that cannot know the window's language, so an English install read
+ * its permission cards in Chinese. The wording moved to the renderer; what
+ * crosses the boundary now is `action`, and the test that would have caught
+ * the original defect is the CJK assertion at the bottom — the same check
+ * `noHardcodedChinese.test.ts` now runs over `src/runtime` as a whole.
+ */
+it('sends an action id for each gated tool and no prose of its own', async () => {
+  const seen: Record<string, unknown> = {};
+  for (const [tool, expected] of [
+    ['bash', 'run_command'],
+    ['write', 'write_file'],
+    ['edit', 'edit_file'],
+    ['read', 'read_file'],
+  ] as const) {
+    const events: RuntimeEventDraft[] = [];
+    const prompt = createPermissionPrompt({
+      sessionId: 'logical',
+      cwd: dir,
+      emit: (event) => events.push(event),
+    });
+    const controller = new AbortController();
+    const pending = prompt.approve(
+      { tool, toolCallId: `call-${tool}`, path: join(dir, 'note.txt'), command: 'ls' },
+      controller.signal
+    );
+    const payload = events[0]?.payload as { action?: string; description?: string };
+    seen[tool] = payload.action;
+    expect(payload.action).toBe(expected);
+    // `description` is reserved for prose the ASKING AGENT wrote. The runtime
+    // filling it in is what made the card unable to tell copy from content.
+    expect(payload.description).toBeUndefined();
+    controller.abort();
+    await pending;
+  }
+  expect(seen).toEqual({
+    bash: 'run_command',
+    write: 'write_file',
+    edit: 'edit_file',
+    read: 'read_file',
+  });
+});
+
+it('sends no action at all for a tool it has no sentence for', async () => {
+  // Better than inventing one: the card already shows the tool's own name, and
+  // a guessed sentence for an unknown tool would be a claim about behaviour
+  // this runtime has not looked at.
+  const events: RuntimeEventDraft[] = [];
+  const prompt = createPermissionPrompt({
+    sessionId: 'logical',
+    cwd: dir,
+    emit: (event) => events.push(event),
+  });
+  const controller = new AbortController();
+  const pending = prompt.approve(
+    { tool: 'mcp__notion__search', toolCallId: 'call-x', path: join(dir, 'note.txt') },
+    controller.signal
+  );
+  expect(events[0]?.payload).not.toHaveProperty('action');
+  controller.abort();
+  await pending;
+});
+
+/**
+ * cutover-17 — the Extension UI fallback gate.
+ *
+ * This arm is unreachable from the app (`nativeWorkerRuntime` always supplies
+ * its own `approve`, so `bootstrap`'s `??` never falls through) but it is a
+ * supported way to embed the runtime, and it had two defects worth a test:
+ * three hardcoded Chinese options, and an answer mapped back by comparing the
+ * returned string to those literals — so any re-wording turned "allow" into
+ * "deny" silently. Both assertions below fail on the old code.
+ */
+async function offeredChoices() {
+  const requests: ExtensionUiRequest[] = [];
+  const approval = createRuntimeApprovalBridge({
+    runtimeId: 'bridge-1',
+    onRequest: (request) => requests.push(request),
+  });
+  const controller = new AbortController();
+  const decision = approval.approve(
+    { tool: 'write', toolCallId: 'call-1', path: join(dir, 'note.txt') },
+    controller.signal
+  );
+  // The select is emitted synchronously by `ui.select`, so one microtask turn
+  // is enough; no polling helper needed here.
+  await Promise.resolve();
+  const args = requests[0]?.args as { options?: string[] } | undefined;
+  return { approval, requests, decision, values: args?.options ?? [] };
+}
+
+it('offers the fallback approval options in the catalog language, not Chinese', async () => {
+  const { approval, requests, decision, values } = await offeredChoices();
+  expect(values).toEqual(['Allow once', 'Allow for this session', 'Deny']);
+  expect(values.some((value) => /[一-鿿]/.test(value))).toBe(false);
+  approval.bridge.respond({
+    runtimeId: requests[0].runtimeId,
+    uiRequestId: requests[0].uiRequestId,
+    ok: true,
+    value: values[1],
+  });
+  await expect(decision).resolves.toBe('allow-session');
+  approval.bridge.dispose();
+});
+
+it('denies a fallback answer it did not offer rather than guessing at it', async () => {
+  const { approval, requests, decision } = await offeredChoices();
+  approval.bridge.respond({
+    runtimeId: requests[0].runtimeId,
+    uiRequestId: requests[0].uiRequestId,
+    ok: true,
+    // What a translated or re-worded dialog would send back. Position in the
+    // array we sent is the mapping now, so an unknown string is unknown —
+    // it cannot accidentally be position 0 and allow the write.
+    value: '允许一次',
+  });
+  await expect(decision).resolves.toBe('deny');
+  approval.bridge.dispose();
 });

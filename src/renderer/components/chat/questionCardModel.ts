@@ -2,6 +2,7 @@ import { englishTranslate, type Translate } from '@shared/i18n';
 import type {
   PermissionDecisionId,
   PermissionFileChange,
+  PermissionRequestAction,
   QuestionItem,
 } from '@shared/types/runtimeEvents';
 import type { ChatBlock } from '@/stores/chatSessions';
@@ -697,9 +698,39 @@ export interface PermissionCardView {
   sessionScopeNote: string | null;
 }
 
-function derivePermissionPrompt(block: ChatBlock): string {
+/**
+ * T023 — the wording for each `PermissionRequestAction`, English-as-key.
+ *
+ * The producer is the worker (`src/runtime/worker/permissionPrompt.ts`), which
+ * has no locale, so it sends an id and this table is where the sentence is
+ * chosen. Same treatment `contentLabel` gets a few functions down: English in
+ * the code IS the dictionary key, `zhTranslations` carries the Chinese, and
+ * "is this translated" stays a question about where the Chinese lives.
+ */
+export const PERMISSION_ACTION_LABELS: Readonly<Record<PermissionRequestAction, string>> = {
+  run_command: 'Run a command in the workspace',
+  write_file: 'Write a file in the workspace',
+  edit_file: 'Modify a file in the workspace',
+  read_file: 'Read file contents',
+};
+
+/**
+ * The line under the title: what is being asked, in one sentence.
+ *
+ * Two sources, and the order matters. `permissionAction` is OUR copy and is
+ * translated; `toolDescription` is prose the agent wrote (Codex's `reason`,
+ * Claude's `description`) and is shown verbatim, because translating an
+ * agent's own justification would be inventing words it did not say. An
+ * unknown action id falls through to the agent's prose and then to the bare
+ * tool name — a card that says less, never one that says something wrong.
+ */
+function derivePermissionPrompt(block: ChatBlock, t: Translate = englishTranslate): string {
   const toolName = block.toolName ?? '';
-  return block.toolDescription ? `${toolName} — ${block.toolDescription}` : toolName;
+  const label = block.permissionAction
+    ? PERMISSION_ACTION_LABELS[block.permissionAction]
+    : undefined;
+  const description = label ? t(label) : block.toolDescription;
+  return description ? `${toolName} — ${description}` : toolName;
 }
 
 /**
@@ -778,7 +809,7 @@ export function derivePermissionCardView(
   canRespond: boolean,
   t: Translate = englishTranslate
 ): PermissionCardView {
-  const prompt = derivePermissionPrompt(block);
+  const prompt = derivePermissionPrompt(block, t);
   const detail = derivePermissionDetailView(block, t);
   const omittedNote = derivePermissionOmittedNote(block.omittedDecisionCount, t);
   const risk = derivePermissionRisk(block);
@@ -858,7 +889,7 @@ export function derivePermissionRowView(
   t: Translate = englishTranslate
 ): ToolRowView | null {
   if (block.resolved !== true) return null;
-  const prompt = derivePermissionPrompt(block);
+  const prompt = derivePermissionPrompt(block, t);
   return {
     key: block.id,
     // A key, per `ToolRowView.verb` — `ToolRows.tsx` translates it.

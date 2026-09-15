@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { translate } from '../../shared/i18n.ts';
 import { paginatePiSessionHistory, projectPiSessionHistory } from '../piSessionTimeline.ts';
 
 function manager(branch: unknown[]) {
@@ -196,5 +197,67 @@ it('preserves SDK edit patch on history reload', () => {
     type: 'tool_result',
     output: 'done',
     patch,
+  });
+});
+
+/**
+ * T023 — the imported-history banner.
+ *
+ * It was a Chinese template literal built in this projector, defended by the
+ * (true) observation that a worker has no renderer locale. The fix is not to
+ * pick the other language: it is to send both halves of the sentence — the
+ * catalog key and its two values — and let the surface that knows the locale
+ * assemble it. `text` stays the English rendering so a reader that ignores
+ * `notice` still prints something whole.
+ *
+ * Nothing stored has to change for this: the session file holds a `custom`
+ * entry with `sourceKind` / `sourceSessionId` and never the sentence, so an
+ * import from last week re-renders in today's wording.
+ */
+describe('imported-history banner (T023)', () => {
+  const projected = () =>
+    projectPiSessionHistory(
+      manager([
+        {
+          type: 'custom',
+          id: 'p1',
+          customType: 'aiclient.legacy-import.provenance',
+          data: { sourceKind: 'claude-code', sourceSessionId: 'abc-123' },
+        },
+      ])
+    );
+
+  it('emits a translatable notice with the two values, not a finished sentence', () => {
+    const block = projected()[0]?.blocks[0] as {
+      type: string;
+      text: string;
+      notice?: { key: string; params?: Record<string, string> };
+    };
+    expect(block.notice?.params).toEqual({
+      sourceKind: 'claude-code',
+      sourceSessionId: 'abc-123',
+    });
+    expect(block.notice?.key).toContain('{{sourceKind}}');
+    expect(block.notice?.key).toContain('{{sourceSessionId}}');
+    // The whole point: nothing Chinese crosses the worker boundary any more.
+    expect(/[一-鿿]/.test(block.text)).toBe(false);
+    expect(/[一-鿿]/.test(block.notice?.key ?? '')).toBe(false);
+  });
+
+  it('renders both languages from that one notice', () => {
+    const block = projected()[0]?.blocks[0] as {
+      text: string;
+      notice: { key: string; params: Record<string, string> };
+    };
+    // English is already in `text`, byte for byte — a surface that never
+    // learned about `notice` is not broken by this change, just untranslated.
+    expect(translate('en', block.notice.key, block.notice.params)).toBe(block.text);
+    expect(block.text).toContain('imported from a claude-code session (abc-123)');
+
+    const chinese = translate('zh', block.notice.key, block.notice.params);
+    expect(chinese).toContain('这段历史从 claude-code 会话 abc-123 导入');
+    // A missing dictionary entry makes `translate` return the key, which would
+    // still read like a sentence — so assert it actually changed.
+    expect(chinese).not.toBe(block.notice.key);
   });
 });

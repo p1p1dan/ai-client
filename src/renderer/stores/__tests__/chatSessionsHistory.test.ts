@@ -658,6 +658,62 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
   });
 });
 
+/**
+ * T023 — a history line the APP wrote, not the model.
+ *
+ * `HistoryNotice` is the only thing separating the two, and everything hangs
+ * on the store carrying it: without this field the imported-history banner is
+ * indistinguishable from transcript text and has to pick a language in the
+ * worker, which is how it came to be Chinese on English installs.
+ */
+describe('applyRuntimeEvent — history notices survive the mapping (T023)', () => {
+  const NOTICE_KEY = 'This history was imported from a {{sourceKind}} session.';
+
+  it('carries a notice through to the block, English text included', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const event = makeHistoryEvent({
+      messages: [
+        {
+          id: 'h:provenance',
+          role: 'system',
+          blocks: [
+            {
+              id: 'banner',
+              type: 'text',
+              text: 'This history was imported from a claude-code session.',
+              notice: { key: NOTICE_KEY, params: { sourceKind: 'claude-code' } },
+            },
+          ],
+        },
+      ],
+    });
+    const next = { ...state, ...applyRuntimeEvent(state, event) };
+    const block = next.messages[SESSION_ID]?.[0]?.blocks[0];
+    expect(block?.notice).toEqual({ key: NOTICE_KEY, params: { sourceKind: 'claude-code' } });
+    // `text` is untouched, so a surface that ignores the notice still paints a
+    // complete English sentence rather than a raw key.
+    expect(block?.text).toBe('This history was imported from a claude-code session.');
+  });
+
+  it('leaves model text with no notice at all, so nothing translates it', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const event = makeHistoryEvent({
+      messages: [
+        {
+          id: 'h:assistant',
+          role: 'assistant',
+          blocks: [{ id: 'said', type: 'text', text: 'Allow' }],
+        },
+      ],
+    });
+    const next = { ...state, ...applyRuntimeEvent(state, event) };
+    const block = next.messages[SESSION_ID]?.[0]?.blocks[0];
+    // 'Allow' IS a dictionary key. An assistant that says it must still say it
+    // — the absent field is what stops the transcript being rewritten.
+    expect(block).not.toHaveProperty('notice');
+  });
+});
+
 describe('applyRuntimeEvent — session.updated (C-06)', () => {
   it('writes runtimeIdentity onto the matching session row without bumping updatedAt', () => {
     const state = baseState({ sessions: [makeSession({ updatedAt: 42 })] });

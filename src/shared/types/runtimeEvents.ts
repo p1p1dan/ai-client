@@ -340,6 +340,27 @@ export interface CustomEntryEvent extends RuntimeEventBase {
 export type PermissionRequestKind = 'tool' | 'exec' | 'file_change';
 
 /**
+ * T023 — WHICH everyday action the gated tool is about to take, as an id.
+ *
+ * `kind` says what shape the card takes; this says what the sentence above it
+ * reads. They are deliberately not the same axis: `write` and `edit` are both
+ * `file_change` but "write a file" and "modify a file" are different promises,
+ * and `read` is a plain `tool` that still deserves a sentence.
+ *
+ * An id rather than a sentence because the producer is the worker, which has
+ * no locale: it ran before the user's language setting existed as far as it is
+ * concerned. Shipping a finished sentence is how the four Chinese strings this
+ * replaced ended up on English installs. The renderer owns the wording
+ * (`PERMISSION_ACTION_LABELS` in `questionCardModel.ts`) and the dictionary
+ * owns the translation, which is the same split `contentLabel` already uses.
+ *
+ * Absent means "no sentence available" — an unrecognised tool, or a Host older
+ * than this field. The card then shows the tool name alone, exactly as it did
+ * before any description existed.
+ */
+export type PermissionRequestAction = 'run_command' | 'write_file' | 'edit_file' | 'read_file';
+
+/**
  * S2 (c): agent-neutral decision vocabulary, four wide. `decisions.ts`
  * (slice 4) maps each id onto the three measured dialects — v2
  * CommandExecution (`accept | acceptForSession | decline | cancel`), v2
@@ -435,7 +456,18 @@ export interface PermissionRequestedEvent extends RuntimeEventBase {
   payload: {
     permissionId: string;
     toolName: string;
+    /**
+     * Free prose from the ASKING AGENT, never from this app.
+     *
+     * T023 moved the native runtime's own one-line summary off this field and
+     * onto `action`, because the two are not the same thing: whatever an agent
+     * writes here is content and must be shown verbatim, while our own summary
+     * is UI copy and must be translated. They shared a field until the copy
+     * started reaching English installs in Chinese.
+     */
     description?: string;
+    /** T023: our own one-line summary, as an id the renderer words. */
+    action?: PermissionRequestAction;
     input?: unknown;
     /**
      * T-34 (optional-field addition, protocol version unchanged): the

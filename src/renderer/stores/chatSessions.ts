@@ -3,6 +3,7 @@ import type {
   PermissionAutoReason,
   PermissionDecisionId,
   PermissionDetail,
+  PermissionRequestAction,
   PermissionRequestKind,
   QuestionItem,
   RuntimeEvent,
@@ -14,6 +15,7 @@ import {
   HISTORY_MESSAGE_ID_PREFIX,
   type HistoryAttachment,
   type HistoryMessage,
+  type HistoryNotice,
 } from '@shared/types/sessionHistory';
 import { create } from 'zustand';
 // Leaf module (no imports of its own): the permission-activity record shape and
@@ -172,6 +174,14 @@ export interface ChatBlock {
   id: string;
   type: ChatBlockType;
   text?: string;
+  /**
+   * T023: set only when `text` is copy THIS APP wrote into the transcript.
+   *
+   * `text` stays the English rendering and is what every existing surface
+   * paints; a surface that wants the user's language runs `notice.key` through
+   * `t()` with `notice.params` instead. Model output never carries it.
+   */
+  notice?: HistoryNotice;
   toolCallId?: string;
   toolName?: string;
   toolInput?: unknown;
@@ -183,6 +193,14 @@ export interface ChatBlock {
   allowed?: boolean;
   /** S2 (c): what the permission card asks about. undefined = a plain tool call. */
   permissionKind?: PermissionRequestKind;
+  /**
+   * T023: which everyday action the gate is about, as an id the card words.
+   *
+   * Separate from `toolDescription` on purpose — that one carries prose the
+   * AGENT wrote and is shown verbatim, this one is our own copy and is
+   * translated. One field for both is how Chinese reached English installs.
+   */
+  permissionAction?: PermissionRequestAction;
   /** S2 (c): exec command / file-change diffs rendered in the card body. */
   permissionDetail?: PermissionDetail;
   /** S2 (c): buttons offered. undefined = the historical Allow / Deny pair. */
@@ -506,7 +524,17 @@ function withBucket(
 function mapHistoryBlock(block: HistoryMessage['blocks'][number]): ChatBlock | null {
   switch (block.type) {
     case 'text':
-      return { id: block.id, type: 'text', text: block.text };
+      return {
+        id: block.id,
+        type: 'text',
+        text: block.text,
+        // T023: carried, not resolved. `text` already holds the English
+        // rendering, so a block whose notice nobody reads still paints a whole
+        // sentence; the notice only lets the surface swap in the user's
+        // language. Absent on every block a model produced, which is the
+        // point — that text is content and must never go near a dictionary.
+        ...(block.notice ? { notice: block.notice } : {}),
+      };
     case 'thinking':
       return { id: block.id, type: 'thinking', text: block.text };
     case 'tool_call':
@@ -1119,6 +1147,9 @@ function applyRuntimeEventCore(
                 // is the historical Claude key. Reading only one loses every
                 // justification the other agent sends, silently.
                 toolDescription: event.payload.reason ?? event.payload.description,
+                // T023: the runtime's own summary travels as an id and is
+                // worded by `PERMISSION_ACTION_LABELS`, not copied as text.
+                permissionAction: event.payload.action,
                 toolInput: event.payload.input,
                 resolved: false,
                 permissionKind: event.payload.kind,

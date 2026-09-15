@@ -15,6 +15,26 @@ export interface PiHistorySessionManager {
   getBranch(): unknown[];
 }
 
+/**
+ * T023 — the imported-history banner, as a catalog key plus its two values.
+ *
+ * It used to be a Chinese template literal built right here, with a comment
+ * arguing that a worker has no renderer locale so Chinese was the safer guess.
+ * The guess is what a language setting exists to stop making: this projection
+ * feeds every install, and the app ships an English UI too.
+ *
+ * ## Why changing it breaks no session file
+ *
+ * Nothing about this sentence is stored. The session file holds a `custom`
+ * entry (`aiclient.legacy-import.provenance`) carrying `sourceKind` and
+ * `sourceSessionId` and nothing else — `nativeImport.ts` writes exactly those
+ * fields — and this function mints the sentence fresh on every read. So a
+ * session imported last week renders in today's wording and today's language,
+ * and no reader needs a compatibility path for the old Chinese string.
+ */
+const IMPORTED_HISTORY_NOTICE_KEY =
+  'This history was imported from a {{sourceKind}} session ({{sourceSessionId}}). You can keep talking here; the original run state — tools, permissions — did not come across.';
+
 const TOOL_OUTPUT_LIMIT = 4_000;
 const UNMATCHED_TOOL_OUTPUT_LIMIT = 2_000;
 const DEFAULT_HISTORY_PAGE_LIMIT = 80;
@@ -148,11 +168,17 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
             {
               type: 'text',
               id: stablePartId(messageId, 'provenance', 0),
-              // Chinese, not a `t()` key: this projection runs inside the
-              // worker, which has no renderer locale. The app ships Simplified
-              // Chinese by default and the H/21 point-check caught this line
-              // sitting in English above an otherwise Chinese transcript.
-              text: `这段历史从 ${sourceKind} 会话 ${sourceSessionId} 导入。可以在这里接着聊；原来的运行状态（工具、权限）没有一起带过来。`,
+              // T023: `text` is the English rendering so any surface that
+              // ignores `notice` still shows a whole sentence; `notice` is
+              // what the renderer runs through the dictionary.
+              text: IMPORTED_HISTORY_NOTICE_KEY.replace('{{sourceKind}}', sourceKind).replace(
+                '{{sourceSessionId}}',
+                sourceSessionId
+              ),
+              notice: {
+                key: IMPORTED_HISTORY_NOTICE_KEY,
+                params: { sourceKind, sourceSessionId },
+              },
             },
           ],
         });

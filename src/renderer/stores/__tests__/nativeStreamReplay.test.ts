@@ -240,6 +240,11 @@ describe('permission card', () => {
     const block = blocks[0]!;
     expect(block.toolName).toBe('write');
     expect(block.permissionKind).toBe('file_change');
+    // T023: the recording carries `action: 'write_file'` where it used to
+    // carry the finished sentence 「写入工作区文件」. The card's wording is
+    // the renderer's job now, so what has to cross the replay is the id.
+    expect(block.permissionAction).toBe('write_file');
+    expect(block.toolDescription).toBeUndefined();
     expect(block.permissionDecisions).toEqual(['allow', 'allow_session', 'deny']);
     // What the user is actually deciding about.
     expect(block.toolInput).toMatchObject({ content: 'hi\n' });

@@ -1,4 +1,9 @@
-import type { PermissionDecisionId, QuestionItem } from '@shared/types/runtimeEvents';
+import { translate } from '@shared/i18n';
+import type {
+  PermissionDecisionId,
+  PermissionRequestAction,
+  QuestionItem,
+} from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import type { ChatBlock } from '@/stores/chatSessions';
 import {
@@ -23,6 +28,7 @@ import {
   deriveQuestionCardState,
   emptySelection,
   isMaskedAnswer,
+  PERMISSION_ACTION_LABELS,
   PERMISSION_ALLOW_SESSION_NOTE,
   PERMISSION_DECISION_LABELS,
   PERMISSION_NO_COMMAND_NOTE,
@@ -1128,5 +1134,74 @@ describe('permission card body (2026-09-10)', () => {
     );
     expect(view.risk).toBe('medium');
     expect(view.content).toBeNull();
+  });
+});
+
+/**
+ * T023 — the permission card's own sentence, from an id.
+ *
+ * The runtime used to send this line as finished Chinese prose from a worker
+ * with no locale, so an English install read 「在工作区运行命令」 on its
+ * permission cards. It now sends `action`, this table words it, and the
+ * dictionary translates it — which means both languages can be asserted from
+ * the SAME input, and that is the assertion the old code cannot pass.
+ */
+describe('permission action copy (T023)', () => {
+  const zh = (key: string) => translate('zh', key);
+
+  const CASES: readonly [PermissionRequestAction, string, string][] = [
+    ['run_command', 'Run a command in the workspace', '在工作区运行命令'],
+    ['write_file', 'Write a file in the workspace', '写入工作区文件'],
+    ['edit_file', 'Modify a file in the workspace', '修改工作区文件'],
+    ['read_file', 'Read file contents', '读取文件内容'],
+  ];
+
+  it.each(CASES)('%s reads English by default and Chinese under zh', (action, english, chinese) => {
+    const block = permissionBlock({ toolName: 'bash', permissionAction: action });
+    expect(derivePermissionCardView(block, true).prompt).toBe(`bash — ${english}`);
+    expect(derivePermissionCardView(block, true, zh).prompt).toBe(`bash — ${chinese}`);
+  });
+
+  it('every action label is a key the Chinese catalog actually answers', () => {
+    // The half a render test cannot see: a label reaching `t()` correctly and
+    // still coming back in English because nobody added the entry.
+    for (const label of Object.values(PERMISSION_ACTION_LABELS)) {
+      expect(zh(label)).not.toBe(label);
+      expect(/[一-鿿]/.test(zh(label))).toBe(true);
+    }
+  });
+
+  it('carries the resolved row in the same language as the card', () => {
+    const block = permissionBlock({
+      toolName: 'write',
+      permissionAction: 'write_file',
+      resolved: true,
+      allowed: true,
+    });
+    expect(derivePermissionRowView(block, null)?.arg).toBe('write — Write a file in the workspace');
+    expect(derivePermissionRowView(block, null, zh)?.arg).toBe('write — 写入工作区文件');
+  });
+
+  it("shows the agent's own prose verbatim when there is no action id", () => {
+    // `toolDescription` is what the ASKING AGENT wrote (Codex's `reason`). It
+    // is content, so it must survive a Chinese locale untouched — running it
+    // through the dictionary would be putting words in the agent's mouth.
+    const block = permissionBlock({ toolName: 'Bash', toolDescription: 'because the tests moved' });
+    expect(derivePermissionCardView(block, true, zh).prompt).toBe('Bash — because the tests moved');
+  });
+
+  it('prefers our own action over an agent description when both are present', () => {
+    const block = permissionBlock({
+      toolName: 'bash',
+      permissionAction: 'run_command',
+      toolDescription: 'stale prose',
+    });
+    expect(derivePermissionCardView(block, true, zh).prompt).toBe('bash — 在工作区运行命令');
+  });
+
+  it('falls back to the bare tool name when neither is present', () => {
+    expect(derivePermissionCardView(permissionBlock({ toolName: 'Bash' }), true, zh).prompt).toBe(
+      'Bash'
+    );
   });
 });

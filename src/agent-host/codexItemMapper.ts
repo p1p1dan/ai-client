@@ -75,7 +75,15 @@ export interface CodexItemRule {
   readonly mode: CodexItemMode;
   /** Set iff `mode === 'not_rendered'`. */
   readonly skipReason?: CodexItemSkipReason;
-  /** One line, surfaced in logs so a dropped item is diagnosable from a log tail. */
+  /**
+   * One line, surfaced in logs so a dropped item is diagnosable from a log tail.
+   *
+   * T023: these are CODE, not comments, so they spell the provenance marker
+   * `[measured]` / `[inferred]` where the surrounding comments keep the repo's
+   * `[实测]` / `[推测]` idiom. Not user-facing copy and therefore not a
+   * dictionary key — a log line is read by whoever is debugging, in the
+   * vocabulary the rest of the log uses.
+   */
   readonly note: string;
 }
 
@@ -87,7 +95,7 @@ export interface CodexItemRule {
 export const CODEX_ITEM_RULES: Readonly<Record<string, CodexItemRule>> = {
   userMessage: {
     mode: 'user_message',
-    note: 'user turn echo; content[].text [实测]',
+    note: 'user turn echo; content[].text [measured]',
   },
   hookPrompt: {
     mode: 'not_rendered',
@@ -96,7 +104,7 @@ export const CODEX_ITEM_RULES: Readonly<Record<string, CodexItemRule>> = {
   },
   agentMessage: {
     mode: 'agent_message',
-    note: 'assistant text; item.text [实测], streamed by item/agentMessage/delta',
+    note: 'assistant text; item.text [measured], streamed by item/agentMessage/delta',
   },
   plan: {
     mode: 'not_rendered',
@@ -105,15 +113,15 @@ export const CODEX_ITEM_RULES: Readonly<Record<string, CodexItemRule>> = {
   },
   reasoning: {
     mode: 'reasoning',
-    note: 'thinking block; summary[] [实测], streamed by item/reasoning/*',
+    note: 'thinking block; summary[] [measured], streamed by item/reasoning/*',
   },
   commandExecution: {
     mode: 'tool',
-    note: 'tool row; command/cwd/aggregatedOutput/exitCode/status [实测]',
+    note: 'tool row; command/cwd/aggregatedOutput/exitCode/status [measured]',
   },
   fileChange: {
     mode: 'tool',
-    note: 'tool row; changes[].{path,kind,diff} [实测] — same diff the approval card needs',
+    note: 'tool row; changes[].{path,kind,diff} [measured] — same diff the approval card needs',
   },
   mcpToolCall: {
     mode: 'tool',

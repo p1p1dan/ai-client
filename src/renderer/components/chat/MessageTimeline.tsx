@@ -1111,7 +1111,14 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
                 ? t(AUTH_REQUIRED_ERROR_VIEW.message)
                 : modelMissing
                   ? t(MODEL_MISSING_ERROR_VIEW.message)
-                  : block.text}
+                  : // T023: a `notice` marks this paragraph as copy the APP
+                    // wrote (today: the imported-history banner), so it
+                    // follows the language setting like every other label.
+                    // Without one, `text` is transcript content and is
+                    // printed exactly as it arrived.
+                    block.notice
+                    ? t(block.notice.key, block.notice.params)
+                    : block.text}
             </p>
           ) : null
         )}

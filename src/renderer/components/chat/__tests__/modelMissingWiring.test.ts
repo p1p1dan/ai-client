@@ -126,3 +126,34 @@ describe('ChatComposer status strip (H/21 point-check D2)', () => {
     expect(COMPOSER_SOURCE).toContain(`\`Error: \${lastError}\``);
   });
 });
+
+/**
+ * T023 — the same notice body, now with a translatable branch.
+ *
+ * Asserted by source scan for the reason stated at the top of this file:
+ * `MessageTimeline.tsx` cannot be rendered here. What the notice resolves TO
+ * is covered where it can be executed — `piSessionTimeline.test.ts` (the key
+ * and its params), `chatSessionsHistory.test.ts` (the field survives the
+ * store) and `i18n`'s own catalog. This only claims the component asks.
+ */
+describe('MessageTimeline translates app-written history notices (T023)', () => {
+  it('[T023-01] branches the notice body on the marker, not on the text', () => {
+    expect(SOURCE).toContain('block.notice');
+    expect(SOURCE).toContain('t(block.notice.key, block.notice.params)');
+  });
+
+  it('[T023-02] keeps the raw-text fallback for everything without a marker', () => {
+    // Model output must not go near the dictionary: the marker is the whole
+    // permission to translate, so the untouched `block.text` branch has to
+    // survive next to it.
+    expect(SOURCE).toContain(': block.text}');
+  });
+
+  it('[T023-03] spells the imported-history sentence nowhere in the renderer', () => {
+    // The producer (`agent-host/piSessionTimeline.ts`) owns the key. A second
+    // copy of the sentence here is how the two drift into different wording
+    // and the dictionary lookup starts missing.
+    expect(SOURCE).not.toContain('This history was imported');
+    expect(SOURCE).not.toContain('这段历史从');
+  });
+});

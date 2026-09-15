@@ -72,6 +72,18 @@ describe('the mapping table covers the contract exactly', () => {
       }
     }
   });
+
+  it('writes those notes in the language the rest of the log is in (T023)', () => {
+    // Five of them carried the repo's `[实测]` provenance marker, which is a
+    // COMMENT idiom that had leaked into code. These strings go to a log tail,
+    // not to a user, so they are not dictionary keys — they just have to match
+    // the log around them, and they are now the only agent-host strings the
+    // Chinese guard scans. `[measured]` is the same marker, spelled out.
+    for (const [type, rule] of Object.entries(CODEX_ITEM_RULES)) {
+      expect(/[一-鿿]/.test(rule.note), `${type} note must not be Chinese`).toBe(false);
+    }
+    expect(CODEX_ITEM_RULES.userMessage.note).toContain('[measured]');
+  });
 });
 
 describe('the two subagent-shaped variants are dropped on purpose', () => {

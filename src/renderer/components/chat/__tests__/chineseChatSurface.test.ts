@@ -186,3 +186,48 @@ it('renders the permission card in Chinese — title, risk chip, body label and 
     container.remove();
   }
 });
+
+/**
+ * T023 — the runtime's own permission sentence, rendered.
+ *
+ * The block below carries only `permissionAction`, which is all the native
+ * runtime sends since the four Chinese literals came out of
+ * `src/runtime/worker/permissionPrompt.ts`. So this asserts the whole chain in
+ * one go: id crosses the worker boundary, `PERMISSION_ACTION_LABELS` words it,
+ * the dictionary translates it, and the card paints the result. Before T023
+ * the Chinese here came from the worker and the English install had no way to
+ * get anything else.
+ */
+it('renders the runtime permission action from an id, in Chinese', async () => {
+  const block = {
+    id: 'perm-action',
+    type: 'permission_request',
+    permissionId: 'perm-action',
+    toolName: 'bash',
+    permissionAction: 'run_command',
+    permissionKind: 'exec',
+    permissionDecisions: ['allow', 'deny'],
+    toolInput: { command: 'pnpm test', workspace: '/repo' },
+  } as unknown as ChatBlock;
+  const { container, root } = mount();
+  try {
+    await act(async () =>
+      root.render(
+        createElement(QuestionCard, {
+          variant: 'permission',
+          block,
+          canRespond: true,
+          onRespondPermission: async () => true,
+        })
+      )
+    );
+    const text = container.textContent ?? '';
+    expect(text).toContain('在工作区运行命令');
+    // The English catalog key must not leak onto a Chinese card — that is the
+    // exact failure the mirror-image guard (`toolVocabulary`) was built for.
+    expect(text).not.toContain('Run a command in the workspace');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});

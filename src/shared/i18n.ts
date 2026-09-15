@@ -2741,6 +2741,19 @@ export const zhTranslations: Record<string, string> = {
   '{{count}} snapshots imported': '已导入 {{count}} 个快照',
   '{{count}} steps processed': '已处理 {{count}} 个步骤',
   '{{month}}/{{day}}': '{{month}} 月 {{day}} 日',
+
+  // T023 — copy the RUNTIME produces. It reaches here as an identifier
+  // (`PermissionRequestAction`, `HistoryNotice.key`) precisely because the
+  // worker that produces it has no locale; these four plus the import banner
+  // were hardcoded Chinese until 2026-09-15 and rendered Chinese on English
+  // installs. The permission wording lives in `questionCardModel.ts`
+  // (`PERMISSION_ACTION_LABELS`), which is what makes the English side a key.
+  'Run a command in the workspace': '在工作区运行命令',
+  'Write a file in the workspace': '写入工作区文件',
+  'Modify a file in the workspace': '修改工作区文件',
+  'Read file contents': '读取文件内容',
+  'This history was imported from a {{sourceKind}} session ({{sourceSessionId}}). You can keep talking here; the original run state — tools, permissions — did not come across.':
+    '这段历史从 {{sourceKind}} 会话 {{sourceSessionId}} 导入。可以在这里接着聊；原来的运行状态（工具、权限）没有一起带过来。',
 };
 
 export function normalizeLocale(input?: string): Locale {

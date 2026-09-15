@@ -370,7 +370,7 @@ describe('native tools', () => {
       runtimeId: request.runtimeId,
       uiRequestId: request.uiRequestId,
       ok: true,
-      value: '允许一次',
+      value: 'Allow once',
     });
     await writing;
     expect(await readFile(join(dir, 'a'), 'utf8')).toBe('yes');

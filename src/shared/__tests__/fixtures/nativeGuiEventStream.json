@@ -166,7 +166,7 @@
     "payload": {
       "permissionId": "call-2",
       "toolName": "write",
-      "description": "写入工作区文件",
+      "action": "write_file",
       "input": {
         "path": "<workspace>/created.txt",
         "content": "hi\n",

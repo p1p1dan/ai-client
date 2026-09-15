@@ -7,11 +7,35 @@ import type { SessionFileChange } from '../sessionFileChange.ts';
  */
 
 /**
+ * T023 — a line the APP wrote into a transcript, marked as translatable.
+ *
+ * Almost everything in a history block is content: the user typed it or a
+ * model produced it, and it must reach the screen byte for byte. A handful of
+ * lines are not — they are this app explaining its own state inside the
+ * transcript, and those are UI copy that has to follow the language setting.
+ *
+ * Nothing distinguished the two, so the one such line we had
+ * (`piSessionTimeline`'s imported-history banner) was written as a finished
+ * Chinese sentence in a worker that has no locale. This marker is the
+ * distinction: `text` stays the English rendering, so any surface that ignores
+ * the marker still prints a correct sentence, and a surface that honours it
+ * runs `key` through `t()` with `params`.
+ *
+ * `key` is the English sentence itself — the repo's convention, see
+ * `noHardcodedChinese.test.ts`. Params are already-formatted strings; the
+ * worker does no number or date formatting it would have to localise.
+ */
+export interface HistoryNotice {
+  key: string;
+  params?: Record<string, string>;
+}
+
+/**
  * One digested history block. Ids are stable across re-reads (derived from
  * JSONL uuids) so repeated resume hydration is idempotent.
  */
 export type HistoryBlock =
-  | { type: 'text'; id: string; text: string; truncated?: boolean }
+  | { type: 'text'; id: string; text: string; truncated?: boolean; notice?: HistoryNotice }
   | { type: 'thinking'; id: string; text: string; truncated?: boolean }
   | {
       type: 'tool_call';

@@ -17,6 +17,7 @@
 
 import type {
   PermissionDecisionId,
+  PermissionRequestAction,
   PermissionRequestKind,
   RuntimeEventDraft,
 } from '../../shared/types/runtimeEvents.ts';
@@ -57,17 +58,29 @@ function kindOf(tool: string): PermissionRequestKind {
   return 'tool';
 }
 
-/** One line naming what the tool does, in the terms of the decision. */
-function describe(tool: string): string | undefined {
+/**
+ * What the tool is about to do, in the terms of the decision — as an ID.
+ *
+ * T023: these four were finished Chinese sentences until 2026-09-15, emitted
+ * from a worker that has no idea what language the window is in. Language is a
+ * user setting (Settings · General), so every English install read its
+ * permission cards in Chinese and the guard that would have caught it
+ * (`noHardcodedChinese.test.ts`) did not scan this directory. The wording now
+ * lives in the renderer and the Chinese in `zhTranslations`.
+ *
+ * `undefined` for anything else: an invented sentence for an unknown tool
+ * would be worse than the tool's own name, which the card already shows.
+ */
+function actionOf(tool: string): PermissionRequestAction | undefined {
   switch (tool) {
     case 'bash':
-      return '在工作区运行命令';
+      return 'run_command';
     case 'write':
-      return '写入工作区文件';
+      return 'write_file';
     case 'edit':
-      return '修改工作区文件';
+      return 'edit_file';
     case 'read':
-      return '读取文件内容';
+      return 'read_file';
     default:
       return undefined;
   }
@@ -136,14 +149,17 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
         // already assumes (`chatSessions.ts` calls it out): one gate per call.
         const permissionId = request.toolCallId;
         const detail = detailOf(request, options.cwd);
-        const description = describe(request.tool);
+        const action = actionOf(request.tool);
         options.emit({
           type: 'permission.requested',
           sessionId: options.sessionId,
           payload: {
             permissionId,
             toolName: request.tool,
-            ...(description ? { description } : {}),
+            // T023: an id, not a sentence. `description` stays reserved for
+            // prose an agent wrote, which is content and must not be
+            // translated — see the field's doc on `PermissionRequestedEvent`.
+            ...(action ? { action } : {}),
             // What the tool is about to do, for the card to show verbatim.
             // Kept separate from `detail` because `PermissionFileChange` models
             // a diff, and a pre-write gate has no before-image to diff against.
