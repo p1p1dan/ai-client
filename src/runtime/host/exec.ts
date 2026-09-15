@@ -333,10 +333,21 @@ export interface TreeKiller {
  */
 export function createTreeKiller(
   child: Pick<ReturnType<typeof spawn>, 'pid' | 'kill'>,
-  options: { platform?: NodeJS.Platform; spawnProcess?: typeof spawn } = {}
+  options: {
+    platform?: NodeJS.Platform;
+    spawnProcess?: typeof spawn;
+    /**
+     * POSIX group signal. Injectable so a test can exercise the failure paths
+     * with a FAKE pid: `process.kill(-1, …)` is not "the group led by pid 1",
+     * it broadcasts to every process this user owns — one test with pid 1 took
+     * the whole desktop session down with it.
+     */
+    killGroup?: (pgid: number, signal: NodeJS.Signals) => void;
+  } = {}
 ): TreeKiller {
   const platform = options.platform ?? process.platform;
   const spawnProcess = options.spawnProcess ?? spawn;
+  const killGroup = options.killGroup ?? ((pgid, signal) => process.kill(pgid, signal));
   const cleaners = new Set<ReturnType<typeof spawn>>();
   let windowsKillStarted = false;
   let reaped = false;
@@ -377,7 +388,7 @@ export function createTreeKiller(
         return;
       }
       try {
-        process.kill(-child.pid, force ? 'SIGKILL' : 'SIGTERM');
+        killGroup(-child.pid, force ? 'SIGKILL' : 'SIGTERM');
       } catch (cause) {
         // Already gone is the expected outcome of a second kill, not a failure.
         if (cause instanceof Error && 'code' in cause && cause.code === 'ESRCH') return;

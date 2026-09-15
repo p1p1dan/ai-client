@@ -527,7 +527,7 @@ describe('host exec spawn', () => {
   }, 20_000);
 
   it('does not lose a child that finishes starting during shutdown', async () => {
-    let release = () => undefined as void;
+    let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
@@ -579,11 +579,20 @@ describe('host exec spawn', () => {
     const out = collect();
     const child = await service.spawn({
       command: process.execPath,
-      args: ['-e', "process.on('SIGTERM',()=>{});setInterval(()=>{},1000)"],
+      args: [
+        '-e',
+        "process.on('SIGTERM',()=>{});process.stdout.write('armed');setInterval(()=>{},1000)",
+      ],
       cwd: dir,
       onStdout: out.sink,
       onStderr: out.sink,
     });
+    // `spawn` resolves when the process exists, not when its script has run:
+    // a SIGTERM that lands before the handler is installed kills the child by
+    // default action, and the grace never runs out. Wait for the handler.
+    for (let attempt = 0; attempt < 250 && !out.text().includes('armed'); attempt++)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(out.text()).toContain('armed');
     // Nobody killed it first: reaping a long-lived child is what shutdown is
     // for, and a tree still unaccounted for when the grace runs out must be
     // reported, not counted as collected.
@@ -734,15 +743,60 @@ describe('exec tree killer', () => {
   });
 
   it('reports a POSIX group that could not be signalled', () => {
+    // Never signal a real process from here. `process.kill(-1, …)` broadcasts
+    // to every process this user owns, and a fake pid can collide with a live
+    // group; the group signal is injected so the failure paths are exercised
+    // against a stub only.
+    const errno = (code: string) => Object.assign(new Error(code), { code });
+    const sent: { pgid: number; signal: string }[] = [];
     const child = fakeChild();
-    const killer = createTreeKiller(child, { platform: 'linux' });
-    // pid 1 is never this process's group leader: the group kill fails with
-    // EPERM, which is exactly the case that must not pass as cleaned up.
-    const denied = createTreeKiller({ ...child, pid: 1 }, { platform: 'linux' });
+    const denied = createTreeKiller(child, {
+      platform: 'linux',
+      killGroup: (pgid, signal) => {
+        sent.push({ pgid, signal });
+        throw errno('EPERM');
+      },
+    });
     denied.kill(true);
+    expect(sent).toEqual([{ pgid: -4242, signal: 'SIGKILL' }]);
     expect(denied.error).toMatchObject({ code: 'exec_cleanup_failed' });
+    // The child itself is still signalled directly as the fallback.
+    expect(child.signals).toEqual(['SIGKILL']);
+
     // A tree that is already gone is the expected second kill, not a failure.
-    killer.kill(true);
-    expect(killer.error).toBeUndefined();
+    const gone = createTreeKiller(fakeChild(), {
+      platform: 'linux',
+      killGroup: () => {
+        throw errno('ESRCH');
+      },
+    });
+    gone.kill(true);
+    expect(gone.error).toBeUndefined();
+
+    // A group that accepted the signal is clean, and escalates on repeat.
+    const signals: string[] = [];
+    const clean = createTreeKiller(fakeChild(), {
+      platform: 'linux',
+      killGroup: (_pgid, signal) => {
+        signals.push(signal);
+      },
+    });
+    clean.kill(false);
+    clean.kill(true);
+    expect(signals).toEqual(['SIGTERM', 'SIGKILL']);
+    expect(clean.error).toBeUndefined();
+  });
+
+  it('never sends a group signal from the tests in this file', () => {
+    // Guard against a regression of the pid-1 incident: with no `killGroup`
+    // injected, the default reaches `process.kill`, so a stub must be installed
+    // before any tree killer here is exercised on a fake pid.
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    try {
+      createTreeKiller(fakeChild(), { platform: 'linux' }).kill(true);
+      expect(kill).toHaveBeenCalledWith(-4242, 'SIGKILL');
+    } finally {
+      kill.mockRestore();
+    }
   });
 });
