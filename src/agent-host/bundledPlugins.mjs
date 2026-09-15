@@ -1,82 +1,60 @@
 /**
- * The feature extensions this app ships with — R03.
+ * Feature switches this app offers, and the pi extension packages it refuses to
+ * ship — R03, rewritten by T025.
  *
- * ## Why a table and not three constants
+ * ## Nothing is bundled any more
  *
- * Three consumers read this list and each of them fails differently when it
- * drifts, so there is exactly one place to change:
+ * R03 shipped two pi extensions inside the worker and injected them into pi's
+ * resource loader: `@juicesharp/rpiv-ask-user-question` (a `ui.select` /
+ * `ui.input` questionnaire) and `@gotgenes/pi-subagents` (delegation). P6-5
+ * retired the engine that did the injecting. The native runtime answers both
+ * needs itself — the `ask` tool raises `question.requested`, and delegation is
+ * `src/runtime/plugins/subagent/` — so the two packages had no runtime consumer
+ * left, only ~1.7 MB of payload the build still insisted on and verified.
  *
- *  - `scripts/agent-host-build-lib.mjs` — preflight (is it installed?), the copy
- *    filter's licence set, and artifact verification (did the entry survive?).
- *  - `src/agent-host/bundledFeaturePlugins.ts` — resolves each to an absolute
- *    path at runtime and hands it to pi.
- *  - the tests for both.
+ * They are named in {@link RETIRED_BUNDLED_PLUGIN_PACKAGES} rather than simply
+ * forgotten, because "not in the dependency list" is not by itself a guard: the
+ * copy filter walks whatever is installed under `src/agent-host/node_modules`,
+ * so a leftover install directory would quietly travel again. The filter
+ * refuses these names outright (`shouldCopy` in
+ * `scripts/agent-host-build-lib.mjs`).
  *
- * ## `entry` is an assertion, not a lookup
+ * `@gotgenes/pi-permission-system` is NOT on that list and is still shipped:
+ * `src/main/services/piPermissionPolicy/index.ts` reads
+ * `<worker dir>/node_modules/@gotgenes/pi-permission-system/config.json` as the
+ * bundled scope of the permission-policy panel, and the build writes that file.
+ * It is payload plus a file location, not a loaded extension.
  *
- * Each `entry` is copied from that package's own `pi.extensions[0]`, and the
- * build asserts the file exists in the artifact. This is deliberate duplication:
- * the packaging filter walks DIRECTORIES and skips a whole subtree the moment it
- * answers no, so a filter mistake removes a package silently and every unit test
- * still passes. A missing entry file is the one symptom that cannot hide.
+ * ## What the opt-in table is for now
  *
- * If an upstream release moves its entry, the build fails loudly here rather
- * than shipping an extension that never loads.
- *
- * ## Why these two
- *
- * `@juicesharp/rpiv-ask-user-question` has a non-terminal branch
- * (`ask-user-question.ts`: `ctx.mode === "rpc" && hasDialogUI(ctx.ui)`) that
- * drives `ui.select` / `ui.input` — the two primitives `ExtensionUiDialog.tsx`
- * already renders. The renderer has had a complete consumer for this and no
- * producer.
- *
- * `@gotgenes/pi-subagents` is OPT-IN (see `optIn` below) and is bundled INSTEAD
- * of `tintinweb/pi-subagents`, which
- * the permission system's own compatibility table
- * (`@gotgenes/pi-permission-system/docs/subagent-integration.md`) records as
- * emitting no lifecycle events: its sub-agents get neither deterministic
- * detection nor ask-state forwarding, so their tool calls run around the
- * approval dialog while the UI still shows a permission tier. That is a security
- * gap, not a preference.
- *
- * ## Not bundled, and why
- *
- * `pi-workspace-history` — blocked upstream, not rejected. See
- * `docs/plantree/plans/pi-resources-and-commands/open-questions.md` (Q-R5).
- * `pi-cc-extensions` (14M, re-adds a terminal UI), `pi-fff` (native binaries),
- * `rpiv-advisor` (spends model quota by default), `rpiv-web-tools` (ten API keys
- * to fill in) and `pi-web-access` (measured +170M) stay on the recommend list.
+ * {@link OPT_IN_FEATURE_PLUGINS} still drives the Settings → Pi Resources
+ * switches (Main reads it through {@link optInFeatureRegistry}). The one entry
+ * left, `subagents`, no longer enables a package — the native runtime always
+ * has delegation. Reconciling that switch with what native actually does is
+ * T026's job; T025 only stopped shipping the package behind it, and left the
+ * user-visible switch exactly as it was.
  */
 
 /**
- * @typedef {object} BundledFeaturePlugin
- * @property {string} package npm name, exactly as installed under node_modules.
- * @property {string} entry Path within the package to its `pi.extensions[0]`.
- * @property {boolean} shipsLicenceFile Whether upstream includes a LICENSE file.
- * @property {string} [optIn] Feature id that must be enabled for this plugin to
- *   be injected. Absent means "always injected".
+ * pi extension packages this app used to bundle and must not bundle again.
+ *
+ * Kept as data so the copy filter, the artifact verifier and their tests all
+ * refuse the same names.
+ */
+export const RETIRED_BUNDLED_PLUGIN_PACKAGES = [
+  '@juicesharp/rpiv-ask-user-question',
+  '@gotgenes/pi-subagents',
+];
+
+/**
+ * @typedef {object} OptInFeaturePlugin
+ * @property {string} optIn Feature id the user turns on.
  * @property {{label: string, cost: string, defaultEnabled: boolean, legacySettingKey?: string}} [settings]
  */
 
-/** @type {readonly BundledFeaturePlugin[]} */
-export const BUNDLED_FEATURE_PLUGINS = [
+/** @type {readonly OptInFeaturePlugin[]} */
+export const OPT_IN_FEATURE_PLUGINS = [
   {
-    package: '@juicesharp/rpiv-ask-user-question',
-    entry: 'index.ts',
-    shipsLicenceFile: true,
-  },
-  {
-    package: '@gotgenes/pi-subagents',
-    entry: 'src/index.ts',
-    shipsLicenceFile: true,
-    // Shipped in the artifact, injected only on request. Its three tool
-    // schemas (`subagent`, `get_subagent_result`, `steer_subagent`) measured
-    // 4.8 KB of the 11.4 KB tool payload on a first turn (2026-09-07) — a cost
-    // every session pays in its cached prefix, for a feature most sessions
-    // never use. Off by default is a COST decision, not a security one: the
-    // security reason for choosing this package over `tintinweb/pi-subagents`
-    // (below) still applies whenever it IS on.
     optIn: 'subagents',
     settings: {
       label: 'Sub-agents',
@@ -87,7 +65,7 @@ export const BUNDLED_FEATURE_PLUGINS = [
   },
 ];
 
-export function optInFeatureRegistry(plugins = BUNDLED_FEATURE_PLUGINS) {
+export function optInFeatureRegistry(plugins = OPT_IN_FEATURE_PLUGINS) {
   return plugins.flatMap((plugin) => {
     if (!plugin.optIn) return [];
     if (!plugin.settings?.cost.trim() || !plugin.settings.label.trim()) {
@@ -95,40 +73,4 @@ export function optInFeatureRegistry(plugins = BUNDLED_FEATURE_PLUGINS) {
     }
     return [{ id: plugin.optIn, ...plugin.settings }];
   });
-}
-
-/**
- * Feature ids that are injected only when named in the opt-in list.
- *
- * Exported so the build's own assertions can state that an opt-in plugin is
- * still COPIED into the artifact — off by default must not become "not shipped",
- * or turning the switch on would find nothing there.
- */
-export function optInFeatureIds() {
-  return BUNDLED_FEATURE_PLUGINS.flatMap((plugin) => (plugin.optIn ? [plugin.optIn] : []));
-}
-
-/** Package names only, for the preflight that refuses to build without them. */
-export function bundledFeaturePluginPackages() {
-  return BUNDLED_FEATURE_PLUGINS.map((plugin) => plugin.package);
-}
-
-/**
- * Entry paths as `shouldCopy` sees them — relative to `node_modules`, NOT
- * including it.
- *
- * The two views exist because the copy filter and the artifact verifier disagree
- * about where the root is: the walker is rooted AT `node_modules`, the verifier
- * at the artifact directory above it. Passing a verifier path to `shouldCopy`
- * makes `topPackage` read `node_modules` as the package name, so every
- * package-specific branch silently stops matching and the assertion passes no
- * matter what the filter does.
- */
-export function bundledFeaturePluginCopyPaths() {
-  return BUNDLED_FEATURE_PLUGINS.map((plugin) => `${plugin.package}/${plugin.entry}`);
-}
-
-/** Artifact-relative paths of the entry files, for `verifyArtifact`. */
-export function bundledFeaturePluginEntryPaths() {
-  return bundledFeaturePluginCopyPaths().map((rel) => `node_modules/${rel}`);
 }

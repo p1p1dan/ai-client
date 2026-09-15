@@ -173,6 +173,15 @@ interface ManagedSlot {
   generation: number;
   configGeneration: number;
   error: string | null;
+  /**
+   * The active leaf this worker last reported, mirrored so `commitPiLeaf` can
+   * skip a write that would not change the index row.
+   *
+   * T025: Main-only since the bootstrap payload lost its `leafCheckpoint`. It
+   * is written from bootstrap / rewind / fork results and read on the way into
+   * the session index (`piLeaf`); it is never sent back to a worker, because
+   * the native runtime resolves the active leaf from the session file itself.
+   */
   leafCheckpoint: PiLeafCheckpoint | null;
   branchRevision: number;
   mutationInFlight: 'rewind' | 'fork' | 'reload' | null;
@@ -853,7 +862,6 @@ export class WorkerManager {
     workspacePath: string;
     model?: string;
     effort?: SessionEffortLevel;
-    leafCheckpoint?: PiLeafCheckpoint;
     ownerWebContentsId?: number;
     /** U05-c — `workspacePath` is a scratch directory; bootstrap untrusted. */
     unbound?: boolean;
@@ -863,14 +871,11 @@ export class WorkerManager {
   }): Promise<string> {
     const sessionFile = normalizeWorkerPath(input.sessionFile, 'Pi session file');
     const cwd = normalizeWorkerPath(input.workspacePath, 'Workspace path');
-    const fingerprint = JSON.stringify([
-      sessionFile,
-      cwd,
-      input.model ?? '',
-      input.effort ?? '',
-      input.leafCheckpoint?.activeEntryId ?? '',
-      input.leafCheckpoint?.fileTailEntryId ?? '',
-    ]);
+    // T025: the leaf checkpoint used to be part of this fingerprint. It was
+    // dropped with the field itself — two resumes that differ only by a leaf
+    // the worker never reads are the same resume, and treating them as a
+    // conflict rejected a legitimate second call.
+    const fingerprint = JSON.stringify([sessionFile, cwd, input.model ?? '', input.effort ?? '']);
     const existingFlight = this.resumeFlights.get(input.sessionId);
     if (existingFlight) {
       if (existingFlight.fingerprint !== fingerprint) {
@@ -997,7 +1002,7 @@ export class WorkerManager {
         generation: 1,
         configGeneration: this.configGeneration,
         error: null,
-        leafCheckpoint: input.leafCheckpoint ?? null,
+        leafCheckpoint: null,
         branchRevision: 0,
         mutationInFlight: null,
         stderrPending: '',
@@ -2084,7 +2089,6 @@ export class WorkerManager {
       cwd: entry.cwd,
       generation: entry.generation,
       ...(entry.sessionFile && !options.fresh ? { sessionFile: entry.sessionFile } : {}),
-      ...(entry.leafCheckpoint && !options.fresh ? { leafCheckpoint: entry.leafCheckpoint } : {}),
       ...(entry.unbound ? { unbound: true } : {}),
       ...(entry.tier ? { tier: entry.tier } : {}),
       ...(entry.permissions ? { permissions: entry.permissions } : {}),

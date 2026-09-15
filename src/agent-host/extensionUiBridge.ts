@@ -14,15 +14,34 @@
  * on the wire, and the four blocking ones park a Promise until an
  * `extensionUi.respond` command arrives.
  *
+ * ## Nothing in this app calls it today — read this before debugging it
+ *
+ * cutover-06 / T025. The bridge is still built on every session
+ * (`nativeWorkerRuntime` passes `approvalUi`), and Main, the preload and the
+ * renderer still carry the whole `extensionUi.request` → `ExtensionUiDialog` →
+ * `worker.extensionUi.respond` round trip. But no PRODUCER remains: the only
+ * caller of `uiContext` is `createRuntimeApprovalBridge`'s `approve` arm, and
+ * that arm is permanently shadowed (`nativeWorkerRuntime` always supplies its
+ * own structured permission card, so `bootstrap`'s `?? approval?.approve` never
+ * falls through), while the pi extensions that used to call `ui.*` are no
+ * longer bundled at all. So the dialog cannot open in this app, and time spent
+ * on the pending map, the timeouts or the abort wiring while chasing "the
+ * dialog never appears" is time wasted.
+ *
+ * It is kept rather than deleted because it is the whole of the Extension UI
+ * embedding contract — a host that embeds `src/runtime` and implements no
+ * `permission.requested` surface asks through exactly this channel. Retiring
+ * the user-facing half is T026's call, not this file's.
+ *
  * ## Why the bridge holds the object rather than proxying a subprocess
  *
- * `PiWorkerSession` runs the SDK embedded (`createAgentSessionRuntime`), so the
- * `ExtensionUIContext` we pass to `bindExtensions` is called in-process, by
- * ordinary function calls, on the utilityProcess's own event loop. There is no
- * serialization boundary between the extension and this file — which is exactly
- * why the pending map, the timers and the abort wiring have to live HERE. Ported
- * from pix `packages/agent-runtime/src/extension-ui-bridge.ts`, whose runtime
- * shape is identical to ours.
+ * The runtime runs the agent loop embedded, so an `ExtensionUIContext` handed
+ * to an extension would be called in-process, by ordinary function calls, on
+ * the utilityProcess's own event loop. There is no serialization boundary
+ * between the extension and this file — which is exactly why the pending map,
+ * the timers and the abort wiring have to live HERE. Ported from pix
+ * `packages/agent-runtime/src/extension-ui-bridge.ts`, whose runtime shape is
+ * identical to ours.
  *
  * ## The one invariant
  *

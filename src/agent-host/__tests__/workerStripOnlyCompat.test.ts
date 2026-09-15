@@ -108,20 +108,22 @@ describe('Pi worker source is loadable under Node strip-only type removal', () =
   });
 
   it('resolves a real ESM extension — `.mjs` is not a missing extension', () => {
-    // R03 singled out: `bundledFeaturePlugins.ts` imports `./bundledPlugins.mjs`.
-    // A naive value-import check that only accepts `.ts`/`.js` flags it, yet
-    // Node — including `--experimental-strip-types` in dev — resolves `.mjs`
-    // without any search. This case pins the distinction: the rule bans bare
-    // names, not ESM file types.
+    // A naive value-import check that only accepts `.ts`/`.js` flags a `.mjs`
+    // specifier, yet Node — including `--experimental-strip-types` in dev —
+    // resolves it without any search. This case pins the distinction: the rule
+    // bans bare names, not ESM file types.
     //
-    // Checked by walking that file directly since P6-5: it used to be reachable
-    // from the worker entry through the legacy engine, and the retirement took
-    // that path out. The file is still shipped and still loaded — by Main, for
-    // the opt-in bundled extensions — so the rule still has to hold for it.
-    const featurePlugins = path.join(repoRoot, 'src/agent-host/bundledFeaturePlugins.ts');
-    expect(fs.existsSync(featurePlugins)).toBe(true);
-    const { extensionless: featureProblems } = walkGraphFrom(featurePlugins);
-    expect(featureProblems.some((p) => p.detail.includes('bundledPlugins.mjs'))).toBe(false);
-    expect(extensionless.some((p) => p.detail.includes('bundledPlugins.mjs'))).toBe(false);
+    // Walked from a second root, for the same reason the case has always needed
+    // one: `worker.ts` pulls the runtime in through DYNAMIC imports, which the
+    // static walker above does not follow, so no `.mjs` importer is on its
+    // graph. T025 moved the root from `bundledFeaturePlugins.ts` (deleted —
+    // nothing called it) to the permissions policy loader, which is a file dev
+    // really does load under strip-only and really does import a `.mjs`.
+    const policyLoader = path.join(repoRoot, 'src/runtime/plugins/permissions/policy.ts');
+    expect(fs.existsSync(policyLoader)).toBe(true);
+    expect(fs.readFileSync(policyLoader, 'utf8')).toContain("permissionPolicy.mjs'");
+    const { extensionless: policyProblems } = walkGraphFrom(policyLoader);
+    expect(policyProblems.some((p) => p.detail.includes('.mjs'))).toBe(false);
+    expect(extensionless.some((p) => p.detail.includes('.mjs'))).toBe(false);
   });
 });

@@ -98,7 +98,7 @@ function addTurnUsage(left: PiTurnUsage | undefined, right: PiTurnUsage): PiTurn
   };
 }
 
-/** Adapt PiWorkerSession's projection to typed native AgentEvents; same wire DTOs. */
+/** Adapt the retired engine's projection to typed native AgentEvents; same wire DTOs. */
 export class RuntimeEventProjector {
   private readonly sink: RuntimeEventSink;
   private readonly requestId: string;

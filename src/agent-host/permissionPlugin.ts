@@ -1,78 +1,37 @@
 /**
- * Bundled permission plugin — T08-a.
+ * Does the user's own pi configuration load a permission system?
  *
- * ## What ships and why
+ * ## What is left here and why
  *
- * `@gotgenes/pi-permission-system` (MIT, pinned in `src/agent-host/package.json`)
- * is the extension that gates tool calls behind user approval. It travels inside
- * the app rather than being installed on demand, because "the user happens to
- * have it globally" is not a security posture — on a machine without it, every
- * tool call would run unattended and nothing would say so.
+ * T025: this file used to decide whether to INJECT the bundled
+ * `@gotgenes/pi-permission-system` into a pi session, verify afterwards that it
+ * had really loaded, and refuse the session when it had not. P6-5 retired the
+ * engine that did the injecting; the native runtime gates every tool call in
+ * its own permissions plugin (`src/runtime/plugins/permissions/`) and never
+ * hands pi an extension path. The injection decision, the load verification and
+ * the bundled-package lookup therefore had no caller at all, while their
+ * comments still described a fail-closed chain that no longer existed.
  *
- * ## How it gets loaded
+ * What survives is one question with one production caller
+ * (`src/main/services/piPlugins/index.ts`): does this user's `settings.json`
+ * name a package that pi would actually load extensions from? The plugins page
+ * shows the answer as the origin of the permission gate. It has nothing to do
+ * with whether this app's own approval flow is running — that one is
+ * unconditional.
  *
- * Through the SDK's `resourceLoaderOptions.additionalExtensionPaths`, as an
- * ABSOLUTE LOCAL PATH. pi's package manager parses such a path as
- * `{ type: 'local' }` and, for a directory, reads its `package.json` to find the
- * real entry (`pi.extensions: ["./src/index.ts"]`). Three consequences worth
- * stating, because each rules out an approach that looks simpler:
+ * ## Why the shapes below are so fussy
  *
- *  - **A directory, never the file.** The package's `exports` entry is
- *    `src/service.ts` while its pi entry is `src/index.ts`. Resolving the module
- *    would load the wrong one.
- *  - **No network.** A local path is never installed, so this works offline and
- *    on a locked-down machine.
- *  - **The user's `settings.json` is not touched.** Editing someone's global pi
- *    config to make our app work would change their `pi` CLI too.
- *
- * ## What it does with no config
- *
- * Nothing is shipped: no policy file, no defaults. The plugin's own fall-through
- * is `ask` for every request that matches no built-in rule (`rule.ts`:
- * `defaultAction ?? "ask"`, plus an explicit `origin: "fail-closed"` arm), so a
- * fresh install prompts for anything not covered by its own infrastructure
- * rules. That is deliberate and is what makes this task independent of Q9 —
- * choosing which surfaces may default to `allow` is T08-c's job, and until it is
- * decided the safe posture is the one that asks.
- *
- * ## The one asymmetry that drives every decision below
- *
- * Skipping the bundled copy when the user's config would NOT actually load a
- * permission system is FAIL-OPEN: tools then run with no gate at all. Injecting
- * it when the user already has one is a double prompt — annoying, never unsafe.
- * So the question this module answers is deliberately narrow: *can we CONFIRM
- * the user's own configuration loads this package's extensions?* Anything short
- * of a confirmation means we inject ours.
+ * Two entry shapes read like "the package is present and working" while pi
+ * loads nothing from it: `autoload: false` with no `extensions` patterns, and
+ * `extensions: []`. Both are matched against pi's own
+ * `PackageManager.collectPackageResources`, because misreading either one as
+ * "the user has a permission system" is the mistake worth avoiding.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { basename, join } from 'node:path';
 
 export const PERMISSION_PLUGIN_PACKAGE = '@gotgenes/pi-permission-system';
-
-/**
- * The name without its npm scope.
- *
- * A git URL or a checkout directory carries no scope — `pi-permission-system` is
- * all `https://github.com/gotgenes/pi-permission-system.git` and
- * `~/pi-extensions/pi-permission-system` ever say — so the unscoped form is the
- * only thing those two source kinds can be matched on.
- */
-const PERMISSION_PLUGIN_UNSCOPED = PERMISSION_PLUGIN_PACKAGE.split('/').pop() as string;
-
-/**
- * The directory holding the running Host entry (bundled or TS source).
- *
- * Exported because every bundled package resolves the same way: esbuild emits
- * `out-agent-host/worker.js` beside the pruned `out-agent-host/node_modules/`,
- * and in dev `src/agent-host/worker.ts` sits beside
- * `src/agent-host/node_modules/`. The Pi SDK is already resolved this way (T04)
- * — this is the same sibling-node_modules contract, not a new one.
- */
-export function hostDirectory(): string {
-  return dirname(fileURLToPath(import.meta.url));
-}
 
 /** Read a `name` out of a package manifest; `undefined` when unreadable. */
 function readPackageName(packageDir: string): string | undefined {
@@ -84,81 +43,6 @@ function readPackageName(packageDir: string): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-/**
- * Why the bundled plugin could not be used, in the words the user needs.
- *
- * `half_copied` is a real build failure and not a theoretical one: the packaging
- * filter is selective about this package (it keeps `.ts`, which the generic rule
- * drops), so a tree that exists but has no manifest has been seen. Reporting it
- * as "missing" would send someone looking for a file that is right there.
- */
-export type PermissionPluginProblem = 'not_present' | 'half_copied' | 'wrong_package';
-
-export interface BundledPackageLookup {
-  /** Absolute path to hand to `additionalExtensionPaths`, when usable. */
-  path?: string;
-  problem?: PermissionPluginProblem;
-  /** Human-readable, for the security error the user actually sees. */
-  detail?: string;
-}
-
-export type BundledPermissionPluginLookup = BundledPackageLookup;
-
-/**
- * Locate a bundled package directory and say precisely what is wrong when it
- * cannot be used.
- *
- * Verified by READING `package.json` rather than by `existsSync` on the
- * directory: an empty or partially copied directory would otherwise be reported
- * as working, and for the permission system that failure surfaces as "no prompts
- * ever appeared" — the one symptom indistinguishable from "nothing needed
- * approval".
- *
- * Generalised in R03 so the bundled feature plugins resolve through the same
- * three checks. What differs between callers is only what they DO with a
- * problem: a missing permission system refuses the session, a missing feature
- * plugin is logged and skipped.
- */
-export function lookupBundledPackage(
-  packageName: string,
-  baseDir = hostDirectory()
-): BundledPackageLookup {
-  const root = join(baseDir, 'node_modules', ...packageName.split('/'));
-  if (!existsSync(root)) {
-    return { problem: 'not_present', detail: `no bundled package directory at ${root}` };
-  }
-  const name = readPackageName(root);
-  if (name === undefined) {
-    return {
-      problem: 'half_copied',
-      detail: `${root} exists but its package.json is missing or unreadable`,
-    };
-  }
-  if (name !== packageName) {
-    return {
-      problem: 'wrong_package',
-      detail: `${root} declares itself as "${name}", not ${packageName}`,
-    };
-  }
-  return { path: root };
-}
-
-export function lookupBundledPermissionPlugin(
-  baseDir = hostDirectory()
-): BundledPermissionPluginLookup {
-  return lookupBundledPackage(PERMISSION_PLUGIN_PACKAGE, baseDir);
-}
-
-/**
- * Absolute path to the bundled plugin directory, or `undefined`.
- *
- * Kept as the narrow form for callers that only need the path; the reason a
- * lookup failed lives on {@link lookupBundledPermissionPlugin}.
- */
-export function resolveBundledPermissionPlugin(baseDir?: string): string | undefined {
-  return lookupBundledPermissionPlugin(baseDir).path;
 }
 
 // ─── user configuration ───
@@ -253,12 +137,12 @@ export interface PermissionPluginMatchOptions {
  *    manifest to read without cloning, so `…/gotgenes/pi-permission-system.git`
  *    matches on `pi-permission-system`.
  *
- * A false positive here means "the user has their own copy" and costs an
- * uninjected bundle — which is why the CALLER never treats a match alone as a
- * gate; see {@link permissionPluginConfiguredByUser}, where a match must ALSO be
- * shown to load extensions.
+ * A false positive here only mislabels the origin shown on the plugins page,
+ * which is why the CALLER never treats a match alone as an answer; see
+ * {@link permissionPluginConfiguredByUser}, where a match must ALSO be shown to
+ * load extensions.
  */
-export function packageSourceMatches(
+function packageSourceMatches(
   source: string,
   packageName: string,
   options: PermissionPluginMatchOptions = {}
@@ -278,13 +162,6 @@ export function packageSourceMatches(
     if (declared !== undefined) return declared === packageName;
   }
   return parsed.name === unscoped;
-}
-
-export function packageSourceIsPermissionPlugin(
-  source: string,
-  options: PermissionPluginMatchOptions = {}
-): boolean {
-  return packageSourceMatches(source, PERMISSION_PLUGIN_PACKAGE, options);
 }
 
 /**
@@ -341,17 +218,12 @@ function entrySource(entry: unknown): string | undefined {
  * Is the user's own pi configuration CONFIRMED to load this package's
  * extensions?
  *
- * Only then may the bundled copy be skipped: pi merges the settings-derived
- * extension list with `additionalExtensionPaths`, so two live copies means two
- * prompts per tool call, with the second arriving after the user already
- * answered the first.
- *
  * Every other answer — no entry, an entry that names it but is switched off, a
- * shape we cannot read — returns `false`, and the caller injects. The cost of
- * being wrong in this direction is a duplicate prompt; the cost of being wrong
- * in the other direction is no permission system at all.
+ * shape we cannot read — is `false`. "Could not confirm" deliberately reads the
+ * same as "not configured": the plugins page would otherwise claim the user
+ * supplied a gate this app cannot see.
  */
-export function packageConfiguredByUser(
+function packageConfiguredByUser(
   packages: unknown,
   packageName: string,
   options: PermissionPluginMatchOptions = {}
@@ -370,117 +242,4 @@ export function permissionPluginConfiguredByUser(
   options: PermissionPluginMatchOptions = {}
 ): boolean {
   return packageConfiguredByUser(packages, PERMISSION_PLUGIN_PACKAGE, options);
-}
-
-// ─── did it actually load? ───
-
-/** pi's `LoadExtensionsResult`, narrowed to the two fields this check reads. */
-export interface LoadedExtensionsSnapshot {
-  extensions?: Array<{ path?: unknown; resolvedPath?: unknown }>;
-  errors?: Array<{ path?: unknown; error?: unknown }>;
-}
-
-export interface PermissionExtensionVerification {
-  ok: boolean;
-  detail?: string;
-}
-
-function pathsOf(entry: { path?: unknown; resolvedPath?: unknown }): string[] {
-  return [entry.path, entry.resolvedPath].filter(
-    (value): value is string => typeof value === 'string' && value.length > 0
-  );
-}
-
-function looksLikePermissionPlugin(path: string, injectedRoots: string[]): boolean {
-  if (injectedRoots.some((root) => path.startsWith(root))) return true;
-  return path.includes(PERMISSION_PLUGIN_UNSCOPED);
-}
-
-/**
- * Did pi actually end up with a permission extension loaded?
- *
- * This is the check the injection decision cannot make. `decidePermissionPlugin`
- * only says which path to hand pi; whether the module at that path imported
- * cleanly is decided later, inside the resource loader — and pi's contract there
- * is to COLLECT the failure into `errors` and carry on. A plugin that threw on
- * import therefore produces a perfectly healthy-looking session with no gate in
- * it, which is the exact state this function refuses.
- *
- * `undefined` (an SDK build with no `resourceLoader.getExtensions()`) is treated
- * as OK: refusing to run on an SDK that cannot answer the question would break
- * every session on that build, and the injection itself already succeeded. The
- * `detail` says so, so the log records that this was unverified rather than
- * verified-good.
- */
-export function verifyPermissionExtensionLoaded(
-  loaded: LoadedExtensionsSnapshot | undefined,
-  injectedRoots: string[] = []
-): PermissionExtensionVerification {
-  if (!loaded) {
-    return { ok: true, detail: 'extension list unavailable; load was not verified' };
-  }
-  const failures = (loaded.errors ?? []).filter((entry) =>
-    pathsOf(entry).some((path) => looksLikePermissionPlugin(path, injectedRoots))
-  );
-  if (failures.length > 0) {
-    const first = failures[0];
-    const where = first ? (pathsOf(first)[0] ?? 'unknown path') : 'unknown path';
-    const why = first && typeof first.error === 'string' ? first.error : 'unknown error';
-    return { ok: false, detail: `the permission extension at ${where} failed to load — ${why}` };
-  }
-  const loadedPermission = (loaded.extensions ?? []).some((entry) =>
-    pathsOf(entry).some((path) => looksLikePermissionPlugin(path, injectedRoots))
-  );
-  if (!loadedPermission) {
-    return {
-      ok: false,
-      detail: 'no permission extension is present in the loaded extension list',
-    };
-  }
-  return { ok: true };
-}
-
-/** What the runtime learned when it decided whether to inject. */
-export interface PermissionPluginDecision {
-  /** Pass to `resourceLoaderOptions.additionalExtensionPaths`; empty = nothing to add. */
-  additionalExtensionPaths: string[];
-  /** Why, for the Host log — a silent permission system is the thing to avoid. */
-  reason: 'bundled' | 'user_configured' | 'missing';
-  /**
-   * True when a permission gate is known to be in place for this session.
-   * `false` is a REFUSAL TO PROCEED upstream, not a warning — see
-   * `PiWorkerSession`, which turns it into a session-level security error rather
-   * than starting a runtime whose tools would run unattended.
-   */
-  gated: boolean;
-  /** Why it is not gated, in words a user can act on. */
-  detail?: string;
-}
-
-/**
- * Decide whether to inject the bundled plugin for this session.
- *
- * `missing` is RETURNED, not thrown, because this function has no way to tell
- * the user anything — it has no event channel. The caller owns the fail-closed
- * decision and owns making it visible; what this returns is the finding plus the
- * detail needed to diagnose it.
- */
-export function decidePermissionPlugin(
-  configuredPackages: unknown,
-  baseDir?: string,
-  options: PermissionPluginMatchOptions = {}
-): PermissionPluginDecision {
-  if (permissionPluginConfiguredByUser(configuredPackages, options)) {
-    return { additionalExtensionPaths: [], reason: 'user_configured', gated: true };
-  }
-  const bundled = lookupBundledPermissionPlugin(baseDir);
-  if (bundled.path) {
-    return { additionalExtensionPaths: [bundled.path], reason: 'bundled', gated: true };
-  }
-  return {
-    additionalExtensionPaths: [],
-    reason: 'missing',
-    gated: false,
-    detail: bundled.detail ?? 'the bundled permission system could not be located',
-  };
 }

@@ -2,17 +2,18 @@
  * P5-2-5 — whether the native runtime offers delegation, and which definitions
  * this install has switched off.
  *
- * The legacy `@gotgenes/pi-subagents` plugin is an OPT-IN feature that defaults
- * to off, because it costs prompt tokens on a backend that cannot bound them.
- * Native delegation is a different thing on a different backend, and the P5-2
- * contract sets a different default: an install that has never expressed a
- * preference gets the full builtin catalog.
+ * The `subagents` opt-in switch was built for the legacy `@gotgenes/pi-subagents`
+ * plugin, which defaulted to off because it cost prompt tokens on a backend that
+ * could not bound them. T025 stopped shipping that plugin altogether; the switch
+ * itself is still in Settings and reconciling it with native is T026's.
  *
- * So this is deliberately NOT `resolveOptInFeatures(...).includes('subagents')`.
- * That call answers "should the legacy plugin load", whose `false` is mostly
- * "nobody has been asked". Only a value the user actually set — the opt-in
- * override, or the older boolean it replaced — is read as a decision about
- * native delegation, and only `false` turns it off.
+ * Either way this is deliberately NOT
+ * `resolveOptInFeatures(...).includes('subagents')`. That call answers "should
+ * the plugin load", whose `false` is mostly "nobody has been asked", while the
+ * P5-2 contract says an install that never expressed a preference gets the full
+ * builtin catalog. Only a value the user actually set — the opt-in override, or
+ * the older boolean it replaced — is read as a decision about native
+ * delegation, and only `false` turns it off.
  */
 
 import {

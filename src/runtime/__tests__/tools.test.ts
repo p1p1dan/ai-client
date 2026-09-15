@@ -381,6 +381,32 @@ describe('native tools', () => {
     await expect(next).rejects.toMatchObject({ code: 'tool_denied' });
     expect(r.approval?.bridge.pendingCount()).toBe(0);
   });
+  it('gives the Extension UI dialog the same deadline the engine will enforce', async () => {
+    // permissions-15: the approval bridge used to hardcode 120 s while the
+    // engine used `PermissionConfig.timeoutMs`. They happened to agree on the
+    // default, so a shortened timeout would have left the dialog counting down
+    // long after the request was already denied — visible only to whoever was
+    // staring at it.
+    const requests: ExtensionUiRequest[] = [];
+    const r = await runtime({
+      permissions: { timeoutMs: 45_000 },
+      approvalUi: {
+        onRequest: (request) => {
+          requests.push(request);
+        },
+      },
+    });
+    const writing = call(r, 'write', { path: 'a', content: 'yes' });
+    await expect.poll(() => requests.length).toBe(1);
+    expect(requests[0].timeoutMs).toBe(45_000);
+    r.approval?.bridge.respond({
+      runtimeId: requests[0].runtimeId,
+      uiRequestId: requests[0].uiRequestId,
+      ok: true,
+      value: 'Deny',
+    });
+    await expect(writing).rejects.toMatchObject({ code: 'tool_denied' });
+  });
   it('enforces tool whitelist and path deny scopes before grants', async () => {
     const r = await runtime({
       permissions: {

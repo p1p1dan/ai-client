@@ -457,7 +457,6 @@ export function registerChatHandlers(): void {
         workspacePath: payload.workspacePath,
         ...(payload.model ? { model: payload.model } : {}),
         ...(payload.effort ? { effort: payload.effort } : {}),
-        ...(row.piLeaf ? { leafCheckpoint: row.piLeaf } : {}),
         ...spawnTier(payload.tier),
         ...spawnPermissions(payload.permissions),
         ownerWebContentsId,

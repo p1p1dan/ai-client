@@ -282,13 +282,15 @@ async function main(): Promise<void> {
       throw new Error(`rewind checkpoint mismatch: ${JSON.stringify(rewindCheckpoint)}`);
     }
     await manager.closeSession('source');
+    // T025: `leafCheckpoint` no longer crosses the wire. The rewound leaf has to
+    // survive the reopen on the strength of the session file alone, which is
+    // what the native store records — the assertion below is the whole point.
     await manager.resumeSession({
       sessionId: 'source',
       sessionFile: sourceFile,
       workspacePath: cwd,
       model: 'probe/probe-model',
       effort: 'low',
-      leafCheckpoint: rewindCheckpoint,
     });
     const reopenedTree = await manager.getSessionTree({ sessionId: 'source', requestSequence: 2 });
     if (reopenedTree.snapshot.leaf.activeEntryId !== aAssistant.id) {

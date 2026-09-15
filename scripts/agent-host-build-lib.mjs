@@ -1,11 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {
-  BUNDLED_FEATURE_PLUGINS,
-  bundledFeaturePluginEntryPaths,
-  bundledFeaturePluginPackages,
-} from '../src/agent-host/bundledPlugins.mjs';
+import { RETIRED_BUNDLED_PLUGIN_PACKAGES } from '../src/agent-host/bundledPlugins.mjs';
 import { serializeDefaultPermissionPolicy } from '../src/agent-host/permissionPolicy.mjs';
 
 export const ESBUILD_EXTERNAL = ['@earendil-works/pi-coding-agent'];
@@ -14,10 +10,19 @@ export const ESBUILD_EXTERNAL = ['@earendil-works/pi-coding-agent'];
 export const WORKER_BUNDLE_BANNER =
   "import { createRequire as createWorkerRequire } from 'node:module'; const require = createWorkerRequire(import.meta.url);";
 
+/**
+ * Packages the worker artifact cannot be built without.
+ *
+ * T025 removed the two bundled pi feature extensions from this list: nothing
+ * loads them since P6-5, so "present in the artifact" had stopped being
+ * evidence that anything worked. `@gotgenes/pi-permission-system` stays — not
+ * as a loaded extension, but because the build writes the shipped permission
+ * policy into its `config.json` and Main reads that path as the bundled scope
+ * of the policy panel.
+ */
 export const REQUIRED_WORKER_PACKAGES = [
   '@earendil-works/pi-coding-agent',
   '@gotgenes/pi-permission-system',
-  ...bundledFeaturePluginPackages(),
 ];
 
 export const OBSOLETE_EXECUTION_PACKAGES = [
@@ -32,9 +37,6 @@ export const LICENSE_BEARING_PACKAGES = new Set([
   'tree-sitter-bash',
   'web-tree-sitter',
   'zod',
-  ...BUNDLED_FEATURE_PLUGINS.filter((plugin) => plugin.shipsLicenceFile).map(
-    (plugin) => plugin.package
-  ),
 ]);
 
 export const BUNDLED_PERMISSION_POLICY_REL =
@@ -65,6 +67,19 @@ function packagePathMatches(rel, packageName) {
 
 export function containsObsoleteExecutionPackage(rel) {
   return OBSOLETE_EXECUTION_PACKAGES.some((name) => packagePathMatches(rel, name));
+}
+
+/**
+ * Is this path inside a pi extension this app has stopped bundling?
+ *
+ * Dropping the two packages from `src/agent-host/package.json` is not enough on
+ * its own: the copy walker reads whatever is actually installed under
+ * `src/agent-host/node_modules`, and a developer machine that installed them
+ * before the removal still has the directories. This is what keeps them out of
+ * the artifact either way.
+ */
+export function containsRetiredBundledPlugin(rel) {
+  return RETIRED_BUNDLED_PLUGIN_PACKAGES.some((name) => packagePathMatches(rel, name));
 }
 
 export function preflightHostDeps({ root }) {
@@ -116,6 +131,7 @@ export function shouldCopy(rel, { platform, arch }) {
 
   if (parts[0] === '.bin' || parts[0] === '.package-lock.json') return false;
   if (containsObsoleteExecutionPackage(rel)) return false;
+  if (containsRetiredBundledPlugin(rel)) return false;
   if (!isCurrentSharpVariant(top, platform, arch)) return false;
 
   if (top === '@gotgenes/pi-permission-system') {
@@ -222,11 +238,6 @@ export function verifyArtifact({ outDir }) {
     'node_modules/@gotgenes/pi-permission-system/package.json',
     'node_modules/@gotgenes/pi-permission-system/src/index.ts',
     'node_modules/tree-sitter-bash/tree-sitter-bash.wasm',
-    // R03: each bundled extension's own pi entry. The copy filter is asked about
-    // DIRECTORIES and skips the whole subtree on a no, so a filter mistake drops
-    // a package with every unit test still green. Asserting the entry file is
-    // what makes that failure loud.
-    ...bundledFeaturePluginEntryPaths(),
     // P4-1: spawned by path, never imported, so esbuild cannot vouch for them
     // and their absence would only surface as the native backend failing on its
     // first shell tool inside a packaged app.
@@ -245,6 +256,12 @@ export function verifyArtifact({ outDir }) {
   for (const rel of files) {
     if (containsObsoleteExecutionPackage(rel)) {
       failures.push(`must not ship node_modules/${rel} (obsolete execution payload)`);
+    }
+    // T025: the two retired pi feature extensions. Verified on the artifact and
+    // not only in the filter, because the filter is one `return true` away from
+    // letting them back in and nothing else would notice ~1.7 MB returning.
+    if (containsRetiredBundledPlugin(rel)) {
+      failures.push(`must not ship node_modules/${rel} (retired pi extension)`);
     }
   }
 

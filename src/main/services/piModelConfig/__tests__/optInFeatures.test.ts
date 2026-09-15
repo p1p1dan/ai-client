@@ -7,11 +7,7 @@ describe('bundled opt-in feature settings', () => {
   it('uses the bundled registry and requires a cost description', () => {
     expect(optInFeatureRegistry().map((feature) => feature.id)).toEqual(['subagents']);
     expect(optInFeatureRegistry().every((feature) => feature.cost.length > 0)).toBe(true);
-    expect(() =>
-      optInFeatureRegistry([
-        { package: 'invalid', entry: 'index.ts', shipsLicenceFile: true, optIn: 'invalid' },
-      ])
-    ).toThrow('cost description');
+    expect(() => optInFeatureRegistry([{ optIn: 'invalid' }])).toThrow('cost description');
   });
 
   it('preserves an existing opt-in and lets an explicit new preference override it', () => {

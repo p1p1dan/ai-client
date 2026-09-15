@@ -37,15 +37,6 @@ export function normalizeSessionKey(sessionPath: string): string {
   return p;
 }
 
-/** True when two session paths name the same JSONL (slash / case / /private drift). */
-export function sessionKeysMatch(
-  a: string | undefined | null,
-  b: string | undefined | null
-): boolean {
-  if (!a?.trim() || !b?.trim()) return false;
-  return normalizeSessionKey(a) === normalizeSessionKey(b);
-}
-
 /**
  * Argv for an interactive Pi TUI.
  *

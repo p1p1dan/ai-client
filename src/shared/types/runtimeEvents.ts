@@ -672,12 +672,16 @@ export interface SessionCreatedEvent extends RuntimeEventBase {
      * Which permission system this session's worker actually came up on, as
      * reported by `worker.bootstrap`.
      *
-     * `user_configured` means the user's own agentDir already declares
-     * `@gotgenes/pi-permission-system`, so we did NOT inject our bundled copy —
-     * and with it went the `authorizerChain: ['aiclient-session-tier']` line
-     * that makes the permission tiers work at all. The tier control has to know,
-     * because the alternative is a picker that offers four tiers while the
-     * runtime honours none of them.
+     * `user_configured` means the user's own agentDir declares
+     * `@gotgenes/pi-permission-system`. Historically that meant this app did not
+     * inject its bundled copy and the permission tiers stopped working, which is
+     * why the tier control reads this field.
+     *
+     * T025: that reasoning no longer holds. Nothing injects a pi permission
+     * extension since P6-5 — every decision is made by
+     * `src/runtime/plugins/permissions/`, whatever the user has installed — so
+     * the flag now only reports what the user's own pi config declares. Making
+     * the control and the plugins page say that instead is T026's.
      *
      * Optional: an older Host never sends it, and "not reported" is not the
      * same claim as "bundled".

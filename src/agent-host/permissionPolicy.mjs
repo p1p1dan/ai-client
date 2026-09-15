@@ -100,14 +100,12 @@ export const AICLIENT_DEFAULT_PERMISSION_POLICY = {
   // Never shipped on. Yolo re-permits even the wrapper floors.
   yoloMode: false,
 
-  // U12: the session-tier authorizer link registered by our inline extension.
-  // `scripts/patch-pi-permission-system.mjs` exempts this one link from the
-  // bounded-delegation envelope, so `fullopen` also clears `path` and
-  // `external_directory` (D-Q13 follow-up 2026-09-04: cross-directory writes
-  // prompted on every call even at `fullopen`, which read as a broken tier).
-  // Deny rules are unaffected — they resolve before any link is consulted, so
-  // the secret-file denies below still hold at every tier.
-  authorizerChain: ['aiclient-session-tier'],
+  // T025 removed `authorizerChain: ['aiclient-session-tier']` from here. That
+  // line named a link registered by an inline pi extension that P6-5 retired
+  // along with the legacy engine, so the shipped policy was advertising a
+  // chain nothing could join. The tiers it used to implement are now decided
+  // in `src/runtime/plugins/permissions/`, which does not consult a chain at
+  // all; deny rules were never chain-dependent and are unaffected.
 
   permission: {
     // Universal fallback for any surface with no rule of its own — including

@@ -26,8 +26,9 @@
  * Verified against the installed SDK rather than assumed from PI-Desktop's
  * shape. `turn_end` is `{ type, message, toolResults }`
  * (`@earendil-works/pi-agent-core/dist/types.d.ts`), and `message.usage` is the
- * PARENT's own provider call — a sub-agent runs its own agent loop inside the
- * opt-in `@gotgenes/pi-subagents` extension, so its tokens are never in there.
+ * PARENT's own provider call — a sub-agent runs its own agent loop (today in
+ * `src/runtime/plugins/subagent/`, originally in the `@gotgenes/pi-subagents`
+ * extension T025 stopped shipping), so its tokens are never in there.
  *
  * The channel that does exist is `ToolResultMessage.usage`, whose SDK comment
  * is decisive: *"Usage from the tool execution itself, if available. Not part of

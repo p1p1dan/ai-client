@@ -106,8 +106,16 @@ export interface WorkerBootstrapPayload {
   sessionFile?: string;
   model?: string;
   effort?: SessionEffortLevel;
-  /** Reapply a durable branch only while its recorded physical tail still matches. */
-  leafCheckpoint?: PiLeafCheckpoint;
+  /**
+   * T025 removed `leafCheckpoint` from this payload. Main persisted the active
+   * leaf, sent it back on every spawn, and the RPC server compared it for
+   * bootstrap idempotence — but the only engine that ever read it went with
+   * P6-5. The native runtime records the active leaf as a `kind: 'lane'` row in
+   * the session file itself and resolves it on open, so the field carried no
+   * information in either direction while still being able to make a repeat
+   * bootstrap look like a different session. Main still keeps its own copy for
+   * the session index (`piLeaf`); it just no longer crosses the wire.
+   */
   /**
    * U05-c — this session runs in a throwaway scratch directory, not a project
    * the user chose. Set by Main (never by the renderer) and one-way: it can
@@ -252,9 +260,9 @@ export interface WorkerSlashCommandInfo {
 /**
  * Cap so a pathological configuration cannot push an unbounded list over RPC.
  *
- * Larger than the extension inventory's own cap (64, in `extensionInventory.ts`)
- * because skills legitimately outnumber plugins — one package can publish many,
- * and `~/.agents/skills` is shared across every agent on the machine.
+ * Set well above the 64 the retired pi extension inventory used, because skills
+ * legitimately outnumber plugins — one package can publish many, and
+ * `~/.agents/skills` is shared across every agent on the machine.
  */
 export const WORKER_COMMAND_INVENTORY_MAX = 256;
 
@@ -696,9 +704,6 @@ export function isWorkerBootstrapPayload(value: unknown): value is WorkerBootstr
     return false;
   }
   if (value.effort !== undefined && !isWorkerEffort(value.effort)) return false;
-  if (value.leafCheckpoint !== undefined && !isPiLeafCheckpoint(value.leafCheckpoint)) {
-    return false;
-  }
   if (value.permissions !== undefined && !isRuntimePermissionSettings(value.permissions))
     return false;
   if (value.unbound !== undefined && typeof value.unbound !== 'boolean') return false;

@@ -244,7 +244,12 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     if (options.tools) {
       const cwd = await io.realpath(options.tools.cwd);
       workspace = cwd;
-      if (options.approvalUi) approval = createRuntimeApprovalBridge(options.approvalUi);
+      if (options.approvalUi) {
+        // permissions-15: hand the bridge the same deadline the permissions
+        // plugin will enforce, so an embedder that shortens `timeoutMs` does
+        // not get a dialog still counting down after the engine aborted.
+        approval = createRuntimeApprovalBridge(options.approvalUi, options.permissions?.timeoutMs);
+      }
       const scopes = await Promise.all(
         (options.permissions?.scopes ?? []).map(async (scope) => ({
           ...scope,

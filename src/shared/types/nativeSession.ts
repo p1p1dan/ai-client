@@ -15,7 +15,12 @@ export interface NativeSessionMetadata {
 export interface NativeIndexedRunRequest {
   prompt: string;
   systemPrompt?: string;
-  targetPath?: string;
+  // T025 removed `targetPath`. It mirrored `RuntimeRunRequest.targetPath`, which
+  // decision 007 deleted along with the root→leaf instruction walk it fed; the
+  // adapter only ever spread this object through, so nothing set it and nothing
+  // read it. The identically named field on the subagent migration preview
+  // (`src/shared/subagentMigration.ts`) is a real destination path — different
+  // thing, still in use.
   model?: { provider: string; id: string };
   thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   runId?: string;

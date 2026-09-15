@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import yaml from 'js-yaml';
 import { describe, expect, it } from 'vitest';
-import { bundledFeaturePluginPackages } from '../../src/agent-host/bundledPlugins.mjs';
+import { RETIRED_BUNDLED_PLUGIN_PACKAGES } from '../../src/agent-host/bundledPlugins.mjs';
 import { resolveResourcesDir } from '../afterPack.mjs';
 
 /**
@@ -69,26 +69,30 @@ describe('worker package dependency boundary', () => {
    * The worker's dependency list is a security surface, not a convenience: each
    * entry is code that runs in the Pi utility process alongside the permission
    * gate. The assertion stays EXACT (not a superset check) so an unvetted
-   * package cannot arrive unnoticed — adding one has to be a deliberate edit to
-   * the bundled table, which is also what the build preflight and the artifact
-   * verifier read.
+   * package cannot arrive unnoticed.
    */
-  it('ships only the Pi runtime, the permission gate, and the bundled extensions', () => {
-    expect(Object.keys(workerPackage.dependencies).sort()).toEqual(
-      [
-        '@earendil-works/pi-coding-agent',
-        '@gotgenes/pi-permission-system',
-        ...bundledFeaturePluginPackages(),
-      ].sort()
-    );
+  it('ships only the Pi runtime and the permission package', () => {
+    expect(Object.keys(workerPackage.dependencies).sort()).toEqual([
+      '@earendil-works/pi-coding-agent',
+      '@gotgenes/pi-permission-system',
+    ]);
     expect(Object.keys(workerPackage.devDependencies ?? {})).toEqual([]);
   });
 
-  it('declares every bundled extension as an exact pin', () => {
-    // A range here would let `npm install` drift the extension out from under
-    // the artifact verification, which asserts one specific entry file path.
-    for (const pkg of bundledFeaturePluginPackages()) {
+  it('declares every worker dependency as an exact pin', () => {
+    // A range here would let `npm install` drift the package out from under the
+    // artifact verification, which asserts specific file paths inside it.
+    for (const pkg of Object.keys(workerPackage.dependencies)) {
       expect(workerPackage.dependencies[pkg], pkg).toMatch(/^\d+\.\d+\.\d+/);
+    }
+  });
+
+  it('no longer declares the two retired pi feature extensions', () => {
+    // T025: ~1.7 MB of payload with no loader since P6-5. Asserted on the
+    // manifest as well as on the copy filter, because a stray `npm install`
+    // here is how they would come back.
+    for (const name of RETIRED_BUNDLED_PLUGIN_PACKAGES) {
+      expect(workerPackage.dependencies).not.toHaveProperty(name);
     }
   });
 });

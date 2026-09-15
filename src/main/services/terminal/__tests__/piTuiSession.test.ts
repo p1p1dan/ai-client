@@ -5,27 +5,35 @@ import {
   normalizeSessionKey,
   PI_TUI_NATIVE_SESSION_REASON,
   PiTuiExclusiveGuard,
-  sessionKeysMatch,
 } from '../piTuiSession';
 
 const CLI = '/app/pi/cli.js';
 
+/**
+ * T025 removed a `sessionKeysMatch(a, b)` export that had no caller: `owns()`
+ * and `release()` both compare normalized keys themselves. The cases it used to
+ * carry are asserted here on the normalizer and on the guard, which is what
+ * production actually runs.
+ */
 describe('normalizeSessionKey', () => {
   it('collapses the macOS firmlink prefix so /var and /private/var match', () => {
     expect(normalizeSessionKey('/private/var/folders/s.jsonl')).toBe('/var/folders/s.jsonl');
-    expect(sessionKeysMatch('/private/var/a.jsonl', '/var/a.jsonl')).toBe(true);
+    expect(normalizeSessionKey('/private/var/a.jsonl')).toBe(normalizeSessionKey('/var/a.jsonl'));
   });
 
   it('ignores case, trailing slashes and backslash separators', () => {
-    expect(sessionKeysMatch('/Repo/S.JSONL', '/repo/s.jsonl')).toBe(true);
-    expect(sessionKeysMatch('/repo/s.jsonl/', '/repo/s.jsonl')).toBe(true);
-    expect(sessionKeysMatch('C:\\repo\\s.jsonl', 'C:/repo/s.jsonl')).toBe(true);
+    expect(normalizeSessionKey('/Repo/S.JSONL')).toBe(normalizeSessionKey('/repo/s.jsonl'));
+    expect(normalizeSessionKey('/repo/s.jsonl/')).toBe(normalizeSessionKey('/repo/s.jsonl'));
+    expect(normalizeSessionKey('C:\\repo\\s.jsonl')).toBe(normalizeSessionKey('C:/repo/s.jsonl'));
   });
 
-  it('never matches a blank path against anything, including another blank', () => {
-    expect(sessionKeysMatch('', '')).toBe(false);
-    expect(sessionKeysMatch('   ', '/repo/s.jsonl')).toBe(false);
-    expect(sessionKeysMatch(undefined, undefined)).toBe(false);
+  it('never lets a blank path own or match anything, including another blank', () => {
+    expect(normalizeSessionKey('   ')).toBe('');
+    const guard = new PiTuiExclusiveGuard();
+    expect(guard.owns('')).toBe(false);
+    expect(guard.transferTo('   ')).toEqual({ ok: false, reason: 'Invalid session key' });
+    guard.transferTo('/repo/s.jsonl');
+    expect(guard.owns('   ')).toBe(false);
   });
 });
 

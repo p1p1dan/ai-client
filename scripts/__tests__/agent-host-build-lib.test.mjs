@@ -5,18 +5,14 @@ import path from 'node:path';
 import { build } from 'esbuild';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  BUNDLED_FEATURE_PLUGINS,
-  bundledFeaturePluginCopyPaths,
-  bundledFeaturePluginEntryPaths,
-  optInFeatureIds,
-} from '../../src/agent-host/bundledPlugins.mjs';
+import { RETIRED_BUNDLED_PLUGIN_PACKAGES } from '../../src/agent-host/bundledPlugins.mjs';
 import { serializeDefaultPermissionPolicy } from '../../src/agent-host/permissionPolicy.mjs';
 import {
   containsObsoleteExecutionPackage,
   ESBUILD_EXTERNAL,
   ensureDevPermissionPolicy,
   preflightHostDeps,
+  REQUIRED_WORKER_PACKAGES,
   shouldCopy,
   verifyArtifact,
   verifyBundledPermissionPolicy,
@@ -46,8 +42,6 @@ function writeJson(file, value) {
 const INSTALLED_VERSIONS = {
   '@earendil-works/pi-coding-agent': '0.84.3',
   '@gotgenes/pi-permission-system': '27.0.1',
-  '@gotgenes/pi-subagents': '21.4.2',
-  '@juicesharp/rpiv-ask-user-question': '2.9.0',
 };
 
 function buildInstall(root) {
@@ -83,18 +77,11 @@ function buildArtifact(outDir) {
     path.join(outDir, 'node_modules', '@gotgenes', 'pi-permission-system', 'src', 'index.ts')
   );
   writeFile(path.join(outDir, 'node_modules', 'tree-sitter-bash', 'tree-sitter-bash.wasm'));
-  for (const rel of bundledFeaturePluginEntryPaths()) {
-    writeFile(path.join(outDir, ...rel.split('/')));
-  }
   for (const [name, license] of [
     ['@gotgenes/pi-permission-system', 'LICENSE'],
     ['tree-sitter-bash', 'LICENSE'],
     ['web-tree-sitter', 'LICENSE'],
     ['zod', 'LICENSE'],
-    ...BUNDLED_FEATURE_PLUGINS.filter((plugin) => plugin.shipsLicenceFile).map((plugin) => [
-      plugin.package,
-      'LICENSE',
-    ]),
   ]) {
     writeFile(path.join(outDir, 'node_modules', ...name.split('/'), license), 'MIT\n');
   }
@@ -111,21 +98,33 @@ describe('worker-only dependency preflight', () => {
     expect(ESBUILD_EXTERNAL).toEqual(['@earendil-works/pi-coding-agent']);
   });
 
-  it('accepts installed Pi, permission and bundled feature packages', () => {
+  it('accepts an install of exactly the Pi SDK and the permission package', () => {
     buildInstall(tmp);
     expect(preflightHostDeps({ root: tmp }).installed).toEqual(INSTALLED_VERSIONS);
   });
 
-  it('refuses to build when a bundled feature extension is not installed', () => {
-    // R03. Without this the build succeeds and ships an app whose questionnaire
-    // dialog and sub-agents simply never appear.
+  it('no longer requires the two retired pi feature extensions', () => {
+    // T025. They are payload with no loader since P6-5, so a build machine
+    // without them must succeed — and the preflight must not quietly re-add
+    // them through some other list.
+    buildInstall(tmp);
+    for (const name of RETIRED_BUNDLED_PLUGIN_PACKAGES) {
+      expect(REQUIRED_WORKER_PACKAGES).not.toContain(name);
+    }
+    expect(() => preflightHostDeps({ root: tmp })).not.toThrow();
+  });
+
+  it('still refuses to build without the permission package', () => {
+    // Not a loaded extension any more, but the build writes the shipped policy
+    // into its `config.json` and Main reads that path as the bundled scope.
     const host = buildInstall(tmp);
-    const missing = BUNDLED_FEATURE_PLUGINS[0].package;
-    fs.rmSync(path.join(host, 'node_modules', ...missing.split('/')), {
+    fs.rmSync(path.join(host, 'node_modules', '@gotgenes', 'pi-permission-system'), {
       recursive: true,
       force: true,
     });
-    expect(() => preflightHostDeps({ root: tmp })).toThrow(`${missing} is not installed`);
+    expect(() => preflightHostDeps({ root: tmp })).toThrow(
+      '@gotgenes/pi-permission-system is not installed'
+    );
   });
 
   it('rejects a ranged worker runtime pin', () => {
@@ -180,41 +179,21 @@ describe('worker-only copy filter', () => {
     expect(shouldCopy('@img/sharp-darwin-arm64/lib/sharp.node', copyOptions)).toBe(false);
   });
 
-  it('copies each bundled feature extension entry, so it reaches pi', () => {
-    // Paths here are node_modules-RELATIVE, matching the walker root. Handing
-    // shouldCopy the verifier's `node_modules/...` form makes topPackage read
-    // "node_modules" and every package branch stops matching, so the assertion
-    // would pass against any filter.
-    for (const entry of bundledFeaturePluginCopyPaths()) {
-      expect(shouldCopy(entry, copyOptions)).toBe(true);
-    }
-  });
-
-  it('ships the opt-in extensions too, so the switch has something to turn on', () => {
-    // Off by default is an INJECTION decision, not a packaging one. If the copy
-    // filter ever learned about `optIn` and started skipping those packages,
-    // enabling the switch would resolve to a directory that is not in the
-    // artifact — and `resolveBundledFeaturePlugins` would report `not_present`,
-    // which reads like a build accident rather than a deliberate omission.
-    const optIn = BUNDLED_FEATURE_PLUGINS.filter((plugin) => plugin.optIn);
-    expect(optIn.length).toBe(optInFeatureIds().length);
-    expect(optIn.length).toBeGreaterThan(0);
-    for (const plugin of optIn) {
-      expect(shouldCopy(`${plugin.package}/${plugin.entry}`, copyOptions)).toBe(true);
-    }
-  });
-
-  it('descends into each bundled feature package directory', () => {
-    // The filter is asked about directories on the way down and skips the whole
-    // subtree on a no, so a branch that forgets the package dir itself drops the
-    // package with the entry assertion above still green.
-    for (const entry of bundledFeaturePluginCopyPaths()) {
-      const segments = entry.split('/');
-      const pkg = segments[0].startsWith('@') ? segments.slice(0, 2) : segments.slice(0, 1);
-      for (let i = pkg.length; i < segments.length; i += 1) {
-        const ancestor = segments.slice(0, i).join('/');
-        expect(shouldCopy(ancestor, copyOptions)).toBe(true);
-      }
+  it('refuses the retired pi feature extensions at every level of their tree', () => {
+    // T025. Paths here are node_modules-RELATIVE, matching the walker root:
+    // handing shouldCopy the verifier's `node_modules/...` form makes topPackage
+    // read "node_modules", every package branch stops matching, and the
+    // assertion would pass against any filter at all.
+    //
+    // The whole tree is asserted, not just the entry file, because the walker
+    // asks about DIRECTORIES on the way down. A rule that only rejected the
+    // entry would still copy everything beside it.
+    for (const name of RETIRED_BUNDLED_PLUGIN_PACKAGES) {
+      expect(shouldCopy(name, copyOptions)).toBe(false);
+      expect(shouldCopy(`${name}/package.json`, copyOptions)).toBe(false);
+      expect(shouldCopy(`${name}/src/index.ts`, copyOptions)).toBe(false);
+      expect(shouldCopy(`${name}/LICENSE`, copyOptions)).toBe(false);
+      expect(shouldCopy(name.split('/')[0], copyOptions)).toBe(true);
     }
   });
 });
@@ -250,16 +229,15 @@ describe('worker-only artifact verification', () => {
     expect(() => verifyArtifact({ outDir: out })).toThrow(`runtime-helpers/${name}`);
   });
 
-  it('requires every bundled feature extension entry to survive the copy', () => {
-    // The copy filter walks DIRECTORIES and drops a whole subtree the moment it
-    // answers no, so there is no per-file hook that fails loud. This is the loud
-    // hook: a package whose entry is gone must be a build failure, not a silently
-    // missing questionnaire / sub-agent experience.
+  it('rejects an artifact that carries a retired pi feature extension', () => {
+    // T025. `shouldCopy` is the filter and this is the receipt: if the filter
+    // ever answers yes again, ~1.7 MB of dead payload returns and nothing else
+    // in the build would say so.
     const out = path.join(tmp, 'out');
     buildArtifact(out);
-    const entry = bundledFeaturePluginEntryPaths()[0];
-    fs.rmSync(path.join(out, ...entry.split('/')));
-    expect(() => verifyArtifact({ outDir: out })).toThrow(entry);
+    const name = RETIRED_BUNDLED_PLUGIN_PACKAGES[0];
+    writeFile(path.join(out, 'node_modules', ...name.split('/'), 'index.ts'));
+    expect(() => verifyArtifact({ outDir: out })).toThrow('retired pi extension');
   });
 
   it('requires worker.js and rejects both transition entries', () => {

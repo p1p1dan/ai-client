@@ -767,13 +767,15 @@ describe('Pi WorkerSlot chat routing', () => {
         effort: 'high',
       })
     ).resolves.toEqual({ requestId: 'resume-1' });
+    // T025: the indexed row's `piLeaf` used to be forwarded here as
+    // `leafCheckpoint` and then sent on to the worker, which never read it. The
+    // exact-match assertion is what keeps it from being reintroduced.
     expect(resumeSession).toHaveBeenCalledWith({
       sessionId: 's1',
       sessionFile: '/session.jsonl',
       workspacePath: '/repo',
       model: 'glm/glm-5',
       effort: 'high',
-      leafCheckpoint: { activeEntryId: 'a', fileTailEntryId: 'c' },
       ownerWebContentsId: 7,
     });
     await expect(

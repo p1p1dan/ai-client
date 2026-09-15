@@ -93,7 +93,6 @@ export async function createPiWorkerSlot(
         ...(options.sessionFile ? { sessionFile: options.sessionFile } : {}),
         ...(options.model ? { model: options.model } : {}),
         ...(options.effort ? { effort: options.effort } : {}),
-        ...(options.leafCheckpoint ? { leafCheckpoint: options.leafCheckpoint } : {}),
         // U05-c: only ever sent as `true`. Omitting it for a normal session
         // keeps `sameBootstrap`'s undefined === undefined comparison intact.
         ...(options.unbound ? { unbound: true } : {}),

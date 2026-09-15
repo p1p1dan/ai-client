@@ -89,45 +89,43 @@ export interface PiWorkerMessagePort {
   postMessage(message: unknown): void;
 }
 
+/**
+ * Everything a worker runtime must answer.
+ *
+ * T025 made every method required. Twelve of them used to be optional so a
+ * second backend could omit what it did not implement, and each RPC handler
+ * carried a `WORKER_*_UNAVAILABLE` arm for that case. P6-5 retired the second
+ * backend; `NativeWorkerRuntime` implements all of them, so those arms were
+ * unreachable code whose comments still described a backend that no longer
+ * exists. Required here means the next runtime that forgets `fork` fails to
+ * compile instead of failing at the moment a user clicks "fork from here".
+ */
 export interface PiWorkerRuntime {
   bootstrap(): Promise<WorkerBootstrapResult>;
   startSend(input: WorkerSendPayload): Promise<WorkerSendResult>;
   history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult>;
-  tree?(input: WorkerTreePayload): Promise<WorkerTreeResult>;
-  commands?(input: WorkerCommandsPayload): Promise<WorkerCommandsResult>;
-  compact?(input: WorkerCompactPayload): Promise<WorkerCompactResult>;
-  rewind?(input: WorkerRewindPayload): Promise<WorkerRewindResult>;
-  reload?(input: WorkerReloadPayload): Promise<WorkerReloadResult>;
-  fork?(input: WorkerForkPayload): Promise<WorkerForkResult>;
-  discardFork?(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
+  tree(input: WorkerTreePayload): Promise<WorkerTreeResult>;
+  commands(input: WorkerCommandsPayload): Promise<WorkerCommandsResult>;
+  compact(input: WorkerCompactPayload): Promise<WorkerCompactResult>;
+  rewind(input: WorkerRewindPayload): Promise<WorkerRewindResult>;
+  reload(input: WorkerReloadPayload): Promise<WorkerReloadResult>;
+  fork(input: WorkerForkPayload): Promise<WorkerForkResult>;
+  discardFork(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
   respondExtensionUi(response: ExtensionUiResponse): boolean;
-  /**
-   * Answer one `permission.requested`. Optional: only a backend that ASKS
-   * through that event implements it, and a backend that does not must reject
-   * the method rather than silently report the gate as answered.
-   */
-  respondPermission?(input: { permissionId: string; decision: PermissionDecisionId }): boolean;
-  /**
-   * F5 — answer one `question.requested`. Optional for the same reason as
-   * `respondPermission`: only a backend that registers the `ask` tool can have
-   * a question parked, and the others must reject rather than report an answer
-   * that went nowhere.
-   */
-  respondQuestion?(input: {
+  /** Answer one `permission.requested`. */
+  respondPermission(input: { permissionId: string; decision: PermissionDecisionId }): boolean;
+  /** F5 — answer one `question.requested`. */
+  respondQuestion(input: {
     questionId: string;
     answers?: Record<string, string>;
     response?: string;
     cancel?: boolean;
   }): boolean;
-  /**
-   * P5-2-3 — report what Main did with one `preview.requested`. Optional for
-   * the same reason again: only a backend that registers `browser_preview` can
-   * have a preview parked.
-   */
-  respondPreview?(input: { previewId: string; ok: boolean; error?: string }): boolean;
-  setPermissions?(permissions: RuntimePermissionSettings): void;
-  setPermissionTier?(tier: SessionPermissionTier): void;
+  /** P5-2-3 — report what Main did with one `preview.requested`. */
+  respondPreview(input: { previewId: string; ok: boolean; error?: string }): boolean;
+  setPermissions(permissions: RuntimePermissionSettings): void;
+  setPermissionTier(tier: SessionPermissionTier): void;
   dispose(): Promise<void>;
 }
 
@@ -271,8 +269,6 @@ function sameBootstrap(a: WorkerBootstrapPayload, b: WorkerBootstrapPayload): bo
     a.sessionFile === b.sessionFile &&
     a.model === b.model &&
     a.effort === b.effort &&
-    a.leafCheckpoint?.activeEntryId === b.leafCheckpoint?.activeEntryId &&
-    a.leafCheckpoint?.fileTailEntryId === b.leafCheckpoint?.fileTailEntryId &&
     // U05-c: a re-bootstrap that flips the trust posture is a DIFFERENT
     // session, not the same one — otherwise the second call would be answered
     // by a runtime already built with the first call's trust.
@@ -304,9 +300,15 @@ function errorPayload(error: unknown): WorkerRpcErrorPayload {
 /**
  * Correlated, generation-bound worker-side dispatcher.
  *
- * Mutating requests are serialized. The first bootstrap owns the process for
- * its lifetime; an identical duplicate is idempotent and a different bootstrap
- * is rejected without constructing a second AgentSession.
+ * EVERY request is serialized on one chain, read-only ones included: `receive`
+ * appends to a single promise. Worth stating plainly (this comment used to say
+ * "mutating requests are serialized", which reads as though `worker.history`
+ * or `worker.commands` could overtake) because it sets the worst case — a large
+ * history read delays the `worker.stop` queued behind it.
+ *
+ * The first bootstrap owns the process for its lifetime; an identical duplicate
+ * is idempotent and a different bootstrap is rejected without constructing a
+ * second AgentSession.
  */
 export class PiWorkerRpcServer {
   private readonly options: PiWorkerRpcServerOptions;
@@ -675,12 +677,6 @@ export class PiWorkerRpcServer {
     if (!this.runtime) {
       throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
-    if (!this.runtime.tree) {
-      throw new PiWorkerSessionError(
-        'WORKER_TREE_UNAVAILABLE',
-        'Worker tree method is unavailable'
-      );
-    }
     this.respondSuccess(request, await this.runtime.tree(request.payload));
   }
 
@@ -701,7 +697,7 @@ export class PiWorkerRpcServer {
       });
       return;
     }
-    if (!this.runtime?.commands) {
+    if (!this.runtime) {
       this.respondSuccess(request, { commands: [], truncated: false });
       return;
     }
@@ -720,12 +716,6 @@ export class PiWorkerRpcServer {
     if (!this.runtime) {
       throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
-    if (!this.runtime.compact) {
-      throw new PiWorkerSessionError(
-        'WORKER_COMPACT_UNAVAILABLE',
-        'Worker compact method is unavailable'
-      );
-    }
     this.respondSuccess(request, await this.runtime.compact(request.payload));
   }
 
@@ -740,12 +730,6 @@ export class PiWorkerRpcServer {
     }
     if (!this.runtime) {
       throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
-    }
-    if (!this.runtime.rewind) {
-      throw new PiWorkerSessionError(
-        'WORKER_REWIND_UNAVAILABLE',
-        'Worker rewind method is unavailable'
-      );
     }
     this.respondSuccess(request, await this.runtime.rewind(request.payload));
   }
@@ -762,12 +746,6 @@ export class PiWorkerRpcServer {
     if (!this.runtime) {
       throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
-    if (!this.runtime.reload) {
-      throw new PiWorkerSessionError(
-        'WORKER_RELOAD_UNAVAILABLE',
-        'Worker reload method is unavailable'
-      );
-    }
     this.respondSuccess(request, await this.runtime.reload(request.payload));
   }
 
@@ -783,12 +761,6 @@ export class PiWorkerRpcServer {
     if (!this.runtime) {
       throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
-    if (!this.runtime.fork) {
-      throw new PiWorkerSessionError(
-        'WORKER_FORK_UNAVAILABLE',
-        'Worker fork method is unavailable'
-      );
-    }
     this.respondSuccess(request, await this.runtime.fork(request.payload));
   }
 
@@ -803,12 +775,6 @@ export class PiWorkerRpcServer {
     }
     if (!this.runtime) {
       throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
-    }
-    if (!this.runtime.discardFork) {
-      throw new PiWorkerSessionError(
-        'WORKER_FORK_UNAVAILABLE',
-        'Worker fork discard method is unavailable'
-      );
     }
     this.respondSuccess(request, await this.runtime.discardFork(request.payload));
   }
@@ -865,15 +831,8 @@ export class PiWorkerRpcServer {
         'Permission response targets another session'
       );
     }
-    if (!this.runtime?.respondPermission) {
-      // The legacy backend asks through the extension UI bridge, so a
-      // permission answer arriving here means the two ends disagree about which
-      // channel is in use — saying so beats reporting `handled: false`, which
-      // reads as "too late" and would hide the mismatch.
-      throw new PiWorkerSessionError(
-        'WORKER_PERMISSION_RESPOND_UNAVAILABLE',
-        'This backend does not answer permissions through worker.permission.respond'
-      );
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     const result: WorkerPermissionRespondResult = {
       handled: this.runtime.respondPermission({
@@ -908,11 +867,8 @@ export class PiWorkerRpcServer {
         'Question response targets another session'
       );
     }
-    if (!this.runtime?.respondQuestion) {
-      throw new PiWorkerSessionError(
-        'WORKER_QUESTION_RESPOND_UNAVAILABLE',
-        'This backend has no question tool to answer'
-      );
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     const result: WorkerQuestionRespondResult = {
       handled: this.runtime.respondQuestion({
@@ -948,11 +904,8 @@ export class PiWorkerRpcServer {
         'Preview response targets another session'
       );
     }
-    if (!this.runtime?.respondPreview) {
-      throw new PiWorkerSessionError(
-        'WORKER_PREVIEW_RESPOND_UNAVAILABLE',
-        'This backend has no preview tool to answer'
-      );
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     const result: WorkerPreviewRespondResult = {
       handled: this.runtime.respondPreview({
@@ -972,11 +925,8 @@ export class PiWorkerRpcServer {
         'WORKER_SESSION_MISMATCH',
         'Permission settings target another session'
       );
-    if (!this.runtime?.setPermissions)
-      throw new PiWorkerSessionError(
-        'WORKER_UNSUPPORTED',
-        'Runtime does not support mode and permission gear'
-      );
+    if (!this.runtime)
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     this.runtime.setPermissions(request.payload.permissions);
     this.respondSuccess(request, { applied: true });
   }
@@ -997,15 +947,12 @@ export class PiWorkerRpcServer {
       );
     }
     // `applied: true` has to mean it. The tier is a security axis: Main records
-    // it and the composer chip shows it, so answering "applied" for a runtime
-    // that implements nothing would leave the UI claiming a posture the engine
+    // it and the composer chip shows it, so answering "applied" without a
+    // runtime to apply it to would leave the UI claiming a posture the engine
     // never took. Same answer `worker.setPermissions` gives for the same
     // situation.
-    if (!this.runtime?.setPermissionTier) {
-      throw new PiWorkerSessionError(
-        'WORKER_UNSUPPORTED',
-        'Runtime does not support the session permission tier'
-      );
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.runtime.setPermissionTier(request.payload.tier);
     const result: WorkerSetPermissionTierResult = { applied: true };
@@ -1065,6 +1012,16 @@ export class PiWorkerRpcServer {
     this.options.port.postMessage(event);
   }
 
+  /**
+   * Put one runtime event on the wire.
+   *
+   * `seq` and `timestamp` are filled because `RuntimeEvent` requires them, not
+   * because anything downstream reads these values: `WorkerManager.dispatch`
+   * re-stamps every event with its own counter and clock on the way out of
+   * Main, which is where the sequence is defined to be monotonic. Nothing —
+   * renderer, trace, contract fixtures — ever sees the numbers written here, so
+   * they are no use for telling worker-side ordering or timing apart.
+   */
   private emitRuntimeEvent(event: RuntimeEventDraft): void {
     if (this.disposed) return;
     const payload = {

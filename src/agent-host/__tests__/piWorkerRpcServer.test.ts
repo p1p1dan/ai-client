@@ -59,6 +59,20 @@ function bootstrapResult(): WorkerBootstrapResult {
   };
 }
 
+/**
+ * A complete `PiWorkerRuntime`.
+ *
+ * T025 made every method on the interface required, so this fixture has to
+ * implement all of them — which is the point: the twelve that used to be
+ * optional each had a `WORKER_*_UNAVAILABLE` arm in the server that no test ever
+ * asserted and no production runtime could reach. The methods no test cares
+ * about throw rather than return a plausible value, so a handler that starts
+ * calling one by accident fails loudly instead of passing on a stub.
+ */
+const notCalled = (method: string) => () => {
+  throw new Error(`this test does not expect ${method} to be called`);
+};
+
 function runtime(overrides: Partial<PiWorkerRuntime> = {}): PiWorkerRuntime {
   return {
     bootstrap: async () => bootstrapResult(),
@@ -75,8 +89,20 @@ function runtime(overrides: Partial<PiWorkerRuntime> = {}): PiWorkerRuntime {
         hasMore: false,
       },
     }),
+    tree: notCalled('tree') as PiWorkerRuntime['tree'],
+    commands: notCalled('commands') as PiWorkerRuntime['commands'],
+    compact: notCalled('compact') as PiWorkerRuntime['compact'],
+    rewind: notCalled('rewind') as PiWorkerRuntime['rewind'],
+    reload: notCalled('reload') as PiWorkerRuntime['reload'],
+    fork: notCalled('fork') as PiWorkerRuntime['fork'],
+    discardFork: notCalled('discardFork') as PiWorkerRuntime['discardFork'],
     stop: async () => ({ stopped: true }),
     respondExtensionUi: () => true,
+    respondPermission: notCalled('respondPermission') as PiWorkerRuntime['respondPermission'],
+    respondQuestion: notCalled('respondQuestion') as PiWorkerRuntime['respondQuestion'],
+    respondPreview: notCalled('respondPreview') as PiWorkerRuntime['respondPreview'],
+    setPermissions: notCalled('setPermissions') as PiWorkerRuntime['setPermissions'],
+    setPermissionTier: notCalled('setPermissionTier') as PiWorkerRuntime['setPermissionTier'],
     dispose: async () => undefined,
     ...overrides,
   };
@@ -545,46 +571,43 @@ describe('PiWorkerRpcServer', () => {
     expect(createUtilityRuntime.mock.calls[0]?.[0]).toMatchObject({ modelCatalog });
   });
 
-  it('refuses a permission tier the runtime cannot apply instead of reporting success', async () => {
+  it('never answers a permission tier with success before a runtime exists', async () => {
+    // T025 replaced this test's old subject. It used to hand the dispatcher a
+    // runtime with no `setPermissionTier` and assert `WORKER_UNSUPPORTED`; the
+    // method is required now, so that shape does not compile and the branch is
+    // gone. What still has to hold is the reason the branch existed: the tier is
+    // a security axis — Main records it and the composer chip shows it — so
+    // `applied: true` must never be answered by a server that applied nothing.
     const messages: Array<Record<string, unknown>> = [];
+    const setPermissionTier = vi.fn();
     const server = new PiWorkerRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
       ...engineFactories,
-      // A runtime with no `setPermissionTier`: the method is optional on the
-      // interface, so this is a shape the dispatcher really can be handed.
-      createRuntime: () => runtime(),
+      createRuntime: () => runtime({ setPermissionTier }),
     });
-    server.receive(
-      request('bootstrap', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
-    );
-    await vi.waitFor(() => expect(messages).toHaveLength(1));
     server.receive(
       request('tier', 'worker.setPermissionTier', {
         logicalSessionId: 'logical-1',
         tier: 'readonly',
       })
     );
-    await vi.waitFor(() => expect(messages).toHaveLength(2));
-    // The tier is a security axis: Main records it and the chip shows it, so
-    // `applied: true` for an engine that did nothing is worse than an error.
-    expect(messages[1]).toMatchObject({
-      requestId: 'tier',
-      ok: false,
-      error: { code: 'WORKER_UNSUPPORTED' },
-    });
-    expect(messages[1]).not.toMatchObject({ result: { applied: true } });
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    expect(messages[0]).toMatchObject({ requestId: 'tier', ok: false });
+    expect(messages[0]).not.toMatchObject({ result: { applied: true } });
+    expect(setPermissionTier).not.toHaveBeenCalled();
   });
 
-  it('separates a compact nobody can serve from a worker that never started', async () => {
+  it('separates a compact before bootstrap from one the runtime serves', async () => {
     const messages: Array<Record<string, unknown>> = [];
+    const compact = vi.fn(async () => ({ compacted: true }) as never);
     const server = new PiWorkerRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
       ...engineFactories,
-      createRuntime: () => runtime(),
+      createRuntime: () => runtime({ compact }),
     });
     server.receive(request('early', 'worker.compact', { logicalSessionId: 'logical-1' }));
     await vi.waitFor(() => expect(messages).toHaveLength(1));
@@ -596,9 +619,12 @@ describe('PiWorkerRpcServer', () => {
     await vi.waitFor(() => expect(messages).toHaveLength(2));
     server.receive(request('compact', 'worker.compact', { logicalSessionId: 'logical-1' }));
     await vi.waitFor(() => expect(messages).toHaveLength(3));
-    // Same answer shape as tree/rewind/reload/fork: a bootstrapped worker whose
-    // engine has no compaction is not an un-started worker.
-    expect(messages[2]).toMatchObject({ error: { code: 'WORKER_COMPACT_UNAVAILABLE' } });
+    // T025: `WORKER_COMPACT_UNAVAILABLE` used to be asserted here for a runtime
+    // that implements no compaction. `compact` is required on the interface now,
+    // so the only distinction left is the one that was always real — a worker
+    // that has not bootstrapped yet versus one that has.
+    expect(compact).toHaveBeenCalledWith({ logicalSessionId: 'logical-1' });
+    expect(messages[2]).toMatchObject({ requestId: 'compact', ok: true });
   });
 
   it('finishes the tear-down and still exits when the engine fails to dispose', async () => {

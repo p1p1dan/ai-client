@@ -309,9 +309,13 @@ function createHarness(
         agentDir: '/agent',
         sessionFile: opened.sessionFile,
         ...(opened.sessionSourceFile ? { sessionSourceFile: opened.sessionSourceFile } : {}),
-        leaf: (options.leafCheckpoint as
-          | { activeEntryId: string | null; fileTailEntryId: string | null }
-          | undefined) ?? { activeEntryId: null, fileTailEntryId: null },
+        // T025: `leafCheckpoint` left the bootstrap payload, so a spawn cannot
+        // dictate the leaf any more. The fake reports the empty leaf a fresh
+        // native session reports; the real runtime resolves it from the file.
+        leaf: { activeEntryId: null, fileTailEntryId: null } as {
+          activeEntryId: string | null;
+          fileTailEntryId: string | null;
+        },
         ...(options.sessionFile
           ? {
               initialHistory: {
@@ -1329,7 +1333,6 @@ describe('WorkerManager unwritten Pi session files', () => {
     );
     // Restarted as a new session rather than reopening a file that never was.
     expect(h.createSlot.mock.calls[1][0]).not.toHaveProperty('sessionFile');
-    expect(h.createSlot.mock.calls[1][0]).not.toHaveProperty('leafCheckpoint');
     // The replacement is just as unwritten, so it earns its identity the same way.
     expect(h.bindRuntimeIdentity).not.toHaveBeenCalled();
     await expect(
