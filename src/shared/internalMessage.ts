@@ -22,8 +22,26 @@
  * what it is for, and everything that projects or summarizes can see what it is.
  */
 
-/** What produced a message the user did not write. */
-export type InternalMessageOrigin = 'subagent-report';
+/**
+ * What produced a message the user did not write.
+ *
+ * `project-instructions` is decision 007's on-demand tier: a CLAUDE.md or
+ * AGENTS.md that came into scope mid-session because a tool read into its
+ * subtree. It needs the same three guarantees the subagent report does — no
+ * user bubble, not "the latest real user task", and the mark survives the JSONL
+ * round trip — so it is the same mechanism rather than a second one.
+ */
+export type InternalMessageOrigin = 'subagent-report' | 'project-instructions';
+
+/**
+ * Recognised values, as data.
+ *
+ * The recogniser used to compare against the one literal inline. That reads
+ * fine with one origin and silently drops every message carrying the second
+ * one, which is the exact failure mode this file exists to prevent — so the
+ * list is written once and both the type and the check come off it.
+ */
+const ORIGINS: readonly InternalMessageOrigin[] = ['subagent-report', 'project-instructions'];
 
 const FIELD = 'aiclientInternal';
 
@@ -58,7 +76,7 @@ export function markInternalMessage<T extends object>(
 export function internalMessageOrigin(value: unknown): InternalMessageOrigin | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const origin = (value as Record<string, unknown>)[FIELD];
-  return origin === 'subagent-report' ? origin : undefined;
+  return ORIGINS.find((known) => known === origin);
 }
 
 /** True when this message is one the runtime wrote for itself. */

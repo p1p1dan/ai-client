@@ -12,6 +12,7 @@ import {
 } from '../../../shared/piPermissionPolicy.ts';
 import type { RuntimeHostIoService } from '../../contracts.ts';
 import { errorCode, RuntimeHostError } from '../../host/errors.ts';
+import { resolveSettingSources, type SettingSource } from '../../settingSources.ts';
 
 export interface RuntimePermissionPolicy {
   config: PiPermissionConfig;
@@ -19,9 +20,29 @@ export interface RuntimePermissionPolicy {
   notes: readonly string[];
 }
 
+/**
+ * decision 008 — the bundled policy is always the base scope.
+ *
+ * Two halves of clause 3, and only one of them is implemented here. "Always
+ * loaded, whatever `settingSources` says" is: the scope below is built before
+ * the switch is consulted at all. "Highest priority" is NOT, because
+ * `mergePermissionScopes` is last-wins and the shipped policy documents the
+ * opposite order in as many words — `agent-host/permissionPolicy.mjs` says
+ * "随包默认 < 用户 / 受管 agentDir 配置 < 项目 .pi 配置" and "the user always
+ * wins", which is D-Q9 from 2026-08-29. Moving `bundled` to the end would let
+ * the shipped table delete every rule a user wrote, which is a different
+ * product, not a merge-order tweak. What is genuinely un-overridable already
+ * exists and is not a config file at all: `pathPolicy` in `permissions/index.ts`
+ * denies secrets before any scope is consulted.
+ */
 export async function loadPermissionPolicy(
   io: RuntimeHostIoService,
-  options: { cwd: string; agentDir?: string | null; projectTrusted?: boolean }
+  options: {
+    cwd: string;
+    agentDir?: string | null;
+    projectTrusted?: boolean;
+    settingSources?: readonly SettingSource[];
+  }
 ): Promise<RuntimePermissionPolicy> {
   const scopes: PolicyScope[] = [
     {
@@ -33,17 +54,29 @@ export async function loadPermissionPolicy(
   ];
   const sources: string[] = [];
   const notes: string[] = [];
+  const enabled = resolveSettingSources(options);
   const locations: Array<{ id: 'global' | 'project'; path: string }> = [];
-  if (options.agentDir)
+  if (options.agentDir && enabled.user)
     locations.push(
       { id: 'global', path: join(options.agentDir, 'pi-permissions.jsonc') },
       { id: 'global', path: join(options.agentDir, 'extensions/pi-permission-system/config.json') }
     );
-  if (options.projectTrusted)
+  if (enabled.project)
     locations.push(
       { id: 'project', path: join(options.cwd, '.pi/agent/pi-permissions.jsonc') },
       { id: 'project', path: join(options.cwd, '.pi/extensions/pi-permission-system/config.json') }
     );
+  // decision 008 — the local tier, after project so it wins on a shared key.
+  // Carries `id: 'project'` rather than an id of its own: `PolicyScopeId` is
+  // also the key type of the settings panel's `Record<PolicyScopeId, …>` label
+  // tables in the renderer, so widening it here would break an exhaustive map
+  // in a surface this task must not touch. The distinct `path` is what shows up
+  // in `sources` and the trace, which is where provenance is actually read.
+  if (enabled.local)
+    locations.push({
+      id: 'project',
+      path: join(options.cwd, '.pi/agent/pi-permissions.local.jsonc'),
+    });
   for (const location of locations) {
     let text: string;
     try {

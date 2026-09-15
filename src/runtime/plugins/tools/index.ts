@@ -4,7 +4,12 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { type Context, Service } from 'cordis';
 import { type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
-import { EXEC_SERVICE, HOST_IO_SERVICE, type RuntimeHostIoService } from '../../contracts.ts';
+import {
+  EXEC_SERVICE,
+  HOST_IO_SERVICE,
+  PROMPT_SERVICE,
+  type RuntimeHostIoService,
+} from '../../contracts.ts';
 import { errorCode, RuntimeHostError } from '../../host/errors.ts';
 import { type BashAnalysis, BashAnalyzer, splitShellPath } from '../permissions/bash-analysis.ts';
 import { containsPath, PERMISSIONS_SERVICE, pathPolicy } from '../permissions/index.ts';
@@ -173,6 +178,27 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       );
     return path;
   }
+  /**
+   * decision 007 — tell the prompt service which files this call actually
+   * reached, so a subdirectory's instruction file can come into scope.
+   *
+   * Called after the operation succeeded, not next to `target()`: an approval
+   * that was granted and then failed on a missing file is not the agent
+   * "working in" that directory. Looked up through `ctx.get` rather than
+   * injected, because this plugin is registered BEFORE the prompt service and a
+   * hard dependency would invert the graph for a purely optional signal.
+   *
+   * Swallows everything. A tool result must not turn into an error because an
+   * AGENTS.md beside the file was unreadable.
+   */
+  private async noteInstructionScope(paths: readonly string[]): Promise<void> {
+    if (paths.length === 0) return;
+    try {
+      await this.ctx.get(PROMPT_SERVICE)?.noteFilesTouched?.(paths);
+    } catch {
+      // Intentionally ignored; see above.
+    }
+  }
   private async locked<T>(path: string, operation: () => Promise<T>): Promise<T> {
     const previous = this.locks.get(path) ?? Promise.resolve();
     let release!: () => void;
@@ -281,6 +307,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
           TOOL_OUTPUT_BYTES - READ_STATUS_BYTES,
           signal
         );
+        await this.noteInstructionScope([target]);
         // Each truncation reason gets its own wording: "one line is too long"
         // sends the model hunting for that line, which is wrong advice when the
         // window simply filled up (tools-13).
@@ -323,6 +350,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
           signal?.throwIfAborted();
           await io.mkdir(dirname(target), { recursive: true });
           await io.writeFile(target, Buffer.from(args.content));
+          await this.noteInstructionScope([target]);
           return result(`Wrote ${Buffer.byteLength(args.content)} bytes to ${target}`, {
             path: target,
             ...(before ? { review: createFileChange(target, before, args.content) } : {}),
@@ -372,6 +400,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
           }
           signal?.throwIfAborted();
           await io.writeFile(target, Buffer.from(content));
+          await this.noteInstructionScope([target]);
           return result(`Applied ${args.edits.length} edits to ${target}`, {
             path: target,
             ...(this.config.recordFileChanges !== false
@@ -538,6 +567,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       execute: async (id, args, signal) => {
         const root = await this.target('grep', id, args.path ?? '.', signal);
         const matches: string[] = [];
+        const hitDirectories = new Set<string>();
         const budget = { visited: 0, truncated: false };
         const limit = args.limit ?? 100;
         const included = args.include ? globMatcher(root, args.include) : undefined;
@@ -608,6 +638,10 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
               break;
             }
             if (!hits(lines[line])) continue;
+            // decision 007 — a file the search MATCHED is a file the agent is
+            // now working with; a file merely walked past is not, so the note
+            // rides the match rather than the walk.
+            hitDirectories.add(file);
             matches.push(`${file}:${line + 1}:${lines[line].slice(0, 2048)}`);
             if (matches.length > limit) {
               matches.pop();
@@ -628,6 +662,9 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
             break;
           }
         }
+        // Once for the whole search rather than per hit: the walk is the hot
+        // loop here, and the tracker de-duplicates by directory anyway.
+        await this.noteInstructionScope([...hitDirectories]);
         return result(
           matches.join('\n') || 'No matches found.',
           {

@@ -87,6 +87,7 @@ import {
 } from './plugins/subagent/index.ts';
 import { TOOLS_SERVICE, type ToolsConfig, ToolsPlugin } from './plugins/tools/index.ts';
 import { canonicalPath } from './plugins/tools/paths.ts';
+import type { SettingSource } from './settingSources.ts';
 import { buildVersionStamp, TracePlugin } from './trace.ts';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -140,6 +141,18 @@ export interface RuntimeBootstrapOptions {
    */
   modelCatalog?: { models: Record<string, unknown>; auth?: Record<string, unknown> };
   loop?: Partial<AgentLoopConfig>;
+  /**
+   * decision 008 — which tiers of on-disk configuration this session may read,
+   * across all four layered sources at once (project instructions, permission
+   * policy, MCP servers, skills / prompts).
+   *
+   * Absent means all three, matching Claude Code's CLI and Agent SDK. An empty
+   * array means none of them, which is what a fixed probe wants: the managed
+   * `<agentDir>/AGENTS.md` and the bundled fail-closed permission policy still
+   * load, because those ship with the app rather than being found on the
+   * machine.
+   */
+  settingSources?: readonly SettingSource[];
   now?: () => number;
   newRunId?: () => string;
 }
@@ -216,8 +229,20 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       ...options.loop,
     };
     const agentDir = options.agentDir ?? flags.agentDir;
+    /**
+     * The workspace as the tools report it, kept for the prompt config below.
+     *
+     * decision 007: the on-demand tier compares a path a tool just touched
+     * against the workspace root, and every path a tool reports has been
+     * through `canonicalPath`. On a machine where the workspace is reached
+     * through a symlink — macOS's `/var` → `/private/var` is the everyday case —
+     * the raw `tools.cwd` and the canonical one differ, and the comparison would
+     * decide that every file in the workspace is outside it.
+     */
+    let workspace: string | undefined;
     if (options.tools) {
       const cwd = await io.realpath(options.tools.cwd);
+      workspace = cwd;
       if (options.approvalUi) approval = createRuntimeApprovalBridge(options.approvalUi);
       const scopes = await Promise.all(
         (options.permissions?.scopes ?? []).map(async (scope) => ({
@@ -235,6 +260,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
           cwd,
           agentDir,
           projectTrusted: options.permissions?.projectTrusted,
+          ...(options.settingSources ? { settingSources: options.settingSources } : {}),
         }),
         approve: options.permissions?.approve ?? approval?.approve,
       });
@@ -254,6 +280,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
           ...(agentDir ? { agentDir } : {}),
           cwd,
           projectTrusted: options.permissions?.projectTrusted,
+          ...(options.settingSources ? { settingSources: options.settingSources } : {}),
           ...options.skills,
         });
         const skillsFiber = await ctx.plugin(SkillsPlugin, skillCatalog);
@@ -267,6 +294,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
           ...(agentDir ? { agentDir } : {}),
           cwd,
           projectTrusted: options.permissions?.projectTrusted,
+          ...(options.settingSources ? { settingSources: options.settingSources } : {}),
           ...options.mcp,
         });
         const mcpFiber = await ctx.plugin(McpPlugin, { catalog: mcpCatalog, cwd });
@@ -280,14 +308,33 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     await eventsFiber.await();
     const contextFiber = await ctx.plugin(ContextPlugin, options.context ?? {});
     await contextFiber.await();
-    const promptFiber = await ctx.plugin(PromptPlugin, {
+    // decision 008 — one prompt config, used both by the parent's own prompt and
+    // by the per-delegation chain below. It used to be spelled out twice, and
+    // the two copies now carry three switches each; a third copy would be a
+    // third chance for them to disagree about what a delegate is allowed to
+    // read.
+    const promptConfig: PromptConfig = {
       ...options.prompt,
-      root: options.prompt?.root ?? options.tools?.cwd,
+      root: options.prompt?.root ?? workspace ?? options.tools?.cwd,
+      projectTrusted: options.permissions?.projectTrusted,
+      ...(options.settingSources ? { settingSources: options.settingSources } : {}),
       globals: [
-        ...(agentDir ? [{ path: join(agentDir, 'AGENTS.md'), label: 'Managed AGENTS.md' }] : []),
+        // `scope: 'managed'` — this one ships with the app, so the `user`
+        // setting source does not switch it off (decision 008 clause 3).
+        // Everything the host supplied after it is the user tier by default.
+        ...(agentDir
+          ? [
+              {
+                path: join(agentDir, 'AGENTS.md'),
+                label: 'Managed AGENTS.md',
+                scope: 'managed' as const,
+              },
+            ]
+          : []),
         ...(options.prompt?.globals ?? []),
       ],
-    });
+    };
+    const promptFiber = await ctx.plugin(PromptPlugin, promptConfig);
     await promptFiber.await();
     const traceDir = options.traceDir === undefined ? flags.traceDir : options.traceDir;
     if (traceDir) await io.mkdir(traceDir, { recursive: true, mode: 0o700 });
@@ -389,16 +436,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
           (() =>
             projectInstructionsText(
               instructionSource(ctx.runtimeHostIo, options.prompt?.maxBytes),
-              {
-                ...options.prompt,
-                root: options.prompt?.root ?? options.tools?.cwd,
-                globals: [
-                  ...(agentDir
-                    ? [{ path: join(agentDir, 'AGENTS.md'), label: 'Managed AGENTS.md' }]
-                    : []),
-                  ...(options.prompt?.globals ?? []),
-                ],
-              }
+              promptConfig
             )),
       });
       await subagentFiber.await();

@@ -9,19 +9,33 @@
  * things differ, each noted at the point it appears: global files are a list
  * rather than one hardcoded path, reading goes through a port instead of
  * `node:fs`, the assembled block is returned as a prompt segment rather than a
- * string, and only the workspace root's own file is loaded.
+ * string, and the directory walk follows the official tier rule rather than the
+ * reference's unreachable `targetPath` chain.
  *
- * ## Why there is no directory walk (decision 007)
+ * ## Which directories are loaded when (decision 007)
  *
- * The reference walks root→leaf from a `targetPath` the caller supplies, and
+ * The reference walked root→leaf from a `targetPath` the caller supplies, and
  * this module was ported with that walk intact. No caller ever supplied one:
  * the parameter reached `RuntimeRunRequest` and stopped there, in this product
- * and in the reference alike (context-prompt-03). Decision 007 removed it
- * rather than wiring it, because the tier rule it half-implemented is not the
- * official one either — the official rule loads the workspace root and every
- * parent directory at session start, and subdirectories on demand as the agent
- * reads into them. T035 implements that; until it lands this module loads the
- * workspace root only, which is what the product has always actually done.
+ * and in the reference alike (context-prompt-03). Decision 007 replaced it with
+ * the official rule, which has two halves:
+ *
+ * - **At session start**, the workspace root and every parent directory, least
+ *   specific first. {@link instructionDirectories} is that walk. It stops
+ *   BEFORE the filesystem root, matching Claude Code's documented "recurses up
+ *   to but not including /": a machine-wide `/CLAUDE.md` is not something a
+ *   workspace opted into, while `/home/<user>/CLAUDE.md` is.
+ * - **On demand**, a subdirectory's file when a tool reads into that subtree.
+ *   That half does not live here — it is session state, so it lives in
+ *   `instructionTracker.ts` and reaches the model as an injected message rather
+ *   than through the system prompt (each file is loaded exactly once per
+ *   session, and rewriting the system prompt mid-run would break the cache
+ *   prefix for every later turn).
+ *
+ * `CLAUDE.local.md` is read from the same directories, ADDED to whichever of
+ * {@link INSTRUCTION_FILE_NAMES} that directory contributed rather than
+ * replacing it — it is the local, not-checked-in companion to a shared file,
+ * and decision 008 puts it behind the `local` setting source.
  *
  * ## Why reading is a port
  *
@@ -34,7 +48,8 @@
  * chain is testable against an in-memory source, with no fixture tree on disk.
  */
 
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { resolveSettingSources, type SettingSourceOptions } from '../../settingSources.ts';
 import type { PromptSegment } from './segments.ts';
 
 /**
@@ -49,6 +64,50 @@ export const INSTRUCTION_FILE_NAMES = [
   'CLAUDE.md',
   join('.claude', 'CLAUDE.md'),
 ] as const;
+
+/**
+ * decision 008 — the `local` tier's instruction file.
+ *
+ * Deliberately NOT a fifth entry in {@link INSTRUCTION_FILE_NAMES}: that list
+ * is first-one-wins, and a local file that SUPPRESSED the team's checked-in
+ * `AGENTS.md` would be the opposite of what "local additions" means. It is read
+ * after the directory's shared file and appended to it.
+ */
+export const LOCAL_INSTRUCTION_FILE_NAME = 'CLAUDE.local.md';
+
+/**
+ * Safety bound on the parent-directory climb; a real filesystem never gets
+ * close. Same guard, and the same reason, as `plugins/skills/index.ts`: a
+ * `dirname` that stops shrinking on some exotic path must not spin.
+ */
+export const MAX_INSTRUCTION_ANCESTORS = 64;
+
+/**
+ * decision 007 — the workspace root and every parent, least specific first.
+ *
+ * Least specific first because the chain is rendered in load order and the
+ * prompt block tells the model that a more specific file wins; putting `cwd`
+ * last is what makes "more specific" and "later" the same thing.
+ *
+ * The filesystem root is excluded unless it IS the workspace (Claude Code's
+ * documented rule is "up to but not including /"). Excluding it also keeps the
+ * walk off a path no workspace ever opted into; including the workspace itself
+ * keeps context-prompt-13's "the workspace IS `/`" case working.
+ */
+export function instructionDirectories(cwd: string): readonly string[] {
+  const start = resolve(cwd);
+  const chain = [start];
+  let directory = start;
+  for (let level = 0; level < MAX_INSTRUCTION_ANCESTORS; level++) {
+    const parent = dirname(directory);
+    // `dirname` is its own fixed point at the filesystem root, so this is both
+    // the "reached the top" test and the "parent IS the top" test.
+    if (parent === directory || dirname(parent) === parent) break;
+    chain.push(parent);
+    directory = parent;
+  }
+  return chain.reverse();
+}
 
 /**
  * Total budget across the whole chain, globals included.
@@ -78,7 +137,22 @@ export interface InstructionSource {
   realpath(path: string): Promise<string | undefined>;
 }
 
-export interface InstructionChainOptions {
+/**
+ * A file loaded ahead of the project chain.
+ *
+ * `scope` exists only because decision 008 splits this list in two: the managed
+ * `<agentDir>/AGENTS.md` ships with the app and is never switched off, while a
+ * host-supplied `~/.claude/CLAUDE.md` is the `user` setting source and is. An
+ * absent `scope` means `user`, so the only call site that has to say anything
+ * is the one that supplies the managed file.
+ */
+export interface InstructionGlobal {
+  path: string;
+  label: string;
+  scope?: 'managed' | 'user';
+}
+
+export interface InstructionChainOptions extends SettingSourceOptions {
   /** Workspace root. Absent loads only explicitly supplied global files. */
   root?: string;
   /**
@@ -92,7 +166,7 @@ export interface InstructionChainOptions {
    * gone — H/19 copies the user's `AGENTS.md` in rather than reading it
    * through — but the list shape is still the right one.)
    */
-  globals?: readonly { path: string; label: string }[];
+  globals?: readonly InstructionGlobal[];
   maxBytes?: number;
 }
 
@@ -138,33 +212,91 @@ export function limitUtf8(content: string, maxBytes: number): string {
   return content.slice(0, end);
 }
 
-async function readDirectoryInstruction(
+async function readInstructionFile(
   source: InstructionSource,
-  root: string,
-  canonicalRoot: string,
+  labelRoot: string,
   directory: string,
+  canonicalDirectory: string,
+  name: string,
   remaining: number
 ): Promise<ProjectInstruction | undefined> {
-  for (const name of INSTRUCTION_FILE_NAMES) {
-    const file = join(directory, name);
-    // A symlink pointing out of the workspace would otherwise pull arbitrary
-    // files into the prompt, so containment is checked on the resolved path.
-    const canonical = await source.realpath(file);
-    if (!canonical || !isWithinRoot(canonicalRoot, canonical)) continue;
-    const content = (await source.readText(file))?.trim();
-    if (!content) continue;
-    return {
-      source: normalizeStablePath(relative(root, file) || name),
-      content: limitUtf8(content, remaining),
-    };
-  }
-  return undefined;
+  const file = join(directory, name);
+  // A symlink pointing out of the directory it was found in would otherwise
+  // pull arbitrary files into the prompt, so containment is checked on the
+  // resolved path. Checked per directory rather than against the workspace
+  // root, because the walk now also visits directories ABOVE the workspace,
+  // where "inside the workspace" is not a question that has a useful answer.
+  const canonical = await source.realpath(file);
+  if (!canonical || !isWithinRoot(canonicalDirectory, canonical)) return undefined;
+  const content = (await source.readText(file))?.trim();
+  if (!content) return undefined;
+  const limited = limitUtf8(content, remaining);
+  if (!limited) return undefined;
+  return { source: normalizeStablePath(relative(labelRoot, file) || name), content: limited };
 }
 
 /**
- * Load globals then the workspace root's own file, sharing one byte budget.
+ * One directory's contribution: its shared file (first name that exists) plus,
+ * when the `local` source is on, its `CLAUDE.local.md`.
  *
- * Globals go first so a project file, being later, can contradict them.
+ * Exported because the on-demand tier in `instructionTracker.ts` reads exactly
+ * the same way — a subdirectory found mid-session must not have different rules
+ * from the one that was there at startup.
+ */
+export async function readDirectoryInstructions(
+  source: InstructionSource,
+  options: { labelRoot: string; directory: string; remaining: number; local: boolean }
+): Promise<readonly ProjectInstruction[]> {
+  const { labelRoot, directory } = options;
+  let remaining = options.remaining;
+  if (remaining <= 0) return [];
+  const entries: ProjectInstruction[] = [];
+  const canonicalDirectory = (await source.realpath(directory)) ?? directory;
+  for (const name of INSTRUCTION_FILE_NAMES) {
+    const entry = await readInstructionFile(
+      source,
+      labelRoot,
+      directory,
+      canonicalDirectory,
+      name,
+      remaining
+    );
+    if (!entry) continue;
+    entries.push(entry);
+    remaining -= Buffer.byteLength(entry.content, 'utf8');
+    break;
+  }
+  // decision 008 — the local file ADDS to the shared one rather than replacing
+  // it, so it is read even when one of the four names already matched.
+  if (options.local && remaining > 0) {
+    const entry = await readInstructionFile(
+      source,
+      labelRoot,
+      directory,
+      canonicalDirectory,
+      LOCAL_INSTRUCTION_FILE_NAME,
+      remaining
+    );
+    if (entry) entries.push(entry);
+  }
+  return entries;
+}
+
+/**
+ * Load globals then the workspace and its parents, sharing one byte budget.
+ *
+ * Globals go first so a project file, being later, can contradict them; within
+ * the project tier the outermost parent goes first for the same reason.
+ *
+ * The budget is spent in that same order and the walk STOPS when it runs out,
+ * rather than reserving room for the nearest directories. Two reasons: it keeps
+ * the single rule this module has always had (one shared budget, consumed in
+ * render order, truncate the entry that straddles the end), and a scheme that
+ * loaded `cwd` first would have to render in a different order than it read,
+ * which is exactly the kind of split the truncation bug in context-prompt-13
+ * came out of. The residual risk is real and bounded: a huge file in a distant
+ * parent can crowd out a nearer one, the same way an oversized global already
+ * could.
  */
 export async function loadInstructionChain(
   source: InstructionSource,
@@ -172,9 +304,14 @@ export async function loadInstructionChain(
 ): Promise<readonly ProjectInstruction[]> {
   let remaining = Math.max(0, options.maxBytes ?? MAX_INSTRUCTION_BYTES);
   const entries: ProjectInstruction[] = [];
+  const sources = resolveSettingSources(options);
 
   for (const global of options.globals ?? []) {
     if (remaining <= 0) break;
+    // decision 008 — a managed file is the product's own, not a "source" the
+    // caller gets to switch off; anything else in this list came from the host
+    // and is the `user` tier.
+    if ((global.scope ?? 'user') === 'user' && !sources.user) continue;
     const content = (await source.readText(global.path))?.trim();
     if (!content) continue;
     const limited = limitUtf8(content, remaining);
@@ -183,17 +320,25 @@ export async function loadInstructionChain(
     remaining -= Buffer.byteLength(limited, 'utf8');
   }
 
-  if (!options.root || remaining <= 0) return entries;
+  // decision 007 / 008 — an untrusted checkout contributes no instructions at
+  // all. A CLAUDE.md is text the model is told to obey, so a folder the user
+  // has not vouched for must not be able to write it, exactly as it must not be
+  // able to contribute a skill or a permission rule.
+  if (!options.root || remaining <= 0 || !sources.project) return entries;
   const resolvedRoot = resolve(options.root);
-  const canonicalRoot = (await source.realpath(resolvedRoot)) ?? resolvedRoot;
-  const entry = await readDirectoryInstruction(
-    source,
-    resolvedRoot,
-    canonicalRoot,
-    resolvedRoot,
-    remaining
-  );
-  if (entry?.content) entries.push(entry);
+  for (const directory of instructionDirectories(resolvedRoot)) {
+    if (remaining <= 0) break;
+    const found = await readDirectoryInstructions(source, {
+      labelRoot: resolvedRoot,
+      directory,
+      remaining,
+      local: sources.local,
+    });
+    for (const entry of found) {
+      entries.push(entry);
+      remaining -= Buffer.byteLength(entry.content, 'utf8');
+    }
+  }
   return entries;
 }
 
@@ -229,4 +374,28 @@ export function projectInstructionsSegment(
     .join('\n')
     .trimEnd();
   return { slot: 'project-instructions', text };
+}
+
+/**
+ * decision 007 — the on-demand tier's rendering.
+ *
+ * A separate function from {@link projectInstructionsSegment} because these
+ * entries arrive mid-session as a message, not as a prompt slot, and the model
+ * needs one extra sentence: WHY a new instruction file just showed up. The
+ * accumulation rule is worded identically on purpose — a subdirectory's file is
+ * not a new regime, it is one more entry in the same list.
+ */
+export function onDemandInstructionsText(
+  entries: readonly ProjectInstruction[]
+): string | undefined {
+  if (entries.length === 0) return undefined;
+  return [
+    '# Project instructions (newly in scope)',
+    '',
+    'You just worked with files in a directory that carries its own instruction file. These add to the project instructions already in your system prompt; where two entries conflict, the more specific file says so itself.',
+    '',
+    ...entries.flatMap((entry) => [`## ${entry.source}`, '', entry.content, '']),
+  ]
+    .join('\n')
+    .trimEnd();
 }

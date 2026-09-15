@@ -32,6 +32,10 @@ async function runtime(options: Partial<RuntimeBootstrapOptions> = {}) {
     traceDir: null,
     providers: [faux.provider],
     tools: { cwd: root },
+    // decision 007 / 008 — project instructions are a trusted-workspace tier
+    // now, so the suite's default workspace has to be one. The untrusted case
+    // is its own test below.
+    permissions: { projectTrusted: true },
     ...options,
   });
   runtimes.push(handle);
@@ -90,6 +94,64 @@ describe('P2 prompt service and HostIo instruction wiring', () => {
     // P5-1 filled the last one. Kept as an assertion rather than deleted: it is
     // what fails if someone adds a slot and forgets to say who fills it.
     expect(deferredSlots().map((slot) => slot.id)).toEqual([]);
+  });
+
+  it('loads the parent directories at session start, least specific first', async () => {
+    // decision 007. `root` is `<tmp>/project`, so `<tmp>` is a real parent
+    // directory on disk and this exercises the climb, the relative labelling
+    // and the ordering in one assembled prompt.
+    await writeFile(join(dir, 'CLAUDE.md'), 'PARENT_RULE');
+    await writeFile(join(root, 'AGENTS.md'), 'ROOT_RULE');
+    const { handle } = await runtime();
+    const composed = await handle.prompt.compose();
+    expect(composed.text).toContain('PARENT_RULE');
+    expect(composed.text.indexOf('PARENT_RULE')).toBeLessThan(composed.text.indexOf('ROOT_RULE'));
+    // Labelled relative to the workspace, not as an absolute machine path.
+    expect(composed.text).toContain('## ../CLAUDE.md');
+  });
+
+  it('adds CLAUDE.local.md beside the shared file, and drops it when local is off', async () => {
+    await writeFile(join(root, 'AGENTS.md'), 'SHARED_RULE');
+    await writeFile(join(root, 'CLAUDE.local.md'), 'LOCAL_RULE');
+    const both = await runtime();
+    const withLocal = await both.handle.prompt.compose();
+    expect(withLocal.text).toContain('SHARED_RULE');
+    expect(withLocal.text.indexOf('SHARED_RULE')).toBeLessThan(
+      withLocal.text.indexOf('LOCAL_RULE')
+    );
+
+    const off = await runtime({ settingSources: ['user', 'project'] });
+    const withoutLocal = await off.handle.prompt.compose();
+    expect(withoutLocal.text).toContain('SHARED_RULE');
+    expect(withoutLocal.text).not.toContain('LOCAL_RULE');
+  });
+
+  it('loads no project instructions for a workspace the host has not trusted', async () => {
+    await writeFile(join(dir, 'CLAUDE.md'), 'PARENT_RULE');
+    await writeFile(join(root, 'AGENTS.md'), 'ROOT_RULE');
+    await writeFile(join(root, 'CLAUDE.local.md'), 'LOCAL_RULE');
+    const { handle } = await runtime({ permissions: {} });
+    const composed = await handle.prompt.compose();
+    for (const rule of ['PARENT_RULE', 'ROOT_RULE', 'LOCAL_RULE'])
+      expect(composed.text).not.toContain(rule);
+  });
+
+  it('keeps the managed AGENTS.md when the user source is switched off', async () => {
+    // decision 008 clause 3 through the real bootstrap: the agent dir's file is
+    // the product's own, the host-supplied one is the user tier.
+    const agentDir = join(dir, 'managed');
+    const borrowed = join(dir, 'borrowed.md');
+    await mkdir(agentDir);
+    await writeFile(join(agentDir, 'AGENTS.md'), 'MANAGED_RULE');
+    await writeFile(borrowed, 'BORROWED_RULE');
+    const { handle } = await runtime({
+      agentDir,
+      prompt: { globals: [{ path: borrowed, label: 'Borrowed' }] },
+      settingSources: ['project', 'local'],
+    });
+    const composed = await handle.prompt.compose();
+    expect(composed.text).toContain('MANAGED_RULE');
+    expect(composed.text).not.toContain('BORROWED_RULE');
   });
 
   it('keeps the static prefix stable while mode, gear and project rules change between runs', async () => {

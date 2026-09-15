@@ -31,6 +31,7 @@ import {
   type RuntimeHostIoService,
 } from '../../contracts.ts';
 import { errorCode } from '../../host/errors.ts';
+import { resolveSettingSources, type SettingSource } from '../../settingSources.ts';
 import { PERMISSIONS_SERVICE } from '../permissions/index.ts';
 import type { PromptSegment } from '../prompt/segments.ts';
 import { TOOLS_SERVICE } from '../tools/index.ts';
@@ -148,6 +149,16 @@ export interface SkillsConfig {
    * `loadPermissionPolicy` applies to project policy files.
    */
   projectTrusted?: boolean;
+  /**
+   * decision 008 — which tiers contribute roots. Absent means all of them.
+   *
+   * There is no `local` skills root: the decision defines the local tier as
+   * three named files (`pi-permissions.local.jsonc`, `mcp.local.json`,
+   * `CLAUDE.local.md`) and skills are not among them. Inventing a fourth path
+   * here would be this app's own convention dressed as an official one, and
+   * `extraSkillRoots` already covers "a root only this machine has".
+   */
+  settingSources?: readonly SettingSource[];
   /** Extra roots, for probes and tests. Highest precedence. */
   extraSkillRoots?: readonly SkillRoot[];
   extraTemplateRoots?: readonly TemplateRoot[];
@@ -202,10 +213,15 @@ export async function skillRoots(
 ): Promise<readonly SkillRoot[]> {
   const home = config.home ?? homedir();
   const roots: SkillRoot[] = [];
-  if (config.agentDir)
+  const enabled = resolveSettingSources(config);
+  if (config.agentDir && enabled.user)
     roots.push({ path: join(config.agentDir, 'skills'), scope: 'user', rootMarkdown: true });
-  roots.push({ path: join(home, '.agents', 'skills'), scope: 'user', rootMarkdown: false });
-  if (config.cwd && config.projectTrusted) {
+  // decision 008 — `~/.agents/skills` is the user tier's second root, so the
+  // switch has to reach it too; leaving it unconditional would have made
+  // "settingSources without user" mean "half the user tier".
+  if (enabled.user)
+    roots.push({ path: join(home, '.agents', 'skills'), scope: 'user', rootMarkdown: false });
+  if (config.cwd && enabled.project) {
     roots.push({ path: join(config.cwd, '.pi', 'skills'), scope: 'project', rootMarkdown: true });
     // Decision 004: `.agents/skills` is looked up from cwd through every
     // ancestor to the repo root, same as pi. Repo-root first (least
@@ -222,8 +238,10 @@ export async function skillRoots(
 
 export function templateRoots(config: SkillsConfig): readonly TemplateRoot[] {
   const roots: TemplateRoot[] = [];
-  if (config.agentDir) roots.push({ path: join(config.agentDir, 'prompts'), scope: 'user' });
-  if (config.cwd && config.projectTrusted)
+  const enabled = resolveSettingSources(config);
+  if (config.agentDir && enabled.user)
+    roots.push({ path: join(config.agentDir, 'prompts'), scope: 'user' });
+  if (config.cwd && enabled.project)
     roots.push({ path: join(config.cwd, '.pi', 'prompts'), scope: 'project' });
   roots.push(...(config.extraTemplateRoots ?? []));
   return roots;

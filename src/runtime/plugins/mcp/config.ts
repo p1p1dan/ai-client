@@ -16,6 +16,7 @@
 import { join } from 'node:path';
 import type { RuntimeHostIoService } from '../../contracts.ts';
 import { errorCode } from '../../host/errors.ts';
+import { resolveSettingSources, type SettingSource } from '../../settingSources.ts';
 
 export interface McpServerConfig {
   name: string;
@@ -24,7 +25,7 @@ export interface McpServerConfig {
   env: Record<string, string>;
   /** Source file, for diagnostics and for the tool row's provenance. */
   source: string;
-  scope: 'user' | 'project';
+  scope: SettingSource;
 }
 
 export interface McpConfigDiagnostic {
@@ -70,15 +71,27 @@ export interface McpConfigRoots {
    * the same gate project skills and project permission policy sit behind.
    */
   projectTrusted?: boolean;
+  /** decision 008 — absent means all three tiers, as the official default does. */
+  settingSources?: readonly SettingSource[];
 }
 
-export function mcpConfigFiles(
-  roots: McpConfigRoots
-): { path: string; scope: 'user' | 'project' }[] {
-  const files: { path: string; scope: 'user' | 'project' }[] = [];
-  if (roots.agentDir) files.push({ path: join(roots.agentDir, 'mcp.json'), scope: 'user' });
-  if (roots.cwd && roots.projectTrusted)
+/**
+ * The files to read, least specific first — which is also merge order, because
+ * {@link loadMcpConfig} lets a later file's server of the same name win.
+ *
+ * decision 008 adds the `local` tier on the end: `.pi/mcp.local.json` is the
+ * not-checked-in companion to `.pi/mcp.json`, so it beats it on a shared name
+ * and both beat the user's.
+ */
+export function mcpConfigFiles(roots: McpConfigRoots): { path: string; scope: SettingSource }[] {
+  const files: { path: string; scope: SettingSource }[] = [];
+  const enabled = resolveSettingSources(roots);
+  if (roots.agentDir && enabled.user)
+    files.push({ path: join(roots.agentDir, 'mcp.json'), scope: 'user' });
+  if (roots.cwd && enabled.project)
     files.push({ path: join(roots.cwd, '.pi', 'mcp.json'), scope: 'project' });
+  if (roots.cwd && enabled.local)
+    files.push({ path: join(roots.cwd, '.pi', 'mcp.local.json'), scope: 'local' });
   return files;
 }
 
@@ -105,6 +118,10 @@ export interface LoadedMcpConfig {
  * `disabled: true` is honoured because that is how the ecosystem's editors turn
  * a server off, and a user who disabled a server somewhere else would otherwise
  * find it running here.
+ *
+ * decision 008: "wins" means the same thing for all three tiers and for both
+ * kinds of override — a redefinition replaces the earlier entry outright, and a
+ * `disabled: true` removes it. `local` over `project` over `user`.
  */
 export async function loadMcpConfig(
   source: McpConfigSource,

@@ -49,7 +49,13 @@ describe('P5-3 server declarations', () => {
       mcpConfigFiles({ agentDir: '/agent', cwd: '/work', projectTrusted: true }).map(
         (item) => item.path
       )
-    ).toEqual([join('/agent', 'mcp.json'), join('/work', '.pi', 'mcp.json')]);
+    ).toEqual([
+      join('/agent', 'mcp.json'),
+      join('/work', '.pi', 'mcp.json'),
+      // decision 008 — the local tier rides on the same trust gate, and comes
+      // last because last is what wins on a shared server name.
+      join('/work', '.pi', 'mcp.local.json'),
+    ]);
   });
 
   it('reads the ecosystem file shape and lets a project override a user server', async () => {

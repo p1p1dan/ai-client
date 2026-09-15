@@ -33,6 +33,7 @@ import type { AgentEvent, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models, Usage } from '@earendil-works/pi-ai';
 import type { SessionAttachment } from '../shared/types/agentHost.ts';
 import type { EventsPlugin } from './events/index.ts';
+import type { ProjectInstruction } from './plugins/prompt/projectInstructions.ts';
 import type { ComposedPrompt } from './plugins/prompt/segments.ts';
 import type { JsonlSessionStore } from './plugins/session/store.ts';
 
@@ -288,6 +289,18 @@ export interface AgentLoopService {
 
 export interface RuntimePromptService {
   compose(): Promise<ComposedPrompt>;
+  /**
+   * decision 007 — the on-demand instruction tier's two halves.
+   *
+   * Optional because they are only meaningful with a workspace: the tool-less
+   * smoke lane registers a prompt service with no root to walk into, and a test
+   * double that only needs `compose` must stay a legal implementation.
+   * `noteFilesTouched` is what the tools plugin calls after a read / edit /
+   * write / grep succeeds; `takePendingInstructions` is what the loop drains
+   * before the next request.
+   */
+  noteFilesTouched?(paths: readonly string[]): Promise<void>;
+  takePendingInstructions?(): readonly ProjectInstruction[];
 }
 
 /**

@@ -39,6 +39,7 @@ import {
   type RuntimeHostIoService,
 } from '../../contracts.ts';
 import { errorCode, RuntimeHostError } from '../../host/errors.ts';
+import type { SettingSource } from '../../settingSources.ts';
 import { PERMISSIONS_SERVICE } from '../permissions/index.ts';
 import { TOOLS_SERVICE } from '../tools/index.ts';
 import { McpClient, type McpToolDefinition, type McpToolResult } from './client.ts';
@@ -105,6 +106,8 @@ export interface McpConfig {
   agentDir?: string;
   cwd?: string;
   projectTrusted?: boolean;
+  /** decision 008 — which of user / project / local `mcp.json` files to read. */
+  settingSources?: readonly SettingSource[];
   connectTimeoutMs?: number;
   /** Ceiling for the whole connect phase. Defaults to {@link MCP_CONNECT_ALL_TIMEOUT_MS}. */
   connectAllTimeoutMs?: number;
@@ -150,6 +153,7 @@ export async function connectMcpServers(
     ...(config.agentDir ? { agentDir: config.agentDir } : {}),
     ...(config.cwd ? { cwd: config.cwd } : {}),
     ...(config.projectTrusted ? { projectTrusted: true } : {}),
+    ...(config.settingSources ? { settingSources: config.settingSources } : {}),
   });
   const budgetMs = config.connectAllTimeoutMs ?? MCP_CONNECT_ALL_TIMEOUT_MS;
   const budget = connectBudget(budgetMs);

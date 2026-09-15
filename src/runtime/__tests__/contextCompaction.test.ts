@@ -24,12 +24,14 @@ import {
   fauxToolCall,
 } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { type InternalMessageOrigin, markInternalMessage } from '../../shared/internalMessage.ts';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
 import { standaloneHost } from '../host/config.ts';
 import { contextBudget, reminderThreshold } from '../plugins/context/budget.ts';
 import {
   CHECKPOINT_TRUNCATION_MARKER,
   CONTEXT_ROLLOVER_SUMMARY,
+  shapeForCheckpoint,
 } from '../plugins/context/compaction.ts';
 import type { CompactionFamily } from '../plugins/tools/new-context.ts';
 
@@ -643,5 +645,40 @@ describe('T014 · compaction across a second pass', () => {
     await expect(prepare(handle, [sized(budget.hardLimit + 1_000)])).rejects.toMatchObject({
       code: 'context_compaction_failed',
     });
+  });
+});
+
+describe('internal messages at a checkpoint (T005, extended by decision 007)', () => {
+  const user = (text: string, origin?: InternalMessageOrigin): AgentMessage => {
+    const message = {
+      role: 'user',
+      content: [{ type: 'text', text }],
+      timestamp: 1,
+    } as unknown as AgentMessage;
+    return origin ? markInternalMessage(message, origin) : message;
+  };
+
+  // Parameterized over every origin rather than pinned to the one that existed
+  // first: the filter reads `isInternalMessage`, and the way this breaks is
+  // that a NEW origin is added and the recogniser still only knows the old one.
+  it.each([
+    'subagent-report',
+    'project-instructions',
+  ] as const)('never promotes a %s message to the surviving user instruction', (origin) => {
+    const preparation = {
+      messagesToSummarize: [],
+      turnPrefixMessages: [user('THE-REAL-QUESTION')],
+      retainedTail: [user('RUNTIME-WROTE-THIS', origin)],
+      isSplitTurn: false,
+      tokensBefore: 0,
+      fileOps: { read: new Set<string>(), written: new Set<string>(), edited: new Set<string>() },
+      settings: {},
+    } as unknown as Parameters<typeof shapeForCheckpoint>[0];
+    const shaped = shapeForCheckpoint(preparation, 4_096, 'active_turn');
+    const retained = JSON.stringify(shaped.retainedTail);
+    expect(retained).toContain('THE-REAL-QUESTION');
+    expect(retained).not.toContain('RUNTIME-WROTE-THIS');
+    // Nothing is lost: it is summarized with everything else in the range.
+    expect(JSON.stringify(shaped.messagesToSummarize)).toContain('RUNTIME-WROTE-THIS');
   });
 });

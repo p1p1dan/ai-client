@@ -30,6 +30,7 @@ import { compactionNeeded, contextBudget } from '../context/budget.ts';
 import { CONTEXT_SERVICE, type TurnPreparation } from '../context/index.ts';
 import { permissionActivityEvent } from '../permissions/activity.ts';
 import type { PermissionActivityRecord } from '../permissions/index.ts';
+import { onDemandInstructionsText } from '../prompt/projectInstructions.ts';
 import type { ComposedPrompt } from '../prompt/segments.ts';
 import { PERMISSIONS_ENTRY } from '../session/legacy.ts';
 import { interruptedToolResults } from '../session/recovery.ts';
@@ -325,6 +326,39 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       },
       onRetrySettled: () => projected.recovered(),
     });
+    /**
+     * decision 007 — hand the model any instruction file that came into scope
+     * since the last check.
+     *
+     * Queued as a steering message rather than written into the turn context
+     * directly, because steering is the one injection path pi emits
+     * `message_end` for: that is what puts the message in `agent.state.messages`
+     * (so later turns and the delegation resume still see it) and in the
+     * session file (so a reopen does). It carries the T005 mark, so the
+     * projector draws no user bubble for it and compaction does not mistake it
+     * for the user's latest task.
+     */
+    const flushDiscoveredInstructions = () => {
+      const prompt = this.ctx.get(PROMPT_SERVICE);
+      const entries = prompt?.takePendingInstructions?.() ?? [];
+      const text = onDemandInstructionsText(entries);
+      if (!text) return;
+      trace.note('note', {
+        event: 'project_instructions_loaded',
+        sources: entries.map((entry) => entry.source),
+        bytes: Buffer.byteLength(text, 'utf8'),
+      });
+      agent.steer(
+        markInternalMessage(
+          {
+            role: 'user',
+            content: [{ type: 'text', text }],
+            timestamp: Date.now(),
+          } satisfies AgentMessage,
+          'project-instructions'
+        )
+      );
+    };
     const agent = new Agent({
       streamFn: (model, context, options) =>
         createProviderRetryStream(
@@ -351,36 +385,42 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // results that belongs to the turn just finished is already in the
       // context, so a model that asked for a new window mid-batch does not
       // lose results it is still holding.
-      prepareNextTurnWithContext: context
-        ? async (turn, signal) => {
-            const prepared = await context.prepareTurn({
-              messages: turn.context.messages,
-              model: resolved.model,
-              models: resolved.models,
-              thinkingLevel,
-              retention:
-                turn.toolResults.length > 0 || turn.message.stopReason === 'toolUse'
-                  ? 'active_turn'
-                  : 'completed_turn',
-              ...(signal ? { signal } : {}),
-            });
-            noteTurnPreparation(prepared);
-            if (prepared.compaction) {
-              // context-prompt-01. Replacing only the loop's `currentContext`
-              // leaves `agent.state.messages` holding the whole uncompacted
-              // history, and every `prompt()` rebuilds its context from THAT.
-              // The delegation resume below calls `prompt()` again inside this
-              // same run, so the window this compaction just bought was handed
-              // straight back: at best one full-size request with a missed
-              // cache prefix, at worst the overflow compaction exists to
-              // avoid. pi only re-prepares between turns of one `prompt()`
-              // call, so nothing downstream would have corrected it.
-              agent.state.messages = prepared.messages;
-            }
-            if (!prepared.compaction && !prepared.reminder) return undefined;
-            return { context: { ...turn.context, messages: prepared.messages } };
-          }
-        : undefined,
+      //
+      // decision 007 — it is also where an instruction file discovered by a
+      // tool call gets queued, so the hook is installed even with no compaction
+      // service. pi polls the steering queue right after calling this, so a
+      // message enqueued here lands in the very next request, after the tool
+      // results and before the assistant speaks again.
+      prepareNextTurnWithContext: async (turn, signal) => {
+        flushDiscoveredInstructions();
+        if (!context) return undefined;
+        const prepared = await context.prepareTurn({
+          messages: turn.context.messages,
+          model: resolved.model,
+          models: resolved.models,
+          thinkingLevel,
+          retention:
+            turn.toolResults.length > 0 || turn.message.stopReason === 'toolUse'
+              ? 'active_turn'
+              : 'completed_turn',
+          ...(signal ? { signal } : {}),
+        });
+        noteTurnPreparation(prepared);
+        if (prepared.compaction) {
+          // context-prompt-01. Replacing only the loop's `currentContext`
+          // leaves `agent.state.messages` holding the whole uncompacted
+          // history, and every `prompt()` rebuilds its context from THAT.
+          // The delegation resume below calls `prompt()` again inside this
+          // same run, so the window this compaction just bought was handed
+          // straight back: at best one full-size request with a missed
+          // cache prefix, at worst the overflow compaction exists to
+          // avoid. pi only re-prepares between turns of one `prompt()`
+          // call, so nothing downstream would have corrected it.
+          agent.state.messages = prepared.messages;
+        }
+        if (!prepared.compaction && !prepared.reminder) return undefined;
+        return { context: { ...turn.context, messages: prepared.messages } };
+      },
     });
 
     const unsubscribe = agent.subscribe(async (event) => {
@@ -476,6 +516,11 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
             data: { mode: permissions.mode, gear: permissions.gear },
           });
       }
+      // decision 007 — a directory discovered by the last tool call of the
+      // PREVIOUS run has nothing to ride into the model on, because that run
+      // ended before another turn boundary came round. Draining here puts it in
+      // this run's first request, right after the user's own message.
+      flushDiscoveredInstructions();
       await agent.prompt(prepared.text, prepared.images.length ? prepared.images : undefined);
       await agent.waitForIdle();
       // P5-2-2 — the parent going idle is not the end of the logical run while
