@@ -1,6 +1,6 @@
 # Runtime 加固与收口
 
-Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批次 A / B / C / D 已落地；批次 D2 补审修补待开工，Q013 待拍板）。
+Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批次 A / B / C / D 已落地；批次 D2 补审修补待开工，决策 013 已定全做，由新对话接手）。
 
 ## 范围
 
@@ -31,7 +31,7 @@ Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批�
 | [evidence/batch-c-2026-09-15.md](evidence/batch-c-2026-09-15.md) | 批次 C 落地记录：提交、偏离、转移项、逐波记录 |
 | [evidence/batch-d-2026-09-15.md](evidence/batch-d-2026-09-15.md) | 批次 D 落地记录：方式、代理与额度、偏离、转移项 |
 | [evidence/batch-d-audit-2026-09-15/](evidence/batch-d-audit-2026-09-15/README.md) | 批次 D 补审证据集：报告、129 条发现全文、接缝与批评者、上机检查单草案、结构化数据、18 份区域原文 |
-| [decisions/](decisions/) | 001 开第二个计划根；002 修补顺序与取舍计数规则；003 allow-session 保持会话级（答 Q003）；004 技能目录找到仓库根（答 Q004）；005 子代理 usage 并入 usage.updated（答 Q007）；006 中段坏行跳过重写（答 Q008，新开 T034）；007 删 targetPath、指令按官方分级只认 CLAUDE.md / AGENTS.md（答 Q001，新开 T035）；008 settingSources 三值开关管全部分层来源并定义 local 层（修订 007）；009 managed 模式下 native 视项目为可信，只有项目级模型设置不读（答 Q009）；010 随包默认策略维持底层，不压顶用户 / 项目层（答 Q010）；011 managed 模式 TUI 只需保证公司渠道可用，不封其他渠道（答 Q011，结案）；012 extensionUi 整链退役、免代码插件扩展推后（答 Q012，新开 T036） |
+| [decisions/](decisions/) | 001 开第二个计划根；002 修补顺序与取舍计数规则；003 allow-session 保持会话级（答 Q003）；004 技能目录找到仓库根（答 Q004）；005 子代理 usage 并入 usage.updated（答 Q007）；006 中段坏行跳过重写（答 Q008，新开 T034）；007 删 targetPath、指令按官方分级只认 CLAUDE.md / AGENTS.md（答 Q001，新开 T035）；008 settingSources 三值开关管全部分层来源并定义 local 层（修订 007）；009 managed 模式下 native 视项目为可信，只有项目级模型设置不读（答 Q009）；010 随包默认策略维持底层，不压顶用户 / 项目层（答 Q010）；011 managed 模式 TUI 只需保证公司渠道可用，不封其他渠道（答 Q011，结案）；012 extensionUi 整链退役、免代码插件扩展推后（答 Q012，新开 T036）；013 批次 D2 上机前修补全做、不压缩（答 Q013） |
 | [../runtime-evolution/evidence/runtime-audit-2026-09-14/](../runtime-evolution/evidence/runtime-audit-2026-09-14/README.md) | 审计报告、235 条发现全文、区域总评、接缝与批评者、结构化数据 |
 | [../../进度看板.md](../../进度看板.md) | 用户看板（implementation-status） |
 

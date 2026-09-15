@@ -48,7 +48,7 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 ## In Progress
 
-- **批次 D 已全部落地**（T029～T031，只读补审，2026-09-15），记录见 [evidence/batch-d-2026-09-15.md](evidence/batch-d-2026-09-15.md)，证据集见 [evidence/batch-d-audit-2026-09-15/README.md](evidence/batch-d-audit-2026-09-15/README.md)。129 条发现，确认 121（3 high / 39 medium / 79 low），去重 5 组、接缝新增 4 条后 119 条独立缺陷，分成 20 个修补组：批次 D2（上机前，T037～T048 + 文档回写 T055）与批次 F（上机后，T049～T054），最后一组并入 T032。**待拍板**：[Q013](open-questions.md) 上机前 12 组修补是否压缩。批次 A / B / C 记录见 [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md)、[evidence/batch-b-2026-09-14.md](evidence/batch-b-2026-09-14.md)、[evidence/batch-c-2026-09-15.md](evidence/batch-c-2026-09-15.md)。
+- **批次 D 已全部落地**（T029～T031，只读补审，2026-09-15），记录见 [evidence/batch-d-2026-09-15.md](evidence/batch-d-2026-09-15.md)，证据集见 [evidence/batch-d-audit-2026-09-15/README.md](evidence/batch-d-audit-2026-09-15/README.md)。129 条发现，确认 121（3 high / 39 medium / 79 low），去重 5 组、接缝新增 4 条后 119 条独立缺陷，分成 20 个修补组：批次 D2（上机前，T037～T048 + 文档回写 T055）与批次 F（上机后，T049～T054），最后一组并入 T032。**决策 013**：上机前 13 项全做、不压缩（Q013 结案），修复在新对话中执行。批次 A / B / C 记录见 [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md)、[evidence/batch-b-2026-09-14.md](evidence/batch-b-2026-09-14.md)、[evidence/batch-c-2026-09-15.md](evidence/batch-c-2026-09-15.md)。
 
 ## Next
 
@@ -102,7 +102,7 @@ T029～T031 已落地，任务描述与验收见上方 Done 段；证据集 [evi
 
 ### 批次 D2：补审修补（上机前，2026-09-15 新开）
 
-来源：批次 D 接缝审查员的 20 个修补组（[cross-and-critic.md](evidence/batch-d-audit-2026-09-15/cross-and-critic.md)「修补分组」），归属 fix-before-e 的 12 组 + docs-only 1 组。发现编号指向[批次 D 证据](evidence/batch-d-audit-2026-09-15/README.md)。3 条 high 全在本批。是否压缩见 Q013。
+来源：批次 D 接缝审查员的 20 个修补组（[cross-and-critic.md](evidence/batch-d-audit-2026-09-15/cross-and-critic.md)「修补分组」），归属 fix-before-e 的 12 组 + docs-only 1 组。发现编号指向[批次 D 证据](evidence/batch-d-audit-2026-09-15/README.md)。3 条 high 全在本批。[决策 013](decisions/013-batch-d2-fix-all-before-field.md)：全做、不压缩；建议顺序 T037 / T038 / T039 → T040 / T041 / T042 / T045 / T046 → T043 / T044 / T047 / T048，T055 可与任一波并行。执行方式沿用批次 C（每波两个实现代理 + 只读审阅，波间三套 tsc，全量 vitest 只在收口跑一次，每条修补至少一处反向验证）。
 
 | ID | 任务 | 严重级 | 覆盖的发现 | 验收 |
 |---|---|---|---|---|
