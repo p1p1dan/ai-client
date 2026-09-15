@@ -39,7 +39,7 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 ## In Progress
 
-- **批次 B 已全部落地**（T012～T024 + T034 / T035，八波，2026-09-14～15），第五～八波随文档提交一并推送。下一步批次 C（T025～T028）待派；Q009 / Q010 待拍板（不阻塞批次 C）。逐波记录见 [evidence/batch-b-2026-09-14.md](evidence/batch-b-2026-09-14.md)；批次 A 记录见 [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md)。
+- **批次 B 已全部落地**（T012～T024 + T034 / T035，八波，2026-09-14～15），第五～八波随文档提交一并推送。下一步批次 C（T025～T028）待派。Q009 / Q010 已拍板为决策 009 / 010（009 的代码半边已落地）；新开 Q011（TUI 项目信任由 pi 自决）。逐波记录见 [evidence/batch-b-2026-09-14.md](evidence/batch-b-2026-09-14.md)；批次 A 记录见 [evidence/batch-a-2026-09-14.md](evidence/batch-a-2026-09-14.md)。
 
 ## Next
 

@@ -9,9 +9,9 @@
    - `user`：`~/.claude/CLAUDE.md`（经 `prompt.globals`）、全局权限策略、用户 `mcp.json`、用户 skills / prompts。
    - `project`：项目 CLAUDE.md / AGENTS.md（根、父目录、子目录按需）、项目权限策略、项目 `mcp.json`、项目 skills / prompts。
    - `local`：新定义的本地不入库变体：权限 `.pi/agent/pi-permissions.local.jsonc`、MCP `.pi/mcp.local.json`、指令 `CLAUDE.local.md`（cwd 与每个父目录）。
-3. 随包 fail-closed 权限策略相当于托管策略，无论开关如何始终加载、优先级最高。
-4. 合并优先级从高到低：托管（随包）> 编程选项（run / bootstrap 请求里显式给的）> local > project > user。
-5. 未信任项目：`project` 与 `local` 视为关闭。
+3. 随包 fail-closed 权限策略无论开关如何始终加载。~~优先级最高~~（决策 010 收窄：仍是最底层默认，不压顶。）
+4. 合并优先级从高到低：~~托管（随包）>~~ 编程选项（run / bootstrap 请求里显式给的）> local > project > user > 随包默认（决策 010）。
+5. 未信任项目：`project` 与 `local` 视为关闭。managed 模式不等于未信任（决策 009）。
 
 ## 理由
 
