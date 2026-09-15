@@ -11,6 +11,11 @@ import { initialExtensionUi, reduceExtensionUi } from '@/components/chat/extensi
 import { PermissionActivityDetails } from '@/components/chat/PermissionActivityRows';
 import { derivePermissionActivityRow } from '@/components/chat/permissionActivityRow';
 import { canRespondToPermission } from '@/components/chat/questionCardModel';
+import { deriveRetryBanner } from '@/components/chat/retryBanner';
+import {
+  initialSubagentActivity,
+  reduceSubagentActivity,
+} from '@/components/chat/subagentActivityModel';
 import { deriveSessionReview } from '@/components/workspace-shell/sessionReview';
 import { applyRuntimeEvents, type ChatSession, type ChatSessionsState } from '../chatSessions';
 import { usePendingUserMessagesStore } from '../pendingUserMessages';
@@ -36,33 +41,36 @@ vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate }) }));
  * stops producing it, this one fails if the GUI stops reducing it correctly, and
  * between them "no GUI regression" is a claim with something behind it.
  *
- * The four surfaces P4-5 signs off are one describe block each. What makes them
- * worth asserting is that every defect they cover was SILENT: `applyRuntimeEvent`
+ * The four surfaces P4-5 signs off are one describe block each, and T017 added
+ * four more recordings below them — thinking and the question card, the retry
+ * banner, the compaction row, the delegation lane. What makes all of them worth
+ * asserting is that every defect they cover was SILENT: `applyRuntimeEvent`
  * returns `{}` for a tool row addressed to a message it cannot find, an
  * unrecognised dialog shape simply never opens a modal, and an unpaired
  * optimistic bubble just sits there. None of them throws.
  */
 
 const SESSION_ID = 'logical-gui';
-const FIXTURE = join(
-  import.meta.dirname,
-  '..',
-  '..',
-  '..',
-  'shared',
-  '__tests__',
-  'fixtures',
-  'nativeGuiEventStream.json'
-);
+const fixture = (name: string) =>
+  join(import.meta.dirname, '..', '..', '..', 'shared', '__tests__', 'fixtures', name);
 
 /**
  * `seq` and `timestamp` are stamped by the worker RPC server on the way out and
  * are dropped from the recording; the renderer needs them present and ordered,
  * so they are re-applied here from the array's own order.
  */
-const STREAM: RuntimeEvent[] = (
-  JSON.parse(readFileSync(FIXTURE, 'utf8')) as Array<Record<string, unknown>>
-).map((event, index) => ({ ...event, seq: index + 1, timestamp: 1_000 + index })) as RuntimeEvent[];
+function load(name: string): RuntimeEvent[] {
+  return (JSON.parse(readFileSync(fixture(name), 'utf8')) as Array<Record<string, unknown>>).map(
+    (event, index) => ({ ...event, seq: index + 1, timestamp: 1_000 + index })
+  ) as RuntimeEvent[];
+}
+
+const STREAM = load('nativeGuiEventStream.json');
+/** T017 — the four surfaces the P4-5 session never exercised. */
+const QUESTION_STREAM = load('nativeGuiQuestionEventStream.json');
+const COMPACTION_STREAM = load('nativeGuiCompactionEventStream.json');
+const RETRY_STREAM = load('nativeGuiRetryEventStream.json');
+const SUBAGENT_STREAM = load('nativeGuiSubagentEventStream.json');
 
 const session: ChatSession = {
   id: SESSION_ID,
@@ -347,5 +355,130 @@ describe('settings', () => {
       payload: { agent: 'pi', permissionGate: 'bundled' },
     } as RuntimeEvent);
     expect(isTierControlDegraded(usePermissionGateStore.getState().gates, SESSION_ID)).toBe(false);
+  });
+});
+
+/**
+ * T017 — the surfaces added to the recording, reduced the way the app does.
+ *
+ * Each of these fails silently in the renderer when it fails at all: a thinking
+ * block that never opens renders as nothing, a question card that never lands
+ * leaves the turn parked on a dock nobody can see, a retry banner that never
+ * clears promises an attempt that already happened, and a compaction row that
+ * is dropped removes the only explanation for why the model's memory changed.
+ */
+describe('thinking and the question card', () => {
+  it('streams the reasoning into a block of its own on the answering message', () => {
+    const messages = replay(QUESTION_STREAM).messages[SESSION_ID] ?? [];
+    const thinking = messages
+      .flatMap((message) => message.blocks)
+      .filter((block) => block.type === 'thinking');
+    expect(thinking).toHaveLength(1);
+    expect(thinking[0].text).toContain('guessing would be wrong');
+    // On the message that then speaks, ahead of what it says: a block addressed
+    // to a message that was never opened is dropped without a word, and one
+    // ordered after the answer reads as an afterthought the model never had.
+    const owner = messages.find((message) =>
+      message.blocks.some((block) => block.type === 'thinking')
+    );
+    expect(owner?.blocks.map((block) => block.type)).toEqual([
+      'thinking',
+      'text',
+      'tool_call',
+      'question',
+      'tool_result',
+    ]);
+  });
+
+  it('docks the question until it is answered, then retires the card resolved', () => {
+    let mid = baseState();
+    for (const event of QUESTION_STREAM) {
+      if (event.type === 'question.resolved') break;
+      mid = { ...mid, ...applyRuntimeEvents(mid, [event]) };
+    }
+    expect(mid.pendingQuestion).toMatchObject({ sessionId: SESSION_ID, questionId: 'call-ask' });
+    expect(mid.sessions.find((session) => session.id === SESSION_ID)?.status).toBe(
+      'waiting_question'
+    );
+
+    const final = replay(QUESTION_STREAM);
+    expect(final.pendingQuestion).toBeNull();
+    const card = (final.messages[SESSION_ID] ?? [])
+      .flatMap((message) => message.blocks)
+      .find((block) => block.type === 'question');
+    expect(card).toMatchObject({ questionId: 'call-ask', resolved: true });
+    expect(card?.questions?.[0]?.options?.map((option) => option.label)).toEqual([
+      'Postgres',
+      'SQLite',
+    ]);
+  });
+});
+
+describe('the retry banner', () => {
+  it('goes up on the retry and is gone by the time the turn ends', () => {
+    let state = baseState();
+    let raised: ReturnType<typeof deriveRetryBanner> = null;
+    for (const event of RETRY_STREAM) {
+      state = { ...state, ...applyRuntimeEvents(state, [event]) };
+      const banner = deriveRetryBanner({
+        retry: state.sessions.find((session) => session.id === SESSION_ID)?.retry,
+        inFlight: true,
+        outputSinceRetry: false,
+      });
+      if (banner) raised = banner;
+    }
+    // `errorStatus: null` is the transport-failure sentinel, and the wording
+    // turns on it: nothing upstream answered, so it is not an upstream error.
+    expect(raised).toEqual({
+      title: 'Network retry 1/3 — the turn is still running',
+      detail: 'Next attempt in 3s · PROVIDER_ERROR',
+    });
+    expect(state.sessions.find((session) => session.id === SESSION_ID)?.retry).toBeUndefined();
+    // And the turn still ends normally — a retry is not a failure.
+    expect(state.sessions.find((session) => session.id === SESSION_ID)?.status).toBe('idle');
+  });
+});
+
+describe('the compaction row', () => {
+  it('keeps the summary the runtime wrote about itself, as a notice in the turn', () => {
+    const messages = replay(COMPACTION_STREAM).messages[SESSION_ID] ?? [];
+    const system = messages.filter((message) => message.role === 'system');
+    expect(system).toHaveLength(1);
+    expect(system[0].blocks.map((block) => block.text).join('')).toContain(
+      'Context summary\n\nCHECKPOINT'
+    );
+    // Notices render unconditionally — outside the collapsible process shell —
+    // which is the placement a row explaining a memory change needs.
+    const turns = groupMessagesIntoTurns(messages);
+    expect(flattenTurnItems(turns[0]).map((item) => item.kind)).toEqual([
+      'toolGroup',
+      'notice',
+      'text',
+    ]);
+  });
+});
+
+describe('the delegation lane', () => {
+  it('rebuilds the delegate lane from the recorded activity', () => {
+    let lanes = initialSubagentActivity;
+    for (const event of SUBAGENT_STREAM) lanes = reduceSubagentActivity(lanes, event);
+    const lane = lanes.lanes['call-task'];
+    expect(lane).toMatchObject({
+      agentType: 'explorer',
+      description: 'survey notes',
+      status: 'completed',
+    });
+    // The delegate's own work, in order: what it ran and what it reported.
+    expect(lane.rows.map((row) => (row.kind === 'tool' ? `${row.name}:${row.status}` : row.kind))) //
+      .toEqual(['read:ok', 'text']);
+    expect(lane.report?.status).toBe('completed');
+    // The parent's transcript keeps the report out of the conversation; the
+    // lane is where it is meant to be visible.
+    expect(
+      (replay(SUBAGENT_STREAM).messages[SESSION_ID] ?? [])
+        .flatMap((message) => message.blocks)
+        .map((block) => block.text ?? '')
+        .join('')
+    ).not.toContain('EXPLORER-REPORT');
   });
 });

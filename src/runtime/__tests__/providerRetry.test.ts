@@ -356,6 +356,83 @@ describe('createProviderRetryStream', () => {
     expect(events).toEqual(['start', 'error']);
   });
 
+  it('names the status the upstream answered with, and ends the wait when the retry streams', async () => {
+    // rpc-projector-02. Both halves feed a user-facing banner: the wording
+    // turns on whether an upstream answered at all (`503` vs a socket that
+    // never connected), and the banner has to come down at the moment the wait
+    // actually ends rather than when the turn eventually finishes.
+    const announced: Array<{ attempt: number; status?: number }> = [];
+    const settled: number[] = [];
+    const created = createProviderRetryBudget({
+      onRetry: ({ attempt, status }) => announced.push({ attempt, status }),
+      onRetrySettled: () => settled.push(announced.length),
+      sleep: async () => {},
+    });
+    // Drive the capture wrapper the way a real request does, so the controller
+    // is holding the failed response's status when the failure is classified.
+    const options = created.requestOptions({
+      fetch: vi.fn().mockResolvedValue(new Response('', { status: 503 })) as never,
+    });
+    await (options.fetch as never as typeof fetch)('https://provider.invalid');
+
+    let attempts = 0;
+    const stream = createProviderRetryStream(
+      model,
+      context,
+      {},
+      () => {
+        attempts += 1;
+        return attempts === 1 ? failedStream() : successfulStream();
+      },
+      created.controller
+    );
+    for await (const _event of stream) void _event;
+
+    expect(announced).toEqual([{ attempt: 1, status: 503 }]);
+    // Once, and after the wait it ends — not before it was ever announced.
+    expect(settled).toEqual([1]);
+  });
+
+  it('says nothing about a retry when the first request simply worked', async () => {
+    const settled: string[] = [];
+    const created = createProviderRetryBudget({
+      onRetrySettled: () => settled.push('settled'),
+      sleep: async () => {},
+    });
+    const stream = createProviderRetryStream(
+      model,
+      context,
+      {},
+      successfulStream,
+      created.controller
+    );
+    for await (const _event of stream) void _event;
+    expect(settled).toEqual([]);
+  });
+
+  it('leaves the status undefined when nothing upstream ever answered', async () => {
+    // A transport failure: no response, so no status. The projector turns this
+    // into the banner's `errorStatus: null` sentinel.
+    const announced: Array<number | undefined> = [];
+    const created = createProviderRetryBudget({
+      onRetry: ({ status }) => announced.push(status),
+      sleep: async () => {},
+    });
+    let attempts = 0;
+    const stream = createProviderRetryStream(
+      model,
+      context,
+      {},
+      () => {
+        attempts += 1;
+        return attempts === 1 ? failedStream({ errorMessage: 'fetch failed' }) : successfulStream();
+      },
+      created.controller
+    );
+    for await (const _event of stream) void _event;
+    expect(announced).toEqual([undefined]);
+  });
+
   it('reports an abort during the backoff as an aborted turn', async () => {
     const abort = new AbortController();
     const created = createProviderRetryBudget({

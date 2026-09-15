@@ -7,6 +7,7 @@ import {
   type WorkerRpcEvent,
 } from '@shared/types/workerRpc';
 import { describe, expect, it, vi } from 'vitest';
+import { STDERR_FORWARD_MAX_LINES_PER_TURN } from '../../../../agent-host/stderrRedaction';
 import { BOOTSTRAP_REQUEST_TIMEOUT_MS } from '../createPiWorkerSlot';
 import {
   resolveDefaultWorkerCapacity,
@@ -52,6 +53,8 @@ interface FakeSlotRecord {
   dispose: ReturnType<typeof vi.fn>;
   forceKillNow: ReturnType<typeof vi.fn>;
   emit(event: Record<string, unknown>): void;
+  /** One raw stderr chunk, split at whatever boundary the OS handed over. */
+  stderr(chunk: string): void;
   crash(message?: string): void;
 }
 
@@ -120,6 +123,7 @@ function createHarness(
     const onLifecycle = options.onLifecycle as
       | ((event: WorkerSlotLifecycleEvent) => void)
       | undefined;
+    const onStderr = options.onStderr as ((chunk: string, generation: number) => void) | undefined;
     const request = vi.fn(async (type: string, payload: unknown) => {
       if (type === 'worker.send') {
         return { accepted: true, requestId: (payload as { requestId: string }).requestId };
@@ -272,6 +276,9 @@ function createHarness(
           type: 'runtime.event',
           payload: event,
         });
+      },
+      stderr(chunk) {
+        onStderr?.(chunk, generation);
       },
       crash(message = 'worker crashed') {
         onLifecycle?.({
@@ -804,6 +811,53 @@ describe('WorkerManager identity and capacity', () => {
  * disconnected, which is why the value must travel on BOTH lifecycle events and
  * must not be defaulted when nothing reported it.
  */
+/**
+ * rpc-projector-17 — the worker's stderr as a session event.
+ *
+ * Everything downstream of this has existed since T-35 and had nothing to
+ * consume: the Context panel's "Host stderr" group, the runtime-facts ring, and
+ * the liveness classifier that reads a stderr line as proof the subprocess is
+ * alive. Until this producer landed, a worker that printed its reason for
+ * failing put it in a log file the user never opens.
+ */
+describe('WorkerManager worker stderr forwarding', () => {
+  it('forwards whole redacted lines and holds an unfinished one back', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1');
+    h.events.length = 0;
+
+    // Two lines and the start of a third, split mid-line the way a pipe does.
+    h.records[0].stderr('boot ok\nfailed with sk-ant-abc123secret\npartial');
+    expect(h.events.map((event) => event.payload)).toEqual([
+      { line: 'boot ok' },
+      // The credential is destroyed BEFORE the event crosses IPC; the bridge
+      // downstream is content-agnostic and gets no second chance.
+      { line: 'failed with [redacted]' },
+    ]);
+    expect(h.events.every((event) => event.sessionId === 's1')).toBe(true);
+    expect(h.events.every((event) => event.type === 'session.stderr')).toBe(true);
+
+    h.events.length = 0;
+    h.records[0].stderr(' line\n');
+    expect(h.events.map((event) => event.payload)).toEqual([{ line: 'partial line' }]);
+  });
+
+  it('caps a chatty turn and says that it did', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1');
+    h.events.length = 0;
+
+    const lines = STDERR_FORWARD_MAX_LINES_PER_TURN + 5;
+    h.records[0].stderr(`${Array.from({ length: lines }, (_, i) => `line ${i}`).join('\n')}\n`);
+    // The cap, plus one line that says the rest is in the log — a silent
+    // cutoff would leave the panel showing a stale excerpt as if it were live.
+    expect(h.events).toHaveLength(STDERR_FORWARD_MAX_LINES_PER_TURN + 1);
+    expect(h.events.at(-1)?.payload).toMatchObject({
+      line: expect.stringContaining('worker log only'),
+    });
+  });
+});
+
 describe('WorkerManager permission gate reporting (D10)', () => {
   it('reports the degraded gate on session.created', async () => {
     const h = createHarness({ permissionGate: 'user_configured' });

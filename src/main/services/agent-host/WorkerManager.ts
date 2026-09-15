@@ -76,6 +76,10 @@ import {
   type WorkerTreePayload,
   type WorkerTreeResult,
 } from '@shared/types/workerRpc';
+import {
+  STDERR_FORWARD_MAX_LINES_PER_TURN,
+  sanitizeStderrLine,
+} from '../../../agent-host/stderrRedaction';
 import { sessionIndexService } from '../chat/SessionIndexService';
 import {
   type CreatedPiImport,
@@ -176,6 +180,13 @@ interface ManagedSlot {
   stderrPending: string;
   /** Last RECENT_STDERR_LIMIT stderr lines, replayed when the worker dies. */
   recentStderr: string[];
+  /**
+   * rpc-projector-17 — how many stderr lines this turn has already forwarded,
+   * and which turn that count belongs to. `undefined` until the first line, and
+   * a turn that never produced one never pays for either field.
+   */
+  stderrForwarded?: number;
+  stderrForwardTurn?: string | null;
 }
 
 interface BlockingRequestOrigin {
@@ -2132,7 +2143,51 @@ export class WorkerManager {
     entry.stderrPending = drained.pending;
     entry.recentStderr = pushRecentStderr(entry.recentStderr, drained.lines);
     const prefix = `[pi-worker:${entry.logicalSessionId}:g${generation}:stderr]`;
-    for (const line of drained.lines) this.log(prefix, line);
+    for (const line of drained.lines) {
+      this.log(prefix, line);
+      this.forwardStderr(entry, line);
+    }
+  }
+
+  /**
+   * rpc-projector-17 — put the worker's own diagnostics where the user is.
+   *
+   * `session.stderr` has had a type, a redaction module written for it and
+   * three renderer consumers — the Context panel's "Host stderr" group, the
+   * runtime-facts ring, the turn-liveness classifier — since T-35, and no
+   * producer at all since the Claude CLI host it was built for was replaced.
+   * The worker IS the session's subprocess now, and this manager already holds
+   * both halves the event needs: whole assembled lines, and the logical session
+   * they came from. So the gap is the emit, and this is it.
+   *
+   * Redacted before it crosses IPC, never after: the bridge is a
+   * content-agnostic passthrough, so this is the only gate between a credential
+   * printed to stderr and a screenshot of the UI.
+   *
+   * Capped per turn, and the cap announces itself. A worker stuck in a retry
+   * loop streams stderr for as long as it runs, and one IPC event per line is a
+   * cost the renderer should not pay; the log and the crash dump still keep
+   * every line. A silent cutoff would be the worse failure — the panel would
+   * show a plausible excerpt with no hint that it stopped being current.
+   */
+  private forwardStderr(entry: ManagedSlot, line: string): void {
+    if (entry.stderrForwardTurn !== entry.activeRequestId) {
+      entry.stderrForwardTurn = entry.activeRequestId;
+      entry.stderrForwarded = 0;
+    }
+    const forwarded = entry.stderrForwarded ?? 0;
+    if (forwarded > STDERR_FORWARD_MAX_LINES_PER_TURN) return;
+    entry.stderrForwarded = forwarded + 1;
+    this.dispatch({
+      type: 'session.stderr',
+      sessionId: entry.logicalSessionId,
+      payload: {
+        line:
+          forwarded === STDERR_FORWARD_MAX_LINES_PER_TURN
+            ? `…more stderr this turn is in the worker log only (forwarding capped at ${STDERR_FORWARD_MAX_LINES_PER_TURN} lines)`
+            : sanitizeStderrLine(line),
+      },
+    });
   }
 
   /** Replay the dead worker's own diagnostics; clears the buffer. */

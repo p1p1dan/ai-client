@@ -1,0 +1,125 @@
+/**
+ * permissions-08 ∥ rpc-projector-18 — what the gate says when nobody answers.
+ *
+ * The 120-second deadline is enforced by aborting the same signal a cancel
+ * aborts, so before T017 "you ran out of time" and "you pressed stop" reached
+ * every surface as the identical event. Two records were wrong because of it:
+ * the approval card reported the countdown as `aborted`, and the audit row fell
+ * back on a vocabulary that draws a timeout as a decision somebody made.
+ *
+ * Nothing here throws on the old behaviour — the tool call is denied either way.
+ * What changes is only what the transcript can afterwards say happened, which
+ * is exactly why it needed a test rather than a look.
+ */
+
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
+import { afterEach, beforeEach, expect, it } from 'vitest';
+import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
+import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
+import { permissionActivityEvent } from '../plugins/permissions/activity.ts';
+import {
+  PERMISSION_TIMEOUT_REASON,
+  type PermissionActivityRecord,
+} from '../plugins/permissions/index.ts';
+import { createPermissionPrompt } from '../worker/permissionPrompt.ts';
+
+let dir: string;
+const runtimes: RuntimeHandle[] = [];
+beforeEach(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'runtime-permissions-'));
+});
+afterEach(async () => {
+  for (const runtime of runtimes.splice(0)) await runtime.dispose();
+  await rm(dir, { recursive: true, force: true });
+});
+
+/**
+ * The real pair: the worker's card as the gate's `approve`, so one deadline
+ * drives both records. Wired by hand rather than through `NativeWorkerRuntime`
+ * because the deadline has to be short enough to wait out in a test.
+ */
+async function gate(timeoutMs: number) {
+  const events: RuntimeEventDraft[] = [];
+  const activity: PermissionActivityRecord[] = [];
+  const prompt = createPermissionPrompt({
+    sessionId: 'logical',
+    cwd: dir,
+    emit: (event) => events.push(event),
+    timeoutMs,
+  });
+  const faux = fauxProvider({ provider: 'test', models: [{ id: 'test', name: 'Test' }] });
+  faux.setResponses([fauxAssistantMessage('ok')]);
+  const runtime = await createRuntime({
+    env: {},
+    traceDir: null,
+    providers: [faux.provider],
+    tools: { cwd: dir },
+    permissions: { gear: 'ask', approve: prompt.approve, timeoutMs },
+  });
+  runtimes.push(runtime);
+  runtime.ctx.runtimePermissions.onActivity((record) => activity.push(record));
+  return { events, activity, permissions: runtime.ctx.runtimePermissions };
+}
+
+const REQUEST = (path: string) => ({ tool: 'write', toolCallId: 'call-1', path });
+
+it('records a countdown that ran out as a timeout, on the card and in the audit row', async () => {
+  const { events, activity, permissions } = await gate(25);
+  await expect(permissions.authorize(REQUEST(join(dir, 'note.txt')))).rejects.toMatchObject({
+    code: 'tool_denied',
+  });
+
+  // The card: `timed_out`, which the block has always been able to draw and
+  // which nothing anywhere produced.
+  expect(events.map((event) => event.type)).toEqual([
+    'permission.requested',
+    'permission.resolved',
+  ]);
+  expect(events[1].payload).toMatchObject({ allow: false, autoReason: 'timed_out' });
+
+  // The audit row: its own source, mapped to its own resolution. `cancelled`
+  // would say the turn was stopped and `user_denied` would say the user
+  // refused; both are statements about a person who was not there.
+  const decision = activity.find((record) => record.phase === 'decision');
+  expect(decision).toMatchObject({ decision: 'deny', source: 'timed-out' });
+  expect(permissionActivityEvent('logical', decision!).payload).toMatchObject({
+    result: 'deny',
+    resolution: 'timed_out',
+  });
+});
+
+it('still calls a cancelled request cancelled', async () => {
+  // The other arm of the same abort. A stop is a thing the user did, and the
+  // two must not be reported as one.
+  const { events, activity, permissions } = await gate(10_000);
+  const controller = new AbortController();
+  const pending = permissions.authorize(REQUEST(join(dir, 'note.txt')), controller.signal);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  controller.abort();
+  await expect(pending).rejects.toMatchObject({ code: 'tool_denied' });
+  expect(events[1].payload).toMatchObject({ autoReason: 'aborted' });
+  expect(activity.find((record) => record.phase === 'decision')).toMatchObject({
+    source: 'cancelled',
+  });
+});
+
+it('reads the reason off the signal even when the card is asked after it aborted', () => {
+  // `AbortSignal.any` forwards the reason as given, and the prompt compares it
+  // by value; an already-aborted signal takes the early-return path, which had
+  // its own hard-coded `aborted`.
+  const events: RuntimeEventDraft[] = [];
+  const prompt = createPermissionPrompt({
+    sessionId: 'logical',
+    cwd: dir,
+    emit: (e) => events.push(e),
+  });
+  const controller = new AbortController();
+  controller.abort(PERMISSION_TIMEOUT_REASON);
+  return prompt.approve(REQUEST(join(dir, 'note.txt')), controller.signal).then((decision) => {
+    expect(decision).toBe('deny');
+    expect(events.at(-1)?.payload).toMatchObject({ autoReason: 'timed_out' });
+  });
+});

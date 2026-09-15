@@ -123,10 +123,11 @@ const PATH_RULES: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
 export const STDERR_LINE_MAX_CHARS = 2000;
 
 /**
- * Per-turn forwarding cap: the endless `api_retry` loop this repo has already
- * fought (see `claudeRuntime.ts`'s TTFT watchdog) streams stderr forever, and
- * the renderer must not pay one IPC event per line for it. The Host log keeps
- * every line regardless — the cap only bounds the UI excerpt.
+ * Per-turn forwarding cap: a subprocess stuck in a retry loop streams stderr
+ * for as long as it runs, and the renderer must not pay one IPC event per line
+ * for it. The log keeps every line regardless — the cap only bounds the UI
+ * excerpt. Enforced by `WorkerManager.forwardStderr`, which is this module's
+ * caller since T017 gave `session.stderr` a producer again.
  */
 export const STDERR_FORWARD_MAX_LINES_PER_TURN = 50;
 

@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import {
   fauxAssistantMessage,
   fauxProvider,
+  fauxText,
+  fauxThinking,
   fauxToolCall,
 } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -56,6 +58,43 @@ const SUBAGENT_FIXTURE = join(
   '__tests__',
   'fixtures',
   'nativeGuiSubagentEventStream.json'
+);
+/**
+ * T017 — three more surfaces the renderer draws and this pair never recorded.
+ *
+ * One session each rather than more turns in the main recording: that one is
+ * P4-5's sign-off and folding new rounds into it would renumber its ids, hiding
+ * a real change in the noise. Each is small, and each covers a surface whose
+ * failure mode is silence — a thinking block that never opens, a question card
+ * that never appears, a summary row that leaves no trace, a retry the user
+ * cannot tell from a slow model.
+ */
+const QUESTION_FIXTURE = join(
+  import.meta.dirname,
+  '..',
+  '..',
+  'shared',
+  '__tests__',
+  'fixtures',
+  'nativeGuiQuestionEventStream.json'
+);
+const COMPACTION_FIXTURE = join(
+  import.meta.dirname,
+  '..',
+  '..',
+  'shared',
+  '__tests__',
+  'fixtures',
+  'nativeGuiCompactionEventStream.json'
+);
+const RETRY_FIXTURE = join(
+  import.meta.dirname,
+  '..',
+  '..',
+  'shared',
+  '__tests__',
+  'fixtures',
+  'nativeGuiRetryEventStream.json'
 );
 const HOST: RuntimeHostConfig = {
   carrier: 'electron-utility',
@@ -446,6 +485,250 @@ describe('the delegation stream the GUI receives (P5-2)', () => {
     );
     expect(delegate?.type === 'permission.activity' && delegate.payload.delegationId).toBeTruthy();
   }, 60_000);
+});
+
+/**
+ * Thinking, then a question the user answers.
+ *
+ * The thinking block is the first half on purpose: it is the only surface where
+ * the projector opens a block of its own, and a reasoning model puts one in
+ * front of nearly every answer. The `ask` half then covers the other card the
+ * renderer can raise — same park-and-resume shape as a permission gate, with
+ * the difference that skipping it is a normal answer rather than a refusal.
+ */
+async function runGuiQuestionSession(): Promise<RuntimeEvent[]> {
+  faux.setResponses([
+    fauxAssistantMessage(
+      [
+        fauxThinking('They have not said which store to use, so guessing would be wrong.'),
+        fauxText('One thing first.'),
+        fauxToolCall(
+          'ask',
+          {
+            questions: [
+              {
+                question: 'Which database?',
+                header: 'Storage',
+                options: [{ label: 'Postgres', description: 'Relational' }, { label: 'SQLite' }],
+              },
+            ],
+          },
+          { id: 'call-ask' }
+        ),
+      ],
+      { stopReason: 'toolUse' }
+    ),
+    fauxAssistantMessage('Postgres it is.'),
+  ]);
+  await call('worker.bootstrap', {
+    logicalSessionId: SESSION,
+    cwd: workspace,
+    permissions: { mode: 'agent', gear: 'ask' },
+  });
+  await call('worker.send', {
+    logicalSessionId: SESSION,
+    requestId: 'turn-1',
+    attemptId: 'attempt-1',
+    text: 'set up the database',
+    model: MODEL,
+  });
+  const question = await waitFor(
+    () =>
+      events().find((event) => event.type === 'question.requested') as
+        | Extract<RuntimeEvent, { type: 'question.requested' }>
+        | undefined,
+    'the question'
+  );
+  // Answered by the tool's OWN item id, not by position: the ids are what keeps
+  // two identically worded questions apart, and an answer under the wrong key
+  // reaches the model as a question nobody answered.
+  const key = question.payload.questions[0]?.id;
+  if (!key) throw new Error('the question arrived without per-item ids');
+  await call('worker.question.respond', {
+    logicalSessionId: SESSION,
+    questionId: question.payload.questionId,
+    answers: { [key]: 'Postgres' },
+  });
+  await waitFor(
+    () =>
+      events().find((event) => event.type === 'session.status' && event.payload.status === 'idle'),
+    'the turn to go idle'
+  );
+  return events();
+}
+
+/**
+ * A model that asks for a fresh window mid-turn.
+ *
+ * The compaction row is a system message the runtime writes about itself, and
+ * it is the only thing on screen that explains why the model's memory of the
+ * conversation just changed. The third response is the summary request the
+ * compaction makes on its own behalf.
+ */
+async function runGuiCompactionSession(): Promise<RuntimeEvent[]> {
+  faux.setResponses([
+    fauxAssistantMessage([fauxToolCall('new_context', {}, { id: 'call-compact' })], {
+      stopReason: 'toolUse',
+    }),
+    fauxAssistantMessage('CHECKPOINT: the user asked to start a fresh window.'),
+    fauxAssistantMessage('Starting fresh — the note says the answer is 42.'),
+  ]);
+  await call('worker.bootstrap', {
+    logicalSessionId: SESSION,
+    cwd: workspace,
+    permissions: { mode: 'agent', gear: 'ask' },
+  });
+  await call('worker.send', {
+    logicalSessionId: SESSION,
+    requestId: 'turn-1',
+    attemptId: 'attempt-1',
+    text: 'summarize what we have and carry on',
+    model: MODEL,
+  });
+  await waitFor(
+    () =>
+      events().find((event) => event.type === 'session.status' && event.payload.status === 'idle'),
+    'the turn to go idle'
+  );
+  return events();
+}
+
+/**
+ * A gateway fault on the first request, then the same turn recovering.
+ *
+ * Thrown rather than answered: faux reports a thrown factory as an error event
+ * with no preceding `start`, which is the setup failure `providerRetry` owns.
+ * The wait is REAL (3s, the first rung of the ladder) because the schedule is
+ * not injectable from here — and the recording is what proves the banner both
+ * appears and comes down without the turn having to end first.
+ */
+async function runGuiRetrySession(): Promise<RuntimeEvent[]> {
+  faux.setResponses([
+    () => {
+      throw new Error('503: service unavailable');
+    },
+    fauxAssistantMessage('Recovered after the gateway hiccup.'),
+  ]);
+  await call('worker.bootstrap', {
+    logicalSessionId: SESSION,
+    cwd: workspace,
+    permissions: { mode: 'agent', gear: 'ask' },
+  });
+  await call('worker.send', {
+    logicalSessionId: SESSION,
+    requestId: 'turn-1',
+    attemptId: 'attempt-1',
+    text: 'say something',
+    model: MODEL,
+  });
+  await waitFor(
+    () =>
+      events().find((event) => event.type === 'session.status' && event.payload.status === 'idle'),
+    'the turn to go idle',
+    30_000
+  );
+  return events();
+}
+
+/**
+ * T017 — the three recordings above, each asserted once on the runtime side.
+ *
+ * The behaviour checks sit in the same `it` as the recording rather than in
+ * `it`s of their own: every one of them would need its own full session, and
+ * this file already pays for seven. The renderer half of each surface is
+ * asserted separately in `nativeStreamReplay.test.ts`.
+ */
+describe('the surfaces T017 added to the recording', () => {
+  it('records a turn that thinks out loud and then asks', async () => {
+    const stream = await runGuiQuestionSession();
+    // The thinking block opens, streams and closes on the same message as the
+    // answer — a block that never closes leaves the timeline mid-thought.
+    const thinking = stream.filter((event) => event.type.startsWith('thinking.'));
+    expect(thinking.map((event) => event.type)).toEqual([
+      'thinking.started',
+      'thinking.delta',
+      'thinking.completed',
+    ]);
+    expect(new Set(thinking.map((event) => (event.payload as { blockId: string }).blockId)).size) //
+      .toBe(1);
+    // The card is asked and answered on one id, which is how the dock retires.
+    expect(
+      stream
+        .filter((event) => event.type.startsWith('question.'))
+        .map((event) => [event.type, (event.payload as { questionId: string }).questionId])
+    ).toEqual([
+      ['question.requested', 'call-ask'],
+      ['question.resolved', 'call-ask'],
+    ]);
+    const recorded = normalize(stream, workspace);
+    if (process.env.AICLIENT_UPDATE_FIXTURES) {
+      await writeFile(
+        QUESTION_FIXTURE,
+        `${JSON.stringify(recorded, null, 2)}
+`
+      );
+    }
+    expect(recorded).toEqual(JSON.parse(await readFile(QUESTION_FIXTURE, 'utf8')));
+  }, 30_000);
+
+  it('records the summary row a fresh context window leaves behind', async () => {
+    const stream = await runGuiCompactionSession();
+    // A system message, opened and closed around one delta. The renderer draws
+    // it as a compaction row; without it the model's memory changes silently.
+    const system = stream.filter(
+      (event) => event.type === 'message.started' && event.payload.role === 'system'
+    );
+    expect(system).toHaveLength(1);
+    const messageId = (system[0].payload as { messageId: string }).messageId;
+    expect(
+      stream.find(
+        (event) =>
+          event.type === 'message.delta' &&
+          (event.payload as { messageId: string }).messageId === messageId
+      )?.payload
+    ).toMatchObject({ text: expect.stringContaining('Context summary') });
+    const recorded = normalize(stream, workspace);
+    if (process.env.AICLIENT_UPDATE_FIXTURES) {
+      await writeFile(
+        COMPACTION_FIXTURE,
+        `${JSON.stringify(recorded, null, 2)}
+`
+      );
+    }
+    expect(recorded).toEqual(JSON.parse(await readFile(COMPACTION_FIXTURE, 'utf8')));
+  }, 30_000);
+
+  it('records the retry banner going up and coming back down', async () => {
+    const stream = await runGuiRetrySession();
+    const statuses = stream.filter((event) => event.type === 'session.status');
+    // rpc-projector-02: `running` throughout — the turn IS alive — with the
+    // retry riding along on exactly one of them and gone by the next.
+    expect(statuses.map((event) => event.payload.status)).toEqual([
+      'running',
+      'running',
+      'running',
+      'idle',
+    ]);
+    expect(statuses[1].payload.retry).toMatchObject({
+      attempt: 1,
+      maxRetries: 3,
+      delayMs: 3_000,
+      // No status: faux never reaches the fetch wrapper, the same shape a
+      // socket that never connected produces.
+      errorStatus: null,
+      error: 'PROVIDER_ERROR',
+    });
+    expect(statuses[2].payload.retry).toBeUndefined();
+    const recorded = normalize(stream, workspace);
+    if (process.env.AICLIENT_UPDATE_FIXTURES) {
+      await writeFile(
+        RETRY_FIXTURE,
+        `${JSON.stringify(recorded, null, 2)}
+`
+      );
+    }
+    expect(recorded).toEqual(JSON.parse(await readFile(RETRY_FIXTURE, 'utf8')));
+  }, 30_000);
 });
 
 describe('the stream the GUI receives from the native backend (P4-5)', () => {

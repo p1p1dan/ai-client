@@ -1,0 +1,131 @@
+[
+  {
+    "type": "session.status",
+    "sessionId": "logical-gui",
+    "payload": {
+      "status": "running"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "user-turn-1-1",
+      "role": "user",
+      "attemptId": "attempt-1"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.delta",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "user-turn-1-1",
+      "blockId": "user-turn-1-1-text",
+      "text": "say something"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "user-turn-1-1"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "session.status",
+    "sessionId": "logical-gui",
+    "payload": {
+      "status": "running",
+      "retry": {
+        "attempt": 1,
+        "maxRetries": 3,
+        "delayMs": 3000,
+        "errorStatus": null,
+        "error": "PROVIDER_ERROR"
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "session.status",
+    "sessionId": "logical-gui",
+    "payload": {
+      "status": "running"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-2",
+      "role": "assistant",
+      "model": "faux/faux-e2e"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.delta",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-2",
+      "blockId": "asst-turn-1-2-text",
+      "text": "Recovered after the gateway hiccup."
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "message.completed",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-2"
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "usage.updated",
+    "sessionId": "logical-gui",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "session.completed",
+    "sessionId": "logical-gui",
+    "payload": {},
+    "requestId": "turn-1"
+  },
+  {
+    "type": "session.status",
+    "sessionId": "logical-gui",
+    "payload": {
+      "status": "idle"
+    },
+    "requestId": "turn-1"
+  }
+]

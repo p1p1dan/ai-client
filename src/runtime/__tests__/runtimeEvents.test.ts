@@ -1,14 +1,16 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { AgentEvent, AgentMessage } from '@earendil-works/pi-agent-core';
 import {
   fauxAssistantMessage,
   fauxProvider,
   fauxToolCall,
 } from '@earendil-works/pi-ai/providers/faux';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
+import { RuntimeEventProjector } from '../events/projector.ts';
 
 const runtimes: RuntimeHandle[] = [];
 const dirs: string[] = [];
@@ -238,3 +240,240 @@ it('reads a tool result out of its content blocks instead of stringifying them',
   expect(output(undefined)).toBe('');
   expect(output({ content: [{ type: 'image', data: 'x' }] })).toBe('[{"type":"image","data":"x"}]');
 });
+
+/**
+ * T017 — the projector's own seams, driven directly.
+ *
+ * Every case below covers a defect that produced NO error: a phantom message
+ * the timeline filtered out, a tool row on the wrong id, a `tool.updated` the
+ * renderer discarded on its first line, a rewritten snapshot that muted the
+ * rest of a message. The runtime kept working through all of them, which is
+ * why they survived to an audit.
+ */
+describe('T017 · projection seams', () => {
+  function projector(): { events: RuntimeEventDraft[]; projection: RuntimeEventProjector } {
+    const events: RuntimeEventDraft[] = [];
+    const projection = new RuntimeEventProjector(
+      { sessionId: 'logical', emit: (event) => events.push(event) },
+      'run'
+    );
+    return { events, projection };
+  }
+  /** The cumulative snapshot shape pi streams, as one `message_update`. */
+  function update(message: AgentMessage): AgentEvent {
+    return {
+      type: 'message_update',
+      message,
+      assistantMessageEvent: { type: 'start', partial: message } as never,
+    };
+  }
+
+  it('hangs the tool rows on the message that asked for them', () => {
+    // rpc-projector-03. pi emits the tool rows AFTER `message_end`, so closing
+    // the message there left the model's own words in one message and the calls
+    // it made in a second, model-less one minted to carry them.
+    const { events, projection } = projector();
+    const message = fauxAssistantMessage(
+      [
+        { type: 'text', text: 'Looking at the notes.' },
+        fauxToolCall('read', { path: 'notes.txt' }, { id: 'call-1' }),
+      ],
+      { stopReason: 'toolUse' }
+    );
+    projection.start();
+    projection.observe({ type: 'message_start', message });
+    projection.observe(update(message));
+    projection.observe({ type: 'message_end', message });
+    projection.observe({
+      type: 'tool_execution_start',
+      toolCallId: 'call-1',
+      toolName: 'read',
+      args: { path: 'notes.txt' },
+    });
+    projection.observe({
+      type: 'tool_execution_end',
+      toolCallId: 'call-1',
+      toolName: 'read',
+      result: 'the answer is 42',
+      isError: false,
+    });
+    projection.observe({ type: 'turn_end', message, toolResults: [] });
+    const started = events.filter((event) => event.type === 'message.started');
+    expect(started).toHaveLength(1);
+    const messageId = started[0].payload.messageId;
+    expect(events.find((event) => event.type === 'tool.started')?.payload.messageId).toBe(
+      messageId
+    );
+    expect(events.find((event) => event.type === 'tool.completed')?.payload.messageId).toBe(
+      messageId
+    );
+    // Closed once, by the round ending — not by the message that opened it.
+    expect(
+      events.filter((event) => event.type === 'message.completed').map((e) => e.payload.messageId)
+    ).toEqual([messageId]);
+  });
+
+  it('opens no message for an assistant turn that says nothing', () => {
+    // rpc-projector-03, the other half: an assistant message is opened by its
+    // first CONTENT. A pure tool-call turn has none, and opening one on the
+    // announcement produced the empty `started` + `completed` pair the timeline
+    // only hid by filtering on `blocks.length > 0`.
+    const { events, projection } = projector();
+    const message = fauxAssistantMessage(
+      [fauxToolCall('read', { path: 'notes.txt' }, { id: 'call-1' })],
+      { stopReason: 'toolUse' }
+    );
+    projection.start();
+    projection.observe({ type: 'message_start', message });
+    projection.observe(update(message));
+    projection.observe({ type: 'message_end', message });
+    expect(events.filter((event) => event.type.startsWith('message.'))).toEqual([]);
+    projection.observe({
+      type: 'tool_execution_start',
+      toolCallId: 'call-1',
+      toolName: 'read',
+      args: { path: 'notes.txt' },
+    });
+    projection.observe({ type: 'turn_end', message, toolResults: [] });
+    // Exactly one message exists for the whole turn, and it is the one the tool
+    // row hangs on.
+    const started = events.filter((event) => event.type === 'message.started');
+    expect(started).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'message.completed')).toHaveLength(1);
+  });
+
+  it('stamps the announced model on a message a tool row minted', () => {
+    // The metadata row reads the model off the last opened assistant message,
+    // and a turn whose message was minted by a tool row reported `null`.
+    const { events, projection } = projector();
+    const message = fauxAssistantMessage([fauxToolCall('read', {}, { id: 'call-1' })], {
+      stopReason: 'toolUse',
+    });
+    projection.observe({ type: 'message_start', message });
+    projection.observe({ type: 'message_end', message });
+    projection.observe({
+      type: 'tool_execution_start',
+      toolCallId: 'call-1',
+      toolName: 'read',
+      args: {},
+    });
+    expect(events.find((event) => event.type === 'message.started')?.payload).toMatchObject({
+      role: 'assistant',
+      model: 'faux/faux-1',
+    });
+    // And the model does not outlive its message: the compaction row that
+    // follows is a system message and must not inherit it.
+    projection.observe({ type: 'turn_end', message, toolResults: [] });
+    projection.compaction('summary');
+    expect(
+      events.filter((event) => event.type === 'message.started').at(-1)?.payload
+    ).not.toHaveProperty('model');
+  });
+
+  it('keeps streaming after the provider rewrites its snapshot, and repeats add nothing', () => {
+    // rpc-projector-13. The cursor used to stay on text the provider had
+    // abandoned, so every later snapshot diverged too and the whole rest of the
+    // message — `message_end`'s final flush included — went silently missing.
+    const { events, projection } = projector();
+    const say = (text: string) => fauxAssistantMessage(text);
+    projection.observe({ type: 'message_start', message: say('') });
+    projection.observe(update(say('Hel')));
+    projection.observe(update(say('Hel'))); // the same snapshot twice
+    projection.observe(update(say('He'))); // a truncation
+    projection.observe(update(say('HELLO'))); // a rewrite
+    projection.observe(update(say('HELLO there')));
+    projection.observe({ type: 'message_end', message: say('HELLO there!') });
+    const deltas = events.filter((event) => event.type === 'message.delta');
+    // Three deltas: the growth, the growth after the rewrite, and the final
+    // flush. The repeat, the truncation and the rewrite itself add none.
+    expect(deltas.map((event) => event.payload.text)).toEqual(['Hel', ' there', '!']);
+  });
+
+  it('carries the arguments a tool row is drawn from on every update', () => {
+    // rpc-projector-07. The renderer's reducer bails on its first line when
+    // `input` is absent, so a native `tool.updated` was a no-op there.
+    const { events, projection } = projector();
+    projection.observe({
+      type: 'tool_execution_start',
+      toolCallId: 'call-1',
+      toolName: 'bash',
+      args: { command: 'ls' },
+    });
+    projection.observe({
+      type: 'tool_execution_update',
+      toolCallId: 'call-1',
+      toolName: 'bash',
+      args: { command: 'ls -la' },
+      partialResult: { content: [{ type: 'text', text: 'total 0' }] },
+    });
+    expect(events.find((event) => event.type === 'tool.updated')?.payload).toMatchObject({
+      input: { command: 'ls -la' },
+      status: 'total 0',
+    });
+  });
+
+  it('announces a provider retry as a running status, and takes the banner down', () => {
+    // rpc-projector-02, projector half. Status stays `running` — the turn IS
+    // alive — and the store clears the banner on the next status with no retry.
+    const { events, projection } = projector();
+    projection.retry({
+      attempt: 1,
+      maxRetries: 3,
+      delayMs: 3_000,
+      errorStatus: null,
+      error: 'PROVIDER_ERROR',
+    });
+    projection.recovered();
+    expect(events.map((event) => event.payload)).toEqual([
+      {
+        status: 'running',
+        retry: {
+          attempt: 1,
+          maxRetries: 3,
+          delayMs: 3_000,
+          errorStatus: null,
+          error: 'PROVIDER_ERROR',
+        },
+      },
+      { status: 'running' },
+    ]);
+  });
+});
+
+it('puts a provider retry on the wire the banner reads, and clears it when the retry streams', async () => {
+  // rpc-projector-02, whole path: the retry ladder used to write to the trace
+  // file and nothing else, so a 429 burst was indistinguishable from a slow
+  // model for up to ~43 seconds.
+  const faux = fauxProvider({ provider: 'test', models: [{ id: 'test', name: 'Test' }] });
+  faux.setResponses([
+    () => {
+      // Thrown rather than answered: faux reports it as an error event with no
+      // preceding `start`, which is the setup failure this layer retries.
+      throw new Error('503: service unavailable');
+    },
+    fauxAssistantMessage('recovered'),
+  ]);
+  const runtime = await createRuntime({ env: {}, traceDir: null, providers: [faux.provider] });
+  runtimes.push(runtime);
+  const events: RuntimeEventDraft[] = [];
+  runtime.events.subscribe((event) => events.push(event));
+  expect((await runtime.run({ prompt: 'hello', systemPrompt: 'probe' })).success).toBe(true);
+  const statuses = events.filter((event) => event.type === 'session.status');
+  const announced = statuses.findIndex((event) => event.payload.retry);
+  expect(announced).toBeGreaterThanOrEqual(0);
+  expect(statuses[announced].payload).toEqual({
+    status: 'running',
+    retry: {
+      attempt: 1,
+      maxRetries: 3,
+      delayMs: 3_000,
+      // Null, not a code: faux never reaches the fetch wrapper, which is the
+      // same shape a socket that never connected produces.
+      errorStatus: null,
+      error: 'PROVIDER_ERROR',
+    },
+  });
+  // The banner comes down when the retried request starts streaming, not when
+  // the turn ends.
+  expect(statuses[announced + 1]?.payload).toEqual({ status: 'running' });
+}, 20_000);

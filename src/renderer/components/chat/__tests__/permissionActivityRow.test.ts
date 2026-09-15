@@ -73,6 +73,23 @@ describe('derivePermissionActivityRow', () => {
     expect(view.note).toContain('some future resolution');
   });
 
+  /**
+   * permissions-08. The gate now produces `timed_out` for a countdown nobody
+   * answered, and the row has to say the refusal came from the clock: written
+   * down as `user_denied` it would claim the user refused a question they may
+   * never have seen.
+   */
+  it('reads a countdown that ran out as a refusal nobody made', () => {
+    const view = derivePermissionActivityRow(
+      record({ surface: 'write', result: 'deny', resolution: 'timed_out' })
+    );
+    expect(view.tone).toBe('denied');
+    expect(view.label).toBe('Denied write');
+    // The note is what carries the reason, and only an automatic resolution
+    // gets one: a user decision is drawn without an explanation.
+    expect(view.note).toBe('timed out');
+  });
+
   it('shows a gate with no verdict yet as pending', () => {
     const view = derivePermissionActivityRow(record({ phase: 'prompt', surface: 'bash' }));
     expect(view.tone).toBe('pending');
