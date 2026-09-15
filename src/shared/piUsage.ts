@@ -74,6 +74,15 @@ export type PiUsagePayload = PiTurnUsage & {
    * produced.
    */
   session?: PiSessionUsage;
+  /**
+   * decision 005 — of the `session` totals above, the part delegates ran up.
+   *
+   * A field on `usage.updated` rather than an event of its own: the renderer
+   * already folds one event here, and a second channel would mean two places
+   * to reconcile one total. Absent when no delegate has settled in this
+   * conversation, which is not the same as "delegates cost nothing".
+   */
+  delegated?: PiTurnUsage;
 };
 
 /** The two arcs of an occupancy ring, plus the figures printed beside them. */
@@ -212,7 +221,8 @@ function readContextUsage(value: unknown): PiContextUsage | null {
 export function buildPiUsagePayload(
   usage: unknown,
   contextUsage?: unknown,
-  sessionUsage?: PiSessionUsage | null
+  sessionUsage?: PiSessionUsage | null,
+  delegatedUsage?: PiTurnUsage | null
 ): PiUsagePayload | null {
   const source = record(usage);
   if (!source) return null;
@@ -228,6 +238,8 @@ export function buildPiUsagePayload(
     ...(context ? { context } : {}),
     // A2: a sibling of the turn totals, never a substitute for them.
     ...(sessionUsage ? { session: sessionUsage } : {}),
+    // decision 005: the delegated slice of `session`, never of the turn above.
+    ...(delegatedUsage ? { delegated: delegatedUsage } : {}),
   };
 }
 
@@ -248,6 +260,7 @@ export function readPiUsagePayload(payload: unknown): PiUsagePayload | null {
   if (input === null || output === null) return null;
   const context = readContextUsage(source.context);
   const session = readSessionUsage(source.session);
+  const delegated = readDelegatedUsage(source.delegated);
   return {
     input,
     output,
@@ -257,5 +270,27 @@ export function readPiUsagePayload(payload: unknown): PiUsagePayload | null {
     costUsd: finiteNumber(source.costUsd) ?? 0,
     ...(context ? { context } : {}),
     ...(session ? { session } : {}),
+    ...(delegated ? { delegated } : {}),
   };
+}
+
+/**
+ * Narrow the delegated slice. `null` for a payload from a build that had none,
+ * and for one whose every column is zero — the absence has to stay tellable
+ * from a measured zero, same rule as {@link readSessionUsage}.
+ */
+function readDelegatedUsage(value: unknown): PiTurnUsage | null {
+  const source = record(value);
+  if (!source) return null;
+  const usage: PiTurnUsage = {
+    input: finiteNumber(source.input) ?? 0,
+    output: finiteNumber(source.output) ?? 0,
+    cacheRead: finiteNumber(source.cacheRead) ?? 0,
+    cacheWrite: finiteNumber(source.cacheWrite) ?? 0,
+    totalTokens: finiteNumber(source.totalTokens) ?? 0,
+    costUsd: finiteNumber(source.costUsd) ?? 0,
+  };
+  return usage.totalTokens === 0 && usage.costUsd === 0 && usage.input === 0 && usage.output === 0
+    ? null
+    : usage;
 }

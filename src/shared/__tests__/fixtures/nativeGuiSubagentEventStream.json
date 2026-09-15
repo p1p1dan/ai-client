@@ -168,7 +168,7 @@
       "parentToolCallId": "call-task",
       "agentId": "id-1",
       "kind": "text",
-      "id": "id-1:<ms>",
+      "id": "id-1:<ms>:2",
       "text": "EXPLORER-REPORT: notes.txt says the answer is 42."
     },
     "requestId": "turn-1"
@@ -265,6 +265,37 @@
     "requestId": "turn-1"
   },
   {
+    "type": "usage.updated",
+    "sessionId": "logical-gui",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      },
+      "delegated": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
     "type": "message.started",
     "sessionId": "logical-gui",
     "payload": {
@@ -310,6 +341,14 @@
       "session": {
         "turns": 0,
         "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      },
+      "delegated": {
         "input": 0,
         "output": 0,
         "cacheRead": 0,

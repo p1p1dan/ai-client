@@ -12,6 +12,11 @@
  * lands on the next turn by itself, and a running delegate keeps the snapshot it
  * started with. Invalidating workers on every keystroke in this page would kill
  * live sessions to apply a change they will pick up anyway.
+ *
+ * subagent-data-02 — that paragraph described an intention for two batches: the
+ * catalog was loaded once per worker and frozen, so an edit reached a session
+ * only after it was closed and reopened. `SubagentService.refresh()` and the
+ * `agent-loop` call at the top of every run are what make the sentence true.
  */
 
 import { mkdir } from 'node:fs/promises';
@@ -22,7 +27,12 @@ import {
   type SubagentThinkingLevel,
 } from '@shared/subagentDefinition';
 import { IPC_CHANNELS } from '@shared/types';
-import type { SubagentCatalogView, SubagentSaveRequest } from '@shared/types/subagentManagement';
+import type {
+  SubagentCatalogView,
+  SubagentImportPreview,
+  SubagentImportResult,
+  SubagentSaveRequest,
+} from '@shared/types/subagentManagement';
 import { ipcMain, shell } from 'electron';
 import { SubagentCatalogService } from '../services/agent-host/subagentCatalog';
 import { getAppPiAgentDir } from '../services/piModelConfig';
@@ -144,6 +154,32 @@ export function registerPiSubagentHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.PI_SUBAGENTS_CLEAR_STALE,
     async (): Promise<SubagentCatalogView> => service.clearStaleDisabled()
+  );
+
+  /**
+   * subagent-data-01 — the migration preview, and the import it feeds.
+   *
+   * Two channels rather than one: previewing must be safe to call whenever the
+   * page opens, and the write has to name exactly what the user ticked. The
+   * preview is re-computed inside `applyLegacyImport`, so the renderer chooses
+   * WHICH documents and never WHAT is written.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PI_SUBAGENTS_IMPORT_PREVIEW,
+    async (): Promise<SubagentImportPreview> => service.previewLegacyImport()
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.PI_SUBAGENTS_IMPORT_APPLY,
+    async (_event, payload: unknown): Promise<SubagentImportResult> => {
+      const raw = asRecord(payload);
+      const names = raw.names;
+      if (!Array.isArray(names) || names.some((name) => typeof name !== 'string')) {
+        throw new Error('Invalid subagent request: names');
+      }
+      if (names.length === 0) throw new Error('Invalid subagent request: names');
+      return service.applyLegacyImport(names as string[]);
+    }
   );
 
   /**

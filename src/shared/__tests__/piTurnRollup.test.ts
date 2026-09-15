@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyTurnUsage,
+  deriveDelegatedShare,
   initTurnRollup,
   type PiTurnRollup,
   readSessionUsage,
@@ -155,5 +156,63 @@ describe('readSessionUsage', () => {
     expect(readSessionUsage([])).toBeNull();
     // A payload from an older build carried no session block at all.
     expect(readSessionUsage({ turns: 0, toolResults: 0, input: 500 })).toBeNull();
+  });
+});
+
+describe('subagent-data-03 / decision 005 · the delegated slice of a conversation', () => {
+  it('counts one fold as the many delegations it stands for', () => {
+    // A reopened session folds what its earlier runs' delegates spent as one
+    // sum. Counting that as a single delegation would make "3 delegated" mean
+    // "3 folds" — the money is the same either way, the counter is not.
+    const state = applyTurnUsage(initTurnRollup(SESSION), {
+      sessionId: SESSION,
+      usage: usage(),
+      source: 'tool',
+      count: 3,
+    });
+    expect(viewTurnRollup(state)?.toolResults).toBe(3);
+    expect(viewTurnRollup(state)?.turns).toBe(0);
+  });
+
+  it('falls back to one for a count that is not a positive whole number', () => {
+    // The count comes off a history read, so a broken file must not be able to
+    // make the counter meaningless (or negative).
+    for (const count of [0, -2, Number.NaN, 1.5]) {
+      const state = applyTurnUsage(initTurnRollup(SESSION), {
+        sessionId: SESSION,
+        usage: usage(),
+        source: 'tool',
+        count,
+      });
+      expect(viewTurnRollup(state)?.toolResults, String(count)).toBe(1);
+    }
+  });
+
+  it('reports the delegated share of a total that already includes it', () => {
+    const session = viewTurnRollup(
+      applyTurnUsage(
+        applyTurnUsage(initTurnRollup(SESSION), {
+          sessionId: SESSION,
+          usage: usage({ totalTokens: 750, costUsd: 0.075 }),
+          source: 'turn',
+        }),
+        {
+          sessionId: SESSION,
+          usage: usage({ totalTokens: 250, costUsd: 0.025 }),
+          source: 'tool',
+        }
+      )
+    );
+    const share = deriveDelegatedShare(session, usage({ totalTokens: 250, costUsd: 0.025 }));
+    expect(share).toEqual({ delegations: 1, tokensPercent: 25, costPercent: 25 });
+  });
+
+  it('answers nothing rather than 0% when no delegate has spent anything', () => {
+    const session = viewTurnRollup(
+      applyTurnUsage(initTurnRollup(SESSION), { sessionId: SESSION, usage: usage() })
+    );
+    expect(deriveDelegatedShare(session, undefined)).toBeNull();
+    expect(deriveDelegatedShare(session, usage({ totalTokens: 0, costUsd: 0 }))).toBeNull();
+    expect(deriveDelegatedShare(null, usage())).toBeNull();
   });
 });

@@ -230,18 +230,54 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       projected.recovery({ skippedLines: recovered.skipped.map((row) => row.line) });
     }
 
+    // Looked up by name rather than imported, the way this file already
+    // reaches `runtimePermissions`: the subagent plugin imports the retry layer
+    // that lives next to this file, and an import back would make the two
+    // modules a cycle for the bundler to guess at.
+    const subagents = this.ctx.get('runtimeSubagents');
+
+    // subagent-data-02 — the top of a top-level run is where the catalog is
+    // re-read, which is what P5-2-1 promised and what `piSubagents.ts`'s module
+    // note has always claimed ("an edit lands on the next turn by itself").
+    // Before the tools snapshot below, because `Task`'s description carries the
+    // menu. Delegates already running keep their own definition object.
+    await subagents?.refresh();
+
     // P5-2-4 — delegations started from here belong to this session and this
     // run. Bound before any tool can fire, because the first thing `Task` does
     // is write a record that has to name both.
     // cross-01/cross-02: the ref actually resolved for this run, not the
     // catalog's default and not a stale config field, is what a delegate
     // without its own pin must inherit.
-    this.ctx.get('runtimeSubagents')?.bindRun({
+    subagents?.bindRun({
       sessionId,
       runId: trace.runId,
       model: resolved.ref,
       thinkingLevel,
     });
+
+    // subagent-data-03 / decision 005 — what THIS session's earlier runs'
+    // delegates spent, folded in before this run adds to it. Without it a
+    // reopened conversation showed the parent's whole history and none of the
+    // delegated part of it, which is a total that was never charged.
+    const delegatedHistory = subagents?.historyUsage();
+    if (delegatedHistory?.usage)
+      projected.delegated(delegatedHistory.usage, delegatedHistory.delegations);
+    /**
+     * Take whatever delegates have settled since the last call, once.
+     *
+     * `takeUsage()` drains, so calling it per auto-resume pass and once more
+     * after `drain()` bills each delegate exactly once while letting the
+     * conversation total move while the run is still going — which is the point
+     * of folding it here rather than only at the end.
+     */
+    let subagentUsage: Usage | null = null;
+    const foldDelegatedUsage = () => {
+      const taken = subagents?.takeUsage();
+      if (!taken) return;
+      subagentUsage = sumUsage([subagentUsage, taken]);
+      projected.delegated(taken);
+    };
 
     // Optional: P0 and the tool-less smoke lane run without it, and a run with
     // no compaction service behaves exactly as it did before P2-3.
@@ -532,14 +568,13 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // The runtime waits, not the model: a parent that simply stopped calling
       // tools still gets its delegates' reports and continues toward the user's
       // original goal, which is the behaviour the reference's D328 settled on.
-      // Looked up by name rather than imported, the way this file already
-      // reaches `runtimePermissions`: the subagent plugin imports the retry
-      // layer that lives next to this file, and an import back would make the
-      // two modules a cycle for the bundler to guess at.
-      const subagents = this.ctx.get('runtimeSubagents');
       if (subagents) {
         while (!request.signal?.aborted) {
           const report = await subagents.collectFinished(request.signal);
+          // Folded per pass, not only at the end: a fan-out that settles
+          // halfway through a long run should move the conversation total then,
+          // not once everything is over.
+          foldDelegatedUsage();
           if (report === undefined) break;
           trace.note('note', { event: 'delegation_resume', report_bytes: report.length });
           // Marked, not plain text. pi wraps any prompt as `role: 'user'`, and
@@ -574,7 +609,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // finish — no delegate of it may outlive it. On the normal path the loop
       // above already emptied the registry and this returns at once; on a Stop
       // it is what makes "the run ended" mean "nothing is still spending".
-      await this.ctx.get('runtimeSubagents')?.drain();
+      await subagents?.drain();
       request.signal?.removeEventListener('abort', onAbort);
       unsubscribe();
       unsubscribePermissions?.();
@@ -595,9 +630,10 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       turnCount >= 64 && last?.stopReason === 'toolUse'
         ? { code: 'turn_limit', message: 'tool loop exceeded 64 assistant turns' }
         : resolveError({ thrown, aborted, last });
-    // Taken once, here, so a run reports its delegates' spend exactly once even
-    // when the loop above went round several times.
-    const subagentUsage = this.ctx.get('runtimeSubagents')?.takeUsage();
+    // The last fold: `drain()` settles stragglers, and a run that failed or was
+    // stopped never reached the loop above at all. `takeUsage()` drains, so
+    // this cannot re-bill what the loop already took.
+    foldDelegatedUsage();
     const result: Omit<RuntimeRunResult, 'trace'> = {
       runId: trace.runId,
       success: !error,

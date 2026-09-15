@@ -322,6 +322,49 @@ describe('deriveRunPanelView — occupancy and usage (U06-b)', () => {
     ).toBeNull();
   });
 
+  it('publishes the delegated share of the session total (decision 005)', () => {
+    const session = {
+      turns: 3,
+      toolResults: 2,
+      input: 60_000,
+      output: 2_000,
+      cacheRead: 6_500,
+      cacheWrite: 3_600,
+      totalTokens: 72_100,
+      costUsd: 0.2,
+    };
+    const delegated = {
+      input: 15_000,
+      output: 500,
+      cacheRead: 2_000,
+      cacheWrite: 525,
+      totalTokens: 18_025,
+      costUsd: 0.05,
+    };
+    const view = deriveRunPanelView(input({ usage: usagePayload({ session, delegated }) }));
+    // A share of a number already shown, not a second total: the session
+    // figures INCLUDE the delegated ones, which is the contract's
+    // 会话/轮级总成本含子调用.
+    expect(view.delegatedUsage).toEqual(delegated);
+    expect(view.delegatedShare).toEqual({ delegations: 2, tokensPercent: 25, costPercent: 25 });
+  });
+
+  it('reports no delegated share when nothing was delegated, rather than 0%', () => {
+    const session = {
+      turns: 3,
+      toolResults: 0,
+      input: 60_000,
+      output: 2_000,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 62_000,
+      costUsd: 0.2,
+    };
+    const view = deriveRunPanelView(input({ usage: usagePayload({ session }) }));
+    expect(view.delegatedUsage).toBeNull();
+    expect(view.delegatedShare).toBeNull();
+  });
+
   it('publishes the cache hit rate beside the raw cache counts (A1)', () => {
     // 9_000 / (12_000 + 9_000), cache writes excluded from the base.
     expect(deriveRunPanelView(input({ usage: usagePayload() })).cacheHitRate).toBe(43);

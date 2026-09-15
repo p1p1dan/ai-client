@@ -128,6 +128,15 @@ export function applyTurnUsage(
     sessionId: string;
     usage: Partial<PiTurnUsage> | null | undefined;
     source?: PiRollupSource;
+    /**
+     * How many settled units this one fold stands for.
+     *
+     * subagent-data-03 — a reopened session folds in what its EARLIER runs'
+     * delegates spent as a single sum, and counting that as one delegation
+     * would make "3 delegated" mean "3 folds" instead of "3 delegates". Only
+     * the counter reads it; the money is the sum either way.
+     */
+    count?: number;
   }
 ): PiTurnRollup {
   // Another session's bill is not this session's, and folding one in would be
@@ -156,10 +165,14 @@ export function applyTurnUsage(
   }
 
   const fromTool = input.source === 'tool';
+  const count =
+    typeof input.count === 'number' && Number.isFinite(input.count) && input.count > 0
+      ? Math.floor(input.count)
+      : 1;
   return {
     sessionId: state.sessionId,
-    turns: state.turns + (fromTool ? 0 : 1),
-    toolResults: state.toolResults + (fromTool ? 1 : 0),
+    turns: state.turns + (fromTool ? 0 : count),
+    toolResults: state.toolResults + (fromTool ? count : 0),
     input: state.input + input_,
     output: state.output + output,
     cacheRead: state.cacheRead + cacheRead,
@@ -208,5 +221,35 @@ export function readSessionUsage(value: unknown): PiSessionUsage | null {
     cacheWrite: number('cacheWrite'),
     totalTokens: number('totalTokens'),
     costUsd: number('costUsd'),
+  };
+}
+
+/**
+ * decision 005 — how much of this conversation was done by delegates.
+ *
+ * The session totals already INCLUDE delegated spend (that is the contract's
+ * "会话/轮级总成本含子调用"), and `delegated` is the part of them a subagent
+ * ran up. The share is therefore a ratio of two numbers the payload already
+ * carries, derived in one place so the panel and any other surface cannot
+ * round it two different ways.
+ *
+ * `null` rather than `0%` when there is no denominator: "no delegate spent
+ * anything" and "we have no figures yet" are different claims, and a 0% badge
+ * on a conversation that has not settled a turn asserts the first.
+ */
+export function deriveDelegatedShare(
+  session: PiSessionUsage | null | undefined,
+  delegated: Partial<PiTurnUsage> | null | undefined
+): { delegations: number; tokensPercent: number; costPercent: number } | null {
+  if (!session || !delegated) return null;
+  const tokens = addend(delegated.totalTokens);
+  const cost = addend(delegated.costUsd);
+  if (tokens === 0 && cost === 0) return null;
+  const percent = (part: number, whole: number): number =>
+    whole > 0 ? Math.min(100, Math.round((part / whole) * 100)) : 0;
+  return {
+    delegations: session.toolResults,
+    tokensPercent: percent(tokens, session.totalTokens),
+    costPercent: percent(cost, session.costUsd),
   };
 }

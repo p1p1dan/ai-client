@@ -22,6 +22,12 @@
  *    repository. Migrating it into the user's global catalog would let a
  *    checkout add a trusted delegate, so it is previewed as `project` and
  *    flagged — the decision is the user's, per document, and never a default.
+ *
+ * subagent-data-01 — this used to live under `src/runtime/plugins/subagent`,
+ * where the only thing that could reach it was its own test: the scan, the IPC
+ * channel and the settings entry all have to run in Main, and the root
+ * type-check excludes `src/runtime`. It is pure and depends on nothing but the
+ * definition module, so `src/shared` is where both ends can use one copy.
  */
 
 import {
@@ -30,7 +36,7 @@ import {
   normalizeSubagentName,
   SUBAGENT_THINKING_LEVELS,
   type SubagentAssignableTool,
-} from '../../../shared/subagentDefinition.ts';
+} from './subagentDefinition.ts';
 
 /** Where a legacy document was found. */
 export type LegacyScope = 'global' | 'project';
@@ -84,19 +90,24 @@ export interface MigrationPreview {
  * counterpart — a delegate that listed directories has to use `Glob` instead,
  * and saying so beats writing a tool name that resolves to nothing.
  */
-const LEGACY_TOOL_MAP: Record<string, SubagentAssignableTool | null> = {
-  read: 'Read',
-  bash: 'Bash',
-  edit: 'Edit',
-  write: 'Write',
-  grep: 'Grep',
-  find: 'Glob',
-  ls: null,
-};
+const LEGACY_TOOL_MAP = new Map<string, SubagentAssignableTool | null>([
+  ['read', 'Read'],
+  ['bash', 'Bash'],
+  ['edit', 'Edit'],
+  ['write', 'Write'],
+  ['grep', 'Grep'],
+  ['find', 'Glob'],
+  ['ls', null],
+]);
 
 /** Minimal frontmatter read, matching what the legacy loader itself accepts. */
 function splitLegacy(raw: string): { frontmatter: Map<string, string>; body: string } {
-  const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  // subagent-data-15 — same leading-BOM strip as `splitFrontmatter`; a legacy
+  // document saved by Notepad must not preview as one with no frontmatter.
+  const normalized = raw
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
   const frontmatter = new Map<string, string>();
   if (!normalized.startsWith('---\n')) return { frontmatter, body: normalized.trim() };
   const end = normalized.indexOf('\n---', 3);
@@ -123,6 +134,21 @@ function unquote(value: string): string {
       return trimmed.slice(1, -1);
   }
   return trimmed;
+}
+
+/**
+ * One frontmatter value, normalised the way every other field here already is.
+ *
+ * subagent-data-09 — `description`, `model`, `thinking`, `max_turns` and
+ * `tools` all went through {@link unquote}; the four behavioural flags were
+ * compared against bare literals instead, so `inherit_context: "true"` (or
+ * `True`) matched nothing and the "native has no such behaviour" note — which
+ * is the entire content SA19 promises — silently never appeared.
+ */
+function flag(frontmatter: Map<string, string>, key: string): string {
+  return unquote(frontmatter.get(key) ?? '')
+    .trim()
+    .toLowerCase();
 }
 
 function legacyList(value: string | undefined): string[] {
@@ -172,7 +198,14 @@ export function previewLegacyMigration(
   const declaredTools = legacyList(frontmatter.get('tools'));
   const tools: string[] = [];
   for (const legacy of declaredTools) {
-    const mapped = LEGACY_TOOL_MAP[legacy.trim().toLowerCase()];
+    // subagent-data-08 — a `Map`, not an object literal: an object lookup
+    // answers `Object.prototype` keys too, and `tools: [constructor]` in a
+    // legacy document (a repository's `.pi/agents`, i.e. content the user does
+    // not control) then pushed a FUNCTION into this string list and threw on
+    // the next line, losing the whole preview instead of reporting one unknown
+    // tool. Only lowercase keys can reach here, so `constructor` and
+    // `__proto__` were the two reachable names.
+    const mapped = LEGACY_TOOL_MAP.get(legacy.trim().toLowerCase());
     if (mapped === undefined) {
       notes.push({ kind: 'dropped', field: 'tools', message: `unknown legacy tool "${legacy}"` });
       continue;
@@ -253,17 +286,15 @@ export function previewLegacyMigration(
     }
   }
 
-  if (frontmatter.get('prompt_mode') === 'replace' || frontmatter.get('prompt_mode') === 'append') {
-    if (frontmatter.get('prompt_mode') === 'append') {
-      notes.push({
-        kind: 'dropped',
-        field: 'prompt_mode',
-        message:
-          'native always uses the document body as the delegate prompt; an "append" body will read differently without the base prompt it was written to extend',
-      });
-    }
+  if (flag(frontmatter, 'prompt_mode') === 'append') {
+    notes.push({
+      kind: 'dropped',
+      field: 'prompt_mode',
+      message:
+        'native always uses the document body as the delegate prompt; an "append" body will read differently without the base prompt it was written to extend',
+    });
   }
-  if (frontmatter.get('inherit_context') === 'true') {
+  if (flag(frontmatter, 'inherit_context') === 'true') {
     notes.push({
       kind: 'dropped',
       field: 'inherit_context',
@@ -271,7 +302,7 @@ export function previewLegacyMigration(
         'a native delegate never sees the parent conversation; put whatever it needs in the Task brief',
     });
   }
-  if (frontmatter.get('run_in_background') === 'false') {
+  if (flag(frontmatter, 'run_in_background') === 'false') {
     notes.push({
       kind: 'dropped',
       field: 'run_in_background',
@@ -288,7 +319,7 @@ export function previewLegacyMigration(
   if (frontmatter.get('locked')) {
     notes.push({ kind: 'dropped', field: 'locked', message: 'native has no field locking' });
   }
-  if (frontmatter.get('enabled') === 'false') {
+  if (flag(frontmatter, 'enabled') === 'false') {
     notes.push({
       kind: 'adapted',
       field: 'enabled',

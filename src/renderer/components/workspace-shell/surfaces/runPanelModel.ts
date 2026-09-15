@@ -15,7 +15,7 @@
  * `contextSurfaceModel.ts`.
  */
 
-import type { PiSessionUsage } from '@shared/piTurnRollup';
+import { deriveDelegatedShare, type PiSessionUsage } from '@shared/piTurnRollup';
 import {
   type ContextOccupancy,
   deriveCacheHitRate,
@@ -172,6 +172,16 @@ export interface RunPanelView {
    * own bill — the view must label the two apart and must never add them.
    */
   sessionUsage: PiSessionUsage | null;
+  /**
+   * decision 005 — how much of `sessionUsage` a subagent ran up.
+   *
+   * `null` when no delegate has settled, which is not "0%": a conversation
+   * that never delegated and one whose figures have not arrived are different
+   * states, and only the first would be honestly printed as zero.
+   */
+  delegatedShare: ReturnType<typeof deriveDelegatedShare>;
+  /** The delegated tokens and cost themselves, for the row beside the share. */
+  delegatedUsage: PiTurnUsage | null;
   /** True when this session has nothing to report yet at all. */
   empty: boolean;
 }
@@ -313,6 +323,8 @@ export function deriveRunPanelView(input: RunPanelInput): RunPanelView {
     usage: turnUsage,
     cacheHitRate: deriveCacheHitRate(turnUsage),
     sessionUsage: usage?.session ?? null,
+    delegatedShare: deriveDelegatedShare(usage?.session, usage?.delegated),
+    delegatedUsage: usage?.delegated ?? null,
     // "Nothing to report" is narrower than "idle": an idle session that has
     // already run a turn still has a model, a clock and a tool count to show.
     empty:

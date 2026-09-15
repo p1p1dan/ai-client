@@ -34,15 +34,22 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { BUILTIN_SUBAGENT_DOCUMENTS } from '@shared/subagentBuiltins';
 import {
+  canonicalToolName,
+  DEFAULT_SUBAGENT_TOOLS,
   formatSubagentDefinition,
   MAX_MANAGED_SUBAGENT_DEFINITIONS,
   MAX_SUBAGENT_DOCUMENT_BYTES,
+  MAX_SUBAGENT_MAX_TURNS,
   normalizeSubagentName,
   parseSubagentDefinition,
+  SUBAGENT_ASSIGNABLE_TOOLS,
   type SubagentDefinition,
 } from '@shared/subagentDefinition';
+import { type LegacyDocument, previewLegacyMigrations } from '@shared/subagentMigration';
 import type {
   SubagentCatalogView,
+  SubagentImportPreview,
+  SubagentImportResult,
   SubagentRow,
   SubagentSaveRequest,
 } from '@shared/types/subagentManagement';
@@ -168,15 +175,38 @@ export class SubagentCatalogService {
     const document = formatSubagentDefinition({
       name,
       description: request.description,
-      tools: request.tools,
+      // Canonicalised and expanded before writing, so the round-trip check
+      // below compares semantics and not spelling. The parser reads `read` back
+      // as `Read`, an empty list back as the read-only default and `*` back as
+      // every assignable tool; writing what it will read means a lenient caller
+      // is still accepted rather than refused for a difference that is not one.
+      tools: writableTools(request.tools),
       ...(request.model ? { model: request.model } : {}),
       ...(request.thinkingLevel ? { thinkingLevel: request.thinkingLevel } : {}),
       ...(request.permission ? { permission: request.permission } : {}),
-      ...(request.maxTurns !== undefined ? { maxTurns: request.maxTurns } : {}),
+      // Clamped here rather than left to the parser, for the same reason: the
+      // parser clamps too, and a document that came back clamped would read as
+      // a failed round trip instead of as the cap doing its job.
+      ...(request.maxTurns !== undefined
+        ? { maxTurns: Math.min(request.maxTurns, MAX_SUBAGENT_MAX_TURNS) }
+        : {}),
       prompt: request.prompt,
     });
     const parsed = parseSubagentDefinition(document, { source: 'user' });
     if (!parsed.ok) throw new SubagentCatalogError(parsed.errors.join('; '));
+    // subagent-data-07 — "it parses" was never the promise. The contract is
+    // that a save round-trips every executable field, and this checks exactly
+    // that by writing what was read back out: if the two documents differ, some
+    // field did not survive the trip. It caught a real one — the writer escapes
+    // an embedded `'` by doubling it and the reader did not undo that, so a
+    // description grew a quote every time it was saved — and it is the guard
+    // that stops a description carrying a newline from writing a second
+    // frontmatter line (a `permission:` among them) that nobody asked for.
+    if (formatSubagentDefinition(parsed.definition) !== document) {
+      throw new SubagentCatalogError(
+        'This definition cannot be stored without changing it — a value here (usually the description) contains a line break or quoting the document format cannot carry.'
+      );
+    }
     if (Buffer.byteLength(document, 'utf8') > MAX_SUBAGENT_DOCUMENT_BYTES) {
       throw new SubagentCatalogError(
         `This definition is larger than ${Math.round(
@@ -266,6 +296,113 @@ export class SubagentCatalogService {
     return this.read();
   }
 
+  /**
+   * subagent-data-01 — what the legacy `<agentDir>/agents` directory would
+   * become, per document, without writing anything.
+   *
+   * The preview logic itself has existed since P5-2-5 and SA19 signed it off as
+   * delivered; what did not exist was any way to reach it — no scan, no IPC, no
+   * button. A user with `@gotgenes/pi-subagents` definitions had to retype them.
+   *
+   * Only the GLOBAL directory is scanned. `.pi/agents` comes from whatever
+   * repository happens to be open, and offering to promote it into the user's
+   * catalog would let a checkout put a trusted delegate on the menu — the same
+   * rule the runtime's own loader follows by never scanning a project root.
+   */
+  async previewLegacyImport(): Promise<SubagentImportPreview> {
+    const sourceDirectory = join(this.deps.agentDir(), 'agents');
+    const documents = await this.readLegacyDocuments(sourceDirectory);
+    if (documents.length === 0) return { sourceDirectory, rows: [] };
+    const existing = await this.read();
+    const previews = previewLegacyMigrations(documents, {
+      targetDir: this.directory(),
+      existingNames: existing.rows.map((entry) => entry.name),
+    });
+    return {
+      sourceDirectory,
+      rows: previews.map((preview) => ({
+        filePath: preview.source.filePath,
+        name: preview.name,
+        ...(preview.targetPath ? { targetPath: preview.targetPath } : {}),
+        collides: preview.collides,
+        blocked: preview.blocked,
+        notes: preview.notes,
+      })),
+    };
+  }
+
+  /**
+   * Import the named legacy documents, and only those.
+   *
+   * Re-scanned and re-previewed here rather than trusting a document the
+   * renderer sends back: a page cannot be allowed to write arbitrary Markdown
+   * into the catalog directory, and re-reading is also what makes "the file
+   * changed since you looked" fail loudly instead of writing a stale copy.
+   *
+   * Nothing is overwritten and nothing is deleted. A name already held by a
+   * USER document is skipped with a reason — the user has an editor and a
+   * delete button for that case, and silently replacing the definition a
+   * session may be running would be the one destructive act this flow makes.
+   * Shadowing a BUILTIN is fine and goes ahead: that is what customising one
+   * has always meant.
+   */
+  async applyLegacyImport(names: readonly string[]): Promise<SubagentImportResult> {
+    const wanted = new Set(names.map((name) => normalizeSubagentName(name)));
+    const imported: string[] = [];
+    const skipped: { name: string; reason: string }[] = [];
+    const documents = await this.readLegacyDocuments(join(this.deps.agentDir(), 'agents'));
+    let catalog = await this.read();
+    const previews = previewLegacyMigrations(documents, {
+      targetDir: this.directory(),
+      existingNames: catalog.rows.map((entry) => entry.name),
+    });
+    let userCount = catalog.rows.filter((entry) => entry.source === 'user').length;
+
+    for (const candidate of previews) {
+      if (!wanted.has(candidate.name)) continue;
+      wanted.delete(candidate.name);
+      if (candidate.blocked || !candidate.document) {
+        skipped.push({
+          name: candidate.name,
+          reason: 'it needs a decision first — see the notes on its row',
+        });
+        continue;
+      }
+      if (catalog.rows.some((entry) => entry.source === 'user' && entry.name === candidate.name)) {
+        skipped.push({
+          name: candidate.name,
+          reason: `a subagent named "${candidate.name}" already exists here; rename or delete it first`,
+        });
+        continue;
+      }
+      if (userCount >= MAX_MANAGED_SUBAGENT_DEFINITIONS) {
+        skipped.push({
+          name: candidate.name,
+          reason: `this install already keeps ${MAX_MANAGED_SUBAGENT_DEFINITIONS} subagent definitions, which is the limit`,
+        });
+        continue;
+      }
+      await mkdir(this.directory(), { recursive: true });
+      await writeFile(this.pathFor(candidate.name), candidate.document, 'utf8');
+      imported.push(candidate.name);
+      userCount += 1;
+      catalog = await this.read();
+    }
+    for (const missing of wanted) {
+      skipped.push({ name: missing, reason: 'no legacy document of that name was found' });
+    }
+    return { imported, skipped, catalog };
+  }
+
+  private async readLegacyDocuments(root: string): Promise<LegacyDocument[]> {
+    return (await this.listDocuments(root)).map((document) => ({
+      filePath: document.path,
+      name: basenameOf(document.path),
+      scope: 'global' as const,
+      raw: document.raw,
+    }));
+  }
+
   private pathFor(name: string): string {
     return join(this.directory(), `${name}.md`);
   }
@@ -304,6 +441,17 @@ export class SubagentCatalogService {
     }
     return documents;
   }
+}
+
+/** The tool list as the parser will read it back; see `save`. */
+function writableTools(tools: readonly string[]): string[] {
+  if (tools.some((tool) => tool.trim() === '*')) return [...SUBAGENT_ASSIGNABLE_TOOLS];
+  const canonical: string[] = [];
+  for (const tool of tools) {
+    const name = canonicalToolName(tool);
+    if (name && !canonical.includes(name)) canonical.push(name);
+  }
+  return canonical.length > 0 ? canonical : [...DEFAULT_SUBAGENT_TOOLS];
 }
 
 function row(

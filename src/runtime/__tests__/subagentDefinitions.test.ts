@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_SUBAGENT_DOCUMENTS } from '../../shared/subagentBuiltins.ts';
 import {
+  formatSubagentDefinition,
   MAX_SUBAGENT_DEFINITIONS,
   MAX_SUBAGENT_DOCUMENT_BYTES,
   MAX_SUBAGENT_MAX_TURNS,
@@ -497,5 +498,54 @@ describe('builtin documents stay parseable on their own terms', () => {
     const explorer = BUILTIN_SUBAGENT_DOCUMENTS.find((raw) => raw.includes('name: explorer'));
     expect(explorer).toBeDefined();
     expect(explorer).toContain('regex');
+  });
+});
+
+describe('subagent-data-07 / subagent-data-15 · a document survives being stored', () => {
+  function parse(raw: string) {
+    const parsed = parseSubagentDefinition(raw, { source: 'user' });
+    if (!parsed.ok) throw new Error(parsed.errors.join('; '));
+    return parsed.definition;
+  }
+
+  it('restores the doubled quote the writer put in', () => {
+    // `writeScalar` escapes an embedded `'` by doubling it, the way a YAML
+    // single-quoted scalar does. The reader only stripped the outer pair, so
+    // every save added one more quote to the user's own words.
+    const definition = {
+      name: 'helper',
+      description: "'quick' helper for X",
+      tools: ['Read'],
+      prompt: 'Body.',
+    };
+    const document = formatSubagentDefinition(definition);
+    expect(parse(document).description).toBe("'quick' helper for X");
+    // The fixpoint is the property that matters: storing twice changes nothing.
+    expect(formatSubagentDefinition(parse(document) as never)).toBe(document);
+  });
+
+  it('round-trips a description that is entirely quoted', () => {
+    const document = formatSubagentDefinition({
+      name: 'helper',
+      description: "'all of it'",
+      tools: ['Read'],
+      prompt: 'Body.',
+    });
+    expect(parse(document).description).toBe("'all of it'");
+  });
+
+  it('leaves a double-quoted value alone, which the writer never produces', () => {
+    const definition = parse('---\nname: h\ndescription: "plain"\n---\n\nBody.');
+    expect(definition.description).toBe('plain');
+  });
+
+  it('reads a document that starts with a byte-order mark', () => {
+    // Main reads with `readFile(path, "utf8")`, which keeps the BOM; the
+    // runtime reads through a `TextDecoder`, which strips it. Without the strip
+    // in `splitFrontmatter` the same Notepad-written file loads in a session
+    // and is reported as broken on the settings page.
+    const definition = parse('\uFEFF---\nname: h\ndescription: from notepad\n---\n\nBody.');
+    expect(definition.description).toBe('from notepad');
+    expect(definition.name).toBe('h');
   });
 });

@@ -231,7 +231,12 @@ function unquote(value: string): string {
   if (trimmed.length >= 2) {
     const first = trimmed[0];
     const last = trimmed[trimmed.length - 1];
-    if ((first === '"' || first === "'") && first === last) return trimmed.slice(1, -1);
+    // subagent-data-07 — the writer escapes an embedded `'` by doubling it, the
+    // way a YAML single-quoted scalar does, so the reader has to undo it. While
+    // it did not, a description holding a quote grew one more quote on every
+    // save: the user's text was rewritten by the act of storing it.
+    if (first === "'" && last === "'") return trimmed.slice(1, -1).replace(/''/g, "'");
+    if (first === '"' && last === '"') return trimmed.slice(1, -1);
   }
   return trimmed;
 }
@@ -246,7 +251,15 @@ function unquote(value: string): string {
  * prompt, to read six scalars.
  */
 function splitFrontmatter(raw: string): { frontmatter: Frontmatter; body: string } {
-  const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  // subagent-data-15 — the leading U+FEFF goes first. The runtime reads these
+  // documents through a `TextDecoder`, which strips a BOM; Main reads them with
+  // `readFile(path, 'utf8')`, which does not. Without this line the same file
+  // written by Windows Notepad loads in a session and is reported as broken on
+  // the settings page, and the user is told to repair a definition that works.
+  const normalized = raw
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
   const frontmatter: Frontmatter = new Map();
   if (!normalized.startsWith('---\n')) return { frontmatter, body: normalized.trim() };
   const end = normalized.indexOf('\n---', 3);

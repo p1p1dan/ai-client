@@ -285,3 +285,130 @@ describe('SA17 · switching and deleting', () => {
     expect(cleared.rows.find((row) => row.name === 'explorer')?.enabled).toBe(false);
   });
 });
+
+async function writeLegacy(name: string, body: string): Promise<void> {
+  const directory = join(root, 'agent', 'agents');
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, `${name}.md`), body, 'utf8');
+}
+
+describe('subagent-data-07 · a save stores what it was given, or refuses', () => {
+  it('keeps a quoted description identical across two saves', async () => {
+    // The writer escapes `'` by doubling it and the reader did not undo that,
+    // so this description grew a quote pair on every save — silently, because
+    // the document still parsed. The assertion is that the SECOND read equals
+    // the first: a rewrite that is stable is a rewrite that is not happening.
+    await service.save({
+      name: 'helper',
+      description: "'quick' helper",
+      tools: ['Read'],
+      prompt: 'Body.',
+    });
+    const first = (await service.read()).rows.find((row) => row.name === 'helper');
+    expect(first?.description).toBe("'quick' helper");
+    await service.save({
+      name: 'helper',
+      previousName: 'helper',
+      description: first?.description ?? '',
+      tools: first?.tools ?? [],
+      prompt: first?.prompt ?? '',
+    });
+    const second = (await service.read()).rows.find((row) => row.name === 'helper');
+    expect(second?.description).toBe("'quick' helper");
+  });
+
+  it('refuses a description carrying a line break instead of writing a second key', async () => {
+    // A newline cannot be carried by the flat `key: value` format this parser
+    // reads, and writing it produced a document whose second line looked like
+    // another frontmatter field. Refused with a reason beats stored-and-changed.
+    await expect(
+      service.save({
+        name: 'helper',
+        description: 'Helper\npermission: auto',
+        tools: ['Read'],
+        prompt: 'Body.',
+      })
+    ).rejects.toBeInstanceOf(SubagentCatalogError);
+    expect((await service.read()).rows.some((row) => row.name === 'helper')).toBe(false);
+  });
+
+  it('still accepts a lenient caller that spells its tools in lower case', async () => {
+    // The round-trip check compares semantics, not spelling: the parser always
+    // reads `read` back as `Read`, so canonicalising before writing is what
+    // keeps this a save rather than a rejection.
+    await service.save({
+      name: 'helper',
+      description: 'd',
+      tools: ['read', 'GREP'],
+      prompt: 'Body.',
+    });
+    const row = (await service.read()).rows.find((entry) => entry.name === 'helper');
+    expect(row?.tools).toEqual(['Read', 'Grep']);
+  });
+});
+
+describe('subagent-data-15 · a document saved with a byte-order mark still loads', () => {
+  it('lists it as a definition rather than as broken', async () => {
+    await writeDefinition('notepad', `\uFEFF${VALID}`);
+    const catalog = await service.read();
+    expect(catalog.broken).toEqual([]);
+    expect(catalog.rows.some((row) => row.name === 'notepad')).toBe(true);
+  });
+});
+
+describe('subagent-data-01 · the legacy import has a scan, a preview and a write', () => {
+  it('previews an old document without writing anything', async () => {
+    await writeLegacy(
+      'oldie',
+      ['---', 'description: an old helper', 'tools: [read, find]', '---', '', 'Look.'].join('\n')
+    );
+    const preview = await service.previewLegacyImport();
+    expect(preview.sourceDirectory).toBe(join(root, 'agent', 'agents'));
+    expect(preview.rows.map((row) => row.name)).toEqual(['oldie']);
+    expect(preview.rows[0].blocked).toBe(false);
+    // `find` becomes `Glob`, which takes different arguments — the kind of
+    // change SA19 promises is visible before anything is written.
+    expect(preview.rows[0].notes.some((note) => note.kind === 'adapted')).toBe(true);
+    // Nothing written: the preview is a read.
+    expect(await readdir(join(root, 'agent')).catch(() => [])).not.toContain('subagents');
+  });
+
+  it('blocks a document that cannot be migrated, and says why', async () => {
+    await writeLegacy('nodesc', ['---', 'tools: [read]', '---', '', 'Body.'].join('\n'));
+    const preview = await service.previewLegacyImport();
+    expect(preview.rows[0].blocked).toBe(true);
+    expect(preview.rows[0].notes.some((note) => note.kind === 'conflict')).toBe(true);
+    // Blocked means nothing is written for it even when it is asked for.
+    const result = await service.applyLegacyImport(['nodesc']);
+    expect(result.imported).toEqual([]);
+    expect(result.skipped[0].reason).toContain('decision');
+  });
+
+  it('writes only what was ticked, and leaves the original where it is', async () => {
+    await writeLegacy('oldie', ['---', 'description: d', '---', '', 'Look.'].join('\n'));
+    await writeLegacy('other', ['---', 'description: d', '---', '', 'Look.'].join('\n'));
+    const result = await service.applyLegacyImport(['oldie']);
+    expect(result.imported).toEqual(['oldie']);
+    expect(result.catalog.rows.some((row) => row.name === 'oldie')).toBe(true);
+    expect(result.catalog.rows.some((row) => row.name === 'other')).toBe(false);
+    // Rule 1 of the migration contract: the legacy file is kept, so a user who
+    // switches back still has it.
+    expect(await readFile(join(root, 'agent', 'agents', 'oldie.md'), 'utf8')).toContain('Look.');
+  });
+
+  it('never overwrites a user definition that already holds the name', async () => {
+    await writeDefinition('oldie', VALID);
+    await writeLegacy('oldie', ['---', 'description: from legacy', '---', '', 'Other.'].join('\n'));
+    const result = await service.applyLegacyImport(['oldie']);
+    expect(result.imported).toEqual([]);
+    expect(result.skipped[0].reason).toContain('already exists');
+    expect(await readFile(join(root, 'agent', 'subagents', 'oldie.md'), 'utf8')).toContain(
+      'finds things'
+    );
+  });
+
+  it('answers with nothing to do when the old folder is not there', async () => {
+    const preview = await service.previewLegacyImport();
+    expect(preview.rows).toEqual([]);
+  });
+});

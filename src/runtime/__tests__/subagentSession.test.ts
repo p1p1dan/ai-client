@@ -194,13 +194,14 @@ describe('SA14 / SA15 / SA16 · delegate records, usage and reopening', () => {
 
     const history = readSubagentHistory(handle.session?.snapshot().entries ?? []);
     const fromRecords = subagentHistoryUsage(history);
-    expect(fromRecords?.totalTokens).toBe(result.subagentUsage?.totalTokens);
+    expect(fromRecords.usage?.totalTokens).toBe(result.subagentUsage?.totalTokens);
+    expect(fromRecords.delegations).toBe(1);
 
     // Reading it again does not bill it again.
     expect(
-      subagentHistoryUsage(readSubagentHistory(handle.session?.snapshot().entries ?? []))
+      subagentHistoryUsage(readSubagentHistory(handle.session?.snapshot().entries ?? [])).usage
         ?.totalTokens
-    ).toBe(fromRecords?.totalTokens);
+    ).toBe(fromRecords.usage?.totalTokens);
     // And the run-level accumulator was emptied when it was taken.
     expect(handle.ctx.runtimeSubagents.takeUsage()).toBeUndefined();
   });

@@ -19,7 +19,7 @@ import {
   type LegacyDocument,
   previewLegacyMigration,
   previewLegacyMigrations,
-} from '../plugins/subagent/migrate.ts';
+} from '../../shared/subagentMigration.ts';
 
 const TARGET = '/agent/subagents';
 
@@ -217,5 +217,72 @@ describe('SA19 · legacy definitions migrate with every difference on screen', (
       { targetDir: TARGET }
     );
     expect(previews.map((preview) => preview.name)).toEqual(['alpha', 'zeta']);
+  });
+
+  it('subagent-data-09 · reads a quoted or capitalised flag, not just the bare literal', () => {
+    // `splitLegacy` normalises KEYS only, and these four were compared against
+    // bare literals while every other field went through `unquote`. So a legacy
+    // document written as YAML normally is — quoted, or `True` — produced not
+    // one of the notes SA19 promises, and the preview page said all was well.
+    const preview = previewLegacyMigration(
+      legacy(
+        [
+          '---',
+          'description: d',
+          'prompt_mode: "append"',
+          "inherit_context: 'True'",
+          'run_in_background: "FALSE"',
+          'enabled: "False"',
+          '---',
+          '',
+          'body',
+        ].join('\n')
+      ),
+      { targetDir: TARGET }
+    );
+    const fields = preview.notes.map((note) => note.field);
+    expect(fields).toContain('prompt_mode');
+    expect(fields).toContain('inherit_context');
+    expect(fields).toContain('run_in_background');
+    expect(fields).toContain('enabled');
+  });
+
+  it('subagent-data-09 · says nothing for a prompt_mode native already matches', () => {
+    // `replace` IS what native does, so it is not a note; the old code had an
+    // outer `if` covering both words whose `replace` arm did nothing at all.
+    const preview = previewLegacyMigration(
+      legacy('---\ndescription: d\nprompt_mode: replace\n---\n\nbody'),
+      { targetDir: TARGET }
+    );
+    expect(preview.notes.map((note) => note.field)).not.toContain('prompt_mode');
+  });
+
+  it('subagent-data-08 · a tool named after a prototype key is reported, not a crash', () => {
+    // A legacy tool list is content the user may not control (a repository's
+    // `.pi/agents`). Looking it up on an object literal answered with
+    // `Object.prototype.constructor` — a function pushed into a string[] and
+    // then `.toLowerCase()`d, which threw and lost the WHOLE preview.
+    const preview = previewLegacyMigration(
+      legacy('---\ndescription: d\ntools: [read, constructor, __proto__]\n---\n\nbody'),
+      { targetDir: TARGET }
+    );
+    expect(preview.blocked).toBe(false);
+    expect(preview.document).toContain('tools: [Read]');
+    const dropped = preview.notes
+      .filter((note) => note.kind === 'dropped' && note.field === 'tools')
+      .map((note) => note.message);
+    expect(dropped.some((message) => message.includes('constructor'))).toBe(true);
+    expect(dropped.some((message) => message.includes('__proto__'))).toBe(true);
+  });
+
+  it('subagent-data-15 · previews a document saved with a byte-order mark', () => {
+    const preview = previewLegacyMigration(
+      legacy('\uFEFF---\ndescription: from notepad\n---\n\nbody'),
+      { targetDir: TARGET }
+    );
+    // Without the strip the `---` test fails, the whole frontmatter is unread,
+    // and the preview blocks on "no description" for a document that has one.
+    expect(preview.blocked).toBe(false);
+    expect(preview.document).toContain('description: from notepad');
   });
 });

@@ -231,6 +231,11 @@ export class NativeWorkerRuntime {
               ...(this.options.subagents?.disabled?.length
                 ? { disabled: this.options.subagents.disabled }
                 : {}),
+              // subagent-data-10 — catalog diagnostics and failed record writes
+              // go to the worker log, the same wiring `mcp` already has. Before
+              // this a definition that could not be read simply vanished from
+              // the menu with nothing written down anywhere.
+              ...(this.options.log ? { log: this.options.log } : {}),
             },
           }),
       permissions: {

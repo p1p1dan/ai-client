@@ -19,6 +19,7 @@ import type {
   SubagentPermission,
   SubagentThinkingLevel,
 } from '../subagentDefinition';
+import type { MigrationNote } from '../subagentMigration';
 
 export interface SubagentRow {
   name: string;
@@ -67,4 +68,43 @@ export interface SubagentSaveRequest {
   permission?: SubagentPermission;
   maxTurns?: number;
   prompt: string;
+}
+
+/**
+ * P5-2-5 / subagent-data-01 — one legacy `<agentDir>/agents/*.md` document, as
+ * the import preview describes it.
+ *
+ * Deliberately WITHOUT the document body that would be written. The preview is
+ * for deciding, and the renderer deciding for the user is the failure this
+ * whole flow exists to avoid: the import re-reads and re-previews from disk, so
+ * what gets written is what Main computed, never what the page sent back.
+ */
+export interface SubagentImportRow {
+  /** Absolute path of the legacy document. Shown so the source is nameable. */
+  filePath: string;
+  /** Native definition name it would land under. */
+  name: string;
+  /** Where it would be written. Absent when nothing can be written. */
+  targetPath?: string;
+  /** A definition of this name is already in the catalog (builtin included). */
+  collides: boolean;
+  /** Something needs a decision first; nothing will be written for this one. */
+  blocked: boolean;
+  /** Per-field account: kept / adapted / dropped / conflict. */
+  notes: MigrationNote[];
+}
+
+export interface SubagentImportPreview {
+  /** The directory scanned, so "nothing found" says where it looked. */
+  sourceDirectory: string;
+  rows: SubagentImportRow[];
+}
+
+export interface SubagentImportResult {
+  /** Names actually written, in the order they were written. */
+  imported: string[];
+  /** Names asked for and not written, each with the reason it was not. */
+  skipped: { name: string; reason: string }[];
+  /** The catalog after the import, same rule as every other mutation here. */
+  catalog: SubagentCatalogView;
 }

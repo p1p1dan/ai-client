@@ -97,7 +97,12 @@ import type { AgentModelCatalog, ListPiModelsRequest } from '@shared/types/agent
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import type { ExtensionUiResponse } from '@shared/types/runtimeEvents';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
-import type { SubagentCatalogView, SubagentSaveRequest } from '@shared/types/subagentManagement';
+import type {
+  SubagentCatalogView,
+  SubagentImportPreview,
+  SubagentImportResult,
+  SubagentSaveRequest,
+} from '@shared/types/subagentManagement';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import type { WorkerExtensionInfo, WorkerSlashCommandInfo } from '@shared/types/workerRpc';
 import type {
@@ -1205,6 +1210,15 @@ const electronAPI = {
     /** No name opens the folder itself — "where do I put one". */
     reveal: (name?: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_REVEAL, name ? { name } : {}),
+    /**
+     * subagent-data-01 — what the legacy `<agentDir>/agents` documents would
+     * become. Reads and changes nothing; `importApply` is the half that writes,
+     * and it takes only the names the user ticked.
+     */
+    importPreview: (): Promise<SubagentImportPreview> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_IMPORT_PREVIEW),
+    importApply: (names: readonly string[]): Promise<SubagentImportResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_IMPORT_APPLY, { names: [...names] }),
   },
 
   /**

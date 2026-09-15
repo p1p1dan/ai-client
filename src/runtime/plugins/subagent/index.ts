@@ -34,9 +34,11 @@ import type { Usage } from '@earendil-works/pi-ai';
 import { type Context, Service } from 'cordis';
 import { type TSchema, Type } from 'typebox';
 import {
+  MAX_SUBAGENT_PROVIDERS,
   normalizeSubagentName,
   type SubagentDefinition,
   subagentModelKey,
+  subagentPinnedProviders,
 } from '../../../shared/subagentDefinition.ts';
 import type { SubagentActivityPayload } from '../../../shared/types/runtimeEvents.ts';
 import {
@@ -56,8 +58,12 @@ import {
 import {
   activityForEvent,
   activityForSettlement,
+  clampRecordedMessage,
+  clampSubagentText,
+  readSubagentHistory,
   SUBAGENT_ENTRY,
   type SubagentRecord,
+  subagentHistoryUsage,
 } from './records.ts';
 import {
   type DelegationRecord,
@@ -92,6 +98,54 @@ const TASKWAIT_DEFAULT_TIMEOUT_SECONDS = 600;
 const TASKWAIT_MAX_TIMEOUT_SECONDS = 900;
 /** A `TaskWait` result IS the parent's context; bound it like a report. */
 const MAX_TASKWAIT_RESULT_CHARS = 50_000;
+/**
+ * The persisted half of a `TaskWait` result, which is a separate budget.
+ *
+ * subagent-core-12 — the contract asks for "UI/details/持久化分开限额", and the
+ * third one was missing: `details.delegations` carried every target's FULL
+ * report (12k each) and pi writes `details` into the session JSONL verbatim, so
+ * a ten-way wait wrote ~120 KB of text the model never sees and a fifty-id
+ * re-read wrote ~600 KB. The full report is on the `settled` record either way;
+ * `details` only has to be enough to tell which delegation a row is.
+ */
+const MAX_TASKWAIT_DETAIL_REPORT_CHARS = 4_000;
+/**
+ * How many delegation ids one `TaskWait`/`TaskStop` call may name.
+ *
+ * Also declared on the schema so the model is told, rather than silently
+ * truncated. Ten is the concurrency ceiling, so a wait that names more than
+ * this is re-reading history — legitimate, but not in one unbounded call.
+ */
+const MAX_DELEGATION_IDS = 50;
+
+/**
+ * Live-channel events one delegation may publish before the carrier goes quiet.
+ *
+ * subagent-core-06 / subagent-data-04 — the wire protocol has carried
+ * `kind: 'capped'` and the renderer has had a branch for it since T-34, but
+ * nothing ever produced one: a delegate in a grep→read→grep loop pushed two
+ * events per tool call through worker → Main → renderer with no ceiling at all.
+ * 200 is the legacy carrier's own figure (`SUBAGENT_EVENTS_MAX_PER_DELEGATION`),
+ * kept so the two paths bound the same thing the same way.
+ *
+ * Terminal status, the report and usage are NOT counted and never suppressed —
+ * the contract's "不允许阻断终态、usage 或完整报告" is the whole reason the cap
+ * is applied here rather than inside the events plugin.
+ */
+export const MAX_ACTIVITY_EVENTS_PER_DELEGATION = 200;
+
+/**
+ * Bytes of delegate transcript one runtime may add to the session file.
+ *
+ * subagent-data-05 — delegate messages are persisted whole into the PARENT's
+ * JSONL, which has a 32 MiB hard budget shared with the parent's own messages;
+ * crossing it makes `appendMessage` throw `session_size_limit` and leaves the
+ * conversation read-only. Per-string clamping (`clampRecordedMessage`) bounds
+ * one message; this bounds the pile. Past it the transcript degrades to
+ * start/settle records only — the terminal facts and the full report — which is
+ * the part a reopened session actually needs.
+ */
+export const MAX_DELEGATION_TRANSCRIPT_BYTES = 2 * 1024 * 1024;
 
 /**
  * How long `drain()` waits for an aborted delegate before settling it itself.
@@ -103,6 +157,21 @@ const MAX_TASKWAIT_RESULT_CHARS = 50_000;
  */
 const DRAIN_TIMEOUT_MS = 30_000;
 
+/**
+ * `Task`'s description, minus the catalog block appended per run.
+ *
+ * Split out from the tool builder because {@link SubagentPlugin.taskDescription}
+ * rebuilds the whole string whenever the catalog is re-read (subagent-data-02),
+ * and the fixed half should not be rebuilt with it.
+ */
+const TASK_DESCRIPTION_PREAMBLE: readonly string[] = [
+  'Start one subagent in the background and return immediately; you keep working while it runs, then converge with TaskWait when you need its report.',
+  'Use it when the work is separable: parallel exploration of independent directions (one Task per direction in the same assistant message), a multi-file implementation with a complete spec (fixer), an adversarial read-only review of a change you just made (code-reviewer), or a wide search / long log / multi-file survey whose intermediate output would otherwise fill this context (explorer, test-runner).',
+  'Do not delegate what you can finish in a couple of tool calls, and do not delegate anything that needs the user — a subagent cannot ask a question or propose a plan on your behalf.',
+  "`task` is the delegate's only instruction. It cannot see this conversation, and you cannot correct it while it runs, so state the goal, the paths and facts it cannot infer, and exactly what to report back.",
+  'To run delegates concurrently, emit several Task calls in one assistant message. A message that mixes Task with any other tool runs one call at a time. You may keep working or talk to the user while they run; the runtime delivers their reports when they finish. Call TaskStop only to cancel.',
+];
+
 const DELEGATION_RESUME_PROMPT =
   'The following subagents have finished. Integrate their reports and continue the ' +
   "user's original task. Call TaskStop only if you have decided a still-running " +
@@ -112,6 +181,33 @@ export interface SubagentConfig {
   catalog: SubagentCatalog;
   /** Definition names the user switched off, from app data (never the Markdown). */
   disabled?: readonly string[];
+  /**
+   * Re-read the catalog from disk, for the top of a new top-level run.
+   *
+   * subagent-data-02 — the contract's "每个顶层用户 run 重新读取活动定义" was
+   * never implemented: the catalog was loaded once per worker and frozen into
+   * this plugin, so a definition edited (or created) from the settings page did
+   * not reach a session already open. Absent leaves the bootstrap snapshot in
+   * place, which is what an embedding with no directory to re-read wants.
+   */
+  reloadCatalog?: () => Promise<SubagentCatalog>;
+  /**
+   * Worker log sink for catalog diagnostics.
+   *
+   * subagent-data-10 — `loadSubagentCatalog` has always reported unreadable,
+   * unparseable and oversized documents, and nothing read the list: a delegate
+   * that silently vanished from the menu left no trace anywhere a person looks.
+   */
+  log?: (message: string, ...args: unknown[]) => void;
+  /**
+   * Transcript byte budget override, defaulting to
+   * {@link MAX_DELEGATION_TRANSCRIPT_BYTES}.
+   *
+   * Exists for the same reason `drain(timeoutMs)` takes one: the degraded path
+   * is the part worth pinning, and a test that had to write two megabytes of
+   * delegate transcript to reach it would spend the budget to prove it exists.
+   */
+  transcriptBudgetBytes?: number;
   /**
    * The project's instruction chain, rendered for a delegate's prompt.
    *
@@ -151,6 +247,21 @@ export interface SubagentRunContext {
 export interface SubagentService {
   readonly definitions: readonly SubagentDefinition[];
   readonly registry: DelegationRegistry;
+  /**
+   * Re-read the catalog and re-advertise `Task`, for a new top-level run.
+   *
+   * Delegates already running keep the definition object they started with —
+   * they hold their own reference, and changing a prompt under a delegate
+   * mid-flight would be a different bug from the one this fixes.
+   */
+  refresh(): Promise<void>;
+  /**
+   * What THIS session's earlier runs' delegates cost, off its own records.
+   *
+   * Read once at the top of a run so a reopened conversation's totals still
+   * include delegated spend; the live figure comes from {@link takeUsage}.
+   */
+  historyUsage(): { usage: Usage | undefined; delegations: number };
   /** True while any delegate runs; the parent run must not be allowed to end. */
   readonly busy: boolean;
   /** Usage accumulated by settled delegates, settled exactly once per run. */
@@ -222,11 +333,28 @@ export class SubagentPlugin extends Service implements SubagentService {
   static inject = [TOOLS_SERVICE, 'runtimeModel'];
 
   readonly registry = new DelegationRegistry();
-  readonly definitions: readonly SubagentDefinition[];
   private readonly config: SubagentConfig;
   private readonly listeners = new Set<(envelope: SubagentEventEnvelope) => void>();
   private usage: Usage | undefined;
   private runContext?: SubagentRunContext;
+  /**
+   * The active definition list. Not `readonly` any more: {@link refresh}
+   * replaces it wholesale between top-level runs (subagent-data-02).
+   */
+  private activeDefinitions: readonly SubagentDefinition[];
+  /** Diagnostics from the catalog this list came from, for failure text. */
+  private diagnostics: readonly { code: string; message: string; path: string }[];
+  /** False until `Task*` reached the registry; an empty catalog registers none. */
+  private toolsRegistered = false;
+  /** The `Task` schema object, shared with the registry's copy so it can be
+   * rewritten in place when the catalog changes. */
+  private taskParameters: TSchema | undefined;
+  /** Live-channel events published per delegation, for the cap. */
+  private readonly activityCounts = new Map<string, number>();
+  /** Bytes of delegate transcript already written to this session. */
+  private transcriptBytes = 0;
+  /** True once the transcript budget was reported; reported once, not per write. */
+  private transcriptBudgetReported = false;
   /** Start facts, kept until settlement so one record can carry both ends. */
   private readonly started = new Map<
     string,
@@ -236,22 +364,124 @@ export class SubagentPlugin extends Service implements SubagentService {
   constructor(ctx: Context, config: SubagentConfig) {
     super(ctx, SUBAGENT_SERVICE);
     this.config = config;
-    this.definitions = applySubagentActivation(config.catalog, config.disabled ?? []).definitions;
-    // Nothing to delegate to means nothing to advertise. Registering `Task`
-    // with an empty catalog would put a tool in every request that can only
-    // ever answer "unknown subagent".
-    if (this.definitions.length === 0) return;
-    // `write` access: the tools plugin already drops write tools in plan mode,
-    // which is exactly the contract's "no delegation from plan".
-    const tools = ctx.get(TOOLS_SERVICE);
-    tools?.register(this.buildTaskTool(), 'write');
-    tools?.register(this.buildWaitTool(), 'write');
-    tools?.register(this.buildListTool(), 'write');
-    tools?.register(this.buildStopTool(), 'write');
+    this.activeDefinitions = applySubagentActivation(
+      config.catalog,
+      config.disabled ?? []
+    ).definitions;
+    this.diagnostics = config.catalog.diagnostics;
+    this.reportDiagnostics();
     ctx.effect(() => () => {
       this.abortAll();
       this.listeners.clear();
     });
+    // Nothing to delegate to means nothing to advertise. Registering `Task`
+    // with an empty catalog would put a tool in every request that can only
+    // ever answer "unknown subagent". `refresh()` registers them later if a
+    // definition appears while the worker is alive.
+    if (this.activeDefinitions.length === 0) return;
+    this.registerTools();
+  }
+
+  get definitions(): readonly SubagentDefinition[] {
+    return this.activeDefinitions;
+  }
+
+  /** `write` access: the tools plugin already drops write tools in plan mode,
+   * which is exactly the contract's "no delegation from plan". */
+  private registerTools(): void {
+    const tools = this.ctx.get(TOOLS_SERVICE);
+    if (!tools) return;
+    tools.register(this.buildTaskTool(), 'write');
+    tools.register(this.buildWaitTool(), 'write');
+    tools.register(this.buildListTool(), 'write');
+    tools.register(this.buildStopTool(), 'write');
+    this.toolsRegistered = true;
+  }
+
+  /**
+   * subagent-data-02 — re-read the catalog for a new top-level run.
+   *
+   * A reload failure is not a turn failure: the previous list is still a
+   * working list, and refusing to run because a directory blinked would be a
+   * worse answer than delegating to what we already know about. It is logged,
+   * because "my new subagent is not there" needs somewhere to look.
+   */
+  async refresh(): Promise<void> {
+    const reload = this.config.reloadCatalog;
+    if (!reload) return;
+    let catalog: SubagentCatalog;
+    try {
+      catalog = await reload();
+    } catch (error) {
+      this.config.log?.('[subagent] catalog reload failed', error);
+      return;
+    }
+    this.activeDefinitions = applySubagentActivation(
+      catalog,
+      this.config.disabled ?? []
+    ).definitions;
+    this.diagnostics = catalog.diagnostics;
+    this.reportDiagnostics();
+    this.refreshTaskTool();
+  }
+
+  /**
+   * Re-advertise the catalog on the already-registered `Task` tool.
+   *
+   * `ToolsPlugin.register` throws on a duplicate name and takes a shallow copy
+   * of the tool object, so re-registering is not an option and rewriting our
+   * own copy would not reach the model. The description is written onto the
+   * registry's copy; `parameters` is the same object on both sides, so the
+   * `agent` enumeration is written through it.
+   */
+  private refreshTaskTool(): void {
+    const tools = this.ctx.get(TOOLS_SERVICE);
+    if (!tools) return;
+    if (!this.toolsRegistered) {
+      if (this.activeDefinitions.length === 0) return;
+      this.registerTools();
+      return;
+    }
+    const registered = tools.list().find((tool) => tool.name === SUBAGENT_TOOL_NAME);
+    // Absent in plan mode, where `Task` is filtered out and no delegation can
+    // happen anyway; the next non-plan run picks the new text up.
+    if (registered) (registered as { description: string }).description = this.taskDescription();
+    const agent = (
+      this.taskParameters as { properties?: { agent?: { description?: string } } } | undefined
+    )?.properties?.agent;
+    if (agent) agent.description = this.taskAgentDescription();
+  }
+
+  /** subagent-data-10 — the one place a bad definition document is reported. */
+  private reportDiagnostics(): void {
+    for (const diagnostic of this.diagnostics) {
+      this.config.log?.(
+        `[subagent] ${diagnostic.code}: ${diagnostic.path} — ${diagnostic.message}`
+      );
+    }
+  }
+
+  /**
+   * The diagnostics as one sentence for a `Task` failure, or nothing.
+   *
+   * Appended to "unknown subagent" because that is when the user is looking at
+   * the consequence: a definition that failed to load is missing from the menu,
+   * and the menu is the only thing the model can report.
+   */
+  private diagnosticNote(): string {
+    if (this.diagnostics.length === 0) return '';
+    const shown = this.diagnostics
+      .slice(0, 3)
+      .map((diagnostic) => `${diagnostic.path}: ${diagnostic.message}`)
+      .join('; ');
+    const more = this.diagnostics.length > 3 ? ` (+${this.diagnostics.length - 3} more)` : '';
+    return ` ${this.diagnostics.length} subagent document(s) failed to load and are not in this list — ${shown}${more}.`;
+  }
+
+  historyUsage(): { usage: Usage | undefined; delegations: number } {
+    const entries = this.ctx.get(SESSION_SERVICE)?.snapshot().entries;
+    if (!entries) return { usage: undefined, delegations: 0 };
+    return subagentHistoryUsage(readSubagentHistory(entries));
   }
 
   bindRun(context: SubagentRunContext): void {
@@ -275,16 +505,80 @@ export class SubagentPlugin extends Service implements SubagentService {
     if (!session) return;
     try {
       await session.appendEntry({ type: 'custom', customType: SUBAGENT_ENTRY, data });
-    } catch {
-      // Deliberately swallowed; see the note above.
+    } catch (error) {
+      // Still swallowed — see the note above — but no longer silent.
+      // subagent-data-05: a delegate's records failing to land is the first
+      // symptom of a session running out of its byte budget, and it left no
+      // trace anywhere, so the eventual `session_size_limit` on the parent's
+      // own message arrived with no history to explain it.
+      this.config.log?.(`[subagent] could not record ${data.kind} for ${data.delegationId}`, error);
     }
   }
 
-  /** Publish one live-projection payload on the session's event channel. */
+  /**
+   * Write one delegate message, inside the transcript budget.
+   *
+   * subagent-data-05 — two bounds, because they fail differently. Each message
+   * is clamped per string so one 50 KiB tool result cannot be one 50 KiB entry;
+   * the session-wide total is capped so a long enough conversation cannot spend
+   * the parent's 32 MiB budget on delegate transcripts and leave the user with
+   * a conversation they can no longer send to. Past the cap the start and
+   * settle records still go — those carry the terminal status and the full
+   * report, which is what a reopened session needs to be truthful.
+   */
+  private async recordMessage(data: SubagentRecord & { kind: 'message' }): Promise<void> {
+    const budget = this.config.transcriptBudgetBytes ?? MAX_DELEGATION_TRANSCRIPT_BYTES;
+    if (this.transcriptBytes >= budget) {
+      if (!this.transcriptBudgetReported) {
+        this.transcriptBudgetReported = true;
+        this.config.log?.(
+          `[subagent] delegate transcript budget spent (${budget} bytes); recording terminal facts only for the rest of this session`
+        );
+      }
+      return;
+    }
+    const clamped = { ...data, message: clampRecordedMessage(data.message) };
+    // Measured on what is actually written, not on what arrived: the clamp is
+    // the point of the measurement.
+    this.transcriptBytes += Buffer.byteLength(JSON.stringify(clamped.message ?? ''), 'utf8');
+    await this.record(clamped);
+  }
+
+  /**
+   * Publish one live-projection payload on the session's event channel.
+   *
+   * subagent-core-06 / subagent-data-04 — bounded per delegation. The first
+   * {@link MAX_ACTIVITY_EVENTS_PER_DELEGATION} progress payloads go out, then
+   * exactly one `kind: 'capped'`, then the carrier is quiet for that delegation.
+   * Terminal payloads (`status`, `report`) are never counted and never dropped:
+   * the contract forbids a cap from costing a terminal status, a usage figure
+   * or a report, and those are also what the renderer needs to stop a lane
+   * spinning forever.
+   */
   private emitActivity(payload: SubagentActivityPayload): void {
     const events = this.ctx.get(EVENTS_SERVICE);
     const sessionId = this.runContext?.sessionId;
     if (!events || !sessionId) return;
+    const terminal = payload.kind === 'status' || payload.kind === 'report';
+    const agentId = payload.agentId;
+    if (!terminal && agentId) {
+      const seen = (this.activityCounts.get(agentId) ?? 0) + 1;
+      this.activityCounts.set(agentId, seen);
+      if (seen > MAX_ACTIVITY_EVENTS_PER_DELEGATION + 1) return;
+      if (seen === MAX_ACTIVITY_EVENTS_PER_DELEGATION + 1) {
+        events.emit({
+          type: 'subagent.activity',
+          sessionId,
+          payload: {
+            parentToolCallId: payload.parentToolCallId,
+            agentId,
+            kind: 'capped',
+            limit: MAX_ACTIVITY_EVENTS_PER_DELEGATION,
+          },
+        });
+        return;
+      }
+    }
     events.emit({ type: 'subagent.activity', sessionId, payload });
   }
 
@@ -405,11 +699,13 @@ export class SubagentPlugin extends Service implements SubagentService {
       agentId: envelope.delegationId,
     };
     for (const activity of activityForEvent(envelope.event, base)) this.emitActivity(activity);
-    // The delegate's own messages are PERSISTED whole, as custom entries. The
-    // live projection above is a bounded summary of the same thing; this is the
-    // copy a history read gets back.
+    // The delegate's own messages are PERSISTED as custom entries. The live
+    // projection above is a bounded summary of the same thing; this is the copy
+    // a history read gets back — per-string clamped and inside a session-wide
+    // byte budget since subagent-data-05, because "whole" and "shares the
+    // parent's 32 MiB file" cannot both be true.
     if (envelope.event.type === 'message_end' && this.runContext) {
-      void this.record({
+      void this.recordMessage({
         kind: 'message',
         delegationId: envelope.delegationId,
         agentName: envelope.agentName,
@@ -461,6 +757,20 @@ export class SubagentPlugin extends Service implements SubagentService {
       return { ok: true, model: adapter.resolve(ref) };
     }
     if (definition.model) {
+      // subagent-core-13 — the provider cap is enforced HERE, on the path that
+      // actually starts a delegate, and not only counted in `catalog.ts`'s
+      // diagnostics (which nothing read). Its own JSDoc said "`Task` is where
+      // the model is told, because that is where the choice is made", and until
+      // now the ninth provider's pin ran anyway. Same shape as an unresolvable
+      // pin: a readable refusal with what to do instead, never a silent
+      // fallback onto the session model.
+      const allowed = subagentPinnedProviders(this.activeDefinitions);
+      if (!allowed.includes(definition.model.provider)) {
+        return {
+          ok: false,
+          text: `The ${definition.name} subagent pins ${subagentModelKey(definition.model)}, but this catalog already names ${MAX_SUBAGENT_PROVIDERS} model providers and that is the limit. Repoint it at ${allowed.join(', ')}, or do this work yourself.`,
+        };
+      }
       const ref = resolveSubagentPin(definition.model, available);
       if (!ref) {
         // No fallback to the session model, ever: a definition that asked for a
@@ -501,46 +811,63 @@ export class SubagentPlugin extends Service implements SubagentService {
     return { ok: true, model: adapter.resolve(fallback) };
   }
 
-  private buildTaskTool(): AgentTool<TSchema, unknown> {
-    const names = this.definitions.map((definition) => definition.name);
-    const catalog = this.definitions
+  /**
+   * The catalog block at the end of `Task`'s description.
+   *
+   * A method rather than a closure variable because {@link refreshTaskTool}
+   * rewrites it between runs; a captured string would freeze the menu the model
+   * sees at whatever the worker booted with.
+   */
+  private taskDescription(): string {
+    const catalog = this.activeDefinitions
       .map(
         (definition) =>
           `- ${definition.name} (tools: ${definition.tools.join(', ')}): ${definition.description}`
       )
       .join('\n');
+    return [
+      ...TASK_DESCRIPTION_PREAMBLE,
+      catalog
+        ? `Available subagents:\n${catalog}`
+        : 'No subagents are configured right now, so every call will fail; do the work yourself.',
+    ].join('\n\n');
+  }
+
+  private taskAgentDescription(): string {
+    const names = this.activeDefinitions.map((definition) => definition.name);
+    return `Name of the subagent to run: ${names.join(', ')}.`;
+  }
+
+  private buildTaskTool(): AgentTool<TSchema, unknown> {
+    const parameters = Type.Object(
+      {
+        agent: Type.String({ description: this.taskAgentDescription() }),
+        task: Type.String({
+          description:
+            'The complete brief: goal, context the delegate cannot infer, and the exact report you want back.',
+        }),
+        description: Type.Optional(
+          Type.String({
+            description: 'Short label for this delegation (3-6 words), shown to the user.',
+          })
+        ),
+        model: Type.Optional(
+          Type.String({
+            description:
+              "Override the delegate's model for this run, as `provider/model`. Omit to use the subagent's default.",
+          })
+        ),
+      },
+      { additionalProperties: false }
+    );
+    // Held so `refreshTaskTool` can rewrite the `agent` enumeration: the tools
+    // registry keeps a shallow copy of the tool, so this object is shared.
+    this.taskParameters = parameters;
     return {
       name: SUBAGENT_TOOL_NAME,
       label: 'Task',
-      description: [
-        'Start one subagent in the background and return immediately; you keep working while it runs, then converge with TaskWait when you need its report.',
-        'Use it when the work is separable: parallel exploration of independent directions (one Task per direction in the same assistant message), a multi-file implementation with a complete spec (fixer), an adversarial read-only review of a change you just made (code-reviewer), or a wide search / long log / multi-file survey whose intermediate output would otherwise fill this context (explorer, test-runner).',
-        'Do not delegate what you can finish in a couple of tool calls, and do not delegate anything that needs the user — a subagent cannot ask a question or propose a plan on your behalf.',
-        "`task` is the delegate's only instruction. It cannot see this conversation, and you cannot correct it while it runs, so state the goal, the paths and facts it cannot infer, and exactly what to report back.",
-        'To run delegates concurrently, emit several Task calls in one assistant message. A message that mixes Task with any other tool runs one call at a time. You may keep working or talk to the user while they run; the runtime delivers their reports when they finish. Call TaskStop only to cancel.',
-        `Available subagents:\n${catalog}`,
-      ].join('\n\n'),
-      parameters: Type.Object(
-        {
-          agent: Type.String({ description: `Name of the subagent to run: ${names.join(', ')}.` }),
-          task: Type.String({
-            description:
-              'The complete brief: goal, context the delegate cannot infer, and the exact report you want back.',
-          }),
-          description: Type.Optional(
-            Type.String({
-              description: 'Short label for this delegation (3-6 words), shown to the user.',
-            })
-          ),
-          model: Type.Optional(
-            Type.String({
-              description:
-                "Override the delegate's model for this run, as `provider/model`. Omit to use the subagent's default.",
-            })
-          ),
-        },
-        { additionalProperties: false }
-      ),
+      description: this.taskDescription(),
+      parameters,
       executionMode: 'parallel',
       execute: async (toolCallId, params) => {
         // Read like `task` and `model` below rather than as a `?? ''` fallback:
@@ -551,11 +878,19 @@ export class SubagentPlugin extends Service implements SubagentService {
         // guard that has to carry an exception per unrelated field stops being
         // a guard.
         const requested = isRecord(params) && typeof params.agent === 'string' ? params.agent : '';
-        const definition = this.definitions.find(
+        const definition = this.activeDefinitions.find(
           (candidate) => candidate.name === normalizeSubagentName(requested)
         );
-        if (!definition)
-          return this.toolError(`Unknown subagent "${requested}". Available: ${names.join(', ')}.`);
+        if (!definition) {
+          // subagent-data-10 — the diagnostics ride the failure that a bad
+          // document actually causes. "Unknown subagent fixer" with no further
+          // word is indistinguishable from a typo; "…and fixer.md failed to
+          // parse" is the answer.
+          const names = this.activeDefinitions.map((candidate) => candidate.name);
+          return this.toolError(
+            `Unknown subagent "${requested}". Available: ${names.join(', ')}.${this.diagnosticNote()}`
+          );
+        }
         const task = isRecord(params) && typeof params.task === 'string' ? params.task.trim() : '';
         if (!task)
           return this.toolError(
@@ -837,6 +1172,9 @@ export class SubagentPlugin extends Service implements SubagentService {
         completedAt,
       });
     }
+    // The cap's counter has done its job once the delegation is terminal, and
+    // leaving it would grow one entry per delegation for the session's life.
+    this.activityCounts.delete(record.delegationId);
     if (start) {
       for (const payload of activityForSettlement(
         { ...result, status: record.status === 'running' ? result.status : record.status },
@@ -854,9 +1192,14 @@ export class SubagentPlugin extends Service implements SubagentService {
     ids: string[];
     unknownIds: string[];
   } {
+    // subagent-core-12 — deduplicated. `delegationIds: [a, a, a]` used to build
+    // three identical entries, each carrying a full report, and the persisted
+    // `details` grew by a multiple of what the model actually asked about. Also
+    // trimmed to `MAX_DELEGATION_IDS`, which the schema declares, so a model
+    // that ignores the declared maximum is bounded rather than obeyed.
     const ids =
       isRecord(params) && Array.isArray(params.delegationIds)
-        ? params.delegationIds.map(String)
+        ? [...new Set(params.delegationIds.map(String))].slice(0, MAX_DELEGATION_IDS)
         : [];
     const targets = ids.length
       ? ids
@@ -876,7 +1219,8 @@ export class SubagentPlugin extends Service implements SubagentService {
         {
           delegationIds: Type.Optional(
             Type.Array(Type.String({ description: 'Delegation ids returned by Task.' }), {
-              description: 'Defaults to all running subagents.',
+              description: `Defaults to all running subagents. At most ${MAX_DELEGATION_IDS}.`,
+              maxItems: MAX_DELEGATION_IDS,
             })
           ),
           mode: Type.Optional(
@@ -972,7 +1316,15 @@ export class SubagentPlugin extends Service implements SubagentService {
           details: {
             status: timedOut ? 'timeout' : 'completed',
             ...(unknownIds.length ? { unknownIds } : {}),
-            delegations: results,
+            // subagent-core-12 — `details` is written into the session JSONL
+            // verbatim by pi and is NOT model context, so it gets its own,
+            // tighter budget than the text above. The full report lives on the
+            // `settled` record; repeating it here at 12k a piece was how a
+            // ten-way wait put ~120 KB in one entry.
+            delegations: results.map((entry) => ({
+              ...entry,
+              report: clampSubagentText(entry.report, MAX_TASKWAIT_DETAIL_REPORT_CHARS),
+            })),
           },
         };
       },
@@ -1011,7 +1363,8 @@ export class SubagentPlugin extends Service implements SubagentService {
         {
           delegationIds: Type.Optional(
             Type.Array(Type.String({ description: 'Delegation ids returned by Task.' }), {
-              description: 'Defaults to all running subagents.',
+              description: `Defaults to all running subagents. At most ${MAX_DELEGATION_IDS}.`,
+              maxItems: MAX_DELEGATION_IDS,
             })
           ),
         },

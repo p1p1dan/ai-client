@@ -3,14 +3,14 @@ import { reviewFromToolResult } from '@shared/sessionFileChange';
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import { isQuietPermissionActivity } from './permissionActivityRow';
-import { PI_TOOL_NAMES } from './piToolNames';
+import { MCP_TOOL_PREFIX, mcpToolLabel, PI_TOOL_NAMES, RUNTIME_TOOL_NAMES } from './piToolNames';
 import { derivePermissionAutoNote, derivePermissionVerb } from './questionCardModel';
 import { deriveToolDiff, type ToolDiff } from './toolDiff';
 import { formatThoughtRow } from './turnTiming';
 
 // Re-exported so the pi tool vocabulary keeps ONE public entry point even
 // though the constant itself had to move out to break an import cycle.
-export { PI_TOOL_NAMES } from './piToolNames';
+export { MCP_TOOL_PREFIX, mcpToolLabel, PI_TOOL_NAMES, RUNTIME_TOOL_NAMES } from './piToolNames';
 
 /**
  * T-05 tool-row pure view model (A07 screen 5, groups A-F). Three layers:
@@ -588,8 +588,23 @@ const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   KillShell: ['description', 'command'],
   // T-34 probe: cometix 2.1.212 names the delegation tool `Agent`; older
   // CLIs said `Task`. Both spellings share one treatment everywhere.
-  Task: ['description', 'subagent_type'],
+  Task: ['description', 'subagent_type', 'agent'],
   Agent: ['description', 'subagent_type'],
+  // subagent-data-06 — our own registry. `Glob` (capital) was already here and
+  // `glob` was not, so every one of our glob rows also grew a full input body
+  // under a summary that already said everything it had.
+  [RUNTIME_TOOL_NAMES.read]: ['path', 'offset', 'limit'],
+  [RUNTIME_TOOL_NAMES.write]: ['path'],
+  [RUNTIME_TOOL_NAMES.edit]: ['path'],
+  [RUNTIME_TOOL_NAMES.glob]: ['pattern'],
+  [RUNTIME_TOOL_NAMES.grep]: ['pattern'],
+  [RUNTIME_TOOL_NAMES.bash]: ['command'],
+  [RUNTIME_TOOL_NAMES.browserPreview]: ['path'],
+  [RUNTIME_TOOL_NAMES.skill]: ['name'],
+  [RUNTIME_TOOL_NAMES.newContext]: [],
+  [RUNTIME_TOOL_NAMES.taskWait]: ['delegationIds'],
+  [RUNTIME_TOOL_NAMES.taskStop]: ['delegationIds'],
+  [RUNTIME_TOOL_NAMES.taskList]: [],
 };
 
 /**
@@ -901,6 +916,46 @@ export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
     refused: 'Search files',
   },
   [PI_TOOL_NAMES.ls]: { done: 'Listed', running: 'Listing', refused: 'List' },
+  // subagent-data-06 — this app's own registry, which is NOT pi's built-in set.
+  // `glob` gets `Glob`'s words because it is the same job under another name;
+  // the rest had no entry at all and read as the unknown-tool fallback "Ran",
+  // in the delegation panel and in the main timeline alike.
+  [RUNTIME_TOOL_NAMES.glob]: {
+    done: 'Searched files',
+    running: 'Searching files',
+    refused: 'Search files',
+  },
+  [RUNTIME_TOOL_NAMES.browserPreview]: {
+    done: 'Previewed',
+    running: 'Previewing',
+    refused: 'Preview',
+  },
+  [RUNTIME_TOOL_NAMES.ask]: { done: 'Asked', running: 'Asking', refused: 'Ask' },
+  [RUNTIME_TOOL_NAMES.skill]: {
+    done: 'Loaded skill',
+    running: 'Loading skill',
+    refused: 'Load skill',
+  },
+  [RUNTIME_TOOL_NAMES.newContext]: {
+    done: 'Started a new context',
+    running: 'Starting a new context',
+    refused: 'Start a new context',
+  },
+  [RUNTIME_TOOL_NAMES.taskWait]: {
+    done: 'Waited for subagents',
+    running: 'Waiting for subagents',
+    refused: 'Wait for subagents',
+  },
+  [RUNTIME_TOOL_NAMES.taskList]: {
+    done: 'Listed subagents',
+    running: 'Listing subagents',
+    refused: 'List subagents',
+  },
+  [RUNTIME_TOOL_NAMES.taskStop]: {
+    done: 'Stopped subagents',
+    running: 'Stopping subagents',
+    refused: 'Stop subagents',
+  },
   Read: { done: 'Read', running: 'Reading', refused: 'Read' },
   NotebookRead: { done: 'Read', running: 'Reading', refused: 'Read' },
   Grep: { done: 'Grepped', running: 'Grepping', refused: 'Grep' },
@@ -922,8 +977,20 @@ export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
 
 export const UNKNOWN_TOOL_VERB: ToolVerbs = { done: 'Ran', running: 'Running', refused: 'Run' };
 
+/**
+ * subagent-data-06 — every MCP-bridged tool, which no table can enumerate.
+ *
+ * The name is `mcp__<server>__<tool>`, composed at runtime, so these can only
+ * be matched by prefix. "Called" rather than "Ran": an MCP tool is a request to
+ * another process, and the row already names which one in its argument.
+ */
+export const MCP_TOOL_VERB: ToolVerbs = { done: 'Called', running: 'Calling', refused: 'Call' };
+
 export function toolVerb(toolName: string, state: ToolVerbState): string {
-  return (TOOL_VERBS[toolName] ?? UNKNOWN_TOOL_VERB)[state];
+  const verbs =
+    TOOL_VERBS[toolName] ??
+    (toolName.startsWith(MCP_TOOL_PREFIX) ? MCP_TOOL_VERB : UNKNOWN_TOOL_VERB);
+  return verbs[state];
 }
 
 /**
@@ -988,6 +1055,9 @@ const SEARCH_TOOL_NAMES = new Set([
   PI_TOOL_NAMES.grep,
   PI_TOOL_NAMES.find,
   PI_TOOL_NAMES.ls,
+  // subagent-data-06: without this our own glob never joined an aggregate row,
+  // so a burst of searches stayed as N separate "Ran" lines.
+  RUNTIME_TOOL_NAMES.glob,
 ]);
 
 /** Decides whether a tool participates in aggregation, and which bucket it counts into. */
@@ -1078,12 +1148,49 @@ function formatToolArgDetail(
       break;
     }
     case PI_TOOL_NAMES.grep:
-    case PI_TOOL_NAMES.find: {
+    case PI_TOOL_NAMES.find:
+    // subagent-data-06: our own `glob`, which the SDK calls `find`. Same
+    // treatment — the pattern is what the call is about, and without this case
+    // the `default:` branch showed the `path` it was narrowed to instead.
+    case RUNTIME_TOOL_NAMES.glob: {
       // The pattern is the point of the call; `path`/`glob` only narrow it.
       const pattern = stringField(rec, 'pattern');
       raw = pattern ? inRepo(pattern) : pattern;
       break;
     }
+    case RUNTIME_TOOL_NAMES.browserPreview: {
+      const path = stringField(rec, 'path');
+      raw = path ? shortPath(path) : undefined;
+      if (raw) kind = 'ident';
+      break;
+    }
+    case RUNTIME_TOOL_NAMES.skill: {
+      raw = stringField(rec, 'name');
+      if (raw) kind = 'ident';
+      break;
+    }
+    case RUNTIME_TOOL_NAMES.newContext:
+      // The tool takes no arguments at all, so there is nothing to show but
+      // what it does; a bare verb with no argument reads as a truncated row.
+      raw = 'a fresh window';
+      break;
+    case RUNTIME_TOOL_NAMES.ask: {
+      // The first question stands for the call. `questions` is an array of
+      // objects, and the row is one line.
+      const questions = rec?.questions;
+      const first = Array.isArray(questions) ? asRecord(questions[0]) : undefined;
+      raw = stringField(first, 'question') ?? stringField(first, 'header');
+      break;
+    }
+    case RUNTIME_TOOL_NAMES.taskWait:
+    case RUNTIME_TOOL_NAMES.taskStop: {
+      const ids = rec?.delegationIds;
+      raw = Array.isArray(ids) && ids.length > 0 ? `${ids.length} delegation(s)` : 'all running';
+      break;
+    }
+    case RUNTIME_TOOL_NAMES.taskList:
+      raw = 'running subagents';
+      break;
     case PI_TOOL_NAMES.ls: {
       // `path` is OPTIONAL on pi's `ls` — an argument-less call lists the
       // working directory, so say that rather than rendering a bare verb.
@@ -1157,18 +1264,33 @@ function formatToolArgDetail(
       break;
     case 'Task':
     case 'Agent':
-      raw = stringField(rec, 'description') ?? stringField(rec, 'subagent_type');
-      break;
-    default:
+      // subagent-data-06 — `agent` is what OUR `Task` tool takes; the two CLI
+      // spellings stay because a replayed Claude-era transcript still has them,
+      // and a row falling through to `default:` here would print the whole
+      // delegated brief (`prompt`) on one line.
       raw =
+        stringField(rec, 'description') ??
+        stringField(rec, 'agent') ??
+        stringField(rec, 'subagent_type');
+      break;
+    default: {
+      const probed =
         stringField(rec, 'command') ??
         stringField(rec, 'description') ??
         stringField(rec, 'path') ??
         stringField(rec, 'file_path') ??
         stringField(rec, 'pattern') ??
         stringField(rec, 'query') ??
-        stringField(rec, 'prompt') ??
-        run.toolName;
+        stringField(rec, 'prompt');
+      // subagent-data-06 — an MCP tool is named `mcp__<server>__<tool>`, which
+      // no table can enumerate. It stays LAST: a server that describes its own
+      // call says more than its address does, and the label only replaces the
+      // wire identifier this branch would otherwise print verbatim.
+      const mcp = mcpToolLabel(run.toolName);
+      raw = probed ?? mcp ?? run.toolName;
+      if (!probed && mcp) kind = 'ident';
+      break;
+    }
   }
 
   if (raw == null) return undefined;

@@ -385,6 +385,20 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
                 value={`$${view.sessionUsage.costUsd.toFixed(4)}`}
               />
             )}
+            {/* decision 005: the session totals above ALREADY include what
+                delegates spent (the contract's 会话/轮级总成本含子调用). This row
+                says how much of them was delegated — a share of a number
+                already shown, never a second total to add to it. Absent when
+                nothing was delegated, which is not the same as 0%. */}
+            {view.delegatedShare && view.delegatedUsage && (
+              <RunMetric
+                label={t('Delegated (session)')}
+                value={t('{{tokens}} · {{percent}}%', {
+                  tokens: formatTokenTotal(view.delegatedUsage.totalTokens),
+                  percent: view.delegatedShare.tokensPercent,
+                })}
+              />
+            )}
           </div>
         )}
       </div>

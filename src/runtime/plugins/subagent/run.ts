@@ -418,12 +418,21 @@ export class SubagentRun {
    * transcript needs.
    *
    * `turn_end`, `agent_end` and `agent_start` are NOT forwarded: the parent's
-   * projector treats those as run boundaries.
+   * projector treats those as run boundaries. `turn_start` IS forwarded, for
+   * counting only — see the case below.
    */
   private handleEvent(event: AgentEvent): void {
     switch (event.type) {
       case 'turn_start':
         this.turns += 1;
+        // subagent-data-16 — forwarded, and only so the registry can count it.
+        // `noteActivity` has always had a `turn_start` arm, but nothing ever
+        // reached it: `record.turns` stayed 0 for the whole run, so every
+        // `TaskList` / `TaskWait` heartbeat dropped the turn column (its
+        // `if (turns > 0)` guard) and a parent asking "is this delegate stuck?"
+        // was answered without the one number that says. `activityForEvent`
+        // returns nothing for this type, so no extra event reaches the panel.
+        this.emit(event);
         return;
       case 'message_start':
       case 'message_update':

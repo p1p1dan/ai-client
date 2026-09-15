@@ -252,6 +252,9 @@ export const IPC_CHANNELS = {
   PI_SUBAGENTS_SET_ENABLED: 'piSubagents:setEnabled',
   PI_SUBAGENTS_CLEAR_STALE: 'piSubagents:clearStale',
   PI_SUBAGENTS_REVEAL: 'piSubagents:reveal',
+  /** subagent-data-01 — preview and import legacy `<agentDir>/agents` documents. */
+  PI_SUBAGENTS_IMPORT_PREVIEW: 'piSubagents:importPreview',
+  PI_SUBAGENTS_IMPORT_APPLY: 'piSubagents:importApply',
 
   // H/19 U2 — copying `~/.pi/agent` into this app's own agent directory.
   AGENT_MIGRATION_INSPECT: 'agentMigration:inspect',

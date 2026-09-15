@@ -524,8 +524,14 @@ describe('formatToolArg', () => {
   it('falls back through common fields for an unknown tool, then toolName when none match', () => {
     const withField = makeRun('a', 'mcp__server__tool', { description: 'do a thing' });
     expect(formatToolArg(withField)).toBe('do a thing');
+    // subagent-data-06 changed the last resort for an MCP name only: the raw
+    // `mcp__server__tool` is a wire identifier, and the row now says which
+    // server and which tool instead. A field the server DID supply still wins,
+    // which is the assertion above.
     const withNoFields = makeRun('b', 'mcp__server__tool', {});
-    expect(formatToolArg(withNoFields)).toBe('mcp__server__tool');
+    expect(formatToolArg(withNoFields)).toBe('server · tool');
+    const notMcp = makeRun('c', 'SomethingElse', {});
+    expect(formatToolArg(notMcp)).toBe('SomethingElse');
   });
 
   it('returns an overlong argument untouched (truncation is CSS-only, not this function)', () => {

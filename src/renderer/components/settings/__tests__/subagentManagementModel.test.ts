@@ -7,17 +7,26 @@
  * must not blank a loaded list, and "clear" actually clearing.
  */
 
-import type { SubagentCatalogView, SubagentRow } from '@shared/types/subagentManagement';
+import type {
+  SubagentCatalogView,
+  SubagentImportPreview,
+  SubagentImportRow,
+  SubagentRow,
+} from '@shared/types/subagentManagement';
 import { describe, expect, it } from 'vitest';
 import {
   adoptCatalog,
+  describeImportResult,
   draftFromBuiltin,
   draftFromRow,
   emptySubagentDraft,
   filterSubagentRows,
+  importableNames,
+  importRowNotes,
   saveRequestFromDraft,
   sortSubagentRows,
   subagentRowSummary,
+  toggleImportSelection,
   validateSubagentDraft,
   withOptimisticEnabled,
 } from '../subagentManagementModel';
@@ -194,5 +203,79 @@ describe('SA17 · the list holds still', () => {
     expect(subagentRowSummary(row({ maxTurns: 40 }))).toContain('40 turns');
     expect(subagentRowSummary(row({ permission: 'inherit' }))).not.toContain('inherit');
     expect(subagentRowSummary(row({ permission: 'auto' }))).toContain('auto');
+  });
+});
+
+describe('subagent-data-01 · choosing what to import from the old folder', () => {
+  function importRow(overrides: Partial<SubagentImportRow> = {}): SubagentImportRow {
+    return {
+      filePath: '/agent/agents/oldie.md',
+      name: 'oldie',
+      targetPath: '/agent/subagents/oldie.md',
+      collides: false,
+      blocked: false,
+      notes: [],
+      ...overrides,
+    };
+  }
+  const preview = (rows: SubagentImportRow[]): SubagentImportPreview => ({
+    sourceDirectory: '/agent/agents',
+    rows,
+  });
+
+  it('offers only the rows that would actually produce a document', () => {
+    const view = preview([
+      importRow(),
+      importRow({ name: 'blocked', blocked: true, targetPath: undefined }),
+    ]);
+    // A blocked row stays VISIBLE — "why is my old fixer not here" needs an
+    // answer on screen — it simply cannot be ticked.
+    expect(view.rows).toHaveLength(2);
+    expect(importableNames(view)).toEqual(['oldie']);
+  });
+
+  it('drops a tick whose row disappeared from a refreshed preview', () => {
+    const before = preview([importRow(), importRow({ name: 'other' })]);
+    const selected = toggleImportSelection(
+      toggleImportSelection([], 'oldie', before),
+      'other',
+      before
+    );
+    expect(selected.sort()).toEqual(['oldie', 'other']);
+    // The file was deleted (or edited into a blocked state) between the two
+    // reads; asking Main to import it would be asking for something the user
+    // can no longer see.
+    const after = preview([importRow()]);
+    expect(toggleImportSelection(selected, 'oldie', after)).toEqual([]);
+  });
+
+  it('unticks a row that was already ticked', () => {
+    const view = preview([importRow()]);
+    expect(toggleImportSelection(['oldie'], 'oldie', view)).toEqual([]);
+  });
+
+  it('puts the notes that block an import first', () => {
+    const lines = importRowNotes(
+      importRow({
+        notes: [
+          { kind: 'kept', field: 'permission', message: 'lands on inherit' },
+          { kind: 'conflict', field: 'model', message: 'names no provider' },
+          { kind: 'dropped', field: 'tools', message: 'ls has no equivalent' },
+        ],
+      })
+    );
+    expect(lines[0]).toContain('conflict');
+    expect(lines[1]).toContain('dropped');
+    expect(lines[2]).toContain('kept');
+  });
+
+  it('says what an import refused to do, not only what it did', () => {
+    const sentence = describeImportResult({
+      imported: ['oldie'],
+      skipped: [{ name: 'taken', reason: 'a subagent named "taken" already exists here' }],
+      catalog: { rows: [], broken: [], directory: '/agent/subagents', staleDisabled: [] },
+    });
+    expect(sentence).toContain('Imported 1 subagent.');
+    expect(sentence).toContain('Skipped "taken"');
   });
 });

@@ -203,6 +203,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
   let skillCatalog: SkillCatalog | undefined;
   let mcpCatalog: McpCatalog | undefined;
   let subagentCatalog: SubagentCatalog | undefined;
+  let readSubagentCatalog: (() => Promise<SubagentCatalog>) | undefined;
   try {
     await ctx.plugin(ExecPlugin, host);
     exec = ctx.runtimeExec as ExecPlugin;
@@ -285,6 +286,23 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
         });
         const skillsFiber = await ctx.plugin(SkillsPlugin, skillCatalog);
         await skillsFiber.await();
+      }
+      // P5-2-1. Loaded HERE rather than beside the plugin below, for two
+      // reasons. The version stamp is built a few lines down and the catalog
+      // used to be read long after it, so `subagents` / `subagent_diagnostics`
+      // were always absent from the trace — the keys existed and could never be
+      // written (subagent-data-10). And `reloadCatalog` needs a reader the
+      // plugin can call again per run (subagent-data-02), which is this one.
+      if (options.subagents && options.tools) {
+        readSubagentCatalog = () =>
+          // `ctx.runtimeHostIo` rather than the local, the way the project
+          // instruction callback below already reads it: this closure outlives
+          // the block, so the local's narrowing does not.
+          loadSubagentCatalog(skillSource(ctx.runtimeHostIo, SUBAGENT_SCAN_BYTES), {
+            ...(agentDir ? { agentDir } : {}),
+            ...(options.subagents?.home ? { home: options.subagents.home } : {}),
+          });
+        subagentCatalog = await readSubagentCatalog();
       }
       // P5-3, last of the tool contributors: an MCP server is an external
       // process, and starting one before the local tools are registered would
@@ -418,14 +436,15 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     // P5-2-2, after the model adapter because a delegate's pinned model is
     // resolved against the live catalog, and after the tools plugin because it
     // registers `Task*` into that registry. Both are already up by here.
-    if (options.subagents && options.tools) {
-      subagentCatalog = await loadSubagentCatalog(skillSource(io, SUBAGENT_SCAN_BYTES), {
-        ...(agentDir ? { agentDir } : {}),
-        ...(options.subagents.home ? { home: options.subagents.home } : {}),
-      });
+    if (options.subagents && options.tools && subagentCatalog && readSubagentCatalog) {
       const subagentFiber = await ctx.plugin(SubagentPlugin, {
         ...options.subagents,
         catalog: subagentCatalog,
+        // subagent-data-02 — the same reader the bootstrap used, handed to the
+        // plugin so the top of every top-level run can ask the directory again.
+        // A caller that supplied its own wins, same rule as
+        // `projectInstructions` below.
+        reloadCatalog: options.subagents.reloadCatalog ?? readSubagentCatalog,
         // The same chain the parent's own prompt loads, through the same
         // loader, read per delegation so a workspace edit between turns reaches
         // the next delegate. A caller that supplies its own wins: the field is

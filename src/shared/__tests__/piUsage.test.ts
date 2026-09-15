@@ -219,3 +219,41 @@ describe('deriveCacheHitRate', () => {
     expect(usage).toEqual(before);
   });
 });
+
+describe('decision 005 · the delegated slice rides the same payload', () => {
+  const delegated: PiTurnUsage = {
+    input: 400,
+    output: 60,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 460,
+    costUsd: 0.004,
+  };
+
+  it('carries `delegated` beside the turn totals, not inside them', () => {
+    const payload = buildPiUsagePayload(SDK_USAGE, undefined, null, delegated);
+    expect(payload?.delegated).toEqual(delegated);
+    // The top-level fields still describe ONE turn, which is what the Run
+    // surface labels them as.
+    expect(payload?.totalTokens).toBe(SDK_USAGE.totalTokens);
+  });
+
+  it('omits the field entirely when no delegate has spent anything', () => {
+    expect(buildPiUsagePayload(SDK_USAGE)).not.toHaveProperty('delegated');
+    expect(buildPiUsagePayload(SDK_USAGE, undefined, null, null)).not.toHaveProperty('delegated');
+  });
+
+  it('reads it back, and refuses a row of zeroes', () => {
+    const payload = buildPiUsagePayload(SDK_USAGE, undefined, null, delegated);
+    expect(readPiUsagePayload(payload)?.delegated).toEqual(delegated);
+    // "No delegate spent anything" and "we have no figures" stay tellable
+    // apart, the same rule `readSessionUsage` follows.
+    expect(
+      readPiUsagePayload({ ...SDK_USAGE, costUsd: 0, delegated: { totalTokens: 0, costUsd: 0 } })
+    ).not.toHaveProperty('delegated');
+  });
+
+  it('is absent from a payload an older build produced', () => {
+    expect(readPiUsagePayload({ input: 1, output: 1 })).not.toHaveProperty('delegated');
+  });
+});

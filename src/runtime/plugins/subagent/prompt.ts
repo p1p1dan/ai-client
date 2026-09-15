@@ -77,29 +77,71 @@ export function subagentGuidance(input: {
 }): string[] {
   const tools = new Set(input.toolNames);
   const blocks: string[] = [];
-  if (tools.has('read') || tools.has('grep') || tools.has('glob')) {
-    blocks.push(
-      'Searching and reading: prefer read, grep and glob over shell text utilities. ' +
-        'read accepts only an existing regular text file, never a directory; it takes ' +
-        '`offset` (one-based line) and `limit`, and reports where to continue. ' +
-        'grep takes a file-or-directory `path` plus `include`, `caseInsensitive` and `limit`; ' +
-        'glob takes a directory `path`, a `pattern` and a `limit`. ' +
-        'Scope every call, and use grep to locate content in a large file before reading a ' +
-        'targeted range. Your context is finite too: an unscoped search over the whole ' +
-        'workspace costs the tokens you need to finish.'
+
+  // subagent-data-14 — assembled per tool, not "any of the three". The module
+  // note above says telling a delegate about a parameter it does not have is
+  // worse than saying nothing; the same is true of a whole tool. A definition
+  // that declares `tools: [Read]` used to be handed grep's and glob's calling
+  // conventions, and its first move was to spend a turn calling one of them.
+  const searching: string[] = [];
+  const named: string[] = [];
+  if (tools.has('read')) {
+    named.push('read');
+    searching.push(
+      'read accepts only an existing regular text file, never a directory; it takes ' +
+        '`offset` (one-based line) and `limit`, and reports where to continue.'
     );
   }
-  if (tools.has('edit') || tools.has('write')) {
-    blocks.push(
-      'Editing: use edit for one small unique replacement and write for a coherent ' +
-        'whole-file rewrite. Treat a failed edit as stale content — read the file once, ' +
-        'regenerate the change, and if it fails again report the exact mismatch instead of ' +
-        'looping. Never write a file the task did not ask you to change; another agent may ' +
-        'be working in the same tree.'
+  if (tools.has('grep')) {
+    named.push('grep');
+    // `regex` is listed because P5-2-3 added it and this text did not follow:
+    // the delegate was told grep took three options when it takes four, and
+    // the one it was not told about is the only way to search by pattern.
+    searching.push(
+      'grep takes a file-or-directory `path` plus `include`, `caseInsensitive`, `limit` ' +
+        'and `regex` (set it to treat the pattern as a JavaScript regular expression, ' +
+        'otherwise the pattern is literal).'
     );
   }
+  if (tools.has('glob')) {
+    named.push('glob');
+    searching.push('glob takes a directory `path`, a `pattern` and a `limit`.');
+  }
+  if (searching.length > 0) {
+    const lead = `Searching and reading: prefer ${listPhrase(named)} over shell text utilities.`;
+    const pairing =
+      tools.has('grep') && tools.has('read')
+        ? ' Scope every call, and use grep to locate content in a large file before reading a targeted range.'
+        : ' Scope every call.';
+    blocks.push(
+      `${lead} ${searching.join(' ')}${pairing} Your context is finite too: an unscoped ` +
+        'search over the whole workspace costs the tokens you need to finish.'
+    );
+  }
+
+  const editing: string[] = [];
+  if (tools.has('edit')) editing.push('use edit for one small unique replacement');
+  if (tools.has('write')) editing.push('use write for a coherent whole-file rewrite');
+  if (editing.length > 0) {
+    blocks.push(
+      `Editing: ${editing.join(' and ')}.` +
+        (tools.has('edit')
+          ? ' Treat a failed edit as stale content — read the file once, regenerate the ' +
+            'change, and if it fails again report the exact mismatch instead of looping.'
+          : '') +
+        ' Never write a file the task did not ask you to change; another agent may be ' +
+        'working in the same tree.'
+    );
+  }
+
   if (input.projectInstructions?.trim()) blocks.push(input.projectInstructions.trim());
   return blocks;
+}
+
+/** `a`, `a and b`, `a, b and c` — English, so the prompt reads as prose. */
+function listPhrase(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
 /**

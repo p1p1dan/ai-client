@@ -5,7 +5,7 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { isInternalMessage } from '../../shared/internalMessage.ts';
 import { applyTurnUsage, initTurnRollup, viewTurnRollup } from '../../shared/piTurnRollup.ts';
-import { buildPiUsagePayload } from '../../shared/piUsage.ts';
+import { buildPiUsagePayload, type PiTurnUsage } from '../../shared/piUsage.ts';
 import { reviewFromToolResult } from '../../shared/sessionFileChange.ts';
 import type {
   MessageAttachmentMeta,
@@ -85,6 +85,19 @@ function advance(cursor: string, snapshot: string): { text?: string; cursor: str
   return { cursor: snapshot };
 }
 
+/** Sum two settled turn payloads. Addition only, same rule as the rollup. */
+function addTurnUsage(left: PiTurnUsage | undefined, right: PiTurnUsage): PiTurnUsage {
+  if (!left) return { ...right };
+  return {
+    input: left.input + right.input,
+    output: left.output + right.output,
+    cacheRead: left.cacheRead + right.cacheRead,
+    cacheWrite: left.cacheWrite + right.cacheWrite,
+    totalTokens: left.totalTokens + right.totalTokens,
+    costUsd: left.costUsd + right.costUsd,
+  };
+}
+
 /** Adapt PiWorkerSession's projection to typed native AgentEvents; same wire DTOs. */
 export class RuntimeEventProjector {
   private readonly sink: RuntimeEventSink;
@@ -106,6 +119,17 @@ export class RuntimeEventProjector {
   private thinking = '';
   private thinkingOpen = false;
   private rollup;
+  /**
+   * decision 005 — what this conversation's delegates have spent so far.
+   *
+   * Kept beside the rollup rather than inside it: the rollup's totals INCLUDE
+   * this (a session total that excluded delegated work would contradict the
+   * contract's "会话/轮级总成本含子调用"), and this is the slice of them that
+   * says how much was delegated.
+   */
+  private delegatedUsage: PiTurnUsage | undefined;
+  /** The last turn payload emitted, so a delegate settling can re-state it. */
+  private lastTurnUsage: unknown;
   private readonly contextWindow: number | undefined;
   private readonly userTurn: UserTurnEcho;
   constructor(
@@ -362,6 +386,7 @@ export class RuntimeEventProjector {
       case 'turn_end': {
         if (event.message.role !== 'assistant') break;
         this.closeAssistant();
+        this.lastTurnUsage = event.message.usage;
         const turn = buildPiUsagePayload(event.message.usage);
         if (turn)
           this.rollup = applyTurnUsage(this.rollup, { sessionId, usage: turn, source: 'turn' });
@@ -380,7 +405,8 @@ export class RuntimeEventProjector {
                 percent: (tokens / this.contextWindow) * 100,
               }
             : undefined,
-          viewTurnRollup(this.rollup)
+          viewTurnRollup(this.rollup),
+          this.delegatedUsage
         );
         if (payload) this.emit({ type: 'usage.updated', sessionId, payload });
         break;
@@ -461,6 +487,45 @@ export class RuntimeEventProjector {
       payload: { messageId },
     });
   }
+  /**
+   * subagent-data-03 / decision 005 — fold what a delegate spent into the
+   * conversation's totals, and say how much of them is delegated.
+   *
+   * The runtime computed this figure from the start; nothing consumed it. The
+   * worker discards the whole `RuntimeRunResult` (`nativeWorkerRuntime` reports
+   * a run through events only), and the projector's own `usage.updated` is
+   * built from the PARENT's `turn_end`, so a session that fanned out three
+   * explorers showed the user a token and cost total missing all three.
+   *
+   * Emitted as another `usage.updated` rather than a new event type, per
+   * decision 005: the top-level fields still describe the last settled turn —
+   * they are re-stated, not re-billed, because the renderer keeps the last
+   * payload rather than accumulating them — while `session` and `delegated`
+   * move. Before the first turn settles there is nothing to re-state, so the
+   * fold happens and the next `turn_end` carries it.
+   *
+   * @param delegations how many settled delegates this one fold stands for.
+   */
+  delegated(usage: unknown, delegations = 1): void {
+    const increment = buildPiUsagePayload(usage);
+    if (!increment) return;
+    this.rollup = applyTurnUsage(this.rollup, {
+      sessionId: this.sink.sessionId,
+      usage: increment,
+      source: 'tool',
+      count: delegations,
+    });
+    this.delegatedUsage = addTurnUsage(this.delegatedUsage, increment);
+    if (this.lastTurnUsage === undefined) return;
+    const payload = buildPiUsagePayload(
+      this.lastTurnUsage,
+      undefined,
+      viewTurnRollup(this.rollup),
+      this.delegatedUsage
+    );
+    if (payload) this.emit({ type: 'usage.updated', sessionId: this.sink.sessionId, payload });
+  }
+
   finish(result: Pick<RuntimeRunResult, 'success' | 'error' | 'stopReason'>): void {
     this.closeAssistant();
     const type =

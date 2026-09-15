@@ -31,3 +31,55 @@ export const PI_TOOL_NAMES = {
   find: 'find',
   ls: 'ls',
 } as const;
+
+/**
+ * subagent-data-06 — the tools THIS app's runtime actually registers.
+ *
+ * Separate from {@link PI_TOOL_NAMES}, which is the pi SDK's own built-in set,
+ * because the two are not the same list and reading one as the other is exactly
+ * how this went wrong: the SDK calls its glob tool `find`, our runtime registers
+ * `glob` (`src/runtime/plugins/tools/index.ts`), and every table in
+ * `toolCard.ts` was keyed on `find`. The miss is silent — `TOOL_VERBS` falls
+ * back to "Ran" and `formatToolArgDetail` falls into its `default:` branch,
+ * whose probe order finds `path` before `pattern` — so a `glob` row read
+ * "Ran src" and never said what was being looked for. That is true of the
+ * delegation panel and of the main timeline, which share one derivation.
+ *
+ * Argument names come from each tool's own typebox schema, same source rule as
+ * the SDK table above.
+ */
+export const RUNTIME_TOOL_NAMES = {
+  read: 'read',
+  write: 'write',
+  edit: 'edit',
+  bash: 'bash',
+  /** pi says `find`; we say `glob`, and both take `pattern` + `path`. */
+  glob: 'glob',
+  grep: 'grep',
+  /** Registered only on a host with a preview surface. */
+  browserPreview: 'browser_preview',
+  /** Registered only on a host that can show a question card. */
+  ask: 'ask',
+  skill: 'skill',
+  newContext: 'new_context',
+  task: 'Task',
+  taskWait: 'TaskWait',
+  taskList: 'TaskList',
+  taskStop: 'TaskStop',
+} as const;
+
+/**
+ * Prefix every MCP-bridged tool carries: `mcp__<server>__<tool>`.
+ *
+ * The name is composed at runtime from the server and tool ids, so no table can
+ * enumerate them; the tables key on this prefix instead.
+ */
+export const MCP_TOOL_PREFIX = 'mcp__';
+
+/** `mcp__github__create_issue` -> `github · create_issue`, for a row's arg. */
+export function mcpToolLabel(toolName: string): string | undefined {
+  if (!toolName.startsWith(MCP_TOOL_PREFIX)) return undefined;
+  const [server, ...rest] = toolName.slice(MCP_TOOL_PREFIX.length).split('__');
+  if (!server) return undefined;
+  return rest.length > 0 ? `${server} · ${rest.join('__')}` : server;
+}

@@ -23,6 +23,9 @@ import {
 } from '@shared/subagentDefinition';
 import type {
   SubagentCatalogView,
+  SubagentImportPreview,
+  SubagentImportResult,
+  SubagentImportRow,
   SubagentRow,
   SubagentSaveRequest,
 } from '@shared/types/subagentManagement';
@@ -248,4 +251,63 @@ export function subagentRowSummary(row: SubagentRow): string {
   if (row.permission && row.permission !== 'inherit') parts.push(row.permission);
   parts.push(row.maxTurns === undefined ? 'unlimited turns' : `${row.maxTurns} turns`);
   return parts.filter(Boolean).join(' · ');
+}
+
+/**
+ * subagent-data-01 — which legacy documents may actually be ticked.
+ *
+ * A blocked row is one the preview could not turn into a document at all (no
+ * description, an empty body, a bare model id, a project-scoped source), and it
+ * stays VISIBLE with its reasons: hiding it would answer "why is my old fixer
+ * not in this list" with silence. It simply cannot be selected.
+ */
+export function importableNames(preview: SubagentImportPreview | null): string[] {
+  return (preview?.rows ?? [])
+    .filter((row) => !row.blocked && row.targetPath !== undefined)
+    .map((row) => row.name);
+}
+
+/**
+ * Tick or untick one row, keeping the selection inside what is importable.
+ *
+ * Filtered against the current preview on every change rather than trusted:
+ * a preview refresh can remove a name (the file was deleted, or edited into a
+ * blocked state), and a stale tick would ask Main to import something the user
+ * can no longer see.
+ */
+export function toggleImportSelection(
+  selected: readonly string[],
+  name: string,
+  preview: SubagentImportPreview | null
+): string[] {
+  const allowed = new Set(importableNames(preview));
+  const next = selected.includes(name)
+    ? selected.filter((entry) => entry !== name)
+    : [...selected, name];
+  return next.filter((entry) => allowed.has(entry));
+}
+
+/** The per-field account, worst kind first, as one line per note. */
+export function importRowNotes(row: SubagentImportRow): string[] {
+  const rank: Record<string, number> = { conflict: 0, dropped: 1, adapted: 2, kept: 3 };
+  return [...row.notes]
+    .sort((left, right) => (rank[left.kind] ?? 9) - (rank[right.kind] ?? 9))
+    .map((note) => `${note.kind} · ${note.field}: ${note.message}`);
+}
+
+/**
+ * One sentence for what an import did, including what it refused to do.
+ *
+ * Skips are as much of the result as writes: an import that quietly did four of
+ * the six a user ticked is one they will not notice until a delegate is missing.
+ */
+export function describeImportResult(result: SubagentImportResult): string {
+  const parts: string[] = [];
+  parts.push(
+    result.imported.length === 1
+      ? 'Imported 1 subagent.'
+      : `Imported ${result.imported.length} subagents.`
+  );
+  for (const skip of result.skipped) parts.push(`Skipped "${skip.name}": ${skip.reason}.`);
+  return parts.join(' ');
 }

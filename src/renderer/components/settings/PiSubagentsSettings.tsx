@@ -26,8 +26,13 @@ import {
   SUBAGENT_ASSIGNABLE_TOOLS,
   SUBAGENT_THINKING_LEVELS,
 } from '@shared/subagentDefinition';
-import type { SubagentCatalogView, SubagentRow } from '@shared/types/subagentManagement';
+import type {
+  SubagentCatalogView,
+  SubagentImportPreview,
+  SubagentRow,
+} from '@shared/types/subagentManagement';
 import {
+  Download,
   FolderOpen,
   Pencil,
   Plus,
@@ -49,6 +54,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Ident } from '@/components/ui/ident';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -66,14 +72,18 @@ import { useI18n } from '@/i18n';
 import { SettingsSectionBlock } from './SettingsPrimitives';
 import {
   adoptCatalog,
+  describeImportResult,
   draftFromBuiltin,
   draftFromRow,
   emptySubagentDraft,
   filterSubagentRows,
+  importableNames,
+  importRowNotes,
   type SubagentDraft,
   saveRequestFromDraft,
   sortSubagentRows,
   subagentRowSummary,
+  toggleImportSelection,
   validateSubagentDraft,
   withOptimisticEnabled,
 } from './subagentManagementModel';
@@ -94,6 +104,11 @@ export function PiSubagentsSettings() {
   const [draft, setDraft] = useState<SubagentDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<SubagentRow | null>(null);
+  /** subagent-data-01: null until the user asks to look at the old directory. */
+  const [importPreview, setImportPreview] = useState<SubagentImportPreview | null>(null);
+  const [importSelected, setImportSelected] = useState<string[]>([]);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importNote, setImportNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -173,6 +188,50 @@ export function PiSubagentsSettings() {
     }
   };
 
+  /**
+   * subagent-data-01 — scan the legacy directory and show what would happen.
+   *
+   * Two steps on purpose, and the preview is the first one: migration is the
+   * place where a delegate can arrive with a different tool set or a different
+   * approval gear than the user set, and nothing complains afterwards because
+   * it still works. The preview is where that is visible, and nothing is
+   * written until the user ticks a row and presses the button.
+   */
+  const openImport = async () => {
+    setError(null);
+    setImportNote(null);
+    setImportBusy(true);
+    try {
+      const preview = await window.electronAPI.piSubagents.importPreview();
+      setImportPreview(preview);
+      setImportSelected([]);
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const runImport = async () => {
+    if (importSelected.length === 0) return;
+    setImportBusy(true);
+    setError(null);
+    try {
+      const result = await window.electronAPI.piSubagents.importApply(importSelected);
+      setCatalog(result.catalog);
+      setImportNote(describeImportResult(result));
+      // Re-previewed rather than closed: what was imported now collides with
+      // itself, and leaving the old list up would invite a second import of
+      // the same document.
+      setImportPreview(await window.electronAPI.piSubagents.importPreview());
+      setImportSelected([]);
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   const clearStale = async () => {
     setError(null);
     try {
@@ -215,6 +274,10 @@ export function PiSubagentsSettings() {
         <Button variant="outline" onClick={() => void reveal()}>
           <FolderOpen className="h-4 w-4" />
           {t('Open subagents folder')}
+        </Button>
+        <Button variant="outline" disabled={importBusy} onClick={() => void openImport()}>
+          <Download className="h-4 w-4" />
+          {t('Import old definitions')}
         </Button>
         <Button onClick={() => setDraft(emptySubagentDraft())}>
           <Plus className="h-4 w-4" />
@@ -333,6 +396,23 @@ export function PiSubagentsSettings() {
         </>
       )}
 
+      {importPreview && (
+        <LegacyImportPanel
+          preview={importPreview}
+          selected={importSelected}
+          busy={importBusy}
+          note={importNote}
+          onToggle={(name) =>
+            setImportSelected(toggleImportSelection(importSelected, name, importPreview))
+          }
+          onClose={() => {
+            setImportPreview(null);
+            setImportNote(null);
+          }}
+          onImport={() => void runImport()}
+        />
+      )}
+
       {draft && (
         <SubagentEditor
           draft={draft}
@@ -372,6 +452,95 @@ export function PiSubagentsSettings() {
         </AlertDialogPopup>
       </AlertDialog>
     </div>
+  );
+}
+
+/**
+ * subagent-data-01 — the legacy directory, one row per document.
+ *
+ * A blocked row is shown and cannot be ticked: "why is my old fixer not here"
+ * has to have an answer on screen, and the notes are that answer.
+ */
+function LegacyImportPanel({
+  preview,
+  selected,
+  busy,
+  note,
+  onToggle,
+  onClose,
+  onImport,
+}: {
+  preview: SubagentImportPreview;
+  selected: readonly string[];
+  busy: boolean;
+  note: string | null;
+  onToggle: (name: string) => void;
+  onClose: () => void;
+  onImport: () => void;
+}) {
+  const { t } = useI18n();
+  const importable = new Set(importableNames(preview));
+
+  return (
+    <section className="space-y-3 rounded-md border p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 space-y-1">
+          <h4 className="text-ui font-semibold">{t('Import old definitions')}</h4>
+          <p className="text-meta text-muted-foreground">
+            {t(
+              'These are the documents in your previous agents folder. Importing copies one into the subagents folder; the original file is left where it is.'
+            )}
+          </p>
+          <Ident className="min-w-0 break-all">{preview.sourceDirectory}</Ident>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          {t('Close')}
+        </Button>
+      </div>
+
+      {note && <p className="text-meta text-muted-foreground">{note}</p>}
+
+      {preview.rows.length === 0 ? (
+        <p className="text-ui text-muted-foreground">
+          {t('Nothing to import — that folder has no definitions.')}
+        </p>
+      ) : (
+        <ul className="divide-y rounded-md border">
+          {preview.rows.map((row) => (
+            <li key={row.filePath} className="flex items-start gap-3 p-3">
+              <Checkbox
+                className="mt-0.5 shrink-0"
+                checked={selected.includes(row.name)}
+                disabled={busy || !importable.has(row.name)}
+                onCheckedChange={() => onToggle(row.name)}
+                aria-label={t('Import {{name}}', { name: row.name })}
+              />
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-ui font-medium">{row.name}</span>
+                  {row.blocked && <Badge variant="outline">{t('Needs a decision')}</Badge>}
+                  {row.collides && <Badge variant="secondary">{t('Name already used')}</Badge>}
+                </div>
+                <Ident className="min-w-0 break-all">{row.filePath}</Ident>
+                {importRowNotes(row).map((line) => (
+                  <p key={line} className="text-meta text-muted-foreground">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {preview.rows.length > 0 && (
+        <div className="flex justify-end">
+          <Button disabled={busy || selected.length === 0} onClick={onImport}>
+            {busy ? t('Importing...') : t('Import {{count}} selected', { count: selected.length })}
+          </Button>
+        </div>
+      )}
+    </section>
   );
 }
 
