@@ -81,6 +81,11 @@ function createHarness(
      * tests for the not-yet-written window pass their own predicate.
      */
     sessionFileExists?: (sessionFile: string) => Promise<boolean>;
+    /** session-index-09 — the index rows the startup sweep reconciles against. */
+    listIndexedSessions?: () => Promise<SessionIndexEntry[]>;
+    /** Names in a session directory, as the startup sweep reads them. */
+    readSessionDirectory?: (directory: string) => Promise<string[]>;
+    removeSessionFile?: (file: string) => Promise<void>;
     createFailureAfter?: number;
     maxRestartAttempts?: number;
     /** When set, `worker.reload` rejects with this message. */
@@ -109,6 +114,9 @@ function createHarness(
   const commitPiLeaf = vi.fn(input.commitPiLeaf ?? (async () => undefined));
   const createForked = vi.fn(input.createForked ?? (async (entry) => entry));
   const sessionFileExists = vi.fn(input.sessionFileExists ?? (async () => true));
+  const listIndexedSessions = vi.fn(input.listIndexedSessions ?? (async () => []));
+  const readSessionDirectory = vi.fn(input.readSessionDirectory ?? (async () => []));
+  const removeSessionFile = vi.fn(input.removeSessionFile ?? (async () => undefined));
   let createCount = 0;
   const createSlot = vi.fn(async (options: Record<string, unknown>) => {
     createCount += 1;
@@ -253,6 +261,7 @@ function createHarness(
       }
       if (type === 'worker.compact') return { compacted: true };
       if (type === 'worker.fork.discard') return { discarded: true };
+      if (type === 'worker.fork.accept') return { accepted: true };
       if (type === 'worker.stop') return { stopped: true };
       if (type === 'worker.preview.respond') return { handled: true };
       if (type === 'worker.setPermissionTier' || type === 'worker.setPermissions')
@@ -349,6 +358,9 @@ function createHarness(
     commitPiLeaf,
     createForked,
     sessionFileExists,
+    listIndexedSessions,
+    readSessionDirectory,
+    removeSessionFile,
     ...(input.showPreview ? { showPreview: input.showPreview } : {}),
     onEvent: (event) => events.push(event as unknown as Record<string, unknown>),
     capacity: input.capacity ?? 4,
@@ -371,6 +383,9 @@ function createHarness(
     commitPiLeaf,
     createForked,
     sessionFileExists,
+    listIndexedSessions,
+    readSessionDirectory,
+    removeSessionFile,
   };
 }
 
@@ -1372,6 +1387,189 @@ describe('WorkerManager unwritten Pi session files', () => {
     });
     await h.manager.forkSession({ sourceSessionId: 's1', entryId: 'e1', sourceTitle: 'Chat' });
     expect(h.createSlot.mock.calls[1][0]).toMatchObject({ unbound: true });
+  });
+
+  /**
+   * session-index-02 — the spawn knew the fork was unbound, the index row did
+   * not. Without the marker the renderer finds no workspace for the scratch
+   * path and reports "could not be materialized" on a fork that landed, and the
+   * next start drops the row as an orphan.
+   */
+  it('[release-blocker] records a fork of an unbound session as unbound in the index', async () => {
+    const h = createHarness();
+    await h.manager.createSession({
+      sessionId: 's1',
+      workspacePath: '/tmp/base/unbound-sessions/abc',
+      unbound: true,
+    });
+    await h.manager.forkSession({ sourceSessionId: 's1', entryId: 'e1', sourceTitle: 'Chat' });
+    expect(h.createForked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspacePath: '/tmp/base/unbound-sessions/abc',
+        unbound: true,
+      })
+    );
+  });
+
+  it('leaves the fork of a bound session unmarked', async () => {
+    // Absent rather than `unbound: false`, like every other writer of this row:
+    // the index file is plain JSON and a false key would still read as "scratch"
+    // to anything that only checks for presence.
+    const h = createHarness();
+    await create(h.manager, 's1');
+    await h.manager.forkSession({ sourceSessionId: 's1', entryId: 'e1', sourceTitle: 'Chat' });
+    expect(h.createForked.mock.calls[0][0]).not.toHaveProperty('unbound');
+  });
+
+  /**
+   * session-index-04 — the fork state machine only had its discard half wired.
+   * The source worker kept every fork it ever made in its "uncommitted
+   * artifact" table, so a second discard caller would have been allowed to
+   * delete a session the user is already using.
+   */
+  it('tells the source worker the fork was adopted once the index row lands', async () => {
+    const h = createHarness();
+    await create(h.manager, 'source');
+    await h.manager.forkSession({
+      sourceSessionId: 'source',
+      entryId: 'leaf-a',
+      sourceTitle: 'Source',
+    });
+    expect(h.records[0].request).toHaveBeenCalledWith('worker.fork.accept', {
+      logicalSessionId: 'source',
+      sessionFile: '/sessions/forked.jsonl',
+    });
+  });
+
+  it('does not claim adoption when the index write failed', async () => {
+    const h = createHarness({
+      createForked: async () => {
+        throw new Error('fork index failed');
+      },
+    });
+    await create(h.manager, 'source');
+    await expect(
+      h.manager.forkSession({
+        sourceSessionId: 'source',
+        entryId: 'leaf-a',
+        sourceTitle: 'Source',
+      })
+    ).rejects.toThrow(/fork index failed/);
+    expect(h.records[0].request).not.toHaveBeenCalledWith(
+      'worker.fork.accept',
+      expect.anything() as never
+    );
+  });
+
+  it('keeps the fork when the source worker cannot confirm adoption', async () => {
+    // Best effort by design: the row is already committed, so failing the call
+    // here would discard a session that exists.
+    const h = createHarness();
+    await create(h.manager, 'source');
+    const answer = h.records[0].request.getMockImplementation();
+    h.records[0].request.mockImplementation(async (type: string, payload: unknown) => {
+      if (type === 'worker.fork.accept') throw new Error('source worker gone');
+      return answer?.(type, payload);
+    });
+    await expect(
+      h.manager.forkSession({
+        sourceSessionId: 'source',
+        entryId: 'leaf-a',
+        sourceTitle: 'Source',
+      })
+    ).resolves.toMatchObject({ session: { runtimeIdentity: '/sessions/forked.jsonl' } });
+  });
+
+  /**
+   * session-index-09 — a fork's transcript is on disk before its index row is,
+   * so a crash (or a kill, or a failed cleanup) inside that window used to
+   * leave a full copy of the user's conversation in the session directory with
+   * nothing pointing at it and no way to delete it from the app.
+   *
+   * The sweep only ever looks at directories the index itself names, and only
+   * deletes a transcript that BOTH carries a staging marker and is claimed by
+   * no row — so a session that merely never got its "adopted" acknowledgement
+   * keeps its file and loses only the marker.
+   */
+  describe('startup sweep for staged fork files', () => {
+    function indexRow(sessionId: string, runtimeIdentity: string): SessionIndexEntry {
+      return {
+        sessionId,
+        agent: 'pi',
+        workspacePath: '/repo',
+        title: sessionId,
+        updatedAt: 1,
+        archived: false,
+        runtimeIdentity,
+      };
+    }
+
+    it('deletes a staged transcript no index row claims, marker included', async () => {
+      const h = createHarness({
+        listIndexedSessions: async () => [indexRow('source', '/sessions/source.jsonl')],
+        readSessionDirectory: async () => [
+          'source.jsonl',
+          'abandoned.jsonl',
+          'abandoned.jsonl.staged',
+        ],
+      });
+
+      await h.manager.ensureReady();
+
+      expect(h.readSessionDirectory).toHaveBeenCalledWith('/sessions');
+      expect(h.removeSessionFile.mock.calls.map((call) => call[0])).toEqual([
+        '/sessions/abandoned.jsonl',
+        '/sessions/abandoned.jsonl.staged',
+      ]);
+    });
+
+    it('keeps a transcript the index claims and clears only its stale marker', async () => {
+      const h = createHarness({
+        listIndexedSessions: async () => [
+          indexRow('source', '/sessions/source.jsonl'),
+          indexRow('forked', '/sessions/forked.jsonl'),
+        ],
+        readSessionDirectory: async () => ['source.jsonl', 'forked.jsonl', 'forked.jsonl.staged'],
+      });
+
+      await h.manager.ensureReady();
+
+      expect(h.removeSessionFile.mock.calls.map((call) => call[0])).toEqual([
+        '/sessions/forked.jsonl.staged',
+      ]);
+    });
+
+    it('leaves the marker in place when the transcript cannot be removed', async () => {
+      // The marker is the only durable record that this file is unclaimed:
+      // dropping it while the transcript survives would make the leak permanent.
+      const h = createHarness({
+        listIndexedSessions: async () => [indexRow('source', '/sessions/source.jsonl')],
+        readSessionDirectory: async () => ['abandoned.jsonl', 'abandoned.jsonl.staged'],
+        removeSessionFile: async (file: string) => {
+          if (file.endsWith('.jsonl')) throw new Error('EBUSY');
+        },
+      });
+
+      await h.manager.ensureReady();
+
+      expect(h.removeSessionFile.mock.calls.map((call) => call[0])).toEqual([
+        '/sessions/abandoned.jsonl',
+      ]);
+    });
+
+    it('sweeps once per run and never scans a directory the index does not name', async () => {
+      const h = createHarness({
+        listIndexedSessions: async () => [],
+        readSessionDirectory: async () => ['abandoned.jsonl.staged'],
+      });
+
+      await h.manager.ensureReady();
+      await h.manager.ensureReady();
+
+      expect(h.readSessionDirectory).not.toHaveBeenCalled();
+      expect(h.listIndexedSessions).toHaveBeenCalledTimes(1);
+      expect(h.removeSessionFile).not.toHaveBeenCalled();
+    });
   });
 
   // U12 fix — the composer chip and the runtime used to be able to disagree,

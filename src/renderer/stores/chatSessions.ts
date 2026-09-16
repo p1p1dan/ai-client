@@ -137,10 +137,12 @@ export interface ChatSession {
   /**
    * U13 (D04, optional-field addition): this chat has no project folder — it
    * runs in the isolated scratch directory named here, which Main allocated
-   * for it (U05). Set ONLY by `mergeSessionIndex`, from the index row's
-   * `unbound` marker; a live unbound chat created in this run has no index row
-   * yet and is recognized the way it always was (`resolveActiveTarget().cwd`
-   * is null).
+   * for it (U05). Set from the index row's `unbound` marker, by
+   * `mergeSessionIndex` (the restart path) and by
+   * `materializeIndexedPiChatSession` (session-index-02: forking an unbound
+   * chat produces such a row mid-run, and it has no workspace to attach to
+   * either); a live unbound chat created in this run has no index row yet and
+   * is recognized the way it always was (`resolveActiveTarget().cwd` is null).
    *
    * The path travels with the session because it is the one thing no other
    * renderer state can supply after a restart: a scratch directory is

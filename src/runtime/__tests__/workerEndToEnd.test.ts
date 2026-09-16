@@ -11,6 +11,7 @@ import { PiWorkerRpcServer } from '../../agent-host/piWorkerRpcServer.ts';
 import type { RuntimeEvent } from '../../shared/types/runtimeEvents.ts';
 import type { SessionTreeSnapshot } from '../../shared/types/sessionHistory.ts';
 import {
+  STAGED_FORK_MARKER_SUFFIX,
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerForkResult,
   type WorkerReloadResult,
@@ -517,6 +518,11 @@ describe('native backend end to end (P4-4)', () => {
     // slot opens this file, so its history has to come from it.
     expect(fork.history.page.messages.length).toBeGreaterThan(0);
     await expect(readFile(fork.sessionFile, 'utf8')).resolves.toContain('"kind":"header"');
+    // session-index-09: the staging marker is what a later startup sweep reads,
+    // because the in-memory table below does not survive a crash.
+    await expect(
+      readFile(`${fork.sessionFile}${STAGED_FORK_MARKER_SUFFIX}`, 'utf8')
+    ).resolves.toContain(boot.piSessionId);
 
     expect(
       await call('worker.fork.discard', {
@@ -525,6 +531,9 @@ describe('native backend end to end (P4-4)', () => {
       })
     ).toEqual({ discarded: true });
     await expect(readFile(fork.sessionFile, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      readFile(`${fork.sessionFile}${STAGED_FORK_MARKER_SUFFIX}`, 'utf8')
+    ).rejects.toMatchObject({ code: 'ENOENT' });
 
     // A file this worker never staged is not ours to delete.
     expect(
@@ -533,6 +542,57 @@ describe('native backend end to end (P4-4)', () => {
         sessionFile: join(workspace, 'not-a-fork.jsonl'),
       })
     ).toEqual({ discarded: false });
+  });
+
+  /**
+   * session-index-04 — the commit half of the same state machine. Before it was
+   * wired, every fork this worker ever made stayed in its "uncommitted
+   * artifact" table for the life of the process, so a discard aimed at an
+   * adopted fork would have deleted a session the user was already using.
+   */
+  it('stops claiming a fork once Main says it was adopted', async () => {
+    faux.setResponses([fauxAssistantMessage('first')]);
+    await bootstrap();
+    await send('hello');
+    await turnIdle();
+
+    const tree = await call<{ snapshot: SessionTreeSnapshot }>('worker.tree', {
+      logicalSessionId: 'logical-e2e',
+    });
+    const forkable = tree.snapshot.nodes.findLast((node) => node.forkable);
+    const fork = await call<WorkerForkResult>('worker.fork', {
+      logicalSessionId: 'logical-e2e',
+      entryId: forkable?.id,
+    });
+
+    expect(
+      await call('worker.fork.accept', {
+        logicalSessionId: 'logical-e2e',
+        sessionFile: fork.sessionFile,
+      })
+    ).toEqual({ accepted: true });
+    // The marker goes with the claim: the sweep must not see an adopted file.
+    await expect(
+      readFile(`${fork.sessionFile}${STAGED_FORK_MARKER_SUFFIX}`, 'utf8')
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+
+    // Adopted means "not ours any more": a later discard is refused and the
+    // user's session file stays exactly where it is.
+    expect(
+      await call('worker.fork.discard', {
+        logicalSessionId: 'logical-e2e',
+        sessionFile: fork.sessionFile,
+      })
+    ).toEqual({ discarded: false });
+    await expect(readFile(fork.sessionFile, 'utf8')).resolves.toContain('"kind":"header"');
+
+    // Accepting a file this worker never staged is not an error, just a no-op.
+    expect(
+      await call('worker.fork.accept', {
+        logicalSessionId: 'logical-e2e',
+        sessionFile: join(workspace, 'not-a-fork.jsonl'),
+      })
+    ).toEqual({ accepted: false });
   });
 
   it('discards the session file it holds open itself', async () => {

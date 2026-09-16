@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { stat } from 'node:fs/promises';
+import { readdir, stat, unlink } from 'node:fs/promises';
 import os from 'node:os';
+import { dirname, join } from 'node:path';
 import type { SessionAttachment, SessionEffortLevel } from '@shared/types/agentHost';
 import { PI_AGENT } from '@shared/types/agentWire';
 import type {
@@ -24,6 +25,7 @@ import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
 import type { WorkerSetPermissionsPayload } from '@shared/types/workerRpc';
 import {
+  isWorkerAcceptForkResult,
   isWorkerCommandsResult,
   isWorkerDiscardForkResult,
   isWorkerForkResult,
@@ -37,8 +39,11 @@ import {
   isWorkerStopResult,
   isWorkerTreeResult,
   normalizeWorkerCapabilities,
+  STAGED_FORK_MARKER_SUFFIX,
   sanitizeWorkerCommandRows,
   WORKER_COMPACT_REQUEST_TIMEOUT_MS,
+  type WorkerAcceptForkPayload,
+  type WorkerAcceptForkResult,
   type WorkerCapabilityInventory,
   type WorkerCommandsPayload,
   type WorkerCommandsResult,
@@ -214,6 +219,18 @@ export interface WorkerManagerOptions {
    */
   sessionFileExists?: (sessionFile: string) => Promise<boolean>;
   /**
+   * session-index-09 — every indexed session row, for the one startup sweep
+   * that reclaims staged fork files.
+   *
+   * The DEFAULT answers "no rows", which makes the sweep a no-op: it only ever
+   * looks inside directories the index itself names, so a manager with no index
+   * (every unit test here) never reads a directory and never deletes anything.
+   */
+  listIndexedSessions?: () => Promise<SessionIndexEntry[]>;
+  /** Names in a session directory. Injected for the same reason as the stat above. */
+  readSessionDirectory?: (directory: string) => Promise<string[]>;
+  removeSessionFile?: (file: string) => Promise<void>;
+  /**
    * P5-2-5 — whether this install offers native delegation, and which
    * definitions it switched off.
    *
@@ -284,6 +301,11 @@ function positiveInteger(value: number, label: string): number {
     throw new Error(`${label} must be a positive safe integer, received ${value}`);
   }
   return value;
+}
+
+/** Production `readSessionDirectory`: plain file names, directories included. */
+async function readSessionDirectoryNames(directory: string): Promise<string[]> {
+  return readdir(directory);
 }
 
 /** Production `sessionFileExists`: a missing or non-regular path is "not yet written". */
@@ -357,6 +379,11 @@ export class WorkerManager {
   private readonly commitPiLeaf: NonNullable<WorkerManagerOptions['commitPiLeaf']>;
   private readonly createForked: NonNullable<WorkerManagerOptions['createForked']>;
   private readonly sessionFileExists: (sessionFile: string) => Promise<boolean>;
+  private readonly listIndexedSessions: () => Promise<SessionIndexEntry[]>;
+  private readonly readSessionDirectory: (directory: string) => Promise<string[]>;
+  private readonly removeSessionFile: (file: string) => Promise<void>;
+  /** The one staged-fork sweep of this run; see `sweepStagedForkFiles`. */
+  private stagedForkSweep: Promise<void> | null = null;
   private readonly createImport: typeof createPiImport;
   private readonly inspectImport: typeof inspectPiImport;
   private readonly reconcileImport: typeof reconcilePiImport;
@@ -411,6 +438,9 @@ export class WorkerManager {
     this.commitPiLeaf = options.commitPiLeaf ?? (async () => undefined);
     this.createForked = options.createForked ?? (async (entry) => entry);
     this.sessionFileExists = options.sessionFileExists ?? statSessionFileExists;
+    this.listIndexedSessions = options.listIndexedSessions ?? (async () => []);
+    this.readSessionDirectory = options.readSessionDirectory ?? readSessionDirectoryNames;
+    this.removeSessionFile = options.removeSessionFile ?? ((file) => unlink(file));
     this.createImport = options.createImport ?? createPiImport;
     this.inspectImport = options.inspectImport ?? inspectPiImport;
     this.reconcileImport = options.reconcileImport ?? reconcilePiImport;
@@ -451,6 +481,89 @@ export class WorkerManager {
 
   async ensureReady(): Promise<void> {
     if (this.state === 'stopped') this.state = 'ready';
+    await this.sweepStagedForkFiles();
+  }
+
+  /**
+   * Reclaim fork transcripts that were staged but never became sessions
+   * (session-index-09).
+   *
+   * `worker.fork` writes the transcript into the session directory before the
+   * new worker is spawned and long before the index row is written, so a crash,
+   * a kill, or a cleanup that could not confirm its delete used to leave a full
+   * copy of a conversation there with nothing pointing at it and no surface
+   * able to remove it.
+   *
+   * Two rules keep this from ever deleting a real session:
+   *
+   *  - it only reads directories the session index itself names, so it can
+   *    never be aimed at an arbitrary path, and an empty/unreadable index makes
+   *    it a no-op rather than a wipe;
+   *  - it only deletes a transcript that BOTH still carries its staging marker
+   *    and is claimed by no row. A fork whose row landed but whose "adopted"
+   *    acknowledgement did not (Main died in between) keeps its file and loses
+   *    only the marker.
+   *
+   * Runs once per process and never rejects: this is housekeeping, and a
+   * failure here must not keep the chat surface from coming up.
+   */
+  private async sweepStagedForkFiles(): Promise<void> {
+    this.stagedForkSweep ??= this.reclaimStagedForkFiles().catch((error) => {
+      this.log('[worker-manager] staged fork sweep failed', error);
+    });
+    await this.stagedForkSweep;
+  }
+
+  private async reclaimStagedForkFiles(): Promise<void> {
+    const rows = await this.listIndexedSessions();
+    const committed = new Set<string>();
+    const directories = new Set<string>();
+    for (const row of rows) {
+      if (!row.runtimeIdentity?.trim()) continue;
+      try {
+        const file = normalizeWorkerPath(row.runtimeIdentity, 'Pi session file');
+        committed.add(sessionWorkerKey(file));
+        directories.add(dirname(file));
+      } catch (error) {
+        this.log('[worker-manager] skipped an unusable indexed session path', error);
+      }
+    }
+    for (const directory of directories) {
+      let names: string[];
+      try {
+        names = await this.readSessionDirectory(directory);
+      } catch (error) {
+        this.log('[worker-manager] could not read a session directory', directory, error);
+        continue;
+      }
+      for (const name of names) {
+        // A bare `.staged` names no transcript; skipping it keeps the key
+        // helpers below from rejecting an empty path and aborting the sweep.
+        if (!name.endsWith(STAGED_FORK_MARKER_SUFFIX)) continue;
+        if (name.length === STAGED_FORK_MARKER_SUFFIX.length) continue;
+        const marker = join(directory, name);
+        const transcript = marker.slice(0, -STAGED_FORK_MARKER_SUFFIX.length);
+        if (!committed.has(sessionWorkerKey(transcript))) {
+          try {
+            await this.removeSessionFile(transcript);
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+              // Keep the marker: it is the only durable record that this file
+              // is unclaimed, so the next start gets to try again.
+              this.log('[worker-manager] staged fork transcript not removed', transcript, error);
+              continue;
+            }
+          }
+        }
+        try {
+          await this.removeSessionFile(marker);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+            this.log('[worker-manager] staged fork marker not removed', marker, error);
+          }
+        }
+      }
+    }
   }
 
   getStatus(): {
@@ -1574,10 +1687,23 @@ export class WorkerManager {
             workspacePath: source.cwd,
             title: `${input.sourceTitle || 'Session'} (fork)`,
             ...(input.model ? { model: input.model } : {}),
+            // session-index-02: the row has to carry the posture the spawn
+            // above already inherited. `workspacePath` is the source's scratch
+            // directory, which matches no project folder — without this key the
+            // renderer cannot materialize the fork it just created, and the
+            // next start drops the row as an orphan. Absent (not `false`) for a
+            // bound session, like every other writer of this field.
+            ...(source.unbound ? { unbound: true } : {}),
             updatedAt: this.now(),
             archived: false,
           });
           indexCommitted = true;
+          // session-index-04: the file is a session now, so the source worker
+          // must stop listing it as an uncommitted artifact it may delete.
+          // After the commit and best-effort by design — the row exists either
+          // way, and a stale claim is a permission a later caller could misuse,
+          // not data loss to roll back.
+          await this.acceptForkFile(source, sessionFile);
           target.state = 'ready';
           target.error = null;
           this.dispatch({
@@ -2152,6 +2278,23 @@ export class WorkerManager {
         'worker_tree_identity_mismatch',
         'Pi worker session tree does not match its authoritative slot identity'
       );
+    }
+  }
+
+  private async acceptForkFile(owner: ManagedSlot, sessionFile: string): Promise<void> {
+    try {
+      const result = await owner.slot?.request<WorkerAcceptForkResult, WorkerAcceptForkPayload>(
+        'worker.fork.accept',
+        {
+          logicalSessionId: owner.logicalSessionId,
+          sessionFile,
+        }
+      );
+      if (!isWorkerAcceptForkResult(result) || !result.accepted) {
+        this.log('[worker-manager] fork adoption was not acknowledged', sessionFile);
+      }
+    } catch (error) {
+      this.log('[worker-manager] failed to report fork adoption to the source worker', error);
     }
   }
 
@@ -2797,4 +2940,7 @@ export const workerManager = new WorkerManager({
   commitResumed: (input) => sessionIndexService.commitResumed(input),
   commitPiLeaf: (input) => sessionIndexService.commitPiLeaf(input),
   createForked: (entry) => sessionIndexService.createForked(entry),
+  // session-index-09: the sweep reconciles against the real index, which is
+  // also what keeps it from looking anywhere the app does not already know.
+  listIndexedSessions: () => sessionIndexService.list(),
 });

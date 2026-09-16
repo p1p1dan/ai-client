@@ -117,6 +117,39 @@ describe('materializeForkedChatSession', () => {
     ).toEqual({ action: 'resume', runtimeIdentity: '/sessions/imported.jsonl' });
   });
 
+  /**
+   * session-index-02 — a fork of an unbound chat lands in the index with its
+   * source's scratch posture and no workspace, which is exactly the shape
+   * `mergeSessionIndex` keeps for it across a restart. Requiring a mounted
+   * workspace here made the tree dialog report "created, but its workspace
+   * could not be materialized" for a fork that had fully landed, with no way to
+   * open it before the next restart.
+   */
+  it('[release-blocker] materializes a fork of an unbound chat, which has no workspace', () => {
+    expect(
+      materializeForkedChatSession({
+        sessionId: 'forked',
+        runtimeIdentity: '/sessions/forked.jsonl',
+        agent: 'pi',
+        workspacePath: '/tmp/base/unbound-sessions/abc',
+        unbound: true,
+        title: 'Chat (fork)',
+        updatedAt: 42,
+        archived: false,
+      })
+    ).toBe(true);
+
+    const state = useChatSessionsStore.getState();
+    expect(state.activeSessionId).toBe('forked');
+    expect(state.sessions[0]).toMatchObject({
+      id: 'forked',
+      projectId: '',
+      workspaceId: '',
+      runtimeIdentity: '/sessions/forked.jsonl',
+      unbound: { workspacePath: '/tmp/base/unbound-sessions/abc' },
+    });
+  });
+
   it('refuses a fork whose indexed workspace is not mounted in this window', () => {
     expect(
       materializeForkedChatSession({

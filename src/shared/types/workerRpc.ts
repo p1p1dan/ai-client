@@ -488,6 +488,40 @@ export interface WorkerDiscardForkResult {
   discarded: boolean;
 }
 
+/**
+ * The commit half of the fork state machine (session-index-04).
+ *
+ * A fork's transcript is written by the SOURCE worker before Main knows whether
+ * it will become a session, so the source keeps it in an "uncommitted artifact"
+ * table that authorises `worker.fork.discard` to delete it. Once the index row
+ * lands, the file belongs to a real session and that authorisation has to be
+ * withdrawn — otherwise any later discard caller is free to delete a chat the
+ * user is already using.
+ */
+export interface WorkerAcceptForkPayload {
+  logicalSessionId: string;
+  sessionFile: string;
+}
+
+export interface WorkerAcceptForkResult {
+  /** False when this worker did not stage that file — a no-op, not an error. */
+  accepted: boolean;
+}
+
+/**
+ * Suffix of the sidecar file that marks a fork transcript as staged
+ * (session-index-09).
+ *
+ * The in-memory tables above die with the process, so a crash between "the
+ * transcript exists" and "the index row exists" used to leave a full copy of a
+ * conversation in the session directory that nothing pointed at and no surface
+ * could delete. The marker is written BEFORE the transcript and removed when
+ * the fork is adopted or discarded, which lets Main's startup sweep recognise
+ * the leftovers. Deliberately not `.jsonl`, so nothing that lists session files
+ * picks it up.
+ */
+export const STAGED_FORK_MARKER_SUFFIX = '.staged' as const;
+
 export interface WorkerStopPayload {
   logicalSessionId: string;
   reason: 'user' | 'dispose';
@@ -656,6 +690,10 @@ export type WorkerForkRequest = WorkerRpcRequest<'worker.fork', WorkerForkPayloa
 export type WorkerDiscardForkRequest = WorkerRpcRequest<
   'worker.fork.discard',
   WorkerDiscardForkPayload
+>;
+export type WorkerAcceptForkRequest = WorkerRpcRequest<
+  'worker.fork.accept',
+  WorkerAcceptForkPayload
 >;
 export type WorkerStopRequest = WorkerRpcRequest<'worker.stop', WorkerStopPayload>;
 export type WorkerPermissionRespondRequest = WorkerRpcRequest<
@@ -1230,6 +1268,18 @@ export function isWorkerDiscardForkPayload(value: unknown): value is WorkerDisca
 
 export function isWorkerDiscardForkResult(value: unknown): value is WorkerDiscardForkResult {
   return isRecord(value) && typeof value.discarded === 'boolean';
+}
+
+export function isWorkerAcceptForkPayload(value: unknown): value is WorkerAcceptForkPayload {
+  return (
+    isLogicalSessionPayload(value) &&
+    typeof value.sessionFile === 'string' &&
+    value.sessionFile.trim().length > 0
+  );
+}
+
+export function isWorkerAcceptForkResult(value: unknown): value is WorkerAcceptForkResult {
+  return isRecord(value) && typeof value.accepted === 'boolean';
 }
 
 export function isWorkerStopPayload(value: unknown): value is WorkerStopPayload {

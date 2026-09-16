@@ -17,6 +17,7 @@ import type {
 import type { RuntimePermissionSettings } from '../shared/types/runtimePermission.ts';
 import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
 import {
+  isWorkerAcceptForkPayload,
   isWorkerBootstrapPayload,
   isWorkerCommandsPayload,
   isWorkerCompactPayload,
@@ -40,6 +41,8 @@ import {
   isWorkerUtilityCancelPayload,
   isWorkerUtilityStartPayload,
   WORKER_RPC_PROTOCOL_VERSION,
+  type WorkerAcceptForkPayload,
+  type WorkerAcceptForkResult,
   type WorkerBootstrapPayload,
   type WorkerBootstrapResult,
   type WorkerCommandsPayload,
@@ -108,6 +111,8 @@ export interface PiWorkerRuntime {
   reload(input: WorkerReloadPayload): Promise<WorkerReloadResult>;
   fork(input: WorkerForkPayload): Promise<WorkerForkResult>;
   discardFork(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
+  /** session-index-04 — the fork became a real session; stop claiming it. */
+  acceptFork(input: WorkerAcceptForkPayload): Promise<WorkerAcceptForkResult>;
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
   /** Answer one `permission.requested`. */
   respondPermission(input: { permissionId: string; decision: PermissionDecisionId }): boolean;
@@ -412,6 +417,9 @@ export class PiWorkerRpcServer {
           break;
         case 'worker.fork.discard':
           await this.handleDiscardFork(request);
+          break;
+        case 'worker.fork.accept':
+          await this.handleAcceptFork(request);
           break;
         case 'worker.stop':
           await this.handleStop(request);
@@ -764,6 +772,21 @@ export class PiWorkerRpcServer {
       throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.discardFork(request.payload));
+  }
+
+  private async handleAcceptFork(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerAcceptForkPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.fork.accept requires logicalSessionId and sessionFile',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    this.respondSuccess(request, await this.runtime.acceptFork(request.payload));
   }
 
   private async handleStop(request: WorkerRpcRequest): Promise<void> {

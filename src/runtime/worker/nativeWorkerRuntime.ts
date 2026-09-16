@@ -9,6 +9,8 @@ import {
 } from '../../shared/types/runtimePermission.ts';
 import type { SessionPermissionTier } from '../../shared/types/sessionPermissionTier.ts';
 import type {
+  WorkerAcceptForkPayload,
+  WorkerAcceptForkResult,
   WorkerBootstrapPayload,
   WorkerBootstrapResult,
   WorkerCapabilityInventory,
@@ -33,6 +35,7 @@ import type {
   WorkerTreePayload,
 } from '../../shared/types/workerRpc.ts';
 import {
+  STAGED_FORK_MARKER_SUFFIX,
   WORKER_COMMAND_INVENTORY_MAX,
   WORKER_COMPACT_BUDGET_MS,
   type WorkerSlashCommandInfo,
@@ -691,10 +694,23 @@ export class NativeWorkerRuntime {
     const session = this.requireSession();
     const sourceSessionFile = session.file;
     const file = join(dirname(sourceSessionFile), `${randomUUID()}.jsonl`);
-    const metadata = await session.fork(file, input.entryId);
+    // Intent log before the transcript (session-index-09): the marker is the
+    // only record of this fork that survives a crash, and writing it first
+    // means either order of dying leaves something the startup sweep can
+    // identify. A marker with no transcript is harmless; a transcript with no
+    // marker and no index row is the leak this closes.
+    await this.writeStagedForkMarker(file, session.metadata().id);
+    let metadata: Awaited<ReturnType<typeof session.fork>>;
+    try {
+      metadata = await session.fork(file, input.entryId);
+    } catch (error) {
+      await this.removeStagedForkMarker(file);
+      throw error;
+    }
     // The fork is staged, not adopted: Main decides whether it becomes a
     // session, and `worker.fork.discard` must be able to prove the file it is
     // asked to delete is one we made rather than an unrelated transcript.
+    // `worker.fork.accept` is the other half — see `acceptFork` below.
     this.stagedForks.set(metadata.file, metadata.id);
     return {
       logicalSessionId: this.logicalSessionId,
@@ -715,6 +731,25 @@ export class NativeWorkerRuntime {
     };
   }
 
+  /**
+   * Main adopted a fork: it is a real session now, not our artifact.
+   *
+   * session-index-04 — without this the source worker claimed every fork it
+   * ever made for the life of the process, which is the state a second discard
+   * caller would have read as permission to delete a live chat. Reports
+   * `accepted: false` rather than failing for a file we never staged: Main
+   * calls this after the index row is already committed, so there is nothing
+   * left to roll back.
+   */
+  async acceptFork(input: WorkerAcceptForkPayload): Promise<WorkerAcceptForkResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    if (!this.stagedForks.has(input.sessionFile)) return { accepted: false };
+    this.stagedForks.delete(input.sessionFile);
+    this.requireSession().acceptFork(input.sessionFile);
+    await this.removeStagedForkMarker(input.sessionFile);
+    return { accepted: true };
+  }
+
   async discardFork(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult> {
     this.assertLogicalSession(input.logicalSessionId);
     const staged = this.stagedForks.get(input.sessionFile);
@@ -723,6 +758,7 @@ export class NativeWorkerRuntime {
     if (staged !== undefined) {
       this.stagedForks.delete(input.sessionFile);
       await this.requireSession().discardFork(input.sessionFile, staged);
+      await this.removeStagedForkMarker(input.sessionFile);
       return { discarded: true };
     }
     // Discarding the file this worker holds open. The unlink goes FIRST,
@@ -745,10 +781,47 @@ export class NativeWorkerRuntime {
       await io.unlink(input.sessionFile).catch((error: unknown) => {
         if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error;
       });
+      // The staging marker was written by the SOURCE worker, but it names this
+      // file, so the worker that deletes the file clears it either way.
+      await this.removeStagedForkMarker(input.sessionFile);
     } finally {
       await this.dispose();
     }
     return { discarded: true };
+  }
+
+  /**
+   * Record "a fork transcript is about to exist here, unclaimed".
+   *
+   * Failing the fork when this cannot be written is deliberate: the marker is
+   * what makes the transcript recoverable, and a session directory that will
+   * not take a 100-byte sidecar will not take the transcript either.
+   */
+  private async writeStagedForkMarker(file: string, parentSessionId: string): Promise<void> {
+    const marker = `${file}${STAGED_FORK_MARKER_SUFFIX}`;
+    const body = `${JSON.stringify({
+      kind: 'staged-fork',
+      sessionFile: file,
+      parentSessionId,
+      createdAt: new Date().toISOString(),
+    })}\n`;
+    await this.requireHandle().hostIo.writeFile(marker, Buffer.from(body), { mode: 0o600 });
+  }
+
+  /**
+   * Drop the marker once the fork is adopted, discarded, or never happened.
+   *
+   * Best effort on purpose: every caller has already done the thing that
+   * matters (committed the row, deleted the file), and a marker left behind is
+   * cleaned up by the next startup sweep rather than by failing the RPC.
+   */
+  private async removeStagedForkMarker(file: string): Promise<void> {
+    try {
+      await this.requireHandle().hostIo.unlink(`${file}${STAGED_FORK_MARKER_SUFFIX}`);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return;
+      this.options.log?.('[native-worker] staged fork marker not removed', file, error);
+    }
   }
 
   /**

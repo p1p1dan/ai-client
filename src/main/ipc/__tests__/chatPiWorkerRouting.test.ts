@@ -362,6 +362,67 @@ describe('Pi WorkerSlot chat routing', () => {
       expect(resumeSession).toHaveBeenCalledWith(expect.objectContaining({ unbound: true }));
     });
 
+    /**
+     * T040 追加项 — the aftermath of main-aux-03. Since the scratch service only
+     * remembers the roots THIS run resolved from the setting, a user who
+     * changed the temp-session path and restarted comes back with an index row
+     * whose cwd is under the old root: not recognised as scratch and not on
+     * disk either. Resuming it as an ordinary folder would either fail on the
+     * missing cwd or run the chat in a leftover directory with project trust.
+     */
+    it('[release-blocker] re-homes an unbound chat whose scratch root moved, instead of trusting it', async () => {
+      const MOVED_ROOT_DIR = '/tmp/old-base/unbound-sessions/abc';
+      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+      const { adoptTempWorkspace } = await import('../../services/agent-host/TempWorkspaceService');
+      vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
+        sessionId: 's1',
+        agent: 'pi',
+        workspacePath: MOVED_ROOT_DIR,
+        unbound: true,
+        title: 'Source',
+        updatedAt: 1,
+        archived: false,
+        runtimeIdentity: '/session.jsonl',
+        piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+      });
+
+      await invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: '/session.jsonl',
+        workspacePath: MOVED_ROOT_DIR,
+      });
+
+      // A fresh directory under the CURRENT root, still untrusted.
+      expect(ensureScratch).toHaveBeenCalledWith('s1');
+      expect(adoptScratch).not.toHaveBeenCalled();
+      expect(adoptTempWorkspace).not.toHaveBeenCalled();
+      expect(resumeSession).toHaveBeenCalledWith(
+        expect.objectContaining({ workspacePath: SCRATCH_DIR, unbound: true })
+      );
+    });
+
+    // The same restart, through the other entry point: the first send asks for
+    // the directory before anything resumes.
+    it('hands a moved-root unbound chat a directory under the current root on ensure', async () => {
+      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+      vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
+        sessionId: 's1',
+        agent: 'pi',
+        workspacePath: '/tmp/old-base/unbound-sessions/abc',
+        unbound: true,
+        title: 'Source',
+        updatedAt: 1,
+        archived: false,
+        runtimeIdentity: '/session.jsonl',
+      });
+
+      await expect(invoke('chat:ensureScratchWorkspace', { sessionId: 's1' })).resolves.toEqual({
+        path: SCRATCH_DIR,
+      });
+      expect(adoptScratch).not.toHaveBeenCalled();
+      expect(ensureScratch).toHaveBeenCalledWith('s1');
+    });
+
     it('does not touch scratch state when resuming a real folder', async () => {
       // The upgrade path: once a chat is bound to a folder it goes through the
       // normal trust gate, with nothing left over from its unbound life.

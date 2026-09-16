@@ -172,16 +172,25 @@ export function materializeIndexedPiChatSession(
     });
     state = useChatSessionsStore.getState();
   }
-  if (!workspace) return false;
+  // U13 (D04) / session-index-02: an unbound chat has no workspace BY DESIGN —
+  // its cwd is a scratch directory that must never appear in the project tree.
+  // This is the same row `mergeSessionIndex` rebuilds for it after a restart,
+  // and without this arm a fork of an unbound chat failed here: the Pi file and
+  // the index row had both landed, but the dialog told the user its workspace
+  // "could not be materialized" and left no way to open it until a restart.
+  const unbound =
+    entry.unbound && entry.workspacePath ? { workspacePath: entry.workspacePath } : undefined;
+  if (!workspace && !unbound) return false;
   const session: ChatSession = {
     id: entry.sessionId,
-    projectId: workspace.projectId,
-    workspaceId: workspace.id,
+    projectId: workspace?.projectId ?? '',
+    workspaceId: workspace?.id ?? '',
     title: entry.title || 'Forked chat',
     status: 'idle',
     updatedAt: entry.updatedAt,
     runtimeIdentity: entry.runtimeIdentity,
     agent: PI_AGENT,
+    ...(unbound ? { unbound } : {}),
   };
   markSessionsLive([entry.sessionId]);
   useChatSessionsStore.setState((current) => ({

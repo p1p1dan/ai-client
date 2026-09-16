@@ -318,6 +318,11 @@ export function registerChatHandlers(): void {
           };
         }
       }
+      // Falling through is also the answer for a recorded path the scratch
+      // service no longer owns — the temp base moved between runs (T040, after
+      // main-aux-03). `adopt` refuses a foreign path by design, so the chat
+      // gets a fresh directory under the CURRENT root; the resume handler above
+      // re-homes the index row to match, and the chat stays unbound either way.
       return { path: await scratchWorkspaceService.ensure(payload.sessionId) };
     }
   );
@@ -401,13 +406,26 @@ export function registerChatHandlers(): void {
       // U05-a: an unbound chat's directory was wiped when the app last quit,
       // so recreate it (empty) at the exact path the index still names before
       // anything tries to spawn Pi in it.
-      const unbound = scratchWorkspaceService.isScratchPath(payload.workspacePath);
+      let workspacePath = payload.workspacePath;
+      let unbound = scratchWorkspaceService.isScratchPath(workspacePath);
       if (unbound) {
-        await scratchWorkspaceService.adopt(payload.sessionId, payload.workspacePath);
+        await scratchWorkspaceService.adopt(payload.sessionId, workspacePath);
+      } else if (row.unbound) {
+        // T040, after main-aux-03: the scratch service only recognises roots
+        // THIS run resolved from the setting, so a user who changed the temp
+        // path and restarted comes back with a row whose cwd is under the old
+        // root — not recognised as scratch, and wiped from disk besides.
+        // Re-home the chat under the CURRENT root instead of falling through:
+        // the branch below would treat a leftover directory as a project the
+        // user picked (trusted), or fail outright on a cwd that is gone.
+        // `commitResumed` writes the new path back into the row, and `unbound`
+        // stays on it because the row is rebuilt from `existing`.
+        workspacePath = await scratchWorkspaceService.ensure(payload.sessionId);
+        unbound = true;
       } else {
         // Same reason as the unbound branch above, for the other directory kind
         // this app creates and the user can delete underneath a live row.
-        await adoptTempWorkspace(payload.workspacePath);
+        await adoptTempWorkspace(workspacePath);
       }
       if (await isUnwrittenPiSession(row)) {
         // Repair, not resume: there is no file to reopen and nothing was ever
@@ -422,7 +440,7 @@ export function registerChatHandlers(): void {
         );
         const repaired = await workerManager.createSession({
           sessionId: payload.sessionId,
-          workspacePath: payload.workspacePath,
+          workspacePath,
           ...(payload.model ? { model: payload.model } : {}),
           ...(payload.effort ? { effort: payload.effort } : {}),
           ...spawnTier(payload.tier),
@@ -435,7 +453,7 @@ export function registerChatHandlers(): void {
       const requestId = await workerManager.resumeSession({
         sessionId: payload.sessionId,
         sessionFile: payload.runtimeIdentity,
-        workspacePath: payload.workspacePath,
+        workspacePath,
         ...(payload.model ? { model: payload.model } : {}),
         ...(payload.effort ? { effort: payload.effort } : {}),
         ...spawnTier(payload.tier),
