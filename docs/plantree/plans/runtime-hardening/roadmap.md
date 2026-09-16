@@ -63,7 +63,8 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 ## In Progress
 
-- 无活跃实现项。批次 D2 已收口（2026-09-16），批次 D3（T056 `8a3ce4a6` / T057 `2c1e4ba3`）已落地。下一目标：**T032** 上机检查单整理（先做完标 dev-box 的项）。
+- **T059** 家目录改为独立 user 层（[决策 016](decisions/016-home-tier-instruction-gating.md)，Q015 结案项）——用户 2026-09-16 拍板最终方案（全局规则对所有项目生效，顺序 `~/.pilab/AGENTS.md` → `~/.claude/CLAUDE.md` → `~/.codex/AGENTS.md`），**排在 T032 之前**；实现与独立审阅已完成（`pass-with-notes`），正在补审阅指出的测试覆盖缺口，待提交。
+- 批次 D2 已收口（2026-09-16），批次 D3（T056 `8a3ce4a6` / T057 `2c1e4ba3`）已落地。T059 之后的目标：**T032** 上机检查单整理（先做完标 dev-box 的项）。
 
 ## Next
 
@@ -141,6 +142,7 @@ T056（`8a3ce4a6`）、T057（`2c1e4ba3`）已全部落地（2 项 2 提交，�
 |---|---|---|---|---|
 | T056 | 假平台依赖测试债专项：skills / subagentDefinitions / agentWireStatic / piWorkerEnv / PiWorkerProcess / panelVisibilityStatic / nativeWorkerDependencyBoundary / piCliIsBundledToolOnly 八个测试文件的路径分隔符字面量债（shellPolicy 的一条并入 T057） | low | 归因 A 类 | 八个文件 Windows 全绿；只改测试不改生产代码（PiWorkerProcess 按消费方核实后定）；断言强度不降（无删断言、无放松 matcher、无 skipIf） |
 | T057 | Windows 路径语义缺陷波：`canonicalPath` 逐段解析主修（junction/symlink + `..` 越界——含内置 deny 失效与 accept-edits 零审批逃逸链）；workerSessionKey POSIX 分支误用原生 resolve；localFileReadGuard 返回值大小写污染；promptService 两条过严断言；shellPolicy 缺引号用例 | **high**（首条；余三条 low） | 深查 #1～#4 | shellPolicy 的 symlink 回归用例转绿并新增 junction 场景用例（含指向工作区自身的 junction + `..` 上爬）；不含 `..` 的快路径行为逐字节不变；反向验证判红复原；三套 tsc 与相关测试全绿 |
+| T059 | 家目录改为独立 user 层（[决策 016](decisions/016-home-tier-instruction-gating.md)，Q015 结案）：家目录从 project 链移除、改作 user 层 global，**对所有项目生效**（含工作区不在家目录下的）；全局层只取一份，顺序 `~/.pilab/AGENTS.md` → `~/.claude/CLAUDE.md` → `~/.codex/AGENTS.md`，找到即停、都没有则为空；全局层不读 `CLAUDE.local.md`；家目录之上的多用户共享目录（`C:\Users` / `/home`）全部跳过；globals 与 project 链做文件级 canonical 去重作兜底；baseline 脚本传 `settingSources: []` 保住机器无关性 | low（语义地雷，当前不可触发） | Q015 | 工作区不在家目录下时也读到全局文件；`settingSources` 含/不含 user 时读/不读各一条；三项全缺时全局层为空；家目录之上的层不读；家目录不在链上时链行为不变；global 与链命中同一文件只出现一次；未信任项目仍读 user 层、project 链全不读（既有语义，非本次引入）；层内 first-one-wins；预算 user 层先于 project 消费；反向验证判红复原；三套 tsc 与相关测试全绿 |
 
 ### 批次 E：现场
 
