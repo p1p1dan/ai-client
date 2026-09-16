@@ -412,3 +412,57 @@ describe('subagent-data-01 · the legacy import has a scan, a preview and a writ
     expect(preview.rows).toEqual([]);
   });
 });
+
+describe('concurrency-06 · a save never shows a rescanning worker half a document', () => {
+  /** A save whose document is the same length every time, so a short read is a torn one. */
+  function edit(index: number) {
+    return {
+      name: 'researcher',
+      description: `finds things ${String(index).padStart(3, '0')}`,
+      tools: ['Read'],
+      prompt: 'x'.repeat(8_000),
+    };
+  }
+
+  it('replaces the file atomically while a reader is scanning it', async () => {
+    await service.save(edit(0));
+    const target = join(root, 'agent', 'subagents', 'researcher.md');
+    const expected = (await readFile(target, 'utf8')).length;
+
+    // What the runtime does at the top of every turn since T020: reread the
+    // whole definition directory. Here it is one file, read as fast as the
+    // filesystem allows, for as long as the saves run.
+    let reads = 0;
+    let torn = 0;
+    let stop = false;
+    const rescan = (async () => {
+      while (!stop) {
+        let raw: string;
+        try {
+          raw = await readFile(target, 'utf8');
+        } catch (error) {
+          // The name itself vanishing is the same defect seen from the outside.
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+          torn++;
+          continue;
+        }
+        reads++;
+        if (raw.length !== expected || !parseSubagentDefinition(raw, { source: 'user' }).ok) torn++;
+      }
+    })();
+
+    try {
+      for (let index = 1; index <= 30; index++) await service.save(edit(index));
+    } finally {
+      stop = true;
+      await rescan;
+    }
+
+    expect(reads).toBeGreaterThan(0);
+    expect(torn).toBe(0);
+    // And the last save is what is on disk: atomicity must not cost the write.
+    expect(await readFile(target, 'utf8')).toContain('finds things 030');
+    // No staging file left beside it for the scanner to trip over.
+    expect((await readdir(join(root, 'agent', 'subagents'))).sort()).toEqual(['researcher.md']);
+  });
+});

@@ -45,6 +45,16 @@ export interface SessionConfig {
   allowWorkspaceRelocation?: boolean;
   /** Bound the in-memory transcript on this host; oversized files fail explicitly. */
   maxBytes?: number;
+  /**
+   * concurrency-02 — open the session even though its writer lock still looks
+   * held.
+   *
+   * The remedy for a lock stranded under a pid the system has since handed to
+   * an unrelated process: nothing can tell that apart from a running writer, so
+   * the refusal explains itself and this is what an explicit "open it anyway"
+   * sets. Never set on its own — the default open is the one that refuses.
+   */
+  forceTakeover?: boolean;
 }
 export type NewSessionEntry<T extends Entry = Entry> = T extends Entry
   ? Omit<T, 'id' | 'seq' | 'parentId' | 'timestamp'>
@@ -126,7 +136,7 @@ export class JsonlSessionStore {
     } catch (error) {
       if (errorCode(error) !== 'ENOENT') throw error;
     }
-    const lock = await acquireWriterLock(io, file);
+    const lock = await acquireWriterLock(io, file, { force: config.forceTakeover === true });
     try {
       let document: SessionDocument;
       let bytes: number;

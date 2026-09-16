@@ -29,7 +29,8 @@
  * against a temp directory and a plain object instead of a running Electron.
  */
 
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { BUILTIN_SUBAGENT_DOCUMENTS } from '@shared/subagentBuiltins';
@@ -233,7 +234,7 @@ export class SubagentCatalogService {
     }
 
     await mkdir(this.directory(), { recursive: true });
-    await writeFile(this.pathFor(name), document, 'utf8');
+    await this.writeDocument(this.pathFor(name), document);
 
     if (previous && previous !== name) {
       // The new document lands before the old one goes, so a crash between the
@@ -383,7 +384,7 @@ export class SubagentCatalogService {
         continue;
       }
       await mkdir(this.directory(), { recursive: true });
-      await writeFile(this.pathFor(candidate.name), candidate.document, 'utf8');
+      await this.writeDocument(this.pathFor(candidate.name), candidate.document);
       imported.push(candidate.name);
       userCount += 1;
       catalog = await this.read();
@@ -405,6 +406,43 @@ export class SubagentCatalogService {
 
   private pathFor(name: string): string {
     return join(this.directory(), `${name}.md`);
+  }
+
+  /**
+   * concurrency-06 — put the document in place in one step, never in two.
+   *
+   * The other reader of this directory is not a person: since T020 every worker
+   * rescans the whole of it at the top of every turn, one process per session.
+   * A plain `writeFile` truncates first and writes second, so a scan landing in
+   * between parses an empty or half file, reports it as broken, and the
+   * definition disappears from that turn's menu — a ghost the user cannot
+   * reproduce because the next turn has the whole file again. Writing to a
+   * staging name and renaming over the target removes the window: `rename`
+   * replaces atomically on POSIX and on Windows, so the `.md` name only ever
+   * holds a complete document.
+   *
+   * The staging name deliberately does not end in `.md`, so neither this
+   * service's own scan nor the runtime's picks it up while it exists. Contents
+   * are flushed before the rename for the reason `writeJsonAtomically` states:
+   * the swap is atomic against a reader either way, but not against a power cut.
+   */
+  private async writeDocument(path: string, document: string): Promise<void> {
+    const staging = `${path}.${randomUUID()}.tmp`;
+    try {
+      // `wx`: a staging name is ours alone, and a collision means something
+      // else is using it — better to fail than to overwrite it.
+      const handle = await open(staging, 'wx', 0o600);
+      try {
+        await handle.writeFile(document, 'utf8');
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      await rename(staging, path);
+    } catch (error) {
+      await rm(staging, { force: true });
+      throw error;
+    }
   }
 
   /** A renamed definition keeps its switch; the old name is gone. */

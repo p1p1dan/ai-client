@@ -18,6 +18,8 @@
  * accumulates the same three fields on the legacy side.
  */
 
+import { randomUUID } from 'node:crypto';
+import { hostname } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Usage } from '@earendil-works/pi-ai';
@@ -52,6 +54,31 @@ export const TRACE_FILE_GENERATIONS = 3;
 export const TRACE_MEMORY_MAX_RUNS = 100;
 export const TRACE_MEMORY_MAX_BYTES = 4 * 1024 * 1024;
 
+/**
+ * concurrency-03 / capacity-05 — the sidecar that makes one trace directory
+ * one writer at a time.
+ *
+ * `AICLIENT_RUNTIME_TRACE_DIR` is read from the environment and every worker
+ * inherits it, so a forensic run has as many writers of `runs.jsonl` as it has
+ * sessions. The promise chain inside `persist` serializes this process and says
+ * so; across processes nothing did, and two workers that cross the ceiling
+ * together each ran a full set of renames — the second one shifting the
+ * generation the first had just moved, retiring it a cycle early and leaving a
+ * hole where readers count backwards from `runs.1.jsonl`.
+ */
+const ROTATE_LOCK_NAME = 'runs.rotate.lock';
+/**
+ * How long the rotation lock can plausibly be held: a few renames and one
+ * append. Anything older was stranded by a crash and is dropped, because a lock
+ * nobody clears would stop this directory rotating for good.
+ */
+const ROTATE_LOCK_MAX_AGE_MS = 30_000;
+/** Total time a run waits for a peer's rotation before giving up on its own. */
+const ROTATE_LOCK_WAIT_MS = 250;
+const ROTATE_LOCK_POLL_MS = 25;
+/** A lock file is one small JSON object; anything bigger is not one of ours. */
+const ROTATE_LOCK_MAX_BYTES = 4096;
+
 export interface TracePluginConfig {
   /** Absolute directory for `runs.jsonl`. `null` keeps traces in memory only. */
   dir: string | null;
@@ -68,6 +95,11 @@ export interface TracePluginConfig {
   /** Ceilings for the in-memory mirror; the newest run is never evicted. */
   maxMemoryRuns?: number;
   maxMemoryBytes?: number;
+  /**
+   * How long to wait for another process's rotation of this directory. `0`
+   * means one attempt, which is what a test wanting a deterministic loser sets.
+   */
+  rotationLockWaitMs?: number;
 }
 
 export class TracePlugin extends Service implements TraceService {
@@ -88,6 +120,7 @@ export class TracePlugin extends Service implements TraceService {
   private readonly fileGenerations: number;
   private readonly maxMemoryRuns: number;
   private readonly maxMemoryBytes: number;
+  private readonly rotationLockWaitMs: number;
 
   constructor(ctx: Context, config: TracePluginConfig) {
     super(ctx, TRACE_SERVICE);
@@ -100,6 +133,7 @@ export class TracePlugin extends Service implements TraceService {
     this.fileGenerations = config.fileGenerations ?? TRACE_FILE_GENERATIONS;
     this.maxMemoryRuns = config.maxMemoryRuns ?? TRACE_MEMORY_MAX_RUNS;
     this.maxMemoryBytes = config.maxMemoryBytes ?? TRACE_MEMORY_MAX_BYTES;
+    this.rotationLockWaitMs = config.rotationLockWaitMs ?? ROTATE_LOCK_WAIT_MS;
   }
 
   get runs(): readonly RunTrace[] {
@@ -206,8 +240,24 @@ export class TracePlugin extends Service implements TraceService {
     const work = this.pending.then(async () => {
       // Rotation runs inside the same serialized chain as the append, so a
       // rename can never land between another run's size check and its write.
-      const rotation = await this.rotate(dir, path, line.byteLength);
-      await this.io.appendFile(path, line, { mode: 0o600 });
+      // Across processes the same guarantee is the directory lock: it spans the
+      // rotation AND the append, so a peer cannot append into a file this run
+      // is about to move, and cannot start its own set of renames halfway
+      // through ours.
+      const guard = await this.lockRotation(dir);
+      let rotation: Error | undefined;
+      try {
+        if (guard.token !== undefined) rotation = await this.rotate(dir, path, line.byteLength);
+        // Losing the lock to a live peer is not a failure: it is rotating right
+        // now, so this run appends and the next one finds the fresh file. A
+        // lock we could not even attempt is a failure, and only matters while
+        // there is a ceiling to enforce.
+        else if (guard.error && this.maxFileBytes > 0)
+          rotation = new RotationError(guard.error.message);
+        await this.io.appendFile(path, line, { mode: 0o600 });
+      } finally {
+        await this.unlockRotation(dir, guard.token);
+      }
       // Reported only after the trace is safely on disk. Housekeeping that
       // failed must not cost the run its record, but it also must not stay
       // invisible — an unrotatable directory grows without bound.
@@ -265,6 +315,95 @@ export class TracePlugin extends Service implements TraceService {
     }
   }
 
+  /**
+   * Hold this directory against the other workers writing to it.
+   *
+   * `createOnly` is the exclusion; the wait is there because the alternative to
+   * waiting is skipping the rotation, and a directory whose workers always
+   * arrive together would then never rotate at all. A lock held by a live
+   * process is respected, one older than any real rotation is dropped — by
+   * rename, so that two workers clearing the same debris cannot both go on to
+   * create it.
+   *
+   * Returns no token when the lock is busy or unusable. Nothing here ever
+   * throws: the trace has to reach disk even when the housekeeping around it
+   * cannot.
+   */
+  private async lockRotation(dir: string): Promise<{ token?: string; error?: Error }> {
+    const path = join(dir, ROTATE_LOCK_NAME);
+    const token = randomUUID();
+    // `Date.now()`, never the injected clock: a test that freezes time to make
+    // trace ids stable would otherwise date every lock to the epoch and read
+    // its own as debris.
+    const deadline = Date.now() + this.rotationLockWaitMs;
+    try {
+      for (;;) {
+        const record = Buffer.from(
+          JSON.stringify({ pid: process.pid, host: hostname(), token, acquiredAt: Date.now() })
+        );
+        try {
+          await this.io.writeFile(path, record, { createOnly: true, mode: 0o600 });
+          return { token };
+        } catch (error) {
+          if (errorCode(error) !== 'EEXIST') throw error;
+        }
+        if (await this.dropStrandedLock(path)) continue;
+        if (Date.now() >= deadline) return {};
+        await new Promise((resolve) => setTimeout(resolve, ROTATE_LOCK_POLL_MS));
+      }
+    } catch (error) {
+      return { error: error instanceof Error ? error : new Error(String(error)) };
+    }
+  }
+
+  /** Whether the lock at `path` was debris, and has been cleared. */
+  private async dropStrandedLock(path: string): Promise<boolean> {
+    let owner: { pid?: unknown; host?: unknown; acquiredAt?: unknown };
+    try {
+      const read = await this.io.readFile(path, {
+        maxBytes: ROTATE_LOCK_MAX_BYTES,
+        overflow: 'truncate',
+      });
+      owner = read.truncated ? {} : (JSON.parse(Buffer.from(read.bytes).toString('utf8')) ?? {});
+    } catch (error) {
+      // Released between our create and our read: the next attempt takes it.
+      if (errorCode(error) === 'ENOENT') return true;
+      owner = {};
+    }
+    const acquiredAt = typeof owner.acquiredAt === 'number' ? owner.acquiredAt : undefined;
+    const fresh = acquiredAt !== undefined && Date.now() - acquiredAt <= ROTATE_LOCK_MAX_AGE_MS;
+    const local = typeof owner.host !== 'string' || owner.host === hostname();
+    if (fresh && (!local || alive(owner.pid))) return false;
+    const aside = `${path}.${randomUUID()}.stale`;
+    try {
+      await this.io.rename(path, aside);
+    } catch (error) {
+      // Someone else cleared it first; either way the name is free to retry.
+      if (errorCode(error) !== 'ENOENT') throw error;
+      return true;
+    }
+    await this.remove(aside);
+    return true;
+  }
+
+  /** Give the lock back, unless a later holder already replaced it. */
+  private async unlockRotation(dir: string, token: string | undefined): Promise<void> {
+    if (token === undefined) return;
+    const path = join(dir, ROTATE_LOCK_NAME);
+    try {
+      const read = await this.io.readFile(path, {
+        maxBytes: ROTATE_LOCK_MAX_BYTES,
+        overflow: 'truncate',
+      });
+      const held = JSON.parse(Buffer.from(read.bytes).toString('utf8')) as { token?: unknown };
+      if (held.token !== token) return;
+      await this.remove(path);
+    } catch {
+      // A lock we cannot read or delete ages out on its own; failing the run
+      // over it would cost the trace we just wrote.
+    }
+  }
+
   private async size(path: string): Promise<number> {
     try {
       return (await this.io.stat(path)).size;
@@ -291,6 +430,22 @@ export class TracePlugin extends Service implements TraceService {
     } catch (error) {
       if (errorCode(error) !== 'ENOENT') throw error;
     }
+  }
+}
+
+/**
+ * Whether the pid recorded in a rotation lock is still running.
+ *
+ * `EPERM` counts as alive: the process exists, it just belongs to another user.
+ * Signal `0` only asks the question, it delivers nothing.
+ */
+function alive(pid: unknown): boolean {
+  if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return errorCode(error) === 'EPERM';
   }
 }
 

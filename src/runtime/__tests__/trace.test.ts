@@ -11,9 +11,20 @@
  * rename does not need a read-only directory to reproduce.
  */
 
+import { fork } from 'node:child_process';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { hostname, tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Context } from 'cordis';
 import { expect, it } from 'vitest';
-import type { RuntimeFileInfo, RuntimeHostIoService, RuntimeReadResult } from '../contracts.ts';
+import type {
+  RuntimeFileInfo,
+  RuntimeHostIoService,
+  RuntimeReadOptions,
+  RuntimeReadResult,
+  RuntimeWriteOptions,
+} from '../contracts.ts';
 import { TracePlugin, type TracePluginConfig } from '../trace.ts';
 
 const DIR = '/traces';
@@ -30,6 +41,8 @@ class FakeIo implements RuntimeHostIoService {
   /** Path → error thrown on the next call of that operation. */
   failAppend?: Error;
   failRename?: Error;
+  /** Fires once, inside the next `stat`. See {@link FakeIo.stat}. */
+  onStat?: () => Promise<void>;
 
   appendFile(path: string, bytes: Uint8Array): Promise<void> {
     this.calls.push(`append ${path}`);
@@ -40,11 +53,16 @@ class FakeIo implements RuntimeHostIoService {
     );
     return Promise.resolve();
   }
-  stat(path: string): Promise<RuntimeFileInfo> {
+  async stat(path: string): Promise<RuntimeFileInfo> {
     this.calls.push(`stat ${path}`);
     const file = this.files.get(path);
-    if (!file) return Promise.reject(ioError('ENOENT', `no such file: ${path}`));
-    return Promise.resolve({ kind: 'file', size: file.byteLength, mtimeMs: 0 });
+    // Runs after the size is read and before the caller sees it: the instant a
+    // second worker gets to act on the same oversized file.
+    const hook = this.onStat;
+    this.onStat = undefined;
+    await hook?.();
+    if (!file) throw ioError('ENOENT', `no such file: ${path}`);
+    return { kind: 'file', size: file.byteLength, mtimeMs: 0 };
   }
   rename(from: string, to: string): Promise<void> {
     this.calls.push(`rename ${from} -> ${to}`);
@@ -60,11 +78,25 @@ class FakeIo implements RuntimeHostIoService {
     if (!this.files.delete(path)) return Promise.reject(ioError('ENOENT', `no such file: ${path}`));
     return Promise.resolve();
   }
-  readFile(): Promise<RuntimeReadResult> {
-    throw new Error('not used');
+  readFile(path: string, options: RuntimeReadOptions): Promise<RuntimeReadResult> {
+    this.calls.push(`read ${path}`);
+    const file = this.files.get(path);
+    if (!file) return Promise.reject(ioError('ENOENT', `no such file: ${path}`));
+    const truncated = file.byteLength > options.maxBytes;
+    return Promise.resolve({
+      bytes: truncated ? file.subarray(0, options.maxBytes) : file,
+      truncated,
+      source: 'direct',
+    });
   }
-  writeFile(): Promise<void> {
-    throw new Error('not used');
+  writeFile(path: string, bytes: Uint8Array, options?: RuntimeWriteOptions): Promise<void> {
+    this.calls.push(`write ${path}`);
+    // `createOnly` is the whole mutual exclusion the rotation lock rests on, so
+    // the stand-in has to refuse an existing name the way the real one does.
+    if (options?.createOnly && this.files.has(path))
+      return Promise.reject(ioError('EEXIST', `file already exists: ${path}`));
+    this.files.set(path, Buffer.from(bytes));
+    return Promise.resolve();
   }
   realpath(): Promise<string> {
     throw new Error('not used');
@@ -231,3 +263,139 @@ it('keeps the newest run even when it alone exceeds the byte ceiling', async () 
   expect(trace.runs.map((entry) => entry.run_id)).toEqual(['enormous']);
   expect(trace.evictedRuns).toBe(1);
 });
+
+const ROTATE_LOCK = `${DIR}/runs.rotate.lock`;
+
+/** A rotation lock as another worker would have left it. */
+function rotationLock(owner: { pid: number; token: string; acquiredAt: number }): Buffer {
+  return Buffer.from(JSON.stringify({ host: hostname(), ...owner }));
+}
+
+it('rotates once when a second worker crosses the ceiling at the same moment', async () => {
+  const io = new FakeIo();
+  io.files.set(RUNS, Buffer.alloc(900, 'x'));
+  const mine = tracer(io, { maxFileBytes: 500, fileGenerations: 2 });
+  // The peer worker: a plugin instance of its own, which is all a second
+  // process is as far as this file is concerned — its appends are serialized
+  // against its own runs and nobody else's.
+  const peer = tracer(io, { maxFileBytes: 500, fileGenerations: 2, rotationLockWaitMs: 0 });
+  io.onStat = async () => {
+    await record(peer, 'peer', 10);
+  };
+
+  await record(mine, 'mine', 10);
+  await mine.flush();
+  await peer.flush();
+
+  // concurrency-03 — a second pass over the same generations would push the
+  // 900-byte file all the way to runs.2 and leave runs.1 holding only what
+  // arrived after it: one generation retired a whole cycle early, and a hole
+  // where readers count backwards from runs.1.
+  expect(io.files.has(`${DIR}/runs.2.jsonl`)).toBe(false);
+  const rotated = io.files.get(`${DIR}/runs.1.jsonl`)?.toString('utf8') ?? '';
+  expect(rotated.startsWith('x'.repeat(900))).toBe(true);
+  expect(rotated).toContain('"run_id":"peer"');
+  expect(lineIds(io, RUNS)).toEqual(['mine']);
+});
+
+it('appends without rotating while another worker holds the directory lock', async () => {
+  const io = new FakeIo();
+  io.files.set(RUNS, Buffer.alloc(900, 'x'));
+  io.files.set(
+    ROTATE_LOCK,
+    rotationLock({ pid: process.pid, token: 'peer', acquiredAt: Date.now() })
+  );
+  const trace = tracer(io, { maxFileBytes: 500, fileGenerations: 2, rotationLockWaitMs: 0 });
+
+  await record(trace, 'mine', 10);
+  // Losing the race for the lock is housekeeping deferred, not a failure: the
+  // peer is rotating, and the next run finds the fresh file.
+  await trace.flush();
+  expect(io.files.has(`${DIR}/runs.1.jsonl`)).toBe(false);
+  expect(io.files.get(RUNS)?.toString('utf8')).toContain('"run_id":"mine"');
+  expect(JSON.parse(io.files.get(ROTATE_LOCK)?.toString('utf8') ?? '{}').token).toBe('peer');
+});
+
+it('drops a rotation lock stranded by a crash and releases its own', async () => {
+  const io = new FakeIo();
+  io.files.set(RUNS, Buffer.alloc(900, 'x'));
+  io.files.set(
+    ROTATE_LOCK,
+    // Same pid, so liveness alone would call it held; a rotation is a handful
+    // of renames, so an age like this can only be debris.
+    rotationLock({ pid: process.pid, token: 'stranded', acquiredAt: Date.now() - 600_000 })
+  );
+  const trace = tracer(io, { maxFileBytes: 500, fileGenerations: 2 });
+
+  await record(trace, 'mine', 10);
+  await trace.flush();
+  expect(io.files.get(`${DIR}/runs.1.jsonl`)?.byteLength).toBe(900);
+  expect(lineIds(io, RUNS)).toEqual(['mine']);
+  // Released rather than left for the next worker to time out on.
+  expect(io.files.has(ROTATE_LOCK)).toBe(false);
+});
+
+it('loses no run when two processes rotate one directory between them', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'trace-race-'));
+  try {
+    const runs = 6;
+    await Promise.all([
+      raceTrace(dir, 'alpha', runs, 5_000, 3),
+      raceTrace(dir, 'beta', runs, 5_000, 3),
+    ]);
+
+    const written = (await readdir(dir)).filter((name) => /^runs(\.\d+)?\.jsonl$/.test(name));
+    const ids: string[] = [];
+    for (const name of written) {
+      const content = await readFile(join(dir, name), 'utf8');
+      for (const line of content.split('\n').filter(Boolean)) {
+        // A torn or interleaved append shows up here first: the line either
+        // parses as one run or it does not exist.
+        ids.push((JSON.parse(line) as { run_id: string }).run_id);
+      }
+    }
+    expect(ids.sort()).toEqual(
+      [
+        ...Array.from({ length: runs }, (_, i) => `alpha-${i}`),
+        ...Array.from({ length: runs }, (_, i) => `beta-${i}`),
+      ].sort()
+    );
+    // Generations stay contiguous: a double rotation is visible as runs.2
+    // existing while runs.1 does not.
+    for (let index = written.length - 1; index >= 1; index--)
+      expect(written).toContain(`runs.${index}.jsonl`);
+    // Neither process left its lock behind.
+    expect((await readdir(dir)).filter((name) => name.endsWith('.lock'))).toEqual([]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}, 60_000);
+
+/** Start one real trace writer and resolve when it has written everything. */
+function raceTrace(
+  dir: string,
+  label: string,
+  count: number,
+  maxFileBytes: number,
+  generations: number
+): Promise<void> {
+  const script = fileURLToPath(new URL('./fixtures/traceRace.ts', import.meta.url));
+  const child = fork(
+    script,
+    [dir, label, String(count), String(maxFileBytes), String(generations)],
+    // Type stripping, the way every other `.ts` child in this repo is started.
+    { execArgv: ['--experimental-strip-types'], stdio: 'inherit' }
+  );
+  return new Promise<void>((resolve, reject) => {
+    child.on('message', (message: unknown) => {
+      // Released together, so the two processes reach the ceiling at the same
+      // time instead of queueing behind each other's startup.
+      if (message === 'ready') return void child.send('go');
+      if (message === 'done') return void resolve();
+    });
+    child.on('error', reject);
+    child.on('exit', (code) =>
+      code === 0 ? resolve() : reject(new Error(`writer exited ${code}`))
+    );
+  });
+}
