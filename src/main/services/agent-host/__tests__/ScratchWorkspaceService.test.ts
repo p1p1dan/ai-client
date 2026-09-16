@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -206,6 +206,108 @@ describe('ScratchWorkspaceService.adopt — resuming an unbound chat in a later 
       'scratch_workspace_foreign_path'
     );
     expect(service.pathFor('session-a')).toBeNull();
+  });
+});
+
+/**
+ * main-aux-01 — the guard used to compare canonicalised strings by prefix, and
+ * that key never resolves `..`. Every form below therefore started the root's
+ * own name, passed as "one of ours", and handed `adopt` a directory outside the
+ * root to create and `release` the same directory to remove recursively.
+ */
+describe('[release-blocker] paths that escape the scratch root through ..', () => {
+  /** The same outside directory, written three ways a stored row could hold. */
+  function escapingForms(outsideName: string): string[] {
+    const root = path.join(base, SCRATCH_ROOT_DIR);
+    const sep = path.sep;
+    return [
+      `${root}${sep}..${sep}${outsideName}`,
+      `${root}${sep}.${sep}..${sep}${outsideName}`,
+      `${root}${sep}a${sep}..${sep}..${sep}${outsideName}`,
+    ];
+  }
+
+  it('does not recognise them as scratch directories', () => {
+    for (const candidate of escapingForms('user-folder')) {
+      expect(service.isScratchPath(candidate)).toBe(false);
+    }
+  });
+
+  it('refuses adopt without touching the filesystem, so release can never remove it', async () => {
+    const outside = path.join(base, 'user-folder');
+    await mkdir(outside, { recursive: true });
+    await writeFile(path.join(outside, 'important.txt'), 'user data');
+
+    for (const candidate of escapingForms('user-folder')) {
+      await expect(service.adopt('session-a', candidate)).rejects.toThrow(
+        'scratch_workspace_foreign_path'
+      );
+    }
+
+    expect(service.pathFor('session-a')).toBeNull();
+    // The archive path is what would have deleted it: release only ever removes
+    // a directory adopt took ownership of.
+    await service.release('session-a');
+    expect((await readdir(outside)).sort()).toEqual(['important.txt']);
+    expect(await rootEntries()).toEqual([]);
+  });
+
+  it('refuses adopt for a directory that does not exist yet, rather than creating it', async () => {
+    const [candidate] = escapingForms('never-created');
+
+    await expect(service.adopt('session-a', candidate)).rejects.toThrow(
+      'scratch_workspace_foreign_path'
+    );
+
+    await expect(stat(path.join(base, 'never-created'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+/**
+ * main-aux-03 — the temp base is a user setting and `rootPath()` re-reads it on
+ * every call, so changing it in Settings moved the root out from under every
+ * directory already allocated: the exit wipe stopped covering them and resume
+ * stopped recognising them as scratch (which is the bit that starts a session
+ * without project trust).
+ */
+describe('when the user changes the temp base path mid-run', () => {
+  let movedBase: string;
+  let moving: ScratchWorkspaceService;
+  let currentBase: string;
+
+  beforeEach(async () => {
+    movedBase = await mkdtemp(path.join(os.tmpdir(), 'aiclient-scratch-moved-'));
+    currentBase = base;
+    let counter = 0;
+    moving = new ScratchWorkspaceService({
+      resolveBasePath: () => currentBase,
+      createId: () => `dir-${++counter}`,
+    });
+  });
+
+  afterEach(async () => {
+    await rm(movedBase, { recursive: true, force: true });
+  });
+
+  it('still recognises a directory allocated under the previous root', async () => {
+    const allocated = await moving.ensure('session-a');
+    currentBase = movedBase;
+
+    // False here is what silently upgraded the session to project trust on the
+    // next resume, and what made `ensure` hand it a SECOND working directory.
+    expect(moving.isScratchPath(allocated)).toBe(true);
+    expect(await moving.adopt('session-b', allocated)).toBe(allocated);
+  });
+
+  it('wipes the previous root as well, so its directories do not outlive the app', async () => {
+    const stale = await moving.ensure('session-a');
+    currentBase = movedBase;
+    const fresh = await moving.ensure('session-b');
+
+    await moving.wipeAll();
+
+    await expect(stat(stale)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(fresh)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 

@@ -125,6 +125,38 @@ describe('isTempWorkspacePath', () => {
       expect(isTempWorkspacePath(path.join(tmpdir(), 'somewhere-else'))).toBe(false);
     });
   });
+
+  /**
+   * main-aux-07 — the saved location is a free-text field, and the setting was
+   * compared as the raw string the user typed while the candidate went through
+   * `path.resolve`. A trailing separator (or any other un-normalised form) made
+   * the comparison always false, which silently switched the whole self-heal
+   * below off.
+   */
+  describe('with a base path the user did not type in normalised form', () => {
+    it('accepts a direct child when the saved location ends with a separator', async () => {
+      await withBase(async (base) => {
+        settings.value = { defaultTemporaryPath: `${base}${path.sep}` };
+        expect(isTempWorkspacePath(path.join(base, '20260819-153654'))).toBe(true);
+      });
+    });
+
+    it('accepts a direct child when the saved location still contains a .. segment', async () => {
+      await withBase(async (base) => {
+        settings.value = { defaultTemporaryPath: `${base}${path.sep}sub${path.sep}..` };
+        expect(isTempWorkspacePath(path.join(base, '20260819-153654'))).toBe(true);
+      });
+    });
+
+    it('still rejects the base itself and a nested grandchild', async () => {
+      await withBase(async (base) => {
+        settings.value = { defaultTemporaryPath: `${base}${path.sep}` };
+        expect(isTempWorkspacePath(base)).toBe(false);
+        expect(isTempWorkspacePath(`${base}${path.sep}`)).toBe(false);
+        expect(isTempWorkspacePath(path.join(base, 'a', 'b'))).toBe(false);
+      });
+    });
+  });
 });
 
 describe('adoptTempWorkspace', () => {
@@ -149,6 +181,20 @@ describe('adoptTempWorkspace', () => {
       await adoptTempWorkspace(existing);
 
       expect(gitInit).not.toHaveBeenCalled();
+    });
+  });
+
+  it('still heals a workspace when the saved location ends with a separator', async () => {
+    // main-aux-07: the guard said "not mine", `adoptTempWorkspace` returned
+    // early, and the chat then failed to spawn on a cwd that was never put back.
+    await withBase(async (base) => {
+      settings.value = { defaultTemporaryPath: `${base}${path.sep}` };
+      const recorded = path.join(base, '20260819-153654');
+
+      await adoptTempWorkspace(recorded);
+
+      expect(existsSync(recorded)).toBe(true);
+      expect(gitInit).toHaveBeenCalledTimes(1);
     });
   });
 

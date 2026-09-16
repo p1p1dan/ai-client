@@ -375,12 +375,79 @@ describe('Pi WorkerSlot chat routing', () => {
     });
 
     it('releases the directory when the chat is archived', async () => {
+      scratchPathsBySession = { s1: SCRATCH_DIR };
       await invoke('chat:archiveSession', { sessionId: 's1', archived: true });
       expect(releaseScratch).toHaveBeenCalledWith('s1');
     });
 
     it('keeps the directory when a chat is un-archived', async () => {
+      scratchPathsBySession = { s1: SCRATCH_DIR };
       await invoke('chat:archiveSession', { sessionId: 's1', archived: false });
+      expect(releaseScratch).not.toHaveBeenCalled();
+      expect(closeSession).not.toHaveBeenCalled();
+    });
+
+    /**
+     * main-aux-02 — the app-exit cleanup states this order in a comment and
+     * obeys it ("after the workers are gone, not before"). Archiving removes
+     * the same directory and used to do it the other way round: the handler
+     * deleted the cwd and the renderer only then asked for the worker to be
+     * closed, so a turn in flight kept running in a directory that was gone.
+     */
+    it('[release-blocker] waits for the worker to be gone before deleting its directory', async () => {
+      scratchPathsBySession = { s1: SCRATCH_DIR };
+      // A stand-in for the dispose handshake — no real process is involved, and
+      // none may be (engineering standard appendix B1).
+      let reportWorkerExited: () => void = () => undefined;
+      closeSession.mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            reportWorkerExited = () => resolve('close-1');
+          })
+      );
+
+      const archiving = invoke('chat:archiveSession', { sessionId: 's1', archived: true });
+
+      await vi.waitFor(() => expect(closeSession).toHaveBeenCalledWith('s1'));
+      expect(releaseScratch).not.toHaveBeenCalled();
+
+      reportWorkerExited();
+      await expect(archiving).resolves.toBe(true);
+      expect(releaseScratch).toHaveBeenCalledWith('s1');
+      expect(closeSession.mock.invocationCallOrder[0]).toBeLessThan(
+        releaseScratch.mock.invocationCallOrder[0]
+      );
+    });
+
+    it('leaves the directory to the exit wipe when the worker could not be disposed', async () => {
+      // Removing it anyway would be exactly the defect above, just with worse
+      // odds; the app-exit and startup wipes are what reclaim it instead.
+      scratchPathsBySession = { s1: SCRATCH_DIR };
+      closeSession.mockRejectedValueOnce(new Error('dispose timed out'));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      try {
+        await expect(
+          invoke('chat:archiveSession', { sessionId: 's1', archived: true })
+        ).resolves.toBe(true);
+
+        expect(releaseScratch).not.toHaveBeenCalled();
+        // The failure must not vanish silently: someone reading the log needs
+        // to know why this session's scratch directory outlived the archive.
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining('Worker close failed while archiving'),
+          expect.any(Error)
+        );
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('does not retire the worker of a chat that has no scratch directory', async () => {
+      // A chat bound to a real project folder: nothing to delete, so archiving
+      // must not start tearing its worker down either.
+      await invoke('chat:archiveSession', { sessionId: 's1', archived: true });
+      expect(closeSession).not.toHaveBeenCalled();
       expect(releaseScratch).not.toHaveBeenCalled();
     });
   });

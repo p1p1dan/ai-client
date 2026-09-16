@@ -18,9 +18,10 @@ import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { expandHomePath, getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
+import { getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
 import { readSettings } from '../../ipc/settings';
 import { GitService } from '../git/GitService';
+import { isDirectChildOf, resolveWorkspacePath } from './workspaceContainment';
 
 /**
  * The temp workspace base as Main sees it.
@@ -47,12 +48,16 @@ function settingsBasePath(): string {
  * The direct-child rule is the one `TEMP_WORKSPACE_REMOVE` already enforces,
  * and here it is what stops `adoptTempWorkspace` from being able to create an
  * arbitrary directory out of a tampered session-index row.
+ *
+ * BOTH sides are resolved before they are compared. Only the candidate used to
+ * be, while the base was the raw string the user typed into a free-text field
+ * in Settings — so a saved location ending in a separator (or holding a `..`
+ * segment) made this answer false for every real workspace, which silently
+ * switched off the self-heal below (main-aux-07).
  */
 export function isTempWorkspacePath(candidate: string): boolean {
   if (!candidate.trim()) return false;
-  const basePath = settingsBasePath();
-  const resolved = path.resolve(expandHomePath(candidate, homedir(), path.sep));
-  return resolved !== basePath && path.dirname(resolved) === basePath;
+  return isDirectChildOf(settingsBasePath(), candidate);
 }
 
 /**
@@ -66,7 +71,7 @@ export function isTempWorkspacePath(candidate: string): boolean {
  */
 export async function adoptTempWorkspace(dirPath: string): Promise<void> {
   if (!isTempWorkspacePath(dirPath)) return;
-  const resolved = path.resolve(expandHomePath(dirPath, homedir(), path.sep));
+  const resolved = resolveWorkspacePath(dirPath);
   await mkdir(resolved, { recursive: true });
   if (existsSync(path.join(resolved, '.git'))) return;
   await new GitService(resolved).init();

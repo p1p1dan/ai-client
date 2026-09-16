@@ -609,8 +609,29 @@ export function registerChatHandlers(): void {
       // U05-a "session destroyed" cleanup: archiving is how this product
       // retires a chat, so it is where an unbound chat's throwaway directory
       // goes away. Un-archiving re-creates it empty through the resume path.
-      if (result && payload.archived) {
-        await scratchWorkspaceService.release(payload.sessionId);
+      //
+      // The worker has to be gone BEFORE its cwd is removed — the app-exit
+      // cleanup states that constraint in `ipc/workerManager.ts` and obeys it,
+      // while this path used to delete the directory and leave the teardown to
+      // a fire-and-forget `chat:closeSession` the renderer sends afterwards. A
+      // turn still running then wrote into a directory that no longer existed
+      // (POSIX) or kept the removal from succeeding at all (Windows, where the
+      // failure is swallowed as best-effort cleanup). main-aux-02.
+      if (result && payload.archived && scratchWorkspaceService.pathFor(payload.sessionId)) {
+        let workerRetired = true;
+        try {
+          await workerManager.closeSession(payload.sessionId);
+        } catch (error) {
+          // Leave the directory to the app-exit and startup wipes instead:
+          // removing it under a worker we could not confirm gone is the very
+          // defect this ordering exists to prevent.
+          workerRetired = false;
+          console.warn(
+            '[chat] Worker close failed while archiving; leaving its scratch directory for the exit/startup wipe instead:',
+            error
+          );
+        }
+        if (workerRetired) await scratchWorkspaceService.release(payload.sessionId);
       }
       return result;
     }

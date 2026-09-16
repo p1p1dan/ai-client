@@ -51,6 +51,7 @@ import path from 'node:path';
 import { getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
 import { canonicalPathKey } from '@shared/utils/path';
 import { readSettings } from '../../ipc/settings';
+import { isInsideDirectory, resolveWorkspacePath } from './workspaceContainment';
 
 /**
  * Directory under the user's temporary base that holds every scratch cwd.
@@ -96,6 +97,18 @@ export class ScratchWorkspaceService {
   private readonly createId: () => string;
   private readonly log: (...args: unknown[]) => void;
   private readonly pathsBySession = new Map<string, string>();
+  /**
+   * Every root this process has resolved from the setting, newest included.
+   *
+   * F2-a made both readers see a base-path change immediately, which also means
+   * a change moves `rootPath()` out from under directories already allocated
+   * under the old one. Those are still ours: still to be recognised as scratch
+   * (that is what starts the session without project trust) and still to be
+   * wiped at exit. Only roots computed from the setting go in here — never a
+   * root derived from a path an index row or an import file handed us, which is
+   * what keeps `wipeAll` from being aimed at an arbitrary directory.
+   */
+  private readonly knownRoots = new Set<string>();
   /** Serializes allocate/release/wipe so a concurrent first send cannot race. */
   private chain: Promise<unknown> = Promise.resolve();
 
@@ -107,7 +120,9 @@ export class ScratchWorkspaceService {
 
   /** Absolute path of the directory that holds every scratch cwd. */
   rootPath(): string {
-    return path.join(this.resolveBasePath(), SCRATCH_ROOT_DIR);
+    const root = resolveWorkspacePath(path.join(this.resolveBasePath(), SCRATCH_ROOT_DIR));
+    this.knownRoots.add(root);
+    return root;
   }
 
   /** The directory already allocated for this session, or null. */
@@ -118,16 +133,21 @@ export class ScratchWorkspaceService {
   /**
    * Is this path one of ours?
    *
-   * Answered by prefix, not by the in-memory map: after an app restart a
+   * Answered by containment, not by the in-memory map: after an app restart a
    * session-index row still carries last run's scratch path, and Main must
    * still recognise it as untrusted rather than treating it as a real project.
+   *
+   * Containment is decided by `path.resolve` + `path.relative`, never by a
+   * string prefix. The prefix form accepted `<root>/../<anything>`, because the
+   * comparison key it used folds separators but does not resolve `..` — and
+   * this is the only check `adopt` has, so an index row in that shape used to
+   * make Main create, own and (on archive) recursively delete a directory
+   * outside the root (main-aux-01).
    */
   isScratchPath(candidate: string): boolean {
     if (!candidate.trim()) return false;
-    // `canonicalPathKey` already folds separators to `/` and trims trailing
-    // ones, so a plain prefix test is exact here — no `path.relative` on
-    // half-normalized strings.
-    return canonicalPathKey(candidate).startsWith(`${canonicalPathKey(this.rootPath())}/`);
+    const roots = [this.rootPath(), ...this.knownRoots];
+    return roots.some((root) => isInsideDirectory(root, candidate));
   }
 
   /**
@@ -205,7 +225,13 @@ export class ScratchWorkspaceService {
   wipeAll(): Promise<void> {
     return this.serialize(async () => {
       this.pathsBySession.clear();
-      await this.removeQuietly(this.rootPath());
+      // Every root this run has used, not just the current one: changing the
+      // temp base path in Settings used to strand everything allocated under
+      // the previous root, and "a scratch directory does not survive the app"
+      // stopped being true for exactly the sessions that had already started
+      // (main-aux-03).
+      const roots = new Set([this.rootPath(), ...this.knownRoots]);
+      for (const root of roots) await this.removeQuietly(root);
     });
   }
 
