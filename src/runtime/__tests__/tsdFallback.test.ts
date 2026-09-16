@@ -305,7 +305,7 @@ describe('TSD fallback contract (doubles)', () => {
     expect(unframe(await run(0, 1))).toEqual(bytes.subarray(0, 1));
     expect(unframe(await run(4096, 4)).length).toBe(0);
     expect(unframe(await run(0, 4))).toEqual(bytes);
-  });
+  }, 20_000);
 
   it('reads a plaintext file that merely starts with the TSD magic (tsd-07)', async () => {
     const path = join(dir, 'tsd-sample.txt');

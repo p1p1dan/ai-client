@@ -1118,7 +1118,6 @@ describe('permission card body (2026-09-10)', () => {
       permissionKind: 'file_change',
       toolInput: { path: '/repo/a.txt', content: 'pong', workspace: '/repo' },
       ...extra,
-      // biome-ignore lint/suspicious/noExplicitAny: block fixture, not the full store type
     }) as any;
 
   it('shows what is about to be written, and where', () => {

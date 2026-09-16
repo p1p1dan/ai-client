@@ -308,9 +308,37 @@ const REGISTRY_FILES = [
   'plugins/subagent/index.ts',
 ];
 
-/** `name: 'glob',` or `name: SUBAGENT_WAIT_TOOL_NAME,` in a tool definition. */
+/**
+ * The `name` of a tool definition: `name: 'glob',`.
+ *
+ * Convention: a tool object names itself with a single-quoted lowercase
+ * literal and a trailing comma, at whatever indent the definition sits at.
+ * Anything else is a reference this pattern cannot resolve on its own —
+ * `name: SUBAGENT_WAIT_TOOL_NAME,` — and is captured by the bare constant
+ * group below, then resolved through {@link EXPORTED_NAME}.
+ *
+ * Deliberately excluded: `label:` and any other key (`name: 'Bash',` is a
+ * label, not a tool name); a value without the trailing comma; and the
+ * `name`-like keys of structures that are not tool definitions at all — the
+ * `parameters` schema's unquoted keys, and the `name: string` fields of
+ * interfaces and the `name: tool.name` lines of other plugins in this package.
+ */
 const TOOL_NAME_FIELD = /^\s*name: (?:'([^']+)'|([A-Z][A-Z0-9_]*)),$/gm;
-/** `export const SUBAGENT_WAIT_TOOL_NAME = 'TaskWait';`, to resolve the above. */
+/**
+ * A module-level tool-name constant: `export const SUBAGENT_WAIT_TOOL_NAME = 'TaskWait';`.
+ *
+ * Convention: the constant is exported, its name matches `[A-Z][A-Z0-9_]*`,
+ * its value is a single-quoted literal, and the line ends in a semicolon.
+ * That is how `plugins/subagent/index.ts` and `plugins/tools/new-context.ts`
+ * spell the names their tool objects reference, and `glob`/`grep` do not need
+ * this at all because they inline their literals.
+ *
+ * Deliberately excluded: non-exported constants (none of these files use
+ * one), values that are not a single-quoted literal, and any constant whose
+ * value is not a tool name — the exported `*_SERVICE` names in the same files
+ * match the shape and are simply never looked up by `registeredToolNames()`,
+ * which only resolves constants a `name:` field actually referenced.
+ */
 const EXPORTED_NAME = /^export const ([A-Z][A-Z0-9_]*) = '([^']+)';$/gm;
 
 function registeredToolNames(): string[] {
