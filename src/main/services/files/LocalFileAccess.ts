@@ -90,9 +90,11 @@ export function isAllowedLocalFilePath(filePath: string): boolean {
 export function resolveAllowedLocalFileReadPath(filePath: string): string | null {
   if (allowedRoots.size === 0) return null;
 
+  let realFileRaw: string;
   let realFile: string;
   try {
-    realFile = normalizePathForComparison(realpathSync.native(filePath));
+    realFileRaw = realpathSync.native(filePath);
+    realFile = normalizePathForComparison(realFileRaw);
   } catch {
     return null;
   }
@@ -104,7 +106,10 @@ export function resolveAllowedLocalFileReadPath(filePath: string): string | null
     } catch {
       continue;
     }
-    if (realFile === realRoot || realFile.startsWith(`${realRoot}${path.sep}`)) return realFile;
+    // The comparison folds case; the value handed back must not. Callers open
+    // and display this path, and a lower-cased spelling is the wrong name for
+    // the file on every platform whose filesystem merely ignores case.
+    if (realFile === realRoot || realFile.startsWith(`${realRoot}${path.sep}`)) return realFileRaw;
   }
 
   return null;

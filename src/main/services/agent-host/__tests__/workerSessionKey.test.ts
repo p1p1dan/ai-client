@@ -26,6 +26,17 @@ describe('worker session keys', () => {
     );
   });
 
+  it('refuses a relative path instead of resolving it against this process', () => {
+    // The key has to name the same file from any host, so there is no cwd to
+    // resolve against — and on Windows `path.resolve` would silently mount a
+    // POSIX path onto the current drive.
+    expect(() => normalizeWorkerPath('sessions/session.jsonl')).toThrow(/absolute path/);
+    expect(() => sessionWorkerKey('./session.jsonl')).toThrow(/absolute path/);
+    expect(() =>
+      workspaceWorkerKey({ workspacePath: 'repo', logicalSessionId: 's1', createToken: 'one' })
+    ).toThrow(/absolute path/);
+  });
+
   it('keeps workspace and durable namespaces separate and create keys unique', () => {
     const first = workspaceWorkerKey({
       workspacePath: '/repo',

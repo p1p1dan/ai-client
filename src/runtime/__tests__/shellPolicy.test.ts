@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
@@ -48,6 +48,12 @@ async function bash(command: string) {
   const tool = runtime?.ctx.runtimeTools.list().find((tool) => tool.name === 'bash');
   if (!tool) throw new Error('bash missing');
   return tool.execute('shell', { command });
+}
+/** The Node-side executor, which opens whatever path the guard handed back. */
+async function readTool(path: string) {
+  const tool = runtime?.ctx.runtimeTools.list().find((tool) => tool.name === 'read');
+  if (!tool) throw new Error('read missing');
+  return tool.execute('read', { path });
 }
 async function config(path: string, document: unknown) {
   await mkdir(join(path, '..'), { recursive: true });
@@ -106,7 +112,7 @@ describe('Bash AST permission enforcement', () => {
       `bash -c 'cd "${outside}"; pwd'`,
       `cd '${outside}' && pwd`,
       'cat "$UNKNOWN_DIR/file"',
-      `git -C${outside} status`,
+      `git -C'${outside}' status`,
     ]) {
       await expect(bash(command)).rejects.toMatchObject({ code: 'tool_denied' });
     }
@@ -133,6 +139,68 @@ describe('Bash AST permission enforcement', () => {
     await writeFile(join(outside, 'secret'), 'external');
     await start();
     await expect(bash('cat link/../secret')).rejects.toMatchObject({ code: 'tool_denied' });
+  });
+  // `mklink /J` needs no privilege, so a junction is the spelling this escape
+  // actually takes on Windows. Node ignores the `'junction'` type off Windows
+  // and makes an ordinary symlink, which carries the same POSIX `..` semantics,
+  // so both branches assert the same property on every platform.
+  it('resolves a junction before applying `..` to it', async () => {
+    await mkdir(join(outside, 'sub'));
+    await writeFile(join(outside, 'outside-file'), 'external');
+    await symlink(join(outside, 'sub'), join(dir, 'jlink'), 'junction');
+    await start();
+    await expect(bash('cat jlink/../outside-file')).rejects.toMatchObject({
+      code: 'tool_denied',
+    });
+  });
+  // The zero-approval escape: a junction pointing at the workspace ITSELF is
+  // inside the workspace by every lexical reading, so `<ws>/self/..` folds back
+  // to `<ws>` on paper while the shell climbs out of it.
+  it('follows a junction to the workspace and counts `..` above it as outside', async () => {
+    await writeFile(join(outside, 'file'), 'external');
+    await symlink(dir, join(dir, 'self'), 'junction');
+    await start();
+    await expect(bash(`cat self/../${basename(outside)}/file`)).rejects.toMatchObject({
+      code: 'tool_denied',
+    });
+  });
+  // The guard's ANSWER is what the tools open, so a `..` that cancels a segment
+  // which does not exist must not stop the walk: the link after it is still
+  // traversed by the OS. Asserted through bash and through the Node-side read,
+  // because they open that answer by two different routes.
+  it('re-resolves a link reached after `..` cancels a missing segment', async () => {
+    await writeFile(join(outside, 'secret.txt'), 'external');
+    await symlink(outside, join(dir, 'link'), 'junction');
+    await start();
+    await expect(bash('cat nosuchdir/../link/secret.txt')).rejects.toMatchObject({
+      code: 'tool_denied',
+    });
+    await expect(readTool('nosuchdir/../link/secret.txt')).rejects.toMatchObject({
+      code: 'tool_denied',
+    });
+  });
+  it('re-resolves a plain file symlink reached the same way', async () => {
+    await writeFile(join(outside, 'secret.txt'), 'external');
+    await symlink(join(outside, 'secret.txt'), join(dir, 'filelink'), 'file');
+    await start();
+    await expect(bash('cat nosuchdir/../filelink')).rejects.toMatchObject({
+      code: 'tool_denied',
+    });
+    await expect(readTool('nosuchdir/../filelink')).rejects.toMatchObject({
+      code: 'tool_denied',
+    });
+  });
+  it('counts a dangling link as the missing segment that `..` cancels', async () => {
+    await writeFile(join(outside, 'secret.txt'), 'external');
+    await symlink(join(dir, 'never-created'), join(dir, 'dangling'), 'file');
+    await symlink(outside, join(dir, 'link'), 'junction');
+    await start();
+    await expect(bash('cat dangling/../link/secret.txt')).rejects.toMatchObject({
+      code: 'tool_denied',
+    });
+    await expect(readTool('dangling/../link/secret.txt')).rejects.toMatchObject({
+      code: 'tool_denied',
+    });
   });
   it('does not let a workspace allow scope authorize external shell paths', async () => {
     await start({

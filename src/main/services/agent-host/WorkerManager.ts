@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { readdir, stat, unlink } from 'node:fs/promises';
 import os from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 import type { SessionAttachment, SessionEffortLevel } from '@shared/types/agentHost';
 import { PI_AGENT } from '@shared/types/agentWire';
 import type {
@@ -98,7 +98,12 @@ import {
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { type NativeSubagentSettings, nativeSubagentSettings } from './nativeSubagentSettings';
 import type { WorkerSlot, WorkerSlotLifecycleEvent } from './WorkerSlot';
-import { normalizeWorkerPath, sessionWorkerKey, workspaceWorkerKey } from './workerSessionKey';
+import {
+  joinWorkerPath,
+  normalizeWorkerPath,
+  sessionWorkerKey,
+  workspaceWorkerKey,
+} from './workerSessionKey';
 
 export type WorkerManagerState = 'stopped' | 'ready' | 'degraded';
 export type WorkerManagerEntryState =
@@ -581,7 +586,9 @@ export class WorkerManager {
         // helpers below from rejecting an empty path and aborting the sweep.
         if (!name.endsWith(STAGED_FORK_MARKER_SUFFIX)) continue;
         if (name.length === STAGED_FORK_MARKER_SUFFIX.length) continue;
-        const marker = join(directory, name);
+        // Joined in the directory's own flavour: the host's `join` would turn a
+        // foreign `/sessions` into `\sessions` and key it as a different file.
+        const marker = joinWorkerPath(directory, name);
         const transcript = marker.slice(0, -STAGED_FORK_MARKER_SUFFIX.length);
         if (!committed.has(sessionWorkerKey(transcript))) {
           try {

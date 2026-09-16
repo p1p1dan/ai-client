@@ -208,9 +208,16 @@ describe('P2 prompt service and HostIo instruction wiring', () => {
   it('bounds HostIo reads without splitting UTF-8 characters', async () => {
     await writeFile(join(root, 'AGENTS.md'), '中文中文');
     const { handle } = await runtime({ prompt: { maxBytes: 4 } });
+    // Asserted on the workspace file rather than on the assembled prompt: the
+    // budget is shared with the parent-directory climb and spent outermost
+    // first, so on a machine whose <tmp> sits under a directory carrying its
+    // own CLAUDE.md nothing is left by the time the walk reaches here. The
+    // property under test is the bounded read, which that climb cannot move.
+    const loaded = await instructionSource(handle.hostIo, 4).readText(join(root, 'AGENTS.md'));
     const composed = await handle.prompt.compose();
-    expect(composed.text).toContain('中');
-    expect(composed.text).not.toContain('文');
+    // Four bytes cut the second character in half: it is dropped, not replaced.
+    expect(loaded).toBe('中');
+    expect(loaded).not.toContain('文');
     expect(composed.text).not.toContain('\uFFFD');
   });
 
@@ -221,7 +228,12 @@ describe('P2 prompt service and HostIo instruction wiring', () => {
     const { handle } = await runtime();
     const reads = vi.spyOn(handle.hostIo, 'readFile');
     expect((await handle.prompt.compose()).text).not.toContain('OUTSIDE_SECRET');
-    expect(reads).not.toHaveBeenCalled();
+    // Narrowed to this workspace and this link's target on purpose: the walk
+    // legitimately visits the parent directories of <root>, and on a developer
+    // machine one of those may carry a real instruction file of its own.
+    const requested = reads.mock.calls.map(([path]) => path);
+    expect(requested.filter((path) => path.startsWith(root))).toEqual([]);
+    expect(requested).not.toContain(outside);
   });
 
   it('skips a directory that is named like an instruction file', async () => {
