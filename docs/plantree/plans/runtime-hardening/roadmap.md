@@ -117,7 +117,7 @@ T029～T031 已落地，任务描述与验收见上方 Done 段；证据集 [evi
 
 来源：批次 D 接缝审查员的 20 个修补组（[cross-and-critic.md](evidence/batch-d-audit-2026-09-15/cross-and-critic.md)「修补分组」），归属 fix-before-e 的 12 组 + docs-only 1 组。发现编号指向[批次 D 证据](evidence/batch-d-audit-2026-09-15/README.md)。3 条 high 全在本批。[决策 013](decisions/013-batch-d2-fix-all-before-field.md)：全做、不压缩；建议顺序 T037 / T038 / T039 → T040 / T041 / T042 / T045 / T046 → T043 / T044 / T047 / T048，T055 可与任一波并行。执行方式沿用批次 C（每波两个实现代理 + 只读审阅，波间三套 tsc，全量 vitest 只在收口跑一次，每条修补至少一处反向验证）。
 
-T037～T044、T045、T046～T048、T055 已落地；批次 D2 仅余 T045b，落地记录见 [evidence/batch-d2-2026-09-15.md](evidence/batch-d2-2026-09-15.md)。
+T037～T045、T045b、T046～T048、T055 已全部落地（14 项 14 提交，批次 D2 收口于 2026-09-16）；落地记录见 [evidence/batch-d2-2026-09-15.md](evidence/batch-d2-2026-09-15.md)。
 
 | ID | 任务 | 严重级 | 覆盖的发现 | 验收 |
 |---|---|---|---|---|
