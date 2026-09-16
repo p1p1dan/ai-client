@@ -492,7 +492,8 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     });
 
     const unsubscribe = agent.subscribe(async (event) => {
-      if (event.type === 'message_end' && session) await session.appendMessage(event.message);
+      if (event.type === 'message_end' && session)
+        await session.appendMessage(redactedForStorage(event.message));
       collected.observe(event);
       projected.observe(event);
       if (event.type === 'tool_execution_start') toolCalls.add(event.toolCallId);
@@ -729,6 +730,23 @@ class TurnCollector {
   get text(): string {
     return this.turns.map((turn) => turn.text).join('');
   }
+}
+
+/**
+ * ah-lib-01 — the copy of a provider error that outlives every other copy.
+ *
+ * T011 sanitized the record `TurnCollector` builds, which feeds the trace and
+ * `RuntimeRunResult`. The session file is written one statement earlier and
+ * straight from `event.message`, so `runs.jsonl` came out redacted while the
+ * JSONL kept the plaintext — and the JSONL is the file that interoperates with
+ * `pi --session`, gets read by import/export, and is the one a user attaches
+ * when reporting a bug. Redacting a COPY (never `event.message` itself) keeps
+ * the loop's own state and the caller's `onEvent` stream untouched: the model
+ * conversation must not be rewritten under pi's feet.
+ */
+function redactedForStorage(message: AgentMessage): AgentMessage {
+  if (!isAssistant(message) || !message.errorMessage) return message;
+  return { ...message, errorMessage: sanitizeProviderErrorText(message.errorMessage) };
 }
 
 function isAssistant(message: AgentMessage): message is AssistantMessage {

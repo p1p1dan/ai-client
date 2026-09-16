@@ -9,6 +9,9 @@
  * cases exist to prevent.
  */
 
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { AgentEvent } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { describe, expect, it } from 'vitest';
@@ -124,6 +127,47 @@ describe('agent loop', () => {
         (llmStep?.detail as { error_message?: string } | undefined)?.error_message ?? '';
       expect(traceMessage.length).toBeLessThanOrEqual(601);
     });
+  });
+
+  it('redacts the provider error body on its way into the session file, not only the trace (ah-lib-01)', async () => {
+    // T011 sanitized the copy the collector builds, and the collector feeds the
+    // trace and `RuntimeRunResult`. The session file is written one line
+    // EARLIER, straight from `event.message`, so `runs.jsonl` came out clean
+    // and the JSONL that outlives it — interoperable with `pi --session`,
+    // read by import/export, the file a user attaches to a bug report — kept
+    // the plaintext key.
+    const dir = await mkdtemp(join(tmpdir(), 'runtime-provider-redaction-'));
+    const secret = `sk-ant-api03-${'x'.repeat(40)}`;
+    const sessionFile = join(dir, 'session.jsonl');
+    const handle = fauxProvider({
+      provider: 'faux',
+      models: [{ id: 'faux-p0', name: 'Faux P0 probe' }],
+    });
+    handle.setResponses([
+      fauxAssistantMessage('', {
+        stopReason: 'error',
+        // A self-hosted gateway echoing the request headers back in its 401
+        // body — the shape ah-lib-01's scenario names.
+        errorMessage: `401 upstream body: {"received":{"authorization":"Bearer ${secret}"}}`,
+      }),
+    ]);
+    const runtime = await createRuntime({
+      providers: [handle.provider],
+      env: {},
+      traceDir: null,
+      session: { file: sessionFile, cwd: dir, mode: 'create' },
+    });
+    try {
+      const result = await runtime.run({ prompt: 'say ready', systemPrompt: 'probe' });
+      expect(result.success).toBe(false);
+      const written = await readFile(sessionFile, 'utf8');
+      expect(written).toContain('[REDACTED]');
+      expect(written).not.toContain(secret);
+      expect(written).not.toContain('sk-ant-api03');
+    } finally {
+      await runtime.dispose();
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('asks for medium reasoning when the caller names no level', async () => {

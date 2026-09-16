@@ -209,6 +209,12 @@ interface ManagedSlot {
   mutationInFlight: 'rewind' | 'fork' | 'reload' | null;
   /** Bytes after the last newline of this worker's stderr; see hostStderr.ts. */
   stderrPending: string;
+  /**
+   * main-aux-08 — chars already discarded from a stderr line that ran past the
+   * cap without a newline. Optional: a worker that never prints one never pays
+   * for the field.
+   */
+  stderrDropped?: number;
   /** Last RECENT_STDERR_LIMIT stderr lines, replayed when the worker dies. */
   recentStderr: string[];
   /**
@@ -2241,13 +2247,23 @@ export class WorkerManager {
    * a bounded buffer that `dumpWorkerStderr` replays at error level when the
    * worker dies. Without that replay a boot crash reaches the user as a bare
    * "Worker exited (code=1)" with the cause discarded.
+   *
+   * main-aux-06 — redaction happens HERE, once, not at the IPC edge. One
+   * assembled line has three exits (the `log` sink, the replay buffer, the
+   * renderer event) and only the renderer one used to be gated, so a worker
+   * that printed its environment on a failed spawn showed the user a masked
+   * line and wrote the key into main.log: `dumpWorkerStderr` uses
+   * `console.error`, and electron-log keeps error level even when file logging
+   * is off. That is the copy a user attaches to a bug report.
    */
   private absorbStderr(entry: ManagedSlot, generation: number, chunk: string): void {
-    const drained = drainStderrLines(entry.stderrPending, chunk);
+    const drained = drainStderrLines(entry.stderrPending, chunk, entry.stderrDropped);
     entry.stderrPending = drained.pending;
-    entry.recentStderr = pushRecentStderr(entry.recentStderr, drained.lines);
+    entry.stderrDropped = drained.dropped;
+    const lines = drained.lines.map(sanitizeStderrLine);
+    entry.recentStderr = pushRecentStderr(entry.recentStderr, lines);
     const prefix = `[pi-worker:${entry.logicalSessionId}:g${generation}:stderr]`;
-    for (const line of drained.lines) {
+    for (const line of lines) {
       this.log(prefix, line);
       this.forwardStderr(entry, line);
     }
@@ -2264,9 +2280,10 @@ export class WorkerManager {
    * both halves the event needs: whole assembled lines, and the logical session
    * they came from. So the gap is the emit, and this is it.
    *
-   * Redacted before it crosses IPC, never after: the bridge is a
-   * content-agnostic passthrough, so this is the only gate between a credential
-   * printed to stderr and a screenshot of the UI.
+   * Already redacted when it gets here: `absorbStderr` runs
+   * `sanitizeStderrLine` over every assembled line, because this exit is not
+   * the only one (main-aux-06). The bridge downstream is a content-agnostic
+   * passthrough and gets no second chance.
    *
    * Capped per turn, and the cap announces itself. A worker stuck in a retry
    * loop streams stderr for as long as it runs, and one IPC event per line is a
@@ -2289,15 +2306,21 @@ export class WorkerManager {
         line:
           forwarded === STDERR_FORWARD_MAX_LINES_PER_TURN
             ? `…more stderr this turn is in the worker log only (forwarding capped at ${STDERR_FORWARD_MAX_LINES_PER_TURN} lines)`
-            : sanitizeStderrLine(line),
+            : line,
       },
     });
   }
 
   /** Replay the dead worker's own diagnostics; clears the buffer. */
   private dumpWorkerStderr(entry: ManagedSlot, reason: string): void {
-    const lines = [...entry.recentStderr, ...flushStderrPending(entry.stderrPending)];
+    // The buffered lines are already redacted (main-aux-06); the unterminated
+    // tail has never been through `absorbStderr`'s loop, so it is gated here.
+    const lines = [
+      ...entry.recentStderr,
+      ...flushStderrPending(entry.stderrPending, entry.stderrDropped).map(sanitizeStderrLine),
+    ];
     entry.stderrPending = '';
+    entry.stderrDropped = 0;
     entry.recentStderr = [];
     if (lines.length === 0) return;
     // console.error, not this.log: electron-log keeps error level even when

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { redactStderrLine, STDERR_LINE_MAX_CHARS, sanitizeStderrLine } from '../stderrRedaction.ts';
+import {
+  redactCredentials,
+  redactStderrLine,
+  STDERR_LINE_MAX_CHARS,
+  sanitizeStderrLine,
+} from '../stderrRedaction.ts';
+import { CREDENTIAL_SAMPLES } from './fixtures/credentialSamples.ts';
 
 /**
  * T-35 acceptance ②: the redaction rule set, pinned per category — ANTHROPIC_*
@@ -170,5 +176,39 @@ describe('sanitizeStderrLine', () => {
     expect(sanitizeStderrLine('plain diagnostic')).toBe('plain diagnostic');
     const secretTail = `${'x'.repeat(STDERR_LINE_MAX_CHARS - 10)} sk-ant-secret-material-goes-here`;
     expect(sanitizeStderrLine(secretTail)).not.toContain('sk-ant');
+  });
+});
+
+/**
+ * T042 — this module is now the repo's ONLY credential rule set, and
+ * `redactCredentials` is the entry the other exits call. The runtime's
+ * provider-error path (`plugins/agent-loop/providerErrors.ts`) used to carry a
+ * second, weaker copy: it knew `authorization: bearer …` but no bare key
+ * shapes, so the same `sk-proj-…` string died on the way to the stderr panel
+ * and survived into `runs.jsonl` and the session file (ah-lib-02).
+ */
+describe('redactCredentials — the shared rule set (T042)', () => {
+  it.each(CREDENTIAL_SAMPLES)('destroys the secret in: $why', ({ text, secret }) => {
+    const out = redactCredentials(text);
+    expect(out).not.toContain(secret);
+    expect(out).toContain('[redacted]');
+  });
+
+  it('writes the caller placeholder, since two casings are already in the wild', () => {
+    // stderr ships `[redacted]`, the provider/trace path `[REDACTED]`; both are
+    // pinned by shipped tests, so casing is a parameter of the one rule set
+    // rather than a reason to keep two rule sets.
+    expect(redactCredentials('key sk-ant-api03-xxxxxxxxxxxx', '[REDACTED]')).toBe('key [REDACTED]');
+  });
+
+  it('leaves paths to the stderr exit — credentials only, no ~ collapsing', () => {
+    // The path rules are about the username, not about a secret, and the
+    // provider-error exit has no reason to rewrite them.
+    expect(redactCredentials('ENOENT: /home/dan/projects/app/cli.js')).toBe(
+      'ENOENT: /home/dan/projects/app/cli.js'
+    );
+    expect(redactStderrLine('ENOENT: /home/dan/projects/app/cli.js')).toBe(
+      'ENOENT: ~/projects/app/cli.js'
+    );
   });
 });

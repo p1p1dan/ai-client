@@ -11,6 +11,8 @@
  * claim a retry budget, and which budget.
  */
 
+import { redactCredentials } from '../../../agent-host/stderrRedaction.ts';
+
 export interface ClassifiedProviderError {
   code: string;
   message: string;
@@ -36,14 +38,31 @@ const STREAM_TERMINATION_PATTERN =
 // biome-ignore lint/suspicious/noControlCharactersInRegex: matching them is the point
 const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 
+/**
+ * The placeholder this path has written since T011. The trace rows, the run
+ * result and (since T042) the session file all carry it, so the casing stays.
+ */
+const PROVIDER_REDACTION_PLACEHOLDER = '[REDACTED]';
+
+/**
+ * Redact a provider error body with the repo's single credential rule set.
+ *
+ * ah-lib-02: this used to be three hand-rolled rules — `authorization: bearer`,
+ * an `api_key|access_token|password` assignment, and control characters. It
+ * recognized no bare key SHAPES at all, which is precisely what a provider
+ * error body contains: server-side wording is prose, not assignment, so
+ * `Incorrect API key provided: sk-proj-…` matched nothing and the key was
+ * written out in full. The same string reaching the stderr panel was
+ * destroyed by `agent-host/stderrRedaction.ts`, which has had shape rules
+ * since T-35. One credential, two exits, two outcomes — so the rules moved to
+ * one place and this function became the adapter that names the placeholder.
+ *
+ * The control-character strip stays here rather than moving into the shared
+ * set: it is about keeping a pasted HTTP body from corrupting a JSONL row, not
+ * about secrecy, and stderr has its own terminal-output conventions.
+ */
 export function redactSensitiveErrorText(message: string): string {
-  return message
-    .replace(/(["']?authorization["']?\s*[:=]\s*["']?\s*bearer\s+)[^\s,"'}]+/gi, '$1[REDACTED]')
-    .replace(
-      /(["']?(?:api[_-]?key|access[_-]?token|password)["']?\s*[:=]\s*["']?)[^"',}\s]+/gi,
-      '$1[REDACTED]'
-    )
-    .replace(CONTROL_CHARACTERS, '');
+  return redactCredentials(message, PROVIDER_REDACTION_PLACEHOLDER).replace(CONTROL_CHARACTERS, '');
 }
 
 /**

@@ -4,6 +4,13 @@
  * passthrough, so this module is the only gate between a leaked credential in
  * stderr and the UI (and anything that screenshots it).
  *
+ * T042 widened that job: `redactCredentials` below is now the ONE credential
+ * rule set in the repo, and every exit a worker's stderr or a provider's error
+ * body can take runs through it — the IPC event, the `log` sink, the crash
+ * replay that reaches main.log at error level, the run trace, and the session
+ * JSONL. Before that, redaction sat on the IPC exit alone and the runtime kept
+ * a second, weaker copy of the rules for the other exits.
+ *
  * Nothing like this existed in the repo before (the closest prior art,
  * `claudeSettings.ts`'s diagnostics, sidesteps the problem by deriving
  * booleans and never carrying raw values) — these rules are new and their
@@ -20,6 +27,16 @@
  */
 
 /**
+ * Stand-in for the caller's placeholder inside the rule templates below.
+ * Substituted with `split`/`join`, never with `replace`, so a placeholder can
+ * never be read as a `$1`-style replacement pattern.
+ */
+const MASK = '<mask>';
+
+/** What the stderr exits write in place of a destroyed value. */
+export const STDERR_REDACTION_PLACEHOLDER = '[redacted]';
+
+/**
  * Ordered rules; every rule runs on every line (a line can hold a token AND a
  * path). Credential rules run before the path rules so a secret inside a path
  * (`/home/dan/.keys/sk-ant-xxx`) is destroyed, not merely relocated.
@@ -32,26 +49,45 @@
  * every rule keeps the NAME of what was masked, because "which credential was
  * involved" is itself the diagnostic fact.
  */
-const REDACTION_RULES: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
+const CREDENTIAL_RULES: ReadonlyArray<{ pattern: RegExp; template: string }> = [
   // Key material by shape, wherever it appears. The set is enumerable
   // provider prefixes plus a generic long-sk catchall — bare keys carry no
   // sensitive-field name for the assignment rule to hook, so shape is the
   // only handle (review F2, two rounds).
-  { pattern: /sk-ant-[A-Za-z0-9_-]+/g, replacement: '[redacted]' },
-  { pattern: /\bsk-proj-[A-Za-z0-9_-]+/g, replacement: '[redacted]' },
-  { pattern: /\bsk-[A-Za-z0-9_-]{16,}/g, replacement: '[redacted]' },
-  { pattern: /\bsk_(?:live|test)_[A-Za-z0-9]{8,}/g, replacement: '[redacted]' },
-  { pattern: /\bgh[pousr]_[A-Za-z0-9]{16,}/g, replacement: '[redacted]' },
-  { pattern: /\bAIza[A-Za-z0-9_-]{16,}/g, replacement: '[redacted]' },
+  { pattern: /sk-ant-[A-Za-z0-9_-]+/g, template: MASK },
+  { pattern: /\bsk-proj-[A-Za-z0-9_-]+/g, template: MASK },
+  { pattern: /\bsk-[A-Za-z0-9_-]{16,}/g, template: MASK },
+  { pattern: /\bsk_(?:live|test)_[A-Za-z0-9]{8,}/g, template: MASK },
+  { pattern: /\bgh[pousr]_[A-Za-z0-9]{16,}/g, template: MASK },
+  { pattern: /\bAIza[A-Za-z0-9_-]{16,}/g, template: MASK },
   // AWS access key ids: AKIA = long-lived, ASIA = temporary/STS (round 3).
-  { pattern: /\bA(?:KIA|SIA)[A-Z0-9]{12,}/g, replacement: '[redacted]' },
+  { pattern: /\bA(?:KIA|SIA)[A-Z0-9]{12,}/g, template: MASK },
   // HTTP auth schemes, case-insensitive, whole token destroyed.
-  { pattern: /((?:bearer|basic)\s+)[^\s"']+/gi, replacement: '$1[redacted]' },
-  { pattern: /(x-api-key["':\s=]+)[^\s"']+/gi, replacement: '$1[redacted]' },
+  { pattern: /((?:bearer|basic)\s+)[^\s"']+/gi, template: `$1${MASK}` },
+  { pattern: /(x-api-key["':\s=]+)[^\s"']+/gi, template: `$1${MASK}` },
   // URL authority userinfo (proxy errors, base-URL echoes):
   // `scheme://user:pass@host` / `scheme://token@host` → `scheme://[redacted]@host`.
-  { pattern: /([a-z][a-z0-9+.-]*:\/\/)[^\s/@"']+@/gi, replacement: '$1[redacted]@' },
+  { pattern: /([a-z][a-z0-9+.-]*:\/\/)[^\s/@"']+@/gi, template: `$1${MASK}@` },
 ];
+
+/**
+ * Rules with the placeholder already baked in, one set per placeholder. Two
+ * casings are in the wild (see `redactCredentials`) and both are on a hot
+ * path — every worker stderr line goes through this — so the substitution is
+ * done once rather than per line.
+ */
+const COMPILED_RULES = new Map<string, ReadonlyArray<{ pattern: RegExp; replacement: string }>>();
+
+function rulesFor(placeholder: string): ReadonlyArray<{ pattern: RegExp; replacement: string }> {
+  const cached = COMPILED_RULES.get(placeholder);
+  if (cached) return cached;
+  const compiled = CREDENTIAL_RULES.map((rule) => ({
+    pattern: rule.pattern,
+    replacement: rule.template.split(MASK).join(placeholder),
+  }));
+  COMPILED_RULES.set(placeholder, compiled);
+  return compiled;
+}
 
 /**
  * Values assigned to sensitive-named variables/fields — env dumps, config
@@ -75,11 +111,44 @@ const SENSITIVE_ASSIGNMENT = new RegExp(
   'gi'
 );
 
-function redactSensitiveAssignments(line: string): string {
+function redactSensitiveAssignments(line: string, placeholder: string): string {
   return line.replace(SENSITIVE_ASSIGNMENT, (_match, quote, name, separator, value) => {
     const valueQuote = value.startsWith('"') ? '"' : value.startsWith("'") ? "'" : '';
-    return `${quote}${name}${quote}${separator}${valueQuote}[redacted]${valueQuote}`;
+    return `${quote}${name}${quote}${separator}${valueQuote}${placeholder}${valueQuote}`;
   });
+}
+
+/**
+ * The repository's one credential-redaction rule set.
+ *
+ * T042 (main-aux-06 / ah-lib-01 / ah-lib-02) merged the second copy into this
+ * one. That copy — `src/runtime/plugins/agent-loop/providerErrors.ts`, written
+ * for T011 — knew `authorization: bearer …` and three `name = value` shapes
+ * and nothing else, so a bare `sk-proj-…` in a gateway's error prose died on
+ * the way to the stderr panel and survived into `runs.jsonl` and the session
+ * file. `providerErrors.ts` now calls this function; the runtime already
+ * depends on this package (`piSessionTimeline`, `permissionPolicy.mjs`), so
+ * the shared rule lives in the depended-on layer and nothing new crosses the
+ * boundary in the other direction.
+ *
+ * Credentials only — the user-directory rules stay with `redactStderrLine`,
+ * because collapsing `/home/dan` to `~` is about a username, not a secret, and
+ * a provider error body has no reason to be rewritten that way.
+ *
+ * The placeholder is a parameter because two casings already ship and both are
+ * pinned by tests: stderr writes `[redacted]`, the provider/trace path writes
+ * `[REDACTED]`. Unifying the casing would change output that readers already
+ * match on, for no security gain. The placeholder must not contain `$`.
+ */
+export function redactCredentials(
+  text: string,
+  placeholder: string = STDERR_REDACTION_PLACEHOLDER
+): string {
+  let redacted = text;
+  for (const rule of rulesFor(placeholder)) {
+    redacted = redacted.replace(rule.pattern, rule.replacement);
+  }
+  return redactSensitiveAssignments(redacted, placeholder);
 }
 
 /**
@@ -133,11 +202,7 @@ export const STDERR_FORWARD_MAX_LINES_PER_TURN = 50;
 
 /** Redaction only — exported separately so tests can pin rules without the clamp. */
 export function redactStderrLine(line: string): string {
-  let redacted = line;
-  for (const rule of REDACTION_RULES) {
-    redacted = redacted.replace(rule.pattern, rule.replacement);
-  }
-  redacted = redactSensitiveAssignments(redacted);
+  let redacted = redactCredentials(line, STDERR_REDACTION_PLACEHOLDER);
   for (const rule of PATH_RULES) {
     redacted = redacted.replace(rule.pattern, rule.replacement);
   }

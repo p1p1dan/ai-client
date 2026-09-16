@@ -109,6 +109,12 @@ function createHarness(
      * default so every other test still builds a manager with no importer.
      */
     createImport?: (payload: unknown, options?: Record<string, unknown>) => Promise<unknown>;
+    /**
+     * main-aux-06 — the per-line diagnostic sink. Production leaves it unset
+     * (info level is off in the shipped log configuration), so a test is the
+     * only place its content can be inspected at all.
+     */
+    log?: (...args: unknown[]) => void;
   } = {}
 ) {
   const records: FakeSlotRecord[] = [];
@@ -375,6 +381,7 @@ function createHarness(
         }
       : {}),
     onEvent: (event) => events.push(event as unknown as Record<string, unknown>),
+    ...(input.log ? { log: input.log } : {}),
     capacity: input.capacity ?? 4,
     idleTimeoutMs: 0,
     idleSweepIntervalMs: 0,
@@ -868,6 +875,43 @@ describe('WorkerManager worker stderr forwarding', () => {
     h.events.length = 0;
     h.records[0].stderr(' line\n');
     expect(h.events.map((event) => event.payload)).toEqual([{ line: 'partial line' }]);
+  });
+
+  it('redacts on the way in, so the log sink and the crash replay are covered too (main-aux-06)', async () => {
+    // Redaction used to live inside `forwardStderr`, i.e. on the IPC exit
+    // only. The same assembled line also goes to the `log` sink and into the
+    // replay buffer that `dumpWorkerStderr` prints with `console.error` — and
+    // console.error is the one exit that reaches main.log in the shipped
+    // configuration, because electron-log keeps `error` level even with file
+    // logging off. The UI showed a masked line while the log kept the key.
+    const logged: string[] = [];
+    const h = createHarness({ log: (...args) => logged.push(args.join(' ')) });
+    await create(h.manager, 's1');
+    h.events.length = 0;
+    const secret = `sk-ant-api03-${'x'.repeat(40)}`;
+    const envDump = `ANTHROPIC_AUTH_TOKEN=plain-${'x'.repeat(40)}`;
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      // Two whole lines plus an unterminated third: the tail is flushed by the
+      // crash dump and is its own exit.
+      h.records[0].stderr(`spawn failed: ${secret}\n${envDump}\nstill holding ${secret}`);
+
+      const sink = logged.join('\n');
+      expect(sink).toContain('[redacted]');
+      expect(sink).not.toContain(secret);
+      expect(sink).not.toContain('plain-xxxx');
+      expect(JSON.stringify(h.events)).not.toContain(secret);
+
+      h.records[0].crash('boom');
+      const dumped = consoleError.mock.calls.map((call) => call.join(' ')).join('\n');
+      expect(dumped).toContain('last 3 stderr line(s)');
+      expect(dumped).toContain('[redacted]');
+      expect(dumped).not.toContain(secret);
+      expect(dumped).not.toContain('sk-ant-api03');
+      expect(dumped).not.toContain('plain-xxxx');
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('caps a chatty turn and says that it did', async () => {

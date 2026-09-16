@@ -27,6 +27,18 @@ export interface StderrDrain {
   lines: string[];
   /** Bytes after the last newline; feed back on the next chunk. */
   pending: string;
+  /**
+   * main-aux-08 — characters already thrown away from a logical line that has
+   * run past the cap without a newline. Non-zero means "still inside that
+   * line"; `pending` is then always empty, because the two states are
+   * exclusive. Feed it back with `pending` on the next chunk.
+   */
+  dropped: number;
+}
+
+/** One line that accounts for what an over-long unterminated line cost. */
+function droppedNotice(chars: number): string {
+  return `…[dropped ${chars} chars of an unterminated line]`;
 }
 
 function clampLine(line: string): string {
@@ -43,29 +55,62 @@ function clampLine(line: string): string {
  * A `pending` that grows past the cap without ever seeing a newline is
  * emitted as a truncated line and reset. Without that guard a Host that
  * streams a newline-free payload would grow this buffer without bound.
+ *
+ * main-aux-08 — that guard bounded MEMORY only. The rest of the same logical
+ * line came back on the next chunk and was emitted as another line, so a
+ * newline-free megabyte turned into one 2000-char line per over-long chunk
+ * instead of the "tail is noise" the cap's comment promises. Those slices then
+ * evicted the boot banner and the SDK stack from the 50-line crash-replay
+ * window below, which is the only thing that window exists to hold. So the
+ * remainder is now SWALLOWED until the line ends, and one accounting line says
+ * how much went: bounded in memory and in line count, with nothing silently
+ * missing.
  */
-export function drainStderrLines(pending: string, chunk: string): StderrDrain {
+export function drainStderrLines(pending: string, chunk: string, dropped = 0): StderrDrain {
   const combined = pending + chunk;
   const parts = combined.split(/\r?\n/);
   // split() always returns at least one element; the last is the incomplete tail.
   const tail = parts.pop() ?? '';
   const lines: string[] = [];
+  let discarding = dropped > 0;
+  let discarded = dropped;
+
   for (const part of parts) {
+    if (discarding) {
+      // The first complete segment while discarding is the END of the
+      // over-long line, not a line of its own.
+      discarded += part.length;
+      lines.push(droppedNotice(discarded));
+      discarding = false;
+      discarded = 0;
+      continue;
+    }
     const trimmed = part.trim();
     if (trimmed) lines.push(clampLine(trimmed));
   }
 
+  // Still no newline: the whole tail belongs to the line being discarded.
+  if (discarding) return { lines, pending: '', dropped: discarded + tail.length };
+
   if (tail.length > MAX_STDERR_LINE_CHARS) {
     const trimmed = tail.trim();
     if (trimmed) lines.push(clampLine(trimmed));
-    return { lines, pending: '' };
+    // The head was just emitted; everything past the cap starts the discard.
+    return { lines, pending: '', dropped: tail.length - MAX_STDERR_LINE_CHARS };
   }
 
-  return { lines, pending: tail };
+  return { lines, pending: tail, dropped: 0 };
 }
 
-/** Emit whatever is left when the Host exits, so the last line is not lost. */
-export function flushStderrPending(pending: string): string[] {
+/**
+ * Emit whatever is left when the Host exits, so the last line is not lost.
+ *
+ * A worker that dies mid-payload leaves `dropped` instead of `pending`; the
+ * accounting line is still worth emitting, because "the last thing this worker
+ * printed was 800 KB without a newline" is itself the diagnosis.
+ */
+export function flushStderrPending(pending: string, dropped = 0): string[] {
+  if (dropped > 0) return [droppedNotice(dropped)];
   const trimmed = pending.trim();
   return trimmed ? [clampLine(trimmed)] : [];
 }
