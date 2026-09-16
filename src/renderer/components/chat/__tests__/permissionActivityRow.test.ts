@@ -1,9 +1,12 @@
+import { type Translate, translate } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import {
   derivePermissionActivityRow,
   mergePermissionActivity,
   type PermissionActivityRecord,
 } from '../permissionActivityRow';
+
+const zh: Translate = (key, params) => translate('zh', key, params);
 
 /**
  * The audit row for one permission gate.
@@ -121,6 +124,56 @@ describe('derivePermissionActivityRow', () => {
 
   it('omits the detail when there is nothing to show', () => {
     expect(derivePermissionActivityRow(record({ result: 'allow' }))).not.toHaveProperty('detail');
+  });
+
+  /**
+   * chat-event-07 — three places turned a machine enum into copy.
+   *
+   * The `gate_error` branch returned BEFORE `humanizeResolution`, so its note
+   * was the raw `gate_error` (underscore and all) and the catalog's own
+   * 「闸门出错」 was unreachable. The other resolutions did go through the
+   * catalog but four of the gate's eight values had no entry — including
+   * `session_grant`, which is what every call after "allow for this session"
+   * resolves as.
+   */
+  it('words the gate’s own error instead of printing its enum', () => {
+    const view = derivePermissionActivityRow(
+      record({ surface: 'bash', result: 'deny', resolution: 'gate_error' }),
+      zh
+    );
+    expect(view.note).toBe('闸门出错');
+    expect(view.note).not.toContain('_');
+  });
+
+  it.each([
+    ['session_grant', '本会话已授权'],
+    ['policy_deny', '策略拒绝'],
+    ['timed_out', '已超时'],
+    ['cancelled', '已取消'],
+  ])('has a word for %s, which the gate really does produce', (resolution, chinese) => {
+    const view = derivePermissionActivityRow(
+      record({ surface: 'bash', result: 'allow', resolution }),
+      zh
+    );
+    expect(view.note).toBe(chinese);
+  });
+
+  /**
+   * chat-tool-06 — the native gate sends the TOOL name as `surface`, and an MCP
+   * tool's name is `mcp__<server>__<tool>`. The audit row read "Allowed
+   * mcp__github__create_issue", a protocol identifier in a line a person is
+   * meant to read, while the timeline row for the same call said
+   * "github · create_issue".
+   */
+  it('names an MCP surface the way every other surface is named', () => {
+    expect(
+      derivePermissionActivityRow(record({ surface: 'mcp__github__create_issue', result: 'allow' }))
+        .label
+    ).toBe('Allowed github · create_issue');
+    // Not a rewrite of every surface: the policy-vocabulary names pass through.
+    expect(derivePermissionActivityRow(record({ surface: 'bash', result: 'allow' })).label).toBe(
+      'Allowed bash'
+    );
   });
 });
 

@@ -1,5 +1,6 @@
 import { englishTranslate, type Translate } from '@shared/i18n';
 import type { SubagentReport, SubagentRunStatus, SubagentUsage } from '@shared/types/runtimeEvents';
+import { toolDisplayName } from './piToolNames';
 import { deriveToolRowView, type ToolRowView } from './toolCard';
 import { THOUGHT_VERB } from './turnTiming';
 
@@ -790,12 +791,19 @@ export function deriveSubagentPanelRows(
   if (contentFree) return [];
 
   let arg: string | undefined;
+  // chat-tool-05 — both branches carry a tool name straight off the wire, and
+  // an MCP one is `mcp__<server>__<tool>`. The child rows below this header go
+  // through `deriveToolRowView`, which labels it; without the same call here the
+  // same action was named twice on one screen, once as a protocol identifier.
   if (lane.pendingPermission) {
-    arg = t('Awaiting permission · {{tool}}', { tool: lane.pendingPermission.toolName });
+    arg = t('Awaiting permission · {{tool}}', {
+      tool: toolDisplayName(lane.pendingPermission.toolName),
+    });
   } else if (live) {
+    const lastTool = lane.progress?.lastToolName;
     arg =
       lane.progress?.description ??
-      lane.progress?.lastToolName ??
+      (lastTool ? toolDisplayName(lastTool) : undefined) ??
       lane.agentType ??
       lane.description ??
       undefined;

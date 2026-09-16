@@ -1,5 +1,6 @@
 import { englishTranslate, type Translate } from '@shared/i18n';
 import type {
+  PermissionAutoReason,
   PermissionDecisionId,
   PermissionFileChange,
   PermissionRequestAction,
@@ -449,6 +450,25 @@ export function derivePermissionVerb(block: ChatBlock): string {
 }
 
 /**
+ * chat-event-07 — the worker's `PermissionAutoReason` enum, worded.
+ *
+ * Same rule as `PERMISSION_ACTION_LABELS` right below: the producer has no
+ * locale, so it sends an id and the sentence is chosen here, in English that
+ * doubles as the dictionary key. Before this the enum was interpolated raw and
+ * a Chinese card read 「自动：timed_out」 — an identifier, underscore included,
+ * inside our own sentence.
+ *
+ * An id this build has never seen falls through to itself rather than to
+ * nothing: an unfamiliar word is still better evidence than a blank tail.
+ */
+export const PERMISSION_AUTO_REASONS: Readonly<Record<PermissionAutoReason, string>> = {
+  unsupported: 'unsupported',
+  session_closed: 'session closed',
+  aborted: 'aborted',
+  timed_out: 'timed out',
+};
+
+/**
  * `auto: <reason>` when the Host answered on the user's behalf.
  *
  * Absent means a human decided — which is what a resolved card has always
@@ -459,9 +479,9 @@ export function derivePermissionAutoNote(
   block: ChatBlock,
   t: Translate = englishTranslate
 ): string | null {
-  return block.permissionAutoReason
-    ? t('auto: {{reason}}', { reason: block.permissionAutoReason })
-    : null;
+  const reason = block.permissionAutoReason;
+  if (!reason) return null;
+  return t('auto: {{reason}}', { reason: t(PERMISSION_AUTO_REASONS[reason] ?? reason) });
 }
 
 /** Provenance always goes at the tail, whichever string carries it. */
@@ -772,15 +792,27 @@ export function derivePermissionContent(block: ChatBlock): { label: string; text
   const content = readInputField(block.toolInput, 'content');
   if (content) {
     // `contentLabel` is the runtime's own word for this body (`Content` for a
-    // write; `src/runtime/plugins/tools/index.ts`). It is English there because
-    // the worker has no locale, so it is treated as a catalog KEY here and
-    // translated where the card paints it — the same treatment the fallback
-    // gets, so the two cannot drift into different languages on one card.
+    // write, `Skill` for a skill, `Arguments` for an MCP call). It is English
+    // there because the worker has no locale, so it is treated as a catalog KEY
+    // here and translated where the card paints it — the same treatment the
+    // fallback gets, so the two cannot drift into different languages on one
+    // card.
     return { label: readInputField(block.toolInput, 'contentLabel') ?? 'Content', text: content };
   }
   if (block.permissionDetail?.kind === 'exec') return null;
   const command = readInputField(block.toolInput, 'command');
-  return command ? { label: 'Command', text: command } : null;
+  if (command) return { label: 'Command', text: command };
+  // chat-tool-02 — nothing to write and nothing to run leaves the PATH as the
+  // whole request, which is what the producer says too ("a read or a glob is
+  // fully described by its path", `ToolPermissionRequest.preview`). Without
+  // this the card asked for a decision about a file it never named, and
+  // `browser_preview` got a body consisting of the word `browser_preview`.
+  //
+  // A `file_change` detail already draws its paths as file rows, so it is not
+  // repeated here — that would print the same path twice on one card.
+  if (block.permissionDetail?.kind === 'file_change') return null;
+  const path = readInputField(block.toolInput, 'path');
+  return path ? { label: 'Path', text: path } : null;
 }
 
 /**

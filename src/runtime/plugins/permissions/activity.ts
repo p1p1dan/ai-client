@@ -23,6 +23,10 @@ import type { PermissionActivityRecord, PermissionDecisionSource } from './index
  * source names are mapped onto that vocabulary rather than passed through: an
  * unrecognised value falls on the quiet side, which would render every
  * user-approved write as though a rule had allowed it.
+ *
+ * The same rule covers the row's `value`: the renderer documents it as the
+ * thing that was EVALUATED, so it gets `policyValue` wherever a tool's policy
+ * vocabulary differs from its path (chat-tool-06).
  */
 const RESOLUTION: Record<PermissionDecisionSource, string> = {
   policy: 'policy_allow',
@@ -43,11 +47,12 @@ export function permissionActivityEvent(
   record: PermissionActivityRecord
 ): RuntimeEventDraft {
   const { request } = record;
-  // The tool call IS the correlation id here. The renderer keeps one block per
-  // `requestId` and merges the phases into it, and our gate runs once per call,
-  // so the prompt and the decision have to agree on this or the transcript
-  // grows two rows for one question.
-  const detail = request.command ?? request.path;
+  // chat-tool-06 — what the gate actually MATCHED, which is not always the path
+  // it was handed. An MCP call carries `path: cwd` as a placeholder and matches
+  // on `policyValue` (`server:tool`); a skill's path is the file on disk while
+  // its policy value is the skill name. Printing the path for those two read as
+  // though a whole directory had been approved.
+  const detail = request.policyValue ?? request.command ?? request.path;
   // Who the gate was raised for. Attribution only: a delegate's call resolves
   // under the same session-scoped grants as anyone else's (decision 003), so
   // these two fields change what the row SAYS and never what it allows.
@@ -57,6 +62,10 @@ export function permissionActivityEvent(
     sessionId,
     payload: {
       phase: record.phase,
+      // The tool call IS the correlation id here. The renderer keeps one block
+      // per `requestId` and merges the phases into it, and our gate runs once
+      // per call, so the prompt and the decision have to agree on this or the
+      // transcript grows two rows for one question.
       requestId: request.toolCallId,
       surface: request.tool,
       ...(detail ? { value: detail } : {}),

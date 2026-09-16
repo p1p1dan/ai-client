@@ -1,5 +1,6 @@
 import { translate } from '@shared/i18n';
 import type {
+  PermissionAutoReason,
   PermissionDecisionId,
   PermissionRequestAction,
   QuestionItem,
@@ -19,6 +20,7 @@ import {
   deriveCardTitle,
   deriveFrozenPairs,
   derivePager,
+  derivePermissionAutoNote,
   derivePermissionCardView,
   derivePermissionDetailView,
   derivePermissionOmittedNote,
@@ -704,6 +706,28 @@ describe('resolved permission verbs and provenance (A22)', () => {
     expect(row?.arg).toBe('Bash — rm -rf / · From subagent · reviewer · auto: aborted');
   });
 
+  // chat-event-07: `permissionAutoReason` is a machine enum from the worker and
+  // was interpolated raw, so a Chinese window read 「自动：timed_out」 — an
+  // identifier, underscore and all, inside our own sentence.
+  it.each([
+    ['unsupported', '不支持'],
+    ['session_closed', '会话已关闭'],
+    ['aborted', '已中止'],
+    ['timed_out', '已超时'],
+  ])('says WHY nobody was asked in the window’s language (%s)', (reason, chinese) => {
+    const block = permissionBlock({
+      resolved: true,
+      allowed: false,
+      permissionDecision: 'deny',
+      permissionAutoReason: reason as PermissionAutoReason,
+    });
+    const zhT = (key: string, params?: Record<string, string | number>) =>
+      translate('zh', key, params);
+    expect(derivePermissionAutoNote(block, zhT)).toBe(`自动：${chinese}`);
+    // English still reads as words rather than as the wire enum.
+    expect(derivePermissionAutoNote(block)).not.toContain('_');
+  });
+
   it('no autoReason: nothing is appended (a human decided, and the row says so by omission)', () => {
     const block = permissionBlock({ resolved: true, allowed: true, permissionDecision: 'allow' });
     expect(derivePermissionCardView(block, false).frozen[0].answer).toBe('Allowed');
@@ -1133,6 +1157,50 @@ describe('permission card body (2026-09-10)', () => {
       true
     );
     expect(view.risk).toBe('medium');
+    // chat-tool-02: it used to read `null` here, i.e. the card asked for a
+    // decision about a file without ever naming the file.
+    expect(view.content).toEqual({ label: 'Path', text: '/etc/hosts' });
+  });
+
+  /**
+   * chat-tool-02 — the gate for a read, a glob, a grep or a browser preview
+   * carries nothing but a path, and the card printed none of it: the user was
+   * asked to approve "read — Read file contents" with no object anywhere on
+   * screen, and `browser_preview` got a card whose whole body was that one word.
+   */
+  it.each([
+    'read',
+    'glob',
+    'grep',
+    'browser_preview',
+  ])('names the path a %s gate is asking about', (toolName) => {
+    const view = derivePermissionCardView(
+      block({
+        toolName,
+        permissionKind: 'tool',
+        permissionDetail: undefined,
+        toolInput: { path: '/home/ai/.config/foo/settings.json', workspace: '/repo' },
+      }),
+      true
+    );
+    expect(view.content).toEqual({
+      label: 'Path',
+      text: '/home/ai/.config/foo/settings.json',
+    });
+  });
+
+  it('does not repeat the path a file-change detail already lists', () => {
+    // `write` / `edit` draw their paths as file rows with a diff stat. Printing
+    // the same path again under a "Path" label would say it twice on one card.
+    const view = derivePermissionCardView(
+      block({
+        toolName: 'edit',
+        permissionKind: 'file_change',
+        toolInput: { path: '/repo/a.txt', workspace: '/repo' },
+        permissionDetail: { kind: 'file_change', changes: [{ path: '/repo/a.txt' }] },
+      }),
+      true
+    );
     expect(view.content).toBeNull();
   });
 });

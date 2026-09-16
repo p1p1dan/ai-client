@@ -409,6 +409,18 @@ describe('deriveRunTools — live tool status (T38-c)', () => {
       }).activeToolStatus
     ).toBeNull();
   });
+
+  // chat-tool-05: the chip printed `block.toolName` verbatim, so an MCP call
+  // showed its wire identifier here while the timeline row for the same call
+  // read "github · create_issue".
+  it('names an MCP tool the way the timeline does, not by its wire identifier', () => {
+    expect(
+      deriveRunTools([message('assistant', [toolCall('t1', 'mcp__github__create_issue')])])
+        .activeTool
+    ).toBe('github · create_issue');
+    // Every other tool keeps the name it was called with.
+    expect(deriveRunTools(messages).activeTool).toBe('read');
+  });
 });
 
 describe('formatRunDuration', () => {

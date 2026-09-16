@@ -91,6 +91,41 @@ it('records a countdown that ran out as a timeout, on the card and in the audit 
   });
 });
 
+/**
+ * chat-tool-06 — the audit row's `value` is "what was evaluated", and for MCP
+ * and skills that is NOT the path.
+ *
+ * The MCP bridge sends `path: cwd` as a placeholder and carries the real
+ * matched value in `policyValue` (`server:tool`); a skill sends the skill FILE
+ * as its path and the skill NAME as `policyValue`, which is what a policy author
+ * writes rules against. Reading `command ?? path` therefore printed the
+ * workspace directory under an MCP allow — a line that reads as though a whole
+ * directory had been approved.
+ */
+it.each([
+  [
+    { tool: 'mcp__github__create_issue', path: '/repo', policyValue: 'github:create_issue' },
+    'github:create_issue',
+  ],
+  [
+    { tool: 'skill', path: '/repo/.claude/skills/plan-tree/SKILL.md', policyValue: 'plan-tree' },
+    'plan-tree',
+  ],
+  // Unchanged where the gate really does match on the command or the path.
+  [{ tool: 'bash', path: '/repo', command: 'ls -la' }, 'ls -la'],
+  [{ tool: 'read', path: '/repo/src/a.ts' }, '/repo/src/a.ts'],
+])('records the value the gate matched on, not the path it was handed', (request, value) => {
+  const event = permissionActivityEvent('logical', {
+    phase: 'decision',
+    request: { toolCallId: 't1', ...request },
+    decision: 'allow',
+    source: 'policy',
+    mode: 'agent',
+    gear: 'ask',
+  } as PermissionActivityRecord);
+  expect(event.payload).toMatchObject({ value });
+});
+
 it('still calls a cancelled request cancelled', async () => {
   // The other arm of the same abort. A stop is a thing the user did, and the
   // two must not be reported as one.

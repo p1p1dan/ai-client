@@ -959,7 +959,9 @@ describe('[FB7-6] the auto: provenance survives the merge', () => {
     );
     const view = deriveToolRowView(runFor(joinResolvedPermissions(items), 'a'));
     expect(view.permissionVerb).toBe('Denied');
-    expect(view.permissionAutoNote).toBe('auto: timed_out');
+    // chat-event-07: the note is words now, not the worker's enum — this case
+    // used to pin `timed_out`, underscore and all, into the transcript.
+    expect(view.permissionAutoNote).toBe('auto: timed out');
   });
 
   it('a human-answered approval carries no note', () => {

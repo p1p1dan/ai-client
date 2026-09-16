@@ -20,24 +20,79 @@ import { isSessionBusy } from './sessionIndex/resumeIntent';
  * arrives through the same failed-resume channel and needs its own copy, so it
  * rides here rather than in a second parallel notice (see `modelMissingError`).
  */
-export type HistoryErrorCode = HistoryReadErrorCode | 'unknown' | 'model_missing';
+export type HistoryErrorCode =
+  | HistoryReadErrorCode
+  | 'unknown'
+  | 'model_missing'
+  | 'session_too_large';
+
+/**
+ * ah-lib-03 — what a failed resume can carry, and which card each one gets.
+ *
+ * This used to be four `WORKER_SESSION_*` strings searched for in the message
+ * text, and three of them stopped having a producer when the runtime took over
+ * opening sessions: it throws its own lowercase codes, or lets Node's `ENOENT`
+ * through untouched. Every one of them therefore landed on the `read_failed`
+ * fallback, whose copy promises the chat is fine and offers a Retry — about a
+ * session whose worker never started — while `session_file_corrupt` and
+ * `session_cwd_mismatch`, written for exactly these failures, became
+ * unreachable branches.
+ *
+ * A plain table rather than a chain of ternaries so the next code is one line:
+ * both halves (this map and `CODE_COPY`) are keyed, and `toCode` derives from
+ * `CODE_COPY` rather than restating it.
+ */
+const RESUME_ERROR_CODES: Readonly<Record<string, HistoryErrorCode>> = {
+  // `src/runtime/plugins/session/` — the session store's own vocabulary. Note
+  // `session_cwd_mismatch` is spelled identically on both sides; that is a
+  // coincidence worth keeping, not a rule the table relies on.
+  session_cwd_mismatch: 'session_cwd_mismatch',
+  session_invalid: 'session_file_corrupt',
+  session_size_limit: 'session_too_large',
+  // The file is gone: `JsonlSessionStore.open` lets a missing path through
+  // `realpath` and the read throws Node's own error, with no code of ours on it.
+  ENOENT: 'jsonl_not_found',
+  // Main's own index lookup (`src/main/ipc/chat.ts`), for a row whose session
+  // file was never recorded.
+  pi_session_not_found: 'jsonl_not_found',
+  // The only `WORKER_*` code left with a producer (`PiWorkerProcess.ts`).
+  WORKER_WORKSPACE_MISSING: 'workspace_missing',
+};
+
+/**
+ * `\b` on both ends so `session_invalid_signature` is not read as
+ * `session_invalid`: underscore is a word character, so the boundary only
+ * matches where the code really ends.
+ */
+const RESUME_ERROR_PATTERNS: ReadonlyArray<readonly [RegExp, HistoryErrorCode]> = Object.entries(
+  RESUME_ERROR_CODES
+).map(([wire, code]) => [new RegExp(`\\b${wire}\\b`), code] as const);
+
+/**
+ * The code the error object CARRIES, when it carries one.
+ *
+ * Preferred over reading the message, because it is exact: `WorkerSlotError`
+ * keeps `remoteError.code` and a Node errno error has `code` too, whereas the
+ * message is somebody else's sentence with our code pasted on the front.
+ */
+function carriedCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
+}
 
 export function encodePiResumeError(error: unknown): { message: string; encoded: string } {
   const message = error instanceof Error ? error.message : String(error);
-  const code = message.includes('WORKER_SESSION_FILE_NOT_FOUND')
-    ? 'jsonl_not_found'
-    : message.includes('WORKER_SESSION_FILE_CORRUPT')
-      ? 'session_file_corrupt'
-      : message.includes('WORKER_SESSION_CWD_MISMATCH')
-        ? 'session_cwd_mismatch'
-        : message.includes('WORKER_WORKSPACE_MISSING')
-          ? 'workspace_missing'
-          : // Checked after the session-file codes (they are disjoint) and
-            // before the fallback, which would otherwise call this a failed
-            // history read — it is not, and the fix is nowhere near retrying.
-            isModelMissingError(message)
-            ? 'model_missing'
-            : 'read_failed';
+  const carried = carriedCode(error);
+  const byField = carried ? RESUME_ERROR_CODES[carried] : undefined;
+  const byText = RESUME_ERROR_PATTERNS.find(([pattern]) => pattern.test(message))?.[1];
+  const code =
+    byField ??
+    byText ??
+    // Checked after the session codes (they are disjoint) and before the
+    // fallback, which would otherwise call this a failed history read — it is
+    // not, and the fix is nowhere near retrying.
+    (isModelMissingError(message) ? 'model_missing' : 'read_failed');
   return { message, encoded: `${code}: ${message}` };
 }
 
@@ -169,6 +224,18 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
     continuationHint:
       'Restore the directory at its original path and retry, or archive this chat and start a new one.',
   },
+  // ah-lib-03. The record is intact and this build simply refuses to load it,
+  // so the copy must not say "missing" or "damaged" — both would send the user
+  // looking for a problem with the file itself. Not retryable: the file will
+  // not have shrunk between one press and the next.
+  session_too_large: {
+    severity: 'error',
+    title: 'Session history is too large to open',
+    guidance:
+      'This chat’s record is larger than this build will load in one piece, so it was not opened. The file itself is intact and untouched on disk.',
+    retryable: false,
+    continuationHint: 'Start a new chat to carry on; the original record stays where it is.',
+  },
   // H/21 P0. Not retryable: the model directory will not have grown between
   // one press and the next, so a Retry button here could only fail again.
   // Copy and action both come from `modelMissingError`, which the session-failed
@@ -194,17 +261,16 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
   },
 };
 
+/**
+ * `CODE_COPY` is the list — a code with a card is a code this module knows, and
+ * a second hand-written enumeration is one more place to forget a new one.
+ *
+ * `Object.hasOwn`, not `in`: `'constructor' in CODE_COPY` is true through the
+ * prototype, which would file a nonsense head as a real code and then index
+ * `CODE_COPY` with it.
+ */
 function toCode(value: string): HistoryErrorCode {
-  return value === 'jsonl_not_found' ||
-    value === 'encrypted_unreadable' ||
-    value === 'read_failed' ||
-    value === 'history_unsupported' ||
-    value === 'session_file_corrupt' ||
-    value === 'session_cwd_mismatch' ||
-    value === 'workspace_missing' ||
-    value === 'model_missing'
-    ? value
-    : 'unknown';
+  return Object.hasOwn(CODE_COPY, value) ? (value as HistoryErrorCode) : 'unknown';
 }
 
 /** Parse `historyErrors[sessionId]`. Returns null when the session has no error. */

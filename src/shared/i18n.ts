@@ -572,6 +572,10 @@ export const zhTranslations: Record<string, string> = {
   'Shared skills': '共享技能',
   Recommended: '推荐',
   Skills: '技能',
+  // chat-tool-04: body label of the skill approval card (runtime emits
+  // preview.label='Skill' and the card looks it up via t()). Distinct from the
+  // plural 'Skills' key; the two must not substitute for each other.
+  Skill: '技能',
   'Prompt templates': '提示词模板',
   'This cross-agent location is always loaded in managed mode, local mode, and the Pi TUI.':
     '这个跨 Agent 共享位置在托管模式、本机模式与 Pi TUI 中都会加载。',
@@ -2479,6 +2483,16 @@ export const zhTranslations: Record<string, string> = {
   '{{count}} edits': '{{count}} 次编辑',
   '{{count}} file': '{{count}} 个文件',
   '{{count}} tokens': '{{count}} tokens',
+  // chat-tool-03: T020 wrote these arg strings without t(), so the Chinese UI
+  // rendered mixed text such as '已开新上下文 a fresh window'. The count entry is
+  // split into singular / plural keys per repo convention.
+  'a fresh window': '一个干净的上下文',
+  '{{count}} delegation': '{{count}} 个委派',
+  '{{count}} delegations': '{{count}} 个委派',
+  'all running': '全部运行中',
+  'running subagents': '运行中的子 Agent',
+  'working directory': '工作目录',
+  'next moves': '后续计划',
 
   // 子 Agent 面板。
   'From subagent': '来自子 Agent',
@@ -2514,6 +2528,12 @@ export const zhTranslations: Record<string, string> = {
   'cwd: {{path}}': '工作目录：{{path}}',
   'Network: {{target}}': '网络：{{target}}',
   'auto: {{reason}}': '自动：{{reason}}',
+  // chat-event-07: wording for the worker-side PermissionAutoReason enum
+  // (questionCardModel's PERMISSION_AUTO_REASONS emits the English keys; the
+  // Chinese copy lives here).
+  unsupported: '不支持',
+  'session closed': '会话已关闭',
+  aborted: '已中止',
   'Project: {{name}}': '项目：{{name}}',
   'Denied automatically if unanswered within {{seconds}}s': '若 {{seconds}} 秒内未响应将自动拒绝',
   yes: '是',
@@ -2533,6 +2553,13 @@ export const zhTranslations: Record<string, string> = {
   // 插件的 resolution 枚举去掉下划线后当键用：认得的照这里翻，不认得的原样显示。
   'policy allow': '策略放行',
   'gate error': '闸门出错',
+  // chat-event-07: the remaining four resolutions the in-house gate actually
+  // produces; the Chinese UI used to show them in raw English. 'timed out' is
+  // also permissionAutoReason's timed_out.
+  'session grant': '本会话已授权',
+  'policy deny': '策略拒绝',
+  'timed out': '已超时',
+  cancelled: '已取消',
 
   // 输入框占位与排队提示。
   'Creating session with Agent Host (first message only)…':
@@ -2681,6 +2708,9 @@ export const zhTranslations: Record<string, string> = {
   'Server address': '服务地址',
   'Session belongs to another workspace': '该会话属于另一个工作区',
   'Session history is damaged': '会话历史已损坏',
+  // ah-lib-03: runtime's session_size_limit needs its own card: the file is
+  // neither missing nor corrupt, this build just refuses to load it whole.
+  'Session history is too large to open': '会话历史过大，本版本无法打开',
   'Sign up': '注册',
   'Sign-in required': '需要重新登录',
   'Signed in': '登录完成',
@@ -2710,6 +2740,10 @@ export const zhTranslations: Record<string, string> = {
   'The service is temporarily unavailable. Please try again later.': '服务暂时不可用，请稍后再试。',
   'The working directory this chat is bound to is no longer on disk, so its worker cannot start. The app will not recreate a directory it did not create.':
     '该会话绑定的工作目录已不在磁盘上，因此无法启动它的 worker。应用不会替你重建自己创建的目录。',
+  'This chat’s record is larger than this build will load in one piece, so it was not opened. The file itself is intact and untouched on disk.':
+    '这个会话的记录超过了本版本一次性加载的上限，因此没有打开。文件本身完好，磁盘上未被改动。',
+  'Start a new chat to carry on; the original record stays where it is.':
+    '新建会话继续；原记录保持原样。',
   'This build cannot read history for that agent yet, so earlier messages were not loaded. The record is still on disk.':
     '当前版本还读不到该 agent 的历史记录，更早的消息没有载入；记录仍在磁盘上。',
   'This chat cannot continue: with its history gone, the next send will fail. Start a new chat to carry on.':

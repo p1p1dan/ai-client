@@ -19,6 +19,10 @@
  * main timeline.
  */
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { type Translate, translate, zhTranslations } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import {
   deriveSubagentPanelRows,
@@ -27,17 +31,24 @@ import {
   type SubagentActivityState,
 } from '../subagentActivityModel';
 import {
+  ARG_COVERED_FIELDS,
   classifyTool,
+  deriveFileLink,
   deriveToolRowView,
   formatToolArg,
   formatToolArgKind,
   MCP_TOOL_VERB,
   mcpToolLabel,
+  outputMaxHeightClass,
   RUNTIME_TOOL_NAMES,
+  TOOL_VERBS,
+  type ToolClass,
   type ToolRun,
   toolVerb,
   UNKNOWN_TOOL_VERB,
 } from '../toolCard';
+
+const zh: Translate = (key, params) => translate('zh', key, params);
 
 function run(toolName: string, input: unknown, overrides: Partial<ToolRun> = {}): ToolRun {
   return {
@@ -122,14 +133,65 @@ describe('the argument shown is what the call was about', () => {
 
   it('counts what TaskWait is waiting on rather than printing ids', () => {
     expect(formatToolArg(run(RUNTIME_TOOL_NAMES.taskWait, { delegationIds: ['a', 'b'] }))).toBe(
-      '2 delegation(s)'
+      '2 delegations'
+    );
+    expect(formatToolArg(run(RUNTIME_TOOL_NAMES.taskWait, { delegationIds: ['a'] }))).toBe(
+      '1 delegation'
     );
     expect(formatToolArg(run(RUNTIME_TOOL_NAMES.taskWait, {}))).toBe('all running');
+  });
+
+  // chat-tool-03: the four arg strings T020 wrote were bare literals, so a
+  // Chinese window read 「已开新上下文 a fresh window」 -- our own verb beside our own
+  // untranslated object. The `(s)` was the giveaway: no Chinese sentence needs it.
+  it('writes its own arg copy in the window’s language, not only in English', () => {
+    expect(formatToolArg(run(RUNTIME_TOOL_NAMES.newContext, {}), { t: zh })).toBe(
+      zhTranslations['a fresh window']
+    );
+    expect(formatToolArg(run(RUNTIME_TOOL_NAMES.taskList, {}), { t: zh })).toBe(
+      zhTranslations['running subagents']
+    );
+    expect(formatToolArg(run(RUNTIME_TOOL_NAMES.taskStop, {}), { t: zh })).toBe(
+      zhTranslations['all running']
+    );
+    // Singular and plural are separate keys, the way every other counted arg in
+    // this module already is -- one key plus "(s)" cannot be translated.
+    expect(
+      formatToolArg(run(RUNTIME_TOOL_NAMES.taskWait, { delegationIds: ['a'] }), { t: zh })
+    ).toBe(translate('zh', '{{count}} delegation', { count: 1 }));
+    expect(
+      formatToolArg(run(RUNTIME_TOOL_NAMES.taskWait, { delegationIds: ['a', 'b'] }), { t: zh })
+    ).toBe(translate('zh', '{{count}} delegations', { count: 2 }));
+    // The same leftovers, under the same rule: pi's argument-less `ls`, and the
+    // plan tools a replayed Claude-era transcript still carries.
+    expect(formatToolArg(run('ls', {}), { t: zh })).toBe(zhTranslations['working directory']);
+    expect(formatToolArg(run('TodoWrite', {}), { t: zh })).toBe(zhTranslations['next moves']);
   });
 
   it('shows an MCP call as its server and tool, not as a wire identifier', () => {
     expect(mcpToolLabel('mcp__github__create_issue')).toBe('github · create_issue');
     expect(formatToolArg(run('mcp__github__create_issue', {}))).toBe('github · create_issue');
+  });
+
+  // chat-tool-09: the wire name is `mcp__<server>__<tool>` and BOTH halves can
+  // contain underscores, so the separator is the LAST `__`, not the first.
+  it('splits an MCP name at the separator the producer used, not at the first underscore pair', () => {
+    // A server named `jira_` composes `mcp__jira___createIssue`. Splitting at
+    // the first pair moved the stray underscore onto the tool and dropped it
+    // from the server, so `jira` and `jira_` were drawn under one name.
+    expect(mcpToolLabel('mcp__jira___createIssue')).toBe('jira_ · createIssue');
+    // A server whose own name contains `__` was cut in half and the rest glued
+    // onto the tool.
+    expect(mcpToolLabel('mcp__my__srv__x')).toBe('my__srv · x');
+    // Unchanged in the ordinary case, which is the whole point.
+    expect(mcpToolLabel('mcp__notion__search')).toBe('notion · search');
+    // No separator at all: the name IS the server, and there is no tool half to
+    // invent one for.
+    expect(mcpToolLabel('mcp__notion')).toBe('notion');
+    // Nothing after the prefix, or not an MCP name: no label, so every caller
+    // keeps whatever it was going to print anyway.
+    expect(mcpToolLabel('mcp__')).toBeUndefined();
+    expect(mcpToolLabel('Bash')).toBeUndefined();
   });
 
   it('shows the skill a skill call loaded', () => {
@@ -206,6 +268,175 @@ describe('the same words reach both surfaces', () => {
   it('renders a TaskWait row on the main timeline with its own words', () => {
     const view = deriveToolRowView(run(RUNTIME_TOOL_NAMES.taskWait, { delegationIds: ['a'] }));
     expect(view.verb).toBe('Waited for subagents');
-    expect(view.arg).toBe('1 delegation(s)');
+    expect(view.arg).toBe('1 delegation');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chat-tool-08 — reconcile the tables against the registry that feeds them
+// ---------------------------------------------------------------------------
+
+/**
+ * The cases above are point-named: they answer "does THIS tool read right".
+ * They cannot answer "did a tool appear that no table knows about", which is
+ * how `chat-tool-01` lived from T-05 to the 2026-09-15 audit — `glob` and
+ * `grep` had verbs, so every case here passed, while their hit lists never
+ * rendered once on the native backend.
+ *
+ * So the registry itself is the fixture. It is READ, not imported: `src/runtime`
+ * is a separate npm package whose tool objects are built inside a cordis
+ * `Service` method, so the names only exist once a whole runtime is
+ * constructed — but they are plain literals in the source, and a literal can be
+ * read without booting anything.
+ *
+ * Add a tool to the runtime and this file fails until it has a probe, a verb
+ * triple, a Chinese entry, an argument and a covered-field list.
+ */
+
+const RUNTIME_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../../runtime'
+);
+
+/** Every file that registers a tool with the agent. */
+const REGISTRY_FILES = [
+  'plugins/tools/index.ts',
+  'plugins/tools/ask.ts',
+  'plugins/tools/browserPreview.ts',
+  'plugins/tools/new-context.ts',
+  'plugins/skills/index.ts',
+  'plugins/subagent/index.ts',
+];
+
+/** `name: 'glob',` or `name: SUBAGENT_WAIT_TOOL_NAME,` in a tool definition. */
+const TOOL_NAME_FIELD = /^\s*name: (?:'([^']+)'|([A-Z][A-Z0-9_]*)),$/gm;
+/** `export const SUBAGENT_WAIT_TOOL_NAME = 'TaskWait';`, to resolve the above. */
+const EXPORTED_NAME = /^export const ([A-Z][A-Z0-9_]*) = '([^']+)';$/gm;
+
+function registeredToolNames(): string[] {
+  const names = new Set<string>();
+  for (const relative of REGISTRY_FILES) {
+    const text = readFileSync(path.join(RUNTIME_DIR, relative), 'utf8');
+    const constants = new Map<string, string>();
+    for (const match of text.matchAll(EXPORTED_NAME)) constants.set(match[1], match[2]);
+    for (const match of text.matchAll(TOOL_NAME_FIELD)) {
+      const name = match[1] ?? constants.get(match[2] ?? '');
+      if (name) names.add(name);
+    }
+  }
+  return [...names].sort();
+}
+
+interface ToolProbe {
+  /** A call the model could plausibly make, with the tool's own argument names. */
+  input: Record<string, unknown>;
+  /** What the row's one-line argument must read as. */
+  arg: string;
+  /** Aggregation bucket, for the tools that have one. */
+  bucket?: ToolClass;
+  /** This tool's output is a hit list the popover can parse. */
+  hitList?: boolean;
+  /** This tool's row opens the file it touched. */
+  link?: string;
+  /** Output scroll window, when the tool is not on the default tier. */
+  outputHeight?: string;
+}
+
+const PROBES: Readonly<Record<string, ToolProbe>> = {
+  read: {
+    input: { path: '/w/src/a.ts' },
+    arg: 'src/a.ts',
+    bucket: 'read',
+    link: '/w/src/a.ts',
+  },
+  write: { input: { path: '/w/src/a.ts' }, arg: 'src/a.ts', link: '/w/src/a.ts' },
+  edit: { input: { path: '/w/src/a.ts' }, arg: 'src/a.ts', link: '/w/src/a.ts' },
+  // The Bash-family output tier, which is keyed on the tool name like every
+  // other table here and had only the capitalised spellings in it.
+  bash: {
+    input: { command: 'pnpm vitest run' },
+    arg: 'pnpm vitest run',
+    outputHeight: 'max-h-[46vh]',
+  },
+  glob: { input: { pattern: '**/*.ts' }, arg: '**/*.ts', bucket: 'search', hitList: true },
+  grep: { input: { pattern: 'TODO' }, arg: 'TODO', bucket: 'search', hitList: true },
+  browser_preview: { input: { path: '/w/site/index.html' }, arg: 'site/index.html' },
+  ask: { input: { questions: [{ question: 'Which branch?' }] }, arg: 'Which branch?' },
+  skill: { input: { name: 'plan-tree' }, arg: 'plan-tree' },
+  new_context: { input: {}, arg: 'a fresh window' },
+  Task: { input: { agent: 'explorer' }, arg: 'explorer' },
+  TaskWait: { input: { delegationIds: ['a'] }, arg: '1 delegation' },
+  TaskList: { input: {}, arg: 'running subagents' },
+  TaskStop: { input: { delegationIds: ['a', 'b'] }, arg: '2 delegations' },
+};
+
+describe('the renderer speaks for every tool the runtime registers', () => {
+  const registered = registeredToolNames();
+
+  it('read the registry, not an empty match', () => {
+    // The failure mode every source scan has: a regex that quietly stops
+    // matching makes every assertion below pass on nothing at all.
+    expect(registered.length).toBeGreaterThanOrEqual(14);
+    expect(registered).toContain('read');
+    expect(registered).toContain('Task');
+  });
+
+  it('RUNTIME_TOOL_NAMES is the registry, not a snapshot of it', () => {
+    // The renderer's constant is what every other case keys on, so it is the
+    // one place a newly registered tool has to land first.
+    expect([...Object.values(RUNTIME_TOOL_NAMES)].sort()).toEqual(registered);
+  });
+
+  it('every registered tool has a probe in this file', () => {
+    expect(Object.keys(PROBES).sort()).toEqual(registered);
+  });
+
+  it.each(registered)('%s has its own verb triple, in both languages', (tool) => {
+    const verbs = TOOL_VERBS[tool];
+    // Presence in the table, not inequality with the fallback: `bash` really is
+    // "Ran", so comparing the words would let a missing entry pass.
+    expect(verbs, `${tool} has no entry in TOOL_VERBS`).toBeDefined();
+    for (const word of [verbs.done, verbs.running, verbs.refused]) {
+      expect(zhTranslations, `${tool}: ${word} is missing from zhTranslations`).toHaveProperty(
+        word
+      );
+    }
+  });
+
+  it.each(registered)('%s says what the call was about, not what it is called', (tool) => {
+    const probe = PROBES[tool];
+    const view = deriveToolRowView(run(tool, probe.input));
+    expect(view.arg).toBe(probe.arg);
+    // `default:`'s last resort is the wire name itself, which is the shape the
+    // audit found on every unlisted tool.
+    expect(view.arg).not.toBe(tool);
+  });
+
+  it.each(registered)('%s declares which fields its arg already covers', (tool) => {
+    // Without an entry the row grows a full JSON input body under a summary
+    // that already said everything it had.
+    expect(ARG_COVERED_FIELDS[tool], `${tool} has no entry in ARG_COVERED_FIELDS`).toBeDefined();
+  });
+
+  it.each(registered)('%s lands in the aggregation bucket it belongs to', (tool) => {
+    expect(classifyTool(tool)).toBe(PROBES[tool].bucket ?? 'action');
+  });
+
+  it.each(registered)('%s offers a hit list exactly when its output is one', (tool) => {
+    const probe = PROBES[tool];
+    const view = deriveToolRowView(run(tool, probe.input, { output: 'src/a.ts:1:TODO' }));
+    if (probe.hitList) expect(view.hitSource).toBe('src/a.ts:1:TODO');
+    else expect(view.hitSource).toBeUndefined();
+  });
+
+  it.each(registered)('%s opens the file it touched, when it touched one', (tool) => {
+    const probe = PROBES[tool];
+    const link = deriveFileLink(run(tool, probe.input));
+    if (probe.link) expect(link).toMatchObject({ path: probe.link });
+    else expect(link).toBeNull();
+  });
+
+  it.each(registered)('%s gets the output scroll window its output size needs', (tool) => {
+    expect(outputMaxHeightClass(tool)).toBe(PROBES[tool].outputHeight ?? 'max-h-[60vh]');
   });
 });

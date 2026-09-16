@@ -24,6 +24,7 @@ import {
   type PiUsagePayload,
 } from '@shared/piUsage';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import { toolDisplayName } from '@/components/chat/piToolNames';
 import type { ChatMessage } from '@/stores/chatSessions';
 
 /**
@@ -237,7 +238,10 @@ export function deriveRunTools(
     // Last unsettled call wins: tools run one after another in a turn, so the
     // most recent open one is what the agent is inside of right now.
     if (!settled.has(block.toolCallId)) {
-      activeTool = block.toolName ?? null;
+      // chat-tool-05 — the chip is read next to the timeline row for the same
+      // call, so it has to use the same name for it: an MCP tool's wire id
+      // (`mcp__<server>__<tool>`) is not what the row says.
+      activeTool = block.toolName ? toolDisplayName(block.toolName) : null;
       activeToolCallId = block.toolCallId;
     }
   }

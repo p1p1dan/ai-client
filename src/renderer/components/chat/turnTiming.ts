@@ -189,6 +189,17 @@ export function formatWorkedForRow(
   return { verb: WORKED_FOR_VERB, arg, argKind: 'prose' };
 }
 
+/**
+ * chat-tool-07 — deliberately still the Claude-era names only.
+ *
+ * Its one reader, `deriveTurnStats` below, has no caller in `src/`: the turn
+ * head's count row went with the retired meta row (T12-b), and this file's
+ * remaining live export is `THOUGHT_VERB` / `formatThoughtRow`. Adding our own
+ * `edit` / `write` here would look like closing a vocabulary gap while actually
+ * writing a case for output nobody renders — which is the trap this note
+ * exists to defuse. If a turn summary ever comes back, this is the line to fix
+ * FIRST, and `runtimeToolVocabulary.test.ts` is where it gets a guard.
+ */
 const EDIT_TOOL_NAMES = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 
 /**

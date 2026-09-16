@@ -572,7 +572,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
  * an empty list: we can't know what its `arg` format covers, so its input is
  * always shown in full once it has any field at all.
  */
-const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
+export const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   Read: ['file_path', 'offset', 'limit'],
   NotebookRead: ['file_path', 'offset', 'limit'],
   Grep: ['pattern'],
@@ -600,6 +600,9 @@ const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   [RUNTIME_TOOL_NAMES.grep]: ['pattern'],
   [RUNTIME_TOOL_NAMES.bash]: ['command'],
   [RUNTIME_TOOL_NAMES.browserPreview]: ['path'],
+  // Empty on purpose, and declared rather than left to the default: the arg is
+  // the FIRST question only, so the body is where the rest of them live.
+  [RUNTIME_TOOL_NAMES.ask]: [],
   [RUNTIME_TOOL_NAMES.skill]: ['name'],
   [RUNTIME_TOOL_NAMES.newContext]: [],
   [RUNTIME_TOOL_NAMES.taskWait]: ['delegationIds'],
@@ -624,8 +627,22 @@ function deriveToolInputBody(run: ToolRun): string | undefined {
   return normalizeRawOutput(run.input);
 }
 
+/**
+ * chat-tool-01 — a search row's output IS the hit list, whoever ran the search.
+ *
+ * This used to be a second two-entry table naming Claude's capitalised `Grep`
+ * and `Glob`, so on the native backend — which registers lowercase `grep` and
+ * `glob` — `hitSource` was undefined for every search the agent ever ran, and
+ * `ToolRows.tsx`'s popover branch was unreachable. The one classification the
+ * module already keeps decides it instead, so a search tool cannot be added to
+ * one list and forgotten in the other.
+ *
+ * Membership is not a promise that the output parses: `parseHitList` is
+ * best-effort and returns null for anything that does not look like hits, which
+ * the row already degrades to a plain expandable body.
+ */
 function isHitListTool(toolName: string): boolean {
-  return toolName === 'Grep' || toolName === 'Glob';
+  return classifyTool(toolName) === 'search';
 }
 
 /**
@@ -1172,7 +1189,10 @@ function formatToolArgDetail(
     case RUNTIME_TOOL_NAMES.newContext:
       // The tool takes no arguments at all, so there is nothing to show but
       // what it does; a bare verb with no argument reads as a truncated row.
-      raw = 'a fresh window';
+      // chat-tool-03: finished text, like every other arg — `ToolRows.tsx`
+      // translates the VERB and prints the arg as-is, so an arg that skips `t`
+      // reaches a Chinese window in English.
+      raw = t('a fresh window');
       break;
     case RUNTIME_TOOL_NAMES.ask: {
       // The first question stands for the call. `questions` is an array of
@@ -1185,17 +1205,26 @@ function formatToolArgDetail(
     case RUNTIME_TOOL_NAMES.taskWait:
     case RUNTIME_TOOL_NAMES.taskStop: {
       const ids = rec?.delegationIds;
-      raw = Array.isArray(ids) && ids.length > 0 ? `${ids.length} delegation(s)` : 'all running';
+      const count = Array.isArray(ids) ? ids.length : 0;
+      // Singular and plural are separate keys, as in `deriveAggregateRow`:
+      // `N delegation(s)` cannot be translated at all — Chinese has no plural
+      // and the parenthesis is not a word in either language.
+      raw =
+        count > 0
+          ? count === 1
+            ? t('{{count}} delegation', { count })
+            : t('{{count}} delegations', { count })
+          : t('all running');
       break;
     }
     case RUNTIME_TOOL_NAMES.taskList:
-      raw = 'running subagents';
+      raw = t('running subagents');
       break;
     case PI_TOOL_NAMES.ls: {
       // `path` is OPTIONAL on pi's `ls` — an argument-less call lists the
       // working directory, so say that rather than rendering a bare verb.
       const path = stringField(rec, 'path');
-      raw = path ? shortPath(path) : 'working directory';
+      raw = path ? shortPath(path) : t('working directory');
       kind = path ? 'ident' : 'prose';
       break;
     }
@@ -1260,7 +1289,7 @@ function formatToolArgDetail(
     }
     case 'TodoWrite':
     case 'ExitPlanMode':
-      raw = 'next moves';
+      raw = t('next moves');
       break;
     case 'Task':
     case 'Agent':
@@ -1355,7 +1384,17 @@ export function deriveRepoName(workspacePath: string | null | undefined): string
   return parts.length > 0 ? parts[parts.length - 1] : null;
 }
 
-const BASH_TOOL_NAMES = new Set(['Bash', 'BashOutput', 'KillShell']);
+// chat-tool-08 — keyed on the tool name like every other table here, so it
+// needed our own lowercase `bash` (and pi's `powershell` sibling) as well as
+// Claude's capitalised spellings; without them a native shell call got the
+// 60vh window meant for file output.
+const BASH_TOOL_NAMES = new Set([
+  'Bash',
+  'BashOutput',
+  'KillShell',
+  PI_TOOL_NAMES.bash,
+  PI_TOOL_NAMES.powershell,
+]);
 
 /** Output body scroll window (legacy sign-off ② values): Bash-family 46vh, everything else 60vh. */
 export function outputMaxHeightClass(toolName: string): string {

@@ -118,8 +118,12 @@ import {
 } from './turnStatus';
 // T12-b: `deriveTurnStats` / `formatWorkedForRow` / `THOUGHT_VERB` /
 // `turnHasThinkingOnlyProcess` all fed the retired meta row's completed state.
-// They stay exported from `turnTiming.ts` because the per-tool-row and subagent
-// surfaces still use them; only this file stopped asking.
+// chat-tool-07 corrects what this note used to claim: of those four, only
+// `THOUGHT_VERB` still has a consumer (`subagentActivityModel.ts`, alongside
+// `formatThoughtRow` in `toolCard.ts`). The other three have no caller anywhere
+// in `src/` — they are kept, exported and tested, but nothing renders them, so
+// anything they look up (`turnTiming.ts`'s `EDIT_TOOL_NAMES`) is not a live
+// vocabulary table and must not be "fixed" as if it were.
 import { useMessageMetadata } from './useMessageMetadata';
 import { useResolvedSessionModel } from './useResolvedSessionModel';
 import { useTurnTiming } from './useTurnTiming';
@@ -839,6 +843,9 @@ const HISTORY_ERROR_ICON = {
   history_unsupported: FileQuestion,
   session_file_corrupt: TriangleAlert,
   session_cwd_mismatch: FileQuestion,
+  // ah-lib-03: the record is neither missing nor damaged — this build simply
+  // refuses to load one that big, which is a limit being hit, not a bad file.
+  session_too_large: TriangleAlert,
   // F2-c: the folder itself is gone, which is a missing-file shape, not a
   // damaged-content one.
   workspace_missing: FileSearch,

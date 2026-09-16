@@ -222,6 +222,7 @@ describe('parseHistoryError (T-03)', () => {
       'encrypted_unreadable',
       'read_failed',
       'history_unsupported',
+      'session_too_large',
       'unknown',
     ];
     for (const code of codes) {
@@ -232,11 +233,36 @@ describe('parseHistoryError (T-03)', () => {
   });
 });
 
-describe('encodePiResumeError (T32)', () => {
+/**
+ * ah-lib-03 — the codes a failed resume actually carries.
+ *
+ * The table used to search the message for four `WORKER_SESSION_*` strings, and
+ * three of them have had no producer since the backend swap: the runtime opens
+ * and validates the session itself now and throws `session_invalid` /
+ * `session_cwd_mismatch` / `session_size_limit`, or lets Node's own `ENOENT`
+ * through. All of those landed on the `read_failed` fallback, whose copy says
+ * the opposite of what happened — "the chat is not interrupted, you can keep
+ * sending messages" about a session whose worker never came up — while the two
+ * cards written for exactly these failures were unreachable code.
+ */
+describe('encodePiResumeError (T32 / ah-lib-03)', () => {
   it.each([
-    ['WORKER_SESSION_FILE_NOT_FOUND: missing', 'jsonl_not_found'],
-    ['WORKER_SESSION_FILE_CORRUPT: bad header', 'session_file_corrupt'],
-    ['WORKER_SESSION_CWD_MISMATCH: wrong repo', 'session_cwd_mismatch'],
+    // The runtime's own session store, as the error reaches the renderer:
+    // `WorkerSlot` flattens it to `<code>: <message>` and Electron wraps that
+    // again on the way out of `invoke`.
+    ['session_cwd_mismatch: resume cwd differs from the session workspace', 'session_cwd_mismatch'],
+    ['session_invalid: line 3 is not a session entry', 'session_file_corrupt'],
+    ['session_size_limit: session exceeds size budget', 'session_too_large'],
+    [
+      "Error invoking remote method 'chat:resumeSession': WorkerSlotError: session_cwd_mismatch: resume cwd differs from the session workspace",
+      'session_cwd_mismatch',
+    ],
+    // The file is simply gone: the store's `realpath` lets ENOENT through and
+    // the read throws Node's own error, with no code of ours on it.
+    ["ENOENT: no such file or directory, open '/home/ai/.pi/sessions/a.jsonl'", 'jsonl_not_found'],
+    // Main's own index lookup, for a session row whose file was never recorded.
+    ['pi_session_not_found: No indexed Pi session file for s1', 'jsonl_not_found'],
+    // The one WORKER_* code that still has a producer (`PiWorkerProcess.ts`).
     [
       'WORKER_WORKSPACE_MISSING: Pi worker working directory is missing: E:\\e\\test',
       'workspace_missing',
@@ -252,6 +278,56 @@ describe('encodePiResumeError (T32)', () => {
       message,
       encoded: `${code}: ${message}`,
     });
+  });
+
+  it('prefers a code the error carries over one spelled in its text', () => {
+    // `WorkerSlotError` keeps `remoteError.code`; an `errno` error carries
+    // `code` too. Reading the field is exact, where a substring search is a
+    // guess about someone else's sentence.
+    const error = Object.assign(new Error('resume cwd differs from the session workspace'), {
+      code: 'session_cwd_mismatch',
+    });
+    expect(encodePiResumeError(error).encoded).toBe(
+      'session_cwd_mismatch: resume cwd differs from the session workspace'
+    );
+  });
+
+  it('matches a code as a whole word, not as a substring of a longer one', () => {
+    // `session_invalid_signature` is not `session_invalid`; a substring match
+    // would file an unrelated failure under "this session file is damaged".
+    expect(encodePiResumeError(new Error('session_invalid_signature: nope')).encoded).toBe(
+      'read_failed: session_invalid_signature: nope'
+    );
+  });
+
+  it('never files a bootstrap failure under copy that says the chat is fine', () => {
+    // The reverse assertion: every code the runtime can fail a resume with must
+    // reach a card that is NOT retryable and does NOT promise continuation —
+    // that promise is what `read_failed` made about sessions whose worker never
+    // started.
+    const runtimeFailures = [
+      'session_cwd_mismatch: x',
+      'session_invalid: x',
+      'session_size_limit: x',
+      "ENOENT: no such file or directory, open '/a.jsonl'",
+      'pi_session_not_found: x',
+      'WORKER_WORKSPACE_MISSING: x',
+    ];
+    for (const message of runtimeFailures) {
+      const view = parseHistoryError(encodePiResumeError(new Error(message)).encoded);
+      expect(view?.code, message).not.toBe('read_failed');
+      expect(view?.retryable, message).toBe(false);
+      expect(view?.continuationHint, message).not.toBe(HISTORY_ERROR_NON_FATAL_HINT);
+    }
+  });
+
+  it('gives a session too large for this build its own card', () => {
+    const view = parseHistoryError('session_too_large: session exceeds size budget');
+    expect(view?.code).toBe('session_too_large');
+    expect(view?.severity).toBe('error');
+    // The file is neither missing nor damaged, so the copy must not say either.
+    expect(view?.guidance).not.toContain('damaged');
+    expect(view?.guidance).not.toContain('No history was found');
   });
 });
 
@@ -485,7 +561,7 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
       activeSessionId: null,
       recentSessionIds: [],
       pendingPermissions: [],
-      pendingQuestion: null,
+      pendingQuestions: [],
       hostBoundSessionIds: [],
       unreadSessionIds: [],
       runtimeReady: false,

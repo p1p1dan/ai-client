@@ -24,11 +24,18 @@
  * The words this file adds AROUND that data are copy, and a Chinese UI must not
  * show them in English. They go through the `t` the component passes in
  * (defaulting to English, which is what the `en` locale wants anyway). The
- * plugin's own values — `surface`, `value`, `origin`, `matchedPattern` — are
- * passed through untouched: they are identifiers from another program, and
- * translating one would invent a name that program never used.
+ * gate's own values — `value`, `origin`, `matchedPattern` — are passed through
+ * untouched: they are identifiers from another program, and translating one
+ * would invent a name that program never used.
+ *
+ * Two exceptions, both chat-event-07 / chat-tool-06: `resolution` is a closed
+ * enum this app maps onto its own vocabulary (`activity.ts`), so it is looked
+ * up in the catalog rather than printed, and `surface` is run through the same
+ * display-name function every other surface uses, so an MCP tool is not read as
+ * `mcp__server__tool` here and as `server · tool` one row above.
  */
 import { englishTranslate, type Translate } from '@shared/i18n';
+import { toolDisplayName } from './piToolNames';
 
 /** One gate, as the plugin described it. Mirrors `PermissionActivityEvent.payload`. */
 export interface PermissionActivityRecord {
@@ -40,9 +47,23 @@ export interface PermissionActivityRecord {
    * that somehow carried no result is still an unresolved gate.
    */
   phase?: 'prompt' | 'decision';
-  /** e.g. `bash`, `read`, `mcp`, `skill`, `external_directory`. */
+  /**
+   * What the gate was raised over, in whatever vocabulary its producer uses.
+   *
+   * chat-tool-06: this comment used to promise a POLICY surface (`bash`, `read`,
+   * `mcp`, `skill`, `external_directory`) and the self-owned gate does not send
+   * one — it sends `request.tool`, i.e. the specific tool name, and for an MCP
+   * call that is the wire id `mcp__<server>__<tool>`. The row labels it for
+   * reading rather than reprinting the identifier; nothing here matches policy,
+   * so the specific name is the more useful of the two anyway.
+   */
   surface?: string;
-  /** The command / path / tool name that was evaluated. */
+  /**
+   * The command / path / skill that was evaluated, as the gate matched it —
+   * `policyValue` when the tool's policy vocabulary differs from its path
+   * (MCP matches `server:tool`, a skill matches its NAME), else the command or
+   * the path.
+   */
   value?: string;
   /**
    * The subagent delegation this gate was raised for, when one was. Declared
@@ -109,7 +130,11 @@ export function derivePermissionActivityRow(
   record: PermissionActivityRecord,
   t: Translate = englishTranslate
 ): PermissionActivityRowView {
-  const surface = record.surface?.trim() || t('request');
+  // chat-tool-06 — the same label the timeline row and the delegation panel use
+  // for the same call. An MCP tool arrives here as `mcp__<server>__<tool>`, and
+  // a line a person is meant to read must not be a protocol identifier.
+  const raw = record.surface?.trim();
+  const surface = raw ? toolDisplayName(raw) : t('request');
   const notes: string[] = [];
 
   if (record.forwarded) {
@@ -125,7 +150,10 @@ export function derivePermissionActivityRow(
       tone: 'denied',
       label: t('Permission check failed — {{surface}}', { surface }),
       detail: record.value,
-      note: record.resolution,
+      // chat-event-07 — through the catalog like every other resolution. This
+      // branch returned the raw enum, so the row read `gate_error` and the
+      // catalog's own entry for it was unreachable code.
+      note: humanizeResolution(record.resolution, t),
     };
   }
   if (!record.result) {

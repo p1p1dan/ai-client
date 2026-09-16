@@ -435,6 +435,37 @@ describe('deriveSubagentPanelRows', () => {
     expect(rows[0].arg).toBe('Awaiting permission · Bash');
   });
 
+  // chat-tool-05: both header branches printed the WIRE name, while the child
+  // row one line below — built by `deriveToolRowView` — printed the label. An
+  // MCP call therefore had two names on one screen, one of them a protocol
+  // identifier. The existing cases used `Bash` / `Read`, where the two spellings
+  // coincide, which is what hid it.
+  it('names an MCP tool in the header the way the row below it does', () => {
+    const running = fold([
+      started(),
+      activity({ kind: 'progress', lastToolName: 'mcp__github__create_issue' }),
+    ]);
+    expect(deriveSubagentPanelRows(running.lanes[PARENT], { parentRunning: true })[0].arg).toBe(
+      'github · create_issue'
+    );
+
+    const gated = fold([
+      started(),
+      {
+        type: 'permission.requested',
+        sessionId: SESSION,
+        payload: {
+          permissionId: 'p',
+          toolName: 'mcp__github__create_issue',
+          agentId: 'agent-1',
+        },
+      },
+    ]);
+    expect(deriveSubagentPanelRows(gated.lanes[PARENT], { parentRunning: true })[0].arg).toBe(
+      'Awaiting permission · github · create_issue'
+    );
+  });
+
   it('a completed lane summarizes from the report: type · tools · tokens · seconds', () => {
     const l = lane([
       started(),

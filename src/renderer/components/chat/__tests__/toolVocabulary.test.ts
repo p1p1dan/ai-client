@@ -5,6 +5,7 @@ import {
   PERMISSION_ALLOW_SESSION,
   PERMISSION_ALLOWED,
   PERMISSION_ALLOWED_SESSION,
+  PERMISSION_AUTO_REASONS,
   PERMISSION_CANCEL,
   PERMISSION_DECISION_LABELS,
   PERMISSION_DENIED,
@@ -63,6 +64,40 @@ describe('chat vocabulary is translatable', () => {
       [THOUGHT_VERB, THINKING_VERB, THOUGHT_BRIEF_ARG, WORKED_FOR_VERB],
       'timing words'
     );
+  });
+
+  /**
+   * chat-tool-04 — a permission card's body label is chosen by the RUNTIME
+   * (`preview.label`), which has no locale, and the card renders it with
+   * `t(view.content.label)`. That is a dynamic key, so neither the literal
+   * `t('…')` scan nor the verb table above can see it: `Skill` had no entry and
+   * a Chinese card read one English word under an otherwise Chinese card.
+   *
+   * The set is closed and small, so it is written out — when a new tool starts
+   * sending a preview, this list is the place its label has to be added.
+   */
+  it('every label a permission body can carry has a catalog entry', () => {
+    expectTranslated(
+      [
+        // Producers: `plugins/tools/index.ts` (write), `plugins/skills/index.ts`,
+        // `plugins/mcp/index.ts`.
+        'Content',
+        'Skill',
+        'Arguments',
+        // The renderer's own fallbacks, for a gate that carries no preview.
+        'Command',
+        'Path',
+      ],
+      'permission body labels'
+    );
+  });
+
+  /**
+   * chat-event-07 — `permissionAutoReason` is a worker enum shown inside our
+   * own sentence, so it needs words in both languages like any other copy.
+   */
+  it('every reason the Host can answer on the user’s behalf has a catalog entry', () => {
+    expectTranslated(Object.values(PERMISSION_AUTO_REASONS), 'permission auto reasons');
   });
 
   it('permission card words have catalog entries', () => {
