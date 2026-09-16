@@ -9,8 +9,8 @@
 | 操作 | 通过标准 |
 |---|---|
 | 先退出已在运行的 AiClient（若在） | 任务管理器无 `AiClient.exe` |
-| 在 PowerShell 执行：`$env:AICLIENT_RUNTIME_BACKEND='native'; $env:AICLIENT_RUNTIME_TRACE_DIR='E:\code\GitTmp\ai-client-runtime\Windows-P4-6-evidence\native-trace2'; & 'D:\Program Files\AiClient\AiClient.exe'` | 应用启动，能开一个会话 |
-| （可选核验）启动后看 `native-trace2\runs.jsonl` | `"backend":"native"`、`"carrier":"bundled-node"` |
+| 在 PowerShell 执行：`$env:AICLIENT_RUNTIME_TRACE_DIR='E:\code\GitTmp\ai-client-runtime\Windows-P4-6-evidence\native-trace2'; & 'D:\Program Files\AiClient\AiClient.exe'`（`AICLIENT_RUNTIME_BACKEND` 已随 P6-5 删除，设置它不再有效果，后端恒为 native） | 应用启动，能开一个会话 |
+| 启动后看 `native-trace2\runs.jsonl` 确认实际后端（不能只看能否聊天） | `"backend":"native"`、`"carrier":"bundled-node"` |
 
 ## 第 1 组 · 工作目录菜单与终端设置
 

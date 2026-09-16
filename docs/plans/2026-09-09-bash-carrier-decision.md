@@ -1,6 +1,8 @@
 # D1 决策论证 · native worker 的 bash 载体
 
-> 状态：**待现场数据拍板**（Linux 侧论证完成，判定探针已就绪）
+> 状态：**部分回填，R2/R3/R4 待重跑**（Linux 侧论证完成；2026-09-09/10 test.12 现场跑过 R0～R4，
+> 结果见下表，R2/R3 未签收、R4 方法已证明无效，详见 `Windows-P4-6-evidence/test12-reverify.md`
+> 第 6 节「Bash 载体决策第 6 节：R0–R4」）
 > 提出：`Windows-P4-6-evidence/linux-side-punch-list.md` 的 D1 条
 > 相关：ARD [D11 执行载体](2026-09-08-runtime-evolution-ard.md#d11--执行载体按进程身份区分不按实现语言推断) · ARD §8 加密机实测记录
 
@@ -62,15 +64,15 @@ bash 不只是执行器，还是权限判定链的一环：`shellPolicy` 用 tre
 
 | 编号 | 步骤 | 观察 | 结论映射 | 现场结果 |
 |---|---|---|---|---|
-| R0 | 记录本次实际选中的 bash 路径（`Get-Process bash \| Select Path`，或看 worker 的子进程命令行） | 一个绝对路径 | 后续所有结论的前提；无此项则证据不成立 | ⬜ |
-| R1 | 先用 GUI 的 write 工具写 `probe-a.txt`（内容 `hello-42`），再用 bash 工具 `cat probe-a.txt` | 明文 `hello-42` | **选 A 并锁定**，写入 ARD §8 | ⬜ |
+| R0 | 记录本次实际选中的 bash 路径（`Get-Process bash \| Select Path`，或看 worker 的子进程命令行） | 一个绝对路径 | 后续所有结论的前提；无此项则证据不成立 | 拿到的是 shell 自报并经 `cygpath` 转换的 Windows 路径 `C:\Program Files\Git\usr\bin\bash.exe`；**没有取到独立的进程映像/父进程证据**，不满足「前提」的完整要求 |
+| R1 | 先用 GUI 的 write 工具写 `probe-a.txt`（内容 `hello-42`），再用 bash 工具 `cat probe-a.txt` | 明文 `hello-42` | **选 A 并锁定**，写入 ARD §8 | 在桌面专用测试目录下 write→bash cat 返回明文 `hello-42`，退出码 0，trace 确认了这次 write/bash 调用。**但目标文件是否处于真实加密态未经证实**，不能仅凭此签 A；不撤销该次读写本身成功的事实 |
 | | | `%TSD-Header-###%` 开头的乱码 | `bash.exe` 不在白名单 → 进 R2 | |
 | | | `Bad file descriptor` / 空输出 | 载体级失败（与 GUI 当初同类）→ 进 R2，并单独记一条 | |
-| R2 | 在 bash 工具里调随包 node 读同一文件：`"/d/Program Files/AiClient/resources/node-runtime/node.exe" -e "console.log(require('fs').readFileSync('probe-a.txt','utf8'))"` | 明文 | 放行按**进程名/路径**、与父进程无关 → B 无效，走缓解或 C | ⬜ |
+| R2 | 在 bash 工具里调随包 node 读同一文件：`"/d/Program Files/AiClient/resources/node-runtime/node.exe" -e "console.log(require('fs').readFileSync('probe-a.txt','utf8'))"` | 明文 | 放行按**进程名/路径**、与父进程无关 → B 无效，走缓解或 C | **未签收**。隔离 worker 里由 bash 调随包 node 读目标，返回 57 字节明文、SHA256 与写入前一致、无 `%TSD-Header-###%` 容器头，退出 0；但目标读取结果本就没有 TSD 头，分不清「本来就是明文文件」和「透明解密」，不能据此拍板放行维度 |
 | | | 仍是密文 | 放行受父进程/进程树影响 → 值得评估 B | |
-| R3 | 把随包 `node.exe` 复制为 `bash-probe.exe` 后执行同一读操作 | 明文 | 按签名或按目录路径放行 → B 可行 | ⬜ |
+| R3 | 把随包 `node.exe` 复制为 `bash-probe.exe` 后执行同一读操作 | 明文 | 按签名或按目录路径放行 → B 可行 | **未签收**。复制改名后由 bash 工具调用同样读到明文、SHA256 一致，退出 0；但复制同时改变了目录与文件名，未能单独隔离改名这一个变量，且与 R2 同样没有 TSD 头做证据支撑，仍需真实加密容器重跑才能判定 |
 | | | 密文 | 按进程名放行 → B 不可行 | |
-| R4（可选，健壮性非决策项） | 临时把 Git 从 PATH 与默认目录移开后调用 bash 工具 | 报 `shell_unconfigured` 而非崩溃/挂起 | 确认无 bash 时的失败是干净的 | ⬜ |
+| R4（可选，健壮性非决策项） | 临时把 Git 从 PATH 与默认目录移开后调用 bash 工具 | 报 `shell_unconfigured` 而非崩溃/挂起 | 确认无 bash 时的失败是干净的 | **方法已证明无效，不能据此签**。隔离环境下移开系统 Git 后命令仍执行成功（`no-shell-should-not-execute` 照常输出），说明这一招没有真正让 worker 的 shell resolver 进入 `shell_unconfigured`；下次若要验证需要改用能覆写 `src/runtime/host/shell.ts` 全部候选查找路径的受控环境，逐个记录排除过程 |
 
 ## 7. 建议
 

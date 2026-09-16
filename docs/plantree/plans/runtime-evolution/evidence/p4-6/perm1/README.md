@@ -3,7 +3,16 @@
 Role: evidence。日期：2026-09-11。对应[执行顺序](../../../README.md#执行顺序)第 5 批第 4 项，
 以及[现场缺陷与修复](../../../README.md#现场缺陷与修复)的 PERM-1 行与 [P1-6 审批流](../../../README.md#p1)。
 
-`node scripts/run-perm1-probe.mjs`（legacy 后端）与 `PERM1_NATIVE=1 node scripts/run-perm1-probe.mjs`（native 后端）。
+> **2026-09-15 时点注记**：legacy 引擎随 P6-5（`fe246bd6`，2026-09-14）整体退役，`PERM1_NATIVE=1`
+> 变体已被 T028 删除（`scripts/run-perm1-probe.mjs` 现在只剩一套输出文件名）；扩展 UI 审批通道
+> 也随 T036（`ce7f3b3a`，2026-09-15）整链退役。下面第 16 行记录的插件英文弹窗、第 104 行
+> 「是否接管」的未决项，描述的都是已经不存在的通道，仅作历史存档读，不再是待决策项。
+> **复跑须知**：探针把输出写死到本目录（`perm1-report.json` 与四张 `perm1-*.png`），T032 要求的
+> PERM-1 复跑会原地覆盖下面这套被标为 legacy 的历史证据，覆盖前请先把本目录现有文件复制进一份
+> 按日期命名的子目录（如 `2026-09-11/`）留档，再执行复跑。
+
+`node scripts/run-perm1-probe.mjs`。两个后端曾经各跑一趟（另一趟经 `PERM1_NATIVE=1` 触发），
+下表保留两栏是当年真实跑出的结果；探针现在只跑得动 native 一种形态。
 两趟都在开发机 Electron 上用真实点击与真实回合跑。
 
 ## 为什么要跑两趟
@@ -36,7 +45,11 @@ Role: evidence。日期：2026-09-11。对应[执行顺序](../../../README.md#�
 | 卡片文案走词典（第 4 批回归） | — 不适用 | ✅ |
 | 允许之后请求消失、命令真的执行 | ✅ | ✅ |
 
-原始输出：[perm1-report.json](perm1-report.json)（legacy）、[perm1-native-report.json](perm1-native-report.json)（native）。
+原始输出（2026-09-11 采集，legacy/native 各跑一次，legacy 侧文件名未加后缀）：
+[perm1-report.json](perm1-report.json)（legacy）、[perm1-native-report.json](perm1-native-report.json)（native）。
+探针的 `PERM1_NATIVE=1` 变体已被 T028 删除，现在只输出 `perm1-report.json` 与不带后缀的
+`perm1-*.png` 这一套名字——下次复跑产出的是 native 结果，但会落在这份记录标为「legacy」的
+同名文件里，见文件顶部「复跑须知」。
 
 native 那张卡整屏读回来是这样，**倒计时在**：
 

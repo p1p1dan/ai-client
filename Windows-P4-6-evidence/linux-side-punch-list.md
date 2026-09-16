@@ -70,7 +70,7 @@
 | 阶段 | 项 |
 |---|---|
 | 产物身份 | 记录 test.11 版本、文件、SHA-256、CI run、源码提交 `b6aa0844`；实际 exe/node.exe/Git Bash 路径 |
-| 启动与载体 | 退出旧应用；`AICLIENT_RUNTIME_BACKEND=native` 启动；用 native trace（backend/carrier/node_exec_path）确认，不能只看能否聊天 |
+| 启动与载体 | 退出旧应用；启动（`AICLIENT_RUNTIME_BACKEND` 已随 P6-5 删除，设置它不再有效果，后端恒为 native）；用 native trace（backend/carrier/node_exec_path）确认，不能只看能否聊天 |
 | 工具探针 | 复用 `p1-bundled-node.ts`（随包 node.exe 执行，bash 用实际 Git Bash 路径；源码 probe 需要该系统提交的 runtime 依赖） |
 | 命令树清理 | 正常/超时/取消/父先退/应用退出五态，核对 runner/taskkill 与进程残留 |
 | 打包 GUI | 权限 plan/agent + ask/accept-edits/auto、允许/拒绝/取消与审计行、用户气泡去重、附件、停止恢复、会话恢复/压缩、GUI/TUI 切换 |

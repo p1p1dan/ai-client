@@ -55,6 +55,13 @@ Role: roadmap（2026-09-14 起为历史基线）。核对日期：2026-09-13；�
 | P0-6 | 离线/在线冒烟 | ✅ |
 
 证据：[P0 在线](evidence/p0/live-smoke.md)、[离线 trace](evidence/p0/offline-smoke-trace.jsonl)。
+**证据已过期，未随代码重跑**：两份存档采集于 2026-09-08（提交 `3ce9702e`/`8a71c843`），trace 里
+`version_stamp.backend` 记的是 `"legacy"`；HEAD 已把 backend 硬编码为 `'native'`
+（`src/runtime/flags.ts:43`），`RUNTIME_CONFIG_VERSION` 也已从 `runtime_p3_complete_v1` 解冻到
+`runtime_p6_hardening_v1`（T028），中间横跨一次引擎整体退役（P6-5）。审计时（2026-09-15）测得
+落后约 227～228 个提交，此后仍在增长，**重采前先跑一次 `git rev-list --count 3ce9702e..HEAD`
+确认当前差距**，不要引用旧数字。存档只作历史记录读，不代表现行代码的 offline lane 状态；
+重采命令：`node --experimental-strip-types src/runtime/smoke/runOnce.ts --offline`（无需凭据/模型）。
 
 <a id="p1"></a>
 
@@ -70,7 +77,7 @@ Role: roadmap（2026-09-14 起为历史基线）。核对日期：2026-09-13；�
 | P1-5 | 权限内核 | 🟡 已实现；真实自定义策略/复杂 shell 与策略重载组合仍缺专项现场记录 |
 | P1-6 | 审批流 | 🟢 开发机侧已验（2026-09-11）：native 后端下结构化权限卡在真实回合中弹出，中文文案齐全、带高风险徽标与「若 119 秒内未响应将自动拒绝」倒计时，点「直接允许」后请求消失且命令真的执行；legacy 后端下审批是 pi 插件自己的英文 `ui.select` 弹窗，两者不是同一张卡。**倒计时走到底的超时拒绝仍只有单测覆盖**；打包现场回归待最后一次上机。[记录](evidence/p4-6/perm1/README.md) |
 | P1-7 | 单测 | ✅ 历史实现门禁；不代表包后新改动测试已执行 |
-| P1-8 | 载体兼容矩阵 | ✅ 核心矩阵：Linux 与 Windows 两载体六项工具探针通过；真实受策略样本的特定链路归 P4-6。**现场证据已过期未重跑**：test12-reverify.md 的 stamp 停在提交 `8115ebe1`，到本次复核的 HEAD（`559c9790`）已隔 150 个提交，其中 21 个动过 `src/runtime/host`、`plugins/tools` 或 `bootstrap.ts`；`RUNTIME_CONFIG_VERSION` 仍冻结在 `runtime_p3_complete_v1`，新旧 stamp 无法据此区分陈旧程度，六项探针尚未在当前代码上复跑（审计 core-host-18，T027 标注实况） |
+| P1-8 | 载体兼容矩阵 | ✅ 核心矩阵：Linux 与 Windows 两载体六项工具探针通过；真实受策略样本的特定链路归 P4-6。**现场证据已过期未重跑**：test12-reverify.md 的 stamp 停在提交 `8115ebe1`；证据钉在这个提交，与当前 HEAD 的差距会持续增长，重采前先跑一次 `git rev-list --count 8115ebe1..HEAD`（含限定 `src/runtime/host`/`plugins/tools`/`bootstrap.ts` 路径的一版）确认实际差距，不再写死具体提交数。`RUNTIME_CONFIG_VERSION` 已由 T028（`a11ccbe0`）从 `runtime_p3_complete_v1` 解冻为 `runtime_p6_hardening_v1`，重采后的 stamp 可据此与旧证据分代；六项探针尚未在当前代码上复跑（审计 core-host-18，T027 标注实况；T028 解冻后本行曾一度未回写，加固批次 D 审计 `[windows-08]` 复核过此处，本次已回写） |
 | P1-9 | new_context 工具 | ✅，与 P2-8 配对 |
 
 证据：[P1 本机](evidence/p1/README.md)、[TEC Windows 五态清理](../../../../Windows-P4-6-evidence/tree-cleanup-five-states.md)、[test.12 两载体及现场结果](../../../../Windows-P4-6-evidence/test12-reverify.md)、[test.11 密文载体对照](../../../../Windows-P4-6-evidence/encryption-special.md)。
@@ -133,7 +140,7 @@ P3 阶段的 v4 互通对象只是 pi-agent-core 的 JSONL，当时不能据此�
 | 包与载体 | test.13 CI 已成功；test.12 实际安装包 native worker Read/Bash/权限活动/退出通过 |
 | Windows 命令树 / 两载体六工具 | ✅，分别计入 P1-0/P1-3/P1-8 |
 | 加密文本 GUI / agent 读写 | ✅ 用户确认被其他软件修改并加密后仍能打开、修改和读取；不是“加密机未测” |
-| 加密载体对照 | test.11 已有真实密文三读取者差分；test.12 R2/R3 都读到明文。用户 2026-09-10 确认 Node 与 Git 本身在企业白名单内，放行规则不再作为待查项 |
+| 加密载体对照 | test.11 已有真实密文三读取者差分，结论成立。test.12 的 R2/R3 **未签收**：目标读取结果没有 TSD 容器头，分不清「本来就是明文文件」和「白名单进程透明解密」，仅作预检保留（[test12-reverify.md:806](../../../../Windows-P4-6-evidence/test12-reverify.md)「限制：目标当前读取结果无 TSD 头，不能区分明文文件与透明解密；R2/R3 不能据此拍板放行按路径/签名/父进程」）。用户 2026-09-10 的确认仅限定「Node 与 Git 本身在企业白名单内」，不覆盖驱动按进程名/路径/签名/父进程哪种维度放行——这一判别器仍是 F3 三个修法选项之间唯一的分辨依据，需真实加密容器重跑 R2/R3 才能拍板，未签收前不撤销 F3 根因待定的状态 |
 | Main Git / diff / 编码 / 二进制 | 🟡 F3 持续复现；特定编码与真实二进制样本无完整现场结果 |
 | 旧会话 | ✅ test.12 v3 历史/重启 resume 通过；首次转换生成时点的基线证据有限 |
 | 新权限 UI、档位与状态修复 | 🟡 按“现场缺陷与修复”列出的包边界复验 |
@@ -220,7 +227,7 @@ P3 阶段的 v4 互通对象只是 pi-agent-core 的 JSONL，当时不能据此�
 | F4 重试 | 🟢 自有重试层已实现（`27d4b7be`），2026-09-11 在开发机用真实 HTTP 假网关触发通过四条路。**退避节奏按用户当日决定改为 3s → 10s → 30s**（三次重试、四次尝试，持续故障总等 43 秒），替掉原来的两套倍增公式；两条预算仍各记各的次数，限流那条保留抖动，服务端 `Retry-After` 一律优先。实测：503×2 后成功（3 次请求、3s→10s）、一直 503 时 4 次请求耗尽、429 按 `Retry-After` 只等 1s、退避中取消 401ms 结束只发 1 次请求。stream 开始后的恢复仍不在该层范围；GUI 侧观感与加密机复测未做。[记录](evidence/p4-6/f4-retry/README.md) |
 | F5 通用问答缺生产者 | 🟢 已实现（2026-09-12，`4916a633`）。runtime `ask` 工具 → `question.requested` → `worker.question.respond` → `chat:respondQuestion` → store → 输入框上方的可作答卡片。工具自己给每一问分配 id（answers 表按问题原文做键时，一次调用里两问同字面会撞键）；不设超时也不做权限门；宿主无处显示时不注册该工具。**仅自动化测试，未真机点验** | [功能决策](../../../plans/2026-09-09-gui-defect-decisions.md#f5--无提问工具questioncard--扩展问答弹不出来) · [记录](evidence/p5-1/README.md) |
 | F6 对话修改审阅 | ✅ 2026-09-10 采用右侧审阅，本地真实应用验证通过，尚未打包 | [R1/R2 与更新 U1](topics/session-review-and-updates.md) |
-| F7a/F7c 权限卡样式/尺寸 | 🟡 结构化权限链与重画本地真实应用可用；倒计时原未接通，已补 `baeff487` 并本地验证；视觉口径仍待定 | 不在 test.13；通用问答卡仍受 F5 限制 |
+| F7a/F7c 权限卡样式/尺寸 | 🟡 结构化权限链与重画本地真实应用可用；倒计时原未接通，已补 `baeff487` 并本地验证；视觉口径仍待定 | 不在 test.13；问答卡已有生产者（F5，`4916a633`），F7c 的问答卡半边随 GUI C/8 一并在最后一次上机点验 |
 | F7b 重复状态行 | ✅ 根因是时间线末尾与输入框上方各挂一个 `SessionActivityStatus`（`a3debdf6` 守的是另一对）；按用户选择只留输入框上方，本地真实应用全程单份 | `225c325e`；[修前截图](evidence/session-review-and-updates/local-f7b-duplicate.png) |
 | 会话写入锁残留 | 🟡 已修：锁记录 `pid`/`host`，`EEXIST` 后判定主进程是否存活，陈旧锁经 rename 独占后接管；活写者与他机锁仍拒绝。7 项新测试含反向对照，未打包、未现场回归 | `280f49fc`；`src/runtime/plugins/session/writerLock.ts`（`store.ts` 与 `legacy.ts` 共用）；[验证](evidence/session-writer-lock/README.md) |
 | 中文界面英文残留（走 t() 的） | ✅ 已修 `d0332939`：全渲染层 1078 个 `t('…')` 字面量逐一比对，补齐 57 处缺失词条（设置、Git、差异视图、用户资料等）。新增 `i18nCoverage` 测试守住这条线，此后新加 `t()` 必须同时加词条 | 起因是 H/21 点验 D4（迁移列表里「AI services」与「历史对话」并排一中一英），量化后一次补齐 |

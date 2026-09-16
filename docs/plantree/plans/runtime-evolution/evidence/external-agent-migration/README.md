@@ -139,16 +139,24 @@ WORKER_REQUEST_FAILED: Pi model not found: maxapi/grok-4.6
 |---|---|
 | 合成注入泄漏 | **0**（查 `<local-command-caveat>` / `<system-reminder>` / `<command-name>` / `# AGENTS.md` / `You are Codex` 五种标记） |
 | 标题 | 修 `ClaudeSourceAdapter` 之前，Claude 最近几条全是 `/clear`；修完取到真实首句（「1.先收尾然后提交H/19…」「开始第 2 批 H/19…」） |
-| 工具调用 | 作为只读 `display` 条目保留，不进模型上下文（`piLegacyImport` 有一条专门的上下文泄漏检查） |
+| 工具调用 | 作为只读 `display` 条目保留，不进模型上下文（当时由已退役的 `piLegacyImport` 做泄漏检查；P6-5 之后同一检查在 `nativeImport.ts` 的 `assertUsable` 里，见下方 2026-09-15 注记） |
 
 ### 真机闭环
+
+> **2026-09-15 时点注记**：下表第 4 行记录的落盘路径 `…/pi-agent/sessions/--home-ai-code-ai-client--/…_import-codex-….jsonl`
+> 是 2026-09-11 现场当时的 pi 写入器布局（按工作区分子目录、文件名带时间戳前缀）。
+> fe246bd6（P6-5，2026-09-14）退役旧引擎之后，导入产物改由 native 写入器落盘，路径变为扁平的
+> `<agentDir>/sessions/<targetPiSessionId>.jsonl`（`src/runtime/worker/nativeImport.ts:255-265`
+> 的 `fileFor`/`sessionsDir`），与 native 普通会话同一布局（`nativeWorkerRuntime.ts` 的 `sessionFilePath()`）。
+> 代码本身自洽，此处只是证据页的路径描述已过期；按这份记录去复验会在一个不存在的路径下找文件。
+> **C1～C6 的验收结论不受影响，仍然成立**。
 
 | # | 检查 | 结果 |
 |---|---|---|
 | 1 | 设置 · Pi 出现「从 Claude Code / Codex 导入历史对话」，列出三个项目 | ✅ 全中文；`pi-cli` 带「未匹配到仓库」徽标，两个 `ai-client` 没有 |
 | 2 | 进项目后列出会话（首句 / id / 时间 / 模型） | ✅ 9 条 Codex 会话，首句是真实提问 |
 | 3 | 导入一条 | ✅ 报告「新导入 1 个，已存在 0 个，失败 0 个」 |
-| 4 | 文件落在统一 sessions 目录 | ✅ `…/pi-agent/sessions/--home-ai-code-ai-client--/…_import-codex-….jsonl`（与 GUI/TUI 共用目录，验证案例 6） |
+| 4 | 文件落在统一 sessions 目录 | ✅ 2026-09-11 实测路径 `…/pi-agent/sessions/--home-ai-code-ai-client--/…_import-codex-….jsonl`（与 GUI/TUI 共用目录，验证案例 6）；**该路径形态已过期，见上方 2026-09-15 注记** |
 | 5 | 索引行 | ✅ `agent: pi`、`legacyImport.sourceKind: codex`、dedupeKey 带内容指纹 |
 | 6 | **导入后出现在侧栏** | ✅ 置顶「now」，在 `ai-client` 仓库下 |
 | 7 | **打开能看到历史** | ✅ 完整 Codex 对话渲染，工具调用折叠成「已处理 N 个步骤」 |

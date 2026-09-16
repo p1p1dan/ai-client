@@ -13,13 +13,12 @@ if ($running) {
     Start-Sleep -Seconds 2
 }
 
-# 2. 设置 native 后端环境
-$env:AICLIENT_RUNTIME_BACKEND   = 'native'
+# 2. 设置 agent/trace 目录（后端恒为 native：AICLIENT_RUNTIME_BACKEND 已随 P6-5 删除，设置无效）
 $env:AICLIENT_RUNTIME_AGENT_DIR = 'C:\Users\JC\.pilab\jyw-ai-client\pi-agent'
 $env:AICLIENT_RUNTIME_TRACE_DIR = $trace
 New-Item -ItemType Directory -Force -Path $trace | Out-Null
 
-Write-Host "backend=$env:AICLIENT_RUNTIME_BACKEND agent=$env:AICLIENT_RUNTIME_AGENT_DIR trace=$trace"
+Write-Host "agent=$env:AICLIENT_RUNTIME_AGENT_DIR trace=$trace（实际后端以 trace 内 version_stamp.backend 为准）"
 
 # 3. 启动应用
 Start-Process -FilePath $app

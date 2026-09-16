@@ -60,6 +60,15 @@ MIT 协议，69KB，两个依赖。DSH 已验证可承载完整 agent runtime。
 插件间 service 接口隔离纪律；响应式属性用于 worker 内插件间状态传播（如权限配置变更
 → 工具注册表更新）；动态 scope 为后续场景（测试 mock、按会话差异化策略）保留空间。
 
+> **落地注记（2026-09-15）**：依赖图解析/生命周期管理/service 注入这一基础部分已落地并在用。
+> 其余三项截至本注记**零落地**：全仓无 `ctx.isolate`/`ctx.accept`/热插拔接入点；当前锁定的
+> `cordis@4.0.0-rc.9` 也没有 v3 版 `ctx.accept` 这个 API，「权限配置变更 → 工具注册表更新」
+> 的实际实现是拉模式（`plugins/tools/index.ts` 里现读 `runtimePermissions.mode`），不是响应式推送
+> ——等价物是 rc.9 的服务重挂后重启依赖 fiber（`ReflectService.notify` + `fiber.update`），
+> 不是本文原指的 `ctx.accept`。热插拔、Fork/Isolate、动态 scope 三项均无接入点也无代码引用。
+> 这不是缺陷，是当时选型时列出的能力清单里，只有一部分被实际用上；未用上的三项也没有另开
+> 决策记录裁决「保留/推迟/放弃」，本注记只如实记录现状，裁决留待需要用到时再做。
+
 ### D2 · 协议层：只保留 pi-ai
 
 `@earendil-works/pi-ai` 负责 provider 差异抹平、模型目录发现、流式响应统一、

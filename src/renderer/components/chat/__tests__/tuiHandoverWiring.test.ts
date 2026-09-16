@@ -39,8 +39,16 @@ describe('leaving the Pi TUI re-reads the session from disk', () => {
   });
 
   it('suspends the terminal first, then reloads', () => {
-    // Order is the correctness point, not a preference: the reload has to read
-    // a file the other writer is no longer appending to.
+    // Order still matters, but not for the reason this comment used to claim.
+    // `suspend` only stops Main from forwarding further PTY output to the
+    // renderer (PiTuiPty.ts) — the pi CLI process itself is untouched and
+    // keeps appending to the same JSONL. So this reload can still land before
+    // a trailing write finishes; it is not reading a file the other writer
+    // has stopped appending to. What actually makes this safe to leave as-is
+    // is that the next GUI write re-reads the file again before it writes
+    // (see the `tuiWrittenSessions` bookkeeping in piTui.ts), so a reload
+    // that lands one write behind here is a transient staleness, not a
+    // lasting correctness bug.
     expect(WORKSPACE).toMatch(
       /piTui\.suspend\(terminalId\);\s*await window\.electronAPI\.chat\.reloadSession/
     );
