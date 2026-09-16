@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { stripComments } from '../../chat/__tests__/stripComments';
 
@@ -49,7 +49,7 @@ function code(path: string): string {
 describe('panel visibility has exactly one derivation point (R1)', () => {
   it('no shell component re-derives visibility from `activeSurfaceId !== null`', () => {
     const offenders = listShellSources()
-      .filter((path) => !ALLOWED.has(path.split('/').pop() ?? ''))
+      .filter((path) => !ALLOWED.has(basename(path)))
       .filter((path) => /activeSurfaceId\s*!==\s*null/.test(code(path)))
       .map((path) => path.slice(SHELL_DIR.length + 1));
 

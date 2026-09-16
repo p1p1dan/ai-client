@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { PI_WORKER_GENERATION_ENV } from '@shared/types/workerRpc';
 import { app, utilityProcess } from 'electron';
 import { describe, expect, it, vi } from 'vitest';
@@ -30,14 +31,14 @@ it('uses the bundled Node executable for packaged Windows workers and fails if i
       inheritedEnv: { Path: 'system-bin', ELECTRON_RUN_AS_NODE: '1' },
     });
     expect(spawn).toHaveBeenCalledWith(
-      '/resources/node-runtime/node.exe',
+      join('/resources', 'node-runtime', 'node.exe'),
       ['/resources/agent-host/worker.js'],
       expect.objectContaining({
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
         windowsHide: true,
         env: expect.objectContaining({
-          PATH: '/resources/node-runtime;system-bin',
-          Path: '/resources/node-runtime;system-bin',
+          PATH: `${join('/resources', 'node-runtime')};system-bin`,
+          Path: `${join('/resources', 'node-runtime')};system-bin`,
         }),
       })
     );
@@ -78,14 +79,14 @@ describe('PiWorkerProcess', () => {
         appPath: '/app',
         resourcesPath: '/resources',
       })
-    ).toBe('/app/src/agent-host/worker.ts');
+    ).toBe(join('/app', 'src', 'agent-host', 'worker.ts'));
     expect(
       resolvePiWorkerEntryPath({
         isPackaged: true,
         appPath: '/app',
         resourcesPath: '/resources',
       })
-    ).toBe('/resources/agent-host/worker.js');
+    ).toBe(join('/resources', 'agent-host', 'worker.js'));
   });
 
   it('sanitizes Electron mode and binds generation plus managed Pi environment', () => {

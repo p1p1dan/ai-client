@@ -9,7 +9,7 @@
  * P5-2 contract's "整体等价基线" exists to prevent.
  */
 
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_SUBAGENT_DOCUMENTS } from '../../shared/subagentBuiltins.ts';
 import {
@@ -54,9 +54,11 @@ function fakeSource(files: Record<string, string>): SubagentDocumentSource {
       if (!directories.has(path)) return undefined;
       const children = new Map<string, RuntimeFileKind>();
       for (const file of Object.keys(files)) {
-        if (!file.startsWith(`${path}/`)) continue;
+        // Keys are built with `join()`, the same way the catalog builds every
+        // path it reads, so child matching has to use the native separator too.
+        if (!file.startsWith(`${path}${sep}`)) continue;
         const rest = file.slice(path.length + 1);
-        const slash = rest.indexOf('/');
+        const slash = rest.indexOf(sep);
         children.set(slash < 0 ? rest : rest.slice(0, slash), slash < 0 ? 'file' : 'directory');
       }
       return [...children].map(([name, kind]) => ({ name, kind }));

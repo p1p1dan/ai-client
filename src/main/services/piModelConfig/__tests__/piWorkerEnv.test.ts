@@ -390,7 +390,7 @@ describe('resolveManagedPiWorkerEnv — the user service count no longer moves a
    * only for local-mode users who happened to add a service. These four cases
    * are the same four inputs, and the directory is now the same in all of them.
    */
-  const APP_AGENT_DIR = '/tmp/aiclient-test/.pilab/dev/pi-agent';
+  const APP_AGENT_DIR = join('/tmp/aiclient-test/.pilab/dev', 'pi-agent');
 
   it('points at the app directory with no services configured', async () => {
     readUserProvidersMock.mockReturnValue({ status: 'ok', providers: [] } as never);

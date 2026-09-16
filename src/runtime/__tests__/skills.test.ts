@@ -18,7 +18,7 @@
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, sep } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
@@ -52,9 +52,18 @@ import { neverAsked } from './fixtures/approval.ts';
  * skills-mcp-08 without a real filesystem.
  */
 function fakeSource(
-  files: Record<string, string>,
-  symlinks: Record<string, string> = {}
+  rawFiles: Record<string, string>,
+  rawSymlinks: Record<string, string> = {}
 ): SkillSource {
+  // Keys above are written posix-style for readability, while the loader builds
+  // every path it looks up with `join()`. Normalise both sides through the same
+  // `join()` so the fake matches the way a real filesystem would.
+  const files: Record<string, string> = Object.fromEntries(
+    Object.entries(rawFiles).map(([path, text]) => [join(path), text])
+  );
+  const symlinks: Record<string, string> = Object.fromEntries(
+    Object.entries(rawSymlinks).map(([path, target]) => [join(path), join(target)])
+  );
   const directories = new Set<string>();
   const addAncestors = (path: string) => {
     for (
@@ -78,7 +87,8 @@ function fakeSource(
    * which may legitimately not exist. A cycle or a dangling target: give up
    * and return the original `path` too, which then correctly fails `exists`.
    */
-  const resolveFullPath = (path: string, seen = new Set<string>()): string => {
+  const resolveFullPath = (rawPath: string, seen = new Set<string>()): string => {
+    const path = join(rawPath);
     if (exists(path)) return path;
     if (seen.has(path)) return path; // cycle guard
     seen.add(path);
@@ -100,9 +110,9 @@ function fakeSource(
   const childrenOf = (dir: string) => {
     const children = new Map<string, RuntimeFileKind>();
     for (const file of Object.keys(files)) {
-      if (!file.startsWith(`${dir}/`)) continue;
+      if (!file.startsWith(`${dir}${sep}`)) continue;
       const rest = file.slice(dir.length + 1);
-      const slash = rest.indexOf('/');
+      const slash = rest.indexOf(sep);
       children.set(slash < 0 ? rest : rest.slice(0, slash), slash < 0 ? 'file' : 'directory');
     }
     // A directory that exists only to hold a nested symlink (no real file of

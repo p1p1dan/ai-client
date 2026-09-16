@@ -75,7 +75,9 @@ function walkStaticGraph(entry: string): { files: Set<string>; packages: Map<str
 
 describe('P6-2 native worker dependency boundary', () => {
   const graph = walkStaticGraph(workerEntry);
-  const relative = (file: string) => path.relative(repoRoot, file);
+  // Repo-relative, always posix-separated: the module identities below are
+  // written the way a specifier is, not the way the host spells a path.
+  const relative = (file: string) => path.relative(repoRoot, file).split(path.sep).join('/');
 
   it('reaches the modules it is supposed to be checking', () => {
     // A scanner that silently visits nothing would "prove" the rule below.

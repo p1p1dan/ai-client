@@ -115,7 +115,9 @@ function read(file: string): string {
 }
 
 function rel(file: string): string {
-  return path.relative(SRC_DIR, file);
+  // Offender labels are module identities, so they stay posix-separated on
+  // every host; `path.relative` answers in the host's own separator.
+  return path.relative(SRC_DIR, file).split(path.sep).join('/');
 }
 
 /* -------------------------------------------------------------------------

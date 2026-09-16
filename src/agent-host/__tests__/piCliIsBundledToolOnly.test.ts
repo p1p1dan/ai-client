@@ -40,6 +40,11 @@ const PACKAGE = '@earendil-works/pi-coding-agent';
  */
 const LIBRARY_ALLOWED: readonly string[] = ['src/agent-host/__tests__/fixtures/loadPiCliProbe.mjs'];
 
+/** Repo-relative and always posix-separated, the way the allow-list spells it. */
+function repoRelative(file: string): string {
+  return path.relative(repoRoot, file).split(path.sep).join('/');
+}
+
 function sourceFiles(dir: string, found: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     if (name === 'node_modules') continue;
@@ -82,7 +87,7 @@ function importsPackageAsLibrary(source: string): boolean {
 describe('P6-2 · pi-coding-agent is a bundled tool, not our library', () => {
   const importers = sourceFiles(srcRoot)
     .filter((file) => importsPackageAsLibrary(readFileSync(file, 'utf8')))
-    .map((file) => path.relative(repoRoot, file))
+    .map((file) => repoRelative(file))
     .sort();
 
   it('walks a real source tree and recognises an import when there is one', () => {
@@ -105,7 +110,7 @@ describe('P6-2 · pi-coding-agent is a bundled tool, not our library', () => {
     // The allow-list may only name files that exist; a stale entry would be a
     // hole nobody can see.
     for (const allowed of LIBRARY_ALLOWED) {
-      expect(sourceFiles(srcRoot).map((file) => path.relative(repoRoot, file))).toContain(allowed);
+      expect(sourceFiles(srcRoot).map((file) => repoRelative(file))).toContain(allowed);
     }
   });
 
