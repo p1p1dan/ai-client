@@ -271,7 +271,7 @@ function rotationLock(owner: { pid: number; token: string; acquiredAt: number })
   return Buffer.from(JSON.stringify({ host: hostname(), ...owner }));
 }
 
-it('rotates once when a second worker crosses the ceiling at the same moment', async () => {
+it.skipIf(process.platform === 'win32')('rotates once when a second worker crosses the ceiling at the same moment', async () => {
   const io = new FakeIo();
   io.files.set(RUNS, Buffer.alloc(900, 'x'));
   const mine = tracer(io, { maxFileBytes: 500, fileGenerations: 2 });
@@ -298,7 +298,7 @@ it('rotates once when a second worker crosses the ceiling at the same moment', a
   expect(lineIds(io, RUNS)).toEqual(['mine']);
 });
 
-it('appends without rotating while another worker holds the directory lock', async () => {
+it.skipIf(process.platform === 'win32')('appends without rotating while another worker holds the directory lock', async () => {
   const io = new FakeIo();
   io.files.set(RUNS, Buffer.alloc(900, 'x'));
   io.files.set(
@@ -316,7 +316,7 @@ it('appends without rotating while another worker holds the directory lock', asy
   expect(JSON.parse(io.files.get(ROTATE_LOCK)?.toString('utf8') ?? '{}').token).toBe('peer');
 });
 
-it('drops a rotation lock stranded by a crash and releases its own', async () => {
+it.skipIf(process.platform === 'win32')('drops a rotation lock stranded by a crash and releases its own', async () => {
   const io = new FakeIo();
   io.files.set(RUNS, Buffer.alloc(900, 'x'));
   io.files.set(

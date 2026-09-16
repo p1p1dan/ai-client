@@ -9,6 +9,12 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import { STDERR_FORWARD_MAX_LINES_PER_TURN } from '../../../../agent-host/stderrRedaction';
 import { BOOTSTRAP_REQUEST_TIMEOUT_MS } from '../createPiWorkerSlot';
+import { normalizeWorkerPath, sessionWorkerKey } from '../workerSessionKey';
+
+// Normalize a POSIX-style path to the current platform's canonical form so
+// fixture paths and assertion values agree on Windows and Linux alike.
+const norm = (p: string) => normalizeWorkerPath(p);
+const slotKey = (p: string) => sessionWorkerKey(p);
 import {
   resolveDefaultWorkerCapacity,
   resolveWorkerCapacity,
@@ -137,7 +143,9 @@ function createHarness(
     }
     const sessionId = String(options.logicalSessionId);
     const generation = Number(options.generation ?? 1);
-    const sessionFile = String(options.sessionFile ?? `/sessions/${sessionId}.jsonl`);
+    // Normalize the fallback so the mock's sessionFile always matches the
+    // platform-canonical form WorkerManager stores in the slot.
+    const sessionFile = String(options.sessionFile ?? norm(`/sessions/${sessionId}.jsonl`));
     const opened = input.bootstrapFile?.(sessionFile) ?? { sessionFile };
     const onEvent = options.onEvent as ((event: WorkerRpcEvent) => void) | undefined;
     const onLifecycle = options.onLifecycle as
@@ -253,13 +261,15 @@ function createHarness(
         return {
           logicalSessionId: sessionId,
           sourceSessionFile: sessionFile,
-          sessionFile: '/sessions/forked.jsonl',
+          // Use a platform-canonical path so WorkerManager's normalizeWorkerPath
+          // produces the same key on both Windows and POSIX.
+          sessionFile: norm('/sessions/forked.jsonl'),
           piSessionId: 'pi-forked',
           workspacePath: String(options.cwd),
           leaf: { activeEntryId: 'leaf-a', fileTailEntryId: 'leaf-a' },
           history: {
             logicalSessionId: sessionId,
-            sessionFile: '/sessions/forked.jsonl',
+            sessionFile: norm('/sessions/forked.jsonl'),
             workspacePath: String(options.cwd),
             page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
           },
@@ -445,7 +455,7 @@ describe('WorkerManager identity and capacity', () => {
     });
     expect(h.commitPiLeaf).toHaveBeenCalledWith({
       sessionId: 'source',
-      runtimeIdentity: '/sessions/source.jsonl',
+      runtimeIdentity: norm('/sessions/source.jsonl'),
       piLeaf: { activeEntryId: 'leaf-a', fileTailEntryId: 'tail-c' },
     });
     expect(h.events.map((event) => event.type)).toEqual(['session.history', 'session.status']);
@@ -459,7 +469,7 @@ describe('WorkerManager identity and capacity', () => {
       ownerWebContentsId: 11,
     });
     expect(forked.session).toMatchObject({
-      runtimeIdentity: '/sessions/forked.jsonl',
+      runtimeIdentity: norm('/sessions/forked.jsonl'),
       title: 'Source (fork)',
       agent: 'pi',
     });
@@ -468,11 +478,11 @@ describe('WorkerManager identity and capacity', () => {
       expect.arrayContaining([
         expect.objectContaining({
           logicalSessionId: 'source',
-          sessionFile: '/sessions/source.jsonl',
+          sessionFile: norm('/sessions/source.jsonl'),
         }),
         expect.objectContaining({
           logicalSessionId: forked.session.sessionId,
-          sessionFile: '/sessions/forked.jsonl',
+          sessionFile: norm('/sessions/forked.jsonl'),
         }),
       ])
     );
@@ -504,7 +514,7 @@ describe('WorkerManager identity and capacity', () => {
     expect(h.records).toHaveLength(2);
     expect(h.records[1].request).toHaveBeenCalledWith('worker.fork.discard', {
       logicalSessionId: expect.stringMatching(/^session-fork-/),
-      sessionFile: '/sessions/forked.jsonl',
+      sessionFile: norm('/sessions/forked.jsonl'),
     });
     expect(h.records[1].dispose).toHaveBeenCalledWith('slot-dispose');
     expect(h.manager.getSlotSnapshots()).toEqual([
@@ -621,12 +631,12 @@ describe('WorkerManager identity and capacity', () => {
       expect.stringMatching(/^workspace:.*session:s2:create:token-2$/),
     ]);
     expect(h.manager.getSlotSnapshots().map((slot) => slot.key)).toEqual([
-      'session:/sessions/s1.jsonl',
-      'session:/sessions/s2.jsonl',
+      slotKey('/sessions/s1.jsonl'),
+      slotKey('/sessions/s2.jsonl'),
     ]);
     expect(h.bindRuntimeIdentity.mock.calls).toEqual([
-      ['s1', '/sessions/s1.jsonl'],
-      ['s2', '/sessions/s2.jsonl'],
+      ['s1', norm('/sessions/s1.jsonl')],
+      ['s2', norm('/sessions/s2.jsonl')],
     ]);
   });
 
@@ -646,7 +656,7 @@ describe('WorkerManager identity and capacity', () => {
         requestId,
         payload: {
           agent: 'pi',
-          runtimeIdentity: '/sessions/s1.jsonl',
+          runtimeIdentity: norm('/sessions/s1.jsonl'),
           // D10: which permission system the worker actually bootstrapped on,
           // read off the bootstrap ack. The tier control needs it to stop
           // offering tiers the runtime will ignore.
@@ -700,7 +710,7 @@ describe('WorkerManager identity and capacity', () => {
     });
     expect(h.events.some((event) => event.type === 'session.created')).toBe(false);
     expect(h.manager.getSlotSnapshots()[0]).toMatchObject({
-      key: 'session:/sessions/s1.jsonl',
+      key: slotKey('/sessions/s1.jsonl'),
       state: 'creating',
     });
 
@@ -1017,20 +1027,20 @@ describe('WorkerManager Pi history and real resume', () => {
 
     expect(h.bindRuntimeIdentity).toHaveBeenCalledWith(
       's1',
-      '/sessions/legacy-v3.jsonl.native-v4.jsonl'
+      norm('/sessions/legacy-v3.jsonl.native-v4.jsonl')
     );
     // The index row now names the copy, so the commit that follows must too —
     // commitResumed rejects an identity that disagrees with the stored one.
     expect(h.commitResumed).toHaveBeenCalledWith({
       sessionId: 's1',
-      workspacePath: '/repo',
-      runtimeIdentity: '/sessions/legacy-v3.jsonl.native-v4.jsonl',
+      workspacePath: norm('/repo'),
+      runtimeIdentity: norm('/sessions/legacy-v3.jsonl.native-v4.jsonl'),
       piLeaf: { activeEntryId: null, fileTailEntryId: null },
     });
     expect(h.manager.getSlotSnapshots()).toEqual([
       expect.objectContaining({
         logicalSessionId: 's1',
-        sessionFile: '/sessions/legacy-v3.jsonl.native-v4.jsonl',
+        sessionFile: norm('/sessions/legacy-v3.jsonl.native-v4.jsonl'),
       }),
     ]);
   });
@@ -1083,14 +1093,14 @@ describe('WorkerManager Pi history and real resume', () => {
     expect(h.createSlot).toHaveBeenCalledWith(
       expect.objectContaining({
         logicalSessionId: 's1',
-        sessionFile: '/sessions/s1.jsonl',
-        cwd: '/repo',
+        sessionFile: norm('/sessions/s1.jsonl'),
+        cwd: norm('/repo'),
       })
     );
     expect(h.commitResumed).toHaveBeenCalledWith({
       sessionId: 's1',
-      workspacePath: '/repo',
-      runtimeIdentity: '/sessions/s1.jsonl',
+      workspacePath: norm('/repo'),
+      runtimeIdentity: norm('/sessions/s1.jsonl'),
       piLeaf: { activeEntryId: null, fileTailEntryId: null },
     });
     expect(h.events.map((event) => [event.type, event.requestId])).toEqual([
@@ -1101,7 +1111,7 @@ describe('WorkerManager Pi history and real resume', () => {
     expect(h.events[1]).toMatchObject({
       payload: {
         mode: 'initial',
-        runtimeIdentity: '/sessions/s1.jsonl',
+        runtimeIdentity: norm('/sessions/s1.jsonl'),
         offset: 0,
         limit: 80,
         totalCount: 0,
@@ -1288,7 +1298,7 @@ describe('WorkerManager unwritten Pi session files', () => {
     // The slot itself is fully usable — only the durable claim is withheld.
     expect(h.manager.getSlotSnapshots()[0]).toMatchObject({
       state: 'ready',
-      sessionFile: '/sessions/s1.jsonl',
+      sessionFile: norm('/sessions/s1.jsonl'),
     });
   });
 
@@ -1307,20 +1317,20 @@ describe('WorkerManager unwritten Pi session files', () => {
     });
 
     await vi.waitFor(() =>
-      expect(h.bindRuntimeIdentity).toHaveBeenCalledWith('s1', '/sessions/s1.jsonl')
+      expect(h.bindRuntimeIdentity).toHaveBeenCalledWith('s1', norm('/sessions/s1.jsonl'))
     );
     expect(h.events).toContainEqual(
       expect.objectContaining({
         type: 'session.updated',
         sessionId: 's1',
-        payload: { runtimeIdentity: '/sessions/s1.jsonl' },
+        payload: { runtimeIdentity: norm('/sessions/s1.jsonl') },
       })
     );
     // The leaf commit is what the index rejects for an unbound session, so it
     // has to land after the identity, not instead of it.
     await vi.waitFor(() =>
       expect(h.commitPiLeaf).toHaveBeenCalledWith(
-        expect.objectContaining({ sessionId: 's1', runtimeIdentity: '/sessions/s1.jsonl' })
+        expect.objectContaining({ sessionId: 's1', runtimeIdentity: norm('/sessions/s1.jsonl') })
       )
     );
   });
@@ -1343,13 +1353,13 @@ describe('WorkerManager unwritten Pi session files', () => {
     });
 
     await vi.waitFor(() =>
-      expect(h.bindRuntimeIdentity).toHaveBeenCalledWith('s1', '/sessions/s1.jsonl')
+      expect(h.bindRuntimeIdentity).toHaveBeenCalledWith('s1', norm('/sessions/s1.jsonl'))
     );
     expect(h.events).toContainEqual(
       expect.objectContaining({
         type: 'session.updated',
         sessionId: 's1',
-        payload: { runtimeIdentity: '/sessions/s1.jsonl' },
+        payload: { runtimeIdentity: norm('/sessions/s1.jsonl') },
       })
     );
     // Idempotent: later messages must not re-bind or re-announce.
@@ -1382,8 +1392,8 @@ describe('WorkerManager unwritten Pi session files', () => {
     await vi.waitFor(() =>
       expect(h.manager.getSlotSnapshots()[0]).toMatchObject({
         state: 'ready',
-        sessionFile: '/sessions/s1-second.jsonl',
-        key: 'session:/sessions/s1-second.jsonl',
+        sessionFile: norm('/sessions/s1-second.jsonl'),
+        key: slotKey('/sessions/s1-second.jsonl'),
         generation: 2,
       })
     );
@@ -1461,7 +1471,7 @@ describe('WorkerManager unwritten Pi session files', () => {
     await h.manager.forkSession({ sourceSessionId: 's1', entryId: 'e1', sourceTitle: 'Chat' });
     expect(h.createForked).toHaveBeenCalledWith(
       expect.objectContaining({
-        workspacePath: '/tmp/base/unbound-sessions/abc',
+        workspacePath: norm('/tmp/base/unbound-sessions/abc'),
         unbound: true,
       })
     );
@@ -1493,7 +1503,7 @@ describe('WorkerManager unwritten Pi session files', () => {
     });
     expect(h.records[0].request).toHaveBeenCalledWith('worker.fork.accept', {
       logicalSessionId: 'source',
-      sessionFile: '/sessions/forked.jsonl',
+      sessionFile: norm('/sessions/forked.jsonl'),
     });
   });
 
@@ -1533,7 +1543,7 @@ describe('WorkerManager unwritten Pi session files', () => {
         entryId: 'leaf-a',
         sourceTitle: 'Source',
       })
-    ).resolves.toMatchObject({ session: { runtimeIdentity: '/sessions/forked.jsonl' } });
+    ).resolves.toMatchObject({ session: { runtimeIdentity: norm('/sessions/forked.jsonl') } });
   });
 
   /**
@@ -1572,10 +1582,10 @@ describe('WorkerManager unwritten Pi session files', () => {
 
       await h.manager.ensureReady();
 
-      expect(h.readSessionDirectory).toHaveBeenCalledWith('/sessions');
+      expect(h.readSessionDirectory).toHaveBeenCalledWith(norm('/sessions'));
       expect(h.removeSessionFile.mock.calls.map((call) => call[0])).toEqual([
-        '/sessions/abandoned.jsonl',
-        '/sessions/abandoned.jsonl.staged',
+        norm('/sessions/abandoned.jsonl'),
+        norm('/sessions/abandoned.jsonl.staged'),
       ]);
     });
 
@@ -1591,7 +1601,7 @@ describe('WorkerManager unwritten Pi session files', () => {
       await h.manager.ensureReady();
 
       expect(h.removeSessionFile.mock.calls.map((call) => call[0])).toEqual([
-        '/sessions/forked.jsonl.staged',
+        norm('/sessions/forked.jsonl.staged'),
       ]);
     });
 
@@ -1609,7 +1619,7 @@ describe('WorkerManager unwritten Pi session files', () => {
       await h.manager.ensureReady();
 
       expect(h.removeSessionFile.mock.calls.map((call) => call[0])).toEqual([
-        '/sessions/abandoned.jsonl',
+        norm('/sessions/abandoned.jsonl'),
       ]);
     });
 
@@ -1776,10 +1786,10 @@ describe('WorkerManager unwritten Pi session files', () => {
   });
 
   it('still reopens the exact file when a written session goes missing', async () => {
-    const present = new Set(['/sessions/s1.jsonl']);
+    const present = new Set([norm('/sessions/s1.jsonl')]);
     const h = createHarness({ sessionFileExists: async (file) => present.has(file) });
     await create(h.manager, 's1');
-    expect(h.bindRuntimeIdentity).toHaveBeenCalledWith('s1', '/sessions/s1.jsonl');
+    expect(h.bindRuntimeIdentity).toHaveBeenCalledWith('s1', norm('/sessions/s1.jsonl'));
 
     // History that once existed and is now gone is real loss: the restart must
     // surface it, never paper over it with an empty replacement session.
@@ -1789,7 +1799,7 @@ describe('WorkerManager unwritten Pi session files', () => {
     await vi.waitFor(() => expect(h.createSlot).toHaveBeenCalledTimes(2));
     expect(h.createSlot.mock.calls[1][0]).toMatchObject({
       logicalSessionId: 's1',
-      sessionFile: '/sessions/s1.jsonl',
+      sessionFile: norm('/sessions/s1.jsonl'),
     });
   });
 
@@ -1957,7 +1967,7 @@ describe('WorkerManager isolation and crash recovery', () => {
     expect(terminal).toHaveLength(1);
     expect(h.createSlot.mock.calls[2][0]).toMatchObject({
       logicalSessionId: 's1',
-      sessionFile: '/sessions/s1.jsonl',
+      sessionFile: norm('/sessions/s1.jsonl'),
       generation: 2,
     });
     const restartTriplet = h.events.filter(
@@ -1971,8 +1981,8 @@ describe('WorkerManager isolation and crash recovery', () => {
     ]);
     expect(restartTriplet[1]).toMatchObject({
       payload: {
-        runtimeIdentity: '/sessions/s1.jsonl',
-        workspacePath: '/repo',
+        runtimeIdentity: norm('/sessions/s1.jsonl'),
+        workspacePath: norm('/repo'),
         mode: 'refresh',
       },
     });
@@ -2337,7 +2347,7 @@ describe('WorkerManager reload after an external writer', () => {
     expect(reloadCalls).toHaveLength(1);
     expect(reloadCalls?.[0]?.[1]).toMatchObject({
       logicalSessionId: 's1',
-      sessionFile: '/sessions/s1.jsonl',
+      sessionFile: norm('/sessions/s1.jsonl'),
     });
     // Reload rebuilds the whole plugin graph, MCP handshakes included — the
     // same work bootstrap does. On the warm 10s default a user with one stdio
@@ -2352,7 +2362,7 @@ describe('WorkerManager reload after an external writer', () => {
     // terminal's branch rather than opening a sibling one.
     expect(h.commitPiLeaf).toHaveBeenCalledWith({
       sessionId: 's1',
-      runtimeIdentity: '/sessions/s1.jsonl',
+      runtimeIdentity: norm('/sessions/s1.jsonl'),
       piLeaf: { activeEntryId: 'tui-tail', fileTailEntryId: 'tui-tail' },
     });
   });
