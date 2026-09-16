@@ -285,7 +285,7 @@ function removeSessionRow(sessionId: string): void {
     messages,
     historyErrors,
     pendingPermissions: state.pendingPermissions.filter((item) => item.sessionId !== sessionId),
-    pendingQuestion: state.pendingQuestion?.sessionId === sessionId ? null : state.pendingQuestion,
+    pendingQuestions: state.pendingQuestions.filter((item) => item.sessionId !== sessionId),
   });
   pruneSessionScopedRendererState(sessions.map((session) => session.id));
 }

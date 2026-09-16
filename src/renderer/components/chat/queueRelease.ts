@@ -529,7 +529,7 @@ export function shouldClearRetryableOnOutcome(outcome: RunEntryOutcome): boolean
 
 export interface DecidePendingResolutionInput {
   status: SessionRuntimeStatus;
-  /** `pendingQuestion?.sessionId === activeSessionId` — already scoped to "this session". */
+  /** `pendingQuestions.some(q => q.sessionId === activeSessionId)` — already scoped to "this session". */
   hasPendingQuestionHere: boolean;
   /** Same scoping for the permission queue. */
   hasPendingPermissionHere: boolean;

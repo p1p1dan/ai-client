@@ -62,7 +62,7 @@ it('renders retry after the long output and preserves a reader scrolled upward',
     },
     lastError: null,
     pendingPermissions: [],
-    pendingQuestion: null,
+    pendingQuestions: [],
   });
   const container = document.createElement('div');
   document.body.append(container);

@@ -521,10 +521,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   );
   // T-05: this session has a pending question dock showing (drives the
   // "Add more optional details…" placeholder, A07 screen 6 group E).
-  const pendingQuestionHere = useChatSessionsStore(
-    (state) =>
-      state.pendingQuestion?.sessionId != null &&
-      state.pendingQuestion.sessionId === state.activeSessionId
+  const pendingQuestionHere = useChatSessionsStore((state) =>
+    state.pendingQuestions.some((item) => item.sessionId === state.activeSessionId)
   );
   // T-19 decision 4: a pending permission is never auto-answered, only hinted
   // at — this scopes that hint (and the "don't deny for the user" rule) to

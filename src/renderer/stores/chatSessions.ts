@@ -291,7 +291,19 @@ export interface ChatSessionsState {
    * send M's id.
    */
   pendingPermissions: PendingPermission[];
-  pendingQuestion: PendingQuestion | null;
+  /**
+   * Every question the worker still has parked, in arrival order — same shape,
+   * and the same rule, as `pendingPermissions` above.
+   *
+   * chat-event-01: this used to be ONE slot that `question.requested`
+   * overwrote. Tool calls in a turn run in parallel and the worker's own
+   * question map is keyed by id, so a second `ask` took the first card off
+   * screen: the dock renders only what is parked here, the timeline draws
+   * nothing for an unresolved question, and the displaced promise then had
+   * nothing left to settle it short of the turn's own abort — the turn hung
+   * with no card anywhere and the user's only way out was Stop.
+   */
+  pendingQuestions: PendingQuestion[];
   /** Sessions already registered with Agent Host. */
   hostBoundSessionIds: string[];
   /**
@@ -357,21 +369,27 @@ export interface ChatSessionsState {
   sendMessage: (text: string, attachments?: ChatSendAttachment[]) => Promise<void>;
   stopActiveSession: () => Promise<void>;
   /**
-   * F5 — answer the one parked question.
+   * F5 — answer one parked question.
    *
-   * Addressed by `state.pendingQuestion` rather than by an argument, because
-   * the dock holds exactly one: taking a session id here would let a caller
-   * answer a question belonging to a session the user is not looking at.
+   * `questionId` names WHICH one. It is optional only for the caller that has
+   * no card in hand (fall back to the oldest parked question); anything drawing
+   * a card passes the id it drew, because `pendingQuestions` can hold several
+   * at once (chat-event-01) and answering by position would send the answer to
+   * the wrong question the moment one of them settles out of order. The session
+   * id is never an argument — it comes from the parked entry — so no caller can
+   * answer into a session the user is not looking at.
    *
-   * Resolves `false` (without touching `lastError`) when nothing is parked or
-   * the worker says the id has already settled — a stale click, not a failure —
-   * and `false` with `lastError` set when the IPC call throws, so the card can
-   * unlock its submitting state instead of staying submitted forever.
+   * Resolves `false` (without touching `lastError`) when nothing is parked
+   * under that id or the worker says it has already settled — a stale click,
+   * not a failure — and `false` with `lastError` set when the IPC call throws,
+   * so the card can unlock its submitting state instead of staying submitted
+   * forever.
    *
    * `cancel` is the card's Skip. It is NOT a refusal: the tool tells the model
    * to pick a default and say which one, so the turn continues either way.
    */
   respondQuestion: (payload: {
+    questionId?: string;
     answers?: Record<string, string>;
     response?: string;
     cancel?: boolean;
@@ -499,6 +517,71 @@ function markSessionUnread(state: ChatSessionsState, sessionId: string): string[
     return state.unreadSessionIds;
   }
   return [...state.unreadSessionIds, sessionId];
+}
+
+/**
+ * Drop one parked question. Same empty-patch identity rule as
+ * {@link withoutPermission}, and the same keying: an answer retires exactly the
+ * card it names, so answering the second question first leaves the first one
+ * parked and answerable instead of clearing the whole dock.
+ */
+function withoutQuestion(
+  state: ChatSessionsState,
+  sessionId: string,
+  questionId: string
+): Pick<ChatSessionsState, 'pendingQuestions'> | Record<string, never> {
+  const next = state.pendingQuestions.filter(
+    (item) => !(item.sessionId === sessionId && item.questionId === questionId)
+  );
+  if (next.length === state.pendingQuestions.length) return {};
+  return { pendingQuestions: next };
+}
+
+/**
+ * chat-event-02 — bring a session back out of `waiting_permission` /
+ * `waiting_question` once the gate that parked it has opened.
+ *
+ * Those two statuses are pushed by this reducer alone, and nothing on the
+ * producer side ever takes them back: the projector emits `session.status`
+ * only at start / retry / recovery / finish. So from the moment the user
+ * clicked Allow, the Run panel kept reading "Waiting for approval" — and, worse
+ * than the stale wording, it stops deriving any tool/thinking detail while the
+ * status is a waiting one, for the entire rest of the turn.
+ *
+ * `running` is the only honest answer here, and it is reachable only FROM a
+ * waiting status: a turn that already ended is `idle` / `failed` by now, and
+ * this leaves those alone rather than resurrecting them. When this session is
+ * still parked on something else — the other queue, or a second card in the
+ * same one — that remaining wait keeps the status instead.
+ *
+ * `settled` names the id this event is retiring, because the queues are read
+ * pre-clear: whichever branch calls this has not applied its own patch yet.
+ */
+function afterGateResolved(
+  state: ChatSessionsState,
+  sessionId: string,
+  settled: { permissionId?: string; questionId?: string }
+): Pick<ChatSessionsState, 'sessions'> | Record<string, never> {
+  const session = state.sessions.find((item) => item.id === sessionId);
+  if (!session) return {};
+  if (session.status !== 'waiting_permission' && session.status !== 'waiting_question') return {};
+
+  const stillPermission = state.pendingPermissions.some(
+    (item) => item.sessionId === sessionId && item.permissionId !== settled.permissionId
+  );
+  const stillQuestion = state.pendingQuestions.some(
+    (item) => item.sessionId === sessionId && item.questionId !== settled.questionId
+  );
+  // Same identity rule as the queue helpers: no change, no patch, so a session
+  // row that did not move does not re-render every subscriber.
+  if (session.status === 'waiting_permission' ? stillPermission : stillQuestion) return {};
+
+  const status: SessionRuntimeStatus = stillQuestion
+    ? 'waiting_question'
+    : stillPermission
+      ? 'waiting_permission'
+      : 'running';
+  return { sessions: upsertSessionStatus(state.sessions, sessionId, status) };
 }
 
 /** Drop every parked prompt of one session (terminal events). Same identity rule as {@link withoutPermission}. */
@@ -1182,8 +1265,13 @@ function applyRuntimeEventCore(
       if (!permissionId) return {};
 
       const cleared = withoutPermission(state, sessionId, permissionId);
+      // chat-event-02: the gate is open, so the session stops claiming it is
+      // waiting on one. Computed against the pre-clear queues (see the helper)
+      // and spread onto every return path below, including the two early ones —
+      // a resolution that found no block here still settled a real card.
+      const gate = afterGateResolved(state, sessionId, { permissionId });
       const bucket = state.messages[sessionId];
-      if (!bucket) return cleared;
+      if (!bucket) return { ...cleared, ...gate };
 
       // R13 (round-2 iteration-2 review, RED-LINE approved): identity-
       // preserving early return when no block in this bucket matches — the
@@ -1222,9 +1310,9 @@ function applyRuntimeEventCore(
         matched = true;
         return { ...message, blocks: nextBlocks };
       });
-      if (!matched) return cleared;
+      if (!matched) return { ...cleared, ...gate };
 
-      return { messages: withBucket(state, sessionId, nextBucket), ...cleared };
+      return { messages: withBucket(state, sessionId, nextBucket), ...cleared, ...gate };
     }
 
     case 'question.requested': {
@@ -1249,27 +1337,40 @@ function applyRuntimeEventCore(
           blocks: [],
         } satisfies ChatMessage);
 
-      const updated: ChatMessage = {
-        ...baseMessage,
-        blocks: [
-          ...baseMessage.blocks,
-          {
-            id: questionId,
-            type: 'question',
-            questionId,
-            questions: event.payload.questions,
-            resolved: false,
-          },
-        ],
-      };
+      // Idempotent on the question id, same guard as `permission.requested`
+      // one branch up: a redelivered request must not draw the card twice nor
+      // park a second queue entry that no answer would ever retire.
+      const blockAlreadyPresent = baseMessage.blocks.some(
+        (block) => block.type === 'question' && block.questionId === questionId
+      );
+      const queueAlreadyHasEntry = state.pendingQuestions.some(
+        (item) => item.sessionId === sessionId && item.questionId === questionId
+      );
+
+      const updated: ChatMessage = blockAlreadyPresent
+        ? baseMessage
+        : {
+            ...baseMessage,
+            blocks: [
+              ...baseMessage.blocks,
+              {
+                id: questionId,
+                type: 'question',
+                questionId,
+                questions: event.payload.questions,
+                resolved: false,
+              },
+            ],
+          };
 
       return {
         messages: withBucket(state, sessionId, upsertMessage(bucket, updated)),
-        pendingQuestion: {
-          sessionId,
-          questionId,
-          messageId,
-        },
+        // chat-event-01: APPEND. This used to overwrite a single slot, which
+        // made the second `ask` of a turn hide the first one's card and strand
+        // its promise.
+        pendingQuestions: queueAlreadyHasEntry
+          ? state.pendingQuestions
+          : [...state.pendingQuestions, { sessionId, questionId, messageId }],
         sessions: upsertSessionStatus(state.sessions, sessionId, 'waiting_question'),
       };
     }
@@ -1277,19 +1378,16 @@ function applyRuntimeEventCore(
     case 'question.resolved': {
       const { questionId, outcome, answers, response } = event.payload;
       const bucket = state.messages[sessionId];
-      // The dock holds ONE question. Clearing it unconditionally means any
-      // resolution — including one for a different session, or one the Host
-      // emits for a request that never produced a card — takes whatever is
-      // currently docked off screen, leaving a live card unanswerable while
-      // `waiting_question` keeps its session busy. Clear only what this event
-      // actually addresses.
-      const clearsDock =
-        state.pendingQuestion !== null &&
-        state.pendingQuestion.sessionId === sessionId &&
-        state.pendingQuestion.questionId === questionId;
-      const dock = clearsDock ? { pendingQuestion: null } : {};
+      // Retire only the entry this event names. A resolution for another
+      // session, or one the worker emits for a request that never produced a
+      // card, must not take a live question out of the queue: that card would
+      // be left on screen with no way to answer it while `waiting_question`
+      // keeps its session busy.
+      const dequeued = questionId ? withoutQuestion(state, sessionId, questionId) : {};
+      // chat-event-02, question half — see `afterGateResolved`.
+      const gate = questionId ? afterGateResolved(state, sessionId, { questionId }) : {};
       if (!questionId || !bucket) {
-        return dock;
+        return { ...dequeued, ...gate };
       }
 
       const nextBucket = bucket.map((message) => ({
@@ -1307,7 +1405,7 @@ function applyRuntimeEventCore(
         ),
       }));
 
-      return { messages: withBucket(state, sessionId, nextBucket), ...dock };
+      return { messages: withBucket(state, sessionId, nextBucket), ...dequeued, ...gate };
     }
 
     default:
@@ -1375,7 +1473,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
   activeSessionId: 'session-live',
   recentSessionIds: ['session-live', 'session-welcome'],
   pendingPermissions: [],
-  pendingQuestion: null,
+  pendingQuestions: [],
   hostBoundSessionIds: [],
   unreadSessionIds: [],
   runtimeReady: false,
@@ -1510,8 +1608,11 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
     }
   },
 
-  respondQuestion: async ({ answers, response, cancel }) => {
-    const pending = get().pendingQuestion;
+  respondQuestion: async ({ questionId, answers, response, cancel }) => {
+    const parked = get().pendingQuestions;
+    // Named id first; the oldest parked question is the fallback for a caller
+    // that has no card of its own (e.g. the send path's auto-skip).
+    const pending = questionId ? parked.find((item) => item.questionId === questionId) : parked[0];
     if (!pending) return false;
     try {
       const result = await window.electronAPI.chat.respondQuestion({

@@ -14,6 +14,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { englishTranslate } from '@shared/i18n';
+import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -32,6 +33,15 @@ const QUESTIONS = [
   },
 ];
 
+const SECOND_QUESTIONS = [
+  {
+    id: 'call-2-0',
+    question: 'Which runtime?',
+    header: 'Runtime',
+    options: [{ label: 'Node' }, { label: 'Bun' }],
+  },
+];
+
 const respondQuestion = vi.fn(async () => ({ handled: true }));
 
 function dock() {
@@ -41,7 +51,7 @@ function dock() {
 }
 
 /** Push a real `question.requested` through the real reducer. */
-function askInStore(sessionId = 's1') {
+function askInStore(sessionId = 's1', questionId = 'call-1', questions = QUESTIONS) {
   useChatSessionsStore.setState((state) => ({
     ...state,
     ...applyRuntimeEvent(useChatSessionsStore.getState(), {
@@ -49,8 +59,22 @@ function askInStore(sessionId = 's1') {
       seq: 1,
       timestamp: 1,
       sessionId,
-      payload: { questionId: 'call-1', questions: QUESTIONS },
-    } as any),
+      payload: { questionId, questions },
+    } satisfies RuntimeEvent),
+  }));
+}
+
+/** Push a real `question.resolved` through the real reducer. */
+function resolveInStore(questionId: string, sessionId = 's1') {
+  useChatSessionsStore.setState((state) => ({
+    ...state,
+    ...applyRuntimeEvent(useChatSessionsStore.getState(), {
+      type: 'question.resolved',
+      seq: 2,
+      timestamp: 2,
+      sessionId,
+      payload: { questionId, outcome: 'cancelled' },
+    } satisfies RuntimeEvent),
   }));
 }
 
@@ -64,7 +88,7 @@ beforeEach(() => {
       { id: 's1', projectId: 'p1', workspaceId: 'w1', title: 's1', status: 'idle', updatedAt: 0 },
     ],
     messages: { s1: [{ id: 'asst-1', sessionId: 's1', role: 'assistant', blocks: [] }] },
-    pendingQuestion: null,
+    pendingQuestions: [],
     lastError: null,
   });
 });
@@ -156,6 +180,30 @@ it('disappears when the worker resolves the question, not when the click lands',
   });
   await act(async () => root.render(createElement(PendingQuestionDock, { sessionId: 's1' })));
   expect(container.textContent).toBe('');
+  await act(async () => root.unmount());
+});
+
+/**
+ * chat-event-01 — the dock is the only place a question can be answered, so
+ * "the second `ask` overwrote the slot" meant the first card left the screen
+ * with its promise unsettled and its turn parked until Stop. Both are parked
+ * now, and the dock works the queue in arrival order.
+ */
+it('chat-event-01: a second question parks behind the first instead of replacing the card on screen', async () => {
+  askInStore('s1');
+  askInStore('s1', 'call-2', SECOND_QUESTIONS);
+  const { container, root } = dock();
+  await act(async () => root.render(createElement(PendingQuestionDock, { sessionId: 's1' })));
+
+  // First in, first shown — and the second one has not stolen its place.
+  expect(container.textContent).toContain('Which database?');
+  expect(container.textContent).not.toContain('Which runtime?');
+
+  await act(async () => resolveInStore('call-1'));
+  await act(async () => root.render(createElement(PendingQuestionDock, { sessionId: 's1' })));
+
+  // The one that used to be discarded is still there to answer.
+  expect(container.textContent).toContain('Which runtime?');
   await act(async () => root.unmount());
 });
 

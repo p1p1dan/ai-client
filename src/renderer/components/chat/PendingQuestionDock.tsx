@@ -28,8 +28,12 @@ import { QuestionCard } from './QuestionCard';
 import { deriveQuestionCardState } from './questionCardModel';
 
 export function PendingQuestionDock({ sessionId }: { sessionId: string | null }) {
-  const pending = useChatSessionsStore((state) =>
-    state.pendingQuestion?.sessionId === sessionId ? state.pendingQuestion : null
+  // chat-event-01: a turn can park several questions at once, so this takes the
+  // OLDEST one still waiting on this session and works the queue in arrival
+  // order. Returning the parked entry itself (or the null literal) keeps the
+  // selector referentially stable across unrelated store writes.
+  const pending = useChatSessionsStore(
+    (state) => state.pendingQuestions.find((item) => item.sessionId === sessionId) ?? null
   );
   const block = useChatSessionsStore((state) => {
     if (!pending || !sessionId) return undefined;
@@ -57,8 +61,10 @@ export function PendingQuestionDock({ sessionId }: { sessionId: string | null })
           block={block}
           collapsed={collapsed}
           onToggleCollapsed={() => setCollapsed((value) => !value)}
-          onSubmit={(payload) => respondQuestion(payload)}
-          onSkip={() => respondQuestion({ cancel: true })}
+          // Answer the card that is actually on screen, by id: with more than
+          // one question parked, "the first one" is not a stable address.
+          onSubmit={(payload) => respondQuestion({ ...payload, questionId: pending.questionId })}
+          onSkip={() => respondQuestion({ questionId: pending.questionId, cancel: true })}
         />
       </div>
     </div>

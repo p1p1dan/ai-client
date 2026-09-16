@@ -94,7 +94,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     activeSessionId: SESSION_ID,
     recentSessionIds: [],
     pendingPermissions: [],
-    pendingQuestion: null,
+    pendingQuestions: [],
     hostBoundSessionIds: [SESSION_ID],
     unreadSessionIds: [],
     runtimeReady: true,
@@ -288,8 +288,14 @@ describe('composer', () => {
       if (status && seen.at(-1) !== status) seen.push(status);
     }
     // `waiting_permission` between the two: the composer has to show that the
-    // turn is parked on a question rather than still working.
-    expect(seen).toEqual(['running', 'waiting_permission', 'idle']);
+    // turn is parked on a question rather than still working — and then come
+    // back OUT of it. chat-event-02 (T044): the second `running` is the fix.
+    // This recording used to go straight from `waiting_permission` to `idle`,
+    // i.e. the whole rest of the turn — the tool actually running, the reply
+    // streaming — rendered as "Waiting for approval" long after the user had
+    // approved, and the Run panel stopped deriving tool/thinking detail for all
+    // of it.
+    expect(seen).toEqual(['running', 'waiting_permission', 'running', 'idle']);
   });
 
   it('retires the optimistic bubble once the authoritative echo arrives', () => {
@@ -397,13 +403,13 @@ describe('thinking and the question card', () => {
       if (event.type === 'question.resolved') break;
       mid = { ...mid, ...applyRuntimeEvents(mid, [event]) };
     }
-    expect(mid.pendingQuestion).toMatchObject({ sessionId: SESSION_ID, questionId: 'call-ask' });
+    expect(mid.pendingQuestions).toMatchObject([{ sessionId: SESSION_ID, questionId: 'call-ask' }]);
     expect(mid.sessions.find((session) => session.id === SESSION_ID)?.status).toBe(
       'waiting_question'
     );
 
     const final = replay(QUESTION_STREAM);
-    expect(final.pendingQuestion).toBeNull();
+    expect(final.pendingQuestions).toEqual([]);
     const card = (final.messages[SESSION_ID] ?? [])
       .flatMap((message) => message.blocks)
       .find((block) => block.type === 'question');

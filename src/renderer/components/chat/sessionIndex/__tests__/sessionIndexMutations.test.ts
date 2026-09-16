@@ -87,7 +87,7 @@ function seedStore(
     recentSessionIds: sessions.map((item) => item.id),
     hostBoundSessionIds: [],
     pendingPermissions: [],
-    pendingQuestion: null,
+    pendingQuestions: [],
     lastError: null,
     historyErrors: {},
     ...extra,
@@ -317,7 +317,7 @@ describe('closeSessionAndRemoveRow — detach + drop the row for this run', () =
       hostBoundSessionIds: ['s1', 's2'],
       historyErrors: { s1: 'boom' },
       pendingPermissions: [{ sessionId: 's1', permissionId: 'perm-1', messageId: 'm1' }],
-      pendingQuestion: { sessionId: 's1', questionId: 'q-1', messageId: 'm1' },
+      pendingQuestions: [{ sessionId: 's1', questionId: 'q-1', messageId: 'm1' }],
     });
 
     await closeSessionAndRemoveRow('s1', refresh);
@@ -327,7 +327,7 @@ describe('closeSessionAndRemoveRow — detach + drop the row for this run', () =
     expect(state.hostBoundSessionIds).toEqual(['s2']);
     expect(state.historyErrors).toEqual({});
     expect(state.pendingPermissions).toEqual([]);
-    expect(state.pendingQuestion).toBeNull();
+    expect(state.pendingQuestions).toEqual([]);
   });
 });
 

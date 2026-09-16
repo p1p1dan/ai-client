@@ -23,7 +23,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     activeSessionId: null,
     recentSessionIds: [],
     pendingPermissions: [],
-    pendingQuestion: null,
+    pendingQuestions: [],
     hostBoundSessionIds: [],
     unreadSessionIds: [],
     runtimeReady: false,
@@ -733,6 +733,51 @@ describe('applyRuntimeEvent — permission.resolved', () => {
     // at all), rather than reallocating an equal-but-new bucket for a no-op.
     expect(patch.messages).toBeUndefined();
     expect(nextState.messages).toBe(state.messages);
+  });
+
+  // chat-event-02 (T044): `waiting_permission` is pushed by this reducer when
+  // the gate parks a call, and no producer ever takes it back — the projector
+  // only emits `session.status` at start / retry / recovery / finish. Without a
+  // return trip here the Run panel reads "Waiting for approval" for the whole
+  // rest of the turn, while the composer's own activity line says "Running a
+  // tool" two rows away.
+  it('chat-event-02: resolving the card takes the session out of waiting_permission and back to running', () => {
+    const state = stateWithPermissionBlock();
+    const patch = applyRuntimeEvent(state, {
+      type: 'permission.resolved',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-1', allow: true },
+    });
+
+    expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.status).toBe('running');
+  });
+
+  it('chat-event-02: a second card still parked keeps the session in waiting_permission', () => {
+    const base = stateWithPermissionBlock();
+    const state = baseState({
+      sessions: base.sessions,
+      messages: base.messages,
+      pendingPermissions: [
+        ...base.pendingPermissions,
+        { sessionId: SESSION_ID, permissionId: 'perm-2', messageId: 'asst-1' },
+      ],
+    });
+
+    const patch = applyRuntimeEvent(state, {
+      type: 'permission.resolved',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-1', allow: true },
+    });
+
+    // Identity rule: nothing about the session changed, so no `sessions` key.
+    expect(patch.sessions).toBeUndefined();
+    expect(patch.pendingPermissions).toEqual([
+      { sessionId: SESSION_ID, permissionId: 'perm-2', messageId: 'asst-1' },
+    ]);
   });
 });
 

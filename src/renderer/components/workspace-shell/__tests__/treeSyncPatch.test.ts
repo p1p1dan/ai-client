@@ -42,7 +42,7 @@ function prevState(overrides: Partial<TreeSyncPrevState> = {}): TreeSyncPrevStat
     messages: {},
     historyErrors: {},
     pendingPermissions: [],
-    pendingQuestion: null,
+    pendingQuestions: [],
     ...overrides,
   };
 }
@@ -157,7 +157,7 @@ describe('resolveTreeSyncPatch — empty workspace tree (T27-a)', () => {
         messages: { s1: [] },
         historyErrors: { s1: 'read failed' },
         pendingPermissions: [{ sessionId: 's1', permissionId: 'p1', messageId: 'm1' }],
-        pendingQuestion: { sessionId: 's1', questionId: 'q1', messageId: 'm2' },
+        pendingQuestions: [{ sessionId: 's1', questionId: 'q1', messageId: 'm2' }],
       }),
       workspaces: [],
       preferredWorkspaceId: null,
@@ -171,7 +171,7 @@ describe('resolveTreeSyncPatch — empty workspace tree (T27-a)', () => {
       messages: {},
       historyErrors: {},
       pendingPermissions: [],
-      pendingQuestion: null,
+      pendingQuestions: [],
     });
   });
 
@@ -222,7 +222,7 @@ describe('resolveTreeSyncPatch — empty workspace tree (T27-a)', () => {
           { sessionId: 's1', permissionId: 'p1', messageId: 'm1' },
           { sessionId: 'removed', permissionId: 'p2', messageId: 'm2' },
         ],
-        pendingQuestion: { sessionId: 'removed', questionId: 'q1', messageId: 'm3' },
+        pendingQuestions: [{ sessionId: 'removed', questionId: 'q1', messageId: 'm3' }],
       })
     );
 
@@ -231,7 +231,7 @@ describe('resolveTreeSyncPatch — empty workspace tree (T27-a)', () => {
     expect(result.pendingPermissions).toEqual([
       { sessionId: 's1', permissionId: 'p1', messageId: 'm1' },
     ]);
-    expect(result.pendingQuestion).toBeNull();
+    expect(result.pendingQuestions).toEqual([]);
   });
 });
 

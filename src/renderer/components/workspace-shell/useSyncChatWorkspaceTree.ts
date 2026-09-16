@@ -191,7 +191,7 @@ export type TreeSyncPrevState = Pick<
   | 'messages'
   | 'historyErrors'
   | 'pendingPermissions'
-  | 'pendingQuestion'
+  | 'pendingQuestions'
 >;
 
 /** Session-shaped part of the store patch the tree sync writes. */
@@ -204,7 +204,7 @@ export type TreeSyncPatch = Pick<
   | 'messages'
   | 'historyErrors'
   | 'pendingPermissions'
-  | 'pendingQuestion'
+  | 'pendingQuestions'
 >;
 
 /**
@@ -274,10 +274,7 @@ export function resolveTreeSyncPatch(input: {
     pendingPermissions: prev.pendingPermissions.filter((item) =>
       liveSessionIds.has(item.sessionId)
     ),
-    pendingQuestion:
-      prev.pendingQuestion && liveSessionIds.has(prev.pendingQuestion.sessionId)
-        ? prev.pendingQuestion
-        : null,
+    pendingQuestions: prev.pendingQuestions.filter((item) => liveSessionIds.has(item.sessionId)),
   };
 }
 

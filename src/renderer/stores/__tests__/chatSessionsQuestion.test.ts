@@ -13,7 +13,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     activeSessionId: null,
     recentSessionIds: [],
     pendingPermissions: [],
-    pendingQuestion: null,
+    pendingQuestions: [],
     hostBoundSessionIds: [],
     runtimeReady: false,
     lastError: null,
@@ -64,7 +64,7 @@ function resolvedEvent(
 }
 
 describe('applyRuntimeEvent — question events (C-04)', () => {
-  it('question.requested appends a question block to the latest assistant message and sets pendingQuestion + session status', () => {
+  it('question.requested appends a question block to the latest assistant message and parks it in pendingQuestions + sets the session status', () => {
     const state = baseState();
     const patch = applyRuntimeEvent(state, requestedEvent('q1'));
 
@@ -79,11 +79,13 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
       },
     ]);
 
-    expect(patch.pendingQuestion).toEqual({
-      sessionId: 's1',
-      questionId: 'q1',
-      messageId: 'asst-1',
-    });
+    expect(patch.pendingQuestions).toEqual([
+      {
+        sessionId: 's1',
+        questionId: 'q1',
+        messageId: 'asst-1',
+      },
+    ]);
 
     const session = patch.sessions?.find((item) => item.id === 's1');
     expect(session?.status).toBe('waiting_question');
@@ -108,11 +110,13 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
       },
     ]);
 
-    expect(patch.pendingQuestion).toEqual({
-      sessionId: 's1',
-      questionId: 'q2',
-      messageId: 'msg-question-q2',
-    });
+    expect(patch.pendingQuestions).toEqual([
+      {
+        sessionId: 's1',
+        questionId: 'q2',
+        messageId: 'msg-question-q2',
+      },
+    ]);
   });
 
   it('question.requested with a missing questionId returns an empty patch', () => {
@@ -120,7 +124,7 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
     expect(applyRuntimeEvent(state, requestedEvent(undefined))).toEqual({});
   });
 
-  it('question.resolved (answered) freezes the block with outcome + answers, and clears pendingQuestion', () => {
+  it('question.resolved (answered) freezes the block with outcome + answers, and dequeues it from pendingQuestions', () => {
     const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
     const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
 
@@ -140,7 +144,7 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
       questionOutcome: 'answered',
       questionAnswers: { 'Which approach?': 'A' },
     });
-    expect(patch.pendingQuestion).toBeNull();
+    expect(patch.pendingQuestions).toEqual([]);
   });
 
   it('question.resolved (cancelled) freezes the block with the cancelled outcome', () => {
@@ -159,7 +163,7 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
       resolved: true,
       questionOutcome: 'cancelled',
     });
-    expect(patch.pendingQuestion).toBeNull();
+    expect(patch.pendingQuestions).toEqual([]);
   });
 
   it('question.resolved (rejected) freezes the block with the rejected outcome and freeform response', () => {
@@ -182,10 +186,10 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
       questionOutcome: 'rejected',
       questionResponse: 'no thanks',
     });
-    expect(patch.pendingQuestion).toBeNull();
+    expect(patch.pendingQuestions).toEqual([]);
   });
 
-  it('question.resolved tolerates an unknown questionId without crashing, and (A15) leaves pendingQuestion docked since the id does not match', () => {
+  it('question.resolved tolerates an unknown questionId without crashing, and (A15) leaves the queue parked since the id does not match', () => {
     const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
     const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
 
@@ -201,8 +205,10 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
       resolved: false,
     });
     // Patch carries no dock change at all (not even an explicit null) — the dock stays put.
-    expect(patch.pendingQuestion).toBeUndefined();
-    expect({ ...afterRequested, ...patch }.pendingQuestion).toEqual(afterRequested.pendingQuestion);
+    expect(patch.pendingQuestions).toBeUndefined();
+    expect({ ...afterRequested, ...patch }.pendingQuestions).toEqual(
+      afterRequested.pendingQuestions
+    );
   });
 
   it('question.resolved is idempotent — applying the same event twice converges to the same state', () => {
@@ -220,38 +226,146 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
     // The dock is already cleared after the first apply, so the guard is a
     // no-op on the second apply (patch omits the field) — compare the
     // resulting STATE, not the raw patch, to assert true idempotency.
-    expect(afterSecond.pendingQuestion).toEqual(afterFirst.pendingQuestion);
+    expect(afterSecond.pendingQuestions).toEqual(afterFirst.pendingQuestions);
   });
 });
 
 describe('applyRuntimeEvent — question.resolved dock guard (A15)', () => {
-  it('a mismatched questionId (same session) leaves pendingQuestion untouched', () => {
+  it('a mismatched questionId (same session) leaves the queue untouched', () => {
     const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
     const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
 
     const patch = applyRuntimeEvent(afterRequested, resolvedEvent('q-other', 'answered'));
 
-    expect(patch.pendingQuestion).toBeUndefined();
-    expect({ ...afterRequested, ...patch }.pendingQuestion).toEqual(afterRequested.pendingQuestion);
+    expect(patch.pendingQuestions).toBeUndefined();
+    expect({ ...afterRequested, ...patch }.pendingQuestions).toEqual(
+      afterRequested.pendingQuestions
+    );
   });
 
-  it('a mismatched sessionId (same questionId) leaves pendingQuestion untouched', () => {
+  it('a mismatched sessionId (same questionId) leaves the queue untouched', () => {
     const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
     const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
 
     // Same questionId 'q1', but the event belongs to a different session.
     const patch = applyRuntimeEvent(afterRequested, resolvedEvent('q1', 'answered', {}, 's2'));
 
-    expect(patch.pendingQuestion).toBeUndefined();
-    expect({ ...afterRequested, ...patch }.pendingQuestion).toEqual(afterRequested.pendingQuestion);
+    expect(patch.pendingQuestions).toBeUndefined();
+    expect({ ...afterRequested, ...patch }.pendingQuestions).toEqual(
+      afterRequested.pendingQuestions
+    );
   });
 
-  it('a matching sessionId + questionId clears pendingQuestion normally (guard does not block the happy path)', () => {
+  it('a matching sessionId + questionId dequeues it normally (guard does not block the happy path)', () => {
     const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
     const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
 
     const patch = applyRuntimeEvent(afterRequested, resolvedEvent('q1', 'answered'));
 
-    expect(patch.pendingQuestion).toBeNull();
+    expect(patch.pendingQuestions).toEqual([]);
+  });
+});
+
+/**
+ * chat-event-01 / chat-event-02 (T044).
+ *
+ * The question queue used to be a single slot that `question.requested`
+ * overwrote, so a second `ask` took the first card off screen — unanswerable
+ * (the dock only shows the slot, the timeline draws nothing for an unresolved
+ * question) and unsettled, which parks that turn until the user presses Stop.
+ * And nothing ever took `waiting_question` back off the session, so the Run
+ * panel kept saying "Waiting for an answer" for the rest of the turn.
+ */
+describe('applyRuntimeEvent — concurrent questions (chat-event-01/02)', () => {
+  /** Two `ask` calls from the same assistant message, neither answered yet. */
+  function parkTwoQuestions(): ChatSessionsState {
+    const first = applyRuntimeEvent(baseState(), requestedEvent('q1'));
+    const afterFirst = { ...baseState(), ...first } as ChatSessionsState;
+    const second = applyRuntimeEvent(afterFirst, requestedEvent('q2'));
+    return { ...afterFirst, ...second } as ChatSessionsState;
+  }
+
+  function statusOf(state: ChatSessionsState, sessionId = 's1'): string | undefined {
+    return state.sessions.find((item) => item.id === sessionId)?.status;
+  }
+
+  it('chat-event-01: a second question parks alongside the first instead of displacing it', () => {
+    const state = parkTwoQuestions();
+
+    expect(state.pendingQuestions).toEqual([
+      { sessionId: 's1', questionId: 'q1', messageId: 'asst-1' },
+      { sessionId: 's1', questionId: 'q2', messageId: 'asst-1' },
+    ]);
+    // Both cards exist in the transcript, both still answerable.
+    const blocks = state.messages.s1?.find((item) => item.id === 'asst-1')?.blocks ?? [];
+    expect(blocks.map((block) => block.questionId)).toEqual(['q1', 'q2']);
+    expect(blocks.every((block) => block.resolved === false)).toBe(true);
+    expect(statusOf(state)).toBe('waiting_question');
+  });
+
+  it('chat-event-01: answering the SECOND question first retires only that card and leaves the first answerable', () => {
+    const parked = parkTwoQuestions();
+
+    const patch = applyRuntimeEvent(
+      parked,
+      resolvedEvent('q2', 'answered', { answers: { 'Which approach?': 'B' } })
+    );
+    const afterSecond = { ...parked, ...patch } as ChatSessionsState;
+
+    // The out-of-order answer takes its own entry out of the queue and nothing else.
+    expect(afterSecond.pendingQuestions).toEqual([
+      { sessionId: 's1', questionId: 'q1', messageId: 'asst-1' },
+    ]);
+    const blocks = afterSecond.messages.s1?.find((item) => item.id === 'asst-1')?.blocks ?? [];
+    expect(blocks.find((block) => block.questionId === 'q1')?.resolved).toBe(false);
+    expect(blocks.find((block) => block.questionId === 'q2')?.resolved).toBe(true);
+    // Still one question outstanding, so the session stays parked on it.
+    expect(statusOf(afterSecond)).toBe('waiting_question');
+
+    const finalPatch = applyRuntimeEvent(
+      afterSecond,
+      resolvedEvent('q1', 'answered', { answers: { 'Which approach?': 'A' } })
+    );
+    const final = { ...afterSecond, ...finalPatch } as ChatSessionsState;
+
+    expect(final.pendingQuestions).toEqual([]);
+    // chat-event-02: last answer in, the turn is running again.
+    expect(statusOf(final)).toBe('running');
+  });
+
+  it('chat-event-01: a redelivered question.requested neither duplicates the card nor double-parks the queue entry', () => {
+    const parked = parkTwoQuestions();
+
+    const patch = applyRuntimeEvent(parked, requestedEvent('q1'));
+    const after = { ...parked, ...patch } as ChatSessionsState;
+
+    expect(after.pendingQuestions).toEqual(parked.pendingQuestions);
+    const blocks = after.messages.s1?.find((item) => item.id === 'asst-1')?.blocks ?? [];
+    expect(blocks.filter((block) => block.questionId === 'q1')).toHaveLength(1);
+  });
+
+  it('chat-event-02: the answer takes the session out of waiting_question and back to running', () => {
+    const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
+    const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
+    expect(statusOf(afterRequested)).toBe('waiting_question');
+
+    const patch = applyRuntimeEvent(afterRequested, resolvedEvent('q1', 'answered'));
+
+    expect(patch.sessions?.find((item) => item.id === 's1')?.status).toBe('running');
+  });
+
+  it('chat-event-02: a resolution arriving after the turn ended leaves the session status alone', () => {
+    const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
+    const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
+    // The turn ended first (Stop / completion): `idle` is not a waiting state,
+    // so the late `question.resolved` must not push it back to running.
+    const ended = {
+      ...afterRequested,
+      sessions: afterRequested.sessions.map((item) => ({ ...item, status: 'idle' as const })),
+    };
+
+    const patch = applyRuntimeEvent(ended, resolvedEvent('q1', 'cancelled'));
+
+    expect(patch.sessions).toBeUndefined();
   });
 });

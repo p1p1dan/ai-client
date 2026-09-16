@@ -73,7 +73,7 @@ function seedStore(extra: Partial<ReturnType<typeof useChatSessionsStore.getStat
     recentSessionIds: ['s1'],
     hostBoundSessionIds: [],
     pendingPermissions: [],
-    pendingQuestion: null,
+    pendingQuestions: [],
     lastError: null,
     historyErrors: {},
     ...extra,

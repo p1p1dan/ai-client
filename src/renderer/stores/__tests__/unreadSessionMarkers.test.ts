@@ -29,7 +29,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     activeSessionId: null,
     recentSessionIds: [],
     pendingPermissions: [],
-    pendingQuestion: null,
+    pendingQuestions: [],
     hostBoundSessionIds: [],
     unreadSessionIds: [],
     runtimeReady: false,

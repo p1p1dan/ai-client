@@ -52,7 +52,7 @@ beforeEach(() => {
     lastError: null,
     historyErrors: {},
     pendingPermissions: [],
-    pendingQuestion: null,
+    pendingQuestions: [],
   });
 });
 
