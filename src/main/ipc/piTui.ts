@@ -110,6 +110,37 @@ function assertOwner(sender: WebContents, controller: PiTuiPtyController): void 
   if (ownerId(sender) !== controller.windowId) throw new Error('Pi TUI owner mismatch');
 }
 
+/** concurrency-07 — refused when a worker is mid-turn on the chat being handed over. */
+export const PI_TUI_TURN_RUNNING_REASON =
+  'This chat is still running a turn; wait for it to finish before opening the Pi terminal';
+
+/**
+ * concurrency-07 — is a GUI worker writing this chat's JSONL right now?
+ *
+ * The rule "no turn may be running when the terminal takes a chat over" only
+ * existed in the renderer, and the pi CLI never takes the worker's writer lock,
+ * so nothing on this side would have noticed the second writer arriving. Asking
+ * the worker manager here makes the renderer's check a matter of UX again
+ * rather than the only thing standing between one JSONL and two live writers.
+ *
+ * Read through a lazy import so this module keeps no load-order dependency on
+ * the worker manager; a probe that cannot answer lets the open through (the
+ * renderer's gate is still in front of it) and says so in the log.
+ */
+async function hasRunningTurn(sessionFile: string): Promise<boolean> {
+  const key = normalizeSessionKey(sessionFile);
+  if (!key) return false;
+  try {
+    const { workerManager } = await import('../services/agent-host/WorkerManager');
+    return workerManager
+      .getSlotSnapshots()
+      .some((slot) => slot.active && normalizeSessionKey(slot.sessionFile ?? '') === key);
+  } catch (error) {
+    console.warn('[pi-tui] Could not check for a running turn before the handover:', error);
+    return false;
+  }
+}
+
 export function registerPiTuiHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.PI_TUI_OPEN, async (event, request: PiTuiOpenRequest) => {
     assertAgentSpawnAllowed();
@@ -127,6 +158,11 @@ export function registerPiTuiHandlers(): void {
       // terminal ever opened.
       const support = await inspectPiTuiSessionSupport(request.sessionFile);
       if (!support.supported) throw new Error(support.reason);
+      // concurrency-07: asked before the transfer, because the transfer is
+      // unconditional by design and cannot itself refuse anything.
+      if (await hasRunningTurn(request.sessionFile)) {
+        throw new Error(PI_TUI_TURN_RUNNING_REASON);
+      }
       // Always transfer, never test-and-set: see PiTuiExclusiveGuard.transferTo
       // for the desync failure pix hit with tryAcquire-only.
       const acquired = sessionGuard.transferTo(request.sessionFile);
@@ -162,8 +198,21 @@ export function registerPiTuiHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.PI_TUI_DISPOSE, async (event, terminalId?: string) => {
     const controller = await controllerFor(event.sender);
     assertOwner(event.sender, controller);
-    if (terminalId) await controller.dispose(terminalId);
-    else await controller.disposeAll();
+    if (terminalId) {
+      await controller.dispose(terminalId);
+      return;
+    }
+    // terminal-10: `disposeAll` latches the controller as disposed for good, so
+    // leaving it in the registry would make every later open in this window
+    // throw "Pi TUI controller is disposed" — the window would lose its
+    // embedded terminal until it was reopened. Unbook it the way the app-exit
+    // and logout paths already do.
+    const { windowId } = controller;
+    try {
+      await controller.disposeAll();
+    } finally {
+      if (controllers.get(windowId) === controller) controllers.delete(windowId);
+    }
   });
   ipcMain.handle(IPC_CHANNELS.PI_TUI_STATUS, async (event) => {
     const controller = await controllerFor(event.sender);
@@ -181,18 +230,36 @@ export function registerPiTuiHandlers(): void {
  * it earlier in this run (see `tuiWrittenSessions`) — killing a writer does not
  * tell the worker what the writer wrote, and neither does a writer that left on
  * its own before anyone asked it to.
+ *
+ * terminal-01 — ownership is released only when every terminal on the file was
+ * SEEN to exit. A disposal that could not confirm that leaves the guard held,
+ * which makes `assertHostPromptAllowed` fail this write: refusing one send is
+ * the cheap outcome, and becoming the second writer on a JSONL a live pi CLI is
+ * still appending to is the expensive one.
  */
 export async function releaseSessionForHostPrompt(sessionFile: string): Promise<boolean> {
   if (!sessionFile.trim()) return false;
-  const written = tuiWrittenSessions.delete(normalizeSessionKey(sessionFile));
+  const key = normalizeSessionKey(sessionFile);
   const results = await Promise.allSettled(
     [...controllers.values()].map((controller) => controller.disposeSession(sessionFile))
   );
-  sessionGuard.release(sessionFile);
-  return (
-    written ||
-    results.some((result) => result.status === 'fulfilled' && (result.value?.length ?? 0) > 0)
+  const killed = results.some(
+    (result) => result.status === 'fulfilled' && result.value.terminalIds.length > 0
   );
+  const unconfirmed = results.some(
+    (result) => result.status === 'rejected' || !result.value.confirmed
+  );
+  if (unconfirmed) {
+    console.warn(
+      `[pi-tui] A terminal on ${sessionFile} was not confirmed dead; keeping the chat locked to terminal mode`
+    );
+    // The mark stays: the retry still has to re-read the file, so spending it
+    // on a handover that did not happen would skip the reload that matters.
+    return killed || tuiWrittenSessions.has(key);
+  }
+  const written = tuiWrittenSessions.delete(key);
+  sessionGuard.release(sessionFile);
+  return written || killed;
 }
 
 /**

@@ -36,7 +36,15 @@ export interface PresentationSwitch {
    * timeline instead of running the handover.
    */
   handleTuiExit: () => void;
-  /** Non-null once the TUI has been entered at least once this app run. */
+  /**
+   * The active chat's own terminal, or null when it has none yet.
+   *
+   * terminal-03: this used to be one id for the whole app run. Switching chats
+   * inside terminal mode then left the previous chat's `pi --session` on screen
+   * while every label said otherwise, and everything typed went into the
+   * previous chat's JSONL. One id per chat is what makes the terminal follow
+   * the conversation the rest of the UI is showing.
+   */
   tuiTerminalId: string | null;
   /** True while leaving the TUI, until the session has been re-read from disk. */
   surfaceSwitching: boolean;
@@ -61,9 +69,25 @@ export function usePresentationSwitch(): PresentationSwitch {
 
   const presentationMode = useSettingsStore((state) => state.presentationMode);
   const setPresentationMode = useSettingsStore((state) => state.setPresentationMode);
-  const [tuiTerminalId, setTuiTerminalId] = useState<string | null>(null);
+  // terminal-03: chat id → its terminal. A map rather than one id, so a switch
+  // between chats swaps the terminal instead of re-pointing the label on it.
+  const [tuiTerminalIds, setTuiTerminalIds] = useState<Record<string, string>>({});
   const [surfaceSwitching, setSurfaceSwitching] = useState(false);
   const previousWorkspacePathRef = useRef(activeWorkspacePath);
+  const tuiTerminalId = activeSessionId ? (tuiTerminalIds[activeSessionId] ?? null) : null;
+  // Read by the teardown paths, which must reach terminals belonging to chats
+  // that are not the active one.
+  const liveTerminalIdsRef = useRef(tuiTerminalIds);
+  liveTerminalIdsRef.current = tuiTerminalIds;
+
+  const forgetTerminal = useCallback((sessionId: string) => {
+    setTuiTerminalIds((current) => {
+      if (!current[sessionId]) return current;
+      const next = { ...current };
+      delete next[sessionId];
+      return next;
+    });
+  }, []);
 
   // U03-b: the gate used to be "this chat has a bound folder". It is now
   // "this chat has a usable cwd" — an unbound chat qualifies, it just has to
@@ -93,7 +117,11 @@ export function usePresentationSwitch(): PresentationSwitch {
     }
     const start = () => {
       setPresentationMode('tui');
-      setTuiTerminalId((current) => current ?? `pi-tui-${crypto.randomUUID()}`);
+      setTuiTerminalIds((current) =>
+        current[activeSessionId]
+          ? current
+          : { ...current, [activeSessionId]: `pi-tui-${crypto.randomUUID()}` }
+      );
     };
     // TUI-1: a native-runtime chat writes a session format the bundled pi CLI
     // cannot parse. Ask Main (only Main can read the file) and say so here,
@@ -159,7 +187,7 @@ export function usePresentationSwitch(): PresentationSwitch {
         // so drop the terminal rather than leave a warm one that could append
         // again on top of a history nobody reloaded.
         void window.electronAPI.piTui.dispose(terminalId).catch(() => {});
-        setTuiTerminalId(null);
+        forgetTerminal(sessionId);
         addToast({
           type: 'error',
           title: 'Could not reload this chat',
@@ -172,7 +200,7 @@ export function usePresentationSwitch(): PresentationSwitch {
         setSurfaceSwitching(false);
       }
     })();
-  }, [activeSessionId, setPresentationMode, tuiTerminalId]);
+  }, [activeSessionId, forgetTerminal, setPresentationMode, tuiTerminalId]);
 
   /**
    * session-01 — the terminal is gone, but what it typed is still only on disk.
@@ -186,7 +214,7 @@ export function usePresentationSwitch(): PresentationSwitch {
    */
   const handleTuiExit = useCallback(() => {
     const sessionId = activeSessionId;
-    setTuiTerminalId(null);
+    if (sessionId) forgetTerminal(sessionId);
     setPresentationMode('gui');
     addToast({
       type: 'warning',
@@ -210,22 +238,27 @@ export function usePresentationSwitch(): PresentationSwitch {
       .finally(() => {
         setSurfaceSwitching(false);
       });
-  }, [activeSessionId, setPresentationMode]);
+  }, [activeSessionId, forgetTerminal, setPresentationMode]);
 
+  // terminal-03: every chat's terminal, not just the one on screen. Switching
+  // chats no longer ends a terminal — the xterm hook parks the one it leaves
+  // and Main evicts parked ones when it runs out of room — so the teardown has
+  // to walk the whole map or it would leak the rest.
   useEffect(() => {
-    if (!tuiTerminalId) return;
     return () => {
-      void window.electronAPI.piTui.dispose(tuiTerminalId).catch(() => {});
+      for (const terminalId of Object.values(liveTerminalIdsRef.current)) {
+        void window.electronAPI.piTui.dispose(terminalId).catch(() => {});
+      }
     };
-  }, [tuiTerminalId]);
+  }, []);
 
   useEffect(() => {
     if (previousWorkspacePathRef.current === activeWorkspacePath) return;
     previousWorkspacePathRef.current = activeWorkspacePath;
-    setTuiTerminalId((current) => {
-      if (current) void window.electronAPI.piTui.dispose(current).catch(() => {});
-      return null;
-    });
+    for (const terminalId of Object.values(liveTerminalIdsRef.current)) {
+      void window.electronAPI.piTui.dispose(terminalId).catch(() => {});
+    }
+    setTuiTerminalIds({});
   }, [activeWorkspacePath]);
 
   return {

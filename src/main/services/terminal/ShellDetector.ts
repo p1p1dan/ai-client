@@ -106,6 +106,11 @@ const UNIX_SHELLS: ShellDefinition[] = [
   },
 ];
 
+/** Lower-cased file name of a shell path, for the exact matching terminal-08 needs. */
+function shellFileName(shellPath: string): string {
+  return shellPath.split(/[/\\]/).pop()?.toLowerCase() || '';
+}
+
 class ShellDetector {
   private cachedShells: ShellInfo[] | null = null;
   private wslAvailable: boolean | null = null;
@@ -274,7 +279,10 @@ class ShellDetector {
    */
   resolveShellForCommand(config: ShellConfig): { shell: string; execArgs: string[] } {
     if (config.shellType === 'custom') {
-      const shell = config.customShellPath || (isWindows ? 'powershell.exe' : '/bin/sh');
+      // terminal-08: an empty custom path means "the user picked Custom and has
+      // not filled the box in yet", not "the user chose /bin/sh". Use the same
+      // default every other caller would get instead of inventing a choice.
+      const shell = config.customShellPath?.trim() || this.getDefaultShell();
       // For custom shell, try to infer execArgs based on shell name
       const execArgs = this.inferExecArgs(shell, config.customShellArgs);
       return { shell, execArgs };
@@ -319,12 +327,18 @@ class ShellDetector {
    * Infer execArgs based on shell path/name.
    */
   private inferExecArgs(shellPath: string, customArgs?: string[]): string[] {
-    const shellName = shellPath.split(/[/\\]/).pop()?.toLowerCase() || '';
+    const shellName = shellFileName(shellPath);
 
-    // Check all definitions for matching shell
-    const allDefs = [...WINDOWS_SHELLS, ...UNIX_SHELLS];
-    for (const def of allDefs) {
-      if (def.paths.some((p) => p.toLowerCase().includes(shellName))) {
+    // terminal-08: exact file-name match, against this platform's definitions
+    // only. The old `paths.includes(shellName)` made every Unix `/bin/sh` a
+    // PowerShell 7 — `'pwsh.exe'.includes('sh')` is true and the Windows
+    // definitions were searched first — so `sh -NoLogo -ExecutionPolicy Bypass
+    // -Command "…"` was handed to every command run through that shell.
+    // Filtering by platform is not enough on its own: `/bin/zsh` also ends in
+    // `sh`, which is why this compares file names rather than substrings.
+    const definitions = isWindows ? WINDOWS_SHELLS : UNIX_SHELLS;
+    for (const def of definitions) {
+      if (def.paths.some((p) => shellFileName(p) === shellName)) {
         return def.execArgs;
       }
     }
@@ -353,8 +367,10 @@ class ShellDetector {
 
   getDefaultShell(): string {
     if (isWindows) {
-      // Try pwsh.exe (PowerShell 7) from PATH first
-      return 'pwsh.exe';
+      // terminal-09: PowerShell 7 is a separate install, and the product's own
+      // default setting is PowerShell 5.x for exactly that reason. Probe before
+      // naming it, so this cannot hand a caller a shell that is not there.
+      return this.commandExists('pwsh.exe') ? 'pwsh.exe' : 'powershell.exe';
     }
 
     const shell = process.env.SHELL;

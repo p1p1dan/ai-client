@@ -984,9 +984,15 @@ export function useXterm({
         cwd: cwd || window.electronAPI.env.HOME,
         cols: terminal.cols,
         rows: terminal.rows,
+        // terminal-04: the same session the first open named. Without it, an
+        // open that misses the parked PTY (pi failed on startup, capacity
+        // evicted it, something else disposed it) falls into Main's "new
+        // terminal" branch and starts a blank pi bound to no chat — outside the
+        // ownership guard and outside the "the GUI must re-read this" record.
+        ...(piTuiSessionFile ? { sessionFile: piTuiSessionFile } : {}),
       })
       .catch(() => {});
-  }, [cwd, isActive, isLoading, piTuiTerminalId]);
+  }, [cwd, isActive, isLoading, piTuiSessionFile, piTuiTerminalId]);
 
   // Fit and focus when becoming active (only after loading completes)
   useEffect(() => {

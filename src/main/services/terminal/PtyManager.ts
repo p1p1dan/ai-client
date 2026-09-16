@@ -220,6 +220,32 @@ function adjustArgsForShell(shell: string, args: string[]): string[] {
 }
 
 /**
+ * terminal-09 — the Windows half of the shell fallback, which did not exist.
+ *
+ * `pwsh.exe` is a separate install and a custom shell path can be uninstalled
+ * or renamed, and both cases arrived at the renderer as node-pty's raw spawn
+ * error with no terminal at all, while Unix quietly retried. Order is "the
+ * next shell Windows itself ships": PowerShell 5.x, then cmd.exe.
+ */
+const WINDOWS_FALLBACK_SHELLS = ['powershell.exe', 'cmd.exe'];
+
+function findWindowsFallbackShell(current: string): string | null {
+  const name = current.split(/[/\\]/).pop()?.toLowerCase() || '';
+  return WINDOWS_FALLBACK_SHELLS.find((candidate) => candidate !== name) ?? null;
+}
+
+function adjustArgsForWindowsShell(shell: string, args: string[]): string[] {
+  const name = shell.split(/[/\\]/).pop()?.toLowerCase() || '';
+  if (name !== 'cmd.exe') return args;
+  // cmd.exe understands none of PowerShell's switches. Keep the one thing that
+  // carries meaning — the command the terminal was opened to run — and drop the
+  // rest rather than handing cmd an argv it will choke on.
+  const commandIndex = args.indexOf('-Command');
+  const initialCommand = commandIndex >= 0 ? args[commandIndex + 1] : undefined;
+  return initialCommand ? ['/k', initialCommand] : [];
+}
+
+/**
  * Find a login shell with appropriate args for running commands.
  * Returns shell path and args that will load user environment (nvm, homebrew, etc.)
  */
@@ -371,11 +397,20 @@ export class PtyManager {
       args = options.args || [];
     }
 
-    if (!isWindows && shell.includes('/') && !existsSync(shell)) {
-      const fallbackShell = findFallbackShell();
-      console.warn(`[pty] Shell not found: ${shell}. Falling back to ${fallbackShell}`);
-      shell = fallbackShell;
-      args = adjustArgsForShell(shell, args);
+    // terminal-09: the pre-check used to be Unix-only, so a configured Windows
+    // shell that had been uninstalled went straight into a spawn nobody could
+    // recover from. A bare name (`pwsh.exe`) is resolved through PATH and has
+    // nothing to check here — only a written-out path does.
+    const shellIsPath = shell.includes('/') || (isWindows && shell.includes('\\'));
+    if (shellIsPath && !existsSync(shell)) {
+      const fallbackShell = isWindows ? findWindowsFallbackShell(shell) : findFallbackShell();
+      if (fallbackShell && fallbackShell !== shell) {
+        console.warn(`[pty] Shell not found: ${shell}. Falling back to ${fallbackShell}`);
+        args = isWindows
+          ? adjustArgsForWindowsShell(fallbackShell, args)
+          : adjustArgsForShell(fallbackShell, args);
+        shell = fallbackShell;
+      }
     }
 
     const initialCommand = options.initialCommand?.trim();
@@ -415,26 +450,25 @@ export class PtyManager {
         env: finalEnv,
       });
     } catch (error) {
-      if (!isWindows) {
-        const fallbackShell = findFallbackShell();
-        if (fallbackShell !== shell) {
-          const fallbackArgs = adjustArgsForShell(fallbackShell, args);
-          console.warn(`[pty] Failed to spawn ${shell}. Falling back to ${fallbackShell}`);
-          ptyProcess = pty.spawn(fallbackShell, fallbackArgs, {
-            name: 'xterm-256color',
-            cols: options.cols || 80,
-            rows: options.rows || 24,
-            cwd: spawnCwd,
-            env: finalEnv,
-          });
-          shell = fallbackShell;
-          args = fallbackArgs;
-        } else {
-          throw error;
-        }
-      } else {
-        throw error;
-      }
+      // terminal-09: Windows used to rethrow here, so a shell that had gone
+      // missing surfaced as node-pty's native spawn error in the panel and the
+      // user got no terminal at all. Both platforms now retry once with a shell
+      // the OS itself ships; if that also fails, the original error still wins.
+      const fallbackShell = isWindows ? findWindowsFallbackShell(shell) : findFallbackShell();
+      if (!fallbackShell || fallbackShell === shell) throw error;
+      const fallbackArgs = isWindows
+        ? adjustArgsForWindowsShell(fallbackShell, args)
+        : adjustArgsForShell(fallbackShell, args);
+      console.warn(`[pty] Failed to spawn ${shell}. Falling back to ${fallbackShell}`);
+      ptyProcess = pty.spawn(fallbackShell, fallbackArgs, {
+        name: 'xterm-256color',
+        cols: options.cols || 80,
+        rows: options.rows || 24,
+        cwd: spawnCwd,
+        env: finalEnv,
+      });
+      shell = fallbackShell;
+      args = fallbackArgs;
     }
 
     const dataDisposable = ptyProcess.onData((data) => {

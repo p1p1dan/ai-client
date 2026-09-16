@@ -31,30 +31,45 @@ function setPlatform(value: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { configurable: true, value });
 }
 
+/**
+ * Load a fresh copy of the module on a chosen platform. `isWindows` is frozen
+ * into a module-scope const at import time, so the platform has to be stubbed
+ * before the import, not before the call.
+ */
+async function loadDetector(platform: NodeJS.Platform) {
+  setPlatform(platform);
+  vi.resetModules();
+  const module = await import('../ShellDetector');
+  module.shellDetector.clearCache();
+  return module;
+}
+
+// File-scope, so the platform stub and the module mocks are reset for the
+// Unix-side suites below as well.
+beforeEach(() => {
+  setPlatform('win32');
+  vi.resetModules();
+  execMock.mockReset();
+  spawnSyncMock.mockReset();
+  existsSyncMock.mockReset();
+  existsSyncMock.mockReturnValue(false);
+  execMock.mockImplementation((_command, _options, callback) => {
+    callback?.(new Error('wsl unavailable'), '', '');
+    return {} as never;
+  });
+});
+
+afterEach(() => {
+  // Restore the original descriptor, not just the value: `platform` is an
+  // accessor on the real `process`, and leaving a data property behind would
+  // outlive this file if the pool ever stops isolating per file.
+  if (ORIGINAL_PLATFORM) {
+    Object.defineProperty(process, 'platform', ORIGINAL_PLATFORM);
+  }
+  vi.restoreAllMocks();
+});
+
 describe('ShellDetector', () => {
-  beforeEach(() => {
-    setPlatform('win32');
-    vi.resetModules();
-    execMock.mockReset();
-    spawnSyncMock.mockReset();
-    existsSyncMock.mockReset();
-    existsSyncMock.mockReturnValue(false);
-    execMock.mockImplementation((_command, _options, callback) => {
-      callback?.(new Error('wsl unavailable'), '', '');
-      return {} as never;
-    });
-  });
-
-  afterEach(() => {
-    // Restore the original descriptor, not just the value: `platform` is an
-    // accessor on the real `process`, and leaving a data property behind would
-    // outlive this file if the pool ever stops isolating per file.
-    if (ORIGINAL_PLATFORM) {
-      Object.defineProperty(process, 'platform', ORIGINAL_PLATFORM);
-    }
-    vi.restoreAllMocks();
-  });
-
   it('does not report PowerShell 7 as available when pwsh.exe is missing', async () => {
     spawnSyncMock.mockImplementation((command: string, args: string[]) => {
       const target = args?.[0];
@@ -109,5 +124,96 @@ describe('ShellDetector', () => {
       shell: 'powershell.exe',
       execArgs: ['-NoLogo', '-ExecutionPolicy', 'Bypass', '-Command'],
     });
+  });
+});
+
+/**
+ * terminal-08 — `inferExecArgs` matched the shell's file name against every
+ * definition's paths with `includes`, in an array that puts the Windows shells
+ * first. `'pwsh.exe'.includes('sh')` is true, so a Unix `/bin/sh` came back with
+ * PowerShell 7's switches and every command run through it failed — which is
+ * what made tmux detection report "not installed" on machines whose `$SHELL`
+ * is /bin/sh.
+ */
+describe('ShellDetector — exec args come from the shell you actually have', () => {
+  const ORIGINAL_SHELL = process.env.SHELL;
+
+  afterEach(() => {
+    if (ORIGINAL_SHELL === undefined) delete process.env.SHELL;
+    else process.env.SHELL = ORIGINAL_SHELL;
+  });
+
+  it("gives /bin/sh the Bourne switch, not PowerShell's", async () => {
+    const { shellDetector } = await loadDetector('linux');
+
+    expect(
+      shellDetector.resolveShellForCommand({ shellType: 'custom', customShellPath: '/bin/sh' })
+    ).toEqual({ shell: '/bin/sh', execArgs: ['-c'] });
+  });
+
+  it('still recognises a Unix shell whose name merely contains another one', async () => {
+    const { shellDetector } = await loadDetector('linux');
+
+    expect(
+      shellDetector.resolveShellForCommand({ shellType: 'custom', customShellPath: '/bin/zsh' })
+    ).toEqual({ shell: '/bin/zsh', execArgs: ['-i', '-l', '-c'] });
+  });
+
+  it('does not hand the system shell PowerShell switches either', async () => {
+    process.env.SHELL = '/bin/sh';
+    existsSyncMock.mockImplementation((path: string) => path === '/bin/sh');
+    const { shellDetector } = await loadDetector('linux');
+
+    expect(shellDetector.resolveShellForCommand({ shellType: 'system' })).toEqual({
+      shell: '/bin/sh',
+      execArgs: ['-c'],
+    });
+  });
+
+  it('treats an empty custom path as "not chosen yet" rather than as /bin/sh', async () => {
+    process.env.SHELL = '/bin/bash';
+    existsSyncMock.mockImplementation((path: string) => path === '/bin/bash');
+    const { shellDetector } = await loadDetector('linux');
+
+    expect(
+      shellDetector.resolveShellForCommand({ shellType: 'custom', customShellPath: '' })
+    ).toEqual({ shell: '/bin/bash', execArgs: ['-i', '-l', '-c'] });
+  });
+
+  it('keeps matching Windows shells by name on Windows', async () => {
+    const { shellDetector } = await loadDetector('win32');
+
+    expect(
+      shellDetector.resolveShellForCommand({
+        shellType: 'custom',
+        customShellPath: 'C:\\Windows\\System32\\cmd.exe',
+      })
+    ).toEqual({ shell: 'C:\\Windows\\System32\\cmd.exe', execArgs: ['/c'] });
+  });
+});
+
+/**
+ * terminal-09 — `getDefaultShell()` claimed pwsh.exe unconditionally, while the
+ * product's own default setting is PowerShell 5.x because PowerShell 7 is a
+ * separate install. On a machine without it, that named a shell that is not
+ * there.
+ */
+describe('ShellDetector — the Windows default shell is one that exists', () => {
+  it('falls back to powershell.exe when PowerShell 7 is not installed', async () => {
+    spawnSyncMock.mockImplementation(() => ({ status: 1, stdout: '', stderr: '' }));
+    const { shellDetector } = await loadDetector('win32');
+
+    expect(shellDetector.getDefaultShell()).toBe('powershell.exe');
+  });
+
+  it('prefers pwsh.exe when it is on PATH', async () => {
+    spawnSyncMock.mockImplementation((command: string, args: string[]) =>
+      command === 'where' && args?.[0] === 'pwsh.exe'
+        ? { status: 0, stdout: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe\r\n', stderr: '' }
+        : { status: 1, stdout: '', stderr: '' }
+    );
+    const { shellDetector } = await loadDetector('win32');
+
+    expect(shellDetector.getDefaultShell()).toBe('pwsh.exe');
   });
 });

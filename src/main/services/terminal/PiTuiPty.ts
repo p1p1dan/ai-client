@@ -14,13 +14,39 @@ import type {
 import type { IPty } from 'node-pty';
 import * as nodePty from 'node-pty';
 import { isCredentialEnvKey } from '../../../../scripts/credential-env-keys.mjs';
+import { killProcessTree } from '../../utils/processUtils';
 import { resolveManagedPiPtyEnv } from '../piModelConfig';
 import { buildPiTuiArgs, normalizeSessionKey } from './piTuiSession';
 
 const MAX_SUSPENDED_REPLAY_CHARS = 65_536;
 const DEFAULT_MAX_LIVE_TERMINALS = 2;
 
-export type PtyHandle = Pick<IPty, 'write' | 'resize' | 'kill' | 'onData' | 'onExit'>;
+/**
+ * terminal-01: how long a disposal waits for the PTY to report that it is gone,
+ * and how long it waits again after escalating.
+ *
+ * Sending the signal is not the event this code needs. The pi CLI installs a
+ * SIGHUP handler that tears its runtime down asynchronously and keeps appending
+ * to the session file while it does, and node-pty's unix kill swallows its own
+ * failures — so "kill returned" says nothing about whether the second writer on
+ * that JSONL has stopped. The handover re-reads the file right after this, so
+ * answering early is how a chat ends up with two writers.
+ */
+const DEFAULT_EXIT_CONFIRM_MS = 2_000;
+const DEFAULT_FORCE_CONFIRM_MS = 3_000;
+
+/** terminal-03: refused when a warm PTY is asked to serve another chat. */
+export const PI_TUI_SESSION_MISMATCH_REASON =
+  'This terminal is already running another chat; close it before opening this one';
+
+export type PtyHandle = Pick<IPty, 'write' | 'resize' | 'kill' | 'onData' | 'onExit'> & {
+  /**
+   * node-pty always reports one; the test doubles deliberately do not, so a
+   * stray escalation in a test cannot name a real process (engineering
+   * standard appendix B1).
+   */
+  readonly pid?: number;
+};
 
 export interface PtySpawnOptions {
   name: string;
@@ -52,6 +78,36 @@ interface LiveTerminal {
   suspended: boolean;
   replayBuffer: string;
   lastUsed: number;
+  /** terminal-01: set from this PTY's own exit event, never from a map lookup. */
+  exited: boolean;
+  /** terminal-01: disposals parked on that exit event. */
+  exitWaiters: Set<() => void>;
+}
+
+/** terminal-01: how a request to take a chat's JSONL back actually ended. */
+export interface PiTuiDisposeSessionResult {
+  /** Terminal ids that owned the session and were asked to stop. */
+  terminalIds: string[];
+  /**
+   * False when at least one of them never reported an exit, even after the
+   * escalation. The caller must keep treating the file as contested — releasing
+   * ownership here is what makes the GUI the second writer.
+   */
+  confirmed: boolean;
+}
+
+export interface PiTuiControllerOptions {
+  /**
+   * terminal-01 — the escalation used when the PTY ignores its first kill.
+   *
+   * Injected rather than called inline: the default reaches `process.kill`
+   * through the process-tree helper, and engineering standard appendix B1
+   * requires that a test can stub it out (a fabricated pid reaching a real
+   * signal is what killed the developer's desktop session on 2026-09-14).
+   */
+  forceKill?: (pty: PtyHandle) => void;
+  exitConfirmMs?: number;
+  forceConfirmMs?: number;
 }
 
 function boundedDimension(value: number | undefined, minimum: number, fallback: number): number {
@@ -149,6 +205,9 @@ export class PiTuiPtyController {
   readonly #generations = new Map<string, number>();
   readonly #callbacks: PiTuiCallbacks;
   readonly #maxLiveTerminals: number;
+  readonly #forceKill: (pty: PtyHandle) => void;
+  readonly #exitConfirmMs: number;
+  readonly #forceConfirmMs: number;
   #openChain: Promise<void> = Promise.resolve();
   #disposed = false;
   #usageSequence = 0;
@@ -158,13 +217,17 @@ export class PiTuiPtyController {
     callbacks: PiTuiCallbacks,
     spawn: PtySpawnFn,
     resolveLaunch: () => Promise<PiTuiLaunchPlan>,
-    maxLiveTerminals = DEFAULT_MAX_LIVE_TERMINALS
+    maxLiveTerminals = DEFAULT_MAX_LIVE_TERMINALS,
+    options: PiTuiControllerOptions = {}
   ) {
     this.windowId = windowId;
     this.#callbacks = callbacks;
     this.#spawn = spawn;
     this.#resolveLaunch = resolveLaunch;
     this.#maxLiveTerminals = Math.max(1, Math.floor(maxLiveTerminals));
+    this.#forceKill = options.forceKill ?? ((pty) => killProcessTree(pty, 'SIGKILL'));
+    this.#exitConfirmMs = options.exitConfirmMs ?? DEFAULT_EXIT_CONFIRM_MS;
+    this.#forceConfirmMs = options.forceConfirmMs ?? DEFAULT_FORCE_CONFIRM_MS;
   }
 
   open(request: PiTuiOpenRequest): Promise<PiTuiOpenResult> {
@@ -183,8 +246,18 @@ export class PiTuiPtyController {
 
   async #openExclusive(request: PiTuiOpenRequest): Promise<PiTuiOpenResult> {
     if (this.#disposed) throw new Error('Pi TUI controller is disposed');
+    const requestedKey = normalizeSessionKey(request.sessionFile ?? '');
     const current = this.#live.get(request.terminalId);
     if (current) {
+      // terminal-03 — a warm PTY is bound to the JSONL it was spawned on, and
+      // this branch used to ignore the request's session entirely. Resuming it
+      // for another chat put everything the user typed into the previous chat's
+      // file while the UI said they were somewhere else. An empty request key
+      // is "no claim" (the revive path passes whatever the chat row has, which
+      // is nothing until the first send binds a runtime), not "another chat".
+      if (requestedKey && requestedKey !== current.sessionKey) {
+        throw new Error(PI_TUI_SESSION_MISMATCH_REASON);
+      }
       current.suspended = false;
       current.lastUsed = ++this.#usageSequence;
       this.#resizeNow(current.pty, request.cols, request.rows);
@@ -217,12 +290,14 @@ export class PiTuiPtyController {
     const live: LiveTerminal = {
       terminalId: request.terminalId,
       cwd: request.cwd,
-      sessionKey: normalizeSessionKey(request.sessionFile ?? ''),
+      sessionKey: requestedKey,
       pty,
       generation,
       suspended: false,
       replayBuffer: '',
       lastUsed: ++this.#usageSequence,
+      exited: false,
+      exitWaiters: new Set(),
     };
     this.#live.set(request.terminalId, live);
 
@@ -236,6 +311,11 @@ export class PiTuiPtyController {
       this.#callbacks.onData({ terminalId: request.terminalId, data });
     });
     pty.onExit((event) => {
+      // terminal-01: mark the record, not the map entry. A disposal unbooks the
+      // terminal before it starts waiting, so a map lookup here would miss
+      // exactly the exit a caller is parked on.
+      live.exited = true;
+      for (const waiter of [...live.exitWaiters]) waiter();
       const active = this.#live.get(request.terminalId);
       if (!active || active.pty !== pty || active.generation !== generation) return;
       this.#live.delete(request.terminalId);
@@ -280,27 +360,36 @@ export class PiTuiPtyController {
     });
   }
 
-  dispose(terminalId: string): Promise<void> {
-    return this.#enqueue(terminalId, () => this.#disposeNow(terminalId));
+  /**
+   * Stop this terminal and wait until its process is actually gone.
+   *
+   * terminal-01 — resolves `true` when the PTY reported its exit, `false` when
+   * it never did. A `false` here is not cosmetic: the caller uses it to decide
+   * whether the chat's JSONL is safe for the GUI to write.
+   */
+  dispose(terminalId: string): Promise<boolean> {
+    return this.#enqueue(terminalId, () => this.#disposeAndConfirm(terminalId));
   }
 
   /**
    * Q17: kill every terminal that owns `sessionFile`, so the GUI worker can
-   * take the JSONL back. Returns the terminal ids that were killed — the caller
-   * releases the ownership guard for them.
+   * take the JSONL back. Reports the terminal ids that were asked to stop and
+   * whether all of them were seen to exit — the caller releases the ownership
+   * guard only on the confirmed case (terminal-01).
    *
    * Matching is on the normalized key, not the raw string: a path that reached
    * the controller through `realpath` and one that came from an index row can
    * differ by `/private` or case and still name the same file.
    */
-  async disposeSession(sessionFile: string): Promise<string[]> {
+  async disposeSession(sessionFile: string): Promise<PiTuiDisposeSessionResult> {
     const key = normalizeSessionKey(sessionFile);
-    if (!key) return [];
+    if (!key) return { terminalIds: [], confirmed: true };
     const targets = [...this.#live.values()]
       .filter((live) => live.sessionKey === key)
       .map((live) => live.terminalId);
-    await Promise.allSettled(targets.map((terminalId) => this.dispose(terminalId)));
-    return targets;
+    const settled = await Promise.allSettled(targets.map((terminalId) => this.dispose(terminalId)));
+    const confirmed = settled.every((result) => result.status === 'fulfilled' && result.value);
+    return { terminalIds: targets, confirmed };
   }
 
   async disposeAll(): Promise<void> {
@@ -311,7 +400,7 @@ export class PiTuiPtyController {
 
   disposeAllSync(): void {
     this.#disposed = true;
-    for (const terminalId of [...this.#live.keys()]) this.#disposeNow(terminalId);
+    for (const terminalId of [...this.#live.keys()]) this.#killNow(terminalId);
     this.#chains.clear();
   }
 
@@ -327,19 +416,74 @@ export class PiTuiPtyController {
     if (!suspended) {
       throw new Error(`Pi TUI capacity reached (${this.#maxLiveTerminals})`);
     }
-    this.#disposeNow(suspended.terminalId);
+    // Eviction cannot wait — it runs inside an open that has to answer now. The
+    // terminal it takes is a parked one whose chat is not the one being opened,
+    // and the GUI re-reads that chat's file before it writes it again
+    // (`tuiWrittenSessions` in ipc/piTui.ts), so a late exit here costs a stale
+    // timeline rather than a second writer.
+    this.#killNow(suspended.terminalId);
   }
 
-  #disposeNow(terminalId: string): void {
+  /** Unbook a terminal and signal it, without waiting. */
+  #killNow(terminalId: string): void {
     const live = this.#live.get(terminalId);
     if (!live) return;
     this.#live.delete(terminalId);
+    this.#killOnce(live);
+    this.#emitState(terminalId, 'dead');
+  }
+
+  /**
+   * terminal-01 — the disposal that the handover depends on: signal, wait for
+   * the exit event, escalate once, and say plainly when the process still has
+   * not been seen to go.
+   */
+  async #disposeAndConfirm(terminalId: string): Promise<boolean> {
+    const live = this.#live.get(terminalId);
+    if (!live) return true;
+    this.#live.delete(terminalId);
+    this.#emitState(terminalId, 'dead');
+    if (live.exited) return true;
+    this.#killOnce(live);
+    if (await this.#waitForExit(live, this.#exitConfirmMs)) return true;
+    try {
+      this.#forceKill(live.pty);
+    } catch (error) {
+      console.warn(`[pi-tui] Force kill failed for terminal ${terminalId}:`, error);
+    }
+    if (await this.#waitForExit(live, this.#forceConfirmMs)) return true;
+    console.warn(
+      `[pi-tui] Terminal ${terminalId} never reported its exit; treating its chat as still contested`
+    );
+    return false;
+  }
+
+  #killOnce(live: LiveTerminal): void {
     try {
       live.pty.kill();
-    } catch {
-      // Process may already have exited.
+    } catch (error) {
+      // Not "it may already have exited": node-pty swallows that case itself on
+      // unix, so an error arriving here is a kill that did not happen.
+      console.warn(`[pi-tui] Kill failed for terminal ${live.terminalId}:`, error);
     }
-    this.#emitState(terminalId, 'dead');
+  }
+
+  #waitForExit(live: LiveTerminal, timeoutMs: number): Promise<boolean> {
+    if (live.exited) return Promise.resolve(true);
+    if (timeoutMs <= 0) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const waiter = () => {
+        clearTimeout(timer);
+        live.exitWaiters.delete(waiter);
+        resolve(true);
+      };
+      timer = setTimeout(() => {
+        live.exitWaiters.delete(waiter);
+        resolve(false);
+      }, timeoutMs);
+      live.exitWaiters.add(waiter);
+    });
   }
 
   #resizeNow(pty: PtyHandle, cols: number | undefined, rows: number | undefined): void {
