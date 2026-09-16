@@ -298,6 +298,9 @@ export class SessionLockedError extends RuntimeHostError {
   readonly owner?: WriterLockOwner;
   constructor(message: string, owner?: WriterLockOwner) {
     super('session_locked', message);
+    // Named after itself, not after the base class it extends: the class name is
+    // what a log line or a stack trace shows.
+    this.name = 'SessionLockedError';
     if (owner !== undefined) this.owner = owner;
   }
 }
@@ -384,7 +387,13 @@ async function takeOver(
 ): Promise<{ taken: true } | { taken: false; owner?: WriterLockOwner }> {
   const sentinel = `${lock}${TAKEOVER_SUFFIX}`;
   const sentinelToken = await holdSentinel(io, sentinel);
-  if (sentinelToken === undefined) return { taken: false };
+  if (sentinelToken === undefined) {
+    // Someone else is mid-takeover. Their record is not the one we judged, so
+    // read it back before naming a holder: the whole point of the refusal is
+    // that the user can see who they would be taking the session from.
+    const holder = await readLock(io, lock).catch(() => undefined);
+    return holder?.owner === undefined ? { taken: false } : { taken: false, owner: holder.owner };
+  }
   try {
     const held = await readLock(io, lock);
     if (held === undefined) {

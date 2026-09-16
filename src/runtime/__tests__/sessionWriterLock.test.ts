@@ -423,6 +423,51 @@ describe('session writer lock — a third claimant during a takeover', () => {
     // The other takeover's sentinel is left exactly as found.
     expect(JSON.parse(await readFile(`${lockPath()}.takeover`, 'utf8')).token).toBe('in-flight');
   });
+
+  it('names the holder when it refuses to race a takeover in flight', async () => {
+    const io = await hostIo();
+    const target = join(dir, 'racing.jsonl');
+    // A dead owner is on record, and another process is already taking it over:
+    // its sentinel is live, so this claimant has to back off. It still has to say
+    // whose session it is backing off from — the lock on disk, read back under
+    // the sentinel — because that is what the user decides whether to force past.
+    const dead = vacantPid();
+    await writeFile(
+      `${target}.writer.lock`,
+      JSON.stringify({
+        pid: dead,
+        host: hostname(),
+        token: 'holder',
+        acquiredAt: Date.now() - 7_200_000,
+      })
+    );
+    await writeFile(
+      `${target}.writer.lock.takeover`,
+      JSON.stringify({
+        pid: process.pid,
+        host: hostname(),
+        token: 'in-flight',
+        acquiredAt: Date.now(),
+      })
+    );
+
+    const error = await acquireWriterLock(io, target).then(
+      () => undefined,
+      (reason: unknown) => reason as Error & { code?: string; name?: string }
+    );
+    expect(error?.code).toBe('session_locked');
+    // The class name, not the name of the base class it extends.
+    expect(error?.name).toBe('SessionLockedError');
+    expect(error?.message).toContain(`pid ${dead}`);
+    expect(error?.message).toContain(hostname());
+    expect(error?.message).toMatch(/held for 2h/);
+    expect(error?.message).toMatch(/force/i);
+    // Nothing was displaced on the way out.
+    expect(JSON.parse(await readFile(`${target}.writer.lock`, 'utf8')).token).toBe('holder');
+    expect(JSON.parse(await readFile(`${target}.writer.lock.takeover`, 'utf8')).token).toBe(
+      'in-flight'
+    );
+  });
 });
 
 describe('session writer lock — staleness is more than "the pid exists"', () => {
