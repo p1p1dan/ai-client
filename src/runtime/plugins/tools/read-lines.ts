@@ -46,8 +46,17 @@ const SCAN_CHUNK_BYTES = 32 * 1024;
  * tools-10 — a TSD file is served by a helper process that starts over and
  * decrypts from byte 0 on every `readFile`, so scanning one in fixed 32 KiB
  * steps costs one process per step and a quadratic number of decrypted bytes.
- * Doubling the window after each fallback chunk keeps both roughly linear in
- * the bytes actually scanned; the cap bounds what a single step may buffer.
+ *
+ * What doubling the window actually buys, stated precisely (tsd-05): growth is
+ * geometric only until it reaches this cap, and past the cap each step still
+ * re-decrypts everything before it, so the decrypted bytes go back to being
+ * quadratic — n²/(2·cap). Over the 64 MiB scan ceiling below that is ~38 reads
+ * and ~1.1 GiB decrypted against a 64 MiB floor: 17x, not linear, though still
+ * ~60x better than the 2048 reads and ~64 GiB of the fixed 32 KiB window. Only
+ * files under ~4 MiB are close to "linear in the bytes scanned". Raising the
+ * cap trades that for what a single step must buffer; making the fallback
+ * genuinely linear needs a helper that serves several windows from one
+ * decryption, which is a new capability and not a bigger number here.
  */
 const FALLBACK_CHUNK_MAX_BYTES = 2 * 1024 * 1024;
 

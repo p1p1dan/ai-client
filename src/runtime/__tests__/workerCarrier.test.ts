@@ -5,7 +5,8 @@ import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { validateHost } from '../host/config.ts';
 import { BUNDLED_HELPER_DIR, resolveHelper } from '../host/helpers.ts';
-import { bundledNodePath, workerHost } from '../host/worker.ts';
+import { bundledNodePath, RUNTIME_TSD_FALLBACK_ENV, workerHost } from '../host/worker.ts';
+import { carrierEvidence } from '../smoke/p1-host-tools.ts';
 
 /**
  * ARD D11 — compatibility follows the process binary, so the carrier decides
@@ -70,6 +71,46 @@ describe('workerHost (D11 carrier matrix)', () => {
     await expect(validateHost(host)).resolves.toBeUndefined();
   });
 
+  /**
+   * tsd-01 — before this switch the fallback had no factory trigger at all:
+   * the one carrier that meets ciphertext (packaged Windows) hardcoded it off,
+   * and the carriers that enabled it run where no encryption driver exists. An
+   * encrypted box can now exercise the helper, and a machine whose driver
+   * stopped whitelisting our binary can be told to try, without a rebuild.
+   */
+  it('lets the field switch turn the fallback on for bundled-node', async () => {
+    const host = workerHost({
+      carrier: 'bundled-node',
+      env: { [RUNTIME_TSD_FALLBACK_ENV]: '1' },
+      execPath: process.execPath,
+    });
+    expect(host.tsdReadFallback).toBe('configured-node');
+    // Still the binary Main spawned us as, never a second copy from disk.
+    expect(host.node).toEqual({ path: process.execPath, source: 'bundled' });
+    await expect(validateHost(host)).resolves.toBeUndefined();
+  });
+
+  it('keeps the fallback off for anything but an explicit on value', () => {
+    for (const value of ['', '0', 'off', 'no', 'maybe']) {
+      const host = workerHost({
+        carrier: 'bundled-node',
+        env: { [RUNTIME_TSD_FALLBACK_ENV]: value },
+        execPath: process.execPath,
+      });
+      expect(host.tsdReadFallback).toBe('disabled');
+    }
+  });
+
+  it('cannot switch on a fallback with no Node to spawn', () => {
+    const host = workerHost({
+      carrier: 'electron-utility',
+      env: { [RUNTIME_TSD_FALLBACK_ENV]: 'on' },
+      resourcesPath: resources,
+    });
+    expect(host.node).toBeUndefined();
+    expect(host.tsdReadFallback).toBe('disabled');
+  });
+
   it('names the Windows binary on Windows', () => {
     expect(bundledNodePath('C:\\app\\resources', 'win32')).toContain('node.exe');
     expect(bundledNodePath('/app/resources', 'darwin')).not.toContain('.exe');
@@ -109,5 +150,71 @@ describe('resolveHelper (P4-1 packaging)', () => {
     expect(() =>
       resolveHelper('tsd-read.mjs', pathToFileURL(join(resources, 'worker.js')).href)
     ).toThrow(/runtime-helpers/);
+  });
+});
+
+/**
+ * tsd-06 — what the P1-8 probes assert about the carrier. The old assertion
+ * compared the trace's carrier with the object the trace copied it from, so it
+ * could not fail; these are the comparisons that can.
+ */
+describe('carrierEvidence (P1-8 probe assertions)', () => {
+  const shippedNode = { path: '/app/resources/node-runtime/node', source: 'bundled' as const };
+  const utility = { carrier: 'electron-utility' as const, node: shippedNode };
+
+  it('passes when the process matches the carrier it claims', () => {
+    expect(
+      carrierEvidence(utility, {
+        execPath: '/opt/app/electron',
+        electron: '38.0.0',
+        platform: 'linux',
+      })
+    ).toBe(true);
+    expect(
+      carrierEvidence(
+        { carrier: 'bundled-node', node: { path: 'C:\\app\\node.exe', source: 'bundled' } },
+        { execPath: 'C:\\App\\node.exe', electron: null, platform: 'win32' }
+      )
+    ).toBe(true);
+    expect(
+      carrierEvidence(
+        {
+          carrier: 'standalone-node',
+          node: { path: process.execPath, source: 'current-process' },
+        },
+        { execPath: process.execPath, electron: null, platform: process.platform }
+      )
+    ).toBe(true);
+  });
+
+  it('fails the mismatches the old tautology waved through', () => {
+    // Claims the Electron carrier from a process with no Electron in it.
+    expect(
+      carrierEvidence(utility, {
+        execPath: '/opt/app/electron',
+        electron: null,
+        platform: 'linux',
+      })
+    ).toBe(false);
+    // Offers its own Electron binary as the TSD helper — the D11 trap.
+    expect(
+      carrierEvidence(
+        { carrier: 'electron-utility', node: { path: '/opt/app/electron', source: 'bundled' } },
+        { execPath: '/opt/app/electron', electron: '38.0.0', platform: 'linux' }
+      )
+    ).toBe(false);
+    // Claims bundled-node from inside Electron, or points at a different Node.
+    expect(
+      carrierEvidence(
+        { carrier: 'bundled-node', node: { path: '/app/node', source: 'bundled' } },
+        { execPath: '/app/node', electron: '38.0.0', platform: 'linux' }
+      )
+    ).toBe(false);
+    expect(
+      carrierEvidence(
+        { carrier: 'bundled-node', node: { path: '/usr/bin/node', source: 'bundled' } },
+        { execPath: '/app/node', electron: null, platform: 'linux' }
+      )
+    ).toBe(false);
   });
 });

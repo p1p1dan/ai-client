@@ -28,6 +28,29 @@ export interface WorkerHostInput {
   cleanupTimeoutMs?: number;
 }
 
+/**
+ * Field switch for the TSD read fallback — engineering standard §6, a new
+ * capability behind a flag (tsd-01).
+ *
+ * D11 left the fallback with no factory trigger: the only carrier that ever
+ * meets ciphertext is `bundled-node` on packaged Windows, which turns it off by
+ * design, while the carriers that enable it run where no encryption driver
+ * exists. So `source: 'node-fallback'` never happened in a shipped build, and
+ * the encrypted box had no product operation that could exercise the helper.
+ *
+ * Set this to `1` / `on` / `true` and the fallback is enabled for the Node the
+ * carrier already has — no second binary, no rebuild, nothing to edit in the
+ * package. Off by default because re-spawning the same whitelisted binary
+ * normally just repeats the same read; it earns its keep when the driver has
+ * stopped whitelisting us (where the re-spawn may land differently) and on the
+ * field trip that has to prove the helper contract end to end.
+ */
+export const RUNTIME_TSD_FALLBACK_ENV = 'AICLIENT_RUNTIME_TSD_FALLBACK';
+function fallbackRequested(env: NodeJS.ProcessEnv): boolean {
+  const value = env[RUNTIME_TSD_FALLBACK_ENV]?.trim().toLowerCase();
+  return value === '1' || value === 'on' || value === 'true';
+}
+
 /** Where `pnpm fetch:node-runtime` puts the Node we ship. */
 export function bundledNodePath(resourcesPath: string, platform: NodeJS.Platform): string {
   return join(resourcesPath, 'node-runtime', platform === 'win32' ? 'node.exe' : 'node');
@@ -62,8 +85,11 @@ export function workerHost(input: WorkerHostInput): RuntimeHostConfig {
       node: { path: execPath, source: 'bundled' },
       // This carrier exists precisely because the security driver whitelists
       // this binary: it already reads plaintext, so a fallback that re-spawns
-      // the same binary could only repeat the failure with a worse message.
-      tsdReadFallback: 'disabled',
+      // the same binary would normally only repeat the failure with a worse
+      // message. The switch is for when that premise breaks — the driver no
+      // longer lets us through, or the field has to run the helper once to
+      // prove its contract.
+      tsdReadFallback: fallbackRequested(env) ? 'configured-node' : 'disabled',
     };
   }
 
@@ -76,9 +102,10 @@ export function workerHost(input: WorkerHostInput): RuntimeHostConfig {
     ...base,
     carrier: 'electron-utility',
     ...(node ? { node } : {}),
-    // Only claim a fallback when a real Node is present. Unpackaged dev shells
-    // have no `resources/node-runtime`, and promising a helper we cannot spawn
-    // would turn a clear "no fallback configured" into a spawn failure.
+    // Only claim a fallback when a real Node is present — here the switch
+    // cannot help either. Unpackaged dev shells have no
+    // `resources/node-runtime`, and promising a helper we cannot spawn would
+    // turn a clear "no fallback configured" into a spawn failure.
     tsdReadFallback: node ? 'configured-node' : 'disabled',
   };
 }

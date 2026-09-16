@@ -278,7 +278,12 @@ describe('P2 prompt service and HostIo instruction wiring', () => {
     const { handle } = await runtime();
     const source = instructionSource(handle.hostIo);
     expect(await source.readText(join(root, 'absent'))).toBeUndefined();
-    await writeFile(join(root, 'AGENTS.md'), '%TSD-Header-###%encrypted');
+    // Block aligned like a real container: the magic alone no longer condemns
+    // a file, so a fixture has to look like ciphertext to be treated as such
+    // (tsd-07).
+    const container = Buffer.alloc(4096, 0x2a);
+    Buffer.from('%TSD-Header-###%').copy(container, 0);
+    await writeFile(join(root, 'AGENTS.md'), container);
     await expect(handle.prompt.compose()).rejects.toMatchObject({ code: 'io_tsd_unavailable' });
     vi.spyOn(handle.hostIo, 'readFile').mockRejectedValue(
       new RuntimeHostError('runtime_disposed', 'disposed')

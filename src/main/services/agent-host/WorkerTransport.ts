@@ -47,6 +47,18 @@ function subscribeReadable(
 }
 
 /**
+ * ARD D11 item 5 — a worker's ordinary stdout must be drained even though the
+ * RPC never reads it. Nothing we write goes there (agent-host/worker.ts logs to
+ * stderr), but a third-party library that calls `console.log` would otherwise
+ * queue its output inside the worker with no reader, growing its memory for the
+ * length of the session and losing the lines for good. Shared by both carriers
+ * so the two cannot drift apart again (tsd-03 / main-host-04).
+ */
+function drainStdout(stdout: NodeJS.ReadableStream | null): void {
+  stdout?.resume();
+}
+
+/**
  * Electron utilityProcess adapter for one WorkerSlot generation.
  *
  * Electron has shipped both direct payload and MessageEvent-like `{ data }`
@@ -54,6 +66,7 @@ function subscribeReadable(
  * that implementation detail.
  */
 export function createUtilityProcessWorkerTransport(proc: UtilityProcess): WorkerTransport {
+  drainStdout(proc.stdout);
   return {
     get pid() {
       return proc.pid;
@@ -95,7 +108,7 @@ export function createUtilityProcessWorkerTransport(proc: UtilityProcess): Worke
 
 export function createNodeProcessWorkerTransport(proc: ChildProcess): WorkerTransport {
   // RPC uses Node IPC; drain ordinary stdout so tool/extension logs cannot fill its pipe.
-  proc.stdout?.resume();
+  drainStdout(proc.stdout);
   return {
     get pid() {
       return proc.pid;

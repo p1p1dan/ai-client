@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
@@ -674,6 +674,41 @@ describe('native tools', () => {
     expect(cappedGrep.details).toMatchObject({ truncated: true });
     expect(content(cappedGrep)).toContain('search truncated');
   });
+  // POSIX only: Windows has no mode that makes a file unreadable to its owner,
+  // and running as root would read it anyway.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'skips a file it cannot read instead of failing the whole search (tsd-02)',
+    async () => {
+      await writeFile(join(dir, 'visible.txt'), 'needle here\n');
+      const locked = join(dir, 'locked.txt');
+      await writeFile(locked, 'needle here\n');
+      await chmod(locked, 0o000);
+      const r = await runtime();
+      const output = await call(r, 'grep', { pattern: 'needle' });
+      expect(content(output)).toContain('visible.txt');
+      expect(content(output)).not.toContain('locked.txt');
+      expect(output.details).toMatchObject({ skipped: 1 });
+    }
+  );
+  it('skips a TSD container but searches a note that merely starts with the magic (tsd-02/tsd-07)', async () => {
+    await writeFile(join(dir, 'visible.txt'), 'needle here\n');
+    const sealed = Buffer.alloc(4096, 0x2a);
+    Buffer.from('%TSD-Header-###%').copy(sealed, 0);
+    await writeFile(join(dir, 'sealed.bin'), sealed);
+    await writeFile(join(dir, 'note.md'), '%TSD-Header-###%\nneedle in a plain note\n');
+    const r = await runtime();
+    const output = await call(r, 'grep', { pattern: 'needle' });
+    // One file the carrier cannot decrypt is one skipped file, not a failed
+    // search; the note is plaintext that happens to open with those 16 bytes.
+    expect(content(output)).toContain('visible.txt');
+    expect(content(output)).toContain('note.md');
+    expect(content(output)).not.toContain('sealed.bin');
+    expect(output.details).toMatchObject({ skipped: 1 });
+    await expect(call(r, 'read', { path: 'sealed.bin' })).rejects.toMatchObject({
+      code: 'io_tsd_unavailable',
+    });
+    expect(content(await call(r, 'read', { path: 'note.md' }))).toContain('needle in a plain note');
+  });
   it('applies deny scopes inside recursive grep instead of only checking the root', async () => {
     await writeFile(join(dir, 'private.txt'), 'hidden');
     const r = await runtime({
@@ -707,6 +742,38 @@ describe('read line scanning', () => {
     } as unknown as RuntimeHostIoService;
     return { io, windows };
   }
+  it('keeps fallback windows capped past 2 MiB (tsd-05)', async () => {
+    // The existing case above uses a 1 MB sample, which never reaches the cap.
+    // Past it the scan is linear in blocks of 2 MiB, not geometric, and that is
+    // the regime a real encrypted log lands in.
+    const CAP = 2 * 1024 * 1024;
+    const big = Buffer.from(`${'y'.repeat(LINE_BYTES - 1)}\n`.repeat(44_000));
+    const sized = (source: RuntimeReadResult['source']) => {
+      const windows: number[] = [];
+      const io = {
+        readFile: (_path: string, options: RuntimeReadOptions): Promise<RuntimeReadResult> => {
+          windows.push(options.maxBytes);
+          const offset = options.offset ?? 0;
+          const slice = big.subarray(offset, offset + options.maxBytes + 1);
+          return Promise.resolve({
+            bytes: slice.subarray(0, options.maxBytes),
+            truncated: slice.length > options.maxBytes,
+            source,
+          });
+        },
+      } as unknown as RuntimeHostIoService;
+      return { io, windows };
+    };
+    const plain = sized('direct');
+    const helper = sized('node-fallback');
+    const expected = await readLines(plain.io, '/scan', 43_000, 200, BUDGET);
+    const actual = await readLines(helper.io, '/scan', 43_000, 200, BUDGET);
+    expect(actual).toEqual(expected);
+    expect(Math.max(...helper.windows)).toBe(CAP);
+    const capped = helper.windows.slice(helper.windows.indexOf(CAP));
+    expect(new Set(capped)).toEqual(new Set([CAP]));
+    expect(helper.windows.length).toBeLessThanOrEqual(Math.ceil(big.length / CAP) + 6);
+  });
   it('widens the window for helper-backed reads only (tools-10)', async () => {
     const plain = countingIo('direct');
     const helper = countingIo('node-fallback');

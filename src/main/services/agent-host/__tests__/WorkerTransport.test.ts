@@ -1,3 +1,4 @@
+import type { ChildProcess } from 'node:child_process';
 import { fork } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -14,6 +15,7 @@ import {
 
 class FakeUtilityProcess extends EventEmitter {
   pid: number | undefined = 4321;
+  stdout = new PassThrough();
   stderr = new PassThrough();
   readonly postMessage = vi.fn();
   readonly kill = vi.fn(() => true);
@@ -119,5 +121,40 @@ describe('createUtilityProcessWorkerTransport', () => {
     });
     expect(transport.kill()).toBe(false);
     expect(process.kill).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * ARD D11 item 5 — the worker's ordinary stdout must be drained on BOTH
+ * carriers. Until tsd-03 only the child_process one was, so under Electron a
+ * third-party library that logs to stdout piled its output up in the worker
+ * with no reader (main-host-04 is the other side of the same branch).
+ */
+describe('worker stdout is drained on both carriers', () => {
+  const settle = () => new Promise((done) => setImmediate(done));
+
+  it('leaves a utility process stdout flowing', async () => {
+    const proc = new FakeUtilityProcess();
+    expect(proc.stdout.readableFlowing).toBe(null);
+    createUtilityProcessWorkerTransport(proc as unknown as UtilityProcess);
+    expect(proc.stdout.readableFlowing).toBe(true);
+    proc.stdout.write('a third-party library says hello');
+    await settle();
+    expect(proc.stdout.readableLength).toBe(0);
+  });
+
+  it('leaves a node child stdout flowing', async () => {
+    const stdout = new PassThrough();
+    const proc = Object.assign(new EventEmitter(), {
+      stdout,
+      stderr: new PassThrough(),
+      pid: 99,
+    }) as unknown as ChildProcess;
+    expect(stdout.readableFlowing).toBe(null);
+    createNodeProcessWorkerTransport(proc);
+    expect(stdout.readableFlowing).toBe(true);
+    stdout.write('ordinary output is not RPC');
+    await settle();
+    expect(stdout.readableLength).toBe(0);
   });
 });

@@ -10,6 +10,7 @@ import {
   HOST_IO_SERVICE,
   PROMPT_SERVICE,
   type RuntimeHostIoService,
+  type RuntimeReadResult,
 } from '../../contracts.ts';
 import { errorCode, RuntimeHostError } from '../../host/errors.ts';
 import { type BashAnalysis, BashAnalyzer, splitShellPath } from '../permissions/bash-analysis.ts';
@@ -54,6 +55,25 @@ export const MAX_BASH_TIMEOUT_SECONDS = 6 * 60 * 60;
 const OPTIONAL_FILE_ERRORS = new Set(['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'EISDIR', 'ELOOP']);
 function isSkippableIoError(error: unknown): boolean {
   return OPTIONAL_FILE_ERRORS.has(errorCode(error) ?? '');
+}
+/**
+ * What a bulk reader must treat as "this one file cannot be scanned" rather
+ * than "the search failed" (tsd-02).
+ *
+ * T010 gave the traversal this tolerance and left the read that follows it
+ * bare, so a single `chmod 000` file — or, on an encrypted box, one file this
+ * carrier cannot decrypt — threw away every match already found. The result
+ * already reports how many files were skipped, which is where these belong.
+ */
+const UNSCANNABLE_FILE_ERRORS = new Set([
+  'io_tsd_unavailable',
+  'io_tsd_unreadable',
+  'io_not_utf8',
+  'io_limit',
+]);
+function isUnscannableFile(error: unknown): boolean {
+  const code = errorCode(error) ?? '';
+  return OPTIONAL_FILE_ERRORS.has(code) || UNSCANNABLE_FILE_ERRORS.has(code);
 }
 export interface ToolsConfig {
   cwd: string;
@@ -627,11 +647,21 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
             skipped++;
             continue;
           }
-          const data = await io.readFile(file, {
-            maxBytes: SEARCH_FILE_BYTES,
-            overflow: 'truncate',
-            signal,
-          });
+          let data: RuntimeReadResult;
+          try {
+            data = await io.readFile(file, {
+              maxBytes: SEARCH_FILE_BYTES,
+              overflow: 'truncate',
+              signal,
+            });
+          } catch (error) {
+            // The same treatment the walk gives an entry it cannot open. An
+            // abort or a disposed runtime is not in the set, so Stop and
+            // shutdown still end the search.
+            if (!isUnscannableFile(error)) throw error;
+            skipped++;
+            continue;
+          }
           totalBytes += data.bytes.length;
           if (totalBytes > 32 * 1024 * 1024) {
             budget.truncated = true;

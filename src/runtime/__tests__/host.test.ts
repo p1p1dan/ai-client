@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeExecRequest, RuntimeHostConfig } from '../contracts.ts';
 import { standaloneHost, validateHost } from '../host/config.ts';
 import {
+  createOrphanReaper,
   createTreeKiller,
   ExecPlugin,
   execRunnerPath,
@@ -51,6 +52,25 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 const text = (value: Uint8Array) => Buffer.from(value).toString('utf8');
+/**
+ * A file shaped like a real TSD container: the magic head AND a whole number of
+ * 4 KiB blocks, which is what HostIo requires before it calls a file encrypted
+ * (tsd-07). A fixture that is only 22 bytes long is now read as the plaintext
+ * it always was.
+ */
+function containerBytes(size = 4096): Buffer {
+  const bytes = Buffer.alloc(size, 0x2a);
+  Buffer.from('%TSD-Header-###%').copy(bytes, 0);
+  return bytes;
+}
+/** Mirrors `tsd-read.mjs`: 8-byte magic + 4-byte big-endian payload length. */
+function framed(payload: Buffer | string): Buffer {
+  const bytes = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
+  const header = Buffer.alloc(12);
+  Buffer.from('%TSDOUT%').copy(header, 0);
+  header.writeUInt32BE(bytes.length, 8);
+  return Buffer.concat([header, bytes]);
+}
 function command(script: string, extra: Partial<RuntimeExecRequest> = {}) {
   return exec.run({
     command: process.execPath,
@@ -89,7 +109,7 @@ describe('host IO', () => {
   });
   it('rejects ciphertext without fallback and checks the header before an offset', async () => {
     const path = join(dir, 'encrypted');
-    await writeFile(path, '%TSD-Header-###%secret');
+    await writeFile(path, containerBytes());
     await expect(
       io.readFile(path, { offset: 17, maxBytes: 2, overflow: 'truncate' })
     ).rejects.toMatchObject({ code: 'io_tsd_unavailable' });
@@ -104,11 +124,16 @@ describe('host IO', () => {
     const helper = fileURLToPath(new URL('../host/tsd-read.mjs', import.meta.url));
     const result = await command('', { args: [helper, path, '3', '4'] });
     expect(result.exitCode).toBe(0);
-    expect(text(result.stdout)).toBe('3456');
+    // Framed since tsd-04: whatever else reaches this stdout is no longer
+    // indistinguishable from the file.
+    const stdout = Buffer.from(result.stdout);
+    expect(stdout.subarray(0, 8).toString('latin1')).toBe('%TSDOUT%');
+    expect(stdout.readUInt32BE(8)).toBe(4);
+    expect(text(stdout.subarray(12))).toBe('3456');
   });
   it('routes TSD reads through an injected adapter exactly once', async () => {
     const encrypted = join(dir, 'encrypted');
-    await writeFile(encrypted, '%TSD-Header-###%opaque');
+    await writeFile(encrypted, containerBytes());
     let calls = 0;
     const alternate = new Context();
     const adapted: RuntimeHostConfig = {
@@ -127,9 +152,9 @@ describe('host IO', () => {
               exitCode: 0,
               signal: null,
               termination: 'exit',
-              stdout: Buffer.from('plain'),
+              stdout: framed('plain'),
               stderr: new Uint8Array(),
-              stdoutBytes: 5,
+              stdoutBytes: 17,
               stderrBytes: 0,
               truncated: false,
             };
@@ -154,11 +179,14 @@ describe('host IO', () => {
   });
   it('reads plaintext through a helper whose Node greets stderr (core-host-05)', async () => {
     const encrypted = join(dir, 'encrypted');
-    await writeFile(encrypted, '%TSD-Header-###%opaque');
+    await writeFile(encrypted, containerBytes());
     const maxBytes = 64;
     // Enough plaintext to fill the helper's whole window, which is the case the
     // shared budget used to lose: a full stdout plus any stderr overflowed it.
-    let script = `process.stderr.write('w'.repeat(8192));process.stdout.write('p'.repeat(${maxBytes + 1}))`;
+    let script =
+      `process.stderr.write('w'.repeat(8192));const h=Buffer.alloc(12);Buffer.from('%TSDOUT%')` +
+      `.copy(h,0);h.writeUInt32BE(${maxBytes + 1},8);` +
+      `process.stdout.write(Buffer.concat([h,Buffer.from('p'.repeat(${maxBytes + 1}))]))`;
     const seen: RuntimeExecRequest[] = [];
     const alternate = new Context();
     const noisy: RuntimeHostConfig = {
@@ -192,7 +220,9 @@ describe('host IO', () => {
       expect(data.source).toBe('node-fallback');
       expect(text(data.bytes)).toBe('p'.repeat(maxBytes));
       expect(data.truncated).toBe(true);
-      expect(seen[0]?.maxOutputBytes).toBe(maxBytes + 1);
+      // The window plus room for the frame header (tsd-04), so a full read is
+      // not mistaken for an overflowing one.
+      expect(seen[0]?.maxOutputBytes).toBe(maxBytes + 1 + 12);
       expect(seen[0]?.maxStderrBytes).toBeGreaterThan(0);
       // A helper that genuinely fails still reads as an unreadable file.
       script = "process.stderr.write('driver refused');process.exitCode=1";
@@ -1120,5 +1150,131 @@ describe('windows carrier', () => {
       '-y',
       'server',
     ]);
+  });
+});
+
+/**
+ * concurrency-05 — long-lived children when this process is not asked nicely.
+ *
+ * Every signal here goes to an INJECTED host. Appendix B1: a test that reaches
+ * this code with a fabricated pid must never let it reach the real
+ * `process.kill`, because `kill(-1, …)` is not "the group led by pid 1" — it is
+ * every process this user owns.
+ */
+describe('orphan reaper', () => {
+  function fakeHost(platform: NodeJS.Platform = 'linux') {
+    const handlers = new Map<string, Set<() => void>>();
+    const killed: { pid: number; signal: NodeJS.Signals }[] = [];
+    return {
+      killed,
+      listenerCount: () => [...handlers.values()].reduce((sum, set) => sum + set.size, 0),
+      emit(event: string) {
+        for (const handler of [...(handlers.get(event) ?? [])]) handler();
+      },
+      host: {
+        pid: 9001,
+        platform,
+        on(event: string, handler: () => void) {
+          const set = handlers.get(event) ?? new Set();
+          set.add(handler);
+          handlers.set(event, set);
+        },
+        removeListener(event: string, handler: () => void) {
+          handlers.get(event)?.delete(handler);
+        },
+        kill(pid: number, signal: NodeJS.Signals) {
+          killed.push({ pid, signal });
+        },
+      },
+    };
+  }
+
+  it('kills the group of every tracked child when this process exits', () => {
+    const stage = fakeHost();
+    createOrphanReaper(stage.host).track(4242);
+    stage.emit('exit');
+    // The GROUP (negative), never the bare pid: what has to go is the tree the
+    // server started, not only its leader.
+    expect(stage.killed).toEqual([{ pid: -4242, signal: 'SIGKILL' }]);
+  });
+
+  it('sweeps, stands down and re-raises the signal it caught', () => {
+    const stage = fakeHost();
+    createOrphanReaper(stage.host).track(4242);
+    stage.emit('SIGTERM');
+    expect(stage.killed).toEqual([
+      { pid: -4242, signal: 'SIGKILL' },
+      // Re-raised on OUR pid with the handler already removed, so the default
+      // termination this handler postponed still happens.
+      { pid: 9001, signal: 'SIGTERM' },
+    ]);
+    expect(stage.listenerCount()).toBe(0);
+  });
+
+  it('stops listening once the last long-lived child has exited', () => {
+    const stage = fakeHost();
+    const reaper = createOrphanReaper(stage.host);
+    const forget = reaper.track(4242);
+    const second = reaper.track(4343);
+    expect(stage.listenerCount()).toBeGreaterThan(0);
+    forget();
+    second();
+    expect(stage.listenerCount()).toBe(0);
+    stage.emit('exit');
+    expect(stage.killed).toEqual([]);
+  });
+
+  it('leaves Windows to the runner carrier, which owns the tree there', () => {
+    const stage = fakeHost('win32');
+    createOrphanReaper(stage.host).track(4242);
+    expect(stage.listenerCount()).toBe(0);
+    stage.emit('exit');
+    expect(stage.killed).toEqual([]);
+  });
+
+  it('registers a long-lived POSIX child and forgets it when it goes away', async () => {
+    const tracked: (number | undefined)[] = [];
+    const forgotten: (number | undefined)[] = [];
+    const child = new EventEmitter() as EventEmitter & {
+      pid: number;
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+      stdin: EventEmitter & { destroy: () => void };
+      kill: () => boolean;
+    };
+    child.pid = 5150;
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.stdin = Object.assign(new EventEmitter(), { destroy: () => undefined });
+    child.kill = () => true;
+    const handle = await spawnPersistent(
+      {
+        command: '/usr/bin/mcp-server',
+        args: [],
+        cwd: '/work',
+        env: {},
+        onStdout: () => undefined,
+        onStderr: () => undefined,
+      },
+      1_000,
+      undefined,
+      {
+        platform: 'linux',
+        spawnProcess: (() => child) as unknown as typeof spawn,
+        killGroup: () => undefined,
+        reaper: {
+          track(pid) {
+            tracked.push(pid);
+            return () => forgotten.push(pid);
+          },
+        },
+      }
+    );
+    expect(handle).toBeDefined();
+    expect(tracked).toEqual([5150]);
+    expect(forgotten).toEqual([]);
+    child.emit('close', 0, null);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(forgotten).toEqual([5150]);
   });
 });
