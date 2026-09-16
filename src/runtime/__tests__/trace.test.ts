@@ -28,7 +28,15 @@ import type {
 import { TracePlugin, type TracePluginConfig } from '../trace.ts';
 
 const DIR = '/traces';
-const RUNS = `${DIR}/runs.jsonl`;
+/**
+ * Every path this file both hands to the plugin and looks up in the fake's
+ * `files` map has to be built the same way the plugin builds it. A literal
+ * `/traces/runs.jsonl` is the same string on POSIX but not on Windows, where
+ * the plugin's own `join` produces `/traces\runs.jsonl` — the test would then
+ * read an empty map and believe nothing was ever written.
+ */
+const tracePath = (...segments: string[]): string => join(DIR, ...segments);
+const RUNS = tracePath('runs.jsonl');
 
 function ioError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });
@@ -149,12 +157,12 @@ it('rotates runs.jsonl once the next line would cross the byte ceiling', async (
   await record(trace, 'a', 4_000);
   await record(trace, 'b', 4_000);
   expect(lineIds(io, RUNS)).toEqual(['a', 'b']);
-  expect(io.files.has(`${DIR}/runs.1.jsonl`)).toBe(false);
+  expect(io.files.has(tracePath('runs.1.jsonl'))).toBe(false);
 
   await record(trace, 'c', 4_000);
   // The crossing run starts the new file; the full ones move aside intact.
   expect(lineIds(io, RUNS)).toEqual(['c']);
-  expect(lineIds(io, `${DIR}/runs.1.jsonl`)).toEqual(['a', 'b']);
+  expect(lineIds(io, tracePath('runs.1.jsonl'))).toEqual(['a', 'b']);
   await trace.flush();
 });
 
@@ -163,10 +171,14 @@ it('keeps only the configured number of rotated generations', async () => {
   const trace = tracer(io, { maxFileBytes: 5_000, fileGenerations: 2 });
   for (const label of ['a', 'b', 'c', 'd']) await record(trace, label, 4_000);
   expect(lineIds(io, RUNS)).toEqual(['d']);
-  expect(lineIds(io, `${DIR}/runs.1.jsonl`)).toEqual(['c']);
-  expect(lineIds(io, `${DIR}/runs.2.jsonl`)).toEqual(['b']);
+  expect(lineIds(io, tracePath('runs.1.jsonl'))).toEqual(['c']);
+  expect(lineIds(io, tracePath('runs.2.jsonl'))).toEqual(['b']);
   // `a` fell off the end rather than accumulating a third generation.
-  expect([...io.files.keys()].sort()).toEqual([`${DIR}/runs.1.jsonl`, `${DIR}/runs.2.jsonl`, RUNS]);
+  expect([...io.files.keys()].sort()).toEqual([
+    tracePath('runs.1.jsonl'),
+    tracePath('runs.2.jsonl'),
+    RUNS,
+  ]);
   await trace.flush();
 });
 
@@ -186,11 +198,11 @@ it('writes a single oversized trace whole rather than splitting it', async () =>
   await record(trace, 'huge', 5_000);
   // Nothing to rotate on an empty file, so the line lands complete.
   expect(lineIds(io, RUNS)).toEqual(['huge']);
-  expect(io.files.has(`${DIR}/runs.1.jsonl`)).toBe(false);
+  expect(io.files.has(tracePath('runs.1.jsonl'))).toBe(false);
   // The next run rotates it away instead of appending to an already-over file.
   await record(trace, 'next', 10);
   expect(lineIds(io, RUNS)).toEqual(['next']);
-  expect(lineIds(io, `${DIR}/runs.1.jsonl`)).toEqual(['huge']);
+  expect(lineIds(io, tracePath('runs.1.jsonl'))).toEqual(['huge']);
   await trace.flush();
 });
 
@@ -200,7 +212,7 @@ it('measures the file on disk, so a new process inherits its predecessor size', 
   const trace = tracer(io, { maxFileBytes: 500, fileGenerations: 1 });
   await record(trace, 'fresh', 10);
   expect(lineIds(io, RUNS)).toEqual(['fresh']);
-  expect(io.files.get(`${DIR}/runs.1.jsonl`)?.byteLength).toBe(900);
+  expect(io.files.get(tracePath('runs.1.jsonl'))?.byteLength).toBe(900);
   await trace.flush();
 });
 
@@ -264,14 +276,14 @@ it('keeps the newest run even when it alone exceeds the byte ceiling', async () 
   expect(trace.evictedRuns).toBe(1);
 });
 
-const ROTATE_LOCK = `${DIR}/runs.rotate.lock`;
+const ROTATE_LOCK = tracePath('runs.rotate.lock');
 
 /** A rotation lock as another worker would have left it. */
 function rotationLock(owner: { pid: number; token: string; acquiredAt: number }): Buffer {
   return Buffer.from(JSON.stringify({ host: hostname(), ...owner }));
 }
 
-it.skipIf(process.platform === 'win32')('rotates once when a second worker crosses the ceiling at the same moment', async () => {
+it('rotates once when a second worker crosses the ceiling at the same moment', async () => {
   const io = new FakeIo();
   io.files.set(RUNS, Buffer.alloc(900, 'x'));
   const mine = tracer(io, { maxFileBytes: 500, fileGenerations: 2 });
@@ -291,14 +303,14 @@ it.skipIf(process.platform === 'win32')('rotates once when a second worker cross
   // 900-byte file all the way to runs.2 and leave runs.1 holding only what
   // arrived after it: one generation retired a whole cycle early, and a hole
   // where readers count backwards from runs.1.
-  expect(io.files.has(`${DIR}/runs.2.jsonl`)).toBe(false);
-  const rotated = io.files.get(`${DIR}/runs.1.jsonl`)?.toString('utf8') ?? '';
+  expect(io.files.has(tracePath('runs.2.jsonl'))).toBe(false);
+  const rotated = io.files.get(tracePath('runs.1.jsonl'))?.toString('utf8') ?? '';
   expect(rotated.startsWith('x'.repeat(900))).toBe(true);
   expect(rotated).toContain('"run_id":"peer"');
   expect(lineIds(io, RUNS)).toEqual(['mine']);
 });
 
-it.skipIf(process.platform === 'win32')('appends without rotating while another worker holds the directory lock', async () => {
+it('appends without rotating while another worker holds the directory lock', async () => {
   const io = new FakeIo();
   io.files.set(RUNS, Buffer.alloc(900, 'x'));
   io.files.set(
@@ -311,12 +323,12 @@ it.skipIf(process.platform === 'win32')('appends without rotating while another 
   // Losing the race for the lock is housekeeping deferred, not a failure: the
   // peer is rotating, and the next run finds the fresh file.
   await trace.flush();
-  expect(io.files.has(`${DIR}/runs.1.jsonl`)).toBe(false);
+  expect(io.files.has(tracePath('runs.1.jsonl'))).toBe(false);
   expect(io.files.get(RUNS)?.toString('utf8')).toContain('"run_id":"mine"');
   expect(JSON.parse(io.files.get(ROTATE_LOCK)?.toString('utf8') ?? '{}').token).toBe('peer');
 });
 
-it.skipIf(process.platform === 'win32')('drops a rotation lock stranded by a crash and releases its own', async () => {
+it('drops a rotation lock stranded by a crash and releases its own', async () => {
   const io = new FakeIo();
   io.files.set(RUNS, Buffer.alloc(900, 'x'));
   io.files.set(
@@ -329,7 +341,7 @@ it.skipIf(process.platform === 'win32')('drops a rotation lock stranded by a cra
 
   await record(trace, 'mine', 10);
   await trace.flush();
-  expect(io.files.get(`${DIR}/runs.1.jsonl`)?.byteLength).toBe(900);
+  expect(io.files.get(tracePath('runs.1.jsonl'))?.byteLength).toBe(900);
   expect(lineIds(io, RUNS)).toEqual(['mine']);
   // Released rather than left for the next worker to time out on.
   expect(io.files.has(ROTATE_LOCK)).toBe(false);
