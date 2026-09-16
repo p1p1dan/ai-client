@@ -67,6 +67,25 @@ import {
 
 export const CONTEXT_SERVICE = 'runtimeContext';
 
+/**
+ * capacity-03 — a model-independent ceiling on the summary a compaction stores.
+ *
+ * Every other thing this runtime writes into the session file has a named byte
+ * constant (tool output 50 KiB, review patch 64 KiB, MCP text 50 KiB). The
+ * checkpoint summary had none: the only gate was a token estimate compared
+ * against the model's own hard limit AFTER the text existed, so how many bytes
+ * could land was decided entirely by the provider's output ceiling and the
+ * configured context window. A 1M-window model makes that a several-hundred-KiB
+ * entry, on the one write that repeats for the life of a long conversation.
+ *
+ * 256 KiB is far above any summary a working compaction produces (the input
+ * budget that feeds it is a fraction of one context window) and far below the
+ * session budget, so this fires only when the summarizer has run away — which
+ * is the case the token check was already in place to catch, just later and in
+ * the model's units rather than the file's.
+ */
+export const MAX_COMPACTION_SUMMARY_BYTES = 256 * 1024;
+
 export interface ContextConfig {
   /** ARD D9's safety guard. Off leaves the loop exactly as P0 ran it. */
   enabled?: boolean;
@@ -322,6 +341,18 @@ export class ContextPlugin extends Service implements RuntimeContextService {
         return this.giveUp(reason, messages, 'compaction_summary_failed', summarized.message);
       }
       result = summarized.value;
+    }
+    // capacity-03 — refused in bytes before it is judged in tokens: the session
+    // file has no opinion about token counts, and `giveUp` is the branch that
+    // leaves the run intact (context-prompt-12) instead of failing `/compact`.
+    const summaryBytes = Buffer.byteLength(result.summary, 'utf8');
+    if (summaryBytes > MAX_COMPACTION_SUMMARY_BYTES) {
+      return this.giveUp(
+        reason,
+        messages,
+        'compaction_over_budget',
+        `the generated checkpoint summary is ${summaryBytes} bytes, past the ${MAX_COMPACTION_SUMMARY_BYTES} byte ceiling`
+      );
     }
     const session = this.ctx.get(SESSION_SERVICE);
     const candidate = [

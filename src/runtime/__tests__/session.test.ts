@@ -11,7 +11,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
 import { decodeSession } from '../plugins/session/codec.ts';
-import { JsonlSessionStore } from '../plugins/session/store.ts';
+import { JsonlSessionStore, SESSION_MAX_ENTRY_BYTES } from '../plugins/session/store.ts';
 import { neverAsked } from './fixtures/approval.ts';
 
 let dir: string;
@@ -443,6 +443,64 @@ describe('P3-1 JSONL session / P2-4 durable compaction', () => {
     expect((store.writeFailure as Error | undefined)?.message).toBe('disk full');
     await expect(store.flush()).rejects.toThrow('disk full');
     expect(await readdir(dir)).not.toContain('observed.jsonl.writer.lock');
+  });
+
+  it('refuses one entry past the per-entry ceiling while the file still has room', async () => {
+    // capacity-04. The aggregate check only asks whether the file still fits,
+    // so on a nearly empty session a single line could legally approach the
+    // whole 32 MiB budget — and the writer that forgets its own limit is
+    // exactly the one this net is for.
+    const { handle } = await runtime();
+    const store = await JsonlSessionStore.open(handle.hostIo, {
+      file: join(dir, 'oversized.jsonl'),
+      cwd: dir,
+      mode: 'create',
+    });
+    const append = vi.spyOn(handle.hostIo, 'appendFile');
+    try {
+      await expect(
+        store.appendMessage(user('x'.repeat(SESSION_MAX_ENTRY_BYTES + 1_024)))
+      ).rejects.toMatchObject({ code: 'session_entry_size_limit' });
+      // Refused BEFORE the write, so nothing half-landed on disk.
+      expect(append).not.toHaveBeenCalled();
+      await expect(store.appendMessage(user('small enough'))).resolves.toBeUndefined();
+    } finally {
+      append.mockRestore();
+      await store.close();
+    }
+  });
+
+  it('reports a writer lock that was taken over before close, and stays quiet otherwise', async () => {
+    // T045 follow-up. `releaseWriterLock` returning false is the only statement
+    // this process can make about two writers having overlapped on one file;
+    // close() dropped the value, so the overlap left no trace anywhere.
+    const { handle } = await runtime();
+    const quiet = vi.fn();
+    const ordinary = await JsonlSessionStore.open(handle.hostIo, {
+      file: join(dir, 'ordinary.jsonl'),
+      cwd: dir,
+      mode: 'create',
+      log: quiet,
+    });
+    await ordinary.close();
+    expect(quiet).not.toHaveBeenCalled();
+
+    const log = vi.fn();
+    const file = join(dir, 'stolen.jsonl');
+    const store = await JsonlSessionStore.open(handle.hostIo, {
+      file,
+      cwd: dir,
+      mode: 'create',
+      log,
+    });
+    // What a takeover leaves behind: the name is held by someone else's record.
+    await writeFile(`${file}.writer.lock`, JSON.stringify({ owner: { pid: 1, token: 'theirs' } }));
+    await store.close();
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(String(log.mock.calls[0][0])).toContain('taken over');
+    // Left exactly as found: releasing someone else's lock is the bug this
+    // reporting exists to make visible, not one to commit.
+    expect(await readdir(dir)).toContain('stolen.jsonl.writer.lock');
   });
 
   it('returns failure when message persistence fails before model execution', async () => {

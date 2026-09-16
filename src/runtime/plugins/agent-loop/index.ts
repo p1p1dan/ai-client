@@ -57,6 +57,38 @@ import {
  */
 const MAX_TRACE_PREVIEW_CHARS = 4000;
 
+/**
+ * capacity-02 — the same cap, applied to the tool arguments a trace records.
+ *
+ * `tool_execution_start` used to store `event.args` whole, which for `write`
+ * is the entire file the model just produced (schema ceiling 8 MiB). That made
+ * the tool step the one place on the trace path with no bound at all, three
+ * orders of magnitude past the approval preview sitting next to it: the step
+ * array grows for the length of the run before `finish()` can apply the
+ * trace's own memory and file budgets, so the bytes are held either way.
+ *
+ * Strings are truncated where they are found rather than the whole object
+ * being replaced, so the SHAPE of the call — which tool, which path, which
+ * flags — survives intact, and only the one oversized leaf is cut. Depth is
+ * bounded because tool arguments are JSON from a model and nothing guarantees
+ * they are shallow.
+ */
+const MAX_TRACE_ARGS_DEPTH = 6;
+
+export function traceSafeToolArgs(args: unknown, depth = 0): unknown {
+  if (typeof args === 'string')
+    return args.length <= MAX_TRACE_PREVIEW_CHARS
+      ? args
+      : `${args.slice(0, MAX_TRACE_PREVIEW_CHARS)}…`;
+  if (args === null || typeof args !== 'object') return args;
+  if (depth >= MAX_TRACE_ARGS_DEPTH) return `[depth ${MAX_TRACE_ARGS_DEPTH} elided]`;
+  if (Array.isArray(args)) return args.map((item) => traceSafeToolArgs(item, depth + 1));
+  const safe: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args as Record<string, unknown>))
+    safe[key] = traceSafeToolArgs(value, depth + 1);
+  return safe;
+}
+
 function traceSafeActivity(record: PermissionActivityRecord): PermissionActivityRecord {
   const preview = record.request.preview;
   if (!preview || preview.text.length <= MAX_TRACE_PREVIEW_CHARS) return record;
@@ -469,7 +501,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
           event: event.type,
           tool_call_id: event.toolCallId,
           tool: event.toolName,
-          args: event.args,
+          args: traceSafeToolArgs(event.args),
         });
       if (event.type === 'tool_execution_end')
         trace.note('tool', {

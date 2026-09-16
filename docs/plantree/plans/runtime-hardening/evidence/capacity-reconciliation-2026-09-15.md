@@ -57,11 +57,11 @@ Role: evidence。任务 [T024](../roadmap.md)，回应审计批评者「长会�
 | `toolResult.details.review.patch`（write / edit 的 diff） | `REVIEW_PATCH_BYTES` · `src/shared/sessionFileChange.ts:3` · 64 KiB，执行点 `plugins/tools/file-change.ts:122` | 每次 write / edit 一条 | 64 KiB × 次数 | 已限。超限退化为 `unavailable: 'too-large'`，不写 patch |
 | `toolResult.content`（MCP 文本） | `MCP_OUTPUT_BYTES` · `plugins/mcp/index.ts:71` · 50 KiB | 每次 MCP 调用一条 | 改前 CJK 文本实际可达 ~150 KiB | **本波落地**：改前按 `String.length`（UTF-16 单元）计数，一个汉字算 1 却占 3 字节；改为按 `Buffer.byteLength` 计，并在字符边界切断 |
 | `toolResult` 里的 MCP 图片（base64 原样落盘） | 改前：只有张数 `MCP_MAX_IMAGES` · `plugins/mcp/index.ts:73` · 8 张，**单张无字节上限** | 每次 MCP 调用一条 | 改前单次 ≈ 8 MiB（受 `MAX_MESSAGE_BYTES` · `plugins/mcp/client.ts:34` · 8 MiB 单帧限制间接约束）→ **4 次顶满会话** | **本波落地**：加 `MCP_IMAGE_BYTES` = 1 MiB/张 与 `MCP_IMAGE_TOTAL_BYTES` = 2 MiB/次 |
-| user 消息里的附件图片 | 无 | 每次发送一条 | 无上限 | **待落地**，见第六节（`plugins/agent-loop/attachments.ts:34-40`，本任务禁改） |
-| user 消息里的文本附件 | 无 | 同上 | 无上限 | **待落地**，同上（`attachments.ts:42`） |
+| user 消息里的附件图片 | `ATTACHMENT_MAX_BYTES` · `plugins/agent-loop/attachments.ts` · 5 MiB 原始字节／张（镜像 Main 的 `MAX_ATTACHMENT_READ_BYTES`）；整条消息另限 `ATTACHMENT_TURN_STORED_BYTES` = `SESSION_MAX_BYTES`/4 = 8 MiB 落盘字节 | 每次发送一条 | 8 MiB／条 | **T046 落地**（capacity-01） |
+| user 消息里的文本附件 | 同上两道，口径相同 | 同上 | 同上（与图片合并计） | **T046 落地**（capacity-01） |
 | 子代理转录 custom 条目（`started.task` / 每条 delegate 消息逐字 / `settled.report`） | 改前无；`MAX_RECORDED_TEXT_CHARS` · `plugins/subagent/records.ts` · 8 000 字符 | 每条 delegate 消息一条 | 与子代理整份转录同量级 | T020 同波落地（未提交），审计 subagent-data-05 |
 | `TaskWait` / `TaskStop` 的结果文本（普通 toolResult） | `MAX_TASKWAIT_RESULT_CHARS` · `plugins/subagent/index.ts` · 50 000 字符 | 每次调用一条 | — | 已限 |
-| compaction 条目的 `summary`（模型生成的历史摘要） | 无 | 每次压缩一条 | 由 provider 的 `maxTokens` 间接约束 | **待落地**，见第六节（`plugins/context/index.ts:347`，不在本任务可改范围） |
+| compaction 条目的 `summary`（模型生成的历史摘要） | `MAX_COMPACTION_SUMMARY_BYTES` · `plugins/context/index.ts` · 256 KiB | 每次压缩一条 | 256 KiB × 压缩次数 | **T046 落地**（capacity-03）。超限走既有 `giveUp('compaction_over_budget')`，本回合不压缩、不落盘、run 不失败 |
 | compaction 的 `retainedTail`（压缩时保留的用户消息） | `COMPACTION_RETAINED_USER_MESSAGE_MAX_TOKENS` · `plugins/context/budget.ts:65` · 20 000 token（按 `maxChars = token × 4` 执行） | 每次压缩 | — | 已限。`completed_turn` 模式下为空 |
 | `labels`（fact 行） | 无 | — | 目前无生产调用方 | 记录，不做 |
 
@@ -74,7 +74,7 @@ trace 有两个落点：磁盘上的 `runs.jsonl`（只在设置了 `AICLIENT_RU
 | `RunTrace.input`（用户 prompt 全文） | 两者 | 无 | 无上限。记录，不做——它就是这一 run 的输入本身，截了 trace 就不能复现 |
 | `RunTrace.final_output`（模型答复全文） | 两者 | 无 | 同上 |
 | `run_start` 步骤里的 `system_prompt` 全文 | 两者 | 无（指令层自己有 32 KiB 装载预算，T035） | 每 run 一条 |
-| `tool_execution_start` 的 `args` 全文 | 两者 | **无** — `write` 的 8 MiB 文件内容整份进 `runs.jsonl` | **待落地**（`plugins/agent-loop/index.ts:432-437`，本任务禁改） |
+| `tool_execution_start` 的 `args` | 两者 | `MAX_TRACE_PREVIEW_CHARS` · `plugins/agent-loop/index.ts` · 4 000 字符／字符串叶子（`traceSafeToolArgs`，保留调用结构，只截长字符串） | **T046 落地**（capacity-02） |
 | `tool_execution_end` 的 `result` 全文 | 两者 | 间接受工具侧闸门（50 KiB / 64 KiB / MCP 两道） | 已限（间接） |
 | `permission_*` 步骤里的审批预览 | 两者 | `MAX_TRACE_PREVIEW_CHARS` · `plugins/agent-loop/index.ts:58` · 4 000 字符 | 已限（T011 修 permissions-12 前半） |
 | `session_recovered` 的 `skipped_previews`（坏行预览） | 两者 | 单条预览由 T034 的解码器决定，条数上限 64 | 已限（T034） |
@@ -96,14 +96,16 @@ trace 有两个落点：磁盘上的 `runs.jsonl`（只在设置了 `AICLIENT_RU
 
 ## 六、待落地（归其他任务或本任务禁改的文件）
 
-| 项 | 位置 | 为什么现在不做 |
+> 2026-09-15 T046 收口：本表前四行（审计编号 capacity-01～04）已全部落地，状态逐行标在下表；余下两行维持原判。
+
+| 项 | 位置 | 状态 / 为什么现在不做 |
 |---|---|---|
-| 用户附件（图片与文本）无任何体积上限 | `plugins/agent-loop/attachments.ts:34-42` | T024 禁改 agent-loop。体积由用户选文件决定，比 MCP 可控，但同样绕过所有闸门直接落盘 |
-| `tool_execution_start` 把工具参数全文写进 `runs.jsonl` | `plugins/agent-loop/index.ts:432-437` | 同上。`write` 的 8 MiB 内容会整份进一行 trace，比 4 000 字符的审批预览大三个数量级；建议沿用 `MAX_TRACE_PREVIEW_CHARS` 的口径 |
-| compaction 摘要正文无上限 | `plugins/context/index.ts:347` | context 插件不在本任务可改范围。输入侧已有 `summaryInputBudget`，输出侧只靠 provider 的 `maxTokens` |
+| 用户附件（图片与文本）无任何体积上限 | `plugins/agent-loop/attachments.ts` | **已落地（T046 · capacity-01）**：单件 5 MiB 原始字节（镜像 Main 的 `MAX_ATTACHMENT_READ_BYTES`），整条消息 8 MiB 落盘字节（`SESSION_MAX_BYTES`/4）。超限在 `preparePrompt` 抛 `attachment_size_limit`，一个字节都不落盘 |
+| `tool_execution_start` 把工具参数全文写进 `runs.jsonl` | `plugins/agent-loop/index.ts` | **已落地（T046 · capacity-02）**：`traceSafeToolArgs` 复用 `MAX_TRACE_PREVIEW_CHARS` = 4 000 字符，逐个字符串叶子截断，调用结构（工具名、路径、标志）原样保留 |
+| compaction 摘要正文无上限 | `plugins/context/index.ts` | **已落地（T046 · capacity-03）**：`MAX_COMPACTION_SUMMARY_BYTES` = 256 KiB，在 token 事后检查之前按字节判，超限走 `giveUp` 而不是抛错 |
 | 子代理转录逐条 verbatim | `plugins/subagent/records.ts` | T020 同波落地，已见 `MAX_RECORDED_TEXT_CHARS = 8 000` |
-| 会话文件缺「单行最大字节」 | `plugins/session/store.ts:288-295` | 有了以上各条上限后是冗余防线；但它是唯一能挡住「未来某个新来源忘了限额」的兜底。建议作为独立小任务评估 |
-| 多个 worker 同时向同一 `traceDir` 追加 / 轮转 `runs.jsonl` | `trace.ts` | 批评者「并发多会话」缺口，归 T031。本波的轮转用 `rename` 实现，并发下两个进程可能各自判定要轮转，结果是多轮转一次（丢一代历史），不会损坏正在写的文件 |
+| 会话文件缺「单行最大字节」 | `plugins/session/store.ts` | **已落地（T046 · capacity-04）**：`SESSION_MAX_ENTRY_BYTES` = `SESSION_MAX_BYTES`/4 = 8 MiB。检查在写队列**之外**先做一次（队列内的拒绝是永久性的，会把一次拒绝变成整个会话只读），队列内保留一次精确检查 |
+| 多个 worker 同时向同一 `traceDir` 追加 / 轮转 `runs.jsonl` | `trace.ts` | 批评者「并发多会话」缺口，T045 已落地跨进程目录锁 |
 
 ## 七、本波落地的四处限额
 
@@ -121,7 +123,18 @@ trace 有两个落点：磁盘上的 `runs.jsonl`（只在设置了 `AICLIENT_RU
 1. **单条超过上限的 trace 照样整行写入**，不切分也不丢弃。一条被切成两半的 trace 比一个暂时超标的文件更糟（它谁也解析不了），下一个 run 会把它轮转走。
 2. **轮转失败不阻止写入**。轮转是清扫工作，失败了 trace 仍然必须落盘；但失败会经既有的 `flush()` 通道以 `trace_rotate_failed` 上报，不静默——否则一个不可写的目录会让文件无声地一直长。
 
-## 八、未能验证的部分
+## 八、T046 落地后仍未满足的一条（2026-09-15 补记）
+
+任务验收原话是「正常使用不再能在个位数消息内把会话文件顶到打不开」。按落地后的数值算：
+
+- **正常使用满足**：一条带截图的消息落盘通常 1～2 MiB，32 MiB 预算要十几到几十条才用得完。
+- **极端构造不满足**：把每条消息都塞到 8 MiB 上限，仍然 4 条就能把预算用光（改前是 2～3 条）。要把这个数推到 10 条以上，每条附件预算必须压到 3 MiB 落盘字节以下，而那会连渲染层自己允许的单张 5 MiB 照片都发不出去（base64 后 6.7 MiB）。
+
+这条张力是 32 MiB 会话预算与 5 MiB 单图上限之间的产品取舍，不是能在 `attachments.ts` 内部解决的问题。真要消除，二选一：调大 `SESSION_MAX_BYTES`，或调小渲染层 `DEFAULT_ATTACHMENT_LIMITS`。另有一条更彻底的路（附件不进会话 JSONL，改为旁路文件 + 引用），改动面远超本任务。
+
+同时已消除的是更要紧的那半：预算耗尽不再是「若干条消息之后整个会话变只读」，而是发送当场被拒、消息里点名是哪个附件、会话本身照常可写。
+
+## 九、未能验证的部分
 
 - **MCP 图片的真实分布**：1 MiB/张、2 MiB/次 是按「base64 后 1 MiB ≈ 768 KiB PNG，够一张截图」推的，没有真实 MCP 截图服务器的样本。若现场发现常见服务器的截图稳定超过 1 MiB，这两个数要一起调。
 - **32 MiB 顶满后的实际观感**未做端到端验证：本文对「写被拒 / 文件打不开」的结论来自代码路径（`session_size_limit` 与 `io_limit` 两处抛点），没有真造一个 32 MiB 会话跑一遍。

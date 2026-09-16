@@ -13,6 +13,7 @@
  * file this runtime touches.
  */
 
+import { totalmem } from 'node:os';
 import { join } from 'node:path';
 import type { RuntimeHostIoService } from '../../contracts.ts';
 import { errorCode } from '../../host/errors.ts';
@@ -38,6 +39,58 @@ export interface McpConfigDiagnostic {
 export const MAX_CONFIG_BYTES = 256 * 1024;
 /** Servers past this are dropped: each one is a process and a handshake. */
 export const MAX_SERVERS = 16;
+
+/**
+ * concurrency-04 — how many worker slots this machine's memory allows.
+ *
+ * A MIRROR of `resolveDefaultWorkerCapacity` in
+ * `src/main/services/agent-host/WorkerManager.ts`. It cannot be imported: that
+ * module is main-process code and this one runs inside the worker, which is a
+ * separate package. The mirror is asserted by a unit case instead — the same
+ * technique `shared/types/attachmentIo.ts` uses for the renderer's image
+ * ceiling. If the tiers there change, change them here.
+ *
+ * It is needed here because the number that matters is a PRODUCT: one slot is
+ * one worker process, and every worker starts its OWN copy of every configured
+ * server. "16 servers" therefore means 16 × slots processes on the machine.
+ */
+export function workerSlotBudget(totalMemoryBytes: number = totalmem()): number {
+  if (totalMemoryBytes <= 4 * 1024 ** 3) return 3;
+  if (totalMemoryBytes <= 8 * 1024 ** 3) return 6;
+  return 10;
+}
+
+/**
+ * concurrency-04 — this session's share of the machine-wide MCP process budget.
+ *
+ * `MAX_SERVERS` is a per-session declaration cap and nothing more: with it as
+ * the only limit, a 4 GiB machine running its three allowed sessions could hold
+ * 48 long-lived child processes, each with three pipes and its own runtime,
+ * none of which appears in any account the application keeps. Nothing was
+ * wrong with any single number; the product of two correct numbers was the
+ * problem.
+ *
+ * So the per-session cap is derived instead of fixed: a per-slot share sized
+ * against the same memory tiers that decide how many sessions may run at once,
+ * which bounds the machine-wide total at {@link hostServerBudget} whatever the
+ * user opens. Every worker computes the same answer from the same memory, so
+ * no message has to be passed between them for the account to hold.
+ *
+ * The tiers are read as ~75 MiB per server process: 4 / 6 / 12 per session is
+ * 12 / 36 / 120 on the machine, i.e. roughly a fifth of RAM at full stretch.
+ * Servers past the share are dropped by declaration order and named in the
+ * diagnostics, exactly as the declaration cap already does.
+ */
+export function sessionServerBudget(totalMemoryBytes: number = totalmem()): number {
+  const perSlot =
+    totalMemoryBytes <= 4 * 1024 ** 3 ? 4 : totalMemoryBytes <= 8 * 1024 ** 3 ? 6 : 12;
+  return Math.min(MAX_SERVERS, perSlot);
+}
+
+/** The machine-wide MCP child-process total the two budgets above imply. */
+export function hostServerBudget(totalMemoryBytes: number = totalmem()): number {
+  return workerSlotBudget(totalMemoryBytes) * sessionServerBudget(totalMemoryBytes);
+}
 
 const OPTIONAL_FILE_ERRORS = new Set(['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'EISDIR', 'ELOOP']);
 
@@ -73,6 +126,14 @@ export interface McpConfigRoots {
   projectTrusted?: boolean;
   /** decision 008 — absent means all three tiers, as the official default does. */
   settingSources?: readonly SettingSource[];
+  /**
+   * How many servers this session may start (concurrency-04).
+   *
+   * Defaults to {@link sessionServerBudget} for this machine. Passed explicitly
+   * only by tests, which must not have their expectations depend on the amount
+   * of RAM in whatever box is running them.
+   */
+  maxServers?: number;
 }
 
 /**
@@ -224,13 +285,14 @@ export async function loadMcpConfig(
   // wrote first. Sorting by name made the surviving set depend on spelling,
   // which is not something anyone edits a config file expecting to matter.
   const servers = [...byName.values()];
-  if (servers.length > MAX_SERVERS) {
-    const dropped = servers.slice(MAX_SERVERS).map((item) => item.name);
+  const limit = Math.max(1, Math.min(roots.maxServers ?? sessionServerBudget(), MAX_SERVERS));
+  if (servers.length > limit) {
+    const dropped = servers.slice(limit).map((item) => item.name);
     diagnostics.push({
       code: 'invalid_entry',
       path: '',
-      message: `only the first ${MAX_SERVERS} servers declared are started; ${servers.length} were declared, so ${dropped.join(', ')} did not start`,
+      message: `only the first ${limit} servers declared are started; ${servers.length} were declared, so ${dropped.join(', ')} did not start (each server is a live child process, and every open session starts its own copy of all of them, so this machine allows ${hostServerBudget()} in total)`,
     });
   }
-  return { servers: servers.slice(0, MAX_SERVERS), diagnostics };
+  return { servers: servers.slice(0, limit), diagnostics };
 }

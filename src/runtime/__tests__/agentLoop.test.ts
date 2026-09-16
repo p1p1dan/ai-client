@@ -13,6 +13,7 @@ import type { AgentEvent } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { describe, expect, it } from 'vitest';
 import { createRuntime } from '../bootstrap.ts';
+import { traceSafeToolArgs } from '../plugins/agent-loop/index.ts';
 
 async function withRuntime<T>(
   reply: ReturnType<typeof fauxAssistantMessage>,
@@ -244,5 +245,42 @@ describe('agent loop', () => {
       // §2 trace shape every later phase appends to rather than replaces.
       expect(runtime.trace.runs[0].steps.map((step) => step.type)).toEqual(['note', 'llm']);
     });
+  });
+});
+
+/**
+ * capacity-02 — the tool step was the one trace field with no bound at all.
+ *
+ * `write` declares an 8 MiB `content` argument, and the whole of it used to be
+ * held in the run's step array until `finish()` — past every budget T024 added,
+ * and three orders of magnitude past the 4000-character approval preview
+ * recorded beside it.
+ */
+describe('trace tool arguments', () => {
+  it('truncates an oversized string argument to the preview cap', () => {
+    const content = 'x'.repeat(50_000);
+    const safe = traceSafeToolArgs({ path: '/tmp/a.txt', content }) as Record<string, string>;
+    expect(safe.path).toBe('/tmp/a.txt');
+    expect(safe.content.length).toBeLessThan(5000);
+    expect(safe.content.endsWith('…')).toBe(true);
+  });
+
+  it('keeps the shape of the call, including nested and non-string values', () => {
+    const safe = traceSafeToolArgs({
+      command: 'ls',
+      timeout: 5,
+      nested: { deep: ['a'.repeat(50_000), 7, null] },
+    }) as { command: string; timeout: number; nested: { deep: [string, number, null] } };
+    expect(safe.command).toBe('ls');
+    expect(safe.timeout).toBe(5);
+    expect(safe.nested.deep[0].length).toBeLessThan(5000);
+    expect(safe.nested.deep[1]).toBe(7);
+    expect(safe.nested.deep[2]).toBeNull();
+  });
+
+  it('stops descending before a pathological nesting depth', () => {
+    let value: unknown = 'leaf';
+    for (let index = 0; index < 20; index++) value = { next: value };
+    expect(JSON.stringify(traceSafeToolArgs(value))).toContain('elided');
   });
 });

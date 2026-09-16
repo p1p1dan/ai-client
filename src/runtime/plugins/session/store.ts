@@ -46,6 +46,16 @@ export interface SessionConfig {
   /** Bound the in-memory transcript on this host; oversized files fail explicitly. */
   maxBytes?: number;
   /**
+   * Where this store reports what it could not fail on.
+   *
+   * There is exactly one such thing today (see `close`): a writer lock that was
+   * taken over while we held it. It is not an error — nothing the caller does
+   * differs — but it is the only evidence that two processes disagreed about
+   * who owns this file, so it must not vanish. Defaults to `console.warn`,
+   * which on a worker is stderr and reaches Main's forwarder.
+   */
+  log?: (message: string, ...args: unknown[]) => void;
+  /**
    * concurrency-02 — open the session even though its writer lock still looks
    * held.
    *
@@ -92,6 +102,34 @@ export interface SessionSnapshot {
   permissions?: RuntimePermissionSettings;
 }
 
+/**
+ * capacity-04 — the most bytes ONE line of the session file may carry.
+ *
+ * The aggregate budget answers "does the file still fit"; it says nothing about
+ * how big a single write may be, so on a nearly empty file one entry could
+ * legally approach the whole 32 MiB. Every known writer already has its own
+ * ceiling (tool output 50 KiB, review patch 64 KiB, MCP text and images,
+ * attachments), which is exactly why this exists: it is the net under the
+ * writer that gets added later and forgets to bring one, and it converts that
+ * omission into a refused write with a name instead of a conversation that
+ * silently becomes read-only.
+ *
+ * A quarter of the budget matches the per-send attachment share
+ * (`plugins/agent-loop/attachments.ts`), so the largest legitimate entry — a
+ * user message carrying pictures — stays comfortably under it.
+ */
+export const SESSION_MAX_ENTRY_BYTES = Math.floor(SESSION_MAX_BYTES / 4);
+
+/**
+ * What the stored line adds to the payload it carries: `kind`, `lane`, a uuid
+ * `id`, `seq`, a uuid `parentId` and `timestamp`. Counted in the pre-flight
+ * check so an oversized payload is refused BEFORE it enters the write queue —
+ * a rejection inside the queue is permanent by design (`enqueue`), so a net
+ * that tripped there would turn one refused message into a dead session, which
+ * is the outcome the net exists to prevent.
+ */
+const ENTRY_OVERHEAD_BYTES = 256;
+
 export class JsonlSessionStore {
   private tail: Promise<void> = Promise.resolve();
   private closed = false;
@@ -106,6 +144,8 @@ export class JsonlSessionStore {
   private readonly document: SessionDocument;
   private readonly lock: WriterLock;
   private readonly maxBytes: number;
+  private readonly maxEntryBytes: number;
+  private readonly log: (message: string, ...args: unknown[]) => void;
   private bytes: number;
   private constructor(
     file: string,
@@ -113,13 +153,18 @@ export class JsonlSessionStore {
     document: SessionDocument,
     lock: WriterLock,
     maxBytes: number,
-    bytes: number
+    bytes: number,
+    log?: (message: string, ...args: unknown[]) => void
   ) {
     this.file = file;
     this.io = io;
     this.document = document;
     this.lock = lock;
     this.maxBytes = maxBytes;
+    // Never above the whole budget: a host that configured a small session gets
+    // the aggregate refusal it asked for, not a second limit larger than it.
+    this.maxEntryBytes = Math.min(SESSION_MAX_ENTRY_BYTES, maxBytes);
+    this.log = log ?? ((message, ...args) => console.warn(message, ...args));
     this.bytes = bytes;
   }
 
@@ -207,7 +252,7 @@ export class JsonlSessionStore {
           delete document.repair;
         }
       }
-      return new JsonlSessionStore(file, io, document, lock, maxBytes, bytes);
+      return new JsonlSessionStore(file, io, document, lock, maxBytes, bytes, config.log);
     } catch (error) {
       await releaseWriterLock(io, lock);
       throw error;
@@ -287,6 +332,18 @@ export class JsonlSessionStore {
     // function instead of a value defers that to the queue, for a payload whose
     // content depends on the branch the write will extend.
     const entry = typeof payload === 'function' ? payload : structuredClone(payload);
+    // capacity-04 — outside the queue, so refusing this one write leaves the
+    // session writable. The queue's own check below is the exact one.
+    // A deferred payload cannot be measured until the queue builds it, so it is
+    // covered by the in-queue check alone — and a rejection there is permanent.
+    // The only deferred writer today is `appendCompaction`, whose summary is
+    // capped far below this ceiling upstream (capacity-03, 256 KiB); a new
+    // deferred caller with an unbounded payload needs its own limit first.
+    const oversize =
+      typeof entry === 'function'
+        ? undefined
+        : this.entrySizeError(Buffer.byteLength(JSON.stringify(entry)) + ENTRY_OVERHEAD_BYTES);
+    if (oversize) return Promise.reject(oversize);
     return this.enqueue(async () => {
       const item: Entry = {
         ...(typeof entry === 'function' ? entry() : entry),
@@ -302,6 +359,8 @@ export class JsonlSessionStore {
           'session_size_limit',
           'session exceeds the configured size budget'
         );
+      const tooLarge = this.entrySizeError(bytes);
+      if (tooLarge) throw tooLarge;
       await this.io.appendFile(this.file, Buffer.from(line), { mode: 0o600 });
       this.bytes += bytes;
       const {
@@ -558,6 +617,10 @@ export class JsonlSessionStore {
   }
 
   private mutate(row: Record<string, unknown>, apply: () => void): Promise<void> {
+    const oversize = this.entrySizeError(
+      Buffer.byteLength(JSON.stringify(row)) + ENTRY_OVERHEAD_BYTES
+    );
+    if (oversize) return Promise.reject(oversize);
     return this.enqueue(async () => {
       // A lane row states the new tip; a fact row hangs off the current one.
       const parentId =
@@ -570,11 +633,23 @@ export class JsonlSessionStore {
       const bytes = Buffer.byteLength(line);
       if (this.bytes + bytes > this.maxBytes)
         throw new RuntimeHostError('session_size_limit', 'session exceeds size budget');
+      const tooLarge = this.entrySizeError(bytes);
+      if (tooLarge) throw tooLarge;
       await this.io.appendFile(this.file, Buffer.from(line), { mode: 0o600 });
       this.bytes += bytes;
       this.document.seq++;
       apply();
     });
+  }
+
+  /** capacity-04 — the per-line net, judged after the aggregate budget. */
+  private entrySizeError(bytes: number): RuntimeHostError | undefined {
+    return bytes > this.maxEntryBytes
+      ? new RuntimeHostError(
+          'session_entry_size_limit',
+          `one session entry may be at most ${this.maxEntryBytes} bytes; this one is ${bytes}`
+        )
+      : undefined;
   }
 
   flush(): Promise<void> {
@@ -595,7 +670,16 @@ export class JsonlSessionStore {
     this.closed = true;
     this.closing ??= (async () => {
       await Promise.allSettled([this.navigationWork, this.tail]);
-      await releaseWriterLock(this.io, this.lock);
+      // T045 follow-up. `false` means the sidecar under our path is no longer
+      // the one we created — someone took this session over while we were
+      // writing it. Closing still succeeded and there is nothing for the caller
+      // to do differently, so this is not an error; but it is the only place in
+      // the process that can say two writers overlapped on one file, and
+      // dropping the value left that unobservable.
+      if (!(await releaseWriterLock(this.io, this.lock)))
+        this.log(
+          `session writer lock was taken over by another process before close: ${this.lock.path}`
+        );
     })();
     return this.closing;
   }

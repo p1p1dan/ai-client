@@ -643,6 +643,23 @@ describe('T014 · compaction across a second pass', () => {
     expect(prepared.messages).toEqual(messages);
   });
 
+  it('refuses a summary past the byte ceiling before it ever reaches the session file', async () => {
+    // capacity-03. The token check below is judged in the MODEL's units against
+    // the model's own limit, so a big-window model let a summary of any size
+    // through; the session file is measured in bytes and had no say. A 300 KiB
+    // summary fits this window's token budget and still must not land.
+    const faux = provider({ contextWindow: 4_000_000, maxTokens: 400_000 });
+    const { handle } = await runtime({ faux, tools: { cwd: dir }, context: { family: 'summary' } });
+    faux.setResponses([fauxAssistantMessage('S'.repeat(300 * 1024))]);
+    handle.context?.requestNewWindow();
+    const messages = [sized(200)];
+    const prepared = await prepare(handle, messages);
+    expect(prepared.compaction).toBeUndefined();
+    expect(prepared.skipped?.code).toBe('compaction_over_budget');
+    expect(prepared.skipped?.message).toContain('byte ceiling');
+    expect(prepared.messages).toEqual(messages);
+  });
+
   it('still fails the turn when the same oversized checkpoint lands at the hard limit', async () => {
     const faux = provider();
     const { handle } = await runtime({ faux, tools: { cwd: dir }, context: { family: 'summary' } });

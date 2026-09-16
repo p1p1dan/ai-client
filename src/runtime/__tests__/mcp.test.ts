@@ -23,10 +23,13 @@ import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from 
 import type { RuntimeChildProcess } from '../contracts.ts';
 import { MAX_MESSAGE_BYTES, McpClient } from '../plugins/mcp/client.ts';
 import {
+  hostServerBudget,
   loadMcpConfig,
   MAX_SERVERS,
   type McpConfigSource,
   mcpConfigFiles,
+  sessionServerBudget,
+  workerSlotBudget,
 } from '../plugins/mcp/config.ts';
 import {
   MCP_CONNECT_ALL_TIMEOUT_MS,
@@ -176,9 +179,62 @@ describe('P5-3 server declarations', () => {
         mcpServers: Object.fromEntries(declared.map((name) => [name, { command: 'node' }])),
       }),
     });
-    const { servers, diagnostics } = await loadMcpConfig(source, { agentDir: '/agent' });
+    // `maxServers` pinned: the default is now derived from this machine's RAM
+    // (concurrency-04), and a case about declaration ORDER must not depend on
+    // how much memory the box running it happens to have.
+    const { servers, diagnostics } = await loadMcpConfig(source, {
+      agentDir: '/agent',
+      maxServers: MAX_SERVERS,
+    });
     expect(servers.map((item) => item.name)).toEqual(declared.slice(0, MAX_SERVERS));
     expect(diagnostics[0].message).toContain('s13, s14');
+  });
+
+  /**
+   * concurrency-04 — the number that was never accounted for is a PRODUCT.
+   *
+   * Each session is its own worker process and starts its own copy of every
+   * configured server, so a per-session cap of 16 on a machine allowed three
+   * sessions is 48 live child processes that no part of the application counts.
+   */
+  describe('machine-wide process budget', () => {
+    const GIB = 1024 ** 3;
+
+    it('mirrors the worker memory tiers that decide how many sessions may run', () => {
+      // MIRROR of resolveDefaultWorkerCapacity (main-process WorkerManager);
+      // these three numbers are the contract between the two files.
+      expect(workerSlotBudget(3.3 * GIB)).toBe(3);
+      expect(workerSlotBudget(8 * GIB)).toBe(6);
+      expect(workerSlotBudget(32 * GIB)).toBe(10);
+    });
+
+    it('keeps the machine-wide total bounded on every tier', () => {
+      expect(sessionServerBudget(3.3 * GIB)).toBe(4);
+      expect(sessionServerBudget(8 * GIB)).toBe(6);
+      expect(sessionServerBudget(32 * GIB)).toBe(12);
+      expect(hostServerBudget(3.3 * GIB)).toBe(12);
+      expect(hostServerBudget(8 * GIB)).toBe(36);
+      expect(hostServerBudget(32 * GIB)).toBe(120);
+      // The point of the budget: never the old 16 × slots.
+      for (const memory of [3.3 * GIB, 8 * GIB, 32 * GIB])
+        expect(hostServerBudget(memory)).toBeLessThan(MAX_SERVERS * workerSlotBudget(memory));
+    });
+
+    it('drops the servers past this session share and says why', async () => {
+      const declared = Array.from({ length: 9 }, (_, index) => `s${index}`);
+      const source = fakeSource({
+        [join('/agent', 'mcp.json')]: JSON.stringify({
+          mcpServers: Object.fromEntries(declared.map((name) => [name, { command: 'node' }])),
+        }),
+      });
+      const { servers, diagnostics } = await loadMcpConfig(source, {
+        agentDir: '/agent',
+        maxServers: sessionServerBudget(3.3 * GIB),
+      });
+      expect(servers.map((item) => item.name)).toEqual(['s0', 's1', 's2', 's3']);
+      expect(diagnostics[0].message).toContain('only the first 4 servers');
+      expect(diagnostics[0].message).toContain('every open session starts its own copy');
+    });
   });
 });
 

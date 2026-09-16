@@ -154,6 +154,120 @@ export interface CarrierOptions {
   /** POSIX group signal; see `createTreeKiller` for why a test MUST pass one. */
   killGroup?: (pgid: number, signal: NodeJS.Signals) => void;
   exists?: (path: string) => boolean;
+  /** concurrency-05 — who reaps long-lived children when this process goes away. */
+  reaper?: OrphanReaper;
+}
+
+/** The parts of `process` the reaper touches, so a test can supply all of them. */
+export interface ReaperHost {
+  pid: number;
+  platform: NodeJS.Platform;
+  on(event: string, handler: () => void): void;
+  removeListener(event: string, handler: () => void): void;
+  kill(pid: number, signal: NodeJS.Signals): void;
+}
+
+export interface OrphanReaper {
+  /** Register a detached child; the returned function forgets it again. */
+  track(pid: number | undefined): () => void;
+}
+
+/**
+ * concurrency-05 — the last resort for children that outlive this process.
+ *
+ * A long-lived child (an MCP server) is started `detached` on POSIX so it leads
+ * its own process group and `createTreeKiller` can take the whole tree down at
+ * once. The cost of that is that nothing ties it to us: when the worker exits
+ * without running its cordis effects — Main kills the transport once the 3
+ * second dispose ACK budget is gone, and again on a crash — the servers are
+ * left with no parent and no killer, and the only thing that can still end them
+ * is the server itself noticing stdin EOF, which the protocol recommends and
+ * does not require. The observed shape is orphan `node` / `python` processes
+ * accumulating one set per evicted session, holding their ports and memory.
+ *
+ * Two mechanisms cover the two ways this process can end:
+ *
+ *  - Signals we can see (`SIGTERM` / `SIGINT` / `SIGHUP`) and ordinary `exit`:
+ *    this reaper kills each tracked GROUP, then re-raises the signal with its
+ *    own handler removed so the default disposition still applies. It must stay
+ *    synchronous — an `exit` handler gets no turn of the event loop.
+ *  - `SIGKILL`, which no handler can see: covered by the runner carrier, whose
+ *    helper kills its own group when the IPC channel to us disconnects
+ *    (`exec-runner.mjs`). That is why a configured Node is the carrier we
+ *    prefer for long-lived children.
+ *
+ * Windows is left alone on purpose: there is no process group to signal, the
+ * runner carrier is mandatory there (`spawnPersistent` refuses without it), and
+ * its disconnect handler runs `taskkill /T` over the whole tree.
+ */
+export function createOrphanReaper(host: ReaperHost): OrphanReaper {
+  const tracked = new Set<number>();
+  const SIGNALS: NodeJS.Signals[] = ['SIGTERM', 'SIGINT', 'SIGHUP'];
+  let installed: { exit: () => void; signals: Map<NodeJS.Signals, () => void> } | undefined;
+
+  const sweep = (): void => {
+    for (const pid of tracked) {
+      try {
+        // The group, not the process: the child is its own leader, and what
+        // has to go is everything it started.
+        host.kill(-pid, 'SIGKILL');
+      } catch {
+        // Already gone, or never ours to signal. Nothing left to do about it.
+      }
+    }
+    tracked.clear();
+  };
+
+  const uninstall = (): void => {
+    if (!installed) return;
+    host.removeListener('exit', installed.exit);
+    for (const [signal, handler] of installed.signals) host.removeListener(signal, handler);
+    installed = undefined;
+  };
+
+  const install = (): void => {
+    if (installed || host.platform === 'win32') return;
+    const exit = () => sweep();
+    const signals = new Map<NodeJS.Signals, () => void>();
+    for (const signal of SIGNALS) {
+      const handler = () => {
+        sweep();
+        // Removed first, then re-raised: this handler is the only reason the
+        // default "terminate" did not already happen.
+        uninstall();
+        host.kill(host.pid, signal);
+      };
+      signals.set(signal, handler);
+    }
+    installed = { exit, signals };
+    host.on('exit', exit);
+    for (const [signal, handler] of signals) host.on(signal, handler);
+  };
+
+  return {
+    track(pid) {
+      if (pid === undefined || host.platform === 'win32') return () => undefined;
+      tracked.add(pid);
+      install();
+      return () => {
+        tracked.delete(pid);
+        if (tracked.size === 0) uninstall();
+      };
+    },
+  };
+}
+
+let processReaper: OrphanReaper | undefined;
+/** The reaper attached to THIS process; built on first use, like the runner path. */
+export function defaultOrphanReaper(): OrphanReaper {
+  processReaper ??= createOrphanReaper({
+    pid: process.pid,
+    platform: process.platform,
+    on: (event, handler) => void process.on(event as NodeJS.Signals, handler),
+    removeListener: (event, handler) => void process.removeListener(event, handler),
+    kill: (pid, signal) => void process.kill(pid, signal),
+  });
+  return processReaper;
 }
 
 /**
@@ -197,6 +311,12 @@ export function spawnPersistent(
       spawnProcess,
       ...(options.killGroup ? { killGroup: options.killGroup } : {}),
     });
+    // concurrency-05 — from here until it exits, this child is on the list the
+    // reaper sweeps if this process is terminated without running its cleanup.
+    const untrack =
+      platform === 'win32'
+        ? () => undefined
+        : (options.reaper ?? defaultOrphanReaper()).track(child.pid);
     let settled = false;
     let killing: Promise<void> | undefined;
     /** Set when the grace period ran out: the tree is NOT known to be gone. */
@@ -227,6 +347,7 @@ export function spawnPersistent(
       }
     });
     child.on('close', (code, signal) => resolveExit(reportedExit ?? { exitCode: code, signal }));
+    void exited.then(untrack, untrack);
     if (nodePath) {
       child.on(
         'message',
