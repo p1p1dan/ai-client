@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -109,6 +109,46 @@ describe('P2 prompt service and HostIo instruction wiring', () => {
     expect(composed.text.indexOf('PARENT_RULE')).toBeLessThan(composed.text.indexOf('ROOT_RULE'));
     // Labelled relative to the workspace, not as an absolute machine path.
     expect(composed.text).toContain('## ../CLAUDE.md');
+  });
+
+  it('loads the home directory file as the user tier and walks no higher than it', async () => {
+    // T059 through the real bootstrap. `dir` stands in for the home directory,
+    // so `<tmp>/project` sits under it: the file is the user tier (labelled
+    // `~/`, gated by `user`), and the walk starts below `dir` — which is also
+    // what keeps this case off the developer's real `~/.claude/CLAUDE.md`,
+    // since <tmp> lives under the real home on every platform.
+    await mkdir(join(dir, '.claude'));
+    await writeFile(join(dir, '.claude', 'CLAUDE.md'), 'HOME_RULE');
+    await writeFile(join(root, 'AGENTS.md'), 'ROOT_RULE');
+    const { handle } = await runtime({ prompt: { home: dir } });
+    const reads = vi.spyOn(handle.hostIo, 'readFile');
+    const composed = await handle.prompt.compose();
+    expect(composed.text).toContain('## ~/.claude/CLAUDE.md');
+    expect(composed.text.indexOf('HOME_RULE')).toBeLessThan(composed.text.indexOf('ROOT_RULE'));
+    expect(reads.mock.calls.map(([path]) => path).every((path) => path.startsWith(dir))).toBe(true);
+
+    const off = await runtime({ prompt: { home: dir }, settingSources: ['project', 'local'] });
+    const withoutUser = await off.handle.prompt.compose();
+    expect(withoutUser.text).toContain('ROOT_RULE');
+    expect(withoutUser.text).not.toContain('HOME_RULE');
+  });
+
+  it('falls back to the process home directory when none is supplied', async () => {
+    // The production path: nothing passes `prompt.home`, so bootstrap asks
+    // `os.homedir()`. Under vitest that is the hermetic sandbox home, which is
+    // what makes writing into it safe here; removed again so the other cases
+    // in this file keep seeing an empty one.
+    const sandbox = join(homedir(), '.claude');
+    await mkdir(sandbox, { recursive: true });
+    try {
+      await writeFile(join(sandbox, 'CLAUDE.md'), 'SANDBOX_HOME_RULE');
+      const { handle } = await runtime();
+      const composed = await handle.prompt.compose();
+      expect(composed.text).toContain('## ~/.claude/CLAUDE.md');
+      expect(composed.text).toContain('SANDBOX_HOME_RULE');
+    } finally {
+      await rm(sandbox, { recursive: true, force: true });
+    }
   });
 
   it('adds CLAUDE.local.md beside the shared file, and drops it when local is off', async () => {

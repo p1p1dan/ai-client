@@ -405,6 +405,12 @@ async function runCase(testCase) {
       agentDir,
       traceDir: join(caseOut, 'runtime-trace'),
       tools: { cwd, shellPath: resolveWorkerShell(process.env), recordFileChanges: false },
+      // T059 — no on-disk configuration layer at all. `projectTrusted: false`
+      // used to be enough to keep the prompt machine-independent only because
+      // it also shut the home directory out of the parent walk; now that the
+      // home directory is the `user` tier, this is the switch that keeps the
+      // developer's own `~/.claude/CLAUDE.md` out of a fixed probe.
+      settingSources: [],
       permissions: {
         mode: 'agent',
         gear: 'ask',

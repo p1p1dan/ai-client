@@ -24,7 +24,7 @@
  *   specific first. {@link instructionDirectories} is that walk. It stops
  *   BEFORE the filesystem root, matching Claude Code's documented "recurses up
  *   to but not including /": a machine-wide `/CLAUDE.md` is not something a
- *   workspace opted into, while `/home/<user>/CLAUDE.md` is.
+ *   workspace opted into.
  * - **On demand**, a subdirectory's file when a tool reads into that subtree.
  *   That half does not live here — it is session state, so it lives in
  *   `instructionTracker.ts` and reaches the model as an injected message rather
@@ -36,6 +36,23 @@
  * {@link INSTRUCTION_FILE_NAMES} that directory contributed rather than
  * replacing it — it is the local, not-checked-in companion to a shared file,
  * and decision 008 puts it behind the `local` setting source.
+ *
+ * ## The home directory is the user tier (T059)
+ *
+ * The walk above used to treat `~` like any other parent: a workspace under
+ * the home directory read `~/.claude/CLAUDE.md` as a PROJECT file (so
+ * `settingSources: ['project']` still loaded the user's personal rules), and a
+ * workspace elsewhere never saw it at all. Decision 008 calls that file the
+ * `user` source, so it is now loaded as one: once, ahead of the project chain,
+ * for every workspace, behind the `user` switch — and never as
+ * `CLAUDE.local.md`, which only means something inside a project. The walk
+ * skips the home directory itself (already loaded) and everything above it:
+ * `/home` and `C:\Users` are shared by every account on the machine and are
+ * not something a workspace opted into.
+ *
+ * The home directory is a parameter ({@link InstructionChainOptions.home})
+ * rather than `os.homedir()`, for the same reason reading is a port: this
+ * module stays testable against an in-memory tree.
  *
  * ## Why reading is a port
  *
@@ -74,6 +91,30 @@ export const INSTRUCTION_FILE_NAMES = [
  * after the directory's shared file and appended to it.
  */
 export const LOCAL_INSTRUCTION_FILE_NAME = 'CLAUDE.local.md';
+
+/**
+ * T059 — the home directory's candidates, first one wins, and NOT a superset
+ * of {@link INSTRUCTION_FILE_NAMES}: a bare `~/AGENTS.md` or `~/CLAUDE.md` is
+ * not looked for. The user asked for exactly this — "if none is there, there is
+ * none" — so the tier is empty rather than falling back to a project-style
+ * name at the top of the home directory.
+ *
+ * The order is this product first, then the two conventions its users also
+ * keep: `.pilab` is our own root, `.claude` is where Claude Code keeps its user
+ * memory, `.codex` is Codex CLI's global directory. Each entry is
+ * `<dot-directory>/<file>` and is spelled with `join`, never a `/` literal,
+ * because the walk keys files with `join` on the platform separator.
+ *
+ * `~/.pilab/AGENTS.md` sits directly under `.pilab`, NOT under
+ * `~/.pilab/<profile>/` where the rest of this product's per-install state
+ * lives. Deliberate: a user's instructions do not differ between a dev and a
+ * release install, so they do not belong to a profile.
+ */
+export const HOME_INSTRUCTION_FILE_NAMES: readonly string[] = [
+  join('.pilab', 'AGENTS.md'),
+  join('.claude', 'CLAUDE.md'),
+  join('.codex', 'AGENTS.md'),
+];
 
 /**
  * Safety bound on the parent-directory climb; a real filesystem never gets
@@ -156,6 +197,13 @@ export interface InstructionChainOptions extends SettingSourceOptions {
   /** Workspace root. Absent loads only explicitly supplied global files. */
   root?: string;
   /**
+   * T059 — the user's home directory: the `user` tier's instruction file lives
+   * there, and the project walk stops below it. Absent means no user tier and
+   * an unshortened walk. Supplied by the plugin layer (`os.homedir()` is not
+   * called here — see the module header).
+   */
+  home?: string;
+  /**
    * Global instruction files, in the order they should appear, before any
    * project file. A LIST rather than PI-Desktop's single
    * `~/.pi/agent/AGENTS.md`: the agent dir's own file is one source, and a
@@ -186,6 +234,15 @@ function isWithinRoot(root: string, path: string): boolean {
   return offset !== '' && !offset.startsWith('..') && !isAbsolute(offset);
 }
 
+/**
+ * Same directory, by the platform's own rules rather than string equality:
+ * `relative` folds case and separators on Windows (`C:\Users\JC` and
+ * `c:/users/jc/` answer `''`) and stays case-sensitive on POSIX.
+ */
+function sameDirectory(a: string, b: string): boolean {
+  return relative(a, b) === '';
+}
+
 /** Windows separators normalized so a recorded source path reads the same everywhere. */
 function normalizeStablePath(path: string): string {
   return path.replace(/\\/g, '/');
@@ -212,14 +269,22 @@ export function limitUtf8(content: string, maxBytes: number): string {
   return content.slice(0, end);
 }
 
+/**
+ * `undefined` when the file is absent, empty, or fails containment — the
+ * caller moves on to the next name. `'loaded'` when it is present and contained
+ * but already in the prompt: it still wins its directory's one-file slot, so
+ * the caller must NOT fall through to the next name, or a directory that was
+ * deduplicated would contribute a second file it never contributed before.
+ */
 async function readInstructionFile(
   source: InstructionSource,
   labelRoot: string,
   directory: string,
   canonicalDirectory: string,
   name: string,
-  remaining: number
-): Promise<ProjectInstruction | undefined> {
+  remaining: number,
+  loaded: Set<string> | undefined
+): Promise<ProjectInstruction | 'loaded' | undefined> {
   const file = join(directory, name);
   // A symlink pointing out of the directory it was found in would otherwise
   // pull arbitrary files into the prompt, so containment is checked on the
@@ -228,10 +293,14 @@ async function readInstructionFile(
   // where "inside the workspace" is not a question that has a useful answer.
   const canonical = await source.realpath(file);
   if (!canonical || !isWithinRoot(canonicalDirectory, canonical)) return undefined;
+  // T059 — keyed by real path so the same file reached under two spellings
+  // (a global's absolute path, the walk's `join`) is still one file.
+  if (loaded?.has(canonical)) return 'loaded';
   const content = (await source.readText(file))?.trim();
   if (!content) return undefined;
   const limited = limitUtf8(content, remaining);
   if (!limited) return undefined;
+  loaded?.add(canonical);
   return { source: normalizeStablePath(relative(labelRoot, file) || name), content: limited };
 }
 
@@ -242,28 +311,43 @@ async function readInstructionFile(
  * Exported because the on-demand tier in `instructionTracker.ts` reads exactly
  * the same way — a subdirectory found mid-session must not have different rules
  * from the one that was there at startup.
+ *
+ * `loaded` is the chain-wide set of real paths already in the prompt (T059):
+ * a file in it is skipped, a file read here is added. Optional because the
+ * on-demand tier keeps its own per-directory bookkeeping and never meets a
+ * global. `names` defaults to the project list; the user tier passes its own.
  */
 export async function readDirectoryInstructions(
   source: InstructionSource,
-  options: { labelRoot: string; directory: string; remaining: number; local: boolean }
+  options: {
+    labelRoot: string;
+    directory: string;
+    remaining: number;
+    local: boolean;
+    names?: readonly string[];
+    loaded?: Set<string>;
+  }
 ): Promise<readonly ProjectInstruction[]> {
-  const { labelRoot, directory } = options;
+  const { labelRoot, directory, loaded } = options;
   let remaining = options.remaining;
   if (remaining <= 0) return [];
   const entries: ProjectInstruction[] = [];
   const canonicalDirectory = (await source.realpath(directory)) ?? directory;
-  for (const name of INSTRUCTION_FILE_NAMES) {
+  for (const name of options.names ?? INSTRUCTION_FILE_NAMES) {
     const entry = await readInstructionFile(
       source,
       labelRoot,
       directory,
       canonicalDirectory,
       name,
-      remaining
+      remaining,
+      loaded
     );
     if (!entry) continue;
-    entries.push(entry);
-    remaining -= Buffer.byteLength(entry.content, 'utf8');
+    if (entry !== 'loaded') {
+      entries.push(entry);
+      remaining -= Buffer.byteLength(entry.content, 'utf8');
+    }
     break;
   }
   // decision 008 — the local file ADDS to the shared one rather than replacing
@@ -275,15 +359,17 @@ export async function readDirectoryInstructions(
       directory,
       canonicalDirectory,
       LOCAL_INSTRUCTION_FILE_NAME,
-      remaining
+      remaining,
+      loaded
     );
-    if (entry) entries.push(entry);
+    if (entry && entry !== 'loaded') entries.push(entry);
   }
   return entries;
 }
 
 /**
- * Load globals then the workspace and its parents, sharing one byte budget.
+ * Load globals, then the user tier, then the workspace and its parents, sharing
+ * one byte budget.
  *
  * Globals go first so a project file, being later, can contradict them; within
  * the project tier the outermost parent goes first for the same reason.
@@ -305,6 +391,10 @@ export async function loadInstructionChain(
   let remaining = Math.max(0, options.maxBytes ?? MAX_INSTRUCTION_BYTES);
   const entries: ProjectInstruction[] = [];
   const sources = resolveSettingSources(options);
+  // T059 — real paths of every file already in the prompt. The user tier and
+  // the walk both consult it, so a file a caller ALSO listed in `globals`
+  // appears once rather than once per route that reaches it.
+  const loaded = new Set<string>();
 
   for (const global of options.globals ?? []) {
     if (remaining <= 0) break;
@@ -318,6 +408,34 @@ export async function loadInstructionChain(
     if (!limited) continue;
     entries.push({ source: global.label, content: limited });
     remaining -= Buffer.byteLength(limited, 'utf8');
+    // The resolved spelling stands in when there is no real path: the walk
+    // cannot read a file whose real path does not resolve either, so the key
+    // only has to be stable, never canonical.
+    loaded.add((await source.realpath(global.path)) ?? resolve(global.path));
+  }
+
+  // T059 — the user tier: one file from the home directory, for every
+  // workspace, whether or not the workspace sits under it. Behind the `user`
+  // switch alone: it is the user's own file, not something the checkout
+  // supplied, so project trust does not enter into it — the rule `skillRoots`
+  // already applies to `~/.agents/skills`. No `CLAUDE.local.md`: "local" means
+  // private to one project, and the home directory is private already.
+  const home = options.home ? resolve(options.home) : undefined;
+  if (home && sources.user && remaining > 0) {
+    const found = await readDirectoryInstructions(source, {
+      labelRoot: home,
+      directory: home,
+      remaining,
+      local: false,
+      names: HOME_INSTRUCTION_FILE_NAMES,
+      loaded,
+    });
+    for (const entry of found) {
+      // `~/` so the heading says whose file this is; a bare `CLAUDE.md` would
+      // read as the workspace's own.
+      entries.push({ source: `~/${entry.source}`, content: entry.content });
+      remaining -= Buffer.byteLength(entry.content, 'utf8');
+    }
   }
 
   // decision 007 / 008 — an untrusted checkout contributes no instructions at
@@ -326,13 +444,20 @@ export async function loadInstructionChain(
   // able to contribute a skill or a permission rule.
   if (!options.root || remaining <= 0 || !sources.project) return entries;
   const resolvedRoot = resolve(options.root);
-  for (const directory of instructionDirectories(resolvedRoot)) {
+  const directories = instructionDirectories(resolvedRoot);
+  // T059 — with the home directory on the walk, start strictly below it: the
+  // directory itself was the user tier above, and the ones above it (`/home`,
+  // `C:\Users`) belong to every account on the machine. Off the walk,
+  // `findIndex` is -1 and `slice(0)` is the whole walk.
+  const first = home ? directories.findIndex((directory) => sameDirectory(directory, home)) + 1 : 0;
+  for (const directory of directories.slice(first)) {
     if (remaining <= 0) break;
     const found = await readDirectoryInstructions(source, {
       labelRoot: resolvedRoot,
       directory,
       remaining,
       local: sources.local,
+      loaded,
     });
     for (const entry of found) {
       entries.push(entry);

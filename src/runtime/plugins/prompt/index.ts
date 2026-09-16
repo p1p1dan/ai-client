@@ -18,6 +18,12 @@ import { composeSystemPrompt } from './segments.ts';
 export interface PromptConfig extends SettingSourceOptions {
   /** Defaults to the tools workspace; no implicit process.cwd() fallback. */
   root?: string;
+  /**
+   * T059 — where the `user` tier's instruction file lives. `bootstrap.ts`
+   * fills it from `os.homedir()` when the caller does not; the loader itself
+   * never asks the OS.
+   */
+  home?: string;
   /** Explicit borrowed files, appended after the managed agent-dir AGENTS.md. */
   globals?: InstructionChainOptions['globals'];
   maxBytes?: number;

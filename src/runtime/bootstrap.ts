@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Context } from 'cordis';
@@ -376,6 +377,10 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     const promptConfig: PromptConfig = {
       ...options.prompt,
       root: options.prompt?.root ?? workspace ?? options.tools?.cwd,
+      // T059 — resolved HERE rather than in the prompt plugin because this
+      // config also feeds the per-delegation chain below, and a delegate must
+      // see the same user tier and the same walk as the parent.
+      home: options.prompt?.home ?? homedir(),
       projectTrusted: options.permissions?.projectTrusted,
       ...(options.settingSources ? { settingSources: options.settingSources } : {}),
       globals: [

@@ -15,6 +15,7 @@
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  HOME_INSTRUCTION_FILE_NAMES,
   type InstructionSource,
   instructionDirectories,
   limitUtf8,
@@ -29,6 +30,13 @@ import {
 // keeps the fake tree spelled the way the loader will look it up.
 const ROOT = resolve('/work/repo');
 const at = (...parts: string[]) => join(ROOT, ...parts);
+/**
+ * T059 — a home directory for the user tier. `/home/u` so that a workspace
+ * placed under it has `/home` — a directory every account on the machine
+ * shares — on its walk, which is the shape the tier rule exists for.
+ */
+const HOME = resolve('/home/u');
+const home = (...parts: string[]) => join(HOME, ...parts);
 /**
  * decision 007 / 008 — the project and local tiers only load for a workspace
  * the host has trusted, so every case that expects a project file to appear has
@@ -378,6 +386,288 @@ describe('loadInstructionChain tiers (decision 007 / 008)', () => {
       settingSources: [],
     });
     expect(entries.map((entry) => entry.source)).toEqual(['Managed AGENTS.md']);
+  });
+});
+
+describe('loadInstructionChain user tier (T059)', () => {
+  it('loads the home directory file for a workspace that is not under it', async () => {
+    // The user's own rules apply wherever the user is working. Before T059
+    // they reached the prompt only by accident of the walk — a workspace under
+    // `~` picked them up as a PROJECT file, one elsewhere never did.
+    const { source } = fakeSource({
+      [home('.claude', 'CLAUDE.md')]: 'user rule',
+      [at('AGENTS.md')]: 'project rule',
+    });
+    const entries = await loadInstructionChain(source, { root: ROOT, home: HOME, ...TRUSTED });
+    expect(entries).toEqual([
+      { source: '~/.claude/CLAUDE.md', content: 'user rule' },
+      { source: 'AGENTS.md', content: 'project rule' },
+    ]);
+  });
+
+  it('gates the home directory file on the user source, not the project one', async () => {
+    const { source, calls } = fakeSource({
+      [home('.claude', 'CLAUDE.md')]: 'user rule',
+      [at('AGENTS.md')]: 'project rule',
+    });
+    const entries = await loadInstructionChain(source, {
+      root: ROOT,
+      home: HOME,
+      ...TRUSTED,
+      settingSources: ['project', 'local'],
+    });
+    expect(entries.map((entry) => entry.source)).toEqual(['AGENTS.md']);
+    expect(calls).not.toContain(home('.claude', 'CLAUDE.md'));
+  });
+
+  it('walks from just below the home directory when the workspace sits under it', async () => {
+    // `/home` is shared by every account on the machine and `/home/u` is the
+    // user tier — neither is a project parent. Only `projects/` and the
+    // workspace itself are.
+    const workspace = home('projects', 'repo');
+    const { source, calls } = fakeSource({
+      [resolve('/home', 'CLAUDE.md')]: 'shared account dir rule',
+      [home('.claude', 'CLAUDE.md')]: 'user rule',
+      [home('projects', 'AGENTS.md')]: 'parent rule',
+      [join(workspace, 'AGENTS.md')]: 'repo rule',
+    });
+    const entries = await loadInstructionChain(source, { root: workspace, home: HOME, ...TRUSTED });
+    expect(entries).toEqual([
+      { source: '~/.claude/CLAUDE.md', content: 'user rule' },
+      { source: '../AGENTS.md', content: 'parent rule' },
+      { source: 'AGENTS.md', content: 'repo rule' },
+    ]);
+    expect(calls).not.toContain(resolve('/home', 'CLAUDE.md'));
+    // Once as the user tier, never again as a project parent.
+    expect(calls.filter((path) => path === home('.claude', 'CLAUDE.md'))).toHaveLength(1);
+  });
+
+  it('matches the home directory by the platform path rules, not string equality', async () => {
+    // On Windows `resolve` keeps the caller's drive-letter case and separators
+    // are interchangeable; a home spelled differently from the walk must still
+    // be recognised there. On POSIX the two spellings below are identical, so
+    // the case is a no-op rather than a failure.
+    const spelled =
+      process.platform === 'win32'
+        ? `${HOME.charAt(0).toLowerCase()}${HOME.slice(1).replaceAll('\\', '/')}/`
+        : `${HOME}/`;
+    const workspace = home('projects', 'repo');
+    const { source, calls } = fakeSource({
+      [resolve('/home', 'CLAUDE.md')]: 'shared account dir rule',
+      [join(workspace, 'AGENTS.md')]: 'repo rule',
+    });
+    const entries = await loadInstructionChain(source, {
+      root: workspace,
+      home: spelled,
+      ...TRUSTED,
+    });
+    expect(entries.map((entry) => entry.content)).toEqual(['repo rule']);
+    expect(calls).not.toContain(resolve('/home', 'CLAUDE.md'));
+  });
+
+  it('keeps the home directory off the walk when the user source is switched off', async () => {
+    // The property Q015 was about, in its exact shape: a workspace UNDER the
+    // home directory, and `user` off. Cutting the walk below `~` must not be
+    // tied to whether the user tier loaded — otherwise switching `user` off
+    // would hand the home directory back to the walk, and the user's personal
+    // rules would enter through the `project` gate, which is where they came
+    // from before T059. Both spellings are planted: the user-tier candidate
+    // and the top-level name the old walk would have picked up.
+    const workspace = home('projects', 'repo');
+    const { source, calls } = fakeSource({
+      [home('CLAUDE.md')]: 'top-level home file',
+      [home('.claude', 'CLAUDE.md')]: 'user rule',
+      [join(workspace, 'AGENTS.md')]: 'repo rule',
+    });
+    const entries = await loadInstructionChain(source, {
+      root: workspace,
+      home: HOME,
+      ...TRUSTED,
+      settingSources: ['project', 'local'],
+    });
+    expect(entries).toEqual([{ source: 'AGENTS.md', content: 'repo rule' }]);
+    expect(calls).not.toContain(home('CLAUDE.md'));
+    expect(calls).not.toContain(home('.claude', 'CLAUDE.md'));
+  });
+
+  it('leaves the walk untouched when the home directory is not on it', async () => {
+    const files = {
+      [resolve('/work', 'AGENTS.md')]: 'outer rule',
+      [at('AGENTS.md')]: 'root rule',
+    };
+    const withHome = await loadInstructionChain(fakeSource(files).source, {
+      root: ROOT,
+      home: HOME,
+      ...TRUSTED,
+    });
+    const withoutHome = await loadInstructionChain(fakeSource(files).source, {
+      root: ROOT,
+      ...TRUSTED,
+    });
+    expect(withHome).toEqual(withoutHome);
+    expect(withHome.map((entry) => entry.content)).toEqual(['outer rule', 'root rule']);
+  });
+
+  it('treats a workspace that IS the home directory as the user tier alone', async () => {
+    // Opening `~` itself. The dot-directory file is the user tier, once; a
+    // bare `~/CLAUDE.md` is neither a user candidate (the list is closed) nor
+    // a project file (the walk starts below the home directory), so it is not
+    // read at all.
+    const { source, calls } = fakeSource({
+      [home('.claude', 'CLAUDE.md')]: 'user rule',
+      [home('CLAUDE.md')]: 'top-level home file',
+    });
+    const entries = await loadInstructionChain(source, { root: HOME, home: HOME, ...TRUSTED });
+    expect(entries).toEqual([{ source: '~/.claude/CLAUDE.md', content: 'user rule' }]);
+    expect(calls).toEqual([home('.claude', 'CLAUDE.md')]);
+  });
+
+  it('looks in the three dot directories, in this order', () => {
+    // The user's ruling, pinned as data: ours first, then the two conventions
+    // its users also keep. Spelled with `join` because that is how the walk
+    // spells the paths it looks up.
+    expect(HOME_INSTRUCTION_FILE_NAMES).toEqual([
+      join('.pilab', 'AGENTS.md'),
+      join('.claude', 'CLAUDE.md'),
+      join('.codex', 'AGENTS.md'),
+    ]);
+  });
+
+  it('takes one file from the home directory, in HOME_INSTRUCTION_FILE_NAMES order', async () => {
+    // Same first-one-wins rule as a project directory. Asserted against the
+    // constant rather than a literal name, so a change of precedence fails the
+    // order case above and not this one.
+    const { source } = fakeSource(
+      Object.fromEntries(HOME_INSTRUCTION_FILE_NAMES.map((name) => [home(name), `rule in ${name}`]))
+    );
+    const entries = await loadInstructionChain(source, { home: HOME });
+    const winner = HOME_INSTRUCTION_FILE_NAMES[0] ?? '';
+    expect(entries).toEqual([
+      { source: `~/${winner.replaceAll('\\', '/')}`, content: `rule in ${winner}` },
+    ]);
+  });
+
+  it('loads nothing from the home directory when none of the three exists', async () => {
+    // "If none is there, there is none": no fall-through to a project-style
+    // name at the top of the home directory, however many of those exist.
+    const { source, calls } = fakeSource({
+      [home('AGENTS.override.md')]: 'top-level override',
+      [home('AGENTS.md')]: 'top-level agents',
+      [home('CLAUDE.md')]: 'top-level claude',
+      [home('CLAUDE.local.md')]: 'top-level local',
+      [at('AGENTS.md')]: 'project rule',
+    });
+    const entries = await loadInstructionChain(source, { root: ROOT, home: HOME, ...TRUSTED });
+    expect(entries).toEqual([{ source: 'AGENTS.md', content: 'project rule' }]);
+    expect(calls).toEqual([at('AGENTS.md')]);
+  });
+
+  it('never reads CLAUDE.local.md from the home directory', async () => {
+    // "Local" means private to one project. The home directory is private
+    // already, so a second private layer there would mean nothing.
+    const { source, calls } = fakeSource({
+      [home('.pilab', 'AGENTS.md')]: 'user rule',
+      [home('CLAUDE.local.md')]: 'home local rule',
+    });
+    const entries = await loadInstructionChain(source, { home: HOME });
+    expect(entries.map((entry) => entry.source)).toEqual(['~/.pilab/AGENTS.md']);
+    expect(calls).not.toContain(home('CLAUDE.local.md'));
+  });
+
+  it('loads the home directory file once when a global names the same file', async () => {
+    // The host may still hand the same file in through `globals`. Keyed by
+    // real path, so a link is the same file too — and the deduplicated file
+    // keeps its one-per-directory slot: the tier must not fall through to the
+    // next name and add a file it never loaded before.
+    const { source } = fakeSource(
+      {
+        [home('link.md')]: 'user rule',
+        [home('.pilab', 'AGENTS.md')]: 'user rule',
+        [home('.claude', 'CLAUDE.md')]: 'second user file',
+        [at('AGENTS.md')]: 'project rule',
+      },
+      { [home('link.md')]: home('.pilab', 'AGENTS.md') }
+    );
+    const entries = await loadInstructionChain(source, {
+      root: ROOT,
+      home: HOME,
+      ...TRUSTED,
+      globals: [{ path: home('link.md'), label: 'User AGENTS.md' }],
+    });
+    expect(entries.map((entry) => entry.source)).toEqual(['User AGENTS.md', 'AGENTS.md']);
+  });
+
+  it('loads a file once when a global and the walk both reach it', async () => {
+    // The general form of the rule above, for any global that happens to sit
+    // on the walk: the walk skips it and does not fall through to the next
+    // name in that directory.
+    const { source } = fakeSource({
+      [resolve('/work', 'AGENTS.md')]: 'outer rule',
+      [at('AGENTS.md')]: 'repo rule',
+      [at('CLAUDE.md')]: 'never loaded before',
+    });
+    const entries = await loadInstructionChain(source, {
+      root: ROOT,
+      ...TRUSTED,
+      globals: [{ path: at('AGENTS.md'), label: 'Pinned AGENTS.md' }],
+    });
+    expect(entries.map((entry) => entry.source)).toEqual(['Pinned AGENTS.md', '../AGENTS.md']);
+  });
+
+  it('still loads the user tier for a workspace the host has not trusted', async () => {
+    // Trust is about the checkout: a folder nobody vouched for must not write
+    // the prompt. The home directory file is the user's own, and every other
+    // reader of the user tier (`skillRoots`, the permission policy, MCP config)
+    // already ignores project trust for it. The project walk stays closed.
+    const { source, calls } = fakeSource({
+      [home('.claude', 'CLAUDE.md')]: 'user rule',
+      [resolve('/work', 'AGENTS.md')]: 'parent rule',
+      [at('AGENTS.md')]: 'project rule',
+      [at('CLAUDE.local.md')]: 'local rule',
+    });
+    const entries = await loadInstructionChain(source, { root: ROOT, home: HOME });
+    expect(entries.map((entry) => entry.source)).toEqual(['~/.claude/CLAUDE.md']);
+    expect(calls).toEqual([home('.claude', 'CLAUDE.md')]);
+  });
+
+  it('spends the shared budget on the user tier before the project walk', async () => {
+    const { source } = fakeSource({
+      [home('.claude', 'CLAUDE.md')]: 'u'.repeat(40),
+      [at('AGENTS.md')]: 'p'.repeat(40),
+    });
+    const entries = await loadInstructionChain(source, {
+      root: ROOT,
+      home: HOME,
+      ...TRUSTED,
+      maxBytes: 50,
+    });
+    expect(entries.map((entry) => entry.content.length)).toEqual([40, 10]);
+  });
+
+  it('treats an omitted settingSources as all three with the home directory on the walk', async () => {
+    const workspace = home('projects', 'repo');
+    const files = {
+      [home('.claude', 'CLAUDE.md')]: 'user rule',
+      [join(workspace, 'AGENTS.md')]: 'repo rule',
+      [join(workspace, 'CLAUDE.local.md')]: 'local rule',
+    };
+    const omitted = await loadInstructionChain(fakeSource(files).source, {
+      root: workspace,
+      home: HOME,
+      ...TRUSTED,
+    });
+    const explicit = await loadInstructionChain(fakeSource(files).source, {
+      root: workspace,
+      home: HOME,
+      ...TRUSTED,
+      settingSources: ['user', 'project', 'local'],
+    });
+    expect(omitted).toEqual(explicit);
+    expect(omitted.map((entry) => entry.source)).toEqual([
+      '~/.claude/CLAUDE.md',
+      'AGENTS.md',
+      'CLAUDE.local.md',
+    ]);
   });
 });
 
