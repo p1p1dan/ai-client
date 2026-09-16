@@ -119,6 +119,8 @@ P5-5 起，**应用内**的模型目录不再从这个目录读：Main 在内存
 
 | `AICLIENT_RUNTIME_TRACE_DIR` | trace 落盘目录；不设则只留在内存 |
 
+| `AICLIENT_CONSOLE_CODEPAGE` | 覆盖控制台代码页探测（`src/shared/windowsCodePage.ts`）；全平台生效，主要给 Windows 现场机器逃生与 Linux 测试用 |
+
 ## trace 的分代戳 `config_version`
 
 `RUNTIME_CONFIG_VERSION`（`bootstrap.ts`）会写进每条 trace 的 `version_stamp.config_version`，

@@ -452,6 +452,18 @@ export interface RuntimeExecResult {
   stdoutBytes: number;
   stderrBytes: number;
   truncated: boolean;
+  /**
+   * Set when the command finished but its process tree could not be confirmed
+   * gone — a `taskkill` that would not start, exited nonzero, or outlived the
+   * cleanup budget (windows-02).
+   *
+   * Diagnostic, never a verdict: the command's own exit code, output and
+   * termination are complete and describe what ran. Reaping stragglers is a
+   * separate concern, and while a failure to reap was reported as the run's
+   * failure, an enterprise security stack that merely slowed `taskkill` down
+   * turned every successful command on that machine into a tool error.
+   */
+  cleanupError?: string;
 }
 
 /**

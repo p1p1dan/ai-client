@@ -96,7 +96,9 @@ describe('the two capability gaps P5-2-0 required closing', () => {
 
   it('lets a command ask for far longer than the old ten-minute ceiling', async () => {
     // `test-runner` and `fixer` run builds. The old cap was shorter than one.
-    const handle = await build();
+    // The shell is named because a host without one registers no bash at all
+    // now (windows-04), same as the two cases below already did.
+    const handle = await build({ tools: { cwd: workspace, shellPath: '/bin/bash' } });
     const bash = handle.ctx.runtimeTools.list().find((tool) => tool.name === 'bash');
     const properties = (bash?.parameters as { properties?: Record<string, { maximum?: number }> })
       .properties;

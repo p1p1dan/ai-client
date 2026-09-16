@@ -1,10 +1,11 @@
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
-import { basename, isAbsolute, resolve, sep } from 'node:path';
+import { basename, posix, resolve, sep, win32 } from 'node:path';
 import { Language, Parser, type Node as SyntaxNode } from 'web-tree-sitter';
 import type { RuntimeHostIoService } from '../../contracts.ts';
 import { RuntimeHostError } from '../../host/errors.ts';
 import { isExplorationCommand } from './shell-policy.ts';
+import { normalizeWindowsPathForm } from './windows-paths.ts';
 
 export interface BashAnalysis {
   paths: string[];
@@ -80,6 +81,28 @@ export function normalizeShellPath(path: string, separator: string = sep): strin
 /** Split a path on the platform separator, tolerating the other one. */
 export function splitShellPath(path: string, separator: string = sep): string[] {
   return separator === '/' ? path.split('/') : path.split(/[\\/]/);
+}
+
+/**
+ * The single spelling one shell operand is registered under.
+ *
+ * Every downstream gate — the deny list, the workspace check, the canonical
+ * re-check — reads the string this returns, so the Windows spellings have to be
+ * folded HERE and not only inside `pathPolicy`: `containsPath` compares the
+ * same string and would otherwise answer "outside the workspace" for a file
+ * inside it, or the reverse (windows-01).
+ */
+export function shellOperandPath(
+  text: string,
+  cwd: string,
+  platform: NodeJS.Platform = process.platform
+): string {
+  const paths = platform === 'win32' ? win32 : posix;
+  const target = normalizeWindowsPathForm(text, platform);
+  return normalizeShellPath(
+    paths.isAbsolute(target) ? target : `${cwd}${paths.sep}${target}`,
+    paths.sep
+  );
 }
 
 let sharedLanguage: Promise<Language> | undefined;
@@ -179,7 +202,7 @@ export class BashAnalyzer {
     function register(text: string, state: ShellState) {
       if (!text) return;
       // Keep wildcard's static parent; glob expansion is handled by the caller.
-      paths.add(normalizeShellPath(isAbsolute(text) ? text : `${state.cwd}${sep}${text}`));
+      paths.add(shellOperandPath(text, state.cwd));
     }
     function addPath(text: string | undefined, state: ShellState) {
       if (!text || /^[a-z][a-z\d+.-]*:\/\//i.test(text)) return;

@@ -3,6 +3,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import type { TerminalCreateOptions } from '@shared/types';
+import { decodeConsoleOutput } from '@shared/windowsCodePage';
 import * as pty from 'node-pty';
 import pidtree from 'pidtree';
 import pidusage from 'pidusage';
@@ -32,10 +33,23 @@ export function clearPathCache(): void {
 }
 
 /**
+ * How the registry is read. `execSync` in production; injected by tests so the
+ * decoding of a non-UTF-8 console can be exercised off Windows (windows-07).
+ */
+type RegistryQuery = (
+  command: string,
+  options: { encoding: 'buffer'; timeout: number }
+) => string | Buffer;
+
+/**
  * Read environment variables from Windows registry (user + system level)
  * This is needed because GUI apps don't inherit shell environment variables
+ *
+ * `reg.exe` writes the console code page, so the output is read as bytes and
+ * decoded with it; reading it as UTF-8 turned every non-ASCII path into
+ * replacement characters (windows-07).
  */
-function getWindowsRegistryEnvVars(): Record<string, string> {
+export function getWindowsRegistryEnvVars(query: RegistryQuery = execSync): Record<string, string> {
   if (cachedRegistryEnvVars !== null) {
     return cachedRegistryEnvVars;
   }
@@ -63,22 +77,22 @@ function getWindowsRegistryEnvVars(): Record<string, string> {
   try {
     // Read user-level environment variables
     try {
-      const userOutput = execSync('reg query "HKCU\\Environment" 2>nul', {
-        encoding: 'utf8',
+      const userOutput = query('reg query "HKCU\\Environment" 2>nul', {
+        encoding: 'buffer',
         timeout: 3000,
       });
-      parseRegistryOutput(userOutput);
+      parseRegistryOutput(decodeConsoleOutput(userOutput));
     } catch {
       // User registry query failed
     }
 
     // Read system-level environment variables
     try {
-      const systemOutput = execSync(
+      const systemOutput = query(
         'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" 2>nul',
-        { encoding: 'utf8', timeout: 3000 }
+        { encoding: 'buffer', timeout: 3000 }
       );
-      parseRegistryOutput(systemOutput);
+      parseRegistryOutput(decodeConsoleOutput(systemOutput));
     } catch {
       // System registry query failed
     }
@@ -94,8 +108,8 @@ function getWindowsRegistryEnvVars(): Record<string, string> {
  * Expand Windows environment variables in a string (e.g., %PATH% -> actual value)
  * Reads variable values from registry (GUI apps don't inherit shell environment)
  */
-function expandWindowsEnvVars(str: string): string {
-  const registryEnvVars = getWindowsRegistryEnvVars();
+function expandWindowsEnvVars(str: string, query: RegistryQuery = execSync): string {
+  const registryEnvVars = getWindowsRegistryEnvVars(query);
 
   // Replace %VAR% patterns with their values from registry
   return str.replace(/%([^%]+)%/g, (match, varName) => {
@@ -113,8 +127,11 @@ function expandWindowsEnvVars(str: string): string {
 /**
  * Read full PATH from Windows registry (user + system level)
  * This ensures GUI apps get the same PATH as terminal apps
+ *
+ * Same decoding rule as `getWindowsRegistryEnvVars`: bytes in, console code
+ * page out (windows-07).
  */
-function getWindowsRegistryPath(): string {
+export function getWindowsRegistryPath(query: RegistryQuery = execSync): string {
   if (cachedWindowsPath !== null) {
     return cachedWindowsPath;
   }
@@ -123,10 +140,12 @@ function getWindowsRegistryPath(): string {
     // Read user-level PATH
     let userPath = '';
     try {
-      const userOutput = execSync('reg query "HKCU\\Environment" /v Path 2>nul', {
-        encoding: 'utf8',
-        timeout: 3000,
-      });
+      const userOutput = decodeConsoleOutput(
+        query('reg query "HKCU\\Environment" /v Path 2>nul', {
+          encoding: 'buffer',
+          timeout: 3000,
+        })
+      );
       const userMatch = userOutput.match(/Path\s+REG_(?:EXPAND_)?SZ\s+(.+)/i);
       userPath = userMatch ? userMatch[1].trim() : '';
     } catch {
@@ -136,9 +155,11 @@ function getWindowsRegistryPath(): string {
     // Read system-level PATH
     let systemPath = '';
     try {
-      const systemOutput = execSync(
-        'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" /v Path 2>nul',
-        { encoding: 'utf8', timeout: 3000 }
+      const systemOutput = decodeConsoleOutput(
+        query(
+          'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" /v Path 2>nul',
+          { encoding: 'buffer', timeout: 3000 }
+        )
       );
       const systemMatch = systemOutput.match(/Path\s+REG_(?:EXPAND_)?SZ\s+(.+)/i);
       systemPath = systemMatch ? systemMatch[1].trim() : '';
@@ -150,7 +171,7 @@ function getWindowsRegistryPath(): string {
     let combinedPath = [systemPath, userPath].filter(Boolean).join(delimiter);
 
     // Expand environment variables like %NVM_SYMLINK%, %USERPROFILE%, etc.
-    combinedPath = expandWindowsEnvVars(combinedPath);
+    combinedPath = expandWindowsEnvVars(combinedPath, query);
 
     cachedWindowsPath = combinedPath || process.env.PATH || '';
     return cachedWindowsPath;

@@ -1,5 +1,5 @@
 import type { spawn } from 'node:child_process';
-import { getEventListeners } from 'node:events';
+import { EventEmitter, getEventListeners } from 'node:events';
 import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -9,7 +9,14 @@ import { Context } from 'cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeExecRequest, RuntimeHostConfig } from '../contracts.ts';
 import { standaloneHost, validateHost } from '../host/config.ts';
-import { createTreeKiller, ExecPlugin, execRunnerPath } from '../host/exec.ts';
+import {
+  createTreeKiller,
+  ExecPlugin,
+  execRunnerPath,
+  resolveWindowsCommand,
+  runPipe,
+  spawnPersistent,
+} from '../host/exec.ts';
 import { HostIoPlugin } from '../host/io.ts';
 
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
@@ -866,5 +873,252 @@ describe('exec tree killer', () => {
     } finally {
       kill.mockRestore();
     }
+  });
+});
+
+/**
+ * The Windows carrier, on a machine that is not Windows (T039).
+ *
+ * Both halves here are Windows-only by construction: every command there runs
+ * through the node runner and is reaped by an external `taskkill.exe`, and a
+ * bare `npx` is really `npx.cmd`. The platform, the spawner and the file
+ * existence check are injected; no real process is spawned and no real signal
+ * is ever sent — the POSIX cases pass their own `killGroup`, per appendix B1.
+ */
+describe('windows carrier', () => {
+  function fakeStream() {
+    const stream = new EventEmitter() as EventEmitter & {
+      destroy: () => void;
+      end: (value?: unknown) => void;
+      write: (value?: unknown, callback?: (error: Error | null) => void) => boolean;
+      destroyed: boolean;
+    };
+    stream.destroyed = false;
+    stream.destroy = () => {
+      stream.destroyed = true;
+    };
+    stream.end = () => undefined;
+    stream.write = (_value, callback) => {
+      callback?.(null);
+      return true;
+    };
+    return stream;
+  }
+  interface Reaper {
+    args: readonly string[];
+    killed: number;
+    emit: (event: string, value?: unknown) => void;
+  }
+  function stage() {
+    const child = new EventEmitter() as EventEmitter & {
+      pid: number;
+      stdout: ReturnType<typeof fakeStream>;
+      stderr: ReturnType<typeof fakeStream>;
+      stdin: ReturnType<typeof fakeStream>;
+      kill: (signal?: string) => boolean;
+      send: (message: unknown, callback?: (error: Error | null) => void) => boolean;
+      signals: (string | undefined)[];
+      sent: { command: string; args: readonly string[] }[];
+    };
+    child.pid = 4242;
+    child.stdout = fakeStream();
+    child.stderr = fakeStream();
+    child.stdin = fakeStream();
+    child.signals = [];
+    child.sent = [];
+    child.kill = (signal?: string) => {
+      child.signals.push(signal);
+      return true;
+    };
+    child.send = (message, callback) => {
+      child.sent.push(message as { command: string; args: readonly string[] });
+      callback?.(null);
+      return true;
+    };
+    const started: { command: string; args: readonly string[] }[] = [];
+    const reapers: Reaper[] = [];
+    const spawnProcess = ((command: string, args: readonly string[]) => {
+      started.push({ command, args });
+      // The first spawn is the carrier itself; everything after it is a reaper.
+      if (started.length === 1) return child;
+      const handlers = new Map<string, (value?: unknown) => void>();
+      const reaper: Reaper = {
+        args,
+        killed: 0,
+        emit: (event, value) => handlers.get(event)?.(value),
+      };
+      reapers.push(reaper);
+      const process = {
+        on(event: string, handler: (value?: unknown) => void) {
+          handlers.set(event, handler);
+          return process;
+        },
+        kill() {
+          reaper.killed++;
+          return true;
+        },
+      };
+      return process;
+    }) as unknown as typeof spawn;
+    return { child, started, reapers, spawnProcess };
+  }
+  const request = {
+    command: 'C:\\Program Files\\Git\\bin\\bash.exe',
+    args: ['-c', 'git status'],
+    cwd: 'C:\\work',
+    env: { Path: 'C:\\Windows\\System32' },
+    timeoutMs: 5_000,
+    maxOutputBytes: 4_096,
+    overflow: 'truncate' as const,
+  };
+
+  it('reports a command that already finished when taskkill will not come back (windows-02)', async () => {
+    const carrier = stage();
+    // 30 ms stands in for the product's 2 s cleanup budget.
+    const run = runPipe(request, 30, 'C:\\node.exe', {
+      platform: 'win32',
+      spawnProcess: carrier.spawnProcess,
+    });
+    carrier.child.stdout.emit('data', Buffer.from('on branch main'));
+    // The runner reports the command's own exit over IPC; the runner itself
+    // stays up until taskkill reaches it, which here it never does.
+    carrier.child.emit('message', { type: 'exit', code: 0, signal: null });
+    expect(carrier.reapers).toHaveLength(1);
+    expect(carrier.reapers[0].args).toEqual(['/PID', '4242', '/T', '/F']);
+    const result = await run;
+    expect(result.exitCode).toBe(0);
+    expect(Buffer.from(result.stdout).toString('utf8')).toBe('on branch main');
+    expect(result.cleanupError).toContain('not confirmed terminated');
+    // The reaper we gave up on is reaped rather than left running.
+    expect(carrier.reapers[0].killed).toBe(1);
+  });
+
+  it('reports a command whose taskkill could not start at all (windows-02)', async () => {
+    const carrier = stage();
+    const run = runPipe(request, 5_000, 'C:\\node.exe', {
+      platform: 'win32',
+      spawnProcess: carrier.spawnProcess,
+    });
+    carrier.child.emit('message', { type: 'exit', code: 3, signal: null });
+    carrier.reapers[0].emit('error', new Error('EPERM'));
+    // taskkill failing makes the tree killer signal the leader directly, and
+    // that is what ends the run.
+    expect(carrier.child.signals).toHaveLength(1);
+    carrier.child.emit('close', null, null);
+    const result = await run;
+    expect(result.exitCode).toBe(3);
+    expect(result.cleanupError).toContain('taskkill could not start');
+  });
+
+  it('still fails a run whose command never reported an outcome', async () => {
+    const carrier = stage();
+    const run = runPipe({ ...request, timeoutMs: 20 }, 20, 'C:\\node.exe', {
+      platform: 'win32',
+      spawnProcess: carrier.spawnProcess,
+    });
+    // No IPC exit and no close: the command is unaccounted for, so the cleanup
+    // deadline is still a failure.
+    await expect(run).rejects.toMatchObject({ code: 'exec_cleanup_failed' });
+  });
+
+  it('leaves the POSIX path signalling the injected group only', async () => {
+    const clean = stage();
+    const sent: { pgid: number; signal: string }[] = [];
+    const run = runPipe(request, 50, undefined, {
+      platform: 'linux',
+      spawnProcess: clean.spawnProcess,
+      killGroup: (pgid, signal) => {
+        sent.push({ pgid, signal });
+      },
+    });
+    clean.child.stdout.emit('data', Buffer.from('ok'));
+    clean.child.emit('close', 0, null);
+    const result = await run;
+    expect(result.exitCode).toBe(0);
+    expect(result.cleanupError).toBeUndefined();
+    expect(sent).toEqual([{ pgid: -4242, signal: 'SIGKILL' }]);
+    expect(clean.reapers).toHaveLength(0);
+
+    // A group we could not signal is recorded, not turned into the run's
+    // failure: the command exited and its output is complete.
+    const denied = stage();
+    const second = runPipe(request, 50, undefined, {
+      platform: 'linux',
+      spawnProcess: denied.spawnProcess,
+      killGroup: () => {
+        throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+      },
+    });
+    denied.child.emit('close', 0, null);
+    await expect(second).resolves.toMatchObject({
+      exitCode: 0,
+      cleanupError: expect.stringContaining('could not terminate child group'),
+    });
+  });
+
+  it('starts npx and friends through cmd.exe, not as a missing .exe (windows-03)', () => {
+    const env = { Path: 'C:\\npm;C:\\Windows\\System32', PATHEXT: '.COM;.EXE;.BAT;.CMD' };
+    // npm writes `npx.cmd` while `PATHEXT` is upper-case, and the Windows file
+    // system does not care — so the probe matches case-insensitively here too,
+    // and the resolved name carries the casing the lookup used.
+    const present = new Set(['c:\\npm\\npx.cmd', 'c:\\npm\\node.exe', 'c:\\tools\\uvx.exe']);
+    const exists = (path: string) => present.has(path.toLowerCase());
+    const npx = resolveWindowsCommand('npx', ['-y', 'server'], env, {
+      platform: 'win32',
+      exists,
+    });
+    expect(npx.command.toLowerCase().endsWith('cmd.exe')).toBe(true);
+    expect(npx.args).toEqual(['/d', '/s', '/c', 'C:\\npm\\npx.CMD', '-y', 'server']);
+    // A real executable is used as it is — no shell, no re-quoting.
+    expect(resolveWindowsCommand('node', ['x.js'], env, { platform: 'win32', exists })).toEqual({
+      command: 'C:\\npm\\node.EXE',
+      args: ['x.js'],
+    });
+    // An absolute .cmd (what a user writes after hitting the bare-name failure)
+    // is wrapped too, rather than being rejected by node outright.
+    expect(
+      resolveWindowsCommand('C:\\npm\\npx.cmd', [], env, { platform: 'win32', exists }).args
+    ).toEqual(['/d', '/s', '/c', 'C:\\npm\\npx.cmd']);
+    // Nothing on PATH: unchanged, so the spawn failure still names the command.
+    expect(resolveWindowsCommand('uvx', [], env, { platform: 'win32', exists })).toEqual({
+      command: 'uvx',
+      args: [],
+    });
+    // POSIX never rewrites anything.
+    expect(
+      resolveWindowsCommand('npx', ['-y'], { PATH: '/usr/bin' }, { platform: 'linux', exists })
+    ).toEqual({ command: 'npx', args: ['-y'] });
+  });
+
+  it('sends the resolved command to the runner for a long-lived child (windows-03)', async () => {
+    const carrier = stage();
+    const handle = await spawnPersistent(
+      {
+        command: 'npx',
+        args: ['-y', 'server'],
+        cwd: 'C:\\work',
+        env: { Path: 'C:\\npm', PATHEXT: '.COM;.EXE;.BAT;.CMD' },
+        onStdout: () => undefined,
+        onStderr: () => undefined,
+      },
+      1_000,
+      'C:\\node.exe',
+      {
+        platform: 'win32',
+        spawnProcess: carrier.spawnProcess,
+        exists: (path) => path.toLowerCase() === 'c:\\npm\\npx.cmd',
+      }
+    );
+    expect(handle).toBeDefined();
+    expect(carrier.child.sent).toHaveLength(1);
+    expect(carrier.child.sent[0].command.toLowerCase().endsWith('cmd.exe')).toBe(true);
+    expect(carrier.child.sent[0].args).toEqual([
+      '/d',
+      '/s',
+      '/c',
+      'C:\\npm\\npx.CMD',
+      '-y',
+      'server',
+    ]);
   });
 });

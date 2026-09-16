@@ -245,6 +245,61 @@ describe('native tools', () => {
     ).rejects.toMatchObject({ code: 'edit_not_unique' });
     expect(await readFile(join(dir, 'sub/file'), 'utf8')).toBe('amber beta');
   });
+  // T039 — the Windows behaviours, exercised on Linux. Each one is a property
+  // of the tool layer that only BITES on Windows, so the trigger is faked (a
+  // host with no shell, a CRLF fixture, an explicit console code page) rather
+  // than the platform.
+  it('does not advertise bash on a host that has no shell (windows-04)', async () => {
+    // What a Windows box without Git for Windows looks like: `resolveWorkerShell`
+    // finds no bash.exe, so `shellPath` is absent.
+    const headless = await runtime({ tools: { cwd: dir } });
+    expect(headless.ctx.runtimeTools.list().map((tool) => tool.name)).not.toContain('bash');
+    const equipped = await runtime();
+    expect(equipped.ctx.runtimeTools.list().map((tool) => tool.name)).toContain('bash');
+  });
+  it('edits a CRLF file without flattening its line endings (windows-05)', async () => {
+    const r = await runtime({ permissions: { gear: 'accept-edits' } });
+    const original = 'const timeout = 30;\r\nconst retries = 2;\r\nexport default timeout;\r\n';
+    await writeFile(join(dir, 'app.ts'), original);
+    // What a model sends back after quoting two lines: plain newlines.
+    await call(r, 'edit', {
+      path: 'app.ts',
+      edits: [
+        {
+          oldText: 'const timeout = 30;\nconst retries = 2;',
+          newText: 'const timeout = 60;\nconst retries = 3;',
+        },
+      ],
+    });
+    expect(await readFile(join(dir, 'app.ts'), 'utf8')).toBe(
+      'const timeout = 60;\r\nconst retries = 3;\r\nexport default timeout;\r\n'
+    );
+    // A miss that is NOT about line endings still fails, and says the file is
+    // CRLF so the model stops blaming its own quoting.
+    await expect(
+      call(r, 'edit', {
+        path: 'app.ts',
+        edits: [{ oldText: 'const absent = 1;\nconst other = 2;', newText: 'x' }],
+      })
+    ).rejects.toThrow(/CRLF/);
+  });
+  it('decodes command output with the console code page, not always UTF-8 (windows-09)', async () => {
+    process.env.AICLIENT_CONSOLE_CODEPAGE = '936';
+    try {
+      const r = await runtime({ permissions: { gear: 'auto' } });
+      // The bytes a cp936 native command writes for 张三. Decoded as UTF-8 they
+      // are four replacement characters, which is what the model used to read.
+      const output = content(await call(r, 'bash', { command: "printf '\\xd5\\xc5\\xc8\\xfd'" }));
+      expect(output).toContain('张三');
+      expect(output).not.toContain('\ufffd');
+      // Git Bash writes UTF-8 whatever the console page says, and still does.
+      expect(content(await call(r, 'bash', { command: "printf '\u5f20\u4e09'" }))).toContain(
+        '张三'
+      );
+    } finally {
+      delete process.env.AICLIENT_CONSOLE_CODEPAGE;
+    }
+  });
   it('keeps multibyte read continuation offsets valid', async () => {
     await writeFile(join(dir, 'a'), 'abc中def\nsecond\nthird');
     const r = await runtime();

@@ -4,6 +4,7 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { type Context, Service } from 'cordis';
 import { type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
+import { decodeConsoleOutput } from '../../../shared/windowsCodePage.ts';
 import {
   EXEC_SERVICE,
   HOST_IO_SERVICE,
@@ -387,14 +388,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
           const before = decodeFileText(utf8FileDecoder(), data.bytes, false, target);
           let content = before;
           for (const edit of args.edits) {
-            const start = content.indexOf(edit.oldText);
-            if (start < 0 || content.indexOf(edit.oldText, start + 1) >= 0)
-              throw new RuntimeHostError(
-                'edit_not_unique',
-                'oldText must match exactly once; file was not changed'
-              );
-            content =
-              content.slice(0, start) + edit.newText + content.slice(start + edit.oldText.length);
+            content = applyEdit(content, edit.oldText, edit.newText);
             if (Buffer.byteLength(content) > FILE_EDIT_BYTES)
               throw new RuntimeHostError('io_limit', 'edited file exceeds 8 MiB');
           }
@@ -410,82 +404,106 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
         });
       },
     });
-    this.register({
-      name: 'bash',
-      label: 'Bash',
-      description:
-        'Execute a command with the configured shell in the workspace. Output is bounded. Runtime is bounded too: 120s unless you name a longer one with timeoutSeconds, which a build or a full test run will need.',
-      parameters: Type.Object(
-        {
-          command: Type.String({ minLength: 1, maxLength: 32768 }),
-          /**
-           * P5-2-3. The reference's Bash defaults to 60s and allows up to 6h;
-           * ours defaulted to 120s and CAPPED at 10 minutes, which is shorter
-           * than a real build. `test-runner` and `fixer` exist to run exactly
-           * those commands, so the ceiling had to move.
-           *
-           * Two decisions inside that, both from the contract:
-           *
-           * - The no-argument default stays 120s. A command that did not ask
-           *   for longer does not silently get to hang for six hours.
-           * - The new knob is in SECONDS, matching the reference's interface
-           *   (converted to ms here). `timeoutMs` stays for callers that
-           *   already pass it; when both are given, the explicit seconds win
-           *   because that is the one a model reaches for.
-           */
-          timeoutSeconds: Type.Optional(
-            Type.Integer({ minimum: 1, maximum: MAX_BASH_TIMEOUT_SECONDS })
-          ),
-          timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 600_000 })),
-        },
-        objectOptions
-      ),
-      execute: async (id, args, signal) => {
-        const analysis = await this.checkShellPaths(args.command);
-        const cwd = await this.target('bash', id, '.', signal, args.command, analysis);
-        const current = await this.checkShellPaths(args.command);
-        if (JSON.stringify(current.paths) !== JSON.stringify(analysis.paths))
-          throw new RuntimeHostError('path_changed', 'shell paths changed during approval; retry');
-        if (!this.config.shellPath)
-          throw new RuntimeHostError(
-            'shell_unconfigured',
-            'host must configure the shell executable'
-          );
-        const output = await this.ctx.runtimeExec.run({
-          command: this.config.shellPath,
-          args: ['--noprofile', '--norc', '-c', args.command],
-          env: {
-            HOME: this.config.shellEnv?.HOME ?? homedir(),
-            BASH_ENV: undefined,
-            ENV: undefined,
-            SHELLOPTS: undefined,
-            BASHOPTS: undefined,
-          },
-          cwd,
-          timeoutMs: args.timeoutSeconds
-            ? args.timeoutSeconds * 1000
-            : (args.timeoutMs ?? DEFAULT_BASH_TIMEOUT_MS),
-          maxOutputBytes: TOOL_OUTPUT_BYTES,
-          overflow: 'truncate',
-          signal,
-        });
-        return result(
-          `${Buffer.from(output.stdout).toString('utf8')}${output.stderr.length ? `\n[stderr]\n${Buffer.from(output.stderr).toString('utf8')}` : ''}`,
-          // Scalars only. The raw result carries stdout/stderr as Uint8Array,
-          // which JSON.stringify writes to the session and the trace as one
-          // object key per byte (tools-06).
+    // windows-04 — no shell, no tool. `resolveWorkerShell` finds nothing on a
+    // Windows box without Git for Windows, and advertising `bash` there bought
+    // the model an English "host must configure the shell executable" on every
+    // call, which it answers by rephrasing the command and trying again. Same
+    // rule `ask` and `browser_preview` above already follow: a tool nobody can
+    // execute is not offered.
+    if (this.config.shellPath) {
+      this.register({
+        name: 'bash',
+        label: 'Bash',
+        description:
+          'Execute a command with the configured shell in the workspace. Output is bounded. Runtime is bounded too: 120s unless you name a longer one with timeoutSeconds, which a build or a full test run will need.',
+        parameters: Type.Object(
           {
-            exitCode: output.exitCode,
-            signal: output.signal,
-            termination: output.termination,
-            stdoutBytes: output.stdoutBytes,
-            stderrBytes: output.stderrBytes,
-            truncated: output.truncated,
+            command: Type.String({ minLength: 1, maxLength: 32768 }),
+            /**
+             * P5-2-3. The reference's Bash defaults to 60s and allows up to 6h;
+             * ours defaulted to 120s and CAPPED at 10 minutes, which is shorter
+             * than a real build. `test-runner` and `fixer` exist to run exactly
+             * those commands, so the ceiling had to move.
+             *
+             * Two decisions inside that, both from the contract:
+             *
+             * - The no-argument default stays 120s. A command that did not ask
+             *   for longer does not silently get to hang for six hours.
+             * - The new knob is in SECONDS, matching the reference's interface
+             *   (converted to ms here). `timeoutMs` stays for callers that
+             *   already pass it; when both are given, the explicit seconds win
+             *   because that is the one a model reaches for.
+             */
+            timeoutSeconds: Type.Optional(
+              Type.Integer({ minimum: 1, maximum: MAX_BASH_TIMEOUT_SECONDS })
+            ),
+            timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 600_000 })),
           },
-          `\n[exit=${output.exitCode}; ${output.termination}${output.truncated ? '; output truncated' : ''}]`
-        );
-      },
-    });
+          objectOptions
+        ),
+        execute: async (id, args, signal) => {
+          const analysis = await this.checkShellPaths(args.command);
+          const cwd = await this.target('bash', id, '.', signal, args.command, analysis);
+          const current = await this.checkShellPaths(args.command);
+          if (JSON.stringify(current.paths) !== JSON.stringify(analysis.paths))
+            throw new RuntimeHostError(
+              'path_changed',
+              'shell paths changed during approval; retry'
+            );
+          if (!this.config.shellPath)
+            throw new RuntimeHostError(
+              'shell_unconfigured',
+              'host must configure the shell executable'
+            );
+          const output = await this.ctx.runtimeExec.run({
+            command: this.config.shellPath,
+            args: ['--noprofile', '--norc', '-c', args.command],
+            env: {
+              HOME: this.config.shellEnv?.HOME ?? homedir(),
+              BASH_ENV: undefined,
+              ENV: undefined,
+              SHELLOPTS: undefined,
+              BASHOPTS: undefined,
+            },
+            cwd,
+            timeoutMs: args.timeoutSeconds
+              ? args.timeoutSeconds * 1000
+              : (args.timeoutMs ?? DEFAULT_BASH_TIMEOUT_MS),
+            maxOutputBytes: TOOL_OUTPUT_BYTES,
+            overflow: 'truncate',
+            signal,
+          });
+          // windows-09 — a Windows native command (`dir`, `python`, a build tool)
+          // writes the OEM code page, not UTF-8, and `toString('utf8')` turns
+          // that into replacement characters the model then reasons about. Valid
+          // UTF-8 still wins, so Git Bash's own output is unaffected; `truncated`
+          // keeps a character the output budget cut in half from looking like a
+          // different encoding.
+          const decode = (bytes: Uint8Array) =>
+            decodeConsoleOutput(bytes, { truncated: output.truncated });
+          return result(
+            `${decode(output.stdout)}${output.stderr.length ? `\n[stderr]\n${decode(output.stderr)}` : ''}`,
+            // Scalars only. The raw result carries stdout/stderr as Uint8Array,
+            // which JSON.stringify writes to the session and the trace as one
+            // object key per byte (tools-06).
+            {
+              exitCode: output.exitCode,
+              signal: output.signal,
+              termination: output.termination,
+              stdoutBytes: output.stdoutBytes,
+              stderrBytes: output.stderrBytes,
+              truncated: output.truncated,
+              // windows-02 — a tree we could not confirm dead is reported here
+              // and nowhere else: the command's own outcome above is complete,
+              // and reaping it is a separate concern that used to be allowed to
+              // fail the whole call.
+              ...(output.cleanupError ? { cleanupError: output.cleanupError } : {}),
+            },
+            `\n[exit=${output.exitCode}; ${output.termination}${output.truncated ? '; output truncated' : ''}]`
+          );
+        },
+      });
+    }
     this.register({
       name: 'glob',
       label: 'Glob',
@@ -703,6 +721,57 @@ function result(text: string, details: unknown, status = ''): AgentToolResult<un
   // A tool that produced nothing still says so; an empty text block reads as
   // "the tool did nothing" to the model and to the timeline (tools-02).
   return { content: [{ type: 'text', text: `${text || '(no output)'}${status}` }], details };
+}
+/**
+ * Apply one `edit` entry, tolerating a different line-end spelling (windows-05).
+ *
+ * An exact byte match is tried first, so nothing changes for the common case.
+ * What changes is the CRLF one: on Windows `core.autocrlf` is on by default, so
+ * a checked-out file is CRLF, while a model that quotes several lines back
+ * normally sends them with plain newlines. That used to miss, report
+ * `edit_not_unique` — which names the wrong cause — and push the model towards
+ * rewriting the whole file with `write`, turning a three-line change into a
+ * whole-file diff. The retry re-spells `oldText` in the file's own endings and
+ * re-spells `newText` the same way, so the file keeps the endings it had.
+ */
+function applyEdit(content: string, oldText: string, newText: string): string {
+  const toCrlf = (text: string) => text.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
+  const toLf = (text: string) => text.replace(/\r\n/g, '\n');
+  const spellings: { fold: (text: string) => string; retried: boolean }[] = [
+    { fold: (text) => text, retried: false },
+    { fold: toCrlf, retried: true },
+    { fold: toLf, retried: true },
+  ];
+  for (const { fold, retried } of spellings) {
+    const needle = fold(oldText);
+    if (retried && needle === oldText) continue;
+    const start = content.indexOf(needle);
+    if (start < 0) continue;
+    if (content.indexOf(needle, start + 1) >= 0)
+      throw new RuntimeHostError(
+        'edit_not_unique',
+        `oldText must match exactly once; file was not changed${
+          retried ? ` (matched ${describeEndings(needle)} line endings, more than once)` : ''
+        }`
+      );
+    return content.slice(0, start) + fold(newText) + content.slice(start + needle.length);
+  }
+  throw new RuntimeHostError(
+    'edit_not_unique',
+    `oldText must match exactly once; file was not changed${endingMismatch(content, oldText)}`
+  );
+}
+function describeEndings(text: string): 'CRLF' | 'LF' {
+  return text.includes('\r\n') ? 'CRLF' : 'LF';
+}
+/** Says so when the file and `oldText` disagree about line endings, and stays quiet otherwise. */
+function endingMismatch(content: string, oldText: string): string {
+  if (!/\n/.test(oldText)) return '';
+  const file = describeEndings(content);
+  if (file === describeEndings(oldText)) return '';
+  return ` (the file uses ${file} line endings and oldText uses ${describeEndings(
+    oldText
+  )}; it was retried with ${file} endings and still did not match)`;
 }
 /**
  * A pattern with no separator names a file rather than a path, so it has to

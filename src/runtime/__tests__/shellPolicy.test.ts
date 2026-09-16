@@ -6,7 +6,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
 import { standaloneHost } from '../host/config.ts';
 import { resolveWorkerShell } from '../host/shell.ts';
-import { normalizeShellPath, splitShellPath } from '../plugins/permissions/bash-analysis.ts';
+import {
+  normalizeShellPath,
+  shellOperandPath,
+  splitShellPath,
+} from '../plugins/permissions/bash-analysis.ts';
+import { pathPolicy } from '../plugins/permissions/index.ts';
+import { normalizeWindowsPathForm } from '../plugins/permissions/windows-paths.ts';
 import { alwaysDenied } from './fixtures/approval.ts';
 
 let dir: string;
@@ -473,6 +479,73 @@ describe('shell path separator folding', () => {
   it('leaves a POSIX path alone, backslashes in names included', () => {
     expect(normalizeShellPath('/work/conf/*', '/')).toBe('/work/conf/*');
     expect(splitShellPath('/work/od\\d/*', '/')).toEqual(['', 'work', 'od\\d', '*']);
+  });
+});
+
+// T039 / windows-01 — one file, several legal Windows spellings, and gates that
+// compare strings. Git Bash writes `/c/Users/...`, Cygwin `/cygdrive/c/...` and
+// the kernel `\\?\C:\...`; before this, only the native spelling matched the
+// deny for `~/.ssh/*`, so `cat /c/Users/JC/.ssh/id_ed25519` was allowed outright
+// in the auto gear. Platform and home are injected, so no Windows machine is
+// needed and the POSIX behaviour is asserted next to it.
+describe('windows path spellings', () => {
+  const win = { platform: 'win32' as const, home: 'C:\\Users\\JC' };
+  const posixEnvironment = { platform: 'linux' as const, home: '/home/jc' };
+
+  it('folds MSYS, Cygwin and extended-length spellings onto the native one', () => {
+    expect(normalizeWindowsPathForm('/c/Users/JC/.ssh/id_ed25519', 'win32')).toBe(
+      'C:/Users/JC/.ssh/id_ed25519'
+    );
+    expect(normalizeWindowsPathForm('/cygdrive/d/data/app.env', 'win32')).toBe('D:/data/app.env');
+    expect(normalizeWindowsPathForm('\\\\?\\C:\\Users\\JC\\.ssh\\config', 'win32')).toBe(
+      'C:\\Users\\JC\\.ssh\\config'
+    );
+    expect(normalizeWindowsPathForm('\\\\?\\UNC\\srv\\share\\key.pem', 'win32')).toBe(
+      '\\\\srv\\share\\key.pem'
+    );
+    expect(normalizeWindowsPathForm('c:\\work\\app.ts', 'win32')).toBe('C:\\work\\app.ts');
+    expect(normalizeWindowsPathForm('/c', 'win32')).toBe('C:/');
+    // Not a drive letter: a real directory named `conf` keeps its own spelling.
+    expect(normalizeWindowsPathForm('/conf/app.ts', 'win32')).toBe('/conf/app.ts');
+    // Off Windows every one of those is an ordinary path and stays untouched.
+    expect(normalizeWindowsPathForm('/c/Users/JC/.ssh/id_ed25519', 'linux')).toBe(
+      '/c/Users/JC/.ssh/id_ed25519'
+    );
+  });
+
+  it('matches the uncoverable deny whatever spelling the shell used', () => {
+    for (const spelling of [
+      'C:\\Users\\JC\\.ssh\\id_ed25519',
+      '/c/Users/JC/.ssh/id_ed25519',
+      '/c/Users/JC/.ssh/config',
+      '/cygdrive/c/Users/JC/.ssh/known_hosts',
+      '\\\\?\\C:\\Users\\JC\\.ssh\\id_ed25519',
+      '/c/Users/JC/.aws/credentials',
+      'c:/users/jc/.aws/credentials',
+    ]) {
+      expect(pathPolicy(spelling, win), spelling).toBe('deny');
+    }
+    expect(pathPolicy('/c/Users/JC/work/app.ts', win)).toBe('allow');
+    // The basename rules never depended on the spelling, and still do not.
+    expect(pathPolicy('/c/Users/JC/work/.env', win)).toBe('deny');
+  });
+
+  it('leaves the POSIX reading of the same strings alone', () => {
+    // `/c/...` is an ordinary absolute path here and names nobody's key.
+    expect(pathPolicy('/c/Users/JC/.ssh/id_ed25519', posixEnvironment)).toBe('allow');
+    expect(pathPolicy('/home/jc/.ssh/id_ed25519', posixEnvironment)).toBe('deny');
+    expect(pathPolicy('/home/jc/.aws/credentials', posixEnvironment)).toBe('deny');
+    expect(pathPolicy('/home/jc/work/app.ts', posixEnvironment)).toBe('allow');
+  });
+
+  it('registers a Git Bash operand under the spelling every gate compares', () => {
+    expect(shellOperandPath('/c/Users/JC/.ssh/id_ed25519', 'C:\\work', 'win32')).toBe(
+      'C:\\Users\\JC\\.ssh\\id_ed25519'
+    );
+    expect(shellOperandPath('notes.txt', 'C:\\work', 'win32')).toBe('C:\\work\\notes.txt');
+    expect(shellOperandPath('conf/*', 'C:\\work', 'win32')).toBe('C:\\work\\conf\\*');
+    expect(shellOperandPath('/etc/hosts', '/work', 'linux')).toBe('/etc/hosts');
+    expect(shellOperandPath('notes.txt', '/work', 'linux')).toBe('/work/notes.txt');
   });
 });
 

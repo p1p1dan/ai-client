@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
+import { isAbsolute, posix, relative, sep, win32 } from 'node:path';
 import { type Context, Service } from 'cordis';
 import { AICLIENT_DEFAULT_PERMISSION_POLICY } from '../../../agent-host/permissionPolicy.mjs';
 import {
@@ -12,6 +12,7 @@ import {
 import { HOST_IO_SERVICE } from '../../contracts.ts';
 import { RuntimeHostError } from '../../host/errors.ts';
 import { policyAction, type RuntimePermissionPolicy } from './policy.ts';
+import { normalizeWindowsPathForm } from './windows-paths.ts';
 
 export const PERMISSIONS_SERVICE = 'runtimePermissions';
 export const PERMISSION_TIMEOUT_MS = 120_000;
@@ -473,22 +474,48 @@ function denied(source: PermissionDecisionSource, message: string): PermissionDe
   return new PermissionDenial(source, message);
 }
 
-export function pathPolicy(path: string): PermissionAction {
+/**
+ * Where the path rules are evaluated. Injectable so the Windows spelling rules
+ * can be exercised on a Linux box: on a real host both fields already describe
+ * the machine the runtime runs on (windows-01).
+ */
+export interface PathPolicyEnvironment {
+  platform?: NodeJS.Platform;
+  home?: string;
+}
+
+export function pathPolicy(
+  path: string,
+  environment: PathPolicyEnvironment = {}
+): PermissionAction {
+  const platform = environment.platform ?? process.platform;
+  const windows = platform === 'win32';
+  // The rules are written with the target platform's separators and home, so
+  // the expansion has to use that platform's path algebra, not the build box's.
+  const paths = windows ? win32 : posix;
+  const home = environment.home ?? homedir();
   let action: PermissionAction = 'allow';
-  const candidate = path.replaceAll('\\', '/');
+  // windows-01 — fold `/c/...`, `/cygdrive/c/...` and `\\?\C:\...` onto the
+  // native spelling first, or a deny that names a directory is decided on a
+  // string the rule cannot match.
+  const normalized = normalizeWindowsPathForm(path, platform);
+  const candidate = normalized.replaceAll('\\', '/');
   for (const [pattern, value] of Object.entries(
     AICLIENT_DEFAULT_PERMISSION_POLICY.permission.path
   )) {
     if (value !== 'allow' && value !== 'ask' && value !== 'deny') continue;
     const expanded = pattern.startsWith('~/')
-      ? resolve(homedir(), pattern.slice(2)).replaceAll('\\', '/')
+      ? paths.resolve(home, pattern.slice(2)).replaceAll('\\', '/')
       : pattern;
     const expression = expanded
       .split('*')
       .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       .join('.*');
-    const regex = new RegExp(`^${expression}$`, process.platform === 'win32' ? 'i' : '');
-    if (regex.test(candidate) || (!expanded.includes('/') && regex.test(basename(path))))
+    const regex = new RegExp(`^${expression}$`, windows ? 'i' : '');
+    if (
+      regex.test(candidate) ||
+      (!expanded.includes('/') && regex.test(paths.basename(normalized)))
+    )
       action = value;
   }
   return action;

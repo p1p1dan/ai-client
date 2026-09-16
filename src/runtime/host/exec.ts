@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { delimiter, dirname, isAbsolute, join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { delimiter, dirname, isAbsolute, join, win32 } from 'node:path';
 import { type Context, Service } from 'cordis';
 import {
   EXEC_SERVICE,
@@ -140,6 +141,22 @@ export class ExecPlugin extends Service implements RuntimeExecService {
 }
 
 /**
+ * The parts of the platform a carrier talks to.
+ *
+ * Injected for the same reason `createTreeKiller` takes them: the Windows
+ * branches — the runner carrier, `taskkill`, `PATHEXT` resolution — are exactly
+ * the ones that cannot run on the machines this is built and tested on. Empty
+ * in production, where every default is the real thing.
+ */
+export interface CarrierOptions {
+  platform?: NodeJS.Platform;
+  spawnProcess?: typeof spawn;
+  /** POSIX group signal; see `createTreeKiller` for why a test MUST pass one. */
+  killGroup?: (pgid: number, signal: NodeJS.Signals) => void;
+  exists?: (path: string) => boolean;
+}
+
+/**
  * Spawn a child that stays up, with the same carrier rules `runPipe` follows.
  *
  * Windows still goes through the runner helper and the bundled node: D11's
@@ -149,18 +166,21 @@ export class ExecPlugin extends Service implements RuntimeExecService {
  * `inherit`, so the pipes reach the grandchild unchanged — which is why stdin
  * is always a pipe here, unlike in `runPipe` where it is optional.
  */
-function spawnPersistent(
+export function spawnPersistent(
   request: RuntimeSpawnRequest & { env: Record<string, string> },
   cleanupTimeoutMs: number,
-  nodePath?: string
+  nodePath?: string,
+  options: CarrierOptions = {}
 ): Promise<RuntimeChildProcess> {
-  if (process.platform === 'win32' && !nodePath) {
+  const platform = options.platform ?? process.platform;
+  const spawnProcess = options.spawnProcess ?? spawn;
+  if (platform === 'win32' && !nodePath) {
     return Promise.reject(
       new RuntimeHostError('invalid_host_config', 'Windows exec requires a configured Node runner')
     );
   }
   return new Promise((resolve, reject) => {
-    const child = spawn(
+    const child = spawnProcess(
       nodePath ?? request.command,
       nodePath ? [execRunnerPath()] : [...request.args],
       {
@@ -168,11 +188,15 @@ function spawnPersistent(
         env: request.env,
         shell: false,
         windowsHide: true,
-        detached: process.platform !== 'win32',
+        detached: platform !== 'win32',
         stdio: nodePath ? ['pipe', 'pipe', 'pipe', 'ipc'] : ['pipe', 'pipe', 'pipe'],
       }
     );
-    const killer = createTreeKiller(child);
+    const killer = createTreeKiller(child, {
+      platform,
+      spawnProcess,
+      ...(options.killGroup ? { killGroup: options.killGroup } : {}),
+    });
     let settled = false;
     let killing: Promise<void> | undefined;
     /** Set when the grace period ran out: the tree is NOT known to be gone. */
@@ -235,9 +259,16 @@ function spawnPersistent(
           killer.kill(true);
         }
       );
+      // windows-03 — the runner spawns with `shell: false`, so a bare `npx`
+      // (really `npx.cmd`) has to be resolved into something CreateProcess can
+      // start before the request leaves this process.
+      const target = resolveWindowsCommand(request.command, request.args, request.env, {
+        platform,
+        ...(options.exists ? { exists: options.exists } : {}),
+      });
       child.send?.({
-        command: request.command,
-        args: request.args,
+        command: target.command,
+        args: target.args,
         cwd: request.cwd,
         env: request.env,
       });
@@ -403,6 +434,66 @@ export function createTreeKiller(
   };
 }
 
+/**
+ * What a bare command name means on Windows (windows-03).
+ *
+ * `npx`, `uvx` and `npm` are the standard way MCP servers are configured, and
+ * on Windows npm installs them as `npx.cmd` — there is no `npx.exe`. Two facts
+ * make that unstartable on the path we spawn on: `CreateProcess` only appends
+ * `.exe`/`.com` to a bare name and never consults `PATHEXT`, and since the fix
+ * for CVE-2024-27980 node refuses to spawn a `.bat`/`.cmd` without a shell. So
+ * the same config that works on Linux and macOS produced `exec_spawn_failed:
+ * could not start npx` for every stdio MCP server on Windows.
+ *
+ * The name is resolved here, against `PATHEXT` and the PATH the child will
+ * actually get, and a batch file is handed to `cmd.exe /d /s /c` explicitly.
+ * `shell: true` would do the lookup too, but it would also re-parse the
+ * arguments under cmd's quoting rules, which is not a thing to do to values
+ * that came from a config file.
+ *
+ * Returns the input unchanged off Windows and when nothing matches, so a
+ * genuinely missing command still fails with its own diagnostic.
+ */
+export function resolveWindowsCommand(
+  command: string,
+  args: readonly string[],
+  env: Readonly<Record<string, string | undefined>> | undefined,
+  options: { platform?: NodeJS.Platform; exists?: (path: string) => boolean } = {}
+): { command: string; args: string[] } {
+  const unchanged = { command, args: [...args] };
+  if ((options.platform ?? process.platform) !== 'win32') return unchanged;
+  const exists = options.exists ?? existsSync;
+  const value = (name: string) =>
+    Object.entries(env ?? {}).find(([key]) => key.toLowerCase() === name)?.[1];
+  // Windows path algebra explicitly, never the build machine's: `PATH` is
+  // separated by `;` there and by `:` here, so the host's own separator would
+  // shred a Windows PATH into fragments that resolve nothing.
+  const extensions = (value('pathext') ?? '.COM;.EXE;.BAT;.CMD')
+    .split(';')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const directories = win32.isAbsolute(command)
+    ? ['']
+    : /[/\\]/.test(command)
+      ? []
+      : (value('path') ?? '').split(win32.delimiter).filter(Boolean);
+  const candidates: string[] = [];
+  for (const directory of directories) {
+    const base = directory ? win32.join(directory, command) : command;
+    // An explicit extension is taken as written; otherwise PATHEXT decides, in
+    // its own order, exactly like the command processor does.
+    if (win32.extname(base)) candidates.push(base);
+    else for (const extension of extensions) candidates.push(`${base}${extension}`);
+  }
+  const found = candidates.find(exists);
+  if (!found) return unchanged;
+  if (!/\.(?:cmd|bat)$/i.test(found)) return { command: found, args: [...args] };
+  return {
+    command: win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'cmd.exe'),
+    args: ['/d', '/s', '/c', found, ...args],
+  };
+}
+
 // Resolved on first use and kept, like io.ts does for its own helper: this sits
 // on the synchronous path before every spawn, and the answer cannot change
 // within a process.
@@ -449,23 +540,26 @@ function emptyResult(): RuntimeExecResult {
   };
 }
 
-function runPipe(
+export function runPipe(
   request: RuntimeExecRequest,
   cleanupTimeoutMs: number,
-  nodePath?: string
+  nodePath?: string,
+  options: CarrierOptions = {}
 ): Promise<RuntimeExecResult> {
   const result = emptyResult();
+  const platform = options.platform ?? process.platform;
+  const spawnProcess = options.spawnProcess ?? spawn;
   if (request.signal?.aborted) {
     result.termination = request.signal.reason === 'disposed' ? 'disposed' : 'aborted';
     return Promise.resolve(result);
   }
-  if (process.platform === 'win32' && !nodePath) {
+  if (platform === 'win32' && !nodePath) {
     return Promise.reject(
       new RuntimeHostError('invalid_host_config', 'Windows exec requires a configured Node runner')
     );
   }
   return new Promise((resolve, reject) => {
-    const child = spawn(
+    const child = spawnProcess(
       nodePath ?? request.command,
       nodePath ? [execRunnerPath()] : [...request.args],
       {
@@ -473,7 +567,7 @@ function runPipe(
         env: request.env,
         shell: false,
         windowsHide: true,
-        detached: process.platform !== 'win32',
+        detached: platform !== 'win32',
         stdio: nodePath
           ? [request.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe', 'ipc']
           : [request.stdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
@@ -487,9 +581,19 @@ function runPipe(
     let streamError: Error | undefined;
     let reportedExit = false;
     let childClosed = false;
-    let cleanupError: Error | undefined;
-    let windowsKillStarted = false;
-    const cleaners = new Set<ReturnType<typeof spawn>>();
+    const killer = createTreeKiller(child, {
+      platform,
+      spawnProcess,
+      ...(options.killGroup ? { killGroup: options.killGroup } : {}),
+    });
+    /**
+     * Whether the command's own outcome is already known.
+     *
+     * On the runner carrier that is the IPC `exit` message, NOT the leader's
+     * `close`: the runner outlives the command and, on Windows, only dies when
+     * `taskkill` reaches it.
+     */
+    const exitKnown = () => (nodePath ? reportedExit : childClosed);
     let escalation: ReturnType<typeof setTimeout> | undefined;
     let cleanupDeadline: ReturnType<typeof setTimeout> | undefined;
     const deadline = setTimeout(() => stop('timeout'), request.timeoutMs);
@@ -500,73 +604,61 @@ function runPipe(
       result.stderr = Buffer.concat(chunks.stderr);
       return result;
     }
+    /**
+     * Settle the run.
+     *
+     * windows-02 — cleanup is reported, it does not decide. On Windows every
+     * command ends by spawning an external `taskkill.exe`, and while that was
+     * the only thing allowed to resolve the promise, a command that had already
+     * finished and whose output was already collected still failed whenever the
+     * enterprise security stack on the machine made `taskkill` slow or blocked
+     * it. Once the command's own exit is known, the result is the result; a
+     * tree we could not confirm dead is recorded in `cleanupError` instead.
+     */
     function finish(error?: Error): void {
       if (settled) return;
       settled = true;
       clearTimeout(deadline);
       clearTimeout(escalation);
       clearTimeout(cleanupDeadline);
-      for (const cleaner of cleaners) cleaner.kill();
-      cleaners.clear();
+      const cleanupProblem = error ?? killer.error;
+      killer.dispose();
       request.signal?.removeEventListener('abort', abort);
-      if (error) reject(Object.assign(error, { partialResult: snapshot() }));
+      if (cleanupProblem && !exitKnown())
+        reject(Object.assign(cleanupProblem, { partialResult: snapshot() }));
+      else if (error) reject(Object.assign(error, { partialResult: snapshot() }));
       else if (streamError) reject(Object.assign(streamError, { partialResult: snapshot() }));
-      else resolve(snapshot());
-    }
-    function killTree(force: boolean): void {
-      if (!child.pid) return;
-      if (process.platform === 'win32') {
-        if (windowsKillStarted) return;
-        windowsKillStarted = true;
-        const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
-        const killer = spawn(taskkill, ['/PID', String(child.pid), '/T', '/F'], {
-          windowsHide: true,
-          stdio: 'ignore',
-        });
-        cleaners.add(killer);
-        killer.on('error', (error) => {
-          cleanupError = new RuntimeHostError('exec_cleanup_failed', 'taskkill could not start', {
-            cause: error,
-          });
-          child.kill();
-        });
-        killer.on('close', (code) => {
-          cleaners.delete(killer);
-          if (code !== 0)
-            cleanupError ??= new RuntimeHostError('exec_cleanup_failed', `taskkill exited ${code}`);
-          if (childClosed) finish(cleanupError);
-        });
-      } else {
-        try {
-          process.kill(-child.pid, force ? 'SIGKILL' : 'SIGTERM');
-        } catch (error) {
-          if (!(error instanceof Error && 'code' in error && error.code === 'ESRCH')) {
-            finish(
-              new RuntimeHostError('exec_cleanup_failed', 'could not terminate command group', {
-                cause: error,
-              })
-            );
-          }
-        }
+      else {
+        if (killer.error) result.cleanupError = killer.error.message;
+        resolve(snapshot());
       }
     }
     function stop(reason: RuntimeExecResult['termination']): void {
       if (settled || stopping) return;
       stopping = true;
       result.termination = reason;
-      killTree(false);
-      escalation = setTimeout(() => killTree(true), Math.max(1, Math.floor(cleanupTimeoutMs / 2)));
+      killer.kill(false);
+      escalation = setTimeout(
+        () => killer.kill(true),
+        Math.max(1, Math.floor(cleanupTimeoutMs / 2))
+      );
       cleanupDeadline = setTimeout(() => {
-        killTree(true);
+        killer.kill(true);
         child.stdout?.destroy();
         child.stderr?.destroy();
         child.stdin?.destroy();
-        finish(
-          new RuntimeHostError(
-            'exec_cleanup_failed',
-            'command streams did not close before cleanup deadline'
-          )
-        );
+        if (exitKnown()) {
+          // The command is accounted for; what ran out of time is the reaping.
+          result.cleanupError ??= `command tree was not confirmed terminated within ${cleanupTimeoutMs} ms`;
+          finish();
+        } else {
+          finish(
+            new RuntimeHostError(
+              'exec_cleanup_failed',
+              'command streams did not close before cleanup deadline'
+            )
+          );
+        }
       }, cleanupTimeoutMs);
     }
     function consume(stream: 'stdout' | 'stderr', data: Buffer): void {
@@ -614,8 +706,11 @@ function runPipe(
         result.signal = signal;
       }
       // Kill remaining members even when the leader exited normally.
-      if (process.platform !== 'win32') killTree(true);
-      if (!cleaners.size) finish(cleanupError);
+      if (platform !== 'win32') killer.kill(true);
+      // Not gated on the reapers any more: on Windows the leader's `close` IS
+      // `taskkill` having done its job, and waiting for the reaper's own exit
+      // code is what made a finished command depend on it (windows-02).
+      finish();
     });
     child.stdin?.on('error', (error: NodeJS.ErrnoException) => {
       if (error.code !== 'EPIPE') streamFailed(error);
@@ -642,8 +737,13 @@ function runPipe(
           stop('exit');
         }
       );
+      // See `resolveWindowsCommand`: same reason as the long-lived carrier.
+      const target = resolveWindowsCommand(request.command, request.args, request.env, {
+        platform,
+        ...(options.exists ? { exists: options.exists } : {}),
+      });
       child.send?.(
-        { command: request.command, args: request.args, cwd: request.cwd, env: request.env },
+        { command: target.command, args: target.args, cwd: request.cwd, env: request.env },
         (error: Error | null) => {
           if (error && !stopping && !settled) streamFailed(error);
         }
