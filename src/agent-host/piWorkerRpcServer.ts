@@ -272,6 +272,9 @@ function sameBootstrap(a: WorkerBootstrapPayload, b: WorkerBootstrapPayload): bo
     // session, not the same one — otherwise the second call would be answered
     // by a runtime already built with the first call's trust.
     a.unbound === b.unbound &&
+    // concurrency-02: a re-bootstrap that forces the writer lock is likewise a
+    // different request — the first runtime was built without the takeover.
+    a.forceTakeover === b.forceTakeover &&
     a.tier === b.tier &&
     a.permissions?.mode === b.permissions?.mode &&
     a.permissions?.gear === b.permissions?.gear

@@ -549,7 +549,11 @@ export async function prepareSessionConfig(
   );
   if (Buffer.byteLength(converted) > (config.maxBytes ?? SESSION_MAX_BYTES))
     throw new RuntimeHostError('session_size_limit', 'converted session exceeds size budget');
-  const lock = await acquireWriterLock(io, file);
+  // concurrency-02: the converted copy has a writer lock of its own, and a
+  // previous crash can strand it exactly the way it strands the v4 file's. A
+  // forced open that stopped at this branch would refuse a legacy session with
+  // the one remedy the UI offers already spent.
+  const lock = await acquireWriterLock(io, file, { force: config.forceTakeover === true });
   try {
     let exists = true;
     try {

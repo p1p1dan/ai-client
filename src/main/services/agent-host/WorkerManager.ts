@@ -133,6 +133,17 @@ interface ManagedSlot {
    */
   readonly unbound: boolean;
   /**
+   * concurrency-02 invariant — there is deliberately NO `forceTakeover` field
+   * here, and there must not be one.
+   *
+   * `unbound` is held on the entry because re-spawning without it would make a
+   * scratch session silently more trusted. A takeover is the opposite: it is a
+   * one-time authorisation to displace another writer, and a crash restart
+   * (`restartEntry`) or a fork that inherited it would strip the next real
+   * holder of its lock with nobody having asked. It rides the single
+   * `spawnForEntry` call that the user's click produced, and nowhere else.
+   */
+  /**
    * U12 fix — the permission tier this session's worker must run on.
    *
    * Mutable, and deliberately held on the entry rather than only inside the
@@ -988,6 +999,16 @@ export class WorkerManager {
     /** U12 fix — tier the worker starts on; omit for the default. */
     tier?: SessionPermissionTier;
     permissions?: RuntimePermissionSettings;
+    /**
+     * concurrency-02 — open the session even though its writer lock still
+     * looks held.
+     *
+     * One-shot by construction: it reaches the spawn below and is never stored
+     * on the entry, so a crash restart or a fork rebuilds the worker on the
+     * normal, refusing open. A takeover is a decision the user made about one
+     * lock at one moment, not a posture the session keeps.
+     */
+    forceTakeover?: boolean;
   }): Promise<string> {
     const sessionFile = normalizeWorkerPath(input.sessionFile, 'Pi session file');
     const cwd = normalizeWorkerPath(input.workspacePath, 'Workspace path');
@@ -995,7 +1016,17 @@ export class WorkerManager {
     // dropped with the field itself — two resumes that differ only by a leaf
     // the worker never reads are the same resume, and treating them as a
     // conflict rejected a legitimate second call.
-    const fingerprint = JSON.stringify([sessionFile, cwd, input.model ?? '', input.effort ?? '']);
+    // concurrency-02: part of the fingerprint, so a plain resume and a forced
+    // one are never answered by each other's in-flight promise. Reporting an
+    // identity conflict is the right failure here — silently reusing the plain
+    // flight would leave the user pressing "Force takeover" to no effect.
+    const fingerprint = JSON.stringify([
+      sessionFile,
+      cwd,
+      input.model ?? '',
+      input.effort ?? '',
+      input.forceTakeover === true,
+    ]);
     const existingFlight = this.resumeFlights.get(input.sessionId);
     if (existingFlight) {
       if (existingFlight.fingerprint !== fingerprint) {
@@ -1024,6 +1055,10 @@ export class WorkerManager {
         await this.retireAndDispose(entry, 'slot-dispose').catch(() => undefined);
         entry = undefined;
       }
+      // concurrency-02: `input.forceTakeover` is deliberately unused on this
+      // warm path. A ready entry means THIS process already holds the file's
+      // writer lock, so there is nobody to take it from — replaying the
+      // history is the whole of what a resume owes the caller here.
       if (entry && entry.state !== 'disposing') {
         if (!entry.sessionFile || sessionWorkerKey(sessionFile) !== entry.key) {
           throw new WorkerManagerError(
@@ -1133,10 +1168,18 @@ export class WorkerManager {
       this.state = 'ready';
 
       try {
-        const created = await this.spawnForEntry(entry, {
-          ...(input.model ? { model: input.model } : {}),
-          ...(input.effort ? { effort: input.effort } : {}),
-        });
+        const created = await this.spawnForEntry(
+          entry,
+          {
+            ...(input.model ? { model: input.model } : {}),
+            ...(input.effort ? { effort: input.effort } : {}),
+          },
+          // Third argument, not folded into `selection`: a takeover is a
+          // property of THIS spawn, where selection is what the session runs
+          // on. `spawnForEntry` is also reached from the crash restart and the
+          // fork, neither of which may ever inherit it.
+          { ...(input.forceTakeover ? { forceTakeover: true } : {}) }
+        );
         const reopenedFile = created.bootstrap.sessionFile
           ? normalizeWorkerPath(created.bootstrap.sessionFile, 'Pi session file')
           : null;
@@ -2184,8 +2227,12 @@ export class WorkerManager {
      * Used by the re-materialization path, which must not clear
      * `entry.sessionFile` up front: a failed spawn has to leave the entry
      * exactly as it found it so the next restart attempt sees the same state.
+     *
+     * `forceTakeover` — concurrency-02 — is passed per call and never read off
+     * `entry`: the restart and fork paths below call this with no options, so
+     * neither can inherit a takeover the user authorised for one open.
      */
-    options: { fresh?: boolean } = {}
+    options: { fresh?: boolean; forceTakeover?: boolean } = {}
   ): Promise<CreatedPiWorkerSlot> {
     let expectedSlot: WorkerSlot | null = null;
     const modelCatalog = this.readModelCatalog();
@@ -2196,6 +2243,7 @@ export class WorkerManager {
       generation: entry.generation,
       ...(entry.sessionFile && !options.fresh ? { sessionFile: entry.sessionFile } : {}),
       ...(entry.unbound ? { unbound: true } : {}),
+      ...(options.forceTakeover ? { forceTakeover: true } : {}),
       ...(entry.tier ? { tier: entry.tier } : {}),
       ...(entry.permissions ? { permissions: entry.permissions } : {}),
       // P5-2-5: read at spawn time, not cached on the entry, so a user who

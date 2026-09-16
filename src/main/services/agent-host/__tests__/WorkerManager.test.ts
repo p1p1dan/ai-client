@@ -1785,6 +1785,74 @@ describe('WorkerManager unwritten Pi session files', () => {
     });
   });
 
+  /**
+   * concurrency-02 — the forced writer-lock takeover, and the one rule that
+   * makes it safe: it belongs to a single spawn, never to the session.
+   */
+  describe('forced writer-lock takeover', () => {
+    it('[WM-force-01] carries the takeover into the spawn the user asked for', async () => {
+      const h = createHarness();
+      await h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: '/sessions/s1.jsonl',
+        workspacePath: '/repo',
+        forceTakeover: true,
+      });
+      expect(h.createSlot.mock.calls[0][0]).toMatchObject({ forceTakeover: true });
+    });
+
+    it('[WM-force-02] never lets a respawn inherit it', async () => {
+      // The reverse assertion, and the reason `ManagedSlot` has no field for
+      // this. A takeover is one authorisation about one lock at one moment: a
+      // worker that crashes half an hour later and comes back forcing would
+      // strip whoever legitimately holds the file by then, with nobody having
+      // asked for it.
+      const h = createHarness();
+      await h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: '/sessions/s1.jsonl',
+        workspacePath: '/repo',
+        forceTakeover: true,
+      });
+      expect(h.createSlot.mock.calls[0][0]).toMatchObject({ forceTakeover: true });
+
+      h.records[0].crash('killed');
+      await vi.waitFor(() => expect(h.createSlot).toHaveBeenCalledTimes(2));
+      expect(h.createSlot.mock.calls[1][0]).not.toHaveProperty('forceTakeover');
+    });
+
+    it('[WM-force-03] omits it for an ordinary resume', async () => {
+      const h = createHarness();
+      await h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: '/sessions/s1.jsonl',
+        workspacePath: '/repo',
+      });
+      expect(h.createSlot.mock.calls[0][0]).not.toHaveProperty('forceTakeover');
+    });
+
+    it('[WM-force-04] refuses to answer a forced resume with a plain one already in flight', async () => {
+      // The takeover is part of the de-duplication fingerprint. Without it the
+      // second call would be handed the first call's promise, and the user
+      // would press "Force takeover" to watch the same refusal come back.
+      const h = createHarness();
+      const plain = h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: '/sessions/s1.jsonl',
+        workspacePath: '/repo',
+      });
+      await expect(
+        h.manager.resumeSession({
+          sessionId: 's1',
+          sessionFile: '/sessions/s1.jsonl',
+          workspacePath: '/repo',
+          forceTakeover: true,
+        })
+      ).rejects.toThrow('already has a different resume in flight');
+      await plain;
+    });
+  });
+
   it('still reopens the exact file when a written session goes missing', async () => {
     const present = new Set([norm('/sessions/s1.jsonl')]);
     const h = createHarness({ sessionFileExists: async (file) => present.has(file) });

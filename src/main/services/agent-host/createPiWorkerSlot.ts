@@ -96,6 +96,11 @@ export async function createPiWorkerSlot(
         // U05-c: only ever sent as `true`. Omitting it for a normal session
         // keeps `sameBootstrap`'s undefined === undefined comparison intact.
         ...(options.unbound ? { unbound: true } : {}),
+        // concurrency-02: same "only ever `true`" rule as `unbound`. An
+        // untouched spawn's payload is byte-identical to what it was before
+        // forced takeover existed, so `sameBootstrap` keeps comparing
+        // undefined === undefined.
+        ...(options.forceTakeover ? { forceTakeover: true } : {}),
         // U12 fix: the tier the worker must come up on. Omitted when the
         // session is on the default, so an untouched session's bootstrap
         // payload is byte-identical to what it was before this fix.

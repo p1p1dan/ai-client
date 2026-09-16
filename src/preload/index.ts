@@ -1019,6 +1019,11 @@ const electronAPI = {
       /** U12 fix — permission tier the worker must come up on. */
       tier?: SessionPermissionTier;
       permissions?: RuntimePermissionSettings;
+      /**
+       * concurrency-02 — reopen the session even though its writer lock still
+       * looks held. Main validates it and only honours a literal `true`.
+       */
+      forceTakeover?: boolean;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESUME_SESSION, payload),
     /**

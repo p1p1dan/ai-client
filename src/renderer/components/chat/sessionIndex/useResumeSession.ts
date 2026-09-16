@@ -19,7 +19,15 @@ import { shouldApplyResumeResult, shouldResumeSession } from './resumeIntent';
 export interface UseResumeSessionResult {
   resume: (
     sessionId: string,
-    options?: { persistedRuntimeIdentity?: string; model?: string }
+    options?: {
+      persistedRuntimeIdentity?: string;
+      model?: string;
+      /**
+       * concurrency-02 — reopen a session whose writer lock still looks held.
+       * Passed only by the `session_locked` notice's "Force takeover" button.
+       */
+      forceTakeover?: boolean;
+    }
   ) => Promise<boolean>;
 }
 
@@ -27,7 +35,11 @@ export function useResumeSession(): UseResumeSessionResult {
   const resume = useCallback(
     async (
       sessionId: string,
-      options: { persistedRuntimeIdentity?: string; model?: string } = {}
+      options: {
+        persistedRuntimeIdentity?: string;
+        model?: string;
+        forceTakeover?: boolean;
+      } = {}
     ): Promise<boolean> => {
       const state = useChatSessionsStore.getState();
       const session = state.sessions.find((item) => item.id === sessionId);
@@ -39,6 +51,7 @@ export function useResumeSession(): UseResumeSessionResult {
       const intent = shouldResumeSession(session, workspace, {
         persistedRuntimeIdentity: options.persistedRuntimeIdentity,
         model: options.model,
+        ...(options.forceTakeover ? { forceTakeover: true } : {}),
         ...(storedPermissions ? { permissions: storedPermissions } : {}),
       });
       if (!intent.shouldResume || !intent.args) return false;

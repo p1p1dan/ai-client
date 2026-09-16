@@ -272,7 +272,17 @@ export class NativeWorkerRuntime {
     await this.openGraph(
       agentDir,
       this.options.sessionFile
-        ? { file: this.options.sessionFile, cwd: this.cwd, mode: 'resume' }
+        ? {
+            file: this.options.sessionFile,
+            cwd: this.cwd,
+            mode: 'resume',
+            // concurrency-02: only a resume can take a lock from anyone, and
+            // only when Main says the user asked for it. Never spread as
+            // `forceTakeover: this.options.forceTakeover` — an explicit
+            // `false` would be indistinguishable from the default here, and
+            // the create branch below must not carry the key at all.
+            ...(this.options.forceTakeover === true ? { forceTakeover: true } : {}),
+          }
         : { file: this.sessionFilePath(agentDir), cwd: this.cwd, mode: 'create' }
     );
 
@@ -648,6 +658,10 @@ export class NativeWorkerRuntime {
     await handle.dispose();
 
     try {
+      // concurrency-02: deliberately NOT forced, even when this worker was
+      // bootstrapped with `forceTakeover`. The lock was released a few lines
+      // above, so whoever holds it now took it legitimately in that window —
+      // forcing here would hand two live writers the same file.
       await this.openGraph(agentDir, { file: current, cwd: this.cwd, mode: 'resume' });
     } catch (error) {
       // The old graph is gone and the new one did not come up, so this slot

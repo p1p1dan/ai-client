@@ -2635,6 +2635,8 @@ export const zhTranslations: Record<string, string> = {
   // 渲染那一层统一翻一次。这样切到英文界面时它们才会跟着变。
   '(no preview)': '（无预览）',
   'Add the model in Pi settings': '去 Pi 设置补上模型',
+  "Another process holds this chat's write lock, so it was not opened. Nothing on disk was changed.":
+    '另一个进程正持有这个会话的写入锁，所以没有打开它。磁盘上的内容没有任何改动。',
   'Asks before each write, edit and command.': '写入、编辑和命令逐条询问。',
   'Auto-accept edits': '自动接受编辑',
   'Carries out approved work.': '执行已批准的工作。',
@@ -2653,9 +2655,15 @@ export const zhTranslations: Record<string, string> = {
   'Failed to read history': '读取历史失败',
   'Failed to render the page': '页面渲染失败',
   'Fit width': '适应宽度',
+  'Force takeover': '强制接管',
   'Full auto': '全自动',
   'Get started': '开始使用',
   'Grid view': '网格视图',
+  'Held by process {{pid}} on {{host}}, for {{duration}}.':
+    '已被进程 {{pid}}（主机 {{host}}）持有 {{duration}}。',
+  'Held by process {{pid}} on {{host}}.': '已被进程 {{pid}}（主机 {{host}}）持有。',
+  'Held by process {{pid}}, for {{duration}}.': '已被进程 {{pid}} 持有 {{duration}}。',
+  'Held by process {{pid}}.': '已被进程 {{pid}} 持有。',
   'History is encrypted — unreadable here': '历史已加密，此处读不到',
   'History not found': '未找到历史',
   'History unavailable for this agent': '该 agent 的历史暂不可读',
@@ -2693,6 +2701,8 @@ export const zhTranslations: Record<string, string> = {
   'Resending...': '重发中…',
   'Restore the directory at its original path and retry, or archive this chat and start a new one.':
     '请把该目录恢复到原路径后重试，或归档该会话并新建一个继续工作。',
+  'Retrying works once the other writer lets go; until then this chat cannot be opened here.':
+    '等对方释放后再重试即可；在那之前，这个会话无法在这里打开。',
   'Runs the available tools automatically; explicit deny rules still apply.':
     '自动执行可用工具；显式拒绝规则仍生效。',
   'Runs the tools available in the current mode automatically, including operations outside the workspace; explicit deny rules still apply.':
@@ -2711,9 +2721,14 @@ export const zhTranslations: Record<string, string> = {
   // ah-lib-03: runtime's session_size_limit needs its own card: the file is
   // neither missing nor corrupt, this build just refuses to load it whole.
   'Session history is too large to open': '会话历史过大，本版本无法打开',
+  // concurrency-02: another process holds the writer lock. The pid and the age
+  // are what let a user judge whether that writer can still be real.
+  'Session is locked by another writer': '会话被另一个写入者锁定',
   'Sign up': '注册',
   'Sign-in required': '需要重新登录',
   'Signed in': '登录完成',
+  'Take the lock only if that writer is really gone. If it is still running, two processes will write to this chat at once and messages can be lost.':
+    '只有确认那个写入者确实已经退出，才去接管。它若仍在运行，就会有两个进程同时写入这个会话，消息可能丢失。',
   'That code has already been used. Send a new one.': '验证码已被使用，请重新发送。',
   'That code has expired. Send a new one.': '验证码已过期，请重新发送。',
   'That did not work. Please try again.': '操作失败，请重试。',
@@ -2725,6 +2740,8 @@ export const zhTranslations: Record<string, string> = {
   'The bundled Pi worker runtime could not be found.': '没有找到随包的 Pi worker 运行时。',
   'The chat is mid-turn; you can retry reading history once this turn ends.':
     '会话正在进行中，本轮结束后可重试读取历史。',
+  'The chat is mid-turn; you can take the session over once this turn ends.':
+    '会话正在进行中，本轮结束后可强制接管。',
   'The chat is not interrupted; you can keep sending messages.': '会话未中断，可以继续发送消息。',
   'The email could not be sent. Please try again later.': '邮件发送失败，请稍后再试。',
   'The history file is encrypted and this process cannot read it as plain text. That does not mean the chat has no history — the record is still on disk, it just cannot be shown here.':
@@ -2738,6 +2755,8 @@ export const zhTranslations: Record<string, string> = {
     '重试未生效，历史仍未读到，可稍后再试一次。',
   'The service hit an internal error. Please try again later.': '服务内部错误，请稍后再试。',
   'The service is temporarily unavailable. Please try again later.': '服务暂时不可用，请稍后再试。',
+  'The takeover did not go through; the session is still held by another writer.':
+    '接管未生效，会话仍被另一个写入者持有。',
   'The working directory this chat is bound to is no longer on disk, so its worker cannot start. The app will not recreate a directory it did not create.':
     '该会话绑定的工作目录已不在磁盘上，因此无法启动它的 worker。应用不会替你重建自己创建的目录。',
   'This chat’s record is larger than this build will load in one piece, so it was not opened. The file itself is intact and untouched on disk.':
@@ -2771,6 +2790,9 @@ export const zhTranslations: Record<string, string> = {
     '随时可以在设置里切换回使用本机自己的配置。',
   'Your sign-in has expired. Sign in again and retry.': '登录状态已失效，请重新登录后再试。',
   'Your sign-in has expired. Verify your email again.': '登录已失效，请重新验证邮箱。',
+  // concurrency-02: the one lock age that is a phrase rather than a number.
+  // `2h5m` needs no entry — it passes through the dictionary unchanged.
+  'less than a minute': '不到 1 分钟',
   '{{count}} digits, valid for 15 minutes.': '{{count}} 位数字，15 分钟内有效。',
   '{{count}} sessions': '{{count}} 个会话',
   '{{count}} snapshots imported': '已导入 {{count}} 个快照',

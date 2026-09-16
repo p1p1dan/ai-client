@@ -63,8 +63,10 @@ describe('MessageTimeline wires the model-missing recovery (H/21 P0)', () => {
   it('[MMW-05] the history notice renders a recovery button independently of Retry', () => {
     // `model_missing` is not retryable, so gating the button on
     // `retryControl.visible` would render nothing at all — the exact shape of
-    // the bug this fix exists to close.
-    expect(SOURCE).toContain('retryControl.visible || view.recovery');
+    // the bug this fix exists to close. concurrency-02 added a third disjunct
+    // (the forced takeover) and the rule is unchanged: every action is its own
+    // term, so none of them can be hidden by another one's absence.
+    expect(SOURCE).toContain('retryControl.visible || takeoverControl.visible || view.recovery');
     expect(SOURCE).toContain('view.recovery.label');
   });
 

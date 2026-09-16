@@ -299,6 +299,53 @@ describe('NativeWorkerRuntime bootstrap', () => {
     });
   });
 
+  /**
+   * concurrency-02 — the worker half of the forced takeover.
+   *
+   * The session store has honoured `forceTakeover` since the lock landed; what
+   * was missing was anyone to set it. These two pin the translation from the
+   * bootstrap payload to the store's `SessionConfig`, in both directions.
+   */
+  it('[NWR-force-01] carries a forced takeover into the resume it opens', async () => {
+    const fake = fakeRuntime({ history: [] });
+    const { runtime } = build(fake, {
+      sessionFile: '/elsewhere/old.jsonl',
+      forceTakeover: true,
+    });
+    live = runtime;
+    await runtime.bootstrap();
+    expect(fake.options?.session).toEqual({
+      file: '/elsewhere/old.jsonl',
+      cwd: '/repo',
+      mode: 'resume',
+      forceTakeover: true,
+    });
+  });
+
+  it('[NWR-force-02] forces nothing unless asked, and never on a create', async () => {
+    const resumed = fakeRuntime({ history: [] });
+    const { runtime: plain } = build(resumed, { sessionFile: '/elsewhere/old.jsonl' });
+    live = plain;
+    await plain.bootstrap();
+    // Absent, not `false`: an ordinary resume's config has to stay exactly what
+    // it was before takeover existed, so the refusing open is the default in
+    // the only place that can act on it.
+    expect(resumed.options?.session).not.toHaveProperty('forceTakeover');
+    await plain.dispose();
+
+    const created = fakeRuntime();
+    const { runtime: fresh } = build(created, { forceTakeover: true });
+    live = fresh;
+    await fresh.bootstrap();
+    // A create names a file nobody can be holding. Passing the flag anyway must
+    // not leave a forced open sitting in the config for the store to honour.
+    expect(created.options?.session).toEqual({
+      file: SESSION_FILE,
+      cwd: '/repo',
+      mode: 'create',
+    });
+  });
+
   it('names the legacy source when it opened a converted copy instead', async () => {
     // A pre-v4 file is converted on resume, so the file that ends up open is
     // not the one Main asked for. Main accepts that only against a declared

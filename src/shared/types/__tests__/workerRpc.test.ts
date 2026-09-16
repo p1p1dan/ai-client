@@ -95,6 +95,22 @@ describe('worker RPC boundary guards', () => {
       ).toBe(true);
     }
 
+    // concurrency-02: a boolean or nothing at all. This is the first of the
+    // three gates that keep a forced writer-lock takeover from happening by
+    // accident, so a truthy non-boolean must not get through — Main's
+    // `spawnForceTakeover` would drop it too, but the guard is what protects a
+    // worker reached by any other route.
+    for (const forceTakeover of [true, false, undefined]) {
+      expect(
+        isWorkerBootstrapPayload({ logicalSessionId: 'logical-1', cwd: '/repo', forceTakeover })
+      ).toBe(true);
+    }
+    for (const forceTakeover of ['yes', 1, 'true', {}]) {
+      expect(
+        isWorkerBootstrapPayload({ logicalSessionId: 'logical-1', cwd: '/repo', forceTakeover })
+      ).toBe(false);
+    }
+
     expect(
       isWorkerBootstrapResult({
         bootstrapped: true,

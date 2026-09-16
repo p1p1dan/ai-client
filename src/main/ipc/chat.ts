@@ -197,6 +197,19 @@ function spawnTier(tier: unknown): { tier?: SessionPermissionTier } {
 }
 
 /**
+ * concurrency-02 — validate the renderer's "open it anyway" request, or drop it.
+ *
+ * Literal `true` and nothing else. Every other value — `'yes'`, `1`, `false`,
+ * an object — yields `{}`, so the resume proceeds on the default open that
+ * REFUSES a held session. Dropping is the safe direction here in a way it is
+ * not for a tier: the worst a dropped takeover costs is a refusal the user can
+ * repeat, where an accidental one displaces a writer that may be alive.
+ */
+function spawnForceTakeover(value: unknown): { forceTakeover?: true } {
+  return value === true ? { forceTakeover: true } : {};
+}
+
+/**
  * Carry a `WorkerManagerError`'s `code` across the IPC boundary.
  *
  * Electron serializes only `error.message` for an `invoke` rejection, so the
@@ -379,6 +392,12 @@ export function registerChatHandlers(): void {
         /** U12 fix — tier the worker must start on; validated below. */
         tier?: SessionPermissionTier;
         permissions?: RuntimePermissionSettings;
+        /**
+         * concurrency-02 — the user answered the "held by another writer"
+         * refusal with "open it anyway". Validated below; only literal `true`
+         * survives.
+         */
+        forceTakeover?: boolean;
       }
     ): Promise<{ requestId: string }> => {
       const row = await sessionIndexService.get(payload.sessionId);
@@ -438,6 +457,8 @@ export function registerChatHandlers(): void {
           payload.sessionId,
           row.runtimeIdentity
         );
+        // concurrency-02: no `forceTakeover` here. This branch creates a brand
+        // new session file, which no other writer can be holding.
         const repaired = await workerManager.createSession({
           sessionId: payload.sessionId,
           workspacePath,
@@ -458,6 +479,7 @@ export function registerChatHandlers(): void {
         ...(payload.effort ? { effort: payload.effort } : {}),
         ...spawnTier(payload.tier),
         ...spawnPermissions(payload.permissions),
+        ...spawnForceTakeover(payload.forceTakeover),
         ownerWebContentsId,
         ...(unbound ? { unbound: true } : {}),
       });

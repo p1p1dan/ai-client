@@ -15,6 +15,7 @@ import {
   FileText,
   GitBranch,
   Image as ImageIcon,
+  Lock,
   PackageSearch,
   RefreshCw,
   ShieldAlert,
@@ -77,6 +78,8 @@ import {
 import {
   deriveHistoryNotice,
   deriveRetryControl,
+  deriveTakeoverControl,
+  describeSessionLockOwner,
   type HistoryErrorView,
   selectHistoryError,
 } from './historyError';
@@ -843,6 +846,9 @@ const HISTORY_ERROR_ICON = {
   history_unsupported: FileQuestion,
   session_file_corrupt: TriangleAlert,
   session_cwd_mismatch: FileQuestion,
+  // concurrency-02: another process is holding the file. Neither missing nor
+  // damaged — occupied, which is the one shape a padlock says on its own.
+  session_locked: Lock,
   // ah-lib-03: the record is neither missing nor damaged — this build simply
   // refuses to load one that big, which is a limit being hit, not a bad file.
   session_too_large: TriangleAlert,
@@ -873,6 +879,11 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
   const [detailOpen, setDetailOpen] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [retryFailed, setRetryFailed] = useState(false);
+  // concurrency-02: the takeover keeps its own pair rather than sharing the
+  // retry's. Both buttons can be on screen at once for `session_locked`, and a
+  // failed takeover must not report itself as a failed re-read.
+  const [takingOver, setTakingOver] = useState(false);
+  const [takeoverFailed, setTakeoverFailed] = useState(false);
   const { resume } = useResumeSession();
   const requestSettings = useSettingsIntentStore((state) => state.requestSettings);
   // Round-2 P0 fix (model directness): this Retry re-runs the same resume
@@ -890,6 +901,13 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
     retrying,
     failed: retryFailed,
   });
+  const takeoverControl = deriveTakeoverControl({
+    available: view.forceTakeover !== undefined,
+    status,
+    taking: takingOver,
+    failed: takeoverFailed,
+  });
+  const lockOwner = describeSessionLockOwner(view.lock, t);
 
   const handleRetry = async () => {
     setRetrying(true);
@@ -906,6 +924,23 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
     }
   };
 
+  // concurrency-02: the same resume, with the lock forced. Nothing else about
+  // the call changes — the model still has to be resolved, or a session opened
+  // through this button would lose the user's pick (see `handleRetry`).
+  const handleForceTakeover = async () => {
+    setTakingOver(true);
+    setTakeoverFailed(false);
+    try {
+      const resumed = await resume(sessionId, {
+        model: resolveSessionModel(sessionId),
+        forceTakeover: true,
+      });
+      if (!resumed) setTakeoverFailed(true);
+    } finally {
+      setTakingOver(false);
+    }
+  };
+
   return (
     <Alert variant={view.severity} role={view.severity === 'error' ? 'alert' : 'status'}>
       <Icon />
@@ -914,7 +949,17 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
       <AlertTitle className="min-w-0 truncate">{t(view.title)}</AlertTitle>
       <AlertDescription className="gap-1 text-meta">
         <p className="break-words">{t(view.guidance)}</p>
+        {/* concurrency-02: who holds it and for how long is how a user judges
+            whether that writer can still be real — the question the takeover
+            below asks them to answer. */}
+        {lockOwner && <p className="break-words">{lockOwner}</p>}
         <p>{t(view.continuationHint)}</p>
+        {/* Rendered next to the button rather than behind a confirmation
+            dialog: the warning is what the user needs while deciding, and a
+            modal that appears after the click is read past, not read. */}
+        {takeoverControl.visible && view.forceTakeover && (
+          <p className="break-words font-medium">{t(view.forceTakeover.warning)}</p>
+        )}
         {retryControl.hint && (
           <p
             className={cn(
@@ -923,6 +968,16 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
             )}
           >
             {t(retryControl.hint)}
+          </p>
+        )}
+        {takeoverControl.hint && (
+          <p
+            className={cn(
+              'break-words',
+              takeoverControl.hintKind === 'failed' && 'font-medium text-destructive'
+            )}
+          >
+            {t(takeoverControl.hint)}
           </p>
         )}
         {view.message && (
@@ -944,7 +999,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
           </Collapsible>
         )}
       </AlertDescription>
-      {(retryControl.visible || view.recovery) && (
+      {(retryControl.visible || takeoverControl.visible || view.recovery) && (
         <AlertAction>
           {retryControl.visible && (
             <Button
@@ -956,6 +1011,21 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
             >
               <RefreshCw className={cn(retrying && 'animate-spin')} />
               Retry
+            </Button>
+          )}
+          {/* concurrency-02: second, never first. Retry is the harmless answer
+              when the holder is a window the user is about to close; the
+              takeover displaces a writer that may still be alive. */}
+          {takeoverControl.visible && view.forceTakeover && (
+            <Button
+              size="xs"
+              variant="outline"
+              className="h-6"
+              disabled={takeoverControl.disabled}
+              onClick={() => void handleForceTakeover()}
+            >
+              <Lock className={cn(takingOver && 'animate-pulse')} />
+              {t(view.forceTakeover.label)}
             </Button>
           )}
           {/* H/21 P0: the only code with a recovery today is `model_missing`,

@@ -559,6 +559,38 @@ describe('session writer lock — the forced takeover', () => {
     expect(error?.message).toMatch(/held for 2h/);
     expect(error?.message).toMatch(/force/i);
   });
+
+  it('writes the holder in the exact shape the renderer notice parses back out', async () => {
+    // concurrency-02 contract pin. The structured `owner` on this error never
+    // leaves the worker: the RPC layer flattens it to `<code>: <message>` and
+    // Electron's `invoke` keeps only the text, so the card that offers the
+    // takeover reads the pid, the host and the age straight out of this
+    // sentence. The pattern is restated rather than imported — the renderer is
+    // a different tsconfig and a different process — which is the point: a
+    // change on either side that the other did not follow fails here rather
+    // than silently degrading the card to "failed to read history".
+    await seededSession();
+    await strandLock({
+      pid: process.pid,
+      host: hostname(),
+      token: 'live',
+      acquiredAt: Date.now() - 7_200_000,
+      startedAt: processStartedAt(),
+    });
+
+    const error = await runtime('resume').then(
+      () => undefined,
+      (reason: unknown) => reason as Error
+    );
+    // Kept identical to `SESSION_LOCK_OWNER` in
+    // `src/renderer/components/chat/historyError.ts`.
+    const match = /\(pid (\d+)(?: on ([^,()]+))?(?:, held for ([^)]+))?\)/.exec(
+      error?.message ?? ''
+    );
+    expect(match?.[1]).toBe(String(process.pid));
+    expect(match?.[2]).toBe(hostname());
+    expect(match?.[3]).toMatch(/^2h\d+m$/);
+  });
 });
 
 describe('session writer lock — separate processes race for one stale lock', () => {

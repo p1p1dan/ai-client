@@ -1,3 +1,4 @@
+import { zhTranslations } from '@shared/i18n';
 import { PI_AGENT } from '@shared/types/agentWire';
 import type {
   RuntimeEvent,
@@ -9,14 +10,19 @@ import { applyRuntimeEvent, type ChatSession, type ChatSessionsState } from '@/s
 import {
   deriveHistoryNotice,
   deriveRetryControl,
+  deriveTakeoverControl,
+  describeSessionLockOwner,
   encodePiResumeError,
   HISTORY_ERROR_DEAD_SESSION_HINT,
   HISTORY_ERROR_NON_FATAL_HINT,
   HISTORY_ERROR_UNSUPPORTED_HINT,
   HISTORY_RETRY_BUSY_HINT,
   HISTORY_RETRY_FAILED_HINT,
+  HISTORY_TAKEOVER_BUSY_HINT,
+  HISTORY_TAKEOVER_FAILED_HINT,
   type HistoryErrorCode,
   parseHistoryError,
+  parseSessionLockOwner,
   selectHistoryError,
 } from '../historyError';
 import { deriveMiddleColumnMode } from '../middleColumnLayout';
@@ -126,6 +132,7 @@ describe('parseHistoryError (T-03)', () => {
       'unknown',
       // Appended, not inserted: the severity assertions below are positional.
       'model_missing',
+      'session_locked',
     ];
     const views = codes.map((code) => parseHistoryError(`${code}: x`));
     for (const view of views) {
@@ -540,6 +547,150 @@ describe('deriveRetryControl (T-03)', () => {
     expect(HISTORY_RETRY_BUSY_HINT.trim().length).toBeGreaterThan(0);
     expect(HISTORY_RETRY_FAILED_HINT.trim().length).toBeGreaterThan(0);
     expect(HISTORY_RETRY_BUSY_HINT).not.toBe(HISTORY_RETRY_FAILED_HINT);
+  });
+});
+
+/**
+ * concurrency-02 — the refusal a stranded writer lock produces.
+ *
+ * The runtime throws a structured `SessionLockedError`, and none of that
+ * structure survives the trip: the worker RPC flattens it to
+ * `<code>: <message>` and Electron's `invoke` keeps only the text. Until this
+ * node that text landed on `read_failed`, whose copy promises "the chat is not
+ * interrupted, you can keep sending messages" about a session that never
+ * opened — and the one action that resolves a stale lock had nowhere to appear.
+ */
+describe('session_locked (concurrency-02)', () => {
+  const HELD =
+    'session already has a writer: /home/u/.pi/sessions/s1.jsonl (pid 4242 on box-1, held for 2h5m). If that writer is gone, reopen it with a forced takeover.';
+
+  it('[PHE-lock-01] recognises the refusal in every shape it arrives in', () => {
+    for (const message of [
+      `session_locked: ${HELD}`,
+      `Error invoking remote method 'chat:resumeSession': WorkerSlotError: session_locked: ${HELD}`,
+    ]) {
+      expect(encodePiResumeError(new Error(message)).encoded).toBe(`session_locked: ${message}`);
+    }
+    // And by the code the error carries, which `WorkerSlotError` keeps.
+    expect(
+      encodePiResumeError(Object.assign(new Error(HELD), { code: 'session_locked' })).encoded
+    ).toBe(`session_locked: ${HELD}`);
+  });
+
+  it('[PHE-lock-02] pulls the holder out of the refusal text', () => {
+    const view = parseHistoryError(
+      encodePiResumeError(new Error(`session_locked: ${HELD}`)).encoded
+    );
+    expect(view?.code).toBe('session_locked');
+    expect(view?.lock).toEqual({ pid: 4242, host: 'box-1', heldFor: '2h5m' });
+    expect(view?.forceTakeover?.label.trim().length).toBeGreaterThan(0);
+    expect(view?.forceTakeover?.warning.trim().length).toBeGreaterThan(0);
+    // The holder may simply be a window the user is about to close, so the
+    // harmless answer stays on offer next to the destructive one.
+    expect(view?.retryable).toBe(true);
+    // The copy must not read as a damaged or missing file — the record is
+    // intact and nothing was written.
+    expect(view?.guidance).not.toContain('damaged');
+    expect(view?.guidance).not.toContain('No history was found');
+  });
+
+  it('[PHE-lock-02b] reads every shape writerLock.ts can write', () => {
+    expect(parseSessionLockOwner('w (pid 7, held for less than a minute).')).toEqual({
+      pid: 7,
+      heldFor: 'less than a minute',
+    });
+    // A lock written before the timestamp field existed carries no age.
+    expect(parseSessionLockOwner('w (pid 7 on box-1).')).toEqual({ pid: 7, host: 'box-1' });
+    expect(parseSessionLockOwner('w (pid 7).')).toEqual({ pid: 7 });
+    // A lock file too damaged to parse names nobody. The card then says only
+    // that the session is held, rather than inventing a holder.
+    expect(parseSessionLockOwner('session already has a writer: /a/b.jsonl.')).toBeUndefined();
+    expect(parseHistoryError('session_locked: no owner recorded')?.lock).toBeUndefined();
+  });
+
+  it('[PHE-lock-03] offers the takeover on this code and no other', () => {
+    for (const code of ['read_failed', 'jsonl_not_found', 'session_file_corrupt', 'unknown']) {
+      const view = parseHistoryError(`${code}: x`);
+      expect(view?.forceTakeover, code).toBeUndefined();
+      expect(view?.lock, code).toBeUndefined();
+      expect(
+        deriveTakeoverControl({
+          available: view?.forceTakeover !== undefined,
+          status: 'idle',
+          taking: false,
+          failed: false,
+        }).visible,
+        code
+      ).toBe(false);
+    }
+  });
+
+  it('[PHE-lock-04] disables the takeover mid-turn, in flight, and says when one went nowhere', () => {
+    const offered = { available: true, taking: false, failed: false } as const;
+    expect(deriveTakeoverControl({ ...offered, status: 'idle' })).toEqual({
+      visible: true,
+      disabled: false,
+      hint: null,
+      hintKind: 'none',
+    });
+    // Backed by the same resume the Retry is, which the Host refuses mid-turn.
+    const busy = deriveTakeoverControl({ ...offered, status: 'running' });
+    expect(busy.disabled).toBe(true);
+    expect(busy.hint).toBe(HISTORY_TAKEOVER_BUSY_HINT);
+    expect(deriveTakeoverControl({ ...offered, status: 'idle', taking: true }).disabled).toBe(true);
+
+    const failed = deriveTakeoverControl({ ...offered, status: 'idle', failed: true });
+    expect(failed.visible).toBe(true);
+    expect(failed.hintKind).toBe('failed');
+    expect(failed.hint).toBe(HISTORY_TAKEOVER_FAILED_HINT);
+    // Distinct from the Retry's, or a failed takeover reports itself as a
+    // failed re-read — two different things the user would act on differently.
+    expect(HISTORY_TAKEOVER_FAILED_HINT).not.toBe(HISTORY_RETRY_FAILED_HINT);
+    expect(HISTORY_TAKEOVER_BUSY_HINT).not.toBe(HISTORY_RETRY_BUSY_HINT);
+  });
+
+  it('[PHE-lock-05] has a whole translated sentence for every holder shape', () => {
+    const asked: string[] = [];
+    const t = (key: string) => {
+      asked.push(key);
+      return key;
+    };
+    const shapes = [
+      { pid: 7, host: 'box-1', heldFor: '2h5m' },
+      { pid: 7, host: 'box-1' },
+      { pid: 7, heldFor: 'less than a minute' },
+      { pid: 7 },
+    ];
+    for (const lock of shapes) expect(describeSessionLockOwner(lock, t)).not.toBeNull();
+    // Four sentences, not one with holes: a missing host or age must never
+    // render as "on , for .".
+    expect(new Set(asked.filter((key) => key.includes('{{pid}}'))).size).toBe(4);
+    for (const key of asked) {
+      // `2h5m` is a number the runtime formatted, not a phrase — it passes the
+      // dictionary untouched and needs no entry. Everything else is copy.
+      if (key === '2h5m') continue;
+      expect(zhTranslations[key], key).toBeDefined();
+    }
+    expect(asked).toContain('less than a minute');
+    expect(describeSessionLockOwner(undefined, t)).toBeNull();
+  });
+
+  it('[PHE-lock-06] ships the whole card in the dictionary', () => {
+    // Every field on the view is a key, not display text (see the module's own
+    // doc comment), so an untranslated one reads as English inside a Chinese
+    // card rather than failing anywhere.
+    const view = parseHistoryError(`session_locked: ${HELD}`);
+    for (const key of [
+      view?.title,
+      view?.guidance,
+      view?.continuationHint,
+      view?.forceTakeover?.label,
+      view?.forceTakeover?.warning,
+      HISTORY_TAKEOVER_BUSY_HINT,
+      HISTORY_TAKEOVER_FAILED_HINT,
+    ]) {
+      expect(key && zhTranslations[key], key).toBeDefined();
+    }
   });
 });
 

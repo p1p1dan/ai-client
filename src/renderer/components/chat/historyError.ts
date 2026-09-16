@@ -1,3 +1,4 @@
+import type { Translate } from '@shared/i18n';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { HistoryReadErrorCode } from '@shared/types/sessionHistory';
 import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingError';
@@ -24,6 +25,7 @@ export type HistoryErrorCode =
   | HistoryReadErrorCode
   | 'unknown'
   | 'model_missing'
+  | 'session_locked'
   | 'session_too_large';
 
 /**
@@ -48,6 +50,10 @@ const RESUME_ERROR_CODES: Readonly<Record<string, HistoryErrorCode>> = {
   // coincidence worth keeping, not a rule the table relies on.
   session_cwd_mismatch: 'session_cwd_mismatch',
   session_invalid: 'session_file_corrupt',
+  // concurrency-02: another process holds this session's writer lock. Landing
+  // on `read_failed` offered a Retry that can only fail the same way, and hid
+  // the one thing that resolves it — the forced takeover.
+  session_locked: 'session_locked',
   session_size_limit: 'session_too_large',
   // The file is gone: `JsonlSessionStore.open` lets a missing path through
   // `realpath` and the read throws Node's own error, with no code of ours on it.
@@ -129,6 +135,25 @@ export interface HistoryErrorView {
    * control that does not exist.
    */
   recovery?: { settingsCategory: 'pi'; label: string };
+  /**
+   * concurrency-02 — who the refusal says holds the writer lock.
+   *
+   * Parsed out of `message`, because that is all there is: `WorkerSlot`
+   * flattens the remote error to `<code>: <message>` and Electron's `invoke`
+   * keeps only `message` on the way out, so the structured `owner` the runtime
+   * threw never reaches this process. Every part is optional — a lock written
+   * by an older build carries no timestamp, and a lock file too damaged to
+   * parse carries no owner at all.
+   */
+  lock?: { pid?: number; host?: string; heldFor?: string };
+  /**
+   * concurrency-02 — the action that resolves this code, when one exists.
+   *
+   * Kept out of `recovery`, which opens a settings pane: this one re-runs the
+   * resume with the lock forced, which is a different kind of button (it
+   * changes something on disk) and needs the warning that rides with it.
+   */
+  forceTakeover?: { label: string; warning: string };
 }
 
 /** Shown under most variants: a history read failure never kills the session. */
@@ -215,6 +240,24 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
     retryable: false,
     continuationHint: 'Open it from the workspace it belongs to, or start a new chat.',
   },
+  // concurrency-02. Retryable as well as forceable, and both on purpose: the
+  // holder may simply be a window the user is about to close, in which case a
+  // plain Retry is the correct, harmless answer and the takeover is the one to
+  // avoid. The card offers the safe button first.
+  session_locked: {
+    severity: 'error',
+    title: 'Session is locked by another writer',
+    guidance:
+      "Another process holds this chat's write lock, so it was not opened. Nothing on disk was changed.",
+    retryable: true,
+    continuationHint:
+      'Retrying works once the other writer lets go; until then this chat cannot be opened here.',
+    forceTakeover: {
+      label: 'Force takeover',
+      warning:
+        'Take the lock only if that writer is really gone. If it is still running, two processes will write to this chat at once and messages can be lost.',
+    },
+  },
   workspace_missing: {
     severity: 'error',
     title: 'Workspace folder is gone',
@@ -273,6 +316,71 @@ function toCode(value: string): HistoryErrorCode {
   return Object.hasOwn(CODE_COPY, value) ? (value as HistoryErrorCode) : 'unknown';
 }
 
+/**
+ * concurrency-02 — pull the holder out of the refusal's own sentence.
+ *
+ * The runtime throws a `SessionLockedError` carrying a structured `owner`, but
+ * only its `message` survives the trip: the worker RPC flattens the error and
+ * Electron's `invoke` drops every field but the text. So the format built in
+ * `writerLock.ts` (`locked()` / `heldFor()`) is a contract, pinned from the
+ * other side by `sessionWriterLock.test.ts`.
+ *
+ * Anchored on `(pid <digits>`, which no session path can accidentally produce,
+ * and every tail is optional: a lock written before the timestamp field existed
+ * has no age, a same-host lock has no host, and a lock file too damaged to
+ * parse has no owner at all — in which case the card simply shows no holder
+ * line rather than an invented one.
+ */
+const SESSION_LOCK_OWNER = /\(pid (\d+)(?: on ([^,()]+))?(?:, held for ([^)]+))?\)/;
+
+export function parseSessionLockOwner(message: string): HistoryErrorView['lock'] | undefined {
+  const match = SESSION_LOCK_OWNER.exec(message);
+  if (!match) return undefined;
+  return {
+    pid: Number(match[1]),
+    ...(match[2] ? { host: match[2].trim() } : {}),
+    ...(match[3] ? { heldFor: match[3].trim() } : {}),
+  };
+}
+
+/**
+ * concurrency-02 — the holder line, already translated.
+ *
+ * Four whole sentences rather than one with optional slots: a lock with no
+ * recorded host or age must not render as "on , for .", and a language that
+ * orders those clauses differently needs the sentence to translate, not its
+ * fragments. Takes `t` as a parameter for the reason stated at the top of this
+ * file — this is a plain `.ts` with no hook in scope, and keeping the choice
+ * here is what makes it assertable.
+ *
+ * Returns null when the refusal named no holder, which is what an unreadable
+ * lock file leaves behind; the card then says only that the session is held.
+ */
+export function describeSessionLockOwner(
+  lock: HistoryErrorView['lock'],
+  t: Translate
+): string | null {
+  if (lock?.pid === undefined) return null;
+  // The age is the runtime's own wording (`writerLock.ts`'s `heldFor`). `2h5m`
+  // passes through `t` unchanged, which is right; only the "no measurable age"
+  // phrase is a fixed sentence the dictionary can carry.
+  const duration = lock.heldFor === undefined ? undefined : t(lock.heldFor);
+  if (lock.host !== undefined && duration !== undefined) {
+    return t('Held by process {{pid}} on {{host}}, for {{duration}}.', {
+      pid: lock.pid,
+      host: lock.host,
+      duration,
+    });
+  }
+  if (duration !== undefined) {
+    return t('Held by process {{pid}}, for {{duration}}.', { pid: lock.pid, duration });
+  }
+  if (lock.host !== undefined) {
+    return t('Held by process {{pid}} on {{host}}.', { pid: lock.pid, host: lock.host });
+  }
+  return t('Held by process {{pid}}.', { pid: lock.pid });
+}
+
 /** Parse `historyErrors[sessionId]`. Returns null when the session has no error. */
 export function parseHistoryError(raw: string | null | undefined): HistoryErrorView | null {
   const trimmed = raw?.trim();
@@ -290,7 +398,8 @@ export function parseHistoryError(raw: string | null | undefined): HistoryErrorV
         ? ''
         : trimmed.slice(separatorIndex + 1).trim();
 
-  return { code, message, ...CODE_COPY[code] };
+  const lock = code === 'session_locked' ? parseSessionLockOwner(message) : undefined;
+  return { code, message, ...CODE_COPY[code], ...(lock ? { lock } : {}) };
 }
 
 export type TimelineHistoryNotice =
@@ -387,6 +496,52 @@ export function deriveRetryControl(input: HistoryRetryControlInput): HistoryRetr
     visible: true,
     disabled: input.retrying || busy,
     hint: busy ? HISTORY_RETRY_BUSY_HINT : null,
+    hintKind: busy ? 'busy' : 'none',
+  };
+}
+
+/** concurrency-02 — the takeover's own mid-turn and failed-attempt copy. */
+export const HISTORY_TAKEOVER_BUSY_HINT =
+  'The chat is mid-turn; you can take the session over once this turn ends.';
+export const HISTORY_TAKEOVER_FAILED_HINT =
+  'The takeover did not go through; the session is still held by another writer.';
+
+export interface HistoryTakeoverControlInput {
+  /** The code offers a takeover at all — i.e. `view.forceTakeover` exists. */
+  available: boolean;
+  status: SessionRuntimeStatus;
+  /** A takeover request is in flight. */
+  taking: boolean;
+  /** The last takeover resolved without opening the session. */
+  failed: boolean;
+}
+
+/**
+ * Force-takeover button state, deliberately the same shape as the Retry one.
+ *
+ * Both buttons are backed by the same resume call, so they share every reason
+ * to be disabled: the Host refuses a resume mid-turn, and a request already in
+ * flight must not be sent twice. Written as its own function rather than a
+ * second call to `deriveRetryControl` because the two are gated on different
+ * facts — `retryable` versus "this code has a takeover" — and a resolved-but-
+ * failed takeover has to say something a failed re-read never would.
+ */
+export function deriveTakeoverControl(input: HistoryTakeoverControlInput): HistoryRetryControl {
+  if (!input.available) return { visible: false, disabled: true, hint: null, hintKind: 'none' };
+
+  const busy = isSessionBusy(input.status);
+  if (input.failed) {
+    return {
+      visible: true,
+      disabled: input.taking || busy,
+      hint: HISTORY_TAKEOVER_FAILED_HINT,
+      hintKind: 'failed',
+    };
+  }
+  return {
+    visible: true,
+    disabled: input.taking || busy,
+    hint: busy ? HISTORY_TAKEOVER_BUSY_HINT : null,
     hintKind: busy ? 'busy' : 'none',
   };
 }

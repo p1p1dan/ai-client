@@ -27,6 +27,12 @@ export interface ResumeIntent {
     /** U12 fix — permission tier the resumed worker must come up on. */
     tier?: SessionPermissionTier;
     permissions?: RuntimePermissionSettings;
+    /**
+     * concurrency-02 — reopen even though the session's writer lock still
+     * looks held. Only ever `true`, and only from the "Force takeover" button
+     * the `session_locked` notice shows.
+     */
+    forceTakeover?: true;
   };
   /** Reason the resume was skipped (for telemetry / diags). */
   reason?: string;
@@ -75,6 +81,12 @@ export function shouldResumeSession(
      */
     tier?: SessionPermissionTier;
     permissions?: RuntimePermissionSettings;
+    /**
+     * concurrency-02 — the user answered a `session_locked` refusal with
+     * "open it anyway". Carried through unchanged; this module makes no
+     * judgement about the lock, it only forwards the decision.
+     */
+    forceTakeover?: boolean;
   } = {}
 ): ResumeIntent {
   const skipBusy = options.skipBusy ?? true;
@@ -117,6 +129,10 @@ export function shouldResumeSession(
       ...(options.model ? { model: options.model } : {}),
       ...(options.tier ? { tier: options.tier } : {}),
       ...(options.permissions ? { permissions: options.permissions } : {}),
+      // Same omit-rather-than-send rule as `model` above: absent is what every
+      // ordinary resume sends, and absent is what Main reads as "refuse a held
+      // session".
+      ...(options.forceTakeover ? { forceTakeover: true as const } : {}),
     },
   };
 }

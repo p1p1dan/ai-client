@@ -611,6 +611,49 @@ describe('Pi WorkerSlot chat routing', () => {
     });
   });
 
+  /**
+   * concurrency-02 — Main's gate on the renderer's "open it anyway".
+   *
+   * Stricter than the tier's, and deliberately: a dropped takeover costs a
+   * refusal the user can repeat, where an accepted one displaces a writer that
+   * may still be alive and writing.
+   */
+  describe('forced writer-lock takeover', () => {
+    it('forwards a literal true to the resume', async () => {
+      await invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: '/session.jsonl',
+        workspacePath: '/repo',
+        forceTakeover: true,
+      });
+      expect(resumeSession).toHaveBeenCalledWith(expect.objectContaining({ forceTakeover: true }));
+    });
+
+    it('drops every other value and still resumes', async () => {
+      for (const forceTakeover of ['yes', 1, false, 'true', {}]) {
+        resumeSession.mockClear();
+        await expect(
+          invoke('chat:resumeSession', {
+            sessionId: 's1',
+            runtimeIdentity: '/session.jsonl',
+            workspacePath: '/repo',
+            forceTakeover,
+          })
+        ).resolves.toEqual({ requestId: 'resume-1' });
+        expect(resumeSession.mock.calls[0][0]).not.toHaveProperty('forceTakeover');
+      }
+    });
+
+    it('omits it when the renderer sends none', async () => {
+      await invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: '/session.jsonl',
+        workspacePath: '/repo',
+      });
+      expect(resumeSession.mock.calls[0][0]).not.toHaveProperty('forceTakeover');
+    });
+  });
+
   describe('handing the session file back from the Pi TUI', () => {
     it('re-reads the file after killing a terminal, before the turn starts', async () => {
       terminalWasReleased = true;

@@ -124,6 +124,18 @@ export interface WorkerBootstrapPayload {
    */
   unbound?: boolean;
   /**
+   * concurrency-02 — open the session even though its writer lock still looks
+   * held.
+   *
+   * Set by Main, never by a worker, and only ever sent as `true`: absent is the
+   * default open, the one that REFUSES a session another writer holds. Only
+   * meaningful alongside `sessionFile` (a resume) — a freshly created session
+   * has no lock to take from anyone. This is what an explicit "open it anyway"
+   * acts through, for the one case no automatic rule can settle: a pid recycled
+   * on a machine that has not rebooted since (see `writerLock.ts`).
+   */
+  forceTakeover?: boolean;
+  /**
    * U12 fix — the session permission tier this worker must START on.
    *
    * `worker.setPermissionTier` can only reach a worker that already exists, so
@@ -751,6 +763,7 @@ export function isWorkerBootstrapPayload(value: unknown): value is WorkerBootstr
   if (value.permissions !== undefined && !isRuntimePermissionSettings(value.permissions))
     return false;
   if (value.unbound !== undefined && typeof value.unbound !== 'boolean') return false;
+  if (value.forceTakeover !== undefined && typeof value.forceTakeover !== 'boolean') return false;
   if (
     value.tier !== undefined &&
     (typeof value.tier !== 'string' || !VALID_TIERS.has(value.tier))
