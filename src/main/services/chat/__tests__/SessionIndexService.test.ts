@@ -1,4 +1,12 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PI_AGENT } from '@shared/types/agentWire';
@@ -679,6 +687,229 @@ describe('SessionIndexService', () => {
       const fresh = new SessionIndexService();
       const [loaded] = await fresh.list();
       expect(loaded).not.toHaveProperty('unbound');
+    });
+  });
+
+  /**
+   * T038 — the index's read/write safety net.
+   *
+   * Every one of these is about the same structural fact: `flush()` rewrites
+   * the WHOLE table, so anything wrong with the in-memory view becomes the
+   * file on the next write. That turns a read failure into data loss
+   * (session-index-01), a rejected mutation into a delayed one
+   * (session-index-05), and unbounded growth into a per-turn cost
+   * (session-index-11).
+   */
+  describe('read/write safety net (T038)', () => {
+    const indexPath = (): string => join(userDataDir, 'session-index.json');
+    const backupFiles = (): string[] =>
+      readdirSync(userDataDir).filter((name) => name.includes('.corrupt-'));
+
+    it('session-index-01: a corrupt index is backed up before anything overwrites it', async () => {
+      // Real bytes, real loader path: a half-written file is what a power cut
+      // during the old (fsync-less) atomic write actually leaves behind.
+      const corrupt =
+        '[{"sessionId":"s1","workspacePath":"/ws/a","title":"Kept","updatedAt":1,"arc';
+      writeFileSync(indexPath(), corrupt, 'utf8');
+
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+
+      await expect(service.list()).resolves.toEqual([]);
+      const health = service.getHealth();
+      expect(health.status).toBe('repaired');
+
+      // The evidence survives the rebuild, byte for byte.
+      const backups = backupFiles();
+      expect(backups).toHaveLength(1);
+      expect(readFileSync(join(userDataDir, backups[0]), 'utf8')).toBe(corrupt);
+
+      // Only now may the table be rewritten, and the old bytes are still there.
+      await service.recordCreated({ sessionId: 'fresh', workspacePath: '/ws/b' });
+      expect(JSON.parse(readFileSync(indexPath(), 'utf8'))).toHaveLength(1);
+      expect(readFileSync(join(userDataDir, backups[0]), 'utf8')).toBe(corrupt);
+    });
+
+    it('session-index-01: an unreadable index refuses writes instead of replacing it', async () => {
+      // A real non-ENOENT read failure (EISDIR) with no mocking: the rows are
+      // presumed intact on disk, so this process must not write over them.
+      mkdirSync(indexPath());
+
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const writeAtomically = vi.fn(async () => {});
+      const service = new SessionIndexService({ writeAtomically });
+
+      await expect(service.list()).resolves.toEqual([]);
+      expect(service.getHealth().status).toBe('unreadable');
+      await expect(
+        service.recordCreated({ sessionId: 'fresh', workspacePath: '/ws/b' })
+      ).rejects.toThrow(/session index/i);
+      expect(writeAtomically).not.toHaveBeenCalled();
+      expect(backupFiles()).toEqual([]);
+    });
+
+    it('session-index-01: keeps the readable rows and drops only the broken ones', async () => {
+      const rows = [
+        { sessionId: 'good', workspacePath: '/ws/a', title: 'Good', updatedAt: 5, archived: false },
+        null,
+        { workspacePath: '/ws/b', title: 'No id', updatedAt: 6, archived: false },
+      ];
+      writeFileSync(indexPath(), JSON.stringify(rows), 'utf8');
+
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+
+      // The old loader threw on `null.sessionId` and lost the good row too.
+      const listed = await service.list();
+      expect(listed.map((entry) => entry.sessionId)).toEqual(['good']);
+      const health = service.getHealth();
+      expect(health.status).toBe('repaired');
+      if (health.status === 'repaired') {
+        expect(health.droppedRows).toBe(2);
+      }
+      expect(backupFiles()).toHaveLength(1);
+    });
+
+    it('session-index-05: a failed setArchived rolls back and never rides a later write to disk', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      let writes = 0;
+      const writeAtomically = vi.fn(async (targetPath: string, data: unknown) => {
+        writes += 1;
+        if (writes === 2) throw new Error('simulated archive write failure');
+        writeFileSync(targetPath, JSON.stringify(data));
+      });
+      const service = new SessionIndexService({ writeAtomically });
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
+
+      await expect(service.setArchived('s1', true)).rejects.toThrow(
+        /simulated archive write failure/
+      );
+      expect((await service.get('s1'))?.archived).toBe(false);
+
+      // The unrelated write that used to smuggle the failed archive onto disk.
+      await service.rename('s1', 'Later, unrelated');
+      expect((await service.get('s1'))?.archived).toBe(false);
+      const persisted = JSON.parse(readFileSync(indexPath(), 'utf8')) as SessionIndexEntry[];
+      expect(persisted[0]).toMatchObject({ title: 'Later, unrelated', archived: false });
+    });
+
+    it('session-index-05: a failed recordCreated leaves no phantom row behind', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      let writes = 0;
+      const writeAtomically = vi.fn(async (targetPath: string, data: unknown) => {
+        writes += 1;
+        if (writes === 1) throw new Error('simulated create write failure');
+        writeFileSync(targetPath, JSON.stringify(data));
+      });
+      const service = new SessionIndexService({ writeAtomically });
+
+      await expect(
+        service.recordCreated({ sessionId: 'ghost', workspacePath: '/ws/a' })
+      ).rejects.toThrow(/simulated create write failure/);
+      expect(await service.get('ghost')).toBeUndefined();
+
+      await service.recordCreated({ sessionId: 'real', workspacePath: '/ws/b' });
+      const persisted = JSON.parse(readFileSync(indexPath(), 'utf8')) as SessionIndexEntry[];
+      expect(persisted.map((entry) => entry.sessionId)).toEqual(['real']);
+    });
+
+    it('session-index-05: every flush call site restores memory when the write fails', () => {
+      // The class had two shapes for the same operation and only one of them
+      // was correct. Keeping a bare `await this.flush()` out of the file is
+      // cheaper than re-deriving the smuggling scenario for the next one.
+      const source = readFileSync(join(__dirname, '..', 'SessionIndexService.ts'), 'utf8').split(
+        '\n'
+      );
+      const unguarded = source
+        .map((line, index) => ({ line: line.trim(), index }))
+        .filter((entry) => entry.line === 'await this.flush();')
+        .filter((entry) => source[entry.index - 1]?.trim() !== 'try {')
+        .map((entry) => entry.index + 1);
+      expect(unguarded).toEqual([]);
+    });
+
+    it('session-index-11: turn-end events stop rewriting the whole table every turn', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const writeAtomically = vi.fn(async (targetPath: string, data: unknown) => {
+        writeFileSync(targetPath, JSON.stringify(data));
+      });
+      const service = new SessionIndexService({ writeAtomically });
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
+      expect(writeAtomically).toHaveBeenCalledTimes(1);
+
+      const turnEnd = (): RuntimeEvent =>
+        ({ type: 'session.completed', sessionId: 's1', payload: {} }) as unknown as RuntimeEvent;
+
+      vi.setSystemTime(new Date('2026-01-01T00:00:01.000Z'));
+      service.handleRuntimeEvent(turnEnd());
+      vi.setSystemTime(new Date('2026-01-01T00:00:02.000Z'));
+      service.handleRuntimeEvent(turnEnd());
+      await service.list();
+      expect(writeAtomically).toHaveBeenCalledTimes(1);
+      // The bump is still visible in memory, it just is not worth a full
+      // re-serialization of the table on the main thread.
+      expect((await service.get('s1'))?.updatedAt).toBe(Date.parse('2026-01-01T00:00:02.000Z'));
+
+      vi.setSystemTime(new Date('2026-01-01T00:01:00.000Z'));
+      service.handleRuntimeEvent(turnEnd());
+      await service.list();
+      expect(writeAtomically).toHaveBeenCalledTimes(2);
+      const persisted = JSON.parse(readFileSync(indexPath(), 'utf8')) as SessionIndexEntry[];
+      expect(persisted[0]?.updatedAt).toBe(Date.parse('2026-01-01T00:01:00.000Z'));
+    });
+
+    it('session-index-11: the table has an upper bound and sheds archived rows first', async () => {
+      const rows: SessionIndexEntry[] = [
+        {
+          sessionId: 'archived-old',
+          workspacePath: '/ws/1',
+          title: '',
+          updatedAt: 1,
+          archived: true,
+        },
+        { sessionId: 'live-old', workspacePath: '/ws/2', title: '', updatedAt: 2, archived: false },
+        {
+          sessionId: 'archived-new',
+          workspacePath: '/ws/3',
+          title: '',
+          updatedAt: 3,
+          archived: true,
+        },
+        { sessionId: 'live-new', workspacePath: '/ws/4', title: '', updatedAt: 4, archived: false },
+      ];
+      writeFileSync(indexPath(), JSON.stringify(rows), 'utf8');
+
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService({ maxEntries: 3 });
+
+      // One write takes the table from 5 rows (4 loaded + 1 new) down to the cap.
+      await service.recordCreated({ sessionId: 'newest', workspacePath: '/ws/5' });
+
+      const persisted = JSON.parse(readFileSync(indexPath(), 'utf8')) as SessionIndexEntry[];
+      expect(persisted.map((entry) => entry.sessionId).sort()).toEqual([
+        'live-new',
+        'live-old',
+        'newest',
+      ]);
+      // Memory and disk agree, otherwise the next flush puts the rows back.
+      expect((await service.list()).map((entry) => entry.sessionId).sort()).toEqual([
+        'live-new',
+        'live-old',
+        'newest',
+      ]);
+    });
+
+    it('session-index-11: an fsynced atomic write still leaves a bare array and no temp files', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
+
+      const raw = readFileSync(indexPath(), 'utf8');
+      expect(Array.isArray(JSON.parse(raw))).toBe(true);
+      expect(readdirSync(userDataDir).some((name) => name.endsWith('.tmp'))).toBe(false);
     });
   });
 });

@@ -9,6 +9,40 @@
  */
 import type { PiLeafCheckpoint } from './sessionHistory';
 
+/**
+ * Load-time health of `session-index.json`.
+ *
+ * The loader used to answer "file missing" and "file unreadable" with the same
+ * empty table, and the next write turned the second one into the first: the
+ * whole table is rewritten on every flush, so one unreadable row set became a
+ * file holding only the session created after the failure. The three states
+ * below are what the loader distinguishes now, and what a degraded-state
+ * notice in the UI needs in order to say which one happened.
+ */
+export type SessionIndexHealth =
+  | { status: 'ok' }
+  | {
+      /**
+       * The file's CONTENT was unusable (not JSON, not an array, or rows
+       * without a `sessionId`). It was preserved at `backupPath` and the table
+       * rebuilt from whatever parsed, so writing again is safe.
+       */
+      status: 'repaired';
+      backupPath: string;
+      droppedRows: number;
+      reason: string;
+    }
+  | {
+      /**
+       * The file could not be read at all (EACCES/EIO/EBUSY — on Windows an
+       * antivirus or backup tool holding it is the common cause) or could not
+       * be backed up. Its rows are presumed intact on disk, so this process
+       * refuses to write and every mutation fails loudly instead.
+       */
+      status: 'unreadable';
+      reason: string;
+    };
+
 export interface SessionIndexEntry {
   sessionId: string;
   /**
