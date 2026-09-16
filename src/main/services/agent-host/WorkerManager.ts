@@ -166,6 +166,29 @@ interface ManagedSlot {
   activeRequestId: string | null;
   ownerWebContentsId: number | null;
   acceptEvents: boolean;
+  /**
+   * main-host-03 — the window in which a retired entry still forwards the two
+   * events its worker emits ON THE WAY OUT.
+   *
+   * `retireEntry` closes `acceptEvents` and unbooks the entry from both maps
+   * the instant a disposal starts, which is right for routing: nothing new may
+   * be addressed to a worker that is going away. But the worker deliberately
+   * keeps emitting after it receives `worker.dispose` — its `handleDispose`
+   * flips `disposed` only AFTER the runtime teardown, precisely so the engine
+   * can deny the permission gates and cancel the questions parked in front of
+   * the user (see agent-host/piWorkerRpcServer.ts and
+   * runtime/worker/nativeWorkerRuntime.ts). Closing Main's gate first dropped
+   * every one of those resolutions, so the cards stayed on screen with nothing
+   * alive left to answer them.
+   *
+   * Open from `retireEntry` until the disposal settles, and read only by
+   * `handleWorkerEvent`, which lets `permission.resolved` and
+   * `question.resolved` through it — the two events that RETRACT a pending
+   * card. Nothing else rides it: a retired session must not keep appending to
+   * a transcript the renderer has moved on from. (A drained preview needs no
+   * event; the worker answers that parked call in-process.)
+   */
+  drainingEvents: boolean;
   lastUsedAt: number;
   lastIdleAt: number;
   restartAttempts: number[];
@@ -852,6 +875,7 @@ export class WorkerManager {
         activeRequestId: null,
         ownerWebContentsId: null,
         acceptEvents: true,
+        drainingEvents: false,
         lastUsedAt: timestamp,
         lastIdleAt: timestamp,
         restartAttempts: [],
@@ -1084,6 +1108,7 @@ export class WorkerManager {
         activeRequestId: null,
         ownerWebContentsId: null,
         acceptEvents: true,
+        drainingEvents: false,
         lastUsedAt: timestamp,
         lastIdleAt: timestamp,
         restartAttempts: [],
@@ -1241,11 +1266,21 @@ export class WorkerManager {
    *  - **No `assertIdleEntry`.** Listing commands is read-only, and the moment
    *    it is needed is often mid-turn.
    *  - **No `claimEntry`.** Reading a list is not taking ownership of a session.
-   *  - **Any ready worker will do.** In managed mode the command set does not
-   *    vary by working directory — project scope is withheld, and the agent dir
-   *    and `~/.agents` are fixed — so the nearest live worker is authoritative
-   *    for all of them. `sessionId` is honoured when it names a ready worker so
-   *    the answer is exact in local mode too, where project scope IS loaded.
+   *  - **A stand-in must share the workspace** (main-host-01). The fallback
+   *    used to take the first ready worker in the pool, on the strength of a
+   *    comment claiming the command set does not vary by working directory
+   *    because project scope is withheld. Decision 009 made project scope
+   *    trusted and loaded (`NATIVE_PROJECT_TRUSTED`), so it does vary: every
+   *    row carries an absolute `path`, and half of them come from the
+   *    answering worker's `<cwd>/.pi/skills` and `<cwd>/.pi/prompts`. A named
+   *    session is therefore only ever answered by a worker with the same
+   *    `cwd`, and a session this pool has never started — the lazy-start case,
+   *    which has no entry and so no workspace to compare — gets an empty list
+   *    rather than another repository's menu.
+   *
+   * The unnamed call is the start screen, where there is no session to hand a
+   * wrong list to and no workspace to match against; it keeps the any-worker
+   * fallback so the menu is not empty for the whole first turn.
    *
    * Not cached. The RPC is in-process message passing and the menu asks once
    * per open, while a cache would keep a skill the user just installed hidden
@@ -1255,12 +1290,19 @@ export class WorkerManager {
     input: { sessionId?: string } = {}
   ): Promise<{ commands: WorkerSlashCommandInfo[]; truncated: boolean }> {
     const named = input.sessionId ? this.entriesBySession.get(input.sessionId) : undefined;
-    const entry =
-      named?.state === 'ready' && named.slot
-        ? named
-        : [...this.entriesBySession.values()].find(
-            (candidate) => candidate.state === 'ready' && candidate.slot
-          );
+    const isReady = (candidate: ManagedSlot): boolean =>
+      candidate.state === 'ready' && candidate.slot !== null;
+    let entry: ManagedSlot | undefined;
+    if (!input.sessionId) {
+      entry = [...this.entriesBySession.values()].find(isReady);
+    } else if (named && isReady(named)) {
+      entry = named;
+    } else if (named) {
+      const workspace = named.cwd;
+      entry = [...this.entriesBySession.values()].find(
+        (candidate) => isReady(candidate) && candidate.cwd === workspace
+      );
+    }
     if (!entry?.slot) return { commands: [], truncated: false };
 
     const result = await entry.slot.request<WorkerCommandsResult, WorkerCommandsPayload>(
@@ -1639,6 +1681,7 @@ export class WorkerManager {
           activeRequestId: null,
           ownerWebContentsId: null,
           acceptEvents: true,
+          drainingEvents: false,
           lastUsedAt: timestamp,
           lastIdleAt: timestamp,
           restartAttempts: [],
@@ -2072,11 +2115,29 @@ export class WorkerManager {
       }
       const activeImport = this.activeImport;
       const activeImportSlot = this.activeImportSlot;
-      if (activeImport) await activeImport.dispose();
-      else if (activeImportSlot) await activeImportSlot.dispose(reason);
-      this.activeImport = null;
-      this.activeImportSlot = null;
-      this.importSlotActive = false;
+      // main-host-02: every teardown below is independent of the others'
+      // failure, the way the worker's own `handleDispose` is. The import slot
+      // rejects whenever its ACK or exit budget runs out, and the wrapper in
+      // `createLegacyImport` rethrows even after a successful force kill — so
+      // this used to be the single most likely thing to abort shutdown. The
+      // pool then never received `worker.dispose` (no runtime teardown, no MCP
+      // child release), `state` never reached `stopped`, and the caller's
+      // `Promise.all` failed in milliseconds, which cleared the 7s deadline
+      // whose whole job was to force-kill exactly those survivors. Shutdown
+      // reports what it could not release; it does not stop on it.
+      try {
+        if (activeImport) await activeImport.dispose();
+        else if (activeImportSlot) await activeImportSlot.dispose(reason);
+        this.activeImport = null;
+        this.activeImportSlot = null;
+        this.importSlotActive = false;
+      } catch (error) {
+        // Ownership deliberately NOT cleared: `createLegacyImport`'s wrapper
+        // already released it if its force kill landed, and kept it if it did
+        // not. A slot that survived both has to stay reachable from
+        // `forceKillAllNow`.
+        this.log('[worker-manager] legacy import disposal failed', error);
+      }
       await this.disposeEntries([...this.entriesBySession.values()], reason);
       this.state = 'stopped';
     });
@@ -2099,6 +2160,9 @@ export class WorkerManager {
     this.state = 'stopped';
     for (const entry of entries) {
       entry.acceptEvents = false;
+      // No drain window on this path: nothing is being asked to tear down
+      // gracefully, so there is no resolution left to wait for.
+      entry.drainingEvents = false;
       entry.state = 'disposing';
     }
     for (const slot of slots) {
@@ -2500,7 +2564,11 @@ export class WorkerManager {
     const results = await Promise.allSettled(
       unique.map(async (entry) => {
         const slot = entry.slot;
-        await slot?.dispose(reason);
+        try {
+          await slot?.dispose(reason);
+        } finally {
+          entry.drainingEvents = false;
+        }
         if (slot) this.ownedSlots.delete(slot);
       })
     );
@@ -2516,7 +2584,11 @@ export class WorkerManager {
   ): Promise<void> {
     this.retireEntry(entry);
     const slot = entry.slot;
-    await slot?.dispose(reason);
+    try {
+      await slot?.dispose(reason);
+    } finally {
+      entry.drainingEvents = false;
+    }
     if (slot) this.ownedSlots.delete(slot);
   }
 
@@ -2556,6 +2628,11 @@ export class WorkerManager {
    */
   private retireEntry(entry: ManagedSlot): void {
     entry.acceptEvents = false;
+    // main-host-03: routing stops here, the event stream does not. The worker
+    // emits its parked resolutions during `worker.dispose`, so the window
+    // opens with the retirement and is closed again by whichever of
+    // `retireAndDispose` / `disposeEntries` is driving that disposal.
+    entry.drainingEvents = true;
     entry.state = 'disposing';
     if (this.entriesByKey.get(entry.key) === entry) this.entriesByKey.delete(entry.key);
     if (this.entriesByKey.get(entry.temporaryKey) === entry) {
@@ -2569,11 +2646,21 @@ export class WorkerManager {
   }
 
   private handleWorkerEvent(entry: ManagedSlot, slot: WorkerSlot, message: WorkerRpcEvent): void {
-    if (!this.isAuthoritative(entry, message.generation) || entry.slot !== slot) return;
-    if (entry.state !== 'ready' || message.type !== 'runtime.event') return;
+    if (entry.slot !== slot || message.type !== 'runtime.event') return;
     const event = message.payload as RuntimeEvent;
     if (!event || typeof event.type !== 'string') return;
     if (event.sessionId && event.sessionId !== entry.logicalSessionId) return;
+    if (!this.isAuthoritative(entry, message.generation) || entry.state !== 'ready') {
+      // main-host-03 — the drain window. `retireEntry` has already closed
+      // `acceptEvents` and unbooked this entry, so `isAuthoritative` is false
+      // by construction while the worker tears down; forwarding the two
+      // resolutions it emits there is the only way the renderer learns that
+      // the cards it is showing were answered on the user's behalf. Slot
+      // identity, generation and session ownership are still checked above and
+      // here, so nothing a worker can put in a payload widens this.
+      this.forwardDrainResolution(entry, message.generation, event);
+      return;
+    }
 
     entry.lastUsedAt = this.now();
     if (event.type === 'preview.requested') {
@@ -2603,6 +2690,17 @@ export class WorkerManager {
       entry.lastIdleAt = this.now();
       void this.syncLeafCheckpoint(entry, message.generation);
     }
+    this.dispatch({ ...event, sessionId: event.sessionId ?? entry.logicalSessionId });
+  }
+
+  /** main-host-03 — the only events a retired entry may still forward. */
+  private forwardDrainResolution(
+    entry: ManagedSlot,
+    generation: number,
+    event: RuntimeEvent
+  ): void {
+    if (!entry.drainingEvents || entry.generation !== generation) return;
+    if (event.type !== 'permission.resolved' && event.type !== 'question.resolved') return;
     this.dispatch({ ...event, sessionId: event.sessionId ?? entry.logicalSessionId });
   }
 

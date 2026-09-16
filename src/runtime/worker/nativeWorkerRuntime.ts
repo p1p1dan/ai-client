@@ -890,6 +890,12 @@ export class NativeWorkerRuntime {
     // takes, and that path emits — which `emit` drops once disposed. A gate
     // left parked here would hold the tool call's promise for the life of the
     // process.
+    //
+    // Main honours this window rather than only documenting it (main-host-03):
+    // `WorkerManager.drainingEvents` stays open from the moment a slot is
+    // retired until its disposal settles, so the `permission.resolved` and
+    // `question.resolved` emitted below still reach the renderer and retract
+    // the cards on screen.
     this.permissions.drain('session_closed');
     this.questions.drain('session_closed');
     this.previews.drain('session_closed');

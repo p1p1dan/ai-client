@@ -103,6 +103,12 @@ function createHarness(
     bootstrapFile?: (requested: string) => { sessionFile: string; sessionSourceFile?: string };
     /** P5-2-3: the preview surface. Default refuses, like a manager with no host. */
     showPreview?: (request: { path: string; focus: boolean }) => Promise<void>;
+    /**
+     * main-host-02 — the legacy import worker, for the shutdown tests that need
+     * a session pool AND an import slot in the same manager. Left out by
+     * default so every other test still builds a manager with no importer.
+     */
+    createImport?: (payload: unknown, options?: Record<string, unknown>) => Promise<unknown>;
   } = {}
 ) {
   const records: FakeSlotRecord[] = [];
@@ -362,6 +368,12 @@ function createHarness(
     readSessionDirectory,
     removeSessionFile,
     ...(input.showPreview ? { showPreview: input.showPreview } : {}),
+    ...(input.createImport
+      ? {
+          createImport: input.createImport as never,
+          reconcileImport: (async () => ({ removedFiles: 0, remainingFiles: 0 })) as never,
+        }
+      : {}),
     onEvent: (event) => events.push(event as unknown as Record<string, unknown>),
     capacity: input.capacity ?? 4,
     idleTimeoutMs: 0,
@@ -2136,6 +2148,68 @@ describe('WorkerManager isolation and crash recovery', () => {
     expect(slotForceKill).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * main-host-02 — shutdown does not stop at the first thing that refuses.
+   *
+   * `createLegacyImport`'s wrapper rethrows even after a successful force kill,
+   * and the import slot rejects whenever its ACK or exit budget runs out. That
+   * rejection used to escape `disposeAll`, so the whole session pool never
+   * received `worker.dispose` — and `cleanupWorkerManager` failed in
+   * milliseconds, which cleared the 7s deadline that would otherwise have
+   * force-killed the survivors.
+   */
+  it('disposes the session pool and stops even when the import slot refuses to go', async () => {
+    const importDispose = vi.fn(async () => {
+      throw new Error('import dispose ACK timed out');
+    });
+    // Returns false: the kill did not land either, so the manager must keep
+    // the import reachable for the app-close force kill instead of nulling it.
+    const importForceKill = vi.fn(() => false);
+    const h = createHarness({
+      createImport: async (_payload, options) => {
+        (options?.onSlotCreated as ((slot: unknown) => void) | undefined)?.({
+          state: 'running',
+          dispose: importDispose,
+          forceKillNow: importForceKill,
+        });
+        return {
+          result: {
+            logicalSessionId: 'import-logical',
+            piSessionId: 'import-pi',
+            workspacePath: '/repo',
+            stagedSessionFile: '/sessions/.staging/import-pi.jsonl',
+            finalSessionFile: '/sessions/import-pi.jsonl',
+            leaf: { activeEntryId: 'leaf', fileTailEntryId: 'leaf' },
+            history: {
+              logicalSessionId: 'import-logical',
+              sessionFile: '/sessions/import-pi.jsonl',
+              workspacePath: '/repo',
+              page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
+            },
+          },
+          pid: 7002,
+          discard: vi.fn(async () => true),
+          dispose: importDispose,
+          forceKillNow: importForceKill,
+        };
+      },
+    });
+    await create(h.manager, 's1');
+    await create(h.manager, 's2');
+    await h.manager.createLegacyImport(importPayload());
+
+    await expect(h.manager.disposeAll('app-shutdown')).resolves.toBeUndefined();
+
+    expect(importDispose).toHaveBeenCalledTimes(1);
+    expect(h.records[0].dispose).toHaveBeenCalledTimes(1);
+    expect(h.records[1].dispose).toHaveBeenCalledTimes(1);
+    expect(h.manager.getSlotSnapshots()).toEqual([]);
+    expect(h.manager.getStatus().state).toBe('stopped');
+    // The deadline force kill still reaches the import worker that refused.
+    h.manager.forceKillAllNow();
+    expect(importForceKill).toHaveBeenCalledTimes(2);
+  });
+
   it('tracks and force-kills an in-flight reconciliation WorkerSlot', async () => {
     const forceKillNow = vi.fn(() => true);
     const dispose = vi.fn(async () => undefined);
@@ -2334,6 +2408,110 @@ describe('WorkerManager manager-level state', () => {
  * session required, no idle assertion, no ownership claim. It is asked while
  * the user types, including on the start screen where no session exists.
  */
+/**
+ * main-host-03 — the dispose drain window.
+ *
+ * The worker orders its teardown so that the engine can still emit while it
+ * denies parked permission gates and cancels parked questions: see the comment
+ * on `handleDispose` (agent-host/piWorkerRpcServer.ts) and `dispose()` in
+ * runtime/worker/nativeWorkerRuntime.ts. Main used to close its event gate
+ * before asking for that teardown, so every one of those resolutions was
+ * dropped and the cards stayed on screen with nothing left to answer them.
+ */
+describe('WorkerManager dispose drain window', () => {
+  it('forwards the resolutions a worker emits while it drains, then closes the gate', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records[0];
+    record.dispose.mockImplementationOnce(async () => {
+      // Exactly what the worker does before it acks: deny the parked gate and
+      // cancel the parked question, both through the emitting path.
+      record.emit({
+        type: 'permission.resolved',
+        sessionId: 's1',
+        payload: {
+          permissionId: 'perm-1',
+          allow: false,
+          decision: 'deny',
+          autoReason: 'session_closed',
+        },
+      });
+      record.emit({
+        type: 'question.resolved',
+        sessionId: 's1',
+        payload: { questionId: 'q-1', outcome: 'cancelled' },
+      });
+    });
+    h.events.length = 0;
+
+    await h.manager.invalidateAll();
+
+    expect(h.events.map((event) => event.type)).toEqual([
+      'permission.resolved',
+      'question.resolved',
+    ]);
+    expect(h.events[0]).toMatchObject({
+      sessionId: 's1',
+      payload: { permissionId: 'perm-1', autoReason: 'session_closed' },
+    });
+
+    // The window is bounded by the disposal itself: anything the dead slot
+    // says afterwards is gone.
+    record.emit({
+      type: 'permission.resolved',
+      sessionId: 's1',
+      payload: { permissionId: 'perm-late', allow: false },
+    });
+    expect(h.events).toHaveLength(2);
+  });
+
+  it('opens the window for resolutions only, not for the rest of the stream', async () => {
+    // A retired session must not keep appending to a transcript the renderer
+    // has moved on from. Only the two events that RETRACT a pending card ride
+    // the window.
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records[0];
+    record.dispose.mockImplementationOnce(async () => {
+      record.emit({
+        type: 'message.delta',
+        sessionId: 's1',
+        payload: { messageId: 'm-1', blockId: 'b-1', text: 'still talking' },
+      });
+      record.emit({
+        type: 'session.completed',
+        sessionId: 's1',
+        payload: { reason: 'completed' },
+      });
+    });
+    h.events.length = 0;
+
+    await h.manager.invalidateAll();
+
+    expect(h.events).toEqual([]);
+  });
+
+  it('drops a drain resolution that names another session', async () => {
+    // The window relaxes the map-membership gate, so the session-ownership
+    // check is the only thing left standing between two workers' streams.
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records[0];
+    record.dispose.mockImplementationOnce(async () => {
+      record.emit({
+        type: 'permission.resolved',
+        sessionId: 'someone-else',
+        payload: { permissionId: 'perm-1', allow: false },
+      });
+    });
+    h.events.length = 0;
+
+    await h.manager.invalidateAll();
+
+    expect(h.events).toEqual([]);
+  });
+});
+
 describe('WorkerManager slash commands', () => {
   it('forwards to a ready worker and returns its list', async () => {
     const h = createHarness();
@@ -2355,16 +2533,71 @@ describe('WorkerManager slash commands', () => {
     });
   });
 
-  it('falls back to any ready worker when the named session has none', async () => {
-    // In managed mode the command set does not vary by working directory, so
-    // the nearest live worker is authoritative for all of them.
+  it('still answers from the nearest worker when no session is named', async () => {
+    // The start screen: there is no session to hand a wrong list to, and the
+    // agent-dir and user scopes are the same for every worker.
     const h = createHarness();
     await create(h.manager, 's1', 11);
 
-    await expect(h.manager.getSlashCommands({ sessionId: 'never-started' })).resolves.toEqual({
+    await expect(h.manager.getSlashCommands()).resolves.toEqual({
       commands: [{ name: 'skill:from-s1', source: 'skill' }],
       truncated: false,
     });
+  });
+
+  // main-host-01 — the fallback used to take the first ready worker in the
+  // pool, on the strength of a comment saying the command set does not vary by
+  // working directory. Decision 009 made project scope trusted and loaded, so
+  // it does: every row carries an absolute `path` under the answering worker's
+  // cwd.
+  it('falls back to a worker in the same workspace when the named session has none', async () => {
+    const h = createHarness({ createFailureAfter: 2, maxRestartAttempts: 1 });
+    await h.manager.createSession({ sessionId: 'alpha-a', workspacePath: '/work/alpha' });
+    await h.manager.createSession({ sessionId: 'alpha-b', workspacePath: '/work/alpha' });
+    h.records[1].crash('worker died');
+    await vi.waitFor(() =>
+      expect(
+        h.manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === 'alpha-b')
+      ).toMatchObject({ state: 'error' })
+    );
+
+    // Same cwd, so the project-scoped skills and prompts the live worker
+    // scanned are the ones this session would load too.
+    await expect(h.manager.getSlashCommands({ sessionId: 'alpha-b' })).resolves.toEqual({
+      commands: [{ name: 'skill:from-alpha-a', source: 'skill' }],
+      truncated: false,
+    });
+  });
+
+  it('never answers a named session from another workspace worker', async () => {
+    const h = createHarness({ createFailureAfter: 2, maxRestartAttempts: 1 });
+    await h.manager.createSession({ sessionId: 'alpha', workspacePath: '/work/alpha' });
+    await h.manager.createSession({ sessionId: 'beta', workspacePath: '/work/beta' });
+    h.records[1].crash('worker died');
+    await vi.waitFor(() =>
+      expect(
+        h.manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === 'beta')
+      ).toMatchObject({ state: 'error' })
+    );
+
+    await expect(h.manager.getSlashCommands({ sessionId: 'beta' })).resolves.toEqual({
+      commands: [],
+      truncated: false,
+    });
+    expect(h.records[0].request).not.toHaveBeenCalledWith('worker.commands', expect.anything());
+  });
+
+  it('answers empty for a named session the pool has never started', async () => {
+    // The reported case: session B in another repo, created but never sent to,
+    // so it has no entry at all and no workspace this class can compare.
+    const h = createHarness();
+    await h.manager.createSession({ sessionId: 'alpha', workspacePath: '/work/alpha' });
+
+    await expect(h.manager.getSlashCommands({ sessionId: 'never-started' })).resolves.toEqual({
+      commands: [],
+      truncated: false,
+    });
+    expect(h.records[0].request).not.toHaveBeenCalledWith('worker.commands', expect.anything());
   });
 
   it('does not require the session to be idle', async () => {
