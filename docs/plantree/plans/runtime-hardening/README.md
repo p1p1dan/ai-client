@@ -1,6 +1,6 @@
 # Runtime 加固与收口
 
-Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批次 A / B / C / D 已落地；批次 D2 补审修补待开工，决策 013 已定全做，由新对话接手）。
+Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批次 A / B / C / D 已落地；批次 D2 波 1（T037～T039，三条 high）已落地，波 2 进行中，决策 013 全做）。
 
 ## 范围
 
