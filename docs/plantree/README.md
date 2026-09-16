@@ -17,7 +17,7 @@
 
 | 计划 | 状态 | 当前阶段 | 任务树 | 用户看板 |
 |---|---|---|---|---|
-| Runtime 加固与收口 | In Progress | 批次 D2 波 1 已落地（T037～T039），波 2 进行中 | [T001～T033](plans/runtime-hardening/roadmap.md) | [当前进度](进度看板.md) |
+| Runtime 加固与收口 | In Progress | 批次 D2 波 1 / 2a / 2b 已落地（T037～T041、T045、T046），波 2c 与批次 3 并行进行中 | [T001～T033](plans/runtime-hardening/roadmap.md) | [当前进度](进度看板.md) |
 | Runtime 自主化演进（含 GUI 改进） | 已收口（参考与证据基线） | 代码侧节点全部执行完；现场与修补移交上一行 | [P0～P6 / GUI](plans/runtime-evolution/README.md) | [收口快照](plans/runtime-evolution/history/2026-09-14-进度看板-收口快照.md) |
 
 GUI 原计划根保留为[功能与验收参考](plans/gui-sdk-experience/README.md)，不再作为独立执行状态源。
