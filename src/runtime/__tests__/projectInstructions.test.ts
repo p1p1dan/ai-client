@@ -14,6 +14,7 @@
 
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { APP_STATE_DIR } from '../../shared/defaultPaths.ts';
 import {
   HOME_INSTRUCTION_FILE_NAMES,
   type InstructionSource,
@@ -526,8 +527,16 @@ describe('loadInstructionChain user tier (T059)', () => {
     // The user's ruling, pinned as data: ours first, then the two conventions
     // its users also keep. Spelled with `join` because that is how the walk
     // spells the paths it looks up.
+    //
+    // Ours comes from APP_STATE_DIR rather than a literal, and that is the
+    // forcing function `shared/__tests__/defaultPaths.test.ts` names when it
+    // allowlists `projectInstructions.ts`: that module is in a separate npm
+    // package and carries no runtime import of `src/shared`, so a rename of
+    // the state directory that misses it cannot be caught by the repo scan.
+    // It goes red here instead — before the user tier starts looking in a
+    // directory this product no longer writes to.
     expect(HOME_INSTRUCTION_FILE_NAMES).toEqual([
-      join('.pilab', 'AGENTS.md'),
+      join(APP_STATE_DIR, 'AGENTS.md'),
       join('.claude', 'CLAUDE.md'),
       join('.codex', 'AGENTS.md'),
     ]);

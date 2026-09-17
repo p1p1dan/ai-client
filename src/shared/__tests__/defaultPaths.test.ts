@@ -174,8 +174,34 @@ describe('APP_STATE_DIR is the single source of truth for the app state dir', ()
    */
   const POLICY_PATTERN = [path.join('src', 'agent-host', 'permissionPolicy.mjs')];
 
+  /**
+   * The user tier's own candidate file, `~/.pilab/AGENTS.md` (T059). It cannot
+   * import the constant for the same shape of reason as POLICY_PATTERN above:
+   * `src/runtime` is a separate npm package with its own `node_modules`, and
+   * every import it has from `src/shared` is type-only — those erase, while a
+   * constant would be the first real cross-package dependency the packaging
+   * gate exists to prevent.
+   *
+   * Listed rather than skipped, and with POLICY_PATTERN's stronger forcing
+   * function rather than DISPLAY_TEXT's: `runtime/__tests__/
+   * projectInstructions.test.ts` asserts the candidate is spelled
+   * `join(APP_STATE_DIR, 'AGENTS.md')`, so a rename that misses this file goes
+   * red there rather than silently pointing the user's global instructions at
+   * a directory nothing writes to any more.
+   */
+  const RUNTIME_SUBPACKAGE = [
+    path.join('src', 'runtime', 'plugins', 'prompt', 'projectInstructions.ts'),
+  ];
+
   it('appears in no source file but its own definition', () => {
-    expect(scanFor(APP_STATE_DIR, [DEFINITION, ...DISPLAY_TEXT, ...POLICY_PATTERN])).toEqual([]);
+    expect(
+      scanFor(APP_STATE_DIR, [
+        DEFINITION,
+        ...DISPLAY_TEXT,
+        ...POLICY_PATTERN,
+        ...RUNTIME_SUBPACKAGE,
+      ])
+    ).toEqual([]);
   });
 
   /**
