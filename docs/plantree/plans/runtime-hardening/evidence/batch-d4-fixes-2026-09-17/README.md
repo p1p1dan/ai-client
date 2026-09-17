@@ -1,7 +1,7 @@
 # 批次 D4 九项修补（T060～T068）落地与复验证据
 
 Role: evidence。日期：2026-09-17。仓库 `/home/ai/code/ai-client`，分支 `feat/runtime-evolution`，基线 HEAD `b3d751e3`。
-**本批全部未提交**（提交需用户批准）。任务身份与状态以 [roadmap](../../roadmap.md) 批次 D4 表为准，本目录只放事实与取证。
+**本批已提交**：代码 `d2bbbf13`、文档 `db8956a8`（2026-09-17）。任务身份与状态以 [roadmap](../../roadmap.md) 批次 D4 表为准，本目录只放事实与取证。
 
 ## 这一轮是怎么走完的
 
