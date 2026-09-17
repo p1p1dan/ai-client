@@ -1,0 +1,21 @@
+# T064 / DEV-4（D15）— 真机复验结果（run 3）
+
+## 造法（与批次 B 同）
+应用起好之后把 src/shared/types/workerRpc.ts:50 的 1 改成 2；
+out/main/index.js 里仍是 `const WORKER_RPC_PROTOCOL_VERSION = 1;`（grep 确认），
+dev 模式 worker 每次 fork 现读源码 → 两侧不一致。收尾 sha256 逐字节还原（ea9ebf9e…）。
+
+## 操作
+新建对话 → 粘一张 six-0.png（195.3 KB）→ 打一句「D4-T064 复验：协议不匹配后草稿应回来」→ 发送（14:05:22）。
+14:05:52 界面：「正在发送… / 正在启动 Agent Host… · 30s」，输入框已清空。
+
+## 14:06:25（满 63 秒）之后看到的
+1. **输入框里那句话回来了**：textarea.value = "D4-T064 复验：协议不匹配后草稿应回来" ✅
+2. **附件也回到附件条**：six-0.png 195.3 KB ✅
+3. 错误可见：Error: Error invoking remote method 'chat:createSession': WorkerSlotError: Worker request worker.bootstrap timed out after 60000ms ✅
+4. **右下角没有 ↺**：整页按钮的 aria-label/文本里没有任何 retry/重试 ✅（只剩 Attach files / 发送消息）
+5. **session-index.json 行数 177 → 177**，没有新增空壳行；文件里 title 为空的 19 行里最新的一条是
+   session-live-1789647205164-vw474ma（08:14，本次之前就有），批次 B 留下的 session-1789644851492-gidi2oz 仍在（预期，不自动清理）✅
+6. 日志：按天日志只多一条 [error] `chat:createSession … worker.bootstrap timed out after 60000ms`，
+   没有任何清理路径的 warn（正常删除是静默的，与 T064 预期一致）。
+截图：T064-01-draft-restored.png

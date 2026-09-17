@@ -1,0 +1,10 @@
+{
+  "sid": "session-1789656608127-jy9zhgb",
+  "case": "oversize-single",
+  "base64Chars": 9786712,
+  "rawBytesBehindIt": 7340034,
+  "attemptId": "dev34a-1789656669807",
+  "mainReturned": { "requestId": "send-1789656669843-5" },
+  "mainThrew": false,
+  "mainRoundTripMs": 70
+}

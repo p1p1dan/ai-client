@@ -1,0 +1,27 @@
+# 检查单第 30 项（TUI-1 / H20）—— reloadSessionFromDisk 耗时
+# 2026-09-17，Linux 开发机，HEAD b3d751e3，dev 模式
+
+## 1. 从日志里拿不到这个数字
+判据写的取证口径是「记录 reloadSessionFromDisk 耗时（main.log / dev.log）」。实测三处日志
+在整个 GUI→TUI→GUI 往返期间一行都没有：
+
+  tail -c +<偏移> ~/.config/jyw-ai-client-dev/logs/main.log             | grep -inE 'reload|tui|handover'  -> 0 行
+  tail -c +<偏移> ~/.config/jyw-ai-client-dev/logs/aiclient-2026-09-17.log | 同上                          -> 0 行
+  tail -c +<偏移> /tmp/t032/dev-D1.log（dev.js 标准输出）               | 同上                            -> 0 行
+
+偏移取自 TUI 续聊完成、点 GUI 之前：main.log 63121 / 按天日志 25244 / dev.log 6997。
+这与 D4 / D8 / D10 / D14 是同一族（成功路径不记 + electron-log 吞低级别）。
+
+## 2. 改为在渲染层直接计时（window.electronAPI.chat.reloadSession 往返）
+会话 session-1789647368097-07petop（已被 TUI 追加过两条条目），连测三次：
+
+  { ms: 24, r: { reloaded: true } }
+  { ms: 22, r: { reloaded: true } }
+  { ms: 25, r: { reloaded: true } }
+
+口径：performance.now() 差值，覆盖 渲染层 -> preload -> Main -> worker.reload -> 返回 全程。
+预算是 BOOTSTRAP_REQUEST_TIMEOUT_MS = 60_000 ms（createPiWorkerSlot.ts:57），实测用掉 0.04%。
+
+## 3. 真点按那一下的端到端观感
+点右上角 GUI 按钮（真鼠标序列）到 composer 重新出现：1.33 s（墙钟）。
+这一段包含 piTui.suspend + chat.reloadSession + React 切面，比上面的纯 IPC 数字大，属正常。

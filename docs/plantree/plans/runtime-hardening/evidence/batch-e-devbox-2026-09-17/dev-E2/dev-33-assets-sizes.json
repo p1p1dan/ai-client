@@ -1,0 +1,24 @@
+{
+  "big": {
+    "file": "/tmp/t032/e2-assets/big-5mib.png",
+    "width": 1024,
+    "height": 5112,
+    "bytes": 5242000,
+    "base64Chars": 6989336,
+    "sha256": "d4b2d50a988dad9ac034252a984fe812e2eb58f92d046bdb478dde6f0a8b44e3"
+  },
+  "small": {
+    "file": "/tmp/t032/e2-assets/small-1mib.png",
+    "width": 512,
+    "height": 2025,
+    "bytes": 1040000,
+    "base64Chars": 1386668,
+    "sha256": "5eb3703a14cfddbc721e53d62e425b7c04b21610db0881a7983bd399ee3123e9"
+  },
+  "storedBytesPerSend": 8376004,
+  "attachmentTurnStoredBytes": 8388608,
+  "headroomPerSend": 12604,
+  "fourSends": 33504016,
+  "sessionMaxBytes": 33554432,
+  "headroomAfterFour": 50416
+}

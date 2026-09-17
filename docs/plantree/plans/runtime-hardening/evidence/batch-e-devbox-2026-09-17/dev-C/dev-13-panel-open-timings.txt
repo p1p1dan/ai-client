@@ -1,0 +1,6 @@
+run1-cold	{"totalMs":780,"piClickMs":499,"paneMs":752,"rows":["ai-client | Claude Code |  | /home/ai/code/ai-client |  | 3 个对话","ai-client | Codex |  | /home/ai/code/ai-client |  | 320 个对话"]}
+run1b-warm-cache	{"totalMs":413,"piClickMs":318,"paneMs":413,"rows":["ai-client | Claude Code |  | /home/ai/code/ai-client |  | 3 个对话","ai-client | Codex |  | /home/ai/code/ai-client |  | 320 个对话"]}
+run2-cold-after-reload	{"totalMs":682,"piClickMs":536,"paneMs":682,"rows":["ai-client | Claude Code |  | /home/ai/code/ai-client |  | 3 个对话","ai-client | Codex |  | /home/ai/code/ai-client |  | 320 个对话"]}
+run3-cold-after-reload	{"totalMs":960,"piClickMs":465,"paneMs":672,"rows":["ai-client | Claude Code |  | /home/ai/code/ai-client |  | 3 个对话","ai-client | Codex |  | /home/ai/code/ai-client |  | 320 个对话"]}
+dev10-restore-contrast	{"totalMs":1591,"piClickMs":623,"paneMs":889,"rows":["ai-client | Claude Code |  | /home/ai/code/ai-client |  | 3 个对话","ai-client | Codex |  | /home/ai/code/ai-client |  | 320 个对话"]}
+dev12-synthetic	{"totalMs":931,"piClickMs":676,"paneMs":821,"rows":["ai-client | Claude Code |  | /home/ai/code/ai-client |  | 3 个对话","ai-client | Codex |  | /home/ai/code/ai-client |  | 321 个对话"]}

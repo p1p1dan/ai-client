@@ -1,0 +1,13 @@
+=== DEV-2 t4 (RESTARTED with 保存位置 = /home/ai/JYWAI/temporary-dev2-new) 2026-09-17T07:09:45-04:00 ===
+--- OLD root tree
+d /home/ai/JYWAI/temporary
+--- NEW root tree
+d /home/ai/JYWAI/temporary-dev2-new
+--- sidebar 临时对话 group:
+=== eval ===
+{"oldChatListed":true,"afterChange":true,"around":"临时对话\ndevB DEV-2 after-GUI-change temp session probe\ntemporary\n2m\ndevB DEV-2 new-root temp session probe\ntemporary\n4m\ndevB DEV-2 old-root temp session probe\ntemporary\n5m\nSession i4c45n\ntemporary\n11m\ndevA1KILL 回一个字：丁\ntemporary\n1h\ndevA1SCRATCH 回一个字：乙\ntemporary\n1h\ndevA1UNB 回一个字：甲 (fork)\ntemporary\n1h\ndev"}
+--- session-index.json unbound rows for this batch:
+total rows: 160 unbound rows: 16
+{"title":"devB DEV-2 old-root temp session probe","unbound":true,"workspacePath":"/home/ai/JYWAI/temporary/unbound-sessions/f6ab0bf8-d582-4516-9a9b-96f0a0beb249","model":"fake-gateway/fake-sonnet"}
+{"title":"devB DEV-2 new-root temp session probe","unbound":true,"workspacePath":"/home/ai/JYWAI/temporary/unbound-sessions/bfa22236-c79f-458e-8736-3bdf72d7982a","model":"fake-gateway/fake-sonnet"}
+{"title":"devB DEV-2 after-GUI-change temp session probe","unbound":true,"workspacePath":"/home/ai/JYWAI/temporary/unbound-sessions/e51a06d5-bd36-4af1-afe5-840586036c50","model":"fake-gateway/fake-sonnet"}

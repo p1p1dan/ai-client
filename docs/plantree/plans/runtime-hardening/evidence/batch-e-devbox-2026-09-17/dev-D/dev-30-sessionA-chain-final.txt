@@ -1,0 +1,11 @@
+--- chain (final) ---
+0 header session cb56fa8c-ebc4-41e8-ba8d-d332988aa0c6 <- None None None None ''
+1 entry model_change 22d9a6ab-d5b3-4261-a95f-235ba4206872 <- None None None None ''
+2 entry thinking_level_change 51297ecb-4494-472f-80fd-06e15be816e8 <- 22d9a6ab-d5b3-4261-a95f-235ba4206872 None None None ''
+3 entry custom eba5c6fc-9139-4507-a33c-ae2a9ec3dca7 <- 51297ecb-4494-472f-80fd-06e15be816e8 None None None ''
+4 entry message a575f7cc-8020-4424-b2ea-1464fbea61be <- eba5c6fc-9139-4507-a33c-ae2a9ec3dca7 user None None 'devD30 第一轮 GUI：回一句话'
+5 entry message 740c758b-e377-43d2-aaca-53b1c09b8c90 <- a575f7cc-8020-4424-b2ea-1464fbea61be assistant probe-fake fake-sonnet 'fake gateway ok'
+6 None message 2b64c614 <- 740c758b-e377-43d2-aaca-53b1c09b8c90 user None None 'devD30 TUI 续聊一句'
+7 None message 7bab7d25 <- 2b64c614 assistant probe-fake fake-sonnet 'fake gateway ok'
+8 entry message 19e0779e-b3da-499c-b607-957f5c8176bb <- 7bab7d25 user None None 'devD30 第三轮 GUI：再回一句'
+9 entry message dc76a1ea-a0e2-4d89-bf56-f511c6692d38 <- 19e0779e-b3da-499c-b607-957f5c8176bb assistant probe-fake fake-sonnet 'fake gateway ok'

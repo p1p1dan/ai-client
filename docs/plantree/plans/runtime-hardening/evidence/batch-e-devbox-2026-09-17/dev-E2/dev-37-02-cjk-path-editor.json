@@ -1,0 +1,11 @@
+{
+  "tabs": [],
+  "monacoPresent": true,
+  "lines": [
+    "export const CJK_MARKER = \"DEV37-B-中文目录与中文文件名\";",
+    "export function 中文函数() { return CJK_MARKER; }",
+    ""
+  ],
+  "breadcrumb": ["中文目录\n文件.ts", "中文目录\n文件.ts", "中文目录", "", "文件.ts"],
+  "errors": ["", ""]
+}

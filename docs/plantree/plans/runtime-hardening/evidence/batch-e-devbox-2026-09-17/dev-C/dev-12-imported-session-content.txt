@@ -1,0 +1,13 @@
+targetSessionFile: /home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-8e413c49-707f-4efb-b6d4-9c1cc11442f5.jsonl
+logicalSessionId: session-import-codex-bafacba4-cf0e-4256-982e-f361a2e4a0b2
+workspacePath: /home/ai/code/ai-client
+title: T032 SYNTHETIC legacy bare-row rollout (not a real Codex artefact)
+cleanupPending: False status: complete
+--- imported pi session file: 7 lines ---
+{"kind": "header", "version": 4, "id": "import-codex-8e413c49-707f-4efb-b6d4-9c1cc11442f5", "createdAt": 1789640864456, "cwd": "/home/ai/code/ai-client", "type": "session", "timestamp": "2026-09-17T10:27:44.456Z"}
+{"kind": "entry", "lane": "main", "type": "custom", "customType": "aiclient.legacy-import.provenance", "data": {"version": 1, "sourceKind": "codex", "stableSourceIdentity": "15a00712b680c6e9692cb989085ac6de9244669c1d388bdcfa926d7c77d12332", "sourceSessionId": "5b1354d1-2594-422f-a7b5-34942e313437", 
+{"kind": "fact", "fact": "name", "name": "T032 SYNTHETIC legacy bare-row rollout (not a real Codex artefact)", "seq": 2, "type": "custom", "customType": "aiclient.v4", "id": "8dceb72e-5640-4497-943e-d9883ea2f001", "parentId": "87003263-6b6c-41ae-bf3f-e2d958ac9731", "timestamp": 1789640864458}
+{"kind": "entry", "lane": "main", "type": "message", "message": {"role": "user", "content": "T032 SYNTHETIC legacy bare-row rollout (not a real Codex artefact)", "timestamp": 1789640864459}, "id": "540f812a-b484-4f0d-84e5-a2583b1d98df", "seq": 3, "parentId": "87003263-6b6c-41ae-bf3f-e2d958ac9731", "
+{"kind": "entry", "lane": "main", "type": "custom", "customType": "aiclient.legacy-import.display", "data": {"version": 1, "displayKind": "tool", "title": "shell", "toolCallId": "call_legacy_1", "toolName": "shell", "input": {"command": ["bash", "-lc", "ls"]}, "sourceEntryId": "codex-line-3"}, "id":
+{"kind": "entry", "lane": "main", "type": "custom", "customType": "aiclient.legacy-import.display", "data": {"version": 1, "displayKind": "tool", "title": "shell", "toolCallId": "call_legacy_1", "toolName": "shell", "output": "README.md\n", "sourceEntryId": "codex-line-4"}, "id": "5740da7d-ecf4-4933
+{"kind": "entry", "lane": "main", "type": "message", "message": {"role": "assistant", "content": [{"type": "text", "text": "legacy answer for T032 SYNTHETIC legacy bare-row rollout (not a real Codex artefact)"}], "api": "legacy-import", "provider": "legacy-import", "model": "codex", "usage": {"input

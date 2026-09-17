@@ -1,0 +1,47 @@
+[
+  {
+    "text": "a b.ts",
+    "containerTag": "DIV",
+    "containerRole": "button",
+    "containerSlot": null,
+    "containerTitle": "",
+    "containerCls": "group relative flex h-9 min-w-[120px] max-w-[180px] cursor-pointer select-none items-center gap-2 border-r px-",
+    "active": null
+  },
+  {
+    "text": "文件.ts",
+    "containerTag": "DIV",
+    "containerRole": "button",
+    "containerSlot": null,
+    "containerTitle": "",
+    "containerCls": "group relative flex h-9 min-w-[120px] max-w-[180px] cursor-pointer select-none items-center gap-2 border-r px-",
+    "active": null
+  },
+  {
+    "text": "deep.ts",
+    "containerTag": "DIV",
+    "containerRole": "button",
+    "containerSlot": null,
+    "containerTitle": "",
+    "containerCls": "group relative flex h-9 min-w-[120px] max-w-[180px] cursor-pointer select-none items-center gap-2 border-r px-",
+    "active": null
+  },
+  {
+    "text": "link.ts",
+    "containerTag": "DIV",
+    "containerRole": "button",
+    "containerSlot": null,
+    "containerTitle": "",
+    "containerCls": "group relative flex h-9 min-w-[120px] max-w-[180px] cursor-pointer select-none items-center gap-2 border-r px-",
+    "active": null
+  },
+  {
+    "text": "link.ts",
+    "containerTag": "BUTTON",
+    "containerRole": null,
+    "containerSlot": "menu-trigger",
+    "containerTitle": "",
+    "containerCls": "inline-flex items-center gap-1 rounded-sm hover:bg-accent/50 px-1 py-0.5 -mx-1 transition-colors text-foregrou",
+    "active": null
+  }
+]

@@ -1,0 +1,9 @@
+# 2026-09-17T09:45:10.538Z
+$ ls -la /home/ai/JYWAI/temporary
+d unbound-sessions
+
+$ ls -la /home/ai/JYWAI/temporary/unbound-sessions
+d 4e6b46a9-c79d-4788-8589-71daa4be606e
+
+$ test -d /home/ai/JYWAI/temporary/20260917-054356 -> false
+$ test -d /home/ai/JYWAI/temporary/unbound-sessions/4e6b46a9-c79d-4788-8589-71daa4be606e -> true

@@ -1,0 +1,32 @@
+Script started on 2026-09-17 08:38:07-04:00 [COMMAND="env PI_CODING_AGENT_DIR=/home/ai/.pilab/jyw-ai-client-dev/pi-agent no_proxy=localhost,127.0.0.1,::1 TERM=xterm-256color node /home/ai/code/ai-client/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js --session-dir /home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions --resume --offline --no-extensions" <not executed on terminal>]
+[>7u
+────────────────────────────────────────────────────────────────────────────────
+
+Resume Session (Curren ○ Current Folder | Loading ...  Name: All  Sort: Threaded
+tab scope · re:<pattern> regex · "phrase" exact
+ctrl+s sort · ctrl+n named · ctrl+d delete · ctrl+p path (off)
+
+>                                                                               
+
+  No sessions in current folder. Press Tab to view all.
+
+────────────────────────────────────────────────────────────────────────────────Resume Session (Curre ○ Current Folder | Loading 5/66  Name: All  Sort: ThreadedResume Session (Curr ○ Current Folder | Loading 17/66  Name: All  Sort: ThreadedResume Session (Curr ○ Current Folder | Loading 35/66  Name: All  Sort: ThreadedResume Session (Curr ○ Current Folder | Loading 49/66  Name: All  Sort: ThreadedResume Session (Curr ○ Current Folder | Loading 57/66  Name: All  Sort: ThreadedResume Session (Curr ○ Current Folder | Loading 64/66  Name: All  Sort: ThreadedResume Session (Current Fold ◉ Current Folder | ○ All  Name: All  Sort: Threaded
+tab scope · re:<pattern> regex · "phrase" exact
+ctrl+s sort · ctrl+n named · ctrl+d delete · ctrl+p path (off)
+
+>                                                                               
+
+› T032 bulk rollout #014 2026-09-10 topic=theme                             5 2m
+  devD30 第一轮 GUI：回一句话                                              8 11m
+  devD14 聊天B 第一轮                                                      2 14m
+  (no messages)                                                            0 24m
+  devB DEV-18 node24 banner probe                                          8 50m
+  T032 SYNTHETIC legacy bare-row rollout (not a real Codex artefact)        2 2h
+  devA1CORRUPT 回一个字：戊                                                 2 2h
+  回一个字：甲                                                              2 3h
+  用 bash 运行这条命令：echo p6-native-default-ok。只运行，不要解释。       4 3d
+  用 bash 运行这条命令：echo p6-native-default-ok。只运行，不要解释。       4 3d
+  (1/55)
+
+────────────────────────────────────────────────────────────────────────────────
+Script done on 2026-09-17 08:38:49-04:00 [COMMAND_EXIT_CODE="0"]

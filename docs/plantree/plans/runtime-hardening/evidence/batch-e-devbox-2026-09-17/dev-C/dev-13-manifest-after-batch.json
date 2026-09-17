@@ -1,0 +1,1373 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:6461e999313cc4068595b7039e7f15cf0ea0a27cea708aaafd0643a597c1e4d0:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "6461e999313cc4068595b7039e7f15cf0ea0a27cea708aaafd0643a597c1e4d0",
+        "size": 1866534,
+        "mode": 33152,
+        "mtimeMs": 1788363599791.0442
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-cfb1ca8d-fd14-427b-8b20-f097e209ce6a",
+      "targetPiSessionId": "import-afe0585f-0bdc-4bf0-a663-efbe9139f66a",
+      "startedAt": 1788363673599,
+      "integrity": "4c57c1ed1c8613febf746f3e072ab80773ee75f074208fb667fa6d702caf2cc4",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-41-14-539Z_import-afe0585f-0bdc-4bf0-a663-efbe9139f66a.jsonl",
+      "completedAt": 1788363674602,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:1d5a87728df309fcc1ed6ed3a8fcc72cd2c644fcf67f587d7fe0525156d85ef4:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "1d5a87728df309fcc1ed6ed3a8fcc72cd2c644fcf67f587d7fe0525156d85ef4",
+        "size": 3365369,
+        "mode": 33152,
+        "mtimeMs": 1788364947523.4866
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-121374fa-0f86-43fb-a772-1c9b0c4e0ac8",
+      "targetPiSessionId": "import-81c2ecd9-7ba5-4cee-8e13-f35ea0232db1",
+      "startedAt": 1788365016739,
+      "integrity": "21201beb8ba1383651a8c52d270a3fcb0f07390033794ee3e00ead0b1115176d",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-03-37-612Z_import-81c2ecd9-7ba5-4cee-8e13-f35ea0232db1.jsonl",
+      "completedAt": 1788365017677,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:5fbe5d89645d6576e846b947a9fbdd4f1d7cd0a595d003714ffda952ffbb5044:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "5fbe5d89645d6576e846b947a9fbdd4f1d7cd0a595d003714ffda952ffbb5044",
+        "size": 3427148,
+        "mode": 33152,
+        "mtimeMs": 1788365391073.7205
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-99a977c3-6634-4c9a-a9eb-1b46880ba3de",
+      "targetPiSessionId": "import-2809d882-c1ea-454b-8702-05c74751ffa5",
+      "startedAt": 1788365453243,
+      "integrity": "4ef9a634658d9295dede8a003be6ae05e88ee96b2b125a913bc4ca735de39640",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-10-54-098Z_import-2809d882-c1ea-454b-8702-05c74751ffa5.jsonl",
+      "completedAt": 1788365454167,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:25cf512389f2acf8c347f85c2556fad6ceee52ad88573e36a22c548993b8e85a:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "25cf512389f2acf8c347f85c2556fad6ceee52ad88573e36a22c548993b8e85a",
+        "size": 3455943,
+        "mode": 33152,
+        "mtimeMs": 1788365534913.9578
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-3cd1fe0e-1c1c-43d0-b427-30b32806e68d",
+      "targetPiSessionId": "import-d2b83e79-9fab-4545-8463-f01c848acc6d",
+      "startedAt": 1788365585609,
+      "integrity": "56961ec528e9eeabd1a0211b9fea1432e4423af4ef7ed5a164dc7a93d3827d53",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-13-06-577Z_import-d2b83e79-9fab-4545-8463-f01c848acc6d.jsonl",
+      "completedAt": 1788365586638,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:0f94c8c22c9f722b1bfb5ea023ae746937eb39377ba8fd89680b2b5e3c15822b:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "0f94c8c22c9f722b1bfb5ea023ae746937eb39377ba8fd89680b2b5e3c15822b",
+        "size": 3532211,
+        "mode": 33152,
+        "mtimeMs": 1788365865640.2993
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-ba5afa43-e1b9-4b00-a0fa-f943ba559350",
+      "targetPiSessionId": "import-43950ebd-385d-4aa1-a244-ced3f5467c7e",
+      "startedAt": 1788366176118,
+      "integrity": "55a455ab8cc88d2aa0d352a150523940ea60299d554e7ed63e8858ea9fdcf783",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-22-57-022Z_import-43950ebd-385d-4aa1-a244-ced3f5467c7e.jsonl",
+      "completedAt": 1788366177087,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:fd6b941eb52fbb446aee04d81b92b600dd06261a5304de9e017719cef86ec5ec:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "fd6b941eb52fbb446aee04d81b92b600dd06261a5304de9e017719cef86ec5ec",
+        "size": 3635682,
+        "mode": 33152,
+        "mtimeMs": 1788367115426.4944
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-f34ddff7-ebf7-4ca9-bc86-44611e5641be",
+      "targetPiSessionId": "import-e6a17de1-a5d8-4979-af5c-4e089112fc2b",
+      "startedAt": 1788367165115,
+      "integrity": "8e1653ac69d533574014050c616da149399fcff2790901175ecc75fcad6f253b",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-39-26-093Z_import-e6a17de1-a5d8-4979-af5c-4e089112fc2b.jsonl",
+      "completedAt": 1788367166230,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:fd7dc68674f0c85a21dcde0ef963f9e905d6893e3927a4e49fa0463344237e9b:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "fd7dc68674f0c85a21dcde0ef963f9e905d6893e3927a4e49fa0463344237e9b",
+        "size": 5330328,
+        "mode": 33152,
+        "mtimeMs": 1788368032618.267
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-08175b24-93c1-4ff3-90e1-7aa58aa39c65",
+      "targetPiSessionId": "import-d7c6acdf-aa24-4f6c-9354-6ed5892b4ae6",
+      "startedAt": 1788368088395,
+      "integrity": "07b28b92acb40020f9a772e68a73426522b356c4b6888de67c9228bdbd360b18",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-49-319Z_import-d7c6acdf-aa24-4f6c-9354-6ed5892b4ae6.jsonl",
+      "completedAt": 1788368089391,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:9603381a4bda5efb557addb387c3a71d44207e648d0f6310241838353661672b:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "9603381a4bda5efb557addb387c3a71d44207e648d0f6310241838353661672b",
+        "size": 7625158,
+        "mode": 33152,
+        "mtimeMs": 1788401595613
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-686d5ca3-24e2-4a3f-852c-35e6fe9d26e2",
+      "targetPiSessionId": "import-a811cbf0-ceb4-4bbd-b612-2cceec293f20",
+      "startedAt": 1788401645485,
+      "integrity": "76f12f87d01bb7debf9b2882943e1076dfdec71116f184116b73825e280413c2",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-14-06-415Z_import-a811cbf0-ceb4-4bbd-b612-2cceec293f20.jsonl",
+      "completedAt": 1788401646517,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:b9b519f48a3581356291e8e7b555332675aa588ff4de0cbe1e2f63400e8e2b3b:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "b9b519f48a3581356291e8e7b555332675aa588ff4de0cbe1e2f63400e8e2b3b",
+        "size": 7715135,
+        "mode": 33152,
+        "mtimeMs": 1788401882247.996
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-8c414d42-9dbc-42b6-8907-38351b5d69c0",
+      "targetPiSessionId": "import-2e3b3c96-ec99-4785-beed-be61dcf6c3a8",
+      "startedAt": 1788401929805,
+      "integrity": "3b6cfa0d09f0817729aec3108f815a3a72207a7893517843a14d6e8f77449b0a",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-50-790Z_import-2e3b3c96-ec99-4785-beed-be61dcf6c3a8.jsonl",
+      "completedAt": 1788401930893,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:57e75cacb5d53f9aa3c567eced03f7c60c5d9e47a1b8a7d7b8077b32aca43eea:01a01d4a-3119-7fd0-a16a-fd81b2ceec9b:dc951162e0f9ae973be7e968c805987a70220fc1beccd32e376804c6aad6069b:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "01a01d4a-3119-7fd0-a16a-fd81b2ceec9b",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/home/ai/.codex/sessions/2026/08/19/rollout-2026-08-19T23-49-56-01a01d4a-3119-7fd0-a16a-fd81b2ceec9b.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "57e75cacb5d53f9aa3c567eced03f7c60c5d9e47a1b8a7d7b8077b32aca43eea",
+        "contentHash": "dc951162e0f9ae973be7e968c805987a70220fc1beccd32e376804c6aad6069b",
+        "size": 307707,
+        "mode": 33204,
+        "mtimeMs": 1787197897293.6445
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "help me install :https://github.com/pnedfff/claude-env-cleanup",
+      "logicalSessionId": "session-import-codex-8aa6e997-aeb8-4b05-a16c-f3277dd9f43b",
+      "targetPiSessionId": "import-codex-2729be2b-6110-4415-af9a-3cb9c82b8337",
+      "startedAt": 1789108841514,
+      "integrity": "7fca0423544e1fed5059e29e4aaebc2dae5b0bc97165c3cc37b9d12ba87ab02c",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T06-40-42-756Z_import-codex-2729be2b-6110-4415-af9a-3cb9c82b8337.jsonl",
+      "completedAt": 1789108842792,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:3fb4ed6eab380df4938e94ec7d270c610f86df568cf6d0efb96cc9dd704648c9:01a04216-e5b9-71d1-9b81-6d2b32fa2fdc:42c7c081dfabaec69befd16e1642c46bfe5a479188660ce4bc22703abd9dea20:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-4befff4a656a138c403ced34953e40a827b55b6ecb26089154fc5ac3733d8e72",
+        "sourceSessionId": "01a04216-e5b9-71d1-9b81-6d2b32fa2fdc",
+        "workspaceMatched": false
+      },
+      "sourcePath": "/home/ai/.codex/sessions/2026/08/27/rollout-2026-08-27T03-19-51-01a04216-e5b9-71d1-9b81-6d2b32fa2fdc.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "3fb4ed6eab380df4938e94ec7d270c610f86df568cf6d0efb96cc9dd704648c9",
+        "contentHash": "42c7c081dfabaec69befd16e1642c46bfe5a479188660ce4bc22703abd9dea20",
+        "size": 152160,
+        "mode": 33204,
+        "mtimeMs": 1787815418638.8137
+      },
+      "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/6fb41b29-f3b2-4918-a498-f098bfbd776b",
+      "title": "pi-install.sh  我运行时报错有点问题，帮我看看，刚刚提示npm不存在",
+      "logicalSessionId": "session-import-codex-904fda2c-a6b6-4fdb-b16e-4acac2b9b192",
+      "targetPiSessionId": "import-codex-c51e6a41-b166-40cc-8a06-b4dbaaeae38d",
+      "startedAt": 1789109498374,
+      "integrity": "86451c19ce426592b779be0ad6a7eef241b17962dec9b2bb7b8b2f0b331ee224",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-JYWAI-temporary-unbound-sessions-6fb41b29-f3b2-4918-a498-f098bfbd776b--/2026-09-11T06-51-39-575Z_import-codex-c51e6a41-b166-40cc-8a06-b4dbaaeae38d.jsonl",
+      "completedAt": 1789109499587,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:68f9d1076605878713a7907b906bcb2cde1812abaa5879f98aa360770fdd9dcf:6d1b0bf6-15c0-4233-b8a9-c99dc71b8670:dc2151c5640d1a258c31a327ad272d0958a48addd4acca0b0c2efa25f48ffa99:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "6d1b0bf6-15c0-4233-b8a9-c99dc71b8670",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T00-00-00-6d1b0bf6-15c0-4233-b8a9-c99dc71b8670.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "68f9d1076605878713a7907b906bcb2cde1812abaa5879f98aa360770fdd9dcf",
+        "contentHash": "dc2151c5640d1a258c31a327ad272d0958a48addd4acca0b0c2efa25f48ffa99",
+        "size": 3614,
+        "mode": 33204,
+        "mtimeMs": 1789639739682.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #001 2026-09-10 topic=terminal",
+      "logicalSessionId": "session-import-codex-65571a2a-e7a7-4625-b191-943f93d6d4a2",
+      "targetPiSessionId": "import-codex-d8dbe8c5-35b1-481d-86a2-8c529a2db361",
+      "startedAt": 1789640357119,
+      "integrity": "469bc3e3b96b5380e745a8427e5d31874875d9f261894cc1a73630a422989f65",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-d8dbe8c5-35b1-481d-86a2-8c529a2db361.jsonl",
+      "completedAt": 1789640358777,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:fd63ee487f38db2b4eba03f6931784f13c8d8a0887fa3da0851db8b3ab3593c0:ac7e518f-d3cd-48bb-b798-37292c42ae5e:074dd0bad8557850bdbd893ab2c3e14bfa6df822a0f5d530d2a8db8a694cb2ca:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "ac7e518f-d3cd-48bb-b798-37292c42ae5e",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T00-36-00-ac7e518f-d3cd-48bb-b798-37292c42ae5e.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "fd63ee487f38db2b4eba03f6931784f13c8d8a0887fa3da0851db8b3ab3593c0",
+        "contentHash": "074dd0bad8557850bdbd893ab2c3e14bfa6df822a0f5d530d2a8db8a694cb2ca",
+        "size": 3614,
+        "mode": 33204,
+        "mtimeMs": 1789639739698.6055
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #049 2026-09-10 topic=terminal",
+      "logicalSessionId": "session-import-codex-bfc21400-4d30-4f9c-8289-d6c9555461e3",
+      "targetPiSessionId": "import-codex-4c271856-63d7-4e7c-a65f-97b95ae0a387",
+      "startedAt": 1789640359252,
+      "integrity": "3a3891c3a6add4a257e7bfab648ca0e7cc68659b350e793de6e2b5f387127a7c",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-4c271856-63d7-4e7c-a65f-97b95ae0a387.jsonl",
+      "completedAt": 1789640360112,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:271facdaf10c7b1f93bf8397c1002dcc410e9117c34c11773ccbfdce4b35c680:fed93744-1702-4f69-b573-ae90014dc349:687af872fc27fc99f5c63cbfc200eed309ae8d86cc277b09e1fed065f7258880:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "fed93744-1702-4f69-b573-ae90014dc349",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T00-48-00-fed93744-1702-4f69-b573-ae90014dc349.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "271facdaf10c7b1f93bf8397c1002dcc410e9117c34c11773ccbfdce4b35c680",
+        "contentHash": "687af872fc27fc99f5c63cbfc200eed309ae8d86cc277b09e1fed065f7258880",
+        "size": 3602,
+        "mode": 33204,
+        "mtimeMs": 1789639739691.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #025 2026-09-10 topic=trace",
+      "logicalSessionId": "session-import-codex-2b6e3fb7-4996-403f-ba5e-edb1637e2be2",
+      "targetPiSessionId": "import-codex-12cc8872-0341-4b1f-abc9-8a52f8d94128",
+      "startedAt": 1789640360355,
+      "integrity": "7e2c4b88fbed9cf85ea5e8563b31c1babb929964941581b4d8be555caf16dc7c",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-12cc8872-0341-4b1f-abc9-8a52f8d94128.jsonl",
+      "completedAt": 1789640361454,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:0e6965a23f6d2b11c8ef4174bcf30863987729b6777f66c3e5646151dde8446a:6df0dbe8-359c-4895-9144-3b119b191f00:c7e4a4bb2e0f465c53734c610d6cf69f9684850fc4597084f2c0dd09bac132f8:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "6df0dbe8-359c-4895-9144-3b119b191f00",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T01-07-00-6df0dbe8-359c-4895-9144-3b119b191f00.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "0e6965a23f6d2b11c8ef4174bcf30863987729b6777f66c3e5646151dde8446a",
+        "contentHash": "c7e4a4bb2e0f465c53734c610d6cf69f9684850fc4597084f2c0dd09bac132f8",
+        "size": 3606,
+        "mode": 33204,
+        "mtimeMs": 1789639739683.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #002 2026-09-10 topic=editor",
+      "logicalSessionId": "session-import-codex-9da5003c-4b60-418c-ae0f-aaa2cd96ee63",
+      "targetPiSessionId": "import-codex-9366c912-2d78-4b38-bac1-da3f0eea5d5b",
+      "startedAt": 1789640361739,
+      "integrity": "05dc6d38675aeb7507f2567fc6de1f6dbcc3fce46247f36f0a33e3c8f50cbddc",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-9366c912-2d78-4b38-bac1-da3f0eea5d5b.jsonl",
+      "completedAt": 1789640362949,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:20f28acdd0602a1b599d47e2854c5e906608286ca09b32d360cb9358786af554:52208fc2-74ae-45e9-a151-5d505e1fadb3:3b66494f3a0422b0d9df9d1846fad90959190afe53123db01c3405bdbdcc4b7a:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "52208fc2-74ae-45e9-a151-5d505e1fadb3",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T01-43-00-52208fc2-74ae-45e9-a151-5d505e1fadb3.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "20f28acdd0602a1b599d47e2854c5e906608286ca09b32d360cb9358786af554",
+        "contentHash": "3b66494f3a0422b0d9df9d1846fad90959190afe53123db01c3405bdbdcc4b7a",
+        "size": 3606,
+        "mode": 33204,
+        "mtimeMs": 1789639739698.6055
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #050 2026-09-10 topic=editor",
+      "logicalSessionId": "session-import-codex-b7e7cc9e-222a-4fb4-a6f5-90921427b37e",
+      "targetPiSessionId": "import-codex-ccf38249-eb67-4465-975a-f9c61f5d6023",
+      "startedAt": 1789640363348,
+      "integrity": "56892dda1e9e2883a9d105871df39b047d0cd033362fdc608e37e816b683c467",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-ccf38249-eb67-4465-975a-f9c61f5d6023.jsonl",
+      "completedAt": 1789640364293,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:669d5bf594075851ee25dde1a72fa0d27596e12afa67153a2d8e6369df17a7a6:f48be8bb-2310-4ca9-9cd8-5c8ae54d5df1:1253b0ba3c7fb18400b5e2852aed8b3f86303f527f6f598ec963ea433b904412:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "f48be8bb-2310-4ca9-9cd8-5c8ae54d5df1",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T01-55-00-f48be8bb-2310-4ca9-9cd8-5c8ae54d5df1.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "669d5bf594075851ee25dde1a72fa0d27596e12afa67153a2d8e6369df17a7a6",
+        "contentHash": "1253b0ba3c7fb18400b5e2852aed8b3f86303f527f6f598ec963ea433b904412",
+        "size": 3606,
+        "mode": 33204,
+        "mtimeMs": 1789639739691.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #026 2026-09-10 topic=worker",
+      "logicalSessionId": "session-import-codex-a03d8ef0-8d4a-4173-ab44-6614e3e4a4f3",
+      "targetPiSessionId": "import-codex-91fef80f-9761-4be0-8f72-17904b19bbd5",
+      "startedAt": 1789640364472,
+      "integrity": "d7fd41174b598ad2d1a2c0e9430560b1e2ff3222ba6577932e650c4054ed7b7a",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-91fef80f-9761-4be0-8f72-17904b19bbd5.jsonl",
+      "completedAt": 1789640365588,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:b60b511b619515f7dd0058455b53fbe476ed01f5bdee4b2b5e87006c4176ec24:26f0449d-ebe4-4a68-811e-525f997030bf:4bd8fc0102a065694759b4529da0a1ec154b08f3dd5b23a41a2f3b713c401875:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "26f0449d-ebe4-4a68-811e-525f997030bf",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T02-02-00-26f0449d-ebe4-4a68-811e-525f997030bf.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "b60b511b619515f7dd0058455b53fbe476ed01f5bdee4b2b5e87006c4176ec24",
+        "contentHash": "4bd8fc0102a065694759b4529da0a1ec154b08f3dd5b23a41a2f3b713c401875",
+        "size": 3610,
+        "mode": 33204,
+        "mtimeMs": 1789639739692.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #027 2026-09-10 topic=scratch",
+      "logicalSessionId": "session-import-codex-5c6c04e2-11ca-41b4-aa1d-ef48d5d4b49f",
+      "targetPiSessionId": "import-codex-35db9af2-5674-4fda-bf1c-6cebf9b7d0cd",
+      "startedAt": 1789640365939,
+      "integrity": "515857060989be8d7941abb6fb25f7dd90bab62182e40e59e9d5d88eeb7ffd5c",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-35db9af2-5674-4fda-bf1c-6cebf9b7d0cd.jsonl",
+      "completedAt": 1789640367161,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:1ae4a184a1f693c3b7212a3fba2ef678fa756865307e85dbf4ad0d723424873d:341663b4-c6a9-457e-9d24-2ea7e1ce022e:99de89a3773dfad8de1393050400fc461baad25e511d98e39be7a5145ef26cbf:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "341663b4-c6a9-457e-9d24-2ea7e1ce022e",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T02-14-00-341663b4-c6a9-457e-9d24-2ea7e1ce022e.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1ae4a184a1f693c3b7212a3fba2ef678fa756865307e85dbf4ad0d723424873d",
+        "contentHash": "99de89a3773dfad8de1393050400fc461baad25e511d98e39be7a5145ef26cbf",
+        "size": 3610,
+        "mode": 33204,
+        "mtimeMs": 1789639739683.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #003 2026-09-10 topic=runtime",
+      "logicalSessionId": "session-import-codex-b12f0fba-d80c-49ef-b2cd-7de92631896b",
+      "targetPiSessionId": "import-codex-107a9be0-459f-4074-bed7-d8bb44ab682b",
+      "startedAt": 1789640367472,
+      "integrity": "6992b23cb873b5e4ab82e9a494f4d77e9ed3ea760f4eb535e71bf2793a264131",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-107a9be0-459f-4074-bed7-d8bb44ab682b.jsonl",
+      "completedAt": 1789640368386,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:aa99c9563e461eb8ef7ce613959e3519005ecba8bd96913a2127d933e8c11f03:62ba6535-a06a-4d4a-9bd6-0cc9438953aa:3bd25aa14f91f2c2675bce745f2e2f47e74c7695d40a4b8ab43006d70edb61fc:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "62ba6535-a06a-4d4a-9bd6-0cc9438953aa",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T02-50-00-62ba6535-a06a-4d4a-9bd6-0cc9438953aa.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "aa99c9563e461eb8ef7ce613959e3519005ecba8bd96913a2127d933e8c11f03",
+        "contentHash": "3bd25aa14f91f2c2675bce745f2e2f47e74c7695d40a4b8ab43006d70edb61fc",
+        "size": 3610,
+        "mode": 33204,
+        "mtimeMs": 1789639739698.6055
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #051 2026-09-10 topic=runtime",
+      "logicalSessionId": "session-import-codex-5895f3ef-3a9c-4141-9b05-e5c50a3d37d7",
+      "targetPiSessionId": "import-codex-0a887b64-ffa1-4fc3-8a0c-3222054edd40",
+      "startedAt": 1789640368562,
+      "integrity": "db58c05614991127f6f7dc83fe131b6dc97c578b9cd9727551f8c4ecd069a4ad",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-0a887b64-ffa1-4fc3-8a0c-3222054edd40.jsonl",
+      "completedAt": 1789640369574,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:cf7c0778d3ade1774488f9c27243bad70ac6bf1faccc1d7303fdc5cf70faf9f8:1e962f8c-c5c7-4725-949d-98943179978e:cbefe85e0c9c86a0a0f8754e984854152b1fcaa7cae3224b2aee110b40da4bec:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "1e962f8c-c5c7-4725-949d-98943179978e",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T03-09-00-1e962f8c-c5c7-4725-949d-98943179978e.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "cf7c0778d3ade1774488f9c27243bad70ac6bf1faccc1d7303fdc5cf70faf9f8",
+        "contentHash": "cbefe85e0c9c86a0a0f8754e984854152b1fcaa7cae3224b2aee110b40da4bec",
+        "size": 3602,
+        "mode": 33204,
+        "mtimeMs": 1789639739692.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #028 2026-09-10 topic=vault",
+      "logicalSessionId": "session-import-codex-322d5f4d-b1dc-4d74-8059-f4cbb90ae806",
+      "targetPiSessionId": "import-codex-90e71e5e-102a-4d67-8d45-7b6a2f125e09",
+      "startedAt": 1789640369891,
+      "integrity": "6a3b1ffabdd44445a067dba7949a59ccdfe3c524189dbcfde8437306371dfcc4",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-90e71e5e-102a-4d67-8d45-7b6a2f125e09.jsonl",
+      "completedAt": 1789640371393,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:5a53bfb2673a6342eb96f7b33d153b89d14dc7815e69fd9b08d461c5052787d5:1707c2cf-a27f-4134-b2ff-b05f55153495:b1176153407f34498d54ab7ee4b1c81774a98ccf807230c88be7daad59a4be6c:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "1707c2cf-a27f-4134-b2ff-b05f55153495",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T03-21-00-1707c2cf-a27f-4134-b2ff-b05f55153495.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "5a53bfb2673a6342eb96f7b33d153b89d14dc7815e69fd9b08d461c5052787d5",
+        "contentHash": "b1176153407f34498d54ab7ee4b1c81774a98ccf807230c88be7daad59a4be6c",
+        "size": 3622,
+        "mode": 33204,
+        "mtimeMs": 1789639739683.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #004 2026-09-10 topic=permission",
+      "logicalSessionId": "session-import-codex-9ad6488a-362d-4cbf-8287-c394eb247eef",
+      "targetPiSessionId": "import-codex-f8c741cd-132a-421c-a998-9dda69bf28da",
+      "startedAt": 1789640371684,
+      "integrity": "b2f30fe821265976d0c6dbb7f25f2ab2634771f60d5a4780071f3ca0afcc25f7",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-f8c741cd-132a-421c-a998-9dda69bf28da.jsonl",
+      "completedAt": 1789640372540,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:77f1394818c94343ee8f8544e4953c4fdc7f8df1ff05cd96df8fce40f22ba1e4:04f4d280-cd82-4cab-baee-19da6fa9882a:be5e80cea9f3770c45d5394e2c3f356808935de4519b5a0bc990bcc95dbe4b3e:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "04f4d280-cd82-4cab-baee-19da6fa9882a",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T03-57-00-04f4d280-cd82-4cab-baee-19da6fa9882a.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "77f1394818c94343ee8f8544e4953c4fdc7f8df1ff05cd96df8fce40f22ba1e4",
+        "contentHash": "be5e80cea9f3770c45d5394e2c3f356808935de4519b5a0bc990bcc95dbe4b3e",
+        "size": 3622,
+        "mode": 33204,
+        "mtimeMs": 1789639739698.6055
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #052 2026-09-10 topic=permission",
+      "logicalSessionId": "session-import-codex-d5db87d4-55a3-4d7e-8f55-013a690738e6",
+      "targetPiSessionId": "import-codex-777a7d9e-85e6-4bf7-843d-18b8af816f3b",
+      "startedAt": 1789640372747,
+      "integrity": "6c8755d4d394924a56ec11477b2b3524d89f5c84938f153854c54a778cf9236f",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-777a7d9e-85e6-4bf7-843d-18b8af816f3b.jsonl",
+      "completedAt": 1789640373938,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:c940140fea127d451696524ce0dfe8635ad084ce728d976757439a5fab76babe:e2a3ee60-ba5d-49fe-bbd5-f1961b8f30e5:9703dc681c5cd81b7cd501d431876f526755dabb344e5175bc6467d3945632e2:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "e2a3ee60-ba5d-49fe-bbd5-f1961b8f30e5",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T04-04-00-e2a3ee60-ba5d-49fe-bbd5-f1961b8f30e5.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "c940140fea127d451696524ce0dfe8635ad084ce728d976757439a5fab76babe",
+        "contentHash": "9703dc681c5cd81b7cd501d431876f526755dabb344e5175bc6467d3945632e2",
+        "size": 3610,
+        "mode": 33204,
+        "mtimeMs": 1789639739699.6055
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #053 2026-09-10 topic=session",
+      "logicalSessionId": "session-import-codex-85cd9b8c-5665-42fb-ab51-abf0fac8750f",
+      "targetPiSessionId": "import-codex-b2de0b3c-d5bc-43aa-9464-1eb39001bd4f",
+      "startedAt": 1789640374288,
+      "integrity": "9b4a9136f13afecea6c6e1dabbe48a3ddf9488b01486c1c7e44151713f1f7a9c",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-b2de0b3c-d5bc-43aa-9464-1eb39001bd4f.jsonl",
+      "completedAt": 1789640375473,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:04f7c6825f193267552fef5d37c485e5ca52fb0fbcf5ec75275088f9dcc0be1a:6910f86f-766d-42e2-96fc-db88e93dae2c:1d02235772fed38be256a0dd92e4524c72f857ee35a4df6c4cf1b29bbac40f07:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "6910f86f-766d-42e2-96fc-db88e93dae2c",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T04-16-00-6910f86f-766d-42e2-96fc-db88e93dae2c.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "04f7c6825f193267552fef5d37c485e5ca52fb0fbcf5ec75275088f9dcc0be1a",
+        "contentHash": "1d02235772fed38be256a0dd92e4524c72f857ee35a4df6c4cf1b29bbac40f07",
+        "size": 3610,
+        "mode": 33204,
+        "mtimeMs": 1789639739692.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #029 2026-09-10 topic=catalog",
+      "logicalSessionId": "session-import-codex-364ca7e1-1587-49a8-8ec3-a800c87e92cb",
+      "targetPiSessionId": "import-codex-bb8bd818-81bb-4a4a-9df3-a4cc7fa5acb7",
+      "startedAt": 1789640375879,
+      "integrity": "9dc12e4abb887e7e551607755118d8b269f7bdc7c31db2c54dcfdd0febb2e93c",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-bb8bd818-81bb-4a4a-9df3-a4cc7fa5acb7.jsonl",
+      "completedAt": 1789640376653,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:c87a3a78da844d63d840b8dd43eb6cc82132f441203d24699eb759e7f7f203d9:b1a97d89-522c-43cb-a061-7bb1b69c51b0:f3f04b9b2caec95383c279c9272e96268a19d272424056d0c6e7c823447d3663:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "b1a97d89-522c-43cb-a061-7bb1b69c51b0",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T04-28-00-b1a97d89-522c-43cb-a061-7bb1b69c51b0.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "c87a3a78da844d63d840b8dd43eb6cc82132f441203d24699eb759e7f7f203d9",
+        "contentHash": "f3f04b9b2caec95383c279c9272e96268a19d272424056d0c6e7c823447d3663",
+        "size": 3610,
+        "mode": 33204,
+        "mtimeMs": 1789639739684.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #005 2026-09-10 topic=session",
+      "logicalSessionId": "session-import-codex-1386f824-6a5e-4e87-a8fe-9b1be8dca57d",
+      "targetPiSessionId": "import-codex-e7f08fc4-1791-4404-b586-c3c90329bd54",
+      "startedAt": 1789640376801,
+      "integrity": "c0214f367f20f6469a971258d6c25334e389e8e251b867a22f039206dda19d43",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-e7f08fc4-1791-4404-b586-c3c90329bd54.jsonl",
+      "completedAt": 1789640378238,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:53e5c4e429dbc1861e893640bb5459bef791d6067c51826488dfbbc992fecd42:9e992882-ffec-4daa-b5d3-596aa062eb73:46e80923b7c204b7fc4c2bedfd7d8e9edc27279714a84c0fa703d80953fca761:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "9e992882-ffec-4daa-b5d3-596aa062eb73",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T05-11-00-9e992882-ffec-4daa-b5d3-596aa062eb73.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "53e5c4e429dbc1861e893640bb5459bef791d6067c51826488dfbbc992fecd42",
+        "contentHash": "46e80923b7c204b7fc4c2bedfd7d8e9edc27279714a84c0fa703d80953fca761",
+        "size": 3606,
+        "mode": 33204,
+        "mtimeMs": 1789639739699.6055
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #054 2026-09-10 topic=plugin",
+      "logicalSessionId": "session-import-codex-94d91165-e0ba-4d9d-969f-a64547a6da30",
+      "targetPiSessionId": "import-codex-68f47078-1f05-4b8b-b180-17896d6b0f56",
+      "startedAt": 1789640378691,
+      "integrity": "6ba8f7431cf15d05d84ddf0bf177475b5bc728036bffb17cb9b87ad527f46f67",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-68f47078-1f05-4b8b-b180-17896d6b0f56.jsonl",
+      "completedAt": 1789640379753,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:1622e39c0a3a949a4c915936300a5d114f21c27a61495f2e1747bc5d60beff0a:42435c72-482c-460a-9f9b-e31f9c52ee9f:e007d5c58fa554e39d3646a81aa1d7cf373b7551afd3da136bd2945f82826738:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "42435c72-482c-460a-9f9b-e31f9c52ee9f",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T05-23-00-42435c72-482c-460a-9f9b-e31f9c52ee9f.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1622e39c0a3a949a4c915936300a5d114f21c27a61495f2e1747bc5d60beff0a",
+        "contentHash": "e007d5c58fa554e39d3646a81aa1d7cf373b7551afd3da136bd2945f82826738",
+        "size": 3602,
+        "mode": 33204,
+        "mtimeMs": 1789639739693.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #030 2026-09-10 topic=theme",
+      "logicalSessionId": "session-import-codex-90c0188e-447b-4ddc-a24e-08a7d8f5b147",
+      "targetPiSessionId": "import-codex-bce48846-9aaf-454a-a48b-e0e04055790e",
+      "startedAt": 1789640379940,
+      "integrity": "6a4101f1b90bb9385116e3d314ce71423e16d661da078af9907c6aa5213628b5",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-bce48846-9aaf-454a-a48b-e0e04055790e.jsonl",
+      "completedAt": 1789640380982,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:aac032dbd51cb05326fd7bfb338d63ba0be84806547b0fdea0b1037e8f41c552:d90b6a77-bb64-46ea-a08f-2436950e4000:f5ea8d8e0e6714b806ef146ca8ae1f90f310ed11a44b086bf86905591af5844e:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "d90b6a77-bb64-46ea-a08f-2436950e4000",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T05-35-00-d90b6a77-bb64-46ea-a08f-2436950e4000.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "aac032dbd51cb05326fd7bfb338d63ba0be84806547b0fdea0b1037e8f41c552",
+        "contentHash": "f5ea8d8e0e6714b806ef146ca8ae1f90f310ed11a44b086bf86905591af5844e",
+        "size": 3606,
+        "mode": 33204,
+        "mtimeMs": 1789639739684.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #006 2026-09-10 topic=plugin",
+      "logicalSessionId": "session-import-codex-ac6fad24-3c12-4cf0-bfeb-f27e532f1fb8",
+      "targetPiSessionId": "import-codex-3e7245bf-d3f8-4853-ba6f-a7cdfbd8fc1c",
+      "startedAt": 1789640381205,
+      "integrity": "4450d85075d467b1aff006dbdbbd33f3824ac807ca6738bf34b7c204118d0d2d",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-3e7245bf-d3f8-4853-ba6f-a7cdfbd8fc1c.jsonl",
+      "completedAt": 1789640382339,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:eea088f7ebf6952bfdeaad49094f2e45e8270c18a5fef31555919ff299ab425f:89b92ffe-7d38-49fa-9963-18a191e4dcee:2bd63c6972d75d59dbf51cdec9b54ce17daf3d1e57246bd5ec52c2526c980d5c:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "89b92ffe-7d38-49fa-9963-18a191e4dcee",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T06-18-00-89b92ffe-7d38-49fa-9963-18a191e4dcee.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "eea088f7ebf6952bfdeaad49094f2e45e8270c18a5fef31555919ff299ab425f",
+        "contentHash": "2bd63c6972d75d59dbf51cdec9b54ce17daf3d1e57246bd5ec52c2526c980d5c",
+        "size": 3602,
+        "mode": 33204,
+        "mtimeMs": 1789639739699.6055
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #055 2026-09-10 topic=model",
+      "logicalSessionId": "session-import-codex-2bd3030b-39fb-42d9-9b97-344862b6ea67",
+      "targetPiSessionId": "import-codex-d918f179-6c14-452a-b731-8fa040d38456",
+      "startedAt": 1789640382718,
+      "integrity": "5bc0ecb412c199153a1e495bc833681f34501998558ff2fa8adfe2c300f60fb0",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-d918f179-6c14-452a-b731-8fa040d38456.jsonl",
+      "completedAt": 1789640383870,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:ae4502c8d3d182f7c893b3af7386e238125cde95f884cfb1bad9250fbb46d082:fca453a1-1b47-4364-ad2a-ee76726eb77c:718799b86913a252eb8d9d1f6fb57cf2188f4bd4033b32781368ca659b6199ed:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "fca453a1-1b47-4364-ad2a-ee76726eb77c",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T06-30-00-fca453a1-1b47-4364-ad2a-ee76726eb77c.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "ae4502c8d3d182f7c893b3af7386e238125cde95f884cfb1bad9250fbb46d082",
+        "contentHash": "718799b86913a252eb8d9d1f6fb57cf2188f4bd4033b32781368ca659b6199ed",
+        "size": 3618,
+        "mode": 33204,
+        "mtimeMs": 1789639739693.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #031 2026-09-10 topic=telemetry",
+      "logicalSessionId": "session-import-codex-a0083207-1e78-4491-bc53-38366434dd29",
+      "targetPiSessionId": "import-codex-c26efbd5-4e19-4fe5-b0db-2f55e0113057",
+      "startedAt": 1789640384017,
+      "integrity": "d559cb1ad90c0cd6bc8a5f8f7c1f655a943093cce58c713d09eef784a553751b",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-c26efbd5-4e19-4fe5-b0db-2f55e0113057.jsonl",
+      "completedAt": 1789640384742,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:fec7d476108af74d360cfdebed7ef7b2ce3384e2bfe3392a8d6c1e516acafbb9:4342d809-0647-4380-922a-ad0851f16d88:65be30d82da787bec3ea26cd92b67b8315eaaafbda3c93da84e92e3bfb0e6b67:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "4342d809-0647-4380-922a-ad0851f16d88",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T06-42-00-4342d809-0647-4380-922a-ad0851f16d88.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "fec7d476108af74d360cfdebed7ef7b2ce3384e2bfe3392a8d6c1e516acafbb9",
+        "contentHash": "65be30d82da787bec3ea26cd92b67b8315eaaafbda3c93da84e92e3bfb0e6b67",
+        "size": 3602,
+        "mode": 33204,
+        "mtimeMs": 1789639739684.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #007 2026-09-10 topic=model",
+      "logicalSessionId": "session-import-codex-1675d3aa-91d6-4543-a849-f252f82e59a7",
+      "targetPiSessionId": "import-codex-825dd954-562f-4aa2-9353-2c5c7b1581de",
+      "startedAt": 1789640385084,
+      "integrity": "cb10728c47e5e395a8d1c4aa9efb86e88a8f9adfe0eb8db8855be9945182c8f1",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-825dd954-562f-4aa2-9353-2c5c7b1581de.jsonl",
+      "completedAt": 1789640386292,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:8c4b9446684d44d6b3c7be04940a9fffeb3dcbd189b6f2e97392166ad9ef9506:ee201f70-f090-4c79-b8b3-767ae9cd9ea7:437847147576fda45f39af4ee7023e7cb993ea2eab0c3feb1bff210164bfc447:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "ee201f70-f090-4c79-b8b3-767ae9cd9ea7",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T07-25-00-ee201f70-f090-4c79-b8b3-767ae9cd9ea7.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "8c4b9446684d44d6b3c7be04940a9fffeb3dcbd189b6f2e97392166ad9ef9506",
+        "contentHash": "437847147576fda45f39af4ee7023e7cb993ea2eab0c3feb1bff210164bfc447",
+        "size": 3606,
+        "mode": 33204,
+        "mtimeMs": 1789639739699.6055
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #056 2026-09-10 topic=import",
+      "logicalSessionId": "session-import-codex-55fd5229-b71d-4495-b4e8-4b8b2418a986",
+      "targetPiSessionId": "import-codex-f58dc407-6e8c-4609-ab24-f6da09ce78b3",
+      "startedAt": 1789640386620,
+      "integrity": "10fbfd90e3300373ce8b22840708d7d28db7836224230bfaa143b98a149c8437",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-f58dc407-6e8c-4609-ab24-f6da09ce78b3.jsonl",
+      "completedAt": 1789640387861,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:ac09685ec1ccd2fdd97ffd3ff5b440d0ecb175abf12ec727936a39bed8d36c59:7e7dd91e-930a-4b3b-a8f8-2f5bfdab1f35:3b8d1365e4f45de770b4172682e5b1deb7e61f08f071b6736c46d67b17ef3104:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "7e7dd91e-930a-4b3b-a8f8-2f5bfdab1f35",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T07-37-00-7e7dd91e-930a-4b3b-a8f8-2f5bfdab1f35.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "ac09685ec1ccd2fdd97ffd3ff5b440d0ecb175abf12ec727936a39bed8d36c59",
+        "contentHash": "3b8d1365e4f45de770b4172682e5b1deb7e61f08f071b6736c46d67b17ef3104",
+        "size": 3614,
+        "mode": 33204,
+        "mtimeMs": 1789639739693.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #032 2026-09-10 topic=worktree",
+      "logicalSessionId": "session-import-codex-a58f34fe-5d89-4a74-97e8-f7fc177f32f9",
+      "targetPiSessionId": "import-codex-1b24f472-02c3-4978-8789-43ae279aef62",
+      "startedAt": 1789640388160,
+      "integrity": "4e599c5dd65834c7e53447d133a63c3f5797cb5de8656ad65c82f5123931b26a",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-1b24f472-02c3-4978-8789-43ae279aef62.jsonl",
+      "completedAt": 1789640388929,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:4e1962b3b6cd6eebf7343dced914856fb6b4b639599cd26444a33280faef0fce:9901c46e-9414-43f5-99cd-fec952e05ae9:df36f8106a71b4952ed56db5a2013671100b662654616f0137c417afd6e6bf46:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "9901c46e-9414-43f5-99cd-fec952e05ae9",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T07-49-00-9901c46e-9414-43f5-99cd-fec952e05ae9.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "4e1962b3b6cd6eebf7343dced914856fb6b4b639599cd26444a33280faef0fce",
+        "contentHash": "df36f8106a71b4952ed56db5a2013671100b662654616f0137c417afd6e6bf46",
+        "size": 3606,
+        "mode": 33204,
+        "mtimeMs": 1789639739685.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #008 2026-09-10 topic=import",
+      "logicalSessionId": "session-import-codex-9528f90c-5835-49ab-bc6b-fcdf31ce1dc0",
+      "targetPiSessionId": "import-codex-fd844832-6663-437f-ac29-77ae233d4250",
+      "startedAt": 1789640389071,
+      "integrity": "b70b08f9a9e05b70b88dafdd36a0b0a4303a6a7879a98b315a6ad48acf64c1b5",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-fd844832-6663-437f-ac29-77ae233d4250.jsonl",
+      "completedAt": 1789640390244,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:451461ed2d88e3c4299a3e1b680d0a7af8903424daed3cf139ca83ffd5c8ecfe:c939e3bc-ba8b-41d2-aa53-d409ca890a4d:0f147634a01ee5ebb625947c89a997cf4e075157399d2e8547405d5724dfe789:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "c939e3bc-ba8b-41d2-aa53-d409ca890a4d",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T08-32-00-c939e3bc-ba8b-41d2-aa53-d409ca890a4d.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "451461ed2d88e3c4299a3e1b680d0a7af8903424daed3cf139ca83ffd5c8ecfe",
+        "contentHash": "0f147634a01ee5ebb625947c89a997cf4e075157399d2e8547405d5724dfe789",
+        "size": 3602,
+        "mode": 33204,
+        "mtimeMs": 1789639739700.6055
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #057 2026-09-10 topic=trace",
+      "logicalSessionId": "session-import-codex-161f6131-5d8f-4a75-969c-afb6754ef87d",
+      "targetPiSessionId": "import-codex-7b286c5f-8e0a-4609-9141-eeb3375cd72d",
+      "startedAt": 1789640390682,
+      "integrity": "3f8003858404fc3675901508e06f92d0fe7240eb3d430fdee19b34253866e6b1",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-7b286c5f-8e0a-4609-9141-eeb3375cd72d.jsonl",
+      "completedAt": 1789640392221,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:f194f58c2ed5fe32dfdad1a64839c227f79563848434f6825c54afc851648015:35ff77df-9d7a-488c-8b6c-c643eb926c61:51d21f82f3b3a95540c57d1781c47aea5e65176eb4d5371d8991b5c5f0b6ce8c:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "35ff77df-9d7a-488c-8b6c-c643eb926c61",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T08-44-00-35ff77df-9d7a-488c-8b6c-c643eb926c61.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "f194f58c2ed5fe32dfdad1a64839c227f79563848434f6825c54afc851648015",
+        "contentHash": "51d21f82f3b3a95540c57d1781c47aea5e65176eb4d5371d8991b5c5f0b6ce8c",
+        "size": 3614,
+        "mode": 33204,
+        "mtimeMs": 1789639739694.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #033 2026-09-10 topic=terminal",
+      "logicalSessionId": "session-import-codex-6c7b1bb0-d78f-491d-aefa-c31822888f84",
+      "targetPiSessionId": "import-codex-e45c38d4-c510-4bdc-8954-3f9b83589869",
+      "startedAt": 1789640392660,
+      "integrity": "34b7ae3da7d8e4c26eca2be01dbd67543e0362f8ef423831e7c045cdd500c4f3",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-e45c38d4-c510-4bdc-8954-3f9b83589869.jsonl",
+      "completedAt": 1789640393431,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:ea189f213fad684518c953fdd4b245d22c7618a6ca10fb814c7bdfd52145a6e9:99a2ca1d-cb1a-40c9-bd65-48059f028f14:01877095dfae9c2b829393a181ae6855dc7ec0b4fd6003853352588d34e30821:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "99a2ca1d-cb1a-40c9-bd65-48059f028f14",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T08-56-00-99a2ca1d-cb1a-40c9-bd65-48059f028f14.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "ea189f213fad684518c953fdd4b245d22c7618a6ca10fb814c7bdfd52145a6e9",
+        "contentHash": "01877095dfae9c2b829393a181ae6855dc7ec0b4fd6003853352588d34e30821",
+        "size": 3602,
+        "mode": 33204,
+        "mtimeMs": 1789639739685.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #009 2026-09-10 topic=trace",
+      "logicalSessionId": "session-import-codex-7c7563d2-c79b-4af1-8f47-e5d5afb7a633",
+      "targetPiSessionId": "import-codex-bce26a25-ae4c-4fff-b3cd-46e1e64833a1",
+      "startedAt": 1789640393653,
+      "integrity": "986ffed43a433de2dafad4b56e27b109232f1194519bec45aabdc860a738115c",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-bce26a25-ae4c-4fff-b3cd-46e1e64833a1.jsonl",
+      "completedAt": 1789640394890,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:8af46fb5b666387efe7447b3c0d3a7dae38865b655f7da426a22fe931b4b6b82:81803fb9-de27-4ee8-bae5-4b637f99b30c:d35ade5125a0080240eba6492a6f9b20ed4de9530f4352f2f534e41d82724697:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "81803fb9-de27-4ee8-bae5-4b637f99b30c",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T09-03-00-81803fb9-de27-4ee8-bae5-4b637f99b30c.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "8af46fb5b666387efe7447b3c0d3a7dae38865b655f7da426a22fe931b4b6b82",
+        "contentHash": "d35ade5125a0080240eba6492a6f9b20ed4de9530f4352f2f534e41d82724697",
+        "size": 3606,
+        "mode": 33204,
+        "mtimeMs": 1789639739685.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #010 2026-09-10 topic=worker",
+      "logicalSessionId": "session-import-codex-fcd27394-8711-4587-8db7-ba13e94aaee4",
+      "targetPiSessionId": "import-codex-48bcee6c-c9e9-4688-8897-4ac51cf69675",
+      "startedAt": 1789640395656,
+      "integrity": "db8b645696c881e8f70448dbe20a70a991751a495ad841bc05edc2428e621c5e",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-48bcee6c-c9e9-4688-8897-4ac51cf69675.jsonl",
+      "completedAt": 1789640396751,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:7b8838c16d2d63f65236250119f50175b35fbdfccf3a65ed778a0426984857b2:a6939b1a-8b03-4a15-8401-b58159e5494c:c64c5f7e8552b9846a05a432caf34174b37a695c93bda0e101e59fb50ce5b1c6:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "a6939b1a-8b03-4a15-8401-b58159e5494c",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T09-39-00-a6939b1a-8b03-4a15-8401-b58159e5494c.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "7b8838c16d2d63f65236250119f50175b35fbdfccf3a65ed778a0426984857b2",
+        "contentHash": "c64c5f7e8552b9846a05a432caf34174b37a695c93bda0e101e59fb50ce5b1c6",
+        "size": 3606,
+        "mode": 33204,
+        "mtimeMs": 1789639739700.6055
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #058 2026-09-10 topic=worker",
+      "logicalSessionId": "session-import-codex-83b4080c-0ce8-46c0-9390-8e846180adbf",
+      "targetPiSessionId": "import-codex-23ec673a-0cbe-4a96-9e54-1e65b1979717",
+      "startedAt": 1789640396996,
+      "integrity": "148fd32b1c422ddb30e0ff94960102b68786fba586ae8ac47fa213bdec74a79f",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-23ec673a-0cbe-4a96-9e54-1e65b1979717.jsonl",
+      "completedAt": 1789640398220,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:c5971b1b8fa347105112e81f75bc8cf3b8340b0946031a693547de7e9cc62719:93da2dfb-144a-40b8-adb2-2bd3116eaf37:41b34dc10de40404ce4665f657d122c63bb875dc4a8066352c69d8cfdb67e97c:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "93da2dfb-144a-40b8-adb2-2bd3116eaf37",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T09-51-00-93da2dfb-144a-40b8-adb2-2bd3116eaf37.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "c5971b1b8fa347105112e81f75bc8cf3b8340b0946031a693547de7e9cc62719",
+        "contentHash": "41b34dc10de40404ce4665f657d122c63bb875dc4a8066352c69d8cfdb67e97c",
+        "size": 3606,
+        "mode": 33204,
+        "mtimeMs": 1789639739694.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #034 2026-09-10 topic=editor",
+      "logicalSessionId": "session-import-codex-eac4bb14-4d67-4c0f-bf2c-c6f1b6bfd8c6",
+      "targetPiSessionId": "import-codex-d87b251d-0ded-4301-8270-9f75f0f93de4",
+      "startedAt": 1789640398752,
+      "integrity": "3feb9964931baa4b9df857a9db55182d1eb8a8c1991d1b2299ef621d8294b2c6",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-d87b251d-0ded-4301-8270-9f75f0f93de4.jsonl",
+      "completedAt": 1789640400309,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:231e719f181f10a9e33a157276e4710ad45e5e66775938bf81ce58fe5496c1ff:3d5069d2-fa80-46b6-9ba3-a6fcb925f862:1ff3464daacbadbdeade2b7ad2a6bd2a8465c0a5207f79b1433ce10ef5248fb9:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "3d5069d2-fa80-46b6-9ba3-a6fcb925f862",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T10-10-00-3d5069d2-fa80-46b6-9ba3-a6fcb925f862.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "231e719f181f10a9e33a157276e4710ad45e5e66775938bf81ce58fe5496c1ff",
+        "contentHash": "1ff3464daacbadbdeade2b7ad2a6bd2a8465c0a5207f79b1433ce10ef5248fb9",
+        "size": 3610,
+        "mode": 33204,
+        "mtimeMs": 1789639739686.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #011 2026-09-10 topic=scratch",
+      "logicalSessionId": "session-import-codex-90c176dd-c9f3-4660-b9c3-b66cb263ae09",
+      "targetPiSessionId": "import-codex-543c39eb-338b-4c8f-b9bb-0eb4526f0958",
+      "startedAt": 1789640400627,
+      "integrity": "26e502263c8fc013acc4888c66b9466d9d001234748c968376f29f46e6073fbc",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-543c39eb-338b-4c8f-b9bb-0eb4526f0958.jsonl",
+      "completedAt": 1789640401368,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:e74ae95c33813ce71096fa883b1c3d61595dc79520704e347c7c066b47d8b40b:7e696226-ebf6-450a-b081-aeaee1a78484:4eac4070250f60684a31c7d2b3f5fd7b58c6f0b3ff2f7f9a8376be1dbca89936:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "7e696226-ebf6-450a-b081-aeaee1a78484",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T10-46-00-7e696226-ebf6-450a-b081-aeaee1a78484.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "e74ae95c33813ce71096fa883b1c3d61595dc79520704e347c7c066b47d8b40b",
+        "contentHash": "4eac4070250f60684a31c7d2b3f5fd7b58c6f0b3ff2f7f9a8376be1dbca89936",
+        "size": 3610,
+        "mode": 33204,
+        "mtimeMs": 1789639739700.6055
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #059 2026-09-10 topic=scratch",
+      "logicalSessionId": "session-import-codex-100e5c08-e498-4b62-a32e-68cd980df455",
+      "targetPiSessionId": "import-codex-0a54899d-3ef6-4384-af8f-26f458bfa662",
+      "startedAt": 1789640401632,
+      "integrity": "58ce980cafc86ad11c8d76edcb7b8d8cc6eb08d382b695cee1af249ca06d6848",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-0a54899d-3ef6-4384-af8f-26f458bfa662.jsonl",
+      "completedAt": 1789640402943,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:e7239786764a20ce33b01d401ef8d70b6915a9b4fce4e7bdb779daa4fb1b0ffa:4a81e5c5-e0f1-40ef-a543-dcbf8d14311f:ff16f32307264cfee40b9b7681dc3875060db8b04b5bb9408213542bc7abbb1e:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "4a81e5c5-e0f1-40ef-a543-dcbf8d14311f",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T10-58-00-4a81e5c5-e0f1-40ef-a543-dcbf8d14311f.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "e7239786764a20ce33b01d401ef8d70b6915a9b4fce4e7bdb779daa4fb1b0ffa",
+        "contentHash": "ff16f32307264cfee40b9b7681dc3875060db8b04b5bb9408213542bc7abbb1e",
+        "size": 3610,
+        "mode": 33204,
+        "mtimeMs": 1789639739694.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #035 2026-09-10 topic=runtime",
+      "logicalSessionId": "session-import-codex-581eac5c-2e5d-41c7-9557-702c159eeb4a",
+      "targetPiSessionId": "import-codex-523d8cb2-2029-4e01-9bf2-2db448e14765",
+      "startedAt": 1789640403195,
+      "integrity": "8441ad998c4e32b7c998f1a9c83068f5aa1777024acc25ea95ba789a64742852",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-523d8cb2-2029-4e01-9bf2-2db448e14765.jsonl",
+      "completedAt": 1789640404530,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:3b694e081ba2e59639abc5457fd86fbe32dc2a67f985ef1ac79fac1cf59a928e:99a637cd-bf89-4dba-b647-d5b77a2d9c83:266fd44d57404f9794d53a4a3316e65b7973f6cc81f3d51464555c53c55b7999:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "99a637cd-bf89-4dba-b647-d5b77a2d9c83",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T11-05-00-99a637cd-bf89-4dba-b647-d5b77a2d9c83.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "3b694e081ba2e59639abc5457fd86fbe32dc2a67f985ef1ac79fac1cf59a928e",
+        "contentHash": "266fd44d57404f9794d53a4a3316e65b7973f6cc81f3d51464555c53c55b7999",
+        "size": 3622,
+        "mode": 33204,
+        "mtimeMs": 1789639739695.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #036 2026-09-10 topic=permission",
+      "logicalSessionId": "session-import-codex-490806d2-9054-4844-b33d-6d46540de643",
+      "targetPiSessionId": "import-codex-10a78417-1670-4261-8139-273aa731154d",
+      "startedAt": 1789640404692,
+      "integrity": "391a151ad21e686d91e2505dcb558c933e2a79accf92de321a4756d89a1b83e6",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-10a78417-1670-4261-8139-273aa731154d.jsonl",
+      "completedAt": 1789640405437,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:745274f988a19375c21b6218f6eb122130f98fe7c2b38813ffb32e24bd656848:764b6728-e7f7-431d-b15f-9ef406325e04:677f9e2ebb03f9f40b98614a97d2565fa90c33615af5bebdc7be0e2a1d7259be:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "764b6728-e7f7-431d-b15f-9ef406325e04",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T11-17-00-764b6728-e7f7-431d-b15f-9ef406325e04.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "745274f988a19375c21b6218f6eb122130f98fe7c2b38813ffb32e24bd656848",
+        "contentHash": "677f9e2ebb03f9f40b98614a97d2565fa90c33615af5bebdc7be0e2a1d7259be",
+        "size": 3602,
+        "mode": 33204,
+        "mtimeMs": 1789639739686.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #012 2026-09-10 topic=vault",
+      "logicalSessionId": "session-import-codex-12008768-df2d-4026-a145-85107107f1ca",
+      "targetPiSessionId": "import-codex-d9e50bb8-b3fb-4abb-94ca-2f3e76f4fbf1",
+      "startedAt": 1789640405713,
+      "integrity": "397c17fff420105bdf4bdbe3aabecfdc55ae9998c3475ddf36967fe703963768",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-d9e50bb8-b3fb-4abb-94ca-2f3e76f4fbf1.jsonl",
+      "completedAt": 1789640406992,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:f324c36b670b6760e4f884fbfe0a44ac1b7ed735d423e197da545687fde0bc81:e3751989-c90e-4924-ae69-8020660c224b:c8962350a3bab191d936f44f7ba8c475a98b54339e0e16b26e8f6b458e698aa6:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "e3751989-c90e-4924-ae69-8020660c224b",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T11-53-00-e3751989-c90e-4924-ae69-8020660c224b.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "f324c36b670b6760e4f884fbfe0a44ac1b7ed735d423e197da545687fde0bc81",
+        "contentHash": "c8962350a3bab191d936f44f7ba8c475a98b54339e0e16b26e8f6b458e698aa6",
+        "size": 3602,
+        "mode": 33204,
+        "mtimeMs": 1789639739700.6055
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #060 2026-09-10 topic=vault",
+      "logicalSessionId": "session-import-codex-99d89b81-fbb3-4183-80d6-553b96b27fed",
+      "targetPiSessionId": "import-codex-e941da7c-8429-43f8-b02d-a3314e476136",
+      "startedAt": 1789640407503,
+      "integrity": "7c98afefeed8c2f96793a0298808eb4d6283b129b62a39f52a7a5b1c07c1bc01",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-e941da7c-8429-43f8-b02d-a3314e476136.jsonl",
+      "completedAt": 1789640408870,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:d41980c1621f81ddb807a969c59d253c7e5d385bd2d73376225d9f3df661b165:fbee6ffd-a91a-4957-958d-fcfa0cc85a5f:bb3d78ef13cc4ae7a0bcff6b7acd1c151565c8cd4199225c9041e12c2f85b6f9:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "fbee6ffd-a91a-4957-958d-fcfa0cc85a5f",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T12-12-00-fbee6ffd-a91a-4957-958d-fcfa0cc85a5f.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "d41980c1621f81ddb807a969c59d253c7e5d385bd2d73376225d9f3df661b165",
+        "contentHash": "bb3d78ef13cc4ae7a0bcff6b7acd1c151565c8cd4199225c9041e12c2f85b6f9",
+        "size": 3610,
+        "mode": 33204,
+        "mtimeMs": 1789639739695.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #037 2026-09-10 topic=session",
+      "logicalSessionId": "session-import-codex-ed4ed8f8-e9ef-47e2-b0ad-a7be2fc0b7bd",
+      "targetPiSessionId": "import-codex-03eb64f7-3164-4808-8807-632888bf8e16",
+      "startedAt": 1789640409218,
+      "integrity": "ac5e1764dfd9aeb62c1c52589ff5f586e551b00d383160e337d09d54e0aefee6",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-03eb64f7-3164-4808-8807-632888bf8e16.jsonl",
+      "completedAt": 1789640410160,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:4315941c5a10860ba8a6f7a3e5866e5b67ccdf060b85945cfc30ab7eb4533381:622aa1fb-3347-4153-8558-558414ee49d2:b035539df25e76b563a985aac3a74168bad24f0e921ced319a5365efc2807c76:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "622aa1fb-3347-4153-8558-558414ee49d2",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T12-24-00-622aa1fb-3347-4153-8558-558414ee49d2.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "4315941c5a10860ba8a6f7a3e5866e5b67ccdf060b85945cfc30ab7eb4533381",
+        "contentHash": "b035539df25e76b563a985aac3a74168bad24f0e921ced319a5365efc2807c76",
+        "size": 3610,
+        "mode": 33204,
+        "mtimeMs": 1789639739686.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #013 2026-09-10 topic=catalog",
+      "logicalSessionId": "session-import-codex-06968e9c-6809-4ed8-b100-0209be4fe4c8",
+      "targetPiSessionId": "import-codex-2b0f557a-ed99-4b9f-8796-b0ef0189dbca",
+      "startedAt": 1789640410470,
+      "integrity": "8293401424ca4057a048e5152eec51e62cb26543fbfc5cc0119787c5c6bc372b",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-2b0f557a-ed99-4b9f-8796-b0ef0189dbca.jsonl",
+      "completedAt": 1789640411826,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:9b4a9de4dc8e8948ec02728fe394c3c39deff7d456c9f3ebbae36417aa4cb3be:fe920db0-34d5-4dda-a0e7-5fb585b13804:17a763efc57284302bea5d40e0b0e80a6f2a21032d47dd8623f99893fd87a9bf:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "fe920db0-34d5-4dda-a0e7-5fb585b13804",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T13-19-00-fe920db0-34d5-4dda-a0e7-5fb585b13804.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "9b4a9de4dc8e8948ec02728fe394c3c39deff7d456c9f3ebbae36417aa4cb3be",
+        "contentHash": "17a763efc57284302bea5d40e0b0e80a6f2a21032d47dd8623f99893fd87a9bf",
+        "size": 3606,
+        "mode": 33204,
+        "mtimeMs": 1789639739695.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #038 2026-09-10 topic=plugin",
+      "logicalSessionId": "session-import-codex-c67984a0-2254-4e4a-b1e9-2b48fc88d2a8",
+      "targetPiSessionId": "import-codex-3a6a421c-e653-4e61-b166-4f5aa30952d1",
+      "startedAt": 1789640412248,
+      "integrity": "4de677aea7b1135b93e3432bba320f617a7ff909634095de8f373f8b34bf06c7",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-3a6a421c-e653-4e61-b166-4f5aa30952d1.jsonl",
+      "completedAt": 1789640413465,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:335deb4a284e71bdde28ed7c6c9c961af3f1a1deb2c2e95c157fb1d905673408:24645ee9-bc6b-412a-a840-115d8c6da5be:d8e661399df96e7833a7561ea9f35026d51f355fc7f2ccdf98e54950b6c19252:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "24645ee9-bc6b-412a-a840-115d8c6da5be",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/tmp/t032/samples/codex-home/sessions/2026/09/10/rollout-2026-09-10T13-31-00-24645ee9-bc6b-412a-a840-115d8c6da5be.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "335deb4a284e71bdde28ed7c6c9c961af3f1a1deb2c2e95c157fb1d905673408",
+        "contentHash": "d8e661399df96e7833a7561ea9f35026d51f355fc7f2ccdf98e54950b6c19252",
+        "size": 3602,
+        "mode": 33204,
+        "mtimeMs": 1789639739686.6052
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "T032 bulk rollout #014 2026-09-10 topic=theme",
+      "logicalSessionId": "session-import-codex-efb78fb7-08ce-4c27-855f-3ec3e5a3312b",
+      "targetPiSessionId": "import-codex-fe0da04f-5267-4e74-acab-4cbd62250e01",
+      "startedAt": 1789640413674,
+      "integrity": "69a49ac9452221b414f8a7c12ae11c50f233056bc4b57c1e7c778ff369c6b615",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-fe0da04f-5267-4e74-acab-4cbd62250e01.jsonl",
+      "completedAt": 1789640414888,
+      "cleanupPending": false
+    }
+  ]
+}

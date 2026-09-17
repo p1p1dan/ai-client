@@ -1,0 +1,39 @@
+=== DEV-1 run2 观察（归档正在跑回合的临时对话，POSIX 半边） 采集于 2026-09-17T07:29:13-04:00 ===
+
+--- 会话身份
+sessionId          : session-1789643542628-wgulnuk
+JSONL              : /home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789643542628-wgulnuk.jsonl
+scratch workspace  : /home/ai/JYWAI/temporary/unbound-sessions/6583166b-4392-4453-a825-6862cadebd2b
+
+--- 时间线（ms 均取自 JSONL / session-index 自身的时间戳，UTC）
+1789643949022  11:19:09.022  user     发出 run2 消息（走 textarea + [aria-label=发送消息]）
+1789643949134  11:19:09.134  assistant toolCall bash: sleep 150 && echo slept
+1789644005696  11:20:05.696  session-index 行 archived=true（GUI 侧栏归档确认框点下）
+1789644005707  11:20:05.707  toolResult  (no output) [exit=null; aborted]  signal=SIGTERM termination=aborted
+1789644005709  11:20:05.709  assistant   stopReason=error errorMessage="This operation was aborted"
+归档到 bash 子进程被 SIGTERM 的间隔：11 ms
+
+--- 假网关：归档后再没有收到过任何一次请求
+gateway 命令行 : node /tmp/t032/fake-gateway.mjs --port 18080 --plan archive-probe --sleep 150 --model-id fake-sonnet --reset --state /tmp/t032/gw-B-archive2.state.json (pid 385215)
+gateway 计数器 : {"count":1}  ← 只有 seq=1，seq 2~5 从未到达
+run2 相关日志行：
+{"time":"2026-09-17T11:19:09.126Z","seq":1,"status":200,"role":"user","contentSummary":"devB DEV-1 run2 archive-during-turn probe","hasToolResult":true,"plan":"archive-probe"}
+（archive-probe 计划的 2~5 号请求分别是 write / read / bash pwd / 收尾文本；本轮一条都没发生）
+
+--- scratch 目录：已被删掉
+total 8
+drwx------ 2 ai ai 4096 Sep 17 07:20 .
+drwx------ 3 ai ai 4096 Sep 17 07:18 ..
+（目录 mtime 07:20 = 归档那一刻；6583166b-... 子目录已不存在，对照回合里 bash pwd 还列得到它）
+
+--- 三处日志在归档时刻一行都没写
+$f = /home/ai/.config/jyw-ai-client-dev/logs/main.log  bytes=62291  mtime=2026-09-17 07:17:40
+$f = /home/ai/.config/jyw-ai-client-dev/logs/aiclient-2026-09-17.log  bytes=22147  mtime=2026-09-17 07:17:51
+$f = /tmp/t032/dev-B6.log  bytes=6700  mtime=2026-09-17 07:17:51
+三处 grep -icE 'scratch|worker exited|closeSession|archiv|aborted' 命中：
+  main.log                 : 0
+  aiclient-2026-09-17.log  : 1  ← 唯一一条是 06:59:23 DEV-2 SIGTERM 那次 crashed: Worker exited (code=15)，与本轮归档无关
+  dev-B6.log (dev.js 标准输出): 0
+三个文件的 mtime 都停在 07:17，归档发生在 07:20：归档 + worker 退出 + 目录删除全过程零日志。
+源码对照：ScratchWorkspaceService.ts:244 的 '[scratch] failed to remove' 只在删除失败时打；成功路径本就不记日志。
+          WorkerSlot.ts:478 的 'Worker exited' 只在 crash 分支组装错误消息，正常 closeSession 退出不走那里。

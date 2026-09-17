@@ -1,0 +1,24 @@
+{
+  "sid": "session-1789656608127-jy9zhgb",
+  "lastError": "attachment \"huge-7mib.png\" is 7340034 bytes; the limit is 5242880 bytes per attachment",
+  "runtimeReady": true,
+  "hostBound": ["session-1789655267185-g85qdok", "session-1789656608127-jy9zhgb"],
+  "status": "idle",
+  "historyErrors": {},
+  "msgs": [
+    {
+      "id": "user-send-1789656631006-4-1",
+      "role": "user",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    },
+    {
+      "id": "asst-send-1789656631006-4-2",
+      "role": "assistant",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    }
+  ]
+}

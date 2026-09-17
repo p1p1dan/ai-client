@@ -1,0 +1,30 @@
+{
+  "at": "2026-09-17T09:31:23.579Z",
+  "label": "T0 退出前（本次 scratch 已分配）",
+  "sessionId": "session-1789637446946-abtu2jn",
+  "indexRow": {
+    "sessionId": "session-1789637446946-abtu2jn",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789637446946-abtu2jn.jsonl",
+    "piLeaf": {
+      "activeEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f",
+      "fileTailEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f"
+    },
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+    "title": "devA1UNB 回一个字：甲",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789637483354,
+    "archived": false
+  },
+  "scratchRoot": {
+    "path": "/home/ai/JYWAI/temporary/unbound-sessions",
+    "entries": ["2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58"]
+  },
+  "tempBase": {
+    "path": "/home/ai/JYWAI/temporary",
+    "entries": ["unbound-sessions"]
+  },
+  "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+  "workspaceDirEntries": []
+}

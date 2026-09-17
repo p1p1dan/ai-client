@@ -1,0 +1,5 @@
+    PID   RSS COMMAND
+  75563 244140 /home/ai/code/ai-client/node_modules/electron/dist/electron . --no-sandbox --remote-debugging-port=9333
+               total        used        free      shared  buff/cache   available
+Mem:            3350        2144         308         158        1323        1206
+Swap:           3861        1579        2282

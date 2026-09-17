@@ -1,0 +1,9 @@
+[
+  {
+    "tag": "DIV",
+    "cls": "mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 font-mono text-code text-destructive whitespace-pre-wrap break-all",
+    "role": null,
+    "text": "Error: session exceeds the configured size budget",
+    "parentText": "Error: session exceeds the configured size budget\nbig-5mib.png\n5.0 MB\nsmall-1mib.png\n1015.6 KB\n\nAttachments total 6.0 MB — sending may take longer.\n\n执行 · 每次询问\n0%\nprobe-fake/fake-sonnet · unverified\nfeat/runtime-evolution\n本机"
+  }
+]

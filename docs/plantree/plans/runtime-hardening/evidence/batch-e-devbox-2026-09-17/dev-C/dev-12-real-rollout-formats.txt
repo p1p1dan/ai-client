@@ -1,0 +1,22 @@
+== 真实 ~/.codex/sessions rollout 首行形态（12 份）==
+NEW(session_meta+payload) cli_version=0.148.0           /home/ai/.codex/sessions/2026/08/19/rollout-2026-08-19T23-49-56-01a01d4a-3119-7fd0-a16a-fd81b2ceec9b.jsonl
+NEW(session_meta+payload) cli_version=0.148.0           /home/ai/.codex/sessions/2026/08/20/rollout-2026-08-20T06-07-50-01a01ea4-2b7a-7381-bada-157fd718c5a0.jsonl
+NEW(session_meta+payload) cli_version=0.148.0           /home/ai/.codex/sessions/2026/08/21/rollout-2026-08-21T03-59-25-01a02354-f521-7712-bb07-0f2dc83b0671.jsonl
+NEW(session_meta+payload) cli_version=0.148.0           /home/ai/.codex/sessions/2026/08/27/rollout-2026-08-27T03-19-51-01a04216-e5b9-71d1-9b81-6d2b32fa2fdc.jsonl
+NEW(session_meta+payload) cli_version=0.149.1           /home/ai/.codex/sessions/2026/08/28/rollout-2026-08-28T02-27-34-01a0470d-61a1-7c42-9870-3bbee592e8fd.jsonl
+NEW(session_meta+payload) cli_version=0.148.0           /home/ai/.codex/sessions/2026/08/28/rollout-2026-08-28T04-52-34-01a04792-2360-7262-8247-858c5a23e3ee.jsonl
+NEW(session_meta+payload) cli_version=0.148.0           /home/ai/.codex/sessions/2026/08/28/rollout-2026-08-28T13-06-07-01a04955-fc5b-7071-b61d-feec064f1417.jsonl
+NEW(session_meta+payload) cli_version=0.148.0           /home/ai/.codex/sessions/2026/09/02/rollout-2026-09-02T05-16-19-01a06167-ac37-7d51-a409-1a4eba7fdc46.jsonl
+NEW(session_meta+payload) cli_version=0.148.0           /home/ai/.codex/sessions/2026/09/02/rollout-2026-09-02T05-16-32-01a06167-e11b-7413-8049-330b0e636986.jsonl
+NEW(session_meta+payload) cli_version=0.148.0           /home/ai/.codex/sessions/2026/09/04/rollout-2026-09-04T22-53-27-01a06f7c-385a-7c80-ba44-cd7e386549f2.jsonl
+NEW(session_meta+payload) cli_version=0.148.0           /home/ai/.codex/sessions/2026/09/13/rollout-2026-09-13T11-16-41-01a09b57-8deb-7a71-a20f-91b51deaf2e2.jsonl
+NEW(session_meta+payload) cli_version=0.148.0           /home/ai/.codex/sessions/2026/09/16/rollout-2026-09-16T01-43-35-01a0a8bd-f0ef-74c3-b2d0-a36f995cf024.jsonl
+
+汇总: {'NEW(session_meta+payload)': 12}
+
+== 仓库内旧格式夹具核对 ==
+-- 唯一的旧格式样本（写在测试源码里的对象字面量）:
+70:  it('reads the legacy bare-row rollout shape', () => {
+103:  it('reports a legacy session with no recorded cwd instead of refusing it', () => {
+-- 仓库内 .jsonl 文件里是否有裸行 rollout（无 session_meta 首行且带 id+timestamp）:
+0

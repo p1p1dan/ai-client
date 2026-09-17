@@ -1,0 +1,19 @@
+{
+  "at": "2026-09-17T09:19:17.942Z",
+  "sessionId": "session-live-1789636546521-0yhy2zv",
+  "storeRow": {
+    "done": true,
+    "active": "session-live-1789636546521-0yhy2zv",
+    "title": "Live Agent Host",
+    "workspaceId": "ws:main:/home/ai/code/ai-client",
+    "runtimeIdentity": null,
+    "total": 102
+  },
+  "indexRow": null,
+  "indexRowCount": 108,
+  "scratchRoot": {
+    "missing": true,
+    "code": "ENOENT"
+  },
+  "tempBase": []
+}

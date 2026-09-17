@@ -1,0 +1,57 @@
+# DEV-33 / DEV-34 在日志里留下了什么（订正版）
+
+查的四个文件：
+  /home/ai/.config/jyw-ai-client-dev/logs/main.log          （electron-log 默认名）
+  /home/ai/.config/jyw-ai-client-dev/logs/aiclient-2026-09-17.log （按天日志）
+  /tmp/t032/dev-E2a.log  第 1 次运行的 dev.js 标准输出
+  /tmp/t032/dev-E2b.log  第 2 次运行的 dev.js 标准输出
+
+## 结论：事发当时零行，退出时才作为 worker 的「遗言」补出来
+
+第 1 次运行里第 5 条被拒（10:36）之后、两次纯文本被吞（10:38 / 10:40）之后，
+分别当场做过 grep：main.log / 按天日志 / dev.js 输出三处 `size budget` 与 `attachment`
+计数**全 0**。第 2 次运行里 DEV-34 两条超限 payload 发完（10:51）当场 grep 同样全 0
+（还按偏移 `tail -c +65612` / `tail -c +72423` 取过新增内容，除 worktrees-absent 噪声外一行没有）。
+
+真正出现，是在**杀掉应用**的那一刻，由 Main 侧的 worker 崩溃汇报顺带带出来的：
+
+```
+[2026-09-17 10:45:45.629] [error] [pi-worker:session-1789655267185-g85qdok:g1] crashed: Worker exited (code=15 signal=null); last 12 stderr line(s):
+[pi-worker] [native-runtime] run failed RuntimeHostError: session exceeds the configured size budget
+at file://~/code/ai-client/src/runtime/plugins/session/store.ts:358:15 {
+code: 'session_size_limit'
+}
+   … 同样的块再重复两次（共 3 块，12 行，正好撞上 "last 12 stderr lines" 的截断上限）…
+```
+
+```
+[2026-09-17 11:05:21.492] [error] [pi-worker:session-1789656608127-jy9zhgb:g1] crashed: Worker exited (code=15 signal=null); last 6 stderr line(s):
+[pi-worker] [native-runtime] run failed RuntimeHostError: attachment "huge-7mib.png" is 7340034 bytes; the limit is 5242880 bytes per attachment
+at preparePrompt (file://~/code/ai-client/src/runtime/plugins/agent-loop/attachments.ts:104:13)
+at Proxy.execute (file://~/code/ai-client/src/runtime/plugins/agent-loop/index.ts:209:22)
+at async Proxy.run (file://~/code/ai-client/src/runtime/plugins/agent-loop/index.ts:150:14) {
+code: 'attachment_size_limit'
+}
+```
+
+三件事要分清：
+
+1. **`main.log` 全程 0 行**（三个 grep 都是 0）。有内容的是**按天日志**与 dev.js 标准输出。
+2. 这些行是 worker 的 **stderr 回放**，不是谁主动记的日志；只有 worker 退出时才补，
+   而且被 `last N stderr line(s)` 截断 —— 第 1 次运行实际有 4 次 `session_size_limit`
+   （第 5 条附件 + 3 次纯文本），日志里只留下最后 3 次。
+   **应用还在跑的时候，运维手段看不到任何一条。**
+3. 「第 1 次运行的三次纯文本被吞」这件事，在日志里**反过来被证实了**：
+   worker 侧每一次都真的抛了 `session_size_limit`（`store.ts:358`，队列内 reject），
+   只是渲染层第一次之后再也不显示。这是 D24 的直接证据。
+
+## 顺手撞到的另一条（发生在收尾移除仓库时，不属于四项判据）
+
+```
+[2026-09-17 11:04:54.620] [error] Error occurred in handler for 'file:list': Error: ENOENT: no such file or directory, scandir '/home/ai/code/ai-client//tmp'
+[2026-09-17 11:04:54.859] [error] … scandir '/home/ai/code/ai-client//tmp/t032'
+[2026-09-17 11:04:54.859] [error] … scandir '/home/ai/code/ai-client//tmp/t032/ws-paths'
+```
+
+移除 `ws-paths` 仓库的那一刻，文件面板回落到 ai-client 仓库根，却把原来的**绝对路径**
+`/tmp/t032/ws-paths` 当相对路径拼了上去（注意双斜杠），逐级三次 ENOENT。界面上没有可见症状。

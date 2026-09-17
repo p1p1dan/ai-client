@@ -1,0 +1,39 @@
+{
+  "criterion": "会话目录里是否多出无主 <uuid>.jsonl，pi CLI 是否把它列成一个会话",
+  "sourceSessionId": "session-1789638427039-ntyubr1",
+  "sourceIndexRow": {
+    "sessionId": "session-1789638427039-ntyubr1",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789638427039-ntyubr1.jsonl",
+    "piLeaf": {
+      "activeEntryId": "e4cfe1ce-af0e-4b8d-9c80-38581d2f59bb",
+      "fileTailEntryId": "e4cfe1ce-af0e-4b8d-9c80-38581d2f59bb"
+    },
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/46e6faab-115c-4e61-8b38-d194a69a236c",
+    "title": "devA1KILL 回一个字：丁",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789638452007,
+    "archived": false
+  },
+  "killMethod": "kill -9 on the real Electron main pid(s) 72067; pids resolved by scanning /proc/*/cmdline for the electron binary with no --type= argument (never kill -1, never pkill -f)",
+  "forkClickToKillMs": 316,
+  "treeDialog": {
+    "text": "会话分支\n\n回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。\n\n共 5 个节点，显示 5 个\n刷新\nmaxapi/grok-4.6\nmodel_change\nmedium\nthinking_level_change\ncustom\ncustom\ndevA1KILL 回一个字：丁\nuser\n**需求反馈** - 你要我只回一个字：丁 - I understand the rules 丁\nassistant\n当前\n关闭",
+    "enabledForks": 1
+  },
+  "sessionsDirBeforeCount": 32,
+  "newFilesInSessionsDir": [
+    "c9d54547-55dd-4b5c-a9f7-1e44458d0e48.jsonl",
+    "c9d54547-55dd-4b5c-a9f7-1e44458d0e48.jsonl.staged"
+  ],
+  "orphanJsonl": ["c9d54547-55dd-4b5c-a9f7-1e44458d0e48.jsonl"],
+  "newIndexRows": [],
+  "scratchAfterKill": [
+    "46e6faab-115c-4e61-8b38-d194a69a236c",
+    "4e6b46a9-c79d-4788-8589-71daa4be606e"
+  ],
+  "tempBaseAfterKill": ["unbound-sessions"],
+  "electronMainGone": true,
+  "devStackRemaining": []
+}

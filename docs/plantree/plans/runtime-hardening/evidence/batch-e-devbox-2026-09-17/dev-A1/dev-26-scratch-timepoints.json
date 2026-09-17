@@ -1,0 +1,142 @@
+{
+  "criterion": "从界面正常退出（非 kill）后，本次的 scratch 目录即被删；与 kill 那次的差异有记录",
+  "parentSessionId": "session-1789637446946-abtu2jn",
+  "forkSessionId": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+  "scratchDirOfThisRun": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+  "exitMethod": "标题栏 Close 按钮（aria-label=\"Close\"）→ 应用自弹「确认退出」→ 点「退出」。未向任何进程发信号",
+  "quitConfirmationText": "确认退出\n\n确定要退出应用吗？\n\n取消\n退出",
+  "note": "第一次尝试时 Close 与「退出」之间隔了约 2 分钟，Main 侧的确认等待已超时，窗口没关；本次把两下点击压在 1.5 秒内完成",
+  "electronMainExited": true,
+  "snapshots": [
+    {
+      "label": "T0 退出前（应用运行中，本次 scratch 已分配）",
+      "at": "2026-09-17T09:38:32.749Z",
+      "scratchRoot": {
+        "path": "/home/ai/JYWAI/temporary/unbound-sessions",
+        "entries": ["2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58"]
+      },
+      "tempBase": {
+        "path": "/home/ai/JYWAI/temporary",
+        "entries": ["unbound-sessions"]
+      },
+      "scratchDir": {
+        "path": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+        "entries": []
+      },
+      "parentRow": {
+        "sessionId": "session-1789637446946-abtu2jn",
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789637446946-abtu2jn.jsonl",
+        "piLeaf": {
+          "activeEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f",
+          "fileTailEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f"
+        },
+        "agent": "pi",
+        "unbound": true,
+        "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+        "title": "devA1UNB 回一个字：甲",
+        "model": "maxapi/grok-4.6",
+        "updatedAt": 1789637483354,
+        "archived": false
+      },
+      "forkRow": {
+        "sessionId": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/ea74ddc0-03d3-4008-b642-7e4d38bd8c49.jsonl",
+        "piLeaf": {
+          "activeEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f",
+          "fileTailEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f"
+        },
+        "agent": "pi",
+        "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+        "title": "devA1UNB 回一个字：甲 (fork)",
+        "model": "maxapi/grok-4.6",
+        "unbound": true,
+        "updatedAt": 1789637489733,
+        "archived": false
+      },
+      "electronMainPids": [69718]
+    },
+    {
+      "label": "T1 正常退出后（未重启）",
+      "at": "2026-09-17T09:38:41.501Z",
+      "scratchRoot": {
+        "path": "/home/ai/JYWAI/temporary/unbound-sessions",
+        "entries": {
+          "missing": true,
+          "code": "ENOENT"
+        }
+      },
+      "tempBase": {
+        "path": "/home/ai/JYWAI/temporary",
+        "entries": []
+      },
+      "scratchDir": {
+        "path": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+        "entries": {
+          "missing": true,
+          "code": "ENOENT"
+        }
+      },
+      "parentRow": {
+        "sessionId": "session-1789637446946-abtu2jn",
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789637446946-abtu2jn.jsonl",
+        "piLeaf": {
+          "activeEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f",
+          "fileTailEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f"
+        },
+        "agent": "pi",
+        "unbound": true,
+        "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+        "title": "devA1UNB 回一个字：甲",
+        "model": "maxapi/grok-4.6",
+        "updatedAt": 1789637483354,
+        "archived": false
+      },
+      "forkRow": {
+        "sessionId": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/ea74ddc0-03d3-4008-b642-7e4d38bd8c49.jsonl",
+        "piLeaf": {
+          "activeEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f",
+          "fileTailEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f"
+        },
+        "agent": "pi",
+        "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+        "title": "devA1UNB 回一个字：甲 (fork)",
+        "model": "maxapi/grok-4.6",
+        "unbound": true,
+        "updatedAt": 1789637489733,
+        "archived": false
+      },
+      "electronMainPids": []
+    }
+  ],
+  "sessionsDirTop": [
+    "--home-ai-JYWAI-temporary-unbound-sessions-67fa5e7c-cbee-40cf-a40e-d20bef7ce8ff--",
+    "--home-ai-JYWAI-temporary-unbound-sessions-6d756b23-0684-4a28-9ab3-a5f811c712aa--",
+    "--home-ai-JYWAI-temporary-unbound-sessions-6fb41b29-f3b2-4918-a498-f098bfbd776b--",
+    "--home-ai-JYWAI-temporary-unbound-sessions-90af159e-1324-47ba-94bc-79a0c741c6b5--",
+    "--home-ai-JYWAI-temporary-unbound-sessions-ad521723-aed3-4228-b730-9448fb970fff--",
+    "--home-ai-JYWAI-temporary-unbound-sessions-c61d061b-8de5-408a-b0e5-95b3bd055228--",
+    "--home-ai-JYWAI-temporary-unbound-sessions-dc9d38bf-257a-4fd7-92e0-73365d89a816--",
+    "--home-ai-code-ai-client--",
+    "ea74ddc0-03d3-4008-b642-7e4d38bd8c49.jsonl",
+    "permission-forwarding",
+    "session-1789637446946-abtu2jn.jsonl",
+    "session-live-1789142835493-v1dj0lp.jsonl",
+    "session-live-1789142835493-v1dj0lp.jsonl.writer.lock",
+    "session-live-1789306423191-vob9ldz.jsonl",
+    "session-live-1789306423191-vob9ldz.jsonl.writer.lock",
+    "session-live-1789306531210-8r0oa7a.jsonl",
+    "session-live-1789306531210-8r0oa7a.jsonl.writer.lock",
+    "session-live-1789306608098-tasrgr0.jsonl",
+    "session-live-1789306608098-tasrgr0.jsonl.writer.lock",
+    "session-live-1789306698435-l4bu1s2.jsonl",
+    "session-live-1789306698435-l4bu1s2.jsonl.writer.lock",
+    "session-live-1789306848585-b03q62x.jsonl",
+    "session-live-1789306848585-b03q62x.jsonl.writer.lock",
+    "session-live-1789306912982-k9ik92s.jsonl",
+    "session-live-1789306912982-k9ik92s.jsonl.writer.lock",
+    "session-live-1789347889296-ltrxsgm.jsonl",
+    "session-live-1789347889296-ltrxsgm.jsonl.writer.lock",
+    "session-live-1789636546521-0yhy2zv.jsonl"
+  ]
+}

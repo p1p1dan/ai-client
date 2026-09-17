@@ -1,0 +1,139 @@
+{
+  "criterion": "该 fork 是否从侧栏彻底消失，而索引行与 JSONL 仍在磁盘上",
+  "parentSessionId": "session-1789637446946-abtu2jn",
+  "forkSessionId": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+  "forkJsonlPath": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/ea74ddc0-03d3-4008-b642-7e4d38bd8c49.jsonl",
+  "parentJsonlPath": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789637446946-abtu2jn.jsonl",
+  "beforeRestart": {
+    "label": "T1.5 重启前（应用已退出）",
+    "at": "2026-09-17T09:39:42.672Z",
+    "scratchRoot": {
+      "missing": true,
+      "code": "ENOENT"
+    },
+    "tempBase": [],
+    "parentRow": {
+      "sessionId": "session-1789637446946-abtu2jn",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789637446946-abtu2jn.jsonl",
+      "piLeaf": {
+        "activeEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f",
+        "fileTailEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f"
+      },
+      "agent": "pi",
+      "unbound": true,
+      "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+      "title": "devA1UNB 回一个字：甲",
+      "model": "maxapi/grok-4.6",
+      "updatedAt": 1789637483354,
+      "archived": false
+    },
+    "forkRow": {
+      "sessionId": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/ea74ddc0-03d3-4008-b642-7e4d38bd8c49.jsonl",
+      "piLeaf": {
+        "activeEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f",
+        "fileTailEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f"
+      },
+      "agent": "pi",
+      "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+      "title": "devA1UNB 回一个字：甲 (fork)",
+      "model": "maxapi/grok-4.6",
+      "unbound": true,
+      "updatedAt": 1789637489733,
+      "archived": false
+    },
+    "parentJsonlExists": true,
+    "forkJsonlExists": true,
+    "stagedSidecars": []
+  },
+  "afterRestart": {
+    "label": "T2 重启后",
+    "at": "2026-09-17T09:40:21.065Z",
+    "scratchRoot": {
+      "missing": true,
+      "code": "ENOENT"
+    },
+    "tempBase": [],
+    "parentRow": {
+      "sessionId": "session-1789637446946-abtu2jn",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789637446946-abtu2jn.jsonl",
+      "piLeaf": {
+        "activeEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f",
+        "fileTailEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f"
+      },
+      "agent": "pi",
+      "unbound": true,
+      "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+      "title": "devA1UNB 回一个字：甲",
+      "model": "maxapi/grok-4.6",
+      "updatedAt": 1789637483354,
+      "archived": false
+    },
+    "forkRow": {
+      "sessionId": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/ea74ddc0-03d3-4008-b642-7e4d38bd8c49.jsonl",
+      "piLeaf": {
+        "activeEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f",
+        "fileTailEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f"
+      },
+      "agent": "pi",
+      "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+      "title": "devA1UNB 回一个字：甲 (fork)",
+      "model": "maxapi/grok-4.6",
+      "unbound": true,
+      "updatedAt": 1789637489733,
+      "archived": false
+    },
+    "parentJsonlExists": true,
+    "forkJsonlExists": true
+  },
+  "sidebarFromStore": {
+    "done": true,
+    "total": 105,
+    "parent": {
+      "id": "session-1789637446946-abtu2jn",
+      "projectId": "",
+      "workspaceId": "",
+      "title": "devA1UNB 回一个字：甲",
+      "status": "idle",
+      "updatedAt": 1789637483354,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789637446946-abtu2jn.jsonl",
+      "agent": "pi",
+      "unbound": {
+        "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58"
+      }
+    },
+    "fork": {
+      "id": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+      "projectId": "",
+      "workspaceId": "",
+      "title": "devA1UNB 回一个字：甲 (fork)",
+      "status": "idle",
+      "updatedAt": 1789637489733,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/ea74ddc0-03d3-4008-b642-7e4d38bd8c49.jsonl",
+      "agent": "pi",
+      "unbound": {
+        "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58"
+      }
+    },
+    "devA1Rows": [
+      {
+        "id": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+        "title": "devA1UNB 回一个字：甲 (fork)",
+        "workspaceId": "",
+        "archived": null,
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/ea74ddc0-03d3-4008-b642-7e4d38bd8c49.jsonl"
+      },
+      {
+        "id": "session-1789637446946-abtu2jn",
+        "title": "devA1UNB 回一个字：甲",
+        "workspaceId": "",
+        "archived": null,
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789637446946-abtu2jn.jsonl"
+      }
+    ]
+  },
+  "forkVisibleInSidebar": true,
+  "forkTitleInRenderedText": true,
+  "indexRowCount": 111
+}

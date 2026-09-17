@@ -1,0 +1,37 @@
+# T065 / D18 —— 跨窗口互斥、拒绝提示、关窗文案（2026-09-17 第二轮复验）
+# 窗口二用主进程 inspector 调应用菜单「文件 → 新建窗口」自己的 click handler 开出（BrowserWindow id=2）。
+# pi 进程数一律走 /proc 遍历（pi 启动后会把进程标题改写成 "pi"，所以按「父进程 = Electron 主进程」认）。
+
+[前置] 窗口一在 TUI 模式，会话 A=session-r2-tuia、B=session-r2-tuib 各有一个 pi。
+       /proc 计数 pi-count=2，按天日志里 `[pi-tui] Spawned terminal` 共 2 行。
+
+[1] 窗口二进来时展示模式已是 TUI（跨重启持久化），界面上是「Start Pi TUI」按钮。
+    选中同一会话 session-r2-tuib → 点「Start Pi TUI」：
+      toast = 「Pi 终端无法打开这个对话 / 该会话已在另一个窗口的终端中打开，请先关闭那个终端，或在那个窗口里继续。」
+      xterm 未挂载，按钮仍在；pi-count 仍为 2，Spawned 行仍为 2。
+    ⇒ 上一轮记的「这条路零提示」已修复。
+    截图 T065-D18-win2-startbtn-toast.png
+
+[2] 同一窗口切回 GUI 再点 TUI 开关（usePresentationSwitch 那条老路）：
+      同一句中文 toast；aria-pressed 停在 GUI:true / TUI:false，不切过去；pi-count 仍为 2。
+    截图 T065-D18-win2-toggle-toast.png
+
+[3] R-B blocking（terminal-03 过度释放）反向验证：
+    先对窗口一「正在跑会话 A」的那个 terminalId 直接打 piTui.open({sessionFile: B}) —— 被 Main 拒绝：
+      Error invoking remote method 'piTui:open': Error: This terminal is already running another chat; close it before opening this one
+    紧接着窗口二对会话 A 问 sessionSupport：
+      {"supported":false,"reason":"This chat is already open in a terminal in another window"}
+    点 TUI 也是同一句中文 toast、不切换。
+    ⇒ 失败的那次 open 只撤了它自己要的那把认领，会话 A 的认领没被连带清掉。
+      pi-count 仍为 2，Spawned 行仍为 2（没有第三个 pi）。
+
+[4] 关窗文案
+    (a) 两个主窗口，关窗口二：「关闭这个窗口 / 应用会在你其他的窗口里继续运行。/ 取消 · 关闭窗口」
+        截图 T065-D18-close-window-two-mains.png
+    (b) 先用 runtime 自己的 browser_preview 工具真开一个预览窗（BrowserWindow id=3，
+        载入 evidence 目录里的 preview-probe.html；权限卡是中文的，点「直接允许」），
+        再关窗口二：文案仍是「关闭这个窗口 … 关闭窗口」——预览窗没有被错算成「其他窗口」。
+        截图 T065-D18-close-window-with-preview.png
+    (c) 反过来：只剩「窗口一 + 预览窗」时关窗口一 →「确认退出 / 确定要退出应用吗？/ 取消 · 退出」。
+        这正是 R-B 毛边二要修的那一条（预览窗不再被当成应用会继续跑的地方）。
+        截图 T065-D18-close-last-main-with-preview.png

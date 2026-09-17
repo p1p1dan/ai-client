@@ -1,0 +1,7 @@
+=== DEV-2 t2 (after NORMAL UI quit: Close -> 确认退出 -> 退出) 2026-09-17T07:02:54-04:00 ===
+--- process residue: none; ports 9333/5173 released
+--- OLD root tree
+d /home/ai/JYWAI/temporary
+--- session-index.json unbound rows (still on disk?)
+total rows: 158 unbound rows: 14
+{"sessionId":"session-1789642848456-1umq351","runtimeIdentity":"/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789642848456-1umq351.jsonl","piLeaf":{"activeEntryId":"de38a6b6-daf8-48bc-91df-e380f52e4c00","fileTailEntryId":"de38a6b6-daf8-48bc-91df-e380f52e4c00"},"agent":"pi","unbound":true,"workspacePath":"/home/ai/JYWAI/temporary/unbound-sessions/f6ab0bf8-d582-4516-9a9b-96f0a0beb249","title":"devB DEV-2 old-root temp session probe","model":"fake-gateway/fake-sonnet","updatedAt":1789642859247,"archived":false}

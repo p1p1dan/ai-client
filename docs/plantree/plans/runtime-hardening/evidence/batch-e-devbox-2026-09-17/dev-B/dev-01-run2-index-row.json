@@ -1,0 +1,15 @@
+{
+  "sessionId": "session-1789643542628-wgulnuk",
+  "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789643542628-wgulnuk.jsonl",
+  "piLeaf": {
+    "activeEntryId": "65a35d68-8ee0-432e-91cb-b39842c9a8bb",
+    "fileTailEntryId": "65a35d68-8ee0-432e-91cb-b39842c9a8bb"
+  },
+  "agent": "pi",
+  "unbound": true,
+  "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/6583166b-4392-4453-a825-6862cadebd2b",
+  "title": "devB DEV-1 archive-during-turn probe",
+  "model": "fake-gateway/fake-sonnet",
+  "updatedAt": 1789644005696,
+  "archived": true
+}

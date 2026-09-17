@@ -1,0 +1,31 @@
+
+ RUN  v3.2.4 /home/ai/code/ai-client
+
+stdout | src/runtime/__tests__/sessionAttachmentFill.test.ts > DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, stays writable, and still reopens
+[DEV-33] accepted sends=4 file bytes=33539942 (31.99 MiB of 32 MiB), bytes after 3 sends=25154998, refusal=session_size_limit
+
+ ✓ src/runtime/__tests__/sessionAttachmentFill.test.ts (5 tests) 886ms
+   ✓ DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, stays writable, and still reopens  786ms
+ ✓ src/runtime/__tests__/agentLoop.test.ts (16 tests) 3160ms
+   ✓ agent loop > retries a provider failure that arrives before the stream starts  3013ms
+ ✓ src/runtime/__tests__/runtimeEvents.test.ts (13 tests) 3074ms
+   ✓ puts a provider retry on the wire the banner reads, and clears it when the retry streams  3007ms
+ ✓ src/runtime/__tests__/sessionWriterLock.test.ts (23 tests) 1564ms
+   ✓ session writer lock — separate processes race for one stale lock > lets exactly one of three processes take over, and the sidecar says which  1130ms
+ ✓ src/runtime/__tests__/workerEndToEnd.test.ts (15 tests) 3893ms
+   ✓ native backend end to end (P4-4) > answers a stop without waiting for the provider to notice it  3025ms
+ ✓ src/runtime/__tests__/session.test.ts (25 tests) 573ms
+ ✓ src/runtime/__tests__/sessionInterop.test.ts (13 tests) 2743ms
+ ✓ src/runtime/__tests__/subagentSession.test.ts (13 tests) 331ms
+ ✓ src/runtime/__tests__/sessionLegacy.test.ts (16 tests) 307ms
+ ✓ src/runtime/__tests__/sessionNavigation.test.ts (6 tests) 158ms
+ ✓ src/runtime/__tests__/nativeWorkerRuntime.test.ts (44 tests) 33ms
+ ✓ src/runtime/__tests__/attachmentBudget.test.ts (6 tests) 14ms
+ ✓ src/agent-host/__tests__/piSessionTimeline.test.ts (7 tests) 2ms
+ ✓ src/runtime/__tests__/sessionCodec.test.ts (22 tests) 6ms
+
+ Test Files  14 passed (14)
+      Tests  224 passed (224)
+   Start at  11:52:51
+   Duration  19.14s (transform 743ms, setup 46ms, collect 2.06s, tests 16.75s, environment 0ms, prepare 48ms)
+

@@ -1,0 +1,33 @@
+# T066 — run 1 日志取证（logs/aiclient-2026-09-17.log，按天日志；main.log 见文末）
+# 起始偏移 74132 字节（应用启动前）
+
+## 1. 索引修复 warn（先用一行无 sessionId 的坏行触发）
+[2026-09-17 13:17:38.852] [warn]  [chat] Session index was damaged (1 row(s) had no usable sessionId); the original is kept at ~/.config/jyw-ai-client-dev/session-index.json.corrupt-2026-09-17T17-17-38-849Z and the list was rebuilt from 171 readable row(s).
+
+## 2. 模型目录诊断 info（T062/D3）
+[2026-09-17 13:17:39.400] [info]  [pi-models] models.json holds providers no session can use {
+  dropped: 'cx2, maxapi, vllmproxy',
+  reason: 'absent_from_runtime_catalog'
+
+## 3. provider 重试 warn（retry-503-forever，重试当下）
+[2026-09-17 13:32:48.592] [warn]  [pi-worker:session-1789666361268-er5utwj] provider retry 1/3 in 3000ms (status=503 code=PROVIDER_ERROR)
+[2026-09-17 13:32:51.600] [warn]  [pi-worker:session-1789666361268-er5utwj] provider retry 2/3 in 10000ms (status=503 code=PROVIDER_ERROR)
+[2026-09-17 13:33:01.611] [warn]  [pi-worker:session-1789666361268-er5utwj] provider retry 3/3 in 30000ms (status=503 code=PROVIDER_ERROR)
+
+## 4. 回合失败 warn（带码 / 不带码各一例）
+[2026-09-17 13:19:48.739] [warn]  [pi-worker:session-d4062-missingmodel] turn failed: model_not_in_catalog: no model "vllmproxy-old/claude-does-not-exist" in the catalog (1 available)
+[2026-09-17 13:33:31.625] [warn]  [pi-worker:session-1789666361268-er5utwj] turn failed: 503 {"type":"error","error":{"type":"overloaded_error","message":"FAKE_GATEWAY_OVERLOADED_MARKER fake overloaded #4"}}
+[2026-09-17 13:41:32.579] [warn]  [pi-worker:session-1789666801369-jvd1dfp] turn failed: session exceeds the configured size budget
+
+## 5. 归档三步 info（临时会话）
+[2026-09-17 13:37:41.490] [info]  [chat] Archiving temp session session-1789665909436-k1sadhy: retiring its worker before releasing its scratch directory.
+[2026-09-17 13:37:41.490] [info]  [chat] Worker retired for archived session session-1789665909436-k1sadhy.
+[2026-09-17 13:37:41.491] [info]  [scratch] Released ~/JYWAI/temporary-d4new/unbound-sessions/e5c490bd-3f6a-4809-a308-88ec4b08ec40 for session session-1789665909436-k1sadhy
+
+## main.log 同期新增（起始偏移 65611）
+main.log 新增字节数: 415
+[2026-09-17 13:17:06.778] [info]  Shared state paths {
+  root: '/home/ai/.pilab/jyw-ai-client-dev',
+  settingsPath: '/home/ai/.pilab/jyw-ai-client-dev/settings.json',
+  sessionPath: '/home/ai/.pilab/jyw-ai-client-dev/session-state.json',
+  settingsMarkerPath: '/home/ai/.pilab/jyw-ai-client-dev/.local-settings-migrated',

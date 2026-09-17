@@ -1,0 +1,39 @@
+# 批次 D4 收口验证（2026-09-17T19:56:13Z，基线 HEAD b3d751e3，工作区含 T060～T068 + 回炉，未提交）
+
+## tsc（根 / runtime / agent-host）
+$ pnpm typecheck
+
+> jyw-ai-client@1.0.0-test.13 typecheck /home/ai/code/ai-client
+> tsc --noEmit
+
+EXIT=0
+$ pnpm typecheck:runtime
+
+> jyw-ai-client@1.0.0-test.13 typecheck:runtime /home/ai/code/ai-client
+> tsc --noEmit -p src/runtime/tsconfig.json
+
+EXIT=0
+$ pnpm typecheck:agent-host
+
+> jyw-ai-client@1.0.0-test.13 typecheck:agent-host /home/ai/code/ai-client
+> tsc --noEmit -p src/agent-host/tsconfig.json
+
+EXIT=0
+
+## Biome（所有改动与新增源文件）
+98
+Checked 98 files in 439ms. No fixes applied.
+EXIT=0
+
+## 全量 Vitest
+$ pnpm test -- --no-file-parallelism
+[chat] Failed to drop the index row of a failed session create: Error: index is unwritable
+[chat] Session index could not be read; refusing to write over it until it can be: Error: EISDIR: illegal operation on a directory, read
+[chat] Session index could not be read; refusing to write over it until it can be: Error: EISDIR: illegal operation on a directory, read
+[OnboardingService] vault.save threw; ignoring (shadow write) Error: boom: simulated vault encrypt failure
+[piRuntime] detect failed: Error: missing resource
+ ✓ src/renderer/components/chat/__tests__/piThinkingDuration.test.ts (5 tests) 4ms
+ Test Files  420 passed (420)
+      Tests  6434 passed (6434)
+   Duration  209.25s (transform 6.35s, setup 2.55s, collect 51.76s, tests 79.73s, environment 5.97s, prepare 20.37s)
+EXIT=0

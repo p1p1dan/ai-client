@@ -1,0 +1,49 @@
+# 批次 D4 真机复验 — 环境交代与逐条还原证据（2026-09-17 13:14 ～ 14:10）
+
+仓库 /home/ai/code/ai-client，分支 feat/runtime-evolution，HEAD b3d751e3，
+工作区带 T060～T068 九项**未提交**修补。dev 模式（userData = ~/.config/jyw-ai-client-dev）。
+
+## 一句真模型都没发
+maxapi / cx2 / vllmproxy 一次都没碰。全程只用本地假网关 /tmp/t032/fake-gateway.mjs
+（127.0.0.1:18080，计划按需切换：text / ask-question / write-approval / retry-503-forever），
+经凭据库里的自定义服务 probe-fake 接进 GUI；settings.json 的 chatAgentDefaults.model
+临时设成 probe-fake/fake-sonnet。TUI 场景把物理 pi-agent/models.json + auth.json 整份换成
+只有 probe-fake 一个 provider（不是「加入」而是「只留它」）。三轮都走仓库原件 dev.env。
+
+## 三次起停（每次起之前都量了 free -m）
+| 轮次 | 目的 | 启动前 available | 退出检查 |
+|---|---|---|---|
+| run 1 | T068 无 NODE24 启动 / T062 / T063 / T060 DEV-2 / T066 / T067 / T068 / T061 | 1934 MB | 进程全无、9333+5173 释放、available 回到 1916 MB |
+| run 2 | T061 重开回放 / T063 重启 / T060 DEV-2-c + D6 / T067+T066 导入 / T065 TUI | 1815 MB | 进程全无、无残留 pi、available 1986 MB |
+| run 3 | T065 第二窗口 + 关窗文案 / T064（放最后） | — | 进程全无、端口全释放 |
+run 2 额外带 CLAUDE_CONFIG_DIR=/tmp/t032/samples/claude-home 与 --open-path=/tmp/t032/d4/ws-normal；
+run 3 额外带 --inspect=9444（只用来调应用菜单「文件 → 新建窗口」自己的 click handler）。
+
+## 强杀只用真实 pid
+停应用一律从 `ps -eo pid,args` 精确取 `node scripts/dev.js …` 的 pid 再 kill；
+停网关同理。查残留遍历 /proc/*/cmdline（判 pi 用「argv[0] 恰为 pi」）。
+全程没有用过 kill -1、process.kill(-1)，也没有用过 pkill -f。
+
+## 逐条还原
+| 东西 | 动过什么 | 还原证据 |
+|---|---|---|
+| credentials/vault.json | 注册假服务 probe-fake（脚本自带备份） | `--restore <bak>` 之后 **1042 字节**，sha256 7200ffeb… 与动手前一致 |
+| settings.json | 加 chatAgentDefaults.model、把 defaultTemporaryPath 改成新根 | chatAgentDefaults **已删**，defaultTemporaryPath 回到 `""`（其余键未动；应用自己给三个 AI 功能补的 `model:""` 保留） |
+| pi-agent/models.json | 整份换成只有 probe-fake | 还原后 sha256 35257b8d… 与动手前一致 |
+| pi-agent/auth.json | 同上 | 还原后 sha256 8d106c13… 与动手前一致 |
+| session-index.json | 造了一行模型缺失会话 + 一行「无 sessionId」的坏行（触发修复 warn），点验期间又新增若干探针行 | 从动手前的备份**逐字节还原**：sha256 84d9a093…，170 行 |
+| src/shared/types/workerRpc.ts | T064 把 1 改成 2 | 还原后 sha256 ea9ebf9e… 与动手前一致，第 50 行回到 `= 1 as const` |
+| ~/.agents/subagents/ | 为 T063 新建，放 probe-compat.md | 应用删掉文件后目录空；目录本身已 rmdir，~/.agents 回到只有 skills/ 与 .skill-lock.json |
+| ~/JYWAI/temporary-d4new/ | T060 的新保存位置，含 scratch 与一个临时工作区 | 整个目录已 rm -rf；~/JYWAI 下只剩空的 temporary/ |
+| 探针会话 JSONL | 造的 session-d4062-missingmodel.jsonl 与 32 MiB 附件会话 session-1789666801369-jvd1dfp.jsonl | 两个都已删除 |
+| dev.env | **没动**（T068 删掉 AICLIENT_NODE24_PATH 是被测的改动本身，备份在 /tmp/t032/dev.env.bak-T068） | 三轮都照常启动 |
+
+## 有意留下的两样（都不在仓库里）
+1. `~/.config/jyw-ai-client-dev/session-index.json.corrupt-2026-09-17T17-17-38-849Z`（89814 B）——
+   产品自己生成的修复备份，是 T066 那条 warn 的现场证据，与批次 A1 的处理一致，没有删。
+2. 其余探针会话的 JSONL（D4-T06x 那几条）留在 sessions/ 目录里无人认领——索引已还原，侧栏看不到它们。
+3. localStorage 里 `aiclient:chat:session-models` 多了一条指向已删除会话 session-d4062-missingmodel 的模型钉选，无害。
+
+## git status
+相对开始只多出 `docs/plantree/plans/runtime-hardening/evidence/batch-e-devbox-2026-09-17/dev-D4-reverify/`
+一个未跟踪目录（100 条 → 101 条）。产品代码一行未改。

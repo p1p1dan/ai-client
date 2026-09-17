@@ -1,0 +1,1196 @@
+# 收口全量 Vitest（2026-09-17T15:16:48Z，HEAD b3d751e3，uptime 32940.83s）
+$ pnpm test -- --no-file-parallelism
+
+> jyw-ai-client@1.0.0-test.13 test /home/ai/code/ai-client
+> vitest run -- --no-file-parallelism
+
+
+ RUN  v3.2.4 /home/ai/code/ai-client
+
+ ✓ src/runtime/__tests__/sessionWriterLock.test.ts (23 tests) 1731ms
+   ✓ session writer lock — separate processes race for one stale lock > lets exactly one of three processes take over, and the sidecar says which  1313ms
+ ✓ src/shared/types/__tests__/agentWireStatic.test.ts (21 tests) 5215ms
+   ✓ the default agent literal has exactly one home > nobody defaults an agent binding to a string literal in place  4774ms
+   ✓ the three agent tables stay disconnected > no cast relabels one axis as another  422ms
+ ✓ src/runtime/__tests__/mcp.test.ts (41 tests) 4578ms
+   ✓ P5-3 bridge against a real stdio server > reports a server that never finishes its handshake, and keeps the session usable  1526ms
+   ✓ P5-3 bridge against a real stdio server > gives up on a server stuck in tools/list and still opens the session  820ms
+   ✓ P5-3 bridge against a real stdio server > runs tools/list on the connect budget, not the two-minute call budget  671ms
+ ✓ src/runtime/__tests__/subagentDelegation.test.ts (34 tests) 4620ms
+   ✓ SA03 / SA06 / SA09 · delegation end to end > re-asks a delegate stream that died, without replaying its tools  3022ms
+   ✓ SA03 / SA06 / SA09 · delegation end to end > tells the parent a stopped delegate was stopped, and hands back what it had  426ms
+ ✓ src/runtime/__tests__/guiEventContract.test.ts (14 tests) 3855ms
+   ✓ the surfaces T017 added to the recording > records the retry banner going up and coming back down  3046ms
+ ✓ src/runtime/__tests__/agentLoop.test.ts (16 tests) 3189ms
+   ✓ agent loop > retries a provider failure that arrives before the stream starts  3013ms
+ ✓ src/runtime/__tests__/runtimeEvents.test.ts (13 tests) 3128ms
+   ✓ puts a provider retry on the wire the banner reads, and clears it when the retry streams  3015ms
+ ✓ src/agent-host/__tests__/workerEntryWiring.test.ts (6 tests) 3491ms
+   ✓ worker conversation import (P5-4) > writes the imported session under the agent directory Main will look in  739ms
+   ✓ worker entry wiring > flushes the dispose acknowledgement and exits naturally over Node IPC  596ms
+   ✓ worker entry wiring > routes bootstrap to the self-owned runtime when no backend variable is set  593ms
+   ✓ worker entry wiring > ignores AICLIENT_RUNTIME_BACKEND=legacy (the retired engine by name) and still routes to the self-owned runtime  507ms
+   ✓ worker entry wiring > ignores AICLIENT_RUNTIME_BACKEND=natvie (a typo) and still routes to the self-owned runtime  554ms
+   ✓ worker entry wiring > runs one-shot completions on the native runtime too (P6-2)  500ms
+ ✓ src/renderer/components/chat/__tests__/chatShiki.test.ts (23 tests) 3595ms
+   ✓ F-C8: every supported grammar loads and tokenises > F-C8: all 27 canonical ids return tokens that rebuild the source exactly  3045ms
+ ✓ src/runtime/__tests__/tools.test.ts (59 tests) 2579ms
+   ✓ native tools > stops a backtracking regular expression on its time budget (tools-09)  1023ms
+ ✓ src/agent-host/__tests__/piWorkerRpcServer.test.ts (25 tests) 2149ms
+ ✓ src/agent-host/__tests__/nativeWorkerModuleLoads.test.ts (3 tests) 2708ms
+   ✓ P6-2 what a worker process loads > never loads pi-coding-agent in a real worker  1215ms
+   ✓ P6-2 what a worker process loads > never loads it for a one-shot completion either  1355ms
+ ✓ src/renderer/stores/__tests__/storeSelectorStability.test.ts (2 tests) 1990ms
+   ✓ zustand selector reference stability > no renderer store selector returns a freshly built value  1987ms
+ ✓ src/runtime/__tests__/host.test.ts (49 tests) 2048ms
+ ✓ src/runtime/__tests__/shellPolicy.test.ts (70 tests) 2046ms
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager unwritten Pi session files > lets resume clear a session parked in error instead of failing forever
+[worker-manager] restart attempt 1/2 failed for s1: restart spawn failed
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager unwritten Pi session files > lets resume clear a session parked in error instead of failing forever
+[worker-manager] restart attempt 2/2 failed for s1: restart spawn failed
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager unwritten Pi session files > lets resume clear a session parked in error instead of failing forever
+[worker-manager] s1: Worker restart budget exhausted (2 attempts per 60000ms)
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager unwritten Pi session files > retires a dead slot to make room instead of reporting the pool full
+[worker-manager] restart attempt 1/1 failed for s1: restart spawn failed
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager unwritten Pi session files > retires a dead slot to make room instead of reporting the pool full
+[worker-manager] s1: Worker restart budget exhausted (1 attempts per 60000ms)
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager isolation and crash recovery > does not spawn a replacement when old-process exit is unconfirmed
+[worker-manager] restart attempt 1/2 failed for s1: exit not confirmed
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager isolation and crash recovery > does not spawn a replacement when old-process exit is unconfirmed
+[worker-manager] restart attempt 2/2 failed for s1: exit not confirmed
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager isolation and crash recovery > does not spawn a replacement when old-process exit is unconfirmed
+[worker-manager] s1: Worker restart budget exhausted (2 attempts per 60000ms)
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager isolation and crash recovery > stops after the bounded restart budget is exhausted
+[worker-manager] restart attempt 1/2 failed for s1: restart spawn 2 failed
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager isolation and crash recovery > stops after the bounded restart budget is exhausted
+[worker-manager] restart attempt 2/2 failed for s1: restart spawn 3 failed
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager isolation and crash recovery > stops after the bounded restart budget is exhausted
+[worker-manager] s1: Worker restart budget exhausted (2 attempts per 60000ms)
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager slash commands > falls back to a worker in the same workspace when the named session has none
+[worker-manager] restart attempt 1/1 failed for alpha-b: restart spawn 3 failed
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager slash commands > falls back to a worker in the same workspace when the named session has none
+[worker-manager] alpha-b: Worker restart budget exhausted (1 attempts per 60000ms)
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager slash commands > never answers a named session from another workspace worker
+[worker-manager] restart attempt 1/1 failed for beta: restart spawn 3 failed
+
+stderr | src/main/services/agent-host/__tests__/WorkerManager.test.ts > WorkerManager slash commands > never answers a named session from another workspace worker
+[worker-manager] beta: Worker restart budget exhausted (1 attempts per 60000ms)
+
+ ✓ src/main/services/agent-host/__tests__/WorkerManager.test.ts (106 tests) 1574ms
+ ✓ src/renderer/App/__tests__/legacyShellAbsence.test.ts (3 tests) 1754ms
+   ✓ S05 legacy shell removal > does not restore legacy entrypoints or their switch  1675ms
+ ✓ src/agent-host/__tests__/permissionPolicyIntegration.test.ts (8 tests) 7553ms
+ ✓ src/main/services/terminal/__tests__/piTuiManagedChannel.test.ts (6 tests) 4271ms
+   ✓ managed catalog, read back by pi itself > parses under pi's own ModelConfig with the company provider intact  3211ms
+   ✓ e2e: the bundled pi CLI in a managed terminal > e2e: lists only the company model, with no built-in provider alongside it  408ms
+   ✓ e2e: the bundled pi CLI in a managed terminal > e2e: sends one company-keyed request when asked for a turn with no --model  498ms
+ ✓ src/runtime/__tests__/trace.test.ts (15 tests) 1048ms
+   ✓ loses no run when two processes rotate one directory between them  1022ms
+stdout | src/runtime/__tests__/sessionAttachmentFill.test.ts > DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, and still reopens
+[DEV-33] accepted sends=4 file bytes=33539730 (31.99 MiB of 32 MiB), bytes after 3 sends=25154839, refusal=session_size_limit
+
+ ✓ src/runtime/__tests__/sessionAttachmentFill.test.ts (2 tests) 898ms
+   ✓ DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, and still reopens  841ms
+ ✓ src/runtime/__tests__/workerEndToEnd.test.ts (15 tests) 930ms
+ ✓ src/main/services/usage/__tests__/UsageService.test.ts (23 tests) 777ms
+ ✓ src/renderer/components/chat/__tests__/fontDomainScan.test.ts (11 tests) 800ms
+   ✓ D25 §6.3 A1: font-mono is a closed whitelist > every font-mono occurrence under src/renderer lives in a whitelisted file  749ms
+stderr | src/main/ipc/__tests__/chatPiWorkerRouting.test.ts > Pi WorkerSlot chat routing > spawn permission tier > drops a corrupt tier instead of refusing to start the session
+[chat] Ignoring an invalid spawn permission tier: root
+
+ ✓ src/main/ipc/__tests__/chatPiWorkerRouting.test.ts (47 tests) 779ms
+ ✓ src/runtime/__tests__/session.test.ts (25 tests) 683ms
+ ✓ src/renderer/components/chat/__tests__/composerFormStatic.test.ts (9 tests) 671ms
+   ✓ F-A20: composer form static scan > no SelectTrigger survives anywhere under components/chat  618ms
+ ✓ src/renderer/components/chat/__tests__/composerTargetGuards.test.ts (5 tests) 649ms
+   ✓ no in-place checkout from the chat tree > never imports BranchSelector  621ms
+ ✓ src/runtime/__tests__/contextCompaction.test.ts (30 tests) 498ms
+ ✓ src/runtime/__tests__/tsdFallback.test.ts (13 tests) 463ms
+ ✓ src/runtime/__tests__/subagentHardening.test.ts (22 tests) 566ms
+ ✓ src/renderer/components/workspace-shell/__tests__/panelVisibilityStatic.test.ts (11 tests) 459ms
+   ✓ panel visibility has exactly one derivation point (R1) > no shell component re-derives visibility from `activeSurfaceId !== null`  397ms
+ ✓ src/runtime/__tests__/subagentToolsPermissions.test.ts (17 tests) 423ms
+ ✓ src/main/services/legacyImport/__tests__/ClaudeSourceAdapter.test.ts (9 tests) 392ms
+ ✓ src/runtime/__tests__/sessionLegacy.test.ts (16 tests) 483ms
+   ✓ P3-3 legacy session compatibility > converts all six actual P2-0 v3 baseline transcripts including compaction  309ms
+ ✓ src/runtime/__tests__/promptService.test.ts (18 tests) 328ms
+ ✓ src/runtime/__tests__/subagentSession.test.ts (13 tests) 351ms
+ ✓ src/main/services/search/__tests__/SearchServiceRipgrep.test.ts (8 tests) 437ms
+stderr | src/main/services/chat/__tests__/SessionIndexService.test.ts > SessionIndexService > starts with an empty index and does not crash when the persisted file is corrupted
+[chat] Session index was damaged (Unexpected token 'o', "not json{{" is not valid JSON); the original is kept at /tmp/aiclient-session-index-CUSzGY/session-index.json.corrupt-2026-09-17T15-18-29-215Z and the list was rebuilt from 0 readable row(s).
+
+stderr | src/main/services/chat/__tests__/SessionIndexService.test.ts > SessionIndexService > read/write safety net (T038) > session-index-01: a corrupt index is backed up before anything overwrites it
+[chat] Session index was damaged (Unterminated string in JSON at position 76 (line 1 column 77)); the original is kept at /tmp/aiclient-session-index-glkS2w/session-index.json.corrupt-2026-09-17T15-18-29-316Z and the list was rebuilt from 0 readable row(s).
+
+stderr | src/main/services/chat/__tests__/SessionIndexService.test.ts > SessionIndexService > read/write safety net (T038) > session-index-01: an unreadable index refuses writes instead of replacing it
+[chat] Session index could not be read; refusing to write over it until it can be: Error: EISDIR: illegal operation on a directory, read
+[90m    at readFileHandle (node:internal/fs/promises:555:24)[39m
+    at [90m/home/ai/code/ai-client/[39msrc/main/services/chat/SessionIndexService.ts:555:19
+    at SessionIndexService.list [90m(/home/ai/code/ai-client/[39msrc/main/services/chat/SessionIndexService.ts:176:5[90m)[39m
+    at [90m/home/ai/code/ai-client/[39msrc/main/services/chat/__tests__/SessionIndexService.test.ts:742:7
+    at [90mfile:///home/ai/code/ai-client/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:752:20 {
+  errno: [33m-21[39m,
+  code: [32m'EISDIR'[39m,
+  syscall: [32m'read'[39m
+}
+
+stderr | src/main/services/chat/__tests__/SessionIndexService.test.ts > SessionIndexService > read/write safety net (T038) > session-index-01: an unreadable index refuses writes instead of replacing it
+[chat] Session index could not be read; refusing to write over it until it can be: Error: EISDIR: illegal operation on a directory, read
+[90m    at readFileHandle (node:internal/fs/promises:555:24)[39m
+    at [90m/home/ai/code/ai-client/[39msrc/main/services/chat/SessionIndexService.ts:555:19
+    at SessionIndexService.recordCreated [90m(/home/ai/code/ai-client/[39msrc/main/services/chat/SessionIndexService.ts:219:5[90m)[39m
+    at [90m/home/ai/code/ai-client/[39msrc/main/services/chat/__tests__/SessionIndexService.test.ts:744:7
+    at [90mfile:///home/ai/code/ai-client/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:752:20 {
+  errno: [33m-21[39m,
+  code: [32m'EISDIR'[39m,
+  syscall: [32m'read'[39m
+}
+
+stderr | src/main/services/chat/__tests__/SessionIndexService.test.ts > SessionIndexService > read/write safety net (T038) > session-index-01: keeps the readable rows and drops only the broken ones
+[chat] Session index was damaged (2 row(s) had no usable sessionId); the original is kept at /tmp/aiclient-session-index-CHguwR/session-index.json.corrupt-2026-09-17T15-18-29-336Z and the list was rebuilt from 1 readable row(s).
+
+stderr | src/main/services/chat/__tests__/SessionIndexService.test.ts > SessionIndexService > read/write safety net (T038) > session-index-11: the table has an upper bound and sheds archived rows first
+[chat] Session index exceeded 3 rows; dropped the 2 least recently updated row(s), archived ones first.
+
+ ✓ src/main/services/chat/__tests__/SessionIndexService.test.ts (36 tests) 371ms
+ ✓ src/runtime/__tests__/subagentPreview.test.ts (9 tests) 319ms
+ ✓ src/runtime/__tests__/subagentHostProbe.test.ts (10 tests) 307ms
+stderr | src/main/services/onboarding/__tests__/OnboardingService.test.ts > OnboardingService > rejects registration when server returns ok=true but data.config is missing required credentials
+[OnboardingService] verifyAndRegister received ok=true but credentials are incomplete; dataKeys=user,config
+
+ ✓ src/main/services/onboarding/__tests__/OnboardingService.test.ts (19 tests) 276ms
+ ✓ src/runtime/__tests__/sessionInterop.test.ts (13 tests) 549ms
+ ✓ src/shared/__tests__/defaultPaths.test.ts (6 tests) 267ms
+ ✓ src/runtime/__tests__/instructionOnDemand.test.ts (11 tests) 328ms
+ ✓ src/runtime/__tests__/skills.test.ts (48 tests) 285ms
+stderr | src/main/services/auth/__tests__/vaultIntegration.test.ts > flag off — no vault footprint (§3-5b) > a full login with the flag off never creates <userData>/credentials
+[CredentialVault] save refused: crypto not promoted yet (crypto_not_ready) — refusing beats a silent plaintext downgrade
+
+stderr | src/main/services/auth/__tests__/vaultIntegration.test.ts > flag off — no vault footprint (§3-5b) > a full login with the flag off never creates <userData>/credentials
+[OnboardingService] vault.save skipped: crypto_not_ready
+
+stderr | src/main/services/auth/__tests__/vaultIntegration.test.ts > vault failure is a shadow write, never a verifyAndRegister rejection (§2.7, mutation target ④) > resolves ok:true even when the vault crypto adapter throws on encrypt
+[OnboardingService] vault.save threw; ignoring (shadow write) Error: boom: simulated vault encrypt failure
+    at Object.encrypt [90m(/home/ai/code/ai-client/[39msrc/main/services/auth/__tests__/vaultIntegration.test.ts:217:15[90m)[39m
+    at CredentialVault.saveInternal [90m(/home/ai/code/ai-client/[39msrc/main/services/auth/CredentialVault.ts:579:32[90m)[39m
+    at [90m/home/ai/code/ai-client/[39msrc/main/services/auth/CredentialVault.ts:542:42
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+
+ ✓ src/main/services/auth/__tests__/vaultIntegration.test.ts (5 tests) 265ms
+ ✓ src/main/ipc/__tests__/piResources.test.ts (16 tests) 247ms
+ ✓ src/main/ipc/__tests__/auth.test.ts (9 tests) 259ms
+ ✓ src/main/services/auth/__tests__/spawnGate.test.ts (18 tests) 218ms
+(node:470307) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/agent-host/__tests__/workerStripOnlyCompat.test.ts (5 tests) 183ms
+ ✓ src/main/services/chat/__tests__/NativeSessionIndexAdapter.test.ts (7 tests) 154ms
+ ✓ src/renderer/App/__tests__/authGateWiring.test.ts (24 tests) 174ms
+ ✓ src/runtime/__tests__/sessionNavigation.test.ts (6 tests) 205ms
+ ✓ src/main/services/piModelConfig/__tests__/piWorkerEnv.test.ts (23 tests) 180ms
+ ✓ src/runtime/__tests__/nativeUtility.test.ts (9 tests) 341ms
+stderr | src/main/services/auth/__tests__/managedCredentialsStartup.test.ts > managedCredentialsStartup (D60) > flag on — phase ③ writes nothing (S0'/D60) > leaves an existing codex-home directory untouched
+[managed-credentials] Pi model sync skipped: Managed credentials are unavailable
+
+stderr | src/main/services/auth/__tests__/managedCredentialsStartup.test.ts > managedCredentialsStartup (D60) > flag on — phase ③ writes nothing (S0'/D60) > does not delete a stale auth.json left by an older build
+[managed-credentials] Pi model sync skipped: Managed credentials are unavailable
+
+ ✓ src/main/services/auth/__tests__/managedCredentialsStartup.test.ts (13 tests) 203ms
+stderr | src/main/services/legacyImport/__tests__/LegacyImportService.test.ts > LegacyImportService transaction > does not roll back a committed import when worker disposal fails after manifest completion
+[legacy-import] Committed import worker disposal failed: dispose failed
+
+stderr | src/main/services/legacyImport/__tests__/LegacyImportService.test.ts > LegacyImportService transaction > quarantines a tampered manifest without unlinking or de-indexing an unowned file
+[legacy-import] Ignored a manifest record that failed to parse (dedupeKey=tampered-key)
+
+ ✓ src/main/services/legacyImport/__tests__/LegacyImportService.test.ts (17 tests) 168ms
+ ✓ src/main/services/agent-host/__tests__/subagentCatalog.test.ts (28 tests) 164ms
+ ✓ src/runtime/__tests__/catalog.test.ts (23 tests) 158ms
+ ✓ src/renderer/components/workspace-shell/__tests__/deadControlsStatic.test.ts (9 tests) 121ms
+ ✓ src/renderer/stores/settings/__tests__/removedSettings.test.ts (3 tests) 191ms
+ ✓ src/renderer/components/chat/__tests__/chatMarkdownRender.test.ts (38 tests) 152ms
+ ✓ src/runtime/__tests__/nativeImport.test.ts (10 tests) 172ms
+ ✓ src/main/services/session/__tests__/SessionManager.test.ts (2 tests) 165ms
+ ✓ src/runtime/__tests__/bootstrap.test.ts (9 tests) 110ms
+ ✓ src/main/services/git/__tests__/tsdWorkingTreeRead.test.ts (6 tests) 99ms
+ ✓ src/runtime/__tests__/askQuestion.test.ts (11 tests) 112ms
+ ✓ src/main/services/git/__tests__/gitStatusFailureModes.test.ts (6 tests) 150ms
+ ✓ src/renderer/components/chat/__tests__/pureModuleImports.test.ts (9 tests) 145ms
+ ✓ src/shared/__tests__/noHardcodedChinese.test.ts (4 tests) 161ms
+ ✓ src/main/ipc/__tests__/settingsMainOwnedKeys.test.ts (6 tests) 118ms
+ ✓ src/renderer/components/workspace-shell/__tests__/tuiEditorAndRailAlignStatic.test.ts (5 tests) 68ms
+ ✓ src/agent-host/__tests__/permissionPatchScript.test.ts (2 tests) 312ms
+   ✓ permission package patch script > is version-guarded and idempotent on an installed package copy  309ms
+ ✓ src/main/services/auth/__tests__/index.test.ts (6 tests) 68ms
+ ✓ src/runtime/__tests__/queueReleaseIntegration.test.ts (1 test) 109ms
+ ✓ src/renderer/components/workspace-shell/__tests__/unboundChatEntryStatic.test.ts (4 tests) 91ms
+ ✓ src/runtime/__tests__/permissions.test.ts (9 tests) 91ms
+ ✓ src/main/services/agent-host/__tests__/NodeRuntimeResolver.test.ts (5 tests) 100ms
+ ✓ src/renderer/components/workspace-shell/__tests__/singleSessionViewStatic.test.ts (4 tests) 88ms
+ ✓ scripts/__tests__/packaging-config.test.mjs (26 tests) 94ms
+ ✓ src/runtime/__tests__/flags.test.ts (2 tests) 409ms
+   ✓ runtime flags > is read by nothing in src/ or scripts/ — the switch is gone, not hidden  406ms
+ ✓ src/renderer/components/announcements/__tests__/announcementWiring.test.ts (8 tests) 117ms
+ ✓ src/renderer/components/chat/__tests__/chatMarkdownPolicy.test.ts (103 tests) 92ms
+ ✓ scripts/__tests__/agent-host-build-lib.test.mjs (22 tests) 95ms
+ ✓ src/main/services/piPlugins/__tests__/terminalPermissionSystem.test.ts (4 tests) 68ms
+ ✓ src/__tests__/sourceIsSearchable.test.ts (2 tests) 146ms
+ ✓ src/main/services/legacyImport/__tests__/ClaudeSessionScanner.test.ts (17 tests) 65ms
+ ✓ src/main/services/auth/__tests__/stopDualWriteMutationTrace.test.ts (1 test) 68ms
+ ✓ src/main/services/piPermissionPolicy/__tests__/permissionPolicyService.test.ts (14 tests) 74ms
+ ✓ src/main/services/auth/__tests__/staticImportBans.test.ts (3 tests) 70ms
+ ✓ src/renderer/components/chat/__tests__/attachments.test.ts (70 tests) 103ms
+stdout | src/main/services/auth/__tests__/startupOrchestrationTrace.test.ts > startup orchestration trace — adoption-read -> vault-save -> marker, regenerate/refresh/fetch each exactly once (D47 S6 §5) > a legacy-registered machine gets adopted at boot, the managed home regenerates from the adopted vault, and the post-refresh probe fires exactly once off the adopted token
+[adoption] auth.json corroboration: absent
+
+ ✓ src/main/services/auth/__tests__/startupOrchestrationTrace.test.ts (1 test) 66ms
+ ✓ src/renderer/components/chat/__tests__/messageTimelineWiring.test.ts (49 tests) 82ms
+ ✓ src/shared/__tests__/i18nCoverage.test.ts (2 tests) 51ms
+ ✓ src/main/services/agent-host/__tests__/createPiWorkerSlot.test.ts (5 tests) 63ms
+ ✓ src/shared/__tests__/authGate.test.ts (54 tests) 60ms
+ ✓ src/main/ipc/__tests__/onboardingLogoutSequence.test.ts (8 tests) 69ms
+ ✓ src/renderer/components/chat/__tests__/questionCardModel.test.ts (126 tests) 32ms
+stderr | src/main/services/terminal/__tests__/PiTuiPty.test.ts > PiTuiPtyController — a disposal waits for the process to be gone > escalates and then reports an unconfirmed exit when the process ignores the kill
+[pi-tui] Terminal one never reported its exit; treating its chat as still contested
+
+ ✓ src/main/services/terminal/__tests__/PiTuiPty.test.ts (17 tests) 54ms
+ ✓ src/main/services/agent-host/__tests__/retiredSurfaceAbsence.test.ts (2 tests) 55ms
+stderr | src/main/services/terminal/__tests__/PtyManagerShellFallback.test.ts > a shell that cannot spawn falls back on Windows too > retries PowerShell 5.x when the configured pwsh.exe is not there
+[pty] Failed to spawn pwsh.exe. Falling back to powershell.exe
+
+stderr | src/main/services/terminal/__tests__/PtyManagerShellFallback.test.ts > a shell that cannot spawn falls back on Windows too > retries cmd.exe when PowerShell itself fails, carrying the initial command over
+[pty] Failed to spawn powershell.exe. Falling back to cmd.exe
+
+stderr | src/main/services/terminal/__tests__/PtyManagerShellFallback.test.ts > a shell that cannot spawn falls back on Windows too > still reports the failure when nothing is left to fall back to
+[pty] Failed to spawn cmd.exe. Falling back to powershell.exe
+
+stderr | src/main/services/terminal/__tests__/PtyManagerShellFallback.test.ts > a shell that cannot spawn falls back on Windows too > leaves the Unix pre-check exactly as it was
+[pty] Shell not found: /opt/gone/fish. Falling back to /bin/bash
+
+ ✓ src/main/services/terminal/__tests__/PtyManagerShellFallback.test.ts (4 tests) 49ms
+stdout | src/main/services/auth/__tests__/adoption.test.ts > adoption.ts (D47 S6 §1) > ensureVaultAdoption — save_failed > crypto_not_ready reason is surfaced and the marker is never written
+[adoption] auth.json corroboration: absent
+
+stdout | src/main/services/auth/__tests__/adoption.test.ts > adoption.ts (D47 S6 §1) > ensureVaultAdoption — save_failed > unsupported_version reason is surfaced
+[adoption] auth.json corroboration: absent
+
+stdout | src/main/services/auth/__tests__/adoption.test.ts > adoption.ts (D47 S6 §1) > ensureVaultAdoption — successful adoption > saves a payload with the same-key doctrine, null userId, and derived cchBaseUrl
+[adoption] auth.json corroboration: absent
+
+stdout | src/main/services/auth/__tests__/adoption.test.ts > adoption.ts (D47 S6 §1) > ensureVaultAdoption — successful adoption > writes the marker file atomically with version + adoptedAt after a successful save
+[adoption] auth.json corroboration: absent
+
+stdout | src/main/services/auth/__tests__/adoption.test.ts > adoption.ts (D47 S6 §1) > ensureVaultAdoption — successful adoption > a second call after the marker was written skips as marker_present, even against a fresh absent vault
+[adoption] auth.json corroboration: absent
+
+stdout | src/main/services/auth/__tests__/adoption.test.ts > adoption.ts (D47 S6 §1) > ensureVaultAdoption — successful adoption > falls back to an empty-string identity.email when the legacy email was missing
+[adoption] auth.json corroboration: absent
+
+stdout | src/main/services/auth/__tests__/adoption.test.ts > adoption.ts (D47 S6 §1) > getAdoptionLatch > stays pending until the in-flight adoption task actually settles
+[adoption] auth.json corroboration: absent
+
+stdout | src/main/services/auth/__tests__/adoption.test.ts > adoption.ts (D47 S6 §1) > getMigrationIncompleteSignal > does not flag a successful adoption as incomplete
+[adoption] auth.json corroboration: absent
+
+ ✓ src/main/services/auth/__tests__/adoption.test.ts (73 tests) 64ms
+ ✓ src/agent-host/__tests__/piSessionTree.test.ts (3 tests) 69ms
+ ✓ src/main/ipc/__tests__/legacyImport.test.ts (3 tests) 60ms
+stderr | src/main/services/legacyImport/__tests__/CodexSessionScanner.test.ts > Codex session source scanner > skips corrupt siblings and rejects a client-supplied unknown source id
+[CodexSessionScanner] Skipped unreadable session SyntaxError
+
+stderr | src/main/services/legacyImport/__tests__/CodexSessionScanner.test.ts > Codex session source scanner > skips corrupt siblings and rejects a client-supplied unknown source id
+[CodexSessionScanner] Skipped unreadable session SyntaxError
+
+ ✓ src/main/services/legacyImport/__tests__/CodexSessionScanner.test.ts (5 tests) 53ms
+ ✓ src/main/services/agent-host/__tests__/WorkerTransport.test.ts (6 tests) 42ms
+ ✓ src/main/services/agent-host/__tests__/ScratchWorkspaceService.test.ts (28 tests) 47ms
+ ✓ src/runtime/__tests__/nativeWorkerRuntime.test.ts (44 tests) 45ms
+ ✓ src/main/services/piModelConfig/__tests__/PiModelConfigService.test.ts (48 tests) 45ms
+ ✓ src/runtime/__tests__/providerRedaction.test.ts (16 tests) 48ms
+ ✓ src/main/services/userProviders/__tests__/readUserProviderGroup.test.ts (6 tests) 31ms
+ ✓ src/main/services/legacyImport/__tests__/CodexImportIntegration.test.ts (1 test) 46ms
+ ✓ src/main/services/agent-host/__tests__/WorkerSlot.test.ts (21 tests) 32ms
+ ✓ src/agent-host/__tests__/codexHistoryReader.test.ts (18 tests) 48ms
+ ✓ src/runtime/__tests__/hostBoundary.test.ts (2 tests) 44ms
+ ✓ src/runtime/__tests__/newContext.test.ts (5 tests) 41ms
+ ✓ src/main/services/auth/__tests__/credentialMode.test.ts (5 tests) 46ms
+ ✓ src/main/ipc/__tests__/agentCatalogIpc.test.ts (1 test) 20ms
+ ✓ src/agent-host/__tests__/piCliIsBundledToolOnly.test.ts (3 tests) 26ms
+ ✓ src/main/services/agentMigration/__tests__/AgentDirMigrationService.test.ts (20 tests) 30ms
+stderr | src/main/ipc/__tests__/piRuntime.test.ts > pi:runtime:check > turns detection failures into an explicit status
+[piRuntime] detect failed: Error: missing resource
+    at [90m/home/ai/code/ai-client/[39msrc/main/ipc/__tests__/piRuntime.test.ts:33:30
+    at [90mfile:///home/ai/code/ai-client/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:155:11
+    at [90mfile:///home/ai/code/ai-client/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:752:26
+    at [90mfile:///home/ai/code/ai-client/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///home/ai/code/ai-client/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///home/ai/code/ai-client/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1574:12[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+    at runSuite [90m(file:///home/ai/code/ai-client/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///home/ai/code/ai-client/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-hooks.js:1729:8[90m)[39m
+
+ ✓ src/main/ipc/__tests__/piRuntime.test.ts (2 tests) 39ms
+ ✓ src/renderer/lib/__tests__/uniqueId.test.ts (4 tests) 29ms
+ ✓ src/renderer/components/chat/__tests__/composerStopStatic.test.ts (28 tests) 35ms
+ ✓ src/renderer/components/chat/__tests__/subagentActivityModel.test.ts (50 tests) 30ms
+stderr | src/main/services/auth/__tests__/CredentialVault.test.ts > CredentialVault — user-added service group (H/17 L1) > refuses to save before crypto promotion, and never overwrites a newer schema
+[CredentialVault] saveUserProviders refused: crypto not promoted yet (crypto_not_ready)
+
+stderr | src/main/services/auth/__tests__/CredentialVault.test.ts > CredentialVault — user-added service group (H/17 L1) > refuses to save before crypto promotion, and never overwrites a newer schema
+[CredentialVault] saveUserProviders refused: on-disk vault is a newer, unsupported schema
+
+stderr | src/main/services/auth/__tests__/CredentialVault.test.ts > CredentialVault — read result union (1e) > a version above this build is unsupported, read-only, and leaves the file bytes untouched
+[CredentialVault] save refused: on-disk vault is a newer, unsupported schema
+
+stderr | src/main/services/auth/__tests__/CredentialVault.test.ts > CredentialVault — promotion latch (1f) > refuses save before promotion, allows it after, is idempotent, and never calls available() during promotion itself
+[CredentialVault] save refused: crypto not promoted yet (crypto_not_ready) — refusing beats a silent plaintext downgrade
+
+ ✓ src/main/services/auth/__tests__/CredentialVault.test.ts (29 tests) 28ms
+ ✓ src/renderer/components/chat/__tests__/toolCard.test.ts (95 tests) 29ms
+ ✓ src/renderer/components/chat/__tests__/queueRelease.test.ts (117 tests) 32ms
+ ✓ src/renderer/components/chat/__tests__/middleColumnLayout.test.ts (116 tests) 28ms
+ ✓ src/agent-host/__tests__/stderrRedaction.test.ts (32 tests) 24ms
+ ✓ src/renderer/components/workspace-shell/surfaces/__tests__/editorSurfaceIntentGuards.test.ts (13 tests) 26ms
+ ✓ src/renderer/components/chat/__tests__/chatTurn.test.ts (30 tests) 27ms
+ ✓ src/renderer/components/chat/__tests__/historyError.test.ts (86 tests) 19ms
+ ✓ src/runtime/__tests__/projectInstructions.test.ts (46 tests) 22ms
+ ✓ src/main/services/terminal/__tests__/ShellDetector.test.ts (9 tests) 25ms
+ ✓ src/runtime/__tests__/workerCarrier.test.ts (14 tests) 22ms
+ ✓ src/runtime/__tests__/pluginGraphIncomplete.test.ts (1 test) 19ms
+ ✓ src/renderer/components/chat/sessionIndex/__tests__/sessionIndexMutations.test.ts (33 tests) 26ms
+ ✓ src/renderer/components/chat/__tests__/runtimeToolVocabulary.test.ts (126 tests) 18ms
+ ✓ src/shared/__tests__/piPermissionPolicy.test.ts (28 tests) 11ms
+ ✓ src/renderer/components/workspace-shell/__tests__/shellLayoutModel.test.ts (88 tests) 19ms
+ ✓ src/runtime/__tests__/attachmentBudget.test.ts (6 tests) 18ms
+ ✓ src/renderer/components/chat/__tests__/composerTarget.test.ts (55 tests) 25ms
+ ✓ src/renderer/components/workspace-shell/__tests__/sidebarRowBudgetStatic.test.ts (8 tests) 4ms
+ ✓ src/main/services/auth/__tests__/claudeHomeRedirectStaticScan.test.ts (6 tests) 25ms
+ ✓ src/renderer/components/chat/__tests__/subagentWiring.test.ts (8 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/slashCommandWiringStatic.test.ts (9 tests) 15ms
+ ✓ src/main/__tests__/esmShimStringTrap.test.ts (1 test) 19ms
+ ✓ src/runtime/__tests__/providerRetry.test.ts (35 tests) 17ms
+ ✓ src/runtime/__tests__/contextBudget.test.ts (17 tests) 17ms
+ ✓ src/renderer/stores/__tests__/chatSessionActions.test.ts (38 tests) 18ms
+ ✓ src/renderer/stores/__tests__/chatSessionsCore.test.ts (64 tests) 20ms
+ ✓ src/runtime/__tests__/subagentDefinitions.test.ts (34 tests) 17ms
+ ✓ src/renderer/components/workspace-shell/surfaces/__tests__/contextSurfaceModel.test.ts (58 tests) 19ms
+ ✓ src/main/ipc/__tests__/tempWorkspaceRecovery.test.ts (13 tests) 21ms
+ ✓ src/renderer/components/workspace-shell/__tests__/endConversationWiringStatic.test.ts (4 tests) 5ms
+ ✓ src/renderer/components/workspace-shell/__tests__/sidebarSectionMenus.test.ts (5 tests) 11ms
+ ✓ src/renderer/components/chat/__tests__/piMarkdownSplitComparison.test.ts (11 tests) 7ms
+ ✓ src/agent-host/__tests__/codexItemMapper.test.ts (34 tests) 63ms
+ ✓ src/runtime/__tests__/subagentMigration.test.ts (17 tests) 15ms
+ ✓ src/renderer/components/chat/__tests__/assistantProgress.test.ts (70 tests) 19ms
+ ✓ src/renderer/components/chat/__tests__/eventRing.test.ts (10 tests) 17ms
+ ✓ src/renderer/components/settings/__tests__/subagentManagementModel.test.ts (24 tests) 16ms
+ ✓ src/renderer/components/workspace-shell/__tests__/deriveChatWorkspaceTree.test.ts (32 tests) 14ms
+ ✓ src/renderer/components/workspace-shell/__tests__/centerLayoutModel.test.ts (47 tests) 16ms
+ ✓ src/main/services/userProviders/__tests__/UserProviderService.test.ts (22 tests) 15ms
+ ✓ src/renderer/components/chat/__tests__/startScreenBarStatic.test.ts (6 tests) 12ms
+ ✓ src/renderer/components/settings/__tests__/permissionPolicyView.test.ts (29 tests) 12ms
+ ✓ src/renderer/components/chat/__tests__/messageQueue.test.ts (46 tests) 14ms
+ ✓ src/renderer/stores/__tests__/chatSessionsHistory.test.ts (29 tests) 17ms
+ ✓ src/renderer/components/workspace-shell/surfaces/__tests__/diffCenterTabsStatic.test.ts (13 tests) 5ms
+stderr | src/main/ipc/__tests__/piTuiHandover.test.ts > an unconfirmed kill keeps the chat contested > holds ownership so the GUI write is refused rather than racing the terminal
+[pi-tui] A terminal on /tmp/ai-client-handover-test/chat.jsonl was not confirmed dead; keeping the chat locked to terminal mode
+
+stderr | src/main/ipc/__tests__/piTuiHandover.test.ts > an unconfirmed kill keeps the chat contested > keeps the "must re-read" mark for the retry, instead of spending it on the failure
+[pi-tui] A terminal on /tmp/ai-client-handover-test/chat.jsonl was not confirmed dead; keeping the chat locked to terminal mode
+
+ ✓ src/main/ipc/__tests__/piTuiHandover.test.ts (13 tests) 15ms
+ ✓ src/renderer/stores/__tests__/historyReplayMerge.test.ts (45 tests) 15ms
+ ✓ src/main/services/search/__tests__/SearchService.test.ts (22 tests) 16ms
+ ✓ src/main/services/auth/__tests__/AuthStateService.test.ts (26 tests) 15ms
+ ✓ src/renderer/components/chat/__tests__/efforts.test.ts (30 tests) 9ms
+ ✓ src/renderer/components/workspace-shell/__tests__/capabilityEntryStatic.test.ts (9 tests) 30ms
+ ✓ src/main/services/piPlugins/__tests__/PiPluginService.test.ts (11 tests) 13ms
+ ✓ src/renderer/components/chat/__tests__/slashCommands.test.ts (17 tests) 13ms
+ ✓ src/main/services/announcements/__tests__/AnnouncementService.test.ts (10 tests) 13ms
+ ✓ src/renderer/components/workspace-shell/__tests__/runPanelModel.test.ts (30 tests) 12ms
+ ✓ src/main/services/agent-host/__tests__/PiUtilityService.test.ts (6 tests) 12ms
+ ✓ src/renderer/stores/__tests__/chatSessionsBatch.test.ts (12 tests) 12ms
+ ✓ src/renderer/stores/__tests__/pendingUserMessages.test.ts (4 tests) 5ms
+ ✓ src/renderer/components/workspace-shell/__tests__/sidebarTree.test.ts (38 tests) 12ms
+ ✓ src/renderer/components/chat/__tests__/pickedAttachments.test.ts (27 tests) 14ms
+ ✓ src/main/services/__tests__/appStateMigration.test.ts (9 tests) 10ms
+ ✓ src/main/services/piPermissionPolicy/__tests__/policyStore.test.ts (15 tests) 11ms
+ ✓ src/main/services/preview/__tests__/PreviewWindowManager.test.ts (12 tests) 12ms
+ ✓ src/renderer/components/settings/__tests__/agentMigrationPromptWiring.test.ts (14 tests) 7ms
+ ✓ src/renderer/stores/__tests__/chatSessionsQuestion.test.ts (16 tests) 10ms
+ ✓ src/runtime/__tests__/sessionCodec.test.ts (22 tests) 14ms
+ ✓ src/renderer/components/workspace-shell/__tests__/surfaceRegistry.test.ts (30 tests) 11ms
+ ✓ src/runtime/__tests__/fileChange.test.ts (7 tests) 8ms
+ ✓ src/runtime/__tests__/eventsPlugin.test.ts (2 tests) 11ms
+ ✓ src/renderer/stores/__tests__/runtimeEventBus.test.ts (12 tests) 11ms
+ ✓ src/runtime/__tests__/settingSources.test.ts (19 tests) 15ms
+ ✓ src/renderer/stores/__tests__/turnSendStatus.test.ts (19 tests) 8ms
+ ✓ src/renderer/hooks/__tests__/gitQueryKeys.test.ts (30 tests) 10ms
+ ✓ src/main/services/auth/__tests__/AuthProbeScheduler.test.ts (17 tests) 10ms
+ ✓ src/renderer/components/workspace-shell/surfaces/__tests__/gitSurfaceModel.test.ts (43 tests) 19ms
+ ✓ src/renderer/stores/__tests__/chatSessionsSendGuard.test.ts (7 tests) 11ms
+ ✓ src/agent-host/__tests__/permissionPlugin.test.ts (12 tests) 9ms
+ ✓ src/renderer/components/chat/__tests__/hostStatus.test.ts (24 tests) 8ms
+ ✓ src/renderer/components/workspace-shell/__tests__/sessionCapabilityModel.test.ts (6 tests) 10ms
+ ✓ src/main/services/cli/__tests__/PiRuntimeChecker.test.ts (2 tests) 9ms
+ ✓ src/main/services/piModelConfig/__tests__/catalogSnapshot.test.ts (10 tests) 15ms
+ ✓ src/renderer/components/chat/__tests__/turnStatus.test.ts (27 tests) 10ms
+ ✓ src/main/ipc/__tests__/agentHostCleanup.test.ts (4 tests) 10ms
+ ✓ src/main/ipc/__tests__/tempWorkspaceCreation.test.ts (1 test) 11ms
+ ✓ src/renderer/components/chat/__tests__/turnTiming.test.ts (35 tests) 10ms
+ ✓ src/main/services/updater/__tests__/AutoUpdater.test.ts (4 tests) 9ms
+ ✓ src/renderer/components/chat/sessionIndex/__tests__/sessionIndexMerge.test.ts (23 tests) 9ms
+ ✓ src/renderer/stores/__tests__/sessionRuntimeFacts.test.ts (8 tests) 7ms
+ ✓ src/shared/__tests__/piUsage.test.ts (23 tests) 9ms
+ ✓ src/renderer/components/chat/__tests__/toolRowArg.test.ts (8 tests) 9ms
+ ✓ src/main/services/terminal/__tests__/piTuiSession.test.ts (17 tests) 8ms
+ ✓ src/renderer/components/chat/__tests__/toolDiff.test.ts (20 tests) 9ms
+ ✓ src/renderer/components/chat/__tests__/chatTimelineLayout.test.ts (27 tests) 9ms
+ ✓ src/renderer/components/workspace-shell/__tests__/sessionContextMenuWiring.test.ts (5 tests) 4ms
+ ✓ src/shared/types/__tests__/workerRpc.test.ts (16 tests) 9ms
+ ✓ src/renderer/components/workspace-shell/__tests__/sidebarRowRemoval.test.ts (5 tests) 8ms
+ ✓ src/main/ipc/__tests__/attachmentReadGuard.test.ts (24 tests) 9ms
+ ✓ src/renderer/components/chat/sessionIndex/__tests__/sessionTitle.test.ts (33 tests) 8ms
+ ✓ src/main/services/agent-host/__tests__/hostStderr.test.ts (18 tests) 8ms
+ ✓ src/shared/__tests__/announcements.test.ts (18 tests) 8ms
+ ✓ src/main/services/agent-host/__tests__/PiWorkerProcess.test.ts (5 tests) 8ms
+ ✓ scripts/__tests__/runtime-baseline-archive.test.mjs (8 tests) 46ms
+ ✓ src/shared/__tests__/weeklyQuota.test.ts (19 tests) 7ms
+ ✓ src/main/services/legacyImport/__tests__/CodexRollout.test.ts (6 tests) 8ms
+ ✓ src/renderer/components/files/__tests__/javaFolding.test.ts (32 tests) 8ms
+ ✓ src/renderer/components/workspace-shell/__tests__/treeSyncPatch.test.ts (14 tests) 7ms
+ ✓ src/main/services/legacyImport/__tests__/PiImportProcess.test.ts (5 tests) 7ms
+ ✓ scripts/__tests__/model-catalog-snapshot.test.mjs (14 tests) 8ms
+ ✓ src/renderer/components/chat/__tests__/turnHead.test.ts (36 tests) 8ms
+ ✓ src/shared/__tests__/moduleCaseCollisions.test.ts (5 tests) 7ms
+ ✓ src/renderer/components/chat/__tests__/piModelCatalog.test.ts (12 tests) 6ms
+ ✓ src/main/services/auth/__tests__/redact.test.ts (12 tests) 7ms
+ ✓ src/renderer/components/workspace-shell/__tests__/unreadRowMarkerStatic.test.ts (3 tests) 4ms
+ ✓ src/renderer/components/chat/__tests__/toolHits.test.ts (14 tests) 8ms
+ ✓ src/runtime/__tests__/prefixStability.test.ts (13 tests) 8ms
+ ✓ src/renderer/lib/__tests__/utils.test.ts (3 tests) 7ms
+ ✓ src/main/services/files/__tests__/localFileWriteGuard.test.ts (18 tests) 8ms
+ ✓ src/runtime/__tests__/instructionTracker.test.ts (9 tests) 8ms
+ ✓ src/renderer/components/chat/__tests__/queueReleaseTransaction.test.ts (7 tests) 7ms
+ ✓ src/renderer/components/chat/__tests__/fileMention.test.ts (30 tests) 7ms
+ ✓ src/renderer/stores/__tests__/sessionLifecycle.test.ts (5 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/messageMetadata.test.ts (19 tests) 7ms
+ ✓ src/renderer/components/chat/__tests__/attachmentLimits.test.ts (21 tests) 7ms
+ ✓ src/main/services/files/__tests__/pickedAttachmentAccess.test.ts (10 tests) 8ms
+ ✓ src/renderer/components/chat/sessionIndex/__tests__/resumeIntent.test.ts (23 tests) 7ms
+ ✓ src/renderer/stores/__tests__/openDiffTab.test.ts (9 tests) 7ms
+ ✓ src/renderer/stores/__tests__/toolExpansion.test.ts (15 tests) 7ms
+stderr | src/main/__tests__/electronViteConfig.test.ts
+[build] ONBOARDING_SERVICE_URL is not set; __ONBOARDING_SERVICE_URL__ will default to https://onboarding-jyw.pipidan.qzz.io
+
+ ✓ src/main/__tests__/electronViteConfig.test.ts (1 test) 3ms
+ ✓ src/renderer/stores/__tests__/scratchWorkspace.test.ts (6 tests) 7ms
+ ✓ src/runtime/__tests__/subagentDisplay.test.ts (12 tests) 7ms
+ ✓ src/renderer/components/chat/__tests__/permissionActivityRow.test.ts (18 tests) 7ms
+ ✓ src/main/services/terminal/__tests__/t35FinalAbsence.test.ts (7 tests) 7ms
+ ✓ src/runtime/__tests__/promptSegments.test.ts (14 tests) 7ms
+ ✓ src/renderer/components/chat/__tests__/piModelWiring.test.ts (3 tests) 4ms
+ ✓ src/shared/__tests__/piTurnRollup.test.ts (13 tests) 7ms
+ ✓ src/renderer/components/chat/__tests__/piToolVocabulary.test.ts (23 tests) 8ms
+ ✓ src/renderer/components/workspace-shell/__tests__/sessionReview.test.ts (6 tests) 7ms
+ ✓ src/renderer/components/workspace-shell/__tests__/shellShortcuts.test.ts (21 tests) 7ms
+ ✓ src/agent-host/__tests__/permissionPolicy.test.ts (18 tests) 7ms
+ ✓ src/renderer/components/chat/__tests__/chatEmptyState.test.ts (16 tests) 24ms
+ ✓ src/shared/__tests__/credentialMode.test.ts (9 tests) 5ms
+ ✓ src/renderer/components/chat/sessionIndex/__tests__/agentBindingMerge.test.ts (11 tests) 6ms
+ ✓ src/renderer/stores/__tests__/fileOpenIntent.test.ts (7 tests) 4ms
+ ✓ src/renderer/stores/__tests__/chatSessionsPermissionActivity.test.ts (8 tests) 7ms
+ ✓ src/renderer/components/chat/__tests__/sessionPreferenceStore.test.ts (11 tests) 7ms
+ ✓ src/renderer/components/workspace-shell/__tests__/endSessionRuntime.test.ts (5 tests) 8ms
+ ✓ src/renderer/stores/__tests__/sessionActivityRecovery.test.ts (6 tests) 8ms
+ ✓ src/main/services/agent-host/__tests__/t31PiOnlyAbsence.test.ts (4 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/models.test.ts (12 tests) 7ms
+ ✓ src/renderer/components/workspace-shell/__tests__/terminalSurfaceStatic.test.ts (17 tests) 15ms
+ ✓ src/renderer/components/workspace-shell/surfaces/__tests__/resolveIntentPath.test.ts (22 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/imageDimensions.test.ts (12 tests) 6ms
+ ✓ src/agent-host/__tests__/piSessionTimeline.test.ts (7 tests) 9ms
+ ✓ src/renderer/components/terminal/__tests__/terminalSurfaceModel.test.ts (19 tests) 6ms
+ ✓ src/shared/__tests__/windowsCodePage.test.ts (6 tests) 5ms
+ ✓ src/renderer/components/workspace-shell/__tests__/conversationSegments.test.ts (8 tests) 6ms
+ ✓ src/shared/__tests__/modelBaseUrl.test.ts (10 tests) 5ms
+ ✓ src/renderer/stores/__tests__/unreadSessionMarkers.test.ts (9 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/retryBanner.test.ts (15 tests) 7ms
+ ✓ src/main/ipc/__tests__/onboardingHandlers.test.ts (7 tests) 7ms
+ ✓ src/renderer/stores/__tests__/permissionGate.test.ts (14 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/unboundChatWiring.test.ts (16 tests) 12ms
+stdout | src/main/services/terminal/__tests__/PtyManagerRegistryEncoding.test.ts > windows registry reads decode the console code page > keeps a PATH entry under a Chinese user directory intact
+[PtyManager] PATH cache cleared
+
+stdout | src/main/services/terminal/__tests__/PtyManagerRegistryEncoding.test.ts > windows registry reads decode the console code page > keeps a PATH entry under a Chinese user directory intact
+[PtyManager] PATH cache cleared
+
+stdout | src/main/services/terminal/__tests__/PtyManagerRegistryEncoding.test.ts > windows registry reads decode the console code page > keeps a registry environment value intact for %VAR% expansion
+[PtyManager] PATH cache cleared
+
+stdout | src/main/services/terminal/__tests__/PtyManagerRegistryEncoding.test.ts > windows registry reads decode the console code page > keeps a registry environment value intact for %VAR% expansion
+[PtyManager] PATH cache cleared
+
+stdout | src/main/services/terminal/__tests__/PtyManagerRegistryEncoding.test.ts > windows registry reads decode the console code page > leaves an ASCII registry read exactly as it was
+[PtyManager] PATH cache cleared
+
+stdout | src/main/services/terminal/__tests__/PtyManagerRegistryEncoding.test.ts > windows registry reads decode the console code page > leaves an ASCII registry read exactly as it was
+[PtyManager] PATH cache cleared
+
+ ✓ src/main/services/terminal/__tests__/PtyManagerRegistryEncoding.test.ts (3 tests) 5ms
+ ✓ src/renderer/components/settings/__tests__/migrationPromptModel.test.ts (14 tests) 6ms
+ ✓ src/main/services/piModelConfig/__tests__/nativeCatalog.test.ts (6 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/messageTimelinePendingStatic.test.ts (7 tests) 6ms
+ ✓ src/renderer/stores/__tests__/subagentActivity.test.ts (5 tests) 5ms
+ ✓ src/renderer/components/workspace-shell/surfaces/__tests__/terminalWorkspace.test.ts (10 tests) 5ms
+ ✓ scripts/__tests__/packaged-worker-report.test.mjs (6 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/thinkingCard.test.ts (21 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/piTurnItemOrder.test.ts (3 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/f2IncidentTest5.test.ts (5 tests) 6ms
+ ✓ src/main/services/files/__tests__/localFileReadGuard.test.ts (4 tests) 6ms
+ ✓ src/renderer/styles/__tests__/tokenValues.test.ts (9 tests) 5ms
+ ✓ src/renderer/stores/__tests__/diffTabTarget.test.ts (16 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/clipboardAttachments.test.ts (14 tests) 6ms
+ ✓ src/renderer/App/hooks/__tests__/fileDragDrop.test.ts (16 tests) 5ms
+ ✓ src/renderer/lib/__tests__/deferRootUnmount.test.ts (5 tests) 5ms
+ ✓ src/renderer/stores/__tests__/chatSessionsAuthGate.test.ts (3 tests) 5ms
+ ✓ src/renderer/components/workspace-shell/__tests__/folderDiffStats.test.ts (14 tests) 6ms
+ ✓ src/renderer/components/settings/__tests__/settingsCategories.test.ts (13 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/turnCopy.test.ts (13 tests) 5ms
+ ✓ src/renderer/components/workspace-shell/surfaces/__tests__/fileIntentToCursor.test.ts (6 tests) 4ms
+ ✓ src/renderer/components/chat/__tests__/modelMissingWiring.test.ts (16 tests) 27ms
+ ✓ src/renderer/components/workspace-shell/__tests__/panelTabsModel.test.ts (7 tests) 5ms
+ ✓ src/renderer/components/chat/__tests__/messageTimelineScroll.test.ts (16 tests) 5ms
+ ✓ scripts/__tests__/dev-proxy-bypass.test.mjs (6 tests) 4ms
+ ✓ src/main/services/piModelConfig/__tests__/nativeFeatures.test.ts (5 tests) 5ms
+ ✓ scripts/__tests__/node-runtime-pin.test.mjs (7 tests) 5ms
+ ✓ src/renderer/components/workspace-shell/__tests__/bulkArchiveStatic.test.ts (10 tests) 12ms
+ ✓ src/main/services/agent-host/__tests__/nativeSubagentSettings.test.ts (6 tests) 4ms
+ ✓ src/main/services/files/__tests__/previewFileRead.test.ts (4 tests) 5ms
+ ✓ src/main/services/git/__tests__/worktreeListParse.test.ts (7 tests) 5ms
+ ✓ src/renderer/components/workspace-shell/surfaces/__tests__/closeEditorTabsSequentially.test.ts (3 tests) 4ms
+ ✓ src/renderer/components/workspace-shell/__tests__/addRepositoryEntry.test.ts (12 tests) 5ms
+ ✓ src/renderer/components/chat/__tests__/sendPreamble.test.ts (5 tests) 3ms
+ ✓ scripts/__tests__/packaging-budget.test.mjs (5 tests) 6ms
+ ✓ src/main/services/agent-host/__tests__/workerSessionKey.test.ts (4 tests) 4ms
+ ✓ src/renderer/stores/__tests__/editorWorkspacePreview.test.ts (2 tests) 4ms
+ ✓ src/renderer/components/chat/__tests__/permissionTierWiring.test.ts (5 tests) 5ms
+ ✓ src/shared/__tests__/internalMessage.test.ts (7 tests) 5ms
+ ✓ src/renderer/hooks/__tests__/piTuiSessionBinding.test.ts (8 tests) 9ms
+ ✓ src/renderer/components/chat/__tests__/piThinkingDuration.test.ts (5 tests) 4ms
+ ✓ src/main/services/legacyImport/__tests__/legacyImportStatic.test.ts (2 tests) 4ms
+ ✓ src/main/services/usage/__tests__/usageCredentialSource.test.ts (3 tests) 4ms
+ ✓ src/runtime/__tests__/contracts.test.ts (6 tests) 4ms
+ ✓ src/renderer/components/files/__tests__/markdownImagePolicy.test.ts (5 tests) 4ms
+ ✓ src/main/services/git/__tests__/gitLogFormat.test.ts (3 tests) 4ms
+ ✓ src/renderer/components/chat/__tests__/sendBudgets.test.ts (5 tests) 4ms
+ ✓ src/renderer/components/workspace-shell/surfaces/__tests__/gitSurfaceLayoutStatic.test.ts (5 tests) 4ms
+ ✓ src/renderer/components/settings/__tests__/piResourcesSettingsStatic.test.ts (8 tests) 4ms
+ ✓ src/renderer/components/chat/__tests__/tuiHandoverWiring.test.ts (6 tests) 4ms
+ ✓ src/renderer/components/chat/__tests__/sessionTree.test.ts (2 tests) 4ms
+ ✓ src/renderer/stores/__tests__/chatSessionsThinking.test.ts (3 tests) 4ms
+ ✓ src/shared/__tests__/windowTheme.test.ts (7 tests) 4ms
+ ✓ src/shared/__tests__/appStateLayout.test.ts (7 tests) 4ms
+ ✓ scripts/__tests__/credential-env-keys.test.mjs (4 tests) 4ms
+ ✓ src/renderer/components/chat/__tests__/permissionGateDegradedStatic.test.ts (4 tests) 4ms
+ ✓ src/main/services/auth/__tests__/adoptionStaticImportBans.test.ts (2 tests) 4ms
+ ✓ src/renderer/components/chat/__tests__/authRequiredError.test.ts (7 tests) 4ms
+ ✓ src/main/ipc/__tests__/chatEffortPayload.test.ts (5 tests) 4ms
+ ✓ src/runtime/__tests__/workerShell.test.ts (5 tests) 4ms
+ ✓ src/renderer/components/chat/__tests__/forkDraftCarry.test.ts (7 tests) 3ms
+ ✓ src/renderer/components/workspace-shell/__tests__/workspaceSearchShortcuts.test.ts (3 tests) 4ms
+ ✓ src/renderer/stores/settings/__tests__/migration.test.ts (1 test) 3ms
+ ✓ src/renderer/components/chat/__tests__/toolVocabulary.test.ts (6 tests) 4ms
+ ✓ src/main/services/agent-host/__tests__/workspaceContainment.test.ts (4 tests) 4ms
+ ✓ src/shared/types/__tests__/legacyImport.test.ts (4 tests) 3ms
+ ✓ src/agent-host/__tests__/nativeWorkerDependencyBoundary.test.ts (2 tests) 4ms
+ ✓ src/shared/__tests__/chatAgentDefaults.test.ts (3 tests) 4ms
+ ✓ src/renderer/components/files/__tests__/previewRecoveryStatic.test.ts (4 tests) 6ms
+ ✓ src/renderer/components/chat/__tests__/t25ModelPickerStatic.test.ts (4 tests) 3ms
+ ✓ src/renderer/components/workspace-shell/__tests__/contextPanelMountStatic.test.ts (6 tests) 4ms
+ ✓ src/renderer/components/workspace-shell/surfaces/__tests__/editorTabCloseDecision.test.ts (6 tests) 5ms
+ ✓ src/renderer/components/chat/__tests__/sendDispatchError.test.ts (6 tests) 4ms
+ ✓ src/renderer/components/chat/__tests__/sendExperienceWiring.test.ts (3 tests) 10ms
+ ✓ src/shared/__tests__/shellMinimums.test.ts (3 tests) 3ms
+ ✓ src/renderer/components/chat/__tests__/fontDomain.test.ts (2 tests) 3ms
+ ✓ src/renderer/hooks/__tests__/useFileDrop.test.ts (5 tests) 3ms
+ ✓ src/renderer/components/chat/__tests__/piResumeNoFallback.test.ts (2 tests) 4ms
+ ✓ src/renderer/lib/__tests__/gitClone.test.ts (2 tests) 3ms
+ ✓ src/renderer/components/sessions/__tests__/legacyImportUiStatic.test.ts (4 tests) 3ms
+ ✓ src/renderer/components/chat/__tests__/questionCardWiring.test.ts (3 tests) 3ms
+ ✓ src/renderer/components/settings/__tests__/piPluginsPermissionNoticeStatic.test.ts (5 tests) 3ms
+ ✓ src/renderer/App/hooks/__tests__/useWorktreeSync.utils.test.ts (3 tests) 3ms
+ ✓ src/renderer/components/workspace-shell/__tests__/railCollapseStatic.test.ts (4 tests) 8ms
+ ✓ src/shared/utils/__tests__/path.test.ts (4 tests) 3ms
+ ✓ src/agent-host/__tests__/piSessionPreflight.test.ts (4 tests) 4ms
+ ✓ src/agent-host/__tests__/nativeProjectTrust.test.ts (3 tests) 3ms
+ ✓ src/renderer/components/files/__tests__/previewResourceLimits.test.ts (3 tests) 3ms
+ ✓ src/renderer/components/chat/__tests__/forceTakeoverWiring.test.ts (3 tests) 3ms
+ ✓ src/renderer/stores/__tests__/sessionRetirement.test.ts (2 tests) 3ms
+ ✓ src/main/ipc/__tests__/workerCleanupBudgetStatic.test.ts (2 tests) 3ms
+ ✓ src/renderer/components/chat/__tests__/scrollStateCss.test.ts (2 tests) 3ms
+ ✓ src/renderer/lib/__tests__/ghosttyTheme.test.ts (3 tests) 3ms
+ ✓ src/renderer/hooks/__tests__/useEditor.test.ts (3 tests) 2ms
+ ✓ src/renderer/components/chat/__tests__/darkVariant.test.ts (1 test) 2ms
+ ✓ src/renderer/components/settings/__tests__/terminalInteraction.test.ts (1 test) 1459ms
+   ✓ mounts terminal settings and appearance with real controls  1458ms
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — who sees it (H/21 P1) > [MPI-01] opens for a user with a Pi setup worth copying
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — what it offers (H/21 P1) > [MPI-06] pre-ticks all five items, so the obvious answer is one click
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — what it offers (H/21 P1) > [MPI-07] shows the history count, so a huge one can be recognised and dropped
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — what it offers (H/21 P1) > [MPI-08] states the API-key consequence while AI services is ticked
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — what it offers (H/21 P1) > [MPI-09] unticking AI services removes both the copy and the warning
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — answering it (H/21 P1) > [MPI-10] "Not now" means later — it closes without copying and without opting out
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — answering it (H/21 P1) > [MPI-10b] the offer really does come back after "Not now"
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — answering it (H/21 P1) > [MPI-10b] the offer really does come back after "Not now"
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — answering it (H/21 P1) > [MPI-10c] "Don’t ask again" is the one exit that is permanent
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — answering it (H/21 P1) > [MPI-10d] closing by Escape is "Not now", never "never"
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — answering it (H/21 P1) > [MPI-11] copying never overwrites — the user has seen counts, not names
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — answering it (H/21 P1) > [MPI-12] a successful copy also counts as answered
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — answering it (H/21 P1) > [MPI-13] a failed copy leaves the offer standing
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts > AgentMigrationPrompt — answering it (H/21 P1) > [MPI-14] reports what each item did, including what failed
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentMigrationPrompt inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/renderer/components/settings/__tests__/agentMigrationPromptInteraction.test.ts (17 tests) 601ms
+ ✓ src/renderer/components/settings/__tests__/SettingsContent.test.ts (2 tests) 535ms
+ ✓ src/renderer/components/chat/__tests__/composerPermissions.test.ts (6 tests) 392ms
+stderr | src/renderer/components/settings/__tests__/userProvidersSettings.test.ts > UserProvidersSettings > offers an add path when nothing is configured
+An update to UserProvidersSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/userProvidersSettings.test.ts > UserProvidersSettings > lists a configured service and never shows a key
+An update to UserProvidersSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/userProvidersSettings.test.ts > UserProvidersSettings > warns when the vault fell back to plaintext
+An update to UserProvidersSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/userProvidersSettings.test.ts > UserProvidersSettings > explains a locked keyring instead of showing an empty list
+An update to UserProvidersSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/renderer/components/settings/__tests__/userProvidersSettings.test.ts > UserProvidersSettings > surfaces a failed removal rather than looking like it worked
+An update to UserProvidersSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/renderer/components/settings/__tests__/userProvidersSettings.test.ts (10 tests) 373ms
+ ✓ src/renderer/components/workspace-shell/__tests__/sidebarContextMenuInteraction.test.ts (5 tests) 374ms
+ ✓ src/renderer/components/user/__tests__/userProfileQuota.test.ts (4 tests) 380ms
+ ✓ src/renderer/components/settings/__tests__/subagentPanelMount.test.ts (6 tests) 196ms
+ ✓ src/renderer/components/settings/__tests__/conversationImportInteraction.test.ts (6 tests) 166ms
+stderr | src/renderer/components/chat/__tests__/timelineRetryInteraction.test.ts
+Warning: KaTeX doesn't work in quirks mode. Make sure your website has a suitable doctype.
+
+ ✓ src/renderer/components/chat/__tests__/timelineRetryInteraction.test.ts (1 test) 125ms
+ ✓ src/renderer/components/__tests__/updateNotification.test.ts (3 tests) 122ms
+ ✓ src/renderer/components/chat/__tests__/composerUsageDetails.test.ts (2 tests) 104ms
+ ✓ src/renderer/components/repository/__tests__/RepositorySettingsDialog.test.ts (2 tests) 93ms
+ ✓ src/renderer/components/settings/__tests__/networkPanelMount.test.ts (1 test) 100ms
+ ✓ src/renderer/components/chat/__tests__/pendingQuestionDock.test.ts (6 tests) 91ms
+ ✓ src/renderer/components/chat/__tests__/questionCardInteraction.test.ts (2 tests) 81ms
+ ✓ src/renderer/components/settings/__tests__/KeybindingsSettings.test.ts (1 test) 48ms
+ ✓ src/renderer/components/chat/__tests__/toolDiffInteraction.test.ts (4 tests) 62ms
+ ✓ src/renderer/components/chat/__tests__/chineseChatSurface.test.ts (5 tests) 61ms
+ ✓ src/renderer/stores/settings/__tests__/toolDiffSetting.test.ts (1 test) 60ms
+ ✓ src/renderer/components/workspace-shell/__tests__/sessionReviewInteraction.test.ts (1 test) 55ms
+ ✓ src/renderer/stores/__tests__/nativeStreamReplay.test.ts (22 tests) 46ms
+ ✓ src/renderer/components/chat/__tests__/sessionActivityStatus.test.ts (3 tests) 39ms
+ ✓ src/renderer/components/search/__tests__/useGlobalSearch.test.ts (5 tests) 25ms
+ ✓ src/renderer/hooks/__tests__/worktreeInitialization.test.ts (5 tests) 41ms
+stderr | src/renderer/components/chat/__tests__/markdownFileLink.test.ts
+Warning: KaTeX doesn't work in quirks mode. Make sure your website has a suitable doctype.
+
+ ✓ src/renderer/components/chat/__tests__/markdownFileLink.test.ts (12 tests) 34ms
+ ✓ src/renderer/components/chat/__tests__/permissionDisplay.test.ts (1 test) 31ms
+ ✓ src/renderer/components/workspace-shell/surfaces/__tests__/editorIntentInteraction.test.ts (1 test) 31ms
+ ✓ src/renderer/components/workspace-shell/__tests__/useWorkspaceSearch.test.ts (3 tests) 19ms
+ ✓ src/renderer/hooks/__tests__/gitBranchMutations.test.ts (4 tests) 39ms
+
+ Test Files  413 passed (413)
+      Tests  6271 passed (6271)
+   Start at  11:16:50
+   Duration  237.55s (transform 7.62s, setup 2.75s, collect 60.89s, tests 93.10s, environment 7.21s, prepare 22.04s)
+
+EXIT=0

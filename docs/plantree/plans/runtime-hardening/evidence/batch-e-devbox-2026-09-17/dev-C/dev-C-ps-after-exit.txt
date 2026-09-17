@@ -1,0 +1,8 @@
+== ps after SIGTERM to dev.js (pid 75515) ==
+(empty = clean)
+== ports ==
+(empty = released)
+== free ==
+               total        used        free      shared  buff/cache   available
+Mem:            3350        1484         915         141        1360        1866
+Swap:           3861        1538        2323

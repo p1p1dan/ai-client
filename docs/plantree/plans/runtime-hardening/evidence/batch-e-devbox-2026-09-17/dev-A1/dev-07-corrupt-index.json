@@ -1,0 +1,94 @@
+{
+  "criterion": "旧行是否被覆盖丢失；坏文件是否还留在磁盘上",
+  "method": "退出应用 → 备份 session-index.json（114 行 / 49284 字节）→ 用 fs 把文件截成前 120 字节（半行 JSON，无闭合括号）→ 重开应用 → 新建聊天发一句 → 再读文件",
+  "backupCopy": "/tmp/t032/a1/session-index.PRE-DEV07-BACKUP.json（本项测完已恢复，见 README）",
+  "log": [
+    {
+      "at": "2026-09-17T09:54:44.051Z",
+      "step": "index-on-disk-before-boot",
+      "value": {
+        "bytes": 120,
+        "head": "[{\"sessionId\":\"session-live-1788103005892-579tztc\",\"agent\":\"pi\",\"workspacePath\":\"/home/ai/code/test\",\"title\":\"hi\",\"model"
+      }
+    },
+    {
+      "at": "2026-09-17T09:54:44.053Z",
+      "step": "sidecar-files-before-boot",
+      "value": []
+    },
+    {
+      "at": "2026-09-17T09:55:04.534Z",
+      "step": "sidebar-after-boot-with-corrupt-index",
+      "value": {
+        "done": true,
+        "total": 1,
+        "first": [
+          {
+            "id": "session-live-1789638896541-9lgqfgk",
+            "title": "Live Agent Host"
+          }
+        ],
+        "lastError": null
+      }
+    },
+    {
+      "at": "2026-09-17T09:55:04.610Z",
+      "step": "index-right-after-boot",
+      "value": {
+        "bytes": 8,
+        "head": "<ENOENT>"
+      }
+    },
+    {
+      "at": "2026-09-17T09:55:04.611Z",
+      "step": "sidecar-files-after-boot",
+      "value": ["session-index.json.corrupt-2026-09-17T09-54-56-756Z"]
+    },
+    {
+      "at": "2026-09-17T09:55:07.993Z",
+      "step": "send-click",
+      "value": "ok"
+    },
+    {
+      "at": "2026-09-17T09:55:20.019Z",
+      "step": "session-after-send",
+      "value": {
+        "done": true,
+        "id": "session-1789638904612-hwm8voi",
+        "title": "devA1CORRUPT 回一个字：戊",
+        "status": "running",
+        "msgs": ["user", "assistant"],
+        "lastError": null,
+        "total": 2
+      }
+    },
+    {
+      "at": "2026-09-17T09:55:20.125Z",
+      "step": "index-after-first-write",
+      "value": {
+        "bytes": 309,
+        "rows": 1,
+        "head": "[{\"sessionId\":\"session-1789638904612-hwm8voi\",\"runtimeIdentity\":\"/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789638904612-hwm8voi.jsonl\",\"agent\":\"pi\",\"workspacePath\":\"/home/ai/code/ai-client\",\"title\":\"devA1CORRUPT 回一个字：戊\",\"model\":\"maxapi/grok-4.6\",\"updatedAt\":1789638916072,\"archived"
+      }
+    },
+    {
+      "at": "2026-09-17T09:55:20.125Z",
+      "step": "sidecar-files-after-first-write",
+      "value": ["session-index.json.corrupt-2026-09-17T09-54-56-756Z"]
+    },
+    {
+      "at": "2026-09-17T09:55:20.127Z",
+      "step": "new-session-index-row",
+      "value": {
+        "sessionId": "session-1789638904612-hwm8voi",
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789638904612-hwm8voi.jsonl",
+        "agent": "pi",
+        "workspacePath": "/home/ai/code/ai-client",
+        "title": "devA1CORRUPT 回一个字：戊",
+        "model": "maxapi/grok-4.6",
+        "updatedAt": 1789638916072,
+        "archived": false
+      }
+    }
+  ]
+}

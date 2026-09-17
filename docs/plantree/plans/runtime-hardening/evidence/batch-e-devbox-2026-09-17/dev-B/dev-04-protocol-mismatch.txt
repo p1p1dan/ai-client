@@ -1,0 +1,57 @@
+=== DEV-4 协议版本不匹配的可诊断性（main-host-08） ===
+
+--- 怎么做到「只改一侧」（dev 模式的关键事实）
+PiWorkerProcess.ts:30-34 resolvePiWorkerEntryPath()：
+  打包态  -> <resourcesPath>/agent-host/worker.js
+  未打包  -> <appPath>/src/agent-host/worker.ts        ← dev 模式走这条
+PiWorkerProcess.ts:94-99：utilityProcess.fork(entryPath, [], { execArgv: ['--experimental-strip-types'] })
+=> dev 模式下 worker 每次 fork 都从磁盘现读 TypeScript 源码，out-agent-host/worker.js 根本不参与。
+   worker.ts:8-13 用相对路径 import '../shared/types/workerRpc.ts'，也就是现读 src/shared/types/workerRpc.ts。
+Main 侧则是 electron-vite 在 dev 启动时把同一常量打进 out/main/index.js，之后不再读源码。
+
+实测确认 electron-vite dev 不会因为改 src/ 下的文件重建 main 或重启 Electron：
+  改常量后等 25 s，out/main/index.js 的 mtime 仍是 07:17，Electron pid 385303 未重启，dev 日志零新增。
+所以制造不匹配只要一步：**应用先起好，再把源码常量 1 改成 2**。
+
+--- 核对两侧确实不一致
+Main（已构建产物）: grep -ao 'const WORKER_RPC_PROTOCOL_VERSION[^;]*;' out/main/index.js
+                    -> const WORKER_RPC_PROTOCOL_VERSION = 1;
+Worker（现读源码）  : src/shared/types/workerRpc.ts:50
+                    -> export const WORKER_RPC_PROTOCOL_VERSION = 2 as const;
+（两侧本来共用同一处定义，见 handbook 第 10 节；打包态要改 out-agent-host/worker.js 的字面量，dev 态改源码即可，因为只有 worker 会再读它。）
+
+--- 操作与时间
+07:34:24  点侧栏「新建」建一个 ai-client 工作区下的新对话
+07:34:25  textarea 填 "devB DEV-4 protocol mismatch probe" + 点 [aria-label="发送消息"]
+07:35:06  界面：正在发送… / 正在启动 Agent Host… · 55s   ← 带秒数的等待态，无任何异常提示
+07:35:28  界面转为错误卡（等待时长 = 63 s；bootstrap 预算 60 s，见 createPiWorkerSlot.ts:57 BOOTSTRAP_REQUEST_TIMEOUT_MS = 60_000）
+
+--- 界面错误文案（逐字）
+Error: Error invoking remote method 'chat:createSession': WorkerSlotError: Worker request worker.bootstrap timed out after 60000ms
+截图：dev-04-01-bootstrap-timeout.png
+
+--- 日志：grep 'protocol|mismatch|bootstrap' 的全部命中
+main.log                      新增 0 字节，0 命中
+aiclient-2026-09-17.log       新增 353 字节，1 命中：
+  [2026-09-17 07:35:28.485] [error] Error occurred in handler for 'chat:createSession': WorkerSlotError: Worker request worker.bootstrap timed out after 60000ms
+      at Timeout._onTimeout (file:///home/ai/code/ai-client/out/main/index.js:5646:11)
+      at listOnTimeout (node:internal/timers:588:17)
+      at process.processTimers (node:internal/timers:523:7)
+dev.js 标准输出(dev-B6.log)    新增 342 字节，同一条
+=> 三处日志里 "protocol" / "mismatch" / "版本" 一个字都没有。worker 侧那句
+   WORKER_PROTOCOL_MISMATCH（piWorkerRpcServer.ts:336-348 组装的错误响应）既没进 stderr 也没进任何日志，
+   因为它是作为 RPC 响应发回去的，而 Main（WorkerSlot.ts:517-529）对版本不符的入站消息是静默丢弃。
+=> 判据「当前预期是只有 worker.bootstrap timed out，无任何协议线索」**逐字复现**。
+
+--- 附带观察（两条，不在判据内）
+1) 用户那条消息被吞了。失败后会话区回到 "No messages yet. Send a prompt to stream from the Agent Host."，
+   textarea 也是空的——用户输入既没留在输入框也没进时间线，只能重打。
+2) session-index.json 多出一行空壳：session-1789644851492-gidi2oz，title=""，
+   workspacePath=/home/ai/code/ai-client，updatedAt=11:34:25.423。createSession 失败了，索引行却留下了。
+   （索引行数 161 -> 162。）
+
+--- 收尾还原
+cp /tmp/t032/workerRpc.ts.bak src/shared/types/workerRpc.ts
+sha256 还原前后一致：ea9ebf9e785ead694ab52786ecf245bc8d3261cfcb807a4847fa8765c203e964
+git status -- src/ 只剩上一批留下的未跟踪文件 sessionAttachmentFill.test.ts；git diff --stat 只有两份文档。
+全程未跑 pnpm build、未跑 build:agent-host（dev 模式不需要），Electron 未重启。

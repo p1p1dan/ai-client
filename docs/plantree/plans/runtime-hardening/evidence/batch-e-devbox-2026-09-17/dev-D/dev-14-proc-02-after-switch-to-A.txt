@@ -1,0 +1,14 @@
+### pi-TUI process scan item14-after-switch-to-A 2026-09-17T08:26:06-04:00
+--- pid=397404 ppid=394488 rss=133124 kB started=2026-09-17 08:24:35.930145316 -0400
+    exe=/home/ai/code/ai-client/node_modules/electron/dist/electron
+    cwd=/home/ai/code/ai-client
+    PI_CODING_AGENT_DIR=/home/ai/.pilab/jyw-ai-client-dev/pi-agent
+    cmdline='pi' argvBytes=246
+    argvBytes>=200 => argv carried a --session <path> (148 B is the bare <electron> <cli.js> form)
+--- pid=398560 ppid=394488 rss=133256 kB started=2026-09-17 08:25:44.947735201 -0400
+    exe=/home/ai/code/ai-client/node_modules/electron/dist/electron
+    cwd=/home/ai/code/ai-client
+    PI_CODING_AGENT_DIR=/home/ai/.pilab/jyw-ai-client-dev/pi-agent
+    cmdline='pi' argvBytes=246
+    argvBytes>=200 => argv carried a --session <path> (148 B is the bare <electron> <cli.js> form)
+### total pi TUI processes: 2

@@ -1,0 +1,20 @@
+### pi-TUI process scan item16-both-windows 2026-09-17T08:49:48-04:00
+--- pid=406850 ppid=406187 rss=124044 kB started=2026-09-17 08:45:13.447722337 -0400
+    exe=/home/ai/code/ai-client/node_modules/electron/dist/electron
+    cwd=/home/ai/code/ai-client
+    PI_CODING_AGENT_DIR=/home/ai/.pilab/jyw-ai-client-dev/pi-agent
+    cmdline='pi' argvBytes=245
+    argvBytes>=200 => argv carried a --session <path> (148 B is the bare <electron> <cli.js> form)
+--- pid=408248 ppid=406187 rss=126580 kB started=2026-09-17 08:48:04.678185836 -0400
+    exe=/home/ai/code/ai-client/node_modules/electron/dist/electron
+    cwd=/home/ai/code/ai-client
+    PI_CODING_AGENT_DIR=/home/ai/.pilab/jyw-ai-client-dev/pi-agent
+    cmdline='pi' argvBytes=246
+    argvBytes>=200 => argv carried a --session <path> (148 B is the bare <electron> <cli.js> form)
+--- pid=416955 ppid=406187 rss=133440 kB started=2026-09-17 08:48:48.096556920 -0400
+    exe=/home/ai/code/ai-client/node_modules/electron/dist/electron
+    cwd=/home/ai/code/ai-client
+    PI_CODING_AGENT_DIR=/home/ai/.pilab/jyw-ai-client-dev/pi-agent
+    cmdline='pi' argvBytes=246
+    argvBytes>=200 => argv carried a --session <path> (148 B is the bare <electron> <cli.js> form)
+### total pi TUI processes: 3

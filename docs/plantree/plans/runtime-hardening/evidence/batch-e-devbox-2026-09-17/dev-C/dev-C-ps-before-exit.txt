@@ -1,0 +1,10 @@
+  75515    1505 49260 node scripts/dev.js --remote-debugging-port=9333
+  75522   75515 80928 npm exec electron-vite dev -- --no-sandbox --remote-debugging-port=9333
+  75534   75522  2008 sh -c electron-vite dev -- --no-sandbox --remote-debugging-port=9333
+  75535   75534 292320 node /home/ai/code/ai-client/node_modules/.bin/electron-vite dev -- --no-sandbox --remote-debugging-port=9333
+  75543   75535 12184 /home/ai/code/ai-client/node_modules/electron-vite/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.25.12 --ping
+  75554   75535 19004 /home/ai/code/ai-client/node_modules/vite/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.27.2 --ping
+  75563   75535 249988 /home/ai/code/ai-client/node_modules/electron/dist/electron . --no-sandbox --remote-debugging-port=9333
+  75565   75563 54780 /home/ai/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox --no-sandbox
+  75566   75563 53760 /home/ai/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-sandbox
+  75599   75565 137548 /home/ai/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox --no-sandbox

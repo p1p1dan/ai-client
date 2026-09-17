@@ -1,0 +1,19 @@
+{
+  "sid": "session-1789655267185-g85qdok",
+  "hasSession": true,
+  "status": "idle",
+  "hasWorkspace": true,
+  "wsPath": "/home/ai/code/ai-client",
+  "hostBound": [],
+  "msgCountBefore": 9,
+  "ensureHost": {
+    "state": "ready",
+    "capabilities": { "history": true, "thinking": true },
+    "capacity": 3,
+    "slots": 1,
+    "active": 0,
+    "restarting": 0,
+    "errors": 0
+  },
+  "createSession": { "requestId": "create-1789656137320-11" }
+}

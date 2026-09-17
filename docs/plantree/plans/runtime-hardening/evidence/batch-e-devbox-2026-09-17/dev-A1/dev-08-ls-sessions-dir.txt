@@ -1,0 +1,39 @@
+# 2026-09-17T09:48:42.736Z
+$ ls -la /home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions
+total 144
+drwxrwxr-x  2 ai ai 4096 Sep 11 12:24 --home-ai-JYWAI-temporary-unbound-sessions-67fa5e7c-cbee-40cf-a40e-d20bef7ce8ff--
+drwxrwxr-x  2 ai ai 4096 Sep 11 12:09 --home-ai-JYWAI-temporary-unbound-sessions-6d756b23-0684-4a28-9ab3-a5f811c712aa--
+drwxrwxr-x  3 ai ai 4096 Sep 11 02:51 --home-ai-JYWAI-temporary-unbound-sessions-6fb41b29-f3b2-4918-a498-f098bfbd776b--
+drwxrwxr-x  2 ai ai 4096 Sep 11 12:09 --home-ai-JYWAI-temporary-unbound-sessions-90af159e-1324-47ba-94bc-79a0c741c6b5--
+drwxrwxr-x  2 ai ai 4096 Sep 11 12:24 --home-ai-JYWAI-temporary-unbound-sessions-ad521723-aed3-4228-b730-9448fb970fff--
+drwxrwxr-x  2 ai ai 4096 Sep 11 12:15 --home-ai-JYWAI-temporary-unbound-sessions-c61d061b-8de5-408a-b0e5-95b3bd055228--
+drwxrwxr-x  2 ai ai 4096 Sep 11 12:15 --home-ai-JYWAI-temporary-unbound-sessions-dc9d38bf-257a-4fd7-92e0-73365d89a816--
+drwxrwxr-x  3 ai ai 4096 Sep 11 13:30 --home-ai-code-ai-client--
+drwxrwxr-x 11 ai ai 4096 Sep 17 05:48 .
+drwx------  6 ai ai 4096 Sep 13 21:05 ..
+-rw-------  1 ai ai 2193 Sep 17 05:48 c9d54547-55dd-4b5c-a9f7-1e44458d0e48.jsonl
+-rw-------  1 ai ai  230 Sep 17 05:48 c9d54547-55dd-4b5c-a9f7-1e44458d0e48.jsonl.staged
+-rw-------  1 ai ai 2239 Sep 17 05:31 ea74ddc0-03d3-4008-b642-7e4d38bd8c49.jsonl
+drwx------  3 ai ai 4096 Sep 11 02:45 permission-forwarding
+-rw-------  1 ai ai 2182 Sep 17 05:31 session-1789637446946-abtu2jn.jsonl
+-rw-------  1 ai ai 2126 Sep 17 05:42 session-1789638144347-jr9q88j.jsonl
+-rw-------  1 ai ai 2087 Sep 17 05:44 session-1789638198463-hg6l2wz.jsonl
+-rw-------  1 ai ai 2136 Sep 17 05:47 session-1789638427039-ntyubr1.jsonl
+-rw-------  1 ai ai  149 Sep 17 05:47 session-1789638427039-ntyubr1.jsonl.writer.lock
+-rw-------  1 ai ai 3617 Sep 11 12:07 session-live-1789142835493-v1dj0lp.jsonl
+-rw-------  1 ai ai  123 Sep 11 12:07 session-live-1789142835493-v1dj0lp.jsonl.writer.lock
+-rw-------  1 ai ai 2913 Sep 13 09:33 session-live-1789306423191-vob9ldz.jsonl
+-rw-------  1 ai ai  124 Sep 13 09:33 session-live-1789306423191-vob9ldz.jsonl.writer.lock
+-rw-------  1 ai ai 2834 Sep 13 09:35 session-live-1789306531210-8r0oa7a.jsonl
+-rw-------  1 ai ai  124 Sep 13 09:35 session-live-1789306531210-8r0oa7a.jsonl.writer.lock
+-rw-------  1 ai ai 3847 Sep 13 09:37 session-live-1789306608098-tasrgr0.jsonl
+-rw-------  1 ai ai  124 Sep 13 09:36 session-live-1789306608098-tasrgr0.jsonl.writer.lock
+-rw-------  1 ai ai 3803 Sep 13 09:38 session-live-1789306698435-l4bu1s2.jsonl
+-rw-------  1 ai ai  124 Sep 13 09:38 session-live-1789306698435-l4bu1s2.jsonl.writer.lock
+-rw-------  1 ai ai 3830 Sep 13 09:41 session-live-1789306848585-b03q62x.jsonl
+-rw-------  1 ai ai  124 Sep 13 09:40 session-live-1789306848585-b03q62x.jsonl.writer.lock
+-rw-------  1 ai ai 3796 Sep 13 09:42 session-live-1789306912982-k9ik92s.jsonl
+-rw-------  1 ai ai  124 Sep 13 09:41 session-live-1789306912982-k9ik92s.jsonl.writer.lock
+-rw-------  1 ai ai 3848 Sep 13 21:05 session-live-1789347889296-ltrxsgm.jsonl
+-rw-------  1 ai ai  124 Sep 13 21:04 session-live-1789347889296-ltrxsgm.jsonl.writer.lock
+-rw-------  1 ai ai 2022 Sep 17 05:29 session-live-1789636546521-0yhy2zv.jsonl

@@ -1,0 +1,51 @@
+{
+  "note": "DEV-8 的补充观察（判据本身只问残留文件与 pi CLI）：强杀后的下一次正常启动，T040 的回收扫描会不会清掉那个无主转录",
+  "orphanFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/c9d54547-55dd-4b5c-a9f7-1e44458d0e48.jsonl",
+  "beforeBoot": {
+    "at": "2026-09-17T09:52:51.322Z",
+    "orphanJsonl": true,
+    "stagedSidecar": true,
+    "scratchRoot": ["46e6faab-115c-4e61-8b38-d194a69a236c", "4e6b46a9-c79d-4788-8589-71daa4be606e"],
+    "tempBase": ["unbound-sessions"]
+  },
+  "afterBoot": {
+    "at": "2026-09-17T09:53:12.369Z",
+    "orphanJsonl": false,
+    "stagedSidecar": false,
+    "scratchRoot": {
+      "missing": true,
+      "code": "ENOENT"
+    },
+    "tempBase": []
+  },
+  "sidebarAfterBoot": {
+    "done": true,
+    "total": 107,
+    "devA1": [
+      {
+        "id": "session-1789638427039-ntyubr1",
+        "title": "devA1KILL 回一个字：丁",
+        "ws": ""
+      },
+      {
+        "id": "session-1789638144347-jr9q88j",
+        "title": "devA1SCRATCH 回一个字：乙",
+        "ws": ""
+      },
+      {
+        "id": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+        "title": "devA1UNB 回一个字：甲 (fork)",
+        "ws": ""
+      },
+      {
+        "id": "session-1789637446946-abtu2jn",
+        "title": "devA1UNB 回一个字：甲",
+        "ws": ""
+      }
+    ]
+  },
+  "killedRunScratchDirsStillPresent": {
+    "missing": true,
+    "code": "ENOENT"
+  }
+}

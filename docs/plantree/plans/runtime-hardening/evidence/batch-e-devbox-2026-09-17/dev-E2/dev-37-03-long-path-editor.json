@@ -1,0 +1,31 @@
+{
+  "tabs": [],
+  "monacoPresent": true,
+  "lines": [
+    "export const DEEP_MARKER = \"DEV37-C-very-long-path\";",
+    "export function deep() { return DEEP_MARKER; }",
+    ""
+  ],
+  "breadcrumb": [
+    "level1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nlevel2-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nlevel3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nlevel4-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nlevel5-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nlevel6-aaa",
+    "level1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nlevel2-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nlevel3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nlevel4-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nlevel5-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nlevel6-aaa",
+    "level1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "",
+    "level2-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "",
+    "level3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "",
+    "level4-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "",
+    "level5-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "",
+    "level6-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "",
+    "level7-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "",
+    "level8-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "",
+    "deep.ts"
+  ],
+  "errors": ["", ""]
+}

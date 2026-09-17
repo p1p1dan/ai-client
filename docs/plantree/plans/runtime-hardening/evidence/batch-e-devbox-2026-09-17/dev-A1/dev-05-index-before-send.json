@@ -1,0 +1,21 @@
+{
+  "at": "2026-09-17T09:30:49.780Z",
+  "sessionId": "session-1789637446946-abtu2jn",
+  "storeRow": {
+    "done": true,
+    "id": "session-1789637446946-abtu2jn",
+    "title": "New chat",
+    "workspaceId": "",
+    "runtimeIdentity": null,
+    "status": "idle",
+    "sessionCount": 103,
+    "lastError": null,
+    "msgs": []
+  },
+  "indexRow": null,
+  "scratchRoot": {
+    "missing": true,
+    "code": "ENOENT"
+  },
+  "tempBase": []
+}

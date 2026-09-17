@@ -1,0 +1,427 @@
+{
+  "model": "fake-sonnet",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "T061 复验一：带附件的一条（文件目录路线）"
+        },
+        {
+          "type": "image",
+          "source": {
+            "type": "base64",
+            "media_type": "image/png",
+            "data": "<266668 chars elided>"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "fake gateway ok"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "T061 复验二：重开会话后的纯文本一条",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        }
+      ]
+    }
+  ],
+  "max_tokens": 64000,
+  "stream": true,
+  "system": [
+    {
+      "type": "text",
+      "text": "<14478 chars elided>",
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    }
+  ],
+  "tools": [
+    {
+      "name": "ask",
+      "description": "Ask the user to choose between options when the decision is genuinely theirs and you cannot settle it from the request, the code, or a sensible default. Each question needs 2-4 options. Blocks until the user answers or skips.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["question", "options"],
+              "properties": {
+                "question": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "header": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["label"],
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "description": {
+                        "type": "string",
+                        "maxLength": 1000
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "minItems": 2,
+                  "maxItems": 4
+                },
+                "multiSelect": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 4
+          }
+        },
+        "required": ["questions"]
+      }
+    },
+    {
+      "name": "browser_preview",
+      "description": "Show a workspace HTML or SVG page in the app preview window. The preview reloads by itself when you edit the file, so call this once per page rather than after every change. Does not take focus unless you ask it to.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Workspace page to preview (.html, .htm or .svg)."
+          },
+          "focus": {
+            "type": "boolean",
+            "description": "Bring the preview to the front. Leave false while working in the background so you do not steal focus from the user."
+          }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "read",
+      "description": "Read a UTF-8 file. offset is a one-based line number; limit is the number of lines. Output is capped at 50 KiB. Use nextOffset to continue.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000
+          }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "write",
+      "description": "Write a complete UTF-8 file. Creates missing parent directories after approval.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 8388608
+          }
+        },
+        "required": ["path", "content"]
+      }
+    },
+    {
+      "name": "edit",
+      "description": "Replace one exact occurrence of oldText with newText. All edits must match uniquely before writing.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "edits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["oldText", "newText"],
+              "properties": {
+                "oldText": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "newText": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 100
+          }
+        },
+        "required": ["path", "edits"]
+      }
+    },
+    {
+      "name": "bash",
+      "description": "Execute a command with the configured shell in the workspace. Output is bounded. Runtime is bounded too: 120s unless you name a longer one with timeoutSeconds, which a build or a full test run will need.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32768
+          },
+          "timeoutSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 21600
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 600000
+          }
+        },
+        "required": ["command"]
+      }
+    },
+    {
+      "name": "glob",
+      "description": "Find files using a glob pattern. A pattern without \"/\" matches a file name at any depth, so *.ts finds src/a.ts. Skips symlinks, .git and node_modules; does not read file contents.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          }
+        },
+        "required": ["pattern"]
+      }
+    },
+    {
+      "name": "grep",
+      "description": "Search UTF-8 files for text. Literal by default; set regex:true to treat pattern as a JavaScript regular expression. include is a glob; without \"/\" it matches a file name at any depth, so *.ts covers src/a.ts. Skips symlinks, .git, node_modules, binary files and denied paths; bounded to 1 MiB per file.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "include": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "caseInsensitive": {
+            "type": "boolean"
+          },
+          "regex": {
+            "type": "boolean"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          }
+        },
+        "required": ["pattern"]
+      }
+    },
+    {
+      "name": "skill",
+      "description": "Load the full instructions of one skill listed in <available_skills>. Takes the skill name, not a path.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "name": "new_context",
+      "description": "Start a new context window. Does not clear, reset, or otherwise affect environment state.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "Task",
+      "description": "Start one subagent in the background and return immediately; you keep working while it runs, then converge with TaskWait when you need its report.\n\nUse it when the work is separable: parallel exploration of independent directions (one Task per direction in the same assistant message), a multi-file implementation with a complete spec (fixer), an adversarial read-only review of a change you just made (code-reviewer), or a wide search / long log / multi-file survey whose intermediate output would otherwise fill this context (explorer, test-runner).\n\nDo not delegate what you can finish in a couple of tool calls, and do not delegate anything that needs the user — a subagent cannot ask a question or propose a plan on your behalf.\n\n`task` is the delegate's only instruction. It cannot see this conversation, and you cannot correct it while it runs, so state the goal, the paths and facts it cannot infer, and exactly what to report back.\n\nTo run delegates concurrently, emit several Task calls in one assistant message. A message that mixes Task with any other tool runs one call at a time. You may keep working or talk to the user while they run; the runtime delivers their reports when they finish. Call TaskStop only to cancel.\n\nAvailable subagents:\n- explorer (tools: Read, Glob, Grep, Bash): Fast codebase search and pattern matching — find files, locate implementations and answer \"where is X?\" / \"how does Y work?\". Use when answering needs a sweep over many files and you only want the conclusion.\n- code-reviewer (tools: Read, Glob, Grep): Review specific code or a specific change for defects. Use for a second opinion on correctness, edge cases and missing tests before you commit.\n- test-runner (tools: Read, Glob, Grep, Bash): Run a specific test or build command and report what failed and why. Use when a command's output is long and only the failures matter.\n- fixer (tools: Read, Glob, Grep, Edit, Write, Bash): Implement a complete multi-file change from a spec. Use when a feature or fix spans several files and the work is separable — it can write files inside the workspace while you keep working.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "string",
+            "description": "Name of the subagent to run: explorer, code-reviewer, test-runner, fixer."
+          },
+          "task": {
+            "type": "string",
+            "description": "The complete brief: goal, context the delegate cannot infer, and the exact report you want back."
+          },
+          "description": {
+            "type": "string",
+            "description": "Short label for this delegation (3-6 words), shown to the user."
+          },
+          "model": {
+            "type": "string",
+            "description": "Override the delegate's model for this run, as `provider/model`. Omit to use the subagent's default."
+          }
+        },
+        "required": ["agent", "task"]
+      }
+    },
+    {
+      "name": "TaskWait",
+      "description": "Wait for one or more subagents started by Task and return their reports. `delegationIds` defaults to every running subagent; use mode \"any\" with `minCompleted` to converge as soon as the first (or first N) finish. Settled delegations return immediately, so re-reading a report by id is cheap. A wait timeout is not a failure: unfinished delegates keep working and the runtime delivers their reports when they finish.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "delegationIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Delegation ids returned by Task."
+            },
+            "description": "Defaults to all running subagents. At most 50.",
+            "maxItems": 50
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "all"
+              },
+              {
+                "type": "string",
+                "const": "any"
+              }
+            ],
+            "description": "Wait for every target (all) or the first to finish (any)."
+          },
+          "minCompleted": {
+            "type": "number",
+            "minimum": 1,
+            "description": "With mode \"any\": wait until at least this many finished."
+          },
+          "timeoutSeconds": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 900,
+            "description": "Max seconds to wait; defaults to 600."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "TaskList",
+      "description": "List the subagents started by Task in this session with their status. Use it to check progress without waiting, or before TaskStop to choose what to stop.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "TaskStop",
+      "description": "Stop one or more running subagents. `delegationIds` defaults to every running subagent. Stopped subagents report as stopped; their partial work is lost.",
+      "eager_input_streaming": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "delegationIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Delegation ids returned by Task."
+            },
+            "description": "Defaults to all running subagents. At most 50.",
+            "maxItems": 50
+          }
+        },
+        "required": []
+      },
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    }
+  ]
+}

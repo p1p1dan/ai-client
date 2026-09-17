@@ -1,0 +1,2 @@
+CODEX_HOME=/tmp/t032/samples/codex-home
+CLAUDE_CONFIG_DIR=/tmp/t032/samples/claude-home

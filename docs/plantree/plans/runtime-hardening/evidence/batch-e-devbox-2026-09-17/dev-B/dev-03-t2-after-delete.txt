@@ -1,0 +1,21 @@
+=== DEV-3 t2 (immediately after delete, app still running) 2026-09-17T06:47:35-04:00 ===
+--- main dir
+total 8
+drwxrwxr-x 2 ai ai 4096 Sep 17 06:47 .
+drwx------ 7 ai ai 4096 Sep 17 06:45 ..
+--- compat root
+total 12
+drwxrwxr-x 2 ai ai 4096 Sep 17 06:42 .
+drwxr-xr-x 4 ai ai 4096 Sep 17 06:42 ..
+-rw-rw-r-- 1 ai ai  210 Sep 17 06:42 probe-compat.md
+--- all files under both roots
+/home/ai/.agents/subagents/probe-compat.md  210 bytes
+--- compat root content (if still there)
+---
+name: probe-compat
+description: DEV-3 ORIGINAL DESCRIPTION compat-root delete semantics probe.
+tools: read, grep
+permission: ask
+maxTurns: 3
+---
+You are a throwaway probe subagent for checklist item DEV-3.

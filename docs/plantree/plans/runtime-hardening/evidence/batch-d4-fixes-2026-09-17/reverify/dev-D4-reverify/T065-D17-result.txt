@@ -1,0 +1,18 @@
+# T065 / DEV-14（D17）— TUI 切换后整屏空白，真机复验结果
+
+环境：run 2，pi-agent/models.json+auth.json 临时只留 probe-fake（假网关），两条 ai-client 会话各开一个 pi TUI。
+
+## 观察序列
+1) 聊天 A（session-1789666361268-er5utwj）点 TUI → pi 正常出屏（T065-A-first-open.txt，非空行 > 0）
+2) 切到聊天 B（session-1789666291721-kopqqgu）→ 显示 Start Pi TUI → 点开 → pi 正常出屏（T065-B-first-open.txt）
+3) 切回聊天 A → **整屏空白**：.xterm-rows 有 35 行，textContent 去空白后长度 = 0（T065-A-back-from-B.txt / T065-01-back-to-A.png）
+4) 手动 window.electronAPI.piTui.resize(<A 的 terminalId>, 70, 20) → **整屏立刻恢复**（T065-A-after-manual-resize.txt）
+5) 再切到聊天 B → 同样整屏空白（T065-B-back-from-A.txt / T065-02-back-to-B.png）
+
+## piTui 事件与回流字节（window.__dtui）
+A 的终端在 1789667762656 收到 state=live（resume 确实发生），此后只回流 10 字节——不是整屏重绘。
+完整事件见 T065-tui-events.txt。
+
+## 判断
+D17 的 Main 侧 #requestRepaint（rows+1 再回退）在真机上**没有让 pi 重绘**；
+而真实的尺寸变更（70x20）立刻救回——说明杠杆是对的，抖动这一下没起作用（疑似两次 resize 被合并或 pi 未响应这次 winsize 变化）。

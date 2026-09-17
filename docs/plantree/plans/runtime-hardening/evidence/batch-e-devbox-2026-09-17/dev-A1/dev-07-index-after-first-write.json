@@ -1,0 +1,16 @@
+[
+  {
+    "sessionId": "session-1789638904612-hwm8voi",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789638904612-hwm8voi.jsonl",
+    "piLeaf": {
+      "activeEntryId": "1f309d3b-1a72-4f51-98e8-dc7ac54dd308",
+      "fileTailEntryId": "1f309d3b-1a72-4f51-98e8-dc7ac54dd308"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "devA1CORRUPT 回一个字：戊",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789638925582,
+    "archived": false
+  }
+]

@@ -1,0 +1,1292 @@
+[
+  {
+    "sessionId": "session-live-1788103005892-579tztc",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/test",
+    "title": "hi",
+    "model": "commandcode/deepseek/deepseek-v4-flash",
+    "updatedAt": 1788103230565,
+    "archived": true
+  },
+  {
+    "sessionId": "session-live-1788103220481-3xpg6y2",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/test",
+    "title": "",
+    "updatedAt": 1788103229526,
+    "archived": true
+  },
+  {
+    "sessionId": "session-live-1788103238150-vrn0sfn",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/test",
+    "title": "hey",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788104825802,
+    "archived": true
+  },
+  {
+    "sessionId": "session-1788103522078-tuba9r5",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/test",
+    "title": "你好，帮我把readme.md里的最后一行删除",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788103560149,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788104801552-hn9xggw",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/test",
+    "title": "",
+    "updatedAt": 1788104824060,
+    "archived": true
+  },
+  {
+    "sessionId": "s1",
+    "agent": "pi",
+    "workspacePath": "/tmp/demo-repo",
+    "title": "",
+    "updatedAt": 1788112637112,
+    "archived": true
+  },
+  {
+    "sessionId": "s-send",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788112766055,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1788361761955-jg2l6s5",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788361876828,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1788362158031-6v95ksa",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "",
+    "updatedAt": 1788362167014,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1788362439344-4qdotza",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "",
+    "updatedAt": 1788362451536,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1788362580499-l5ej560",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-23-15-910Z_01a062b7-9e46-7ed8-b21f-9cae5d0c2114.jsonl",
+    "piLeaf": { "activeEntryId": "d9678be2", "fileTailEntryId": "d9678be2" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "",
+    "updatedAt": 1788362717290,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788362915985-slwaai5",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788401510943,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788362988825-c4pygn2",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-29-50-055Z_01a062bd-a1e7-76e6-a854-143663159c0d.jsonl",
+    "piLeaf": { "activeEntryId": "c2b3381b", "fileTailEntryId": "c2b3381b" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788362997616,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788362988826-ucyygoh",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-29-58-421Z_01a062bd-c295-7c47-9a48-c01863097e50.jsonl",
+    "piLeaf": { "activeEntryId": "e4c0df04", "fileTailEntryId": "e4c0df04" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788363003850,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788363241408-zrej2s9",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-34-02-604Z_01a062c1-7c6c-7bc1-9f31-591c8b3c7682.jsonl",
+    "piLeaf": { "activeEntryId": "33067fa7", "fileTailEntryId": "33067fa7" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788363255766,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788363241408-5ie1x57",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-34-09-449Z_01a062c1-9729-7556-afe9-8d3069671d7a.jsonl",
+    "piLeaf": { "activeEntryId": "6e8a03c9", "fileTailEntryId": "6e8a03c9" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788363256531,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788363241408-h9xd96i",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-39-01-160Z_01a062c6-0aa8-7e6e-b2b3-ce7494b0764b.jsonl",
+    "piLeaf": { "activeEntryId": "04a653a7", "fileTailEntryId": "04a653a7" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788363546568,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788363618686-omshwxv",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-40-19-913Z_01a062c7-3e49-703d-9e4a-a6c24cf0a291.jsonl",
+    "piLeaf": { "activeEntryId": "9673cd26", "fileTailEntryId": "9673cd26" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788363625486,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788363618686-fv745xy",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-40-27-810Z_01a062c7-5d22-76b8-9c11-a48237297300.jsonl",
+    "piLeaf": { "activeEntryId": "c64120ba", "fileTailEntryId": "c64120ba" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788363635664,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788363618686-vf8md5f",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-40-37-166Z_01a062c7-81ae-7bab-a3ae-46d2a3d4c383.jsonl",
+    "piLeaf": { "activeEntryId": "d861a20b", "fileTailEntryId": "d861a20b" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788363666892,
+    "archived": false
+  },
+  {
+    "sessionId": "session-import-cfb1ca8d-fd14-427b-8b20-f097e209ce6a",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-41-14-539Z_import-afe0585f-0bdc-4bf0-a663-efbe9139f66a.jsonl",
+    "piLeaf": { "activeEntryId": "cf8c76b2", "fileTailEntryId": "cf8c76b2" },
+    "legacyImport": {
+      "sourceKind": "claude-code",
+      "targetPiSessionId": "import-afe0585f-0bdc-4bf0-a663-efbe9139f66a",
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:6461e999313cc4068595b7039e7f15cf0ea0a27cea708aaafd0643a597c1e4d0:1:t34-claude-v1"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "/clear",
+    "updatedAt": 1788363674601,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1788363772117-ohqrhly",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-43-05-632Z_01a062c9-c5a0-748e-b942-861164fc157e.jsonl",
+    "piLeaf": { "activeEntryId": "7eab3759", "fileTailEntryId": "7eab3759" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: PIDPROBE",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788363791196,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788364789043-ij1guom",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-59-50-869Z_01a062d9-1c55-7ec9-9e16-404834ef50fc.jsonl",
+    "piLeaf": { "activeEntryId": "b91269e8", "fileTailEntryId": "b91269e8" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788364816629,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788364789044-b7f5yaz",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-59-56-887Z_01a062d9-33d7-7554-9184-97fc83240bf5.jsonl",
+    "piLeaf": { "activeEntryId": "88dff56f", "fileTailEntryId": "88dff56f" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788364824901,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788364789044-i9koskn",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-00-06-932Z_01a062d9-5b14-77e1-80f8-f65beae66d23.jsonl",
+    "piLeaf": { "activeEntryId": "fa4b38cb", "fileTailEntryId": "fa4b38cb" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788364814596,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788364965948-wvsb2uu",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-02-50-380Z_01a062db-d98c-715a-b668-6d86038eed87.jsonl",
+    "piLeaf": { "activeEntryId": "8dd27658", "fileTailEntryId": "8dd27658" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788364976834,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788364965948-4rpqr2j",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-03-00-466Z_01a062dc-00f2-7123-9734-47542881621b.jsonl",
+    "piLeaf": { "activeEntryId": "23782207", "fileTailEntryId": "23782207" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788364985700,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788364965948-uvb31n9",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-03-07-196Z_01a062dc-1b3c-7a43-a044-1a30952a3b80.jsonl",
+    "piLeaf": { "activeEntryId": "c574ee7b", "fileTailEntryId": "c574ee7b" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365012165,
+    "archived": false
+  },
+  {
+    "sessionId": "session-import-121374fa-0f86-43fb-a772-1c9b0c4e0ac8",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-03-37-612Z_import-81c2ecd9-7ba5-4cee-8e13-f35ea0232db1.jsonl",
+    "piLeaf": { "activeEntryId": "ffd735e2", "fileTailEntryId": "ffd735e2" },
+    "legacyImport": {
+      "sourceKind": "claude-code",
+      "targetPiSessionId": "import-81c2ecd9-7ba5-4cee-8e13-f35ea0232db1",
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:1d5a87728df309fcc1ed6ed3a8fcc72cd2c644fcf67f587d7fe0525156d85ef4:1:t34-claude-v1"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "/clear",
+    "updatedAt": 1788365017676,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365022258-il8xyhr",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-03-44-612Z_01a062dc-ad64-746a-9a7b-f9600d80e5a5.jsonl",
+    "piLeaf": { "activeEntryId": "4fd5b53a", "fileTailEntryId": "4fd5b53a" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-AFTER-CRASH",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365029737,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365136435-59s8x2r",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-05-38-240Z_01a062de-6940-72fe-bcea-59632c63c37d.jsonl",
+    "piLeaf": { "activeEntryId": "5640cebb", "fileTailEntryId": "5640cebb" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365154220,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365136435-gm90mxx",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-05-54-519Z_01a062de-a8d7-7063-9315-edf74698034f.jsonl",
+    "piLeaf": { "activeEntryId": "30986222", "fileTailEntryId": "30986222" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365171971,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365136435-ug1mtvk",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-06-12-312Z_01a062de-ee58-7eba-9716-d29ecb244a74.jsonl",
+    "piLeaf": { "activeEntryId": "90736dc7", "fileTailEntryId": "90736dc7" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365177436,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365230383-noqghx0",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-07-12-411Z_01a062df-d91b-7df1-8558-280ec0c22720.jsonl",
+    "piLeaf": { "activeEntryId": "1a4e8ae4", "fileTailEntryId": "1a4e8ae4" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365259710,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365230383-dqo2tup",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-07-41-483Z_01a062e0-4aab-771a-ab3b-62bc1d614240.jsonl",
+    "piLeaf": { "activeEntryId": "a39e6a3e", "fileTailEntryId": "a39e6a3e" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365279221,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365230384-03omjj3",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-08-02-143Z_01a062e0-9b5f-7ba2-84b3-2c5708cfb19a.jsonl",
+    "piLeaf": { "activeEntryId": "3a674314", "fileTailEntryId": "3a674314" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365297984,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365407896-z28v5gi",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-10-09-890Z_01a062e2-8e62-7b7c-956b-f327a44f73d6.jsonl",
+    "piLeaf": { "activeEntryId": "cdf3e55c", "fileTailEntryId": "cdf3e55c" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365423732,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365407896-gm16ir6",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-10-25-480Z_01a062e2-cb48-7cf6-acb4-91fc7985d622.jsonl",
+    "piLeaf": { "activeEntryId": "178d42b4", "fileTailEntryId": "178d42b4" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365438304,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365407896-jr46v0d",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-10-39-903Z_01a062e3-039f-7633-a471-2127e1f3b688.jsonl",
+    "piLeaf": { "activeEntryId": "05069c54", "fileTailEntryId": "05069c54" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365448632,
+    "archived": false
+  },
+  {
+    "sessionId": "session-import-99a977c3-6634-4c9a-a9eb-1b46880ba3de",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-10-54-098Z_import-2809d882-c1ea-454b-8702-05c74751ffa5.jsonl",
+    "piLeaf": { "activeEntryId": "67f7cd06", "fileTailEntryId": "67f7cd06" },
+    "legacyImport": {
+      "sourceKind": "claude-code",
+      "targetPiSessionId": "import-2809d882-c1ea-454b-8702-05c74751ffa5",
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:5fbe5d89645d6576e846b947a9fbdd4f1d7cd0a595d003714ffda952ffbb5044:1:t34-claude-v1"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "/clear",
+    "updatedAt": 1788365454166,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365458607-3i2u9q7",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Count slowly from 1 to 60, one number per line, no other te…",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788401512390,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365551777-h8mzi58",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-12-33-524Z_01a062e4-bf73-7189-9756-869af4617206.jsonl",
+    "piLeaf": { "activeEntryId": "c5507bce", "fileTailEntryId": "c5507bce" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365558658,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365551777-ys8rd2i",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-12-39-498Z_01a062e4-d6ca-7729-89e3-ddf6802ec3c0.jsonl",
+    "piLeaf": { "activeEntryId": "bae423ad", "fileTailEntryId": "bae423ad" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365580934,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365551777-29ym6cx",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-12-47-096Z_01a062e4-f478-77aa-b66e-4f959b4175a9.jsonl",
+    "piLeaf": { "activeEntryId": "3a550869", "fileTailEntryId": "3a550869" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365576564,
+    "archived": false
+  },
+  {
+    "sessionId": "session-import-3cd1fe0e-1c1c-43d0-b427-30b32806e68d",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-13-06-577Z_import-d2b83e79-9fab-4545-8463-f01c848acc6d.jsonl",
+    "piLeaf": { "activeEntryId": "82f21b60", "fileTailEntryId": "82f21b60" },
+    "legacyImport": {
+      "sourceKind": "claude-code",
+      "targetPiSessionId": "import-d2b83e79-9fab-4545-8463-f01c848acc6d",
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:25cf512389f2acf8c347f85c2556fad6ceee52ad88573e36a22c548993b8e85a:1:t34-claude-v1"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "/clear",
+    "updatedAt": 1788365586637,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365591287-5g73c64",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Count slowly from 1 to 60, one number per line, no other te…",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788401514012,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365882003-g0lhehr",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-18-04-039Z_01a062e9-ca87-7285-9095-11ef261b18ac.jsonl",
+    "piLeaf": { "activeEntryId": "b35541b2", "fileTailEntryId": "b35541b2" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788365897788,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365882003-hvby3dc",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-18-19-583Z_01a062ea-073f-7374-b2fe-35ef66581f99.jsonl",
+    "piLeaf": { "activeEntryId": "94fbc95c", "fileTailEntryId": "94fbc95c" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788366114506,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788365882003-vtz0vwa",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-20-50-041Z_01a062ec-52f9-702d-bf09-a3c64dccc51a.jsonl",
+    "piLeaf": { "activeEntryId": "750a0bf5", "fileTailEntryId": "750a0bf5" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788366171745,
+    "archived": false
+  },
+  {
+    "sessionId": "session-import-ba5afa43-e1b9-4b00-a0fa-f943ba559350",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-22-57-022Z_import-43950ebd-385d-4aa1-a244-ced3f5467c7e.jsonl",
+    "piLeaf": { "activeEntryId": "91606977", "fileTailEntryId": "91606977" },
+    "legacyImport": {
+      "sourceKind": "claude-code",
+      "targetPiSessionId": "import-43950ebd-385d-4aa1-a244-ced3f5467c7e",
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:0f94c8c22c9f722b1bfb5ea023ae746937eb39377ba8fd89680b2b5e3c15822b:1:t34-claude-v1"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "/clear",
+    "updatedAt": 1788366177086,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788366181501-m0dg1ax",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Count slowly from 1 to 60, one number per line, no other te…",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788401515431,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788366555356-xajw24k",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Count slowly from 1 to 60, one number per line, no other te…",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788401516963,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788366817805-twoue3s",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-33-39-523Z_01a062f8-10c3-7f50-ab06-a3e5a3a27ed2.jsonl",
+    "piLeaf": { "activeEntryId": "b855f268", "fileTailEntryId": "b855f268" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Count slowly from 1 to 60, one number per line, no other te…",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788366897280,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788367135113-tvf3j0v",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-38-57-035Z_01a062fc-e90b-730e-ba7e-ac5ccb3fcf8b.jsonl",
+    "piLeaf": { "activeEntryId": "0b239a0b", "fileTailEntryId": "0b239a0b" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788367141986,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788367135113-ttggz18",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-39-02-880Z_01a062fc-ffe0-7028-81d9-c7241d7b5c93.jsonl",
+    "piLeaf": { "activeEntryId": "4b66df5d", "fileTailEntryId": "4b66df5d" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788367159443,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788367135113-cjqjxkq",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-39-09-608Z_01a062fd-1a28-76a6-bafe-898a707f5509.jsonl",
+    "piLeaf": { "activeEntryId": "ce7c0136", "fileTailEntryId": "ce7c0136" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788367154561,
+    "archived": false
+  },
+  {
+    "sessionId": "session-import-f34ddff7-ebf7-4ca9-bc86-44611e5641be",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-39-26-093Z_import-e6a17de1-a5d8-4979-af5c-4e089112fc2b.jsonl",
+    "piLeaf": { "activeEntryId": "c040f5e7", "fileTailEntryId": "c040f5e7" },
+    "legacyImport": {
+      "sourceKind": "claude-code",
+      "targetPiSessionId": "import-e6a17de1-a5d8-4979-af5c-4e089112fc2b",
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:fd6b941eb52fbb446aee04d81b92b600dd06261a5304de9e017719cef86ec5ec:1:t34-claude-v1"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "/clear",
+    "updatedAt": 1788665154323,
+    "archived": false,
+    "model": "cx2/gpt-5.6-terra"
+  },
+  {
+    "sessionId": "session-1788367170719-ogkusk7",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-39-32-755Z_01a062fd-7493-7d1b-8112-2dd54d0c719b.jsonl",
+    "piLeaf": { "activeEntryId": "a9e2eac7", "fileTailEntryId": "a9e2eac7" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Count slowly from 1 to 60, one number per line, no other te…",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788665155607,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788367339439-rumdyxn",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-42-24-005Z_01a06300-1185-71ec-a702-d96678588114.jsonl",
+    "piLeaf": { "activeEntryId": "36ce23ef", "fileTailEntryId": "36ce23ef" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Run the bash command: echo T37C-PERM",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788367913760,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788368051228-ffe62vl",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-13-278Z_01a0630a-e41e-741e-97de-2c0c10551b20.jsonl",
+    "piLeaf": { "activeEntryId": "7c3c438a", "fileTailEntryId": "7c3c438a" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788368059988,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788368051228-ce1ft0x",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-23-325Z_01a0630b-0b5d-7aee-80f5-26c9c947e520.jsonl",
+    "piLeaf": { "activeEntryId": "47a16caf", "fileTailEntryId": "47a16caf" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788665153104,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788368051228-tau09co",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-34-809Z_01a0630b-3839-70ba-98d1-7b50790dc9f3.jsonl",
+    "piLeaf": { "activeEntryId": "fe4494bf", "fileTailEntryId": "fe4494bf" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788368083706,
+    "archived": false
+  },
+  {
+    "sessionId": "session-import-08175b24-93c1-4ff3-90e1-7aa58aa39c65",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-49-319Z_import-d7c6acdf-aa24-4f6c-9354-6ed5892b4ae6.jsonl",
+    "piLeaf": { "activeEntryId": "3c6a2f76", "fileTailEntryId": "3c6a2f76" },
+    "legacyImport": {
+      "sourceKind": "claude-code",
+      "targetPiSessionId": "import-d7c6acdf-aa24-4f6c-9354-6ed5892b4ae6",
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:fd7dc68674f0c85a21dcde0ef963f9e905d6893e3927a4e49fa0463344237e9b:1:t34-claude-v1"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "/clear",
+    "updatedAt": 1788368089390,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788368093872-wx1coh4",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-55-949Z_01a0630b-8acd-7449-969d-577e25a8afcf.jsonl",
+    "piLeaf": { "activeEntryId": "127ca6b3", "fileTailEntryId": "127ca6b3" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Count slowly from 1 to 60, one number per line, no other te…",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788368168877,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788401319554-54ygyed",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-08-46-361Z_01a06506-9919-7ba6-9bf6-fb94efd814c5.jsonl",
+    "piLeaf": { "activeEntryId": "686d619c", "fileTailEntryId": "686d619c" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Count slowly from 1 to 90, one number per line, no other te…",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788665156817,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788401597800-umqv6fl",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-13-20-005Z_01a0650a-c605-761a-b37e-84a672b1b168.jsonl",
+    "piLeaf": { "activeEntryId": "c622ad3c", "fileTailEntryId": "c622ad3c" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788401607701,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788401597800-3pylyxt",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-13-30-808Z_01a0650a-f038-78f0-8ff0-0c690da08ba9.jsonl",
+    "piLeaf": { "activeEntryId": "08ac2e61", "fileTailEntryId": "08ac2e61" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788401618778,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788401597800-w9g9yhd",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-13-42-215Z_01a0650b-1cc7-769f-bf19-ff9facba24f9.jsonl",
+    "piLeaf": { "activeEntryId": "3783bc72", "fileTailEntryId": "3783bc72" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788401638626,
+    "archived": false
+  },
+  {
+    "sessionId": "session-import-686d5ca3-24e2-4a3f-852c-35e6fe9d26e2",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-14-06-415Z_import-a811cbf0-ceb4-4bbd-b612-2cceec293f20.jsonl",
+    "piLeaf": { "activeEntryId": "a226bce6", "fileTailEntryId": "a226bce6" },
+    "legacyImport": {
+      "sourceKind": "claude-code",
+      "targetPiSessionId": "import-a811cbf0-ceb4-4bbd-b612-2cceec293f20",
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:9603381a4bda5efb557addb387c3a71d44207e648d0f6310241838353661672b:1:t34-claude-v1"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "/clear",
+    "updatedAt": 1788401646516,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788401651188-nlj4uqg",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-14-15-672Z_01a0650b-9f78-718c-9e3f-81aaddb2e99c.jsonl",
+    "piLeaf": { "activeEntryId": "a7d31dff", "fileTailEntryId": "a7d31dff" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Count slowly from 1 to 90, one number per line, no other te…",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788401659593,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788401661481-cvmdb3h",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-14-23-655Z_01a0650b-bea7-71d2-9cb5-751c65f35eff.jsonl",
+    "piLeaf": { "activeEntryId": "baf08273", "fileTailEntryId": "baf08273" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Count slowly from 1 to 60, one number per line, no other te…",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788665151622,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788401898915-g5wen36",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-21-768Z_01a0650f-60c8-7b66-ac66-7c3f4ac63b6a.jsonl",
+    "piLeaf": { "activeEntryId": "958079ea", "fileTailEntryId": "958079ea" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S1",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788401906063,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788401898915-6sjbby6",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-28-975Z_01a0650f-7cef-7069-a460-5fa9508945cd.jsonl",
+    "piLeaf": { "activeEntryId": "bf78bdc7", "fileTailEntryId": "bf78bdc7" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S3",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788401924746,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788401898915-6ajhkog",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-35-859Z_01a0650f-97d3-7003-982d-0c047bb45cd8.jsonl",
+    "piLeaf": { "activeEntryId": "42b8752c", "fileTailEntryId": "42b8752c" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Reply with exactly: T37C-S2",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788425091581,
+    "archived": false
+  },
+  {
+    "sessionId": "session-import-8c414d42-9dbc-42b6-8907-38351b5d69c0",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-50-790Z_import-2e3b3c96-ec99-4785-beed-be61dcf6c3a8.jsonl",
+    "piLeaf": { "activeEntryId": "6abf2b11", "fileTailEntryId": "6abf2b11" },
+    "legacyImport": {
+      "sourceKind": "claude-code",
+      "targetPiSessionId": "import-2e3b3c96-ec99-4785-beed-be61dcf6c3a8",
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:b9b519f48a3581356291e8e7b555332675aa588ff4de0cbe1e2f63400e8e2b3b:1:t34-claude-v1"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "/clear",
+    "updatedAt": 1788401930891,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788401935498-ly4hg4v",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-59-779Z_01a0650f-f543-7425-9a3a-db86b3be44a8.jsonl",
+    "piLeaf": { "activeEntryId": "53b5b60b", "fileTailEntryId": "53b5b60b" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Count slowly from 1 to 90, one number per line, no other te…",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788425079588,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788401952669-m7rgvi4",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-19-14-711Z_01a06510-2f97-70cd-86b1-48ae3eec2d01.jsonl",
+    "piLeaf": { "activeEntryId": "8fdf7e79", "fileTailEntryId": "8fdf7e79" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "Count slowly from 1 to 60, one number per line, no other te…",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788425077804,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788425093600-q6pxqzp",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T08-45-09-220Z_01a06671-7ee4-7d82-8844-04437934b262.jsonl",
+    "piLeaf": { "activeEntryId": "4948f0f9", "fileTailEntryId": "4948f0f9" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "hey bro",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788573300743,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788503410669-b0kwoti",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788503432208,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1788504035730-i7itmdw",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-04T06-40-49-962Z_01a06b26-092a-73bd-846d-1c33a6b78253.jsonl",
+    "piLeaf": { "activeEntryId": "1f9837b5", "fileTailEntryId": "1f9837b5" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "hey",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788509767050,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1788509956852-xl21yai",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-04T08-20-18-310Z_01a06b81-1b06-736e-88a8-60540eb5cc92.jsonl",
+    "piLeaf": { "activeEntryId": "c94cd613", "fileTailEntryId": "c94cd613" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "啥意思",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788665142396,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1788572233370-z5p868v",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-05T01-39-54-980Z_01a06f38-e5e4-7e97-bc59-7db0a478169d.jsonl",
+    "piLeaf": { "activeEntryId": "0c804e0a", "fileTailEntryId": "0c804e0a" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "你好",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788665135050,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788572526965-pr7obte",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-05T01-42-16-203Z_01a06f3b-0d8b-7d78-bcec-aad3d5e230f3.jsonl",
+    "piLeaf": { "activeEntryId": "f0b45e9e", "fileTailEntryId": "f0b45e9e" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "你好呀",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788572540750,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1788664854690-2d6xooy",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-06T03-21-40-369Z_01a074bc-6b11-7d59-8778-d83c9fcdc268.jsonl",
+    "piLeaf": { "activeEntryId": "846ff008", "fileTailEntryId": "846ff008" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "nihao",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788665345255,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788664933866-e7ya9g7",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-06T03-22-28-077Z_01a074bd-256d-7a0f-8397-c3ae6c311e38.jsonl",
+    "piLeaf": { "activeEntryId": "4bf71044", "fileTailEntryId": "4bf71044" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "hello",
+    "model": "cx2/gpt-5.6-terra",
+    "updatedAt": 1788664964530,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1788682527925-ynzbtxy",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-06T08-16-01-197Z_01a075c9-e6ad-7a57-bfbc-5a1c55954004.jsonl",
+    "piLeaf": { "activeEntryId": "26ec64a6", "fileTailEntryId": "26ec64a6" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "写一个test.txt",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789103436789,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1788682810267-llbkp9c",
+    "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-JYWAI-temporary-unbound-sessions-000efb42-311c-4a46-816e-2d46e7b8b8d8--/2026-09-06T08-20-11-449Z_01a075cd-b839-738e-81a7-e895a1350aff.jsonl",
+    "piLeaf": { "activeEntryId": "c82df639", "fileTailEntryId": "c82df639" },
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/000efb42-311c-4a46-816e-2d46e7b8b8d8",
+    "title": "写一个test123.txt文件",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1788683017339,
+    "archived": false
+  },
+  {
+    "sessionId": "session-import-codex-8aa6e997-aeb8-4b05-a16c-f3277dd9f43b",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T06-40-42-756Z_import-codex-2729be2b-6110-4415-af9a-3cb9c82b8337.jsonl",
+    "piLeaf": { "activeEntryId": "8b75772b", "fileTailEntryId": "8b75772b" },
+    "legacyImport": {
+      "sourceKind": "codex",
+      "targetPiSessionId": "import-codex-2729be2b-6110-4415-af9a-3cb9c82b8337",
+      "dedupeKey": "codex:57e75cacb5d53f9aa3c567eced03f7c60c5d9e47a1b8a7d7b8077b32aca43eea:01a01d4a-3119-7fd0-a16a-fd81b2ceec9b:dc951162e0f9ae973be7e968c805987a70220fc1beccd32e376804c6aad6069b:1:b4-legacy-v2"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "help me install :https://github.com/pnedfff/claude-env-cleanup",
+    "updatedAt": 1789112465644,
+    "archived": false,
+    "model": "vllmproxy/claude-sonnet-5"
+  },
+  {
+    "sessionId": "session-import-codex-904fda2c-a6b6-4fdb-b16e-4acac2b9b192",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-JYWAI-temporary-unbound-sessions-6fb41b29-f3b2-4918-a498-f098bfbd776b--/2026-09-11T06-51-39-575Z_import-codex-c51e6a41-b166-40cc-8a06-b4dbaaeae38d.jsonl",
+    "piLeaf": { "activeEntryId": "8fd7280c", "fileTailEntryId": "8fd7280c" },
+    "legacyImport": {
+      "sourceKind": "codex",
+      "targetPiSessionId": "import-codex-c51e6a41-b166-40cc-8a06-b4dbaaeae38d",
+      "dedupeKey": "codex:3fb4ed6eab380df4938e94ec7d270c610f86df568cf6d0efb96cc9dd704648c9:01a04216-e5b9-71d1-9b81-6d2b32fa2fdc:42c7c081dfabaec69befd16e1642c46bfe5a479188660ce4bc22703abd9dea20:1:b4-legacy-v2"
+    },
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/6fb41b29-f3b2-4918-a498-f098bfbd776b",
+    "title": "pi-install.sh  我运行时报错有点问题，帮我看看，刚刚提示npm不存在",
+    "updatedAt": 1789201564485,
+    "archived": false,
+    "model": "vllmproxy/claude-sonnet-5"
+  },
+  {
+    "sessionId": "session-live-1789137614294-ib49fsx",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T15-21-07-330Z_01a0910e-e402-7c94-bbcf-05733f32c42b.jsonl",
+    "piLeaf": { "activeEntryId": "b3f364bd", "fileTailEntryId": "b3f364bd" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "回一个字：好",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789140072811,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1789140568519-d9egdw2",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T15-29-38-231Z_01a09116-afb7-7797-84de-69420224d417.jsonl",
+    "piLeaf": { "activeEntryId": "6f893f42", "fileTailEntryId": "6f893f42" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "回一个字：好",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789140583934,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1789141980761-ypg9e97",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T15-53-15-629Z_01a0912c-506d-702b-97b2-f0bc8866ba8a.jsonl",
+    "piLeaf": { "activeEntryId": "752ee9af", "fileTailEntryId": "752ee9af" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "用 bash 运行这条命令：echo perm-probe-ok",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789142684183,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1789142718965-l1g2ivc",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T16-05-30-919Z_01a09137-88a7-703e-b8bc-e65c6c162bcd.jsonl",
+    "piLeaf": { "activeEntryId": "ea690b68", "fileTailEntryId": "ea690b68" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "用 bash 运行这条命令：echo perm-probe-ok",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789142739487,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1789142835493-v1dj0lp",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789142835493-v1dj0lp.jsonl",
+    "piLeaf": {
+      "activeEntryId": "5dc03401-de56-40ff-a20b-6304fa7c9043",
+      "fileTailEntryId": "5dc03401-de56-40ff-a20b-6304fa7c9043"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "用 bash 运行这条命令：echo perm-probe-ok",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789142857546,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1789142986092-uxx5l7s",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-JYWAI-temporary-unbound-sessions-90af159e-1324-47ba-94bc-79a0c741c6b5--/2026-09-11T16-09-49-737Z_01a0913b-7ba9-74e8-94fd-b99d8b3111d8.jsonl",
+    "piLeaf": { "activeEntryId": "bf251a46", "fileTailEntryId": "bf251a46" },
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/90af159e-1324-47ba-94bc-79a0c741c6b5",
+    "title": "",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789201562755,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1789142989175-2d4909j",
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/6d756b23-0684-4a28-9ab3-a5f811c712aa",
+    "title": "",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789142996651,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1789143311851-exg29cz",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-JYWAI-temporary-unbound-sessions-dc9d38bf-257a-4fd7-92e0-73365d89a816--/2026-09-11T16-15-15-658Z_01a09140-74ca-7f75-9c45-218ed3ab738e.jsonl",
+    "piLeaf": { "activeEntryId": "621ecf72", "fileTailEntryId": "621ecf72" },
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/dc9d38bf-257a-4fd7-92e0-73365d89a816",
+    "title": "",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789143320439,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1789143314942-nmgm09v",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-JYWAI-temporary-unbound-sessions-c61d061b-8de5-408a-b0e5-95b3bd055228--/2026-09-11T16-15-22-278Z_01a09140-8ea6-74bf-b53c-c93bb8e5e6c0.jsonl",
+    "piLeaf": { "activeEntryId": "e2ea0da4", "fileTailEntryId": "e2ea0da4" },
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/c61d061b-8de5-408a-b0e5-95b3bd055228",
+    "title": "",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789201561253,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1789143859808-u6k5w7h",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-JYWAI-temporary-unbound-sessions-ad521723-aed3-4228-b730-9448fb970fff--/2026-09-11T16-24-23-612Z_01a09148-d13c-7ee7-8c60-f67309fe1cdf.jsonl",
+    "piLeaf": { "activeEntryId": "c9e1247b", "fileTailEntryId": "c9e1247b" },
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/ad521723-aed3-4228-b730-9448fb970fff",
+    "title": "",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789201554879,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1789143862883-il1l2hq",
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/67fa5e7c-cbee-40cf-a40e-d20bef7ce8ff",
+    "title": "",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789143874814,
+    "archived": true
+  },
+  {
+    "sessionId": "session-live-1789147793385-9ksu0xo",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T17-30-05-259Z_01a09184-f64b-7e66-92df-33e6a0e38504.jsonl",
+    "piLeaf": { "activeEntryId": "a40b7e94", "fileTailEntryId": "a40b7e94" },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "用 bash 运行这条命令：echo perm-probe-ok",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789147814106,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1789306423191-vob9ldz",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789306423191-vob9ldz.jsonl",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789306437085,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1789306531210-8r0oa7a",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789306531210-8r0oa7a.jsonl",
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789306541241,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1789306608098-tasrgr0",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789306608098-tasrgr0.jsonl",
+    "piLeaf": {
+      "activeEntryId": "c8a685da-8662-4667-9a0a-b72e3679d03a",
+      "fileTailEntryId": "c8a685da-8662-4667-9a0a-b72e3679d03a"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789306626374,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1789306698435-l4bu1s2",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789306698435-l4bu1s2.jsonl",
+    "piLeaf": {
+      "activeEntryId": "841d79ad-44c5-4daa-8b40-ce106b41a72c",
+      "fileTailEntryId": "841d79ad-44c5-4daa-8b40-ce106b41a72c"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789306714635,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1789306848585-b03q62x",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789306848585-b03q62x.jsonl",
+    "piLeaf": {
+      "activeEntryId": "269e01b0-23da-49b8-a4bf-97010a0167b4",
+      "fileTailEntryId": "269e01b0-23da-49b8-a4bf-97010a0167b4"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789306866167,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1789306912982-k9ik92s",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789306912982-k9ik92s.jsonl",
+    "piLeaf": {
+      "activeEntryId": "78e85de9-27b5-4bf4-9b77-1943292971e8",
+      "fileTailEntryId": "78e85de9-27b5-4bf4-9b77-1943292971e8"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789306929036,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1789347889296-ltrxsgm",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789347889296-ltrxsgm.jsonl",
+    "piLeaf": {
+      "activeEntryId": "543eb6d9-9145-48ce-b051-f4b43375c459",
+      "fileTailEntryId": "543eb6d9-9145-48ce-b051-f4b43375c459"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789347907152,
+    "archived": false
+  },
+  {
+    "sessionId": "session-live-1789636546521-0yhy2zv",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789636546521-0yhy2zv.jsonl",
+    "piLeaf": {
+      "activeEntryId": "581a77df-923e-442a-a6c2-659367af0bd7",
+      "fileTailEntryId": "581a77df-923e-442a-a6c2-659367af0bd7"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/code/ai-client",
+    "title": "回一个字：甲",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789637340215,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1789637446946-abtu2jn",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789637446946-abtu2jn.jsonl",
+    "piLeaf": {
+      "activeEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f",
+      "fileTailEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f"
+    },
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+    "title": "devA1UNB 回一个字：甲",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789637483354,
+    "archived": false
+  },
+  {
+    "sessionId": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/ea74ddc0-03d3-4008-b642-7e4d38bd8c49.jsonl",
+    "piLeaf": {
+      "activeEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f",
+      "fileTailEntryId": "8a05a9db-02cd-408f-bd75-26a3e2c5547f"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+    "title": "devA1UNB 回一个字：甲 (fork)",
+    "model": "maxapi/grok-4.6",
+    "unbound": true,
+    "updatedAt": 1789637489733,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1789638144347-jr9q88j",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789638144347-jr9q88j.jsonl",
+    "piLeaf": {
+      "activeEntryId": "0325e601-a700-487d-83fd-8286a9303b28",
+      "fileTailEntryId": "0325e601-a700-487d-83fd-8286a9303b28"
+    },
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/4e6b46a9-c79d-4788-8589-71daa4be606e",
+    "title": "devA1SCRATCH 回一个字：乙",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789638166969,
+    "archived": false
+  },
+  {
+    "sessionId": "session-1789638198463-hg6l2wz",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789638198463-hg6l2wz.jsonl",
+    "piLeaf": {
+      "activeEntryId": "58a703c8-38fe-4227-8d29-94e4f7dec0b0",
+      "fileTailEntryId": "58a703c8-38fe-4227-8d29-94e4f7dec0b0"
+    },
+    "agent": "pi",
+    "workspacePath": "/home/ai/JYWAI/temporary/20260917-054356",
+    "title": "devA1TEMPWS 回一个字：丙",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789638255528,
+    "archived": false
+  }
+]

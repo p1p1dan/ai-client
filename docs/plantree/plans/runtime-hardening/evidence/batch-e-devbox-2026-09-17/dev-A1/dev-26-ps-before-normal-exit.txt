@@ -1,0 +1,12 @@
+# ps at 2026-09-17T09:38:32.754Z
+# electron main pids: 69718
+69671    1505 40728 node /home/ai/code/ai-client/scripts/dev.js --remote-debugging-port=9333
+69679   69671 53708 npm exec electron-vite dev -- --no-sandbox --remote-debugging-port=9333
+69691   69679  1900 sh -c electron-vite dev -- --no-sandbox --remote-debugging-port=9333
+69692   69691 149060 node /home/ai/code/ai-client/node_modules/.bin/electron-vite dev -- --no-sandbox --remote-debugging-port=9333
+69700   69692  2608 /home/ai/code/ai-client/node_modules/electron-vite/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.25.12 --ping
+69711   69692 14364 /home/ai/code/ai-client/node_modules/vite/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.27.2 --ping
+69718   69692 192908 /home/ai/code/ai-client/node_modules/electron/dist/electron . --no-sandbox --remote-debugging-port=9333
+69720   69718 45616 /home/ai/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox --no-sandbox
+69721   69718 44540 /home/ai/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-sandbox
+69754   69720 114792 /home/ai/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox --no-sandbox

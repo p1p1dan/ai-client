@@ -1,0 +1,19 @@
+{
+  "at": "2026-09-17T09:31:11.555Z",
+  "sessionId": "session-1789637446946-abtu2jn",
+  "criterion": "发完第一句后索引行 title 非空且与侧栏显示一致",
+  "indexRow": {
+    "sessionId": "session-1789637446946-abtu2jn",
+    "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789637446946-abtu2jn.jsonl",
+    "agent": "pi",
+    "unbound": true,
+    "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58",
+    "title": "devA1UNB 回一个字：甲",
+    "model": "maxapi/grok-4.6",
+    "updatedAt": 1789637471194,
+    "archived": false
+  },
+  "sidebarTitleFromStore": "devA1UNB 回一个字：甲",
+  "equal": true,
+  "scratchRoot": ["2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58"]
+}

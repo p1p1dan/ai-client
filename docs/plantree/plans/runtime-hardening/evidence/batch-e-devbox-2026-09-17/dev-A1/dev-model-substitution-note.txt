@@ -1,0 +1,55 @@
+# dev-A1：为什么这批点验用的是 maxapi/grok-4.6 而不是 vllmproxy/claude-sonnet-5
+# 2026-09-17，Linux 开发机，HEAD b3d751e3
+
+任务书要求「需要发消息的项用真实模型：vllmproxy + claude-sonnet-5」。这台机器上这条路
+今天走不通，两件互相独立的事：
+
+## 一、网关本身在 502（上游，不是本地配置）
+
+起应用之前按手册先 curl 探活 `https://api.vllmproxy.com/v1/messages`
+（凭据从 dev.env 读，未落盘、未打印）：
+
+| 次数 | 结果 | 耗时 |
+|---|---|---|
+| 1 | HTTP 502，响应体 `error code: 502` | 82.6 s |
+| 2 | HTTP 000（60 s 超时） | 60.0 s |
+| 3 | HTTP 000（60 s 超时，--noproxy 直连同样） | 60.0 s |
+| 4 | HTTP 502，响应体 `error code: 502` | 82.2 s |
+
+`error code: 502` 是 Cloudflare 边缘的纯文本错误页，不是 Anthropic 风格的 JSON 错误体，
+说明失败发生在网关入口而不是模型侧。按手册 5.5 的既有口径，这类 5xx 不往本地配置上查。
+
+（第 5 次探活被本机的命令沙箱以 Credential Exploration 拦下，之后改为只在应用内验证。）
+
+## 二、更关键：worker 的模型目录里根本没有 vllmproxy
+
+在应用里把新会话默认模型设成 `vllmproxy/claude-sonnet-5` 后走 textarea + 发送按钮发一句，
+store 的 `lastError` 是：
+
+    no model "vllmproxy/claude-sonnet-5" in the catalog (4 available)
+
+这条文案来自 `src/runtime/plugins/model-adapter/index.ts:77`（错误码 `model_not_in_catalog`）。
+
+两侧对不上：
+
+- 渲染层问 `window.electronAPI.chat.listPiModels()` 返回 **5** 个模型、`source: "local"`，
+  其中就有 `vllmproxy/claude-sonnet-5`（label "Claude Sonnet 5"）。
+- worker 侧的目录只有 **4** 个。
+- `~/.pilab/jyw-ai-client-dev/pi-agent/models.json` 里 cx2 / maxapi / vllmproxy 三个 provider 都在，
+  `auth.json` 里三个 provider 也都有 `type: api_key` 的非空 key。
+
+**推断（未验证）**：worker 拿到的是 Main 经 `resolveNativeModelCatalog()` 组装、随
+`utility.start` 下发的内存目录（`nativeCatalog.ts`），它不是直接读 agentDir 的 models.json；
+4 = cx2 的 3 个 + maxapi 的 1 个，正好是漏掉 vllmproxy 一个 provider。真正的丢弃原因写在
+`catalog.dropped`（`no_api_key` / `no_base_url` / `unknown_api` / `no_usable_model` 四选一），
+本轮没有把这个字段取出来，所以只能说「vllmproxy 被丢了」，不能说丢在哪一条规则上。
+
+**影响**：即使网关恢复，这台机器上的 GUI 也选不到 vllmproxy——模型选择器列得出来，发出去就报
+`model_not_in_catalog`。这是一条独立于网关的疑似缺陷，不在本批 8 项的判据内，只记录不修。
+
+## 三、本批实际用的模型
+
+`maxapi/grok-4.6`（真实 provider、真实 key、真实回合，不是假网关、不是合成 transcript）。
+每一项里模型都真的回了内容，索引行的 `model` 字段可以逐条复核：
+
+    "model": "maxapi/grok-4.6"

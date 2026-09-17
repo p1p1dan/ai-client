@@ -1,0 +1,35 @@
+# T062 / D19 —— 模型缺失时 composer 上方的中文覆盖层（2026-09-17 第二轮复验）
+
+会话：session-r2-missingmodel（真会话复制一份，末尾追加一条
+      model_change → provider="vllmproxy-old", modelId="claude-does-not-exist"）。
+
+[第一次尝试失败，值得记下来]
+  只改会话文件不够。目录里只有 probe-fake/fake-sonnet 时，composer 会自动改用一个本应用
+  已有的模型并往会话里写一条新的 model_change（实测文件里多出 `model_change probe-fake
+  fake-sonnet`），这一轮就正常出话了（"fake gateway ok"），根本没有触发模型缺失。
+  上一轮之所以能触发，是因为 localStorage 的每会话模型钉子
+  `aiclient:chat:session-models` 里已经有一条指向这个不存在的模型。
+  ⇒ 本轮按同一形态把钉子写上（`session-r2-missingmodel` → `vllmproxy-old/claude-does-not-exist`），
+    重载渲染层后再发。这也正是真实用户的处境：曾经配过这个模型，后来它从目录里消失了。
+
+[结果：中文卡出来了]
+  composer 上方是一张 `[data-slot=alert]`，整段原文：
+    标题  本应用没有这个模型
+    正文  这个会话记录的模型不在本应用的模型目录里，所以没能把它启动起来。本应用用自己的
+          agent 目录，你原先在自己的 Pi 目录里配好的 AI 服务不会自动带过来。
+    提示  到「设置 · Pi」把 AI 服务迁移或补上，这个会话就能继续；也可以在输入框上方改用一个
+          本应用已有的模型。
+    诊断  model_not_in_catalog: no model "vllmproxy-old/claude-does-not-exist" in the catalog (1 available)
+    按钮  去 Pi 设置补上模型
+  截图 T062-D19-model-missing-notice.png
+
+[判据逐条]
+  - 英文词典键：整页扫 'Model is not available here' / 'This chat is pinned to a model' /
+    'Migrate or add the AI service' / 'Add the model in Pi settings' —— 四条全为 0。
+  - 状态条：session 模式且有错误时，状态行走 largeHint（本次为 null），所以那一行是空的，
+    没有印任何英文；composer 下方只剩「执行 · 每次询问」与模型名
+    「vllmproxy-old/claude-does-not-exist · unverified」。
+  - 不与其它覆盖层同现：标题 / 提示 / 诊断各出现 1 次，`[data-slot=alert]` 只有这一张；
+    老的红色等宽 `Error: …` 框出现 0 次。
+  - 按钮可用：点「去 Pi 设置补上模型」→ 打开「设置 · Pi」分类（截图
+    T062-D19-settings-after-button.png）。

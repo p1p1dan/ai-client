@@ -1,0 +1,18 @@
+{
+  "tabs": [],
+  "monacoPresent": true,
+  "lines": [
+    "export const SPACE_MARKER = ",
+    "\"DEV37-A-space-in-both-names\";",
+    "export function a() { return SPACE_MARKER; }",
+    ""
+  ],
+  "breadcrumb": [
+    "dir with space\na b.ts",
+    "dir with space\na b.ts",
+    "dir with space",
+    "",
+    "a b.ts"
+  ],
+  "errors": ["", ""]
+}

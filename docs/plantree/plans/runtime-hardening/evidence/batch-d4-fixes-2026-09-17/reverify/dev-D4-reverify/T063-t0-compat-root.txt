@@ -1,0 +1,7 @@
+total 12
+drwxrwxr-x 2 ai ai 4096 Sep 17 13:16 .
+drwxr-xr-x 4 ai ai 4096 Sep 17 13:16 ..
+-rw-rw-r-- 1 ai ai  220 Sep 17 13:16 probe-compat.md
+15b2c52f291e48b484fce91c34adbca9  /home/ai/.agents/subagents/probe-compat.md
+--- main dir ---
+ls: cannot access '/home/ai/.pilab/jyw-ai-client-dev/pi-agent/subagents/': No such file or directory

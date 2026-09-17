@@ -1,0 +1,4 @@
+=== DEV-2 note: state after run-2 was stopped by SIGTERM to dev.js (NOT a UI quit) 2026-09-17T07:00:02-04:00 ===
+d /home/ai/JYWAI/temporary
+d /home/ai/JYWAI/temporary/unbound-sessions
+d /home/ai/JYWAI/temporary/unbound-sessions/ec331867-1994-468c-b9e9-ddf057c57551

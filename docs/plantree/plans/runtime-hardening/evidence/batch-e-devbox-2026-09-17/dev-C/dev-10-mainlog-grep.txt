@@ -1,0 +1,9 @@
+== /tmp/t032/dev-C.log ==
+
+== main.log ==
+
+== aiclient-2026-09-17.log ==
+(counts)
+/tmp/t032/dev-C.log:0
+/home/ai/.config/jyw-ai-client-dev/logs/main.log:0
+/home/ai/.config/jyw-ai-client-dev/logs/aiclient-2026-09-17.log:0

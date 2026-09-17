@@ -1,0 +1,3 @@
+  10 3455 /home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789647368097-07petop.jsonl
+   6 1762 /home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789647839178-q40z4vd.jsonl
+  16 5217 total

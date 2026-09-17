@@ -1,0 +1,15 @@
+=== DEV-2 t3 (app RUNNING, AFTER the 保存位置 change was made through the GUI) 2026-09-17T07:08:40-04:00 ===
+--- GUI input value: /home/ai/JYWAI/temporary-dev2-new (see dev-02-06-setting-changed-via-gui.png)
+--- settings.json (nested under aiclient-settings.state):
+"/home/ai/JYWAI/temporary-dev2-new"
+--- settings.json TOP-LEVEL keys (what Main readSettings() sees):
+credentialMode, aiclient-settings
+--- OLD root tree
+d /home/ai/JYWAI/temporary
+d /home/ai/JYWAI/temporary/unbound-sessions
+d /home/ai/JYWAI/temporary/unbound-sessions/e51a06d5-bd36-4af1-afe5-840586036c50
+d /home/ai/JYWAI/temporary/unbound-sessions/f6ab0bf8-d582-4516-9a9b-96f0a0beb249
+d /home/ai/JYWAI/temporary/unbound-sessions/bfa22236-c79f-458e-8736-3bdf72d7982a
+--- NEW root tree
+d /home/ai/JYWAI/temporary-dev2-new
+--- mapping: f6ab0bf8 = old chat reopened; bfa22236 = new chat created BEFORE gui change; e51a06d5 = new chat created AFTER gui change

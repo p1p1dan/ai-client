@@ -1,0 +1,16 @@
+# T032 batch E2 — before-state fingerprints (2026-09-17T10:23:20-04:00)
+7200ffebd23157d96d2b2d835d10cdf2090bfa19da3fd4508e0f72ae091565f8  /home/ai/.pilab/jyw-ai-client-dev/credentials/vault.json
+35257b8d58d17b5a447843363e9774f39aadd93828fd5204bee4e65a6a269d3b  /home/ai/.pilab/jyw-ai-client-dev/pi-agent/models.json
+8d106c1371a340759709e3b3d99388556be5df3369f1846a3e214c025002c491  /home/ai/.pilab/jyw-ai-client-dev/pi-agent/auth.json
+3efcf6770f3dd65a20dc8eb5412f66dc784a5e356ff22627bcc9df9d095e20d9  /home/ai/code/ai-client/dev.env
+2af3c6115c1702adb7bbc7d506a78aeda81bee936dd675e09baf14bf77cd2049  /home/ai/.pilab/jyw-ai-client-dev/settings.json
+vault bytes: 1042
+session-index lines: 0
+sessions dirs: 96
+# T032 batch E2 — after-state fingerprints (2026-09-17T11:07:23-04:00)
+7200ffebd23157d96d2b2d835d10cdf2090bfa19da3fd4508e0f72ae091565f8  /home/ai/.pilab/jyw-ai-client-dev/credentials/vault.json
+35257b8d58d17b5a447843363e9774f39aadd93828fd5204bee4e65a6a269d3b  /home/ai/.pilab/jyw-ai-client-dev/pi-agent/models.json
+8d106c1371a340759709e3b3d99388556be5df3369f1846a3e214c025002c491  /home/ai/.pilab/jyw-ai-client-dev/pi-agent/auth.json
+3efcf6770f3dd65a20dc8eb5412f66dc784a5e356ff22627bcc9df9d095e20d9  /home/ai/code/ai-client/dev.env
+vault bytes: 1042
+session-index rows: 170

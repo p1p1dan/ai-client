@@ -1,0 +1,42 @@
+# T066 回炉 —— 按天日志三处（2026-09-17 第二轮复验）
+# 日志一律是 ~/.config/jyw-ai-client-dev/logs/aiclient-2026-09-17.log
+
+[① 预算拒绝行带 errorCode]（上一轮这里只有正文、没有码）
+  造法：把一份真会话复制出来，用 `custom` 条目（agent-loop 只把 type==='message' 的条目
+  放进模型上下文，所以这些填充不会变成 32 MiB 的请求体）填到 33,554,132 字节，
+  距 SESSION_MAX_BYTES(33,554,432) 还剩 300 字节；重启应用让 store 以这个大小重新开档，再发一句话。
+
+    [2026-09-17 15:39:30.666] [warn]  [pi-worker:session-r2-budget] turn failed: session_size_limit: session exceeds the configured size budget
+
+  码 `session_size_limit:` 出现在正文前面，正文本身一字未改 —— 正是 T066 回炉「码并排、不拼进正文」的形状。
+  会话文件大小拒绝前后都是 33,554,132 字节（这一条没写进去）。
+  旁证：这一轮假网关计数涨了 1，也就是**模型先被调用了一次**，拒绝发生在把消息落盘那一步
+  （用户消息是在 message_end 事件里 appendMessage 的）。上一轮记的「模型侧没被调用」在本形态下不成立，记在这里备查。
+
+  第二种码（也在判据里列的那一个），用 IPC 直接发一个 6 MiB 的附件绕过 composer 限额：
+    [2026-09-17 15:40:45.365] [warn]  [pi-worker:session-…-aksxeml] turn failed: attachment_size_limit: attachment "oversize.png" is 6291456 bytes; the limit is 5242880 bytes per attachment
+  这一条的码来自抛出路径（thrownRunErrorText 已在正文前加了码），WorkerManager 没有重复印码 —— 回炉里那个防重复的守卫是有效的。
+
+[② 保险库解析错误不回显内容]
+  造法：把 vault.json 换成 `{sk-ant-plaintext-9f3aSECRET, "version": 2}`（44 字节，
+  第一个 token 就是一段像密钥的明文），再用 dev-only 的 `auth:devMarkInvalidated` 走
+  AuthStateService.markRejected() → CredentialVault.markInvalidated()。
+
+    [2026-09-17 15:26:46.218] [warn]  [CredentialVault] markInvalidated: existing vault is not valid JSON (SyntaxError, 44 bytes read)
+
+  只有错误类型与读到的字节数。整段日志里 grep 'sk-ant' / 'SECRET' / 'plaintext' = **0 次**。
+  （V8 在这类 SyntaxError 里会引用出错位置附近约 10 个字符的原文，正是回炉要堵的那条。）
+  vault 随后按字节还原。
+
+[③ scratch 删除失败行脱敏]
+  造法：建出 ~/JYWAI/temporary/unbound-sessions/ 并把它的父目录 chmod 500，
+  于是 wipeAll() 的 rm 会 EACCES；启动时的 sweepScratchWorkspacesOnStartup 触发。
+
+    [2026-09-17 15:35:01.222] [warn]  [scratch] Failed to remove ~/JYWAI/temporary/unbound-sessions: Error: EACCES: permission denied, rmdir '~/JYWAI/temporary/unbound-sessions'
+
+  一条 warn、**一个参数**（没有第二个被 electron-log 单独序列化的 Error 对象），
+  路径与 fs 错误里那份路径**都**折成了 `~`：整行 grep '/home/ai' = **0 次**，
+  而失败原因（EACCES / rmdir）仍然读得出来。目录与权限随后还原。
+
+  ⚠️ 顺带一条观察：dev.js 收到 SIGTERM 后走的退出路径**没有**跑到 wipeAll（退出那一侧一条 scratch 日志都没有），
+  这条 warn 是下一次启动的 sweep 打的。不影响判据，但说明「退出时清 scratch」在 SIGTERM 下不生效。

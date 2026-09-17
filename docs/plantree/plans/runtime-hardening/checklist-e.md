@@ -57,7 +57,7 @@ Role: reference。[T032](roadmap.md) 的产出，取代[批次 D 的草案](evid
 | # | 项 | 判据 | 取证方式 | 来源 |
 |---|---|---|---|---|
 | MODEL-47 | H/20 I5：在 TUI 里续聊再回 GUI 的完整一圈 | GUI 跑一回合 → 内嵌 TUI 里继续聊一轮 → 回 GUI，两轮都在时间线上、顺序正确、无重复条目；会话文件头一行仍同时满足 v4 与 v3 | 内嵌终端真开，前后各读一次会话 JSONL 比对条目链，GUI 侧截图 | 旧树 H/20「仍未验」 |
-| MODEL-48 | 右上角 GUI / TUI 开关那一下 | 用户手点开关切换（不是探针驱动）后，会话所有权正确移交、回来后 GUI 接得上 | 手工点按，前后各查一次 `writer.lock` 与 `ps` 里的 `--session` | 旧树 H/20「探针驱动不了那个控件」 |
+| MODEL-48 | 右上角 GUI / TUI 开关那一下 | 开关切换后，会话所有权正确移交、回来后 GUI 接得上（2026-09-17：CDP 真鼠标序列已能驱动该开关，DEV-30 已用它点过一圈；上机日仍手点一次即可） | 手工点按，前后各查一次 `writer.lock` 与 spawn 窗口内的 pi argv（`ps` 过滤 `--session` 抓不到，pi 会改写进程标题） | 旧树 H/20「探针驱动不了那个控件」（已被 2026-09-17 实测推翻） |
 | PKG-22 | P6-4 回退窗口：旧版产物互读 | 用上一个安装包打开本版写出的会话文件：要么正常打开，要么给出可读的说明；不得静默丢条目或写坏文件（回退方案是「装回上一个安装包」，这条是它成立的前提） | 留一份上一版安装包，装在同机另一目录，打开本版的会话文件并截图；之后再用本版打开同一文件确认未被写坏 | 审计 P6-4 |
 | PKG-23 | P6-3 第 4 条：打包产物的 GUI 无回归 | 打包态起应用 → 一整回合（含工具、审批、压缩）→ 权限卡与时间线正常 → 侧栏「能力」面板与插件设置页文案正确 | 打包产物上走一遍，截图归档到 P6-3 第 4 条 | 旧树 P6-3 第 4 条 + cutover-03 |
 
@@ -68,7 +68,7 @@ Role: reference。[T032](roadmap.md) 的产出，取代[批次 D 的草案](evid
 | WIN-37 | permissions-19：Windows 分隔符下的权限判定 | 同一条规则在 `\`、`/`、MSYS `/c/` 三种拼法下判定一致（T001 已修静态面，Linux 载体结构上发现不了这条） | 与 MODEL 组第 33 项（W3）同一轮做：三种拼法各跑一次，比对 trace 的权限审计行 | permissions-19 |
 | ENC-23 | core-host-05：TSD helper 的 stderr 噪声不再挤掉输出预算 | 一个 configured Node 会往 stderr 打噪声的场景下，受策略文件仍被判为可读、返回明文，不出现 `io_tsd_unreadable`（T013 `19f9e888` 已给 stderr 独立 4 KiB 预算） | 加密机上读一个大受策略文件，抓 trace 的 exec 事件看 stderr 字节数与结果 | core-host-05 |
 | ENC-24 | tools-10：加密路径下大文件读的进程数与耗时 | 读一个 ≥ 2 MiB 的受策略文件，helper 子进程创建次数应是个位数、总耗时接近线性（改前是 32 KiB 固定分块导致 O(n²) 重读与上百次子进程） | 加密机上用 Process Monitor 数 helper 进程创建次数，同时记 trace 的 latency | tools-10 |
-| DEV-36 | cutover-03：native 下「能力」面板与插件页文案 | 侧栏「能力」面板列出 native runtime 自己的 MCP / 技能 / 子代理（「未报告」与「报零」两态可区分）；插件设置页的权限归属文案是「本应用自带权限系统审批每个对话，你装的 pi 权限扩展只影响内嵌终端」 | 起 Electron 截两处图（T026 `2cfed556` 已改实现，这里验的是用户看到的样子） | cutover-03 |
+| DEV-36 | cutover-03：native 下「能力」面板与插件页文案（判据 2026-09-17 拆成两行，见 5.1） | 侧栏「能力」面板列出 native runtime 自己的 MCP / 技能 / 子代理（「未报告」与「报零」两态可区分）；插件设置页权限归属文案：① 无条件显示「本应用的每个对话，都由它自带的权限系统审批工具调用」；② 装了 pi 权限扩展时另显示「你自己安装的 pi 权限系统只对内嵌终端生效」 | 起 Electron 截两处图（T026 `2cfed556` 已改实现，这里验的是用户看到的样子）；②要先 `pi install` 一个权限扩展再看，开发机 2026-09-17 未装、只验到 ① | cutover-03 |
 
 ### 2.5 旧树里未被覆盖的其余现场项
 
@@ -246,39 +246,39 @@ Role: reference。[T032](roadmap.md) 的产出，取代[批次 D 的草案](evid
 
 | # | 项 | 判据 | 取证方式 | 来源区域 |
 |---|---|---|---|---|
-| 1 | 归档正在跑回合的临时对话（POSIX 半边） | 回合后续的文件工具不会在已删除目录里静默失败，或至少给出与「目录没了」相关的错误 | 同上，在开发机重放并记录工具失败文案 | `main-host-aux` |
-| 2 | 临时根改设置后的旧根 | 旧根下的 unbound-sessions/ 在退出与重启后是否仍在；重开旧对话时侧栏是否仍标为临时会话 | 改设置前后各记一次两个根的目录列表与 session-index.json 的 unbound 位 | `main-host-aux` |
-| 3 | 兼容根子代理定义的删除语义 | 在 ~/.agents/subagents 放一份定义并编辑后删除，该行应消失而不是回到旧内容 | 设置页子代理列表操作前后各查看一次两个目录的文件 | `main-host-aux` |
+| 1 | 归档正在跑回合的临时对话（POSIX 半边；判据 2026-09-17 改写，见 5.1） | 归档时正在跑的回合被中止（工具进程收到 SIGTERM、回合记为 aborted），worker 退出之后 scratch 目录才被删；不出现任何「在已删除目录里写入 / 读取」的工具调用，main.log 无 `[scratch] failed to remove` | 同上，在开发机重放：假网关给一个长 bash 再接 write / read，sleep 期间归档，记录回合终态、网关收到的后续请求数、目录残留 | `main-host-aux` |
+| 2 | 临时根改设置后的旧根 | 旧根下的 unbound-sessions/ 在退出与重启后是否仍在；重开旧对话时侧栏是否仍标为临时会话；**改设置后新建的临时对话其 scratch 目录落在新根**（2026-09-17 补，见 5.1） | 改设置前后各记一次两个根的目录列表与 session-index.json 的 unbound 位；改设置后新建一个临时对话并记它的 scratch 目录路径 | `main-host-aux` |
+| 3 | 兼容根子代理定义的删除语义 | 在 ~/.agents/subagents 放一份定义并编辑后删除，该行应消失而不是回到旧内容。**当前预期 ✗**（2026-09-17 实测：编辑只写主目录影子、删除只删影子，兼容根原件浮回；缺陷 D12），修复后按本判据复验 → **已修（T063），2026-09-17 真机复验 ✅**（编辑原地改兼容根、主目录始终无同名文件、删一次即消失且重启不回来） | 设置页子代理列表操作前后各查看一次两个目录的文件 | `main-host-aux` |
 | 4 | 协议版本不匹配的可诊断性 | 故意让打包产物里的 worker.js 与 Main 的 WORKER_RPC_PROTOCOL_VERSION 不一致，检查日志里是否出现任何指向「协议版本」的字样 | 在 dev 环境改一处常量制造不匹配，起会话并收集 Main 的 console 与 electron-log 输出；当前预期是只有 worker.bootstrap timed out，无任何协议线索（main-host-08） | `main-host` |
-| 5 | fork 一个未绑定（scratch）会话 | 对话框是否弹出「Fork was created, but its workspace could not be materialized in this window」；此时 session-index.json 里是否已有该 fork 行且不含 unbound | 起 Electron，新建不选文件夹的聊天并发一轮，点 Branches → Fork；随后 cat userData 下的 session-index.json | `session-index` |
+| 5 | fork 一个未绑定（scratch）会话（后半句判据 2026-09-17 更正，见 5.1） | 对话框不出现「Fork was created, but its workspace could not be materialized in this window」；此时 session-index.json 里已有该 fork 行，且**带** `unbound: true`、`workspacePath` 指向源会话的 scratch 目录 | 起 Electron，新建不选文件夹的聊天并发一轮，点 Branches → Fork；随后 cat userData 下的 session-index.json | `session-index` |
 | 6 | 上一条之后重启应用 | 该 fork 是否从侧栏彻底消失，而索引行与 JSONL 仍在磁盘上 | 退出应用后重开，比对侧栏与 session-index.json | `session-index` |
 | 7 | 索引损坏后的第一次写 | 旧行是否被覆盖丢失；坏文件是否还留在磁盘上 | 退出应用，把 session-index.json 截断成半行 JSON，重开应用（侧栏应为空），新建聊天发一句话，再看文件内容 | `session-index` |
 | 8 | fork 窗口内强杀留下的残留文件 | 会话目录里是否多出无主 <uuid>.jsonl，pi CLI 是否把它列成一个会话 | 点 Fork 后在新 worker 起来之前强杀应用，随后 ls 会话目录并开 pi CLI 列会话 | `session-index` |
 | 9 | 临时工作区删除后的会话去向 | 用侧栏删除一个临时工作区目录后，其下的聊天是否从侧栏静默消失，而索引行仍在 | 起 Electron 走 temp:workspace:remove 那条链，之后刷新侧栏并比对 session-index.json | `session-index` |
-| 10 | 子目录不可读时 Codex 源的表现（import-up-01） | 在 ~/.codex/sessions/<某一天>/ 上置 mode 000 后，导入面板里 Codex 项目仍能列出其它日期的会话 | 改权限 → 打开导入面板截图 → 恢复权限 | `import-upstream` |
-| 11 | 超 32 MiB 会话的导入错误形态（import-up-04） | 用户看到的失败文案可理解；失败后 sessions/.aiclient-import-staging/ 下无残留、manifest 无 cleanupPending 记录 | 造一份 35 MiB 左右的 Claude JSONL，走 GUI 导入，记录报错文本并检查暂存目录 | `import-upstream` |
+| 10 | 子目录不可读时 Codex 源的表现（import-up-01） | 在 ~/.codex/sessions/<某一天>/ 上置 mode 000 后，导入面板里 Codex 项目仍能列出其它日期的会话。**当前预期 ✗**（2026-09-17 实测整个 Codex 源静默消失，即 import-up-01，归 T052），修复后按本判据复验 | 改权限 → 打开导入面板截图 → 恢复权限 | `import-upstream` |
+| 11 | 超限会话的导入错误形态（import-up-04；阈值 2026-09-17 更正，见 5.1） | 用户看到的失败文案可理解；失败后 sessions/.aiclient-import-staging/ 下无残留、manifest 无 cleanupPending 记录 | 造两份 Claude JSONL 走 GUI 导入：一份 35 MiB / 6000 行（撞 4000 条目上限）、一份 > 64 MiB（撞体积守卫），各记录报错文本并检查暂存目录 | `import-upstream` |
 | 12 | Codex 旧格式（裸行）真机导入（H/21 C5 的现场半边） | 真实旧格式 rollout 能被列出并导入成功 | 需要一台还留着旧格式 rollout 的机器，或从 Codex 历史版本导出一份；H/21 当时「本机 10 个 rollout 全是新格式」 | `import-upstream` |
 | 13 | 大目录下导入的主进程占用（import-up-03） | 300 份以上 rollout 时，打开导入面板到列表渲染的耗时，以及批量导入 40 条期间界面是否可交互 | 起 Electron，用 CDP 记录面板打开到列表渲染的时间；批量导入期间观察界面响应 | `import-upstream` |
 | 14 | TUI 模式下切换会话（terminal-03） | 切到另一个聊天后终端画面是否仍是上一个聊天的 pi 会话；在终端里敲一句话后它落进哪个 JSONL | 同仓库两个聊天，TUI 模式下点侧栏切换，然后 grep 两个会话文件 | `terminal-tui` |
-| 15 | 终端复活丢 sessionFile（terminal-04） | 让 pi 快速失败后，终端是否变成一个空白新会话（第二次 spawn 的 argv 里没有 --session） | 临时改坏模型配置起 TUI，看 Main 日志与 ps 里的 --session 参数 | `terminal-tui` |
-| 16 | 两个窗口对同一会话开终端 | 是否能出现两个 pi --session <同一文件> 进程 | 开第二个窗口选中同一聊天进 TUI，ps aux 过滤 --session | `terminal-tui` |
-| 17 | 会话文件损坏 / 缺失 / 换工作区三种恢复失败的界面文案（ah-lib-03） | 分别看到「Session history is damaged（不可重试）」「History not found（此对话无法继续）」「Session belongs to another workspace」，而不是三次都看到「Failed to read history（可以继续发送）」 | 起 Electron，造三个会话：① 中段插 65 行坏 JSON（超过 MAX_SKIPPED_ROWS 触发拒绝）② 删掉会话文件但保留索引行 ③ 把工作区路径改掉；逐一恢复并截图卡片 | `agent-host-lib` |
-| 18 | 宿主诊断横幅 | 人为让 Node 24 解析失败时，用户能否看到可操作的提示 | 清掉 AICLIENT_NODE24_PATH 并让默认 node 不可用后起应用 | `chat-event-vocab` |
+| 15 | 终端复活丢 sessionFile（terminal-04；取证 2026-09-17 更正，见 5.1） | 让 pi 快速失败后，终端是否变成一个空白新会话（pi 自己退出后经 `handleTuiExit` 复活的那次 spawn，argv 里没有 --session） | 把 `--session` 指向的 JSONL 首行改坏起 TUI（改坏模型配置 pi 只报错不退出），在 spawn 后的启动窗口内抓 `/proc/<pid>/cmdline`（pi 随后会改写进程标题，只剩 `pi`），两次 spawn 各抓一次 | `terminal-tui` |
+| 16 | 两个窗口对同一会话开终端 | 是否能出现两个 pi --session <同一文件> 进程。**当前预期 ✗**（2026-09-17 实测两进程并存、零提示、会话树静默分叉；缺陷 D18），修复后按本判据复验 → **已修（T065），2026-09-17 真机复验 ✅**（第二个窗口两条路都弹中文 toast 且界面不切，`/proc` 里始终只有一个 pi） | File → New Window 开第二个窗口选中同一聊天进 TUI，在 spawn 启动窗口内抓 argv（`ps aux` 过滤 `--session` 抓不到，pi 会改写进程标题），前后读 writer.lock 与两条 JSONL 的条目链 | `terminal-tui` |
+| 17 | 会话文件损坏 / 缺失 / 换工作区三种恢复失败的界面文案（ah-lib-03） | 分别看到「Session history is damaged（不可重试）」「History not found（此对话无法继续）」「Session belongs to another workspace」（中文界面对应「会话历史已损坏」「未找到历史」「该会话属于另一个工作区」），而不是三次都看到「Failed to read history（可以继续发送）」 | 起 Electron，造三个会话：① 中段插 65 行坏 JSON（超过 MAX_SKIPPED_ROWS 触发拒绝）② 删掉会话文件但保留索引行——**索引行必须带 `piLeaf`**，否则走 `isUnwrittenPiSession` 的修复分支原地重建空会话、一张卡都不出（2026-09-17 踩坑，见 5.1）③ 把工作区路径改掉；逐一恢复并截图卡片 | `agent-host-lib` |
+| 18 | 宿主诊断横幅 | 人为让 Node 24 解析失败时，用户能否看到可操作的提示。**当前不可执行**（2026-09-17，见 5.2：Node 24 解析已无生产调用方）；宿主 `state=error` 时横幅是否出现、文案是否可操作已由第 4 项（bootstrap 超时）顺带观察 | 清掉 AICLIENT_NODE24_PATH 并让默认 node 不可用后起应用 | `chat-event-vocab` |
 | 19 | offline lane 现行可跑：执行 node --experimental-strip-types src/runtime/smoke/runOnce.ts --offline | 退出码 0，六项断言全部 PASS，新 trace 的 version_stamp.backend==='native'、config_version==='runtime_p6_hardening_v1' | 实际执行命令，存档 stdout 与新生成的 runs.jsonl | `smoke-p0-6` |
 | 20 | 新证据同时存档 report.outcomes（逐条断言名与 pass/fail）与 runs.jsonl | 新存档文件里能直接读到六项断言各自的通过状态，而不是只有裸 trace | 执行时加 --json，把 stdout 与 trace 一起写入 evidence 目录 | `smoke-p0-6` |
 | 21 | 为 plugin_graph_incomplete 失败路径补测试后确认通过 | 新增 vitest 用例断言 code:'plugin_graph_incomplete' 且缺失服务名单正确，不影响既有用例 | 运行 pnpm typecheck:runtime 与对应 vitest 文件 | `cordis-spike-d1` |
 | 22 | cordis 版本升级时重跑 p0-cordis-semantics.ts 确认三条语义不变 | 三行 console.log 布尔值（deferred activation / fiber settle / dispose retraction）与升级前一致 | 手动执行 node --experimental-strip-types src/runtime/spikes/p0-cordis-semantics.ts，比对升级前后输出 | `cordis-spike-d1` |
 | 23 | CI 在日常 push/PR 上确实不触发任何测试 job | 向非 tag 分支推送一次提交或开一个测试 PR，GitHub Actions 页面除 code-review.yml/claude.yml 外没有任何 workflow run 被创建 | 用有仓库权限的账号实际推送/开 PR 并观察 Actions 列表；或 gh run list --branch <分支> | `baseline-comparability` |
-| 24 | F4 的 GUI 观感 | 重试期间时间线出现重试提示；预算耗尽后错误卡文案完整可读且带网关原文 | 起 Electron 加假网关，走真实会话触发并截图 | `field-nodes` |
-| 25 | F7a/F7c 视觉口径 | 权限卡与问答卡的尺寸、字号、间距按 docs/design-system.md 的 Token 分档复核并留截图 | 真实回合触发两张卡后逐项比对 | `field-nodes` |
+| 24 | F4 的 GUI 观感 | 重试期间时间线出现重试提示；预算耗尽后错误文案完整可读且带网关原文（2026-09-17 注：实物是时间线里一个 mono 红色错误块，不是带标题 / 下一步 / 重试按钮的卡片；两条判据成立，「要不要升级成卡」是产品决策，见 5.1） | 起 Electron 加假网关（`--plan retry-503` 与 `retry-503-forever`），走真实会话触发并截图 | `field-nodes` |
+| 25 | F7a/F7c 视觉口径 | 权限卡与问答卡的圆角 / 阴影 / 字号 / **字重** / 间距 / 动画按 docs/design-system.md 的 Token 分档复核并留截图（字重一维 2026-09-17 补，见 5.1；Linux 上看不出偏差，须在 Win10 复拍） | 真实回合触发两张卡后用 getComputedStyle 逐项比对 | `field-nodes` |
 | 26 | F2-b 正常退出时的 scratch 清理 | 从界面正常退出（非 kill）后，本次的 scratch 目录即被删；与 kill 那次的差异有记录 | 三时点各读一次 session-index.json 与目录，沿用 scripts/run-f2b-probe.mjs 的两侧读法 | `field-nodes` |
 | 27 | F2-b 临时行第三个「删除」按钮 | temp:workspace:remove 只删临时基目录的直接子目录，删不到 unbound-sessions/ 下的 scratch 目录 | 真机点按，两侧读目录 | `field-nodes` |
 | 28 | 临时会话索引 title 为空的复现与定性 | 发完第一句后索引行 title 非空且与侧栏显示一致 | 直接读 session-index.json，不看界面 | `field-nodes` |
-| 29 | GUI A/10 TEMP /new 矩阵 | 从普通目录、TEMP 会话、无工作区三种起点各开 /new，cwd 继承结果逐格记录 | 真机点按，逐格记 | `field-nodes` |
+| 29 | GUI A/10 TEMP /new 矩阵 | 从普通目录、TEMP 会话（已发过消息，scratch 已分配）、TEMP 会话（从未发送，scratch 未分配）三种起点各开 /new，cwd 继承结果逐格记录（起点命名 2026-09-17 更正，见 5.1） | 真机点按，逐格记 | `field-nodes` |
 | 30 | TUI-1 / H/20 真机一圈 | GUI 跑一回合 → pi --session 打开 → 在 TUI 里续聊 → 回 GUI 接得上；右上角 GUI/TUI 开关那一下也点一次 | 内嵌终端真开，前后各读一次会话文件并比对头一行与条目链 | `field-nodes` |
 | 31 | H/19 验证案例 7 | GUI 与内嵌 TUI 都能列出迁移/导入后的历史会话；在 TUI 里续聊一轮再回 GUI，历史接得上 | 真实 Electron + 内嵌 PTY，走完整一圈 | `h-nodes` |
-| 32 | H/21 内嵌 TUI 模型缺失覆盖层 | 打开一条模型已被迁移覆盖的旧会话，TUI 侧同样给出可读的「模型缺失」提示而不是裸错误 | 真实 Electron，切到内嵌 TUI 视图 | `h-nodes` |
-| 33 | 附件顶满会话文件后打不开的端到端复现 | 连续发送 2~3 条各含多张图片附件的消息后，会话文件字节数是否逼近/超过 32 MiB；重开该会话是否抛 io_limit | 用真实 Electron GUI 走一遍 Composer 发送流程观察结果；或在 runtime 包内写构造用例模拟同等字节量 | `capacity-leftovers` |
+| 32 | H/21 内嵌 TUI 模型缺失覆盖层（判据 2026-09-17 补全，见 5.1） | 打开一条模型已被迁移覆盖的旧会话：GUI 侧出 H/21 的中文「本应用没有这个模型」覆盖层；TUI 侧同样给出可读的「模型缺失」提示而不是裸错误。**GUI 侧当前预期 ✗**（缺陷 D19：`isModelMissingError` 认的两个信号在会话路径上已无生产抛出点）→ **已修（T062），2026-09-17 真机复验 ✅**（composer 上方出中文覆盖层卡，四段全中文、按钮跳「设置 · Pi」；复现该场景还需 localStorage 的每会话模型钉子） | 真实 Electron，GUI 侧截覆盖层，再切到内嵌 TUI 视图截 pi 的提示原文 | `h-nodes` |
+| 33 | 附件顶满会话文件后的端到端表现（判据 2026-09-17 改写，见 5.1） | 连续发送 4 条「1 张 ≈5 MiB 图 + 1 张 ≈1 MiB 图」的消息后，会话文件停在 32 MiB 以内（≈31.9 MiB）；第 5 条发送被拒，界面给出会话超预算类错误；重开该会话正常打开（不抛 io_limit）；**被拒后同一会话继续发纯文本，要么成功、要么给出可见错误，静默丢弃判负**（当前预期 ✗，缺陷 D24 → **已修（T061），2026-09-17 真机复验 ✅**：被拒后纯文本发送成功、网关计数 +1、会话文件 +926 B，被拒那次的红块仍在）；重开应用后恢复 | 用真实 Electron GUI 走 Composer：渲染层没有 `input[type=file]`、⊕ 走原生对话框（CDP 驱动不了），要往 textarea 派带 `File` 的 `ClipboardEvent('paste')`（同一条 `ingestFiles` 管线）挂图；runtime 包内构造用例半边已由 `sessionAttachmentFill.test.ts` 覆盖 | `capacity-leftovers` |
 | 34 | Main IPC 层缺失附件校验的直接验证 | 绕开 Composer 直接向 CHAT_SEND 传超限 attachments payload，确认 Main 不拒绝、请求原样送达 worker | 起 Electron 应用，在渲染层 devtools 控制台直接调用 window.api 发送接口并传构造好的超限 payload | `capacity-leftovers` |
 | 35 | 多进程并发轮转同一 runs.jsonl | 两个独立 worker 进程共享同一 AICLIENT_RUNTIME_TRACE_DIR 并几乎同时 finish() 时，是否出现代际丢失或写入交织/损坏 | 用两个 Node 子进程直接跑 runtime 包 bootstrap（不需要 Electron），共享同一 traceDir | `capacity-leftovers` |
 
@@ -290,6 +290,20 @@ Role: reference。[T032](roadmap.md) 的产出，取代[批次 D 的草案](evid
 | 项 | 草案原判据 | 改为 | 理由 |
 |---|---|---|---|
 | DEV-22 cordis 语义探针 | 「三行 console.log 布尔值……（`shouter present? true` 两次、`dispose 后 shouter present? false`）」 | 脚本实际打印五行：① `after dependant only — shouter present? false`（Q1 推迟激活）② `after dependency arrives — shouter present? true` 且 `shout: HELLO RUNTIME`（Q2）③ dispose 后 greeter / shouter 均 `false`（Q3） | 原判据把第一行写反了。按 Q1 的定义，依赖未到时**必须**是 false；真出现「true 两次」恰恰说明推迟激活语义被推翻、`bootstrap.ts` 的兜底分支再也轮不到执行。照原判据验会得出相反结论。2026-09-17 实跑核对 |
+| DEV-33 附件顶满会话文件 | 「连续发送 2~3 条各含多张图片附件的消息后，会话文件字节数是否逼近/超过 32 MiB；重开该会话是否抛 io_limit」 | 「4 条『1 张 ≈5 MiB + 1 张 ≈1 MiB』后文件停在 32 MiB 内、第 5 条被拒、重开正常」 | 原判据写于 T046 之前。T046 后单条落盘上限 8 MiB，一条里放不下多张 5 MiB 图（base64 后 6.67 MiB），32 / 8 = 4 条才顶满，2~3 条最多 23.99 MiB；写入侧 `store.ts:357` 与读取侧 `io.ts:336` 同用严格 `>` 比 32 MiB，本 store 写出的文件永远 ≤ 32 MiB，重开的 `io_limit` 经产品路径不可达（只有外部把文件推过 32 MiB 才够得着）。2026-09-17 构造用例实测：4 条 31.99 MiB、第 5 条 `session_size_limit`、重开成功；两组反向验证判红后复原 |
+| DEV-11 超限会话导入 | 「超 32 MiB 会话的导入错误形态……造一份 35 MiB 左右的 Claude JSONL」 | 阈值改为「35 MiB / 6000 行撞 4000 条目上限 + > 64 MiB 撞体积守卫」两份 | 普通文件的体积守卫是 `LEGACY_IMPORT_MAX_SOURCE_BYTES` = 64 MiB（`src/shared/types/legacyImport.ts:6`），32 MiB 是 `TSD_BUFFERED_READ_LIMIT`（`tsdSafeRead.ts:86`）只管 TSD 加密文件的有界读；35 MiB 在 Linux 上触发的是 `LEGACY_IMPORT_MAX_ENTRIES` = 4000（`ClaudeSourceAdapter.ts:270`），照原判据会把「条目上限」的报错误记成「体积上限」。2026-09-17 样本准备时离线实跑核对 |
+| DEV-5 fork 未绑定会话 | 「session-index.json 里是否已有该 fork 行且**不含** unbound」 | 「已有该 fork 行且**带** `unbound: true`，`workspacePath` 指向源会话 scratch 目录」 | 原判据是修复前形态。T040 `d4a361b5` 提交说明第一条：fork 未绑定会话时索引行补写 unbound，渲染层接受「有 unbound、没有工作区」的行，重启后不再被当孤儿丢掉——「带 unbound」正是 DEV-6「重启后不消失」成立的前提。照原判据字面验会把修复成功判成失败。2026-09-17 真机实测到 `unbound: true` |
+| DEV-13 大目录导入耗时 | 「打开导入面板到列表渲染的耗时」未定义「列表」 | 明确为两个数：① 面板打开 → Codex **项目行**出现；② 展开项目 → 320 行**会话列表**渲染完成（两者差一个量级，2026-09-17 实测分别约 0.7～1.0 s 与再加 0.6～1.2 s） | 判据原文歧义，两种读法结论不同；本次两个都记 |
+| DEV-1 归档跑中回合 | 「回合后续的文件工具不会在已删除目录里静默失败，或至少给出与『目录没了』相关的错误」 | 「归档时回合被中止（SIGTERM、aborted），worker 退出后才删 scratch 目录，不出现任何在已删目录里的工具调用」 | 原判据是修复前形态（工具真的跑了、真的失败了）。T037 `99db822c` 之后整个回合在归档那一刻被中止，后续工具不会被调起，「与目录没了相关的错误」永远不会出现，照第二分句字面验会读成不通过。2026-09-17 实测：归档 11 ms 后 bash 收 SIGTERM、回合 aborted、worker 退出后目录才删、网关未再收到后续请求 |
+| DEV-2 临时根改设置 | 只问「旧根还在不在」「侧栏还标不标 temporary」 | 补一格「改设置后新建临时对话，记 scratch 目录落在哪个根」 | 原两问都能通过，却漏掉真正的雷：Main 侧 `readSettings()` 读的是 settings.json 顶层、用户设置在 `aiclient-settings.state` 里，「保存位置」恒读不到，scratch 根永远回落默认目录（缺陷 D13）。补这一格才逼得出来 |
+| DEV-15 终端复活 | 取证「临时改坏模型配置起 TUI，看 ps 里的 --session」 | 「把 `--session` 指向的 JSONL 首行改坏；spawn 启动窗口内抓 /proc cmdline」，并写明验的是 `handleTuiExit` 那条复活路径 | 改坏模型配置 pi 只印一条错误继续活着，达不到「快速失败」；pi 起来后改写进程标题，`ps` 里只剩 `pi`，过滤 `--session` 永远为空（DEV-16、MODEL-48 同）。2026-09-17 实测两次 spawn argv 都带 `--session`（T048 复活绑定成立）。方法与基线见 dev-D-method-note-proc-title.txt |
+| DEV-32 模型缺失覆盖层 | 判据只写「TUI 侧同样给出可读提示」 | 补成「GUI 侧出 H/21 中文覆盖层」+「TUI 侧出 pi 可读提示」两句 | 取证方式里有「GUI 侧截覆盖层」而判据句里没有，照判据字面读是 ✅、照取证读是 ⛔；2026-09-17 实测 GUI 侧覆盖层已触发不到（D19），这种回归会从判据缝里漏过去 |
+| DEV-17 恢复失败文案 | 取证「删掉会话文件但保留索引行」 | 补「索引行必须带 `piLeaf`」 | 不带 `piLeaf` 的索引行会被 `isUnwrittenPiSession` 判成「从未写过的会话」走修复分支，原地重建空会话、不出任何卡，验不到 `jsonl_not_found`。2026-09-17 实测三张卡各出各的中文文案 |
+| DEV-24 F4 观感 | 「错误卡」 | 「错误文案」并注明实物形态 | 预算耗尽后屏上没有 `role="alert"` 的卡片，只有 `font-mono text-code` 红色错误块（无标题 / 下一步 / 重试按钮）；判据两条（完整可读、含网关原文）实测成立。要不要像 DEV-17 那样升级成有引导的卡是产品决策，列入缺陷总结待定 |
+| DEV-25 视觉口径 | 「尺寸、字号、间距」 | 补「字重」成六维 | 2026-09-17 实测圆角 / 阴影 / 字号 / 间距 / 动画全部在档，唯一系统性偏差在字重（标题 `font-medium` 500，Win10 常见字体无 500 档会回落 400，缺陷 D23）；原三维判据正好漏掉它，且 Linux 上看不出 |
+| DEV-29 TEMP /new | 「TEMP 会话」与「无工作区」并列为两种起点 | 「TEMP 会话（已发过消息）」与「TEMP 会话（从未发送）」 | `temporaryWorkspaceEnabled=true` 时「不选文件夹的聊天」就是一条 unbound 会话，发第一句才分配 scratch 目录；两格差别是 `inheritedPath` 有无值，不存在第三种会话类型。2026-09-17 实测：普通目录继承同工作区；已分配 scratch 的 TEMP 会话 /new 继承**同一个** scratch 目录（两条会话共用）；未分配的无可继承、首发时新分配 |
+| DEV-36 插件页文案 | 一句合写「本应用自带权限系统审批每个对话，你装的 pi 权限扩展只影响内嵌终端」 | 拆成「① 无条件句」+「② 装了 pi 权限扩展时才显示的句」，取证加前置步骤 | 后半句是 `PiPluginsSettings.tsx:253-268` 的条件渲染（`permissionSystemOwner` 为 `user_configured` / `unknown` 才出），没装扩展的机器只看得到前半句；照原判据会误判成「后半句丢了」。2026-09-17 开发机只验到 ① |
+| DEV-33 附件 GUI 半边 | 「被拒后能否继续发纯文本」挂在「另记」 | 升格为判据分句，静默丢弃判负；取证方式改为 paste 事件挂图 | 2026-09-17 实测被拒后纯文本被静默丢弃、重开应用即恢复（D24，本轮最疼的一条），挂在「另记」里下一个人可能只记一句「不能」就过去；`input[type=file]` + `DOM.setFileInputFiles` 在本仓不可执行（无文件 input，原生对话框 + `file:readAttachment` 一次性授权闸） |
 
 ### 5.2 不需要人工执行的项
 
@@ -298,6 +312,7 @@ Role: reference。[T032](roadmap.md) 的产出，取代[批次 D 的草案](evid
 | DEV-35 多进程并发轮转同一 runs.jsonl | 🚫 已有自动化覆盖 | `src/runtime/__tests__/trace.test.ts:350` 用两个真实 `fork` 子进程共享同一 traceDir 冲击轮转阈值，断言无代际丢失、无写入交织、代际连续、不留 `.lock`（T045 `e5a2d5b9` 落）。2026-09-17 实跑 15/15 绿 |
 | baseline-01 CI 是否在日常 push / PR 上触发测试 | 🚫 已结案 | `.github/workflows/build.yml` 的 `on:` 只有 `push.tags:['v*']` 与 `workflow_dispatch`；另两个 workflow（claude / code-review）不是测试作业。结论即「不触发」，这正是批次 D 判 P1-7 incomplete 的依据。要不要加测试 job 是决策，归 T054 |
 | concurrency「三个会话并发时的真实进程数与内存」（PKG 组第 12 项） | ⚠️ 不在开发机做 | 开发机 2 核 / 3.3 GB 跑不出有意义的数字，会得出假结论。上机日做，或换一台内存充裕的机器 |
+| DEV-18 宿主诊断横幅（Node 24 解析失败） | ⛔ 当前不可执行 | `AICLIENT_NODE24_PATH` 唯一的读者 `resolveNode24Runtime` 没有生产调用方，横幅分支 `isNode24ResolutionFailure` 只被单测引用、`describeHostStatus` 不调它；2026-09-17 去掉该变量起应用，宿主仍 ready、回合照跑、横幅零张。属死代码 + 文档漂移（缺陷 D16），先决定删代码还是接回来，再定这一行去留。宿主 `state=error` 的横幅表现已由 DEV-4 顺带记录。**2026-09-17 结论：T068 已删除该死代码（解析器、横幅分支、三个类型、`dev.env` 与四处注释），本行退役**，上机日不再尝试构造「Node 24 解析失败」；改为顺带确认 Windows 第 2 项——随包 `node.exe` 缺失时文案是 `Pi Node runtime is missing: <路径>`，且不再提及 `AICLIENT_NODE24_PATH` |
 
 ### 5.3 旧树待现场项的覆盖对照
 

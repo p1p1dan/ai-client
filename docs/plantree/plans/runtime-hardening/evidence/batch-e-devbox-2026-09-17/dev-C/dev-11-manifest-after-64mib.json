@@ -1,0 +1,293 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:6461e999313cc4068595b7039e7f15cf0ea0a27cea708aaafd0643a597c1e4d0:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "6461e999313cc4068595b7039e7f15cf0ea0a27cea708aaafd0643a597c1e4d0",
+        "size": 1866534,
+        "mode": 33152,
+        "mtimeMs": 1788363599791.0442
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-cfb1ca8d-fd14-427b-8b20-f097e209ce6a",
+      "targetPiSessionId": "import-afe0585f-0bdc-4bf0-a663-efbe9139f66a",
+      "startedAt": 1788363673599,
+      "integrity": "4c57c1ed1c8613febf746f3e072ab80773ee75f074208fb667fa6d702caf2cc4",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-41-14-539Z_import-afe0585f-0bdc-4bf0-a663-efbe9139f66a.jsonl",
+      "completedAt": 1788363674602,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:1d5a87728df309fcc1ed6ed3a8fcc72cd2c644fcf67f587d7fe0525156d85ef4:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "1d5a87728df309fcc1ed6ed3a8fcc72cd2c644fcf67f587d7fe0525156d85ef4",
+        "size": 3365369,
+        "mode": 33152,
+        "mtimeMs": 1788364947523.4866
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-121374fa-0f86-43fb-a772-1c9b0c4e0ac8",
+      "targetPiSessionId": "import-81c2ecd9-7ba5-4cee-8e13-f35ea0232db1",
+      "startedAt": 1788365016739,
+      "integrity": "21201beb8ba1383651a8c52d270a3fcb0f07390033794ee3e00ead0b1115176d",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-03-37-612Z_import-81c2ecd9-7ba5-4cee-8e13-f35ea0232db1.jsonl",
+      "completedAt": 1788365017677,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:5fbe5d89645d6576e846b947a9fbdd4f1d7cd0a595d003714ffda952ffbb5044:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "5fbe5d89645d6576e846b947a9fbdd4f1d7cd0a595d003714ffda952ffbb5044",
+        "size": 3427148,
+        "mode": 33152,
+        "mtimeMs": 1788365391073.7205
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-99a977c3-6634-4c9a-a9eb-1b46880ba3de",
+      "targetPiSessionId": "import-2809d882-c1ea-454b-8702-05c74751ffa5",
+      "startedAt": 1788365453243,
+      "integrity": "4ef9a634658d9295dede8a003be6ae05e88ee96b2b125a913bc4ca735de39640",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-10-54-098Z_import-2809d882-c1ea-454b-8702-05c74751ffa5.jsonl",
+      "completedAt": 1788365454167,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:25cf512389f2acf8c347f85c2556fad6ceee52ad88573e36a22c548993b8e85a:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "25cf512389f2acf8c347f85c2556fad6ceee52ad88573e36a22c548993b8e85a",
+        "size": 3455943,
+        "mode": 33152,
+        "mtimeMs": 1788365534913.9578
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-3cd1fe0e-1c1c-43d0-b427-30b32806e68d",
+      "targetPiSessionId": "import-d2b83e79-9fab-4545-8463-f01c848acc6d",
+      "startedAt": 1788365585609,
+      "integrity": "56961ec528e9eeabd1a0211b9fea1432e4423af4ef7ed5a164dc7a93d3827d53",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-13-06-577Z_import-d2b83e79-9fab-4545-8463-f01c848acc6d.jsonl",
+      "completedAt": 1788365586638,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:0f94c8c22c9f722b1bfb5ea023ae746937eb39377ba8fd89680b2b5e3c15822b:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "0f94c8c22c9f722b1bfb5ea023ae746937eb39377ba8fd89680b2b5e3c15822b",
+        "size": 3532211,
+        "mode": 33152,
+        "mtimeMs": 1788365865640.2993
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-ba5afa43-e1b9-4b00-a0fa-f943ba559350",
+      "targetPiSessionId": "import-43950ebd-385d-4aa1-a244-ced3f5467c7e",
+      "startedAt": 1788366176118,
+      "integrity": "55a455ab8cc88d2aa0d352a150523940ea60299d554e7ed63e8858ea9fdcf783",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-22-57-022Z_import-43950ebd-385d-4aa1-a244-ced3f5467c7e.jsonl",
+      "completedAt": 1788366177087,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:fd6b941eb52fbb446aee04d81b92b600dd06261a5304de9e017719cef86ec5ec:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "fd6b941eb52fbb446aee04d81b92b600dd06261a5304de9e017719cef86ec5ec",
+        "size": 3635682,
+        "mode": 33152,
+        "mtimeMs": 1788367115426.4944
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-f34ddff7-ebf7-4ca9-bc86-44611e5641be",
+      "targetPiSessionId": "import-e6a17de1-a5d8-4979-af5c-4e089112fc2b",
+      "startedAt": 1788367165115,
+      "integrity": "8e1653ac69d533574014050c616da149399fcff2790901175ecc75fcad6f253b",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-39-26-093Z_import-e6a17de1-a5d8-4979-af5c-4e089112fc2b.jsonl",
+      "completedAt": 1788367166230,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:fd7dc68674f0c85a21dcde0ef963f9e905d6893e3927a4e49fa0463344237e9b:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "fd7dc68674f0c85a21dcde0ef963f9e905d6893e3927a4e49fa0463344237e9b",
+        "size": 5330328,
+        "mode": 33152,
+        "mtimeMs": 1788368032618.267
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-08175b24-93c1-4ff3-90e1-7aa58aa39c65",
+      "targetPiSessionId": "import-d7c6acdf-aa24-4f6c-9354-6ed5892b4ae6",
+      "startedAt": 1788368088395,
+      "integrity": "07b28b92acb40020f9a772e68a73426522b356c4b6888de67c9228bdbd360b18",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-49-319Z_import-d7c6acdf-aa24-4f6c-9354-6ed5892b4ae6.jsonl",
+      "completedAt": 1788368089391,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:9603381a4bda5efb557addb387c3a71d44207e648d0f6310241838353661672b:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "9603381a4bda5efb557addb387c3a71d44207e648d0f6310241838353661672b",
+        "size": 7625158,
+        "mode": 33152,
+        "mtimeMs": 1788401595613
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-686d5ca3-24e2-4a3f-852c-35e6fe9d26e2",
+      "targetPiSessionId": "import-a811cbf0-ceb4-4bbd-b612-2cceec293f20",
+      "startedAt": 1788401645485,
+      "integrity": "76f12f87d01bb7debf9b2882943e1076dfdec71116f184116b73825e280413c2",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-14-06-415Z_import-a811cbf0-ceb4-4bbd-b612-2cceec293f20.jsonl",
+      "completedAt": 1788401646517,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "claude-code:1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08:3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402:b9b519f48a3581356291e8e7b555332675aa588ff4de0cbe1e2f63400e8e2b3b:1:t34-claude-v1",
+      "status": "complete",
+      "source": {
+        "sourceKind": "claude-code",
+        "projectId": "-home-ai-code-ai-client",
+        "sourceSessionId": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402"
+      },
+      "sourcePath": "/home/ai/.claude/projects/-home-ai-code-ai-client/3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "1abae5e5251c918b059266f7b89f88d296275b6114b9457bfec20fa4cfa0fb08",
+        "contentHash": "b9b519f48a3581356291e8e7b555332675aa588ff4de0cbe1e2f63400e8e2b3b",
+        "size": 7715135,
+        "mode": 33152,
+        "mtimeMs": 1788401882247.996
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "/clear",
+      "logicalSessionId": "session-import-8c414d42-9dbc-42b6-8907-38351b5d69c0",
+      "targetPiSessionId": "import-2e3b3c96-ec99-4785-beed-be61dcf6c3a8",
+      "startedAt": 1788401929805,
+      "integrity": "3b6cfa0d09f0817729aec3108f815a3a72207a7893517843a14d6e8f77449b0a",
+      "targetSessionFile": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-50-790Z_import-2e3b3c96-ec99-4785-beed-be61dcf6c3a8.jsonl",
+      "completedAt": 1788401930893,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:57e75cacb5d53f9aa3c567eced03f7c60c5d9e47a1b8a7d7b8077b32aca43eea:01a01d4a-3119-7fd0-a16a-fd81b2ceec9b:dc951162e0f9ae973be7e968c805987a70220fc1beccd32e376804c6aad6069b:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-0d0e6f0206d58e1f0134292ef1429440541bc4a15151c0ee0def386951e54b88",
+        "sourceSessionId": "01a01d4a-3119-7fd0-a16a-fd81b2ceec9b",
+        "workspaceMatched": true
+      },
+      "sourcePath": "/home/ai/.codex/sessions/2026/08/19/rollout-2026-08-19T23-49-56-01a01d4a-3119-7fd0-a16a-fd81b2ceec9b.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "57e75cacb5d53f9aa3c567eced03f7c60c5d9e47a1b8a7d7b8077b32aca43eea",
+        "contentHash": "dc951162e0f9ae973be7e968c805987a70220fc1beccd32e376804c6aad6069b",
+        "size": 307707,
+        "mode": 33204,
+        "mtimeMs": 1787197897293.6445
+      },
+      "workspacePath": "/home/ai/code/ai-client",
+      "title": "help me install :https://github.com/pnedfff/claude-env-cleanup",
+      "logicalSessionId": "session-import-codex-8aa6e997-aeb8-4b05-a16c-f3277dd9f43b",
+      "targetPiSessionId": "import-codex-2729be2b-6110-4415-af9a-3cb9c82b8337",
+      "startedAt": 1789108841514,
+      "integrity": "7fca0423544e1fed5059e29e4aaebc2dae5b0bc97165c3cc37b9d12ba87ab02c",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T06-40-42-756Z_import-codex-2729be2b-6110-4415-af9a-3cb9c82b8337.jsonl",
+      "completedAt": 1789108842792,
+      "cleanupPending": false
+    },
+    {
+      "dedupeKey": "codex:3fb4ed6eab380df4938e94ec7d270c610f86df568cf6d0efb96cc9dd704648c9:01a04216-e5b9-71d1-9b81-6d2b32fa2fdc:42c7c081dfabaec69befd16e1642c46bfe5a479188660ce4bc22703abd9dea20:1:b4-legacy-v2",
+      "status": "complete",
+      "source": {
+        "sourceKind": "codex",
+        "projectId": "codex-4befff4a656a138c403ced34953e40a827b55b6ecb26089154fc5ac3733d8e72",
+        "sourceSessionId": "01a04216-e5b9-71d1-9b81-6d2b32fa2fdc",
+        "workspaceMatched": false
+      },
+      "sourcePath": "/home/ai/.codex/sessions/2026/08/27/rollout-2026-08-27T03-19-51-01a04216-e5b9-71d1-9b81-6d2b32fa2fdc.jsonl",
+      "sourceFingerprint": {
+        "stableSourceIdentity": "3fb4ed6eab380df4938e94ec7d270c610f86df568cf6d0efb96cc9dd704648c9",
+        "contentHash": "42c7c081dfabaec69befd16e1642c46bfe5a479188660ce4bc22703abd9dea20",
+        "size": 152160,
+        "mode": 33204,
+        "mtimeMs": 1787815418638.8137
+      },
+      "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/6fb41b29-f3b2-4918-a498-f098bfbd776b",
+      "title": "pi-install.sh  我运行时报错有点问题，帮我看看，刚刚提示npm不存在",
+      "logicalSessionId": "session-import-codex-904fda2c-a6b6-4fdb-b16e-4acac2b9b192",
+      "targetPiSessionId": "import-codex-c51e6a41-b166-40cc-8a06-b4dbaaeae38d",
+      "startedAt": 1789109498374,
+      "integrity": "86451c19ce426592b779be0ad6a7eef241b17962dec9b2bb7b8b2f0b331ee224",
+      "targetSessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-JYWAI-temporary-unbound-sessions-6fb41b29-f3b2-4918-a498-f098bfbd776b--/2026-09-11T06-51-39-575Z_import-codex-c51e6a41-b166-40cc-8a06-b4dbaaeae38d.jsonl",
+      "completedAt": 1789109499587,
+      "cleanupPending": false
+    }
+  ]
+}

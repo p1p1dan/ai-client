@@ -1,0 +1,12 @@
+=== DEV-3 t3 (after a SECOND delete on the same row, app still running) 2026-09-17T06:48:52-04:00 ===
+note: the 1st delete removed only the main-dir shadow copy; the row came back with the OLD
+      compat-root text, so a 2nd delete was issued on the same row.
+--- main dir
+total 8
+drwxrwxr-x 2 ai ai 4096 Sep 17 06:47 .
+drwx------ 7 ai ai 4096 Sep 17 06:45 ..
+--- compat root
+total 8
+drwxrwxr-x 2 ai ai 4096 Sep 17 06:48 .
+drwxr-xr-x 4 ai ai 4096 Sep 17 06:42 ..
+--- list contains probe-compat? -> false (row finally gone)

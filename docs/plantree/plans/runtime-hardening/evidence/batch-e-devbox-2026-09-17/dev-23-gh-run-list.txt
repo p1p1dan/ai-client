@@ -1,0 +1,49 @@
+# DEV-23 取证：gh run list（采集时间 2026-09-17T08:36:09Z，HEAD b3d751e3，origin/feat/runtime-evolution b3d751e3）
+
+$ gh run list --branch feat/runtime-evolution --limit 30 --json databaseId,event,name,status,conclusion,createdAt,headSha
+[{"conclusion":"success","createdAt":"2026-09-10T01:09:40Z","databaseId":34424337205,"event":"workflow_dispatch","headSha":"c0ae2a34c6e6c855668000f0b407f9bd516fa678","name":"Build","status":"completed"},{"conclusion":"cancelled","createdAt":"2026-09-10T00:57:08Z","databaseId":34423455408,"event":"workflow_dispatch","headSha":"b4bc63a5acaf9bd8a32ea5df7afbe1950ddd821f","name":"Build","status":"completed"},{"conclusion":"failure","createdAt":"2026-09-10T00:53:04Z","databaseId":34423168563,"event":"workflow_dispatch","headSha":"913e981244cd87501717bbe055abcce99611f558","name":"Build","status":"completed"},{"conclusion":"cancelled","createdAt":"2026-09-09T13:00:53Z","databaseId":34354429552,"event":"workflow_dispatch","headSha":"b6dbfe65ac7f3cd9c4546fe2b7d714661cb5663c","name":"Build","status":"completed"},{"conclusion":"success","createdAt":"2026-09-09T13:00:21Z","databaseId":34354367890,"event":"workflow_dispatch","headSha":"b6dbfe65ac7f3cd9c4546fe2b7d714661cb5663c","name":"Build","status":"completed"},{"conclusion":"success","createdAt":"2026-09-09T03:44:51Z","databaseId":34308304362,"event":"workflow_dispatch","headSha":"b6aa08441eae775f47e8e8829a1e327cbae217e3","name":"Build","status":"completed"},{"conclusion":"failure","createdAt":"2026-09-09T03:39:39Z","databaseId":34307976137,"event":"workflow_dispatch","headSha":"65eee950926d8d62112a6b4b4a423ca4138d2584","name":"Build","status":"completed"},{"conclusion":"failure","createdAt":"2026-09-09T03:35:17Z","databaseId":34307700512,"event":"workflow_dispatch","headSha":"c1f22c11698dd195948cf57cd837da1e8bbe0a18","name":"Build","status":"completed"},{"conclusion":"failure","createdAt":"2026-09-09T03:32:06Z","databaseId":34307492175,"event":"workflow_dispatch","headSha":"f42d41febc1c094f31d98eab4288f175bf557fb9","name":"Build","status":"completed"},{"conclusion":"failure","createdAt":"2026-09-09T03:15:47Z","databaseId":34306438655,"event":"workflow_dispatch","headSha":"2397f1ed5df95e7bc3fd8203213ff65d7001730b","name":"Build","status":"completed"},{"conclusion":"failure","createdAt":"2026-09-09T03:10:33Z","databaseId":34306095371,"event":"workflow_dispatch","headSha":"3d14a4b291bfbab5d596eb69f52a906a53db755b","name":"Build","status":"completed"},{"conclusion":"failure","createdAt":"2026-09-09T03:06:38Z","databaseId":34305837633,"event":"workflow_dispatch","headSha":"76424efa41e22c09baf3484ff9526f4f50e09747","name":"Build","status":"completed"},{"conclusion":"failure","createdAt":"2026-09-09T02:29:53Z","databaseId":34303440949,"event":"workflow_dispatch","headSha":"9edab07c718e3ceeb1498d841fa2783322d570cd","name":"Build","status":"completed"}]
+
+$ gh run list --limit 50 --json event | jq -r ".[].event" | sort | uniq -c
+     11 push
+     35 workflow_dispatch
+
+$ git rev-list --count --since=2026-09-10T01:10:00Z origin/feat/runtime-evolution  (最后一次 workflow_dispatch 之后推到远端的提交数)
+179
+
+$ git log origin/feat/runtime-evolution --since=2026-09-10T01:10:00Z --format="%h %ci" | tail -3  (最早三条)
+db175931 2026-09-10 10:17:21 +0800
+a3debdf6 2026-09-10 09:35:50 +0800
+6bb94e84 2026-09-10 09:11:42 +0800
+
+$ grep -n -A5 "^on:" .github/workflows/*.yml
+.github/workflows/claude.yml:3:on:
+.github/workflows/claude.yml-4-  issue_comment:
+.github/workflows/claude.yml-5-    types: [created]
+.github/workflows/claude.yml-6-  pull_request_review_comment:
+.github/workflows/claude.yml-7-    types: [created]
+.github/workflows/claude.yml-8-  issues:
+.github/workflows/build.yml:3:on:
+.github/workflows/build.yml-4-  push:
+.github/workflows/build.yml-5-    tags:
+.github/workflows/build.yml-6-      - 'v*'
+.github/workflows/build.yml-7-  workflow_dispatch:
+.github/workflows/build.yml-8-
+.github/workflows/code-review.yml:3:on:
+.github/workflows/code-review.yml-4-  pull_request_target:
+.github/workflows/code-review.yml-5-    types: [opened, reopened, synchronize, ready_for_review]
+.github/workflows/code-review.yml-6-    paths:
+.github/workflows/code-review.yml-7-      - "src/**"
+.github/workflows/code-review.yml-8-      - "electron.vite.config.ts"
+
+$ gh run list --limit 50 --json event,headBranch,name,createdAt,createdAt | jq -c ".[] | select(.event==\"push\")"  (push 触发的 11 次全是 tag 推送？)
+{"createdAt":"2026-06-16T07:58:15Z","event":"push","headBranch":"v0.3.4","name":"Build"}
+{"createdAt":"2026-06-16T06:37:54Z","event":"push","headBranch":"v0.3.1","name":"Build"}
+{"createdAt":"2026-06-16T06:17:23Z","event":"push","headBranch":"v0.3.0","name":"Build"}
+{"createdAt":"2026-05-11T02:54:36Z","event":"push","headBranch":"v0.2.57","name":"Build"}
+{"createdAt":"2026-05-08T08:19:11Z","event":"push","headBranch":"v0.2.56","name":"Build"}
+{"createdAt":"2026-05-08T07:21:15Z","event":"push","headBranch":"v0.2.55","name":"Build"}
+{"createdAt":"2026-05-08T02:04:52Z","event":"push","headBranch":"v0.2.54","name":"Build"}
+{"createdAt":"2026-04-29T02:47:18Z","event":"push","headBranch":"v0.2.53","name":"Build"}
+{"createdAt":"2026-04-28T08:44:57Z","event":"push","headBranch":"v0.2.52","name":"Build"}
+{"createdAt":"2026-04-28T06:21:20Z","event":"push","headBranch":"v0.2.51","name":"Build"}
+{"createdAt":"2026-04-27T10:11:10Z","event":"push","headBranch":"v0.2.50","name":"Build"}

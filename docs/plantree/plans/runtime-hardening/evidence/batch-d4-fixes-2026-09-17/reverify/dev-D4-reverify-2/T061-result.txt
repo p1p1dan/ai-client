@@ -1,0 +1,42 @@
+# T061 回炉 —— 出网剥掉本应用自己的键（2026-09-17 第二轮复验）
+#
+# 判据：历史里的 image block 在**出网请求体**里不能带 `aiclientName`，
+#      而**会话 JSONL** 里要带。
+
+[前置：一个必须记下来的坑]
+  一开始把假网关注册成 vault 里的自定义 AI 服务（handbook 5.3 路 B），发带图的一条 ——
+  出网请求体里根本没有 image block，只有一句
+    {"type":"text","text":"(image omitted: model does not support images)"}
+  原因在 `PiModelConfigService.ts:773 toPiUserProvider()`：vault 里的自定义服务只带模型 id
+  （`models: (provider.models ?? []).map((id) => ({ id }))`），没有 `input` 能力声明，
+  于是 pi-ai 认为这个模型不吃图，附件在出网前就被换成一句说明。
+  ⇒ 改走**物理文件目录**这条路：把 vault 的 `userProviders` 清空（`resolveNativeModelCatalog`
+    这时凑不出完整目录，返回 undefined，worker 退回读 agentDir 下的 models.json/auth.json），
+    手写的 models.json 里给 probe-fake 声明 `"input":["text","image"]`。
+    这之后图才真的出网。**这条对上机点验同样适用：用 vault 自定义服务是验不了图的。**
+
+[1] 落盘那一半（会话 JSONL）
+  会话 session-1789673431979-y6t512t，第一条用户消息带一张 195.3 KB 的 r2-holiday.png（paste 入口）。
+  JSONL 里该 image block 的键集合 = ['aiclientName', 'data', 'mimeType', 'type'] —— **带 aiclientName**。
+  见 T061-session-jsonl-blocks.json（base64 已省略）。
+
+[2] 出网那一半 · anthropic-messages（控制组，不是判据）
+  退出并重开该会话（chat.closeSession 后重新选中，历史从磁盘读回）再发一条纯文本，
+  请求体里的历史 image block 键集合 = ['source', 'type']；
+  整个请求体 grep 'aiclient' = 0，grep 'holiday' = 0。
+  这条是控制组：anthropic-messages adapter 本来就会重建 content block、顺手丢掉未知键。
+  见 T061-wire-anthropic-messages.json。
+
+[3] 出网那一半 · pi-messages（**这才是判据**）
+  把 models.json 里 probe-fake 的 api 改成 `pi-messages` —— 这个 adapter 不重建 block，
+  它把 `{model, context, options}` 原样 JSON.stringify 发出（T061 回炉那一节点名的就是它），
+  重启应用让 worker 重新读目录后再发一条纯文本：
+    请求体顶层键 = ['context', 'model', 'options']  ← 确实是 pi-messages 的原样透传形状
+    context.messages 里第一条 user 的 image block 键集合 = ['data', 'mimeType', 'type']
+    **没有 aiclientName**；整个 295 KB 请求体里 'aiclient' 出现 0 次、'holiday' 出现 0 次，
+    正则 /"aiclient[A-Za-z]*"/ 命中 0 个键。
+  见 T061-wire-pi-messages.json。
+  说明：假网关回的是 Anthropic 风格 SSE，pi-messages 客户端解析不了，所以这一轮回合本身是失败/重试的
+  （网关计数一次涨了 3）。这不影响判据 —— 请求体是在任何响应处理之前落盘的。
+
+[结论] 落盘有、出网无，两边都钉住了；而且是在「adapter 不会替你丢键」的那条路上钉住的。

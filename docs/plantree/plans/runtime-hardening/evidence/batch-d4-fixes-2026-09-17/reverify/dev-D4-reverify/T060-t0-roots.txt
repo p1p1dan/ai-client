@@ -1,0 +1,6 @@
+=== t0 temp roots ===
+total 8
+drwx------ 2 ai ai 4096 Sep 17 10:25 .
+drwx------ 3 ai ai 4096 Sep 17 07:10 ..
+ls: cannot access '/home/ai/JYWAI/temporary-d4new/': No such file or directory
+defaultTemporaryPath = "" | chatAgentDefaults = undefined

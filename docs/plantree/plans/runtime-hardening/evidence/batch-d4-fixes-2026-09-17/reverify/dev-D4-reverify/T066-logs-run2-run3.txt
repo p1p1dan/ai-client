@@ -1,0 +1,23 @@
+# T066 — run 2 / run 3 日志取证（logs/aiclient-2026-09-17.log）
+
+## 6. 导入批次起止 + 每条失败一行（run 2，CLAUDE_CONFIG_DIR 指向 /tmp/t032/samples/claude-home）
+[2026-09-17 13:52:37.881] [info]  [legacy-import] Batch started: 2 session(s) from 2 requested.
+[2026-09-17 13:52:37.888] [warn]  [legacy-import] Failed claude-code session c9d0e1f2-a3b4-4c5d-8e6f-112233445566: Claude session exceeds the 67108864-byte import limit
+[2026-09-17 13:52:38.943] [warn]  [legacy-import] Failed claude-code session 0a5f2c31-7b44-4d0e-9f61-a1b2c3d4e5f6: Claude session exceeds the 4000-entry import limit
+[2026-09-17 13:52:38.944] [info]  [legacy-import] Batch done: 0 imported, 0 already imported, 2 failed.
+
+## 7. pi TUI spawn（argv 摘要，家目录折成 ~）
+[2026-09-17 13:53:34.401] [info]  [pi-tui] Spawned terminal pi-tui-65e9d704-466a-4791-9451-6a8929ee928f (generation 1): ~/code/ai-client/node_modules/electron/dist/electron ~/code/ai-client/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js --session ~/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789666361268-er5utwj.jsonl in ~/code/ai-client
+[2026-09-17 13:55:29.583] [info]  [pi-tui] Spawned terminal pi-tui-4aaa98d0-1479-4837-80cc-5bfab781e1b9 (generation 1): ~/code/ai-client/node_modules/electron/dist/electron ~/code/ai-client/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js --session ~/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789666291721-kopqqgu.jsonl in ~/code/ai-client
+[2026-09-17 14:00:01.885] [info]  [pi-tui] Spawned terminal pi-tui-8c416aab-ec88-4248-8468-3193c59a5ce1 (generation 1): ~/code/ai-client/node_modules/electron/dist/electron ~/code/ai-client/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js --session ~/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789666361268-er5utwj.jsonl in ~/code/ai-client
+
+## 8. pi TUI 退出（code=0 走 info）
+[2026-09-17 13:58:54.004] [info]  [pi-tui] Terminal pi-tui-65e9d704-466a-4791-9451-6a8929ee928f exited (code=0 signal=0)
+[2026-09-17 13:58:54.004] [info]  [pi-tui] Terminal pi-tui-4aaa98d0-1479-4837-80cc-5bfab781e1b9 exited (code=0 signal=0)
+
+## 9. run 3 / T064 的唯一一条（协议不匹配只留 bootstrap 超时，无协议线索）
+[2026-09-17 07:35:28.485] [error] Error occurred in handler for 'chat:createSession': WorkerSlotError: Worker request worker.bootstrap timed out after 60000ms
+[2026-09-17 14:06:25.904] [error] Error occurred in handler for 'chat:createSession': WorkerSlotError: Worker request worker.bootstrap timed out after 60000ms
+
+## main.log 对照：整轮点验期间新增
+main.log 起始 65611 字节 -> 现在 66856 字节；内容只有启动期的 Shared state paths 一条。

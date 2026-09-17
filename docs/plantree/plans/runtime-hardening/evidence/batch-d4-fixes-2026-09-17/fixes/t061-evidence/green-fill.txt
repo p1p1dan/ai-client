@@ -1,0 +1,14 @@
+
+ RUN  v3.2.4 /home/ai/code/ai-client
+
+stdout | src/runtime/__tests__/sessionAttachmentFill.test.ts > DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, stays writable, and still reopens
+[DEV-33] accepted sends=4 file bytes=33539942 (31.99 MiB of 32 MiB), bytes after 3 sends=25154998, refusal=session_size_limit
+
+ ✓ src/runtime/__tests__/sessionAttachmentFill.test.ts (5 tests) 1282ms
+   ✓ DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, stays writable, and still reopens  1185ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  11:52:22
+   Duration  4.30s (transform 1.27s, setup 61ms, collect 2.32s, tests 1.28s, environment 0ms, prepare 201ms)
+

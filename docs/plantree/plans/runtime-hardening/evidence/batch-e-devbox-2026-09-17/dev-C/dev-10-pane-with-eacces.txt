@@ -1,0 +1,10 @@
+
+=== pane ===
+从 Claude Code / Codex 导入历史对话
+把这台机器上的历史对话复制进本应用，进来之后可以看、也可以接着聊。原来的文件只读不改。
+ai-client
+Claude Code
+
+/home/ai/code/ai-client
+
+3 个对话

@@ -1,0 +1,3 @@
+# ps at 2026-09-17T09:48:42.733Z
+# electron main pids: (none)
+(no dev-stack process matched)

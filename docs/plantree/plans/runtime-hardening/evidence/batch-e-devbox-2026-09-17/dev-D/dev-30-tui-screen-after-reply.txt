@@ -1,0 +1,37 @@
+# xterm rendered screen — 2026-09-17T12:21:49.401Z
+======================================================================
+ escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o more
+ Press ctrl+o to show full startup help and loaded resources.
+
+ Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.
+
+
+[Context]
+  AGENTS.md
+
+[Skills]
+  docx, find-skills, pdf, plan-tree, skill-creator, xlsx
+
+
+ devD30 第一轮 GUI：回一句话
+
+
+ fake gateway ok
+
+──────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available
+ New version 0.85.1 is available. Run pi update
+ Changelog: https://pi.dev/changelog
+──────────────────────────────────────────────────────────────────────────────────────────────
+
+
+ devD30 TUI 续聊一句
+
+
+ fake gateway ok
+
+──────────────────────────────────────────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────────────────────────────────────
+~/code/ai-client (feat/runtime-evolution)
+↑24 ↓18 0.0%/200k (auto)                                              (probe-fake) fake-sonnet

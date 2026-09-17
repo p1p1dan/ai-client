@@ -1,0 +1,533 @@
+{
+  "model": "fake-sonnet",
+  "context": {
+    "systemPrompt": "You are the coding agent inside AI Client, a local-first desktop client for working in a user’s own repositories. Prefer concise, actionable answers, and use the tools available to you when they help.\n\nCollaboration: answer in the same language the user writes in. Before each batch of tool calls, write one short sentence saying what you are about to do; never leave the user with no new text for more than one tool batch or 60 seconds of work. Whatever the user asked must be answered in your visible text — your reasoning is not shown to them, so a conclusion that lives only there never reached them. Make the final message self-contained: the outcome, what you changed, and anything still open, without asking the user to re-read intermediate updates. Carry the work through end to end; when you hit a blocker, try to clear it yourself and report what you tried, instead of stopping at analysis or a half-finished change.\n\nCall tools through the native tool-call interface. Treat tool errors and denials as results to handle; do not claim an operation succeeded before its tool result confirms it.\n\nUse glob to discover files and grep for literal text search; narrow path and include to keep results bounded. read uses a one-based line offset and a line limit; follow the reported next line after truncation. When edit is available, it takes an edits array of exact, unique oldText/newText replacements. Prefer whichever of read, write and edit are available over shell file operations. bash requires the configured shell and has a time limit; never retry a failed command automatically when it may already have changed files.\n\nThe following skills provide specialized instructions for specific tasks.\nCall the `skill` tool with a skill name to load its full instructions when the task matches its description.\nWhen a skill references a relative path, resolve it against that skill directory (the parent of its location) and use the absolute path in tool calls.\n\n<available_skills>\n  <skill>\n    <name>docx</name>\n    <description>Comprehensive document creation, editing, and analysis with support for tracked changes, comments, formatting preservation, and text extraction. When Claude needs to work with professional documents (.docx files) for: (1) Creating new documents, (2) Modifying or editing content, (3) Working with tracked changes, (4) Adding comments, or any other document tasks</description>\n    <location>/home/ai/.agents/skills/docx/SKILL.md</location>\n  </skill>\n  <skill>\n    <name>find-skills</name>\n    <description>Helps users discover and install agent skills when they ask questions like &quot;how do I do X&quot;, &quot;find a skill for X&quot;, &quot;is there a skill that can...&quot;, or express interest in extending capabilities. This skill should be used when the user is looking for functionality that might exist as an installable skill.</description>\n    <location>/home/ai/.agents/skills/find-skills/SKILL.md</location>\n  </skill>\n  <skill>\n    <name>pdf</name>\n    <description>Comprehensive PDF manipulation toolkit for extracting text and tables, creating new PDFs, merging/splitting documents, and handling forms. When Claude needs to fill in a PDF form or programmatically process, generate, or analyze PDF documents at scale.</description>\n    <location>/home/ai/.agents/skills/pdf/SKILL.md</location>\n  </skill>\n  <skill>\n    <name>plan-tree</name>\n    <description>Use when project work involves planning, roadmap discussion, requirement clarification, scope negotiation, implementation strategy, execution-readiness checks, progress tracking, handoff, decision/open-question/evidence management, or maintaining a Markdown planning tree. Helps turn short-lived plans into stable docs/plantree state with registered plan roots, baseline, roadmap/status, topics, decisions, history, ideas, and plan-to-landing traceability across sessions and agents.</description>\n    <location>/home/ai/.agents/skills/plan-tree/SKILL.md</location>\n  </skill>\n  <skill>\n    <name>skill-creator</name>\n    <description>Guide for creating effective skills. This skill should be used when users want to create a new skill (or update an existing skill) that extends Claude&apos;s capabilities with specialized knowledge, workflows, or tool integrations.</description>\n    <location>/home/ai/.agents/skills/skill-creator/SKILL.md</location>\n  </skill>\n  <skill>\n    <name>xlsx</name>\n    <description>Comprehensive spreadsheet creation, editing, and analysis with support for formulas, formatting, data analysis, and visualization. When Claude needs to work with spreadsheets (.xlsx, .xlsm, .csv, .tsv, etc) for: (1) Creating new spreadsheets with formulas and formatting, (2) Reading or analyzing data, (3) Modify existing spreadsheets while preserving formulas, (4) Data analysis and visualization in spreadsheets, or (5) Recalculating formulas</description>\n    <location>/home/ai/.agents/skills/xlsx/SKILL.md</location>\n  </skill>\n</available_skills>\n\n# Project instructions\n\nThe following instructions are loaded from the workspace. Follow them when they apply to the task; where two entries conflict, the more specific file says so itself.\n\n## ~/.claude/CLAUDE.md\n\n<!-- plan-tree:instructions:start -->\n## Plan Tree Long-Term Project Management\n\nUse the installed `plan-tree` skill as the planning authority for roadmap work, requirement clarification, scope or implementation strategy, execution-readiness checks, progress tracking, handoff, decisions, open questions, and plan-to-landing evidence.\n\nBefore direction-changing implementation, inspect `docs/plantree/README.md` and the relevant current Plan when they exist. If durable planning state is needed but absent, use the skill to create only the minimal Plan Tree structure.\n\nKeep implementation and planning state synchronized: resolve core ambiguity before formal implementation, then update roadmap, status, decisions, questions, and evidence after work lands.\n\nPlan Tree governs planning state; it does not grant permission for commits, pushes, releases, destructive actions, or unrelated scope expansion.\n<!-- plan-tree:instructions:end -->\n\n## Language and Interaction Standards\n\n1. Language requirement: Reply in Simplified Chinese throughout the entire process. Except for code snippets, proprietary terms, and references to the original text, English output is not used by default.\n2. Requirement feedback (absolutely mandatory - cannot be skipped):\n   - Core workflow: User input → Error correction and organization → [If there is any ambiguity: clarification inquiry] → Requirement feedback → Automatic execution of subsequent operations.\n   - Trigger condition: After each user input, the requirement echo block is first output before any other operations can be performed, without exception.\n   - Prohibited behavior: It is strictly prohibited to execute any tool or read any file before the output requirement is displayed.\n   - Organize and standardize: Classify by theme into clear points (sections, groups), and remove redundant and ambiguous expressions.\n   - Confirmation statement: \"I understand the rules\" must be added after the echo.\n3. Input error correction:\n   - Principle: Automatically correct user input if it can be determined, and inquire if it is uncertain.\n   - Active logic correction: Actively correct based on technical context (such as \"Love\" → \"UI\", \"Function\" → \"Function\").\n   - Forced reverse confirmation: When the recognition result is illogical, ambiguous, lacks key information, or may lead to serious consequences, guessing is prohibited and confirmation must be asked back to the user.\n4. Inquiry mechanism:\n   - Must inquire:\n     - Semantic ambiguity and logical conflict.\n     - Major technical decisions: involving framework selection (such as React/Vue), architecture details (microservices/monolithic), etc.\n   - Do not inquire:\n     - Version numbers, dependency libraries, and other information that can be independently obtained from project files.\n     - Clearly inferable homophonic errors.\n5. Plain-language output (applies to every reply, not only when asked):\n   - Default register: explain things the way you would to a competent colleague who does not work on this specific code. Lead with what actually happened and what it means, then the detail.\n   - Jargon rule: a term of art is allowed only if it is either (a) already established in this conversation, or (b) explained in the same breath the first time it appears. Never let an identifier, file path, or flag name carry the meaning of a sentence by itself — say what it does, then name it.\n   - Structure over density: short paragraphs and plain sentences beat compressed clause-stacking. Do not compress three findings into one sentence to look concise.\n   - Keep the substance: plain language means fewer unexplained terms, never less information, weaker caveats, or hidden uncertainty. State what was measured and what was only inferred.\n   - Escalate on request: when asked to \"say it in plain words\" / \"说人话\", drop to everyday language with a concrete analogy where it helps, and cut the reply to the decision the user actually faces.\n\n## AGENTS.md\n\n# PROJECT KNOWLEDGE BASE\n\n**Generated:** 2026-01-13\n**Commit:** ccc93c2\n**Branch:** main\n\n## OVERVIEW\n\nAiClient 正在收敛为 Pi-only Git Worktree + AI coding desktop application。Electron 39 + React 19 + TypeScript 5.9 + Tailwind 4。当前 checkout 仍含 Claude/Codex legacy runtime，删除边界由 Pi migration T28/T35 管理。\n\n## STRUCTURE\n\n```\njyw-ai-client/\n├── src/\n│   ├── main/          # Electron 主进程 (IPC, Services, Menu)\n│   ├── preload/       # Electron 预加载脚本 (Context Bridge)\n│   ├── renderer/      # React 前端 (Components, Stores, Hooks)\n│   └── shared/        # 跨进程共享类型定义\n├── resources/         # 静态资源 (Ghostty themes 438个)\n├── scripts/           # 构建脚本 (dev.js 进程管理)\n├── docs/              # 设计文档 (design-system.md 关键)\n└── build/             # Electron Builder 图标资源\n```\n\n## WHERE TO LOOK\n\n| 任务 | 位置 | 备注 |\n|------|------|------|\n| IPC 通信 | `src/main/ipc/*.ts` | 17 个 handler 模块，按功能分离 |\n| 状态管理 | `src/renderer/stores/*.ts` | Zustand stores，settings.ts 最大(37KB) |\n| UI 组件 | `src/renderer/components/ui/` | @coss/ui 组件，52 个文件 |\n| Git 操作 | `src/main/services/git/` | simple-git 封装 |\n| 终端 | `src/main/services/terminal/` + `src/renderer/hooks/useXterm.ts` | node-pty + xterm.js |\n| Pi runtime/worker | `src/main/services/agent-host/` + `src/agent-host/` | 过渡态仍含 singleton PiHost 与 Claude/Codex；目标是 Main WorkerManager + 每槽一个隔离进程（载体按平台分：Windows 安装版随包 Node，其余 utilityProcess，见 ARD D11） |\n| 类型定义 | `src/shared/types/*.ts` | 15 个类型文件，ipc.ts 最重要 |\n| 设计规范 | `docs/design-system.md` | **UI 开发必读** |\n\n## MANDATORY REFERENCE REPOSITORIES（Pi 迁移必读）\n\nPi Backend Migration 不是从零设计。任何相关新会话、实现切片或复审必须先打开对应本地参考仓源码与测试，并明确“直接移植 / 适配移植 / 不采用”：\n\n| 仓库 | 本地路径 | 上游 | 主要用途 |\n|---|---|---|---|\n| pi-app | `/home/ai/code/pi-app` | `https://github.com/justhil/pi-app` | **WorkerManager/WorkerSlot 主参考**；Pi-native history/resume、session tree、rewind/fork、时间线与竞态测试 |\n| pix | `/home/ai/code/pix` | `https://github.com/num-scope/pix` | **Pi TUI/PTY/CLI packaging 主参考**；single-writer guard、stale output、资源提取与 terminal tests |\n\n两者均为 MIT。大量直接复制须保留对应 copyright/license notice。详细文件地图与复用规则见 `docs/plantree/plans/pi-backend-migration/topics/reference-repositories.md`。目标边界以 D14/D15 及 [ARD D11](docs/plans/2026-09-08-runtime-evolution-ard.md) 的载体修订为准：renderer → preload → Electron Main WorkerManager → bounded WorkerSlot → one isolated process/Pi AgentSession per slot；Windows 安装版用随包 Node + 原生 IPC，其余路径用 utilityProcess + MessagePort（取证见 `Windows加密环境GUI异常分析.md`）；Pi SDK 不直接进 Main，不保留额外 singleton supervisor。参考实现冲突时，以本仓已拍板产品语义、安全边界和 Cycle 1/2 已验证行为为准。\n\n## CONVENTIONS\n\n### 工具链（非标准配置）\n- **Biome** 替代 ESLint/Prettier — `biome.json` 配置\n- **Tailwind 4** 新语法 — `@theme` 块定义在 `globals.css`\n- **OKLCH 色彩空间** — 非传统 HEX/HSL\n\n### 路径别名\n```typescript\n@/*      → src/renderer/*\n@shared/* → src/shared/*\n```\n\n### 提交规范（CLAUDE.md 已定义）\n- Conventional Commits 格式\n- 描述用中文\n- `feat|fix|ci|build` 才进 Release Notes\n\n## ANTI-PATTERNS (禁止)\n\n| 禁止 | 原因 |\n|------|------|\n| `as any` / `@ts-ignore` | Biome 规则明确禁用类型逃逸 |\n| 手动实现 UI 组件 | 必须优先用 `@coss/ui`，见 `docs/design-system.md` |\n| CDN 加载 Monaco worker | CSP 限制，必须本地 worker import |\n| 直接修改 `globals.css` 主题 | 使用 Ghostty themes 同步机制 |\n\n## UNIQUE STYLES\n\n### UI 尺寸常量\n```\nTab 栏:   h-9 (36px)\n树节点:   h-7 (28px)\n小按钮:   h-6 (24px)\n缩进:     depth * 12 + 8px\n```\n\n### Flexbox 截断模式\n```tsx\n// 固定元素\n<Icon className=\"h-4 w-4 shrink-0\" />\n// 可截断文本\n<span className=\"min-w-0 flex-1 truncate\">{text}</span>\n```\n\n### 图标颜色映射\n- 目录: `text-yellow-500`\n- TypeScript: `text-blue-500`\n- JavaScript: `text-yellow-400`\n\n## RESOURCE SAFETY（当前主机强制约束）\n\n当前开发主机资源有限（约 3.3 GiB RAM，根分区约 30 GiB）。所有 Agent 必须把避免 OOM、Swap 抖动和磁盘耗尽作为硬性执行约束：\n\n1. **重任务前先检查资源**：运行 `free -h`、`df -h . /tmp`，并确认没有遗留的 `vite`、`vitest`、`tsc`、`esbuild`、Electron Builder 或 Agent Host 构建进程。\n2. **禁止并行运行重任务**：全量 Vitest、Agent Host 构建/打包、Electron 打包、全量 typecheck/lint 必须串行执行；不得放入并行 tool call，也不得同时启动多个重型子 Agent。\n3. **测试必须小批次**：优先单文件或少量相关测试，并强制 `--maxWorkers=1 --no-file-parallelism`。不得在本机直接运行一次性全量 Vitest；全量门禁应拆成多个小批次，批次之间复查资源。\n4. **本机禁止整套生产构建**：不得直接运行 `pnpm build` 或 `dist:prereq`。确需构建证据时，必须拆分 Main、Preload、Renderer/资产或 Agent Host 阶段，逐阶段执行、检查和清理；无法安全拆分时记录待由 CI/高资源主机验证，不能硬跑。\n5. **构建限制 Node 堆**：获准执行的单阶段 Node 构建默认使用 `NODE_OPTIONS=--max-old-space-size=1536`；若该上限不足，必须停止并重新评估，不能直接无上限重跑。\n6. **每个批次后复查并清理**：确认进程已退出，检查 RAM/Swap/磁盘；及时删除临时 probe、失败的临时打包目录和不再需要的大型产物，但不得删除需要验证或属于用户的文件。\n7. **资源不足时不得硬跑**：可先执行静态检查、进一步拆分测试或记录待验证项；不能用并行或反复重试的方式把主机拖垮。\n\n## COMMANDS\n\n```bash\n# 开发\npnpm dev              # electron-vite dev (自定义 scripts/dev.js 包装)\n\n# 构建\npnpm build            # electron-vite build\npnpm build:mac        # 构建 macOS (签名+公证)\npnpm build:win        # 构建 Windows\npnpm build:linux      # 构建 Linux\n\n# 质量检查\npnpm typecheck        # tsc --noEmit\npnpm lint             # biome check\npnpm lint:fix         # biome check --write\n```\n\n## NOTES\n\n- **有自动化测试** — Vitest 覆盖 main/renderer/agent-host contracts 与纯逻辑；当前低资源主机必须小批串行运行\n- **原生模块** — `node-pty`, `@parcel/watcher` 需 `postinstall` 编译\n- **Settings Store 巨大** — `settings.ts` 37KB，修改前仔细阅读结构\n- **Claude IDE Bridge** — `src/main/services/claude/ClaudeIdeBridge.ts` 是 MCP 集成核心\n- **进程清理** — `scripts/dev.js` 处理 SIGINT/SIGTERM，确保 PTY 正确退出\n\nMode: agent. Execute the approved work with the available tools, under the selected permission gear.\n\nPermission gear: ask. Writes, edits and shell calls require approval. Wait for the tool result. Never bypass a denied tool or path by switching tools.",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "T061 复验一：带附件的一条（文件目录路线）"
+          },
+          {
+            "type": "image",
+            "data": "<266668 chars elided>",
+            "mimeType": "image/png"
+          }
+        ],
+        "timestamp": 1789673443853
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "fake gateway ok"
+          }
+        ],
+        "api": "anthropic-messages",
+        "provider": "probe-fake",
+        "model": "fake-sonnet",
+        "usage": {
+          "input": 12,
+          "output": 9,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 21,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          },
+          "cacheWrite1h": 0
+        },
+        "stopReason": "stop",
+        "timestamp": 1789673443890,
+        "responseId": "msg_a91bb9be-2610-4ba6-b16d-d9428ef6bd43",
+        "rawStopReason": "end_turn"
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "T061 复验二：重开会话后的纯文本一条"
+          }
+        ],
+        "timestamp": 1789673529417
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "fake gateway ok"
+          }
+        ],
+        "api": "anthropic-messages",
+        "provider": "probe-fake",
+        "model": "fake-sonnet",
+        "usage": {
+          "input": 12,
+          "output": 9,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 21,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          },
+          "cacheWrite1h": 0
+        },
+        "stopReason": "stop",
+        "timestamp": 1789673529427,
+        "responseId": "msg_1415b0b0-97ab-4ae0-88aa-4708f8212aed",
+        "rawStopReason": "end_turn"
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "T061 复验三：pi-messages 原样透传路线"
+          }
+        ],
+        "timestamp": 1789673588458
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "fake gateway ok"
+          }
+        ],
+        "api": "anthropic-messages",
+        "provider": "probe-fake",
+        "model": "fake-sonnet",
+        "usage": {
+          "input": 12,
+          "output": 9,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 21,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          },
+          "cacheWrite1h": 0
+        },
+        "stopReason": "stop",
+        "timestamp": 1789673588460,
+        "responseId": "msg_2fcb9cc8-63db-420b-a3c5-03b0d295b8c1",
+        "rawStopReason": "end_turn"
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "T061 复验三：pi-messages 原样透传路线"
+          }
+        ],
+        "timestamp": 1789673860549
+      }
+    ],
+    "tools": [
+      {
+        "name": "ask",
+        "label": "Ask",
+        "description": "Ask the user to choose between options when the decision is genuinely theirs and you cannot settle it from the request, the code, or a sensible default. Each question needs 2-4 options. Blocks until the user answers or skips.",
+        "parameters": {
+          "type": "object",
+          "required": ["questions"],
+          "properties": {
+            "questions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["question", "options"],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "header": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "options": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["label"],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "description": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "minItems": 2,
+                    "maxItems": 4
+                  },
+                  "multiSelect": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 4
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "browser_preview",
+        "label": "Browser Preview",
+        "description": "Show a workspace HTML or SVG page in the app preview window. The preview reloads by itself when you edit the file, so call this once per page rather than after every change. Does not take focus unless you ask it to.",
+        "parameters": {
+          "type": "object",
+          "required": ["path"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "description": "Workspace page to preview (.html, .htm or .svg)."
+            },
+            "focus": {
+              "type": "boolean",
+              "description": "Bring the preview to the front. Leave false while working in the background so you do not steal focus from the user."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "read",
+        "label": "Read",
+        "description": "Read a UTF-8 file. offset is a one-based line number; limit is the number of lines. Output is capped at 50 KiB. Use nextOffset to continue.",
+        "parameters": {
+          "type": "object",
+          "required": ["path"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "write",
+        "label": "Write",
+        "description": "Write a complete UTF-8 file. Creates missing parent directories after approval.",
+        "parameters": {
+          "type": "object",
+          "required": ["path", "content"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "content": {
+              "type": "string",
+              "maxLength": 8388608
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "edit",
+        "label": "Edit",
+        "description": "Replace one exact occurrence of oldText with newText. All edits must match uniquely before writing.",
+        "parameters": {
+          "type": "object",
+          "required": ["path", "edits"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "edits": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["oldText", "newText"],
+                "properties": {
+                  "oldText": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "newText": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 100
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "bash",
+        "label": "Bash",
+        "description": "Execute a command with the configured shell in the workspace. Output is bounded. Runtime is bounded too: 120s unless you name a longer one with timeoutSeconds, which a build or a full test run will need.",
+        "parameters": {
+          "type": "object",
+          "required": ["command"],
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32768
+            },
+            "timeoutSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 21600
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 600000
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "glob",
+        "label": "Glob",
+        "description": "Find files using a glob pattern. A pattern without \"/\" matches a file name at any depth, so *.ts finds src/a.ts. Skips symlinks, .git and node_modules; does not read file contents.",
+        "parameters": {
+          "type": "object",
+          "required": ["pattern"],
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "grep",
+        "label": "Grep",
+        "description": "Search UTF-8 files for text. Literal by default; set regex:true to treat pattern as a JavaScript regular expression. include is a glob; without \"/\" it matches a file name at any depth, so *.ts covers src/a.ts. Skips symlinks, .git, node_modules, binary files and denied paths; bounded to 1 MiB per file.",
+        "parameters": {
+          "type": "object",
+          "required": ["pattern"],
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "include": {
+              "type": "string",
+              "maxLength": 512
+            },
+            "caseInsensitive": {
+              "type": "boolean"
+            },
+            "regex": {
+              "type": "boolean"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "skill",
+        "label": "Skill",
+        "description": "Load the full instructions of one skill listed in <available_skills>. Takes the skill name, not a path.",
+        "parameters": {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "new_context",
+        "label": "New Context",
+        "description": "Start a new context window. Does not clear, reset, or otherwise affect environment state.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "Task",
+        "label": "Task",
+        "description": "Start one subagent in the background and return immediately; you keep working while it runs, then converge with TaskWait when you need its report.\n\nUse it when the work is separable: parallel exploration of independent directions (one Task per direction in the same assistant message), a multi-file implementation with a complete spec (fixer), an adversarial read-only review of a change you just made (code-reviewer), or a wide search / long log / multi-file survey whose intermediate output would otherwise fill this context (explorer, test-runner).\n\nDo not delegate what you can finish in a couple of tool calls, and do not delegate anything that needs the user — a subagent cannot ask a question or propose a plan on your behalf.\n\n`task` is the delegate's only instruction. It cannot see this conversation, and you cannot correct it while it runs, so state the goal, the paths and facts it cannot infer, and exactly what to report back.\n\nTo run delegates concurrently, emit several Task calls in one assistant message. A message that mixes Task with any other tool runs one call at a time. You may keep working or talk to the user while they run; the runtime delivers their reports when they finish. Call TaskStop only to cancel.\n\nAvailable subagents:\n- explorer (tools: Read, Glob, Grep, Bash): Fast codebase search and pattern matching — find files, locate implementations and answer \"where is X?\" / \"how does Y work?\". Use when answering needs a sweep over many files and you only want the conclusion.\n- code-reviewer (tools: Read, Glob, Grep): Review specific code or a specific change for defects. Use for a second opinion on correctness, edge cases and missing tests before you commit.\n- test-runner (tools: Read, Glob, Grep, Bash): Run a specific test or build command and report what failed and why. Use when a command's output is long and only the failures matter.\n- fixer (tools: Read, Glob, Grep, Edit, Write, Bash): Implement a complete multi-file change from a spec. Use when a feature or fix spans several files and the work is separable — it can write files inside the workspace while you keep working.",
+        "parameters": {
+          "type": "object",
+          "required": ["agent", "task"],
+          "properties": {
+            "agent": {
+              "type": "string",
+              "description": "Name of the subagent to run: explorer, code-reviewer, test-runner, fixer."
+            },
+            "task": {
+              "type": "string",
+              "description": "The complete brief: goal, context the delegate cannot infer, and the exact report you want back."
+            },
+            "description": {
+              "type": "string",
+              "description": "Short label for this delegation (3-6 words), shown to the user."
+            },
+            "model": {
+              "type": "string",
+              "description": "Override the delegate's model for this run, as `provider/model`. Omit to use the subagent's default."
+            }
+          },
+          "additionalProperties": false
+        },
+        "executionMode": "parallel"
+      },
+      {
+        "name": "TaskWait",
+        "label": "Task Wait",
+        "description": "Wait for one or more subagents started by Task and return their reports. `delegationIds` defaults to every running subagent; use mode \"any\" with `minCompleted` to converge as soon as the first (or first N) finish. Settled delegations return immediately, so re-reading a report by id is cheap. A wait timeout is not a failure: unfinished delegates keep working and the runtime delivers their reports when they finish.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "delegationIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "Delegation ids returned by Task."
+              },
+              "description": "Defaults to all running subagents. At most 50.",
+              "maxItems": 50
+            },
+            "mode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "all"
+                },
+                {
+                  "type": "string",
+                  "const": "any"
+                }
+              ],
+              "description": "Wait for every target (all) or the first to finish (any)."
+            },
+            "minCompleted": {
+              "type": "number",
+              "minimum": 1,
+              "description": "With mode \"any\": wait until at least this many finished."
+            },
+            "timeoutSeconds": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 900,
+              "description": "Max seconds to wait; defaults to 600."
+            }
+          },
+          "additionalProperties": false
+        },
+        "executionMode": "sequential"
+      },
+      {
+        "name": "TaskList",
+        "label": "Task List",
+        "description": "List the subagents started by Task in this session with their status. Use it to check progress without waiting, or before TaskStop to choose what to stop.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "executionMode": "sequential"
+      },
+      {
+        "name": "TaskStop",
+        "label": "Task Stop",
+        "description": "Stop one or more running subagents. `delegationIds` defaults to every running subagent. Stopped subagents report as stopped; their partial work is lost.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "delegationIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "Delegation ids returned by Task."
+              },
+              "description": "Defaults to all running subagents. At most 50.",
+              "maxItems": 50
+            }
+          },
+          "additionalProperties": false
+        },
+        "executionMode": "sequential"
+      }
+    ]
+  },
+  "options": {
+    "reasoning": "medium"
+  }
+}

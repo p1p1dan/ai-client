@@ -1,0 +1,13 @@
+# 2026-09-17 dev-A1：在 main.log / 按天日志里找 scratch / session-index 相关行的结果
+# main.log 与 logs/aiclient-2026-09-17.log 里都没有任何匹配行。
+# 原因：dev 模式下 electron-log 的 transport 只把 'Shared state paths' 这类启动行写进这两个文件，
+#      ScratchWorkspaceService / SessionIndexService 的 console.* 输出走的是进程 stdout，被 scripts/dev.js 收进 dev.log，
+#      而 dev.log 每次启动都是 'w' 模式重开，前几次启动的内容已被覆盖。
+
+$ grep -cE 'scratch|unbound-sessions|session-index|corrupt|staged' logs/main.log
+0
+
+$ grep -cE 'scratch|unbound-sessions|session-index|corrupt|staged' logs/aiclient-2026-09-17.log
+0
+
+# 最后一次启动（DEV-7 那次）的 dev.log 里与索引 / scratch 相关的行：

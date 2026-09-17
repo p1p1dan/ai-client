@@ -1,0 +1,6 @@
+# fast argv catcher (pre-title-rewrite) — 2026-09-17T12:58:00.867Z
+# needle=pi-coding-agent/dist/bundle/cli.js; window=40s; hits=1
+### pid=447833 at=2026-09-17T12:57:22.898Z argvBytes=148
+    argv[0]=/home/ai/code/ai-client/node_modules/electron/dist/electron
+    argv[1]=/home/ai/code/ai-client/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js
+    hasSession=false sessionFile=null

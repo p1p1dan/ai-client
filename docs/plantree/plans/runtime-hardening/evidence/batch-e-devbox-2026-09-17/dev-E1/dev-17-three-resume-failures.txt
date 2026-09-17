@@ -1,0 +1,71 @@
+# dev item 17 (ah-lib-03) — three resume failures, actual Chinese copy vs the English keys in the criterion
+# T032 batch E1, 2026-09-17, dev profile (~/.config/jyw-ai-client-dev), HEAD b3d751e3
+# Fixtures were built by cloning a real session JSONL
+# (sessions/session-1789647839178-q40z4vd.jsonl, 6 rows) and adding one index row each.
+
+== (1) 65 unparseable rows in the MIDDLE of the file ==
+fixture : sessions/session-e117a-corrupt.jsonl (71 rows, 5653 B) — 65 non-JSON rows spliced
+          between entry 4 and the first user message, one more than MAX_SKIPPED_ROWS = 64
+          (codec.ts:50, refusal at codec.ts:451)
+store   : historyErrors["session-e117a-corrupt"] =
+          "session_file_corrupt: Error invoking remote method 'chat:resumeSession':
+           WorkerSlotError: session_invalid: more than 64 unparseable rows, first at line 5"
+card    : 会话历史已损坏
+          Pi 会话文件不是有效会话，应用没有修改或替换原文件。
+          请保留原文件用于恢复；新建会话后再继续工作。
+          [详情]
+buttons : only 「详情」 (a details disclosure). NO retry button — matches retryable:false.
+keys    : title 'Session history is damaged' (i18n.ts:2720) /
+          continuationHint 'Keep the original file for recovery; start a new chat to carry on.'
+verdict : the criterion's "Session history is damaged（不可重试）" — MET.
+note    : the composer itself is NOT disabled. With text typed, [aria-label="发送消息"] is
+          enabled, so the user can still press send even though the card says to start a new chat.
+
+== (2) session file deleted, index row kept ==
+fixture : index row session-e117b-missing with runtimeIdentity pointing at a deleted JSONL,
+          AND a piLeaf block (copied from the source session).
+store   : historyErrors["session-e117b-missing"] =
+          "jsonl_not_found: Error invoking remote method 'chat:resumeSession':
+           WorkerSlotError: ENOENT: ENOENT: no such file or directory, realpath
+           '/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-e117b-missing.jsonl'"
+card    : 未找到历史
+          恢复该会话时没有找到它的历史记录，历史消息没有载入。
+          该会话已无法继续：历史记录缺失后，继续发送会失败；请新建会话继续工作。
+          [详情]
+buttons : only 「详情」. No retry.
+keys    : title 'History not found' (i18n.ts:2668) /
+          HISTORY_ERROR_DEAD_SESSION_HINT 'This chat cannot continue...' (i18n.ts:2768-2769)
+verdict : the criterion's "History not found（此对话无法继续）" — MET.
+disk    : the file was NOT recreated; sessions/ still has no session-e117b-missing.jsonl.
+
+== (2') the piLeaf trap (first attempt, recorded because it changes how this row must be built) ==
+The first fixture had NO piLeaf. Selecting it produced NO error card at all: the timeline said
+"No messages yet." and the worker came up bound. Cause is by design, not a fault:
+src/main/ipc/chat.ts:449 calls isUnwrittenPiSession(row) (chat.ts:67-74), which returns true when
+the row has a runtimeIdentity, NO piLeaf, and the file does not stat — i.e. "a phantom identity
+for a session pi never wrote". That branch takes the "repair, not resume" path: it clears the
+runtimeIdentity and calls createSession, and because the worker names a new file
+<agentDir>/sessions/<logicalSessionId>.jsonl (nativeWorkerRuntime.ts:994-996) the brand-new file
+lands on exactly the same path. Observed: a fresh 188-byte header with a NEW session uuid
+(83ca5185-…), created at the moment of the click.
+=> a fixture for jsonl_not_found MUST carry piLeaf, otherwise it exercises the repair path.
+
+== (3) workspace path changed ==
+fixture : sessions/session-e117c-cwd.jsonl, header row's cwd rewritten to /home/ai/code/test
+          while the index row still says workspacePath /home/ai/code/ai-client
+          (store.ts:217-220 compares document.header.cwd against realpath(config.cwd))
+store   : historyErrors["session-e117c-cwd"] =
+          "session_cwd_mismatch: Error invoking remote method 'chat:resumeSession':
+           WorkerSlotError: session_cwd_mismatch: resume cwd differs from the session workspace"
+card    : 该会话属于另一个工作区
+          Pi 会话记录的工作区与当前仓库不一致，因此已拒绝静默重绑。
+          请从该会话原本的工作区打开，或新建会话继续。
+          [详情]
+buttons : only 「详情」. No retry.
+keys    : title 'Session belongs to another workspace' (i18n.ts:2719)
+verdict : the criterion's "Session belongs to another workspace" — MET.
+
+== control ==
+None of the three fell back to 'Failed to read history' / 「读取历史失败」 (retryable:true,
+HISTORY_ERROR_NON_FATAL_HINT 「会话未中断，可以继续发送消息。」). The three专属 branches that
+ah-lib-03 was written for are all reachable and each produced its own copy.

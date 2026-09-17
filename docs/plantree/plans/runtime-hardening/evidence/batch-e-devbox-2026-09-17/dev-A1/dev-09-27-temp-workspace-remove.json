@@ -1,0 +1,156 @@
+{
+  "dev09Criterion": "用侧栏删除一个临时工作区目录后，其下的聊天是否从侧栏静默消失，而索引行仍在",
+  "dev27Criterion": "temp:workspace:remove 只删临时基目录的直接子目录，删不到 unbound-sessions/ 下的 scratch 目录",
+  "chain": "侧栏临时行第三个按钮（aria-label=\"Delete\"）→ 确认框 → App.tsx handleRemoveTempWorkspace → electronAPI.tempWorkspace.remove(path, basePath) = temp:workspace:remove",
+  "tempWorkspaceSessionId": "session-1789638198463-hg6l2wz",
+  "tempWorkspaceDir": "/home/ai/JYWAI/temporary/20260917-054356",
+  "scratchSessionId": "session-1789638144347-jr9q88j",
+  "scratchDir": "/home/ai/JYWAI/temporary/unbound-sessions/4e6b46a9-c79d-4788-8589-71daa4be606e",
+  "rowButtons": [
+    {
+      "aria": "Archive session",
+      "title": "Archive",
+      "text": ""
+    },
+    {
+      "aria": "Close session",
+      "title": "Close",
+      "text": ""
+    },
+    {
+      "aria": "删除",
+      "title": "删除",
+      "text": ""
+    }
+  ],
+  "deleteConfirmation": {
+    "text": "删除临时会话？\n\n此操作将删除该临时会话目录及其内容。\n\n取消\n删除",
+    "buttons": ["取消", "删除"]
+  },
+  "before": {
+    "label": "删除前",
+    "at": "2026-09-17T09:45:00.083Z",
+    "tempBaseDirectChildren": ["20260917-054356", "unbound-sessions"],
+    "tempWorkspaceDir": {
+      "path": "/home/ai/JYWAI/temporary/20260917-054356",
+      "exists": true,
+      "entries": [".git"]
+    },
+    "scratchRoot": {
+      "path": "/home/ai/JYWAI/temporary/unbound-sessions",
+      "entries": ["4e6b46a9-c79d-4788-8589-71daa4be606e"]
+    },
+    "scratchDir": {
+      "path": "/home/ai/JYWAI/temporary/unbound-sessions/4e6b46a9-c79d-4788-8589-71daa4be606e",
+      "exists": true,
+      "entries": []
+    },
+    "tempSessionIndexRow": {
+      "sessionId": "session-1789638198463-hg6l2wz",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789638198463-hg6l2wz.jsonl",
+      "piLeaf": {
+        "activeEntryId": "58a703c8-38fe-4227-8d29-94e4f7dec0b0",
+        "fileTailEntryId": "58a703c8-38fe-4227-8d29-94e4f7dec0b0"
+      },
+      "agent": "pi",
+      "workspacePath": "/home/ai/JYWAI/temporary/20260917-054356",
+      "title": "devA1TEMPWS 回一个字：丙",
+      "model": "maxapi/grok-4.6",
+      "updatedAt": 1789638255528,
+      "archived": false
+    },
+    "scratchSessionIndexRow": {
+      "sessionId": "session-1789638144347-jr9q88j",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789638144347-jr9q88j.jsonl",
+      "piLeaf": {
+        "activeEntryId": "0325e601-a700-487d-83fd-8286a9303b28",
+        "fileTailEntryId": "0325e601-a700-487d-83fd-8286a9303b28"
+      },
+      "agent": "pi",
+      "unbound": true,
+      "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/4e6b46a9-c79d-4788-8589-71daa4be606e",
+      "title": "devA1SCRATCH 回一个字：乙",
+      "model": "maxapi/grok-4.6",
+      "updatedAt": 1789638166969,
+      "archived": false
+    }
+  },
+  "after": {
+    "label": "删除后（未重启）",
+    "at": "2026-09-17T09:45:10.248Z",
+    "tempBaseDirectChildren": ["unbound-sessions"],
+    "tempWorkspaceDir": {
+      "path": "/home/ai/JYWAI/temporary/20260917-054356",
+      "exists": false,
+      "entries": {
+        "missing": true,
+        "code": "ENOENT"
+      }
+    },
+    "scratchRoot": {
+      "path": "/home/ai/JYWAI/temporary/unbound-sessions",
+      "entries": ["4e6b46a9-c79d-4788-8589-71daa4be606e"]
+    },
+    "scratchDir": {
+      "path": "/home/ai/JYWAI/temporary/unbound-sessions/4e6b46a9-c79d-4788-8589-71daa4be606e",
+      "exists": true,
+      "entries": []
+    },
+    "tempSessionIndexRow": {
+      "sessionId": "session-1789638198463-hg6l2wz",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789638198463-hg6l2wz.jsonl",
+      "piLeaf": {
+        "activeEntryId": "58a703c8-38fe-4227-8d29-94e4f7dec0b0",
+        "fileTailEntryId": "58a703c8-38fe-4227-8d29-94e4f7dec0b0"
+      },
+      "agent": "pi",
+      "workspacePath": "/home/ai/JYWAI/temporary/20260917-054356",
+      "title": "devA1TEMPWS 回一个字：丙",
+      "model": "maxapi/grok-4.6",
+      "updatedAt": 1789638255528,
+      "archived": false
+    },
+    "scratchSessionIndexRow": {
+      "sessionId": "session-1789638144347-jr9q88j",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789638144347-jr9q88j.jsonl",
+      "piLeaf": {
+        "activeEntryId": "0325e601-a700-487d-83fd-8286a9303b28",
+        "fileTailEntryId": "0325e601-a700-487d-83fd-8286a9303b28"
+      },
+      "agent": "pi",
+      "unbound": true,
+      "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/4e6b46a9-c79d-4788-8589-71daa4be606e",
+      "title": "devA1SCRATCH 回一个字：乙",
+      "model": "maxapi/grok-4.6",
+      "updatedAt": 1789638166969,
+      "archived": false
+    }
+  },
+  "sidebarBefore": {
+    "done": true,
+    "total": 99,
+    "tempSession": {
+      "id": "session-1789638198463-hg6l2wz",
+      "title": "devA1TEMPWS 回一个字：丙",
+      "workspaceId": "ws:temp:/home/ai/jywai/temporary/20260917-054356",
+      "archived": null
+    },
+    "scratchSession": null,
+    "tempWorkspaces": [
+      {
+        "id": "ws:temp:/home/ai/jywai/temporary/20260917-054356",
+        "path": "/home/ai/JYWAI/temporary/20260917-054356"
+      }
+    ],
+    "renderedHasTempTitle": true
+  },
+  "sidebarAfter": {
+    "done": true,
+    "total": 98,
+    "tempSession": null,
+    "scratchSession": null,
+    "tempWorkspaces": [],
+    "renderedHasTempTitle": false
+  },
+  "indexRowCountAfter": 113
+}

@@ -1,0 +1,7 @@
+# piTui.onData raw capture — 2026-09-17T13:01:01.950Z
+# bytes=145 chunks=1 terminalIds=["pi-tui-e9769376-5f35-452d-9fcb-8eac25e62e0d"]
+# exits=[{"t":1789650028825,"e":{"terminalId":"pi-tui-e9769376-5f35-452d-9fcb-8eac25e62e0d","exitCode":1,"signal":0,"sessionFile":"/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-devd32-missing-model.jsonl"}}]
+# states=[{"t":1789649842902,"e":{"terminalId":"pi-tui-fe29b4ea-b41d-4b0a-b137-dcc13cce7ba3","state":"live"}},{"t":1789649842958,"e":{"terminalId":"pi-tui-fe29b4ea-b41d-4b0a-b137-dcc13cce7ba3","state":"live"}},{"t":1789649994341,"e":{"terminalId":"pi-tui-fe29b4ea-b41d-4b0a-b137-dcc13cce7ba3","state":"dead"}},{"t":1789650028452,"e":{"terminalId":"pi-tui-e9769376-5f35-452d-9fcb-8eac25e62e0d","state":"live"}},{"t":1789650028502,"e":{"terminalId":"pi-tui-e9769376-5f35-452d-9fcb-8eac25e62e0d","state":"live"}},{"t":1789650028825,"e":{"terminalId":"pi-tui-e9769376-5f35-452d-9fcb-8eac25e62e0d","state":"dead"}}]
+======================================================================
+[31mError: Session file is not a valid pi session: /home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-devd32-missing-model.jsonl[39m
+

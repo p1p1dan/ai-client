@@ -1,0 +1,8 @@
+### pi-TUI process scan item30-tui-open 2026-09-17T08:20:28-04:00
+--- pid=395037 ppid=394488 rss=125932 kB started=2026-09-17 08:17:12.694357010 -0400
+    exe=/home/ai/code/ai-client/node_modules/electron/dist/electron
+    cwd=/home/ai/code/ai-client
+    PI_CODING_AGENT_DIR=/home/ai/.pilab/jyw-ai-client-dev/pi-agent
+    cmdline='pi' argvBytes=246
+    argvBytes>=200 => argv carried a --session <path> (148 B is the bare <electron> <cli.js> form)
+### total pi TUI processes: 1

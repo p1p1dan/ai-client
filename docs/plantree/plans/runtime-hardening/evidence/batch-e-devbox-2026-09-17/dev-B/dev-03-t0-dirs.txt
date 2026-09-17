@@ -1,0 +1,21 @@
+=== DEV-3 t0 (before app start) 2026-09-17T06:42:29-04:00 ===
+--- main dir: /home/ai/.pilab/jyw-ai-client-dev/pi-agent/subagents
+total 8
+drwxrwxr-x 2 ai ai 4096 Sep 17 06:42 .
+drwx------ 7 ai ai 4096 Sep 17 06:42 ..
+--- compat root: /home/ai/.agents/subagents
+total 12
+drwxrwxr-x 2 ai ai 4096 Sep 17 06:42 .
+drwxr-xr-x 4 ai ai 4096 Sep 17 06:42 ..
+-rw-rw-r-- 1 ai ai  210 Sep 17 06:42 probe-compat.md
+--- content of compat probe-compat.md
+---
+name: probe-compat
+description: DEV-3 ORIGINAL DESCRIPTION compat-root delete semantics probe.
+tools: read, grep
+permission: ask
+maxTurns: 3
+---
+You are a throwaway probe subagent for checklist item DEV-3.
+--- md5
+8e9781ca1d69149c5ba4f5e7da7e5705  /home/ai/.agents/subagents/probe-compat.md

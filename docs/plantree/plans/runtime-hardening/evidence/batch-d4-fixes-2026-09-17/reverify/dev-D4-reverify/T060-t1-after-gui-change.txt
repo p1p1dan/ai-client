@@ -1,0 +1,23 @@
+=== T060 DEV-2 after GUI change + send (13:25) ===
+setting: /home/ai/JYWAI/temporary-d4new
+--- new root ---
+/home/ai/JYWAI/temporary-d4new/:
+total 12
+drwxrwxr-x 3 ai ai 4096 Sep 17 13:25 .
+drwx------ 4 ai ai 4096 Sep 17 13:24 ..
+drwx------ 3 ai ai 4096 Sep 17 13:25 unbound-sessions
+
+/home/ai/JYWAI/temporary-d4new/unbound-sessions:
+total 12
+drwx------ 3 ai ai 4096 Sep 17 13:25 .
+drwxrwxr-x 3 ai ai 4096 Sep 17 13:25 ..
+drwx------ 2 ai ai 4096 Sep 17 13:25 e5c490bd-3f6a-4809-a308-88ec4b08ec40
+
+/home/ai/JYWAI/temporary-d4new/unbound-sessions/e5c490bd-3f6a-4809-a308-88ec4b08ec40:
+total 8
+drwx------ 2 ai ai 4096 Sep 17 13:25 .
+drwx------ 3 ai ai 4096 Sep 17 13:25 ..
+--- old root ---
+total 8
+drwx------ 2 ai ai 4096 Sep 17 10:25 .
+drwx------ 4 ai ai 4096 Sep 17 13:24 ..

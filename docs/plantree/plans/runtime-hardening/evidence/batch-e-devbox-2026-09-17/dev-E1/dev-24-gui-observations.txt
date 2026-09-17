@@ -1,0 +1,62 @@
+# dev item 24 (F4) — GUI feel during retries and after the budget runs out
+# T032 batch E1, 2026-09-17. Local fake gateway only; no real provider was contacted.
+
+Budget under test (src/runtime/plugins/agent-loop/providerRetry.ts:52-62):
+PROVIDER_RETRY_DELAYS_MS = [3000, 10000, 30000], PROVIDER_TRANSIENT_MAX_RETRIES = 3
+=> four attempts, 43 s of waiting. Both halves matched that exactly (see the gateway log below).
+
+== half 1: --plan retry-503 (two 503s, then success) ==
+Per-tick timeline text: dev-24-retry-log.json (20 ticks, 1 s apart).
+
+ +0.0s  正在发送… / 正在启动 Agent Host… · 0s
+ +1.9s  timeline banner: "Upstream error 503 — retrying 1/3, the turn is still running" [Details]
+        composer status line: 正在重试 · 1/3 · 3 秒后重试 · 0s
+ +4.9s  banner: "Upstream error 503 — retrying 2/3, …"  status: 正在重试 · 2/3 · 10 秒后重试 · 0s
+ +15.3s banner gone, assistant reply "fake gateway ok" rendered, turn complete.
+
+=> "重试期间时间线出现重试提示" — MET. The banner is a real timeline row
+   (MessageTimeline.tsx:1710 `<RetryBanner>`), with a spinning icon, the attempt counter and a
+   Details disclosure; the composer carries a second, independent countdown line.
+
+Copy note: the banner title and the "Details" summary are hardcoded English string templates
+(retryBanner.ts:107-108, MessageTimeline.tsx:1838) and never pass through `t()`, while the
+composer's own line right below it is Chinese. See defect D21.
+
+== half 2: --plan retry-503-forever (every attempt 503, message carries FAKE_GATEWAY_OVERLOADED_MARKER) ==
+Per-tick timeline text: dev-24-forever-log.json (27 ticks, 2 s apart).
+
+ +2s  … 1/3 · 3 秒后重试
+ +6s  … 2/3 · 10 秒后重试
+ +16s … 3/3 · 29 秒后重试   (counts down to · 1 秒后重试 at +44s)
+ +46s banner gone, error block rendered:
+
+   Error: 503 {"type":"error","error":{"type":"overloaded_error","message":"FAKE_GATEWAY_OVERLOADED_MARKER fake overloaded #4"}}
+
+=> "预算耗尽后错误卡文案完整可读且带网关原文" — MET.
+   The gateway's own body is reproduced verbatim, marker included.
+   Readability measured, not eyeballed: the block is
+   `mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10
+    px-2 py-1.5 font-mono text-code text-destructive whitespace-pre-wrap break-all`
+   → font-size 12px, white-space pre-wrap, word-break break-all, max-height 112px,
+   scrollHeight 47px == clientHeight 47px, scrollWidth 718 == clientWidth 718.
+   Nothing is clipped and nothing needs scrolling.
+
+Lighter observation (not counted as a defect): what the user gets is ONLY that mono block —
+there is no `role="alert"` card around it, no title, no next-step sentence and no retry button,
+unlike the history-error cards in item 17. Whether a bare upstream JSON body is the intended
+final surface for an exhausted retry budget is a product call.
+
+== where the retries are visible ==
+trace (AICLIENT_RUNTIME_TRACE_DIR=/tmp/t032/trace-e1, runs.jsonl) — full record:
+  {"event":"provider_retry","code":"PROVIDER_ERROR","attempt":1,"delay_ms":3000,"providerStatus":503}
+  {"event":"provider_retry","code":"PROVIDER_ERROR","attempt":2,"delay_ms":10000,"providerStatus":503}
+  (half 2 adds attempt 3, delay_ms 30000)
+main.log / aiclient-2026-09-17.log / dev.js stdout — grep -icE 'provider_retry|overloaded' = 0 / 0 / 0.
+So a retry storm leaves no trace in any log that is on by default; the trace dir has to be
+exported before launch. Same family as D4 / D8 / D10 / D14.
+
+== fake gateway request log (proves the 4-attempt / 3+10+30 s shape) ==
+13:35:12.106 seq 1 503
+13:35:15.127 seq 2 503   (+3.0 s)
+13:35:25.140 seq 3 503   (+10.0 s)
+13:35:55.150 seq 4 503   (+30.0 s)  -> budget exhausted, no seq 5

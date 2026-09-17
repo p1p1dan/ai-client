@@ -1,0 +1,40 @@
+# T064 回炉 —— createSession 失败时载荷的去处（2026-09-17 第二轮复验）
+#
+# 制造方式与批次 B 相同：应用起好之后把 src/shared/types/workerRpc.ts:50 的
+# WORKER_RPC_PROTOCOL_VERSION 从 1 改成 2。实测 out/main/index.js 仍是 1（electron-vite
+# 没有因此重建 main、也没有重启应用），dev 模式下 worker 现读源码，于是两侧版本不一致，
+# Main 静默丢弃 worker 的响应，worker.bootstrap 卡满 60 秒超时。
+
+[主判据：等待期间往输入框打了一个字]
+  新建对话 → paste 一张 195.3 KB 的 r2-holiday.png → 打一句「T064 复验：等待期间我会再打一个字」→ 发送（15:42:19）
+  → 15:42:34（发送后 15 秒，仍在 60 秒等待窗口内）往输入框打一个字符 "X"
+  → 15:43:58 超时之后：
+     textarea.value 仍是 **"X"**（用户自己打的那个字没有被覆盖）
+     附件条已清空（attachChip=false）
+     出现重发按钮，aria-label / title = **"Retry last message (1 file)"** ← 附件计数在里面
+     错误照旧可见：Error: … WorkerSlotError: Worker request worker.bootstrap timed out after 60000ms
+  截图 T064-legA-retry-armed.png
+  ⇒ 这正是回炉要补的那条：恢复被拒绝时回落到 ↺，载荷不再无家可归。
+
+[载荷完整性，端到端确认]
+  把 workerRpc.ts 改回 1（sha256 校回 ea9ebf9e…），再点那颗 ↺ → 会话真的建起来并发出去了。
+  假网关落盘的请求体 req-014.json（293,614 字节）里：
+    user 消息 = [ text "T064 复验：等待期间我会再打一个字", image(cache_control/source/type) ]
+  原文与那张图一起重发，一个都没丢。
+
+[反向的那一半：等待期间不碰输入框]
+  重新把常量改成 2 → 新建对话 → paste 同一张图 → 打一句「T064 对照：等待期间我一个字都不打」→ 发送（15:45:25）
+  → 全程不碰输入框 → 15:46:55 超时之后：
+     textarea.value = "T064 对照：等待期间我一个字都不打"（原文回到输入框）
+     附件条回来了（attachChip=true）
+     重发按钮 **没有出现**（retryButtons 为空数组）
+  截图 T064-legB-draft-restored.png
+  ⇒ 两条都看了：回落只在「恢复被拒绝」时发生，没有把草稿回写这条路换成 ↺。
+
+[顺带的两条]
+  - 索引行：本次两条失败的 createSession 里，**对照那一条（自始至终没成功）没有留下任何索引行**；
+    主判据那一条是因为后来 ↺ 成功了才有行。没有空壳行。
+  - T062 的「反向不削弱」在这里顺带验了：bootstrap 超时这条路上，composer 上方仍是原来的
+    红色等宽诊断框（`[data-slot=alert]` 为空、「本应用没有这个模型」不出现）。
+  ⚠️ 一条中文界面的毛边（非本次判据）：重发按钮的 aria-label/title 是英文
+    "Retry last message (1 file)"，中文界面里没有翻译。

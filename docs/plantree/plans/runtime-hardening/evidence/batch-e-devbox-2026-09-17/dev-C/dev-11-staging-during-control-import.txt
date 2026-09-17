@@ -1,0 +1,90 @@
+-- 06:28:49.826
+drwx------  2 ai ai  4096 Sep 17 06:27 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:27 ..
+-- 06:28:50.147
+drwx------  2 ai ai  4096 Sep 17 06:27 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:27 ..
+-- 06:28:50.487
+drwx------  2 ai ai  4096 Sep 17 06:27 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:27 ..
+-- 06:28:50.820
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:51.149
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:51.488
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:51.822
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:52.161
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:52.474
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:52.787
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:53.102
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:53.417
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:53.735
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:54.051
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:54.370
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:54.682
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:54.997
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:55.313
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:55.633
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:55.951
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:56.270
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:56.586
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:56.899
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:57.215
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:57.528
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:57.844
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:58.159
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:58.474
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:58.789
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..
+-- 06:28:59.102
+drwx------  2 ai ai  4096 Sep 17 06:28 .
+drwxrwxr-x 12 ai ai 12288 Sep 17 06:28 ..

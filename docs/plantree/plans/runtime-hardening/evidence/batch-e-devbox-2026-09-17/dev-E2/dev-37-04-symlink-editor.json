@@ -1,0 +1,12 @@
+{
+  "tabs": [],
+  "monacoPresent": true,
+  "lines": [
+    "export const LINK_TARGET_MARKER = ",
+    "\"DEV37-D-symlink-target\";",
+    "export function target() { return LINK_TARGET_MARKER; }",
+    ""
+  ],
+  "breadcrumb": ["link.ts", "link.ts", "link.ts"],
+  "errors": ["", ""]
+}

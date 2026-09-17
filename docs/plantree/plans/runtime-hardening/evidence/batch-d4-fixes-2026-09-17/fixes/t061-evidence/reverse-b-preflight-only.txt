@@ -1,0 +1,55 @@
+
+ RUN  v3.2.4 /home/ai/code/ai-client
+
+stdout | src/runtime/__tests__/sessionAttachmentFill.test.ts > DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, stays writable, and still reopens
+[DEV-33] accepted sends=4 file bytes=33539942 (31.99 MiB of 32 MiB), bytes after 3 sends=25154998, refusal=session_size_limit
+
+ ❯ src/runtime/__tests__/sessionAttachmentFill.test.ts (5 tests | 2 failed) 962ms
+   ✓ DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, stays writable, and still reopens  868ms
+   ✓ DEV-33 — a session file filled with image attachments > refuses a send sized to the attachment ceiling with the per-entry code, not the attachment one 47ms
+   × DEV-33 — a session file filled with image attachments > D1 — answers an over-budget write immediately, without putting it in the queue 11ms
+     → expected 'session_entry_size_limit' to be 'session_size_limit' // Object.is equality
+   ✓ DEV-33 — a session file filled with image attachments > D25 — keeps the attachment file name across a close and reopen 8ms
+   × DEV-33 — a session file filled with image attachments > D24 — reports the refusal to the renderer and takes the next send 28ms
+     → expected 'one session entry may be at most 8192…' to contain 'session exceeds the configured size b…'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/runtime/__tests__/sessionAttachmentFill.test.ts > DEV-33 — a session file filled with image attachments > D1 — answers an over-budget write immediately, without putting it in the queue
+AssertionError: expected 'session_entry_size_limit' to be 'session_size_limit' // Object.is equality
+
+Expected: [32m"session_size_limit"[39m
+Received: [31m"session_[7mentry_[27msize_limit"[39m
+
+ ❯ src/runtime/__tests__/sessionAttachmentFill.test.ts:287:23
+    285|         }),
+    286|       ]);
+    287|       expect(outcome).toBe('session_size_limit');
+       |                       ^
+    288|       // Never offered to the file: the pre-flight settled it.
+    289|       expect(append).toHaveBeenCalledTimes(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/runtime/__tests__/sessionAttachmentFill.test.ts > DEV-33 — a session file filled with image attachments > D24 — reports the refusal to the renderer and takes the next send
+AssertionError: expected 'one session entry may be at most 8192…' to contain 'session exceeds the configured size b…'
+
+Expected: [32m"session e[7mxceeds the configured size budget[27m"[39m
+Received: [31m"[7mone [27msession e[7mntry may be at most 8192 bytes; this one is 16364[27m"[39m
+
+ ❯ src/runtime/__tests__/sessionAttachmentFill.test.ts:365:36
+    363|     });
+    364|     expect(refused.success).toBe(false);
+    365|     expect(refused.error?.message).toContain('session exceeds the conf…
+       |                                    ^
+    366|     // Refused before the request, not after it: nothing was spent.
+    367|     expect(refused.text).toBe('');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+   Start at  11:51:41
+   Duration  2.17s (transform 460ms, setup 18ms, collect 984ms, tests 962ms, environment 0ms, prepare 45ms)
+

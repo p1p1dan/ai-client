@@ -1,0 +1,46 @@
+# 第二轮真机复验 —— 环境交代与逐条还原证据（2026-09-17）
+
+机器：同一台 Linux 开发机，2 核 / 3.3 GB。仓库 /home/ai/code/ai-client，分支 feat/runtime-evolution，
+基线 HEAD b3d751e3 + 工作区带批次 D4 未提交修补（含 R-A / R-B / R-C 回炉）。dev 模式跑的就是工作区代码。
+
+== 没碰过的东西 ==
+- **一句真模型都没发。** maxapi / cx2 / vllmproxy 一次都没被调用：
+  为此把 pi-agent/models.json 与 auth.json 临时改成**只有** probe-fake 一个 provider（指向
+  127.0.0.1:18080 的本地假网关），私有 provider 在整轮里连配置里都不存在。收尾已按 sha256 还原。
+- 强杀只用真实 pid（从 `ps -eo pid,args` 精确取）；查残留遍历 /proc。
+  **全程没有用过 kill -1、process.kill(-1)，也没有用过 pkill -f。**
+- 没跑 vitest，没跑 build，没改任何产品代码（workerRpc.ts 的常量是 T064 的制造手段，已还原且 sha256 校回）。
+- dev.env 没动。
+
+== 两次起停 ==
+run 1  14:57 起（--remote-debugging-port=9333 --inspect=9444），起前 available 1984 MB；
+       15:34 SIGTERM 退出，退出后进程全无、9333/5173/9444 三个端口全部释放、无残留 pi，available 1962 MB。
+run 2  15:35 起，起前 available 1953 MB；15:48 SIGTERM 退出，同样干净，available 1955 MB。
+假网关 127.0.0.1:18080 起了三次（plan 依次为 text / browser-preview / text），收尾已 kill，18080 未再监听。
+
+== 逐条还原（sha256 全部校回本轮开始时的值）==
+  vault.json          7200ffeb…  1042 字节   ✔（期间曾被写成明文 probe-fake、又被写坏成 44 字节触发 T066②，均已还原）
+  settings.json       af758e00…              ✔（应用运行中自己删掉了三个空 model 键，按开始时的字节还原）
+  pi-agent/models.json 35257b8d…             ✔（期间为 probe-fake，且 api 曾临时改成 pi-messages）
+  pi-agent/auth.json  8d106c13…              ✔
+  session-index.json  84d9a093…  170 行      ✔（期间加过 4 条造的行 + 应用自己写的 5 条）
+  workerRpc.ts        ea9ebf9e…              ✔（第 50 行回到 `= 1 as const`）
+
+== 删掉的东西（都是本轮产生的）==
+- 造的 4 份会话：session-r2-{missingmodel,budget,tuia,tuib}.jsonl
+- 应用自己建的 5 个会话文件（预览探针 / T061 两条 / T066 附件限额 / T064 主判据）及其 .writer.lock
+- register-fake-provider.mjs 本轮写的那份 vault 备份 vault.json.bak-2026-09-17T18-58-37-957Z
+  （更早几轮留下的 5 份备份原样不动 —— 它们在本轮开始前就在那儿）
+- ~/JYWAI/temporary/unbound-sessions/（T066③ 的只读陷阱），父目录权限已改回 700，目录已空
+- 渲染层 localStorage 的 `aiclient:chat:session-models` 已写回本轮开始时的原值
+
+== git status ==
+开始 121 条 → 结束 122 条，只多出 `docs/plantree/.../dev-D4-reverify-2/` 这一个未跟踪目录。
+
+== 工具侧（都在 /tmp，不入库）==
+- /tmp/t032/fake-gateway.mjs 加了两样：`--dump-bodies <dir>`（把每个 POST 的原始请求体落盘，T061 用）
+  与 `browser-preview` 计划（让 runtime 自己的 browser_preview 工具真开一个预览窗，T065 D18 用）。
+  改前的副本留在 /tmp/t032/fake-gateway.mjs.orig-before-D4R2。
+- /tmp/t032/d4r2-drive.mjs 是 d4-drive.mjs 的副本，只改了证据目录。
+- /tmp/t032/d4r2/ 下另有 pi-scan.sh（按 /proc 数 pi 进程）、prep-r2.mjs（造会话）、
+  pad-budget.mjs（把会话顶到预算线以下几百字节）、d17-cycle*.sh（切换循环）。

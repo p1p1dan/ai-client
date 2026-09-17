@@ -1,0 +1,29 @@
+# dev-24 provider_retry evidence — 2026-09-17T09:37:15-04:00
+## trace: /tmp/t032/trace-e1/runs.jsonl (AICLIENT_RUNTIME_TRACE_DIR exported on the dev.js launch)
+"event":"provider_retry","code":"PROVIDER_ERROR","attempt":1,"delay_ms":3000,"providerStatus":503}
+"event":"provider_retry","code":"PROVIDER_ERROR","attempt":2,"delay_ms":10000,"providerStatus":503}
+"event":"provider_retry","code":"PROVIDER_ERROR","attempt":1,"delay_ms":3000,"providerStatus":503}
+"event":"provider_retry","code":"PROVIDER_ERROR","attempt":2,"delay_ms":10000,"providerStatus":503}
+"event":"provider_retry","code":"PROVIDER_ERROR","attempt":3,"delay_ms":30000,"providerStatus":503}
+
+## main.log grep (retry|503|provider_retry|overloaded)
+(main.log matches: 0)
+
+## daily log grep
+0
+## dev.js stdout grep
+0
+
+## fake gateway request log (last 12)
+{"time":"2026-09-17T12:26:26.739Z","seq":7,"status":200,"role":"user","contentSummary":"devD14 这句话敲在切到聊天A之后","hasToolResult":false,"plan":"text"}
+{"time":"2026-09-17T12:35:25.602Z","seq":8,"status":200,"role":"user","contentSummary":"devD31 在 TUI 里给这条导入会话续一轮","hasToolResult":false,"plan":"text"}
+{"time":"2026-09-17T12:50:34.339Z","seq":9,"status":200,"role":"user","contentSummary":"devD16 窗口二敲的一句","hasToolResult":false,"plan":"text"}
+{"time":"2026-09-17T12:50:49.323Z","seq":10,"status":200,"role":"user","contentSummary":"devD16 窗口一敲的一句","hasToolResult":false,"plan":"text"}
+{"time":"2026-09-17T13:21:11.573Z","seq":1,"status":200,"role":"user","contentSummary":"hi","hasToolResult":false,"plan":"ask-question"}
+{"time":"2026-09-17T13:33:42.572Z","seq":1,"status":503,"role":"user","contentSummary":"E1-24 重试观感探针：请回一句话","hasToolResult":false,"plan":"retry-503"}
+{"time":"2026-09-17T13:33:45.587Z","seq":2,"status":503,"role":"user","contentSummary":"E1-24 重试观感探针：请回一句话","hasToolResult":false,"plan":"retry-503"}
+{"time":"2026-09-17T13:33:55.599Z","seq":3,"status":200,"role":"user","contentSummary":"E1-24 重试观感探针：请回一句话","hasToolResult":false,"plan":"retry-503"}
+{"time":"2026-09-17T13:35:12.106Z","seq":1,"status":503,"role":"user","contentSummary":"E1-24 预算耗尽探针：请回一句话","hasToolResult":false,"plan":"retry-503-forever"}
+{"time":"2026-09-17T13:35:15.127Z","seq":2,"status":503,"role":"user","contentSummary":"E1-24 预算耗尽探针：请回一句话","hasToolResult":false,"plan":"retry-503-forever"}
+{"time":"2026-09-17T13:35:25.140Z","seq":3,"status":503,"role":"user","contentSummary":"E1-24 预算耗尽探针：请回一句话","hasToolResult":false,"plan":"retry-503-forever"}
+{"time":"2026-09-17T13:35:55.150Z","seq":4,"status":503,"role":"user","contentSummary":"E1-24 预算耗尽探针：请回一句话","hasToolResult":false,"plan":"retry-503-forever"}

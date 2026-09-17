@@ -1,0 +1,26 @@
+# 方法学：为什么本批不用 `ps aux | grep -- --session`
+# 检查单第 15 / 16 项的取证方式写的是「ps 里的 --session 参数」。在这台机器上它拿不到东西。
+
+## 现象
+pi v0.84.4 启动后把自己的进程标题改写成裸字符串 "pi"，这个改写是就地覆盖内核的 argv 区，
+所以 /proc/<pid>/cmdline 读出来是 "pi" + 一串 NUL，ps / grep 完全看不到 --session：
+
+  $ tr '\0' '|' < /proc/395037/cmdline
+  pi||||||||||||...（共 246 字节）
+  $ ps -eo args | grep -- --session      # 只会匹配到你自己这条 grep
+
+## 两个仍然可用的口径（本批两个都用了）
+1) **argv 区字节数**：内核保留 arg_end-arg_start，改写标题不改长度。本仓路径下：
+     <electron> <cli.js> --session <jsonl>  = 246 B（会话名长 1 字符时 245 B）
+     <electron> <cli.js>                    = 148 B
+   实测 148 B 的那次（新对话、runtimeIdentity 为空）确实没有 --session，见
+   dev-15-argv-control-no-runtimeidentity.txt —— 基线是实测出来的，不是算出来的。
+
+2) **启动窗口内抓真 argv**：pi 改标题前有 ~300 ms。bash 轮询 /proc 太慢（一圈 200~800 ms，
+   本批第一次尝试 0 命中），改用 Node 紧循环（一圈约 10~30 ms）后每次都能抓到，逐字 argv 见
+   dev-15-argv-both-spawns.txt / dev-16-argv-window1.txt / dev-16-argv-window2.txt。
+
+## 顺带确认（来自 /proc/<pid>/environ）
+   PI_CODING_AGENT_DIR=/home/ai/.pilab/jyw-ai-client-dev/pi-agent
+即内嵌 TUI 读的是应用自己 profile 下的 pi-agent，dev.env 里的 PI_CODING_AGENT_DIR=~/.pilab/t37c-agent
+被 resolveManagedPiPtyEnv() 覆盖掉了 —— 批次 D 前置说明第 1.1 条的读码结论，这里是实测确认。

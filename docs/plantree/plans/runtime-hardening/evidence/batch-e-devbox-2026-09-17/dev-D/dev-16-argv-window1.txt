@@ -1,0 +1,8 @@
+# fast argv catcher (pre-title-rewrite) — 2026-09-17T12:53:56.952Z
+# needle=pi-coding-agent/dist/bundle/cli.js; window=60s; hits=1
+### pid=443146 at=2026-09-17T12:53:06.700Z argvBytes=246
+    argv[0]=/home/ai/code/ai-client/node_modules/electron/dist/electron
+    argv[1]=/home/ai/code/ai-client/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js
+    argv[2]=--session
+    argv[3]=/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789647368097-07petop.jsonl
+    hasSession=true sessionFile=/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789647368097-07petop.jsonl

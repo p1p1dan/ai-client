@@ -1,0 +1,60 @@
+[
+  {
+    "role": "user",
+    "block": {
+      "type": "text",
+      "text": "T061 复验一：带附件的一条（文件目录路线）"
+    }
+  },
+  {
+    "role": "user",
+    "block": {
+      "type": "image",
+      "data": "<266668 chars elided>",
+      "mimeType": "image/png",
+      "aiclientName": "r2-holiday.png"
+    }
+  },
+  {
+    "role": "assistant",
+    "block": {
+      "type": "text",
+      "text": "fake gateway ok"
+    }
+  },
+  {
+    "role": "user",
+    "block": {
+      "type": "text",
+      "text": "T061 复验二：重开会话后的纯文本一条"
+    }
+  },
+  {
+    "role": "assistant",
+    "block": {
+      "type": "text",
+      "text": "fake gateway ok"
+    }
+  },
+  {
+    "role": "user",
+    "block": {
+      "type": "text",
+      "text": "T061 复验三：pi-messages 原样透传路线"
+    }
+  },
+  {
+    "role": "assistant",
+    "block": {
+      "type": "text",
+      "text": "fake gateway ok"
+    }
+  },
+  {
+    "role": "user",
+    "block": {
+      "type": "text",
+      "text": "T061 复验三：pi-messages 原样透传路线"
+    }
+  }
+]

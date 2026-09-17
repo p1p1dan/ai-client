@@ -1,0 +1,16 @@
+批量导入 40 条 Codex 会话（DEV-13）
+总耗时: 60.2 s，采样 221 次（每 250 ms 一次）
+CDP 往返延迟: min 2 ms / 中位 5 ms / p95 15 ms / max 1329 ms
+超过 100 ms 的采样点（tMs, rttMs）: [(1155, 1155), (4616, 623), (58623, 414), (60203, 1329)]
+渲染进程定时器漂移峰值（主线程卡顿）: 1563 ms（100 ms 间隔探针，共 563 个采样）
+列表滚动交互成功次数: 221 / 221
+导入按钮状态: ['导入所选（0）', '正在导入…']（全程 disabled=[True]，产品自身的 busy 设计）
+最终报告: 新导入 40 个，已存在 0 个，失败 0 个。 导入的对话会出现在侧栏，打开就能接着聊。
+
+面板打开 → Codex 项目行出现（页面内 performance.now 打点，单位 ms）
+  run1-cold                total=780    其中点开设置→点中 Pi 分类=499   面板标题出现=752   | Claude Code 3 个对话 / Codex 320 个对话
+  run1b-warm-cache         total=413    其中点开设置→点中 Pi 分类=318   面板标题出现=413   | Claude Code 3 个对话 / Codex 320 个对话
+  run2-cold-after-reload   total=682    其中点开设置→点中 Pi 分类=536   面板标题出现=682   | Claude Code 3 个对话 / Codex 320 个对话
+  run3-cold-after-reload   total=960    其中点开设置→点中 Pi 分类=465   面板标题出现=672   | Claude Code 3 个对话 / Codex 320 个对话
+  dev10-restore-contrast   total=1591   其中点开设置→点中 Pi 分类=623   面板标题出现=889   | Claude Code 3 个对话 / Codex 320 个对话
+  dev12-synthetic          total=931    其中点开设置→点中 Pi 分类=676   面板标题出现=821   | Claude Code 3 个对话 / Codex 321 个对话

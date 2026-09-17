@@ -1,0 +1,12 @@
+DEV-13 附带测量：把 React 渲染剥掉，只看 Main 侧扫描的耗时
+（在渲染层直接连打 window.electronAPI.legacyImport.listProjects()，绕开 react-query 缓存；
+  Main 侧每次都是全量重扫 320 份 rollout + 3 份 Claude 会话，没有缓存）
+
+listProjects() 连续三次：175 ms / 169 ms / 170 ms
+  返回：claude-code 3 个会话、codex 320 个会话
+
+点开某个项目 → 会话行渲染完（页面内 performance.now 打点，含 listSessions IPC + React 渲染）：
+  Codex（320 行）  ：887 ms / 613 ms / 1170 ms（三次分别在不同阶段测得，见正文）
+  Claude Code（3 行）：105 ms / 107 ms
+
+参考：离线纯扫描（无 Electron、样本在 tmpfs、缓存热）是 139 ms，见 /tmp/t032/samples/verify-scan.txt

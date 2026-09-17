@@ -1,0 +1,10 @@
+{
+  "sid": "session-1789656608127-jy9zhgb",
+  "case": "count-over-limit",
+  "count": 6,
+  "base64CharsEach": 266668,
+  "attemptId": "dev34b-1789656713928",
+  "mainReturned": { "requestId": "send-1789656713935-6" },
+  "mainThrew": false,
+  "mainRoundTripMs": 18
+}

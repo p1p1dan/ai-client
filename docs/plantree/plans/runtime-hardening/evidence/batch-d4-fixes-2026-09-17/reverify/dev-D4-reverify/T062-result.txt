@@ -1,0 +1,30 @@
+# T062 / DEV-32（D19）+ D3 — 真机复验结果
+
+## 造法
+复制真实会话 session-1789652096201-xlacs7d.jsonl，改 header id，尾部追加一条
+{"type":"model_change","provider":"vllmproxy-old","modelId":"claude-does-not-exist",...}
+落成 session-d4062-missingmodel.jsonl 并补一行索引。
+第一次发送走的是 chatAgentDefaults 的 probe-fake/fake-sonnet（覆盖了会话记录的模型），成功回话；
+于是把 localStorage['aiclient:chat:session-models'] 里这条会话钉成 vllmproxy-old/claude-does-not-exist
+再发一次——这才是「会话被钉在一个本应用没有的模型上」的真实形态。
+
+## D19（模型缺失覆盖层）—— 半生效
+- store.lastError = `model_not_in_catalog: no model "vllmproxy-old/claude-does-not-exist" in the catalog (1 available)`
+  → T062 给 runtime 错误加的稳定码**确实传到了渲染层**，isModelMissingError() 现在命中（改动前两个信号都对不上）。
+- composer 上方的红色 mono 块不再是 `Error: no model "…" in the catalog (…)`，换成了 MODEL_MISSING_ERROR_VIEW.hint。
+- **但是**：那一句是**英文原文**（词典键）：
+  "Migrate or add the AI service under Settings · Pi and this chat can continue; you can also switch to a model this app already has, from above the composer."
+  DOM 上只有这一个叶子节点带这句话，class = `mb-2 max-h-28 … font-mono text-code text-destructive`。
+  原因在 ChatComposer.tsx:773-774：这条状态条直接返回 `MODEL_MISSING_ERROR_VIEW.hint` 这个**键**，没过 t()。
+  （i18n.ts:2694 里这句的中文条目是有的，MessageTimeline 那两处都写了 t(...)。）
+- **H/21 的中文覆盖层卡片一个字都没出现**：`本应用没有这个模型` / `这个会话记录的模型不在本应用的模型目录里…` / `去 Pi 设置补上模型`
+  全为 false。两个渲染点都没命中：MessageTimeline.tsx:742 挂在**历史恢复失败**通知里（本次 historyErrors 为空），
+  MessageTimeline.tsx:1171 要求时间线里有一条 isError 且文本命中的**消息**（发送失败只写了 lastError，没有生成这种消息）。
+截图：T062-01-model-missing-composer.png
+
+## D3（选择器与 worker 同一份目录）—— 生效
+- chat.listPiModels() 返回 {"models":[{"id":"probe-fake/fake-sonnet"}],"source":"local"}，
+  与 worker 报的 "(1 available)" 完全一致。
+- 物理 models.json 里手写的 vllmproxy / cx2 / maxapi **不再出现在选择器里**（本轮凭据库里只有假网关 probe-fake）。
+- 诊断行落在按天日志里（info 级，改动前看不见）：
+  [pi-models] models.json holds providers no session can use { dropped: 'cx2, maxapi, vllmproxy', reason: 'absent_from_runtime_catalog' }

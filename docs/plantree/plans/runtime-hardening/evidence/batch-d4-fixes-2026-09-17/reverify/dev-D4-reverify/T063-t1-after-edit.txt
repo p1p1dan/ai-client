@@ -1,0 +1,9 @@
+=== T063 t1 after edit ===
+total 12
+drwxrwxr-x 2 ai ai 4096 Sep 17 13:23 .
+drwxr-xr-x 4 ai ai 4096 Sep 17 13:16 ..
+-rw------- 1 ai ai  221 Sep 17 13:23 probe-compat.md
+e9d530dd41867a9a70c5cff50016e4a6  /home/ai/.agents/subagents/probe-compat.md
+description: EDITED - D4 T063 compat-root delete semantics probe, do not dispatch.
+--- main dir ---
+ls: cannot access '/home/ai/.pilab/jyw-ai-client-dev/pi-agent/subagents/': No such file or directory

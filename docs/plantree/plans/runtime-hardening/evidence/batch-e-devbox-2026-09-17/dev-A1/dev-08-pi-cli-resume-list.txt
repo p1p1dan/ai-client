@@ -1,0 +1,40 @@
+# DEV-8 pi CLI 列会话（2026-09-17）
+# 命令（从 /tmp/t032/a1 作为 cwd 运行，用 script 提供 pty，Tab 切到 All，再输入 devA1KILL 过滤）:
+#   node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js \
+#     --session-dir /home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions --resume
+# pi 没有非交互列会话的 flag，--resume 的交互选择器就是唯一列表入口（手册 6.2）
+
+[>7u
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Resume Session (Current Folder)                                                              ○ Current Folder | Loading ...  Name: All  Sort: Threaded
+tab scope · re:<pattern> regex · "phrase" exact
+ctrl+s sort · ctrl+n named · ctrl+d delete · ctrl+p path (off)
+>                                                                                                                                                     
+  No sessions in current folder. Press Tab to view all.
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Resume Session (Current Folder)                                                                    ◉ Current Folder | ○ All  Name: All  Sort: Threaded
+Resume Session (All)                                                                         ○ Current Folder | Loading ...  Name: All  Sort: Threaded
+Resume Session (All)                                                                               ○ Current Folder | ◉ All  Name: All  Sort: Threaded
+tab scope · re:<pattern> regex · "phrase" exact
+ctrl+s sort · ctrl+n named · ctrl+d delete · ctrl+p path (off)
+>                                                                                                                                                     
+› devA1KILL 回一个字：丁                                                  ~/JYWAI/temporary/unbound-sessions/46e6faab-115c-4e61-8b38-d194a69a236c 2 4m
+  devA1KILL 回一个字：丁                                                  ~/JYWAI/temporary/unbound-sessions/46e6faab-115c-4e61-8b38-d194a69a236c 2 4m
+  devA1TEMPWS 回一个字：丙                                                                                      ~/JYWAI/temporary/20260917-054356 2 7m
+  devA1SCRATCH 回一个字：乙                                               ~/JYWAI/temporary/unbound-sessions/4e6b46a9-c79d-4788-8589-71daa4be606e 2 8m
+  devA1UNB 回一个字：甲                                                  ~/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58 2 20m
+  devA1UNB 回一个字：甲                                                  ~/JYWAI/temporary/unbound-sessions/2a8e9b2f-4e7f-42fa-9ff7-8e7acab9bb58 2 20m
+  回一个字：甲                                                                                                                  ~/code/ai-client 2 22m
+  用 bash 运行这条命令：echo p6-native-default-ok。只运行，不要解释。                                                            ~/code/ai-client 4 3d
+  用 bash 运行这条命令：echo p6-native-default-ok。只运行，不要解释。                                                            ~/code/ai-client 4 3d
+  用 bash 运行这条命令：echo p6-native-default-ok。只运行，不要解释。                                                            ~/code/ai-client 4 3d
+  (1/14)
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> devA1KILL                                                                                                                                           
+› devA1KILL 回一个字：丁                                                  ~/JYWAI/temporary/unbound-sessions/46e6faab-115c-4e61-8b38-d194a69a236c 2 4m
+  devA1KILL 回一个字：丁                                                  ~/JYWAI/temporary/unbound-sessions/46e6faab-115c-4e61-8b38-d194a69a236c 2 4m
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Delete session? enter confirm · escape/ctrl+c cancel
+> devA1KILL                                                                                                                                           
+› devA1KILL 回一个字：丁                                                  ~/JYWAI/temporary/unbound-sessions/46e6faab-115c-4e61-8b38-d194a69a236c 2 4m
+Session terminated, killing shell... ...killed.

@@ -1,0 +1,24 @@
+
+=== pane ===
+从 Claude Code / Codex 导入历史对话
+把这台机器上的历史对话复制进本应用，进来之后可以看、也可以接着聊。原来的文件只读不改。
+返回
+ai-client
+重新扫描
+导入所选（0）
+全选
+T032 DEV-11 byte-cap sample (>64 MiB) / round 0 / filler-00000-filler-00000-fill…
+c9d0e1f2-a3b4-4c5d-8e6f-112233445566
+9 月 9 日
+claude-sonnet-5
+T032 DEV-11 oversize sample (~35 MiB) / round 0 / filler-00000-filler-00000-fill…
+0a5f2c31-7b44-4d0e-9f61-a1b2c3d4e5f6
+Claude session exceeds the 4000-entry import limit
+9 月 9 日
+claude-sonnet-5
+T032 DEV-11 control sample (~50 KiB) / round 0 / filler-00000-filler-00000-fille…
+b7c81d92-3e40-4a55-8c11-d0e1f2a3b4c5
+9 月 9 日
+claude-sonnet-5
+
+新导入 0 个，已存在 0 个，失败 1 个。 导入的对话会出现在侧栏，打开就能接着聊。

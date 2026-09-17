@@ -1,0 +1,1076 @@
+{
+  "active": "session-e117b-missing",
+  "runtimeReady": true,
+  "hostBound": [],
+  "historyErrors": {
+    "session-e117b-missing": "jsonl_not_found: Error invoking remote method 'chat:resumeSession': WorkerSlotError: ENOENT: ENOENT: no such file or directory, realpath '/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-e117b-missing.jsonl'"
+  },
+  "pendingPermissions": [],
+  "pendingQuestions": [],
+  "sessions": [
+    {
+      "id": "session-1789652464182-iinf16s",
+      "status": "idle",
+      "title": "E1-25 问答卡视觉口径：请问我一个问题",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789652464182-iinf16s.jsonl"
+    },
+    {
+      "id": "session-1789652269668-l4gbh1k",
+      "status": "idle",
+      "title": "E1-25 权限卡视觉口径：请写一个文件",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789652269668-l4gbh1k.jsonl"
+    },
+    {
+      "id": "session-1789652096201-xlacs7d",
+      "status": "idle",
+      "title": "E1-24 预算耗尽探针：请回一句话",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789652096201-xlacs7d.jsonl"
+    },
+    {
+      "id": "session-1789652002133-0n6wb2b",
+      "status": "idle",
+      "title": "E1-24 重试观感探针：请回一句话",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789652002133-0n6wb2b.jsonl"
+    },
+    {
+      "id": "session-e117b-missing",
+      "status": "idle",
+      "title": "E1-17b 会话文件缺失（索引行保留 + piLeaf）",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-e117b-missing.jsonl"
+    },
+    {
+      "id": "session-e117a-corrupt",
+      "status": "idle",
+      "title": "E1-17a 会话文件损坏（65 行坏 JSON）",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-e117a-corrupt.jsonl"
+    },
+    {
+      "id": "session-e117c-cwd",
+      "status": "idle",
+      "title": "E1-17c 工作区路径不符",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-e117c-cwd.jsonl"
+    },
+    {
+      "id": "session-1789647368097-07petop",
+      "status": "idle",
+      "title": "devD30 第一轮 GUI：回一句话",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789647368097-07petop.jsonl"
+    },
+    {
+      "id": "session-import-codex-efb78fb7-08ce-4c27-855f-3ec3e5a3312b",
+      "status": "idle",
+      "title": "T032 bulk rollout #014 2026-09-10 topic=theme",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-fe0da04f-5267-4e74-acab-4cbd62250e01.jsonl"
+    },
+    {
+      "id": "session-1789647839178-q40z4vd",
+      "status": "idle",
+      "title": "devD14 聊天B 第一轮",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789647839178-q40z4vd.jsonl"
+    },
+    {
+      "id": "session-live-1789647205164-vw474ma",
+      "status": "idle",
+      "title": "Session w474ma",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789647205164-vw474ma.jsonl"
+    },
+    {
+      "id": "session-1789645533315-00lntm4",
+      "status": "idle",
+      "title": "devB DEV-18 node24 banner probe",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789645533315-00lntm4.jsonl"
+    },
+    {
+      "id": "session-1789644851492-gidi2oz",
+      "status": "idle",
+      "title": "Session idi2oz",
+      "workspaceId": "ws:main:/home/ai/code/ai-client"
+    },
+    {
+      "id": "session-import-claude-code-6a590c00-b711-4156-b2a8-319e7a178f66",
+      "status": "idle",
+      "title": "T032 DEV-11 control sample (~50 KiB) / round 0 / filler-00000-filler-00000-filler-00000-filler-00000-filler-00000-filler",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-claude-code-2ffa6990-4f76-404e-ba9c-a6daabd28fd8.jsonl"
+    },
+    {
+      "id": "session-import-codex-bafacba4-cf0e-4256-982e-f361a2e4a0b2",
+      "status": "idle",
+      "title": "T032 SYNTHETIC legacy bare-row rollout (not a real Codex artefact)",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-8e413c49-707f-4efb-b6d4-9c1cc11442f5.jsonl"
+    },
+    {
+      "id": "session-import-codex-c67984a0-2254-4e4a-b1e9-2b48fc88d2a8",
+      "status": "idle",
+      "title": "T032 bulk rollout #038 2026-09-10 topic=plugin",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-3a6a421c-e653-4e61-b166-4f5aa30952d1.jsonl"
+    },
+    {
+      "id": "session-import-codex-06968e9c-6809-4ed8-b100-0209be4fe4c8",
+      "status": "idle",
+      "title": "T032 bulk rollout #013 2026-09-10 topic=catalog",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-2b0f557a-ed99-4b9f-8796-b0ef0189dbca.jsonl"
+    },
+    {
+      "id": "session-import-codex-ed4ed8f8-e9ef-47e2-b0ad-a7be2fc0b7bd",
+      "status": "idle",
+      "title": "T032 bulk rollout #037 2026-09-10 topic=session",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-03eb64f7-3164-4808-8807-632888bf8e16.jsonl"
+    },
+    {
+      "id": "session-import-codex-99d89b81-fbb3-4183-80d6-553b96b27fed",
+      "status": "idle",
+      "title": "T032 bulk rollout #060 2026-09-10 topic=vault",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-e941da7c-8429-43f8-b02d-a3314e476136.jsonl"
+    },
+    {
+      "id": "session-import-codex-12008768-df2d-4026-a145-85107107f1ca",
+      "status": "idle",
+      "title": "T032 bulk rollout #012 2026-09-10 topic=vault",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-d9e50bb8-b3fb-4abb-94ca-2f3e76f4fbf1.jsonl"
+    },
+    {
+      "id": "session-import-codex-490806d2-9054-4844-b33d-6d46540de643",
+      "status": "idle",
+      "title": "T032 bulk rollout #036 2026-09-10 topic=permission",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-10a78417-1670-4261-8139-273aa731154d.jsonl"
+    },
+    {
+      "id": "session-import-codex-581eac5c-2e5d-41c7-9557-702c159eeb4a",
+      "status": "idle",
+      "title": "T032 bulk rollout #035 2026-09-10 topic=runtime",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-523d8cb2-2029-4e01-9bf2-2db448e14765.jsonl"
+    },
+    {
+      "id": "session-import-codex-100e5c08-e498-4b62-a32e-68cd980df455",
+      "status": "idle",
+      "title": "T032 bulk rollout #059 2026-09-10 topic=scratch",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-0a54899d-3ef6-4384-af8f-26f458bfa662.jsonl"
+    },
+    {
+      "id": "session-import-codex-90c176dd-c9f3-4660-b9c3-b66cb263ae09",
+      "status": "idle",
+      "title": "T032 bulk rollout #011 2026-09-10 topic=scratch",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-543c39eb-338b-4c8f-b9bb-0eb4526f0958.jsonl"
+    },
+    {
+      "id": "session-import-codex-eac4bb14-4d67-4c0f-bf2c-c6f1b6bfd8c6",
+      "status": "idle",
+      "title": "T032 bulk rollout #034 2026-09-10 topic=editor",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-d87b251d-0ded-4301-8270-9f75f0f93de4.jsonl"
+    },
+    {
+      "id": "session-import-codex-83b4080c-0ce8-46c0-9390-8e846180adbf",
+      "status": "idle",
+      "title": "T032 bulk rollout #058 2026-09-10 topic=worker",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-23ec673a-0cbe-4a96-9e54-1e65b1979717.jsonl"
+    },
+    {
+      "id": "session-import-codex-fcd27394-8711-4587-8db7-ba13e94aaee4",
+      "status": "idle",
+      "title": "T032 bulk rollout #010 2026-09-10 topic=worker",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-48bcee6c-c9e9-4688-8897-4ac51cf69675.jsonl"
+    },
+    {
+      "id": "session-import-codex-7c7563d2-c79b-4af1-8f47-e5d5afb7a633",
+      "status": "idle",
+      "title": "T032 bulk rollout #009 2026-09-10 topic=trace",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-bce26a25-ae4c-4fff-b3cd-46e1e64833a1.jsonl"
+    },
+    {
+      "id": "session-import-codex-6c7b1bb0-d78f-491d-aefa-c31822888f84",
+      "status": "idle",
+      "title": "T032 bulk rollout #033 2026-09-10 topic=terminal",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-e45c38d4-c510-4bdc-8954-3f9b83589869.jsonl"
+    },
+    {
+      "id": "session-import-codex-161f6131-5d8f-4a75-969c-afb6754ef87d",
+      "status": "idle",
+      "title": "T032 bulk rollout #057 2026-09-10 topic=trace",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-7b286c5f-8e0a-4609-9141-eeb3375cd72d.jsonl"
+    },
+    {
+      "id": "session-import-codex-9528f90c-5835-49ab-bc6b-fcdf31ce1dc0",
+      "status": "idle",
+      "title": "T032 bulk rollout #008 2026-09-10 topic=import",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-fd844832-6663-437f-ac29-77ae233d4250.jsonl"
+    },
+    {
+      "id": "session-import-codex-a58f34fe-5d89-4a74-97e8-f7fc177f32f9",
+      "status": "idle",
+      "title": "T032 bulk rollout #032 2026-09-10 topic=worktree",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-1b24f472-02c3-4978-8789-43ae279aef62.jsonl"
+    },
+    {
+      "id": "session-import-codex-55fd5229-b71d-4495-b4e8-4b8b2418a986",
+      "status": "idle",
+      "title": "T032 bulk rollout #056 2026-09-10 topic=import",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-f58dc407-6e8c-4609-ab24-f6da09ce78b3.jsonl"
+    },
+    {
+      "id": "session-import-codex-1675d3aa-91d6-4543-a849-f252f82e59a7",
+      "status": "idle",
+      "title": "T032 bulk rollout #007 2026-09-10 topic=model",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-825dd954-562f-4aa2-9353-2c5c7b1581de.jsonl"
+    },
+    {
+      "id": "session-import-codex-a0083207-1e78-4491-bc53-38366434dd29",
+      "status": "idle",
+      "title": "T032 bulk rollout #031 2026-09-10 topic=telemetry",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-c26efbd5-4e19-4fe5-b0db-2f55e0113057.jsonl"
+    },
+    {
+      "id": "session-import-codex-2bd3030b-39fb-42d9-9b97-344862b6ea67",
+      "status": "idle",
+      "title": "T032 bulk rollout #055 2026-09-10 topic=model",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-d918f179-6c14-452a-b731-8fa040d38456.jsonl"
+    },
+    {
+      "id": "session-import-codex-ac6fad24-3c12-4cf0-bfeb-f27e532f1fb8",
+      "status": "idle",
+      "title": "T032 bulk rollout #006 2026-09-10 topic=plugin",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-3e7245bf-d3f8-4853-ba6f-a7cdfbd8fc1c.jsonl"
+    },
+    {
+      "id": "session-import-codex-90c0188e-447b-4ddc-a24e-08a7d8f5b147",
+      "status": "idle",
+      "title": "T032 bulk rollout #030 2026-09-10 topic=theme",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-bce48846-9aaf-454a-a48b-e0e04055790e.jsonl"
+    },
+    {
+      "id": "session-import-codex-94d91165-e0ba-4d9d-969f-a64547a6da30",
+      "status": "idle",
+      "title": "T032 bulk rollout #054 2026-09-10 topic=plugin",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-68f47078-1f05-4b8b-b180-17896d6b0f56.jsonl"
+    },
+    {
+      "id": "session-import-codex-1386f824-6a5e-4e87-a8fe-9b1be8dca57d",
+      "status": "idle",
+      "title": "T032 bulk rollout #005 2026-09-10 topic=session",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-e7f08fc4-1791-4404-b586-c3c90329bd54.jsonl"
+    },
+    {
+      "id": "session-import-codex-364ca7e1-1587-49a8-8ec3-a800c87e92cb",
+      "status": "idle",
+      "title": "T032 bulk rollout #029 2026-09-10 topic=catalog",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-bb8bd818-81bb-4a4a-9df3-a4cc7fa5acb7.jsonl"
+    },
+    {
+      "id": "session-import-codex-85cd9b8c-5665-42fb-ab51-abf0fac8750f",
+      "status": "idle",
+      "title": "T032 bulk rollout #053 2026-09-10 topic=session",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-b2de0b3c-d5bc-43aa-9464-1eb39001bd4f.jsonl"
+    },
+    {
+      "id": "session-import-codex-d5db87d4-55a3-4d7e-8f55-013a690738e6",
+      "status": "idle",
+      "title": "T032 bulk rollout #052 2026-09-10 topic=permission",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-777a7d9e-85e6-4bf7-843d-18b8af816f3b.jsonl"
+    },
+    {
+      "id": "session-import-codex-9ad6488a-362d-4cbf-8287-c394eb247eef",
+      "status": "idle",
+      "title": "T032 bulk rollout #004 2026-09-10 topic=permission",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-f8c741cd-132a-421c-a998-9dda69bf28da.jsonl"
+    },
+    {
+      "id": "session-import-codex-322d5f4d-b1dc-4d74-8059-f4cbb90ae806",
+      "status": "idle",
+      "title": "T032 bulk rollout #028 2026-09-10 topic=vault",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-90e71e5e-102a-4d67-8d45-7b6a2f125e09.jsonl"
+    },
+    {
+      "id": "session-import-codex-5895f3ef-3a9c-4141-9b05-e5c50a3d37d7",
+      "status": "idle",
+      "title": "T032 bulk rollout #051 2026-09-10 topic=runtime",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-0a887b64-ffa1-4fc3-8a0c-3222054edd40.jsonl"
+    },
+    {
+      "id": "session-import-codex-b12f0fba-d80c-49ef-b2cd-7de92631896b",
+      "status": "idle",
+      "title": "T032 bulk rollout #003 2026-09-10 topic=runtime",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-107a9be0-459f-4074-bed7-d8bb44ab682b.jsonl"
+    },
+    {
+      "id": "session-import-codex-5c6c04e2-11ca-41b4-aa1d-ef48d5d4b49f",
+      "status": "idle",
+      "title": "T032 bulk rollout #027 2026-09-10 topic=scratch",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-35db9af2-5674-4fda-bf1c-6cebf9b7d0cd.jsonl"
+    },
+    {
+      "id": "session-import-codex-a03d8ef0-8d4a-4173-ab44-6614e3e4a4f3",
+      "status": "idle",
+      "title": "T032 bulk rollout #026 2026-09-10 topic=worker",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-91fef80f-9761-4be0-8f72-17904b19bbd5.jsonl"
+    },
+    {
+      "id": "session-import-codex-b7e7cc9e-222a-4fb4-a6f5-90921427b37e",
+      "status": "idle",
+      "title": "T032 bulk rollout #050 2026-09-10 topic=editor",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-ccf38249-eb67-4465-975a-f9c61f5d6023.jsonl"
+    },
+    {
+      "id": "session-import-codex-9da5003c-4b60-418c-ae0f-aaa2cd96ee63",
+      "status": "idle",
+      "title": "T032 bulk rollout #002 2026-09-10 topic=editor",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-9366c912-2d78-4b38-bac1-da3f0eea5d5b.jsonl"
+    },
+    {
+      "id": "session-import-codex-2b6e3fb7-4996-403f-ba5e-edb1637e2be2",
+      "status": "idle",
+      "title": "T032 bulk rollout #025 2026-09-10 topic=trace",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-12cc8872-0341-4b1f-abc9-8a52f8d94128.jsonl"
+    },
+    {
+      "id": "session-import-codex-bfc21400-4d30-4f9c-8289-d6c9555461e3",
+      "status": "idle",
+      "title": "T032 bulk rollout #049 2026-09-10 topic=terminal",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-4c271856-63d7-4e7c-a65f-97b95ae0a387.jsonl"
+    },
+    {
+      "id": "session-import-codex-65571a2a-e7a7-4625-b191-943f93d6d4a2",
+      "status": "idle",
+      "title": "T032 bulk rollout #001 2026-09-10 topic=terminal",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-codex-d8dbe8c5-35b1-481d-86a2-8c529a2db361.jsonl"
+    },
+    {
+      "id": "session-live-1789636546521-0yhy2zv",
+      "status": "idle",
+      "title": "回一个字：甲",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789636546521-0yhy2zv.jsonl"
+    },
+    {
+      "id": "session-live-1789347889296-ltrxsgm",
+      "status": "idle",
+      "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789347889296-ltrxsgm.jsonl"
+    },
+    {
+      "id": "session-live-1789306912982-k9ik92s",
+      "status": "idle",
+      "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789306912982-k9ik92s.jsonl"
+    },
+    {
+      "id": "session-live-1789306848585-b03q62x",
+      "status": "idle",
+      "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789306848585-b03q62x.jsonl"
+    },
+    {
+      "id": "session-live-1789306698435-l4bu1s2",
+      "status": "idle",
+      "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789306698435-l4bu1s2.jsonl"
+    },
+    {
+      "id": "session-live-1789306608098-tasrgr0",
+      "status": "idle",
+      "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789306608098-tasrgr0.jsonl"
+    },
+    {
+      "id": "session-live-1789306531210-8r0oa7a",
+      "status": "idle",
+      "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789306531210-8r0oa7a.jsonl"
+    },
+    {
+      "id": "session-live-1789306423191-vob9ldz",
+      "status": "idle",
+      "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789306423191-vob9ldz.jsonl"
+    },
+    {
+      "id": "session-live-1789147793385-9ksu0xo",
+      "status": "idle",
+      "title": "用 bash 运行这条命令：echo perm-probe-ok",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T17-30-05-259Z_01a09184-f64b-7e66-92df-33e6a0e38504.jsonl"
+    },
+    {
+      "id": "session-1789142989175-2d4909j",
+      "status": "idle",
+      "title": "Session d4909j",
+      "unbound": {
+        "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/6d756b23-0684-4a28-9ab3-a5f811c712aa"
+      },
+      "workspaceId": "ws:main:/tmp/t032/ws-normal"
+    },
+    {
+      "id": "session-live-1789142835493-v1dj0lp",
+      "status": "idle",
+      "title": "用 bash 运行这条命令：echo perm-probe-ok",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789142835493-v1dj0lp.jsonl"
+    },
+    {
+      "id": "session-live-1789142718965-l1g2ivc",
+      "status": "idle",
+      "title": "用 bash 运行这条命令：echo perm-probe-ok",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T16-05-30-919Z_01a09137-88a7-703e-b8bc-e65c6c162bcd.jsonl"
+    },
+    {
+      "id": "session-live-1789141980761-ypg9e97",
+      "status": "idle",
+      "title": "用 bash 运行这条命令：echo perm-probe-ok",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T15-53-15-629Z_01a0912c-506d-702b-97b2-f0bc8866ba8a.jsonl"
+    },
+    {
+      "id": "session-live-1789140568519-d9egdw2",
+      "status": "idle",
+      "title": "回一个字：好",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T15-29-38-231Z_01a09116-afb7-7797-84de-69420224d417.jsonl"
+    },
+    {
+      "id": "session-live-1789137614294-ib49fsx",
+      "status": "idle",
+      "title": "回一个字：好",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T15-21-07-330Z_01a0910e-e402-7c94-bbcf-05733f32c42b.jsonl"
+    },
+    {
+      "id": "session-import-codex-8aa6e997-aeb8-4b05-a16c-f3277dd9f43b",
+      "status": "idle",
+      "title": "help me install :https://github.com/pnedfff/claude-env-cleanup",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/--home-ai-code-ai-client--/2026-09-11T06-40-42-756Z_import-codex-2729be2b-6110-4415-af9a-3cb9c82b8337.jsonl"
+    },
+    {
+      "id": "session-live-1788682527925-ynzbtxy",
+      "status": "idle",
+      "title": "写一个test.txt",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-06T08-16-01-197Z_01a075c9-e6ad-7a57-bfbc-5a1c55954004.jsonl"
+    },
+    {
+      "id": "session-live-1788664854690-2d6xooy",
+      "status": "idle",
+      "title": "nihao",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-06T03-21-40-369Z_01a074bc-6b11-7d59-8778-d83c9fcdc268.jsonl"
+    },
+    {
+      "id": "session-1788401319554-54ygyed",
+      "status": "idle",
+      "title": "Count slowly from 1 to 90, one number per line, no other te…",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-08-46-361Z_01a06506-9919-7ba6-9bf6-fb94efd814c5.jsonl"
+    },
+    {
+      "id": "session-1788367170719-ogkusk7",
+      "status": "idle",
+      "title": "Count slowly from 1 to 60, one number per line, no other te…",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-39-32-755Z_01a062fd-7493-7d1b-8112-2dd54d0c719b.jsonl"
+    },
+    {
+      "id": "session-import-f34ddff7-ebf7-4ca9-bc86-44611e5641be",
+      "status": "idle",
+      "title": "/clear",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-39-26-093Z_import-e6a17de1-a5d8-4979-af5c-4e089112fc2b.jsonl"
+    },
+    {
+      "id": "session-1788368051228-ce1ft0x",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-23-325Z_01a0630b-0b5d-7aee-80f5-26c9c947e520.jsonl"
+    },
+    {
+      "id": "session-1788401661481-cvmdb3h",
+      "status": "idle",
+      "title": "Count slowly from 1 to 60, one number per line, no other te…",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-14-23-655Z_01a0650b-bea7-71d2-9cb5-751c65f35eff.jsonl"
+    },
+    {
+      "id": "session-live-1788509956852-xl21yai",
+      "status": "idle",
+      "title": "啥意思",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-04T08-20-18-310Z_01a06b81-1b06-736e-88a8-60540eb5cc92.jsonl"
+    },
+    {
+      "id": "session-live-1788572233370-z5p868v",
+      "status": "idle",
+      "title": "你好",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-05T01-39-54-980Z_01a06f38-e5e4-7e97-bc59-7db0a478169d.jsonl"
+    },
+    {
+      "id": "session-1788664933866-e7ya9g7",
+      "status": "idle",
+      "title": "hello",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-06T03-22-28-077Z_01a074bd-256d-7a0f-8397-c3ae6c311e38.jsonl"
+    },
+    {
+      "id": "session-1788425093600-q6pxqzp",
+      "status": "idle",
+      "title": "hey bro",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T08-45-09-220Z_01a06671-7ee4-7d82-8844-04437934b262.jsonl"
+    },
+    {
+      "id": "session-1788572526965-pr7obte",
+      "status": "idle",
+      "title": "你好呀",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-05T01-42-16-203Z_01a06f3b-0d8b-7d78-bcec-aad3d5e230f3.jsonl"
+    },
+    {
+      "id": "session-live-1788504035730-i7itmdw",
+      "status": "idle",
+      "title": "hey",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-04T06-40-49-962Z_01a06b26-092a-73bd-846d-1c33a6b78253.jsonl"
+    },
+    {
+      "id": "session-1788503410669-b0kwoti",
+      "status": "idle",
+      "title": "Session 0kwoti",
+      "workspaceId": "ws:main:/home/ai/code/ai-client"
+    },
+    {
+      "id": "session-1788401898915-6ajhkog",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-35-859Z_01a0650f-97d3-7003-982d-0c047bb45cd8.jsonl"
+    },
+    {
+      "id": "session-1788401935498-ly4hg4v",
+      "status": "idle",
+      "title": "Count slowly from 1 to 90, one number per line, no other te…",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-59-779Z_01a0650f-f543-7425-9a3a-db86b3be44a8.jsonl"
+    },
+    {
+      "id": "session-1788401952669-m7rgvi4",
+      "status": "idle",
+      "title": "Count slowly from 1 to 60, one number per line, no other te…",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-19-14-711Z_01a06510-2f97-70cd-86b1-48ae3eec2d01.jsonl"
+    },
+    {
+      "id": "session-import-8c414d42-9dbc-42b6-8907-38351b5d69c0",
+      "status": "idle",
+      "title": "/clear",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-50-790Z_import-2e3b3c96-ec99-4785-beed-be61dcf6c3a8.jsonl"
+    },
+    {
+      "id": "session-1788401898915-6sjbby6",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-28-975Z_01a0650f-7cef-7069-a460-5fa9508945cd.jsonl"
+    },
+    {
+      "id": "session-1788401898915-g5wen36",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-18-21-768Z_01a0650f-60c8-7b66-ac66-7c3f4ac63b6a.jsonl"
+    },
+    {
+      "id": "session-1788401651188-nlj4uqg",
+      "status": "idle",
+      "title": "Count slowly from 1 to 90, one number per line, no other te…",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-14-15-672Z_01a0650b-9f78-718c-9e3f-81aaddb2e99c.jsonl"
+    },
+    {
+      "id": "session-import-686d5ca3-24e2-4a3f-852c-35e6fe9d26e2",
+      "status": "idle",
+      "title": "/clear",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-14-06-415Z_import-a811cbf0-ceb4-4bbd-b612-2cceec293f20.jsonl"
+    },
+    {
+      "id": "session-1788401597800-w9g9yhd",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-13-42-215Z_01a0650b-1cc7-769f-bf19-ff9facba24f9.jsonl"
+    },
+    {
+      "id": "session-1788401597800-3pylyxt",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-13-30-808Z_01a0650a-f038-78f0-8ff0-0c690da08ba9.jsonl"
+    },
+    {
+      "id": "session-1788401597800-umqv6fl",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-03T02-13-20-005Z_01a0650a-c605-761a-b37e-84a672b1b168.jsonl"
+    },
+    {
+      "id": "session-1788366555356-xajw24k",
+      "status": "idle",
+      "title": "Count slowly from 1 to 60, one number per line, no other te…",
+      "workspaceId": "ws:main:/home/ai/code/ai-client"
+    },
+    {
+      "id": "session-1788366181501-m0dg1ax",
+      "status": "idle",
+      "title": "Count slowly from 1 to 60, one number per line, no other te…",
+      "workspaceId": "ws:main:/home/ai/code/ai-client"
+    },
+    {
+      "id": "session-1788365591287-5g73c64",
+      "status": "idle",
+      "title": "Count slowly from 1 to 60, one number per line, no other te…",
+      "workspaceId": "ws:main:/home/ai/code/ai-client"
+    },
+    {
+      "id": "session-1788365458607-3i2u9q7",
+      "status": "idle",
+      "title": "Count slowly from 1 to 60, one number per line, no other te…",
+      "workspaceId": "ws:main:/home/ai/code/ai-client"
+    },
+    {
+      "id": "session-1788362915985-slwaai5",
+      "status": "idle",
+      "title": "Session lwaai5",
+      "workspaceId": "ws:main:/home/ai/code/ai-client"
+    },
+    {
+      "id": "session-1788368093872-wx1coh4",
+      "status": "idle",
+      "title": "Count slowly from 1 to 60, one number per line, no other te…",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-55-949Z_01a0630b-8acd-7449-969d-577e25a8afcf.jsonl"
+    },
+    {
+      "id": "session-import-08175b24-93c1-4ff3-90e1-7aa58aa39c65",
+      "status": "idle",
+      "title": "/clear",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-49-319Z_import-d7c6acdf-aa24-4f6c-9354-6ed5892b4ae6.jsonl"
+    },
+    {
+      "id": "session-1788368051228-tau09co",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-34-809Z_01a0630b-3839-70ba-98d1-7b50790dc9f3.jsonl"
+    },
+    {
+      "id": "session-1788368051228-ffe62vl",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-13-278Z_01a0630a-e41e-741e-97de-2c0c10551b20.jsonl"
+    },
+    {
+      "id": "session-1788367339439-rumdyxn",
+      "status": "idle",
+      "title": "Run the bash command: echo T37C-PERM",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-42-24-005Z_01a06300-1185-71ec-a702-d96678588114.jsonl"
+    },
+    {
+      "id": "session-1788367135113-ttggz18",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-39-02-880Z_01a062fc-ffe0-7028-81d9-c7241d7b5c93.jsonl"
+    },
+    {
+      "id": "session-1788367135113-cjqjxkq",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-39-09-608Z_01a062fd-1a28-76a6-bafe-898a707f5509.jsonl"
+    },
+    {
+      "id": "session-1788367135113-tvf3j0v",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-38-57-035Z_01a062fc-e90b-730e-ba7e-ac5ccb3fcf8b.jsonl"
+    },
+    {
+      "id": "session-1788366817805-twoue3s",
+      "status": "idle",
+      "title": "Count slowly from 1 to 60, one number per line, no other te…",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-33-39-523Z_01a062f8-10c3-7f50-ab06-a3e5a3a27ed2.jsonl"
+    },
+    {
+      "id": "session-import-ba5afa43-e1b9-4b00-a0fa-f943ba559350",
+      "status": "idle",
+      "title": "/clear",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-22-57-022Z_import-43950ebd-385d-4aa1-a244-ced3f5467c7e.jsonl"
+    },
+    {
+      "id": "session-1788365882003-vtz0vwa",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-20-50-041Z_01a062ec-52f9-702d-bf09-a3c64dccc51a.jsonl"
+    },
+    {
+      "id": "session-1788365882003-hvby3dc",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-18-19-583Z_01a062ea-073f-7374-b2fe-35ef66581f99.jsonl"
+    },
+    {
+      "id": "session-1788365882003-g0lhehr",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-18-04-039Z_01a062e9-ca87-7285-9095-11ef261b18ac.jsonl"
+    },
+    {
+      "id": "session-import-3cd1fe0e-1c1c-43d0-b427-30b32806e68d",
+      "status": "idle",
+      "title": "/clear",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-13-06-577Z_import-d2b83e79-9fab-4545-8463-f01c848acc6d.jsonl"
+    },
+    {
+      "id": "session-1788365551777-ys8rd2i",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-12-39-498Z_01a062e4-d6ca-7729-89e3-ddf6802ec3c0.jsonl"
+    },
+    {
+      "id": "session-1788365551777-29ym6cx",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-12-47-096Z_01a062e4-f478-77aa-b66e-4f959b4175a9.jsonl"
+    },
+    {
+      "id": "session-1788365551777-h8mzi58",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-12-33-524Z_01a062e4-bf73-7189-9756-869af4617206.jsonl"
+    },
+    {
+      "id": "session-import-99a977c3-6634-4c9a-a9eb-1b46880ba3de",
+      "status": "idle",
+      "title": "/clear",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-10-54-098Z_import-2809d882-c1ea-454b-8702-05c74751ffa5.jsonl"
+    },
+    {
+      "id": "session-1788365407896-jr46v0d",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-10-39-903Z_01a062e3-039f-7633-a471-2127e1f3b688.jsonl"
+    },
+    {
+      "id": "session-1788365407896-gm16ir6",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-10-25-480Z_01a062e2-cb48-7cf6-acb4-91fc7985d622.jsonl"
+    },
+    {
+      "id": "session-1788365407896-z28v5gi",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-10-09-890Z_01a062e2-8e62-7b7c-956b-f327a44f73d6.jsonl"
+    },
+    {
+      "id": "session-1788365230384-03omjj3",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-08-02-143Z_01a062e0-9b5f-7ba2-84b3-2c5708cfb19a.jsonl"
+    },
+    {
+      "id": "session-1788365230383-dqo2tup",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-07-41-483Z_01a062e0-4aab-771a-ab3b-62bc1d614240.jsonl"
+    },
+    {
+      "id": "session-1788365230383-noqghx0",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-07-12-411Z_01a062df-d91b-7df1-8558-280ec0c22720.jsonl"
+    },
+    {
+      "id": "session-1788365136435-ug1mtvk",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-06-12-312Z_01a062de-ee58-7eba-9716-d29ecb244a74.jsonl"
+    },
+    {
+      "id": "session-1788365136435-gm90mxx",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-05-54-519Z_01a062de-a8d7-7063-9315-edf74698034f.jsonl"
+    },
+    {
+      "id": "session-1788365136435-59s8x2r",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-05-38-240Z_01a062de-6940-72fe-bcea-59632c63c37d.jsonl"
+    },
+    {
+      "id": "session-1788365022258-il8xyhr",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-AFTER-CRASH",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-03-44-612Z_01a062dc-ad64-746a-9a7b-f9600d80e5a5.jsonl"
+    },
+    {
+      "id": "session-import-121374fa-0f86-43fb-a772-1c9b0c4e0ac8",
+      "status": "idle",
+      "title": "/clear",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-03-37-612Z_import-81c2ecd9-7ba5-4cee-8e13-f35ea0232db1.jsonl"
+    },
+    {
+      "id": "session-1788364965948-uvb31n9",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-03-07-196Z_01a062dc-1b3c-7a43-a044-1a30952a3b80.jsonl"
+    },
+    {
+      "id": "session-1788364965948-4rpqr2j",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-03-00-466Z_01a062dc-00f2-7123-9734-47542881621b.jsonl"
+    },
+    {
+      "id": "session-1788364965948-wvsb2uu",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-02-50-380Z_01a062db-d98c-715a-b668-6d86038eed87.jsonl"
+    },
+    {
+      "id": "session-1788364789044-b7f5yaz",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-59-56-887Z_01a062d9-33d7-7554-9184-97fc83240bf5.jsonl"
+    },
+    {
+      "id": "session-1788364789043-ij1guom",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-59-50-869Z_01a062d9-1c55-7ec9-9e16-404834ef50fc.jsonl"
+    },
+    {
+      "id": "session-1788364789044-i9koskn",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-00-06-932Z_01a062d9-5b14-77e1-80f8-f65beae66d23.jsonl"
+    },
+    {
+      "id": "session-live-1788363772117-ohqrhly",
+      "status": "idle",
+      "title": "Reply with exactly: PIDPROBE",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-43-05-632Z_01a062c9-c5a0-748e-b942-861164fc157e.jsonl"
+    },
+    {
+      "id": "session-import-cfb1ca8d-fd14-427b-8b20-f097e209ce6a",
+      "status": "idle",
+      "title": "/clear",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-41-14-539Z_import-afe0585f-0bdc-4bf0-a663-efbe9139f66a.jsonl"
+    },
+    {
+      "id": "session-1788363618686-vf8md5f",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-40-37-166Z_01a062c7-81ae-7bab-a3ae-46d2a3d4c383.jsonl"
+    },
+    {
+      "id": "session-1788363618686-fv745xy",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-40-27-810Z_01a062c7-5d22-76b8-9c11-a48237297300.jsonl"
+    },
+    {
+      "id": "session-1788363618686-omshwxv",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-40-19-913Z_01a062c7-3e49-703d-9e4a-a6c24cf0a291.jsonl"
+    },
+    {
+      "id": "session-1788363241408-h9xd96i",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S2",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-39-01-160Z_01a062c6-0aa8-7e6e-b2b3-ce7494b0764b.jsonl"
+    },
+    {
+      "id": "session-1788363241408-5ie1x57",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-34-09-449Z_01a062c1-9729-7556-afe9-8d3069671d7a.jsonl"
+    },
+    {
+      "id": "session-1788363241408-zrej2s9",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-34-02-604Z_01a062c1-7c6c-7bc1-9f31-591c8b3c7682.jsonl"
+    },
+    {
+      "id": "session-1788362988826-ucyygoh",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S3",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-29-58-421Z_01a062bd-c295-7c47-9a48-c01863097e50.jsonl"
+    },
+    {
+      "id": "session-1788362988825-c4pygn2",
+      "status": "idle",
+      "title": "Reply with exactly: T37C-S1",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-29-50-055Z_01a062bd-a1e7-76e6-a854-143663159c0d.jsonl"
+    },
+    {
+      "id": "session-live-1788362580499-l5ej560",
+      "status": "idle",
+      "title": "Session 5ej560",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T15-23-15-910Z_01a062b7-9e46-7ed8-b21f-9cae5d0c2114.jsonl"
+    },
+    {
+      "id": "session-live-1788362439344-4qdotza",
+      "status": "idle",
+      "title": "Session qdotza",
+      "workspaceId": "ws:main:/home/ai/code/ai-client"
+    },
+    {
+      "id": "session-live-1788362158031-6v95ksa",
+      "status": "idle",
+      "title": "Session v95ksa",
+      "workspaceId": "ws:main:/home/ai/code/ai-client"
+    },
+    {
+      "id": "session-live-1788361761955-jg2l6s5",
+      "status": "idle",
+      "title": "Session g2l6s5",
+      "workspaceId": "ws:main:/home/ai/code/ai-client"
+    },
+    {
+      "id": "s-send",
+      "status": "idle",
+      "title": "Session s-send",
+      "workspaceId": "ws:main:/home/ai/code/ai-client"
+    },
+    {
+      "id": "session-live-1789652840608-d85k2t3",
+      "status": "idle",
+      "title": "Live Agent Host",
+      "workspaceId": "ws:main:/home/ai/code/ai-client"
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "ws:main:/home/ai/code/ai-client",
+      "path": "/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client"
+    },
+    {
+      "id": "ws:main:/tmp/t032/ws-normal",
+      "path": "/tmp/t032/ws-normal",
+      "projectId": "local:/tmp/t032/ws-normal"
+    }
+  ],
+  "projects": [
+    { "id": "local:/home/ai/code/ai-client", "name": "ai-client" },
+    { "id": "local:/tmp/t032/ws-normal", "name": "ws-normal" }
+  ],
+  "msgCounts": {}
+}

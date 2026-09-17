@@ -1,0 +1,78 @@
+{
+  "note": "T032 batch E1 / checklist dev item 29 — GUI A/10 TEMP /new matrix. Slash command typed into the composer textarea and submitted with a real Enter key (two Enters: the first completes the slash suggestion to \"/new \", the second runs it).",
+  "cells": [
+    {
+      "start": "1 bound normal directory",
+      "startSession": "session-1789652987586-56dkttr",
+      "startCwd": "/tmp/t032/ws-normal",
+      "newSession": "session-1789653100430-6jduqga",
+      "newWorkspaceId": "ws:main:/tmp/t032/ws-normal",
+      "newCwd": "/tmp/t032/ws-normal",
+      "inherited": true,
+      "via": "createChatSessionOnWorkspace(current.workspaceId) — chatSessionActions.ts:78-80"
+    },
+    {
+      "start": "2 TEMP chat with an allocated scratch dir",
+      "startSession": "session-1789653214158-m3tseh2",
+      "startCwd": "/home/ai/JYWAI/temporary/unbound-sessions/46766010-477b-4163-8fae-a7e85c04b14f",
+      "newSession": "session-1789653289825-nu2nw3h",
+      "newWorkspaceId": "",
+      "newCwd": "/home/ai/JYWAI/temporary/unbound-sessions/46766010-477b-4163-8fae-a7e85c04b14f",
+      "inherited": true,
+      "sharedScratchWithSource": true,
+      "via": "createUnboundChatSession + inheritedPath = current.unbound?.workspacePath ?? scratchWorkspaceStore.pathFor(current.id) — chatSessionActions.ts:82-92"
+    },
+    {
+      "start": "3 no workspace (unbound chat that has never sent)",
+      "startSession": "session-1789653348041-kt3cjzw",
+      "startCwd": null,
+      "newSession": "session-1789653371295-1u1vt2e",
+      "newWorkspaceId": "",
+      "newCwdAtCreate": null,
+      "newCwdAfterFirstSend": "/home/ai/JYWAI/temporary/unbound-sessions/79f89e05-c84b-4d10-87c0-0f5670a4a406",
+      "inherited": false,
+      "via": "inheritedPath undefined -> no unbound.workspacePath written; ensureScratchWorkspace allocates a fresh dir on the first send"
+    }
+  ],
+  "sessionIndexRows": [
+    {
+      "sessionId": "session-1789652987586-56dkttr",
+      "title": "E1-29 起点1 普通目录",
+      "workspacePath": "/tmp/t032/ws-normal",
+      "unbound": false,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789652987586-56dkttr.jsonl"
+    },
+    {
+      "sessionId": "session-1789653100430-6jduqga",
+      "title": "E1-29 新会话1",
+      "workspacePath": "/tmp/t032/ws-normal",
+      "unbound": false,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789653100430-6jduqga.jsonl"
+    },
+    {
+      "sessionId": "session-1789653214158-m3tseh2",
+      "title": "E1-29 起点2 TEMP",
+      "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/46766010-477b-4163-8fae-a7e85c04b14f",
+      "unbound": true,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789653214158-m3tseh2.jsonl"
+    },
+    {
+      "sessionId": "session-1789653289825-nu2nw3h",
+      "title": "E1-29 新会话2",
+      "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/46766010-477b-4163-8fae-a7e85c04b14f",
+      "unbound": true,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789653289825-nu2nw3h.jsonl"
+    },
+    {
+      "sessionId": "session-1789653371295-1u1vt2e",
+      "title": "E1-29 新会话3",
+      "workspacePath": "/home/ai/JYWAI/temporary/unbound-sessions/79f89e05-c84b-4d10-87c0-0f5670a4a406",
+      "unbound": true,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789653371295-1u1vt2e.jsonl"
+    }
+  ],
+  "scratchDirsOnDisk": [
+    "46766010-477b-4163-8fae-a7e85c04b14f",
+    "79f89e05-c84b-4d10-87c0-0f5670a4a406"
+  ]
+}

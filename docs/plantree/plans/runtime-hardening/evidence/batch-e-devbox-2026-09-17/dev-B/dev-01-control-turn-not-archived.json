@@ -1,0 +1,148 @@
+[
+  {
+    "role": "user",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "devB DEV-1 archive-during-turn probe"
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "blocks": [
+      {
+        "type": "tool_call",
+        "toolName": "bash",
+        "toolInput": {
+          "command": "sleep 45 && echo slept"
+        }
+      },
+      {
+        "type": "permission_activity",
+        "permissionActivity": {
+          "phase": "decision",
+          "requestId": "toolu_5d256482-08d4-4f49-b9cf-9d2c6050377c",
+          "surface": "bash",
+          "value": "sleep 45 && echo slept",
+          "result": "allow",
+          "resolution": "policy_allow"
+        }
+      },
+      {
+        "type": "tool_result",
+        "toolOk": true,
+        "toolOutput": "slept\n\n[exit=0; exit]"
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "blocks": [
+      {
+        "type": "tool_call",
+        "toolName": "write",
+        "toolInput": {
+          "path": "archive-probe.txt",
+          "content": "written after archive"
+        }
+      },
+      {
+        "type": "permission_activity",
+        "permissionActivity": {
+          "phase": "decision",
+          "requestId": "toolu_537e7d24-53b8-4833-bcf4-c42e437f431c",
+          "surface": "write",
+          "value": "/home/ai/JYWAI/temporary/unbound-sessions/6583166b-4392-4453-a825-6862cadebd2b/archive-probe.txt",
+          "result": "allow",
+          "resolution": "policy_allow"
+        }
+      },
+      {
+        "type": "tool_result",
+        "toolOk": true,
+        "toolOutput": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Wrote 21 bytes to /home/ai/JYWAI/temporary/unbound-sessions/6583166b-4392-4453-a825-6862cadebd2b/archive-probe.txt"
+            }
+          ],
+          "details": {
+            "review": {
+              "version": 1,
+              "path": "/home/ai/JYWAI/temporary/unbound-sessions/6583166b-4392-4453-a825-6862cadebd2b/archive-probe.txt",
+              "status": "added",
+              "patch": "@@ -0,0 +1,1 @@\n+written after archive\n\\ No newline at end of file"
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "blocks": [
+      {
+        "type": "tool_call",
+        "toolName": "read",
+        "toolInput": {
+          "path": "archive-probe.txt"
+        }
+      },
+      {
+        "type": "permission_activity",
+        "permissionActivity": {
+          "phase": "decision",
+          "requestId": "toolu_3a35ff1e-5566-4155-a4ab-b5e72da59feb",
+          "surface": "read",
+          "value": "/home/ai/JYWAI/temporary/unbound-sessions/6583166b-4392-4453-a825-6862cadebd2b/archive-probe.txt",
+          "result": "allow",
+          "resolution": "policy_allow"
+        }
+      },
+      {
+        "type": "tool_result",
+        "toolOk": true,
+        "toolOutput": "written after archive"
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "blocks": [
+      {
+        "type": "tool_call",
+        "toolName": "bash",
+        "toolInput": {
+          "command": "pwd && ls -la"
+        }
+      },
+      {
+        "type": "permission_activity",
+        "permissionActivity": {
+          "phase": "decision",
+          "requestId": "toolu_2b3aaedc-e4df-4559-bc9a-47f821530915",
+          "surface": "bash",
+          "value": "pwd && ls -la",
+          "result": "allow",
+          "resolution": "policy_allow"
+        }
+      },
+      {
+        "type": "tool_result",
+        "toolOk": true,
+        "toolOutput": "/home/ai/JYWAI/temporary/unbound-sessions/6583166b-4392-4453-a825-6862cadebd2b\ntotal 12\ndrwx------ 2 ai ai 4096 Sep 17 07:14 .\ndrwx------ 3 ai ai 4096 Sep 17 07:13 ..\n-rw-rw-r-- 1 ai ai   21 Sep 17 07:14 archive-probe.txt\n\n[exit=0; exit]"
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "archive probe finished"
+      }
+    ]
+  }
+]

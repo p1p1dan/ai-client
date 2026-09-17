@@ -6,7 +6,7 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 ## 顺序与依赖
 
-批次 A（安全与数据完整性）先于 B（功能正确性）先于 C（清扫与文档）；D（补审）与 A/B 并行，只读不冲突；D2（补审修补，上机前）在 E 之前；E（现场）最后一次上机，合并 A～D 的现场项；F（补审修补，上机后）在 E 之后。批次内按编号顺序，编号即建议顺序。
+批次 A（安全与数据完整性）先于 B（功能正确性）先于 C（清扫与文档）；D（补审）与 A/B 并行，只读不冲突；D2（补审修补，上机前）在 E 之前；D3（收口后追加修补）与 D4（开发机点验修补，源自 T032）同样在 E 之前，D4 排在 T032 之后、T033 之前；E（现场）最后一次上机，合并 A～D 的现场项；F（补审修补，上机后）在 E 之后。批次内按编号顺序，编号即建议顺序。
 
 ## Done
 
@@ -64,8 +64,9 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 ## In Progress
 
-- **T032** 上机检查单（2026-09-17 起）：**正式检查单已产出** → [checklist-e.md](checklist-e.md)（计划根下，与本文件并列；批次 D 的草案作为存证保留原样）。四个来源合并去重完毕，新增 20 项（旧树 P5-2 六行 / P5-4-P5-5 四行 / H-20 两行 / P6-3 第 4 条 / P6-4 回退互读 / 四条审计静态推断项 / 三条旧树未覆盖项），并做了三条裁决（cordis 判据写反已改正、并发轮转已由 `trace.test.ts:350` 覆盖、CI 不触发测试已结案）。**剩下的是 dev-box 那 35 项的执行**：2026-09-17 做完 5 项（见下），其余多数需要起 Electron，尚未做。
+- ✅ **T032** 上机检查单与开发机组 — 只读点验，无提交（2026-09-17）。**正式检查单已产出** → [checklist-e.md](checklist-e.md)（计划根下，与本文件并列；批次 D 的草案作为存证保留原样）：四个来源合并去重完毕，新增 20 项（旧树 P5-2 六行 / P5-4-P5-5 四行 / H-20 两行 / P6-3 第 4 条 / P6-4 回退互读 / 四条审计静态推断项 / 三条旧树未覆盖项），并做了三条裁决（cordis 判据写反已改正、并发轮转已由 `trace.test.ts:350` 覆盖、CI 不触发测试已结案）。**开发机组 37 项（35 + DEV-36/37）当日全部处置完毕**，分七批执行：✅ 通过 28 项、⚠️ 部分成立 3 项（DEV-11 导入文案、DEV-32 GUI 侧覆盖层、DEV-36 插件页有条件句）、⛔ 判负或复现已知缺陷 3 项（DEV-3 兼容根子代理定义删除语义、DEV-10 Codex 子目录不可读整源静默消失、DEV-16 两个窗口对同一会话开 `pi --session` 静默分叉）、⛔ 当前不可执行 2 项（DEV-12 本机无真实旧格式 Codex 样本、DEV-18 Node 24 解析属死代码）、🚫 裁决不需人工 2 项（DEV-35 已由 `trace.test.ts:350` 覆盖、baseline-01 CI 已结案）。检查单同日更正 16 行：5.1 判据修正新增 15 行（DEV-22、DEV-33 ×2、DEV-11、DEV-5、DEV-13、DEV-1、DEV-2、DEV-15、DEV-32、DEV-17、DEV-24、DEV-25、DEV-29、DEV-36），5.2 新增 DEV-18（死代码不可执行）；另第 2.3 节 MODEL-48 放宽为「CDP 真鼠标序列可驱动」。点验产出 26 条疑似缺陷 D1～D26，收敛成新开的**批次 D4**（T060～T068）与两条待拍板问题 **Q016 / Q017**。方法与环境：模型除第二批 dev-A1 用了 `maxapi/grok-4.6` 真实回合外全部走本地假网关（vault 临时注册、每批还原），Electron 累计起 20 次，产品代码零改动，唯一新增仓库文件是测试用例 `src/runtime/__tests__/sessionAttachmentFill.test.ts`（2 条）。收口全量 Vitest（Linux 开发机、单 worker）**413 文件 / 6271 条全部通过，退出码 0，237.55 s**，存档 [closeout-vitest-full.txt](evidence/batch-e-devbox-2026-09-17/closeout-vitest-full.txt)；对比 T059 收口的 411 / 6268（2 failed 为开机时长相关的 `sessionWriterLock` 两条），本次 +2 文件（`pluginGraphIncomplete.test.ts` 已提交、`sessionAttachmentFill.test.ts` 新增）。证据：[evidence/batch-e-devbox-2026-09-17/README.md](evidence/batch-e-devbox-2026-09-17/README.md)。**本轮全部未提交**（提交需用户批准）。
 - 批次 D2 已收口（2026-09-16），批次 D3（T056 `8a3ce4a6` / T057 `2c1e4ba3` / T059 `b32fa9da`）已全部落地并收口（2026-09-17）。
+- **批次 D4（T060～T068）九项已全部落地并经两轮审阅、两轮真机复验（2026-09-17），尚未提交**——逐项结论见下方批次 D4 表，证据 [evidence/batch-d4-fixes-2026-09-17/README.md](evidence/batch-d4-fixes-2026-09-17/README.md)。本段当前在飞：提交批次 D4 与 T032 的证据，然后进 **T033**（最后一次上机，先补一次打包构建）。
 
 ## Next
 
@@ -147,11 +148,31 @@ T059 的收口全量另在 **Linux 开发机**上跑（2026-09-17，单 worker�
 | T057 | Windows 路径语义缺陷波：`canonicalPath` 逐段解析主修（junction/symlink + `..` 越界——含内置 deny 失效与 accept-edits 零审批逃逸链）；workerSessionKey POSIX 分支误用原生 resolve；localFileReadGuard 返回值大小写污染；promptService 两条过严断言；shellPolicy 缺引号用例 | **high**（首条；余三条 low） | 深查 #1～#4 | shellPolicy 的 symlink 回归用例转绿并新增 junction 场景用例（含指向工作区自身的 junction + `..` 上爬）；不含 `..` 的快路径行为逐字节不变；反向验证判红复原；三套 tsc 与相关测试全绿 |
 | T059 | 家目录改为独立 user 层（[决策 016](decisions/016-home-tier-instruction-gating.md)，Q015 结案）：家目录从 project 链移除、改作 user 层 global，**对所有项目生效**（含工作区不在家目录下的）；全局层只取一份，顺序 `~/.pilab/AGENTS.md` → `~/.claude/CLAUDE.md` → `~/.codex/AGENTS.md`，找到即停、都没有则为空；全局层不读 `CLAUDE.local.md`；家目录之上的多用户共享目录（`C:\Users` / `/home`）全部跳过；globals 与 project 链做文件级 canonical 去重作兜底；baseline 脚本传 `settingSources: []` 保住机器无关性 | low（语义地雷，当前不可触发） | Q015 | 工作区不在家目录下时也读到全局文件；`settingSources` 含/不含 user 时读/不读各一条；三项全缺时全局层为空；家目录之上的层不读；家目录不在链上时链行为不变；global 与链命中同一文件只出现一次；未信任项目仍读 user 层、project 链全不读（既有语义，非本次引入）；层内 first-one-wins；预算 user 层先于 project 消费；反向验证判红复原；三套 tsc 与相关测试全绿 |
 
+### 批次 D4（上机前，开发机点验修补，2026-09-17 立项）
+
+来源：T032 开发机组 37 项点验产出的 26 条疑似缺陷 D1～D26（逐条台账见 [defects-ledger.md](evidence/batch-e-devbox-2026-09-17/defects-ledger.md)，现场原文见[批次 E 开发机证据](evidence/batch-e-devbox-2026-09-17/README.md)的汇总节与各批「疑似缺陷清单」小节）。用户拍板「审查完毕后总结并派人修」，本批在 T033 上机之前做完，修完逐项回开发机真机复验。建议顺序：两条 high（T060 / T061）先做，其余 medium / low 按文件范围不冲突即可并行。
+
+**2026-09-17：九项全部落地，未提交。** 经三组只读一审（T064 / T065 判 blocking）→ 回炉 R-A / R-B / R-C → 二审（rework-2 另判一条 blocking 并已修）→ 两轮开发机真机复验。逐项结论见下表验收列，完整证据 [evidence/batch-d4-fixes-2026-09-17/README.md](evidence/batch-d4-fixes-2026-09-17/README.md)。
+
+| ID | 任务 | 严重级 | 覆盖的发现 | 验收 |
+|---|---|---|---|---|
+| ✅ T060 | 临时根「保存位置」设置 Main 侧恒读不到（`readSettings()` 读 settings.json 顶层，用户设置在 `aiclient-settings.state`），scratch 根永远回落默认目录；顺带复现定位 D6（未绑定会话运行中从侧栏消失、重启回来） | **high** | D13、D6 | Main 经统一设置读取入口拿到 defaultTemporaryPath；改设置后新建临时对话的 scratch 目录落在新根；用例钉住读取路径；DEV-2 补格真机复验 ✅；衍生 [Q018](open-questions.md)。**已落地（2026-09-17，未提交）**：一审 pass-with-notes、无回炉，真机复验 ✅（新根落点 / 重启后索引 / D6 侧栏不掉）→ [证据](evidence/batch-d4-fixes-2026-09-17/README.md) |
+| ✅ T061 | 会话总预算拒绝后 store 中毒成静默死会话（总预算检查在写队列内、tail 变已 reject 的 promise），附件名不落盘重开后丢失 | **high** | D1、D24、D25 | 总预算改队列外预检；一次 `session_size_limit` 拒绝后同一会话纯文本可发或给出可见错误，静默丢弃判负（`sessionAttachmentFill.test.ts` 改断言可写）；附件 name 落盘并回放；DEV-33 真机复验。**已落地（2026-09-17，未提交）**：一审 pass-with-notes（证伪「未知键到不了 provider」）→ 回炉 R-C 在 runtime 出网口剥键 → 二审 pass，两轮真机复验 ✅（含 `pi-messages` 请求体取证）→ [证据](evidence/batch-d4-fixes-2026-09-17/README.md) |
+| ✅ T062 | 模型目录两侧口径不一致（选择器读磁盘 models.json、worker 用凭据库内存目录），只存在于磁盘的 provider「列得出、发不出」；H/21 模型缺失中文覆盖层已触发不到（`isModelMissingError` 不认 `no model "…" in the catalog`） | medium | D3、D19 | 两侧用同一份目录；覆盖层认现行错误信号；DEV-32 GUI 侧复验。**已落地（2026-09-17，未提交）**：一审 pass-with-notes → 回炉 R-A 补中文覆盖层卡 → 二审 pass-with-notes，复验第一轮半生效、第二轮 ✅ 完全成立 → [证据](evidence/batch-d4-fixes-2026-09-17/README.md) |
+| ✅ T063 | 兼容根 `~/.agents/subagents` 定义编辑后写成主目录影子、删除要删两次且回旧内容 | medium | D12 | 编辑写回原文件或明确提示已复制；删除一次即消失；DEV-3 复验 ✅；方案见[决策 017](decisions/017-subagent-definitions-edit-at-source-root.md)。**已落地（2026-09-17，未提交）**：一审 pass-with-notes、无回炉，真机复验 ✅（四时点：原地改、删一次即消失、重启不回来）→ [证据](evidence/batch-d4-fixes-2026-09-17/README.md) |
+| ✅ T064 | worker bootstrap 失败后用户刚发的消息被吞、索引留 title 为空的空壳行 | medium | D15 | 失败时输入还回 composer 并给可见错误；不留空壳索引行；DEV-4 复验。**已落地（2026-09-17，未提交）**：一审 **blocking**（输入框非空时载荷会丢）→ 回炉 R-A 加 ↺ 回落 → 二审 pass-with-notes（blocking 关闭），真机复验 ✅ 正反两条都做 → [证据](evidence/batch-d4-fixes-2026-09-17/README.md) |
+| ✅ T065 | 两个窗口对同一会话各起 `pi --session` 把会话树静默分叉；TUI 切回被挂起的聊天整屏空白 | medium | D18、D17（+ 轻项：TUI 关闭 / 会话损坏英文条、关第二窗口弹整应用退出） | 第二窗口被拦或降级并提示；切回自动重绘；DEV-14/16 复验。**已落地（2026-09-17，未提交）**：一审 **blocking**（open 失败回滚过度释放）→ 回炉 R-B 定向释放并重做 D17 触发点 → 二审 pass-with-notes（blocking 关闭），复验 D18 与关窗文案 ✅、D17 第二轮基本成立但留约 4% 偶发空白 → [证据](evidence/batch-d4-fixes-2026-09-17/README.md) |
+| ✅ T066 | 可观测性：electron-log 吞 warn 致索引修复日志缺失；导入链路、归档 / worker 退出 / scratch 删除、pi TUI spawn 与退出码、provider_retry、预算拒绝各自零日志 | low | D4、D10、D14（+ 各批轻项） | 上述路径各一行落 main.log；T038 说明的「记 main.log」兑现。**已落地（2026-09-17，未提交）**：一审 pass-with-notes（门槛下降把既有未脱敏日志提拔到落盘）→ 回炉 R-C 修三处脱敏 + 预算拒绝补码 → 二审判 **blocking**（`clearInternal` 同一明文回显）已修，两轮真机复验 ✅（落点是按天日志，非 `main.log`）→ [证据](evidence/batch-d4-fixes-2026-09-17/README.md) |
+| ✅ T067 | i18n 补漏：问答卡固定文案、重试横幅与 Details、导入失败原因句（字节数用 MiB）、Composer 附件六句、TUI 英文条 | low | D9、D20、D21、D26 | 中文界面无英文硬编码，DEV-11/24/25/33 复拍。**已落地（2026-09-17，未提交）**：一审 pass-with-notes（跨模块 `instanceof` 接线无用例）→ 回炉 R-C 只补用例不改生产码 → 二审 pass，真机复拍 ✅ 四处 + 原「遗留」的附件总量提示均为中文 → [证据](evidence/batch-d4-fixes-2026-09-17/README.md) |
+| ✅ T068 | 卡片标题字重 `font-medium`（Win10 无 500 档）、`QuestionItem.header` 声明未渲染、Node 24 解析与横幅死代码及 dev.env / 注释漂移 | low | D23、D22、D16 | 标题改 semibold 并 Win10 复拍；header 渲染或删契约；死代码删除或接回、注释同步。**已落地（2026-09-17，未提交）**：一审 **pass**（本批唯一无 notes）、无回炉，真机复验 ✅（字重 computed 600/400、chip 就位、无 Node 24 残留）；Win10 对拍留 T033 → [证据](evidence/batch-d4-fixes-2026-09-17/README.md) |
+
+其余缺陷的归属：D2（两个 8 MiB 上限量的不是同一个东西）归批次 F 的 T058（[决策 015](decisions/015-attachment-sidecar-for-session-budget.md) 附件旁路落地后这个接缝自然消失）、D7 / D8（Codex 子目录不可读整源静默消失且三处日志零行）归批次 F 的 T052、D11（导入面板 320 行不虚拟化）只记录不改；D5（删除临时工作区后其下聊天的去向）与「运行时错误块是否升级成卡片」转为 [Q016 / Q017](open-questions.md)。D1～D26 的逐条处置已回写进 [defects-ledger.md](evidence/batch-e-devbox-2026-09-17/defects-ledger.md) 末尾的处置表。
+
 ### 批次 E：现场
 
 | ID | 任务 | 范围 | 验收 |
 |---|---|---|---|
-| T032 | 上机检查单：合并旧树待现场项（P5-2 六行、P5-4/P5-5 五行、P6-3 第 4/6 条、H/20 I5、F3 根因）、T001 后的 PERM-1 探针复跑（`scripts/run-perm1-probe.mjs`，需真实模型回合）与审计静态推断项（permissions-19、core-host-05/07、tools-10、cutover-03、P1-8 证据重采、P6-4 旧版产物互读） ；**批次 D 追加**：并入 [checklist-e.md](evidence/batch-d-audit-2026-09-15/checklist-e.md)（批评者 34 条上机必做 + 18 区域 150 项，按 windows / encrypted / utility / real-model 分组，其中标 dev-box 的项在上机前先做完）与 field-06 点名的现场项（F1～F7、GUI A/2、A/4、A/10、B/5、C/8、F/13、F/15、F3 根因）；P4-6 经接缝裁决为 incomplete，R2/R3/R4 三行从未执行，上机日必须给出结论 | 旧树第 11 批 + 审计 + 批次 D | 检查单每项有判据与取证方式。**2026-09-17：正式检查单已产出** → [checklist-e.md](checklist-e.md)（计划根下；四来源合并去重，原 150 项判据逐字搬入、新增 20 项、三条裁决、回填出口表、取证规矩）。剩余工作是 dev-box 那 35 项的执行：已做完 5 项（[证据](evidence/batch-e-devbox-2026-09-17/README.md)），其余多数需起 Electron |
+| T032 | 上机检查单：合并旧树待现场项（P5-2 六行、P5-4/P5-5 五行、P6-3 第 4/6 条、H/20 I5、F3 根因）、T001 后的 PERM-1 探针复跑（`scripts/run-perm1-probe.mjs`，需真实模型回合）与审计静态推断项（permissions-19、core-host-05/07、tools-10、cutover-03、P1-8 证据重采、P6-4 旧版产物互读） ；**批次 D 追加**：并入 [checklist-e.md](evidence/batch-d-audit-2026-09-15/checklist-e.md)（批评者 34 条上机必做 + 18 区域 150 项，按 windows / encrypted / utility / real-model 分组，其中标 dev-box 的项在上机前先做完）与 field-06 点名的现场项（F1～F7、GUI A/2、A/4、A/10、B/5、C/8、F/13、F/15、F3 根因）；P4-6 经接缝裁决为 incomplete，R2/R3/R4 三行从未执行，上机日必须给出结论 | 旧树第 11 批 + 审计 + 批次 D | 检查单每项有判据与取证方式。**2026-09-17：正式检查单已产出** → [checklist-e.md](checklist-e.md)（计划根下；四来源合并去重，原 150 项判据逐字搬入、新增 20 项、三条裁决、回填出口表、取证规矩）。**2026-09-17 开发机组全部完成** → [证据](evidence/batch-e-devbox-2026-09-17/README.md)：37 项（35 + DEV-36/37）分七批处置完毕，28 ✅ / 3 ⚠️ 部分成立 / 3 ⛔ 判负 / 2 ⛔ 不可执行 / 2 🚫 裁决不需人工；检查单同日更正 16 行；26 条疑似缺陷转批次 D4 与 Q016 / Q017；收口全量 413 文件 / 6271 条全绿。未提交 |
 | T033 | 最后一次上机：加密 Windows 一次性全量验收 | T032 | 逐项取证进 evidence |
 
 ### 批次 F：补审修补（上机后）

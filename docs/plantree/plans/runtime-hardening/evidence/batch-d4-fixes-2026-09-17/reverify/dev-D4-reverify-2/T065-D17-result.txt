@@ -1,0 +1,45 @@
+# T065 / D17 —— TUI 模式下 A<->B 切换：回流字节与屏幕内容（2026-09-17 第二轮复验）
+#
+# 会话 A = session-r2-tuia（终端 pi-tui-79fcde73…），pi 的输入行里留着未发送的标记 AAAMARKER
+# 会话 B = session-r2-tuib（终端 pi-tui-46bc6e9f…），同上留着 BBBMARKER
+#   —— 两个会话是同一份真会话的拷贝，画面本来一模一样，靠这两个标记才分得出「现在屏幕上是谁」。
+#
+# 判据（T065 回炉自己定的）：state:"live" 之后 piTui.onData 的回流应当是整屏量级（数 KB），
+# 而不是上一轮那 10 个字节；xterm 非空行数 > 0；屏幕上的标记要和目标会话对得上。
+#
+# 每一腿的做法：清空 onData 抓取 → 切会话 → 等 6 秒 → 读字节数 / 非空行数 / 标记。
+
+== 第一批（6 腿，落盘文件 T065-D17-r{1,2,3}-to{A,B}[-screen].txt 就是这一批）==
+round=1 switchTo=A  bytesAfterSwitch=11     nonBlankRows=0   markerOnScreen=NONE     ← 唯一一次失败
+round=1 switchTo=B  bytesAfterSwitch=15372  nonBlankRows=22  markerOnScreen=BBBMARKER
+round=2 switchTo=A  bytesAfterSwitch=15372  nonBlankRows=22  markerOnScreen=AAAMARKER
+round=2 switchTo=B  bytesAfterSwitch=15372  nonBlankRows=22  markerOnScreen=BBBMARKER
+round=3 switchTo=A  bytesAfterSwitch=15383  nonBlankRows=22  markerOnScreen=AAAMARKER
+round=3 switchTo=B  bytesAfterSwitch=15372  nonBlankRows=22  markerOnScreen=BBBMARKER
+
+  失败那一腿的 11 个字节原文是 ESC[10G ESC[?25l 加一个换行 —— 只有光标定位，没有重绘，
+  和上一轮记的 10 字节是同一种形态。见 T065-D17-r1-toA.txt / -screen.txt（非空行 = 0）。
+
+== 第二批（10 腿，每腿连 states 一起清空，所以每行只报这一次 resume 的事件）==
+pass2 round=1 switchTo=A {"bytes":15383,"chunks":7,"states":["…:suspended","…:live","…:live"],"nonBlank":22,"marker":"AAAMARKER"}
+pass2 round=1 switchTo=B {"bytes":15372,"chunks":6,…,"nonBlank":22,"marker":"BBBMARKER"}
+pass2 round=2 switchTo=A {"bytes":15372,…,"nonBlank":22,"marker":"AAAMARKER"}
+pass2 round=2 switchTo=B {"bytes":15372,…,"nonBlank":22,"marker":"BBBMARKER"}
+pass2 round=3 switchTo=A {"bytes":15372,…,"nonBlank":22,"marker":"AAAMARKER"}
+pass2 round=3 switchTo=B {"bytes":15372,…,"nonBlank":22,"marker":"BBBMARKER"}
+pass2 round=4 switchTo=A {"bytes":15372,…,"nonBlank":22,"marker":"AAAMARKER"}
+pass2 round=4 switchTo=B {"bytes":15383,…,"nonBlank":22,"marker":"BBBMARKER"}
+pass2 round=5 switchTo=A {"bytes":15372,…,"nonBlank":22,"marker":"AAAMARKER"}
+pass2 round=5 switchTo=B {"bytes":15383,…,"nonBlank":22,"marker":"BBBMARKER"}
+
+== 第三批（先空转 70 秒再跑，验「久置之后第一次切」是不是更容易空白）6 腿 ==
+全部 bytes≈15372、nonBlank=22、标记正确 —— 「久置」这个怀疑不成立。
+
+== 汇总 ==
+真正的切换 27 次（第一批 round=1 switchTo=A 之前还有几次摸索性切换未计入本表），
+26 次整屏回流（15,372～15,383 字节，6～8 个分片），1 次空白（11 字节）。失败率约 4%。
+两个方向（A→B、B→A）都反复验过，标记从未串台。
+上一轮「两个方向都整屏空白、只回 10 字节」的稳定故障已经不复现；
+剩下的是 T065 回炉自己写明的那条概率边界（pi 在整个 IPC 往返期间一次都没被调度，
+就只看得到最终尺寸而错过中间态）。失败那一次的 live 事件间隔是 4 ms，
+但成功的腿里也有 2 ms 的，所以这个间隔并不是判别量 —— 本轮没能定位出更细的触发条件。

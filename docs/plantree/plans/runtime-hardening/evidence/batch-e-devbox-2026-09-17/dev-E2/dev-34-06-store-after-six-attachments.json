@@ -1,0 +1,38 @@
+{
+  "sid": "session-1789656608127-jy9zhgb",
+  "lastError": null,
+  "runtimeReady": true,
+  "hostBound": ["session-1789655267185-g85qdok", "session-1789656608127-jy9zhgb"],
+  "status": "idle",
+  "historyErrors": {},
+  "msgs": [
+    {
+      "id": "user-send-1789656631006-4-1",
+      "role": "user",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    },
+    {
+      "id": "asst-send-1789656631006-4-2",
+      "role": "assistant",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    },
+    {
+      "id": "user-send-1789656713935-6-1",
+      "role": "user",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    },
+    {
+      "id": "asst-send-1789656713935-6-2",
+      "role": "assistant",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+ "kind": "entry",
+ "lane": "main",
+ "type": "message",
+ "message": {
+  "role": "user",
+  "content": [
+   {
+    "type": "text",
+    "text": "devB DEV-1 run2 archive-during-turn probe"
+   }
+  ],
+  "timestamp": 1789643949022
+ },
+ "id": "bd756c1b-159d-4c69-abe4-6dcbdcaf140b",
+ "seq": 14,
+ "parentId": "65a35d68-8ee0-432e-91cb-b39842c9a8bb",
+ "timestamp": 1789643949024
+}
+
+{
+ "kind": "entry",
+ "lane": "main",
+ "type": "message",
+ "message": {
+  "role": "assistant",
+  "content": [
+   {
+    "type": "toolCall",
+    "id": "toolu_c4ac5ad3-cfcb-4448-a152-a4d82eb85635",
+    "name": "bash",
+    "arguments": {
+     "command": "sleep 150 && echo slept"
+    }
+   }
+  ],
+  "api": "anthropic-messages",
+  "provider": "fake-gateway",
+  "model": "fake-sonnet",
+  "usage": {
+   "input": 18,
+   "output": 24,
+   "cacheRead": 0,
+   "cacheWrite": 0,
+   "totalTokens": 42,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   },
+   "cacheWrite1h": 0
+  },
+  "stopReason": "toolUse",
+  "timestamp": 1789643949056,
+  "responseId": "msg_358514bc-16d2-43d2-ba39-d5567cf911e9",
+  "rawStopReason": "tool_use"
+ },
+ "id": "88b6681e-17dc-420b-ac71-07ff2fc97ee6",
+ "seq": 15,
+ "parentId": "bd756c1b-159d-4c69-abe4-6dcbdcaf140b",
+ "timestamp": 1789643949134
+}
+
+{
+ "kind": "entry",
+ "lane": "main",
+ "type": "message",
+ "message": {
+  "role": "toolResult",
+  "toolCallId": "toolu_c4ac5ad3-cfcb-4448-a152-a4d82eb85635",
+  "toolName": "bash",
+  "content": [
+   {
+    "type": "text",
+    "text": "(no output)\n[exit=null; aborted]"
+   }
+  ],
+  "details": {
+   "exitCode": null,
+   "signal": "SIGTERM",
+   "termination": "aborted",
+   "stdoutBytes": 0,
+   "stderrBytes": 0,
+   "truncated": false
+  },
+  "isError": false,
+  "timestamp": 1789644005707
+ },
+ "id": "ced25ba2-e9fe-44ef-9577-617d0b121a28",
+ "seq": 16,
+ "parentId": "88b6681e-17dc-420b-ac71-07ff2fc97ee6",
+ "timestamp": 1789644005707
+}
+
+{
+ "kind": "entry",
+ "lane": "main",
+ "type": "message",
+ "message": {
+  "role": "assistant",
+  "content": [],
+  "api": "anthropic-messages",
+  "provider": "fake-gateway",
+  "model": "fake-sonnet",
+  "usage": {
+   "input": 0,
+   "output": 0,
+   "cacheRead": 0,
+   "cacheWrite": 0,
+   "totalTokens": 0,
+   "cost": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 0
+   }
+  },
+  "stopReason": "error",
+  "errorMessage": "This operation was aborted",
+  "timestamp": 1789644005708
+ },
+ "id": "ed6e3af2-7fa2-4e65-a63d-c2d62d3e0f5c",
+ "seq": 17,
+ "parentId": "ced25ba2-e9fe-44ef-9577-617d0b121a28",
+ "timestamp": 1789644005709
+}

@@ -1,0 +1,15 @@
+# fast argv catcher (pre-title-rewrite) — 2026-09-17T13:02:07.746Z
+# needle=pi-coding-agent/dist/bundle/cli.js; window=110s; hits=2
+### pid=450137 at=2026-09-17T13:00:28.447Z argvBytes=245
+    argv[0]=/home/ai/code/ai-client/node_modules/electron/dist/electron
+    argv[1]=/home/ai/code/ai-client/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js
+    argv[2]=--session
+    argv[3]=/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-devd32-missing-model.jsonl
+    hasSession=true sessionFile=/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-devd32-missing-model.jsonl
+
+### pid=450283 at=2026-09-17T13:01:02.939Z argvBytes=245
+    argv[0]=/home/ai/code/ai-client/node_modules/electron/dist/electron
+    argv[1]=/home/ai/code/ai-client/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js
+    argv[2]=--session
+    argv[3]=/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-devd32-missing-model.jsonl
+    hasSession=true sessionFile=/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-devd32-missing-model.jsonl

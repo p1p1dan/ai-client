@@ -1,0 +1,24 @@
+# 批次 D 期间本地假网关（127.0.0.1:18080）收到的全部请求
+# 每一轮模型回合都落在这里 = 没有一条请求发给 maxapi / cx2 / vllmproxy
+# 共 10 条（含 2 条离线 pi CLI 预检）
+======================================================================
+2026-09-17T12:05:19.834Z  seq=1  status=200  plan=text  role=user  toolResult=False
+    say hi
+2026-09-17T12:08:19.653Z  seq=2  status=200  plan=text  role=user  toolResult=False
+    second turn
+2026-09-17T12:16:16.083Z  seq=3  status=200  plan=text  role=user  toolResult=False
+    devD30 第一轮 GUI：回一句话
+2026-09-17T12:21:27.058Z  seq=4  status=200  plan=text  role=user  toolResult=False
+    devD30 TUI 续聊一句
+2026-09-17T12:22:57.435Z  seq=5  status=200  plan=text  role=user  toolResult=False
+    devD30 第三轮 GUI：再回一句
+2026-09-17T12:24:07.004Z  seq=6  status=200  plan=text  role=user  toolResult=False
+    devD14 聊天B 第一轮
+2026-09-17T12:26:26.739Z  seq=7  status=200  plan=text  role=user  toolResult=False
+    devD14 这句话敲在切到聊天A之后
+2026-09-17T12:35:25.602Z  seq=8  status=200  plan=text  role=user  toolResult=False
+    devD31 在 TUI 里给这条导入会话续一轮
+2026-09-17T12:50:34.339Z  seq=9  status=200  plan=text  role=user  toolResult=False
+    devD16 窗口二敲的一句
+2026-09-17T12:50:49.323Z  seq=10  status=200  plan=text  role=user  toolResult=False
+    devD16 窗口一敲的一句

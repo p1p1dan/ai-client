@@ -1,0 +1,22 @@
+== after chmod 000 ==
+d--------- 2 ai ai 840 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/12
+ls: cannot open directory '/tmp/t032/samples/codex-home/sessions/2026/09/12': Permission denied
+drwxrwxr-x 2 ai ai 1240 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/10
+drwxrwxr-x 2 ai ai 1240 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/11
+d--------- 2 ai ai  840 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/12
+drwxrwxr-x 2 ai ai 1240 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/13
+drwxrwxr-x 2 ai ai 1240 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/14
+drwxrwxr-x 2 ai ai  840 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/15
+drwxrwxr-x 2 ai ai 1240 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/10
+drwxrwxr-x 2 ai ai 1240 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/11
+drwxr-xr-x 2 ai ai  840 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/12
+drwxrwxr-x 2 ai ai 1240 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/13
+drwxrwxr-x 2 ai ai 1240 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/14
+drwxrwxr-x 2 ai ai  840 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/15
+== after restore ==
+drwxrwxr-x 2 ai ai 1240 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/10
+drwxrwxr-x 2 ai ai 1240 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/11
+drwxrwxr-x 2 ai ai  840 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/12
+drwxrwxr-x 2 ai ai 1240 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/13
+drwxrwxr-x 2 ai ai 1240 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/14
+drwxrwxr-x 2 ai ai  840 Sep 17 06:08 /tmp/t032/samples/codex-home/sessions/2026/09/15

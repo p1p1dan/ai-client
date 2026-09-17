@@ -1,0 +1,21 @@
+== 收工清理核对 ==
+-- claude-home 样本（--huge 那份已删）:
+total 35936
+drwxrwxr-x 2 ai ai       80 Sep 17 06:30 .
+drwxrwxr-x 3 ai ai       60 Sep 17 06:08 ..
+-rw-rw-r-- 1 ai ai 36748026 Sep 17 06:08 0a5f2c31-7b44-4d0e-9f61-a1b2c3d4e5f6.jsonl
+-rw-rw-r-- 1 ai ai    48485 Sep 17 06:08 b7c81d92-3e40-4a55-8c11-d0e1f2a3b4c5.jsonl
+-- codex-home 日期目录权限与份数:
+drwxrwxr-x /tmp/t032/samples/codex-home/sessions/2026/09/10 files=60
+drwxrwxr-x /tmp/t032/samples/codex-home/sessions/2026/09/11 files=60
+drwxrwxr-x /tmp/t032/samples/codex-home/sessions/2026/09/12 files=40
+drwxrwxr-x /tmp/t032/samples/codex-home/sessions/2026/09/13 files=60
+drwxrwxr-x /tmp/t032/samples/codex-home/sessions/2026/09/14 files=60
+drwxrwxr-x /tmp/t032/samples/codex-home/sessions/2026/09/15 files=40
+-- codex-home 总份数:
+320
+-- 合成旧格式样本仍在原处（未混入 codex-home）:
+rollout-2026-09-16T09-00-00-5b1354d1-2594-422f-a7b5-34942e313437.jsonl
+               total        used        free      shared  buff/cache   available
+Mem:            3350        1410         989          77        1296        1940
+Swap:           3861        1538        2323

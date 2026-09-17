@@ -1,0 +1,35 @@
+
+ RUN  v3.2.4 /home/ai/code/ai-client
+
+stdout | src/runtime/__tests__/sessionAttachmentFill.test.ts > DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, and still reopens
+[DEV-33] accepted sends=8 file bytes=67079294 (63.97 MiB of 32 MiB), bytes after 3 sends=25154839, refusal=undefined
+
+ ❯ src/runtime/__tests__/sessionAttachmentFill.test.ts (2 tests | 1 failed) 842ms
+   × DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, and still reopens 756ms
+     → expected 'undefined' to be 'session_size_limit' // Object.is equality
+   ✓ DEV-33 — a session file filled with image attachments > refuses a send sized to the attachment ceiling with the per-entry code, not the attachment one 85ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/runtime/__tests__/sessionAttachmentFill.test.ts > DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, and still reopens
+AssertionError: expected 'undefined' to be 'session_size_limit' // Object.is equality
+
+Expected: [32m"session_size_limit"[39m
+Received: [31m"undefined"[39m
+
+ ❯ src/runtime/__tests__/sessionAttachmentFill.test.ts:133:32
+    131| 
+    132|     // The refusal is the aggregate budget, and it names itself.
+    133|     expect(errorCode(refusal)).toBe('session_size_limit');
+       |                                ^
+    134| 
+    135|     // DIVERGENCE FROM THE CHECKLIST (1/2): the checklist says 2~3 sen…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  05:11:10
+   Duration  1.50s (transform 187ms, setup 17ms, collect 445ms, tests 842ms, environment 0ms, prepare 51ms)
+

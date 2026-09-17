@@ -1,0 +1,66 @@
+{
+  "sid": "session-1789655267185-g85qdok",
+  "lastError": null,
+  "runtimeReady": true,
+  "hostBound": ["session-1789655267185-g85qdok"],
+  "status": "idle",
+  "historyErrors": {},
+  "msgs": [
+    {
+      "id": "h:16c29474-49fb-4ce7-8fc0-1395cceb2926",
+      "role": "user",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    },
+    {
+      "id": "h:18406b68-e190-470b-8384-8cb96c287583",
+      "role": "assistant",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    },
+    {
+      "id": "h:da867238-b157-4320-a539-076fc37475e5",
+      "role": "user",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    },
+    {
+      "id": "h:9c58ea24-4a22-4cc1-9c43-d7e70e9c9d63",
+      "role": "assistant",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    },
+    {
+      "id": "h:b1fa351a-8e6c-4d2f-bcc7-04447b4acfb6",
+      "role": "user",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    },
+    {
+      "id": "h:14cd8efb-2f0a-44d8-bf37-72aca597f072",
+      "role": "assistant",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    },
+    {
+      "id": "h:b2b0a0ad-a4e5-4f71-844d-be5e7a3d8929",
+      "role": "user",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    },
+    {
+      "id": "h:98117df3-48e2-477e-bc8d-58272080865d",
+      "role": "assistant",
+      "error": null,
+      "status": null,
+      "preview": "\"\""
+    }
+  ]
+}

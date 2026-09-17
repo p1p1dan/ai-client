@@ -1,0 +1,55 @@
+=== DEV-18 宿主诊断横幅（判据：人为让 Node 24 解析失败时，用户能否看到可操作的提示） ===
+
+--- 本机 Node 现状（先记，免得把「环境里本来就有 24」读成通过）
+which -a node ->  /home/ai/.local/bin/node（软链到 ~/.nvm/versions/node/v22.23.2/bin/node，共 5 次重复项）
+                  /home/ai/.nvm/versions/node/v22.23.2/bin/node
+node -v       ->  v22.23.2
+~/.nvm/versions/node/ 下只有 v22.23.2 一个版本，fnm / volta 目录不存在。
+全机唯一一份 Node 24 是 /home/ai/code/ai-client/out-node-runtime/node（v24.18.0），
+它不在 PATH 上，只靠 dev.env 的 AICLIENT_NODE24_PATH 指过去。
+=> 把这一行去掉，NodeRuntimeResolver 的四条候选（explicit / env / 版本管理器 / PATH）就一条都拿不到 24。
+
+--- 怎么造的失败
+cp dev.env 去掉 AICLIENT_NODE24_PATH 一行 -> /tmp/t032/dev.env.no-node24（24 行变 23 行）
+AICLIENT_DEV_ENV_FILE=/tmp/t032/dev.env.no-node24 起应用（07:40:35 起，07:42:26 窗口显示）
+自证：Electron 主进程 pid 388798 的 /proc/388798/environ 里
+  AICLIENT_DEV_ENV_FILE=/tmp/t032/dev.env.no-node24
+  grep -c '^AICLIENT_NODE24_PATH=' -> 0
+  PATH 上的 node 目录只有 ~/.local/bin 与 ~/.nvm/versions/node/v22.23.2/bin
+未额外改 PATH（本机默认就只有 22，不需要）。
+
+--- 观察结果：横幅一张都没有，宿主自称 ready，回合照常跑完
+1) 进主界面后 window.electronAPI.chat.getHostStatus() ->
+   {"state":"ready","capabilities":{"history":true,"thinking":true},"capacity":3,"slots":0,"active":0,"errors":0}
+2) 页面上 [role="status"] 只有一个，文本是状态栏的「本机」——没有任何诊断横幅。
+3) 新建对话发 "devB DEV-18 node24 banner probe"（textarea + [aria-label="发送消息"]），
+   假网关按 archive-probe 计划正常应答：seq2 write -> seq3 read -> seq4 bash -> seq5 收尾文本
+   （见 fake-gateway.log 的 11:45:39 ~ 11:47:46 四行）。
+   期间弹出的是结构化中文权限卡（「权限 / 高风险 / write —— 写入工作区文件 / 直接允许·本会话内允许·直接拒绝 /
+   若 36 秒内未响应将自动拒绝」），按要求点了「直接允许」，共点 2 次（write 与后续一次），
+   最终会话区显示「已处理 3 个步骤 / archive probe finished」。
+   截图：dev-18-01-turn-without-node24.png（权限卡）、dev-18-02-turn-finished.png（回合完成）
+4) 日志：按天日志新增 1280 字节，全部是已知噪声 [workspace-tree] worktrees-absent；
+   'node 24' / 'NODE24' / 'No Node' / 'runtime found' 在按天日志与 dev.js 标准输出里命中数均为 0
+   （dev-B7.log 唯一一条含 node24 的行是我自己那句 [dev] credentials: /tmp/t032/dev.env.no-node24）。
+
+--- 为什么造不出来（读码确认，两层都断了）
+第一层：**没有任何生产代码调用 resolveNode24Runtime。**
+  grep -ran 'resolveNode24Runtime|REQUIRED_NODE_MAJOR' src/ 的命中只有三处：
+    NodeRuntimeResolver.ts（定义本身）
+    agent-host/index.ts（只是 re-export）
+    __tests__/NodeRuntimeResolver.test.ts（单测）
+  也就是说 NodeRuntimeResolver.ts:123 那句
+    "No Node 24 runtime found. Set AICLIENT_NODE24_PATH or install Node 24."
+  在产品运行时永远不会被生成。原因合理：P6 之后 worker 跑在 Electron 自己的 utilityProcess 里
+  （PiWorkerProcess.ts:94），根本不需要外部 Node 24。
+第二层：**就算这条错误真的冒出来，渲染层也不会把它变成「可操作提示」。**
+  hostStatus.ts:264 的 isNode24ResolutionFailure 同样只被自己的单测引用；
+  真正决定横幅长什么样的 describeHostStatus（hostStatus.ts:92-122）压根没调它——
+  state=error 时它只给「lastFatalError 原文 + 'Press Retry to reinitialise the Pi session service' + Retry 按钮」。
+  而 HostStatusBanner.tsx:8-12 的文档注释仍写着自己「覆盖 Node 24 missing actionable guidance（AICLIENT_NODE24_PATH）」。
+
+--- 结论
+判据问的「用户能否看到可操作的提示」在本机得到的答案是：**造不出这个失败，也就没有提示**。
+AICLIENT_NODE24_PATH 现在是一个没人读的环境变量（只有 NodeRuntimeResolver.ts:70 读它，而那个函数没人调），
+dev.env 里还留着它和一段解释注释；HostStatusBanner 的注释也还在承诺一个已经不存在的分支。

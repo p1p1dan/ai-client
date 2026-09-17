@@ -1,0 +1,12 @@
+# ps at 2026-09-17T09:48:32.337Z
+# electron main pid(s) resolved from /proc/*/cmdline (electron binary, no --type= arg): 72067
+72019    1505 49260 node /home/ai/code/ai-client/scripts/dev.js --remote-debugging-port=9333
+72027   72019 78520 npm exec electron-vite dev -- --no-sandbox --remote-debugging-port=9333
+72039   72027  2012 sh -c electron-vite dev -- --no-sandbox --remote-debugging-port=9333
+72040   72039 294572 node /home/ai/code/ai-client/node_modules/.bin/electron-vite dev -- --no-sandbox --remote-debugging-port=9333
+72048   72040  9044 /home/ai/code/ai-client/node_modules/electron-vite/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.25.12 --ping
+72059   72040 18920 /home/ai/code/ai-client/node_modules/vite/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.27.2 --ping
+72067   72040 226424 /home/ai/code/ai-client/node_modules/electron/dist/electron . --no-sandbox --remote-debugging-port=9333
+72069   72067 54900 /home/ai/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox --no-sandbox
+72070   72067 54272 /home/ai/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-sandbox
+72103   72069 133432 /home/ai/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox --no-sandbox

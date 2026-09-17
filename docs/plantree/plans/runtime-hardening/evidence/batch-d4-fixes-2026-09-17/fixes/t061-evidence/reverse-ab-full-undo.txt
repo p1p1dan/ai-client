@@ -1,0 +1,74 @@
+
+ RUN  v3.2.4 /home/ai/code/ai-client
+
+stdout | src/runtime/__tests__/sessionAttachmentFill.test.ts > DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, stays writable, and still reopens
+[DEV-33] accepted sends=4 file bytes=33539942 (31.99 MiB of 32 MiB), bytes after 3 sends=25154998, refusal=session_size_limit
+
+ ❯ src/runtime/__tests__/sessionAttachmentFill.test.ts (5 tests | 3 failed) 588ms
+   × DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, stays writable, and still reopens 483ms
+     → promise rejected "RuntimeHostError: session exceeds the con… { code: '…' }" instead of resolving
+   ✓ DEV-33 — a session file filled with image attachments > refuses a send sized to the attachment ceiling with the per-entry code, not the attachment one 59ms
+   × DEV-33 — a session file filled with image attachments > D1 — answers an over-budget write immediately, without putting it in the queue 7ms
+     → expected 'session_entry_size_limit' to be 'session_size_limit' // Object.is equality
+   ✓ DEV-33 — a session file filled with image attachments > D25 — keeps the attachment file name across a close and reopen 8ms
+   × DEV-33 — a session file filled with image attachments > D24 — reports the refusal to the renderer and takes the next send 30ms
+     → expected 'one session entry may be at most 8192…' to contain 'session exceeds the configured size b…'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/runtime/__tests__/sessionAttachmentFill.test.ts > DEV-33 — a session file filled with image attachments > stops at session_size_limit just under the budget, stays writable, and still reopens
+AssertionError: promise rejected "RuntimeHostError: session exceeds the con… { code: '…' }" instead of resolving
+ ❯ src/runtime/__tests__/sessionAttachmentFill.test.ts:166:70
+    164|     // a plain text message included, and the real app showed a conver…
+    165|     // that swallowed everything typed into it until it was restarted.
+    166|     await expect(store.appendMessage(shortMessage('and a short one')))…
+       |                                                                      ^
+    167|     expect((await stat(file)).size).toBeGreaterThan(filled);
+    168|     // Still refuses what genuinely does not fit, and still refuses it…
+
+Caused by: RuntimeHostError: session exceeds the configured size budget
+ ❯ JsonlSessionStore.writeRefusal src/runtime/plugins/session/store.ts:680:14
+ ❯ src/runtime/plugins/session/store.ts:375:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'session_size_limit' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/runtime/__tests__/sessionAttachmentFill.test.ts > DEV-33 — a session file filled with image attachments > D1 — answers an over-budget write immediately, without putting it in the queue
+AssertionError: expected 'session_entry_size_limit' to be 'session_size_limit' // Object.is equality
+
+Expected: [32m"session_size_limit"[39m
+Received: [31m"session_[7mentry_[27msize_limit"[39m
+
+ ❯ src/runtime/__tests__/sessionAttachmentFill.test.ts:287:23
+    285|         }),
+    286|       ]);
+    287|       expect(outcome).toBe('session_size_limit');
+       |                       ^
+    288|       // Never offered to the file: the pre-flight settled it.
+    289|       expect(append).toHaveBeenCalledTimes(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/runtime/__tests__/sessionAttachmentFill.test.ts > DEV-33 — a session file filled with image attachments > D24 — reports the refusal to the renderer and takes the next send
+AssertionError: expected 'one session entry may be at most 8192…' to contain 'session exceeds the configured size b…'
+
+Expected: [32m"session e[7mxceeds the configured size budget[27m"[39m
+Received: [31m"[7mone [27msession e[7mntry may be at most 8192 bytes; this one is 16364[27m"[39m
+
+ ❯ src/runtime/__tests__/sessionAttachmentFill.test.ts:365:36
+    363|     });
+    364|     expect(refused.success).toBe(false);
+    365|     expect(refused.error?.message).toContain('session exceeds the conf…
+       |                                    ^
+    366|     // Refused before the request, not after it: nothing was spent.
+    367|     expect(refused.text).toBe('');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+   Start at  11:51:27
+   Duration  1.74s (transform 476ms, setup 18ms, collect 923ms, tests 588ms, environment 0ms, prepare 52ms)
+

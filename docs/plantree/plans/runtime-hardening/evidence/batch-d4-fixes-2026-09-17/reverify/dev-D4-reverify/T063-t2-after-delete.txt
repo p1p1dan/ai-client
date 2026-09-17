@@ -1,0 +1,6 @@
+=== T063 t2 after ONE delete ===
+total 8
+drwxrwxr-x 2 ai ai 4096 Sep 17 13:23 .
+drwxr-xr-x 4 ai ai 4096 Sep 17 13:16 ..
+--- main dir ---
+ls: cannot access '/home/ai/.pilab/jyw-ai-client-dev/pi-agent/subagents/': No such file or directory

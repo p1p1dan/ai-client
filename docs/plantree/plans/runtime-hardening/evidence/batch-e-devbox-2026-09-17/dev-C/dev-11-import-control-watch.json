@@ -1,0 +1,92 @@
+{
+  "summary": {
+    "pressed": {
+      "pressed": "导入所选（1）",
+      "at": 1789640929892
+    },
+    "durationMs": 1441,
+    "sampleCount": 6,
+    "rttMs": {
+      "min": 2,
+      "max": 138,
+      "median": 8
+    },
+    "lagMaxMs": 13,
+    "scrollMoved": 0,
+    "report": "新导入 1 个，已存在 0 个，失败 0 个。 导入的对话会出现在侧栏，打开就能接着聊。"
+  },
+  "samples": [
+    {
+      "tMs": 2,
+      "rttMs": 2,
+      "now": 108574.30000000075,
+      "lagMax": 0,
+      "lagSamples": 0,
+      "scrollBefore": 0,
+      "scrollAfter": 0,
+      "buttonText": "正在导入…",
+      "busy": true,
+      "report": null
+    },
+    {
+      "tMs": 280,
+      "rttMs": 22,
+      "now": 108841.30000000075,
+      "lagMax": 3,
+      "lagSamples": 2,
+      "scrollBefore": 0,
+      "scrollAfter": 0,
+      "buttonText": "正在导入…",
+      "busy": true,
+      "report": null
+    },
+    {
+      "tMs": 533,
+      "rttMs": 2,
+      "now": 109105.30000000075,
+      "lagMax": 3,
+      "lagSamples": 5,
+      "scrollBefore": 0,
+      "scrollAfter": 0,
+      "buttonText": "正在导入…",
+      "busy": true,
+      "report": null
+    },
+    {
+      "tMs": 790,
+      "rttMs": 5,
+      "now": 109361.30000000075,
+      "lagMax": 3,
+      "lagSamples": 7,
+      "scrollBefore": 0,
+      "scrollAfter": 0,
+      "buttonText": "正在导入…",
+      "busy": true,
+      "report": null
+    },
+    {
+      "tMs": 1051,
+      "rttMs": 8,
+      "now": 109623.20000000112,
+      "lagMax": 13,
+      "lagSamples": 10,
+      "scrollBefore": 0,
+      "scrollAfter": 0,
+      "buttonText": "正在导入…",
+      "busy": true,
+      "report": null
+    },
+    {
+      "tMs": 1441,
+      "rttMs": 138,
+      "now": 110012.80000000075,
+      "lagMax": 13,
+      "lagSamples": 10,
+      "scrollBefore": 0,
+      "scrollAfter": 0,
+      "buttonText": "导入所选（0）",
+      "busy": true,
+      "report": "新导入 1 个，已存在 0 个，失败 0 个。 导入的对话会出现在侧栏，打开就能接着聊。"
+    }
+  ]
+}
