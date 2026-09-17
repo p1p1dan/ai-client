@@ -1,0 +1,6 @@
+after dependant only — shouter present? false
+  fiber state: 0
+after dependency arrives — shouter present? true
+  shout: HELLO RUNTIME
+after dependency disposed — greeter present? false
+after dependency disposed — shouter present? false

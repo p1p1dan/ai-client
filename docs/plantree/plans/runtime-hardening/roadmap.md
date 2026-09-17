@@ -64,8 +64,8 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 ## In Progress
 
-- 无活跃实现项。批次 D2 已收口（2026-09-16），批次 D3（T056 `8a3ce4a6` / T057 `2c1e4ba3` / T059 `b32fa9da`）已全部落地并收口（2026-09-17）。下一目标：**T032** 上机检查单整理（先做完标 dev-box 的项）。
-- 待提交（工作区）：T059 收口时补跑全量逮出的改名守卫回归修复，改的是两个测试文件（`src/shared/__tests__/defaultPaths.test.ts` 白名单 + `src/runtime/__tests__/projectInstructions.test.ts` forcing function），见 Done 区 T059 行。
+- **T032** 上机检查单（2026-09-17 起）：**正式检查单已产出** → [checklist-e.md](checklist-e.md)（计划根下，与本文件并列；批次 D 的草案作为存证保留原样）。四个来源合并去重完毕，新增 20 项（旧树 P5-2 六行 / P5-4-P5-5 四行 / H-20 两行 / P6-3 第 4 条 / P6-4 回退互读 / 四条审计静态推断项 / 三条旧树未覆盖项），并做了三条裁决（cordis 判据写反已改正、并发轮转已由 `trace.test.ts:350` 覆盖、CI 不触发测试已结案）。**剩下的是 dev-box 那 35 项的执行**：2026-09-17 做完 5 项（见下），其余多数需要起 Electron，尚未做。
+- 批次 D2 已收口（2026-09-16），批次 D3（T056 `8a3ce4a6` / T057 `2c1e4ba3` / T059 `b32fa9da`）已全部落地并收口（2026-09-17）。
 
 ## Next
 
@@ -151,7 +151,7 @@ T059 的收口全量另在 **Linux 开发机**上跑（2026-09-17，单 worker�
 
 | ID | 任务 | 范围 | 验收 |
 |---|---|---|---|
-| T032 | 上机检查单：合并旧树待现场项（P5-2 六行、P5-4/P5-5 五行、P6-3 第 4/6 条、H/20 I5、F3 根因）、T001 后的 PERM-1 探针复跑（`scripts/run-perm1-probe.mjs`，需真实模型回合）与审计静态推断项（permissions-19、core-host-05/07、tools-10、cutover-03、P1-8 证据重采、P6-4 旧版产物互读） ；**批次 D 追加**：并入 [checklist-e.md](evidence/batch-d-audit-2026-09-15/checklist-e.md)（批评者 34 条上机必做 + 18 区域 150 项，按 windows / encrypted / utility / real-model 分组，其中标 dev-box 的项在上机前先做完）与 field-06 点名的现场项（F1～F7、GUI A/2、A/4、A/10、B/5、C/8、F/13、F/15、F3 根因）；P4-6 经接缝裁决为 incomplete，R2/R3/R4 三行从未执行，上机日必须给出结论 | 旧树第 11 批 + 审计 + 批次 D | 检查单每项有判据与取证方式 |
+| T032 | 上机检查单：合并旧树待现场项（P5-2 六行、P5-4/P5-5 五行、P6-3 第 4/6 条、H/20 I5、F3 根因）、T001 后的 PERM-1 探针复跑（`scripts/run-perm1-probe.mjs`，需真实模型回合）与审计静态推断项（permissions-19、core-host-05/07、tools-10、cutover-03、P1-8 证据重采、P6-4 旧版产物互读） ；**批次 D 追加**：并入 [checklist-e.md](evidence/batch-d-audit-2026-09-15/checklist-e.md)（批评者 34 条上机必做 + 18 区域 150 项，按 windows / encrypted / utility / real-model 分组，其中标 dev-box 的项在上机前先做完）与 field-06 点名的现场项（F1～F7、GUI A/2、A/4、A/10、B/5、C/8、F/13、F/15、F3 根因）；P4-6 经接缝裁决为 incomplete，R2/R3/R4 三行从未执行，上机日必须给出结论 | 旧树第 11 批 + 审计 + 批次 D | 检查单每项有判据与取证方式。**2026-09-17：正式检查单已产出** → [checklist-e.md](checklist-e.md)（计划根下；四来源合并去重，原 150 项判据逐字搬入、新增 20 项、三条裁决、回填出口表、取证规矩）。剩余工作是 dev-box 那 35 项的执行：已做完 5 项（[证据](evidence/batch-e-devbox-2026-09-17/README.md)），其余多数需起 Electron |
 | T033 | 最后一次上机：加密 Windows 一次性全量验收 | T032 | 逐项取证进 evidence |
 
 ### 批次 F：补审修补（上机后）
