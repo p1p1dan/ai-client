@@ -12,6 +12,7 @@
 import { createModels, type Models, type Provider } from '@earendil-works/pi-ai';
 import type { Context } from 'cordis';
 import { Service } from 'cordis';
+import { stripAiclientKeys } from '../../../shared/aiclientKeys.ts';
 import {
   HOST_IO_SERVICE,
   MODEL_SERVICE,
@@ -46,6 +47,46 @@ interface Binding {
   ref: RuntimeModelRef;
   models: Models;
   requestKey: string;
+}
+
+/** The registry calls that take a `Context` — i.e. everything that can send one. */
+const CONTEXT_CALLS = new Set(['stream', 'complete', 'streamSimple', 'completeSimple']);
+
+/**
+ * One wrapper per registry, so a provider's models share it.
+ *
+ * Identity matters here: the loop holds on to `resolved.models` for the length
+ * of a run, and two resolves of the same provider must not hand it two
+ * different objects.
+ */
+const wireGuarded = new WeakMap<Models, Models>();
+
+/**
+ * The single point where the app's own keys stop (T061).
+ *
+ * `attachmentRider.ts` and `internalMessage.ts` put namespaced keys on objects
+ * pi persists. Most pi-ai adapters would drop them anyway — they rebuild each
+ * block from the fields they know — but `pi-messages` sends the context
+ * verbatim, and it is a user-selectable API here. Rather than teach each
+ * adapter the app's namespace, every registry this plugin hands out strips it
+ * on the way to the provider: the session file keeps the rider, the request
+ * never carries it, and a future rider is covered without a second edit.
+ */
+function withoutAiclientKeys(models: Models): Models {
+  const existing = wireGuarded.get(models);
+  if (existing) return existing;
+  const guarded = new Proxy(models, {
+    get(target, property) {
+      const value = Reflect.get(target, property);
+      if (typeof value !== 'function' || typeof property !== 'string') return value;
+      if (!CONTEXT_CALLS.has(property)) return value;
+      const call = value as (...args: unknown[]) => unknown;
+      return (model: unknown, context: unknown, ...rest: unknown[]) =>
+        call.call(target, model, stripAiclientKeys(context), ...rest);
+    },
+  });
+  wireGuarded.set(models, guarded);
+  return guarded;
 }
 
 export class ModelAdapterPlugin extends Service implements ModelAdapterService {
@@ -152,7 +193,9 @@ export class ModelAdapterPlugin extends Service implements ModelAdapterService {
     // duplicate row later in `models.json` cannot silently retarget a model id
     // the user already picked.
     if (this.bindings.has(key)) return;
-    this.bindings.set(key, binding);
+    // Both bind paths land here, so the wire guard covers the on-disk catalog
+    // and an injected provider alike.
+    this.bindings.set(key, { ...binding, models: withoutAiclientKeys(binding.models) });
     this.order.push(binding.ref);
   }
 }

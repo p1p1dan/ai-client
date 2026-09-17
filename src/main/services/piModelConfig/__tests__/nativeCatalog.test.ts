@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { UserProvider } from '../../auth/CredentialVault';
 import { type NativeModelCatalogDeps, resolveNativeModelCatalogWith } from '../nativeCatalog';
@@ -124,5 +127,43 @@ describe('resolveNativeModelCatalogWith (P5-5 / import-catalog-12)', () => {
     expect(resolveNativeModelCatalogWith(d)).toBeUndefined();
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0]?.[0])).toContain('native model catalog');
+  });
+});
+
+/**
+ * T062 / D3 — the menu and the worker read one document.
+ *
+ * A source scan, for the reason `index.ts` has no unit test at all: it reaches
+ * for `electron`, the app state root and the credential vault at import time.
+ * What is claimed here is only the wiring — that the picker's Main-side entry
+ * point hands `readCatalog` the same assembly `WorkerManager` hands a worker.
+ * What the two documents CONTAIN is covered in `PiModelConfigService.test.ts`.
+ */
+describe('the model picker and the worker are handed the same catalog', () => {
+  const WIRING = readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.ts'),
+    'utf8'
+  );
+
+  it('[T062-D3] readPiModelCatalog passes the native catalog into readCatalog', () => {
+    expect(WIRING).toContain(
+      "service.readCatalog(managed ? undefined : 'local', resolveNativeModelCatalog())"
+    );
+  });
+
+  it('[T062-D3] the worker side still reads the same assembler', () => {
+    // If this name ever stops being the one `WorkerManager` injects, the line
+    // above is wiring the picker to a different catalog than the worker's.
+    const manager = readFileSync(
+      path.join(
+        path.dirname(fileURLToPath(import.meta.url)),
+        '..',
+        '..',
+        'agent-host',
+        'WorkerManager.ts'
+      ),
+      'utf8'
+    );
+    expect(manager).toContain('readModelCatalog: () => resolveNativeModelCatalog()');
   });
 });

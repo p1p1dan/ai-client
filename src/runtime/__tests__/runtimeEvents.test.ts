@@ -445,6 +445,40 @@ describe('T017 · projection seams', () => {
       { status: 'running' },
     ]);
   });
+
+  /**
+   * T066 回炉. A run that ends in failure used to report `error` alone, so the
+   * operator log had no code to grep and read `turn failed: session exceeds the
+   * configured size budget`. The code rides BESIDE the sentence rather than in
+   * front of it, because this sentence is the one the renderer shows — putting
+   * `stop_error:` in front of a provider's 503 would be a worse trade.
+   */
+  it('reports the failure code beside the sentence, not inside it', () => {
+    const { events, projection } = projector();
+    projection.finish({
+      success: false,
+      stopReason: 'error',
+      error: { code: 'session_size_limit', message: 'session exceeds the configured size budget' },
+    });
+    expect(events[0]).toMatchObject({
+      type: 'session.failed',
+      payload: {
+        error: 'session exceeds the configured size budget',
+        errorCode: 'session_size_limit',
+      },
+    });
+  });
+
+  it('carries no code on a run that ended cleanly', () => {
+    const { events, projection } = projector();
+    projection.finish({ success: true, stopReason: 'stop' });
+    expect(events[0]).toEqual({
+      type: 'session.completed',
+      sessionId: 'logical',
+      requestId: 'run',
+      payload: {},
+    });
+  });
 });
 
 it('puts a provider retry on the wire the banner reads, and clears it when the retry streams', async () => {

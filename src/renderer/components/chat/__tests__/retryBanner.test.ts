@@ -1,3 +1,4 @@
+import { translate } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import { deriveRetryBanner, type RetryBannerInput } from '../retryBanner';
 
@@ -147,5 +148,54 @@ describe('deriveRetryBanner — everything absent', () => {
         detail: null,
       });
     }
+  });
+});
+
+/**
+ * T067 (D21) — the banner in the app's default language.
+ *
+ * Two 503 rounds were photographed on 2026-09-17 with this banner reading
+ * 「Upstream error 503 — retrying 1/3…」 while the composer one line below
+ * said 「正在重试 · 1/3 · 3 秒后重试」 about the same retry. Same fact, two
+ * languages, eight pixels apart.
+ *
+ * All four title shapes are covered because the count is what picks the key:
+ * a missing `attempt` must not fall back to the English template, which is the
+ * failure mode a single happy-path assertion would miss.
+ */
+describe('deriveRetryBanner — Chinese (T067 D21)', () => {
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+
+  it('words all four title shapes from the catalog', () => {
+    expect(deriveRetryBanner(FULL, zh)?.title).toBe('网络重试中 · 2/10 · 本回合仍在进行');
+    expect(deriveRetryBanner({ ...FULL, retry: { delayMs: 8000 } }, zh)?.title).toBe(
+      '网络重试中 · 本回合仍在进行'
+    );
+    expect(
+      deriveRetryBanner({ ...FULL, retry: { ...FULL.retry, errorStatus: '503' } }, zh)?.title
+    ).toBe('上游返回错误 503 · 正在重试 2/10 · 本回合仍在进行');
+    expect(deriveRetryBanner({ ...FULL, retry: { errorStatus: '503' } }, zh)?.title).toBe(
+      '上游返回错误 503 · 正在重试 · 本回合仍在进行'
+    );
+  });
+
+  it('words the delay segment and leaves the upstream error text alone', () => {
+    const view = deriveRetryBanner(
+      { ...FULL, retry: { ...FULL.retry, errorStatus: '503', error: 'server_error' } },
+      zh
+    );
+    expect(view?.detail).toBe('8s 后重试 · server_error 503');
+    // The gateway's own words are not ours to translate — only our frame is.
+    expect(view?.detail).toContain('server_error');
+  });
+
+  it('reverse: the default translator still emits the exact English bytes', () => {
+    // The whole point of the `englishTranslate` default. If this drifts, an
+    // un-threaded call site is silently producing different copy rather than
+    // the same copy in a different language.
+    expect(deriveRetryBanner(FULL)?.title).toBe(`Network retry 2/10 ${TITLE_TAIL}`);
+    expect(deriveRetryBanner(FULL)?.detail).toBe('Next attempt in 8s · unknown');
+    expect(deriveRetryBanner(FULL, zh)?.title).not.toMatch(/Network retry|the turn is still/);
   });
 });

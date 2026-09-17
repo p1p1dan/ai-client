@@ -2,9 +2,10 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, stat, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { LEGACY_IMPORT_MAX_SOURCE_BYTES } from '@shared/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClaudeSessionScanner } from '../ClaudeSessionScanner';
-import { ClaudeSourceAdapter } from '../ClaudeSourceAdapter';
+import { type ClaudeImportSourceError, ClaudeSourceAdapter } from '../ClaudeSourceAdapter';
 
 let root: string;
 let projectDir: string;
@@ -259,6 +260,45 @@ describe('ClaudeSourceAdapter', () => {
         sourceSessionId: 'session-a',
       })
     ).rejects.toThrow(/exceeds the .* import limit/);
+  });
+
+  /**
+   * T067 (D9): the refusal above also has to be MACHINE-readable.
+   *
+   * Its English sentence reached a Chinese panel verbatim on 2026-09-17,
+   * carrying `67108864` with it, because a string was the only thing this
+   * layer ever produced. The main process has no locale and never will, so
+   * what it owes the renderer is the code and the ceiling — the words are the
+   * renderer's job.
+   */
+  it('carries a stable code and the ceiling it enforced, not just a sentence', async () => {
+    await writeFile(sourceFile, '', 'utf8');
+    await truncate(sourceFile, 64 * 1024 * 1024 + 1);
+    await expect(
+      adapter().read({
+        sourceKind: 'claude-code',
+        projectId: 'project-a',
+        sourceSessionId: 'session-a',
+      })
+    ).rejects.toSatisfy(
+      (error: ClaudeImportSourceError) =>
+        error.failure?.code === 'source-byte-limit' &&
+        error.failure.params.limit === LEGACY_IMPORT_MAX_SOURCE_BYTES
+    );
+  });
+
+  it('leaves uncoded failures uncoded — a diagnostic is not a remedy', async () => {
+    // Reverse check: `failure` marks the two refusals the user can act on. A
+    // blanket code would make the renderer paraphrase failures whose only
+    // useful content is the raw detail.
+    await writeFile(sourceFile, `${JSON.stringify({ type: 'summary' })}\n`, 'utf8');
+    await expect(
+      adapter().read({
+        sourceKind: 'claude-code',
+        projectId: 'project-a',
+        sourceSessionId: 'session-a',
+      })
+    ).rejects.toSatisfy((error: ClaudeImportSourceError) => error.failure === undefined);
   });
 
   // H/21 C6: the probe over this machine's real history found the newest

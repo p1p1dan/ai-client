@@ -108,3 +108,25 @@ describe('entering the Pi TUI is refused mid-turn', () => {
     );
   });
 });
+
+/**
+ * T065 — the app ships with Simplified Chinese as its default, so an English
+ * sentence on screen is a defect (see `src/shared/__tests__/i18nCoverage.test.ts`).
+ * The Pi TUI's own notices were the last hardcoded ones in this hook: the
+ * DEV-15 point check photographed 「Pi TUI closed / Returned to the GUI
+ * session.」 sitting in an otherwise Chinese window.
+ */
+describe('the Pi TUI notices are translated', () => {
+  it('sends the exit toast through the translator instead of hardcoding English', () => {
+    expect(WORKSPACE).toContain("title: t('Pi TUI closed')");
+    expect(WORKSPACE).toContain("description: t('Returned to the GUI session.')");
+  });
+
+  it('translates the refusal Main sends, rather than printing its wire text', () => {
+    // D18 and TUI-1 both arrive as `support.reason`. Main has no translator, so
+    // the string it sends is a dictionary key and this side is what looks it up
+    // (the catalog entries are guarded in `piTuiSession.test.ts`, since a scan
+    // for `t('…')` literals cannot see a key held in a variable).
+    expect(WORKSPACE).toContain('description: t(support.reason)');
+  });
+});

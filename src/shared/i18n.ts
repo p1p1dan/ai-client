@@ -746,6 +746,23 @@ export const zhTranslations: Record<string, string> = {
     '还没有收藏的主题。点心形图标即可收藏。',
   'Open TUI': '打开 TUI',
   'Pi terminal disconnected': 'Pi 终端已断开',
+  // T065 — the Pi TUI's own notices. `Pi TUI closed` and the line under it were
+  // hardcoded English in `usePresentationSwitch.ts`; the two `reason` strings
+  // below are dictionary keys Main sends across IPC (it has no translator).
+  'Pi TUI closed': 'Pi 终端已关闭',
+  'Returned to the GUI session.': '已切回图形界面的对话。',
+  'The Pi TUI cannot open this chat': 'Pi 终端无法打开这个对话',
+  'This chat is already open in a terminal in another window':
+    '该会话已在另一个窗口的终端中打开，请先关闭那个终端，或在那个窗口里继续。',
+  'This chat was saved in an older native format. Open it in the app once to upgrade it, then the Pi terminal can open it.':
+    '这个对话保存的是旧版原生格式。先在应用里打开一次完成升级，Pi 终端才能打开它。',
+  // T065 回炉 — the other two refusals Main can send. They used to be thrown
+  // away by the open path (no terminal, no message), so nothing ever displayed
+  // them; now that they reach a toast they need Chinese like the two above.
+  'This terminal is already running another chat; close it before opening this one':
+    '这个终端已经在运行另一个对话，请先关掉那个终端，再打开这一个。',
+  'This chat is still running a turn; wait for it to finish before opening the Pi terminal':
+    '这个对话还有一轮没跑完，等它结束之后再打开 Pi 终端。',
   'Preview limit': '预览上限',
   'Review changes with AI assistance': '用 AI 协助审阅改动',
   'Save changes (Cmd+S)': '保存改动（Cmd+S）',
@@ -1059,6 +1076,11 @@ export const zhTranslations: Record<string, string> = {
   'Confirm close all agent sessions?': '确认关闭所有 Agent 会话？',
   'Confirm close all terminal sessions?': '确认关闭所有终端会话？',
   'Confirm exit': '确认退出',
+  // T065 — closing one of several windows is not the app exiting; the old copy
+  // asked about quitting either way.
+  'Close this window': '关闭这个窗口',
+  'The app keeps running in your other windows.': '应用会在你其他的窗口里继续运行。',
+  'Close window': '关闭窗口',
   'Create your first worktree to get started': '创建第一个 Worktree 开始工作',
   'Creating...': '创建中...',
   Dark: '深色',
@@ -2811,6 +2833,75 @@ export const zhTranslations: Record<string, string> = {
   'Read file contents': '读取文件内容',
   'This history was imported from a {{sourceKind}} session ({{sourceSessionId}}). You can keep talking here; the original run state — tools, permissions — did not come across.':
     '这段历史从 {{sourceKind}} 会话 {{sourceSessionId}} 导入。可以在这里接着聊；原来的运行状态（工具、权限）没有一起带过来。',
+
+  // T067 — copy that was never routed through `t()` at all. All four groups
+  // below were photographed on 2026-09-17 sitting inside an otherwise Chinese
+  // screen, which is why they are one batch rather than four: the defect is
+  // not the wording, it is that these surfaces never asked the catalog.
+
+  // D20 — the question card. Its permission sibling renders in the same shell
+  // and was fully translated; these five plus the skipped mark were bare
+  // constants, so a Chinese user saw 「权限」 and 「Questions」 side by side.
+  Questions: '提问',
+  Answers: '回答',
+  'Questions skipped': '已跳过提问',
+  'Other…': '其他…',
+  Skip: '跳过',
+  Skipped: '已跳过',
+  // Identity on purpose: a key chord is not a sentence. The entry exists so a
+  // locale that words it differently has a place to say so.
+  'Ctrl + Enter': 'Ctrl + Enter',
+
+  // D21 — the transport-retry banner. Four keys rather than two templates with
+  // a `+`: the attempt count sits mid-sentence in English and at the end in
+  // Chinese, so the presence of the count picks the key instead of patching a
+  // hole in one. `{{counts}}` is a bare ratio ('2' / '2/10') and needs no
+  // translating — the composer one line below has printed it that way all
+  // along.
+  'Network retry — the turn is still running': '网络重试中 · 本回合仍在进行',
+  'Network retry {{counts}} — the turn is still running':
+    '网络重试中 · {{counts}} · 本回合仍在进行',
+  'Upstream error {{status}} — retrying, the turn is still running':
+    '上游返回错误 {{status}} · 正在重试 · 本回合仍在进行',
+  'Upstream error {{status}} — retrying {{counts}}, the turn is still running':
+    '上游返回错误 {{status}} · 正在重试 {{counts}} · 本回合仍在进行',
+  'Next attempt in {{delay}}': '{{delay}} 后重试',
+
+  // D26 — the Composer's attachment sentences, refusals and hint alike. They
+  // share one folded notice, so they are translated together: a Chinese list
+  // under an English header is the same defect one layer up.
+  'Pasted item': '粘贴的内容',
+  'Pasted image': '粘贴的图片',
+  image: '图片',
+  'text file': '文本文件',
+  'an unknown image type': '未知的图片格式',
+  '"{{name}}" is empty — skipped.': '「{{name}}」是空文件，已跳过。',
+  'Up to {{max}} attachments per message — "{{name}}" skipped.':
+    '每条消息最多 {{max}} 个附件，已跳过「{{name}}」。',
+  '"{{name}}" is {{size}} — max {{max}} per {{what}}.':
+    '「{{name}}」有 {{size}}，单个{{what}}最大 {{max}}。',
+  'Attachments would total {{size}} — max {{max}} per message. Remove one first.':
+    '附件合计将达 {{size}}，每条消息最多 {{max}}，请先移除一个。',
+  '"{{name}}" is {{type}} — only JPEG, PNG, GIF and WebP are supported.':
+    '「{{name}}」是 {{type}}，只支持 JPEG、PNG、GIF 和 WebP。',
+  '"{{name}}" is {{width}}x{{height}}px — max {{max}}px on the longer edge.':
+    '「{{name}}」是 {{width}}x{{height}} 像素，长边最大 {{max}} 像素。',
+  'Attachments total {{size}} — sending may take longer.': '附件合计 {{size}}，发送可能会慢一些。',
+  '"{{name}}" is not an image or text file — skipped.':
+    '「{{name}}」既不是图片也不是文本文件，已跳过。',
+  'Could not read "{{name}}" — skipped.': '读取「{{name}}」失败，已跳过。',
+  '"{{name}}" is not a file — skipped.': '「{{name}}」不是文件，已跳过。',
+  '"{{name}}" looks like binary data — skipped.': '「{{name}}」看起来是二进制数据，已跳过。',
+  '{{count}} attachments skipped: {{reasons}}': '已跳过 {{count}} 个附件：{{reasons}}',
+
+  // D9 — the import refusal. The main process has no locale, so it now sends a
+  // code plus the ceiling it enforced; these two sentences are where that
+  // becomes Chinese, where 67108864 becomes 64 MiB, and where the user is told
+  // what to do next instead of being handed a number.
+  'This conversation has more than {{limit}} records, past the import limit. Import a smaller conversation, or split it up first.':
+    '这个对话的记录条数超过了 {{limit}} 条的导入上限，没能导入。请改导入较小的对话，或先拆分后再导入。',
+  'This conversation is larger than {{size}}, past the import limit. Import a smaller conversation, or split it up first.':
+    '这个对话的体积超过了 {{size}} 的导入上限，没能导入。请改导入较小的对话，或先拆分后再导入。',
 };
 
 export function normalizeLocale(input?: string): Locale {

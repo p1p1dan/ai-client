@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { MODEL_NOT_IN_CATALOG_CODE_TOKEN } from '../modelMissingError';
 import { stripComments } from './stripComments';
 
 /**
@@ -28,9 +29,37 @@ const TERMINAL = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '
 
 const COMPOSER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ChatComposer.tsx');
 
+const NOTICE = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'ModelMissingNotice.tsx'
+);
+
+/**
+ * T062 / D19 — the two runtime files the detector's code token depends on.
+ *
+ * Read as text rather than imported: `src/runtime` is its own npm package with
+ * its own `node_modules` (cordis + pi-ai), and importing into a renderer suite
+ * would make this file unrunnable on a checkout that has not installed it.
+ */
+const RUNTIME_ROOT = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  '..',
+  '..',
+  'runtime',
+  'plugins'
+);
+const ADAPTER = path.join(RUNTIME_ROOT, 'model-adapter', 'index.ts');
+const LOOP = path.join(RUNTIME_ROOT, 'agent-loop', 'index.ts');
+
 const SOURCE = stripComments(readFileSync(TIMELINE, 'utf8'), 'MessageTimeline.tsx');
 const TERMINAL_SOURCE = stripComments(readFileSync(TERMINAL, 'utf8'), 'AgentTerminal.tsx');
 const COMPOSER_SOURCE = stripComments(readFileSync(COMPOSER, 'utf8'), 'ChatComposer.tsx');
+const NOTICE_SOURCE = stripComments(readFileSync(NOTICE, 'utf8'), 'ModelMissingNotice.tsx');
+const ADAPTER_SOURCE = stripComments(readFileSync(ADAPTER, 'utf8'), 'model-adapter-index.ts');
+const LOOP_SOURCE = stripComments(readFileSync(LOOP, 'utf8'), 'agent-loop-index.ts');
 
 describe('MessageTimeline wires the model-missing recovery (H/21 P0)', () => {
   it('[MMW-01] imports the shared detector and view rather than re-spelling the needle', () => {
@@ -126,6 +155,78 @@ describe('ChatComposer status strip (H/21 point-check D2)', () => {
     // This strip is the only place most Host errors are ever shown. Replacing
     // the fallback instead of ranking above it would hide all of them.
     expect(COMPOSER_SOURCE).toContain(`\`Error: \${lastError}\``);
+  });
+
+  it('[MMW-17] the strip translates the mapped hint instead of printing the key', () => {
+    // 2026-09-17 re-verification: the strip showed the English dictionary key
+    // under a Chinese UI, because this one call site was the only surface that
+    // read the view without `t()`.
+    expect(COMPOSER_SOURCE).toContain('t(MODEL_MISSING_ERROR_VIEW.hint)');
+  });
+});
+
+/**
+ * T062 round-2 — the recovery card on the SEND path.
+ *
+ * The three H/21 surfaces all need something a failed send does not produce (a
+ * `'failed'` status that survives, an error MESSAGE in the transcript, or a
+ * failed history read). `lastError` is the durable one, so the card is mounted
+ * on the surface `lastError` already lights.
+ */
+describe('ChatComposer mounts the recovery card on the send path (T062 round-2)', () => {
+  it('[MMW-18] the error surface above the composer branches on the detector', () => {
+    expect(COMPOSER_SOURCE).toContain("from './ModelMissingNotice'");
+    expect(COMPOSER_SOURCE).toContain('isModelMissingError(lastError) ? (');
+    expect(COMPOSER_SOURCE).toContain('<ModelMissingNotice error={lastError}');
+    // Reverse: every other failure keeps the raw diagnostic box it had.
+    expect(COMPOSER_SOURCE).toContain('{statusHint}');
+  });
+
+  it('[MMW-19] the card asks the dictionary for every one of its four fields', () => {
+    for (const field of ['title', 'message', 'hint', 'actionLabel']) {
+      expect(NOTICE_SOURCE).toContain(`t(MODEL_MISSING_ERROR_VIEW.${field})`);
+    }
+    // ...and never renders one raw — that is the defect this file just caught
+    // on the status strip.
+    expect(NOTICE_SOURCE).not.toMatch(
+      /\{MODEL_MISSING_ERROR_VIEW\.(title|message|hint|actionLabel)\}/
+    );
+  });
+
+  it('[MMW-20] the card keeps the diagnostic that names the model, and the way out', () => {
+    expect(NOTICE_SOURCE).toContain('{error}');
+    expect(NOTICE_SOURCE).toContain('requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)');
+  });
+});
+
+/**
+ * T062 / D19 — the signal the session path sends, pinned at both ends.
+ *
+ * The 2026-09-17 point-check found this card unreachable from a real send: the
+ * detector matched `WORKER_MODEL_NOT_FOUND` and `Pi model not found`, and the
+ * session path had moved to a `RuntimeConfigError` carrying neither. The code
+ * is now the contract; these two scans are what stop it drifting again, since
+ * the producer and the consumer are in different npm packages and no compiler
+ * checks the seam.
+ */
+describe('the session path carries a code the renderer can match (T062 / D19)', () => {
+  it('[MMW-14] the model-adapter throw site still spells the code the detector expects', () => {
+    expect(ADAPTER_SOURCE).toContain(`'${MODEL_NOT_IN_CATALOG_CODE_TOKEN}'`);
+  });
+
+  it('[MMW-15] the loop pastes a thrown failure code onto the session.failed text', () => {
+    // Only the CODE is asserted to travel. The sentence beside it belongs to
+    // the runtime and is free to change.
+    expect(LOOP_SOURCE).toContain('payload: { error: thrownRunErrorText(error) }');
+    expect(LOOP_SOURCE).toMatch(/\$\{code\}: \$\{error\.message\}/);
+  });
+
+  it('[MMW-16] the renderer never matches the runtime sentence itself', () => {
+    // Matching `no model "…" in the catalog` would tie a Chinese recovery card
+    // to an English diagnostic, which is the shape of the original defect.
+    for (const source of [SOURCE, TERMINAL_SOURCE, COMPOSER_SOURCE, NOTICE_SOURCE]) {
+      expect(source).not.toContain('in the catalog');
+    }
   });
 });
 

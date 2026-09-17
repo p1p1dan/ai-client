@@ -6,10 +6,9 @@ import { describeHostStatus, type HostStatus } from './hostStatus';
 /**
  * Compact diagnostics ribbon (T-09): shown only while the Host is not ready.
  *
- * Covers: host-not-ready placeholder, Node 24 missing actionable guidance
- * (`AICLIENT_NODE24_PATH`), generic Host error with the fatal message, and a
- * Retry that re-runs `ensureHost`. A small diagnostics line surfaces the
- * Host-reported pool counters when available.
+ * Covers: host-not-ready placeholder, generic Host error with the fatal
+ * message, and a Retry that re-runs `ensureHost`. A small diagnostics line
+ * surfaces the Host-reported pool counters when available.
  *
  * Which states speak at all is `describeHostStatus` (hostStatus.ts) — a pure
  * function, because the node-env vitest config cannot render this `.tsx`, and

@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { zhTranslations } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import { stripComments } from '@/components/chat/__tests__/stripComments';
+import { piTuiOpenRefusalKey } from '../piTuiOpenError';
 
 /**
  * Which chat the embedded Pi terminal is actually attached to.
@@ -71,6 +73,88 @@ describe('[terminal-03] the terminal id belongs to a chat, not to the app', () =
     expect(SWITCH).toMatch(
       /Object\.values\([a-zA-Z.]*[Tt]erminalIds[a-zA-Z.]*\)[\s\S]{0,160}piTui\.dispose\(terminalId\)/
     );
+  });
+});
+
+/**
+ * D17 (T065 回炉) — the renderer half of the repaint.
+ *
+ * Main deliberately leaves a resumed PTY one row off the requested size, and
+ * this side is what puts the true size back, in a separate IPC message, once
+ * the rebuilt xterm is attached. The first attempt did both halves inside one
+ * synchronous turn in Main; the point check found the screen still blank and
+ * only 10 bytes flowing back, because a child that is scheduled once, after
+ * both ioctls, reads a winsize identical to its own.
+ */
+describe('[D17] the renderer confirms its size after attaching, so pi repaints', () => {
+  it('sends the size the attached xterm actually has', () => {
+    expect(XTERM).toMatch(
+      /function confirmPiTuiSize\(terminalId: string, terminal: Terminal\)[\s\S]{0,200}piTui\s*\.resize\(terminalId, terminal\.cols, terminal\.rows\)/
+    );
+  });
+
+  it('sends it after the open resolves, not before the terminal exists', () => {
+    // Order is the whole point: sent from here rather than from Main so the
+    // full frame pi paints cannot arrive before the xterm that has to show it.
+    expect(XTERM).toMatch(
+      /setCurrentSessionId\(opened\.terminalId\);\s*confirmPiTuiSize\(piTuiTerminalId, terminal\);/
+    );
+  });
+
+  it('sends it on the revive too, which is the path a chat switch actually takes', () => {
+    // Switching back to a parked chat re-opens through the effect below, not
+    // through the first open — leaving it out would leave the screen blank in
+    // exactly the case the defect was reported on.
+    expect(reviveEffect()).toContain('confirmPiTuiSize(piTuiTerminalId, terminal)');
+  });
+});
+
+/**
+ * T065 回炉 — a refused open has to say so.
+ *
+ * Main refuses with sentences that double as dictionary keys, and only the
+ * pre-flight in `usePresentationSwitch` ever displayed one. The D4 re-verify
+ * clicked 「Start Pi TUI」 twice in a second window and got no terminal and no
+ * message: both paths that reach `piTui.open` directly threw the reason away.
+ */
+describe('[T065] the refusal Main sends reaches the user', () => {
+  it('unwraps the key Electron buried in its invoke wrapper', () => {
+    expect(
+      piTuiOpenRefusalKey(
+        new Error(
+          "Error invoking remote method 'pi-tui:open': Error: This chat is already open in a terminal in another window"
+        )
+      )
+    ).toBe('This chat is already open in a terminal in another window');
+    // And the key it returns is one the dictionary answers — the point of
+    // unwrapping at all.
+    expect(
+      zhTranslations['This chat is already open in a terminal in another window']
+    ).toBeTruthy();
+  });
+
+  it('passes anything it does not recognise through as itself', () => {
+    // Reverse check: `translate` falls back to its key, so an unknown failure
+    // degrades to its own English text rather than to a blank toast.
+    expect(piTuiOpenRefusalKey(new Error('node-pty exploded'))).toBe('node-pty exploded');
+    expect(piTuiOpenRefusalKey('plain string')).toBe('plain string');
+  });
+
+  it('toasts the refusal through the translator on the open path', () => {
+    expect(XTERM).toContain('if (piTuiTerminalId) reportPiTuiOpenFailure(error);');
+    expect(XTERM).toMatch(
+      /title: translate\('The Pi TUI cannot open this chat'\),\s*description: translate\(piTuiOpenRefusalKey\(error\)\)/
+    );
+  });
+
+  it('no longer swallows the revive rejection whole', () => {
+    // Only the open's own chain: the `suspend` call in the same effect keeps
+    // its silent catch, which is correct — parking a terminal is not something
+    // the user asked for and cannot fail in a way they can act on.
+    const effect = reviveEffect();
+    const openChain = effect.slice(effect.indexOf('.open({'));
+    expect(openChain).toContain('.catch(reportPiTuiOpenFailure)');
+    expect(openChain).not.toContain('.catch(() => {})');
   });
 });
 

@@ -11,6 +11,7 @@
  * around it, not node-pty.
  */
 
+import { zhTranslations } from '@shared/i18n';
 import type { PiTuiOpenRequest } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -35,12 +36,16 @@ const open = vi.fn(async (request: PiTuiOpenRequest) => ({
 }));
 const disposeAll = vi.fn(async () => undefined);
 const dispose = vi.fn(async () => true);
+/** The real controller announces every stop on the state channel; so does this. */
+type StateCallback = (event: { terminalId: string; state: string }) => void;
+let announceState: StateCallback = () => {};
 /** terminal-10: every controller the registry has built, newest last. */
 const controllerInstances: unknown[] = [];
 
 vi.mock('electron', () => ({
   BrowserWindow: {
-    fromWebContents: () => ({ id: 1 }),
+    // D18: the sender says which window it is, so one test can drive two.
+    fromWebContents: (sender: { windowId?: number }) => ({ id: sender?.windowId ?? 1 }),
     fromId: () => null,
   },
   ipcMain: {
@@ -68,12 +73,19 @@ vi.mock('../../services/terminal/PiTuiPty', () => ({
   })),
   PiTuiPtyController: class {
     readonly windowId: number;
-    constructor(windowId: number) {
+    constructor(windowId: number, callbacks: { onState?: StateCallback }) {
       this.windowId = windowId;
+      announceState = (event) => callbacks.onState?.(event);
       controllerInstances.push(this);
     }
     open = open;
-    dispose = dispose;
+    dispose = vi.fn(async (terminalId: string) => {
+      // `#disposeAndConfirm` emits 'dead' before it waits for the exit, and
+      // that event is what releases the D18 claim — a double that stayed
+      // silent here would let a leak pass.
+      announceState({ terminalId, state: 'dead' });
+      return dispose();
+    });
     disposeSession = disposeSession;
     disposeAll = disposeAll;
     disposeAllSync = vi.fn(() => undefined);
@@ -85,20 +97,30 @@ const {
   releaseSessionForHostPrompt,
   assertHostPromptAllowed,
   disposeAllPiTuiControllers,
+  PI_TUI_TURN_RUNNING_REASON,
 } = await import('../piTui');
 
 /** A path that does not exist, so the TUI-1 support probe lets it through. */
 const CHAT = '/tmp/ai-client-handover-test/chat.jsonl';
 const OTHER_CHAT = '/tmp/ai-client-handover-test/other.jsonl';
 
-async function openTerminal(sessionFile: string): Promise<void> {
+async function openTerminal(
+  sessionFile: string,
+  options: { windowId?: number; terminalId?: string } = {}
+): Promise<void> {
   const handler = handlers.get(IPC_CHANNELS.PI_TUI_OPEN);
   if (!handler) throw new Error('PI_TUI_OPEN handler was not registered');
-  await handler({ sender: {} }, {
-    terminalId: 'terminal-1',
+  await handler({ sender: { windowId: options.windowId ?? 1 } }, {
+    terminalId: options.terminalId ?? 'terminal-1',
     cwd: '/repo',
     sessionFile,
   } satisfies PiTuiOpenRequest);
+}
+
+async function sessionSupport(sessionFile: string, windowId = 1): Promise<unknown> {
+  const handler = handlers.get(IPC_CHANNELS.PI_TUI_SESSION_SUPPORT);
+  if (!handler) throw new Error('PI_TUI_SESSION_SUPPORT handler was not registered');
+  return handler({ sender: { windowId } }, sessionFile);
 }
 
 beforeEach(async () => {
@@ -210,6 +232,12 @@ describe('an unconfirmed kill keeps the chat contested', () => {
  * question in front of the handover itself.
  */
 describe('the Pi TUI cannot take a chat that is mid-turn', () => {
+  it('ships a Chinese entry for the refusal it sends the renderer', () => {
+    // T065 回炉: same reasoning as the other reason guards — the renderer looks
+    // this up as a variable, so the `t('literal')` coverage scan is blind to it.
+    expect(zhTranslations[PI_TUI_TURN_RUNNING_REASON]).toBeTruthy();
+  });
+
   it('refuses the open and never transfers ownership', async () => {
     busySessionFiles = [CHAT];
 
@@ -225,6 +253,105 @@ describe('the Pi TUI cannot take a chat that is mid-turn', () => {
 
     await expect(openTerminal(CHAT)).resolves.toBeUndefined();
     expect(open).toHaveBeenCalled();
+  });
+});
+
+/**
+ * D18 — the DEV-16 point check opened one chat in two windows. Both windows
+ * spawned `pi --session` on the same JSONL, both read the tree once at open,
+ * and both hung their own turn off the same parent entry: the session forked
+ * into two branches inside one file, with no prompt, no refusal and no
+ * read-only fallback. The per-window PTY controllers cannot see each other, so
+ * the refusal has to live here.
+ */
+describe('two windows cannot drive the same chat', () => {
+  it('refuses the second window and never spawns its pi', async () => {
+    await openTerminal(CHAT, { windowId: 1 });
+    open.mockClear();
+
+    await expect(openTerminal(CHAT, { windowId: 2, terminalId: 'terminal-2' })).rejects.toThrow(
+      /another window/i
+    );
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('leaves the same window and a different chat alone', async () => {
+    // Reverse check. Switching chats inside one window opens a second terminal
+    // id, and the other window keeps every chat this one is not holding.
+    await openTerminal(CHAT, { windowId: 1 });
+
+    await expect(openTerminal(CHAT, { windowId: 1 })).resolves.toBeUndefined();
+    await expect(
+      openTerminal(OTHER_CHAT, { windowId: 2, terminalId: 'terminal-2' })
+    ).resolves.toBeUndefined();
+  });
+
+  it('lets the other window in once the first window let the chat go', async () => {
+    await openTerminal(CHAT, { windowId: 1 });
+    const disposeHandler = handlers.get(IPC_CHANNELS.PI_TUI_DISPOSE);
+    if (!disposeHandler) throw new Error('PI_TUI_DISPOSE handler was not registered');
+    // Disposing unbooks the terminal before its PTY reports an exit, so the
+    // controller's `onExit` never fires for it — this is the release path that
+    // has to work, or the chat stays locked to window 1 for the rest of the run.
+    await disposeHandler({ sender: { windowId: 1 } }, 'terminal-1');
+
+    await expect(
+      openTerminal(CHAT, { windowId: 2, terminalId: 'terminal-2' })
+    ).resolves.toBeUndefined();
+  });
+
+  it('frees the chat when the GUI takes the file back', async () => {
+    await openTerminal(CHAT, { windowId: 1 });
+    await releaseSessionForHostPrompt(CHAT);
+
+    await expect(
+      openTerminal(CHAT, { windowId: 2, terminalId: 'terminal-2' })
+    ).resolves.toBeUndefined();
+  });
+
+  /**
+   * T065 回炉 — the rollback after a refused open must not disown a live pi.
+   *
+   * `controller.open` rejects for reasons that leave the previous terminal
+   * running: terminal-03 refuses a warm PTY asked for a second chat, and a
+   * chat's `runtimeIdentity` can change under a live terminal (a pi session file
+   * is written lazily, and a fork or a continued chat renames it). The first
+   * landing rolled the claim back with `releaseTerminal`, which drops every chat
+   * that terminal id holds — including the one still being written.
+   */
+  it('keeps the live claim when the same terminal is refused a second chat', async () => {
+    await openTerminal(CHAT, { windowId: 1 });
+    open.mockRejectedValueOnce(new Error('This terminal is already running another chat'));
+
+    await expect(openTerminal(OTHER_CHAT, { windowId: 1 })).rejects.toThrow(/another chat/i);
+
+    // Window 1's pi is still on CHAT, so window 2 still must not get it. Under
+    // the over-wide rollback this resolved, and two `pi --session` ran on one
+    // JSONL — D18 itself.
+    await expect(openTerminal(CHAT, { windowId: 2, terminalId: 'terminal-2' })).rejects.toThrow(
+      /another window/i
+    );
+  });
+
+  it('does release the chat the failed open asked for', async () => {
+    // Reverse check: the rollback still has to happen, or a spawn that never
+    // started would lock the chat out of terminal mode for the rest of the run.
+    await openTerminal(CHAT, { windowId: 1 });
+    open.mockRejectedValueOnce(new Error('This terminal is already running another chat'));
+    await expect(openTerminal(OTHER_CHAT, { windowId: 1 })).rejects.toThrow();
+
+    await expect(
+      openTerminal(OTHER_CHAT, { windowId: 2, terminalId: 'terminal-2' })
+    ).resolves.toBeUndefined();
+  });
+
+  it('says so in the pre-flight, so the surface never switches to a doomed terminal', async () => {
+    await openTerminal(CHAT, { windowId: 1 });
+
+    expect(await sessionSupport(CHAT, 2)).toMatchObject({ supported: false });
+    // The window that holds it, and every other chat, stay openable.
+    expect(await sessionSupport(CHAT, 1)).toEqual({ supported: true });
+    expect(await sessionSupport(OTHER_CHAT, 2)).toEqual({ supported: true });
   });
 });
 

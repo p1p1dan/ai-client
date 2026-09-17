@@ -147,3 +147,105 @@ it('counts down on the permission card and denies once at zero', async () => {
     vi.unstubAllGlobals();
   }
 });
+
+/**
+ * D22 + D23 (batch E1 point-check, 2026-09-17).
+ *
+ * D22: `QuestionItem.header` is declared in the runtime contract and forwarded
+ * by the `ask` tool, but no renderer drew it — a real run sent `header` and the
+ * card showed nothing.
+ *
+ * D23: every title tier on both cards leaned on `font-medium` (500). Win10's
+ * static Segoe UI family has no 500, and CSS Fonts 4 §5.2 falls DOWN to 400, so
+ * the titles were pixel-identical to body text there. `docs/design-system.md`
+ * assigns card / section titles to `font-semibold` and descriptions to
+ * `font-normal`. Asserted as classes, not computed styles: happy-dom loads no
+ * Tailwind stylesheet, so the class list is the only observable.
+ */
+it('renders the question header chip and words both cards in the semibold title tier', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const headerBlock: ChatBlock = {
+    id: 'q-header',
+    type: 'question',
+    questionId: 'q-header',
+    questions: [
+      {
+        question: 'Which store should the cache use?',
+        header: 'Storage',
+        options: [
+          { label: 'Postgres', description: 'Relational, already deployed' },
+          { label: 'SQLite' },
+        ],
+      },
+    ],
+  };
+  const spansWith = (text: string) =>
+    Array.from(container.querySelectorAll('span')).filter((el) => el.textContent === text);
+  try {
+    await act(async () =>
+      root.render(
+        createElement(QuestionCard, {
+          variant: 'interactive',
+          block: headerBlock,
+          onSubmit: async () => true,
+          onSkip: async () => true,
+        })
+      )
+    );
+    // D22 — the chip exists, as its own element rather than glued to the text.
+    const chip = spansWith('Storage')[0];
+    expect(chip).toBeDefined();
+    expect(chip.className).toContain('text-meta');
+    expect(chip.textContent).toBe('Storage');
+
+    // D23 — section head and question title.
+    expect(spansWith('Questions')[0]?.className).toContain('font-semibold');
+    const questionTitle = Array.from(container.querySelectorAll('div')).find(
+      (el) => el.textContent === 'Which store should the cache use?'
+    );
+    expect(questionTitle?.className).toContain('font-semibold');
+    expect(questionTitle?.className).not.toContain('font-medium');
+
+    // D23 — the option description drops the button base class's 500.
+    const description = spansWith('Relational, already deployed')[0];
+    expect(description?.className).toContain('font-normal');
+
+    // Reverse control: the fix is scoped. Option BUTTONS keep the button tier's
+    // `font-medium` (design-system allows 500 on controls), so a global weight
+    // sweep would fail here.
+    const radio = container.querySelector<HTMLButtonElement>('[role="radio"]');
+    expect(radio?.className).toContain('font-medium');
+    expect(radio?.className).not.toContain('font-semibold');
+
+    // Permission card — same two title tiers, different variant.
+    await act(async () =>
+      root.render(
+        createElement(QuestionCard, {
+          variant: 'permission',
+          block: {
+            id: 'p-weight',
+            type: 'permission_request',
+            permissionId: 'call-weight',
+            toolName: 'write',
+            permissionKind: 'file_change',
+            toolInput: { path: '/repo/a.txt', content: 'pong', workspace: '/repo' },
+          } as ChatBlock,
+          canRespond: true,
+          onRespondPermission: async () => true,
+        })
+      )
+    );
+    expect(spansWith('Permission')[0]?.className).toContain('font-semibold');
+    const permissionTitle = container.querySelector<HTMLParagraphElement>('p.text-ui');
+    expect(permissionTitle).not.toBeNull();
+    expect(permissionTitle?.className).toContain('font-semibold');
+    expect(permissionTitle?.className).not.toContain('font-medium');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  }
+});

@@ -11,6 +11,7 @@ import { isRemoteVirtualPath, toRemoteVirtualPath } from '@shared/utils/remotePa
 import { buildRepositoryId } from '@shared/utils/workspace';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
+import { closeConfirmCopy } from './App/closeConfirmCopy';
 import { type Repository, TEMP_REPO_ID } from './App/constants';
 import {
   useAppLifecycle,
@@ -382,9 +383,12 @@ export default function App() {
 
   useTerminalNavigation(activeWorktree?.path ?? null, setActiveTab, setWorktreeTabMap);
   useMenuActions(openSettings);
-  const { confirmCloseAndRespond, cancelCloseAndRespond } = useAppLifecycle(
+  const { confirmCloseAndRespond, cancelCloseAndRespond, closeRequestReason } = useAppLifecycle(
     panelState.setCloseDialogOpen
   );
+  // T065: closing one of several windows is not the app exiting, and the reason
+  // Main sends has always distinguished them.
+  const closeCopy = closeConfirmCopy(closeRequestReason);
 
   useTempWorkspaceSync(
     effectiveTemporaryWorkspaceEnabled,
@@ -1036,8 +1040,8 @@ export default function App() {
         >
           <DialogPopup className="sm:max-w-sm" showCloseButton={false}>
             <DialogHeader>
-              <DialogTitle>{t('Confirm exit')}</DialogTitle>
-              <DialogDescription>{t('Are you sure you want to exit the app?')}</DialogDescription>
+              <DialogTitle>{t(closeCopy.title)}</DialogTitle>
+              <DialogDescription>{t(closeCopy.description)}</DialogDescription>
             </DialogHeader>
             <DialogFooter variant="bare">
               <Button
@@ -1056,7 +1060,7 @@ export default function App() {
                   confirmCloseAndRespond();
                 }}
               >
-                {t('Exit')}
+                {t(closeCopy.confirmLabel)}
               </Button>
             </DialogFooter>
           </DialogPopup>

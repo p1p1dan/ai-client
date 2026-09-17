@@ -1,3 +1,4 @@
+import { translate } from '@shared/i18n';
 import type { AttachmentReadResult } from '@shared/types/attachmentIo';
 import { describe, expect, it } from 'vitest';
 import { admitAttachment, DEFAULT_ATTACHMENT_LIMITS } from '../attachmentLimits';
@@ -361,5 +362,68 @@ describe('toArrayBuffer (D4)', () => {
     expect(out.byteLength).toBe(3);
     expect([...new Uint8Array(out)]).toEqual([1, 2, 3]);
     expect(out).not.toBe(pool.buffer);
+  });
+});
+
+/**
+ * T067 (D26) — the sameness property above, now in the app's default language.
+ *
+ * The picked path has its own sentences (unreadable / wrong kind / not a file)
+ * that sit in the SAME folded notice as the budget refusals it delegates. A
+ * Chinese list under an English header, or the reverse, is the same defect one
+ * layer up — so the translator travels with the delegation.
+ */
+describe('picked-path copy in Chinese (T067 D26)', () => {
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+
+  it('still speaks admitAttachment’s exact sentence — in Chinese', () => {
+    const byteLength = 6 * MB;
+    const pasted = admitAttachment(
+      [],
+      { name: 'shot.png', kind: 'image', byteLength },
+      DEFAULT_ATTACHMENT_LIMITS,
+      zh
+    );
+    expect(pasted.ok).toBe(false);
+    expect(
+      pickedSkipMessage(
+        { reason: 'too-large', name: 'shot.png', kind: 'image', byteLength },
+        DEFAULT_ATTACHMENT_LIMITS,
+        zh
+      )
+    ).toBe(pasted.ok ? '' : pasted.message);
+  });
+
+  it('words its own three sentences too', () => {
+    expect(unsupportedKindMessage('notes.bin', zh)).toBe(
+      '「notes.bin」既不是图片也不是文本文件，已跳过。'
+    );
+    expect(unreadableMessage('locked.png', zh)).toBe('读取「locked.png」失败，已跳过。');
+    expect(
+      pickedSkipMessage({ reason: 'not-a-file', name: 'a-folder', kind: 'text' }, undefined, zh)
+    ).toBe('「a-folder」不是文件，已跳过。');
+  });
+
+  it('reverse: without a translator the English bytes are unchanged', () => {
+    expect(unsupportedKindMessage('notes.bin')).toBe(
+      '"notes.bin" is not an image or text file — skipped.'
+    );
+    expect(unreadableMessage('locked.png')).toBe('Could not read "locked.png" — skipped.');
+    expect(unsupportedKindMessage('notes.bin', zh)).not.toMatch(/is not an image or text file/);
+  });
+
+  it('carries the translator through the batch loop, not just the formatters', () => {
+    // The wiring assertion: `readPickedBatch` is where the hook hands `t` over,
+    // and a loop that accepted it but forgot to forward it would still pass
+    // every assertion above.
+    return expect(
+      readPickedBatch({
+        paths: ['/tmp/a-folder'],
+        liveCount: () => 0,
+        read: async (): Promise<AttachmentReadResult> => ({ ok: false, reason: 'not-a-file' }),
+        t: zh,
+      })
+    ).resolves.toEqual({ reads: [], skipped: ['「a-folder」不是文件，已跳过。'] });
   });
 });

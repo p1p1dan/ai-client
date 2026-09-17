@@ -69,6 +69,8 @@ const stop = vi.fn(async () => 'stop-1');
 const closeSession = vi.fn(async () => 'close-1');
 const ensureReady = vi.fn(async () => undefined);
 const recordCreated = vi.fn(async () => undefined);
+/** D15 — the take-back for a row whose worker never bootstrapped. */
+const removeUncommittedCreated = vi.fn(async () => true);
 /** U04 — Main answers from the cached bootstrap; `null` = no live worker. */
 const getSessionCapabilities = vi.fn((_sessionId: string) => null as unknown);
 const clearUnwrittenRuntimeIdentity = vi.fn(async () => true);
@@ -139,6 +141,7 @@ vi.mock('../../services/chat/SessionIndexService', () => ({
     })),
     clearUnwrittenRuntimeIdentity,
     recordCreated,
+    removeUncommittedCreated,
     list: vi.fn(async () => []),
     rename: vi.fn(async () => true),
     setArchived: vi.fn(async () => true),
@@ -258,6 +261,68 @@ describe('Pi WorkerSlot chat routing', () => {
       model: 'glm/glm-5',
       effort: 'high',
       ownerWebContentsId: 7,
+    });
+  });
+
+  /**
+   * D15 (2026-09-17 field run, DEV-4) — what the index keeps when the worker
+   * never comes up.
+   *
+   * The row is written before the spawn on purpose (the identity commit and the
+   * runtime-event branches both refuse a session with no row), so a bootstrap
+   * timeout left a `title: ''` shell behind that came back as "Session xxxxxx"
+   * in the sidebar after a restart.
+   */
+  describe('a spawn that fails leaves no shell row', () => {
+    const bootstrapTimeout = (): Error =>
+      new Error('WorkerSlotError: Worker request worker.bootstrap timed out after 60000ms');
+
+    it('takes back the row it just wrote, and still reports the failure', async () => {
+      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+      // No row before this call: the renderer reverted eager registration, so a
+      // never-sent chat is unknown to the index until right here.
+      vi.mocked(sessionIndexService.get).mockResolvedValueOnce(undefined);
+      createSession.mockRejectedValueOnce(bootstrapTimeout());
+
+      await expect(
+        invoke('chat:createSession', { sessionId: 's-new', workspacePath: '/repo' })
+      ).rejects.toThrow(/worker\.bootstrap timed out/);
+
+      expect(recordCreated).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 's-new' }));
+      expect(removeUncommittedCreated).toHaveBeenCalledWith('s-new', '/repo');
+    });
+
+    it('keeps a row that was already there — a failed spawn is no reason to delete it', async () => {
+      // The default `get` mock answers with a complete, runtime-bound row.
+      createSession.mockRejectedValueOnce(bootstrapTimeout());
+
+      await expect(
+        invoke('chat:createSession', { sessionId: 's1', workspacePath: '/repo' })
+      ).rejects.toThrow(/worker\.bootstrap timed out/);
+
+      expect(removeUncommittedCreated).not.toHaveBeenCalled();
+    });
+
+    it('a cleanup that itself fails never masks the spawn error', async () => {
+      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+      vi.mocked(sessionIndexService.get).mockResolvedValueOnce(undefined);
+      createSession.mockRejectedValueOnce(bootstrapTimeout());
+      removeUncommittedCreated.mockRejectedValueOnce(new Error('index is unwritable'));
+
+      await expect(
+        invoke('chat:createSession', { sessionId: 's-new', workspacePath: '/repo' })
+      ).rejects.toThrow(/worker\.bootstrap timed out/);
+    });
+
+    it('reverse: a spawn that succeeds deletes nothing', async () => {
+      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+      vi.mocked(sessionIndexService.get).mockResolvedValueOnce(undefined);
+
+      await expect(
+        invoke('chat:createSession', { sessionId: 's-new', workspacePath: '/repo' })
+      ).resolves.toEqual({ requestId: 'create-1' });
+
+      expect(removeUncommittedCreated).not.toHaveBeenCalled();
     });
   });
 
@@ -501,6 +566,63 @@ describe('Pi WorkerSlot chat routing', () => {
         );
       } finally {
         warn.mockRestore();
+      }
+    });
+
+    /**
+     * T066 (D14) — archiving a temp chat used to leave no trace of any of it.
+     *
+     * The field pass archived a chat mid-turn: the worker was killed, the
+     * directory was deleted, and all three log files stopped writing before it
+     * happened. The removal itself reports from `ScratchWorkspaceService`; the
+     * two steps this handler owns report here.
+     */
+    it('T066: logs the archive and the worker retirement', async () => {
+      scratchPathsBySession = { s1: SCRATCH_DIR };
+      const logs = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+      try {
+        await invoke('chat:archiveSession', { sessionId: 's1', archived: true });
+
+        const lines = logs.mock.calls.map((call) => String(call[0]));
+        expect(lines.some((line) => line.includes('Archiving temp session s1'))).toBe(true);
+        expect(lines.some((line) => line.includes('Worker retired for archived session s1'))).toBe(
+          true
+        );
+      } finally {
+        logs.mockRestore();
+      }
+    });
+
+    it('T066: claims no worker retirement when the close failed', async () => {
+      scratchPathsBySession = { s1: SCRATCH_DIR };
+      closeSession.mockRejectedValueOnce(new Error('dispose timed out'));
+      const logs = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      try {
+        await invoke('chat:archiveSession', { sessionId: 's1', archived: true });
+
+        const lines = logs.mock.calls.map((call) => String(call[0]));
+        expect(lines.some((line) => line.includes('Archiving temp session s1'))).toBe(true);
+        expect(lines.some((line) => line.includes('Worker retired'))).toBe(false);
+      } finally {
+        logs.mockRestore();
+        warn.mockRestore();
+      }
+    });
+
+    it('T066: stays quiet for a chat bound to a real folder', async () => {
+      const logs = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+      try {
+        await invoke('chat:archiveSession', { sessionId: 's1', archived: true });
+
+        expect(logs.mock.calls.map((call) => String(call[0]))).not.toContainEqual(
+          expect.stringContaining('Archiving temp session')
+        );
+      } finally {
+        logs.mockRestore();
       }
     });
 

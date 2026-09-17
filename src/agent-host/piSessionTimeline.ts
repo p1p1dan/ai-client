@@ -1,3 +1,4 @@
+import { attachmentNameOf } from '../shared/attachmentRider.ts';
 import { isInternalMessage } from '../shared/internalMessage.ts';
 import { reviewFromToolResult } from '../shared/sessionFileChange.ts';
 import {
@@ -74,7 +75,11 @@ function attachmentMetadata(content: unknown): HistoryAttachment[] {
         : typeof record.mediaType === 'string'
           ? record.mediaType
           : 'image/*';
-    return [{ kind: 'image' as const, mediaType }];
+    // D25 — the file name, when the block that was written carried it. Absent
+    // on every block stored before T061 and on anything pi wrote itself, which
+    // keeps falling back to the media type alone.
+    const name = attachmentNameOf(record);
+    return [{ kind: 'image' as const, mediaType, ...(name ? { name } : {}) }];
   });
 }
 

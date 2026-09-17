@@ -272,3 +272,83 @@ describe('resolveTreeSyncPatch — same-path dual identity (round-6 review M3/N2
     expect(result.sessions[0]?.projectId).toBe('p-aaa');
   });
 });
+
+/**
+ * D6 (dev-box pass 2026-09-17) — temp chats left the sidebar mid-run and came
+ * back after a restart.
+ *
+ * The two paths that rebuild the session list disagreed about unbound chats:
+ * `mergeSessionIndex` has an explicit `!workspaceId && unbound` arm and keeps
+ * the row, while this pass had none, so an unbound chat that had already run a
+ * turn (and therefore carries a runtime identity) fell through to the orphan
+ * rule and was dropped from the store. Every tree signature change triggered it
+ * — a temp workspace added or removed, a worktree list arriving, the selected
+ * repository changing — and only a restart brought the rows back, because the
+ * startup path reads the index rows this pass never touched.
+ */
+describe('resolveTreeSyncPatch — unbound chats (D6)', () => {
+  function unbound(id: string, extra: Partial<ChatSession> = {}): ChatSession {
+    return session(id, {
+      projectId: '',
+      workspaceId: '',
+      unbound: { workspacePath: `/tmp/JYWAI/temporary/unbound-sessions/${id}` },
+      ...extra,
+    });
+  }
+
+  it('keeps an unbound chat that has already run a turn', () => {
+    const temp = unbound('session-temp', { runtimeIdentity: 'pi-1' });
+    const result = patch(prevState({ sessions: [session('session-bound'), temp] }));
+
+    expect(result.sessions.map((item) => item.id)).toEqual(['session-bound', 'session-temp']);
+    // Still unbound: adopting it into the preferred repository would give a
+    // scratch-directory chat a project cwd it never agreed to.
+    expect(result.sessions.find((item) => item.id === 'session-temp')?.workspaceId).toBe('');
+  });
+
+  it('keeps an unbound chat that is currently Host-bound, and keeps it bound', () => {
+    const temp = unbound('session-temp', { runtimeIdentity: 'pi-1' });
+    const result = patch(prevState({ sessions: [temp], hostBoundSessionIds: ['session-temp'] }));
+
+    expect(result.sessions.map((item) => item.id)).toContain('session-temp');
+    expect(result.hostBoundSessionIds).toEqual(['session-temp']);
+  });
+
+  it('keeps a live unbound chat that has run but has no index row yet', () => {
+    // `createUnboundChatSession` writes no `unbound` marker — it is set from the
+    // index row, which does not exist until the first send commits and the next
+    // refresh arrives. In that window the empty workspaceId is the only signal.
+    const live = session('session-live-temp', {
+      projectId: '',
+      workspaceId: '',
+      runtimeIdentity: 'pi-2',
+    });
+    const result = patch(prevState({ sessions: [live] }));
+
+    expect(result.sessions.map((item) => item.id)).toEqual(['session-live-temp']);
+    expect(result.sessions[0]?.workspaceId).toBe('');
+  });
+
+  it('still adopts an unsent unbound draft into the preferred workspace (U22)', () => {
+    // No marker and no runtime identity: nothing has run in it, so there is no
+    // history to misplace, and attaching it to the repository the user just
+    // added is the behaviour U22 asked for.
+    const draft = session('session-draft', { projectId: '', workspaceId: '' });
+    const result = patch(prevState({ sessions: [draft] }));
+
+    expect(result.sessions[0]?.workspaceId).toBe('ws-main');
+    expect(result.sessions[0]?.projectId).toBe('p1');
+  });
+
+  it('still drops an orphan whose repository disappeared', () => {
+    // The rule the new arm must not weaken: a session that DID have a workspace
+    // and lost it keeps a runtime identity pointing at that checkout's cwd.
+    const orphan = session('session-orphan', {
+      workspaceId: 'ws-gone',
+      runtimeIdentity: 'pi-3',
+    });
+    const result = patch(prevState({ sessions: [orphan] }));
+
+    expect(result.sessions.map((item) => item.id)).not.toContain('session-orphan');
+  });
+});

@@ -1,3 +1,4 @@
+import { translate } from '@shared/i18n';
 import { MAX_ATTACHMENT_READ_BYTES } from '@shared/types/attachmentIo';
 import { describe, expect, it } from 'vitest';
 import {
@@ -219,3 +220,96 @@ describe('largeAttachmentHint (T-18 E6)', () => {
  * byte-scaled timeout formula is void — see spec §1.3 / §12.1). There are no
  * more timeout-related cases in this file.
  */
+
+/**
+ * T067 (D26) — every attachment sentence, in the app's default language.
+ *
+ * The 2026-09-17 field pass photographed a composer whose own controls read
+ * 「执行 · 每次询问」 and 「发送消息」 while the attachment line under them read
+ * `Attachments total 6.0 MB — sending may take longer.` Six sentences, one
+ * surface, none of them ever routed through the catalog.
+ *
+ * Each case asserts the Chinese AND that the English template is gone. The
+ * second half is what catches a half-applied fix — a key that reached the
+ * catalog with the wrong text falls back to the key itself, i.e. to English,
+ * silently.
+ */
+describe('attachment copy in Chinese (T067 D26)', () => {
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+  const refuse = (result: ReturnType<typeof admitAttachment>): string =>
+    result.ok ? '' : result.message;
+
+  it('words the four admission refusals', () => {
+    expect(
+      refuse(admitAttachment([], { name: 'empty.txt', byteLength: 0, kind: 'text' }, LIMITS, zh))
+    ).toBe('「empty.txt」是空文件，已跳过。');
+
+    const full = Array.from({ length: 5 }, () => ({ byteLength: 1024 }));
+    expect(
+      refuse(
+        admitAttachment(full, { name: 'six.png', byteLength: 4096, kind: 'image' }, LIMITS, zh)
+      )
+    ).toBe('每条消息最多 5 个附件，已跳过「six.png」。');
+
+    expect(
+      refuse(
+        admitAttachment([], { name: 'huge.png', byteLength: 7 * MB, kind: 'image' }, LIMITS, zh)
+      )
+    ).toBe('「huge.png」有 7.0 MB，单个图片最大 1.0 MB。');
+    // The kind noun is its own key, so the text branch must not print 'image'.
+    expect(
+      refuse(admitAttachment([], { name: 'big.log', byteLength: 7 * MB, kind: 'text' }, LIMITS, zh))
+    ).toContain('单个文本文件');
+
+    expect(
+      refuse(
+        admitAttachment(
+          [{ byteLength: 1.5 * MB }],
+          { name: 'more.png', byteLength: 1 * MB, kind: 'image' },
+          LIMITS,
+          zh
+        )
+      )
+    ).toBe('附件合计将达 2.5 MB，每条消息最多 2.0 MB，请先移除一个。');
+  });
+
+  it('words both image rejections', () => {
+    expect(planImageAttachment({ name: 'old.bmp', mediaType: 'image/bmp' }, zh)).toEqual({
+      action: 'reject',
+      reason: 'unsupported-type',
+      message: '「old.bmp」是 image/bmp，只支持 JPEG、PNG、GIF 和 WebP。',
+    });
+    expect(
+      planImageAttachment(
+        { name: 'wide.png', mediaType: 'image/png', width: 9000, height: 100 },
+        zh
+      )
+    ).toEqual({
+      action: 'reject',
+      reason: 'oversized-pixels',
+      message: '「wide.png」是 9000x100 像素，长边最大 8000 像素。',
+    });
+  });
+
+  it('words the large-payload hint — the sentence actually photographed', () => {
+    expect(largeAttachmentHint([{ byteLength: 3 * MB }], undefined, zh)).toBe(
+      '附件合计 3.0 MB，发送可能会慢一些。'
+    );
+  });
+
+  it('reverse: the default translator still emits the exact English bytes', () => {
+    // Every assertion above this block asserts English through the same code
+    // path with no `t` supplied. These two re-state it next to their Chinese
+    // twins so a drift shows up as one failing pair, not a whole file.
+    expect(largeAttachmentHint([{ byteLength: 3 * MB }])).toBe(
+      'Attachments total 3.0 MB — sending may take longer.'
+    );
+    expect(largeAttachmentHint([{ byteLength: 3 * MB }], undefined, zh)).not.toMatch(
+      /Attachments total|sending may take longer/
+    );
+    expect(refuse(admitAttachment([], { name: 'e.txt', byteLength: 0, kind: 'text' }))).toBe(
+      '"e.txt" is empty — skipped.'
+    );
+  });
+});

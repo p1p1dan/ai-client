@@ -47,24 +47,3 @@ export interface SessionAttachment {
   /** Display or document title, e.g. the pasted file name. */
   name?: string;
 }
-
-/** Runtime binary discovered for a utility worker. */
-export interface NodeRuntimeInfo {
-  /** Absolute path to the node binary. */
-  execPath: string;
-  /** Full runtime version, e.g. v24.18.0. */
-  version: string;
-  /** Parsed major version, e.g. 24. */
-  major: number;
-  source: NodeRuntimeSource;
-}
-
-export type NodeRuntimeSource = 'env' | 'nvm' | 'fnm' | 'volta' | 'path' | 'explicit' | 'bundled';
-
-export interface NodeRuntimeResolveResult {
-  ok: boolean;
-  runtime?: NodeRuntimeInfo;
-  error?: string;
-  /** Candidates inspected for diagnostics. */
-  candidates: Array<{ path: string; reason: string }>;
-}

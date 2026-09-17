@@ -7,7 +7,6 @@ import {
   type HostStatus,
   initialHostStatus,
   isHostUsable,
-  isNode24ResolutionFailure,
   primeHostStatus,
   reduceHostStatus,
 } from '../hostStatus';
@@ -84,17 +83,6 @@ describe('reduceHostStatus (T-09)', () => {
     const next = reduceHostStatus(first, event('host.error', { message: 'fatal', fatal: true }));
     expect(next.state).toBe('error');
     expect(next.lastFatalError).toBe('fatal');
-  });
-
-  it('isNode24ResolutionFailure matches the resolver error wording', () => {
-    expect(
-      isNode24ResolutionFailure({
-        state: 'error',
-        lastFatalError: 'No Node 24 runtime found. Set AICLIENT_NODE24_PATH or install Node 24.',
-      })
-    ).toBe(true);
-    expect(isNode24ResolutionFailure({ state: 'error', lastFatalError: 'boom' })).toBe(false);
-    expect(isNode24ResolutionFailure({ state: 'ready', lastFatalError: null })).toBe(false);
   });
 
   it('ignores unrelated event types', () => {

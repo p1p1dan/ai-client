@@ -12,10 +12,12 @@ import type {
 } from '@shared/types';
 import { legacyImportDedupeKey } from '@shared/types';
 import { PI_AGENT } from '@shared/types/agentWire';
+import { redactStderrLine } from '../../../agent-host/stderrRedaction';
 import { scratchWorkspaceService } from '../agent-host/ScratchWorkspaceService';
 import { workerManager } from '../agent-host/WorkerManager';
 import { sessionIndexService } from '../chat/SessionIndexService';
 import { ClaudeSessionScanner, resolveLegacyClaudeSessionRoot } from './ClaudeSessionScanner';
+import { ClaudeImportSourceError } from './ClaudeSourceAdapter';
 import { LegacyImportManifest, type LegacyImportManifestRecord } from './LegacyImportManifest';
 import {
   type ConvertedLegacySource,
@@ -28,6 +30,23 @@ import type { createPiImport, inspectPiImport, reconcilePiImport } from './PiImp
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * T067 (D9): the failed-item fields, message and machine-readable code alike.
+ *
+ * The message is unchanged and still the fallback — only refusals that carry a
+ * `failure` (the two source-size ceilings) gain a code, and only because the
+ * renderer has a Chinese sentence and a next step to offer for those two.
+ */
+function failureFields(
+  error: unknown
+): Pick<LegacyImportItemResult, 'error' | 'errorCode' | 'errorParams'> {
+  const message = errorMessage(error);
+  if (error instanceof ClaudeImportSourceError && error.failure) {
+    return { error: message, errorCode: error.failure.code, errorParams: error.failure.params };
+  }
+  return { error: message };
 }
 
 function sameFilePath(left: string, right: string): boolean {
@@ -192,6 +211,17 @@ export class LegacyImportService {
     }));
   }
 
+  /**
+   * T066 (D10) — the batch says what it is about to do, and what came of it.
+   *
+   * The 2026-09-17 field pass ran 42 successful imports and 2 guard rejections
+   * and found not one line about any of them in any log: every exit of this
+   * service was either a return value the renderer consumed or a `catch` that
+   * turned into an item status. Three lines cover it — one when the batch
+   * starts, one per failed item (the only place the reason exists at all), one
+   * when it ends — and none of them carries conversation content: a source ref
+   * is a project id plus a session id, not a transcript.
+   */
   async importBatch(sources: LegacyImportSourceRef[]): Promise<LegacyImportBatchResult> {
     await this.reconcile();
     const unique = new Map<string, LegacyImportSourceRef>();
@@ -205,10 +235,25 @@ export class LegacyImportService {
       }
       unique.set(`${source.sourceKind}:${source.projectId}:${source.sourceSessionId}`, source);
     }
+    console.log(
+      `[legacy-import] Batch started: ${unique.size} session(s) from ${sources.length} requested.`
+    );
     const results: LegacyImportItemResult[] = [];
     for (const source of unique.values()) {
-      results.push(await this.importOne(source));
+      const result = await this.importOne(source);
+      if (result.status === 'failed') {
+        console.warn(
+          `[legacy-import] Failed ${source.sourceKind} session ${source.sourceSessionId}: ${redactStderrLine(result.error ?? 'unknown error')}`
+        );
+      }
+      results.push(result);
     }
+    const imported = results.filter((item) => item.status === 'imported').length;
+    const already = results.filter((item) => item.status === 'already-imported').length;
+    const failed = results.filter((item) => item.status === 'failed').length;
+    console.log(
+      `[legacy-import] Batch done: ${imported} imported, ${already} already imported, ${failed} failed.`
+    );
     return { results };
   }
 
@@ -219,7 +264,7 @@ export class LegacyImportService {
       if (!importer) throw new Error('Unsupported legacy import source');
       read = await importer.convert(source);
     } catch (error) {
-      return { source, status: 'failed', error: errorMessage(error) };
+      return { source, status: 'failed', ...failureFields(error) };
     }
     const dedupeKey = legacyImportDedupeKey(read.conversation);
     const existingFlight = this.flights.get(dedupeKey);

@@ -138,11 +138,36 @@ export interface LegacyImportBatchRequest {
 
 export type LegacyImportItemStatus = 'imported' | 'already-imported' | 'failed';
 
+/**
+ * T067 (D9): the refusals a user can act on, named so the renderer can word
+ * them.
+ *
+ * The main process has no locale — it produced the English sentence
+ * 「Claude session exceeds the 4000-entry import limit」 and the Chinese panel
+ * printed it verbatim next to its own Chinese summary line. A code plus the
+ * raw number moves the wording to the only layer that knows the language, and
+ * moves 67108864 to the only layer that should be deciding it reads better as
+ * 64 MiB.
+ *
+ * Deliberately NOT exhaustive: every other import failure is a diagnostic, not
+ * a remedy, and keeps travelling as its `error` string.
+ */
+export type LegacyImportErrorCode = 'source-entry-limit' | 'source-byte-limit';
+
+/** The one number each coded refusal is about: the ceiling that was crossed. */
+export interface LegacyImportErrorParams {
+  limit: number;
+}
+
 export interface LegacyImportItemResult {
   source: LegacyImportSourceRef;
   status: LegacyImportItemStatus;
   session?: SessionIndexEntry;
+  /** Always present on failure: the raw sentence, English, for logs and fallback. */
   error?: string;
+  /** Present only when the renderer can word this failure itself (D9). */
+  errorCode?: LegacyImportErrorCode;
+  errorParams?: LegacyImportErrorParams;
 }
 
 export interface LegacyImportBatchResult {

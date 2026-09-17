@@ -11,6 +11,7 @@ import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import {
   buildOptionRows,
   buildRespondPayload,
+  CONTINUE_CHORD,
   CONTINUE_LABEL,
   canContinue,
   clampPage,
@@ -147,7 +148,7 @@ interface QaHeadProps {
 function QaHead({ title, pager, onPrev, onNext, collapsed, onToggleCollapsed }: QaHeadProps) {
   return (
     <div className="flex min-h-9 items-start gap-2 border-b border-border px-3 py-2 text-muted-foreground">
-      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words font-medium tracking-[0.01em]">
+      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words font-semibold tracking-[0.01em]">
         {title}
       </span>
       {pager?.visible && (
@@ -269,7 +270,10 @@ function QaOptionRow({
           >
             {option.label}
             {option.description && (
-              <span className="mt-1 block text-meta text-muted-foreground">
+              // font-normal, not the button base class's 500: a description is
+              // body text, and on Win10 (Segoe UI has no 500) 500 renders as
+              // 400 anyway, so the label/description contrast would vanish.
+              <span className="mt-1 block text-meta font-normal text-muted-foreground">
                 {option.description}
               </span>
             )}
@@ -298,6 +302,7 @@ function QaOptionRow({
 
 /** `.qa-frozen` — read-only Q/A pairs, same color and size, order-only distinction. */
 function QaFrozenPairs({ pairs }: { pairs: FrozenPair[] }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col gap-2.5 px-3.5 pb-3">
       {pairs.map((pair) => (
@@ -307,7 +312,7 @@ function QaFrozenPairs({ pairs }: { pairs: FrozenPair[] }) {
         >
           <span className="text-foreground">{pair.question}</span>
           {pair.skipped ? (
-            <span className="italic text-muted-foreground">{SKIPPED_MARK}</span>
+            <span className="italic text-muted-foreground">{t(SKIPPED_MARK)}</span>
           ) : (
             <span className="text-foreground">{pair.answer}</span>
           )}
@@ -320,8 +325,10 @@ function QaFrozenPairs({ pairs }: { pairs: FrozenPair[] }) {
 // ---- Frozen variant ----
 
 function FrozenQaCard({ block }: { block: ChatBlock }) {
+  const { t } = useI18n();
   const state = deriveQuestionCardState(block);
-  const title = deriveCardTitle(state);
+  // `deriveCardTitle` returns a catalog key (T067) — the card words it.
+  const title = t(deriveCardTitle(state));
   const pairs = deriveFrozenPairs(block);
   if (pairs.length === 0) return null;
   return (
@@ -410,7 +417,7 @@ function InteractiveQaCard({
       }}
     >
       <QaHead
-        title={QUESTION_TITLE}
+        title={t(QUESTION_TITLE)}
         pager={pager}
         onPrev={() => goToPage(page - 1)}
         onNext={() => goToPage(page + 1)}
@@ -427,7 +434,23 @@ function InteractiveQaCard({
                   questionRefs.current[index] = el;
                 }}
               >
-                <div className="px-1 pb-2 pt-2 whitespace-pre-wrap break-words text-ui font-medium leading-relaxed text-foreground">
+                {item.header && (
+                  // D22 — `QuestionItem.header` is the SDK's ~12-char tag for
+                  // this question. The ask tool carries it through untouched,
+                  // so a card that never draws it drops what the model paid
+                  // tokens to say.
+                  <div className="px-1 pt-2">
+                    <span className="inline-block rounded-sm bg-muted px-1.5 py-0.5 text-meta text-muted-foreground">
+                      {item.header}
+                    </span>
+                  </div>
+                )}
+                <div
+                  className={cn(
+                    'px-1 pb-2 whitespace-pre-wrap break-words text-ui font-semibold leading-relaxed text-foreground',
+                    item.header ? 'pt-1' : 'pt-2'
+                  )}
+                >
                   {item.question}
                 </div>
                 {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: role is dynamic (group vs radiogroup per multiSelect); aria-label is valid for both */}
@@ -456,7 +479,7 @@ function InteractiveQaCard({
                   role={item.multiSelect ? 'group' : 'radiogroup'}
                   aria-label={item.question}
                 >
-                  {buildOptionRows(item).map((option) => {
+                  {buildOptionRows(item, t).map((option) => {
                     const otherSelected = sel.otherSelected[index] ?? false;
                     const selected = option.isOther
                       ? otherSelected
@@ -508,7 +531,7 @@ function InteractiveQaCard({
               disabled={submitting}
               onClick={handleSkip}
             >
-              {SKIP_LABEL}
+              {t(SKIP_LABEL)}
             </Button>
             <Button
               size="sm"
@@ -517,8 +540,8 @@ function InteractiveQaCard({
               disabled={!canSubmit}
               onClick={handleContinue}
             >
-              <span>{CONTINUE_LABEL}</span>
-              <span className="text-meta opacity-70">Ctrl + Enter</span>
+              <span>{t(CONTINUE_LABEL)}</span>
+              <span className="text-meta opacity-70">{t(CONTINUE_CHORD)}</span>
             </Button>
           </div>
         </>
@@ -646,7 +669,7 @@ function PermissionQaCard({
   return (
     <div className={cn(QA_SHELL_CLASS, PERMISSION_RISK_SHELL[view.risk])}>
       <div className="flex min-h-9 items-center gap-2 border-b border-border px-3 py-2">
-        <span className="min-w-0 flex-1 font-medium tracking-[0.01em] text-foreground">
+        <span className="min-w-0 flex-1 font-semibold tracking-[0.01em] text-foreground">
           {t(view.title)}
         </span>
         <span
@@ -660,7 +683,7 @@ function PermissionQaCard({
       </div>
       {originChip}
       <div className="flex flex-col gap-3 px-2.5 pb-3">
-        <p className="px-1 pb-1 pt-2 whitespace-pre-wrap break-words text-ui font-medium leading-relaxed text-foreground">
+        <p className="px-1 pb-1 pt-2 whitespace-pre-wrap break-words text-ui font-semibold leading-relaxed text-foreground">
           {view.prompt}
         </p>
         {/* The thing being approved, above everything the engine has to say

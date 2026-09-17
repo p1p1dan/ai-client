@@ -1,7 +1,7 @@
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SCRATCH_ROOT_DIR, ScratchWorkspaceService } from '../ScratchWorkspaceService';
 
 /**
@@ -338,4 +338,92 @@ it('keeps an explicitly inherited directory until both sessions release it', asy
   expect(service.pathFor('new')).toBe(inherited);
   await service.release('new');
   await expect(stat(inherited)).rejects.toThrow();
+});
+
+/**
+ * T066 (D14) — the removal used to happen in complete silence.
+ *
+ * Archiving a temp chat while its turn was running deleted the directory with
+ * no line anywhere, so "the cleanup ran" and "the cleanup was never reached"
+ * read the same afterwards. The two outcomes are told apart here because they
+ * are told apart in the log: a directory two sessions share is KEPT, and that
+ * is not a failure worth a warning — it is the other half of the milestone.
+ */
+describe('release reports what it did (T066)', () => {
+  let logged: string[];
+  let reporting: ScratchWorkspaceService;
+
+  beforeEach(() => {
+    logged = [];
+    reporting = new ScratchWorkspaceService({
+      resolveBasePath: () => base,
+      createId: () => `dir-${++idCounter}`,
+      log: (...args: unknown[]) => logged.push(args.map(String).join(' ')),
+    });
+  });
+
+  it('logs one line naming the session whose directory it removed', async () => {
+    const target = await reporting.ensure('session-a');
+
+    await reporting.release('session-a');
+
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toContain('[scratch] Released');
+    expect(logged[0]).toContain('session-a');
+    expect(logged[0]).toContain(path.basename(target));
+  });
+
+  it('says so instead when another session still runs in the same directory', async () => {
+    const inherited = await reporting.ensure('old');
+    await reporting.adopt('new', inherited);
+
+    await reporting.release('old');
+
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toContain('another session still uses it');
+    expect(logged[0]).not.toContain('Released');
+  });
+
+  it('says nothing about a session that never had a directory', async () => {
+    await reporting.release('session-never-allocated');
+
+    expect(logged).toEqual([]);
+  });
+
+  it('reports a failed removal on the warn channel, with the path redacted', async () => {
+    // `rm` fails on a path the service still owns: the anomaly has to survive
+    // the shipped log level, which is what separates it from the milestones.
+    const homeLike = path.join(base, 'home', 'tester');
+    await mkdir(homeLike, { recursive: true });
+    const failing = new ScratchWorkspaceService({
+      resolveBasePath: () => homeLike,
+      createId: () => 'dir-x',
+      log: (...args: unknown[]) => logged.push(args.map(String).join(' ')),
+    });
+    const target = await failing.ensure('session-a');
+    // A directory whose parent is read-only cannot be unlinked; skip where the
+    // test runs as root, which ignores the mode.
+    await chmod(path.dirname(target), 0o500);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      await failing.release('session-a');
+      if (process.getuid?.() === 0) return;
+      expect(warn).toHaveBeenCalledTimes(1);
+      // T066 回炉: ONE argument. The redaction used to cover the first one
+      // while the raw `error` rode along as a second, and electron-log writes
+      // every argument it is handed — so the fs error's own copy of the path
+      // (`EACCES: permission denied, rmdir '/home/<name>/…'`) went to disk
+      // unredacted. Asserting the joined arguments is what catches that.
+      expect(warn.mock.calls[0]).toHaveLength(1);
+      const line = warn.mock.calls[0].map(String).join(' ');
+      expect(line).toContain('[scratch] Failed to remove');
+      expect(line).not.toContain('/home/tester');
+      // The reason still reaches the log — redacting it must not silence it.
+      expect(line).toMatch(/Error: \w+/);
+    } finally {
+      warn.mockRestore();
+      await chmod(path.dirname(target), 0o700);
+    }
+  });
 });

@@ -87,6 +87,50 @@ export function readSettings(): Record<string, unknown> | null {
 }
 
 /**
+ * Top-level key the renderer's zustand `persist` middleware writes the settings
+ * store under. Its value is `{ state, version }`, never the fields themselves.
+ */
+const RENDERER_SETTINGS_STORE_KEY = 'aiclient-settings';
+
+/**
+ * The settings the SETTINGS PAGE owns — i.e. everything the user can change.
+ *
+ * `readSettings()` returns the settings FILE, and that file's top level holds
+ * only `MAIN_OWNED_SETTING_KEYS` plus the renderer's persist wrapper; every
+ * user-facing field lives one level down, in `aiclient-settings.state`.
+ *
+ * Reading such a field off the top level therefore yields `undefined` on every
+ * machine — silently, because each caller had its own `?? ''` fallback. That is
+ * D13 (dev-box pass 2026-09-17): `defaultTemporaryPath` was unreadable to Main,
+ * so scratch directories always went to the default root while the renderer,
+ * which reads its own store, sent temp workspaces to the directory the user had
+ * actually picked. This function is the single entry point for that layer, so
+ * the unwrap is stated once instead of being re-derived per caller.
+ */
+export function readSettingsState(): Record<string, unknown> {
+  const persisted = readSettings()?.[RENDERER_SETTINGS_STORE_KEY];
+  if (!persisted || typeof persisted !== 'object') return {};
+  const state = (persisted as { state?: unknown }).state;
+  return state && typeof state === 'object' ? (state as Record<string, unknown>) : {};
+}
+
+/** A renderer-owned setting that is a string, or `''` when unset or malformed. */
+export function readStringSetting(key: string): string {
+  const value = readSettingsState()[key];
+  return typeof value === 'string' ? value : '';
+}
+
+/**
+ * Renderer-owned setting: the base directory for temp workspaces and for the
+ * scratch cwds of unbound sessions ("保存位置" in Settings → General).
+ *
+ * Spelled once here because two Main services and the renderer must resolve the
+ * same root from it; two of them spelling it separately is how they came to
+ * disagree.
+ */
+export const TEMPORARY_PATH_SETTING_KEY = 'defaultTemporaryPath';
+
+/**
  * 原子写入：先写临时文件，再重命名，避免崩溃导致文件损坏
  */
 function atomicWriteSettings(data: Record<string, unknown>): boolean {

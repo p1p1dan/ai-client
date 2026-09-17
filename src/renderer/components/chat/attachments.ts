@@ -546,11 +546,19 @@ export interface AttachmentNotice {
  * Fold every skip reason of one paste into a single inline notice — a toast
  * per file would both spam and disappear before the user can act.
  */
-export function formatSkipNotice(skipped: readonly string[]): AttachmentNotice | null {
+export function formatSkipNotice(
+  skipped: readonly string[],
+  t: Translate = englishTranslate
+): AttachmentNotice | null {
   if (skipped.length === 0) return null;
   if (skipped.length === 1) return { tone: 'warning', message: skipped[0] };
   return {
     tone: 'warning',
-    message: `${skipped.length} attachments skipped: ${skipped.join(' ')}`,
+    // T067: the wrapper travels with the sentences it wraps — a Chinese list
+    // under an English header was the shape the 2026-09-17 pass photographed.
+    message: t('{{count}} attachments skipped: {{reasons}}', {
+      count: skipped.length,
+      reasons: skipped.join(' '),
+    }),
   };
 }

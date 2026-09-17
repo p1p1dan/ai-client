@@ -20,6 +20,12 @@
  *    prefers. Nothing we ship is ever written to.
  * 4. **The file is the identity.** A rename writes the new document and removes
  *    the old one; it never leaves two files claiming one name.
+ * 5. **An edit writes back to the file it came from.** A definition found in
+ *    the compatibility root `~/.agents/subagents` is edited THERE. Copying it
+ *    into `<agentDir>/subagents` instead left the original in place, so the
+ *    first delete removed only the copy and the pre-edit document resurfaced —
+ *    the user had to delete twice and got the old contents in between. For the
+ *    same reason a delete removes every file claiming the name, in either root.
  *
  * Reads are lenient and writes are strict: a malformed document is listed with
  * its error so the user can fix it, but nothing is saved that would not load.
@@ -32,7 +38,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { BUILTIN_SUBAGENT_DOCUMENTS } from '@shared/subagentBuiltins';
 import {
   canonicalToolName,
@@ -59,7 +65,7 @@ import { NATIVE_SUBAGENTS_DISABLED_KEY } from './nativeSubagentSettings';
 export class SubagentCatalogError extends Error {}
 
 export interface SubagentCatalogDeps {
-  /** The app's agent directory; `<agentDir>/subagents` is what the UI writes. */
+  /** The app's agent directory; `<agentDir>/subagents` holds new definitions. */
   agentDir: () => string;
   readSettings: () => Record<string, unknown>;
   /** Returns false when the write failed, matching `mergeSettingsPatch`. */
@@ -72,10 +78,27 @@ function basenameOf(path: string): string {
   return path.split(/[\\/]/).pop() ?? '';
 }
 
+/**
+ * One document on disk, with the name it claims.
+ *
+ * A scan keeps documents the view drops — a shadowed copy, a file that does not
+ * load — because a write has to reach the file a name really came from, and a
+ * delete has to reach every file that would take the name back.
+ */
+interface ScannedDocument {
+  path: string;
+  /** The definition's own name, or the file stem when it does not load. */
+  name: string;
+  /** Absent when the document does not load. */
+  definition?: SubagentDefinition;
+  errors?: string[];
+  warnings: readonly string[];
+}
+
 export class SubagentCatalogService {
   constructor(private readonly deps: SubagentCatalogDeps) {}
 
-  /** Where the management UI writes. The runtime reads this root first. */
+  /** Where a definition with no file yet goes. The runtime reads it first. */
   directory(): string {
     return join(this.deps.agentDir(), 'subagents');
   }
@@ -113,11 +136,17 @@ export class SubagentCatalogService {
    * edits is the list a session will load.
    */
   async read(): Promise<SubagentCatalogView> {
-    const disabled = new Set(this.disabledNames());
-    const rows: SubagentRow[] = [];
-    const broken: SubagentCatalogView['broken'] = [];
-    const claimed = new Set<string>();
+    return this.view(await this.scanUserDocuments());
+  }
 
+  /**
+   * Every user document in every root, parsed, in precedence order.
+   *
+   * Separate from {@link view} because a write needs what the view drops: the
+   * file a name came from, and the copies of it the list hides.
+   */
+  private async scanUserDocuments(): Promise<ScannedDocument[]> {
+    const scanned: ScannedDocument[] = [];
     for (const root of this.roots()) {
       for (const document of await this.listDocuments(root)) {
         const parsed = parseSubagentDefinition(document.raw, {
@@ -125,20 +154,46 @@ export class SubagentCatalogService {
           fallbackName: basenameOf(document.path),
           filePath: document.path,
         });
-        if (!parsed.ok) {
-          broken.push({
-            filePath: document.path,
-            name: normalizeSubagentName(basenameOf(document.path)),
-            errors: parsed.errors,
-          });
-          continue;
-        }
-        // First root wins a name, which is the runtime's rule. The shadowed copy
-        // is not listed twice: two rows for one name is a list nobody can act on.
-        if (claimed.has(parsed.definition.name)) continue;
-        claimed.add(parsed.definition.name);
-        rows.push(row(parsed.definition, disabled, parsed.warnings));
+        scanned.push(
+          parsed.ok
+            ? {
+                path: document.path,
+                name: parsed.definition.name,
+                definition: parsed.definition,
+                warnings: parsed.warnings,
+              }
+            : {
+                path: document.path,
+                name: normalizeSubagentName(basenameOf(document.path)),
+                errors: parsed.errors,
+                warnings: [],
+              }
+        );
       }
+    }
+    return scanned;
+  }
+
+  private view(scanned: readonly ScannedDocument[]): SubagentCatalogView {
+    const disabled = new Set(this.disabledNames());
+    const rows: SubagentRow[] = [];
+    const broken: SubagentCatalogView['broken'] = [];
+    const claimed = new Set<string>();
+
+    for (const document of scanned) {
+      if (!document.definition) {
+        broken.push({
+          filePath: document.path,
+          name: document.name,
+          errors: document.errors ?? [],
+        });
+        continue;
+      }
+      // First root wins a name, which is the runtime's rule. The shadowed copy
+      // is not listed twice: two rows for one name is a list nobody can act on.
+      if (claimed.has(document.name)) continue;
+      claimed.add(document.name);
+      rows.push(row(document.definition, disabled, document.warnings));
     }
 
     for (const raw of BUILTIN_SUBAGENT_DOCUMENTS) {
@@ -217,7 +272,8 @@ export class SubagentCatalogService {
     }
 
     const previous = request.previousName ? normalizeSubagentName(request.previousName) : undefined;
-    const before = await this.read();
+    const scanned = await this.scanUserDocuments();
+    const before = this.view(scanned);
     const userCount = before.rows.filter((entry) => entry.source === 'user').length;
     const replacesUser = before.rows.some(
       (entry) => entry.source === 'user' && entry.name === name
@@ -233,14 +289,33 @@ export class SubagentCatalogService {
       throw new SubagentCatalogError(`A subagent named "${name}" already exists`);
     }
 
-    await mkdir(this.directory(), { recursive: true });
-    await this.writeDocument(this.pathFor(name), document);
+    // The file this definition already lives in is the file it is written back
+    // to, compatibility root included. Writing every edit into the agent
+    // directory instead made an edit a COPY: the original stayed put, so the
+    // delete that followed took the copy and the pre-edit document came back.
+    // A definition with no file yet — a new one, or a builtin being shadowed —
+    // still lands in the directory this service owns. A rename stays in the
+    // root it was found in, for the same reason: the file is the identity.
+    const claimants = scanned.filter((entry) => entry.name === (previous ?? name));
+    // The parsed one is the row the user was looking at; a file that does not
+    // load only becomes the target when it is the only claimant there is.
+    const source = claimants.find((entry) => entry.definition) ?? claimants[0];
+    const target = !source
+      ? this.pathFor(name)
+      : previous && previous !== name
+        ? join(dirname(source.path), `${name}.md`)
+        : source.path;
+    await mkdir(dirname(target), { recursive: true });
+    await this.writeDocument(target, document);
 
     if (previous && previous !== name) {
       // The new document lands before the old one goes, so a crash between the
-      // two leaves a duplicate rather than nothing.
-      const old = before.rows.find((entry) => entry.name === previous);
-      if (old?.filePath) await rm(old.filePath, { force: true });
+      // two leaves a duplicate rather than nothing. Every file claiming the old
+      // name goes, not just the one that was listed: a shadowed copy left
+      // behind would resurface as the definition the user just renamed away.
+      for (const old of scanned) {
+        if (old.name === previous && old.path !== target) await rm(old.path, { force: true });
+      }
       this.carryEnablement(previous, name);
     }
     return this.read();
@@ -254,7 +329,8 @@ export class SubagentCatalogService {
    */
   async remove(name: string): Promise<SubagentCatalogView> {
     const normalized = normalizeSubagentName(name);
-    const catalog = await this.read();
+    const scanned = await this.scanUserDocuments();
+    const catalog = this.view(scanned);
     const target = catalog.rows.find((entry) => entry.name === normalized);
     const brokenTarget = catalog.broken.find((entry) => entry.name === normalized);
     if (!target && !brokenTarget)
@@ -264,8 +340,14 @@ export class SubagentCatalogService {
         `"${normalized}" ships with the app and cannot be deleted; switch it off instead`
       );
     }
-    const filePath = target?.filePath ?? brokenTarget?.filePath;
-    if (filePath) await rm(filePath, { force: true });
+    // Every file claiming the name, not only the one the list showed. A copy
+    // shadowed in another root is unreachable — no row, no session ever loads
+    // it — so removing it costs the user nothing they could reach, while
+    // leaving it is what made a delete look like it had failed: the row came
+    // back, holding whatever that older file said.
+    for (const document of scanned) {
+      if (document.name === normalized) await rm(document.path, { force: true });
+    }
     // The switch goes with it. Leaving it behind is the tombstone case: a later
     // definition reusing this name would arrive silently off.
     const disabled = this.disabledNames();

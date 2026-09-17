@@ -39,6 +39,7 @@ import {
 } from '@/hooks/useLegacyImport';
 import { useI18n } from '@/i18n';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { describeLegacyImportFailure } from './legacyImportFailure';
 import { SettingsSectionBlock } from './SettingsPrimitives';
 
 function messageOf(cause: unknown): string {
@@ -218,7 +219,7 @@ export function ConversationImportSettings() {
                     <li key={session.id}>
                       <SessionItem
                         disabled={busy}
-                        error={outcome?.error}
+                        error={describeLegacyImportFailure(outcome, t)}
                         onSelectedChange={(selected) =>
                           setSelectedIds((current) => {
                             const next = new Set(current);

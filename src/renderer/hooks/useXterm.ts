@@ -7,10 +7,13 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { addToast } from '@/components/ui/toast';
+import { useI18n } from '@/i18n';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
 import { useNavigationStore } from '@/stores/navigation';
 import { useSettingsStore } from '@/stores/settings';
+import { piTuiOpenRefusalKey } from './piTuiOpenError';
 import '@xterm/xterm/css/xterm.css';
 
 // Regex to match file paths with optional line:column
@@ -24,6 +27,24 @@ const ANSI_ESCAPE_REGEX = /\x1b\[[0-9;?]*[a-zA-Z]/g;
 
 // Maximum length for session name derived from terminal current line
 const SESSION_NAME_MAX_LENGTH = 36;
+
+/**
+ * D17 (T065 回炉) — the second half of the repaint, sent once THIS xterm is
+ * attached and listening.
+ *
+ * Reviving a parked pi leaves Main holding a PTY one row off the size the
+ * renderer asked for (`#primeRepaint` in `PiTuiPty.ts`), on purpose: a size the
+ * child does not have is the only thing that raises SIGWINCH for it, and the
+ * first attempt at this undid its own nudge inside one synchronous turn, so the
+ * child saw a net change of zero and the screen stayed blank on the real
+ * machine. This call is the change that puts the true size back. It is a
+ * separate IPC message, so the child is scheduled in between and observes both
+ * transitions, and it is sent from here rather than from Main so the full frame
+ * pi paints in response cannot arrive before the xterm that has to show it.
+ */
+function confirmPiTuiSize(terminalId: string, terminal: Terminal): void {
+  void window.electronAPI.piTui.resize(terminalId, terminal.cols, terminal.rows).catch(() => {});
+}
 
 export interface UseXtermOptions {
   piTuiTerminalId?: string;
@@ -147,6 +168,11 @@ export function useXterm({
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const settings = useTerminalSettings();
+  // T065: held in a ref like the callbacks below, so switching language cannot
+  // re-create `initTerminal` and, through it, the whole terminal.
+  const { t } = useI18n();
+  const translateRef = useRef(t);
+  translateRef.current = t;
   const terminalRenderer = useSettingsStore((s) => s.terminalRenderer);
   const copyOnSelection = useSettingsStore((s) => s.copyOnSelection);
   const shellConfig = useSettingsStore((s) => s.shellConfig);
@@ -223,6 +249,28 @@ export function useXterm({
     },
     [piTuiTerminalId]
   );
+
+  /**
+   * T065 回炉 — Main refused to open this chat's terminal; say so where the
+   * user is looking.
+   *
+   * The refusals are real and already worded (another window has the chat, this
+   * terminal is on a different chat, a turn is still running, the session is in
+   * a format the CLI cannot parse), but only the pre-flight in
+   * `usePresentationSwitch` ever displayed one. Everything that reaches
+   * `piTui.open` directly — the 「Start Pi TUI」 button in a window that is
+   * already in terminal mode, and the revive below — swallowed the rejection,
+   * which the D4 re-verify saw as two clicks that did nothing at all. Same
+   * toast, same dictionary lookup, so there is one answer rather than two.
+   */
+  const reportPiTuiOpenFailure = useCallback((error: unknown) => {
+    const translate = translateRef.current;
+    addToast({
+      type: 'warning',
+      title: translate('The Pi TUI cannot open this chat'),
+      description: translate(piTuiOpenRefusalKey(error)),
+    });
+  }, []);
 
   const fit = useCallback(() => {
     if (
@@ -764,6 +812,12 @@ export function useXterm({
           ...(piTuiSessionFile ? { sessionFile: piTuiSessionFile } : {}),
         });
         setCurrentSessionId(opened.terminalId);
+        // D17: this xterm is open on its container and its data listener is
+        // already bound (both happen above), so the repaint this triggers has
+        // somewhere to land. Sent on every open, not only on a resumed one —
+        // Main decides which of the two it was, and a size confirmation is a
+        // no-op for a PTY that was just spawned at that size.
+        confirmPiTuiSize(piTuiTerminalId, terminal);
       } else {
         if (backendSessionId) {
           try {
@@ -819,6 +873,10 @@ export function useXterm({
       }
       setIsLoading(false);
       setStartupError(error instanceof Error ? error.message : String(error));
+      // T065: a refusal written into a terminal nobody can see is not a
+      // message. The lines below stay for the shell terminals; a Pi TUI that
+      // was refused also gets a toast, the same one the pre-flight shows.
+      if (piTuiTerminalId) reportPiTuiOpenFailure(error);
       terminal.writeln(`\x1b[31mFailed to start terminal.\x1b[0m`);
       terminal.writeln(`\x1b[33mError: ${error}\x1b[0m`);
     }
@@ -833,6 +891,7 @@ export function useXterm({
     kind,
     persistOnDisconnect,
     write,
+    reportPiTuiOpenFailure,
   ]);
 
   useEffect(() => {
@@ -991,8 +1050,16 @@ export function useXterm({
         // ownership guard and outside the "the GUI must re-read this" record.
         ...(piTuiSessionFile ? { sessionFile: piTuiSessionFile } : {}),
       })
-      .catch(() => {});
-  }, [cwd, isActive, isLoading, piTuiSessionFile, piTuiTerminalId]);
+      // D17: the same size confirmation as the first open. This path is the one
+      // that actually runs when the user switches back to a parked chat, so
+      // leaving it out would leave the screen blank in exactly the case the
+      // defect was reported on.
+      .then(() => confirmPiTuiSize(piTuiTerminalId, terminal))
+      // T065: and the same refusal toast. This used to swallow the rejection
+      // whole, so a revive Main turned down (another window took the chat while
+      // this one was parked) looked like nothing happening.
+      .catch(reportPiTuiOpenFailure);
+  }, [cwd, isActive, isLoading, piTuiSessionFile, piTuiTerminalId, reportPiTuiOpenFailure]);
 
   // Fit and focus when becoming active (only after loading completes)
   useEffect(() => {

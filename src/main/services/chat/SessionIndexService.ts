@@ -12,6 +12,7 @@ import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { PiLeafCheckpoint } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry, SessionIndexHealth } from '@shared/types/sessionIndex';
 import { app } from 'electron';
+import { redactStderrLine } from '../../../agent-host/stderrRedaction';
 
 const SESSION_INDEX_FILENAME = 'session-index.json';
 
@@ -239,6 +240,49 @@ export class SessionIndexService {
         },
         existing
       );
+    });
+  }
+
+  /**
+   * D15 — take back a `recordCreated` row whose worker never came up.
+   *
+   * The row has to be written before the spawn (WorkerManager's identity commit
+   * and the runtime-event branches both refuse a session with no row), so a
+   * bootstrap that fails — a protocol mismatch, in the 2026-09-17 field run —
+   * used to leave a `title: ''` shell behind that came back as "Session xxxxxx"
+   * in the sidebar after a restart.
+   *
+   * Deliberately narrow, in the shape of `removeImported` above: it deletes
+   * ONLY a row that is still exactly the shell this create wrote. Anything that
+   * makes the row worth keeping — a durable Pi file, a leaf checkpoint, a
+   * title, an archive bit, an import record, or a workspace that has since
+   * moved — vetoes the delete and returns false. A caller that did not create
+   * the row must not call this at all; the guards are the second line, not the
+   * first.
+   */
+  async removeUncommittedCreated(sessionId: string, workspacePath: string): Promise<boolean> {
+    await this.ensureLoaded();
+    return this.queueMutation(async () => {
+      const existing = this.entries.get(sessionId);
+      if (
+        !existing ||
+        existing.workspacePath !== workspacePath ||
+        existing.runtimeIdentity ||
+        existing.piLeaf ||
+        existing.legacyImport ||
+        existing.archived ||
+        (existing.title ?? '') !== ''
+      ) {
+        return false;
+      }
+      this.entries.delete(sessionId);
+      try {
+        await this.flush();
+      } catch (error) {
+        this.entries.set(sessionId, existing);
+        throw error;
+      }
+      return true;
     });
   }
 
@@ -628,8 +672,15 @@ export class SessionIndexService {
       console.error('[chat] Session index is damaged and cannot be preserved:', blocked);
       return { status: 'unreadable', reason: blocked };
     }
+    // T066 (D4): this line is the only durable trace of a repair, and the
+    // field pass could not find it anywhere — not because `console.warn` is
+    // the wrong call (it IS electron-log once `initLogger` hijacks console)
+    // but because both transports sat at `error` while the logging switch was
+    // off. The floor moved (main/utils/logger.ts); the path is redacted here
+    // because a log line naming a file under the user's home is exactly what
+    // T042's rules exist for.
     console.warn(
-      `[chat] Session index was damaged (${reason}); the original is kept at ${backupPath} and the list was rebuilt from ${this.entries.size} readable row(s).`
+      `[chat] Session index was damaged (${reason}); the original is kept at ${redactStderrLine(backupPath)} and the list was rebuilt from ${this.entries.size} readable row(s).`
     );
     return { status: 'repaired', backupPath, droppedRows, reason };
   }

@@ -495,6 +495,71 @@ describe('PiModelConfigService', () => {
     });
   });
 
+  /**
+   * T062 / D3 — the model menu and the worker must answer from one document.
+   *
+   * The 2026-09-17 point-check found a `vllmproxy` provider hand-written into
+   * `models.json` and never stored in the credential vault. The picker listed
+   * it (it reads the file); every worker was handed the in-memory assembly
+   * built from the vault, which has never held it. Choosing it therefore failed
+   * with `no model "vllmproxy/claude-sonnet-5" in the catalog (4 available)` —
+   * and the next settings edit would have erased the row from the file anyway.
+   */
+  it('builds the menu from the document a worker is handed, not from models.json', () => {
+    const glm = {
+      baseUrl: 'https://glm.example/v1',
+      api: 'openai-completions',
+      models: [{ id: 'glm-5', name: 'GLM 5' }],
+    };
+    writeFileSync(
+      join(dir, 'models.json'),
+      JSON.stringify({
+        providers: {
+          glm,
+          // The hand-edited shape from the point-check: a provider-level
+          // `name` and sized model rows, neither of which the app's own writer
+          // can produce — the tell that it never came from the vault.
+          vllmproxy: {
+            name: 'VLLM Proxy',
+            baseUrl: 'https://api.vllmproxy.example',
+            api: 'anthropic-messages',
+            models: [{ id: 'claude-sonnet-5', name: 'Claude Sonnet 5', contextWindow: 200000 }],
+          },
+        },
+      })
+    );
+    const logged: unknown[][] = [];
+    const local = new PiModelConfigService({
+      agentDir: dir,
+      fetchFn: async () => ({ ok: false, status: 500, text: async () => '' }),
+      now: () => 1234,
+      readBundledCatalog: () => null,
+      log: (...args) => logged.push(args),
+    });
+    // What a worker is handed this launch: the vault half only.
+    const handedToWorker = { models: { providers: { glm } } };
+
+    // No document to hand over (`resolveNativeModelCatalog` returned
+    // `undefined`) is the case where the worker reads the directory itself, so
+    // the file is the right answer for both sides and nothing is dropped.
+    expect(local.readCatalog('local').models.map((model) => model.id)).toEqual([
+      'glm/glm-5',
+      'vllmproxy/claude-sonnet-5',
+    ]);
+    expect(logged).toEqual([]);
+
+    // With one, the menu is exactly that document's providers — and the row
+    // that is not in it says so somewhere rather than just vanishing.
+    const menu = local.readCatalog('local', handedToWorker);
+    expect(menu.models.map((model) => model.id)).toEqual(['glm/glm-5']);
+    expect(new Set(menu.models.map((model) => model.id.split('/', 1)[0]))).toEqual(
+      new Set(Object.keys(handedToWorker.models.providers))
+    );
+    expect(logged.flat()).toContainEqual(
+      expect.objectContaining({ dropped: 'vllmproxy', reason: 'absent_from_runtime_catalog' })
+    );
+  });
+
   // T38-b: the occupancy surfaces need the window the configuration declares.
   // It used to be parsed and then dropped by `piModelOption`.
   it('carries contextWindow through both the managed and the user-owned catalog', async () => {

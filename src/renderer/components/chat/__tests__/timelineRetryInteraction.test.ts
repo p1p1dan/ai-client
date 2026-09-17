@@ -1,13 +1,15 @@
 // @vitest-environment happy-dom
+import { englishTranslate } from '@shared/i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 
-vi.mock('@/i18n', () => {
-  const t = (key: string) => key;
-  return { useI18n: () => ({ t }) };
-});
+// T067: the stub fills `{{…}}` the way the real translator does. The banner's
+// copy is catalog keys WITH parameters now, so a stub that returned the key
+// verbatim would assert against 'Upstream error {{status}}' and call it a
+// render — the identity stub was only ever right for parameterless keys.
+vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate }) }));
 vi.mock('@/stores/settings', () => {
   const state = { showToolDiff: false };
   return {

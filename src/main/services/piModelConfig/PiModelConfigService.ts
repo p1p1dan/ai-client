@@ -81,6 +81,18 @@ export interface PiModelConfigServiceOptions {
   managedCredentialsEnabled?: () => boolean;
 }
 
+/**
+ * The `models.json` half of what a native worker is handed in its bootstrap.
+ *
+ * Structurally the models half of `nativeCatalog.ts`'s `NativeModelCatalog`.
+ * Declared narrowly on purpose: listing models needs no key, and a type that
+ * asked for `auth` would invite a caller to hand credentials to a read path
+ * that has no use for them.
+ */
+export interface RuntimeModelDocuments {
+  models: Record<string, unknown>;
+}
+
 /** No managed providers at all. Not an error: plan D03 makes it a legal answer. */
 const EMPTY_CONFIG: PiManagedModelsConfig = { version: 1, providers: {} };
 
@@ -129,73 +141,80 @@ function readCachedConfig(path: string): PiManagedModelsConfig | null {
   }
 }
 
-function readLocalModelOptions(path: string): Array<{
+/** One selectable row, with the display fields `piModelOption` needs. */
+type CatalogModelEntry = {
   providerId: string;
   model: Pick<
     PiManagedModelDefinition,
     'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap' | 'contextWindow'
   >;
-}> {
+};
+
+function readLocalModelOptions(path: string): CatalogModelEntry[] {
   if (!existsSync(path)) return [];
   try {
-    const parsed = readJson(path);
-    if (!parsed || typeof parsed !== 'object' || !('providers' in parsed)) return [];
-    const providers = (parsed as { providers: unknown }).providers;
-    if (!providers || typeof providers !== 'object' || Array.isArray(providers)) return [];
-    const out: Array<{
-      providerId: string;
-      model: Pick<
-        PiManagedModelDefinition,
-        'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap' | 'contextWindow'
-      >;
-    }> = [];
-    for (const [providerId, rawProvider] of Object.entries(providers)) {
-      if (!rawProvider || typeof rawProvider !== 'object' || Array.isArray(rawProvider)) continue;
-      const models = (rawProvider as { models?: unknown }).models;
-      if (!Array.isArray(models)) continue;
-      for (const rawModel of models) {
-        if (!rawModel || typeof rawModel !== 'object' || Array.isArray(rawModel)) continue;
-        const raw = rawModel as Record<string, unknown>;
-        const id = raw.id;
-        const name = raw.name;
-        if (typeof id !== 'string' || !id.trim()) continue;
-        const tags = Array.isArray(raw.tags)
-          ? raw.tags.filter((tag): tag is string => typeof tag === 'string' && Boolean(tag.trim()))
-          : undefined;
-        let thinkingLevelMap: PiManagedModelDefinition['thinkingLevelMap'];
-        if (
-          raw.thinkingLevelMap &&
-          typeof raw.thinkingLevelMap === 'object' &&
-          !Array.isArray(raw.thinkingLevelMap)
-        ) {
-          thinkingLevelMap = {};
-          const rawMap = raw.thinkingLevelMap as Record<string, unknown>;
-          for (const level of PI_THINKING_LEVELS) {
-            const mapped = rawMap[level];
-            if (typeof mapped === 'string' || mapped === null) thinkingLevelMap[level] = mapped;
-          }
-        }
-        out.push({
-          providerId,
-          model: {
-            id: id.trim(),
-            ...(typeof name === 'string' && name.trim() ? { name: name.trim() } : {}),
-            ...(tags ? { tags: [...new Set(tags.map((tag) => tag.trim()))] } : {}),
-            ...(typeof raw.reasoning === 'boolean' ? { reasoning: raw.reasoning } : {}),
-            ...(thinkingLevelMap ? { thinkingLevelMap: { ...thinkingLevelMap } } : {}),
-            // T38-b: `piModelOption` re-checks the range, so this reader only
-            // has to establish that the field is a number at all.
-            ...(typeof raw.contextWindow === 'number' && Number.isFinite(raw.contextWindow)
-              ? { contextWindow: raw.contextWindow }
-              : {}),
-          },
-        });
-      }
-    }
-    return out;
+    return collectModelOptions(readJson(path));
   } catch {
     return [];
   }
+}
+
+/**
+ * The selectable rows in a `models.json` DOCUMENT, wherever it came from.
+ *
+ * T062 / D3: split out of {@link readLocalModelOptions} so the picker can be
+ * built from the document a native worker is handed, not only from the file on
+ * disk. Same walk, same fields — the only thing that changes is the source.
+ */
+function collectModelOptions(parsed: unknown): CatalogModelEntry[] {
+  if (!parsed || typeof parsed !== 'object' || !('providers' in parsed)) return [];
+  const providers = (parsed as { providers: unknown }).providers;
+  if (!providers || typeof providers !== 'object' || Array.isArray(providers)) return [];
+  const out: CatalogModelEntry[] = [];
+  for (const [providerId, rawProvider] of Object.entries(providers)) {
+    if (!rawProvider || typeof rawProvider !== 'object' || Array.isArray(rawProvider)) continue;
+    const models = (rawProvider as { models?: unknown }).models;
+    if (!Array.isArray(models)) continue;
+    for (const rawModel of models) {
+      if (!rawModel || typeof rawModel !== 'object' || Array.isArray(rawModel)) continue;
+      const raw = rawModel as Record<string, unknown>;
+      const id = raw.id;
+      const name = raw.name;
+      if (typeof id !== 'string' || !id.trim()) continue;
+      const tags = Array.isArray(raw.tags)
+        ? raw.tags.filter((tag): tag is string => typeof tag === 'string' && Boolean(tag.trim()))
+        : undefined;
+      let thinkingLevelMap: PiManagedModelDefinition['thinkingLevelMap'];
+      if (
+        raw.thinkingLevelMap &&
+        typeof raw.thinkingLevelMap === 'object' &&
+        !Array.isArray(raw.thinkingLevelMap)
+      ) {
+        thinkingLevelMap = {};
+        const rawMap = raw.thinkingLevelMap as Record<string, unknown>;
+        for (const level of PI_THINKING_LEVELS) {
+          const mapped = rawMap[level];
+          if (typeof mapped === 'string' || mapped === null) thinkingLevelMap[level] = mapped;
+        }
+      }
+      out.push({
+        providerId,
+        model: {
+          id: id.trim(),
+          ...(typeof name === 'string' && name.trim() ? { name: name.trim() } : {}),
+          ...(tags ? { tags: [...new Set(tags.map((tag) => tag.trim()))] } : {}),
+          ...(typeof raw.reasoning === 'boolean' ? { reasoning: raw.reasoning } : {}),
+          ...(thinkingLevelMap ? { thinkingLevelMap: { ...thinkingLevelMap } } : {}),
+          // T38-b: `piModelOption` re-checks the range, so this reader only
+          // has to establish that the field is a number at all.
+          ...(typeof raw.contextWindow === 'number' && Number.isFinite(raw.contextWindow)
+            ? { contextWindow: raw.contextWindow }
+            : {}),
+        },
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -438,10 +457,22 @@ export class PiModelConfigService {
     };
   }
 
-  readCatalog(sourceOverride?: 'local'): AgentModelCatalog {
+  /**
+   * The model menu.
+   *
+   * `runtime` is the `models.json` document a native worker is actually handed
+   * this launch ({@link PiModelConfigService.buildNativeModelCatalog}, via
+   * `resolveNativeModelCatalog`). Supply it and the menu is built from that
+   * document; omit it and the menu is built from the file on disk, which is
+   * also what the worker falls back to reading when Main cannot assemble one.
+   * Either way both sides answer from the SAME document — T062 / D3, where a
+   * provider hand-written into `models.json` was listed here and unknown to
+   * every worker, so picking it failed with `no model "…" in the catalog`.
+   */
+  readCatalog(sourceOverride?: 'local', runtime?: RuntimeModelDocuments): AgentModelCatalog {
     // One reader for both routes: `models.json` is pi's own format either way,
     // and the state file is what says whether we fetched it or found it.
-    const entries = readLocalModelOptions(this.modelsPath);
+    const entries = this.catalogEntries(runtime);
     const state = this.readState();
     const source = sourceOverride ?? state.source;
     const catalogSource = source === 'remote' ? 'managed' : source === 'local' ? 'local' : source;
@@ -493,6 +524,36 @@ export class PiModelConfigService {
       fetchedAt: state.syncedAt ?? safeMtime(this.modelsPath),
       ...(error ? { error } : {}),
     };
+  }
+
+  /**
+   * The rows the menu is built from, and the one diagnostic this seam can give.
+   *
+   * A provider that exists only in the file — hand-edited in, or left behind by
+   * a write that the vault no longer backs — is invisible to every worker, so
+   * it must be invisible here too. It leaves a log line instead of a silent
+   * absence: `parsePiCatalog`'s `dropped` list cannot record this class at all
+   * (the provider never entered the document, so nothing dropped it), and
+   * "the model I picked does not exist" has no other symptom to go on.
+   */
+  private catalogEntries(runtime?: RuntimeModelDocuments): CatalogModelEntry[] {
+    if (!runtime) return readLocalModelOptions(this.modelsPath);
+    const entries = collectModelOptions(runtime.models);
+    const selectable = new Set(entries.map((entry) => entry.providerId));
+    const fileOnly = [
+      ...new Set(
+        readLocalModelOptions(this.modelsPath)
+          .map((entry) => entry.providerId)
+          .filter((providerId) => !selectable.has(providerId))
+      ),
+    ].sort();
+    if (fileOnly.length > 0) {
+      this.log('[pi-models] models.json holds providers no session can use', {
+        dropped: fileOnly.join(', '),
+        reason: 'absent_from_runtime_catalog',
+      });
+    }
+    return entries;
   }
 
   clearCredential(): void {

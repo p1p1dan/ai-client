@@ -119,6 +119,143 @@ export class PiTuiExclusiveGuard {
 }
 
 /**
+ * D18 — the sentence shown when a second window asks for a chat a first window
+ * already has open in a terminal.
+ *
+ * An English sentence used as a DICTIONARY KEY (`zhTranslations` in
+ * `@shared/i18n`), the way the other cross-process reasons here are: Main has
+ * no translator, and the renderer that displays it does.
+ */
+export const PI_TUI_SESSION_BUSY_REASON =
+  'This chat is already open in a terminal in another window';
+
+export type PiTuiSessionClaim = { ok: true } | { ok: false; reason: string };
+
+/**
+ * D18 — one window at a time may run `pi --session` on a given JSONL.
+ *
+ * `PiTuiExclusiveGuard` above answers a different question ("is a terminal
+ * holding the file the GUI is about to write") and answers it for the whole
+ * process with a single owner key that TRANSFERS rather than refuses. That is
+ * right for its job and useless for this one: the real-machine point check
+ * (DEV-16) opened the same chat in two windows, and both `pi --session` on one
+ * file, each reading the tree once at open and then hanging its own turn off
+ * the same leaf — one JSONL silently forked into two branches, with no prompt,
+ * no refusal and no read-only fallback anywhere in the UI. The writer lock does
+ * not help: it belongs to the GUI worker and the pi CLI never takes it.
+ *
+ * Keyed by session file, valued by the window that claimed it, because the
+ * controllers that own the PTYs are per-window (`ipc/piTui.ts`) and therefore
+ * cannot see each other's terminals. Within ONE window the claim is re-keyed
+ * rather than refused: the existing terminal-03 mismatch guard already stops a
+ * warm PTY from serving another chat, and refusing here would break the
+ * legitimate case where a chat's terminal died and the renderer minted a new id
+ * for it.
+ */
+export class PiTuiWindowSessionGuard {
+  #owners = new Map<string, { windowId: number; terminalIds: Set<string> }>();
+
+  /** The window running a terminal on this file, or null when it is free. */
+  ownerWindowId(sessionFile: string): number | null {
+    const key = normalizeSessionKey(sessionFile);
+    if (!key) return null;
+    return this.#owners.get(key)?.windowId ?? null;
+  }
+
+  /**
+   * Can `windowId` open a terminal on this file? Asked without claiming, for
+   * the renderer's pre-flight — the claim below is what actually protects the
+   * file.
+   */
+  check(sessionFile: string, windowId: number): PiTuiSessionClaim {
+    const owner = this.ownerWindowId(sessionFile);
+    if (owner !== null && owner !== windowId) {
+      return { ok: false, reason: PI_TUI_SESSION_BUSY_REASON };
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Take the file for `windowId`, or refuse because another window has it.
+   *
+   * A terminal with no session file (a TUI opened from a repo rather than from
+   * a chat) claims nothing: it starts its own conversation and contests no
+   * existing JSONL.
+   */
+  claim(sessionFile: string, windowId: number, terminalId: string): PiTuiSessionClaim {
+    const key = normalizeSessionKey(sessionFile);
+    if (!key) return { ok: true };
+    const existing = this.#owners.get(key);
+    if (existing && existing.windowId !== windowId) {
+      return { ok: false, reason: PI_TUI_SESSION_BUSY_REASON };
+    }
+    if (existing) existing.terminalIds.add(terminalId);
+    else this.#owners.set(key, { windowId, terminalIds: new Set([terminalId]) });
+    return { ok: true };
+  }
+
+  /**
+   * Undo ONE claim: this window's terminal is no longer opening this chat.
+   *
+   * Separate from `releaseTerminal` below because the two answer different
+   * questions, and the review of the first landing caught the difference the
+   * hard way. `releaseTerminal` means "this PTY is gone" and therefore walks
+   * every chat the window holds; using it to roll back a claim whose open then
+   * failed also dropped the claim the SAME terminal id already held on another
+   * chat — while that pi was still running on it. The next window asking for
+   * that chat would have been let in, which is D18 itself.
+   *
+   * The path that reaches it: a warm terminal is asked for a second chat
+   * (`PI_TUI_SESSION_MISMATCH_REASON`, terminal-03). The claim for the new chat
+   * is already booked when the controller refuses, so exactly that one — and
+   * nothing else — has to come back off.
+   */
+  releaseClaim(sessionFile: string, windowId: number, terminalId: string): void {
+    const key = normalizeSessionKey(sessionFile);
+    if (!key) return;
+    const owner = this.#owners.get(key);
+    if (!owner || owner.windowId !== windowId) return;
+    owner.terminalIds.delete(terminalId);
+    if (owner.terminalIds.size === 0) this.#owners.delete(key);
+  }
+
+  /**
+   * One terminal stopped. Released on every way a terminal can end — its own
+   * exit, an explicit dispose, a window teardown — because a claim that
+   * outlives its PTY locks the chat out of terminal mode for the rest of the
+   * run, which is the failure mode `PiTuiExclusiveGuard.transferTo` was
+   * rewritten to avoid.
+   *
+   * Every chat this window's terminal held, because a dead PTY holds none of
+   * them any more. A rollback wants `releaseClaim` above instead.
+   */
+  releaseTerminal(windowId: number, terminalId: string): void {
+    for (const [key, owner] of [...this.#owners]) {
+      if (owner.windowId !== windowId) continue;
+      owner.terminalIds.delete(terminalId);
+      if (owner.terminalIds.size === 0) this.#owners.delete(key);
+    }
+  }
+
+  /** Every terminal in a window stopped (window closed, controller disposed). */
+  releaseWindow(windowId: number): void {
+    for (const [key, owner] of [...this.#owners]) {
+      if (owner.windowId === windowId) this.#owners.delete(key);
+    }
+  }
+
+  /** The GUI took this chat's JSONL back, so no terminal holds it any more. */
+  releaseSession(sessionFile: string): void {
+    const key = normalizeSessionKey(sessionFile);
+    if (key) this.#owners.delete(key);
+  }
+
+  releaseAll(): void {
+    this.#owners.clear();
+  }
+}
+
+/**
  * TUI-1 / H/20: can the bundled `pi` CLI open this chat's JSONL at all?
  *
  * `pi --session <file>` parses with pi-coding-agent's own SessionManager, which

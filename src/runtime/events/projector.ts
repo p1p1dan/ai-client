@@ -537,7 +537,13 @@ export class RuntimeEventProjector {
     this.emit({
       type,
       sessionId: this.sink.sessionId,
-      payload: { ...(result.error ? { error: result.error.message } : {}) },
+      // T066 回炉: the code travels beside the message, not inside it. A run
+      // that ENDS in failure reports the provider's own sentence to the user,
+      // so prefixing it would put `stop_error:` in front of a 503; the log and
+      // any later branching reader read `errorCode` instead.
+      payload: {
+        ...(result.error ? { error: result.error.message, errorCode: result.error.code } : {}),
+      },
     });
     this.emit({
       type: 'session.status',

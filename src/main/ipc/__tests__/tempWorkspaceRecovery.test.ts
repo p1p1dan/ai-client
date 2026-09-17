@@ -24,6 +24,7 @@ const { handlers, gitInit, settings } = vi.hoisted(() => ({
 }));
 
 vi.mock('electron', () => ({
+  app: { on: vi.fn(), getPath: vi.fn(() => tmpdir()) },
   ipcMain: { handle: (name: string, handler: RemoveHandler) => handlers.set(name, handler) },
 }));
 vi.mock('../../services/git/GitService', () => ({
@@ -36,7 +37,15 @@ vi.mock('../../services/session/SessionManager', () => ({
 }));
 vi.mock('../files', () => ({ stopWatchersInDirectory: vi.fn(async () => undefined) }));
 vi.mock('../git', () => ({ unregisterAuthorizedWorkdir: vi.fn() }));
-vi.mock('../settings', () => ({ readSettings: () => settings.value }));
+// Stubbed one level BELOW `ipc/settings`, so the real unwrap of the renderer's
+// persist wrapper runs here too. Stubbing `readSettings` itself let this file
+// hand the service a flat `{ defaultTemporaryPath }` object that no settings.json
+// has ever had, which is what kept D13 invisible to the suite.
+vi.mock('../../services/SharedSessionState', () => ({
+  readSharedSettings: () => settings.value,
+  writeSharedSettings: vi.fn(),
+  writeSharedSettingsToSession: vi.fn(),
+}));
 
 import {
   adoptTempWorkspace,
@@ -47,9 +56,17 @@ import { registerTempWorkspaceHandlers } from '../tempWorkspace';
 registerTempWorkspaceHandlers();
 const remove = handlers.get(IPC_CHANNELS.TEMP_WORKSPACE_REMOVE) as RemoveHandler;
 
+/**
+ * Put a saved location on disk the way settings.json really holds it: nested
+ * under the renderer's zustand persist key, never on the file's top level.
+ */
+function savedLocation(defaultTemporaryPath: string): void {
+  settings.value = { 'aiclient-settings': { state: { defaultTemporaryPath }, version: 0 } };
+}
+
 async function withBase(run: (base: string) => Promise<void>): Promise<void> {
   const base = await mkdtemp(path.join(tmpdir(), 'temp-ws-recovery-'));
-  settings.value = { defaultTemporaryPath: base };
+  savedLocation(base);
   try {
     await run(base);
   } finally {
@@ -136,21 +153,21 @@ describe('isTempWorkspacePath', () => {
   describe('with a base path the user did not type in normalised form', () => {
     it('accepts a direct child when the saved location ends with a separator', async () => {
       await withBase(async (base) => {
-        settings.value = { defaultTemporaryPath: `${base}${path.sep}` };
+        savedLocation(`${base}${path.sep}`);
         expect(isTempWorkspacePath(path.join(base, '20260819-153654'))).toBe(true);
       });
     });
 
     it('accepts a direct child when the saved location still contains a .. segment', async () => {
       await withBase(async (base) => {
-        settings.value = { defaultTemporaryPath: `${base}${path.sep}sub${path.sep}..` };
+        savedLocation(`${base}${path.sep}sub${path.sep}..`);
         expect(isTempWorkspacePath(path.join(base, '20260819-153654'))).toBe(true);
       });
     });
 
     it('still rejects the base itself and a nested grandchild', async () => {
       await withBase(async (base) => {
-        settings.value = { defaultTemporaryPath: `${base}${path.sep}` };
+        savedLocation(`${base}${path.sep}`);
         expect(isTempWorkspacePath(base)).toBe(false);
         expect(isTempWorkspacePath(`${base}${path.sep}`)).toBe(false);
         expect(isTempWorkspacePath(path.join(base, 'a', 'b'))).toBe(false);
@@ -188,7 +205,7 @@ describe('adoptTempWorkspace', () => {
     // main-aux-07: the guard said "not mine", `adoptTempWorkspace` returned
     // early, and the chat then failed to spawn on a cwd that was never put back.
     await withBase(async (base) => {
-      settings.value = { defaultTemporaryPath: `${base}${path.sep}` };
+      savedLocation(`${base}${path.sep}`);
       const recorded = path.join(base, '20260819-153654');
 
       await adoptTempWorkspace(recorded);

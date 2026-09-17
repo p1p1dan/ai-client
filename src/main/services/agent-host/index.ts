@@ -3,11 +3,6 @@ export type {
   CreatePiWorkerSlotOptions,
 } from './createPiWorkerSlot';
 export { createPiWorkerSlot } from './createPiWorkerSlot';
-export {
-  REQUIRED_NODE_MAJOR,
-  type ResolveNodeRuntimeOptions,
-  resolveNode24Runtime,
-} from './NodeRuntimeResolver';
 export type {
   ForkedPiWorker,
   PiWorkerEntryLayout,

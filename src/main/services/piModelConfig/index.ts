@@ -218,7 +218,15 @@ export function readPiModelCatalog(): AgentModelCatalog {
   // The `'local'` source label follows the credential mode, not the directory:
   // a local-route catalog is still the user's own even once it is assembled in
   // our directory, and relabelling it 'remote' would claim a sync happened.
-  return service.readCatalog(managed ? undefined : 'local');
+  //
+  // T062 / D3 — the menu is built from the SAME document a worker gets. The
+  // two used to be different things: this read went to `models.json` on disk
+  // while `WorkerManager` handed the worker the in-memory assembly, so any
+  // provider that existed only in the file was listed here and unknown there.
+  // `undefined` is passed straight through: that is exactly the case where the
+  // worker falls back to reading the directory (`nativeCatalog.ts`), so the
+  // file is the right answer for both sides then.
+  return service.readCatalog(managed ? undefined : 'local', resolveNativeModelCatalog());
 }
 
 export function clearManagedPiCredential(): void {

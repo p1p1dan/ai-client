@@ -15,6 +15,7 @@
  *
  * §12 verification first: `__tests__/pickedAttachments.test.ts`.
  */
+import { englishTranslate, type Translate } from '@shared/i18n';
 import type { AttachmentReadFailureReason, AttachmentReadResult } from '@shared/types/attachmentIo';
 import {
   type AttachmentLimits,
@@ -93,14 +94,16 @@ export function plannedReadLimit(
 export function pickedCountSkipMessage(
   projected: number,
   candidate: { name: string; kind: AttachmentKind },
-  limits: AttachmentLimits = DEFAULT_ATTACHMENT_LIMITS
+  limits: AttachmentLimits = DEFAULT_ATTACHMENT_LIMITS,
+  t: Translate = englishTranslate
 ): string | null {
   if (projected < limits.maxCount) return null;
 
   const verdict = admitAttachment(
     Array.from({ length: projected }, () => ({ byteLength: 1 })),
     { name: candidate.name, kind: candidate.kind, byteLength: 1 },
-    limits
+    limits,
+    t
   );
   return verdict.ok ? null : verdict.message;
 }
@@ -109,13 +112,13 @@ export function pickedCountSkipMessage(
  * "This file is not something we can send" — shared with the paste path so the
  * two entry points cannot drift into two different sentences for one verdict.
  */
-export function unsupportedKindMessage(label: string): string {
-  return `"${label}" is not an image or text file — skipped.`;
+export function unsupportedKindMessage(label: string, t: Translate = englishTranslate): string {
+  return t('"{{name}}" is not an image or text file — skipped.', { name: label });
 }
 
 /** "We could not get the bytes" — likewise shared with the paste path. */
-export function unreadableMessage(label: string): string {
-  return `Could not read "${label}" — skipped.`;
+export function unreadableMessage(label: string, t: Translate = englishTranslate): string {
+  return t('Could not read "{{name}}" — skipped.', { name: label });
 }
 
 /**
@@ -134,7 +137,8 @@ export function pickedSkipMessage(
     kind: AttachmentKind;
     byteLength?: number;
   },
-  limits: AttachmentLimits = DEFAULT_ATTACHMENT_LIMITS
+  limits: AttachmentLimits = DEFAULT_ATTACHMENT_LIMITS,
+  t: Translate = englishTranslate
 ): string {
   const label = input.name;
 
@@ -144,24 +148,25 @@ export function pickedSkipMessage(
         const verdict = admitAttachment(
           [],
           { name: label, kind: input.kind, byteLength: input.byteLength },
-          limits
+          limits,
+          t
         );
         if (!verdict.ok) return verdict.message;
       }
       // Main refuses on size before reading and always reports the size it
       // saw, so this is unreachable. Falling back to the read-failure sentence
       // keeps an impossible state from inventing a number to print.
-      return unreadableMessage(label);
+      return unreadableMessage(label, t);
     }
     case 'not-a-file':
-      return `"${label}" is not a file — skipped.`;
+      return t('"{{name}}" is not a file — skipped.', { name: label });
     // `not-allowed` means the one-shot grant was missing (a replayed read, or
     // a path the user did not pick). It is an internal invariant breach, not
     // something the user did, and the only honest thing to tell them is the
     // same "could not read" the IO failures get.
     case 'not-allowed':
     case 'unreadable':
-      return unreadableMessage(label);
+      return unreadableMessage(label, t);
   }
 }
 
@@ -209,8 +214,11 @@ export async function readPickedBatch(input: {
   liveCount: () => number;
   read: (filePath: string, maxBytes: number) => Promise<AttachmentReadResult>;
   limits?: AttachmentLimits;
+  /** T067: the hook's translator — every sentence below is the user's to read. */
+  t?: Translate;
 }): Promise<PickedBatchOutcome> {
   const limits = input.limits ?? DEFAULT_ATTACHMENT_LIMITS;
+  const t = input.t ?? englishTranslate;
   const reads: PickedReadSuccess[] = [];
   const skipped: string[] = [];
 
@@ -219,14 +227,15 @@ export async function readPickedBatch(input: {
     try {
       const plan = plannedReadLimit(label, limits);
       if (!plan) {
-        skipped.push(unsupportedKindMessage(label));
+        skipped.push(unsupportedKindMessage(label, t));
         continue;
       }
 
       const countSkip = pickedCountSkipMessage(
         input.liveCount() + reads.length,
         { name: label, kind: plan.kind },
-        limits
+        limits,
+        t
       );
       if (countSkip) {
         skipped.push(countSkip);
@@ -238,7 +247,8 @@ export async function readPickedBatch(input: {
         skipped.push(
           pickedSkipMessage(
             { reason: result.reason, name: label, kind: plan.kind, byteLength: result.byteLength },
-            limits
+            limits,
+            t
           )
         );
         continue;
@@ -253,7 +263,7 @@ export async function readPickedBatch(input: {
     } catch {
       // A rejected read lands here, and so would a bug above it. Either way the
       // honest thing to tell the user is that this ONE file did not make it.
-      skipped.push(unreadableMessage(label));
+      skipped.push(unreadableMessage(label, t));
     }
   }
 

@@ -6,7 +6,7 @@ import {
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerRpcEvent,
 } from '@shared/types/workerRpc';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STDERR_FORWARD_MAX_LINES_PER_TURN } from '../../../../agent-host/stderrRedaction';
 import { BOOTSTRAP_REQUEST_TIMEOUT_MS } from '../createPiWorkerSlot';
 import { normalizeWorkerPath, sessionWorkerKey } from '../workerSessionKey';
@@ -15,6 +15,7 @@ import { normalizeWorkerPath, sessionWorkerKey } from '../workerSessionKey';
 // fixture paths and assertion values agree on Windows and Linux alike.
 const norm = (p: string) => normalizeWorkerPath(p);
 const slotKey = (p: string) => sessionWorkerKey(p);
+
 import {
   resolveDefaultWorkerCapacity,
   resolveWorkerCapacity,
@@ -2880,5 +2881,136 @@ describe('WorkerManager preview requests', () => {
     requestedPreview(record, { previewId: 'p1', path: '/repo/demo.html', focus: false });
     await vi.waitFor(() => expect(previewAcks(record)).toHaveLength(1));
     expect(h.events.some((event) => event.type === 'preview.requested')).toBe(true);
+  });
+});
+
+/**
+ * T066 — a retry and a refused turn become log lines here, not only events.
+ *
+ * Both facts already crossed this funnel and neither was written down: the
+ * retry existed as a `provider_retry` note in a trace file that only exists if
+ * someone exported `AICLIENT_RUNTIME_TRACE_DIR` first, and a refusal
+ * (`session_size_limit`, `attachment_size_limit`) as worker stderr that the log
+ * only received later, truncated, as part of the crash replay of a killed
+ * worker. `console.warn` rather than the `log` sink, because production never
+ * injects one — see the manager's own export.
+ */
+describe('WorkerManager notable-event logging (T066)', () => {
+  let warn: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    warn.mockRestore();
+  });
+
+  const lines = (): string[] => warn.mock.calls.map((call) => String(call[0]));
+
+  it('writes one line per provider retry, naming the attempt and the wait', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1');
+
+    h.records[0].emit({
+      type: 'session.status',
+      sessionId: 's1',
+      requestId: 'turn-1',
+      payload: {
+        status: 'running',
+        retry: { attempt: 2, maxRetries: 3, delayMs: 3000, errorStatus: '503', error: 'upstream' },
+      },
+    });
+
+    const retry = lines().filter((line) => line.includes('provider retry'));
+    expect(retry).toHaveLength(1);
+    expect(retry[0]).toContain('s1');
+    expect(retry[0]).toContain('2/3');
+    expect(retry[0]).toContain('3000ms');
+    expect(retry[0]).toContain('503');
+  });
+
+  it('writes the refusal code the moment the turn fails, redacted', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1');
+
+    h.records[0].emit({
+      type: 'session.failed',
+      sessionId: 's1',
+      requestId: 'turn-1',
+      payload: {
+        error: 'session_size_limit: session exceeds the configured size budget sk-ant-abc123secret',
+      },
+    });
+
+    const failed = lines().filter((line) => line.includes('turn failed'));
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toContain('session_size_limit');
+    expect(failed[0]).not.toContain('sk-ant-abc123secret');
+  });
+
+  /**
+   * T066 回炉 — the 2026-09-17 field pass found this line reading `turn failed:
+   * session exceeds the configured size budget`: the code sits in the payload,
+   * not in the sentence, for every run that ENDS in failure (the sentence is
+   * the user's, so the projector does not prefix it). With nothing to grep for,
+   * a refusal and a provider outage looked the same in the log.
+   */
+  it('puts the failure code in front of a refusal that reports it beside the text', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1');
+
+    h.records[0].emit({
+      type: 'session.failed',
+      sessionId: 's1',
+      requestId: 'turn-1',
+      payload: {
+        error: 'session exceeds the configured size budget',
+        errorCode: 'session_size_limit',
+      },
+    });
+
+    const failed = lines().filter((line) => line.includes('turn failed'));
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toContain('turn failed: session_size_limit: session exceeds');
+  });
+
+  it('does not repeat a code the text already leads with', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1');
+
+    h.records[0].emit({
+      type: 'session.failed',
+      sessionId: 's1',
+      requestId: 'turn-1',
+      payload: {
+        error: 'attachment_size_limit: attachment "a.png" is 9000000 bytes',
+        errorCode: 'attachment_size_limit',
+      },
+    });
+
+    const failed = lines().filter((line) => line.includes('turn failed'));
+    expect(failed[0]).toContain('turn failed: attachment_size_limit: attachment');
+    expect(failed[0]).not.toContain('attachment_size_limit: attachment_size_limit');
+  });
+
+  it('stays quiet on an ordinary running status and a completed turn', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1');
+
+    h.records[0].emit({
+      type: 'session.status',
+      sessionId: 's1',
+      requestId: 'turn-1',
+      payload: { status: 'running' },
+    });
+    h.records[0].emit({
+      type: 'session.completed',
+      sessionId: 's1',
+      requestId: 'turn-1',
+      payload: { status: 'completed' },
+    });
+
+    expect(lines()).toEqual([]);
   });
 });

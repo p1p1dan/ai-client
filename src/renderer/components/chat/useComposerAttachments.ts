@@ -10,7 +10,12 @@
  */
 import type React from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { admitAttachment, planImageAttachment } from './attachmentLimits';
+import { useI18n } from '@/i18n';
+import {
+  admitAttachment,
+  DEFAULT_ATTACHMENT_LIMITS,
+  planImageAttachment,
+} from './attachmentLimits';
 import {
   type AttachmentDraft,
   type AttachmentNotice,
@@ -31,7 +36,7 @@ import {
   unsupportedKindMessage,
 } from './pickedAttachments';
 
-/** Clipboard bitmaps often arrive without a usable file name. */
+/** Clipboard bitmaps often arrive without a usable file name. Catalog key. */
 const UNNAMED_PASTE = 'Pasted image';
 
 /**
@@ -97,6 +102,10 @@ export interface ComposerAttachments {
 }
 
 export function useComposerAttachments(options: { disabled: boolean }): ComposerAttachments {
+  // T067 (D26): every refusal below is a sentence the user reads. The budget
+  // modules hold the wording as catalog keys; this is where the locale that
+  // resolves them enters the pipeline.
+  const { t } = useI18n();
   const [drafts, setDrafts] = useState<AttachmentDraft[]>([]);
   const [notice, setNotice] = useState<AttachmentNotice | null>(null);
   const [reading, setReading] = useState(0);
@@ -122,21 +131,22 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
       const skipped: string[] = [...preSkipped];
       try {
         for (const file of files) {
-          const label = file.name || UNNAMED_PASTE;
+          const label = file.name || t(UNNAMED_PASTE);
           const detected = detectAttachmentKind(file.name, file.type);
           if (!detected) {
-            skipped.push(unsupportedKindMessage(label));
+            skipped.push(unsupportedKindMessage(label, t));
             continue;
           }
 
           // Cheap pre-check on the size the File already knows. The budget
           // exists to protect the renderer, so it must fire BEFORE a 200 MB
           // paste is materialised into an ArrayBuffer, not after.
-          const preVerdict = admitAttachment(draftsRef.current, {
-            name: label,
-            byteLength: file.size,
-            kind: detected.kind,
-          });
+          const preVerdict = admitAttachment(
+            draftsRef.current,
+            { name: label, byteLength: file.size, kind: detected.kind },
+            DEFAULT_ATTACHMENT_LIMITS,
+            t
+          );
           if (!preVerdict.ok) {
             skipped.push(preVerdict.message);
             continue;
@@ -146,7 +156,7 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
           try {
             bytes = new Uint8Array(await file.arrayBuffer());
           } catch {
-            skipped.push(unreadableMessage(label));
+            skipped.push(unreadableMessage(label, t));
             continue;
           }
 
@@ -154,11 +164,10 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
             // Header parse, never a decode: an oversized bitmap must be
             // rejected without ever allocating the surface it describes.
             const size = readImageDimensions(bytes);
-            const plan = planImageAttachment({
-              name: label,
-              mediaType: detected.mediaType,
-              ...(size ?? {}),
-            });
+            const plan = planImageAttachment(
+              { name: label, mediaType: detected.mediaType, ...(size ?? {}) },
+              t
+            );
             if (plan.action === 'reject') {
               skipped.push(plan.message);
               continue;
@@ -166,11 +175,12 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
           }
 
           // Authoritative check, now against the bytes actually read.
-          const verdict = admitAttachment(draftsRef.current, {
-            name: label,
-            byteLength: bytes.length,
-            kind: detected.kind,
-          });
+          const verdict = admitAttachment(
+            draftsRef.current,
+            { name: label, byteLength: bytes.length, kind: detected.kind },
+            DEFAULT_ATTACHMENT_LIMITS,
+            t
+          );
           if (!verdict.ok) {
             skipped.push(verdict.message);
             continue;
@@ -182,11 +192,11 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
           } else {
             const text = decodeTextBytes(bytes);
             if (isProbablyBinary(text)) {
-              skipped.push(`"${label}" looks like binary data — skipped.`);
+              skipped.push(t('"{{name}}" looks like binary data — skipped.', { name: label }));
               continue;
             }
             if (text.trim().length === 0) {
-              skipped.push(`"${label}" is empty — skipped.`);
+              skipped.push(t('"{{name}}" is empty — skipped.', { name: label }));
               continue;
             }
             data = text;
@@ -194,7 +204,7 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
           // Belt and braces: the Host drops the WHOLE send on an empty data
           // field, so nothing empty may ever reach the draft list.
           if (data.length === 0) {
-            skipped.push(`"${label}" is empty — skipped.`);
+            skipped.push(t('"{{name}}" is empty — skipped.', { name: label }));
             continue;
           }
 
@@ -217,10 +227,10 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
         // through must still publish the skips collected so far instead of
         // leaving the user with a gesture that silently produced nothing.
         // null on a clean paste, which also clears the previous notice.
-        setNotice(formatSkipNotice(skipped));
+        setNotice(formatSkipNotice(skipped, t));
       }
     },
-    [applyDrafts]
+    [applyDrafts, t]
   );
 
   /**
@@ -262,6 +272,7 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
           liveCount: () => draftsRef.current.length,
           read: (filePath, maxBytes) =>
             window.electronAPI.file.readAttachment(filePath, { maxBytes }),
+          t,
         });
       } catch (error) {
         // Round-5 C2: `readPickedBatch` isolates every per-file failure, so
@@ -284,7 +295,7 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
       }));
       await ingestFiles(sources, outcome.skipped);
     },
-    [ingestFiles, options.disabled]
+    [ingestFiles, options.disabled, t]
   );
 
   const handlePaste = useCallback(

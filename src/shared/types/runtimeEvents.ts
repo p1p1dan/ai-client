@@ -576,7 +576,21 @@ export interface QuestionRequestedEvent extends RuntimeEventBase {
 export interface SessionTerminalEvent extends RuntimeEventBase {
   type: 'session.completed' | 'session.failed' | 'session.stopped';
   sessionId: string;
-  payload?: { error?: string };
+  payload?: {
+    error?: string;
+    /**
+     * T066 回炉 — the machine-readable half, beside the sentence rather than
+     * inside it.
+     *
+     * `error` is what the renderer shows, so it stays the provider's or the
+     * runtime's own wording. The operator log needs the code (a refusal read
+     * `turn failed: session exceeds the configured size budget`, with nothing
+     * to grep for), and so would any later reader that has to branch on the
+     * reason. Absent when the code is already spelled in `error` — the thrown
+     * path prefixes it there for the renderer's recovery cards.
+     */
+    errorCode?: string;
+  };
 }
 
 /**

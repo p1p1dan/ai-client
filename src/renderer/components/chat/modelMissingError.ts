@@ -9,12 +9,14 @@
  * but never says a migration exists. The H/19 point-check found users have no
  * way to get from that failure to the fix, which is what this module supplies.
  *
- * Shaped after `authRequiredError`, and matched on two signals for the same
- * reason: only one of the two throw sites carries a code that survives the trip
- * to the renderer.
+ * Shaped after `authRequiredError`, and matched on three signals because the
+ * throw sites do not all carry a code that survives the trip to the renderer.
  *  - `piWorkerSession` throws `PiWorkerSessionError('WORKER_MODEL_NOT_FOUND')`,
  *    and `WorkerSlot` formats remote failures as `` `${code}: ${message}` `` —
  *    so the code is in the text.
+ *  - the session path (`model-adapter`'s `resolve()`) throws
+ *    `RuntimeConfigError('model_not_in_catalog')`, whose code now rides the
+ *    `session.failed` text the same way. See the constant below.
  *  - `piAgentSessionBootstrap` throws a plain `Error`, which the worker's
  *    `errorPayload` flattens to `WORKER_REQUEST_FAILED`. There the code is
  *    gone and only the fixed message text identifies the failure.
@@ -22,6 +24,22 @@
 
 /** The code carried by the throw site that has one (`piWorkerSession`). */
 export const MODEL_MISSING_CODE_TOKEN = 'WORKER_MODEL_NOT_FOUND';
+
+/**
+ * The code the SESSION path carries (`model-adapter`'s `resolve()`).
+ *
+ * T062 / D19: this is the throw a user actually reaches by sending into a chat
+ * whose recorded model is gone. Its message is `no model "<provider>/<id>" in
+ * the catalog (N available)` — an English sentence with neither of the two
+ * signals above, so the copy below had become a dead branch on the one path
+ * that needs it. The runtime now pastes this code on the front of the
+ * `session.failed` text (`thrownRunErrorText`, `plugins/agent-loop/index.ts`),
+ * which is what makes it matchable here.
+ *
+ * Matched on the CODE, never on the sentence: the sentence is the runtime's
+ * diagnostic and is free to be reworded, translated or truncated.
+ */
+export const MODEL_NOT_IN_CATALOG_CODE_TOKEN = 'model_not_in_catalog';
 
 /**
  * The message text both throw sites produce (`Pi model not found: <ref>`).
@@ -33,7 +51,11 @@ const MODEL_MISSING_MESSAGE_NEEDLE = 'Pi model not found';
 /** True when `text` looks like a session whose recorded model is unknown here. */
 export function isModelMissingError(text: string | null | undefined): boolean {
   if (!text) return false;
-  return text.includes(MODEL_MISSING_CODE_TOKEN) || text.includes(MODEL_MISSING_MESSAGE_NEEDLE);
+  return (
+    text.includes(MODEL_MISSING_CODE_TOKEN) ||
+    text.includes(MODEL_NOT_IN_CATALOG_CODE_TOKEN) ||
+    text.includes(MODEL_MISSING_MESSAGE_NEEDLE)
+  );
 }
 
 export interface ModelMissingErrorView {

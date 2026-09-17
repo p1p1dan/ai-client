@@ -1,10 +1,13 @@
-import type { AppCloseRequestPayload } from '@shared/types';
-import { useCallback, useEffect, useRef } from 'react';
+import type { AppCloseRequestPayload, AppCloseRequestReason } from '@shared/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '@/stores/editor';
 import { useSettingsStore } from '@/stores/settings';
 
 export function useAppLifecycle(setCloseDialogOpen: (open: boolean) => void) {
   const pendingRequestIdRef = useRef<string | null>(null);
+  // T065: what the dialog is actually confirming. Main has always said, and
+  // this side always asked about quitting the whole app.
+  const [closeRequestReason, setCloseRequestReason] = useState<AppCloseRequestReason>('quit-app');
   const getDirtyPaths = useCallback(() => {
     const state = useEditorStore.getState();
     const editorSettings = useSettingsStore.getState().editorSettings;
@@ -48,6 +51,7 @@ export function useAppLifecycle(setCloseDialogOpen: (open: boolean) => void) {
       }
 
       pendingRequestIdRef.current = payload.requestId;
+      setCloseRequestReason(payload.reason);
       setCloseDialogOpen(true);
     });
     return cleanup;
@@ -88,5 +92,5 @@ export function useAppLifecycle(setCloseDialogOpen: (open: boolean) => void) {
     return cleanup;
   }, []);
 
-  return { confirmCloseAndRespond, cancelCloseAndRespond };
+  return { confirmCloseAndRespond, cancelCloseAndRespond, closeRequestReason };
 }

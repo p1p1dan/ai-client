@@ -97,11 +97,22 @@ function ensureEventBridge(): void {
   workerManager.onEvent((event) => sessionIndexService.handleRuntimeEvent(event));
 }
 
-async function assertPiCompatibleIndexRow(sessionId: string): Promise<void> {
+/**
+ * Refuse a session the index already binds to another agent.
+ *
+ * Hands back the row it read (D15), so a caller can tell "this row existed
+ * before I touched it" from "I am the one who just wrote it" without a second
+ * read — the difference between a shell this handler owns and somebody else's
+ * persisted session.
+ */
+async function assertPiCompatibleIndexRow(
+  sessionId: string
+): Promise<SessionIndexEntry | undefined> {
   const row = await sessionIndexService.get(sessionId);
   if (row && resolveAgentWireName(row.agent) !== PI_AGENT) {
     throw new Error(`pi_session_agent_mismatch: Session ${sessionId} is not indexed as Pi`);
   }
+  return row;
 }
 
 /**
@@ -272,7 +283,7 @@ export function registerChatHandlers(): void {
       // (SessionManager.create's own kind==='agent' check is the sibling
       // enforcement point for the PTY-agent path).
       assertAgentSpawnAllowed();
-      await assertPiCompatibleIndexRow(payload.sessionId);
+      const indexedBefore = await assertPiCompatibleIndexRow(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
       // U05-c: Main decides the posture from the path it allocated itself —
       // the renderer never gets to declare a session trusted or untrusted.
@@ -292,17 +303,45 @@ export function registerChatHandlers(): void {
         agent: PI_AGENT,
         unbound,
       });
-      const requestId = await workerManager.createSession({
-        sessionId: payload.sessionId,
-        workspacePath: payload.workspacePath,
-        ...(payload.model ? { model: payload.model } : {}),
-        ...(payload.effort ? { effort: payload.effort } : {}),
-        ...spawnTier(payload.tier),
-        ...spawnPermissions(payload.permissions),
-        ownerWebContentsId,
-        ...(unbound ? { unbound: true } : {}),
-      });
-      return { requestId };
+      try {
+        const requestId = await workerManager.createSession({
+          sessionId: payload.sessionId,
+          workspacePath: payload.workspacePath,
+          ...(payload.model ? { model: payload.model } : {}),
+          ...(payload.effort ? { effort: payload.effort } : {}),
+          ...spawnTier(payload.tier),
+          ...spawnPermissions(payload.permissions),
+          ownerWebContentsId,
+          ...(unbound ? { unbound: true } : {}),
+        });
+        return { requestId };
+      } catch (error) {
+        // D15 (DEV-4): the row above is written BEFORE the spawn, because the
+        // worker's own identity commit (`commitIdentityIfMaterialized` ->
+        // `bindRuntimeIdentity`) refuses a session with no row, and the index's
+        // runtime-event branches drop events for one. So the row cannot be
+        // deferred — it has to be taken back when the spawn fails, or a worker
+        // that never bootstrapped (a protocol mismatch, in the field run)
+        // leaves a `title: ''` shell that comes back as "Session xxxxxx" in the
+        // sidebar on the next start.
+        //
+        // Only when this call is the one that created it: a row that was
+        // already there is somebody else's truth (a resumable session, a fork,
+        // an archived row), and a failed spawn is no reason to delete it. The
+        // service applies its own shape guard on top.
+        if (!indexedBefore) {
+          await sessionIndexService
+            .removeUncommittedCreated(payload.sessionId, payload.workspacePath)
+            .catch((cleanupError) => {
+              // Never mask the spawn failure the user is waiting on.
+              console.warn(
+                '[chat] Failed to drop the index row of a failed session create:',
+                cleanupError
+              );
+            });
+        }
+        throw error;
+      }
     }
   );
 
@@ -658,9 +697,19 @@ export function registerChatHandlers(): void {
       // (POSIX) or kept the removal from succeeding at all (Windows, where the
       // failure is swallowed as best-effort cleanup). main-aux-02.
       if (result && payload.archived && scratchWorkspaceService.pathFor(payload.sessionId)) {
+        // T066 (D14): the three steps this branch runs — archive, retire the
+        // worker, delete the cwd — left no trace at all, so a directory that
+        // was removed and a directory that was never reached looked identical
+        // afterwards. One line per step; the removal itself reports from
+        // `ScratchWorkspaceService.release`, which is the only place that knows
+        // whether a directory was actually deleted or still shared.
+        console.log(
+          `[chat] Archiving temp session ${payload.sessionId}: retiring its worker before releasing its scratch directory.`
+        );
         let workerRetired = true;
         try {
           await workerManager.closeSession(payload.sessionId);
+          console.log(`[chat] Worker retired for archived session ${payload.sessionId}.`);
         } catch (error) {
           // Leave the directory to the app-exit and startup wipes instead:
           // removing it under a worker we could not confirm gone is the very

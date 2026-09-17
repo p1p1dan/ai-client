@@ -18,6 +18,7 @@ import type {
 } from '@shared/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClaudeSessionScanner } from '../ClaudeSessionScanner';
+import { ClaudeImportSourceError } from '../ClaudeSourceAdapter';
 import { CodexSessionScanner } from '../CodexSessionScanner';
 import { LegacyImportManifest } from '../LegacyImportManifest';
 import { LegacyImportService, type LegacyImportSessionIndex } from '../LegacyImportService';
@@ -654,5 +655,193 @@ describe('B4 multi-source import', () => {
     const projects = await h.service.listProjects();
     expect(projects).toHaveLength(1);
     expect(projects[0].sourceKind).toBe('claude-code');
+  });
+});
+
+/**
+ * T066 (D10) — the import chain used to run silently.
+ *
+ * The 2026-09-17 field pass imported 42 sessions and had 2 rejected by the size
+ * guards; grepping main.log, the daily log and the dev-server output for
+ * anything about any of it returned zero lines. Every exit of this service was
+ * a return value or an item status, and both die in the renderer.
+ */
+describe('LegacyImportService logging (T066)', () => {
+  let logged: string[];
+  let warned: string[];
+
+  beforeEach(() => {
+    logged = [];
+    warned = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logged.push(args.map(String).join(' '));
+    });
+    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+      warned.push(args.map(String).join(' '));
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('brackets a batch with a start line and a result line', async () => {
+    const h = harness();
+
+    await h.service.importBatch([source]);
+
+    expect(
+      logged.some((line) => line.includes('[legacy-import] Batch started: 1 session(s)'))
+    ).toBe(true);
+    expect(
+      logged.some((line) =>
+        line.includes('[legacy-import] Batch done: 1 imported, 0 already imported, 0 failed.')
+      )
+    ).toBe(true);
+    // A clean batch is not an anomaly: nothing may reach the warn channel.
+    expect(warned).toEqual([]);
+  });
+
+  it('counts an already-imported snapshot apart from a fresh one', async () => {
+    const h = harness();
+    await h.service.importBatch([source]);
+    logged.length = 0;
+
+    await h.service.importBatch([source]);
+
+    expect(
+      logged.some((line) =>
+        line.includes('[legacy-import] Batch done: 0 imported, 1 already imported, 0 failed.')
+      )
+    ).toBe(true);
+  });
+
+  it('names the failing session and its reason once per failed item', async () => {
+    const h = harness();
+
+    const result = await h.service.importBatch([{ ...source, sourceSessionId: 'session-missing' }]);
+
+    expect(result.results[0]?.status).toBe('failed');
+    const failure = warned.filter((line) => line.startsWith('[legacy-import] Failed'));
+    expect(failure).toHaveLength(1);
+    expect(failure[0]).toContain('session-missing');
+    expect(
+      logged.some((line) =>
+        line.includes('[legacy-import] Batch done: 0 imported, 0 already imported, 1 failed.')
+      )
+    ).toBe(true);
+  });
+
+  it('keeps the home directory out of a failure reason', async () => {
+    // The reason is an arbitrary error message, and the ones that carry a path
+    // carry the user's own (`ENOENT … /home/<user>/.claude/…`). T042's rules
+    // collapse the username; nothing else about the line changes.
+    const failing: LegacySourceImporter = {
+      source: 'claude-code',
+      scan: async () => ({ projects: [], sessions: [] }),
+      convert: async () => {
+        throw new Error('ENOENT: no such file or directory, open /home/tester/.claude/a.jsonl');
+      },
+    };
+    const h = harness({ importers: [failing] });
+
+    await h.service.importBatch([source]);
+
+    const failure = warned.find((line) => line.startsWith('[legacy-import] Failed'));
+    expect(failure).toBeDefined();
+    expect(failure).toContain('ENOENT');
+    expect(failure).not.toContain('/home/tester');
+  });
+});
+
+/**
+ * T067 回炉 — the three lines that turn a refusal into a Chinese sentence.
+ *
+ * `ClaudeSourceAdapter.test.ts` pins that the adapter THROWS a coded error, and
+ * `legacyImportFailure.test.ts` pins that the renderer words a code it is
+ * GIVEN. The join between them — `failureFields`, an `instanceof` check on a
+ * class imported across modules — had no case at all. If it ever stops
+ * matching (a duplicated class through a bundler split, a refactor that wraps
+ * the error), the item quietly falls back to the English sentence: D9 back
+ * verbatim, with every existing test still green.
+ */
+describe('LegacyImportService coded failures (T067)', () => {
+  let warn: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    warn.mockRestore();
+  });
+
+  function refusing(failure?: ConstructorParameters<typeof ClaudeImportSourceError>[1]) {
+    const importer: LegacySourceImporter = {
+      source: 'claude-code',
+      scan: async () => ({ projects: [], sessions: [] }),
+      convert: async () => {
+        throw new ClaudeImportSourceError(
+          'This conversation has 9000 entries; the import limit is 4000.',
+          failure
+        );
+      },
+    };
+    return importer;
+  }
+
+  it('hands the renderer the code and the ceiling, beside the English sentence', async () => {
+    const h = harness({
+      importers: [refusing({ code: 'source-entry-limit', params: { limit: 4000 } })],
+    });
+
+    // The exact call the IPC handler makes (`ipc/legacyImport.ts`), so this is
+    // the payload that crosses to the renderer.
+    const result = await h.service.importBatch([source]);
+
+    expect(result.results[0]).toMatchObject({
+      status: 'failed',
+      errorCode: 'source-entry-limit',
+      errorParams: { limit: 4000 },
+    });
+    // The sentence survives too — it is the log's copy and the fallback.
+    expect(result.results[0]?.error).toContain('the import limit is 4000');
+  });
+
+  it('carries the byte ceiling the same way', async () => {
+    const h = harness({
+      importers: [refusing({ code: 'source-byte-limit', params: { limit: 67_108_864 } })],
+    });
+
+    const result = await h.service.importBatch([source]);
+
+    expect(result.results[0]?.errorCode).toBe('source-byte-limit');
+    expect(result.results[0]?.errorParams).toEqual({ limit: 67_108_864 });
+  });
+
+  it('adds no code to a refusal that carries none', async () => {
+    const h = harness({ importers: [refusing()] });
+
+    const result = await h.service.importBatch([source]);
+
+    expect(result.results[0]?.status).toBe('failed');
+    expect(result.results[0]?.errorCode).toBeUndefined();
+    expect(result.results[0]?.errorParams).toBeUndefined();
+  });
+
+  it('adds no code to an ordinary error, so only the two ceilings are re-worded', async () => {
+    const plain: LegacySourceImporter = {
+      source: 'claude-code',
+      scan: async () => ({ projects: [], sessions: [] }),
+      convert: async () => {
+        throw new Error('source file vanished');
+      },
+    };
+    const h = harness({ importers: [plain] });
+
+    const result = await h.service.importBatch([source]);
+
+    expect(result.results[0]?.error).toBe('source file vanished');
+    expect(result.results[0]?.errorCode).toBeUndefined();
   });
 });

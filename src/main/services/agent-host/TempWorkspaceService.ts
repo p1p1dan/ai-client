@@ -19,7 +19,7 @@ import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
-import { readSettings } from '../../ipc/settings';
+import { readStringSetting, TEMPORARY_PATH_SETTING_KEY } from '../../ipc/settings';
 import { GitService } from '../git/GitService';
 import { isDirectChildOf, resolveWorkspacePath } from './workspaceContainment';
 
@@ -31,11 +31,17 @@ import { isDirectChildOf, resolveWorkspacePath } from './workspaceContainment';
  * caller, so they read the same setting from Main's own copy; the renderer
  * resolves it identically (`getEffectiveTemporaryBasePath(defaultTemporaryPath)`
  * in `useComposerTarget.ts`), so the two agree.
+ *
+ * "The same setting" has to come through `readStringSetting`, which unwraps the
+ * renderer's persist layer. Taking it off the settings file's top level — as
+ * this did until D13 — reads `undefined` on every machine, and the `?? ''`
+ * fallback turned that into "the user picked nothing": the self-heal below then
+ * measured every path against the DEFAULT root and answered false for a
+ * workspace under the root the user had actually chosen.
  */
 function settingsBasePath(): string {
-  const configured = readSettings()?.defaultTemporaryPath;
   return getEffectiveTemporaryBasePath(
-    typeof configured === 'string' ? configured : '',
+    readStringSetting(TEMPORARY_PATH_SETTING_KEY),
     homedir(),
     path.sep
   );

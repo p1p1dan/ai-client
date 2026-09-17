@@ -12,6 +12,7 @@ import {
   inspectPiTuiSessionSupport,
   normalizeSessionKey,
   PiTuiExclusiveGuard,
+  PiTuiWindowSessionGuard,
 } from '../services/terminal/piTuiSession';
 
 /**
@@ -21,6 +22,20 @@ import {
  * be the second writer is process-wide too.
  */
 const sessionGuard = new PiTuiExclusiveGuard();
+
+/**
+ * D18: which WINDOW has a Pi terminal on each chat's JSONL.
+ *
+ * `sessionGuard` above cannot answer this. It holds one owner key for the whole
+ * process and transfers it unconditionally, which is correct for the GUI-vs-TUI
+ * question it exists for and blind to the one the DEV-16 point check exposed:
+ * two windows opened the same chat, both spawned `pi --session` on that file,
+ * and each appended its own turn under the same parent entry — one session tree
+ * silently forked in two, with nothing on screen to say so. The PTY controllers
+ * are per-window, so no controller could see the other window's terminal; this
+ * registry is the one place that can.
+ */
+const windowSessionGuard = new PiTuiWindowSessionGuard();
 
 /**
  * session-01: chats a Pi terminal has been handed, and that the GUI has not
@@ -72,6 +87,13 @@ async function createController(windowId: number): Promise<PiTuiPtyController> {
         }
       },
       onState: (event) => {
+        // D18: the one seam every way a terminal can stop passes through —
+        // its own exit, a dispose (which unbooks the entry BEFORE the PTY
+        // reports an exit, so `onExit` above never fires for it) and a
+        // capacity eviction (which never produces an exit event at all). A
+        // claim that outlives its PTY would refuse the chat to every other
+        // window for the rest of the run.
+        if (event.state === 'dead') windowSessionGuard.releaseTerminal(windowId, event.terminalId);
         const window = BrowserWindow.fromId(windowId);
         if (window && !window.isDestroyed()) {
           window.webContents.send(IPC_CHANNELS.PI_TUI_STATE, event);
@@ -167,16 +189,61 @@ export function registerPiTuiHandlers(): void {
       // for the desync failure pix hit with tryAcquire-only.
       const acquired = sessionGuard.transferTo(request.sessionFile);
       if (!acquired.ok) throw new Error(acquired.reason);
+      // D18: the cross-window half, and the only refusal that is a real
+      // test-and-set. It sits AFTER the transfer above deliberately — the
+      // transfer is this window's own bookkeeping and stays unconditional
+      // (see `PiTuiExclusiveGuard.transferTo`), while the claim is what
+      // stops a second `pi --session` on a file another window is already
+      // driving.
+      const claimed = windowSessionGuard.claim(
+        request.sessionFile,
+        controller.windowId,
+        request.terminalId
+      );
+      if (!claimed.ok) throw new Error(claimed.reason);
       // Marked on the way in, not on the way out: however this terminal ends —
       // disposed, crashed, or quit from inside pi — the GUI has to re-read the
       // file before it writes it again.
       tuiWrittenSessions.add(normalizeSessionKey(request.sessionFile));
     }
-    return controller.open(request);
+    try {
+      return await controller.open(request);
+    } catch (error) {
+      // A spawn that never happened must not leave the chat claimed: the next
+      // attempt, in this window or another, would be refused for a terminal
+      // that does not exist.
+      //
+      // Scoped to the chat this open asked for, never `releaseTerminal`: that
+      // one means "this PTY died" and drops every chat the terminal id holds.
+      // A warm terminal refused a SECOND chat (terminal-03) would then have had
+      // its FIRST chat un-claimed with its pi still running on it — and the
+      // next window asking for that chat would have been let straight in, which
+      // is the D18 fork this guard exists to stop.
+      if (request.sessionFile) {
+        windowSessionGuard.releaseClaim(
+          request.sessionFile,
+          controller.windowId,
+          request.terminalId
+        );
+      }
+      throw error;
+    }
   });
-  ipcMain.handle(IPC_CHANNELS.PI_TUI_SESSION_SUPPORT, async (_event, sessionFile: string | null) =>
-    inspectPiTuiSessionSupport(sessionFile)
-  );
+  ipcMain.handle(IPC_CHANNELS.PI_TUI_SESSION_SUPPORT, async (event, sessionFile: string | null) => {
+    const support = await inspectPiTuiSessionSupport(sessionFile);
+    if (!support.supported || !sessionFile) return support;
+    // D18 pre-flight. Advisory, not the guard: the open handler above refuses
+    // for real. This exists so the renderer can say why BEFORE it switches the
+    // whole chat surface to a terminal that is about to fail.
+    let windowId: number;
+    try {
+      windowId = ownerId(event.sender);
+    } catch {
+      return support;
+    }
+    const available = windowSessionGuard.check(sessionFile, windowId);
+    return available.ok ? support : { supported: false, reason: available.reason };
+  });
   ipcMain.handle(IPC_CHANNELS.PI_TUI_WRITE, async (event, terminalId: string, data: string) => {
     const controller = await controllerFor(event.sender);
     assertOwner(event.sender, controller);
@@ -211,6 +278,7 @@ export function registerPiTuiHandlers(): void {
     try {
       await controller.disposeAll();
     } finally {
+      windowSessionGuard.releaseWindow(windowId);
       if (controllers.get(windowId) === controller) controllers.delete(windowId);
     }
   });
@@ -259,6 +327,8 @@ export async function releaseSessionForHostPrompt(sessionFile: string): Promise<
   }
   const written = tuiWrittenSessions.delete(key);
   sessionGuard.release(sessionFile);
+  // D18: every terminal on this file is confirmed gone, so no window holds it.
+  windowSessionGuard.releaseSession(sessionFile);
   return written || killed;
 }
 
@@ -283,6 +353,7 @@ export async function disposeAllPiTuiControllers(): Promise<void> {
   await Promise.allSettled([...controllers.values()].map((controller) => controller.disposeAll()));
   controllers.clear();
   sessionGuard.release();
+  windowSessionGuard.releaseAll();
   disposedWindowIds.clear();
 }
 
@@ -294,11 +365,16 @@ export function disposeAllPiTuiControllersSync(): void {
   for (const controller of controllers.values()) controller.disposeAllSync();
   controllers.clear();
   sessionGuard.release();
+  windowSessionGuard.releaseAll();
 }
 
 export function disposePiTuiWindow(windowId: number): void {
   disposedWindowIds.add(windowId);
   controllerPromises.delete(windowId);
+  // D18: before the early return, because claims are keyed by window rather
+  // than by controller — a window whose controller was already unbooked is
+  // still the recorded owner of every chat its terminals held.
+  windowSessionGuard.releaseWindow(windowId);
   const controller = controllers.get(windowId);
   if (!controller) return;
   controller.disposeAllSync();

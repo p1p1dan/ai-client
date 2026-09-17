@@ -76,6 +76,7 @@ import { createEventRing, type EventRing } from './eventRing';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { consumeForkDraftCarry } from './forkDraftCarry';
 import { encodePiResumeError } from './historyError';
+import { ModelMissingNotice } from './ModelMissingNotice';
 import { type QueuedMessage, selectSessionQueue } from './messageQueue';
 import {
   COMPOSER_BAR_LEADING,
@@ -100,11 +101,13 @@ import { resolveResumeModel } from './models';
 import { QueuedMessageStrip } from './QueuedMessageStrip';
 import {
   decideAdmittedTimeoutOutcome,
+  decideDeclinedRestore,
   decideFailureAffordance,
   decideRunEntryOutcome,
   decideSendAction,
   deriveActionButtons,
   deriveQueueStripModel,
+  type FailureAffordanceContext,
   isAdmittedOutcome,
   isRunningStatus,
   type RestoredDraftMarker,
@@ -669,10 +672,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // which time the user may have started typing something else that must never
   // be clobbered.
   const restoreDraftIfComposerEmpty = useCallback(
-    (sessionId: string, payload: { text: string; drafts: readonly AttachmentDraft[] }) => {
+    (sessionId: string, payload: { text: string; drafts: readonly AttachmentDraft[] }): boolean => {
       const composerIsEmpty =
         valueRef.current.trim().length === 0 && attachments.getLiveDraftCount() === 0;
-      if (!composerIsEmpty) return;
+      // D15 round-2: the caller needs to know a refusal happened. A declined
+      // restore leaves the payload with no home on the create-handshake path,
+      // where nothing else holds it any more (see `decideDeclinedRestore`).
+      if (!composerIsEmpty) return false;
       if (payload.text) updateValue(payload.text);
       if (payload.drafts.length > 0) attachments.addDrafts(payload.drafts);
       // Written AFTER the two writes above, so `valueRevision` is the revision
@@ -684,6 +690,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         valueRevision: valueRevisionRef.current,
         attachmentRevision: attachmentRevisionRef.current,
       };
+      return true;
     },
     [attachments, updateValue]
   );
@@ -769,8 +776,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           // directly under the mapped copy, on the same screen. One line here,
           // because this strip is a status hint and has no room for the full
           // explanation the notice above already gives.
+          // T062 round-2: `MODEL_MISSING_ERROR_VIEW`'s fields are dictionary
+          // keys, so the strip printed the English one verbatim under a
+          // Chinese UI. Same `t()` the timeline's two surfaces already use.
           isModelMissingError(lastError)
-          ? MODEL_MISSING_ERROR_VIEW.hint
+          ? t(MODEL_MISSING_ERROR_VIEW.hint)
           : lastError
             ? `Error: ${lastError}`
             : sending
@@ -1417,18 +1427,31 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // same treatment, closing the restore→re-release livelock for every
     // handshake-failure class, not just `session_busy` exhaustion (see
     // `shouldPauseQueueOnRejection`'s header in queueRelease.ts).
-    const finalizeOutcome = (outcome: RunEntryOutcome): RunEntryOutcome => {
+    const finalizeOutcome = (
+      outcome: RunEntryOutcome,
+      // D15: the only extra fact any branch may state about its own death.
+      // Passed through to the single authority below rather than acted on
+      // here, so invariant 2 (one decider) still holds.
+      context: FailureAffordanceContext = {}
+    ): RunEntryOutcome => {
       if (outcome === 'rejected' && pendingAttemptId) {
         usePendingUserMessagesStore.getState().clear(pendingAttemptId);
       }
-      const affordance = decideFailureAffordance(outcome, origin);
+      const affordance = decideFailureAffordance(outcome, origin, context);
       if (affordance === 'resend') {
         setRetryable(committed);
       } else if (affordance === 'restore-draft') {
         // F2 §5.3: the lifted, provenance-writing version (see its definition
         // above) — the same one the confirmed-death listener uses, so both
         // automatic restores are revocable by exactly the same rule.
-        restoreDraftIfComposerEmpty(sessionId, committed);
+        const restored = restoreDraftIfComposerEmpty(sessionId, committed);
+        // D15 round-2: the restore declines whenever the user has typed since
+        // the commit point. Who gets the payload then is still the authority's
+        // call, not this branch's — it answers `'resend'` only for the turn
+        // that was never dispatched, and `'none'` for an admitted one.
+        if (!restored && decideDeclinedRestore(outcome, origin, context) === 'resend') {
+          setRetryable(committed);
+        }
       }
       if (shouldPauseQueueOnRejection(outcome, origin)) {
         useMessageQueueStore.getState().pauseSession(sessionId, 'send-rejected');
@@ -1730,17 +1753,32 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // swallowed, hangs to timeout" bug this fix closes. The stash path
       // (see the listener above) naturally takes over this window.
       setCurrentRequestId(null);
-      const createResult = await window.electronAPI.chat.createSession({
-        sessionId,
-        workspacePath,
-        // B11: `Automatic` omits the key entirely rather than sending an
-        // `undefined` value — `model: undefined` still serialises as a present
-        // key on some paths, and "no model" has to be indistinguishable from
-        // "field not supported" for the runtime default to apply.
-        ...(model ? { model } : {}),
-        ...(effort ? { effort } : {}),
-        ...(spawnPermissions ? { permissions: spawnPermissions } : {}),
-      });
+      // D15: the dispatch rejection is caught HERE, like the resume branch
+      // below catches its own, instead of being left to the outer `catch`. A
+      // rejected `chat:createSession` (a bootstrap timeout, in the field run)
+      // means the session was never opened and the turn was never dispatched —
+      // a fact only this call site can state, and one the outer catch cannot
+      // tell apart from an `ensureHost()` failure. The error text still reaches
+      // the same error card it always did.
+      let createResult: Awaited<ReturnType<typeof window.electronAPI.chat.createSession>>;
+      try {
+        createResult = await window.electronAPI.chat.createSession({
+          sessionId,
+          workspacePath,
+          // B11: `Automatic` omits the key entirely rather than sending an
+          // `undefined` value — `model: undefined` still serialises as a present
+          // key on some paths, and "no model" has to be indistinguishable from
+          // "field not supported" for the runtime default to apply.
+          ...(model ? { model } : {}),
+          ...(effort ? { effort } : {}),
+          ...(spawnPermissions ? { permissions: spawnPermissions } : {}),
+        });
+      } catch (error) {
+        useChatSessionsStore.setState({
+          lastError: error instanceof Error ? error.message : String(error),
+        });
+        return 'fatal';
+      }
       setCurrentRequestId(createResult?.requestId ?? null);
 
       const created = await waitUntil(
@@ -1936,14 +1974,18 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           // honestly instead of hardcoding 'committed'.
           unbindHost();
           return finalizeOutcome(
-            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho }),
+            // D15: no session, no dispatch, nothing in the timeline — so the
+            // payload goes back to the composer where the user can see it.
+            { sessionNeverCreated: true }
           );
         }
         if (seq === 'timeout') {
           unbindHost();
           setCreateTimeoutError();
           return finalizeOutcome(
-            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho }),
+            { sessionNeverCreated: true }
           );
         }
       } else if (preamble.action === 'resume') {
@@ -2594,7 +2636,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     attachments.reading > 0
       ? `Reading ${attachments.reading} file${attachments.reading > 1 ? 's' : ''}…`
       : null;
-  const largeHint = largeAttachmentHint(attachments.drafts);
+  const largeHint = largeAttachmentHint(attachments.drafts, undefined, t);
   // F5(a) (round-4 Codex NEEDS-FIX #4): `resolveIdleStatusText` replaces the
   // old inline `(!hasStatusError && largeHint) || statusHint` for the
   // non-sending, non-reading case — that selection still fell through to
@@ -3062,11 +3104,21 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       {/* T12-e′ moves the no-repository welcome surface to ChatWorkspace and
             does not mount this component at all in that state. Real failures
             still belong immediately above the composer. */}
-      {emptySurface === 'error-notice' && (
-        <div className="mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 font-mono text-code text-destructive whitespace-pre-wrap break-all">
-          {statusHint}
-        </div>
-      )}
+      {/* T062 round-2 (2026-09-17 re-verification): a send that fails because
+          this chat's model is gone reaches NO H/21 surface — the timeline card
+          needs a `'failed'` status the runtime overwrites with `'idle'` one
+          event later, and the bubble swap needs an error MESSAGE that a
+          `session.failed` event never writes. `lastError` is the one durable
+          signal on that path, and it is what lights this box, so the recovery
+          card goes here. Raw diagnostic kept inside it. */}
+      {emptySurface === 'error-notice' &&
+        (isModelMissingError(lastError) ? (
+          <ModelMissingNotice error={lastError} className="mb-2" />
+        ) : (
+          <div className="mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 font-mono text-code text-destructive whitespace-pre-wrap break-all">
+            {statusHint}
+          </div>
+        ))}
       {/* T-28 §3.6: one ComposerTargetBar instance, rendered at one of two
             positions by mode — never both at once. Empty mode keeps the bar
             above the card; session mode docks it below.

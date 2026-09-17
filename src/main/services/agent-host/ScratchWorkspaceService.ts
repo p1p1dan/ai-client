@@ -50,7 +50,8 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
 import { canonicalPathKey } from '@shared/utils/path';
-import { readSettings } from '../../ipc/settings';
+import { redactStderrLine, sanitizeStderrLine } from '../../../agent-host/stderrRedaction';
+import { readStringSetting, TEMPORARY_PATH_SETTING_KEY } from '../../ipc/settings';
 import { isInsideDirectory, resolveWorkspacePath } from './workspaceContainment';
 
 /**
@@ -63,13 +64,23 @@ import { isInsideDirectory, resolveWorkspacePath } from './workspaceContainment'
  */
 export const SCRATCH_ROOT_DIR = 'unbound-sessions';
 
-/** Settings key the renderer writes for the temp-session base path. */
-const TEMPORARY_PATH_SETTING_KEY = 'defaultTemporaryPath';
+/** An error as one loggable sentence, so the redactor sees all of it. */
+function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  return error.message ? `${error.name}: ${error.message}` : error.name;
+}
 
 export interface ScratchWorkspaceServiceOptions {
   /** Injected in tests; production reads the user's setting. */
   resolveBasePath?: () => string;
   createId?: () => string;
+  /**
+   * Milestone sink (info level). Defaults to the hijacked `console.log`, which
+   * IS electron-log in the main process — T066 (D14): this used to default to
+   * a no-op and production never passed one, so the service's only existing
+   * line (`failed to remove`) could not reach a log file even in principle.
+   * Tests inject their own to assert on it.
+   */
   log?: (...args: unknown[]) => void;
 }
 
@@ -80,8 +91,14 @@ function settingsTemporaryPath(): string {
   // workspaces already used the new one — two directory kinds disagreeing about
   // one setting is exactly what the field pass reported as "实际的临时工作区跟
   // 设置里的不一样".
-  const configured = readSettings()?.[TEMPORARY_PATH_SETTING_KEY];
-  return typeof configured === 'string' ? configured : '';
+  //
+  // D13: reading the same copy was necessary but not sufficient. Both readers
+  // took the key off the settings FILE's top level, where no user-facing
+  // setting has ever lived — it is nested under the renderer's persist wrapper
+  // — so both read `undefined` and both fell back to the default root, which is
+  // why F2-a's promise was not observable on a real machine. The unwrap now
+  // lives in `readStringSetting`, once, for every Main-side reader.
+  return readStringSetting(TEMPORARY_PATH_SETTING_KEY);
 }
 
 /**
@@ -115,7 +132,7 @@ export class ScratchWorkspaceService {
   constructor(options: ScratchWorkspaceServiceOptions = {}) {
     this.resolveBasePath = options.resolveBasePath ?? productionBasePath;
     this.createId = options.createId ?? randomUUID;
-    this.log = options.log ?? (() => undefined);
+    this.log = options.log ?? ((...args: unknown[]) => console.log(...args));
   }
 
   /** Absolute path of the directory that holds every scratch cwd. */
@@ -200,7 +217,14 @@ export class ScratchWorkspaceService {
     });
   }
 
-  /** Drop one session's directory — the "session destroyed" cleanup path. */
+  /**
+   * Drop one session's directory — the "session destroyed" cleanup path.
+   *
+   * T066 (D14): the outcome is logged because the two ways this can end are
+   * indistinguishable from outside — the directory is deleted, or it is kept
+   * because another session still runs in the same one — and neither used to
+   * say anything. The path is redacted (T042) before it is written down.
+   */
   release(sessionId: string): Promise<void> {
     return this.serialize(async () => {
       const target = this.pathsBySession.get(sessionId);
@@ -212,6 +236,11 @@ export class ScratchWorkspaceService {
         )
       ) {
         await this.removeQuietly(target);
+        this.log(`[scratch] Released ${redactStderrLine(target)} for session ${sessionId}`);
+      } else {
+        this.log(
+          `[scratch] Kept ${redactStderrLine(target)} after session ${sessionId}: another session still uses it`
+        );
       }
     });
   }
@@ -241,7 +270,18 @@ export class ScratchWorkspaceService {
     } catch (error) {
       // Cleanup is best-effort by design: a locked file on Windows must not
       // fail an app quit or an archive. The next startup wipe retries it.
-      this.log('[scratch] failed to remove', target, error);
+      //
+      // T066: `console.warn`, not the milestone sink — a directory that could
+      // not be removed is an anomaly, and warn is the level that survives with
+      // the logging switch off (main/utils/logger.ts). Redacted (T042).
+      //
+      // 回炉: one argument, not two. An `rm` failure reads `EACCES: permission
+      // denied, rmdir '/home/<name>/…'`, and electron-log serializes every
+      // argument it is given — so passing `error` alongside a redacted path
+      // put the unredacted path on disk anyway.
+      console.warn(
+        `[scratch] Failed to remove ${redactStderrLine(target)}: ${sanitizeStderrLine(describeError(error))}`
+      );
     }
   }
 

@@ -1056,7 +1056,10 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('inFlight: inFlightSession');
     expectCalled('outputSinceRetry: turnProgressStamp > progressStampAtRetry');
     // …the pending head's are literals, because its existence is the proof.
-    expectCalled('deriveRetryBanner({ retry, inFlight: true, outputSinceRetry: false })');
+    // T067: `, t` is part of the token on purpose — the banner's copy comes
+    // from the catalog now, and a pending head that forgot the translator
+    // would print English under a Chinese composer again.
+    expectCalled('deriveRetryBanner({ retry, inFlight: true, outputSinceRetry: false }, t)');
     // F1 (Codex review, two rounds): the disproof is "new output SINCE this
     // retry", never "the turn ever had output" — and the stamp counts
     // CHARACTERS, not just blocks, because recovery may append into an

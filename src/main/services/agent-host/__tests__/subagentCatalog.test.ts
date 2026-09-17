@@ -466,3 +466,172 @@ describe('concurrency-06 · a save never shows a rescanning worker half a docume
     expect((await readdir(join(root, 'agent', 'subagents'))).sort()).toEqual(['researcher.md']);
   });
 });
+
+/**
+ * D12 (T063) — the compatibility root is a place definitions LIVE, not a place
+ * they are copied out of.
+ *
+ * The defect the DEV-3 point-check caught on the dev box: a definition in
+ * `~/.agents/subagents`, edited in the settings page and then deleted, came
+ * back holding its pre-edit contents. The edit had written a copy into
+ * `<agentDir>/subagents` and the delete took the copy, leaving the original to
+ * resurface through the same merge rule that had hidden it.
+ *
+ * The temp home makes both roots real directories here, so these assertions are
+ * about files rather than about a mocked precedence.
+ */
+const COMPAT_ROOT = ['home', '.agents', 'subagents'];
+
+async function writeCompatDefinition(name: string, body: string): Promise<void> {
+  const directory = join(root, ...COMPAT_ROOT);
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, `${name}.md`), body, 'utf8');
+}
+
+function documentSaying(description: string): string {
+  return ['---', `description: ${description}`, 'tools: [Read]', '---', '', 'Look.'].join('\n');
+}
+
+describe('D12 · a definition is edited where it lives, and one delete is one delete', () => {
+  let compat: string;
+  let owned: string;
+
+  beforeEach(() => {
+    compat = join(root, ...COMPAT_ROOT);
+    owned = join(root, 'agent', 'subagents');
+  });
+
+  it('edits the compatibility root in place instead of copying it', async () => {
+    await writeCompatDefinition('probe-compat', documentSaying('ORIGINAL'));
+    const listed = (await service.read()).rows.find((entry) => entry.name === 'probe-compat');
+    expect(listed?.filePath).toBe(join(compat, 'probe-compat.md'));
+
+    await service.save({
+      name: 'probe-compat',
+      previousName: 'probe-compat',
+      description: 'EDITED',
+      tools: listed?.tools ?? ['Read'],
+      prompt: listed?.prompt ?? 'Look.',
+    });
+
+    expect(await readFile(join(compat, 'probe-compat.md'), 'utf8')).toContain('EDITED');
+    // No shadow copy: the agent directory was never this definition's home, so
+    // the save must not have created it.
+    await expect(readdir(owned)).rejects.toThrow();
+    const after = await service.read();
+    expect(after.rows.filter((entry) => entry.name === 'probe-compat')).toHaveLength(1);
+    expect(after.rows.find((entry) => entry.name === 'probe-compat')?.description).toBe('EDITED');
+  });
+
+  it('is gone after ONE delete, and does not come back holding the old contents', async () => {
+    // The DEV-3 sequence exactly: place, edit, delete once, rescan.
+    await writeCompatDefinition('probe-compat', documentSaying('ORIGINAL'));
+    await service.save({
+      name: 'probe-compat',
+      previousName: 'probe-compat',
+      description: 'EDITED',
+      tools: ['Read'],
+      prompt: 'Look.',
+    });
+
+    const afterDelete = await service.remove('probe-compat');
+    expect(afterDelete.rows.find((entry) => entry.name === 'probe-compat')).toBeUndefined();
+    // A rescan, which is what the page does on reopen and what every worker
+    // does at the top of a turn: the row must not be back, with any contents.
+    const reread = await service.read();
+    expect(reread.rows.find((entry) => entry.name === 'probe-compat')).toBeUndefined();
+    expect(reread.broken).toEqual([]);
+    expect(await readdir(compat)).toEqual([]);
+  });
+
+  it('deletes the copy an older build left behind, in the same one delete', async () => {
+    // What a user upgrading into this fix has on disk already: the pre-edit
+    // original below, the edited copy above. Neither is reachable twice, so
+    // deleting the name has to take both or the row returns.
+    await writeDefinition('probe-compat', documentSaying('EDITED'));
+    await writeCompatDefinition('probe-compat', documentSaying('ORIGINAL'));
+
+    await service.remove('probe-compat');
+    const reread = await service.read();
+    expect(reread.rows.find((entry) => entry.name === 'probe-compat')).toBeUndefined();
+    expect(await readdir(compat)).toEqual([]);
+    expect(await readdir(owned)).toEqual([]);
+  });
+
+  it('renames a compatibility-root definition without moving it out of that root', async () => {
+    await writeCompatDefinition('probe-compat', documentSaying('ORIGINAL'));
+    await service.save({
+      name: 'probe-renamed',
+      previousName: 'probe-compat',
+      description: 'ORIGINAL',
+      tools: ['Read'],
+      prompt: 'Look.',
+    });
+
+    expect(await readdir(compat)).toEqual(['probe-renamed.md']);
+    await expect(readdir(owned)).rejects.toThrow();
+  });
+
+  it('writes back to the file it came from even when that file has another stem', async () => {
+    await writeDefinition(
+      'oddly-named-file',
+      ['---', 'name: helper', 'description: d', 'tools: [Read]', '---', '', 'body'].join('\n')
+    );
+    await service.save({
+      name: 'helper',
+      previousName: 'helper',
+      description: 'edited',
+      tools: ['Read'],
+      prompt: 'body',
+    });
+
+    // Writing `<name>.md` beside it would leave two files claiming one name,
+    // one of them invisible — the shape of this whole defect.
+    expect(await readdir(owned)).toEqual(['oddly-named-file.md']);
+    expect(await readFile(join(owned, 'oddly-named-file.md'), 'utf8')).toContain('edited');
+  });
+
+  it('still writes a NEW definition into the agent directory', async () => {
+    await writeCompatDefinition('theirs', documentSaying('someone else'));
+    await service.save({ name: 'fresh', description: 'd', tools: ['Read'], prompt: 'body' });
+
+    expect(await readdir(owned)).toEqual(['fresh.md']);
+    // The compatibility root is not a dumping ground either: nothing new there.
+    expect(await readdir(compat)).toEqual(['theirs.md']);
+  });
+
+  it('still shadows a builtin into the agent directory, never into either original', async () => {
+    await writeCompatDefinition('theirs', documentSaying('someone else'));
+    const builtin = (await service.read()).rows.find((entry) => entry.name === 'explorer');
+    if (!builtin) throw new Error('no explorer');
+
+    await service.save({
+      name: 'explorer',
+      description: builtin.description,
+      tools: builtin.tools,
+      prompt: 'My own instructions.',
+    });
+    expect(await readdir(owned)).toEqual(['explorer.md']);
+    expect(await readdir(compat)).toEqual(['theirs.md']);
+
+    // And the shipped one still comes back when the shadow goes.
+    await service.remove('explorer');
+    expect((await service.read()).rows.find((entry) => entry.name === 'explorer')).toMatchObject({
+      source: 'builtin',
+      prompt: builtin.prompt,
+    });
+  });
+
+  it('deleting one definition leaves a differently named one in the other root', async () => {
+    await writeDefinition('helper', documentSaying('mine'));
+    await writeCompatDefinition('theirs', documentSaying('someone else'));
+
+    await service.remove('helper');
+    expect(await readdir(owned)).toEqual([]);
+    expect(await readdir(compat)).toEqual(['theirs.md']);
+    expect((await service.read()).rows.find((entry) => entry.name === 'theirs')).toMatchObject({
+      source: 'user',
+      description: 'someone else',
+    });
+  });
+});

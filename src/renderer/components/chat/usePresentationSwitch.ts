@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { addToast } from '@/components/ui/toast';
+import { useI18n } from '@/i18n';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useScratchWorkspaceStore } from '@/stores/scratchWorkspace';
 import { useSettingsStore } from '@/stores/settings';
@@ -53,6 +54,7 @@ export interface PresentationSwitch {
 }
 
 export function usePresentationSwitch(): PresentationSwitch {
+  const { t } = useI18n();
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
@@ -135,10 +137,14 @@ export function usePresentationSwitch(): PresentationSwitch {
       .catch(() => ({ supported: true }) as const)
       .then((support) => {
         if (!support.supported) {
+          // D18 / TUI-1: `reason` is a dictionary KEY chosen by Main (which has
+          // no translator), not display text — the same arrangement the error
+          // views in this folder use. `translate` falls back to the key itself,
+          // so an untranslated reason degrades to English rather than to blank.
           addToast({
             type: 'warning',
-            title: 'The Pi TUI cannot open this chat',
-            description: support.reason,
+            title: t('The Pi TUI cannot open this chat'),
+            description: t(support.reason),
           });
           return;
         }
@@ -155,7 +161,7 @@ export function usePresentationSwitch(): PresentationSwitch {
           });
         });
       });
-  }, [activeSessionId, effectiveCwd, ensureScratchWorkspace, setPresentationMode]);
+  }, [activeSessionId, effectiveCwd, ensureScratchWorkspace, setPresentationMode, t]);
 
   /**
    * Leave terminal mode the way pix's `leaveTerminalMode()` does: suspend the
@@ -218,8 +224,8 @@ export function usePresentationSwitch(): PresentationSwitch {
     setPresentationMode('gui');
     addToast({
       type: 'warning',
-      title: 'Pi TUI closed',
-      description: 'Returned to the GUI session.',
+      title: t('Pi TUI closed'),
+      description: t('Returned to the GUI session.'),
     });
     if (!sessionId) return;
     setSurfaceSwitching(true);
@@ -238,7 +244,7 @@ export function usePresentationSwitch(): PresentationSwitch {
       .finally(() => {
         setSurfaceSwitching(false);
       });
-  }, [activeSessionId, forgetTerminal, setPresentationMode]);
+  }, [activeSessionId, forgetTerminal, setPresentationMode, t]);
 
   // terminal-03: every chat's terminal, not just the one on screen. Switching
   // chats no longer ends a terminal — the xterm hook parks the one it leaves

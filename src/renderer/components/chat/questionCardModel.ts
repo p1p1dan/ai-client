@@ -28,11 +28,21 @@ export function deriveQuestionCardState(block: ChatBlock): QuestionCardState {
   return block.questionOutcome === 'answered' ? 'answered' : 'skipped';
 }
 
+/**
+ * T067 (D9/D20 family): the card's fixed copy is CATALOG KEYS, not finished
+ * text. `PERMISSION_WAITING` next door already worked this way, which is how
+ * the permission variant came out fully Chinese while the question variant —
+ * same card, same screen — stayed English through the 2026-09-17 field pass.
+ *
+ * The constants keep their English wording because the key IS the English
+ * string (see `englishTranslate`): every existing assertion on these values
+ * stays true, and the render sites add the `t()` the card was missing.
+ */
 export const QUESTION_TITLE = 'Questions';
 export const ANSWERS_TITLE = 'Answers';
 export const SKIPPED_TITLE = 'Questions skipped';
 
-/** Header copy: Questions / Answers / Questions skipped (A07 :2654/:2679). */
+/** Header copy KEY: Questions / Answers / Questions skipped (A07 :2654/:2679). */
 export function deriveCardTitle(state: QuestionCardState): string {
   if (state === 'answered') return ANSWERS_TITLE;
   if (state === 'skipped') return SKIPPED_TITLE;
@@ -123,21 +133,29 @@ export interface OptionRow {
   decision?: PermissionDecisionId;
 }
 
+/** Catalog key for the trailing free-text row (T067). */
 export const OTHER_LABEL = 'Other…';
 
 export function optionLetter(index: number): string {
   return index < 26 ? String.fromCharCode(65 + index) : String(index + 1);
 }
 
-/** Options in order, plus a trailing Other… row (always present, always lettered — A07 :2609). */
-export function buildOptionRows(item: QuestionItem): OptionRow[] {
+/**
+ * Options in order, plus a trailing Other… row (always present, always
+ * lettered — A07 :2609).
+ *
+ * Only the Other… row is translated: the agent's own option labels are its
+ * words, not ours, and a catalog lookup on them would either miss (harmless)
+ * or collide with an unrelated entry (not harmless).
+ */
+export function buildOptionRows(item: QuestionItem, t: Translate = englishTranslate): OptionRow[] {
   const rows: OptionRow[] = item.options.map((option, index) => ({
     letter: optionLetter(index),
     label: option.label,
     ...(option.description ? { description: option.description } : {}),
     isOther: false,
   }));
-  rows.push({ letter: optionLetter(item.options.length), label: OTHER_LABEL, isOther: true });
+  rows.push({ letter: optionLetter(item.options.length), label: t(OTHER_LABEL), isOther: true });
   return rows;
 }
 
@@ -203,10 +221,17 @@ export function buildSkipPayload(): { cancel: true } {
   return { cancel: true };
 }
 
+/** Footer copy KEYS (T067) — `QuestionCard.tsx` renders them through `t()`. */
 export const SKIP_LABEL = 'Skip';
 export const CONTINUE_LABEL = 'Continue';
 export const CONTINUE_KBD = '⏎';
 export const SKIPPED_MARK = 'Skipped';
+/**
+ * The submit chord, a key rather than a literal so a platform or locale that
+ * words it differently has somewhere to say so. The zh entry is the same text
+ * on purpose: a chord is not a sentence.
+ */
+export const CONTINUE_CHORD = 'Ctrl + Enter';
 
 // ---- Pagination ----
 

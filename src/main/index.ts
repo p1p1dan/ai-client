@@ -522,8 +522,14 @@ app
           return new Response('Bad Request', { status: 400 });
         }
 
-        console.log(`[local-image] Request URL: ${request.url}`);
-        console.log(`[local-image] Parsed Path: ${filePath}`);
+        // T066 回炉: `debug`, not `log`. Two lines per rendered image, each an
+        // unredacted absolute path — harmless while the file transport sat at
+        // `error`, but the threshold is `info` now, so these would write a
+        // user's directory layout to disk on every thumbnail. `debug` is below
+        // the threshold, so they stay available to a developer running with
+        // the switch on and reach no log file otherwise.
+        console.debug(`[local-image] Request URL: ${request.url}`);
+        console.debug(`[local-image] Parsed Path: ${filePath}`);
 
         // Security check: only allow image/video extensions
         const ext = extname(filePath).toLowerCase();

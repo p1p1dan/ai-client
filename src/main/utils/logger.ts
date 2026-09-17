@@ -37,8 +37,42 @@ async function cleanupOldLogs(daysToKeep: number = 30): Promise<void> {
 }
 
 /**
+ * Floors that apply while the user's "diagnostic logging" switch is OFF —
+ * which is the configuration nearly every machine runs (see `init()` in
+ * main/index.ts: the setting defaults to false).
+ *
+ * T066 (D4/D10/D14, 2026-09-17 field pass). Both floors used to be `error`, and
+ * because `initLogger` hijacks `console` into electron-log, that one line
+ * silently deleted EVERY `console.warn` / `console.log` diagnostic the main
+ * process writes — 80 warn call sites and 22 info ones at the time of writing.
+ * The field pass read it as "electron-log swallows anything below error"; the
+ * wiring is fine, the floor was ours. A repaired session index, a legacy-import
+ * batch and an archived temp chat deleting its scratch directory all ran with
+ * literally zero lines on disk, so "it worked" and "it never ran" looked the
+ * same to anyone reading the log afterwards.
+ *
+ * Two different floors on purpose:
+ *
+ * - The FILE is the operator's record, so it keeps `info`: the lifecycle
+ *   milestones (a batch import ran, a scratch directory was released) are the
+ *   half of the story that failure-only logging cannot tell. Cost measured
+ *   before changing it: 22 existing info call sites in the whole main process,
+ *   20 of which fire at most once per app lifecycle, against a 10 MB rotation
+ *   and a 7-day retention.
+ * - The CONSOLE stays at `warn`, so a developer terminal (and the dev.js
+ *   capture) still only shows things that want attention.
+ *
+ * The alternative — leaving the floor at `warn` and logging successful
+ * operations AS warnings to get them past it — was rejected: it buys the same
+ * lines by lying about severity, and a warn channel full of routine success is
+ * a channel nobody reads.
+ */
+export const DISABLED_FILE_LEVEL = 'info' as const;
+export const DISABLED_CONSOLE_LEVEL = 'warn' as const;
+
+/**
  * Initialize logger with configuration
- * @param enabled - Whether logging is enabled (defaults to false, only errors logged)
+ * @param enabled - Whether logging is enabled (defaults to false; see the floors above)
  * @param level - Log level to use when enabled
  * @param retentionDays - Number of days to keep log files (optional, only used on first init)
  */
@@ -82,9 +116,9 @@ export function initLogger(
     log.transports.file.level = level;
     log.transports.console.level = level;
   } else {
-    // When disabled, only log errors
-    log.transports.file.level = 'error';
-    log.transports.console.level = 'error';
+    // Switch off: keep the operator's baseline, not silence. See the floors above.
+    log.transports.file.level = DISABLED_FILE_LEVEL;
+    log.transports.console.level = DISABLED_CONSOLE_LEVEL;
   }
 }
 

@@ -13,6 +13,7 @@
  *
  * §12 verification first: __tests__/attachmentLimits.test.ts.
  */
+import { englishTranslate, type Translate } from '@shared/i18n';
 import type { AttachmentKind } from './attachments';
 import { formatAttachmentSize } from './attachments';
 
@@ -69,26 +70,41 @@ export interface AdmitCandidate {
 export function admitAttachment(
   existing: ReadonlyArray<{ byteLength: number }>,
   next: AdmitCandidate,
-  limits: AttachmentLimits = DEFAULT_ATTACHMENT_LIMITS
+  limits: AttachmentLimits = DEFAULT_ATTACHMENT_LIMITS,
+  t: Translate = englishTranslate
 ): AdmitResult {
-  const label = next.name || 'Pasted item';
+  const label = next.name || t('Pasted item');
   if (next.byteLength <= 0) {
-    return { ok: false, reason: 'empty', message: `"${label}" is empty — skipped.` };
+    return {
+      ok: false,
+      reason: 'empty',
+      message: t('"{{name}}" is empty — skipped.', { name: label }),
+    };
   }
   if (existing.length >= limits.maxCount) {
     return {
       ok: false,
       reason: 'too-many',
-      message: `Up to ${limits.maxCount} attachments per message — "${label}" skipped.`,
+      message: t('Up to {{max}} attachments per message — "{{name}}" skipped.', {
+        max: limits.maxCount,
+        name: label,
+      }),
     };
   }
   const singleMax = next.kind === 'image' ? limits.maxImageBytes : limits.maxTextBytes;
   if (next.byteLength > singleMax) {
-    const what = next.kind === 'image' ? 'image' : 'text file';
+    // The noun is its own key: 「每张图片」 and 「每个文本文件」 are not one
+    // sentence with a slot in Chinese any more than they are in English.
+    const what = next.kind === 'image' ? t('image') : t('text file');
     return {
       ok: false,
       reason: 'too-large',
-      message: `"${label}" is ${formatAttachmentSize(next.byteLength)} — max ${formatAttachmentSize(singleMax)} per ${what}.`,
+      message: t('"{{name}}" is {{size}} — max {{max}} per {{what}}.', {
+        name: label,
+        size: formatAttachmentSize(next.byteLength),
+        max: formatAttachmentSize(singleMax),
+        what,
+      }),
     };
   }
   let total = next.byteLength;
@@ -97,7 +113,10 @@ export function admitAttachment(
     return {
       ok: false,
       reason: 'total-exceeded',
-      message: `Attachments would total ${formatAttachmentSize(total)} — max ${formatAttachmentSize(limits.maxTotalBytes)} per message. Remove one first.`,
+      message: t('Attachments would total {{size}} — max {{max}} per message. Remove one first.', {
+        size: formatAttachmentSize(total),
+        max: formatAttachmentSize(limits.maxTotalBytes),
+      }),
     };
   }
   return { ok: true };
@@ -116,21 +135,27 @@ export type ImagePlan =
  * environment, and buys nothing for correctness — the server already
  * downsamples anything past its own tier limit.
  */
-export function planImageAttachment(input: {
-  name: string;
-  mediaType: string;
-  /** Omitted when the bitmap could not be decoded — the pixel check is skipped. */
-  width?: number;
-  height?: number;
-  maxEdgePx?: number;
-}): ImagePlan {
-  const label = input.name || 'Pasted image';
+export function planImageAttachment(
+  input: {
+    name: string;
+    mediaType: string;
+    /** Omitted when the bitmap could not be decoded — the pixel check is skipped. */
+    width?: number;
+    height?: number;
+    maxEdgePx?: number;
+  },
+  t: Translate = englishTranslate
+): ImagePlan {
+  const label = input.name || t('Pasted image');
   const supported = SUPPORTED_IMAGE_MEDIA_TYPES as readonly string[];
   if (!supported.includes(input.mediaType)) {
     return {
       action: 'reject',
       reason: 'unsupported-type',
-      message: `"${label}" is ${input.mediaType || 'an unknown image type'} — only JPEG, PNG, GIF and WebP are supported.`,
+      message: t('"{{name}}" is {{type}} — only JPEG, PNG, GIF and WebP are supported.', {
+        name: label,
+        type: input.mediaType || t('an unknown image type'),
+      }),
     };
   }
   const maxEdge = input.maxEdgePx ?? MAX_IMAGE_EDGE_PX;
@@ -139,7 +164,12 @@ export function planImageAttachment(input: {
     return {
       action: 'reject',
       reason: 'oversized-pixels',
-      message: `"${label}" is ${input.width}x${input.height}px — max ${maxEdge}px on the longer edge.`,
+      message: t('"{{name}}" is {{width}}x{{height}}px — max {{max}}px on the longer edge.', {
+        name: label,
+        width: String(input.width),
+        height: String(input.height),
+        max: maxEdge,
+      }),
     };
   }
   return { action: 'as-is' };
@@ -151,7 +181,8 @@ export function largeAttachmentHint(
   limits: {
     singleBytes: number;
     totalBytes: number;
-  } = { singleBytes: LARGE_SINGLE_HINT_BYTES, totalBytes: LARGE_TOTAL_HINT_BYTES }
+  } = { singleBytes: LARGE_SINGLE_HINT_BYTES, totalBytes: LARGE_TOTAL_HINT_BYTES },
+  t: Translate = englishTranslate
 ): string | null {
   let total = 0;
   let largest = 0;
@@ -160,7 +191,9 @@ export function largeAttachmentHint(
     if (draft.byteLength > largest) largest = draft.byteLength;
   }
   if (largest > limits.singleBytes || total > limits.totalBytes) {
-    return `Attachments total ${formatAttachmentSize(total)} — sending may take longer.`;
+    return t('Attachments total {{size}} — sending may take longer.', {
+      size: formatAttachmentSize(total),
+    });
   }
   return null;
 }

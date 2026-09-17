@@ -1473,11 +1473,16 @@ const ChatTurn = memo(function ChatTurn({
   // opened can still report its retry (the status row below stays absent
   // there by design). `outputSinceRetry` is what makes it disappear the
   // moment the retried call succeeds — see `retryBanner.ts`.
-  const retryBanner = deriveRetryBanner({
-    retry,
-    inFlight: inFlightSession,
-    outputSinceRetry: turnProgressStamp > progressStampAtRetry,
-  });
+  const retryBanner = deriveRetryBanner(
+    {
+      retry,
+      inFlight: inFlightSession,
+      outputSinceRetry: turnProgressStamp > progressStampAtRetry,
+    },
+    // T067 (D21): the banner words itself from the catalog now, so it needs
+    // the same translator the composer line below it already had.
+    t
+  );
 
   // A turn that is running with NEITHER clock (a session left running before
   // this window opened) gets no status row rather than one frozen at "0s" —
@@ -1802,7 +1807,7 @@ function PendingTurnHead({
   );
   // T-33: the pending head's existence is itself the in-flight proof, and no
   // turn exists yet, so the other two gate inputs are literals here.
-  const retryBanner = deriveRetryBanner({ retry, inFlight: true, outputSinceRetry: false });
+  const retryBanner = deriveRetryBanner({ retry, inFlight: true, outputSinceRetry: false }, t);
   if (!status && !retryBanner) return null;
   return (
     <>
@@ -1824,6 +1829,7 @@ function PendingTurnHead({
  * alarm color would claim the opposite.
  */
 function RetryBanner({ view }: { view: RetryBannerView }) {
+  const { t } = useI18n();
   return (
     <div
       className="flex items-start gap-2 rounded-md border border-status-running/30 bg-status-running/10 px-3 py-2 text-meta text-status-running"
@@ -1834,7 +1840,7 @@ function RetryBanner({ view }: { view: RetryBannerView }) {
         <p className="font-medium">{view.title}</p>
         {view.detail && (
           <details className="mt-1 break-words">
-            <summary className="cursor-pointer">Details</summary>
+            <summary className="cursor-pointer">{t('Details')}</summary>
             <p className="mt-1 whitespace-pre-wrap">{view.detail}</p>
           </details>
         )}

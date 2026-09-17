@@ -691,6 +691,94 @@ describe('SessionIndexService', () => {
   });
 
   /**
+   * D15 (2026-09-17 field run, DEV-4) — the row a failed spawn leaves behind.
+   *
+   * The create handler writes the row before the worker exists, so when
+   * bootstrap times out the index keeps a `title: ''` shell that shows up as
+   * "Session xxxxxx" in the sidebar on the next start. `removeUncommittedCreated`
+   * is the take-back, and every guard below is there to make sure the take-back
+   * can never reach a row that means something.
+   */
+  describe('uncommitted create rollback (D15)', () => {
+    it('drops the shell row a failed create wrote, on disk as well as in memory', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: PI_AGENT });
+      await service.recordCreated({ sessionId: 'keep', workspacePath: '/ws/b', agent: PI_AGENT });
+
+      await expect(service.removeUncommittedCreated('s1', '/ws/a')).resolves.toBe(true);
+
+      expect(await service.get('s1')).toBeUndefined();
+      const persisted = JSON.parse(
+        readFileSync(join(userDataDir, 'session-index.json'), 'utf8')
+      ) as SessionIndexEntry[];
+      expect(persisted.map((row) => row.sessionId)).toEqual(['keep']);
+    });
+
+    it('refuses every row that means something: identity, leaf, title, archive, import', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+
+      await service.recordCreated({ sessionId: 'bound', workspacePath: '/ws/a' });
+      await service.bindRuntimeIdentity('bound', '/sessions/bound.jsonl');
+      await expect(service.removeUncommittedCreated('bound', '/ws/a')).resolves.toBe(false);
+
+      await service.recordCreated({ sessionId: 'named', workspacePath: '/ws/a' });
+      await service.rename('named', 'Kept by its title');
+      await expect(service.removeUncommittedCreated('named', '/ws/a')).resolves.toBe(false);
+
+      await service.recordCreated({ sessionId: 'archived', workspacePath: '/ws/a' });
+      await service.setArchived('archived', true);
+      await expect(service.removeUncommittedCreated('archived', '/ws/a')).resolves.toBe(false);
+
+      // A fork row (T040) is a complete, independently created session — it is
+      // never this handler's to take back.
+      await service.createForked({
+        sessionId: 'forked',
+        workspacePath: '/ws/a',
+        runtimeIdentity: '/sessions/forked.jsonl',
+        agent: PI_AGENT,
+        title: 'Source (fork)',
+        updatedAt: 1,
+        archived: false,
+      });
+      await expect(service.removeUncommittedCreated('forked', '/ws/a')).resolves.toBe(false);
+
+      expect((await service.list()).map((row) => row.sessionId).sort()).toEqual([
+        'archived',
+        'bound',
+        'forked',
+        'named',
+      ]);
+    });
+
+    it('refuses an unknown session and a row whose workspace has moved', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
+
+      await expect(service.removeUncommittedCreated('nobody', '/ws/a')).resolves.toBe(false);
+      await expect(service.removeUncommittedCreated('s1', '/ws/elsewhere')).resolves.toBe(false);
+      expect(await service.get('s1')).toBeDefined();
+    });
+
+    it('restores the row in memory when the flush fails (T038 rollback)', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      let writes = 0;
+      const service = new SessionIndexService({
+        writeAtomically: async () => {
+          writes += 1;
+          if (writes > 1) throw new Error('disk full');
+        },
+      });
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
+
+      await expect(service.removeUncommittedCreated('s1', '/ws/a')).rejects.toThrow('disk full');
+      expect(await service.get('s1')).toMatchObject({ sessionId: 's1', workspacePath: '/ws/a' });
+    });
+  });
+
+  /**
    * T038 — the index's read/write safety net.
    *
    * Every one of these is about the same structural fact: `flush()` rewrites
@@ -900,6 +988,57 @@ describe('SessionIndexService', () => {
         'live-old',
         'newest',
       ]);
+    });
+
+    /**
+     * T066 (D4) — the repair announces itself, and the announcement lands.
+     *
+     * T038 promised this line ("在日志与界面上说明"); the 2026-09-17 field pass
+     * repaired a real index and found nothing in main.log, the daily log or the
+     * dev-server output. The call was never the problem — `console.warn` IS
+     * electron-log here — the file transport floor was, and it is pinned in
+     * `main/utils/__tests__/logger.test.ts`. What is pinned here is that the
+     * line exists at all, and that it does not carry a username.
+     */
+    it('T066: warns once about a repaired index, with the backup path redacted', async () => {
+      const outer = userDataDir;
+      const homeLike = join(outer, 'home', 'tester');
+      mkdirSync(homeLike, { recursive: true });
+      userDataDir = homeLike;
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      try {
+        writeFileSync(join(homeLike, 'session-index.json'), '[{"sessionId":"s1","work', 'utf8');
+        const { SessionIndexService } = await import('../SessionIndexService');
+        const service = new SessionIndexService();
+
+        await expect(service.list()).resolves.toEqual([]);
+        expect(service.getHealth().status).toBe('repaired');
+
+        const lines = warn.mock.calls.map((call) => String(call[0]));
+        const repair = lines.filter((line) => line.includes('Session index was damaged'));
+        expect(repair).toHaveLength(1);
+        expect(repair[0]).toContain('.corrupt-');
+        expect(repair[0]).not.toContain('/home/tester');
+      } finally {
+        warn.mockRestore();
+        userDataDir = outer;
+      }
+    });
+
+    it('T066: says nothing when the index loads cleanly', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        writeFileSync(indexPath(), '[]', 'utf8');
+        const { SessionIndexService } = await import('../SessionIndexService');
+        const service = new SessionIndexService();
+
+        await expect(service.list()).resolves.toEqual([]);
+
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it('session-index-11: an fsynced atomic write still leaves a bare array and no temp files', async () => {

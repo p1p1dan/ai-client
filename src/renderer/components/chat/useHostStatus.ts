@@ -10,10 +10,10 @@ import {
 
 /**
  * Subscribe to Host Runtime Events + poll `getHostStatus` for a display-ready
- * snapshot (T-09). Host crash / Node 24 missing flip state to `error`.
+ * snapshot (T-09). A Host crash flips state to `error`.
  *
- * `retry` re-runs `ensureHost` so a user can recover after a Node 24 path fix
- * or after the Host process was killed (acceptance: "kill Host → reconnect").
+ * `retry` re-runs `ensureHost` so a user can recover after the Host process
+ * was killed (acceptance: "kill Host → reconnect").
  *
  * Renderer-only; does not touch the red-line store.
  */
@@ -102,7 +102,7 @@ export function useHostStatus(): HostStatusSnapshot {
       const snapshot = await window.electronAPI.chat.ensureHost();
       setStatus((prev) => primeHostStatus(prev, snapshot));
     } catch {
-      // ensureHost rejection (e.g. Node 24 missing) is surfaced via state=error
+      // An ensureHost rejection is surfaced via state=error
       // through getHostStatus polling; nothing more to do here.
     }
   };

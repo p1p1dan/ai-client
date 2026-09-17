@@ -48,6 +48,34 @@ describe('legacy import IPC', () => {
     expect(importBatch).toHaveBeenCalledWith(request.sources);
   });
 
+  /**
+   * T067 回炉 — the renderer's Chinese sentence is built from `errorCode` and
+   * `errorParams`, and this hop is the only thing between the service and it.
+   * The handler returns the batch verbatim today; a response validator added
+   * later would drop unknown fields silently, and the symptom would be D9 back
+   * (an English byte count) with every other case still green.
+   */
+  it('returns a coded failure with its code and ceiling intact', async () => {
+    const failed = {
+      results: [
+        {
+          source: { sourceKind: 'claude-code', projectId: 'p', sourceSessionId: 's' },
+          status: 'failed',
+          error: 'This conversation is 70000000 bytes; the import limit is 67108864.',
+          errorCode: 'source-byte-limit',
+          errorParams: { limit: 67_108_864 },
+        },
+      ],
+    };
+    importBatch.mockResolvedValueOnce(failed as never);
+
+    await expect(
+      invokeBatch({
+        sources: [{ sourceKind: 'claude-code', projectId: 'p', sourceSessionId: 's' }],
+      })
+    ).resolves.toEqual(failed);
+  });
+
   it('rejects project traversal before scanning the filesystem', async () => {
     for (const projectId of ['..', '../tmp', 'p/escape', 'p\\escape', '']) {
       await expect(invokeListSessions(projectId)).rejects.toThrow(

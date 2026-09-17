@@ -1,10 +1,13 @@
+import { zhTranslations } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import {
   buildPiTuiArgs,
   inspectPiTuiSessionSupport,
   normalizeSessionKey,
   PI_TUI_NATIVE_SESSION_REASON,
+  PI_TUI_SESSION_BUSY_REASON,
   PiTuiExclusiveGuard,
+  PiTuiWindowSessionGuard,
 } from '../piTuiSession';
 
 const CLI = '/app/pi/cli.js';
@@ -115,6 +118,162 @@ describe('PiTuiExclusiveGuard', () => {
     guard.transferTo('/repo/mine.jsonl');
     guard.release('/repo/someone-else.jsonl');
     expect(guard.owns('/repo/mine.jsonl')).toBe(true);
+  });
+});
+
+/**
+ * D18 (real-machine point check DEV-16) — two windows both opened the same chat
+ * in a terminal. Both `pi --session` processes read the tree once at open and
+ * then hung their own turn off the same parent entry, so one JSONL ended up
+ * with two parallel branches; the UI said nothing at any point.
+ */
+describe('PiTuiWindowSessionGuard', () => {
+  const CHAT = '/chats/a.jsonl';
+  const OTHER = '/chats/b.jsonl';
+
+  it('refuses a second window asking for a chat the first one has open', () => {
+    const guard = new PiTuiWindowSessionGuard();
+    expect(guard.claim(CHAT, 1, 'terminal-1')).toEqual({ ok: true });
+
+    expect(guard.claim(CHAT, 2, 'terminal-2')).toEqual({
+      ok: false,
+      reason: PI_TUI_SESSION_BUSY_REASON,
+    });
+    expect(guard.ownerWindowId(CHAT)).toBe(1);
+  });
+
+  it('leaves the same window and other chats alone', () => {
+    // Reverse check: the refusal has to be narrow, or it takes away chat
+    // switching inside one window (every chat has its own terminal id) and the
+    // second window's OTHER chats with it.
+    const guard = new PiTuiWindowSessionGuard();
+    guard.claim(CHAT, 1, 'terminal-1');
+
+    expect(guard.claim(CHAT, 1, 'terminal-1')).toEqual({ ok: true });
+    expect(guard.claim(CHAT, 1, 'terminal-1b')).toEqual({ ok: true });
+    expect(guard.claim(OTHER, 2, 'terminal-2')).toEqual({ ok: true });
+  });
+
+  it('claims nothing for a terminal with no chat behind it', () => {
+    // A TUI opened from a repo starts its own conversation; there is no
+    // existing JSONL for it to contest.
+    const guard = new PiTuiWindowSessionGuard();
+    expect(guard.claim('', 1, 'terminal-1')).toEqual({ ok: true });
+    expect(guard.claim('', 2, 'terminal-2')).toEqual({ ok: true });
+    expect(guard.ownerWindowId('')).toBeNull();
+  });
+
+  it('matches through path drift, so /private/var cannot slip a second pi past it', () => {
+    const guard = new PiTuiWindowSessionGuard();
+    guard.claim('/private/var/chats/a.jsonl', 1, 'terminal-1');
+
+    expect(guard.claim('/VAR/CHATS/A.JSONL', 2, 'terminal-2').ok).toBe(false);
+  });
+
+  it('frees the chat again once that terminal is gone', () => {
+    const guard = new PiTuiWindowSessionGuard();
+    guard.claim(CHAT, 1, 'terminal-1');
+    guard.releaseTerminal(1, 'terminal-1');
+
+    expect(guard.claim(CHAT, 2, 'terminal-2')).toEqual({ ok: true });
+    expect(guard.ownerWindowId(CHAT)).toBe(2);
+  });
+
+  it('keeps the claim while the window still has another terminal on that chat', () => {
+    const guard = new PiTuiWindowSessionGuard();
+    guard.claim(CHAT, 1, 'terminal-1');
+    guard.claim(CHAT, 1, 'terminal-1b');
+    guard.releaseTerminal(1, 'terminal-1');
+
+    expect(guard.claim(CHAT, 2, 'terminal-2').ok).toBe(false);
+  });
+
+  /**
+   * T065 回炉 — the rollback path, and the reason it needs its own release.
+   *
+   * The first landing rolled a failed claim back with `releaseTerminal`, which
+   * means "this PTY is gone" and walks every chat the window holds. A warm
+   * terminal refused a second chat (terminal-03) therefore lost the claim on the
+   * chat its pi was STILL RUNNING on, and the next window asking for that chat
+   * would have been waved through — D18 again, from inside the fix for it.
+   */
+  it('takes back only the chat whose open failed, not the one the same terminal is serving', () => {
+    const guard = new PiTuiWindowSessionGuard();
+    guard.claim(CHAT, 1, 'terminal-1');
+    // The same terminal id is asked for a second chat; the controller refuses
+    // and the handler rolls that one claim back.
+    guard.claim(OTHER, 1, 'terminal-1');
+    guard.releaseClaim(OTHER, 1, 'terminal-1');
+
+    expect(guard.ownerWindowId(OTHER)).toBeNull();
+    // The live one survives — this is the assertion the defect fails.
+    expect(guard.ownerWindowId(CHAT)).toBe(1);
+    expect(guard.claim(CHAT, 2, 'terminal-2').ok).toBe(false);
+  });
+
+  it('is a release, not a lock: the rolled-back chat opens again, in either window', () => {
+    // Reverse check. Undoing the claim has to leave the chat genuinely free,
+    // or a spawn that never happened would lock it out for the rest of the run.
+    const guard = new PiTuiWindowSessionGuard();
+    guard.claim(CHAT, 1, 'terminal-1');
+    guard.releaseClaim(`/private${CHAT}`, 1, 'terminal-1');
+
+    expect(guard.claim(CHAT, 2, 'terminal-2')).toEqual({ ok: true });
+  });
+
+  it('ignores a rollback from a window that does not hold the chat', () => {
+    const guard = new PiTuiWindowSessionGuard();
+    guard.claim(CHAT, 1, 'terminal-1');
+
+    guard.releaseClaim(CHAT, 2, 'terminal-1');
+    guard.releaseClaim('', 1, 'terminal-1');
+    guard.releaseClaim(OTHER, 1, 'terminal-1');
+
+    expect(guard.ownerWindowId(CHAT)).toBe(1);
+  });
+
+  it("ignores a release naming another window, so one window cannot free another's chat", () => {
+    const guard = new PiTuiWindowSessionGuard();
+    guard.claim(CHAT, 1, 'terminal-1');
+    guard.releaseTerminal(2, 'terminal-1');
+
+    expect(guard.claim(CHAT, 2, 'terminal-2').ok).toBe(false);
+  });
+
+  it('frees everything a closing window held, and everything on a reclaimed chat', () => {
+    const guard = new PiTuiWindowSessionGuard();
+    guard.claim(CHAT, 1, 'terminal-1');
+    guard.claim(OTHER, 1, 'terminal-2');
+    guard.releaseWindow(1);
+    expect(guard.ownerWindowId(CHAT)).toBeNull();
+    expect(guard.ownerWindowId(OTHER)).toBeNull();
+
+    guard.claim(CHAT, 3, 'terminal-3');
+    guard.releaseSession(`/private${CHAT}`);
+    expect(guard.ownerWindowId(CHAT)).toBeNull();
+  });
+
+  /**
+   * The i18n coverage scan (`src/shared/__tests__/i18nCoverage.test.ts`) only
+   * sees `t('literal')` call sites under `src/renderer`. These two sentences
+   * are chosen HERE and travel across IPC as a `reason`, so the renderer calls
+   * `t(support.reason)` on a variable and the scan cannot see them at all —
+   * this is the guard that keeps them out of an otherwise Chinese UI.
+   */
+  it('ships a Chinese entry for every reason this module sends to the renderer', () => {
+    expect(zhTranslations[PI_TUI_SESSION_BUSY_REASON]).toBeTruthy();
+    expect(zhTranslations[PI_TUI_NATIVE_SESSION_REASON]).toBeTruthy();
+  });
+
+  it('answers the pre-flight without taking the chat', () => {
+    const guard = new PiTuiWindowSessionGuard();
+    expect(guard.check(CHAT, 1)).toEqual({ ok: true });
+    // Asking did not claim it, so the window that actually opens still wins.
+    expect(guard.ownerWindowId(CHAT)).toBeNull();
+
+    guard.claim(CHAT, 1, 'terminal-1');
+    expect(guard.check(CHAT, 1)).toEqual({ ok: true });
+    expect(guard.check(CHAT, 2)).toEqual({ ok: false, reason: PI_TUI_SESSION_BUSY_REASON });
   });
 });
 

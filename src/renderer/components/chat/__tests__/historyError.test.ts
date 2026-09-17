@@ -1016,6 +1016,10 @@ describe('isModelMissingError (H/21 P0)', () => {
     'WORKER_MODEL_NOT_FOUND: Pi model not found: a/b',
     'WORKER_REQUEST_FAILED: Pi model not found: a/b',
     "Error invoking remote method 'chat:resume': Error: Pi model not found: a/b",
+    // T062 / D19 — the one a user actually reaches by sending into a chat
+    // whose recorded model is gone. Verbatim from the 2026-09-17 point-check,
+    // with the code the runtime now pastes on the front.
+    'model_not_in_catalog: no model "vllmproxy-old/claude-does-not-exist" in the catalog (1 available)',
   ])('recognises %s', (text) => {
     expect(isModelMissingError(text)).toBe(true);
   });
@@ -1028,6 +1032,13 @@ describe('isModelMissingError (H/21 P0)', () => {
     // Adjacent but different: the stored reference is malformed, which no
     // migration fixes. Must not be swept into the migration copy.
     'WORKER_REQUEST_FAILED: Invalid Pi model reference: grok. Expected provider/model',
+    // T062 / D19 — the code is the signal, NOT the sentence. Without the code
+    // this is the same failure the renderer used to be unable to name, and
+    // matching the English would make the card fire on any reworded copy.
+    'no model "vllmproxy-old/claude-does-not-exist" in the catalog (1 available)',
+    // The catalog is empty rather than missing this one model: a different
+    // remedy (add any service at all), so it must not take this card.
+    'catalog_empty: the model catalog is empty, so there is nothing to run against',
   ])('rejects %s', (text) => {
     expect(isModelMissingError(text)).toBe(false);
   });

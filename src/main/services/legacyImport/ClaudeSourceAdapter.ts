@@ -13,6 +13,8 @@ import {
   LEGACY_IMPORT_MAX_TEXT_CHARS,
   LEGACY_IMPORT_SCHEMA_VERSION,
   LEGACY_IMPORTER_VERSION,
+  type LegacyImportErrorCode,
+  type LegacyImportErrorParams,
   type LegacyImportSourceFingerprint,
   type LegacyImportSourceRef,
 } from '@shared/types';
@@ -60,9 +62,23 @@ interface SourceSnapshot extends LegacyImportSourceFingerprint {
 }
 
 export class ClaudeImportSourceError extends Error {
-  constructor(message: string) {
+  /**
+   * T067 (D9): set only for the refusals the renderer can word itself.
+   *
+   * The message stays English and stays authoritative for logs; `failure` is
+   * the machine-readable half, so the panel can say 「这个会话超过了 64 MiB
+   * 的导入上限」 and add the next step instead of echoing a byte count at a
+   * user who cannot act on it.
+   */
+  readonly failure?: { code: LegacyImportErrorCode; params: LegacyImportErrorParams };
+
+  constructor(
+    message: string,
+    failure?: { code: LegacyImportErrorCode; params: LegacyImportErrorParams }
+  ) {
     super(message);
     this.name = 'ClaudeImportSourceError';
+    if (failure) this.failure = failure;
   }
 }
 
@@ -185,7 +201,8 @@ async function snapshotSource(source: ClaudeSessionSource): Promise<SourceSnapsh
   }
   if (info.size > LEGACY_IMPORT_MAX_SOURCE_BYTES) {
     throw new ClaudeImportSourceError(
-      `Claude session exceeds the ${LEGACY_IMPORT_MAX_SOURCE_BYTES}-byte import limit`
+      `Claude session exceeds the ${LEGACY_IMPORT_MAX_SOURCE_BYTES}-byte import limit`,
+      { code: 'source-byte-limit', params: { limit: LEGACY_IMPORT_MAX_SOURCE_BYTES } }
     );
   }
   const contentHash = await sha256File(source.filePath);
@@ -269,7 +286,8 @@ async function* sourceLines(filePath: string): AsyncIterable<string> {
 function pushBounded(entries: ImportedConversationEntry[], entry: ImportedConversationEntry): void {
   if (entries.length >= LEGACY_IMPORT_MAX_ENTRIES) {
     throw new ClaudeImportSourceError(
-      `Claude session exceeds the ${LEGACY_IMPORT_MAX_ENTRIES}-entry import limit`
+      `Claude session exceeds the ${LEGACY_IMPORT_MAX_ENTRIES}-entry import limit`,
+      { code: 'source-entry-limit', params: { limit: LEGACY_IMPORT_MAX_ENTRIES } }
     );
   }
   entries.push(entry);

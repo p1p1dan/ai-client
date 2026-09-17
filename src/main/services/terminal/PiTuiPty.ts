@@ -14,12 +14,16 @@ import type {
 import type { IPty } from 'node-pty';
 import * as nodePty from 'node-pty';
 import { isCredentialEnvKey } from '../../../../scripts/credential-env-keys.mjs';
+import { redactStderrLine } from '../../../agent-host/stderrRedaction';
 import { killProcessTree } from '../../utils/processUtils';
 import { resolveManagedPiPtyEnv } from '../piModelConfig';
 import { buildPiTuiArgs, normalizeSessionKey } from './piTuiSession';
 
 const MAX_SUSPENDED_REPLAY_CHARS = 65_536;
 const DEFAULT_MAX_LIVE_TERMINALS = 2;
+
+/** D17: `boundedDimension`'s row floor, below which a resize cannot be a change. */
+const REPAINT_MIN_ROWS = 5;
 
 /**
  * terminal-01: how long a disposal waits for the PTY to report that it is gone,
@@ -266,6 +270,12 @@ export class PiTuiPtyController {
         this.#callbacks.onData({ terminalId: request.terminalId, data: current.replayBuffer });
         current.replayBuffer = '';
       }
+      // D17 — a parked pi that produced nothing has an empty replay buffer, and
+      // the renderer rebuilt its xterm with an empty scrollback: the screen
+      // comes back blank while the PTY is alive and still echoing keystrokes.
+      // Nobody owns the repaint at that seam, so half of it is arranged here —
+      // after the replay, so the repaint lands on top of the replayed bytes.
+      this.#primeRepaint(current.pty, request.cols, request.rows);
       return {
         terminalId: request.terminalId,
         generation: current.generation,
@@ -280,13 +290,25 @@ export class PiTuiPtyController {
     const generation = (this.#generations.get(request.terminalId) ?? 0) + 1;
     this.#generations.set(request.terminalId, generation);
     const prompt = request.initialPrompt?.trim();
-    const pty = this.#spawn(launch.nodePath, buildPiTuiArgs(launch.cliPath, request.sessionFile), {
+    const args = buildPiTuiArgs(launch.cliPath, request.sessionFile);
+    const pty = this.#spawn(launch.nodePath, args, {
       name: 'xterm-256color',
       cols: boundedDimension(request.cols, 20, 80),
       rows: boundedDimension(request.rows, 5, 24),
       cwd: request.cwd,
       env: launch.env,
     });
+    // T066: terminal mode starts a second process on the user's session file
+    // and, until now, said nothing anywhere — not the spawn, not the exit, not
+    // the exit code. The argv summary is safe by construction: the environment
+    // is never printed, and the initial prompt is written to stdin below
+    // precisely so it stays out of argv and process listings. Paths are
+    // redacted (T042).
+    console.log(
+      `[pi-tui] Spawned terminal ${request.terminalId} (generation ${generation}): ${redactStderrLine(
+        [launch.nodePath, ...args].join(' ')
+      )} in ${redactStderrLine(request.cwd)}`
+    );
     const live: LiveTerminal = {
       terminalId: request.terminalId,
       cwd: request.cwd,
@@ -315,6 +337,13 @@ export class PiTuiPtyController {
       // terminal before it starts waiting, so a map lookup here would miss
       // exactly the exit a caller is parked on.
       live.exited = true;
+      // T066: one line per exit, carrying the code the field pass could not
+      // find anywhere. A non-zero exit is an anomaly and goes to `warn`, which
+      // is the level that survives with the logging switch off; a clean exit is
+      // a milestone and stays at info.
+      const exitSummary = `[pi-tui] Terminal ${request.terminalId} exited (code=${event.exitCode} signal=${event.signal ?? 'none'})`;
+      if (event.exitCode === 0) console.log(exitSummary);
+      else console.warn(exitSummary);
       for (const waiter of [...live.exitWaiters]) waiter();
       const active = this.#live.get(request.terminalId);
       if (!active || active.pty !== pty || active.generation !== generation) return;
@@ -484,6 +513,49 @@ export class PiTuiPtyController {
       }, timeoutMs);
       live.exitWaiters.add(waiter);
     });
+  }
+
+  /**
+   * D17 — leave the PTY at a size the child does NOT have, so the renderer's
+   * own resize (sent once its new xterm is attached) becomes a real change the
+   * child repaints on.
+   *
+   * The first attempt at this nudged the size off and straight back inside this
+   * one call, and the point check found it changed nothing on the real machine:
+   * the screen was still blank and only 10 bytes came back, while a manual
+   * `piTui.resize(id, 70, 20)` restored it instantly. Both ioctls run in the
+   * same synchronous turn, so the child is scheduled once, after both — and
+   * standard signals do not queue, so what it sees is one SIGWINCH and a
+   * winsize identical to the one it already had. A TTY only raises SIGWINCH
+   * when the size actually CHANGES (Linux `tty_do_resize` compares the old
+   * winsize first), and a child that re-reads the same numbers has nothing to
+   * relayout. Net change zero is indistinguishable from no change at all.
+   *
+   * So the change is left standing instead. The size the child reads here
+   * really is different from the one it was parked at, and it stays different
+   * until the renderer sends the true size back — a separate IPC message, hence
+   * a later turn, with the child scheduled in between. That makes TWO real
+   * transitions the child can observe (parked → primed, primed → true) instead
+   * of zero, and the second one is caused by the renderer having finished
+   * attaching, so the full frame it triggers cannot land in an xterm that is
+   * not listening yet. `useXterm.ts` owns that half.
+   *
+   * One row SHORTER rather than taller: the frame pi paints while primed then
+   * fits inside the new xterm instead of scrolling its top line away. At the
+   * floor (`boundedDimension`'s minimum of 5) subtracting would be clamped back
+   * to the same number — which is exactly the no-op this fix is about — so that
+   * case goes up instead.
+   *
+   * Still `resize` rather than signalling SIGWINCH ourselves: that needs a real
+   * pid in production code (engineering standard appendix B1 keeps signals
+   * behind an injectable seam for exactly this reason) and has no Windows
+   * equivalent, whereas `resize` is node-pty's own cross-platform API.
+   */
+  #primeRepaint(pty: PtyHandle, cols: number | undefined, rows: number | undefined): void {
+    const targetCols = boundedDimension(cols, 20, 80);
+    const targetRows = boundedDimension(rows, 5, 24);
+    const primedRows = targetRows > REPAINT_MIN_ROWS ? targetRows - 1 : targetRows + 1;
+    this.#resizeNow(pty, targetCols, primedRows);
   }
 
   #resizeNow(pty: PtyHandle, cols: number | undefined, rows: number | undefined): void {

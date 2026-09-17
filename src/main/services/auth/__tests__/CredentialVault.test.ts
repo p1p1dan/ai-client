@@ -192,6 +192,34 @@ describe('CredentialVault — clear (1b)', () => {
       rmSync(emptyDir, { recursive: true, force: true });
     }
   });
+
+  /**
+   * T066 rework-2 — `clearInternal()` shares the same `JSON.parse` call as
+   * `markInvalidated()` and logged the raw `SyntaxError` verbatim, which can
+   * quote a fragment of a plaintext (`enc: 'none'`) credential back into the
+   * log file. Same fix, same shape: only the error type and byte count may
+   * be logged.
+   */
+  it('names the parse failure without quoting the damaged file back', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      writeFileSync(
+        join(baseDir, VAULT_FILE),
+        'sk-ant-plaintext-9f3a{"version":2,"enc":"none"}',
+        'utf-8'
+      );
+      const vault = new CredentialVault({ baseDir, crypto: fakeAvailableCrypto() });
+      await vault.clear({ keepLastEmail: true });
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      const logged = warn.mock.calls[0].map((part) => String(part)).join(' ');
+      expect(logged).not.toContain('sk-ant');
+      expect(logged).toContain('SyntaxError');
+      expect(logged).toContain('47 bytes read');
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
 
 describe('CredentialVault — user-added service group (H/17 L1)', () => {
@@ -561,6 +589,35 @@ describe('CredentialVault — markInvalidated / rejected (D47 S5 §1.1)', () => 
       expect(existsSync(join(emptyDir, VAULT_FILE))).toBe(false);
     } finally {
       rmSync(emptyDir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * T066 回炉 — the log threshold dropped to `info`, so this warn now reaches
+   * `logs/aiclient-<date>.log`. `JSON.parse` quotes the first ~10 characters of
+   * a file it cannot read, and a vault written while `safeStorage` was
+   * unavailable holds its payload in the clear (`enc: 'none'`), so a damaged
+   * one can hand that quote a credential.
+   */
+  it('names the parse failure without quoting the damaged file back', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      writeFileSync(
+        join(baseDir, VAULT_FILE),
+        'sk-ant-plaintext-9f3a{"version":2,"enc":"none"}',
+        'utf-8'
+      );
+      const vault = new CredentialVault({ baseDir, crypto: fakeAvailableCrypto() });
+      await vault.markInvalidated('2026-08-15T12:00:00.000Z');
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      // Every argument, not just the first: electron-log serializes them all.
+      const logged = warn.mock.calls[0].map((part) => String(part)).join(' ');
+      expect(logged).not.toContain('sk-ant');
+      expect(logged).toContain('SyntaxError');
+      expect(logged).toContain('47 bytes read');
+    } finally {
+      warn.mockRestore();
     }
   });
 

@@ -2768,7 +2768,49 @@ export class WorkerManager {
       entry.lastIdleAt = this.now();
       void this.syncLeafCheckpoint(entry, message.generation);
     }
+    this.logNotableEvent(entry, event);
     this.dispatch({ ...event, sessionId: event.sessionId ?? entry.logicalSessionId });
+  }
+
+  /**
+   * T066 — the two worker facts an operator has no other way to see.
+   *
+   * A retry and a refused turn both used to exist only inside the worker: the
+   * retry as a `provider_retry` note in a trace file nobody has unless they
+   * exported `AICLIENT_RUNTIME_TRACE_DIR` first, the refusal as a line of the
+   * worker's stderr that main.log only ever received as part of the crash
+   * replay — i.e. after the process died, truncated to the last N lines. The
+   * 2026-09-17 field pass hit four `session_size_limit` refusals and could
+   * find three of them, hours later, in the dump of a killed worker.
+   *
+   * `console.warn` rather than `this.log`: the `log` sink is optional and
+   * production never injects one (see the export at the bottom of this file),
+   * so it is a no-op on every real machine — the same reason
+   * `dumpWorkerStderr` reaches for `console.error`. Both lines are anomalies,
+   * so `warn` is also the level that survives the logging switch being off.
+   *
+   * Redacted (T042) because a provider error body is a place credentials show
+   * up, and clamped by the same rule the stderr exits use.
+   */
+  private logNotableEvent(entry: ManagedSlot, event: RuntimeEvent): void {
+    if (event.type === 'session.status' && event.payload.retry) {
+      const retry = event.payload.retry;
+      console.warn(
+        `[pi-worker:${entry.logicalSessionId}] provider retry ${retry.attempt}/${retry.maxRetries} in ${retry.delayMs}ms (status=${retry.errorStatus ?? 'none'} code=${retry.error})`
+      );
+      return;
+    }
+    if (event.type === 'session.failed') {
+      // T066 回炉: the 2026-09-17 field pass found this line reading `turn
+      // failed: session exceeds the configured size budget` — no code to grep
+      // for. A run that ends in failure carries the code beside the sentence;
+      // one that throws already has it in front of the sentence, hence the
+      // guard against printing it twice.
+      const text = sanitizeStderrLine(event.payload?.error ?? 'no reason reported');
+      const code = event.payload?.errorCode;
+      const reason = code && !text.startsWith(`${code}:`) ? `${code}: ${text}` : text;
+      console.warn(`[pi-worker:${entry.logicalSessionId}] turn failed: ${reason}`);
+    }
   }
 
   /** main-host-03 — the only events a retired entry may still forward. */

@@ -255,14 +255,3 @@ export function primeHostStatus(
       : prev.capabilities,
   };
 }
-
-/**
- * Node 24 resolution failures are emitted by the Main process throwing inside
- * `ensureHost`. The Renderer treats any `state=error` whose message looks like
- * a Node-resolution failure as actionable guidance (set AICLIENT_NODE24_PATH).
- */
-export function isNode24ResolutionFailure(status: HostStatus): boolean {
-  if (status.state !== 'error') return false;
-  const message = status.lastFatalError ?? '';
-  return /node 24|AICLIENT_NODE24_PATH/i.test(message);
-}

@@ -90,6 +90,10 @@ const FONT_MONO_WHITELIST: readonly string[] = [
   'components/chat/HitListPopover.tsx',
   'components/chat/HostStatusBanner.tsx',
   'components/chat/MessageTimeline.tsx',
+  // T062 round-2: the model-missing card keeps the runtime's raw diagnostic
+  // under the mapped copy — same machine-text domain as the timeline's card it
+  // was lifted from, so the same monospace treatment.
+  'components/chat/ModelMissingNotice.tsx',
   'components/chat/TargetBranchSelect.tsx',
   'components/chat/ToolRows.tsx',
   'components/chat/toolCard.ts',

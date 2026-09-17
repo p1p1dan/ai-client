@@ -121,6 +121,22 @@ export class PreviewWindowManager {
     return this.entries.size;
   }
 
+  /**
+   * Is this one of ours?
+   *
+   * T065 — a preview is an ordinary `BrowserWindow`, so `getAllWindows()` counts
+   * it as a place the app "keeps running", which it is not: closing the last app
+   * window disposes every preview and quits. Asked by the close-confirmation
+   * dialog, which would otherwise promise the user a window that is about to
+   * close with the app.
+   */
+  isPreviewWindow(window: BrowserWindow): boolean {
+    for (const entry of this.entries.values()) {
+      if (entry.window === window) return true;
+    }
+    return false;
+  }
+
   private openWindow(): BrowserWindow {
     const options: Electron.BrowserWindowConstructorOptions = {
       width: PREVIEW_DEFAULT_WIDTH,

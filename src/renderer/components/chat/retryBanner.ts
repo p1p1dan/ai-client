@@ -1,3 +1,4 @@
+import { englishTranslate, type Translate } from '@shared/i18n';
 import type { SessionRetryInfo } from '@shared/types/runtimeEvents';
 
 /**
@@ -67,7 +68,10 @@ export interface RetryBannerView {
  * for "render nothing" — no empty box, mirroring `deriveTurnHeadModel`'s
  * `T | null` shape.
  */
-export function deriveRetryBanner(input: RetryBannerInput): RetryBannerView | null {
+export function deriveRetryBanner(
+  input: RetryBannerInput,
+  t: Translate = englishTranslate
+): RetryBannerView | null {
   if (!input.retry || !input.inFlight || input.outputSinceRetry) return null;
 
   const attempt = positiveInt(input.retry.attempt);
@@ -75,12 +79,12 @@ export function deriveRetryBanner(input: RetryBannerInput): RetryBannerView | nu
   // A ceiling without an attempt number is unreportable ("retry ?/10"), so the
   // count segment degrades attempt-first.
   const counts =
-    attempt === null ? '' : maxRetries === null ? ` ${attempt}` : ` ${attempt}/${maxRetries}`;
+    attempt === null ? null : maxRetries === null ? String(attempt) : `${attempt}/${maxRetries}`;
 
   const segments: string[] = [];
   const delayMs = input.retry.delayMs;
   if (typeof delayMs === 'number' && Number.isFinite(delayMs) && delayMs > 0) {
-    segments.push(`Next attempt in ${formatRetryDelay(delayMs)}`);
+    segments.push(t('Next attempt in {{delay}}', { delay: formatRetryDelay(delayMs) }));
   }
   const error =
     typeof input.retry.error === 'string' && input.retry.error !== '' ? input.retry.error : null;
@@ -102,12 +106,31 @@ export function deriveRetryBanner(input: RetryBannerInput): RetryBannerView | nu
     // a "network" problem misdirects the diagnosis. Status present → upstream
     // wording; status null (transport-layer failure, the normalizer's
     // sentinel) → the original network wording.
-    title:
-      errorStatus === null
-        ? `Network retry${counts} — the turn is still running`
-        : `Upstream error ${errorStatus} — retrying${counts}, the turn is still running`,
+    //
+    // T067 (D21): four catalog keys rather than two templates plus `+`. The
+    // count is a PARAMETER ('2' or '2/10'), and its presence or absence picks
+    // the key — Chinese cannot take an English sentence with a hole punched in
+    // the middle of it, and the composer one line below has been saying
+    // 「正在重试 · 1/3」 in Chinese the whole time this banner said it in
+    // English.
+    title: buildTitle(t, errorStatus, counts),
     detail: segments.length > 0 ? segments.join(' · ') : null,
   };
+}
+
+/** The 2x2 of "upstream status or not" x "countable attempt or not". */
+function buildTitle(t: Translate, errorStatus: string | null, counts: string | null): string {
+  if (errorStatus === null) {
+    return counts === null
+      ? t('Network retry — the turn is still running')
+      : t('Network retry {{counts}} — the turn is still running', { counts });
+  }
+  return counts === null
+    ? t('Upstream error {{status}} — retrying, the turn is still running', { status: errorStatus })
+    : t('Upstream error {{status}} — retrying {{counts}}, the turn is still running', {
+        status: errorStatus,
+        counts,
+      });
 }
 
 /** `attempt`/`maxRetries` are 1-based; the normalizer's missing-field sentinel is `0`. */

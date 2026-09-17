@@ -278,6 +278,45 @@ describe('agent loop', () => {
     }
   });
 
+  /**
+   * T062 / D19. `session.failed` is one string, and the renderer decides which
+   * recovery card to show from it. Before this, a send into a chat whose model
+   * is gone arrived as a bare English sentence, so the "model is not available
+   * here" card could not fire and the user got `Error: no model "…"`.
+   */
+  it('puts the failure code in front of the text a thrown run reaches the renderer as', async () => {
+    const runtime = await createRuntime({
+      modelCatalog: {
+        models: {
+          providers: {
+            gw: { api: 'openai-completions', baseUrl: 'https://x.example', models: [{ id: 'a' }] },
+          },
+        },
+        auth: { gw: { type: 'api_key', key: 'probe-key' } },
+      },
+      env: {},
+    });
+    const failures: string[] = [];
+    runtime.events.subscribe((event) => {
+      if (event.type === 'session.failed') failures.push(event.payload?.error ?? '');
+    });
+    try {
+      await expect(
+        runtime.run({
+          prompt: 'hi',
+          systemPrompt: 'probe',
+          model: { provider: 'gw', id: 'gone' },
+        })
+      ).rejects.toThrow('no model "gw/gone"');
+      // The code, then the runtime's own sentence — the sentence still names
+      // the model, which is the only part a user can act on.
+      expect(failures).toHaveLength(1);
+      expect(failures[0]).toMatch(/^model_not_in_catalog: no model "gw\/gone" in the catalog \(/);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it('appends every run to the trace sink in order', async () => {
     await withRuntime(fauxAssistantMessage('first'), async (runtime, faux) => {
       faux.appendResponses([fauxAssistantMessage('second')]);

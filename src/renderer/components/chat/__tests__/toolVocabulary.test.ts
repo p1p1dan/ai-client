@@ -1,6 +1,10 @@
 import { zhTranslations } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import {
+  ANSWERS_TITLE,
+  CONTINUE_CHORD,
+  CONTINUE_LABEL,
+  OTHER_LABEL,
   PERMISSION_ALLOW,
   PERMISSION_ALLOW_SESSION,
   PERMISSION_ALLOWED,
@@ -15,6 +19,10 @@ import {
   PERMISSION_NO_COMMAND_NOTE,
   PERMISSION_TITLE,
   PERMISSION_WAITING,
+  QUESTION_TITLE,
+  SKIP_LABEL,
+  SKIPPED_MARK,
+  SKIPPED_TITLE,
 } from '../questionCardModel';
 import { AGGREGATE_VERB, TOOL_VERBS, UNKNOWN_TOOL_VERB } from '../toolCard';
 import { THINKING_VERB, THOUGHT_BRIEF_ARG, THOUGHT_VERB, WORKED_FOR_VERB } from '../turnTiming';
@@ -118,6 +126,32 @@ describe('chat vocabulary is translatable', () => {
         ...Object.values(PERMISSION_DECISION_LABELS),
       ],
       'permission words'
+    );
+  });
+
+  /**
+   * T067 (D20) — the question card's half of the same vocabulary.
+   *
+   * These constants sat one screen away from the permission words above and
+   * were never listed here, which is half the reason they reached a Chinese
+   * user in English. The catalog check and the DOM check
+   * (`chineseChatSurface.test.ts`) fail in different ways on purpose: a word
+   * missing from the table fails here, a render path that never asks fails
+   * there, and neither one catches the other's case.
+   */
+  it('question card words have catalog entries', () => {
+    expectTranslated(
+      [
+        QUESTION_TITLE,
+        ANSWERS_TITLE,
+        SKIPPED_TITLE,
+        OTHER_LABEL,
+        SKIP_LABEL,
+        CONTINUE_LABEL,
+        SKIPPED_MARK,
+        CONTINUE_CHORD,
+      ],
+      'question card words'
     );
   });
 });

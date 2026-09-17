@@ -250,6 +250,24 @@ function randomTmpSuffix(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
+/**
+ * T066 回炉 — what a parse failure is allowed to say about the file.
+ *
+ * `JSON.parse` in V8 quotes roughly thirty characters of the offending text in
+ * its `SyntaxError` message (`Unexpected token 'x', ..."<that text>"... is not
+ * valid JSON`). A vault written while `safeStorage` was unavailable is stored
+ * with `enc: 'none'` — in the clear — so on a damaged file that quote can be a
+ * piece of a credential. Since the log threshold dropped to `info` the line
+ * reaches disk, which it never did before.
+ *
+ * The type of the failure and the size of what was read are enough to tell a
+ * truncated file from a garbled one, and neither can carry a secret.
+ */
+function parseFailureNote(error: unknown, bytes: number): string {
+  const kind = error instanceof Error ? error.name : typeof error;
+  return `${kind}, ${bytes} bytes read`;
+}
+
 export interface CredentialVaultOptions {
   baseDir: string;
   crypto: VaultCrypto;
@@ -633,7 +651,9 @@ export class CredentialVault {
     try {
       parsed = JSON.parse(raw);
     } catch (error) {
-      console.warn('[CredentialVault] markInvalidated: existing vault is not valid JSON', error);
+      console.warn(
+        `[CredentialVault] markInvalidated: existing vault is not valid JSON (${parseFailureNote(error, raw.length)})`
+      );
       return;
     }
 
@@ -663,8 +683,9 @@ export class CredentialVault {
 
     let lastEmail: string | null = null;
     let existing: RawEnvelope | null = null;
+    let raw = '';
     try {
-      const raw = readFileSync(this.vaultPath, 'utf-8');
+      raw = readFileSync(this.vaultPath, 'utf-8');
       const validation = validateEnvelopeShape(JSON.parse(raw));
       if (validation.ok) {
         existing = validation.envelope;
@@ -672,8 +693,7 @@ export class CredentialVault {
       }
     } catch (error) {
       console.warn(
-        '[CredentialVault] clear: existing vault unreadable, wiping without lastEmail recovery',
-        error
+        `[CredentialVault] clear: existing vault unreadable, wiping without lastEmail recovery (${parseFailureNote(error, raw.length)})`
       );
     }
 

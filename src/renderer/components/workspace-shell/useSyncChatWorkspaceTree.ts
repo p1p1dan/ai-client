@@ -128,6 +128,31 @@ function rebindSessionsToTree(
       continue;
     }
 
+    // U13: a chat that was never bound to a project is not an orphan. An empty
+    // `workspaceId` is what "unbound" looks like everywhere in this store, and
+    // such a chat runs in the scratch directory Main allocated for it — there
+    // is no repository for it to have lost, and none for it to move to.
+    //
+    // `mergeSessionIndex` keeps exactly this row at startup (its `!workspaceId
+    // && unbound` arm); this pass had no matching arm, so it fell through to
+    // the orphan rule below and DROPPED every temp chat that had already run a
+    // turn. That is D6 (dev-box pass 2026-09-17): temp chats vanished from the
+    // sidebar the moment anything moved the workspace tree — a temp workspace
+    // added or removed, a worktree list arriving, the selected repository
+    // changing — and reappeared only after a restart, because the startup path
+    // rebuilds from the index rows, which were never touched.
+    //
+    // An unsent unbound draft (no marker, no runtime identity) still falls
+    // through to the rebind below: adopting it into the first repository the
+    // user adds is the U22 behaviour, and it has no history to misplace.
+    if (!session.workspaceId && (session.unbound != null || session.runtimeIdentity != null)) {
+      remapped.push(session);
+      if (bound.has(session.id)) {
+        nextBound.add(session.id);
+      }
+      continue;
+    }
+
     // Orphan: only rebind a true unsent draft. A restored session may not be
     // currently Host-bound yet still carry a persisted runtime identity; moving
     // that identity to another repository would resume one checkout's history

@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { zhTranslations } from '@shared/i18n';
 import type { PiTuiDataEvent, PiTuiExitEvent, PiTuiStatusEvent } from '@shared/types';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
@@ -341,6 +342,14 @@ describe('PiTuiPtyController — a disposal waits for the process to be gone', (
  * chat's file while the UI says they are somewhere else.
  */
 describe('PiTuiPtyController — a warm terminal stays on its own chat', () => {
+  it('ships a Chinese entry for the refusal it sends the renderer', () => {
+    // T065 回炉: this sentence is a dictionary KEY (Main has no translator), and
+    // since the open path started showing refusals in a toast it is on screen
+    // rather than swallowed. `i18nCoverage` only sees `t('literal')` call sites
+    // under src/renderer, so it cannot see a key that travels in a variable.
+    expect(zhTranslations[PI_TUI_SESSION_MISMATCH_REASON]).toBeTruthy();
+  });
+
   it('refuses to resume a terminal that was spawned on a different session file', async () => {
     const { controller } = harness();
     await controller.open({ terminalId: 'one', cwd: '/repo', sessionFile: '/repo/a.jsonl' });
@@ -371,5 +380,176 @@ describe('PiTuiPtyController — a warm terminal stays on its own chat', () => {
     await expect(controller.open({ terminalId: 'one', cwd: '/repo' })).resolves.toMatchObject({
       resumed: true,
     });
+  });
+});
+
+/**
+ * D17 (real-machine point check DEV-14) — switching to another chat and back
+ * left the terminal area entirely blank while the PTY was still alive and still
+ * echoing keystrokes. Two halves each behaved correctly: the replay buffer only
+ * collects output produced WHILE parked, and a parked pi is idle, so there was
+ * nothing to send; the renderer meanwhile rebuilt its xterm from scratch, with
+ * an empty scrollback. Nobody owned the repaint at the seam.
+ */
+/**
+ * D17 — the screen a parked pi comes back to.
+ *
+ * The first landing nudged the size off and straight back inside the open call,
+ * and the real machine said no: the screen stayed blank, 10 bytes came back, and
+ * a manual `piTui.resize(id, 70, 20)` fixed it instantly. Both ioctls ran in one
+ * synchronous turn, so the child was scheduled once, after both, and read a
+ * winsize identical to its own — a change of zero is not a change. What is
+ * pinned here is the property that failure lacked: when the open returns, the
+ * PTY is at a size the child does NOT have, and it is still there for the child
+ * to read.
+ */
+describe('PiTuiPtyController — a resumed terminal is told to repaint', () => {
+  it('leaves the PTY at a size the parked pi does not have, instead of undoing it', async () => {
+    const { controller, ptys } = harness();
+    await controller.open({ terminalId: 'one', cwd: '/repo', cols: 100, rows: 30 });
+    await controller.suspend('one');
+    // The defect's exact shape: parked, produced nothing, resumed at the size
+    // it was parked at — so a plain resize cannot raise SIGWINCH at all.
+    const beforeResume = ptys[0]?.resizes.length ?? 0;
+
+    await expect(
+      controller.open({ terminalId: 'one', cwd: '/repo', cols: 100, rows: 30 })
+    ).resolves.toMatchObject({ resumed: true });
+
+    // One row SHORTER, so the frame pi paints while primed fits in the new
+    // xterm rather than scrolling its top line away.
+    expect(ptys[0]?.resizes.slice(beforeResume)).toEqual([
+      [100, 30],
+      [100, 29],
+    ]);
+    // The assertion the old nudge failed: the change is still standing when the
+    // open returns, so the child has something different to read.
+    expect(ptys[0]?.resizes.at(-1)).not.toEqual([100, 30]);
+  });
+
+  it('goes back to the true size when the renderer confirms it, as a second change', async () => {
+    const { controller, ptys } = harness();
+    await controller.open({ terminalId: 'one', cwd: '/repo', cols: 100, rows: 30 });
+    await controller.suspend('one');
+    await controller.open({ terminalId: 'one', cwd: '/repo', cols: 100, rows: 30 });
+
+    // `useXterm.confirmPiTuiSize`, sent once the rebuilt xterm is attached: a
+    // separate IPC message, hence a separate turn with the child scheduled in
+    // between — which is what makes this a transition the child can observe.
+    await controller.resize('one', 100, 30);
+
+    expect(ptys[0]?.resizes.slice(-2)).toEqual([
+      [100, 29],
+      [100, 30],
+    ]);
+  });
+
+  it('primes upwards when the terminal is already at the row floor', async () => {
+    // `boundedDimension` clamps rows at 5, so subtracting there would land back
+    // on the same number — the exact no-op this fix exists to avoid.
+    const { controller, ptys } = harness();
+    await controller.open({ terminalId: 'one', cwd: '/repo', cols: 100, rows: 5 });
+    await controller.suspend('one');
+
+    await controller.open({ terminalId: 'one', cwd: '/repo', cols: 100, rows: 5 });
+
+    expect(ptys[0]?.resizes.at(-1)).toEqual([100, 6]);
+  });
+
+  it('still flushes the replay buffer, and puts the repaint after it', async () => {
+    const { controller, ptys, data } = harness();
+    await controller.open({ terminalId: 'one', cwd: '/repo', cols: 100, rows: 30 });
+    await controller.suspend('one');
+    ptys[0]?.emitData('parked');
+
+    await controller.open({ terminalId: 'one', cwd: '/repo', cols: 100, rows: 30 });
+
+    expect(data).toEqual([{ terminalId: 'one', data: 'parked' }]);
+    // Last, so pi's repaint lands on top of the replayed bytes rather than
+    // under them.
+    expect(ptys[0]?.resizes.at(-1)).toEqual([100, 29]);
+  });
+
+  it('does not prime a terminal that was just spawned', async () => {
+    // Reverse check: a fresh PTY is created at the requested size and paints
+    // itself, so leaving it at the wrong size would be a real defect rather
+    // than a repaint.
+    const { controller, ptys } = harness();
+    await controller.open({ terminalId: 'one', cwd: '/repo', cols: 100, rows: 30 });
+
+    expect(ptys[0]?.resizes).toEqual([]);
+  });
+});
+
+/**
+ * T066 — terminal mode used to start and stop a second process on the user's
+ * session file with no line anywhere.
+ *
+ * The field pass grepped main.log, the daily log and the dev-server output for
+ * the spawn, the exit and the exit code, and found none of the three. What is
+ * pinned here is that the lines exist, that the spawn summary carries argv
+ * only (the environment holds the credentials, and the initial prompt is
+ * deliberately kept out of argv), and that a bad exit reaches the warn channel.
+ */
+describe('PiTuiPtyController logging (T066)', () => {
+  let logs: string[];
+  let warns: string[];
+
+  beforeEach(() => {
+    logs = [];
+    warns = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '));
+    });
+    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+      warns.push(args.map(String).join(' '));
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('logs the spawn with the argv summary and the working directory', async () => {
+    const { controller } = harness();
+
+    await controller.open({
+      terminalId: 'one',
+      cwd: '/repo',
+      sessionFile: '/home/tester/.pilab/sessions/s1.jsonl',
+      initialPrompt: 'secret task',
+    });
+
+    const spawn = logs.filter((line) => line.includes('[pi-tui] Spawned terminal one'));
+    expect(spawn).toHaveLength(1);
+    expect(spawn[0]).toContain('/app/node /app/pi/cli.js --session');
+    expect(spawn[0]).toContain('/repo');
+    // Two things that must never reach a log line: the prompt (it is written
+    // through the PTY for exactly this reason) and the username in a path.
+    expect(spawn[0]).not.toContain('secret task');
+    expect(spawn[0]).not.toContain('/home/tester');
+  });
+
+  it('logs a clean exit with its code on the info channel', async () => {
+    const { controller, ptys } = harness();
+    await controller.open({ terminalId: 'one', cwd: '/repo' });
+
+    ptys[0]?.emitExit(0);
+
+    expect(
+      logs.filter((line) => line.includes('[pi-tui] Terminal one exited (code=0'))
+    ).toHaveLength(1);
+    expect(warns).toEqual([]);
+  });
+
+  it('raises a non-zero exit to the warn channel', async () => {
+    const { controller, ptys } = harness();
+    await controller.open({ terminalId: 'one', cwd: '/repo' });
+
+    ptys[0]?.emitExit(3);
+
+    expect(
+      warns.filter((line) => line.includes('[pi-tui] Terminal one exited (code=3'))
+    ).toHaveLength(1);
   });
 });

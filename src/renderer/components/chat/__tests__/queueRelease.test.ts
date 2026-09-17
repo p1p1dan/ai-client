@@ -11,6 +11,7 @@ import {
   type DecideRunEntryOutcomeInput,
   type DecideSendActionInput,
   decideAdmittedTimeoutOutcome,
+  decideDeclinedRestore,
   decideFailureAffordance,
   decidePendingResolution,
   decideQueueRelease,
@@ -721,6 +722,92 @@ describe('decideFailureAffordance (A1, round-4 point-check fix)', () => {
   it("is 'resend' for 'rejected' + 'direct'/'retry' — no queue entry to fall back on", () => {
     expect(decideFailureAffordance('rejected', 'direct')).toBe('resend');
     expect(decideFailureAffordance('rejected', 'retry')).toBe('resend');
+  });
+
+  /**
+   * D15 (2026-09-17 field run, DEV-4). A protocol-mismatched worker never
+   * bootstrapped, `chat:createSession` rejected after 60s, and the user's
+   * sentence ended up nowhere they could see it: empty composer, empty
+   * transcript, and a payload parked behind the round Retry icon. It was
+   * retyped. `'resend'` is not WRONG there — nothing was admitted, so a replay
+   * cannot duplicate — it is just invisible, and a handshake failure is the
+   * class most likely to need an edit before the next try.
+   */
+  describe('D15 — a create handshake that never opened the session', () => {
+    const NEVER_CREATED = { sessionNeverCreated: true } as const;
+
+    it('hands a direct/Retry payload back to the visible composer', () => {
+      expect(decideFailureAffordance('rejected', 'direct', NEVER_CREATED)).toBe('restore-draft');
+      expect(decideFailureAffordance('rejected', 'retry', NEVER_CREATED)).toBe('restore-draft');
+    });
+
+    it('reverse: the same pair without the fact keeps the old one-click Retry', () => {
+      expect(decideFailureAffordance('rejected', 'direct', {})).toBe('resend');
+      expect(decideFailureAffordance('rejected', 'retry')).toBe('resend');
+      expect(decideFailureAffordance('rejected', 'direct', { sessionNeverCreated: false })).toBe(
+        'resend'
+      );
+    });
+
+    it("leaves 'release' alone — the queue entry is the recovery there", () => {
+      // The one row where this must not turn `'none'` into a second copy of a
+      // payload the queue already holds.
+      expect(decideFailureAffordance('rejected', 'release', NEVER_CREATED)).toBe('none');
+    });
+
+    it('never widens past `rejected`: the other three outcomes ignore the fact', () => {
+      for (const origin of ORIGINS) {
+        expect(decideFailureAffordance('committed', origin, NEVER_CREATED)).toBe('restore-draft');
+        expect(decideFailureAffordance('skipped', origin, NEVER_CREATED)).toBe('resend');
+        expect(decideFailureAffordance('pending', origin, NEVER_CREATED)).toBe('none');
+      }
+    });
+
+    /**
+     * D15 round-2 (2026-09-17 review). `'restore-draft'` is an INSTRUCTION,
+     * not a guarantee: `restoreDraftIfComposerEmpty` refuses whenever the user
+     * has typed since the commit point, and the D15 fix had stopped arming the
+     * Retry snapshot for this row — so one keystroke during the 60s bootstrap
+     * wait dropped the text and its attachments with nothing left holding them.
+     */
+    describe('decideDeclinedRestore — the restore refused, so where does it go', () => {
+      it('falls back to the Retry snapshot for the turn that was never dispatched', () => {
+        expect(decideDeclinedRestore('rejected', 'direct', NEVER_CREATED)).toBe('resend');
+        expect(decideDeclinedRestore('rejected', 'retry', NEVER_CREATED)).toBe('resend');
+      });
+
+      it('the create-failure payload has a home whichever way the restore goes', () => {
+        // The pair of answers IS the invariant: empty composer -> the visible
+        // draft, busy composer -> the Retry snapshot. Neither row is 'none'.
+        for (const origin of ['direct', 'retry'] as const) {
+          expect(decideFailureAffordance('rejected', origin, NEVER_CREATED)).toBe('restore-draft');
+          expect(decideDeclinedRestore('rejected', origin, NEVER_CREATED)).toBe('resend');
+        }
+      });
+
+      it("reverse: an admitted turn's declined restore arms nothing", () => {
+        // A `'committed'` turn was echoed into the timeline, so the text is
+        // still on screen; arming a one-click resend here is the double send
+        // A1 removed.
+        for (const origin of ORIGINS) {
+          expect(decideDeclinedRestore('committed', origin, NEVER_CREATED)).toBe('none');
+          expect(decideDeclinedRestore('committed', origin)).toBe('none');
+          expect(decideDeclinedRestore('pending', origin, NEVER_CREATED)).toBe('none');
+          expect(decideDeclinedRestore('skipped', origin, NEVER_CREATED)).toBe('none');
+        }
+      });
+
+      it('reverse: without the fact, and on the release path, it stays silent', () => {
+        // Both rows already keep their own affordance ('resend' / the queue
+        // entry), so a fallback here would be a second copy of the payload.
+        expect(decideDeclinedRestore('rejected', 'direct', {})).toBe('none');
+        expect(decideDeclinedRestore('rejected', 'retry')).toBe('none');
+        expect(decideDeclinedRestore('rejected', 'direct', { sessionNeverCreated: false })).toBe(
+          'none'
+        );
+        expect(decideDeclinedRestore('rejected', 'release', NEVER_CREATED)).toBe('none');
+      });
+    });
   });
 
   it('full matrix over every outcome/origin pair', () => {

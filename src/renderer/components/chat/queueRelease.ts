@@ -311,9 +311,26 @@ export function shouldArmRetryable(outcome: RunEntryOutcome, origin: RunSendOrig
  */
 export type FailureAffordance = 'resend' | 'restore-draft' | 'none';
 
+/**
+ * D15 (2026-09-17 field run, DEV-4) — extra facts about HOW the attempt died.
+ *
+ * `sessionNeverCreated` means the create handshake itself failed: the session
+ * was never opened, `chat.send` was never dispatched, and the timeline stayed
+ * empty. The old answer for that outcome was `'resend'` — correct about
+ * double-send safety, but it parks the text behind a round icon next to an
+ * empty composer and an empty transcript, which reads as "my message is gone"
+ * (the field agent retyped it). A one-line handshake failure is also the class
+ * most likely to need an EDIT before the next attempt (wrong model, dead
+ * gateway), not a blind replay.
+ */
+export interface FailureAffordanceContext {
+  sessionNeverCreated?: boolean;
+}
+
 export function decideFailureAffordance(
   outcome: RunEntryOutcome,
-  origin: RunSendOrigin
+  origin: RunSendOrigin,
+  context: FailureAffordanceContext = {}
 ): FailureAffordance {
   if (outcome === 'committed') return 'restore-draft';
   // F2 §4.3 consumption point 2, and the executable form of the user's own
@@ -328,7 +345,50 @@ export function decideFailureAffordance(
   // The silent default here would have been `'resend'`, i.e. exactly the
   // double-send affordance the line above removes for `'committed'`.
   if (outcome === 'pending') return 'none';
+  // D15: a create handshake that never opened the session. Decided here rather
+  // than by delegation for the same reason as `'pending'` above — and it may
+  // only ever MOVE a payload from the Retry snapshot into the visible composer,
+  // never conjure one where the previous answer was `'none'`: `'release'` keeps
+  // its queue-owned recovery untouched, so no payload can end up in two places
+  // at once.
+  if (outcome === 'rejected' && context.sessionNeverCreated) {
+    return origin === 'release' ? 'none' : 'restore-draft';
+  }
   return shouldArmRetryable(outcome, origin) ? 'resend' : 'none';
+}
+
+/**
+ * D15 round-2 (2026-09-17 review of the D15 fix) — where the payload goes when
+ * the draft restore DECLINES.
+ *
+ * `restoreDraftIfComposerEmpty` writes nothing once the user has typed (or
+ * attached) anything since the commit point: overwriting live input would
+ * destroy something that exists nowhere else. That refusal is right, but it
+ * leaves the committed payload homeless on the create-handshake path, because
+ * D15 stopped arming the Retry snapshot there — the composer was cleared at
+ * the commit point, the timeline never opened, and the text and its
+ * attachments end up in no store at all. Typing one character during the 60s
+ * bootstrap wait was enough to reproduce it.
+ *
+ * So a declined restore falls back to the pre-D15 affordance, but ONLY for the
+ * turn that was never dispatched:
+ *  - `'resend'` — `'rejected'` + `sessionNeverCreated`: `chat.send` never ran,
+ *    so a one-click resend cannot double-send, and the Retry snapshot is the
+ *    only surface left that can hold the payload.
+ *  - `'none'` — everything else, `'committed'` above all: the Host already
+ *    echoed that user message into the timeline, so a declined restore costs
+ *    visibility rather than data, and arming a resend there would re-introduce
+ *    exactly the double send A1 removed.
+ */
+export function decideDeclinedRestore(
+  outcome: RunEntryOutcome,
+  origin: RunSendOrigin,
+  context: FailureAffordanceContext = {}
+): 'resend' | 'none' {
+  if (outcome !== 'rejected' || !context.sessionNeverCreated) return 'none';
+  // `'release'` never reaches a restore in the first place (the queue still
+  // owns that entry); spelled out so a future caller cannot make it.
+  return origin === 'release' ? 'none' : 'resend';
 }
 
 /**

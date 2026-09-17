@@ -24,6 +24,7 @@ import { previewWindowManager } from '../services/preview/PreviewWindowManager';
 import { sessionManager } from '../services/session/SessionManager';
 
 import { autoUpdaterService } from '../services/updater/AutoUpdater';
+import { closeRequestReason } from './closeRequestReason';
 
 /**
  * D47 S5 §1.4 — Main's own call site for the shared `resolveGateDecision`
@@ -498,7 +499,21 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
     }
 
     e.preventDefault();
-    void confirmCloseWithReason('quit-app').then((confirmed) => {
+    // T065: `window-all-closed` quits the app, so this really is the last
+    // window's close AND the app's exit — but only when it IS the last one.
+    // With another window still up, the dialog used to ask about quitting an
+    // app that would keep running. `win` is still in `getAllWindows()` during
+    // `close`, hence the explicit exclusion; preview windows are excluded by
+    // `closeRequestReason` itself, which is where the reasoning lives.
+    const reason = closeRequestReason(
+      BrowserWindow.getAllWindows()
+        .filter((other) => other !== win)
+        .map((other) => ({
+          destroyed: other.isDestroyed(),
+          preview: previewWindowManager.isPreviewWindow(other),
+        }))
+    );
+    void confirmCloseWithReason(reason).then((confirmed) => {
       if (confirmed) {
         forceReplaceCloseCurrentWindow();
       }

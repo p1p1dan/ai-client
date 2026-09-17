@@ -1,4 +1,12 @@
-export type AppCloseRequestReason = 'quit-app' | 'replace-window';
+/**
+ * Why the renderer is being asked to confirm.
+ *
+ * `close-window` (T065) is the case the app used to call `quit-app` too: with a
+ * second window open, closing one of them asked 「确定要退出应用吗？」 about an
+ * app that was not going anywhere. `window-all-closed` quits, so the two really
+ * are different outcomes, and the dialog now says which one it is.
+ */
+export type AppCloseRequestReason = 'quit-app' | 'close-window' | 'replace-window';
 
 export interface AppCloseRequestPayload {
   requestId: string;

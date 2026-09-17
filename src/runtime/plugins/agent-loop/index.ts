@@ -155,7 +155,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         type: 'session.failed',
         sessionId,
         requestId: runId,
-        payload: { error: error instanceof Error ? error.message : String(error) },
+        payload: { error: thrownRunErrorText(error) },
       });
       this.ctx.runtimeEvents.emit({
         type: 'session.status',
@@ -758,6 +758,26 @@ function assistantText(message: AssistantMessage): string {
     .filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text')
     .map((block) => block.text)
     .join('');
+}
+
+/**
+ * The text a run that THREW reaches the renderer as.
+ *
+ * `session.failed` carries one string, so a failure whose only stable part is
+ * its code has to spell that code into the text — the same `${code}: ${message}`
+ * shape the worker RPC (`errorPayload`) and the resume path
+ * (`encodePiResumeError`) already use. Without it the renderer can only match
+ * an English sentence, which is how the "model is not available here" copy
+ * stopped firing once the session path started throwing `model_not_in_catalog`
+ * instead of the older `Pi model not found` (D19, 2026-09-17 point-check).
+ *
+ * Only the thrown path. A run that ENDS in failure reports through
+ * `RunProjection.finish`, whose message is the provider's own sentence.
+ */
+function thrownRunErrorText(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const code = (error as Error & { code?: unknown }).code;
+  return typeof code === 'string' && code !== '' ? `${code}: ${error.message}` : error.message;
 }
 
 function resolveError(input: {

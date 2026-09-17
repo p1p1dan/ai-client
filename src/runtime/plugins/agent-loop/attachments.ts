@@ -1,4 +1,5 @@
 import type { ImageContent } from '@earendil-works/pi-ai';
+import { attachmentNameRider } from '../../../shared/attachmentRider.ts';
 import type { SessionAttachment } from '../../../shared/types/agentHost.ts';
 import { MAX_ATTACHMENT_READ_BYTES } from '../../../shared/types/attachmentIo.ts';
 import type { MessageAttachmentMeta } from '../../../shared/types/runtimeEvents.ts';
@@ -114,10 +115,15 @@ export function preparePrompt(
       );
     }
     if (attachment.kind === 'image') {
+      // D25 — the file name rides along so a reopened conversation still says
+      // `photo.png` instead of `image/png`. `plugins/model-adapter` strips the
+      // app's namespace before a request leaves, so it lands in the session
+      // file and never on the wire; see `attachmentRider.ts`.
       images.push({
         type: 'image',
         data: attachment.data,
         mimeType: attachment.mediaType || 'image/png',
+        ...attachmentNameRider(attachment.name),
       });
     } else {
       documents.push(`--- ${attachment.name ?? 'attachment'} ---\n${attachment.data}`);

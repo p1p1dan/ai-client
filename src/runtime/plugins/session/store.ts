@@ -123,12 +123,28 @@ export const SESSION_MAX_ENTRY_BYTES = Math.floor(SESSION_MAX_BYTES / 4);
 /**
  * What the stored line adds to the payload it carries: `kind`, `lane`, a uuid
  * `id`, `seq`, a uuid `parentId` and `timestamp`. Counted in the pre-flight
- * check so an oversized payload is refused BEFORE it enters the write queue —
- * a rejection inside the queue is permanent by design (`enqueue`), so a net
- * that tripped there would turn one refused message into a dead session, which
- * is the outcome the net exists to prevent.
+ * checks so an oversized payload is refused BEFORE it enters the write queue.
+ * Deliberately generous: a pre-flight that over-estimates refuses a write the
+ * queue would have taken, which costs at most the last few hundred bytes of a
+ * ceiling; one that under-estimates lets the write through to the exact check
+ * inside the queue, which is the path this overhead exists to keep short.
  */
 const ENTRY_OVERHEAD_BYTES = 256;
+
+/**
+ * T061 / D1 — failures that leave the file exactly as it was.
+ *
+ * Both are decided before `appendFile` is called, so the session on disk is
+ * untouched and only the caller that asked for the oversized write should see
+ * anything. Every other rejection inside the queue (a full disk, a revoked
+ * handle) leaves the file in a state nothing here can describe, and keeps
+ * poisoning the queue on purpose — see `enqueue` and `close` (session-06).
+ */
+const WRITE_REFUSAL_CODES: readonly string[] = ['session_size_limit', 'session_entry_size_limit'];
+
+function isWriteRefusal(error: unknown): boolean {
+  return WRITE_REFUSAL_CODES.includes((error as { code?: string } | null)?.code ?? '');
+}
 
 export class JsonlSessionStore {
   private tail: Promise<void> = Promise.resolve();
@@ -332,18 +348,20 @@ export class JsonlSessionStore {
     // function instead of a value defers that to the queue, for a payload whose
     // content depends on the branch the write will extend.
     const entry = typeof payload === 'function' ? payload : structuredClone(payload);
-    // capacity-04 — outside the queue, so refusing this one write leaves the
-    // session writable. The queue's own check below is the exact one.
+    // capacity-04 / T061 — both ceilings are judged outside the queue, so
+    // refusing this one write leaves the session writable. The queue's own
+    // copies below are the exact ones; these two only keep a doomed write from
+    // ever entering the queue.
     // A deferred payload cannot be measured until the queue builds it, so it is
-    // covered by the in-queue check alone — and a rejection there is permanent.
-    // The only deferred writer today is `appendCompaction`, whose summary is
-    // capped far below this ceiling upstream (capacity-03, 256 KiB); a new
-    // deferred caller with an unbounded payload needs its own limit first.
-    const oversize =
+    // covered by the in-queue checks alone. The only deferred writer today is
+    // `appendCompaction`, whose summary is capped far below this ceiling
+    // upstream (capacity-03, 256 KiB); a new deferred caller with an unbounded
+    // payload needs its own limit first.
+    const refusal =
       typeof entry === 'function'
         ? undefined
-        : this.entrySizeError(Buffer.byteLength(JSON.stringify(entry)) + ENTRY_OVERHEAD_BYTES);
-    if (oversize) return Promise.reject(oversize);
+        : this.writeRefusal(Buffer.byteLength(JSON.stringify(entry)) + ENTRY_OVERHEAD_BYTES);
+    if (refusal) return Promise.reject(refusal);
     return this.enqueue(async () => {
       const item: Entry = {
         ...(typeof entry === 'function' ? entry() : entry),
@@ -354,13 +372,8 @@ export class JsonlSessionStore {
       };
       const line = `${JSON.stringify({ kind: 'entry', lane: 'main', ...item })}\n`;
       const bytes = Buffer.byteLength(line);
-      if (this.bytes + bytes > this.maxBytes)
-        throw new RuntimeHostError(
-          'session_size_limit',
-          'session exceeds the configured size budget'
-        );
-      const tooLarge = this.entrySizeError(bytes);
-      if (tooLarge) throw tooLarge;
+      const exact = this.writeRefusal(bytes);
+      if (exact) throw exact;
       await this.io.appendFile(this.file, Buffer.from(line), { mode: 0o600 });
       this.bytes += bytes;
       const {
@@ -379,11 +392,24 @@ export class JsonlSessionStore {
     if (this.closed)
       return Promise.reject(new RuntimeHostError('session_closed', 'session is closed'));
     const work = this.tail.then(operation);
-    this.tail = work.then(() => {});
+    // T061 / D1 — a refusal is this caller's answer, not the queue's new state.
+    // `tail` used to become the rejected promise itself, so ONE over-budget
+    // message made every later `tail.then(operation)` skip its operation and
+    // reject with the same error: the conversation went read-only for the rest
+    // of the worker's life, and a plain one-line reply was refused while the
+    // file still had room for it. Swallowing refusals here resets the queue to
+    // resolved; the caller still gets the rejection from `work`.
+    this.tail = work.then(
+      () => {},
+      (error) => {
+        if (!isWriteRefusal(error)) throw error;
+      }
+    );
     void this.tail.catch((error) => {
       // session-06 — the queue keeps its failed state to refuse further writes,
       // but close() no longer reports it, so the first failure is kept here for
-      // the host to read back.
+      // the host to read back. Refusals never reach this: they left the file
+      // intact, so there is nothing for a later reader to be warned about.
       if (this.failure === undefined) this.failure = error;
     });
     return work;
@@ -404,7 +430,11 @@ export class JsonlSessionStore {
     const skipped = this.document.skipped;
     return skipped?.length ? { skipped } : undefined;
   }
-  /** The first write rejection, if any; see `close`. Also still thrown by `flush`. */
+  /**
+   * The first write FAILURE, if any; see `close`. Also still thrown by `flush`.
+   * A size refusal is not one: it is reported to its own caller and leaves both
+   * the file and the queue intact (T061).
+   */
   get writeFailure(): unknown {
     return this.failure;
   }
@@ -617,10 +647,10 @@ export class JsonlSessionStore {
   }
 
   private mutate(row: Record<string, unknown>, apply: () => void): Promise<void> {
-    const oversize = this.entrySizeError(
+    const refusal = this.writeRefusal(
       Buffer.byteLength(JSON.stringify(row)) + ENTRY_OVERHEAD_BYTES
     );
-    if (oversize) return Promise.reject(oversize);
+    if (refusal) return Promise.reject(refusal);
     return this.enqueue(async () => {
       // A lane row states the new tip; a fact row hangs off the current one.
       const parentId =
@@ -631,15 +661,32 @@ export class JsonlSessionStore {
         ...cliBookkeeping(randomUUID(), parentId, Date.now()),
       })}\n`;
       const bytes = Buffer.byteLength(line);
-      if (this.bytes + bytes > this.maxBytes)
-        throw new RuntimeHostError('session_size_limit', 'session exceeds size budget');
-      const tooLarge = this.entrySizeError(bytes);
-      if (tooLarge) throw tooLarge;
+      const exact = this.writeRefusal(bytes);
+      if (exact) throw exact;
       await this.io.appendFile(this.file, Buffer.from(line), { mode: 0o600 });
       this.bytes += bytes;
       this.document.seq++;
       apply();
     });
+  }
+
+  /**
+   * Why this line cannot be written, if it cannot: the aggregate budget first,
+   * then the per-line net (capacity-04).
+   *
+   * One function for both call sites on purpose. The pre-flight outside the
+   * queue and the exact check inside it have to refuse the same writes for the
+   * same reasons — a pre-flight that knew about only one of the two ceilings is
+   * what let an over-budget message reach the queue and (before T061) take the
+   * whole conversation down with it.
+   */
+  private writeRefusal(bytes: number): RuntimeHostError | undefined {
+    if (this.bytes + bytes > this.maxBytes)
+      return new RuntimeHostError(
+        'session_size_limit',
+        'session exceeds the configured size budget'
+      );
+    return this.entrySizeError(bytes);
   }
 
   /** capacity-04 — the per-line net, judged after the aggregate budget. */
@@ -659,9 +706,10 @@ export class JsonlSessionStore {
   /**
    * Drain the queue and release the lock.
    *
-   * session-06 — settled, not awaited for success. A write that failed (a full
-   * disk, a size budget) leaves the queue permanently rejected, which is how
-   * further writes are refused; making close() rethrow it turned every later
+   * session-06 — settled, not awaited for success. A write that failed for a
+   * reason the store cannot describe (a full disk, a revoked handle) leaves the
+   * queue permanently rejected, which is how further writes are refused — a
+   * size refusal does NOT, see `enqueue`. Making close() rethrow it turned every later
    * shutdown into a failure the host reported as if closing had gone wrong,
    * while the lock and the file handles had in fact been released cleanly. The
    * failure stays visible through `writeFailure` and `flush`.
