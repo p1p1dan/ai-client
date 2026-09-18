@@ -26,7 +26,7 @@ export function toolSegments(): readonly PromptSegment[] {
     },
     {
       slot: 'tool-guidance',
-      text: 'Use glob to discover files and grep for literal text search; narrow path and include to keep results bounded. read uses a one-based line offset and a line limit; follow the reported next line after truncation. When edit is available, it takes an edits array of exact, unique oldText/newText replacements. Prefer whichever of read, write and edit are available over shell file operations. bash requires the configured shell and has a time limit; never retry a failed command automatically when it may already have changed files.',
+      text: 'Use glob to discover files and grep for literal text search; narrow path and include to keep results bounded. Search the tree with those two rather than through the shell: running grep, find, rg, ls -R or dir as a command walks the same directories far more slowly and returns unbounded output, so keep bash for running programs, builds and version control. read uses a one-based line offset and a line limit; follow the reported next line after truncation. When edit is available, it takes an edits array of exact, unique oldText/newText replacements. Prefer whichever of read, write and edit are available over shell file operations. bash requires the configured shell and has a time limit; never retry a failed command automatically when it may already have changed files.',
     },
   ];
 }

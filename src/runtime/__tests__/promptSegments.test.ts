@@ -159,6 +159,17 @@ describe('tool guidance', () => {
     expect(guidance?.text).toContain('bash');
   });
 
+  it('sends tree search to glob and grep rather than to the shell (tools-20)', () => {
+    // A Windows field run spent 183 s on `grep -ran` and 120 s on `find .`
+    // through bash, on a tree the glob tool crosses in a fraction of that. The
+    // block named glob and grep but never said not to shell out, and a model
+    // that reaches for `rg` by habit has no reason to read the omission as a
+    // rule.
+    const guidance = toolSegments().find((segment) => segment.slot === 'tool-guidance');
+    expect(guidance?.text).toMatch(/Search the tree with those two rather than through the shell/);
+    expect(guidance?.text).toMatch(/running grep, find, rg, ls -R or dir as a command/);
+  });
+
   it('never states that a write-capable tool exists', () => {
     // Plan mode removes `write` and `edit` from the registry (ARD D14), and
     // this text is in the `static` band, so it cannot know which mode is

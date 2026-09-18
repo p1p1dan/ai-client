@@ -734,6 +734,164 @@ describe('native tools', () => {
   });
 });
 
+/**
+ * tools-20 — the traversal itself, after the per-entry `realpath` came out.
+ *
+ * A Windows field run spent 50 s in one `glob` over a C++ workspace, because
+ * every directory entry was resolved through the filesystem to answer a
+ * question the walk had already settled: the root is canonical and a symlink
+ * dirent is skipped rather than followed, so nothing below it can be anything
+ * else. These cases pin what that removal must NOT change.
+ */
+describe('search traversal', () => {
+  it('still refuses to follow a symlinked directory (tools-20)', async () => {
+    await mkdir(join(dir, 'real'));
+    await writeFile(join(dir, 'real', 'x.ts'), 'needle here\n');
+    // Inside the root, so a containsPath check alone would wave it through: the
+    // reason to skip it is that its contents are reachable under their own name
+    // and would otherwise be reported (and grepped) twice.
+    await symlink(join(dir, 'real'), join(dir, 'link'), 'dir');
+    const r = await runtime();
+    const found = content(await call(r, 'glob', { pattern: '**/*.ts' })).split('\n');
+    expect(found).toEqual([join(dir, 'real', 'x.ts')]);
+    expect(content(await call(r, 'grep', { pattern: 'needle' })).split('\n')).toHaveLength(1);
+  });
+  it('terminates on a symlink cycle back to an ancestor (tools-20)', async () => {
+    await mkdir(join(dir, 'sub'));
+    await writeFile(join(dir, 'sub', 'x.ts'), 'needle here\n');
+    await symlink(dir, join(dir, 'sub', 'loop'), 'dir');
+    const r = await runtime();
+    const output = await call(r, 'glob', { pattern: '**/*.ts' });
+    expect(content(output).split('\n')).toEqual([join(dir, 'sub', 'x.ts')]);
+    expect(output.details).toMatchObject({ truncated: false });
+  });
+  it('skips a directory that resolves outside the search root (tools-20)', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'runtime-outside-'));
+    try {
+      await writeFile(join(outside, 'secret.ts'), 'needle here\n');
+      await writeFile(join(dir, 'inside.ts'), 'needle here\n');
+      const r = await runtime();
+      // A host whose readDirectory reports a child that realpath then resolves
+      // elsewhere — a junction on Windows, a bind mount on Linux. The walk now
+      // checks that once per directory instead of once per entry, so this is
+      // the case that proves the check survived.
+      const original = r.ctx.runtimeHostIo.readDirectory.bind(r.ctx.runtimeHostIo);
+      r.ctx.runtimeHostIo.readDirectory = (path: string) =>
+        path === dir
+          ? (async function* () {
+              yield { name: 'inside.ts', kind: 'file' as const };
+              yield { name: 'elsewhere', kind: 'directory' as const };
+            })()
+          : original(path);
+      const realpath = r.ctx.runtimeHostIo.realpath.bind(r.ctx.runtimeHostIo);
+      r.ctx.runtimeHostIo.realpath = (path: string) =>
+        path === join(dir, 'elsewhere') ? Promise.resolve(outside) : realpath(path);
+      const found = content(await call(r, 'glob', { pattern: '**/*.ts' }));
+      expect(found).toContain('inside.ts');
+      expect(found).not.toContain('secret.ts');
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+  it('stops at the entry budget even when nothing matches (tools-20)', async () => {
+    await writeFile(join(dir, 'a.ts'), 'needle here\n');
+    const r = await runtime();
+    // 20 001 synthetic entries, so the cap is reached without writing that many
+    // files. They are reported as symlinks: the walk counts an entry before it
+    // decides what to do with it, which is exactly the counter under test, and
+    // the cheap kind keeps the case off the permission gate 20 000 times.
+    r.ctx.runtimeHostIo.readDirectory = () =>
+      (async function* () {
+        for (let i = 0; i < 20_001; i++) yield { name: `e${i}.ts`, kind: 'symlink' as const };
+      })();
+    const output = await call(r, 'glob', { pattern: '**/*.ts' });
+    expect(output.details).toMatchObject({ truncated: true, visited: 20_001 });
+    expect(content(output)).toContain('search truncated');
+  });
+});
+
+describe('search gitignore', () => {
+  async function tree() {
+    await writeFile(join(dir, '.gitignore'), '# comment\nbuild/\n*.o\n!keep.o\n/dist\n');
+    await writeFile(join(dir, 'main.cpp'), 'needle here\n');
+    await writeFile(join(dir, 'stale.o'), 'needle here\n');
+    await writeFile(join(dir, 'keep.o'), 'needle here\n');
+    await mkdir(join(dir, 'build', 'deep'), { recursive: true });
+    await writeFile(join(dir, 'build', 'deep', 'gen.cpp'), 'needle here\n');
+    await mkdir(join(dir, 'dist'));
+    await writeFile(join(dir, 'dist', 'bundle.cpp'), 'needle here\n');
+    await mkdir(join(dir, 'src', 'dist'), { recursive: true });
+    // `/dist` is anchored to the file's own directory, so this one stays.
+    await writeFile(join(dir, 'src', 'dist', 'kept.cpp'), 'needle here\n');
+  }
+  it('skips ignored directories and files by default', async () => {
+    await tree();
+    const r = await runtime();
+    const output = await call(r, 'glob', { pattern: '**/*', limit: 1000 });
+    const found = content(output);
+    expect(found).toContain('main.cpp');
+    expect(found).toContain(join('src', 'dist', 'kept.cpp'));
+    // The negation wins because it comes after the rule that hid it.
+    expect(found).toContain('keep.o');
+    expect(found).not.toContain('gen.cpp');
+    expect(found).not.toContain('bundle.cpp');
+    expect(found).not.toContain('stale.o');
+    // An ignored directory is one entry skipped, not one per file inside it.
+    expect(output.details).toMatchObject({ ignored: 3 });
+    const grepped = content(await call(r, 'grep', { pattern: 'needle' }));
+    expect(grepped).toContain('main.cpp');
+    expect(grepped).not.toContain('gen.cpp');
+  });
+  it('walks everything again when respectGitignore is false', async () => {
+    await tree();
+    const r = await runtime();
+    const found = content(
+      await call(r, 'glob', { pattern: '**/*', limit: 1000, respectGitignore: false })
+    );
+    expect(found).toContain('gen.cpp');
+    expect(found).toContain('bundle.cpp');
+    expect(found).toContain('stale.o');
+    const grepped = content(await call(r, 'grep', { pattern: 'needle', respectGitignore: false }));
+    expect(grepped).toContain('gen.cpp');
+  });
+  it('says why an empty search may be empty, and only then', async () => {
+    await tree();
+    const r = await runtime();
+    // "No files matched" and "everything that matched is in an ignored build
+    // directory" are the same three words otherwise, and the second one is what
+    // sends the model to the shell.
+    const empty = content(await call(r, 'glob', { pattern: 'gen.cpp' }));
+    expect(empty).toContain('respectGitignore:false');
+    const hit = content(await call(r, 'glob', { pattern: '**/*.cpp' }));
+    expect(hit).toContain('main.cpp');
+    expect(hit).not.toContain('respectGitignore:false');
+  });
+  it('applies a nested .gitignore only below its own directory', async () => {
+    await mkdir(join(dir, 'a'));
+    await mkdir(join(dir, 'b'));
+    await writeFile(join(dir, 'a', '.gitignore'), 'notes.txt\n');
+    await writeFile(join(dir, 'a', 'notes.txt'), 'needle here\n');
+    await writeFile(join(dir, 'b', 'notes.txt'), 'needle here\n');
+    const r = await runtime();
+    const found = content(await call(r, 'glob', { pattern: '**/notes.txt' }));
+    expect(found).toContain(join('b', 'notes.txt'));
+    expect(found).not.toContain(join('a', 'notes.txt'));
+  });
+  it('searches the whole tree when the .gitignore cannot be read', async () => {
+    await writeFile(join(dir, '.gitignore'), 'hidden.txt\n');
+    await writeFile(join(dir, 'hidden.txt'), 'needle here\n');
+    const r = await runtime();
+    const original = r.ctx.runtimeHostIo.readFile.bind(r.ctx.runtimeHostIo);
+    r.ctx.runtimeHostIo.readFile = (path: string, options: RuntimeReadOptions) =>
+      path === join(dir, '.gitignore')
+        ? Promise.reject(Object.assign(new Error('EIO'), { code: 'EIO' }))
+        : original(path, options);
+    // Fail open: a search that cannot read the rules shows more files, never
+    // fewer, and never fails outright.
+    expect(content(await call(r, 'glob', { pattern: '**/hidden.txt' }))).toContain('hidden.txt');
+  });
+});
+
 describe('read line scanning', () => {
   const LINE_BYTES = 200;
   const LINES = 5000;

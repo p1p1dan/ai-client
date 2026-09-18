@@ -124,22 +124,60 @@ export async function loadPermissionPolicy(
   return { config: mergePermissionScopes(scopes), sources, notes };
 }
 
-// Same wildcard vocabulary as the old engine: * / ?, last matching pattern,
-// and a trailing " *" also matches the bare command. Path matching folds Windows separators.
-function matches(pattern: string, value: string, path: boolean): boolean {
-  if (pattern === '~' || pattern.startsWith('~/')) pattern = `${homedir()}${pattern.slice(1)}`;
-  if (path) {
-    pattern = pattern.replaceAll('\\', '/');
-    value = value.replaceAll('\\', '/');
-  }
+/**
+ * Compiled patterns, keyed by the pattern and the two things its translation
+ * depends on (tools-20).
+ *
+ * The compilation is pure — same pattern, same regex — but it was being redone
+ * for every rule of every surface on every call, which a recursive search makes
+ * a hot loop: one `glob` over a 19 000-file tree rebuilt these tens of
+ * thousands of times and spent most of its wall clock here. The cache changes
+ * no decision; `~` is part of the key because `homedir()` is read at
+ * translation time and a test may point HOME somewhere else mid-process.
+ */
+const EXPRESSIONS = new Map<string, RegExp>();
+/** Enough for any policy table; cleared rather than evicted, since a miss only costs one compile. */
+const EXPRESSION_CACHE_LIMIT = 4096;
+function matcher(pattern: string, path: boolean): RegExp {
+  const home = pattern.startsWith('~') ? homedir() : '';
+  const key = `${path ? 'p' : 'c'}\u0000${home}\u0000${pattern}`;
+  const cached = EXPRESSIONS.get(key);
+  if (cached) return cached;
+  if (pattern === '~' || pattern.startsWith('~/')) pattern = `${home}${pattern.slice(1)}`;
+  if (path) pattern = pattern.replaceAll('\\', '/');
   let expression = pattern
     .split('*')
     .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replaceAll('\\?', '.'))
     .join('.*');
   if (expression.endsWith(' .*')) expression = `${expression.slice(0, -3)}( .*)?`;
-  return new RegExp(`^${expression}$`, path && process.platform === 'win32' ? 'si' : 's').test(
-    value
-  );
+  const compiled = new RegExp(`^${expression}$`, path && process.platform === 'win32' ? 'si' : 's');
+  if (EXPRESSIONS.size >= EXPRESSION_CACHE_LIMIT) EXPRESSIONS.clear();
+  EXPRESSIONS.set(key, compiled);
+  return compiled;
+}
+// Same wildcard vocabulary as the old engine: * / ?, last matching pattern,
+// and a trailing " *" also matches the bare command. Path matching folds Windows separators.
+function matches(pattern: string, value: string, path: boolean): boolean {
+  // No `g` or `y` flag, so the shared regex carries no lastIndex between calls.
+  return matcher(pattern, path).test(path ? value.replaceAll('\\', '/') : value);
+}
+/**
+ * `Object.entries` of a policy table, kept rather than rebuilt (tools-20).
+ *
+ * A policy object is immutable once merged, and the rule order is what decides
+ * the outcome, so listing it once and reusing the list is the same evaluation
+ * with one fewer array allocated per call — and a recursive search makes that
+ * call per file walked. Weak, so a reconfigured session's old table is still
+ * collected.
+ */
+const ENTRIES = new WeakMap<object, readonly (readonly [string, unknown])[]>();
+function entriesOf<T>(table: object): readonly (readonly [string, T])[] {
+  let listed = ENTRIES.get(table);
+  if (!listed) {
+    listed = Object.entries(table);
+    ENTRIES.set(table, listed);
+  }
+  return listed as readonly (readonly [string, T])[];
 }
 function matchEntry(
   entry: PermissionEntry,
@@ -148,10 +186,20 @@ function matchEntry(
 ): PermissionAction | undefined {
   if (typeof entry === 'string') return entry;
   let action: PermissionAction | undefined;
-  for (const [pattern, rule] of Object.entries(entry))
+  for (const [pattern, rule] of entriesOf<PermissionAction>(entry))
     if (values.some((value) => matches(pattern, value, path))) action = rule;
   return action;
 }
+/** Surfaces whose values are paths rather than command lines or server names. */
+const PATH_SURFACES = new Set([
+  'path',
+  'external_directory',
+  'read',
+  'write',
+  'edit',
+  'find',
+  'grep',
+]);
 export function policyAction(
   policy: RuntimePermissionPolicy,
   surface: string,
@@ -159,14 +207,14 @@ export function policyAction(
   cwd: string
 ): PermissionAction {
   if (surface === 'glob') surface = 'find';
-  const path = ['path', 'external_directory', 'read', 'write', 'edit', 'find', 'grep'].includes(
-    surface
-  );
+  const path = PATH_SURFACES.has(surface);
   const candidates = path
     ? values.flatMap((value) => [value, relative(cwd, resolve(value)), basename(value)])
     : values;
   let action: PermissionAction = 'ask';
-  for (const [name, entry] of Object.entries(policy.config.permission ?? {})) {
+  const permission = policy.config.permission;
+  if (!permission) return action;
+  for (const [name, entry] of entriesOf<PermissionEntry>(permission)) {
     if (matches(name, surface, false)) action = matchEntry(entry, candidates, path) ?? action;
   }
   return action;

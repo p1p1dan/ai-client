@@ -845,6 +845,37 @@ export function pathPolicy(
   // string the rule cannot match.
   const normalized = normalizeWindowsPathForm(path, platform);
   const candidate = normalized.replaceAll('\\', '/');
+  for (const rule of pathPolicyRules(platform, home)) {
+    if (
+      rule.expression.test(candidate) ||
+      (rule.bare && rule.expression.test(paths.basename(normalized)))
+    )
+      action = rule.action;
+  }
+  return action;
+}
+/**
+ * The bundled path table, compiled once per (platform, home) pair (tools-20).
+ *
+ * Same rules, same order, same last-match-wins result; what changes is that a
+ * recursive search no longer rebuilds ten regular expressions for every file it
+ * walks past. `home` is part of the key because the `~/` patterns expand
+ * against it, and a test may point HOME elsewhere mid-process.
+ */
+interface CompiledPathRule {
+  expression: RegExp;
+  /** A pattern with no separator also matches a bare file name at any depth. */
+  bare: boolean;
+  action: PermissionAction;
+}
+const PATH_RULES = new Map<string, readonly CompiledPathRule[]>();
+function pathPolicyRules(platform: NodeJS.Platform, home: string): readonly CompiledPathRule[] {
+  const key = `${platform} ${home}`;
+  const cached = PATH_RULES.get(key);
+  if (cached) return cached;
+  const windows = platform === 'win32';
+  const paths = windows ? win32 : posix;
+  const rules: CompiledPathRule[] = [];
   for (const [pattern, value] of Object.entries(
     AICLIENT_DEFAULT_PERMISSION_POLICY.permission.path
   )) {
@@ -856,12 +887,13 @@ export function pathPolicy(
       .split('*')
       .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       .join('.*');
-    const regex = new RegExp(`^${expression}$`, windows ? 'i' : '');
-    if (
-      regex.test(candidate) ||
-      (!expanded.includes('/') && regex.test(paths.basename(normalized)))
-    )
-      action = value;
+    rules.push({
+      // No `g` or `y` flag, so a shared instance carries no lastIndex.
+      expression: new RegExp(`^${expression}$`, windows ? 'i' : ''),
+      bare: !expanded.includes('/'),
+      action: value,
+    });
   }
-  return action;
+  PATH_RULES.set(key, rules);
+  return rules;
 }

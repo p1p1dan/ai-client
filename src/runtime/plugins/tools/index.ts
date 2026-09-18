@@ -18,6 +18,7 @@ import { containsPath, PERMISSIONS_SERVICE, pathPolicy } from '../permissions/in
 import { type AskUser, askTool } from './ask.ts';
 import { browserPreviewTool, type PreviewHost } from './browserPreview.ts';
 import { createFileChange, readBeforeChange } from './file-change.ts';
+import { type IgnoreLayer, isIgnored, parseGitignore } from './gitignore.ts';
 import { canonicalPath } from './paths.ts';
 import { decodeFileText, readLines, utf8FileDecoder } from './read-lines.ts';
 
@@ -528,12 +529,13 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       name: 'glob',
       label: 'Glob',
       description:
-        'Find files using a glob pattern. A pattern without "/" matches a file name at any depth, so *.ts finds src/a.ts. Skips symlinks, .git and node_modules; does not read file contents.',
+        'Find files using a glob pattern. A pattern without "/" matches a file name at any depth, so *.ts finds src/a.ts. Skips symlinks, .git, node_modules and paths a .gitignore in the tree excludes; set respectGitignore:false to search build output too. Does not read file contents.',
       parameters: Type.Object(
         {
           pattern: Type.String({ minLength: 1, maxLength: 512 }),
           path: Type.Optional(path),
           limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000 })),
+          respectGitignore: Type.Optional(Type.Boolean()),
         },
         objectOptions
       ),
@@ -542,14 +544,18 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
         const found: string[] = [];
         const limit = args.limit ?? 100;
         const matches = globMatcher(root, args.pattern);
-        const budget = { visited: 0, truncated: false };
+        const budget = { visited: 0, truncated: false, ignored: 0 };
+        // Resolved once. `this.ctx` is a cordis Proxy, so reading a service off
+        // it per directory entry cost more than the permission check it was
+        // fetching (tools-20).
+        const permissions = this.ctx.runtimePermissions;
         for await (const file of walk(
           io,
           root,
           budget,
-          (file) =>
-            this.ctx.runtimePermissions.canTraverse({ tool: 'glob', toolCallId: id, path: file }),
-          signal
+          (file) => permissions.canTraverse({ tool: 'glob', toolCallId: id, path: file }),
+          signal,
+          { respectGitignore: args.respectGitignore }
         )) {
           if (!matches(file)) continue;
           found.push(file);
@@ -570,8 +576,11 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
             files: found,
             truncated: budget.truncated,
             visited: budget.visited,
+            ...(budget.ignored ? { ignored: budget.ignored } : {}),
           },
-          budget.truncated ? '\n[search truncated; narrow the search or increase limit]' : ''
+          budget.truncated
+            ? '\n[search truncated; narrow the search or increase limit]'
+            : ignoreNote(found.length, budget)
         );
       },
     });
@@ -579,7 +588,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       name: 'grep',
       label: 'Grep',
       description:
-        'Search UTF-8 files for text. Literal by default; set regex:true to treat pattern as a JavaScript regular expression. include is a glob; without "/" it matches a file name at any depth, so *.ts covers src/a.ts. Skips symlinks, .git, node_modules, binary files and denied paths; bounded to 1 MiB per file.',
+        'Search UTF-8 files for text. Literal by default; set regex:true to treat pattern as a JavaScript regular expression. include is a glob; without "/" it matches a file name at any depth, so *.ts covers src/a.ts. Skips symlinks, .git, node_modules, binary files, denied paths and paths a .gitignore in the tree excludes; set respectGitignore:false to search build output too. Bounded to 1 MiB per file.',
       parameters: Type.Object(
         {
           pattern: Type.String({ minLength: 1, maxLength: 1024 }),
@@ -599,6 +608,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
            */
           regex: Type.Optional(Type.Boolean()),
           limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000 })),
+          respectGitignore: Type.Optional(Type.Boolean()),
         },
         objectOptions
       ),
@@ -606,7 +616,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
         const root = await this.target('grep', id, args.path ?? '.', signal);
         const matches: string[] = [];
         const hitDirectories = new Set<string>();
-        const budget = { visited: 0, truncated: false };
+        const budget = { visited: 0, truncated: false, ignored: 0 };
         const limit = args.limit ?? 100;
         const included = args.include ? globMatcher(root, args.include) : undefined;
         let totalBytes = 0;
@@ -634,13 +644,15 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
           expression
             ? expression.test(line)
             : (args.caseInsensitive ? line.toLowerCase() : line).includes(needle);
+        // See `glob`: one Proxy read instead of one per entry (tools-20).
+        const permissions = this.ctx.runtimePermissions;
         for await (const file of walk(
           io,
           root,
           budget,
-          (file) =>
-            this.ctx.runtimePermissions.canTraverse({ tool: 'grep', toolCallId: id, path: file }),
-          signal
+          (file) => permissions.canTraverse({ tool: 'grep', toolCallId: id, path: file }),
+          signal,
+          { respectGitignore: args.respectGitignore }
         )) {
           if (included && !included(file)) continue;
           if (pathPolicy(file) !== 'allow') {
@@ -719,13 +731,14 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
             truncated: budget.truncated,
             skipped,
             visited: budget.visited,
+            ...(budget.ignored ? { ignored: budget.ignored } : {}),
             ...(timedOut ? { timedOut: true } : {}),
           },
           timedOut
             ? '\n[search stopped: the pattern is too slow over this tree; simplify the regular expression]'
             : budget.truncated
               ? '\n[search truncated; narrow the search]'
-              : ''
+              : ignoreNote(matches.length, budget)
         );
       },
     });
@@ -828,45 +841,101 @@ function decodeUtf8(bytes: Uint8Array, truncated: boolean): { text: string; byte
     );
   return { text, bytes: Buffer.byteLength(text) };
 }
+/**
+ * Say so when a search came back empty and `.gitignore` is why it might have.
+ *
+ * Only on an empty result, and only when something was actually skipped: a
+ * search that found what it was looking for does not need the footnote, and a
+ * model that reads one on every call learns to ignore it. Without this, "No
+ * files matched" is indistinguishable from "the file is in an ignored build
+ * directory", and the model's next move is to reach for the shell.
+ */
+function ignoreNote(hits: number, budget: WalkBudget): string {
+  if (hits || !budget.ignored) return '';
+  return `\n[${budget.ignored} ${
+    budget.ignored === 1 ? 'entry was' : 'entries were'
+  } skipped by .gitignore; pass respectGitignore:false to search them]`;
+}
+/** What a search reports about the tree it crossed, rather than about its hits. */
+interface WalkBudget {
+  visited: number;
+  truncated: boolean;
+  /** Entries a `.gitignore` in scope hid. Zero when `respectGitignore` is off. */
+  ignored: number;
+}
+/**
+ * Walk a tree, yielding the files a search may look at.
+ *
+ * ## Why realpath happens once per directory and not once per entry (tools-20)
+ *
+ * The root arrives canonical — `target` resolves it through `canonicalPath` —
+ * and a `symlink` dirent is skipped rather than followed, so every path this
+ * produces is canonical as well. The per-entry `realpath` that used to prove
+ * that was therefore answering a question that could not come out any other
+ * way, and it dominated the walk: on a 19 000-file tree it was about 80% of the
+ * wall clock on Linux, and on Windows it is worse, because realpath there
+ * resolves the WHOLE path on every call rather than one component. A field run
+ * on a C++ workspace spent 50 s in a single `glob` because of it.
+ *
+ * What is kept is one realpath per directory ENTERED, which still refuses a
+ * directory that resolves outside the root, plus a set of the canonical
+ * directories already walked so a cycle cannot loop forever.
+ */
 async function* walk(
   io: RuntimeHostIoService,
   root: string,
-  budget: { visited: number; truncated: boolean },
+  budget: WalkBudget,
   allowed: (path: string) => boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: { respectGitignore?: boolean } = {}
 ): AsyncIterable<string> {
   if ((await io.stat(root)).kind === 'file') {
     if (allowed(root)) yield root;
     return;
   }
-  const stack = [root];
+  const respectGitignore = options.respectGitignore !== false;
+  const seen = new Set<string>();
+  const stack: { path: string; layers: readonly IgnoreLayer[] }[] = [{ path: root, layers: [] }];
   while (stack.length) {
     signal?.throwIfAborted();
-    const directory = stack.pop();
-    if (!directory) break;
+    const current = stack.pop();
+    if (!current) break;
+    let canonical: string;
     try {
-      for await (const entry of io.readDirectory(directory)) {
+      canonical = await io.realpath(current.path);
+    } catch (error) {
+      if (!isSkippableIoError(error)) throw error;
+      continue;
+    }
+    if (!containsPath(root, canonical) || seen.has(canonical)) continue;
+    seen.add(canonical);
+    const layers = respectGitignore
+      ? await ignoreLayers(io, current.path, current.layers, allowed, signal)
+      : current.layers;
+    try {
+      for await (const entry of io.readDirectory(current.path)) {
         signal?.throwIfAborted();
         if (++budget.visited > SEARCH_ENTRIES) {
           budget.truncated = true;
           return;
         }
         if (entry.name === '.git' || entry.name === 'node_modules') continue;
-        const path = join(directory, entry.name);
-        if (!allowed(path)) continue;
-        // The dirent already says it's a symlink; realpath would only tell us
-        // whether it's dangling/looping, and we skip it either way.
-        if (entry.kind === 'symlink') continue;
-        let canonical: string;
-        try {
-          canonical = await io.realpath(path);
-        } catch (error) {
-          if (!isSkippableIoError(error)) throw error;
+        // Only ordinary files and directories. A symlink is dropped here rather
+        // than resolved: the dirent already says what it is, and realpath would
+        // only add whether it is dangling or looping, which changes nothing —
+        // it is skipped either way. Sockets, devices and FIFOs go the same way.
+        if (entry.kind !== 'file' && entry.kind !== 'directory') continue;
+        const path = join(current.path, entry.name);
+        // Ahead of the permission check on purpose: an ignored build tree is
+        // the case this exists for, and asking the gate about each of its
+        // 12 000 object files first would spend exactly what it saves.
+        if (layers.length && isIgnored(layers, path, entry.kind === 'directory')) {
+          budget.ignored++;
           continue;
         }
-        if (!containsPath(root, canonical) || canonical !== path) continue;
-        if (entry.kind === 'directory') stack.push(path);
-        else if (entry.kind === 'file') yield path;
+        if (!allowed(path)) continue;
+        if (entry.kind === 'directory') stack.push({ path, layers });
+        else yield path;
       }
     } catch (error) {
       // A directory that vanished mid-walk or one we can't read (EACCES)
@@ -874,4 +943,42 @@ async function* walk(
       if (!isSkippableIoError(error)) throw error;
     }
   }
+}
+/** How much of a `.gitignore` is read before the rest is ignored. */
+const GITIGNORE_BYTES = 128 * 1024;
+/**
+ * The ignore layers in scope inside `directory`: whatever it inherited, plus
+ * its own `.gitignore` when there is one to read.
+ *
+ * Every failure short of cancellation answers "no extra rules". A `.gitignore`
+ * that is missing, unreadable, binary or actually a directory must not fail a
+ * search — the worst it can cost is a few thousand files the model did not need
+ * to see.
+ */
+async function ignoreLayers(
+  io: RuntimeHostIoService,
+  directory: string,
+  inherited: readonly IgnoreLayer[],
+  allowed: (path: string) => boolean,
+  signal?: AbortSignal
+): Promise<readonly IgnoreLayer[]> {
+  const file = join(directory, '.gitignore');
+  if (!allowed(file)) return inherited;
+  let text: string;
+  try {
+    const read = await io.readFile(file, {
+      maxBytes: GITIGNORE_BYTES,
+      overflow: 'truncate',
+      signal,
+    });
+    if (read.bytes.includes(0)) return inherited;
+    text = Buffer.from(read.bytes).toString('utf8');
+  } catch (error) {
+    signal?.throwIfAborted();
+    const code = errorCode(error);
+    if (code === 'io_aborted' || code === 'runtime_disposed') throw error;
+    return inherited;
+  }
+  const layer = parseGitignore(directory, text);
+  return layer ? [...inherited, layer] : inherited;
 }
