@@ -277,7 +277,12 @@ function sameBootstrap(a: WorkerBootstrapPayload, b: WorkerBootstrapPayload): bo
     a.forceTakeover === b.forceTakeover &&
     a.tier === b.tier &&
     a.permissions?.mode === b.permissions?.mode &&
-    a.permissions?.gear === b.permissions?.gear
+    a.permissions?.gear === b.permissions?.gear &&
+    // The TTLs are read at spawn time, so a user who changed the setting
+    // between two bootstraps of the same slot must get a runtime built with the
+    // new value rather than the cached answer from the old one.
+    a.promptCacheTtl === b.promptCacheTtl &&
+    a.subagentPromptCacheTtl === b.subagentPromptCacheTtl
   );
 }
 

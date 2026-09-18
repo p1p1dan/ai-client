@@ -30,7 +30,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { AgentTool, ThinkingLevel } from '@earendil-works/pi-agent-core';
-import type { Usage } from '@earendil-works/pi-ai';
+import type { CacheRetention, Usage } from '@earendil-works/pi-ai';
 import { type Context, Service } from 'cordis';
 import { type TSchema, Type } from 'typebox';
 import {
@@ -73,7 +73,12 @@ import {
   MAX_SUBAGENT_CONCURRENCY,
   waitForDelegations,
 } from './registry.ts';
-import { addUsage, type SubagentEventEnvelope, SubagentRun } from './run.ts';
+import {
+  addUsage,
+  DEFAULT_SUBAGENT_CACHE_RETENTION,
+  type SubagentEventEnvelope,
+  SubagentRun,
+} from './run.ts';
 
 export const SUBAGENT_SERVICE = 'runtimeSubagents';
 
@@ -225,6 +230,16 @@ export interface SubagentConfig {
    * embedding with no agent loop in front of it).
    */
   thinkingLevel?: ThinkingLevel;
+  /**
+   * How long the provider keeps a DELEGATE's prompt cache prefix.
+   *
+   * `short` (the plain five-minute `cache_control`), deliberately not the
+   * parent's `long`. A delegate is a burst: it builds its own prefix, spends a
+   * handful of turns on it and is gone, and nothing ever re-reads that prefix
+   * again. Buying an hour of retention for it is a pure write premium — and a
+   * fan-out of delegates would buy one per delegate.
+   */
+  cacheRetention?: CacheRetention;
 }
 
 /** Which run a delegation belongs to, for attribution on records and events. */
@@ -1059,6 +1074,7 @@ export class SubagentPlugin extends Service implements SubagentService {
         this.runContext?.thinkingLevel ??
         this.config.thinkingLevel ??
         'medium') as ThinkingLevel,
+      cacheRetention: this.config.cacheRetention ?? DEFAULT_SUBAGENT_CACHE_RETENTION,
       tools,
       onEvent: (envelope) => this.publish(envelope),
       signal,

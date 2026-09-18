@@ -160,6 +160,39 @@ describe('createPiWorkerSlot', () => {
   });
 
   /**
+   * Same absence rule for the two prompt cache TTLs: the worker applies the
+   * shipped defaults when neither key travels, so an install on the defaults
+   * must not start sending fields `sameBootstrap` would then have to compare.
+   */
+  it('carries the prompt cache TTLs when set, and omits them otherwise', async () => {
+    const chosen = new LoopbackTransport();
+    void createPiWorkerSlot({
+      slotKey: 'workspace:/repo',
+      logicalSessionId: 'logical-1',
+      cwd: '/repo',
+      promptCacheTtl: '1h',
+      subagentPromptCacheTtl: '5m',
+      createTransport: () => chosen,
+    });
+    await vi.waitFor(() => expect(chosen.requests).toHaveLength(1));
+    expect(chosen.requests[0].payload).toMatchObject({
+      promptCacheTtl: '1h',
+      subagentPromptCacheTtl: '5m',
+    });
+
+    const untouched = new LoopbackTransport();
+    void createPiWorkerSlot({
+      slotKey: 'workspace:/repo',
+      logicalSessionId: 'logical-1',
+      cwd: '/repo',
+      createTransport: () => untouched,
+    });
+    await vi.waitFor(() => expect(untouched.requests).toHaveLength(1));
+    expect(untouched.requests[0].payload).not.toHaveProperty('promptCacheTtl');
+    expect(untouched.requests[0].payload).not.toHaveProperty('subagentPromptCacheTtl');
+  });
+
+  /**
    * The 2026-09-05 startup defect: bootstrap shared `WorkerSlot`'s 10s warm-RPC
    * budget, so a cold start that ran long failed `chat:resumeSession` with
    * `worker.bootstrap timed out after 10000ms` and left the session unopenable.

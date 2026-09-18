@@ -50,9 +50,22 @@ const api = {
   reveal: vi.fn(async () => undefined),
 };
 
+// `PiSubagentsSettings` also renders `SubagentPromptCacheTtlRow`, which reads
+// and writes `useSettingsStore`. Importing that store triggers zustand
+// persist's auto-rehydrate immediately, at module-evaluation time — before any
+// `beforeEach` runs — and rehydrate hydrates through `window.electronAPI.settings`.
+// Without `settings` here from the start, that hydrate promise never settles
+// and the whole suite hangs before the first assertion (`env`/`app` are what
+// `onRehydrateStorage` reaches for right after). So the base stub has to live
+// in `vi.hoisted`, not `beforeEach` — `beforeEach` runs too late.
 vi.hoisted(() => {
-  window.electronAPI = {} as unknown as typeof window.electronAPI;
+  window.electronAPI = {
+    env: { platform: 'linux' },
+    settings: { read: async () => null, write: async () => undefined },
+    app: { setLanguage: () => undefined, setProxy: () => undefined },
+  } as unknown as typeof window.electronAPI;
 });
+vi.mock('@/utils/logging', () => ({ updateRendererLogging: vi.fn() }));
 const i18n = { t: (key: string) => key, locale: 'en' };
 vi.mock('@/i18n', () => ({ useI18n: () => i18n }));
 
@@ -60,7 +73,10 @@ beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockClear();
   api.list.mockResolvedValue(catalog);
   api.setEnabled.mockResolvedValue(catalog);
-  window.electronAPI = { piSubagents: api } as unknown as typeof window.electronAPI;
+  window.electronAPI = {
+    ...window.electronAPI,
+    piSubagents: api,
+  } as unknown as typeof window.electronAPI;
 });
 
 async function mount() {

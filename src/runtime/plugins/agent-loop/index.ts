@@ -9,7 +9,7 @@ import {
   estimateContextTokens,
   type ThinkingLevel,
 } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, Usage } from '@earendil-works/pi-ai';
+import type { AssistantMessage, CacheRetention, Usage } from '@earendil-works/pi-ai';
 import type { Context } from 'cordis';
 import { Service } from 'cordis';
 import { markInternalMessage } from '../../../shared/internalMessage.ts';
@@ -127,11 +127,25 @@ export interface AgentLoopConfig {
    * LEVEL a caller can ask for; it is just no longer what "unspecified" means.
    */
   defaultThinkingLevel: ThinkingLevel;
+  /**
+   * How long the provider keeps this loop's prompt cache prefix.
+   *
+   * `long` (Anthropic `cache_control.ttl: "1h"`) because a main conversation is
+   * exactly the traffic shape the hour is for: one prefix that grows all session
+   * and is re-read on every turn, with human-length gaps between turns that the
+   * five-minute default does not survive. pi-ai's own default is `short`, and
+   * before this the field was never set at all — so every gap longer than five
+   * minutes re-wrote the whole conversation at the 1.25x write premium.
+   *
+   * Delegates get `short` instead; see `SubagentConfig.cacheRetention`.
+   */
+  cacheRetention: CacheRetention;
 }
 
 export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
   singleTurn: true,
   defaultThinkingLevel: 'medium',
+  cacheRetention: 'long',
 };
 
 export class AgentLoopPlugin extends Service implements AgentLoopService {
@@ -432,7 +446,11 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         createProviderRetryStream(
           model,
           context,
-          retryBudget.requestOptions(options),
+          // Applied here rather than inside the retry factory so a retried
+          // request carries the same TTL as the one it replaces: a retry that
+          // downgraded to the SDK default would write a second, shorter entry
+          // for a prefix the first attempt already paid an hour for.
+          retryBudget.requestOptions({ ...options, cacheRetention: this.config.cacheRetention }),
           (retryOptions) => resolved.models.streamSimple(model, context, retryOptions),
           retryBudget.controller
         ),

@@ -2,6 +2,7 @@ import type { Locale } from '@shared/i18n';
 import type { ChatAgentDefaults } from '@shared/models/chatAgentDefaults';
 import type { ConnectionProfile, GitHostMapping, ProxySettings, ShellConfig } from '@shared/types';
 import type { CommonAISettings } from '@shared/types/ai';
+import type { PromptCacheTtl } from '@shared/types/promptCacheTtl';
 
 // Theme types
 export type Theme = 'light' | 'dark' | 'system' | 'sync-terminal';
@@ -211,6 +212,19 @@ export interface SettingsState {
    */
   chatAgentDefaults: ChatAgentDefaults;
 
+  /**
+   * How long the provider keeps the MAIN conversation's prompt cache prefix,
+   * and how long a DELEGATE's.
+   *
+   * Two settings rather than one because the two loops have opposite cache
+   * economics — see `@shared/types/promptCacheTtl`. Held here (renderer-owned,
+   * persisted through the settings file) rather than per session: it is a
+   * spend/latency preference for the install, not a property of one
+   * conversation. Main reads both at worker spawn time.
+   */
+  promptCacheTtl: PromptCacheTtl;
+  subagentPromptCacheTtl: PromptCacheTtl;
+
   // AI Features
   commitMessageGenerator: CommitMessageGeneratorSettings;
   codeReview: CodeReviewSettings;
@@ -301,6 +315,10 @@ export interface SettingsState {
    * never grows a second, subtly different merge rule.
    */
   setChatAgentDefaults: (defaults: ChatAgentDefaults) => void;
+
+  // Setters - Prompt cache
+  setPromptCacheTtl: (ttl: PromptCacheTtl) => void;
+  setSubagentPromptCacheTtl: (ttl: PromptCacheTtl) => void;
 
   // Setters - AI Features
   setCommitMessageGenerator: (settings: Partial<CommitMessageGeneratorSettings>) => void;

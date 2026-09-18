@@ -6,6 +6,27 @@ import type { SettingsCategory } from '../constants';
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: 'en' }) }));
 
+// Several `pi` category panels reach into `useSettingsStore` (e.g.
+// `PiSubagentsSettings` renders `SubagentPromptCacheTtlRow`). Importing that
+// store triggers zustand persist's auto-rehydrate at module-evaluation time,
+// before any hook runs, and rehydrate hydrates through
+// `window.electronAPI.settings`. Without a stub here from the start, that
+// hydrate promise never settles and `beforeAll` hangs before the first test
+// even starts. The base stub has to live in `vi.hoisted`, not `beforeAll` —
+// `beforeAll` runs too late, after the dynamic import below already pulled in
+// every unmocked panel.
+vi.hoisted(() => {
+  window.electronAPI = {
+    env: { platform: 'linux' },
+    settings: { read: async () => null, write: async () => undefined },
+    app: { setLanguage: () => undefined, setProxy: () => undefined },
+  } as unknown as typeof window.electronAPI;
+});
+vi.mock('@/utils/logging', () => ({ updateRendererLogging: vi.fn() }));
+
+// Every panel `SettingsContent.tsx` actually imports, in source order. Every
+// entry here must stay mocked — an entry left out renders the real panel
+// (and whatever store/IPC it touches) instead of exercising navigation.
 const panels = [
   'GeneralSettings',
   'AppearanceSettings',
@@ -14,10 +35,14 @@ const panels = [
   'EditorSettings',
   'GitSettings',
   'AISettings',
+  'AgentMigrationSettings',
   'ConversationImportSettings',
+  'UserProvidersSettings',
   'PiModelManagementSettings',
   'PermissionPolicySettings',
+  'PiPluginsSettings',
   'PiResourcesSettings',
+  'PiSubagentsSettings',
   'KeybindingsSettings',
   'NetworkSettings',
   'RemoteSettings',
@@ -58,10 +83,14 @@ describe('settings navigation', () => {
       ['EditorSettings'],
       ['GitSettings', 'AISettings'],
       [
+        'AgentMigrationSettings',
         'ConversationImportSettings',
+        'UserProvidersSettings',
         'PiModelManagementSettings',
         'PermissionPolicySettings',
+        'PiPluginsSettings',
         'PiResourcesSettings',
+        'PiSubagentsSettings',
       ],
       ['KeybindingsSettings'],
       ['NetworkSettings', 'RemoteSettings'],

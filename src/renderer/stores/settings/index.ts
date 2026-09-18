@@ -1,6 +1,10 @@
 import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
 import { EMPTY_CHAT_AGENT_DEFAULTS } from '@shared/models/chatAgentDefaults';
+import {
+  DEFAULT_PROMPT_CACHE_TTL,
+  DEFAULT_SUBAGENT_PROMPT_CACHE_TTL,
+} from '@shared/types/promptCacheTtl';
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -154,6 +158,12 @@ export function getInitialState() {
     // draft on the legacy binding and every model on `Automatic`.
     chatAgentDefaults: EMPTY_CHAT_AGENT_DEFAULTS,
 
+    // Prompt cache. Written here as the SAME defaults the worker applies when
+    // the keys are absent, so the settings page and the runtime cannot disagree
+    // about what an untouched install is doing.
+    promptCacheTtl: DEFAULT_PROMPT_CACHE_TTL,
+    subagentPromptCacheTtl: DEFAULT_SUBAGENT_PROMPT_CACHE_TTL,
+
     // AI Features
     commitMessageGenerator: defaultCommitMessageGeneratorSettings,
     codeReview: defaultCodeReviewSettings,
@@ -278,6 +288,12 @@ export const useSettingsStore = create<SettingsState>()(
       setShellConfig: (shellConfig) => set({ shellConfig }),
 
       setChatAgentDefaults: (chatAgentDefaults) => set({ chatAgentDefaults }),
+
+      // Both only reach a session at its next worker spawn: the TTL is fixed
+      // when the runtime graph is built, so an open conversation keeps the one
+      // it started on until it is reopened.
+      setPromptCacheTtl: (promptCacheTtl) => set({ promptCacheTtl }),
+      setSubagentPromptCacheTtl: (subagentPromptCacheTtl) => set({ subagentPromptCacheTtl }),
 
       // AI Feature Setters
       setCommitMessageGenerator: (settings) =>

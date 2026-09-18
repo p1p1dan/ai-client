@@ -63,7 +63,7 @@ import {
   estimateContextTokens,
   type ThinkingLevel,
 } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, Usage } from '@earendil-works/pi-ai';
+import type { AssistantMessage, CacheRetention, Usage } from '@earendil-works/pi-ai';
 import type { TSchema } from 'typebox';
 import type { SubagentDefinition } from '../../../shared/subagentDefinition.ts';
 import type { ResolvedModel } from '../../contracts.ts';
@@ -91,6 +91,15 @@ import {
  * becoming the context problem delegation was supposed to avoid.
  */
 export const MAX_SUBAGENT_REPORT_CHARS = 12_000;
+
+/**
+ * What a delegate asks for when nothing configured it.
+ *
+ * `short` is also pi-ai's own default, so this constant does not CHANGE
+ * behaviour — it pins it, so that raising the parent loop to `long` cannot drag
+ * delegates along with it by accident.
+ */
+export const DEFAULT_SUBAGENT_CACHE_RETENTION: CacheRetention = 'short';
 
 /**
  * Lifecycle states a delegate can settle in.
@@ -143,6 +152,14 @@ export interface SubagentRunOptions {
   /** Model this delegate runs on, already resolved against the catalog. */
   model: ResolvedModel;
   thinkingLevel: ThinkingLevel;
+  /**
+   * Prompt cache lifetime for THIS delegate's requests.
+   *
+   * Required rather than optional so a new call site has to state which side of
+   * the parent/delegate split it is on: the whole point of the field is that a
+   * delegate must not silently inherit the parent's hour.
+   */
+  cacheRetention: CacheRetention;
   /** Host-backed tools, so a delegate's calls take the parent's exact path. */
   tools: readonly AgentTool<TSchema, unknown>[];
   onEvent?: (envelope: SubagentEventEnvelope) => void;
@@ -243,7 +260,12 @@ export class SubagentRun {
         createProviderRetryStream(
           requestModel,
           context,
-          retryBudget.requestOptions(streamOptions),
+          // Same placement as the parent loop: on the options the retry factory
+          // clones, so attempt 2 asks for the same TTL attempt 1 did.
+          retryBudget.requestOptions({
+            ...streamOptions,
+            cacheRetention: options.cacheRetention,
+          }),
           (retryOptions) => model.models.streamSimple(requestModel, context, retryOptions),
           retryBudget.controller
         ),

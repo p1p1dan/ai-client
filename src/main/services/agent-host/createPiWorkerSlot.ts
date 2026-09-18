@@ -110,6 +110,14 @@ export async function createPiWorkerSlot(
         // runtime reads as "on with the builtin catalog". Only an explicit
         // setting travels, so an untouched install's payload is unchanged.
         ...(options.subagents ? { subagents: options.subagents } : {}),
+        // Omitted when the user is on the shipped defaults, for the same reason
+        // as `tier` above: an untouched install's payload stays byte-identical
+        // to a pre-TTL build's and `sameBootstrap` keeps comparing
+        // undefined === undefined.
+        ...(options.promptCacheTtl ? { promptCacheTtl: options.promptCacheTtl } : {}),
+        ...(options.subagentPromptCacheTtl
+          ? { subagentPromptCacheTtl: options.subagentPromptCacheTtl }
+          : {}),
         // P5-5: present only when Main could assemble one. Absent leaves the
         // native worker reading the agent directory, which is what every
         // pre-P5-5 build did and what the smoke lanes still do.

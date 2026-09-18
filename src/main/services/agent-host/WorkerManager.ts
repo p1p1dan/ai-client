@@ -97,6 +97,7 @@ import {
 } from './createPiWorkerSlot';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { type NativeSubagentSettings, nativeSubagentSettings } from './nativeSubagentSettings';
+import { type PromptCacheTtlSettings, promptCacheTtlSettings } from './promptCacheSettings';
 import type { WorkerSlot, WorkerSlotLifecycleEvent } from './WorkerSlot';
 import {
   joinWorkerPath,
@@ -294,6 +295,13 @@ export interface WorkerManagerOptions {
    */
   readModelCatalog?: () => WorkerModelCatalog | undefined;
   /**
+   * The prompt-cache TTLs the settings page holds, or `{}` when the user has
+   * chosen neither. Injected for the same reason as the two readers above: the
+   * real one unwraps the renderer's persist layer out of the shared settings
+   * file, which needs Electron's `app` paths.
+   */
+  readPromptCacheTtls?: () => PromptCacheTtlSettings;
+  /**
    * P5-2-3 — show a workspace page in the preview window.
    *
    * Injected for the same reason as the two above: production opens a real
@@ -418,6 +426,7 @@ export class WorkerManager {
   private readonly createSlot: typeof createPiWorkerSlot;
   private readonly readSubagentSettings: () => NativeSubagentSettings;
   private readonly readModelCatalog: () => WorkerModelCatalog | undefined;
+  private readonly readPromptCacheTtls: () => PromptCacheTtlSettings;
   private readonly showPreview: (request: PreviewShowRequest) => Promise<void>;
   private readonly bindRuntimeIdentity: (sessionId: string, sessionFile: string) => Promise<void>;
   private readonly commitResumed: NonNullable<WorkerManagerOptions['commitResumed']>;
@@ -469,6 +478,9 @@ export class WorkerManager {
     // host behaves exactly as it did before this node — the worker reads the
     // agent directory. The production singleton below injects the assembler.
     this.readModelCatalog = options.readModelCatalog ?? (() => undefined);
+    // Same rule again: an empty object means "the user chose neither", which
+    // leaves the worker on the shipped defaults (1h main / 5m delegate).
+    this.readPromptCacheTtls = options.readPromptCacheTtls ?? (() => ({}));
     // Same rule, one step further: the DEFAULT refuses. A manager with no host
     // has no window to open, and answering `ok: true` from one would tell the
     // model a page is on screen when nothing is. The production singleton below
@@ -2257,6 +2269,9 @@ export class WorkerManager {
       // switches delegation off gets it off on the next worker rather than only
       // after a restart.
       subagents: this.readSubagentSettings(),
+      // Read at spawn time for the same reason as the line above: a TTL the
+      // user just changed reaches the next worker without an app restart.
+      ...this.readPromptCacheTtls(),
       // P5-5: read at spawn time for the same reason as the line above — a key
       // the user just added, or a sync that just landed, reaches the next
       // worker without waiting for a restart.
@@ -3151,6 +3166,8 @@ export const workerManager = new WorkerManager({
   readSubagentSettings: () => nativeSubagentSettings(),
   // P5-5: the real assembler, injected for the same reason.
   readModelCatalog: () => resolveNativeModelCatalog(),
+  // The real settings-page read, injected for the same reason.
+  readPromptCacheTtls: () => promptCacheTtlSettings(),
   // P5-2-3: the real preview window, injected for the same reason.
   showPreview: (request) => previewWindowManager.show(request),
   bindRuntimeIdentity: (sessionId, sessionFile) =>

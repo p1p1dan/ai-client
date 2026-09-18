@@ -20,6 +20,8 @@ import {
   type WorkerReconcileImportedSessionPayload,
   type WorkerReconcileImportedSessionResult,
 } from './legacyImport.ts';
+// Value import (`isPromptCacheTtl`), so the explicit `.ts` applies here too.
+import { isPromptCacheTtl, type PromptCacheTtl } from './promptCacheTtl.ts';
 import type { PermissionDecisionId, RuntimeEvent } from './runtimeEvents';
 import {
   isRuntimePermissionSettings,
@@ -163,6 +165,18 @@ export interface WorkerBootstrapPayload {
    * shareable artifact and the switch is this machine's.
    */
   subagents?: { enabled: boolean; disabled?: readonly string[] };
+  /**
+   * How long the provider should keep this session's prompt cache entries.
+   *
+   * Two separate values because the two loops have opposite cache economics:
+   * the main conversation re-reads one growing prefix for as long as the tab is
+   * open, a delegate writes a prefix that nothing reads again. Absent means the
+   * runtime's own defaults (`1h` main, `5m` delegate), so an install that never
+   * touched the setting sends a payload identical to a pre-TTL build's and
+   * `sameBootstrap` keeps comparing undefined === undefined.
+   */
+  promptCacheTtl?: PromptCacheTtl;
+  subagentPromptCacheTtl?: PromptCacheTtl;
   /**
    * P5-5 — the model catalog, handed over rather than read off disk.
    *
@@ -767,6 +781,16 @@ export function isWorkerBootstrapPayload(value: unknown): value is WorkerBootstr
   if (
     value.tier !== undefined &&
     (typeof value.tier !== 'string' || !VALID_TIERS.has(value.tier))
+  ) {
+    return false;
+  }
+  // Rejected rather than coerced: a worker that silently fell back would run a
+  // TTL the settings page is not showing, which is the failure this guard exists
+  // to make impossible for every other field too.
+  if (value.promptCacheTtl !== undefined && !isPromptCacheTtl(value.promptCacheTtl)) return false;
+  if (
+    value.subagentPromptCacheTtl !== undefined &&
+    !isPromptCacheTtl(value.subagentPromptCacheTtl)
   ) {
     return false;
   }

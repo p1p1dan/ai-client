@@ -2911,6 +2911,21 @@ export const zhTranslations: Record<string, string> = {
     '这个对话的记录条数超过了 {{limit}} 条的导入上限，没能导入。请改导入较小的对话，或先拆分后再导入。',
   'This conversation is larger than {{size}}, past the import limit. Import a smaller conversation, or split it up first.':
     '这个对话的体积超过了 {{size}} 的导入上限，没能导入。请改导入较小的对话，或先拆分后再导入。',
+
+  // --- 提示词缓存存活时长（主对话 / 子代理各一档）----------------------------
+  // 两档分开，是因为两种循环的缓存经济学相反：主对话是一段不断增长、每轮都会被
+  // 重读的前缀，值得买一小时；子代理是一次性爆发，写完的前缀没人再读，多付的写入
+  // 溢价收不回来。
+  '1 hour': '1 小时',
+  '5 minutes': '5 分钟',
+  'Prompt cache': '提示词缓存',
+  'Main conversation': '主对话',
+  'How long the provider keeps the main conversation cached between turns. One hour costs a little more on each write and saves the whole prefix on every turn that follows a pause longer than five minutes.':
+    '供应商在两轮之间为主对话保留缓存的时长。选 1 小时，每次写入会略贵一点，但只要中间停顿超过 5 分钟，下一轮就能整段命中缓存。',
+  'Takes effect the next time a conversation starts its runtime.': '在对话下一次启动运行时生效。',
+  'Subagent prompt cache': '子代理提示词缓存',
+  'A delegate writes a prefix nothing reads again, so five minutes is usually the cheaper choice. Takes effect the next time a conversation starts its runtime.':
+    '子代理写出的前缀之后没人再读，所以通常 5 分钟更划算。在对话下一次启动运行时生效。',
 };
 
 export function normalizeLocale(input?: string): Locale {

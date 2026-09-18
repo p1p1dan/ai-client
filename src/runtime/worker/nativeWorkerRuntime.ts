@@ -2,6 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { samePiSessionPath } from '../../agent-host/piSessionPreflight.ts';
 import { paginatePiSessionHistory } from '../../agent-host/piSessionTimeline.ts';
+import {
+  cacheRetentionForPromptCacheTtl,
+  DEFAULT_PROMPT_CACHE_TTL,
+  DEFAULT_SUBAGENT_PROMPT_CACHE_TTL,
+  readPromptCacheTtl,
+} from '../../shared/types/promptCacheTtl.ts';
 import type { PermissionDecisionId, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import {
   migratePermissionTier,
@@ -236,8 +242,24 @@ export class NativeWorkerRuntime {
               // this a definition that could not be read simply vanished from
               // the menu with nothing written down anywhere.
               ...(this.options.log ? { log: this.options.log } : {}),
+              cacheRetention: cacheRetentionForPromptCacheTtl(
+                readPromptCacheTtl(
+                  this.options.subagentPromptCacheTtl,
+                  DEFAULT_SUBAGENT_PROMPT_CACHE_TTL
+                )
+              ),
             },
           }),
+      // The two prompt-cache TTLs, translated from the setting's wire
+      // vocabulary (`5m`/`1h`) into pi-ai's (`short`/`long`) exactly once. Both
+      // are resolved here rather than defaulted deeper down so the graph always
+      // starts with an explicit value: a session opened before the setting
+      // existed must not inherit the SDK's own `short` for the main loop.
+      loop: {
+        cacheRetention: cacheRetentionForPromptCacheTtl(
+          readPromptCacheTtl(this.options.promptCacheTtl, DEFAULT_PROMPT_CACHE_TTL)
+        ),
+      },
       permissions: {
         ...(this.options.permissions?.mode ? { mode: this.options.permissions.mode } : {}),
         ...(this.options.permissions?.gear ? { gear: this.options.permissions.gear } : {}),

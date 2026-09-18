@@ -111,6 +111,32 @@ describe('worker RPC boundary guards', () => {
       ).toBe(false);
     }
 
+    // The two prompt cache TTLs: absent is the shipped default, and anything
+    // that is not one of the two accepted spellings is REJECTED rather than
+    // coerced — a worker that fell back silently would run a lifetime the
+    // settings page is not showing.
+    for (const promptCacheTtl of ['5m', '1h', undefined]) {
+      expect(
+        isWorkerBootstrapPayload({ logicalSessionId: 'logical-1', cwd: '/repo', promptCacheTtl })
+      ).toBe(true);
+    }
+    for (const ttl of ['1 hour', 'long', '60m', 5, {}]) {
+      expect(
+        isWorkerBootstrapPayload({
+          logicalSessionId: 'logical-1',
+          cwd: '/repo',
+          promptCacheTtl: ttl,
+        })
+      ).toBe(false);
+      expect(
+        isWorkerBootstrapPayload({
+          logicalSessionId: 'logical-1',
+          cwd: '/repo',
+          subagentPromptCacheTtl: ttl,
+        })
+      ).toBe(false);
+    }
+
     expect(
       isWorkerBootstrapResult({
         bootstrapped: true,

@@ -26,6 +26,7 @@ import {
   SUBAGENT_ASSIGNABLE_TOOLS,
   SUBAGENT_THINKING_LEVELS,
 } from '@shared/subagentDefinition';
+import { isPromptCacheTtl, PROMPT_CACHE_TTLS } from '@shared/types/promptCacheTtl';
 import type {
   SubagentCatalogView,
   SubagentImportPreview,
@@ -69,7 +70,8 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useI18n } from '@/i18n';
-import { SettingsSectionBlock } from './SettingsPrimitives';
+import { useSettingsStore } from '@/stores/settings';
+import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 import {
   adoptCatalog,
   describeImportResult,
@@ -92,6 +94,49 @@ const UNSET = '__unset__';
 
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+/**
+ * How long a DELEGATE's prompt cache prefix lives, which is a different
+ * question from the main conversation's (that one is on the model-management
+ * page).
+ *
+ * Five minutes by default: a delegate builds a prefix, spends a few turns on it
+ * and is gone, and nothing reads that prefix again — so an hour of retention is
+ * a write premium with no read to earn it back, once per delegate on a fan-out.
+ * Raising it only pays when the same delegate is re-run against an unchanged
+ * prompt, repeatedly.
+ */
+function SubagentPromptCacheTtlRow() {
+  const { t } = useI18n();
+  const subagentPromptCacheTtl = useSettingsStore((state) => state.subagentPromptCacheTtl);
+  const setSubagentPromptCacheTtl = useSettingsStore((state) => state.setSubagentPromptCacheTtl);
+
+  return (
+    <SettingsRow>
+      <span className="text-ui">{t('Subagent prompt cache')}</span>
+      <div className="min-w-0 space-y-2">
+        <ToggleGroup
+          value={[subagentPromptCacheTtl]}
+          onValueChange={(value) => {
+            const next = (value as string[])[0];
+            if (isPromptCacheTtl(next)) setSubagentPromptCacheTtl(next);
+          }}
+        >
+          {PROMPT_CACHE_TTLS.map((ttl) => (
+            <ToggleGroupItem key={ttl} value={ttl}>
+              {ttl === '1h' ? t('1 hour') : t('5 minutes')}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        <p className="text-meta text-muted-foreground">
+          {t(
+            'A delegate writes a prefix nothing reads again, so five minutes is usually the cheaper choice. Takes effect the next time a conversation starts its runtime.'
+          )}
+        </p>
+      </div>
+    </SettingsRow>
+  );
 }
 
 export function PiSubagentsSettings() {
@@ -249,6 +294,8 @@ export function PiSubagentsSettings() {
           'Background delegates the model can start with Task. Each one runs on its own context and reports back when it finishes.'
         )}
       />
+
+      <SubagentPromptCacheTtlRow />
 
       {error && (
         <div

@@ -2,14 +2,17 @@ import type {
   PiModelManagementSettings as PiModelManagementSnapshot,
   PiModelSyncResult,
 } from '@shared/piModelConfig';
+import { isPromptCacheTtl, PROMPT_CACHE_TTLS } from '@shared/types/promptCacheTtl';
 import { CheckCircle2, ExternalLink, RefreshCw, Server, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { Input } from '@/components/ui/input';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useI18n } from '@/i18n';
-import { SettingsSectionBlock } from './SettingsPrimitives';
+import { useSettingsStore } from '@/stores/settings';
+import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
 function formatTime(value: number | null): string {
   if (!value) return '—';
@@ -185,6 +188,55 @@ export function PiModelManagementSettings() {
           )}
         </p>
       </div>
+
+      <PromptCacheTtlSection />
     </div>
+  );
+}
+
+/**
+ * The main conversation's prompt cache lifetime.
+ *
+ * Lives on this page rather than in General because it is a property of how we
+ * make MODEL requests, not of the app's chrome. The delegate's own TTL is on the
+ * subagents page, next to everything else that is about delegates.
+ *
+ * Both are read when a session's worker starts, so the note below is not a
+ * disclaimer — it is the actual rule a user needs to know to test the change.
+ */
+function PromptCacheTtlSection() {
+  const { t } = useI18n();
+  const promptCacheTtl = useSettingsStore((state) => state.promptCacheTtl);
+  const setPromptCacheTtl = useSettingsStore((state) => state.setPromptCacheTtl);
+
+  return (
+    <SettingsSectionBlock
+      title={t('Prompt cache')}
+      description={t(
+        'How long the provider keeps the main conversation cached between turns. One hour costs a little more on each write and saves the whole prefix on every turn that follows a pause longer than five minutes.'
+      )}
+    >
+      <SettingsRow>
+        <span className="text-ui">{t('Main conversation')}</span>
+        <div className="min-w-0 space-y-2">
+          <ToggleGroup
+            value={[promptCacheTtl]}
+            onValueChange={(value) => {
+              const next = (value as string[])[0];
+              if (isPromptCacheTtl(next)) setPromptCacheTtl(next);
+            }}
+          >
+            {PROMPT_CACHE_TTLS.map((ttl) => (
+              <ToggleGroupItem key={ttl} value={ttl}>
+                {ttl === '1h' ? t('1 hour') : t('5 minutes')}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <p className="text-meta text-muted-foreground">
+            {t('Takes effect the next time a conversation starts its runtime.')}
+          </p>
+        </div>
+      </SettingsRow>
+    </SettingsSectionBlock>
   );
 }

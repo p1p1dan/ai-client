@@ -408,6 +408,33 @@ describe('NativeWorkerRuntime bootstrap', () => {
     expect(typeof fake.options?.permissions?.approve).toBe('function');
   });
 
+  /**
+   * The prompt cache TTLs. Both are stated on the graph even when the payload
+   * named neither, because the SDK's own default is `short` for both: a session
+   * opened by a build that predates the setting must not silently drop the main
+   * conversation back to five minutes.
+   */
+  it('gives the graph an hour for the main loop and five minutes for delegates by default', async () => {
+    const fake = fakeRuntime();
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    expect(fake.options?.loop?.cacheRetention).toBe('long');
+    expect(fake.options?.subagents?.cacheRetention).toBe('short');
+  });
+
+  it('translates the two settings into the runtime vocabulary independently', async () => {
+    const fake = fakeRuntime();
+    const { runtime } = build(fake, {
+      promptCacheTtl: '5m',
+      subagentPromptCacheTtl: '1h',
+    });
+    live = runtime;
+    await runtime.bootstrap();
+    expect(fake.options?.loop?.cacheRetention).toBe('short');
+    expect(fake.options?.subagents?.cacheRetention).toBe('long');
+  });
+
   it('offers delegation when the host said nothing about it (P5-2-5)', async () => {
     // An install with no prior preference gets the builtin catalog. The legacy
     // plugin's opt-in defaults to OFF for its own prompt-cost reasons, and
