@@ -1,6 +1,8 @@
 import { deriveCacheHitRate, deriveContextOccupancy, type PiUsagePayload } from '@shared/piUsage';
-import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
+import { useEffect, useState } from 'react';
+import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
 import { useI18n } from '@/i18n';
+import { Z_INDEX } from '@/lib/z-index';
 import { type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { formatTokenTotal } from './countFormat';
@@ -102,25 +104,48 @@ export function ComposerUsageDetails({ usage, tools }: { usage: PiUsagePayload; 
   );
 }
 
+/**
+ * The compact occupancy chip in the composer bar.
+ *
+ * It is a BUTTON, not a hover target: the details below are a dense read
+ * (six token rows, a meter, the turn's tools) that a reader has to be able to
+ * keep open while scanning, and a tooltip took them away the moment the
+ * pointer moved. Click opens, clicking the chip again — or anywhere outside,
+ * or Escape — closes, which is what the Popover primitive already does.
+ */
 export function ComposerUsageChip({ sessionId }: { sessionId: string }) {
   const { t } = useI18n();
   const usage = useSessionRuntimeFactsStore(
     (state) => state.factsBySession[sessionId]?.usage ?? null
   );
   const messages = useChatSessionsStore((state) => state.messages[sessionId]);
+  const [open, setOpen] = useState(false);
+  // A session switch must not leave another session's numbers on screen: the
+  // chip itself re-renders with the new facts, but an open popup would keep
+  // its position and simply swap its contents under the reader.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId is the reset TRIGGER, not a value the body reads
+  useEffect(() => {
+    setOpen(false);
+  }, [sessionId]);
   const occupancy = deriveContextOccupancy(usage?.context);
   if (!usage || !occupancy) return null;
   return (
-    <Tooltip key={sessionId}>
-      <TooltipTrigger
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
         aria-label={t('Context used')}
-        className="inline-flex h-6 shrink-0 cursor-default items-center whitespace-nowrap rounded-sm px-1.5 text-sm text-muted-foreground tabular-nums focus-visible:outline-2 focus-visible:outline-ring"
+        title={t('Context used')}
+        className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-sm px-1.5 text-sm text-muted-foreground tabular-nums hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring data-popup-open:bg-hover data-popup-open:text-foreground"
       >
         {`${Math.round(occupancy.percent)}%`}
-      </TooltipTrigger>
-      <TooltipPopup className="max-h-[min(75vh,32rem)] overflow-y-auto text-left" align="end">
+      </PopoverTrigger>
+      <PopoverPopup
+        side="top"
+        align="end"
+        className="max-h-[min(75vh,32rem)] text-left"
+        zIndex={Z_INDEX.DROPDOWN}
+      >
         <ComposerUsageDetails usage={usage} tools={currentTurnToolSummary(messages ?? [])} />
-      </TooltipPopup>
-    </Tooltip>
+      </PopoverPopup>
+    </Popover>
   );
 }
