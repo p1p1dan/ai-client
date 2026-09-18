@@ -53,6 +53,22 @@ export function markAppEntered(mode: CredentialMode): void {
   entryModeThisRun = mode;
 }
 
+/**
+ * Un-latch — `auth:requestSignIn`, the only way back out.
+ *
+ * `resolveGateDecision` routes to App on this latch ALONE, so it is also the
+ * only thing that can route away from App without quitting. Every "sign in" /
+ * "re-login" affordance inside the product used to just re-query the gate and
+ * hope; with the latch set, the gate correctly kept answering `app` and the
+ * button did nothing at all. Clearing it is what makes those buttons work.
+ *
+ * Deliberately NOT a logout: the vault is untouched, so an account that is
+ * still signed in comes back as `Continue as <email>` rather than a form.
+ */
+export function clearAppEntry(): void {
+  entryModeThisRun = null;
+}
+
 /** Test-only: module state has to be resettable between cases. */
 export function resetAppEntryForTests(): void {
   entryModeThisRun = null;

@@ -2428,6 +2428,12 @@ export const zhTranslations: Record<string, string> = {
   'Not signed in': '未登录',
   'Sign in again': '重新登录',
   'Sign in': '登录',
+  // `useSignInRequest` — the failure side of "take me to the sign-in screen".
+  // The request is refused only while the keyring has not answered yet, and
+  // that refusal is deliberate: routing on an unresolved account would land
+  // the user on a blank spinner instead of a screen.
+  'Could not open the sign-in screen': '无法打开登录页面',
+  'Credentials are still unlocking. Try again in a moment.': '凭据仍在解锁，请稍后再试。',
 
   // ── 批次 4：硬编码英文残留（2026-09-11）────────────────────────────────
   //

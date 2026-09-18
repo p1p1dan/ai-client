@@ -1,4 +1,3 @@
-import { AUTH_OPEN_ONBOARDING_EVENT } from '@shared/authGate';
 import type { SessionRetryInfo, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import {
   ArrowDown,
@@ -22,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
+import { useSignInRequest } from '@/hooks/useSignInRequest';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/stores/chatSessions';
@@ -224,6 +224,10 @@ export function MessageTimeline({
   // H/21 P0: the session-failed card's "go migrate" action. `requestSettings`
   // is a stable store action, so subscribing to it does not add a render path.
   const requestSettings = useSettingsIntentStore((state) => state.requestSettings);
+  // The session-failed card's re-login action. Dispatching the routing event
+  // alone never moved the gate (see `useSignInRequest`); this leaves the
+  // credential mode behind first, which is what the spawn gate was rejecting on.
+  const { requestSignIn, requesting: signInRequesting } = useSignInRequest();
   const lastError = useChatSessionsStore(
     (state) =>
       state.sessions.find((session) => session.id === sessionId)?.runtimeError ??
@@ -692,10 +696,10 @@ export function MessageTimeline({
                       size="sm"
                       variant="outline"
                       className="mt-2 h-6 text-ui"
-                      onClick={() =>
-                        window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT))
-                      }
+                      onClick={() => void requestSignIn()}
+                      disabled={signInRequesting}
                     >
+                      {signInRequesting ? <Spinner className="h-3.5 w-3.5" /> : null}
                       {t(AUTH_REQUIRED_ERROR_VIEW.actionLabel)}
                     </Button>
                   </>
@@ -1123,6 +1127,9 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
     !authRequired &&
     message.blocks.some((block) => block.type === 'text' && isModelMissingError(block.text));
   const requestSettings = useSettingsIntentStore((state) => state.requestSettings);
+  // Same action as the session-failed card's, and it was broken the same way —
+  // see `useSignInRequest`.
+  const { requestSignIn, requesting: signInRequesting } = useSignInRequest();
 
   return (
     <Alert variant={isError ? 'error' : 'default'} role={isError ? 'alert' : 'status'}>
@@ -1181,8 +1188,10 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
               size="xs"
               variant="outline"
               className="h-6"
-              onClick={() => window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT))}
+              onClick={() => void requestSignIn()}
+              disabled={signInRequesting}
             >
+              {signInRequesting ? <Spinner className="h-3.5 w-3.5" /> : null}
               {t(AUTH_REQUIRED_ERROR_VIEW.actionLabel)}
             </Button>
           ) : (

@@ -25,3 +25,22 @@ export type AuthState =
   | { status: 'locked'; lastEmail: string | null };
 
 export type AuthStateStatus = AuthState['status'];
+
+/**
+ * Result of `auth:requestSignIn` — "leave whatever this run entered on and put
+ * the sign-in screen back in front of me".
+ *
+ * `reason` is a CODE rather than a sentence for the same reason
+ * `deriveUserProfilePresentation` returns no copy: the renderer owns the i18n
+ * lookup, and literal UI strings stay out of Main/shared (src/shared/i18n.ts
+ * convention).
+ *
+ * `credentials-unresolved` is the one refusal there is. `deriveWelcomeEntry`
+ * returns `null` for `locked`/`unknown`, which routes to a spinner — so
+ * dropping the entry latch in either of those states would strand the user on
+ * a blank loading screen with no way back. The request is refused instead and
+ * the caller says "try again in a moment".
+ */
+export type AuthSignInRequestResult =
+  | { ok: true }
+  | { ok: false; reason: 'credentials-unresolved' };

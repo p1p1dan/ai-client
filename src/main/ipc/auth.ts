@@ -7,12 +7,13 @@
 
 import { resolveSkipAuthGate } from '@shared/devFlags';
 import { IPC_CHANNELS } from '@shared/types';
-import type { AuthState } from '@shared/types/auth';
+import type { AuthSignInRequestResult, AuthState } from '@shared/types/auth';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { getAuthProbeScheduler, getAuthStateService } from '../services/auth';
 import { getAdoptionLatch } from '../services/auth/adoption';
-import { hasEnteredApp, markAppEntered } from '../services/auth/appEntry';
+import { clearAppEntry, hasEnteredApp, markAppEntered } from '../services/auth/appEntry';
 import {
+  getCredentialMode,
   resolveManagedCredentialsEnabled,
   setCredentialMode,
 } from '../services/auth/credentialMode';
@@ -109,6 +110,65 @@ export function registerAuthHandlers(): void {
     }
     setCredentialMode(mode);
     markAppEntered(mode);
+    return { ok: true };
+  });
+
+  /**
+   * The inverse of `enterApp`, and the fix for a defect every in-app
+   * "登录 / 重新登录" button shared.
+   *
+   * Those buttons only ever dispatched a renderer event whose single listener
+   * re-queried the gate. That can never route anywhere: `resolveGateDecision`
+   * returns `app` whenever the entry latch is set, and the latch is set for as
+   * long as the user is inside the app. In `local` mode it could not even fail
+   * loudly — `resolveSpawnGateDecision` short-circuits `local` to "allowed", so
+   * nothing was ever rejected and nothing was ever logged. The button did
+   * nothing, silently.
+   *
+   * Two writes, both needed:
+   *
+   *  1. `setCredentialMode('managed')` — leave the user's own credentials. The
+   *     recorded mode is what `resolveSpawnCredentialMode` falls back on once
+   *     the entry latch is gone, and while it says `local` the spawn gate
+   *     answers "nothing to sign in to". Writing the value rather than deleting
+   *     the key is the same thing to every reader (`resolveCredentialMode`
+   *     defaults to `managed` when it is absent) and leaves an observable
+   *     choice behind instead of a hole.
+   *  2. `clearAppEntry()` — the routing half. Without it the gate keeps saying
+   *     `app` and the screen never changes.
+   *
+   * The vault is NOT touched. This is "take me to the sign-in screen", not a
+   * logout: an account that is still valid comes back as `Continue as <email>`
+   * (`deriveWelcomeEntry`), which is what the user asked for when they said the
+   * already-signed-in case should end in login mode rather than a fresh form.
+   */
+  ipcMain.handle(IPC_CHANNELS.AUTH_REQUEST_SIGN_IN, async (): Promise<AuthSignInRequestResult> => {
+    await getAdoptionLatch();
+
+    const authStateService = getAuthStateService();
+    const previousMode = getCredentialMode();
+    setCredentialMode('managed');
+
+    // Recomputed AFTER the write, deliberately. `AuthStateService.refresh()`
+    // short-circuits to a placeholder `signed_out` whenever managed
+    // credentials are off — it never touches the vault in `local` mode — so
+    // the snapshot from a moment ago is not an answer about the account, it is
+    // an answer about the mode we just left. Asking again is what lets a user
+    // whose vault is still valid come back to `Continue as <email>` instead of
+    // being handed a fresh code form.
+    const status = authStateService.refresh().status;
+
+    // `deriveWelcomeEntry` returns null for `locked`/`unknown`, which the gate
+    // renders as a spinner — dropping the entry latch in either state would
+    // replace a working app with a blank screen and no way back. Put the mode
+    // back and refuse; the caller says "try again in a moment".
+    if (status === 'locked' || status === 'unknown') {
+      setCredentialMode(previousMode);
+      authStateService.refresh();
+      return { ok: false, reason: 'credentials-unresolved' };
+    }
+
+    clearAppEntry();
     return { ok: true };
   });
 

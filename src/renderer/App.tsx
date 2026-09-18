@@ -1,4 +1,3 @@
-import { AUTH_OPEN_ONBOARDING_EVENT } from '@shared/authGate';
 import { getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
 import type {
   GitWorktree,
@@ -55,6 +54,7 @@ import { addToast, toastManager } from './components/ui/toast';
 import { WorkspaceShell } from './components/workspace-shell';
 import { MergeEditor, MergeWorktreeDialog } from './components/worktree';
 import { useAutoFetchListener, useGitBranches } from './hooks/useGit';
+import { useSignInRequest } from './hooks/useSignInRequest';
 import { useWebInspector } from './hooks/useWebInspector';
 import {
   useWorktreeList,
@@ -89,6 +89,7 @@ initCloneProgressListener();
 
 export default function App() {
   const { t } = useI18n();
+  const { requestSignIn } = useSignInRequest();
 
   // D47 S5: `ONBOARDING_LIVE_CREDENTIALS_STATUS` is retired — `auth.stateChanged`
   // is now the single push channel for credential-state changes.
@@ -97,13 +98,24 @@ export default function App() {
   // "temporarily unavailable" warning let the user keep working in a chat
   // session whose agent spawns would now be gated, which just delayed the
   // failure instead of explaining it.
+  //
+  // Dispatching the routing event on its own never actually routed (the gate
+  // answers `app` for as long as Main's entry latch is set), so this goes
+  // through the same request the 登录 buttons make. Safe to reuse here even
+  // though it also leaves the `local` credential mode: `credentials_invalid`
+  // cannot reach a local-mode run at all — `AuthStateService.refresh()`
+  // short-circuits to `signed_out` while managed credentials are off, so the
+  // probe scheduler (which only runs during `authenticated`) never starts and
+  // nothing can call `markRejected()`. By construction this listener only
+  // fires on a run that is already `managed`, where leaving `local` is a
+  // no-op and clearing the latch is the whole point.
   useEffect(() => {
     return window.electronAPI.auth.onStateChanged((state) => {
       if (state.status === 'credentials_invalid') {
-        window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT));
+        void requestSignIn();
       }
     });
-  }, []);
+  }, [requestSignIn]);
 
   // Initialize agent activity listener for tree sidebar status display
   useEffect(() => {

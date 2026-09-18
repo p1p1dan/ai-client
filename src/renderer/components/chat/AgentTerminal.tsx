@@ -1,6 +1,5 @@
-import { AUTH_OPEN_ONBOARDING_EVENT } from '@shared/authGate';
 import { isRemoteVirtualPath } from '@shared/utils/remotePath';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   TerminalSearchBar,
@@ -8,6 +7,7 @@ import {
 } from '@/components/terminal/TerminalSearchBar';
 import { Button } from '@/components/ui/button';
 import { useFileDrop } from '@/hooks/useFileDrop';
+import { useSignInRequest } from '@/hooks/useSignInRequest';
 import { useTerminalScrollToBottom } from '@/hooks/useTerminalScrollToBottom';
 import { useXterm } from '@/hooks/useXterm';
 import { useI18n } from '@/i18n';
@@ -67,6 +67,10 @@ export function AgentTerminal({
   const { register, unregister } = useTerminalWriteStore();
   // H/21 P0: the "go migrate" action on the model-missing startup failure.
   const requestSettings = useSettingsIntentStore((state) => state.requestSettings);
+  // The re-login action on the auth-required startup failure. It used to
+  // dispatch the routing event on its own, which could never move the gate —
+  // see `useSignInRequest`.
+  const { requestSignIn, requesting: signInRequesting } = useSignInRequest();
   // Pi TUI is a local node-pty launch of the bundled CLI, so a remote virtual
   // cwd has no local directory to spawn in. Keep the terminal dormant and
   // explain why instead of failing on an unusable spawn path.
@@ -193,10 +197,8 @@ export function AgentTerminal({
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/90 text-sm">
           <strong>{AUTH_REQUIRED_ERROR_VIEW.title}</strong>
           <span className="text-muted-foreground">{AUTH_REQUIRED_ERROR_VIEW.message}</span>
-          <Button
-            size="sm"
-            onClick={() => window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT))}
-          >
+          <Button size="sm" onClick={() => void requestSignIn()} disabled={signInRequesting}>
+            {signInRequesting ? <Loader2 className="animate-spin" /> : null}
             {AUTH_REQUIRED_ERROR_VIEW.actionLabel}
           </Button>
         </div>

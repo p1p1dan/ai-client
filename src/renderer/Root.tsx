@@ -2,6 +2,7 @@ import {
   AUTH_GATE_SNAPSHOT_QUERY_KEY,
   AUTH_OPEN_ONBOARDING_EVENT,
   deriveOnboardingEntry,
+  deriveWelcomeEntry,
   parseInitialAuthGateArg,
   resolveGateDecision,
 } from '@shared/authGate';
@@ -35,6 +36,9 @@ const argvGatePayload = parseInitialAuthGateArg(
   typeof window !== 'undefined' ? (window.electronAPI?.auth?.initialArgv ?? []) : []
 );
 const skipAuthGate = argvGatePayload?.skipAuthGate ?? false;
+
+/** `auth.getGateSnapshot()`'s payload, named so a cache read can be typed. */
+type GateSnapshot = Awaited<ReturnType<typeof window.electronAPI.auth.getGateSnapshot>>;
 
 function LoadingShell() {
   return (
@@ -201,10 +205,25 @@ function RootWithOnboardingGate() {
         }
       : null);
 
+  // `useSignInRequest` has already made Main drop the entry latch by the time
+  // this fires, so the refreshed snapshot really does decide a different shell
+  // — which is what the two invalidations below were always meant to achieve.
+  //
+  // The second half picks WHICH welcome screen. `deriveWelcomeEntry` is the
+  // same function the screen itself renders from, so asking it here cannot
+  // disagree with what the user is about to see: nobody signed in means the
+  // primary button is `sign-in`, and making the person press one more button to
+  // reach the form they just asked for is the defect over again, one click
+  // shorter. An account that IS still signed in keeps its `Continue as …`
+  // screen instead of being sent to re-verify an email it does not need to.
   useEffect(() => {
     const handler = () => {
-      queryClient.invalidateQueries({ queryKey: ['piRuntimeStatus'] });
-      queryClient.invalidateQueries({ queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY });
+      void (async () => {
+        queryClient.invalidateQueries({ queryKey: ['piRuntimeStatus'] });
+        await queryClient.invalidateQueries({ queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY });
+        const snapshot = queryClient.getQueryData<GateSnapshot>(AUTH_GATE_SNAPSHOT_QUERY_KEY);
+        setSignInFlow(!!snapshot && deriveWelcomeEntry(snapshot.state)?.primary === 'sign-in');
+      })();
     };
     window.addEventListener(AUTH_OPEN_ONBOARDING_EVENT, handler);
     return () => window.removeEventListener(AUTH_OPEN_ONBOARDING_EVENT, handler);

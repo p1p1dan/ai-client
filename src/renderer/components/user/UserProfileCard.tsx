@@ -1,11 +1,7 @@
-import {
-  AUTH_GATE_SNAPSHOT_QUERY_KEY,
-  AUTH_OPEN_ONBOARDING_EVENT,
-  type UserProfilePresentation,
-} from '@shared/authGate';
+import { AUTH_GATE_SNAPSHOT_QUERY_KEY, type UserProfilePresentation } from '@shared/authGate';
 import { deriveWeeklyQuotaView } from '@shared/weeklyQuota';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, LogIn, LogOut, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Loader2, LogIn, LogOut, RefreshCw } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -20,6 +16,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toastManager } from '@/components/ui/toast';
+import { useSignInRequest } from '@/hooks/useSignInRequest';
 import { useUsageStats } from '@/hooks/useUsageStats';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -109,6 +106,7 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
   const usage = useUsageStats({ enabled: isAuthenticated });
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const { requestSignIn, requesting: signInRequesting } = useSignInRequest();
 
   const pendingCredentials =
     !!usage.data && 'error' in usage.data && usage.data.error === 'Credentials not available';
@@ -173,7 +171,12 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
       queryClient.invalidateQueries({ queryKey: ['usageStats'] });
       queryClient.invalidateQueries({ queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY });
       onRequestClose?.();
-      window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT));
+      // Logout ends with the same request the sign-in button makes, and needs
+      // it for the same reason: clearing the vault does not move the gate,
+      // because the gate routes on the entry latch. Without this the confirm
+      // dialog's promise ("you will need to register again") was followed by
+      // the user staying exactly where they were, now signed out.
+      await requestSignIn();
     } catch (error) {
       toastManager.add({
         type: 'error',
@@ -183,18 +186,27 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
     } finally {
       setLoggingOut(false);
     }
-  }, [onRequestClose, queryClient, t]);
+  }, [onRequestClose, queryClient, requestSignIn, t]);
 
-  const handleOpenOnboarding = useCallback(() => {
-    onRequestClose?.();
-    window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT));
-  }, [onRequestClose]);
+  /**
+   * The card's own `登录 / 重新登录` button.
+   *
+   * The popover closes only AFTER the request lands. Closing first would take
+   * the spinner off screen with it and leave a refusal explaining itself over
+   * a card that is no longer there; this way the button spins in place and the
+   * card stays put if the request is refused.
+   */
+  const handleOpenOnboarding = useCallback(async () => {
+    if (await requestSignIn()) {
+      onRequestClose?.();
+    }
+  }, [onRequestClose, requestSignIn]);
 
   // D47 S5: `attention` (credentials_invalid/locked) and `signed-out`
   // (signed_out/unknown) both render a compact call-to-action instead of the
   // usage/logout panel below — there is nothing to log out of yet, only
-  // somewhere to send the user (back through onboarding, re-verifying via
-  // `AUTH_OPEN_ONBOARDING_EVENT`).
+  // somewhere to send the user (back through onboarding, via
+  // `useSignInRequest`).
   if (!isAuthenticated) {
     const isAttention = presentation.tone === 'attention';
     return (
@@ -227,9 +239,14 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
         <Button
           variant={isAttention ? 'destructive' : 'default'}
           className="w-full"
-          onClick={handleOpenOnboarding}
+          onClick={() => void handleOpenOnboarding()}
+          disabled={signInRequesting}
         >
-          <LogIn className="mr-2 h-4 w-4" />
+          {signInRequesting ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <LogIn className="mr-2 h-4 w-4" />
+          )}
           {isAttention ? t('Sign in again') : t('Sign in')}
         </Button>
       </div>

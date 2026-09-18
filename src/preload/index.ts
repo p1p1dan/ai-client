@@ -906,6 +906,14 @@ const electronAPI = {
       mode: import('@shared/credentialMode').CredentialMode
     ): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.AUTH_ENTER_APP, mode),
+    /**
+     * The inverse of `enterApp`: leave the user's own credentials behind and
+     * drop this run's entry, so the gate routes back to the sign-in screen.
+     * Every in-app "登录 / 重新登录" button goes through this — re-querying the
+     * gate alone can never route while the entry latch is set.
+     */
+    requestSignIn: (): Promise<import('@shared/types/auth').AuthSignInRequestResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTH_REQUEST_SIGN_IN),
     onStateChanged: (
       callback: (state: import('@shared/types/auth').AuthState) => void
     ): (() => void) => {

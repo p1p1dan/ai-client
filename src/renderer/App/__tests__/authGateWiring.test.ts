@@ -96,7 +96,10 @@ describe('D47 S5b auth-gate helper wiring (static)', () => {
     const card = code('components/user/UserProfileCard.tsx').replace(/\s+/g, ' ');
     expect(card).toContain('UserProfilePresentation');
     expect(card).toContain('presentation.tone');
-    expect(card).toContain('AUTH_OPEN_ONBOARDING_EVENT');
+    // The clickable affordance the `attention`/`signed-out` tones exist for.
+    // It used to be a bare `AUTH_OPEN_ONBOARDING_EVENT` dispatch, which could
+    // never route anywhere — see the sign-in route suite below.
+    expect(card).toContain('useSignInRequest()');
   });
 
   it('[AGW-07] App.tsx routes credentials_invalid back to onboarding via auth.stateChanged, not the retired live-credentials push', () => {
@@ -292,6 +295,23 @@ describe('A2 two-button welcome screen (static)', () => {
     );
   });
 
+  it('[A2-09] the local-setup button is closed by a named switch, not by a probe', () => {
+    // A-round testing shuts the `Use my own setup` route. The switch must be
+    // the thing the button reads, so nobody can "fix" a stuck screen by
+    // hardcoding the disabled state and leaving the constant behind as a lie.
+    //
+    // This is NOT the D68 ban above being broken: [A2-04] forbids REPORTING
+    // AVAILABILITY — greying a button out because a probe judged the machine
+    // unready — and the terms it bans (`checkPrerequisites`, `detectCli`,
+    // `credentials.json`) are still absent. Nothing here asks the machine
+    // anything; it would look the same on a perfectly configured one.
+    const view = code('components/onboarding/WelcomeView.tsx').replace(/\s+/g, ' ');
+    expect(view).toContain('LOCAL_SETUP_ENTRY_DISABLED = ');
+    expect(view).toContain('disabled={LOCAL_SETUP_ENTRY_DISABLED ||');
+    // Still rendered — closed, not deleted.
+    expect(view).toContain("t('Use my own setup')");
+  });
+
   it('[A2-08] the logo ships no external asset', () => {
     // `scripts/assert-no-webfonts.mjs` guards the packaged build; this pins the
     // same rule at the source so a later edit fails here first.
@@ -305,5 +325,95 @@ describe('A2 two-button welcome screen (static)', () => {
     expect(mark).not.toContain('<img');
     expect(mark).not.toMatch(/url\(\s*['"]?[^#'")]/);
     expect(mark).toContain('var(--primary)');
+  });
+});
+
+/**
+ * The in-app sign-in route — every 登录 / 重新登录 affordance that is not the
+ * welcome screen itself.
+ *
+ * ## The defect
+ *
+ * All of them did the same two lines inline: close the surface, dispatch
+ * `AUTH_OPEN_ONBOARDING_EVENT`. Root listened and invalidated two queries,
+ * trusting the gate to route. It cannot — `resolveGateDecision` returns `app`
+ * for as long as Main's entry latch is set, and the latch is set for as long as
+ * the user is inside the app, so the refreshed snapshot produced the identical
+ * decision every time. A machine on `Use my own setup` could not even fail
+ * loudly: `resolveSpawnGateDecision` short-circuits `local` to "allowed", so
+ * nothing was rejected and nothing was logged. The button did nothing.
+ *
+ * Behaviour lives in `authRequestSignIn.test.ts` (Main) and
+ * `userProfileSignIn.test.ts` (a real click). What only a source scan can reach
+ * is the CENSUS: that no surface kept its own copy of the broken two lines.
+ */
+describe('in-app sign-in route (static)', () => {
+  const SURFACES: readonly [string, number][] = [
+    // Each entry is [file, number of sign-in affordances in it].
+    ['components/user/UserProfileCard.tsx', 1],
+    // The session-failed card and the notice/alert card — two separate
+    // components in one file, both offering 重新登录 on a spawn-gate rejection.
+    ['components/chat/MessageTimeline.tsx', 2],
+    ['components/chat/AgentTerminal.tsx', 1],
+    // Not a button: the automatic `credentials_invalid` push. It can only
+    // reach a run that is already `managed` (the probe scheduler runs during
+    // `authenticated` only, and `local` never gets there), so it is safe on
+    // the same request — and it was broken in exactly the same way.
+    ['App.tsx', 1],
+  ];
+
+  it('[SIR-01] every surface goes through the shared hook, and none dispatches the event itself', () => {
+    for (const [file, expected] of SURFACES) {
+      const source = code(file).replace(/\s+/g, ' ');
+      // Either spelling of the same module — `App.tsx` imports its siblings
+      // relatively, everything under `components/` uses the alias.
+      expect(source, file).toMatch(/from '(@\/|\.\/)hooks\/useSignInRequest'/);
+      expect(source.match(/useSignInRequest\(\)/g) ?? [], file).toHaveLength(expected);
+      // The two lines that never worked. A surface that grows them back is a
+      // button that silently does nothing again.
+      expect(source, file).not.toContain('AUTH_OPEN_ONBOARDING_EVENT');
+    }
+  });
+
+  it('[SIR-02] the hook changes Main state FIRST and only then routes', () => {
+    const hook = code('hooks/useSignInRequest.ts').replace(/\s+/g, ' ');
+    const request = hook.indexOf('auth.requestSignIn()');
+    const dispatch = hook.indexOf('AUTH_OPEN_ONBOARDING_EVENT)');
+    expect(request).toBeGreaterThan(-1);
+    expect(dispatch).toBeGreaterThan(-1);
+    // Order is the whole fix: the event is only meaningful once the gate has
+    // something different to decide on.
+    expect(request).toBeLessThan(dispatch);
+    // A refused request must not route, and must not be silent either.
+    expect(hook).toContain('if (!result.ok)');
+    expect(hook).toContain('toastManager.add(');
+  });
+
+  it('[SIR-03] Main leaves the local mode AND drops the entry latch — neither alone works', () => {
+    const path = join(process.cwd(), 'src/main/ipc/auth.ts');
+    const stripped = stripComments(readFileSync(path, 'utf8'), path);
+    const body = stripped.slice(stripped.indexOf('AUTH_REQUEST_SIGN_IN'));
+    const handler = body.slice(0, body.indexOf('});'));
+    // Leaving `local` is what stops the spawn gate answering "nothing to sign
+    // in to"; clearing the latch is what lets the gate route off `app`.
+    expect(handler).toContain("setCredentialMode('managed')");
+    expect(handler).toContain('clearAppEntry()');
+    // Not a logout: an account that is still valid has to come back as
+    // `Continue as …` rather than a fresh code form (D64 keeps the recorded
+    // choice and the credentials in separate files precisely for this).
+    for (const term of ['Vault', 'logout', 'clear()', 'markRejected']) {
+      expect(handler).not.toContain(term);
+    }
+  });
+
+  it('[SIR-04] Root re-decides the sub-flow from the refreshed snapshot', () => {
+    // Landing on the welcome screen and making the user press one more button
+    // is the same defect one click shorter. Root asks `deriveWelcomeEntry` —
+    // the function the screen itself renders from, so the two cannot disagree
+    // — and opens the email/code form only when nobody is signed in.
+    const root = code('Root.tsx').replace(/\s+/g, ' ');
+    expect(root).toContain('deriveWelcomeEntry(');
+    expect(root).toContain("primary === 'sign-in'");
+    expect(root).toContain('setSignInFlow(');
   });
 });

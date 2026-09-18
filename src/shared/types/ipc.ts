@@ -307,6 +307,9 @@ export const IPC_CHANNELS = {
   // consumes; `stateChanged` is the value-changed-only push.
   AUTH_GET_GATE_SNAPSHOT: 'auth:getGateSnapshot',
   AUTH_ENTER_APP: 'auth:enterApp',
+  // The inverse of `enterApp`: drop this run's entry and stop running on the
+  // user's own credentials, so the gate routes back to the sign-in screen.
+  AUTH_REQUEST_SIGN_IN: 'auth:requestSignIn',
   AUTH_STATE_CHANGED: 'auth:stateChanged',
   // Dev-only (D47 S5 §5 GUI point-check ⑧) — registered ONLY when
   // `!app.isPackaged`; forces `vault.markInvalidated` so the failed-login
