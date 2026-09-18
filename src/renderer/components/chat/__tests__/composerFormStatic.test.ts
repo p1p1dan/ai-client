@@ -361,6 +361,25 @@ describe('U12: permission bar slot is wired', () => {
     expect(source).toContain('ComposerPermissionTrigger');
     expect(source).not.toMatch(/permission\s*:\s*null/);
   });
+
+  /**
+   * Mode-lock regression pin: the slot used to feed `ComposerPermissionTrigger`
+   * bare `sending` — ChatComposer's own send latch, true only for the brief
+   * window a send request is in flight. By the time an approval card is on
+   * screen the turn is well past that window (`sending` has already fallen
+   * back to false), so the trigger's mode lock almost never saw a true value
+   * again. `busy` (`isStoppable(activeSession?.status)`) is what stays true for
+   * the whole turn — the same union `canStop` already uses — so the slot must
+   * feed that union, not the latch alone. A render-level assertion cannot
+   * reach this fact because no test in this suite mounts `ChatComposer` itself;
+   * see `composerPermissions.test.ts` for the receiving prop's own lock
+   * behaviour once it is true.
+   */
+  it('feeds the permission slot the busy || sending union, not sending alone', () => {
+    const source = readStripped(join(CHAT_DIR, 'ChatComposer.tsx'));
+    expect(source).toContain('turnActive={busy || sending}');
+    expect(source).not.toContain('turnActive={sending}');
+  });
 });
 
 /**

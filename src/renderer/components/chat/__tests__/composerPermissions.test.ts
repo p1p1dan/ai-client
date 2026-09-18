@@ -46,7 +46,7 @@ afterEach(async () => {
   container.remove();
   vi.unstubAllGlobals();
 });
-async function render(sessionId: string | null, extra: { sending?: boolean } = {}) {
+async function render(sessionId: string | null, extra: { turnActive?: boolean } = {}) {
   await act(() =>
     root.render(
       createElement(ComposerPermissionTrigger, {
@@ -156,11 +156,18 @@ describe('D14 composer permission controls', () => {
  * everything first. The gear is live during a turn now (the runtime re-judges
  * the requests still waiting when it widens); the mode is not, because it
  * decides which tools the running turn was handed.
+ *
+ * `turnActive` stands for the caller's `busy || sending` union, not merely "a
+ * send request is in flight" — ChatComposer's own send latch clears long
+ * before an approval card can appear, so a lock keyed on that alone would
+ * (and did) leave every option clickable by the time it mattered. See
+ * `composerFormStatic.test.ts`'s "U12: permission bar slot is wired" for the
+ * pin on the caller's actual expression, which this component cannot see.
  */
 describe('a turn in flight locks the mode and leaves the gear open', () => {
   it('keeps the trigger reachable and the gears pickable', async () => {
     setPermissions.mockResolvedValue(undefined);
-    await render('s1', { sending: true });
+    await render('s1', { turnActive: true });
     const trigger = container.querySelector('button');
     expect(trigger?.hasAttribute('disabled')).toBe(false);
     await click(trigger);
@@ -174,7 +181,7 @@ describe('a turn in flight locks the mode and leaves the gear open', () => {
   });
 
   it('refuses the mode and says why', async () => {
-    await render('s1', { sending: true });
+    await render('s1', { turnActive: true });
     await click(container.querySelector('button'));
     const plan = choice('规划');
     expect(plan?.getAttribute('data-disabled')).not.toBeNull();

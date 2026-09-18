@@ -73,7 +73,14 @@ interface ComposerPermissionTriggerProps {
   hostState: HostStatus['state'];
   mode: MiddleColumnMode;
   disabled?: boolean;
-  sending?: boolean;
+  /**
+   * True while the current turn is running: the caller's `busy || sending`
+   * union (session status is stoppable, OR a send request is in flight), not
+   * merely "a send request is in flight". The narrower flag used to leave
+   * every option clickable for almost the whole turn, because the send-only
+   * latch falls back to false long before an approval card can appear.
+   */
+  turnActive?: boolean;
 }
 
 export function ComposerPermissionTrigger({
@@ -81,7 +88,7 @@ export function ComposerPermissionTrigger({
   hostState,
   mode,
   disabled,
-  sending,
+  turnActive,
 }: ComposerPermissionTriggerProps) {
   const { t } = useI18n();
   const [settings, setSettings] = useState(() => readPermissionsFor(sessionId));
@@ -151,7 +158,7 @@ export function ComposerPermissionTrigger({
    * now also releases the card that is already waiting (the runtime re-judges
    * it), so this is not merely a setting for next time.
    */
-  const modeLocked = sending === true;
+  const modeLocked = turnActive === true;
   const turnNote = t('While this turn runs, only the permission level can change.');
   const isDisabled = disabled || pending || (sessionId !== null && !isHostUsable(hostState));
   // While bypass is on, the chip is the only thing on screen that says so — no

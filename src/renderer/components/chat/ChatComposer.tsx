@@ -3080,7 +3080,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         hostState={hostStatus.state}
         mode={mode}
         disabled={disabled}
-        sending={sending}
+        // A running turn must lock the mode for its whole duration, not just
+        // the brief window a send request is in flight — `sending` alone
+        // falls back to false long before an approval card can appear.
+        turnActive={busy || sending}
       />
     ),
     // U06-b: renders nothing until the runtime reports occupancy (T38-a).
