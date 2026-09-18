@@ -10,6 +10,9 @@ export const zhTranslations: Record<string, string> = {
   Network: '网络',
   Advanced: '高级',
   Pi: 'Pi',
+  // Settings nav categories split out of the Pi page.
+  Extensions: '扩展',
+  'Data migration': '数据迁移',
   'Updated {{providers}} providers and {{models}} models.':
     '已更新 {{providers}} 个渠道、{{models}} 个模型。',
   'Yolo mode disables all permission checks, including command restrictions. Disable it in the {{source}} configuration file.':
@@ -67,6 +70,9 @@ export const zhTranslations: Record<string, string> = {
   'Allow anyway': '仍然直接允许',
   'Review the policy applied before Pi tool calls and edit your own overrides.':
     'Pi 后端每次调用工具前都会先过这道闸。这里能看到它当前的判断依据，并修改属于你的那一层。',
+  'Changes take effect in conversations started afterwards; one already open keeps the policy it started with.':
+    '改动在之后新建的对话里生效；已经打开的对话仍沿用它启动时的那份策略。',
+  'Permission rules': '权限规则',
   Allow: '直接允许',
   'Ask every time': '每次询问',
   Deny: '直接拒绝',
@@ -2738,6 +2744,37 @@ export const zhTranslations: Record<string, string> = {
   'Migrate or add the AI service under Settings · Pi and this chat can continue; you can also switch to a model this app already has, from above the composer.':
     '到「设置 · Pi」把 AI 服务迁移或补上，这个会话就能继续；也可以在输入框上方改用一个本应用已有的模型。',
   'Model is not available here': '本应用没有这个模型',
+  // `PiModelSyncNotice` — the login-time managed model sync failed. The keys
+  // are read through `t(view.title)` from `piModelSyncNotice.ts`, so the
+  // renderer-wide literal scan cannot see them; `piModelSyncNotice.test.ts`
+  // asserts every one of them is present here.
+  'Your company models could not be loaded': '没能取到公司发给你的模型',
+  'This app could not reach the model service, so none of the models your company provides are in the list yet.':
+    '这台机器连不上发模型的服务，所以模型列表里还没有公司发给你的模型。',
+  'Check your network — or your company VPN — and then try again.':
+    '先确认网络（如果公司要求连 VPN，也确认 VPN 连上了），然后点「重试」。',
+  'The model service answered with an error, so none of the models your company provides are in the list yet.':
+    '发模型的服务回了一个错误，所以模型列表里还没有公司发给你的模型。',
+  'Try again in a moment. If it keeps failing, send the line below to your administrator.':
+    '过一会儿再点一次「重试」。如果一直失败，把下面那行报错发给管理员。',
+  'The model service answered with something this app could not read, so the model list is still empty.':
+    '发模型的服务回的内容这个应用读不懂，所以模型列表还是空的。',
+  'Try once more. If it fails the same way, this is a problem on the server — send the line below to your administrator.':
+    '可以再点一次「重试」。如果还是同样的错，那就是服务端的问题，把下面那行报错发给管理员。',
+  'The model service turned down your account': '发模型的服务拒绝了你的账号',
+  'Signing in worked, but the model service refused this account. Anything still in the model list will be refused the same way when you send a message.':
+    '登录本身是成功的，但取模型的时候服务拒绝了这个账号。列表里就算还留着模型，发消息时也会被同样拒绝。',
+  'Sign in again first. If that does not help, ask your administrator whether your account has model access.':
+    '先重新登录一次试试。如果还是不行，请管理员确认你的账号有没有开通模型权限。',
+  'Your account did not receive a model credential': '你的账号没有拿到模型访问凭据',
+  'Signing in worked, but this account came back without the credential the model service needs, so no company model could be loaded.':
+    '登录成功了，但这个账号没有一起下发访问模型服务要用的凭据，所以取不到任何公司模型。',
+  'Ask your administrator to enable model access for your account, then sign in again.':
+    '请管理员给你的账号开通模型访问权限，然后重新登录。',
+  'Details to send to your administrator:': '发给管理员看的原始报错：',
+  'Still could not load your company models': '还是没能取到公司发给你的模型',
+  'Nothing changed. The reason below is the latest one.':
+    '这次重试没有变化，卡片上的原因就是最新一次的。',
   'No history was found for this chat when resuming it, so no past messages were loaded.':
     '恢复该会话时没有找到它的历史记录，历史消息没有载入。',
   'No importable sessions found': '未找到可导入会话',
