@@ -33,6 +33,8 @@ interface Fake {
   settle(result?: Partial<RuntimeRunResult>): void;
   disposed: number;
   configured: unknown[];
+  /** Gear-only changes, which take a different door than `configure`. */
+  gears: unknown[];
 }
 
 /** What `handle.skills` offers, when P5-1 discovery ran. */
@@ -94,6 +96,7 @@ function fakeRuntime(
     runs: [],
     disposed: 0,
     configured: [],
+    gears: [],
     emit: (event) => listener?.(event),
     settle: (result) =>
       resolveRun?.({
@@ -140,6 +143,7 @@ function fakeRuntime(
     },
     permissions: {
       configure: (settings: unknown) => fake.configured.push(settings),
+      setGear: (gear: unknown) => fake.gears.push(gear),
     },
     ...(overrides.skills === undefined ? {} : { skills: overrides.skills }),
     ...(overrides.mcp === undefined ? {} : { mcp: overrides.mcp }),
@@ -711,6 +715,31 @@ describe('NativeWorkerRuntime session reads and lifecycle', () => {
       text: 'hi',
     });
     expect(() => runtime.setPermissions({ mode: 'plan', gear: 'ask' })).toThrow(/active/);
+    fake.settle();
+  });
+
+  it('lets the gear alone move mid-turn, through its own door', async () => {
+    // The two calls are locked differently on purpose. `setPermissions` rebuilds
+    // the posture — it forgets the session's grants and voids every request
+    // parked at the approval gate — so it stays idle-only. The gear on its own
+    // does neither, and the moment a user wants it is the moment a card they do
+    // not want to answer is on screen, i.e. mid-turn by definition.
+    const fake = fakeRuntime();
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    await runtime.startSend({
+      logicalSessionId: 'logical-1',
+      requestId: 'turn-1',
+      attemptId: 'a1',
+      text: 'hi',
+    });
+    runtime.setPermissionGear('bypass');
+    expect(fake.gears).toEqual(['bypass']);
+    // ...and it went nowhere near the heavy path, which is what keeps the
+    // grants and the queue alive across the switch.
+    expect(fake.configured).toEqual([]);
+    expect(() => runtime.setPermissions({ mode: 'agent', gear: 'bypass' })).toThrow(/active/);
     fake.settle();
   });
 

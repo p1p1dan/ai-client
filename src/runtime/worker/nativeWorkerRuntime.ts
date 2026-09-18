@@ -11,6 +11,7 @@ import {
 import type { PermissionDecisionId, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import {
   migratePermissionTier,
+  type PermissionGear,
   type RuntimePermissionSettings,
 } from '../../shared/types/runtimePermission.ts';
 import type { SessionPermissionTier } from '../../shared/types/sessionPermissionTier.ts';
@@ -270,6 +271,9 @@ export class NativeWorkerRuntime {
         // Ask through `permission.requested`: the renderer has a card, a
         // queue and a block type for this question.
         approve: this.permissions.approve,
+        // ...and take the card back down through the same surface when the
+        // user widens the gear instead of answering it.
+        autoAllow: this.permissions.autoAllow,
       },
     });
 
@@ -909,7 +913,28 @@ export class NativeWorkerRuntime {
   }
 
   setPermissions(permissions: RuntimePermissionSettings): void {
+    // Still idle-only, and now for one reason rather than two: `configure`
+    // forgets the session's grants and voids everything parked at the gate,
+    // and `mode` decides which tools the running turn was given. The gear on
+    // its own has neither problem — see `setPermissionGear`.
     this.assertIdle('change permissions');
+    this.requirePermissions().configure(permissions);
+  }
+
+  /**
+   * Slide the approval gear, turn or no turn.
+   *
+   * The point of the split: the user is looking at an approval card they do not
+   * want to answer, and the setting that would stop it being asked sits three
+   * pixels away in the composer. Making them wait for the turn to end to change
+   * it is making them answer the card first, which is the opposite of what they
+   * asked for.
+   */
+  setPermissionGear(gear: PermissionGear): void {
+    this.requirePermissions().setGear(gear);
+  }
+
+  private requirePermissions() {
     const service = this.handle?.permissions;
     if (!service) {
       throw new NativeWorkerRuntimeError(
@@ -917,7 +942,7 @@ export class NativeWorkerRuntime {
         'Native runtime has no permissions service'
       );
     }
-    service.configure(permissions);
+    return service;
   }
 
   async dispose(): Promise<void> {

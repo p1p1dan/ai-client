@@ -376,8 +376,19 @@ export type PermissionDecisionId = 'allow' | 'allow_session' | 'deny' | 'cancel'
  * S2 (c): why the client answered a request without a human deciding.
  * Doubles as the drain reason when the Host clears its pending server-request
  * table on session stop/close/shutdown (C10) — one vocabulary, not two.
+ *
+ * `gear_widened` is the only one of the four that ALLOWS: the user moved the
+ * permission gear to a setting that would not have raised this card, so the
+ * card is settled as allowed and taken down. It is recorded rather than passed
+ * off as a press, because "you allowed this" and "the posture you switched to
+ * allows this" are different statements about the same tool call.
  */
-export type PermissionAutoReason = 'unsupported' | 'session_closed' | 'aborted' | 'timed_out';
+export type PermissionAutoReason =
+  | 'unsupported'
+  | 'session_closed'
+  | 'aborted'
+  | 'timed_out'
+  | 'gear_widened';
 
 /** One file touched by a `file_change` approval. */
 export interface PermissionFileChange {

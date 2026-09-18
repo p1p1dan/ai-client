@@ -2707,7 +2707,6 @@ export const zhTranslations: Record<string, string> = {
   'Mermaid render error': 'Mermaid 渲染错误',
   'Migrate or add the AI service under Settings · Pi and this chat can continue; you can also switch to a model this app already has, from above the composer.':
     '到「设置 · Pi」把 AI 服务迁移或补上，这个会话就能继续；也可以在输入框上方改用一个本应用已有的模型。',
-  'Mode and permissions can be changed once this turn ends.': '当前轮次结束后可修改模式和权限。',
   'Model is not available here': '本应用没有这个模型',
   'No history was found for this chat when resuming it, so no past messages were loaded.':
     '恢复该会话时没有找到它的历史记录，历史消息没有载入。',
@@ -2982,3 +2981,18 @@ export type Translate = (key: string, params?: Record<string, string | number>) 
  * an un-threaded path is a missing TRANSLATION, never a broken string.
  */
 export const englishTranslate: Translate = (key, params) => translate('en', key, params);
+
+/**
+ * Changing the permission gear in the middle of a turn.
+ *
+ * The composer control used to grey out entirely while a turn ran, which put
+ * the one setting that stops approval cards out of reach at the exact moment a
+ * card was on screen. The gear is live now; the mode is still locked, and these
+ * three strings are how the UI says which is which — plus the word the resolved
+ * card carries once a widened gear has answered it.
+ */
+Object.assign(zhTranslations, {
+  'While this turn runs, only the permission level can change.': '本轮对话进行中只能修改权限档位。',
+  'Can be changed once this turn ends.': '本轮对话结束后可修改。',
+  'permissions widened': '权限已放宽',
+});

@@ -46,10 +46,15 @@ afterEach(async () => {
   container.remove();
   vi.unstubAllGlobals();
 });
-async function render(sessionId: string | null) {
+async function render(sessionId: string | null, extra: { sending?: boolean } = {}) {
   await act(() =>
     root.render(
-      createElement(ComposerPermissionTrigger, { sessionId, hostState: 'ready', mode: 'session' })
+      createElement(ComposerPermissionTrigger, {
+        sessionId,
+        hostState: 'ready',
+        mode: 'session',
+        ...extra,
+      })
     )
   );
 }
@@ -139,6 +144,43 @@ describe('D14 composer permission controls', () => {
     await click(choice('全自动'));
     expect(document.querySelectorAll('[role="menu"]').length).toBeGreaterThan(0);
     expect(document.body.textContent).toContain('启用全自动');
+  });
+});
+
+/**
+ * While a turn is running.
+ *
+ * The whole control used to go grey the moment a message was sent, which put
+ * the setting that stops approval cards out of reach at the exact moment one
+ * was on screen — the user's only way to stop being asked was to answer
+ * everything first. The gear is live during a turn now (the runtime re-judges
+ * the requests still waiting when it widens); the mode is not, because it
+ * decides which tools the running turn was handed.
+ */
+describe('a turn in flight locks the mode and leaves the gear open', () => {
+  it('keeps the trigger reachable and the gears pickable', async () => {
+    setPermissions.mockResolvedValue(undefined);
+    await render('s1', { sending: true });
+    const trigger = container.querySelector('button');
+    expect(trigger?.hasAttribute('disabled')).toBe(false);
+    await click(trigger);
+    const gear = choice('自动接受编辑');
+    expect(gear?.getAttribute('data-disabled')).toBeNull();
+    await click(gear);
+    expect(setPermissions).toHaveBeenCalledWith({
+      sessionId: 's1',
+      permissions: { mode: 'agent', gear: 'accept-edits' },
+    });
+  });
+
+  it('refuses the mode and says why', async () => {
+    await render('s1', { sending: true });
+    await click(container.querySelector('button'));
+    const plan = choice('规划');
+    expect(plan?.getAttribute('data-disabled')).not.toBeNull();
+    await click(plan);
+    expect(setPermissions).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('本轮对话进行中只能修改权限档位');
   });
 });
 

@@ -491,6 +491,7 @@ export const PERMISSION_AUTO_REASONS: Readonly<Record<PermissionAutoReason, stri
   session_closed: 'session closed',
   aborted: 'aborted',
   timed_out: 'timed out',
+  gear_widened: 'permissions widened',
 };
 
 /**

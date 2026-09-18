@@ -17,13 +17,17 @@ import type {
   RuntimeEventDraft,
 } from '@shared/types/runtimeEvents';
 import {
+  DEFAULT_RUNTIME_PERMISSION,
   migratePermissionTier,
   type RuntimePermissionSettings,
 } from '@shared/types/runtimePermission';
 import type { PiLeafCheckpoint, SessionTreeSnapshot } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
-import type { WorkerSetPermissionsPayload } from '@shared/types/workerRpc';
+import type {
+  WorkerSetPermissionGearPayload,
+  WorkerSetPermissionsPayload,
+} from '@shared/types/workerRpc';
 import {
   isWorkerAcceptForkResult,
   isWorkerCommandsResult,
@@ -2094,16 +2098,34 @@ export class WorkerManager {
         'session_not_ready',
         'Wait for the worker before changing permissions'
       );
-    if (entry?.activeRequestId)
+    // A turn in flight locks the MODE, not the gear. Plan mode decides which
+    // tools the model was handed when the turn started, so switching it halfway
+    // through would leave the turn running on a tool set its own posture no
+    // longer matches; the gear only decides how often the user is asked, which
+    // is exactly the thing they are trying to change while a card is up.
+    //
+    // `entry.permissions` is Main's record of what the worker was last told.
+    // Absent means nothing was ever told to it, which is the runtime default —
+    // so the comparison is against that rather than refused outright.
+    const current = entry?.permissions ?? DEFAULT_RUNTIME_PERMISSION;
+    const gearOnly = permissions.mode === current.mode;
+    if (entry?.activeRequestId && !gearOnly)
       throw new WorkerManagerError(
         'session_busy',
-        'Permission settings cannot change during a turn'
+        'The mode cannot change during a turn; the permission level can'
       );
     if (entry?.slot && entry.state === 'ready') {
-      const result = await entry.slot.request<
-        WorkerSetPermissionTierResult,
-        WorkerSetPermissionsPayload
-      >('worker.setPermissions', { logicalSessionId: sessionId, permissions });
+      // Mid-turn the narrow RPC is the only one the worker will accept, and
+      // between turns the broad one is what re-applies both axes from scratch.
+      const result = entry.activeRequestId
+        ? await entry.slot.request<WorkerSetPermissionTierResult, WorkerSetPermissionGearPayload>(
+            'worker.setPermissionGear',
+            { logicalSessionId: sessionId, gear: permissions.gear }
+          )
+        : await entry.slot.request<WorkerSetPermissionTierResult, WorkerSetPermissionsPayload>(
+            'worker.setPermissions',
+            { logicalSessionId: sessionId, permissions }
+          );
       if (!isWorkerSetPermissionTierResult(result) || !result.applied)
         throw new WorkerManagerError(
           'worker_permission_not_applied',

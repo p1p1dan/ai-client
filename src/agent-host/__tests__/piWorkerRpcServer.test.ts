@@ -104,6 +104,7 @@ function runtime(overrides: Partial<PiWorkerRuntime> = {}): PiWorkerRuntime {
     respondQuestion: notCalled('respondQuestion') as PiWorkerRuntime['respondQuestion'],
     respondPreview: notCalled('respondPreview') as PiWorkerRuntime['respondPreview'],
     setPermissions: notCalled('setPermissions') as PiWorkerRuntime['setPermissions'],
+    setPermissionGear: notCalled('setPermissionGear') as PiWorkerRuntime['setPermissionGear'],
     setPermissionTier: notCalled('setPermissionTier') as PiWorkerRuntime['setPermissionTier'],
     dispose: async () => undefined,
     ...overrides,
@@ -500,6 +501,41 @@ describe('PiWorkerRpcServer', () => {
     await vi.waitFor(() => expect(messages).toHaveLength(3));
     expect(messages[2]).toMatchObject({ ok: false, error: { code: 'WORKER_INVALID_PAYLOAD' } });
     expect(setPermissions).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards the gear-only change and refuses one that names no valid gear', async () => {
+    // The mid-turn path. It carries no `mode` at all, which is what makes it a
+    // different call rather than a looser version of the one above: there is no
+    // way to spell a mode change on this method, so the lock the running turn
+    // keeps cannot be talked around by sending the wrong payload.
+    const messages: Array<Record<string, unknown>> = [];
+    const setPermissionGear = vi.fn();
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      ...engineFactories,
+      createRuntime: () => runtime({ setPermissionGear }),
+    });
+    server.receive(
+      request('boot', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    server.receive(
+      request('gear', 'worker.setPermissionGear', { logicalSessionId: 'logical-1', gear: 'bypass' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(setPermissionGear).toHaveBeenCalledWith('bypass');
+    expect(messages[1]).toMatchObject({ ok: true, result: { applied: true } });
+    server.receive(
+      request('bad', 'worker.setPermissionGear', {
+        logicalSessionId: 'logical-1',
+        gear: 'fullopen',
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(3));
+    expect(messages[2]).toMatchObject({ ok: false, error: { code: 'WORKER_INVALID_PAYLOAD' } });
+    expect(setPermissionGear).toHaveBeenCalledTimes(1);
   });
 
   it('forwards setPermissionTier to the runtime and responds success', async () => {

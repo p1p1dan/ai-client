@@ -24,7 +24,9 @@ import {
 import { isPromptCacheTtl, type PromptCacheTtl } from './promptCacheTtl.ts';
 import type { PermissionDecisionId, RuntimeEvent } from './runtimeEvents';
 import {
+  isPermissionGear,
   isRuntimePermissionSettings,
+  type PermissionGear,
   type RuntimePermissionSettings,
 } from './runtimePermission.ts';
 // Explicit `.ts`: in dev the Pi worker loads this file as SOURCE under Node's
@@ -1486,5 +1488,32 @@ export function isWorkerSetPermissionsPayload(
     isRecord(value) &&
     typeof value.logicalSessionId === 'string' &&
     isRuntimePermissionSettings(value.permissions)
+  );
+}
+
+/**
+ * Change the approval gear ALONE, mid-turn included.
+ *
+ * Separate from `worker.setPermissions` because the two calls are locked
+ * differently, and one payload carrying both axes could not say which lock it
+ * was asking for. `worker.setPermissions` rebuilds the posture: it clears the
+ * session's remembered grants, invalidates every request already parked at the
+ * gate and is refused while a turn runs. This one only slides the gear the
+ * running turn is judged against — grants survive, parked requests survive, and
+ * a widened gear is re-applied to the requests still waiting for an answer.
+ *
+ * `mode` is deliberately absent rather than optional: plan mode decides which
+ * tools the model was given at the start of the turn, so changing it halfway is
+ * not a setting change, it is a different session.
+ */
+export interface WorkerSetPermissionGearPayload {
+  logicalSessionId: string;
+  gear: PermissionGear;
+}
+export function isWorkerSetPermissionGearPayload(
+  value: unknown
+): value is WorkerSetPermissionGearPayload {
+  return (
+    isRecord(value) && typeof value.logicalSessionId === 'string' && isPermissionGear(value.gear)
   );
 }

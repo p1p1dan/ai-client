@@ -16,6 +16,7 @@
  */
 
 import type {
+  PermissionAutoReason,
   PermissionDecisionId,
   PermissionRequestAction,
   PermissionRequestKind,
@@ -30,6 +31,15 @@ import {
 
 /** The three answers this runtime can act on; `cancel` is not modelled. */
 const OFFERED: PermissionDecisionId[] = ['allow', 'allow_session', 'deny'];
+
+/**
+ * Why the runtime answered a card instead of the user.
+ *
+ * `unsupported` is the one member of the wire enum this file cannot produce: it
+ * describes a backend that has no gate at all, which is not a thing this gate
+ * can say about itself.
+ */
+type AutoAnswer = Exclude<PermissionAutoReason, 'unsupported'>;
 
 export interface PermissionPromptOptions {
   sessionId: string;
@@ -48,6 +58,19 @@ export interface PermissionPrompt {
   approve: NonNullable<PermissionConfig['approve']>;
   /** `false` when nothing was waiting on that id — see the RPC result's doc. */
   respond: (input: { permissionId: string; decision: PermissionDecisionId }) => boolean;
+  /**
+   * Take a card down as ALLOWED without anyone having answered it.
+   *
+   * The one caller is the gate itself, when the user widens the permission gear
+   * while a card is up and the question it asks no longer needs an answer. It
+   * resolves through the same `settle` a real answer takes — so the renderer
+   * gets its `permission.resolved` and the card leaves the screen — and marks
+   * the resolution `gear_widened`, because a transcript that recorded it as a
+   * press would be claiming a decision nobody made.
+   *
+   * `false` when nothing was waiting on that id, same as `respond`.
+   */
+  autoAllow: (permissionId: string) => boolean;
   /**
    * Settle everything still parked, e.g. on dispose. Answers are denials.
    *
@@ -126,17 +149,14 @@ function detailOf(request: ToolPermissionRequest, cwd: string) {
 export function createPermissionPrompt(options: PermissionPromptOptions): PermissionPrompt {
   const pending = new Map<
     string,
-    (
-      decision: PermissionDecisionId,
-      autoReason?: 'session_closed' | 'aborted' | 'timed_out'
-    ) => void
+    (decision: PermissionDecisionId, autoReason?: AutoAnswer) => void
   >();
 
   const resolved = (
     permissionId: string,
     allow: boolean,
     decision: PermissionDecisionId,
-    autoReason?: 'session_closed' | 'aborted' | 'timed_out'
+    autoReason?: AutoAnswer
   ) => {
     options.emit({
       type: 'permission.resolved',
@@ -206,10 +226,7 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
         });
 
         let settled = false;
-        const settle = (
-          decision: PermissionDecisionId,
-          autoReason?: 'session_closed' | 'aborted' | 'timed_out'
-        ) => {
+        const settle = (decision: PermissionDecisionId, autoReason?: AutoAnswer) => {
           if (settled) return;
           settled = true;
           pending.delete(permissionId);
@@ -242,6 +259,16 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
       const settle = pending.get(permissionId);
       if (!settle) return false;
       settle(decision);
+      return true;
+    },
+
+    autoAllow: (permissionId) => {
+      const settle = pending.get(permissionId);
+      if (!settle) return false;
+      // `allow`, never `allow_session`: the gear that waved this call through
+      // is a live setting the user can put back, and writing a permanent grant
+      // for this exact command would outlive it.
+      settle('allow', 'gear_widened');
       return true;
     },
 

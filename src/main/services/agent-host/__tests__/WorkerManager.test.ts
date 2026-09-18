@@ -287,7 +287,11 @@ function createHarness(
       if (type === 'worker.fork.accept') return { accepted: true };
       if (type === 'worker.stop') return { stopped: true };
       if (type === 'worker.preview.respond') return { handled: true };
-      if (type === 'worker.setPermissionTier' || type === 'worker.setPermissions')
+      if (
+        type === 'worker.setPermissionTier' ||
+        type === 'worker.setPermissions' ||
+        type === 'worker.setPermissionGear'
+      )
         return { applied: true };
       throw new Error(`unexpected request ${type}`);
     });
@@ -1688,6 +1692,42 @@ describe('WorkerManager unwritten Pi session files', () => {
       });
       expect(h.createSlot.mock.calls[0][0]).toMatchObject({
         permissions: { mode: 'plan', gear: 'auto' },
+      });
+    });
+    it('moves the gear during a live turn but still refuses a mode change', async () => {
+      // What the composer needs while an approval card is up: the gear is the
+      // setting that stops the asking, so locking it until the turn ends meant
+      // the only way to stop being asked was to answer everything first. The
+      // mode stays locked — it decides which tools the turn was handed.
+      const h = createHarness({ sessionFileExists: async () => false });
+      await h.manager.createSession({
+        sessionId: 's1',
+        workspacePath: '/repo',
+        permissions: { mode: 'agent', gear: 'ask' },
+      });
+      await h.manager.send({ sessionId: 's1', attemptId: 'a1', text: 'go' });
+
+      await h.manager.setPermissions('s1', { mode: 'agent', gear: 'auto' });
+      // The narrow RPC, which carries no mode at all — see its payload doc.
+      expect(h.records[0].request).toHaveBeenCalledWith('worker.setPermissionGear', {
+        logicalSessionId: 's1',
+        gear: 'auto',
+      });
+      expect(h.records[0].request).not.toHaveBeenCalledWith(
+        'worker.setPermissions',
+        expect.anything()
+      );
+
+      await expect(
+        h.manager.setPermissions('s1', { mode: 'plan', gear: 'auto' })
+      ).rejects.toMatchObject({ code: 'session_busy' });
+
+      // The gear that did land is Main's record now, so a crash restart brings
+      // the worker back on it rather than on what the session started with.
+      h.records[0].crash('killed');
+      await vi.waitFor(() => expect(h.createSlot).toHaveBeenCalledTimes(2));
+      expect(h.createSlot.mock.calls[1][0]).toMatchObject({
+        permissions: { mode: 'agent', gear: 'auto' },
       });
     });
     it('does not replace the saved setting when the worker rejects a change', async () => {

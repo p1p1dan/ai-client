@@ -140,15 +140,25 @@ export function ComposerPermissionTrigger({
     ? t('Your own policy')
     : `${t(RUNTIME_MODE_LABELS[settings.mode])} · ${t(PERMISSION_GEAR_LABELS[settings.gear])}`;
   const scope = sessionId ? t('Applies immediately, to this thread.') : t('Applies to new chats.');
-  const isDisabled =
-    disabled || sending || pending || (sessionId !== null && !isHostUsable(hostState));
+  /**
+   * A running turn locks the MODE and leaves the gear open.
+   *
+   * Plan mode decides which tools the turn was handed when it started, so
+   * switching it halfway leaves the turn running on a tool set its own posture
+   * no longer matches. The gear only decides how often the user is asked — and
+   * the moment they most want it is while an approval card is sitting there,
+   * which is precisely when the whole control used to go grey. A gear widened
+   * now also releases the card that is already waiting (the runtime re-judges
+   * it), so this is not merely a setting for next time.
+   */
+  const modeLocked = sending === true;
+  const turnNote = t('While this turn runs, only the permission level can change.');
+  const isDisabled = disabled || pending || (sessionId !== null && !isHostUsable(hostState));
   // While bypass is on, the chip is the only thing on screen that says so — no
   // card will ever appear again to remind anyone. So it stops being quiet
   // chrome and carries the destructive tone for as long as the gear is live.
   const bypassing = !degraded && settings.gear === 'bypass';
-  const title = sending
-    ? t('Mode and permissions can be changed once this turn ends.')
-    : `${label} — ${scope}`;
+  const title = modeLocked ? `${label} — ${turnNote}` : `${label} — ${scope}`;
 
   return (
     <Menu
@@ -224,7 +234,7 @@ export function ComposerPermissionTrigger({
                 <MenuPrimitive.RadioItem
                   key={runtimeMode}
                   value={runtimeMode}
-                  disabled={pending}
+                  disabled={pending || modeLocked}
                   // U30 rev.3 — closing is Base UI's own press handling, never a
                   // consequence of the worker acknowledging. `closeOnClick={false}`
                   // (D14's rework) made the popup's fate depend on an await: a
@@ -239,9 +249,11 @@ export function ComposerPermissionTrigger({
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span>{t(RUNTIME_MODE_LABELS[runtimeMode])}</span>
                     <span className="text-meta text-muted-foreground">
-                      {runtimeMode === 'plan'
-                        ? t('Investigates and submits a plan, then waits for approval.')
-                        : t('Carries out approved work.')}
+                      {modeLocked
+                        ? t('Can be changed once this turn ends.')
+                        : runtimeMode === 'plan'
+                          ? t('Investigates and submits a plan, then waits for approval.')
+                          : t('Carries out approved work.')}
                     </span>
                   </span>
                   <MenuPrimitive.RadioItemIndicator>
@@ -292,7 +304,9 @@ export function ComposerPermissionTrigger({
               })}
             </MenuRadioGroup>
             <MenuSeparator />
-            <div className="px-2 py-1.5 text-meta text-muted-foreground">{scope}</div>
+            <div className="px-2 py-1.5 text-meta text-muted-foreground">
+              {modeLocked ? turnNote : scope}
+            </div>
           </>
         )}
         {error && (

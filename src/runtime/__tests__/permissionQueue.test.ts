@@ -18,8 +18,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
+import type { PermissionGear } from '../../shared/types/runtimePermission.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import type {
   PermissionActivityRecord,
@@ -49,7 +50,8 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 /** A real graph, gated on `ask`, answering through the approver given. */
 async function engine(
   approve: NonNullable<PermissionConfig['approve']>,
-  timeoutMs?: number
+  timeoutMs?: number,
+  options: { gear?: PermissionGear; autoAllow?: PermissionConfig['autoAllow'] } = {}
 ): Promise<{
   runtime: RuntimeHandle;
   permissions: RuntimePermissionsService;
@@ -63,7 +65,12 @@ async function engine(
     traceDir: null,
     providers: [faux.provider],
     tools: { cwd: dir },
-    permissions: { gear: 'ask', approve, timeoutMs },
+    permissions: {
+      gear: options.gear ?? 'ask',
+      approve,
+      timeoutMs,
+      ...(options.autoAllow ? { autoAllow: options.autoAllow } : {}),
+    },
   });
   runtimes.push(runtime);
   runtime.ctx.runtimePermissions.onActivity((record) => activity.push(record));
@@ -74,7 +81,7 @@ async function engine(
  * The production pair: the worker's card as the gate's approver, so what the
  * renderer would see is exactly what these cases read.
  */
-async function cardGate(timeoutMs?: number) {
+async function cardGate(timeoutMs?: number, gear?: PermissionGear) {
   const events: RuntimeEventDraft[] = [];
   const prompt = createPermissionPrompt({
     sessionId: 'logical',
@@ -82,7 +89,12 @@ async function cardGate(timeoutMs?: number) {
     emit: (event) => events.push(event),
     timeoutMs,
   });
-  const rest = await engine(prompt.approve, timeoutMs);
+  // Both directions of the pair, as the worker wires them: the gate asks
+  // through `approve` and takes a card back down through `autoAllow`.
+  const rest = await engine(prompt.approve, timeoutMs, {
+    ...(gear ? { gear } : {}),
+    autoAllow: prompt.autoAllow,
+  });
   const cards = () =>
     events.filter((event): event is Card => event.type === 'permission.requested');
   const shown = () => cards().map((card) => card.payload.permissionId);
@@ -352,4 +364,137 @@ it('drops a queued request when the permission settings change under it', async 
   expect(
     activity.find((record) => record.phase === 'decision' && record.request.toolCallId === 'b')
   ).toMatchObject({ decision: 'deny', source: 'cancelled' });
+});
+
+/**
+ * Moving the gear WHILE the cards are up.
+ *
+ * The case this exists for is one person's afternoon: a turn asks for six
+ * writes, they answer two, decide they trust the rest and reach for "full
+ * auto". Before this, the control was disabled until the turn ended — so the
+ * only way to stop being asked was to finish answering — and `configure` was
+ * the only way to change anything, which voids every parked request and forgets
+ * every grant already given.
+ *
+ * `setGear` is the small version of that change, and the four claims below are
+ * its whole contract: a widened gear ANSWERS what it would not have asked,
+ * re-judges rather than waves through, leaves a narrowed gear's existing
+ * questions alone, and keeps the grants.
+ */
+describe('a gear change while requests are waiting', () => {
+  /** Outside the workspace: `ask` and `accept-edits` both stop for it. */
+  const outside = (id: string): ToolPermissionRequest => ({
+    tool: 'write',
+    toolCallId: id,
+    path: join(dir, '..', `queue-${id}.txt`),
+  });
+
+  const report = (promise: Promise<void>) =>
+    promise.then(
+      () => 'allowed',
+      (error: unknown) => (error as { code?: string }).code ?? 'failed'
+    );
+
+  it('answers the card on screen and the queue behind it', async () => {
+    const { shown, resolutions, activity, permissions } = await cardGate();
+    const pending = ['a', 'b', 'c'].map((id) => ask(permissions, id));
+    await settle();
+    expect(shown()).toEqual(['a']);
+
+    permissions.setGear('auto');
+    expect(await Promise.all(pending)).toEqual(['allowed', 'allowed', 'allowed']);
+
+    // The card that was up came down as ALLOWED, not as a denial and not by
+    // going quiet: the renderer takes it off screen on this event and nowhere
+    // else, so a gate that simply stopped waiting would leave it there forever.
+    expect(resolutions()).toHaveLength(1);
+    expect(resolutions()[0]?.payload).toMatchObject({
+      permissionId: 'a',
+      allow: true,
+      decision: 'allow',
+      autoReason: 'gear_widened',
+    });
+    // And the two behind it were never put on screen at all — they were
+    // re-judged as they came up, rather than asked as they were written down.
+    expect(shown()).toEqual(['a']);
+    // Nobody pressed anything, so the audit rows must not say a person did.
+    for (const id of ['a', 'b', 'c'])
+      expect(
+        activity.find((record) => record.phase === 'decision' && record.request.toolCallId === id)
+      ).toMatchObject({ decision: 'allow', source: 'policy', gear: 'auto' });
+  });
+
+  it('keeps asking about the call the wider gear still stops for', async () => {
+    // `auto` is not "allow everything": a command whose operands the shell
+    // analysis could not resolve has passed no path check at all, so it still
+    // asks. The point here is that widening RE-JUDGES each waiting request
+    // instead of releasing whatever happens to be parked.
+    const { shown, prompt, resolutions, permissions } = await cardGate();
+    const unresolved = report(
+      permissions.authorize({
+        tool: 'bash',
+        toolCallId: 'cmd',
+        path: dir,
+        command: 'rm -rf $TARGET',
+        unresolvedPaths: true,
+      })
+    );
+    const write = ask(permissions, 'w');
+    await settle();
+    expect(shown()).toEqual(['cmd']);
+
+    permissions.setGear('auto');
+    await settle();
+    // Still the user's question: no resolution, no hand-over, card still up.
+    expect(resolutions()).toHaveLength(0);
+    expect(shown()).toEqual(['cmd']);
+
+    expect(prompt.respond({ permissionId: 'cmd', decision: 'allow' })).toBe(true);
+    expect(await unresolved).toBe('allowed');
+    // ...while the ordinary write behind it never needed a card once the gear
+    // had moved.
+    expect(await write).toBe('allowed');
+    expect(shown()).toEqual(['cmd']);
+  });
+
+  it('leaves a waiting card alone when the gear narrows', async () => {
+    const { shown, resolutions, prompt, permissions } = await cardGate(undefined, 'accept-edits');
+    const parked = report(permissions.authorize(outside('n')));
+    await settle();
+    expect(shown()).toEqual(['n']);
+
+    permissions.setGear('ask');
+    await settle();
+    // A question already asked stays asked. Answering it on the user's behalf
+    // — in either direction — would be deciding something they were in the
+    // middle of deciding themselves.
+    expect(resolutions()).toHaveLength(0);
+    expect(shown()).toEqual(['n']);
+
+    expect(prompt.respond({ permissionId: 'n', decision: 'deny' })).toBe(true);
+    expect(await parked).toBe('tool_denied');
+  });
+
+  it('keeps the session grants a `configure` would have cleared', async () => {
+    const { shown, activity, prompt, permissions } = await cardGate();
+    const first = report(permissions.authorize(outside('g')));
+    await settle();
+    expect(prompt.respond({ permissionId: 'g', decision: 'allow_session' })).toBe(true);
+    expect(await first).toBe('allowed');
+
+    // The whole reason this is not `configure`: the same call must not be asked
+    // about again just because the user touched the gear. (`accept-edits` does
+    // not cover this path — it is outside the workspace — so the grant is the
+    // only thing that can be allowing it.)
+    permissions.setGear('accept-edits');
+    const again = report(permissions.authorize(outside('g')));
+    expect(await again).toBe('allowed');
+    expect(shown()).toEqual(['g']);
+    expect(
+      activity.filter((record) => record.phase === 'decision' && record.request.toolCallId === 'g')
+    ).toMatchObject([
+      { decision: 'allow', source: 'allow-session' },
+      { decision: 'allow', source: 'session-grant' },
+    ]);
+  });
 });

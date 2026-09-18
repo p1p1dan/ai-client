@@ -143,6 +143,20 @@ export interface PermissionConfig {
      */
     queue?: PermissionQueueSlot
   ) => Promise<'allow-once' | 'allow-session' | 'deny'>;
+  /**
+   * Answer a card that is already on screen with `allow`, because the question
+   * it asks has stopped being a question — see `setGear`.
+   *
+   * The gate cannot do this itself: the promise `approve` returned belongs to
+   * the approval UI, and resolving it behind that UI's back would leave the
+   * card up forever with nothing left to answer it. So the retraction goes
+   * through the same surface that raised it, which emits the resolution the
+   * renderer needs to take the card down.
+   *
+   * Returns false when nothing was waiting on that id. Optional: an approver
+   * with no way to retract simply keeps asking, which is the old behaviour.
+   */
+  autoAllow?: (toolCallId: string) => boolean;
   timeoutMs?: number;
 }
 /**
@@ -199,6 +213,24 @@ export interface RuntimePermissionsService {
   isToolAllowed(name: string): boolean;
   configure(settings: Partial<RuntimePermissionSettings>): void;
   /**
+   * Move the gear, and nothing else, while the session keeps running.
+   *
+   * The counterpart to `configure`, which is a posture change: it forgets every
+   * session grant and voids every request parked at the gate, so it can only be
+   * applied between turns. Sliding the gear is a much smaller statement — "ask
+   * me less from now on" — and the whole value of it is that it can be made at
+   * the moment the user is looking at a card they do not want to answer.
+   *
+   * So this keeps the grants, keeps the epoch, and keeps the queue. Widening
+   * (ask → accept-edits → auto → bypass) re-judges the requests that are still
+   * waiting: the card on screen is settled as allowed and retracted if the new
+   * gear would not have raised it, and each request still queued behind it is
+   * re-evaluated when its turn comes rather than being asked as it was written
+   * down. Narrowing changes nothing that is already waiting — a question
+   * already asked stays asked, and an answer already given stays given.
+   */
+  setGear(gear: PermissionGear): void;
+  /**
    * Resolve one tool call under a delegate's scope, and give back the undo.
    *
    * Scoped per `toolCallId` rather than by switching the session gear, because
@@ -235,6 +267,33 @@ interface PromptWaiter {
   wake: () => boolean;
 }
 
+/**
+ * The request whose card is on screen right now, if any.
+ *
+ * The gate serializes approvals, so there is at most one — but `check` cannot
+ * reach into its own pending `approve` promise, so the record is what lets
+ * `setGear` find the live question and retract it.
+ */
+interface LivePrompt {
+  request: ToolPermissionRequest;
+  /** Settled by the gear rather than by a person. See `setGear`. */
+  autoAllowed: boolean;
+}
+
+/**
+ * How far each gear opens, so two of them can be compared.
+ *
+ * Only the ORDER is meaningful. It is the order the menu shows and the order
+ * the four gears widen in: every call `ask` waves through, `accept-edits` waves
+ * through too, and so on up to `bypass`, which raises no card at all.
+ */
+const GEAR_WIDTH: Record<PermissionGear, number> = {
+  ask: 0,
+  'accept-edits': 1,
+  auto: 2,
+  bypass: 3,
+};
+
 export class PermissionsPlugin extends Service implements RuntimePermissionsService {
   static inject = [HOST_IO_SERVICE];
   private readonly config: PermissionConfig;
@@ -257,6 +316,8 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
   private readonly waiting: PromptWaiter[] = [];
   /** Whether a request currently holds the approval gate. */
   private prompting = false;
+  /** The card on screen, for `setGear` to retract. Null between cards. */
+  private live: LivePrompt | null = null;
   /** Cards shown since the queue was last empty; see `PermissionQueueSlot`. */
   private served = 0;
 
@@ -284,6 +345,25 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     this.settings = { ...this.settings, ...settings };
     this.epoch++;
     this.grants.clear();
+  }
+  setGear(gear: PermissionGear): void {
+    const previous = this.settings.gear;
+    if (gear === previous) return;
+    this.settings = { ...this.settings, gear };
+    // Narrowing leaves the queue alone on purpose: a request that is already
+    // waiting was raised under a posture the user has since tightened, and the
+    // tightening is about what comes next. Denying it here would refuse a call
+    // on the user's behalf that they were in the middle of deciding.
+    if (GEAR_WIDTH[gear] <= GEAR_WIDTH[previous]) return;
+    const live = this.live;
+    if (!live || live.autoAllowed) return;
+    // Re-judged, not waved through: widening is not "allow whatever is on
+    // screen". A bash call with an operand the analysis could not read still
+    // asks under `auto`, and a delegate running on its own scoped gear is not
+    // affected by the session's at all — both fall out of `evaluate` for free.
+    if (this.evaluate(live.request) !== 'allow') return;
+    if (this.config.autoAllow?.(live.request.toolCallId) !== true) return;
+    live.autoAllowed = true;
   }
   scopeToolCall(toolCallId: string, scope: DelegateCallScope): () => void {
     this.scopedGears.set(toolCallId, scope);
@@ -545,6 +625,7 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     // One card at a time, from here to the `finally` at the bottom. Everything
     // that announces the gate or counts against its deadline lives inside.
     await this.acquirePrompt(combined);
+    const live: LivePrompt = { request, autoAllowed: false };
     try {
       // Re-read, because the wait above can be arbitrarily long: the turn may
       // have been stopped, the graph torn down, or the permission settings
@@ -567,6 +648,7 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
         this.config.timeoutMs ?? PERMISSION_TIMEOUT_MS
       );
       let abort: (() => void) | undefined;
+      this.live = live;
       try {
         const cancelled = new Promise<'deny'>((resolve) => {
           abort = () => resolve('deny');
@@ -577,10 +659,16 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
           throw approvalSignal.reason === PERMISSION_TIMEOUT_REASON
             ? denied('timed-out', 'nobody answered the permission request in time')
             : denied('cancelled', 'permission request expired');
+        // Retracted by a widened gear, so the audit line must not read as a
+        // decision a person made: nobody answered this card, it stopped being
+        // a question. Checked after the abort above, which still wins — the
+        // same order a user's own answer races a stop in.
+        if (live.autoAllowed) return 'policy';
         if (decision === 'deny') throw denied('user-denied', 'permission denied');
         if (decision === 'allow-session') this.grants.add(grantKey(request));
         return decision;
       } finally {
+        if (this.live === live) this.live = null;
         clearTimeout(timeout);
         if (abort) approvalSignal.removeEventListener('abort', abort);
         controller.abort();

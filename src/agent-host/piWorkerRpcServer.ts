@@ -14,7 +14,10 @@ import type {
   RuntimeEvent,
   RuntimeEventDraft,
 } from '../shared/types/runtimeEvents.ts';
-import type { RuntimePermissionSettings } from '../shared/types/runtimePermission.ts';
+import type {
+  PermissionGear,
+  RuntimePermissionSettings,
+} from '../shared/types/runtimePermission.ts';
 import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
 import {
   isWorkerAcceptForkPayload,
@@ -34,6 +37,7 @@ import {
   isWorkerRewindPayload,
   isWorkerRpcRequest,
   isWorkerSendPayload,
+  isWorkerSetPermissionGearPayload,
   isWorkerSetPermissionsPayload,
   isWorkerSetPermissionTierPayload,
   isWorkerStopPayload,
@@ -126,6 +130,8 @@ export interface PiWorkerRuntime {
   /** P5-2-3 — report what Main did with one `preview.requested`. */
   respondPreview(input: { previewId: string; ok: boolean; error?: string }): boolean;
   setPermissions(permissions: RuntimePermissionSettings): void;
+  /** The gear alone, which a running turn does not lock. */
+  setPermissionGear(gear: PermissionGear): void;
   setPermissionTier(tier: SessionPermissionTier): void;
   dispose(): Promise<void>;
 }
@@ -443,6 +449,9 @@ export class PiWorkerRpcServer {
           break;
         case 'worker.setPermissions':
           this.handleSetPermissions(request);
+          break;
+        case 'worker.setPermissionGear':
+          this.handleSetPermissionGear(request);
           break;
         case 'worker.setPermissionTier':
           this.handleSetPermissionTier(request);
@@ -925,6 +934,29 @@ export class PiWorkerRpcServer {
     if (!this.runtime)
       throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     this.runtime.setPermissions(request.payload.permissions);
+    this.respondSuccess(request, { applied: true });
+  }
+
+  /**
+   * The gear-only change, which is the one a running turn still accepts.
+   *
+   * Same three guards as its neighbour above — a valid payload, the right
+   * session, a runtime to apply it to — and the same `applied: true` contract:
+   * Main records the gear and the composer chip shows it, so claiming it landed
+   * without an engine behind it would put a posture on screen that nothing is
+   * enforcing.
+   */
+  private handleSetPermissionGear(request: WorkerRpcRequest): void {
+    if (!isWorkerSetPermissionGearPayload(request.payload))
+      throw new PiWorkerSessionError('WORKER_INVALID_PAYLOAD', 'Invalid permission gear');
+    if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId)
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_MISMATCH',
+        'Permission gear change targets another session'
+      );
+    if (!this.runtime)
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    this.runtime.setPermissionGear(request.payload.gear);
     this.respondSuccess(request, { applied: true });
   }
 
