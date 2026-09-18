@@ -4,7 +4,7 @@ import { hostname, tmpdir, uptime } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fauxProvider } from '@earendil-works/pi-ai/providers/faux';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
 import type { RuntimeHostIoService } from '../contracts.ts';
 import { prepareSessionConfig } from '../plugins/session/legacy.ts';
@@ -15,12 +15,35 @@ import {
 } from '../plugins/session/writerLock.ts';
 import { neverAsked } from './fixtures/approval.ts';
 
+/**
+ * `writerLock.ts` derives "when did this machine boot" from `os.uptime()` and
+ * treats a lock whose `acquiredAt` predates that boot as stale (windows-06 /
+ * concurrency-02). A couple of tests below plant a lock "acquired 2 hours
+ * ago" and expect it to still be honored as live — true on a desk machine up
+ * for days, false on a CI runner that just booted and reports well under two
+ * hours of uptime. Mocking `uptime()` lets those tests fix the boot time
+ * they need instead of gambling on the real uptime of whatever machine runs
+ * the suite. Left at `undefined`, this is a no-op passthrough to the real
+ * `os.uptime()`, so every other test here is unaffected.
+ */
+let uptimeOverrideSeconds: number | undefined;
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>();
+  return { ...actual, uptime: () => uptimeOverrideSeconds ?? actual.uptime() };
+});
+
+/** Make `os.uptime()` — seen by both the lock module and this file — report a boot `hours` ago. */
+function bootedHoursAgo(hours: number): void {
+  uptimeOverrideSeconds = hours * 3600;
+}
+
 let dir: string;
 const live = new Set<RuntimeHandle>();
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'writer-lock-'));
 });
 afterEach(async () => {
+  uptimeOverrideSeconds = undefined;
   for (const handle of live) await handle.dispose().catch(() => {});
   live.clear();
   await rm(dir, { recursive: true, force: true });
@@ -539,6 +562,9 @@ describe('session writer lock — the forced takeover', () => {
   });
 
   it('names the holder and the remedy when it refuses', async () => {
+    // A 2-hour-old lock must outlive the boot-skew check on its own machine,
+    // not on whatever real uptime the suite happens to run under.
+    bootedHoursAgo(3);
     await seededSession();
     await strandLock({
       pid: process.pid,
@@ -569,6 +595,9 @@ describe('session writer lock — the forced takeover', () => {
     // a different tsconfig and a different process — which is the point: a
     // change on either side that the other did not follow fails here rather
     // than silently degrading the card to "failed to read history".
+    // A 2-hour-old lock must outlive the boot-skew check on its own machine,
+    // not on whatever real uptime the suite happens to run under.
+    bootedHoursAgo(3);
     await seededSession();
     await strandLock({
       pid: process.pid,
