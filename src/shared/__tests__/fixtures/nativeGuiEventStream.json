@@ -190,6 +190,10 @@
             "change": "add"
           }
         ]
+      },
+      "sessionGrantScope": {
+        "kind": "directory",
+        "value": "./"
       }
     }
   },

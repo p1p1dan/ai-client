@@ -3,6 +3,7 @@ import type {
   PermissionAutoReason,
   PermissionDecisionId,
   PermissionDetail,
+  PermissionGrantScope,
   PermissionRequestAction,
   PermissionRequestKind,
   QuestionItem,
@@ -207,6 +208,12 @@ export interface ChatBlock {
   permissionDetail?: PermissionDetail;
   /** S2 (c): buttons offered. undefined = the historical Allow / Deny pair. */
   permissionDecisions?: PermissionDecisionId[];
+  /**
+   * What "Allow for session" on this card would remember — a directory with its
+   * subdirectories, or a command prefix. Absent when the grant is still the
+   * exact call, or when the backend does not report it.
+   */
+  permissionGrantScope?: PermissionGrantScope;
   /** S2 (c): which button settled it, when richer than the `allowed` boolean. */
   permissionDecision?: PermissionDecisionId;
   /** S2 (c): set when the client answered without asking anyone. */
@@ -1262,6 +1269,12 @@ function applyRuntimeEventCore(
                 permissionKind: event.payload.kind,
                 permissionDetail: event.payload.detail,
                 permissionDecisions: event.payload.decisions,
+                // Spread rather than assigned: an absent scope must stay absent
+                // so "this build reports no reach" and "this request has none"
+                // read the same to the card.
+                ...(event.payload.sessionGrantScope
+                  ? { permissionGrantScope: event.payload.sessionGrantScope }
+                  : {}),
                 ...(event.payload.timeoutMs !== undefined
                   ? { permissionExpiresAt: event.timestamp + event.payload.timeoutMs }
                   : {}),

@@ -21,6 +21,16 @@ import { acquireWriterLock, releaseWriterLock } from './writerLock.ts';
 
 export const PERMISSIONS_ENTRY = 'aiclient.permissions';
 /**
+ * Where "Allow for session" survives a restart.
+ *
+ * A grant was purely in-memory, so closing the window forgot every approval the
+ * user had given — reopening the same conversation asked all of them again, one
+ * card at a time. The record is versioned (`plugins/permissions/grants.ts`) and
+ * last-one-wins, so clearing the grants is written down as an empty record
+ * rather than by deleting anything from an append-only file.
+ */
+export const PERMISSION_GRANTS_ENTRY = 'aiclient.permissionGrants';
+/**
  * Custom entries this runtime writes for ITSELF.
  *
  * They belong in the transcript file — `sessionPermissions` reads them back to
@@ -30,6 +40,7 @@ export const PERMISSIONS_ENTRY = 'aiclient.permissions';
  */
 export const INTERNAL_CUSTOM_ENTRIES: readonly string[] = [
   PERMISSIONS_ENTRY,
+  PERMISSION_GRANTS_ENTRY,
   'aiclient-session-tier',
   'permission-tier',
   // P5-2-6. Delegation records — a delegate's own messages, plus the start and

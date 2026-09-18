@@ -3,6 +3,7 @@ import type {
   PermissionAutoReason,
   PermissionDecisionId,
   PermissionFileChange,
+  PermissionGrantScope,
   PermissionRequestAction,
   QuestionItem,
 } from '@shared/types/runtimeEvents';
@@ -451,16 +452,49 @@ export function derivePermissionOmittedNote(
 }
 
 /**
+ * What the grant will cover, in one clause — the half of the button's meaning
+ * the words "Allow for session" cannot carry.
+ *
+ * A session grant used to be the exact call; it is now a SHAPE (every file in a
+ * directory and its subdirectories, or every command starting with a prefix),
+ * and a user pressing a button has to be able to see that. `toolName` words the
+ * directory arm because the grant is per tool: allowing `edit` under `src/`
+ * does not allow `bash` there.
+ */
+export function derivePermissionGrantScopeNote(
+  scope: PermissionGrantScope | undefined,
+  toolName: string | undefined,
+  t: Translate = englishTranslate
+): string | null {
+  if (!scope) return null;
+  if (scope.kind === 'command')
+    return t('Allow for session remembers commands starting with {{prefix}}', {
+      prefix: scope.value,
+    });
+  return t('Allow for session remembers {{tool}} anywhere under {{path}}', {
+    tool: toolName ?? '',
+    path: scope.value,
+  });
+}
+
+/**
  * T002 — shown only when the card actually offers "Allow for session": a row
  * that never renders the button has nothing to explain the scope of.
+ *
+ * Two clauses when the runtime told us the reach: WHAT is remembered first,
+ * because that is the new information and the part that changes the decision,
+ * then WHO it applies to, which has been true since decision 003.
  */
 export function derivePermissionSessionScopeNote(
   options: readonly OptionRow[],
-  t: Translate = englishTranslate
+  t: Translate = englishTranslate,
+  scope?: PermissionGrantScope,
+  toolName?: string
 ): string | null {
-  return options.some((option) => option.decision === 'allow_session')
-    ? t(PERMISSION_ALLOW_SESSION_NOTE)
-    : null;
+  if (!options.some((option) => option.decision === 'allow_session')) return null;
+  const reach = derivePermissionGrantScopeNote(scope, toolName, t);
+  const applies = t(PERMISSION_ALLOW_SESSION_NOTE);
+  return reach ? `${reach} · ${applies}` : applies;
 }
 
 /**
@@ -945,7 +979,12 @@ export function derivePermissionCardView(
       waiting: false,
       detail,
       omittedNote,
-      sessionScopeNote: derivePermissionSessionScopeNote(options, t),
+      sessionScopeNote: derivePermissionSessionScopeNote(
+        options,
+        t,
+        block.permissionGrantScope,
+        block.toolName
+      ),
     };
   }
 

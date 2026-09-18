@@ -2996,3 +2996,18 @@ Object.assign(zhTranslations, {
   'Can be changed once this turn ends.': '本轮对话结束后可修改。',
   'permissions widened': '权限已放宽',
 });
+
+/**
+ * What 「本会话内允许」 actually remembers.
+ *
+ * The grant stopped being one exact call — it is a directory with everything
+ * under it, or a command prefix — so the card has to say which, or the button
+ * promises something the user cannot see. Its own block at the end of the file
+ * for the usual reason: several people add strings here on the same day.
+ */
+Object.assign(zhTranslations, {
+  'Allow for session remembers commands starting with {{prefix}}':
+    '「本会话内允许」会记住以 {{prefix}} 开头的命令',
+  'Allow for session remembers {{tool}} anywhere under {{path}}':
+    '「本会话内允许」会记住 {{tool}} 可访问 {{path}} 及其子目录',
+});

@@ -390,6 +390,32 @@ export type PermissionAutoReason =
   | 'timed_out'
   | 'gear_widened';
 
+/**
+ * What "Allow for session" on THIS card would remember.
+ *
+ * A session grant used to be the exact call, so the button needed no
+ * explanation: allowing it allowed that one thing again. It is now a shape — a
+ * directory and everything under it, or a command prefix and everything that
+ * starts with it — and a button whose reach a user cannot see is a button they
+ * cannot decide about. So the runtime, which is the only side that knows what
+ * its own matcher will do, says it here and the card words it.
+ *
+ * Absent when the grant is still exact (MCP tools, skills) or when the request
+ * cannot be remembered at all — in both cases there is nothing extra to warn
+ * about, and the card keeps its generic scope line.
+ */
+export interface PermissionGrantScope {
+  /** `command`: a bash prefix. `directory`: a folder, with its subfolders. */
+  kind: 'command' | 'directory';
+  /**
+   * Already shaped for display: a comma-joined prefix list, or a
+   * workspace-relative directory with a trailing separator (absolute when the
+   * directory is outside the workspace, so an approval that reaches out of the
+   * project reads like one).
+   */
+  value: string;
+}
+
 /** One file touched by a `file_change` approval. */
 export interface PermissionFileChange {
   path: string;
@@ -502,6 +528,12 @@ export interface PermissionRequestedEvent extends RuntimeEventBase {
     decisions?: PermissionDecisionId[];
     /** S2: card body for exec / file_change requests. */
     detail?: PermissionDetail;
+    /**
+     * What an `allow_session` answer to this card would remember. Absent on
+     * backends that do not model it, and on requests with nothing to say — the
+     * card then shows its generic scope line rather than inventing a reach.
+     */
+    sessionGrantScope?: PermissionGrantScope;
     /** S2: the agent's own justification, when it sent one. */
     reason?: string;
     /**

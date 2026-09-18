@@ -48,6 +48,7 @@ import {
 } from './plugins/mcp/index.ts';
 import { parsePiCatalog, readPiCatalog } from './plugins/model-adapter/catalog.ts';
 import { type ModelAdapterConfig, ModelAdapterPlugin } from './plugins/model-adapter/index.ts';
+import { restoredGrants } from './plugins/permissions/grants.ts';
 import {
   PERMISSIONS_SERVICE,
   type PermissionConfig,
@@ -295,10 +296,17 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
           tools: [...scope.tools],
         }))
       );
+      // One snapshot for both reads: it rebuilds the whole entry list, and the
+      // grants come out of the same entries the permission settings do.
+      const restored = session?.snapshot();
       const permissionsFiber = await ctx.plugin(PermissionsPlugin, {
-        ...session?.snapshot().permissions,
+        ...restored?.permissions,
         ...options.permissions,
         cwd,
+        // Approvals the user already gave in THIS conversation. A fresh session
+        // has no such entries and therefore starts with none, which is what
+        // makes "for session" mean the session rather than the install.
+        grants: restoredGrants(restored?.entries ?? []),
         scopes,
         policy: await loadPermissionPolicy(io, {
           cwd,

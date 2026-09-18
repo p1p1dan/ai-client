@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { isAbsolute, posix, relative, sep, win32 } from 'node:path';
+import { posix, win32 } from 'node:path';
 import { type Context, Service } from 'cordis';
 import { AICLIENT_DEFAULT_PERMISSION_POLICY } from '../../../agent-host/permissionPolicy.mjs';
 import {
@@ -9,10 +9,21 @@ import {
   type RuntimePermissionSettings,
   resolveRuntimePermission,
 } from '../../../shared/types/runtimePermission.ts';
-import { HOST_IO_SERVICE } from '../../contracts.ts';
+import { HOST_IO_SERVICE, SESSION_SERVICE } from '../../contracts.ts';
 import { RuntimeHostError } from '../../host/errors.ts';
+import {
+  containsPath,
+  encodeGrants,
+  grantCovers,
+  grantKeyOf,
+  grantsFor,
+  PERMISSION_GRANTS_ENTRY,
+  type PermissionGrant,
+} from './grants.ts';
 import { policyAction, type RuntimePermissionPolicy } from './policy.ts';
 import { normalizeWindowsPathForm } from './windows-paths.ts';
+
+export { containsPath };
 
 export const PERMISSIONS_SERVICE = 'runtimePermissions';
 export const PERMISSION_TIMEOUT_MS = 120_000;
@@ -133,6 +144,16 @@ export interface PermissionConfig {
   scopes?: readonly PermissionScope[];
   policy?: RuntimePermissionPolicy;
   projectTrusted?: boolean;
+  /**
+   * Session grants this gate starts with, read back off the transcript.
+   *
+   * A resumed conversation is the SAME session to the person who reopened it,
+   * so the approvals they already gave still hold; a brand-new one starts
+   * empty because nothing has been approved in it yet. Supplied by
+   * `bootstrap`, which is the only place that has the session file open before
+   * this plugin exists.
+   */
+  grants?: readonly PermissionGrant[];
   approve?: (
     request: ToolPermissionRequest,
     signal: AbortSignal,
@@ -297,7 +318,11 @@ const GEAR_WIDTH: Record<PermissionGear, number> = {
 export class PermissionsPlugin extends Service implements RuntimePermissionsService {
   static inject = [HOST_IO_SERVICE];
   private readonly config: PermissionConfig;
-  private readonly grants = new Set<string>();
+  /**
+   * Session grants by key, so a repeat approval replaces rather than piles up
+   * and the matcher can still read each record's shape.
+   */
+  private readonly grants = new Map<string, PermissionGrant>();
   private readonly controller = new AbortController();
   private settings: RuntimePermissionSettings;
   /** Per-call delegate scopes, keyed by tool call id. See `scopeToolCall`. */
@@ -325,6 +350,7 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     super(ctx, PERMISSIONS_SERVICE);
     this.config = config;
     this.settings = resolveRuntimePermission(config);
+    for (const grant of config.grants ?? []) this.grants.set(grantKeyOf(grant), grant);
     ctx.effect(() => () => {
       this.controller.abort();
       this.grants.clear();
@@ -345,6 +371,10 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     this.settings = { ...this.settings, ...settings };
     this.epoch++;
     this.grants.clear();
+    // Written down as well as forgotten. Clearing only the in-memory copy would
+    // hand every grant straight back on the next open, so a posture change
+    // would be undone by reopening the conversation.
+    this.persistGrants();
   }
   setGear(gear: PermissionGear): void {
     const previous = this.settings.gear;
@@ -393,6 +423,71 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
   }
   isToolAllowed(name: string): boolean {
     return !this.config.allowedTools || this.config.allowedTools.includes(name);
+  }
+  /**
+   * Has the user already approved a call of this shape in this session?
+   *
+   * `grantCovers` answers the part a grant is ABOUT — this directory, this
+   * command prefix. The three checks after it are the parts a grant deliberately
+   * does not answer, and they are re-made on every call:
+   *
+   *  - a bundled-secret path (`.env`, `~/.ssh/*`) still asks, because approving
+   *    `src/a.ts` is not approving whatever else happens to live beside it;
+   *  - a policy rule that says `ask` for a path still asks, same reasoning;
+   *  - a bash grant never reaches outside the workspace it was given in. A
+   *    command prefix says nothing about which files the NEXT invocation of it
+   *    will touch, so `npm test` approved in the project does not become
+   *    permission to run something named `npm test` against `/etc`.
+   *
+   * A file grant does cover its own directory even outside the workspace,
+   * because there the user was shown, and approved, the exact directory.
+   */
+  private granted(request: ToolPermissionRequest): boolean {
+    if (this.grants.size === 0) return false;
+    if (!grantCovers(this.grants.values(), request)) return false;
+    if (request.trustedPath) return true;
+    const inspected = [request.path, ...(request.paths ?? [])];
+    if (inspected.some((path) => pathPolicy(path) === 'ask')) return false;
+    const policy = this.config.policy;
+    if (
+      policy &&
+      inspected.some((path) => policyAction(policy, 'path', [path], this.config.cwd) === 'ask')
+    )
+      return false;
+    if (request.tool === 'bash' && inspected.some((path) => !containsPath(this.config.cwd, path)))
+      return false;
+    return true;
+  }
+  /** Write down what this approval covers, and keep it across restarts. */
+  private remember(request: ToolPermissionRequest): void {
+    const grants = grantsFor(request);
+    // Nothing to remember is a real outcome, not a failure: a command whose
+    // program name the shell analysis could not read has no prefix worth
+    // storing, so the approval simply behaves like "allow once".
+    if (grants.length === 0) return;
+    for (const grant of grants) this.grants.set(grantKeyOf(grant), grant);
+    this.persistGrants();
+  }
+  /**
+   * Append the current grant set to the transcript, if there is one.
+   *
+   * Fire-and-forget on purpose. The gate is answering a user right now and a
+   * session file that cannot be written must not turn their "Allow" into a
+   * failed tool call — the cost of a lost append is that the grant does not
+   * survive the next restart, which is exactly where this feature started.
+   */
+  private persistGrants(): void {
+    const session = this.ctx.get(SESSION_SERVICE);
+    if (!session) return;
+    void session
+      .appendEntry({
+        type: 'custom',
+        customType: PERMISSION_GRANTS_ENTRY,
+        data: encodeGrants(this.grants.values()),
+      })
+      .catch(() => {
+        // See above: persistence is best-effort, the decision already stands.
+      });
   }
   evaluate(request: ToolPermissionRequest): PermissionAction {
     if (!this.isToolAllowed(request.tool)) return 'deny';
@@ -445,14 +540,19 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     // command still applies, which is why the check stays after `grants`.
     if (gear === 'auto' && !request.unresolvedPaths) return 'allow';
     if (matches.some((scope) => scope.action === 'ask'))
-      return this.grants.has(grantKey(request)) ? 'allow' : 'ask';
+      return this.granted(request) ? 'allow' : 'ask';
     if (
       inspectedPaths.every((path) =>
         matches.some((scope) => scope.action === 'allow' && containsPath(scope.root, path))
       )
     )
       return 'allow';
-    if (this.grants.has(grantKey(request))) return 'allow';
+    // Before the unresolved-operand stop, and that ordering is the whole point
+    // of the bash rule: `npm test $FLAGS` resolves no operands at all, and
+    // asking about it again after the user has already allowed `npm test` is
+    // precisely the loop this change exists to end. What the grant cannot buy
+    // it — a path outside the workspace, a secret file — `granted` withholds.
+    if (this.granted(request)) return 'allow';
     if (request.unresolvedPaths) return 'ask';
     // A trusted path skips straight past the workspace-boundary checks below:
     // every deny above (policy, bundled secrets, scope) has already had its
@@ -618,10 +718,11 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     const action = this.evaluate(request);
     if (action === 'deny')
       throw denied('policy-deny', `access denied: ${request.tool} ${request.path}`);
-    if (action === 'allow') return this.grants.has(grantKey(request)) ? 'session-grant' : 'policy';
+    if (action === 'allow') return this.granted(request) ? 'session-grant' : 'policy';
     const approve = this.config.approve;
     if (!approve) throw denied('error', 'approval UI is not connected');
     const epoch = this.epoch;
+    const gearAtEntry = this.gearFor(request);
     // One card at a time, from here to the `finally` at the bottom. Everything
     // that announces the gate or counts against its deadline lives inside.
     await this.acquirePrompt(combined);
@@ -634,6 +735,12 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
       // means no card is ever raised for a request nobody can act on.
       if (combined.aborted) throw denied('cancelled', 'permission request cancelled');
       if (epoch !== this.epoch) throw denied('cancelled', 'permission request expired');
+      // The gear can widen while a request stands in line (`setGear`), and this
+      // one was judged before it got here. Judging it again costs one call and
+      // is the difference between "the user turned the asking off" and "the
+      // user turned the asking off and was then asked four more times".
+      if (this.gearFor(request) !== gearAtEntry && this.evaluate(request) === 'allow')
+        return this.granted(request) ? 'session-grant' : 'policy';
       const queue: PermissionQueueSlot = {
         position: ++this.served,
         depth: this.served + this.waiting.length,
@@ -665,7 +772,7 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
         // same order a user's own answer races a stop in.
         if (live.autoAllowed) return 'policy';
         if (decision === 'deny') throw denied('user-denied', 'permission denied');
-        if (decision === 'allow-session') this.grants.add(grantKey(request));
+        if (decision === 'allow-session') this.remember(request);
         return decision;
       } finally {
         if (this.live === live) this.live = null;
@@ -683,13 +790,6 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
       this.releasePrompt();
     }
   }
-}
-export function containsPath(root: string, path: string): boolean {
-  const delta = relative(root, path);
-  return delta === '' || (!isAbsolute(delta) && delta !== '..' && !delta.startsWith(`..${sep}`));
-}
-function grantKey(request: ToolPermissionRequest): string {
-  return JSON.stringify([request.tool, request.path, request.command ?? null, request.paths ?? []]);
 }
 /**
  * Gears that answer an `ask` on the user's behalf rather than raising a card.

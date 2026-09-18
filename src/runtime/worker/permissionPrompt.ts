@@ -22,6 +22,7 @@ import type {
   PermissionRequestKind,
   RuntimeEventDraft,
 } from '../../shared/types/runtimeEvents.ts';
+import { describeGrantScope } from '../plugins/permissions/grants.ts';
 import {
   PERMISSION_TIMEOUT_MS,
   PERMISSION_TIMEOUT_REASON,
@@ -178,6 +179,10 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
         const permissionId = request.toolCallId;
         const detail = detailOf(request, options.cwd);
         const action = actionOf(request.tool);
+        // What the "Allow for session" button would actually write down. The
+        // matcher lives in the runtime, so the runtime is the only side that
+        // can describe it without guessing — see `PermissionGrantScope`.
+        const sessionGrantScope = describeGrantScope(request, options.cwd);
         options.emit({
           type: 'permission.requested',
           sessionId: options.sessionId,
@@ -222,6 +227,7 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
             // drives `approve` directly.
             ...(queue ? { queuePosition: queue.position, queueDepth: queue.depth } : {}),
             ...(detail ? { detail } : {}),
+            ...(sessionGrantScope ? { sessionGrantScope } : {}),
           },
         });
 

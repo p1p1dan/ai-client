@@ -23,6 +23,7 @@ import {
   derivePermissionAutoNote,
   derivePermissionCardView,
   derivePermissionDetailView,
+  derivePermissionGrantScopeNote,
   derivePermissionOmittedNote,
   derivePermissionQueueProgress,
   derivePermissionRowView,
@@ -659,6 +660,74 @@ describe('permission card session-scope note (T002)', () => {
         buildPermissionOptionRows(['allow', 'allow_session', 'deny'])
       )
     ).toBe(PERMISSION_ALLOW_SESSION_NOTE);
+  });
+});
+
+/**
+ * What the button will REMEMBER, which stopped being obvious the moment the
+ * grant stopped being one exact call.
+ *
+ * A session grant now covers a directory and everything under it, or every
+ * command starting with a prefix. That is a materially bigger decision than the
+ * card used to be asking for, and the only place it can be stated is next to the
+ * button that makes it.
+ */
+describe('permission card grant-scope copy', () => {
+  it('words a command grant as a prefix, not as the command that was typed', () => {
+    expect(derivePermissionGrantScopeNote({ kind: 'command', value: 'npm test' }, 'Bash')).toBe(
+      'Allow for session remembers commands starting with npm test'
+    );
+  });
+
+  it('words a directory grant with the tool it is tied to', () => {
+    // Per tool on purpose: allowing `edit` under `src/renderer/` is not
+    // allowing `bash` there, and a note that dropped the tool would promise
+    // more than the matcher gives.
+    expect(
+      derivePermissionGrantScopeNote({ kind: 'directory', value: 'src/renderer/' }, 'Edit')
+    ).toBe('Allow for session remembers Edit anywhere under src/renderer/');
+  });
+
+  it('says nothing when the runtime reported no scope', () => {
+    expect(derivePermissionGrantScopeNote(undefined, 'Bash')).toBeNull();
+  });
+
+  it('puts the reach before the audience on the card, and keeps both', () => {
+    const view = derivePermissionCardView(
+      permissionBlock({
+        permissionDecisions: ['allow', 'allow_session', 'deny'],
+        permissionGrantScope: { kind: 'command', value: 'npm test' },
+      }),
+      true
+    );
+    expect(view.sessionScopeNote).toBe(
+      `Allow for session remembers commands starting with npm test · ${PERMISSION_ALLOW_SESSION_NOTE}`
+    );
+  });
+
+  it('falls back to the audience line alone when no scope arrived', () => {
+    // Every pre-existing producer, and every backend that does not model the
+    // grant shape, takes this path — the card says exactly what it said before.
+    const view = derivePermissionCardView(
+      permissionBlock({ permissionDecisions: ['allow', 'allow_session', 'deny'] }),
+      true
+    );
+    expect(view.sessionScopeNote).toBe(PERMISSION_ALLOW_SESSION_NOTE);
+  });
+
+  it('is translated as one sentence, not as a English/Chinese mix', () => {
+    const view = derivePermissionCardView(
+      permissionBlock({
+        toolName: 'Edit',
+        permissionDecisions: ['allow', 'allow_session', 'deny'],
+        permissionGrantScope: { kind: 'directory', value: 'src/renderer/' },
+      }),
+      true,
+      (key, params) => translate('zh', key, params)
+    );
+    expect(view.sessionScopeNote).toBe(
+      `「本会话内允许」会记住 Edit 可访问 src/renderer/ 及其子目录 · ${translate('zh', PERMISSION_ALLOW_SESSION_NOTE)}`
+    );
   });
 });
 
