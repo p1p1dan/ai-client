@@ -160,7 +160,12 @@ export function readDefaultPermissions(): RuntimePermissionSettings | null {
     const raw = localStorage.getItem(DEFAULT_PERMISSIONS_STORAGE_KEY);
     if (raw) {
       const value: unknown = JSON.parse(raw);
-      if (isRuntimePermissionSettings(value)) return value;
+      // A stored `bypass` should be unreachable (`writeDefaultPermissions`
+      // refuses it), but storage outlives builds and is editable by hand, so
+      // reading one lands on `auto` rather than starting a fresh chat with
+      // every approval prompt already switched off.
+      if (isRuntimePermissionSettings(value))
+        return value.gear === 'bypass' ? { ...value, gear: 'auto' } : value;
     }
   } catch {
     // Fall back to the old setting when the new storage is unavailable or invalid.
@@ -168,7 +173,17 @@ export function readDefaultPermissions(): RuntimePermissionSettings | null {
   const legacy = readDefaultTier();
   return legacy ? migratePermissionTier(legacy) : null;
 }
+/**
+ * Remember the gear new chats start on — except `bypass`.
+ *
+ * `bypass` turns off every approval prompt, and a default is the one setting
+ * nobody re-reads: persisting it would silently open the next chat, and the one
+ * after that, with no card ever shown again. Dropping the write leaves the
+ * previous non-bypass default in place, which is what the composer falls back
+ * to when a new chat is started.
+ */
 export function writeDefaultPermissions(settings: RuntimePermissionSettings): void {
+  if (settings.gear === 'bypass') return;
   try {
     localStorage.setItem(DEFAULT_PERMISSIONS_STORAGE_KEY, JSON.stringify(settings));
   } catch {

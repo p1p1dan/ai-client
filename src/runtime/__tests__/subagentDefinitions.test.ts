@@ -284,6 +284,21 @@ describe('SA01 · the four builtins and full-field parsing', () => {
     expect(parsed.warnings.join(' ')).toContain('yolo');
   });
 
+  it('refuses a declared bypass the same way it refuses a made-up gear', () => {
+    // `bypass` is a real session gear, which is exactly why a file on disk may
+    // not assert it: turning off every approval prompt is a decision a person
+    // makes for one live thread, not a property a definition carries into
+    // every future session that loads it. A delegate still RUNS under bypass
+    // when the session is on it — that is what `inherit` means.
+    const parsed = parseSubagentDefinition(
+      document(['name: t', 'description: d', 'permission: bypass'].join('\n')),
+      { source: 'user' }
+    );
+    expect(parsed.ok && parsed.definition.permission).toBeUndefined();
+    expect(parsed.warnings.join(' ')).toContain('bypass');
+    expect(parsed.warnings.join(' ')).toContain('use inherit, ask, accept-edits or auto');
+  });
+
   it('does not store the default permission as an explicit override', () => {
     // `inherit` written out and `inherit` by omission must be the same
     // definition, or a management UI save would turn one into the other.

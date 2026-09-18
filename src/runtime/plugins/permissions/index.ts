@@ -300,7 +300,9 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
   /**
    * The gear this request resolves under.
    *
-   * A scope can only change which of ask / accept-edits / auto applies. Every
+   * A scope can only change which of ask / accept-edits / auto / bypass
+   * applies — and no definition may declare `bypass`, so in practice a scope
+   * reaches it only by inheriting a session already set to it. Every
    * deny — policy, path, scope, plan mode — is decided BEFORE the gear is
    * consulted in `evaluate`, so a delegate declaring `auto` still cannot cross
    * a deny rule, reach outside the workspace, widen its tool set, or turn a
@@ -352,6 +354,11 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     );
     if (matches.some((scope) => scope.action === 'deny')) return 'deny';
     const gear = this.gearFor(request);
+    // `bypass` is the one gear that answers the unresolved-operand case too.
+    // It sits AFTER every deny above — policy, bundled secrets, deny scopes,
+    // plan mode, the tool whitelist — so it can only turn an `ask` into an
+    // `allow`; it never buys authority a denied call did not have.
+    if (gear === 'bypass') return 'allow';
     // An operand the shell analysis could not read has passed no path, scope or
     // deny judgement at all, so no gear may wave it through: `auto` has to fall
     // to the `unresolvedPaths` check below. A session grant for this exact
@@ -395,11 +402,11 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     if (
       this.config.policy &&
       policyAction(this.config.policy, 'path', [request.path], this.config.cwd) === 'ask' &&
-      this.gearFor(request) !== 'auto'
+      !skipsApproval(this.gearFor(request))
     )
       return false;
     if (pathPolicy(request.path) === 'deny' || this.evaluate(request) === 'deny') return false;
-    if (pathPolicy(request.path) === 'ask' && this.gearFor(request) !== 'auto') return false;
+    if (pathPolicy(request.path) === 'ask' && !skipsApproval(this.gearFor(request))) return false;
     return !(this.config.scopes ?? []).some(
       (scope) =>
         scope.action !== 'allow' &&
@@ -595,6 +602,16 @@ export function containsPath(root: string, path: string): boolean {
 }
 function grantKey(request: ToolPermissionRequest): string {
   return JSON.stringify([request.tool, request.path, request.command ?? null, request.paths ?? []]);
+}
+/**
+ * Gears that answer an `ask` on the user's behalf rather than raising a card.
+ *
+ * Wherever `auto` waives a check, `bypass` waives it too — a traversal the
+ * looser gear refused would be a card the user was promised they would never
+ * see. Denies are not routed through here; they are decided before any gear.
+ */
+function skipsApproval(gear: PermissionGear): boolean {
+  return gear === 'auto' || gear === 'bypass';
 }
 /**
  * A refusal that remembers why.

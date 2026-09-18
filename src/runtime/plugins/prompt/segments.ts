@@ -69,8 +69,8 @@ export interface PromptSlotDefinition {
  *    reason in this file's header.
  * 2. ARD D14 splits what this product used to fold into one permission tier
  *    into two axes: the MODE (`plan` / `agent`) decides which tools exist,
- *    the GEAR (`ask` / `accept-edits` / `auto`) decides how much the
- *    remaining calls prompt. Both get a slot, both are P1's to write next to
+ *    the GEAR (`ask` / `accept-edits` / `auto` / `bypass`) decides how much
+ *    the remaining calls prompt. Both get a slot, both are P1's to write next to
  *    the policy they describe, and both sit after the instruction chain
  *    because a mode constraint has to outrank a project instruction that
  *    contradicts it — the position PI-Desktop gives its mode block

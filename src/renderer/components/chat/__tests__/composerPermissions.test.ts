@@ -68,10 +68,10 @@ function choice(text: string) {
 }
 
 describe('D14 composer permission controls', () => {
-  it('shows two modes and three gears and saves a new-chat preference', async () => {
+  it('shows two modes and four gears and saves a new-chat preference', async () => {
     await render(null);
     await click(container.querySelector('button'));
-    expect(document.querySelectorAll('[role="menuitemradio"]')).toHaveLength(5);
+    expect(document.querySelectorAll('[role="menuitemradio"]')).toHaveLength(6);
     await click(choice('自动接受编辑'));
     expect(readDefaultPermissions()).toEqual({ mode: 'agent', gear: 'accept-edits' });
     expect(setPermissions).not.toHaveBeenCalled();
@@ -139,5 +139,76 @@ describe('D14 composer permission controls', () => {
     await click(choice('全自动'));
     expect(document.querySelectorAll('[role="menu"]').length).toBeGreaterThan(0);
     expect(document.body.textContent).toContain('启用全自动');
+  });
+});
+
+/**
+ * The fourth gear. `bypass` answers every approval prompt on the user's behalf,
+ * including the bash calls `auto` still stops for, so the three claims worth
+ * pinning here are: it cannot be reached in one press, it cannot be reached at
+ * all before a chat exists, and it is visible for as long as it is on.
+ */
+describe('bypass gear · the composer side', () => {
+  it('cannot be picked on the start screen, where no thread would honour it', async () => {
+    await render(null);
+    await click(container.querySelector('button'));
+    const item = choice('完全放行');
+    expect(item).not.toBeNull();
+    // Base UI marks a disabled radio item rather than removing it, so the gear
+    // is still legible — with the reason attached.
+    expect(item?.getAttribute('data-disabled')).not.toBeNull();
+    expect(item?.textContent).toContain('需要先有对话才能开启');
+    await click(item);
+    expect(readDefaultPermissions()).toBeNull();
+    expect(setPermissions).not.toHaveBeenCalled();
+  });
+
+  it('asks a second time before it applies, and says what it turns off', async () => {
+    setPermissions.mockResolvedValue(undefined);
+    await render('s1');
+    await click(container.querySelector('button'));
+    await click(choice('完全放行'));
+    // One press must not be enough: nothing has been sent yet.
+    expect(setPermissions).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('[role="menu"]').length).toBeGreaterThan(0);
+    expect(document.body.textContent).toContain('关闭全部授权询问');
+    expect(document.body.textContent).toContain('所有工具调用都不再询问');
+    const confirm = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent === '应用'
+    );
+    await click(confirm ?? null);
+    expect(setPermissions).toHaveBeenCalledWith({
+      sessionId: 's1',
+      permissions: { mode: 'agent', gear: 'bypass' },
+    });
+    expect(readSessionPermissions('s1')).toEqual({ mode: 'agent', gear: 'bypass' });
+  });
+
+  it('cancelling the confirmation leaves the previous gear in force', async () => {
+    await render('s1');
+    await click(container.querySelector('button'));
+    await click(choice('完全放行'));
+    const cancel = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent === '取消'
+    );
+    await click(cancel ?? null);
+    expect(setPermissions).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('执行 · 每次询问');
+  });
+
+  it('stays visible in the trigger for as long as it is on', async () => {
+    setPermissions.mockResolvedValue(undefined);
+    await render('s1');
+    await click(container.querySelector('button'));
+    await click(choice('完全放行'));
+    await click(
+      [...document.querySelectorAll('button')].find((button) => button.textContent === '应用') ??
+        null
+    );
+    // No approval card will ever appear again to remind anyone, so the chip is
+    // the whole reminder: it names the gear and carries the destructive tone.
+    const trigger = container.querySelector('button');
+    expect(trigger?.textContent).toContain('完全放行');
+    expect(trigger?.className).toContain('text-destructive');
   });
 });

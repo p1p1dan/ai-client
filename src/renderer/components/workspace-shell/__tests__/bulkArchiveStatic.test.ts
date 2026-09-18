@@ -54,8 +54,10 @@ describe('U30 rev.2 the permission menu closes on pick', () => {
     // protecting. The failure is announced by toast, because the popup it used
     // to render the alert into is gone by then.
     expect(PERMISSION).not.toContain('closeOnClick={true}');
-    // Only `auto` keeps the popup, and it does so to show the confirmation.
-    expect(PERMISSION).toContain("closeOnClick={option.id !== 'auto'}");
+    // Only the gears that confirm keep the popup, and they do so to show the
+    // confirmation panel. `bypass` joined `auto` there when the fourth gear
+    // landed, which is why this pins the predicate rather than one literal.
+    expect(PERMISSION).toContain('closeOnClick={!needsConfirmation(option.id)}');
     const apply = PERMISSION.slice(PERMISSION.indexOf('const apply ='));
     const settingsWrite = apply.indexOf('setSettings(next)');
     expect(settingsWrite).toBeGreaterThanOrEqual(0);
@@ -63,15 +65,21 @@ describe('U30 rev.2 the permission menu closes on pick', () => {
     expect(apply).toContain('addToast(');
   });
 
-  it('sends the dangerous gear to a confirmation step instead of applying it', () => {
-    // `auto` lets tools run without asking, so picking it must open the
-    // confirmation rather than take effect on the press. If this ever called
-    // `apply` directly the menu would close on the same click and the
+  it('sends the dangerous gears to a confirmation step instead of applying them', () => {
+    // `auto` and `bypass` let tools run without asking, so picking either must
+    // open the confirmation rather than take effect on the press. If this ever
+    // called `apply` directly the menu would close on the same click and the
     // confirmation would never be seen.
     const onGearChange = PERMISSION.slice(PERMISSION.indexOf('isPermissionGear(value)'));
     const body = onGearChange.slice(0, onGearChange.indexOf('}}'));
-    expect(body).toMatch(/value === 'auto'\s*\)?\s*setConfirmingAuto\(true\)/);
+    expect(body).toMatch(/needsConfirmation\(value\)\s*\)?\s*setConfirming\(value\)/);
     expect(body.slice(0, body.indexOf('else'))).not.toContain('apply(');
+    // And the predicate itself names both, so narrowing it to one gear breaks
+    // here rather than silently applying `bypass` on the press.
+    const predicate = PERMISSION.slice(PERMISSION.indexOf('function needsConfirmation'));
+    expect(predicate.slice(0, predicate.indexOf('}'))).toContain(
+      "gear === 'auto' || gear === 'bypass'"
+    );
   });
 });
 

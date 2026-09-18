@@ -58,8 +58,14 @@ export interface SubagentModelPin {
  * `inherit` follows the session's effective gear, and is the default. The
  * others name a gear for this delegate's calls only — they cannot widen its
  * tool set, cross a deny rule, or turn a parent `plan` session into `agent`.
+ *
+ * `bypass` is excluded on purpose: turning off every approval prompt is a
+ * decision a person makes for one live thread, not something a definition file
+ * on disk gets to assert for every future session that reads it. A delegate
+ * still RUNS under `bypass` when the session is on it — that is what `inherit`
+ * means — it just cannot ask for it.
  */
-export type SubagentPermission = 'inherit' | PermissionGear;
+export type SubagentPermission = 'inherit' | Exclude<PermissionGear, 'bypass'>;
 
 export const SUBAGENT_PERMISSIONS: readonly SubagentPermission[] = [
   'inherit',

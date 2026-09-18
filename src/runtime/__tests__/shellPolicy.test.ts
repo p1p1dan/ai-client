@@ -422,6 +422,95 @@ describe('Bash AST unresolved operands under auto', () => {
   });
 });
 
+/**
+ * The fourth gear, and the one the previous suite explains the need for.
+ *
+ * `auto` raises a card for an operand the static analysis could not read — a
+ * `$VAR`, a `$(…)`, a loop variable — which is exactly the "全自动还弹授权卡"
+ * the field pass kept reporting. `bypass` answers those too. What it must NOT
+ * do is acquire authority: every deny is decided before any gear is consulted,
+ * so the second half of this suite is the list of things that still refuse.
+ */
+describe('the bypass gear', () => {
+  it('runs an unresolved-operand command with no card at all', async () => {
+    let approvals = 0;
+    await writeFile(join(outside, 'file'), 'amber');
+    await start({
+      permissions: {
+        gear: 'bypass',
+        approve: async () => {
+          approvals++;
+          return 'deny';
+        },
+      },
+    });
+    // Both halves of the case `auto` stops for: an unreadable variable, and a
+    // variable that resolves to a path outside the workspace.
+    await expect(bash('cat "$UNKNOWN_DIR/file" 2>/dev/null; true')).resolves.toBeDefined();
+    await expect(bash(`TARGET='${outside}'; cat "$TARGET/file"`)).resolves.toBeDefined();
+    await expect(bash('for f in *.txt; do echo "$f"; done')).resolves.toBeDefined();
+    expect(approvals).toBe(0);
+  });
+
+  it('is not a way past the bundled path denies', async () => {
+    await start({ permissions: { gear: 'bypass' } });
+    // `approve` is `alwaysDenied` here, so a `tool_denied` could in principle
+    // mean "a card was raised and refused". These are policy denies, which
+    // return before the gate: the point is that the call never runs.
+    for (const command of ['cat .env', 'cat ~/.ssh/config', 'cat *.pem', 'printf x > .env'])
+      await expect(bash(command)).rejects.toMatchObject({ code: 'tool_denied' });
+  });
+
+  it('is not a way past a configured bash or path deny rule', async () => {
+    const agentDir = join(dir, 'agent');
+    await config(join(agentDir, 'extensions/pi-permission-system/config.json'), {
+      permission: { bash: { 'rm *': 'deny' }, path: { 'private.txt': 'deny' } },
+    });
+    await start({ agentDir, permissions: { gear: 'bypass' } });
+    await expect(bash('rm file')).rejects.toMatchObject({ code: 'tool_denied' });
+    // Including the wrapped spellings T001 normalizes.
+    await expect(bash('timeout 5 rm file')).rejects.toMatchObject({ code: 'tool_denied' });
+    await expect(bash('cat private.txt')).rejects.toMatchObject({ code: 'tool_denied' });
+  });
+
+  it('is not a way past a deny scope', async () => {
+    await writeFile(join(dir, 'private.txt'), 'private');
+    await start({
+      permissions: {
+        gear: 'bypass',
+        scopes: [{ root: join(dir, 'private.txt'), tools: ['bash'], action: 'deny' }],
+      },
+    });
+    await expect(bash('cat private.txt')).rejects.toMatchObject({ code: 'tool_denied' });
+  });
+
+  it('is not a way past plan mode or the tool whitelist', async () => {
+    await start({
+      permissions: { mode: 'plan', gear: 'bypass', allowedTools: ['read', 'bash', 'glob', 'grep'] },
+    });
+    const permissions = runtime?.ctx.runtimePermissions;
+    if (!permissions) throw new Error('no permissions service');
+    // Plan mode crops write tools, and the gate refuses them even when the
+    // caller still holds a handle to one.
+    expect(
+      permissions.evaluate({ tool: 'write', toolCallId: 'plan-write', path: join(dir, 'a.txt') })
+    ).toBe('deny');
+    // A tool outside the whitelist is denied on the same principle.
+    expect(
+      permissions.evaluate({ tool: 'edit', toolCallId: 'not-listed', path: join(dir, 'a.txt') })
+    ).toBe('deny');
+    // And a non-exploration shell call is still a plan-mode refusal.
+    expect(
+      permissions.evaluate({
+        tool: 'bash',
+        toolCallId: 'plan-bash',
+        path: dir,
+        command: 'rm -rf x',
+      })
+    ).toBe('deny');
+  });
+});
+
 // T001 — a `$(...)` in the command-name position was never walked, so the inner
 // command's operands reached no judgement at all.
 describe('Bash AST command substitution in the name position', () => {

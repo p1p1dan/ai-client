@@ -114,6 +114,22 @@ describe('D14 permission preferences', () => {
     expect(readSessionPermissions('s1')).toBeNull();
     expect(readDefaultPermissions()).toEqual({ mode: 'agent', gear: 'accept-edits' });
   });
+  it('never lets bypass become the gear new chats start on', () => {
+    writeDefaultPermissions({ mode: 'agent', gear: 'accept-edits' });
+    writeDefaultPermissions({ mode: 'agent', gear: 'bypass' });
+    // The write is dropped, not stored and filtered on read: nothing on disk
+    // ever claims a new chat should come up with approvals switched off.
+    expect(storage.get(DEFAULT_PERMISSIONS_STORAGE_KEY)).not.toContain('bypass');
+    expect(readDefaultPermissions()).toEqual({ mode: 'agent', gear: 'accept-edits' });
+    // A live thread is a different matter: the chip has to survive a remount,
+    // or the session would keep running on bypass with nothing saying so.
+    writeSessionPermissions('s1', { mode: 'agent', gear: 'bypass' });
+    expect(readSessionPermissions('s1')).toEqual({ mode: 'agent', gear: 'bypass' });
+  });
+  it('downgrades a hand-edited bypass default to auto', () => {
+    storage.set(DEFAULT_PERMISSIONS_STORAGE_KEY, JSON.stringify({ mode: 'agent', gear: 'bypass' }));
+    expect(readDefaultPermissions()).toEqual({ mode: 'agent', gear: 'auto' });
+  });
   it('falls back from malformed new settings without dropping old readonly', () => {
     storage.set(DEFAULT_PERMISSIONS_STORAGE_KEY, '{broken');
     storage.set(DEFAULT_TIER_STORAGE_KEY, 'readonly');

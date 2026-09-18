@@ -1,6 +1,19 @@
 /** D14: mode selects capabilities; gear controls approval frequency. */
 export type RuntimeMode = 'plan' | 'agent';
-export type PermissionGear = 'ask' | 'accept-edits' | 'auto';
+/**
+ * `bypass` is the fourth gear, and the only one that never raises a card.
+ *
+ * `auto` still stops for a bash command whose operands the static analysis
+ * could not resolve (a `$VAR`, a `$(...)`, a loop variable), which is the
+ * "full auto still asks me" the field pass kept reporting. `bypass` answers
+ * that case too. It widens APPROVAL only: every deny — policy rules, bundled
+ * secrets, deny scopes, plan mode, the tool whitelist — is decided before any
+ * gear is consulted and stays in force.
+ *
+ * Deliberately not persistable as a new-chat default, and not declarable by a
+ * subagent definition: it is a decision a person makes for one live thread.
+ */
+export type PermissionGear = 'ask' | 'accept-edits' | 'auto' | 'bypass';
 export type LegacyPermissionTier = 'readonly' | 'pragmatic' | 'handsoff' | 'fullopen';
 export interface RuntimePermissionSettings {
   mode: RuntimeMode;
@@ -20,6 +33,9 @@ export const PERMISSION_GEAR_LABELS: Record<PermissionGear, string> = {
   ask: 'Ask every time',
   'accept-edits': 'Auto-accept edits',
   auto: 'Full auto',
+  // NOT 'Bypass permissions': that key is already taken by the legacy Pi
+  // permission-mode picker, whose catalog entry reads 「跳过权限确认」.
+  bypass: 'Bypass all prompts',
 };
 export const RUNTIME_MODE_LABELS: Record<RuntimeMode, string> = {
   plan: 'Plan',
@@ -51,7 +67,7 @@ export function isRuntimeMode(value: unknown): value is RuntimeMode {
   return value === 'plan' || value === 'agent';
 }
 export function isPermissionGear(value: unknown): value is PermissionGear {
-  return value === 'ask' || value === 'accept-edits' || value === 'auto';
+  return value === 'ask' || value === 'accept-edits' || value === 'auto' || value === 'bypass';
 }
 export function isRuntimePermissionSettings(value: unknown): value is RuntimePermissionSettings {
   return (

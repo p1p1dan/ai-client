@@ -6,6 +6,8 @@ const GEAR_TEXT: Record<PermissionGear, string> = {
   'accept-edits':
     'Permission gear: accept-edits. Workspace writes, edits and bash calls are allowed without ordinary approval. External paths and external directories still require approval.',
   auto: 'Permission gear: auto. Available tools may execute without ordinary approval. Explicit deny rules and the tool whitelist remain enforced.',
+  bypass:
+    'Permission gear: bypass. The user has turned off approval prompts entirely: available tools execute without approval, including shell commands whose operands cannot be resolved statically. Explicit deny rules and the tool whitelist remain enforced, and a denied call is still denied.',
 };
 export function permissionGearSegment(gear: PermissionGear): PromptSegment {
   return {

@@ -8,7 +8,7 @@ import {
   RUNTIME_MODE_LABELS,
   type RuntimePermissionSettings,
 } from '@shared/types/runtimePermission';
-import { Shield, ShieldAlert, ShieldOff, ShieldQuestion } from 'lucide-react';
+import { Shield, ShieldAlert, ShieldBan, ShieldOff, ShieldQuestion } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Menu, MenuPopup, MenuRadioGroup, MenuSeparator } from '@/components/ui/menu';
 import { addToast } from '@/components/ui/toast';
@@ -50,7 +50,23 @@ const GEAR_OPTIONS: readonly { id: PermissionGear; description: string; icon: ty
     description: 'Runs the available tools automatically; explicit deny rules still apply.',
     icon: ShieldAlert,
   },
+  {
+    id: 'bypass',
+    description:
+      'Never asks. Even commands full auto would stop to confirm run straight through; explicit deny rules still apply.',
+    icon: ShieldBan,
+  },
 ];
+
+/**
+ * Gears that take effect only after the user confirms a second time.
+ *
+ * Both hand work to the model that nobody will be asked about again, and both
+ * are one keystroke away from the quiet gears in the same radio group.
+ */
+function needsConfirmation(gear: PermissionGear): gear is 'auto' | 'bypass' {
+  return gear === 'auto' || gear === 'bypass';
+}
 
 interface ComposerPermissionTriggerProps {
   sessionId: string | null;
@@ -69,7 +85,8 @@ export function ComposerPermissionTrigger({
 }: ComposerPermissionTriggerProps) {
   const { t } = useI18n();
   const [settings, setSettings] = useState(() => readPermissionsFor(sessionId));
-  const [confirmingAuto, setConfirmingAuto] = useState(false);
+  /** Which dangerous gear is waiting on its confirmation, if any. */
+  const [confirming, setConfirming] = useState<'auto' | 'bypass' | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Keep Base UI's own close bookkeeping: never drive its open prop manually.
@@ -78,7 +95,7 @@ export function ComposerPermissionTrigger({
   currentSession.current = sessionId;
   useEffect(() => {
     setSettings(readPermissionsFor(sessionId));
-    setConfirmingAuto(false);
+    setConfirming(null);
     setError(null);
   }, [sessionId]);
 
@@ -95,7 +112,7 @@ export function ComposerPermissionTrigger({
       }
       if (currentSession.current === sessionId) {
         setSettings(next);
-        setConfirmingAuto(false);
+        setConfirming(null);
         menuActions.current?.close();
       }
     } catch (failure) {
@@ -125,6 +142,10 @@ export function ComposerPermissionTrigger({
   const scope = sessionId ? t('Applies immediately, to this thread.') : t('Applies to new chats.');
   const isDisabled =
     disabled || sending || pending || (sessionId !== null && !isHostUsable(hostState));
+  // While bypass is on, the chip is the only thing on screen that says so — no
+  // card will ever appear again to remind anyone. So it stops being quiet
+  // chrome and carries the destructive tone for as long as the gear is live.
+  const bypassing = !degraded && settings.gear === 'bypass';
   const title = sending
     ? t('Mode and permissions can be changed once this turn ends.')
     : `${label} — ${scope}`;
@@ -133,18 +154,20 @@ export function ComposerPermissionTrigger({
     <Menu
       actionsRef={menuActions}
       onOpenChange={(open) => {
-        if (!open) setConfirmingAuto(false);
+        if (!open) setConfirming(null);
       }}
     >
       <MenuPrimitive.Trigger
-        className={composerPermissionTriggerClass()}
+        className={`${composerPermissionTriggerClass()}${
+          bypassing ? ' bg-destructive/10 text-destructive hover:bg-destructive/20' : ''
+        }`}
         disabled={isDisabled}
         aria-label={title}
         title={title}
         render={<button type="button" />}
       >
         <Icon className="size-3.5 shrink-0" />
-        <span className="text-muted-foreground">{label}</span>
+        <span className={bypassing ? 'font-medium' : 'text-muted-foreground'}>{label}</span>
       </MenuPrimitive.Trigger>
       <MenuPopup
         align="start"
@@ -153,21 +176,29 @@ export function ComposerPermissionTrigger({
       >
         {degraded ? (
           <DegradedGateNotice />
-        ) : confirmingAuto ? (
+        ) : confirming ? (
           <div className="flex max-w-72 flex-col gap-2 p-3">
-            <p className="text-ui font-medium text-destructive">{t('Turn on full auto?')}</p>
+            <p className="text-ui font-medium text-destructive">
+              {confirming === 'bypass'
+                ? t('Turn off every approval prompt?')
+                : t('Turn on full auto?')}
+            </p>
             <p className="text-meta text-muted-foreground">
-              {t(
-                'Runs the tools available in the current mode automatically, including operations outside the workspace; explicit deny rules still apply.'
-              )}
-              {scope}
+              {confirming === 'bypass'
+                ? t(
+                    'Every tool call runs without asking, including the commands full auto still stops to confirm. Explicit deny rules still apply. This is never saved as the default for new chats.'
+                  )
+                : t(
+                    'Runs the tools available in the current mode automatically, including operations outside the workspace; explicit deny rules still apply.'
+                  )}
+              {confirming === 'bypass' ? '' : scope}
             </p>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 disabled={pending}
                 className="rounded-sm px-2 py-1 text-ui hover:bg-hover"
-                onClick={() => setConfirmingAuto(false)}
+                onClick={() => setConfirming(null)}
               >
                 {t('Cancel')}
               </button>
@@ -175,7 +206,7 @@ export function ComposerPermissionTrigger({
                 type="button"
                 disabled={pending}
                 className="rounded-sm bg-destructive/10 px-2 py-1 text-ui text-destructive hover:bg-destructive/20"
-                onClick={() => void apply({ ...settings, gear: 'auto' })}
+                onClick={() => void apply({ ...settings, gear: confirming })}
               >
                 {t('Apply')}
               </button>
@@ -224,27 +255,33 @@ export function ComposerPermissionTrigger({
               value={settings.gear}
               onValueChange={(value) => {
                 if (!isPermissionGear(value)) return;
-                if (value === 'auto') setConfirmingAuto(true);
+                if (needsConfirmation(value)) setConfirming(value);
                 else void apply({ ...settings, gear: value });
               }}
             >
               {GEAR_OPTIONS.map((option) => {
                 const OptionIcon = option.icon;
+                // `bypass` never becomes a new-chat default, so offering it on
+                // the start screen would show a chip the next session would not
+                // honour. It is a live-thread decision, taken in the thread.
+                const unavailable = option.id === 'bypass' && !sessionId;
                 return (
                   <MenuPrimitive.RadioItem
                     key={option.id}
                     value={option.id}
-                    disabled={pending}
-                    // `auto` keeps the popup up because picking it opens the
-                    // confirmation panel instead of applying anything.
-                    closeOnClick={option.id !== 'auto'}
+                    disabled={pending || unavailable}
+                    // `auto` and `bypass` keep the popup up because picking one
+                    // opens the confirmation panel instead of applying anything.
+                    closeOnClick={!needsConfirmation(option.id)}
                     className={composerMenuItemClass()}
                   >
                     <OptionIcon className="size-3.5 shrink-0" />
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span>{t(PERMISSION_GEAR_LABELS[option.id])}</span>
                       <span className="text-meta text-muted-foreground">
-                        {t(option.description)}
+                        {unavailable
+                          ? t('Can be turned on once this chat exists.')
+                          : t(option.description)}
                       </span>
                     </span>
                     <MenuPrimitive.RadioItemIndicator>

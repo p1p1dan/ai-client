@@ -9,7 +9,7 @@
  * under rules nobody chose.
  */
 
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
@@ -189,7 +189,7 @@ describe('SA10 · a delegate resolves under its own scope, and says who it is', 
     await rm(workspace, { recursive: true, force: true });
   });
 
-  async function build(gear: 'ask' | 'accept-edits' | 'auto') {
+  async function build(gear: 'ask' | 'accept-edits' | 'auto' | 'bypass') {
     const faux = fauxProvider({ provider: 'faux', models: [{ id: 'm', name: 'm' }] });
     faux.setResponses([fauxAssistantMessage('ok')]);
     const seen: ToolPermissionRequest[] = [];
@@ -312,10 +312,62 @@ describe('SA10 · a delegate resolves under its own scope, and says who it is', 
     });
     // A path the default policy denies outright. The gear is consulted AFTER
     // every deny, so `auto` cannot buy its way past one.
+    //
+    // The file is created, and the refusal is matched on `tool_denied`: this
+    // used to name `.git/config`, which is NOT a denied path and does not
+    // exist in a fresh temp workspace — so the `rejects.toThrow()` was being
+    // satisfied by ENOENT and the claim was never tested.
+    await writeFile(join(workspace, '.env'), 'TOKEN=secret\n', 'utf8');
     await expect(
-      read.execute('delegate-call', { path: join(workspace, '.git', 'config') } as never)
-    ).rejects.toThrow();
+      read.execute('delegate-call', { path: join(workspace, '.env') } as never)
+    ).rejects.toMatchObject({ code: 'tool_denied' });
     release();
+  });
+
+  it('lets an inheriting delegate run under the session bypass', async () => {
+    const { handle, seen, activity } = await build('bypass');
+    const permissions = handle.ctx.runtimePermissions;
+    const write = handle.ctx.runtimeTools.list().find((tool) => tool.name === 'write');
+    if (!write) throw new Error('no write tool');
+
+    // No `gear` on the scope — that IS `inherit`, the only shape a definition
+    // can produce for bypass, since declaring it is refused at parse time.
+    const release = permissions.scopeToolCall('delegate-call', {
+      delegation: { delegationId: 'd9', agentName: 'fixer' },
+    });
+    await write.execute('delegate-call', { path: 'by-delegate.txt', content: 'hi' } as never);
+    release();
+
+    expect(seen).toHaveLength(0);
+    expect(await readFile(join(workspace, 'by-delegate.txt'), 'utf8')).toBe('hi');
+    // The audit row names the gear the call actually resolved under, and the
+    // delegate that made it — the only trace left when no card is ever shown.
+    const decision = activity.find((record) => record.phase === 'decision');
+    expect(decision?.gear).toBe('bypass');
+    expect(decision?.request.delegation?.agentName).toBe('fixer');
+  });
+
+  it('does not let a session on bypass cross a deny, for parent or delegate', async () => {
+    const { handle } = await build('bypass');
+    const permissions = handle.ctx.runtimePermissions;
+    const read = handle.ctx.runtimeTools.list().find((tool) => tool.name === 'read');
+    if (!read) throw new Error('no read tool');
+    // Both files EXIST, so a refusal here is the policy talking and not a
+    // missing path — the trap that would make this pass on nothing.
+    await mkdir(join(workspace, 'keys'), { recursive: true });
+    await writeFile(join(workspace, 'keys', 'server.pem'), 'KEY\n', 'utf8');
+    await writeFile(join(workspace, '.env'), 'TOKEN=secret\n', 'utf8');
+    const release = permissions.scopeToolCall('delegate-call', {
+      delegation: { delegationId: 'd10', agentName: 'explorer' },
+    });
+    // Bypass answers asks; it does not repeal denies.
+    await expect(
+      read.execute('delegate-call', { path: join(workspace, 'keys', 'server.pem') } as never)
+    ).rejects.toMatchObject({ code: 'tool_denied' });
+    release();
+    await expect(
+      read.execute('parent-call', { path: join(workspace, '.env') } as never)
+    ).rejects.toMatchObject({ code: 'tool_denied' });
   });
 
   it('releases the scope even when the call throws', async () => {

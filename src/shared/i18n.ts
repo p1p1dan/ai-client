@@ -2660,6 +2660,14 @@ export const zhTranslations: Record<string, string> = {
     '另一个进程正持有这个会话的写入锁，所以没有打开它。磁盘上的内容没有任何改动。',
   'Asks before each write, edit and command.': '写入、编辑和命令逐条询问。',
   'Auto-accept edits': '自动接受编辑',
+  // D14 第四档：完全放行（bypass）。它不会成为新会话默认，所以只在已有会话里可选。
+  'Bypass all prompts': '完全放行',
+  'Never asks. Even commands full auto would stop to confirm run straight through; explicit deny rules still apply.':
+    '完全不再询问。连「全自动」都会停下来确认的命令也直接执行；明确的拒绝规则依然生效。',
+  'Turn off every approval prompt?': '关闭全部授权询问？',
+  'Every tool call runs without asking, including the commands full auto still stops to confirm. Explicit deny rules still apply. This is never saved as the default for new chats.':
+    '所有工具调用都不再询问，包括「全自动」仍会停下确认的那些命令。明确的拒绝规则依然生效。该档位不会被保存为新对话的默认。',
+  'Can be turned on once this chat exists.': '需要先有对话才能开启。',
   'Carries out approved work.': '执行已批准的工作。',
   'Check that Claude Code or Codex has been used on this machine and that its session directory holds JSONL records.':
     '请确认本机使用过 Claude Code 或 Codex，且会话目录中存在 JSONL 记录。',

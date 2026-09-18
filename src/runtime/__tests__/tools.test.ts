@@ -106,6 +106,10 @@ describe('native tools', () => {
     ['auto', 'write', 'allow'],
     ['auto', 'edit', 'allow'],
     ['auto', 'bash', 'allow'],
+    ['bypass', 'read', 'allow'],
+    ['bypass', 'write', 'allow'],
+    ['bypass', 'edit', 'allow'],
+    ['bypass', 'bash', 'allow'],
   ] as const)('evaluates agent / %s / %s as %s', async (gear, tool, expected) => {
     const r = await runtime({ permissions: { mode: 'agent', gear } });
     expect(
@@ -131,6 +135,9 @@ describe('native tools', () => {
     'ask',
     'accept-edits',
     'auto',
+    // The gear that answers every prompt still cannot add a tool plan mode
+    // took away: the crop happens before any gear is consulted.
+    'bypass',
   ] as const)('crops write tools in plan / %s, including cached plugin handles', async (gear) => {
     const r = await runtime({ permissions: { gear } });
     let writes = 0;
