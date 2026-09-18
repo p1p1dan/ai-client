@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { useModalQueueSlot } from '@/hooks/useModalQueueSlot';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 
@@ -45,6 +46,20 @@ const SEVERITY_CLASS: Record<AnnouncementSeverity, string> = {
  * mean interpreting remote content inside the app's own chrome, which is the
  * one thing an announcement channel must not do. `break-words` is what keeps a
  * long unbroken URL from widening the dialog past the window.
+ *
+ * ## Sharing the screen with other self-opening dialogs
+ *
+ * `useModalQueueSlot` (`@/hooks/useModalQueueSlot`) is the fix for a
+ * 2026-09-18 field report: this dialog and the Pi-setup migration offer
+ * (`AgentMigrationPrompt`) both auto-open on the same launch and both sit on
+ * the same z-index tier, so whichever rendered second painted over the
+ * other's own buttons — this dialog's "Got it" ended up permanently
+ * undismissable, sitting under the migration dialog's list rows. `open` still
+ * means exactly what the caller says it means (auto-opened, or the bell was
+ * clicked); the queue only decides whether that is allowed to paint *right
+ * now*. In practice a manual bell click can only happen once nothing else is
+ * holding the slot anyway, since the backdrop of whatever IS holding it
+ * covers the bell.
  */
 export function AnnouncementDialog({
   announcements,
@@ -56,10 +71,11 @@ export function AnnouncementDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { t } = useI18n();
+  const canShow = useModalQueueSlot('announcement', open);
   if (announcements.length === 0) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open && canShow} onOpenChange={onOpenChange}>
       <DialogPopup className="sm:max-w-lg" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -77,7 +93,9 @@ export function AnnouncementDialog({
             footer each carry it, so a body without it sits 24px left of the
             title it belongs to — which is what the 2026-09-10 screenshot of the
             launch announcement showed. `pr-3` inside stays as the scrollbar's
-            gutter. */}
+            gutter. Not `DialogPanel`: its `ScrollArea` grows to fill the
+            popup, with no way to cap it at `max-h-[50vh]` the way this one
+            needs to, so the padding is applied by hand here instead. */}
         <ScrollArea className="max-h-[50vh] px-6">
           <div className="flex flex-col gap-4 pr-3">
             {announcements.map((announcement, index) => {

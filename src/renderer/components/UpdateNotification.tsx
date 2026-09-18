@@ -1,5 +1,6 @@
 import { Download, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useModalQueueSlot } from '@/hooks/useModalQueueSlot';
 import { useI18n } from '@/i18n';
 import { useUpdaterStatus } from '@/stores/updater';
 import { Button } from './ui/button';
@@ -8,10 +9,22 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogPanel,
   DialogPopup,
   DialogTitle,
 } from './ui/dialog';
 
+/**
+ * ## Sharing the screen with other self-opening dialogs
+ *
+ * `useModalQueueSlot` (`@/hooks/useModalQueueSlot`) keeps this dialog from
+ * stacking on top of the startup announcement or the Pi-setup migration
+ * offer the way those two stacked on each other (2026-09-18 field report):
+ * at most one self-opening dialog paints at a time, in a fixed priority
+ * order, and this one is lowest — an update can always be started later from
+ * the status pill below, which stays visible and clickable regardless of
+ * whose turn it is.
+ */
 export function UpdateNotification() {
   const { t } = useI18n();
   const status = useUpdaterStatus();
@@ -22,6 +35,7 @@ export function UpdateNotification() {
   useEffect(() => {
     if (phase === 'downloaded' && version) setOpen(true);
   }, [phase, version]);
+  const canShow = useModalQueueSlot('updateNotification', open);
   // A failed check (offline, unreachable feed) stays on the settings page; the
   // reminder only carries errors for a version already found.
   if (!status?.info || !['available', 'downloading', 'downloaded', 'error'].includes(status.status))
@@ -70,7 +84,7 @@ export function UpdateNotification() {
           {status.progress ? ` · ${Math.floor(status.progress.percent)}%` : ''}
         </Button>
       </div>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open && canShow} onOpenChange={setOpen}>
         <DialogPopup className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
@@ -89,19 +103,28 @@ export function UpdateNotification() {
                       )}
             </DialogDescription>
           </DialogHeader>
-          {downloading && status.progress && (
-            <div className="text-meta tabular-nums">{Math.floor(status.progress.percent)}%</div>
-          )}
-          {(actionError || status.error) && (
-            <p role="alert" className="break-words text-meta text-destructive">
-              {actionError || status.error}
-            </p>
-          )}
-          {status.info?.releaseNotes && (
-            <div className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-meta text-muted-foreground">
-              {status.info.releaseNotes}
-            </div>
-          )}
+          {/* DialogPopup carries no padding of its own; DialogPanel is what lines
+              this body up with the 24px the header and footer already have. */}
+          {(downloading && status.progress) ||
+          actionError ||
+          status.error ||
+          status.info?.releaseNotes ? (
+            <DialogPanel className="space-y-3">
+              {downloading && status.progress && (
+                <div className="text-meta tabular-nums">{Math.floor(status.progress.percent)}%</div>
+              )}
+              {(actionError || status.error) && (
+                <p role="alert" className="break-words text-meta text-destructive">
+                  {actionError || status.error}
+                </p>
+              )}
+              {status.info?.releaseNotes && (
+                <div className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-meta text-muted-foreground">
+                  {status.info.releaseNotes}
+                </div>
+              )}
+            </DialogPanel>
+          ) : null}
           <DialogFooter variant="bare">
             <Button variant="outline" onClick={() => setOpen(false)}>
               {t('Later')}

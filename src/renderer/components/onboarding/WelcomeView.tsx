@@ -3,6 +3,7 @@ import { Loader2Icon } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
+import { LOCAL_SETUP_ENTRY_DISABLED } from '@/lib/aRoundTesting';
 import { AiClientMark } from './AiClientMark';
 
 /**
@@ -56,18 +57,24 @@ const PRODUCT_NAME = 'PILAB';
 /**
  * A-round testing: the `Use my own setup` route is closed for the duration.
  *
- * TO RE-OPEN IT, FLIP THIS ONE LINE TO `false` (exported only so the test can
- * follow it rather than hardcode today's answer). Nothing else needs changing —
- * the button, its handler and `enterApp('local')` are all still here and still
- * wired; this only stops the control from being pressed.
+ * The switch itself now lives in `@/lib/aRoundTesting` (imported above) —
+ * re-exported here so this file's own test (`welcomeLocalEntry.test.ts`) and
+ * any other existing caller of `LOCAL_SETUP_ENTRY_DISABLED` from
+ * `WelcomeView` keep working unchanged. See that module for why one constant
+ * now also gates the migration dialog and its Settings-pane twin, not just
+ * this button.
  *
- * One line is enough because this button is the ONLY entrance to the local
- * route. `auth.enterApp` is the sole writer of the credential mode from the
- * renderer, Root is its only caller, and the settings IPC explicitly refuses to
- * write `credentialMode` (Main-owned-key guard, `main/ipc/settings.ts`).
- * `OnboardingView`'s closing line — "you can switch back to your own local
- * configuration in Settings at any time" — describes a control that does not
- * exist; it is stale copy, not a second door left open.
+ * This button's OWN treatment: kept ON SCREEN while disabled — removing it
+ * would make the second route look like it never existed, and A-round
+ * testers have to be able to see that it is coming back. Disabling it is
+ * enough to close the whole route because this button is the ONLY entrance to
+ * `credentialMode: 'local'`: `auth.enterApp` is the sole writer of the
+ * credential mode from the renderer, Root is its only caller, and the
+ * settings IPC explicitly refuses to write `credentialMode` (Main-owned-key
+ * guard, `main/ipc/settings.ts`). `OnboardingView`'s closing line — "you can
+ * switch back to your own local configuration in Settings at any time" —
+ * describes a control that does not exist; it is stale copy, not a second
+ * door left open.
  *
  * ## This is not the D68 rule being broken
  *
@@ -83,7 +90,7 @@ const PRODUCT_NAME = 'PILAB';
  * runs, so there is nothing here that can be wrong about the user's computer —
  * which is the entire thing D68 was protecting.
  */
-export const LOCAL_SETUP_ENTRY_DISABLED = true;
+export { LOCAL_SETUP_ENTRY_DISABLED };
 
 export interface WelcomeViewProps {
   entry: AuthGateWelcomeEntry;

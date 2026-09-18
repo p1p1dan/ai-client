@@ -123,3 +123,58 @@ describe('AgentMigrationSettings shares the prompt rules (H/21 P1)', () => {
     expect(PANE).not.toContain('item.total > item.conflicts + item.blocked');
   });
 });
+
+describe('A-round testing gate (@/lib/aRoundTesting)', () => {
+  it('[MPW-14] the dialog is suppressed before it ever inspects, not just greyed out', () => {
+    expect(PROMPT).toContain("from '@/lib/aRoundTesting'");
+    // Both the auto-open effect and the settings-page yield check bail before
+    // any `inspect()` call — neither walks the filesystem while this is on.
+    const effect = PROMPT.slice(PROMPT.indexOf('useEffect(() => {'));
+    expect(effect.indexOf('LOCAL_SETUP_ENTRY_DISABLED')).toBeGreaterThan(-1);
+    expect(effect.indexOf('LOCAL_SETUP_ENTRY_DISABLED')).toBeLessThan(
+      effect.indexOf('agentMigration.inspect')
+    );
+    const gate = PROMPT.slice(PROMPT.indexOf('export async function migrationOfferWillOpen'));
+    expect(gate.indexOf('LOCAL_SETUP_ENTRY_DISABLED')).toBeGreaterThan(-1);
+    expect(gate.indexOf('LOCAL_SETUP_ENTRY_DISABLED')).toBeLessThan(
+      gate.indexOf('agentMigration.inspect')
+    );
+  });
+
+  it('[MPW-15] the settings-pane twin is greyed out, not removed', () => {
+    expect(PANE).toContain("from '@/lib/aRoundTesting'");
+    // The section still renders (no early `return null` keyed on the flag) —
+    // only the interactive controls carry it.
+    expect(PANE).not.toMatch(/if \(LOCAL_SETUP_ENTRY_DISABLED\)\s*return null/);
+    expect(PANE.match(/LOCAL_SETUP_ENTRY_DISABLED/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('[MPW-16] WelcomeView, the dialog and the pane all read the one shared constant', () => {
+    const WELCOME = read('../../onboarding/WelcomeView.tsx', 'WelcomeView.tsx');
+    for (const file of [WELCOME, PROMPT, PANE]) {
+      expect(file).toContain('LOCAL_SETUP_ENTRY_DISABLED');
+    }
+    expect(WELCOME).toContain("from '@/lib/aRoundTesting'");
+  });
+});
+
+describe('self-opening dialogs share one slot (@/hooks/useModalQueueSlot)', () => {
+  it('[MPW-17] the migration prompt and the announcement dialog both register for it', () => {
+    const ANNOUNCEMENT = read(
+      '../../announcements/AnnouncementDialog.tsx',
+      'AnnouncementDialog.tsx'
+    );
+    expect(PROMPT).toContain("from '@/hooks/useModalQueueSlot'");
+    expect(PROMPT).toContain("useModalQueueSlot('agentMigrationPrompt', open)");
+    expect(PROMPT).toContain('open={open && canShow}');
+    expect(ANNOUNCEMENT).toContain("useModalQueueSlot('announcement', open)");
+    expect(ANNOUNCEMENT).toContain('open={open && canShow}');
+  });
+
+  it('[MPW-18] the update-ready dialog registers too, lowest priority', () => {
+    const UPDATE = read('../../UpdateNotification.tsx', 'UpdateNotification.tsx');
+    expect(UPDATE).toContain("from '@/hooks/useModalQueueSlot'");
+    expect(UPDATE).toContain("useModalQueueSlot('updateNotification', open)");
+    expect(UPDATE).toContain('open={open && canShow}');
+  });
+});

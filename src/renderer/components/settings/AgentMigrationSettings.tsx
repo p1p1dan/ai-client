@@ -9,6 +9,17 @@
  *
  * The whole section disappears for a user with no `~/.pi/agent`, which is most
  * new users — there is nothing to say to them.
+ *
+ * ## A-round testing: greyed out, not hidden
+ *
+ * `LOCAL_SETUP_ENTRY_DISABLED` (`@/lib/aRoundTesting`) closes this route for
+ * the round, same switch as `WelcomeView`'s "Use my own setup" button and the
+ * startup `AgentMigrationPrompt` dialog. This section gets the `WelcomeView`
+ * treatment, not the dialog's: it only shows up when someone deliberately
+ * opens Settings, which is a gesture, not an interruption, so there is no
+ * reason to hide that the route exists — every control in it (the checkboxes,
+ * the overwrite switch, the copy button) is just disabled while the switch is
+ * on. Flip it back to `false` and every one of them is live again, unchanged.
  */
 
 import type {
@@ -25,6 +36,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Ident } from '@/components/ui/ident';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
+import { LOCAL_SETUP_ENTRY_DISABLED } from '@/lib/aRoundTesting';
 // H/21 P1: label and "would this copy anything" now live with the first-launch
 // prompt's rules, so the dialog and this pane cannot drift apart on either.
 import { defaultMigrationSelection, migrationKindLabel } from './migrationPromptModel';
@@ -117,7 +129,7 @@ export function AgentMigrationSettings() {
             key={item.kind}
             item={item}
             checked={selected.has(item.kind)}
-            disabled={busy}
+            disabled={busy || LOCAL_SETUP_ENTRY_DISABLED}
             onCheckedChange={(checked) => toggle(item.kind, checked)}
           />
         ))}
@@ -125,7 +137,11 @@ export function AgentMigrationSettings() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex min-w-0 items-center gap-2 text-ui">
-          <Switch checked={overwrite} onCheckedChange={setOverwrite} disabled={busy} />
+          <Switch
+            checked={overwrite}
+            onCheckedChange={setOverwrite}
+            disabled={busy || LOCAL_SETUP_ENTRY_DISABLED}
+          />
           <span className="min-w-0">
             {t('Replace items this app already has')}
             <span className="ml-2 text-meta text-muted-foreground">
@@ -133,7 +149,10 @@ export function AgentMigrationSettings() {
             </span>
           </span>
         </label>
-        <Button onClick={() => void run()} disabled={busy || selected.size === 0}>
+        <Button
+          onClick={() => void run()}
+          disabled={busy || selected.size === 0 || LOCAL_SETUP_ENTRY_DISABLED}
+        >
           <ArrowRightLeft className="h-4 w-4" />
           {busy ? t('Copying...') : t('Copy selected')}
         </Button>

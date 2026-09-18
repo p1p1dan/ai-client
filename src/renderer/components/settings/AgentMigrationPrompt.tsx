@@ -29,6 +29,31 @@
  * reading, which would hollow out the consent argument above. It is acceptable
  * here precisely because the permanent opt-out is one click away and visible on
  * the same row: the repeat is a reminder, not a trap.
+ *
+ * ## A-round testing: suppressed outright, not greyed out
+ *
+ * `LOCAL_SETUP_ENTRY_DISABLED` (`@/lib/aRoundTesting`) closes this route for
+ * the round, same switch as `WelcomeView`'s "Use my own setup" button and
+ * `AgentMigrationSettings`. Those two stay on screen, disabled — this one does
+ * not, because it is not a button someone chooses to press, it is a dialog
+ * that shows up on its own. A popup whose only real answer is "ask me later"
+ * is not made honest by greying out its buttons; it is still a modal in a
+ * tester's way for a route this round does not want exercised. So while the
+ * switch is on, the effect below never even calls `inspect()` — no directory
+ * walk, no `plan`, no dialog. Flip the switch back and every line here runs
+ * exactly as it did before, unchanged.
+ *
+ * ## Sharing the screen with other self-opening dialogs
+ *
+ * `useModalQueueSlot` (`@/hooks/useModalQueueSlot`) is the fix for a 2026-09-18
+ * field report: this dialog and the startup announcement both auto-open on the
+ * same launch and both sit on the same z-index tier (no tier exists for "two
+ * unrelated top-level modals"), so whichever rendered second painted over the
+ * other's own buttons — the announcement's "Got it" ended up permanently
+ * undismissable, sitting under this dialog's list rows. `open` here still
+ * means exactly what it always meant ("I have something to offer, and the user
+ * has not answered yet"); the queue only decides whether that is allowed to
+ * paint *right now*, and shows it the instant it is this dialog's turn.
  */
 
 import type {
@@ -47,11 +72,14 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogPanel,
   DialogPopup,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Ident } from '@/components/ui/ident';
+import { useModalQueueSlot } from '@/hooks/useModalQueueSlot';
 import { useI18n } from '@/i18n';
+import { LOCAL_SETUP_ENTRY_DISABLED } from '@/lib/aRoundTesting';
 import { STORAGE_KEYS } from '../../App/storage';
 import {
   defaultMigrationSelection,
@@ -111,6 +139,9 @@ function alreadySettled(): boolean {
  * caching a startup decision across two unrelated components.
  */
 export async function migrationOfferWillOpen(): Promise<boolean> {
+  // A-round testing: this route is closed, so nothing else should defer to an
+  // offer that will never appear. See the class comment above.
+  if (LOCAL_SETUP_ENTRY_DISABLED) return false;
   if (alreadySettled()) return false;
   try {
     const plan = await window.electronAPI.agentMigration.inspect();
@@ -132,6 +163,10 @@ export function AgentMigrationPrompt() {
   const [outcomes, setOutcomes] = useState<MigrationOutcome[] | null>(null);
 
   useEffect(() => {
+    // A-round testing: this route is closed. Suppressed here, before the IPC
+    // call, so the dialog does not just show disabled buttons — it does not
+    // inspect anything and does not open at all. See the class comment above.
+    if (LOCAL_SETUP_ENTRY_DISABLED) return;
     // The inspection walks directories, so it is skipped entirely once the
     // question has been answered — which is every launch after the first for
     // everyone, and every launch for a user who never had `pi`.
@@ -155,6 +190,11 @@ export function AgentMigrationPrompt() {
       cancelled = true;
     };
   }, []);
+
+  // `open` keeps meaning "I have something to offer and the user has not
+  // answered yet"; `canShow` is the separate question of whether it is this
+  // dialog's turn to actually paint. See the class comment above.
+  const canShow = useModalQueueSlot('agentMigrationPrompt', open);
 
   /** This launch only. The offer comes back, because "Not now" said it would. */
   const notNow = useCallback(() => {
@@ -207,7 +247,7 @@ export function AgentMigrationPrompt() {
 
   return (
     <Dialog
-      open={open}
+      open={open && canShow}
       onOpenChange={(next) => {
         // Escape and the backdrop mean "Not now", never "never". Someone who
         // dismisses a dialog by reflex has not opted out of anything, and
@@ -229,55 +269,59 @@ export function AgentMigrationPrompt() {
           </DialogDescription>
         </DialogHeader>
 
-        {done ? (
-          <PromptReport outcomes={outcomes} />
-        ) : (
-          <div className="space-y-3">
-            <div className="grid gap-1 text-meta text-muted-foreground sm:grid-cols-[80px_1fr] sm:gap-3">
-              <span>{t('Copy from')}</span>
-              <Ident className="min-w-0 break-all">{plan.sourceDir}</Ident>
-              <span>{t('Copy to')}</span>
-              <Ident className="min-w-0 break-all">{plan.targetDir}</Ident>
-            </div>
+        <DialogPanel>
+          {done ? (
+            <PromptReport outcomes={outcomes} />
+          ) : (
+            <div className="space-y-3">
+              <div className="grid gap-1 text-meta text-muted-foreground sm:grid-cols-[80px_1fr] sm:gap-3">
+                <span>{t('Copy from')}</span>
+                <Ident className="min-w-0 break-all">{plan.sourceDir}</Ident>
+                <span>{t('Copy to')}</span>
+                <Ident className="min-w-0 break-all">{plan.targetDir}</Ident>
+              </div>
 
-            <ul className="divide-y rounded-md border">
-              {plan.items.map((item) => (
-                <PromptRow
-                  key={item.kind}
-                  item={item}
-                  checked={selected.has(item.kind)}
-                  disabled={busy}
-                  onCheckedChange={(checked) => toggle(item.kind, checked)}
-                />
-              ))}
-            </ul>
+              <ul className="divide-y rounded-md border">
+                {plan.items.map((item) => (
+                  <PromptRow
+                    key={item.kind}
+                    item={item}
+                    checked={selected.has(item.kind)}
+                    disabled={busy}
+                    onCheckedChange={(checked) => toggle(item.kind, checked)}
+                  />
+                ))}
+              </ul>
 
-            {/* The consent sentence. Shown only while the item carrying secrets
-                is actually ticked, so unticking it visibly removes the warning
-                as well as the copy. */}
-            {secrets && (
-              <p className="flex gap-2 rounded-sm border border-warning/30 bg-warning/8 p-3 text-meta text-muted-foreground">
-                <KeyRound className="h-4 w-4 shrink-0 text-warning" />
-                <span>
-                  {t(
-                    'Your AI services include API keys. Copying them stores a copy in this app’s own credential vault. Uncheck that row to leave them out.'
-                  )}
-                </span>
+              {/* The consent sentence. Shown only while the item carrying secrets
+                  is actually ticked, so unticking it visibly removes the warning
+                  as well as the copy. */}
+              {secrets && (
+                <p className="flex gap-2 rounded-sm border border-warning/30 bg-warning/8 p-3 text-meta text-muted-foreground">
+                  <KeyRound className="h-4 w-4 shrink-0 text-warning" />
+                  <span>
+                    {t(
+                      'Your AI services include API keys. Copying them stores a copy in this app’s own credential vault. Uncheck that row to leave them out.'
+                    )}
+                  </span>
+                </p>
+              )}
+
+              <p className="text-meta text-muted-foreground">
+                {t(
+                  'Anything this app already has is left alone. You can do this later in Settings.'
+                )}
               </p>
-            )}
+            </div>
+          )}
 
-            <p className="text-meta text-muted-foreground">
-              {t('Anything this app already has is left alone. You can do this later in Settings.')}
+          {error && (
+            <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
+              <TriangleAlert className="h-4 w-4 shrink-0" />
+              {error}
             </p>
-          </div>
-        )}
-
-        {error && (
-          <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
-            <TriangleAlert className="h-4 w-4 shrink-0" />
-            {error}
-          </p>
-        )}
+          )}
+        </DialogPanel>
 
         <DialogFooter variant="bare">
           {done ? (

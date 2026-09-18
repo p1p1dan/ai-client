@@ -17,7 +17,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: 'en' }) }));
+// This suite is about the dialog's OWN mechanics (open, select, copy, the
+// three exits) — a separate concern from "is this route open during A-round",
+// which `aRoundMigrationGate.test.ts` pins against the real (unmocked) flag.
+// Mocked `false` here so flipping the real switch back on later cannot turn
+// this whole file red.
+vi.mock('@/lib/aRoundTesting', () => ({ LOCAL_SETUP_ENTRY_DISABLED: false }));
 
+import { resetModalQueueForTests } from '@/stores/modalQueue';
 import { STORAGE_KEYS } from '../../../App/storage';
 import { AgentMigrationPrompt } from '../AgentMigrationPrompt';
 
@@ -65,6 +72,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   localStorage.clear();
+  // The modal-share queue is a module-level singleton (@/stores/modalQueue);
+  // a prior test's mount should already release its slot on unmount, but
+  // resetting here too means a stray failure elsewhere cannot leak into this
+  // file and make the dialog wait its turn for no visible reason.
+  resetModalQueueForTests();
   api.inspect.mockResolvedValue(FULL_PLAN);
   api.apply.mockResolvedValue({ plan: FULL_PLAN, outcomes: [] });
   (window as unknown as { electronAPI: unknown }).electronAPI = {
