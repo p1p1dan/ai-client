@@ -11,6 +11,9 @@
  * around it, not node-pty.
  */
 
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { zhTranslations } from '@shared/i18n';
 import type { PiTuiOpenRequest } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
@@ -42,6 +45,9 @@ let announceState: StateCallback = () => {};
 /** terminal-10: every controller the registry has built, newest last. */
 const controllerInstances: unknown[] = [];
 
+/** TUI `/new`: the notices Main asked the OS to show, newest last. */
+const shownNotices: Array<{ title: string; body?: string }> = [];
+
 vi.mock('electron', () => ({
   BrowserWindow: {
     // D18: the sender says which window it is, so one test can drive two.
@@ -50,6 +56,15 @@ vi.mock('electron', () => ({
   },
   ipcMain: {
     handle: vi.fn((channel: string, handler: Handler) => handlers.set(channel, handler)),
+  },
+  Notification: class {
+    static isSupported() {
+      return true;
+    }
+    constructor(private readonly options: { title: string; body?: string }) {}
+    show() {
+      shownNotices.push(this.options);
+    }
   },
 }));
 
@@ -130,6 +145,7 @@ beforeEach(async () => {
   unconfirmedSessions = [];
   busySessionFiles = [];
   controllerInstances.length = 0;
+  shownNotices.length = 0;
   disposeSession.mockClear();
   disposeAll.mockClear();
   dispose.mockClear();
@@ -352,6 +368,47 @@ describe('two windows cannot drive the same chat', () => {
     // The window that holds it, and every other chat, stay openable.
     expect(await sessionSupport(CHAT, 1)).toEqual({ supported: true });
     expect(await sessionSupport(OTHER_CHAT, 2)).toEqual({ supported: true });
+  });
+});
+
+/**
+ * TUI `/new` — pi moves itself to a session file this app never hears about.
+ *
+ * `session-index.json` has no directory scan and no watcher, so that chat is
+ * simply missing from the sidebar and the user reads it as lost. pi offers no
+ * way to disable `/new` and no way to report the new path in TUI mode, so the
+ * only evidence available is the file that appeared next to the one the app
+ * handed over — and the terminal's own stop is where this looks for it.
+ */
+describe('a chat created inside the terminal', () => {
+  it('names the file when the terminal stops', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-client-tui-new-'));
+    const chat = join(directory, 'chat.jsonl');
+    writeFileSync(chat, '{"type":"session"}\n', 'utf8');
+    await openTerminal(chat, { terminalId: 'terminal-new' });
+
+    // What `/new` leaves behind: a fresh JSONL in the same directory, which
+    // nothing in this app has a row for.
+    const created = join(directory, '2026-09-18T10-00-00-000Z_new.jsonl');
+    writeFileSync(created, '{"type":"session"}\n', 'utf8');
+    announceState({ terminalId: 'terminal-new', state: 'dead' });
+
+    await vi.waitFor(() => expect(shownNotices).toHaveLength(1));
+    expect(shownNotices[0].body).toContain(created);
+  });
+
+  it('stays quiet when the terminal only wrote the chat it was given', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'ai-client-tui-new-'));
+    const chat = join(directory, 'chat.jsonl');
+    writeFileSync(chat, '{"type":"session"}\n', 'utf8');
+    await openTerminal(chat, { terminalId: 'terminal-quiet' });
+
+    announceState({ terminalId: 'terminal-quiet', state: 'dead' });
+
+    // Give the sweep the same window the assertion above waits through, so a
+    // notice that arrives late still fails this test.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(shownNotices).toEqual([]);
   });
 });
 

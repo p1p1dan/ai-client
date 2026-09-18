@@ -2983,6 +2983,20 @@ export type Translate = (key: string, params?: Record<string, string | number>) 
 export const englishTranslate: Translate = (key, params) => translate('en', key, params);
 
 /**
+ * Terminal-created chats (`/new` inside the Pi TUI).
+ *
+ * Appended here rather than written into the literal above so that two people
+ * adding strings at the same time do not land on the same line. Read from Main
+ * through `translate(getCurrentLocale(), …)`, which is why the keys live with
+ * the rest of the dictionary rather than in the renderer.
+ */
+Object.assign(zhTranslations, {
+  'A new chat was created in the terminal': '终端里新建了一个会话',
+  'Chats started with /new in the Pi terminal are not listed in the sidebar. This one was saved to {{path}}':
+    '在 Pi 终端里用 /new 新建的会话不会出现在左侧会话列表里。这个会话已保存到 {{path}}',
+});
+
+/**
  * Changing the permission gear in the middle of a turn.
  *
  * The composer control used to grey out entirely while a turn ran, which put

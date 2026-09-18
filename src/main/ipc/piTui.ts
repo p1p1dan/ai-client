@@ -1,7 +1,10 @@
+import { translate } from '@shared/i18n';
 import { IPC_CHANNELS, type PiTuiOpenRequest } from '@shared/types';
-import { BrowserWindow, ipcMain, type WebContents } from 'electron';
+import { BrowserWindow, ipcMain, Notification, type WebContents } from 'electron';
+import { redactStderrLine } from '../../agent-host/stderrRedaction';
 import { currentPiCliLayout } from '../services/agent-host/piCliLayout';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
+import { getCurrentLocale } from '../services/i18n';
 import { isRemoteVirtualPath } from '../services/remote/RemotePath';
 import {
   createNodePtySpawn,
@@ -14,6 +17,13 @@ import {
   PiTuiExclusiveGuard,
   PiTuiWindowSessionGuard,
 } from '../services/terminal/piTuiSession';
+import {
+  STRANDED_SESSION_BODY,
+  STRANDED_SESSION_TITLE,
+  type StrandedSessionSnapshot,
+  snapshotSessionDirectory,
+  sweepStrandedSessions,
+} from '../services/terminal/piTuiStrandedSessions';
 
 /**
  * Q17: which chat session (if any) currently has a Pi terminal writing its
@@ -59,6 +69,110 @@ const controllers = new Map<number, PiTuiPtyController>();
 const controllerPromises = new Map<number, Promise<PiTuiPtyController>>();
 const disposedWindowIds = new Set<number>();
 
+/**
+ * What each terminal's session directory held when it opened, keyed by
+ * window+terminal.
+ *
+ * `/new` inside the TUI silently moves pi to a session file this app never
+ * hears about (see `piTuiStrandedSessions.ts`), so the only way to notice is to
+ * compare the directory afterwards. Recorded on open, spent when the terminal
+ * stops.
+ */
+const sessionDirectorySnapshots = new Map<string, StrandedSessionSnapshot>();
+
+function snapshotKey(windowId: number, terminalId: string): string {
+  return `${windowId}:${terminalId}`;
+}
+
+/**
+ * Remember the chat's session directory before pi can write to it.
+ *
+ * Never overwrites an existing record: leaving and re-entering terminal mode
+ * SUSPENDS and re-opens the same PTY, and a second snapshot would adopt a
+ * session created since the first one as "already there" — which is exactly the
+ * file the user needs to be told about.
+ */
+async function rememberSessionDirectory(
+  windowId: number,
+  terminalId: string,
+  sessionFile: string
+): Promise<boolean> {
+  const key = snapshotKey(windowId, terminalId);
+  if (sessionDirectorySnapshots.has(key)) return false;
+  try {
+    sessionDirectorySnapshots.set(key, await snapshotSessionDirectory(sessionFile));
+    return true;
+  } catch (error) {
+    console.warn('[pi-tui] Could not read the session directory before opening a terminal:', error);
+    return false;
+  }
+}
+
+/**
+ * Does the session index already know this file?
+ *
+ * The app writes its own chats into the same directory, so a chat created in
+ * another window while the terminal was open would otherwise be announced as
+ * lost while it sits in the sidebar. Read through a lazy import, like
+ * `hasRunningTurn`: an index this process cannot reach answers "unknown", and
+ * an extra notice naming a real file beats silence about a missing chat.
+ */
+async function isIndexedSession(sessionFile: string): Promise<boolean> {
+  const key = normalizeSessionKey(sessionFile);
+  try {
+    const { sessionIndexService } = await import('../services/chat/SessionIndexService');
+    const entries = await sessionIndexService.list();
+    return entries.some((entry) => normalizeSessionKey(entry.runtimeIdentity ?? '') === key);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Tell the user where the chat they started in the terminal actually went.
+ *
+ * A system notification rather than an in-app toast: the app has no Main→
+ * renderer channel for an unsolicited message, and this one arrives exactly
+ * when the terminal closes and the user turns back to a sidebar that does not
+ * list their conversation. Best effort throughout — a notification that cannot
+ * be shown must not take a terminal teardown down with it.
+ */
+function showStrandedSessionNotice(sessionFile: string): void {
+  const t = (key: string, params?: Record<string, string | number>) =>
+    translate(getCurrentLocale(), key, params);
+  try {
+    if (!Notification.isSupported()) return;
+    new Notification({
+      title: t(STRANDED_SESSION_TITLE),
+      body: t(STRANDED_SESSION_BODY, { path: sessionFile }),
+    }).show();
+  } catch (error) {
+    console.warn('[pi-tui] Could not show the notice about a terminal-created chat:', error);
+  }
+}
+
+/**
+ * The terminal stopped — anything that appeared in its session directory since
+ * it opened is a chat this app has no row for.
+ *
+ * Paths are redacted in the log (T042) and spelled out in the notification: the
+ * log is diagnostics, and the notification is the one place the user can read
+ * the filename they now need.
+ */
+async function reportStrandedSessions(windowId: number, terminalId: string): Promise<void> {
+  const key = snapshotKey(windowId, terminalId);
+  const snapshot = sessionDirectorySnapshots.get(key);
+  if (!snapshot) return;
+  sessionDirectorySnapshots.delete(key);
+  const stranded = await sweepStrandedSessions(snapshot, { isIndexed: isIndexedSession });
+  for (const sessionFile of stranded) {
+    console.warn(
+      `[pi-tui] A chat created inside the terminal is not in the session list: ${redactStderrLine(sessionFile)}`
+    );
+    showStrandedSessionNotice(sessionFile);
+  }
+}
+
 function ownerId(sender: WebContents): number {
   const owner = BrowserWindow.fromWebContents(sender);
   if (!owner) throw new Error('Pi TUI owner window not found');
@@ -93,7 +207,14 @@ async function createController(windowId: number): Promise<PiTuiPtyController> {
         // capacity eviction (which never produces an exit event at all). A
         // claim that outlives its PTY would refuse the chat to every other
         // window for the rest of the run.
-        if (event.state === 'dead') windowSessionGuard.releaseTerminal(windowId, event.terminalId);
+        if (event.state === 'dead') {
+          windowSessionGuard.releaseTerminal(windowId, event.terminalId);
+          // Same seam, same reason: whichever way this terminal stopped, its
+          // `/new` chats are stranded from here on and nothing else will look.
+          void reportStrandedSessions(windowId, event.terminalId).catch((error) => {
+            console.warn('[pi-tui] Could not check the session directory after a terminal:', error);
+          });
+        }
         const window = BrowserWindow.fromId(windowId);
         if (window && !window.isDestroyed()) {
           window.webContents.send(IPC_CHANNELS.PI_TUI_STATE, event);
@@ -173,6 +294,8 @@ export function registerPiTuiHandlers(): void {
     }
     const controller = await controllerFor(event.sender);
     assertOwner(event.sender, controller);
+    /** True when THIS call took the session-directory snapshot below. */
+    let recorded = false;
     if (request.sessionFile) {
       // TUI-1: refuse a session the CLI cannot parse before taking ownership of
       // it. Reaching the spawn would hand the user the CLI's own
@@ -205,6 +328,13 @@ export function registerPiTuiHandlers(): void {
       // disposed, crashed, or quit from inside pi — the GUI has to re-read the
       // file before it writes it again.
       tuiWrittenSessions.add(normalizeSessionKey(request.sessionFile));
+      // Before the spawn, so a `/new` session written by this pi cannot be
+      // mistaken for a file that was already there.
+      recorded = await rememberSessionDirectory(
+        controller.windowId,
+        request.terminalId,
+        request.sessionFile
+      );
     }
     try {
       return await controller.open(request);
@@ -225,6 +355,12 @@ export function registerPiTuiHandlers(): void {
           controller.windowId,
           request.terminalId
         );
+      }
+      // Only the snapshot this call took: a warm terminal refused a SECOND chat
+      // (terminal-03) is still running on its first one, and dropping ITS
+      // snapshot would lose the `/new` chats that terminal is about to make.
+      if (recorded) {
+        sessionDirectorySnapshots.delete(snapshotKey(controller.windowId, request.terminalId));
       }
       throw error;
     }
