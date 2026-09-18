@@ -103,6 +103,26 @@ export async function refreshSessionIndexNow(): Promise<boolean> {
   }
 }
 
+/**
+ * Rows Main added on its own, with nothing in the renderer having asked.
+ *
+ * One case today: a chat pi created with `/new` inside a terminal, which Main
+ * puts in the index once that terminal is dead (`main/ipc/piTui.ts`). The index
+ * is pull-only — read on mount and after this side's own mutations — so without
+ * this the chat would sit in `session-index.json`, correct and invisible, until
+ * something unrelated refreshed the sidebar.
+ *
+ * Returns an unsubscribe. A preload that predates the channel simply gets a
+ * no-op rather than an exception during mount.
+ */
+export function subscribeToTerminalCreatedSessions(): () => void {
+  const piTui = typeof window === 'undefined' ? undefined : window.electronAPI?.piTui;
+  if (!piTui?.onSessionsIndexed) return () => {};
+  return piTui.onSessionsIndexed(() => {
+    void refreshSessionIndexNow();
+  });
+}
+
 export function useSessionIndex(): UseSessionIndexResult {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,6 +156,12 @@ export function useSessionIndex(): UseSessionIndexResult {
       cancelled = true;
     };
   }, [refresh]);
+
+  // Rows Main wrote by itself (a chat `/new` created in a terminal) — the only
+  // push into an otherwise pull-only list. Mount-scoped and dependency-free:
+  // the handler re-reads through `refreshSessionIndexNow`, not through the
+  // `refresh` callback above, so it never re-subscribes.
+  useEffect(() => subscribeToTerminalCreatedSessions(), []);
 
   return { refresh, loading, error };
 }

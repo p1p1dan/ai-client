@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { zhTranslations } from '@shared/i18n';
 import type { PiTuiOpenRequest } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
+import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown;
@@ -47,12 +48,28 @@ const controllerInstances: unknown[] = [];
 
 /** TUI `/new`: the notices Main asked the OS to show, newest last. */
 const shownNotices: Array<{ title: string; body?: string }> = [];
+/** TUI `/new`: rows Main wrote into the session index, newest last. */
+const importedRows: SessionIndexEntry[] = [];
+/** TUI `/new`: an index that refuses the row (unwritable file, duplicate). */
+let importRefusal: Error | null = null;
+/** Everything Main pushed at a renderer, so a missing refresh fails a test. */
+const sentToRenderer: Array<{ channel: string; payload: unknown }> = [];
 
 vi.mock('electron', () => ({
   BrowserWindow: {
     // D18: the sender says which window it is, so one test can drive two.
     fromWebContents: (sender: { windowId?: number }) => ({ id: sender?.windowId ?? 1 }),
     fromId: () => null,
+    // One window, listening: the sidebar refresh is a broadcast, because one
+    // session index backs every window's list.
+    getAllWindows: () => [
+      {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, payload: unknown) => sentToRenderer.push({ channel, payload }),
+        },
+      },
+    ],
   },
   ipcMain: {
     handle: vi.fn((channel: string, handler: Handler) => handlers.set(channel, handler)),
@@ -65,6 +82,18 @@ vi.mock('electron', () => ({
     show() {
       shownNotices.push(this.options);
     }
+  },
+}));
+
+vi.mock('../../services/chat/SessionIndexService', () => ({
+  sessionIndexService: {
+    // The veto that keeps a chat created in another window out of the sweep.
+    list: async () => [...importedRows],
+    createImported: async (row: SessionIndexEntry) => {
+      if (importRefusal) throw importRefusal;
+      importedRows.push(row);
+      return row;
+    },
   },
 }));
 
@@ -107,6 +136,10 @@ vi.mock('../../services/terminal/PiTuiPty', () => ({
   },
 }));
 
+const { STRANDED_SESSION_BODY, STRANDED_SESSION_TITLE } = await import(
+  '../../services/terminal/piTuiStrandedSessions'
+);
+
 const {
   registerPiTuiHandlers,
   releaseSessionForHostPrompt,
@@ -146,6 +179,9 @@ beforeEach(async () => {
   busySessionFiles = [];
   controllerInstances.length = 0;
   shownNotices.length = 0;
+  importedRows.length = 0;
+  importRefusal = null;
+  sentToRenderer.length = 0;
   disposeSession.mockClear();
   disposeAll.mockClear();
   dispose.mockClear();
@@ -379,36 +415,114 @@ describe('two windows cannot drive the same chat', () => {
  * way to disable `/new` and no way to report the new path in TUI mode, so the
  * only evidence available is the file that appeared next to the one the app
  * handed over — and the terminal's own stop is where this looks for it.
+ *
+ * What happens to that file is the part these pin: it is INDEXED, because pi's
+ * JSONL differs from this app's only in the header line and the runtime converts
+ * it on the first open (see `piTuiStrandedSessions.ts`). The notification is
+ * what is left when a file cannot be identified at all.
  */
 describe('a chat created inside the terminal', () => {
-  it('names the file when the terminal stops', async () => {
+  /** A `/new` session as pi writes it: v3 header, cwd, and a name row. */
+  function writePiSession(file: string, cwd: string, name?: string): void {
+    const rows: unknown[] = [
+      {
+        type: 'session',
+        version: 3,
+        id: 'pi-session-1',
+        cwd,
+        timestamp: '2026-09-18T10:00:00.000Z',
+      },
+    ];
+    if (name) rows.push({ type: 'session_info', name });
+    writeFileSync(file, `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`, 'utf8');
+  }
+
+  function openedTerminalDirectory(terminalId: string): Promise<string> {
     const directory = mkdtempSync(join(tmpdir(), 'ai-client-tui-new-'));
     const chat = join(directory, 'chat.jsonl');
-    writeFileSync(chat, '{"type":"session"}\n', 'utf8');
-    await openTerminal(chat, { terminalId: 'terminal-new' });
+    writePiSession(chat, '/repo');
+    return openTerminal(chat, { terminalId }).then(() => directory);
+  }
+
+  it('puts the chat in the session list when the terminal stops', async () => {
+    const directory = await openedTerminalDirectory('terminal-new');
 
     // What `/new` leaves behind: a fresh JSONL in the same directory, which
-    // nothing in this app has a row for.
+    // nothing in this app has a row for. Its header names the folder pi ran
+    // in, which is NOT the cwd the terminal was opened with — pi lets the user
+    // pick another one — and the row has to record pi's, or resuming the chat
+    // fails with `session_cwd_mismatch`.
     const created = join(directory, '2026-09-18T10-00-00-000Z_new.jsonl');
-    writeFileSync(created, '{"type":"session"}\n', 'utf8');
+    writePiSession(created, '/elsewhere/repo', 'named in pi');
     announceState({ terminalId: 'terminal-new', state: 'dead' });
 
+    await vi.waitFor(() => expect(importedRows).toHaveLength(1));
+    expect(importedRows[0]).toMatchObject({
+      // pi's own file, not a copy: the runtime converts it on the first open
+      // and Main re-binds the row to the v4 sibling then.
+      runtimeIdentity: created,
+      workspacePath: '/elsewhere/repo',
+      title: 'named in pi',
+      agent: 'pi',
+      archived: false,
+    });
+    expect(importedRows[0].sessionId).toBeTruthy();
+    // The list is pull-only, so a row nobody is told about stays invisible.
+    expect(sentToRenderer).toContainEqual({
+      channel: IPC_CHANNELS.PI_TUI_SESSIONS_INDEXED,
+      payload: { sessionIds: [importedRows[0].sessionId] },
+    });
+    // Nothing to warn about: the chat is in the sidebar, which is the answer
+    // the user wanted.
+    expect(shownNotices).toEqual([]);
+  });
+
+  it('names the file instead when it cannot be identified', async () => {
+    const directory = await openedTerminalDirectory('terminal-unreadable');
+
+    // No pi header, so no workspace to resume in. A row pointing at it would
+    // be a chat that fails the moment it is clicked.
+    const created = join(directory, '2026-09-18T10-00-00-000Z_new.jsonl');
+    writeFileSync(created, 'not a session file\n', 'utf8');
+    announceState({ terminalId: 'terminal-unreadable', state: 'dead' });
+
+    await vi.waitFor(() => expect(shownNotices).toHaveLength(1));
+    expect(shownNotices[0].body).toContain(created);
+    expect(importedRows).toEqual([]);
+    expect(sentToRenderer).toEqual([]);
+  });
+
+  it('falls back to the notice when the index refuses the row', async () => {
+    const directory = await openedTerminalDirectory('terminal-refused');
+    importRefusal = new Error('Imported runtime identity is already indexed');
+
+    const created = join(directory, '2026-09-18T10-00-00-000Z_new.jsonl');
+    writePiSession(created, '/repo');
+    announceState({ terminalId: 'terminal-refused', state: 'dead' });
+
+    // A failed write must not swallow the chat: the user still gets the path.
     await vi.waitFor(() => expect(shownNotices).toHaveLength(1));
     expect(shownNotices[0].body).toContain(created);
   });
 
+  it('ships a Chinese entry for the notice it shows', () => {
+    // Main translates this itself (`translate(getCurrentLocale(), …)`), so the
+    // renderer-side `t('literal')` coverage scan cannot see it.
+    expect(zhTranslations[STRANDED_SESSION_BODY]).toBeTruthy();
+    expect(zhTranslations[STRANDED_SESSION_TITLE]).toBeTruthy();
+  });
+
   it('stays quiet when the terminal only wrote the chat it was given', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'ai-client-tui-new-'));
-    const chat = join(directory, 'chat.jsonl');
-    writeFileSync(chat, '{"type":"session"}\n', 'utf8');
-    await openTerminal(chat, { terminalId: 'terminal-quiet' });
+    await openedTerminalDirectory('terminal-quiet');
 
     announceState({ terminalId: 'terminal-quiet', state: 'dead' });
 
-    // Give the sweep the same window the assertion above waits through, so a
-    // notice that arrives late still fails this test.
+    // Give the sweep the same window the assertions above wait through, so a
+    // notice or a row that arrives late still fails this test.
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(shownNotices).toEqual([]);
+    expect(importedRows).toEqual([]);
+    expect(sentToRenderer).toEqual([]);
   });
 });
 

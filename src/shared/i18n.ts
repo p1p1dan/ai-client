@@ -2989,11 +2989,14 @@ export const englishTranslate: Translate = (key, params) => translate('en', key,
  * adding strings at the same time do not land on the same line. Read from Main
  * through `translate(getCurrentLocale(), …)`, which is why the keys live with
  * the rest of the dictionary rather than in the renderer.
+ *
+ * The sentence that used to follow — "chats started with /new are not listed in
+ * the sidebar" — was deleted with the behaviour it described: those chats ARE
+ * listed now. What replaced it is at the end of this file, under the case where
+ * indexing one of them fails.
  */
 Object.assign(zhTranslations, {
   'A new chat was created in the terminal': '终端里新建了一个会话',
-  'Chats started with /new in the Pi terminal are not listed in the sidebar. This one was saved to {{path}}':
-    '在 Pi 终端里用 /new 新建的会话不会出现在左侧会话列表里。这个会话已保存到 {{path}}',
 });
 
 /**
@@ -3023,4 +3026,18 @@ Object.assign(zhTranslations, {
     '「本会话内允许」会记住以 {{prefix}} 开头的命令',
   'Allow for session remembers {{tool}} on {{path}}':
     '「本会话内允许」会记住 {{tool}} 可访问 {{path}}',
+});
+
+/**
+ * A terminal-created chat that could NOT be put in the chat list.
+ *
+ * The notice used to go out for every `/new` session, because none of them could
+ * be listed at all. They are indexed now (`main/ipc/piTui.ts`), so what is left
+ * to say is the exception: a file with no readable pi header, or an index that
+ * refused the row. Its own block at the end of the file for the usual reason —
+ * several people add strings here on the same day.
+ */
+Object.assign(zhTranslations, {
+  'This chat could not be added to the chat list. Its file is at {{path}}':
+    '这个会话无法加入会话列表，文件在 {{path}}',
 });

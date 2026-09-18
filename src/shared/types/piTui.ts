@@ -43,6 +43,17 @@ export type PiTuiExitEvent = {
 };
 export type PiTuiStatusEvent = { terminalId: string; state: 'live' | 'suspended' | 'dead' };
 
+/**
+ * Main added chat rows nobody asked it for: the sessions pi created with `/new`
+ * inside a terminal, indexed once that terminal died (`main/ipc/piTui.ts`).
+ *
+ * The session index is pull-only — the renderer re-reads it on LeftNav mount and
+ * after its own mutations — so this is what makes those chats appear without the
+ * user reloading anything. Carries the new logical session ids; the renderer
+ * only needs to know that the list changed.
+ */
+export type PiTuiSessionsIndexedEvent = { sessionIds: string[] };
+
 export type PiTuiLaunchLayout = {
   isPackaged: boolean;
   appPath: string;

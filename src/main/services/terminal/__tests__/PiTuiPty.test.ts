@@ -216,7 +216,11 @@ describe('PiTuiPtyController — session binding (Q17)', () => {
     await controller.open({ terminalId: 'one', cwd: '/repo', sessionFile: '/repo/s.jsonl' });
 
     expect(spawnCalls).toEqual([
-      { file: '/app/node', args: ['/app/pi/cli.js', '--session', '/repo/s.jsonl'] },
+      {
+        file: '/app/node',
+        // `--session-dir` pins where `/new` writes; see `buildPiTuiArgs`.
+        args: ['/app/pi/cli.js', '--session', '/repo/s.jsonl', '--session-dir', '/repo'],
+      },
     ]);
   });
 

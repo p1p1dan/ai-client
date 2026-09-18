@@ -42,7 +42,17 @@ describe('normalizeSessionKey', () => {
 
 describe('buildPiTuiArgs', () => {
   it('binds the TUI to an existing session file', () => {
-    expect(buildPiTuiArgs(CLI, '/repo/s.jsonl')).toEqual([CLI, '--session', '/repo/s.jsonl']);
+    expect(buildPiTuiArgs(CLI, '/repo/sessions/s.jsonl')).toEqual([
+      CLI,
+      '--session',
+      '/repo/sessions/s.jsonl',
+      // Where `/new` writes. Left implicit, pi would take it from its settings
+      // first — a `sessionDir` in a repo's `.pi/settings.json` then sends
+      // terminal-created chats somewhere the stranded-session sweep, which
+      // watches THIS directory, never looks.
+      '--session-dir',
+      '/repo/sessions',
+    ]);
   });
 
   it('starts a fresh session when no file is given', () => {

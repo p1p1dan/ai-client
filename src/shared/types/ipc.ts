@@ -148,6 +148,8 @@ export const IPC_CHANNELS = {
   PI_TUI_DATA: 'piTui:data',
   PI_TUI_EXIT: 'piTui:exit',
   PI_TUI_STATE: 'piTui:state',
+  /** Main indexed the chats `/new` created in a terminal; re-read the list. */
+  PI_TUI_SESSIONS_INDEXED: 'piTui:sessionsIndexed',
 
   // App
   APP_GET_PATH: 'app:getPath',

@@ -19,6 +19,7 @@
  * pix counterpart.
  */
 
+import { dirname } from 'node:path';
 import type { PiTuiSessionSupport } from '@shared/types';
 
 /**
@@ -44,10 +45,21 @@ export function normalizeSessionKey(sessionPath: string): string {
  * would type in their own terminal to reattach to that conversation. Without
  * one the TUI starts a fresh session, which is what a terminal opened from a
  * repo (rather than from a chat) should do.
+ *
+ * `--session-dir` pins the directory the CLI creates NEW sessions in (`/new`).
+ * pi resolves it in this order: the flag, `PI_CODING_AGENT_SESSION_DIR`, its
+ * settings — including a per-workspace `<cwd>/.pi/settings.json` — and only then
+ * the session file's own parent. Relying on that last step meant one `sessionDir`
+ * key in a repo's settings sent terminal-created chats somewhere this app never
+ * looks: `piTuiStrandedSessions.ts` watches the chat's own directory, so those
+ * chats would have gone missing with no row, no notice and no log line. Stated
+ * explicitly, it is the same directory the chat already lives in — deliberately
+ * not a private one, because pi's in-TUI session picker lists that folder and
+ * isolating the app's chats elsewhere would hide them from the terminal.
  */
 export function buildPiTuiArgs(cliPath: string, sessionFile?: string | null): string[] {
   const file = sessionFile?.trim();
-  return file ? [cliPath, '--session', file] : [cliPath];
+  return file ? [cliPath, '--session', file, '--session-dir', dirname(file)] : [cliPath];
 }
 
 /**

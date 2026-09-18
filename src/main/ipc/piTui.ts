@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { translate } from '@shared/i18n';
-import { IPC_CHANNELS, type PiTuiOpenRequest } from '@shared/types';
+import { IPC_CHANNELS, type PiTuiOpenRequest, type PiTuiSessionsIndexedEvent } from '@shared/types';
+import { PI_AGENT } from '@shared/types/agentWire';
 import { BrowserWindow, ipcMain, Notification, type WebContents } from 'electron';
 import { redactStderrLine } from '../../agent-host/stderrRedaction';
 import { currentPiCliLayout } from '../services/agent-host/piCliLayout';
@@ -20,6 +22,7 @@ import {
 import {
   STRANDED_SESSION_BODY,
   STRANDED_SESSION_TITLE,
+  type StrandedSession,
   type StrandedSessionSnapshot,
   snapshotSessionDirectory,
   sweepStrandedSessions,
@@ -91,16 +94,21 @@ function snapshotKey(windowId: number, terminalId: string): string {
  * SUSPENDS and re-opens the same PTY, and a second snapshot would adopt a
  * session created since the first one as "already there" — which is exactly the
  * file the user needs to be told about.
+ *
+ * `cwd` is kept with it because this is the only place that still knows the
+ * app's own spelling of the workspace; the sweep compares it with the one pi
+ * writes (`StrandedSession.workspacePath`).
  */
 async function rememberSessionDirectory(
   windowId: number,
   terminalId: string,
-  sessionFile: string
+  sessionFile: string,
+  cwd: string
 ): Promise<boolean> {
   const key = snapshotKey(windowId, terminalId);
   if (sessionDirectorySnapshots.has(key)) return false;
   try {
-    sessionDirectorySnapshots.set(key, await snapshotSessionDirectory(sessionFile));
+    sessionDirectorySnapshots.set(key, await snapshotSessionDirectory(sessionFile, cwd));
     return true;
   } catch (error) {
     console.warn('[pi-tui] Could not read the session directory before opening a terminal:', error);
@@ -129,13 +137,16 @@ async function isIndexedSession(sessionFile: string): Promise<boolean> {
 }
 
 /**
- * Tell the user where the chat they started in the terminal actually went.
+ * Tell the user where a chat they started in the terminal actually went.
  *
- * A system notification rather than an in-app toast: the app has no Main→
- * renderer channel for an unsolicited message, and this one arrives exactly
- * when the terminal closes and the user turns back to a sidebar that does not
- * list their conversation. Best effort throughout — a notification that cannot
- * be shown must not take a terminal teardown down with it.
+ * The fallback, not the outcome: a file this app could identify is put in the
+ * chat list instead (`indexStrandedSession`), and only one it could not — no
+ * readable pi header, so no workspace to resume it in, or an index that refused
+ * the row — is reported by path. A system notification rather than an in-app
+ * toast: it arrives exactly when the terminal closes, which is when the user
+ * turns back to a sidebar that does not list their conversation. Best effort
+ * throughout — a notification that cannot be shown must not take a terminal
+ * teardown down with it.
  */
 function showStrandedSessionNotice(sessionFile: string): void {
   const t = (key: string, params?: Record<string, string | number>) =>
@@ -152,12 +163,80 @@ function showStrandedSessionNotice(sessionFile: string): void {
 }
 
 /**
+ * Put a chat pi created inside the terminal into the session list.
+ *
+ * `createImported` is the same commit `LegacyImportService` uses for a
+ * conversation this app did not create: one complete row, one atomic flush, and
+ * a refusal if the file is already indexed. Three fields carry the reasoning —
+ *
+ * - `runtimeIdentity` is PI'S OWN file. The runtime converts it to a v4 sibling
+ *   on the first open and Main re-binds the row to the copy then; see
+ *   `piTuiStrandedSessions.ts` for why that makes a conversion here unnecessary.
+ * - `workspacePath` is the directory the sweep settled on — pi's header, or the
+ *   terminal's spelling of it when both name one directory — because the
+ *   conversion refuses a resume cwd that disagrees (`session_cwd_mismatch`) and
+ *   the sidebar drops a row whose path matches no registered workspace.
+ * - `sessionId` is a fresh id, like any other chat's: pi's id names the pi
+ *   session, and this row is the app's logical chat pointing at it.
+ *
+ * Returns the new session id, or `null` when the row was not written — the
+ * caller then falls back to naming the file for the user. Read through a lazy
+ * import, like `isIndexedSession`, so this module keeps no load-order dependency
+ * on the index service.
+ */
+async function indexStrandedSession(session: StrandedSession): Promise<string | null> {
+  if (!session.identity) return null;
+  const sessionId = randomUUID();
+  try {
+    const { sessionIndexService } = await import('../services/chat/SessionIndexService');
+    await sessionIndexService.createImported({
+      sessionId,
+      runtimeIdentity: session.file,
+      agent: PI_AGENT,
+      workspacePath: session.workspacePath,
+      // Empty unless the chat was named in pi; the sidebar then shows its own
+      // fallback title rather than a blank row.
+      title: session.identity.title,
+      updatedAt: session.identity.createdAt || Date.now(),
+      archived: false,
+    });
+    return sessionId;
+  } catch (error) {
+    console.warn('[pi-tui] Could not index a chat created inside the terminal:', error);
+    return null;
+  }
+}
+
+/**
+ * Tell every window's sidebar that the session list grew.
+ *
+ * `chat:listSessions` is pull-only — the renderer reads it on mount and after
+ * its own mutations — so a row written here would stay invisible until something
+ * unrelated refreshed. Broadcast rather than sent to the terminal's own window
+ * (the same reasoning as `broadcastRuntimeEvent` in `ipc/chat.ts`): one index
+ * backs every window's list.
+ */
+function announceIndexedSessions(sessionIds: string[]): void {
+  if (sessionIds.length === 0) return;
+  const event: PiTuiSessionsIndexedEvent = { sessionIds };
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed()) continue;
+    try {
+      window.webContents.send(IPC_CHANNELS.PI_TUI_SESSIONS_INDEXED, event);
+    } catch {
+      // Window may be closing mid-send.
+    }
+  }
+}
+
+/**
  * The terminal stopped — anything that appeared in its session directory since
  * it opened is a chat this app has no row for.
  *
- * Paths are redacted in the log (T042) and spelled out in the notification: the
- * log is diagnostics, and the notification is the one place the user can read
- * the filename they now need.
+ * Each one is indexed if the file can say where it ran, and only reported to the
+ * user when it cannot. Paths are redacted in the log (T042) and spelled out in
+ * the notification: the log is diagnostics, and the notification is the one
+ * place the user can read the filename they now need.
  */
 async function reportStrandedSessions(windowId: number, terminalId: string): Promise<void> {
   const key = snapshotKey(windowId, terminalId);
@@ -165,12 +244,22 @@ async function reportStrandedSessions(windowId: number, terminalId: string): Pro
   if (!snapshot) return;
   sessionDirectorySnapshots.delete(key);
   const stranded = await sweepStrandedSessions(snapshot, { isIndexed: isIndexedSession });
-  for (const sessionFile of stranded) {
+  const indexed: string[] = [];
+  for (const session of stranded) {
+    const sessionId = await indexStrandedSession(session);
+    if (sessionId) {
+      indexed.push(sessionId);
+      console.log(
+        `[pi-tui] A chat created inside the terminal was added to the session list: ${redactStderrLine(session.file)}`
+      );
+      continue;
+    }
     console.warn(
-      `[pi-tui] A chat created inside the terminal is not in the session list: ${redactStderrLine(sessionFile)}`
+      `[pi-tui] A chat created inside the terminal could not be added to the session list: ${redactStderrLine(session.file)}`
     );
-    showStrandedSessionNotice(sessionFile);
+    showStrandedSessionNotice(session.file);
   }
+  announceIndexedSessions(indexed);
 }
 
 function ownerId(sender: WebContents): number {
@@ -211,6 +300,9 @@ async function createController(windowId: number): Promise<PiTuiPtyController> {
           windowSessionGuard.releaseTerminal(windowId, event.terminalId);
           // Same seam, same reason: whichever way this terminal stopped, its
           // `/new` chats are stranded from here on and nothing else will look.
+          // Deliberately at the terminal's death and not on a watcher — while pi
+          // is still writing, indexing the file would let the user open it, and
+          // the runtime's v4 copy would then fork the conversation in two.
           void reportStrandedSessions(windowId, event.terminalId).catch((error) => {
             console.warn('[pi-tui] Could not check the session directory after a terminal:', error);
           });
@@ -333,7 +425,8 @@ export function registerPiTuiHandlers(): void {
       recorded = await rememberSessionDirectory(
         controller.windowId,
         request.terminalId,
-        request.sessionFile
+        request.sessionFile,
+        request.cwd
       );
     }
     try {

@@ -512,6 +512,15 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.PI_TUI_STATE, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.PI_TUI_STATE, handler);
     },
+    /** Chats `/new` created in a terminal, after Main put them in the index. */
+    onSessionsIndexed: (
+      callback: (event: import('@shared/types').PiTuiSessionsIndexedEvent) => void
+    ): (() => void) => {
+      const handler = (_: unknown, event: import('@shared/types').PiTuiSessionsIndexedEvent) =>
+        callback(event);
+      ipcRenderer.on(IPC_CHANNELS.PI_TUI_SESSIONS_INDEXED, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.PI_TUI_SESSIONS_INDEXED, handler);
+    },
   },
 
   session: {
