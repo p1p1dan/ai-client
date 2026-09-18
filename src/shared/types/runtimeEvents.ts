@@ -510,6 +510,31 @@ export interface PermissionRequestedEvent extends RuntimeEventBase {
      * choice never looks like the whole choice.
      */
     omittedDecisionCount?: number;
+    /**
+     * Which card of the current burst this is, 1-based.
+     *
+     * The native gate shows one card at a time: a model that asks for five
+     * tools in one message used to raise five cards whose 120-second clocks all
+     * started together, so the ones the user had not reached yet could expire
+     * unseen. They are queued instead, and this says where in that line the card
+     * on screen sits. Counting resets once the queue drains, so a request that
+     * waited for nobody is always `1`.
+     *
+     * Absent on any backend that does not queue (the legacy one) and on older
+     * Hosts. The card then shows no progress rather than inventing one.
+     */
+    queuePosition?: number;
+    /**
+     * How many requests the gate knows about right now: this card plus the ones
+     * still queued behind it.
+     *
+     * NOT a promise about how many cards will follow. The queue is fed while
+     * the user reads, so this number can be larger on the next card than it was
+     * on this one — "2 of 5" after "1 of 3" is correct, not a glitch. It never
+     * shrinks within a burst, and a renderer that treats it as a fixed total
+     * will draw a progress bar that jumps backwards.
+     */
+    queueDepth?: number;
   };
 }
 

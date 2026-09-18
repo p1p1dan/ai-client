@@ -180,6 +180,8 @@
         "deny"
       ],
       "timeoutMs": 120000,
+      "queuePosition": 1,
+      "queueDepth": 1,
       "detail": {
         "kind": "file_change",
         "changes": [

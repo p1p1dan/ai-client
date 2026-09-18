@@ -101,6 +101,29 @@ export interface PermissionScope {
   tools: readonly string[];
   action: PermissionAction;
 }
+/**
+ * Where a card sits in the gate's approval queue, at the moment it is shown.
+ *
+ * Only ever produced for a request that actually reaches `approve`; the gate
+ * serializes those (see `acquirePrompt`), so exactly one slot is live at a time
+ * and the numbers describe one burst of tool calls rather than the session.
+ */
+export interface PermissionQueueSlot {
+  /**
+   * 1-based, counting only the cards this burst has already put on screen.
+   * Resets once the queue drains, so a lone request is always `1`.
+   */
+  position: number;
+  /**
+   * `position` plus everything still queued behind it — i.e. how many requests
+   * the gate knows about RIGHT NOW.
+   *
+   * A snapshot, never a promise: more calls from the same turn can arrive while
+   * the user is still reading card 1, so a card that said "1 of 3" may be
+   * followed by one that says "2 of 5". It never shrinks within a burst.
+   */
+  depth: number;
+}
 export interface PermissionConfig {
   cwd: string;
   mode?: RuntimeMode;
@@ -112,7 +135,13 @@ export interface PermissionConfig {
   projectTrusted?: boolean;
   approve?: (
     request: ToolPermissionRequest,
-    signal: AbortSignal
+    signal: AbortSignal,
+    /**
+     * Optional third argument so every existing approver stays assignable:
+     * a two-parameter function is still a valid `approve`, it simply cannot
+     * tell the user there is a line behind this card.
+     */
+    queue?: PermissionQueueSlot
   ) => Promise<'allow-once' | 'allow-session' | 'deny'>;
   timeoutMs?: number;
 }
@@ -194,6 +223,18 @@ declare module 'cordis' {
   }
 }
 
+/**
+ * One request parked in the approval queue. See `acquirePrompt`.
+ *
+ * `wake` reports whether the hand-over landed, because handing the gate to a
+ * request that already gave up would leave the gate held by nobody — the one
+ * failure here that never recovers.
+ */
+interface PromptWaiter {
+  settled: boolean;
+  wake: () => boolean;
+}
+
 export class PermissionsPlugin extends Service implements RuntimePermissionsService {
   static inject = [HOST_IO_SERVICE];
   private readonly config: PermissionConfig;
@@ -204,6 +245,20 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
   private readonly scopedGears = new Map<string, DelegateCallScope>();
   private epoch = 0;
   private readonly listeners = new Set<(record: PermissionActivityRecord) => void>();
+  /**
+   * Requests queued for the approval gate, in arrival order (FIFO).
+   *
+   * A model that asks for five tools at once produces five gates at once, and
+   * before this queue all five raised a card and all five started their own
+   * 120-second deadline at the same instant — so cards four and five could
+   * expire before the user had ever seen them. Now only the holder is on
+   * screen; the rest wait here, having emitted nothing and started no clock.
+   */
+  private readonly waiting: PromptWaiter[] = [];
+  /** Whether a request currently holds the approval gate. */
+  private prompting = false;
+  /** Cards shown since the queue was last empty; see `PermissionQueueSlot`. */
+  private served = 0;
 
   constructor(ctx: Context, config: PermissionConfig) {
     super(ctx, PERMISSIONS_SERVICE);
@@ -402,6 +457,69 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
       gear: this.gearFor(request),
     });
   }
+  /**
+   * Take the approval gate, or queue for it.
+   *
+   * Only requests that really have to ask a human come through here: `evaluate`
+   * has already returned `allow` or `deny` for everything else and returned
+   * before this line, so a turn's parallel reads are never serialized behind a
+   * card.
+   *
+   * A queued request emits nothing and starts no timer, which is the whole
+   * point — its deadline begins when it becomes the holder. It leaves the queue
+   * early only by being aborted, and then it takes the same denial an
+   * already-cancelled request gets at the top of `check`.
+   */
+  private acquirePrompt(signal: AbortSignal): Promise<void> {
+    if (!this.prompting) {
+      this.prompting = true;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve, reject) => {
+      const waiter: PromptWaiter = { settled: false, wake: () => false };
+      const onAbort = () => {
+        if (waiter.settled) return;
+        waiter.settled = true;
+        const index = this.waiting.indexOf(waiter);
+        if (index >= 0) this.waiting.splice(index, 1);
+        reject(denied('cancelled', 'permission request cancelled'));
+      };
+      waiter.wake = () => {
+        if (waiter.settled) return false;
+        waiter.settled = true;
+        signal.removeEventListener('abort', onAbort);
+        resolve();
+        return true;
+      };
+      this.waiting.push(waiter);
+      // Covers dispose and turn cancellation alike: `signal` is the combination
+      // of the caller's signal and this service's own, so tearing the graph
+      // down wakes every waiter instead of stranding it behind a card that will
+      // never be answered.
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+  }
+  /**
+   * Hand the gate to whoever is next, or park it.
+   *
+   * Direct hand-over rather than "clear the flag and let them race": `prompting`
+   * stays true across the transfer, so a request arriving in this window queues
+   * behind the waiter instead of barging in front of it. The loop is for a
+   * waiter that gave up between the shift and the hand-over — skipping it costs
+   * a shift, handing the gate to it would deadlock every request after it.
+   */
+  private releasePrompt(): void {
+    for (;;) {
+      const next = this.waiting.shift();
+      if (!next) {
+        this.prompting = false;
+        // The burst is over, so the next card starts a fresh "1 of n".
+        this.served = 0;
+        return;
+      }
+      if (next.wake()) return;
+    }
+  }
   private async check(
     request: ToolPermissionRequest,
     signal?: AbortSignal
@@ -414,38 +532,60 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
     if (action === 'deny')
       throw denied('policy-deny', `access denied: ${request.tool} ${request.path}`);
     if (action === 'allow') return this.grants.has(grantKey(request)) ? 'session-grant' : 'policy';
-    if (!this.config.approve) throw denied('error', 'approval UI is not connected');
-    // Announced before the await, so the transcript can show the gate is open
-    // for as long as the dialog actually is.
-    this.notify({ phase: 'prompt', request, mode: this.mode, gear: this.gearFor(request) });
+    const approve = this.config.approve;
+    if (!approve) throw denied('error', 'approval UI is not connected');
     const epoch = this.epoch;
-    const controller = new AbortController();
-    const approvalSignal = AbortSignal.any([combined, controller.signal]);
-    const timeout = setTimeout(
-      () => controller.abort(PERMISSION_TIMEOUT_REASON),
-      this.config.timeoutMs ?? PERMISSION_TIMEOUT_MS
-    );
-    let abort: (() => void) | undefined;
+    // One card at a time, from here to the `finally` at the bottom. Everything
+    // that announces the gate or counts against its deadline lives inside.
+    await this.acquirePrompt(combined);
     try {
-      const cancelled = new Promise<'deny'>((resolve) => {
-        abort = () => resolve('deny');
-        approvalSignal.addEventListener('abort', abort, { once: true });
-      });
-      const decision = await Promise.race([
-        this.config.approve(request, approvalSignal),
-        cancelled,
-      ]);
-      if (approvalSignal.aborted || epoch !== this.epoch)
-        throw approvalSignal.reason === PERMISSION_TIMEOUT_REASON
-          ? denied('timed-out', 'nobody answered the permission request in time')
-          : denied('cancelled', 'permission request expired');
-      if (decision === 'deny') throw denied('user-denied', 'permission denied');
-      if (decision === 'allow-session') this.grants.add(grantKey(request));
-      return decision;
+      // Re-read, because the wait above can be arbitrarily long: the turn may
+      // have been stopped, the graph torn down, or the permission settings
+      // changed while this request sat in line. Each of those is the same
+      // refusal it would have been at the top of `check`, and taking it here
+      // means no card is ever raised for a request nobody can act on.
+      if (combined.aborted) throw denied('cancelled', 'permission request cancelled');
+      if (epoch !== this.epoch) throw denied('cancelled', 'permission request expired');
+      const queue: PermissionQueueSlot = {
+        position: ++this.served,
+        depth: this.served + this.waiting.length,
+      };
+      // Announced before the await, so the transcript can show the gate is open
+      // for as long as the dialog actually is.
+      this.notify({ phase: 'prompt', request, mode: this.mode, gear: this.gearFor(request) });
+      const controller = new AbortController();
+      const approvalSignal = AbortSignal.any([combined, controller.signal]);
+      const timeout = setTimeout(
+        () => controller.abort(PERMISSION_TIMEOUT_REASON),
+        this.config.timeoutMs ?? PERMISSION_TIMEOUT_MS
+      );
+      let abort: (() => void) | undefined;
+      try {
+        const cancelled = new Promise<'deny'>((resolve) => {
+          abort = () => resolve('deny');
+          approvalSignal.addEventListener('abort', abort, { once: true });
+        });
+        const decision = await Promise.race([approve(request, approvalSignal, queue), cancelled]);
+        if (approvalSignal.aborted || epoch !== this.epoch)
+          throw approvalSignal.reason === PERMISSION_TIMEOUT_REASON
+            ? denied('timed-out', 'nobody answered the permission request in time')
+            : denied('cancelled', 'permission request expired');
+        if (decision === 'deny') throw denied('user-denied', 'permission denied');
+        if (decision === 'allow-session') this.grants.add(grantKey(request));
+        return decision;
+      } finally {
+        clearTimeout(timeout);
+        if (abort) approvalSignal.removeEventListener('abort', abort);
+        controller.abort();
+      }
     } finally {
-      clearTimeout(timeout);
-      if (abort) approvalSignal.removeEventListener('abort', abort);
-      controller.abort();
+      // Every exit releases: a decision, a denial, a cancel, an epoch bump, or
+      // an approver that threw. Anything that skipped this would stop the queue
+      // forever, which is worse than any single request failing.
+      // Every exit releases: a decision, a denial, a cancel, an epoch bump, or
+      // an approver that threw. Anything that skipped this would stop the queue
+      // forever, which is worse than any single request failing.
+      this.releasePrompt();
     }
   }
 }

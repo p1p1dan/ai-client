@@ -48,7 +48,15 @@ export interface PermissionPrompt {
   approve: NonNullable<PermissionConfig['approve']>;
   /** `false` when nothing was waiting on that id — see the RPC result's doc. */
   respond: (input: { permissionId: string; decision: PermissionDecisionId }) => boolean;
-  /** Settle everything still parked, e.g. on dispose. Answers are denials. */
+  /**
+   * Settle everything still parked, e.g. on dispose. Answers are denials.
+   *
+   * "Parked" means ASKED: the gate serializes approvals, so requests queued
+   * behind the card on screen have never called `approve` and are invisible
+   * here. Draining therefore answers the card and lets the next one up — it is
+   * not a way to cancel a whole burst. Both callers abort alongside it, which
+   * is what actually clears the queue.
+   */
   drain: (reason: 'session_closed' | 'aborted') => void;
 }
 
@@ -143,7 +151,7 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
   };
 
   return {
-    approve: (request, signal) =>
+    approve: (request, signal, queue) =>
       new Promise((resolve) => {
         // The tool call id is the permission id, which is what the timeline
         // already assumes (`chatSessions.ts` calls it out): one gate per call.
@@ -186,6 +194,13 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
               : {}),
             decisions: OFFERED,
             timeoutMs: options.timeoutMs ?? PERMISSION_TIMEOUT_MS,
+            // Where this card sits in the gate's line, forwarded verbatim. The
+            // engine owns the queue and is the only thing that can count it:
+            // the renderer cannot, because serialization means its own pending
+            // list holds exactly one entry while a card is up. Absent when the
+            // approver was called without a slot, which is every caller that
+            // drives `approve` directly.
+            ...(queue ? { queuePosition: queue.position, queueDepth: queue.depth } : {}),
             ...(detail ? { detail } : {}),
           },
         });
