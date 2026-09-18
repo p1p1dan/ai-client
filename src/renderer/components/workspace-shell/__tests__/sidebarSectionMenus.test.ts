@@ -35,7 +35,10 @@ describe('S1 partition context menus', () => {
     // between rows rather than adding a wrapper element with its own box.
     expect(unboundSection).toContain('render={<section />}');
     expect(unboundSection).toContain("{t('New temporary chat')}");
-    expect(unboundSection).toContain('createUnboundChatSession()');
+    // Goes through the same create-or-reuse wrapper as the three New buttons,
+    // so this menu item cannot be the one route left for stacking up empty
+    // shell sessions.
+    expect(unboundSection).toContain('createOrReuseUnboundChatSession()');
   });
 
   it('the projects partition offers Add Repository', () => {

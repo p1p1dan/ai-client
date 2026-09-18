@@ -30,7 +30,7 @@ describe('U22 unbound chat entry points', () => {
     // ("without one, this chat runs in a private temporary folder") had no path
     // behind it and the composer stayed permanently greyed out.
     expect(nav).not.toContain('disabled={!canStartNewSession}');
-    expect(nav).toContain('createUnboundChatSession');
+    expect(nav).toContain('createOrReuseUnboundChatSession');
   });
 
   it('falls back to an unbound session instead of returning early', () => {
@@ -39,12 +39,15 @@ describe('U22 unbound chat entry points', () => {
     // mostly whitespace and would silently stop covering the body.
     const start = nav.indexOf('const handleNewSession');
     const handler = nav.slice(start, nav.indexOf('\n  };', start));
-    expect(handler).toContain('createUnboundChatSession()');
+    // Both calls now go through the create-or-reuse wrappers (the New-button
+    // idempotency guard); the fallback ORDER this test exists to pin is
+    // unchanged.
+    expect(handler).toContain('createOrReuseUnboundChatSession()');
     // The bound path must still win when a workspace IS available, or every
     // chat would land in a scratch directory.
-    expect(handler).toContain('createChatSessionOnWorkspace(effectiveWorkspaceId)');
-    expect(handler.indexOf('createUnboundChatSession()')).toBeLessThan(
-      handler.indexOf('createChatSessionOnWorkspace(effectiveWorkspaceId)')
+    expect(handler).toContain('createOrReuseChatSessionOnWorkspace(effectiveWorkspaceId)');
+    expect(handler.indexOf('createOrReuseUnboundChatSession()')).toBeLessThan(
+      handler.indexOf('createOrReuseChatSessionOnWorkspace(effectiveWorkspaceId)')
     );
   });
 

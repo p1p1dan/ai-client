@@ -5,6 +5,8 @@ import {
   applyAutoSessionTitle,
   createChatSessionInCurrentDirectory,
   createChatSessionOnWorkspace,
+  createOrReuseChatSessionOnWorkspace,
+  createOrReuseUnboundChatSession,
   createUnboundChatSession,
   materializeForkedChatSession,
   materializeIndexedPiChatSession,
@@ -239,6 +241,329 @@ describe('retargetChatSession', () => {
     const state = useChatSessionsStore.getState();
     expect(state.hostBoundSessionIds).toEqual(['s1']);
     expect(state.messages).toBe(messages);
+  });
+});
+
+describe('createOrReuseChatSessionOnWorkspace (idempotent New button, A/B/C tiers)', () => {
+  it('tier A: does nothing when the active session is already a fresh empty session on the target workspace', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const fresh = makeSession({
+      id: 'fresh',
+      workspaceId: 'ws-a',
+      projectId: 'proj-a',
+      title: 'New chat',
+      status: 'idle',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [fresh],
+      activeSessionId: 'fresh',
+      messages: {},
+      hostBoundSessionIds: [],
+      recentSessionIds: ['fresh'],
+    });
+
+    const result = createOrReuseChatSessionOnWorkspace('ws-a');
+
+    const state = useChatSessionsStore.getState();
+    expect(result).toBe('fresh');
+    expect(state.sessions).toHaveLength(1);
+    expect(state.sessions[0]).toBe(fresh); // reference untouched — no write happened
+    expect(state.activeSessionId).toBe('fresh');
+    expect(state.recentSessionIds).toEqual(['fresh']);
+  });
+
+  it('tier B: retargets the fresh empty session onto a different workspace instead of creating a new one', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const wsB = makeWorkspace({ id: 'ws-b', projectId: 'proj-b', path: '/b' });
+    const fresh = makeSession({
+      id: 'fresh',
+      workspaceId: 'ws-a',
+      projectId: 'proj-a',
+      title: 'New chat',
+      status: 'idle',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA, wsB],
+      sessions: [fresh],
+      activeSessionId: 'fresh',
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+
+    const result = createOrReuseChatSessionOnWorkspace('ws-b');
+
+    const state = useChatSessionsStore.getState();
+    expect(result).toBe('fresh');
+    expect(state.sessions).toHaveLength(1);
+    expect(state.sessions[0]?.workspaceId).toBe('ws-b');
+    expect(state.sessions[0]?.projectId).toBe('proj-b');
+    expect(state.activeSessionId).toBe('fresh');
+  });
+
+  it('tier C: creates a new session as before when the active session already has messages', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const withHistory = makeSession({
+      id: 'with-history',
+      workspaceId: 'ws-a',
+      projectId: 'proj-a',
+      title: 'New chat',
+      status: 'idle',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [withHistory],
+      activeSessionId: 'with-history',
+      messages: {
+        'with-history': [{ id: 'm1', sessionId: 'with-history', role: 'user', blocks: [] }],
+      },
+      hostBoundSessionIds: [],
+    });
+
+    const result = createOrReuseChatSessionOnWorkspace('ws-a');
+
+    const state = useChatSessionsStore.getState();
+    expect(result).not.toBe('with-history');
+    expect(state.sessions).toHaveLength(2);
+    expect(state.activeSessionId).toBe(result);
+    expect(state.sessions.find((item) => item.id === 'with-history')).toBe(withHistory);
+  });
+
+  it('tier C: creates a new session as before when the active session is already host-bound', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const bound = makeSession({
+      id: 'bound',
+      workspaceId: 'ws-a',
+      projectId: 'proj-a',
+      title: 'New chat',
+      status: 'idle',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [bound],
+      activeSessionId: 'bound',
+      messages: {},
+      hostBoundSessionIds: ['bound'],
+    });
+
+    const result = createOrReuseChatSessionOnWorkspace('ws-a');
+
+    const state = useChatSessionsStore.getState();
+    expect(result).not.toBe('bound');
+    expect(state.sessions).toHaveLength(2);
+  });
+
+  it('tier C: creates a new session as before when the active session title is no longer a placeholder', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const renamed = makeSession({
+      id: 'renamed',
+      workspaceId: 'ws-a',
+      projectId: 'proj-a',
+      title: 'Fix the login flow',
+      status: 'idle',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [renamed],
+      activeSessionId: 'renamed',
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+
+    const result = createOrReuseChatSessionOnWorkspace('ws-a');
+
+    const state = useChatSessionsStore.getState();
+    expect(result).not.toBe('renamed');
+    expect(state.sessions).toHaveLength(2);
+  });
+
+  it('guard: an empty, never-host-bound session that is BUSY is not misjudged as fresh — still creates new', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const running = makeSession({
+      id: 'running',
+      workspaceId: 'ws-a',
+      projectId: 'proj-a',
+      title: 'New chat', // placeholder title
+      status: 'running', // the ONLY non-fresh signal in this case
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [running],
+      activeSessionId: 'running',
+      messages: {}, // zero messages
+      hostBoundSessionIds: [], // never host-bound
+    });
+
+    const result = createOrReuseChatSessionOnWorkspace('ws-a');
+
+    const state = useChatSessionsStore.getState();
+    expect(result).not.toBe('running');
+    expect(state.sessions).toHaveLength(2);
+    // The busy session itself must be left completely alone.
+    expect(state.sessions.find((item) => item.id === 'running')).toBe(running);
+  });
+
+  it('falls back to the unconditional create when the target workspace id does not resolve (defensive)', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const fresh = makeSession({
+      id: 'fresh',
+      workspaceId: 'ws-a',
+      projectId: 'proj-a',
+      title: 'New chat',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [fresh],
+      activeSessionId: 'fresh',
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+
+    const result = createOrReuseChatSessionOnWorkspace('ws-missing');
+
+    expect(result).toBeNull();
+    expect(useChatSessionsStore.getState().sessions).toHaveLength(1);
+  });
+
+  it('creates a new session when there is no active session at all', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [],
+      activeSessionId: null,
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+
+    const result = createOrReuseChatSessionOnWorkspace('ws-a');
+
+    expect(result).not.toBeNull();
+    expect(useChatSessionsStore.getState().sessions).toHaveLength(1);
+  });
+});
+
+describe('createOrReuseUnboundChatSession (idempotent New button — unbound branch)', () => {
+  it('tier A: does nothing when the active session is already a fresh, unbound empty session', () => {
+    const unbound = makeSession({
+      id: 'fresh-unbound',
+      workspaceId: '',
+      projectId: '',
+      title: 'New chat',
+      status: 'idle',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [],
+      sessions: [unbound],
+      activeSessionId: 'fresh-unbound',
+      messages: {},
+      hostBoundSessionIds: [],
+      recentSessionIds: ['fresh-unbound'],
+    });
+
+    const result = createOrReuseUnboundChatSession();
+
+    const state = useChatSessionsStore.getState();
+    expect(result).toBe('fresh-unbound');
+    expect(state.sessions).toHaveLength(1);
+    expect(state.sessions[0]).toBe(unbound);
+    expect(state.activeSessionId).toBe('fresh-unbound');
+    expect(state.recentSessionIds).toEqual(['fresh-unbound']);
+  });
+
+  it('tier A: also treats a fresh session pointed at a non-targetable (empty-path) workspace as unbound', () => {
+    // Mirrors the DEMO seed shape: a real workspace row whose path is empty.
+    const wsSeed = makeWorkspace({ id: 'ws-seed', path: '' });
+    const fresh = makeSession({
+      id: 'fresh',
+      workspaceId: 'ws-seed',
+      title: 'New chat',
+      status: 'idle',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsSeed],
+      sessions: [fresh],
+      activeSessionId: 'fresh',
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+
+    const result = createOrReuseUnboundChatSession();
+
+    const state = useChatSessionsStore.getState();
+    expect(result).toBe('fresh');
+    expect(state.sessions).toHaveLength(1);
+  });
+
+  it('tier C: creates a new unbound session as before when the active session already has messages', () => {
+    const unbound = makeSession({
+      id: 'has-history',
+      workspaceId: '',
+      projectId: '',
+      title: 'New chat',
+      status: 'idle',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [],
+      sessions: [unbound],
+      activeSessionId: 'has-history',
+      messages: {
+        'has-history': [{ id: 'm1', sessionId: 'has-history', role: 'user', blocks: [] }],
+      },
+      hostBoundSessionIds: [],
+    });
+
+    const result = createOrReuseUnboundChatSession();
+
+    const state = useChatSessionsStore.getState();
+    expect(result).not.toBe('has-history');
+    expect(state.sessions).toHaveLength(2);
+    expect(state.activeSessionId).toBe(result);
+  });
+
+  it('is not tier A when the fresh active session is bound to a real, usable workspace (only the CLICK TARGET is unbound)', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', path: '/a' });
+    const fresh = makeSession({
+      id: 'fresh-bound',
+      workspaceId: 'ws-a',
+      title: 'New chat',
+      status: 'idle',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [fresh],
+      activeSessionId: 'fresh-bound',
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+
+    const result = createOrReuseUnboundChatSession();
+
+    const state = useChatSessionsStore.getState();
+    expect(result).not.toBe('fresh-bound');
+    expect(state.sessions).toHaveLength(2);
+  });
+
+  it('guard: a fresh, unbound session that is BUSY is not misjudged as fresh — still creates a new one', () => {
+    const unbound = makeSession({
+      id: 'running-unbound',
+      workspaceId: '',
+      projectId: '',
+      title: 'New chat',
+      status: 'running',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [],
+      sessions: [unbound],
+      activeSessionId: 'running-unbound',
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+
+    const result = createOrReuseUnboundChatSession();
+
+    const state = useChatSessionsStore.getState();
+    expect(result).not.toBe('running-unbound');
+    expect(state.sessions).toHaveLength(2);
   });
 });
 

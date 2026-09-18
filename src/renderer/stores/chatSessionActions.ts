@@ -9,7 +9,11 @@
 import { PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { pathsEqual } from '@/App/storage';
-import { decideTargetChange } from '@/components/chat/composerTarget';
+import {
+  decideTargetChange,
+  isTargetableWorkspace,
+  planTargetChange,
+} from '@/components/chat/composerTarget';
 import {
   deriveSessionTitleFromFirstMessage,
   isPlaceholderTitle,
@@ -18,6 +22,7 @@ import { renameSessionIndexEntry } from '@/components/chat/sessionIndex/useSessi
 import { uniqueId } from '@/lib/uniqueId';
 import { type ChatSession, useChatSessionsStore } from './chatSessions';
 import { useScratchWorkspaceStore } from './scratchWorkspace';
+import { isFreshEmptySession } from './sessionFreshness';
 import { markSessionsLive } from './sessionRetirement';
 
 /**
@@ -67,6 +72,14 @@ export function createChatSessionOnWorkspace(
   return sessionId;
 }
 
+/**
+ * `/new` slash command. Deliberately NOT routed through
+ * `createOrReuseChatSessionOnWorkspace`'s fresh-empty-session reuse: this is
+ * an explicit "start a sibling chat in the same directory" command a user
+ * types while already looking at a chat, not a "New" button click, and its
+ * own existing semantics (inherit only the directory, never the old
+ * session's identity) must stay unchanged here.
+ */
 export function createChatSessionInCurrentDirectory(sending = false): string | null {
   const state = useChatSessionsStore.getState();
   const current = state.sessions.find((session) => session.id === state.activeSessionId);
@@ -252,6 +265,95 @@ export function retargetChatSession(sessionId: string, workspaceId: string): boo
   });
 
   return true;
+}
+
+/**
+ * Idempotent guard in front of `createChatSessionOnWorkspace`, shared by the
+ * three "start a new chat" entry points (LeftNav's header "+ New", a
+ * folder's own "+", and SessionBar's "+"). Clicking New while the ACTIVE
+ * session is already a brand-new, untouched chat must not pile up another
+ * empty session next to it.
+ *
+ * Reuses the SAME three-tier rule the Composer target bar already applies
+ * (`planTargetChange`) rather than adding a second copy of it:
+ *  - the active session is not fresh/empty -> unchanged, always create.
+ *  - fresh/empty AND already pointed at `workspaceId` -> do nothing and stay
+ *    on this page ('noop' / 'same-workspace').
+ *  - fresh/empty AND pointed elsewhere -> retarget it onto `workspaceId` in
+ *    place instead of creating a new shell session ('retarget').
+ *
+ * `messageCount`/`hostBound` are passed as the literal 0/false
+ * `isFreshEmptySession` just proved true for the active session —
+ * recomputing them here would risk drifting from the predicate that gated
+ * this branch.
+ */
+export function createOrReuseChatSessionOnWorkspace(workspaceId: string): string | null {
+  const state = useChatSessionsStore.getState();
+  const activeSessionId = state.activeSessionId;
+  if (!isFreshEmptySession(state, activeSessionId)) {
+    return createChatSessionOnWorkspace(workspaceId);
+  }
+  const activeSession = state.sessions.find((item) => item.id === activeSessionId);
+  if (!activeSession) {
+    // Unreachable: isFreshEmptySession above already found this session.
+    return createChatSessionOnWorkspace(workspaceId);
+  }
+
+  const plan = planTargetChange({
+    nextWorkspaceId: workspaceId,
+    activeSession,
+    workspaces: state.workspaces,
+    messageCount: 0,
+    hostBound: false,
+  });
+
+  switch (plan.kind) {
+    case 'noop':
+      // 'same-workspace' is the "stay put" tier. 'unknown-workspace' means
+      // `workspaceId` itself is not a usable target — fall back to the
+      // pre-existing unconditional path instead of silently doing nothing
+      // with an invalid target.
+      return plan.reason === 'same-workspace'
+        ? activeSession.id
+        : createChatSessionOnWorkspace(workspaceId);
+    case 'retarget':
+      retargetChatSession(plan.sessionId, plan.workspaceId);
+      return plan.sessionId;
+    case 'blocked':
+    case 'fork':
+      // Not reachable here: isFreshEmptySession already guarantees
+      // messageCount === 0, hostBound === false and status === 'idle' — the
+      // only inputs decideTargetChange consults besides `sending`, which
+      // this call site never sets. Kept so the switch stays exhaustive.
+      return createChatSessionOnWorkspace(workspaceId);
+    default:
+      return createChatSessionOnWorkspace(workspaceId);
+  }
+}
+
+/**
+ * Same idempotent guard as `createOrReuseChatSessionOnWorkspace`, for the
+ * "no targetable workspace" branch the three entry points fall back to
+ * (U22's unbound chat). `planTargetChange` needs a real `nextWorkspaceId`,
+ * so the "both sides unbound" tier is checked directly here: the active
+ * session counts as unbound when it has no workspaceId, or that workspaceId
+ * no longer resolves to a targetable workspace — the same condition that
+ * sends a caller down the unbound branch in the first place.
+ */
+export function createOrReuseUnboundChatSession(): string | null {
+  const state = useChatSessionsStore.getState();
+  const activeSessionId = state.activeSessionId;
+  if (isFreshEmptySession(state, activeSessionId)) {
+    const activeSession = state.sessions.find((item) => item.id === activeSessionId);
+    const workspace = activeSession
+      ? state.workspaces.find((item) => item.id === activeSession.workspaceId)
+      : undefined;
+    if (activeSession && !isTargetableWorkspace(workspace)) {
+      // Both the active session and the click target are unbound — stay put.
+      return activeSession.id;
+    }
+  }
+  return createUnboundChatSession();
 }
 
 // R2 fix: module-level dedup so two concurrent triggers for the SAME session

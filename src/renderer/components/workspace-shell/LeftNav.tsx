@@ -49,8 +49,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import {
-  createChatSessionOnWorkspace,
-  createUnboundChatSession,
+  createOrReuseChatSessionOnWorkspace,
+  createOrReuseUnboundChatSession,
 } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
@@ -340,11 +340,16 @@ export function LeftNav({
     // unbound case U05 made sendable. This button used to return silently on a
     // machine with no repository added, which was the only entry point to a
     // session there, so the composer stayed permanently disabled.
+    //
+    // create-or-reuse: if the ACTIVE session is already a brand-new, empty
+    // chat, this reuses it (stays put, or retargets in place) instead of
+    // creating another throwaway session next to it — see
+    // chatSessionActions.ts's createOrReuseChatSessionOnWorkspace.
     if (!effectiveWorkspaceId || !canStartNewSession) {
-      createUnboundChatSession();
+      createOrReuseUnboundChatSession();
       return;
     }
-    createChatSessionOnWorkspace(effectiveWorkspaceId);
+    createOrReuseChatSessionOnWorkspace(effectiveWorkspaceId);
   };
 
   /**
@@ -411,7 +416,10 @@ export function LeftNav({
           )}
         </ContextMenuPrimitive.Trigger>
         <MenuPopup align="start" side="bottom" className="min-w-40">
-          <MenuItem onClick={() => createUnboundChatSession()}>
+          {/* Same guard as the three "New" buttons: this menu item creates the
+              same kind of session they do, so leaving it unconditional would
+              keep one route open for piling up empty shells. */}
+          <MenuItem onClick={() => createOrReuseUnboundChatSession()}>
             <Plus className="size-4" />
             {t('New temporary chat')}
           </MenuItem>
@@ -789,7 +797,9 @@ export function LeftNav({
                                       (workspace) => workspace.id === newSessionWorkspaceId
                                     )?.path ?? '',
                                 })}
-                                onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
+                                onClick={() =>
+                                  createOrReuseChatSessionOnWorkspace(newSessionWorkspaceId)
+                                }
                               >
                                 <Plus className="h-3 w-3" />
                               </Button>
@@ -854,7 +864,9 @@ export function LeftNav({
                               <button
                                 type="button"
                                 className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui text-muted-foreground hover:bg-hover"
-                                onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
+                                onClick={() =>
+                                  createOrReuseChatSessionOnWorkspace(newSessionWorkspaceId)
+                                }
                               >
                                 <Plus className="h-3 w-3 shrink-0" />
                                 {t('New chat')}
