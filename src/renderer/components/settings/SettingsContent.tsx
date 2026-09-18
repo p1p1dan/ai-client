@@ -1,4 +1,6 @@
 import {
+  ArrowRightLeft,
+  Blocks,
   FileCode,
   GitBranch,
   Globe,
@@ -49,6 +51,18 @@ export function SettingsContent({
   const { t } = useI18n();
   const [internalCategory, setInternalCategory] = useState<SettingsCategory>('general');
   const activeCategory = controlledCategory ?? internalCategory;
+  /**
+   * The Pi page used to stack eight sections — models, providers, permission
+   * policy, plugins, resources, subagents, agent-directory migration and
+   * conversation import — on one scroll. Three of them are about extending the
+   * agent and two are one-off "bring data in" operations, so they are their own
+   * pages now; `pi` keeps what a user changes to make a chat work at all.
+   *
+   * The permission policy moved to `advanced` instead: it stays fully editable
+   * (it writes the global scope file every chat reads at start-up), but it is an
+   * expert surface next to the per-turn permission gear in the composer, and on
+   * the Pi page it was the single largest thing between a user and their models.
+   */
   const categories: Array<{ id: SettingsCategory; icon: ElementType; label: string }> = [
     { id: 'general', icon: Settings, label: t('General') },
     { id: 'appearance', icon: Palette, label: t('Appearance') },
@@ -56,6 +70,8 @@ export function SettingsContent({
     { id: 'editor', icon: FileCode, label: t('Editor') },
     { id: 'git', icon: GitBranch, label: t('Git') },
     { id: 'pi', icon: Sparkles, label: t('Pi') },
+    { id: 'extensions', icon: Blocks, label: t('Extensions') },
+    { id: 'migration', icon: ArrowRightLeft, label: t('Data migration') },
     { id: 'keybindings', icon: Keyboard, label: t('Keybindings') },
     { id: 'network', icon: Globe, label: t('Network') },
     { id: 'advanced', icon: SlidersHorizontal, label: t('Advanced') },
@@ -108,14 +124,21 @@ export function SettingsContent({
           )}
           {activeCategory === 'pi' && (
             <>
-              <AgentMigrationSettings />
-              <ConversationImportSettings />
               <UserProvidersSettings />
               <PiModelManagementSettings />
-              <PermissionPolicySettings repoPath={repoPath} />
+            </>
+          )}
+          {activeCategory === 'extensions' && (
+            <>
               <PiPluginsSettings />
               <PiResourcesSettings />
               <PiSubagentsSettings />
+            </>
+          )}
+          {activeCategory === 'migration' && (
+            <>
+              <AgentMigrationSettings />
+              <ConversationImportSettings />
             </>
           )}
           {activeCategory === 'keybindings' && <KeybindingsSettings />}
@@ -128,6 +151,7 @@ export function SettingsContent({
           {activeCategory === 'advanced' && (
             <>
               <AdvancedSettings />
+              <PermissionPolicySettings repoPath={repoPath} />
               <WebInspectorSettings />
             </>
           )}

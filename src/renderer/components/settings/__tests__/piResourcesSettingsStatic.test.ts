@@ -67,15 +67,25 @@ describe('R04 Pi resource settings', () => {
     expect(component).not.toContain('borrowUserPiResources');
   });
 
-  it('lives in the Pi Settings category, not a new workspace navigation surface', () => {
-    expect(settingsContent).toContain("id: 'pi'");
-    expect(settingsContent).toContain("activeCategory === 'pi'");
+  /**
+   * Still a Settings category, not a workspace navigation surface of its own.
+   *
+   * The page moved from `pi` to `extensions` when the Pi page was split: three
+   * panels that extend the agent (plugins, resources, subagents) are one topic,
+   * and stacking them under the model settings was most of what made that page
+   * unreadable.
+   */
+  it('lives in the Extensions Settings category, not a new workspace navigation surface', () => {
+    expect(settingsContent).toContain("id: 'extensions'");
+    expect(settingsContent).toContain("activeCategory === 'extensions'");
     expect(settingsContent).toContain('<PiResourcesSettings />');
   });
 
-  /** H/19 U2 and U4 put two more sections on the same page. */
-  it('shows the migration and plugin sections on the Pi page too', () => {
-    expect(settingsContent).toContain('<AgentMigrationSettings />');
+  /** H/19 U2 and U4's two sections, each now on the page it belongs to. */
+  it('keeps the plugin section beside it and the migration section on its own page', () => {
     expect(settingsContent).toContain('<PiPluginsSettings />');
+    expect(settingsContent).toContain("id: 'migration'");
+    expect(settingsContent).toContain("activeCategory === 'migration'");
+    expect(settingsContent).toContain('<AgentMigrationSettings />');
   });
 });

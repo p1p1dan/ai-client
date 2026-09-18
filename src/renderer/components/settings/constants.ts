@@ -17,6 +17,8 @@ export const SETTINGS_CATEGORIES = [
   'editor',
   'git',
   'pi',
+  'extensions',
+  'migration',
   'keybindings',
   'network',
   'advanced',
@@ -34,9 +36,15 @@ export function restoreSettingsCategory(value: string | null): SettingsCategory 
     case 'ai':
       return 'git';
     case 'piModels':
-    case 'piPermissions':
-    case 'piResources':
       return 'pi';
+    // The Pi page used to hold eight sections. It now keeps the model ones; the
+    // three extension sections and the permission policy moved, so a category
+    // restored from an older build has to follow its panel rather than land on
+    // a page that no longer renders it.
+    case 'piResources':
+      return 'extensions';
+    case 'piPermissions':
+      return 'advanced';
     case 'remote':
       return 'network';
     case 'webInspector':

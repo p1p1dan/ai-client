@@ -5,7 +5,15 @@ import type {
   PolicyPatch,
   PolicyScopeId,
 } from '@shared/piPermissionPolicy';
-import { AlertTriangle, FolderOpen, Plus, RotateCcw, Trash2, TriangleAlert } from 'lucide-react';
+import {
+  AlertTriangle,
+  ChevronDown,
+  FolderOpen,
+  Plus,
+  RotateCcw,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import {
   AlertDialog,
@@ -17,6 +25,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Ident } from '@/components/ui/ident';
 import { Input } from '@/components/ui/input';
 import {
@@ -64,10 +73,22 @@ import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
  *     fail for ordinary reasons (an unwritable file, a disk that is full);
  *     swallowing that would leave a panel reporting a policy the user does not
  *     have.
+ *
+ * ## Why it opens collapsed, on the Advanced page
+ *
+ * Day to day, permission decisions are made by the gear in the composer and the
+ * approval card it raises; this panel is the rarely-needed layer underneath —
+ * standing rules that outlive a conversation. It used to sit unfolded in the
+ * middle of the Pi page, where it was larger than everything a user actually
+ * came there to change. Heading and description stay visible so the page still
+ * says who governs tool calls and where to edit that; only the rule tables fold
+ * away. The snapshot is fetched on first expand rather than on mount — three
+ * policy files read for a section nobody opened is work nobody asked for.
  */
 export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
   const { t, locale } = useI18n();
 
+  const [open, setOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<PermissionPolicySnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -88,8 +109,8 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
   }, [repoPath]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (open) void load();
+  }, [open, load]);
 
   const apply = useCallback(
     async (patch: PolicyPatch) => {
@@ -126,127 +147,125 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
     void apply(surfacePatch(control, next));
   };
 
-  if (!snapshot) {
-    return (
-      <div className="space-y-6">
-        <PanelHeading />
-        <p className="text-ui text-muted-foreground">{error ?? t('Loading...')}</p>
-      </div>
-    );
-  }
-
-  const controls = deriveSurfaceControls(snapshot);
-  const tables = deriveRuleTables(snapshot);
-  const scopes = deriveScopeRows(snapshot.scopes, locale);
-  const editable = snapshot.editable && !busy;
+  const controls = snapshot ? deriveSurfaceControls(snapshot) : [];
+  const tables = snapshot ? deriveRuleTables(snapshot) : [];
+  const scopes = snapshot ? deriveScopeRows(snapshot.scopes, locale) : [];
+  const editable = Boolean(snapshot?.editable) && !busy;
 
   return (
-    <div className="space-y-6">
+    <Collapsible className="space-y-4" open={open} onOpenChange={setOpen}>
       <PanelHeading />
+      <CollapsibleContent className="space-y-6">
+        {!snapshot && <p className="text-ui text-muted-foreground">{error ?? t('Loading...')}</p>}
 
-      {!snapshot.editable && (
-        <div className="flex gap-3 rounded-md border border-info/30 bg-info/10 p-3 text-ui text-info">
-          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1">{snapshot.readOnlyReason}</span>
-        </div>
-      )}
-
-      {snapshot.effective.yoloMode.value && (
-        <div className="flex gap-3 rounded-md border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1">
-            {t(
-              'Yolo mode disables all permission checks, including command restrictions. Disable it in the {{source}} configuration file.',
-              { source: t(originLabel(snapshot.effective.yoloMode.origin)) }
+        {snapshot && (
+          <>
+            {!snapshot.editable && (
+              <div className="flex gap-3 rounded-md border border-info/30 bg-info/10 p-3 text-ui text-info">
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <span className="min-w-0 flex-1">{snapshot.readOnlyReason}</span>
+              </div>
             )}
-          </span>
-        </div>
-      )}
 
-      {error && (
-        <div
-          role="alert"
-          className="flex gap-3 rounded-md border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive"
-        >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1">{error}</span>
-        </div>
-      )}
+            {snapshot.effective.yoloMode.value && (
+              <div className="flex gap-3 rounded-md border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span className="min-w-0 flex-1">
+                  {t(
+                    'Yolo mode disables all permission checks, including command restrictions. Disable it in the {{source}} configuration file.',
+                    { source: t(originLabel(snapshot.effective.yoloMode.origin)) }
+                  )}
+                </span>
+              </div>
+            )}
 
-      <section className="space-y-3">
-        <SettingsSectionBlock
-          title={t('Default actions')}
-          description={t(
-            'Choose whether each tool call is allowed, requires approval, or is denied.'
-          )}
-        />
-        <div className="border-t divide-y">
-          {controls.map((control) => (
-            <SurfaceRow
-              key={`${control.surface}:${control.pattern ?? ''}`}
-              control={control}
-              editable={editable}
-              onChoose={(next) => chooseSurface(control, next)}
-            />
-          ))}
-        </div>
-      </section>
+            {error && (
+              <div
+                role="alert"
+                className="flex gap-3 rounded-md border border-destructive/30 bg-destructive/8 p-3 text-ui text-destructive"
+              >
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span className="min-w-0 flex-1">{error}</span>
+              </div>
+            )}
 
-      {tables.map((table) => (
-        <RuleTableSection
-          key={table.surface}
-          table={table}
-          editable={editable}
-          onApply={(patch) => void apply(patch)}
-        />
-      ))}
+            <section className="space-y-3">
+              <SettingsSectionBlock
+                title={t('Default actions')}
+                description={t(
+                  'Choose whether each tool call is allowed, requires approval, or is denied.'
+                )}
+              />
+              <div className="border-t divide-y">
+                {controls.map((control) => (
+                  <SurfaceRow
+                    key={`${control.surface}:${control.pattern ?? ''}`}
+                    control={control}
+                    editable={editable}
+                    onChoose={(next) => chooseSurface(control, next)}
+                  />
+                ))}
+              </div>
+            </section>
 
-      <section className="space-y-3">
-        <SettingsSectionBlock
-          title={t('Approval log')}
-          description={t('Record allowed and denied actions for review.')}
-        />
-        <div className="flex items-center justify-between gap-4 border-t p-4">
-          <div className="min-w-0 flex-1">
-            <p className="text-ui font-medium">{t('Record approval results')}</p>
-            <p className="text-meta text-muted-foreground">
-              {t('Write to')}
-              <Ident>{'<agentDir>/extensions/pi-permission-system/logs'}</Ident>。
-              {snapshot.effective.permissionReviewLog.origin
-                ? t('Currently set by {{source}}.', {
-                    source: t(originLabel(snapshot.effective.permissionReviewLog.origin)),
-                  })
-                : t('Using the plugin default.')}
-            </p>
-          </div>
-          <Switch
-            checked={snapshot.effective.permissionReviewLog.value}
-            disabled={!editable}
-            onCheckedChange={(checked) => void apply({ permissionReviewLog: checked })}
-            aria-label={t('Record approval results')}
-          />
-        </div>
-      </section>
+            {tables.map((table) => (
+              <RuleTableSection
+                key={table.surface}
+                table={table}
+                editable={editable}
+                onApply={(patch) => void apply(patch)}
+              />
+            ))}
 
-      <section className="space-y-3">
-        <SettingsSectionBlock
-          title={t('Configuration sources')}
-          description={t(
-            'Lower entries take precedence. The last layer defining a setting determines its value.'
-          )}
-        />
-        <div className="border-t divide-y">
-          {scopes.map((scope) => (
-            <ScopeRowView key={scope.id} scope={scope} />
-          ))}
-        </div>
-        {snapshot.editable && (
-          <Button variant="outline" disabled={busy} onClick={() => void reset()}>
-            <RotateCcw className="h-4 w-4" />
-            {t('Reset my permission overrides')}
-          </Button>
+            <section className="space-y-3">
+              <SettingsSectionBlock
+                title={t('Approval log')}
+                description={t('Record allowed and denied actions for review.')}
+              />
+              <div className="flex items-center justify-between gap-4 border-t p-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-ui font-medium">{t('Record approval results')}</p>
+                  <p className="text-meta text-muted-foreground">
+                    {t('Write to')}
+                    <Ident>{'<agentDir>/extensions/pi-permission-system/logs'}</Ident>。
+                    {snapshot.effective.permissionReviewLog.origin
+                      ? t('Currently set by {{source}}.', {
+                          source: t(originLabel(snapshot.effective.permissionReviewLog.origin)),
+                        })
+                      : t('Using the plugin default.')}
+                  </p>
+                </div>
+                <Switch
+                  checked={snapshot.effective.permissionReviewLog.value}
+                  disabled={!editable}
+                  onCheckedChange={(checked) => void apply({ permissionReviewLog: checked })}
+                  aria-label={t('Record approval results')}
+                />
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <SettingsSectionBlock
+                title={t('Configuration sources')}
+                description={t(
+                  'Lower entries take precedence. The last layer defining a setting determines its value.'
+                )}
+              />
+              <div className="border-t divide-y">
+                {scopes.map((scope) => (
+                  <ScopeRowView key={scope.id} scope={scope} />
+                ))}
+              </div>
+              {snapshot.editable && (
+                <Button variant="outline" disabled={busy} onClick={() => void reset()}>
+                  <RotateCcw className="h-4 w-4" />
+                  {t('Reset my permission overrides')}
+                </Button>
+              )}
+            </section>
+          </>
         )}
-      </section>
+      </CollapsibleContent>
 
       <AlertDialog
         open={pending !== null}
@@ -288,18 +307,42 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
           </AlertDialogFooter>
         </AlertDialogPopup>
       </AlertDialog>
-    </div>
+    </Collapsible>
   );
 }
 
+/**
+ * Title, description and the one control that is always on screen.
+ *
+ * The second sentence answers the question this panel gets asked most: a user
+ * who edits a rule and watches the running conversation ignore it concludes the
+ * page is decorative. `loadPermissionPolicy` is called once per session at
+ * start-up (`runtime/bootstrap.ts`) and the result is frozen into the
+ * permissions plugin, so "later conversations" is the honest scope — saying it
+ * here is cheaper than the support question.
+ */
 function PanelHeading() {
   const { t } = useI18n();
 
   return (
     <SettingsSectionBlock
       title={t('Permission policy')}
-      description={t('Review the policy applied before Pi tool calls and edit your own overrides.')}
-    />
+      description={
+        <>
+          <p>{t('Review the policy applied before Pi tool calls and edit your own overrides.')}</p>
+          <p>
+            {t(
+              'Changes take effect in conversations started afterwards; one already open keeps the policy it started with.'
+            )}
+          </p>
+        </>
+      }
+    >
+      <CollapsibleTrigger className="flex items-center gap-1 text-ui text-muted-foreground transition-colors hover:text-foreground">
+        <ChevronDown className="h-3.5 w-3.5 transition-transform duration-150 [[data-state=open]>&]:rotate-180" />
+        {t('Permission rules')}
+      </CollapsibleTrigger>
+    </SettingsSectionBlock>
   );
 }
 

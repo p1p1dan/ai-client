@@ -21,7 +21,7 @@ const SETTINGS_CONTENT = join(__dirname, '..', 'SettingsContent.tsx');
 const source = stripComments(readFileSync(SETTINGS_CONTENT, 'utf8'), SETTINGS_CONTENT);
 
 describe('settings categories', () => {
-  it('uses the nine agreed categories in order', () => {
+  it('uses the eleven agreed categories in order', () => {
     expect(SETTINGS_CATEGORIES).toEqual([
       'general',
       'appearance',
@@ -29,17 +29,27 @@ describe('settings categories', () => {
       'editor',
       'git',
       'pi',
+      'extensions',
+      'migration',
       'keybindings',
       'network',
       'advanced',
     ]);
   });
 
+  /**
+   * A restored category has to follow its panel, not its old page.
+   *
+   * `piResources` and `piPermissions` both used to land on `pi` because that is
+   * where everything Pi-shaped lived. The split moved those two panels
+   * elsewhere, so the old answers would now open a page that does not render
+   * what the user was last looking at.
+   */
   it.each([
     ['ai', 'git'],
     ['piModels', 'pi'],
-    ['piPermissions', 'pi'],
-    ['piResources', 'pi'],
+    ['piPermissions', 'advanced'],
+    ['piResources', 'extensions'],
     ['remote', 'network'],
     ['webInspector', 'advanced'],
     [null, 'general'],

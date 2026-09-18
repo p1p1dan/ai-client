@@ -82,22 +82,15 @@ describe('settings navigation', () => {
       ['TerminalSettings', 'TerminalAppearanceSettings'],
       ['EditorSettings'],
       ['GitSettings', 'AISettings'],
-      [
-        'AgentMigrationSettings',
-        'ConversationImportSettings',
-        'UserProvidersSettings',
-        'PiModelManagementSettings',
-        'PermissionPolicySettings',
-        'PiPluginsSettings',
-        'PiResourcesSettings',
-        'PiSubagentsSettings',
-      ],
+      ['UserProvidersSettings', 'PiModelManagementSettings'],
+      ['PiPluginsSettings', 'PiResourcesSettings', 'PiSubagentsSettings'],
+      ['AgentMigrationSettings', 'ConversationImportSettings'],
       ['KeybindingsSettings'],
       ['NetworkSettings', 'RemoteSettings'],
-      ['AdvancedSettings', 'WebInspectorSettings'],
+      ['AdvancedSettings', 'PermissionPolicySettings', 'WebInspectorSettings'],
     ];
     const buttons = Array.from(container.querySelectorAll('nav button'));
-    expect(buttons).toHaveLength(9);
+    expect(buttons).toHaveLength(11);
     for (const [index, button] of buttons.entries()) {
       await act(() => (button as HTMLButtonElement).click());
       expect(
@@ -106,7 +99,9 @@ describe('settings navigation', () => {
         )
       ).toEqual(expected[index]);
       expect(button.getAttribute('aria-current')).toBe('page');
-      if (index === 5)
+      // The policy panel is the only one scoped to a repository, and it now
+      // rides on `advanced` — the last entry.
+      if (index === expected.length - 1)
         expect(
           container
             .querySelector('[data-panel="PermissionPolicySettings"]')
@@ -122,7 +117,7 @@ describe('settings navigation', () => {
     const change = vi.fn<(category: SettingsCategory) => void>();
     await act(() =>
       root.render(
-        createElement(SettingsContent, { activeCategory: 'pi', onCategoryChange: change })
+        createElement(SettingsContent, { activeCategory: 'extensions', onCategoryChange: change })
       )
     );
     expect(container.querySelector('[data-panel="PiResourcesSettings"]')).not.toBeNull();
