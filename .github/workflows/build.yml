@@ -235,14 +235,9 @@ jobs:
       - name: Build Pi worker artifact
         run: node scripts/build-agent-host.mjs
 
-      # T08-a: the gate has to WORK in the artifact, not merely be present.
-      # verifyArtifact checks the files; this loads the extension through pi,
-      # checks it registers the tool_call handler it gates with, and parses a
-      # real compound bash command with the packaged WASM grammar. A gate that
-      # silently fails to load looks exactly like a session where nothing
-      # needed approval, which is why it is a CI gate and not a manual script.
-      - name: Smoke the packaged permission gate
-        run: node --experimental-strip-types src/agent-host/spikes/t08a-permission-plugin-smoke.ts out-agent-host
+      # The legacy pi permission-plugin smoke (T08-a) was removed with the legacy
+      # engine (fe246bd6, P6-5): its script no longer exists and the native
+      # permission system is exercised by "Verify packaged Pi worker" below.
 
       # Key on the pin file's hash, not a hardcoded version: actions/cache never
       # overwrites an existing key, so a literal key survives a pin bump and
@@ -388,10 +383,6 @@ jobs:
       - name: Build Pi worker artifact
         run: node scripts/build-agent-host.mjs
 
-      # Same gate as the Windows job — see the note there.
-      - name: Smoke the packaged permission gate
-        run: node --experimental-strip-types src/agent-host/spikes/t08a-permission-plugin-smoke.ts out-agent-host
-
       - name: Cache bundled Node runtime
         uses: actions/cache@v5
         with:
@@ -500,9 +491,6 @@ jobs:
 
       - name: Build Pi worker artifact
         run: node scripts/build-agent-host.mjs
-
-      - name: Smoke the packaged permission gate
-        run: node --experimental-strip-types src/agent-host/spikes/t08a-permission-plugin-smoke.ts out-agent-host
 
       - name: Resolve native macOS target
         id: target
