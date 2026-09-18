@@ -178,7 +178,20 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
     ) : null;
 
   const row = !view.expandable ? (
-    <div className={rowClass}>{rowContent}</div>
+    view.liveText ? (
+      // A row whose content is still arriving: header plus the text itself,
+      // no chevron (A07 :2331) and nothing to toggle. Same tokens the settled
+      // thought body uses in `ToolRowOutputSegment`, so the text does not
+      // change appearance when the thought finishes and folds away.
+      <div className="flex flex-col">
+        <div className={rowClass}>{rowContent}</div>
+        <div className="mt-1 flex select-text flex-col gap-1.5 text-markdown leading-[1.55] text-tool-arg">
+          <p className="whitespace-pre-wrap">{view.liveText}</p>
+        </div>
+      </div>
+    ) : (
+      <div className={rowClass}>{rowContent}</div>
+    )
   ) : (
     // 2026-08-25 (user decision): rows open only when something explicitly asks
     // them to. Failures used to auto-expand (sign-off ②) — with the turn-level

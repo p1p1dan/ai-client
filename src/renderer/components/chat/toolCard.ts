@@ -425,6 +425,19 @@ export interface ToolRowView {
   /** Only a row with a body can expand; always false while running. */
   expandable: boolean;
   body?: ToolRowBody;
+  /**
+   * Text painted UNDER a running row, with no chevron and no collapsible.
+   *
+   * The one shape a running row is allowed to carry a body in. A07's
+   * no-chevron rule (see `running` above) is about interaction — a row whose
+   * content is still arriving must not offer a toggle whose state would be
+   * meaningless a second later — and this obeys it: there is nothing to click,
+   * the text simply grows. It exists because the collapsible body is gated on
+   * `!streaming`, which made extended thinking invisible for exactly as long
+   * as it was happening: a spinner for 12-20s, then a row the reader has to
+   * open to discover what the model was doing. Only thought rows set it.
+   */
+  liveText?: string;
   /** Body text when `body === 'output'`. */
   output?: string;
   /** Scroll-window class when `body === 'output'` (legacy sign-off values). */
@@ -854,6 +867,12 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
   // earlier expandable-but-empty placeholder shell: the bare row is the
   // honest Cursor form and was approved & registered in the T-05 ledger
   // (see `deriveToolGroupRows` empty-block test below for the locked case).
+  //
+  // While the thought is still arriving the same text goes to `liveText`
+  // instead: settled thinking stays behind a chevron (it is reference
+  // material once the answer exists), but a thought in flight IS the only
+  // thing happening, and hiding it is what made a 12-20s think look like a
+  // frozen window.
   return {
     key: block.id,
     verb,
@@ -864,6 +883,7 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
     expandable: showBody,
     body: showBody ? 'thinking' : undefined,
     output: showBody ? block.text : undefined,
+    ...(streaming && hasText ? { liveText: block.text } : {}),
   };
 }
 
