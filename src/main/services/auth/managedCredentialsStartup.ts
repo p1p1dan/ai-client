@@ -29,6 +29,7 @@
  */
 
 import { isCredentialEnvKey } from '../../../../scripts/credential-env-keys.mjs';
+import type { VaultChangeListener } from './CredentialVault';
 import { resolveManagedCredentialsEnabled } from './credentialMode';
 
 /** Managed credentials on? Set by `activateManagedCredentials()`, read by the two functions below. */
@@ -84,4 +85,78 @@ export async function regenerateFromVault(): Promise<void> {
 /** Test-only: reset module state between test cases (mirrors `resetAuthSingletonsForTests`). */
 export function resetManagedCredentialsStartupStateForTests(): void {
   managedActive = false;
+}
+
+/**
+ * T082 — a bare vault mutation (a `save()`/`clear()` reaching the vault
+ * directly, outside every path that already re-syncs pi's `auth.json`: an
+ * edit to the user's own service group, this app's own startup, account
+ * migration, or a manual "sync now") left `auth.json` stale until the next
+ * one of THOSE happened to run. The pi TUI is a separate process that only
+ * ever reads that file off disk (`PiTuiPty.ts`), so a company-issued key
+ * refreshed by a bare vault write was invisible to it until then.
+ *
+ * Coalescing, not merely serialized: `CredentialVault` already serializes
+ * its OWN writes (`runSerialized`), so this never sees two notifications
+ * truly concurrently — but `writeUserProviderRuntimeConfig()` always reads
+ * the vault's CURRENT state, so N notifications queued while one resync is
+ * already running only need the LAST one to actually re-run once more, not
+ * N redundant passes over the same files.
+ */
+let vaultAuthJsonSyncQueued = false;
+let vaultAuthJsonSyncInFlight: Promise<void> | null = null;
+
+function scheduleAuthJsonResync(): void {
+  vaultAuthJsonSyncQueued = true;
+  if (vaultAuthJsonSyncInFlight) return;
+  vaultAuthJsonSyncInFlight = runAuthJsonResyncLoop();
+}
+
+async function runAuthJsonResyncLoop(): Promise<void> {
+  while (vaultAuthJsonSyncQueued) {
+    vaultAuthJsonSyncQueued = false;
+    try {
+      // Lazy import: this module loads at startup, ahead of the first
+      // BrowserWindow, and `piModelConfig` pulls in the whole managed-config
+      // stack (mirrors `services/userProviders/index.ts`'s `onChange` bridge).
+      const { writeUserProviderRuntimeConfig } = await import('../piModelConfig');
+      // Reused, not reimplemented: this is the SAME writer `writeUserProviderRuntimeConfig()`
+      // (agentMigration / self-hosted-service edits) already calls. It reads
+      // BOTH halves fresh every time — the managed catalog cache and, via
+      // `managedCredential()`, whatever the vault now holds — so it is the
+      // right rewrite for every one of the three change types, including
+      // `clear`: `managedCredential()` degrades to `null` on a cleared vault,
+      // which resolves to an EMPTY key for every provider that inherits it
+      // (`resolveProviderApiKey`), not the stale one.
+      writeUserProviderRuntimeConfig();
+    } catch (error) {
+      // Never let a resync failure surface anywhere but a log line — this
+      // runs detached from whatever caller's `save()`/`clear()` triggered it.
+      console.warn(
+        '[managed-credentials] failed to resync pi auth.json after a vault change',
+        error
+      );
+    }
+  }
+  vaultAuthJsonSyncInFlight = null;
+}
+
+/**
+ * Wires the vault's change notification to the `auth.json` resync above.
+ *
+ * Production has exactly one caller (`main/index.ts`, once, at module load —
+ * `getCredentialVault()`'s singleton has no I/O of its own to race). Returns
+ * the vault's own unsubscribe function so a test can tear it down between
+ * cases instead of relying on `resetVaultAuthJsonResyncStateForTests()` alone.
+ */
+export function wireVaultAuthJsonResync(vault: {
+  onChange(listener: VaultChangeListener): () => void;
+}): () => void {
+  return vault.onChange(() => scheduleAuthJsonResync());
+}
+
+/** Test-only: reset the coalescing state between test cases. */
+export function resetVaultAuthJsonResyncStateForTests(): void {
+  vaultAuthJsonSyncQueued = false;
+  vaultAuthJsonSyncInFlight = null;
 }

@@ -152,6 +152,15 @@ export type VaultSaveResult =
   | { ok: false; reason: 'crypto_not_ready' | 'unsupported_version' };
 
 /**
+ * T082 — which mutation just committed. Carried so a subscriber that logs or
+ * branches on the kind of change can, without having to diff the vault itself
+ * (the payload is still encrypted at this layer for a `safeStorage` vault).
+ */
+export type VaultChangeType = 'save' | 'saveUserProviders' | 'clear';
+
+export type VaultChangeListener = (type: VaultChangeType) => void;
+
+/**
  * Read outcome for the user-added group.
  *
  * Deliberately NOT folded into {@link VaultReadResult}: that union answers
@@ -281,6 +290,8 @@ export class CredentialVault {
   private cachedAvailable: boolean | null = null;
   /** Process-internal serialization for save/clear (S1 spec §2.1) — a Promise chain, not a lock file. */
   private writeQueue: Promise<unknown> = Promise.resolve();
+  /** T082 — subscribers notified after a successful `save`/`saveUserProviders`/`clear`. */
+  private readonly changeListeners = new Set<VaultChangeListener>();
 
   constructor(options: CredentialVaultOptions) {
     this.baseDir = options.baseDir;
@@ -318,6 +329,44 @@ export class CredentialVault {
       this.cachedAvailable = this.crypto.available();
     }
     return this.cachedAvailable;
+  }
+
+  /**
+   * T082 — subscribe to successful vault mutations.
+   *
+   * Fired synchronously from inside the serialized write queue, right after
+   * the new envelope lands on disk (so a listener that re-derives another
+   * file from the vault — pi's `auth.json`, via `writeUserProviderRuntimeConfig`
+   * — sees the same bytes a concurrent `read()` would). This is the ONE hook
+   * that covers every mutation path uniformly; `writeUserProviders`'s own
+   * caller-side `onChange` (H/17) and each `save()` call site's ad-hoc
+   * re-sync (login, startup adoption, account migration) predate this and are
+   * left in place — this listener is a backstop for the vault mutations none
+   * of those cover (a bare `save()`/`clear()` reaching the vault directly).
+   *
+   * A listener that throws is caught and logged by {@link notifyChange},
+   * never propagated: a broken subscriber must not turn a successful vault
+   * write into a rejected `save()`/`saveUserProviders()`/`clear()` — this
+   * module stays a "pure" one, with no I/O dependency on what a subscriber
+   * does with the notification.
+   *
+   * Returns the unsubscribe function.
+   */
+  onChange(listener: VaultChangeListener): () => void {
+    this.changeListeners.add(listener);
+    return () => {
+      this.changeListeners.delete(listener);
+    };
+  }
+
+  private notifyChange(type: VaultChangeType): void {
+    for (const listener of this.changeListeners) {
+      try {
+        listener(type);
+      } catch (error) {
+        console.warn('[CredentialVault] onChange listener threw', error);
+      }
+    }
   }
 
   private runSerialized<T>(task: () => T): Promise<T> {
@@ -542,6 +591,7 @@ export class CredentialVault {
       userProviders: available ? this.crypto.encrypt(serialized) : (providers as UserProvider[]),
       userProvidersEnc: available ? 'safeStorage' : 'none',
     });
+    this.notifyChange('saveUserProviders');
     return { ok: true };
   }
 
@@ -608,6 +658,7 @@ export class CredentialVault {
         };
 
     this.writeEnvelope(envelope);
+    this.notifyChange('save');
     return { ok: true };
   }
 
@@ -722,6 +773,7 @@ export class CredentialVault {
 
     try {
       this.writeEnvelope(envelope);
+      this.notifyChange('clear');
     } catch (error) {
       // Logout must never fail because the vault could not be wiped — the
       // caller (`OnboardingService.logout`) does not change its return value

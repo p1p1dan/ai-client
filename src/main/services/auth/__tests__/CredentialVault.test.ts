@@ -632,3 +632,137 @@ describe('CredentialVault — markInvalidated / rejected (D47 S5 §1.1)', () => 
     expect(lockedVault.read()).toEqual({ status: 'rejected', lastEmail: 'user@jcdz.cc' });
   });
 });
+
+/**
+ * T082 — the `onChange` notification `save`/`saveUserProviders`/`clear` each
+ * fire on success, so a subscriber can re-derive pi's `auth.json` without
+ * waiting for one of the four pre-existing triggers (edit-own-service,
+ * app startup, account migration, manual sync).
+ */
+describe('CredentialVault — onChange (T082)', () => {
+  function openVault(): CredentialVault {
+    const vault = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    vault.promoteCrypto(fakeAvailableCrypto());
+    return vault;
+  }
+
+  function makeProvider(): UserProvider {
+    return {
+      id: 'svc-1',
+      name: 'My DeepSeek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      api: 'openai-completions',
+      apiKey: 'USER-KEY-4b1e7a',
+      enabled: true,
+      createdAt: '2026-09-10T00:00:00.000Z',
+    };
+  }
+
+  it('fires after a successful save() with the "save" change type', async () => {
+    const vault = openVault();
+    const listener = vi.fn();
+    vault.onChange(listener);
+
+    await vault.save(makePayload());
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith('save');
+  });
+
+  it('fires after a successful saveUserProviders() with the "saveUserProviders" change type', async () => {
+    const vault = openVault();
+    const listener = vi.fn();
+    vault.onChange(listener);
+
+    await vault.saveUserProviders([makeProvider()]);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith('saveUserProviders');
+  });
+
+  it('fires after a successful clear() with the "clear" change type', async () => {
+    const vault = openVault();
+    await vault.save(makePayload());
+    const listener = vi.fn();
+    vault.onChange(listener);
+
+    await vault.clear({ keepLastEmail: true });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith('clear');
+  });
+
+  it('does not fire clear() on a vault file that never existed (clearInternal no-op)', async () => {
+    const vault = openVault();
+    const listener = vi.fn();
+    vault.onChange(listener);
+
+    await vault.clear({ keepLastEmail: true });
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('does not fire save() when it is refused (crypto not promoted)', async () => {
+    const vault = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    const listener = vi.fn();
+    vault.onChange(listener);
+
+    const result = await vault.save(makePayload());
+
+    expect(result).toEqual({ ok: false, reason: 'crypto_not_ready' });
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('stops notifying after unsubscribe', async () => {
+    const vault = openVault();
+    const listener = vi.fn();
+    const unsubscribe = vault.onChange(listener);
+
+    await vault.save(makePayload());
+    unsubscribe();
+    await vault.saveUserProviders([makeProvider()]);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith('save');
+  });
+
+  it("a throwing listener is caught and logged, and never changes save()'s own result", async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const vault = openVault();
+      vault.onChange(() => {
+        throw new Error('listener boom');
+      });
+
+      const result = await vault.save(makePayload());
+
+      expect(result).toEqual({ ok: true });
+      expect(warn).toHaveBeenCalled();
+      const logged = warn.mock.calls.map((call) => call.map(String).join(' ')).join('\n');
+      expect(logged).toContain('onChange listener threw');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('notifies every subscribed listener, independently of the others throwing', async () => {
+    const vault = openVault();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const good1 = vi.fn();
+    const good2 = vi.fn();
+    try {
+      vault.onChange(good1);
+      vault.onChange(() => {
+        throw new Error('middle listener boom');
+      });
+      vault.onChange(good2);
+
+      await vault.save(makePayload());
+
+      expect(good1).toHaveBeenCalledWith('save');
+      expect(good2).toHaveBeenCalledWith('save');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

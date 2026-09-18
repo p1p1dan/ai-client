@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PI_AUTH_FILE_NAME } from '@shared/piModelConfig';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VaultCrypto } from '../CredentialVault';
 import { resetManagedFileWriterQueuesForTests } from '../managedFileWriter';
@@ -348,6 +349,123 @@ describe('managedCredentialsStartup (D60)', () => {
       await runPhaseThree();
 
       expect(existsSync(staleAuthPath)).toBe(true);
+    });
+  });
+
+  /**
+   * T082 — `wireVaultAuthJsonResync` is the backstop for a bare vault write
+   * that none of the four pre-existing triggers (edit-own-service, app
+   * startup, account migration, manual sync) happens to follow. Proven here
+   * against the SAME real-write stack `regenerateFromVault()` already
+   * exercises above (real `PiModelConfigService`, real `auth.json` on disk) —
+   * only the trigger differs.
+   */
+  describe('wireVaultAuthJsonResync (T082)', () => {
+    function makeManagedPayload(apiKey: string) {
+      return {
+        identity: { email: 'a@jcdz.cc', userId: 1 },
+        cchBaseUrl: 'https://cch.example.com',
+        claude: { baseUrl: 'https://vault.example.com/v1', authToken: apiKey },
+        codex: { baseUrl: 'https://vault.example.com/v1', apiKey },
+        receivedAt: new Date().toISOString(),
+      };
+    }
+
+    async function authJsonPath(): Promise<string> {
+      const { getAppPiAgentDir } = await import('../../piModelConfig');
+      return join(getAppPiAgentDir(), PI_AUTH_FILE_NAME);
+    }
+
+    function readAuthJson(path: string): Record<string, { key?: string }> {
+      return JSON.parse(readFileSync(path, 'utf-8')) as Record<string, { key?: string }>;
+    }
+
+    it('rewrites auth.json with the new key after a bare vault.save(), with no extra network sync', async () => {
+      process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+      const authIndex = await import('../index');
+      const { wireVaultAuthJsonResync, activateManagedCredentials, regenerateFromVault } =
+        await import('../managedCredentialsStartup');
+      const vault = authIndex.getCredentialVault();
+      vault.promoteCrypto(fakeCrypto(true));
+
+      // Wired AFTER the baseline sync below, deliberately: wiring first would
+      // ALSO fire on `save('first-key')`, and with no wire-form cache on disk
+      // yet that resync would fall back to the bundled snapshot's own
+      // (different) provider set — a real, harmless A3 behavior in
+      // production, but it would race the assertions below on which write
+      // landed last. Wiring after isolates the one behavior this test cares
+      // about: a bare save with a cache already on disk.
+      await vault.save(makeManagedPayload('first-key'));
+      activateManagedCredentials();
+      // The one and only REAL sync — populates the wire-form cache
+      // (`managed-models-source.json`) as well as `auth.json`.
+      await regenerateFromVault();
+
+      const authPath = await authJsonPath();
+      expect(readAuthJson(authPath).pilab?.key).toBe('first-key');
+      expect(modelFetchMock).toHaveBeenCalledTimes(1);
+
+      wireVaultAuthJsonResync(vault);
+      // A bare save — no `regenerateFromVault()`, no manual "sync now" IPC —
+      // is exactly the gap T082 closes.
+      await vault.save(makeManagedPayload('second-key'));
+
+      await vi.waitFor(() => {
+        expect(readAuthJson(authPath).pilab?.key).toBe('second-key');
+      });
+      // Reused the cached catalog (`managedHalf()`), never re-fetched it.
+      expect(modelFetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears the stale key from auth.json after clear(), instead of leaving it', async () => {
+      process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+      const authIndex = await import('../index');
+      const { wireVaultAuthJsonResync, activateManagedCredentials, regenerateFromVault } =
+        await import('../managedCredentialsStartup');
+      const vault = authIndex.getCredentialVault();
+      vault.promoteCrypto(fakeCrypto(true));
+
+      await vault.save(makeManagedPayload('will-be-cleared'));
+      activateManagedCredentials();
+      await regenerateFromVault();
+
+      const authPath = await authJsonPath();
+      expect(readAuthJson(authPath).pilab?.key).toBe('will-be-cleared');
+
+      wireVaultAuthJsonResync(vault);
+      await vault.clear({ keepLastEmail: true });
+
+      await vi.waitFor(() => {
+        expect(readAuthJson(authPath).pilab?.key).toBe('');
+      });
+    });
+
+    it('debounces back-to-back saves into a single resync pass', async () => {
+      process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+      const authIndex = await import('../index');
+      const { wireVaultAuthJsonResync, activateManagedCredentials, regenerateFromVault } =
+        await import('../managedCredentialsStartup');
+      const vault = authIndex.getCredentialVault();
+      vault.promoteCrypto(fakeCrypto(true));
+
+      await vault.save(makeManagedPayload('first-key'));
+      activateManagedCredentials();
+      await regenerateFromVault();
+
+      wireVaultAuthJsonResync(vault);
+      const authPath = await authJsonPath();
+
+      // Three saves fired back to back, before the resync of the first has
+      // had a chance to run — only the LAST value must win.
+      await Promise.all([
+        vault.save(makeManagedPayload('key-a')),
+        vault.save(makeManagedPayload('key-b')),
+        vault.save(makeManagedPayload('key-c')),
+      ]);
+
+      await vi.waitFor(() => {
+        expect(readAuthJson(authPath).pilab?.key).toBe('key-c');
+      });
     });
   });
 });

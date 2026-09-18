@@ -64,6 +64,7 @@ import { resolveManagedCredentialsEnabled } from './services/auth/credentialMode
 import {
   activateManagedCredentials,
   regenerateFromVault,
+  wireVaultAuthJsonResync,
 } from './services/auth/managedCredentialsStartup';
 import {
   LOCAL_FILE_PREVIEW_MAX_BYTES,
@@ -179,6 +180,14 @@ if (appStateMigration.kind === 'migrated') {
 // Managed mode strips inherited credential-shaped variables before services
 // initialize. Local mode leaves the process environment untouched.
 activateManagedCredentials();
+
+// T082 — subscribe once, as early as `getCredentialVault()` can safely be
+// touched (the singleton itself does no I/O; only `read`/`save`/etc. do).
+// From here on, any bare vault write NOT already followed by an adjacent
+// resync (login, startup adoption, account migration, self-hosted-service
+// edit, manual sync — see `managedCredentialsStartup.ts`) still gets pi's
+// `auth.json` rewritten, so a TUI opened after it never reads a stale key.
+wireVaultAuthJsonResync(getCredentialVault());
 
 // Register URL scheme handler (must be done before app is ready)
 if (process.defaultApp) {
