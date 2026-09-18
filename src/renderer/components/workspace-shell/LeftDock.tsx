@@ -455,66 +455,72 @@ function CapabilitiesDialog({
             {t('MCP servers, skills and sub-agents this chat brought up.')}
           </DialogDescription>
         </DialogHeader>
-        {!view.reported ? (
-          // Not "nothing": nothing has been asked yet, because this chat has no
-          // running worker to have brought anything up.
-          <p className="px-1 py-2 text-meta text-muted-foreground">
-            {t('Send a message to start this chat and see what it brings up.')}
-          </p>
-        ) : (
-          <div className="flex max-h-80 flex-col gap-1 overflow-y-auto">
-            <CapabilityRow
-              label={t('MCP servers')}
-              value={
-                view.mcp
-                  ? view.mcp.badge
-                  : view.mcpServers
-                    ? t('No MCP servers configured')
-                    : t('Not reported')
-              }
-            />
-            {view.mcpServers?.map((server) => (
-              <div key={server.name} className="flex flex-col px-2 py-1">
-                <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-ui">{server.name}</span>
-                  {server.ok ? (
-                    <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
-                      {t('{{count}} tools', { count: server.toolCount })}
+        {/* DialogPopup carries no padding of its own; DialogPanel's ScrollArea
+            would fight this list's own `max-h-80` cap (same reason
+            AnnouncementDialog goes manual), so the 24px the header already has
+            is replicated by hand on this wrapper instead. */}
+        <div className="px-6 pb-6">
+          {!view.reported ? (
+            // Not "nothing": nothing has been asked yet, because this chat has no
+            // running worker to have brought anything up.
+            <p className="py-2 text-meta text-muted-foreground">
+              {t('Send a message to start this chat and see what it brings up.')}
+            </p>
+          ) : (
+            <div className="flex max-h-80 flex-col gap-1 overflow-y-auto">
+              <CapabilityRow
+                label={t('MCP servers')}
+                value={
+                  view.mcp
+                    ? view.mcp.badge
+                    : view.mcpServers
+                      ? t('No MCP servers configured')
+                      : t('Not reported')
+                }
+              />
+              {view.mcpServers?.map((server) => (
+                <div key={server.name} className="flex flex-col px-2 py-1">
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-ui">{server.name}</span>
+                    {server.ok ? (
+                      <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
+                        {t('{{count}} tools', { count: server.toolCount })}
+                      </span>
+                    ) : (
+                      <Badge variant="error" size="sm" className="shrink-0">
+                        {t('Failed')}
+                      </Badge>
+                    )}
+                  </div>
+                  {server.error && (
+                    <span className="truncate text-meta text-muted-foreground" title={server.error}>
+                      {server.error}
                     </span>
-                  ) : (
-                    <Badge variant="error" size="sm" className="shrink-0">
-                      {t('Failed')}
-                    </Badge>
                   )}
                 </div>
-                {server.error && (
-                  <span className="truncate text-meta text-muted-foreground" title={server.error}>
-                    {server.error}
-                  </span>
-                )}
-              </div>
-            ))}
-            <CapabilityRow
-              label={t('Skills')}
-              value={view.skills === null ? t('Not reported') : String(view.skills)}
-            />
-            <CapabilityRow
-              label={t('Prompt templates')}
-              value={
-                view.promptTemplates === null ? t('Not reported') : String(view.promptTemplates)
-              }
-            />
-            <CapabilityRow
-              label={t('Sub-agents')}
-              value={view.subagents === null ? t('Not reported') : String(view.subagents)}
-            />
-            {/* cutover-03: the sentence that stops someone reinstalling a pi
-                extension because this panel never names it. */}
-            <p className="px-2 pt-2 text-meta text-muted-foreground">
-              {t('Pi extensions you install are loaded only by the built-in terminal.')}
-            </p>
-          </div>
-        )}
+              ))}
+              <CapabilityRow
+                label={t('Skills')}
+                value={view.skills === null ? t('Not reported') : String(view.skills)}
+              />
+              <CapabilityRow
+                label={t('Prompt templates')}
+                value={
+                  view.promptTemplates === null ? t('Not reported') : String(view.promptTemplates)
+                }
+              />
+              <CapabilityRow
+                label={t('Sub-agents')}
+                value={view.subagents === null ? t('Not reported') : String(view.subagents)}
+              />
+              {/* cutover-03: the sentence that stops someone reinstalling a pi
+                  extension because this panel never names it. */}
+              <p className="pt-2 text-meta text-muted-foreground">
+                {t('Pi extensions you install are loaded only by the built-in terminal.')}
+              </p>
+            </div>
+          )}
+        </div>
       </DialogPopup>
     </Dialog>
   );

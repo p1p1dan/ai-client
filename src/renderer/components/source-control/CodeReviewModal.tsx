@@ -309,6 +309,11 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
             <DialogDescription>{statusText()}</DialogDescription>
           </DialogHeader>
 
+          {/* Not DialogPanel: streamed review output needs a stable ref to detect
+              "user scrolled up" (handleScroll) and to auto-scroll on new content
+              (the effect above), plus `flex-1 min-h-0` so it fills whichever
+              height the maximize toggle picked. `px-6` replicates the 24px the
+              header already has, same reason DialogPanel carries it. */}
           <div
             ref={scrollAreaRef}
             className="flex-1 min-h-0 overflow-hidden"

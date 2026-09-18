@@ -13,6 +13,7 @@ import {
   Dialog,
   DialogFooter,
   DialogHeader,
+  DialogPanel,
   DialogPopup,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -60,14 +61,14 @@ export function TempWorkspaceDialogs({
           <DialogHeader>
             <DialogTitle>{t('Rename temp session')}</DialogTitle>
           </DialogHeader>
-          <div className="px-6 pb-4">
+          <DialogPanel>
             <Input
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
               placeholder={t('Enter a new title')}
               autoFocus
             />
-          </div>
+          </DialogPanel>
           <DialogFooter className="border-t">
             <Button variant="outline" onClick={() => openRename(null)}>
               {t('Cancel')}
