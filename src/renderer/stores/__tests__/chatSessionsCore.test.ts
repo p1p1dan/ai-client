@@ -455,6 +455,65 @@ describe('applyRuntimeEvent — permission.requested', () => {
     ]);
   });
 
+  /**
+   * 2026-09-18 — gate progress rides the QUEUE ENTRY, never the block.
+   *
+   * The dock draws `2/5` from these two fields, and it has to: after the
+   * runtime serialized the gate, `pendingPermissions` holds at most one entry
+   * per session, so counting the array reports `1/1` for every card forever.
+   *
+   * The block half is the assertion that matters more. A `permission_request`
+   * block is transcript — it is re-read every time the conversation is
+   * reopened — so a queue count written into it would freeze there and label a
+   * long-settled request with a number nothing can explain.
+   */
+  it('carries the gate queue counters on the pending entry and keeps them out of the block', () => {
+    const state = baseState({ sessions: [makeSession({ status: 'running' })], messages: {} });
+    const patch = applyRuntimeEvent(state, {
+      type: 'permission.requested',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-q', toolName: 'Bash', queuePosition: 2, queueDepth: 5 },
+    } satisfies RuntimeEvent);
+
+    expect(patch.pendingPermissions).toEqual([
+      {
+        sessionId: SESSION_ID,
+        permissionId: 'perm-q',
+        messageId: 'msg-perm-perm-q',
+        queuePosition: 2,
+        queueDepth: 5,
+      },
+    ]);
+    const block = patch.messages?.[SESSION_ID]?.[0]?.blocks?.[0];
+    expect(block).toBeDefined();
+    expect(Object.keys(block ?? {})).not.toContain('queuePosition');
+    expect(Object.keys(block ?? {})).not.toContain('queueDepth');
+  });
+
+  /**
+   * The legacy backend and any older worker send neither number. The keys must
+   * then be ABSENT rather than present-and-undefined: the dock's progress rule
+   * distinguishes "nothing reported" from "reported a 1", and an explicit
+   * `undefined` would also make every `toEqual` on this queue in this file
+   * depend on which producer happened to raise the card.
+   */
+  it('omits the queue counters entirely when the event reports none', () => {
+    const state = baseState({ sessions: [makeSession({ status: 'running' })], messages: {} });
+    const patch = applyRuntimeEvent(state, {
+      type: 'permission.requested',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-plain', toolName: 'Bash' },
+    } satisfies RuntimeEvent);
+
+    const entry = patch.pendingPermissions?.[0];
+    expect(entry).toBeDefined();
+    expect(Object.keys(entry ?? {})).toEqual(['sessionId', 'permissionId', 'messageId']);
+  });
+
   it('attaches to the target session own latest assistant message, ignoring a newer cross-session decoy', () => {
     const targetAssistant = makeMessage({ id: 'asst-target', role: 'assistant', blocks: [] });
     // Decoy: a different session's assistant message, placed LATER in the array so a

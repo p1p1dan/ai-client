@@ -24,6 +24,7 @@ import {
   derivePermissionCardView,
   derivePermissionDetailView,
   derivePermissionOmittedNote,
+  derivePermissionQueueProgress,
   derivePermissionRowView,
   derivePermissionSessionScopeNote,
   derivePermissionVerb,
@@ -1043,6 +1044,55 @@ describe('canRespondToPermission', () => {
   it('G7: after the head resolves (dequeued), the next entry becomes answerable', () => {
     const afterHeadResolved = [{ sessionId: 's1', permissionId: 'perm-2' }];
     expect(canRespondToPermission(afterHeadResolved, 's1', 'perm-2')).toBe(true);
+  });
+});
+
+/**
+ * 2026-09-18 — the dock card's `2/5` marker.
+ *
+ * Every case here is a way the marker can be WRONG on screen rather than
+ * merely absent, which is why the rule is pure and lives away from the card:
+ * a `.tsx` in this node-only suite cannot be asserted at all, and "the card
+ * silently printed undefined/undefined" is a defect nobody notices in review.
+ */
+describe('derivePermissionQueueProgress', () => {
+  it('Q1: draws position/depth once more than one request is in the gate', () => {
+    expect(derivePermissionQueueProgress({ queuePosition: 2, queueDepth: 5 })).toBe('2/5');
+    expect(derivePermissionQueueProgress({ queuePosition: 1, queueDepth: 3 })).toBe('1/3');
+  });
+
+  it('Q2: says nothing for a lone request — `1/1` is progress through a queue of one', () => {
+    expect(derivePermissionQueueProgress({ queuePosition: 1, queueDepth: 1 })).toBeNull();
+  });
+
+  it('Q3: says nothing when the producer reported neither number (legacy backend, older worker)', () => {
+    expect(derivePermissionQueueProgress({})).toBeNull();
+  });
+
+  it('Q4: says nothing when only ONE of the two arrived — half a fraction is not a fraction', () => {
+    expect(derivePermissionQueueProgress({ queuePosition: 2 })).toBeNull();
+    expect(derivePermissionQueueProgress({ queueDepth: 5 })).toBeNull();
+  });
+
+  it('Q5: refuses a pair that contradicts itself rather than drawing `3/2`', () => {
+    expect(derivePermissionQueueProgress({ queuePosition: 3, queueDepth: 2 })).toBeNull();
+    expect(derivePermissionQueueProgress({ queuePosition: 0, queueDepth: 4 })).toBeNull();
+  });
+
+  it('Q6: refuses non-integers — the marker is a count, not a measurement', () => {
+    expect(derivePermissionQueueProgress({ queuePosition: 1.5, queueDepth: 4 })).toBeNull();
+    expect(derivePermissionQueueProgress({ queuePosition: 1, queueDepth: Number.NaN })).toBeNull();
+  });
+
+  /**
+   * The denominator is depth AS OF NOW, not a total: the gate keeps taking
+   * requests while the user reads. `2/5` after `1/3` is the documented correct
+   * behaviour of `PermissionRequestedEvent.queueDepth`, and this pins that this
+   * function does not try to "fix" it into a monotone total.
+   */
+  it('Q7: a growing depth is passed through, not clamped to the first one seen', () => {
+    expect(derivePermissionQueueProgress({ queuePosition: 1, queueDepth: 3 })).toBe('1/3');
+    expect(derivePermissionQueueProgress({ queuePosition: 2, queueDepth: 5 })).toBe('2/5');
   });
 });
 

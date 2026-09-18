@@ -266,6 +266,28 @@ interface PendingPermission {
   sessionId: string;
   permissionId: string;
   messageId: string;
+  /**
+   * Gate progress, carried by `permission.requested` and kept ON THE QUEUE
+   * ENTRY rather than on the `permission_request` block.
+   *
+   * The distinction is the point: a block is transcript — it is re-read every
+   * time the conversation is reopened — while "the 2nd of 5 cards the gate
+   * currently knows about" is true for as long as the gate is open and
+   * meaningless afterwards. Written into the block it would freeze into
+   * history and label a settled request with a count nothing can explain.
+   *
+   * Both are optional because the producer is: a backend that does not
+   * serialize (the legacy one) and an older worker send neither, and the dock
+   * then shows no progress instead of inventing one.
+   */
+  queuePosition?: number;
+  /**
+   * How many requests the gate knew about when this card was raised — this one
+   * plus the ones still queued behind it. NOT a promise: the queue is fed while
+   * the user reads, so the next card may report a larger depth. See
+   * `PermissionRequestedEvent.payload.queueDepth`.
+   */
+  queueDepth?: number;
 }
 
 interface PendingQuestion {
@@ -1254,7 +1276,21 @@ function applyRuntimeEventCore(
           ? state.pendingPermissions
           : [
               ...state.pendingPermissions,
-              { sessionId, permissionId: event.payload.permissionId, messageId },
+              {
+                sessionId,
+                permissionId: event.payload.permissionId,
+                messageId,
+                // Spread conditionally, like `permissionExpiresAt` above: an
+                // absent field must stay absent rather than become an explicit
+                // `undefined`, so "this worker does not report progress" and
+                // "this worker reported nothing" read the same downstream.
+                ...(event.payload.queuePosition !== undefined
+                  ? { queuePosition: event.payload.queuePosition }
+                  : {}),
+                ...(event.payload.queueDepth !== undefined
+                  ? { queueDepth: event.payload.queueDepth }
+                  : {}),
+              },
             ],
         sessions: upsertSessionStatus(state.sessions, sessionId, 'waiting_permission'),
       };

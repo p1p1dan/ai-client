@@ -24,7 +24,10 @@ vi.mock('../useResolvedSessionModel', () => {
   return { useResolvedSessionModel: () => resolve };
 });
 vi.mock('../sessionIndex/useResumeSession', () => ({ useResumeSession: () => () => undefined }));
-vi.mock('../SessionTreeDialog', () => ({ SessionTreeDialog: () => null }));
+
+// `SessionTreeDialog` no longer needs a stub here: 2026-09-18 moved it (and the
+// button that opens it) to `workspace-shell/SessionBar.tsx`, so this timeline
+// does not pull it into the module graph at all.
 
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { MessageTimeline } from '../MessageTimeline';

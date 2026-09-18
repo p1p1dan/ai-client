@@ -1,19 +1,23 @@
 import { describe, expect, it } from 'vitest';
+import { COLLAPSIBLE_PANEL_BASE_CLASS } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 import {
   chatTurnClass,
   readingColumnSpacingClass,
   turnActionsInnerClass,
   turnActionsSlotClass,
+  turnAnswerToneClass,
   turnBodyClass,
   turnCopyButtonClass,
   turnHeadClass,
   turnProcessShellClass,
+  turnProcessToneClass,
   turnStatusToneClass,
+  turnWorkGroupSummaryClass,
   userBubbleClass,
   userBubbleRowClass,
   userBubbleTextClass,
 } from '../chatTimelineLayout';
-import { countProcessSteps } from '../turnProcessFold';
 
 /** Tailwind's spacing scale: one step is 4px (`py-2.5` -> 10px). */
 const SPACING_STEP_PX = 4;
@@ -433,19 +437,96 @@ describe('turnStatusToneClass (F456 §7.5)', () => {
   });
 });
 
-describe('process fold (2026-09-10)', () => {
-  it('counts what happened, not how it was grouped', () => {
-    // A tool group holding four runs is four steps; counting groups would tell
-    // a turn that ran four tools that it took one.
-    const item = (kind: string, extra: Record<string, unknown> = {}) =>
-      ({ kind, blockIndex: 0, messageId: 'm1', ...extra }) as never;
-    expect(
-      countProcessSteps([
-        item('toolGroup', { entries: [{ kind: 'run' }, { kind: 'thinking' }, { kind: 'run' }] }),
-        item('permissionActivity', { blocks: [{}, {}] }),
-        item('permission', { block: {} }),
-      ])
-    ).toBe(6);
-    expect(countProcessSteps([])).toBe(0);
+/**
+ * `process fold (2026-09-10)` moved to `turnProcessFold.test.ts` along with the
+ * rest of that module's rules — `countProcessSteps` is now one of five exports
+ * there, and splitting its test away from the other four would have left the
+ * work group's placement rules and its fallback copy asserted in two files.
+ */
+
+/**
+ * The three-tier reading ladder (user decision 2026-09-18).
+ *
+ * The assertion that matters is the ORDER — three DISTINCT tokens, brightest
+ * for the answer, dimmest for the process rows — because the defect this
+ * replaces was two of the three being the same colour, which is invisible in
+ * any single-class assertion.
+ */
+describe('reading ladder (2026-09-18)', () => {
+  it('[LADDER-1] the three rungs are pairwise different colours, and all three are tokens', () => {
+    const answer = turnAnswerToneClass();
+    const process = turnProcessToneClass();
+    const head = turnWorkGroupSummaryClass();
+    // Written as three CONTAINMENT claims rather than "3 distinct `text-*`
+    // tokens": the head also carries `text-meta`, a SIZE, so a naive
+    // first-match extraction reads the size as the colour and the whole check
+    // passes even when two rungs have collapsed onto one colour. (Verified: a
+    // mutation setting the process rows back to `text-muted-foreground`
+    // survived that version of this assertion.)
+    expect(answer).not.toBe(process);
+    expect(head, 'the head must not be as bright as the answer').not.toContain(answer);
+    expect(head, 'nor as dim as the rows it summarises').not.toContain(process);
+    for (const cls of [answer, process, head]) {
+      // A hex/oklch/rgb literal or an arbitrary-value bracket means the ladder
+      // has left the token system and the themes can no longer retune it.
+      expect(cls, cls).not.toMatch(/#[0-9a-f]{3,8}|oklch\(|rgb\(|\[/i);
+    }
+  });
+
+  it('[LADDER-2] the answer is the brightest rung and the process rows the dimmest', () => {
+    expect(turnAnswerToneClass()).toBe('text-foreground');
+    expect(turnProcessToneClass()).toBe('text-tool-arg');
+    // The head sits between them, on the same tier as the status row it
+    // replaced at the end of a completed turn.
+    expect(turnWorkGroupSummaryClass()).toContain('text-muted-foreground');
+  });
+
+  /**
+   * The tone is applied through `cn()` on top of `turnBodyClass()`, and
+   * `turnBodyClass()` carries `text-markdown` — a SIZE token. `utils.ts`
+   * registers the repo's custom size tokens into tailwind-merge's `font-size`
+   * group precisely because they would otherwise fall through to `text-color`
+   * and be dropped by the colour that follows them. This is the assertion that
+   * that registration is still doing its job for the two new call sites:
+   * without it the answer would silently lose the markdown type scale.
+   */
+  it('[LADDER-5] adding a tone to the body class keeps the size token', () => {
+    const answer = cn(turnBodyClass(), turnAnswerToneClass());
+    expect(answer).toContain('text-markdown');
+    expect(answer).toContain('text-foreground');
+    const process = cn(turnProcessShellClass(), turnBodyClass(), turnProcessToneClass());
+    expect(process).toContain('text-markdown');
+    expect(process).toContain('text-tool-arg');
+  });
+
+  it('[LADDER-3] the group head strips the native disclosure marker and stays a meta row', () => {
+    const head = turnWorkGroupSummaryClass();
+    // Without both of these a `<summary>` draws a triangle that cannot be
+    // styled and points the wrong way in half the browsers that draw one.
+    expect(head).toContain('list-none');
+    expect(head).toContain('marker:content-none');
+    expect(head).toContain('cursor-pointer');
+    expect(head).toContain('text-meta');
+  });
+
+  /**
+   * The standing prohibition, re-checked at the one place it could re-enter:
+   * the work group is the first collapsible the turn has owned since FB6, and
+   * the Base UI panel it deliberately does NOT use carries `overflow-hidden`.
+   */
+  it('[LADDER-4] no turn-level class assembler carries overflow-hidden', () => {
+    for (const cls of [
+      chatTurnClass(),
+      turnBodyClass(),
+      turnProcessShellClass(),
+      turnWorkGroupSummaryClass(),
+      turnAnswerToneClass(),
+      turnProcessToneClass(),
+    ]) {
+      expect(cls, cls).not.toContain('overflow-hidden');
+    }
+    expect(COLLAPSIBLE_PANEL_BASE_CLASS, 'the component this rules out').toContain(
+      'overflow-hidden'
+    );
   });
 });

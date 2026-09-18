@@ -1,9 +1,5 @@
 import { AUTH_OPEN_ONBOARDING_EVENT } from '@shared/authGate';
-import type {
-  PermissionDecisionId,
-  SessionRetryInfo,
-  SessionRuntimeStatus,
-} from '@shared/types/runtimeEvents';
+import type { SessionRetryInfo, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import {
   ArrowDown,
   ArrowRightLeft,
@@ -13,7 +9,6 @@ import {
   FileQuestion,
   FileSearch,
   FileText,
-  GitBranch,
   Image as ImageIcon,
   Lock,
   PackageSearch,
@@ -56,11 +51,14 @@ import {
   readingColumnSpacingClass,
   turnActionsInnerClass,
   turnActionsSlotClass,
+  turnAnswerToneClass,
   turnBodyClass,
   turnCopyButtonClass,
   turnHeadClass,
   turnProcessShellClass,
+  turnProcessToneClass,
   turnStatusToneClass,
+  turnWorkGroupSummaryClass,
   userBubbleClass,
   userBubbleRowClass,
   userBubbleTextClass,
@@ -91,16 +89,11 @@ import { formatAbsoluteTime, type MessageMetadata } from './messageMetadata';
 import { nextFollowState, shouldShowJumpToBottom } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
 import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingError';
-import { PermissionActivityDetails, PermissionActivityRows } from './PermissionActivityRows';
+import { PermissionActivityRows } from './PermissionActivityRows';
 import { QuestionCard } from './QuestionCard';
-import {
-  canRespondToPermission,
-  deriveQuestionCardState,
-  permissionDecisionAllows,
-} from './questionCardModel';
+import { deriveQuestionCardState } from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
 import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
-import { SessionTreeDialog } from './SessionTreeDialog';
 import { SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { ToolGroup } from './ToolRows';
@@ -112,7 +105,13 @@ import {
   isTurnInFlight,
   ownsSessionFailure,
 } from './turnHead';
-import { countProcessSteps } from './turnProcessFold';
+import {
+  countProcessSteps,
+  deriveTurnWorkGroupLabel,
+  splitTurnWorkGroup,
+  turnWorkGroupAwaitsUser,
+  turnWorkGroupOpen,
+} from './turnProcessFold';
 import {
   deriveTurnStatus,
   isFailedCardBodyDuplicate,
@@ -127,6 +126,11 @@ import {
 // in `src/` — they are kept, exported and tested, but nothing renders them, so
 // anything they look up (`turnTiming.ts`'s `EDIT_TOOL_NAMES`) is not a live
 // vocabulary table and must not be "fixed" as if it were.
+//
+// 2026-09-18 adds ONE live consumer from that module, and it is deliberately
+// not `formatWorkedForRow`: the work group needs the whole turn's span, which
+// is `deriveTurnWorkedMs`, not the last message's own latency.
+import { deriveTurnWorkedMs } from './turnTiming';
 import { useMessageMetadata } from './useMessageMetadata';
 import { useResolvedSessionModel } from './useResolvedSessionModel';
 import { useTurnTiming } from './useTurnTiming';
@@ -212,40 +216,14 @@ export function MessageTimeline({
       ? (state.bySession[sessionId] ?? EMPTY_PENDING_USER_MESSAGES)
       : EMPTY_PENDING_USER_MESSAGES
   );
+  // Still read here for the session-failed card's Stop button (below): a turn
+  // that died with the gate still open is the one case where Stop is the only
+  // way out. Answering moved to `PendingPermissionDock` together with the live
+  // card — see this file's `case 'permission'`.
   const pendingPermissions = useChatSessionsStore((state) => state.pendingPermissions);
   // H/21 P0: the session-failed card's "go migrate" action. `requestSettings`
   // is a stable store action, so subscribing to it does not add a render path.
   const requestSettings = useSettingsIntentStore((state) => state.requestSettings);
-  // The other half of `permission.requested`: the runtime parks the tool call
-  // until this lands. Answering is all this does — the card's own state comes
-  // from the `permission.resolved` the worker emits, so a decision made in one
-  // window is reflected in every other view of the same session.
-  const respondPermission = useCallback(
-    async (permissionId: string, allow: boolean, decision?: PermissionDecisionId) => {
-      if (!sessionId) return false;
-      try {
-        const result = await window.electronAPI.chat.respondPermission({
-          sessionId,
-          // `allow` is the historical two-button answer; a card that offers the
-          // richer set sends which button it was, and that wins.
-          decision: decision ?? (allow ? 'allow' : 'deny'),
-          permissionId,
-        });
-        return result.handled;
-      } catch {
-        // `false` is what the card reads as "not answered" — it keeps the rows
-        // live so the user can try again, which is right for a failed IPC and
-        // right for a gate that timed out while the card was on screen.
-        return false;
-      }
-    },
-    [sessionId]
-  );
-  const canRespondPermission = useMemo(
-    () => (permissionId: string | undefined) =>
-      canRespondToPermission(pendingPermissions, sessionId, permissionId),
-    [pendingPermissions, sessionId]
-  );
   const lastError = useChatSessionsStore(
     (state) =>
       state.sessions.find((session) => session.id === sessionId)?.runtimeError ??
@@ -269,15 +247,13 @@ export function MessageTimeline({
   const historyPagination = useChatSessionsStore((state) =>
     sessionId ? state.historyPagination?.[sessionId] : undefined
   );
-  const hasDurablePiSession = useChatSessionsStore((state) =>
-    sessionId
-      ? state.sessions.some(
-          (session) => session.id === sessionId && session.runtimeIdentity != null
-        )
-      : false
-  );
-  const isIdle = status === 'idle';
-  const [treeOpen, setTreeOpen] = useState(false);
+  // 2026-09-18: `hasDurablePiSession` / `isIdle` / `treeOpen` and the
+  // SessionTreeDialog they drove moved to `workspace-shell/SessionBar.tsx`. The
+  // button that opened it («Branches») was the first child of the scrolling
+  // message list, so it read as a top-bar control and then scrolled away — the
+  // user asked what it was and whether it was in the wrong place. Its gate
+  // (`runtimeIdentity`) and its disable rule (non-idle) moved with it, derived
+  // once, in the bar.
   const [loadingOlderHistory, setLoadingOlderHistory] = useState(false);
   const loadOlderHistory = useCallback(async () => {
     if (!sessionId || !historyPagination?.hasMore || loadingOlderHistory) return;
@@ -618,20 +594,6 @@ export function MessageTimeline({
               into 10 here + 10 of sticky-band padding; T12 retired the band, so
               the whole beat is back in one place (F-B9). */}
           <ReadingColumn className={readingColumnSpacingClass()}>
-            {hasDurablePiSession && (
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  disabled={!isIdle}
-                  onClick={() => setTreeOpen(true)}
-                >
-                  <GitBranch />
-                  Branches
-                </Button>
-              </div>
-            )}
             {historyPagination?.hasMore && (
               <div className="flex justify-center">
                 <Button
@@ -694,8 +656,6 @@ export function MessageTimeline({
                     thinkingEnabled={thinkingEnabled}
                     repoName={repoName}
                     getThinkingDurationMs={getThinkingDurationMs}
-                    canRespondPermission={canRespondPermission}
-                    onRespondPermission={respondPermission}
                   />
                 );
               })
@@ -809,13 +769,6 @@ export function MessageTimeline({
           acceptable (a duplicate of an action available elsewhere) does not
           transfer to the only way back to a running stream. It is a real
           <button>, so it is reachable by keyboard whenever it is on screen. */}
-      <SessionTreeDialog
-        key={sessionId}
-        sessionId={sessionId}
-        open={treeOpen}
-        onOpenChange={setTreeOpen}
-        isIdle={isIdle}
-      />
       {showJumpToBottom && (
         <button
           type="button"
@@ -1287,32 +1240,28 @@ interface ChatTurnProps {
   thinkingEnabled: boolean;
   repoName?: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
-  canRespondPermission: (permissionId: string | undefined) => boolean;
-  onRespondPermission: (
-    permissionId: string,
-    allow: boolean,
-    decision?: PermissionDecisionId
-  ) => Promise<boolean>;
 }
 
 /**
  * T-31 §4.8: one turn — the container this whole spec exists to introduce.
  *
- * Renders, in order: the sticky user-bubble band (§5), the turn's content
- * segments in block order (answer prose outside the shell, notices outside it,
- * tool/thinking/authorization inside a collapsible one — FB4), and finally ONE
- * bottom meta row carrying the status slot, the collapse trigger, the model ·
- * relative-time metadata and the copy button (FB6 + D55 ①).
+ * Renders, in order: the user's prompt bubble (§5), then the turn's content in
+ * block order under the 2026-09-18 work-group shape —
  *
- * FB6 moved that row from the top of the turn to the bottom, which is where the
- * user asked for it: while a turn streams, "Worked for Ns" belongs under the
- * output being produced, not above it. T-31 §4.7's "one slot, two states"
- * (status while in flight -> `Worked for Ns …` once complete) is UNCHANGED —
- * this batch moved the slot's coordinates, not the number of slots, which is
- * why `deriveTurnHeadModel` / `deriveTurnStatus` / `formatWorkedForRow` are
- * untouched.
+ * ```
+ *   [user bubble]
+ *   [work-group head]   工作中 / 已工作 57 秒  ⌄
+ *     └ everything before the final output, collapsible
+ *   [final output]      always visible
+ *   [anything after it] notices, always visible
+ * ```
  *
- * The segments and the meta row are deliberately siblings under one
+ * — and finally the running status row and the hover action strip. What goes
+ * where is `splitTurnWorkGroup`'s ruling, not this component's; see its note
+ * for why the final output is "the last `answer` SEGMENT" and not "the trailing
+ * run of text items" (the FB4 defect, which that phrasing reintroduces).
+ *
+ * The segments and the status row are deliberately siblings under one
  * `turnBodyClass()`: P-17's 10px "within a turn" gap stays a single source,
  * inherited from the `<article className="flex flex-col gap-2.5">` that
  * `AssistantMessage` used to own before it was split in two.
@@ -1326,36 +1275,95 @@ interface ChatTurnProps {
  * -stable at their source.
  */
 /**
- * A finished turn's steps, behind one line.
+ * The turn's work group: one head, one collapsible body, everything the user
+ * did not ask to see.
  *
- * `<details>` rather than a state hook: the open/closed bit then lives in the
- * DOM, so it survives the re-renders a streaming sibling turn causes without
- * this component having to own — and reset — state of its own.
+ * ## Why a native `<details>` with `preventDefault`
+ *
+ * Two constraints meet here. The panel must be fully CONTROLLED — the group
+ * collapses itself when the turn ends, and an unanswered authorization card
+ * forces it open regardless of what anyone clicked — and it must not introduce
+ * `overflow-hidden`, which is what rules out the Base UI `Collapsible`
+ * (`COLLAPSIBLE_PANEL_BASE_CLASS` carries it; see `turnProcessShellClass()`).
+ *
+ * `<details>` toggles ITSELF on a summary click, before React hears about it,
+ * so a plain `open={…}` prop desynchronises the moment a click is refused: the
+ * DOM closes, the computed value stays `true`, React sees no prop change and
+ * never puts it back. `preventDefault()` on the summary removes the native
+ * toggle entirely, leaving `open` as the single driver — and keyboard Enter /
+ * Space on a `<summary>` dispatch a click, so the affordance stays reachable
+ * without inventing any ARIA.
+ *
+ * The children stay mounted when collapsed (that is what `<details>` does), so
+ * collapsing never discards a tool row's expanded body.
  */
-function TurnProcessFold({
+function TurnWorkGroup({
   items,
+  settled,
+  forcedOpen,
+  workedMs,
   children,
-  footer,
 }: {
+  /** The grouped PROCESS items only — the step count is about work, not paragraphs. */
   items: readonly TurnItem[];
+  settled: boolean;
+  /** An unanswered permission/question is inside: the group may not close. */
+  forcedOpen: boolean;
+  /** Whole-turn span, or `null` when the turn replayed no timing events. */
+  workedMs: number | null;
   children: React.ReactNode;
-  /** The quiet approval audit, which belongs with the steps it audited. */
-  footer?: React.ReactNode;
 }) {
   const { t } = useI18n();
-  const steps = countProcessSteps(items);
-  if (steps === 0) return null;
+  // `null` until the user clicks: "no opinion yet" has to be distinguishable
+  // from "chose closed", or the auto-collapse and a deliberate collapse would
+  // be the same state and rule 2 of `turnWorkGroupOpen` could never hold.
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const open = turnWorkGroupOpen({ settled, forcedOpen, userOpen });
+  const label = deriveTurnWorkGroupLabel({
+    settled,
+    workedMs,
+    steps: countProcessSteps(items),
+  });
+  // Three literal keys rather than one interpolated `{{duration}}`: the unit
+  // words are the catalog's ("1m 6s" vs 「1 分 6 秒」), and a literal
+  // single-quoted key is also the only form `i18nCoverage.test.ts` can scan —
+  // a key assembled from the label's discriminant would ship untranslated.
+  const headText =
+    label.kind === 'working'
+      ? t('Working')
+      : label.kind === 'steps'
+        ? t('{{count}} steps processed', { count: label.steps })
+        : label.minutes === 0
+          ? t('Worked for {{seconds}}s', { seconds: label.seconds })
+          : label.seconds === 0
+            ? t('Worked for {{minutes}}m', { minutes: label.minutes })
+            : t('Worked for {{minutes}}m {{seconds}}s', {
+                minutes: label.minutes,
+                seconds: label.seconds,
+              });
+
   return (
-    <details className={turnBodyClass()}>
-      <summary className="cursor-pointer list-none text-meta text-muted-foreground marker:content-none">
-        <span className="underline-offset-2 hover:underline">
-          {t('{{count}} steps processed', { count: steps })}
-        </span>
+    <details className={turnBodyClass()} open={open}>
+      <summary
+        className={turnWorkGroupSummaryClass()}
+        // While `forcedOpen` holds, this records the intent without acting on
+        // it — the group stays open and the click takes effect once the card
+        // has been answered. Deliberately NOT a disabled trigger: a control
+        // that goes dead for the duration of an authorization is a second thing
+        // to explain, and the recorded intent is the behaviour a user who
+        // clicked "collapse" actually wanted.
+        onClick={(event) => {
+          event.preventDefault();
+          setUserOpen(!open);
+        }}
+      >
+        <span className="min-w-0 truncate underline-offset-2 hover:underline">{headText}</span>
+        <ChevronRight
+          className={cn('size-3.5 shrink-0 transition-transform duration-150', open && 'rotate-90')}
+          aria-hidden
+        />
       </summary>
-      <div className={cn(turnProcessShellClass(), 'pt-2.5')}>
-        {children}
-        {footer}
-      </div>
+      <div className={cn(turnProcessShellClass(), 'pt-2.5')}>{children}</div>
     </details>
   );
 }
@@ -1377,8 +1385,6 @@ const ChatTurn = memo(function ChatTurn({
   thinkingEnabled,
   repoName,
   getThinkingDurationMs,
-  canRespondPermission,
-  onRespondPermission,
 }: ChatTurnProps) {
   const { t } = useI18n();
   // One flatten per turn, feeding both the render and the copy payload (F7):
@@ -1599,25 +1605,39 @@ const ChatTurn = memo(function ChatTurn({
       repoName={repoName}
       streamingBlockId={streamingBlockIdByMessage.get(item.messageId) ?? null}
       getThinkingDurationMs={getThinkingDurationMs}
-      canRespondPermission={canRespondPermission}
-      onRespondPermission={onRespondPermission}
     />
   );
 
-  const activityDetails = (
-    <PermissionActivityDetails blocks={turn.body.flatMap((message) => message.blocks)} />
-  );
-  // Which process segment gets the audit appended, if any of them folds.
-  const lastProcessKey = segments
-    .filter((segment) => segment.kind === 'process')
-    .map((segment) => `${segment.kind}:${turnItemKey(segment.items[0])}`)
-    .at(-1);
   // Between two assistant messages (a tool result or permission wait splits
   // them) the last one already carries a latency while the turn is still in
   // flight; only the session status tells those apart. No latency is needed
-  // otherwise, so a restored history turn folds too.
+  // otherwise, so a restored history turn is settled from its first render and
+  // therefore mounts collapsed.
   const processSettled = !turnActive && !(isLastTurn && inFlightSession);
-  const processFolds = processSettled && lastProcessKey !== undefined;
+  // The 2026-09-18 work group. Every placement rule is in `splitTurnWorkGroup`
+  // so it can be truth-tabled in the node suite; this file only renders the
+  // four buckets it returns, in the order it returns them.
+  const workGroup = useMemo(() => splitTurnWorkGroup(segments), [segments]);
+  // The step-count fallback is about WORK, so it counts the grouped process
+  // items only — a paragraph the model wrote on the way is not a step.
+  const groupedProcessItems = useMemo(
+    () =>
+      workGroup.grouped
+        .filter((segment) => segment.kind === 'process')
+        .flatMap((segment) => segment.items),
+    [workGroup]
+  );
+  // The red line: an unanswered Allow/Deny or question inside the group pins it
+  // open, outranking both the auto-collapse and the user's own click.
+  const groupForcedOpen = useMemo(
+    () => turnWorkGroupAwaitsUser(workGroup.grouped),
+    [workGroup.grouped]
+  );
+  // Whole-turn span (first start -> last completion), NOT the last message's
+  // latency: a turn split by a tool result or an authorization wait is several
+  // messages, and reporting the final one's latency told a two-minute turn it
+  // took four seconds. `null` here means "omit the number", never "0s".
+  const workedMs = useMemo(() => deriveTurnWorkedMs(bodyMetadata), [bodyMetadata]);
 
   const renderSegment = (segment: TurnSegment<TurnItem>) => {
     // Keyed off the segment's FIRST item, not its index: an index key would
@@ -1631,8 +1651,12 @@ const ChatTurn = memo(function ChatTurn({
       // several boxes inside a single reply (Q14). The role signal moved
       // entirely to the user side's shape; see the note in
       // `chatTimelineLayout.ts` where the container used to be defined.
+      //
+      // The tone is the SAME inside the group and outside it (2026-09-18): the
+      // brightest rung belongs to prose wherever it sits, so a paragraph the
+      // model wrote mid-turn is not dimmed for having been written early.
       return (
-        <div key={key} className={turnBodyClass()}>
+        <div key={key} className={cn(turnBodyClass(), turnAnswerToneClass())}>
           {segment.items.map(renderItem)}
         </div>
       );
@@ -1648,45 +1672,28 @@ const ChatTurn = memo(function ChatTurn({
     }
     /**
      * The process segment: tool runs, thinking, and authorization cards, in
-     * block order.
+     * block order, on the dim rung of the reading ladder.
      *
-     * 2026-08-25 ruled this rendered UNCONDITIONALLY, on the grounds that
-     * per-row expansion was the only granularity worth having. 2026-09-10
-     * replaces that after comparing the transcript against PI-Desktop's: a
-     * finished turn there says 「已处理 19s 2 个步骤」 and keeps its steps behind
-     * that one line, which is most of why its transcript reads clean while ours
-     * read 杂乱. So a COMPLETED turn folds.
+     * It no longer decides its own visibility. 2026-09-10 gave each process
+     * segment its own `<details>`, which put one 「已处理 N 个步骤」 line between
+     * every pair of paragraphs; 2026-09-18 replaced that with ONE group per
+     * turn (`splitTurnWorkGroup`), so this function renders a plain panel and
+     * the group above it decides whether it is on screen.
      *
-     * Two things still never fold, and they are the same red line as before —
-     * the Allow/Deny card can never be collapsed away:
-     *  - a segment holding an unanswered permission or question card stays open,
-     *    whole, in order (folding only the rest would scramble block order);
-     *  - a turn still in flight stays open, because hiding a tool the model is
-     *    running right now is how a working app looks frozen.
+     * A process segment can also render OUTSIDE the group — while a turn
+     * streams, a tool called after the last paragraph sits in `trailing` until
+     * the next paragraph arrives. That is why the panel carries no visibility
+     * logic of its own: it has to look the same in both places.
      *
      * NO `overflow-hidden` here, ever: it would create a containing block and
-     * silently break the pinned bubble band's `position: sticky`
+     * silently break `position: sticky` anywhere above it
      * (`chatTimelineLayout.ts`'s standing prohibition).
      */
-    const answerable = segment.items.some(
-      (item) =>
-        (item.kind === 'permission' || item.kind === 'question') && item.block.resolved !== true
-    );
-    if (!answerable && processSettled) {
-      return (
-        <TurnProcessFold
-          key={key}
-          items={segment.items}
-          // Only the last one carries it: the audit is turn-wide, and repeating
-          // it under every process run would count the same gates twice.
-          {...(key === lastProcessKey ? { footer: activityDetails } : {})}
-        >
-          {segment.items.map(renderItem)}
-        </TurnProcessFold>
-      );
-    }
     return (
-      <div key={key} className={cn(turnProcessShellClass(), turnBodyClass())}>
+      <div
+        key={key}
+        className={cn(turnProcessShellClass(), turnBodyClass(), turnProcessToneClass())}
+      >
         {segment.items.map(renderItem)}
       </div>
     );
@@ -1702,16 +1709,29 @@ const ChatTurn = memo(function ChatTurn({
           10px inside one. */}
       {turn.user && <UserBubble message={turn.user} />}
       <div className={turnBodyClass()}>
-        {/* FB4: block order, all the way down. Prose and notices render where
-            they happened instead of being scraped to the end of the turn, and
-            only tool / thinking / authorization runs go inside a shell. The old
-            rule ("the answer is the TRAILING run of text items") sent every
-            earlier paragraph into the collapsed segment, and a turn that ended
-            in an error notice sent ALL of it. */}
-        {segments.map(renderSegment)}
-        {/* Inside the fold when there is one — the audit belongs with the steps
-            it audited, not floating under a collapsed summary. */}
-        {!processFolds && activityDetails}
+        {/* FB4 survives inside the group: block order, all the way down. What
+            2026-09-18 changed is only WHERE the boundary is — everything before
+            the final output goes behind one head instead of each process run
+            getting its own. The rule that must never come back is "the answer
+            is the TRAILING run of text items": under it a turn that ended in an
+            error notice folded away every paragraph it had written. */}
+        {workGroup.leading.map(renderSegment)}
+        {workGroup.grouped.length > 0 && (
+          <TurnWorkGroup
+            items={groupedProcessItems}
+            settled={processSettled}
+            forcedOpen={groupForcedOpen}
+            workedMs={workedMs}
+          >
+            {workGroup.grouped.map(renderSegment)}
+          </TurnWorkGroup>
+        )}
+        {/* The final output — outside the group, in every state, always. */}
+        {workGroup.finalAnswer && renderSegment(workGroup.finalAnswer)}
+        {/* Whatever arrived after it. Settled, that is a notice (an error the
+            turn ended on); mid-stream it can also be a tool run that has not
+            been followed by prose yet. Either way it stays visible. */}
+        {workGroup.trailing.map(renderSegment)}
         {retryBanner && <RetryBanner view={retryBanner} />}
         {/* T12-b: the running status, and ONLY while it is running. FB6's
             position is kept — under the output it describes, not above it —
@@ -1909,12 +1929,6 @@ interface TurnItemViewProps {
   /** The one block in this item's source message that may still be streaming, if any. */
   streamingBlockId: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
-  canRespondPermission: (permissionId: string | undefined) => boolean;
-  onRespondPermission: (
-    permissionId: string,
-    allow: boolean,
-    decision?: PermissionDecisionId
-  ) => Promise<boolean>;
 }
 
 /**
@@ -2019,8 +2033,6 @@ function TurnItemView({
   repoName,
   streamingBlockId,
   getThinkingDurationMs,
-  canRespondPermission,
-  onRespondPermission,
 }: TurnItemViewProps) {
   switch (item.kind) {
     /**
@@ -2066,26 +2078,26 @@ function TurnItemView({
       );
 
     case 'permission':
-      // T-05 (D-5): same `.qa` shell as questions, thin adapter over
-      // `derivePermissionCardView` — position unchanged (block-order,
-      // not the Dock), Allow/Deny behavior preserved verbatim.
-      return (
-        <QuestionCard
-          variant="permission"
-          block={item.block}
-          canRespond={canRespondPermission(item.block.permissionId)}
-          // The one place `allow` is derived from the decision (spec §3.2):
-          // downstream both travel together, so a card that says Allowed
-          // cannot sit on top of a wire reply that said decline.
-          onRespondPermission={(decision) =>
-            onRespondPermission(
-              item.block.permissionId ?? '',
-              permissionDecisionAllows(decision),
-              decision
-            )
-          }
-        />
-      );
+      // 2026-09-18: the live, answerable card lives in `PendingPermissionDock`
+      // (outside ScrollArea, docked above the Composer) — this branch only
+      // renders once the request is settled, in its original block position.
+      // Exactly the arrangement `case 'question'` below already had, and for
+      // the same reason: a card that exists twice on screen is a card the user
+      // can answer twice.
+      //
+      // T-05 (D-5)'s block-order ruling is unchanged — the settled row still
+      // renders where the request happened. `PermissionQaCard` collapses it to
+      // the Allowed/Denied tool row (2026-08-10 ruling); `canRespond` is not
+      // passed because a settled card has nothing to respond to.
+      //
+      // Stated rather than hidden: an UNSETTLED request whose queue entry was
+      // dropped without a `permission.resolved` — the terminal-event cleanup in
+      // `withoutSessionPermissions` does exactly that when a turn fails or is
+      // stopped mid-approval — now renders nothing here either. It was an
+      // unanswerable "Waiting" card before. Nothing is waiting on it: the gate
+      // it belonged to is gone with the turn.
+      if (item.block.resolved !== true) return null;
+      return <QuestionCard variant="permission" block={item.block} />;
 
     case 'permissionActivity':
       // T08-b: the record of what the permission plugin decided. Not a card and

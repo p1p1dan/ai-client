@@ -157,9 +157,69 @@ export function turnBodyClass(): string {
  * panel's height. A plain `hidden` panel measures nothing, so there is nothing
  * left to undo — see `MessageTimeline`'s note on why Base UI could not drive
  * several panels from one外部 trigger.
+ *
+ * ⚠️ The Base UI `Collapsible` is still the wrong component here, and for a
+ * SECOND reason the 2026-09-18 work group had to re-check: its panel class
+ * (`COLLAPSIBLE_PANEL_BASE_CLASS` in `ui/collapsible.tsx`) carries
+ * `overflow-hidden`, and `overflow` on an ancestor creates a containing block.
+ * That is the standing prohibition this file has carried since T-31 and it is
+ * why the group is a native `<details>`.
  */
 export function turnProcessShellClass(): string {
   return 'flex flex-col gap-2.5';
+}
+
+/**
+ * ## The three-tier reading ladder (user decision 2026-09-18)
+ *
+ * The user's complaint was not that the transcript showed too little — it was
+ * that everything on it shouted equally: 「用户真实关注的其实只是模型输出，而不是
+ * 那些什么思考和终端」. So brightness now encodes importance, in three steps, and
+ * the three functions below are the only places those steps are named.
+ *
+ * Measured contrast against each theme's `--background` (oklch → linear sRGB →
+ * WCAG relative luminance; the middle rung reproduces the 7.20 / 6.70 pair this
+ * file already recorded for `turnStatusToneClass`, which is what says the
+ * arithmetic is right):
+ *
+ * ```
+ *                      light   dark    role
+ * text-foreground      18.78   11.38   the final output, and mid-turn prose
+ * text-muted-foreground 7.20    6.70   the work-group head
+ * text-tool-arg         5.09    5.02   thinking / terminal rows inside it
+ * ```
+ *
+ * Every rung clears WCAG AA for body text (4.5) on its own; the point of the
+ * table is the RATIOS between them — 1.70× then 1.33× in dark, which is the
+ * narrower of the two themes. No new colour token was minted for this: all
+ * three already existed, `--tool-arg` being the derived third grey T-05
+ * introduced for tool-row arguments.
+ */
+
+/** Tier 1 — the final output, and any prose the model wrote on the way there. */
+export function turnAnswerToneClass(): string {
+  return 'text-foreground';
+}
+
+/** Tier 3 — thinking and terminal rows. Dimmer than the head that summarises them. */
+export function turnProcessToneClass(): string {
+  return 'text-tool-arg';
+}
+
+/**
+ * Tier 2 — the work group's own head: 「工作中」 while the turn runs, 「已工作 57
+ * 秒」 once it stops, plus the chevron.
+ *
+ * `list-none` + `marker:content-none` strips the `<summary>` disclosure
+ * triangle, which points the wrong way in half the browsers that draw it and
+ * cannot be styled; the chevron beside the text is the affordance instead.
+ * `cursor-pointer` because a `<summary>` does not get one by default.
+ *
+ * `text-meta` keeps it in the same size domain as the status row and the
+ * timestamps — it is a label about the turn, not content of it.
+ */
+export function turnWorkGroupSummaryClass(): string {
+  return 'flex min-w-0 cursor-pointer list-none items-center gap-1.5 text-meta text-muted-foreground marker:content-none';
 }
 
 /**

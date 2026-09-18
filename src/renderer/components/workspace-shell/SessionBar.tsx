@@ -1,4 +1,6 @@
-import { ArrowLeftRight, Monitor, Plus, Terminal } from 'lucide-react';
+import { ArrowLeftRight, GitBranch, Monitor, Plus, Terminal } from 'lucide-react';
+import { useState } from 'react';
+import { SessionTreeDialog } from '@/components/chat/SessionTreeDialog';
 import type { PresentationSwitch } from '@/components/chat/usePresentationSwitch';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
@@ -6,8 +8,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import {
-  createChatSessionOnWorkspace,
-  createUnboundChatSession,
+  createOrReuseChatSessionOnWorkspace,
+  createOrReuseUnboundChatSession,
 } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 
@@ -72,16 +74,41 @@ export function SessionBar({
   const contextLine = [activeProject?.name, activeWorkspace?.name].filter(Boolean).join(' · ');
   const busy = activeSession?.status === 'running' || activeSession?.status === 'starting';
 
+  // 2026-09-18 — the conversation's message tree (branches / rewind points),
+  // moved here from `MessageTimeline`. It used to be the first child of the
+  // scrolling message list: it looked like a bar control, it scrolled away as
+  // soon as the reader moved, and its label was a hardcoded English "Branches"
+  // that stayed English in the Chinese UI. Nothing about it was timeline
+  // content, so it belongs on the bar with the other conversation-level
+  // controls.
+  //
+  // Both of its gates travel verbatim, and are derived HERE rather than in two
+  // places:
+  //  - it exists only once the chat has a durable session on disk
+  //    (`runtimeIdentity`), because there is no tree to read before that;
+  //  - and it is disabled unless the session is IDLE — `busy` above is the
+  //    narrower 「running / starting」 dot and is deliberately NOT reused:
+  //    rewinding a session parked on a permission prompt is just as unsafe as
+  //    rewinding one mid-stream.
+  const [treeOpen, setTreeOpen] = useState(false);
+  const hasDurableSession = activeSession?.runtimeIdentity != null;
+  const isIdle = (activeSession?.status ?? 'idle') === 'idle';
+
   // "New chat" targets the folder the current chat lives in. With no folder
   // behind the current chat it starts a temporary one instead of doing nothing —
   // same rule U22 gave the sidebar's New button.
+  //
+  // create-or-reuse: since this target IS the active session's own workspace,
+  // a fresh empty active session always resolves to "already there" (stay
+  // put) here — never a retarget — see chatSessionActions.ts's
+  // createOrReuseChatSessionOnWorkspace / createOrReuseUnboundChatSession.
   const newSessionWorkspaceId = activeWorkspace?.path?.trim() ? activeWorkspace.id : null;
   const startNewChat = () => {
     if (newSessionWorkspaceId) {
-      createChatSessionOnWorkspace(newSessionWorkspaceId);
+      createOrReuseChatSessionOnWorkspace(newSessionWorkspaceId);
       return;
     }
-    createUnboundChatSession();
+    createOrReuseUnboundChatSession();
   };
 
   const title = (
@@ -118,6 +145,22 @@ export function SessionBar({
         <div className="min-w-0 flex-1">{title}</div>
       )}
 
+      {/* Left of 「审阅」: both controls inspect the conversation already on
+          screen, while 「+ / GUI / TUI」 to their right create or re-present one.
+          Same size tier as every other control on this bar (h-6, size-3.5). */}
+      {hasDurableSession && activeSessionId && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 shrink-0 gap-1 text-meta"
+          disabled={!isIdle}
+          onClick={() => setTreeOpen(true)}
+          title={t('Session branches')}
+        >
+          <GitBranch className="size-3.5" />
+          {t('Session branches')}
+        </Button>
+      )}
       {onToggleReview && activeSessionId && (
         <Button
           variant="ghost"
@@ -156,6 +199,18 @@ export function SessionBar({
           />
           <PresentationButton label="TUI" icon={Terminal} active={isTui} onClick={openTui} />
         </div>
+      )}
+      {/* Keyed by session: a dialog left open across a session switch must not
+          show the previous conversation's tree. Mounted next to its trigger
+          rather than in the timeline, so the two cannot drift apart. */}
+      {activeSessionId && (
+        <SessionTreeDialog
+          key={activeSessionId}
+          sessionId={activeSessionId}
+          open={treeOpen}
+          onOpenChange={setTreeOpen}
+          isIdle={isIdle}
+        />
       )}
     </div>
   );

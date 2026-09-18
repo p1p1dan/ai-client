@@ -514,18 +514,65 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   // 2026-09-10 local pass: between two assistant messages the last one already
-  // carries a latency while the session still runs, so a fold gated on that
-  // latency alone collapsed the process mid-turn.
-  it('the process fold waits for the session, not only the last message', () => {
+  // carries a latency while the session still runs, so a collapse gated on that
+  // latency alone hid the process mid-turn. 2026-09-18 keeps the same gate and
+  // hands it to the work group as `settled`.
+  it('the work group waits for the session, not only the last message', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
     expect(turn).toContain(
       'const processSettled = !turnActive && !(isLastTurn && inFlightSession);'
     );
-    expect(turn).toContain('if (!answerable && processSettled) {');
-    // No duration (user decision 2026-09-10), so a history turn without a
-    // latency folds as well.
-    expect(turn).not.toContain('latencyMs != null && lastProcessKey');
+    expectCalled('settled={processSettled}');
+    // The per-segment fold this replaced. Its branch condition must not come
+    // back: with one group per turn there is nothing left for a segment to
+    // decide about its own visibility.
+    expectUnwired('if (!answerable && processSettled) {');
+    expectUnwired('<TurnProcessFold');
     expect(SYNTAX).not.toContain('durationMs={');
+  });
+
+  /**
+   * The turn's duration is the TURN's, not the last message's.
+   *
+   * `formatWorkedForRow(metadata?.latencyMs)` is the shape this must not be: a
+   * turn split by a tool result or an authorization wait is several messages,
+   * and the final one's latency told a two-minute turn it took four seconds.
+   * The `null` path matters just as much — a restored history turn replays no
+   * timing events, and the head falls back to a step count rather than 0s.
+   */
+  it('[WG-WIRE-1] the head reads the whole-turn span, and never fabricates one', () => {
+    expectCalled('deriveTurnWorkedMs(bodyMetadata)');
+    expectCalled('workedMs={workedMs}');
+    expectUnwired('formatWorkedForRow(');
+    // The fallback is chosen inside the pure derivation, so the component must
+    // not second-guess it with a `?? 0` on the way in.
+    expectUnwired('workedMs={workedMs ?? 0}');
+    expectCalled('deriveTurnWorkGroupLabel(');
+  });
+
+  /**
+   * The three head keys are literal `t('…')` calls, not a key built from the
+   * label's discriminant. `i18nCoverage.test.ts` can only scan literals, so a
+   * `t(label.key)` would ship an untranslated head and no gate would notice.
+   */
+  it('[WG-WIRE-2] the head words itself from literal catalog keys', () => {
+    expectCalled("t('Working')");
+    expectCalled("t('Worked for {{seconds}}s'");
+    expectCalled("t('Worked for {{minutes}}m {{seconds}}s'");
+    expectCalled("t('Worked for {{minutes}}m'");
+    // The no-timestamp fallback, kept from the 2026-09-10 fold.
+    expectCalled("t('{{count}} steps processed'");
+  });
+
+  /**
+   * The 「授权详情」 disclosure is gone (user decision 2026-09-18), and the row
+   * component that renders REFUSALS is not. Deleting both would have made a
+   * denial silent, which is the opposite of what was asked for.
+   */
+  it('[WG-WIRE-3] the approval-details disclosure is gone; the refusal rows are not', () => {
+    expectUnwired('PermissionActivityDetails');
+    expectUnwired('activityDetails');
+    expectCalled('<PermissionActivityRows');
   });
 
   // F2: the in-flight snapshot is bound by evidence, never by "no latency".
@@ -562,57 +609,95 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * The authorization red line, restated structurally.
+   * ## The authorization red line — REWRITTEN 2026-09-18, and why
    *
-   * It used to be conditional: `defaultTurnProcessOpen` force-opened the shell
-   * while a permission was unresolved, and the trigger was disabled so the user
-   * could not undo it — because a collapsed shell could bury the only Allow/Deny
-   * surface in the app (round-2 point-check #5). With the turn-level collapse
-   * retired (2026-08-25) there is no shell, so the card cannot be hidden at all.
+   * This test used to read "the process segment renders unconditionally —
+   * nothing can hide a permission card", and it asserted three negatives: no
+   * `hidden={`, no conditional render of the process branch, no `<Collapsible`.
+   * That phrasing was only available while the turn had NO collapsible shell
+   * (2026-08-25 – 2026-09-10), and it had already gone stale once: the
+   * per-segment `<details>` landed on 2026-09-10 and these negatives stayed
+   * green throughout, because a `<details>` is none of the three things they
+   * name. A structural "nothing can hide it" claim cannot survive the turn
+   * having a collapse again — so it is replaced rather than patched.
    *
-   * That is a stronger guarantee, but only while the process segment stays
-   * unconditional. These three negatives are what keep it that way: no
-   * visibility binding, no conditional render, no collapse component.
+   * The guarantee is CONDITIONAL now and is asserted as a condition, in two
+   * halves that have to hold together:
+   *
+   *  1. **the rule is reached** — `turnWorkGroupAwaitsUser` runs over the
+   *     grouped segments and its answer arrives as `forcedOpen`, which
+   *     `turnWorkGroupOpen` gives precedence over both the auto-collapse and
+   *     the user's click (truth-tabled in `turnProcessFold.test.ts`);
+   *  2. **the card is in the DOM either way** — the panel renders `{children}`
+   *     unconditionally, so a collapsed group HIDES its content rather than
+   *     unmounting it, and no state is lost when it reopens.
+   *
+   * Plus the one negative still worth keeping: the rule must exist in exactly
+   * one place. A second copy of "is this card unanswered" inlined here would
+   * eventually disagree with the module's, and the disagreement would show up
+   * as a buried Allow/Deny card.
    */
-  it('[FB6-4] the process segment renders unconditionally — nothing can hide a permission card', () => {
+  it('[FB6-4] an unanswered authorization pins the work group open, and its card never unmounts', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
-    expect(turn, 'no visibility binding on the panel').not.toContain('hidden={');
-    expect(turn, 'the panel is never conditionally rendered').not.toContain(
-      "segment.kind === 'process' &&"
+    expectCalled('turnWorkGroupAwaitsUser(workGroup.grouped)');
+    expectCalled('forcedOpen={groupForcedOpen}');
+    expectCalled('turnWorkGroupOpen({ settled, forcedOpen, userOpen })');
+
+    const group = nodeSource(topLevelFunction('TurnWorkGroup'));
+    expect(group, 'the panel renders its children unconditionally').toContain(
+      `<div className={cn(turnProcessShellClass(), 'pt-2.5')}>{children}</div>`
     );
-    expect(turn, 'and no collapse component came back').not.toContain('<Collapsible');
-    // The panel is a plain child of the segment map, spacing and all.
-    expectCalled('cn(turnProcessShellClass(), turnBodyClass())');
+    expect(group, 'the open bit must be the derived one, not a second rule').toContain(
+      'const open = turnWorkGroupOpen({ settled, forcedOpen, userOpen });'
+    );
+    // Base UI's panel carries `overflow-hidden` (COLLAPSIBLE_PANEL_BASE_CLASS),
+    // which creates a containing block — the standing prohibition on the turn
+    // chrome. The group is a native <details> for that reason.
+    expect(group, 'no collapse component, and no overflow clip with it').not.toContain(
+      '<Collapsible'
+    );
+    expect(turn, 'the predicate lives in turnProcessFold.ts, not inlined here').not.toContain(
+      "item.kind === 'permission' || item.kind === 'question'"
+    );
   });
 
-  // S3 slice 4 (§3.2): the permission card now sends a DECISION, and the
-  // allow/deny boolean is derived from it in exactly one place — this lambda.
-  //
-  // Why it needs a pin here rather than somewhere cheaper: both halves of the
-  // wire reply are covered on their own (`permissionDecisionAllows` is truth-
-  // tabled in `questionCardModel.test.ts`, the store's outbound payload in
-  // `chatSessionsRespond.test.ts`) and NEITHER can tell whether this component
-  // joins them. Delete the third argument and every one of those stays green
-  // while `Deny and stop` silently degrades into an ordinary deny — the exact
-  // shape of blind spot this file's header describes.
-  it('S3-4: the permission lambda derives allow from the decision and forwards the decision', () => {
-    expectCalled('onRespondPermission={(decision) =>');
-    // The single derivation site. A second one would eventually disagree about
-    // `allow_session` and draw an "Allowed" card over a wire reply that declined.
-    expectCalled('permissionDecisionAllows(decision)');
-    // The decision travels as the THIRD argument, immediately after the boolean
-    // it produced. Adjacency is the assertion: a bare `decision` token would be
-    // satisfied by the lambda's own parameter list.
-    expectCalled('permissionDecisionAllows(decision), decision');
-    // The boolean-only call this replaced, so a revert cannot pass by adding
-    // the third argument back somewhere else in the file.
+  /**
+   * S3 slice 4 (§3.2) INVERTED, 2026-09-18.
+   *
+   * It used to pin the decision→allow lambda IN THIS FILE, because the
+   * answerable permission card rendered in block position here. The card moved
+   * to `PendingPermissionDock`, and the whole point of the move is that there
+   * is exactly ONE answerable copy on screen: a second one here would let the
+   * same request be answered twice, from two places, with the later reply
+   * landing on a gate that had already closed.
+   *
+   * So the assertion flips rather than disappearing. The positive half — the
+   * lambda still exists, still derives `allow` from the decision, still
+   * forwards the decision as the third argument — moved to
+   * `pendingPermissionDock.test.ts`, where a real render can check it instead
+   * of a source scan.
+   */
+  it('S3-4: no answerable permission card is left in the timeline', () => {
+    // The response path in every spelling it has ever had here.
+    expectUnwired('onRespondPermission');
+    expectUnwired('canRespondPermission');
+    expectUnwired('permissionDecisionAllows');
     expectUnwired("item.block.permissionId ?? '', allow)");
+    // The settled copy DOES stay, in block position (T-05 D-5), and it stays
+    // gated on `resolved` so an unanswered request cannot reappear here.
+    expectWired('if (item.block.resolved !== true) return null;');
+    expectWired('return <QuestionCard variant="permission" block={item.block} />;');
   });
 
   // F11: the panel needs its own gap or its rows sit flush at 0px while every
-  // other pair inside the turn keeps P-17's 10px beat.
-  it('F11: the process panel carries the process shell spacing', () => {
-    expectCalled('cn(turnProcessShellClass(), turnBodyClass())');
+  // other pair inside the turn keeps P-17's 10px beat. 2026-09-18 adds the
+  // ladder's dim rung to the same call — the panel is the one place that tone
+  // applies, inside the group and in the streaming tail alike.
+  it('F11: the process panel carries the process shell spacing and the dim tone', () => {
+    expectCalled('cn(turnProcessShellClass(), turnBodyClass(), turnProcessToneClass())');
+    // The answer keeps the brightest rung wherever it sits — a paragraph the
+    // model wrote mid-turn must not be dimmed for having been written early.
+    expectCalled('cn(turnBodyClass(), turnAnswerToneClass())');
   });
 
   // F12: `waiting_*` must count as in flight for the shell, or the head and the
@@ -971,8 +1056,11 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     for (const box of ['border-border', 'rounded-sm', 'bg-muted', 'bg-card', 'shadow-']) {
       expect(renderSegment, `a segment branch grew a container: ${box}`).not.toContain(box);
     }
-    // The process branch keeps its own shell — spacing only, no face, no edge.
-    expect(renderSegment).toContain('cn(turnProcessShellClass(), turnBodyClass())');
+    // The process branch keeps its own shell — spacing and tone only, no face,
+    // no edge. (2026-09-18 added the third argument; the claim is unchanged.)
+    expect(renderSegment).toContain(
+      'cn(turnProcessShellClass(), turnBodyClass(), turnProcessToneClass())'
+    );
   });
 
   /**
@@ -1006,6 +1094,47 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // …and nothing chrome-like survives ABOVE the content (`retry` is a banner
     // about the reply in progress, not a summary of it).
     expect(kinds.slice(0, -2).every((kind) => kind === 'retry' || kind.startsWith('?'))).toBe(true);
+  });
+
+  /**
+   * The shape the whole 2026-09-18 batch exists to produce, pinned positionally.
+   *
+   * `turnBodyChildKinds()` above cannot see three of the four buckets: they are
+   * `.map(renderSegment)` calls and a direct `renderSegment(…)` call, which
+   * produce no JSX node at this level for the AST walk to classify. So the
+   * order is asserted over the body's source text instead — and the second half
+   * is the one that matters: the final output must not appear anywhere INSIDE
+   * the group element, because a group that owns the answer is a group that can
+   * collapse it.
+   */
+  it('[WG-WIRE-4] the final output renders after the group and outside it', () => {
+    const body = nodeSource(turnBodyNode());
+    const at = (token: string): number => {
+      const index = body.indexOf(token);
+      expect(index, `missing from the turn body: ${token}`).toBeGreaterThan(-1);
+      return index;
+    };
+    const leading = at('workGroup.leading.map(renderSegment)');
+    const group = at('<TurnWorkGroup');
+    const final = at('renderSegment(workGroup.finalAnswer)');
+    const trailing = at('workGroup.trailing.map(renderSegment)');
+    expect(leading, 'leading segments come first').toBeLessThan(group);
+    expect(group, 'then the work group').toBeLessThan(final);
+    expect(final, 'then the final output').toBeLessThan(trailing);
+
+    const groupNode = jsxChildrenOf(turnBodyNode()).find(
+      (child) => tagNameOf(child) === 'TurnWorkGroup'
+    );
+    if (!groupNode) throw new Error('ChatTurn renders no <TurnWorkGroup>');
+    const inside = nodeSource(groupNode);
+    expect(inside, 'the group holds the grouped segments').toContain(
+      'workGroup.grouped.map(renderSegment)'
+    );
+    expect(inside, 'and nothing else — the answer is never its child').not.toContain('finalAnswer');
+    expect(inside).not.toContain('workGroup.trailing');
+    // The head is gated on there being work to hide: a one-paragraph reply must
+    // not grow an empty shell.
+    expect(body).toContain('{workGroup.grouped.length > 0 && (');
   });
 
   /**

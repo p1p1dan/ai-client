@@ -19,6 +19,7 @@ import {
   rememberSendAttempt,
   START_SCREEN_HOST_CLASS,
 } from './middleColumnLayout';
+import { PendingPermissionDock } from './PendingPermissionDock';
 import { PendingQuestionDock } from './PendingQuestionDock';
 import type { RunSendOrigin } from './queueRelease';
 import { isThinkingCapable } from './thinkingCard';
@@ -248,6 +249,11 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
               composer rather than in the timeline so it cannot scroll away
               while the session waits on it. */}
           <PendingQuestionDock sessionId={activeSessionId} />
+          {/* 2026-09-18: the same arrangement for permissions, and the only
+              answerable copy of one. Questions and permissions are two separate
+              gates that can be open at the same time, so neither dock hides the
+              other — stacked, they are still both above the composer. */}
+          <PendingPermissionDock sessionId={activeSessionId} />
           {/* U05-b ②: the start screen does not REPLACE the composer, it sits
               above it — a user who wants to bind a folder still has the
               composer's own target bar, and a user who just wants to talk can

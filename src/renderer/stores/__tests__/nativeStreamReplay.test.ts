@@ -7,7 +7,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flattenTurnItems, groupMessagesIntoTurns } from '@/components/chat/chatTurn';
-import { PermissionActivityDetails } from '@/components/chat/PermissionActivityRows';
+import { PermissionActivityRows } from '@/components/chat/PermissionActivityRows';
 import { derivePermissionActivityRow } from '@/components/chat/permissionActivityRow';
 import { canRespondToPermission } from '@/components/chat/questionCardModel';
 import { deriveRetryBanner } from '@/components/chat/retryBanner';
@@ -163,21 +163,35 @@ describe('timeline', () => {
 });
 
 describe('permission trail', () => {
-  it('keeps the recorded allowed gates accessible in the collapsed approval details', async () => {
+  /**
+   * Was: "keeps the recorded allowed gates accessible in the collapsed approval
+   * details". `PermissionActivityDetails` was removed on 2026-09-18 (user
+   * decision: 「输出过程中不要再显示『授权详情』这个项目了」), so the DOM half of
+   * that assertion had nothing left to render.
+   *
+   * What it was really protecting is kept and made explicit: the replay still
+   * produces both gate records, and `includeAllowed` is still the parameter
+   * that surfaces them. The gates left the SCREEN; they did not leave the data.
+   */
+  it('keeps both recorded gates in the replayed blocks, quiet one included', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     const blocks = (replay().messages[SESSION_ID] ?? []).flatMap((message) => message.blocks);
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
     try {
-      await act(async () => root.render(createElement(PermissionActivityDetails, { blocks })));
-      const details = container.querySelector('details')!;
-      expect(details.open).toBe(false);
-      await act(async () => details.querySelector('summary')!.click());
-      expect(details.open).toBe(true);
-      expect(details.querySelectorAll('li')).toHaveLength(2);
-      expect(details.textContent).toContain('Allowed read');
-      expect(details.textContent).toContain('Allowed write');
+      await act(async () =>
+        root.render(createElement(PermissionActivityRows, { blocks, includeAllowed: true }))
+      );
+      expect(container.querySelectorAll('li')).toHaveLength(2);
+      expect(container.textContent).toContain('Allowed read');
+      expect(container.textContent).toContain('Allowed write');
+      // The default render is the one the timeline actually mounts: both of
+      // these gates were allowed, so neither is shown, and no disclosure is
+      // offered for them either.
+      await act(async () => root.render(createElement(PermissionActivityRows, { blocks })));
+      expect(container.querySelectorAll('li')).toHaveLength(0);
+      expect(container.querySelector('details')).toBeNull();
     } finally {
       await act(async () => root.unmount());
       container.remove();

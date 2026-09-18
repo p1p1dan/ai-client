@@ -18,6 +18,7 @@ import {
   resolveToolRowOpen,
   useToolExpansionStore,
 } from '@/stores/toolExpansion';
+import { turnProcessToneClass } from './chatTimelineLayout';
 import { HitListPopover } from './HitListPopover';
 import { deriveSubagentPanelRows } from './subagentActivityModel';
 import {
@@ -123,9 +124,16 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
   // mount, so it evaluates `resolveToolRowOpen` against fresh memory.
   const [initialOpen] = useState(() => resolveToolRowOpen(view, readToolExpandMemory(sessionId)));
   const setToolRowExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
+  // The dim rung of the 2026-09-18 reading ladder (see
+  // `chatTimelineLayout.ts`). It used to be `text-muted-foreground`, which is
+  // the same tier the work-group head above these rows now uses — so the head
+  // and the rows it summarises were indistinguishable, and the "importance is
+  // brightness" rule the user asked for had only two steps instead of three.
+  // The row ARG has been on this token since T-05; this aligns the verb with
+  // it, which is also what the reference client does.
   const rowClass = cn(
     'group/row flex w-full items-baseline gap-1.5 text-left text-markdown leading-normal',
-    view.failed ? 'text-destructive' : 'text-muted-foreground'
+    view.failed ? 'text-destructive' : turnProcessToneClass()
   );
   const verbClass = cn('shrink-0', !view.failed && 'group-hover/row:text-foreground');
 

@@ -4,11 +4,13 @@ import { describe, expect, it } from 'vitest';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import {
   deriveTurnStats,
+  deriveTurnWorkedMs,
   formatThoughtRow,
   formatWorkedForDuration,
   formatWorkedForRow,
   initialTurnTimingRegistry,
   reduceTurnTiming,
+  splitWorkedForDuration,
   turnHasThinkingOnlyProcess,
 } from '../turnTiming';
 
@@ -172,7 +174,15 @@ describe('formatThoughtRow', () => {
     expect(body).not.toMatch(/\/\s*1000/);
     expect(body).not.toMatch(/%\s*60/);
     expect(countOccurrences(source, /%\s*60/g)).toBe(1);
-    expect(countOccurrences(source, /Math\.floor\(seconds \/ 60\)/g)).toBe(1);
+    // 2026-09-18: the arithmetic moved down one level, into
+    // `splitWorkedForDuration`, so the work-group head can reach the NUMBERS
+    // (「已工作 1 分 6 秒」) without an English "1m 6s" being interpolated into a
+    // Chinese sentence. The claim is unchanged — still exactly one place that
+    // knows how many seconds a minute has — only the function's name moved.
+    expect(countOccurrences(source, /Math\.floor\(total \/ 60\)/g)).toBe(1);
+    expect(functionBody(source, 'formatWorkedForDuration')).toContain(
+      'splitWorkedForDuration(latencyMs)'
+    );
   });
 
   // §7.2 / Q8: no hour tier in this batch -- pinned so adding one is a
@@ -370,5 +380,76 @@ describe('turnHasThinkingOnlyProcess', () => {
 
   it('false for an empty block list', () => {
     expect(turnHasThinkingOnlyProcess([])).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2026-09-18 — the work group's clock
+// ---------------------------------------------------------------------------
+
+describe('splitWorkedForDuration', () => {
+  it('[WG-DUR-1] agrees with the English formatter on every tier', () => {
+    // Same split, two renderings. A drift here would show up as the head and
+    // the thought row disagreeing about how long the same turn took.
+    for (const ms of [1, 999, 1_000, 30_400, 59_500, 60_000, 66_000, 120_000, 3_600_000]) {
+      const { minutes, seconds } = splitWorkedForDuration(ms);
+      const expected =
+        minutes === 0 ? `${seconds}s` : seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+      expect(formatWorkedForDuration(ms), String(ms)).toBe(expected);
+    }
+  });
+
+  it('[WG-DUR-2] floors at one second — a turn that ran did not take zero', () => {
+    expect(splitWorkedForDuration(0)).toEqual({ minutes: 0, seconds: 1 });
+    expect(splitWorkedForDuration(400)).toEqual({ minutes: 0, seconds: 1 });
+  });
+
+  it('[WG-DUR-3] carries a whole minute with no remainder', () => {
+    expect(splitWorkedForDuration(57_000)).toEqual({ minutes: 0, seconds: 57 });
+    expect(splitWorkedForDuration(66_000)).toEqual({ minutes: 1, seconds: 6 });
+    expect(splitWorkedForDuration(120_000)).toEqual({ minutes: 2, seconds: 0 });
+  });
+});
+
+describe('deriveTurnWorkedMs', () => {
+  it('[WG-SPAN-1] spans the whole turn: last completion minus first start', () => {
+    // Two assistant messages — an authorization wait split the turn. The last
+    // message's own latency is 2s; the turn took 57.
+    expect(
+      deriveTurnWorkedMs([
+        { startedAt: 1_000, completedAt: 20_000 },
+        { startedAt: 56_000, completedAt: 58_000 },
+      ])
+    ).toBe(57_000);
+  });
+
+  it('[WG-SPAN-2] ignores entries with no timing and messages that are still running', () => {
+    expect(
+      deriveTurnWorkedMs([undefined, { startedAt: 5_000 }, null, { completedAt: 9_000 }])
+    ).toBe(4_000);
+  });
+
+  /**
+   * A07 `:2399` at the turn scale. A restored history turn replays no
+   * `message.started` / `message.completed` events, so `null` here is the ONLY
+   * honest answer — and callers must read it as "omit the number", never as
+   * "0s". `deriveTurnWorkGroupLabel` is what acts on it.
+   */
+  it('[WG-SPAN-3] returns null rather than fabricating a duration', () => {
+    expect(deriveTurnWorkedMs([])).toBeNull();
+    expect(deriveTurnWorkedMs([undefined, undefined])).toBeNull();
+    // Started but never finished: no end to measure to.
+    expect(deriveTurnWorkedMs([{ startedAt: 1_000 }])).toBeNull();
+    // Finished with no recorded start — the shape a partially-replayed turn has.
+    expect(deriveTurnWorkedMs([{ completedAt: 1_000 }])).toBeNull();
+    // A clock that ran backwards is unknown time, not negative time.
+    expect(deriveTurnWorkedMs([{ startedAt: 9_000, completedAt: 1_000 }])).toBeNull();
+  });
+
+  it('[WG-SPAN-4] treats an explicit null timestamp exactly like a missing one', () => {
+    expect(deriveTurnWorkedMs([{ startedAt: null, completedAt: null }])).toBeNull();
+    expect(
+      deriveTurnWorkedMs([{ startedAt: 1_000, completedAt: null }, { completedAt: 4_000 }])
+    ).toBe(3_000);
   });
 });

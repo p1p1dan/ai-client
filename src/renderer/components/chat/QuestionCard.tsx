@@ -67,9 +67,19 @@ interface QuestionCardProps {
   canRespond?: boolean;
   /**
    * Takes the DECISION the pressed row carries, not a boolean: the allow/deny
-   * boolean is derived from it exactly once, at the timeline's call site.
+   * boolean is derived from it exactly once, at the dock's call site.
    */
   onRespondPermission?: (decision: PermissionDecisionId) => Promise<boolean> | undefined;
+  /**
+   * permission only — the dock's `2/5` queue marker, already worded by
+   * `derivePermissionQueueProgress`.
+   *
+   * A finished string rather than a `{position, depth}` pair on purpose: both
+   * rules that decide whether a marker appears at all (no lone `1/1`, nothing
+   * when the worker did not report) are pure and testable where they live, and
+   * this card stays a renderer. `null`/absent means draw nothing.
+   */
+  progress?: string | null;
 }
 
 const QA_SHELL_CLASS = 'overflow-hidden rounded-md border border-border bg-card';
@@ -114,6 +124,7 @@ export function QuestionCard(props: QuestionCardProps) {
         block={props.block}
         canRespond={Boolean(props.canRespond)}
         onRespond={props.onRespondPermission}
+        progress={props.progress ?? null}
       />
     );
   }
@@ -615,10 +626,12 @@ function PermissionQaCard({
   block,
   canRespond,
   onRespond,
+  progress,
 }: {
   block: ChatBlock;
   canRespond: boolean;
   onRespond?: (decision: PermissionDecisionId) => Promise<boolean> | undefined;
+  progress: string | null;
 }) {
   const { t } = useI18n();
   const view = derivePermissionCardView(block, canRespond, t);
@@ -669,6 +682,15 @@ function PermissionQaCard({
   return (
     <div className={cn(QA_SHELL_CLASS, PERMISSION_RISK_SHELL[view.risk])}>
       <div className="flex min-h-9 items-center gap-2 border-b border-border px-3 py-2">
+        {/* Top-left, ahead of the title: it answers "how much of this is left"
+            before the user reads what THIS one asks. `tabular-nums` because it
+            is replaced in place as the queue advances, and a proportional `1`
+            would shift the title a pixel on every card. */}
+        {progress && (
+          <span className="shrink-0 rounded-xs bg-muted px-1.5 py-0.5 text-meta tabular-nums text-muted-foreground">
+            {progress}
+          </span>
+        )}
         <span className="min-w-0 flex-1 font-semibold tracking-[0.01em] text-foreground">
           {t(view.title)}
         </span>

@@ -861,6 +861,39 @@ export function canRespondToPermission(
   return head !== undefined && head.permissionId === permissionId;
 }
 
+/**
+ * The `2/5` in the dock card's top-left corner, or `null` for "say nothing".
+ *
+ * Pure and here rather than inside the card, because the two suppression rules
+ * are the whole feature and neither can be asserted from a `.tsx` in this
+ * node-only suite:
+ *
+ *  1. **A lone request says nothing.** `1/1` is a progress indicator for a queue
+ *     of one — noise on the card it sits on, and worse than noise on the card
+ *     the user sees most often.
+ *  2. **A missing field says nothing.** The legacy backend and any older worker
+ *     send neither number, so both are optional all the way from the wire
+ *     (`PermissionRequestedEvent`) to here. Rendering them unchecked is how a
+ *     card ends up wearing `undefined/undefined`.
+ *
+ * The denominator is DEPTH-AS-OF-NOW, not a total: the gate keeps taking
+ * requests while the user reads, so `2/5` legitimately follows `1/3`. That is
+ * why this returns text and not a fraction — a progress BAR built on it would
+ * jump backwards. See `PermissionRequestedEvent.payload.queueDepth`.
+ */
+export function derivePermissionQueueProgress(entry: {
+  queuePosition?: number;
+  queueDepth?: number;
+}): string | null {
+  const { queuePosition, queueDepth } = entry;
+  if (queuePosition === undefined || queueDepth === undefined) return null;
+  // Integers only, and never a position past the depth: a malformed pair is a
+  // producer bug, and drawing `3/2` would make the card argue with itself.
+  if (!Number.isInteger(queuePosition) || !Number.isInteger(queueDepth)) return null;
+  if (queueDepth <= 1 || queuePosition < 1 || queuePosition > queueDepth) return null;
+  return `${queuePosition}/${queueDepth}`;
+}
+
 export function derivePermissionCardView(
   block: ChatBlock,
   canRespond: boolean,

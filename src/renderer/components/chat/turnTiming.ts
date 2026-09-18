@@ -9,9 +9,14 @@ import { classifyTool, pairToolBlocks, refusedToolCallIds } from './toolCard';
  * Scope is deliberately narrow — A07 screen 5 (groups A-F) has no per-tool
  * duration column (that "right-hand latency column" was explicitly cut), so
  * `tool.started`/`tool.completed` never enter this registry. Only thinking
- * timing is tracked here; the turn's own "Worked for Ns" line reuses the
- * existing T-06 `MessageMetadata.latencyMs` (see `formatWorkedForRow`) and is
- * not folded again in this module.
+ * timing is folded HERE.
+ *
+ * The turn's own "已工作 Ns" head is not folded either: it is DERIVED from the
+ * T-06 metadata the message registry already holds, by `deriveTurnWorkedMs`
+ * below. That function replaced the old "reuse `MessageMetadata.latencyMs`"
+ * note at the bottom of this header — one message's latency is not the turn's,
+ * once a tool result or an authorization wait has split the turn into several
+ * messages.
  */
 
 export interface ThinkingTiming {
@@ -154,13 +159,83 @@ export interface WorkedForRowText {
   argKind: 'prose';
 }
 
+/** A duration already cut into the two units the copy is written in. */
+export interface WorkedForParts {
+  minutes: number;
+  /** Remainder seconds — `0` when the duration lands on a whole minute. */
+  seconds: number;
+}
+
+/**
+ * The ONE place a millisecond count becomes "how long that was".
+ *
+ * Structured rather than formatted, because the work-group head has to reach a
+ * TRANSLATED sentence ("已工作 1 分 6 秒"), and the only way to do that without
+ * shipping English into a `{{…}}` slot is to hand the catalog the numbers and
+ * let the render site pick the key. `formatWorkedForDuration` below is the
+ * English-only rendering of the same split, kept because the thought row's arg
+ * interpolates a duration into an already-translated phrase.
+ *
+ * `Math.max(1, …)` is the floor the head has always had: a turn that happened
+ * at all took at least a second to a reader, and "0s" reads as "didn't run".
+ */
+export function splitWorkedForDuration(latencyMs: number): WorkedForParts {
+  const total = Math.max(1, Math.round(latencyMs / 1000));
+  return { minutes: Math.floor(total / 60), seconds: total % 60 };
+}
+
 /** Duration text for the turn head: "31s" under a minute, "1m 6s" above it, "2m" on the minute. */
 export function formatWorkedForDuration(latencyMs: number): string {
-  const seconds = Math.max(1, Math.round(latencyMs / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
-  return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`;
+  const { minutes, seconds } = splitWorkedForDuration(latencyMs);
+  if (minutes === 0) return `${seconds}s`;
+  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+}
+
+/** The two `MessageMetadata` fields this module needs, named structurally so it stays import-free. */
+export interface TurnSpanMetadata {
+  startedAt?: number | null;
+  completedAt?: number | null;
+}
+
+/**
+ * How long a whole TURN took: last completion minus first start, across every
+ * message in its body.
+ *
+ * Not `MessageMetadata.latencyMs` (which `formatWorkedForRow` uses): that is ONE
+ * message's own span, and a turn interrupted by a tool result or an
+ * authorization wait is several messages. Reporting the last one's latency
+ * would tell a two-minute turn it took four seconds.
+ *
+ * ## `null` means OMIT, never zero
+ *
+ * A07 `:2399`'s red line, restated for the turn scale: a restored history turn
+ * replays no `message.started` / `message.completed` events, so it has no
+ * timestamps at all and there is no honest number to print. Callers must fall
+ * back to a different sentence, not to `0s`. Returns `null` when either end is
+ * missing, and also when the arithmetic comes out negative — a clock that ran
+ * backwards is unknown time, not negative time.
+ */
+export function deriveTurnWorkedMs(
+  metadata: readonly (TurnSpanMetadata | undefined | null)[]
+): number | null {
+  let earliestStart: number | null = null;
+  let latestCompletion: number | null = null;
+  for (const entry of metadata) {
+    const startedAt = entry?.startedAt;
+    if (typeof startedAt === 'number' && (earliestStart === null || startedAt < earliestStart)) {
+      earliestStart = startedAt;
+    }
+    const completedAt = entry?.completedAt;
+    if (
+      typeof completedAt === 'number' &&
+      (latestCompletion === null || completedAt > latestCompletion)
+    ) {
+      latestCompletion = completedAt;
+    }
+  }
+  if (earliestStart === null || latestCompletion === null) return null;
+  const span = latestCompletion - earliestStart;
+  return span < 0 ? null : span;
 }
 
 /**

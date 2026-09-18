@@ -2372,7 +2372,6 @@ export const zhTranslations: Record<string, string> = {
   Retrying: '正在重试',
   'Retry in {{seconds}}s': '{{seconds}} 秒后重试',
   'Waiting for retry response': '等待重试响应',
-  'Approval details': '授权详情',
   'Chat file changes': '聊天中的文件修改',
   'Edit shows modification diffs; Write shows content only. Bash changes are not captured.':
     'Edit 显示修改差异；Write 仅显示写入内容。暂不捕获 Bash 的文件修改。',
@@ -2818,6 +2817,16 @@ export const zhTranslations: Record<string, string> = {
   '{{count}} digits, valid for 15 minutes.': '{{count}} 位数字，15 分钟内有效。',
   '{{count}} sessions': '{{count}} 个会话',
   '{{count}} snapshots imported': '已导入 {{count}} 个快照',
+  // The turn work group's head. Three duration keys rather than one with a
+  // pre-formatted `{{duration}}`: English writes "1m 6s" and Chinese writes
+  // 「1 分 6 秒」, so the unit words belong to the CATALOG, not to the
+  // renderer. `deriveTurnWorkGroupLabel` hands over plain numbers and the
+  // render site picks the key. 「已处理 N 个步骤」 is the fallback for a turn
+  // with no timestamps at all (restored history) — never a fabricated 0 秒.
+  Working: '工作中',
+  'Worked for {{seconds}}s': '已工作 {{seconds}} 秒',
+  'Worked for {{minutes}}m {{seconds}}s': '已工作 {{minutes}} 分 {{seconds}} 秒',
+  'Worked for {{minutes}}m': '已工作 {{minutes}} 分',
   '{{count}} steps processed': '已处理 {{count}} 个步骤',
   '{{month}}/{{day}}': '{{month}} 月 {{day}} 日',
 

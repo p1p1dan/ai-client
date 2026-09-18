@@ -45,8 +45,13 @@ import { groupTimeline, joinResolvedPermissions, type TimelineItem } from './too
  * `error` message" — §4.3 names failed tool calls, and D26 ②'s row-level
  * cluster rule keys off the same fact (spec §7.2 nests the two levels).
  *
- * There is no "collapsing is disabled" export, and since 2026-08-25 no
- * collapsing at all — see the retirement note at the end of this file.
+ * **This module does not decide what collapses.** It produces the ordered
+ * segment list and stops there; which segments end up behind the turn's work
+ * group, and whether that group is open, are `turnProcessFold.ts`'s three pure
+ * rules (`splitTurnWorkGroup` / `turnWorkGroupAwaitsUser` /
+ * `turnWorkGroupOpen`). Keeping the split out of here is what lets the
+ * order-preserving contract below stay a contract: the segmenter has no reason
+ * to ever look ahead.
  */
 
 export interface Turn {
@@ -233,29 +238,35 @@ export function segmentTurnBody<T extends { kind: TurnItemKind }>(
 }
 
 /**
- * ⚠️ RETIRED (2026-08-25, user decision): `collapsedLeavesNothing`,
- * `TurnProcessOpenInput`, `defaultTurnProcessOpen`, `hasUnresolvedPermission`
- * and `turnHasFailure` all went with the turn-level collapse itself.
+ * ## Where the turn-level collapse lives — and the two times this note was wrong
  *
- * The turn no longer has a shell to open or close. Every tool row already
- * carries its own expander, and once FB4 stopped folding prose into the process
- * segment there was little left for a second, turn-wide control to hide — so
- * the chevron in the bottom meta row was removed and process segments are
- * simply always rendered. The meta row keeps its text (`Worked for 24s · 2
- * tools`, plus model and time); it is now purely a summary.
+ * Read the history, because the same mistake has now been made twice in
+ * opposite directions and a reader who trusts an old paragraph here will make
+ * it a third time.
  *
- * What this does to the authorization red line: it satisfies it BY
- * CONSTRUCTION. `defaultTurnProcessOpen`'s first return existed to force the
- * shell open while a `permission_request` was unresolved, because a collapsed
- * shell could bury the only Allow/Deny surface in the app (round-2 point-check
- * #5). With no shell, a permission card cannot be hidden at all — the guarantee
- * is structural now, not conditional, and `messageTimelineWiring.test.ts`
- * asserts it as such: the process panel has no visibility binding and is never
- * rendered conditionally.
+ * **2026-08-25** retired the turn-level shell entirely (`collapsedLeavesNothing`,
+ * `TurnProcessOpenInput`, `defaultTurnProcessOpen`, `hasUnresolvedPermission`,
+ * `turnHasFailure` all deleted), and this note claimed the authorization red
+ * line was now satisfied BY CONSTRUCTION: with no shell, a permission card
+ * cannot be hidden at all.
  *
- * The other four retired because they existed solely to feed that one decision.
- * An exported predicate nothing consumes is a shell waiting to be mistaken for
- * a live rule (§13 ①), so they are deleted rather than left standing.
+ * **2026-09-10** put a shell back (per-`process`-segment `<details>`), so the
+ * "by construction" claim stopped holding — but this note was not updated, and
+ * for eight days the file asserted "no collapsing at all" directly above code
+ * that collapsed.
+ *
+ * **2026-09-18** replaced that with ONE work group per turn, holding everything
+ * before the final output. The guarantee is CONDITIONAL again and is written
+ * as a condition: `turnWorkGroupAwaitsUser` forces the group open while an
+ * unanswered permission/question is inside it, and `turnWorkGroupOpen` gives
+ * that rule precedence over both the auto-collapse and the user's own click.
+ * Both live in `turnProcessFold.ts`, next to the split they guard, and are
+ * asserted there rather than by a structural "nothing can hide" negative.
+ *
+ * The lesson worth keeping, since the 2026-08-25 deletion was otherwise
+ * correct: an exported predicate nothing consumes is a shell waiting to be
+ * mistaken for a live rule (§13 ①). The five names above stayed deleted, and
+ * the new rules were written fresh against the new shape rather than revived.
  */
 
 /**

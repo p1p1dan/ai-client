@@ -21,6 +21,25 @@ import {
  *
  * Every string comes off a third-party plugin's broadcast and is rendered as
  * TEXT — React escapes it. Nothing here may reach for `dangerouslySetInnerHTML`.
+ *
+ * ## `PermissionActivityDetails` removed (user decision 2026-09-18)
+ *
+ * 「输出过程中不要再显示『授权详情』这个项目了，不需要。」 It was the sibling
+ * `<details>` that held the QUIET gates — the `policy_allow` records nobody
+ * decided — behind a 「授权详情 (N)」 summary appended once per turn. With the
+ * turn-level work group now hiding the whole process behind one line, a second
+ * disclosure inside it was a fold within a fold for the least interesting rows
+ * on the transcript.
+ *
+ * What deliberately stayed is this component: it renders the NON-quiet records
+ * (denied, and gate errors) unconditionally, and it is the only visible exit a
+ * refused authorization has. Removing it too would make a denial silent, which
+ * is the opposite of what the decision asked for.
+ *
+ * The cost, recorded rather than hidden: a `policy_allow` gate now has no
+ * surface at all in the UI. It is still in the message blocks and still in the
+ * session log; `isQuietPermissionActivity` below is what draws the line, and
+ * `includeAllowed` is the parameter that would bring them back.
  */
 
 const TONE_CLASS: Record<PermissionActivityTone, string> = {
@@ -38,20 +57,6 @@ const TONE_ICON: Record<PermissionActivityTone, typeof ShieldCheck> = {
   denied: ShieldX,
   auto: ShieldAlert,
 };
-
-export function PermissionActivityDetails({ blocks }: { blocks: readonly ChatBlock[] }) {
-  const { t } = useI18n();
-  const allowed = blocks.filter((block) => isQuietPermissionActivity(block.permissionActivity));
-  if (allowed.length === 0) return null;
-  return (
-    <details className="text-meta text-muted-foreground">
-      <summary className="cursor-pointer">
-        {t('Approval details')} ({allowed.length})
-      </summary>
-      <PermissionActivityRows blocks={allowed} includeAllowed />
-    </details>
-  );
-}
 
 export function PermissionActivityRows({
   blocks,
