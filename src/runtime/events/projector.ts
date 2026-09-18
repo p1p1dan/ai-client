@@ -130,6 +130,16 @@ export class RuntimeEventProjector {
   private delegatedUsage: PiTurnUsage | undefined;
   /** The last turn payload emitted, so a delegate settling can re-state it. */
   private lastTurnUsage: unknown;
+  /**
+   * The context-occupancy figure from the last `turn_end`, kept so a delegate
+   * settling can re-state it instead of re-stating `undefined`.
+   *
+   * `delegated()` below used to hardcode this argument to `undefined`, which
+   * made `foldSettledUsage` on the renderer side treat the whole `context`
+   * field as gone — the occupancy ring read as zero for the length of a
+   * delegation even though nothing about the parent turn's context changed.
+   */
+  private lastContextUsage: { tokens: number; contextWindow: number; percent: number } | undefined;
   private readonly contextWindow: number | undefined;
   private readonly userTurn: UserTurnEcho;
   constructor(
@@ -396,15 +406,17 @@ export class RuntimeEventProjector {
             this.rollup = applyTurnUsage(this.rollup, { sessionId, usage, source: 'tool' });
         }
         const tokens = estimateContextTokens([event.message, ...event.toolResults]).tokens;
+        const contextUsage = this.contextWindow
+          ? {
+              tokens,
+              contextWindow: this.contextWindow,
+              percent: (tokens / this.contextWindow) * 100,
+            }
+          : undefined;
+        this.lastContextUsage = contextUsage;
         const payload = buildPiUsagePayload(
           event.message.usage,
-          this.contextWindow
-            ? {
-                tokens,
-                contextWindow: this.contextWindow,
-                percent: (tokens / this.contextWindow) * 100,
-              }
-            : undefined,
+          contextUsage,
           viewTurnRollup(this.rollup),
           this.delegatedUsage
         );
@@ -519,7 +531,7 @@ export class RuntimeEventProjector {
     if (this.lastTurnUsage === undefined) return;
     const payload = buildPiUsagePayload(
       this.lastTurnUsage,
-      undefined,
+      this.lastContextUsage,
       viewTurnRollup(this.rollup),
       this.delegatedUsage
     );

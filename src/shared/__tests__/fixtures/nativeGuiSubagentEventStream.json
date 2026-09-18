@@ -274,6 +274,11 @@
       "cacheWrite": 0,
       "totalTokens": 0,
       "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
       "session": {
         "turns": 0,
         "toolResults": 0,

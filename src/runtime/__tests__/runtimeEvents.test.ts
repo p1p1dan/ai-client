@@ -479,6 +479,51 @@ describe('T017 · projection seams', () => {
       payload: {},
     });
   });
+
+  /**
+   * T053. `delegated()` used to hardcode the context-occupancy argument to
+   * `undefined`, so the `usage.updated` it emits when a delegate settles wiped
+   * the `context` field entirely — the renderer's `foldSettledUsage` replaces
+   * it wholesale, so the occupancy ring read as zero for as long as a
+   * delegation was in flight, even though the parent turn's occupancy had not
+   * changed.
+   */
+  it('keeps the last turn context occupancy on a usage.updated a delegate settling re-states', () => {
+    const events: RuntimeEventDraft[] = [];
+    const projection = new RuntimeEventProjector(
+      { sessionId: 'logical', emit: (event) => events.push(event) },
+      'run',
+      [],
+      1000
+    );
+    const usage = {
+      input: 10,
+      output: 5,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 15,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.01 },
+    };
+    const message = { ...fauxAssistantMessage('done'), usage } as AgentMessage;
+    projection.observe({ type: 'message_start', message });
+    projection.observe({ type: 'message_end', message });
+    projection.observe({ type: 'turn_end', message, toolResults: [] });
+    const turnPayload = events.find((event) => event.type === 'usage.updated')?.payload;
+    expect(turnPayload?.context).toBeDefined();
+
+    events.length = 0;
+    projection.delegated({
+      input: 3,
+      output: 2,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 5,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.002 },
+    });
+    const delegatedPayload = events.find((event) => event.type === 'usage.updated')?.payload;
+    expect(delegatedPayload?.context).toBeDefined();
+    expect(delegatedPayload?.context).toEqual(turnPayload?.context);
+  });
 });
 
 it('puts a provider retry on the wire the banner reads, and clears it when the retry streams', async () => {
