@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
+import { Z_INDEX } from '@/lib/z-index';
 import {
   deriveRuleTables,
   deriveScopeRows,
@@ -255,7 +256,8 @@ export function PermissionPolicySettings({ repoPath }: { repoPath?: string }) {
           if (!nextOpen) setPending(null);
         }}
       >
-        <AlertDialogPopup className="sm:max-w-md">
+        {/* Opened from within SettingsDialog: must render above the base modal, not rely on DOM mount order */}
+        <AlertDialogPopup className="sm:max-w-md" zIndexLevel="nested">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
@@ -349,7 +351,7 @@ function SurfaceRow({
             </span>
           </SelectValue>
         </SelectTrigger>
-        <SelectPopup>
+        <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
           <SelectItem value={INHERIT_OPTION}>{t('Inherit default')}</SelectItem>
           <SelectItem value="allow">
             <span className={control.dangerous ? 'text-destructive' : undefined}>
@@ -428,7 +430,7 @@ function RuleTableSection({
               <SelectTrigger className="w-32 shrink-0" aria-label={t('Action for the new rule')}>
                 <SelectValue>{t(ACTION_LABELS[action])}</SelectValue>
               </SelectTrigger>
-              <SelectPopup>
+              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
                 <SelectItem value="allow">{t(ACTION_LABELS.allow)}</SelectItem>
                 <SelectItem value="ask">{t(ACTION_LABELS.ask)}</SelectItem>
                 <SelectItem value="deny">{t(ACTION_LABELS.deny)}</SelectItem>

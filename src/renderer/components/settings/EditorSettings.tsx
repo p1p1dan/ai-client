@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
+import { Z_INDEX } from '@/lib/z-index';
 import {
   type EditorAutoClosingBrackets,
   type EditorAutoClosingQuotes,
@@ -315,7 +316,7 @@ export function EditorSettings() {
             <SelectTrigger className="w-48">
               <SelectValue>{editorSettings.tabSize}</SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {tabSizeOptions.map((size) => (
                 <SelectItem key={size} value={String(size)}>
                   {size}
@@ -369,7 +370,7 @@ export function EditorSettings() {
                 {lineNumbersOptions.find((o) => o.value === editorSettings.lineNumbers)?.label}
               </SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {lineNumbersOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -389,7 +390,7 @@ export function EditorSettings() {
                 {wordWrapOptions.find((o) => o.value === editorSettings.wordWrap)?.label}
               </SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {wordWrapOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -414,7 +415,7 @@ export function EditorSettings() {
                 }
               </SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {renderWhitespaceOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -440,7 +441,7 @@ export function EditorSettings() {
                 }
               </SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {renderLineHighlightOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -492,7 +493,7 @@ export function EditorSettings() {
                 {cursorStyleOptions.find((o) => o.value === editorSettings.cursorStyle)?.label}
               </SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {cursorStyleOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -515,7 +516,7 @@ export function EditorSettings() {
                 }
               </SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {cursorBlinkingOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -549,7 +550,7 @@ export function EditorSettings() {
                 {matchBracketsOptions.find((o) => o.value === editorSettings.matchBrackets)?.label}
               </SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {matchBracketsOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -596,7 +597,7 @@ export function EditorSettings() {
                 }
               </SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {autoClosingOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -621,7 +622,7 @@ export function EditorSettings() {
                 }
               </SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {autoClosingOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -643,7 +644,7 @@ export function EditorSettings() {
                 {autoSaveOptions.find((o) => o.value === editorSettings.autoSave)?.label}
               </SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {autoSaveOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}

@@ -70,6 +70,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useI18n } from '@/i18n';
+import { Z_INDEX } from '@/lib/z-index';
 import { useSettingsStore } from '@/stores/settings';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 import {
@@ -475,7 +476,8 @@ export function PiSubagentsSettings() {
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}
       >
-        <AlertDialogPopup className="max-w-md">
+        {/* Opened from within SettingsDialog: must render above the base modal, not rely on DOM mount order */}
+        <AlertDialogPopup className="max-w-md" zIndexLevel="nested">
           <AlertDialogHeader>
             <AlertDialogTitle>
               {t('Delete {{name}}?', { name: pendingDelete?.name ?? '' })}
@@ -684,7 +686,7 @@ function SubagentEditor({
           <SelectTrigger className="w-64">
             <SelectValue>{draft.thinkingLevel || t('Follow the session')}</SelectValue>
           </SelectTrigger>
-          <SelectPopup>
+          <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
             <SelectItem value={UNSET}>{t('Follow the session')}</SelectItem>
             {SUBAGENT_THINKING_LEVELS.map((level) => (
               <SelectItem key={level} value={level}>

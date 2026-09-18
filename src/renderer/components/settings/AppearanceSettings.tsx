@@ -24,6 +24,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { Z_INDEX } from '@/lib/z-index';
 import { type Theme, useSettingsStore } from '@/stores/settings';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { SettingsSectionBlock } from './SettingsPrimitives';
@@ -240,7 +241,7 @@ export function AppearanceSettings() {
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectPopup>
+                <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
                   <SelectItem value="file">{t('Image / Video File')}</SelectItem>
                   <SelectItem value="folder">{t('Folder (Random)')}</SelectItem>
                   <SelectItem value="url">{t('URL (Auto Refresh)')}</SelectItem>
@@ -468,7 +469,7 @@ export function AppearanceSettings() {
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectPopup>
+                <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
                   <SelectItem value="cover">{t('Cover')}</SelectItem>
                   <SelectItem value="contain">{t('Contain')}</SelectItem>
                   <SelectItem value="repeat">{t('Repeat')}</SelectItem>

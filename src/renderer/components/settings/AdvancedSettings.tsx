@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
+import { Z_INDEX } from '@/lib/z-index';
 import { useSettingsStore } from '@/stores/settings';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
@@ -62,7 +63,7 @@ export function AdvancedSettings() {
                 {logLevel === 'debug' && t('Debug')}
               </SelectValue>
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               <SelectItem value="error">
                 {t('Error')} - {t('Only critical errors')}
               </SelectItem>
@@ -95,7 +96,7 @@ export function AdvancedSettings() {
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
-              <SelectPopup>
+              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
                 <SelectItem value="7">{t('7 days')}</SelectItem>
                 <SelectItem value="14">{t('14 days')}</SelectItem>
                 <SelectItem value="30">{t('30 days')}</SelectItem>

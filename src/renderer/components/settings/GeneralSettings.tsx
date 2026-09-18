@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
+import { Z_INDEX } from '@/lib/z-index';
 import { useSettingsStore } from '@/stores/settings';
 import { useUpdaterStatus } from '@/stores/updater';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
@@ -88,7 +89,7 @@ export function GeneralSettings() {
               <SelectTrigger className="w-48">
                 <SelectValue>{language === 'zh' ? t('Chinese') : t('English')}</SelectValue>
               </SelectTrigger>
-              <SelectPopup>
+              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
                 <SelectItem value="en">{t('English')}</SelectItem>
                 <SelectItem value="zh">{t('Chinese')}</SelectItem>
               </SelectPopup>

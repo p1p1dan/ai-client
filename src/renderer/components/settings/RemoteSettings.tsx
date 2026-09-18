@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useI18n } from '@/i18n';
+import { Z_INDEX } from '@/lib/z-index';
 import { useSettingsStore } from '@/stores/settings';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
@@ -477,7 +478,7 @@ export function RemoteSettings() {
                         : t('Create new profile')}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectPopup>
+                  <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
                     <SelectItem value="">{t('Create new profile')}</SelectItem>
                     {profiles.map((profile) => (
                       <SelectItem key={profile.id} value={profile.id}>
@@ -745,7 +746,8 @@ export function RemoteSettings() {
         </Alert>
       )}
       <AlertDialog open={deleteRuntimeDialogOpen} onOpenChange={setDeleteRuntimeDialogOpen}>
-        <AlertDialogPopup className="max-w-md">
+        {/* Opened from within SettingsDialog: must render above the base modal, not rely on DOM mount order */}
+        <AlertDialogPopup className="max-w-md" zIndexLevel="nested">
           <AlertDialogHeader>
             <AlertDialogTitle>{t('Delete managed remote runtime?')}</AlertDialogTitle>
             <AlertDialogDescription>

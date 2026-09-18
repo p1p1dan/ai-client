@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/select';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { Z_INDEX } from '@/lib/z-index';
 
 const CUSTOM_SERVICE = 'custom';
 
@@ -176,7 +177,8 @@ export function ProviderSetupDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="max-w-lg">
+      {/* Opened from within SettingsDialog: must render above the base modal, not rely on DOM mount order */}
+      <DialogPopup className="max-w-lg" zIndexLevel="nested">
         <DialogHeader>
           <DialogTitle>{editing ? t('Edit AI service') : t('Add AI service')}</DialogTitle>
         </DialogHeader>
@@ -190,7 +192,7 @@ export function ProviderSetupDialog({
                     t('Custom')}
                 </SelectValue>
               </SelectTrigger>
-              <SelectPopup>
+              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_NESTED_MODAL}>
                 {PROVIDER_PRESETS.map((candidate) => (
                   <SelectItem key={candidate.id} value={candidate.id}>
                     {candidate.label}
@@ -234,7 +236,7 @@ export function ProviderSetupDialog({
               <SelectTrigger className="w-full" aria-label={t('API style')}>
                 <SelectValue>{API_LABELS[api]}</SelectValue>
               </SelectTrigger>
-              <SelectPopup>
+              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_NESTED_MODAL}>
                 {USER_PROVIDER_APIS.map((style) => (
                   <SelectItem key={style} value={style}>
                     {API_LABELS[style]}

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
+import { Z_INDEX } from '@/lib/z-index';
 import {
   defaultBranchNameGeneratorSettings,
   defaultCodeReviewPromptEn,
@@ -57,7 +58,7 @@ function ModelField({
           {models.find((model) => model.id === selected)?.label ?? t('Automatic')}
         </SelectValue>
       </SelectTrigger>
-      <SelectPopup>
+      <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
         <SelectItem value={AUTOMATIC}>{t('Automatic')}</SelectItem>
         {models.map((model) => (
           <SelectItem key={model.id} value={model.id}>
@@ -96,7 +97,7 @@ function EffortField({
       <SelectTrigger className="w-40">
         <SelectValue />
       </SelectTrigger>
-      <SelectPopup>
+      <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
         <SelectItem value="default">{t('Automatic')}</SelectItem>
         {options.map((effort) => (
           <SelectItem key={effort.id} value={effort.id}>

@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
+import { Z_INDEX } from '@/lib/z-index';
 import { type TerminalRenderer, useSettingsStore } from '@/stores/settings';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
@@ -145,7 +146,7 @@ export function TerminalSettings() {
                     {isCustomShell ? t('Custom') : currentShell?.name || shellConfig.shellType}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectPopup>
+                <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
                   {availableShells.map((shell) => (
                     <SelectItem key={shell.id} value={shell.id}>
                       <div className="flex items-center gap-2">
@@ -203,7 +204,7 @@ export function TerminalSettings() {
                   {rendererOptions.find((o) => o.value === terminalRenderer)?.label}
                 </SelectValue>
               </SelectTrigger>
-              <SelectPopup>
+              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
                 {rendererOptions.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
@@ -232,7 +233,7 @@ export function TerminalSettings() {
                     t('{{count}} lines', { count: numberFormatter.format(terminalScrollback) })}
                 </SelectValue>
               </SelectTrigger>
-              <SelectPopup>
+              <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
                 {scrollbackOptions.map((opt) => (
                   <SelectItem key={opt.value} value={String(opt.value)}>
                     {opt.label}

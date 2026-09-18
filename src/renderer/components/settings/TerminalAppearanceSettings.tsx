@@ -25,6 +25,7 @@ import {
   type XtermTheme,
 } from '@/lib/ghosttyTheme';
 import { cn } from '@/lib/utils';
+import { Z_INDEX } from '@/lib/z-index';
 import { type FontWeight, useSettingsStore } from '@/stores/settings';
 import { fontWeightOptions } from './constants';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
@@ -269,7 +270,7 @@ function ThemeCombobox({
           </label>
         </div>
       </div>
-      <ComboboxPopup>
+      <ComboboxPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
         <ComboboxList ref={listRef}>
           {filteredThemes.length === 0 && (
             <div className="py-6 text-center text-sm text-muted-foreground">
@@ -465,7 +466,7 @@ export function TerminalAppearanceSettings() {
             <SelectTrigger className="w-48">
               <SelectValue />
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {fontWeightOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
@@ -483,7 +484,7 @@ export function TerminalAppearanceSettings() {
             <SelectTrigger className="w-48">
               <SelectValue />
             </SelectTrigger>
-            <SelectPopup>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
               {fontWeightOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
