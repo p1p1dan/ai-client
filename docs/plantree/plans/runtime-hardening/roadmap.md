@@ -67,6 +67,7 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 - ✅ **T032** 上机检查单与开发机组 — 只读点验，证据随 `db8956a8` 提交（2026-09-17）。**正式检查单已产出** → [checklist-e.md](checklist-e.md)（计划根下，与本文件并列；批次 D 的草案作为存证保留原样）：四个来源合并去重完毕，新增 20 项（旧树 P5-2 六行 / P5-4-P5-5 四行 / H-20 两行 / P6-3 第 4 条 / P6-4 回退互读 / 四条审计静态推断项 / 三条旧树未覆盖项），并做了三条裁决（cordis 判据写反已改正、并发轮转已由 `trace.test.ts:350` 覆盖、CI 不触发测试已结案）。**开发机组 37 项（35 + DEV-36/37）当日全部处置完毕**，分七批执行：✅ 通过 28 项、⚠️ 部分成立 3 项（DEV-11 导入文案、DEV-32 GUI 侧覆盖层、DEV-36 插件页有条件句）、⛔ 判负或复现已知缺陷 3 项（DEV-3 兼容根子代理定义删除语义、DEV-10 Codex 子目录不可读整源静默消失、DEV-16 两个窗口对同一会话开 `pi --session` 静默分叉）、⛔ 当前不可执行 2 项（DEV-12 本机无真实旧格式 Codex 样本、DEV-18 Node 24 解析属死代码）、🚫 裁决不需人工 2 项（DEV-35 已由 `trace.test.ts:350` 覆盖、baseline-01 CI 已结案）。检查单同日更正 16 行：5.1 判据修正新增 15 行（DEV-22、DEV-33 ×2、DEV-11、DEV-5、DEV-13、DEV-1、DEV-2、DEV-15、DEV-32、DEV-17、DEV-24、DEV-25、DEV-29、DEV-36），5.2 新增 DEV-18（死代码不可执行）；另第 2.3 节 MODEL-48 放宽为「CDP 真鼠标序列可驱动」。点验产出 26 条疑似缺陷 D1～D26，收敛成新开的**批次 D4**（T060～T068）与两条待拍板问题 **Q016 / Q017**。方法与环境：模型除第二批 dev-A1 用了 `maxapi/grok-4.6` 真实回合外全部走本地假网关（vault 临时注册、每批还原），Electron 累计起 20 次，产品代码零改动，唯一新增仓库文件是测试用例 `src/runtime/__tests__/sessionAttachmentFill.test.ts`（2 条）。收口全量 Vitest（Linux 开发机、单 worker）**413 文件 / 6271 条全部通过，退出码 0，237.55 s**，存档 [closeout-vitest-full.txt](evidence/batch-e-devbox-2026-09-17/closeout-vitest-full.txt)；对比 T059 收口的 411 / 6268（2 failed 为开机时长相关的 `sessionWriterLock` 两条），本次 +2 文件（`pluginGraphIncomplete.test.ts` 已提交、`sessionAttachmentFill.test.ts` 新增）。证据：[evidence/batch-e-devbox-2026-09-17/README.md](evidence/batch-e-devbox-2026-09-17/README.md)。**本轮全部未提交**（提交需用户批准）。
 - 批次 D2 已收口（2026-09-16），批次 D3（T056 `8a3ce4a6` / T057 `2c1e4ba3` / T059 `b32fa9da`）已全部落地并收口（2026-09-17）。
 - **批次 D4（T060～T068）九项已全部落地并经两轮审阅、两轮真机复验（2026-09-17），代码 `d2bbbf13`、文档 `db8956a8`**——逐项结论见下方批次 D4 表，证据 [evidence/batch-d4-fixes-2026-09-17/README.md](evidence/batch-d4-fixes-2026-09-17/README.md)。本段当前在飞：提交批次 D4 与 T032 的证据，然后进 **T033**（最后一次上机，先补一次打包构建）。
+- **批次 G（T072～T076）五项已全部落地并提交（2026-09-18）**，`17eb4581` / `0144320e` / `cd734d61`，未推送——来源是用户当日直接提出的五条界面诉求，不走审计/点验通道；逐项结论见下方批次 G 表，证据 [evidence/batch-g-chat-ux-2026-09-18/README.md](evidence/batch-g-chat-ux-2026-09-18/README.md)。**全程只有静态验证，未启动 Electron**：三处观感/对比度判定（暗色第二跳 1.33×、浮层遮挡、折叠后清爽度）并入 T033 上机日。
 
 ## Next
 
@@ -199,6 +200,18 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | T069 | 删除临时工作区前确认并把其下聊天转回未绑定分组（[决策 018](decisions/018-temp-workspace-removal-keeps-chats-visible.md)，结 Q016） | low | D5、Q016 | 删除前确认框列出该目录下的对话条数；删除后这些聊天转为未绑定会话，在未绑定分组下可见、可打开；补一条用例 + 一次真机复验 |
 | T070 | 运行时错误统一改成带标题与下一步的引导卡片（[决策 019](decisions/019-runtime-errors-as-guided-cards.md)，结 Q017） | low | Q017、DEV-24、DEV-33 判据问题 | 重试预算耗尽与会话超预算两种错误均改为带标题的卡片，原始报错文字折叠进「详情」，按钮可用；复用 T062 的 `ModelMissingNotice` 骨架；中文界面下卡片文案无英文硬编码；补一条用例 + 一次真机复拍 |
 | T071 | 临时工作区根固定加一层应用专属子目录（[决策 020](decisions/020-temp-workspace-root-app-owned-subdir.md)，结 Q018） | medium | Q018、T060 审阅备注（`evidence/batch-d4-fixes-2026-09-17/reviews/group1.md` T060 note 1） | 保存位置指向任意目录时，只在其专属子目录内创建与认领临时工作区；把保存位置设成真实项目的父目录后不再对该项目执行 `git init`（用例先复现原风险判红，修后转绿）；默认路径（`~/JYWAI/temporary`）下行为不变；已存在的临时工作区仍可正常打开；补一次真机复验 |
+
+### 批次 G：聊天区信息层级与授权交互（2026-09-18 用户直接提出，已全部落地）
+
+来源不是审计也不是点验，是用户当日提出的五条界面诉求（附参照截图 `sharePic/20260918/`，未纳入版本库）。第 4 条含一处分叉，经三候选拍板结为[决策 022](decisions/022-permission-gate-serialized-single-docked-card.md)；时间线一项推翻了 2026-08-29 与 2026-09-10 两条旧裁定，结为[决策 021](decisions/021-turn-work-group-restores-elapsed-and-fold.md)。三个提交 `17eb4581` / `0144320e` / `cd734d61`，**未推送**。落地记录与遗留缺口见[批次 G 证据](evidence/batch-g-chat-ux-2026-09-18/README.md)。
+
+| ID | 任务 | 严重级 | 来源 | 验收 |
+|---|---|---|---|---|
+| ✅ T072 | 回合过程收进「工作组」：最后一个 `answer` 段为最终输出留在组外，其余进组；运行中 header 显示「工作中」并展开，结束后变「已工作 xx 秒」并自动折叠；三档对比度（[决策 021](decisions/021-turn-work-group-restores-elapsed-and-fold.md)） | — | 用户诉求 5 | 交替形态只有最后一段散文在组外；以 notice 收尾时最终输出仍可见（FB4 回归）；纯文字回合不渲染工作组；用户手动展开后不被自动折叠覆盖；时长未知回落步骤数且不渲染任何秒数。**已落地（`cd734d61`）**：新增 `turnProcessFold.test.ts` 21 条 + `turnTiming` 7 条 + `chatTimelineLayout` 5 条，6 组反向验证 |
+| ✅ T073 | 移除「授权详情」折叠条 | — | 用户诉求 3 | 静默自动放行的授权不再有界面出口（数据与日志仍在，`includeAllowed` 为回头路并有测试守着）；拒绝/报错的 `PermissionActivityRows` 保留。**已落地（`cd734d61`）** |
+| ✅ T074 | 授权闸串行化 + 浮层单卡（[决策 022](decisions/022-permission-gate-serialized-single-docked-card.md)） | — | 用户诉求 4 | 并发多调用只发一张卡；排队中不发事件不起计时（假计时器钉死）；FIFO；自动放行不进队列；`permission.requested` 带 `queuePosition` / `queueDepth`；浮层在 Composer 上方非模态，`queueDepth > 1` 才显示进度；内联退化为冻结副本；红线用例断言「恰好一张可答卡且在浮层里」。**已落地（`17eb4581` + `cd734d61`）**：runtime 10 条用例 6 组反向验证，渲染层 12 条用例 |
+| ✅ T075 | 新建会话幂等：四个入口先判空再决定停留 / 原地改目标 / 新建 | — | 用户诉求 1 | 目标一致则停留、跨项目则 retarget 复用、非空则照旧新建；不给 `ChatSession` 加字段；不产生 `session-index.json` 写入。**已落地（`0144320e`）**：28 条用例，3 组反向验证。编排者补正两处——判空谓词改用 `computeEverHostBound`（原判据会把磁盘恢复、转录未回放的真实会话误判为全新并改写其绑定）、右键菜单入口补接线 + 三条静态测试改断言 |
+| ✅ T076 | 「Branches」按钮从滚动消息区移进顶栏，文案改用既有词条 | — | 用户诉求 2 | 按钮出现在 `SessionBar` 不在 `MessageTimeline`；文案走 `t('Session branches')`（「会话分支」）；显示条件 `runtimeIdentity != null`、禁用条件严格 `idle`（刻意不复用顶栏 `busy`，它只认 `running`/`starting`），且只此一份定义。**已落地（`cd734d61`）**：4 条用例 |
 
 ## Deferred
 
