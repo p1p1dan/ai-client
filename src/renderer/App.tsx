@@ -29,6 +29,7 @@ import {
   useWorktreeSync,
 } from './App/hooks';
 import { getStoredWorktreeMap, pathsEqual, STORAGE_KEYS } from './App/storage';
+import { SignInConfirmHost } from './components/auth/SignInConfirmHost';
 import { DevToolsOverlay } from './components/DevToolsOverlay';
 import { UnsavedPromptHost } from './components/files/UnsavedPromptHost';
 import { AddRepositoryDialog } from './components/git';
@@ -109,10 +110,20 @@ export default function App() {
   // nothing can call `markRejected()`. By construction this listener only
   // fires on a run that is already `managed`, where leaving `local` is a
   // no-op and clearing the latch is the whole point.
+  //
+  // `session-expired`, not the button prompt: the user pressed nothing, so
+  // "are you sure?" asks them to confirm a decision that was made for them.
+  // The dialog states the fact (the sign-in is gone, AI features have already
+  // stopped) and still lists the same losses, because routing away silently
+  // would take a running build with it — the one outcome worse than an
+  // unexpected dialog. Its second button defers rather than cancels: deferring
+  // is what lets someone save their work first, and it strands nobody, since
+  // the account chip in the footer stays on 登录已过期 with the same request
+  // behind it.
   useEffect(() => {
     return window.electronAPI.auth.onStateChanged((state) => {
       if (state.status === 'credentials_invalid') {
-        void requestSignIn();
+        void requestSignIn({ prompt: 'session-expired' });
       }
     });
   }, [requestSignIn]);
@@ -1036,6 +1047,12 @@ export default function App() {
 
         {/* Unsaved Prompt Host */}
         <UnsavedPromptHost />
+
+        {/* The one mount point for the "signing in closes this workspace"
+            confirmation. Every sign-in affordance awaits it through
+            `useSignInRequest`, and the request fails closed (with a toast)
+            rather than routing away if this is ever missing. */}
+        <SignInConfirmHost />
 
         {/* Remote SSH Auth Prompt Host */}
         <RemoteAuthPromptHost />

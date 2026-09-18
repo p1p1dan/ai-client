@@ -3,6 +3,7 @@ import { deriveWeeklyQuotaView } from '@shared/weeklyQuota';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Loader2, LogIn, LogOut, RefreshCw } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import { type SignInLossSnapshot, signInLossLines } from '@/components/auth/signInLossModel';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,6 +21,7 @@ import { useSignInRequest } from '@/hooks/useSignInRequest';
 import { useUsageStats } from '@/hooks/useUsageStats';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { readSignInLosses } from '@/stores/signInConfirm';
 
 const usageNumberFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 });
 
@@ -155,6 +157,24 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
     return formatCostUsd(usage.data.monthCostUsd);
   }, [metricsLoading, usage.data, t]);
 
+  /**
+   * Losses frozen when the logout confirm OPENS, not when it is answered.
+   *
+   * The dialog's whole job is to state the price before the user agrees to it,
+   * so the number they read has to be the number they agreed to — re-reading at
+   * click time would let a terminal that appeared in between change the deal
+   * after the fact.
+   */
+  const [logoutLosses, setLogoutLosses] = useState<SignInLossSnapshot | null>(null);
+  const openLogoutConfirm = useCallback(() => {
+    setLogoutLosses(readSignInLosses());
+    setLogoutConfirmOpen(true);
+  }, []);
+  const logoutLossLines = useMemo(
+    () => (logoutLosses ? signInLossLines(logoutLosses, { terminatesTurns: true }) : []),
+    [logoutLosses]
+  );
+
   const handleLogout = useCallback(async () => {
     setLoggingOut(true);
     try {
@@ -176,7 +196,12 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
       // because the gate routes on the entry latch. Without this the confirm
       // dialog's promise ("you will need to register again") was followed by
       // the user staying exactly where they were, now signed out.
-      await requestSignIn();
+      //
+      // `skip`: this path already asked, and the dialog it asked with lists the
+      // same losses. A second confirmation here would put two boxes in a row in
+      // front of one decision — and the second one would arrive AFTER the vault
+      // was already cleared, so "cancel" could not undo anything.
+      await requestSignIn({ prompt: 'skip' });
     } catch (error) {
       toastManager.add({
         type: 'error',
@@ -325,7 +350,7 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
       <Button
         variant="destructive"
         className="w-full"
-        onClick={() => setLogoutConfirmOpen(true)}
+        onClick={openLogoutConfirm}
         disabled={!email || loggingOut}
       >
         <LogOut className="mr-2 h-4 w-4" />
@@ -341,6 +366,25 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
                 'This will terminate all active agent and terminal sessions. You will need to register again to continue using AI features.'
               )}
             </DialogDescription>
+            {/* The counted version of the sentence above, and the reason this
+                dialog does not get a second one stacked on top of it: logging
+                out ALSO drops Main's entry latch, so the app returns to the
+                welcome screen and `<App/>` unmounts. Same losses as any other
+                sign-in request — see `signInLossModel.ts` — so they are listed
+                here instead, once.
+
+                `terminatesTurns` is what makes the running-turn line honest
+                here: a plain re-login leaves the worker alive (the turn keeps
+                going, only its output is lost), while logout's own sequence
+                terminates every session and invalidates the worker before it
+                clears the vault. Same count, opposite promise. */}
+            {logoutLosses && logoutLossLines.length > 0 && (
+              <ul className="flex list-disc flex-col gap-1 pl-4 text-sm text-foreground">
+                {logoutLossLines.map((line) => (
+                  <li key={line.key}>{t(line.key, line.params)}</li>
+                ))}
+              </ul>
+            )}
             {/* D47 S6 §2 (A-m9) — known limitation: flag-on logout stops
                 touching ~/.claude at all (U1 decision), so a CLI logged in
                 outside this app keeps working after this dialog's logout. */}

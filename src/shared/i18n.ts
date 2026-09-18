@@ -2435,6 +2435,30 @@ export const zhTranslations: Record<string, string> = {
   'Could not open the sign-in screen': '无法打开登录页面',
   'Credentials are still unlocking. Try again in a moment.': '凭据仍在解锁，请稍后再试。',
 
+  // The confirmation in front of every sign-in request (`signInLossModel.ts`,
+  // `SignInConfirmDialog.tsx`). Going to the sign-in screen unmounts the whole
+  // app tree, which kills every terminal in it, so the dialog counts what that
+  // costs instead of warning in the abstract.
+  'Going to the sign-in screen closes this workspace': '去登录会关掉当前工作区',
+  'The app goes back to the welcome screen, so the workspace you have open is closed.':
+    '应用会回到欢迎页，你现在打开的工作区会被关闭。',
+  'Your sign-in has expired — you need to sign in again': '登录已失效，需要重新登录',
+  'AI features have already stopped working. Returning to the sign-in screen closes the workspace you have open.':
+    'AI 功能已经无法使用。回到登录页会关掉你现在打开的工作区。',
+  '{{count}} chat(s) are mid-turn. The turn keeps running in the background, but its output will not come back to the screen, and it hangs if it asks for permission while you are away.':
+    '{{count}} 个会话正在跑回合：回合会在后台继续，但期间的输出不会回到界面；如果它中途要你授权，会一直卡住，只能停止后重来。',
+  '{{count}} chat(s) are mid-turn and will be stopped.': '{{count}} 个会话正在跑回合，会被直接终止',
+  '{{count}} terminal(s) will close, and any command still running is force-quit.':
+    '{{count}} 个终端会关闭，正在运行的命令会被强制结束',
+  '{{count}} file(s) have unsaved edits that are not on disk yet.':
+    '{{count}} 个文件有未保存的修改，还没写入磁盘',
+  'Chat history is safe. Anything you typed into the composer but have not sent is not.':
+    '已有的对话记录不会丢；输入框里还没发送的内容会丢。',
+  'Continue to sign-in': '继续去登录',
+  // `Not now` is already in this catalog (the updater's defer button) and means
+  // the same thing here — deliberately reused rather than duplicated.
+  'The confirmation could not be shown. Try again in a moment.': '确认框无法显示，请稍后再试。',
+
   // ── 批次 4：硬编码英文残留（2026-09-11）────────────────────────────────
   //
   // 上一轮补的是「走了 t() 却没有词条」的那批。这一批不一样：这些字符串

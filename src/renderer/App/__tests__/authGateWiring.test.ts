@@ -406,6 +406,65 @@ describe('in-app sign-in route (static)', () => {
     }
   });
 
+  /**
+   * The safety net the route needed the moment it started working.
+   *
+   * Making the buttons work gave the app its first way to unmount `<App/>`
+   * while somebody is using it, and that unmount kills every terminal in the
+   * tree (a shell gets SIGKILL across its process group; a Pi TUI is disposed).
+   * User ruling, 2026-09-18: 「这个肯定是不行的。需要安全的退出」 → 「先弹确认框，
+   * 列明会丢什么」. Behaviour lives in `signInConfirmFlow.test.ts`; what only a
+   * source scan can reach is that no surface bypasses it.
+   */
+  it('[SIR-05] the confirmation host is mounted, or every button fails closed', () => {
+    // `requestSignInConfirmation` refuses (and the caller toasts) when no host
+    // is registered — deliberately, since fail-open would route away with no
+    // warning at all. That makes this mount the difference between a working
+    // route and a route that always refuses.
+    const app = code('App.tsx').replace(/\s+/g, ' ');
+    expect(app).toContain('<SignInConfirmHost />');
+    expect(app).toContain("from './components/auth/SignInConfirmHost'");
+  });
+
+  it('[SIR-06] the hook asks the user BEFORE it asks Main', () => {
+    const hook = code('hooks/useSignInRequest.ts').replace(/\s+/g, ' ');
+    const confirm = hook.indexOf('requestSignInConfirmation(');
+    const ipc = hook.indexOf('auth.requestSignIn()');
+    expect(confirm).toBeGreaterThan(-1);
+    // Order is the whole guarantee: a cancel must leave the credential mode and
+    // the entry latch exactly as they were.
+    expect(confirm).toBeLessThan(ipc);
+    expect(hook).toContain("if (outcome === 'declined') return false;");
+    // Nothing to lose → no dialog. An empty confirmation is friction with no
+    // content, and it teaches the user to click through the one that matters.
+    expect(hook).toContain('hasSignInLosses(losses)');
+  });
+
+  it('[SIR-07] logout asks ONCE — its own dialog carries the losses', () => {
+    const card = code('components/user/UserProfileCard.tsx').replace(/\s+/g, ' ');
+    // Two boxes in a row for one decision, and the second one would arrive
+    // after the vault was already cleared — a "cancel" that cannot undo
+    // anything.
+    expect(card).toContain("requestSignIn({ prompt: 'skip' })");
+    // So the losses have to be IN the dialog it does show, with the logout
+    // wording: `performLogoutSequence` stops every turn, where a plain
+    // re-login leaves them running.
+    expect(card).toContain('signInLossLines(logoutLosses, { terminatesTurns: true })');
+    expect(card).toContain('readSignInLosses()');
+  });
+
+  it('[SIR-08] the automatic push gets the informational prompt, and it is the only one that does', () => {
+    // Nobody pressed anything, so "are you sure?" would ask the user to confirm
+    // a decision that was made for them. `session-expired` states the fact and
+    // still lists the losses, with a defer instead of a cancel.
+    const app = code('App.tsx').replace(/\s+/g, ' ');
+    expect(app).toContain("requestSignIn({ prompt: 'session-expired' })");
+    for (const [file] of SURFACES) {
+      if (file === 'App.tsx') continue;
+      expect(code(file), file).not.toContain('session-expired');
+    }
+  });
+
   it('[SIR-04] Root re-decides the sub-flow from the refreshed snapshot', () => {
     // Landing on the welcome screen and making the user press one more button
     // is the same defect one click shorter. Root asks `deriveWelcomeEntry` —

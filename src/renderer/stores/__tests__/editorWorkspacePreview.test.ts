@@ -68,4 +68,31 @@ describe('workspace preview tab behavior', () => {
     expect(state.tabs[0]).toMatchObject({ content: 'edited', isDirty: true });
     expect(state.tabs[1]).toMatchObject({ isTooLarge: true, byteLength: 10_000_000 });
   });
+
+  it('keeps unsaved text across a "no workspace yet" round trip — the App remount shape', () => {
+    // This is the fact the sign-in confirmation's copy rests on
+    // (`components/auth/signInLossModel.ts`): going to the login screen
+    // unmounts `<App/>`, and while everything React-local dies with it, THIS
+    // store does not — it is a module singleton, nothing calls
+    // `closeAllWorktreeStates`, and `useEditorWorktreeSync` replays the same
+    // two calls below when the workspace resolves again.
+    //
+    // So the dialog says "not written to disk yet" rather than "will be lost".
+    // Claiming a loss that does not happen is how a user learns to click
+    // through the next warning too.
+    useEditorStore.getState().switchWorktree('/repo-a');
+    useEditorStore.getState().openFile({ path: '/repo-a/a.ts', content: 'saved', isDirty: false });
+    useEditorStore.getState().updateFileContent('/repo-a/a.ts', 'half-written thought', true);
+
+    // Unmount, then remount before the active session has resolved a path.
+    useEditorStore.getState().switchWorktree(null);
+    expect(useEditorStore.getState().tabs).toEqual([]);
+
+    useEditorStore.getState().switchWorktree('/repo-a');
+    expect(useEditorStore.getState().tabs[0]).toMatchObject({
+      path: '/repo-a/a.ts',
+      content: 'half-written thought',
+      isDirty: true,
+    });
+  });
 });
