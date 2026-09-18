@@ -407,12 +407,16 @@ describe('a gear change while requests are waiting', () => {
     // The card that was up came down as ALLOWED, not as a denial and not by
     // going quiet: the renderer takes it off screen on this event and nowhere
     // else, so a gate that simply stopped waiting would leave it there forever.
+    //
+    // `toEqual`, so the absence of `autoReason` is pinned rather than merely
+    // unmentioned: the resolution is deliberately the same shape a press
+    // produces. The user moved the gear, so this IS their decision, and a flag
+    // singling it out would put a caveat on the timeline that says otherwise.
     expect(resolutions()).toHaveLength(1);
-    expect(resolutions()[0]?.payload).toMatchObject({
+    expect(resolutions()[0]?.payload).toEqual({
       permissionId: 'a',
       allow: true,
       decision: 'allow',
-      autoReason: 'gear_widened',
     });
     // And the two behind it were never put on screen at all — they were
     // re-judged as they came up, rather than asked as they were written down.

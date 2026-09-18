@@ -3002,13 +3002,11 @@ Object.assign(zhTranslations, {
  * The composer control used to grey out entirely while a turn ran, which put
  * the one setting that stops approval cards out of reach at the exact moment a
  * card was on screen. The gear is live now; the mode is still locked, and these
- * three strings are how the UI says which is which — plus the word the resolved
- * card carries once a widened gear has answered it.
+ * two strings are how the UI says which is which.
  */
 Object.assign(zhTranslations, {
   'While this turn runs, only the permission level can change.': '本轮对话进行中只能修改权限档位。',
   'Can be changed once this turn ends.': '本轮对话结束后可修改。',
-  'permissions widened': '权限已放宽',
 });
 
 /**

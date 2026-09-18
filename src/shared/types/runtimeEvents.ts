@@ -377,18 +377,12 @@ export type PermissionDecisionId = 'allow' | 'allow_session' | 'deny' | 'cancel'
  * Doubles as the drain reason when the Host clears its pending server-request
  * table on session stop/close/shutdown (C10) — one vocabulary, not two.
  *
- * `gear_widened` is the only one of the four that ALLOWS: the user moved the
- * permission gear to a setting that would not have raised this card, so the
- * card is settled as allowed and taken down. It is recorded rather than passed
- * off as a press, because "you allowed this" and "the posture you switched to
- * allows this" are different statements about the same tool call.
+ * Every member DENIES. Widening the permission gear while a card is up settles
+ * that card as a plain allow instead, carrying no reason at all: the user moved
+ * the setting that decides this, so the outcome is theirs and the transcript
+ * says the same thing it would have said had they pressed the button.
  */
-export type PermissionAutoReason =
-  | 'unsupported'
-  | 'session_closed'
-  | 'aborted'
-  | 'timed_out'
-  | 'gear_widened';
+export type PermissionAutoReason = 'unsupported' | 'session_closed' | 'aborted' | 'timed_out';
 
 /**
  * What "Allow for session" on THIS card would remember.

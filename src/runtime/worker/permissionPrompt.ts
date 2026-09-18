@@ -64,10 +64,11 @@ export interface PermissionPrompt {
    *
    * The one caller is the gate itself, when the user widens the permission gear
    * while a card is up and the question it asks no longer needs an answer. It
-   * resolves through the same `settle` a real answer takes — so the renderer
-   * gets its `permission.resolved` and the card leaves the screen — and marks
-   * the resolution `gear_widened`, because a transcript that recorded it as a
-   * press would be claiming a decision nobody made.
+   * resolves through the same `settle` a real answer takes, carrying no auto
+   * reason — so the renderer gets a `permission.resolved` identical in shape to
+   * the one a press produces, and the card leaves the screen the same way. The
+   * user moved the setting that decides this, so the timeline does not split
+   * hairs over which of their two actions allowed the call.
    *
    * `false` when nothing was waiting on that id, same as `respond`.
    */
@@ -274,7 +275,7 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
       // `allow`, never `allow_session`: the gear that waved this call through
       // is a live setting the user can put back, and writing a permanent grant
       // for this exact command would outlive it.
-      settle('allow', 'gear_widened');
+      settle('allow');
       return true;
     },
 
