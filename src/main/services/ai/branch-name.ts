@@ -1,5 +1,6 @@
 import type { CommonAICompletionOptions } from '@shared/types/ai';
 import { piUtilityService } from '../agent-host/PiUtilityService';
+import { stripCodeFence } from './providers';
 
 export interface BranchNameOptions extends CommonAICompletionOptions {
   workdir: string;
@@ -24,7 +25,9 @@ export async function generateBranchName(options: BranchNameOptions): Promise<Br
       ...(effort ? { effort } : {}),
       timeoutMs: timeout * 1000,
     });
-    return { success: true, branchName: completion.text.trim() };
+    // Models commonly wrap a short answer in a ``` fence; left in place it
+    // would land verbatim in a git branch name (backticks and all).
+    return { success: true, branchName: stripCodeFence(completion.text) };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
