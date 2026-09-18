@@ -8,6 +8,7 @@ import { ipcMain, shell } from 'electron';
 import { workerManager } from '../services/agent-host/WorkerManager';
 import { resolveManagedCredentialsEnabled } from '../services/auth/credentialMode';
 import {
+  getManagedPiSyncFailure,
   getPiModelManagementUrl,
   getPiModelSyncState,
   setPiModelManagementUrl,
@@ -29,6 +30,11 @@ export function registerPiModelHandlers(): void {
       endpointUrl: getPiModelManagementUrl(),
       state: getPiModelSyncState(),
       managed: resolveManagedCredentialsEnabled(),
+      // Widened rather than given a channel of its own: the sync state file
+      // describes the CATALOG, and the two credential refusals never write one
+      // — so "the login-time sync failed and why" has no home in `state`, and
+      // every reader of it needs `managed` from this same reply anyway.
+      lastFailure: getManagedPiSyncFailure(),
     })
   );
 

@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import {
+  httpSyncFailureKind,
   PI_AUTH_FILE_NAME,
   PI_MODEL_SOURCE_FILE_NAME,
   PI_MODEL_SYNC_STATE_FILE_NAME,
@@ -18,6 +19,7 @@ import {
   PI_USER_AGENT_HEADER,
   type PiManagedModelDefinition,
   type PiManagedModelsConfig,
+  type PiModelSyncFailureKind,
   type PiModelSyncResult,
   type PiModelSyncState,
   piModelOption,
@@ -278,6 +280,11 @@ export class PiModelConfigService {
   }): Promise<PiModelSyncResult> {
     const attemptedAt = this.now();
     let remoteError: string | undefined;
+    // Classified here, where the step that failed is still known, rather than
+    // re-derived from `remoteError` afterwards — see `PiModelSyncFailureKind`.
+    // `network` is the value in force until a response object exists, which is
+    // exactly what "we never reached the endpoint" means.
+    let failureKind: PiModelSyncFailureKind = 'network';
     const cached = readCachedConfig(this.sourcePath);
     const previous = this.readState();
     if (
@@ -304,6 +311,10 @@ export class PiModelConfigService {
         },
         signal: AbortSignal.timeout(this.timeoutMs),
       });
+      // Set BEFORE the body is touched: from here on the endpoint has been
+      // reached, so a failure is either its answer (`unauthorized` / `server`)
+      // or its payload (`response`) — never the network.
+      failureKind = response.ok ? 'response' : httpSyncFailureKind(response.status);
       const body = await response.text();
       if (!response.ok) throw new Error(`management endpoint returned HTTP ${response.status}`);
       if (Buffer.byteLength(body, 'utf8') > MAX_CONFIG_BYTES) {
@@ -341,7 +352,7 @@ export class PiModelConfigService {
         error: remoteError,
       };
       this.writeState(state);
-      return { ...state, ok: true };
+      return { ...state, ok: true, failureKind };
     }
 
     // A3: no live answer and no cache of this client's own, but the release
@@ -376,7 +387,7 @@ export class PiModelConfigService {
       this.writeState(state);
       // `ok` asks whether the client came away with a usable catalog, not
       // whether the network worked; `error` still carries the failure.
-      return { ...state, ok: true };
+      return { ...state, ok: true, failureKind };
     }
 
     // D03: no built-in table to fall back to. Say the catalog is unavailable
@@ -394,7 +405,7 @@ export class PiModelConfigService {
       error: remoteError,
     };
     this.writeState(state);
-    return { ...state, ok: false };
+    return { ...state, ok: false, failureKind };
   }
 
   /**

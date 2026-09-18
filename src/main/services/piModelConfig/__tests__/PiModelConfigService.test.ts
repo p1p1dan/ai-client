@@ -189,6 +189,56 @@ describe('PiModelConfigService', () => {
     ).toMatchObject({ source: 'unavailable', stale: true, models: [], error: 'http' });
   });
 
+  /**
+   * `failureKind` is what the recovery card above the composer turns into a
+   * sentence and a button, so a misclassification is a user reading the wrong
+   * advice — "check your network" for an account the server refused, or "ask
+   * your administrator" for a laptop that is simply offline.
+   *
+   * Classified at the point of failure rather than matched out of `error`
+   * afterwards, and these cases are what pins the boundary: everything before
+   * a response object exists is the network, everything after it is either the
+   * answer or the payload.
+   */
+  it.each([
+    ['nothing answered', undefined, 'network'],
+    ['the account was refused', 401, 'unauthorized'],
+    ['the account is forbidden', 403, 'unauthorized'],
+    ['the server broke', 500, 'server'],
+    ['the server sent nonsense', 200, 'response'],
+  ] as const)('classifies a failure where %s', async (_name, status, kind) => {
+    const fetchFn: PiModelConfigFetch =
+      status === undefined
+        ? async () => {
+            throw new Error('connection refused');
+          }
+        : async () => ({ ok: status < 400, status, text: async () => 'not json at all' });
+
+    const result = await service(fetchFn).sync({
+      endpointUrl: 'https://onboard.example/api/v1/models-config',
+      apiKey: 'company-key',
+      inheritedBaseUrl: 'https://gateway.example.com/v1',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.failureKind).toBe(kind);
+  });
+
+  it('leaves failureKind absent on a sync that worked', async () => {
+    const result = await service(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(REMOTE_CONFIG),
+    })).sync({
+      endpointUrl: 'https://onboard.example/api/v1/models-config',
+      apiKey: 'company-key',
+      inheritedBaseUrl: 'https://gateway.example.com/v1',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.failureKind).toBeUndefined();
+  });
+
   // D01: the endpoint only answers a client that proves who it is, because the
   // answer may carry provider keys.
   it('presents the login key as a bearer token on every fetch', async () => {

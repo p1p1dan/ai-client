@@ -94,6 +94,10 @@ const FONT_MONO_WHITELIST: readonly string[] = [
   // under the mapped copy — same machine-text domain as the timeline's card it
   // was lifted from, so the same monospace treatment.
   'components/chat/ModelMissingNotice.tsx',
+  // The model-sync card carries the management endpoint's raw English
+  // diagnostic under the explanation, labelled as evidence to forward — the
+  // same machine-text domain, and lifted from the card above.
+  'components/chat/PiModelSyncNotice.tsx',
   'components/chat/TargetBranchSelect.tsx',
   'components/chat/ToolRows.tsx',
   'components/chat/toolCard.ts',

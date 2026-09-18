@@ -208,6 +208,12 @@ export function registerOnboardingHandlers(): void {
       onSuccess: async () => {
         getAuthStateService().refresh();
         const result = await syncManagedPiModels(undefined, { force: true });
+        // The log line is for a developer reading a terminal. The USER is told
+        // by `PiModelSyncNotice` above the composer, which reads the failure
+        // `syncManagedPiModels` just recorded (`getManagedPiSyncFailure`,
+        // served on `piModels:getStatus`). This used to be the only trace of
+        // the failure anywhere: a signed-in user landed on an empty model menu
+        // with no message, no reason and no way to retry.
         if (!result.ok) console.warn('[onboarding] Pi model sync skipped:', result.error);
       },
     })

@@ -98,6 +98,7 @@ import {
 } from './middleColumnLayout';
 import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingError';
 import { resolveResumeModel } from './models';
+import { PiModelSyncNotice } from './PiModelSyncNotice';
 import { QueuedMessageStrip } from './QueuedMessageStrip';
 import {
   decideAdmittedTimeoutOutcome,
@@ -3104,6 +3105,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // shrink/grow behaviour for both modes now — no border/background here.
     <ReadingColumn>
       <SessionActivityStatus sessionId={activeSessionId} />
+      {/* "You signed in and your company's models did not arrive." Above the
+          send-failure box rather than below it because the two are a standing
+          condition and a transient one: this card explains why the model menu
+          is empty for the whole session, while the box under it reports one
+          send. It renders nothing at all unless a managed sync actually failed
+          (`piModelSyncNotice.ts`), so a healthy install never sees it, and it
+          is deliberately NOT gated on `emptySurface` — the failure happens at
+          login, long before anyone has tried to send. */}
+      <PiModelSyncNotice className="mb-2" />
       {/* T12-e′ moves the no-repository welcome surface to ChatWorkspace and
             does not mount this component at all in that state. Real failures
             still belong immediately above the composer. */}

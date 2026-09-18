@@ -246,8 +246,72 @@ export interface PiModelSyncState {
   error?: string;
 }
 
+/**
+ * Why a managed model sync did not produce a catalog.
+ *
+ * Six values, not six error strings: the renderer owes the user a different
+ * SENTENCE and a different next step for each, and deriving that from
+ * `error` — a free-form English diagnostic assembled from HTTP status text,
+ * `JSON.parse` messages and `configValidation`'s field-by-field throws — would
+ * be a substring match against text nobody promised to keep stable.
+ *
+ * Each value is decided where the failure happens and is never re-derived:
+ *  - `credentials-disabled` / `credentials-missing` — `syncManagedPiModels`,
+ *    before any request is made;
+ *  - `unauthorized` / `server` — the moment a response object exists, off its
+ *    status alone (see {@link httpSyncFailureKind});
+ *  - `response` — the endpoint answered 2xx and the body could not be read,
+ *    parsed or validated;
+ *  - `network` — the default, and the only honest answer while no response
+ *    exists yet: DNS, TLS, proxy, timeout and "the app is offline" all land
+ *    here, and they share one next step (check the connection, try again).
+ */
+export type PiModelSyncFailureKind =
+  | 'credentials-disabled'
+  | 'credentials-missing'
+  | 'unauthorized'
+  | 'server'
+  | 'response'
+  | 'network';
+
+/** `syncManagedPiModels`'s refusal when this install is on the local route. */
+export const MANAGED_CREDENTIALS_DISABLED_ERROR = 'Managed credentials are disabled';
+
+/** `syncManagedPiModels`'s refusal when the vault holds no gateway credential. */
+export const MANAGED_CREDENTIALS_UNAVAILABLE_ERROR = 'Managed credentials are unavailable';
+
+/**
+ * A response exists, so the endpoint was reached — the only question left is
+ * whether it refused THIS account (which no retry can fix) or failed for its
+ * own reasons (which a retry can).
+ */
+export function httpSyncFailureKind(status: number): PiModelSyncFailureKind {
+  return status === 401 || status === 403 ? 'unauthorized' : 'server';
+}
+
+/**
+ * The last managed sync that came away with no catalog, kept so a renderer can
+ * ask about it long after the login that triggered it.
+ *
+ * `error` is the raw English diagnostic and is NOT product copy: it is carried
+ * for a bug report, printed small and below the explanation, never in place of
+ * one.
+ */
+export interface PiModelSyncFailure {
+  kind: PiModelSyncFailureKind;
+  error: string;
+  /** `Date.now()` of the attempt. */
+  at: number;
+}
+
 export interface PiModelSyncResult extends PiModelSyncState {
   ok: boolean;
+  /**
+   * Set whenever `error` is. Present on `ok: true` results too — a stale cache
+   * or the shipped baseline still means the wire failed, and the caller may
+   * want to say which way.
+   */
+  failureKind?: PiModelSyncFailureKind;
 }
 
 export interface SyncPiModelsRequest {
@@ -258,6 +322,15 @@ export interface PiModelManagementSettings {
   endpointUrl: string;
   state: PiModelSyncState;
   managed: boolean;
+  /**
+   * The last failed managed sync, or `null` when the most recent one worked.
+   *
+   * Carried on this reply rather than on a channel of its own because every
+   * consumer needs `managed` in the same breath: on the local route a missing
+   * managed catalog is not a failure at all, it is the route working as
+   * chosen.
+   */
+  lastFailure: PiModelSyncFailure | null;
 }
 
 /** R04 — the three durable installation locations shown in Settings → Resources. */

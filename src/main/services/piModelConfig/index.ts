@@ -1,6 +1,8 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
+  MANAGED_CREDENTIALS_DISABLED_ERROR,
+  MANAGED_CREDENTIALS_UNAVAILABLE_ERROR,
   PI_MANAGED_AGENT_DIR_NAME,
   PI_MODEL_CONFIG_PATH,
   PI_MODEL_MANAGEMENT_URL_ENV,
@@ -8,6 +10,8 @@ import {
   PI_PROJECT_TRUST_ENV,
   PI_SUBAGENTS_FEATURE_ID,
   PI_USER_AGENT_ENV,
+  type PiModelSyncFailure,
+  type PiModelSyncFailureKind,
   type PiModelSyncResult,
   type PiModelSyncState,
   type PiResourceSettings,
@@ -173,6 +177,63 @@ function managedCredential(): { apiKey: string; baseUrl: string } | null {
   return apiKey && baseUrl ? { apiKey, baseUrl } : null;
 }
 
+/**
+ * The last managed sync that came away with NO catalog.
+ *
+ * Why this is remembered at all: the login-time sync
+ * (`ipc/onboarding.ts`'s `onSuccess`) and the startup one
+ * (`managedCredentialsStartup.regenerateFromVault`) both run with no renderer
+ * waiting on their result, so their outcome used to exist only as a
+ * `console.warn` — a user signed in, landed on an empty model menu, and was
+ * told nothing. This is the value that lets the window ask afterwards.
+ *
+ * In memory rather than on disk, deliberately. `managed-models-state.json`
+ * describes the CATALOG (what is on disk, where it came from, when), and the
+ * two credential refusals below never touch a catalog — writing them there
+ * would put an error on a state file that is otherwise a true description of
+ * `models.json`, and the settings page would report it as a catalog fault
+ * forever. The lifetime that is actually wanted is "until the next attempt",
+ * and every app start makes one on the managed route, so nothing is lost
+ * across a restart that the restart itself does not immediately re-establish.
+ */
+let lastManagedSyncFailure: PiModelSyncFailure | null = null;
+
+/** What the last managed sync failed on, or `null` when it worked. */
+export function getManagedPiSyncFailure(): PiModelSyncFailure | null {
+  return lastManagedSyncFailure;
+}
+
+/**
+ * Failures that are about the ACCOUNT rather than the wire.
+ *
+ * These are remembered even when the sync came away with a catalog, and that
+ * exception is the point. A 401 from the management endpoint falls through to
+ * the shipped baseline (`sync`'s A3 rung), which returns `ok: true` and writes
+ * that baseline's providers with the very key the endpoint just refused — so
+ * the user gets a full model menu in which every turn fails at request time.
+ * A populated menu is not a rescue when the account cannot use it, and staying
+ * quiet there would reproduce the silence this whole notice exists to end.
+ *
+ * A transient wire failure is the opposite case and is deliberately NOT here:
+ * the baseline is a real catalog the account CAN use, the model menu already
+ * says the list is the shipped one, and a red card over a working app is the
+ * permanently-lit box `chatEmptyState.ts` was written to get rid of.
+ */
+const ACCOUNT_SYNC_FAILURES: ReadonlySet<PiModelSyncFailureKind> = new Set([
+  'unauthorized',
+  'credentials-missing',
+  'credentials-disabled',
+]);
+
+function rememberSyncOutcome(result: PiModelSyncResult): PiModelSyncResult {
+  const kind = result.failureKind;
+  const worthReporting = kind !== undefined && (!result.ok || ACCOUNT_SYNC_FAILURES.has(kind));
+  lastManagedSyncFailure = worthReporting
+    ? { kind, error: result.error ?? '', at: Date.now() }
+    : null;
+  return result;
+}
+
 export async function syncManagedPiModels(
   endpointUrl = getPiModelManagementUrl(),
   options: { force?: boolean } = {}
@@ -180,19 +241,31 @@ export async function syncManagedPiModels(
   const service = serviceFor(getAppPiAgentDir());
   if (!resolveManagedCredentialsEnabled()) {
     const state = service.readState();
-    return { ...state, ok: false, error: 'Managed credentials are disabled' };
+    return rememberSyncOutcome({
+      ...state,
+      ok: false,
+      error: MANAGED_CREDENTIALS_DISABLED_ERROR,
+      failureKind: 'credentials-disabled',
+    });
   }
   const credential = managedCredential();
   if (!credential) {
     const state = service.readState();
-    return { ...state, ok: false, error: 'Managed credentials are unavailable' };
+    return rememberSyncOutcome({
+      ...state,
+      ok: false,
+      error: MANAGED_CREDENTIALS_UNAVAILABLE_ERROR,
+      failureKind: 'credentials-missing',
+    });
   }
-  return service.sync({
-    endpointUrl,
-    apiKey: credential.apiKey,
-    inheritedBaseUrl: credential.baseUrl,
-    force: options.force,
-  });
+  return rememberSyncOutcome(
+    await service.sync({
+      endpointUrl,
+      apiKey: credential.apiKey,
+      inheritedBaseUrl: credential.baseUrl,
+      force: options.force,
+    })
+  );
 }
 
 export function getPiModelSyncState(): PiModelSyncState {
