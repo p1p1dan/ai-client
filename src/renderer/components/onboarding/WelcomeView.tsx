@@ -53,6 +53,38 @@ import { AiClientMark } from './AiClientMark';
 
 const PRODUCT_NAME = 'PILAB';
 
+/**
+ * A-round testing: the `Use my own setup` route is closed for the duration.
+ *
+ * TO RE-OPEN IT, FLIP THIS ONE LINE TO `false` (exported only so the test can
+ * follow it rather than hardcode today's answer). Nothing else needs changing —
+ * the button, its handler and `enterApp('local')` are all still here and still
+ * wired; this only stops the control from being pressed.
+ *
+ * One line is enough because this button is the ONLY entrance to the local
+ * route. `auth.enterApp` is the sole writer of the credential mode from the
+ * renderer, Root is its only caller, and the settings IPC explicitly refuses to
+ * write `credentialMode` (Main-owned-key guard, `main/ipc/settings.ts`).
+ * `OnboardingView`'s closing line — "you can switch back to your own local
+ * configuration in Settings at any time" — describes a control that does not
+ * exist; it is stale copy, not a second door left open.
+ *
+ * ## This is not the D68 rule being broken
+ *
+ * D68 bans REPORTING AVAILABILITY on this screen — no "found your
+ * subscription", no "no local config detected", and in particular no greying
+ * out a button because a probe decided the machine looks unready. E1's
+ * forensics measured that such a probe is wrong in both directions, so the
+ * screen must never claim to know.
+ *
+ * This disables the button without asking the machine anything. It is a
+ * product decision about which routes are open during A-round testing, and it
+ * would look identical on a machine with a perfect local setup. No detection
+ * runs, so there is nothing here that can be wrong about the user's computer —
+ * which is the entire thing D68 was protecting.
+ */
+export const LOCAL_SETUP_ENTRY_DISABLED = true;
+
 export interface WelcomeViewProps {
   entry: AuthGateWelcomeEntry;
   /** Open the sign-in sub-flow (email → code). */
@@ -111,9 +143,12 @@ export function WelcomeView({ entry, onSignIn, onContinue, onUseOwnSetup }: Welc
           {primaryLabel}
         </Button>
 
+        {/* Kept on screen while closed, deliberately: removing it would make
+            the second route look like it never existed, and A-round testers
+            have to be able to see that it is coming back. */}
         <Button
           className="w-full"
-          disabled={pending !== null}
+          disabled={LOCAL_SETUP_ENTRY_DISABLED || pending !== null}
           onClick={handleLocal}
           size="lg"
           variant="outline"
