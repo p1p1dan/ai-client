@@ -1,0 +1,72 @@
+{
+  "_note": "One CDP Runtime.evaluate, so the approval card's state and the menu's DOM come from the SAME instant. Round 1's FAIL reading was taken after the card had already auto-rejected, when the menu is legitimately unlocked.",
+  "_captured_by": "/tmp/bh2/t080-run.mjs (batch H pointcheck round 2)",
+  "at": "2026-09-18T14:16:31.295Z",
+  "cardWaiting": true,
+  "cardCountdown": "119",
+  "turnFinished": false,
+  "itemCount": 6,
+  "items": [
+    {
+      "text": "规划本轮对话结束后可修改。",
+      "ariaDisabled": "true",
+      "dataDisabled": "",
+      "ariaChecked": "false",
+      "tabIndex": "-1",
+      "pointerEvents": "none",
+      "opacity": "0.64"
+    },
+    {
+      "text": "执行本轮对话结束后可修改。",
+      "ariaDisabled": "true",
+      "dataDisabled": "",
+      "ariaChecked": "true",
+      "tabIndex": "-1",
+      "pointerEvents": "none",
+      "opacity": "0.64"
+    },
+    {
+      "text": "每次询问写入、编辑和命令逐条询问。",
+      "ariaDisabled": null,
+      "dataDisabled": null,
+      "ariaChecked": "true",
+      "tabIndex": "0",
+      "pointerEvents": "auto",
+      "opacity": "1"
+    },
+    {
+      "text": "自动接受编辑工作区内写入、编辑和命令自动执行；外部路径仍询问。",
+      "ariaDisabled": null,
+      "dataDisabled": null,
+      "ariaChecked": "false",
+      "tabIndex": "-1",
+      "pointerEvents": "auto",
+      "opacity": "1"
+    },
+    {
+      "text": "全自动自动执行可用工具；显式拒绝规则仍生效。",
+      "ariaDisabled": null,
+      "dataDisabled": null,
+      "ariaChecked": "false",
+      "tabIndex": "-1",
+      "pointerEvents": "auto",
+      "opacity": "1"
+    },
+    {
+      "text": "完全放行完全不再询问。连「全自动」都会停下来确认的命令也直接执行；明",
+      "ariaDisabled": null,
+      "dataDisabled": null,
+      "ariaChecked": "false",
+      "tabIndex": "-1",
+      "pointerEvents": "auto",
+      "opacity": "1"
+    }
+  ],
+  "menuTail": ["本轮对话进行中只能修改权限档位。"],
+  "_control_reading": {
+    "_note": "The same dump taken after the turn had ended, for contrast — every option clickable, footer back to the idle text.",
+    "at": "2026-09-18T14:15:0x (turn finished, card gone)",
+    "modeItemsAriaDisabled": null,
+    "menuTail": "立即生效，作用于当前线程。"
+  }
+}

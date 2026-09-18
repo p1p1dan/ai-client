@@ -7,7 +7,6 @@ Role: open-questions；只维护尚需拍板的问题。答了就移到 decision
 | Q002 | P2-7 前缀稳定性模块是接进 trace（每次请求记 systemPromptSha256）还是删掉？ | 全仓只有单测引用（context-prompt-09，D9 明写可选） | Deferred |
 | Q019 | 子 agent 独立展示位的形态：侧边抽屉 / 独立浮窗 / 可钉住面板？ | T033 现场反馈用户期待独立展示位，现状是挂在工具行下可展开（[07-findings.md](topics/t033-field-day/07-findings.md) 现象 #9） | T085（H-9，阻塞于此） |
 | Q020 | 用户在自己命令行工具上测试时用的 provider / 模型名，是否与本应用当时用的一致？ | 若不一致，「同一中转、性能可比」这个前提不成立，需要重新核对性能对比结论 | 影响[决策 024](decisions/024-prompt-cache-ttl-split.md)的适用范围 |
-| Q021 | 中转是否把 `cache_control` 的 `ttl: '1h'` 参数原样透传给上游？ | T077 已提交（本地未推送）；开发机上 `runs.jsonl` 的 `cacheWrite1h` 分桶恒为 0，需 T033 第二轮上机用真实请求验证是应用没发对参数还是中转吞掉了 | T077（H-1） |
 
 ~~Q015~~ 已由[决策 016](decisions/016-home-tier-instruction-gating.md)结案（2026-09-16）：家目录从 project 链移除、改作独立的 **user 层 global**，全局规则对所有项目生效；全局层只取一份，顺序 `~/.pilab/AGENTS.md` → `~/.claude/CLAUDE.md` → `~/.codex/AGENTS.md`，找到即停；家目录之上的多用户共享目录不读；未信任项目仍整条 project 链不读的底线不动。落地任务 **T059**，排在 T032 之前。
 
@@ -26,3 +25,5 @@ Role: open-questions；只维护尚需拍板的问题。答了就移到 decision
 ~~Q025~~ 已结案（2026-09-18，记入 [roadmap.md](roadmap.md) 批次 H T080 落地注记，未另立决策）：不区分「因放宽档位而放行」与用户主动点允许，wire 层新增的 `autoReason: 'gear_widened'` 已删除，统一按普通 `allow` 结算。用户原话：「不要区分」。落地任务 **T080**，已完成，提交 `0a4f6f61`。
 
 ~~Q026~~ 已结案（2026-09-18，记入 [roadmap.md](roadmap.md) 批次 H T086 落地注记，未另立决策）：用户期望是新会话出现在侧栏。核实 pi `/new` 写出的会话文件与本应用格式只差首行头，runtime 打开时已有自动转换（`legacy.ts` 的 `prepareSessionConfig` 会转成 `.native-v4.jsonl` 并 resume），此前「登记会变成点开报错」的判断有误，已更正。现在终端关闭时读取新会话文件头，登记进索引并广播刷新侧栏，登记失败才退回弹系统通知；同时在 spawn TUI 时显式传 `--session-dir dirname(sessionFile)`，堵住工作区 `.pi/settings.json` 可改落点的漏洞。「常驻不关闭的 TUI 不会触发」这一残留局限已不再是等待用户裁决的开放问题，直接记在 T086 落地注记里。落地任务 **T086**，已完成，提交 `b930b5b9` / `f3b658d4`。
+
+~~Q021~~ 已结案（2026-09-18，证据见 [evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md](evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md)）：真实请求端到端确认中转把 `ttl:'1h'` 原样透传、且上游真的按 1 小时处理——公司渠道 `claude/claude-sonnet-5`（经 `cch-jyw` 中转）第一轮 `usage.cacheWrite1h = 10742`，间隔 **13.5 分钟**（5 分钟档早已过期）后第二轮 `cacheRead = 10742` 命中；用户在中转平台后台独立确认「缓存确实是 1h」，平台说明 `cache_control` 完全跟随客户端下发值、记录只做展示。此前「`cacheWrite1h` 恒为 0」的证据基础是误读（观测采集于 T077 落地前一整天），已在本文件先前的记录里更正过一次，本次是端到端确认收尾。同一批测试还推翻了另一条独立判断——批次 H 立项时认定「输出慢的主因是 5 分钟缓存 TTL」不成立，缓存命中相对冷缓存只省 2.3 秒，真正主因是思考（extended thinking）token 量；[决策 024](decisions/024-prompt-cache-ttl-split.md) 主对话默认 1 小时依然正确（省成本、省这 2.3 秒），但已追加注记更正「解决输出慢」这条理由。落地任务 **T077**，已完成。

@@ -1,0 +1,128 @@
+{
+  "run_id": "send-1789741277109-9",
+  "timestamp": "2026-09-18T14:21:17.119Z",
+  "model": "fake-sonnet",
+  "provider": "probe-fake",
+  "steps": [
+    {
+      "step": 2,
+      "type": "tool",
+      "at": "2026-09-18T14:21:17.133Z",
+      "detail": {
+        "event": "tool_execution_start",
+        "tool_call_id": "toolu_1b2dfcc9-65ec-429c-82ef-c94d448a17b1",
+        "tool": "bash",
+        "args": {
+          "command": "rm -rf /tmp/bh-rm-sandbox/sub /tmp/bh-rm-sandbox/b.txt && ls -la /tmp/bh-rm-sandbox"
+        }
+      }
+    },
+    {
+      "step": 3,
+      "type": "note",
+      "at": "2026-09-18T14:21:17.210Z",
+      "detail": {
+        "event": "permission_decision",
+        "phase": "decision",
+        "request": {
+          "tool": "bash",
+          "toolCallId": "toolu_1b2dfcc9-65ec-429c-82ef-c94d448a17b1",
+          "path": "/home/ai/code/ai-client",
+          "command": "rm -rf /tmp/bh-rm-sandbox/sub /tmp/bh-rm-sandbox/b.txt && ls -la /tmp/bh-rm-sandbox",
+          "paths": [
+            "/home/ai/code/ai-client/a",
+            "/home/ai/code/ai-client/f",
+            "/tmp/bh-rm-sandbox",
+            "/tmp/bh-rm-sandbox/b.txt",
+            "/tmp/bh-rm-sandbox/sub"
+          ],
+          "commands": [
+            "rm -rf /tmp/bh-rm-sandbox/sub /tmp/bh-rm-sandbox/b.txt",
+            "ls -la /tmp/bh-rm-sandbox"
+          ],
+          "unresolvedPaths": false,
+          "exploration": false
+        },
+        "decision": "allow",
+        "source": "policy",
+        "mode": "agent",
+        "gear": "bypass"
+      }
+    },
+    {
+      "step": 4,
+      "type": "tool",
+      "at": "2026-09-18T14:21:17.235Z",
+      "detail": {
+        "event": "tool_execution_end",
+        "tool_call_id": "toolu_1b2dfcc9-65ec-429c-82ef-c94d448a17b1",
+        "tool": "bash",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "total 4\ndrwxrwxr-x   2 ai   ai     60 Sep 18 10:21 .\ndrwxrwxrwt 239 root root 5400 Sep 18 10:20 ..\n-rw-rw-r--   1 ai   ai      8 Sep 18 10:18 a.txt\n\n[exit=0; exit]"
+            }
+          ],
+          "details": {
+            "exitCode": 0,
+            "signal": null,
+            "termination": "exit",
+            "stdoutBytes": 148,
+            "stderrBytes": 0,
+            "truncated": false
+          }
+        },
+        "is_error": false
+      }
+    },
+    {
+      "step": 5,
+      "type": "llm",
+      "at": "2026-09-18T14:21:17.250Z",
+      "detail": {
+        "stop_reason": "toolUse",
+        "text_bytes": 0,
+        "usage": {
+          "input": 18,
+          "output": 24,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 42,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          },
+          "cacheWrite1h": 0
+        }
+      }
+    },
+    {
+      "step": 6,
+      "type": "llm",
+      "at": "2026-09-18T14:21:17.250Z",
+      "detail": {
+        "stop_reason": "stop",
+        "text_bytes": 13,
+        "usage": {
+          "input": 12,
+          "output": 9,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 21,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          },
+          "cacheWrite1h": 0
+        }
+      }
+    }
+  ]
+}

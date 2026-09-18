@@ -1,0 +1,8 @@
+{"time":"2026-09-18T14:12:07.156Z","seq":1,"status":200,"role":"user","contentSummary":"请写一个文件 probe-write.txt","hasToolResult":false,"plan":"write-approval"}
+{"time":"2026-09-18T14:14:07.189Z","seq":2,"status":200,"role":"user","contentSummary":"[tool_result:nobody answered the permission request in time]","hasToolResult":true,"plan":"write-approval"}
+{"time":"2026-09-18T14:16:29.445Z","seq":3,"status":200,"role":"user","contentSummary":"请写一个文件 probe-write.txt","hasToolResult":false,"plan":"write-approval"}
+{"time":"2026-09-18T14:17:43.199Z","seq":4,"status":200,"role":"user","contentSummary":"[tool_result:Wrote 23 bytes to /home/ai/code/ai-client/probe-write.txt]","hasToolResult":true,"plan":"write-approval"}
+{"time":"2026-09-18T14:21:10.380Z","seq":1,"status":200,"role":"user","contentSummary":"先打个招呼","hasToolResult":false,"plan":"bypass-rm"}
+{"time":"2026-09-18T14:21:17.127Z","seq":2,"status":200,"role":"user","contentSummary":"请删掉 /tmp/bh-rm-sandbox 下的 sub 目录和 b.txt","hasToolResult":false,"plan":"bypass-rm"}
+{"time":"2026-09-18T14:21:17.247Z","seq":3,"status":200,"role":"user","contentSummary":"[tool_result:total 4 drwxrwxr-x 2 ai ai 60 Sep 18 10:21 . drwxrwxrwt 239 root root 5400 Sep 18 10:20 .. -rw-rw-r-- 1 ai ai 8 Sep 18 10:18 a.txt [exit=0; exit]]","hasToolResult":true,"plan":"bypass-rm"}
+{"time":"2026-09-18T14:32:35.724Z","seq":1,"status":200,"role":"user","contentSummary":"回一个字：丁","hasToolResult":false,"plan":"text"}

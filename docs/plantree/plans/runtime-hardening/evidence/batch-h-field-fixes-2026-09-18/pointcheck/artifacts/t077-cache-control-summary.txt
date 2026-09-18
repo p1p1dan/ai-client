@@ -1,0 +1,19 @@
+req-001.json  model=fake-sonnet  tools=ask,browser_preview,read,write,edit,bash,glob,grep,skill,new_context,Task,TaskWait,TaskList,TaskStop
+  system[0] = {"type":"ephemeral","ttl":"1h"}
+  tools[13:TaskStop] = {"type":"ephemeral","ttl":"1h"}
+  messages[0][0:text] = {"type":"ephemeral","ttl":"1h"}
+
+req-002.json  model=fake-sonnet  tools=read,bash,glob,grep
+  system[0] = {"type":"ephemeral"}
+  tools[3:grep] = {"type":"ephemeral"}
+  messages[0][0:text] = {"type":"ephemeral"}
+
+req-003.json  model=fake-sonnet  tools=ask,browser_preview,read,write,edit,bash,glob,grep,skill,new_context,Task,TaskWait,TaskList,TaskStop
+  system[0] = {"type":"ephemeral","ttl":"1h"}
+  tools[13:TaskStop] = {"type":"ephemeral","ttl":"1h"}
+  messages[2][0:tool_result] = {"type":"ephemeral","ttl":"1h"}
+
+req-004.json  model=fake-sonnet  tools=ask,browser_preview,read,write,edit,bash,glob,grep,skill,new_context,Task,TaskWait,TaskList,TaskStop
+  system[0] = {"type":"ephemeral","ttl":"1h"}
+  tools[13:TaskStop] = {"type":"ephemeral","ttl":"1h"}
+  messages[4][0:text] = {"type":"ephemeral","ttl":"1h"}

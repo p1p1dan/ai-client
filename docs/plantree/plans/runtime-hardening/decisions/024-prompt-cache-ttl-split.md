@@ -27,9 +27,15 @@ T033 现场反馈 #8（本轮现场最疼的一条，是「正常输出慢」的
 - 不做运行中热切换：改设置只对下一次启动的 runtime 生效，不影响正在跑的会话。
 - 一次性工具调用（`nativeUtility`）固定留 5 分钟档，不跟随主档改动。
 
+## 追加注记（性能实测推翻主因判断，2026-09-18 下半场）
+
+- **本决策「问题」「理由」两节里「5 分钟缓存过期是本轮现场『输出变慢』反馈的主因」这一判断被当天更完整的实测推翻**：用真实公司渠道请求做六组对照（我们的 runtime 冷/热缓存、裸调用开/关思考、裸调用带/不带工具定义、用户自己的 Claude CLI），缓存对首字延迟的贡献只值约 **2.3 秒**（冷缓存 28.2s → 全命中 25.9s），量级远小于现场观测到的「首字 6.8s → 29～51s」那个落差；真正的大头是**思考（extended thinking）token 量**——关闭思考后总时长从 30.7s 降到 11.3s（降 64%），首字从 25.0s 降到 6.9s，且三组数据的思考 token 量与耗时完全单调对应。完整数据见 [evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md](../evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md)。
+- **本决策本身不撤回**：主对话默认 1 小时依然值得做——省成本（避免短停顿后的重复全量写入）、省这 2.3 秒——只是它不再被当作「解决输出慢」的方案。上面「问题」「理由」两节的原文保留不删，本注记是对其因果判断的更正，不是否定这个决定。
+- 与 Q021 的关系：本决策「后果与备注」一节记的「待验证：中转是否透传 `ttl:'1h'`」已用同一批真实请求端到端确认——中转如实透传且上游确实按 1 小时处理，[Q021](../open-questions.md) 已结案。
+
 ## 相关
 
 - 现场反馈与完整性能数据：[t033-field-day/07-findings.md](../topics/t033-field-day/07-findings.md) 现象 #8
 - 落地任务：[roadmap.md](../roadmap.md) 批次 H T077
-- 待验证问题：[open-questions.md](../open-questions.md) Q021
-- 已结案：[open-questions.md](../open-questions.md) Q024
+- 性能重测与主因更正：[evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md](../evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md)
+- 已结案：[open-questions.md](../open-questions.md) Q024、[open-questions.md](../open-questions.md) Q021

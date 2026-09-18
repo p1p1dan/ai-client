@@ -19,7 +19,7 @@ Role: detail shard。上位：[执行单](../t033-field-day-runbook.md)。建立
 | 5 | 委托（子代理）时上下文占用归零 | `projector.ts:520` 调 `buildPiUsagePayload` 时第二个参数硬写 `undefined`；`contextSurfaceModel.ts:576-585` 对上下文做整体替换而非合并 | 同左；对应已有任务 T053 | [T053](../../roadmap.md)（提级批次 H） |
 | 6 | TUI 请求不了新增的 claude provider | **T082 落地时更正**：五个保管箱（vault）写入点其实都已挂了 `auth.json` 重写的补救钩子，并非完全没有触发时机；但这些钩子全是不等待、不捕获失败的异步调用（其中自建服务那一处连 `.catch` 都没有），真正的缺口是保管箱写入与 `auth.json` 重写之间没有可靠先后保证的**时序竞态窗口**，TUI 恰好在窗口内读到旧文件；已排除「TUI 读取另一个 agentDir」的备选病因，两侧用的是同一个 `getAppPiAgentDir()` | `PiTuiPty.ts:163-184`；`PiModelConfigService.writeRuntimeConfig():645-661` | [T082](../../roadmap.md)（H-6）已落地（工作区未提交），见[批次 H 证据](../../evidence/batch-h-field-fixes-2026-09-18/README.md) |
 | 7 | TUI 执行 `new` 后静默解绑 | pi 自己的 `SessionManager` 切到了新路径；GUI 的 `session-index.json` 侧没有目录扫描、没有 `fs.watch`，感知不到这次切换 | `SessionIndexService.ts:94-96` | [T086](../../roadmap.md)（H-10） |
-| 8 | 正常输出慢（本轮现场最疼的一条，主因） | 5 分钟无请求后 prompt cache 过期，下一次请求触发全量重写上下文；数据见下节「性能深挖」 | `contextFX/session-1789701613704-i5jfwqz.jsonl` | [决策 024](../../decisions/024-prompt-cache-ttl-split.md) / [T077](../../roadmap.md)（H-1）**已落地，收益待上机验证**（开发机上 `cacheWrite1h` 分桶恒为 0，需 T033 第二轮现场确认中转是否透传 `ttl:'1h'`，见 [Q021](../../open-questions.md)）；工具耗时部分另见[决策 025](../../decisions/025-search-tool-native-over-pi-fff.md) / [T083](../../roadmap.md)（H-7）**已落地，收益待上机验证**（glob 大目录树性能仅在 Linux 开发机测过，见[批次 H 证据](../../evidence/batch-h-field-fixes-2026-09-18/README.md)） |
+| 8 | 正常输出慢（本轮现场最疼的一条，主因） | ~~5 分钟无请求后 prompt cache 过期，下一次请求触发全量重写上下文~~；数据见下节「性能深挖」。**2026-09-18 下半场更正**：缓存过期只解释约 2.3 秒延迟，不是「首字 6.8s→29~51s」这个量级落差的成因，真正主因是思考（extended thinking）token 量，见「性能深挖」节末尾的更正小节 | `contextFX/session-1789701613704-i5jfwqz.jsonl` | [决策 024](../../decisions/024-prompt-cache-ttl-split.md) / [T077](../../roadmap.md)（H-1）~~已落地，收益待上机验证（开发机上 `cacheWrite1h` 分桶恒为 0，需 T033 第二轮现场确认中转是否透传 `ttl:'1h'`，见 [Q021](../../open-questions.md)）~~ **2026-09-18 下半场已补完**：真实请求端到端确认中转如实透传 `ttl:'1h'` 且上游按 1 小时处理，[Q021](../../open-questions.md) 已结案；但同一批测试同时推翻了本条「主因是缓存 TTL」的判断，详见 [perf-2026-09-18.md](../../evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md)；工具耗时部分另见[决策 025](../../decisions/025-search-tool-native-over-pi-fff.md) / [T083](../../roadmap.md)（H-7）**已落地，收益待上机验证**（glob 大目录树性能仅在 Linux 开发机测过，见[批次 H 证据](../../evidence/batch-h-field-fixes-2026-09-18/README.md)） |
 | 9 | 子 agent 没有独立展示位 | **不是缺陷**：子代理的执行过程当前挂在工具行下，可以展开查看；用户期待的是一个独立的展示位置，不是「看不到」 | `ToolRows.tsx:164-165` 挂载 `SubagentActivity` | [Q019](../../open-questions.md) / [T085](../../roadmap.md)（H-9，阻塞于 Q019） |
 | 10 | 网关对 claude 模型 503 / 超时 | 独立问题，与现象 #8 的「慢」无关；两段短测试里 claude provider 一次未成功、142 秒零输出 | `contextFX/2026-09-18T07-28-08-430Z_*.jsonl`、`contextFX/2026-09-18T07-31-10-855Z_*.jsonl` | [T087](../../roadmap.md)（H-11，本批不实现，另行跟进） |
 
@@ -70,10 +70,17 @@ Role: detail shard。上位：[执行单](../t033-field-day-runbook.md)。建立
 
 客户端自身的处理开销上限约为 7 秒（用 claude-opus-5 缓存命中时的最快值倒推的地板值）。要进一步拆出「网关排队用了多久」「模型生成用了多久」这些更细的环节，需要在代码里加三个时间点的埋点：请求发出的时刻、网关接单的时刻、返回的第一个正文 token 的时刻。目前没有这些埋点，做不到进一步拆分。
 
+### 2026-09-18 下半场更正：缓存 TTL 不是「输出慢」的主因
+
+上面「缓存失效（真正的主因）」一节的判断已被同日更完整的实测推翻，原文保留不删，更正记在这里。
+
+用真实公司渠道请求（`claude/claude-sonnet-5`，经 `cch-jyw` 中转）做六组对照：我们的 runtime 缓存冷/全命中分别 28.2s / 25.9s，只省 **2.3 秒**——不是「首字 6.8s→29~51s」那个落差的成因；绕开全部应用代码的裸调用在思考开启时反而比走应用慢 5～7 秒（30.7s/33.2s 对 25.9s），说明应用自身代码不是瓶颈；裸调用关闭思考后总时长从 30.7s 降到 11.3s（降 64%）、首字从 25.0s 降到 6.9s，三组裸调用的思考 token 量（976/1,063/0）与耗时完全单调对应——**真正的主因是思考（extended thinking）token 量，不是缓存 TTL**。[决策 024](../../decisions/024-prompt-cache-ttl-split.md) 主对话默认 1 小时依然成立（省成本、省这 2.3 秒），但不再被当作「解决输出慢」的方案，该决策已追加注记更正。同一批测试还端到端确认了中转确实透传 `ttl:'1h'` 且上游按 1 小时处理，[Q021](../../open-questions.md) 已结案。完整数据、测试配置与待拍板线索（系统提示词里家目录 `CLAUDE.md` 的「需求复述」规则对思考量/输出量的影响）见 [evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md](../../evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md)。
+
 ## 相关文件
 
 - 判据权威（不含本轮现场反馈）：[checklist-e.md](../../checklist-e.md)
 - 上位执行单：[t033-field-day-runbook.md](../t033-field-day-runbook.md)
-- 落地任务：[roadmap.md](../../roadmap.md) 批次 H
-- 决策：[023](../../decisions/023-bypass-permissions-tier.md) · [024](../../decisions/024-prompt-cache-ttl-split.md) · [025](../../decisions/025-search-tool-native-over-pi-fff.md)
-- 未决问题：[open-questions.md](../../open-questions.md) Q019 / Q020 / Q021
+- 落地任务：[roadmap.md](../../roadmap.md) 批次 H（及其后的「批次 H 追加」T088/T089）
+- 决策：[023](../../decisions/023-bypass-permissions-tier.md) · [024](../../decisions/024-prompt-cache-ttl-split.md)（已追加性能主因更正） · [025](../../decisions/025-search-tool-native-over-pi-fff.md)
+- 性能重测与主因更正（2026-09-18 下半场）：[evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md](../../evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md)
+- 未决问题：[open-questions.md](../../open-questions.md) Q019 / Q020 仍待拍板；~~Q021~~ 已结案

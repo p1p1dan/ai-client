@@ -1,6 +1,6 @@
 # Runtime 加固与收口
 
-Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批次 A～D4、G 已落地；批次 H：T077～T087 + 提级的 T053 中，十项已分 13 个本地提交落地（未推送），本地点验进行中，待 Windows 第二轮验证，T085 阻塞于 Q019 未开始，T087 推迟）。
+Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批次 A～D4、G 已落地；批次 H：T077～T087 + 提级的 T053 十项、以及下半场追加的 T088/T089，共分 17 个本地提交落地（未推送），本地点验两轮均已完成，T085 阻塞于 Q019 未开始，T087 推迟；Q021 已结案，且批次立项时「输出慢＝5 分钟缓存 TTL」的判断已被 2026-09-18 实测推翻，详见 [perf-2026-09-18.md](evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md)，待 Windows 第二轮上机做剩余观感类验证）。
 
 ## 范围
 
@@ -26,7 +26,7 @@ Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批�
 |---|---|
 | [roadmap.md](roadmap.md) | 任务树 T001～T087，批次 A～D、D2、D3、D4、E、F、G、H，Done / In Progress / Next / Deferred |
 | [open-questions.md](open-questions.md) | 修补前要拍板的问题 |
-| [evidence/batch-h-field-fixes-2026-09-18/](evidence/batch-h-field-fixes-2026-09-18/README.md) | 批次 H（T077～T087 + 提级 T053）十项落地明细（13 个本地提交，未推送）、验证结果（429 文件 / 6641 条全绿）、本地点验状态、待 T033 第二轮上机验证清单；新增 Q022～Q026 均已结案 |
+| [evidence/batch-h-field-fixes-2026-09-18/](evidence/batch-h-field-fixes-2026-09-18/README.md) | 批次 H（T077～T087 + 提级 T053，及下半场追加的 T088/T089）落地明细（17 个本地提交，未推送）、验证结果（429 文件 / 6641 条全绿）、两轮本地点验结果、待 T033 第二轮上机验证清单、当日其它发现登记；新增 Q022～Q026 均已结案，Q021 亦已结案（见同目录 [perf-2026-09-18.md](evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md)：性能重测推翻「输出慢＝缓存 TTL」旧判断） |
 | [checklist-e.md](checklist-e.md) | 批次 E 正式上机检查单（T032 产出）：DEV / Windows / 加密机 / utility / 真实模型五组判据与取证方式 |
 | [topics/t033-field-day-runbook.md](topics/t033-field-day-runbook.md) | T033 上机日执行单（topic capsule）：装机、上机前自检、执行顺序、34 条必做的编号映射、砍单顺序、远程协作与证据命名；逐项分片在 [topics/t033-field-day/](topics/t033-field-day/01-win.md) 七份（WIN / ENC / PKG / MODEL / 批次 D4 复验 / 收尾回填 / [2026-09-18 现场反馈与根因](topics/t033-field-day/07-findings.md)） |
 | [evidence/batch-e-build-2026-09-18/](evidence/batch-e-build-2026-09-18/README.md) | T033 上机前补的那次打包构建（run 35295618831，源码 `13e6cdb7`）：产物与作业清单、三平台 worker-smoke JSON（WIN-19 据此已可标 ✅） |
