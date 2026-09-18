@@ -74,7 +74,7 @@ Role: reference。[T032](roadmap.md) 的产出，取代[批次 D 的草案](evid
 
 | # | 项 | 判据 | 取证方式 | 来源 |
 |---|---|---|---|---|
-| MODEL-49 | P1-5 真实自定义策略与复杂 shell | 用户自写的策略文件、含管道 / 重定向 / here-string 的复杂命令、以及策略热重载三种组合下，判定与档位表一致 | 准备一份自定义策略，跑三类命令各一次，抓权限审计行 | 旧树 P1-5 |
+| MODEL-49 | P1-5 真实自定义策略与复杂 shell | 用户自写的策略文件、含管道 / 重定向 / here-string 的复杂命令两种组合下，判定与档位表一致；第三格「策略改写」验的是**不热重载**：会话进行中改策略文件，同一会话判定不变，新开会话才按新策略判定（判据更正见 5.1） | 准备一份自定义策略（[样本](evidence/batch-e-devbox-2026-09-17/tools/field-samples/README.md)），跑三类命令各一次，抓权限审计行；再改策略文件，同会话 / 新会话各跑一次 | 旧树 P1-5 |
 | MODEL-50 | GUI A/2 完整 Shell / Custom 组合 | 终端设置里默认 shell、自定义 shell 路径、自定义参数三种组合逐项可用（核心现场只验过一条） | 逐格切换并开一次终端，截图 | 旧树 GUI A/2 |
 | DEV-37 | GUI A/7 多样路径下的文件点击与编辑器 | 含空格、中文、超长、软链四类路径的文件点击后编辑器正确打开并定位 | 造四类路径各一个文件，逐个点击截图 | 旧树 GUI A/7「多样路径 2c 缺样本」 |
 
@@ -127,7 +127,7 @@ Role: reference。[T032](roadmap.md) 的产出，取代[批次 D 的草案](evid
 | 16 | R0 bash 进程映像取证 | 拿到 Windows 映像绝对路径与父进程链，而不是 shell 自报的 MSYS 路径（test.12 只拿到后者） | Get-Process bash \| Select Path 加父进程查询，与 src/runtime/host/shell.ts 的候选顺序逐条对照 | `field-nodes` |
 | 17 | R4 有效的无 Bash 探针 | worker 的 shell resolver 真正落到 shell_unconfigured，且应用不崩不挂 | 覆写 resolveWorkerShell 会查的全部候选路径后调 bash 工具；现场记录必须写明覆盖了哪几个候选（test.12 那次因未覆盖默认安装目录而无效） | `field-nodes` |
 | 18 | GUI F/15 的 F2-a/c 新包复验 | 临时根改设置后两处解析一致；用户目录缺失时给 workspace_missing 而非裸 ENOENT | 在新包上按现场清单复验 | `field-nodes` |
-| 19 | 打包门禁改 native-only 后的三平台绿灯 | 三平台 Verify packaged Pi worker 步骤成功，stamp.backend=native、carrier=bundled-node、权限审计行存在 | 推一次构建并收三份 worker-smoke-*.json（现有 test.13 绿灯停在 c0ae2a34，距 HEAD 144 个提交，门禁已被 T009/T028 改过两次） | `field-nodes` |
+| 19 | 打包门禁改 native-only 后的三平台绿灯 — ✅ **2026-09-18 已结案**：run 35295618831（HEAD `13e6cdb7`）三平台 success，三份 worker-smoke `ok=true`、`backend=native`、Windows `carrier=bundled-node`（非 Windows 为 electron-utility，符合载体规则）、read / bash 权限审计行各一条，见 [batch-e-build-2026-09-18](evidence/batch-e-build-2026-09-18/README.md) | 三平台 Verify packaged Pi worker 步骤成功，stamp.backend=native、carrier=bundled-node、权限审计行存在 | 推一次构建并收三份 worker-smoke-*.json（现有 test.13 绿灯停在 c0ae2a34，距 HEAD 144 个提交，门禁已被 T009/T028 改过两次） | `field-nodes` |
 | 20 | F6 右侧审阅栏打包后回归 | 安装包里右侧审阅栏能记录 Edit/Write 修改，上限行为与本地一致 | 新包上开一个会改文件的会话并对照本地结果 | `field-nodes` |
 | 21 | H/17 本地模式 AI 服务在打包产物里可用 | 添加自定义服务后模型选择器能拉到模型列表并可对话；safeStorage 不可用时界面如实显示未加密 | 打包应用 + CDP/手工点验 | `h-nodes` |
 | 22 | H/19 插件安装在打包产物里的路径解析正确 | currentPiCliLayout() 在打包布局下解析出的 pi 可执行文件路径存在且可跑；安装/卸载后 settings.json 与 node_modules 增减正确 | 打包应用真实调用 pi install/remove/list | `h-nodes` |
@@ -304,6 +304,7 @@ Role: reference。[T032](roadmap.md) 的产出，取代[批次 D 的草案](evid
 | DEV-29 TEMP /new | 「TEMP 会话」与「无工作区」并列为两种起点 | 「TEMP 会话（已发过消息）」与「TEMP 会话（从未发送）」 | `temporaryWorkspaceEnabled=true` 时「不选文件夹的聊天」就是一条 unbound 会话，发第一句才分配 scratch 目录；两格差别是 `inheritedPath` 有无值，不存在第三种会话类型。2026-09-17 实测：普通目录继承同工作区；已分配 scratch 的 TEMP 会话 /new 继承**同一个** scratch 目录（两条会话共用）；未分配的无可继承、首发时新分配 |
 | DEV-36 插件页文案 | 一句合写「本应用自带权限系统审批每个对话，你装的 pi 权限扩展只影响内嵌终端」 | 拆成「① 无条件句」+「② 装了 pi 权限扩展时才显示的句」，取证加前置步骤 | 后半句是 `PiPluginsSettings.tsx:253-268` 的条件渲染（`permissionSystemOwner` 为 `user_configured` / `unknown` 才出），没装扩展的机器只看得到前半句；照原判据会误判成「后半句丢了」。2026-09-17 开发机只验到 ① |
 | DEV-33 附件 GUI 半边 | 「被拒后能否继续发纯文本」挂在「另记」 | 升格为判据分句，静默丢弃判负；取证方式改为 paste 事件挂图 | 2026-09-17 实测被拒后纯文本被静默丢弃、重开应用即恢复（D24，本轮最疼的一条），挂在「另记」里下一个人可能只记一句「不能」就过去；`input[type=file]` + `DOM.setFileInputFiles` 在本仓不可执行（无文件 input，原生对话框 + `file:readAttachment` 一次性授权闸） |
+| MODEL-49 策略热重载 | 「策略热重载……判定与档位表一致」 | 第三格改为「会话进行中改策略文件，同一会话判定不变，新开会话才生效」 | 当前实现没有热重载：`loadPermissionPolicy` 只在 `bootstrap.ts:303` 启动时调一次，结果冻进 `PermissionsPlugin` 的只读配置，运行期 `configure()` 只吃 `mode` / `gear`，全仓无策略文件监听。按原判据字面读会把「改了不生效」判负，实际是设计如此；若要热重载须另立项（2026-09-17，T033 执行单备样本时发现） |
 
 ### 5.2 不需要人工执行的项
 

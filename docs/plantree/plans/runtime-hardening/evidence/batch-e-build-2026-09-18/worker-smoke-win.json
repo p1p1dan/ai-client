@@ -1,0 +1,79 @@
+{
+  "appDir": "D:\\a\\ai-client\\ai-client\\dist\\win-unpacked",
+  "reports": [
+    {
+      "ok": true,
+      "backend": "native",
+      "workerPath": "D:\\a\\ai-client\\ai-client\\dist\\win-unpacked\\resources\\agent-host\\worker.js",
+      "workerExecutable": "D:\\a\\ai-client\\ai-client\\dist\\win-unpacked\\resources\\node-runtime\\node.exe",
+      "bootstrapResultKeys": [
+        "agentDir",
+        "bootstrapped",
+        "capabilities",
+        "cwd",
+        "effort",
+        "leaf",
+        "logicalSessionId",
+        "model",
+        "permissionGate",
+        "piSessionId",
+        "projectTrusted",
+        "sessionFile"
+      ],
+      "stamp": {
+        "config_version": "runtime_p6_hardening_v1",
+        "git_commit": "unknown",
+        "node": "v24.18.0",
+        "backend": "native",
+        "single_turn": "false",
+        "tools": "true",
+        "mode": "agent",
+        "permission_gear": "auto",
+        "permission_policy_sha256": "0fb12ca34d8e92517613d715a45abf61276070c0df62d2a989a4567e79260dfd",
+        "permission_policy_sources": "[]",
+        "permission_policy_notes": "[]",
+        "skills": "0",
+        "prompt_templates": "0",
+        "skill_diagnostics": "0",
+        "subagents": "4",
+        "subagent_diagnostics": "0",
+        "mcp_servers": "0",
+        "mcp_failed": "0",
+        "mcp_tools": "0",
+        "compaction": "true",
+        "compaction_family": "summary",
+        "carrier": "bundled-node",
+        "exec_stdio": "pipe",
+        "exec_adapter": "node-runner-pipe-v1",
+        "tsd_read_fallback": "disabled",
+        "cleanup_timeout_ms": "2000",
+        "node_source": "bundled",
+        "node_exec_path": "D:\\a\\ai-client\\ai-client\\dist\\win-unpacked\\resources\\node-runtime\\node.exe"
+      },
+      "permissionActivity": [
+        {
+          "phase": "decision",
+          "requestId": "probe_read",
+          "surface": "read",
+          "value": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aiclient-packaged-worker-lkfPvA\\workspace\\worker-read-probe.md",
+          "result": "allow",
+          "resolution": "policy_allow"
+        },
+        {
+          "phase": "decision",
+          "requestId": "probe_bash",
+          "surface": "bash",
+          "value": "printf packaged-worker-bash-ok",
+          "result": "allow",
+          "resolution": "policy_allow"
+        }
+      ],
+      "exitCode": 0,
+      "workerPid": 3240,
+      "sessionFile": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aiclient-packaged-worker-lkfPvA\\agent\\sessions\\packaged-probe.jsonl",
+      "transport": "node-ipc",
+      "tools": ["read", "bash"]
+    }
+  ],
+  "failures": []
+}

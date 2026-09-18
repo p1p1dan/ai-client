@@ -1,0 +1,8 @@
+gate	success
+build-remote-runtime-linux (arm64, ubuntu-24.04-arm)	success
+build-app	success
+build-remote-runtime-linux (x64, ubuntu-latest)	success
+build-linux	success
+build-macos	success
+build-windows	success
+generate-release-notes	skipped

@@ -1,0 +1,5 @@
+# ENC-12 fixtures are byte-exact: the GBK file has no BOM, the UTF-16 file uses
+# CRLF (0d 00 0a 00) and the PNG signature itself contains 0d 0a. Any EOL or
+# encoding conversion on checkout destroys the very thing this sample set
+# measures, and a machine with core.autocrlf=true would do it silently.
+enc12/** binary

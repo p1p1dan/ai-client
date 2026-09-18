@@ -1,0 +1,58 @@
+[
+  {
+    "name": "enc12-gbk.txt",
+    "note": "GBK / CP936, LF, no BOM",
+    "bytes": 204,
+    "head16": "b5 da d2 bb d0 d0 a3 ba bc d3 c3 dc c5 cc b1 e0",
+    "sha256": "cd47c32aec99cd377289570b6e8450400af177f7b81b14b62de6e0f80245c209"
+  },
+  {
+    "name": "enc12-gbk.v2.txt",
+    "note": "GBK v2 (one line changed)",
+    "bytes": 226,
+    "head16": "b5 da d2 bb d0 d0 a3 ba bc d3 c3 dc c5 cc b1 e0",
+    "sha256": "65ed0c8a0410b9b442db9767a83504a4c431b6662d5115dc4fc7287b1e55b5e9"
+  },
+  {
+    "name": "enc12-utf16le-bom.txt",
+    "note": "UTF-16 LE + BOM, CRLF",
+    "bytes": 302,
+    "head16": "ff fe 2c 7b 00 4e 4c 88 1a ff a0 52 c6 5b d8 76",
+    "sha256": "c7223cff8d075f599c445d3dc812b84bbef05f14a68d149ade489650e81a01b6"
+  },
+  {
+    "name": "enc12-utf16le-bom.v2.txt",
+    "note": "UTF-16 LE + BOM v2",
+    "bytes": 324,
+    "head16": "ff fe 2c 7b 00 4e 4c 88 1a ff a0 52 c6 5b d8 76",
+    "sha256": "3d102ac1810e84a734937f48f39503e372925974366c824db3baf4bfe1c5a5b5"
+  },
+  {
+    "name": "enc12-utf8-bom.txt",
+    "note": "UTF-8 + BOM, LF",
+    "bytes": 265,
+    "head16": "ef bb bf e7 ac ac e4 b8 80 e8 a1 8c ef bc 9a e5",
+    "sha256": "6d0c64a0339236322dc4dae5891cd0b49eef9517eee928685703f6c705ef67c0"
+  },
+  {
+    "name": "enc12-utf8-bom.v2.txt",
+    "note": "UTF-8 + BOM v2",
+    "bytes": 298,
+    "head16": "ef bb bf e7 ac ac e4 b8 80 e8 a1 8c ef bc 9a e5",
+    "sha256": "aed7802bb9a2fd6997517556c820e151daed2553d39855cf046cef212ce63700"
+  },
+  {
+    "name": "enc12-tiny.png",
+    "note": "valid 1x1 truecolour PNG",
+    "bytes": 69,
+    "head16": "89 50 4e 47 0d 0a 1a 0a 00 00 00 0d 49 48 44 52",
+    "sha256": "92240245569608a22d537ae963ae4c62dd33a69fee0bf06b650eae93269f05a6"
+  },
+  {
+    "name": "enc12-random-1kib.bin",
+    "note": "exactly 1024 deterministic bytes, contains NUL",
+    "bytes": 1024,
+    "head16": "41 6e d6 bf a7 d9 ff 20 7b 9a 57 0e 87 73 c9 d0",
+    "sha256": "301744840ac9337311b3b833b5fe7811befe4a2e6e1f486b353e5e3900dec25e"
+  }
+]

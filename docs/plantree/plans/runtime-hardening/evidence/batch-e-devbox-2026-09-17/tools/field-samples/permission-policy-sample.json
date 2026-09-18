@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/gotgenes/pi-packages/main/packages/pi-permission-system/schemas/permissions.schema.json",
+  "permissionReviewLog": true,
+  "permission": {
+    "bash": {
+      "git status *": "allow",
+      "curl *": "deny"
+    },
+    "path": {
+      "*t033-secret.txt": "deny"
+    }
+  }
+}

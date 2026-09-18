@@ -173,7 +173,7 @@ T059 的收口全量另在 **Linux 开发机**上跑（2026-09-17，单 worker�
 | ID | 任务 | 范围 | 验收 |
 |---|---|---|---|
 | T032 | 上机检查单：合并旧树待现场项（P5-2 六行、P5-4/P5-5 五行、P6-3 第 4/6 条、H/20 I5、F3 根因）、T001 后的 PERM-1 探针复跑（`scripts/run-perm1-probe.mjs`，需真实模型回合）与审计静态推断项（permissions-19、core-host-05/07、tools-10、cutover-03、P1-8 证据重采、P6-4 旧版产物互读） ；**批次 D 追加**：并入 [checklist-e.md](evidence/batch-d-audit-2026-09-15/checklist-e.md)（批评者 34 条上机必做 + 18 区域 150 项，按 windows / encrypted / utility / real-model 分组，其中标 dev-box 的项在上机前先做完）与 field-06 点名的现场项（F1～F7、GUI A/2、A/4、A/10、B/5、C/8、F/13、F/15、F3 根因）；P4-6 经接缝裁决为 incomplete，R2/R3/R4 三行从未执行，上机日必须给出结论 | 旧树第 11 批 + 审计 + 批次 D | 检查单每项有判据与取证方式。**2026-09-17：正式检查单已产出** → [checklist-e.md](checklist-e.md)（计划根下；四来源合并去重，原 150 项判据逐字搬入、新增 20 项、三条裁决、回填出口表、取证规矩）。**2026-09-17 开发机组全部完成** → [证据](evidence/batch-e-devbox-2026-09-17/README.md)：37 项（35 + DEV-36/37）分七批处置完毕，28 ✅ / 3 ⚠️ 部分成立 / 3 ⛔ 判负 / 2 ⛔ 不可执行 / 2 🚫 裁决不需人工；检查单同日更正 16 行；26 条疑似缺陷转批次 D4 与 Q016 / Q017；收口全量 413 文件 / 6271 条全绿。未提交 |
-| T033 | 最后一次上机：加密 Windows 一次性全量验收 | T032 | 逐项取证进 evidence |
+| T033 | 最后一次上机：加密 Windows 一次性全量验收。**2026-09-17 上机日执行单已备** → [topics/t033-field-day-runbook.md](topics/t033-field-day-runbook.md)（装机与旧包获取、上机前 15 项自检、按检查单 §1 的执行顺序把 134 项排成十余轮、34 条必做的编号映射、三刀砍单顺序、远程协作与证据命名；逐项分片六份）；上机前的打包构建已完成（run [35295618831](https://github.com/p1p1dan/ai-client/actions/runs/35295618831)，源码 `13e6cdb7`，七个 job 全 success，三份 worker-smoke 已归档 → [证据](evidence/batch-e-build-2026-09-18/README.md)，**WIN-19 据此可标 ✅**）；可提前造的样本已备 → [field-samples](evidence/batch-e-devbox-2026-09-17/tools/field-samples/README.md) | T032 | 逐项取证进 evidence（目录约定 `evidence/batch-e-field-<date>/`） |
 
 ### 批次 F：补审修补（上机后）
 

@@ -1,0 +1,4 @@
+﻿第一行：加密盘编码样本，用于 ENC-12。
+second line stays ASCII so a broken decode is obvious by contrast
+第三行：全角标点——括号（圆括号）、引号「直角引号」、省略号……
+第四行：待改动的哨兵串 SENTINEL-V1
