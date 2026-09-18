@@ -216,6 +216,18 @@ export interface InstructionChainOptions extends SettingSourceOptions {
    */
   globals?: readonly InstructionGlobal[];
   maxBytes?: number;
+  /**
+   * A-round testing only (temporary, see `flags.ts`'s
+   * `SKIP_USER_INSTRUCTIONS_ENV`): when `true`, the user tier (T059 — the
+   * home-directory global) is skipped regardless of `sources.user`. Does NOT
+   * touch the project or local tiers below; those keep loading the
+   * workspace's own `CLAUDE.md` / `AGENTS.md` exactly as before. Left
+   * `undefined`/`false` by default, which is the pre-existing behaviour — the
+   * actual A-round switch is resolved in `bootstrap.ts`, not here, so this
+   * module stays a pure function of its options (same reasoning as `home`
+   * above).
+   */
+  skipUserTier?: boolean;
 }
 
 /**
@@ -421,7 +433,7 @@ export async function loadInstructionChain(
   // already applies to `~/.agents/skills`. No `CLAUDE.local.md`: "local" means
   // private to one project, and the home directory is private already.
   const home = options.home ? resolve(options.home) : undefined;
-  if (home && sources.user && remaining > 0) {
+  if (home && sources.user && !options.skipUserTier && remaining > 0) {
     const found = await readDirectoryInstructions(source, {
       labelRoot: home,
       directory: home,

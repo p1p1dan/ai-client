@@ -19,6 +19,7 @@ import {
   RUNTIME_AGENT_DIR_ENV,
   RUNTIME_TRACE_DIR_ENV,
   readRuntimeFlags,
+  SKIP_USER_INSTRUCTIONS_ENV,
 } from '../flags.ts';
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
@@ -79,6 +80,18 @@ describe('runtime flags', () => {
     );
     // Not a knob any more: one engine, stamped into every trace as a constant.
     expect(readRuntimeFlags({ [RETIRED_SWITCH]: 'legacy' }).backend).toBe('native');
+  });
+
+  it('only skips the user tier of project instructions when explicitly asked for "1"', () => {
+    // Default: unset means the pre-existing behaviour (user tier loads).
+    expect(readRuntimeFlags({}).skipUserInstructions).toBe(false);
+    expect(readRuntimeFlags({ [SKIP_USER_INSTRUCTIONS_ENV]: '1' }).skipUserInstructions).toBe(true);
+    // Anything other than the exact sentinel is treated as unset, the same
+    // strict-equality rule `AICLIENT_SESSION_REVIEW`/`AICLIENT_SKIP_AUTH_GATE`
+    // use elsewhere, so a typo cannot silently flip A-round testing off.
+    expect(readRuntimeFlags({ [SKIP_USER_INSTRUCTIONS_ENV]: 'true' }).skipUserInstructions).toBe(
+      false
+    );
   });
 
   it('is read by nothing in src/ or scripts/ — the switch is gone, not hidden', () => {

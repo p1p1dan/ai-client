@@ -27,6 +27,14 @@ export interface PromptConfig extends SettingSourceOptions {
   /** Explicit borrowed files, appended after the managed agent-dir AGENTS.md. */
   globals?: InstructionChainOptions['globals'];
   maxBytes?: number;
+  /**
+   * A-round testing only (temporary). Forwarded as-is to
+   * `loadInstructionChain`; see `InstructionChainOptions['skipUserTier']` for
+   * what it does and does not affect. `bootstrap.ts` is the only production
+   * caller and resolves its default from `AICLIENT_SKIP_USER_INSTRUCTIONS`
+   * (`flags.ts`); a caller that supplies its own value here wins.
+   */
+  skipUserTier?: InstructionChainOptions['skipUserTier'];
 }
 
 export class PromptPlugin extends Service implements RuntimePromptService {

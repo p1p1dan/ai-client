@@ -389,6 +389,11 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       // config also feeds the per-delegation chain below, and a delegate must
       // see the same user tier and the same walk as the parent.
       home: options.prompt?.home ?? homedir(),
+      // A-round testing only (temporary): resolved from the environment here,
+      // same edge as `home` above, so `projectInstructions.ts` stays a pure
+      // function of its options. See `SKIP_USER_INSTRUCTIONS_ENV` in
+      // `flags.ts` for what this does and how to revert it.
+      skipUserTier: options.prompt?.skipUserTier ?? flags.skipUserInstructions,
       projectTrusted: options.permissions?.projectTrusted,
       ...(options.settingSources ? { settingSources: options.settingSources } : {}),
       globals: [

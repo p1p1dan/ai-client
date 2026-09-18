@@ -421,6 +421,43 @@ describe('loadInstructionChain user tier (T059)', () => {
     expect(calls).not.toContain(home('.claude', 'CLAUDE.md'));
   });
 
+  it('loads the home directory file when skipUserTier is left off (default unchanged)', async () => {
+    // A-round testing (temporary, `flags.ts`'s SKIP_USER_INSTRUCTIONS_ENV):
+    // the option exists, but not passing it — the production default when the
+    // env var is unset — must reproduce the pre-existing behaviour exactly.
+    const { source } = fakeSource({
+      [home('.claude', 'CLAUDE.md')]: 'user rule',
+      [at('AGENTS.md')]: 'project rule',
+    });
+    const entries = await loadInstructionChain(source, {
+      root: ROOT,
+      home: HOME,
+      ...TRUSTED,
+      skipUserTier: false,
+    });
+    expect(entries).toEqual([
+      { source: '~/.claude/CLAUDE.md', content: 'user rule' },
+      { source: 'AGENTS.md', content: 'project rule' },
+    ]);
+  });
+
+  it('drops only the home directory file when skipUserTier is on (A-round testing)', async () => {
+    const { source, calls } = fakeSource({
+      [home('.claude', 'CLAUDE.md')]: 'user rule',
+      [at('AGENTS.md')]: 'project rule',
+    });
+    const entries = await loadInstructionChain(source, {
+      root: ROOT,
+      home: HOME,
+      ...TRUSTED,
+      skipUserTier: true,
+    });
+    // The project tier is untouched — only the user tier this switch exists
+    // for is gone, and it is never even read.
+    expect(entries).toEqual([{ source: 'AGENTS.md', content: 'project rule' }]);
+    expect(calls).not.toContain(home('.claude', 'CLAUDE.md'));
+  });
+
   it('walks from just below the home directory when the workspace sits under it', async () => {
     // `/home` is shared by every account on the machine and `/home/u` is the
     // user tier — neither is a project parent. Only `projects/` and the
