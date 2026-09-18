@@ -66,7 +66,8 @@ function parseArgs(argv) {
     else throw new Error(`Unknown arg: ${a}`);
   }
   if (!args.restore) {
-    if (!args.port || Number.isNaN(args.port)) throw new Error('--port <n> is required (unless using --restore)');
+    if (!args.port || Number.isNaN(args.port))
+      throw new Error('--port <n> is required (unless using --restore)');
   }
   return args;
 }
@@ -101,7 +102,9 @@ function backupVault(vaultPath, raw) {
     return backupPath;
   } catch (err) {
     if (err.code === 'EEXIST') {
-      console.log(`[register-fake-provider] backup already exists at ${backupPath}, leaving it untouched`);
+      console.log(
+        `[register-fake-provider] backup already exists at ${backupPath}, leaving it untouched`
+      );
       return backupPath;
     }
     throw err;
@@ -177,14 +180,22 @@ function main() {
   if (args.dryRun) {
     console.log('[register-fake-provider] DRY RUN — nothing will be written.');
     console.log(`[register-fake-provider] vault path: ${args.vault}`);
-    console.log(`[register-fake-provider] existing userProvidersEnc: ${JSON.stringify(original.userProvidersEnc)}`);
+    console.log(
+      `[register-fake-provider] existing userProvidersEnc: ${JSON.stringify(original.userProvidersEnc)}`
+    );
     console.log(
       `[register-fake-provider] existing userProviders type: ${
-        typeof original.userProviders === 'string' ? 'encrypted string' : Array.isArray(original.userProviders) ? `plaintext array (${original.userProviders.length} entries)` : String(original.userProviders)
+        typeof original.userProviders === 'string'
+          ? 'encrypted string'
+          : Array.isArray(original.userProviders)
+            ? `plaintext array (${original.userProviders.length} entries)`
+            : String(original.userProviders)
       }`
     );
     console.log(`[register-fake-provider] ${note}`);
-    console.log('[register-fake-provider] vault JSON that WOULD be written (apiKey / encrypted strings redacted):');
+    console.log(
+      '[register-fake-provider] vault JSON that WOULD be written (apiKey / encrypted strings redacted):'
+    );
     console.log(JSON.stringify(redactForPrint(newVault), null, 2));
     return;
   }
@@ -192,7 +203,9 @@ function main() {
   const backupPath = backupVault(args.vault, raw);
   fs.writeFileSync(args.vault, JSON.stringify(newVault, null, 2));
   console.log(`[register-fake-provider] backed up original vault to ${backupPath}`);
-  console.log(`[register-fake-provider] wrote fake provider "${args.id}" -> http://127.0.0.1:${args.port} into ${args.vault}`);
+  console.log(
+    `[register-fake-provider] wrote fake provider "${args.id}" -> http://127.0.0.1:${args.port} into ${args.vault}`
+  );
   console.log(`[register-fake-provider] ${note}`);
 }
 

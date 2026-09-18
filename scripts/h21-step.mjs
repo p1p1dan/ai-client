@@ -23,7 +23,10 @@ const show = (label, value) => console.log(`\n=== ${label} ===\n${value}`);
 switch (command) {
   case 'look': {
     show('flag', await cdp.evaluate(`localStorage.getItem(${JSON.stringify(FLAG)})`));
-    show('root text', await cdp.evaluate(`document.getElementById('root').innerText.slice(0, 900)`));
+    show(
+      'root text',
+      await cdp.evaluate(`document.getElementById('root').innerText.slice(0, 900)`)
+    );
     show('dialog', JSON.stringify(await cdp.evaluate(DIALOG_STATE), null, 1));
     break;
   }

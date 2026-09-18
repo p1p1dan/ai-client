@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 // T032 DEV-10/11/12/13 (import-up-01/03/04) sample generator.
 //
 // Builds two fake config homes under /tmp/t032/samples:
@@ -16,10 +17,10 @@
 //
 // Nothing in the repo is touched.
 
-import { createWriteStream } from 'node:fs';
-import { mkdir, rm, writeFile, stat } from 'node:fs/promises';
-import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { createWriteStream } from 'node:fs';
+import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 const ROOT = '/tmp/t032/samples';
 const CLAUDE_HOME = join(ROOT, 'claude-home');
@@ -173,7 +174,9 @@ function codexRolloutLines({ sessionId, title, startMs }) {
       type: 'message',
       id: `msg_${randomUUID()}`,
       role: 'user',
-      content: [{ type: 'input_text', text: `# AGENTS.md instructions for ${WORKSPACE}\nignore me` }],
+      content: [
+        { type: 'input_text', text: `# AGENTS.md instructions for ${WORKSPACE}\nignore me` },
+      ],
     },
     20
   );
@@ -190,18 +193,32 @@ function codexRolloutLines({ sessionId, title, startMs }) {
   );
   push(
     'response_item',
-    { type: 'reasoning', id: `rs_${randomUUID()}`, summary: [{ type: 'summary_text', text: `Planning: ${title}` }] },
+    {
+      type: 'reasoning',
+      id: `rs_${randomUUID()}`,
+      summary: [{ type: 'summary_text', text: `Planning: ${title}` }],
+    },
     40
   );
   const callId = `call_${randomUUID().slice(0, 12)}`;
   push(
     'response_item',
-    { type: 'function_call', id: `fc_${randomUUID()}`, call_id: callId, name: 'shell', arguments: JSON.stringify({ command: ['bash', '-lc', 'ls'] }) },
+    {
+      type: 'function_call',
+      id: `fc_${randomUUID()}`,
+      call_id: callId,
+      name: 'shell',
+      arguments: JSON.stringify({ command: ['bash', '-lc', 'ls'] }),
+    },
     50
   );
   push(
     'response_item',
-    { type: 'function_call_output', call_id: callId, output: JSON.stringify({ output: 'README.md\npackage.json\n', metadata: { exit_code: 0 } }) },
+    {
+      type: 'function_call_output',
+      call_id: callId,
+      output: JSON.stringify({ output: 'README.md\npackage.json\n', metadata: { exit_code: 0 } }),
+    },
     60
   );
   push(
@@ -257,8 +274,22 @@ function legacyRolloutLines({ sessionId, title, startMs }) {
 // ------------------------------------------------------------------ main ----
 
 const TOPICS = [
-  'worktree', 'terminal', 'editor', 'runtime', 'permission', 'session', 'plugin', 'model',
-  'import', 'trace', 'worker', 'scratch', 'vault', 'catalog', 'theme', 'telemetry',
+  'worktree',
+  'terminal',
+  'editor',
+  'runtime',
+  'permission',
+  'session',
+  'plugin',
+  'model',
+  'import',
+  'trace',
+  'worker',
+  'scratch',
+  'vault',
+  'catalog',
+  'theme',
+  'telemetry',
 ];
 
 async function main() {
@@ -349,10 +380,7 @@ async function main() {
   const legacyDir = join(CODEX_LEGACY_SYNTHETIC, 'sessions', '2026', '09', '16');
   await mkdir(legacyDir, { recursive: true });
   const legacyId = randomUUID();
-  const legacyPath = join(
-    legacyDir,
-    `rollout-2026-09-16T09-00-00-${legacyId}.jsonl`
-  );
+  const legacyPath = join(legacyDir, `rollout-2026-09-16T09-00-00-${legacyId}.jsonl`);
   await writeFile(
     legacyPath,
     legacyRolloutLines({

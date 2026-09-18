@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * fake-gateway.mjs — local fake Anthropic-Messages-style AI gateway for GUI point-checks.
  *
@@ -91,14 +92,22 @@
  *   curl -s http://127.0.0.1:18080/health
  */
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import process from 'node:process';
-import crypto from 'node:crypto';
 
 const LOG_PATH = '/tmp/t032/fake-gateway.log';
-const VALID_PLANS = ['text', 'long-turn', 'retry-503', 'retry-503-forever', 'write-approval', 'archive-probe', 'ask-question'];
+const VALID_PLANS = [
+  'text',
+  'long-turn',
+  'retry-503',
+  'retry-503-forever',
+  'write-approval',
+  'archive-probe',
+  'ask-question',
+];
 
 function parseArgs(argv) {
   const args = {
@@ -124,7 +133,8 @@ function parseArgs(argv) {
   if (!VALID_PLANS.includes(args.plan)) {
     throw new Error(`--plan must be one of: ${VALID_PLANS.join(', ')} (got "${args.plan}")`);
   }
-  if (!Number.isFinite(args.sleep) || args.sleep <= 0) throw new Error('--sleep must be a positive number');
+  if (!Number.isFinite(args.sleep) || args.sleep <= 0)
+    throw new Error('--sleep must be a positive number');
   if (!args.modelId) throw new Error('--model-id requires a value');
   return args;
 }
@@ -177,7 +187,9 @@ function summarizeMessage(msg) {
 }
 
 function hasToolResult(messages) {
-  return messages.some((m) => Array.isArray(m?.content) && m.content.some((b) => b?.type === 'tool_result'));
+  return messages.some(
+    (m) => Array.isArray(m?.content) && m.content.some((b) => b?.type === 'tool_result')
+  );
 }
 
 function logRequest(entry) {
@@ -217,11 +229,21 @@ function decide(plan, seq, toolResultPresent, sleepSeconds) {
           questions: [
             {
               header: '\u70b9\u9a8c\u987a\u5e8f',
-              question: '\u8fd9\u6b21\u89c6\u89c9\u70b9\u9a8c\u5148\u91cf\u54ea\u4e00\u5f20\u5361\uff1f',
+              question:
+                '\u8fd9\u6b21\u89c6\u89c9\u70b9\u9a8c\u5148\u91cf\u54ea\u4e00\u5f20\u5361\uff1f',
               options: [
-                { label: '\u5148\u91cf\u6743\u9650\u5361', description: '\u5199\u6587\u4ef6\u5ba1\u6279\u90a3\u4e00\u5f20' },
-                { label: '\u5148\u91cf\u95ee\u7b54\u5361', description: '\u5c31\u662f\u73b0\u5728\u8fd9\u4e00\u5f20' },
-                { label: '\u4e24\u5f20\u4e00\u8d77\u91cf', description: '\u540c\u4e00\u56de\u5408\u5185\u5148\u540e\u89e6\u53d1' },
+                {
+                  label: '\u5148\u91cf\u6743\u9650\u5361',
+                  description: '\u5199\u6587\u4ef6\u5ba1\u6279\u90a3\u4e00\u5f20',
+                },
+                {
+                  label: '\u5148\u91cf\u95ee\u7b54\u5361',
+                  description: '\u5c31\u662f\u73b0\u5728\u8fd9\u4e00\u5f20',
+                },
+                {
+                  label: '\u4e24\u5f20\u4e00\u8d77\u91cf',
+                  description: '\u540c\u4e00\u56de\u5408\u5185\u5148\u540e\u89e6\u53d1',
+                },
               ],
             },
           ],
@@ -309,7 +331,10 @@ function sendTextTurn(res, model, text) {
         },
       },
     ],
-    ['content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }],
+    [
+      'content_block_start',
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+    ],
     [
       'content_block_delta',
       { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } },
@@ -317,7 +342,11 @@ function sendTextTurn(res, model, text) {
     ['content_block_stop', { type: 'content_block_stop', index: 0 }],
     [
       'message_delta',
-      { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 9 } },
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 9 },
+      },
     ],
     ['message_stop', { type: 'message_stop' }],
   ];
@@ -356,7 +385,11 @@ function sendToolUseTurn(res, model, { name, input }) {
     ],
     [
       'content_block_start',
-      { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: toolId, name, input: {} } },
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'tool_use', id: toolId, name, input: {} },
+      },
     ],
     ...chunks.map((partial_json) => [
       'content_block_delta',
@@ -394,7 +427,12 @@ function main() {
     }
     if (req.method !== 'POST') {
       res.writeHead(404, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'not found', hint: 'this fake gateway only serves POST (as /v1/messages) and GET /health' }));
+      res.end(
+        JSON.stringify({
+          error: 'not found',
+          hint: 'this fake gateway only serves POST (as /v1/messages) and GET /health',
+        })
+      );
       return;
     }
 

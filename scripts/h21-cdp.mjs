@@ -126,7 +126,9 @@ export class Cdp {
     const deadline = Date.now() + timeoutMs;
     let last;
     while (Date.now() < deadline) {
-      last = await this.evaluate(`(() => { try { return ${expression} } catch { return null } })()`);
+      last = await this.evaluate(
+        `(() => { try { return ${expression} } catch { return null } })()`
+      );
       if (last) return last;
       await sleep(250);
     }

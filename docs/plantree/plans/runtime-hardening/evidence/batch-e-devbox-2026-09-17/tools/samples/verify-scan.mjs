@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 // T032 sample verification: run the REAL scanners/adapters against the fake
 // homes in /tmp/t032/samples, without Electron and without touching the repo.
 //
@@ -11,9 +12,9 @@
 //
 // Writes its findings to stdout; capture with `| tee verify-scan.txt`.
 
-import { build } from '/home/ai/code/ai-client/node_modules/esbuild/lib/main.js';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { build } from '/home/ai/code/ai-client/node_modules/esbuild/lib/main.js';
 
 const REPO = '/home/ai/code/ai-client';
 const LI = `${REPO}/src/main/services/legacyImport`;
