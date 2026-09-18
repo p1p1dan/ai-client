@@ -455,11 +455,12 @@ export function derivePermissionOmittedNote(
  * What the grant will cover, in one clause — the half of the button's meaning
  * the words "Allow for session" cannot carry.
  *
- * A session grant used to be the exact call; it is now a SHAPE (every file in a
- * directory and its subdirectories, or every command starting with a prefix),
- * and a user pressing a button has to be able to see that. `toolName` words the
- * directory arm because the grant is per tool: allowing `edit` under `src/`
- * does not allow `bash` there.
+ * The two arms are wide for different reasons. A bash grant covers every command
+ * starting with the prefix, which is more than the line on the card. A file
+ * grant covers that one file and nothing else, which is LESS than a user might
+ * assume — so it is stated too, rather than left to be discovered by being asked
+ * again about the file next to it. `toolName` words the path arm because the
+ * grant is per tool: allowing `edit` on a file does not allow `bash` on it.
  */
 export function derivePermissionGrantScopeNote(
   scope: PermissionGrantScope | undefined,
@@ -471,7 +472,7 @@ export function derivePermissionGrantScopeNote(
     return t('Allow for session remembers commands starting with {{prefix}}', {
       prefix: scope.value,
     });
-  return t('Allow for session remembers {{tool}} anywhere under {{path}}', {
+  return t('Allow for session remembers {{tool}} on {{path}}', {
     tool: toolName ?? '',
     path: scope.value,
   });

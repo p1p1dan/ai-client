@@ -393,25 +393,25 @@ export type PermissionAutoReason =
 /**
  * What "Allow for session" on THIS card would remember.
  *
- * A session grant used to be the exact call, so the button needed no
- * explanation: allowing it allowed that one thing again. It is now a shape — a
- * directory and everything under it, or a command prefix and everything that
- * starts with it — and a button whose reach a user cannot see is a button they
- * cannot decide about. So the runtime, which is the only side that knows what
- * its own matcher will do, says it here and the card words it.
+ * The button says "Allow for session" and nothing about its reach, and a button
+ * whose reach a user cannot see is a button they cannot decide about. So the
+ * runtime, which is the only side that knows what its own matcher will do, says
+ * it here and the card words it. For bash the reach is genuinely wider than the
+ * line on the card — every command starting with the same prefix — and for a
+ * file tool it is that one file, which is worth naming precisely because a user
+ * might otherwise assume the folder came with it.
  *
- * Absent when the grant is still exact (MCP tools, skills) or when the request
- * cannot be remembered at all — in both cases there is nothing extra to warn
- * about, and the card keeps its generic scope line.
+ * Absent when there is nothing a grant could be keyed on (MCP tools, skills) or
+ * when the request cannot be remembered at all — in both cases there is nothing
+ * extra to state, and the card keeps its generic scope line.
  */
 export interface PermissionGrantScope {
-  /** `command`: a bash prefix. `directory`: a folder, with its subfolders. */
-  kind: 'command' | 'directory';
+  /** `command`: a bash prefix. `path`: one file, for one tool. */
+  kind: 'command' | 'path';
   /**
    * Already shaped for display: a comma-joined prefix list, or a
-   * workspace-relative directory with a trailing separator (absolute when the
-   * directory is outside the workspace, so an approval that reaches out of the
-   * project reads like one).
+   * workspace-relative path (absolute when the path is outside the workspace, so
+   * an approval that reaches out of the project reads like one).
    */
   value: string;
 }

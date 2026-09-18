@@ -664,13 +664,11 @@ describe('permission card session-scope note (T002)', () => {
 });
 
 /**
- * What the button will REMEMBER, which stopped being obvious the moment the
- * grant stopped being one exact call.
+ * What the button will REMEMBER, which the words "Allow for session" do not say.
  *
- * A session grant now covers a directory and everything under it, or every
- * command starting with a prefix. That is a materially bigger decision than the
- * card used to be asking for, and the only place it can be stated is next to the
- * button that makes it.
+ * A bash grant covers every command starting with the prefix, which is more than
+ * the card shows; a file grant covers that one file, which is less than a user
+ * would guess. Both are decisions the card is the only place to state.
  */
 describe('permission card grant-scope copy', () => {
   it('words a command grant as a prefix, not as the command that was typed', () => {
@@ -679,13 +677,13 @@ describe('permission card grant-scope copy', () => {
     );
   });
 
-  it('words a directory grant with the tool it is tied to', () => {
-    // Per tool on purpose: allowing `edit` under `src/renderer/` is not
-    // allowing `bash` there, and a note that dropped the tool would promise
-    // more than the matcher gives.
+  it('words a file grant with the tool it is tied to', () => {
+    // Per tool on purpose: allowing `edit` on a file is not allowing `bash` to
+    // touch it, and a note that dropped the tool would promise more than the
+    // matcher gives.
     expect(
-      derivePermissionGrantScopeNote({ kind: 'directory', value: 'src/renderer/' }, 'Edit')
-    ).toBe('Allow for session remembers Edit anywhere under src/renderer/');
+      derivePermissionGrantScopeNote({ kind: 'path', value: 'src/renderer/app.tsx' }, 'Edit')
+    ).toBe('Allow for session remembers Edit on src/renderer/app.tsx');
   });
 
   it('says nothing when the runtime reported no scope', () => {
@@ -720,13 +718,13 @@ describe('permission card grant-scope copy', () => {
       permissionBlock({
         toolName: 'Edit',
         permissionDecisions: ['allow', 'allow_session', 'deny'],
-        permissionGrantScope: { kind: 'directory', value: 'src/renderer/' },
+        permissionGrantScope: { kind: 'path', value: 'src/renderer/app.tsx' },
       }),
       true,
       (key, params) => translate('zh', key, params)
     );
     expect(view.sessionScopeNote).toBe(
-      `「本会话内允许」会记住 Edit 可访问 src/renderer/ 及其子目录 · ${translate('zh', PERMISSION_ALLOW_SESSION_NOTE)}`
+      `「本会话内允许」会记住 Edit 可访问 src/renderer/app.tsx · ${translate('zh', PERMISSION_ALLOW_SESSION_NOTE)}`
     );
   });
 });

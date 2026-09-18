@@ -9,10 +9,11 @@
  * permission", and it was accurate: the button they pressed had almost no reach
  * and forgot everything at the next restart on top of that.
  *
- * What is pinned here is the new reach and, just as much, its edges: a grant
- * covers a directory tree or a command prefix and nothing beyond it, it never
- * buys a path outside the workspace for bash, and it survives a reopen of the
- * same conversation without leaking into a new one.
+ * What is pinned here is the new reach and, just as much, its edges: a file
+ * grant covers the approved file and not its neighbours, a bash grant covers a
+ * command prefix and nothing beyond it, neither buys a path outside the
+ * workspace for bash, and both survive a reopen of the same conversation without
+ * leaking into a new one.
  */
 
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -113,37 +114,39 @@ const shell = (
   ...extra,
 });
 
-describe('a file grant covers the directory it was given in', () => {
-  it('covers siblings and subdirectories, and stops at the directory it named', async () => {
+describe('a file grant covers the file it was given for', () => {
+  it('covers the same file again, and stops at the file it named', async () => {
     const { permissions, asked } = await gate();
 
     expect(await ask(permissions, file('1', 'a/b.ts'))).toBe('allowed');
     expect(asked).toHaveLength(1);
 
-    // The two calls the old exact-match grant asked about again, which is the
-    // whole complaint: same tool, same folder, a file the user never named but
-    // plainly meant when they approved the folder's first edit.
-    expect(await ask(permissions, file('2', 'a/c.ts'))).toBe('allowed');
-    expect(await ask(permissions, file('3', 'a/sub/d.ts'))).toBe('allowed');
+    // The half of the complaint that is genuinely a bug: the SAME file, edited
+    // twice in a row, raised a second card because the grant was the whole
+    // request stringified and the second call never matched it byte for byte.
+    expect(await ask(permissions, file('2', 'a/b.ts'))).toBe('allowed');
     expect(asked).toHaveLength(1);
 
-    // ...and the edge that keeps it a grant rather than a blank cheque.
-    expect(await ask(permissions, file('4', 'x/e.ts'))).toBe('allowed');
-    expect(asked.map((request) => request.toolCallId)).toEqual(['1', '4']);
+    // ...and the edge that keeps it a grant on a FILE rather than on a folder.
+    // Neither of these was ever on a card, so each gets one — approving an edit
+    // to one file says nothing about what else lives beside it.
+    expect(await ask(permissions, file('3', 'a/c.ts'))).toBe('allowed');
+    expect(await ask(permissions, file('4', 'a/sub/d.ts'))).toBe('allowed');
+    expect(asked.map((request) => request.toolCallId)).toEqual(['1', '3', '4']);
   });
 
-  it('is per tool: allowing an edit in a folder does not allow a command there', async () => {
+  it('is per tool: allowing an edit to a file does not allow writing it', async () => {
     const { permissions, asked } = await gate();
     expect(await ask(permissions, file('1', 'a/b.ts'))).toBe('allowed');
-    expect(await ask(permissions, file('2', 'a/c.ts', 'write'))).toBe('allowed');
+    expect(await ask(permissions, file('2', 'a/b.ts', 'write'))).toBe('allowed');
     expect(asked.map((request) => request.tool)).toEqual(['edit', 'write']);
   });
 
-  it('refuses to ride a grant into a secret file sitting in the same folder', async () => {
-    // A directory grant is about the folder, never about what the bundled path
-    // rules say about individual files in it. Approving one edit in the project
-    // root must not hand over `.env` on the next call — and `.env` is a `deny`
-    // rule, so it is refused rather than re-asked.
+  it('refuses a secret file outright rather than asking about it', async () => {
+    // What the bundled path rules say about a file is decided before grants are
+    // consulted at all, so a session that has approvals in it is no closer to
+    // `.env` than one that has none — and `.env` is a `deny` rule, so it is
+    // refused rather than put on a card the user could say yes to.
     const { permissions, asked } = await gate();
     expect(await ask(permissions, file('1', 'note.txt'))).toBe('allowed');
     expect(await ask(permissions, file('2', '.env'))).toBe('tool_denied');
@@ -152,16 +155,17 @@ describe('a file grant covers the directory it was given in', () => {
 
   it('keeps asking about a path the bundled rules mark `ask`, grant or no grant', async () => {
     // The other arm of the same idea, on a rule that asks instead of refusing:
-    // `~/.pilab/*`. The grant covers the DIRECTORY; the rule is about the file,
-    // and the rule is re-read on every call rather than inherited.
+    // `~/.pilab/*`. The same file is approved and then requested again, so the
+    // grant matches exactly — and the rule still wins, because it is re-read on
+    // every call rather than inherited from the approval.
     const { permissions, asked } = await gate();
-    const pilab = (id: string, name: string): ToolPermissionRequest => ({
+    const pilab = (id: string): ToolPermissionRequest => ({
       tool: 'edit',
       toolCallId: id,
-      path: join(homedir(), '.pilab', name),
+      path: join(homedir(), '.pilab', 'a.txt'),
     });
-    expect(await ask(permissions, pilab('1', 'a.txt'))).toBe('allowed');
-    expect(await ask(permissions, pilab('2', 'b.txt'))).toBe('allowed');
+    expect(await ask(permissions, pilab('1'))).toBe('allowed');
+    expect(await ask(permissions, pilab('2'))).toBe('allowed');
     expect(asked.map((request) => request.toolCallId)).toEqual(['1', '2']);
   });
 });
@@ -324,7 +328,7 @@ describe('grants survive a reopen of the same conversation', () => {
     });
     // The point: a restart is not a reason to re-ask a question already
     // answered about this conversation.
-    expect(await ask(resumed.permissions, file('2', 'a/c.ts'))).toBe('allowed');
+    expect(await ask(resumed.permissions, file('2', 'a/b.ts'))).toBe('allowed');
     expect(resumed.asked).toHaveLength(0);
     live.delete(resumed.handle);
     await resumed.handle.dispose();
@@ -334,7 +338,7 @@ describe('grants survive a reopen of the same conversation', () => {
     const fresh = await gate({
       session: { file: join(dir, 'other.jsonl'), cwd: dir, mode: 'create' },
     });
-    expect(await ask(fresh.permissions, file('3', 'a/c.ts'))).toBe('allowed');
+    expect(await ask(fresh.permissions, file('3', 'a/b.ts'))).toBe('allowed');
     expect(fresh.asked).toHaveLength(1);
   });
 
@@ -354,7 +358,7 @@ describe('grants survive a reopen of the same conversation', () => {
     const resumed = await gate({
       session: { file: sessionFile(), cwd: dir, mode: 'resume' },
     });
-    expect(await ask(resumed.permissions, file('2', 'a/c.ts'))).toBe('allowed');
+    expect(await ask(resumed.permissions, file('2', 'a/b.ts'))).toBe('allowed');
     expect(resumed.asked).toHaveLength(1);
   });
 });
@@ -371,7 +375,7 @@ describe('the stored format', () => {
 
   it('round-trips what it wrote', () => {
     const grants = [
-      { kind: 'path' as const, tool: 'edit', dir: '/repo/src' },
+      { kind: 'path' as const, tool: 'edit', path: '/repo/src/a.ts' },
       { kind: 'command' as const, prefix: 'npm test', root: '/repo' },
     ];
     expect(restoredGrants(record(encodeGrants(grants)))).toEqual(grants);
@@ -381,10 +385,20 @@ describe('the stored format', () => {
     // Deliberately silent: a session written by a newer build must still open,
     // and the worst an ignored grant can do is ask once more.
     expect(
-      decodeGrants({ version: 99, grants: [{ kind: 'path', tool: 'edit', dir: '/repo' }] })
+      decodeGrants({ version: 99, grants: [{ kind: 'path', tool: 'edit', path: '/repo/a.ts' }] })
     ).toBeUndefined();
     expect(restoredGrants(record({ version: 99, grants: [] }))).toEqual([]);
     expect(restoredGrants(record('nonsense'))).toEqual([]);
+  });
+
+  it('drops the retired v1 records rather than reading them as file grants', () => {
+    // A v1 `path` grant named a DIRECTORY and covered everything under it. Its
+    // field is even called `dir`, so a reader that only checked `kind` would
+    // turn "this folder" into "the folder itself" — quietly, and in the
+    // direction that keeps a stale approval alive.
+    expect(
+      decodeGrants({ version: 1, grants: [{ kind: 'path', tool: 'edit', dir: '/repo/src' }] })
+    ).toBeUndefined();
   });
 
   it('keeps the last record, so an empty one really clears', () => {
@@ -397,7 +411,7 @@ describe('the stored format', () => {
 
   it('drops a malformed member without losing the record around it', () => {
     const decoded = decodeGrants({
-      version: 1,
+      version: 2,
       grants: [
         { kind: 'path', tool: 'edit' },
         { kind: 'command', prefix: 'ls', root: '/repo' },

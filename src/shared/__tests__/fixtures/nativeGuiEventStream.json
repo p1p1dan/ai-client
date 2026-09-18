@@ -192,8 +192,8 @@
         ]
       },
       "sessionGrantScope": {
-        "kind": "directory",
-        "value": "./"
+        "kind": "path",
+        "value": "created.txt"
       }
     }
   },

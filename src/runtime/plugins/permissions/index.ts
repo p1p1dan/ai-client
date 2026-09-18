@@ -427,20 +427,20 @@ export class PermissionsPlugin extends Service implements RuntimePermissionsServ
   /**
    * Has the user already approved a call of this shape in this session?
    *
-   * `grantCovers` answers the part a grant is ABOUT — this directory, this
-   * command prefix. The three checks after it are the parts a grant deliberately
-   * does not answer, and they are re-made on every call:
+   * `grantCovers` answers the part a grant is ABOUT — this file, this command
+   * prefix. The three checks after it are the parts a grant deliberately does
+   * not answer, and they are re-made on every call:
    *
-   *  - a bundled-secret path (`.env`, `~/.ssh/*`) still asks, because approving
-   *    `src/a.ts` is not approving whatever else happens to live beside it;
+   *  - a bundled-secret path (`.env`, `~/.ssh/*`) still asks, because a rule
+   *    about a file outranks an approval that happened to name it;
    *  - a policy rule that says `ask` for a path still asks, same reasoning;
    *  - a bash grant never reaches outside the workspace it was given in. A
    *    command prefix says nothing about which files the NEXT invocation of it
    *    will touch, so `npm test` approved in the project does not become
    *    permission to run something named `npm test` against `/etc`.
    *
-   * A file grant does cover its own directory even outside the workspace,
-   * because there the user was shown, and approved, the exact directory.
+   * A file grant does cover its own path even outside the workspace, because
+   * there the user was shown, and approved, that exact file.
    */
   private granted(request: ToolPermissionRequest): boolean {
     if (this.grants.size === 0) return false;

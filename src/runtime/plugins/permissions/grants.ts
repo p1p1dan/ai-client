@@ -8,21 +8,22 @@
  * the same command with one extra flag. The feature read as broken because in
  * practice it granted nothing — the second call was always a different string.
  *
- * So a grant is now a SHAPE rather than a literal:
+ * So a grant is now keyed by what the user was actually shown:
  *
- *  - a file tool remembers a DIRECTORY, and covers that directory and
- *    everything under it for the same tool;
+ *  - a file tool remembers THAT FILE, for that tool, and nothing else — the
+ *    same rule Claude Code applies, and the reason approving one edit in a
+ *    folder never hands over the rest of the folder;
  *  - `bash` remembers a COMMAND PREFIX plus the workspace it was approved in,
  *    and covers any later command whose every segment starts with a granted
  *    prefix.
  *
  * Both are deliberately narrow in the one direction that matters: a grant says
- * "this kind of call, in this place". It never says "this tool, anywhere", and
- * the checks it does NOT answer (a secret file, a path outside the workspace)
- * stay with the gate — see `PermissionsPlugin.granted`.
+ * "this call, in this place". It never says "this tool, anywhere", and the
+ * checks it does NOT answer (a secret file, a path outside the workspace) stay
+ * with the gate — see `PermissionsPlugin.granted`.
  */
 
-import { basename, dirname, isAbsolute, relative, sep } from 'node:path';
+import { basename, isAbsolute, normalize, relative, sep } from 'node:path';
 import type { PermissionGrantScope } from '../../../shared/types/runtimeEvents.ts';
 import { PERMISSION_GRANTS_ENTRY } from '../session/legacy.ts';
 import type { ToolPermissionRequest } from './index.ts';
@@ -35,19 +36,18 @@ export { PERMISSION_GRANTS_ENTRY };
  * `value` is the unchanged old behaviour, kept for the two surfaces whose
  * "path" is not a path at all: an MCP call sends the workspace root as `path`
  * and the real subject as `policyValue` (`server:tool`), and a skill sends the
- * skill file with the skill NAME as `policyValue`. Widening those to a
- * directory would grant every MCP tool on a server, or every skill in a folder,
- * from one approval — so they stay exact.
+ * skill file with the skill NAME as `policyValue`. Reading those as file paths
+ * would grant on the wrong subject entirely — so they stay exact.
  */
 export type PermissionGrant =
-  | { kind: 'path'; tool: string; dir: string }
+  | { kind: 'path'; tool: string; path: string }
   | { kind: 'command'; prefix: string; root: string }
   | { kind: 'value'; tool: string; value: string };
 
 /** Stable identity of a grant, for set membership and de-duplication. */
 export function grantKeyOf(grant: PermissionGrant): string {
   if (grant.kind === 'command') return JSON.stringify(['command', grant.prefix, grant.root]);
-  if (grant.kind === 'path') return JSON.stringify(['path', grant.tool, grant.dir]);
+  if (grant.kind === 'path') return JSON.stringify(['path', grant.tool, grant.path]);
   return JSON.stringify(['value', grant.tool, grant.value]);
 }
 
@@ -64,15 +64,22 @@ export function containsPath(root: string, path: string): boolean {
 }
 
 /**
- * Tools whose `path` IS the directory, not a file inside one.
+ * The spelling a path grant is stored and compared under.
  *
- * `glob` and `grep` are handed a search root (`tools/index.ts` passes
- * `args.path ?? '.'`), so taking its parent would silently grant one level
- * above what the user was shown. Everything else — read, write, edit,
- * browser_preview — names a file, and the directory the user meant is the file's
- * own.
+ * Everything reaching the gate through the tool layer is already absolute and
+ * realpath'd (`tools/index.ts` canonicalizes before it authorizes), so this only
+ * settles the cosmetics a caller from elsewhere could still carry: a redundant
+ * `.` segment, a doubled separator, a trailing separator that would make one
+ * path two different strings. Exact matching makes those differences decide
+ * whether a question is asked again, which they must not.
  */
-const DIRECTORY_ROOT_TOOLS: readonly string[] = ['glob', 'grep'];
+function normalizeGrantPath(path: string): string {
+  const normalized = normalize(path);
+  if (normalized.length <= 1 || !normalized.endsWith(sep)) return normalized;
+  const trimmed = normalized.slice(0, -1);
+  // A filesystem root is its own parent: `/` and `C:\` must survive intact.
+  return trimmed.endsWith(':') ? normalized : trimmed;
+}
 
 /**
  * Programs whose first argument is a SUBCOMMAND, not an operand.
@@ -152,11 +159,6 @@ export function commandPrefixes(request: ToolPermissionRequest): string[] | unde
   return prefixes.size > 0 ? [...prefixes] : undefined;
 }
 
-/** The directory a file-tool grant is anchored at. See `DIRECTORY_ROOT_TOOLS`. */
-function grantDirectory(tool: string, path: string): string {
-  return DIRECTORY_ROOT_TOOLS.includes(tool) ? path : dirname(path);
-}
-
 /**
  * What pressing "Allow for session" on this request writes down.
  *
@@ -179,7 +181,7 @@ export function grantsFor(request: ToolPermissionRequest): PermissionGrant[] {
     const grant: PermissionGrant = {
       kind: 'path',
       tool: request.tool,
-      dir: grantDirectory(request.tool, path),
+      path: normalizeGrantPath(path),
     };
     const key = grantKeyOf(grant);
     if (seen.has(key)) continue;
@@ -192,10 +194,9 @@ export function grantsFor(request: ToolPermissionRequest): PermissionGrant[] {
 /**
  * Do the grants already given cover this request?
  *
- * Every path / every segment, not any: a call that touches one granted
- * directory and one that was never mentioned is a call the user has not
- * approved, and the same goes for `npm test && rm -rf build` when only the
- * first half was ever allowed.
+ * Every path / every segment, not any: a call that touches one granted file and
+ * one that was never mentioned is a call the user has not approved, and the same
+ * goes for `npm test && rm -rf build` when only the first half was ever allowed.
  */
 export function grantCovers(
   grants: Iterable<PermissionGrant>,
@@ -221,22 +222,23 @@ export function grantCovers(
       (grant) => grant.kind === 'value' && grant.tool === request.tool && grant.value === value
     );
   }
-  return [request.path, ...(request.paths ?? [])].every((path) =>
-    held.some(
-      (grant) =>
-        grant.kind === 'path' && grant.tool === request.tool && containsPath(grant.dir, path)
-    )
-  );
+  return [request.path, ...(request.paths ?? [])].every((path) => {
+    const wanted = normalizeGrantPath(path);
+    return held.some(
+      (grant) => grant.kind === 'path' && grant.tool === request.tool && grant.path === wanted
+    );
+  });
 }
 
 /**
  * How the approval card describes what it is about to remember.
  *
  * The card offered a button called "Allow for session" and said nothing about
- * its reach, which was survivable while the grant was one exact call and is not
- * now that it is a directory or a command family. `undefined` for the exact
- * kinds (MCP, skills), whose reach is unchanged and already obvious from the
- * request itself.
+ * its reach. For bash that reach is still a command FAMILY, which the user has
+ * to be able to see; for a file tool it is the one file named on the card, and
+ * naming it is what keeps the button honest about not covering the folder.
+ * `undefined` for the exact kinds (MCP, skills), whose reach is already obvious
+ * from the request itself.
  */
 export function describeGrantScope(
   request: ToolPermissionRequest,
@@ -247,37 +249,43 @@ export function describeGrantScope(
     return prefixes ? { kind: 'command', value: prefixes.join(', ') } : undefined;
   }
   if (request.policyValue !== undefined) return undefined;
-  const directories = new Set(
-    [request.path, ...(request.paths ?? [])].map((path) => grantDirectory(request.tool, path))
+  const paths = new Set(
+    [request.path, ...(request.paths ?? [])].map((path) => normalizeGrantPath(path))
   );
-  if (directories.size === 0) return undefined;
+  if (paths.size === 0) return undefined;
   return {
-    kind: 'directory',
-    value: [...directories].map((dir) => displayPath(dir, cwd)).join(', '),
+    kind: 'path',
+    value: [...paths].map((path) => displayPath(path, cwd)).join(', '),
   };
 }
 
 /**
- * A directory as the user should read it: workspace-relative with a trailing
- * separator, absolute when it is not in the workspace at all. An approval that
- * reaches outside the project has to LOOK like one, so `../../etc` is never
- * shown in place of the path it means.
+ * A path as the user should read it: workspace-relative, absolute when it is not
+ * in the workspace at all. An approval that reaches outside the project has to
+ * LOOK like one, so `../../etc/passwd` is never shown in place of the path it
+ * means.
  */
-function displayPath(dir: string, cwd: string): string {
-  if (!containsPath(cwd, dir)) return dir;
-  const delta = relative(cwd, dir);
-  return delta === '' ? './' : `${delta}/`;
+function displayPath(path: string, cwd: string): string {
+  if (!containsPath(cwd, path)) return path;
+  const delta = relative(cwd, path);
+  return delta === '' ? './' : delta;
 }
 
 /**
  * The storage format version.
  *
- * Bumping it is how a future change to the grant shape retires the old records
- * instead of half-reading them: an unrecognised version is dropped and the
- * session simply starts with no grants, which costs a few extra cards and can
- * never mis-apply an approval whose meaning has changed.
+ * Bumping it is how a change to the grant shape retires the old records instead
+ * of half-reading them: an unrecognised version is dropped and the session
+ * simply starts with no grants, which costs a few extra cards and can never
+ * mis-apply an approval whose meaning has changed.
+ *
+ * 2 is exactly that case. A v1 path grant named a DIRECTORY and covered
+ * everything under it; a v2 one names a single file. Reading a v1 record with
+ * the v2 matcher would silently turn "allow this folder" into "allow the folder
+ * itself", so v1 is dropped rather than migrated — there is no v2 answer to the
+ * question a v1 record was the answer to.
  */
-export const PERMISSION_GRANTS_VERSION = 1;
+export const PERMISSION_GRANTS_VERSION = 2;
 
 export interface PersistedGrants {
   version: number;
@@ -297,8 +305,8 @@ function parseGrant(value: unknown): PermissionGrant | undefined {
   const row = value as Record<string, unknown>;
   if (row.kind === 'path') {
     const tool = text(row.tool);
-    const dir = text(row.dir);
-    return tool && dir ? { kind: 'path', tool, dir } : undefined;
+    const path = text(row.path);
+    return tool && path ? { kind: 'path', tool, path } : undefined;
   }
   if (row.kind === 'command') {
     const prefix = text(row.prefix);

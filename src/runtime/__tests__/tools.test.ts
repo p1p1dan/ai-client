@@ -396,11 +396,11 @@ describe('native tools', () => {
       'timeout'
     );
   });
-  it('grants the approved file’s directory, and clears it on settings change', async () => {
-    // This used to assert the EXACT call: approving `a` re-asked for `b` in the
-    // same folder, and for `a` again with different content. That is the bug
-    // behind "it keeps asking for permission" — a grant that almost never
-    // matched a second time. It now covers the directory the user was shown.
+  it('grants the approved file itself, and clears it on settings change', async () => {
+    // This used to assert the EXACT CALL: approving `a` re-asked for `a` again
+    // with different content, because the grant was the whole request
+    // stringified. The grant is the FILE now — the same file for the same tool
+    // stops asking, and the file beside it does not come along for the ride.
     let approvals = 0;
     const r = await runtime({
       permissions: {
@@ -412,15 +412,15 @@ describe('native tools', () => {
     });
     await call(r, 'write', { path: 'nested/a', content: '1' });
     await call(r, 'write', { path: 'nested/a', content: '2' });
-    await call(r, 'write', { path: 'nested/b', content: '3' });
-    await call(r, 'write', { path: 'nested/deep/c', content: '4' });
     expect(approvals).toBe(1);
-    // ...and stops there: a sibling directory is not what was approved.
-    await call(r, 'write', { path: 'other/d', content: '5' });
+    // ...and stops there: neither the sibling nor the subdirectory was on a card.
+    await call(r, 'write', { path: 'nested/b', content: '3' });
     expect(approvals).toBe(2);
-    r.permissions?.configure({ gear: 'ask' });
-    await call(r, 'write', { path: 'nested/a', content: '6' });
+    await call(r, 'write', { path: 'nested/deep/c', content: '4' });
     expect(approvals).toBe(3);
+    r.permissions?.configure({ gear: 'ask' });
+    await call(r, 'write', { path: 'nested/a', content: '5' });
+    expect(approvals).toBe(4);
   });
   it('denies on approval timeout even when an external approver never settles', async () => {
     const r = await runtime({
