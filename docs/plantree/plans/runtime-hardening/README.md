@@ -1,6 +1,6 @@
 # Runtime 加固与收口
 
-Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批次 A / B / C / D / D2 / D3 已全部落地并收口；T032 的检查单与开发机组 37 项已于 2026-09-17 做完；当前在飞的是批次 D4（T060～T068，开发机点验修补，上机前）与其后的 T033 上机）。
+Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批次 A～D4、G 已落地；批次 H：T077～T087 + 提级的 T053 中，十项已分 13 个本地提交落地（未推送），本地点验进行中，待 Windows 第二轮验证，T085 阻塞于 Q019 未开始，T087 推迟）。
 
 ## 范围
 
@@ -24,10 +24,11 @@ Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批�
 
 | 文件 | 角色 |
 |---|---|
-| [roadmap.md](roadmap.md) | 任务树 T001～T068，批次 A～D、D2、D3、D4、E、F，Done / In Progress / Next / Deferred |
+| [roadmap.md](roadmap.md) | 任务树 T001～T087，批次 A～D、D2、D3、D4、E、F、G、H，Done / In Progress / Next / Deferred |
 | [open-questions.md](open-questions.md) | 修补前要拍板的问题 |
+| [evidence/batch-h-field-fixes-2026-09-18/](evidence/batch-h-field-fixes-2026-09-18/README.md) | 批次 H（T077～T087 + 提级 T053）十项落地明细（13 个本地提交，未推送）、验证结果（429 文件 / 6641 条全绿）、本地点验状态、待 T033 第二轮上机验证清单；新增 Q022～Q026 均已结案 |
 | [checklist-e.md](checklist-e.md) | 批次 E 正式上机检查单（T032 产出）：DEV / Windows / 加密机 / utility / 真实模型五组判据与取证方式 |
-| [topics/t033-field-day-runbook.md](topics/t033-field-day-runbook.md) | T033 上机日执行单（topic capsule）：装机、上机前自检、执行顺序、34 条必做的编号映射、砍单顺序、远程协作与证据命名；逐项分片在 [topics/t033-field-day/](topics/t033-field-day/01-win.md) 六份（WIN / ENC / PKG / MODEL / 批次 D4 复验 / 收尾回填） |
+| [topics/t033-field-day-runbook.md](topics/t033-field-day-runbook.md) | T033 上机日执行单（topic capsule）：装机、上机前自检、执行顺序、34 条必做的编号映射、砍单顺序、远程协作与证据命名；逐项分片在 [topics/t033-field-day/](topics/t033-field-day/01-win.md) 七份（WIN / ENC / PKG / MODEL / 批次 D4 复验 / 收尾回填 / [2026-09-18 现场反馈与根因](topics/t033-field-day/07-findings.md)） |
 | [evidence/batch-e-build-2026-09-18/](evidence/batch-e-build-2026-09-18/README.md) | T033 上机前补的那次打包构建（run 35295618831，源码 `13e6cdb7`）：产物与作业清单、三平台 worker-smoke JSON（WIN-19 据此已可标 ✅） |
 | [evidence/batch-e-devbox-2026-09-17/tools/field-samples/](evidence/batch-e-devbox-2026-09-17/tools/field-samples/README.md) | T033 上机日样本包：ENC-12 的编码与二进制样本及生成脚本、MODEL-49 的策略样例与三类 shell 命令、慢启动 stdio MCP 服务器、真实旧格式 Codex rollout 的查找路径 |
 | [evidence/batch-d4-fixes-2026-09-17/](evidence/batch-d4-fixes-2026-09-17/README.md) | 批次 D4 九项修补（T060～T068）的落地、两轮审阅、两轮真机复验与「留给上机」的点 |
@@ -37,7 +38,7 @@ Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批�
 | [evidence/batch-c-2026-09-15.md](evidence/batch-c-2026-09-15.md) | 批次 C 落地记录：提交、偏离、转移项、逐波记录 |
 | [evidence/batch-d-2026-09-15.md](evidence/batch-d-2026-09-15.md) | 批次 D 落地记录：方式、代理与额度、偏离、转移项 |
 | [evidence/batch-d-audit-2026-09-15/](evidence/batch-d-audit-2026-09-15/README.md) | 批次 D 补审证据集：报告、129 条发现全文、接缝与批评者、上机检查单草案、结构化数据、18 份区域原文 |
-| [decisions/](decisions/) | 001 开第二个计划根；002 修补顺序与取舍计数规则；003 allow-session 保持会话级（答 Q003）；004 技能目录找到仓库根（答 Q004）；005 子代理 usage 并入 usage.updated（答 Q007）；006 中段坏行跳过重写（答 Q008，新开 T034）；007 删 targetPath、指令按官方分级只认 CLAUDE.md / AGENTS.md（答 Q001，新开 T035）；008 settingSources 三值开关管全部分层来源并定义 local 层（修订 007）；009 managed 模式下 native 视项目为可信，只有项目级模型设置不读（答 Q009）；010 随包默认策略维持底层，不压顶用户 / 项目层（答 Q010）；011 managed 模式 TUI 只需保证公司渠道可用，不封其他渠道（答 Q011，结案）；012 extensionUi 整链退役、免代码插件扩展推后（答 Q012，新开 T036）；013 批次 D2 上机前修补全做、不压缩（答 Q013）；014 MCP 服务器每会话上限从固定 16 改为按内存分档 4/6/12（编排者裁定，T046 落地）；017 兼容根子代理定义按来源文件编辑 / 删除，结 D12（编排者采纳，T063 落地）；018 删除临时工作区前确认，删除后聊天转回未绑定分组继续显示，结 Q016（用户拍板，T069 落地，批次 F）；019 运行时错误统一改成带标题与下一步的引导卡片，结 Q017（用户拍板，T070 落地，批次 F）；020 临时工作区根目录固定加一层应用专属子目录，结 Q018（用户拍板，T071 落地，批次 F）；021 回合过程收进「工作组」并恢复「已工作 xx 秒」，推翻 2026-08-29 与 2026-09-10 两条旧裁定（用户拍板，T072 / T073 已落地，批次 G）；022 授权闸串行化 + 活卡收进输入框上方浮层单卡（用户三候选中选定，T074 已落地，批次 G） |
+| [decisions/](decisions/) | 001 开第二个计划根；002 修补顺序与取舍计数规则；003 allow-session 保持会话级（答 Q003）；004 技能目录找到仓库根（答 Q004）；005 子代理 usage 并入 usage.updated（答 Q007）；006 中段坏行跳过重写（答 Q008，新开 T034）；007 删 targetPath、指令按官方分级只认 CLAUDE.md / AGENTS.md（答 Q001，新开 T035）；008 settingSources 三值开关管全部分层来源并定义 local 层（修订 007）；009 managed 模式下 native 视项目为可信，只有项目级模型设置不读（答 Q009）；010 随包默认策略维持底层，不压顶用户 / 项目层（答 Q010）；011 managed 模式 TUI 只需保证公司渠道可用，不封其他渠道（答 Q011，结案）；012 extensionUi 整链退役、免代码插件扩展推后（答 Q012，新开 T036）；013 批次 D2 上机前修补全做、不压缩（答 Q013）；014 MCP 服务器每会话上限从固定 16 改为按内存分档 4/6/12（编排者裁定，T046 落地）；017 兼容根子代理定义按来源文件编辑 / 删除，结 D12（编排者采纳，T063 落地）；018 删除临时工作区前确认，删除后聊天转回未绑定分组继续显示，结 Q016（用户拍板，T069 落地，批次 F）；019 运行时错误统一改成带标题与下一步的引导卡片，结 Q017（用户拍板，T070 落地，批次 F）；020 临时工作区根目录固定加一层应用专属子目录，结 Q018（用户拍板，T071 落地，批次 F）；021 回合过程收进「工作组」并恢复「已工作 xx 秒」，推翻 2026-08-29 与 2026-09-10 两条旧裁定（用户拍板，T072 / T073 已落地，批次 G）；022 授权闸串行化 + 活卡收进输入框上方浮层单卡（用户三候选中选定，T074 已落地，批次 G）；023 新增第四档权限模式「完全放行」，全自动之上放行 bash 静态分析未解析路径，进入需二次确认且激活期间界面持续可见（用户拍板，T078，批次 H）；024 prompt cache TTL 主对话 1h / 子代理 5m 分离并暴露为设置项，对齐 Claude Code 的 promptCacheTtl / subagentPromptCacheTtl（用户拍板，T077，批次 H；待验证中转是否透传 ttl 1h，见 Q021）；025 搜索工具优先改自有实现，`@ff-labs/pi-fff` 仅作设计参考、替换成本低才整包采用（编排者裁定，无独立任务，指导 T083）；026 授权记忆的粒度——文件类只记批准的那一个文件（对齐 Claude Code），bash 类维持记命令前缀不变，存活期维持随会话持久化不跨会话（用户拍板，结 Q023，T081 落地，批次 H） |
 | [../runtime-evolution/evidence/runtime-audit-2026-09-14/](../runtime-evolution/evidence/runtime-audit-2026-09-14/README.md) | 审计报告、235 条发现全文、区域总评、接缝与批评者、结构化数据 |
 | [../../进度看板.md](../../进度看板.md) | 用户看板（implementation-status） |
 

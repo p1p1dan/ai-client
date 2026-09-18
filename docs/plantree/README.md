@@ -17,7 +17,7 @@
 
 | 计划 | 状态 | 当前阶段 | 任务树 | 用户看板 |
 |---|---|---|---|---|
-| Runtime 加固与收口 | In Progress | 批次 D4 与批次 G 均已落地；待 T033 上机（并在上机日做掉批次 G 留下的三处观感判定） | [T001～T076](plans/runtime-hardening/roadmap.md) | [当前进度](进度看板.md) |
+| Runtime 加固与收口 | In Progress | 批次 D4 与批次 G 均已落地；批次 H（T077～T087 + 提级 T053）十项已提交（13 个本地提交，未推送），本地点验进行中，待 Windows 第二轮验证；T085 未开始（阻塞 Q019）、T087 推迟 | [T001～T087](plans/runtime-hardening/roadmap.md) | [当前进度](进度看板.md) |
 | Runtime 自主化演进（含 GUI 改进） | 已收口（参考与证据基线） | 代码侧节点全部执行完；现场与修补移交上一行 | [P0～P6 / GUI](plans/runtime-evolution/README.md) | [收口快照](plans/runtime-evolution/history/2026-09-14-进度看板-收口快照.md) |
 
 GUI 原计划根保留为[功能与验收参考](plans/gui-sdk-experience/README.md)，不再作为独立执行状态源。
