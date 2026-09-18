@@ -28,12 +28,17 @@ function MenuPopup({
   align = 'center',
   alignOffset,
   side = 'bottom',
+  collisionAvoidance,
   ...props
 }: MenuPrimitive.Popup.Props & {
   align?: MenuPrimitive.Positioner.Props['align'];
   sideOffset?: MenuPrimitive.Positioner.Props['sideOffset'];
   alignOffset?: MenuPrimitive.Positioner.Props['alignOffset'];
   side?: MenuPrimitive.Positioner.Props['side'];
+  // Left undefined by default so root menus keep Base UI's own collision
+  // defaults (top-level popups are allowed to flip top/bottom when the
+  // trigger is near a screen edge). `MenuSubPopup` overrides this.
+  collisionAvoidance?: MenuPrimitive.Positioner.Props['collisionAvoidance'];
 }) {
   return (
     <MenuPrimitive.Portal>
@@ -42,6 +47,7 @@ function MenuPopup({
         align={align}
         alignOffset={alignOffset}
         className="z-50"
+        collisionAvoidance={collisionAvoidance}
         data-slot="menu-positioner"
         side={side}
         sideOffset={sideOffset}
@@ -252,6 +258,15 @@ function MenuSubPopup({
       align={align}
       alignOffset={alignOffset ?? defaultAlignOffset}
       className={className}
+      // Base UI's default collision avoidance for a submenu (nested inside
+      // another menu) is "flip" on both axes: when the preferred side/edge
+      // runs out of room, it instantly mirrors the popup to the opposite
+      // side/edge instead of sliding it. A submenu is re-measured on every
+      // item click, so a click near the collision boundary makes it jump
+      // sides (or edges) under the pointer. "shift" keeps it on the same
+      // side/edge and only slides it to stay on screen, so it never
+      // relocates out from under the user.
+      collisionAvoidance={{ side: 'shift', align: 'shift' }}
       data-slot="menu-sub-content"
       side="inline-end"
       sideOffset={sideOffset}
