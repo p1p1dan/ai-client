@@ -1,0 +1,731 @@
+{
+  "at": "2026-09-19T23:46:17.102Z",
+  "control": {
+    "samples": [
+      {
+        "t": 1789861577105,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861578106,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861579109,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861580111,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861581114,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861582117,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861583120,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861584123,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861585125,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861586128,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861587131,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861588134,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      }
+    ],
+    "delta": {
+      "log-infinite": 0,
+      "branches": 0,
+      "head-signature": 0
+    },
+    "spanMs": 11029
+  },
+  "blurEvent": {
+    "t": 1789861589137,
+    "type": "blur"
+  },
+  "blurred": {
+    "samples": [
+      {
+        "t": 1789861589208,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861590210,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861591212,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861592215,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861593218,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861594220,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861595223,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861596226,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861597229,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861598231,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 6,
+          "at": 1789861540791,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      }
+    ],
+    "delta": {
+      "log-infinite": 0,
+      "branches": 0,
+      "head-signature": 0
+    },
+    "spanMs": 9023
+  },
+  "focusEvent": {
+    "t": 1789861599234,
+    "type": "focus"
+  },
+  "refocused": {
+    "samples": [
+      {
+        "t": 1789861599328,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 7,
+          "at": 1789861599328,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 24,
+          "at": 1789861545760,
+          "fetchStatus": "fetching",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861600340,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 7,
+          "at": 1789861599328,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 25,
+          "at": 1789861599339,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861601341,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 7,
+          "at": 1789861599328,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 25,
+          "at": 1789861599339,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861602345,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 7,
+          "at": 1789861599328,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 25,
+          "at": 1789861599339,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861603348,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 7,
+          "at": 1789861599328,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 25,
+          "at": 1789861599339,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861604403,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 7,
+          "at": 1789861599328,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 25,
+          "at": 1789861599339,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861605412,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 7,
+          "at": 1789861599328,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 26,
+          "at": 1789861604491,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      },
+      {
+        "t": 1789861606414,
+        "hidden": false,
+        "hasFocus": true,
+        "branches": {
+          "updates": 1,
+          "at": 1789861129659,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "log-infinite": {
+          "updates": 7,
+          "at": 1789861599328,
+          "fetchStatus": "idle",
+          "observers": 1
+        },
+        "head-signature": {
+          "updates": 26,
+          "at": 1789861604491,
+          "fetchStatus": "idle",
+          "observers": 1
+        }
+      }
+    ],
+    "delta": {
+      "log-infinite": 0,
+      "branches": 0,
+      "head-signature": 2
+    },
+    "spanMs": 7086
+  }
+}

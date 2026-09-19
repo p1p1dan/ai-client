@@ -1,0 +1,525 @@
+{
+  "at": "2026-09-19T23:48:09.033Z",
+  "awake": {
+    "t": 1789861701545,
+    "events": [
+      {
+        "t": 1789861690320,
+        "type": "observerOptionsUpdated",
+        "scope": "branches",
+        "fetchStatus": "idle",
+        "updates": 12
+      },
+      {
+        "t": 1789861690321,
+        "type": "observerOptionsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 7
+      },
+      {
+        "t": 1789861690321,
+        "type": "observerOptionsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 42
+      },
+      {
+        "t": 1789861690405,
+        "type": "observerOptionsUpdated",
+        "scope": "branches",
+        "fetchStatus": "idle",
+        "updates": 12
+      },
+      {
+        "t": 1789861690406,
+        "type": "observerOptionsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 7
+      },
+      {
+        "t": 1789861690406,
+        "type": "observerOptionsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 42
+      },
+      {
+        "t": 1789861690409,
+        "type": "observerResultsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "fetching",
+        "updates": 42
+      },
+      {
+        "t": 1789861690409,
+        "type": "updated",
+        "action": "fetch",
+        "scope": "head-signature",
+        "fetchStatus": "fetching",
+        "updates": 42
+      },
+      {
+        "t": 1789861690424,
+        "type": "observerResultsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 43
+      },
+      {
+        "t": 1789861690424,
+        "type": "updated",
+        "action": "success",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 43
+      },
+      {
+        "t": 1789861695393,
+        "type": "observerOptionsUpdated",
+        "scope": "branches",
+        "fetchStatus": "idle",
+        "updates": 12
+      },
+      {
+        "t": 1789861695393,
+        "type": "observerOptionsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 7
+      },
+      {
+        "t": 1789861695393,
+        "type": "observerOptionsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 43
+      },
+      {
+        "t": 1789861695462,
+        "type": "observerOptionsUpdated",
+        "scope": "branches",
+        "fetchStatus": "idle",
+        "updates": 12
+      },
+      {
+        "t": 1789861695462,
+        "type": "observerOptionsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 7
+      },
+      {
+        "t": 1789861695462,
+        "type": "observerOptionsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 43
+      },
+      {
+        "t": 1789861695466,
+        "type": "observerResultsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "fetching",
+        "updates": 43
+      },
+      {
+        "t": 1789861695466,
+        "type": "updated",
+        "action": "fetch",
+        "scope": "head-signature",
+        "fetchStatus": "fetching",
+        "updates": 43
+      },
+      {
+        "t": 1789861695493,
+        "type": "observerResultsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 44
+      },
+      {
+        "t": 1789861695493,
+        "type": "updated",
+        "action": "success",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 44
+      },
+      {
+        "t": 1789861697721,
+        "type": "observerOptionsUpdated",
+        "scope": "branches",
+        "fetchStatus": "idle",
+        "updates": 12
+      },
+      {
+        "t": 1789861700460,
+        "type": "observerOptionsUpdated",
+        "scope": "branches",
+        "fetchStatus": "idle",
+        "updates": 12
+      },
+      {
+        "t": 1789861700461,
+        "type": "observerOptionsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 7
+      },
+      {
+        "t": 1789861700461,
+        "type": "observerOptionsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 44
+      },
+      {
+        "t": 1789861700631,
+        "type": "observerOptionsUpdated",
+        "scope": "branches",
+        "fetchStatus": "idle",
+        "updates": 12
+      },
+      {
+        "t": 1789861700631,
+        "type": "observerOptionsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 7
+      },
+      {
+        "t": 1789861700631,
+        "type": "observerOptionsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 44
+      },
+      {
+        "t": 1789861700635,
+        "type": "observerResultsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "fetching",
+        "updates": 44
+      },
+      {
+        "t": 1789861700635,
+        "type": "updated",
+        "action": "fetch",
+        "scope": "head-signature",
+        "fetchStatus": "fetching",
+        "updates": 44
+      },
+      {
+        "t": 1789861700657,
+        "type": "observerResultsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 45
+      },
+      {
+        "t": 1789861700657,
+        "type": "updated",
+        "action": "success",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 45
+      }
+    ]
+  },
+  "blurAt": 1789861701548,
+  "blurred": {
+    "t": 1789861712636,
+    "events": [
+      {
+        "t": 1789861707720,
+        "type": "observerOptionsUpdated",
+        "scope": "branches",
+        "fetchStatus": "idle",
+        "updates": 12
+      }
+    ]
+  },
+  "whileBlurred": {
+    "events": [
+      {
+        "t": 1789861715578,
+        "type": "observerResultsUpdated",
+        "scope": "branches",
+        "fetchStatus": "idle",
+        "updates": 12
+      }
+    ],
+    "badge": {
+      "t": 1789861716648,
+      "badge": false,
+      "text": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新 dan feat/runtime-evolution"
+    }
+  },
+  "focusAt": 1789861716649,
+  "afterFocus": {
+    "events": [
+      {
+        "dt": 70,
+        "t": 1789861716719,
+        "type": "observerOptionsUpdated",
+        "scope": "branches",
+        "fetchStatus": "idle",
+        "updates": 12
+      },
+      {
+        "dt": 71,
+        "t": 1789861716720,
+        "type": "observerOptionsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 7
+      },
+      {
+        "dt": 71,
+        "t": 1789861716720,
+        "type": "observerOptionsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 45
+      },
+      {
+        "dt": 71,
+        "t": 1789861716720,
+        "type": "updated",
+        "action": "invalidate",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 7
+      },
+      {
+        "dt": 71,
+        "t": 1789861716720,
+        "type": "observerResultsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "fetching",
+        "updates": 7
+      },
+      {
+        "dt": 71,
+        "t": 1789861716720,
+        "type": "updated",
+        "action": "fetch",
+        "scope": "log-infinite",
+        "fetchStatus": "fetching",
+        "updates": 7
+      },
+      {
+        "dt": 71,
+        "t": 1789861716720,
+        "type": "updated",
+        "action": "invalidate",
+        "scope": "branches",
+        "fetchStatus": "idle",
+        "updates": 12
+      },
+      {
+        "dt": 71,
+        "t": 1789861716720,
+        "type": "observerResultsUpdated",
+        "scope": "branches",
+        "fetchStatus": "fetching",
+        "updates": 12
+      },
+      {
+        "dt": 71,
+        "t": 1789861716720,
+        "type": "observerResultsUpdated",
+        "scope": "branches",
+        "fetchStatus": "fetching",
+        "updates": 12
+      },
+      {
+        "dt": 71,
+        "t": 1789861716720,
+        "type": "updated",
+        "action": "fetch",
+        "scope": "branches",
+        "fetchStatus": "fetching",
+        "updates": 12
+      },
+      {
+        "dt": 71,
+        "t": 1789861716720,
+        "type": "updated",
+        "action": "invalidate",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 45
+      },
+      {
+        "dt": 71,
+        "t": 1789861716720,
+        "type": "observerResultsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "fetching",
+        "updates": 45
+      },
+      {
+        "dt": 71,
+        "t": 1789861716720,
+        "type": "updated",
+        "action": "fetch",
+        "scope": "head-signature",
+        "fetchStatus": "fetching",
+        "updates": 45
+      },
+      {
+        "dt": 106,
+        "t": 1789861716755,
+        "type": "observerResultsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 8
+      },
+      {
+        "dt": 106,
+        "t": 1789861716755,
+        "type": "updated",
+        "action": "success",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 8
+      },
+      {
+        "dt": 225,
+        "t": 1789861716874,
+        "type": "observerOptionsUpdated",
+        "scope": "branches",
+        "fetchStatus": "fetching",
+        "updates": 12
+      },
+      {
+        "dt": 226,
+        "t": 1789861716875,
+        "type": "observerOptionsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 8
+      },
+      {
+        "dt": 226,
+        "t": 1789861716875,
+        "type": "observerOptionsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "fetching",
+        "updates": 45
+      },
+      {
+        "dt": 228,
+        "t": 1789861716877,
+        "type": "observerResultsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 46
+      },
+      {
+        "dt": 228,
+        "t": 1789861716877,
+        "type": "updated",
+        "action": "success",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 46
+      },
+      {
+        "dt": 288,
+        "t": 1789861716937,
+        "type": "observerOptionsUpdated",
+        "scope": "branches",
+        "fetchStatus": "fetching",
+        "updates": 12
+      },
+      {
+        "dt": 289,
+        "t": 1789861716938,
+        "type": "observerOptionsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 8
+      },
+      {
+        "dt": 289,
+        "t": 1789861716938,
+        "type": "observerOptionsUpdated",
+        "scope": "head-signature",
+        "fetchStatus": "idle",
+        "updates": 46
+      },
+      {
+        "dt": 289,
+        "t": 1789861716938,
+        "type": "observerResultsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 8
+      },
+      {
+        "dt": 289,
+        "t": 1789861716938,
+        "type": "updated",
+        "action": "invalidate",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 8
+      },
+      {
+        "dt": 289,
+        "t": 1789861716938,
+        "type": "observerResultsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "fetching",
+        "updates": 8
+      },
+      {
+        "dt": 289,
+        "t": 1789861716938,
+        "type": "updated",
+        "action": "fetch",
+        "scope": "log-infinite",
+        "fetchStatus": "fetching",
+        "updates": 8
+      },
+      {
+        "dt": 289,
+        "t": 1789861716938,
+        "type": "updated",
+        "action": "fetch",
+        "scope": "branches",
+        "fetchStatus": "fetching",
+        "updates": 12
+      },
+      {
+        "dt": 302,
+        "t": 1789861716951,
+        "type": "observerResultsUpdated",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 9
+      },
+      {
+        "dt": 302,
+        "t": 1789861716951,
+        "type": "updated",
+        "action": "success",
+        "scope": "log-infinite",
+        "fetchStatus": "idle",
+        "updates": 9
+      }
+    ],
+    "badgeSeries": [
+      {
+        "dt": 353,
+        "badge": true
+      }
+    ],
+    "badgeAtMs": 353
+  },
+  "branchListAtExit": "feat/model-catalog-admin\n  feat/openchamber-chat-refactor\n  feat/pi-primary-backend\n* feat/runtime-evolution\n  main"
+}

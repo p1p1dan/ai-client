@@ -1,0 +1,37 @@
+{
+  "ok": true,
+  "buttons": [
+    {
+      "label": "聊天",
+      "pressed": "true"
+    },
+    {
+      "label": "Git",
+      "pressed": "false"
+    },
+    {
+      "label": "文件",
+      "pressed": "false"
+    },
+    {
+      "label": "上下文",
+      "pressed": "false"
+    },
+    {
+      "label": "运行",
+      "pressed": "false"
+    },
+    {
+      "label": "收起侧栏 (Ctrl+B)",
+      "pressed": null
+    },
+    {
+      "label": "能力",
+      "pressed": null
+    },
+    {
+      "label": "设置 (Ctrl+,)",
+      "pressed": null
+    }
+  ]
+}

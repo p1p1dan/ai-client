@@ -41,12 +41,14 @@ Role: evidence。记录批次 I（roadmap T091～T102）从反馈到落地的事
 - 金样本 5 份重录（`AICLIENT_UPDATE_FIXTURES=1`）：每个工具调用净增一条带摘要输入的 `tool.started`、原事件变 `tool.updated`；重试样本多 `retryAt` / `attemptStartedAt`。
 - 全量 Vitest 单 worker：**463 文件 / 7059 条全部通过，313 s**（对比 T090 收口的 450 / 6909）。
 - 锁文件：`pnpm install --frozen-lockfile --offline` 通过（只保留新增 `@earendil-works/pi-agent-core`）。
-- **真机 GUI 点验**（同日，[artifacts/pointcheck/report.md](artifacts/pointcheck/report.md)，假网关新增 `slow-write` / `long-thinking` / `slow-fail` 三个 plan）：8 项里 7 项 ✅——T091 握手窗口内新建成功且新会话零 Stop、T101 工具行在首个参数片后 ≤250ms 出现并「已收到 N 行」递增、T098/T096 流式可折叠且钉住态背景不透明无穿插、收起精确回原位、T093 逐秒倒计时 + 立即放弃 + 30 秒空闲超时三次尝试各在 30.0 秒被切、T102 看历史 worker 集合不变、T092 结束后 7 条消息一条没少、T097/T099 数值与面板状态与计划一致；T094 新建 282ms 出现 ✅ 而**删除未取证**（原生 `window.confirm` 挡住 CDP，登记 T103）。
+- **真机 GUI 点验**（同日，[artifacts/pointcheck/report.md](artifacts/pointcheck/report.md)，假网关新增 `slow-write` / `long-thinking` / `slow-fail` 三个 plan）：8 项里 7 项 ✅——T091 握手窗口内新建成功且新会话零 Stop、T101 工具行在首个参数片后 ≤250ms 出现并「已收到 N 行」递增、T098/T096 流式可折叠且钉住态背景不透明无穿插、收起精确回原位、T093 逐秒倒计时 + 立即放弃 + 30 秒空闲超时三次尝试各在 30.0 秒被切、T102 看历史 worker 集合不变、T092 结束后 7 条消息一条没少、T097/T099 数值与面板状态与计划一致；T094 新建 282ms 出现 ✅ 而**删除未取证**（原生 `window.confirm` 挡住 CDP，登记 T103）；用户拍板后 T103 当日落地（`ffd0b841`），**删除判据补跑通过**：自绘确认框标题「删除文件？」/「删除文件夹？」、弹框开着时渲染进程往返 1～2ms（旧版三次复现均 12 秒无应答）、点删除后不刷新树上第一个 250ms 采样即消失、磁盘同步；T100 补跑通过：外部 `git branch` 7.1 秒内进分支缓存、`update-ref` 后历史 3.2 秒内重取、删分支 6.1 秒内移除、失焦期间建分支再聚焦 71ms 内三条查询同时重取（[report.md 追记](artifacts/pointcheck/report.md)）。
 
 ## 未处理 / 顺带发现
 
-- T100：Git 面板提交历史与分支列表不自动刷新；左栏三套失效体系互不相通。
+- ~~T100~~：用户拍板后当日落地（`fb120545`，head-signature 5 秒轮询）；左栏三套失效体系互不相通的统一入口仍另议。
 - 预览过（T102）或结束过（T092）的会话点「分支」会因无 worker 失败——T092 之后即存在，未立项。
 - 侧栏行的归档按钮 `aria-label` 仍是硬编码英文（与 ✕ 同类）。
+- 点验观察 E-3：`useWindowFocus` 90 秒无输入判 idle 后 head-signature 轮询停摆，「面板开着、人盯着不动」时外部 git 改动要等用户动鼠标或重聚焦才追上（切走再切回已覆盖）。
+- 点验观察 E-2：文件树把单子目录链压成一行「tree-demo/alpha」，该行删除只删最深一段（确认框正文诚实写「alpha」），但行上显示两段路径易被误读为连上级一起删。
 - `scripts/run-f3-dev-probe.mjs` 与 `src/runtime/__tests__/eventsPlugin.test.ts` 各有一条早于本批的 Biome 报错（提交 `341bcbb8`），预提交钩子只查暂存文件所以未拦住。
-- 锁文件：`pnpm install` 顺带把 `@smithy/node-http-handler`（4.7.3→4.11.3）与 `@google/genai` 的 `ws`（8.19.0→8.21.3）两处解析刷新，node_modules 里 `ws` 仍是 8.19.0。
+- 锁文件：`pnpm install` 曾顺带把 `@smithy/node-http-handler`（4.7.3→4.11.3）与 `@google/genai` 的 `ws`（8.19.0→8.21.3）两处解析刷新，而 node_modules 里 `ws` 仍是 8.19.0；收口时已回退这两处 hunk，锁文件只保留新增的 `@earendil-works/pi-agent-core`，`pnpm install --frozen-lockfile --offline` 通过。

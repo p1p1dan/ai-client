@@ -1,0 +1,1408 @@
+{
+  "at": "2026-09-19T23:43:43.112Z",
+  "before": {
+    "t": 1789861429313,
+    "queries": [
+      {
+        "key": "git | branches | /home/ai/code/ai-client",
+        "scope": "branches",
+        "status": "success",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 1789861424141,
+        "dataUpdateCount": 2,
+        "observers": 2,
+        "isActive": true,
+        "data": [
+          "feat/model-catalog-admin",
+          "feat/openchamber-chat-refactor",
+          "feat/pi-primary-backend",
+          "feat/runtime-evolution",
+          "main",
+          "remotes/origin/feat/model-catalog-admin",
+          "remotes/origin/feat/openchamber-chat-refactor",
+          "remotes/origin/feat/pi-primary-backend",
+          "remotes/origin/feat/runtime-evolution",
+          "remotes/origin/fix/recentBug",
+          "remotes/origin/main"
+        ]
+      },
+      {
+        "key": "git | status | /home/ai/code/ai-client",
+        "scope": "status",
+        "status": "success",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 1789861423433,
+        "dataUpdateCount": 3,
+        "observers": 2,
+        "isActive": true
+      },
+      {
+        "key": "git | branches | /tmp/pc-i/ws",
+        "scope": "branches",
+        "status": "success",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 1789861129659,
+        "dataUpdateCount": 1,
+        "observers": 1,
+        "isActive": false,
+        "data": []
+      },
+      {
+        "key": "git | file-changes | /home/ai/code/ai-client",
+        "scope": "file-changes",
+        "status": "success",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 1789861423287,
+        "dataUpdateCount": 1,
+        "observers": 1,
+        "isActive": true
+      },
+      {
+        "key": "git | log-infinite | /home/ai/code/ai-client",
+        "scope": "log-infinite",
+        "status": "success",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 1789861423433,
+        "dataUpdateCount": 1,
+        "observers": 1,
+        "isActive": true,
+        "data": {
+          "pages": 1,
+          "total": 30,
+          "first": {
+            "hash": "fb120545",
+            "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+          }
+        }
+      },
+      {
+        "key": "git | head-signature | /home/ai/code/ai-client",
+        "scope": "head-signature",
+        "status": "success",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 1789861423433,
+        "dataUpdateCount": 1,
+        "observers": 1,
+        "isActive": true,
+        "data": {
+          "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+          "ref": "refs/heads/feat/runtime-evolution",
+          "refs": "4dbb7013940abd57ea728d54d0978928fb70b922"
+        }
+      },
+      {
+        "key": "git | file-diff | /home/ai/code/ai-client | null | false",
+        "scope": "file-diff",
+        "status": "pending",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 0,
+        "dataUpdateCount": 0,
+        "observers": 1,
+        "isActive": false
+      },
+      {
+        "key": "git | commit-files | /home/ai/code/ai-client | null",
+        "scope": "commit-files",
+        "status": "pending",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 0,
+        "dataUpdateCount": 0,
+        "observers": 1,
+        "isActive": false
+      }
+    ]
+  },
+  "historyBefore": {
+    "t": 1789861429314,
+    "count": 30,
+    "first": {
+      "text": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新 dan feat/runtime-evolution",
+      "title": "fb120545 · dan · 2026-09-19 19:26:58 -0400"
+    },
+    "rows": [
+      {
+        "text": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新 dan feat/runtime-evolution",
+        "title": "fb120545 · dan · 2026-09-19 19:26:58 -0400"
+      },
+      {
+        "text": "fix(files): 删除文件改用应用内确认框并接中文 dan",
+        "title": "ffd0b841 · dan · 2026-09-19 19:26:57 -0400"
+      },
+      {
+        "text": "docs(plan): 登记批次 I 十条用户反馈的调查、决策 028～030 与落地证据 dan",
+        "title": "d6182b62 · dan · 2026-09-19 19:05:34 -0400"
+      },
+      {
+        "text": "feat(chat): 查看历史会话改为主进程只读回放，发送时才启动 worker dan",
+        "title": "848f5981 · dan · 2026-09-19 19:05:04 -0400"
+      },
+      {
+        "text": "feat(runtime): 工具调用在参数流式期就出现在时间线上 dan",
+        "title": "c1559038 · dan · 2026-09-19 19:04:38 -0400"
+      }
+    ]
+  },
+  "dropdownBefore": {
+    "trigger": "feat/runtime-evolution",
+    "popup": {
+      "items": [
+        "feat/model-catalog-admin",
+        "feat/openchamber-chat-refactor",
+        "feat/pi-primary-backend",
+        "feat/runtime-evolution",
+        "main",
+        "origin/feat/model-catalog-admin",
+        "origin/feat/openchamber-chat-refactor",
+        "origin/feat/pi-primary-backend",
+        "origin/feat/runtime-evolution",
+        "origin/fix/recentBug",
+        "origin/main"
+      ],
+      "text": "创建新分支... 本地分支 feat/model-catalog-admin feat/openchamber-chat-refactor feat/pi-primary-backend feat/runtime-evolution main 远程分支 origin/feat/model-catalog-admin origin/feat/openchamber-chat-refactor origin/feat/pi-primary-backend origin/feat/runtime-evolution origin/fix/recentBug origin/main"
+    },
+    "shot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-i-user-feedback-2026-09-19/artifacts/pointcheck/shots/13-b-dropdown-before.png"
+  },
+  "pollEvidence": {
+    "sig0": {
+      "key": "git | head-signature | /home/ai/code/ai-client",
+      "scope": "head-signature",
+      "status": "success",
+      "fetchStatus": "idle",
+      "dataUpdatedAt": 1789861423433,
+      "dataUpdateCount": 1,
+      "observers": 1,
+      "isActive": true,
+      "data": {
+        "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+        "ref": "refs/heads/feat/runtime-evolution",
+        "refs": "4dbb7013940abd57ea728d54d0978928fb70b922"
+      }
+    },
+    "sig1": {
+      "key": "git | head-signature | /home/ai/code/ai-client",
+      "scope": "head-signature",
+      "status": "success",
+      "fetchStatus": "idle",
+      "dataUpdatedAt": 1789861434507,
+      "dataUpdateCount": 2,
+      "observers": 1,
+      "isActive": true,
+      "data": {
+        "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+        "ref": "refs/heads/feat/runtime-evolution",
+        "refs": "4dbb7013940abd57ea728d54d0978928fb70b922"
+      }
+    },
+    "deltaUpdates": 1,
+    "deltaMs": 11074
+  },
+  "gitCreate": {
+    "status": 0,
+    "out": ""
+  },
+  "createWait": {
+    "ok": true,
+    "ms": 7130,
+    "samples": [
+      {
+        "dt": 1,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861430349,
+          "dataUpdateCount": 3,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861423433,
+          "dataUpdateCount": 1,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861434507,
+          "dataUpdateCount": 2,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "4dbb7013940abd57ea728d54d0978928fb70b922"
+          }
+        }
+      },
+      {
+        "dt": 1052,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861430349,
+          "dataUpdateCount": 3,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861423433,
+          "dataUpdateCount": 1,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861439579,
+          "dataUpdateCount": 3,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "8c1a80ce628e8e8d27fb15c246260f66f0f5c653"
+          }
+        }
+      },
+      {
+        "dt": 2055,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "fetching",
+          "dataUpdatedAt": 1789861430349,
+          "dataUpdateCount": 3,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861439694,
+          "dataUpdateCount": 2,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861439579,
+          "dataUpdateCount": 3,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "8c1a80ce628e8e8d27fb15c246260f66f0f5c653"
+          }
+        }
+      },
+      {
+        "dt": 3058,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "fetching",
+          "dataUpdatedAt": 1789861430349,
+          "dataUpdateCount": 3,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861439694,
+          "dataUpdateCount": 2,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861439579,
+          "dataUpdateCount": 3,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "8c1a80ce628e8e8d27fb15c246260f66f0f5c653"
+          }
+        }
+      },
+      {
+        "dt": 4061,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "fetching",
+          "dataUpdatedAt": 1789861430349,
+          "dataUpdateCount": 3,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861439694,
+          "dataUpdateCount": 2,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861439579,
+          "dataUpdateCount": 3,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "8c1a80ce628e8e8d27fb15c246260f66f0f5c653"
+          }
+        }
+      },
+      {
+        "dt": 5064,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "fetching",
+          "dataUpdatedAt": 1789861430349,
+          "dataUpdateCount": 3,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861439694,
+          "dataUpdateCount": 2,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861439579,
+          "dataUpdateCount": 3,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "8c1a80ce628e8e8d27fb15c246260f66f0f5c653"
+          }
+        }
+      },
+      {
+        "dt": 6128,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "fetching",
+          "dataUpdatedAt": 1789861430349,
+          "dataUpdateCount": 3,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861439694,
+          "dataUpdateCount": 2,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "fetching",
+          "dataUpdatedAt": 1789861439579,
+          "dataUpdateCount": 3,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "8c1a80ce628e8e8d27fb15c246260f66f0f5c653"
+          }
+        }
+      },
+      {
+        "dt": 7130,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861444741,
+          "dataUpdateCount": 4,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "t100-probe-branch",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861439694,
+          "dataUpdateCount": 2,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861444661,
+          "dataUpdateCount": 4,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "8c1a80ce628e8e8d27fb15c246260f66f0f5c653"
+          }
+        }
+      }
+    ]
+  },
+  "branchesAfterCreate": {
+    "key": "git | branches | /home/ai/code/ai-client",
+    "scope": "branches",
+    "status": "success",
+    "fetchStatus": "idle",
+    "dataUpdatedAt": 1789861444741,
+    "dataUpdateCount": 4,
+    "observers": 2,
+    "isActive": true,
+    "data": [
+      "feat/model-catalog-admin",
+      "feat/openchamber-chat-refactor",
+      "feat/pi-primary-backend",
+      "feat/runtime-evolution",
+      "main",
+      "t100-probe-branch",
+      "remotes/origin/feat/model-catalog-admin",
+      "remotes/origin/feat/openchamber-chat-refactor",
+      "remotes/origin/feat/pi-primary-backend",
+      "remotes/origin/feat/runtime-evolution",
+      "remotes/origin/fix/recentBug",
+      "remotes/origin/main"
+    ]
+  },
+  "historyRefetchOnCreate": {
+    "before": {
+      "dataUpdatedAt": 1789861423433,
+      "dataUpdateCount": 1,
+      "first": {
+        "hash": "fb120545",
+        "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+      }
+    },
+    "after": {
+      "dataUpdatedAt": 1789861439694,
+      "dataUpdateCount": 2,
+      "first": {
+        "hash": "fb120545",
+        "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+      }
+    }
+  },
+  "dropdownAfterCreate": {
+    "trigger": "feat/runtime-evolution",
+    "popup": null,
+    "shot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-i-user-feedback-2026-09-19/artifacts/pointcheck/shots/13-c-dropdown-after-create.png"
+  },
+  "historyRowsAfterCreate": {
+    "t": 1789861447754,
+    "count": 30,
+    "first": {
+      "text": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新 dan feat/runtime-evolution t100-probe-branch",
+      "title": "fb120545 · dan · 2026-09-19 19:26:58 -0400"
+    },
+    "rows": [
+      {
+        "text": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新 dan feat/runtime-evolution t100-probe-branch",
+        "title": "fb120545 · dan · 2026-09-19 19:26:58 -0400"
+      },
+      {
+        "text": "fix(files): 删除文件改用应用内确认框并接中文 dan",
+        "title": "ffd0b841 · dan · 2026-09-19 19:26:57 -0400"
+      },
+      {
+        "text": "docs(plan): 登记批次 I 十条用户反馈的调查、决策 028～030 与落地证据 dan",
+        "title": "d6182b62 · dan · 2026-09-19 19:05:34 -0400"
+      },
+      {
+        "text": "feat(chat): 查看历史会话改为主进程只读回放，发送时才启动 worker dan",
+        "title": "848f5981 · dan · 2026-09-19 19:05:04 -0400"
+      },
+      {
+        "text": "feat(runtime): 工具调用在参数流式期就出现在时间线上 dan",
+        "title": "c1559038 · dan · 2026-09-19 19:04:38 -0400"
+      }
+    ]
+  },
+  "gitMove": {
+    "status": 0,
+    "out": ""
+  },
+  "refMove": {
+    "ok": true,
+    "ms": 3148,
+    "historyBefore": {
+      "dataUpdatedAt": 1789861439694,
+      "dataUpdateCount": 2,
+      "first": {
+        "hash": "fb120545",
+        "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+      },
+      "total": 30
+    },
+    "historyAfter": {
+      "dataUpdatedAt": 1789861449905,
+      "dataUpdateCount": 3,
+      "first": {
+        "hash": "fb120545",
+        "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+      },
+      "total": 30
+    },
+    "rowsBefore": {
+      "text": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新 dan feat/runtime-evolution t100-probe-branch",
+      "title": "fb120545 · dan · 2026-09-19 19:26:58 -0400"
+    },
+    "rowsAfter": {
+      "text": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新 dan feat/runtime-evolution",
+      "title": "fb120545 · dan · 2026-09-19 19:26:58 -0400"
+    }
+  },
+  "gitDelete": {
+    "status": 0,
+    "out": "Deleted branch t100-probe-branch (was ffd0b841)."
+  },
+  "deleteWait": {
+    "ok": true,
+    "ms": 6074,
+    "samples": [
+      {
+        "dt": 0,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861450531,
+          "dataUpdateCount": 5,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "t100-probe-branch",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861449905,
+          "dataUpdateCount": 3,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861449734,
+          "dataUpdateCount": 5,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "da1708010f64df5ef246c8bd08ffd9be15a7c4ec"
+          }
+        }
+      },
+      {
+        "dt": 1004,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861450531,
+          "dataUpdateCount": 5,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "t100-probe-branch",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861449905,
+          "dataUpdateCount": 3,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861449734,
+          "dataUpdateCount": 5,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "da1708010f64df5ef246c8bd08ffd9be15a7c4ec"
+          }
+        }
+      },
+      {
+        "dt": 2007,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861450531,
+          "dataUpdateCount": 5,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "t100-probe-branch",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861449905,
+          "dataUpdateCount": 3,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861449734,
+          "dataUpdateCount": 5,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "da1708010f64df5ef246c8bd08ffd9be15a7c4ec"
+          }
+        }
+      },
+      {
+        "dt": 3009,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861450531,
+          "dataUpdateCount": 5,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "t100-probe-branch",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861449905,
+          "dataUpdateCount": 3,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861449734,
+          "dataUpdateCount": 5,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "da1708010f64df5ef246c8bd08ffd9be15a7c4ec"
+          }
+        }
+      },
+      {
+        "dt": 4068,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "fetching",
+          "dataUpdatedAt": 1789861450531,
+          "dataUpdateCount": 5,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "t100-probe-branch",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861454897,
+          "dataUpdateCount": 4,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861454806,
+          "dataUpdateCount": 6,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "4dbb7013940abd57ea728d54d0978928fb70b922"
+          }
+        }
+      },
+      {
+        "dt": 5071,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "fetching",
+          "dataUpdatedAt": 1789861450531,
+          "dataUpdateCount": 5,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "t100-probe-branch",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861454897,
+          "dataUpdateCount": 4,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861454806,
+          "dataUpdateCount": 6,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "4dbb7013940abd57ea728d54d0978928fb70b922"
+          }
+        }
+      },
+      {
+        "dt": 6074,
+        "branches": {
+          "key": "git | branches | /home/ai/code/ai-client",
+          "scope": "branches",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861456142,
+          "dataUpdateCount": 6,
+          "observers": 2,
+          "isActive": true,
+          "data": [
+            "feat/model-catalog-admin",
+            "feat/openchamber-chat-refactor",
+            "feat/pi-primary-backend",
+            "feat/runtime-evolution",
+            "main",
+            "remotes/origin/feat/model-catalog-admin",
+            "remotes/origin/feat/openchamber-chat-refactor",
+            "remotes/origin/feat/pi-primary-backend",
+            "remotes/origin/feat/runtime-evolution",
+            "remotes/origin/fix/recentBug",
+            "remotes/origin/main"
+          ]
+        },
+        "logInfinite": {
+          "key": "git | log-infinite | /home/ai/code/ai-client",
+          "scope": "log-infinite",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861454897,
+          "dataUpdateCount": 4,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "pages": 1,
+            "total": 30,
+            "first": {
+              "hash": "fb120545",
+              "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+            }
+          }
+        },
+        "headSignature": {
+          "key": "git | head-signature | /home/ai/code/ai-client",
+          "scope": "head-signature",
+          "status": "success",
+          "fetchStatus": "idle",
+          "dataUpdatedAt": 1789861454806,
+          "dataUpdateCount": 6,
+          "observers": 1,
+          "isActive": true,
+          "data": {
+            "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+            "ref": "refs/heads/feat/runtime-evolution",
+            "refs": "4dbb7013940abd57ea728d54d0978928fb70b922"
+          }
+        }
+      }
+    ]
+  },
+  "branchesAfterDelete": {
+    "key": "git | branches | /home/ai/code/ai-client",
+    "scope": "branches",
+    "status": "success",
+    "fetchStatus": "idle",
+    "dataUpdatedAt": 1789861456142,
+    "dataUpdateCount": 6,
+    "observers": 2,
+    "isActive": true,
+    "data": [
+      "feat/model-catalog-admin",
+      "feat/openchamber-chat-refactor",
+      "feat/pi-primary-backend",
+      "feat/runtime-evolution",
+      "main",
+      "remotes/origin/feat/model-catalog-admin",
+      "remotes/origin/feat/openchamber-chat-refactor",
+      "remotes/origin/feat/pi-primary-backend",
+      "remotes/origin/feat/runtime-evolution",
+      "remotes/origin/fix/recentBug",
+      "remotes/origin/main"
+    ]
+  },
+  "dropdownAfterDelete": {
+    "trigger": "feat/runtime-evolution",
+    "popup": {
+      "items": [
+        "feat/model-catalog-admin",
+        "feat/openchamber-chat-refactor",
+        "feat/pi-primary-backend",
+        "feat/runtime-evolution",
+        "main",
+        "origin/feat/model-catalog-admin",
+        "origin/feat/openchamber-chat-refactor",
+        "origin/feat/pi-primary-backend",
+        "origin/feat/runtime-evolution",
+        "origin/fix/recentBug",
+        "origin/main"
+      ],
+      "text": "创建新分支... 本地分支 feat/model-catalog-admin feat/openchamber-chat-refactor feat/pi-primary-backend feat/runtime-evolution main 远程分支 origin/feat/model-catalog-admin origin/feat/openchamber-chat-refactor origin/feat/pi-primary-backend origin/feat/runtime-evolution origin/fix/recentBug origin/main"
+    },
+    "shot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-i-user-feedback-2026-09-19/artifacts/pointcheck/shots/13-d-dropdown-after-delete.png"
+  },
+  "after": {
+    "t": 1789861459068,
+    "queries": [
+      {
+        "key": "git | branches | /home/ai/code/ai-client",
+        "scope": "branches",
+        "status": "success",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 1789861457893,
+        "dataUpdateCount": 7,
+        "observers": 2,
+        "isActive": true,
+        "data": [
+          "feat/model-catalog-admin",
+          "feat/openchamber-chat-refactor",
+          "feat/pi-primary-backend",
+          "feat/runtime-evolution",
+          "main",
+          "remotes/origin/feat/model-catalog-admin",
+          "remotes/origin/feat/openchamber-chat-refactor",
+          "remotes/origin/feat/pi-primary-backend",
+          "remotes/origin/feat/runtime-evolution",
+          "remotes/origin/fix/recentBug",
+          "remotes/origin/main"
+        ]
+      },
+      {
+        "key": "git | status | /home/ai/code/ai-client",
+        "scope": "status",
+        "status": "success",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 1789861454808,
+        "dataUpdateCount": 8,
+        "observers": 2,
+        "isActive": true
+      },
+      {
+        "key": "git | branches | /tmp/pc-i/ws",
+        "scope": "branches",
+        "status": "success",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 1789861129659,
+        "dataUpdateCount": 1,
+        "observers": 1,
+        "isActive": false,
+        "data": []
+      },
+      {
+        "key": "git | file-changes | /home/ai/code/ai-client",
+        "scope": "file-changes",
+        "status": "success",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 1789861454808,
+        "dataUpdateCount": 6,
+        "observers": 1,
+        "isActive": true
+      },
+      {
+        "key": "git | log-infinite | /home/ai/code/ai-client",
+        "scope": "log-infinite",
+        "status": "success",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 1789861454897,
+        "dataUpdateCount": 4,
+        "observers": 1,
+        "isActive": true,
+        "data": {
+          "pages": 1,
+          "total": 30,
+          "first": {
+            "hash": "fb120545",
+            "message": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新"
+          }
+        }
+      },
+      {
+        "key": "git | head-signature | /home/ai/code/ai-client",
+        "scope": "head-signature",
+        "status": "success",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 1789861454806,
+        "dataUpdateCount": 6,
+        "observers": 1,
+        "isActive": true,
+        "data": {
+          "head": "fb120545e836e40cc84a5da6579d8e3db68bf780",
+          "ref": "refs/heads/feat/runtime-evolution",
+          "refs": "4dbb7013940abd57ea728d54d0978928fb70b922"
+        }
+      },
+      {
+        "key": "git | file-diff | /home/ai/code/ai-client | null | false",
+        "scope": "file-diff",
+        "status": "pending",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 0,
+        "dataUpdateCount": 0,
+        "observers": 1,
+        "isActive": false
+      },
+      {
+        "key": "git | commit-files | /home/ai/code/ai-client | null",
+        "scope": "commit-files",
+        "status": "pending",
+        "fetchStatus": "idle",
+        "dataUpdatedAt": 0,
+        "dataUpdateCount": 0,
+        "observers": 1,
+        "isActive": false
+      }
+    ]
+  },
+  "historyAfter": {
+    "t": 1789861459070,
+    "count": 30,
+    "first": {
+      "text": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新 dan feat/runtime-evolution",
+      "title": "fb120545 · dan · 2026-09-19 19:26:58 -0400"
+    },
+    "rows": [
+      {
+        "text": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新 dan feat/runtime-evolution",
+        "title": "fb120545 · dan · 2026-09-19 19:26:58 -0400"
+      },
+      {
+        "text": "fix(files): 删除文件改用应用内确认框并接中文 dan",
+        "title": "ffd0b841 · dan · 2026-09-19 19:26:57 -0400"
+      },
+      {
+        "text": "docs(plan): 登记批次 I 十条用户反馈的调查、决策 028～030 与落地证据 dan",
+        "title": "d6182b62 · dan · 2026-09-19 19:05:34 -0400"
+      },
+      {
+        "text": "feat(chat): 查看历史会话改为主进程只读回放，发送时才启动 worker dan",
+        "title": "848f5981 · dan · 2026-09-19 19:05:04 -0400"
+      },
+      {
+        "text": "feat(runtime): 工具调用在参数流式期就出现在时间线上 dan",
+        "title": "c1559038 · dan · 2026-09-19 19:04:38 -0400"
+      }
+    ]
+  },
+  "branchListAtExit": "feat/model-catalog-admin\n  feat/openchamber-chat-refactor\n  feat/pi-primary-backend\n* feat/runtime-evolution\n  main"
+}

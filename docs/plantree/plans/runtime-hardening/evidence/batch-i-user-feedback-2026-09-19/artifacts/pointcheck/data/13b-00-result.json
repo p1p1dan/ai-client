@@ -1,0 +1,68 @@
+{
+  "at": "2026-09-19T23:45:35.453Z",
+  "baseline": {
+    "t": 1789861535454,
+    "count": 30,
+    "rows": [
+      {
+        "text": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新 dan feat/runtime-evolution",
+        "title": "fb120545 · dan · 2026-09-19 19:26:58 -0400"
+      },
+      {
+        "text": "fix(files): 删除文件改用应用内确认框并接中文 dan",
+        "title": "ffd0b841 · dan · 2026-09-19 19:26:57 -0400"
+      },
+      {
+        "text": "docs(plan): 登记批次 I 十条用户反馈的调查、决策 028～030 与落地证据 dan",
+        "title": "d6182b62 · dan · 2026-09-19 19:05:34 -0400"
+      }
+    ]
+  },
+  "appear": {
+    "ok": true,
+    "ms": 503,
+    "rows": {
+      "t": 1789861535961,
+      "count": 30,
+      "rows": [
+        {
+          "text": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新 dan feat/runtime-evolution t100-probe-branch",
+          "title": "fb120545 · dan · 2026-09-19 19:26:58 -0400"
+        },
+        {
+          "text": "fix(files): 删除文件改用应用内确认框并接中文 dan",
+          "title": "ffd0b841 · dan · 2026-09-19 19:26:57 -0400"
+        },
+        {
+          "text": "docs(plan): 登记批次 I 十条用户反馈的调查、决策 028～030 与落地证据 dan",
+          "title": "d6182b62 · dan · 2026-09-19 19:05:34 -0400"
+        }
+      ]
+    }
+  },
+  "appearShot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-i-user-feedback-2026-09-19/artifacts/pointcheck/shots/13-e-badge-after-create.png",
+  "disappear": {
+    "ok": true,
+    "ms": 5026,
+    "rows": {
+      "t": 1789861541049,
+      "count": 30,
+      "rows": [
+        {
+          "text": "fix(git): Git 面板的提交历史与分支列表在外部操作后自动刷新 dan feat/runtime-evolution",
+          "title": "fb120545 · dan · 2026-09-19 19:26:58 -0400"
+        },
+        {
+          "text": "fix(files): 删除文件改用应用内确认框并接中文 dan",
+          "title": "ffd0b841 · dan · 2026-09-19 19:26:57 -0400"
+        },
+        {
+          "text": "docs(plan): 登记批次 I 十条用户反馈的调查、决策 028～030 与落地证据 dan",
+          "title": "d6182b62 · dan · 2026-09-19 19:05:34 -0400"
+        }
+      ]
+    }
+  },
+  "disappearShot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-i-user-feedback-2026-09-19/artifacts/pointcheck/shots/13-f-badge-after-delete.png",
+  "branchListAtExit": "feat/model-catalog-admin\n  feat/openchamber-chat-refactor\n  feat/pi-primary-backend\n* feat/runtime-evolution\n  main"
+}

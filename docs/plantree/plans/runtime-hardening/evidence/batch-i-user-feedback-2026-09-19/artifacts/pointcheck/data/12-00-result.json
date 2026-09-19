@@ -1,0 +1,115 @@
+{
+  "at": "2026-09-19T23:41:29.779Z",
+  "dialogA": {
+    "role": "alertdialog",
+    "dataSlot": "alert-dialog-popup",
+    "title": "删除文件？",
+    "description": "将从磁盘删除「beta.txt」，此操作不可撤销。",
+    "text": "删除文件？ 将从磁盘删除「beta.txt」，此操作不可撤销。 取消 删除",
+    "buttons": [
+      "取消",
+      "删除"
+    ]
+  },
+  "dialogAResponseMs": 2,
+  "pingsWhileDialogOpen": [
+    1,
+    1,
+    1
+  ],
+  "afterCancel": {
+    "dialog": null,
+    "tree": {
+      "t": 1789861304580,
+      "alphaDir": true,
+      "beta": true,
+      "gamma": true
+    },
+    "disk": [
+      "beta.txt",
+      "gamma.txt"
+    ],
+    "ms": 1301
+  },
+  "dialogB": {
+    "role": "alertdialog",
+    "dataSlot": "alert-dialog-popup",
+    "title": "删除文件？",
+    "description": "将从磁盘删除「beta.txt」，此操作不可撤销。",
+    "text": "删除文件？ 将从磁盘删除「beta.txt」，此操作不可撤销。 取消 删除",
+    "buttons": [
+      "取消",
+      "删除"
+    ]
+  },
+  "deleteSeries": [
+    {
+      "dt": 771,
+      "beta": false,
+      "gamma": true
+    }
+  ],
+  "goneAfterMs": 771,
+  "diskAfterDelete": [
+    "gamma.txt"
+  ],
+  "dialogC": {
+    "role": "alertdialog",
+    "dataSlot": "alert-dialog-popup",
+    "title": "删除文件夹？",
+    "description": "将从磁盘删除「alpha」，此操作不可撤销。",
+    "text": "删除文件夹？ 将从磁盘删除「alpha」，此操作不可撤销。 取消 删除",
+    "buttons": [
+      "取消",
+      "删除"
+    ]
+  },
+  "afterFolderCancel": {
+    "tree": {
+      "t": 1789861312617,
+      "alphaDir": true,
+      "beta": false,
+      "gamma": true
+    },
+    "disk": true
+  },
+  "menus": {
+    "A": [
+      [
+        "重命名",
+        "复制",
+        "剪切",
+        "复制路径",
+        "复制相对路径",
+        "在资源管理器中显示",
+        "删除"
+      ]
+    ],
+    "B": [
+      [
+        "重命名",
+        "复制",
+        "剪切",
+        "复制路径",
+        "复制相对路径",
+        "在资源管理器中显示",
+        "删除"
+      ]
+    ],
+    "C": [
+      [
+        "新建文件",
+        "新建文件夹",
+        "重命名",
+        "tree-demo",
+        "alpha",
+        "复制",
+        "剪切",
+        "复制路径",
+        "复制相对路径",
+        "在资源管理器中显示",
+        "删除"
+      ]
+    ]
+  }
+}

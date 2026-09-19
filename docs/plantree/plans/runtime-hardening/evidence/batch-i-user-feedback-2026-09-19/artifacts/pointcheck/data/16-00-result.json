@@ -1,0 +1,43 @@
+{
+  "at": "2026-09-19T23:50:01.388Z",
+  "badgeAfterMs": 1506,
+  "dropdown": {
+    "trigger": "feat/runtime-evolution",
+    "items": [
+      "feat/model-catalog-admin",
+      "feat/openchamber-chat-refactor",
+      "feat/pi-primary-backend",
+      "feat/runtime-evolution",
+      "main",
+      "t100-probe-branch",
+      "origin/feat/model-catalog-admin",
+      "origin/feat/openchamber-chat-refactor",
+      "origin/feat/pi-primary-backend",
+      "origin/feat/runtime-evolution",
+      "origin/fix/recentBug",
+      "origin/main"
+    ],
+    "shot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-i-user-feedback-2026-09-19/artifacts/pointcheck/shots/16-a-dropdown-with-probe-branch.png",
+    "attempt": 1
+  },
+  "badgeGoneAfterMs": 5028,
+  "dropdownAfter": {
+    "trigger": "feat/runtime-evolution",
+    "items": [
+      "feat/model-catalog-admin",
+      "feat/openchamber-chat-refactor",
+      "feat/pi-primary-backend",
+      "feat/runtime-evolution",
+      "main",
+      "origin/feat/model-catalog-admin",
+      "origin/feat/openchamber-chat-refactor",
+      "origin/feat/pi-primary-backend",
+      "origin/feat/runtime-evolution",
+      "origin/fix/recentBug",
+      "origin/main"
+    ],
+    "shot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-i-user-feedback-2026-09-19/artifacts/pointcheck/shots/16-b-dropdown-after-delete.png",
+    "attempt": 1
+  },
+  "branchListAtExit": "feat/model-catalog-admin\n  feat/openchamber-chat-refactor\n  feat/pi-primary-backend\n* feat/runtime-evolution\n  main"
+}
