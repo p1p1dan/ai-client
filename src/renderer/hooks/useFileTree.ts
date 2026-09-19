@@ -14,6 +14,55 @@ interface FileTreeNode extends FileEntry {
   isLoading?: boolean;
 }
 
+/**
+ * Split a path into its parent directory and the separator that produced it.
+ *
+ * The main process hands back native paths (backslashes on Windows) while the
+ * rest of this hook slices on '/', so both separators have to be understood.
+ * Node's `path` module is unavailable here — this runs in the renderer.
+ */
+function splitParentPath(targetPath: string): { parent: string; separator: string } {
+  const index = Math.max(targetPath.lastIndexOf('/'), targetPath.lastIndexOf('\\'));
+  if (index < 0) return { parent: '', separator: '/' };
+  const separator = targetPath[index];
+  return { parent: targetPath.slice(0, index) || separator, separator };
+}
+
+function getParentPath(targetPath: string): string {
+  return splitParentPath(targetPath).parent;
+}
+
+function isAbsolutePath(candidate: string): boolean {
+  return (
+    candidate.startsWith('/') || candidate.startsWith('\\') || /^[a-zA-Z]:[\\/]/.test(candidate)
+  );
+}
+
+/**
+ * T095: the tree's inline rename input produces a BARE name, not a path. Sent
+ * as-is the main process resolves it against its own cwd, which either moves
+ * the file to an unrelated directory or trips the workspace guard with a path
+ * nobody recognises. The source path is the only place the destination
+ * directory is known, so the join happens here.
+ */
+export function resolveRenameTarget(fromPath: string, newNameOrPath: string): string {
+  if (isAbsolutePath(newNameOrPath)) return newNameOrPath;
+  const { parent, separator } = splitParentPath(fromPath);
+  if (!parent) return newNameOrPath;
+  return parent.endsWith(separator)
+    ? `${parent}${newNameOrPath}`
+    : `${parent}${separator}${newNameOrPath}`;
+}
+
+/** True when `candidate` is `ancestor` itself or sits underneath it. */
+function isSelfOrDescendant(candidate: string, ancestor: string): boolean {
+  return (
+    candidate === ancestor ||
+    candidate.startsWith(`${ancestor}/`) ||
+    candidate.startsWith(`${ancestor}\\`)
+  );
+}
+
 export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFileTreeOptions) {
   const queryClient = useQueryClient();
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() =>
@@ -51,6 +100,23 @@ export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFi
     if (rootPathRef.current) saveFileTreeExpandedPaths(rootPathRef.current, paths);
   }, []);
 
+  // Drop a vanished directory and its descendants from the expanded set. Without
+  // this a deleted/renamed directory keeps a persisted "expanded" entry that
+  // comes back as an arrow with no content after the next repo switch.
+  const pruneExpandedPaths = useCallback(
+    (removedPath: string) => {
+      const current = expandedPathsRef.current;
+      const next = new Set<string>();
+      for (const p of current) {
+        if (!isSelfOrDescendant(p, removedPath)) next.add(p);
+      }
+      if (next.size === current.size) return;
+      expandedPathsRef.current = next; // Sync ref immediately
+      setAndPersistExpandedPaths(next);
+    },
+    [setAndPersistExpandedPaths]
+  );
+
   // When rootPath changes: restore saved expanded state and trigger a fresh tree fetch
   useEffect(() => {
     if (!rootPath) return;
@@ -63,16 +129,21 @@ export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFi
     queryClient.invalidateQueries({ queryKey: ['file', 'list', rootPath] });
   }, [rootPath, queryClient]);
 
-  // Load children for a directory
+  // Load children for a directory.
+  //
+  // `staleTime: 0` on purpose: subdirectory listings have no observer, so
+  // nothing in react-query ever refetches them. Serving the cached entry — as
+  // this used to — replayed a pre-CRUD (or pre-unmount) snapshot of the
+  // directory, which is how a deleted file survived a surface switch. The disk
+  // read is cheap next to the wrong answer; `fetchQuery` still dedupes
+  // concurrent callers and keeps the cache populated for the tree merge.
   const loadChildren = useCallback(
-    async (path: string): Promise<FileEntry[]> => {
-      const cached = queryClient.getQueryData<FileEntry[]>(['file', 'list', path]);
-      if (cached) return cached;
-
-      const files = await window.electronAPI.file.list(path, rootPath);
-      queryClient.setQueryData(['file', 'list', path], files);
-      return files;
-    },
+    async (path: string): Promise<FileEntry[]> =>
+      queryClient.fetchQuery({
+        queryKey: ['file', 'list', path],
+        queryFn: () => window.electronAPI.file.list(path, rootPath),
+        staleTime: 0,
+      }),
     [queryClient, rootPath]
   );
 
@@ -302,21 +373,45 @@ export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFi
           return updateNode(current);
         });
       } catch (error) {
-        // Directory was deleted - remove from expanded paths and tree
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        // Directory is gone - drop its cache entry and its expanded paths.
+        // The error crossed IPC, which strips `code` off the Error object, so
+        // the previous `error.code === 'ENOENT'` test could never be true and
+        // the branch never ran. Match on the message text instead.
+        const message = error instanceof Error ? error.message : String(error);
+        if (/ENOENT|ENOTDIR/.test(message)) {
           queryClient.removeQueries({ queryKey: ['file', 'list', targetPath] });
-          // Compute next set outside updater to avoid side effects inside pure function
-          const next = new Set(expandedPathsRef.current);
-          for (const p of expandedPathsRef.current) {
-            if (p === targetPath || p.startsWith(`${targetPath}/`)) {
-              next.delete(p);
-            }
-          }
-          setAndPersistExpandedPaths(next);
+          pruneExpandedPaths(targetPath);
         }
       }
     },
-    [queryClient, rootPath, setAndPersistExpandedPaths]
+    [queryClient, rootPath, pruneExpandedPaths]
+  );
+
+  /**
+   * T094: make a write visible without waiting for the file watcher.
+   *
+   * `invalidateQueries` alone did nothing here. Only the ROOT listing has an
+   * observer; every subdirectory listing is written by hand via `loadChildren`,
+   * so marking it stale neither refetches it nor removes it, and the tree state
+   * (`tree`) is not derived from the cache at all. The result was a panel that
+   * did not move after a create/delete/rename inside an expanded directory.
+   */
+  const refreshAfterMutation = useCallback(
+    async (targetPath: string) => {
+      // The path itself may have had a cached listing (a directory that was
+      // deleted or renamed); it must not be served again under the old name.
+      queryClient.removeQueries({ queryKey: ['file', 'list', targetPath] });
+
+      const parentPath = getParentPath(targetPath);
+      if (!parentPath) return;
+
+      if (parentPath === rootPathRef.current) {
+        await queryClient.refetchQueries({ queryKey: ['file', 'list', parentPath] });
+        return;
+      }
+      await refreshNodeChildren(parentPath);
+    },
+    [queryClient, refreshNodeChildren]
   );
 
   // Track if we need to refresh when becoming active
@@ -330,8 +425,12 @@ export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFi
   useEffect(() => {
     if (!rootPath || !enabled) return;
 
-    // Start watching
-    window.electronAPI.file.watchStart(rootPath);
+    // Start watching. The promise was previously dropped on the floor, so a
+    // refused or crashed subscription left the panel silently un-watched with
+    // nothing in the log to say so.
+    void window.electronAPI.file.watchStart(rootPath).catch((error) => {
+      console.error('[useFileTree] Failed to start file watcher:', rootPath, error);
+    });
 
     // Listen for changes
     const unsubscribe = window.electronAPI.file.onChange(async (event) => {
@@ -364,7 +463,9 @@ export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFi
 
     return () => {
       unsubscribe();
-      window.electronAPI.file.watchStop(rootPath);
+      void window.electronAPI.file.watchStop(rootPath).catch((error) => {
+        console.error('[useFileTree] Failed to stop file watcher:', rootPath, error);
+      });
     };
   }, [rootPath, enabled, queryClient, refreshNodeChildren]);
 
@@ -372,37 +473,44 @@ export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFi
   const createFile = useCallback(
     async (path: string, content = '') => {
       await window.electronAPI.file.createFile(path, content);
-      const parentPath = path.substring(0, path.lastIndexOf('/'));
-      queryClient.invalidateQueries({ queryKey: ['file', 'list', parentPath] });
+      await refreshAfterMutation(path);
     },
-    [queryClient]
+    [refreshAfterMutation]
   );
 
   const createDirectory = useCallback(
     async (path: string) => {
       await window.electronAPI.file.createDirectory(path);
-      const parentPath = path.substring(0, path.lastIndexOf('/'));
-      queryClient.invalidateQueries({ queryKey: ['file', 'list', parentPath] });
+      await refreshAfterMutation(path);
     },
-    [queryClient]
+    [refreshAfterMutation]
   );
 
+  /**
+   * `newNameOrPath` is what the tree's inline editor produced: usually a bare
+   * file name. `resolveRenameTarget` turns it into an absolute destination
+   * before it crosses IPC (T095) — the main process would otherwise resolve a
+   * relative target against its own cwd.
+   */
   const renameItem = useCallback(
-    async (fromPath: string, toPath: string) => {
+    async (fromPath: string, newNameOrPath: string) => {
+      const toPath = resolveRenameTarget(fromPath, newNameOrPath);
       await window.electronAPI.file.rename(fromPath, toPath);
-      const parentPath = fromPath.substring(0, fromPath.lastIndexOf('/'));
-      queryClient.invalidateQueries({ queryKey: ['file', 'list', parentPath] });
+      // A renamed directory no longer exists under its old path, so its
+      // expanded entries would otherwise linger in localStorage forever.
+      pruneExpandedPaths(fromPath);
+      await refreshAfterMutation(fromPath);
     },
-    [queryClient]
+    [refreshAfterMutation, pruneExpandedPaths]
   );
 
   const deleteItem = useCallback(
     async (path: string) => {
       await window.electronAPI.file.delete(path);
-      const parentPath = path.substring(0, path.lastIndexOf('/'));
-      queryClient.invalidateQueries({ queryKey: ['file', 'list', parentPath] });
+      pruneExpandedPaths(path);
+      await refreshAfterMutation(path);
     },
-    [queryClient]
+    [refreshAfterMutation, pruneExpandedPaths]
   );
 
   const refresh = useCallback(async () => {

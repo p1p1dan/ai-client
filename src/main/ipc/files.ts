@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs';
 import { copyFile, mkdir, open, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   type AttachmentReadOptions,
   type AttachmentReadResult,
@@ -91,6 +91,8 @@ interface FileWatcherEntry {
   ownerId: number;
   state: FileWatcherState;
   startPromise: Promise<void>;
+  /** Set once a stop is in flight, so a concurrent start can await it. */
+  stopPromise?: Promise<void>;
   cleanup: () => void;
 }
 
@@ -179,17 +181,35 @@ function untrackWatcherKey(ownerId: number, key: string): void {
 
 async function stopWatcherEntry(key: string): Promise<void> {
   const entry = watchers.get(key);
-  if (!entry || entry.state === 'stopping') {
+  if (!entry) {
+    return;
+  }
+
+  // A stop already in flight is awaited rather than skipped. Returning early
+  // here (the old behaviour) told the caller "it is stopped" while the entry
+  // was still in `watchers`, which is what let a restart be swallowed by the
+  // `watchers.has(key)` guard in FILE_WATCH_START.
+  if (entry.stopPromise) {
+    await entry.stopPromise;
     return;
   }
 
   entry.state = 'stopping';
-  entry.cleanup();
-  await entry.startPromise.catch(() => {});
-  await entry.watcher.stop().catch(() => {});
+  const stopPromise = (async () => {
+    entry.cleanup();
+    await entry.startPromise.catch(() => {});
+    await entry.watcher.stop().catch(() => {});
 
-  watchers.delete(key);
-  untrackWatcherKey(entry.ownerId, key);
+    // Only retire the map slot if it is still ours: a restart that waited for
+    // this stop may already have installed a new entry under the same key.
+    if (watchers.get(key) === entry) {
+      watchers.delete(key);
+      untrackWatcherKey(entry.ownerId, key);
+    }
+  })();
+
+  entry.stopPromise = stopPromise;
+  await stopPromise;
 }
 
 async function stopFileWatchersForOwner(ownerId: number): Promise<void> {
@@ -582,6 +602,17 @@ export function registerFileHandlers(): void {
       return;
     }
 
+    // T095 defence: a relative target is resolved against the MAIN PROCESS
+    // cwd, not the workspace. The file tree used to send the bare new file
+    // name, which either moved the file to wherever the app was launched from
+    // or tripped the guard below with a path nobody recognised. Neither is a
+    // rename, so refuse it at the boundary instead of guessing a base.
+    if (!isAbsolute(fromPath) || !isAbsolute(toPath)) {
+      throw new Error(
+        `file:rename: refused — both paths must be absolute (from="${fromPath}", to="${toPath}").`
+      );
+    }
+
     // Both ends: checking only the source would let a rename walk a repo file
     // out to any path on the disk.
     assertLocalPathWritable(fromPath, 'file:rename');
@@ -711,8 +742,22 @@ export function registerFileHandlers(): void {
 
     const ownerId = event.sender.id;
     const watcherKey = getWatcherKey(ownerId, dirPath);
-    if (watchers.has(watcherKey)) {
-      return;
+    const existing = watchers.get(watcherKey);
+    if (existing) {
+      if (existing.state !== 'stopping') {
+        return;
+      }
+
+      // React StrictMode fires start(A) → stop(A) → start(A) in a single flush.
+      // The third call used to hit `watchers.has(key)` while the stop was still
+      // unwinding, return "already watching", and then watch the entry be
+      // deleted by that stop — leaving the directory with no watcher at all.
+      // Wait for the stop to finish, then subscribe again.
+      await stopWatcherEntry(watcherKey);
+      if (watchers.has(watcherKey)) {
+        // Another start won the race and is already (re)subscribing.
+        return;
+      }
     }
 
     const MAX_PENDING_EVENTS = 5000;
@@ -796,7 +841,9 @@ export function registerFileHandlers(): void {
     try {
       await startPromise;
 
-      if (!watchers.has(watcherKey)) {
+      // Identity, not presence: a stop-then-restart cycle can have replaced the
+      // slot with a different entry while this one was still subscribing.
+      if (watchers.get(watcherKey) !== entry) {
         await watcher.stop().catch(() => {});
         return;
       }
