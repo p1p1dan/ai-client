@@ -13,6 +13,8 @@ export const zhTranslations: Record<string, string> = {
   // Settings nav categories split out of the Pi page.
   Extensions: '扩展',
   'Data migration': '数据迁移',
+  // T099: why every control in the migration pane is greyed out.
+  'Not available during the test round.': '测试期间暂未开放。',
   'Updated {{providers}} providers and {{models}} models.':
     '已更新 {{providers}} 个渠道、{{models}} 个模型。',
   'Yolo mode disables all permission checks, including command restrictions. Disable it in the {{source}} configuration file.':

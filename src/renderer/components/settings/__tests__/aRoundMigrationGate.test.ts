@@ -124,9 +124,32 @@ describe('A-round: AgentMigrationSettings (@/lib/aRoundTesting)', () => {
     const overwriteSwitch = document.body.querySelector('[role="switch"]');
     expect(overwriteSwitch?.getAttribute('data-disabled') === '').toBe(LOCAL_SETUP_ENTRY_DISABLED);
 
-    // Every item defaults to pre-ticked (`defaultMigrationSelection`), so the
-    // button's only other disable condition (`selected.size === 0`) does not
-    // apply — whatever this reads is the switch's own doing.
+    // With the switch OFF every item is pre-ticked, so an enabled button here
+    // is the switch's own doing. With it ON, T099 also empties the selection,
+    // so the button is disabled twice over — belt and braces, deliberately: the
+    // copy must not become reachable by un-disabling one of the two.
     expect(copyButton()?.disabled).toBe(LOCAL_SETUP_ENTRY_DISABLED);
+  });
+
+  it('shows nothing as selected while the switch is on', async () => {
+    await act(() => root.render(createElement(AgentMigrationSettings)));
+    await settle();
+
+    // T099: `data-disabled` alone was not the whole story. The items were still
+    // pre-ticked underneath it, so the pane said "these three are queued" and
+    // "you cannot untick them" in the same breath — about a copy that, during
+    // A-round, would be the tester's own API keys. Frozen AND empty is the only
+    // pair of statements that is true here.
+    const checkboxes = [...document.body.querySelectorAll('[role="checkbox"]')];
+    expect(checkboxes.length).toBeGreaterThan(0);
+    for (const box of checkboxes) {
+      expect(box.getAttribute('aria-checked')).toBe(LOCAL_SETUP_ENTRY_DISABLED ? 'false' : 'true');
+      expect(box.getAttribute('data-disabled') === '').toBe(LOCAL_SETUP_ENTRY_DISABLED);
+    }
+
+    // And the section says why, rather than leaving dead controls unexplained.
+    expect(document.body.textContent?.includes('Not available during the test round.')).toBe(
+      LOCAL_SETUP_ENTRY_DISABLED
+    );
   });
 });

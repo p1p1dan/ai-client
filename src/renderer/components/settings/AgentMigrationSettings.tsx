@@ -20,6 +20,12 @@
  * reason to hide that the route exists — every control in it (the checkboxes,
  * the overwrite switch, the copy button) is just disabled while the switch is
  * on. Flip it back to `false` and every one of them is live again, unchanged.
+ *
+ * T099: greyed out also means UNTICKED and explained. Disabling the controls
+ * while still pre-selecting every item left the pane saying two contradictory
+ * things at once — "these three will be copied" and "you cannot touch them" —
+ * about a copy that, during the round, would be the tester's own API keys. The
+ * section now starts empty and says in its description why nothing is live.
  */
 
 import type {
@@ -29,7 +35,7 @@ import type {
   MigrationPlan,
 } from '@shared/agentMigration';
 import { AlertTriangle, ArrowRightLeft, Check, FolderInput } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -48,6 +54,7 @@ function messageOf(cause: unknown): string {
 
 export function AgentMigrationSettings() {
   const { t } = useI18n();
+  const overwriteLabelId = useId();
   const [plan, setPlan] = useState<MigrationPlan | null>(null);
   const [selected, setSelected] = useState<Set<MigrationItemKind>>(new Set());
   const [overwrite, setOverwrite] = useState(false);
@@ -62,7 +69,13 @@ export function AgentMigrationSettings() {
       // Pre-select everything that would actually copy something. A user who
       // opens this page and presses the button gets the obvious outcome; the
       // checkboxes are there to take things OUT.
-      setSelected(new Set(defaultMigrationSelection(next)));
+      //
+      // T099: not while the A-round gate is closed. Pre-ticking under disabled
+      // controls reads as "these three are queued and you cannot stop them" —
+      // the one impression this route must not give during a test round, when
+      // what it would copy is the tester's own API keys. Ticked-and-frozen is
+      // a state the user cannot act on either way, so it says nothing true.
+      setSelected(new Set(LOCAL_SETUP_ENTRY_DISABLED ? [] : defaultMigrationSelection(next)));
       setError(null);
     } catch (cause) {
       setError(messageOf(cause));
@@ -108,9 +121,19 @@ export function AgentMigrationSettings() {
     <div className="space-y-4">
       <SettingsSectionBlock
         title={t('Bring over your personal Pi setup')}
-        description={t(
-          'Copies from your own Pi directory into this app. Your files stay where they are — nothing is moved or changed there.'
-        )}
+        description={
+          <>
+            {t(
+              'Copies from your own Pi directory into this app. Your files stay where they are — nothing is moved or changed there.'
+            )}
+            {/* T099: the controls below are greyed out on purpose. Without this
+                line the pane is a wall of dead checkboxes with no reason given,
+                which reads as a bug rather than as a decision. */}
+            {LOCAL_SETUP_ENTRY_DISABLED && (
+              <span className="mt-1 block">{t('Not available during the test round.')}</span>
+            )}
+          </>
+        }
       />
 
       <div className="grid gap-1 text-meta text-muted-foreground sm:grid-cols-[80px_1fr] sm:gap-3">
@@ -136,19 +159,25 @@ export function AgentMigrationSettings() {
       </ul>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="flex min-w-0 items-center gap-2 text-ui">
+        {/* NOT a <label> around the Switch: base-ui renders the switch root as a
+            <button>, and a label wrapping a labelable control forwards its own
+            click back onto it — so every click toggled twice and the control
+            never moved. Associated by `aria-labelledby` instead, which is also
+            the shape every other Switch in Settings uses. */}
+        <div className="flex min-w-0 items-center gap-2 text-ui">
           <Switch
             checked={overwrite}
             onCheckedChange={setOverwrite}
             disabled={busy || LOCAL_SETUP_ENTRY_DISABLED}
+            aria-labelledby={overwriteLabelId}
           />
-          <span className="min-w-0">
+          <span className="min-w-0" id={overwriteLabelId}>
             {t('Replace items this app already has')}
             <span className="ml-2 text-meta text-muted-foreground">
               {t('Off: anything already here is left alone.')}
             </span>
           </span>
-        </label>
+        </div>
         <Button
           onClick={() => void run()}
           disabled={busy || selected.size === 0 || LOCAL_SETUP_ENTRY_DISABLED}
