@@ -1057,6 +1057,12 @@ export interface PermissionActivityEvent extends RuntimeEventBase {
      * scoped no matter which agent earned it (runtime-hardening decision 003),
      * so this answers "who was this checked for" and never narrows what the
      * check permits.
+     *
+     * This is the pair the native runtime's gate actually sends (see
+     * `src/runtime/plugins/permissions/activity.ts`). The legacy backend sent
+     * `forwarded` / `requesterAgentName` below instead; the renderer
+     * (`permissionActivityRow.ts`) reads both pairs as the same fact
+     * (MODEL-20, 2026-09-19).
      */
     delegationId?: string;
     agentName?: string;
@@ -1072,6 +1078,9 @@ export interface PermissionActivityEvent extends RuntimeEventBase {
      * The ask came from a SUBAGENT and was forwarded to this session to answer.
      * Worth surfacing on its own: approving a subagent's request is not the same
      * act as approving one's own, and the two are otherwise indistinguishable.
+     *
+     * Legacy backend only — the native runtime's gate never sets this pair,
+     * it sets `delegationId` / `agentName` above instead.
      */
     forwarded?: boolean;
     requesterAgentName?: string;

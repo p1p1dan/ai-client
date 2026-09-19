@@ -122,6 +122,42 @@ describe('derivePermissionActivityRow', () => {
     ).toBe('for subagent explorer');
   });
 
+  /**
+   * MODEL-20 (2026-09-19). The native runtime's gate (`activity.ts`) never
+   * sets `forwarded` / `requesterAgentName` — only `delegationId` + `agentName`
+   * — so a subagent's denial reached the timeline as a bare "已拒绝 bash pwd"
+   * with no attribution at all. This is the shape a real record actually has.
+   */
+  it('names the subagent from delegationId + agentName when the legacy pair is absent', () => {
+    const view = derivePermissionActivityRow(
+      record({
+        surface: 'bash',
+        value: 'pwd',
+        result: 'deny',
+        resolution: 'user_denied',
+        forwarded: undefined,
+        requesterAgentName: undefined,
+        delegationId: '1103083d-0000-0000-0000-000000000000',
+        agentName: 'explorer',
+      })
+    );
+    expect(view.note).toContain('explorer');
+  });
+
+  /** Guards the legacy shape so the fix above does not regress it. */
+  it('still names the subagent from the legacy forwarded + requesterAgentName pair', () => {
+    const view = derivePermissionActivityRow(
+      record({
+        surface: 'bash',
+        result: 'deny',
+        resolution: 'user_denied',
+        forwarded: true,
+        requesterAgentName: 'explorer',
+      })
+    );
+    expect(view.note).toContain('explorer');
+  });
+
   it('omits the detail when there is nothing to show', () => {
     expect(derivePermissionActivityRow(record({ result: 'allow' }))).not.toHaveProperty('detail');
   });

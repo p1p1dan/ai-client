@@ -69,6 +69,11 @@ export interface PermissionActivityRecord {
    * The subagent delegation this gate was raised for, when one was. Declared
    * because the store folds the payload verbatim; it is attribution only and
    * says nothing about how widely the decision applies.
+   *
+   * This is what the native runtime's gate (`activity.ts`) sends for
+   * attribution — the legacy `forwarded` / `requesterAgentName` pair below is
+   * never set by it. `derivePermissionActivityRow` treats both pairs as the
+   * same fact (MODEL-20, 2026-09-19).
    */
   delegationId?: string;
   agentName?: string;
@@ -77,6 +82,7 @@ export interface PermissionActivityRecord {
   resolution?: string;
   origin?: string;
   matchedPattern?: string;
+  /** Legacy backend's attribution pair — see `delegationId` / `agentName` above. */
   forwarded?: boolean;
   requesterAgentName?: string;
 }
@@ -137,11 +143,18 @@ export function derivePermissionActivityRow(
   const surface = raw ? toolDisplayName(raw) : t('request');
   const notes: string[] = [];
 
-  if (record.forwarded) {
-    const requester = record.requesterAgentName?.trim();
+  // MODEL-20 (2026-09-19): the legacy backend's plugin set `forwarded` +
+  // `requesterAgentName`; the native runtime's gate (activity.ts) sets
+  // `delegationId` + `agentName` instead and never touches the legacy pair.
+  // A non-empty `delegationId` means the same thing `forwarded` used to mean —
+  // this gate was raised for a subagent's call — so both are read here.
+  const requesterName = record.requesterAgentName?.trim() || record.agentName?.trim();
+  if (record.forwarded || record.delegationId?.trim()) {
     // Approving a subagent's request is not the same act as approving one's
     // own, and the two are otherwise indistinguishable in the transcript.
-    notes.push(requester ? t('for subagent {{name}}', { name: requester }) : t('for a subagent'));
+    notes.push(
+      requesterName ? t('for subagent {{name}}', { name: requesterName }) : t('for a subagent')
+    );
   }
 
   if (record.resolution?.includes('error')) {
