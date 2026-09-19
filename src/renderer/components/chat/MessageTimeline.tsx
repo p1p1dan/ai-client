@@ -25,6 +25,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useSignInRequest } from '@/hooks/useSignInRequest';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { stopChatSession } from '@/stores/chatSessionActions';
 import type { ChatMessage } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import {
@@ -241,7 +242,11 @@ export function MessageTimeline({
       state.sessions.find((session) => session.id === sessionId)?.runtimeError ??
       (state.activeSessionId === sessionId ? state.lastError : null)
   );
-  const stopActiveSession = useChatSessionsStore((state) => state.stopActiveSession);
+  // T091: no `stopActiveSession` selector here any more. This timeline renders
+  // ONE session (`sessionId`, a prop), and its Stop button used to hand that
+  // fact back to the store and let it re-resolve `activeSessionId` — which is
+  // only the same session when this happens to be the foreground timeline.
+  // `stopChatSession(sessionId)` at the call site stops what is on screen.
   // Round-10 inspection ③: when the latest error notice in the timeline
   // already carries `lastError`'s text, the session-failed card drops its
   // duplicate body (title/hint/Stop stay) — same failure, printed once.
@@ -764,7 +769,7 @@ export function MessageTimeline({
                         size="sm"
                         variant="outline"
                         className="mt-2 h-6 text-ui"
-                        onClick={() => void stopActiveSession()}
+                        onClick={() => void stopChatSession(sessionId)}
                       >
                         Stop
                       </Button>

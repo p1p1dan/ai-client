@@ -71,6 +71,12 @@ export interface SidebarTreeInput {
   sessions: readonly ChatSession[];
   /** Search text — matches session titles only, never folder or branch names. */
   query?: string;
+  /**
+   * T091: the session the user is looking at RIGHT NOW. It is exempt from the
+   * title query — see `matchesQuery`. Optional, and omitting it restores the
+   * pre-T091 behaviour exactly.
+   */
+  activeSessionId?: string | null;
 }
 
 const BUSY_STATUSES: ReadonlySet<SessionRuntimeStatus> = new Set([
@@ -110,8 +116,54 @@ function normalizeQuery(query: string | undefined): string {
   return query?.trim().toLowerCase() ?? '';
 }
 
-function matchesQuery(session: ChatSession, normalized: string): boolean {
-  return normalized.length === 0 || session.title.toLowerCase().includes(normalized);
+/**
+ * T091 — a session that has no repository behind it, in EITHER of the two
+ * shapes such a session can take.
+ *
+ * `session.unbound` is the durable marker: it is written once the scratch
+ * directory actually exists (`materializeIndexedPiChatSession`, and the index
+ * merge after a restart). But `createUnboundChatSession` deliberately does NOT
+ * write it at creation time — the directory has not been allocated yet, and a
+ * guessed `workspacePath` is the fake-cwd failure U13 exists to prevent — so a
+ * temporary chat started in this run carries nothing but `workspaceId: ''`
+ * until its first message lands.
+ *
+ * The three derivations below all keyed on the marker alone, so a just-created
+ * temporary chat was filtered out of the Temporary group, out of Recent, and
+ * out of the repository folders — i.e. out of the sidebar entirely — until a
+ * send wrote the index and the sidebar remounted. Both shapes mean the same
+ * thing, so both belong here.
+ *
+ * The complement still holds: a genuine orphan carries a NON-EMPTY workspaceId
+ * that no longer resolves, and is still dropped.
+ */
+export function isUnboundSessionRow(
+  session: Pick<ChatSession, 'unbound' | 'workspaceId'>
+): boolean {
+  return session.unbound != null || session.workspaceId.trim().length === 0;
+}
+
+/**
+ * T091: the ACTIVE session is never filtered out by the title query.
+ *
+ * A search box with text in it is a filter over a LIST, not a statement about
+ * which conversation is open. Hiding the row the user is currently inside makes
+ * the sidebar disagree with the main pane, and it is exactly what happened on
+ * every New click while a search was active: the new chat is titled `New chat`,
+ * the query does not match it, and the row the click was supposed to produce
+ * never appeared — indistinguishable from "the button did nothing".
+ *
+ * `activeSessionId` is optional at every entry point, so a caller that does not
+ * pass it keeps the old behaviour unchanged.
+ */
+function matchesQuery(
+  session: ChatSession,
+  normalized: string,
+  activeSessionId?: string | null
+): boolean {
+  if (normalized.length === 0) return true;
+  if (activeSessionId != null && session.id === activeSessionId) return true;
+  return session.title.toLowerCase().includes(normalized);
 }
 
 function toRow(session: ChatSession, workspace: ChatWorkspace | undefined): SidebarSessionRow {
@@ -171,7 +223,15 @@ export function buildSidebarFolders(input: SidebarTreeInput): SidebarFolder[] {
     // failing — one such chat (a store seed session the user typed into before
     // adding any repository) does still carry a workspace id, and would
     // otherwise render twice.
-    if (!workspace || session.unbound || !matchesQuery(session, normalized)) {
+    // T091: `isUnboundSessionRow` also covers the marker-less shape a temporary
+    // chat has before its first send. That shape has `workspaceId: ''`, so the
+    // lookup above already drops it here — stating it anyway is what keeps all
+    // three derivations reading ONE predicate for "this chat has no repository",
+    // which is how they came to disagree in the first place.
+    if (!workspace || isUnboundSessionRow(session)) {
+      continue;
+    }
+    if (!matchesQuery(session, normalized, input.activeSessionId)) {
       continue;
     }
     // The workspace is authoritative for grouping: a stale session.projectId
@@ -211,10 +271,15 @@ export function buildUnboundFolder(input: {
   /** Display label; the caller passes a translated string. */
   name: string;
   query?: string;
+  /** T091: exempt from the title query — see `matchesQuery`. */
+  activeSessionId?: string | null;
 }): SidebarFolder | null {
   const normalized = normalizeQuery(input.query);
   const rows = input.sessions
-    .filter((session) => session.unbound && matchesQuery(session, normalized))
+    .filter(
+      (session) =>
+        isUnboundSessionRow(session) && matchesQuery(session, normalized, input.activeSessionId)
+    )
     .map((session) => toRow(session, undefined))
     .sort(byUpdatedAtDesc);
   if (rows.length === 0) return null;
@@ -404,6 +469,8 @@ export interface RecentRowsInput {
   /** True once the user pressed "Show more" — lifts the 7-row cap. */
   showAll?: boolean;
   query?: string;
+  /** T091: exempt from the title query — see `matchesQuery`. */
+  activeSessionId?: string | null;
 }
 
 export interface RecentRowsResult {
@@ -430,10 +497,13 @@ export function deriveRecentRows(input: RecentRowsInput): RecentRowsResult {
       // filtered out with the genuinely orphaned rows — Recent is where the
       // user looks first, and after a restart it is the fastest way back into
       // one. Its row renders with the same `temporary` chip as in the tree.
-      if (!session.unbound && !workspaceById.has(session.workspaceId)) {
+      // T091: `isUnboundSessionRow` also admits the marker-less shape a
+      // temporary chat has before its first send; a genuine orphan (a
+      // non-empty workspaceId nothing resolves) is still dropped here.
+      if (!isUnboundSessionRow(session) && !workspaceById.has(session.workspaceId)) {
         return false;
       }
-      if (!matchesQuery(session, normalized)) {
+      if (!matchesQuery(session, normalized, input.activeSessionId)) {
         return false;
       }
       return (
@@ -441,7 +511,10 @@ export function deriveRecentRows(input: RecentRowsInput): RecentRowsResult {
       );
     })
     .map((session) =>
-      toRow(session, session.unbound ? undefined : workspaceById.get(session.workspaceId))
+      toRow(
+        session,
+        isUnboundSessionRow(session) ? undefined : workspaceById.get(session.workspaceId)
+      )
     )
     .sort(byUpdatedAtDesc);
 

@@ -225,3 +225,39 @@ export const useTurnSendStatusStore = create<TurnSendStatusStore>()((set) => ({
   clearPendingReply: (sessionId) =>
     set((state) => (state.pendingReply?.sessionId === sessionId ? { pendingReply: null } : state)),
 }));
+
+/**
+ * T091 — which session has a send in flight RIGHT NOW, or `null`.
+ *
+ * ## Why this slot answers the question
+ *
+ * `begin` runs at `runSend`'s commit point and `end` runs in its `finally`,
+ * immediately beside the `setSendingSessionId` latch `ChatComposer` keeps for its
+ * own affordances — the two windows are the same window, and this one already
+ * carries the session id. So this is a READER of an existing fact, not a second
+ * copy of it: no new store, no new writer, nothing that can drift.
+ *
+ * ## What it is for
+ *
+ * The "New chat" entry points (`chatSessionActions.ts`) run outside the composer
+ * and cannot see its local latch. During the 1–3.5s handshake a send opens, the
+ * session it belongs to still LOOKS brand new to `isFreshEmptySession` — zero
+ * messages, `idle`, never host-bound, placeholder title — because the Host has
+ * not answered yet and nothing has moved `session.status`. Clicking New in that
+ * window therefore took the reuse branch, planned a same-workspace noop, and did
+ * literally nothing; a second later the session the user thought they had left
+ * started streaming in front of them.
+ *
+ * Deliberately a plain function over `getState()` rather than a hook: every
+ * caller is an imperative click handler / store action, and subscribing a
+ * component to this slot would re-render it on every one-second turn-head tick.
+ */
+export function sendInFlightSessionId(): string | null {
+  return useTurnSendStatusStore.getState().status?.sessionId ?? null;
+}
+
+/** `true` when THIS session (not merely some session) has a send in flight. */
+export function hasSendInFlight(sessionId: string | null | undefined): boolean {
+  if (!sessionId) return false;
+  return sendInFlightSessionId() === sessionId;
+}

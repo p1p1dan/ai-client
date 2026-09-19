@@ -24,6 +24,7 @@ import { type ChatSession, useChatSessionsStore } from './chatSessions';
 import { useScratchWorkspaceStore } from './scratchWorkspace';
 import { isFreshEmptySession } from './sessionFreshness';
 import { markSessionsLive } from './sessionRetirement';
+import { hasSendInFlight } from './turnSendStatus';
 
 /**
  * Moved verbatim (function body unchanged) from
@@ -286,11 +287,26 @@ export function retargetChatSession(sessionId: string, workspaceId: string): boo
  * `isFreshEmptySession` just proved true for the active session —
  * recomputing them here would risk drifting from the predicate that gated
  * this branch.
+ *
+ * T091: freshness alone is not enough. A send opens a 1–3.5s handshake window
+ * in which the session it belongs to still satisfies every clause of
+ * `isFreshEmptySession` — the Host has not answered, so there are no messages,
+ * no host binding and the status is still `idle`. Clicking New inside that
+ * window took the reuse branch, `planTargetChange` answered `same-workspace`,
+ * and the click did nothing at all; a second later the very session the user
+ * meant to leave started streaming. `hasSendInFlight` is the missing fact, and
+ * it is read off the turn-send slot the composer already publishes (see
+ * `turnSendStatus.ts`) rather than from a new flag — a send in flight means the
+ * user has committed this session, so New must create, unconditionally.
+ *
+ * Checked OUTSIDE `isFreshEmptySession` on purpose: that predicate is a pure
+ * function of `chatSessions` state and stays that way, so it remains testable
+ * (and reusable) without a live turn-send store behind it.
  */
 export function createOrReuseChatSessionOnWorkspace(workspaceId: string): string | null {
   const state = useChatSessionsStore.getState();
   const activeSessionId = state.activeSessionId;
-  if (!isFreshEmptySession(state, activeSessionId)) {
+  if (!isFreshEmptySession(state, activeSessionId) || hasSendInFlight(activeSessionId)) {
     return createChatSessionOnWorkspace(workspaceId);
   }
   const activeSession = state.sessions.find((item) => item.id === activeSessionId);
@@ -339,11 +355,15 @@ export function createOrReuseChatSessionOnWorkspace(workspaceId: string): string
  * session counts as unbound when it has no workspaceId, or that workspaceId
  * no longer resolves to a targetable workspace — the same condition that
  * sends a caller down the unbound branch in the first place.
+ *
+ * T091: carries the same in-flight escape hatch as the bound branch above, for
+ * the same reason — see its header for the handshake window that makes a
+ * committed session still look brand new.
  */
 export function createOrReuseUnboundChatSession(): string | null {
   const state = useChatSessionsStore.getState();
   const activeSessionId = state.activeSessionId;
-  if (isFreshEmptySession(state, activeSessionId)) {
+  if (isFreshEmptySession(state, activeSessionId) && !hasSendInFlight(activeSessionId)) {
     const activeSession = state.sessions.find((item) => item.id === activeSessionId);
     const workspace = activeSession
       ? state.workspaces.find((item) => item.id === activeSession.workspaceId)
@@ -354,6 +374,42 @@ export function createOrReuseUnboundChatSession(): string | null {
     }
   }
   return createUnboundChatSession();
+}
+
+/**
+ * T091 — stop a NAMED session's turn.
+ *
+ * Body is `chatSessions.ts`'s `stopActiveSession` with one substitution: the
+ * session comes from the caller instead of from `activeSessionId`. That single
+ * difference is the whole bug it closes. Every Stop affordance in the app knows
+ * exactly which turn it is stopping — the composer holds it in
+ * `inFlightSessionIdRef` (and already uses it to pause the right queue), the
+ * timeline's failed-session card has it as a prop — and all of them then threw
+ * that knowledge away by calling `stopActiveSession()`. Clicking Stop after
+ * starting a new chat mid-handshake therefore sent `chat.stop` for the brand-new
+ * empty session while the turn the user wanted stopped kept running.
+ *
+ * Lives here rather than in `chatSessions.ts` for the standing reason this whole
+ * module exists: that store is a red-line file, extended only through external
+ * `setState`. `stopActiveSession` is left untouched beside it — the store's own
+ * interface still offers it, and nothing in this change needs it removed.
+ *
+ * Accepts `null`/`undefined` and no-ops, mirroring `stopActiveSession`'s own
+ * `if (!activeSessionId) return`, so a caller holding a nullable session id does
+ * not have to grow a guard that can drift from this one.
+ */
+export async function stopChatSession(sessionId: string | null | undefined): Promise<void> {
+  if (!sessionId) {
+    return;
+  }
+  try {
+    await window.electronAPI.chat.stop({ sessionId });
+    useChatSessionsStore.setState({ lastError: null });
+  } catch (err) {
+    useChatSessionsStore.setState({
+      lastError: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 // R2 fix: module-level dedup so two concurrent triggers for the SAME session

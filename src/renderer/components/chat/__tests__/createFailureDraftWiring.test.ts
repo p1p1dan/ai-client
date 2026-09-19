@@ -59,7 +59,7 @@ describe('create-failure draft restore wiring (D15)', () => {
   });
 
   it('routes the fact through the single affordance authority, not around it', () => {
-    const finalize = slice('const finalizeOutcome = (', 'setSending(true);');
+    const finalize = slice('const finalizeOutcome = (', 'setSendingSessionId(sessionId);');
     expect(finalize).toContain('decideFailureAffordance(outcome, origin, context)');
     // ...and the `'restore-draft'` answer still lands in the composer draft
     // rather than anywhere new.
@@ -85,7 +85,7 @@ describe('create-failure draft restore wiring (D15)', () => {
     });
 
     it('falls back to the Retry snapshot when the restore refused', () => {
-      const finalize = slice('const finalizeOutcome = (', 'setSending(true);');
+      const finalize = slice('const finalizeOutcome = (', 'setSendingSessionId(sessionId);');
       expect(finalize).toContain(
         'const restored = restoreDraftIfComposerEmpty(sessionId, committed)'
       );

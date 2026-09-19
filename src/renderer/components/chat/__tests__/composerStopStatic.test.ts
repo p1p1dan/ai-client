@@ -106,14 +106,213 @@ describe('runSend cancellation-token ordering (F6 + 2026-08-10 stop-hang fix)', 
 
   /**
    * `handleStop` must bump SYNCHRONOUSLY (before/independently of the async
-   * `stopActiveSession()` IPC): the whole point is that an in-flight attempt
-   * notices the cancellation on its next poll rather than waiting for the
-   * Host round-trip that produces `session.stopped`.
+   * stop IPC): the whole point is that an in-flight attempt notices the
+   * cancellation on its next poll rather than waiting for the Host round-trip
+   * that produces `session.stopped`.
    */
   it('handleStop bumps the generation before awaiting anything', () => {
     const stopBump = offsets('sendGenerationRef.current += 1;')[1];
-    const stopCall = only('void stopActiveSession();');
+    const stopCall = only('void stopChatSession(stopTarget);');
     expect(stopBump).toBeLessThan(stopCall);
+  });
+});
+
+/**
+ * T091 (field repro A-c, 2026-09-19) — Stop must abort the session it paused.
+ *
+ * `handleStop` already knew which session was in flight: it has been pausing
+ * `inFlightSessionIdRef.current ?? activeSessionId`'s queue since the m10 fix.
+ * It then dropped that knowledge and called the store's `stopActiveSession`,
+ * which re-resolves `activeSessionId` for itself. The two agree right up until
+ * the user does the one thing this task is about — starting a new chat while a
+ * send is in flight — and then the pause lands on the real turn while the abort
+ * lands on the brand-new empty session. Observed: the new chat's Stop was
+ * clickable, clicking it did nothing visible, and the original session kept
+ * streaming.
+ *
+ * The invariant is "one target, both calls", and it is a source fact about a
+ * `.tsx`-local closure, so it is pinned the same way the group above pins its
+ * ordering facts.
+ */
+describe('handleStop targets one session for both the pause and the abort (T091)', () => {
+  /** `handleStop`'s body: its declaration to the next top-level `const`. */
+  function handleStopBody(): string {
+    const start = only('const handleStop = () => {');
+    const end = source.indexOf('\n  };', start);
+    expect(end).toBeGreaterThan(start);
+    return source.slice(start, end);
+  }
+
+  it('stops the session it pauses, never the store’s activeSessionId', () => {
+    const body = handleStopBody();
+    // One resolution of "which session is this", used twice.
+    expect(body).toContain('const stopTarget = inFlightSessionIdRef.current ?? activeSessionId;');
+    expect(body).toContain('useMessageQueueStore.getState().pauseSession(stopTarget);');
+    expect(body).toContain('void stopChatSession(stopTarget);');
+    // The store action that re-resolves the session for itself must not be
+    // reachable from this component at all — not from `handleStop`, and not
+    // from a selector kept around "just in case".
+    expect(source).not.toContain('stopActiveSession');
+  });
+
+  it('never falls back to activeSessionId for the abort while pausing something else', () => {
+    const body = handleStopBody();
+    // `activeSessionId` may appear exactly once in this body: inside the single
+    // `stopTarget` resolution. A second mention would mean a second answer to
+    // the same question, which is the bug itself.
+    expect(body.match(/activeSessionId/g) ?? []).toHaveLength(1);
+  });
+});
+
+/**
+ * T091 — the send latch is per-session, and WHICH derived flag each reader
+ * takes is the whole fix.
+ *
+ * `sendingSessionId` replaces the old boolean `sending`. Two flags come off it:
+ *  - `sending` (global: "some session is sending") — legal for exactly three
+ *    dispatch-layer readers, all of which exist because `runSend` can only run
+ *    one send at a time;
+ *  - `sendingHere` (per-session) — every user-facing affordance.
+ *
+ * Getting one of these wrong is invisible until two sessions are involved, and
+ * then it is either a Stop on a chat that owns no turn (too global) or a
+ * silently dropped message (too local). Hence the exhaustive pin below.
+ */
+describe('the send latch is per-session, and its readers are exhaustively pinned (T091)', () => {
+  /**
+   * The `ChatComposer` function body only. `AttachmentChip` sits above it in
+   * the same file and has its own unrelated `sending` PROP, which would
+   * otherwise be counted as a composer read.
+   */
+  function composerBody(): string {
+    const start = only('export function ChatComposer({');
+    return source.slice(start);
+  }
+
+  /**
+   * Bare `sending` used as a VALUE inside the composer body: not
+   * `sendingSessionId` / `sendingHere` / `setSendingSessionId` (all excluded by
+   * the word boundaries), not a JSX prop name (`sending=`) and not an object
+   * key with an explicit value (`sending:`). Single-quoted string literals are
+   * blanked first so the user-visible copy `'Starting Agent Host / sending…'`
+   * cannot inflate the count.
+   */
+  function bareGlobalReads(): string[] {
+    const withoutStrings = composerBody().replace(/'(?:[^'\\\n]|\\.)*'/g, "''");
+    return withoutStrings.match(/(?<![\w.])sending(?![\w:=])/g) ?? [];
+  }
+
+  it('sending has exactly one writer per edge, and the clear sits in the same finally as the in-flight refs', () => {
+    // Armed once, at the commit point, with THIS send's session id.
+    expect(offsets('setSendingSessionId(sessionId);')).toHaveLength(1);
+    // Released once. Two `setSendingSessionId(` call sites in the whole file,
+    // and no other writer of the state exists.
+    expect(offsets('setSendingSessionId(null);')).toHaveLength(1);
+    expect(offsets('setSendingSessionId(')).toHaveLength(2);
+    expect(
+      offsets('const [sendingSessionId, setSendingSessionId] = useState<string | null>(null);')
+    ).toHaveLength(1);
+
+    // The clear belongs to the SAME `finally` block that clears the two
+    // in-flight refs — the three describe one fact, and a path that clears one
+    // without the others puts the affordances out of step with the dispatch
+    // guard. Pinned as adjacency (within one short block), not as a line number.
+    const refClear = only('inFlightSessionIdRef.current = null;');
+    const latchClear = only('setSendingSessionId(null);');
+    expect(latchClear).toBeGreaterThan(refClear);
+    expect(latchClear - refClear).toBeLessThan(500);
+    // Nothing between them re-opens the latch or the ref.
+    const between = source.slice(refClear, latchClear);
+    expect(between).not.toContain('inFlightRef.current = true;');
+    expect(between).not.toContain('setSendingSessionId(sessionId);');
+  });
+
+  it('derives both flags from the one latch, and never confuses a null session for a match', () => {
+    expect(source).toContain('const sending = sendingSessionId !== null;');
+    // The explicit null check is load-bearing: with no session selected and no
+    // send in flight, a bare `sendingSessionId === activeSessionId` is
+    // `null === null`, i.e. "this session is sending" for a session that does
+    // not exist.
+    expect(source).toContain(
+      'const sendingHere = sendingSessionId !== null && sendingSessionId === activeSessionId;'
+    );
+    expect(source).toContain(
+      'const otherSendInFlight = sendingSessionId !== null && sendingSessionId !== activeSessionId;'
+    );
+  });
+
+  it('useQueueRelease is still given the GLOBAL sending flag', () => {
+    // The release effect ends in `runSend`, which refuses to start while the
+    // composer's single send slot is taken and returns `'skipped'` — an outcome
+    // that arms no pause. A per-session value here would spin take/restore.
+    const hook = source.slice(
+      only('useQueueRelease({'),
+      only('isInFlight: () => inFlightRef.current,')
+    );
+    expect(hook).toContain('sending,');
+    expect(hook).not.toContain('sendingHere');
+  });
+
+  it('the other two global readers are the send dispatch and Retry, and nothing else', () => {
+    // `decideSendAction`: a keystroke aimed at another session must ENQUEUE,
+    // not be dispatched into a closed latch and silently skipped.
+    const dispatch = source.slice(
+      only('const action = decideSendAction({'),
+      only("if (action === 'blocked') return;")
+    );
+    expect(dispatch).toContain('sending,');
+    expect(dispatch).not.toContain('sendingHere');
+    // `canRetry`: Retry re-enters `runSend`, so the same latch blocks it.
+    expect(source).toContain('!sending &&');
+
+    // Exhaustive: the declaration plus exactly three value reads. Anything
+    // else reading the global flag is a presentation bug waiting for a second
+    // session to show up.
+    expect(bareGlobalReads()).toHaveLength(4);
+  });
+
+  it('every user-facing reader takes the per-session flag', () => {
+    for (const reader of [
+      // Stop / the send gate that hangs off it.
+      'const canStop = busy || sendingHere;',
+      // The create-handshake placeholder.
+      'const isCreatingSession = sendingHere && !hostBound && activeSession?.runtimeIdentity == null;',
+      // The composer status line.
+      ': sendingHere',
+      // Attachment chips dim while THEIR turn is going out.
+      'sending={sendingHere}',
+      // The textarea placeholder.
+      'sending: sendingHere,',
+      // Model/effort trigger lock.
+      'disabled={disabled || busy || sendingHere}',
+      // Permission tier lock.
+      'turnActive={busy || sendingHere}',
+    ]) {
+      expect(source, `user-facing reader missing: ${reader}`).toContain(reader);
+    }
+    // Two target-bar instances (empty mode and session mode) and the chip.
+    expect(offsets('sending={sendingHere}')).toHaveLength(3);
+    // `sending: sendingHere,` covers the placeholder and deriveActionButtons.
+    expect(offsets('sending: sendingHere,')).toHaveLength(2);
+    // The stale global forms must not come back through any door.
+    for (const stale of [
+      'const canStop = busy || sending;',
+      'const isCreatingSession = sending &&',
+      'sending={sending}',
+      'turnActive={busy || sending}',
+      'disabled={disabled || busy || sending}',
+    ]) {
+      expect(source, `stale global reader present: ${stale}`).not.toContain(stale);
+    }
+  });
+
+  it('tells deriveActionButtons about a send that belongs to another session', () => {
+    const derive = source.slice(
+      only('const actionButtonSpecs = deriveActionButtons({'),
+      only('const actionButtons = (')
+    );
+    expect(derive).toContain('sending: sendingHere,');
+    expect(derive).toContain('otherSendInFlight,');
   });
 });
 

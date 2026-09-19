@@ -11,8 +11,11 @@ import {
   materializeForkedChatSession,
   materializeIndexedPiChatSession,
   retargetChatSession,
+  stopChatSession,
 } from '../chatSessionActions';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '../chatSessions';
+import { isFreshEmptySession } from '../sessionFreshness';
+import { useTurnSendStatusStore } from '../turnSendStatus';
 
 type ChatSessionCreatePayload = {
   sessionId: string;
@@ -56,7 +59,30 @@ beforeEach(() => {
     pendingPermissions: [],
     pendingQuestions: [],
   });
+  useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReply: null });
 });
+
+/**
+ * T091 — arm the turn-send slot the way `ChatComposer.runSend` does at its
+ * commit point. Goes through the store's own `begin` rather than a hand-built
+ * `setState`, so the test cannot arm a shape production never produces (the
+ * slot carries an ownership token these tests have no business minting).
+ */
+function armSendInFlight(sessionId: string): void {
+  useTurnSendStatusStore.getState().begin(
+    {
+      sessionId,
+      phase: 'handshake',
+      elapsedSeconds: 0,
+      turnStartedAtMs: 0,
+      budgetMs: 1000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+      promptChars: 4,
+    },
+    null
+  );
+}
 
 describe('materializeForkedChatSession', () => {
   it('adds, binds, and selects an indexed Pi fork without copying source transient state', () => {
@@ -440,6 +466,101 @@ describe('createOrReuseChatSessionOnWorkspace (idempotent New button, A/B/C tier
     expect(result).not.toBeNull();
     expect(useChatSessionsStore.getState().sessions).toHaveLength(1);
   });
+
+  /**
+   * T091, field repro A-b (2026-09-19) — THE acceptance point for this task.
+   *
+   * Click Send, then click New 0.7s later. The Host has not answered yet, so
+   * the session the send belongs to still satisfies every clause of
+   * `isFreshEmptySession`: zero messages, never host-bound, status still
+   * `idle`, title still `New chat`. The reuse branch therefore fired,
+   * `planTargetChange` answered `same-workspace`, and the click did NOTHING —
+   * no new session, no navigation, no message. A second later the session the
+   * user believed they had left started streaming in front of them. The
+   * handshake window measured 1–3.5s on a live gateway, which is exactly long
+   * enough to be the common case rather than a race.
+   */
+  it('[A-b] creates a new session when the active one has a send in flight, even though it still looks fresh', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const sending = makeSession({
+      id: 'sending',
+      workspaceId: 'ws-a',
+      projectId: 'proj-a',
+      title: 'New chat', // still a placeholder
+      status: 'idle', // the Host has not answered yet
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [sending],
+      activeSessionId: 'sending',
+      messages: {}, // no echo yet either
+      hostBoundSessionIds: [],
+    });
+    // Everything except the in-flight send says "fresh".
+    expect(isFreshEmptySession(useChatSessionsStore.getState(), 'sending')).toBe(true);
+
+    armSendInFlight('sending');
+    const result = createOrReuseChatSessionOnWorkspace('ws-a');
+
+    const state = useChatSessionsStore.getState();
+    expect(result).not.toBe('sending');
+    expect(state.sessions).toHaveLength(2);
+    expect(state.activeSessionId).toBe(result);
+    // The committed session is left completely alone — same reference, and it
+    // keeps its own workspace binding (the retarget branch must not have run).
+    expect(state.sessions.find((item) => item.id === 'sending')).toBe(sending);
+  });
+
+  it('[A-b] the in-flight escape hatch is scoped: another session’s send does not disable reuse', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const fresh = makeSession({
+      id: 'fresh',
+      workspaceId: 'ws-a',
+      projectId: 'proj-a',
+      title: 'New chat',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [fresh],
+      activeSessionId: 'fresh',
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+
+    // A send is in flight, but for a session that is not the active one.
+    armSendInFlight('somebody-else');
+    const result = createOrReuseChatSessionOnWorkspace('ws-a');
+
+    // Unchanged tier-A behaviour: stay put, write nothing.
+    expect(result).toBe('fresh');
+    expect(useChatSessionsStore.getState().sessions).toHaveLength(1);
+  });
+
+  it('[A-b] a finished send releases the slot, so reuse works again', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const fresh = makeSession({
+      id: 'fresh',
+      workspaceId: 'ws-a',
+      projectId: 'proj-a',
+      title: 'New chat',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [fresh],
+      activeSessionId: 'fresh',
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+
+    armSendInFlight('fresh');
+    const owner = useTurnSendStatusStore.getState().status?.owner;
+    expect(owner).toBeDefined();
+    // `runSend`'s `finally`.
+    useTurnSendStatusStore.getState().end(owner as number);
+
+    expect(createOrReuseChatSessionOnWorkspace('ws-a')).toBe('fresh');
+    expect(useChatSessionsStore.getState().sessions).toHaveLength(1);
+  });
 });
 
 describe('createOrReuseUnboundChatSession (idempotent New button — unbound branch)', () => {
@@ -564,6 +685,96 @@ describe('createOrReuseUnboundChatSession (idempotent New button — unbound bra
     const state = useChatSessionsStore.getState();
     expect(result).not.toBe('running-unbound');
     expect(state.sessions).toHaveLength(2);
+  });
+
+  /** T091 — the unbound branch carries the same escape hatch as the bound one. */
+  it('[A-b] creates a new unbound session when the active one has a send in flight', () => {
+    const sendingUnbound = makeSession({
+      id: 'sending-unbound',
+      workspaceId: '',
+      projectId: '',
+      title: 'New chat',
+      status: 'idle',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [],
+      sessions: [sendingUnbound],
+      activeSessionId: 'sending-unbound',
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+    expect(isFreshEmptySession(useChatSessionsStore.getState(), 'sending-unbound')).toBe(true);
+
+    armSendInFlight('sending-unbound');
+    const result = createOrReuseUnboundChatSession();
+
+    const state = useChatSessionsStore.getState();
+    expect(result).not.toBe('sending-unbound');
+    expect(state.sessions).toHaveLength(2);
+    expect(state.activeSessionId).toBe(result);
+  });
+});
+
+/**
+ * T091, field repro A-c (2026-09-19) — Stop stopped the wrong session.
+ *
+ * `stopActiveSession` re-resolves `activeSessionId` for itself, so every caller
+ * that knew better (the composer's `inFlightSessionIdRef`, the timeline's
+ * `sessionId` prop) silently handed that knowledge back. After creating a new
+ * chat mid-handshake, `activeSessionId` names the new empty session and the
+ * abort went there while the real turn kept running.
+ */
+describe('stopChatSession (T091)', () => {
+  function stubChatStop(stop: (args: { sessionId: string }) => Promise<unknown>) {
+    (globalThis as { window?: unknown }).window = {
+      electronAPI: { chat: { stop } },
+    } as unknown as typeof globalThis.window;
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, 'window');
+  });
+
+  it('stops the NAMED session, not the active one', async () => {
+    const stop = vi.fn().mockResolvedValue(undefined);
+    stubChatStop(stop);
+    useChatSessionsStore.setState({
+      sessions: [makeSession({ id: 'in-flight' }), makeSession({ id: 'brand-new' })],
+      // The exact divergence the field repro produced: the user clicked New
+      // during the handshake, so the active session is the empty one.
+      activeSessionId: 'brand-new',
+      lastError: 'stale',
+    });
+
+    await stopChatSession('in-flight');
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalledWith({ sessionId: 'in-flight' });
+    expect(useChatSessionsStore.getState().lastError).toBeNull();
+  });
+
+  it('no-ops on a null/empty session id instead of reaching for the active one', async () => {
+    const stop = vi.fn().mockResolvedValue(undefined);
+    stubChatStop(stop);
+    useChatSessionsStore.setState({
+      sessions: [makeSession({ id: 's1' })],
+      activeSessionId: 's1',
+    });
+
+    await stopChatSession(null);
+    await stopChatSession('');
+    await stopChatSession(undefined);
+
+    expect(stop).not.toHaveBeenCalled();
+  });
+
+  it('surfaces an IPC failure as lastError, like the store action it replaces', async () => {
+    stubChatStop(vi.fn().mockRejectedValue(new Error('worker gone')));
+    useChatSessionsStore.setState({ sessions: [makeSession({ id: 's1' })], activeSessionId: 's1' });
+
+    await stopChatSession('s1');
+
+    expect(useChatSessionsStore.getState().lastError).toBe('worker gone');
   });
 });
 

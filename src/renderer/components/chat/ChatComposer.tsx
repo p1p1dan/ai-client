@@ -29,6 +29,7 @@ import {
   applyAutoSessionTitle,
   createChatSessionInCurrentDirectory,
   createUnboundChatSession,
+  stopChatSession,
 } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
@@ -359,7 +360,39 @@ function deadlineAt(durationMs: number): () => boolean {
 export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: ChatComposerProps) {
   const { t } = useI18n();
   const [value, setValue] = useState('');
-  const [sending, setSending] = useState(false);
+  /**
+   * T091: the pre-first-token send latch, now carrying WHICH session it belongs
+   * to instead of a bare boolean.
+   *
+   * One composer is mounted at a time and it serves whichever session is active,
+   * but a send outlives a session switch: `runSend` holds this latch from its
+   * commit point until the Host answers (1–3.5s on a create handshake, longer on
+   * a slow gateway), and the user is free to click New or pick another chat in
+   * that window. A boolean could not tell "this session is sending" from "some
+   * session is sending", so every reader got the first meaning and half of them
+   * needed the second — which is how a brand-new empty chat came to render a
+   * live "Stop" for a turn it does not own.
+   *
+   * Two derived flags replace it, and which one a reader takes is the whole
+   * decision: `sending` below is the GLOBAL latch (only the three dispatch-layer
+   * readers may use it — see its comment), `sendingHere` further down is the
+   * per-session one every user-facing affordance reads.
+   */
+  const [sendingSessionId, setSendingSessionId] = useState<string | null>(null);
+  /**
+   * The GLOBAL latch: a send is in flight SOMEWHERE. Exactly three readers, and
+   * each of them is dispatch-layer, not presentation:
+   *  - `decideSendAction` — the composer can only run one send at a time
+   *    (`runSend` bails on `inFlightRef.current`), so a keystroke aimed at
+   *    another session must ENQUEUE rather than be silently skipped;
+   *  - `useQueueRelease` — same reason, from the other side: a per-session value
+   *    here would let a second session's queue release into a closed latch,
+   *    which comes back `'skipped'` (no pause, no retry) and spins
+   *    take/restore;
+   *  - `canRetry` — Retry re-enters `runSend`, so it is blocked by the same
+   *    latch for the same reason.
+   */
+  const sending = sendingSessionId !== null;
   // T-19 fix review (R5): reverted from batch 3's queue-based "failure
   // payload lives on queueEntries[0].failure" back to a component-local
   // snapshot — batch 3's form let a swap-edit on a failed head clear
@@ -510,8 +543,25 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const [mentionIndex, setMentionIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
-  const stopActiveSession = useChatSessionsStore((state) => state.stopActiveSession);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
+  /**
+   * T091: the send in flight belongs to the session on screen. This is what
+   * every user-facing affordance reads — Stop, the placeholder, the status line,
+   * the model/permission locks, the target bar, the attachment chips.
+   *
+   * Spelled with the explicit null check rather than a bare `===`: with no
+   * session selected AND no send in flight both sides are `null`, and
+   * `null === null` would claim this (non-existent) session is sending.
+   */
+  const sendingHere = sendingSessionId !== null && sendingSessionId === activeSessionId;
+  /**
+   * The complement: a send is in flight, but for a DIFFERENT session. The one
+   * state the old boolean could not express, and the one the user meets by
+   * clicking New mid-handshake. `deriveActionButtons` turns it into the
+   * enqueue-only stack, which is what the dispatch layer will actually do with
+   * the next keystroke (`decideSendAction` reads the global latch).
+   */
+  const otherSendInFlight = sendingSessionId !== null && sendingSessionId !== activeSessionId;
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
   const lastError = useChatSessionsStore((state) => {
@@ -603,7 +653,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // A Send in flight must also be abortable: the SDK stream can hang (e.g.
   // gateway revoked key) without ever flipping session.status to running, and
   // the user needs Stop during the 45s wait, not just when store says busy.
-  const canStop = busy || sending;
+  const canStop = busy || sendingHere;
   // Round-2 P0: THIS session has no live Host registry entry yet, so a send
   // right now would take runSend's 'create' preamble (close → sleep(120) →
   // createSession → wait up to 5s for session.created) instead of the
@@ -613,7 +663,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const hostBound = useChatSessionsStore((state) =>
     activeSessionId ? state.hostBoundSessionIds.includes(activeSessionId) : false
   );
-  const isCreatingSession = sending && !hostBound && activeSession?.runtimeIdentity == null;
+  const isCreatingSession = sendingHere && !hostBound && activeSession?.runtimeIdentity == null;
   // `cwd` (resolveActiveTarget's derived value, not `activeWorkspace?.path`
   // directly): it already folds "no workspace" and "workspace present but
   // not targetable (demo placeholder's empty path)" into a single null, so
@@ -783,7 +833,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           ? t(MODEL_MISSING_ERROR_VIEW.hint)
           : lastError
             ? `Error: ${lastError}`
-            : sending
+            : sendingHere
               ? 'Starting Agent Host / sending…'
               : busy
                 ? 'Agent Host running — use Stop to abort'
@@ -1459,7 +1509,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       return outcome;
     };
 
-    setSending(true);
+    // T091: the latch is armed with THIS send's session id, not a bare `true`.
+    // `sessionId` is the one resolved above — the active session, or the one
+    // this very send just created — so a session switch during the handshake
+    // moves the affordances off this composer's Stop instead of leaving a new,
+    // empty chat wearing another turn's controls.
+    setSendingSessionId(sessionId);
     // T-31 §3: publish this turn's status for the turn head. Attachment count
     // and bytes are taken from `committed`-to-be `drafts`, NOT from the live
     // composer state the old status line read: the drafts were removed from
@@ -2410,7 +2465,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       inFlightRef.current = false;
       inFlightSessionIdRef.current = null;
       unsubEvents();
-      setSending(false);
+      // T091: the latch's ONLY release, in the same `finally` as the two refs
+      // above — the three describe one fact ("a send is in flight, and it is
+      // this session's") and any path that clears one without the others puts
+      // the composer's affordances out of step with its own dispatch guard.
+      setSendingSessionId(null);
     }
   };
 
@@ -2422,6 +2481,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     sessionId: activeSessionId,
     hasTarget: hasSendTarget,
     disabled: Boolean(disabled),
+    // T091: the GLOBAL latch, deliberately — NOT `sendingHere`. The release
+    // effect ends in `runEntry -> runSend`, and `runSend` refuses to start
+    // while the composer's single send slot is taken (`inFlightRef.current`),
+    // returning `'skipped'`. A per-session value here would let THIS session's
+    // queue release into that closed slot: `releaseQueueHead` takes the head,
+    // gets `'skipped'` back, restores it, and the next render tries again —
+    // a take/restore spin that `'skipped'` cannot even pause (only `'rejected'`
+    // + `'release'` arms `shouldPauseQueueOnRejection`). Holding on the global
+    // latch is what makes the queue wait for the slot instead of fighting it.
     sending,
     isInFlight: () => inFlightRef.current,
     status: activeSession?.status ?? 'idle',
@@ -2602,21 +2670,30 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   });
 
   const handleStop = () => {
+    // F6: invalidate any in-flight runSend's session_busy backoff loop so a
+    // queued resend cannot fire after this explicit Stop already told the
+    // Host to abort the turn the user was looking at. Bumped first and
+    // synchronously, so an attempt mid-backoff notices on its next poll rather
+    // than waiting for the Host round-trip.
+    sendGenerationRef.current += 1;
     // T-19 decision 3.4: Stop means "not doing this right now", not "this
     // turn finished" — pause the queue so it does not auto-fire the next
     // entry the instant status settles back to idle/stopped. m10 fix: pause
     // the session actually in flight (`inFlightSessionIdRef`), not
     // `activeSessionId` — those can diverge when the user switches sessions
     // mid-send (see the ref's own comment for why).
-    const pauseTarget = inFlightSessionIdRef.current ?? activeSessionId;
-    if (pauseTarget) {
-      useMessageQueueStore.getState().pauseSession(pauseTarget);
-    }
-    // F6: invalidate any in-flight runSend's session_busy backoff loop so a
-    // queued resend cannot fire after this explicit Stop already told the
-    // Host to abort the turn the user was looking at.
-    sendGenerationRef.current += 1;
-    void stopActiveSession();
+    //
+    // T091: ONE target now drives both halves. The pause already used the
+    // in-flight session; the stop itself went through the store's
+    // `stopActiveSession`, which re-read `activeSessionId` and so aborted a
+    // DIFFERENT session than the one it had just paused. Clicking New during a
+    // handshake and then Stop therefore stopped the brand-new empty chat while
+    // the real turn kept running. `stopChatSession` takes the id, so the two
+    // can no longer disagree.
+    const stopTarget = inFlightSessionIdRef.current ?? activeSessionId;
+    if (!stopTarget) return;
+    useMessageQueueStore.getState().pauseSession(stopTarget);
+    void stopChatSession(stopTarget);
   };
 
   // T12-e: one derivation, two readers. `emptySurface` decides WHICH surface
@@ -2772,7 +2849,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           <AttachmentChip
             key={draft.id}
             draft={draft}
-            sending={sending}
+            sending={sendingHere}
             onRemove={attachments.removeDraft}
           />
         ))}
@@ -2867,7 +2944,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           mode,
           canSend,
           busy,
-          sending,
+          sending: sendingHere,
           hasSession: Boolean(activeSessionId),
           hasWorkspace: Boolean(activeWorkspace),
           hasCwd: Boolean(cwd),
@@ -2975,7 +3052,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       sessionId={activeSessionId}
       hostState={hostStatus.state}
       mode={mode}
-      disabled={disabled || busy || sending}
+      disabled={disabled || busy || sendingHere}
     />
   );
 
@@ -3005,10 +3082,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // `if (!canRetry) return`). A button that is visible must be clickable.
   const actionButtonSpecs = deriveActionButtons({
     status: activeSession?.status ?? 'idle',
-    sending,
+    sending: sendingHere,
     hasFailed: canRetry,
     hasDraftContent: Boolean(value.trim()) || attachments.drafts.length > 0,
     hasQueuedEntries: queuedCount > 0,
+    // T091: another session's send holds the composer's only send slot, so a
+    // keystroke here will be enqueued (`decideSendAction` reads the global
+    // latch). Say so, instead of offering a Send that silently becomes one.
+    otherSendInFlight,
   });
 
   const actionButtons = (
@@ -3086,9 +3167,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         mode={mode}
         disabled={disabled}
         // A running turn must lock the mode for its whole duration, not just
-        // the brief window a send request is in flight — `sending` alone
+        // the brief window a send request is in flight — the latch alone
         // falls back to false long before an approval card can appear.
-        turnActive={busy || sending}
+        // T091: the latch half is per-session, so another chat's turn no
+        // longer locks the tier picker on the one the user is looking at.
+        turnActive={busy || sendingHere}
       />
     ),
     // U06-b: renders nothing until the runtime reports occupancy (T38-a).
@@ -3155,7 +3238,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       {mode === 'empty' && (
         <ComposerTargetBar
           mode={mode}
-          sending={sending}
+          sending={sendingHere}
           disabled={disabled}
           onAddRepository={onAddRepository}
         />
@@ -3384,7 +3467,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       {mode === 'session' && (
         <ComposerTargetBar
           mode={mode}
-          sending={sending}
+          sending={sendingHere}
           disabled={disabled}
           onAddRepository={onAddRepository}
         />

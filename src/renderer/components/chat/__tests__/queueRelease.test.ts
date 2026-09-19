@@ -500,6 +500,150 @@ describe('deriveActionButtons', () => {
       }
     }
   });
+
+  /**
+   * T091 (field repro A-c, 2026-09-19) — clicking New while another session's
+   * send was mid-handshake produced a brand-new empty chat that rendered a live
+   * "Stop" and a disabled "enqueue", with no Send anywhere. The Stop was not
+   * merely decorative: `handleStop` read the store's `activeSessionId`, so
+   * pressing it aborted this empty session while the turn the user wanted
+   * stopped kept running.
+   *
+   * `sending` is per-session now, so the empty chat's own latch is false — and
+   * `otherSendInFlight` is what keeps the stack honest about what a keystroke
+   * here will actually do (`decideSendAction` enqueues while the composer's
+   * single send slot is taken).
+   */
+  it("another session's send in flight shows no Stop — the draft can only be enqueued", () => {
+    expect(
+      deriveActionButtons({
+        status: 'idle',
+        sending: false,
+        hasFailed: false,
+        hasDraftContent: true,
+        hasQueuedEntries: false,
+        otherSendInFlight: true,
+      })
+    ).toEqual([{ kind: 'enqueue', disabled: false }]);
+  });
+
+  it("another session's send in flight disables enqueue on an empty draft, like the queued case", () => {
+    expect(
+      deriveActionButtons({
+        status: 'idle',
+        sending: false,
+        hasFailed: false,
+        hasDraftContent: false,
+        hasQueuedEntries: false,
+        otherSendInFlight: true,
+      })
+    ).toEqual([{ kind: 'enqueue', disabled: true }]);
+  });
+
+  /**
+   * The other half of the same fix, and the reason the new branch sits AFTER
+   * `canStop`: the session that actually owns the in-flight send must keep its
+   * Stop. These two inputs are mutually exclusive in production (one latch, one
+   * session id), but the ordering is what guarantees it here.
+   */
+  it('the session actually in flight still gets Stop + enqueue', () => {
+    expect(
+      deriveActionButtons({
+        status: 'idle',
+        sending: true,
+        hasFailed: false,
+        hasDraftContent: true,
+        hasQueuedEntries: false,
+        otherSendInFlight: false,
+      })
+    ).toEqual([
+      { kind: 'stop', disabled: false },
+      { kind: 'enqueue', disabled: false },
+    ]);
+  });
+
+  it('omitting otherSendInFlight changes nothing — every pre-T091 caller keeps its stack', () => {
+    for (const status of ALL_STATUSES) {
+      for (const hasFailed of [true, false]) {
+        for (const hasQueuedEntries of [true, false]) {
+          const withoutField = deriveActionButtons({
+            status,
+            sending: false,
+            hasFailed,
+            hasDraftContent: true,
+            hasQueuedEntries,
+          });
+          const withFalse = deriveActionButtons({
+            status,
+            sending: false,
+            hasFailed,
+            hasDraftContent: true,
+            hasQueuedEntries,
+            otherSendInFlight: false,
+          });
+          expect(withoutField).toEqual(withFalse);
+        }
+      }
+    }
+  });
+
+  /**
+   * T091 widens the "retry and stop never share a render" property with the new
+   * axis. The enqueue-only branch contains neither kind, so it cannot break the
+   * property — but a future edit that returned, say, `[retry, enqueue]` there
+   * while a turn is running would, and this is what would catch it.
+   */
+  it('property: retry and stop never share a render, now across the otherSendInFlight axis too', () => {
+    for (const status of ALL_STATUSES) {
+      for (const hasFailed of [true, false]) {
+        for (const sending of [true, false]) {
+          for (const otherSendInFlight of [true, false]) {
+            for (const hasQueuedEntries of [true, false]) {
+              const kinds = deriveActionButtons({
+                status,
+                sending,
+                hasFailed,
+                hasDraftContent: true,
+                hasQueuedEntries,
+                otherSendInFlight,
+              }).map((button) => button.kind) as ActionButtonKind[];
+              expect(kinds.includes('retry') && kinds.includes('stop')).toBe(false);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  /**
+   * The dispatch-layer half of the same state, asserted here so the button and
+   * the action it promises are pinned side by side: while ANOTHER session holds
+   * the composer's send latch, pressing Enter on this session enqueues. If
+   * `decideSendAction` were ever given the per-session flag instead, this would
+   * answer `'send'`, `runSend` would bail on `inFlightRef.current` and return
+   * `'skipped'`, and the user's message would vanish with no error.
+   */
+  it("decideSendAction still enqueues while the latch is held by another session's send", () => {
+    expect(
+      decideSendAction(
+        baseSendAction({ busy: false, sending: true, inFlight: true, hasQueuedEntries: false })
+      )
+    ).toBe('enqueue');
+  });
+
+  /**
+   * And the queue's own release gate reads the same GLOBAL flag, for the same
+   * reason from the other side: a per-session value would let this session's
+   * queue release into a slot another send already holds, get `'skipped'` back
+   * (which arms no pause — see `shouldPauseQueueOnRejection`), restore the head
+   * and try again on the next render.
+   */
+  it("decideQueueRelease holds 'in-flight' on the GLOBAL sending flag, even on an idle session", () => {
+    expect(decideQueueRelease(baseRelease({ status: 'idle', sending: true }))).toEqual({
+      type: 'hold',
+      reason: 'in-flight',
+    });
+  });
 });
 
 function entry(overrides: Partial<QueuedMessage> = {}): QueuedMessage {

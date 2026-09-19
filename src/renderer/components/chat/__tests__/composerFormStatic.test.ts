@@ -374,11 +374,18 @@ describe('U12: permission bar slot is wired', () => {
    * reach this fact because no test in this suite mounts `ChatComposer` itself;
    * see `composerPermissions.test.ts` for the receiving prop's own lock
    * behaviour once it is true.
+   *
+   * T091: the latch is per-session now (`sendingHere`), which narrows the union
+   * further in exactly the right direction — a turn belonging to a DIFFERENT
+   * session must not lock this session's permission tier either. The rule the
+   * pin protects is unchanged: `busy` must still be in the union, because it is
+   * the half that stays true for the whole turn.
    */
-  it('feeds the permission slot the busy || sending union, not sending alone', () => {
+  it('feeds the permission slot the busy || sending union, not the latch alone', () => {
     const source = readStripped(join(CHAT_DIR, 'ChatComposer.tsx'));
-    expect(source).toContain('turnActive={busy || sending}');
+    expect(source).toContain('turnActive={busy || sendingHere}');
     expect(source).not.toContain('turnActive={sending}');
+    expect(source).not.toContain('turnActive={sendingHere}');
   });
 });
 

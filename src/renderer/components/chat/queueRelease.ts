@@ -645,7 +645,15 @@ export function isRunningStatus(status: SessionRuntimeStatus): boolean {
 
 export interface DeriveActionButtonsInput {
   status: SessionRuntimeStatus;
-  /** The Composer's pre-first-token latch — also makes Stop available (`canStop = busy || sending`). */
+  /**
+   * The Composer's pre-first-token latch FOR THIS SESSION — also makes Stop
+   * available (`canStop = busy || sendingHere`).
+   *
+   * T091: per-session, not global. It used to be the composer's one `sending`
+   * flag, which is true while ANY session's send is in flight, so a brand-new
+   * chat created during another session's handshake rendered a live "Stop" that
+   * would have stopped a turn it does not own (and hid its own Send).
+   */
   sending: boolean;
   /** Last turn on this session ended in failure (explicit `failed` or the Composer's fallback `retryable`). */
   hasFailed: boolean;
@@ -653,6 +661,20 @@ export interface DeriveActionButtonsInput {
   hasDraftContent: boolean;
   /** A non-empty queue keeps FIFO ownership even after the runtime settles idle. */
   hasQueuedEntries: boolean;
+  /**
+   * T091: a send belonging to a DIFFERENT session is in flight.
+   *
+   * The composer's send latch is global by construction (one mounted composer,
+   * one send at a time), so while another session's send is in flight
+   * `decideSendAction` answers `'enqueue'` for THIS session too — its text goes
+   * on this session's queue and releases when the latch opens. This field is
+   * what makes the button say so. Without it the stack offered `send`, which is
+   * a promise the dispatch cannot keep: the click enqueues either way, and the
+   * user is told afterwards.
+   *
+   * Optional so every existing caller keeps its exact behaviour when omitted.
+   */
+  otherSendInFlight?: boolean;
 }
 
 /**
@@ -660,6 +682,10 @@ export interface DeriveActionButtonsInput {
  * mutually exclusive by construction here — `canRetry` in `ChatComposer.tsx`
  * already requires `!busy && !sending`, so the two can never occupy the same
  * render, which the test file asserts as a property over all nine statuses.
+ *
+ * T091 widened that property to a third axis: `otherSendInFlight` returns the
+ * enqueue-only stack, which contains neither `retry` nor `stop`, so it cannot
+ * put the two on screen together either.
  */
 export function deriveActionButtons(input: DeriveActionButtonsInput): readonly ActionButtonSpec[] {
   const canStop = isRunningStatus(input.status) || input.sending;
@@ -669,7 +695,10 @@ export function deriveActionButtons(input: DeriveActionButtonsInput): readonly A
       { kind: 'enqueue', disabled: !input.hasDraftContent },
     ];
   }
-  if (input.hasQueuedEntries) {
+  // T091: checked AFTER `canStop` so the session that actually owns the
+  // in-flight send still gets its Stop — `sending` above is already per-session,
+  // and these two are mutually exclusive by construction.
+  if (input.hasQueuedEntries || input.otherSendInFlight === true) {
     return [{ kind: 'enqueue', disabled: !input.hasDraftContent }];
   }
   if (input.hasFailed) {

@@ -8,6 +8,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { decideTargetChange } from '../composerTarget';
 import { stripComments } from './stripComments';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -93,6 +94,69 @@ describe('dependency direction', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * T091 — `decideTargetChange` blocks on a send, and it must be THIS session's.
+ *
+ * The rule itself is unchanged and correct: you cannot re-point a chat at a
+ * different folder while its own turn is being dispatched. What was wrong was
+ * the input. `ChatComposer`'s latch used to be a bare boolean that is true while
+ * ANY session's send is in flight, so a brand-new chat created during another
+ * session's handshake had its whole target bar frozen — folder picker, branch
+ * picker, everything — over a turn it has nothing to do with.
+ *
+ * The decision function has no way to notice: it is handed one boolean and must
+ * trust it. So the guard has to live on the WIRING, and it is a chain of three
+ * hops (composer -> ComposerTargetBar -> useComposerTarget -> decideTargetChange)
+ * that no single unit test spans.
+ */
+describe('the target-change block is scoped to this session (T091)', () => {
+  const composerPath = path.join(CHAT_DIR, 'ChatComposer.tsx');
+  const composer = stripComments(readFileSync(composerPath, 'utf8'), composerPath);
+  const hookPath = path.join(CHAT_DIR, 'useComposerTarget.ts');
+  const hook = stripComments(readFileSync(hookPath, 'utf8'), hookPath);
+
+  it('the target bar is fed the per-session latch, in both composer modes', () => {
+    // Two instances, one per mode (empty / session) — never both at once, but
+    // both must be scoped.
+    expect(composer.match(/sending=\{sendingHere\}/g) ?? []).toHaveLength(3);
+    expect(composer).not.toContain('sending={sending}');
+  });
+
+  it('useComposerTarget forwards that value into the rule without widening it', () => {
+    // Both consumers of the three-tier rule inside the hook — the render-time
+    // `blocked` derivation and the click-time plan — take the SAME input, so
+    // the bar cannot look enabled and then refuse the click (or the reverse).
+    expect(hook.match(/sending: input\.sending,/g) ?? []).toHaveLength(2);
+    // No second source: the hook must not reach into a store for a send flag
+    // of its own.
+    expect(hook).not.toContain('sendInFlightSessionId');
+    expect(hook).not.toContain('useTurnSendStatusStore');
+  });
+
+  it('the /new slash command asks the same question, about the same session', () => {
+    // The one reader that was already correct before T091, and the shape every
+    // other one now matches: the synchronous latch AND an identity check
+    // against the session the command was typed into.
+    expect(composer).toContain(
+      'inFlightRef.current && inFlightSessionIdRef.current === activeSessionId'
+    );
+  });
+
+  it('a send belonging to ANOTHER session leaves this one retargetable', () => {
+    // What the wiring above buys, stated as behaviour: the fresh empty chat the
+    // user just created is idle, has no messages and is not host-bound, so with
+    // `sending: false` (the other session owns that send) it retargets. Passing
+    // the global latch here — the pre-T091 wiring — is the `blocked` row below,
+    // i.e. a target bar frozen by someone else's turn.
+    expect(
+      decideTargetChange({ status: 'idle', messageCount: 0, hostBound: false, sending: false })
+    ).toBe('retarget');
+    expect(
+      decideTargetChange({ status: 'idle', messageCount: 0, hostBound: false, sending: true })
+    ).toBe('blocked');
   });
 });
 

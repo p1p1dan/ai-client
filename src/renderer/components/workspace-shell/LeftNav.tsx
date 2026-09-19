@@ -283,7 +283,9 @@ export function LeftNav({
   // Cheap at sidebar scale; a useMemo would be defeated by the per-render
   // `now` anyway (Recent's 48h window needs a fresh clock every render).
   const now = Date.now();
-  const folders = buildSidebarFolders({ projects, workspaces, sessions, query });
+  // T091: `activeSessionId` is passed to every list derivation so a title query
+  // never hides the conversation that is currently open — see `matchesQuery`.
+  const folders = buildSidebarFolders({ projects, workspaces, sessions, query, activeSessionId });
   // U13: rendered next to the repository folders but deliberately NOT part of
   // `folders` — it has no workspace to create a chat in, so letting the "New"
   // target resolver see it would only produce a disabled button pointing at a
@@ -293,8 +295,20 @@ export function LeftNav({
   // sidebar costs nothing.
   useFolderDiffStatsPolling(folders, workspaces);
   const diffStatsByPath = useWorktreeActivityStore((state) => state.diffStats);
-  const unboundFolder = buildUnboundFolder({ sessions, name: t('Temporary chats'), query });
-  const recent = deriveRecentRows({ sessions, workspaces, now, showAll: recentShowAll, query });
+  const unboundFolder = buildUnboundFolder({
+    sessions,
+    name: t('Temporary chats'),
+    query,
+    activeSessionId,
+  });
+  const recent = deriveRecentRows({
+    sessions,
+    workspaces,
+    now,
+    showAll: recentShowAll,
+    query,
+    activeSessionId,
+  });
   const queryActive = query.trim().length > 0;
   // While searching, folders with zero hits collapse away instead of leaving
   // a wall of empty headers; without a query every folder stays visible so

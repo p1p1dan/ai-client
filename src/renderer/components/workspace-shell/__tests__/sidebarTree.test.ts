@@ -572,6 +572,186 @@ describe('buildUnboundFolder (U13)', () => {
   });
 });
 
+/**
+ * T091, field repro B(b) and the temporary-chat half of it (2026-09-19).
+ *
+ * A temporary chat created in THIS run carries no `unbound` marker.
+ * `createUnboundChatSession` deliberately withholds it: the scratch directory
+ * does not exist until the first send allocates it, and writing a guessed
+ * `workspacePath` is the fake-cwd failure U13 exists to prevent. All it has is
+ * `workspaceId: ''`.
+ *
+ * All three derivations keyed on the marker alone, so such a chat appeared in
+ * NO part of the sidebar — not the Temporary group, not Recent, not a
+ * repository folder — until a send wrote the session index and the sidebar
+ * remounted. From the user's side that is indistinguishable from "the New
+ * button did nothing".
+ */
+describe('a live-only temporary chat is visible before its first send (T091)', () => {
+  /** Exactly what `createUnboundChatSession` produces: no marker, no workspace. */
+  const liveOnly = session({ id: 'live-temp', workspaceId: '', projectId: '', title: 'New chat' });
+
+  it('appears in the Temporary chats group', () => {
+    const folder = buildUnboundFolder({ sessions: [liveOnly], name: 'Temporary' });
+    expect(folder?.rows.map((row) => row.sessionId)).toEqual(['live-temp']);
+    expect(folder?.rows[0]?.chip?.label).toBe('temporary');
+  });
+
+  it('appears in Recent', () => {
+    const { rows } = deriveRecentRows({ sessions: [liveOnly], workspaces, now: NOW });
+    expect(rows.map((row) => row.sessionId)).toEqual(['live-temp']);
+    expect(rows[0]?.chip?.label).toBe('temporary');
+  });
+
+  it('is never duplicated into a repository folder', () => {
+    const folders = buildSidebarFolders({ projects, workspaces, sessions: [liveOnly] });
+    expect(folders.flatMap((folder) => folder.rows)).toEqual([]);
+  });
+
+  it('a genuine orphan — an unknown, NON-EMPTY workspaceId — is still dropped everywhere', () => {
+    const orphan = session({ id: 'orphan', workspaceId: 'ws-removed' });
+    expect(buildUnboundFolder({ sessions: [orphan], name: 'Temporary' })).toBeNull();
+    expect(deriveRecentRows({ sessions: [orphan], workspaces, now: NOW }).rows).toEqual([]);
+    expect(
+      buildSidebarFolders({ projects, workspaces, sessions: [orphan] }).flatMap(
+        (folder) => folder.rows
+      )
+    ).toEqual([]);
+  });
+
+  it('a whitespace-only workspaceId counts as unbound, not as an orphan', () => {
+    // The store writes `''`, but a merge/import path trimming to whitespace
+    // would otherwise fall into the orphan bucket and vanish.
+    const blank = session({ id: 'blank', workspaceId: '   ' });
+    expect(buildUnboundFolder({ sessions: [blank], name: 'Temporary' })?.rows).toHaveLength(1);
+  });
+});
+
+/**
+ * T091, field repro B(b) — the search box hid the row the click just created.
+ *
+ * With a query in the sidebar's search field, a brand-new chat is titled
+ * `New chat`, does not match, and is filtered out of every group. The user
+ * clicks New, the main pane switches to an empty chat, and the sidebar shows
+ * nothing new — so the button looks broken. A query is a filter over a list,
+ * not a statement about which conversation is open, so the ACTIVE session is
+ * exempt from it.
+ */
+describe('the active session is never filtered out by a title query (T091)', () => {
+  it('survives a non-matching query in a repository folder', () => {
+    const sessions = [
+      session({ id: 'new', title: 'New chat' }),
+      session({ id: 'match', title: 'Draft plan' }),
+    ];
+    const withoutActive = buildSidebarFolders({ projects, workspaces, sessions, query: 'draft' });
+    expect(withoutActive.flatMap((f) => f.rows).map((row) => row.sessionId)).toEqual(['match']);
+
+    const withActive = buildSidebarFolders({
+      projects,
+      workspaces,
+      sessions,
+      query: 'draft',
+      activeSessionId: 'new',
+    });
+    expect(
+      withActive
+        .flatMap((f) => f.rows)
+        .map((row) => row.sessionId)
+        .sort()
+    ).toEqual(['match', 'new']);
+  });
+
+  it('survives a non-matching query in the Temporary group', () => {
+    const sessions = [
+      session({ id: 'new', title: 'New chat', workspaceId: '' }),
+      session({ id: 'match', title: 'Draft plan', workspaceId: '' }),
+    ];
+    expect(
+      buildUnboundFolder({ sessions, name: 'Temporary', query: 'draft' })?.rows.map(
+        (row) => row.sessionId
+      )
+    ).toEqual(['match']);
+    expect(
+      buildUnboundFolder({
+        sessions,
+        name: 'Temporary',
+        query: 'draft',
+        activeSessionId: 'new',
+      })
+        ?.rows.map((row) => row.sessionId)
+        .sort()
+    ).toEqual(['match', 'new']);
+  });
+
+  it('can bring the Temporary group back from null on its own', () => {
+    // The group collapses entirely when no row survives; the active chat must
+    // be able to keep it on screen.
+    const sessions = [session({ id: 'new', title: 'New chat', workspaceId: '' })];
+    expect(buildUnboundFolder({ sessions, name: 'Temporary', query: 'zzz' })).toBeNull();
+    expect(
+      buildUnboundFolder({ sessions, name: 'Temporary', query: 'zzz', activeSessionId: 'new' })
+        ?.rows
+    ).toHaveLength(1);
+  });
+
+  it('survives a non-matching query in Recent', () => {
+    const sessions = [
+      session({ id: 'new', title: 'New chat' }),
+      session({ id: 'match', title: 'Draft plan' }),
+    ];
+    expect(
+      deriveRecentRows({ sessions, workspaces, now: NOW, query: 'draft' }).rows.map(
+        (row) => row.sessionId
+      )
+    ).toEqual(['match']);
+    expect(
+      deriveRecentRows({
+        sessions,
+        workspaces,
+        now: NOW,
+        query: 'draft',
+        activeSessionId: 'new',
+      })
+        .rows.map((row) => row.sessionId)
+        .sort()
+    ).toEqual(['match', 'new']);
+  });
+
+  it('exempts only the query — an orphan active session is still dropped', () => {
+    // The exemption is about SEARCH, not about validity. A session whose
+    // workspace no longer exists has nowhere to render, active or not.
+    const orphan = session({ id: 'orphan', title: 'New chat', workspaceId: 'ws-removed' });
+    expect(
+      buildSidebarFolders({
+        projects,
+        workspaces,
+        sessions: [orphan],
+        query: 'zzz',
+        activeSessionId: 'orphan',
+      }).flatMap((folder) => folder.rows)
+    ).toEqual([]);
+  });
+
+  it('omitting activeSessionId leaves every derivation exactly as it was', () => {
+    const sessions = [
+      session({ id: 'a', title: 'Draft plan' }),
+      session({ id: 'b', title: 'Other' }),
+      session({ id: 'c', title: 'Draft notes', workspaceId: '' }),
+    ];
+    for (const activeSessionId of [undefined, null]) {
+      expect(
+        buildSidebarFolders({ projects, workspaces, sessions, query: 'draft', activeSessionId })
+      ).toEqual(buildSidebarFolders({ projects, workspaces, sessions, query: 'draft' }));
+      expect(
+        buildUnboundFolder({ sessions, name: 'Temporary', query: 'draft', activeSessionId })
+      ).toEqual(buildUnboundFolder({ sessions, name: 'Temporary', query: 'draft' }));
+      expect(
+        deriveRecentRows({ sessions, workspaces, now: NOW, query: 'draft', activeSessionId })
+      ).toEqual(deriveRecentRows({ sessions, workspaces, now: NOW, query: 'draft' }));
+    }
+  });
+});
+
 describe('formatRelativeAge', () => {
   it('formats compact ages per range', () => {
     expect(formatRelativeAge(NOW - 5_000, NOW)).toBe('now');
