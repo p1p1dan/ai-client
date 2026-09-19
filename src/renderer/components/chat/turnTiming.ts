@@ -11,12 +11,13 @@ import { classifyTool, pairToolBlocks, refusedToolCallIds } from './toolCard';
  * `tool.started`/`tool.completed` never enter this registry. Only thinking
  * timing is folded HERE.
  *
- * The turn's own "已工作 Ns" head is not folded either: it is DERIVED from the
- * T-06 metadata the message registry already holds, by `deriveTurnWorkedMs`
- * below. That function replaced the old "reuse `MessageMetadata.latencyMs`"
- * note at the bottom of this header — one message's latency is not the turn's,
- * once a tool result or an authorization wait has split the turn into several
- * messages.
+ * The turn's own "Worked for Ns" head is not folded either: it is DERIVED from
+ * the T-06 metadata the message registry already holds, by
+ * `deriveTurnElapsedMs` / `deriveTurnWorkedMs` below. Those replaced the old
+ * "reuse `MessageMetadata.latencyMs`" note at the bottom of this header — one
+ * message's latency is not the turn's, once a tool result or an authorization
+ * wait has split the turn into several messages, and neither is it the turn's
+ * once the wait BEFORE the first message is counted (2026-09-19).
  */
 
 export interface ThinkingTiming {
@@ -198,43 +199,157 @@ export interface TurnSpanMetadata {
 }
 
 /**
- * How long a whole TURN took: last completion minus first start, across every
- * message in its body.
+ * The earliest instant this turn can prove it existed at: the caller's own
+ * anchor (the user message's `message.started`, i.e. the send), or failing that
+ * the first body message that started.
+ *
+ * `Math.min` across every candidate rather than "the anchor wins": the body's
+ * starts are folded one at a time while the turn runs, and a candidate that
+ * arrives late can still name an EARLIER instant than one already known. Taking
+ * the minimum makes the origin monotone NON-INCREASING for as long as the turn
+ * lives, which is precisely what stops the head's clock from running backwards.
+ */
+function earliestTurnStartMs(
+  metadata: readonly (TurnSpanMetadata | undefined | null)[],
+  anchorMs?: number | null
+): number | null {
+  let earliest: number | null = typeof anchorMs === 'number' ? anchorMs : null;
+  for (const entry of metadata) {
+    const startedAt = entry?.startedAt;
+    if (typeof startedAt === 'number' && (earliest === null || startedAt < earliest)) {
+      earliest = startedAt;
+    }
+  }
+  return earliest;
+}
+
+/** The last instant anything about this turn was timestamped, start or completion. */
+function latestTurnStampMs(
+  metadata: readonly (TurnSpanMetadata | undefined | null)[]
+): number | null {
+  let latest: number | null = null;
+  for (const entry of metadata) {
+    for (const stamp of [entry?.startedAt, entry?.completedAt]) {
+      if (typeof stamp === 'number' && (latest === null || stamp > latest)) latest = stamp;
+    }
+  }
+  return latest;
+}
+
+/**
+ * How long a whole TURN took: its first start to its last stamped event, across
+ * every message in its body — and, when the caller can name one, from the
+ * turn's own origin rather than from its first assistant message.
  *
  * Not `MessageMetadata.latencyMs` (which `formatWorkedForRow` uses): that is ONE
  * message's own span, and a turn interrupted by a tool result or an
  * authorization wait is several messages. Reporting the last one's latency
  * would tell a two-minute turn it took four seconds.
  *
+ * ## `startedAtMs`, and the 7.3 seconds it puts back (2026-09-19)
+ *
+ * Measured on a real turn: 7936ms from Send to the end of the reply, of which
+ * 7315ms was silence before the first byte. With the body's metadata as the
+ * only start candidate the head reported 「已工作 1 秒」 — the assistant
+ * message's own span — and threw away the entire wait, which is the part the
+ * user is actually complaining about when they say 「运行了差不多 1 分钟」.
+ *
+ * So the caller passes the turn's origin (the user message's own
+ * `message.started`), and it participates as one more start candidate through
+ * `earliestTurnStartMs`. Absent — a restored history turn, an orphan turn — the
+ * function measures exactly what it always did.
+ *
+ * ## Where the turn ENDS, including when it was stopped or failed
+ *
+ * The last instant anything about the turn was stamped, of EITHER kind. For a
+ * turn that finished normally that is its last `message.completed`, which is
+ * what this function has always measured to. For one the user Stopped
+ * mid-stream — or one whose session failed with a message still open — no
+ * completion ever arrives, and the end is then the last `message.started` on
+ * record.
+ *
+ * That second case is a LOWER BOUND on the real duration, and it is labelled
+ * as one rather than presented as exact. The alternative — stamping
+ * `Date.now()` when the UI notices the turn stopped — would invent a number
+ * nothing measured, and it would keep growing for a turn that died while the
+ * window was in the background.
+ *
  * ## `null` means OMIT, never zero
  *
  * A07 `:2399`'s red line, restated for the turn scale: a restored history turn
  * replays no `message.started` / `message.completed` events, so it has no
  * timestamps at all and there is no honest number to print. Callers must fall
- * back to a different sentence, not to `0s`. Returns `null` when either end is
- * missing, and also when the arithmetic comes out negative — a clock that ran
- * backwards is unknown time, not negative time.
+ * back to a different sentence, not to `0s`.
+ *
+ * `null` when there is no start, no stamp after it, or the arithmetic does not
+ * come out POSITIVE. That last rule covers two things at once: a clock that ran
+ * backwards is unknown time, not negative time; and a turn with exactly one
+ * timestamp to its name has not been measured twice, so its "0" is the absence
+ * of a second measurement rather than a duration — and `splitWorkedForDuration`
+ * would print it as 「1 秒」.
  */
 export function deriveTurnWorkedMs(
-  metadata: readonly (TurnSpanMetadata | undefined | null)[]
+  metadata: readonly (TurnSpanMetadata | undefined | null)[],
+  startedAtMs?: number | null
 ): number | null {
-  let earliestStart: number | null = null;
-  let latestCompletion: number | null = null;
-  for (const entry of metadata) {
-    const startedAt = entry?.startedAt;
-    if (typeof startedAt === 'number' && (earliestStart === null || startedAt < earliestStart)) {
-      earliestStart = startedAt;
-    }
-    const completedAt = entry?.completedAt;
-    if (
-      typeof completedAt === 'number' &&
-      (latestCompletion === null || completedAt > latestCompletion)
-    ) {
-      latestCompletion = completedAt;
-    }
-  }
-  if (earliestStart === null || latestCompletion === null) return null;
-  const span = latestCompletion - earliestStart;
+  const earliestStart = earliestTurnStartMs(metadata, startedAtMs);
+  const latestStamp = latestTurnStampMs(metadata);
+  if (earliestStart === null || latestStamp === null) return null;
+  const span = latestStamp - earliestStart;
+  return span > 0 ? span : null;
+}
+
+export interface TurnElapsedInput {
+  /**
+   * The turn's origin — when the user pressed Send, as far as anything
+   * durable knows it. `null` when no such stamp exists (restored history, an
+   * orphan turn), in which case the body's own starts have to carry the clock.
+   */
+  startedAtMs: number | null;
+  /** Every body message's T-06 metadata, in body order. */
+  metadata: readonly (TurnSpanMetadata | undefined | null)[];
+  /** Clock reading. Only read while `running`. */
+  nowMs: number;
+  /** The turn is still going: more events are expected, so "now" is its end. */
+  running: boolean;
+}
+
+/**
+ * The ONE answer to "how long has this turn taken", running or finished.
+ *
+ * ## Why one function and not two
+ *
+ * It used to be two, reading two different origins, and that is the whole
+ * defect (2026-09-19 field measurement). While the turn ran, the head counted
+ * from the composer's per-PHASE ticker; the instant the first byte arrived that
+ * ticker was torn down and the head switched to the first assistant message's
+ * `message.started` — a later instant — so the number on screen fell from 3
+ * seconds back to 1. Then the finished turn reported the assistant message's
+ * own span and lost the wait entirely.
+ *
+ * Both readings now come from `earliestTurnStartMs` over the same candidate
+ * set, so the origin cannot change under the reader; only the END differs
+ * between the two states, and it only ever moves forward. That is the
+ * structural form of "the clock never goes backwards" — not a clamp bolted on
+ * afterwards.
+ *
+ * ## Where a turn ENDS
+ *
+ * While it RUNS, at `nowMs` — nothing else is honest, the turn has not ended.
+ * Once it stops, at whatever `deriveTurnWorkedMs` measures to, which covers the
+ * normal, the multi-step and the interrupted cases in one rule (see its note).
+ *
+ * The running branch keeps a `0` that the settled one rejects, and the
+ * difference is real rather than an inconsistency: "the turn started this
+ * instant and has not got anywhere yet" IS a measurement of a running turn,
+ * whereas a settled turn whose only two stamps are the same instant was never
+ * measured twice at all.
+ */
+export function deriveTurnElapsedMs(input: TurnElapsedInput): number | null {
+  if (!input.running) return deriveTurnWorkedMs(input.metadata, input.startedAtMs);
+  const origin = earliestTurnStartMs(input.metadata, input.startedAtMs);
+  if (origin === null) return null;
+  const span = input.nowMs - origin;
   return span < 0 ? null : span;
 }
 

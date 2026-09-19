@@ -1,4 +1,4 @@
-import { translate } from '@shared/i18n';
+import { englishTranslate, translate } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import {
   formatReasoningTokensClause,
@@ -293,5 +293,87 @@ describe('turnProgressClauses — the two stages', () => {
     expect(
       turnProgressClauses({ hasReplyContent: true, tokens: null, thinkingMs: null }, zh)
     ).toEqual([]);
+  });
+});
+
+/**
+ * ## [HEAD-EN-2] The turn progress head renders in English (user decision
+ * 2026-09-19)
+ *
+ * The rest of the chat surface stays Simplified Chinese — `chineseChatSurface`
+ * is the suite that holds that line, and it is not being relaxed. This ONE row,
+ * the one directly above the agent's reply, is the exception the user asked
+ * for, and `MessageTimeline`'s `TurnProgressHead` implements it by binding
+ * `englishTranslate` instead of `useI18n()`'s `t`.
+ *
+ * Both halves of the guard matter and neither substitutes for the other:
+ *
+ *  - the SOURCE half (`messageTimelineWiring.test.ts` `[HEAD-EN-1]`) is what
+ *    catches the actual regression — somebody restoring `useI18n()` because the
+ *    binding "looks wrong" next to every other component in the file;
+ *  - this half is what says the catalog can still produce both, so that
+ *    regression would be silent rather than a crash: every key below has a
+ *    Chinese entry, and the entries must stay (three of these words are shared
+ *    with the Run panel, which is still Chinese).
+ */
+describe('[HEAD-EN-2] the turn progress head speaks English', () => {
+  const en = englishTranslate;
+  /** Anything in the CJK Unified Ideographs block — the check the rule is about. */
+  const CJK = /[一-鿿]/;
+
+  it('renders the running and finished head words in English', () => {
+    expect(en('Working')).toBe('Working');
+    expect(en('Working {{seconds}}s', { seconds: 12 })).toBe('Working 12s');
+    expect(en('Working {{minutes}}m {{seconds}}s', { minutes: 2, seconds: 3 })).toBe(
+      'Working 2m 3s'
+    );
+    expect(en('Working {{minutes}}m', { minutes: 2 })).toBe('Working 2m');
+    expect(en('Worked for {{seconds}}s', { seconds: 57 })).toBe('Worked for 57s');
+    expect(en('Worked for {{minutes}}m {{seconds}}s', { minutes: 1, seconds: 6 })).toBe(
+      'Worked for 1m 6s'
+    );
+    expect(en('Worked for {{minutes}}m', { minutes: 1 })).toBe('Worked for 1m');
+    expect(en('{{count}} steps processed', { count: 3 })).toBe('3 steps processed');
+  });
+
+  it('renders the whole line — clauses included — with no Chinese in it', () => {
+    const line = joinTurnProgressLine(
+      en('Working {{seconds}}s', { seconds: 12 }),
+      turnProgressClauses(
+        {
+          hasReplyContent: true,
+          tokens: { up: 7_600, down: 87, reasoning: 86 },
+          thinkingMs: 20_000,
+        },
+        en
+      )
+    );
+    expect(line).toBe('Working 12s · ↑ 7.6k tokens · ↓ 87 tokens · Thinking 20s');
+    expect(line).not.toMatch(CJK);
+  });
+
+  it('renders the reasoning-token fallback clause in English too', () => {
+    expect(
+      turnProgressClauses(
+        { hasReplyContent: true, tokens: { up: 0, down: 0, reasoning: 86 }, thinkingMs: null },
+        en
+      )
+    ).toEqual(['Thinking 86 tokens']);
+  });
+
+  /**
+   * The catalog still answers in Chinese for every one of these keys. Without
+   * this, the suite above would keep passing after somebody deleted the entries
+   * — and the deletion would break the Run panel, which shares `Thinking`.
+   */
+  it('the Chinese entries these keys would otherwise resolve to are still there', () => {
+    expect(zh('Working {{seconds}}s', { seconds: 12 })).toMatch(CJK);
+    expect(zh('Worked for {{seconds}}s', { seconds: 57 })).toMatch(CJK);
+    expect(zh('{{count}} steps processed', { count: 3 })).toMatch(CJK);
+    expect(zh('Thinking {{seconds}}s', { seconds: 20 })).toMatch(CJK);
+    expect(zh('Thinking {{count}} tokens', { count: 86 })).toMatch(CJK);
+    // The Run panel's own use of the shared word, still Chinese
+    // (`runPanelModel.ts`'s `ACTIVITY_HEADLINE`).
+    expect(zh('Thinking')).toMatch(CJK);
   });
 });

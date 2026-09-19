@@ -541,22 +541,89 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * The turn's duration is the TURN's, not the last message's.
+   * The turn's duration is the TURN's — the whole of it, from the send.
    *
    * `formatWorkedForRow(metadata?.latencyMs)` is the shape this must not be: a
    * turn split by a tool result or an authorization wait is several messages,
    * and the final one's latency told a two-minute turn it took four seconds.
    * The `null` path matters just as much — a restored history turn replays no
    * timing events, and the head falls back to a step count rather than 0s.
+   *
+   * 2026-09-19 adds the half that was still missing. `deriveTurnWorkedMs`
+   * measured from the first ASSISTANT message, so the wait before the first
+   * byte — 7315ms of a measured 7936ms turn — was not in the number at all,
+   * and the head reported 「已工作 1 秒」. The clock now runs from
+   * `turnStartedAtMs`, and the SAME origin feeds the running head and the
+   * finished one, which is what stops the count resetting at the first byte.
    */
-  it('[WG-WIRE-1] the head reads the whole-turn span, and never fabricates one', () => {
-    expectCalled('deriveTurnWorkedMs(bodyMetadata)');
+  it('[WG-WIRE-1] the head reads the whole-turn span, from the send, and never fabricates one', () => {
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    expectCalled('deriveTurnElapsedMs(');
+    expect(turn).toContain('startedAtMs: turnStartedAtMs');
+    expect(turn).toContain('running: turnRunning');
     expectCalled('workedMs={workedMs}');
     expectUnwired('formatWorkedForRow(');
     // The fallback is chosen inside the pure derivation, so the component must
     // not second-guess it with a `?? 0` on the way in.
     expectUnwired('workedMs={workedMs ?? 0}');
     expectCalled('deriveTurnWorkGroupLabel(');
+  });
+
+  /**
+   * ONE origin per turn, and the order it is resolved in.
+   *
+   * The user message's own `message.started` has to come first: it is the only
+   * candidate that outlives the send (the snapshot is torn down at the first
+   * byte, the watch is cleared by the next send), so anchoring on anything else
+   * means the origin moves mid-turn — which is the reset this batch removed.
+   * The other two exist for the window before the Host echoes the prompt back,
+   * where the turn on screen is the composer's optimistic bubble.
+   */
+  it('[WG-WIRE-1b] the turn origin prefers the durable stamp over the two live ones', () => {
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    expect(turn).toContain(
+      'const turnStartedAtMs = (turn.user ? (getMetadata(turn.user.id)?.startedAt ?? null) : null) ?? (inFlight && sendStatus ? sendStatus.turnStartedAtMs : null) ?? (pendingActive && pendingReply ? pendingReply.turnStartedAtMs : null);'
+    );
+    // Exactly one derivation of it: a second one elsewhere would be a fork of
+    // the judgement this whole fix rests on.
+    expect(SYNTAX.split('const turnStartedAtMs =').length - 1).toBe(1);
+    // The snapshot's own commit stamp, NOT `elapsedSeconds` — that one is
+    // phase-relative and is reset to 0 at dispatch, which is the second of the
+    // two resets the field measurement caught.
+    expect(turn).not.toContain('turnStartedAtMs = sendStatus.elapsedSeconds');
+  });
+
+  /**
+   * ⚠️ [HEAD-EN-1] The turn progress head renders in ENGLISH, alone on a
+   * Simplified-Chinese surface (user decision 2026-09-19).
+   *
+   * This is the guard the decision rests on, because the regression is a
+   * one-word edit that nothing else would catch: `TurnProgressHead` looks like
+   * every other component in this file, so restoring `const { t } =
+   * useI18n();` reads as a cleanup and silently puts 「工作中 12 秒」 back on
+   * screen. No type error, no failing render, no other assertion.
+   *
+   * The mechanism is `@shared/i18n`'s own `englishTranslate`, not a set of
+   * hardcoded English literals: the call sites keep their catalog keys, so
+   * `i18nCoverage.test.ts` still scans them and their `zhTranslations` entries
+   * are still required to exist — which matters because `Thinking` is shared
+   * with the Run panel (`runPanelModel.ts`), which stays Chinese.
+   *
+   * `turnProgress.test.ts`'s `[HEAD-EN-2]` is the other half: it runs the same
+   * keys through the same translator and asserts the line comes out English.
+   */
+  it('[HEAD-EN-1] the head binds englishTranslate, and does not reach for useI18n', () => {
+    const head = nodeSource(topLevelFunction('TurnProgressHead'));
+    expect(head).toContain('const t = englishTranslate;');
+    expect(
+      head,
+      'TurnProgressHead must not take the localized translator — that is the regression'
+    ).not.toContain('useI18n()');
+    expect(SYNTAX).toContain("import { englishTranslate } from '@shared/i18n';");
+    // The rest of the file is untouched: the status row and the retry banner
+    // below the head are still localized, and still fed by the hook's `t`.
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    expect(turn).toContain('const { t } = useI18n();');
   });
 
   /**
@@ -1185,10 +1252,13 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('hasReplyContent={turnHasBlocks}');
     expectCalled('hasBlocks: turnHasBlocks');
     expectCalled('turnProgressClauses({ hasReplyContent, tokens, thinkingMs }, t)');
-    // `elapsedSeconds` falls back to 0 for a session that was already running
-    // when this window opened; `turnActive` is what says a clock exists at all.
+    // 2026-09-19: the head's seconds come from the TURN clock, not from the
+    // composer's per-phase ticker. `turnElapsedMs === null` is what says no
+    // clock exists (a session already running when this window opened replays
+    // no origin); the old `?? 0` fallback the previous wiring leaned on is what
+    // made a turn with no measurement print 「工作中 0 秒」.
     expect(nodeSource(topLevelFunction('ChatTurn'))).toContain(
-      'const headElapsedSeconds = turnActive ? elapsedSeconds : null;'
+      'const headElapsedSeconds = turnRunning && turnElapsedMs !== null ? Math.floor(turnElapsedMs / 1000) : null;'
     );
     expectCalled('elapsedSeconds={headElapsedSeconds}');
     expectUnwired('elapsedSeconds={elapsedSeconds}');

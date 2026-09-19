@@ -1491,6 +1491,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         sessionId,
         phase: 'handshake',
         elapsedSeconds: 0,
+        // The moment the user's send was committed, in absolute time. Read by
+        // the turn head as the turn's origin for the window before the Host
+        // echoes the prompt back; `elapsedSeconds` above cannot serve, because
+        // the phase change at dispatch resets it to 0 (see `TurnSendStatus`).
+        turnStartedAtMs: Date.now(),
         budgetMs: SEND_SILENCE_CEILING_MS,
         attachmentCount: drafts.length,
         attachmentBytes: totalAttachmentBytes(drafts),

@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import {
+  deriveTurnElapsedMs,
   deriveTurnStats,
   deriveTurnWorkedMs,
   formatThoughtRow,
@@ -11,6 +12,7 @@ import {
   initialTurnTimingRegistry,
   reduceTurnTiming,
   splitWorkedForDuration,
+  type TurnSpanMetadata,
   turnHasThinkingOnlyProcess,
 } from '../turnTiming';
 
@@ -438,7 +440,10 @@ describe('deriveTurnWorkedMs', () => {
   it('[WG-SPAN-3] returns null rather than fabricating a duration', () => {
     expect(deriveTurnWorkedMs([])).toBeNull();
     expect(deriveTurnWorkedMs([undefined, undefined])).toBeNull();
-    // Started but never finished: no end to measure to.
+    // Started and never stamped again: ONE timestamp is not a span. (2026-09-19
+    // moved the end from "the last completion" to "the last stamp of any kind",
+    // so an interrupted turn does get a lower bound — but only once there is a
+    // second instant to measure against, which there is not here.)
     expect(deriveTurnWorkedMs([{ startedAt: 1_000 }])).toBeNull();
     // Finished with no recorded start — the shape a partially-replayed turn has.
     expect(deriveTurnWorkedMs([{ completedAt: 1_000 }])).toBeNull();
@@ -451,5 +456,224 @@ describe('deriveTurnWorkedMs', () => {
     expect(
       deriveTurnWorkedMs([{ startedAt: 1_000, completedAt: null }, { completedAt: 4_000 }])
     ).toBe(3_000);
+  });
+
+  /**
+   * The turn's own origin is one more START candidate, so it can only ever make
+   * the span LONGER — never shorter, and never a different measurement.
+   */
+  it('[WG-SPAN-5] counts from the turn origin when the caller knows one', () => {
+    // Send at 1_000, first assistant byte at 8_000, reply done at 9_000.
+    expect(deriveTurnWorkedMs([{ startedAt: 8_000, completedAt: 9_000 }], 1_000)).toBe(8_000);
+    // An origin LATER than the body's first start is ignored — the earliest
+    // evidence wins, so a stale anchor cannot shorten a turn.
+    expect(deriveTurnWorkedMs([{ startedAt: 2_000, completedAt: 9_000 }], 5_000)).toBe(7_000);
+    // Stopped before the reply completed: the lower bound the origin makes
+    // measurable. Without it this turn had exactly one stamp and no duration.
+    expect(deriveTurnWorkedMs([{ startedAt: 8_000 }], 1_000)).toBe(7_000);
+  });
+});
+
+/**
+ * `deriveTurnElapsedMs` — the head's one clock, running and finished.
+ */
+describe('deriveTurnElapsedMs', () => {
+  it('[WG-CLOCK-1] running, it counts from the origin to now — wait included', () => {
+    // 7s into a turn whose first byte has not arrived: no body metadata at all,
+    // and the honest answer is still 7s, not "unmeasured".
+    expect(
+      deriveTurnElapsedMs({ startedAtMs: 1_000, metadata: [], nowMs: 8_000, running: true })
+    ).toBe(7_000);
+    // With the first assistant message open, the origin does not move to it.
+    expect(
+      deriveTurnElapsedMs({
+        startedAtMs: 1_000,
+        metadata: [{ startedAt: 8_000 }],
+        nowMs: 8_500,
+        running: true,
+      })
+    ).toBe(7_500);
+  });
+
+  it('[WG-CLOCK-2] returns null rather than zero when there is no origin', () => {
+    expect(
+      deriveTurnElapsedMs({ startedAtMs: null, metadata: [], nowMs: 9_999, running: true })
+    ).toBeNull();
+    expect(
+      deriveTurnElapsedMs({ startedAtMs: null, metadata: [], nowMs: 9_999, running: false })
+    ).toBeNull();
+    // A clock that ran backwards is unknown time, not negative time.
+    expect(
+      deriveTurnElapsedMs({ startedAtMs: 9_000, metadata: [], nowMs: 1_000, running: true })
+    ).toBeNull();
+  });
+
+  /**
+   * A multi-step turn (tool call, or an authorization wait) settles several
+   * messages. The span is send -> the LAST completion, never the last model
+   * call's own latency — the defect `deriveTurnWorkedMs`'s header describes,
+   * restated now that the origin moved further back.
+   */
+  it('[WG-CLOCK-3] a multi-step turn spans the whole turn, not its last call', () => {
+    expect(
+      deriveTurnElapsedMs({
+        startedAtMs: 1_000,
+        metadata: [
+          { startedAt: 9_000, completedAt: 20_000 },
+          { startedAt: 56_000, completedAt: 58_000 },
+        ],
+        nowMs: 0,
+        running: false,
+      })
+    ).toBe(57_000);
+  });
+
+  /**
+   * Stop pressed mid-stream, or a session failure with a message still open:
+   * `message.completed` never arrives, so the end is the last instant anything
+   * WAS stamped. A lower bound, stated as such in the function's own note —
+   * and still better than the alternative the old code produced, which was no
+   * number at all for every interrupted turn.
+   */
+  it('[WG-CLOCK-4] an interrupted turn ends at its last stamped event', () => {
+    expect(
+      deriveTurnElapsedMs({
+        startedAtMs: 1_000,
+        metadata: [{ startedAt: 8_000, completedAt: 9_000 }, { startedAt: 12_000 }],
+        nowMs: 0,
+        running: false,
+      })
+    ).toBe(11_000);
+    // Nothing after the origin at all: one stamp is not a span, and a `0` here
+    // would print as 「1 秒」 about a turn nobody timed.
+    expect(
+      deriveTurnElapsedMs({ startedAtMs: 4_000, metadata: [], nowMs: 0, running: false })
+    ).toBeNull();
+    expect(
+      deriveTurnElapsedMs({
+        startedAtMs: 4_000,
+        metadata: [{ startedAt: 4_000 }],
+        nowMs: 0,
+        running: false,
+      })
+    ).toBeNull();
+  });
+});
+
+/**
+ * ## [WG-CLOCK-5] The regression this whole batch exists for: the clock never
+ * goes backwards.
+ *
+ * Measured on a real turn through CDP, 2026-09-19 — 7936ms from Send to the
+ * end of the reply, sampled at the head:
+ *
+ * ```
+ * [+520ms]  工作中 1 秒
+ * [+2615ms] 工作中 1 秒
+ * [+5147ms] 工作中 2 秒
+ * [+6164ms] 工作中 3 秒
+ * [+7315ms] 工作中 1 秒 · ↑ 7.6k tokens   <- first byte: 3 -> 1
+ * [+7936ms] 已工作 1 秒 · …                <- 7.9s reported as 1
+ * ```
+ *
+ * Two faults, one cause: the head took whichever of three clocks happened to
+ * be live, and they count from three different instants. The first byte swapped
+ * the composer's ticker for the first assistant message's `message.started`, so
+ * the number fell; and the finished turn reported that message's own span,
+ * throwing the 7.3s wait away — the part the user means by 「运行了差不多 1 分
+ * 钟」.
+ *
+ * This replays that exact shape — 7s of silence, first byte, 1s of streaming —
+ * and asserts the two properties separately, because they fail separately:
+ * MONOTONE across every sample, and a final value of 8s rather than 1s.
+ */
+describe('[WG-CLOCK-5] the turn head clock never runs backwards', () => {
+  /** Send committed / user message echoed. */
+  const SEND_AT = 1_000_000;
+  /** First assistant byte, 7s of silence later. */
+  const FIRST_BYTE_AT = SEND_AT + 7_000;
+  /** Reply complete, one second of streaming after that. */
+  const COMPLETED_AT = FIRST_BYTE_AT + 1_000;
+
+  interface Sample {
+    at: number;
+    running: boolean;
+    metadata: (TurnSpanMetadata | undefined)[];
+  }
+
+  /**
+   * The two steps the head itself performs, reproduced here so the assertion
+   * is about the NUMBER ON SCREEN and not about an intermediate value: while
+   * the turn runs `MessageTimeline` floors the elapsed ms to whole seconds
+   * before `deriveTurnWorkGroupLabel` splits them; once it settles the label
+   * receives the milliseconds directly.
+   */
+  function renderedSeconds(sample: Sample): number | null {
+    const elapsedMs = deriveTurnElapsedMs({
+      startedAtMs: SEND_AT,
+      metadata: sample.metadata,
+      nowMs: sample.at,
+      running: sample.running,
+    });
+    if (elapsedMs === null) return null;
+    const ms = sample.running ? Math.floor(elapsedMs / 1000) * 1000 : elapsedMs;
+    const { minutes, seconds } = splitWorkedForDuration(ms);
+    return minutes * 60 + seconds;
+  }
+
+  /** One sample per tick of `useSecondsTick`, plus the two event instants. */
+  function timeline(): Sample[] {
+    const samples: Sample[] = [];
+    // The silence: the turn exists (the user message was echoed) and its body
+    // is still empty, which is exactly the state the old code had no clock for.
+    for (let at = SEND_AT + 500; at < FIRST_BYTE_AT; at += 1_000) {
+      samples.push({ at, running: true, metadata: [] });
+    }
+    // First byte: the assistant message opens. This is the sample where the
+    // count used to fall from 3 back to 1.
+    samples.push({ at: FIRST_BYTE_AT, running: true, metadata: [{ startedAt: FIRST_BYTE_AT }] });
+    samples.push({
+      at: FIRST_BYTE_AT + 500,
+      running: true,
+      metadata: [{ startedAt: FIRST_BYTE_AT }],
+    });
+    // Settled: `message.completed` landed, so the head switches to its
+    // finished shape — same origin, so the number may only grow.
+    samples.push({
+      at: COMPLETED_AT,
+      running: false,
+      metadata: [{ startedAt: FIRST_BYTE_AT, completedAt: COMPLETED_AT }],
+    });
+    return samples;
+  }
+
+  it('is monotone across every sample from send to settled', () => {
+    const seen = timeline().map(renderedSeconds);
+    expect(seen).not.toContain(null);
+    for (let index = 1; index < seen.length; index += 1) {
+      const previous = seen[index - 1] ?? 0;
+      const current = seen[index] ?? 0;
+      expect(
+        current,
+        `sample ${index} went backwards: ${previous}s -> ${current}s (whole sequence: ${seen.join(', ')})`
+      ).toBeGreaterThanOrEqual(previous);
+    }
+  });
+
+  it('reports 8s at the end, not the 1s the assistant message alone lasted', () => {
+    const samples = timeline();
+    const final = samples[samples.length - 1];
+    expect(final.running).toBe(false);
+    expect(renderedSeconds(final)).toBe(8);
+    // The shape that produced 「已工作 1 秒」: the same body metadata with no
+    // origin. Pinned here so the regression is visible in the test, not just
+    // in the fix.
+    expect(deriveTurnWorkedMs(final.metadata)).toBe(1_000);
+  });
+
+  it('shows the wait while it is happening, instead of waiting for a first byte', () => {
+    // The 4th second of silence, with an empty body. The old head had no clock
+    // at all in this state once the composer snapshot's phase reset landed.
+    expect(renderedSeconds({ at: SEND_AT + 4_500, running: true, metadata: [] })).toBe(4);
   });
 });

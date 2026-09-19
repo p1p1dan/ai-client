@@ -124,17 +124,43 @@ describe('reduceMessageMetadata (T-06)', () => {
     expect(reg.byMessage.a1.reportedModel).toBe('claude-opus-4-8[1m]');
   });
 
-  it('ignores user message.started (no assistant index, no entry)', () => {
+  /**
+   * 2026-09-19: a user `message.started` now records ONE field — the turn's
+   * origin, which `turnTiming.ts`'s clock counts from. Before this the entry
+   * did not exist at all, so the turn head could only count from the first
+   * assistant message and lost the whole wait before the first byte.
+   *
+   * What must NOT change is everything else about the fold. `model` /
+   * `reportedModel` are claims about what answered; the assistant index is what
+   * `usage.updated` (sessionId, no messageId) is filed against, and moving it
+   * to a prompt would bill the reply's tokens to the question.
+   */
+  it('records the user turn origin — and nothing else — from a user message.started', () => {
     const next = reduceMessageMetadata(
       initialMetadataRegistry,
       event('message.started', {
         sessionId: 's1',
         timestamp: 1000,
         payload: { messageId: 'u1', role: 'user' },
-      })
+      }),
+      'sonnet'
     );
-    expect(next.byMessage.u1).toBeUndefined();
+    expect(next.byMessage.u1).toEqual({ startedAt: 1000 });
     expect(next.bySessionLastAssistant.s1).toBeUndefined();
+  });
+
+  /**
+   * A user turn the Host stamped with nothing keeps `startedAt: null` rather
+   * than a `Date.now()` stand-in: the clock reads `null` as "no origin" and
+   * says a bare 「Working」, which is the honest output. A fabricated origin
+   * would make the head count from the moment the event happened to be folded.
+   */
+  it('keeps a user origin null when the event carried no timestamp', () => {
+    const next = reduceMessageMetadata(
+      initialMetadataRegistry,
+      event('message.started', { sessionId: 's1', payload: { messageId: 'u1', role: 'user' } })
+    );
+    expect(next.byMessage.u1).toEqual({ startedAt: null });
   });
 
   it('computes latencyMs on message.completed from the recorded startedAt', () => {

@@ -66,6 +66,7 @@ describe('session lifecycle pruning', () => {
         sessionId: 'drop',
         phase: 'awaiting',
         elapsedSeconds: 1,
+        turnStartedAtMs: 1,
         budgetMs: 10,
         attachmentCount: 1,
         attachmentBytes: 4,

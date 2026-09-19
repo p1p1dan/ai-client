@@ -1,3 +1,4 @@
+import { englishTranslate } from '@shared/i18n';
 import type { SessionRetryInfo, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import {
   ArrowDown,
@@ -136,8 +137,8 @@ import {
 //
 // 2026-09-18 adds ONE live consumer from that module, and it is deliberately
 // not `formatWorkedForRow`: the work group needs the whole turn's span, which
-// is `deriveTurnWorkedMs`, not the last message's own latency.
-import { deriveTurnWorkedMs, type ThinkingTiming } from './turnTiming';
+// is `deriveTurnElapsedMs`, not the last message's own latency.
+import { deriveTurnElapsedMs, type ThinkingTiming } from './turnTiming';
 import { useMessageMetadata } from './useMessageMetadata';
 import { useResolvedSessionModel } from './useResolvedSessionModel';
 import { useTurnTiming } from './useTurnTiming';
@@ -1384,7 +1385,31 @@ function TurnProgressHead({
   onUserOpenChange: (open: boolean) => void;
   children: React.ReactNode;
 }) {
-  const { t } = useI18n();
+  /**
+   * ⚠️ This ONE line renders in English, in a Simplified-Chinese UI (user
+   * decision 2026-09-19). Everything else on the chat surface stays Chinese —
+   * do not copy this binding anywhere else.
+   *
+   * ## Why the identifier is still `t`
+   *
+   * `englishTranslate` is `@shared/i18n`'s own "resolve against the English
+   * catalog" translator, built for exactly this: the call sites below keep
+   * their literal single-quoted keys, so `i18nCoverage.test.ts`'s scan — which
+   * looks for a quoted first argument to a call named exactly `t` — still sees
+   * every one of them and still REQUIRES a `zhTranslations` entry for each.
+   * (That scan reads comments too, so this note may not spell its own pattern
+   * out: doing so registers a key nothing translates. Measured, not guessed.)
+   *
+   * Renaming the binding would hide these keys from that scan and leave their
+   * catalog entries looking like orphans — and three of the words here
+   * (`Thinking`, `Stopping`, `Retrying`) are shared with the Run panel
+   * (`runPanelModel.ts`), which is still Chinese and still needs them.
+   *
+   * So: this is not `useI18n()`, and swapping it back for `useI18n()` silently
+   * re-Chinesifies the line. `messageTimelineWiring.test.ts`'s
+   * `[HEAD-EN-1]` guard is what makes that swap fail loudly.
+   */
+  const t = englishTranslate;
   const open = turnWorkGroupOpen({ settled, forcedOpen, userOpen });
   const label = deriveTurnWorkGroupLabel({
     settled,
@@ -1559,10 +1584,11 @@ const ChatTurn = memo(function ChatTurn({
 
   // ---- Head slot state (§4.7) ----
 
-  // Two clocks, never both: the composer's snapshot covers handshake/awaiting
-  // (it stops at the first assistant progress, where `runSend` returns), and
-  // T-06's `message.started` timestamp covers the streaming remainder.
-  // `!turnComplete` guards the stream clock the same way the parent's send
+  // Three ways a turn can be ACTIVE. Note that these decide whether a clock
+  // exists, not what it reads — `turnStartedAtMs` below owns the reading, and
+  // deliberately does not branch the same way (see its note).
+  //
+  // `!turnComplete` guards `streamStartedAt` the same way the parent's send
   // binding guards the snapshot: once this turn has its latency, a
   // still-`running` session status belongs to the NEXT turn, not this one.
   //
@@ -1585,6 +1611,11 @@ const ChatTurn = memo(function ChatTurn({
   // showing it (taking the Stop button with it).
   const pendingActive = isLastTurn && pendingReply != null;
   const turnActive = inFlight || streamStartedAt != null || pendingActive;
+  // The status ROW's clock, and only it: `composerSendingLine`'s wording and
+  // its two silence tiers (`SLOW_HINT` / `STALLED_HINT`) ask "how long has THIS
+  // PHASE been silent", which is what the composer's per-phase ticker measures.
+  // The turn head asks a different question and has its own clock below; the
+  // two are not interchangeable and were never meant to be one value.
   const elapsedSeconds =
     inFlight && sendStatus
       ? sendStatus.elapsedSeconds
@@ -1596,6 +1627,48 @@ const ChatTurn = memo(function ChatTurn({
           pendingActive && pendingReply
           ? Math.max(0, Math.floor((nowMs - pendingReply.turnStartedAtMs) / 1000))
           : 0;
+
+  /**
+   * The turn's ORIGIN: when the user pressed Send, as well as anything here
+   * knows it. One value, read by the running head and by the finished one.
+   *
+   * Measured defect, 2026-09-19: a 7936ms turn whose head counted 1s. The head
+   * used to take whichever of the three clocks above happened to be live, and
+   * those count from three different instants — so the first byte arriving
+   * swapped the composer's ticker for the first assistant message's
+   * `message.started` and the number on screen fell from 3 back to 1; then the
+   * finished turn reported the assistant message's own span (~600ms) and threw
+   * the 7.3s wait away. The wait is the part the user is complaining about.
+   *
+   * Priority, and why it is a priority rather than a `Math.min`:
+   *
+   *  1. **the user message's own `message.started`** — the Host's echo of this
+   *     prompt (`projector.ts`). It is the only candidate that survives the
+   *     whole turn: the snapshot below is torn down at the first byte, and the
+   *     watch below that is cleared by the next send. Anchoring on it means
+   *     the origin cannot move mid-turn, which is what the "never goes
+   *     backwards" property actually rests on.
+   *  2. **the send snapshot's commit stamp** — for the window BEFORE that echo
+   *     lands, where the turn on screen is the composer's optimistic
+   *     `pending-user:` bubble and no Host stamp exists yet.
+   *  3. **the pending-reply watch** — after the silence ceiling, where the
+   *     snapshot is gone and the Host has still said nothing.
+   *
+   * Known residual, recorded rather than hidden: at the handover from (2) to
+   * (1) the origin moves forward by the Agent-Host start plus one IPC round
+   * trip, so the count can step back by that much, once, early in the turn.
+   * Closing it needs the commit stamp carried onto the authoritative user
+   * message, which is a red-line-store field (`chatSessions.ts` keeps no
+   * timestamps at all); it is not done here.
+   *
+   * `null` is a real answer — a restored history turn replays none of these —
+   * and it makes the head say a bare 「Working」 / fall back to a step count
+   * rather than print a second nobody measured.
+   */
+  const turnStartedAtMs =
+    (turn.user ? (getMetadata(turn.user.id)?.startedAt ?? null) : null) ??
+    (inFlight && sendStatus ? sendStatus.turnStartedAtMs : null) ??
+    (pendingActive && pendingReply ? pendingReply.turnStartedAtMs : null);
 
   // T-33 (review F1, round 2): the turn's progress stamp — block count PLUS
   // streamed characters. A resumed call may append into an EXISTING text
@@ -1792,11 +1865,28 @@ const ChatTurn = memo(function ChatTurn({
     () => turnWorkGroupAwaitsUser(workGroup.grouped),
     [workGroup.grouped]
   );
-  // Whole-turn span (first start -> last completion), NOT the last message's
-  // latency: a turn split by a tool result or an authorization wait is several
-  // messages, and reporting the final one's latency told a two-minute turn it
-  // took four seconds. `null` here means "omit the number", never "0s".
-  const workedMs = useMemo(() => deriveTurnWorkedMs(bodyMetadata), [bodyMetadata]);
+  // The turn's clock, in ONE derivation for both of the head's states. Running
+  // it counts to `nowMs`; finished it counts to the turn's last completion (or,
+  // for a stopped/failed turn, to the last stamp on record) — but from the SAME
+  // origin either way, which is what makes the head's number monotone across
+  // the first-byte handover instead of resetting there. `null` means "omit the
+  // number", never "0s" (`deriveTurnElapsedMs`'s own rule).
+  //
+  // Not memoized: while the turn runs this is a function of the one-second
+  // tick, so a `useMemo` keyed on `nowMs` would only add a comparison — the
+  // same reasoning `turnThinkingMs` below already carries.
+  const turnRunning = !processSettled;
+  const turnElapsedMs = deriveTurnElapsedMs({
+    startedAtMs: turnStartedAtMs,
+    metadata: bodyMetadata,
+    nowMs,
+    running: turnRunning,
+  });
+  // Split back out for the head's two props. Whole-turn span, NOT the last
+  // message's latency: a turn split by a tool result or an authorization wait
+  // is several messages, and reporting the final one's latency told a
+  // two-minute turn it took four seconds.
+  const workedMs = turnRunning ? null : turnElapsedMs;
   // The head's live numbers. Both are per-TURN by construction: the usage
   // registry attributes each `usage.updated` to the assistant message that was
   // open at the time, and the thinking registry is keyed by block id — so
@@ -1819,10 +1909,14 @@ const ChatTurn = memo(function ChatTurn({
   // clock, so this is a per-tick value by definition and a `useMemo` keyed on
   // the tick would only add a comparison.
   const turnThinkingMs = sumTurnThinkingMs(thinkingSpans, { nowMs, live: !processSettled });
-  // `turnActive` is what says a clock exists at all — `elapsedSeconds` falls
-  // back to 0 for a session that was already running when this window opened,
-  // and a head must not report that as 「工作中 0 秒」.
-  const headElapsedSeconds = turnActive ? elapsedSeconds : null;
+  // `turnElapsedMs === null` is what says no clock exists — a session that was
+  // already running when this window opened replays no origin, and a head must
+  // not report that as 「Working 0s」. Gated on `turnRunning` rather than
+  // `turnActive` so it matches the branch `deriveTurnWorkGroupLabel` takes on
+  // the very same flag: the two used to disagree in the window between the two,
+  // which left the head saying a bare 「Working」 while a clock was available.
+  const headElapsedSeconds =
+    turnRunning && turnElapsedMs !== null ? Math.floor(turnElapsedMs / 1000) : null;
 
   const renderSegment = (segment: TurnSegment<TurnItem>) => {
     // Keyed off the segment's FIRST item, not its index: an index key would

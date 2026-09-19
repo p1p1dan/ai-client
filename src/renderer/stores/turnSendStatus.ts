@@ -45,6 +45,22 @@ export interface TurnSendStatus {
   /** Seconds since the CURRENT phase started (the ticker resets at the phase change). */
   elapsedSeconds: number;
   /**
+   * Epoch ms of the send's COMMIT point — stamped once in `begin` and never
+   * re-stamped (2026-09-19).
+   *
+   * Deliberately not derivable from `elapsedSeconds`, which is relative to the
+   * current phase and is reset to 0 when the handshake hands over to the wait.
+   * That reset is correct for the status line it was built for ("how long has
+   * this phase been silent") and wrong for the turn head, which answers "how
+   * long have I been waiting" and must never go backwards.
+   *
+   * Its one reader is the turn head, and only for the window before the Host
+   * echoes the user message back: from that echo onward the turn's origin is
+   * the echo's own `message.started`, which — unlike this slot — survives the
+   * send being torn down at the first byte.
+   */
+  turnStartedAtMs: number;
+  /**
    * This send's wait budget in ms. F456 §7.2 retired the `(up to Ns)` clause it
    * used to feed, so no reader prints it any more; it is still carried so the
    * turn head can pass it to a parameter whose whole job is now to be ignored.

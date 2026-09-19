@@ -17,6 +17,9 @@ const snapshot = (sessionId: string) => ({
   sessionId,
   phase: 'handshake' as const,
   elapsedSeconds: 0,
+  // The commit stamp (2026-09-19). Distinct from `elapsedSeconds` on purpose:
+  // that one is phase-relative and is reset at dispatch, this one never moves.
+  turnStartedAtMs: 1_700_000_000_000,
   budgetMs: 60_000,
   attachmentCount: 0,
   attachmentBytes: 0,

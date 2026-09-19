@@ -14,7 +14,12 @@ import { formatRelativeAge, RELATIVE_AGE_NOW } from '@/lib/relativeTime';
  */
 
 export interface MessageMetadata {
-  /** Epoch ms of `message.started`, for latency computation. */
+  /**
+   * Epoch ms of `message.started`, for latency computation — and, on the USER
+   * message of a turn, for the turn clock's origin (see `reduceMessageMetadata`
+   * and `turnTiming.ts`'s `deriveTurnElapsedMs`). A user entry carries this
+   * field and nothing else.
+   */
   startedAt?: number | null;
   /** Epoch ms of `message.completed`. */
   completedAt?: number | null;
@@ -116,6 +121,27 @@ export function reduceMessageMetadata(
         return {
           byMessage,
           bySessionLastAssistant: { ...prev.bySessionLastAssistant, [sessionId]: messageId },
+        };
+      }
+      if (role === 'user') {
+        // 2026-09-19: the turn's own origin, and the only stamp for it that
+        // outlives the send.
+        //
+        // The head's clock used to start at the first ASSISTANT message, so
+        // the wait before the first byte — 7.3s of a measured 7.9s turn, and
+        // the entire minute behind 「我仅仅发送一句 nihao，运行了差不多 1 分
+        // 钟」 — was not counted at all. This is the earliest instant the Host
+        // admits the turn existed: the projector emits it the moment pi echoes
+        // the prompt back (`projector.ts`, `message_start` / `role: 'user'`).
+        //
+        // Nothing else is written. `model` / `reportedModel` are claims about
+        // what ANSWERED and a user message answered nothing; `usage` is billed
+        // against the assistant side; and `bySessionLastAssistant` must not
+        // move, or the next `usage.updated` (which carries a sessionId and no
+        // messageId) would be filed against the prompt instead of the reply.
+        return {
+          ...prev,
+          byMessage: { ...prev.byMessage, [messageId]: { startedAt: ts ?? null } },
         };
       }
       return prev;
