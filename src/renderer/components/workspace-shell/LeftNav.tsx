@@ -1266,8 +1266,12 @@ function SessionRow({
               variant="ghost"
               size="icon-xs"
               className="h-5 w-5"
-              aria-label="Close session"
-              title="Close"
+              // Not "Close": this is the list's remove, not the run's end (the
+              // context menu's "End conversation" is that one). The title says
+              // which of the two it is, because the difference — the row comes
+              // back on the next launch — is not visible from an ✕.
+              aria-label={t('Remove from the list')}
+              title={t('Remove from the list (it comes back after a restart)')}
               onClick={(event) => {
                 event.stopPropagation();
                 onClose();
@@ -1316,7 +1320,9 @@ function SessionRow({
                 </span>
               )}
               <span className="mt-2 block text-muted-foreground">
-                {t('It stays in the chat list and reopening it will load its history again.')}
+                {t(
+                  'It stays in the chat list, its history stays readable, and your next message starts it again.'
+                )}
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>

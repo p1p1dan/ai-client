@@ -1,17 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChatProject, ChatWorkspace } from '@/stores/chatSessions';
+import type { ChatMessage, ChatProject, ChatWorkspace } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { endSessionRuntime } from '../endSessionRuntime';
 import { buildSidebarFolders } from '../sidebarTree';
 
 /**
- * Closing a center tab ends the conversation but keeps its row.
+ * Ending a conversation stops its run and keeps everything else.
  *
- * The two halves are tested together because either one alone is a bug the
- * user reported: detaching without keeping the row is the dock's Close, and
- * keeping the row without detaching is what the tab strip shipped with — the
- * conversation kept running in the background after the user closed it.
+ * The halves are tested together because each one alone is a bug the user
+ * reported: detaching without keeping the row is the dock's Close; keeping the
+ * row without detaching is what the tab strip shipped with (the conversation
+ * kept running in the background after the user closed it); and dropping the
+ * transcript — T092 — blanked the pane the user was still reading.
  */
+
+/** One hydrated history row plus one live reply — what the user is reading. */
+const TIMELINE: ChatMessage[] = [
+  {
+    id: 'h:1',
+    sessionId: 's1',
+    role: 'user',
+    blocks: [{ id: 'h:1:0', type: 'text', text: 'what changed here?' }],
+  },
+  {
+    id: 'm-2',
+    sessionId: 's1',
+    role: 'assistant',
+    blocks: [{ id: 'm-2:0', type: 'text', text: 'the parser moved' }],
+  },
+];
 
 const projects: ChatProject[] = [{ id: 'p-ai', name: 'ai-client' }];
 const workspaces: ChatWorkspace[] = [
@@ -41,7 +58,7 @@ function seedSession() {
         runtimeIdentity: '/sessions/s1.jsonl',
       },
     ],
-    messages: { s1: [], s2: [] },
+    messages: { s1: [...TIMELINE], s2: [] },
     hostBoundSessionIds: ['s1', 's2'],
     historyErrors: { s1: 'read_failed: boom' },
     historyPagination: { s1: { nextOffset: 20, hydratedCount: 20, totalCount: 60, hasMore: true } },
@@ -79,21 +96,52 @@ describe('endSessionRuntime', () => {
     ).toEqual(['s1']);
   });
 
-  it('clears exactly the state that would make a reopen skip the resume', async () => {
+  it('keeps the timeline so the ended conversation is still readable', async () => {
     stubChat(Promise.resolve({ requestId: 'req-1' }));
 
     await endSessionRuntime('s1');
 
     const state = useChatSessionsStore.getState();
-    // `useActivateSession` resumes only when the timeline is empty, and
-    // `sendMessage` skips createSession while the id is still host-bound.
-    expect(state.messages.s1).toBeUndefined();
+    // T092: the transcript survives. What goes is the read cursor around it —
+    // pagination and branch revision describe a live read, and with no worker
+    // attached "Load earlier messages" is disabled by status anyway.
+    expect(state.messages.s1).toEqual(TIMELINE);
     expect(state.hostBoundSessionIds).toEqual(['s2']);
     expect(state.historyErrors.s1).toBeUndefined();
     expect(state.historyPagination?.s1).toBeUndefined();
     expect(state.historyBranchRevisions?.s1).toBeUndefined();
     // A neighbour's state is untouched.
     expect(state.messages.s2).toEqual([]);
+  });
+
+  it('keeps the timeline visible for the session the user is still looking at', async () => {
+    stubChat(Promise.resolve({ requestId: 'req-1' }));
+
+    // The reported defect exactly: ending from the context menu does not move
+    // the user anywhere, so whatever this leaves in `messages` is what the open
+    // pane paints. It used to leave nothing, and the pane said "No messages
+    // yet" over a conversation the user had just been reading.
+    await endSessionRuntime('s1');
+
+    const state = useChatSessionsStore.getState();
+    expect(state.activeSessionId).toBe('s1');
+    expect(state.messages[state.activeSessionId ?? '']).toEqual(TIMELINE);
+  });
+
+  it('still detaches the host binding so the next send re-opens the runtime', async () => {
+    const api = stubChat(Promise.resolve({ requestId: 'req-1' }));
+
+    await endSessionRuntime('s1');
+
+    const state = useChatSessionsStore.getState();
+    // Keeping the transcript must not cost the detach: a stale host binding
+    // would send the next turn to a worker that no longer exists. The identity
+    // is what lets that send resume the ORIGINAL session file.
+    expect(api.closeSession).toHaveBeenCalledWith({ sessionId: 's1' });
+    expect(state.hostBoundSessionIds).not.toContain('s1');
+    expect(state.sessions.find((item) => item.id === 's1')?.runtimeIdentity).toBe(
+      '/sessions/s1.jsonl'
+    );
   });
 
   it('parks the row at a status a later resume is allowed to run from', async () => {
@@ -111,7 +159,7 @@ describe('endSessionRuntime', () => {
 
     const state = useChatSessionsStore.getState();
     expect(state.hostBoundSessionIds).toEqual(['s2']);
-    expect(state.messages.s1).toBeUndefined();
+    expect(state.messages.s1).toEqual(TIMELINE);
     expect(state.sessions.find((item) => item.id === 's1')).toBeDefined();
   });
 });

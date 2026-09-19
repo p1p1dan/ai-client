@@ -2088,6 +2088,9 @@ export const zhTranslations: Record<string, string> = {
   'Their history stays on disk; this only clears them out of the list.':
     '历史记录仍留在磁盘上，这一步只是把它们从列表里清出去。',
   'No conversation open': '未打开对话',
+  // The sidebar row's ✕ — the list's remove, not the run's end.
+  'Remove from the list': '从列表移除',
+  'Remove from the list (it comes back after a restart)': '从列表移除（重启后会回来）',
   // Ending a conversation has to say which parts are lost (the running turn)
   // and which are not (the row, the history). Moved from the tab's ✕ to the
   // sidebar row's context menu, so the copy names the session instead of "this".
@@ -2096,8 +2099,10 @@ export const zhTranslations: Record<string, string> = {
     '结束「{{name}}」会停止它的 agent，并把它从后台释放。',
   'This conversation is still running; its current turn will be cut off.':
     '这个对话还在运行，当前这一轮会被中断。',
-  'It stays in the chat list and reopening it will load its history again.':
-    '它仍然留在左栏会话列表里，重新打开会再次载入历史。',
+  // T092: the transcript is no longer dropped when a conversation ends, so the
+  // copy no longer promises a re-load that never happened on screen.
+  'It stays in the chat list, its history stays readable, and your next message starts it again.':
+    '它仍然留在左栏会话列表里，历史记录也仍然可见；下次发送消息时会自动重新启动。',
   'End conversation': '结束对话',
   // D12 decision three: reclamation used to be silent in both directions.
   'A conversation moved to the background': '有一个对话已转入后台',

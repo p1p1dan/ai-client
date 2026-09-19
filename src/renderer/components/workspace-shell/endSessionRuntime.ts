@@ -25,19 +25,32 @@ function withoutKey<T>(map: Record<string, T> | undefined, key: string): Record<
 }
 
 /**
- * Detach the worker and reset this session's live state, keeping its row.
+ * Detach the worker and reset this session's live state, keeping its row AND
+ * the transcript the user was reading.
  *
- * The store surgery is not cosmetic — each field would otherwise leave the
- * reopened session broken in a different way:
+ * What each field is doing here:
  *
  *   - `hostBoundSessionIds` tells `sendMessage` the Host already knows this
  *     session, so it skips `createSession`. Left stale, the next send goes to a
- *     runtime that no longer exists.
- *   - `messages` is what `useActivateSession` reads to decide whether a click
- *     needs a resume (`!hasTimeline`). Left populated, reopening the tab would
- *     restore the transcript from memory and never spawn a worker for it.
- *   - `historyErrors` / pagination / branch revision all describe the read that
- *     produced that transcript, so they go with it.
+ *     runtime that no longer exists. This is the load-bearing half of ending.
+ *   - `messages` is KEPT (T092). It used to be deleted so that
+ *     `useActivateSession`'s `!hasTimeline` test would fire a resume on the next
+ *     click — but nothing re-hydrates a timeline for the session the user is
+ *     ALREADY looking at, so ending a conversation blanked the pane in front of
+ *     them and left "No messages yet" where their history had been. The capacity
+ *     reclaim path in `chatSessions.ts` keeps the transcript for the same
+ *     reason; ending on purpose is not a reason to read less.
+ *   - `historyErrors` is cleared, and pagination / branch revision are dropped:
+ *     they describe the READ CURSOR of a live session, not its transcript. With
+ *     no worker attached, "Load earlier messages" is disabled by status anyway,
+ *     and the next resume replays the file and recomputes all three.
+ *
+ * Keeping the transcript costs the click-time resume: activating an ended
+ * session now just shows it. The run comes back on the next SEND, which routes
+ * through `computeEverHostBound` (`sessionBinding.ts`) — still true here because
+ * `runtimeIdentity` stays — and therefore resumes the original session file
+ * instead of creating a new one. `historyReplayMerge` replaces the already
+ * hydrated `h:*` rows with that replay, so the transcript is not doubled.
  *
  * `runtimeIdentity` and the title stay: they are how the row finds its session
  * file again. Status becomes `disconnected` rather than `idle` because no worker
@@ -57,7 +70,6 @@ export async function endSessionRuntime(sessionId: string): Promise<boolean> {
 
   useChatSessionsStore.setState((current) => ({
     hostBoundSessionIds: current.hostBoundSessionIds.filter((id) => id !== sessionId),
-    messages: withoutKey(current.messages, sessionId),
     historyErrors: withoutKey(current.historyErrors, sessionId),
     historyPagination: withoutKey(current.historyPagination, sessionId),
     historyBranchRevisions: withoutKey(current.historyBranchRevisions, sessionId),

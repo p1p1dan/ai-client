@@ -50,6 +50,25 @@ describe('end-conversation wiring', () => {
     expect(CODE).toContain('{started && (');
   });
 
+  it('the sidebar close button and the end-conversation menu item call different actions', () => {
+    // Two controls, one row, opposite promises: the ✕ takes the row OUT of the
+    // list for the rest of the run (`closeSessionAndRemoveRow`, reached through
+    // the index mutation `close`), the menu item ends the RUN and leaves the
+    // row and its transcript where they are. Collapsing either into the other
+    // is a one-character edit and silent to look at.
+    const closeButton = CODE.slice(
+      CODE.lastIndexOf('<Button', CODE.indexOf('onClose();')),
+      CODE.indexOf('</Button>', CODE.indexOf('onClose();'))
+    );
+    expect(closeButton).toContain('onClose();');
+    expect(closeButton).not.toContain('endSessionRuntime');
+    expect(closeButton).not.toContain('setEndConfirmOpen');
+    // The prop behind that ✕ is the index close, on every row list.
+    expect(CODE).toContain('onClose={() => void close(row.sessionId)}');
+    // And its label no longer says the bare "Close" both controls could mean.
+    expect(closeButton).toContain("aria-label={t('Remove from the list')}");
+  });
+
   it('keeps the dock row: ending is not dismissal, removal or archiving', () => {
     const dialog = CODE.slice(
       CODE.indexOf('<AlertDialog open={endConfirmOpen}'),
