@@ -18,6 +18,7 @@ import {
   Cdp,
   clickByText,
   devLogTail,
+  ENTER_MAIN_SURFACE,
   repoRoot,
   sleep,
   startDevApp,
@@ -137,7 +138,7 @@ async function main() {
     // 起始页挡在前面：先按「使用本机已有配置」进到主界面，再塞对话。
     // 这一步失败不算致命 —— 如果这台机器上已经引导过，按钮本来就不在。
     try {
-      await cdp.evaluate(clickByText('使用本机已有配置'));
+      await cdp.evaluate(ENTER_MAIN_SURFACE);
       await sleep(2500);
     } catch {
       /* 已经引导过了 */

@@ -25,6 +25,7 @@ import {
   Cdp,
   clickByText,
   devLogTail,
+  ENTER_MAIN_SURFACE,
   repoRoot,
   sleep,
   startDevApp,
@@ -130,7 +131,7 @@ try {
   });
   // 起始页挡在前面：本地模式那条路用 dev.env 的 PI_CODING_AGENT_DIR，正是点验要的。
   try {
-    await cdp.evaluate(clickByText('使用本机已有配置'));
+    await cdp.evaluate(ENTER_MAIN_SURFACE);
     report.steps.onboarding = 'clicked';
     await sleep(2500);
   } catch {

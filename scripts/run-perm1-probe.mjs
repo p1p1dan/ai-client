@@ -29,6 +29,7 @@ import {
   clickByText,
   DEBUG_PORT,
   devLogTail,
+  ENTER_MAIN_SURFACE,
   repoRoot,
   sleep,
   startDevApp,
@@ -165,7 +166,7 @@ async function main() {
       label: 'renderer painted',
     });
     try {
-      await cdp.evaluate(clickByText('使用本机已有配置'));
+      await cdp.evaluate(ENTER_MAIN_SURFACE);
       await sleep(2500);
     } catch {
       /* 已经引导过了 */
@@ -287,7 +288,17 @@ async function main() {
     report.rendererProblems = cdp.problems;
     const s = report.steps;
     report.verdict = {
-      popupHasAllFourGearsAndModes: (s.popupContents?.items ?? []).length === 5,
+      // 2026-09-19: was `length === 5`, written before 决策 023 added 「完全放行」.
+      // A bare count told me "6 ≠ 5" and nothing about WHICH row was new, so it
+      // reads as a regression when it is really a stale expectation. Naming the
+      // rows makes the next addition say what it is.
+      popupHasAllFourGearsAndModes: (() => {
+        const want = ['规划', '执行', '每次询问', '自动接受编辑', '全自动', '完全放行'];
+        const got = (s.popupContents?.items ?? []).map((i) =>
+          (i.text ?? '').split(' | ')[0].trim()
+        );
+        return want.length === got.length && want.every((row, i) => got[i] === row);
+      })(),
       closesOnPlainGear: s.closedOnPlainGear === true,
       labelFollowsGear: (s.labelAfterGear ?? '').includes('自动接受编辑'),
       autoKeepsPopupOpen: s.autoKeepsPopup === true,

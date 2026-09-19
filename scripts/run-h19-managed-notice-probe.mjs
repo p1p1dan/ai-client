@@ -39,9 +39,16 @@ fs.writeFileSync(
 // startDevApp 把自己的 process.env 原样传给子进程，所以在 import 之前设好。
 process.env.AICLIENT_DEV_ENV_FILE = managedEnvFile;
 
-const { Cdp, clickByText, DEBUG_PORT, devLogTail, sleep, startDevApp, stopDevApp } = await import(
-  './h21-cdp.mjs'
-);
+const {
+  Cdp,
+  clickByText,
+  DEBUG_PORT,
+  devLogTail,
+  ENTER_MAIN_SURFACE,
+  sleep,
+  startDevApp,
+  stopDevApp,
+} = await import('./h21-cdp.mjs');
 
 const outDir = path.join(
   repoRoot,
@@ -107,7 +114,7 @@ async function main() {
       label: 'renderer painted',
     });
     try {
-      await cdp.evaluate(clickByText('使用本机已有配置'));
+      await cdp.evaluate(ENTER_MAIN_SURFACE);
       await sleep(2500);
     } catch {
       /* 门已经跳过了 */

@@ -33,6 +33,7 @@ import {
   clickByText,
   DEBUG_PORT,
   devLogTail,
+  ENTER_MAIN_SURFACE,
   repoRoot,
   sleep,
   startDevApp,
@@ -233,7 +234,7 @@ async function main() {
       label: 'renderer painted',
     });
     try {
-      await cdp.evaluate(clickByText('使用本机已有配置'));
+      await cdp.evaluate(ENTER_MAIN_SURFACE);
       await sleep(2500);
     } catch {
       /* 已经引导过了 */

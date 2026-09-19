@@ -206,6 +206,36 @@ export const clickByText = (text) => `(() => {
   return true;
 })()`;
 
+/**
+ * Get past the welcome screen, whichever entry this build actually offers.
+ *
+ * Every probe used to hardcode 「使用本机已有配置」. A-round testing disables that
+ * button (`renderer/lib/aRoundTesting.ts`), and a disabled button swallows
+ * `.click()` without throwing — so the probes did not fail at the click, they
+ * failed 120s later at "composer mounted", pointing at the wrong thing entirely.
+ *
+ * Returns the label it clicked, or `null` when there is no welcome screen (the
+ * app is already inside). Never clicks a disabled button.
+ */
+export const ENTER_MAIN_SURFACE = `(() => {
+  if (document.querySelector('textarea')) return null;
+  const buttons = [...document.querySelectorAll('button')].filter(
+    (b) => !b.disabled && b.offsetParent !== null
+  );
+  // Signed-in managed entry first: it is the one A-round leaves open, and the
+  // one the MODEL group's real-provider criteria are written against.
+  const hit =
+    buttons.find((b) => /^以 .+ 继续$/.test((b.textContent ?? '').trim())) ??
+    buttons.find((b) => (b.textContent ?? '').trim() === '使用本机已有配置');
+  if (!hit) {
+    const seen = buttons.map((b) => (b.textContent ?? '').trim() + (b.disabled ? ' [disabled]' : ''));
+    throw new Error('no usable welcome entry; buttons on screen: ' + JSON.stringify(seen));
+  }
+  const label = (hit.textContent ?? '').trim();
+  hit.click();
+  return label;
+})()`;
+
 export const hasText = (text) => `document.body.innerText.includes(${JSON.stringify(text)})`;
 
 /** Everything about the open dialog a human would check, in one read. */

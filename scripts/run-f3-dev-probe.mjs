@@ -21,6 +21,7 @@ import {
   clickByText,
   DEBUG_PORT,
   devLogTail,
+  ENTER_MAIN_SURFACE,
   repoRoot,
   sleep,
   startDevApp,
@@ -77,7 +78,7 @@ async function main() {
     });
     // 起始页挡在前面时先进主界面；已引导过则按钮不存在，属正常。
     try {
-      await cdp.evaluate(clickByText('使用本机已有配置'));
+      await cdp.evaluate(ENTER_MAIN_SURFACE);
       await sleep(2500);
     } catch {
       /* 已经引导过了 */
