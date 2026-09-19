@@ -53,7 +53,8 @@ interface FileTreeProps {
   onCreateFile: (parentPath: string) => void;
   onCreateDirectory: (parentPath: string) => void;
   onRename: (path: string, newName: string) => void;
-  onDelete: (path: string) => void;
+  // T103: isDirectory lets the confirmation dialog pick "file" vs "folder" copy.
+  onDelete: (path: string, isDirectory: boolean) => void;
   onRefresh: () => void;
   onOpenSearch?: () => void;
   onExternalDrop?: (files: FileList, targetDir: string, operation: 'copy' | 'move') => void;
@@ -1359,7 +1360,7 @@ interface FileTreeNodeComponentProps {
   onStartRename: (path: string, currentName: string) => void;
   onFinishRename: (path: string) => void;
   onEditValueChange: (value: string) => void;
-  onDelete: (path: string) => void;
+  onDelete: (path: string, isDirectory: boolean) => void;
   onCopyPath: (path: string) => void;
   onCopyRelativePath?: (path: string) => void;
   onRevealInFinder?: (path: string) => void;
@@ -1815,7 +1816,10 @@ function FileTreeNodeComponent({
             </MenuItem>
           )}
           <MenuSeparator />
-          <MenuItem variant="destructive" onClick={() => onDelete(actualNode.path)}>
+          <MenuItem
+            variant="destructive"
+            onClick={() => onDelete(actualNode.path, actualNode.isDirectory)}
+          >
             <Trash2 className="h-4 w-4" />
             {t('Delete')}
           </MenuItem>

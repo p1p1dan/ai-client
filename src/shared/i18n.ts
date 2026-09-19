@@ -341,6 +341,12 @@ export const zhTranslations: Record<string, string> = {
   'Delete Group': '删除分组',
   Deleted: '删除',
   'Delete file': '删除文件',
+  // T103: the files panel's delete confirmation, an app-drawn AlertDialog
+  // replacing window.confirm. Title varies by node kind; body names the file.
+  'Delete file?': '删除文件？',
+  'Delete folder?': '删除文件夹？',
+  'This will delete “{{name}}” from disk. This action cannot be undone.':
+    '将从磁盘删除「{{name}}」，此操作不可撤销。',
   'Delete Worktree': '删除 Worktree',
   Description: '描述',
   'Description (optional)': '描述 (可选)',

@@ -13,10 +13,19 @@
  * renamed); only its meaning and label changed.
  */
 
+import { getDisplayPathBasename } from '@shared/utils/path';
 import { FileCode, FileSearch, Search } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { FileTree } from '@/components/files/FileTree';
 import { NewItemDialog } from '@/components/files/NewItemDialog';
+import {
+  AlertDialog,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -91,14 +100,25 @@ export function FilesSurfaceView({ surfaceId, onSearch }: SurfaceViewProps) {
     [newItemType, newItemParentPath, createFile, createDirectory]
   );
 
-  const handleDelete = useCallback(
-    async (path: string) => {
-      if (!window.confirm(`Delete "${path.split('/').pop()}"?`)) return;
-      await deleteItem(path);
-      closeFile(path);
-    },
-    [deleteItem, closeFile]
+  // T103: delete confirmation moved off the native, synchronous
+  // `window.confirm` and onto the app's own AlertDialog — hardcoded English
+  // there could not go through `t()`, and a blocking native prompt cannot be
+  // driven by the CDP-based point checks the rest of the shell uses.
+  const [deleteTarget, setDeleteTarget] = useState<{ path: string; isDirectory: boolean } | null>(
+    null
   );
+
+  const handleDeleteRequest = useCallback((path: string, isDirectory: boolean) => {
+    setDeleteTarget({ path, isDirectory });
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    const { path } = deleteTarget;
+    setDeleteTarget(null);
+    await deleteItem(path);
+    closeFile(path);
+  }, [deleteTarget, deleteItem, closeFile]);
 
   // A08 (a08:1512): a tree click opens the CENTER editor. `navigateToFile`
   // already handles both branches (existing tab → activate + background
@@ -165,7 +185,7 @@ export function FilesSurfaceView({ surfaceId, onSearch }: SurfaceViewProps) {
           onCreateFile={handleCreateFile}
           onCreateDirectory={handleCreateDirectory}
           onRename={renameItem}
-          onDelete={handleDelete}
+          onDelete={handleDeleteRequest}
           onRefresh={refresh}
           isLoading={isTreeLoading}
           rootPath={rootPath}
@@ -180,6 +200,33 @@ export function FilesSurfaceView({ surfaceId, onSearch }: SurfaceViewProps) {
           setNewItemParentPath('');
         }}
       />
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteTarget?.isDirectory ? t('Delete folder?') : t('Delete file?')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('This will delete “{{name}}” from disk. This action cannot be undone.', {
+                name: deleteTarget ? getDisplayPathBasename(deleteTarget.path) : '',
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button variant="destructive" onClick={() => void handleConfirmDelete()}>
+              {t('Delete')}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </div>
   );
 }
