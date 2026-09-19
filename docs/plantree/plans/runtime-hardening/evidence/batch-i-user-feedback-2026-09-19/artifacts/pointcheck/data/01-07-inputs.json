@@ -1,0 +1,10 @@
+[
+  {
+    "i": 0,
+    "type": "text",
+    "placeholder": "搜索会话",
+    "ariaLabel": null,
+    "value": "",
+    "rectX": 81
+  }
+]

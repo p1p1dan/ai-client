@@ -1,0 +1,33 @@
+{
+  "banner": {
+    "t": "2026-09-19T18:16:30.681Z",
+    "countdownText": "30s 后重试",
+    "retryingNow": false,
+    "giveUpButton": true,
+    "bannerLines": [
+      "T093：渠道一直 503（点验倒计时与立即放弃）",
+      "E1-24 重试观感探针：请回一句话",
+      "T093b：一直 503，点验「立即放弃」",
+      "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+      "30s 后重试 · PROVIDER_ERROR 503",
+      "立即放弃"
+    ]
+  },
+  "status": {
+    "t": "2026-09-19T18:16:30.671Z",
+    "status": "running",
+    "title": "New chat",
+    "msgs": 1,
+    "hostBound": true,
+    "active": "session-1789841772574-28u781p",
+    "retry": {
+      "attempt": 3,
+      "maxRetries": 3,
+      "delayMs": 30000,
+      "errorStatus": "503",
+      "error": "PROVIDER_ERROR",
+      "retryAt": 1789841819649,
+      "attemptStartedAt": 1789841789640
+    }
+  }
+}

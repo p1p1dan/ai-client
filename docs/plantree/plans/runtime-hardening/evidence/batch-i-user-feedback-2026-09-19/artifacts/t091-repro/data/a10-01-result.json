@@ -1,0 +1,463 @@
+{
+  "trace": [
+    {
+      "t": "2026-09-19T13:28:26.085Z",
+      "active": "session-1789824505356-65wf4oc",
+      "count": 200,
+      "activeTitle": "New chat",
+      "activeStatus": "idle",
+      "round": [
+        {
+          "label": "停止当前回合",
+          "disabled": false
+        },
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "t": "2026-09-19T13:28:27.420Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:28.453Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:29.455Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:30.460Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:31.566Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:32.568Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:33.569Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:34.570Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:35.571Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:36.572Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:37.573Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:38.574Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:39.576Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:40.577Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:41.673Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:42.675Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:43.676Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:44.677Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:45.678Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    },
+    {
+      "t": "2026-09-19T13:28:46.679Z",
+      "phase": "post-click",
+      "sender": {
+        "status": "running",
+        "msgs": 2
+      },
+      "fresh": {
+        "status": "idle",
+        "msgs": 0,
+        "title": "New chat"
+      },
+      "round": [
+        {
+          "label": "加入队列",
+          "disabled": true
+        }
+      ],
+      "textarea": ""
+    }
+  ],
+  "senderId": "session-1789824442392-wigej2l",
+  "newClickedAt": "2026-09-19T13:28:25.356Z",
+  "newId": "session-1789824505356-65wf4oc",
+  "created": true,
+  "countBefore": 199,
+  "countAfter": 200,
+  "staleStopSeen": {
+    "t": "2026-09-19T13:28:26.085Z",
+    "active": "session-1789824505356-65wf4oc",
+    "count": 200,
+    "activeTitle": "New chat",
+    "activeStatus": "idle",
+    "round": [
+      {
+        "label": "停止当前回合",
+        "disabled": false
+      },
+      {
+        "label": "加入队列",
+        "disabled": true
+      }
+    ]
+  },
+  "afterTyping": {
+    "t": "2026-09-19T13:28:26.417Z",
+    "active": "session-1789824505356-65wf4oc",
+    "count": 200,
+    "activeTitle": "New chat",
+    "activeStatus": "idle",
+    "round": [
+      {
+        "label": "停止当前回合",
+        "disabled": false
+      },
+      {
+        "label": "加入队列",
+        "disabled": false
+      }
+    ]
+  },
+  "primaryLabel": "加入队列",
+  "primaryClickedAt": "2026-09-19T13:28:26.420Z"
+}

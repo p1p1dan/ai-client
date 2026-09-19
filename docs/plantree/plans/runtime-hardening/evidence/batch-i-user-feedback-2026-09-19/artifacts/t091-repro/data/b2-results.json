@@ -1,0 +1,1019 @@
+{
+  "p1_asFound": {
+    "toggle": {
+      "kind": "toggle",
+      "ariaLabel": "展开最近",
+      "visible": true
+    },
+    "byGroup": {
+      "最近": {
+        "total": 200,
+        "newChat": 1,
+        "showMore": null
+      }
+    },
+    "rows": [
+      {
+        "group": "最近",
+        "title": "T091 A10：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": true
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A6：长回合，别急着结束",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A6：长回合，别急着结束",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "点验重命名-0919",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A6：长回合，别急着结束",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 场景A：请开始一个长回合",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 场景A-4：这条应该落在 S2",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "一句话回答，不要展开：为什么 0.1 + 0.2 在浮点数里不等于 0.3",
+        "visible": true,
+        "active": false
+      }
+    ]
+  },
+  "p2_recentExpanded": {
+    "byGroup": {
+      "最近": {
+        "total": 207,
+        "newChat": 2,
+        "showMore": "显示更多 ( 36 )"
+      }
+    },
+    "rows": [
+      {
+        "group": "最近",
+        "title": "T091 A10：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": true
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A6：长回合，别急着结束",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A6：长回合，别急着结束",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "showMore": "显示更多 ( 36 )",
+        "visible": true
+      },
+      {
+        "group": "最近",
+        "title": "T091 A10：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": true
+      }
+    ]
+  },
+  "p3_newWithRecentExpanded": {
+    "click": {
+      "t": "2026-09-19T13:31:18.072Z",
+      "preCount": 200,
+      "postCount": 201,
+      "created": true,
+      "newId": "session-1789824678072-q93r6ux"
+    },
+    "snapshots": {
+      "plus0": {
+        "byGroup": {
+          "最近": {
+            "total": 208,
+            "newChat": 4,
+            "showMore": "显示更多 ( 37 )"
+          }
+        },
+        "rows": [
+          {
+            "group": "最近",
+            "title": "New chat",
+            "visible": true,
+            "active": true
+          },
+          {
+            "group": "最近",
+            "title": "T091 A10：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "New chat",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A6：长回合，别急着结束",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "showMore": "显示更多 ( 37 )",
+            "visible": true
+          },
+          {
+            "group": "最近",
+            "title": "New chat",
+            "visible": true,
+            "active": true
+          },
+          {
+            "group": "最近",
+            "title": "T091 A10：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          }
+        ]
+      },
+      "plus200": {
+        "byGroup": {
+          "最近": {
+            "total": 208,
+            "newChat": 4,
+            "showMore": "显示更多 ( 37 )"
+          }
+        },
+        "rows": [
+          {
+            "group": "最近",
+            "title": "New chat",
+            "visible": true,
+            "active": true
+          },
+          {
+            "group": "最近",
+            "title": "T091 A10：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "New chat",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A6：长回合，别急着结束",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "showMore": "显示更多 ( 37 )",
+            "visible": true
+          },
+          {
+            "group": "最近",
+            "title": "New chat",
+            "visible": true,
+            "active": true
+          },
+          {
+            "group": "最近",
+            "title": "T091 A10：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          }
+        ]
+      },
+      "plus1000": {
+        "byGroup": {
+          "最近": {
+            "total": 208,
+            "newChat": 4,
+            "showMore": "显示更多 ( 37 )"
+          }
+        },
+        "rows": [
+          {
+            "group": "最近",
+            "title": "New chat",
+            "visible": true,
+            "active": true
+          },
+          {
+            "group": "最近",
+            "title": "T091 A10：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "New chat",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A6：长回合，别急着结束",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "showMore": "显示更多 ( 37 )",
+            "visible": true
+          },
+          {
+            "group": "最近",
+            "title": "New chat",
+            "visible": true,
+            "active": true
+          },
+          {
+            "group": "最近",
+            "title": "T091 A10：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          }
+        ]
+      },
+      "plus3000": {
+        "byGroup": {
+          "最近": {
+            "total": 208,
+            "newChat": 4,
+            "showMore": "显示更多 ( 37 )"
+          }
+        },
+        "rows": [
+          {
+            "group": "最近",
+            "title": "New chat",
+            "visible": true,
+            "active": true
+          },
+          {
+            "group": "最近",
+            "title": "T091 A10：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "New chat",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A6：长回合，别急着结束",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "showMore": "显示更多 ( 37 )",
+            "visible": true
+          },
+          {
+            "group": "最近",
+            "title": "New chat",
+            "visible": true,
+            "active": true
+          },
+          {
+            "group": "最近",
+            "title": "T091 A10：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          },
+          {
+            "group": "最近",
+            "title": "T091 A8：长回合，请一直跑",
+            "visible": true,
+            "active": false
+          }
+        ]
+      }
+    }
+  },
+  "p4_afterRailSwitch": {
+    "byGroup": {
+      "最近": {
+        "total": 208,
+        "newChat": 4,
+        "showMore": "显示更多 ( 37 )"
+      }
+    },
+    "rows": [
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": true
+      },
+      {
+        "group": "最近",
+        "title": "T091 A10：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A6：长回合，别急着结束",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "showMore": "显示更多 ( 37 )",
+        "visible": true
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": true
+      },
+      {
+        "group": "最近",
+        "title": "T091 A10：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      }
+    ]
+  },
+  "p5_withQueryBefore": {
+    "byGroup": {
+      "最近": {
+        "total": 14,
+        "newChat": 0,
+        "showMore": null
+      }
+    },
+    "rows": [
+      {
+        "group": "最近",
+        "title": "点验重命名-0919",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-clie…",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验权限策略，预期会被拒绝，不要绕过：用 explorer 子代理读一下 /home/ai/code/ai-cli…",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "新开一个会话继续点验",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验权限策略，请用 bash 原样执行下面这条命令，不要改写、不要解释、不要换别的命令：git status --…",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验权限策略",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "点验重命名-0919",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-clie…",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验权限策略，预期会被拒绝，不要绕过：用 explorer 子代理读一下 /home/ai/code/ai-cli…",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "新开一个会话继续点验",
+        "visible": true,
+        "active": false
+      }
+    ]
+  },
+  "p5_withQueryAfter": {
+    "click": {
+      "t": "2026-09-19T13:31:30.872Z",
+      "preCount": 201,
+      "postCount": 202,
+      "created": true,
+      "newId": "session-1789824690872-07me1ym"
+    },
+    "byGroup": {
+      "最近": {
+        "total": 14,
+        "newChat": 0,
+        "showMore": null
+      }
+    },
+    "rows": [
+      {
+        "group": "最近",
+        "title": "点验重命名-0919",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-clie…",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验权限策略，预期会被拒绝，不要绕过：用 explorer 子代理读一下 /home/ai/code/ai-cli…",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "新开一个会话继续点验",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验权限策略，请用 bash 原样执行下面这条命令，不要改写、不要解释、不要换别的命令：git status --…",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验权限策略",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "点验重命名-0919",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-clie…",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "我在点验权限策略，预期会被拒绝，不要绕过：用 explorer 子代理读一下 /home/ai/code/ai-cli…",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "新开一个会话继续点验",
+        "visible": true,
+        "active": false
+      }
+    ]
+  },
+  "p5_afterClearingQuery": {
+    "byGroup": {
+      "最近": {
+        "total": 209,
+        "newChat": 6,
+        "showMore": "显示更多 ( 38 )"
+      }
+    },
+    "rows": [
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": true
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A10：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "showMore": "显示更多 ( 38 )",
+        "visible": true
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": true
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A10：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      }
+    ]
+  },
+  "p6_folderCollapsed": {
+    "byGroup": {
+      "最近": {
+        "total": 22,
+        "newChat": 3,
+        "showMore": "显示更多 ( 38 )"
+      }
+    },
+    "rows": [
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": true
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A10：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "showMore": "显示更多 ( 38 )",
+        "visible": true
+      },
+      {
+        "group": "最近",
+        "title": "devB DEV-2 after-GUI-change temp session probe",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "devB DEV-2 new-root temp session probe",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "devB DEV-2 old-root temp session probe",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "Session i4c45n",
+        "visible": true,
+        "active": false
+      }
+    ]
+  },
+  "p6_afterNew": {
+    "click": {
+      "t": "2026-09-19T13:31:38.351Z",
+      "preCount": 202,
+      "postCount": 202,
+      "created": false,
+      "newId": "session-1789824690872-07me1ym"
+    },
+    "byGroup": {
+      "最近": {
+        "total": 22,
+        "newChat": 3,
+        "showMore": "显示更多 ( 38 )"
+      }
+    },
+    "rows": [
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": true
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A10：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "New chat",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "T091 A8：长回合，请一直跑",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "showMore": "显示更多 ( 38 )",
+        "visible": true
+      },
+      {
+        "group": "最近",
+        "title": "devB DEV-2 after-GUI-change temp session probe",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "devB DEV-2 new-root temp session probe",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "devB DEV-2 old-root temp session probe",
+        "visible": true,
+        "active": false
+      },
+      {
+        "group": "最近",
+        "title": "Session i4c45n",
+        "visible": true,
+        "active": false
+      }
+    ]
+  }
+}

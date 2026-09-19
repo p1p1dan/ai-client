@@ -1,0 +1,13 @@
+{
+  "s1": "session-live-1789823729760-b24it59",
+  "poll": {
+    "t": "2026-09-19T13:18:10.812Z",
+    "status": "running",
+    "title": "T091 场景A：请开始一个长回合",
+    "msgs": 2,
+    "hostBound": true,
+    "pendingPermissions": 0,
+    "count": 191,
+    "active": "session-live-1789823729760-b24it59"
+  }
+}

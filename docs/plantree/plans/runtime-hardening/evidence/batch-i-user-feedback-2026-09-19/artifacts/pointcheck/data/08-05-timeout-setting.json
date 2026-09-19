@@ -1,0 +1,17 @@
+{
+  "before": 120000,
+  "store": 30000,
+  "after": 30000,
+  "uiLines": [
+    "docs",
+    "plans",
+    "ideas",
+    "plans",
+    "decisions",
+    "artifacts",
+    "shots",
+    "gw.mjs",
+    "lib.mjs",
+    "pc-00-enter.mjs"
+  ]
+}

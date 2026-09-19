@@ -1,0 +1,8 @@
+{
+  "chatAgentDefaults": {
+    "model": "claude/claude-opus-5",
+    "effort": "default"
+  },
+  "providerIdleTimeoutMs": 120000,
+  "defaultTier": "pragmatic"
+}

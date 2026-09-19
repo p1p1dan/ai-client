@@ -1,0 +1,138 @@
+[
+  {
+    "status": {
+      "t": "2026-09-19T17:57:20.587Z",
+      "status": "idle",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 3,
+      "hostBound": true,
+      "active": "session-live-1789840444093-xrxvotj",
+      "retry": null
+    },
+    "transcript": {
+      "len": 11676,
+      "head": "最近\n\n仓库列表\n\nai-client\n+5795\n-478\nT091-C：这条应当作为「发送」而不是「排队」\nfeat/runtime-evolution\nnow\nT091-A：请开始一个长回合（点验用）\nfeat/runtime-evolution\n1m\nNew chat\nfeat/runtime-evolution\n1m\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 A10：长回合，请一直跑\n",
+      "tail": "2w\nSession s-send\nfeat/runtime-evolution\n2w\nws\n新建对话\n临时对话\ndevB DEV-2 after-GUI-change temp session probe\ntemporary\n2d\ndevB DEV-2 new-root temp session probe\ntemporary\n2d\ndevB DEV-2 old-root temp session probe\ntemporary\n2d\nSession i4c45n\ntemporary\n2d\ndevA1KILL 回一个字：丁\ntemporary\n2d\ndevA1SCRATCH 回一个字：乙\ntemporary\n2d\ndevA1UNB 回一个字：甲 (fork)\ntemporary\n2d\ndevA1UNB 回一个字：甲\ntemporary\n2d\npi-install.sh 我运行时报错有点问题，帮我看看，刚刚提示npm不存在\ntemporary\n1w\nSession xx5l7s\ntemporary\n1w\nSession mgm09v\ntemporary\n1w\nSession 6k5w7h\ntemporary\n1w\nSession xg29cz\ntemporary\n1w\nSession d4909j\ntemporary\n1w\n写一个test123.txt文件\ntemporary\n1w",
+      "emptyState": false
+    }
+  },
+  {
+    "status": {
+      "t": "2026-09-19T17:57:22.094Z",
+      "status": "idle",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 3,
+      "hostBound": true,
+      "active": "session-live-1789840444093-xrxvotj",
+      "retry": null
+    },
+    "transcript": {
+      "len": 11676,
+      "head": "最近\n\n仓库列表\n\nai-client\n+5795\n-478\nT091-C：这条应当作为「发送」而不是「排队」\nfeat/runtime-evolution\nnow\nT091-A：请开始一个长回合（点验用）\nfeat/runtime-evolution\n1m\nNew chat\nfeat/runtime-evolution\n1m\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 A10：长回合，请一直跑\n",
+      "tail": "2w\nSession s-send\nfeat/runtime-evolution\n2w\nws\n新建对话\n临时对话\ndevB DEV-2 after-GUI-change temp session probe\ntemporary\n2d\ndevB DEV-2 new-root temp session probe\ntemporary\n2d\ndevB DEV-2 old-root temp session probe\ntemporary\n2d\nSession i4c45n\ntemporary\n2d\ndevA1KILL 回一个字：丁\ntemporary\n2d\ndevA1SCRATCH 回一个字：乙\ntemporary\n2d\ndevA1UNB 回一个字：甲 (fork)\ntemporary\n2d\ndevA1UNB 回一个字：甲\ntemporary\n2d\npi-install.sh 我运行时报错有点问题，帮我看看，刚刚提示npm不存在\ntemporary\n1w\nSession xx5l7s\ntemporary\n1w\nSession mgm09v\ntemporary\n1w\nSession 6k5w7h\ntemporary\n1w\nSession xg29cz\ntemporary\n1w\nSession d4909j\ntemporary\n1w\n写一个test123.txt文件\ntemporary\n1w",
+      "emptyState": false
+    }
+  },
+  {
+    "status": {
+      "t": "2026-09-19T17:57:23.602Z",
+      "status": "idle",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 3,
+      "hostBound": true,
+      "active": "session-live-1789840444093-xrxvotj",
+      "retry": null
+    },
+    "transcript": {
+      "len": 11676,
+      "head": "最近\n\n仓库列表\n\nai-client\n+5795\n-478\nT091-C：这条应当作为「发送」而不是「排队」\nfeat/runtime-evolution\nnow\nT091-A：请开始一个长回合（点验用）\nfeat/runtime-evolution\n1m\nNew chat\nfeat/runtime-evolution\n1m\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 A10：长回合，请一直跑\n",
+      "tail": "2w\nSession s-send\nfeat/runtime-evolution\n2w\nws\n新建对话\n临时对话\ndevB DEV-2 after-GUI-change temp session probe\ntemporary\n2d\ndevB DEV-2 new-root temp session probe\ntemporary\n2d\ndevB DEV-2 old-root temp session probe\ntemporary\n2d\nSession i4c45n\ntemporary\n2d\ndevA1KILL 回一个字：丁\ntemporary\n2d\ndevA1SCRATCH 回一个字：乙\ntemporary\n2d\ndevA1UNB 回一个字：甲 (fork)\ntemporary\n2d\ndevA1UNB 回一个字：甲\ntemporary\n2d\npi-install.sh 我运行时报错有点问题，帮我看看，刚刚提示npm不存在\ntemporary\n1w\nSession xx5l7s\ntemporary\n1w\nSession mgm09v\ntemporary\n1w\nSession 6k5w7h\ntemporary\n1w\nSession xg29cz\ntemporary\n1w\nSession d4909j\ntemporary\n1w\n写一个test123.txt文件\ntemporary\n1w",
+      "emptyState": false
+    }
+  },
+  {
+    "status": {
+      "t": "2026-09-19T17:57:25.109Z",
+      "status": "idle",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 3,
+      "hostBound": true,
+      "active": "session-live-1789840444093-xrxvotj",
+      "retry": null
+    },
+    "transcript": {
+      "len": 11676,
+      "head": "最近\n\n仓库列表\n\nai-client\n+5795\n-478\nT091-C：这条应当作为「发送」而不是「排队」\nfeat/runtime-evolution\nnow\nT091-A：请开始一个长回合（点验用）\nfeat/runtime-evolution\n1m\nNew chat\nfeat/runtime-evolution\n1m\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 A10：长回合，请一直跑\n",
+      "tail": "2w\nSession s-send\nfeat/runtime-evolution\n2w\nws\n新建对话\n临时对话\ndevB DEV-2 after-GUI-change temp session probe\ntemporary\n2d\ndevB DEV-2 new-root temp session probe\ntemporary\n2d\ndevB DEV-2 old-root temp session probe\ntemporary\n2d\nSession i4c45n\ntemporary\n2d\ndevA1KILL 回一个字：丁\ntemporary\n2d\ndevA1SCRATCH 回一个字：乙\ntemporary\n2d\ndevA1UNB 回一个字：甲 (fork)\ntemporary\n2d\ndevA1UNB 回一个字：甲\ntemporary\n2d\npi-install.sh 我运行时报错有点问题，帮我看看，刚刚提示npm不存在\ntemporary\n1w\nSession xx5l7s\ntemporary\n1w\nSession mgm09v\ntemporary\n1w\nSession 6k5w7h\ntemporary\n1w\nSession xg29cz\ntemporary\n1w\nSession d4909j\ntemporary\n1w\n写一个test123.txt文件\ntemporary\n1w",
+      "emptyState": false
+    }
+  },
+  {
+    "status": {
+      "t": "2026-09-19T17:57:26.616Z",
+      "status": "idle",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 3,
+      "hostBound": true,
+      "active": "session-live-1789840444093-xrxvotj",
+      "retry": null
+    },
+    "transcript": {
+      "len": 11676,
+      "head": "最近\n\n仓库列表\n\nai-client\n+5795\n-478\nT091-C：这条应当作为「发送」而不是「排队」\nfeat/runtime-evolution\nnow\nT091-A：请开始一个长回合（点验用）\nfeat/runtime-evolution\n1m\nNew chat\nfeat/runtime-evolution\n1m\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 A10：长回合，请一直跑\n",
+      "tail": "2w\nSession s-send\nfeat/runtime-evolution\n2w\nws\n新建对话\n临时对话\ndevB DEV-2 after-GUI-change temp session probe\ntemporary\n2d\ndevB DEV-2 new-root temp session probe\ntemporary\n2d\ndevB DEV-2 old-root temp session probe\ntemporary\n2d\nSession i4c45n\ntemporary\n2d\ndevA1KILL 回一个字：丁\ntemporary\n2d\ndevA1SCRATCH 回一个字：乙\ntemporary\n2d\ndevA1UNB 回一个字：甲 (fork)\ntemporary\n2d\ndevA1UNB 回一个字：甲\ntemporary\n2d\npi-install.sh 我运行时报错有点问题，帮我看看，刚刚提示npm不存在\ntemporary\n1w\nSession xx5l7s\ntemporary\n1w\nSession mgm09v\ntemporary\n1w\nSession 6k5w7h\ntemporary\n1w\nSession xg29cz\ntemporary\n1w\nSession d4909j\ntemporary\n1w\n写一个test123.txt文件\ntemporary\n1w",
+      "emptyState": false
+    }
+  },
+  {
+    "status": {
+      "t": "2026-09-19T17:57:28.122Z",
+      "status": "idle",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 3,
+      "hostBound": true,
+      "active": "session-live-1789840444093-xrxvotj",
+      "retry": null
+    },
+    "transcript": {
+      "len": 11676,
+      "head": "最近\n\n仓库列表\n\nai-client\n+5795\n-478\nT091-C：这条应当作为「发送」而不是「排队」\nfeat/runtime-evolution\nnow\nT091-A：请开始一个长回合（点验用）\nfeat/runtime-evolution\n1m\nNew chat\nfeat/runtime-evolution\n1m\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 A10：长回合，请一直跑\n",
+      "tail": "2w\nSession s-send\nfeat/runtime-evolution\n2w\nws\n新建对话\n临时对话\ndevB DEV-2 after-GUI-change temp session probe\ntemporary\n2d\ndevB DEV-2 new-root temp session probe\ntemporary\n2d\ndevB DEV-2 old-root temp session probe\ntemporary\n2d\nSession i4c45n\ntemporary\n2d\ndevA1KILL 回一个字：丁\ntemporary\n2d\ndevA1SCRATCH 回一个字：乙\ntemporary\n2d\ndevA1UNB 回一个字：甲 (fork)\ntemporary\n2d\ndevA1UNB 回一个字：甲\ntemporary\n2d\npi-install.sh 我运行时报错有点问题，帮我看看，刚刚提示npm不存在\ntemporary\n1w\nSession xx5l7s\ntemporary\n1w\nSession mgm09v\ntemporary\n1w\nSession 6k5w7h\ntemporary\n1w\nSession xg29cz\ntemporary\n1w\nSession d4909j\ntemporary\n1w\n写一个test123.txt文件\ntemporary\n1w",
+      "emptyState": false
+    }
+  },
+  {
+    "status": {
+      "t": "2026-09-19T17:57:29.629Z",
+      "status": "idle",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 3,
+      "hostBound": true,
+      "active": "session-live-1789840444093-xrxvotj",
+      "retry": null
+    },
+    "transcript": {
+      "len": 11676,
+      "head": "最近\n\n仓库列表\n\nai-client\n+5795\n-478\nT091-C：这条应当作为「发送」而不是「排队」\nfeat/runtime-evolution\nnow\nT091-A：请开始一个长回合（点验用）\nfeat/runtime-evolution\n1m\nNew chat\nfeat/runtime-evolution\n1m\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 A10：长回合，请一直跑\n",
+      "tail": "2w\nSession s-send\nfeat/runtime-evolution\n2w\nws\n新建对话\n临时对话\ndevB DEV-2 after-GUI-change temp session probe\ntemporary\n2d\ndevB DEV-2 new-root temp session probe\ntemporary\n2d\ndevB DEV-2 old-root temp session probe\ntemporary\n2d\nSession i4c45n\ntemporary\n2d\ndevA1KILL 回一个字：丁\ntemporary\n2d\ndevA1SCRATCH 回一个字：乙\ntemporary\n2d\ndevA1UNB 回一个字：甲 (fork)\ntemporary\n2d\ndevA1UNB 回一个字：甲\ntemporary\n2d\npi-install.sh 我运行时报错有点问题，帮我看看，刚刚提示npm不存在\ntemporary\n1w\nSession xx5l7s\ntemporary\n1w\nSession mgm09v\ntemporary\n1w\nSession 6k5w7h\ntemporary\n1w\nSession xg29cz\ntemporary\n1w\nSession d4909j\ntemporary\n1w\n写一个test123.txt文件\ntemporary\n1w",
+      "emptyState": false
+    }
+  },
+  {
+    "status": {
+      "t": "2026-09-19T17:57:31.135Z",
+      "status": "idle",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 3,
+      "hostBound": true,
+      "active": "session-live-1789840444093-xrxvotj",
+      "retry": null
+    },
+    "transcript": {
+      "len": 11676,
+      "head": "最近\n\n仓库列表\n\nai-client\n+5795\n-478\nT091-C：这条应当作为「发送」而不是「排队」\nfeat/runtime-evolution\nnow\nT091-A：请开始一个长回合（点验用）\nfeat/runtime-evolution\n1m\nNew chat\nfeat/runtime-evolution\n1m\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 截图用：长回合\nfeat/runtime-evolution\n4h\nT091 A10：长回合，请一直跑\n",
+      "tail": "2w\nSession s-send\nfeat/runtime-evolution\n2w\nws\n新建对话\n临时对话\ndevB DEV-2 after-GUI-change temp session probe\ntemporary\n2d\ndevB DEV-2 new-root temp session probe\ntemporary\n2d\ndevB DEV-2 old-root temp session probe\ntemporary\n2d\nSession i4c45n\ntemporary\n2d\ndevA1KILL 回一个字：丁\ntemporary\n2d\ndevA1SCRATCH 回一个字：乙\ntemporary\n2d\ndevA1UNB 回一个字：甲 (fork)\ntemporary\n2d\ndevA1UNB 回一个字：甲\ntemporary\n2d\npi-install.sh 我运行时报错有点问题，帮我看看，刚刚提示npm不存在\ntemporary\n1w\nSession xx5l7s\ntemporary\n1w\nSession mgm09v\ntemporary\n1w\nSession 6k5w7h\ntemporary\n1w\nSession xg29cz\ntemporary\n1w\nSession d4909j\ntemporary\n1w\n写一个test123.txt文件\ntemporary\n1w",
+      "emptyState": false
+    }
+  }
+]

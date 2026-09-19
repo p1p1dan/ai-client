@@ -10,6 +10,12 @@ Role: open-questions；只维护尚需拍板的问题。答了就移到 decision
 | ~~Q027~~ | 审批可见性：用户手点「直接允许」无独立审计行（`isQuietPermissionActivity` 只看 `result`，不看 `resolution`），硬编码路径 deny 在闸门之前短路、零审计行（`tools/index.ts:177-178`）。要不要让这两类都留一行？ | 2026-09-19 MODEL-23 / MODEL-20 顺带发现，findings.md F3 / F7 | 已结案 → [决策 027](decisions/027-permission-rows-no-audit-trail.md)（2026-09-19，用户拍板：审批审核不需要审计，仅用于当时是否批准，没人会回头去看；两处均维持现状不做） |
 | Q028 | 会话名两套存储：GUI 重命名只写 `session-index.json`，pi 只认 JSONL 的 `session_info.name`，pi 侧永远显示空。要不要在重命名与导入时同时写 `session_info`？ | 2026-09-19 MODEL-5，findings.md F8；`NativeSessionIndexAdapter.rename()` 能写回但生产代码零实例化 | Deferred（编排器裁定，2026-09-19）：让 pi 显示名字须往会话 JSONL 追加 pi 格式的 `session_info` 条目，涉及 GUI worker 与 pi CLI 两种写入方的格式互认与回放兼容（findings F10），风险大于「pi 状态栏多一个名字」的收益；不立任务 |
 
+~~Q032~~ 已结案（2026-09-19，用户拍板，记入 [roadmap.md](roadmap.md) 批次 I T099，未另立决策）：A 轮测试未结束（用户仍在 Windows 上使用测试），迁移三处入口保持关闭；只修「勾着却动不了」的矛盾态并回写 T089 的撤销说明。
+
+~~Q031~~ 已由[决策 028](decisions/028-thought-block-sticky-fold-header.md)结案（2026-09-19）：看过演示页后用户选 A 折叠头吸顶，要求不透明、吸顶后内容不得穿插到折叠头后面。落地任务 **T096**。
+~~Q030~~ 已由[决策 029](decisions/029-provider-timeout-and-retry-policy.md)结案（2026-09-19）：对齐 pi 官方 CLI 的首字节 / 空闲超时（默认 120 秒，可调可关）并显式传给 SDK；倒计时活起来 + 「立即放弃」；父循环补流中断恢复（共用 3 次预算）；未知错误兜底收紧；次数与梯子不变；不加硬性总时长上限。落地任务 **T093**。
+~~Q029~~ 已由[决策 030](decisions/030-read-only-history-replay.md)结案（2026-09-19）：用户选档位 A——主进程只读回放，点开会话先显示历史、发送时才 resume；有活 worker 时仍走老路。落地任务 **T102**。
+
 ~~Q015~~ 已由[决策 016](decisions/016-home-tier-instruction-gating.md)结案（2026-09-16）：家目录从 project 链移除、改作独立的 **user 层 global**，全局规则对所有项目生效；全局层只取一份，顺序 `~/.pilab/AGENTS.md` → `~/.claude/CLAUDE.md` → `~/.codex/AGENTS.md`，找到即停；家目录之上的多用户共享目录不读；未信任项目仍整条 project 链不读的底线不动。落地任务 **T059**，排在 T032 之前。
 
 ~~Q016~~ 已由[决策 018](decisions/018-temp-workspace-removal-keeps-chats-visible.md)结案（2026-09-17）：删除临时工作区前先弹确认框，列出该目录下受影响的对话条数；删除后这些聊天转为未绑定会话，继续在侧栏未绑定分组下可见、可打开（复用 T040 已落地的未绑定会话语义）。落地任务 **T069**，排批次 F。

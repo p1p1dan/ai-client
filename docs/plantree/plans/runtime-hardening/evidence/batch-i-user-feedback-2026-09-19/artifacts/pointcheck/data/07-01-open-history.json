@@ -1,0 +1,150 @@
+{
+  "target": {
+    "id": "session-live-1789843333513-dfq5gcj",
+    "title": "Live Agent Host",
+    "status": "idle"
+  },
+  "workersBefore": [],
+  "series": [
+    {
+      "t": "2026-09-19T18:42:18.487Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:19.996Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:21.504Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:23.012Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:24.520Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:26.028Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:27.536Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:29.044Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:30.552Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:32.061Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:33.569Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:35.076Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:36.584Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:42:38.090Z",
+      "status": "idle",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-live-1789843333513-dfq5gcj",
+      "transcriptLen": 1982,
+      "emptyState": false,
+      "workers": []
+    }
+  ]
+}

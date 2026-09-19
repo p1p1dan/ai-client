@@ -1,0 +1,26 @@
+# 决策 028：长思考块的收起方式——折叠头吸顶（方案 A）
+
+日期：2026-09-19 · 拍板人：用户 · 状态：已决 · 任务：T096
+
+## 问题
+
+用户反馈（批次 I #4）：思考块很长时，读到末尾要拖回顶部才能点收起。调查（[Q031](../open-questions.md)）确认仓库当前时间线里零 sticky，且有两条测试红线（`chatTimelineLayout.test.ts`、`messageTimelineWiring.test.ts`）禁止回合级 class 出现 `sticky|fixed`——那是 2026-08-18 F10 缺陷的护栏：当年「吸顶 + 钉住态截断改高度」导致 `scrollHeight` 缩小 → `scrollTop` 被钳回 → 解钉 → 逐帧振荡。
+
+给用户看了三方案演示页（`../evidence/batch-i-user-feedback-2026-09-19/artifacts/q031-collapse-demo.html`）：A 折叠头吸顶、B 展开内容底部加「收起」、C 两者都做。
+
+## 决定
+
+选 **A：折叠头吸顶**。附加视觉要求（用户原话）：做好看点，**不要透视效果，吸顶后不得出现内容穿插在折叠按钮后面**。
+
+落地约束：
+
+- 吸顶头**定高、不截断、不随钉住态改变高度**，从根上避开 F10 的振荡条件；两条测试红线放宽为「允许定高吸顶头」，并改写护栏文案说明为什么定高头不触发 F10。
+- 吸顶头背景**完全不透明**，与时间线背景同色，`z-index` 高于思考正文，覆盖整个块宽（含思考块左侧的竖线 / 引用轨）；不得用半透明或 backdrop 模糊。
+- 收起时把滚动位置对齐到折叠头（`scrollIntoView({ block: 'start' })` 或等价），避免视口跳到无关位置。
+- 中间任何一层若出现 `overflow` / `transform` / `filter` / `contain` 会让 sticky 失效——Base UI `Collapsible` 的面板基类带 `overflow-hidden`（`MessageTimeline.tsx:1320-1337` 注释已记），落地时要么给思考行的 Collapsible 面板去掉该类，要么吸顶头放在面板之外。
+- 不做 B（底部收起）；若日后需要可追加，不影响 A。
+
+## 影响
+
+- T096 可以开工；与 T098（思考进行中可折叠，动同一片 `ToolRows.tsx`）串行，T098 先落地。
+- 设计规范 `docs/design-system.md` 新增一条「时间线折叠头吸顶」条目（定高、不透明、覆盖全宽），与「`scroll-state()` 已退役」条目并列说明区别。

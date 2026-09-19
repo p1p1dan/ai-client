@@ -1,0 +1,18 @@
+{
+  "senderId": "session-1789824346707-429ijzn",
+  "newId": "session-1789824418217-6hkx5op",
+  "pair": [
+    {
+      "id": "session-1789824346707-429ijzn",
+      "status": "running",
+      "title": "T091 A8：长回合，请一直跑",
+      "msgs": 2
+    },
+    {
+      "id": "session-1789824418217-6hkx5op",
+      "status": "idle",
+      "title": "New chat",
+      "msgs": 0
+    }
+  ]
+}

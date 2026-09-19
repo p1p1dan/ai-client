@@ -1,0 +1,70 @@
+{
+  "beforeRefold": {
+    "t": "2026-09-19T18:10:30.411Z",
+    "found": true,
+    "triggerText": "已思考 耗时 40s",
+    "triggerTag": "BUTTON",
+    "ariaExpanded": "false",
+    "dataState": null,
+    "hasChevron": true,
+    "triggerTop": -1025.25,
+    "triggerHeight": 21,
+    "viewportTop": 68,
+    "viewportBottom": 611.703125,
+    "offsetFromViewportTop": -1093.25,
+    "triggerPosition": "sticky",
+    "triggerBackground": "oklch(0.9931 0.012 96.42)",
+    "stickyAncestor": {
+      "tag": "BUTTON",
+      "position": "sticky",
+      "background": "oklch(0.9931 0.012 96.42)",
+      "top": -1025.25,
+      "height": 21
+    },
+    "body": {
+      "paragraphs": 0,
+      "chars": 0
+    },
+    "scrollTop": 1203,
+    "scrollHeight": 1747,
+    "clientHeight": 544
+  },
+  "refold": {
+    "ok": true,
+    "at": "2026-09-19T18:10:30.413Z",
+    "before": {
+      "scrollTop": 1203,
+      "top": -1025.25
+    }
+  },
+  "afterRefold": {
+    "t": "2026-09-19T18:10:31.933Z",
+    "found": true,
+    "triggerText": "已思考 耗时 40s",
+    "triggerTag": "BUTTON",
+    "ariaExpanded": "true",
+    "dataState": null,
+    "hasChevron": true,
+    "triggerTop": -1177.75,
+    "triggerHeight": 22,
+    "viewportTop": 68,
+    "viewportBottom": 611.703125,
+    "offsetFromViewportTop": -1245.75,
+    "triggerPosition": "sticky",
+    "triggerBackground": "oklch(0.9931 0.012 96.42)",
+    "stickyAncestor": {
+      "tag": "BUTTON",
+      "position": "sticky",
+      "background": "oklch(0.9931 0.012 96.42)",
+      "top": -1177.75,
+      "height": 22
+    },
+    "body": {
+      "paragraphs": 1,
+      "chars": 7092
+    },
+    "scrollTop": 5697,
+    "scrollHeight": 6241,
+    "clientHeight": 544
+  }
+}

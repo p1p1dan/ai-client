@@ -1,0 +1,207 @@
+{
+  "01-folder-expanded": {
+    "t": "2026-09-19T13:32:36.133Z",
+    "recentToggle": ["收起最近"],
+    "showMore": ["显示更多 ( 38 )"],
+    "searchQuery": "",
+    "recentCount": 7,
+    "folderCount": 202,
+    "recentTop": [
+      {
+        "title": "New chat",
+        "active": true
+      },
+      {
+        "title": "New chat",
+        "active": false
+      },
+      {
+        "title": "T091 A10：长回合，请一直跑",
+        "active": false
+      },
+      {
+        "title": "T091 A8：长回合，请一直跑",
+        "active": false
+      },
+      {
+        "title": "T091 A8：长回合，请一直跑",
+        "active": false
+      }
+    ],
+    "folderTop": [
+      {
+        "title": "New chat",
+        "active": true
+      },
+      {
+        "title": "New chat",
+        "active": false
+      },
+      {
+        "title": "T091 A10：长回合，请一直跑",
+        "active": false
+      },
+      {
+        "title": "T091 A8：长回合，请一直跑",
+        "active": false
+      },
+      {
+        "title": "T091 A8：长回合，请一直跑",
+        "active": false
+      }
+    ],
+    "newChatInRecent": 3,
+    "newChatInFolder": 3,
+    "folderHeaderTexts": ["ai-client", "临时对话"]
+  },
+  "02-old-session-active": {
+    "t": "2026-09-19T13:32:39.062Z",
+    "recentToggle": ["收起最近"],
+    "showMore": ["显示更多 ( 38 )"],
+    "searchQuery": "",
+    "recentCount": 7,
+    "folderCount": 202,
+    "recentTop": [
+      {
+        "title": "New chat",
+        "active": false
+      },
+      {
+        "title": "New chat",
+        "active": false
+      },
+      {
+        "title": "T091 A10：长回合，请一直跑",
+        "active": false
+      },
+      {
+        "title": "T091 A8：长回合，请一直跑",
+        "active": false
+      },
+      {
+        "title": "T091 A8：长回合，请一直跑",
+        "active": false
+      }
+    ],
+    "folderTop": [
+      {
+        "title": "New chat",
+        "active": false
+      },
+      {
+        "title": "New chat",
+        "active": false
+      },
+      {
+        "title": "T091 A10：长回合，请一直跑",
+        "active": false
+      },
+      {
+        "title": "T091 A8：长回合，请一直跑",
+        "active": false
+      },
+      {
+        "title": "T091 A8：长回合，请一直跑",
+        "active": false
+      }
+    ],
+    "newChatInRecent": 3,
+    "newChatInFolder": 3,
+    "folderHeaderTexts": ["ai-client", "临时对话"]
+  },
+  "03-click": {
+    "preCount": 202,
+    "postCount": 203,
+    "created": true,
+    "newId": "session-1789824759065-2fqol4q"
+  },
+  "03-after-new": {
+    "t": "2026-09-19T13:32:39.739Z",
+    "recentToggle": ["收起最近"],
+    "showMore": ["显示更多 ( 39 )"],
+    "searchQuery": "",
+    "recentCount": 7,
+    "folderCount": 203,
+    "recentTop": [
+      {
+        "title": "New chat",
+        "active": true
+      },
+      {
+        "title": "New chat",
+        "active": false
+      },
+      {
+        "title": "New chat",
+        "active": false
+      },
+      {
+        "title": "T091 A10：长回合，请一直跑",
+        "active": false
+      },
+      {
+        "title": "T091 A8：长回合，请一直跑",
+        "active": false
+      }
+    ],
+    "folderTop": [
+      {
+        "title": "New chat",
+        "active": true
+      },
+      {
+        "title": "New chat",
+        "active": false
+      },
+      {
+        "title": "New chat",
+        "active": false
+      },
+      {
+        "title": "T091 A10：长回合，请一直跑",
+        "active": false
+      },
+      {
+        "title": "T091 A8：长回合，请一直跑",
+        "active": false
+      }
+    ],
+    "newChatInRecent": 4,
+    "newChatInFolder": 4,
+    "folderHeaderTexts": ["ai-client", "临时对话"]
+  },
+  "04-recent-collapsed": {
+    "t": "2026-09-19T13:32:40.920Z",
+    "recentToggle": ["展开最近"],
+    "showMore": [],
+    "searchQuery": "",
+    "recentCount": 0,
+    "folderCount": 203,
+    "recentTop": [],
+    "folderTop": [
+      {
+        "title": "New chat",
+        "active": true
+      },
+      {
+        "title": "New chat",
+        "active": false
+      },
+      {
+        "title": "New chat",
+        "active": false
+      },
+      {
+        "title": "T091 A10：长回合，请一直跑",
+        "active": false
+      },
+      {
+        "title": "T091 A8：长回合，请一直跑",
+        "active": false
+      }
+    ],
+    "newChatInRecent": 0,
+    "newChatInFolder": 4,
+    "folderHeaderTexts": ["ai-client", "临时对话"]
+  }
+}

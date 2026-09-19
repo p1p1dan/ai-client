@@ -1,0 +1,26 @@
+[
+  {
+    "id": "user-send-1789824442389-21-1",
+    "role": "user",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "T091 A8：长回合，请一直跑"
+      }
+    ]
+  },
+  {
+    "id": "asst-send-1789824442389-21-2",
+    "role": "assistant",
+    "blocks": [
+      {
+        "type": "tool_call",
+        "toolName": "bash",
+        "toolInput": "{\"command\":\"sleep 240 && echo done\"}"
+      },
+      {
+        "type": "permission_activity"
+      }
+    ]
+  }
+]

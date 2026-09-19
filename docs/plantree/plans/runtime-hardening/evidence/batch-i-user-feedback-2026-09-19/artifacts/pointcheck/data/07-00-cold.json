@@ -1,0 +1,26 @@
+{
+  "store": {
+    "t": "2026-09-19T18:42:16.868Z",
+    "activeSessionId": "session-live-1789843333513-dfq5gcj",
+    "sessionCount": 1,
+    "sessions": [
+      {
+        "id": "session-live-1789843333513-dfq5gcj",
+        "title": "Live Agent Host",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789843333513
+      }
+    ],
+    "hostBoundSessionIds": [],
+    "recentSessionIds": [
+      "session-live-1789843333513-dfq5gcj"
+    ],
+    "pendingPermissions": [],
+    "msgCounts": {},
+    "lastError": null
+  },
+  "workersBefore": []
+}

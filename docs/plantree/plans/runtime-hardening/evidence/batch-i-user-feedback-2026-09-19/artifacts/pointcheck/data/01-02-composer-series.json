@@ -1,0 +1,182 @@
+[
+  {
+    "wait": 150,
+    "t": "2026-09-19T17:55:12.381Z",
+    "send": [],
+    "stop": [],
+    "queue": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "s1": {
+      "t": "2026-09-19T17:55:12.932Z",
+      "status": "idle",
+      "title": "Live Agent Host",
+      "msgs": 0,
+      "hostBound": true,
+      "active": "session-1789840511282-z56vcuu",
+      "retry": null
+    },
+    "s2": {
+      "t": "2026-09-19T17:55:13.720Z",
+      "status": "idle",
+      "title": "New chat",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-1789840511282-z56vcuu",
+      "retry": null
+    }
+  },
+  {
+    "wait": 350,
+    "t": "2026-09-19T17:55:14.007Z",
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "s1": {
+      "t": "2026-09-19T17:55:14.010Z",
+      "status": "running",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 2,
+      "hostBound": true,
+      "active": "session-1789840511282-z56vcuu",
+      "retry": null
+    },
+    "s2": {
+      "t": "2026-09-19T17:55:14.011Z",
+      "status": "idle",
+      "title": "New chat",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-1789840511282-z56vcuu",
+      "retry": null
+    }
+  },
+  {
+    "wait": 500,
+    "t": "2026-09-19T17:55:14.213Z",
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "s1": {
+      "t": "2026-09-19T17:55:14.216Z",
+      "status": "running",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 2,
+      "hostBound": true,
+      "active": "session-1789840511282-z56vcuu",
+      "retry": null
+    },
+    "s2": {
+      "t": "2026-09-19T17:55:14.218Z",
+      "status": "idle",
+      "title": "New chat",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-1789840511282-z56vcuu",
+      "retry": null
+    }
+  },
+  {
+    "wait": 1000,
+    "t": "2026-09-19T17:55:14.420Z",
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "s1": {
+      "t": "2026-09-19T17:55:14.423Z",
+      "status": "running",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 2,
+      "hostBound": true,
+      "active": "session-1789840511282-z56vcuu",
+      "retry": null
+    },
+    "s2": {
+      "t": "2026-09-19T17:55:14.424Z",
+      "status": "idle",
+      "title": "New chat",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-1789840511282-z56vcuu",
+      "retry": null
+    }
+  },
+  {
+    "wait": 2000,
+    "t": "2026-09-19T17:55:14.626Z",
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "s1": {
+      "t": "2026-09-19T17:55:14.629Z",
+      "status": "running",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 2,
+      "hostBound": true,
+      "active": "session-1789840511282-z56vcuu",
+      "retry": null
+    },
+    "s2": {
+      "t": "2026-09-19T17:55:14.630Z",
+      "status": "idle",
+      "title": "New chat",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-1789840511282-z56vcuu",
+      "retry": null
+    }
+  },
+  {
+    "wait": 3000,
+    "t": "2026-09-19T17:55:14.832Z",
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "s1": {
+      "t": "2026-09-19T17:55:14.834Z",
+      "status": "running",
+      "title": "T091-A：请开始一个长回合（点验用）",
+      "msgs": 2,
+      "hostBound": true,
+      "active": "session-1789840511282-z56vcuu",
+      "retry": null
+    },
+    "s2": {
+      "t": "2026-09-19T17:55:14.836Z",
+      "status": "idle",
+      "title": "New chat",
+      "msgs": 0,
+      "hostBound": false,
+      "active": "session-1789840511282-z56vcuu",
+      "retry": null
+    }
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "chatAgentDefaults": {
+    "model": "claude/claude-opus-5",
+    "effort": "off"
+  },
+  "defaultTier": "pragmatic",
+  "recentCollapsed": null,
+  "allSidebarKeys": [
+    "aiclient-file-sidebar-width",
+    "aiclient:chat:session-tiers",
+    "aiclient:chat:session-efforts",
+    "aiclient:chat:session-models",
+    "aiclient:chat:default-tier",
+    "aiclient-file-sidebar-collapsed",
+    "aiclient:chat:session-permissions",
+    "aiclient-tree-sidebar-width",
+    "aiclient-sidebar-recent-collapsed"
+  ]
+}

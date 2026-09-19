@@ -1,0 +1,125 @@
+{
+  "t": "2026-09-19T13:29:54.660Z",
+  "activeSessionId": "session-1789824505356-65wf4oc",
+  "sessionCount": 200,
+  "sessions": [
+    {
+      "id": "session-1789824505356-65wf4oc",
+      "title": "New chat",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824505356,
+      "runtimeIdentity": null
+    },
+    {
+      "id": "session-1789824442392-wigej2l",
+      "title": "T091 A10：长回合，请一直跑",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824588163,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789824442392-wigej2l.jsonl"
+    },
+    {
+      "id": "session-1789824418217-6hkx5op",
+      "title": "T091 A8：长回合，请一直跑",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824562972,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789824418217-6hkx5op.jsonl"
+    },
+    {
+      "id": "session-1789824346707-429ijzn",
+      "title": "T091 A8：长回合，请一直跑",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824536232,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789824346707-429ijzn.jsonl"
+    },
+    {
+      "id": "session-1789824270510-ljyycly",
+      "title": "T091 A8：长回合，请一直跑",
+      "status": "disconnected",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824504356,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789824270510-ljyycly.jsonl"
+    },
+    {
+      "id": "session-1789824216736-3dy2625",
+      "title": "T091 A6：长回合，别急着结束",
+      "status": "disconnected",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824440730,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789824216736-3dy2625.jsonl"
+    },
+    {
+      "id": "session-1789824079602-fj5ne4v",
+      "title": "T091 A6：长回合，别急着结束",
+      "status": "disconnected",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824415035,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789824079602-fj5ne4v.jsonl"
+    },
+    {
+      "id": "session-1789824076041-qe94w8q",
+      "title": "T091 A6：长回合，别急着结束",
+      "status": "disconnected",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824269213,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789824076041-qe94w8q.jsonl"
+    }
+  ],
+  "hostBoundSessionIds": [
+    "session-1789824346707-429ijzn",
+    "session-1789824418217-6hkx5op",
+    "session-1789824442392-wigej2l"
+  ],
+  "recentSessionIds": [
+    "session-1789824442392-wigej2l",
+    "session-1789824418217-6hkx5op",
+    "session-1789824346707-429ijzn",
+    "session-1789824505356-65wf4oc",
+    "session-1789824270510-ljyycly",
+    "session-1789824216736-3dy2625",
+    "session-1789824079602-fj5ne4v",
+    "session-live-1789808581115-3p910tm"
+  ],
+  "unreadSessionIds": [
+    "session-live-1789823729760-b24it59",
+    "session-1789824076041-qe94w8q",
+    "session-1789824079602-fj5ne4v",
+    "session-1789824216736-3dy2625",
+    "session-1789824270510-ljyycly",
+    "session-1789824346707-429ijzn",
+    "session-1789824418217-6hkx5op"
+  ],
+  "pendingPermissions": [],
+  "msgCounts": {
+    "session-live-1789823729760-b24it59": 3,
+    "session-1789823953591-m1suk8l": 2,
+    "session-1789824076041-qe94w8q": 3,
+    "session-1789824079602-fj5ne4v": 3,
+    "session-live-1789808581115-3p910tm": 9,
+    "session-1789824216736-3dy2625": 3,
+    "session-1789824270510-ljyycly": 3,
+    "session-1789824346707-429ijzn": 3,
+    "session-1789824418217-6hkx5op": 3,
+    "session-1789824442392-wigej2l": 2
+  },
+  "lastError": "Error invoking remote method 'chat:createSession': WorkerManagerError: Pi worker capacity 3 is fully protected by foreground, active, or blocking sessions"
+}

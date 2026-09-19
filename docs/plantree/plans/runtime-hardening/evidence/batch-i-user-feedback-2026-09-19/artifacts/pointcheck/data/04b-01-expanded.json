@@ -1,0 +1,26 @@
+{
+  "found": true,
+  "count": 2,
+  "text": "已思考 耗时 40s",
+  "ariaExpanded": "true",
+  "position": "sticky",
+  "cssTop": "0px",
+  "zIndex": "10",
+  "background": "oklch(0.9931 0.012 96.42)",
+  "height": 22,
+  "triggerTop": 68,
+  "triggerBottom": 90,
+  "viewportTop": 68,
+  "viewportBottom": 611.703125,
+  "offsetFromViewportTop": 0,
+  "panel": {
+    "top": -3800.25,
+    "bottom": 541.25,
+    "height": 4341.5,
+    "tag": "DIV",
+    "slot": "collapsible-panel"
+  },
+  "scrollTop": 8536,
+  "scrollHeight": 9080,
+  "clientHeight": 544
+}

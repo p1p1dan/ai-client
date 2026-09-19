@@ -1,0 +1,178 @@
+[
+  {
+    "dt": 1014,
+    "label": "|false"
+  },
+  {
+    "dt": 2378,
+    "label": "4s 后重试|false"
+  },
+  {
+    "dt": 3503,
+    "label": "2s 后重试|false"
+  },
+  {
+    "dt": 4512,
+    "label": "<1s 后重试|false"
+  },
+  {
+    "dt": 5521,
+    "label": "10s 后重试|false"
+  },
+  {
+    "dt": 6526,
+    "label": "9s 后重试|false"
+  },
+  {
+    "dt": 7535,
+    "label": "8s 后重试|false"
+  },
+  {
+    "dt": 8544,
+    "label": "7s 后重试|false"
+  },
+  {
+    "dt": 9552,
+    "label": "6s 后重试|false"
+  },
+  {
+    "dt": 10559,
+    "label": "5s 后重试|false"
+  },
+  {
+    "dt": 11567,
+    "label": "4s 后重试|false"
+  },
+  {
+    "dt": 12574,
+    "label": "3s 后重试|false"
+  },
+  {
+    "dt": 13580,
+    "label": "2s 后重试|false"
+  },
+  {
+    "dt": 14589,
+    "label": "<1s 后重试|false"
+  },
+  {
+    "dt": 15597,
+    "label": "30s 后重试|false"
+  },
+  {
+    "dt": 16603,
+    "label": "29s 后重试|false"
+  },
+  {
+    "dt": 17609,
+    "label": "28s 后重试|false"
+  },
+  {
+    "dt": 18618,
+    "label": "27s 后重试|false"
+  },
+  {
+    "dt": 19625,
+    "label": "26s 后重试|false"
+  },
+  {
+    "dt": 20632,
+    "label": "25s 后重试|false"
+  },
+  {
+    "dt": 21639,
+    "label": "24s 后重试|false"
+  },
+  {
+    "dt": 22644,
+    "label": "23s 后重试|false"
+  },
+  {
+    "dt": 23650,
+    "label": "22s 后重试|false"
+  },
+  {
+    "dt": 24656,
+    "label": "21s 后重试|false"
+  },
+  {
+    "dt": 25663,
+    "label": "20s 后重试|false"
+  },
+  {
+    "dt": 26671,
+    "label": "19s 后重试|false"
+  },
+  {
+    "dt": 27679,
+    "label": "18s 后重试|false"
+  },
+  {
+    "dt": 28689,
+    "label": "17s 后重试|false"
+  },
+  {
+    "dt": 29696,
+    "label": "16s 后重试|false"
+  },
+  {
+    "dt": 30703,
+    "label": "15s 后重试|false"
+  },
+  {
+    "dt": 31712,
+    "label": "14s 后重试|false"
+  },
+  {
+    "dt": 32720,
+    "label": "13s 后重试|false"
+  },
+  {
+    "dt": 33726,
+    "label": "12s 后重试|false"
+  },
+  {
+    "dt": 34735,
+    "label": "11s 后重试|false"
+  },
+  {
+    "dt": 35741,
+    "label": "10s 后重试|false"
+  },
+  {
+    "dt": 36747,
+    "label": "9s 后重试|false"
+  },
+  {
+    "dt": 37753,
+    "label": "8s 后重试|false"
+  },
+  {
+    "dt": 38759,
+    "label": "7s 后重试|false"
+  },
+  {
+    "dt": 39765,
+    "label": "6s 后重试|false"
+  },
+  {
+    "dt": 40773,
+    "label": "5s 后重试|false"
+  },
+  {
+    "dt": 41779,
+    "label": "4s 后重试|false"
+  },
+  {
+    "dt": 42787,
+    "label": "3s 后重试|false"
+  },
+  {
+    "dt": 43795,
+    "label": "2s 后重试|false"
+  },
+  {
+    "dt": 45699,
+    "label": "|false"
+  }
+]

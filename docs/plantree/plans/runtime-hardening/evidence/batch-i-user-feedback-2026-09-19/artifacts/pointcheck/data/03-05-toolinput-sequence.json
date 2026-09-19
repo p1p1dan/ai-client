@@ -1,0 +1,166 @@
+[
+  {
+    "dt": 2857,
+    "toolInput": "{\"__streaming\":{\"bytes\":0,\"lines\":0}}"
+  },
+  {
+    "dt": 2979,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":90,\"lines\":5}}"
+  },
+  {
+    "dt": 3228,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":178,\"lines\":8}}"
+  },
+  {
+    "dt": 3478,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":307,\"lines\":10}}"
+  },
+  {
+    "dt": 3728,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":421,\"lines\":11}}"
+  },
+  {
+    "dt": 3978,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":564,\"lines\":12}}"
+  },
+  {
+    "dt": 4228,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":672,\"lines\":14}}"
+  },
+  {
+    "dt": 4729,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":818,\"lines\":15}}"
+  },
+  {
+    "dt": 4978,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":931,\"lines\":17}}"
+  },
+  {
+    "dt": 5229,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1053,\"lines\":18}}"
+  },
+  {
+    "dt": 5478,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1187,\"lines\":19}}"
+  },
+  {
+    "dt": 5729,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1296,\"lines\":21}}"
+  },
+  {
+    "dt": 6228,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1434,\"lines\":22}}"
+  },
+  {
+    "dt": 6478,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1555,\"lines\":24}}"
+  },
+  {
+    "dt": 6729,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1664,\"lines\":25}}"
+  },
+  {
+    "dt": 6978,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1813,\"lines\":26}}"
+  },
+  {
+    "dt": 7234,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1922,\"lines\":28}}"
+  },
+  {
+    "dt": 7728,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2046,\"lines\":29}}"
+  },
+  {
+    "dt": 7979,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2177,\"lines\":30}}"
+  },
+  {
+    "dt": 8228,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2287,\"lines\":32}}"
+  },
+  {
+    "dt": 8478,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2427,\"lines\":33}}"
+  },
+  {
+    "dt": 8738,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2546,\"lines\":35}}"
+  },
+  {
+    "dt": 9229,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2658,\"lines\":36}}"
+  },
+  {
+    "dt": 9478,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2804,\"lines\":37}}"
+  },
+  {
+    "dt": 9728,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2913,\"lines\":39}}"
+  },
+  {
+    "dt": 9978,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3039,\"lines\":40}}"
+  },
+  {
+    "dt": 10240,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3167,\"lines\":41}}"
+  },
+  {
+    "dt": 10728,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3278,\"lines\":43}}"
+  },
+  {
+    "dt": 10978,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3420,\"lines\":44}}"
+  },
+  {
+    "dt": 11228,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3537,\"lines\":46}}"
+  },
+  {
+    "dt": 11478,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3651,\"lines\":47}}"
+  },
+  {
+    "dt": 11749,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3795,\"lines\":48}}"
+  },
+  {
+    "dt": 12228,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3903,\"lines\":50}}"
+  },
+  {
+    "dt": 12478,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4032,\"lines\":51}}"
+  },
+  {
+    "dt": 12728,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4157,\"lines\":52}}"
+  },
+  {
+    "dt": 12979,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4271,\"lines\":54}}"
+  },
+  {
+    "dt": 13245,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4413,\"lines\":55}}"
+  },
+  {
+    "dt": 13728,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4528,\"lines\":57}}"
+  },
+  {
+    "dt": 13978,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4644,\"lines\":58}}"
+  },
+  {
+    "dt": 14228,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4715,\"lines\":60}}"
+  },
+  {
+    "dt": 14821,
+    "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"content\":\"<!doctype html>\\n<html lang=\\\"zh\\\">\\n  <head>\\n    <meta charset=\\\"utf-8\\\" />\\n    <title>T101 slow write</title"
+  }
+]

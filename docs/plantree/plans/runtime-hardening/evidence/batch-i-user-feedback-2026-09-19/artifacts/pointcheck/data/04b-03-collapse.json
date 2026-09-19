@@ -1,0 +1,59 @@
+{
+  "naturalScrollTop": 8536,
+  "naturalOffset": 0,
+  "beforeCollapse": {
+    "found": true,
+    "count": 2,
+    "text": "已思考 耗时 40s",
+    "ariaExpanded": "true",
+    "position": "sticky",
+    "cssTop": "0px",
+    "zIndex": "10",
+    "background": "oklch(0.9931 0.012 96.42)",
+    "height": 22,
+    "triggerTop": 68,
+    "triggerBottom": 90,
+    "viewportTop": 68,
+    "viewportBottom": 611.703125,
+    "offsetFromViewportTop": 0,
+    "panel": {
+      "top": -3800.25,
+      "bottom": 541.25,
+      "height": 4341.5,
+      "tag": "DIV",
+      "slot": "collapsible-panel"
+    },
+    "scrollTop": 8536,
+    "scrollHeight": 9080,
+    "clientHeight": 544
+  },
+  "collapse": {
+    "ok": true,
+    "before": {
+      "scrollTop": 8536,
+      "triggerTop": 68,
+      "ariaExpanded": "true"
+    },
+    "at": "2026-09-19T18:12:20.761Z"
+  },
+  "afterCollapse": {
+    "found": true,
+    "count": 2,
+    "text": "已思考 耗时 40s",
+    "ariaExpanded": "false",
+    "position": "sticky",
+    "cssTop": "0px",
+    "zIndex": "10",
+    "background": "oklch(0.9931 0.012 96.42)",
+    "height": 21,
+    "triggerTop": 519.75,
+    "triggerBottom": 540.75,
+    "viewportTop": 68,
+    "viewportBottom": 611.703125,
+    "offsetFromViewportTop": 451.75,
+    "panel": null,
+    "scrollTop": 4194,
+    "scrollHeight": 4738,
+    "clientHeight": 544
+  }
+}

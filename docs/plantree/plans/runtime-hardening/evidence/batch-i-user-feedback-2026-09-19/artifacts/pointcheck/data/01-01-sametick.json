@@ -1,0 +1,21 @@
+{
+  "done": true,
+  "sentAt": "2026-09-19T17:55:10.878Z",
+  "clickedAt": "2026-09-19T17:55:11.282Z",
+  "gapMs": 404,
+  "foundNewButton": true,
+  "beforeActive": "session-live-1789840444093-xrxvotj",
+  "beforeCount": 203,
+  "afterActive": "session-1789840511282-z56vcuu",
+  "afterCount": 204,
+  "created": true,
+  "newSession": {
+    "id": "session-1789840511282-z56vcuu",
+    "title": "New chat",
+    "status": "idle",
+    "workspaceId": "ws:main:/home/ai/code/ai-client",
+    "unbound": null
+  },
+  "s1StatusSameTick": "idle",
+  "stopButtonSameTick": true
+}

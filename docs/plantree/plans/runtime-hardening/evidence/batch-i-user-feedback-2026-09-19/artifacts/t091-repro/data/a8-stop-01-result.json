@@ -1,0 +1,46 @@
+{
+  "preActive": "session-1789824346707-429ijzn",
+  "preCount": 197,
+  "newClickedAt": "2026-09-19T13:26:58.216Z",
+  "postActive": "session-1789824418217-6hkx5op",
+  "postCount": 198,
+  "created": true,
+  "beforeAction": {
+    "t": "2026-09-19T13:26:58.916Z",
+    "active": "session-1789824418217-6hkx5op",
+    "count": 198,
+    "activeTitle": "New chat",
+    "activeStatus": "idle",
+    "send": [],
+    "stop": [
+      {
+        "disabled": false,
+        "visible": true
+      }
+    ],
+    "queue": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "statuses": {}
+  },
+  "stopClickedAt": "2026-09-19T13:26:58.923Z",
+  "afterAction": {
+    "t": "2026-09-19T13:27:01.552Z",
+    "active": "session-1789824418217-6hkx5op",
+    "count": 198,
+    "activeTitle": "New chat",
+    "activeStatus": "idle",
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "statuses": {}
+  }
+}

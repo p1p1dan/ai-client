@@ -1,0 +1,41 @@
+{
+  "clickedAt": "2026-09-19T13:17:14.784Z",
+  "buttonTitle": "在 ai-client 中新建会话",
+  "preActive": "session-live-1789823729760-b24it59",
+  "preCount": 191,
+  "postActive": "session-live-1789823729760-b24it59",
+  "postCount": 191,
+  "postTop": [
+    {
+      "id": "session-1789817681946-ld3fzeq",
+      "title": "一句话回答，不要展开：为什么 0.1 + 0.2 在浮点数里不等于 0.3",
+      "status": "idle",
+      "updatedAt": 1789817700002
+    },
+    {
+      "id": "session-1789817369031-pbn5tmh",
+      "title": "我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」",
+      "status": "idle",
+      "updatedAt": 1789817511683
+    },
+    {
+      "id": "session-1789816983416-mgbovsu",
+      "title": "我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-clie…",
+      "status": "idle",
+      "updatedAt": 1789817178453
+    }
+  ],
+  "newSessionInStore": {
+    "id": "session-live-1789823729760-b24it59",
+    "title": "Live Agent Host"
+  },
+  "domRowTitlesSameTick": [
+    "Live Agent Host",
+    "一句话回答，不要展开：为什么 0.1 + 0.2 在浮点数里不等于 0.3",
+    "我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」",
+    "我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-clie…",
+    "我在点验权限策略，预期会被拒绝，不要绕过：用 explorer 子代理读一下 /home/ai/code/ai-cli…",
+    "请委派 explorer 子代理，把 src/runtime/plugins/ 里每个子目录的 index.ts 都读…"
+  ],
+  "domRowCountSameTick": 191
+}

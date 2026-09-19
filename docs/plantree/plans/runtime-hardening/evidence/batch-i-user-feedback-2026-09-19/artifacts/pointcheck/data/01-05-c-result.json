@@ -1,0 +1,34 @@
+{
+  "sendClick": {
+    "ok": true,
+    "at": "2026-09-19T17:55:15.723Z"
+  },
+  "gwBefore": {
+    "ok": true,
+    "plan": "long-turn",
+    "count": 1
+  },
+  "gwAfter": {
+    "ok": true,
+    "plan": "long-turn",
+    "count": 2
+  },
+  "s1": {
+    "t": "2026-09-19T17:55:23.735Z",
+    "status": "running",
+    "title": "T091-A：请开始一个长回合（点验用）",
+    "msgs": 2,
+    "hostBound": true,
+    "active": "session-1789840511282-z56vcuu",
+    "retry": null
+  },
+  "s2": {
+    "t": "2026-09-19T17:55:23.740Z",
+    "status": "running",
+    "title": "T091-C：这条应当作为「发送」而不是「排队」",
+    "msgs": 2,
+    "hostBound": true,
+    "active": "session-1789840511282-z56vcuu",
+    "retry": null
+  }
+}

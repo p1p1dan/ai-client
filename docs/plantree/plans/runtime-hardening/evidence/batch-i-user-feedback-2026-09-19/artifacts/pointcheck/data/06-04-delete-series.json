@@ -1,0 +1,170 @@
+{
+  "deletedAt": 1789843686625,
+  "deleteSeries": [
+    {
+      "dt": 251,
+      "t": 1789843686876,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 503,
+      "t": 1789843687128,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 755,
+      "t": 1789843687380,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 1008,
+      "t": 1789843687633,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 1260,
+      "t": 1789843687885,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 1512,
+      "t": 1789843688137,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 1764,
+      "t": 1789843688389,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 2016,
+      "t": 1789843688641,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 2268,
+      "t": 1789843688893,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 2520,
+      "t": 1789843689145,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 2773,
+      "t": 1789843689398,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 3026,
+      "t": 1789843689651,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 3278,
+      "t": 1789843689903,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 3530,
+      "t": 1789843690155,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 3782,
+      "t": 1789843690407,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 4033,
+      "t": 1789843690658,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 4286,
+      "t": 1789843690911,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 4538,
+      "t": 1789843691163,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 4790,
+      "t": 1789843691415,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    },
+    {
+      "dt": 5042,
+      "t": 1789843691667,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": false
+    }
+  ],
+  "disk": [
+    "alpha.txt",
+    "beta.txt",
+    "gamma.txt"
+  ]
+}

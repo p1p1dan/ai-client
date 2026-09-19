@@ -1,0 +1,102 @@
+{
+  "t": "2026-09-19T13:15:46.405Z",
+  "activeSessionId": "session-live-1789823729760-b24it59",
+  "sessionCount": 191,
+  "sessions": [
+    {
+      "id": "session-1789817681946-ld3fzeq",
+      "title": "一句话回答，不要展开：为什么 0.1 + 0.2 在浮点数里不等于 0.3",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789817700002,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789817681946-ld3fzeq.jsonl"
+    },
+    {
+      "id": "session-1789817369031-pbn5tmh",
+      "title": "我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789817511683,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789817369031-pbn5tmh.jsonl"
+    },
+    {
+      "id": "session-1789816983416-mgbovsu",
+      "title": "我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-clie…",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789817178453,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789816983416-mgbovsu.jsonl"
+    },
+    {
+      "id": "session-1789816893329-3884h3h",
+      "title": "我在点验权限策略，预期会被拒绝，不要绕过：用 explorer 子代理读一下 /home/ai/code/ai-cli…",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789816975676,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789816893329-3884h3h.jsonl"
+    },
+    {
+      "id": "session-live-1789816715489-4jacar2",
+      "title": "请委派 explorer 子代理，把 src/runtime/plugins/ 里每个子目录的 index.ts 都读…",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789816801955,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789816715489-4jacar2.jsonl"
+    },
+    {
+      "id": "session-import-claude-code-b2baf4c1-5ca5-4527-81d4-edb227b6b7d6",
+      "title": "help me install this skill:https://github.com/SeemSeam/plan-tree",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789810525069,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-claude-code-c3abf416-6c97-4ef5-824d-47143b9f0a4d.jsonl"
+    },
+    {
+      "id": "session-live-1789808581115-3p910tm",
+      "title": "点验重命名-0919",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789809904596,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789808581115-3p910tm.jsonl"
+    },
+    {
+      "id": "session-1789807016168-mau6u8m",
+      "title": "新开一个会话继续点验",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789807279107,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789807016168-mau6u8m.jsonl"
+    }
+  ],
+  "hostBoundSessionIds": [],
+  "recentSessionIds": [
+    "session-live-1789823729760-b24it59",
+    "session-1789817681946-ld3fzeq",
+    "session-1789817369031-pbn5tmh",
+    "session-1789816983416-mgbovsu",
+    "session-1789816893329-3884h3h",
+    "session-live-1789816715489-4jacar2",
+    "session-import-claude-code-b2baf4c1-5ca5-4527-81d4-edb227b6b7d6",
+    "session-live-1789808581115-3p910tm"
+  ],
+  "unreadSessionIds": [],
+  "pendingPermissions": [],
+  "msgCounts": {},
+  "lastError": null
+}

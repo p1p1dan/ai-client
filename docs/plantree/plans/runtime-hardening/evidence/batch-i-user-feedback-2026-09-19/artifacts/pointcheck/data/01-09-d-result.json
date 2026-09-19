@@ -1,0 +1,30 @@
+{
+  "dTick": {
+    "ok": true,
+    "at": "2026-09-19T17:55:25.474Z",
+    "beforeActive": "session-1789840511282-z56vcuu",
+    "afterActive": "session-1789840525474-en2jb65",
+    "beforeCount": 204,
+    "afterCount": 205
+  },
+  "s3": "session-1789840525474-en2jb65",
+  "s3title": "New chat",
+  "sidebarAfter": {
+    "t": "2026-09-19T17:55:27.061Z",
+    "rows": [
+      {
+        "title": "New chat",
+        "text": "New chat feat/runtime-evolution now",
+        "active": true
+      }
+    ],
+    "hasNewButton": true
+  },
+  "s3Visible": [
+    {
+      "title": "New chat",
+      "text": "New chat feat/runtime-evolution now",
+      "active": true
+    }
+  ]
+}

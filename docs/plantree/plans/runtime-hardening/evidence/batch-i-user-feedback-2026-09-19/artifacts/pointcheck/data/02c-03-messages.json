@@ -1,0 +1,89 @@
+[
+  {
+    "id": "user-send-1789840512676-2-1",
+    "role": "user",
+    "blocks": [
+      {
+        "id": "user-send-1789840512676-2-1-text",
+        "type": "text",
+        "text": "T091-A：请开始一个长回合（点验用）"
+      }
+    ]
+  },
+  {
+    "id": "asst-send-1789840512676-2-2",
+    "role": "assistant",
+    "blocks": [
+      {
+        "id": "toolu_691b6b4c-1113-4ad2-951f-1873125a04eb",
+        "type": "tool_call",
+        "toolName": "bash",
+        "toolInput": "{\"command\":\"sleep 60 && echo done\"}"
+      },
+      {
+        "id": "perm-activity-toolu_691b6b4c-1113-4ad2-951f-1873125a04eb",
+        "type": "permission_activity"
+      },
+      {
+        "id": "toolu_691b6b4c-1113-4ad2-951f-1873125a04eb-result",
+        "type": "tool_result",
+        "toolOk": true
+      }
+    ]
+  },
+  {
+    "id": "asst-send-1789840512676-2-3",
+    "role": "assistant",
+    "blocks": [
+      {
+        "id": "asst-send-1789840512676-2-3-text",
+        "type": "text",
+        "text": "turn finished"
+      }
+    ]
+  },
+  {
+    "id": "user-send-1789840652069-5-1",
+    "role": "user",
+    "blocks": [
+      {
+        "id": "user-send-1789840652069-5-1-text",
+        "type": "text",
+        "text": "T092：结束后再发一条，应当自动 resume"
+      }
+    ]
+  },
+  {
+    "id": "asst-send-1789840652069-5-2",
+    "role": "assistant",
+    "blocks": [
+      {
+        "id": "asst-send-1789840652069-5-2-text",
+        "type": "text",
+        "text": "turn finished"
+      }
+    ]
+  },
+  {
+    "id": "user-send-1789840714514-6-1",
+    "role": "user",
+    "blocks": [
+      {
+        "id": "user-send-1789840714514-6-1-text",
+        "type": "text",
+        "text": "T092：结束后再发一条，应自动 resume"
+      }
+    ]
+  },
+  {
+    "id": "asst-send-1789840714514-6-2",
+    "role": "assistant",
+    "blocks": [
+      {
+        "id": "asst-send-1789840714514-6-2-text",
+        "type": "text",
+        "text": "turn finished"
+      }
+    ]
+  }
+]

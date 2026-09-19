@@ -1,0 +1,285 @@
+{
+  "gwBefore": {
+    "ok": true,
+    "plan": "retry-503-forever",
+    "count": 4
+  },
+  "give": {
+    "ok": false,
+    "why": "no 立即放弃 button on screen"
+  },
+  "after": [
+    {
+      "t": "2026-09-19T18:14:26.774Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:26.777Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:28.782Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:28.785Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:30.791Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:30.794Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:32.799Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:32.802Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:34.808Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:34.811Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:36.816Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:36.819Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:38.823Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:38.826Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:40.831Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:40.834Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:42.838Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:42.841Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:44.846Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:44.849Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:46.855Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:46.858Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:48.864Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:48.866Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:50.876Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:50.887Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:52.894Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:52.897Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:54.901Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:54.904Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    },
+    {
+      "t": "2026-09-19T18:14:56.909Z",
+      "status": "idle",
+      "gwCount": 4,
+      "banner": {
+        "t": "2026-09-19T18:14:56.912Z",
+        "countdownText": null,
+        "retryingNow": false,
+        "giveUpButton": false,
+        "bannerLines": [
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "E1-24 重试观感探针：请回一句话",
+          "T093：渠道一直 503（点验倒计时与立即放弃）",
+          "T093：渠道一直 503（点验倒计时与立即放弃）"
+        ]
+      }
+    }
+  ]
+}

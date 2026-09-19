@@ -1,0 +1,17 @@
+{
+  "t": "2026-09-19T13:23:35.824Z",
+  "active": "session-live-1789808581115-3p910tm",
+  "count": 194,
+  "activeStatus": "idle",
+  "activeTitle": "点验重命名-0919",
+  "activeMsgs": 7,
+  "send": [
+    {
+      "disabled": true,
+      "visible": true
+    }
+  ],
+  "stop": [],
+  "queue": [],
+  "rowCount": 194
+}

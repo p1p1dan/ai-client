@@ -1,0 +1,63 @@
+[
+  {
+    "t": "2026-09-19T13:23:35.945Z",
+    "active": "session-live-1789808581115-3p910tm",
+    "count": 194,
+    "activeStatus": "idle",
+    "activeTitle": "点验重命名-0919",
+    "activeMsgs": 7,
+    "send": [],
+    "stop": [
+      {
+        "disabled": false,
+        "visible": true
+      }
+    ],
+    "queue": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "rowCount": 194
+  },
+  {
+    "t": "2026-09-19T13:23:36.305Z",
+    "active": "session-live-1789808581115-3p910tm",
+    "count": 194,
+    "activeStatus": "running",
+    "activeTitle": "点验重命名-0919",
+    "activeMsgs": 8,
+    "send": [],
+    "stop": [
+      {
+        "disabled": false,
+        "visible": true
+      }
+    ],
+    "queue": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "rowCount": 194
+  },
+  {
+    "t": "2026-09-19T13:23:36.515Z",
+    "active": "session-live-1789808581115-3p910tm",
+    "count": 194,
+    "activeStatus": "idle",
+    "activeTitle": "点验重命名-0919",
+    "activeMsgs": 9,
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "rowCount": 194
+  }
+]

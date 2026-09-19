@@ -1,0 +1,14 @@
+{
+  "statusRow": {
+    "cls": "flex flex-col gap-2 text-markdown leading-normal",
+    "gap": "8px",
+    "fontSize": "14px",
+    "text": "Worked for 1s · ↑ 12 tokens · ↓ 9 tokens fake gateway ok 14:"
+  },
+  "statusParent": {
+    "cls": "group/turn flex flex-col gap-3",
+    "gap": "12px",
+    "fontSize": "14px",
+    "text": "T102：发一条，这时才应该起 worker Worked for 1s · ↑ 12 tokens · ↓ 9 tok"
+  }
+}

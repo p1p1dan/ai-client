@@ -1,0 +1,26 @@
+[
+  {
+    "id": "user-send-1789823885116-2-1",
+    "role": "user",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "T091 场景A：请开始一个长回合"
+      }
+    ]
+  },
+  {
+    "id": "asst-send-1789823885116-2-2",
+    "role": "assistant",
+    "blocks": [
+      {
+        "type": "tool_call",
+        "toolName": "bash",
+        "toolInput": "{\"command\":\"sleep 240 && echo done\"}"
+      },
+      {
+        "type": "permission_activity"
+      }
+    ]
+  }
+]

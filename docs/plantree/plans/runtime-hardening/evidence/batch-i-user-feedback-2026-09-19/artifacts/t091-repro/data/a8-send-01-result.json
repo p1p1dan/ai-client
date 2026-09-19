@@ -1,0 +1,47 @@
+{
+  "preActive": "session-1789824418217-6hkx5op",
+  "preCount": 198,
+  "newClickedAt": "2026-09-19T13:27:22.391Z",
+  "postActive": "session-1789824442392-wigej2l",
+  "postCount": 199,
+  "created": true,
+  "beforeAction": {
+    "t": "2026-09-19T13:27:23.381Z",
+    "active": "session-1789824442392-wigej2l",
+    "count": 199,
+    "activeTitle": "New chat",
+    "activeStatus": "idle",
+    "send": [
+      {
+        "disabled": false,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "statuses": {}
+  },
+  "roundButtons": [
+    {
+      "label": "发送消息",
+      "disabled": false
+    }
+  ],
+  "primaryClicked": "发送消息",
+  "afterAction": {
+    "t": "2026-09-19T13:27:25.889Z",
+    "active": "session-1789824442392-wigej2l",
+    "count": 199,
+    "activeTitle": "New chat",
+    "activeStatus": "idle",
+    "send": [
+      {
+        "disabled": false,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "statuses": {}
+  }
+}

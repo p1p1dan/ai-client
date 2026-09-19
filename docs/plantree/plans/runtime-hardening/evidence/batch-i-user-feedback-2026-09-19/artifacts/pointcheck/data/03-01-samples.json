@@ -1,0 +1,744 @@
+{
+  "sentAt": 1789841067244,
+  "sid": "session-1789841064729-5g54dzh",
+  "samples": [
+    {
+      "t": 1789841068117,
+      "preamble": false,
+      "toolish": [],
+      "linesSoFar": [],
+      "details": 0,
+      "toolInput": null
+    },
+    {
+      "t": 1789841068223,
+      "preamble": false,
+      "toolish": [],
+      "linesSoFar": [],
+      "details": 0,
+      "toolInput": null
+    },
+    {
+      "t": 1789841069052,
+      "preamble": false,
+      "toolish": [],
+      "linesSoFar": [],
+      "details": 0,
+      "toolInput": null
+    },
+    {
+      "t": 1789841069312,
+      "preamble": false,
+      "toolish": [],
+      "linesSoFar": [],
+      "details": 0,
+      "toolInput": null
+    },
+    {
+      "t": 1789841069686,
+      "preamble": true,
+      "toolish": [],
+      "linesSoFar": [],
+      "details": 0,
+      "toolInput": null
+    },
+    {
+      "t": 1789841070101,
+      "preamble": true,
+      "toolish": [
+        "编辑中"
+      ],
+      "linesSoFar": [],
+      "details": 0,
+      "toolInput": "{\"__streaming\":{\"bytes\":0,\"lines\":0}}"
+    },
+    {
+      "t": 1789841070223,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 5 行"
+      ],
+      "linesSoFar": [
+        "已收到 5 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":90,\"lines\":5}}"
+    },
+    {
+      "t": 1789841070472,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 8 行"
+      ],
+      "linesSoFar": [
+        "已收到 8 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":178,\"lines\":8}}"
+    },
+    {
+      "t": 1789841070722,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 10 行"
+      ],
+      "linesSoFar": [
+        "已收到 10 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":307,\"lines\":10}}"
+    },
+    {
+      "t": 1789841070972,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 11 行"
+      ],
+      "linesSoFar": [
+        "已收到 11 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":421,\"lines\":11}}"
+    },
+    {
+      "t": 1789841071222,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 12 行"
+      ],
+      "linesSoFar": [
+        "已收到 12 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":564,\"lines\":12}}"
+    },
+    {
+      "t": 1789841071472,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 14 行"
+      ],
+      "linesSoFar": [
+        "已收到 14 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":672,\"lines\":14}}"
+    },
+    {
+      "t": 1789841071722,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 14 行"
+      ],
+      "linesSoFar": [
+        "已收到 14 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":672,\"lines\":14}}"
+    },
+    {
+      "t": 1789841071973,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 15 行"
+      ],
+      "linesSoFar": [
+        "已收到 15 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":818,\"lines\":15}}"
+    },
+    {
+      "t": 1789841072222,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 17 行"
+      ],
+      "linesSoFar": [
+        "已收到 17 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":931,\"lines\":17}}"
+    },
+    {
+      "t": 1789841072473,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 18 行"
+      ],
+      "linesSoFar": [
+        "已收到 18 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1053,\"lines\":18}}"
+    },
+    {
+      "t": 1789841072722,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 19 行"
+      ],
+      "linesSoFar": [
+        "已收到 19 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1187,\"lines\":19}}"
+    },
+    {
+      "t": 1789841072973,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 21 行"
+      ],
+      "linesSoFar": [
+        "已收到 21 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1296,\"lines\":21}}"
+    },
+    {
+      "t": 1789841073222,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 21 行"
+      ],
+      "linesSoFar": [
+        "已收到 21 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1296,\"lines\":21}}"
+    },
+    {
+      "t": 1789841073472,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 22 行"
+      ],
+      "linesSoFar": [
+        "已收到 22 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1434,\"lines\":22}}"
+    },
+    {
+      "t": 1789841073722,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 24 行"
+      ],
+      "linesSoFar": [
+        "已收到 24 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1555,\"lines\":24}}"
+    },
+    {
+      "t": 1789841073973,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 25 行"
+      ],
+      "linesSoFar": [
+        "已收到 25 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1664,\"lines\":25}}"
+    },
+    {
+      "t": 1789841074222,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 26 行"
+      ],
+      "linesSoFar": [
+        "已收到 26 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1813,\"lines\":26}}"
+    },
+    {
+      "t": 1789841074478,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 28 行"
+      ],
+      "linesSoFar": [
+        "已收到 28 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1922,\"lines\":28}}"
+    },
+    {
+      "t": 1789841074722,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 28 行"
+      ],
+      "linesSoFar": [
+        "已收到 28 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":1922,\"lines\":28}}"
+    },
+    {
+      "t": 1789841074972,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 29 行"
+      ],
+      "linesSoFar": [
+        "已收到 29 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2046,\"lines\":29}}"
+    },
+    {
+      "t": 1789841075223,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 30 行"
+      ],
+      "linesSoFar": [
+        "已收到 30 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2177,\"lines\":30}}"
+    },
+    {
+      "t": 1789841075472,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 32 行"
+      ],
+      "linesSoFar": [
+        "已收到 32 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2287,\"lines\":32}}"
+    },
+    {
+      "t": 1789841075722,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 33 行"
+      ],
+      "linesSoFar": [
+        "已收到 33 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2427,\"lines\":33}}"
+    },
+    {
+      "t": 1789841075982,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 35 行"
+      ],
+      "linesSoFar": [
+        "已收到 35 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2546,\"lines\":35}}"
+    },
+    {
+      "t": 1789841076222,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 35 行"
+      ],
+      "linesSoFar": [
+        "已收到 35 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2546,\"lines\":35}}"
+    },
+    {
+      "t": 1789841076473,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 36 行"
+      ],
+      "linesSoFar": [
+        "已收到 36 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2658,\"lines\":36}}"
+    },
+    {
+      "t": 1789841076722,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 37 行"
+      ],
+      "linesSoFar": [
+        "已收到 37 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2804,\"lines\":37}}"
+    },
+    {
+      "t": 1789841076972,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 39 行"
+      ],
+      "linesSoFar": [
+        "已收到 39 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":2913,\"lines\":39}}"
+    },
+    {
+      "t": 1789841077222,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 40 行"
+      ],
+      "linesSoFar": [
+        "已收到 40 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3039,\"lines\":40}}"
+    },
+    {
+      "t": 1789841077484,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 41 行"
+      ],
+      "linesSoFar": [
+        "已收到 41 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3167,\"lines\":41}}"
+    },
+    {
+      "t": 1789841077722,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 41 行"
+      ],
+      "linesSoFar": [
+        "已收到 41 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3167,\"lines\":41}}"
+    },
+    {
+      "t": 1789841077972,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 43 行"
+      ],
+      "linesSoFar": [
+        "已收到 43 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3278,\"lines\":43}}"
+    },
+    {
+      "t": 1789841078222,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 44 行"
+      ],
+      "linesSoFar": [
+        "已收到 44 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3420,\"lines\":44}}"
+    },
+    {
+      "t": 1789841078472,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 46 行"
+      ],
+      "linesSoFar": [
+        "已收到 46 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3537,\"lines\":46}}"
+    },
+    {
+      "t": 1789841078722,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 47 行"
+      ],
+      "linesSoFar": [
+        "已收到 47 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3651,\"lines\":47}}"
+    },
+    {
+      "t": 1789841078993,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 48 行"
+      ],
+      "linesSoFar": [
+        "已收到 48 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3795,\"lines\":48}}"
+    },
+    {
+      "t": 1789841079222,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 48 行"
+      ],
+      "linesSoFar": [
+        "已收到 48 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3795,\"lines\":48}}"
+    },
+    {
+      "t": 1789841079472,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 50 行"
+      ],
+      "linesSoFar": [
+        "已收到 50 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":3903,\"lines\":50}}"
+    },
+    {
+      "t": 1789841079722,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 51 行"
+      ],
+      "linesSoFar": [
+        "已收到 51 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4032,\"lines\":51}}"
+    },
+    {
+      "t": 1789841079972,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 52 行"
+      ],
+      "linesSoFar": [
+        "已收到 52 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4157,\"lines\":52}}"
+    },
+    {
+      "t": 1789841080223,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 54 行"
+      ],
+      "linesSoFar": [
+        "已收到 54 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4271,\"lines\":54}}"
+    },
+    {
+      "t": 1789841080489,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 55 行"
+      ],
+      "linesSoFar": [
+        "已收到 55 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4413,\"lines\":55}}"
+    },
+    {
+      "t": 1789841080722,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 55 行"
+      ],
+      "linesSoFar": [
+        "已收到 55 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4413,\"lines\":55}}"
+    },
+    {
+      "t": 1789841080972,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 57 行"
+      ],
+      "linesSoFar": [
+        "已收到 57 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4528,\"lines\":57}}"
+    },
+    {
+      "t": 1789841081222,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 58 行"
+      ],
+      "linesSoFar": [
+        "已收到 58 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4644,\"lines\":58}}"
+    },
+    {
+      "t": 1789841081472,
+      "preamble": true,
+      "toolish": [
+        "编辑中",
+        "demo/out.html · 已收到 60 行"
+      ],
+      "linesSoFar": [
+        "已收到 60 行"
+      ],
+      "details": 0,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"__streaming\":{\"bytes\":4715,\"lines\":60}}"
+    },
+    {
+      "t": 1789841082065,
+      "preamble": false,
+      "toolish": [
+        "写入完成"
+      ],
+      "linesSoFar": [],
+      "details": 1,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"content\":\"<!doctype html>\\n<html lang=\\\"zh\\\">\\n  <head>\\n    <meta charset=\\\"utf-8\\\" />\\n    <title>T101 slow write</title"
+    },
+    {
+      "t": 1789841082222,
+      "preamble": false,
+      "toolish": [
+        "写入完成"
+      ],
+      "linesSoFar": [],
+      "details": 1,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"content\":\"<!doctype html>\\n<html lang=\\\"zh\\\">\\n  <head>\\n    <meta charset=\\\"utf-8\\\" />\\n    <title>T101 slow write</title"
+    },
+    {
+      "t": 1789841082472,
+      "preamble": false,
+      "toolish": [
+        "写入完成"
+      ],
+      "linesSoFar": [],
+      "details": 1,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"content\":\"<!doctype html>\\n<html lang=\\\"zh\\\">\\n  <head>\\n    <meta charset=\\\"utf-8\\\" />\\n    <title>T101 slow write</title"
+    },
+    {
+      "t": 1789841082722,
+      "preamble": false,
+      "toolish": [
+        "写入完成"
+      ],
+      "linesSoFar": [],
+      "details": 1,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"content\":\"<!doctype html>\\n<html lang=\\\"zh\\\">\\n  <head>\\n    <meta charset=\\\"utf-8\\\" />\\n    <title>T101 slow write</title"
+    },
+    {
+      "t": 1789841082972,
+      "preamble": false,
+      "toolish": [
+        "写入完成"
+      ],
+      "linesSoFar": [],
+      "details": 1,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"content\":\"<!doctype html>\\n<html lang=\\\"zh\\\">\\n  <head>\\n    <meta charset=\\\"utf-8\\\" />\\n    <title>T101 slow write</title"
+    },
+    {
+      "t": 1789841083222,
+      "preamble": false,
+      "toolish": [
+        "写入完成"
+      ],
+      "linesSoFar": [],
+      "details": 1,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"content\":\"<!doctype html>\\n<html lang=\\\"zh\\\">\\n  <head>\\n    <meta charset=\\\"utf-8\\\" />\\n    <title>T101 slow write</title"
+    },
+    {
+      "t": 1789841083472,
+      "preamble": false,
+      "toolish": [
+        "写入完成"
+      ],
+      "linesSoFar": [],
+      "details": 1,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"content\":\"<!doctype html>\\n<html lang=\\\"zh\\\">\\n  <head>\\n    <meta charset=\\\"utf-8\\\" />\\n    <title>T101 slow write</title"
+    },
+    {
+      "t": 1789841083722,
+      "preamble": false,
+      "toolish": [
+        "写入完成"
+      ],
+      "linesSoFar": [],
+      "details": 1,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"content\":\"<!doctype html>\\n<html lang=\\\"zh\\\">\\n  <head>\\n    <meta charset=\\\"utf-8\\\" />\\n    <title>T101 slow write</title"
+    },
+    {
+      "t": 1789841083972,
+      "preamble": false,
+      "toolish": [
+        "写入完成"
+      ],
+      "linesSoFar": [],
+      "details": 1,
+      "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"content\":\"<!doctype html>\\n<html lang=\\\"zh\\\">\\n  <head>\\n    <meta charset=\\\"utf-8\\\" />\\n    <title>T101 slow write</title"
+    }
+  ]
+}

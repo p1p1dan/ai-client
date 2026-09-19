@@ -1,0 +1,16 @@
+{
+  "status": {
+    "t": "2026-09-19T17:58:18.586Z",
+    "status": "idle",
+    "title": "T091-A：请开始一个长回合（点验用）",
+    "msgs": 5,
+    "hostBound": true,
+    "active": "session-live-1789840444093-xrxvotj",
+    "retry": null
+  },
+  "transcript": {
+    "len": 11676,
+    "tail": "obe\ntemporary\n2d\ndevB DEV-2 new-root temp session probe\ntemporary\n2d\ndevB DEV-2 old-root temp session probe\ntemporary\n2d\nSession i4c45n\ntemporary\n2d\ndevA1KILL 回一个字：丁\ntemporary\n2d\ndevA1SCRATCH 回一个字：乙\ntemporary\n2d\ndevA1UNB 回一个字：甲 (fork)\ntemporary\n2d\ndevA1UNB 回一个字：甲\ntemporary\n2d\npi-install.sh 我运行时报错有点问题，帮我看看，刚刚提示npm不存在\ntemporary\n1w\nSession xx5l7s\ntemporary\n1w\nSession mgm09v\ntemporary\n1w\nSession 6k5w7h\ntemporary\n1w\nSession xg29cz\ntemporary\n1w\nSession d4909j\ntemporary\n1w\n写一个test123.txt文件\ntemporary\n1w",
+    "emptyState": false
+  }
+}

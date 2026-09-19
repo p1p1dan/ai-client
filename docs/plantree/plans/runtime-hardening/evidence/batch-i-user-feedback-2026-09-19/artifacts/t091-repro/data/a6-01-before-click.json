@@ -1,0 +1,52 @@
+[
+  {
+    "t": "2026-09-19T13:24:29.161Z",
+    "active": "session-1789824216736-3dy2625",
+    "count": 195,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [],
+    "stop": [
+      {
+        "disabled": false,
+        "visible": true
+      }
+    ],
+    "queue": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "textarea": "",
+    "placeholderVisible": false,
+    "transcriptEmpty": 57,
+    "rowCount": 195
+  },
+  {
+    "t": "2026-09-19T13:24:29.881Z",
+    "active": "session-1789824216736-3dy2625",
+    "count": 195,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [],
+    "stop": [
+      {
+        "disabled": false,
+        "visible": true
+      }
+    ],
+    "queue": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "textarea": "",
+    "placeholderVisible": false,
+    "transcriptEmpty": 57,
+    "rowCount": 195
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "user-send-1789841068807-13-1",
+    "role": "user",
+    "blocks": [
+      {
+        "id": "user-send-1789841068807-13-1-text",
+        "type": "text",
+        "text": "T101：请写一个文件（点验用，流式参数）"
+      }
+    ]
+  },
+  {
+    "id": "asst-send-1789841068807-13-2",
+    "role": "assistant",
+    "blocks": [
+      {
+        "id": "asst-send-1789841068807-13-2-text",
+        "type": "text",
+        "text": "下面开始编写文件："
+      },
+      {
+        "id": "toolu_d0227033-854f-4e2a-8194-89b8c1c9ee67",
+        "type": "tool_call",
+        "toolName": "write",
+        "toolInput": "{\"path\":\"/tmp/pc-i/ws/demo/out.html\",\"content\":\"<!doctype html>\\n<html lang=\\\"zh\\\">\\n  <head>\\n    <meta charset=\\\"utf-8\\\" />\\n    <title>T101 slow write</title>\\n  </head>\\n  <body>\\n    <p data-row=\\\"1\\\">第 1 行：工具行应当在参数还没流完时就出现。</p>\\n    <p data-row=\\\"2\\\">第 2 行：工具行应当在参数还没流完时就出现。</p>\\n    <p data-ro"
+      },
+      {
+        "id": "perm-activity-toolu_d0227033-854f-4e2a-8194-89b8c1c9ee67",
+        "type": "permission_activity"
+      },
+      {
+        "id": "toolu_d0227033-854f-4e2a-8194-89b8c1c9ee67-result",
+        "type": "tool_result",
+        "toolOk": true
+      }
+    ]
+  },
+  {
+    "id": "asst-send-1789841068807-13-3",
+    "role": "assistant",
+    "blocks": [
+      {
+        "id": "asst-send-1789841068807-13-3-text",
+        "type": "text",
+        "text": "写入完成"
+      }
+    ]
+  }
+]

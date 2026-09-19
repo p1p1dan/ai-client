@@ -1,0 +1,197 @@
+{
+  "t": "2026-09-19T13:31:39.939Z",
+  "items": [
+    {
+      "kind": "groupHeader",
+      "text": "最近",
+      "visible": true
+    },
+    {
+      "kind": "toggle",
+      "ariaLabel": "收起最近",
+      "visible": true
+    },
+    {
+      "kind": "row",
+      "title": "New chat",
+      "text": "New chat feat/runtime-evolution now",
+      "visible": true,
+      "active": true,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "New chat",
+      "text": "New chat feat/runtime-evolution now",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "T091 A10：长回合，请一直跑",
+      "text": "T091 A10：长回合，请一直跑 feat/runtime-evolution 1m",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "T091 A8：长回合，请一直跑",
+      "text": "T091 A8：长回合，请一直跑 feat/runtime-evolution 2m",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "T091 A8：长回合，请一直跑",
+      "text": "T091 A8：长回合，请一直跑 feat/runtime-evolution 2m",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "New chat",
+      "text": "New chat feat/runtime-evolution 3m",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "T091 A8：长回合，请一直跑",
+      "text": "T091 A8：长回合，请一直跑 feat/runtime-evolution 3m",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "showMore",
+      "text": "显示更多 ( 38 )",
+      "visible": true
+    },
+    {
+      "kind": "row",
+      "title": "devB DEV-2 after-GUI-change temp session probe",
+      "text": "devB DEV-2 after-GUI-change temp session probe temporary 2d",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "devB DEV-2 new-root temp session probe",
+      "text": "devB DEV-2 new-root temp session probe temporary 2d",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "devB DEV-2 old-root temp session probe",
+      "text": "devB DEV-2 old-root temp session probe temporary 2d",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "Session i4c45n",
+      "text": "Session i4c45n temporary 2d",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "devA1KILL 回一个字：丁",
+      "text": "devA1KILL 回一个字：丁 temporary 2d",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "devA1SCRATCH 回一个字：乙",
+      "text": "devA1SCRATCH 回一个字：乙 temporary 2d",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "devA1UNB 回一个字：甲 (fork)",
+      "text": "devA1UNB 回一个字：甲 (fork) temporary 2d",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "devA1UNB 回一个字：甲",
+      "text": "devA1UNB 回一个字：甲 temporary 2d",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "pi-install.sh  我运行时报错有点问题，帮我看看，刚刚提示npm不存在",
+      "text": "pi-install.sh 我运行时报错有点问题，帮我看看，刚刚提示npm不存在 temporary 1w",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "Session xx5l7s",
+      "text": "Session xx5l7s temporary 1w",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "Session mgm09v",
+      "text": "Session mgm09v temporary 1w",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "Session 6k5w7h",
+      "text": "Session 6k5w7h temporary 1w",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "Session xg29cz",
+      "text": "Session xg29cz temporary 1w",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "Session d4909j",
+      "text": "Session d4909j temporary 1w",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    },
+    {
+      "kind": "row",
+      "title": "写一个test123.txt文件",
+      "text": "写一个test123.txt文件 temporary 1w",
+      "visible": true,
+      "active": false,
+      "busyDot": true
+    }
+  ],
+  "rootText": "新建\n添加仓库\n\n最近\n\nNew chat\nfeat/runtime-evolution\nnow\nNew chat\nfeat/runtime-evolution\nnow\nT091 A10：长回合，请一直跑\nfeat/runtime-evolution\n1m\nT091 A8：长回合，请一直跑\nfeat/runtime-evolution\n2m\nT091 A8：长回合，请一直跑\nfeat/runtime-evolution\n2m\nNew chat\nfeat/runtime-evolution\n3m\nT091 A8：长回合，请一直跑\nfeat/runtime-evolution\n3m\n显示更多 (\n38\n)\n\n仓库列表\n\nai-client\n临时对话\ndevB DEV-2 after-GUI-change temp session probe\ntemporary\n2d\ndevB DEV-2 new-root temp session probe\ntemporary\n2d\ndevB DEV-2 old-root temp session probe\ntemporary\n2d\nSession i4c45n\ntemporary\n2d\ndevA1KILL 回一个字：丁\ntemporary\n2d\ndevA1SCRATCH 回一个字：乙\ntemporary\n2d\ndevA1UNB 回一个字：甲 (fork)\ntemporary\n2d\ndevA1UNB 回一个字：甲\ntemporary\n2d\npi-install.sh 我运行时报错有点问题，帮我看看，刚刚提示npm不存在\ntemporary\n1w\nSession xx5l7s\ntemporary\n1w\nSession mgm09v\ntemporary\n1w\nSession 6k5w7h\ntemporary\n1w\nSession xg29cz\ntemporary\n1w\nSession d4909j\ntemporary\n1w\n写一个test123.txt文件\ntemporary\n1w"
+}

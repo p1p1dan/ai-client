@@ -1,0 +1,19 @@
+{
+  "clickedAt": "2026-09-19T13:19:13.590Z",
+  "preActive": "session-live-1789823729760-b24it59",
+  "preCount": 191,
+  "postActive": "session-1789823953591-m1suk8l",
+  "postCount": 192,
+  "created": true,
+  "newSession": {
+    "id": "session-1789823953591-m1suk8l",
+    "projectId": "local:/home/ai/code/ai-client",
+    "workspaceId": "ws:main:/home/ai/code/ai-client",
+    "title": "New chat",
+    "status": "idle",
+    "updatedAt": 1789823953591
+  },
+  "s1Status": "running",
+  "stopButtonPresentSameTick": true,
+  "domRowCountSameTick": 191
+}

@@ -1,0 +1,170 @@
+[
+  {
+    "offset": 150,
+    "t": "2026-09-19T13:23:36.915Z",
+    "active": "session-1789824216736-3dy2625",
+    "count": 195,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "rowCount": 195,
+    "pair": {
+      "old": "idle",
+      "oldMsgs": 9,
+      "fresh": "idle",
+      "freshMsgs": 0
+    }
+  },
+  {
+    "offset": 500,
+    "t": "2026-09-19T13:23:37.169Z",
+    "active": "session-1789824216736-3dy2625",
+    "count": 195,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "rowCount": 195,
+    "pair": {
+      "old": "idle",
+      "oldMsgs": 9,
+      "fresh": "idle",
+      "freshMsgs": 0
+    }
+  },
+  {
+    "offset": 1200,
+    "t": "2026-09-19T13:23:37.899Z",
+    "active": "session-1789824216736-3dy2625",
+    "count": 195,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "rowCount": 195,
+    "pair": {
+      "old": "idle",
+      "oldMsgs": 9,
+      "fresh": "idle",
+      "freshMsgs": 0
+    }
+  },
+  {
+    "offset": 3000,
+    "t": "2026-09-19T13:23:39.651Z",
+    "active": "session-1789824216736-3dy2625",
+    "count": 195,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "rowCount": 195,
+    "pair": {
+      "old": "idle",
+      "oldMsgs": 9,
+      "fresh": "idle",
+      "freshMsgs": 0
+    }
+  },
+  {
+    "offset": 6000,
+    "t": "2026-09-19T13:23:42.717Z",
+    "active": "session-1789824216736-3dy2625",
+    "count": 195,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "rowCount": 195,
+    "pair": {
+      "old": "idle",
+      "oldMsgs": 9,
+      "fresh": "idle",
+      "freshMsgs": 0
+    }
+  },
+  {
+    "offset": 10000,
+    "t": "2026-09-19T13:23:46.669Z",
+    "active": "session-1789824216736-3dy2625",
+    "count": 195,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "rowCount": 195,
+    "pair": {
+      "old": "idle",
+      "oldMsgs": 9,
+      "fresh": "idle",
+      "freshMsgs": 0
+    }
+  },
+  {
+    "offset": 16000,
+    "t": "2026-09-19T13:23:52.724Z",
+    "active": "session-1789824216736-3dy2625",
+    "count": 195,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "rowCount": 195,
+    "pair": {
+      "old": "idle",
+      "oldMsgs": 9,
+      "fresh": "idle",
+      "freshMsgs": 0
+    }
+  }
+]

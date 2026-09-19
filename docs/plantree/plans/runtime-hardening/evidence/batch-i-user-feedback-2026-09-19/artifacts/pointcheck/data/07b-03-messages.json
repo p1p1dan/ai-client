@@ -1,0 +1,24 @@
+[
+  {
+    "id": "h:e87a7cd8-f8e9-4e24-a859-4e3e4b781035",
+    "role": "user",
+    "blocks": [
+      {
+        "id": "h:e87a7cd8-f8e9-4e24-a859-4e3e4b781035:text:0",
+        "type": "text",
+        "text": "T093b：一直 503，点验「立即放弃」"
+      }
+    ]
+  },
+  {
+    "id": "h:f3dd0d41-9b7a-4236-84e4-f0d5264af837",
+    "role": "assistant",
+    "blocks": [
+      {
+        "id": "h:f3dd0d41-9b7a-4236-84e4-f0d5264af837:interrupted",
+        "type": "text",
+        "text": "Response interrupted before any assistant content was saved."
+      }
+    ]
+  }
+]

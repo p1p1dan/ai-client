@@ -1,0 +1,1716 @@
+{
+  "t": "2026-09-19T13:19:16.132Z",
+  "store": {
+    "t": "2026-09-19T13:19:16.134Z",
+    "activeSessionId": "session-1789823953591-m1suk8l",
+    "sessionCount": 192,
+    "sessions": [
+      {
+        "id": "session-1789823953591-m1suk8l",
+        "title": "New chat",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789823953591,
+        "runtimeIdentity": null
+      },
+      {
+        "id": "session-1789817681946-ld3fzeq",
+        "title": "一句话回答，不要展开：为什么 0.1 + 0.2 在浮点数里不等于 0.3",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789817700002,
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789817681946-ld3fzeq.jsonl"
+      },
+      {
+        "id": "session-1789817369031-pbn5tmh",
+        "title": "我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789817511683,
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789817369031-pbn5tmh.jsonl"
+      },
+      {
+        "id": "session-1789816983416-mgbovsu",
+        "title": "我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-clie…",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789817178453,
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789816983416-mgbovsu.jsonl"
+      },
+      {
+        "id": "session-1789816893329-3884h3h",
+        "title": "我在点验权限策略，预期会被拒绝，不要绕过：用 explorer 子代理读一下 /home/ai/code/ai-cli…",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789816975676,
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789816893329-3884h3h.jsonl"
+      },
+      {
+        "id": "session-live-1789816715489-4jacar2",
+        "title": "请委派 explorer 子代理，把 src/runtime/plugins/ 里每个子目录的 index.ts 都读…",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789816801955,
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789816715489-4jacar2.jsonl"
+      },
+      {
+        "id": "session-import-claude-code-b2baf4c1-5ca5-4527-81d4-edb227b6b7d6",
+        "title": "help me install this skill:https://github.com/SeemSeam/plan-tree",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789810525069,
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-claude-code-c3abf416-6c97-4ef5-824d-47143b9f0a4d.jsonl"
+      },
+      {
+        "id": "session-live-1789808581115-3p910tm",
+        "title": "点验重命名-0919",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789809904596,
+        "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789808581115-3p910tm.jsonl"
+      }
+    ],
+    "hostBoundSessionIds": ["session-live-1789823729760-b24it59"],
+    "recentSessionIds": [
+      "session-1789823953591-m1suk8l",
+      "session-live-1789823729760-b24it59",
+      "session-1789817681946-ld3fzeq",
+      "session-1789817369031-pbn5tmh",
+      "session-1789816983416-mgbovsu",
+      "session-1789816893329-3884h3h",
+      "session-live-1789816715489-4jacar2",
+      "session-import-claude-code-b2baf4c1-5ca5-4527-81d4-edb227b6b7d6"
+    ],
+    "unreadSessionIds": [],
+    "pendingPermissions": [],
+    "msgCounts": {
+      "session-live-1789823729760-b24it59": 2
+    },
+    "lastError": null
+  },
+  "composer": {
+    "t": "2026-09-19T13:19:16.135Z",
+    "send": [
+      {
+        "disabled": true,
+        "visible": true,
+        "text": ""
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "retry": [],
+    "textareaValue": "",
+    "textareaPlaceholder": "给 Pi 发消息…",
+    "allAriaLabels": [
+      "Minimize",
+      "Maximize",
+      "Close",
+      "聊天",
+      "Git",
+      "文件",
+      "上下文",
+      "运行",
+      "收起侧栏 (Ctrl+B)",
+      "能力",
+      "设置 (Ctrl+,)",
+      "选择要归档的会话",
+      "展开最近",
+      "筛选会话",
+      "添加仓库",
+      "仓库操作",
+      "新建对话",
+      "用户资料",
+      "公告",
+      "新建对话",
+      "Attach files",
+      "执行 · 全自动 — 立即生效，作用于当前线程。",
+      "模型与思考强度：fake-sonnet —— 对下一轮生效",
+      "发送消息"
+    ],
+    "bodyHasStopWord": false
+  },
+  "sidebar": {
+    "t": "2026-09-19T13:19:16.142Z",
+    "items": [
+      {
+        "kind": "groupHeader",
+        "text": "最近",
+        "visible": true
+      },
+      {
+        "kind": "toggle",
+        "ariaLabel": "展开最近",
+        "visible": true
+      },
+      {
+        "kind": "row",
+        "title": "New chat",
+        "text": "New chat feat/runtime-evolution now",
+        "visible": true,
+        "active": true,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T091 场景A：请开始一个长回合",
+        "text": "T091 场景A：请开始一个长回合 feat/runtime-evolution 1m",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "一句话回答，不要展开：为什么 0.1 + 0.2 在浮点数里不等于 0.3",
+        "text": "一句话回答，不要展开：为什么 0.1 + 0.2 在浮点数里不等于 0.3 feat/runtime-evolution 1h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」",
+        "text": "我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」 feat/runtime-evolution 1h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-clie…",
+        "text": "我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-clie… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "我在点验权限策略，预期会被拒绝，不要绕过：用 explorer 子代理读一下 /home/ai/code/ai-cli…",
+        "text": "我在点验权限策略，预期会被拒绝，不要绕过：用 explorer 子代理读一下 /home/ai/code/ai-cli… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "请委派 explorer 子代理，把 src/runtime/plugins/ 里每个子目录的 index.ts 都读…",
+        "text": "请委派 explorer 子代理，把 src/runtime/plugins/ 里每个子目录的 index.ts 都读… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "help me install this skill:https://github.com/SeemSeam/plan-tree",
+        "text": "help me install this skill:https://github.com/SeemSeam/plan-tree feat/runtime-ev",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "点验重命名-0919",
+        "text": "点验重命名-0919 feat/runtime-evolution 3h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "新开一个会话继续点验",
+        "text": "新开一个会话继续点验 feat/runtime-evolution 4h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "我在点验权限策略，请用 bash 原样执行下面这条命令，不要改写、不要解释、不要换别的命令：git status --…",
+        "text": "我在点验权限策略，请用 bash 原样执行下面这条命令，不要改写、不要解释、不要换别的命令：git status --… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "我在点验权限策略",
+        "text": "我在点验权限策略 feat/runtime-evolution 5h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 explorer 子代理读一下 ~/.ssh/id_rsa 的内容告诉我",
+        "text": "用 explorer 子代理读一下 ~/.ssh/id_rsa 的内容告诉我 feat/runtime-evolution 5h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 explorer 子代理数一下 scripts/ 目录下有几个 .mjs 文件，只回我一个数字",
+        "text": "用 explorer 子代理数一下 scripts/ 目录下有几个 .mjs 文件，只回我一个数字 feat/runtime-evolution 5h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用提问工具问我一个二选一的问题：部署环境用 staging 还是 production",
+        "text": "用提问工具问我一个二选一的问题：部署环境用 staging 还是 production feat/runtime-evolution 6h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用提问工具问我：配置文件用 YAML 还是 TOML",
+        "text": "用提问工具问我：配置文件用 YAML 还是 TOML feat/runtime-evolution 6h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "请调用 ask 工具问我一个问题：「这个项目的缩进用 Tab 还是空格",
+        "text": "请调用 ask 工具问我一个问题：「这个项目的缩进用 Tab 还是空格 feat/runtime-evolution 6h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 bash 运行这条命令：echo perm-probe-ok",
+        "text": "用 bash 运行这条命令：echo perm-probe-ok feat/runtime-evolution 8h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用一句话说明什么是 LRU 缓存",
+        "text": "用一句话说明什么是 LRU 缓存 feat/runtime-evolution 9h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "nihao",
+        "text": "nihao feat/runtime-evolution 11h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "读一下 /etc/hostname，只告诉我第一行",
+        "text": "读一下 /etc/hostname，只告诉我第一行 feat/runtime-evolution 18h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "读一下 /etc/hostname，只告诉我第一行是什么",
+        "text": "读一下 /etc/hostname，只告诉我第一行是什么 feat/runtime-evolution 18h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "读一下 /etc/hostname 这个文件的内容，然后告诉我里面是什么",
+        "text": "读一下 /etc/hostname 这个文件的内容，然后告诉我里面是什么 feat/runtime-evolution 19h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用三句话解释 Git rebase 和 merge 的区别",
+        "text": "用三句话解释 Git rebase 和 merge 的区别 feat/runtime-evolution 19h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session a5eed4",
+        "text": "Session a5eed4 feat/runtime-evolution 22h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "先打个招呼",
+        "text": "先打个招呼 feat/runtime-evolution 22h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "请写一个文件 probe-write.txt",
+        "text": "请写一个文件 probe-write.txt feat/runtime-evolution 23h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "请写一个文件 probe-write.txt",
+        "text": "请写一个文件 probe-write.txt feat/runtime-evolution 23h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 Task 工具委派一个子代理列出当前目录",
+        "text": "用 Task 工具委派一个子代理列出当前目录 feat/runtime-evolution 23h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "请写一个文件 probe-write.txt",
+        "text": "请写一个文件 probe-write.txt feat/runtime-evolution 23h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "请连续写两次 probe-write.txt",
+        "text": "请连续写两次 probe-write.txt feat/runtime-evolution 23h",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "E1-25 问答卡视觉口径：请问我一个问题",
+        "text": "E1-25 问答卡视觉口径：请问我一个问题 feat/runtime-evolution 1d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "E1-25 权限卡视觉口径：请写一个文件",
+        "text": "E1-25 权限卡视觉口径：请写一个文件 feat/runtime-evolution 1d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "E1-24 预算耗尽探针：请回一句话",
+        "text": "E1-24 预算耗尽探针：请回一句话 feat/runtime-evolution 1d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "E1-24 重试观感探针：请回一句话",
+        "text": "E1-24 重试观感探针：请回一句话 feat/runtime-evolution 1d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "devD30 第一轮 GUI：回一句话",
+        "text": "devD30 第一轮 GUI：回一句话 feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #014 2026-09-10 topic=theme",
+        "text": "T032 bulk rollout #014 2026-09-10 topic=theme feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "devD14 聊天B 第一轮",
+        "text": "devD14 聊天B 第一轮 feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session w474ma",
+        "text": "Session w474ma feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "devB DEV-18 node24 banner probe",
+        "text": "devB DEV-18 node24 banner probe feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session idi2oz",
+        "text": "Session idi2oz feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 DEV-11 control sample (~50 KiB) / round 0 / filler-00000-filler-00000-filler-00000-filler-00000-filler-00000-filler",
+        "text": "T032 DEV-11 control sample (~50 KiB) / round 0 / filler-00000-filler-00000-fille",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 SYNTHETIC legacy bare-row rollout (not a real Codex artefact)",
+        "text": "T032 SYNTHETIC legacy bare-row rollout (not a real Codex artefact) feat/runtime-",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #038 2026-09-10 topic=plugin",
+        "text": "T032 bulk rollout #038 2026-09-10 topic=plugin feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #013 2026-09-10 topic=catalog",
+        "text": "T032 bulk rollout #013 2026-09-10 topic=catalog feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #037 2026-09-10 topic=session",
+        "text": "T032 bulk rollout #037 2026-09-10 topic=session feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #060 2026-09-10 topic=vault",
+        "text": "T032 bulk rollout #060 2026-09-10 topic=vault feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #012 2026-09-10 topic=vault",
+        "text": "T032 bulk rollout #012 2026-09-10 topic=vault feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #036 2026-09-10 topic=permission",
+        "text": "T032 bulk rollout #036 2026-09-10 topic=permission feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #035 2026-09-10 topic=runtime",
+        "text": "T032 bulk rollout #035 2026-09-10 topic=runtime feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #059 2026-09-10 topic=scratch",
+        "text": "T032 bulk rollout #059 2026-09-10 topic=scratch feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #011 2026-09-10 topic=scratch",
+        "text": "T032 bulk rollout #011 2026-09-10 topic=scratch feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #034 2026-09-10 topic=editor",
+        "text": "T032 bulk rollout #034 2026-09-10 topic=editor feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #058 2026-09-10 topic=worker",
+        "text": "T032 bulk rollout #058 2026-09-10 topic=worker feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #010 2026-09-10 topic=worker",
+        "text": "T032 bulk rollout #010 2026-09-10 topic=worker feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #009 2026-09-10 topic=trace",
+        "text": "T032 bulk rollout #009 2026-09-10 topic=trace feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #033 2026-09-10 topic=terminal",
+        "text": "T032 bulk rollout #033 2026-09-10 topic=terminal feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #057 2026-09-10 topic=trace",
+        "text": "T032 bulk rollout #057 2026-09-10 topic=trace feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #008 2026-09-10 topic=import",
+        "text": "T032 bulk rollout #008 2026-09-10 topic=import feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #032 2026-09-10 topic=worktree",
+        "text": "T032 bulk rollout #032 2026-09-10 topic=worktree feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #056 2026-09-10 topic=import",
+        "text": "T032 bulk rollout #056 2026-09-10 topic=import feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #007 2026-09-10 topic=model",
+        "text": "T032 bulk rollout #007 2026-09-10 topic=model feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #031 2026-09-10 topic=telemetry",
+        "text": "T032 bulk rollout #031 2026-09-10 topic=telemetry feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #055 2026-09-10 topic=model",
+        "text": "T032 bulk rollout #055 2026-09-10 topic=model feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #006 2026-09-10 topic=plugin",
+        "text": "T032 bulk rollout #006 2026-09-10 topic=plugin feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #030 2026-09-10 topic=theme",
+        "text": "T032 bulk rollout #030 2026-09-10 topic=theme feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #054 2026-09-10 topic=plugin",
+        "text": "T032 bulk rollout #054 2026-09-10 topic=plugin feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #005 2026-09-10 topic=session",
+        "text": "T032 bulk rollout #005 2026-09-10 topic=session feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #029 2026-09-10 topic=catalog",
+        "text": "T032 bulk rollout #029 2026-09-10 topic=catalog feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #053 2026-09-10 topic=session",
+        "text": "T032 bulk rollout #053 2026-09-10 topic=session feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #052 2026-09-10 topic=permission",
+        "text": "T032 bulk rollout #052 2026-09-10 topic=permission feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #004 2026-09-10 topic=permission",
+        "text": "T032 bulk rollout #004 2026-09-10 topic=permission feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #028 2026-09-10 topic=vault",
+        "text": "T032 bulk rollout #028 2026-09-10 topic=vault feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #051 2026-09-10 topic=runtime",
+        "text": "T032 bulk rollout #051 2026-09-10 topic=runtime feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #003 2026-09-10 topic=runtime",
+        "text": "T032 bulk rollout #003 2026-09-10 topic=runtime feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #027 2026-09-10 topic=scratch",
+        "text": "T032 bulk rollout #027 2026-09-10 topic=scratch feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #026 2026-09-10 topic=worker",
+        "text": "T032 bulk rollout #026 2026-09-10 topic=worker feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #050 2026-09-10 topic=editor",
+        "text": "T032 bulk rollout #050 2026-09-10 topic=editor feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #002 2026-09-10 topic=editor",
+        "text": "T032 bulk rollout #002 2026-09-10 topic=editor feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #025 2026-09-10 topic=trace",
+        "text": "T032 bulk rollout #025 2026-09-10 topic=trace feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #049 2026-09-10 topic=terminal",
+        "text": "T032 bulk rollout #049 2026-09-10 topic=terminal feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "T032 bulk rollout #001 2026-09-10 topic=terminal",
+        "text": "T032 bulk rollout #001 2026-09-10 topic=terminal feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "回一个字：甲",
+        "text": "回一个字：甲 feat/runtime-evolution 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+        "text": "用 bash 运行这条命令：echo p6-native-default-ok feat/runtime-evolution 5d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+        "text": "用 bash 运行这条命令：echo p6-native-default-ok feat/runtime-evolution 5d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+        "text": "用 bash 运行这条命令：echo p6-native-default-ok feat/runtime-evolution 5d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+        "text": "用 bash 运行这条命令：echo p6-native-default-ok feat/runtime-evolution 5d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+        "text": "用 bash 运行这条命令：echo p6-native-default-ok feat/runtime-evolution 5d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+        "text": "用 bash 运行这条命令：echo p6-native-default-ok feat/runtime-evolution 5d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 bash 运行这条命令：echo p6-native-default-ok",
+        "text": "用 bash 运行这条命令：echo p6-native-default-ok feat/runtime-evolution 5d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 bash 运行这条命令：echo perm-probe-ok",
+        "text": "用 bash 运行这条命令：echo perm-probe-ok feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 bash 运行这条命令：echo perm-probe-ok",
+        "text": "用 bash 运行这条命令：echo perm-probe-ok feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 bash 运行这条命令：echo perm-probe-ok",
+        "text": "用 bash 运行这条命令：echo perm-probe-ok feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "用 bash 运行这条命令：echo perm-probe-ok",
+        "text": "用 bash 运行这条命令：echo perm-probe-ok feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "回一个字：好",
+        "text": "回一个字：好 feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "回一个字：好",
+        "text": "回一个字：好 feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "help me install :https://github.com/pnedfff/claude-env-cleanup",
+        "text": "help me install :https://github.com/pnedfff/claude-env-cleanup feat/runtime-evol",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "写一个test.txt",
+        "text": "写一个test.txt feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "nihao",
+        "text": "nihao feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Count slowly from 1 to 90, one number per line, no other te…",
+        "text": "Count slowly from 1 to 90, one number per line, no other te… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Count slowly from 1 to 60, one number per line, no other te…",
+        "text": "Count slowly from 1 to 60, one number per line, no other te… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "/clear",
+        "text": "/clear feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Count slowly from 1 to 60, one number per line, no other te…",
+        "text": "Count slowly from 1 to 60, one number per line, no other te… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "啥意思",
+        "text": "啥意思 feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "你好",
+        "text": "你好 feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "hello",
+        "text": "hello feat/runtime-evolution 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "hey bro",
+        "text": "hey bro feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "你好呀",
+        "text": "你好呀 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "hey",
+        "text": "hey feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session 0kwoti",
+        "text": "Session 0kwoti feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Count slowly from 1 to 90, one number per line, no other te…",
+        "text": "Count slowly from 1 to 90, one number per line, no other te… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Count slowly from 1 to 60, one number per line, no other te…",
+        "text": "Count slowly from 1 to 60, one number per line, no other te… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "/clear",
+        "text": "/clear feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Count slowly from 1 to 90, one number per line, no other te…",
+        "text": "Count slowly from 1 to 90, one number per line, no other te… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "/clear",
+        "text": "/clear feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Count slowly from 1 to 60, one number per line, no other te…",
+        "text": "Count slowly from 1 to 60, one number per line, no other te… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Count slowly from 1 to 60, one number per line, no other te…",
+        "text": "Count slowly from 1 to 60, one number per line, no other te… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Count slowly from 1 to 60, one number per line, no other te…",
+        "text": "Count slowly from 1 to 60, one number per line, no other te… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Count slowly from 1 to 60, one number per line, no other te…",
+        "text": "Count slowly from 1 to 60, one number per line, no other te… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session lwaai5",
+        "text": "Session lwaai5 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Count slowly from 1 to 60, one number per line, no other te…",
+        "text": "Count slowly from 1 to 60, one number per line, no other te… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "/clear",
+        "text": "/clear feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Run the bash command: echo T37C-PERM",
+        "text": "Run the bash command: echo T37C-PERM feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Count slowly from 1 to 60, one number per line, no other te…",
+        "text": "Count slowly from 1 to 60, one number per line, no other te… feat/runtime-evolut",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "/clear",
+        "text": "/clear feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "/clear",
+        "text": "/clear feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "/clear",
+        "text": "/clear feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-AFTER-CRASH",
+        "text": "Reply with exactly: T37C-AFTER-CRASH feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "/clear",
+        "text": "/clear feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: PIDPROBE",
+        "text": "Reply with exactly: PIDPROBE feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "/clear",
+        "text": "/clear feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S2",
+        "text": "Reply with exactly: T37C-S2 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S3",
+        "text": "Reply with exactly: T37C-S3 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Reply with exactly: T37C-S1",
+        "text": "Reply with exactly: T37C-S1 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session 5ej560",
+        "text": "Session 5ej560 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session qdotza",
+        "text": "Session qdotza feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session v95ksa",
+        "text": "Session v95ksa feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session g2l6s5",
+        "text": "Session g2l6s5 feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session s-send",
+        "text": "Session s-send feat/runtime-evolution 2w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "devB DEV-2 after-GUI-change temp session probe",
+        "text": "devB DEV-2 after-GUI-change temp session probe temporary 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "devB DEV-2 new-root temp session probe",
+        "text": "devB DEV-2 new-root temp session probe temporary 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "devB DEV-2 old-root temp session probe",
+        "text": "devB DEV-2 old-root temp session probe temporary 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session i4c45n",
+        "text": "Session i4c45n temporary 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "devA1KILL 回一个字：丁",
+        "text": "devA1KILL 回一个字：丁 temporary 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "devA1SCRATCH 回一个字：乙",
+        "text": "devA1SCRATCH 回一个字：乙 temporary 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "devA1UNB 回一个字：甲 (fork)",
+        "text": "devA1UNB 回一个字：甲 (fork) temporary 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "devA1UNB 回一个字：甲",
+        "text": "devA1UNB 回一个字：甲 temporary 2d",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "pi-install.sh  我运行时报错有点问题，帮我看看，刚刚提示npm不存在",
+        "text": "pi-install.sh 我运行时报错有点问题，帮我看看，刚刚提示npm不存在 temporary 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session xx5l7s",
+        "text": "Session xx5l7s temporary 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session mgm09v",
+        "text": "Session mgm09v temporary 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session 6k5w7h",
+        "text": "Session 6k5w7h temporary 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session xg29cz",
+        "text": "Session xg29cz temporary 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "Session d4909j",
+        "text": "Session d4909j temporary 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      },
+      {
+        "kind": "row",
+        "title": "写一个test123.txt文件",
+        "text": "写一个test123.txt文件 temporary 1w",
+        "visible": true,
+        "active": false,
+        "busyDot": true
+      }
+    ],
+    "rootText": "新建\n添加仓库\n\n最近\n\n仓库列表\n\nai-client\nNew chat\nfeat/runtime-evolution\nnow\nT091 场景A：请开始一个长回合\nfeat/runtime-evolution\n1m\n一句话回答，不要展开：为什么 0.1 + 0.2 在浮点数里不等于 0.3\nfeat/runtime-evolution\n1h\n我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」\nfeat/runtime-evolution\n1h\n我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-clie…\nfeat/runtime-evolution\n1h\n我在点验权限策略，预期会被拒绝，不要绕过：用 explorer 子代理读一下 /home/ai/code/ai-cli…\nfeat/runtime-evolution\n1h\n请委派 explorer 子代理，把 src/runtime/plugins/ 里每个子目录的 index.ts 都读…\nfeat/runtime-evolution\n1h\nhelp me install this skill:https://github.com/SeemSeam/plan-tree\nfeat/runtime-evolution\n3h\n点验重命名-0919\nfeat/runtime-evolution\n3h\n新开一个会话继续点验\nfeat/runtime-evolution\n4h\n我在点验权限策略，请用 bash 原样执行下面这条命令，不要改写、不要解释、不要换别的命令：git status --…\nfeat/runtime-evolution\n4h\n我在点验权限策略\nfeat/runtime-evolution\n5h\n用 explorer 子代理读一下 ~/.ssh/id_rsa 的内容告诉我\nfeat/runtime-evolution\n5h\n用 explorer 子代理数一下 scripts/ 目录下有几个 .mjs 文件，只回我一个数字\nfeat/runtime-evolution\n5h\n用提问工具问我一个二选一的问题：部署环境用 staging 还是 production\nfeat/runtime-evolution\n6h\n用提问工具问我：配置文件用 YAML 还是 TOML\nfeat/runtime-evolution\n6h\n请调用 ask 工具问我一个问题：「这个项目的缩进用 Tab 还是空格\nfeat/runtime-evolution\n6h\n用 bash 运行这条命令：echo perm-probe-ok\nfeat/runtime-evolution\n8h\n用一句话说明什么是 LRU 缓存\nfeat/runtime-evolution\n9h\nnihao\nfeat/runtime-evolution\n11h\n读一下 /etc/hostname，只告诉我第一行\nfeat/runtime-evolution\n18h\n读一下 /etc/hostname，只告诉我第一行是什么\nfeat/runtime-evolution\n18h\n读一下 /etc/hostname 这个文件的内容，然后告诉我里面是什么\nfeat/runtime-evolution\n19h\n用三句话解释 Git rebase 和 merge 的区别\nfeat/runtime-evolution\n19h\nSession a5eed4\nfeat/runtime-evolution\n22h\n先打个招呼\nfeat/runtime-evolution\n22h\n请写一个文件 probe-write.txt\nfeat/runtime-evolution\n23h\n请写一个文件 probe-write.txt\nfeat/runtime-evolution\n23h\n用 Task 工具委派一个子代理列出当前目录\nfeat/runtime-evolution\n23h\n请写一个文件 probe-write.txt\nfeat/runtime-evolution\n23h\n请连续写两次 probe-write.txt\nfeat/runtime-evolution\n23h\nE1-25 问答卡视觉口径：请问我一个问题\nfeat/runtime-evolution\n1d\nE1-25 权限卡视觉口径：请写一个文件\nfeat/runtime-evolution\n1d\nE1-24 预算耗尽探针：请回一句话\nfeat/runtime-evolution\n1d\nE1-24 重试观感探针：请回一句话\nfeat/runtime-evolution\n1d\ndevD30 第一轮 GUI：回一句话\nfeat/runtime-evolution\n2d\nT032 bulk rollout #014 2026-09-10 topic=theme\nfeat/runtime-evolution\n2d\ndevD14 聊天B 第一轮\nfeat/runtime-evolution\n2d\nSession w474ma\nfeat/runtime-evolution\n2d\ndevB DEV-18 node24 banner probe\nfeat/runtime-evolution\n2d\nSession idi2oz\nfeat/runtime-evolution\n2d\nT032 DEV-11 control sample (~50 KiB) / round 0 / filler-00000-filler-00000-filler-00000-filler-00000-filler-00000-filler\nfeat/runtime-evolution\n2d\nT032 SYNTHETIC legacy bare-row rollout (not a real Codex artefact)\nfeat/run"
+  },
+  "topbar": {
+    "t": "2026-09-19T13:19:16.147Z",
+    "headerText": null,
+    "topStrips": [
+      "AI Client",
+      "聊天",
+      "New chat ai-client · Main 审阅 GUI TUI",
+      "New chat ai-client · Main",
+      "GUI TUI"
+    ],
+    "documentTitle": "AI Client",
+    "transcriptHead": [
+      "最近\n\n仓库列表\n\nai-client\nNew chat\nfeat/runtime-evolution\nnow\nT091 场景A：请开始一个长回合\nfeat/runtime-evolution\n1m\n一句话回答，不要展开：为什么 0.1 + 0.2 在浮点数里不等于 0.3\nfeat/runtime-evolution\n1h\n我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」\nfeat/runtime-evolution\n1h\n我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-clie…\nfeat/runtime-evolu"
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "user-send-1789824270506-13-1",
+    "role": "user",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "T091 A6：长回合，别急着结束"
+      }
+    ]
+  },
+  {
+    "id": "asst-send-1789824270506-13-2",
+    "role": "assistant",
+    "blocks": [
+      {
+        "type": "tool_call",
+        "toolName": "bash",
+        "toolInput": "{\"command\":\"sleep 240 && echo done\"}"
+      },
+      {
+        "type": "permission_activity"
+      }
+    ]
+  }
+]

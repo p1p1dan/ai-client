@@ -1,0 +1,152 @@
+{
+  "target": {
+    "id": "session-1789841772574-28u781p",
+    "title": "T093b：一直 503，点验「立即放弃」",
+    "status": "idle",
+    "loadedMsgs": 0,
+    "bound": false
+  },
+  "workersBefore": [],
+  "series": [
+    {
+      "t": "2026-09-19T18:56:25.162Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:26.671Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:28.179Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:29.687Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:31.195Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:32.704Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:34.212Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:35.720Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:37.229Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:38.738Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:40.247Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:41.755Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:43.263Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    },
+    {
+      "t": "2026-09-19T18:56:44.771Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": false,
+      "active": "session-1789841772574-28u781p",
+      "transcriptLen": 83,
+      "emptyState": false,
+      "workers": []
+    }
+  ]
+}

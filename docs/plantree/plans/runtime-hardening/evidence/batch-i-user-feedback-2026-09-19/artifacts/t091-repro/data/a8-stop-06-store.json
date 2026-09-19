@@ -1,0 +1,120 @@
+{
+  "t": "2026-09-19T13:27:01.812Z",
+  "activeSessionId": "session-1789824418217-6hkx5op",
+  "sessionCount": 198,
+  "sessions": [
+    {
+      "id": "session-1789824418217-6hkx5op",
+      "title": "New chat",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824418217,
+      "runtimeIdentity": null
+    },
+    {
+      "id": "session-1789824346707-429ijzn",
+      "title": "T091 A8：长回合，请一直跑",
+      "status": "running",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824418634,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789824346707-429ijzn.jsonl"
+    },
+    {
+      "id": "session-1789824270510-ljyycly",
+      "title": "T091 A8：长回合，请一直跑",
+      "status": "running",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824347027,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789824270510-ljyycly.jsonl"
+    },
+    {
+      "id": "session-1789824216736-3dy2625",
+      "title": "T091 A6：长回合，别急着结束",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824390749,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789824216736-3dy2625.jsonl"
+    },
+    {
+      "id": "session-1789824079602-fj5ne4v",
+      "title": "T091 A6：长回合，别急着结束",
+      "status": "disconnected",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824415035,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789824079602-fj5ne4v.jsonl"
+    },
+    {
+      "id": "session-1789824076041-qe94w8q",
+      "title": "T091 A6：长回合，别急着结束",
+      "status": "disconnected",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824269213,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789824076041-qe94w8q.jsonl"
+    },
+    {
+      "id": "session-1789823953591-m1suk8l",
+      "title": "T091 场景A-4：这条应该落在 S2",
+      "status": "disconnected",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824118382,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789823953591-m1suk8l.jsonl"
+    },
+    {
+      "id": "session-1789817681946-ld3fzeq",
+      "title": "一句话回答，不要展开：为什么 0.1 + 0.2 在浮点数里不等于 0.3",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789817700002,
+      "runtimeIdentity": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-1789817681946-ld3fzeq.jsonl"
+    }
+  ],
+  "hostBoundSessionIds": [
+    "session-1789824216736-3dy2625",
+    "session-1789824270510-ljyycly",
+    "session-1789824346707-429ijzn"
+  ],
+  "recentSessionIds": [
+    "session-1789824346707-429ijzn",
+    "session-1789824418217-6hkx5op",
+    "session-1789824079602-fj5ne4v",
+    "session-1789824216736-3dy2625",
+    "session-1789824270510-ljyycly",
+    "session-live-1789808581115-3p910tm",
+    "session-1789824076041-qe94w8q",
+    "session-live-1789823729760-b24it59"
+  ],
+  "unreadSessionIds": [
+    "session-live-1789823729760-b24it59",
+    "session-1789824076041-qe94w8q",
+    "session-1789824079602-fj5ne4v",
+    "session-1789824216736-3dy2625"
+  ],
+  "pendingPermissions": [],
+  "msgCounts": {
+    "session-live-1789823729760-b24it59": 3,
+    "session-1789823953591-m1suk8l": 2,
+    "session-1789824076041-qe94w8q": 3,
+    "session-1789824079602-fj5ne4v": 3,
+    "session-live-1789808581115-3p910tm": 9,
+    "session-1789824216736-3dy2625": 3,
+    "session-1789824270510-ljyycly": 2,
+    "session-1789824346707-429ijzn": 2
+  },
+  "lastError": null
+}

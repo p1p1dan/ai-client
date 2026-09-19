@@ -1,0 +1,29 @@
+[
+  {
+    "id": "user-send-1789840516996-4-1",
+    "role": "user",
+    "blocks": [
+      {
+        "id": "user-send-1789840516996-4-1-text",
+        "type": "text",
+        "text": "T091-C：这条应当作为「发送」而不是「排队」"
+      }
+    ]
+  },
+  {
+    "id": "asst-send-1789840516996-4-2",
+    "role": "assistant",
+    "blocks": [
+      {
+        "id": "toolu_89f80a6c-5fa9-4c8d-a3e7-d4a863875de8",
+        "type": "tool_call",
+        "toolName": "bash",
+        "toolInput": "{\"command\":\"sleep 60 && echo done\"}"
+      },
+      {
+        "id": "perm-activity-toolu_89f80a6c-5fa9-4c8d-a3e7-d4a863875de8",
+        "type": "permission_activity"
+      }
+    ]
+  }
+]

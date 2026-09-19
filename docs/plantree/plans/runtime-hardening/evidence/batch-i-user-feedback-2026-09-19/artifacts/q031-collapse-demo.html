@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Q031 长思考块收起方式对比（A / B / C）</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #fafafa;
+    color: #111827;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .page {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+  h1 {
+    font-size: 18px;
+    margin: 0 0 8px;
+  }
+  .intro {
+    color: #374151;
+    margin: 0 0 20px;
+    font-size: 14px;
+  }
+  .intro strong {
+    color: #111827;
+  }
+  .panels {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .panel {
+    width: 380px;
+  }
+  .panel-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .panel-desc {
+    font-size: 12.5px;
+    color: #6b7280;
+    margin: 0 0 8px;
+  }
+  .scroll-box {
+    position: relative;
+    height: 520px;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #ffffff;
+    padding: 12px;
+  }
+
+  /* user bubble */
+  .bubble-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+  }
+  .bubble {
+    background: #ececec;
+    border-radius: 8px;
+    padding: 8px 12px;
+    max-width: 85%;
+  }
+
+  /* collapse header */
+  .think-header {
+    font-size: 13px;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 6px 4px;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 4px;
+  }
+  .think-header:hover {
+    color: #374151;
+  }
+  .think-header.sticky {
+    position: sticky;
+    top: 0;
+    background: #fafafa;
+    border-bottom: 1px solid #e5e7eb;
+    z-index: 2;
+    margin: 0 -4px 4px;
+    padding: 6px 8px;
+  }
+  .caret {
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+  }
+
+  /* thinking body */
+  .think-body.collapsed {
+    display: none;
+  }
+  .think-content .think-p {
+    font-size: 13px;
+    color: #4b5563;
+    margin: 0 0 6px;
+    padding-left: 8px;
+    border-left: 2px solid #e5e7eb;
+  }
+  .think-content .think-p[data-n="60"] {
+    background: #fff7e0;
+    border-left-color: #f2c94c;
+  }
+
+  /* bottom collapse button (plan B / C) */
+  .collapse-btn {
+    font-size: 13px;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 8px 4px 4px;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .collapse-btn:hover {
+    color: #374151;
+  }
+
+  /* assistant final text */
+  .assistant-text {
+    font-size: 14px;
+    color: #111827;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed #e5e7eb;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Q031 长思考块收起方式对比</h1>
+  <p class="intro">
+    在各面板内向下滚动到第 <strong>60</strong> 段附近，再试着收起，对比三种方案在「读到一半想收起」时的体验差异。
+    每个面板都是独立的滚动区域，内容完全相同。
+  </p>
+
+  <div class="panels">
+
+    <!-- Panel A: sticky header -->
+    <div class="panel">
+      <div class="panel-title">A · 吸顶折叠头</div>
+      <div class="panel-desc">折叠头在滚动容器内 sticky 吸顶，滚动到任何位置都能直接点击收起；收起后自动把视口对齐回折叠头。</div>
+      <div class="scroll-box" id="scrollA">
+        <div class="bubble-row">
+          <div class="bubble">帮我评估一下这段重构方案的风险，并给出完整的思考过程。</div>
+        </div>
+        <div class="think-header sticky" id="headerA" onclick="toggleThink('A')">
+          <span class="caret" id="caretA">˅</span> 已思考 耗时 4m 51s
+        </div>
+        <div class="think-body" id="bodyA">
+          <div class="think-content" id="contentA"></div>
+        </div>
+        <div class="assistant-text">
+          综合以上思考，建议按渐进式重构的方式处理：先补齐关键路径的测试覆盖，再分批替换具体实现，最终收敛到统一的接口，避免一次性大改带来的回归风险。
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel B: bottom collapse button -->
+    <div class="panel">
+      <div class="panel-title">B · 底部收起按钮</div>
+      <div class="panel-desc">折叠头不吸顶；展开状态下思考内容末尾有一行「收起」按钮，读到哪里就能在哪里收起，点击后折叠并滚回折叠头。</div>
+      <div class="scroll-box" id="scrollB">
+        <div class="bubble-row">
+          <div class="bubble">帮我评估一下这段重构方案的风险，并给出完整的思考过程。</div>
+        </div>
+        <div class="think-header" id="headerB" onclick="toggleThink('B')">
+          <span class="caret" id="caretB">˅</span> 已思考 耗时 4m 51s
+        </div>
+        <div class="think-body" id="bodyB">
+          <div class="think-content" id="contentB"></div>
+          <div class="collapse-btn" onclick="toggleThink('B')">收起 <span class="caret">˄</span></div>
+        </div>
+        <div class="assistant-text">
+          综合以上思考，建议按渐进式重构的方式处理：先补齐关键路径的测试覆盖，再分批替换具体实现，最终收敛到统一的接口，避免一次性大改带来的回归风险。
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel C: sticky header + bottom collapse button -->
+    <div class="panel">
+      <div class="panel-title">C · 吸顶 + 底部按钮</div>
+      <div class="panel-desc">吸顶折叠头与末尾收起按钮同时具备，滚动过程中随时都能就近点击收起。</div>
+      <div class="scroll-box" id="scrollC">
+        <div class="bubble-row">
+          <div class="bubble">帮我评估一下这段重构方案的风险，并给出完整的思考过程。</div>
+        </div>
+        <div class="think-header sticky" id="headerC" onclick="toggleThink('C')">
+          <span class="caret" id="caretC">˅</span> 已思考 耗时 4m 51s
+        </div>
+        <div class="think-body" id="bodyC">
+          <div class="think-content" id="contentC"></div>
+          <div class="collapse-btn" onclick="toggleThink('C')">收起 <span class="caret">˄</span></div>
+        </div>
+        <div class="assistant-text">
+          综合以上思考，建议按渐进式重构的方式处理：先补齐关键路径的测试覆盖，再分批替换具体实现，最终收敛到统一的接口，避免一次性大改带来的回归风险。
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Small deterministic Chinese "lorem" bank to simulate long thinking text.
+  var sentenceBank = [
+    "需要先确认用户的核心诉求，再决定具体的实现路径。",
+    "从现有代码结构来看，这部分逻辑存在重复调用的情况。",
+    "考虑到性能开销，或许可以把这一步骤合并到前一个阶段处理。",
+    "这里有一个边界条件需要额外验证，避免空值导致异常。",
+    "对比两种实现方式，第二种在可维护性上更有优势。",
+    "如果用户输入为空，应当给出明确的提示而不是静默失败。",
+    "这个假设还需要进一步的数据支撑，暂时先记录下来。",
+    "从架构角度看，模块之间的耦合度略高，后续可以考虑拆分。",
+    "需要留意并发场景下状态更新是否会出现竞态问题。",
+    "这里的命名可以更贴近业务语义，便于后续维护者理解。",
+    "先梳理一遍现有的测试覆盖范围，确认是否遗漏关键路径。",
+    "权衡之后，选择更保守的方案，优先保证稳定性。",
+    "这段逻辑的时间复杂度偏高，或许可以引入缓存来优化。",
+    "还需要和上下游模块确认接口约定，避免理解偏差。",
+    "先记下这个待办，等主流程跑通之后再回头处理细节。"
+  ];
+
+  function buildParagraph(i) {
+    var a = sentenceBank[i % sentenceBank.length];
+    var b = sentenceBank[(i * 3 + 5) % sentenceBank.length];
+    var c = sentenceBank[(i * 7 + 11) % sentenceBank.length];
+    return a + b + c;
+  }
+
+  function renderThinking(panel) {
+    var el = document.getElementById('content' + panel);
+    var html = '';
+    for (var i = 1; i <= 120; i++) {
+      html += '<p class="think-p" data-n="' + i + '">' + i + '. ' + buildParagraph(i) + '</p>';
+    }
+    el.innerHTML = html;
+  }
+
+  ['A', 'B', 'C'].forEach(renderThinking);
+
+  // Toggle expand/collapse for a panel; on collapse, scroll the header back into view.
+  function toggleThink(panel) {
+    var body = document.getElementById('body' + panel);
+    var header = document.getElementById('header' + panel);
+    var caret = document.getElementById('caret' + panel);
+    var collapsed = body.classList.toggle('collapsed');
+    caret.textContent = collapsed ? '˄' : '˅';
+    if (collapsed) {
+      header.scrollIntoView({ block: 'start' });
+    }
+  }
+</script>
+</body>
+</html>

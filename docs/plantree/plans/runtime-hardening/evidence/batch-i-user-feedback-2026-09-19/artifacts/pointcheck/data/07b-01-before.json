@@ -1,0 +1,132 @@
+{
+  "workersBefore": [],
+  "storeBefore": {
+    "t": "2026-09-19T18:56:23.255Z",
+    "activeSessionId": "session-live-1789844104857-a4nfcxt",
+    "sessionCount": 212,
+    "sessions": [
+      {
+        "id": "session-live-1789843333513-dfq5gcj",
+        "title": "T102：发一条，这时才应该起 worker",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789843525864
+      },
+      {
+        "id": "session-1789841772574-28u781p",
+        "title": "T093b：一直 503，点验「立即放弃」",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789841791208
+      },
+      {
+        "id": "session-1789841605504-c56szre",
+        "title": "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789841653220
+      },
+      {
+        "id": "session-1789841368875-n62at8l",
+        "title": "T098-1：请先长时间思考（点验用，不点它）",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789841458039
+      },
+      {
+        "id": "session-1789841286868-nnz6uob",
+        "title": "T098-1：请先长时间思考（点验用，不点它）",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789841330899
+      },
+      {
+        "id": "session-1789841064729-5g54dzh",
+        "title": "T101：请写一个文件（点验用，流式参数）",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789841081696
+      },
+      {
+        "id": "session-1789840953690-5ci34oe",
+        "title": "T101：请写一个文件（点验用，流式参数）",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789840970075
+      },
+      {
+        "id": "session-live-1789840444093-xrxvotj",
+        "title": "T091-A：请开始一个长回合（点验用）",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789840839448
+      },
+      {
+        "id": "session-1789840511282-z56vcuu",
+        "title": "T091-C：这条应当作为「发送」而不是「排队」",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789840577554
+      },
+      {
+        "id": "session-1789824851831-trd1w7j",
+        "title": "T091 截图用：长回合",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789824976132
+      },
+      {
+        "id": "session-1789824821419-ntzjw19",
+        "title": "T091 截图用：长回合",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789824947003
+      },
+      {
+        "id": "session-1789824872590-22t11lc",
+        "title": "T091 截图用：长回合",
+        "status": "idle",
+        "workspaceId": "ws:main:/home/ai/code/ai-client",
+        "projectId": "local:/home/ai/code/ai-client",
+        "unbound": null,
+        "updatedAt": 1789824877020
+      }
+    ],
+    "hostBoundSessionIds": [],
+    "recentSessionIds": [
+      "session-live-1789844104857-a4nfcxt",
+      "session-live-1789843333513-dfq5gcj",
+      "session-1789841772574-28u781p",
+      "session-1789841605504-c56szre",
+      "session-1789841368875-n62at8l",
+      "session-1789841286868-nnz6uob",
+      "session-1789841064729-5g54dzh",
+      "session-1789840953690-5ci34oe"
+    ],
+    "pendingPermissions": [],
+    "msgCounts": {},
+    "lastError": null
+  }
+}

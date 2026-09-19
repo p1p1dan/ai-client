@@ -1,0 +1,21 @@
+{"time":"2026-09-19T13:18:07.249Z","seq":1,"status":200,"role":"user","contentSummary":"T091 场景A：请开始一个长回合","hasToolResult":false,"plan":"long-turn"}
+{"time":"2026-09-19T13:19:18.630Z","seq":2,"status":200,"role":"user","contentSummary":"T091 场景A-4：这条应该落在 S2","hasToolResult":false,"plan":"long-turn"}
+{"time":"2026-09-19T13:20:08.586Z","seq":3,"status":200,"role":"user","contentSummary":"[tool_result:(no output) [exit=null; timeout]]","hasToolResult":true,"plan":"long-turn"}
+{"time":"2026-09-19T13:21:19.155Z","seq":4,"status":200,"role":"user","contentSummary":"T091 A6：长回合，别急着结束","hasToolResult":false,"plan":"long-turn"}
+{"time":"2026-09-19T13:21:59.538Z","seq":5,"status":200,"role":"user","contentSummary":"T091 A6：长回合，别急着结束","hasToolResult":false,"plan":"long-turn"}
+{"time":"2026-09-19T13:23:19.290Z","seq":6,"status":200,"role":"user","contentSummary":"[tool_result:(no output) [exit=null; timeout]]","hasToolResult":true,"plan":"long-turn"}
+{"time":"2026-09-19T13:23:36.036Z","seq":7,"status":200,"role":"user","contentSummary":"T091 A7：长回合，请慢慢来","hasToolResult":true,"plan":"long-turn"}
+{"time":"2026-09-19T13:23:59.686Z","seq":8,"status":200,"role":"user","contentSummary":"[tool_result:(no output) [exit=null; timeout]]","hasToolResult":true,"plan":"long-turn"}
+{"time":"2026-09-19T13:24:30.621Z","seq":9,"status":200,"role":"user","contentSummary":"T091 A6：长回合，别急着结束","hasToolResult":false,"plan":"long-turn"}
+{"time":"2026-09-19T13:25:46.638Z","seq":10,"status":200,"role":"user","contentSummary":"T091 A8：长回合，请一直跑","hasToolResult":false,"plan":"long-turn"}
+{"time":"2026-09-19T13:26:30.741Z","seq":11,"status":200,"role":"user","contentSummary":"[tool_result:(no output) [exit=null; timeout]]","hasToolResult":true,"plan":"long-turn"}
+{"time":"2026-09-19T13:26:56.073Z","seq":12,"status":200,"role":"user","contentSummary":"T091 A8：长回合，请一直跑","hasToolResult":false,"plan":"long-turn"}
+{"time":"2026-09-19T13:27:22.529Z","seq":13,"status":200,"role":"user","contentSummary":"T091 A8：长回合，请一直跑","hasToolResult":false,"plan":"long-turn"}
+{"time":"2026-09-19T13:27:46.769Z","seq":14,"status":200,"role":"user","contentSummary":"[tool_result:(no output) [exit=null; timeout]]","hasToolResult":true,"plan":"long-turn"}
+{"time":"2026-09-19T13:28:25.468Z","seq":15,"status":200,"role":"user","contentSummary":"T091 A10：长回合，请一直跑","hasToolResult":false,"plan":"long-turn"}
+{"time":"2026-09-19T13:28:56.224Z","seq":16,"status":200,"role":"user","contentSummary":"[tool_result:(no output) [exit=null; timeout]]","hasToolResult":true,"plan":"long-turn"}
+{"time":"2026-09-19T13:29:22.634Z","seq":17,"status":200,"role":"user","contentSummary":"[tool_result:(no output) [exit=null; timeout]]","hasToolResult":true,"plan":"long-turn"}
+{"time":"2026-09-19T13:33:46.708Z","seq":18,"status":200,"role":"user","contentSummary":"T091 截图用：长回合","hasToolResult":false,"plan":"long-turn"}
+{"time":"2026-09-19T13:34:15.786Z","seq":19,"status":200,"role":"user","contentSummary":"T091 截图用：长回合","hasToolResult":false,"plan":"long-turn"}
+{"time":"2026-09-19T13:34:35.993Z","seq":20,"status":200,"role":"user","contentSummary":"T091 截图用：长回合","hasToolResult":false,"plan":"long-turn"}
+{"time":"2026-09-19T13:35:46.990Z","seq":21,"status":200,"role":"user","contentSummary":"[tool_result:(no output) [exit=null; timeout]]","hasToolResult":true,"plan":"long-turn"}

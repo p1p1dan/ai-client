@@ -1,0 +1,30 @@
+{
+  "t": "2026-09-19T18:10:24.289Z",
+  "found": true,
+  "triggerText": "已思考 耗时 40s",
+  "triggerTag": "BUTTON",
+  "ariaExpanded": "true",
+  "dataState": null,
+  "hasChevron": true,
+  "triggerTop": -331.75,
+  "triggerHeight": 22,
+  "viewportTop": 68,
+  "viewportBottom": 611.703125,
+  "offsetFromViewportTop": -399.75,
+  "triggerPosition": "sticky",
+  "triggerBackground": "oklch(0.9931 0.012 96.42)",
+  "stickyAncestor": {
+    "tag": "BUTTON",
+    "position": "sticky",
+    "background": "oklch(0.9931 0.012 96.42)",
+    "top": -331.75,
+    "height": 22
+  },
+  "body": {
+    "paragraphs": 1,
+    "chars": 7092
+  },
+  "scrollTop": 4851,
+  "scrollHeight": 5395,
+  "clientHeight": 544
+}

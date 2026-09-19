@@ -1,0 +1,100 @@
+{
+  "s1": "session-live-1789823729760-b24it59",
+  "s2": "session-1789823953591-m1suk8l",
+  "stopClick": {
+    "ok": true,
+    "at": "2026-09-19T13:19:23.046Z"
+  },
+  "series": [
+    {
+      "t": "2026-09-19T13:19:23.044Z",
+      "s1": "running",
+      "s2": "running",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:24.552Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:26.056Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:27.560Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:29.065Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:30.569Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:32.074Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:33.578Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:35.083Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:36.588Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:38.092Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:39.596Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:41.101Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:42.604Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    },
+    {
+      "t": "2026-09-19T13:19:44.107Z",
+      "s1": "running",
+      "s2": "idle",
+      "active": "session-1789823953591-m1suk8l"
+    }
+  ]
+}

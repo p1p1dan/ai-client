@@ -1,0 +1,128 @@
+[
+  {
+    "moved": {
+      "ok": true,
+      "before": 110,
+      "after": 330,
+      "max": 704
+    },
+    "offsetFromViewportTop": -220.25,
+    "triggerTop": -152.25,
+    "viewportTop": 68,
+    "scrollTop": 330,
+    "position": "sticky",
+    "background": "oklch(0.9931 0.012 96.42)",
+    "sticky": {
+      "tag": "BUTTON",
+      "position": "sticky",
+      "background": "oklch(0.9931 0.012 96.42)",
+      "top": -152.25,
+      "height": 21
+    }
+  },
+  {
+    "moved": {
+      "ok": true,
+      "before": 330,
+      "after": 550,
+      "max": 791
+    },
+    "offsetFromViewportTop": -440.25,
+    "triggerTop": -372.25,
+    "viewportTop": 68,
+    "scrollTop": 550,
+    "position": "sticky",
+    "background": "oklch(0.9931 0.012 96.42)",
+    "sticky": {
+      "tag": "BUTTON",
+      "position": "sticky",
+      "background": "oklch(0.9931 0.012 96.42)",
+      "top": -372.25,
+      "height": 21
+    }
+  },
+  {
+    "moved": {
+      "ok": true,
+      "before": 550,
+      "after": 770,
+      "max": 856
+    },
+    "offsetFromViewportTop": -660.25,
+    "triggerTop": -592.25,
+    "viewportTop": 68,
+    "scrollTop": 770,
+    "position": "sticky",
+    "background": "oklch(0.9931 0.012 96.42)",
+    "sticky": {
+      "tag": "BUTTON",
+      "position": "sticky",
+      "background": "oklch(0.9931 0.012 96.42)",
+      "top": -592.25,
+      "height": 21
+    }
+  },
+  {
+    "moved": {
+      "ok": true,
+      "before": 770,
+      "after": 943,
+      "max": 943
+    },
+    "offsetFromViewportTop": -898.25,
+    "triggerTop": -830.25,
+    "viewportTop": 68,
+    "scrollTop": 1008,
+    "position": "sticky",
+    "background": "oklch(0.9931 0.012 96.42)",
+    "sticky": {
+      "tag": "BUTTON",
+      "position": "sticky",
+      "background": "oklch(0.9931 0.012 96.42)",
+      "top": -830.25,
+      "height": 21
+    }
+  },
+  {
+    "moved": {
+      "ok": true,
+      "before": 1008,
+      "after": 1008,
+      "max": 1008
+    },
+    "offsetFromViewportTop": -985.25,
+    "triggerTop": -917.25,
+    "viewportTop": 68,
+    "scrollTop": 1095,
+    "position": "sticky",
+    "background": "oklch(0.9931 0.012 96.42)",
+    "sticky": {
+      "tag": "BUTTON",
+      "position": "sticky",
+      "background": "oklch(0.9931 0.012 96.42)",
+      "top": -917.25,
+      "height": 21
+    }
+  },
+  {
+    "moved": {
+      "ok": true,
+      "before": 1095,
+      "after": 1095,
+      "max": 1095
+    },
+    "offsetFromViewportTop": -1050.25,
+    "triggerTop": -982.25,
+    "viewportTop": 68,
+    "scrollTop": 1160,
+    "position": "sticky",
+    "background": "oklch(0.9931 0.012 96.42)",
+    "sticky": {
+      "tag": "BUTTON",
+      "position": "sticky",
+      "background": "oklch(0.9931 0.012 96.42)",
+      "top": -982.25,
+      "height": 21
+    }
+  }
+]

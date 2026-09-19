@@ -1,0 +1,138 @@
+[
+  {
+    "offsetFromNewClick": 150,
+    "t": "2026-09-19T13:24:30.959Z",
+    "active": "session-1789824270510-ljyycly",
+    "count": 196,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [],
+    "stop": [
+      {
+        "disabled": false,
+        "visible": true
+      }
+    ],
+    "queue": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "textarea": "",
+    "placeholderVisible": false,
+    "transcriptEmpty": 11267,
+    "rowCount": 196
+  },
+  {
+    "offsetFromNewClick": 500,
+    "t": "2026-09-19T13:24:30.968Z",
+    "active": "session-1789824270510-ljyycly",
+    "count": 196,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [],
+    "stop": [
+      {
+        "disabled": false,
+        "visible": true
+      }
+    ],
+    "queue": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "textarea": "",
+    "placeholderVisible": false,
+    "transcriptEmpty": 11267,
+    "rowCount": 196
+  },
+  {
+    "offsetFromNewClick": 1500,
+    "t": "2026-09-19T13:24:31.674Z",
+    "active": "session-1789824270510-ljyycly",
+    "count": 196,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "textarea": "",
+    "placeholderVisible": false,
+    "transcriptEmpty": 11276,
+    "rowCount": 196
+  },
+  {
+    "offsetFromNewClick": 4000,
+    "t": "2026-09-19T13:24:33.713Z",
+    "active": "session-1789824270510-ljyycly",
+    "count": 196,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "textarea": "",
+    "placeholderVisible": false,
+    "transcriptEmpty": 11276,
+    "rowCount": 196
+  },
+  {
+    "offsetFromNewClick": 8000,
+    "t": "2026-09-19T13:24:37.738Z",
+    "active": "session-1789824270510-ljyycly",
+    "count": 196,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "textarea": "",
+    "placeholderVisible": false,
+    "transcriptEmpty": 11276,
+    "rowCount": 196
+  },
+  {
+    "offsetFromNewClick": 14000,
+    "t": "2026-09-19T13:24:43.785Z",
+    "active": "session-1789824270510-ljyycly",
+    "count": 196,
+    "activeStatus": "idle",
+    "activeTitle": "New chat",
+    "activeMsgs": 0,
+    "send": [
+      {
+        "disabled": true,
+        "visible": true
+      }
+    ],
+    "stop": [],
+    "queue": [],
+    "textarea": "",
+    "placeholderVisible": false,
+    "transcriptEmpty": 11275,
+    "rowCount": 196
+  }
+]

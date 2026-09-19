@@ -1,0 +1,25 @@
+{
+  "t": "2026-09-19T13:29:11.789Z",
+  "active": "session-1789824505356-65wf4oc",
+  "activeStatus": "idle",
+  "activeMsgs": 0,
+  "moduleKeys": ["useMessageQueueStore"],
+  "queue": {
+    "state": {
+      "bySession": {
+        "session-1789824505356-65wf4oc": {
+          "entries": [
+            {
+              "id": "queued-mu8farsk-1",
+              "sessionId": "session-1789824505356-65wf4oc",
+              "text": "T091 A10-B：这条在新对话里输入",
+              "attachments": [],
+              "queuedAt": 1789824506420
+            }
+          ],
+          "paused": "send-rejected"
+        }
+      }
+    }
+  }
+}

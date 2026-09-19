@@ -1,0 +1,18 @@
+{
+  "after": [
+    {
+      "t": "2026-09-19T18:42:40.696Z",
+      "status": "idle",
+      "msgs": 2,
+      "hostBound": true,
+      "workers": [
+        929598
+      ]
+    }
+  ],
+  "gateway": {
+    "ok": true,
+    "plan": "text",
+    "count": 1
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "boxes": [
+    {
+      "ariaChecked": "false",
+      "disabled": "true",
+      "label": "AI 服务 3 /home/ai/.pilab/t37c-agent/models.json CX2 (GPT-5.6)"
+    },
+    {
+      "ariaChecked": "false",
+      "disabled": "true",
+      "label": "AI 服务 3 /home/ai/.pilab/t37c-agent/models.json CX2 (GPT-5.6)"
+    },
+    {
+      "ariaChecked": "false",
+      "disabled": "true",
+      "label": "历史对话 74 /home/ai/.pilab/t37c-agent/sessions --home-ai-JYWAI-"
+    },
+    {
+      "ariaChecked": "false",
+      "disabled": "true",
+      "label": "历史对话 74 /home/ai/.pilab/t37c-agent/sessions --home-ai-JYWAI-"
+    },
+    {
+      "ariaChecked": "false",
+      "disabled": "true",
+      "label": "替换本应用已经有的同名项关闭时：这边已经有的一律保持不动。"
+    }
+  ],
+  "hasNotOpenNote": true,
+  "noteLines": [
+    "数据迁移",
+    "数据迁移",
+    "测试期间暂未开放。"
+  ]
+}

@@ -1,0 +1,637 @@
+{
+  "ok": true,
+  "rows": [
+    {
+      "name": ".claude",
+      "depth": 0,
+      "top": -654
+    },
+    {
+      "name": ".codex",
+      "depth": 0,
+      "top": -626
+    },
+    {
+      "name": ".git",
+      "depth": 0,
+      "top": -598
+    },
+    {
+      "name": ".github",
+      "depth": 0,
+      "top": -570
+    },
+    {
+      "name": ".husky",
+      "depth": 0,
+      "top": -542
+    },
+    {
+      "name": "build",
+      "depth": 0,
+      "top": -514
+    },
+    {
+      "name": "contextFX",
+      "depth": 0,
+      "top": -486
+    },
+    {
+      "name": "dist",
+      "depth": 0,
+      "top": -458
+    },
+    {
+      "name": "docs",
+      "depth": 0,
+      "top": -430
+    },
+    {
+      "name": "plans",
+      "depth": 1,
+      "top": -402
+    },
+    {
+      "name": "2026-08-18-deepseek-harness-study.md",
+      "depth": 2,
+      "top": -374
+    },
+    {
+      "name": "2026-09-08-pi-desktop-study.md",
+      "depth": 2,
+      "top": -346
+    },
+    {
+      "name": "2026-09-08-runtime-evolution-ard.md",
+      "depth": 2,
+      "top": -318
+    },
+    {
+      "name": "2026-09-09-bash-carrier-decision.md",
+      "depth": 2,
+      "top": -290
+    },
+    {
+      "name": "2026-09-09-gui-defect-decisions.md",
+      "depth": 2,
+      "top": -262
+    },
+    {
+      "name": "plantree",
+      "depth": 1,
+      "top": -234
+    },
+    {
+      "name": "baseline",
+      "depth": 2,
+      "top": -206
+    },
+    {
+      "name": "ideas",
+      "depth": 2,
+      "top": -178
+    },
+    {
+      "name": "plans",
+      "depth": 2,
+      "top": -150
+    },
+    {
+      "name": "gui-sdk-experience",
+      "depth": 3,
+      "top": -122
+    },
+    {
+      "name": "runtime-evolution",
+      "depth": 3,
+      "top": -94
+    },
+    {
+      "name": "runtime-hardening",
+      "depth": 3,
+      "top": -66
+    },
+    {
+      "name": "decisions",
+      "depth": 4,
+      "top": -38
+    },
+    {
+      "name": "evidence",
+      "depth": 4,
+      "top": -10
+    },
+    {
+      "name": "batch-d-audit-2026-09-15",
+      "depth": 5,
+      "top": 18
+    },
+    {
+      "name": "batch-d4-fixes-2026-09-17",
+      "depth": 5,
+      "top": 46
+    },
+    {
+      "name": "batch-e-build-2026-09-18",
+      "depth": 5,
+      "top": 74
+    },
+    {
+      "name": "batch-e-devbox-2026-09-17",
+      "depth": 5,
+      "top": 102
+    },
+    {
+      "name": "batch-g-chat-ux-2026-09-18",
+      "depth": 5,
+      "top": 130
+    },
+    {
+      "name": "batch-h-build-2026-09-19",
+      "depth": 5,
+      "top": 158
+    },
+    {
+      "name": "batch-h-devbox-pointcheck-2026-09-19",
+      "depth": 5,
+      "top": 186
+    },
+    {
+      "name": "batch-h-field-fixes-2026-09-18",
+      "depth": 5,
+      "top": 214
+    },
+    {
+      "name": "batch-i-user-feedback-2026-09-19",
+      "depth": 5,
+      "top": 242
+    },
+    {
+      "name": "artifacts",
+      "depth": 6,
+      "top": 270
+    },
+    {
+      "name": "pointcheck",
+      "depth": 7,
+      "top": 298
+    },
+    {
+      "name": "data",
+      "depth": 8,
+      "top": 326
+    },
+    {
+      "name": "shots",
+      "depth": 8,
+      "top": 354
+    },
+    {
+      "name": "tree-demo",
+      "depth": 8,
+      "top": 382
+    },
+    {
+      "name": "alpha.txt",
+      "depth": 9,
+      "top": 410
+    },
+    {
+      "name": "beta.txt",
+      "depth": 9,
+      "top": 438
+    },
+    {
+      "name": "gamma.txt",
+      "depth": 9,
+      "top": 466
+    },
+    {
+      "name": "gw.mjs",
+      "depth": 8,
+      "top": 494
+    },
+    {
+      "name": "lib.mjs",
+      "depth": 8,
+      "top": 522
+    },
+    {
+      "name": "pc-00-enter.mjs",
+      "depth": 8,
+      "top": 550
+    },
+    {
+      "name": "pc-01-t091.mjs",
+      "depth": 8,
+      "top": 578
+    },
+    {
+      "name": "pc-02-t092.mjs",
+      "depth": 8,
+      "top": 606
+    },
+    {
+      "name": "pc-02b-t092.mjs",
+      "depth": 8,
+      "top": 634
+    },
+    {
+      "name": "pc-02c-t092.mjs",
+      "depth": 8,
+      "top": 662
+    },
+    {
+      "name": "pc-03-t101.mjs",
+      "depth": 8,
+      "top": 690
+    },
+    {
+      "name": "pc-03b-t101-settled.mjs",
+      "depth": 8,
+      "top": 718
+    },
+    {
+      "name": "pc-04-t096-t098.mjs",
+      "depth": 8,
+      "top": 746
+    },
+    {
+      "name": "pc-04b-t096-sticky.mjs",
+      "depth": 8,
+      "top": 774
+    },
+    {
+      "name": "pc-05-t093-banner.mjs",
+      "depth": 8,
+      "top": 802
+    },
+    {
+      "name": "pc-05b-t093-giveup.mjs",
+      "depth": 8,
+      "top": 830
+    },
+    {
+      "name": "pc-06-t094-filetree.mjs",
+      "depth": 8,
+      "top": 858
+    },
+    {
+      "name": "pc-06b-t094-tempws.mjs",
+      "depth": 8,
+      "top": 886
+    },
+    {
+      "name": "pc-07-t102.mjs",
+      "depth": 8,
+      "top": 914
+    },
+    {
+      "name": "pc-07b-t102.mjs",
+      "depth": 8,
+      "top": 942
+    },
+    {
+      "name": "pc-08-t097-t099-timeout.mjs",
+      "depth": 8,
+      "top": 970
+    },
+    {
+      "name": "pc-08b-timeout-ui.mjs",
+      "depth": 8,
+      "top": 998
+    },
+    {
+      "name": "t091-repro",
+      "depth": 7,
+      "top": 1026
+    },
+    {
+      "name": "q031-collapse-demo.html",
+      "depth": 7,
+      "top": 1054
+    },
+    {
+      "name": "README.md",
+      "depth": 6,
+      "top": 1082
+    },
+    {
+      "name": "batch-a-2026-09-14.md",
+      "depth": 5,
+      "top": 1110
+    },
+    {
+      "name": "batch-b-2026-09-14.md",
+      "depth": 5,
+      "top": 1138
+    },
+    {
+      "name": "batch-c-2026-09-15.md",
+      "depth": 5,
+      "top": 1166
+    },
+    {
+      "name": "batch-d-2026-09-15.md",
+      "depth": 5,
+      "top": 1194
+    },
+    {
+      "name": "batch-d2-2026-09-15.md",
+      "depth": 5,
+      "top": 1222
+    },
+    {
+      "name": "capacity-reconciliation-2026-09-15.md",
+      "depth": 5,
+      "top": 1250
+    },
+    {
+      "name": "defect-deep-dive-2026-09-16.md",
+      "depth": 5,
+      "top": 1278
+    },
+    {
+      "name": "vitest-attribution-2026-09-16.md",
+      "depth": 5,
+      "top": 1306
+    },
+    {
+      "name": "topics",
+      "depth": 4,
+      "top": 1334
+    },
+    {
+      "name": "checklist-e.md",
+      "depth": 4,
+      "top": 1362
+    },
+    {
+      "name": "open-questions.md",
+      "depth": 4,
+      "top": 1390
+    },
+    {
+      "name": "README.md",
+      "depth": 4,
+      "top": 1418
+    },
+    {
+      "name": "roadmap.md",
+      "depth": 4,
+      "top": 1446
+    },
+    {
+      "name": "README.md",
+      "depth": 2,
+      "top": 1474
+    },
+    {
+      "name": "进度看板.md",
+      "depth": 2,
+      "top": 1502
+    },
+    {
+      "name": "release-notes",
+      "depth": 1,
+      "top": 1530
+    },
+    {
+      "name": "agent-project-engineering.md",
+      "depth": 1,
+      "top": 1558
+    },
+    {
+      "name": "architecture.md",
+      "depth": 1,
+      "top": 1586
+    },
+    {
+      "name": "design-system.md",
+      "depth": 1,
+      "top": 1614
+    },
+    {
+      "name": "pi-only-migration.md",
+      "depth": 1,
+      "top": 1642
+    },
+    {
+      "name": "pi-only-rollout-rollback.md",
+      "depth": 1,
+      "top": 1670
+    },
+    {
+      "name": "z-index-system.md",
+      "depth": 1,
+      "top": 1698
+    },
+    {
+      "name": "model-admin",
+      "depth": 0,
+      "top": 1726
+    },
+    {
+      "name": "models-config.json",
+      "depth": 1,
+      "top": 1754
+    },
+    {
+      "name": "README.md",
+      "depth": 1,
+      "top": 1782
+    },
+    {
+      "name": "node_modules",
+      "depth": 0,
+      "top": 1810
+    },
+    {
+      "name": "out",
+      "depth": 0,
+      "top": 1838
+    },
+    {
+      "name": "out-agent-host",
+      "depth": 0,
+      "top": 1866
+    },
+    {
+      "name": "out-node-runtime",
+      "depth": 0,
+      "top": 1894
+    },
+    {
+      "name": "resources",
+      "depth": 0,
+      "top": 1922
+    },
+    {
+      "name": "scripts",
+      "depth": 0,
+      "top": 1950
+    },
+    {
+      "name": "sharePic",
+      "depth": 0,
+      "top": 1978
+    },
+    {
+      "name": "src",
+      "depth": 0,
+      "top": 2006
+    },
+    {
+      "name": "Windows-P4-6-evidence",
+      "depth": 0,
+      "top": 2034
+    },
+    {
+      "name": ".env.local.example",
+      "depth": 0,
+      "top": 2062
+    },
+    {
+      "name": ".gitattributes",
+      "depth": 0,
+      "top": 2090
+    },
+    {
+      "name": ".gitignore",
+      "depth": 0,
+      "top": 2118
+    },
+    {
+      "name": ".npmrc",
+      "depth": 0,
+      "top": 2146
+    },
+    {
+      "name": ".nvmrc",
+      "depth": 0,
+      "top": 2174
+    },
+    {
+      "name": "AGENTS.md",
+      "depth": 0,
+      "top": 2202
+    },
+    {
+      "name": "biome.json",
+      "depth": 0,
+      "top": 2230
+    },
+    {
+      "name": "CLAUDE.md",
+      "depth": 0,
+      "top": 2258
+    },
+    {
+      "name": "components.json",
+      "depth": 0,
+      "top": 2286
+    },
+    {
+      "name": "dev.env",
+      "depth": 0,
+      "top": 2314
+    },
+    {
+      "name": "dev.env.example",
+      "depth": 0,
+      "top": 2342
+    },
+    {
+      "name": "electron-builder.yml",
+      "depth": 0,
+      "top": 2370
+    },
+    {
+      "name": "electron.vite.config.ts",
+      "depth": 0,
+      "top": 2398
+    },
+    {
+      "name": "LICENSE",
+      "depth": 0,
+      "top": 2426
+    },
+    {
+      "name": "mise.toml",
+      "depth": 0,
+      "top": 2454
+    },
+    {
+      "name": "package-lock.json",
+      "depth": 0,
+      "top": 2482
+    },
+    {
+      "name": "package.json",
+      "depth": 0,
+      "top": 2510
+    },
+    {
+      "name": "pnpm-lock.yaml",
+      "depth": 0,
+      "top": 2538
+    },
+    {
+      "name": "pnpm-workspace.yaml",
+      "depth": 0,
+      "top": 2566
+    },
+    {
+      "name": "README.md",
+      "depth": 0,
+      "top": 2594
+    },
+    {
+      "name": "README.zh.md",
+      "depth": 0,
+      "top": 2622
+    },
+    {
+      "name": "slashcom.txt",
+      "depth": 0,
+      "top": 2650
+    },
+    {
+      "name": "THIRD_PARTY_NOTICES.md",
+      "depth": 0,
+      "top": 2678
+    },
+    {
+      "name": "tsconfig.json",
+      "depth": 0,
+      "top": 2706
+    },
+    {
+      "name": "tsconfig.node.json",
+      "depth": 0,
+      "top": 2734
+    },
+    {
+      "name": "tsconfig.web.json",
+      "depth": 0,
+      "top": 2762
+    },
+    {
+      "name": "vitest.config.ts",
+      "depth": 0,
+      "top": 2790
+    },
+    {
+      "name": "Windows-P4-6-验收记录.md",
+      "depth": 0,
+      "top": 2818
+    },
+    {
+      "name": "Windows加密环境GUI异常分析.md",
+      "depth": 0,
+      "top": 2846
+    }
+  ],
+  "scrollTop": 798,
+  "max": 3056
+}

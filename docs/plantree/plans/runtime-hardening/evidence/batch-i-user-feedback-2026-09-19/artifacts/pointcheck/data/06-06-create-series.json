@@ -1,0 +1,19 @@
+{
+  "createdAt": 1789843694600,
+  "createSeries": [
+    {
+      "dt": 282,
+      "t": 1789843694882,
+      "alpha": true,
+      "beta": true,
+      "gamma": true,
+      "delta": true
+    }
+  ],
+  "disk": [
+    "alpha.txt",
+    "beta.txt",
+    "delta.txt",
+    "gamma.txt"
+  ]
+}

@@ -1,0 +1,135 @@
+{
+  "t": "2026-09-19T17:57:34.572Z",
+  "activeSessionId": "session-live-1789840444093-xrxvotj",
+  "sessionCount": 205,
+  "sessions": [
+    {
+      "id": "session-1789840525474-en2jb65",
+      "title": "New chat",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789840525474
+    },
+    {
+      "id": "session-1789840511282-z56vcuu",
+      "title": "T091-C：这条应当作为「发送」而不是「排队」",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789840577860
+    },
+    {
+      "id": "session-1789824851831-trd1w7j",
+      "title": "T091 截图用：长回合",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824976132
+    },
+    {
+      "id": "session-1789824821419-ntzjw19",
+      "title": "T091 截图用：长回合",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824947003
+    },
+    {
+      "id": "session-1789824872590-22t11lc",
+      "title": "T091 截图用：长回合",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824877020
+    },
+    {
+      "id": "session-1789824442392-wigej2l",
+      "title": "T091 A10：长回合，请一直跑",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824588162
+    },
+    {
+      "id": "session-1789824418217-6hkx5op",
+      "title": "T091 A8：长回合，请一直跑",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824562652
+    },
+    {
+      "id": "session-1789824346707-429ijzn",
+      "title": "T091 A8：长回合，请一直跑",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824536235
+    },
+    {
+      "id": "session-1789824270510-ljyycly",
+      "title": "T091 A8：长回合，请一直跑",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824466798
+    },
+    {
+      "id": "session-1789824216736-3dy2625",
+      "title": "T091 A6：长回合，别急着结束",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824390755
+    },
+    {
+      "id": "session-1789824079602-fj5ne4v",
+      "title": "T091 A6：长回合，别急着结束",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824239695
+    },
+    {
+      "id": "session-live-1789808581115-3p910tm",
+      "title": "点验重命名-0919",
+      "status": "idle",
+      "workspaceId": "ws:main:/home/ai/code/ai-client",
+      "projectId": "local:/home/ai/code/ai-client",
+      "unbound": null,
+      "updatedAt": 1789824216049
+    }
+  ],
+  "hostBoundSessionIds": [
+    "session-live-1789840444093-xrxvotj",
+    "session-1789840511282-z56vcuu"
+  ],
+  "recentSessionIds": [
+    "session-live-1789840444093-xrxvotj",
+    "session-1789840511282-z56vcuu",
+    "session-1789840525474-en2jb65",
+    "session-1789824851831-trd1w7j",
+    "session-1789824821419-ntzjw19",
+    "session-1789824872590-22t11lc",
+    "session-1789824442392-wigej2l",
+    "session-1789824418217-6hkx5op"
+  ],
+  "pendingPermissions": [],
+  "msgCounts": {
+    "session-live-1789840444093-xrxvotj": 5,
+    "session-1789840511282-z56vcuu": 3
+  },
+  "lastError": null
+}

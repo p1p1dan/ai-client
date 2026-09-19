@@ -1,0 +1,1205 @@
+{
+  "sentAt": 1789841607983,
+  "sid": "session-1789841605504-c56szre",
+  "samples": [
+    {
+      "dt": 1014,
+      "t": "2026-09-19T18:13:28.993Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    },
+    {
+      "dt": 2378,
+      "t": "2026-09-19T18:13:30.095Z",
+      "countdownText": "4s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 1/3 · 本回合仍在进行",
+        "4s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 1,
+        "maxRetries": 3,
+        "delayMs": 3000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841612592,
+        "attemptStartedAt": 1789841609510
+      }
+    },
+    {
+      "dt": 3503,
+      "t": "2026-09-19T18:13:31.484Z",
+      "countdownText": "2s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 1/3 · 本回合仍在进行",
+        "2s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 1,
+        "maxRetries": 3,
+        "delayMs": 3000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841612592,
+        "attemptStartedAt": 1789841609510
+      }
+    },
+    {
+      "dt": 4512,
+      "t": "2026-09-19T18:13:32.490Z",
+      "countdownText": "<1s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 1/3 · 本回合仍在进行",
+        "<1s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 1,
+        "maxRetries": 3,
+        "delayMs": 3000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841612592,
+        "attemptStartedAt": 1789841609510
+      }
+    },
+    {
+      "dt": 5521,
+      "t": "2026-09-19T18:13:33.499Z",
+      "countdownText": "10s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 2/3 · 本回合仍在进行",
+        "10s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 2,
+        "maxRetries": 3,
+        "delayMs": 10000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841622603,
+        "attemptStartedAt": 1789841612596
+      }
+    },
+    {
+      "dt": 6526,
+      "t": "2026-09-19T18:13:34.507Z",
+      "countdownText": "9s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 2/3 · 本回合仍在进行",
+        "9s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 2,
+        "maxRetries": 3,
+        "delayMs": 10000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841622603,
+        "attemptStartedAt": 1789841612596
+      }
+    },
+    {
+      "dt": 7535,
+      "t": "2026-09-19T18:13:35.513Z",
+      "countdownText": "8s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 2/3 · 本回合仍在进行",
+        "8s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 2,
+        "maxRetries": 3,
+        "delayMs": 10000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841622603,
+        "attemptStartedAt": 1789841612596
+      }
+    },
+    {
+      "dt": 8544,
+      "t": "2026-09-19T18:13:36.522Z",
+      "countdownText": "7s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 2/3 · 本回合仍在进行",
+        "7s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 2,
+        "maxRetries": 3,
+        "delayMs": 10000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841622603,
+        "attemptStartedAt": 1789841612596
+      }
+    },
+    {
+      "dt": 9552,
+      "t": "2026-09-19T18:13:37.531Z",
+      "countdownText": "6s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 2/3 · 本回合仍在进行",
+        "6s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 2,
+        "maxRetries": 3,
+        "delayMs": 10000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841622603,
+        "attemptStartedAt": 1789841612596
+      }
+    },
+    {
+      "dt": 10559,
+      "t": "2026-09-19T18:13:38.539Z",
+      "countdownText": "5s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 2/3 · 本回合仍在进行",
+        "5s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 2,
+        "maxRetries": 3,
+        "delayMs": 10000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841622603,
+        "attemptStartedAt": 1789841612596
+      }
+    },
+    {
+      "dt": 11567,
+      "t": "2026-09-19T18:13:39.545Z",
+      "countdownText": "4s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 2/3 · 本回合仍在进行",
+        "4s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 2,
+        "maxRetries": 3,
+        "delayMs": 10000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841622603,
+        "attemptStartedAt": 1789841612596
+      }
+    },
+    {
+      "dt": 12574,
+      "t": "2026-09-19T18:13:40.554Z",
+      "countdownText": "3s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 2/3 · 本回合仍在进行",
+        "3s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 2,
+        "maxRetries": 3,
+        "delayMs": 10000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841622603,
+        "attemptStartedAt": 1789841612596
+      }
+    },
+    {
+      "dt": 13580,
+      "t": "2026-09-19T18:13:41.561Z",
+      "countdownText": "2s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 2/3 · 本回合仍在进行",
+        "2s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 2,
+        "maxRetries": 3,
+        "delayMs": 10000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841622603,
+        "attemptStartedAt": 1789841612596
+      }
+    },
+    {
+      "dt": 14589,
+      "t": "2026-09-19T18:13:42.567Z",
+      "countdownText": "<1s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 2/3 · 本回合仍在进行",
+        "<1s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 2,
+        "maxRetries": 3,
+        "delayMs": 10000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841622603,
+        "attemptStartedAt": 1789841612596
+      }
+    },
+    {
+      "dt": 15597,
+      "t": "2026-09-19T18:13:43.574Z",
+      "countdownText": "30s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "30s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 16603,
+      "t": "2026-09-19T18:13:44.584Z",
+      "countdownText": "29s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "29s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 17609,
+      "t": "2026-09-19T18:13:45.589Z",
+      "countdownText": "28s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "28s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 18618,
+      "t": "2026-09-19T18:13:46.596Z",
+      "countdownText": "27s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "27s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 19625,
+      "t": "2026-09-19T18:13:47.605Z",
+      "countdownText": "26s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "26s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 20632,
+      "t": "2026-09-19T18:13:48.612Z",
+      "countdownText": "25s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "25s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 21639,
+      "t": "2026-09-19T18:13:49.618Z",
+      "countdownText": "24s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "24s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 22644,
+      "t": "2026-09-19T18:13:50.624Z",
+      "countdownText": "23s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "23s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 23650,
+      "t": "2026-09-19T18:13:51.630Z",
+      "countdownText": "22s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "22s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 24656,
+      "t": "2026-09-19T18:13:52.637Z",
+      "countdownText": "21s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "21s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 25663,
+      "t": "2026-09-19T18:13:53.642Z",
+      "countdownText": "20s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "20s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 26671,
+      "t": "2026-09-19T18:13:54.649Z",
+      "countdownText": "19s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "19s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 27679,
+      "t": "2026-09-19T18:13:55.659Z",
+      "countdownText": "18s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "18s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 28689,
+      "t": "2026-09-19T18:13:56.666Z",
+      "countdownText": "17s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "17s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 29696,
+      "t": "2026-09-19T18:13:57.676Z",
+      "countdownText": "16s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "16s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 30703,
+      "t": "2026-09-19T18:13:58.683Z",
+      "countdownText": "15s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "15s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 31712,
+      "t": "2026-09-19T18:13:59.690Z",
+      "countdownText": "14s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "14s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 32720,
+      "t": "2026-09-19T18:14:00.698Z",
+      "countdownText": "13s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "13s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 33726,
+      "t": "2026-09-19T18:14:01.706Z",
+      "countdownText": "12s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "12s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 34735,
+      "t": "2026-09-19T18:14:02.714Z",
+      "countdownText": "11s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "11s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 35741,
+      "t": "2026-09-19T18:14:03.721Z",
+      "countdownText": "10s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "10s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 36747,
+      "t": "2026-09-19T18:14:04.727Z",
+      "countdownText": "9s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "9s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 37753,
+      "t": "2026-09-19T18:14:05.734Z",
+      "countdownText": "8s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "8s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 38759,
+      "t": "2026-09-19T18:14:06.739Z",
+      "countdownText": "7s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "7s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 39765,
+      "t": "2026-09-19T18:14:07.745Z",
+      "countdownText": "6s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "6s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 40773,
+      "t": "2026-09-19T18:14:08.753Z",
+      "countdownText": "5s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "5s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 41779,
+      "t": "2026-09-19T18:14:09.759Z",
+      "countdownText": "4s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "4s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 42787,
+      "t": "2026-09-19T18:14:10.766Z",
+      "countdownText": "3s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "3s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 43795,
+      "t": "2026-09-19T18:14:11.773Z",
+      "countdownText": "2s 后重试",
+      "retryingNow": false,
+      "giveUpButton": true,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "上游返回错误 503 · 正在重试 3/3 · 本回合仍在进行",
+        "2s 后重试 · PROVIDER_ERROR 503",
+        "立即放弃"
+      ],
+      "status": "running",
+      "retry": {
+        "attempt": 3,
+        "maxRetries": 3,
+        "delayMs": 30000,
+        "errorStatus": "503",
+        "error": "PROVIDER_ERROR",
+        "retryAt": 1789841652618,
+        "attemptStartedAt": 1789841622613
+      }
+    },
+    {
+      "dt": 45699,
+      "t": "2026-09-19T18:14:13.034Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    },
+    {
+      "dt": 46705,
+      "t": "2026-09-19T18:14:14.685Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    },
+    {
+      "dt": 47712,
+      "t": "2026-09-19T18:14:15.692Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    },
+    {
+      "dt": 48718,
+      "t": "2026-09-19T18:14:16.698Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    },
+    {
+      "dt": 49724,
+      "t": "2026-09-19T18:14:17.704Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    },
+    {
+      "dt": 50729,
+      "t": "2026-09-19T18:14:18.710Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    },
+    {
+      "dt": 51735,
+      "t": "2026-09-19T18:14:19.716Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    },
+    {
+      "dt": 52741,
+      "t": "2026-09-19T18:14:20.721Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    },
+    {
+      "dt": 53766,
+      "t": "2026-09-19T18:14:21.736Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    },
+    {
+      "dt": 54772,
+      "t": "2026-09-19T18:14:22.753Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    },
+    {
+      "dt": 55778,
+      "t": "2026-09-19T18:14:23.758Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    },
+    {
+      "dt": 56784,
+      "t": "2026-09-19T18:14:24.764Z",
+      "countdownText": null,
+      "retryingNow": false,
+      "giveUpButton": false,
+      "bannerLines": [
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "E1-24 重试观感探针：请回一句话",
+        "T093：渠道一直 503（点验倒计时与立即放弃）",
+        "T093：渠道一直 503（点验倒计时与立即放弃）"
+      ],
+      "status": "idle",
+      "retry": null
+    }
+  ]
+}
