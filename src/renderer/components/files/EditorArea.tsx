@@ -278,6 +278,11 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
   const previewModeRef = useRef<MarkdownPreviewMode>('off');
   previewModeRef.current = previewMode;
   const [editorReady, setEditorReady] = useState(false);
+  // URI of the model currently attached to the editor. `<Editor path=…/>` swaps
+  // models in place instead of remounting, so this is the only live signal for
+  // "which file is the editor actually showing right now". Kept as state (not a
+  // ref) so the pending-cursor effect re-runs once the swap lands.
+  const [editorModelUri, setEditorModelUri] = useState<string | null>(null);
   const [previewWidth, setPreviewWidth] = useState(50); // percentage
 
   // Sync preview mode from pendingCursor
@@ -306,7 +311,6 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
   const tabsRef = useRef<EditorTab[]>(tabs);
   const sessionIdRef = useRef<string | null>(null);
   const pendingCursorRef = useRef<PendingCursor | null>(null);
-  const editorForPathRef = useRef<string | null>(null);
   const rootPathRef = useRef<string | undefined>(rootPath);
   const definitionNavDisposableRef = useRef<{ dispose: () => void } | null>(null);
   // Flag to suppress onChange events triggered by programmatic setValue calls (not user input)
@@ -600,12 +604,20 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
   // Handle pending cursor navigation (jump to line and select match)
   // Only handles same-file search; new file search is handled by handleEditorMount
   useEffect(() => {
-    if (
-      !pendingCursor ||
-      !editorRef.current ||
-      pendingCursor.path !== activeTabPath ||
-      editorForPathRef.current !== activeTabPath
-    ) {
+    if (!pendingCursor || !editorRef.current || pendingCursor.path !== activeTabPath) {
+      return;
+    }
+
+    // Only move the cursor once the editor really holds the target file's
+    // model. Switching tabs swaps the model in place (no remount), so a path
+    // captured at mount time would be stale forever and this effect would
+    // bail out on every file but the first one. A mismatch here means the
+    // swap has not landed yet (or the editor is being remounted for a
+    // preview tab) — leave `pendingCursor` untouched so the next run, driven
+    // by `onDidChangeModel` or by `handleEditorMount`, can still apply it.
+    // (`pendingCursor.path` is the active tab's path — same string, but
+    // already narrowed to non-null by the check above.)
+    if (editorModelUri !== toMonacoFileUri(pendingCursor.path)) {
       return;
     }
 
@@ -629,7 +641,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
     editor.focus();
 
     onClearPendingCursor();
-  }, [pendingCursor, activeTabPath, onClearPendingCursor]);
+  }, [pendingCursor, activeTabPath, editorModelUri, onClearPendingCursor]);
 
   const handleEditorMount: OnMount = useCallback(
     (editor, m) => {
@@ -637,7 +649,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
       monacoRef.current = m;
       setEditorInstance(editor);
       setMonacoInstance(m);
-      editorForPathRef.current = activeTabPath;
+      setEditorModelUri(editor.getModel()?.uri.toString() ?? null);
       setEditorReady(true);
 
       // Cmd/Ctrl+S shortcut is registered via useEffect + onKeyDown below
@@ -741,8 +753,14 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
         editor.updateOptions({ foldingImportsByDefault: lang === 'java' });
       };
       syncFoldingImports();
-      const foldingImportsDisposable = editor.onDidChangeModel(() => syncFoldingImports());
-      editor.onDidDispose(() => foldingImportsDisposable.dispose());
+      // Tab switches swap the model on this same editor instance, so this is
+      // where the rest of the component learns which file is live — the
+      // pending-cursor effect waits for it before moving the caret.
+      const modelChangeDisposable = editor.onDidChangeModel(() => {
+        syncFoldingImports();
+        setEditorModelUri(editor.getModel()?.uri.toString() ?? null);
+      });
+      editor.onDidDispose(() => modelChangeDisposable.dispose());
 
       // Sync scroll from editor to preview (for markdown files)
       editor.onDidScrollChange((e) => {
