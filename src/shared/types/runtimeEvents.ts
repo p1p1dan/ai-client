@@ -318,6 +318,19 @@ export interface ThinkingDeltaEvent extends RuntimeEventBase {
   };
 }
 
+/**
+ * T101 — while a tool call's arguments are still streaming, its `input` is a
+ * REDACTED summary: the short identifying fields that have arrived, plus a
+ * `__streaming: { bytes, lines }` key standing for the long text withheld.
+ * Defined in `shared/streamingToolArgs.ts` (a leaf module, so the renderer can
+ * import the reader as a value without pulling this whole file into a chunk);
+ * produced by `runtime/events/streamingToolArgs.ts`.
+ *
+ * The key's presence is the "not final yet" signal. One later `tool.updated`
+ * carries the complete arguments without it.
+ */
+export type { StreamingToolArgs } from '../streamingToolArgs.ts';
+
 export interface ToolStartedEvent extends RuntimeEventBase {
   type: 'tool.started';
   sessionId: string;
@@ -325,6 +338,11 @@ export interface ToolStartedEvent extends RuntimeEventBase {
     messageId: string;
     toolCallId: string;
     name: string;
+    /**
+     * The call's arguments. Complete once the call is settled; while they are
+     * still streaming this is the redacted summary described above, and a later
+     * `tool.updated` replaces it.
+     */
     input?: unknown;
   };
 }
@@ -872,6 +890,14 @@ export interface ToolUpdatedEvent extends RuntimeEventBase {
   payload: {
     messageId: string;
     toolCallId: string;
+    /**
+     * The arguments as they stand now, replacing whatever the row was showing.
+     *
+     * Three producers, in the order one call meets them: the streaming pass
+     * (a redacted summary — see `StreamingToolArgs` above), the moment
+     * the call is complete (the full arguments, summary key gone), and a tool
+     * that revises its own arguments mid-execution.
+     */
     input?: unknown;
     /**
      * T38-c: one clamped line of the tool's own progress report, off the SDK's

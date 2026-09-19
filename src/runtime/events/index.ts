@@ -4,11 +4,22 @@ import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { EVENTS_SERVICE } from '../contracts.ts';
 import { RuntimeEventProjector, type UserTurnEcho } from './projector.ts';
 
+export interface EventsConfig {
+  /**
+   * T101 / {@link STREAM_TOOL_ROWS_ENV} — open a tool row while its arguments
+   * are still streaming. Read from the flags once at bootstrap and held for the
+   * process, so every run of a session projects the same way.
+   */
+  streamToolRows?: boolean;
+}
+
 export class EventsPlugin extends Service {
   private readonly listeners = new Set<(event: RuntimeEventDraft) => void>();
   private active?: { sessionId: string; requestId: string };
-  constructor(ctx: Context) {
+  private readonly config: EventsConfig;
+  constructor(ctx: Context, config: EventsConfig = {}) {
     super(ctx, EVENTS_SERVICE);
+    this.config = config;
     ctx.effect(() => () => this.listeners.clear());
   }
   subscribe(listener: (event: RuntimeEventDraft) => void): () => void {
@@ -44,7 +55,12 @@ export class EventsPlugin extends Service {
       requestId,
       history,
       contextWindow,
-      userTurn
+      userTurn,
+      {
+        ...(this.config.streamToolRows === undefined
+          ? {}
+          : { streamToolRows: this.config.streamToolRows }),
+      }
     );
     projector.start();
     return projector;

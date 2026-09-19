@@ -105,6 +105,21 @@
       "toolCallId": "call-ask",
       "name": "ask",
       "input": {
+        "__streaming": {
+          "bytes": 46,
+          "lines": 5
+        }
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "tool.updated",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-2",
+      "toolCallId": "call-ask",
+      "input": {
         "questions": [
           {
             "question": "Which database?",

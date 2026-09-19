@@ -20,6 +20,7 @@ import {
   RUNTIME_TRACE_DIR_ENV,
   readRuntimeFlags,
   SKIP_USER_INSTRUCTIONS_ENV,
+  STREAM_TOOL_ROWS_ENV,
 } from '../flags.ts';
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
@@ -92,6 +93,18 @@ describe('runtime flags', () => {
     expect(readRuntimeFlags({ [SKIP_USER_INSTRUCTIONS_ENV]: 'true' }).skipUserInstructions).toBe(
       false
     );
+  });
+
+  it('streams tool rows unless explicitly switched off with "0"', () => {
+    // T101 is the first opt-OUT knob here, because it is the behaviour we want
+    // shipped and the variable exists to take it back. Unset therefore means
+    // ON, which is the opposite of every flag above — asserted so a reader who
+    // pattern-matches on them does not "fix" this one.
+    expect(readRuntimeFlags({}).streamToolRows).toBe(true);
+    expect(readRuntimeFlags({ [STREAM_TOOL_ROWS_ENV]: '0' }).streamToolRows).toBe(false);
+    // Only the exact sentinel switches it off; anything else keeps the default.
+    expect(readRuntimeFlags({ [STREAM_TOOL_ROWS_ENV]: 'false' }).streamToolRows).toBe(true);
+    expect(readRuntimeFlags({ [STREAM_TOOL_ROWS_ENV]: '1' }).streamToolRows).toBe(true);
   });
 
   it('is read by nothing in src/ or scripts/ — the switch is gone, not hidden', () => {

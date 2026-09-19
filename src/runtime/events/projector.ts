@@ -18,6 +18,46 @@ import type {
   SessionRetryInfo,
 } from '../../shared/types/runtimeEvents.ts';
 import type { RuntimeRunResult } from '../contracts.ts';
+import { streamingToolArgsKey, summarizeStreamingToolArgs } from './streamingToolArgs.ts';
+
+/**
+ * T101 — the shortest gap between two `tool.updated` events for one call while
+ * its arguments stream.
+ *
+ * A provider emits arguments in chunks of a few tokens, so an unthrottled pass
+ * would put one event per chunk on the wire — thousands for a large `write`,
+ * each one a store write and a re-render, to move a byte counter. 100 ms is
+ * fast enough to read as live and slow enough that the file body costs ~10
+ * events per second instead of ~200.
+ */
+export const TOOL_ARG_COALESCE_MS = 100;
+
+/** What has already been said about one tool call opened during streaming. */
+interface StreamingToolRow {
+  /** The assistant message the row hangs on; its later events must agree. */
+  messageId: string;
+  /** `streamingToolArgsKey` of the last summary emitted, for change detection. */
+  summary: string;
+  /** Clock reading of the last event emitted for this row. */
+  lastEmitMs: number;
+  /** The complete arguments have been delivered; the streaming pass is done. */
+  settled: boolean;
+  /**
+   * The argument object delivered as final, so the same one arriving again
+   * says nothing. `message_end` and `tool_execution_start` both carry the tool
+   * call's own `arguments` reference, and re-stating it would put a second,
+   * byte-identical `tool.updated` on the wire for every call in every turn.
+   */
+  settledInput?: unknown;
+}
+
+/** Construction-time knobs, both injected so a test can drive them. */
+export interface RuntimeEventProjectorOptions {
+  /** {@link STREAM_TOOL_ROWS_ENV}. Defaults to `true`. */
+  streamToolRows?: boolean;
+  /** Monotonic-enough clock for {@link TOOL_ARG_COALESCE_MS}. Defaults to `Date.now`. */
+  now?: () => number;
+}
 
 /**
  * What the composer said about this send, echoed back on the user message.
@@ -158,17 +198,32 @@ export class RuntimeEventProjector {
   private interimUsageFor: string | undefined;
   private readonly contextWindow: number | undefined;
   private readonly userTurn: UserTurnEcho;
+  /**
+   * T101 — tool rows opened from a PARTIAL message, by tool call id.
+   *
+   * An entry lives from the first partial arguments until the call's execution
+   * ends. While it exists it answers three questions: which message the row
+   * hangs on, whether the row has already been announced (so
+   * `tool_execution_start` does not open a second one), and whether the call
+   * ever reached execution at all (so a stopped run can settle what is left).
+   */
+  private readonly streamingTools = new Map<string, StreamingToolRow>();
+  private readonly streamToolRows: boolean;
+  private readonly now: () => number;
   constructor(
     sink: RuntimeEventSink,
     requestId: string,
     history: readonly AgentMessage[] = [],
     contextWindow?: number,
-    userTurn: UserTurnEcho = {}
+    userTurn: UserTurnEcho = {},
+    options: RuntimeEventProjectorOptions = {}
   ) {
     this.sink = sink;
     this.contextWindow = contextWindow;
     this.requestId = requestId;
     this.userTurn = userTurn;
+    this.streamToolRows = options.streamToolRows ?? true;
+    this.now = options.now ?? Date.now;
     this.rollup = initTurnRollup(sink.sessionId);
     for (const message of history) {
       if (message.role === 'assistant' || message.role === 'toolResult') {
@@ -219,7 +274,7 @@ export class RuntimeEventProjector {
     }
     return this.assistant;
   }
-  private deltas(message: AgentMessage): void {
+  private deltas(message: AgentMessage, final = false): void {
     if (message.role !== 'assistant') return;
     const prose = text(message.content);
     const thinking = message.content
@@ -265,6 +320,78 @@ export class RuntimeEventProjector {
         payload: { messageId, blockId: `${messageId}-text`, text: nextProse.text },
       });
     }
+    this.toolDeltas(message, final);
+  }
+  /**
+   * T101 — open a tool row as soon as the model starts dictating the call, and
+   * keep its short arguments current while the rest of them arrive.
+   *
+   * Third pass of `deltas`, and the last one on purpose: a turn emits its prose
+   * before the calls it decided on, so the row lands under the sentence that
+   * explains it.
+   *
+   * Reads the `toolCall` blocks of the cumulative partial message rather than
+   * the `toolcall_delta` payload beside it. The delta is a fragment of raw JSON
+   * with no id and no tool name on it; the partial's block already carries both,
+   * plus pi's own partial-JSON parse of the arguments so far — so `path` is
+   * readable the moment the model has finished typing it, which for `write` is
+   * before a single byte of the file.
+   *
+   * @param final the arguments on this message are complete (`message_end`, or
+   *   a `toolcall_end` for one specific call): emit them in full and stop
+   *   summarizing. Everything the summary withheld arrives exactly here.
+   */
+  private toolDeltas(message: AgentMessage, final: boolean, onlyId?: string): void {
+    if (!this.streamToolRows || message.role !== 'assistant') return;
+    for (const block of message.content) {
+      if (block.type !== 'toolCall') continue;
+      const { id, name } = block;
+      // An id and a name are what a row IS addressed by; a provider that has
+      // not sent them yet has not opened a call this projector can speak about.
+      if (!id || !name) continue;
+      if (onlyId !== undefined && onlyId !== id) continue;
+      const seen = this.streamingTools.get(id);
+      if (seen?.settled) continue;
+      const summary = final ? undefined : summarizeStreamingToolArgs(block.arguments);
+      const input = summary ?? block.arguments;
+      if (!seen) {
+        const messageId = this.ensureAssistant();
+        this.streamingTools.set(id, {
+          messageId,
+          summary: summary ? streamingToolArgsKey(summary) : '',
+          lastEmitMs: this.now(),
+          settled: final,
+          ...(final ? { settledInput: input } : {}),
+        });
+        this.toolMessages.set(id, messageId);
+        this.emit({
+          type: 'tool.started',
+          sessionId: this.sink.sessionId,
+          payload: { messageId, toolCallId: id, name, input },
+        });
+        continue;
+      }
+      if (!final) {
+        // Two gates, both required. The summary must have actually moved —
+        // a provider re-sending the same snapshot must not redraw the row —
+        // and the previous event for THIS row must be at least one window old.
+        const key = streamingToolArgsKey(summary ?? {});
+        if (key === seen.summary) continue;
+        const now = this.now();
+        if (now - seen.lastEmitMs < TOOL_ARG_COALESCE_MS) continue;
+        seen.summary = key;
+        seen.lastEmitMs = now;
+      } else {
+        seen.settled = true;
+        seen.settledInput = input;
+        seen.lastEmitMs = this.now();
+      }
+      this.emit({
+        type: 'tool.updated',
+        sessionId: this.sink.sessionId,
+        payload: { messageId: seen.messageId, toolCallId: id, input },
+      });
+    }
   }
   /**
    * Light the `↑` on the turn progress head as soon as the provider reports a
@@ -287,9 +414,42 @@ export class RuntimeEventProjector {
     this.interimUsageFor = messageId;
     this.emit({ type: 'usage.updated', sessionId: this.sink.sessionId, payload });
   }
+  /**
+   * T101 — give every tool row that never ran a terminal, so nothing is left
+   * spinning.
+   *
+   * A row is now opened by the model DECIDING to call a tool, which is one
+   * event earlier than the runtime agreeing to run it. Everything between the
+   * two can go wrong: Stop, an output limit that truncates the arguments
+   * mid-object, a provider error. `tool_execution_end` removes a row that did
+   * run, so whatever is still here when its message closes is a call that
+   * never started — and without this it would keep the `running` spinner for
+   * the rest of the conversation, on a transcript that is otherwise finished.
+   *
+   * Reported as a FAILED completion rather than a silent removal: the model did
+   * ask for the call, and a transcript that quietly drops a request the user
+   * watched being typed is a worse lie than one that says it was dropped.
+   */
+  private settleUnfinishedToolRows(): void {
+    for (const [toolCallId, row] of this.streamingTools) {
+      this.emit({
+        type: 'tool.completed',
+        sessionId: this.sink.sessionId,
+        payload: {
+          messageId: row.messageId,
+          toolCallId,
+          ok: false,
+          error: 'The run ended before this call started.',
+        },
+      });
+      this.toolMessages.delete(toolCallId);
+    }
+    this.streamingTools.clear();
+  }
   private closeAssistant(completed = true): void {
     this.model = undefined;
     this.streamingUsage = undefined;
+    this.settleUnfinishedToolRows();
     if (!this.assistant) return;
     const messageId = this.assistant;
     if (this.thinkingOpen) {
@@ -352,11 +512,20 @@ export class RuntimeEventProjector {
         // `usage` block at all — `deltas` applies the same role test.
         if (event.message.role === 'assistant') this.streamingUsage = event.message.usage;
         this.deltas(event.message);
+        // T101 — a call whose arguments just finished gets its complete set
+        // NOW, not at `message_end`. For a turn with several calls that is the
+        // difference between the first row settling immediately and it waiting
+        // for the last one; and when the call needs approval, the permission
+        // card and the row would otherwise disagree about what is being asked.
+        if (event.assistantMessageEvent?.type === 'toolcall_end')
+          this.toolDeltas(event.message, true, event.assistantMessageEvent.toolCall.id);
         this.interimUsage();
         break;
       case 'message_end':
         if (event.message.role === 'assistant') {
-          this.deltas(event.message);
+          // `final`: this message's arguments are the ones that will be run, so
+          // every row still carrying a redacted summary is filled in here.
+          this.deltas(event.message, true);
           // A turn that ends in tool calls is not over. pi emits the tool rows
           // AFTER this event, so closing here minted a second, model-less
           // message to carry them and left this one — the message that asked
@@ -380,12 +549,35 @@ export class RuntimeEventProjector {
         }
         break;
       case 'tool_execution_start': {
-        const messageId = this.ensureAssistant();
+        // T101 — idempotent. The streaming pass may already have opened this
+        // row minutes ago (a `write` whose `content` is a whole file), in which
+        // case a second `tool.started` would draw a SECOND row for one call.
+        // What is left to say is the authoritative argument set the runtime is
+        // about to execute, which is a `tool.updated` — a no-op downstream when
+        // `message_end` already delivered the same object.
+        const streamed = this.streamingTools.get(event.toolCallId);
+        const messageId = streamed?.messageId ?? this.ensureAssistant();
         // A turn whose first output is a tool call mints its message HERE, so
         // this is the earliest point at which the tick has somewhere to go.
         // No-op once `message_update` already sent one for this message.
         this.interimUsage();
         this.toolMessages.set(event.toolCallId, messageId);
+        if (streamed) {
+          // Silent when `message_end` already delivered this very object,
+          // which is the normal path — pi hands both events the tool call's
+          // own `arguments`. Only a runtime that REVISED them before executing
+          // has anything left to say here.
+          const settled = streamed.settled && streamed.settledInput === event.args;
+          streamed.settled = true;
+          streamed.settledInput = event.args;
+          if (!settled)
+            this.emit({
+              type: 'tool.updated',
+              sessionId,
+              payload: { messageId, toolCallId: event.toolCallId, input: event.args },
+            });
+          break;
+        }
         this.emit({
           type: 'tool.started',
           sessionId,
@@ -439,6 +631,9 @@ export class RuntimeEventProjector {
           },
         });
         this.toolMessages.delete(event.toolCallId);
+        // T101 — this row has a terminal of its own, so it is no longer one of
+        // the unfinished ones `settleUnfinishedToolRows` has to answer for.
+        this.streamingTools.delete(event.toolCallId);
         break;
       }
       case 'turn_end': {

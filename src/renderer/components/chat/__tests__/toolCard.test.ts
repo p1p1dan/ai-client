@@ -1288,3 +1288,86 @@ describe('refused calls are not described in the past tense', () => {
     expect(UNKNOWN_TOOL_VERB.refused).toBe('Run');
   });
 });
+
+/**
+ * T101 — a tool row now exists before the call does.
+ *
+ * The projector opens the row on the model's FIRST partial arguments, so a row
+ * can be on screen while the file it writes is still being dictated. Those
+ * arguments are a redacted summary: the short identifying fields plus a
+ * `__streaming` size marker standing for the withheld file body.
+ *
+ * What the derivations have to get right is all about that marker. A path that
+ * never changes for minutes is indistinguishable from a wedged row, so the
+ * size travels with it; and a diff built from a half-written file would show
+ * the user a change that is not the one about to happen.
+ */
+describe('T101 · a tool row whose arguments are still streaming', () => {
+  /** The shape the projector emits mid-stream; `content` is never in it. */
+  const streaming = (fields: Record<string, unknown>, lines: number, bytes = lines * 10) => ({
+    ...fields,
+    __streaming: { bytes, lines },
+  });
+
+  it('a write row with partial arguments shows its target path and received line count', () => {
+    const run = makeRun('w1', 'write', streaming({ path: 'src/index.html' }, 128), 'running');
+    const view = deriveToolRowView(run);
+    expect(view.running).toBe(true);
+    expect(view.verb).toBe('Editing');
+    expect(view.arg).toBe('src/index.html · 128 lines so far');
+    // Still a path, so still the mono font domain (D25 §2.4).
+    expect(view.argKind).toBe('ident');
+  });
+
+  it('a streaming row without a path shows only the tool name', () => {
+    // The model has not finished typing the path yet. A bare "0 lines" names
+    // nothing, so the row falls back to its verb alone rather than inventing a
+    // placeholder target.
+    const view = deriveToolRowView(makeRun('w2', 'write', streaming({}, 0, 0), 'running'));
+    expect(view.arg).toBeUndefined();
+    expect(view.verb).toBe('Editing');
+    expect(formatToolArg(makeRun('w2', 'write', streaming({}, 0, 0), 'running'))).toBeUndefined();
+  });
+
+  it('no diff is computed until the full arguments arrive', () => {
+    const partialRun = makeRun('w3', 'write', streaming({ path: 'a.txt' }, 2, 12), 'running');
+    expect(deriveToolRowView(partialRun).diff).toBeUndefined();
+    // And no raw-argument body either, so the size marker is never printed at
+    // the user as JSON.
+    expect(deriveToolRowView(partialRun).input).toBeUndefined();
+
+    // The same row once the projector has replaced the summary with the real
+    // arguments: the preview appears, which is the behaviour T12-b added.
+    const settled = makeRun('w3', 'write', { path: 'a.txt', content: 'one\ntwo' }, 'running');
+    const diff = deriveToolRowView(settled).diff;
+    expect(diff?.source).toBe('write-content');
+    expect(diff?.added).toBe(2);
+  });
+
+  it('leaves a settled row exactly as it was', () => {
+    // The negative control for all three cases above: without the marker,
+    // nothing about a Write row changes.
+    const view = deriveToolRowView(makeRun('w4', 'write', { path: 'src/index.html' }, 'running'));
+    expect(view.arg).toBe('src/index.html');
+    expect(view.argKind).toBe('ident');
+  });
+
+  it('a Claude-era Write row reads the same way', () => {
+    // `file_path` where pi says `path`; a replayed transcript still carries it,
+    // and the streaming branch must not be reachable from only one spelling.
+    const view = deriveToolRowView(
+      makeRun('w5', 'Write', streaming({ file_path: 'docs/a.md' }, 7), 'running')
+    );
+    expect(view.arg).toBe('docs/a.md · 7 lines so far');
+  });
+
+  it('a streaming bash row still shows the command it is assembling', () => {
+    // `command` is short enough to travel verbatim, so this row needs no size
+    // note — the argument itself is what is growing.
+    const view = deriveToolRowView(
+      makeRun('b1', 'bash', streaming({ command: 'npm run bui' }, 0, 0), 'running')
+    );
+    expect(view.arg).toBe('npm run bui');
+    expect(view.verb).toBe('Running');
+  });
+});

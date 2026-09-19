@@ -47,6 +47,22 @@ export const RUNTIME_TRACE_DIR_ENV = 'AICLIENT_RUNTIME_TRACE_DIR';
  */
 export const SKIP_USER_INSTRUCTIONS_ENV = 'AICLIENT_SKIP_USER_INSTRUCTIONS';
 
+/**
+ * T101 — open a tool row while its arguments are still streaming.
+ *
+ * Default ON. Before this, a row appeared only at `tool_execution_start`, which
+ * is AFTER the model has finished dictating the call: a `write` whose `content`
+ * is a whole file left the screen completely still for as long as the file took
+ * to emit — minutes, with a spinning group head and nothing under it, and not
+ * even a liveness event to say the turn was alive.
+ *
+ * Set to `0` to restore that behaviour exactly. The projector then ignores
+ * `toolCall` blocks on partial messages and `tool_execution_start` is once again
+ * the only producer of `tool.started`, so nothing downstream can tell the
+ * difference — which is the point of the switch (engineering standard §6).
+ */
+export const STREAM_TOOL_ROWS_ENV = 'AICLIENT_STREAM_TOOL_ROWS';
+
 export interface RuntimeFlags {
   /**
    * The engine that produced a run, carried into every trace's version stamp.
@@ -61,6 +77,8 @@ export interface RuntimeFlags {
   traceDir: string | null;
   /** See {@link SKIP_USER_INSTRUCTIONS_ENV}. Defaults to `false`. */
   skipUserInstructions: boolean;
+  /** See {@link STREAM_TOOL_ROWS_ENV}. Defaults to `true`. */
+  streamToolRows: boolean;
 }
 
 export function readRuntimeFlags(env: NodeJS.ProcessEnv = process.env): RuntimeFlags {
@@ -69,6 +87,9 @@ export function readRuntimeFlags(env: NodeJS.ProcessEnv = process.env): RuntimeF
     agentDir: firstNonEmpty(env[RUNTIME_AGENT_DIR_ENV], env[PI_AGENT_DIR_ENV]),
     traceDir: firstNonEmpty(env[RUNTIME_TRACE_DIR_ENV]),
     skipUserInstructions: env[SKIP_USER_INSTRUCTIONS_ENV] === '1',
+    // Opt-OUT rather than opt-in, unlike every flag above: this one is the
+    // behaviour we want shipped, and the variable exists to take it back.
+    streamToolRows: env[STREAM_TOOL_ROWS_ENV] !== '0',
   };
 }
 

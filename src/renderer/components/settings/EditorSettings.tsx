@@ -580,7 +580,10 @@ export function EditorSettings() {
           </div>
         </SettingsRow>
       </SettingsSectionBlock>
-      <SettingsSectionBlock title={t('Editing')} description={t('Auto-completion settings')}>
+      <SettingsSectionBlock
+        title={t('Editing behavior')}
+        description={t('Auto-completion settings')}
+      >
         <SettingsRow>
           <span className="text-sm font-medium">{t('Auto brackets')}</span>
           <Select

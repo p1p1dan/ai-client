@@ -759,6 +759,38 @@ function appendTextBlock(
   return { ...message, blocks };
 }
 
+/**
+ * T101 — "would rewriting `toolInput` with this change anything?"
+ *
+ * Reference equality used to be the whole test, which was right while the only
+ * producer was `tool_execution_update` re-sending the very same `args` object.
+ * The streaming pass builds a FRESH summary object per event, so every one of
+ * them compared unequal and re-rendered the timeline to move a byte counter
+ * that had not moved. One level of field comparison is enough for both
+ * producers: a summary is flat scalars, and a settled argument set arrives once.
+ *
+ * Deliberately shallow. A deep compare here would walk an 8 MiB `content`
+ * string on every frame, which is the cost this function exists to avoid.
+ */
+function sameToolInput(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (
+    typeof left !== 'object' ||
+    typeof right !== 'object' ||
+    left === null ||
+    right === null ||
+    Array.isArray(left) ||
+    Array.isArray(right)
+  ) {
+    return false;
+  }
+  const a = left as Record<string, unknown>;
+  const b = right as Record<string, unknown>;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => Object.is(a[key], b[key]));
+}
+
 export function applyRuntimeEvent(
   state: ChatSessionsState,
   event: RuntimeEvent
@@ -1084,6 +1116,19 @@ function applyRuntimeEventCore(
       if (!existing) {
         return {};
       }
+      // T101 — one row per call, whoever opened it. The projector makes
+      // `tool_execution_start` idempotent for a row the streaming pass already
+      // announced, and this is the same rule held on the reading side: a
+      // second `tool.started` for a call already on screen must not append a
+      // second block, because the two would then be indistinguishable to
+      // `pairToolBlocks` and only one of them could ever be given a result.
+      if (
+        existing.blocks.some(
+          (block) => block.type === 'tool_call' && block.toolCallId === event.payload.toolCallId
+        )
+      ) {
+        return {};
+      }
       const updated: ChatMessage = {
         ...existing,
         blocks: [
@@ -1110,7 +1155,7 @@ function applyRuntimeEventCore(
       );
       if (blockIndex < 0) return {};
       const current = existing.blocks[blockIndex];
-      if (!current || current.toolInput === event.payload.input) return {};
+      if (!current || sameToolInput(current.toolInput, event.payload.input)) return {};
       const blocks = [...existing.blocks];
       blocks[blockIndex] = { ...current, toolInput: event.payload.input };
       return {

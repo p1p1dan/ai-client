@@ -1291,8 +1291,16 @@ export const zhTranslations: Record<string, string> = {
   'Show bracket pair guides': '显示括号配对引导线',
   'Indent guides': '缩进引导线',
   'Show indentation guides': '显示缩进引导线',
-  // Editing section
-  Editing: '编辑',
+  // Editing section.
+  //
+  // T101 — this key used to be the bare word `Editing`, which COLLIDES with
+  // the tool vocabulary: `TOOL_VERBS` uses `Editing` as the present-tense verb
+  // for write/edit, and a catalog is keyed by English string with no context
+  // dimension. So a running Write row in a Chinese window read “编辑 x.html”
+  // (the settings heading) instead of “编辑中”. The settings block is the side
+  // that can be renamed without lying — it is a heading over auto-completion
+  // options, and “Editing behavior” says that at least as well.
+  'Editing behavior': '编辑',
   'Auto-create session': '自动创建会话',
   'Automatically create Agent/Terminal session when activating a worktree':
     '激活 Worktree 时自动创建 Agent / 终端会话',
@@ -2481,6 +2489,16 @@ export const zhTranslations: Record<string, string> = {
   Read: '读取',
   Reading: '读取中',
   Edited: '已编辑',
+  // T101 — the write/edit present tense. It had no entry of its own: the key
+  // `Editing` existed, but as the editor settings heading (see its note near
+  // the top of this catalog), so every running Write row rendered that
+  // heading's translation. The settings key was renamed; this is the verb.
+  Editing: '编辑中',
+  // T101 — a Write/Edit row whose arguments are still streaming. `count` is
+  // lines of file body received so far, not lines of the finished file: the
+  // model is still dictating it and the total is not knowable yet, which is
+  // what “so far” has to carry in both languages.
+  '{{count}} lines so far': '已收到 {{count}} 行',
   Ran: '已运行',
   Grep: '搜索内容',
   Grepped: '已搜索内容',

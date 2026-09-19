@@ -1,3 +1,4 @@
+import { readStreamingToolArgs } from '../../../shared/streamingToolArgs';
 import { lineDiffRows, type ToolDiffRow } from '../../../shared/textDiff';
 import { PI_TOOL_NAMES } from './piToolNames';
 
@@ -95,6 +96,13 @@ export function deriveToolDiff(run: {
   result?: unknown;
   status?: string;
 }): ToolDiff | null {
+  // T101 — a row can now exist while the model is still dictating the call, and
+  // those arguments are a SUMMARY: the file body was never sent. Bailing on the
+  // marker rather than on a missing `content` because that is the honest test —
+  // `content: undefined` reads as "this call has no content field", and the day
+  // a summary carried a clipped one, this would render a truncated file as if
+  // it were the whole change the user is about to approve.
+  if (readStreamingToolArgs(run.input)) return null;
   const rec = asRecord(run.input);
   const path = stringField(rec, 'path') ?? stringField(rec, 'file_path');
 

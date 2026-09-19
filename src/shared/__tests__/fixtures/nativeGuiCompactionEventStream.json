@@ -46,6 +46,22 @@
     "requestId": "turn-1"
   },
   {
+    "type": "tool.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-2",
+      "toolCallId": "call-compact",
+      "name": "new_context",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
     "type": "usage.updated",
     "sessionId": "logical-gui",
     "payload": {
@@ -60,12 +76,11 @@
     "requestId": "turn-1"
   },
   {
-    "type": "tool.started",
+    "type": "tool.updated",
     "sessionId": "logical-gui",
     "payload": {
       "messageId": "asst-turn-1-2",
       "toolCallId": "call-compact",
-      "name": "new_context",
       "input": {}
     },
     "requestId": "turn-1"

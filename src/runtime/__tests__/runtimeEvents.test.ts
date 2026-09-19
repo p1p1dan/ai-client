@@ -92,12 +92,15 @@ it('reports provider and first-request budget failures as failed sessions', asyn
   runtimes.push(r);
   const events: RuntimeEventDraft[] = [];
   r.events.subscribe((event) => events.push(event));
+  // T093: a TERMINAL provider error, because since decision 029 a retriable one
+  // (any 5xx, or one with no status at all) is re-asked even after the stream
+  // started. This case is about how a failure is REPORTED, not about the ladder.
   faux.setResponses([
-    fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'provider unavailable' }),
+    fauxAssistantMessage('', { stopReason: 'error', errorMessage: '400: provider rejected this' }),
   ]);
   expect((await r.run({ prompt: 'hello', systemPrompt: 'probe' })).success).toBe(false);
   expect(events.find((event) => event.type === 'session.failed')).toMatchObject({
-    payload: { error: 'provider unavailable' },
+    payload: { error: '400: provider rejected this' },
   });
   events.length = 0;
   expect((await r.run({ prompt: 'x'.repeat(200_000), systemPrompt: 'probe' })).success).toBe(false);
@@ -353,7 +356,13 @@ describe('T017 · projection seams', () => {
     projection.observe({ type: 'message_start', message });
     projection.observe(update(message));
     projection.observe({ type: 'message_end', message });
-    expect(events.filter((event) => event.type.startsWith('message.'))).toEqual([]);
+    // T101 moved WHEN this message is minted, not whether. A tool call is
+    // content, so the row opening during the stream mints it — one message,
+    // started and not yet completed. What must never appear is a message with
+    // nothing in it, which is what the original defect produced.
+    expect(events.filter((event) => event.type.startsWith('message.')).map((e) => e.type)).toEqual([
+      'message.started',
+    ]);
     projection.observe({
       type: 'tool_execution_start',
       toolCallId: 'call-1',
@@ -707,9 +716,298 @@ it('puts a provider retry on the wire the banner reads, and clears it when the r
       // same shape a socket that never connected produces.
       errorStatus: null,
       error: 'PROVIDER_ERROR',
+      // T093 / decision 029 clause 3 — absolute instants, so the banner can run
+      // a countdown instead of showing a number frozen when it was drawn.
+      retryAt: expect.any(Number),
+      attemptStartedAt: expect.any(Number),
     },
   });
+  const retry = statuses[announced].payload.retry;
+  // `retryAt` is the instant the attempt failed plus the backoff, so the two
+  // fields together say how long the attempt itself ran — the figure the
+  // 2026-09-19 field report had no way to obtain.
+  expect(retry?.retryAt).toBeGreaterThanOrEqual((retry?.attemptStartedAt ?? 0) + 3_000);
   // The banner comes down when the retried request starts streaming, not when
   // the turn ends.
   expect(statuses[announced + 1]?.payload).toEqual({ status: 'running' });
 }, 20_000);
+
+/**
+ * T101 — a tool row appears while the model is still dictating the call.
+ *
+ * The defect this covers produced no error and no log line: `write` takes the
+ * whole file as an argument, and a row was only opened at
+ * `tool_execution_start`, which is AFTER the model has finished emitting it.
+ * A large file therefore left the screen completely still for minutes — a
+ * spinning group head with nothing under it — and not even a liveness event to
+ * say the turn was alive.
+ *
+ * The cases below drive the projector directly, because the faux provider
+ * cannot reproduce the shape: it fills `arguments` only at `toolcall_end`
+ * (`pi-ai/dist/providers/faux.js`), so a recorded fixture has no partial
+ * arguments in it at all. The partial-message snapshots here are the shape a
+ * real provider streams (`parseStreamingJson` over accumulated partial JSON).
+ */
+describe('T101 · streaming tool rows', () => {
+  /** A clock the test moves by hand, so the 100 ms window is not a timing race. */
+  function clock(start = 0) {
+    let value = start;
+    return {
+      now: () => value,
+      advance(ms: number) {
+        value += ms;
+      },
+    };
+  }
+
+  function projector(options: { streamToolRows?: boolean; now?: () => number } = {}) {
+    const events: RuntimeEventDraft[] = [];
+    const projection = new RuntimeEventProjector(
+      { sessionId: 'logical', emit: (event) => events.push(event) },
+      'run',
+      [],
+      undefined,
+      {},
+      options
+    );
+    return { events, projection };
+  }
+
+  /**
+   * One cumulative snapshot, as `message_update` carries it. `arguments` is an
+   * OBJECT even mid-stream — pi partial-parses the accumulated JSON — so the
+   * fields that arrived first are readable before the rest exists.
+   */
+  function partial(
+    args: Record<string, unknown>,
+    options: { id?: string; name?: string } = {}
+  ): AgentMessage {
+    return fauxAssistantMessage(
+      [fauxToolCall(options.name ?? 'write', args, { id: options.id ?? 'w1' })],
+      {
+        stopReason: 'toolUse',
+      }
+    );
+  }
+
+  function update(message: AgentMessage): AgentEvent {
+    return {
+      type: 'message_update',
+      message,
+      assistantMessageEvent: { type: 'start', partial: message } as never,
+    };
+  }
+
+  const started = (events: RuntimeEventDraft[]) => events.filter((e) => e.type === 'tool.started');
+  const updated = (events: RuntimeEventDraft[]) => events.filter((e) => e.type === 'tool.updated');
+
+  it('opens a tool row while its arguments are still streaming', () => {
+    const { events, projection } = projector();
+    const message = partial({ path: 'src/index.html' });
+    projection.observe({ type: 'message_start', message });
+    projection.observe(update(message));
+
+    const rows = started(events);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.payload).toMatchObject({ toolCallId: 'w1', name: 'write' });
+    // The row hangs on a real assistant message, minted for it — a row filed
+    // against a message the renderer never opened is silently dropped there.
+    const opened = events.find((event) => event.type === 'message.started');
+    expect(rows[0]?.payload.messageId).toBe(opened?.payload.messageId);
+    // Nothing has executed. `tool_execution_start` has not happened yet and
+    // must not be what the row waited for.
+    expect(events.some((event) => event.type === 'tool.completed')).toBe(false);
+  });
+
+  it('the streaming row carries the path but never the file body', () => {
+    const { events, projection } = projector();
+    const body = 'line one\nline two\nline three';
+    const message = partial({ path: 'src/index.html', content: body });
+    projection.observe({ type: 'message_start', message });
+    projection.observe(update(message));
+
+    const input = started(events)[0]?.payload.input as Record<string, unknown>;
+    expect(input.path).toBe('src/index.html');
+    expect(input).not.toHaveProperty('content');
+    // What replaces it is a size, which is what lets the row say how far along
+    // the file is without carrying the file.
+    expect(input.__streaming).toEqual({ bytes: body.length, lines: 3 });
+    // The belt-and-braces version of the assertion above: no serialization of
+    // this event contains any of the file, at any depth.
+    expect(JSON.stringify(input)).not.toContain('line one');
+  });
+
+  it('withholds long text however deeply the schema nests it', () => {
+    // `edit` puts its before/after texts inside an ARRAY of objects, so a rule
+    // that only looked at top-level string fields would forward the whole file
+    // twice over. The summary is an allow list for exactly this reason: a tool
+    // whose long field nobody thought about is summarized, not leaked.
+    const { events, projection } = projector();
+    const message = partial(
+      {
+        path: 'src/app.ts',
+        edits: [{ oldText: 'const a = 1;\n', newText: 'const a = 2;\nconst b = 3;\n' }],
+      },
+      { name: 'edit', id: 'e1' }
+    );
+    projection.observe({ type: 'message_start', message });
+    projection.observe(update(message));
+
+    const input = started(events)[0]?.payload.input as Record<string, unknown>;
+    expect(input.path).toBe('src/app.ts');
+    expect(input).not.toHaveProperty('edits');
+    expect(JSON.stringify(input)).not.toContain('const a');
+    // Three lines across both texts, counted as one body.
+    expect(input.__streaming).toMatchObject({ lines: 3 });
+  });
+
+  it('coalesces argument deltas to at most one update per 100ms', () => {
+    const time = clock();
+    const { events, projection } = projector({ now: time.now });
+    projection.observe({ type: 'message_start', message: partial({}) });
+    projection.observe(update(partial({ path: 'a.txt' })));
+    expect(started(events)).toHaveLength(1);
+
+    // Chunks inside the first window produce nothing at all: the row is
+    // already on screen and the only thing that moved is a byte counter.
+    for (let chunk = 1; chunk <= 20; chunk += 1) {
+      time.advance(4);
+      projection.observe(update(partial({ path: 'a.txt', content: 'x'.repeat(chunk) })));
+    }
+    expect(updated(events)).toHaveLength(0);
+
+    // A full second of a realistic provider cadence — 250 more chunks at 4 ms
+    // apiece — is ten events, not 250. That ratio is the whole point: without
+    // it every token of an 8 MiB `write` is a store write and a re-render.
+    for (let chunk = 21; chunk <= 270; chunk += 1) {
+      time.advance(4);
+      projection.observe(update(partial({ path: 'a.txt', content: 'x'.repeat(chunk) })));
+    }
+    expect(updated(events)).toHaveLength(10);
+
+    // A snapshot that repeats itself is not a change, window or no window.
+    // Flush what the last window still owed first, so the repeat below is a
+    // repeat of something already on screen rather than of an older state.
+    time.advance(1_000);
+    projection.observe(update(partial({ path: 'a.txt', content: 'x'.repeat(270) })));
+    expect(updated(events)).toHaveLength(11);
+    time.advance(1_000);
+    projection.observe(update(partial({ path: 'a.txt', content: 'x'.repeat(270) })));
+    expect(updated(events)).toHaveLength(11);
+  });
+
+  it('does not duplicate the row when tool_execution_start arrives', () => {
+    const { events, projection } = projector();
+    const message = partial({ path: 'a.txt', content: 'hello' });
+    projection.observe({ type: 'message_start', message });
+    projection.observe(update(message));
+    projection.observe({ type: 'message_end', message });
+    projection.observe({
+      type: 'tool_execution_start',
+      toolCallId: 'w1',
+      toolName: 'write',
+      args: { path: 'a.txt', content: 'hello' },
+    } as AgentEvent);
+
+    // One row for one call. A second `tool.started` would append a second
+    // `tool_call` block that could never be paired with the single result.
+    expect(started(events)).toHaveLength(1);
+    const rows = started(events);
+    const updates = updated(events);
+    expect(updates.length).toBeGreaterThanOrEqual(1);
+    // Every later event agrees with the row's own message and id.
+    for (const event of updates) {
+      expect(event.payload.messageId).toBe(rows[0]?.payload.messageId);
+      expect(event.payload.toolCallId).toBe('w1');
+    }
+  });
+
+  it('fills in the full arguments once the call is complete', () => {
+    const { events, projection } = projector();
+    const message = partial({ path: 'a.txt', content: 'hello\nworld' });
+    projection.observe({ type: 'message_start', message });
+    projection.observe(update(message));
+    expect(started(events)[0]?.payload.input).not.toHaveProperty('content');
+
+    projection.observe({ type: 'message_end', message });
+    const settled = updated(events).at(-1)?.payload.input as Record<string, unknown>;
+    expect(settled).toEqual({ path: 'a.txt', content: 'hello\nworld' });
+    // The marker is GONE, which is how the renderer knows it may draw a diff.
+    expect(settled).not.toHaveProperty('__streaming');
+  });
+
+  it('settles an unfinished tool row when the run is stopped', () => {
+    const { events, projection } = projector();
+    const message = partial({ path: 'a.txt', content: 'half a fi' });
+    projection.observe({ type: 'message_start', message });
+    projection.observe(update(message));
+    expect(started(events)).toHaveLength(1);
+
+    // Stop. The call is never executed, so nothing else would ever speak about
+    // this row — and `pairToolBlocks` leaves an unpaired call `running`, i.e.
+    // a spinner on a finished transcript, forever.
+    projection.finish({ success: false, stopReason: 'aborted' });
+    const terminal = events.filter((event) => event.type === 'tool.completed');
+    expect(terminal).toHaveLength(1);
+    expect(terminal[0]?.payload).toMatchObject({ toolCallId: 'w1', ok: false });
+    expect(terminal[0]?.payload.error).toBeTruthy();
+    // Before the message it hangs on is closed — a block appended to a message
+    // the store has already completed still renders, but the ordering that
+    // produced it would be a lie.
+    const completedAt = events.findIndex((event) => event.type === 'message.completed');
+    const terminalAt = events.findIndex((event) => event.type === 'tool.completed');
+    expect(terminalAt).toBeLessThan(completedAt);
+  });
+
+  it('leaves a row that really ran alone', () => {
+    // The other side of the case above: a settled call must NOT also be
+    // reported as cancelled when its turn ends.
+    const { events, projection } = projector();
+    const message = partial({ path: 'a.txt', content: 'hi' });
+    projection.observe({ type: 'message_start', message });
+    projection.observe(update(message));
+    projection.observe({ type: 'message_end', message });
+    projection.observe({
+      type: 'tool_execution_start',
+      toolCallId: 'w1',
+      toolName: 'write',
+      args: { path: 'a.txt', content: 'hi' },
+    } as AgentEvent);
+    projection.observe({
+      type: 'tool_execution_end',
+      toolCallId: 'w1',
+      toolName: 'write',
+      args: { path: 'a.txt', content: 'hi' },
+      result: 'Wrote 2 bytes',
+      isError: false,
+    } as AgentEvent);
+    projection.finish({ success: true, stopReason: 'stop' });
+
+    const terminal = events.filter((event) => event.type === 'tool.completed');
+    expect(terminal).toHaveLength(1);
+    expect(terminal[0]?.payload.ok).toBe(true);
+  });
+
+  it('the flag off restores the old behaviour', () => {
+    const { events, projection } = projector({ streamToolRows: false });
+    const message = partial({ path: 'a.txt', content: 'hello' });
+    projection.observe({ type: 'message_start', message });
+    projection.observe(update(message));
+    projection.observe({ type: 'message_end', message });
+    // Not one word about the call until the runtime agrees to run it.
+    expect(started(events)).toHaveLength(0);
+    expect(updated(events)).toHaveLength(0);
+
+    projection.observe({
+      type: 'tool_execution_start',
+      toolCallId: 'w1',
+      toolName: 'write',
+      args: { path: 'a.txt', content: 'hello' },
+    } as AgentEvent);
+    const rows = started(events);
+    expect(rows).toHaveLength(1);
+    // The pre-T101 payload exactly: the full arguments, on `tool.started`.
+    expect(rows[0]?.payload.input).toEqual({ path: 'a.txt', content: 'hello' });
+    expect(updated(events)).toHaveLength(0);
+  });
+});

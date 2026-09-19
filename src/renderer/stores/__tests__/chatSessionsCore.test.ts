@@ -1705,3 +1705,111 @@ describe('applyRuntimeEvent — session.failed / session.completed', () => {
     expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.status).toBe('idle');
   });
 });
+
+/**
+ * T101 — the reducer half of "a tool row opens while its arguments stream".
+ *
+ * Two dead branches came alive with it. `tool.updated` carried an `input` field
+ * no producer ever filled (T053 audit), and the row's `toolInput` was therefore
+ * frozen at whatever `tool.started` said; and `tool.started` appended a block
+ * unconditionally, which was safe only while exactly one producer existed.
+ */
+describe('applyRuntimeEvent — T101 streaming tool rows', () => {
+  const state = () =>
+    baseState({
+      messages: {
+        [SESSION_ID]: [
+          makeMessage({
+            blocks: [
+              { id: 'txt', type: 'text', text: 'Writing the file.' },
+              {
+                id: 'call-1',
+                type: 'tool_call',
+                toolCallId: 'call-1',
+                toolName: 'write',
+                toolInput: { path: 'a.html', __streaming: { bytes: 20, lines: 2 } },
+              },
+            ],
+          }),
+        ],
+      },
+    });
+
+  const update = (input: unknown): RuntimeEvent => ({
+    type: 'tool.updated',
+    seq: 2,
+    sessionId: SESSION_ID,
+    timestamp: 2,
+    payload: { messageId: 'msg-1', toolCallId: 'call-1', input },
+  });
+
+  it('tool.updated with input replaces the tool input without touching other blocks', () => {
+    const before = state();
+    const patch = applyRuntimeEvent(before, update({ path: 'a.html', content: '<p>hi</p>' }));
+    const blocks = patch.messages?.[SESSION_ID]?.find((m) => m.id === 'msg-1')?.blocks;
+
+    expect(blocks?.[1]?.toolInput).toEqual({ path: 'a.html', content: '<p>hi</p>' });
+    // The summary is replaced, not merged: a leftover marker would keep the
+    // renderer refusing to draw the diff forever.
+    expect(blocks?.[1]?.toolInput).not.toHaveProperty('__streaming');
+    // Everything else is the SAME object, not a rebuilt equal one — the rest of
+    // the timeline must not re-render because one tool row's bytes moved.
+    const original = before.messages[SESSION_ID]?.[0]?.blocks;
+    expect(blocks?.[0]).toBe(original?.[0]);
+    expect(blocks).toHaveLength(2);
+  });
+
+  it('an update that changes nothing is dropped', () => {
+    // Reference equality used to be the whole test, and the projector now
+    // builds a FRESH object per event — so a settled row re-stating its
+    // arguments (`tool_execution_start` after `message_end` already delivered
+    // them) would have re-rendered the timeline for nothing.
+    const settled = baseState({
+      messages: {
+        [SESSION_ID]: [
+          makeMessage({
+            blocks: [
+              {
+                id: 'call-1',
+                type: 'tool_call',
+                toolCallId: 'call-1',
+                toolName: 'write',
+                toolInput: { path: 'a.html', content: '<p>hi</p>' },
+              },
+            ],
+          }),
+        ],
+      },
+    });
+    // A different object, the same call.
+    expect(
+      applyRuntimeEvent(settled, update({ path: 'a.html', content: '<p>hi</p>' })).messages
+    ).toBeUndefined();
+    // A real change still gets through.
+    expect(
+      applyRuntimeEvent(settled, update({ path: 'a.html', content: '<p>hi there</p>' })).messages
+    ).toBeDefined();
+    // So does a field appearing or disappearing, which a key-count-blind
+    // compare would have missed.
+    expect(applyRuntimeEvent(settled, update({ path: 'a.html' })).messages).toBeDefined();
+  });
+
+  it('a second tool.started for the same call does not open a second row', () => {
+    // `tool_execution_start` used to be the only producer of `tool.started`;
+    // now the streaming pass gets there first, and a duplicate would append a
+    // `tool_call` block that could never be paired with the single result.
+    const started: RuntimeEvent = {
+      type: 'tool.started',
+      seq: 3,
+      sessionId: SESSION_ID,
+      timestamp: 3,
+      payload: {
+        messageId: 'msg-1',
+        toolCallId: 'call-1',
+        name: 'write',
+        input: { path: 'a.html', content: '<p>hi</p>' },
+      },
+    };
+    expect(applyRuntimeEvent(state(), started).messages).toBeUndefined();
+  });
+});

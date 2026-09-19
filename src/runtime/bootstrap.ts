@@ -417,7 +417,9 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     // After the tools plugin, because this is what registers `new_context`:
     // the compaction consumer and the tool that requests it land together
     // (plan board P1-9 / P2-8) or not at all.
-    const eventsFiber = await ctx.plugin(EventsPlugin);
+    const eventsFiber = await ctx.plugin(EventsPlugin, {
+      streamToolRows: flags.streamToolRows,
+    });
     await eventsFiber.await();
     const contextFiber = await ctx.plugin(ContextPlugin, options.context ?? {});
     await contextFiber.await();
@@ -466,6 +468,9 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       configVersion: RUNTIME_CONFIG_VERSION,
       extra: {
         backend: flags.backend,
+        // §15 — a flag that changes what a run EMITS belongs in the stamp, so
+        // an archived trace says which projection produced it (T101).
+        stream_tool_rows: String(flags.streamToolRows),
         single_turn: String(loopConfig.singleTurn),
         tools: String(Boolean(options.tools)),
         mode: options.tools ? ctx.runtimePermissions.mode : 'agent',

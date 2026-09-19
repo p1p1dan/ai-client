@@ -46,6 +46,24 @@
     "requestId": "turn-1"
   },
   {
+    "type": "tool.started",
+    "sessionId": "logical-gui",
+    "payload": {
+      "messageId": "asst-turn-1-2",
+      "toolCallId": "call-task",
+      "name": "Task",
+      "input": {
+        "agent": "explorer",
+        "description": "survey notes",
+        "__streaming": {
+          "bytes": 36,
+          "lines": 1
+        }
+      }
+    },
+    "requestId": "turn-1"
+  },
+  {
     "type": "usage.updated",
     "sessionId": "logical-gui",
     "payload": {
@@ -60,12 +78,11 @@
     "requestId": "turn-1"
   },
   {
-    "type": "tool.started",
+    "type": "tool.updated",
     "sessionId": "logical-gui",
     "payload": {
       "messageId": "asst-turn-1-2",
       "toolCallId": "call-task",
-      "name": "Task",
       "input": {
         "agent": "explorer",
         "task": "read notes.txt and report the answer",

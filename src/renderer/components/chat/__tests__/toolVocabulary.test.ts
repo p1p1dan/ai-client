@@ -60,6 +60,27 @@ describe('chat vocabulary is translatable', () => {
     expectTranslated(words, 'tool verbs');
   });
 
+  /**
+   * T101 — "has an entry" was never enough, and this is the case that proved
+   * it.
+   *
+   * The catalog is keyed by English string with no context dimension, and the
+   * editor settings page had claimed `Editing` for its section heading. So the
+   * assertion above passed — `Editing` WAS in the catalog — while a running
+   * Write row in a Chinese window read “编辑 x.html”, the heading's translation,
+   * instead of “编辑中”. A present-but-wrong translation is invisible to a
+   * presence check by construction, so the words whose English form is also a
+   * plausible UI label elsewhere are spot-checked by value.
+   */
+  it('the running verbs really mean "in progress", not something else with the same spelling', () => {
+    expect(zhTranslations.Editing).toBe('编辑中');
+    expect(zhTranslations.Reading).toBe('读取中');
+    expect(zhTranslations.Running).toBe('运行中');
+    // Both halves of the pair, so a swap between them would fail too.
+    expect(zhTranslations.Edited).toBe('已编辑');
+    expect(zhTranslations.Read).toBe('读取');
+  });
+
   it('the table it checks is the real one, not an empty object', () => {
     // Same guard `i18nCoverage` puts on its own scan: a lookup that silently
     // stopped resolving would make the assertion above pass on nothing.

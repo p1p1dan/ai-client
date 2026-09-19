@@ -747,6 +747,32 @@ describe('classifyTurnLiveness (F2 L-1..L-5)', () => {
     expect(classifyTurnLiveness(event('session.history', {}), 'session-live')).toBe('ignore');
   });
 
+  /**
+   * T101 — the silence the field report complained about was REAL silence: a
+   * `write` whose argument is a whole file produced no event of any kind
+   * between `message_start` and `tool_execution_start`, so the renderer's
+   * silence budget had nothing to reset on for minutes.
+   *
+   * Streaming tool rows close that gap with these two types. They were already
+   * in the set (containment from `classifyAssistantProgress` put them there),
+   * which is why nothing had to change in the producer — but the gap is now
+   * load-bearing, so it is asserted by name rather than left to containment.
+   */
+  it('tool.started and tool.updated count as liveness', () => {
+    expect(
+      classifyTurnLiveness(
+        event('tool.started', { messageId: 'm-1', toolCallId: 'c-1', name: 'write' }),
+        'session-live'
+      )
+    ).toBe('liveness');
+    expect(
+      classifyTurnLiveness(
+        event('tool.updated', { messageId: 'm-1', toolCallId: 'c-1', input: { path: 'a.txt' } }),
+        'session-live'
+      )
+    ).toBe('liveness');
+  });
+
   it('[L-5] events for another session — or with no session at all — are always ignored', () => {
     expect(
       classifyTurnLiveness(

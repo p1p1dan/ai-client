@@ -1,5 +1,6 @@
 import { englishTranslate, type Translate } from '@shared/i18n';
 import { reviewFromToolResult } from '@shared/sessionFileChange';
+import { readStreamingToolArgs } from '@shared/streamingToolArgs';
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import { isQuietPermissionActivity } from './permissionActivityRow';
@@ -1134,6 +1135,31 @@ function numberField(rec: Record<string, unknown> | undefined, field: string): n
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+/**
+ * T101 — the argument text for a Write/Edit row, whether or not its arguments
+ * have finished arriving.
+ *
+ * A settled call reads exactly as it always did: the shortened path. A call
+ * still being dictated shows that path AND how much of the file has landed,
+ * because the path is typed in the first few tokens and then does not change
+ * for however long the body takes — which for a whole-file `write` is minutes,
+ * and a row that never moves is indistinguishable from a wedged one.
+ *
+ * With no path yet the row gets NO argument rather than a placeholder: the
+ * model has not said which file it means, and "0 lines" names nothing. The row
+ * falls back to its verb alone, which is true and short.
+ */
+function fileArgWithProgress(
+  path: string | undefined,
+  input: unknown,
+  t: Translate
+): string | undefined {
+  const streaming = readStreamingToolArgs(input);
+  if (!path) return undefined;
+  if (!streaming || streaming.lines <= 0) return shortPath(path);
+  return `${shortPath(path)} · ${t('{{count}} lines so far', { count: streaming.lines })}`;
+}
+
 /** D25 §2.4 arg font-domain classifier -- see `ToolRowView.argKind` doc comment. */
 export type ToolArgKind = 'ident' | 'prose';
 
@@ -1192,8 +1218,7 @@ function formatToolArgDetail(
     }
     case PI_TOOL_NAMES.edit:
     case PI_TOOL_NAMES.write: {
-      const path = stringField(rec, 'path');
-      raw = path ? shortPath(path) : undefined;
+      raw = fileArgWithProgress(stringField(rec, 'path'), run.input, t);
       if (raw) kind = 'ident';
       break;
     }
@@ -1302,8 +1327,7 @@ function formatToolArgDetail(
     case 'MultiEdit':
     case 'Write':
     case 'NotebookEdit': {
-      const path = stringField(rec, 'file_path');
-      raw = path ? shortPath(path) : undefined;
+      raw = fileArgWithProgress(stringField(rec, 'file_path'), run.input, t);
       if (raw) kind = 'ident';
       break;
     }
