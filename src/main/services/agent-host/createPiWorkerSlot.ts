@@ -118,6 +118,13 @@ export async function createPiWorkerSlot(
         ...(options.subagentPromptCacheTtl
           ? { subagentPromptCacheTtl: options.subagentPromptCacheTtl }
           : {}),
+        // T093: `!== undefined` rather than truthiness, because `0` is the
+        // user's "never time out" and is exactly the value a truthy test would
+        // drop. Absent still means the shipped default, so an untouched
+        // install's payload is byte-identical to a pre-T093 build's.
+        ...(options.providerIdleTimeoutMs !== undefined
+          ? { providerIdleTimeoutMs: options.providerIdleTimeoutMs }
+          : {}),
         // P5-5: present only when Main could assemble one. Absent leaves the
         // native worker reading the agent directory, which is what every
         // pre-P5-5 build did and what the smoke lanes still do.

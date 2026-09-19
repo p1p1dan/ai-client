@@ -15,11 +15,23 @@
  * inner stream is always created with `maxRetries: 0` and this layer owns the
  * schedule.
  *
- * ## What it does NOT do
+ * ## Where this file's job ends
  *
- * Events from a stream that already started are forwarded unchanged. Replacing
- * a half-streamed assistant message is mid-stream recovery, which needs the
- * loop's message state, and PI-Desktop keeps that outside this file too.
+ * Events from a stream that already started are forwarded unchanged. That is a
+ * division of labour, not a limit on recovery: replacing a half-streamed
+ * assistant message needs the loop's message state, which this file does not
+ * have, so mid-stream recovery lives in `streamRecovery.ts` and is driven by
+ * whichever loop owns the transcript.
+ *
+ * The two phases share ONE budget (decision 029 clause 4, PI-Desktop's rule).
+ * `claim` is the single gate both go through, so a turn that fails once before
+ * the stream opens and twice after it has spent three retries — not three plus
+ * three. The budget does not reset at the phase boundary and does not double.
+ *
+ * The earlier wording here said the parent loop deliberately took only
+ * pre-stream failures. Decision 029 overturned that: a stream cut by the new
+ * body timeout is exactly a mid-stream failure, and leaving it terminal would
+ * have made the timeout a regression rather than a fix.
  */
 
 import {
@@ -112,6 +124,37 @@ export interface ProviderResponseSnapshot {
   headers: Record<string, string>;
 }
 
+/** Which half of a turn an attempt belonged to; see the module note. */
+export type ProviderAttemptPhase = 'request' | 'stream';
+
+/**
+ * One provider request, opened.
+ *
+ * `attempt` is the ordinal of the REQUEST — 1 is the first one a turn makes —
+ * and deliberately not the retry number that `claim` returns (there, 1 is the
+ * first RE-try, i.e. request 2). Two counters, because the two answer different
+ * questions: "how many times did we go out to the network" is what a duration
+ * log is about, and "how much of the allowance is left" is what the banner
+ * shows.
+ */
+export interface ProviderAttemptNote {
+  attempt: number;
+  phase: ProviderAttemptPhase;
+  /** Epoch ms. Absolute so a consumer can time it against its own clock. */
+  startedAt: number;
+}
+
+/** The same attempt, closed. */
+export interface ProviderAttemptOutcome extends ProviderAttemptNote {
+  durationMs: number;
+  /** `streaming`: the provider answered and the stream is live. */
+  outcome: 'streaming' | 'failed';
+  /** HTTP status captured off the response, when the upstream answered at all. */
+  status?: number;
+  /** Classification code, on a failure. */
+  code?: string;
+}
+
 export interface ProviderRetryController {
   /** Claim one retry from the shared per-run budget; the attempt number, or undefined when spent. */
   claim: (error: ClassifiedProviderError) => number | undefined;
@@ -120,23 +163,77 @@ export interface ProviderRetryController {
   /** Status captured even when the provider body omits the HTTP code. */
   status: () => number | undefined;
   /**
-   * About to wait `delayMs` before attempt `attempt`.
+   * Open an attempt on the shared ordinal, and announce it.
+   *
+   * On the budget rather than on each caller so the request phase and the
+   * stream phase number the same turn's requests in one sequence: "attempt 3
+   * failed" has to mean the third request this turn made, whichever phase cut
+   * it.
+   */
+  beginAttempt: (phase: ProviderAttemptPhase) => ProviderAttemptNote;
+  /**
+   * The most recent attempt this budget opened.
+   *
+   * `streamRecovery.ts` reads it: a stream that dies halfway belongs to a
+   * request this budget already opened, and the recovery has to be able to say
+   * how long that request had been running before it broke.
+   */
+  lastAttempt: () => ProviderAttemptNote | undefined;
+  /**
+   * The provider's own stream reported an error on this attempt.
+   *
+   * The discriminator `streamRecovery.ts` cannot do without. pi's `Agent` turns
+   * EVERY throw inside its loop into an assistant message with
+   * `stopReason: "error"` — a session file that could not be appended to, a
+   * compaction checkpoint that failed to persist, a listener that threw — so
+   * "the last message failed" is not the same question as "the provider
+   * failed". Re-asking a request because the local disk is full would spend the
+   * whole ladder on something a second attempt cannot fix, and would do it
+   * while the user watches a banner promising recovery.
+   *
+   * Set from the error EVENT as it is forwarded, not from the stream's result,
+   * so it is true before pi can emit the `message_end` that a caller classifies.
+   * Reset when the next attempt opens.
+   */
+  providerStreamFailed: () => boolean;
+  /** Called by the retry wrapper as it forwards a provider error event. */
+  noteProviderStreamFailure: () => void;
+  /** Close an attempt opened by {@link beginAttempt}. */
+  settleAttempt: (
+    note: ProviderAttemptNote,
+    outcome: { outcome: ProviderAttemptOutcome['outcome']; status?: number; code?: string }
+  ) => void;
+  /**
+   * About to wait `delayMs` before retry `attempt`.
    *
    * `status` is the HTTP code captured from the failed response when there was
    * one, because the user-facing wording turns on it: an upstream that answered
    * `503` is a different diagnosis from a socket that never connected, and the
    * banner says so. Undefined for a transport-level failure.
+   *
+   * `retryAt` and `attemptStartedAt` are absolute epoch milliseconds, which is
+   * what makes the banner's countdown LIVE instead of a number frozen at the
+   * moment the event was drawn (decision 029 clause 3): the renderer recomputes
+   * `retryAt - now` every second and switches wording when it reaches zero.
+   * `delayMs` stays alongside them because it is the figure the log line and the
+   * trace state, and deriving it back out of two timestamps would be worse.
    */
   onRetry?: (input: {
     error: ClassifiedProviderError;
     attempt: number;
     delayMs: number;
     status?: number;
+    /** Epoch ms when the attempt that just failed was opened. */
+    attemptStartedAt: number;
+    /** Epoch ms when the next attempt will be made. */
+    retryAt: number;
   }) => void;
   /** A retried request produced its first event, so the wait is over. */
   onRetrySettled?: () => void;
   /** Test hook; production uses the abortable timer below. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /** Test hook; production reads the wall clock. */
+  now?: () => number;
 }
 
 /**
@@ -301,12 +398,20 @@ export function createProviderRetryBudget(
     onRetry?: ProviderRetryController['onRetry'];
     onRetrySettled?: ProviderRetryController['onRetrySettled'];
     sleep?: ProviderRetryController['sleep'];
+    now?: () => number;
+    /** Every provider request this budget covers, opened and closed. */
+    onAttempt?: (note: ProviderAttemptNote) => void;
+    onAttemptSettled?: (outcome: ProviderAttemptOutcome) => void;
   } = {}
 ): ProviderRetryBudget {
   let status: number | undefined;
   let headers: Record<string, string> | undefined;
   let rateLimitAttempts = 0;
   let transientAttempts = 0;
+  let attempts = 0;
+  let lastAttempt: ProviderAttemptNote | undefined;
+  let providerStreamFailed = false;
+  const now = options.now ?? Date.now;
 
   return {
     requestOptions: (streamOptions) => ({
@@ -329,9 +434,29 @@ export function createProviderRetryBudget(
       },
       headers: () => headers,
       status: () => status,
+      beginAttempt: (phase) => {
+        const note: ProviderAttemptNote = { attempt: ++attempts, phase, startedAt: now() };
+        lastAttempt = note;
+        providerStreamFailed = false;
+        options.onAttempt?.(note);
+        return note;
+      },
+      lastAttempt: () => lastAttempt,
+      providerStreamFailed: () => providerStreamFailed,
+      noteProviderStreamFailure: () => {
+        providerStreamFailed = true;
+      },
+      settleAttempt: (note, outcome) => {
+        options.onAttemptSettled?.({
+          ...note,
+          ...outcome,
+          durationMs: Math.max(0, now() - note.startedAt),
+        });
+      },
       ...(options.onRetry ? { onRetry: options.onRetry } : {}),
       ...(options.onRetrySettled ? { onRetrySettled: options.onRetrySettled } : {}),
       ...(options.sleep ? { sleep: options.sleep } : {}),
+      now,
     },
   };
 }
@@ -389,13 +514,25 @@ export function createProviderRetryStream(
     for (;;) {
       // maxRetries: 0 — the SDK's own ladder is what made a failed request
       // take 110s in the P0 live smoke; this layer owns the schedule.
+      const note = controller.beginAttempt('request');
       const inner = createStream({ ...options, maxRetries: 0 });
       let sawStart = false;
+      let settled = false;
       let retry: { error: ClassifiedProviderError; attempt: number } | undefined;
 
       for await (const event of inner) {
         if (event.type === 'start') {
           sawStart = true;
+          // Closed at `start` rather than at the end of the stream: what this
+          // attempt's duration measures is how long the provider took to answer
+          // at all, which is the number the idle timeout is set against. How
+          // long the ANSWER then takes is the model's business, not a fault.
+          const startStatus = controller.status();
+          controller.settleAttempt(note, {
+            outcome: 'streaming',
+            ...(startStatus !== undefined ? { status: startStatus } : {}),
+          });
+          settled = true;
           // The request the last wait was for is now streaming. Announced here
           // rather than after the loop because that is the moment the wait
           // stops being true, and anything reporting it to a user has to stop
@@ -409,11 +546,24 @@ export function createProviderRetryStream(
           const errorMessage =
             typeof event.error.errorMessage === 'string' ? event.error.errorMessage : event.error;
           const error = classifyProviderError(errorMessage, controller.status());
+          const status = controller.status();
+          controller.settleAttempt(note, {
+            outcome: 'failed',
+            code: error.code,
+            ...(status !== undefined ? { status } : {}),
+          });
+          settled = true;
           const attempt = controller.claim(error);
           if (attempt !== undefined) {
             retry = { error, attempt };
             break;
           }
+        }
+        if (event.type === 'error' && event.reason === 'error') {
+          // Marked as we FORWARD it, not when the stream settles: pi may emit
+          // `message_end` off this very event, and the flag has to be readable
+          // by whoever classifies that message.
+          controller.noteProviderStreamFailure();
         }
         const forwarded =
           event.type === 'error' && event.reason === 'error' && controller.status() === 429
@@ -424,6 +574,17 @@ export function createProviderRetryStream(
 
       if (!retry) {
         const result = await inner.result();
+        // A stream that neither started nor claimed a retry still made a
+        // request, and the point of the attempt log is that no request goes
+        // unaccounted for.
+        if (!settled) {
+          const endStatus = controller.status();
+          controller.settleAttempt(note, {
+            outcome: 'failed',
+            ...(result.stopReason === 'error' ? { code: 'PROVIDER_ERROR' } : {}),
+            ...(endStatus !== undefined ? { status: endStatus } : {}),
+          });
+        }
         outer.end(
           result.stopReason === 'error' && controller.status() === 429
             ? normalizeRateLimitMessage(result)
@@ -441,11 +602,14 @@ export function createProviderRetryStream(
           : providerSetupRetryDelayMs(retry.attempt, controller.headers());
       waiting = true;
       const status = controller.status();
+      const failedAt = (controller.now ?? Date.now)();
       controller.onRetry?.({
         error: retry.error,
         attempt: retry.attempt,
         delayMs,
         ...(status !== undefined ? { status } : {}),
+        attemptStartedAt: note.startedAt,
+        retryAt: failedAt + delayMs,
       });
       await sleep(delayMs, options.signal);
     }
@@ -453,6 +617,10 @@ export function createProviderRetryStream(
     const aborted =
       options.signal?.aborted || (error instanceof Error && error.name === 'AbortError');
     const message = setupErrorMessage(model, error, Boolean(aborted));
+    // The provider path is what threw, so a caller may treat this as its
+    // failure. An abort is not one, and `claimStreamRetry` never asks about a
+    // message whose stop reason is `aborted`.
+    if (!aborted) controller.noteProviderStreamFailure();
     outer.push({
       type: 'error',
       reason: message.stopReason === 'aborted' ? 'aborted' : 'error',

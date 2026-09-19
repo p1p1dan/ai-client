@@ -74,21 +74,74 @@ describe('agent loop', () => {
   });
 
   it('reports a provider failure as a failed run, not an empty success', async () => {
+    // T093 note: the failure has to be a TERMINAL one to say only this. A
+    // retriable message (any 5xx, or one with no status at all) is now re-asked
+    // from the shared budget even after the stream started — see the
+    // mid-stream case below — so using one here would be measuring the retry
+    // ladder rather than the reporting.
     const failed = fauxAssistantMessage('', {
       stopReason: 'error',
-      errorMessage: 'upstream returned HTTP 500',
+      errorMessage: '400: upstream rejected the request',
     });
     await withRuntime(failed, async (runtime) => {
       const result = await runtime.run({ prompt: 'say ready', systemPrompt: 'probe' });
       expect(result.success).toBe(false);
       expect(result.error).toEqual({
         code: 'stop_error',
-        message: 'upstream returned HTTP 500',
+        message: '400: upstream rejected the request',
       });
       expect(result.trace.success).toBe(false);
       expect(result.trace.error?.code).toBe('stop_error');
     });
   });
+
+  it('retries a stream that dies mid-way, from the same budget as a request-phase failure', async () => {
+    // decision 029 clause 4, overturning the earlier "the parent loop only
+    // takes pre-stream failures" trade-off. The delegate loop could already do
+    // this; the conversation the user is actually watching could not, so a
+    // gateway that dropped an answer halfway ended the turn outright — and with
+    // the new body timeout that is precisely how a stalled stream now ends.
+    const handle = fauxProvider({
+      provider: 'faux',
+      models: [{ id: 'faux-p0', name: 'Faux P0 probe' }],
+    });
+    handle.setResponses([
+      // `start` IS emitted for this one — faux streams the text block before it
+      // reports the error — which is what makes it the stream phase.
+      fauxAssistantMessage('half an ans', {
+        stopReason: 'error',
+        errorMessage: '503: gateway dropped the stream',
+      }),
+      fauxAssistantMessage('the whole answer'),
+    ]);
+    const runtime = await createRuntime({ providers: [handle.provider], env: {} });
+    try {
+      const retries: unknown[] = [];
+      runtime.events.subscribe((event) => {
+        if (event.type === 'session.status' && event.payload.retry)
+          retries.push(event.payload.retry);
+      });
+      const result = await runtime.run({ prompt: 'say something', systemPrompt: 'probe' });
+      expect(result.success).toBe(true);
+      expect(result.text).toContain('the whole answer');
+      // The banner went up once — the user is told, which is the other half of
+      // the complaint this fixes.
+      expect(retries).toHaveLength(1);
+      expect(retries[0]).toMatchObject({
+        attempt: 1,
+        maxRetries: 3,
+        error: 'PROVIDER_ERROR',
+        retryAt: expect.any(Number),
+        attemptStartedAt: expect.any(Number),
+      });
+      // The rewind dropped the failed message rather than restarting the turn:
+      // the recovered text stands alone instead of being appended to "half an
+      // ans".
+      expect(result.text).toBe('the whole answer');
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
 
   it('redacts a bearer token out of a provider error before it reaches the trace or the run result (core-host-03)', async () => {
     // pi-ai folds the raw HTTP response body into `errorMessage`; a gateway
@@ -97,7 +150,10 @@ describe('agent loop', () => {
     const secret = 'sk-live-verysecret-1234567890';
     const failed = fauxAssistantMessage('', {
       stopReason: 'error',
-      errorMessage: `502 upstream body: {"detail":"Authorization: Bearer ${secret}"}`,
+      // 403 rather than 502, so the run ends on this message: since T093 a
+      // retriable mid-stream failure is re-asked, and this case is about what
+      // the error TEXT looks like when it lands, not about the ladder.
+      errorMessage: `403 upstream body: {"detail":"Authorization: Bearer ${secret}"}`,
     });
     await withRuntime(failed, async (runtime) => {
       const result = await runtime.run({ prompt: 'say ready', systemPrompt: 'probe' });
@@ -115,7 +171,8 @@ describe('agent loop', () => {
   it('caps an oversized provider error at 600 characters before it reaches the trace', async () => {
     const failed = fauxAssistantMessage('', {
       stopReason: 'error',
-      errorMessage: `502: ${'x'.repeat(5000)}`,
+      // 400 rather than 502, for the reason the case above states.
+      errorMessage: `400: ${'x'.repeat(5000)}`,
     });
     await withRuntime(failed, async (runtime) => {
       const result = await runtime.run({ prompt: 'say ready', systemPrompt: 'probe' });
@@ -324,9 +381,20 @@ describe('agent loop', () => {
       await runtime.run({ prompt: 'two', systemPrompt: 'probe', runId: 'run_b' });
       expect(runtime.trace.runs.map((run) => run.run_id)).toEqual(['run_a', 'run_b']);
       expect(runtime.trace.runs.map((run) => run.final_output)).toEqual(['first', 'second']);
-      // One `note` for the run header and one `llm` per completed turn - the
-      // §2 trace shape every later phase appends to rather than replaces.
-      expect(runtime.trace.runs[0].steps.map((step) => step.type)).toEqual(['note', 'llm']);
+      // One `note` for the run header, one pair of `note`s per provider request
+      // (T093: `provider_attempt_start` / `provider_attempt_end`, so "the turn
+      // was slow" resolves into "which attempt, and how long did it take"), and
+      // one `llm` per completed turn — the §2 trace shape every later phase
+      // appends to rather than replaces.
+      expect(runtime.trace.runs[0].steps.map((step) => step.type)).toEqual([
+        'note',
+        'note',
+        'note',
+        'llm',
+      ]);
+      expect(
+        runtime.trace.runs[0].steps.map((step) => (step.detail as { event?: string })?.event)
+      ).toEqual(['run_start', 'provider_attempt_start', 'provider_attempt_end', undefined]);
     });
   });
 });

@@ -45,10 +45,12 @@
  *    is 3s/10s/30s with three retries per budget, per the 2026-09-11 user
  *    ruling — deliberately not the reference's 5/4, because that ruling
  *    postdates the contract text and applies to every provider call we make.
- *    Both phases draw on ONE budget per delegate: the wrapper covers a request
- *    that never started, `retryPendingStream` covers a stream that died after
- *    it did, and neither can spend the other's allowance. A recovery re-asks
- *    the failed request and never replays a tool that already ran.
+ *    Both phases draw on ONE budget per delegate: `createProviderRetryStream`
+ *    covers a request that never started, `agent-loop/streamRecovery.ts` covers
+ *    a stream that died after it did, and neither can spend the other's
+ *    allowance. A recovery re-asks the failed request and never replays a tool
+ *    that already ran. The recovery used to be a private method here and is now
+ *    shared with the parent loop (T093 / decision 029 clause 4).
  */
 
 import {
@@ -67,16 +69,17 @@ import type { AssistantMessage, CacheRetention, Usage } from '@earendil-works/pi
 import type { TSchema } from 'typebox';
 import type { SubagentDefinition } from '../../../shared/subagentDefinition.ts';
 import type { ResolvedModel } from '../../contracts.ts';
-import type { ClassifiedProviderError } from '../agent-loop/providerErrors.ts';
 import {
-  classifyProviderError,
   createProviderRetryBudget,
   createProviderRetryStream,
-  delayWithAbort,
   type ProviderRetryBudget,
-  providerRateLimitDelayMs,
-  providerSetupRetryDelayMs,
+  type ProviderRetryController,
 } from '../agent-loop/providerRetry.ts';
+import {
+  claimStreamRetry,
+  type PendingStreamRetry,
+  recoverPendingStream,
+} from '../agent-loop/streamRecovery.ts';
 import {
   CONTEXT_BUDGET_CHANNEL,
   compactionNeeded,
@@ -160,9 +163,31 @@ export interface SubagentRunOptions {
    * delegate must not silently inherit the parent's hour.
    */
   cacheRetention: CacheRetention;
+  /**
+   * The per-request wall clock, in milliseconds — the parent loop's number.
+   *
+   * A delegate is a provider request like any other, and before T093 it sent no
+   * timeout at all, so a delegate was capable of holding the whole parent run
+   * open for the SDK's 600-second default while the parent waited for its
+   * report. "Off" arrives here as max int32, never as 0.
+   */
+  providerTimeoutMs: number;
   /** Host-backed tools, so a delegate's calls take the parent's exact path. */
   tools: readonly AgentTool<TSchema, unknown>[];
   onEvent?: (envelope: SubagentEventEnvelope) => void;
+  /**
+   * decision 029 clause 8 — this delegate is waiting out a provider backoff.
+   *
+   * The delegate budget used to be built with `createProviderRetryBudget()` and
+   * no callbacks whatsoever, so a fan-out sitting in a gateway outage was
+   * indistinguishable from a fan-out that had silently stopped: the parent's
+   * banner never moved, the trace recorded nothing, and the only evidence was
+   * the delegate eventually reporting a failure 43 seconds later. The plugin
+   * turns these into the same `session.status` rider the parent's own retries
+   * use, tagged with the delegation id.
+   */
+  onRetry?: ProviderRetryController['onRetry'];
+  onRetrySettled?: ProviderRetryController['onRetrySettled'];
   /**
    * The session's own `afterToolCall` bookkeeping, so a host failure inside a
    * delegate reaches its tool-error channel the way it reaches the parent's.
@@ -242,7 +267,7 @@ export class SubagentRun {
   private reminders: ReminderState = NO_REMINDERS_CLAIMED;
   private streamError?: { code: string; message: string };
   /** A stream failure that claimed a retry and is waiting to be re-asked. */
-  private pendingRetry?: { error: ClassifiedProviderError; attempt: number };
+  private pendingRetry?: PendingStreamRetry;
   private readonly retryBudget: ProviderRetryBudget;
 
   constructor(options: SubagentRunOptions) {
@@ -253,7 +278,10 @@ export class SubagentRun {
     // delegate cannot spend twice the parent's budget by failing in two
     // different places. A 429 burst inside one delegate may not spend another
     // delegate's allowance, nor the parent's.
-    const retryBudget = createProviderRetryBudget();
+    const retryBudget = createProviderRetryBudget({
+      ...(options.onRetry ? { onRetry: options.onRetry } : {}),
+      ...(options.onRetrySettled ? { onRetrySettled: options.onRetrySettled } : {}),
+    });
     this.retryBudget = retryBudget;
     this.agent = new Agent({
       streamFn: (requestModel, context, streamOptions) =>
@@ -265,6 +293,7 @@ export class SubagentRun {
           retryBudget.requestOptions({
             ...streamOptions,
             cacheRetention: options.cacheRetention,
+            timeoutMs: options.providerTimeoutMs,
           }),
           (retryOptions) => model.models.streamSimple(requestModel, context, retryOptions),
           retryBudget.controller
@@ -341,34 +370,23 @@ export class SubagentRun {
   /**
    * Re-ask the failed request without re-running anything that already ran.
    *
-   * Drops the failed assistant message and continues from the transcript, which
-   * is what keeps this a RETRY rather than a restart: every tool the delegate
-   * already executed stays executed, and its results stay in context. Restarting
-   * the delegate would re-run them, which for `fixer` means writing the same
-   * files twice.
+   * The body of this used to live here; T093 moved it to
+   * `agent-loop/streamRecovery.ts` so the main conversation gets the same
+   * capability (decision 029 clause 4). What stays here is the delegate's own
+   * bookkeeping: a recovery that cannot be attempted settles this delegate as
+   * failed, which the parent loop expresses differently.
    */
   private async retryPendingStream(): Promise<void> {
     const pending = this.pendingRetry;
     if (!pending) return;
     this.pendingRetry = undefined;
-    const messages = [...this.agent.state.messages];
-    if (messages.at(-1)?.role !== 'assistant') {
-      // Nothing to rewind means the transcript is not in the shape this
-      // recovery assumes; failing loudly beats continuing from a guess.
-      this.streamError = { code: pending.error.code, message: pending.error.message };
-      return;
-    }
-    messages.pop();
-    this.agent.state.messages = messages;
-    const headers = this.retryBudget.controller.headers();
-    const delayMs =
-      pending.error.code === 'PROVIDER_RATE_LIMITED'
-        ? providerRateLimitDelayMs(pending.attempt, headers)
-        : providerSetupRetryDelayMs(pending.attempt, headers);
-    await delayWithAbort(delayMs, this.options.signal);
-    if (this.options.signal?.aborted) return;
-    await this.agent.continue();
-    await this.agent.waitForIdle();
+    const outcome = await recoverPendingStream({
+      agent: this.agent,
+      pending,
+      controller: this.retryBudget.controller,
+      ...(this.options.signal ? { signal: this.options.signal } : {}),
+    });
+    if (outcome.failure) this.streamError = outcome.failure;
   }
 
   /**
@@ -466,18 +484,11 @@ export class SubagentRun {
           const text = assistantText(message);
           const failed = message.stopReason === 'error';
           if (failed) {
-            const classified = classifyProviderError(
-              message.errorMessage ?? 'the provider stream failed',
-              this.retryBudget.controller.status()
-            );
-            const attempt = this.retryBudget.controller.claim(classified);
-            if (attempt === undefined) {
-              // Budget spent, or an error re-sending cannot fix. Either way the
-              // delegate fails now rather than looping on it.
-              this.streamError = { code: classified.code, message: classified.message };
-            } else {
-              this.pendingRetry = { error: classified, attempt };
-            }
+            const verdict = claimStreamRetry(message, this.retryBudget.controller);
+            // Budget spent, or an error re-sending cannot fix: the delegate
+            // fails now rather than looping on it.
+            if (verdict.failure) this.streamError = verdict.failure;
+            this.pendingRetry = verdict.pending;
           }
           this.usage = addUsage(this.usage, message.usage);
           // The report is the last assistant TEXT. A turn that only called

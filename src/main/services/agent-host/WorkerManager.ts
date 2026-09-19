@@ -15,6 +15,7 @@ import type {
   PermissionDecisionId,
   RuntimeEvent,
   RuntimeEventDraft,
+  SessionRetryInfo,
 } from '@shared/types/runtimeEvents';
 import {
   DEFAULT_RUNTIME_PERMISSION,
@@ -102,6 +103,7 @@ import {
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { type NativeSubagentSettings, nativeSubagentSettings } from './nativeSubagentSettings';
 import { type PromptCacheTtlSettings, promptCacheTtlSettings } from './promptCacheSettings';
+import { type ProviderTimeoutSettings, providerTimeoutSettings } from './providerTimeoutSettings';
 import type { WorkerSlot, WorkerSlotLifecycleEvent } from './WorkerSlot';
 import {
   joinWorkerPath,
@@ -306,6 +308,11 @@ export interface WorkerManagerOptions {
    */
   readPromptCacheTtls?: () => PromptCacheTtlSettings;
   /**
+   * T093 — the provider idle timeout the settings page holds, or `{}` when the
+   * user has not chosen one. Injected for the same reason as the reader above.
+   */
+  readProviderTimeout?: () => ProviderTimeoutSettings;
+  /**
    * P5-2-3 — show a workspace page in the preview window.
    *
    * Injected for the same reason as the two above: production opens a real
@@ -426,11 +433,32 @@ function readString(payload: unknown, key: string): string | undefined {
   return typeof value === 'string' && value ? value : undefined;
 }
 
+/**
+ * T093 / decision 029 clause 8 — how long the attempt that just failed ran.
+ *
+ * This is THE number the 2026-09-19 field report was missing. "provider retry
+ * 1/3 in 3000ms" says what happens next and nothing about what took the time:
+ * the user's seven-minute message was seven minutes of attempts hanging, not of
+ * backoff, and the log could not tell the two apart.
+ *
+ * Derived rather than carried as a third field, and exactly so: the runtime
+ * computes `retryAt` as the instant the attempt failed PLUS `delayMs`, so
+ * `retryAt - delayMs` is that instant back, with no rounding and nothing that
+ * can drift from the number the banner shows. Empty string when an older worker
+ * sends neither field, which keeps the line's shape for whatever is parsing it.
+ */
+function attemptDurationSuffix(retry: SessionRetryInfo): string {
+  if (retry.retryAt === undefined || retry.attemptStartedAt === undefined) return '';
+  const failedAt = retry.retryAt - retry.delayMs;
+  return ` after ${Math.max(0, failedAt - retry.attemptStartedAt)}ms`;
+}
+
 export class WorkerManager {
   private readonly createSlot: typeof createPiWorkerSlot;
   private readonly readSubagentSettings: () => NativeSubagentSettings;
   private readonly readModelCatalog: () => WorkerModelCatalog | undefined;
   private readonly readPromptCacheTtls: () => PromptCacheTtlSettings;
+  private readonly readProviderTimeout: () => ProviderTimeoutSettings;
   private readonly showPreview: (request: PreviewShowRequest) => Promise<void>;
   private readonly bindRuntimeIdentity: (sessionId: string, sessionFile: string) => Promise<void>;
   private readonly commitResumed: NonNullable<WorkerManagerOptions['commitResumed']>;
@@ -485,6 +513,9 @@ export class WorkerManager {
     // Same rule again: an empty object means "the user chose neither", which
     // leaves the worker on the shipped defaults (1h main / 5m delegate).
     this.readPromptCacheTtls = options.readPromptCacheTtls ?? (() => ({}));
+    // Same rule once more: an empty object means "the user chose nothing",
+    // which leaves the worker on the shipped 120s default.
+    this.readProviderTimeout = options.readProviderTimeout ?? (() => ({}));
     // Same rule, one step further: the DEFAULT refuses. A manager with no host
     // has no window to open, and answering `ok: true` from one would tell the
     // model a page is on screen when nothing is. The production singleton below
@@ -2294,6 +2325,9 @@ export class WorkerManager {
       // Read at spawn time for the same reason as the line above: a TTL the
       // user just changed reaches the next worker without an app restart.
       ...this.readPromptCacheTtls(),
+      // T093, read at spawn time for the same reason: a timeout the user just
+      // changed reaches the next worker without an app restart.
+      ...this.readProviderTimeout(),
       // P5-5: read at spawn time for the same reason as the line above — a key
       // the user just added, or a sync that just landed, reaches the next
       // worker without waiting for a restart.
@@ -2833,7 +2867,7 @@ export class WorkerManager {
     if (event.type === 'session.status' && event.payload.retry) {
       const retry = event.payload.retry;
       console.warn(
-        `[pi-worker:${entry.logicalSessionId}] provider retry ${retry.attempt}/${retry.maxRetries} in ${retry.delayMs}ms (status=${retry.errorStatus ?? 'none'} code=${retry.error})`
+        `[pi-worker:${entry.logicalSessionId}] provider retry ${retry.attempt}/${retry.maxRetries} in ${retry.delayMs}ms${attemptDurationSuffix(retry)} (status=${retry.errorStatus ?? 'none'} code=${retry.error}${retry.delegationId ? ` delegate=${retry.delegationId}` : ''})`
       );
       return;
     }
@@ -3190,6 +3224,8 @@ export const workerManager = new WorkerManager({
   readModelCatalog: () => resolveNativeModelCatalog(),
   // The real settings-page read, injected for the same reason.
   readPromptCacheTtls: () => promptCacheTtlSettings(),
+  // T093: the real settings-page read, injected for the same reason.
+  readProviderTimeout: () => providerTimeoutSettings(),
   // P5-2-3: the real preview window, injected for the same reason.
   showPreview: (request) => previewWindowManager.show(request),
   bindRuntimeIdentity: (sessionId, sessionFile) =>

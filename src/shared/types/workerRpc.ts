@@ -20,8 +20,10 @@ import {
   type WorkerReconcileImportedSessionPayload,
   type WorkerReconcileImportedSessionResult,
 } from './legacyImport.ts';
-// Value import (`isPromptCacheTtl`), so the explicit `.ts` applies here too.
+// Value imports (`isPromptCacheTtl`, `isProviderIdleTimeoutMs`), so the
+// explicit `.ts` applies to both for the reason stated above.
 import { isPromptCacheTtl, type PromptCacheTtl } from './promptCacheTtl.ts';
+import { isProviderIdleTimeoutMs } from './providerTimeout.ts';
 import type { PermissionDecisionId, RuntimeEvent } from './runtimeEvents';
 import {
   isPermissionGear,
@@ -179,6 +181,17 @@ export interface WorkerBootstrapPayload {
    */
   promptCacheTtl?: PromptCacheTtl;
   subagentPromptCacheTtl?: PromptCacheTtl;
+  /**
+   * T093 / decision 029 — how long a provider request may stay silent, in ms.
+   *
+   * One number that becomes three things in the worker: undici's
+   * `headersTimeout`, its `bodyTimeout`, and the SDK's per-request `timeout`.
+   * `0` is the user's "off". Absent means the runtime's own default (120 s), so
+   * an install that never touched the setting sends a payload identical to a
+   * pre-T093 build's and `sameBootstrap` keeps comparing undefined === undefined
+   * — the same rule the two TTLs above follow.
+   */
+  providerIdleTimeoutMs?: number;
   /**
    * P5-5 — the model catalog, handed over rather than read off disk.
    *
@@ -793,6 +806,15 @@ export function isWorkerBootstrapPayload(value: unknown): value is WorkerBootstr
   if (
     value.subagentPromptCacheTtl !== undefined &&
     !isPromptCacheTtl(value.subagentPromptCacheTtl)
+  ) {
+    return false;
+  }
+  // Same rule as the TTLs above: rejected rather than coerced. A worker that
+  // fell back silently would be more (or less) patient than the settings page
+  // claims, and "why did it give up after 30 seconds" has no other answer.
+  if (
+    value.providerIdleTimeoutMs !== undefined &&
+    !isProviderIdleTimeoutMs(value.providerIdleTimeoutMs)
   ) {
     return false;
   }

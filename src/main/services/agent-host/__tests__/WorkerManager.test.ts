@@ -2970,6 +2970,61 @@ describe('WorkerManager notable-event logging (T066)', () => {
     expect(retry[0]).toContain('503');
   });
 
+  it('says how long the attempt that failed had been running (T093)', async () => {
+    // decision 029 clause 8. "provider retry 1/3 in 3000ms" describes what
+    // happens NEXT and nothing about what took the time — and in the 2026-09-19
+    // field report the seven minutes were entirely inside the attempts, not the
+    // backoff, so the log could not tell a hung gateway from a busy one.
+    const h = createHarness();
+    await create(h.manager, 's1');
+    const startedAt = 1_758_000_000_000;
+
+    h.records[0].emit({
+      type: 'session.status',
+      sessionId: 's1',
+      requestId: 'turn-1',
+      payload: {
+        status: 'running',
+        retry: {
+          attempt: 1,
+          maxRetries: 3,
+          delayMs: 3_000,
+          errorStatus: null,
+          error: 'NETWORK_ERROR',
+          attemptStartedAt: startedAt,
+          // The runtime builds this as "the instant it failed plus the
+          // backoff", so 120s of attempt + 3s of wait.
+          retryAt: startedAt + 120_000 + 3_000,
+          delegationId: 'deleg-7',
+        },
+      },
+    });
+
+    const retry = lines().filter((line) => line.includes('provider retry'))[0] ?? '';
+    expect(retry).toContain('after 120000ms');
+    // ...and which delegate it was, when it was not the conversation itself.
+    expect(retry).toContain('deleg-7');
+  });
+
+  it('keeps the old line shape when a worker sends no timing (T093)', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1');
+
+    h.records[0].emit({
+      type: 'session.status',
+      sessionId: 's1',
+      requestId: 'turn-1',
+      payload: {
+        status: 'running',
+        retry: { attempt: 1, maxRetries: 3, delayMs: 3_000, errorStatus: null, error: 'unknown' },
+      },
+    });
+
+    const retry = lines().filter((line) => line.includes('provider retry'))[0] ?? '';
+    expect(retry).not.toContain('after');
+    expect(retry).not.toContain('delegate=');
+  });
+
   it('writes the refusal code the moment the turn fails, redacted', async () => {
     const h = createHarness();
     await create(h.manager, 's1');

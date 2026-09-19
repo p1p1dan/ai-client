@@ -172,6 +172,21 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const EPOCH_MS = /\b\d{13}\b/g;
 
 /**
+ * The same instant as a NUMBER rather than inside a string.
+ *
+ * T093 put two absolute timestamps on `session.status.retry` (`retryAt`,
+ * `attemptStartedAt`) so the banner can run a live countdown. They move every
+ * run by definition, and `walk` only rewrote epoch milliseconds it found in
+ * TEXT — so without this the retry recording would have had to be re-cut on
+ * every execution, which is the opposite of what a golden stream is for. The
+ * window is the 13-digit range, the same one `EPOCH_MS` matches, so a genuine
+ * measurement (a token count, a delay in ms) is never caught by it.
+ */
+function isEpochMs(value: number): boolean {
+  return Number.isInteger(value) && value >= 1_000_000_000_000 && value < 10_000_000_000_000;
+}
+
+/**
  * Replace the temp workspace with `<workspace>`, in both the plain and the
  * JSON-escaped spelling, and normalize the separators that follow it.
  *
@@ -202,7 +217,10 @@ function withoutWorkspacePath(value: string, workspacePath: string): string {
 function normalize(stream: readonly RuntimeEvent[], workspacePath: string): unknown[] {
   const ids = new Map<string, string>();
   const walk = (value: unknown, zeroNumbers: boolean): unknown => {
-    if (typeof value === 'number') return zeroNumbers ? 0 : value;
+    if (typeof value === 'number') {
+      if (zeroNumbers) return 0;
+      return isEpochMs(value) ? '<ms>' : value;
+    }
     if (typeof value === 'string') {
       const withoutWorkspace = withoutWorkspacePath(value, workspacePath);
       return withoutWorkspace

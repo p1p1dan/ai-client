@@ -40,13 +40,21 @@ import {
   subagentModelKey,
   subagentPinnedProviders,
 } from '../../../shared/subagentDefinition.ts';
-import type { SubagentActivityPayload } from '../../../shared/types/runtimeEvents.ts';
+import { DEFAULT_PROVIDER_IDLE_TIMEOUT_MS } from '../../../shared/types/providerTimeout.ts';
+import type {
+  SessionRetryInfo,
+  SubagentActivityPayload,
+} from '../../../shared/types/runtimeEvents.ts';
 import {
   EVENTS_SERVICE,
   type ResolvedModel,
   type RuntimeModelRef,
   SESSION_SERVICE,
 } from '../../contracts.ts';
+import {
+  PROVIDER_RATE_LIMIT_MAX_RETRIES,
+  PROVIDER_TRANSIENT_MAX_RETRIES,
+} from '../agent-loop/providerRetry.ts';
 import type { DelegateCallScope } from '../permissions/index.ts';
 import { TOOLS_SERVICE } from '../tools/index.ts';
 import { applySubagentActivation, resolveSubagentPin, type SubagentCatalog } from './catalog.ts';
@@ -240,6 +248,15 @@ export interface SubagentConfig {
    * fan-out of delegates would buy one per delegate.
    */
   cacheRetention?: CacheRetention;
+  /**
+   * Per-request wall clock for a delegate's provider calls, in milliseconds.
+   *
+   * The parent loop's number, handed down rather than defaulted here: a
+   * delegate that was more patient than the conversation it serves would hold
+   * the parent run open past the point the user was told to expect.
+   * {@link DEFAULT_PROVIDER_IDLE_TIMEOUT_MS} when the host says nothing.
+   */
+  providerTimeoutMs?: number;
 }
 
 /** Which run a delegation belongs to, for attribution on records and events. */
@@ -595,6 +612,32 @@ export class SubagentPlugin extends Service implements SubagentService {
       }
     }
     events.emit({ type: 'subagent.activity', sessionId, payload });
+  }
+
+  /**
+   * Put a delegate's provider backoff on the session's retry banner.
+   *
+   * The same `session.status` rider the parent loop's own retries use, and
+   * deliberately not a `subagent.activity` row: the banner is one surface, and a
+   * user watching a turn that has stopped producing output needs the SAME
+   * explanation whether the stalled request is the conversation's or a
+   * delegate's. `delegationId` is what lets the renderer attribute it; an
+   * `undefined` info is the "the wait is over" message, which is how every other
+   * producer of this status takes the banner down.
+   *
+   * Not counted against the per-delegation activity cap: a cap that could cost a
+   * user the explanation for a stalled turn would be the wrong trade, and the
+   * number of these is bounded by the retry budget anyway.
+   */
+  private publishRetry(delegationId: string, info: SessionRetryInfo | undefined): void {
+    const events = this.ctx.get(EVENTS_SERVICE);
+    const sessionId = this.runContext?.sessionId;
+    if (!events || !sessionId) return;
+    events.emit({
+      type: 'session.status',
+      sessionId,
+      payload: { status: 'running', ...(info ? { retry: { ...info, delegationId } } : {}) },
+    });
   }
 
   takeUsage(): Usage | undefined {
@@ -1075,8 +1118,26 @@ export class SubagentPlugin extends Service implements SubagentService {
         this.config.thinkingLevel ??
         'medium') as ThinkingLevel,
       cacheRetention: this.config.cacheRetention ?? DEFAULT_SUBAGENT_CACHE_RETENTION,
+      providerTimeoutMs: this.config.providerTimeoutMs ?? DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
       tools,
       onEvent: (envelope) => this.publish(envelope),
+      // decision 029 clause 8 — a delegate's backoff reaches the same banner
+      // the parent's does, tagged so the renderer can say WHICH delegate is
+      // waiting. Before this the delegate budget carried no callbacks at all.
+      onRetry: ({ error, attempt, delayMs, status, attemptStartedAt, retryAt }) =>
+        this.publishRetry(delegationId, {
+          attempt,
+          maxRetries:
+            error.code === 'PROVIDER_RATE_LIMITED'
+              ? PROVIDER_RATE_LIMIT_MAX_RETRIES
+              : PROVIDER_TRANSIENT_MAX_RETRIES,
+          delayMs,
+          errorStatus: status === undefined ? null : String(status),
+          error: error.code,
+          retryAt,
+          attemptStartedAt,
+        }),
+      onRetrySettled: () => this.publishRetry(delegationId, undefined),
       signal,
       // Read at settlement, not now: `requestStop` writes the reason onto the
       // record while the delegate's loop is still closing.

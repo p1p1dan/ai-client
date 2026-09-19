@@ -13,6 +13,7 @@ import type { AssistantMessage, CacheRetention, Usage } from '@earendil-works/pi
 import type { Context } from 'cordis';
 import { Service } from 'cordis';
 import { markInternalMessage } from '../../../shared/internalMessage.ts';
+import { DEFAULT_PROVIDER_IDLE_TIMEOUT_MS } from '../../../shared/types/providerTimeout.ts';
 import {
   type AgentLoopService,
   EVENTS_SERVICE,
@@ -42,6 +43,11 @@ import {
   PROVIDER_RATE_LIMIT_MAX_RETRIES,
   PROVIDER_TRANSIENT_MAX_RETRIES,
 } from './providerRetry.ts';
+import {
+  claimStreamRetry,
+  type PendingStreamRetry,
+  recoverPendingStream,
+} from './streamRecovery.ts';
 
 /**
  * Cap on a permission-activity preview once it reaches the trace.
@@ -140,12 +146,29 @@ export interface AgentLoopConfig {
    * Delegates get `short` instead; see `SubagentConfig.cacheRetention`.
    */
   cacheRetention: CacheRetention;
+  /**
+   * The per-request wall clock handed to the provider SDK, in milliseconds.
+   *
+   * decision 029 clause 2. Until T093 this loop sent no `timeoutMs` at all, so
+   * every request fell through to the SDK's own default of 600 seconds: a
+   * gateway that accepted the connection and then went quiet held one message
+   * for ten minutes per attempt, which is what the 2026-09-19 field report
+   * measured as "seven or eight minutes for one message".
+   *
+   * It is the SAME number the process's undici idle timeouts are set from
+   * (`host/httpDispatcher.ts`), so the two cannot disagree about how patient
+   * this app is — with one spelling difference that matters: "off" reaches the
+   * SDK as `PROVIDER_TIMEOUT_DISABLED_SENTINEL` (max int32), never as 0, because
+   * every SDK we talk through reads 0 as "time out immediately".
+   */
+  providerTimeoutMs: number;
 }
 
 export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
   singleTurn: true,
   defaultThinkingLevel: 'medium',
   cacheRetention: 'long',
+  providerTimeoutMs: DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
 };
 
 export class AgentLoopPlugin extends Service implements AgentLoopService {
@@ -381,12 +404,38 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // One budget per run: a 429 burst and a later gateway fault each get their
     // own bounded allowance, and neither may borrow from the other.
     const retryBudget = createProviderRetryBudget({
-      onRetry: ({ error, attempt, delayMs, status }) => {
+      // decision 029 clause 8 — one line per provider request, so "the turn was
+      // slow" can be resolved into "which attempt, and how long did IT take"
+      // without an exported trace directory. Before this the only evidence a
+      // request had been issued at all was the retry that followed a failure,
+      // which says nothing about the attempt that is currently hanging.
+      onAttempt: ({ attempt, phase, startedAt }) => {
+        trace.note('note', {
+          event: 'provider_attempt_start',
+          attempt,
+          phase,
+          started_at: startedAt,
+        });
+      },
+      onAttemptSettled: ({ attempt, phase, durationMs, outcome, status, code }) => {
+        trace.note('note', {
+          event: 'provider_attempt_end',
+          attempt,
+          phase,
+          duration_ms: durationMs,
+          outcome,
+          ...(status !== undefined ? { status } : {}),
+          ...(code !== undefined ? { code } : {}),
+        });
+      },
+      onRetry: ({ error, attempt, delayMs, status, attemptStartedAt, retryAt }) => {
         trace.note('note', {
           event: 'provider_retry',
           code: error.code,
           attempt,
           delay_ms: delayMs,
+          attempt_started_at: attemptStartedAt,
+          retry_at: retryAt,
           ...(error.details ?? {}),
         });
         // rpc-projector-02: the trace file is not a user surface. The renderer
@@ -404,6 +453,10 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
           // is named as such; `null` is its sentinel for a transport failure.
           errorStatus: status === undefined ? null : String(status),
           error: error.code,
+          // decision 029 clause 3: absolute instants, so the countdown is live
+          // rather than a number frozen when the event was drawn.
+          retryAt,
+          attemptStartedAt,
         });
       },
       onRetrySettled: () => projected.recovered(),
@@ -449,8 +502,14 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
           // Applied here rather than inside the retry factory so a retried
           // request carries the same TTL as the one it replaces: a retry that
           // downgraded to the SDK default would write a second, shorter entry
-          // for a prefix the first attempt already paid an hour for.
-          retryBudget.requestOptions({ ...options, cacheRetention: this.config.cacheRetention }),
+          // for a prefix the first attempt already paid an hour for. The
+          // timeout rides along for the same reason — attempt 2 must not be
+          // more patient than attempt 1.
+          retryBudget.requestOptions({
+            ...options,
+            cacheRetention: this.config.cacheRetention,
+            timeoutMs: this.config.providerTimeoutMs,
+          }),
           (retryOptions) => resolved.models.streamSimple(model, context, retryOptions),
           retryBudget.controller
         ),
@@ -509,10 +568,36 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       },
     });
 
+    /**
+     * decision 029 clause 4 — a provider stream that died after it started.
+     *
+     * Set here and drained by `drainStreamRetries` below, because recovering
+     * needs the loop to be idle: `agent.continue()` cannot be called from
+     * inside the subscription that is still delivering the failure.
+     */
+    let pendingStreamRetry: PendingStreamRetry | undefined;
+    const claimStreamFailure = (message: AgentMessage): boolean => {
+      if (!isAssistant(message) || message.stopReason !== 'error') return false;
+      // An abort is not a provider fault. pi spells it `stopReason: 'aborted'`,
+      // so the guard above already covers the normal case; this one covers the
+      // race where the user's Stop lands between the failure and this handler.
+      if (request.signal?.aborted) return false;
+      const verdict = claimStreamRetry(message, retryBudget.controller);
+      if (!verdict.pending) return false;
+      pendingStreamRetry = verdict.pending;
+      return true;
+    };
     const unsubscribe = agent.subscribe(async (event) => {
-      if (event.type === 'message_end' && session)
-        await session.appendMessage(redactedForStorage(event.message));
-      collected.observe(event);
+      let rewinding = false;
+      if (event.type === 'message_end') {
+        // Claimed BEFORE the append, because a message this run is about to
+        // rewind out of the model's context must not be left behind in the
+        // session file: a reopened conversation would otherwise replay a failed
+        // turn the model itself never saw.
+        rewinding = claimStreamFailure(event.message);
+        if (session && !rewinding) await session.appendMessage(redactedForStorage(event.message));
+      }
+      collected.observe(event, rewinding);
       projected.observe(event);
       if (event.type === 'tool_execution_start') toolCalls.add(event.toolCallId);
       if (event.type === 'tool_execution_start')
@@ -540,6 +625,40 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       this.ctx.get('runtimeSubagents')?.abortAll();
     };
     request.signal?.addEventListener('abort', onAbort, { once: true });
+
+    /**
+     * Re-ask every stream that died mid-answer, until one of them sticks.
+     *
+     * A loop rather than a single pass: the request that replaces a cut stream
+     * can be cut too, and each one claims from the same three-retry budget the
+     * request phase draws on, so this terminates on the budget rather than on a
+     * count kept here. Called after every point the loop goes idle — the user's
+     * own turn and each delegation resume — because that is where the
+     * transcript is settled enough to rewind.
+     */
+    const drainStreamRetries = async (): Promise<void> => {
+      while (pendingStreamRetry && !request.signal?.aborted) {
+        const pending = pendingStreamRetry;
+        pendingStreamRetry = undefined;
+        const outcome = await recoverPendingStream({
+          agent,
+          pending,
+          controller: retryBudget.controller,
+          ...(request.signal ? { signal: request.signal } : {}),
+          onRewind: () =>
+            trace.note('note', {
+              event: 'provider_stream_rewind',
+              code: pending.error.code,
+              attempt: pending.attempt,
+            }),
+        });
+        if (!outcome.attempted) {
+          if (outcome.failure)
+            trace.note('note', { event: 'provider_stream_rewind_refused', ...outcome.failure });
+          return;
+        }
+      }
+    };
 
     let thrown: Error | undefined;
     try {
@@ -610,6 +729,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       flushDiscoveredInstructions();
       await agent.prompt(prepared.text, prepared.images.length ? prepared.images : undefined);
       await agent.waitForIdle();
+      await drainStreamRetries();
       // P5-2-2 — the parent going idle is not the end of the logical run while
       // its delegates are still working. This promise IS the run boundary the
       // worker reports on (`nativeWorkerRuntime.startSend` clears its turn when
@@ -646,6 +766,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
             )
           );
           await agent.waitForIdle();
+          await drainStreamRetries();
         }
       }
       await session?.flush();
@@ -712,6 +833,16 @@ interface CollectedTurn {
   stopReason: string;
   usage: Usage | null;
   errorMessage?: string;
+  /**
+   * The stream this turn carried died and was re-asked (T093).
+   *
+   * Kept in the list rather than dropped, because it IS a request the run made
+   * and the trace has to be able to say so, but excluded from {@link text}: the
+   * half sentence a cut stream delivered was rewound out of the model's own
+   * context, so repeating it in front of the answer that replaced it would put
+   * a fragment in `final_output` that the conversation does not contain.
+   */
+  rewound?: boolean;
 }
 
 /**
@@ -725,11 +856,12 @@ interface CollectedTurn {
 class TurnCollector {
   readonly turns: CollectedTurn[] = [];
 
-  observe(event: AgentEvent): void {
+  observe(event: AgentEvent, rewound = false): void {
     if (event.type !== 'message_end') return;
     const message = event.message;
     if (!isAssistant(message)) return;
     this.turns.push({
+      ...(rewound ? { rewound: true } : {}),
       text: assistantText(message),
       stopReason: message.stopReason,
       usage: message.usage ?? null,
@@ -746,7 +878,10 @@ class TurnCollector {
   }
 
   get text(): string {
-    return this.turns.map((turn) => turn.text).join('');
+    return this.turns
+      .filter((turn) => !turn.rewound)
+      .map((turn) => turn.text)
+      .join('');
   }
 }
 

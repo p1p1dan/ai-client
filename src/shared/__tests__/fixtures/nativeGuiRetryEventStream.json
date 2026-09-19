@@ -45,7 +45,9 @@
         "maxRetries": 3,
         "delayMs": 3000,
         "errorStatus": null,
-        "error": "PROVIDER_ERROR"
+        "error": "PROVIDER_ERROR",
+        "retryAt": "<ms>",
+        "attemptStartedAt": "<ms>"
       }
     },
     "requestId": "turn-1"

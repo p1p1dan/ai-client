@@ -97,17 +97,21 @@ function asErrorLike(value: unknown): ErrorLike | undefined {
 }
 
 /**
- * Probe the HTTP status across SDK error shapes: `status` / `statusCode`
- * fields (walking the `cause` chain), then a leading "<status>:" or a
- * "(status)" / "status code NNN" marker in the message.
+ * Probe the HTTP status out of the error MESSAGE: a leading "<status>:", a
+ * "(status)" marker, or "status code NNN".
+ *
+ * loop-model-11 — this used to walk `status` / `statusCode` fields down the
+ * `cause` chain first. Nothing could ever reach that walk: pi-ai folds every
+ * provider failure into an `errorMessage` STRING before this module sees it, so
+ * both callers (`classifyProviderError` in the retry layer, `SubagentRun`'s
+ * stream-failure arm) hand in a string or an `AssistantMessage`, and neither
+ * shape carries an HTTP status field. It was six lines of belief about a shape
+ * that does not arrive. The HTTP code we DO hold — the one captured off the
+ * real response by `captureProviderResponse` — travels as its own argument
+ * rather than hidden in an error object, which is why the walk had nothing left
+ * to find.
  */
-function extractStatus(error: unknown, message: string): number | undefined {
-  let current = asErrorLike(error);
-  for (let depth = 0; depth < 4 && current; depth += 1) {
-    if (typeof current.statusCode === 'number') return current.statusCode;
-    if (typeof current.status === 'number') return current.status;
-    current = asErrorLike(current.cause);
-  }
+function extractStatus(message: string): number | undefined {
   const patterns = [
     /^\s*(\d{3})\s*:/,
     /^\s*(\d{3})\b/,
@@ -136,6 +140,37 @@ function hasNetworkCause(error: unknown, message: string): boolean {
   return false;
 }
 
+/**
+ * loop-model-03 — a user abort is a NAME, never a word in a sentence.
+ *
+ * This used to also match `/\babort/i` against the error text, which made every
+ * provider body containing the word "abort" — "upstream aborted the request",
+ * "connection aborted by peer", a gateway quoting its own log line — read as
+ * "the user pressed Stop". Those are retriable transport faults reported as a
+ * terminal user action: the turn ended instantly and the banner never appeared.
+ * A real abort arrives as `AbortError` (the `DOMException` `fetch` rejects with,
+ * or the one `delayWithAbort` mints), and that name is what is checked here.
+ */
+function isAbortError(error: unknown): boolean {
+  let current = asErrorLike(error);
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (current instanceof Object && (current as { name?: unknown }).name === 'AbortError')
+      return true;
+    current = asErrorLike(current.cause);
+  }
+  return false;
+}
+
+/**
+ * Statuses below 500 that are still worth re-sending.
+ *
+ * 408 is a server-declared timeout, 409 a transient conflict, 429 rate limiting
+ * — all three are the upstream saying "not now" rather than "not like that".
+ * Everything else in the 4xx range describes the REQUEST, and the request does
+ * not change between attempts.
+ */
+const RETRIABLE_CLIENT_STATUSES = new Set([408, 409, 429]);
+
 function extractErrorCode(error: unknown): string | number | undefined {
   let current = asErrorLike(error);
   for (let depth = 0; depth < 4 && current; depth += 1) {
@@ -154,7 +189,7 @@ export function classifyProviderFailure(error: unknown): ClassifiedProviderError
   const rawMessage =
     typeof error === 'string' ? error : error instanceof Error ? error.message : String(error);
   const message = sanitizeProviderErrorText(rawMessage);
-  const status = extractStatus(error, rawMessage);
+  const status = extractStatus(rawMessage);
   const providerCode = extractErrorCode(error);
   const details = {
     ...(status !== undefined ? { providerStatus: status } : {}),
@@ -167,9 +202,7 @@ export function classifyProviderFailure(error: unknown): ClassifiedProviderError
     ...(Object.keys(details).length > 0 ? { details } : {}),
   });
 
-  if ((error instanceof Error && error.name === 'AbortError') || /\babort/i.test(rawMessage)) {
-    return result('TURN_ABORTED', false);
-  }
+  if (isAbortError(error)) return result('TURN_ABORTED', false);
   // Network failures never carry an HTTP status; probe before the status logic
   // so a "fetch failed" cause does not fall through to the generic bucket.
   if (hasNetworkCause(error, rawMessage)) return result('NETWORK_ERROR', true);
@@ -186,7 +219,14 @@ export function classifyProviderFailure(error: unknown): ClassifiedProviderError
       // Malformed request (wrong api style, bad params) — resending will not help.
       return result('PROVIDER_ERROR', false);
     }
-    return result('PROVIDER_ERROR', true);
+    // decision 029 clause 5 — an unclassified status fails FAST when the
+    // upstream answered in the 4xx range. This line used to read `true`, so a
+    // 402, a 405, a 418 or a gateway's own 451 each bought the user the full
+    // 3 + 10 + 30 second ladder before reporting a request that could never
+    // have succeeded. Anything the upstream does not describe as the request's
+    // fault (5xx is already handled above, and the three statuses below are the
+    // "not now" ones) keeps its retry.
+    return result('PROVIDER_ERROR', RETRIABLE_CLIENT_STATUSES.has(status));
   }
 
   // `no api key` is pi-ai's own wording for a credential that is not there at
@@ -213,5 +253,12 @@ export function classifyProviderFailure(error: unknown): ClassifiedProviderError
   if (STREAM_TERMINATION_PATTERN.test(rawMessage) || /stream/i.test(rawMessage)) {
     return result('STREAM_FAILED', true);
   }
+  // Nothing matched AND no HTTP status was found anywhere. decision 029 clause 5
+  // keeps this arm retriable on purpose: an error with no status is one that
+  // never got an answer out of the upstream at all, which is the network class —
+  // a DNS failure, a reset socket, a TLS handshake that died. Those are exactly
+  // what a second attempt is for. The tightening above applies only where a
+  // status WAS parsed, because that is the only case where the upstream told us
+  // the request itself was the problem.
   return result('PROVIDER_ERROR', true);
 }

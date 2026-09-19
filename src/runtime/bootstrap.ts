@@ -4,6 +4,10 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Context } from 'cordis';
 import {
+  DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
+  providerRequestTimeoutMs,
+} from '../shared/types/providerTimeout.ts';
+import {
   type AgentLoopService,
   EVENTS_SERVICE,
   type ModelAdapterService,
@@ -26,6 +30,7 @@ import { type RuntimeFlags, readRuntimeFlags } from './flags.ts';
 import { standaloneHost, validateHost } from './host/config.ts';
 import { RuntimeHostError } from './host/errors.ts';
 import { commandEnvironment, ExecPlugin } from './host/exec.ts';
+import { configureProviderHttpDispatcher } from './host/httpDispatcher.ts';
 import { HostIoPlugin } from './host/io.ts';
 import {
   type AgentLoopConfig,
@@ -178,6 +183,32 @@ export interface RuntimeBootstrapOptions {
   modelCatalog?: { models: Record<string, unknown>; auth?: Record<string, unknown> };
   loop?: Partial<AgentLoopConfig>;
   /**
+   * T093 / decision 029 — how long a provider request may stay silent, in ms.
+   *
+   * One number, three landing points: undici's `headersTimeout` (no first byte)
+   * and `bodyTimeout` (the stream went quiet), both set process-wide here, and
+   * the SDK's own per-request `timeout`, passed down to the loop and to
+   * delegates. `0` means "never cut it", which the dispatcher takes literally
+   * and the SDK is given as max int32.
+   *
+   * ABSENT means "leave this process's HTTP stack alone", which is not the same
+   * as 0: a probe lane, the fixed suite and the unit tests must not acquire a
+   * global dispatcher as a side effect of building a graph. Only a host that
+   * actually read the setting passes a value, and the worker always does.
+   */
+  providerIdleTimeoutMs?: number;
+  /**
+   * Worker log sink for graph-level diagnostics.
+   *
+   * Today it has exactly one writer: the HTTP dispatcher reporting that it
+   * could not be installed, which is a DEGRADATION rather than a failure (the
+   * turn still runs, it just runs without the idle timeout) and therefore has
+   * to be written down somewhere or it is invisible. It used to borrow
+   * `mcp.log`, which tied a transport diagnostic to whether the session happened
+   * to have MCP servers configured.
+   */
+  log?: (message: string, ...args: unknown[]) => void;
+  /**
    * decision 008 — which tiers of on-disk configuration this session may read,
    * across all four layered sources at once (project instructions, permission
    * policy, MCP servers, skills / prompts).
@@ -269,9 +300,22 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       const sessionFiber = await ctx.plugin(SessionPlugin, session);
       await sessionFiber.await();
     }
+    // Before the first plugin that can issue a provider request. Installed on
+    // the process, not on a request, because the two timeouts it sets are
+    // transport facts no SDK option can express — see `host/httpDispatcher.ts`.
+    // A host that named no timeout leaves the HTTP stack untouched.
+    if (options.providerIdleTimeoutMs !== undefined) {
+      await configureProviderHttpDispatcher(options.providerIdleTimeoutMs, {
+        ...(options.log ? { log: options.log } : {}),
+      });
+    }
+    const providerTimeoutMs = providerRequestTimeoutMs(
+      options.providerIdleTimeoutMs ?? DEFAULT_PROVIDER_IDLE_TIMEOUT_MS
+    );
     const loopConfig = {
       ...DEFAULT_AGENT_LOOP_CONFIG,
       singleTurn: !options.tools,
+      providerTimeoutMs,
       ...options.loop,
     };
     const agentDir = options.agentDir ?? flags.agentDir;
@@ -498,6 +542,8 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     // registers `Task*` into that registry. Both are already up by here.
     if (options.subagents && options.tools && subagentCatalog && readSubagentCatalog) {
       const subagentFiber = await ctx.plugin(SubagentPlugin, {
+        // The parent's number first, so a caller that pins one still wins.
+        providerTimeoutMs,
         ...options.subagents,
         catalog: subagentCatalog,
         // subagent-data-02 — the same reader the bootstrap used, handed to the

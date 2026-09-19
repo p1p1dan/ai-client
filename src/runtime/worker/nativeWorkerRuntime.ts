@@ -8,6 +8,7 @@ import {
   DEFAULT_SUBAGENT_PROMPT_CACHE_TTL,
   readPromptCacheTtl,
 } from '../../shared/types/promptCacheTtl.ts';
+import { readProviderIdleTimeoutMs } from '../../shared/types/providerTimeout.ts';
 import type { PermissionDecisionId, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import {
   migratePermissionTier,
@@ -261,6 +262,16 @@ export class NativeWorkerRuntime {
           readPromptCacheTtl(this.options.promptCacheTtl, DEFAULT_PROMPT_CACHE_TTL)
         ),
       },
+      // T093 — resolved here for the same reason the TTLs above are: the graph
+      // starts with an explicit number, so a session opened before the setting
+      // existed gets the app's 120 s rather than the SDK's ten-minute default.
+      // Passing it at all is also what installs the process's idle timeouts; a
+      // probe lane that builds a graph without this key leaves them alone.
+      providerIdleTimeoutMs: readProviderIdleTimeoutMs(this.options.providerIdleTimeoutMs),
+      // The one thing the line above can fail at — undici not resolving — is a
+      // silent degradation back to the SDK's ten-minute wall clock, so it has
+      // to reach the worker log rather than nothing.
+      ...(this.options.log ? { log: this.options.log } : {}),
       permissions: {
         ...(this.options.permissions?.mode ? { mode: this.options.permissions.mode } : {}),
         ...(this.options.permissions?.gear ? { gear: this.options.permissions.gear } : {}),

@@ -143,6 +143,61 @@ describe('provider failure classification', () => {
       code: 'TURN_ABORTED',
       retriable: false,
     });
+    // ...including when the name is buried in a cause chain, which is the shape
+    // `fetch` rejects with when a signal fires mid-request.
+    expect(
+      classifyProviderFailure(
+        Object.assign(new Error('fetch failed'), {
+          cause: Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }),
+        })
+      )
+    ).toMatchObject({ code: 'TURN_ABORTED', retriable: false });
+  });
+
+  it('does not treat the word "abort" inside an ordinary error message as a user abort', () => {
+    // loop-model-03. A gateway quoting its own log line — "upstream aborted the
+    // request", "connection aborted by peer" — is a transport fault, and calling
+    // it a user abort ended the turn instantly with no banner and no retry.
+    for (const message of [
+      '502: upstream aborted the request',
+      'socket hang up (connection aborted by peer)',
+      'the provider aborted the stream',
+    ]) {
+      const classified = classifyProviderFailure(message);
+      expect(classified.code).not.toBe('TURN_ABORTED');
+      expect(classified.retriable).toBe(true);
+    }
+  });
+
+  it('fails fast on an unclassified 4xx', () => {
+    // decision 029 clause 5. These statuses describe the REQUEST, and the
+    // request does not change between attempts — they used to buy the user the
+    // whole 3 + 10 + 30 second ladder before saying so.
+    for (const message of ['402: payment required', '405: method not allowed', '451: blocked']) {
+      expect(classifyProviderFailure(message)).toMatchObject({
+        code: 'PROVIDER_ERROR',
+        retriable: false,
+      });
+    }
+    // The three "not now" statuses keep their retry.
+    expect(classifyProviderFailure('409: conflict')).toMatchObject({ retriable: true });
+    expect(classifyProviderFailure('408: request timeout')).toMatchObject({ retriable: true });
+    expect(classifyProviderFailure('429: slow down')).toMatchObject({ retriable: true });
+    // And so does everything the upstream reports as its own fault.
+    expect(classifyProviderFailure('503: service unavailable')).toMatchObject({ retriable: true });
+  });
+
+  it('still retries an error that carries no status code', () => {
+    // The other half of clause 5: no status means nothing answered, which is
+    // the network class, which is exactly what a second attempt is for.
+    expect(classifyProviderFailure('something went sideways')).toMatchObject({
+      code: 'PROVIDER_ERROR',
+      retriable: true,
+    });
+    expect(classifyProviderFailure('ECONNRESET')).toMatchObject({
+      code: 'NETWORK_ERROR',
+      retriable: true,
+    });
   });
 
   it('redacts credentials out of the recorded message', () => {
@@ -431,6 +486,85 @@ describe('createProviderRetryStream', () => {
     );
     for await (const _event of stream) void _event;
     expect(announced).toEqual([undefined]);
+  });
+
+  it('carries retryAt and attemptStartedAt so the banner can count down', async () => {
+    // decision 029 clause 3. `delayMs` alone is a duration frozen at the moment
+    // the event was drawn, which is why the banner read "retrying in 30s" for
+    // thirty seconds. Absolute instants are what make the countdown live.
+    let clock = 1_000_000_000_000;
+    const announced: Array<{ attemptStartedAt: number; retryAt: number; delayMs: number }> = [];
+    const created = createProviderRetryBudget({
+      now: () => clock,
+      onRetry: ({ attemptStartedAt, retryAt, delayMs }) =>
+        announced.push({ attemptStartedAt, retryAt, delayMs }),
+      sleep: async () => {},
+    });
+    let attempts = 0;
+    const stream = createProviderRetryStream(
+      model,
+      context,
+      {},
+      () => {
+        attempts += 1;
+        // 5s of the attempt itself elapses before it fails.
+        clock += 5_000;
+        return attempts === 1 ? failedStream() : successfulStream();
+      },
+      created.controller
+    );
+    for await (const _event of stream) void _event;
+
+    expect(announced).toEqual([
+      {
+        attemptStartedAt: 1_000_000_000_000,
+        // The attempt ran 5s and the first rung is 3s, so the next request is
+        // due 8s after the attempt that failed was issued.
+        retryAt: 1_000_000_008_000,
+        delayMs: 3_000,
+      },
+    ]);
+  });
+
+  it('logs each attempt with its duration', async () => {
+    // decision 029 clause 8. "provider retry 1/3 in 3000ms" says what happens
+    // next and nothing about what took the time — and in the 2026-09-19 field
+    // report the time was entirely inside the attempts, not the backoff.
+    let clock = 1_700_000_000_000;
+    const opened: Array<{ attempt: number; phase: string }> = [];
+    const closed: Array<{ attempt: number; durationMs: number; outcome: string; code?: string }> =
+      [];
+    const created = createProviderRetryBudget({
+      now: () => clock,
+      onAttempt: ({ attempt, phase }) => opened.push({ attempt, phase }),
+      onAttemptSettled: ({ attempt, durationMs, outcome, code }) =>
+        closed.push({ attempt, durationMs, outcome, ...(code ? { code } : {}) }),
+      sleep: async () => {},
+    });
+    let attempts = 0;
+    const stream = createProviderRetryStream(
+      model,
+      context,
+      {},
+      () => {
+        attempts += 1;
+        clock += attempts * 1_000;
+        return attempts === 1 ? failedStream() : successfulStream();
+      },
+      created.controller
+    );
+    for await (const _event of stream) void _event;
+
+    // Every request is accounted for, numbered as a REQUEST rather than as a
+    // retry: attempt 2 is the one that worked.
+    expect(opened).toEqual([
+      { attempt: 1, phase: 'request' },
+      { attempt: 2, phase: 'request' },
+    ]);
+    expect(closed).toEqual([
+      { attempt: 1, durationMs: 1_000, outcome: 'failed', code: 'PROVIDER_ERROR' },
+      { attempt: 2, durationMs: 2_000, outcome: 'streaming' },
+    ]);
   });
 
   it('reports an abort during the backoff as an aborted turn', async () => {

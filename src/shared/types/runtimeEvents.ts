@@ -138,6 +138,37 @@ export interface SessionRetryInfo {
   errorStatus: string | null;
   /** SDK's own error label, e.g. `"unknown"` for a socket-level failure. */
   error: string;
+  /**
+   * T093 / decision 029 clause 3 — absolute epoch ms of the next attempt.
+   *
+   * `delayMs` above is a DURATION, and a duration only means something at the
+   * instant it was measured: the banner drew "retrying in 30s" once and left it
+   * there for thirty seconds, so a user watching a stalled turn could not tell a
+   * countdown from a frozen one. An absolute instant lets the renderer recompute
+   * `retryAt - now` every second and switch wording when it passes.
+   *
+   * Optional for the compatibility reason the whole of this interface follows:
+   * an old consumer ignores the extra key and keeps reading `delayMs`.
+   */
+  retryAt?: number;
+  /**
+   * Absolute epoch ms when the attempt that just failed was issued.
+   *
+   * With `retryAt` this is what makes "the request had been silent for 118
+   * seconds" sayable — the fact the 2026-09-19 field report was missing. It is
+   * also what the main-process log line derives its per-attempt duration from,
+   * so the number in the log and the number on screen cannot disagree.
+   */
+  attemptStartedAt?: number;
+  /**
+   * The delegation whose provider call is being retried.
+   *
+   * Absent means the main conversation's own request. Present means a subagent
+   * running under this session: delegate retries used to be completely silent
+   * (the delegate's budget was built with no callbacks at all), so a fan-out
+   * sitting in a gateway outage looked like a fan-out that had simply stopped.
+   */
+  delegationId?: string;
 }
 
 /**

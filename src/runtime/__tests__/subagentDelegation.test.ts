@@ -25,7 +25,7 @@ import {
   fauxToolCall,
 } from '@earendil-works/pi-ai/providers/faux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
+import type { RuntimeEventDraft, SessionRetryInfo } from '../../shared/types/runtimeEvents.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
 import {
   SUBAGENT_LIST_TOOL_NAME,
@@ -382,6 +382,61 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
     expect(result.subagentUsage).toBeDefined();
     expect(result.usage).not.toEqual(result.subagentUsage);
   });
+
+  it('publishes a delegate retry with the delegation id', async () => {
+    // decision 029 clause 8. The delegate budget was built with NO callbacks at
+    // all, so a fan-out sitting in a gateway outage was indistinguishable from
+    // one that had silently stopped: the banner never moved, and the only
+    // evidence was the delegate reporting a failure 43 seconds later. The wait
+    // here is the real first rung (3s) because the ladder is not injectable
+    // from this far out.
+    const handle = await build({
+      parent: [
+        () =>
+          fauxAssistantMessage([fauxToolCall('Task', { agent: 'explorer', task: 'look' })], {
+            stopReason: 'toolUse',
+          }),
+        () => fauxAssistantMessage('Started it.'),
+        () => fauxAssistantMessage('Integrated the report.'),
+      ],
+      delegate: [
+        () => {
+          // Thrown, so faux reports an error event with no preceding `start` —
+          // the setup failure the retry wrapper owns.
+          throw new Error('503: gateway unavailable');
+        },
+        () => fauxAssistantMessage('EXPLORER-REPORT: recovered after the hiccup.'),
+      ],
+    });
+    const retries: SessionRetryInfo[] = [];
+    const plainStatuses: number[] = [];
+    handle.events.subscribe((event) => {
+      if (event.type !== 'session.status') return;
+      if (event.payload.retry) retries.push(event.payload.retry);
+      else plainStatuses.push(retries.length);
+    });
+
+    const result = await handle.run({ prompt: 'find the thing' });
+    expect(result.success).toBe(true);
+
+    const records = handle.ctx.runtimeSubagents.registry.all();
+    expect(records[0].status).toBe('completed');
+    expect(retries).toHaveLength(1);
+    expect(retries[0]).toMatchObject({
+      attempt: 1,
+      maxRetries: 3,
+      delayMs: 3_000,
+      error: 'PROVIDER_ERROR',
+      // The field that makes this attributable: without it the banner can say
+      // "retrying" but not which of five delegates is waiting.
+      delegationId: records[0].delegationId,
+      retryAt: expect.any(Number),
+      attemptStartedAt: expect.any(Number),
+    });
+    // ...and it comes back down: a status with no retry after the one that
+    // carried it, which is how every producer of this event clears the banner.
+    expect(plainStatuses).toContain(1);
+  }, 30_000);
 
   it('gives two delegations to the same agent independent ids', async () => {
     const handle = await build({
