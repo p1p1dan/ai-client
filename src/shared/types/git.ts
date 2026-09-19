@@ -24,6 +24,22 @@ export interface GitBranch {
   merged?: boolean;
 }
 
+/**
+ * T100: a cheap fingerprint of "where this repository currently points".
+ * Read from refs only (no working-tree scan), so it is affordable to poll next
+ * to the status/file-changes polls; the git panel compares consecutive readings
+ * to notice commits, checkouts and branch edits made OUTSIDE the app (a
+ * terminal, another editor, an agent) and refresh its history and branch list.
+ */
+export interface GitHeadSignature {
+  /** `git rev-parse HEAD`; `null` on an unborn HEAD (repo with no commits yet). */
+  head: string | null;
+  /** Full ref HEAD points at (e.g. `refs/heads/main`); `null` when detached or unborn. */
+  ref: string | null;
+  /** Digest over every local and remote-tracking branch ref (`<sha> <refname>` lines). */
+  refs: string;
+}
+
 export interface GitLogEntry {
   hash: string;
   date: string;

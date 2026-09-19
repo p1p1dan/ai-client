@@ -1,4 +1,5 @@
 import { exec } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -12,6 +13,7 @@ import type {
   GhCliStatus,
   GitBlameLineInfo,
   GitBranch,
+  GitHeadSignature,
   GitLogEntry,
   GitStatus,
   GitSubmodule,
@@ -316,6 +318,46 @@ export class GitService {
       truncated: limited.truncated,
       truncatedLimit: limited.truncated ? MAX_GIT_STATUS_ENTRIES : undefined,
     };
+  }
+
+  /**
+   * T100: the fingerprint the git panel polls to notice work done outside the
+   * app. Two metadata-only git calls (no working-tree walk, no object reads),
+   * both far cheaper than the `git status` poll they ride alongside:
+   * - `rev-parse HEAD --symbolic-full-name HEAD` -> the commit HEAD resolves to
+   *   plus the ref it points at, which together cover an external `git commit`,
+   *   `git checkout <branch>` and `git checkout --detach`.
+   * - `for-each-ref refs/heads refs/remotes` -> every branch tip, which covers
+   *   branch creation/deletion/renaming and an external `git fetch`. Hashed
+   *   because the caller only ever compares it, and a repo can have thousands
+   *   of remote-tracking branches we should not ship over IPC every 5s.
+   */
+  async getHeadSignature(): Promise<GitHeadSignature> {
+    let head: string | null = null;
+    let ref: string | null = null;
+
+    try {
+      const output = await this.git.raw(['rev-parse', 'HEAD', '--symbolic-full-name', 'HEAD']);
+      const [headLine = '', refLine = ''] = output.split('\n').map((line) => line.trim());
+      head = headLine || null;
+      // `--symbolic-full-name HEAD` prints the literal string "HEAD" when no
+      // branch is checked out; that is a detached head, not a ref name.
+      ref = refLine && refLine !== 'HEAD' ? refLine : null;
+    } catch {
+      // Unborn HEAD: a fresh repository with no commits is a normal state, not
+      // a failure. The branch-ref digest below is still meaningful.
+    }
+
+    const refLines = await this.git.raw([
+      'for-each-ref',
+      '--format=%(objectname) %(refname)',
+      'refs/heads',
+      'refs/remotes',
+    ]);
+
+    // `for-each-ref` sorts by refname by default, so equal repositories hash
+    // equal without sorting here.
+    return { head, ref, refs: createHash('sha1').update(refLines).digest('hex') };
   }
 
   async getBranches(): Promise<GitBranch[]> {

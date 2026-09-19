@@ -74,6 +74,8 @@ function scopedKeyBuilder(...segments: string[]) {
 export const gitQueryKeys = {
   status: scopedKeyBuilder('git', 'status'),
   branches: scopedKeyBuilder('git', 'branches'),
+  /** T100: the polled HEAD/branch-ref fingerprint (`useGitHeadSignature.ts`). */
+  headSignature: scopedKeyBuilder('git', 'head-signature'),
   fileChanges: scopedKeyBuilder('git', 'file-changes'),
   submodules: scopedKeyBuilder('git', 'submodules'),
 

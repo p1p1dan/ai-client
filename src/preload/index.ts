@@ -43,6 +43,7 @@ import type {
   FolderCheckTypeResult,
   GhCliStatus,
   GitBranch,
+  GitHeadSignature,
   GitLogEntry,
   GitStatus,
   GitSubmodule,
@@ -142,6 +143,9 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.GIT_LOG, workdir, maxCount, skip, submodulePath),
     getBranches: (workdir: string): Promise<GitBranch[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_BRANCH_LIST, workdir),
+    /** T100: `null` for a repository with no cheap local fingerprint (remote workdirs). */
+    getHeadSignature: (workdir: string): Promise<GitHeadSignature | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_HEAD_SIGNATURE, workdir),
     createBranch: (workdir: string, name: string, startPoint?: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_BRANCH_CREATE, workdir, name, startPoint),
     checkout: (workdir: string, branch: string): Promise<void> =>

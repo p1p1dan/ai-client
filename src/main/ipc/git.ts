@@ -156,6 +156,24 @@ export function registerGitHandlers(): void {
     }
   );
 
+  /**
+   * T100: polled by the git panel to detect commits/checkouts/branch edits made
+   * outside the app. `null` means "no signature to compare" — the renderer then
+   * leaves its caches alone rather than refreshing on every tick. Remote
+   * repositories take that branch: their refs live on the other end of the
+   * connection and there is no cheap local fingerprint for them.
+   */
+  ipcMain.handle(IPC_CHANNELS.GIT_HEAD_SIGNATURE, async (_, workdir: string) => {
+    if (isRemoteWorkdir(workdir)) {
+      return null;
+    }
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return null;
+    }
+    return git.getHeadSignature();
+  });
+
   ipcMain.handle(IPC_CHANNELS.GIT_BRANCH_LIST, async (_, workdir: string) => {
     if (isRemoteWorkdir(workdir)) {
       return remoteRepositoryBackend.getBranches(workdir);

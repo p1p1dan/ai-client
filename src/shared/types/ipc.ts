@@ -22,6 +22,7 @@ export const IPC_CHANNELS = {
   GIT_BRANCH_CREATE: 'git:branch:create',
   GIT_BRANCH_CHECKOUT: 'git:branch:checkout',
   GIT_LOG: 'git:log',
+  GIT_HEAD_SIGNATURE: 'git:head-signature',
   GIT_FILE_CHANGES: 'git:file-changes',
   GIT_FILE_DIFF: 'git:file-diff',
   GIT_STAGE: 'git:stage',

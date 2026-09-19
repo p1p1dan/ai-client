@@ -48,6 +48,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { useGitStatus } from '@/hooks/useGit';
+import { useGitExternalRefresh } from '@/hooks/useGitHeadSignature';
 import { useGitHistoryInfinite } from '@/hooks/useGitHistory';
 import {
   useFileChanges,
@@ -196,6 +197,14 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
   const historyQuery = useGitHistoryInfinite(workdir, GIT_HISTORY_PAGE_SIZE);
   const historyCommits = useMemo(() => historyQuery.data?.pages.flat() ?? [], [historyQuery.data]);
 
+  // T100: neither History nor the branch list polls, so a `git commit` /
+  // `git checkout` / `git branch` run outside the app (terminal, agent) used to
+  // stay invisible for as long as this panel stayed open. This watches a cheap
+  // refs fingerprint at the file-changes cadence and refreshes both when it
+  // moves; it also owns the refresh button, which used to reload only the
+  // changed-files list.
+  const { refresh: refreshGitPanel } = useGitExternalRefresh(workdir, surfaceActive);
+
   // If the selected file is no longer present (staged away, discarded,
   // committed) once real data has arrived, fall back to the list instead of
   // showing a diff for a file that no longer has one.
@@ -315,10 +324,6 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
     [workdir, commitMutation]
   );
 
-  const handleRefresh = useCallback(() => {
-    fileChangesQuery.refetch();
-  }, [fileChangesQuery]);
-
   const emptyCopy = useGitEmptyStateCopy('reason' in resolution ? resolution.reason : 'no-session');
 
   if (!workdir) {
@@ -352,7 +357,7 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
             onStage={handleStage}
             onUnstage={handleUnstage}
             onDiscard={handleDiscard}
-            onRefresh={handleRefresh}
+            onRefresh={refreshGitPanel}
             isRefreshing={fileChangesQuery.isFetching}
             repoPath={workdir}
           />
