@@ -305,8 +305,14 @@ describe('A2 two-button welcome screen (static)', () => {
     // unready — and the terms it bans (`checkPrerequisites`, `detectCli`,
     // `credentials.json`) are still absent. Nothing here asks the machine
     // anything; it would look the same on a perfectly configured one.
+    // The switch moved to `lib/aRoundTesting.ts` when the round grew from one
+    // surface to three; pinning both halves keeps the original rule intact —
+    // the button must read the SHARED constant, not a local copy that happens
+    // to share its name while the real one says otherwise.
+    const switchFile = code('lib/aRoundTesting.ts');
+    expect(switchFile).toContain('export const LOCAL_SETUP_ENTRY_DISABLED = ');
     const view = code('components/onboarding/WelcomeView.tsx').replace(/\s+/g, ' ');
-    expect(view).toContain('LOCAL_SETUP_ENTRY_DISABLED = ');
+    expect(view).toContain("import { LOCAL_SETUP_ENTRY_DISABLED } from '@/lib/aRoundTesting'");
     expect(view).toContain('disabled={LOCAL_SETUP_ENTRY_DISABLED ||');
     // Still rendered — closed, not deleted.
     expect(view).toContain("t('Use my own setup')");
