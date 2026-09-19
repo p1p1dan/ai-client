@@ -42,11 +42,24 @@ function MenuPopup({
 }) {
   return (
     <MenuPrimitive.Portal>
-      <MenuPrimitive.Backdrop className="fixed inset-0 z-40" />
+      {/*
+        `data-closed:pointer-events-none` on all three layers is load-bearing,
+        not defensive polish. Measured on the running app 2026-09-19: after a
+        close, Base UI leaves the popup, its positioner AND this backdrop
+        mounted with `data-closed` + `data-ending-style` still set and
+        `pointer-events: auto`. The popup is invisible by then, so what the user
+        sees is a window that has stopped responding to clicks — the composer's
+        own centre point resolves to a menu row sitting on top of it.
+
+        Whether Base UI ought to have unmounted them is a separate question
+        (open). This rule makes the answer not matter: a layer marked closed
+        never eats a click, however long it lingers.
+      */}
+      <MenuPrimitive.Backdrop className="fixed inset-0 z-40 data-closed:pointer-events-none" />
       <MenuPrimitive.Positioner
         align={align}
         alignOffset={alignOffset}
-        className="z-50"
+        className="z-50 data-closed:pointer-events-none"
         collisionAvoidance={collisionAvoidance}
         data-slot="menu-positioner"
         side={side}
@@ -55,7 +68,7 @@ function MenuPopup({
         <MenuPrimitive.Popup
           className={cn(
             // 优化动画：150ms，使用模拟 Spring 的 cubic-bezier 曲线
-            "relative flex not-[class*='w-']:min-w-32 origin-(--transform-origin) rounded-lg border bg-popover bg-clip-padding shadow-lg outline-none transition-[scale,opacity] duration-150 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] focus:outline-none has-data-starting-style:scale-95 has-data-starting-style:opacity-0 has-data-ending-style:scale-95 has-data-ending-style:opacity-0 dark:bg-clip-border dark:before:shadow-[0_-1px_--theme(--color-white/8%)]",
+            "relative flex not-[class*='w-']:min-w-32 origin-(--transform-origin) rounded-lg border bg-popover bg-clip-padding shadow-lg outline-none transition-[scale,opacity] duration-150 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] focus:outline-none data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0 data-closed:pointer-events-none dark:bg-clip-border dark:before:shadow-[0_-1px_--theme(--color-white/8%)]",
             className
           )}
           data-slot="menu-popup"
@@ -297,13 +310,13 @@ function TitleBarMenuPopup({
     <MenuPrimitive.Portal>
       {/* 透明 Backdrop，支持点击关闭，设置 no-drag 避免拖拽冲突 */}
       <MenuPrimitive.Backdrop
-        className="fixed inset-0 z-[99]"
+        className="fixed inset-0 z-[99] data-closed:pointer-events-none"
         style={{ WebkitAppRegion: 'no-drag' } as ElectronCSSProperties}
       />
       <MenuPrimitive.Positioner
         align={align}
         alignOffset={alignOffset}
-        className="z-[100]"
+        className="z-[100] data-closed:pointer-events-none"
         data-slot="menu-positioner"
         side={side}
         sideOffset={sideOffset}
@@ -315,8 +328,8 @@ function TitleBarMenuPopup({
             "relative flex not-[class*='w-']:min-w-32 rounded-md border bg-popover shadow-lg outline-none",
             // 优化动画：150ms，使用模拟 Spring 的 cubic-bezier 曲线
             'origin-(--transform-origin) transition-[scale,opacity] duration-150 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)]',
-            'has-data-starting-style:scale-95 has-data-starting-style:opacity-0',
-            'has-data-ending-style:scale-95 has-data-ending-style:opacity-0',
+            'data-starting-style:scale-95 data-starting-style:opacity-0',
+            'data-ending-style:scale-95 data-ending-style:opacity-0 data-closed:pointer-events-none',
             // 标题栏菜单使用更小的字体
             '[&_[data-slot=menu-item]]:text-xs [&_[data-slot=menu-item]]:min-h-7 [&_[data-slot=menu-item]]:py-1.5',
             '[&_[data-slot=menu-shortcut]]:text-[10px]',

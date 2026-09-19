@@ -23,7 +23,7 @@ function SheetBackdrop({ className, ...props }: SheetPrimitive.Backdrop.Props) {
     <SheetPrimitive.Backdrop
       className={cn(
         // 优化动画：150ms 快速响应
-        'fixed inset-0 z-50 bg-black/32 backdrop-blur-sm transition-opacity duration-150 ease-out data-ending-style:opacity-0 data-starting-style:opacity-0',
+        'fixed inset-0 z-50 bg-black/32 backdrop-blur-sm transition-opacity duration-150 ease-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-closed:pointer-events-none',
         className
       )}
       data-slot="sheet-backdrop"
