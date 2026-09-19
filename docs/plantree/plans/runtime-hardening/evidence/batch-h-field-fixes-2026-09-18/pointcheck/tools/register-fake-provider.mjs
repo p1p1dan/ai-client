@@ -48,7 +48,6 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import process from 'node:process';
 
 const DEFAULT_VAULT = '/home/ai/.pilab/jyw-ai-client-dev/credentials/vault.json';

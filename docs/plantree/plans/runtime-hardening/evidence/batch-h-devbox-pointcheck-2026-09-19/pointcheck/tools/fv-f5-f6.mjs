@@ -26,15 +26,20 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { Cdp, DEBUG_PORT, ENTER_MAIN_SURFACE, sleep } from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
+import {
+  Cdp,
+  DEBUG_PORT,
+  ENTER_MAIN_SURFACE,
+  sleep,
+} from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
 import {
   ALLOW_TEXT,
   CLICK_SEND,
   EXPAND_WORK_GROUPS,
-  PERMISSION_CARD,
-  SEND_READY,
   enterApp,
   makeEval,
+  PERMISSION_CARD,
+  SEND_READY,
   shoot,
   typeIntoComposer,
   writeJson,
@@ -271,7 +276,10 @@ async function answerCard(decision, shotName) {
   return { at: new Date().toISOString(), decision, clicked, card, screenshot };
 }
 
-async function driveTurn(sid, { decision, cardShot, timeoutMs = 900_000, busyGraceMs = 120_000, onTick }) {
+async function driveTurn(
+  sid,
+  { decision, cardShot, timeoutMs = 900_000, busyGraceMs = 120_000, onTick }
+) {
   const t0 = now();
   const busy = new Set(BUSY);
   const cards = [];
@@ -294,10 +302,15 @@ async function driveTurn(sid, { decision, cardShot, timeoutMs = 900_000, busyGra
     } else if (now() - t0 > busyGraceMs) {
       return { ok: false, reason: 'never went busy', sawBusy, status, trail, cards };
     }
-    const answered = await answerCard(decision, cardShot ? `${cardShot}-${cards.length + 1}.png` : null);
+    const answered = await answerCard(
+      decision,
+      cardShot ? `${cardShot}-${cards.length + 1}.png` : null
+    );
     if (answered) {
       cards.push(answered);
-      console.log(`  card → ${decision}: ${answered.card.text.replace(/\n/g, ' | ').slice(0, 140)}`);
+      console.log(
+        `  card → ${decision}: ${answered.card.text.replace(/\n/g, ' | ').slice(0, 140)}`
+      );
     }
     if (onTick) {
       const stop = await onTick({ status, elapsedMs: now() - t0 });
@@ -360,7 +373,8 @@ async function denyRound(key, prompt) {
 try {
   state.probe = 'fv-f5-f6.mjs';
   state.commits = { f5: 'f059a8ae', f6: '6ea3fb2d' };
-  (state.runs ??= []).push({ stages: [...STAGES], startedAt: new Date().toISOString() });
+  state.runs ??= [];
+  state.runs.push({ stages: [...STAGES], startedAt: new Date().toISOString() });
 
   if (STAGES.has('enter')) state.entry = await enterApp(cdp, ENTER_MAIN_SURFACE);
   state.recorder = await evalAsync(USAGE_RECORDER, { label: 'usage.updated recorder' });
@@ -422,7 +436,11 @@ try {
       b.click();
       return { label: b.getAttribute('aria-label'), at: new Date().toISOString() };
     })()`);
-    const settle = await driveTurn(fresh.sid, { decision: ALLOW_TEXT, timeoutMs: 300_000, busyGraceMs: 500 });
+    const settle = await driveTurn(fresh.sid, {
+      decision: ALLOW_TEXT,
+      timeoutMs: 300_000,
+      busyGraceMs: 500,
+    });
     state.f5Settle = settle;
     state.f5Timing = {
       sentToStopMs: stopT0 - sent.t0,
@@ -434,7 +452,9 @@ try {
     console.log(`[f5] idle ${state.f5Timing.stopToIdleMs}ms after Stop (${settle.status})`);
     await sleep(3000);
     state.f5AfterStop = await snapshot(fresh.sid, 'F5 after Stop');
-    state.f5AfterStopBlocks = await evalAsync(readBlocks(fresh.sid), { label: 'F5 blocks after stop' });
+    state.f5AfterStopBlocks = await evalAsync(readBlocks(fresh.sid), {
+      label: 'F5 blocks after stop',
+    });
     state.f5Shot = await shoot(cdp, OUT, 'fix-f5-badge-after-stop.png');
     state.f5PostStopBroadcasts = await cdp.evaluate(
       `(() => (window.__fv_usage ?? []).filter((u) => u.at >= ${stopMark}))()`
@@ -495,7 +515,9 @@ try {
     state.verdict = {
       f5: {
         pass: f5Pass,
-        branch: measuredBranch ? 'chip carried a figure before Stop' : 'no turn_end before Stop (context key omitted)',
+        branch: measuredBranch
+          ? 'chip carried a figure before Stop'
+          : 'no turn_end before Stop (context key omitted)',
         chipBeforeStop: before,
         chipAfterStop: after,
         contextBeforeStop: state.f5BeforeStop?.usage?.context ?? null,
@@ -527,8 +549,12 @@ try {
     };
     saveState();
     console.log(`\nF5 pass=${f5Pass} (${state.verdict.f5.branch})`);
-    console.log(`  chip ${JSON.stringify(before?.text)} → ${JSON.stringify(after?.text)}; context after ${JSON.stringify(afterCtx)}`);
-    console.log(`F6 pass=${state.verdict.f6.pass}; rows=${JSON.stringify(denyRows.map((r) => r.text))}`);
+    console.log(
+      `  chip ${JSON.stringify(before?.text)} → ${JSON.stringify(after?.text)}; context after ${JSON.stringify(afterCtx)}`
+    );
+    console.log(
+      `F6 pass=${state.verdict.f6.pass}; rows=${JSON.stringify(denyRows.map((r) => r.text))}`
+    );
   }
 } catch (error) {
   state.error = String(error?.stack ?? error?.message ?? error);

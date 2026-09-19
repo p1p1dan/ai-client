@@ -34,7 +34,8 @@ const report = {
   environment: {
     mode: 'electron-vite dev + CDP 9222',
     model: 'claude/claude-opus-5',
-    credentials: "托管 auth.json 的 claude 条目（公司中转）；未用 cx2 / maxapi / vllmproxy / beehears / 真实 anthropic",
+    credentials:
+      '托管 auth.json 的 claude 条目（公司中转）；未用 cx2 / maxapi / vllmproxy / beehears / 真实 anthropic',
     permissionMode: '执行 · 每次询问',
     srcChanged: false,
     appRestarts: 3,
@@ -48,32 +49,47 @@ const report = {
     transcript: '合成（零模型回合）',
     sessionId: f12.sessionId ?? null,
     readings: [
-      { step: 'step1 · 首次打开 A', ...(step('step1-open-A') ? {
-        clicked: step('step1-open-A').clicked,
-        activeTabPath: step('step1-open-A').after.activeTabPath,
-        currentCursorLine: step('step1-open-A').after.currentCursorLine,
-        pendingCursor: step('step1-open-A').after.pendingCursor,
-        expect: step('step1-open-A').expect,
-        pass: step('step1-open-A').pass,
-      } : {}) },
-      { step: 'step2 · 编辑器已开 A 时点 B（旧缺陷暴露点）', ...(step('step2-other-file-B') ? {
-        clicked: step('step2-other-file-B').clicked,
-        tabsBefore: step('step2-other-file-B').before.tabs,
-        activeTabPath: step('step2-other-file-B').after.activeTabPath,
-        currentCursorLine: step('step2-other-file-B').after.currentCursorLine,
-        pendingCursor: step('step2-other-file-B').after.pendingCursor,
-        expect: step('step2-other-file-B').expect,
-        pass: step('step2-other-file-B').pass,
-      } : {}) },
-      { step: 'step3 · 再点回 A 的另一行', ...(step('step3-back-to-A') ? {
-        clicked: step('step3-back-to-A').clicked,
-        tabsBefore: step('step3-back-to-A').before.tabs,
-        activeTabPath: step('step3-back-to-A').after.activeTabPath,
-        currentCursorLine: step('step3-back-to-A').after.currentCursorLine,
-        pendingCursor: step('step3-back-to-A').after.pendingCursor,
-        expect: step('step3-back-to-A').expect,
-        pass: step('step3-back-to-A').pass,
-      } : {}) },
+      {
+        step: 'step1 · 首次打开 A',
+        ...(step('step1-open-A')
+          ? {
+              clicked: step('step1-open-A').clicked,
+              activeTabPath: step('step1-open-A').after.activeTabPath,
+              currentCursorLine: step('step1-open-A').after.currentCursorLine,
+              pendingCursor: step('step1-open-A').after.pendingCursor,
+              expect: step('step1-open-A').expect,
+              pass: step('step1-open-A').pass,
+            }
+          : {}),
+      },
+      {
+        step: 'step2 · 编辑器已开 A 时点 B（旧缺陷暴露点）',
+        ...(step('step2-other-file-B')
+          ? {
+              clicked: step('step2-other-file-B').clicked,
+              tabsBefore: step('step2-other-file-B').before.tabs,
+              activeTabPath: step('step2-other-file-B').after.activeTabPath,
+              currentCursorLine: step('step2-other-file-B').after.currentCursorLine,
+              pendingCursor: step('step2-other-file-B').after.pendingCursor,
+              expect: step('step2-other-file-B').expect,
+              pass: step('step2-other-file-B').pass,
+            }
+          : {}),
+      },
+      {
+        step: 'step3 · 再点回 A 的另一行',
+        ...(step('step3-back-to-A')
+          ? {
+              clicked: step('step3-back-to-A').clicked,
+              tabsBefore: step('step3-back-to-A').before.tabs,
+              activeTabPath: step('step3-back-to-A').after.activeTabPath,
+              currentCursorLine: step('step3-back-to-A').after.currentCursorLine,
+              pendingCursor: step('step3-back-to-A').after.pendingCursor,
+              expect: step('step3-back-to-A').expect,
+              pass: step('step3-back-to-A').pass,
+            }
+          : {}),
+      },
     ],
     before0919Morning:
       '倒序实验：第二次开文件不跳行，pendingCursor 挂着不被消费（model-11/model-11-jump-order.json）',
@@ -123,7 +139,9 @@ const report = {
       permissionCardsAnswered: (f56.f5Lane?.drive?.cards ?? []).map((c) => ({
         decision: c.decision,
         clicked: c.clicked,
-        cardHead: String(c.card?.text ?? '').replace(/\n/g, ' | ').slice(0, 160),
+        cardHead: String(c.card?.text ?? '')
+          .replace(/\n/g, ' | ')
+          .slice(0, 160),
       })),
     },
     before0919Morning: {
@@ -156,7 +174,9 @@ const report = {
         prompt: round.prompt,
         turnMs: round.turn?.totalMs ?? null,
         cardsAnswered: (round.turn?.cards ?? []).length,
-        deniedRows: (round.after?.activityRows ?? []).filter((r) => r.tone === 'denied').map((r) => r.text),
+        deniedRows: (round.after?.activityRows ?? [])
+          .filter((r) => r.tone === 'denied')
+          .map((r) => r.text),
         permissionActivityCount: (round.blocks?.permissionActivity ?? []).length,
         outcome:
           key === 'f6'
@@ -195,7 +215,11 @@ const report = {
       offMenuLabel: off.verdict?.offMenuLabel ?? null,
       triggerAfterPick: off.verdict?.triggerAfterPick ?? null,
       triggerAriaLabelAfterPick: off.triggerAfter?.ariaLabel ?? null,
-      turn: { prompt: off.prompt ?? null, totalMs: off.turn?.totalMs ?? null, trail: off.turn?.trail ?? null },
+      turn: {
+        prompt: off.prompt ?? null,
+        totalMs: off.turn?.totalMs ?? null,
+        trail: off.turn?.trail ?? null,
+      },
       thinkingClauseLines: off.verdict?.thinkingClausesOnTurn ?? null,
       thinkingBlockCount: off.verdict?.thinkingBlocks ?? null,
       usageReasoning: off.verdict?.usageReasoning ?? null,

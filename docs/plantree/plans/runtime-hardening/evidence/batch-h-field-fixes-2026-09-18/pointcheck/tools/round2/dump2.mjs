@@ -14,15 +14,19 @@ const out = process.argv[2] ?? null;
 const cdp = await connect();
 try {
   const raw = await cdp.evaluate('(() => window.__bh2 ? window.__bh2.data : "")()');
-  const clean = String(raw)
-    // OSC: ESC ] ... (BEL | ESC \)
-    .replace(/\][\s\S]*?(?:|\\)/g, '')
-    // CSI
-    .replace(/\[[0-9;?]*[ -/]*[@-~]/g, '')
-    // charset selection / single-char escapes
-    .replace(/[()][B0]/g, '')
-    .replace(/[=><]/g, '')
-    .replace(/\r/g, '\n');
+  let clean = String(raw);
+  // OSC: ESC ] ... (BEL | ESC \)
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  clean = clean.replace(/\][\s\S]*?(?:|\\)/g, '');
+  // CSI
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  clean = clean.replace(/\[[0-9;?]*[ -/]*[@-~]/g, '');
+  // charset selection / single-char escapes
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  clean = clean.replace(/[()][B0]/g, '');
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  clean = clean.replace(/[=><]/g, '');
+  clean = clean.replace(/\r/g, '\n');
   if (out) {
     fs.writeFileSync(out, clean);
     console.log(`${out}: ${clean.length} chars (raw ${String(raw).length})`);

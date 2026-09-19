@@ -33,7 +33,12 @@ const importedHead = read('model-06/model-06-imported-head.json');
 const common = {
   ranAt: state.finishedAt,
   build: { branch: 'feat/runtime-evolution', head: '9fa5a511' },
-  app: { agentDir: '/home/ai/.pilab/jyw-ai-client-dev/pi-agent', credential: 'auth.json entry "claude"', model: 'claude/claude-opus-5', permissionGear: '执行 · 每次询问' },
+  app: {
+    agentDir: '/home/ai/.pilab/jyw-ai-client-dev/pi-agent',
+    credential: 'auth.json entry "claude"',
+    model: 'claude/claude-opus-5',
+    permissionGear: '执行 · 每次询问',
+  },
   probe: path.join(BASE, 'tools/m47-m05-m06.mjs'),
 };
 
@@ -47,17 +52,43 @@ write('model-47', {
   sessionId: state.S,
   sessionFile: state.sessionFile,
   rounds: [
-    { where: 'GUI', prompt: state.turns.t1.prompt, ms: state.turns.t1.turnMs, reply: state.turns.t1.reply },
-    { where: 'TUI', prompt: state.tuiTurn.message, ms: state.tuiTurn.elapsedMs, reply: 'version 字段的值是 1.0.0-test.13。' },
-    { where: 'GUI', prompt: state.turns.t3.prompt, ms: state.turns.t3.turnMs, reply: state.turns.t3.reply },
+    {
+      where: 'GUI',
+      prompt: state.turns.t1.prompt,
+      ms: state.turns.t1.turnMs,
+      reply: state.turns.t1.reply,
+    },
+    {
+      where: 'TUI',
+      prompt: state.tuiTurn.message,
+      ms: state.tuiTurn.elapsedMs,
+      reply: 'version 字段的值是 1.0.0-test.13。',
+    },
+    {
+      where: 'GUI',
+      prompt: state.turns.t3.prompt,
+      ms: state.turns.t3.turnMs,
+      reply: state.turns.t3.reply,
+    },
   ],
   presentationSwitch: {
     question: 'prep-notes 「待核实的矛盾」: can CDP drive the GUI/TUI segmented control?',
     answer:
       'yes — Input.dispatchMouseEvent (mouseMoved + mousePressed + mouseReleased at the button centre) flips aria-pressed; no .click() fallback was needed on any of the four presses this run',
     presses: [
-      { to: 'TUI', via: state.tui1?.pressedVia ?? 'Input.dispatchMouseEvent (aria-pressed flipped; the stage misjudged it because it verified on .xterm, which needs ~40s to mount in Vite dev mode)', note: 'first press, measured with the old surface-only check' },
-      { to: 'GUI', via: state.gui1.pressedVia, flippedInMs: state.gui1.press.flippedInMs, surfaceInMs: state.gui1.press.surfaceInMs },
+      {
+        to: 'TUI',
+        via:
+          state.tui1?.pressedVia ??
+          'Input.dispatchMouseEvent (aria-pressed flipped; the stage misjudged it because it verified on .xterm, which needs ~40s to mount in Vite dev mode)',
+        note: 'first press, measured with the old surface-only check',
+      },
+      {
+        to: 'GUI',
+        via: state.gui1.pressedVia,
+        flippedInMs: state.gui1.press.flippedInMs,
+        surfaceInMs: state.gui1.press.surfaceInMs,
+      },
       { to: 'TUI', via: state.tui2.pressedVia },
       { to: 'GUI', via: state.gui2.pressedVia },
     ],
@@ -77,7 +108,13 @@ write('model-47', {
     beforeLines: diff.linesBefore,
     afterLines: diff.linesAfter,
     addedLines: diff.addedLines,
-    addedEntries: diff.added.map((e) => ({ index: e.index, type: e.type, kind: e.kind, role: e.role, textHead: e.textHead })),
+    addedEntries: diff.added.map((e) => ({
+      index: e.index,
+      type: e.type,
+      kind: e.kind,
+      role: e.role,
+      textHead: e.textHead,
+    })),
     duplicateIds: diff.duplicateIds,
     duplicateTextHeads: diff.duplicateTextHeads,
     parentChainBreaks: diff.chainBreaks,
@@ -135,7 +172,8 @@ write('model-05', {
     jsonlLinesUnchanged: true,
     jsonlNameMentionsAfter: state.rename.jsonlAfter.nameMentions.map((m) => ({
       index: m.index,
-      whatItReallyIs: 'assistant message text about package.json\'s `name` field — not a session name entry',
+      whatItReallyIs:
+        "assistant message text about package.json's `name` field — not a session name entry",
     })),
   },
   simulatedGetSessionName: {
@@ -147,7 +185,8 @@ write('model-05', {
   piObserved: {
     howOpened: 'GUI 的 TUI 按钮（真鼠标点击），冷启动的 pi 进程，读的就是这份 JSONL',
     statusBar: '~/code/ai-client (feat/runtime-evolution)',
-    statusBarWouldShow: 'pi 的状态栏在有名字时是 `<cwd> (<branch>) • <sessionName>`；这里没有 ` • 点验重命名-0919`',
+    statusBarWouldShow:
+      'pi 的状态栏在有名字时是 `<cwd> (<branch>) • <sessionName>`；这里没有 ` • 点验重命名-0919`',
     nameCommand: { sent: '/name', output: 'Warning: Usage: /name <name>' },
     nameCommandMeaning:
       '`/name` 不带参数时，pi 有名字就打印 “Session name …”，没有就落到 Usage 警告分支 —— 落到警告分支即 getSessionName() 返回 undefined',
@@ -178,7 +217,8 @@ const facts = [
   {
     fact: 'node 由 nvm 装的 v22.23.2，~/.bashrc 非交互 return 导致 PATH 里看不到；修复命令 export PATH="$HOME/.nvm/versions/node/v22.23.2/bin:$PATH"',
     hit: true,
-    quote: 'node 其实由 nvm 装着 v22.23.2 … `~/.bashrc` 在前面就 return 了 … export PATH="$HOME/.nvm/versions/node/v22.23.2/bin:$PATH"',
+    quote:
+      'node 其实由 nvm 装着 v22.23.2 … `~/.bashrc` 在前面就 return 了 … export PATH="$HOME/.nvm/versions/node/v22.23.2/bin:$PATH"',
   },
 ];
 
@@ -192,15 +232,25 @@ write('model-06', {
     sourceFile: state.import.sourceFile,
     sourceBytes: state.import.sourceBytes,
     sourceProject: state.import.projectPath,
-    sourceRounds: { realUserPrompts: 4, assistantTextReplies: 2, bashToolRounds: 14, note: '按「真实问答」计 3 轮以上（4 条用户提问 + 2 段长回答 + 1 次 AskUserQuestion）' },
-    whyThisOne: '在已注册工作区 ai-client 下、体积最小且仍有 3 轮以上真实问答的候选（172 KB；更小的 17 KB 两份各只有 1 条真实回答）',
+    sourceRounds: {
+      realUserPrompts: 4,
+      assistantTextReplies: 2,
+      bashToolRounds: 14,
+      note: '按「真实问答」计 3 轮以上（4 条用户提问 + 2 段长回答 + 1 次 AskUserQuestion）',
+    },
+    whyThisOne:
+      '在已注册工作区 ai-client 下、体积最小且仍有 3 轮以上真实问答的候选（172 KB；更小的 17 KB 两份各只有 1 条真实回答）',
     secretShapeHitsInSource: state.import.sourceSecretShapeHits,
-    secretHandling: '命中 2 处 sk- 前缀短串（11 字符，位于一条工具结果里）。只报命中数，值不写入任何证据文件；探针对所有拷贝出来的文本做形状脱敏。',
+    secretHandling:
+      '命中 2 处 sk- 前缀短串（11 字符，位于一条工具结果里）。只报命中数，值不写入任何证据文件；探针对所有拷贝出来的文本做形状脱敏。',
   },
   import: {
     reportLine: '新导入 1 个，已存在 0 个，失败 0 个。 导入的对话会出现在侧栏，打开就能接着聊。',
     perRowBadge: '已导入 1 个快照',
-    importedFile: path.join('/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions', state.import.importedFile),
+    importedFile: path.join(
+      '/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions',
+      state.import.importedFile
+    ),
     importedBytes: importedHead.bytes,
     importedLines: importedHead.lines,
     header: importedHead.header,

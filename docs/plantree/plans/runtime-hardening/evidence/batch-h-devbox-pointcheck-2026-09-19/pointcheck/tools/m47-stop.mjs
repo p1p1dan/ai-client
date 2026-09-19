@@ -70,7 +70,10 @@ for (const p of first) {
 }
 await sleep(5000);
 const left = targets();
-console.log('still up after SIGTERM:', left.map((p) => p.pid));
+console.log(
+  'still up after SIGTERM:',
+  left.map((p) => p.pid)
+);
 for (const p of left) {
   try {
     process.kill(p.pid, 'SIGKILL');
@@ -79,4 +82,7 @@ for (const p of left) {
   }
 }
 await sleep(2000);
-console.log('final:', targets().map((p) => p.pid));
+console.log(
+  'final:',
+  targets().map((p) => p.pid)
+);

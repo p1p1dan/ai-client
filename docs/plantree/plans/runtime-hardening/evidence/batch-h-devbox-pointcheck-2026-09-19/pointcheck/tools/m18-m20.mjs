@@ -38,15 +38,20 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { Cdp, DEBUG_PORT, ENTER_MAIN_SURFACE, sleep } from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
+import {
+  Cdp,
+  DEBUG_PORT,
+  ENTER_MAIN_SURFACE,
+  sleep,
+} from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
 import {
   ALLOW_TEXT,
   CLICK_SEND,
   EXPAND_WORK_GROUPS,
-  PERMISSION_CARD,
-  SEND_READY,
   enterApp,
   makeEval,
+  PERMISSION_CARD,
+  SEND_READY,
   shoot,
   typeIntoComposer,
   writeJson,
@@ -335,7 +340,9 @@ async function driveTurn(sid, { decision, timeoutMs = 900_000, busyGraceMs = 120
     const answered = await answerCard(decision);
     if (answered) {
       cards.push(answered);
-      console.log(`  card → ${decision}: ${answered.card.text.replace(/\n/g, ' | ').slice(0, 120)}`);
+      console.log(
+        `  card → ${decision}: ${answered.card.text.replace(/\n/g, ' | ').slice(0, 120)}`
+      );
     }
     if (onTick) {
       const stop = await onTick({ status, elapsedMs: now() - t0 });
@@ -381,7 +388,8 @@ const USAGE_RECORDER = `
 try {
   state.probe = 'm18-m20.mjs';
   state.criteria = ['MODEL-18', 'MODEL-20'];
-  (state.runs ??= []).push({ stages: [...STAGES], startedAt: new Date().toISOString() });
+  state.runs ??= [];
+  state.runs.push({ stages: [...STAGES], startedAt: new Date().toISOString() });
 
   if (STAGES.has('enter')) state.entry = await enterApp(cdp, ENTER_MAIN_SURFACE);
   state.recorder = await evalAsync(USAGE_RECORDER, { label: 'usage.updated recorder' });
@@ -441,7 +449,9 @@ try {
     });
     state.stopLane = { laneSeenAtMs, drive: { ...drive, totalMs: now() - sent.t0 } };
     if (drive.earlyExit !== 'stop-now') {
-      throw new Error(`stop round never reached the Stop point: ${JSON.stringify(drive).slice(0, 400)}`);
+      throw new Error(
+        `stop round never reached the Stop point: ${JSON.stringify(drive).slice(0, 400)}`
+      );
     }
     state.beforeStop = await snapshot(SID, 'just before Stop');
     saveState();
@@ -488,7 +498,8 @@ try {
      * that still has unfinished work in it.
      */
     if (process.env.PC_NEW_SESSION === '1') {
-      (state.denyPreviousRounds ??= []).push({
+      state.denyPreviousRounds ??= [];
+      state.denyPreviousRounds.push({
         sessionId: state.denySessionId ?? state.sessionId,
         prompt: state.denyPrompt ?? null,
         denyTurn: state.denyTurn ?? null,
@@ -509,7 +520,9 @@ try {
     // finding, so it is refused rather than allowed.
     const drive = await driveTurn(DENY_SID, { decision: DENY_TEXT, timeoutMs: 600_000 });
     state.denyTurn = { ...drive, totalMs: now() - sent.t0, sessionId: DENY_SID };
-    console.log(`[deny] ok=${drive.ok} in ${state.denyTurn.totalMs}ms, cards=${drive.cards.length}`);
+    console.log(
+      `[deny] ok=${drive.ok} in ${state.denyTurn.totalMs}ms, cards=${drive.cards.length}`
+    );
     await sleep(2500);
     state.afterDeny = await snapshot(DENY_SID, 'after deny turn');
     state.denyScan = await cdp.evaluate(DENY_SCAN);

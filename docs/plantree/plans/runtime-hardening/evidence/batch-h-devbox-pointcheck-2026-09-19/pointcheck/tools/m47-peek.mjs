@@ -22,8 +22,8 @@ const id = tid ?? JSON.parse(order ?? '[]')?.at(-1)?.id;
 const raw = (await cdp.evaluate(`window.__m47tap?.terms?.[${JSON.stringify(id)}] ?? ''`)) ?? '';
 console.log(`--- ${id}: ${raw.length} bytes ---`);
 console.log('--- OSC ---');
-let m;
-while ((m = OSC_RE.exec(raw))) console.log(m[1], JSON.stringify(m[2]));
+for (let m = OSC_RE.exec(raw); m !== null; m = OSC_RE.exec(raw))
+  console.log(m[1], JSON.stringify(m[2]));
 console.log('--- stripped tail ---');
 console.log(strip(raw).slice(-tail));
 console.log('--- xterm screen ---');

@@ -17,16 +17,21 @@
  * resumes a session with no timeline and replays `session.history`.
  */
 import path from 'node:path';
-import { Cdp, DEBUG_PORT, ENTER_MAIN_SURFACE, sleep } from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
+import {
+  Cdp,
+  DEBUG_PORT,
+  ENTER_MAIN_SURFACE,
+  sleep,
+} from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
 import {
   DOM_SUMMARY,
   EXPAND_WORK_GROUPS,
-  TRANSCRIPT_TEXT,
   enterApp,
   makeEval,
   shoot,
   storeSummary,
   switchTo,
+  TRANSCRIPT_TEXT,
   writeJson,
 } from './pc-lib.mjs';
 
@@ -118,7 +123,9 @@ try {
 
   out.store = await evalAsync(storeSummary(A), { label: 'store summary' });
   out.file = writeJson(OUT23, `model-23-${STAGE}.json`, out);
-  console.log(`[${STAGE}] messages=${count} blockTypes=${JSON.stringify(out.store.blockTypeCounts)}`);
+  console.log(
+    `[${STAGE}] messages=${count} blockTypes=${JSON.stringify(out.store.blockTypeCounts)}`
+  );
   console.log(`[${STAGE}] expand clicked=${JSON.stringify(out.expand.clicked)}`);
   console.log(
     `[${STAGE}] permissionActivityRows collapsed=${out.collapsed.dom.permissionActivityRows.length} expanded=${out.expanded.dom.permissionActivityRows.length}`

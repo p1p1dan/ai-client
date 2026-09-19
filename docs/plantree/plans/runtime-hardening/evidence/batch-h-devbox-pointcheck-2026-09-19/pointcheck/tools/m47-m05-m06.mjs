@@ -48,10 +48,10 @@ import {
   ALLOW_TEXT,
   CLICK_SEND,
   EXPAND_WORK_GROUPS,
-  PERMISSION_CARD,
-  SEND_READY,
   enterApp,
   makeEval,
+  PERMISSION_CARD,
+  SEND_READY,
   shoot,
   typeIntoComposer,
   writeJson,
@@ -81,18 +81,23 @@ const now = () => Date.now();
 
 // --- node-side file reads ----------------------------------------------------
 
-const STRIP_ANSI = (s) =>
-  s
-    .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '')
-    .replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '')
-    .replace(/\u001b[()][B0]/g, '')
-    .replace(/\u001b[=>]/g, '');
+const STRIP_ANSI = (s) => {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  let out = s.replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '');
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  out = out.replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '');
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  out = out.replace(/\u001b[()][B0]/g, '');
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  out = out.replace(/\u001b[=>]/g, '');
+  return out;
+};
 
 const OSC_OF = (s) => {
   const out = [];
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
   const re = /\u001b\](\d+);([^\u0007\u001b]*)(?:\u0007|\u001b\\)/g;
-  let m;
-  while ((m = re.exec(s))) out.push({ code: m[1], text: m[2] });
+  for (let m = re.exec(s); m !== null; m = re.exec(s)) out.push({ code: m[1], text: m[2] });
   return out;
 };
 
@@ -101,7 +106,8 @@ const OSC_OF = (s) => {
  * copies into the evidence tree goes through here first, so a key-shaped string
  * in the source can only ever be reported as a hit count.
  */
-const SECRET_SHAPE = /(sk-[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9]{8,}|gho_[A-Za-z0-9]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|Bearer\s+[A-Za-z0-9._-]{8,}|AKIA[0-9A-Z]{12,})/g;
+const SECRET_SHAPE =
+  /(sk-[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9]{8,}|gho_[A-Za-z0-9]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|Bearer\s+[A-Za-z0-9._-]{8,}|AKIA[0-9A-Z]{12,})/g;
 const redact = (s) => (s == null ? s : String(s).replace(SECRET_SHAPE, '<redacted-secret-shape>'));
 const secretHits = (s) => (String(s ?? '').match(SECRET_SHAPE) ?? []).length;
 const safe = (value) => JSON.parse(redact(JSON.stringify(value)));
@@ -138,7 +144,14 @@ function chainOf(file) {
       bytes: line.length,
     };
   });
-  return { exists: true, file, bytes: raw.length, lines: lines.length, headerRaw: lines[0], entries };
+  return {
+    exists: true,
+    file,
+    bytes: raw.length,
+    lines: lines.length,
+    headerRaw: lines[0],
+    entries,
+  };
 }
 
 /** The 04-model.md:88 header question: does line 1 satisfy v4 AND v3 at once. */
@@ -178,7 +191,8 @@ function diffChains(before, after) {
   for (let i = 2; i < after.entries.length; i += 1) {
     const prev = after.entries[i - 1];
     const cur = after.entries[i];
-    if (cur.parentId !== prev.id) chainBreaks.push({ index: i, parentId: cur.parentId, prevId: prev.id });
+    if (cur.parentId !== prev.id)
+      chainBreaks.push({ index: i, parentId: cur.parentId, prevId: prev.id });
   }
   return {
     linesBefore: before.lines,
@@ -186,7 +200,9 @@ function diffChains(before, after) {
     addedLines: added.length,
     added,
     duplicateIds: [...idCount].filter(([, n]) => n > 1).map(([id, n]) => ({ id, n })),
-    duplicateTextHeads: [...textCount].filter(([, n]) => n > 1).map(([t, n]) => ({ textHead: t, n })),
+    duplicateTextHeads: [...textCount]
+      .filter(([, n]) => n > 1)
+      .map(([t, n]) => ({ textHead: t, n })),
     headerUnchanged: before.headerRaw === after.headerRaw,
     chainBreaks,
   };
@@ -226,7 +242,9 @@ function readProc(pid) {
     /* not readable */
   }
   try {
-    out.ppid = Number(fs.readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ').at(-1).split(' ')[1]);
+    out.ppid = Number(
+      fs.readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ').at(-1).split(' ')[1]
+    );
   } catch {
     /* gone */
   }
@@ -339,7 +357,10 @@ function indexRowOf(sessionId) {
 /** What pi's own `getSessionName()` would return: last `session_info`.name. */
 function simulateGetSessionName(file) {
   if (!fs.existsSync(file)) return { file, exists: false, name: null };
-  const lines = fs.readFileSync(file, 'utf8').split('\n').filter((l) => l.trim());
+  const lines = fs
+    .readFileSync(file, 'utf8')
+    .split('\n')
+    .filter((l) => l.trim());
   let name = null;
   const hits = [];
   for (let i = lines.length - 1; i >= 0; i -= 1) {
@@ -392,7 +413,13 @@ const rectOf = (expr) => `(() => {
 })()`;
 
 async function realMouseAt(x, y, { clickCount = 1 } = {}) {
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none', buttons: 0 });
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x,
+    y,
+    button: 'none',
+    buttons: 0,
+  });
   for (let i = 1; i <= clickCount; i += 1) {
     await cdp.send('Input.dispatchMouseEvent', {
       type: 'mousePressed',
@@ -429,7 +456,11 @@ const switchButton = (label) => `[...document.querySelectorAll('div[role="group"
  *     first xterm mount is a Vite dev-mode dynamic import and can take a minute,
  *     which is long enough to look like a failed click if the two are merged.
  */
-async function pressPresentation(label, surfaceExpr, { timeoutMs = 90_000, pressMs = 10_000 } = {}) {
+async function pressPresentation(
+  label,
+  surfaceExpr,
+  { timeoutMs = 90_000, pressMs = 10_000 } = {}
+) {
   const attempts = [];
   const before = await cdp.evaluate(rectOf(switchButton(label)));
   if (!before) throw new Error(`no presentation button labelled ${label}`);
@@ -448,7 +479,9 @@ async function pressPresentation(label, surfaceExpr, { timeoutMs = 90_000, press
   const waitSurface = async () => {
     const t0 = now();
     while (now() - t0 < timeoutMs) {
-      const ok = await cdp.evaluate(`(() => { try { return ${surfaceExpr} } catch { return false } })()`);
+      const ok = await cdp.evaluate(
+        `(() => { try { return ${surfaceExpr} } catch { return false } })()`
+      );
       if (ok) return { surface: true, surfaceInMs: now() - t0 };
       await sleep(1000);
     }
@@ -459,7 +492,9 @@ async function pressPresentation(label, surfaceExpr, { timeoutMs = 90_000, press
   let flip = await waitFlip('Input.dispatchMouseEvent');
   attempts.push(flip);
   if (!flip.pressed) {
-    await cdp.evaluate(`(() => { const n = ${switchButton(label)}; if (!n) throw new Error('gone'); n.click(); return true; })()`);
+    await cdp.evaluate(
+      `(() => { const n = ${switchButton(label)}; if (!n) throw new Error('gone'); n.click(); return true; })()`
+    );
     flip = await waitFlip('element.click()');
     attempts.push(flip);
   }
@@ -621,7 +656,9 @@ async function driveTurn(sid, dir, { timeoutMs = 600_000, busyGraceMs = 120_000 
     const answered = await answerCard(dir);
     if (answered) {
       cards.push(answered);
-      console.log(`  card answered: ${String(answered.card.text).replace(/\n/g, ' | ').slice(0, 140)}`);
+      console.log(
+        `  card answered: ${String(answered.card.text).replace(/\n/g, ' | ').slice(0, 140)}`
+      );
     }
     await sleep(1200);
   }
@@ -641,7 +678,9 @@ async function guiTurn(key, sid, prompt, dir) {
   const t0 = await send(prompt);
   const drive = await driveTurn(sid, dir);
   const totalMs = now() - t0;
-  console.log(`[${key}] ok=${drive.ok} in ${Math.round(totalMs / 1000)}s, cards=${drive.cards.length}`);
+  console.log(
+    `[${key}] ok=${drive.ok} in ${Math.round(totalMs / 1000)}s, cards=${drive.cards.length}`
+  );
   await sleep(2500);
   await cdp.evaluate(EXPAND_WORK_GROUPS);
   await sleep(900);
@@ -657,7 +696,8 @@ async function guiTurn(key, sid, prompt, dir) {
     reply: msgs.lastAssistant,
     blocks: msgs.messages,
   };
-  (state.turns ??= {})[key] = {
+  state.turns ??= {};
+  state.turns[key] = {
     prompt,
     turnMs: totalMs,
     ok: drive.ok,
@@ -685,12 +725,15 @@ async function newSession() {
 try {
   state.probe = 'm47-m05-m06.mjs';
   state.criteria = ['MODEL-47', 'MODEL-5', 'MODEL-6'];
-  (state.runs ??= []).push({ stages: [...STAGES], startedAt: new Date().toISOString() });
+  state.runs ??= [];
+  state.runs.push({ stages: [...STAGES], startedAt: new Date().toISOString() });
 
   if (STAGES.has('enter')) {
     state.entry = await enterApp(cdp, ENTER_MAIN_SURFACE);
     state.tapInstalled = await cdp.evaluate(INSTALL_TAP);
-    console.log(`entered: ${JSON.stringify(state.entry)} tap ${JSON.stringify(state.tapInstalled)}`);
+    console.log(
+      `entered: ${JSON.stringify(state.entry)} tap ${JSON.stringify(state.tapInstalled)}`
+    );
     saveState();
   }
 
@@ -735,7 +778,9 @@ try {
       lock: lockState(file),
     };
     saveState();
-    console.log(`before: ${chain.lines} lines, header v4=${state.before.header.v4} v3=${state.before.header.v3}`);
+    console.log(
+      `before: ${chain.lines} lines, header v4=${state.before.header.v4} v3=${state.before.header.v3}`
+    );
   }
 
   if (STAGES.has('tui')) {
@@ -743,11 +788,9 @@ try {
     const tapBefore = await cdp.evaluate(tapState);
     const beforeState = await cdp.evaluate(PRESENTATION_STATE);
     const piBefore = scanPi();
-    const press = await pressPresentation(
-      'TUI',
-      `document.querySelectorAll('.xterm').length > 0`,
-      { timeoutMs: 40_000 }
-    );
+    const press = await pressPresentation('TUI', `document.querySelectorAll('.xterm').length > 0`, {
+      timeoutMs: 40_000,
+    });
     const piProcs = await watchForPi(30_000);
     await sleep(6000);
     const afterState = await cdp.evaluate(PRESENTATION_STATE);
@@ -836,7 +879,9 @@ try {
     let last = -1;
     let quietSince = null;
     while (now() - t0 < 240_000) {
-      const len = await cdp.evaluate(`(() => (window.__m47tap?.terms?.[${JSON.stringify(tid)}] ?? '').length)()`);
+      const len = await cdp.evaluate(
+        `(() => (window.__m47tap?.terms?.[${JSON.stringify(tid)}] ?? '').length)()`
+      );
       if (len !== last) {
         last = len;
         quietSince = now();
@@ -863,7 +908,9 @@ try {
     state.tuiStartupRaw = before.length;
     saveState();
     await shoot(cdp, OUT47, 'model-47-tui-turn.png');
-    console.log(`TUI turn: +${raw.length - before.length} bytes in ${Math.round((now() - t0) / 1000)}s`);
+    console.log(
+      `TUI turn: +${raw.length - before.length} bytes in ${Math.round((now() - t0) / 1000)}s`
+    );
     console.log(STRIP_ANSI(delta).split('\n').slice(-25).join('\n'));
   }
 
@@ -876,7 +923,10 @@ try {
     );
     await sleep(20_000);
     const raw = (await cdp.evaluate(tapRead(tid))) ?? '';
-    fs.appendFileSync(path.join(OUT47, 'model-47-tui-output.txt'), `\n--- poke ---\n${STRIP_ANSI(raw.slice(before.length))}`);
+    fs.appendFileSync(
+      path.join(OUT47, 'model-47-tui-output.txt'),
+      `\n--- poke ---\n${STRIP_ANSI(raw.slice(before.length))}`
+    );
     console.log(STRIP_ANSI(raw.slice(before.length)).split('\n').slice(-30).join('\n'));
   }
 
@@ -907,12 +957,16 @@ try {
       piAfter: scanPi(),
     };
     saveState();
-    console.log(`GUI press via ${press.used}; messages ${last}; pi left ${state.gui1.piAfter.length}`);
+    console.log(
+      `GUI press via ${press.used}; messages ${last}; pi left ${state.gui1.piAfter.length}`
+    );
   }
 
   if (STAGES.has('after')) {
     const file = state.sessionFile;
-    const before = JSON.parse(fs.readFileSync(path.join(OUT47, 'model-47-chain-before.json'), 'utf8'));
+    const before = JSON.parse(
+      fs.readFileSync(path.join(OUT47, 'model-47-chain-before.json'), 'utf8')
+    );
     const chain = chainOf(file);
     fs.writeFileSync(path.join(OUT47, 'model-47-jsonl-after.txt'), fs.readFileSync(file, 'utf8'));
     writeJson(OUT47, 'model-47-chain-after.json', {
@@ -946,12 +1000,7 @@ try {
   }
 
   if (STAGES.has('t3')) {
-    const rec = await guiTurn(
-      't3',
-      state.S,
-      '这两个字段合起来写成 name@version 是什么？',
-      OUT47
-    );
+    const rec = await guiTurn('t3', state.S, '这两个字段合起来写成 name@version 是什么？', OUT47);
     writeJson(OUT47, 'model-47-turn3.json', rec);
     const chain = chainOf(state.sessionFile);
     state.t3 = {
@@ -1046,7 +1095,9 @@ try {
     await sleep(6000);
     state.tuiDispose = { terminalId: state.terminalId, piBefore: before, piAfter: scanPi() };
     saveState();
-    console.log(`disposed ${state.terminalId}: pi ${before.length} -> ${state.tuiDispose.piAfter.length}`);
+    console.log(
+      `disposed ${state.terminalId}: pi ${before.length} -> ${state.tuiDispose.piAfter.length}`
+    );
   }
 
   if (STAGES.has('tuiname')) {
@@ -1064,7 +1115,12 @@ try {
     const delta = raw.slice(before.length);
     fs.writeFileSync(path.join(OUT05, 'model-05-pi-name-command.txt'), STRIP_ANSI(delta));
     const shot = await shoot(cdp, OUT05, 'model-05-rename-in-pi.png');
-    state.piNameCommand = { command: '/name', bytes: delta.length, stripped: STRIP_ANSI(delta).slice(-1500), screenshot: shot };
+    state.piNameCommand = {
+      command: '/name',
+      bytes: delta.length,
+      stripped: STRIP_ANSI(delta).slice(-1500),
+      screenshot: shot,
+    };
     saveState();
     console.log(STRIP_ANSI(delta).split('\n').slice(-30).join('\n'));
   }
@@ -1104,7 +1160,12 @@ try {
     saveState();
     writeJson(OUT05, 'model-05-tui.json', state.tui2);
     console.log(`TUI2 via ${press.used}; OSC ${JSON.stringify(state.tui2.oscTitles)}`);
-    console.log(String(state.tui2.screenText ?? '').split('\n').slice(0, 25).join('\n'));
+    console.log(
+      String(state.tui2.screenText ?? '')
+        .split('\n')
+        .slice(0, 25)
+        .join('\n')
+    );
   }
 
   if (STAGES.has('gui2')) {
@@ -1140,10 +1201,13 @@ try {
     );
     if (!open) throw new Error(`no import project row for ${IMPORT_PROJECT_PATH}`);
     await realMouseAt(open.x, open.y);
-    await cdp.waitFor(`document.body.innerText.includes('全选') || document.body.innerText.includes('Select all')`, {
-      timeoutMs: 60_000,
-      label: 'import session list',
-    });
+    await cdp.waitFor(
+      `document.body.innerText.includes('全选') || document.body.innerText.includes('Select all')`,
+      {
+        timeoutMs: 60_000,
+        label: 'import session list',
+      }
+    );
     await sleep(2500);
     const rowExpr = `[...document.querySelectorAll('label')]
       .find((l) => (l.innerText || '').includes(${JSON.stringify(IMPORT_SESSION_ID)}))`;
@@ -1163,7 +1227,8 @@ try {
       rectOf(`[...document.querySelectorAll('button')]
         .find((b) => !b.disabled && b.offsetParent !== null && /导入所选|Import selected/.test((b.innerText || '').trim()))`)
     );
-    if (!importBtn) throw new Error(`import button not enabled; selection was ${JSON.stringify(selected)}`);
+    if (!importBtn)
+      throw new Error(`import button not enabled; selection was ${JSON.stringify(selected)}`);
     const filesBefore = new Set(fs.readdirSync(SESSIONS_DIR));
     await realMouseAt(importBtn.x, importBtn.y);
     await cdp.waitFor(`/已导入|Imported \\d/.test(document.body.innerText)`, {
@@ -1180,11 +1245,16 @@ try {
       projectPath: IMPORT_PROJECT_PATH,
       sourceSessionId: IMPORT_SESSION_ID,
       sourceFile: `/home/ai/.claude/projects/-home-ai-code-ai-client/${IMPORT_SESSION_ID}.jsonl`,
-      sourceBytes: fs.statSync(`/home/ai/.claude/projects/-home-ai-code-ai-client/${IMPORT_SESSION_ID}.jsonl`).size,
+      sourceBytes: fs.statSync(
+        `/home/ai/.claude/projects/-home-ai-code-ai-client/${IMPORT_SESSION_ID}.jsonl`
+      ).size,
       // Reported as a count only: the source transcript is not this batch's to
       // copy, and a key-shaped string in it must not be re-typed into evidence.
       sourceSecretShapeHits: secretHits(
-        fs.readFileSync(`/home/ai/.claude/projects/-home-ai-code-ai-client/${IMPORT_SESSION_ID}.jsonl`, 'utf8')
+        fs.readFileSync(
+          `/home/ai/.claude/projects/-home-ai-code-ai-client/${IMPORT_SESSION_ID}.jsonl`,
+          'utf8'
+        )
       ),
       importButton: importBtn,
       reportLine,
@@ -1199,7 +1269,10 @@ try {
   if (STAGES.has('importopen')) {
     const file = path.join(SESSIONS_DIR, state.import.importedFile);
     const chain = chainOf(file);
-    fs.writeFileSync(path.join(OUT06, 'model-06-imported-chain.txt'), JSON.stringify(chain.entries, null, 1));
+    fs.writeFileSync(
+      path.join(OUT06, 'model-06-imported-chain.txt'),
+      JSON.stringify(chain.entries, null, 1)
+    );
     writeJson(OUT06, 'model-06-imported-head.json', {
       file,
       bytes: chain.bytes,
@@ -1216,7 +1289,9 @@ try {
       return !!b;
     })()`);
     await sleep(1500);
-    await cdp.evaluate(`(() => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true; })()`);
+    await cdp.evaluate(
+      `(() => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true; })()`
+    );
     await sleep(1500);
     const picked = await evalAsync(
       `const chat = await import(/* @vite-ignore */ '/stores/chatSessions.ts');

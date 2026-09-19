@@ -17,7 +17,7 @@
  */
 import fs from 'node:fs';
 import { Cdp, DEBUG_PORT, sleep } from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
-import { CLICK_SEND, SEND_READY, makeEval, shoot, typeIntoComposer, writeJson } from './pc-lib.mjs';
+import { CLICK_SEND, makeEval, SEND_READY, shoot, typeIntoComposer, writeJson } from './pc-lib.mjs';
 
 const OUT =
   process.env.PC_OUT_DIR ??
@@ -170,7 +170,9 @@ try {
     })()`);
     await sleep(2000);
   } else {
-    await cdp.evaluate(`(() => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true; })()`);
+    await cdp.evaluate(
+      `(() => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true; })()`
+    );
     await sleep(800);
   }
   out.triggerAfter = await cdp.evaluate(TRIGGER);
@@ -256,7 +258,7 @@ try {
     usageReasoning: out.usage?.reasoning ?? null,
     usageHasReasoningKey: out.usage?.hasReasoning ?? null,
   };
-  console.log('\n' + JSON.stringify(out.verdict, null, 1));
+  console.log(`\n${JSON.stringify(out.verdict, null, 1)}`);
 } catch (error) {
   out.error = String(error?.stack ?? error?.message ?? error);
   console.error('probe failed:', out.error);

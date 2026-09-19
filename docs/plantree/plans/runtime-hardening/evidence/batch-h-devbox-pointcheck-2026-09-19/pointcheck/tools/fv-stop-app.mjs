@@ -35,7 +35,8 @@ function candidates() {
     // script. Match on argv[1] being a real path, never on a free-text scan.
     const argv = cmd.split(' ').filter(Boolean);
     if (argv[1] === '-e' || argv[1] === '--eval') continue;
-    const isElectron = /electron\/dist\/electron$/.test(exe) && cmd.includes('remote-debugging-port=9222');
+    const isElectron =
+      /electron\/dist\/electron$/.test(exe) && cmd.includes('remote-debugging-port=9222');
     const isDevNode =
       /\/node$/.test(exe) &&
       (argv.some((a) => a.endsWith('scripts/dev.js')) ||

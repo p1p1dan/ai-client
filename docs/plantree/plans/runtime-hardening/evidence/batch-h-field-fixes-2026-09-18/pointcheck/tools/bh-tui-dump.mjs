@@ -15,15 +15,19 @@ const out = process.argv[2] ?? null;
 const cdp = await connect();
 try {
   const raw = await cdp.evaluate('(() => window.__bhTui ? window.__bhTui.data : "")()');
-  const clean = String(raw)
-    // CSI sequences (colour, cursor moves, erases)
-    .replace(/\[[0-9;?]*[ -/]*[@-~]/g, '')
-    // OSC sequences (hyperlinks, titles, shell integration marks)
-    .replace(/\][^]*(?:|\\)/g, '')
-    // charset selection and single-char escapes
-    .replace(/[()][B0]/g, '')
-    .replace(/[=><]/g, '')
-    .replace(/\r/g, '\n');
+  let clean = String(raw);
+  // CSI sequences (colour, cursor moves, erases)
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  clean = clean.replace(/\[[0-9;?]*[ -/]*[@-~]/g, '');
+  // OSC sequences (hyperlinks, titles, shell integration marks)
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  clean = clean.replace(/\][^]*(?:|\\)/g, '');
+  // charset selection and single-char escapes
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  clean = clean.replace(/[()][B0]/g, '');
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  clean = clean.replace(/[=><]/g, '');
+  clean = clean.replace(/\r/g, '\n');
   if (out) {
     fs.writeFileSync(out, clean);
     console.log(`${out}: ${clean.length} chars`);

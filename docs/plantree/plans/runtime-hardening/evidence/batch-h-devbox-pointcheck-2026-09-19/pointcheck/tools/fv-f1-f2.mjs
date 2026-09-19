@@ -20,7 +20,12 @@
  *    and asserts the popup sits next to it instead of at the viewport origin.
  */
 import fs from 'node:fs';
-import { Cdp, DEBUG_PORT, ENTER_MAIN_SURFACE, sleep } from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
+import {
+  Cdp,
+  DEBUG_PORT,
+  ENTER_MAIN_SURFACE,
+  sleep,
+} from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
 import { EXPAND_WORK_GROUPS, enterApp, makeEval, shoot, writeJson } from './pc-lib.mjs';
 
 const OUT =
@@ -55,7 +60,7 @@ const HITS_2 = [
 
 const HITS_3 = [
   `src/renderer/components/chat/toolCard.ts:${LINE_A2}:import type { FileLinkTarget } from './fileLinks';`,
-  'src/renderer/components/chat/ToolRows.tsx:22:import { HitListPopover } from \'./HitListPopover\';',
+  "src/renderer/components/chat/ToolRows.tsx:22:import { HitListPopover } from './HitListPopover';",
 ].join('\n');
 
 const SEED = (sid) => `
@@ -185,7 +190,13 @@ const out = {
 const persist = () => writeJson(OUT, 'fv-f1-f2.json', out);
 
 const moveMouse = (x, y) =>
-  cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, buttons: 0, pointerType: 'mouse' });
+  cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x,
+    y,
+    buttons: 0,
+    pointerType: 'mouse',
+  });
 
 /**
  * Hover a row and wait for its hit list.
@@ -373,7 +384,7 @@ try {
       allHoverAnchors: out.anchors,
     },
   };
-  console.log('\n' + JSON.stringify(out.verdict.f1.pass ? 'F1 PASS' : 'F1 FAIL'));
+  console.log(`\n${JSON.stringify(out.verdict.f1.pass ? 'F1 PASS' : 'F1 FAIL')}`);
   console.log(JSON.stringify(out.verdict.f2.pass ? 'F2 PASS' : 'F2 FAIL'));
 } catch (error) {
   out.error = String(error?.stack ?? error?.message ?? error);

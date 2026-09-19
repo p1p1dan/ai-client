@@ -238,7 +238,7 @@ function codexRolloutLines({ sessionId, title, startMs }) {
     70
   );
   push('event_msg', { type: 'task_complete', last_agent_message: `done: ${title}` }, 80);
-  return rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
+  return `${rows.map((r) => JSON.stringify(r)).join('\n')}\n`;
 }
 
 /**
@@ -268,7 +268,7 @@ function legacyRolloutLines({ sessionId, title, startMs }) {
       content: [{ type: 'output_text', text: `legacy answer for ${title}` }],
     },
   ];
-  return rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
+  return `${rows.map((r) => JSON.stringify(r)).join('\n')}\n`;
 }
 
 // ------------------------------------------------------------------ main ----

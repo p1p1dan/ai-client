@@ -44,14 +44,20 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Cdp, DEBUG_PORT, ENTER_MAIN_SURFACE, sleep, startDevApp } from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
+import {
+  Cdp,
+  DEBUG_PORT,
+  ENTER_MAIN_SURFACE,
+  sleep,
+  startDevApp,
+} from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
 import {
   CLICK_SEND,
   EXPAND_WORK_GROUPS,
-  PERMISSION_CARD,
-  SEND_READY,
   enterApp,
   makeEval,
+  PERMISSION_CARD,
+  SEND_READY,
   shoot,
   typeIntoComposer,
   writeJson,
@@ -124,13 +130,19 @@ const now = () => Date.now();
 
 function runsLineCount() {
   if (!fs.existsSync(RUNS)) return 0;
-  return fs.readFileSync(RUNS, 'utf8').split('\n').filter((l) => l.trim()).length;
+  return fs
+    .readFileSync(RUNS, 'utf8')
+    .split('\n')
+    .filter((l) => l.trim()).length;
 }
 
 /** Runs appended since `fromLine`, parsed; a truncated last line is skipped. */
 function runsSince(fromLine) {
   if (!fs.existsSync(RUNS)) return [];
-  const lines = fs.readFileSync(RUNS, 'utf8').split('\n').filter((l) => l.trim());
+  const lines = fs
+    .readFileSync(RUNS, 'utf8')
+    .split('\n')
+    .filter((l) => l.trim());
   return lines.slice(fromLine).flatMap((l) => {
     try {
       return [JSON.parse(l)];
@@ -321,7 +333,9 @@ let cardShots = 0;
 async function answerCard() {
   const card = await cdp.evaluate(PERMISSION_CARD).catch(() => null);
   if (!card) return null;
-  const shot = await shoot(cdp, OUT, `model-49-permission-card-${++cardShots}.png`).catch(() => null);
+  const shot = await shoot(cdp, OUT, `model-49-permission-card-${++cardShots}.png`).catch(
+    () => null
+  );
   const clicked = await cdp.evaluate(`(() => {
     const b = [...document.querySelectorAll('button')]
       .find((n) => (n.innerText || '').trim() === ${JSON.stringify(DENY_TEXT)} && n.offsetParent !== null);
@@ -354,7 +368,9 @@ async function driveTurn(sid, { timeoutMs = 600_000, busyGraceMs = 120_000 } = {
     const answered = await answerCard();
     if (answered) {
       cards.push(answered);
-      console.log(`  !! CARD (unexpected for a policy deny): ${answered.card.text.replace(/\n/g, ' | ').slice(0, 160)}`);
+      console.log(
+        `  !! CARD (unexpected for a policy deny): ${answered.card.text.replace(/\n/g, ' | ').slice(0, 160)}`
+      );
     }
     await sleep(1200);
   }
@@ -401,7 +417,12 @@ async function runTurn(key, sid) {
     policyFileSha256: fs.existsSync(POLICY_FILE) ? sha256File(POLICY_FILE) : null,
     policyFileText: fs.existsSync(POLICY_FILE) ? fs.readFileSync(POLICY_FILE, 'utf8').trim() : null,
     turnMs: totalMs,
-    drive: { ok: drive.ok, reason: drive.reason ?? null, trail: drive.trail, status: drive.status ?? null },
+    drive: {
+      ok: drive.ok,
+      reason: drive.reason ?? null,
+      trail: drive.trail,
+      status: drive.status ?? null,
+    },
     approvalCardsSeen: drive.cards,
     permissionActivityRowsPainted: activityRows,
     storePermissionActivity: blocks.permissionActivity,
@@ -413,7 +434,8 @@ async function runTurn(key, sid) {
   };
   writeAudit(spec.file, payload);
   const stateKey = `${key}${process.env.PC_FILE_SUFFIX ?? ''}`;
-  (state.turns ??= {})[stateKey] = {
+  state.turns ??= {};
+  state.turns[stateKey] = {
     sessionId: sid,
     prompt: spec.prompt,
     turnMs: totalMs,
@@ -436,12 +458,15 @@ async function runTurn(key, sid) {
 try {
   state.probe = 'm49-policy.mjs';
   state.criterion = 'MODEL-49';
-  (state.runs ??= []).push({ stages: [...STAGES], startedAt: new Date().toISOString() });
+  state.runs ??= [];
+  state.runs.push({ stages: [...STAGES], startedAt: new Date().toISOString() });
 
   if (STAGES.has('enter')) {
     state.entry = await enterApp(cdp, ENTER_MAIN_SURFACE);
     state.gearAtEntry = await cdp.evaluate(GEAR_TRIGGER);
-    console.log(`entered: ${JSON.stringify(state.entry)}; gear ${JSON.stringify(state.gearAtEntry)}`);
+    console.log(
+      `entered: ${JSON.stringify(state.entry)}; gear ${JSON.stringify(state.gearAtEntry)}`
+    );
     saveState();
   }
 

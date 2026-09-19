@@ -35,9 +35,7 @@ try {
       `JSON.stringify({ exit: window.__bh2.exit, indexed: window.__bh2.indexed })`
     );
     const after = rows();
-    console.log(
-      `t+${((i + 1) * 1.5).toFixed(1)}s rows=${after.length} ${state}`
-    );
+    console.log(`t+${((i + 1) * 1.5).toFixed(1)}s rows=${after.length} ${state}`);
     if (after.length > before.length && JSON.parse(state).indexed.length > 0) break;
   }
 

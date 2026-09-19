@@ -103,7 +103,9 @@ try {
       return { card: t.includes('等待审批') || t.includes('权限') && t.includes('直接允许'), finished: t.includes('turn finished'), rm: t.includes('rm -rf') };
     })()`);
     if (s.card) sawCard = true;
-    samples.push(`${((Date.now() - t0) / 1000).toFixed(1)}s card=${s.card} rm=${s.rm} fin=${s.finished}`);
+    samples.push(
+      `${((Date.now() - t0) / 1000).toFixed(1)}s card=${s.card} rm=${s.rm} fin=${s.finished}`
+    );
     if (s.finished) {
       finished = true;
       break;

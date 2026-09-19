@@ -21,7 +21,12 @@
  *     the resolver accepts is exactly what the criterion leaves open.
  */
 import path from 'node:path';
-import { Cdp, DEBUG_PORT, ENTER_MAIN_SURFACE, sleep } from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
+import {
+  Cdp,
+  DEBUG_PORT,
+  ENTER_MAIN_SURFACE,
+  sleep,
+} from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
 import { EXPAND_WORK_GROUPS, enterApp, makeEval, shoot, writeJson } from './pc-lib.mjs';
 
 const ROOT =
@@ -170,10 +175,22 @@ const cdp = await Cdp.attach(DEBUG_PORT, 120_000);
 cdp.collectRendererProblems();
 const evalAsync = makeEval(cdp, 'm11');
 
-const out = { probe: 'm11-hover.mjs', criterion: 'MODEL-11', startedAt: new Date().toISOString(), hovers: [], clicks: [] };
+const out = {
+  probe: 'm11-hover.mjs',
+  criterion: 'MODEL-11',
+  startedAt: new Date().toISOString(),
+  hovers: [],
+  clicks: [],
+};
 
 async function moveMouse(x, y) {
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, buttons: 0, pointerType: 'mouse' });
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x,
+    y,
+    buttons: 0,
+    pointerType: 'mouse',
+  });
 }
 
 /**
@@ -275,9 +292,18 @@ try {
     const trigger = result.trigger;
     const anchor = await cdp.evaluate(ANCHOR);
     const shot = await shoot(cdp, OUT11, spec.file);
-    const entry = { ...spec, trigger, method: result.method, popup: result.popup, anchor, screenshot: shot };
+    const entry = {
+      ...spec,
+      trigger,
+      method: result.method,
+      popup: result.popup,
+      anchor,
+      screenshot: shot,
+    };
     out.hovers.push(entry);
-    console.log(`[${spec.key}] method=${result.method} hits=${JSON.stringify(result.popup?.hits ?? null)}`);
+    console.log(
+      `[${spec.key}] method=${result.method} hits=${JSON.stringify(result.popup?.hits ?? null)}`
+    );
 
     if (result.popup?.open && (result.popup.hits?.length ?? 0) > spec.clickIndex) {
       const before = await evalAsync(EDITOR_STATE, { label: `${spec.key}: editor before` });
@@ -317,7 +343,13 @@ try {
         OUT11,
         spec.key === 'grep-relative' ? 'model-11-jump.png' : `model-11-jump-${spec.key}.png`
       );
-      out.clicks.push({ key: spec.key, clicked, before, after: afterSettled, screenshot: jumpShot });
+      out.clicks.push({
+        key: spec.key,
+        clicked,
+        before,
+        after: afterSettled,
+        screenshot: jumpShot,
+      });
       console.log(
         `[${spec.key}] clicked "${clicked}" → tab=${afterSettled.activeTabPath} cursor=${JSON.stringify(afterSettled.pendingCursor)} line=${afterSettled.currentCursorLine}`
       );
@@ -335,7 +367,10 @@ try {
   out.verdict = {
     hoverOpenedPopover: out.hovers.filter((h) => h.popup?.open).length,
     hoverMethods: out.hovers.map((h) => ({ key: h.key, method: h.method })),
-    hitsListed: out.hovers.map((h) => ({ key: h.key, hits: h.popup?.hits?.map((x) => x.text) ?? null })),
+    hitsListed: out.hovers.map((h) => ({
+      key: h.key,
+      hits: h.popup?.hits?.map((x) => x.text) ?? null,
+    })),
     relativeClicked: rel?.clicked ?? null,
     relativeTab: rel?.after?.activeTabPath ?? null,
     relativePathOpened: rel?.after?.activeTabPath === EXPECT_REL,
@@ -355,7 +390,7 @@ try {
     popoverAnchoredToRow: out.hovers.every((h) => (h.anchor?.positionerRect?.[1] ?? 0) > 40),
     anchors: out.hovers.map((h) => ({ key: h.key, anchor: h.anchor })),
   };
-  console.log('\n' + JSON.stringify(out.verdict, null, 1));
+  console.log(`\n${JSON.stringify(out.verdict, null, 1)}`);
 } catch (error) {
   out.error = String(error?.stack ?? error?.message ?? error);
   console.error('probe failed:', out.error);

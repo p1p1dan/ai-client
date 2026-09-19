@@ -34,7 +34,10 @@ export function makeEval(cdp, prefix = 'pc') {
         .catch((error) => { window.${key} = { done: true, error: String(error?.stack ?? error?.message ?? error) }; });
       return true;
     })()`);
-    const out = await cdp.waitFor(`window.${key}?.done ? window.${key} : null`, { timeoutMs, label });
+    const out = await cdp.waitFor(`window.${key}?.done ? window.${key} : null`, {
+      timeoutMs,
+      label,
+    });
     if (out.error) throw new Error(`${label}: ${out.error}`);
     return out.value;
   };
@@ -277,7 +280,9 @@ export const settled = (sessionId, timeoutMs) => `
  * cold-start announcement dialog that otherwise covers the composer.
  */
 export async function enterApp(cdp, ENTER_MAIN_SURFACE) {
-  const entered = await cdp.evaluate(ENTER_MAIN_SURFACE).catch((error) => `ERROR: ${error.message}`);
+  const entered = await cdp
+    .evaluate(ENTER_MAIN_SURFACE)
+    .catch((error) => `ERROR: ${error.message}`);
   await cdp.waitFor(`document.querySelector('textarea') !== null`, {
     timeoutMs: 180_000,
     label: 'composer mounted',

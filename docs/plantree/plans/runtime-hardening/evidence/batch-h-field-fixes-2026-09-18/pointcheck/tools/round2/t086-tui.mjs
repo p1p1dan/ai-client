@@ -34,12 +34,18 @@ if (!sessionFile) {
 const terminalId = `bh2-t086-${Date.now()}`;
 const cdp = await connect();
 
-const strip = (s) =>
-  String(s)
-    .replace(/\[[0-9;?]*[ -/]*[@-~]/g, '')
-    .replace(/\][^]*(?:|\\)/g, '')
-    .replace(/[()][B0]/g, '')
-    .replace(/[=><]/g, '');
+const strip = (s) => {
+  let out = String(s);
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  out = out.replace(/\[[0-9;?]*[ -/]*[@-~]/g, '');
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  out = out.replace(/\][^]*(?:|\\)/g, '');
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  out = out.replace(/[()][B0]/g, '');
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI/OSC escape sequences from pty output
+  out = out.replace(/[=><]/g, '');
+  return out;
+};
 
 const transcript = async () => strip(await cdp.evaluate('window.__bh2.data'));
 const dispose = async () =>

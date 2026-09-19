@@ -248,7 +248,9 @@ const report = {
 };
 
 try {
-  const entered = await cdp.evaluate(ENTER_MAIN_SURFACE).catch((error) => `ERROR: ${error.message}`);
+  const entered = await cdp
+    .evaluate(ENTER_MAIN_SURFACE)
+    .catch((error) => `ERROR: ${error.message}`);
   report.welcomeEntry = entered;
   await cdp.waitFor(`document.querySelector('textarea') !== null`, {
     timeoutMs: 120_000,
@@ -327,7 +329,9 @@ try {
     });
     round.cardAtMs = Date.now() - t0;
     round.card = await cdp.evaluate(CARD);
-    round.store = await evalAsync(READ_QUESTION(sessionId), { label: `${mode}: read store question` });
+    round.store = await evalAsync(READ_QUESTION(sessionId), {
+      label: `${mode}: read store question`,
+    });
     console.log(`[${mode}] card up after ${round.cardAtMs}ms`);
     console.log(JSON.stringify(round.card, null, 1));
 
@@ -411,10 +415,12 @@ try {
   }
 
   const [answered, skipped] = report.rounds;
-  const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   report.verdict = {
     cardAppearedBothTimes: report.rounds.length === 2 && report.rounds.every((r) => r.card != null),
-    storeParkedBothTimes: report.rounds.every((r) => r.store?.pending != null && r.store?.block != null),
+    storeParkedBothTimes: report.rounds.every(
+      (r) => r.store?.pending != null && r.store?.block != null
+    ),
     // 2 offered options + the trailing 其他… row.
     cardHadTwoOptionsPlusOther: (answered?.card?.options?.length ?? 0) >= 3,
     hasSkipAndContinue:
@@ -425,7 +431,7 @@ try {
     // The model must echo back the option the user actually chose.
     answerReachedModel:
       answered?.picked != null &&
-      new RegExp(escape(answered.picked), 'i').test(answered.replyFull ?? ''),
+      new RegExp(escapeRegExp(answered.picked), 'i').test(answered.replyFull ?? ''),
     // A skip is a sentence, not silence: the model should say it chose a default.
     skipReachedModel: /默认|default|自行|我选|跳过|未回答|没有回答/i.test(skipped?.replyFull ?? ''),
     // The two rounds must be different questions (no cache echo).
@@ -435,7 +441,7 @@ try {
   };
   report.verdict.pass = Object.values(report.verdict).every((v) => v === true);
   report.rendererProblems = cdp.problems.slice(0, 20);
-  console.log('\n' + JSON.stringify(report.verdict, null, 1));
+  console.log(`\n${JSON.stringify(report.verdict, null, 1)}`);
 } catch (error) {
   report.error = String(error?.stack ?? error?.message ?? error);
   console.error('probe failed:', report.error);

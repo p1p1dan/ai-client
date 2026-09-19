@@ -32,16 +32,25 @@ const EDITOR_STATE = `
   };
 `;
 
-const move = (x, y) => cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, buttons: 0, pointerType: 'mouse' });
+const move = (x, y) =>
+  cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x,
+    y,
+    buttons: 0,
+    pointerType: 'mouse',
+  });
 
 async function hoverAndClick(triggerIndex, hitIndex) {
   await move(5, 5);
   await sleep(700);
-  const t = (await cdp.evaluate(`(() => [...document.querySelectorAll('[data-slot="preview-card-trigger"]')].map((n) => {
+  const t = (
+    await cdp.evaluate(`(() => [...document.querySelectorAll('[data-slot="preview-card-trigger"]')].map((n) => {
     const b = n.firstElementChild ?? n;
     const r = b.getBoundingClientRect();
     return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-  }))()`))[triggerIndex];
+  }))()`)
+  )[triggerIndex];
   await move(t.x - 6, t.y);
   await sleep(150);
   await move(t.x, t.y);
@@ -72,7 +81,13 @@ try {
   await sleep(8000);
   const afterFirst = await evalAsync(EDITOR_STATE, { label: 'after first open' });
   const shot1 = await shoot(cdp, OUT11, 'model-11-jump-abs-first.png');
-  out.rounds.push({ order: 'first', kind: 'absolute', clicked: first, state: afterFirst, screenshot: shot1 });
+  out.rounds.push({
+    order: 'first',
+    kind: 'absolute',
+    clicked: first,
+    state: afterFirst,
+    screenshot: shot1,
+  });
   console.log('first(absolute):', JSON.stringify(afterFirst));
 
   // Round 2: the RELATIVE hit, now the SECOND open into a mounted editor.
@@ -80,7 +95,13 @@ try {
   await sleep(8000);
   const afterSecond = await evalAsync(EDITOR_STATE, { label: 'after second open' });
   const shot2 = await shoot(cdp, OUT11, 'model-11-jump-rel-second.png');
-  out.rounds.push({ order: 'second', kind: 'relative', clicked: second, state: afterSecond, screenshot: shot2 });
+  out.rounds.push({
+    order: 'second',
+    kind: 'relative',
+    clicked: second,
+    state: afterSecond,
+    screenshot: shot2,
+  });
   console.log('second(relative):', JSON.stringify(afterSecond));
 } catch (error) {
   out.error = String(error?.stack ?? error?.message ?? error);

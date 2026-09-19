@@ -19,19 +19,24 @@
  * scanning /proc, never `pkill -f`.
  */
 import path from 'node:path';
-import { Cdp, DEBUG_PORT, ENTER_MAIN_SURFACE, sleep } from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
+import {
+  Cdp,
+  DEBUG_PORT,
+  ENTER_MAIN_SURFACE,
+  sleep,
+} from '/home/ai/code/ai-client/scripts/h21-cdp.mjs';
 import {
   ALLOW_TEXT,
   CARD,
   CLICK_SEND,
   CONTINUE_TEXT,
   DOM_SUMMARY,
+  enterApp,
+  makeEval,
   OTHER_TEXT,
   PERMISSION_CARD,
   SEND_READY,
   SKIP_TEXT,
-  enterApp,
-  makeEval,
   settled,
   shoot,
   storeSummary,
@@ -113,7 +118,8 @@ try {
   const A = afterNew.sid;
   report.steps.sessionA = { before, after: afterNew, sessionId: A };
   if (!A) throw new Error('no active session after 新建对话');
-  if (afterNew.messageCount !== 0) throw new Error(`session A is not empty (${afterNew.messageCount})`);
+  if (afterNew.messageCount !== 0)
+    throw new Error(`session A is not empty (${afterNew.messageCount})`);
 
   // --- step 2: park A's question, do NOT answer ----------------------------
   console.log('[A] sending ask prompt');
@@ -145,7 +151,9 @@ try {
   report.steps.bCard = { atMs: bCardMs, card: await cdp.evaluate(CARD) };
   report.steps.pendingTwo = await readPending();
   report.steps.bCardScreenshot = await shoot(cdp, OUT19, 'model-19-b-card.png');
-  console.log(`[B] card up after ${bCardMs}ms; pending=${report.steps.pendingTwo.pendingQuestions.length}`);
+  console.log(
+    `[B] card up after ${bCardMs}ms; pending=${report.steps.pendingTwo.pendingQuestions.length}`
+  );
 
   // --- step 4: back to A — the card must still be ANSWERABLE ---------------
   report.steps.switchBackToA = await switchTo(cdp, evalAsync, A);
@@ -218,7 +226,9 @@ try {
   report.steps.bTurn = { skipToSettleMs: now() - skipT0, totalMs: now() - sentB.t0, ...settledB };
   report.turns.push({ id: 'B-ask', ms: bCardMs }, { id: 'B-skip', ms: now() - skipT0 });
   report.steps.pendingFinal = await readPending();
-  console.log(`[B] settled=${settledB.settled} pending=${report.steps.pendingFinal.pendingQuestions.length}`);
+  console.log(
+    `[B] settled=${settledB.settled} pending=${report.steps.pendingFinal.pendingQuestions.length}`
+  );
 
   report.model19 = {
     twoCardsParkedAtOnce: report.steps.pendingTwo.pendingQuestions.length === 2,
@@ -238,7 +248,7 @@ try {
     pendingEmptyAtEnd: report.steps.pendingFinal.pendingQuestions.length === 0,
   };
   report.model19.pass = Object.values(report.model19).every((v) => v === true || Array.isArray(v));
-  console.log('\nMODEL-19 ' + JSON.stringify(report.model19, null, 1));
+  console.log(`\nMODEL-19 ${JSON.stringify(report.model19, null, 1)}`);
   writeJson(OUT19, 'report.json', {
     probe: report.probe,
     criterion: 'MODEL-19',
@@ -292,7 +302,11 @@ try {
     timeoutMs: 520_000,
     label: 'A permission turn settled',
   });
-  report.steps.permissionTurn = { cardAtMs: permCardMs, totalMs: now() - sentPerm.t0, ...settledPerm };
+  report.steps.permissionTurn = {
+    cardAtMs: permCardMs,
+    totalMs: now() - sentPerm.t0,
+    ...settledPerm,
+  };
   report.turns.push({ id: 'A-permission', ms: now() - sentPerm.t0 });
   console.log(`[A] permission turn settled=${settledPerm.settled}`);
 
@@ -301,7 +315,12 @@ try {
   report.steps.beforeScreenshot = await shoot(cdp, OUT23, 'model-23-replay-前.png');
   const beforeStore = await evalAsync(storeSummary(A), { label: 'store summary before' });
   const beforeDom = await cdp.evaluate(DOM_SUMMARY);
-  writeJson(OUT23, 'model-23-before.json', { at: 'live', sessionId: A, store: beforeStore, dom: beforeDom });
+  writeJson(OUT23, 'model-23-before.json', {
+    at: 'live',
+    sessionId: A,
+    store: beforeStore,
+    dom: beforeDom,
+  });
 
   // --- step 10a: the light round trip B → A --------------------------------
   report.steps.switchAwayToB = await switchTo(cdp, evalAsync, B);

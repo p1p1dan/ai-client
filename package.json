@@ -119,7 +119,7 @@
     "node": ">=20"
   },
   "lint-staged": {
-    "*.{js,ts,jsx,tsx,json,css}": [
+    "*.{js,ts,jsx,tsx,mjs,cjs,json,css}": [
       "biome check --write --no-errors-on-unmatched"
     ]
   },
