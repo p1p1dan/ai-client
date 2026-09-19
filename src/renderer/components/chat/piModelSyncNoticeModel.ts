@@ -19,7 +19,7 @@
  * a title, one sentence of cause, one sentence of next step, and exactly ONE
  * button. Every string here is a DICTIONARY KEY, not display text — this is a
  * plain `.ts` with no translator in scope, so the component calls `t()` on
- * each field. `piModelSyncNotice.test.ts` asserts each key has a Chinese
+ * each field. `piModelSyncNoticeModel.test.ts` asserts each key has a Chinese
  * entry, because the renderer-wide scan (`i18nCoverage.test.ts`) only sees a
  * translator call whose argument is a literal, and every call here passes a
  * field of the view instead.

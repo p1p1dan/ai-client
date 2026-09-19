@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { toastManager } from '@/components/ui/toast';
 import { useSignInRequest } from '@/hooks/useSignInRequest';
 import { useI18n } from '@/i18n';
-import { PI_MODEL_SYNC_DETAIL_LABEL, piModelSyncNoticeView } from './piModelSyncNotice';
+import { PI_MODEL_SYNC_DETAIL_LABEL, piModelSyncNoticeView } from './piModelSyncNoticeModel';
 import { refreshPiModelCatalog } from './usePiModelCatalog';
 
 /**
@@ -24,7 +24,7 @@ import { refreshPiModelCatalog } from './usePiModelCatalog';
  * time they notice the menu is empty, and there is no way to get it back. The
  * card stays until a sync succeeds, and disappears by itself when one does.
  *
- * Copy and the choice of button come from `piModelSyncNotice.ts`, which is
+ * Copy and the choice of button come from `piModelSyncNoticeModel.ts`, which is
  * pure and tested; everything here is wiring.
  */
 export function PiModelSyncNotice({ className }: { className?: string }) {

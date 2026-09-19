@@ -5,7 +5,7 @@ import {
   PI_MODEL_SYNC_DETAIL_LABEL,
   PI_MODEL_SYNC_NOTICE_VIEWS,
   piModelSyncNoticeView,
-} from '../piModelSyncNotice';
+} from '../piModelSyncNoticeModel';
 
 /**
  * The copy and the choice of button for "you signed in and your company's
