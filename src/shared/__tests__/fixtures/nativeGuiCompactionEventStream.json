@@ -46,6 +46,20 @@
     "requestId": "turn-1"
   },
   {
+    "type": "usage.updated",
+    "sessionId": "logical-gui",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    },
+    "requestId": "turn-1"
+  },
+  {
     "type": "tool.started",
     "sessionId": "logical-gui",
     "payload": {
@@ -147,6 +161,20 @@
       "messageId": "asst-turn-1-4",
       "blockId": "asst-turn-1-4-text",
       "text": "Starting fresh — the note says the answer is 42."
+    },
+    "requestId": "turn-1"
+  },
+  {
+    "type": "usage.updated",
+    "sessionId": "logical-gui",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
     },
     "requestId": "turn-1"
   },

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildPiInterimUsagePayload,
   buildPiUsagePayload,
   deriveCacheHitRate,
+  isPendingUsagePayload,
   type PiTurnUsage,
   readPiUsagePayload,
 } from '../piUsage';
@@ -29,6 +31,7 @@ describe('buildPiUsagePayload', () => {
       cacheWrite: 1_200,
       totalTokens: 22_680,
       costUsd: 0.0504,
+      reasoning: 300,
       context: { tokens: 21_400, contextWindow: 200_000, percent: 10.7 },
     });
   });
@@ -78,6 +81,32 @@ describe('buildPiUsagePayload', () => {
       totalTokens: 0,
       costUsd: 0,
     });
+  });
+});
+
+describe('the reasoning/thinking token count (`Usage.reasoning`)', () => {
+  it('carries it through when the provider reports it', () => {
+    expect(buildPiUsagePayload(SDK_USAGE, SDK_CONTEXT)?.reasoning).toBe(300);
+  });
+
+  it('omits it rather than inventing zero when the provider never reported it', () => {
+    expect(buildPiUsagePayload({ input: 10, output: 5 })).not.toHaveProperty('reasoning');
+  });
+
+  it('keeps a genuinely reported zero distinct from "not reported"', () => {
+    // Faithful passthrough at this layer: whether the `0` came from a
+    // provider that truly measured zero, or from one of pi-ai's OpenAI-style
+    // adapters defaulting an absent breakdown to `0`, this module cannot tell
+    // the two apart (see the field's doc comment on `PiTurnUsage`) — so it
+    // must not silently drop a `0` it WAS handed. Deciding whether `0` is
+    // worth printing is `formatReasoningTokensClause`'s job, not this one's.
+    expect(buildPiUsagePayload({ input: 10, output: 5, reasoning: 0 })?.reasoning).toBe(0);
+  });
+
+  it('round-trips through readPiUsagePayload, including the absent case', () => {
+    const built = buildPiUsagePayload(SDK_USAGE, SDK_CONTEXT);
+    expect(readPiUsagePayload(built)?.reasoning).toBe(300);
+    expect(readPiUsagePayload({ input: 10, output: 5 })).not.toHaveProperty('reasoning');
   });
 });
 
@@ -255,5 +284,63 @@ describe('decision 005 · the delegated slice rides the same payload', () => {
 
   it('is absent from a payload an older build produced', () => {
     expect(readPiUsagePayload({ input: 1, output: 1 })).not.toHaveProperty('delegated');
+  });
+});
+
+describe('2026-09-19 · the first-byte tick', () => {
+  /**
+   * What Anthropic actually puts on the wire at first byte, as pi-ai stores it
+   * on the partial message: a real prompt side, and an `output` that is the
+   * placeholder `1` for the whole stream.
+   */
+  const FIRST_BYTE_USAGE = {
+    input: 431,
+    output: 1,
+    cacheRead: 0,
+    cacheWrite: 10_656,
+    totalTokens: 11_088,
+    cost: { input: 0.0013, output: 0.000015, cacheRead: 0, cacheWrite: 0.04, total: 0.0413 },
+  };
+
+  it('blocks the `output_tokens: 1` placeholder instead of reporting it', () => {
+    const payload = buildPiInterimUsagePayload(FIRST_BYTE_USAGE);
+    // The one thing this must never do. A `1` here is a `↓ 1 tokens` that
+    // would sit on screen for the length of every turn.
+    expect(payload?.output).toBe(0);
+    // Cost is derived from the completion side upstream, so it is unmeasured
+    // for the same reason.
+    expect(payload?.costUsd).toBe(0);
+  });
+
+  it('reports the prompt side verbatim, and re-derives the total from it alone', () => {
+    const payload = buildPiInterimUsagePayload(FIRST_BYTE_USAGE);
+    expect(payload).toMatchObject({ input: 431, cacheRead: 0, cacheWrite: 10_656 });
+    // NOT pi-ai's own `totalTokens`, which already has the placeholder in it.
+    expect(payload?.totalTokens).toBe(431 + 10_656);
+  });
+
+  it('marks itself pending so settled-bill surfaces can refuse it', () => {
+    expect(isPendingUsagePayload(buildPiInterimUsagePayload(FIRST_BYTE_USAGE))).toBe(true);
+    // A settled payload carries no mark at all, so a consumer that folds both
+    // cannot be left holding a stale one.
+    expect(buildPiUsagePayload(SDK_USAGE)).not.toHaveProperty('pending');
+    expect(isPendingUsagePayload(buildPiUsagePayload(SDK_USAGE))).toBe(false);
+    expect(isPendingUsagePayload(undefined)).toBe(false);
+  });
+
+  it('says nothing when the provider reported no prompt size', () => {
+    // A provider that reports usage only at the end. An event here would claim
+    // a measurement of zero, which is not what happened.
+    expect(
+      buildPiInterimUsagePayload({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
+    ).toBeNull();
+    expect(buildPiInterimUsagePayload(undefined)).toBeNull();
+  });
+
+  it('survives the read path the turn head uses, with no `↓` half to report', () => {
+    const read = readPiUsagePayload(buildPiInterimUsagePayload(FIRST_BYTE_USAGE));
+    // `readPiUsagePayload` requires both halves to be numbers; the forced zero
+    // is what keeps the prompt side readable at all.
+    expect(read).toMatchObject({ input: 431, output: 0, cacheWrite: 10_656 });
   });
 });

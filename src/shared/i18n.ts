@@ -2371,13 +2371,11 @@ export const zhTranslations: Record<string, string> = {
     'AI 会在 {{folder}} 里干活，直接说你想做什么。',
   'Just type. This chat runs in a private temporary folder.':
     '直接输入即可，这次对话会在一个私有的临时目录里进行。',
-  'Waiting for model': '等待模型响应',
-  'Writing response': '正在输出',
-  'Running tool': '执行工具',
-  'Waiting for confirmation': '等待确认',
+  // The composer's own activity line was removed on 2026-09-19 (the turn head
+  // above the reply carries the clock now). These six of its phase words had no
+  // second consumer and went with it; `Retrying`, `Thinking` and `Stopping` did
+  // — the run panel still says all three.
   Retrying: '正在重试',
-  'Retry in {{seconds}}s': '{{seconds}} 秒后重试',
-  'Waiting for retry response': '等待重试响应',
   'Chat file changes': '聊天中的文件修改',
   'Edit shows modification diffs; Write shows content only. Bash changes are not captured.':
     'Edit 显示修改差异；Write 仅显示写入内容。暂不捕获 Bash 的文件修改。',
@@ -2745,8 +2743,8 @@ export const zhTranslations: Record<string, string> = {
     '到「设置 · Pi」把 AI 服务迁移或补上，这个会话就能继续；也可以在输入框上方改用一个本应用已有的模型。',
   'Model is not available here': '本应用没有这个模型',
   // `PiModelSyncNotice` — the login-time managed model sync failed. The keys
-  // are read through `t(view.title)` from `piModelSyncNotice.ts`, so the
-  // renderer-wide literal scan cannot see them; `piModelSyncNotice.test.ts`
+  // are read through `t(view.title)` from `piModelSyncNoticeModel.ts`, so the
+  // renderer-wide literal scan cannot see them; `piModelSyncNoticeModel.test.ts`
   // asserts every one of them is present here.
   'Your company models could not be loaded': '没能取到公司发给你的模型',
   'This app could not reach the model service, so none of the models your company provides are in the list yet.':
@@ -2902,6 +2900,28 @@ export const zhTranslations: Record<string, string> = {
   'Worked for {{minutes}}m {{seconds}}s': '已工作 {{minutes}} 分 {{seconds}} 秒',
   'Worked for {{minutes}}m': '已工作 {{minutes}} 分',
   '{{count}} steps processed': '已处理 {{count}} 个步骤',
+  // The running half of the same head (2026-09-18). `Working` above stays as
+  // the no-clock fallback; these three carry the seconds the field report was
+  // about — a 50-second wait whose only evidence was a counter above the
+  // composer.
+  'Working {{seconds}}s': '工作中 {{seconds}} 秒',
+  'Working {{minutes}}m {{seconds}}s': '工作中 {{minutes}} 分 {{seconds}} 秒',
+  'Working {{minutes}}m': '工作中 {{minutes}} 分',
+  // The head's live clauses. `tokens` stays English: it is the unit's own name
+  // and the term the user asked for by name, the same treatment `Pi` and the
+  // model ids get. The arrows are decoration applied at the call site, exactly
+  // as `replyCharsLabel` does for 「↓ 128 字符」.
+  tokens: 'tokens',
+  'Thinking {{seconds}}s': '思考 {{seconds}} 秒',
+  'Thinking {{minutes}}m {{seconds}}s': '思考 {{minutes}} 分 {{seconds}} 秒',
+  'Thinking {{minutes}}m': '思考 {{minutes}} 分',
+  // The reasoning-token-count fallback for the same clause (`turnProgress.ts`'s
+  // `formatReasoningTokensClause`) — used when the turn's duration is
+  // unmeasured (the claude channel's normal shape) but `Usage.reasoning` still
+  // came through. `{{count}}` arrives pre-formatted (`formatTokenTotal`,
+  // "1.2k"-style), same convention as `'{{count}} tokens remaining'` elsewhere
+  // in this catalog (`ComposerUsageChip.tsx`).
+  'Thinking {{count}} tokens': '思考 {{count}} tokens',
   '{{month}}/{{day}}': '{{month}} 月 {{day}} 日',
 
   // T023 — copy the RUNTIME produces. It reaches here as an identifier

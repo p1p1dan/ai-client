@@ -207,8 +207,9 @@ export function turnProcessToneClass(): string {
 }
 
 /**
- * Tier 2 — the work group's own head: 「工作中」 while the turn runs, 「已工作 57
- * 秒」 once it stops, plus the chevron.
+ * Tier 2 — the turn's progress head: 「工作中 47 秒 · ↑ 12.0k tokens · ↓ 1.3k
+ * tokens · 思考 20 秒」 while the turn runs, 「已工作 57 秒」 once it stops, plus
+ * the chevron.
  *
  * `list-none` + `marker:content-none` strips the `<summary>` disclosure
  * triangle, which points the wrong way in half the browsers that draw it and
@@ -217,9 +218,14 @@ export function turnProcessToneClass(): string {
  *
  * `text-meta` keeps it in the same size domain as the status row and the
  * timestamps — it is a label about the turn, not content of it.
+ *
+ * `tabular-nums` joined it on 2026-09-18, when the head started carrying a
+ * ticking clock: the same reason `turnHeadClass()` below has always had it, and
+ * the same defect it prevents — a proportional `1` makes the row re-measure
+ * every second underneath a stick-to-bottom follower.
  */
 export function turnWorkGroupSummaryClass(): string {
-  return 'flex min-w-0 cursor-pointer list-none items-center gap-1.5 text-meta text-muted-foreground marker:content-none';
+  return 'flex min-w-0 cursor-pointer list-none items-center gap-1.5 text-meta tabular-nums text-muted-foreground marker:content-none';
 }
 
 /**

@@ -79,6 +79,20 @@
     "requestId": "turn-1"
   },
   {
+    "type": "usage.updated",
+    "sessionId": "logical-gui",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    },
+    "requestId": "turn-1"
+  },
+  {
     "type": "message.completed",
     "sessionId": "logical-gui",
     "payload": {

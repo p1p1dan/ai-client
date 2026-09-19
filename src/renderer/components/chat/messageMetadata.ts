@@ -150,9 +150,17 @@ export function reduceMessageMetadata(
       const messageId = sid ? prev.bySessionLastAssistant[sid] : undefined;
       if (!messageId) return prev;
       const existing = prev.byMessage[messageId] ?? {};
+      // 2026-09-19: the native projector sends ONE tick per model call at first
+      // byte, carrying the prompt side only (`pending: true` — see
+      // `buildPiInterimUsagePayload`). It IS folded, because the turn progress
+      // head's `↑` is the whole point of it; what does not get stored is the
+      // mark itself. The merge never clears keys, so a `pending` left in the
+      // record would outlive the numbers it qualifies and describe the settled
+      // bill that overwrites them a few seconds later.
+      const { pending: _pending, ...merged } = { ...(existing.usage ?? {}), ...payload };
       const byMessage = {
         ...prev.byMessage,
-        [messageId]: { ...existing, usage: { ...(existing.usage ?? {}), ...payload } },
+        [messageId]: { ...existing, usage: merged },
       };
       return { ...prev, byMessage };
     }

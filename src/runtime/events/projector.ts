@@ -5,7 +5,11 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { isInternalMessage } from '../../shared/internalMessage.ts';
 import { applyTurnUsage, initTurnRollup, viewTurnRollup } from '../../shared/piTurnRollup.ts';
-import { buildPiUsagePayload, type PiTurnUsage } from '../../shared/piUsage.ts';
+import {
+  buildPiInterimUsagePayload,
+  buildPiUsagePayload,
+  type PiTurnUsage,
+} from '../../shared/piUsage.ts';
 import { reviewFromToolResult } from '../../shared/sessionFileChange.ts';
 import type {
   MessageAttachmentMeta,
@@ -140,6 +144,18 @@ export class RuntimeEventProjector {
    * delegation even though nothing about the parent turn's context changed.
    */
   private lastContextUsage: { tokens: number; contextWindow: number; percent: number } | undefined;
+  /**
+   * The usage block off the message currently streaming, kept so the interim
+   * tick can be emitted from a later event than the one that carried it.
+   *
+   * pi reports usage on the PARTIAL message (`message_update`), but the
+   * assistant message this projector mints is opened by its first content —
+   * which for a tool-first turn is `tool_execution_start`, an event that
+   * carries no usage at all. Cleared with the message it belongs to.
+   */
+  private streamingUsage: unknown;
+  /** The message the interim tick was already emitted for; one per model call. */
+  private interimUsageFor: string | undefined;
   private readonly contextWindow: number | undefined;
   private readonly userTurn: UserTurnEcho;
   constructor(
@@ -250,8 +266,30 @@ export class RuntimeEventProjector {
       });
     }
   }
+  /**
+   * Light the `↑` on the turn progress head as soon as the provider reports a
+   * prompt size, instead of at `turn_end` (2026-09-19 user decision).
+   *
+   * Emitted at most once per assistant message, and only once that message has
+   * been minted — the renderer attributes a `usage.updated` to whichever
+   * assistant message is open (`messageMetadata.ts`'s `bySessionLastAssistant`),
+   * so a tick sent before this call's message existed would be filed against
+   * the PREVIOUS turn and make its settled total jump.
+   *
+   * `buildPiInterimUsagePayload` owns what the payload may claim; see its note
+   * on the `output_tokens: 1` placeholder.
+   */
+  private interimUsage(): void {
+    const messageId = this.assistant;
+    if (!messageId || this.interimUsageFor === messageId) return;
+    const payload = buildPiInterimUsagePayload(this.streamingUsage);
+    if (!payload) return;
+    this.interimUsageFor = messageId;
+    this.emit({ type: 'usage.updated', sessionId: this.sink.sessionId, payload });
+  }
   private closeAssistant(completed = true): void {
     this.model = undefined;
+    this.streamingUsage = undefined;
     if (!this.assistant) return;
     const messageId = this.assistant;
     if (this.thinkingOpen) {
@@ -308,7 +346,13 @@ export class RuntimeEventProjector {
           this.announceAssistant(`${event.message.provider}/${event.message.model}`);
         break;
       case 'message_update':
+        // Before `deltas`, which is what mints the message the tick is filed
+        // against: the partial carries the prompt counts Anthropic sent with
+        // the very first frame of this call. Only an assistant message has a
+        // `usage` block at all — `deltas` applies the same role test.
+        if (event.message.role === 'assistant') this.streamingUsage = event.message.usage;
         this.deltas(event.message);
+        this.interimUsage();
         break;
       case 'message_end':
         if (event.message.role === 'assistant') {
@@ -337,6 +381,10 @@ export class RuntimeEventProjector {
         break;
       case 'tool_execution_start': {
         const messageId = this.ensureAssistant();
+        // A turn whose first output is a tool call mints its message HERE, so
+        // this is the earliest point at which the tick has somewhere to go.
+        // No-op once `message_update` already sent one for this message.
+        this.interimUsage();
         this.toolMessages.set(event.toolCallId, messageId);
         this.emit({
           type: 'tool.started',

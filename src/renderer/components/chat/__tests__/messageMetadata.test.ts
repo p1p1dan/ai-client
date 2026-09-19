@@ -209,6 +209,68 @@ describe('reduceMessageMetadata (T-06)', () => {
     expect(reg.byMessage.a1.usage).not.toHaveProperty('turn_output_tokens_display');
   });
 
+  // 2026-09-19: the native projector's first-byte tick is the OPPOSITE case to
+  // D33 above and has to stay tellable apart from it. It is a measurement (the
+  // prompt side, reported by the provider before it starts writing), so it IS
+  // folded — that is what lights the turn head's `↑` during the wait. Only the
+  // `pending` mark is withheld, because the merge never clears keys and the
+  // mark would end up describing the settled bill that overwrites the numbers.
+  it('folds the first-byte pending tick, keeps the mark out, and lets the bill overwrite it', () => {
+    let reg = reduceMessageMetadata(
+      initialMetadataRegistry,
+      event('message.started', {
+        sessionId: 's1',
+        timestamp: 1000,
+        payload: { messageId: 'a1', role: 'assistant' },
+      }),
+      'sonnet'
+    );
+    reg = reduceMessageMetadata(
+      reg,
+      event('usage.updated', {
+        sessionId: 's1',
+        payload: {
+          input: 431,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 10_656,
+          totalTokens: 11_087,
+          costUsd: 0,
+          pending: true,
+        },
+      })
+    );
+    // The `↑` half is readable immediately…
+    expect(reg.byMessage.a1.usage).toMatchObject({ input: 431, cacheWrite: 10_656 });
+    // …and nothing downstream is told these numbers are final.
+    expect(reg.byMessage.a1.usage).not.toHaveProperty('pending');
+
+    // The settled bill for the same call overwrites every column rather than
+    // adding to it, so the figure corrects itself instead of doubling.
+    reg = reduceMessageMetadata(
+      reg,
+      event('usage.updated', {
+        sessionId: 's1',
+        payload: {
+          input: 431,
+          output: 1_321,
+          cacheRead: 0,
+          cacheWrite: 10_656,
+          totalTokens: 12_408,
+          costUsd: 0.04,
+        },
+      })
+    );
+    expect(reg.byMessage.a1.usage).toEqual({
+      input: 431,
+      output: 1_321,
+      cacheRead: 0,
+      cacheWrite: 10_656,
+      totalTokens: 12_408,
+      costUsd: 0.04,
+    });
+  });
+
   it('ignores usage.updated with no prior assistant index for the session', () => {
     const next = reduceMessageMetadata(
       initialMetadataRegistry,

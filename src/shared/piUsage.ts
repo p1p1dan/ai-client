@@ -50,6 +50,24 @@ export type PiTurnUsage = {
    * `$` next to it.
    */
   costUsd: number;
+  /**
+   * `Usage.reasoning` — provider-reported reasoning/thinking tokens, already
+   * counted inside `output` (pi-ai's own contract: "subset of `output`", see
+   * `pi-ai`'s `types.d.ts`). A breakdown of that figure, never a quantity to
+   * add on top of it.
+   *
+   * Optional, and NOT defaulted to `0` here: pi-ai's Anthropic adapter only
+   * sets it `if (thinkingTokens != null)`, so an absent field is a real "this
+   * call did not report a breakdown" — same rule `context.tokens` follows for
+   * "Pi cannot tell yet". Note for callers: pi-ai's OpenAI-style adapters take
+   * the opposite approach and coerce a missing breakdown to a literal `0`
+   * (`rawUsage.completion_tokens_details?.reasoning_tokens || 0`), so `0`
+   * reaches THIS module already unable to tell "measured zero" from "field not
+   * supported" on those channels — a distinction this module cannot recover
+   * because pi-ai collapsed it upstream. Display sites should treat `0` (and
+   * absence) as nothing to report; see `formatReasoningTokensClause`.
+   */
+  reasoning?: number;
 };
 
 /** `AgentSession.getContextUsage()`, passed through without re-derivation. */
@@ -83,6 +101,15 @@ export type PiUsagePayload = PiTurnUsage & {
    * conversation, which is not the same as "delegates cost nothing".
    */
   delegated?: PiTurnUsage;
+  /**
+   * 2026-09-19 — this payload reports the PROMPT side of a model call that has
+   * not finished yet. See {@link buildPiInterimUsagePayload}.
+   *
+   * Only ever `true`: a settled payload omits the key entirely, so the merge a
+   * consumer does (`{ ...existing, ...payload }`) cannot leave the mark behind
+   * on numbers that have since been billed.
+   */
+  pending?: true;
 };
 
 /** The two arcs of an occupancy ring, plus the figures printed beside them. */
@@ -228,6 +255,10 @@ export function buildPiUsagePayload(
   if (!source) return null;
   const cost = record(source.cost);
   const context = readContextUsage(contextUsage);
+  // Not `?? 0`: an absent `reasoning` is "this call reported no breakdown",
+  // and folding it into a `0` would make it indistinguishable from a provider
+  // that measured zero (see the field's doc comment on `PiTurnUsage`).
+  const reasoning = finiteNumber(source.reasoning);
   return {
     input: finiteNumber(source.input) ?? 0,
     output: finiteNumber(source.output) ?? 0,
@@ -235,6 +266,7 @@ export function buildPiUsagePayload(
     cacheWrite: finiteNumber(source.cacheWrite) ?? 0,
     totalTokens: finiteNumber(source.totalTokens) ?? 0,
     costUsd: finiteNumber(cost?.total) ?? 0,
+    ...(reasoning !== null ? { reasoning } : {}),
     ...(context ? { context } : {}),
     // A2: a sibling of the turn totals, never a substitute for them.
     ...(sessionUsage ? { session: sessionUsage } : {}),
@@ -261,6 +293,7 @@ export function readPiUsagePayload(payload: unknown): PiUsagePayload | null {
   const context = readContextUsage(source.context);
   const session = readSessionUsage(source.session);
   const delegated = readDelegatedUsage(source.delegated);
+  const reasoning = finiteNumber(source.reasoning);
   return {
     input,
     output,
@@ -268,6 +301,7 @@ export function readPiUsagePayload(payload: unknown): PiUsagePayload | null {
     cacheWrite: finiteNumber(source.cacheWrite) ?? 0,
     totalTokens: finiteNumber(source.totalTokens) ?? 0,
     costUsd: finiteNumber(source.costUsd) ?? 0,
+    ...(reasoning !== null ? { reasoning } : {}),
     ...(context ? { context } : {}),
     ...(session ? { session } : {}),
     ...(delegated ? { delegated } : {}),
@@ -293,4 +327,74 @@ function readDelegatedUsage(value: unknown): PiTurnUsage | null {
   return usage.totalTokens === 0 && usage.costUsd === 0 && usage.input === 0 && usage.output === 0
     ? null
     : usage;
+}
+
+/**
+ * The prompt side of a model call that is still streaming, or `null` when the
+ * provider has not reported one.
+ *
+ * ## Why this exists (2026-09-19 user decision)
+ *
+ * Anthropic's `message_start` frame arrives at FIRST BYTE and already carries
+ * the real prompt-side counts — measured on the gateway on 2026-09-18, e.g.
+ * `input_tokens: 431` — while the settled bill only arrives at the end of the
+ * turn. Waiting for `turn_end` meant the `↑` figure on the turn progress head
+ * stayed blank for the ten-to-thirty seconds the user actually spends staring
+ * at the screen, which is the one window where it answers a question.
+ *
+ * ## Why the completion side is force-zeroed
+ *
+ * The SAME frame reports `output_tokens: 1`. That is a placeholder, not a
+ * measurement — it stays `1` for the whole stream and is replaced wholesale by
+ * the `message_delta` frame at the end. Passing it through would put a
+ * permanent `↓ 1 tokens` on screen for every turn. So `output` (and the cost
+ * that is derived from it) is reported as `0` here, which every display site
+ * already drops rather than prints — `formatTurnTokenClauses` omits a zero
+ * column precisely because "nothing to say yet" must not read as "the model
+ * wrote nothing".
+ *
+ * `totalTokens` is re-derived from the prompt side alone for the same reason:
+ * pi-ai's own total at this point includes the placeholder.
+ *
+ * ## The `pending` mark, and who reads it
+ *
+ * Surfaces that report a SETTLED bill (the Run panel's "last turn" rows, via
+ * `foldSettledUsage`) must ignore this payload entirely — a turn still running
+ * has not been billed. Surfaces that report LIVE progress (the turn progress
+ * head, via the per-message metadata registry) fold it in and let the settled
+ * payload that follows overwrite every numeric key on the same message, so the
+ * interim figure is corrected rather than added to.
+ *
+ * Returns `null` when the prompt side is all zeroes: that is a provider which
+ * reports nothing before the end, and an event saying so carries no
+ * information.
+ */
+export function buildPiInterimUsagePayload(usage: unknown): PiUsagePayload | null {
+  const source = record(usage);
+  if (!source) return null;
+  const input = finiteNumber(source.input) ?? 0;
+  const cacheRead = finiteNumber(source.cacheRead) ?? 0;
+  const cacheWrite = finiteNumber(source.cacheWrite) ?? 0;
+  const promptTokens = input + cacheRead + cacheWrite;
+  if (promptTokens <= 0) return null;
+  return {
+    input,
+    output: 0,
+    cacheRead,
+    cacheWrite,
+    totalTokens: promptTokens,
+    costUsd: 0,
+    pending: true,
+  };
+}
+
+/**
+ * True for a payload built by {@link buildPiInterimUsagePayload}.
+ *
+ * Read by consumers that may only show settled bills. Kept next to the builder
+ * so the key is written and tested in one place rather than spelled out again
+ * at each call site.
+ */
+export function isPendingUsagePayload(payload: unknown): boolean {
+  return record(payload)?.pending === true;
 }

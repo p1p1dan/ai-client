@@ -113,6 +113,13 @@ import {
   turnWorkGroupOpen,
 } from './turnProcessFold';
 import {
+  joinTurnProgressLine,
+  sumTurnThinkingMs,
+  sumTurnTokens,
+  type TurnTokenTotals,
+  turnProgressClauses,
+} from './turnProgress';
+import {
   deriveTurnStatus,
   isFailedCardBodyDuplicate,
   latestErrorNoticeText,
@@ -130,7 +137,7 @@ import {
 // 2026-09-18 adds ONE live consumer from that module, and it is deliberately
 // not `formatWorkedForRow`: the work group needs the whole turn's span, which
 // is `deriveTurnWorkedMs`, not the last message's own latency.
-import { deriveTurnWorkedMs } from './turnTiming';
+import { deriveTurnWorkedMs, type ThinkingTiming } from './turnTiming';
 import { useMessageMetadata } from './useMessageMetadata';
 import { useResolvedSessionModel } from './useResolvedSessionModel';
 import { useTurnTiming } from './useTurnTiming';
@@ -660,6 +667,12 @@ export function MessageTimeline({
                     thinkingEnabled={thinkingEnabled}
                     repoName={repoName}
                     getThinkingDurationMs={getThinkingDurationMs}
+                    // The progress head needs the SPAN, not just the settled
+                    // duration: a thought that has started and not finished is
+                    // the whole point of a live 「思考 N 秒」 clause, and
+                    // `durationMs` is null for exactly that case. Already
+                    // `useCallback`-stable at its source, so the memo holds.
+                    getThinkingTiming={getThinking}
                   />
                 );
               })
@@ -1249,6 +1262,8 @@ interface ChatTurnProps {
   thinkingEnabled: boolean;
   repoName?: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
+  /** The whole span, for the head's live 「思考 N 秒」 clause (`sumTurnThinkingMs`). */
+  getThinkingTiming: (blockId: string) => ThinkingTiming | undefined;
 }
 
 /**
@@ -1284,8 +1299,22 @@ interface ChatTurnProps {
  * -stable at their source.
  */
 /**
- * The turn's work group: one head, one collapsible body, everything the user
- * did not ask to see.
+ * The turn's progress head: one line above the reply, and behind it everything
+ * the user did not ask to see.
+ *
+ * ## Two shapes, one line of copy
+ *
+ * `collapsible` decides which. With work to hide it is a `<details>` whose
+ * `<summary>` carries the line and a chevron; with nothing to hide it is a
+ * plain row with neither. The second shape is not cosmetic — it is the case
+ * the 2026-09-18 field report was actually about: a one-word prompt that takes
+ * 50 seconds produces no thinking block and no tool call, so under the old
+ * "render the head only when the group has members" rule that turn showed
+ * NOTHING at all for the whole wait.
+ *
+ * A head with no chevron is also the honest shape: an affordance that expands
+ * to nothing is worse than no affordance, which is the same reasoning
+ * `splitTurnWorkGroup` uses to refuse an empty group in the first place.
  *
  * ## Why a native `<details>` with `preventDefault`
  *
@@ -1306,11 +1335,18 @@ interface ChatTurnProps {
  * The children stay mounted when collapsed (that is what `<details>` does), so
  * collapsing never discards a tool row's expanded body.
  */
-function TurnWorkGroup({
+function TurnProgressHead({
   items,
   settled,
   forcedOpen,
   workedMs,
+  elapsedSeconds,
+  tokens,
+  thinkingMs,
+  hasReplyContent,
+  collapsible,
+  userOpen,
+  onUserOpenChange,
   children,
 }: {
   /** The grouped PROCESS items only — the step count is about work, not paragraphs. */
@@ -1320,26 +1356,57 @@ function TurnWorkGroup({
   forcedOpen: boolean;
   /** Whole-turn span, or `null` when the turn replayed no timing events. */
   workedMs: number | null;
+  /** Live seconds while the turn runs; `null` when it is running with no clock. */
+  elapsedSeconds: number | null;
+  /** Tokens billed so far this turn, or `null` when nothing has settled. */
+  tokens: TurnTokenTotals | null;
+  /** Thinking time so far, or `null` when the provider reports no reasoning. */
+  thinkingMs: number | null;
+  /**
+   * The turn has produced at least one block. Stage boundary for the live
+   * clauses — see `turnProgressClauses` for why the rule is this fact and not
+   * "are there any tokens yet".
+   */
+  hasReplyContent: boolean;
+  /** There is work behind the head, so it gets a chevron and a panel. */
+  collapsible: boolean;
+  /**
+   * The user's own click, held by `ChatTurn` rather than here.
+   *
+   * Hoisted on purpose: this component swaps between `<details>` and a plain
+   * row as `collapsible` flips mid-turn (the first tool call of a turn does
+   * exactly that), and a `useState` inside would be discarded by that swap —
+   * silently re-collapsing a group the reader had just opened. Rule 2 of
+   * `turnWorkGroupOpen` ("a choice is permanent for this turn") can only hold
+   * if the choice outlives the element that took it.
+   */
+  userOpen: boolean | null;
+  onUserOpenChange: (open: boolean) => void;
   children: React.ReactNode;
 }) {
   const { t } = useI18n();
-  // `null` until the user clicks: "no opinion yet" has to be distinguishable
-  // from "chose closed", or the auto-collapse and a deliberate collapse would
-  // be the same state and rule 2 of `turnWorkGroupOpen` could never hold.
-  const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const open = turnWorkGroupOpen({ settled, forcedOpen, userOpen });
   const label = deriveTurnWorkGroupLabel({
     settled,
     workedMs,
     steps: countProcessSteps(items),
+    elapsedSeconds,
   });
-  // Three literal keys rather than one interpolated `{{duration}}`: the unit
-  // words are the catalog's ("1m 6s" vs 「1 分 6 秒」), and a literal
-  // single-quoted key is also the only form `i18nCoverage.test.ts` can scan —
-  // a key assembled from the label's discriminant would ship untranslated.
+  if (!label) {
+    // Nothing honest to say about this turn (restored history with no timing
+    // and no steps). `deriveTurnWorkGroupLabel` only returns `null` when the
+    // turn folded no work at all, so `collapsible` is false here — the branch
+    // is kept anyway so a head that declines to render can never take the
+    // children down with it.
+    return collapsible ? <div className={turnBodyClass()}>{children}</div> : null;
+  }
+  // Literal keys rather than one interpolated `{{duration}}`: the unit words
+  // are the catalog's ("1m 6s" vs 「1 分 6 秒」), and a literal single-quoted
+  // key is also the only form `i18nCoverage.test.ts` can scan — a key assembled
+  // from the label's discriminant would ship untranslated.
   const headText =
     label.kind === 'working'
-      ? t('Working')
+      ? workingHeadText(t, label.elapsed)
       : label.kind === 'steps'
         ? t('{{count}} steps processed', { count: label.steps })
         : label.minutes === 0
@@ -1350,6 +1417,43 @@ function TurnWorkGroup({
                 minutes: label.minutes,
                 seconds: label.seconds,
               });
+  // 2026-09-18 (third pass): a settled turn KEEPS its ↑↓ clause instead of
+  // dropping straight to bare duration. The earlier rule here was "the live
+  // clauses ride the running head only", on the reasoning that a settled
+  // turn's numbers answer "is it still going", which a finished turn no
+  // longer asks. That reasoning missed a real case: `usage.updated` lands at
+  // `turn_end`, so a turn with exactly one model call (no tool use) settles
+  // in the SAME tick that first makes any usage available at all — the old
+  // `label.kind === 'working'` guard threw that number away before the head
+  // ever had a chance to show it, so only multi-step, tool-calling turns ever
+  // displayed a token count. The two-stage rule this app actually asked for —
+  // 「没收到回复时只显示状态词+运行时间，收到内容后再持续更新 ↑↓ token，思考
+  // 量」 — has its second half apply to a settled turn too: content has
+  // plainly been received by the time the turn ends.
+  //
+  // Which clauses appear, and when, is `turnProgressClauses`' two-stage rule —
+  // not a `label.kind` check here — so the boundary between 「只有状态词和时间」
+  // and 「加上 ↑↓ token」 stays one truth-tabled function for every kind of head,
+  // running or settled, rather than a JSX condition duplicating part of it.
+  const line = joinTurnProgressLine(
+    headText,
+    turnProgressClauses({ hasReplyContent, tokens, thinkingMs }, t)
+  );
+  // A turn can stay silent for a minute; the spinner beside the ticking clock
+  // is what says it is alive rather than hung. Same 3.5 size as every other
+  // running indicator in the chat surface.
+  const spinner = settled ? null : <Spinner className="size-3.5 shrink-0" />;
+
+  if (!collapsible) {
+    return (
+      <div className={turnHeadClass()}>
+        {spinner}
+        <span className="min-w-0 truncate" title={line}>
+          {line}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <details className={turnBodyClass()} open={open}>
@@ -1363,10 +1467,15 @@ function TurnWorkGroup({
         // clicked "collapse" actually wanted.
         onClick={(event) => {
           event.preventDefault();
-          setUserOpen(!open);
+          onUserOpenChange(!open);
         }}
       >
-        <span className="min-w-0 truncate underline-offset-2 hover:underline">{headText}</span>
+        {spinner}
+        {/* `title` for the same reason the plain row above has one: the running
+            line carries up to four clauses and truncates on a narrow column. */}
+        <span className="min-w-0 truncate underline-offset-2 hover:underline" title={line}>
+          {line}
+        </span>
         <ChevronRight
           className={cn('size-3.5 shrink-0 transition-transform duration-150', open && 'rotate-90')}
           aria-hidden
@@ -1375,6 +1484,28 @@ function TurnWorkGroup({
       <div className={cn(turnProcessShellClass(), 'pt-2.5')}>{children}</div>
     </details>
   );
+}
+
+/**
+ * 「工作中」 / 「工作中 47 秒」 / 「工作中 1 分 6 秒」.
+ *
+ * A function rather than a fourth nested ternary at the call site, and its four
+ * keys are literals for the reason stated there. The bare form is for a turn
+ * running with no clock of its own — a session that was already in flight when
+ * this window opened replays no `message.started`, and 「工作中 0 秒」 would be
+ * a number nobody measured.
+ */
+function workingHeadText(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  elapsed: { minutes: number; seconds: number } | null
+): string {
+  if (!elapsed) return t('Working');
+  if (elapsed.minutes === 0) return t('Working {{seconds}}s', { seconds: elapsed.seconds });
+  if (elapsed.seconds === 0) return t('Working {{minutes}}m', { minutes: elapsed.minutes });
+  return t('Working {{minutes}}m {{seconds}}s', {
+    minutes: elapsed.minutes,
+    seconds: elapsed.seconds,
+  });
 }
 
 const ChatTurn = memo(function ChatTurn({
@@ -1394,8 +1525,15 @@ const ChatTurn = memo(function ChatTurn({
   thinkingEnabled,
   repoName,
   getThinkingDurationMs,
+  getThinkingTiming,
 }: ChatTurnProps) {
   const { t } = useI18n();
+  // `null` until the user clicks: "no opinion yet" has to be distinguishable
+  // from "chose closed", or the auto-collapse and a deliberate collapse would
+  // be the same state and rule 2 of `turnWorkGroupOpen` could never hold. Held
+  // HERE rather than in the head so it survives the head swapping shape — see
+  // `TurnProgressHead`'s `userOpen` note.
+  const [workGroupUserOpen, setWorkGroupUserOpen] = useState<boolean | null>(null);
   // One flatten per turn, feeding both the render and the copy payload (F7):
   // the copy builder's `Turn` overload used to re-run `flattenTurnItems` — and
   // through it `groupTimeline`/`pairToolBlocks` over every block — a second
@@ -1622,7 +1760,19 @@ const ChatTurn = memo(function ChatTurn({
   // flight; only the session status tells those apart. No latency is needed
   // otherwise, so a restored history turn is settled from its first render and
   // therefore mounts collapsed.
-  const processSettled = !turnActive && !(isLastTurn && inFlightSession);
+  //
+  // `&& !statusOwnedByPendingHead` closes the one window where the session
+  // status lies about WHICH turn is running: between `chat.send` and the Host
+  // echoing the user message back, the session is in flight but the turn that
+  // send opened does not exist yet, so the previous (finished) turn is still
+  // `isLastTurn`. Without this it un-settled itself for the length of the
+  // handshake — reverting 「已工作 57 秒」 to 「工作中」 and re-expanding a group
+  // the user had watched collapse, on a turn that ended a minute ago.
+  // `pendingSendStatus != null` is exactly "a send is in flight whose turn has
+  // not been echoed yet" (`deriveSendStatusBinding`), which is the fact needed;
+  // `turnComplete` cannot serve here, for the reason the paragraph above gives.
+  const processSettled =
+    !turnActive && !(isLastTurn && inFlightSession && !statusOwnedByPendingHead);
   // The 2026-09-18 work group. Every placement rule is in `splitTurnWorkGroup`
   // so it can be truth-tabled in the node suite; this file only renders the
   // four buckets it returns, in the order it returns them.
@@ -1647,6 +1797,32 @@ const ChatTurn = memo(function ChatTurn({
   // messages, and reporting the final one's latency told a two-minute turn it
   // took four seconds. `null` here means "omit the number", never "0s".
   const workedMs = useMemo(() => deriveTurnWorkedMs(bodyMetadata), [bodyMetadata]);
+  // The head's live numbers. Both are per-TURN by construction: the usage
+  // registry attributes each `usage.updated` to the assistant message that was
+  // open at the time, and the thinking registry is keyed by block id — so
+  // reading this turn's own messages is what scopes them, with no snapshot to
+  // arm and no counter to reset between sends.
+  const turnTokens = useMemo(
+    () => sumTurnTokens(bodyMetadata.map((entry) => entry?.usage)),
+    [bodyMetadata]
+  );
+  const thinkingSpans = useMemo(
+    () =>
+      turn.body.flatMap((message) =>
+        message.blocks
+          .filter((block) => block.type === 'thinking')
+          .map((block) => getThinkingTiming(block.id))
+      ),
+    [turn.body, getThinkingTiming]
+  );
+  // Not memoized on `nowMs`: an unfinished thought is measured against the
+  // clock, so this is a per-tick value by definition and a `useMemo` keyed on
+  // the tick would only add a comparison.
+  const turnThinkingMs = sumTurnThinkingMs(thinkingSpans, { nowMs, live: !processSettled });
+  // `turnActive` is what says a clock exists at all — `elapsedSeconds` falls
+  // back to 0 for a session that was already running when this window opened,
+  // and a head must not report that as 「工作中 0 秒」.
+  const headElapsedSeconds = turnActive ? elapsedSeconds : null;
 
   const renderSegment = (segment: TurnSegment<TurnItem>) => {
     // Keyed off the segment's FIRST item, not its index: an index key would
@@ -1724,17 +1900,31 @@ const ChatTurn = memo(function ChatTurn({
             getting its own. The rule that must never come back is "the answer
             is the TRAILING run of text items": under it a turn that ended in an
             error notice folded away every paragraph it had written. */}
+        {/* The head comes FIRST, always — it is the turn's own line, and the
+            2026-09-18 report is precisely that a progress indicator far from
+            the reply it describes does not read as progress. `leading` is
+            non-empty only in the shape where `grouped` is empty
+            (`splitTurnWorkGroup`), so the two never compete for this slot and
+            nothing is reordered by putting the head above both. */}
+        <TurnProgressHead
+          items={groupedProcessItems}
+          settled={processSettled}
+          forcedOpen={groupForcedOpen}
+          workedMs={workedMs}
+          elapsedSeconds={headElapsedSeconds}
+          tokens={turnTokens}
+          thinkingMs={turnThinkingMs}
+          // Same fact `deriveTurnStatus` switches its wording on, passed from
+          // the same variable: the two lines must agree about when the wait
+          // ended, and upstream sends nothing at all until it does.
+          hasReplyContent={turnHasBlocks}
+          collapsible={workGroup.grouped.length > 0}
+          userOpen={workGroupUserOpen}
+          onUserOpenChange={setWorkGroupUserOpen}
+        >
+          {workGroup.grouped.map(renderSegment)}
+        </TurnProgressHead>
         {workGroup.leading.map(renderSegment)}
-        {workGroup.grouped.length > 0 && (
-          <TurnWorkGroup
-            items={groupedProcessItems}
-            settled={processSettled}
-            forcedOpen={groupForcedOpen}
-            workedMs={workedMs}
-          >
-            {workGroup.grouped.map(renderSegment)}
-          </TurnWorkGroup>
-        )}
         {/* The final output — outside the group, in every state, always. */}
         {workGroup.finalAnswer && renderSegment(workGroup.finalAnswer)}
         {/* Whatever arrived after it. Settled, that is a notice (an error the

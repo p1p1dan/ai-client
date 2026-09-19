@@ -64,7 +64,23 @@ it('projects a real tool run with text, thinking, tool result, usage and termina
   expect(events.find((event) => event.type === 'tool.completed')).toMatchObject({
     payload: { toolCallId: 'glob-1', ok: true },
   });
-  expect(events.filter((event) => event.type === 'usage.updated')).toHaveLength(2);
+  // Two SETTLED bills — one per model call — and one first-byte tick ahead of
+  // each of them (2026-09-19). The tick is what lights the turn head's `↑`
+  // while the call is still streaming, so it must never carry a completion
+  // count: `buildPiInterimUsagePayload` forces `output` to 0 rather than pass
+  // on Anthropic's `output_tokens: 1` placeholder.
+  const usage = events.filter((event) => event.type === 'usage.updated');
+  const pending = usage.filter((event) => event.payload.pending === true);
+  expect(usage.filter((event) => event.payload.pending !== true)).toHaveLength(2);
+  expect(pending).toHaveLength(2);
+  for (const tick of pending) {
+    expect(tick.payload.output).toBe(0);
+    expect(tick.payload.costUsd).toBe(0);
+    expect(Number(tick.payload.totalTokens)).toBeGreaterThan(0);
+  }
+  // Ordering is the whole point: a tick that arrived after its own settled
+  // bill would overwrite a measured total with a half-measured one.
+  expect(usage.findIndex((event) => event.payload.pending === true)).toBe(0);
   expect(events.filter((event) => event.type === 'session.completed')).toHaveLength(1);
 });
 it('reports provider and first-request budget failures as failed sessions', async () => {
@@ -131,7 +147,10 @@ it('keeps its own bookkeeping off the wire, stamps the run identity, and preserv
   second.events.subscribe((event) => events.push(event));
   faux.setResponses([fauxAssistantMessage('second')]);
   await second.run({ prompt: 'two', systemPrompt: 'probe', logicalSessionId: 'logical' });
-  const usages = events.filter((e) => e.type === 'usage.updated');
+  // Settled bills only: the first-byte ticks carry no `session` rollup at all
+  // (they describe one call's prompt, not the conversation), so counting them
+  // here would say nothing about what survived the resume.
+  const usages = events.filter((e) => e.type === 'usage.updated' && e.payload.pending !== true);
   expect(usages).toHaveLength(2);
   expect(usages[1].payload).toMatchObject({ session: { turns: 2 } });
 });

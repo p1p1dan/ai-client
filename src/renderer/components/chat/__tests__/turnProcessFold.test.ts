@@ -140,6 +140,83 @@ describe('splitTurnWorkGroup — the final output is the LAST answer segment', (
 });
 
 // ---------------------------------------------------------------------------
+// The same rule against the four turn shapes real sessions actually produce
+// ---------------------------------------------------------------------------
+
+/**
+ * Read off `~/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-*.jsonl`
+ * on 2026-09-18, not imagined. Four shapes account for every turn in the five
+ * most recent live sessions:
+ *
+ * ```
+ *   user | text
+ *   assistant | thinking,text,toolCall     <- intermediate: explains, then calls
+ *   toolResult| text
+ *   assistant | thinking,text              <- the final output
+ * ```
+ *
+ * The pieces of one assistant message do NOT stay together on screen:
+ * `groupTimeline` flushes the open tool group when a `text` block arrives, so
+ * `thinking,text,toolCall` flattens to `toolGroup, text, toolGroup`. That is
+ * what makes 「模型在工具调用之间穿插的解释性文字」 an `answer` segment in the
+ * middle of the turn — and therefore something the last-answer rule has to have
+ * an opinion about.
+ */
+describe('splitTurnWorkGroup — the turn shapes real pi sessions produce', () => {
+  /**
+   * The common shape. The mid-turn explanation goes INSIDE the fold; only the
+   * paragraph the model ended on stays out. That is the user's own wording:
+   * 「折叠后只显示 agent 的最终输出」.
+   */
+  it('[WG-REAL-1] explanatory text between tool calls folds away; the last paragraph does not', () => {
+    const split = splitTurnWorkGroup(
+      segmentsOf(['toolGroup', 'text', 'toolGroup', 'toolGroup', 'text'])
+    );
+    // The two adjacent tool groups are one run-length segment, hence three.
+    expect(kindsOf(split.grouped)).toEqual(['process', 'answer', 'process']);
+    expect(split.finalAnswer?.kind).toBe('answer');
+    expect(split.trailing).toEqual([]);
+  });
+
+  /** A turn that only thought — no tool call anywhere. The thought still folds. */
+  it('[WG-REAL-2] thinking with no tool call is still work, and still folds', () => {
+    const split = splitTurnWorkGroup(segmentsOf(['toolGroup', 'text']));
+    expect(kindsOf(split.grouped)).toEqual(['process']);
+    expect(split.finalAnswer?.kind).toBe('answer');
+    expect(split.leading).toEqual([]);
+  });
+
+  /**
+   * Interrupted mid-tool (Stop, or a failure): the turn's last event is a tool
+   * call, so there is a `process` segment AFTER the last thing the model said.
+   *
+   * It stays in `trailing`, i.e. VISIBLE, and that is deliberate rather than an
+   * oversight of the collapse: on an interrupted turn the unfinished call is the
+   * explanation for why there is no answer, and folding it away would leave the
+   * turn looking like it simply stopped talking.
+   */
+  it('[WG-REAL-3] a turn interrupted mid-tool keeps the unfinished call on screen', () => {
+    const split = splitTurnWorkGroup(segmentsOf(['toolGroup', 'text', 'toolGroup']));
+    expect(kindsOf(split.grouped)).toEqual(['process']);
+    expect(split.finalAnswer?.kind).toBe('answer');
+    expect(kindsOf(split.trailing)).toEqual(['process']);
+  });
+
+  /**
+   * Interrupted before the model said anything at all — thinking and a tool
+   * call, then the error notice. Everything that ran folds; the notice does
+   * not, because a collapsed head is not allowed to hide the only statement the
+   * turn has to make (`[WG-3]`, restated against the real shape).
+   */
+  it('[WG-REAL-4] an interrupted turn with no prose folds the work and keeps the error', () => {
+    const split = splitTurnWorkGroup(segmentsOf(['toolGroup', 'notice']));
+    expect(split.finalAnswer).toBeNull();
+    expect(kindsOf(split.grouped)).toEqual(['process']);
+    expect(kindsOf(split.trailing)).toEqual(['notice']);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The authorization red line
 // ---------------------------------------------------------------------------
 
@@ -228,28 +305,54 @@ describe('turnWorkGroupOpen — auto-collapse once, user intent forever', () => 
 // ---------------------------------------------------------------------------
 
 describe('deriveTurnWorkGroupLabel', () => {
-  it('[WG-LABEL-1] says 「工作中」 while the turn runs, with no second count', () => {
-    expect(deriveTurnWorkGroupLabel({ settled: false, workedMs: 61_000, steps: 3 })).toEqual({
-      kind: 'working',
-    });
+  /**
+   * 2026-09-18, second pass. This case used to assert the OPPOSITE — 「工作中」
+   * and no second count, on the ground that the composer's own status row was
+   * already counting. The user's report after living with that arrangement is
+   * why it is inverted here: a counter that far from the reply does not read as
+   * progress, and a 50-second wait behind a static 「工作中」 reads as a hang.
+   *
+   * Note which clock it reports: `elapsedSeconds` (the live one), NOT
+   * `workedMs`. A running turn has no completion timestamp, so `workedMs` on an
+   * unsettled turn is whatever a PREVIOUS message in it happened to close with.
+   */
+  it('[WG-LABEL-1] a running turn reports the LIVE clock, not the settled span', () => {
+    expect(
+      deriveTurnWorkGroupLabel({
+        settled: false,
+        workedMs: 61_000,
+        steps: 3,
+        elapsedSeconds: 47,
+      })
+    ).toEqual({ kind: 'working', elapsed: { minutes: 0, seconds: 47 } });
+    expect(
+      deriveTurnWorkGroupLabel({ settled: false, workedMs: null, steps: 0, elapsedSeconds: 66 })
+    ).toEqual({ kind: 'working', elapsed: { minutes: 1, seconds: 6 } });
+  });
+
+  /**
+   * A session that was already in flight when this window opened replays no
+   * `message.started`, so it is running with no origin to count from. The head
+   * says a bare 「工作中」 there — `elapsed: null` — rather than 「工作中 0 秒」,
+   * which is the same fabricated-measurement rule as [WG-LABEL-3] below.
+   */
+  it('[WG-LABEL-1b] a running turn with no clock reports no seconds at all', () => {
+    expect(
+      deriveTurnWorkGroupLabel({
+        settled: false,
+        workedMs: null,
+        steps: 2,
+        elapsedSeconds: null,
+      })
+    ).toEqual({ kind: 'working', elapsed: null });
   });
 
   it('[WG-LABEL-2] reports the span in the units the catalog writes', () => {
-    expect(deriveTurnWorkGroupLabel({ settled: true, workedMs: 57_000, steps: 3 })).toEqual({
-      kind: 'worked',
-      minutes: 0,
-      seconds: 57,
-    });
-    expect(deriveTurnWorkGroupLabel({ settled: true, workedMs: 66_000, steps: 3 })).toEqual({
-      kind: 'worked',
-      minutes: 1,
-      seconds: 6,
-    });
-    expect(deriveTurnWorkGroupLabel({ settled: true, workedMs: 120_000, steps: 3 })).toEqual({
-      kind: 'worked',
-      minutes: 2,
-      seconds: 0,
-    });
+    const settled = (workedMs: number) =>
+      deriveTurnWorkGroupLabel({ settled: true, workedMs, steps: 3, elapsedSeconds: null });
+    expect(settled(57_000)).toEqual({ kind: 'worked', minutes: 0, seconds: 57 });
+    expect(settled(66_000)).toEqual({ kind: 'worked', minutes: 1, seconds: 6 });
+    expect(settled(120_000)).toEqual({ kind: 'worked', minutes: 2, seconds: 0 });
   });
 
   /**
@@ -258,10 +361,28 @@ describe('deriveTurnWorkGroupLabel', () => {
    * 「已工作 0 秒」 about a turn that ran four tools is a fabricated measurement.
    */
   it('[WG-LABEL-3] an unknown duration falls back to the step count and prints NO seconds', () => {
-    const label = deriveTurnWorkGroupLabel({ settled: true, workedMs: null, steps: 4 });
+    const label = deriveTurnWorkGroupLabel({
+      settled: true,
+      workedMs: null,
+      steps: 4,
+      elapsedSeconds: null,
+    });
     expect(label).toEqual({ kind: 'steps', steps: 4 });
-    expect(Object.keys(label)).not.toContain('seconds');
-    expect(Object.keys(label)).not.toContain('minutes');
+    expect(Object.keys(label ?? {})).not.toContain('seconds');
+    expect(Object.keys(label ?? {})).not.toContain('minutes');
+  });
+
+  /**
+   * The head now renders for turns that fold NO work (that is the whole point
+   * of the second pass — a 50-second one-word reply used to show nothing), so
+   * it needs an answer for the one turn that has nothing honest to say: settled,
+   * no timing, no steps. That is restored history, and both fallbacks would be
+   * inventions there — `0 秒` and 「已处理 0 个步骤」 alike.
+   */
+  it('[WG-LABEL-4] a settled turn with neither a duration nor a step renders no head', () => {
+    expect(
+      deriveTurnWorkGroupLabel({ settled: true, workedMs: null, steps: 0, elapsedSeconds: null })
+    ).toBeNull();
   });
 });
 

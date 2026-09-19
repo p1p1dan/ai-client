@@ -13,7 +13,7 @@
  * React/electronAPI so it runs under the repo's node-env vitest.
  */
 
-import { type PiUsagePayload, readPiUsagePayload } from '@shared/piUsage';
+import { isPendingUsagePayload, type PiUsagePayload, readPiUsagePayload } from '@shared/piUsage';
 import type { SessionRetryInfo, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { EFFORT_DEFAULT_ID, effortLabel } from '@/components/chat/efforts';
 import { parseMentionChips } from '@/components/chat/fileMention';
@@ -572,6 +572,13 @@ function foldStderrLine(
  *
  * Anything that is not a settled Pi payload leaves `prev` untouched and
  * reference-identical — `readPiUsagePayload` owns that judgement.
+ *
+ * 2026-09-19 adds a second rejection with its own reason: the first-byte tick
+ * (`pending: true`) reports a prompt size for a call that has not been billed
+ * yet, and its completion side is a deliberate `0`. This panel labels its rows
+ * as the LAST TURN's cost, so folding one would replace a finished turn's real
+ * bill with a running turn's half-measurement for as long as the turn lasts.
+ * The live figure has its own surface — the turn progress head.
  */
 function foldSettledUsage(
   prev: SessionRuntimeFactsState,
@@ -579,6 +586,7 @@ function foldSettledUsage(
 ): SessionRuntimeFactsState {
   const sessionId = event.sessionId;
   if (!sessionId) return prev;
+  if (isPendingUsagePayload(event.payload)) return prev;
   const usage = readPiUsagePayload(event.payload);
   if (!usage) return prev;
   return { ...prev, [sessionId]: { ...prev[sessionId], usage } };

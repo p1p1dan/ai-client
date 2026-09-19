@@ -873,6 +873,30 @@ describe('reduceSessionRuntimeFacts — settled usage (U06-b)', () => {
     expect(next.s1).toBeUndefined();
   });
 
+  // 2026-09-19: the native projector's first-byte tick. Unlike the legacy one
+  // above it carries real numbers, but only for the prompt of a call that has
+  // not been billed yet — and this panel labels its rows as the LAST TURN's
+  // cost. Folding one would blank a finished turn's completion column for as
+  // long as the next turn runs.
+  it('leaves the last settled bill alone while a pending tick passes through', () => {
+    const state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, settled());
+    const next = reduceSessionRuntimeFacts(state, {
+      type: 'usage.updated',
+      sessionId: 's1',
+      payload: {
+        input: 431,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 10_656,
+        totalTokens: 11_087,
+        costUsd: 0,
+        pending: true,
+      },
+    });
+    expect(next).toBe(state);
+    expect(next.s1.usage?.output).toBe(480);
+  });
+
   it('survives a terminal session.status', () => {
     // The bill of the turn that just ended is exactly what the panel should
     // still be showing once the turn is over.

@@ -22,7 +22,7 @@
  */
 
 import type { TurnItem, TurnSegment } from './chatTurn';
-import { splitWorkedForDuration } from './turnTiming';
+import { splitWorkedForDuration, type WorkedForParts } from './turnTiming';
 
 /**
  * How many steps a folded process segment says it took.
@@ -210,34 +210,62 @@ export function turnWorkGroupOpen(input: TurnWorkGroupOpenInput): boolean {
 /**
  * What the group's head says about itself.
  *
- * `worked` carries NUMBERS, not a formatted string: the render site turns it
- * into one of three catalog keys so Chinese can write 「已工作 1 分 6 秒」
- * instead of interpolating an English "1m 6s" into a Chinese sentence.
+ * Both duration variants carry NUMBERS, not a formatted string: the render site
+ * turns them into one of the catalog keys so Chinese can write 「已工作 1 分 6
+ * 秒」 instead of interpolating an English "1m 6s" into a Chinese sentence.
+ *
+ * `working.elapsed` is `null` for a turn that is running with NO clock at all —
+ * a session that was already in flight when this window opened replays no
+ * `message.started`, so there is no origin to count from and the head says a
+ * bare 「工作中」 rather than a fabricated 「工作中 0 秒」.
  */
 export type TurnWorkGroupLabel =
-  | { kind: 'working' }
+  | { kind: 'working'; elapsed: WorkedForParts | null }
   | { kind: 'worked'; minutes: number; seconds: number }
   | { kind: 'steps'; steps: number };
 
 /**
- * Head copy for the work group.
+ * Head copy for the work group. `null` means the head has nothing honest to
+ * say and does not render at all.
  *
- * While the turn runs the head says 「工作中」 and nothing else — there is
- * already a second-by-second status row under the output, and a second ticking
- * clock in the head would be two counters disagreeing about the same turn.
+ * ## 2026-09-18 (second pass): the running head carries the clock
  *
- * Once settled it reports the duration, and when the duration is UNKNOWN it
- * falls back to the step count rather than inventing one. That fallback is the
- * whole reason it exists: a restored history turn replays no timing events, so
- * `workedMs` is `null` there and `0 秒` would be a lie about a turn that plainly
- * did work (A07 `:2399`, and `deriveTurnWorkedMs`'s own note).
+ * It used to say 「工作中」 and nothing else, on the ground that "there is
+ * already a second-by-second status row" — that row being the one above the
+ * composer. The user's report after living with it: that row is the ONLY
+ * evidence a turn is alive, it sits far from the reply it describes, and a
+ * 50-second wait behind it reads as a hang. So the clock moves here, next to
+ * the output it belongs to. The composer row keeps its own count; the two are
+ * derived from different origins (`activity.since` vs `message.started`) and
+ * can legitimately differ by a second — see the report for the open question
+ * about retiring one of them.
+ *
+ * ## The `null` cases, and why neither is a zero
+ *
+ *  - **settled, no duration, no steps** — a restored history turn that replayed
+ *    no timing events and folded no work. Printing 「已工作 0 秒」 or 「已处理 0
+ *    个步骤」 would both be claims about a turn this window never watched
+ *    (A07 `:2399`, and `deriveTurnWorkedMs`'s own note).
+ *  - **settled, no duration, some steps** — still reports the STEP count, which
+ *    is the fallback that has been here since 2026-09-10 and is the one thing
+ *    such a turn does know about itself.
  */
 export function deriveTurnWorkGroupLabel(input: {
   settled: boolean;
   workedMs: number | null;
   steps: number;
-}): TurnWorkGroupLabel {
-  if (!input.settled) return { kind: 'working' };
-  if (input.workedMs === null) return { kind: 'steps', steps: input.steps };
+  /** Seconds since the turn's own clock started, or `null` when it has none. */
+  elapsedSeconds: number | null;
+}): TurnWorkGroupLabel | null {
+  if (!input.settled) {
+    return {
+      kind: 'working',
+      elapsed:
+        input.elapsedSeconds === null ? null : splitWorkedForDuration(input.elapsedSeconds * 1000),
+    };
+  }
+  if (input.workedMs === null) {
+    return input.steps > 0 ? { kind: 'steps', steps: input.steps } : null;
+  }
   return { kind: 'worked', ...splitWorkedForDuration(input.workedMs) };
 }

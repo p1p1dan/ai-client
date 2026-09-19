@@ -121,7 +121,6 @@ import {
   shouldRevokeRestoredDraft,
 } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
-import { SessionActivityStatus } from './SessionActivityStatus';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { parseSendDispatchErrorCode } from './sendDispatchError';
 import { decideSendPreamble } from './sendPreamble';
@@ -3104,13 +3103,20 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // div in ChatWorkspace (`middleColumnHostClass`) owns the padding and the
     // shrink/grow behaviour for both modes now — no border/background here.
     <ReadingColumn>
-      <SessionActivityStatus sessionId={activeSessionId} />
+      {/* 2026-09-19 (user decision): there is NO running-status row here any
+          more, and `SessionActivityStatus` is gone with it. The turn progress
+          head above each agent turn now carries the clock and the ↑↓ token
+          counts, right next to the reply they describe, so a second copy down
+          here was the same fact twice — the reason given for keeping this one
+          on 2026-09-10 ("it stays visible while scrolling back") no longer
+          outweighs that. Do not re-add it: if something is missing, the head
+          (`TurnProgressHead` in MessageTimeline.tsx) is where it belongs. */}
       {/* "You signed in and your company's models did not arrive." Above the
           send-failure box rather than below it because the two are a standing
           condition and a transient one: this card explains why the model menu
           is empty for the whole session, while the box under it reports one
           send. It renders nothing at all unless a managed sync actually failed
-          (`piModelSyncNotice.ts`), so a healthy install never sees it, and it
+          (`piModelSyncNoticeModel.ts`), so a healthy install never sees it, and it
           is deliberately NOT gated on `emptySurface` — the failure happens at
           login, long before anyone has tried to send. */}
       <PiModelSyncNotice className="mb-2" />
