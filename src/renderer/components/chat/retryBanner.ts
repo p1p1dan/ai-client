@@ -54,6 +54,23 @@ export interface RetryBannerInput {
    * reason.
    */
   outputSinceRetry: boolean;
+  /**
+   * T093: whole-second wall clock for the live countdown — MessageTimeline's
+   * `useSecondsTick`, the same one the turn head counts with.
+   *
+   * Absent (or `STATIC_NOW_MS`, the non-ticking turn's sentinel) means "no
+   * clock here", and the banner then prints the one-shot `delayMs` duration it
+   * was handed. That is what every build before T093 did, and it is still the
+   * right answer for a worker that sends no `retryAt`.
+   */
+  nowMs?: number | null;
+  /**
+   * Display name of the delegate behind `retry.delegationId`, when the
+   * subagent store knows one (`MessageTimeline` resolves it through the lane
+   * index). The id itself is never printed: a uuid tells a reader nothing the
+   * word "subagent" does not already say.
+   */
+  delegateName?: string | null;
 }
 
 export interface RetryBannerView {
@@ -61,6 +78,61 @@ export interface RetryBannerView {
   title: string;
   /** e.g. `Next attempt in 8s · unknown`; `null` when no segment survives. */
   detail: string | null;
+}
+
+/**
+ * T093 / decision 029 clause 3 — where the next attempt stands, right now.
+ *
+ * `countdown` is derived live from `retryAt - nowMs`; `due` is that same
+ * subtraction having reached zero, i.e. the attempt is being made as the user
+ * reads the line; `static` is the pre-T093 shape, a duration measured once by
+ * whoever sent the event. The three are distinguished rather than collapsed
+ * into a formatted string because the WORDS differ ("in 8s" vs "now"), and a
+ * caller that only has the static duration must not be made to word it as a
+ * countdown it is not actually running.
+ */
+export type RetryCountdown =
+  | { kind: 'countdown'; remainingMs: number }
+  | { kind: 'due' }
+  | { kind: 'static'; delayMs: number };
+
+/**
+ * Fold the retry payload plus a clock reading into the countdown state.
+ *
+ * `null` means "say nothing about timing" — the same degradation rule the rest
+ * of this module follows: the normalizer's missing-`delayMs` sentinel is `0`,
+ * and a `0` printed as `0s` would claim an instant retry that is not happening.
+ *
+ * Shared with the turn head's status line (`attachments.ts`), so the banner and
+ * the line one row below it cannot count different seconds.
+ */
+export function deriveRetryCountdown(
+  retry: Pick<Partial<SessionRetryInfo>, 'retryAt' | 'delayMs'> | null | undefined,
+  nowMs?: number | null
+): RetryCountdown | null {
+  if (!retry) return null;
+  const retryAt = positiveMs(retry.retryAt);
+  const now = positiveMs(nowMs);
+  if (retryAt !== null && now !== null) {
+    const remainingMs = retryAt - now;
+    return remainingMs > 0 ? { kind: 'countdown', remainingMs } : { kind: 'due' };
+  }
+  const delayMs = positiveMs(retry.delayMs);
+  return delayMs === null ? null : { kind: 'static', delayMs };
+}
+
+/** The one place either surface turns a {@link RetryCountdown} into words. */
+export function retryCountdownLabel(
+  countdown: RetryCountdown | null,
+  t: Translate = englishTranslate
+): string | null {
+  if (countdown === null) return null;
+  // Past the instant: the request is out again and nothing is being waited for,
+  // so a countdown frozen at `0s` would be the lie this whole change exists to
+  // remove.
+  if (countdown.kind === 'due') return t('Retrying now…');
+  const ms = countdown.kind === 'countdown' ? countdown.remainingMs : countdown.delayMs;
+  return t('Next attempt in {{delay}}', { delay: formatRetryDelay(ms) });
 }
 
 /**
@@ -82,10 +154,11 @@ export function deriveRetryBanner(
     attempt === null ? null : maxRetries === null ? String(attempt) : `${attempt}/${maxRetries}`;
 
   const segments: string[] = [];
-  const delayMs = input.retry.delayMs;
-  if (typeof delayMs === 'number' && Number.isFinite(delayMs) && delayMs > 0) {
-    segments.push(t('Next attempt in {{delay}}', { delay: formatRetryDelay(delayMs) }));
-  }
+  // T093: live when the payload carries `retryAt` AND a clock was handed in;
+  // the old one-shot duration otherwise. Both shapes come out of the same
+  // function so the wording can only be written once.
+  const countdown = retryCountdownLabel(deriveRetryCountdown(input.retry, input.nowMs), t);
+  if (countdown !== null) segments.push(countdown);
   const error =
     typeof input.retry.error === 'string' && input.retry.error !== '' ? input.retry.error : null;
   const errorStatus =
@@ -113,9 +186,41 @@ export function deriveRetryBanner(
     // the middle of it, and the composer one line below has been saying
     // 「正在重试 · 1/3」 in Chinese the whole time this banner said it in
     // English.
-    title: buildTitle(t, errorStatus, counts),
+    // T093: a delegate's provider call is retried under the same session as
+    // the main conversation's, and the two used to word themselves
+    // identically — a fan-out stuck in a gateway outage read as the main turn
+    // being stuck. The prefix says whose request this is before it says what
+    // happened to it.
+    title: withDelegatePrefix(
+      t,
+      buildTitle(t, errorStatus, counts),
+      input.retry.delegationId,
+      input.delegateName
+    ),
     detail: segments.length > 0 ? segments.join(' · ') : null,
   };
+}
+
+/**
+ * Prefix the title with whose request this is, when it is not the main
+ * conversation's.
+ *
+ * Name-first, falling back to the bare noun: `delegationId` proves a delegate
+ * is involved, but the lane that knows its NAME may not exist yet (a retry can
+ * precede the delegate's first event, and lanes are evicted under pressure).
+ * Printing the id instead would be worse than printing nothing — it is a uuid.
+ */
+function withDelegatePrefix(
+  t: Translate,
+  title: string,
+  delegationId: string | undefined,
+  delegateName: string | null | undefined
+): string {
+  const id = typeof delegationId === 'string' ? delegationId.trim() : '';
+  if (id === '') return title;
+  const name = typeof delegateName === 'string' ? delegateName.trim() : '';
+  const who = name === '' ? t('A subagent') : t('Subagent {{name}}', { name });
+  return `${who} · ${title}`;
 }
 
 /** The 2x2 of "upstream status or not" x "countable attempt or not". */
@@ -136,6 +241,18 @@ function buildTitle(t: Translate, errorStatus: string | null, counts: string | n
 /** `attempt`/`maxRetries` are 1-based; the normalizer's missing-field sentinel is `0`. */
 function positiveInt(value: number | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 1 ? value : null;
+}
+
+/**
+ * A millisecond reading that is worth doing arithmetic with.
+ *
+ * `0` is rejected on both inputs and for the same reason on each: it is the
+ * normalizer's "field absent" sentinel for `delayMs`, and it is
+ * `STATIC_NOW_MS` — the constant every turn but the in-flight one is handed —
+ * for the clock. Neither is an instant.
+ */
+function positiveMs(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 
 /** Sub-second backoffs exist (first retry can be ~500ms) — never print `0s`. */

@@ -2977,6 +2977,18 @@ export const zhTranslations: Record<string, string> = {
     '上游返回错误 {{status}} · 正在重试 {{counts}} · 本回合仍在进行',
   'Next attempt in {{delay}}': '{{delay}} 后重试',
 
+  // T093（决策 029 第 3 条）—— 倒计时活起来之后多出来的三句。
+  // 「正在重试…」是倒计时归零后的状态：请求已经发出去了，屏幕上不该再挂一个
+  // 停在 0s 的数字。前缀两句分名字有无两种情况：delegationId 证明这是子代理的
+  // 请求，但知道名字的那条 lane 可能还没建起来，这时只说「子代理」，绝不把
+  // uuid 摆到用户面前。
+  'Retrying now…': '正在重试…',
+  'A subagent': '子代理',
+  'Subagent {{name}}': '子代理 {{name}}',
+  // 横幅右侧的放弃按钮。「立即」是它与 Composer 上那颗 Stop 的差别：退避期间
+  // 也能按，不必等这一次尝试跑完。
+  'Give up now': '立即放弃',
+
   // D26 — the Composer's attachment sentences, refusals and hint alike. They
   // share one folded notice, so they are translated together: a Chinese list
   // under an English header is the same defect one layer up.
@@ -3027,6 +3039,18 @@ export const zhTranslations: Record<string, string> = {
   'Subagent prompt cache': '子代理提示词缓存',
   'A delegate writes a prefix nothing reads again, so five minutes is usually the cheaper choice. Takes effect the next time a conversation starts its runtime.':
     '子代理写出的前缀之后没人再读，所以通常 5 分钟更划算。在对话下一次启动运行时生效。',
+
+  // --- 模型请求空闲超时（T093 / 决策 029 第 1、2 条）-------------------------
+  // 这一档管的是「连上了但不说话」：连接建立之后迟迟收不到第一个字节，或者流
+  // 开到一半停住。以前不设这个数，落到 SDK 默认的 600 秒，网关哑掉时一次尝试
+  // 就能占掉十分钟。「关闭」是合法取值（0），不是没填。
+  'Model request timeout': '模型请求超时',
+  'Idle timeout': '空闲超时',
+  'Give up an attempt and retry when nothing arrives for this long after the connection opens. Off waits indefinitely.':
+    '连接后超过这个时间没有收到任何数据就放弃本次尝试并重试；关闭则等待到底。',
+  '30 seconds': '30 秒',
+  '1 minute': '1 分钟',
+  '2 minutes': '2 分钟',
 };
 
 export function normalizeLocale(input?: string): Locale {

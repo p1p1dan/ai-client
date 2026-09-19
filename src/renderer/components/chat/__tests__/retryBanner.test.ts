@@ -26,6 +26,10 @@ const FULL: RetryBannerInput = {
 
 const TITLE_TAIL = '— the turn is still running';
 
+/** Catalog-backed Chinese translator, shared by the T093 and T067 blocks. */
+const zhTranslate = (key: string, params?: Record<string, string | number>) =>
+  translate('zh', key, params);
+
 describe('deriveRetryBanner — gate', () => {
   it('no retry state renders nothing, in every gate position', () => {
     expect(deriveRetryBanner({ ...FULL, retry: null })).toBeNull();
@@ -152,6 +156,121 @@ describe('deriveRetryBanner — everything absent', () => {
 });
 
 /**
+ * T093 (decision 029 clause 3) — the countdown is derived, not formatted once.
+ *
+ * The defect this replaces: the banner printed 「30 秒后重试」 at the instant the
+ * event arrived and then held that text for the whole backoff, so a user
+ * watching a stalled turn could not tell a countdown from a frozen screen.
+ *
+ * The clock is INJECTED (`nowMs`), never read off `Date.now()`, which is what
+ * makes the whole progression assertable here rather than in a timer test.
+ */
+describe('deriveRetryBanner — live countdown (T093)', () => {
+  /** Arbitrary fixed epoch; only the differences matter. */
+  const AT = 1_700_000_000_000;
+  const LIVE: RetryBannerInput = {
+    ...FULL,
+    retry: { ...FULL.retry, delayMs: 10_000, retryAt: AT + 10_000 },
+    nowMs: AT,
+  };
+
+  it('counts down from retryAt against the injected clock', () => {
+    const at = (offsetMs: number) => deriveRetryBanner({ ...LIVE, nowMs: AT + offsetMs })?.detail;
+    expect(at(0)).toBe('Next attempt in 10s · unknown');
+    expect(at(1_000)).toBe('Next attempt in 9s · unknown');
+    expect(at(7_000)).toBe('Next attempt in 3s · unknown');
+    // Sub-second remainder keeps the existing `<1s` wording rather than `0s`:
+    // one formatter serves both shapes, so they cannot word the tail
+    // differently.
+    expect(at(9_500)).toBe('Next attempt in <1s · unknown');
+  });
+
+  it('switches to "retrying now" once retryAt has passed', () => {
+    // Exactly at the instant, and well past it: the attempt is out, so there
+    // is nothing left to count and a `0s` would be a lie with a number on it.
+    expect(deriveRetryBanner({ ...LIVE, nowMs: AT + 10_000 })?.detail).toBe(
+      'Retrying now… · unknown'
+    );
+    expect(deriveRetryBanner({ ...LIVE, nowMs: AT + 45_000 })?.detail).toBe(
+      'Retrying now… · unknown'
+    );
+    expect(deriveRetryBanner({ ...LIVE, nowMs: AT + 45_000 }, zhTranslate)?.detail).toBe(
+      '正在重试… · unknown'
+    );
+    // The title never claims the turn died: the retry IS the turn continuing.
+    expect(deriveRetryBanner({ ...LIVE, nowMs: AT + 45_000 })?.title).toContain(TITLE_TAIL);
+  });
+
+  it('falls back to the static text when retryAt is absent', () => {
+    // An old worker sends `delayMs` only. A clock alone must not turn that
+    // duration into a countdown it is not running.
+    expect(deriveRetryBanner({ ...FULL, nowMs: AT })?.detail).toBe('Next attempt in 8s · unknown');
+    // And the reverse: `retryAt` with no clock (every turn but the in-flight
+    // one is handed `STATIC_NOW_MS`, which is 0) degrades the same way.
+    expect(deriveRetryBanner({ ...LIVE, nowMs: undefined })?.detail).toBe(
+      'Next attempt in 10s · unknown'
+    );
+    expect(deriveRetryBanner({ ...LIVE, nowMs: 0 })?.detail).toBe('Next attempt in 10s · unknown');
+    // Neither field: the timing segment disappears, it is never invented.
+    expect(
+      deriveRetryBanner({ ...FULL, retry: { ...FULL.retry, delayMs: 0 }, nowMs: AT })?.detail
+    ).toBe('unknown');
+  });
+});
+
+/**
+ * T093 — a delegate's retry says so.
+ *
+ * Before decision 029 clause 8 the delegate's provider budget carried no
+ * callbacks at all, so a fan-out sitting in a gateway outage was silent. Now
+ * that it banners, the banner has to name whose request it is: it renders in
+ * the PARENT's timeline, where an unattributed 「正在重试」 reads as the main
+ * conversation being stuck.
+ */
+describe('deriveRetryBanner — subagent attribution (T093)', () => {
+  const DELEGATED: RetryBannerInput = {
+    ...FULL,
+    retry: { ...FULL.retry, delegationId: '1103083d-0000-0000-0000-000000000000' },
+  };
+
+  it('names the delegate when the retry belongs to a subagent', () => {
+    expect(deriveRetryBanner({ ...DELEGATED, delegateName: 'code-reviewer' })?.title).toBe(
+      `Subagent code-reviewer · Network retry 2/10 ${TITLE_TAIL}`
+    );
+    expect(
+      deriveRetryBanner({ ...DELEGATED, delegateName: 'code-reviewer' }, zhTranslate)?.title
+    ).toBe('子代理 code-reviewer · 网络重试中 · 2/10 · 本回合仍在进行');
+  });
+
+  it('falls back to the bare noun rather than printing a uuid', () => {
+    // The lane that knows the name may not exist yet (a retry can precede the
+    // delegate's first event) or may have been evicted. `delegationId` still
+    // proves a delegate is involved, so the attribution survives the name.
+    for (const delegateName of [undefined, null, '', '   ']) {
+      const view = deriveRetryBanner({ ...DELEGATED, delegateName });
+      expect(view?.title, `delegateName=${JSON.stringify(delegateName)}`).toBe(
+        `A subagent · Network retry 2/10 ${TITLE_TAIL}`
+      );
+      expect(view?.title).not.toContain('1103083d');
+    }
+  });
+
+  it('leaves the main conversation unprefixed, name or no name', () => {
+    expect(deriveRetryBanner(FULL)?.title).toBe(`Network retry 2/10 ${TITLE_TAIL}`);
+    // A stale name with no delegation is not attribution — `delegationId` is
+    // the only thing that decides whose request this is.
+    expect(deriveRetryBanner({ ...FULL, delegateName: 'code-reviewer' })?.title).toBe(
+      `Network retry 2/10 ${TITLE_TAIL}`
+    );
+    for (const delegationId of ['', '   ']) {
+      expect(deriveRetryBanner({ ...FULL, retry: { ...FULL.retry, delegationId } })?.title).toBe(
+        `Network retry 2/10 ${TITLE_TAIL}`
+      );
+    }
+  });
+});
+
+/**
  * T067 (D21) — the banner in the app's default language.
  *
  * Two 503 rounds were photographed on 2026-09-17 with this banner reading
@@ -164,8 +283,7 @@ describe('deriveRetryBanner — everything absent', () => {
  * failure mode a single happy-path assertion would miss.
  */
 describe('deriveRetryBanner — Chinese (T067 D21)', () => {
-  const zh = (key: string, params?: Record<string, string | number>) =>
-    translate('zh', key, params);
+  const zh = zhTranslate;
 
   it('words all four title shapes from the catalog', () => {
     expect(deriveRetryBanner(FULL, zh)?.title).toBe('网络重试中 · 2/10 · 本回合仍在进行');

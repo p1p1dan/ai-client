@@ -10,6 +10,10 @@
 import { englishTranslate, type Translate } from '@shared/i18n';
 import type { ChatSendAttachment } from '@/stores/chatSessions';
 import { formatCharCount, replyCharsLabel } from './countFormat';
+// T093: the retry countdown's vocabulary lives with the banner that introduced
+// it (`Next attempt in Ns` / `Retrying now…`), and this line borrows it rather
+// than growing a second copy — the two render eight pixels apart.
+import { deriveRetryCountdown, retryCountdownLabel } from './retryBanner';
 
 export type AttachmentKind = 'image' | 'text';
 
@@ -438,7 +442,20 @@ export function composerSendingLine(
      * wait, instead of a wording swap that would make every prior screenshot
      * and design-doc reference stale.
      */
-    retry?: { attempt: number; maxRetries: number } | null;
+    retry?: {
+      attempt: number;
+      maxRetries: number;
+      /** T093: absolute instant of the next attempt, for the live countdown. */
+      retryAt?: number;
+      /** Pre-T093 fallback: the backoff as measured when the event was sent. */
+      delayMs?: number;
+    } | null;
+    /**
+     * T093: the same whole-second clock the banner counts with. Optional, and
+     * absent means the suffix stays the static `Retry n/m` it has always been —
+     * a caller with no clock must not be made to print a countdown.
+     */
+    nowMs?: number;
     /**
      * F456 §7.4: size of the prompt this turn sent, in CODE POINTS, snapshotted
      * at the commit point (`ChatComposer.tsx`). `0` — the fallback for a session
@@ -467,11 +484,19 @@ export function composerSendingLine(
   // user's live case was an upstream 503), so the suffix stays cause-neutral.
   // The banner (retryBanner.ts), which does see the status, carries the
   // cause-specific wording.
+  //
+  // T093: the count is followed by the SAME countdown clause the banner above
+  // prints, from the same function (`retryBanner.ts`), so the two lines cannot
+  // disagree about how long is left. Without a `retryAt` or without a clock
+  // the clause is absent and this suffix is byte-identical to the pre-T093 one.
+  const retryCountdown = input.retry
+    ? retryCountdownLabel(deriveRetryCountdown(input.retry, input.nowMs), t)
+    : null;
   const retrySuffix = input.retry
     ? ` · ${t('Retry {{attempt}}/{{max}}', {
         attempt: input.retry.attempt,
         max: input.retry.maxRetries,
-      })}`
+      })}${retryCountdown === null ? '' : ` · ${retryCountdown}`}`
     : '';
   // The two wording tiers, in the same order `deriveTurnStatus` tests its two
   // kinds — same constants, same sequence, so a `kind` can never describe a

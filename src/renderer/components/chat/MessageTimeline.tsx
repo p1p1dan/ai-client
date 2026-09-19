@@ -35,6 +35,7 @@ import {
   usePendingUserMessagesStore,
 } from '@/stores/pendingUserMessages';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
+import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import {
   type PendingReplyWatch,
   type TurnSendStatus,
@@ -98,6 +99,7 @@ import { ReadingColumn } from './ReadingColumn';
 import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
 import { SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { useResumeSession } from './sessionIndex/useResumeSession';
+import { delegateDisplayName } from './subagentActivityModel';
 import { ToolGroup } from './ToolRows';
 import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
 import { buildTurnCopyTextFromItems } from './turnCopy';
@@ -321,6 +323,15 @@ export function MessageTimeline({
   // `deriveTurnStatus` appends it to the same copy the composer used to show.
   const sessionRetry = useChatSessionsStore(
     (state) => state.sessions.find((session) => session.id === sessionId)?.retry ?? null
+  );
+  // T093: who the retried request belongs to, when it is a delegate's.
+  // Subscribed as a STRING, so the timeline re-renders only when the NAME
+  // changes — the subagent store rewrites its lanes on every delegate event,
+  // and subscribing to the lane itself would make a fan-out re-render this
+  // whole list at its event rate. `null` (no delegation, or a lane that does
+  // not exist yet) is a legitimate answer the banner words for itself.
+  const retryDelegateName = useSubagentActivityStore((state) =>
+    delegateDisplayName(state, sessionRetry?.delegationId)
   );
   const { get: getMeta } = useMessageMetadata(sessionId);
   const { getThinking } = useTurnTiming(sessionId);
@@ -668,6 +679,12 @@ export function MessageTimeline({
                     // other turn for the same reason the two ticking props are
                     // (F7): a retry tick must not break `memo` session-wide.
                     retry={isLastTurn && pendingSendStatus == null ? sessionRetry : null}
+                    // T093: narrowed exactly like `retry` above — the name is
+                    // only ever read next to it, so handing it to every turn
+                    // would break `memo` for a string nobody else renders.
+                    retryDelegateName={
+                      isLastTurn && pendingSendStatus == null ? retryDelegateName : null
+                    }
                     nowMs={isLastTurn ? nowMs : STATIC_NOW_MS}
                     getMetadata={getMeta}
                     thinkingEnabled={thinkingEnabled}
@@ -684,7 +701,13 @@ export function MessageTimeline({
               })
             )}
             {pendingSendStatus && (
-              <PendingTurnHead sendStatus={pendingSendStatus} retry={sessionRetry} />
+              <PendingTurnHead
+                sessionId={sessionId}
+                sendStatus={pendingSendStatus}
+                retry={sessionRetry}
+                retryDelegateName={retryDelegateName}
+                nowMs={nowMs}
+              />
             )}
             {/* T-31 §9-ζ: stays SESSION-level and stays here, after the last
                 turn. Folding it into the failing turn would leave a
@@ -1262,6 +1285,8 @@ interface ChatTurnProps {
   /** Last message id in the bucket when this session's last send began. */
   baselineMessageId: string | null;
   retry: SessionRetryInfo | null;
+  /** T093: delegate behind `retry.delegationId`, resolved by the timeline. */
+  retryDelegateName: string | null;
   /** Whole-second clock, ticking only while a turn is in flight (`useSecondsTick`). `STATIC_NOW_MS` for every turn but the last. */
   nowMs: number;
   getMetadata: (messageId: string) => MessageMetadata | undefined;
@@ -1551,6 +1576,7 @@ const ChatTurn = memo(function ChatTurn({
   baselineKnown,
   baselineMessageId,
   retry,
+  retryDelegateName,
   nowMs,
   getMetadata,
   thinkingEnabled,
@@ -1710,6 +1736,11 @@ const ChatTurn = memo(function ChatTurn({
       retry,
       inFlight: inFlightSession,
       outputSinceRetry: turnProgressStamp > progressStampAtRetry,
+      // T093: the ticking clock, so `retryAt` becomes a countdown instead of a
+      // number formatted once and left there. `STATIC_NOW_MS` on a turn that
+      // is not the last one degrades to the old static wording by itself.
+      nowMs,
+      delegateName: retryDelegateName,
     },
     // T067 (D21): the banner words itself from the catalog now, so it needs
     // the same translator the composer line below it already had.
@@ -1739,7 +1770,17 @@ const ChatTurn = memo(function ChatTurn({
       // this window opened has no `sendStatus`, but its reply text is still on
       // screen and still countable).
       replyChars: countAssistantReplyChars(turn.body),
-      retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
+      // T093: `retryAt` and the clock ride along so this line counts the same
+      // second the banner above it does.
+      retry: retry
+        ? {
+            attempt: retry.attempt,
+            maxRetries: retry.maxRetries,
+            ...(retry.retryAt === undefined ? {} : { retryAt: retry.retryAt }),
+            delayMs: retry.delayMs,
+          }
+        : null,
+      nowMs,
       hasBlocks: turnHasBlocks,
       // F4: a session failure belongs to the turn that was actually running when
       // it happened — never to the completed turn that merely happens to be last
@@ -2031,7 +2072,7 @@ const ChatTurn = memo(function ChatTurn({
             turn ended on); mid-stream it can also be a tool run that has not
             been followed by prose yet. Either way it stays visible. */}
         {workGroup.trailing.map(renderSegment)}
-        {retryBanner && <RetryBanner view={retryBanner} />}
+        {retryBanner && <RetryBanner view={retryBanner} sessionId={sessionId} />}
         {/* T12-b: the running status, and ONLY while it is running. FB6's
             position is kept — under the output it describes, not above it —
             but the row no longer has a completed state (`Worked for 12s ·
@@ -2100,11 +2141,19 @@ function findFirstAssistant(messages: readonly ChatMessage[]): ChatMessage | nul
  * nothing has streamed yet, so there is no `message.started` to count from.
  */
 function PendingTurnHead({
+  sessionId,
   sendStatus,
   retry,
+  retryDelegateName,
+  nowMs,
 }: {
+  /** T093: whose turn the banner's Give-up button must abort — this timeline's. */
+  sessionId: string;
   sendStatus: TurnSendStatus;
   retry: SessionRetryInfo | null;
+  retryDelegateName: string | null;
+  /** The timeline's `useSecondsTick`; it runs throughout this window (`sendStatus != null`). */
+  nowMs: number;
 }) {
   const { t } = useI18n();
   const status = deriveTurnStatus(
@@ -2119,18 +2168,30 @@ function PendingTurnHead({
       // where it says the most — no user bubble exists yet, so `↑ 428 chars` is
       // the only thing on screen describing what was just sent.
       promptChars: sendStatus.promptChars,
-      retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
+      // T093: same countdown inputs the attached turn passes.
+      retry: retry
+        ? {
+            attempt: retry.attempt,
+            maxRetries: retry.maxRetries,
+            ...(retry.retryAt === undefined ? {} : { retryAt: retry.retryAt }),
+            delayMs: retry.delayMs,
+          }
+        : null,
+      nowMs,
       hasBlocks: false,
     },
     t
   );
   // T-33: the pending head's existence is itself the in-flight proof, and no
   // turn exists yet, so the other two gate inputs are literals here.
-  const retryBanner = deriveRetryBanner({ retry, inFlight: true, outputSinceRetry: false }, t);
+  const retryBanner = deriveRetryBanner(
+    { retry, inFlight: true, outputSinceRetry: false, nowMs, delegateName: retryDelegateName },
+    t
+  );
   if (!status && !retryBanner) return null;
   return (
     <>
-      {retryBanner && <RetryBanner view={retryBanner} />}
+      {retryBanner && <RetryBanner view={retryBanner} sessionId={sessionId} />}
       {status && (
         <div className={turnHeadClass()}>
           <TurnStatusContent status={status} />
@@ -2147,7 +2208,7 @@ function PendingTurnHead({
  * `warning`/`destructive`: the banner exists to say the turn is alive, and an
  * alarm color would claim the opposite.
  */
-function RetryBanner({ view }: { view: RetryBannerView }) {
+function RetryBanner({ view, sessionId }: { view: RetryBannerView; sessionId: string }) {
   const { t } = useI18n();
   return (
     <div
@@ -2157,13 +2218,32 @@ function RetryBanner({ view }: { view: RetryBannerView }) {
       <RefreshCw className="mt-0.5 size-3.5 shrink-0 animate-spin" />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{view.title}</p>
+        {/* T093: the detail line is no longer behind a `<details>` disclosure.
+            It carries the COUNTDOWN now, and a countdown nobody can see is
+            indistinguishable from the frozen number decision 029 clause 3
+            exists to replace. `tabular-nums` because the seconds are rewritten
+            in place once a second — proportional digits would make the whole
+            line twitch sideways (design-system 数字对齐). */}
         {view.detail && (
-          <details className="mt-1 break-words">
-            <summary className="cursor-pointer">{t('Details')}</summary>
-            <p className="mt-1 whitespace-pre-wrap">{view.detail}</p>
-          </details>
+          <p className="mt-1 break-words tabular-nums whitespace-pre-wrap">{view.detail}</p>
         )}
       </div>
+      {/* Decision 029 clause 3: give up without hunting for the composer's Stop.
+          Shown during the backoff AND during an attempt — waiting out a 120 s
+          silent attempt is exactly the case the user reported. `stopChatSession`
+          takes an id, so this aborts THIS banner's session even when the
+          timeline is not the foreground one (T091). Ghost, not destructive: the
+          turn is alive and the banner says so; an alarm-coloured button would
+          contradict the sentence it sits next to. */}
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="-my-0.5 h-6 shrink-0 text-meta"
+        onClick={() => void stopChatSession(sessionId)}
+      >
+        {t('Give up now')}
+      </Button>
     </div>
   );
 }

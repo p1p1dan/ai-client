@@ -100,6 +100,29 @@ export const initialSubagentActivity: SubagentActivityState = {
   nextOrdinal: 0,
 };
 
+/**
+ * T093: name the delegate behind a `delegationId`, for the retry banner.
+ *
+ * The join is the one `permission.requested` already uses — `agentIndex` to a
+ * lane — and the label is the one the lane header already prints
+ * (`agentType`, falling back to the task description). Returning a STRING (or
+ * null) rather than the lane keeps it usable as a zustand selector: a lane
+ * update that does not change the name cannot then re-render the timeline.
+ *
+ * `null` for an unknown delegation is not a degradation to paper over: a retry
+ * can arrive before the delegate's first event, and lanes are evicted under
+ * pressure. The caller words that case as a nameless subagent.
+ */
+export function delegateDisplayName(
+  state: SubagentActivityState,
+  delegationId: string | null | undefined
+): string | null {
+  if (!delegationId) return null;
+  const parentToolCallId = state.agentIndex[delegationId];
+  const lane = parentToolCallId ? state.lanes[parentToolCallId] : undefined;
+  return lane?.agentType ?? lane?.description ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Reducer
 // ---------------------------------------------------------------------------

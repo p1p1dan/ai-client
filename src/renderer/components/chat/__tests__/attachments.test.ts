@@ -593,6 +593,50 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
     expect(withoutField).toBe(withNull);
   });
 
+  /**
+   * T093 (decision 029 clause 3) — the line one row under the banner counts
+   * the same seconds the banner does.
+   *
+   * Both call `retryCountdownLabel` (`retryBanner.ts`), so this pins the
+   * DELEGATION as much as the copy: two surfaces eight pixels apart saying
+   * different things about the same backoff is the 2026-09-17 defect that
+   * started this, in its other form.
+   */
+  it('the composer retry hint counts down with the same clock', () => {
+    const AT = 1_700_000_000_000;
+    const line = (nowMs?: number) =>
+      composerSendingLine({
+        phase: 'awaiting',
+        elapsedSeconds: 12,
+        budgetMs: 45_000,
+        attachmentCount: 0,
+        attachmentBytes: 0,
+        retry: { attempt: 2, maxRetries: 3, delayMs: 10_000, retryAt: AT + 10_000 },
+        nowMs,
+      });
+    expect(line(AT)).toContain('· Retry 2/3 · Next attempt in 10s');
+    expect(line(AT + 4_000)).toContain('· Retry 2/3 · Next attempt in 6s');
+    // Past the instant the count keeps its place and only the clause changes.
+    expect(line(AT + 10_000)).toContain('· Retry 2/3 · Retrying now…');
+    // No clock: the suffix is exactly the pre-T093 one, not a countdown from
+    // an epoch this caller never read.
+    expect(line()).toContain('· Retry 2/3 · Next attempt in 10s');
+    // A worker that sends neither instant nor duration: the count stands
+    // alone, the timing clause is not invented.
+    const countOnly = composerSendingLine({
+      phase: 'awaiting',
+      elapsedSeconds: 12,
+      budgetMs: 45_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+      retry: { attempt: 2, maxRetries: 3 },
+      nowMs: AT,
+    });
+    expect(countOnly).toContain('· Retry 2/3');
+    expect(countOnly).not.toContain('Next attempt in');
+    expect(countOnly).not.toContain('Retrying now');
+  });
+
   it('never shows the retry counter during the handshake phase', () => {
     const line = composerSendingLine({
       phase: 'handshake',

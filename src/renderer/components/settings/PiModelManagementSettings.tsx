@@ -1,16 +1,31 @@
+import type { Translate } from '@shared/i18n';
 import type {
   PiModelManagementSettings as PiModelManagementSnapshot,
   PiModelSyncResult,
 } from '@shared/piModelConfig';
 import { isPromptCacheTtl, PROMPT_CACHE_TTLS } from '@shared/types/promptCacheTtl';
+import {
+  DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
+  PROVIDER_IDLE_TIMEOUT_CHOICES,
+  PROVIDER_IDLE_TIMEOUT_DISABLED,
+  readProviderIdleTimeoutMs,
+} from '@shared/types/providerTimeout';
 import { CheckCircle2, ExternalLink, RefreshCw, Server, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useI18n } from '@/i18n';
+import { Z_INDEX } from '@/lib/z-index';
 import { useSettingsStore } from '@/stores/settings';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
@@ -190,6 +205,7 @@ export function PiModelManagementSettings() {
       </div>
 
       <PromptCacheTtlSection />
+      <ProviderIdleTimeoutSection />
     </div>
   );
 }
@@ -239,4 +255,97 @@ function PromptCacheTtlSection() {
       </SettingsRow>
     </SettingsSectionBlock>
   );
+}
+
+/**
+ * T093 / decision 029 — how long a model request may stay silent.
+ *
+ * Next to the prompt cache because both are properties of how we make MODEL
+ * requests, and both reach a conversation the same way: read once, when its
+ * worker starts.
+ *
+ * A picker rather than free text: the five rungs are the ones pi's own CLI
+ * offers, and a number field would invite the value this setting exists to
+ * prevent (the 2026-09-19 field report was a gateway holding one attempt for
+ * ten minutes).
+ *
+ * Exported so a mount test can render THIS section without stubbing the model
+ * -catalog IPC the rest of the page loads on start.
+ */
+export function ProviderIdleTimeoutSection() {
+  const { t } = useI18n();
+  const providerIdleTimeoutMs = useSettingsStore((state) => state.providerIdleTimeoutMs);
+  const setProviderIdleTimeoutMs = useSettingsStore((state) => state.setProviderIdleTimeoutMs);
+
+  // `0` is the "off" rung, so the current value is compared and transported as
+  // a STRING: `String(0)` is `'0'`, which is a perfectly ordinary option value,
+  // whereas every shortcut that treats the number as a flag turns "off" back
+  // into the 120 s default.
+  const value = String(providerIdleTimeoutMs);
+
+  return (
+    <SettingsSectionBlock
+      title={t('Model request timeout')}
+      description={t(
+        'Give up an attempt and retry when nothing arrives for this long after the connection opens. Off waits indefinitely.'
+      )}
+    >
+      <SettingsRow>
+        <span className="text-ui">{t('Idle timeout')}</span>
+        <div className="min-w-0 space-y-2">
+          <Select
+            value={value}
+            onValueChange={(next) => {
+              // The picker only ever emits its own option values, but they
+              // arrive as strings; `readProviderIdleTimeoutMs` is the one
+              // parser that knows `'0'` is a value and `''` is not.
+              setProviderIdleTimeoutMs(
+                readProviderIdleTimeoutMs(next, DEFAULT_PROVIDER_IDLE_TIMEOUT_MS)
+              );
+            }}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue>{idleTimeoutLabel(providerIdleTimeoutMs, t)}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_MODAL}>
+              {PROVIDER_IDLE_TIMEOUT_CHOICES.map((choice) => (
+                <SelectItem key={choice} value={String(choice)}>
+                  {idleTimeoutLabel(choice, t)}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+          <p className="text-meta text-muted-foreground">
+            {t('Takes effect the next time a conversation starts its runtime.')}
+          </p>
+        </div>
+      </SettingsRow>
+    </SettingsSectionBlock>
+  );
+}
+
+/**
+ * Rung labels. `0` is worded ("Off"), never printed as `0 ms`.
+ *
+ * One case per rung rather than a formatter, so each label is a catalog key a
+ * translator can see. The `default` is not dead code: the stored value is a
+ * plain number in a JSON file a user can edit, and an off-ladder value is
+ * reported as the seconds it actually is instead of being rounded onto a rung
+ * it is not.
+ */
+function idleTimeoutLabel(idleTimeoutMs: number, t: Translate): string {
+  switch (idleTimeoutMs) {
+    case PROVIDER_IDLE_TIMEOUT_DISABLED:
+      return t('Off');
+    case 30_000:
+      return t('30 seconds');
+    case 60_000:
+      return t('1 minute');
+    case 120_000:
+      return t('2 minutes');
+    case 300_000:
+      return t('5 minutes');
+    default:
+      return `${Math.round(idleTimeoutMs / 1000)}s`;
+  }
 }

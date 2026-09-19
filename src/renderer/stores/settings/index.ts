@@ -5,6 +5,10 @@ import {
   DEFAULT_PROMPT_CACHE_TTL,
   DEFAULT_SUBAGENT_PROMPT_CACHE_TTL,
 } from '@shared/types/promptCacheTtl';
+import {
+  DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
+  isProviderIdleTimeoutMs,
+} from '@shared/types/providerTimeout';
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -164,6 +168,11 @@ export function getInitialState() {
     promptCacheTtl: DEFAULT_PROMPT_CACHE_TTL,
     subagentPromptCacheTtl: DEFAULT_SUBAGENT_PROMPT_CACHE_TTL,
 
+    // T093: same discipline as the two TTLs above — the value written here is
+    // the one the worker applies when the key is absent, so the settings page
+    // cannot show a number the runtime is not using.
+    providerIdleTimeoutMs: DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
+
     // AI Features
     commitMessageGenerator: defaultCommitMessageGeneratorSettings,
     codeReview: defaultCodeReviewSettings,
@@ -294,6 +303,14 @@ export const useSettingsStore = create<SettingsState>()(
       // it started on until it is reopened.
       setPromptCacheTtl: (promptCacheTtl) => set({ promptCacheTtl }),
       setSubagentPromptCacheTtl: (subagentPromptCacheTtl) => set({ subagentPromptCacheTtl }),
+
+      // T093: guarded at the door rather than at every reader. `0` passes —
+      // it is the "off" rung, and `isProviderIdleTimeoutMs` says so — while a
+      // negative or absurd number is dropped, because a stored value main
+      // would reject is a setting that silently does nothing.
+      setProviderIdleTimeoutMs: (providerIdleTimeoutMs) => {
+        if (isProviderIdleTimeoutMs(providerIdleTimeoutMs)) set({ providerIdleTimeoutMs });
+      },
 
       // AI Feature Setters
       setCommitMessageGenerator: (settings) =>

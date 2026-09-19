@@ -82,7 +82,20 @@ export interface TurnStatusInput {
    */
   replyChars?: number;
   /** The CLI's transport-retry loop for this turn, if any. */
-  retry?: { attempt: number; maxRetries: number } | null;
+  retry?: {
+    attempt: number;
+    maxRetries: number;
+    /** T093: absolute instant of the next attempt (decision 029 clause 3). */
+    retryAt?: number;
+    /** Pre-T093 fallback: the backoff as measured when the event was sent. */
+    delayMs?: number;
+  } | null;
+  /**
+   * T093: the caller's whole-second clock, forwarded so the retry suffix can
+   * count down instead of freezing. Forwarded, never consumed here — the
+   * wording stays in `composerSendingLine`, like every other clause.
+   */
+  nowMs?: number;
   /** The turn already produced at least one block, i.e. tokens are arriving. */
   hasBlocks?: boolean;
   /** The turn ended in failure. */
@@ -124,6 +137,9 @@ export function deriveTurnStatus(
       attachmentCount: input.attachmentCount,
       attachmentBytes: input.attachmentBytes,
       retry: input.retry,
+      // T093: same treatment as the two counts below — forwarded so exactly one
+      // module words the countdown.
+      nowMs: input.nowMs,
       // F456 §7.4: forwarded, not consumed here.
       promptChars: input.promptChars,
       // F06: same treatment — the wording, including whether `↓` appears at all,

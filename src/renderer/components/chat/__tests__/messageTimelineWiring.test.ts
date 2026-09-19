@@ -1373,7 +1373,14 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // T067: `, t` is part of the token on purpose — the banner's copy comes
     // from the catalog now, and a pending head that forgot the translator
     // would print English under a Chinese composer again.
-    expectCalled('deriveRetryBanner({ retry, inFlight: true, outputSinceRetry: false }, t)');
+    // T093: the clock and the delegate name join that literal pair. `nowMs`
+    // is what makes the countdown a countdown, and the pending head is the ONE
+    // window where a subagent retry is most likely to be all there is on
+    // screen — a head that forgot either would print a frozen number about an
+    // unattributed request.
+    expectCalled(
+      '{ retry, inFlight: true, outputSinceRetry: false, nowMs, delegateName: retryDelegateName }'
+    );
     // F1 (Codex review, two rounds): the disproof is "new output SINCE this
     // retry", never "the turn ever had output" — and the stamp counts
     // CHARACTERS, not just blocks, because recovery may append into an
@@ -1386,6 +1393,13 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
       (CALL_SITES.match(/<RetryBanner/g) ?? []).length,
       'the banner must render in exactly the two head slots'
     ).toBe(2);
+    // T093: the give-up button aborts a session by id, and the banner has no
+    // other way to know which one — a required prop is what keeps the two
+    // mounts from falling back to whatever is in the foreground (T091).
+    expectWired(
+      'function RetryBanner({ view, sessionId }: { view: RetryBannerView; sessionId: string })'
+    );
+    expectCalled('void stopChatSession(sessionId)');
     // A retry tick must not re-render every turn in the session: the prop is
     // narrowed to the one turn that can show it, like the two ticking props.
     expectCalled('retry={isLastTurn && pendingSendStatus == null ? sessionRetry : null}');

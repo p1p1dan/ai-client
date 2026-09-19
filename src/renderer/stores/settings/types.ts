@@ -225,6 +225,21 @@ export interface SettingsState {
   promptCacheTtl: PromptCacheTtl;
   subagentPromptCacheTtl: PromptCacheTtl;
 
+  /**
+   * T093 / decision 029: how long a provider request may stay SILENT before it
+   * is cut and retried — first byte and mid-stream alike, one number
+   * (`@shared/types/providerTimeout`).
+   *
+   * Renderer-owned and persisted like the two TTLs above, and read by main out
+   * of the same settings file at worker spawn
+   * (`agent-host/providerTimeoutSettings.ts`).
+   *
+   * `0` means "never cut a silent request" and is a REAL value, not an empty
+   * one: any truthiness test on this field silently reinstates the 120 s
+   * default for the user who deliberately turned it off.
+   */
+  providerIdleTimeoutMs: number;
+
   // AI Features
   commitMessageGenerator: CommitMessageGeneratorSettings;
   codeReview: CodeReviewSettings;
@@ -319,6 +334,8 @@ export interface SettingsState {
   // Setters - Prompt cache
   setPromptCacheTtl: (ttl: PromptCacheTtl) => void;
   setSubagentPromptCacheTtl: (ttl: PromptCacheTtl) => void;
+  /** T093: milliseconds, `0` = off. Rejects anything out of range (see the field). */
+  setProviderIdleTimeoutMs: (idleTimeoutMs: number) => void;
 
   // Setters - AI Features
   setCommitMessageGenerator: (settings: Partial<CommitMessageGeneratorSettings>) => void;
