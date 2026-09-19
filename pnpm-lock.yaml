@@ -16,6 +16,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.0.0
         version: 1.1.0(@types/react@19.2.8)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@earendil-works/pi-agent-core':
+        specifier: 0.84.4
+        version: 0.84.4(ws@8.19.0)(zod@4.3.5)
       '@earendil-works/pi-coding-agent':
         specifier: ^0.84.3
         version: 0.84.4(ws@8.19.0)(zod@4.3.5)

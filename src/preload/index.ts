@@ -1115,6 +1115,21 @@ const electronAPI = {
       limit?: number;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LOAD_HISTORY_PAGE, payload),
+    /**
+     * T102 — one page of history read off the session file, with no worker.
+     *
+     * Answers with the same `session.history` runtime event the worker path
+     * publishes, so nothing downstream has to know which channel served it.
+     * Rejects with `worker_active` when the session does have a worker (ask
+     * that one instead) and with `session_replay_unavailable` when the file
+     * cannot be replayed (fall back to resume).
+     */
+    readSessionPage: (payload: {
+      sessionId: string;
+      offset?: number;
+      limit?: number;
+    }): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_READ_SESSION_PAGE, payload),
     /** R02-b — commands for the composer menu; `sessionId` is a hint, not a requirement. */
     getSlashCommands: (payload?: {
       sessionId?: string;

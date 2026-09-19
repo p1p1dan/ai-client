@@ -21,6 +21,7 @@ import { useCallback } from 'react';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useResumeSession } from '../chat/sessionIndex/useResumeSession';
 import { useResolvedSessionModel } from '../chat/useResolvedSessionModel';
+import { runSessionActivation } from './activateSessionStart';
 
 export type ActivateSession = (sessionId: string, persistedRuntimeIdentity?: string) => void;
 
@@ -38,16 +39,33 @@ export function useActivateSession(): ActivateSession {
       const session = state.sessions.find((item) => item.id === sessionId);
       const workspace = state.workspaces.find((ws) => ws.id === session?.workspaceId);
       const runtimeIdentity = session?.runtimeIdentity ?? persistedRuntimeIdentity;
-      const hasTimeline = (state.messages[sessionId]?.length ?? 0) > 0;
-      // U13: `workspace || session.unbound` — a temporary chat has no workspace
-      // on purpose and would otherwise open with an empty timeline. The actual
-      // decision (and the cwd it resumes into) stays inside `shouldResumeSession`.
-      if (runtimeIdentity && (workspace || session?.unbound) && !hasTimeline) {
-        void resume(sessionId, {
-          persistedRuntimeIdentity: runtimeIdentity,
-          model: resolveSessionModel(sessionId),
-        });
-      }
+      // The three-part rule (identity / somewhere to run / no timeline yet) is
+      // stated in `activateSessionStart.ts`, together with T102's preview-first
+      // rule; the cwd a resume runs into stays inside `shouldResumeSession`.
+      void runSessionActivation(
+        {
+          sessionId,
+          runtimeIdentity,
+          hasWorkspace: workspace != null,
+          unbound: session?.unbound != null,
+          hasTimeline: (state.messages[sessionId]?.length ?? 0) > 0,
+          hostBound: state.hostBoundSessionIds.includes(sessionId),
+        },
+        {
+          // Offset omitted rather than 0: the reader defaults to the newest
+          // page, which is the one a click wants.
+          preview: (input) =>
+            window.electronAPI.chat.readSessionPage({
+              sessionId: input.sessionId,
+              limit: 80,
+            }),
+          resume: (input) =>
+            resume(input.sessionId, {
+              persistedRuntimeIdentity: input.runtimeIdentity,
+              model: resolveSessionModel(input.sessionId),
+            }),
+        }
+      );
     },
     [selectSession, resume, resolveSessionModel]
   );

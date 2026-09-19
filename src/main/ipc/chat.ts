@@ -24,9 +24,25 @@ import { adoptTempWorkspace } from '../services/agent-host/TempWorkspaceService'
 import { WorkerManagerError, workerManager } from '../services/agent-host/WorkerManager';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
+import { readSessionReplayPage } from '../services/chat/SessionReplayReader';
 
 /** The window that sent this IPC call, when it still exists. */
 const windowCleanupAttached = new Set<number>();
+
+/**
+ * Sequence numbers for the read-only replay events (T102).
+ *
+ * Its own counter rather than the WorkerManager's: a replay is not produced by
+ * the host, so borrowing the host's sequence would let a page that no worker
+ * emitted advance a number other events are ordered by. Nothing consumes `seq`
+ * for ordering today (the renderer's event bus fans out in arrival order), so
+ * what this has to be is monotonic within this process, which it is.
+ */
+let replaySequence = 0;
+function nextReplaySequence(): number {
+  replaySequence += 1;
+  return replaySequence;
+}
 
 function ownerIdFor(event: IpcMainInvokeEvent | undefined): number | undefined {
   const webContentsId = event?.sender?.id;
@@ -838,6 +854,62 @@ export function registerChatHandlers(): void {
       const requestId = await workerManager.loadHistoryPage({
         ...payload,
         ownerWebContentsId,
+      });
+      return { requestId };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_READ_SESSION_PAGE,
+    async (
+      _e,
+      payload: { sessionId: string; offset?: number; limit?: number }
+    ): Promise<{ requestId: string }> => {
+      const row = await requireIndexedPiSession(payload.sessionId);
+      // A live worker owns the writer lock and holds the authoritative branch
+      // in memory, so its file may legitimately lag. Refuse rather than answer
+      // from a stale read; `worker_active` tells the renderer to ask the
+      // worker instead. Every slot counts, whatever state it is in — a
+      // starting or restarting worker owns the file just as much as a ready
+      // one.
+      if (
+        workerManager.getSlotSnapshots().some((slot) => slot.logicalSessionId === payload.sessionId)
+      ) {
+        throw new Error(
+          `worker_active: Session ${payload.sessionId} has a live worker; read its history from there`
+        );
+      }
+      // No `claimSessionForSender` on purpose: claiming marks a worker slot as
+      // foreground, and this path has no slot to mark. Reading history must
+      // never be the reason a session is treated as held by a window.
+      const page = await readSessionReplayPage({
+        sessionFile: row.runtimeIdentity,
+        ...(payload.offset !== undefined ? { offset: payload.offset } : {}),
+        ...(payload.limit !== undefined ? { limit: payload.limit } : {}),
+        ...(row.workspacePath ? { workspacePath: row.workspacePath } : {}),
+      });
+      const seq = nextReplaySequence();
+      const requestId = `replay-${payload.sessionId}-${seq}`;
+      broadcastRuntimeEvent({
+        type: 'session.history',
+        sessionId: payload.sessionId,
+        requestId,
+        seq,
+        timestamp: Date.now(),
+        payload: {
+          runtimeIdentity: row.runtimeIdentity,
+          workspacePath: row.workspacePath,
+          agent: PI_AGENT,
+          // `branch`, not `initial`: `initial` and `refresh` are the resume
+          // modes, and the store rejects both unless a matching
+          // `session.resumed` snapshot was taken first — which a preview must
+          // never publish. `branch` means "the file is the authority now", and
+          // that is precisely what this page is. `older` pages page.
+          mode: payload.offset ? 'older' : 'branch',
+          ...page,
+          truncated: page.hasMore,
+          omittedCount: Math.max(0, page.totalCount - page.offset - page.messages.length),
+        },
       });
       return { requestId };
     }

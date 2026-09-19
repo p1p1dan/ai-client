@@ -84,6 +84,7 @@ import {
   type HistoryErrorView,
   selectHistoryError,
 } from './historyError';
+import { loadOlderHistoryPage } from './historyPageRequest';
 // T12-b: `formatMessageMetadata` / `formatRelativeTimestamp` left with the meta
 // row. The strip that replaced it shows a bare wall clock (`14:32`), so the
 // relative form ("3 minutes ago") and the `model · time` composer are both
@@ -278,10 +279,14 @@ export function MessageTimeline({
     if (!sessionId || !historyPagination?.hasMore || loadingOlderHistory) return;
     setLoadingOlderHistory(true);
     try {
-      await window.electronAPI.chat.loadHistoryPage({
+      await loadOlderHistoryPage({
         sessionId,
         offset: historyPagination.nextOffset,
         limit: 80,
+        // Read at click time, not subscribed: this only decides which channel
+        // to ask, and a subscription would re-render the whole timeline every
+        // time any session gained or lost a worker.
+        hostBound: useChatSessionsStore.getState().hostBoundSessionIds.includes(sessionId),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

@@ -1,6 +1,7 @@
 import { getDisplayPathBasename } from '@shared/utils/path';
 import { ArrowLeftRight, ChevronRight, FileCode, Maximize2, Minimize2, X } from 'lucide-react';
 import { useState } from 'react';
+import { loadOlderHistoryPage } from '@/components/chat/historyPageRequest';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Ident } from '@/components/ui/ident';
@@ -43,10 +44,13 @@ export function SessionReviewPanel({
     setLoading(true);
     setError('');
     try {
-      await window.electronAPI.chat.loadHistoryPage({
+      await loadOlderHistoryPage({
         sessionId,
         offset: pagination.nextOffset,
         limit: 80,
+        // T102: a session with no worker pages off its file. Read at click
+        // time rather than subscribed — see `MessageTimeline`'s note.
+        hostBound: useChatSessionsStore.getState().hostBoundSessionIds.includes(sessionId),
       });
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));

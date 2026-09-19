@@ -401,6 +401,23 @@ export const IPC_CHANNELS = {
   CHAT_RENAME_SESSION: 'chat:renameSession',
   CHAT_ARCHIVE_SESSION: 'chat:archiveSession',
   CHAT_LOAD_HISTORY_PAGE: 'chat:loadHistoryPage',
+  /**
+   * T102 (decision 030) — one page of a session's transcript, read straight
+   * off its JSONL by Main, with no worker involved.
+   *
+   * The sibling of `chat:loadHistoryPage`, not a replacement: that one asks a
+   * live worker, whose in-memory branch is the authority while it exists. This
+   * one is for the case that had no answer before — a session nobody is
+   * running, which used to have to be resumed (a worker slot, possibly a
+   * `worker_capacity_reached` refusal) just to be looked at. It refuses with
+   * `worker_active` when the session does have a worker, so the caller can use
+   * the other channel.
+   *
+   * Publishes its page as a `session.history` runtime event, exactly like the
+   * worker path, and deliberately publishes NOTHING else: a preview must not
+   * emit `session.resumed`, which is what binds a session to a host.
+   */
+  CHAT_READ_SESSION_PAGE: 'chat:readSessionPage',
   CHAT_GET_SESSION_TREE: 'chat:getSessionTree',
   /** R02-b — slash commands for the composer's completion menu. */
   CHAT_GET_SLASH_COMMANDS: 'chat:getSlashCommands',
