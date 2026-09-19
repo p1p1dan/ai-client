@@ -419,25 +419,21 @@ export interface ToolRowView {
    * as 'prose' -- the safe default direction (D25 §2.5: fail toward sans).
    */
   argKind?: 'ident' | 'prose';
-  /** Running rows use the present-tense verb and never show a chevron (A07 :2331). */
+  /**
+   * The row is still in flight: present-tense verb, and a live body where the
+   * row has one.
+   *
+   * A07 `:2331` also said a running row never shows a chevron. That half is
+   * RETIRED for thought rows (user decision 2026-09-19) — see
+   * `buildThoughtRow` — and was already a registered deviation for the live
+   * subagent panel (`subagentActivityModel.ts`). It still holds for tool calls,
+   * whose output does not exist until they settle.
+   */
   running: boolean;
   failed: boolean;
-  /** Only a row with a body can expand; always false while running. */
+  /** Only a row with a body can expand. */
   expandable: boolean;
   body?: ToolRowBody;
-  /**
-   * Text painted UNDER a running row, with no chevron and no collapsible.
-   *
-   * The one shape a running row is allowed to carry a body in. A07's
-   * no-chevron rule (see `running` above) is about interaction — a row whose
-   * content is still arriving must not offer a toggle whose state would be
-   * meaningless a second later — and this obeys it: there is nothing to click,
-   * the text simply grows. It exists because the collapsible body is gated on
-   * `!streaming`, which made extended thinking invisible for exactly as long
-   * as it was happening: a spinner for 12-20s, then a row the reader has to
-   * open to discover what the model was doing. Only thought rows set it.
-   */
-  liveText?: string;
   /** Body text when `body === 'output'`. */
   output?: string;
   /** Scroll-window class when `body === 'output'` (legacy sign-off values). */
@@ -486,10 +482,13 @@ export interface ToolRowView {
    */
   permissionAutoNote?: string;
   /**
-   * T-34: initial open state for the row's Collapsible, evaluated at mount.
-   * `deriveToolRowView` never sets it, and since 2026-08-25 nothing else opens
-   * a row either — `ToolRows.tsx` renders `view.defaultOpen ?? false`, so the
-   * subagent panel's LIVE header row is the only thing that starts open.
+   * T-34: initial open state for the row's Collapsible, evaluated at mount and
+   * outranked by a remembered user choice (`resolveToolRowOpen`).
+   *
+   * `deriveToolRowView` never sets it — a tool call opens only when the user
+   * asks (2026-08-25). Exactly two producers do: the subagent panel's LIVE
+   * header row (T-34) and a thought that is still streaming (2026-09-19). Both
+   * are rows whose content is the only thing happening at that moment.
    */
   defaultOpen?: boolean;
 }
@@ -861,18 +860,28 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
   const durationMs = options.thinkingDurationMs ? options.thinkingDurationMs(block.id) : undefined;
   const { verb, arg, argKind } = formatThoughtRow({ durationMs, streaming }, options.t);
   const hasText = Boolean(block.text && block.text.length > 0);
-  const showBody = !streaming && hasText;
+  const showBody = hasText;
   // An empty (no-text) block renders as a bare, non-expandable row — no
   // chevron, nothing to open. This is a deliberate behavior change from an
   // earlier expandable-but-empty placeholder shell: the bare row is the
   // honest Cursor form and was approved & registered in the T-05 ledger
   // (see `deriveToolGroupRows` empty-block test below for the locked case).
   //
-  // While the thought is still arriving the same text goes to `liveText`
-  // instead: settled thinking stays behind a chevron (it is reference
-  // material once the answer exists), but a thought in flight IS the only
-  // thing happening, and hiding it is what made a 12-20s think look like a
-  // frozen window.
+  // ## The streaming thought is an ordinary expandable row (2026-09-19)
+  //
+  // It used to be two shapes: a settled thought went behind a chevron, and a
+  // thought in flight painted its text with NO control at all (`liveText`),
+  // on the argument that "a row whose content is still arriving must not offer
+  // a toggle whose state is meaningless a second later".
+  //
+  // That argument was half right. It correctly refused to HIDE a thought in
+  // flight — hiding it is what made a 12-20s think look like a frozen window —
+  // but it also took away the only way to get a long think out of the way
+  // while it happens, which is what the user then asked for. Both halves are
+  // satisfied by one row: expandable, and `defaultOpen` so it starts visible
+  // without a click. Folding it back is now a choice the reader can make at
+  // any time, and `resolveToolRowOpen` keeps that choice across the moment the
+  // thought settles.
   return {
     key: block.id,
     verb,
@@ -883,7 +892,11 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
     expandable: showBody,
     body: showBody ? 'thinking' : undefined,
     output: showBody ? block.text : undefined,
-    ...(streaming && hasText ? { liveText: block.text } : {}),
+    // Only while streaming. A settled thought is reference material once the
+    // answer exists, so it goes back to starting closed — which is also what
+    // folds an untouched thought away by itself the moment it ends, since
+    // `ToolRows.tsx` re-seeds the row at that transition.
+    ...(streaming ? { defaultOpen: true } : {}),
   };
 }
 

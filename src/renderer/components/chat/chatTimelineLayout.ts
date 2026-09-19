@@ -30,21 +30,69 @@
  *
  * ⚠️ Known trade recorded rather than hidden: an extremely long pasted prompt
  * now renders at full height. pi-app accepts the same. If that turns out to be
- * a problem the fix is a clamp again — but it must NOT come back together with
- * a sticky band, or F10's oscillation comes back with it.
+ * a problem the fix is a clamp again — but a *pinned-only* clamp must never
+ * come back, for the reason spelled out in the next section.
+ *
+ * ## T096 (2026-09-19): sticky is allowed again, under one stated condition
+ *
+ * The blanket "no sticky in the timeline" rule this file used to carry was
+ * never the real lesson of F10; it was the cheapest way to be sure the lesson
+ * held. Decision 028 (`docs/plantree/.../028-thought-block-sticky-fold-header.md`)
+ * reopens it for exactly one element — `thoughtFoldHeaderClass()` below, the
+ * fold header of a thinking block — because a long thought is unreadable when
+ * the only way to put it away is to scroll back to where it started.
+ *
+ * **F10's oscillation needs a cycle, and the cycle needs a height change that
+ * is a FUNCTION OF SCROLL POSITION.** All four links have to be present:
+ *
+ * ```
+ * scroll position -> "is it stuck?" -> layout height -> scrollHeight
+ *      ^                                                     |
+ *      +----- browser clamps scrollTop to the new maximum ---+
+ * ```
+ *
+ * The retired band closed that loop with `@container scroll-state(stuck: top)`
+ * + `line-clamp-3`: getting stuck removed three lines of height, the document
+ * got shorter, the engine clamped `scrollTop` back below the sticky threshold,
+ * the band un-stuck and grew again, and the bottom-follower pushed the offset
+ * back — once per frame.
+ *
+ * The thought fold header cannot close it because the second link is missing:
+ * its height is the same number stuck and un-stuck. Nothing it carries is
+ * derived from scroll position at all — no `scroll-state()` query, no clamp,
+ * no max-height, and the one decoration that DOES vary (the hairline under it)
+ * keys off `data-panel-open`, i.e. a click, not an offset. A height change a
+ * user asked for is not a cycle; it settles in one frame.
+ *
+ * So the rule that replaces the prohibition is: **a sticky element in this
+ * timeline may not change its own height as a function of scroll state.** That
+ * is what `chatTimelineLayout.test.ts`'s T096 group asserts, and it is the only
+ * thing that has to stay true for F10 to stay dead.
  *
  * ## Spacing arithmetic (asserted by F-B9)
  *
  * ```
  * ReadingColumn space-y-5  = 20   previous turn's end -> this turn's prompt
- * turn gap-2.5             = 10   prompt -> turn body
- * turn body gap-2.5        = 10   content segments / meta row (P-17)
+ * turn gap-3               = 12   prompt -> the turn's own line (status / head)
+ * turn body gap-2          = 8    that line -> the content it describes (P-17)
  * ```
  *
- * The 20px turn-to-turn beat (A07 `:846`) is unchanged in total; only its
- * composition moved back to a single gap now that there is no band padding to
- * carry half of it. `chatTurnClass()` picks up the 10px that used to be the
- * band's bottom padding.
+ * The 20px turn-to-turn beat (A07 `:846`) is unchanged in total, and it still
+ * lives entirely in `ReadingColumn` — the band that used to carry half of it is
+ * gone (see above), and nothing has been added back above the prompt.
+ *
+ * ## Why the two inner tiers are different numbers (user decision 2026-09-19)
+ *
+ * They were one number (10px) for as long as the turn had nothing between the
+ * prompt and the reply. The work group put a LINE there — 「工作中 47 秒 …」
+ * while the turn runs, the status row when something is wrong — and at equal
+ * gaps above and below, that line is read as the tail of the prompt rather than
+ * as the header of the output: 「状态行贴着用户气泡、离后续输出远」.
+ *
+ * So the two beats separate, both onto design-system tiers (12px loose / 8px
+ * standard, `docs/design-system.md` 「间距规范」), and the asymmetry is the whole
+ * point — the line is now nearer to what it is about than to what came before
+ * it. Re-unifying them "for consistency" restores the defect.
  */
 import type { TurnStatusKind } from './turnStatus';
 
@@ -62,8 +110,10 @@ export function readingColumnSpacingClass(): string {
 /**
  * Per-turn `<section>`: the user's prompt row, then the turn body.
  *
- * `gap-2.5` is the 10px that used to be the bubble band's bottom padding — the
- * "prompt -> first content segment" beat, inherited unchanged.
+ * `gap-3` is the 12px loose tier — the beat between the prompt and the first
+ * thing the turn says about itself (the work-group head, or the status row).
+ * It is deliberately WIDER than the within-turn tier below it; see the head
+ * note's spacing arithmetic for what an equal pair did to that line.
  *
  * `group/turn` is the hover scope for `turnActionsSlotClass()` (T12-b). It is
  * NAMED rather than a bare `group` on purpose: tool rows and the thinking chain
@@ -71,7 +121,7 @@ export function readingColumnSpacingClass(): string {
  * would be the nearest ancestor for some of them and change what they react to.
  */
 export function chatTurnClass(): string {
-  return 'group/turn flex flex-col gap-2.5';
+  return 'group/turn flex flex-col gap-3';
 }
 
 /**
@@ -133,18 +183,20 @@ export function userBubbleTextClass(): string {
 }
 
 /**
- * Everything after the band: turn head, process shell, answer, footer.
- * `gap-2.5` is P-17's 10px "within a turn" tier and stays the single source of
- * it, inherited from the pre-T-31 `<article className="flex flex-col gap-2.5">`
- * that `AssistantMessage` used to own.
+ * Everything after the prompt: turn head, process shell, answer, footer.
+ * `gap-2` is the 8px "within a turn" tier (P-17's slot; the number moved to the
+ * standard tier on 2026-09-19, see the head note) and this function stays the
+ * single source of it, inherited from the pre-T-31 `<article>` that
+ * `AssistantMessage` used to own.
  */
 export function turnBodyClass(): string {
   // `text-markdown leading-normal` comes from that same article and is not
   // decoration: `QuestionCard`'s header row sets no size of its own and reads
   // the body scale by inheritance. Dropping it here would silently resize a
   // component nothing in this module names. The head and footer slots override
-  // it with `text-meta` (D25 S24) on their own elements.
-  return 'flex flex-col gap-2.5 text-markdown leading-normal';
+  // it on their own elements — the head with `text-ui`, the hover strip with
+  // `text-meta` (D25 S24); see those two functions for why they differ.
+  return 'flex flex-col gap-2 text-markdown leading-normal';
 }
 
 /**
@@ -166,7 +218,10 @@ export function turnBodyClass(): string {
  * why the group is a native `<details>`.
  */
 export function turnProcessShellClass(): string {
-  return 'flex flex-col gap-2.5';
+  // Pinned to `turnBodyClass()`'s gap rather than spelled independently: the
+  // shell stacks process rows INSIDE one turn-body slot, so a second number
+  // here would read as a third tier nobody chose.
+  return 'flex flex-col gap-2';
 }
 
 /**
@@ -207,6 +262,70 @@ export function turnProcessToneClass(): string {
 }
 
 /**
+ * T096 / decision 028: the ONE pinned surface in this timeline — the fold
+ * header of a thinking block, added to `ToolRows.tsx`'s collapsible trigger
+ * when (and only when) the row's body is `thinking`.
+ *
+ * The problem it solves is stated in the head note; what follows is why each
+ * of the four classes is the one it is. Read that note first — this string is
+ * only legal because of the height rule it records.
+ *
+ * ## `sticky top-0`
+ *
+ * `top-0`, not an inset, because the scroll viewport
+ * (`ui/scroll-area.tsx`'s `data-slot="scroll-area-viewport"`) has no padding of
+ * its own — the timeline's `px-6 pt-5 pb-2` sits on the content div INSIDE it
+ * — so 0 is already flush with the visible top edge. The same viewport is
+ * `scrollFade="bottom"`, which matters here rather than being a coincidence: a
+ * top fade would render the pinned header half-transparent, which is the exact
+ * look the user ruled out (「不要透视效果」).
+ *
+ * ## `z-10`
+ *
+ * The thought body is an ordinary sibling at `z-index: auto`, so the header
+ * needs to win against it and nothing else. The competition is scoped: the
+ * viewport carries a mask (the bottom fade), a mask forms a stacking context,
+ * and so every z-index inside the scrollport is settled inside the scrollport.
+ * The jump-to-bottom button, the permission dock and `ChatWorkspace`'s overlay
+ * all live OUTSIDE it and are therefore unaffected by this number.
+ *
+ * ## `bg-background`, and the one caveat that comes with it
+ *
+ * Fully opaque, no alpha of our own, no `backdrop-blur` — the user's ruling was
+ * 「吸顶后不得出现内容穿插在折叠按钮后面」 and a blur is still see-through. The
+ * token is the timeline's own surface: the shell root is `bg-background`
+ * (`WorkspaceShell.tsx`) and nothing between it and the viewport repaints, so
+ * this is the same colour the header sits on when it is not pinned — in both
+ * themes, without a second value to keep in sync.
+ *
+ * ⚠️ Caveat, recorded rather than hidden: `--background` is one of the four
+ * panel surfaces that multiply in `--panel-bg-opacity` (`globals.css`, see
+ * `docs/design-system.md` 「面板半透明（背景图）」). With a wallpaper enabled the
+ * header is therefore as translucent as every other panel in the app. That is
+ * the app-wide setting behaving as designed, not an alpha this element chose,
+ * and the alternative — minting an opaque twin of `--background` — would make
+ * the header the one surface that ignores the user's wallpaper.
+ *
+ * ## `data-panel-open:border-b border-border`
+ *
+ * A hairline, and it is gated on OPEN, not on stuck. Gating it on stuck would
+ * need `scroll-state()`, which is retired, and a 1px height change driven by
+ * scroll position is the very cycle the head note forbids. Gated on open it is
+ * present exactly when there is a body below it to separate, it never moves
+ * while scrolling, and the 1px it adds when the reader expands the row is a
+ * click's consequence — not a frame-by-frame feedback loop.
+ *
+ * Note what is deliberately NOT here: no `h-*`. "Fixed height" in the head
+ * note's rule means "does not vary with scroll state", and the row's intrinsic
+ * height already satisfies that — its content is identical pinned and unpinned.
+ * Pinning a pixel height would instead make the thought row a different height
+ * from the tool rows it is interleaved with, for no gain.
+ */
+export function thoughtFoldHeaderClass(): string {
+  return 'sticky top-0 z-10 bg-background data-panel-open:border-b data-panel-open:border-border';
+}
+
+/**
  * Tier 2 — the turn's progress head: 「工作中 47 秒 · ↑ 12.0k tokens · ↓ 1.3k
  * tokens · 思考 20 秒」 while the turn runs, 「已工作 57 秒」 once it stops, plus
  * the chevron.
@@ -216,8 +335,18 @@ export function turnProcessToneClass(): string {
  * cannot be styled; the chevron beside the text is the affordance instead.
  * `cursor-pointer` because a `<summary>` does not get one by default.
  *
- * `text-meta` keeps it in the same size domain as the status row and the
- * timestamps — it is a label about the turn, not content of it.
+ * `text-ui` (14px) — raised from `text-meta` (13px) by user decision
+ * 2026-09-19, together with `turnHeadClass()` below, which is the same line in
+ * its other shape. The two must move together or the turn appears to change
+ * type size when a work group forms mid-turn.
+ *
+ * ⚠️ Registered deviation from `docs/design-system.md`'s Typography table,
+ * which files a status line under `meta`. The tier that table describes is
+ * passive chrome — timestamps, footers, the app's own status bar — read once or
+ * not at all. THIS line is what the reader watches for the whole length of a
+ * wait (it is often the only thing on screen for 20s), and at 13px it was
+ * reported as too small to be that. It stays a token, not an arbitrary value,
+ * so the domain scale still owns the number.
  *
  * `tabular-nums` joined it on 2026-09-18, when the head started carrying a
  * ticking clock: the same reason `turnHeadClass()` below has always had it, and
@@ -225,7 +354,7 @@ export function turnProcessToneClass(): string {
  * every second underneath a stick-to-bottom follower.
  */
 export function turnWorkGroupSummaryClass(): string {
-  return 'flex min-w-0 cursor-pointer list-none items-center gap-1.5 text-meta tabular-nums text-muted-foreground marker:content-none';
+  return 'flex min-w-0 cursor-pointer list-none items-center gap-1.5 text-ui tabular-nums text-muted-foreground marker:content-none';
 }
 
 /**
@@ -243,9 +372,13 @@ export function turnWorkGroupSummaryClass(): string {
  * ticks; `min-w-0` lets the status text truncate rather than wrap, because a
  * row that can wrap can change HEIGHT every second underneath a
  * stick-to-bottom follower.
+ *
+ * `text-ui` for the reason recorded on `turnWorkGroupSummaryClass()` above,
+ * including the recorded deviation: this row and that one are the same line in
+ * two shapes and share one size.
  */
 export function turnHeadClass(): string {
-  return 'flex min-w-0 items-center gap-1.5 text-meta tabular-nums text-muted-foreground';
+  return 'flex min-w-0 items-center gap-1.5 text-ui tabular-nums text-muted-foreground';
 }
 
 /**
@@ -339,6 +472,11 @@ export function turnActionsSlotClass(): string {
  *
  * `overflow-hidden` and `min-h-0` retired with the `0fr` track — they existed
  * only to make that track clip rather than merely shrink.
+ *
+ * It keeps `text-meta` while the turn's status line moved to `text-ui`
+ * (2026-09-19). Not an oversight: what this row carries is a wall clock and a
+ * copy button — the meta tier's own examples, read once if at all — and it must
+ * stay inside `h-6`, which is the copy button's tier, not a type decision.
  */
 export function turnActionsInnerClass(): string {
   return 'flex h-6 items-center gap-1.5 text-meta tabular-nums text-muted-foreground';

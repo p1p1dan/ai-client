@@ -1292,9 +1292,10 @@ interface ChatTurnProps {
  * run of text items" (the FB4 defect, which that phrasing reintroduces).
  *
  * The segments and the status row are deliberately siblings under one
- * `turnBodyClass()`: P-17's 10px "within a turn" gap stays a single source,
- * inherited from the `<article className="flex flex-col gap-2.5">` that
- * `AssistantMessage` used to own before it was split in two.
+ * `turnBodyClass()`: P-17's "within a turn" gap stays a single source (8px
+ * since 2026-09-19 — `chatTimelineLayout.ts` owns the number and the reason),
+ * inherited from the `<article>` that `AssistantMessage` used to own before it
+ * was split in two.
  *
  * `memo` (review batch F7) is load-bearing, not a micro-optimization: the head
  * runs off a one-second clock, so without it every turn in the session
@@ -1511,7 +1512,7 @@ function TurnProgressHead({
           aria-hidden
         />
       </summary>
-      <div className={cn(turnProcessShellClass(), 'pt-2.5')}>{children}</div>
+      <div className={cn(turnProcessShellClass(), 'pt-2')}>{children}</div>
     </details>
   );
 }
@@ -1990,7 +1991,7 @@ const ChatTurn = memo(function ChatTurn({
           toggle it forced (`chatTimelineLayout.ts` head note). What it bought —
           "you can always see which prompt you are reading the reply to" — is
           paid for instead by the reading rhythm: 20px between turns against
-          10px inside one. */}
+          12px / 8px inside one. */}
       {turn.user && <UserBubble message={turn.user} />}
       <div className={turnBodyClass()}>
         {/* FB4 survives inside the group: block order, all the way down. What

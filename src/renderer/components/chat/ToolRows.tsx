@@ -18,8 +18,9 @@ import {
   resolveToolRowOpen,
   useToolExpansionStore,
 } from '@/stores/toolExpansion';
-import { turnProcessToneClass } from './chatTimelineLayout';
+import { thoughtFoldHeaderClass, turnProcessToneClass } from './chatTimelineLayout';
 import { HitListPopover } from './HitListPopover';
+import { stickyFoldScrollTarget } from './messageTimelineScroll';
 import { deriveSubagentPanelRows } from './subagentActivityModel';
 import {
   type FileLinkTarget,
@@ -80,10 +81,9 @@ export function ToolGroup({ rows, onOpenFile, sessionId, showDiff }: ToolGroupPr
   const inherited = useContext(ToolDiffVisibility);
   if (rows.length === 0) return null;
   return (
-    // T-30 P-17: no own margin — the parent `AssistantMessage` article owns
-    // the 10px item-to-item gap via `gap-2.5`; a margin here would stack on
-    // top of it (and on ReadingColumn's turn-to-turn space-y-5) instead of
-    // replacing it.
+    // T-30 P-17: no own margin — the parent turn body owns the item-to-item
+    // gap (`turnBodyClass()`); a margin here would stack on top of it (and on
+    // ReadingColumn's turn-to-turn space-y-5) instead of replacing it.
     <ToolDiffVisibility.Provider value={showDiff ?? inherited}>
       <div className="flex flex-col gap-1">
         {rows.map((row) => (
@@ -113,17 +113,6 @@ interface ToolRowProps {
 export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
   const showDiff = useContext(ToolDiffVisibility);
   const { t } = useI18n();
-  // T12-d: the row's opening state, seeded ONCE from the session's memory.
-  //
-  // Seeded rather than controlled, deliberately. `defaultOpen` is read by the
-  // collapsible at mount only, and that is what preserves T-34's live subagent
-  // panel: its `defaultOpen: true` disappears the moment the lane stops being
-  // live, and a controlled `open` bound to the same expression would slam the
-  // panel shut under a reader mid-sentence. Seeding also makes the aggregation
-  // case work for free — an aggregate that swallows an open row is a NEW
-  // mount, so it evaluates `resolveToolRowOpen` against fresh memory.
-  const [initialOpen] = useState(() => resolveToolRowOpen(view, readToolExpandMemory(sessionId)));
-  const setToolRowExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
   // The dim rung of the 2026-09-18 reading ladder (see
   // `chatTimelineLayout.ts`). It used to be `text-muted-foreground`, which is
   // the same tier the work-group head above these rows now uses — so the head
@@ -178,49 +167,20 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
     ) : null;
 
   const row = !view.expandable ? (
-    view.liveText ? (
-      // A row whose content is still arriving: header plus the text itself,
-      // no chevron (A07 :2331) and nothing to toggle. Same tokens the settled
-      // thought body uses in `ToolRowOutputSegment`, so the text does not
-      // change appearance when the thought finishes and folds away.
-      <div className="flex flex-col">
-        <div className={rowClass}>{rowContent}</div>
-        <div className="mt-1 flex select-text flex-col gap-1.5 text-markdown leading-[1.55] text-tool-arg">
-          <p className="whitespace-pre-wrap">{view.liveText}</p>
-        </div>
-      </div>
-    ) : (
-      <div className={rowClass}>{rowContent}</div>
-    )
+    <div className={rowClass}>{rowContent}</div>
   ) : (
-    // 2026-08-25 (user decision): rows open only when something explicitly asks
-    // them to. Failures used to auto-expand (sign-off ②) — with the turn-level
-    // collapse gone, that put a wall of output on screen for every failed or
-    // denied call, in restored history and live turns alike. Red on the row and
-    // a click is enough. `defaultOpen` is still honoured: T-34's LIVE subagent
-    // panel sets it, and T12-d's remembered choice outranks it.
-    <Collapsible
-      defaultOpen={initialOpen}
-      onOpenChange={(open) => {
-        if (sessionId) setToolRowExpanded(sessionId, view.key, open);
-      }}
+    <ToolRowCollapsible
+      // The seed is re-taken when a row crosses from live to settled — see the
+      // component's note. Everything that is not a streaming row keys as
+      // `settled` from its first render and therefore never re-seeds.
+      key={view.running ? 'live' : 'settled'}
+      view={view}
+      rowClass={rowClass}
+      onOpenFile={onOpenFile}
+      sessionId={sessionId}
     >
-      <CollapsibleTrigger
-        className={cn(rowClass, '[&[data-panel-open]>svg]:rotate-180')}
-        // A Read row nests a real <button> inside the trigger for its
-        // clickable file name (F①) — a native <button> can't contain one,
-        // so those rows render the trigger as a <div role="button"> instead
-        // (Base UI's documented escape hatch for a non-button render target).
-        nativeButton={!view.link}
-        render={view.link ? <div /> : undefined}
-      >
-        {rowContent}
-        <ChevronDown className="size-[13px] shrink-0 self-center text-tool-arg transition-transform duration-150" />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <ToolRowBody view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
-      </CollapsibleContent>
-    </Collapsible>
+      {rowContent}
+    </ToolRowCollapsible>
   );
 
   if (!subagentSlot) return row;
@@ -229,6 +189,151 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
       {row}
       {subagentSlot}
     </div>
+  );
+}
+
+/**
+ * Every scroll surface a timeline row can sit inside, nearest-first.
+ *
+ * Two, not one: a thought row normally scrolls in the timeline viewport, but
+ * `deriveSubagentPanelRows` also emits `body: 'thinking'` for an over-long
+ * delegate prose line, and THAT row lives inside `SubagentDetail`'s own
+ * `max-h-72 overflow-y-auto` window. A top-sticky element pins to its nearest
+ * scrollport, so the re-anchor has to aim at the same one the browser did.
+ */
+const SCROLL_SURFACE_SELECTOR = '[data-slot="scroll-area-viewport"], [data-slot="subagent-detail"]';
+
+/**
+ * T096: fold a pinned thought header without leaving the reader somewhere else.
+ *
+ * `stickyFoldScrollTarget` owns the judgement (and returns `null` when the
+ * header was never pinned, which is the case where moving the scroll would be
+ * the bug); this function only supplies the four measurements and performs the
+ * write. Reading the block's top off `parentElement` is exact rather than
+ * approximate: the trigger is the first child of the Base UI `Collapsible`
+ * root, the root is not sticky, so its top edge IS the header's natural one.
+ *
+ * The write itself disarms the bottom-follower for free — it moves `scrollTop`
+ * upward, which is rule 1 of `nextFollowState` ("away from the bottom -> never
+ * following"). Without that, a reader who folded a tall thought while parked at
+ * the bottom would be yanked straight back down by the collapse's own
+ * `ResizeObserver` frame.
+ */
+function scrollPinnedFoldHeaderIntoView(trigger: HTMLElement | null): void {
+  const block = trigger?.parentElement;
+  const surface = trigger?.closest<HTMLElement>(SCROLL_SURFACE_SELECTOR);
+  if (!trigger || !block || !surface) return;
+  const target = stickyFoldScrollTarget({
+    scrollTop: surface.scrollTop,
+    viewportTop: surface.getBoundingClientRect().top,
+    blockTop: block.getBoundingClientRect().top,
+    headerTop: trigger.getBoundingClientRect().top,
+  });
+  if (target !== null) surface.scrollTop = target;
+}
+
+/**
+ * The expandable shape of a row: trigger + chevron above a collapsible body.
+ *
+ * 2026-08-25 (user decision): rows open only when something explicitly asks
+ * them to. Failures used to auto-expand (sign-off ②) — with the turn-level
+ * collapse gone, that put a wall of output on screen for every failed or denied
+ * call, in restored history and live turns alike. Red on the row and a click is
+ * enough. `defaultOpen` is still honoured: T-34's LIVE subagent panel sets it,
+ * a streaming thought sets it (2026-09-19), and T12-d's remembered choice
+ * outranks both.
+ *
+ * ## Why this is its own component, and why the caller gives it a `key`
+ *
+ * T12-d: the opening state is SEEDED once from the session's memory, not
+ * controlled. Seeding is what preserves T-34's live subagent panel — its
+ * `defaultOpen: true` disappears the moment the lane stops being live, and a
+ * controlled `open` bound to that expression would slam the panel shut under a
+ * reader mid-sentence. It also makes the aggregation case work for free: an
+ * aggregate that swallows an open row is a NEW mount, so it re-evaluates
+ * `resolveToolRowOpen` against fresh memory.
+ *
+ * The seed therefore has to be taken at the moment the collapsible APPEARS, not
+ * at the moment its row does. Those were the same instant until 2026-09-19;
+ * they stopped being the same when a streaming thought became expandable,
+ * because that row is expandable BEFORE it settles and its `defaultOpen` is
+ * true only while it streams. With the seed in `ToolRow`, the settled thought
+ * would have kept the open state the live one was seeded with and never folded
+ * itself away. So the state lives here, and `key={running ? 'live' : 'settled'}`
+ * re-seeds it exactly once per row, at that crossing:
+ *
+ *  - nobody touched it  -> memory is empty, the settled view has no
+ *    `defaultOpen`, so it re-seeds CLOSED and the thought folds itself away;
+ *  - the user folded or re-opened it mid-stream -> `onOpenChange` wrote the
+ *    choice, and rule 1 of `resolveToolRowOpen` returns it, so the choice
+ *    survives the crossing (and session switches, and aggregation).
+ *
+ * The live subagent panel is deliberately unaffected: its header row pins
+ * `running: false` (a registered deviation in `subagentActivityModel.ts`, so
+ * the chevron exists while the delegate works), which keys it `settled` from
+ * its first render — it never crosses, so it never re-seeds. The settled
+ * permission row `QuestionCard` renders without a session pins it too, which
+ * matters because that row has no memory to re-seed FROM.
+ *
+ * The one other row that does cross is a running `edit`/`write`, expandable for
+ * its diff preview. Both rules give it what it already had: a preview the user
+ * opened is remembered and stays open through the crossing, and an untouched
+ * one re-seeds closed, which is where it was.
+ */
+function ToolRowCollapsible({
+  view,
+  rowClass,
+  onOpenFile,
+  sessionId,
+  children,
+}: {
+  view: ToolRowView;
+  rowClass: string;
+  onOpenFile?: (target: FileLinkTarget) => void;
+  sessionId?: string;
+  children: ReactNode;
+}) {
+  const [initialOpen] = useState(() => resolveToolRowOpen(view, readToolExpandMemory(sessionId)));
+  const setToolRowExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  // T096: a thought is the only body long enough for its own header to scroll
+  // out of reach — tool output is bounded by `outputMaxHeightClass`, a diff by
+  // `max-h-72`, a subagent panel by its own scroll window. So the pin is scoped
+  // to `body === 'thinking'` rather than granted to every expandable row.
+  const pinsHeader = view.body === 'thinking';
+  return (
+    <Collapsible
+      defaultOpen={initialOpen}
+      onOpenChange={(open) => {
+        // Before the state write, and deliberately: `onOpenChange` runs inside
+        // the click, so the DOM still holds the OPEN geometry the measurement
+        // needs — the header where the pin put it and the block at its natural
+        // top. One React commit later both are gone.
+        if (!open && pinsHeader) scrollPinnedFoldHeaderIntoView(triggerRef.current);
+        if (sessionId) setToolRowExpanded(sessionId, view.key, open);
+      }}
+    >
+      <CollapsibleTrigger
+        ref={triggerRef}
+        className={cn(
+          rowClass,
+          '[&[data-panel-open]>svg]:rotate-180',
+          pinsHeader && thoughtFoldHeaderClass()
+        )}
+        // A Read row nests a real <button> inside the trigger for its
+        // clickable file name (F①) — a native <button> can't contain one,
+        // so those rows render the trigger as a <div role="button"> instead
+        // (Base UI's documented escape hatch for a non-button render target).
+        nativeButton={!view.link}
+        render={view.link ? <div /> : undefined}
+      >
+        {children}
+        <ChevronDown className="size-[13px] shrink-0 self-center text-tool-arg transition-transform duration-150" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ToolRowBody view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

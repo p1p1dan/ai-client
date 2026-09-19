@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
+import { EMPTY_TOOL_EXPAND_MEMORY, resolveToolRowOpen } from '@/stores/toolExpansion';
 import {
   classifyTool,
   countPermissionRecords,
@@ -351,63 +352,72 @@ describe('buildThoughtRow empty-block behavior (via deriveToolGroupRows)', () =>
 });
 
 /**
- * A thought that is still arriving must be READABLE, not just announced.
+ * A thought that is still arriving must be READABLE without a click — and
+ * foldable WITH one (user decision 2026-09-19).
  *
- * Before this, `showBody` was `!streaming && hasText`, so the only thing on
- * screen for the 12-20s a model spends thinking was the word "Thinking" — the
- * text existed in the store the whole time and was deliberately withheld until
- * the thought was over, at which point it folded behind a chevron. These lock
- * both halves: live text is painted with no chevron, settled text keeps its
- * chevron and gains no live copy.
+ * Two shapes collapsed into one here. `showBody` used to be
+ * `!streaming && hasText`, so a thought in flight had no collapsible at all:
+ * its text went to a `liveText` field that painted a bare, control-less
+ * paragraph. That kept the text visible (the point) but left no way to put a
+ * long think away while it happened (the complaint). A streaming thought is now
+ * an ordinary expandable row that happens to carry `defaultOpen` — visible
+ * without a click, foldable at any time, and `resolveToolRowOpen` is what
+ * carries the fold across the moment it settles.
+ *
+ * `liveText` retired with the branch: one shape, one code path.
  */
 describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
-  it('paints a streaming thought as live text with no chevron', () => {
+  it('gives a streaming thought a body, a chevron and an open default', () => {
     const entries = [thinkEntry(thinkingBlock('th1', 'Let me check the catalog'))];
     const rows = deriveToolGroupRows(entries, { isStreamingBlockId: 'th1' });
     expect(rows).toHaveLength(1);
     expect(rows[0].running).toBe(true);
-    expect(rows[0].liveText).toBe('Let me check the catalog');
-    // A07 :2331 — a row whose content is still arriving offers no toggle.
-    expect(rows[0].expandable).toBe(false);
-    expect(rows[0].body).toBeUndefined();
+    expect(rows[0].expandable).toBe(true);
+    expect(rows[0].body).toBe('thinking');
+    expect(rows[0].output).toBe('Let me check the catalog');
+    // Without this the row would mount collapsed and the wait would look
+    // frozen again — the defect the live text was introduced for.
+    expect(rows[0].defaultOpen).toBe(true);
   });
 
-  it('grows the live text as deltas land (the append the store already does)', () => {
+  it('grows the body as deltas land (the append the store already does)', () => {
     const first = deriveToolGroupRows([thinkEntry(thinkingBlock('th1', 'Let me '))], {
       isStreamingBlockId: 'th1',
     });
     const second = deriveToolGroupRows([thinkEntry(thinkingBlock('th1', 'Let me check.'))], {
       isStreamingBlockId: 'th1',
     });
-    expect(first[0].liveText).toBe('Let me ');
-    expect(second[0].liveText).toBe('Let me check.');
+    expect(first[0].output).toBe('Let me ');
+    expect(second[0].output).toBe('Let me check.');
   });
 
-  it('keeps an empty streaming block bare — no live text, nothing to read yet', () => {
+  it('keeps an empty streaming block bare — nothing to read, so nothing to open', () => {
     const rows = deriveToolGroupRows([thinkEntry(thinkingBlock('th1', ''))], {
       isStreamingBlockId: 'th1',
     });
-    expect(rows[0].liveText).toBeUndefined();
     expect(rows[0].expandable).toBe(false);
+    expect(rows[0].body).toBeUndefined();
+    expect(rows[0].output).toBeUndefined();
   });
 
-  it('a settled thought keeps the collapsible body and carries no live text', () => {
+  it('a settled thought keeps the collapsible body and stops asking to be open', () => {
     const rows = deriveToolGroupRows([thinkEntry(thinkingBlock('th1', 'done thinking'))], {
       isStreamingBlockId: null,
     });
     expect(rows[0].running).toBe(false);
-    expect(rows[0].liveText).toBeUndefined();
     expect(rows[0].expandable).toBe(true);
     expect(rows[0].body).toBe('thinking');
     expect(rows[0].output).toBe('done thinking');
+    // The absence is what folds an untouched thought away once it ends.
+    expect(rows[0].defaultOpen).toBeUndefined();
   });
 
   it('another block streaming leaves this thought settled', () => {
     const rows = deriveToolGroupRows([thinkEntry(thinkingBlock('th1', 'earlier thought'))], {
       isStreamingBlockId: 'some-other-block',
     });
-    expect(rows[0].liveText).toBeUndefined();
     expect(rows[0].body).toBe('thinking');
+    expect(rows[0].defaultOpen).toBeUndefined();
   });
 
   it('re-stamps a streaming thought folded into an aggregate detail row', () => {
@@ -418,8 +428,26 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
     ];
     const rows = deriveToolGroupRows(entries, { isStreamingBlockId: 'th1' });
     const thought = rows[0].detail?.find((row) => row.key === 'th1');
-    expect(thought?.liveText).toBe('mid-turn thought');
-    expect(thought?.expandable).toBe(false);
+    expect(thought?.output).toBe('mid-turn thought');
+    expect(thought?.expandable).toBe(true);
+    expect(thought?.defaultOpen).toBe(true);
+  });
+
+  /**
+   * `defaultOpen` is the LAST rule in `resolveToolRowOpen`, and it has to stay
+   * there for the streaming thought as well: a reader who folds a think away
+   * mid-stream is telling the app something about this row, and the row asking
+   * to be open is only a default. Asserted against the real resolver rather
+   * than by reading the field, because the precedence — not the flag — is what
+   * keeps a collapsed think collapsed when the aggregate below re-mounts it.
+   */
+  it('a streaming thought’s open default loses to a remembered choice', () => {
+    const rows = deriveToolGroupRows([thinkEntry(thinkingBlock('th1', 'thinking out loud'))], {
+      isStreamingBlockId: 'th1',
+    });
+    expect(resolveToolRowOpen(rows[0], EMPTY_TOOL_EXPAND_MEMORY)).toBe(true);
+    expect(resolveToolRowOpen(rows[0], { th1: false })).toBe(false);
+    expect(resolveToolRowOpen(rows[0], { th1: true })).toBe(true);
   });
 });
 

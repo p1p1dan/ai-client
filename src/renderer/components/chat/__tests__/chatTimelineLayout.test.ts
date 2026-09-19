@@ -1,9 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { COLLAPSIBLE_PANEL_BASE_CLASS } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import * as layout from '../chatTimelineLayout';
 import {
   chatTurnClass,
   readingColumnSpacingClass,
+  thoughtFoldHeaderClass,
   turnActionsInnerClass,
   turnActionsSlotClass,
   turnAnswerToneClass,
@@ -18,6 +22,41 @@ import {
   userBubbleRowClass,
   userBubbleTextClass,
 } from '../chatTimelineLayout';
+import { TIMELINE_PADDING_CLASS } from '../middleColumnLayout';
+import { stripComments } from './stripComments';
+
+/** A source file on the thought row's ancestor chain, comments blanked. */
+function readSource(relative: string): string {
+  const file = fileURLToPath(new URL(`../${relative}`, import.meta.url));
+  return stripComments(readFileSync(file, 'utf8'), file);
+}
+
+/**
+ * Every whitespace-separated token inside every quoted literal of a source
+ * file.
+ *
+ * Tokenised rather than regex-matched against the raw text, because the
+ * obvious form of that regex (`"…\ssticky\s…"`) silently misses the case that
+ * matters most — a class string that BEGINS with the banned token, e.g.
+ * `className="sticky top-0"`. Splitting first removes the position from the
+ * question entirely.
+ */
+function classTokens(source: string): string[] {
+  return [...source.matchAll(/["'`]([^"'`\n]*)["'`]/g)].flatMap(([, body]) =>
+    body.split(/\s+/).filter(Boolean)
+  );
+}
+
+/** `sticky`, `fixed`, and any variant-prefixed form of either (`md:sticky`). */
+const PIN_TOKEN = /(?:^|:)(?:sticky|fixed)$/;
+
+/** The four properties that switch `position: sticky` off, or re-parent it. */
+const CLIPPING_PATTERNS: readonly [string, RegExp][] = [
+  ['overflow', /(?:^|\s)overflow-/],
+  ['transform', /(?:^|\s)(?:transform|translate-|scale-|rotate-)/],
+  ['filter', /(?:^|\s)(?:filter|blur-|backdrop-)/],
+  ['contain', /(?:^|\s)contain-/],
+];
 
 /** Tailwind's spacing scale: one step is 4px (`py-2.5` -> 10px). */
 const SPACING_STEP_PX = 4;
@@ -34,18 +73,34 @@ function spacingPx(classes: string, prefix: string): number {
 }
 
 /**
- * T12 retired `turnBubbleBandClass()` — the `position: sticky` band that pinned
- * the user's prompt to the top of the viewport — and with it the F-B8 sticky
- * prohibitions, because there is no longer a sticky element for an ancestor's
- * `overflow` / `transform` / `contain` to switch off.
+ * T096 (decision 028) replaces T12's blanket "the timeline pins nothing" rule.
  *
- * The claim worth keeping from that block is the NEGATIVE one, and it moves
- * here: no element in the turn chrome may pin itself back without the rest of
- * the chain being rebuilt. A `sticky` reintroduced on its own would bring back
- * F10's oscillation (scroll position -> clamp -> height -> scroll position),
- * which is precisely what this batch removed the preconditions for.
+ * ## What the old rule was, and why it is not the lesson
+ *
+ * T12 retired `turnBubbleBandClass()` — the `position: sticky` band that pinned
+ * the user's prompt — and this group used to forbid `sticky` outright, on the
+ * grounds that bringing one back would bring F10's oscillation back with it.
+ * That was the cheap way to be certain, not the accurate way. F10 needs a
+ * CYCLE, and the cycle needs one specific link: a height that is a function of
+ * scroll state.
+ *
+ * ```
+ * stuck? -> height -> scrollHeight -> browser clamps scrollTop -> stuck?
+ * ```
+ *
+ * The retired band closed it with `scroll-state(stuck: top)` + `line-clamp-3`.
+ * The thought fold header cannot: its height is identical pinned and unpinned,
+ * nothing it carries reads a scroll offset, and the only thing that varies
+ * about it keys off `data-panel-open` — a click, which settles in one frame.
+ *
+ * ## The rule that replaces it
+ *
+ * **A sticky element in this timeline may not change its own height as a
+ * function of scroll state, and there may be exactly one of them.** The turn
+ * chrome is still not allowed to pin itself; what changed is that the thought
+ * fold header now is, by name.
  */
-describe('T12: the turn chrome pins nothing', () => {
+describe('T096: one pinned surface, and its height never moves with the scroll', () => {
   it('T12: no turn-level class assembler carries a sticky/fixed hook', () => {
     for (const cls of [
       chatTurnClass(),
@@ -57,11 +112,154 @@ describe('T12: the turn chrome pins nothing', () => {
       turnActionsSlotClass(),
       turnActionsInnerClass(),
     ]) {
-      expect(cls, `sticky must not return without the rest of the chain: ${cls}`).not.toMatch(
-        /(?:^|\s)(?:sticky|fixed)(?:\s|$)/
-      );
+      expect(
+        cls,
+        `only the thought fold header may pin; the turn chrome may not: ${cls}`
+      ).not.toMatch(/(?:^|\s)(?:sticky|fixed)(?:\s|$)/);
       expect(cls).not.toMatch(/(?:^|\s)z-\d+(?:\s|$)/);
     }
+  });
+
+  /**
+   * Exactly one, and it is the thought header. The scan is over every zero-arg
+   * export of this module plus the two `.tsx` files that render the chain, so
+   * a second pinned element cannot be added anywhere on it without landing
+   * here — which is the half of the rule that "the turn chrome is clean" does
+   * not cover.
+   */
+  it('the thought trigger is the only sticky surface in the timeline', () => {
+    const pinned = Object.entries(layout)
+      .filter(([, value]) => typeof value === 'function' && value.length === 0)
+      .map(([name, value]) => [name, (value as () => string)()] as const)
+      .filter(([, cls]) => /(?:^|\s)(?:sticky|fixed)(?:\s|$)/.test(cls))
+      .map(([name]) => name);
+    expect(pinned).toEqual(['thoughtFoldHeaderClass']);
+
+    // …and no inline class string on the chain pins anything either. Every file
+    // is scanned with comments blanked, so the prose above (and in the modules
+    // themselves) explaining WHY sticky is allowed cannot satisfy the scan.
+    for (const relative of ['ToolRows.tsx', 'MessageTimeline.tsx', 'ReadingColumn.tsx']) {
+      const offenders = classTokens(readSource(relative)).filter((token) => PIN_TOKEN.test(token));
+      expect(
+        offenders,
+        `${relative}: the pin belongs in thoughtFoldHeaderClass(), not in a class literal`
+      ).toEqual([]);
+    }
+    // The one legal reference: `ToolRows.tsx` reaches the pin by calling the
+    // function above, on the thinking-body condition and nothing else.
+    const toolRows = readSource('ToolRows.tsx');
+    expect(toolRows).toContain("view.body === 'thinking'");
+    expect(toolRows).toContain('pinsHeader && thoughtFoldHeaderClass()');
+  });
+
+  /**
+   * The user's ruling was 「不要透视效果，吸顶后不得出现内容穿插在折叠按钮后面」.
+   * A `backdrop-blur` is still see-through, and an `/NN` alpha suffix is
+   * see-through by definition — so both are banned, and the background has to
+   * be a theme token rather than a literal colour so the two themes stay one
+   * decision.
+   */
+  it('the sticky thought trigger has an opaque themed background and no backdrop filter', () => {
+    const cls = thoughtFoldHeaderClass();
+    expect(cls).toContain('bg-background');
+    expect(cls, 'a translucent background IS the defect, not the feature').not.toMatch(
+      /bg-\S+\/\d/
+    );
+    expect(cls, 'a blur is still see-through').not.toMatch(/backdrop-|blur-/);
+    expect(cls, 'no raw colour: the header must follow the theme token').not.toMatch(
+      /bg-(?:white|black|\[)/
+    );
+    // Pinned above its own body, and nothing else — see the function's note on
+    // why the competition is scoped to the scrollport's stacking context.
+    expect(cls).toMatch(/(?:^|\s)sticky(?:\s|$)/);
+    expect(cls).toMatch(/(?:^|\s)top-0(?:\s|$)/);
+    expect(cls).toMatch(/(?:^|\s)z-10(?:\s|$)/);
+
+    // The height half of the T096 rule, as a prohibition. Anything here that
+    // could resize the header — a clamp, a height cap, a scroll-state query —
+    // re-opens F10 even though the class itself looks harmless.
+    for (const banned of ['line-clamp', 'max-h-', 'min-h-', 'h-[', 'scroll-state']) {
+      expect(cls, `height must not vary under the pin: ${banned}`).not.toContain(banned);
+    }
+    // The hairline is gated on OPEN, never on stuck: `data-panel-open` is a
+    // click's state, so the 1px it adds is not in any scroll feedback loop.
+    expect(cls).toContain('data-panel-open:border-b');
+    expect(cls).toContain('data-panel-open:border-border');
+  });
+
+  /**
+   * `position: sticky` dies silently. Any `overflow` / `transform` / `filter` /
+   * `contain` on an element BETWEEN the header and the scroll viewport either
+   * switches it off or re-parents it onto a scrollport the reader never sees —
+   * with every other assertion in this file still green.
+   *
+   * The chain, viewport-first:
+   *
+   * ```
+   * ScrollArea Viewport   overflow: scroll (inline, base-ui) — the scrollport
+   *   TIMELINE_PADDING_CLASS
+   *     ReadingColumn
+   *       <section chatTurnClass()>
+   *         <div turnBodyClass()>
+   *           <details turnBodyClass()>            the work group
+   *             <div turnProcessShellClass()>
+   *               <div turnProcessShellClass() + turnBodyClass()>  process segment
+   *                 <div "flex flex-col gap-1">    ToolGroup
+   *                   <div data-slot="collapsible">
+   *                     <button> <- the pinned header
+   * ```
+   */
+  it('no ancestor between the thought row and the scroll viewport clips overflow or transforms', () => {
+    const chain: readonly [string, string][] = [
+      ['TIMELINE_PADDING_CLASS', TIMELINE_PADDING_CLASS],
+      ['readingColumnSpacingClass', readingColumnSpacingClass()],
+      ['chatTurnClass', chatTurnClass()],
+      ['turnBodyClass', turnBodyClass()],
+      ['turnProcessShellClass', turnProcessShellClass()],
+      ['turnProcessToneClass', turnProcessToneClass()],
+      ['turnWorkGroupSummaryClass', turnWorkGroupSummaryClass()],
+    ];
+    for (const [name, cls] of chain) {
+      for (const [property, pattern] of CLIPPING_PATTERNS) {
+        expect(cls, `${name} must not introduce ${property}: ${cls}`).not.toMatch(pattern);
+      }
+    }
+
+    // The two inline wrappers `ToolRows.tsx` puts above a row. Pinned as exact
+    // strings on purpose: an editor who adds `overflow-hidden` to either breaks
+    // the `toContain` first and has to read this note before re-stating it.
+    const toolRows = readSource('ToolRows.tsx');
+    for (const wrapper of ['flex flex-col gap-1', 'ml-0.5 border-l border-border pl-3.5']) {
+      expect(toolRows, `ToolRows.tsx no longer wraps rows in: ${wrapper}`).toContain(
+        `"${wrapper}"`
+      );
+      for (const [property, pattern] of CLIPPING_PATTERNS) {
+        expect(wrapper, `the row wrapper must not introduce ${property}`).not.toMatch(pattern);
+      }
+    }
+
+    // The panel below DOES clip (`overflow-hidden` is how base-ui animates its
+    // height), which is exactly why the header is its SIBLING and not inside
+    // it. This is the assertion that keeps the trigger outside the panel.
+    expect(COLLAPSIBLE_PANEL_BASE_CLASS).toContain('overflow-hidden');
+    const triggerOpen = toolRows.indexOf('<CollapsibleTrigger');
+    const triggerClose = toolRows.indexOf('</CollapsibleTrigger>');
+    const panelOpen = toolRows.indexOf('<CollapsibleContent');
+    expect(triggerOpen).toBeGreaterThan(-1);
+    expect(triggerClose, 'the trigger must close before the clipping panel opens').toBeLessThan(
+      panelOpen
+    );
+
+    // The scrollport itself: base-ui sets `overflow: scroll` inline, so the
+    // only thing this repo could break is adding a clip of its own — and the
+    // fade has to stay bottom-only, because a top mask would wash out the very
+    // header being pinned.
+    const scrollArea = stripComments(
+      readFileSync(fileURLToPath(new URL('../../ui/scroll-area.tsx', import.meta.url)), 'utf8'),
+      'scroll-area.tsx'
+    );
+    expect(scrollArea).not.toContain('overflow-hidden');
+    expect(readSource('MessageTimeline.tsx')).toContain('scrollFade="bottom"');
   });
 });
 
@@ -77,11 +275,11 @@ describe('chatTurnClass (F-B10)', () => {
     expect(cls).not.toMatch(/transform/);
   });
 
-  // The 10px that used to be the band's BOTTOM padding: prompt -> first content
-  // segment. It had to land somewhere when the band retired, and the section is
-  // the only element that spans both.
-  it('F-B10: owns the 10px prompt-to-body beat the band used to pad', () => {
-    expect(spacingPx(chatTurnClass(), 'gap')).toBe(10);
+  // The prompt -> turn body beat. It was 10px (the retired band's bottom
+  // padding, inherited whole); on 2026-09-19 it moved to the 12px loose tier so
+  // the turn's own line stops reading as the tail of the prompt above it.
+  it('F-B10: owns the 12px prompt-to-body beat', () => {
+    expect(spacingPx(chatTurnClass(), 'gap')).toBe(12);
     expect(chatTurnClass()).not.toMatch(/(?:^|\s)space-y-/);
   });
 });
@@ -100,16 +298,27 @@ describe('turn spacing arithmetic (F-B9)', () => {
     expect(spacingPx(readingColumnSpacingClass(), 'space-y')).toBe(20);
   });
 
-  // …and it has to be strictly bigger than the within-turn tier, or a reply and
-  // the next prompt read as one block. This is the relation the absolute
-  // numbers above exist to protect.
-  it('F-B9: turn-to-turn spacing is double the 10px within-turn tier (P-17)', () => {
+  /**
+   * …and the three beats have to stay a strictly descending ladder, or the
+   * structure stops being readable at a glance: turns must separate more than
+   * the parts of one turn do, and the prompt must separate from the turn's own
+   * line more than that line does from the output it is about.
+   *
+   * The third rung is the 2026-09-19 change. It used to be "prompt-to-body IS
+   * the within-turn tier" — one number for both — and at that equality the
+   * status / work-group line read as the tail of the user's bubble rather than
+   * as the header of the reply (the user's report). So this asserts the ORDER,
+   * plus each tier's absolute number so a failure names which one moved.
+   */
+  it('F-B9: the three beats descend — 20 between turns, 12 to the turn line, 8 inside', () => {
     const between = spacingPx(readingColumnSpacingClass(), 'space-y');
+    const toTurnLine = spacingPx(chatTurnClass(), 'gap');
     const within = spacingPx(turnBodyClass(), 'gap');
-    expect(within).toBe(10);
-    expect(between).toBe(within * 2);
-    // The prompt-to-body gap is the within-turn tier too, not a third number.
-    expect(spacingPx(chatTurnClass(), 'gap')).toBe(within);
+    expect(between).toBe(20);
+    expect(toTurnLine).toBe(12);
+    expect(within).toBe(8);
+    expect(between).toBeGreaterThan(toTurnLine);
+    expect(toTurnLine).toBeGreaterThan(within);
   });
 });
 
@@ -128,11 +337,13 @@ describe('turnProcessShellClass (F11)', () => {
   // `Collapsible.Root` renders a bare `<div>`; without this the trigger row and
   // the panel sat flush at 0px while every other pair inside the turn kept
   // P-17's 10px beat.
-  it('F11: the shell stacks its trigger and panel on the 10px within-turn tier', () => {
+  it('F11: the shell stacks its trigger and panel on the within-turn tier', () => {
     const cls = turnProcessShellClass();
     expect(cls).toContain('flex');
     expect(cls).toContain('flex-col');
-    expect(spacingPx(cls, 'gap')).toBe(10);
+    // Read from `turnBodyClass()` rather than hard-coded a second time: the
+    // shell sits inside one of its slots, so the two are one number by design
+    // and F-B9 above is where that number is pinned.
     expect(spacingPx(cls, 'gap')).toBe(spacingPx(turnBodyClass(), 'gap'));
   });
 
@@ -229,12 +440,32 @@ describe('userBubbleTextClass / userBubbleClass (T12)', () => {
 });
 
 describe('turnHeadClass', () => {
-  it('is a single-line meta row whose ticking seconds cannot jitter its width', () => {
+  it('is a single line whose ticking seconds cannot jitter its width', () => {
     const cls = turnHeadClass();
     expect(cls).toContain('items-center');
     expect(cls).toContain('min-w-0');
     expect(cls).toContain('tabular-nums');
-    expect(cls).toContain('text-meta');
+  });
+
+  /**
+   * The status row and the work-group head are the SAME line in two shapes —
+   * which one renders depends only on whether the turn has work to fold — so a
+   * size that differs between them makes the turn appear to change type scale
+   * the moment its first tool call lands. Asserted as an equality plus the
+   * token, so moving one without the other fails here rather than in a
+   * screenshot.
+   *
+   * 14px (`text-ui`) rather than 13px (`text-meta`) by user decision
+   * 2026-09-19; the deviation from the Typography table's "status line -> meta"
+   * row is recorded on `turnWorkGroupSummaryClass()`.
+   */
+  it('shares one size token with the work-group head, and it is the 14px tier', () => {
+    expect(turnHeadClass()).toContain('text-ui');
+    expect(turnWorkGroupSummaryClass()).toContain('text-ui');
+    expect(turnHeadClass(), 'the 13px tier must not linger on one of the pair').not.toContain(
+      'text-meta'
+    );
+    expect(turnWorkGroupSummaryClass()).not.toContain('text-meta');
   });
 });
 
@@ -458,7 +689,7 @@ describe('reading ladder (2026-09-18)', () => {
     const process = turnProcessToneClass();
     const head = turnWorkGroupSummaryClass();
     // Written as three CONTAINMENT claims rather than "3 distinct `text-*`
-    // tokens": the head also carries `text-meta`, a SIZE, so a naive
+    // tokens": the head also carries `text-ui`, a SIZE, so a naive
     // first-match extraction reads the size as the colour and the whole check
     // passes even when two rungs have collapsed onto one colour. (Verified: a
     // mutation setting the process rows back to `text-muted-foreground`
@@ -499,14 +730,15 @@ describe('reading ladder (2026-09-18)', () => {
     expect(process).toContain('text-tool-arg');
   });
 
-  it('[LADDER-3] the group head strips the native disclosure marker and stays a meta row', () => {
+  it('[LADDER-3] the group head strips the native disclosure marker', () => {
     const head = turnWorkGroupSummaryClass();
     // Without both of these a `<summary>` draws a triangle that cannot be
     // styled and points the wrong way in half the browsers that draw one.
     expect(head).toContain('list-none');
     expect(head).toContain('marker:content-none');
     expect(head).toContain('cursor-pointer');
-    expect(head).toContain('text-meta');
+    // Its size is asserted next to the status row's (`turnHeadClass` above):
+    // the two are one line in two shapes and share one token.
   });
 
   /**

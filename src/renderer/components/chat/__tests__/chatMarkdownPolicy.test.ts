@@ -911,13 +911,14 @@ describe('F-C4: prose owns its two tiers and still invents no third (D1-b)', () 
     // ① / ② the two prose tiers, spelled out so a failure names which moved.
     expect(marginTopPx(chatMarkdownParagraphClass())).toBe(14);
     expect(marginTopPx(chatMarkdownHeadingClass(1))).toBe(24);
-    // ③ the skeleton was NOT dragged along: P-17's 10px within-turn beat is
-    //    still 10px, and `turnBodyClass()` feeds `QuestionCard` and the tool
-    //    shells, which set no size of their own.
+    // ③ the skeleton was NOT dragged along: P-17's within-turn beat keeps its
+    //    own number (8px since 2026-09-19 — `chatTimelineLayout.ts` owns it and
+    //    `chatTimelineLayout.test.ts` pins it), and `turnBodyClass()` feeds
+    //    `QuestionCard` and the tool shells, which set no size of their own.
     const bodyGap = /(?:^|\s)gap-([0-9]+(?:\.[0-9]+)?)(?:\s|$)/.exec(turnBodyClass());
     expect(bodyGap).not.toBeNull();
     const skeletonGapPx = Number(bodyGap?.[1]) * SPACING_STEP_PX;
-    expect(skeletonGapPx).toBe(10);
+    expect(skeletonGapPx).toBe(8);
     // ④ the decoupling itself, asserted positively rather than left implicit
     //    in ①. Without this line, an edit that re-couples BOTH sides (prose
     //    back to 10, skeleton unchanged) is caught only by ①'s literal — and

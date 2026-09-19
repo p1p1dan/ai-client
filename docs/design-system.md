@@ -469,6 +469,19 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 > （`text-2xs` 恰好匹配 tailwind-merge 默认的 t-shirt 尺寸正则，那是**巧合**，不能当先例；
 > `text-tool-arg` 是颜色 token 而非字号，**刻意不注册**，它就该落在 `text-color` 组里。）
 
+### 已记录偏离：回合状态行用 `text-ui`（T097，2026-09-19）
+
+上表把 statusLine 归在 **meta（13px）**。聊天时间线的**回合状态行**不照这一格走，用 **`text-ui`（14px）**——两个形状一起改：`chatTimelineLayout.turnWorkGroupSummaryClass()`（工作组 `<summary>`：「工作中 47 秒 · ↑ 12.0k tokens · ↓ 1.3k tokens · 思考 20 秒」）与 `turnHeadClass()`（同一条线的非折叠形状）。
+
+**理由**（完整版在 `turnWorkGroupSummaryClass()` 的注释里）：meta 档描述的是**被动陪衬**——时间戳、页脚、应用状态栏，看一眼或根本不看。这一行不是：一次等待里它经常是**屏幕上唯一在动的东西**，读者要盯着它看 20 秒，13px 被实测反馈为「太小，撑不起这个角色」。
+
+**边界，不要顺手扩大**：
+
+- 两个函数**必须同时改**。它们是同一条线的两种形状，回合中途生成工作组时若只改一个，整个回合看起来像换了字号。
+- 仍然是 **token 不是任意值**，字号的话语权留在字号表里。
+- **回合尾部的悬浮操作条不跟着走**（`turnActionsInnerClass()` 保持 `text-meta`）：它装的是墙钟时间 + 复制按钮，正是 meta 档自己的例子，而且必须待在 `h-6` 里——那是按钮档位，不是排版决定。
+- 这条偏离只覆盖**聊天回合状态行**。侧栏、设置页、应用状态栏的 statusLine 仍归 meta。
+
 ### Font Weight（字重）
 
 字重是标题层级的**主要**载体（见上），不是可选装饰。但**有几档可用取决于字体栈**——
@@ -956,6 +969,40 @@ inline 永远赢 `:root` 声明 → **运行时稳态一直是 16px**。
 **红线（有测试钉住）**：滚动派生状态永远不得改变版面高度。任何 `@container scroll-state(...)` 块只允许 paint-only 属性（颜色/背景/阴影/透明度等），由 `chat/__tests__/scrollStateCss.test.ts` 扫描 `styles/` 目录强制。
 
 **保留的管线教训**（供未来前沿 CSS 语法复用）：Tailwind v4 的 lightningcss 管线解析不了它不认识的语法时会**静默丢弃规则**——不报错、构建照常过。依赖前沿语法的样式必须放独立文件走 Vite 原生 CSS 管线（postcss + esbuild），且该文件永远不得写入任何 Tailwind 指令（`@import "tailwindcss"` / `@theme` / `@apply`），否则被重新路由回 lightningcss 再次被吞。不要指望构建报错来发现。
+
+### 时间线折叠头吸顶（T096，决策 028）
+
+上一条退役的是**「钉住态改高度」这套机制**，不是 `position: sticky` 本身。T096 在时间线里放回了**唯一一个**吸顶元素：**思考块的折叠头**（`chatTimelineLayout.thoughtFoldHeaderClass()`，由 `chat/ToolRows.tsx` 在 `view.body === 'thinking'` 时挂到 Collapsible 触发器上）。动机是长思考块读到末尾时，收起按钮已经滚出视口。
+
+**它和 F10 的区别只有一条，但这条是决定性的。** F10 的振荡需要一个闭环：
+
+```
+钉住态 → 版面高度 → scrollHeight → 浏览器把 scrollTop 钳回 → 钉住态
+```
+
+退役的用户气泡带用 `scroll-state(stuck: top)` + `line-clamp-3` 接上了第二环。折叠头接不上：它**钉住与不钉住是同一个高度**，身上没有任何属性读取滚动偏移。唯一会变的装饰（下方发丝分隔线）挂在 `data-panel-open` 上——那是**点击**的状态，不是滚动的状态，一帧就收敛。
+
+**红线（有测试钉住，`chat/__tests__/chatTimelineLayout.test.ts` 的 T096 组）**：
+
+1. 时间线里吸顶元素**有且只有一个**，就是思考行触发器。回合级 class 组装函数一律不得带 `sticky` / `fixed`，`MessageTimeline.tsx` / `ReadingColumn.tsx` / `ToolRows.tsx` 的行内 class 字面量也不得带。
+2. 吸顶元素**不得让自身高度随钉住态变化**——禁 `line-clamp` / `max-h-` / `min-h-` / 任意值高度 / `scroll-state()`。
+3. 触发器到滚动视口之间**任何一层都不得引入** `overflow` / `transform` / `filter` / `contain`（这四个属性会让 sticky 静默失效或改挂到别的滚动容器上）。Base UI `Collapsible` 的面板基类带 `overflow-hidden`，所以吸顶头必须是面板的**兄弟**而不是它的后代。
+
+**视觉规格**（用户原话：「做好看点，不要透视效果，吸顶后不得出现内容穿插在折叠按钮后面」）：
+
+| 项 | 取值 | 理由 |
+|----|------|------|
+| 定位 | `sticky top-0` | 视口自身无 padding（`px-6 pt-5 pb-2` 在内层内容 div 上），0 就是可视上沿 |
+| 层级 | `z-10` | 只需压过同级的思考正文；视口带 mask 会形成层叠上下文，这个数字不会外溢到跳转按钮 / 权限坞 / 遮罩 |
+| 底色 | `bg-background`，**不透明** | 与时间线同一表面色（外壳根即 `bg-background`），明暗主题共用一个值 |
+| 禁用 | 半透明 alpha（`bg-*/NN`）、`backdrop-blur`、裸色值 | 模糊仍然透视，等于没解决问题 |
+| 宽度 | 触发器 `w-full`，覆盖整块宽 | 思考正文当前**没有**左侧竖线 / 引用轨；若日后给正文加轨，吸顶头必须同步用负边距盖住它 |
+| 分隔 | `data-panel-open:border-b data-panel-open:border-border` | 展开时才画（收起态不留孤立横线）；挂 open 而非挂 stuck 是红线 2 的要求 |
+
+**已知取舍**：`--background` 是参与 `--panel-bg-opacity` 的四个面板表面之一（见「面板半透明（背景图）」）。开启背景图后折叠头会和全 app 其他面板一样变半透明——那是该功能的既定行为，不是这个元素自己选的 alpha；为它单造一个不透明孪生 token 反而会让它成为唯一无视壁纸的表面。
+
+**收起时的滚动归位**：折叠头处于钉住态时收起，会把滚动容器回滚到该块的自然位置（`messageTimelineScroll.stickyFoldScrollTarget()` 出判断，`ToolRows.tsx` 出测量与写入）。**没被钉住就不动滚动**——读者本来就看得见自己点的那一行，动它才是缺陷。
+
 ## Icons
 
 ### 文件图标映射

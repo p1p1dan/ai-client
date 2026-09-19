@@ -726,7 +726,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
 
     const group = nodeSource(topLevelFunction('TurnProgressHead'));
     expect(group, 'the panel renders its children unconditionally').toContain(
-      `<div className={cn(turnProcessShellClass(), 'pt-2.5')}>{children}</div>`
+      `<div className={cn(turnProcessShellClass(), 'pt-2')}>{children}</div>`
     );
     expect(group, 'the open bit must be the derived one, not a second rule').toContain(
       'const open = turnWorkGroupOpen({ settled, forcedOpen, userOpen });'
@@ -841,12 +841,19 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * class functions and no wrapper: `userBubbleRowClass()` aligns it,
    * `userBubbleClass()` shapes it, `userBubbleTextClass()` sets the prose.
    *
-   * The negatives are the load-bearing half. `turnBubbleBandClass` was the
-   * `position: sticky` band, and the two `fx-` hooks were the scroll-state
-   * query container that made the clamp pinned-only. All three are gone, and
-   * they must stay gone TOGETHER: bringing the band back without the rest
-   * re-creates F10's oscillation (scroll position -> clamp -> height -> scroll
-   * position), which is the whole reason the clamp existed in the first place.
+   * The negatives are the load-bearing half, and T096 narrowed WHY they are.
+   * `turnBubbleBandClass` was the `position: sticky` band and the two `fx-`
+   * hooks were the `scroll-state()` query container that made the clamp
+   * pinned-only. Those three are one apparatus and it is the apparatus that is
+   * banned — a height that changes because the element got stuck, which closes
+   * F10's loop (stuck -> shorter -> clamp -> unstuck).
+   *
+   * Pinning by itself is no longer the ban: T096 pins the thought fold header,
+   * whose height is the same number stuck and unstuck. That element lives in
+   * `ToolRows.tsx` and reaches its classes through
+   * `chatTimelineLayout.thoughtFoldHeaderClass()`, so `MessageTimeline.tsx` is
+   * still expected to carry no pinned element of its own — which is what the
+   * bare-token assertion below now says, in place of "nothing anywhere pins".
    */
   it('T12: the bubble renders through its class functions, with no sticky band', () => {
     expectCalled('userBubbleRowClass()');
@@ -860,6 +867,13 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // The clamp and its toggle retired with the band — see `userBubbleClass()`.
     expect(SYNTAX, 'the prompt clamp must not return on its own').not.toContain('line-clamp');
     expect(SYNTAX, 'the Show more toggle retired with the clamp').not.toContain('Show more');
+    // T096: the one legal pin is the thought fold header, and it is not here.
+    // Class tokens, not a substring scan — `stickToBottomRef` and `position` are
+    // ordinary identifiers in this file and must not read as a pin.
+    const pins = [...SYNTAX.matchAll(/["'`]([^"'`\n]*)["'`]/g)]
+      .flatMap(([, body]) => body.split(/\s+/))
+      .filter((token) => /(?:^|:)(?:sticky|fixed)$/.test(token));
+    expect(pins, 'the timeline pins nothing of its own (T096: only ToolRows.tsx may)').toEqual([]);
   });
 
   // T-29: assistant prose is Markdown, and it is Markdown in exactly ONE place.
@@ -1553,7 +1567,7 @@ describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest d
 
   it('the tool rows, code block and turn skeleton retain the 1.5 tier', () => {
     expect(countIn(DENSITY_CODE, 'leading-normal')).toBe(3);
-    expect(DENSITY_CODE).toContain('flex flex-col gap-2.5 text-markdown leading-normal');
+    expect(DENSITY_CODE).toContain('flex flex-col gap-2 text-markdown leading-normal');
     expect(DENSITY_CODE).toContain('text-left text-markdown leading-normal');
   });
 });
@@ -1649,16 +1663,23 @@ describe('T12-d: the jump-to-bottom button', () => {
   });
 
   /**
-   * The button is positioned against the WRAPPER, not the scrollport. Inside
-   * the viewport an absolute child scrolls away with the content and a sticky
-   * one is the exact shape `chatTimelineLayout.ts` prohibits after F10.
+   * The button is positioned against the WRAPPER, not the scrollport, and both
+   * halves of that still hold after T096 reopened `sticky` for one element.
+   *
+   * Inside the viewport an absolute child scrolls away with the content, which
+   * is the original reason. The sticky alternative is now merely WRONG rather
+   * than forbidden: the T096 rule is "a pinned element may not change its own
+   * height with scroll state, and there is one of them" — this button would be
+   * a second, and it would be pinned inside a stacking context (the viewport's
+   * bottom-fade mask) that the header it competes with also lives in. Out here
+   * it neither scrolls nor participates in the timeline's layout at all.
    */
   it('renders outside the scrollport and carries no sticky/fixed hook', () => {
     const anchorIndex = timeline.indexOf('showJumpToBottom && (');
     expect(anchorIndex).toBeGreaterThan(timeline.indexOf('</ScrollArea>'));
     const button = timeline.slice(anchorIndex);
     expect(button).toContain('absolute right-3 bottom-3');
-    expect(button, 'sticky must not come back through this door').not.toMatch(
+    expect(button, 'the one legal pin is the thought fold header, not this').not.toMatch(
       /(?:^|\s)(?:sticky|fixed)(?:\s|-)/
     );
   });
