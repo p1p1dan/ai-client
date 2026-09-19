@@ -13,8 +13,12 @@ import { parseHitList } from './toolHits';
 
 interface HitListPopoverProps {
   source: string;
-  /** Trigger content — the already-styled `.ct-a` arg node. */
-  children: React.ReactNode;
+  /**
+   * Trigger content — the already-styled `.ct-a` arg node. A single element,
+   * not free-form nodes: it IS the trigger (see `render` below), so the
+   * positioner measures this very box.
+   */
+  children: React.ReactElement<Record<string, unknown>>;
   onOpenFile: (target: FileLinkTarget) => void;
 }
 
@@ -24,10 +28,12 @@ export function HitListPopover({ source, children, onOpenFile }: HitListPopoverP
 
   return (
     <PreviewCard>
-      {/* `contents` keeps this wrapper out of the row's flex layout so the
-          arg span underneath it stays the actual flex item — needed for its
-          own `min-w-0 truncate` to take effect. */}
-      <PreviewCardTrigger render={<span className="contents" />}>{children}</PreviewCardTrigger>
+      {/* The arg node IS the trigger — no wrapper. A `display: contents`
+          wrapper kept the row's flex layout intact but had no box of its own
+          (`getClientRects()` is empty), so the positioner measured an empty
+          rect and pinned the popup to the viewport's top-left corner. Same
+          shape as `BreadcrumbTreeMenu`'s `MenuTrigger`. */}
+      <PreviewCardTrigger render={children} />
       <PreviewCardPopup className="w-140 max-h-72 flex-col overflow-auto rounded-md p-1 text-wrap before:hidden">
         {hitList.hits.map((hit) => (
           <button
