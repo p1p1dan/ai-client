@@ -543,6 +543,137 @@ describe('T017 · projection seams', () => {
     expect(delegatedPayload?.context).toBeDefined();
     expect(delegatedPayload?.context).toEqual(turnPayload?.context);
   });
+
+  /**
+   * MODEL-18 (2026-09-19). Pressing Stop while a Task delegate was running took
+   * the context badge from 2% to 0%.
+   *
+   * pi answers an abort by emitting `turn_end` with an EMPTY message and no
+   * tool results, and `estimateContextTokens` skips an aborted message's usage
+   * on purpose — so measuring that event counted the characters of nothing and
+   * reported `{tokens: 0, percent: 0}`. The fold of the delegate's spend that
+   * followed then re-stated the same zero from the cache. Stop does not empty
+   * the context, so the last measured occupancy has to survive both events.
+   */
+  it('keeps the measured context occupancy when Stop ends the turn', () => {
+    const events: RuntimeEventDraft[] = [];
+    const projection = new RuntimeEventProjector(
+      { sessionId: 'logical', emit: (event) => events.push(event) },
+      'run',
+      [],
+      1000
+    );
+    const usage = {
+      input: 120,
+      output: 30,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 150,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.01 },
+    };
+    const settled = { ...fauxAssistantMessage('done'), usage } as AgentMessage;
+    projection.observe({ type: 'turn_end', message: settled, toolResults: [] });
+    const measured = events.find((event) => event.type === 'usage.updated')?.payload;
+    expect(measured?.context).toEqual({ tokens: 150, contextWindow: 1000, percent: 15 });
+    const session = measured?.session;
+    expect(session).toMatchObject({ turns: 1, totalTokens: 150 });
+
+    // The Stop. Empty content, no tool results, `stopReason: 'aborted'` — the
+    // exact event `runLoop` emits, faux's zeroed usage included.
+    events.length = 0;
+    projection.observe({
+      type: 'turn_end',
+      message: fauxAssistantMessage('', { stopReason: 'aborted' }),
+      toolResults: [],
+    });
+    const afterStop = events.find((event) => event.type === 'usage.updated')?.payload;
+    expect(afterStop?.context).toEqual(measured?.context);
+    // The running totals are unharmed: an abort bills nothing, it does not
+    // un-bill the turns before it.
+    expect(afterStop?.session).toEqual(session);
+
+    // The second event from the field report: the delegate's spend settling
+    // after the Stop must not re-state the placeholder either.
+    events.length = 0;
+    projection.delegated({
+      input: 3,
+      output: 2,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 5,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.002 },
+    });
+    const folded = events.find((event) => event.type === 'usage.updated')?.payload;
+    expect(folded?.context).toEqual(measured?.context);
+    expect(folded?.delegated).toMatchObject({ totalTokens: 5 });
+    // Re-stated from the last MEASURED turn, not from the aborted placeholder.
+    expect(folded?.totalTokens).toBe(150);
+  });
+
+  /**
+   * MODEL-18, the adjacent case the same guard covers. A provider failure ends
+   * the loop through the SAME placeholder message a Stop does — `runLoop`
+   * branches on `'error'` and `'aborted'` together (`agent-loop.js:124`) — so
+   * it zeroed the badge by the same route, on a turn the user did not cancel.
+   */
+  it('keeps the measured context occupancy when the provider fails the turn', () => {
+    const events: RuntimeEventDraft[] = [];
+    const projection = new RuntimeEventProjector(
+      { sessionId: 'logical', emit: (event) => events.push(event) },
+      'run',
+      [],
+      1000
+    );
+    const settled = {
+      ...fauxAssistantMessage('done'),
+      usage: {
+        input: 120,
+        output: 30,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 150,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.01 },
+      },
+    } as AgentMessage;
+    projection.observe({ type: 'turn_end', message: settled, toolResults: [] });
+    const measured = events.find((event) => event.type === 'usage.updated')?.payload;
+    expect(measured?.context).toEqual({ tokens: 150, contextWindow: 1000, percent: 15 });
+
+    events.length = 0;
+    projection.observe({
+      type: 'turn_end',
+      message: fauxAssistantMessage('', {
+        stopReason: 'error',
+        errorMessage: 'provider unavailable',
+      }),
+      toolResults: [],
+    });
+    const afterFailure = events.find((event) => event.type === 'usage.updated')?.payload;
+    expect(afterFailure?.context).toEqual(measured?.context);
+  });
+
+  /**
+   * MODEL-18, the other half: a run aborted before any turn settled has no
+   * occupancy to re-state, and saying `0%` would assert one. The key is dropped
+   * instead — the rule `buildPiInterimUsagePayload` already follows.
+   */
+  it('reports no context at all when the first turn is the aborted one', () => {
+    const events: RuntimeEventDraft[] = [];
+    const projection = new RuntimeEventProjector(
+      { sessionId: 'logical', emit: (event) => events.push(event) },
+      'run',
+      [],
+      1000
+    );
+    projection.observe({
+      type: 'turn_end',
+      message: fauxAssistantMessage('', { stopReason: 'aborted' }),
+      toolResults: [],
+    });
+    const payload = events.find((event) => event.type === 'usage.updated')?.payload;
+    expect(payload).toBeDefined();
+    expect(payload).not.toHaveProperty('context');
+  });
 });
 
 it('puts a provider retry on the wire the banner reads, and clears it when the retry streams', async () => {

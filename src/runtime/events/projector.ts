@@ -444,7 +444,23 @@ export class RuntimeEventProjector {
       case 'turn_end': {
         if (event.message.role !== 'assistant') break;
         this.closeAssistant();
-        this.lastTurnUsage = event.message.usage;
+        /**
+         * MODEL-18 (2026-09-19): a turn that did not finish ends through a
+         * PLACEHOLDER message, and that message must not be measured.
+         *
+         * `'aborted'` and `'error'` are one path, not two: pi's `runLoop` tests
+         * for both in the same branch (`agent-loop.js:124`) and answers either
+         * with a `turn_end` carrying empty content and no tool results.
+         * `estimateContextTokens` then refuses that message's usage — its
+         * `getAssistantUsage` excludes both stop reasons by name
+         * (`compaction.js`) — and falls back to counting the characters of
+         * nothing, which reported `{tokens: 0, percent: 0}` and dropped the
+         * badge from 2% to 0. Neither pressing Stop nor a provider failing
+         * empties the context, so the last measured occupancy stands and the
+         * cached figures stay put for `delegated()` to re-state.
+         */
+        const placeholder = ['aborted', 'error'].includes(event.message.stopReason);
+        if (!placeholder) this.lastTurnUsage = event.message.usage;
         const turn = buildPiUsagePayload(event.message.usage);
         if (turn)
           this.rollup = applyTurnUsage(this.rollup, { sessionId, usage: turn, source: 'turn' });
@@ -453,18 +469,23 @@ export class RuntimeEventProjector {
           if (usage)
             this.rollup = applyTurnUsage(this.rollup, { sessionId, usage, source: 'tool' });
         }
-        const tokens = estimateContextTokens([event.message, ...event.toolResults]).tokens;
-        const contextUsage = this.contextWindow
-          ? {
-              tokens,
-              contextWindow: this.contextWindow,
-              percent: (tokens / this.contextWindow) * 100,
-            }
-          : undefined;
-        this.lastContextUsage = contextUsage;
+        if (!placeholder) {
+          const tokens = estimateContextTokens([event.message, ...event.toolResults]).tokens;
+          this.lastContextUsage = this.contextWindow
+            ? {
+                tokens,
+                contextWindow: this.contextWindow,
+                percent: (tokens / this.contextWindow) * 100,
+              }
+            : undefined;
+        }
         const payload = buildPiUsagePayload(
           event.message.usage,
-          contextUsage,
+          // Still absent before any turn has been measured, so a run that ends
+          // on its first turn drops the key rather than claiming zero
+          // occupancy — the rule `buildPiInterimUsagePayload` follows for a
+          // figure it lacks.
+          this.lastContextUsage,
           viewTurnRollup(this.rollup),
           this.delegatedUsage
         );
