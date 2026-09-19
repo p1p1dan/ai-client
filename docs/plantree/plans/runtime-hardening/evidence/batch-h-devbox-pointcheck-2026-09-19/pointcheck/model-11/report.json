@@ -1,0 +1,428 @@
+{
+  "probe": "m11-hover.mjs",
+  "criterion": "MODEL-11",
+  "startedAt": "2026-09-19T07:28:54.150Z",
+  "hovers": [
+    {
+      "key": "grep-relative",
+      "file": "model-11-grep-hover.png",
+      "clickIndex": 2,
+      "trigger": {
+        "index": 0,
+        "text": "HitList（ai-client）",
+        "x": 559.1171875,
+        "y": 188.75,
+        "w": 118.234375,
+        "h": 21,
+        "hitTestOk": true
+      },
+      "method": "Input.dispatchMouseEvent",
+      "popup": {
+        "open": true,
+        "hits": [
+          {
+            "index": 0,
+            "text": "toolCard.ts src/renderer/components/chat"
+          },
+          {
+            "index": 1,
+            "text": "toolHits.ts src/renderer/components/chat"
+          },
+          {
+            "index": 2,
+            "text": "HitListPopover.tsx src/renderer/components/chat"
+          },
+          {
+            "index": 3,
+            "text": "ToolRows.tsx src/renderer/components/chat"
+          }
+        ]
+      },
+      "anchor": {
+        "triggerDisplay": "contents",
+        "triggerRect": [0, 0, 0, 0],
+        "triggerClientRects": 0,
+        "childRect": [500, 178.25, 118.234375, 21],
+        "positionerRect": [0, 4, 560, 122],
+        "positionerTransform": "matrix(1, 0, 0, 1, 0, 4)"
+      },
+      "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-11/model-11-grep-hover.png"
+    },
+    {
+      "key": "grep-absolute",
+      "file": "model-11-grep-abs-hover.png",
+      "clickIndex": 0,
+      "trigger": {
+        "index": 1,
+        "text": "useFileOpenIntentStore（ai-client）",
+        "x": 538.25,
+        "y": 324.75,
+        "w": 228.5,
+        "h": 21,
+        "hitTestOk": true
+      },
+      "method": "Input.dispatchMouseEvent",
+      "popup": {
+        "open": true,
+        "hits": [
+          {
+            "index": 0,
+            "text": "fileOpenIntent.ts home/ai/code/ai-client/src/renderer/stores"
+          },
+          {
+            "index": 1,
+            "text": "SessionReviewPanel.tsx home/ai/code/ai-client/src/renderer/components/workspace-shell"
+          },
+          {
+            "index": 2,
+            "text": "WorkspaceShell.tsx home/ai/code/ai-client/src/renderer/components/workspace-shell"
+          }
+        ]
+      },
+      "anchor": {
+        "triggerDisplay": "contents",
+        "triggerRect": [0, 0, 0, 0],
+        "triggerClientRects": 0,
+        "childRect": [424, 178.25, 118.234375, 21],
+        "positionerRect": [0, 4, 560, 122],
+        "positionerTransform": "matrix(1, 0, 0, 1, 0, 4)"
+      },
+      "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-11/model-11-grep-abs-hover.png"
+    },
+    {
+      "key": "glob",
+      "file": "model-11-glob-hover.png",
+      "clickIndex": 0,
+      "trigger": {
+        "index": 2,
+        "text": "scripts/*.mjs（ai-client）",
+        "x": 501.6640625,
+        "y": 599.6875,
+        "w": 155.328125,
+        "h": 21,
+        "hitTestOk": true
+      },
+      "method": "Input.dispatchMouseEvent",
+      "popup": {
+        "open": true,
+        "hits": [
+          {
+            "index": 0,
+            "text": "afterPack.mjs scripts"
+          },
+          {
+            "index": 1,
+            "text": "agent-host-build-lib.mjs scripts"
+          },
+          {
+            "index": 2,
+            "text": "assert-build-target.mjs scripts"
+          },
+          {
+            "index": 3,
+            "text": "build-agent-host.mjs scripts"
+          }
+        ]
+      },
+      "anchor": {
+        "triggerDisplay": "contents",
+        "triggerRect": [0, 0, 0, 0],
+        "triggerClientRects": 0,
+        "childRect": [424, 41.25, 118.234375, 21],
+        "positionerRect": [0, 4, 560, 94],
+        "positionerTransform": "matrix(1, 0, 0, 1, 0, 4)"
+      },
+      "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-11/model-11-glob-hover.png"
+    }
+  ],
+  "clicks": [
+    {
+      "key": "grep-relative",
+      "clicked": "HitListPopover.tsx src/renderer/components/chat",
+      "before": {
+        "tabs": [],
+        "activeTabPath": null,
+        "pendingCursor": null,
+        "currentCursorLine": null,
+        "intent": null
+      },
+      "after": {
+        "tabs": [
+          {
+            "path": "/home/ai/code/ai-client/src/renderer/components/chat/HitListPopover.tsx",
+            "title": "HitListPopover.tsx"
+          }
+        ],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/components/chat/HitListPopover.tsx",
+        "pendingCursor": null,
+        "currentCursorLine": null,
+        "intent": null
+      },
+      "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-11/model-11-jump.png"
+    },
+    {
+      "key": "grep-absolute",
+      "clicked": "fileOpenIntent.ts home/ai/code/ai-client/src/renderer/stores",
+      "before": {
+        "tabs": [
+          {
+            "path": "/home/ai/code/ai-client/src/renderer/components/chat/HitListPopover.tsx",
+            "title": "HitListPopover.tsx"
+          }
+        ],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/components/chat/HitListPopover.tsx",
+        "pendingCursor": null,
+        "currentCursorLine": null,
+        "intent": null
+      },
+      "after": {
+        "tabs": [
+          {
+            "path": "/home/ai/code/ai-client/src/renderer/components/chat/HitListPopover.tsx",
+            "title": "HitListPopover.tsx"
+          },
+          {
+            "path": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+            "title": "fileOpenIntent.ts"
+          }
+        ],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+        "pendingCursor": {
+          "path": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+          "line": 57,
+          "column": 0
+        },
+        "currentCursorLine": null,
+        "intent": null
+      },
+      "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-11/model-11-jump-grep-absolute.png"
+    },
+    {
+      "key": "glob",
+      "clicked": "afterPack.mjs scripts",
+      "before": {
+        "tabs": [
+          {
+            "path": "/home/ai/code/ai-client/src/renderer/components/chat/HitListPopover.tsx",
+            "title": "HitListPopover.tsx"
+          },
+          {
+            "path": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+            "title": "fileOpenIntent.ts"
+          }
+        ],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+        "pendingCursor": {
+          "path": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+          "line": 57,
+          "column": 0
+        },
+        "currentCursorLine": null,
+        "intent": null
+      },
+      "after": {
+        "tabs": [
+          {
+            "path": "/home/ai/code/ai-client/src/renderer/components/chat/HitListPopover.tsx",
+            "title": "HitListPopover.tsx"
+          },
+          {
+            "path": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+            "title": "fileOpenIntent.ts"
+          },
+          {
+            "path": "/home/ai/code/ai-client/scripts/afterPack.mjs",
+            "title": "afterPack.mjs"
+          }
+        ],
+        "activeTabPath": "/home/ai/code/ai-client/scripts/afterPack.mjs",
+        "pendingCursor": {
+          "path": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+          "line": 57,
+          "column": 0
+        },
+        "currentCursorLine": null,
+        "intent": null
+      },
+      "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-11/model-11-jump-glob.png"
+    }
+  ],
+  "entry": {
+    "entered": null,
+    "dismissed": null
+  },
+  "sessionId": "session-1789802936458-ofwjd8f",
+  "seededMessages": 4,
+  "editorReset": 0,
+  "expand": {
+    "summaries": 1,
+    "clicked": ["3 steps processed"]
+  },
+  "triggers": [
+    {
+      "index": 0,
+      "text": "HitList（ai-client）",
+      "x": 559.1171875,
+      "y": 188.75,
+      "w": 118.234375,
+      "h": 21,
+      "hitTestOk": true
+    },
+    {
+      "index": 1,
+      "text": "useFileOpenIntentStore（ai-client）",
+      "x": 614.25,
+      "y": 219.75,
+      "w": 228.5,
+      "h": 21,
+      "hitTestOk": true
+    },
+    {
+      "index": 2,
+      "text": "scripts/*.mjs（ai-client）",
+      "x": 577.6640625,
+      "y": 250.75,
+      "w": 155.328125,
+      "h": 21,
+      "hitTestOk": true
+    }
+  ],
+  "verdict": {
+    "hoverOpenedPopover": 3,
+    "hoverMethods": [
+      {
+        "key": "grep-relative",
+        "method": "Input.dispatchMouseEvent"
+      },
+      {
+        "key": "grep-absolute",
+        "method": "Input.dispatchMouseEvent"
+      },
+      {
+        "key": "glob",
+        "method": "Input.dispatchMouseEvent"
+      }
+    ],
+    "hitsListed": [
+      {
+        "key": "grep-relative",
+        "hits": [
+          "toolCard.ts src/renderer/components/chat",
+          "toolHits.ts src/renderer/components/chat",
+          "HitListPopover.tsx src/renderer/components/chat",
+          "ToolRows.tsx src/renderer/components/chat"
+        ]
+      },
+      {
+        "key": "grep-absolute",
+        "hits": [
+          "fileOpenIntent.ts home/ai/code/ai-client/src/renderer/stores",
+          "SessionReviewPanel.tsx home/ai/code/ai-client/src/renderer/components/workspace-shell",
+          "WorkspaceShell.tsx home/ai/code/ai-client/src/renderer/components/workspace-shell"
+        ]
+      },
+      {
+        "key": "glob",
+        "hits": [
+          "afterPack.mjs scripts",
+          "agent-host-build-lib.mjs scripts",
+          "assert-build-target.mjs scripts",
+          "build-agent-host.mjs scripts"
+        ]
+      }
+    ],
+    "relativeClicked": "HitListPopover.tsx src/renderer/components/chat",
+    "relativeTab": "/home/ai/code/ai-client/src/renderer/components/chat/HitListPopover.tsx",
+    "relativePathOpened": true,
+    "relativeCursor": null,
+    "relativeCursorLine": null,
+    "absoluteClicked": "fileOpenIntent.ts home/ai/code/ai-client/src/renderer/stores",
+    "absoluteTab": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+    "absolutePathOpened": true,
+    "absoluteCursor": {
+      "path": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+      "line": 57,
+      "column": 0
+    },
+    "absoluteCursorLine": null,
+    "globClicked": "afterPack.mjs scripts",
+    "globTab": "/home/ai/code/ai-client/scripts/afterPack.mjs",
+    "globPathOpened": true,
+    "globCursorLine": null,
+    "popoverAnchoredToRow": false,
+    "anchors": [
+      {
+        "key": "grep-relative",
+        "anchor": {
+          "triggerDisplay": "contents",
+          "triggerRect": [0, 0, 0, 0],
+          "triggerClientRects": 0,
+          "childRect": [500, 178.25, 118.234375, 21],
+          "positionerRect": [0, 4, 560, 122],
+          "positionerTransform": "matrix(1, 0, 0, 1, 0, 4)"
+        }
+      },
+      {
+        "key": "grep-absolute",
+        "anchor": {
+          "triggerDisplay": "contents",
+          "triggerRect": [0, 0, 0, 0],
+          "triggerClientRects": 0,
+          "childRect": [424, 178.25, 118.234375, 21],
+          "positionerRect": [0, 4, 560, 122],
+          "positionerTransform": "matrix(1, 0, 0, 1, 0, 4)"
+        }
+      },
+      {
+        "key": "glob",
+        "anchor": {
+          "triggerDisplay": "contents",
+          "triggerRect": [0, 0, 0, 0],
+          "triggerClientRects": 0,
+          "childRect": [424, 41.25, 118.234375, 21],
+          "positionerRect": [0, 4, 560, 94],
+          "positionerTransform": "matrix(1, 0, 0, 1, 0, 4)"
+        }
+      }
+    ]
+  },
+  "finishedAt": "2026-09-19T07:31:49.772Z",
+  "rendererProblems": [
+    {
+      "kind": "exception",
+      "text": "Canceled: Canceled\n    at Delayer.cancel (http://localhost:5173/@fs/home/ai/code/ai-client/node_modules/.vite/deps/chunk-ZSQ4Y54E.js?v=5e035f5c:2969:23)\n    at _a82.restore (http://localhost:5173/@fs/home/ai/code/ai-client/node_modules/.vite/deps/chunk-ZSQ4Y54E.js?v=5e035f5c:163014:21)\n    at _a83.restoreViewState (http://localhost:5173/@fs/home/ai/code/ai-client/node_modules/.vite/deps/chunk-ZSQ4Y54E.js?v=5e035f5c:163413:29)\n    at CodeEditorContributions.restoreViewState (http://localhost:5173/@fs/home/ai/code/ai-client/node_modules/.vite/deps/chunk-ZSQ4Y54E.js?v=5e035f5c:56222:22)\n    at StandaloneEditor2.restoreViewState (http://localhost:5173/@fs/home/ai/code/ai-client/node_modules/.vite/deps/chunk-ZSQ4Y54E.js?v=5e035f5c:76114:27)\n    at http://localhost:5173/@fs/home/ai/code/ai-client/node_modules/.vite/deps/@monaco-editor_react.js?v=5e035f5c:629:117\n    at http://localhost:5173/@fs/home/ai/code/ai-client/node_modules/.vite/deps/@monaco-editor_react.js?v=5e035f5c:635:17\n    at Object.react_stack_bottom_frame (http://localhost:5173/@fs/home/ai/code/ai-client/node_modules/.vite/deps/react-dom_client.js?v=5e035f5c:18567:20)\n    at runWithFiberInDEV (http://localhost:5173/@fs/home/ai/code/ai-client/node_modules/.vite/deps/react-dom_client.js?v=5e035f5c:997:72)\n    at commitHookEffectListMount (http://localhost:5173/@fs/home/ai/code/ai-client/node_modules/.vite/deps/react-dom_client.js?v=5e035f5c:9411:163)"
+    }
+  ],
+  "followUp": {
+    "probe": "m11-jump-order.mjs",
+    "question": "为什么只有第一次点击跳到了行号",
+    "rounds": [
+      {
+        "order": "first",
+        "pathKind": "absolute",
+        "clicked": "fileOpenIntent.ts home/ai/code/ai-client/src/renderer/stores",
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+        "pendingCursor": null,
+        "currentCursorLine": 57
+      },
+      {
+        "order": "second",
+        "pathKind": "relative",
+        "clicked": "toolCard.ts src/renderer/components/chat",
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+        "pendingCursor": {
+          "path": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "line": 464,
+          "column": 0
+        },
+        "currentCursorLine": 57
+      }
+    ],
+    "conclusion": "跳行失败跟路径形态无关，跟顺序有关：编辑器本次第一次开文件时 pendingCursor 被消费、光标落到命中行；编辑器已经开着再点第二条命中，文件会新开 tab 但 pendingCursor 一直挂着不被消费，停在原位置。"
+  },
+  "notes": [
+    "悬停三种行（相对路径 Grep / 绝对路径 Grep / Glob）都靠 CDP Input.dispatchMouseEvent 成功，没用到合成 pointer 事件兜底。",
+    "第一次跑失败是探针的问题不是功能的问题：结算回合的工具行折在收起的 <details> 工作组里，收起态的内容 getBoundingClientRect 仍返回像样的坐标但不参与命中测试，真实鼠标落到了后面的滚动容器上。探针现在先展开再量坐标，并断言 elementFromPoint 落在触发元素内。",
+    "弹层位置有缺陷：HitListPopover 给 Base UI 触发器的是 render={<span className=\"contents\"/>}，display:contents 元素没有盒子（getClientRects().length===0，rect 全 0），positioner 因此锚到视口原点，命中列表画在窗口左上角盖住标题栏，而不是贴着搜索行。"
+  ]
+}

@@ -1,0 +1,335 @@
+{
+  "probe": "m27-ask.mjs",
+  "criterion": "MODEL-27",
+  "startedAt": "2026-09-19T06:42:24.085Z",
+  "rounds": [
+    {
+      "mode": "answer",
+      "prompt": "请调用 ask 工具问我一个问题：「这个项目的缩进用 Tab 还是空格？」，只给「Tab」和「空格」两个选项。拿到我的回答后，用一句话把我选中的那一项原样复述出来，不要调用任何别的工具，也不要做别的事。",
+      "typedChars": 101,
+      "cardAtMs": 58638,
+      "card": {
+        "title": "提问",
+        "text": "提问\n缩进风格\n这个项目的缩进用 Tab 还是空格？\nA\nTab\n使用制表符缩进\nB\n空格\n使用空格缩进\nC\n其他…\n跳过\n继续\nctrl + enter",
+        "buttons": [
+          "A Tab 使用制表符缩进",
+          "B 空格 使用空格缩进",
+          "C 其他…",
+          "跳过",
+          "继续 ctrl + enter"
+        ],
+        "footerButtons": [
+          {
+            "text": "",
+            "disabled": false
+          },
+          {
+            "text": "跳过",
+            "disabled": false
+          },
+          {
+            "text": "继续 ctrl + enter",
+            "disabled": true
+          }
+        ],
+        "groups": [
+          {
+            "role": "radiogroup",
+            "ariaLabel": "这个项目的缩进用 Tab 还是空格？"
+          }
+        ],
+        "options": [
+          {
+            "index": 0,
+            "role": "radio",
+            "ariaChecked": "false",
+            "letter": "A",
+            "label": "Tab",
+            "full": "A / Tab / 使用制表符缩进"
+          },
+          {
+            "index": 1,
+            "role": "radio",
+            "ariaChecked": "false",
+            "letter": "B",
+            "label": "空格",
+            "full": "B / 空格 / 使用空格缩进"
+          },
+          {
+            "index": 2,
+            "role": "radio",
+            "ariaChecked": "false",
+            "letter": "C",
+            "label": "其他…",
+            "full": "C / 其他…"
+          }
+        ]
+      },
+      "store": {
+        "pendingQuestions": [
+          {
+            "sessionId": "session-live-1789799773225-xncrqne",
+            "questionId": "toolu_01s40gzC56AYmBxs9bSgH3dZ",
+            "messageId": "asst-send-1789800150425-2-2"
+          }
+        ],
+        "pending": {
+          "sessionId": "session-live-1789799773225-xncrqne",
+          "questionId": "toolu_01s40gzC56AYmBxs9bSgH3dZ",
+          "messageId": "asst-send-1789800150425-2-2"
+        },
+        "block": {
+          "id": "toolu_01s40gzC56AYmBxs9bSgH3dZ",
+          "type": "question",
+          "questionId": "toolu_01s40gzC56AYmBxs9bSgH3dZ",
+          "questions": [
+            {
+              "id": "toolu_01s40gzC56AYmBxs9bSgH3dZ-0",
+              "question": "这个项目的缩进用 Tab 还是空格？",
+              "header": "缩进风格",
+              "options": [
+                {
+                  "label": "Tab",
+                  "description": "使用制表符缩进"
+                },
+                {
+                  "label": "空格",
+                  "description": "使用空格缩进"
+                }
+              ]
+            }
+          ],
+          "resolved": false
+        },
+        "status": "waiting_question"
+      },
+      "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-27/model-27-question-card.png",
+      "optionLabelsFromStore": ["Tab", "空格"],
+      "picked": "Tab",
+      "cardAfterPick": {
+        "title": "提问",
+        "text": "提问\n缩进风格\n这个项目的缩进用 Tab 还是空格？\nA\nTab\n使用制表符缩进\nB\n空格\n使用空格缩进\nC\n其他…\n跳过\n继续\nctrl + enter",
+        "buttons": [
+          "A Tab 使用制表符缩进",
+          "B 空格 使用空格缩进",
+          "C 其他…",
+          "跳过",
+          "继续 ctrl + enter"
+        ],
+        "footerButtons": [
+          {
+            "text": "",
+            "disabled": false
+          },
+          {
+            "text": "跳过",
+            "disabled": false
+          },
+          {
+            "text": "继续 ctrl + enter",
+            "disabled": false
+          }
+        ],
+        "groups": [
+          {
+            "role": "radiogroup",
+            "ariaLabel": "这个项目的缩进用 Tab 还是空格？"
+          }
+        ],
+        "options": [
+          {
+            "index": 0,
+            "role": "radio",
+            "ariaChecked": "true",
+            "letter": "A",
+            "label": "Tab",
+            "full": "A / Tab / 使用制表符缩进"
+          },
+          {
+            "index": 1,
+            "role": "radio",
+            "ariaChecked": "false",
+            "letter": "B",
+            "label": "空格",
+            "full": "B / 空格 / 使用空格缩进"
+          },
+          {
+            "index": 2,
+            "role": "radio",
+            "ariaChecked": "false",
+            "letter": "C",
+            "label": "其他…",
+            "full": "C / 其他…"
+          }
+        ]
+      },
+      "clicked": "继续 ctrl + enter",
+      "cardCleared": true,
+      "storeAfter": {
+        "pendingQuestions": [],
+        "pending": null,
+        "block": null,
+        "status": "running"
+      },
+      "settled": true,
+      "statusAfter": "idle",
+      "reply": "你选择的是「Tab」。",
+      "replyFull": "你选择的是「Tab」。",
+      "totalMs": 70152
+    },
+    {
+      "mode": "skip",
+      "prompt": "请调用 ask 工具问我一个新问题：「日志时间戳用 UTC 还是本地时区？」，只给「UTC」和「本地时区」两个选项。拿到结果后用一句话回复，不要调用任何别的工具，也不要做别的事。",
+      "typedChars": 89,
+      "cardAtMs": 18689,
+      "card": {
+        "title": "提问",
+        "text": "提问\n日志时区\n日志时间戳用 UTC 还是本地时区？\nA\nUTC\n日志时间戳统一使用 UTC\nB\n本地时区\n日志时间戳使用运行环境的本地时区\nC\n其他…\n跳过\n继续\nctrl + enter",
+        "buttons": [
+          "A UTC 日志时间戳统一使用 UTC",
+          "B 本地时区 日志时间戳使用运行环境的本地时区",
+          "C 其他…",
+          "跳过",
+          "继续 ctrl + enter"
+        ],
+        "footerButtons": [
+          {
+            "text": "",
+            "disabled": false
+          },
+          {
+            "text": "跳过",
+            "disabled": false
+          },
+          {
+            "text": "继续 ctrl + enter",
+            "disabled": true
+          }
+        ],
+        "groups": [
+          {
+            "role": "radiogroup",
+            "ariaLabel": "日志时间戳用 UTC 还是本地时区？"
+          }
+        ],
+        "options": [
+          {
+            "index": 0,
+            "role": "radio",
+            "ariaChecked": "false",
+            "letter": "A",
+            "label": "UTC",
+            "full": "A / UTC / 日志时间戳统一使用 UTC"
+          },
+          {
+            "index": 1,
+            "role": "radio",
+            "ariaChecked": "false",
+            "letter": "B",
+            "label": "本地时区",
+            "full": "B / 本地时区 / 日志时间戳使用运行环境的本地时区"
+          },
+          {
+            "index": 2,
+            "role": "radio",
+            "ariaChecked": "false",
+            "letter": "C",
+            "label": "其他…",
+            "full": "C / 其他…"
+          }
+        ]
+      },
+      "store": {
+        "pendingQuestions": [
+          {
+            "sessionId": "session-live-1789799773225-xncrqne",
+            "questionId": "toolu_01Dl9TwkGQehAZsbgcKadt98",
+            "messageId": "asst-send-1789800221146-3-2"
+          }
+        ],
+        "pending": {
+          "sessionId": "session-live-1789799773225-xncrqne",
+          "questionId": "toolu_01Dl9TwkGQehAZsbgcKadt98",
+          "messageId": "asst-send-1789800221146-3-2"
+        },
+        "block": {
+          "id": "toolu_01Dl9TwkGQehAZsbgcKadt98",
+          "type": "question",
+          "questionId": "toolu_01Dl9TwkGQehAZsbgcKadt98",
+          "questions": [
+            {
+              "id": "toolu_01Dl9TwkGQehAZsbgcKadt98-0",
+              "question": "日志时间戳用 UTC 还是本地时区？",
+              "header": "日志时区",
+              "options": [
+                {
+                  "label": "UTC",
+                  "description": "日志时间戳统一使用 UTC"
+                },
+                {
+                  "label": "本地时区",
+                  "description": "日志时间戳使用运行环境的本地时区"
+                }
+              ]
+            }
+          ],
+          "resolved": false
+        },
+        "status": "waiting_question"
+      },
+      "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-27/model-27-skip.png",
+      "picked": null,
+      "clicked": "跳过",
+      "cardCleared": true,
+      "storeAfter": {
+        "pendingQuestions": [],
+        "pending": null,
+        "block": null,
+        "status": "running"
+      },
+      "settled": true,
+      "statusAfter": "idle",
+      "reply": "你跳过了这个问题，我按合理默认选定「UTC」——日志时间戳用 UTC，便于跨时区比对和归档。",
+      "replyFull": "你跳过了这个问题，我按合理默认选定「UTC」——日志时间戳用 UTC，便于跨时区比对和归档。",
+      "totalMs": 28689
+    }
+  ],
+  "welcomeEntry": null,
+  "dismissedNotice": null,
+  "session": {
+    "before": "session-live-1789799773225-xncrqne",
+    "after": "session-live-1789799773225-xncrqne",
+    "createdNew": false,
+    "messageCount": 0
+  },
+  "composer": {
+    "model": {
+      "ariaLabel": "模型与思考强度：Claude Opus 5 —— 对下一轮生效",
+      "text": "Claude Opus 5"
+    },
+    "permission": {
+      "ariaLabel": "执行 · 每次询问 — 立即生效，作用于当前线程。",
+      "text": "执行 · 每次询问"
+    }
+  },
+  "modelDefaults": {
+    "chatAgentDefaults": {
+      "model": "claude/claude-opus-5",
+      "effort": "default"
+    }
+  },
+  "verdict": {
+    "cardAppearedBothTimes": true,
+    "storeParkedBothTimes": true,
+    "cardHadTwoOptionsPlusOther": true,
+    "hasSkipAndContinue": true,
+    "cardClearedBothTimes": true,
+    "bothTurnsSettled": true,
+    "answerReachedModel": true,
+    "skipReachedModel": true,
+    "twoDistinctQuestions": true,
+    "pass": true
+  },
+  "rendererProblems": [],
+  "finishedAt": "2026-09-19T06:44:11.804Z"
+}

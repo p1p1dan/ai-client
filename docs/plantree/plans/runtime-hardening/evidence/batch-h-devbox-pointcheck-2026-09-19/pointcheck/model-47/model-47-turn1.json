@@ -1,0 +1,72 @@
+{
+  "key": "t1",
+  "prompt": "用一句话说明这个仓库 package.json 里 name 字段的值是什么。",
+  "sessionId": "session-live-1789808581115-3p910tm",
+  "turnMs": 47484,
+  "drive": {
+    "ok": true,
+    "reason": null,
+    "trail": [
+      {
+        "status": "idle",
+        "atMs": 65
+      },
+      {
+        "status": "running",
+        "atMs": 3310
+      },
+      {
+        "status": "idle",
+        "atMs": 45065
+      }
+    ]
+  },
+  "cards": [],
+  "messageCount": 3,
+  "reply": "这个仓库 `package.json` 里的 `name` 字段值是 `jyw-ai-client`（版本号为 `1.0.0-test.13`）。",
+  "blocks": [
+    {
+      "id": "user-send-1789808601534-2-1",
+      "role": "user",
+      "blocks": [
+        {
+          "type": "text",
+          "textLen": 39,
+          "textHead": "用一句话说明这个仓库 package.json 里 name 字段的值是什么。"
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1789808601534-2-2",
+      "role": "assistant",
+      "blocks": [
+        {
+          "type": "text",
+          "textLen": 172,
+          "textHead": "## 需求回显\n\n- **任务**：读取本仓库根目录的 `package.json`，取出其中 `name` 字段的值。\n- **输出要求**：用一句话给出该值。\n- **语言**：简体中文。\n- **边界**：只读取并汇报，不修改任何文件"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read"
+        },
+        {
+          "type": "permission_activity"
+        },
+        {
+          "type": "tool_result"
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1789808601534-2-3",
+      "role": "assistant",
+      "blocks": [
+        {
+          "type": "text",
+          "textLen": 73,
+          "textHead": "这个仓库 `package.json` 里的 `name` 字段值是 `jyw-ai-client`（版本号为 `1.0.0-test.13`）。"
+        }
+      ]
+    }
+  ]
+}

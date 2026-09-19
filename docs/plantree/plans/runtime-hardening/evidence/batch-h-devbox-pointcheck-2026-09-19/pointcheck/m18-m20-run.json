@@ -1,0 +1,121 @@
+{
+  "probe": "m18-m20.mjs",
+  "criteria": ["MODEL-18", "MODEL-20"],
+  "startedAt": "2026-09-19T07:45:27.095Z",
+  "turns": [
+    {
+      "id": "MODEL-18 normal",
+      "ms": 1565
+    }
+  ],
+  "steps": {
+    "recorderInstalled": true,
+    "session": {
+      "sessionId": "session-live-1789803932663-ara37a1",
+      "messageCount": 0
+    },
+    "initial": {
+      "label": "initial (empty session)",
+      "at": "2026-09-19T07:45:39.412Z",
+      "chip": {
+        "present": false,
+        "text": null,
+        "visible": false
+      },
+      "usage": {
+        "hasFacts": false,
+        "usageIsNull": true,
+        "keys": null,
+        "hasContext": false,
+        "contextKeys": null,
+        "usage": null
+      },
+      "lanes": {
+        "laneCount": 0,
+        "lanes": [],
+        "agentIndex": {},
+        "permissionOrigin": {}
+      },
+      "activityRows": []
+    },
+    "normalCards": [],
+    "normalIdle": {
+      "idle": true,
+      "statusTrail": ["idle"],
+      "finalStatus": "idle"
+    },
+    "afterNormal": {
+      "label": "after normal finish",
+      "at": "2026-09-19T07:45:44.115Z",
+      "chip": {
+        "present": false,
+        "text": null,
+        "visible": false
+      },
+      "usage": {
+        "hasFacts": false,
+        "usageIsNull": true,
+        "keys": null,
+        "hasContext": false,
+        "contextKeys": null,
+        "usage": null
+      },
+      "lanes": {
+        "laneCount": 0,
+        "lanes": [],
+        "agentIndex": {},
+        "permissionOrigin": {}
+      },
+      "activityRows": []
+    },
+    "afterNormalBlocks": {
+      "status": "idle",
+      "messageCount": 0,
+      "blockTypeCounts": {},
+      "permissionActivity": [],
+      "toolBlocks": [],
+      "lastAssistantText": ""
+    },
+    "normalShot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-18/model-18-badge-normal.png"
+  },
+  "entry": {
+    "entered": "以 danyuan@jcdz.cc 继续",
+    "dismissed": "知道了"
+  },
+  "error": "Error: waitFor timed out after 60000ms: send button ready (last: false)\n    at Cdp.waitFor (file:///home/ai/code/ai-client/scripts/h21-cdp.mjs:135:11)\n    at async send (file:///home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/tools/m18-m20.mjs:206:3)\n    at async file:///home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/tools/m18-m20.mjs:370:20",
+  "finishedAt": "2026-09-19T07:46:44.374Z",
+  "rendererProblems": [
+    {
+      "kind": "console.error",
+      "text": "03:45:32.662 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:45:32.671 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:45:32.781 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:45:32.881 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:45:32.957 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:45:33.033 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:45:33.072 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:45:33.092 › [workspace-tree] worktrees-absent Object"
+    }
+  ]
+}

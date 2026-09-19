@@ -1,0 +1,221 @@
+{
+  "ranAt": "2026-09-19T09:35:32.611Z",
+  "build": {
+    "branch": "feat/runtime-evolution",
+    "head": "9fa5a511"
+  },
+  "app": {
+    "agentDir": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent",
+    "credential": "auth.json entry \"claude\"",
+    "model": "claude/claude-opus-5",
+    "permissionGear": "执行 · 每次询问"
+  },
+  "probe": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/tools/m47-m05-m06.mjs",
+  "criterion": "MODEL-47",
+  "criterionText": "GUI 跑一回合 → 内嵌 TUI 里续聊一轮 → 回 GUI；前后各读一次会话 JSONL 比对条目链。两轮都在时间线上、顺序正确、无重复条目；会话文件头一行仍同时满足 v4 与 v3。(04-model.md:88)",
+  "verdict": "pass",
+  "sessionId": "session-live-1789808581115-3p910tm",
+  "sessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789808581115-3p910tm.jsonl",
+  "rounds": [
+    {
+      "where": "GUI",
+      "prompt": "用一句话说明这个仓库 package.json 里 name 字段的值是什么。",
+      "ms": 47484,
+      "reply": "这个仓库 `package.json` 里的 `name` 字段值是 `jyw-ai-client`（版本号为 `1.0.0-test.13`）。"
+    },
+    {
+      "where": "TUI",
+      "prompt": "再用一句话说明 version 字段的值。",
+      "ms": 24126,
+      "reply": "version 字段的值是 1.0.0-test.13。"
+    },
+    {
+      "where": "GUI",
+      "prompt": "这两个字段合起来写成 name@version 是什么？",
+      "ms": 25484,
+      "reply": "## 需求回显\n\n- **任务**：把 `package.json` 的 `name` 与 `version` 按 `name@version` 格式拼接。\n- **已知**：name = `jyw-ai-client`，version = `1.0.0-test.13`。\n- **边界**：纯文本拼接，不读取文件、不修改任何内容。\n\n我理解规则。\n\n拼接结果是：\n\njyw-ai-client@1.0.0-test.13\n\n这正是 npm/pnpm 里引用某个确切包版本时使用的写法。"
+    }
+  ],
+  "presentationSwitch": {
+    "question": "prep-notes 「待核实的矛盾」: can CDP drive the GUI/TUI segmented control?",
+    "answer": "yes — Input.dispatchMouseEvent (mouseMoved + mousePressed + mouseReleased at the button centre) flips aria-pressed; no .click() fallback was needed on any of the four presses this run",
+    "presses": [
+      {
+        "to": "TUI",
+        "via": "Input.dispatchMouseEvent (aria-pressed flipped; the stage misjudged it because it verified on .xterm, which needs ~40s to mount in Vite dev mode)",
+        "note": "first press, measured with the old surface-only check"
+      },
+      {
+        "to": "GUI",
+        "via": "Input.dispatchMouseEvent",
+        "flippedInMs": 3,
+        "surfaceInMs": 1
+      },
+      {
+        "to": "TUI",
+        "via": "Input.dispatchMouseEvent"
+      },
+      {
+        "to": "GUI",
+        "via": "Input.dispatchMouseEvent"
+      }
+    ],
+    "groupAriaLabel": "显示方式"
+  },
+  "piProcess": {
+    "note": "not a `node …/cli.js` process: Electron re-executed as node, and pi overwrites its argv within ~1s",
+    "argvAtSpawn": [
+      "/home/ai/code/ai-client/node_modules/electron/dist/electron",
+      "/home/ai/code/ai-client/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js",
+      "--session",
+      "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789808581115-3p910tm.jsonl",
+      "--session-dir",
+      "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions"
+    ],
+    "argvAfterRewrite": ["pi"],
+    "exe": "/home/ai/code/ai-client/node_modules/electron/dist/electron",
+    "comm": "pi",
+    "cwd": "/home/ai/code/ai-client",
+    "parentIsElectronMain": true,
+    "observedPids": [836041, 838501, 840070]
+  },
+  "jsonl": {
+    "beforeLines": 8,
+    "afterLines": 10,
+    "addedLines": 2,
+    "addedEntries": [
+      {
+        "index": 8,
+        "type": "message",
+        "kind": null,
+        "role": "user",
+        "textHead": "再用一句话说明 version 字段的值。"
+      },
+      {
+        "index": 9,
+        "type": "message",
+        "kind": null,
+        "role": "assistant",
+        "textHead": " `version` 字段的值是 `1.0.0-test.13`。"
+      }
+    ],
+    "duplicateIds": [],
+    "duplicateTextHeads": [],
+    "parentChainBreaks": [],
+    "headerUnchanged": true,
+    "headerBefore": {
+      "parsed": true,
+      "keys": ["kind", "version", "id", "createdAt", "cwd", "type", "timestamp"],
+      "v4": true,
+      "v3": true,
+      "raw": "{\"kind\":\"header\",\"version\":4,\"id\":\"3be0bbe8-dc8a-4ccc-a30e-f77494cba408\",\"createdAt\":1789808601051,\"cwd\":\"/home/ai/code/ai-client\",\"type\":\"session\",\"timestamp\":\"2026-09-19T09:03:21.051Z\"}"
+    },
+    "headerAfter": {
+      "parsed": true,
+      "keys": ["kind", "version", "id", "createdAt", "cwd", "type", "timestamp"],
+      "v4": true,
+      "v3": true,
+      "raw": "{\"kind\":\"header\",\"version\":4,\"id\":\"3be0bbe8-dc8a-4ccc-a30e-f77494cba408\",\"createdAt\":1789808601051,\"cwd\":\"/home/ai/code/ai-client\",\"type\":\"session\",\"timestamp\":\"2026-09-19T09:03:21.051Z\"}"
+    },
+    "headerAfterTurn3": {
+      "parsed": true,
+      "keys": ["kind", "version", "id", "createdAt", "cwd", "type", "timestamp"],
+      "v4": true,
+      "v3": true,
+      "raw": "{\"kind\":\"header\",\"version\":4,\"id\":\"3be0bbe8-dc8a-4ccc-a30e-f77494cba408\",\"createdAt\":1789808601051,\"cwd\":\"/home/ai/code/ai-client\",\"type\":\"session\",\"timestamp\":\"2026-09-19T09:03:21.051Z\"}"
+    },
+    "linesAfterTurn3": 12,
+    "writerFormatDivergence": {
+      "guiWorkerKeys": ["kind", "lane", "type", "message", "id", "seq", "parentId", "timestamp"],
+      "piCliKeys": ["type", "id", "parentId", "timestamp", "message"],
+      "idShape": {
+        "guiWorker": "uuid v4",
+        "piCli": "8 hex chars"
+      },
+      "note": "both writers keep the parentId strand intact; the pi CLI simply omits kind/lane/seq"
+    }
+  },
+  "timeline": {
+    "storeMessagesAfterReload": 5,
+    "orderOk": true,
+    "duplicates": 0,
+    "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-timeline.png",
+    "note": "回放的 TUI 回合折进英文摘要「1 steps processed」的工作组，展开后两轮按序排列"
+  },
+  "writerLock": {
+    "beforeSwitch": {
+      "lockPath": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789808581115-3p910tm.jsonl.writer.lock",
+      "lockExists": true,
+      "lockBody": "{\"pid\":835889,\"host\":\"ai-VMware-Virtual-Platform\",\"token\":\"217016a3-10fe-44c7-8ad3-f4479ee15460\",\"acquiredAt\":1789808601050,\"startedAt\":1789808600387}",
+      "listing": [
+        {
+          "file": "session-live-1789808581115-3p910tm.jsonl",
+          "size": 10494,
+          "mtime": "2026-09-19T09:04:04.668Z"
+        },
+        {
+          "file": "session-live-1789808581115-3p910tm.jsonl.writer.lock",
+          "size": 150,
+          "mtime": "2026-09-19T09:03:21.050Z"
+        }
+      ]
+    },
+    "afterSwitchBack": {
+      "lockPath": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789808581115-3p910tm.jsonl.writer.lock",
+      "lockExists": true,
+      "lockBody": "{\"pid\":835889,\"host\":\"ai-VMware-Virtual-Platform\",\"token\":\"a0ba9d48-ad9b-4f56-8fa5-f9061b10e336\",\"acquiredAt\":1789809425797,\"startedAt\":1789808600388}",
+      "listing": [
+        {
+          "file": "session-live-1789808581115-3p910tm.jsonl",
+          "size": 12695,
+          "mtime": "2026-09-19T09:15:48.421Z"
+        },
+        {
+          "file": "session-live-1789808581115-3p910tm.jsonl.writer.lock",
+          "size": 150,
+          "mtime": "2026-09-19T09:17:05.796Z"
+        }
+      ]
+    },
+    "afterTurn3": {
+      "lockPath": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789808581115-3p910tm.jsonl.writer.lock",
+      "lockExists": true,
+      "lockBody": "{\"pid\":835889,\"host\":\"ai-VMware-Virtual-Platform\",\"token\":\"1caaac0a-492b-4dd9-a4a7-ffc90791a496\",\"acquiredAt\":1789809470070,\"startedAt\":1789808600387}",
+      "listing": [
+        {
+          "file": "session-live-1789808581115-3p910tm.jsonl",
+          "size": 16979,
+          "mtime": "2026-09-19T09:18:12.214Z"
+        },
+        {
+          "file": "session-live-1789808581115-3p910tm.jsonl.writer.lock",
+          "size": 150,
+          "mtime": "2026-09-19T09:17:50.069Z"
+        }
+      ]
+    },
+    "heldBy": "GUI worker (node.mojom.NodeService utility, pid 835889) — pi CLI never takes it"
+  },
+  "sideObservations": [
+    "GUI 的 send 路径会先杀掉这条会话上的终端：第三轮发送后，之前被 suspend 的 pi (836041) 已经不在了（tuidispose 阶段扫到 0 个）。",
+    "回 GUI 时 openGui 走的是 suspend 而非 dispose，切回瞬间 pi 仍在（gui1.piAfter 有 1 个）。",
+    "pi 没有发 OSC 0/2 终端标题序列；流里只有 OSC 8（超链接）与 OSC 133（shell 集成标记）。"
+  ],
+  "evidence": [
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-chain-after.json",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-chain-before.json",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-chain-turn3.json",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-diff.json",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-jsonl-after.txt",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-jsonl-before.txt",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-switch-to-tui.json",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-timeline.png",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-tui-open.png",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-tui-osc.json",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-tui-output-full.txt",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-tui-output.txt",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-tui-turn.png",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-turn1.json",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-47/model-47-turn3.json"
+  ]
+}

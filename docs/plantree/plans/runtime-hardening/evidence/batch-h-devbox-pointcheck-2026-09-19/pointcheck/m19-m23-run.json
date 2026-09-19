@@ -1,0 +1,3996 @@
+{
+  "probe": "m19-m23.mjs",
+  "criteria": ["MODEL-19", "MODEL-23 (phase 1: live + switch-back)"],
+  "startedAt": "2026-09-19T07:01:34.317Z",
+  "turns": [
+    {
+      "id": "A-ask",
+      "ms": 42739
+    },
+    {
+      "id": "A-answer",
+      "ms": 11500
+    },
+    {
+      "id": "B-ask",
+      "ms": 18012
+    },
+    {
+      "id": "B-skip",
+      "ms": 14047
+    },
+    {
+      "id": "A-permission",
+      "ms": 28538
+    }
+  ],
+  "steps": {
+    "sessionA": {
+      "before": {
+        "sid": "session-live-1789801299008-x65un9n",
+        "messageCount": 0
+      },
+      "after": {
+        "sid": "session-live-1789801299008-x65un9n",
+        "messageCount": 0
+      },
+      "sessionId": "session-live-1789801299008-x65un9n"
+    },
+    "aCard": {
+      "atMs": 42739,
+      "card": {
+        "text": "提问\n部署环境\n部署环境用 staging 还是 production？\nA\nstaging\nB\nproduction\nC\n其他…\n跳过\n继续\nctrl + enter",
+        "buttons": [
+          {
+            "text": "",
+            "disabled": false
+          },
+          {
+            "text": "跳过",
+            "disabled": false
+          },
+          {
+            "text": "继续 ctrl + enter",
+            "disabled": true
+          }
+        ],
+        "options": [
+          {
+            "index": 0,
+            "role": "radio",
+            "ariaChecked": "false",
+            "visible": true,
+            "letter": "A",
+            "label": "staging"
+          },
+          {
+            "index": 1,
+            "role": "radio",
+            "ariaChecked": "false",
+            "visible": true,
+            "letter": "B",
+            "label": "production"
+          },
+          {
+            "index": 2,
+            "role": "radio",
+            "ariaChecked": "false",
+            "visible": true,
+            "letter": "C",
+            "label": "其他…"
+          }
+        ]
+      }
+    },
+    "pendingAfterA": {
+      "activeSessionId": "session-live-1789801299008-x65un9n",
+      "pendingQuestions": [
+        {
+          "sessionId": "session-live-1789801299008-x65un9n",
+          "questionId": "toolu_01OSSSUYxsd1MpJwxqff4OUY",
+          "messageId": "asst-send-1789801305676-2-2"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "session-live-1789799773225-xncrqne",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789792485533-9h0gw44",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789789544825-g87qb1c",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789758067568-79rg6d4",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789755675423-o8py6n2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789755312272-kso9e3l",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789753287293-975xks1",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789750386923-dzh3w0a",
+          "status": "idle"
+        },
+        {
+          "id": "19c881be-eb5e-4d48-bfbc-7c40eca5eed4",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789741266571-fcdur2x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789740985585-kufut5w",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789740512547-fcn097s",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789737156154-ota6r8p",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789737696308-ft3r69x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789737909692-pcpw3gj",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652464182-iinf16s",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652269668-l4gbh1k",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652096201-xlacs7d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652002133-0n6wb2b",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789647368097-07petop",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-efb78fb7-08ce-4c27-855f-3ec3e5a3312b",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789647839178-q40z4vd",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789647205164-vw474ma",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789645533315-00lntm4",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789644851492-gidi2oz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789643220038-1wf6gzz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789643083360-udognyg",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789642848456-1umq351",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789642461865-wi4c45n",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-claude-code-6a590c00-b711-4156-b2a8-319e7a178f66",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-bafacba4-cf0e-4256-982e-f361a2e4a0b2",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-c67984a0-2254-4e4a-b1e9-2b48fc88d2a8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-06968e9c-6809-4ed8-b100-0209be4fe4c8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-ed4ed8f8-e9ef-47e2-b0ad-a7be2fc0b7bd",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-99d89b81-fbb3-4183-80d6-553b96b27fed",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-12008768-df2d-4026-a145-85107107f1ca",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-490806d2-9054-4844-b33d-6d46540de643",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-581eac5c-2e5d-41c7-9557-702c159eeb4a",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-100e5c08-e498-4b62-a32e-68cd980df455",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-90c176dd-c9f3-4660-b9c3-b66cb263ae09",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-eac4bb14-4d67-4c0f-bf2c-c6f1b6bfd8c6",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-83b4080c-0ce8-46c0-9390-8e846180adbf",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-fcd27394-8711-4587-8db7-ba13e94aaee4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-7c7563d2-c79b-4af1-8f47-e5d5afb7a633",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-6c7b1bb0-d78f-491d-aefa-c31822888f84",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-161f6131-5d8f-4a75-969c-afb6754ef87d",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9528f90c-5835-49ab-bc6b-fcdf31ce1dc0",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a58f34fe-5d89-4a74-97e8-f7fc177f32f9",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-55fd5229-b71d-4495-b4e8-4b8b2418a986",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-1675d3aa-91d6-4543-a849-f252f82e59a7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a0083207-1e78-4491-bc53-38366434dd29",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-2bd3030b-39fb-42d9-9b97-344862b6ea67",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-ac6fad24-3c12-4cf0-bfeb-f27e532f1fb8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-90c0188e-447b-4ddc-a24e-08a7d8f5b147",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-94d91165-e0ba-4d9d-969f-a64547a6da30",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-1386f824-6a5e-4e87-a8fe-9b1be8dca57d",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-364ca7e1-1587-49a8-8ec3-a800c87e92cb",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-85cd9b8c-5665-42fb-ab51-abf0fac8750f",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-d5db87d4-55a3-4d7e-8f55-013a690738e6",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9ad6488a-362d-4cbf-8287-c394eb247eef",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-322d5f4d-b1dc-4d74-8059-f4cbb90ae806",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-5895f3ef-3a9c-4141-9b05-e5c50a3d37d7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-b12f0fba-d80c-49ef-b2cd-7de92631896b",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-5c6c04e2-11ca-41b4-aa1d-ef48d5d4b49f",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a03d8ef0-8d4a-4173-ab44-6614e3e4a4f3",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-b7e7cc9e-222a-4fb4-a6f5-90921427b37e",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9da5003c-4b60-418c-ae0f-aaa2cd96ee63",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-2b6e3fb7-4996-403f-ba5e-edb1637e2be2",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-bfc21400-4d30-4f9c-8289-d6c9555461e3",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-65571a2a-e7a7-4625-b191-943f93d6d4a2",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789638427039-ntyubr1",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789638144347-jr9q88j",
+          "status": "idle"
+        },
+        {
+          "id": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789637446946-abtu2jn",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789636546521-0yhy2zv",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789347889296-ltrxsgm",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306912982-k9ik92s",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306848585-b03q62x",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306698435-l4bu1s2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306608098-tasrgr0",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306531210-8r0oa7a",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306423191-vob9ldz",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-904fda2c-a6b6-4fdb-b16e-4acac2b9b192",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789142986092-uxx5l7s",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143314942-nmgm09v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143859808-u6k5w7h",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789147793385-9ksu0xo",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143311851-exg29cz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789142989175-2d4909j",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789142835493-v1dj0lp",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789142718965-l1g2ivc",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789141980761-ypg9e97",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789140568519-d9egdw2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789137614294-ib49fsx",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-8aa6e997-aeb8-4b05-a16c-f3277dd9f43b",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788682527925-ynzbtxy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788682810267-llbkp9c",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788664854690-2d6xooy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401319554-54ygyed",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367170719-ogkusk7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-f34ddff7-ebf7-4ca9-bc86-44611e5641be",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-ce1ft0x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401661481-cvmdb3h",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788509956852-xl21yai",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788572233370-z5p868v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788664933866-e7ya9g7",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788425093600-q6pxqzp",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788572526965-pr7obte",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788504035730-i7itmdw",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788503410669-b0kwoti",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-6ajhkog",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401935498-ly4hg4v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401952669-m7rgvi4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-8c414d42-9dbc-42b6-8907-38351b5d69c0",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-6sjbby6",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-g5wen36",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401651188-nlj4uqg",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-686d5ca3-24e2-4a3f-852c-35e6fe9d26e2",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-w9g9yhd",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-3pylyxt",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-umqv6fl",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366555356-xajw24k",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366181501-m0dg1ax",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365591287-5g73c64",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365458607-3i2u9q7",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362915985-slwaai5",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368093872-wx1coh4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-08175b24-93c1-4ff3-90e1-7aa58aa39c65",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-tau09co",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-ffe62vl",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367339439-rumdyxn",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-ttggz18",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-cjqjxkq",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-tvf3j0v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366817805-twoue3s",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-ba5afa43-e1b9-4b00-a0fa-f943ba559350",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-vtz0vwa",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-hvby3dc",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-g0lhehr",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-3cd1fe0e-1c1c-43d0-b427-30b32806e68d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-ys8rd2i",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-29ym6cx",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-h8mzi58",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-99a977c3-6634-4c9a-a9eb-1b46880ba3de",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-jr46v0d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-gm16ir6",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-z28v5gi",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230384-03omjj3",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230383-dqo2tup",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230383-noqghx0",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-ug1mtvk",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-gm90mxx",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-59s8x2r",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365022258-il8xyhr",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-121374fa-0f86-43fb-a772-1c9b0c4e0ac8",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-uvb31n9",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-4rpqr2j",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-wvsb2uu",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789044-b7f5yaz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789043-ij1guom",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789044-i9koskn",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788363772117-ohqrhly",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-cfb1ca8d-fd14-427b-8b20-f097e209ce6a",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-vf8md5f",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-fv745xy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-omshwxv",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-h9xd96i",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-5ie1x57",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-zrej2s9",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362988826-ucyygoh",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362988825-c4pygn2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362580499-l5ej560",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362439344-4qdotza",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362158031-6v95ksa",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788361761955-jg2l6s5",
+          "status": "idle"
+        },
+        {
+          "id": "s-send",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789801299008-x65un9n",
+          "status": "waiting_question"
+        }
+      ]
+    },
+    "aCardScreenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-19/model-19-a-card.png",
+    "sessionB": {
+      "sessionId": "session-1789801347193-4twhymk",
+      "distinct": true,
+      "messageCount": 0
+    },
+    "bCard": {
+      "atMs": 18012,
+      "card": {
+        "text": "提问\n配置文件格式\n配置文件用 YAML 还是 TOML？\nA\nYAML\n使用 YAML 作为配置文件格式\nB\nTOML\n使用 TOML 作为配置文件格式\nC\n其他…\n跳过\n继续\nctrl + enter",
+        "buttons": [
+          {
+            "text": "",
+            "disabled": false
+          },
+          {
+            "text": "跳过",
+            "disabled": false
+          },
+          {
+            "text": "继续 ctrl + enter",
+            "disabled": true
+          }
+        ],
+        "options": [
+          {
+            "index": 0,
+            "role": "radio",
+            "ariaChecked": "false",
+            "visible": true,
+            "letter": "A",
+            "label": "YAML"
+          },
+          {
+            "index": 1,
+            "role": "radio",
+            "ariaChecked": "false",
+            "visible": true,
+            "letter": "B",
+            "label": "TOML"
+          },
+          {
+            "index": 2,
+            "role": "radio",
+            "ariaChecked": "false",
+            "visible": true,
+            "letter": "C",
+            "label": "其他…"
+          }
+        ]
+      }
+    },
+    "pendingTwo": {
+      "activeSessionId": "session-1789801347193-4twhymk",
+      "pendingQuestions": [
+        {
+          "sessionId": "session-live-1789801299008-x65un9n",
+          "questionId": "toolu_01OSSSUYxsd1MpJwxqff4OUY",
+          "messageId": "asst-send-1789801305676-2-2"
+        },
+        {
+          "sessionId": "session-1789801347193-4twhymk",
+          "questionId": "toolu_01frFuazLBrTiRRrIilnXBHL",
+          "messageId": "asst-send-1789801351003-4-2"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "session-1789801347193-4twhymk",
+          "status": "waiting_question"
+        },
+        {
+          "id": "session-live-1789799773225-xncrqne",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789792485533-9h0gw44",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789789544825-g87qb1c",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789758067568-79rg6d4",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789755675423-o8py6n2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789755312272-kso9e3l",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789753287293-975xks1",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789750386923-dzh3w0a",
+          "status": "idle"
+        },
+        {
+          "id": "19c881be-eb5e-4d48-bfbc-7c40eca5eed4",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789741266571-fcdur2x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789740985585-kufut5w",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789740512547-fcn097s",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789737156154-ota6r8p",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789737696308-ft3r69x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789737909692-pcpw3gj",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652464182-iinf16s",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652269668-l4gbh1k",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652096201-xlacs7d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652002133-0n6wb2b",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789647368097-07petop",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-efb78fb7-08ce-4c27-855f-3ec3e5a3312b",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789647839178-q40z4vd",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789647205164-vw474ma",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789645533315-00lntm4",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789644851492-gidi2oz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789643220038-1wf6gzz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789643083360-udognyg",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789642848456-1umq351",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789642461865-wi4c45n",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-claude-code-6a590c00-b711-4156-b2a8-319e7a178f66",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-bafacba4-cf0e-4256-982e-f361a2e4a0b2",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-c67984a0-2254-4e4a-b1e9-2b48fc88d2a8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-06968e9c-6809-4ed8-b100-0209be4fe4c8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-ed4ed8f8-e9ef-47e2-b0ad-a7be2fc0b7bd",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-99d89b81-fbb3-4183-80d6-553b96b27fed",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-12008768-df2d-4026-a145-85107107f1ca",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-490806d2-9054-4844-b33d-6d46540de643",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-581eac5c-2e5d-41c7-9557-702c159eeb4a",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-100e5c08-e498-4b62-a32e-68cd980df455",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-90c176dd-c9f3-4660-b9c3-b66cb263ae09",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-eac4bb14-4d67-4c0f-bf2c-c6f1b6bfd8c6",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-83b4080c-0ce8-46c0-9390-8e846180adbf",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-fcd27394-8711-4587-8db7-ba13e94aaee4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-7c7563d2-c79b-4af1-8f47-e5d5afb7a633",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-6c7b1bb0-d78f-491d-aefa-c31822888f84",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-161f6131-5d8f-4a75-969c-afb6754ef87d",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9528f90c-5835-49ab-bc6b-fcdf31ce1dc0",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a58f34fe-5d89-4a74-97e8-f7fc177f32f9",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-55fd5229-b71d-4495-b4e8-4b8b2418a986",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-1675d3aa-91d6-4543-a849-f252f82e59a7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a0083207-1e78-4491-bc53-38366434dd29",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-2bd3030b-39fb-42d9-9b97-344862b6ea67",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-ac6fad24-3c12-4cf0-bfeb-f27e532f1fb8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-90c0188e-447b-4ddc-a24e-08a7d8f5b147",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-94d91165-e0ba-4d9d-969f-a64547a6da30",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-1386f824-6a5e-4e87-a8fe-9b1be8dca57d",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-364ca7e1-1587-49a8-8ec3-a800c87e92cb",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-85cd9b8c-5665-42fb-ab51-abf0fac8750f",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-d5db87d4-55a3-4d7e-8f55-013a690738e6",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9ad6488a-362d-4cbf-8287-c394eb247eef",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-322d5f4d-b1dc-4d74-8059-f4cbb90ae806",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-5895f3ef-3a9c-4141-9b05-e5c50a3d37d7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-b12f0fba-d80c-49ef-b2cd-7de92631896b",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-5c6c04e2-11ca-41b4-aa1d-ef48d5d4b49f",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a03d8ef0-8d4a-4173-ab44-6614e3e4a4f3",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-b7e7cc9e-222a-4fb4-a6f5-90921427b37e",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9da5003c-4b60-418c-ae0f-aaa2cd96ee63",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-2b6e3fb7-4996-403f-ba5e-edb1637e2be2",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-bfc21400-4d30-4f9c-8289-d6c9555461e3",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-65571a2a-e7a7-4625-b191-943f93d6d4a2",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789638427039-ntyubr1",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789638144347-jr9q88j",
+          "status": "idle"
+        },
+        {
+          "id": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789637446946-abtu2jn",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789636546521-0yhy2zv",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789347889296-ltrxsgm",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306912982-k9ik92s",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306848585-b03q62x",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306698435-l4bu1s2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306608098-tasrgr0",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306531210-8r0oa7a",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306423191-vob9ldz",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-904fda2c-a6b6-4fdb-b16e-4acac2b9b192",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789142986092-uxx5l7s",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143314942-nmgm09v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143859808-u6k5w7h",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789147793385-9ksu0xo",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143311851-exg29cz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789142989175-2d4909j",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789142835493-v1dj0lp",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789142718965-l1g2ivc",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789141980761-ypg9e97",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789140568519-d9egdw2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789137614294-ib49fsx",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-8aa6e997-aeb8-4b05-a16c-f3277dd9f43b",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788682527925-ynzbtxy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788682810267-llbkp9c",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788664854690-2d6xooy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401319554-54ygyed",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367170719-ogkusk7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-f34ddff7-ebf7-4ca9-bc86-44611e5641be",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-ce1ft0x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401661481-cvmdb3h",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788509956852-xl21yai",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788572233370-z5p868v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788664933866-e7ya9g7",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788425093600-q6pxqzp",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788572526965-pr7obte",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788504035730-i7itmdw",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788503410669-b0kwoti",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-6ajhkog",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401935498-ly4hg4v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401952669-m7rgvi4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-8c414d42-9dbc-42b6-8907-38351b5d69c0",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-6sjbby6",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-g5wen36",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401651188-nlj4uqg",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-686d5ca3-24e2-4a3f-852c-35e6fe9d26e2",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-w9g9yhd",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-3pylyxt",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-umqv6fl",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366555356-xajw24k",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366181501-m0dg1ax",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365591287-5g73c64",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365458607-3i2u9q7",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362915985-slwaai5",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368093872-wx1coh4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-08175b24-93c1-4ff3-90e1-7aa58aa39c65",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-tau09co",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-ffe62vl",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367339439-rumdyxn",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-ttggz18",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-cjqjxkq",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-tvf3j0v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366817805-twoue3s",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-ba5afa43-e1b9-4b00-a0fa-f943ba559350",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-vtz0vwa",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-hvby3dc",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-g0lhehr",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-3cd1fe0e-1c1c-43d0-b427-30b32806e68d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-ys8rd2i",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-29ym6cx",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-h8mzi58",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-99a977c3-6634-4c9a-a9eb-1b46880ba3de",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-jr46v0d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-gm16ir6",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-z28v5gi",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230384-03omjj3",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230383-dqo2tup",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230383-noqghx0",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-ug1mtvk",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-gm90mxx",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-59s8x2r",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365022258-il8xyhr",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-121374fa-0f86-43fb-a772-1c9b0c4e0ac8",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-uvb31n9",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-4rpqr2j",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-wvsb2uu",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789044-b7f5yaz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789043-ij1guom",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789044-i9koskn",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788363772117-ohqrhly",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-cfb1ca8d-fd14-427b-8b20-f097e209ce6a",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-vf8md5f",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-fv745xy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-omshwxv",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-h9xd96i",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-5ie1x57",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-zrej2s9",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362988826-ucyygoh",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362988825-c4pygn2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362580499-l5ej560",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362439344-4qdotza",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362158031-6v95ksa",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788361761955-jg2l6s5",
+          "status": "idle"
+        },
+        {
+          "id": "s-send",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789801299008-x65un9n",
+          "status": "waiting_question"
+        }
+      ]
+    },
+    "bCardScreenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-19/model-19-b-card.png",
+    "switchBackToA": {
+      "sessionId": "session-live-1789801299008-x65un9n",
+      "title": "用提问工具问我一个二选一的问题：部署环境用 staging 还是 production",
+      "via": "sidebar",
+      "sidebarMatches": 1,
+      "activeSessionId": "session-live-1789801299008-x65un9n"
+    },
+    "aCardAfterSwitch": {
+      "text": "提问\n部署环境\n部署环境用 staging 还是 production？\nA\nstaging\nB\nproduction\nC\n其他…\n跳过\n继续\nctrl + enter",
+      "buttons": [
+        {
+          "text": "",
+          "disabled": false
+        },
+        {
+          "text": "跳过",
+          "disabled": false
+        },
+        {
+          "text": "继续 ctrl + enter",
+          "disabled": true
+        }
+      ],
+      "options": [
+        {
+          "index": 0,
+          "role": "radio",
+          "ariaChecked": "false",
+          "visible": true,
+          "letter": "A",
+          "label": "staging"
+        },
+        {
+          "index": 1,
+          "role": "radio",
+          "ariaChecked": "false",
+          "visible": true,
+          "letter": "B",
+          "label": "production"
+        },
+        {
+          "index": 2,
+          "role": "radio",
+          "ariaChecked": "false",
+          "visible": true,
+          "letter": "C",
+          "label": "其他…"
+        }
+      ]
+    },
+    "pendingAfterSwitchBack": {
+      "activeSessionId": "session-live-1789801299008-x65un9n",
+      "pendingQuestions": [
+        {
+          "sessionId": "session-live-1789801299008-x65un9n",
+          "questionId": "toolu_01OSSSUYxsd1MpJwxqff4OUY",
+          "messageId": "asst-send-1789801305676-2-2"
+        },
+        {
+          "sessionId": "session-1789801347193-4twhymk",
+          "questionId": "toolu_01frFuazLBrTiRRrIilnXBHL",
+          "messageId": "asst-send-1789801351003-4-2"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "session-1789801347193-4twhymk",
+          "status": "waiting_question"
+        },
+        {
+          "id": "session-live-1789799773225-xncrqne",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789792485533-9h0gw44",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789789544825-g87qb1c",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789758067568-79rg6d4",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789755675423-o8py6n2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789755312272-kso9e3l",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789753287293-975xks1",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789750386923-dzh3w0a",
+          "status": "idle"
+        },
+        {
+          "id": "19c881be-eb5e-4d48-bfbc-7c40eca5eed4",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789741266571-fcdur2x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789740985585-kufut5w",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789740512547-fcn097s",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789737156154-ota6r8p",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789737696308-ft3r69x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789737909692-pcpw3gj",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652464182-iinf16s",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652269668-l4gbh1k",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652096201-xlacs7d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652002133-0n6wb2b",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789647368097-07petop",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-efb78fb7-08ce-4c27-855f-3ec3e5a3312b",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789647839178-q40z4vd",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789647205164-vw474ma",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789645533315-00lntm4",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789644851492-gidi2oz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789643220038-1wf6gzz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789643083360-udognyg",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789642848456-1umq351",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789642461865-wi4c45n",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-claude-code-6a590c00-b711-4156-b2a8-319e7a178f66",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-bafacba4-cf0e-4256-982e-f361a2e4a0b2",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-c67984a0-2254-4e4a-b1e9-2b48fc88d2a8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-06968e9c-6809-4ed8-b100-0209be4fe4c8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-ed4ed8f8-e9ef-47e2-b0ad-a7be2fc0b7bd",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-99d89b81-fbb3-4183-80d6-553b96b27fed",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-12008768-df2d-4026-a145-85107107f1ca",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-490806d2-9054-4844-b33d-6d46540de643",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-581eac5c-2e5d-41c7-9557-702c159eeb4a",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-100e5c08-e498-4b62-a32e-68cd980df455",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-90c176dd-c9f3-4660-b9c3-b66cb263ae09",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-eac4bb14-4d67-4c0f-bf2c-c6f1b6bfd8c6",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-83b4080c-0ce8-46c0-9390-8e846180adbf",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-fcd27394-8711-4587-8db7-ba13e94aaee4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-7c7563d2-c79b-4af1-8f47-e5d5afb7a633",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-6c7b1bb0-d78f-491d-aefa-c31822888f84",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-161f6131-5d8f-4a75-969c-afb6754ef87d",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9528f90c-5835-49ab-bc6b-fcdf31ce1dc0",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a58f34fe-5d89-4a74-97e8-f7fc177f32f9",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-55fd5229-b71d-4495-b4e8-4b8b2418a986",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-1675d3aa-91d6-4543-a849-f252f82e59a7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a0083207-1e78-4491-bc53-38366434dd29",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-2bd3030b-39fb-42d9-9b97-344862b6ea67",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-ac6fad24-3c12-4cf0-bfeb-f27e532f1fb8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-90c0188e-447b-4ddc-a24e-08a7d8f5b147",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-94d91165-e0ba-4d9d-969f-a64547a6da30",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-1386f824-6a5e-4e87-a8fe-9b1be8dca57d",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-364ca7e1-1587-49a8-8ec3-a800c87e92cb",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-85cd9b8c-5665-42fb-ab51-abf0fac8750f",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-d5db87d4-55a3-4d7e-8f55-013a690738e6",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9ad6488a-362d-4cbf-8287-c394eb247eef",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-322d5f4d-b1dc-4d74-8059-f4cbb90ae806",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-5895f3ef-3a9c-4141-9b05-e5c50a3d37d7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-b12f0fba-d80c-49ef-b2cd-7de92631896b",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-5c6c04e2-11ca-41b4-aa1d-ef48d5d4b49f",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a03d8ef0-8d4a-4173-ab44-6614e3e4a4f3",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-b7e7cc9e-222a-4fb4-a6f5-90921427b37e",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9da5003c-4b60-418c-ae0f-aaa2cd96ee63",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-2b6e3fb7-4996-403f-ba5e-edb1637e2be2",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-bfc21400-4d30-4f9c-8289-d6c9555461e3",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-65571a2a-e7a7-4625-b191-943f93d6d4a2",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789638427039-ntyubr1",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789638144347-jr9q88j",
+          "status": "idle"
+        },
+        {
+          "id": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789637446946-abtu2jn",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789636546521-0yhy2zv",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789347889296-ltrxsgm",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306912982-k9ik92s",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306848585-b03q62x",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306698435-l4bu1s2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306608098-tasrgr0",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306531210-8r0oa7a",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306423191-vob9ldz",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-904fda2c-a6b6-4fdb-b16e-4acac2b9b192",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789142986092-uxx5l7s",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143314942-nmgm09v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143859808-u6k5w7h",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789147793385-9ksu0xo",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143311851-exg29cz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789142989175-2d4909j",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789142835493-v1dj0lp",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789142718965-l1g2ivc",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789141980761-ypg9e97",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789140568519-d9egdw2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789137614294-ib49fsx",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-8aa6e997-aeb8-4b05-a16c-f3277dd9f43b",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788682527925-ynzbtxy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788682810267-llbkp9c",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788664854690-2d6xooy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401319554-54ygyed",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367170719-ogkusk7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-f34ddff7-ebf7-4ca9-bc86-44611e5641be",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-ce1ft0x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401661481-cvmdb3h",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788509956852-xl21yai",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788572233370-z5p868v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788664933866-e7ya9g7",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788425093600-q6pxqzp",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788572526965-pr7obte",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788504035730-i7itmdw",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788503410669-b0kwoti",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-6ajhkog",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401935498-ly4hg4v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401952669-m7rgvi4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-8c414d42-9dbc-42b6-8907-38351b5d69c0",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-6sjbby6",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-g5wen36",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401651188-nlj4uqg",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-686d5ca3-24e2-4a3f-852c-35e6fe9d26e2",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-w9g9yhd",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-3pylyxt",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-umqv6fl",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366555356-xajw24k",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366181501-m0dg1ax",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365591287-5g73c64",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365458607-3i2u9q7",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362915985-slwaai5",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368093872-wx1coh4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-08175b24-93c1-4ff3-90e1-7aa58aa39c65",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-tau09co",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-ffe62vl",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367339439-rumdyxn",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-ttggz18",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-cjqjxkq",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-tvf3j0v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366817805-twoue3s",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-ba5afa43-e1b9-4b00-a0fa-f943ba559350",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-vtz0vwa",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-hvby3dc",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-g0lhehr",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-3cd1fe0e-1c1c-43d0-b427-30b32806e68d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-ys8rd2i",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-29ym6cx",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-h8mzi58",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-99a977c3-6634-4c9a-a9eb-1b46880ba3de",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-jr46v0d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-gm16ir6",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-z28v5gi",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230384-03omjj3",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230383-dqo2tup",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230383-noqghx0",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-ug1mtvk",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-gm90mxx",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-59s8x2r",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365022258-il8xyhr",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-121374fa-0f86-43fb-a772-1c9b0c4e0ac8",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-uvb31n9",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-4rpqr2j",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-wvsb2uu",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789044-b7f5yaz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789043-ij1guom",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789044-i9koskn",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788363772117-ohqrhly",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-cfb1ca8d-fd14-427b-8b20-f097e209ce6a",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-vf8md5f",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-fv745xy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-omshwxv",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-h9xd96i",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-5ie1x57",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-zrej2s9",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362988826-ucyygoh",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362988825-c4pygn2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362580499-l5ej560",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362439344-4qdotza",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362158031-6v95ksa",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788361761955-jg2l6s5",
+          "status": "idle"
+        },
+        {
+          "id": "s-send",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789801299008-x65un9n",
+          "status": "waiting_question"
+        }
+      ]
+    },
+    "concurrentScreenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-19/model-19-concurrent-ask.png",
+    "domAfterSwitchBack": {
+      "cards": [
+        {
+          "text": "提问 部署环境 部署环境用 staging 还是 production？ A staging B production C 其他… 跳过 继续 ctrl + enter",
+          "buttons": ["A staging", "B production", "C 其他…", "跳过", "继续 ctrl + enter"],
+          "interactiveOptions": 3
+        },
+        {
+          "text": "执行 · 每次询问 Claude Opus 5",
+          "buttons": ["执行 · 每次询问", "Claude Opus 5"],
+          "interactiveOptions": 0
+        }
+      ],
+      "permissionActivityRows": [],
+      "mentions": {
+        "allow": 0,
+        "allowed": 0,
+        "permissionWord": 1,
+        "ask": 6
+      },
+      "bodyText": "AI Client\n聊天\n新建\n添加仓库\n\n最近\n\n仓库列表\n\nai-client\n用提问工具问我：配置文件用 YAML 还是 TOML\nfeat/runtime-evolution\nnow\n用提问工具问我一个二选一的问题：部署环境用 staging 还是 production\nfeat/runtime-evolution\nnow\n请调用 ask 工具问我一个问题：「这个项目的缩进用 Tab 还是空格\nfeat/runtime-evolution\n18m\n用 bash 运行这条命令：echo perm-probe-ok\nfeat/runtime-evolution\n2h\n用一句话说明什么是 LRU 缓存\nfeat/runtime-evolution\n2h\nnihao\nfeat/runtime-evolution\n4h\n读一下 /etc/hostname，只告诉我第一行\nfeat/runtime-evolution\n12h\n读一下 /etc/hostname，只告诉我第一行是什么\nfeat/runtime-evolution\n12h\n读一下 /etc/hostname 这个文件的内容，然后告诉我里面是什么\nfeat/runtime-evolution\n12h\n用三句话解释 Git rebase 和 merge 的区别\nfeat/runtime-evolution\n13h\nSession a5eed4\nfeat/runtime-evolution\n16h\n先打个招呼\nfeat/runtime-evolution\n16h\n请写一个文件 probe-write.txt\nfeat/runtime-evolution\n16h\n请写一个文件 probe-write.txt\nfeat/runtime-evolution\n16h\n用 Task 工具委派一个子代理列出当前目录\nfeat/runtime-evolution\n17h\n请写一个文件 probe-write.txt\nfeat/runtime-evolution\n17h\n请连续写两次 probe-write.txt\nfeat/runtime-evolution\n17h\nE1-25 问答卡视觉口径：请问我一个问题\nfeat/runtime-evolution\n1d\nE1-25 权限卡视觉口径：请写一个文件\nfeat/runtime-evolution\n1d\nE1-24 预算耗尽探针：请回一句话\nfeat/runtime-evolution\n1d\nE1-24 重试观感探针：请回一句话\nfeat/runtime-evolution\n1d\ndevD30 第一轮 GUI：回一句话\nfeat/runtime-evolution\n1d\nT032 bulk rollout #014 2026-09-10 topic=theme\nfeat/runtime-evolution\n1d\ndevD14 聊天B 第一轮\nfeat/runtime-evolution\n1d\nSession w474ma\nfeat/runtime-evolution\n1d\ndevB DEV-18 node24 banner probe\nfeat/runtime-evolution\n1d\nSession idi2oz\nfeat/runtime-evolution\n1d\nT032 DEV-11 control sample (~50 KiB) / round 0 / filler-00000-filler-00000-filler-00000-filler-00000-filler-00000-filler\nfeat/runtime-evolution\n1d\nT032 SYNTHETIC legacy bare-row rollout (not a real Codex artefact)\nfeat/runtime-evolution\n1d\nT032 bulk rollout #038 2026-09-10 topic=plugin\nfeat/runtime-evolution\n1d\nT032 bulk rollout #013 2026-09-10 topic=catalog\nfeat/runtime-evolution\n1d\nT032 bulk rollout #037 2026-09-10 topic=session\nfeat/runtime-evolution\n1d\nT032 bulk rollout #060 2026-09-10 topic=vault\nfeat/runtime-evolution\n1d\nT032 bulk rollout #012 2026-09-10 topic=vault\nfeat/runtime-evolution\n1d\nT032 bulk rollout #036 2026-09-10 topic=permission\nfeat/runtime-evolution\n1d\nT032 bulk rollout #035 2026-09-10 topic=runtime\nfeat/runtime-evolution\n1d\nT032 bulk rollout #059 2026-09-10 topic=scratch\nfeat/runtime-evolution\n1d\nT032 bulk rollout #011 2026-09-10 topic=scratch\nfeat/runtime-evolution\n1d\nT032 bulk rollout #034 2026-09-10 topic=editor\nfeat/runtime-evolution\n1d\nT032 bulk rollout #058 2026-09-10 topic=worker\nfeat/runtime-evolution\n1d\nT032 bulk rollout #010 2026-09-10 topic=worker\nfeat/runtime-evolution\n1d\nT032 bulk rollout #009 2026-09-10 topic=trace\nfeat/runtime-evolution\n1d\nT032 bulk rollout #033 2026-09-10 topic=terminal\nfeat/runtime-evolution\n1d\nT032 bulk rollout #057 2026-09-10 topic=trace\nfeat/runtime-evolution\n1d\nT032 bulk rollout #008 2026-09-10 topic=import\nfeat/runtime-evolution\n1d\nT032 bulk rollout #032 2026-09-10 topic=worktree\nfeat/runtime-evolution\n1d\nT032 bulk rollout #056 2026-09-10 topic=import\nfeat/runtime-evolution\n1d\nT032 bulk rollout #007 2026-09-10 topic=model\nfeat/runtime-evolution\n1d\nT032 bulk rollout #031 2026-09-10 topic=telemetry\nfeat/runtime-evolution\n1d\nT032 bulk rollout #055 2026-09-10 topic=model\nfeat/runtime-evolution\n1d\nT032 bulk rollout #006 2026-09-10 topic=plugin\nfeat/runtime-evolution\n1d\nT032 bulk rollout #030 2026-09-10 topic=theme\nfeat/runtime-evolution\n1d\nT032 bulk rollout #054 2026-09-10 topic=plugin\nfeat/runtime-evolution\n1d\nT032 bulk rollout #005 2026-09-10 topic=session\nfeat/runtime-evolution\n1d\nT032 bulk rollout #029 2026-09-10 topic=catalog\nfeat/runtime-evolution\n1d\nT032 bulk rollout #053 2026-09-10 topic=session\nfeat/runtime-evolution\n1d\nT032 bulk rollout #052 2026-09-10 topic=permission\nfeat/runtime-evolution\n1d\nT032 bulk rollout #004 2026-09-10 topic=permission\nfeat/runtime-evolution\n1d\nT032 bulk rollout #028 2026-09-10 topic=vault\nfeat/runtime-evolution\n1d\nT032 bulk rollout #051 2026-09-10 topic=runtime\nfeat/runtime-evolution\n1d\nT032 bulk rollout #003 2026-09-10 topic=runtime\nfeat/runtime-evolution\n1d\nT032 bulk rollout #027 2026-09-10 topic=scratch\nfeat/runtime-evolution\n1d\nT032 bulk rollout #026 2026-09-10 topic=worker\nfeat/runtime-evolution\n1d\nT032 bulk rollout #050 2026-09-10 topic=editor\nfeat/runtime-evolution\n1d\nT032 bulk rollout #002 2026-09-10 topic=editor\nfeat/runtime-evolution\n1d\nT032 bulk rollout #025 2026-09-10 topic=trace\nfeat/runtime-evolution\n1d\nT032 bulk rollout #049 2026-09-10 topic=terminal\nfeat/runtime-evolution\n1d\nT032 bulk rollout #001 2026-09-10 topic=terminal\nfeat/runtime-evolution\n1d\n回一个字：甲\nfeat/runtime-evolution\n1d\n用 bash 运行这条命令：echo p6-native-default-ok\nfeat/runtime-evolution\n5d\n用 bash 运行这条命令：echo p6-native-default-ok\nfeat/runtime-evolution\n5d\n用 bash 运行这条命令：echo p6-native-default-ok\nfeat/runtime-evolution\n5d\n用 bash 运行这条命令：echo p6-native-default-ok\nfeat/runtime-evolution\n5d\n用 bash 运行这条命令：echo p6-native-default-ok\nfeat/runtime-evolution\n5d\n用 bash 运行这条命令：echo p6-native-default-ok\nfeat/runtime-evolution\n5d\n用 bash 运行这条命令：echo p6-native-default-ok\nfeat/runtime-evolution\n5d\n用 bash 运行这条命令：echo perm-probe-ok\nfeat/runtime-evolution\n1w\n用 bash 运行这条命令：echo perm-probe-ok\nfeat/runtime-evolution\n1w\n用 bash 运行这条命令：echo perm-probe-ok\nfeat/runtime-evolution\n1w\n用 bash 运行这条命令：echo perm-probe-ok\nfeat/runtime-evolution\n1w\n回一个字：好\nfeat/runtime-evolution\n1w\n回一个字：好\nfeat/runtime-evolution\n1w\nhelp me install :https://github.com/pnedfff/claude-env-cleanup\nfeat/runtime-evolution\n1w\n写一个test.txt\nfeat/runtime-evolution\n1w\nnihao\nfeat/runtime-evolution\n1w\nCount slowly from 1 to 90, one number per line, no other te…\nfeat/runtime-evolution\n1w\nCount slowly from 1 to 60, one number per line, no other te…\nfeat/runtime-evolution\n1w\n/clear\nfeat/runtime-evolution\n1w\nReply with exactly: T37C-S2\nfeat/runtime-evolution\n1w\nCount slowly from 1 to 60, one number per line, no other te…\nfeat/runtime-evolution\n1w\n啥意思\nfeat/runtime-evolution\n1w\n你好\nfeat/runtime-evolution\n1w\nhello\nfeat/runtime-evolution\n1w\nhey bro\nfeat/runtime-evolution\n2w\n你好呀\nfeat/runtime-evolution\n2w\nhey\nfeat/runtime-evolution\n2w\nSession 0kwoti\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S2\nfeat/runtime-evolution\n2w\nCount slowly from 1 to 90, one number per line, no other te…\nfeat/runtime-evolution\n2w\nCount slowly from 1 to 60, one number per line, no other te…\nfeat/runtime-evolution\n2w\n/clear\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S3\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S1\nfeat/runtime-evolution\n2w\nCount slowly from 1 to 90, one number per line, no other te…\nfeat/runtime-evolution\n2w\n/clear\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S3\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S2\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S1\nfeat/runtime-evolution\n2w\nCount slowly from 1 to 60, one number per line, no other te…\nfeat/runtime-evolution\n2w\nCount slowly from 1 to 60, one number per line, no other te…\nfeat/runtime-evolution\n2w\nCount slowly from 1 to 60, one number per line, no other te…\nfeat/runtime-evolution\n2w\nCount slowly from 1 to 60, one number per line, no other te…\nfeat/runtime-evolution\n2w\nSession lwaai5\nfeat/runtime-evolution\n2w\nCount slowly from 1 to 60, one number per line, no other te…\nfeat/runtime-evolution\n2w\n/clear\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S3\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S1\nfeat/runtime-evolution\n2w\nRun the bash command: echo T37C-PERM\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S3\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S2\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S1\nfeat/runtime-evolution\n2w\nCount slowly from 1 to 60, one number per line, no other te…\nfeat/runtime-evolution\n2w\n/clear\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S3\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S2\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S1\nfeat/runtime-evolution\n2w\n/clear\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S3\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S2\nfeat/runtime-evolution\n2w\nReply with exactly: T37C-S1\nfeat/runtim"
+    },
+    "picked": "staging",
+    "cardAfterPick": {
+      "text": "提问\n部署环境\n部署环境用 staging 还是 production？\nA\nstaging\nB\nproduction\nC\n其他…\n跳过\n继续\nctrl + enter",
+      "buttons": [
+        {
+          "text": "",
+          "disabled": false
+        },
+        {
+          "text": "跳过",
+          "disabled": false
+        },
+        {
+          "text": "继续 ctrl + enter",
+          "disabled": false
+        }
+      ],
+      "options": [
+        {
+          "index": 0,
+          "role": "radio",
+          "ariaChecked": "true",
+          "visible": true,
+          "letter": "A",
+          "label": "staging"
+        },
+        {
+          "index": 1,
+          "role": "radio",
+          "ariaChecked": "false",
+          "visible": true,
+          "letter": "B",
+          "label": "production"
+        },
+        {
+          "index": 2,
+          "role": "radio",
+          "ariaChecked": "false",
+          "visible": true,
+          "letter": "C",
+          "label": "其他…"
+        }
+      ]
+    },
+    "continueClicked": "继续 ctrl + enter",
+    "aCardCleared": true,
+    "aTurn": {
+      "answerToSettleMs": 11500,
+      "totalMs": 77872,
+      "settled": true,
+      "status": "idle",
+      "reply": "你选中的是：staging。"
+    },
+    "pendingAfterAAnswered": {
+      "activeSessionId": "session-live-1789801299008-x65un9n",
+      "pendingQuestions": [
+        {
+          "sessionId": "session-1789801347193-4twhymk",
+          "questionId": "toolu_01frFuazLBrTiRRrIilnXBHL",
+          "messageId": "asst-send-1789801351003-4-2"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "session-1789801347193-4twhymk",
+          "status": "waiting_question"
+        },
+        {
+          "id": "session-live-1789799773225-xncrqne",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789792485533-9h0gw44",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789789544825-g87qb1c",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789758067568-79rg6d4",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789755675423-o8py6n2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789755312272-kso9e3l",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789753287293-975xks1",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789750386923-dzh3w0a",
+          "status": "idle"
+        },
+        {
+          "id": "19c881be-eb5e-4d48-bfbc-7c40eca5eed4",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789741266571-fcdur2x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789740985585-kufut5w",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789740512547-fcn097s",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789737156154-ota6r8p",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789737696308-ft3r69x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789737909692-pcpw3gj",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652464182-iinf16s",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652269668-l4gbh1k",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652096201-xlacs7d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652002133-0n6wb2b",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789647368097-07petop",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-efb78fb7-08ce-4c27-855f-3ec3e5a3312b",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789647839178-q40z4vd",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789647205164-vw474ma",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789645533315-00lntm4",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789644851492-gidi2oz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789643220038-1wf6gzz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789643083360-udognyg",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789642848456-1umq351",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789642461865-wi4c45n",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-claude-code-6a590c00-b711-4156-b2a8-319e7a178f66",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-bafacba4-cf0e-4256-982e-f361a2e4a0b2",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-c67984a0-2254-4e4a-b1e9-2b48fc88d2a8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-06968e9c-6809-4ed8-b100-0209be4fe4c8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-ed4ed8f8-e9ef-47e2-b0ad-a7be2fc0b7bd",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-99d89b81-fbb3-4183-80d6-553b96b27fed",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-12008768-df2d-4026-a145-85107107f1ca",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-490806d2-9054-4844-b33d-6d46540de643",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-581eac5c-2e5d-41c7-9557-702c159eeb4a",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-100e5c08-e498-4b62-a32e-68cd980df455",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-90c176dd-c9f3-4660-b9c3-b66cb263ae09",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-eac4bb14-4d67-4c0f-bf2c-c6f1b6bfd8c6",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-83b4080c-0ce8-46c0-9390-8e846180adbf",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-fcd27394-8711-4587-8db7-ba13e94aaee4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-7c7563d2-c79b-4af1-8f47-e5d5afb7a633",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-6c7b1bb0-d78f-491d-aefa-c31822888f84",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-161f6131-5d8f-4a75-969c-afb6754ef87d",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9528f90c-5835-49ab-bc6b-fcdf31ce1dc0",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a58f34fe-5d89-4a74-97e8-f7fc177f32f9",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-55fd5229-b71d-4495-b4e8-4b8b2418a986",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-1675d3aa-91d6-4543-a849-f252f82e59a7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a0083207-1e78-4491-bc53-38366434dd29",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-2bd3030b-39fb-42d9-9b97-344862b6ea67",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-ac6fad24-3c12-4cf0-bfeb-f27e532f1fb8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-90c0188e-447b-4ddc-a24e-08a7d8f5b147",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-94d91165-e0ba-4d9d-969f-a64547a6da30",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-1386f824-6a5e-4e87-a8fe-9b1be8dca57d",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-364ca7e1-1587-49a8-8ec3-a800c87e92cb",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-85cd9b8c-5665-42fb-ab51-abf0fac8750f",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-d5db87d4-55a3-4d7e-8f55-013a690738e6",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9ad6488a-362d-4cbf-8287-c394eb247eef",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-322d5f4d-b1dc-4d74-8059-f4cbb90ae806",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-5895f3ef-3a9c-4141-9b05-e5c50a3d37d7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-b12f0fba-d80c-49ef-b2cd-7de92631896b",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-5c6c04e2-11ca-41b4-aa1d-ef48d5d4b49f",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a03d8ef0-8d4a-4173-ab44-6614e3e4a4f3",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-b7e7cc9e-222a-4fb4-a6f5-90921427b37e",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9da5003c-4b60-418c-ae0f-aaa2cd96ee63",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-2b6e3fb7-4996-403f-ba5e-edb1637e2be2",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-bfc21400-4d30-4f9c-8289-d6c9555461e3",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-65571a2a-e7a7-4625-b191-943f93d6d4a2",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789638427039-ntyubr1",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789638144347-jr9q88j",
+          "status": "idle"
+        },
+        {
+          "id": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789637446946-abtu2jn",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789636546521-0yhy2zv",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789347889296-ltrxsgm",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306912982-k9ik92s",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306848585-b03q62x",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306698435-l4bu1s2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306608098-tasrgr0",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306531210-8r0oa7a",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306423191-vob9ldz",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-904fda2c-a6b6-4fdb-b16e-4acac2b9b192",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789142986092-uxx5l7s",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143314942-nmgm09v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143859808-u6k5w7h",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789147793385-9ksu0xo",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143311851-exg29cz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789142989175-2d4909j",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789142835493-v1dj0lp",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789142718965-l1g2ivc",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789141980761-ypg9e97",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789140568519-d9egdw2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789137614294-ib49fsx",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-8aa6e997-aeb8-4b05-a16c-f3277dd9f43b",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788682527925-ynzbtxy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788682810267-llbkp9c",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788664854690-2d6xooy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401319554-54ygyed",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367170719-ogkusk7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-f34ddff7-ebf7-4ca9-bc86-44611e5641be",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-ce1ft0x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401661481-cvmdb3h",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788509956852-xl21yai",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788572233370-z5p868v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788664933866-e7ya9g7",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788425093600-q6pxqzp",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788572526965-pr7obte",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788504035730-i7itmdw",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788503410669-b0kwoti",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-6ajhkog",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401935498-ly4hg4v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401952669-m7rgvi4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-8c414d42-9dbc-42b6-8907-38351b5d69c0",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-6sjbby6",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-g5wen36",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401651188-nlj4uqg",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-686d5ca3-24e2-4a3f-852c-35e6fe9d26e2",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-w9g9yhd",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-3pylyxt",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-umqv6fl",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366555356-xajw24k",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366181501-m0dg1ax",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365591287-5g73c64",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365458607-3i2u9q7",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362915985-slwaai5",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368093872-wx1coh4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-08175b24-93c1-4ff3-90e1-7aa58aa39c65",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-tau09co",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-ffe62vl",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367339439-rumdyxn",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-ttggz18",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-cjqjxkq",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-tvf3j0v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366817805-twoue3s",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-ba5afa43-e1b9-4b00-a0fa-f943ba559350",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-vtz0vwa",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-hvby3dc",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-g0lhehr",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-3cd1fe0e-1c1c-43d0-b427-30b32806e68d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-ys8rd2i",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-29ym6cx",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-h8mzi58",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-99a977c3-6634-4c9a-a9eb-1b46880ba3de",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-jr46v0d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-gm16ir6",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-z28v5gi",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230384-03omjj3",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230383-dqo2tup",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230383-noqghx0",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-ug1mtvk",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-gm90mxx",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-59s8x2r",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365022258-il8xyhr",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-121374fa-0f86-43fb-a772-1c9b0c4e0ac8",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-uvb31n9",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-4rpqr2j",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-wvsb2uu",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789044-b7f5yaz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789043-ij1guom",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789044-i9koskn",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788363772117-ohqrhly",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-cfb1ca8d-fd14-427b-8b20-f097e209ce6a",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-vf8md5f",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-fv745xy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-omshwxv",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-h9xd96i",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-5ie1x57",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-zrej2s9",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362988826-ucyygoh",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362988825-c4pygn2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362580499-l5ej560",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362439344-4qdotza",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362158031-6v95ksa",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788361761955-jg2l6s5",
+          "status": "idle"
+        },
+        {
+          "id": "s-send",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789801299008-x65un9n",
+          "status": "idle"
+        }
+      ]
+    },
+    "switchToB": {
+      "sessionId": "session-1789801347193-4twhymk",
+      "title": "用提问工具问我：配置文件用 YAML 还是 TOML",
+      "via": "sidebar",
+      "sidebarMatches": 1,
+      "activeSessionId": "session-1789801347193-4twhymk"
+    },
+    "bSkipClicked": true,
+    "bTurn": {
+      "skipToSettleMs": 14047,
+      "totalMs": 47702,
+      "settled": true,
+      "status": "idle",
+      "reply": "你没有选择，我按默认处理：**选 TOML**。\n\n理由（一句话）：配置文件里 TOML 的类型是明确的，`on`、`1.0`、`no` 这类值不会被悄悄解析成布尔或数字，缩进也不影响语义，而 YAML 恰好在这几点上容易出坑。\n\n如果后面觉得不合适，换回 YAML 只影响一个解析入口，改动很小。"
+    },
+    "pendingFinal": {
+      "activeSessionId": "session-1789801347193-4twhymk",
+      "pendingQuestions": [],
+      "statuses": [
+        {
+          "id": "session-1789801347193-4twhymk",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789799773225-xncrqne",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789792485533-9h0gw44",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789789544825-g87qb1c",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789758067568-79rg6d4",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789755675423-o8py6n2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789755312272-kso9e3l",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789753287293-975xks1",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789750386923-dzh3w0a",
+          "status": "idle"
+        },
+        {
+          "id": "19c881be-eb5e-4d48-bfbc-7c40eca5eed4",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789741266571-fcdur2x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789740985585-kufut5w",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789740512547-fcn097s",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789737156154-ota6r8p",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789737696308-ft3r69x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789737909692-pcpw3gj",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652464182-iinf16s",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652269668-l4gbh1k",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652096201-xlacs7d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789652002133-0n6wb2b",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789647368097-07petop",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-efb78fb7-08ce-4c27-855f-3ec3e5a3312b",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789647839178-q40z4vd",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789647205164-vw474ma",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789645533315-00lntm4",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789644851492-gidi2oz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789643220038-1wf6gzz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789643083360-udognyg",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789642848456-1umq351",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789642461865-wi4c45n",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-claude-code-6a590c00-b711-4156-b2a8-319e7a178f66",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-bafacba4-cf0e-4256-982e-f361a2e4a0b2",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-c67984a0-2254-4e4a-b1e9-2b48fc88d2a8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-06968e9c-6809-4ed8-b100-0209be4fe4c8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-ed4ed8f8-e9ef-47e2-b0ad-a7be2fc0b7bd",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-99d89b81-fbb3-4183-80d6-553b96b27fed",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-12008768-df2d-4026-a145-85107107f1ca",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-490806d2-9054-4844-b33d-6d46540de643",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-581eac5c-2e5d-41c7-9557-702c159eeb4a",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-100e5c08-e498-4b62-a32e-68cd980df455",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-90c176dd-c9f3-4660-b9c3-b66cb263ae09",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-eac4bb14-4d67-4c0f-bf2c-c6f1b6bfd8c6",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-83b4080c-0ce8-46c0-9390-8e846180adbf",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-fcd27394-8711-4587-8db7-ba13e94aaee4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-7c7563d2-c79b-4af1-8f47-e5d5afb7a633",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-6c7b1bb0-d78f-491d-aefa-c31822888f84",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-161f6131-5d8f-4a75-969c-afb6754ef87d",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9528f90c-5835-49ab-bc6b-fcdf31ce1dc0",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a58f34fe-5d89-4a74-97e8-f7fc177f32f9",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-55fd5229-b71d-4495-b4e8-4b8b2418a986",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-1675d3aa-91d6-4543-a849-f252f82e59a7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a0083207-1e78-4491-bc53-38366434dd29",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-2bd3030b-39fb-42d9-9b97-344862b6ea67",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-ac6fad24-3c12-4cf0-bfeb-f27e532f1fb8",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-90c0188e-447b-4ddc-a24e-08a7d8f5b147",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-94d91165-e0ba-4d9d-969f-a64547a6da30",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-1386f824-6a5e-4e87-a8fe-9b1be8dca57d",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-364ca7e1-1587-49a8-8ec3-a800c87e92cb",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-85cd9b8c-5665-42fb-ab51-abf0fac8750f",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-d5db87d4-55a3-4d7e-8f55-013a690738e6",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9ad6488a-362d-4cbf-8287-c394eb247eef",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-322d5f4d-b1dc-4d74-8059-f4cbb90ae806",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-5895f3ef-3a9c-4141-9b05-e5c50a3d37d7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-b12f0fba-d80c-49ef-b2cd-7de92631896b",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-5c6c04e2-11ca-41b4-aa1d-ef48d5d4b49f",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-a03d8ef0-8d4a-4173-ab44-6614e3e4a4f3",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-b7e7cc9e-222a-4fb4-a6f5-90921427b37e",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-9da5003c-4b60-418c-ae0f-aaa2cd96ee63",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-2b6e3fb7-4996-403f-ba5e-edb1637e2be2",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-bfc21400-4d30-4f9c-8289-d6c9555461e3",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-65571a2a-e7a7-4625-b191-943f93d6d4a2",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789638427039-ntyubr1",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789638144347-jr9q88j",
+          "status": "idle"
+        },
+        {
+          "id": "session-fork-fba2b0ab-6fb0-46b9-9f4b-dd69104903f5",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789637446946-abtu2jn",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789636546521-0yhy2zv",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789347889296-ltrxsgm",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306912982-k9ik92s",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306848585-b03q62x",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306698435-l4bu1s2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306608098-tasrgr0",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306531210-8r0oa7a",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789306423191-vob9ldz",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-904fda2c-a6b6-4fdb-b16e-4acac2b9b192",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789142986092-uxx5l7s",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143314942-nmgm09v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143859808-u6k5w7h",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789147793385-9ksu0xo",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789143311851-exg29cz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1789142989175-2d4909j",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789142835493-v1dj0lp",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789142718965-l1g2ivc",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789141980761-ypg9e97",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789140568519-d9egdw2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789137614294-ib49fsx",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-codex-8aa6e997-aeb8-4b05-a16c-f3277dd9f43b",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788682527925-ynzbtxy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788682810267-llbkp9c",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788664854690-2d6xooy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401319554-54ygyed",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367170719-ogkusk7",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-f34ddff7-ebf7-4ca9-bc86-44611e5641be",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-ce1ft0x",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401661481-cvmdb3h",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788509956852-xl21yai",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788572233370-z5p868v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788664933866-e7ya9g7",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788425093600-q6pxqzp",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788572526965-pr7obte",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788504035730-i7itmdw",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788503410669-b0kwoti",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-6ajhkog",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401935498-ly4hg4v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401952669-m7rgvi4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-8c414d42-9dbc-42b6-8907-38351b5d69c0",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-6sjbby6",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401898915-g5wen36",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401651188-nlj4uqg",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-686d5ca3-24e2-4a3f-852c-35e6fe9d26e2",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-w9g9yhd",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-3pylyxt",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788401597800-umqv6fl",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366555356-xajw24k",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366181501-m0dg1ax",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365591287-5g73c64",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365458607-3i2u9q7",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362915985-slwaai5",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368093872-wx1coh4",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-08175b24-93c1-4ff3-90e1-7aa58aa39c65",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-tau09co",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788368051228-ffe62vl",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367339439-rumdyxn",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-ttggz18",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-cjqjxkq",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788367135113-tvf3j0v",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788366817805-twoue3s",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-ba5afa43-e1b9-4b00-a0fa-f943ba559350",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-vtz0vwa",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-hvby3dc",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365882003-g0lhehr",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-3cd1fe0e-1c1c-43d0-b427-30b32806e68d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-ys8rd2i",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-29ym6cx",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365551777-h8mzi58",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-99a977c3-6634-4c9a-a9eb-1b46880ba3de",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-jr46v0d",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-gm16ir6",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365407896-z28v5gi",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230384-03omjj3",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230383-dqo2tup",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365230383-noqghx0",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-ug1mtvk",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-gm90mxx",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365136435-59s8x2r",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788365022258-il8xyhr",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-121374fa-0f86-43fb-a772-1c9b0c4e0ac8",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-uvb31n9",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-4rpqr2j",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364965948-wvsb2uu",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789044-b7f5yaz",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789043-ij1guom",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788364789044-i9koskn",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788363772117-ohqrhly",
+          "status": "idle"
+        },
+        {
+          "id": "session-import-cfb1ca8d-fd14-427b-8b20-f097e209ce6a",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-vf8md5f",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-fv745xy",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363618686-omshwxv",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-h9xd96i",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-5ie1x57",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788363241408-zrej2s9",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362988826-ucyygoh",
+          "status": "idle"
+        },
+        {
+          "id": "session-1788362988825-c4pygn2",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362580499-l5ej560",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362439344-4qdotza",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788362158031-6v95ksa",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1788361761955-jg2l6s5",
+          "status": "idle"
+        },
+        {
+          "id": "s-send",
+          "status": "idle"
+        },
+        {
+          "id": "session-live-1789801299008-x65un9n",
+          "status": "idle"
+        }
+      ]
+    },
+    "switchBackToAForPermission": {
+      "sessionId": "session-live-1789801299008-x65un9n",
+      "title": "用提问工具问我一个二选一的问题：部署环境用 staging 还是 production",
+      "via": "sidebar",
+      "sidebarMatches": 1,
+      "activeSessionId": "session-live-1789801299008-x65un9n"
+    },
+    "permissionCard": {
+      "atMs": 21103,
+      "card": {
+        "text": "权限\n需确认\n\nread — 读取文件内容\n\n路径\n\n/etc/hostname\n\n项目：/home/ai/code/ai-client\n\n若 120 秒内未响应将自动拒绝\n直接允许\n本会话内允许\n直接拒绝\n\n「本会话内允许」会记住 read 可访问 /etc/hostname · 对本次会话内的所有代理生效，含子代理",
+        "buttons": ["直接允许", "本会话内允许", "直接拒绝"]
+      }
+    },
+    "permissionCardScreenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-23/model-23-permission-card.png",
+    "allowClicked": "直接允许",
+    "permissionTurn": {
+      "cardAtMs": 21103,
+      "totalMs": 28538,
+      "settled": true,
+      "status": "idle",
+      "reply": "`/etc/hostname` 的内容是一行文本：\n\n```\nai-VMware-Virtual-Platform\n```\n\n这就是本机的主机名（hostname）——系统在启动时读取它来给这台机器命名，网络服务、shell 提示符和日志里出现的机器名都来自这里。文件本身没有被改动。"
+    },
+    "beforeScreenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-23/model-23-replay-前.png",
+    "switchAwayToB": {
+      "sessionId": "session-1789801347193-4twhymk",
+      "title": "用提问工具问我：配置文件用 YAML 还是 TOML",
+      "via": "sidebar",
+      "sidebarMatches": 1,
+      "activeSessionId": "session-1789801347193-4twhymk"
+    },
+    "switchBackAgain": {
+      "sessionId": "session-live-1789801299008-x65un9n",
+      "title": "用提问工具问我一个二选一的问题：部署环境用 staging 还是 production",
+      "via": "sidebar",
+      "sidebarMatches": 1,
+      "activeSessionId": "session-live-1789801299008-x65un9n"
+    },
+    "switchBackScreenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-23/model-23-switch-back.png"
+  },
+  "entry": {
+    "entered": "以 danyuan@jcdz.cc 继续",
+    "dismissed": "知道了"
+  },
+  "model19": {
+    "twoCardsParkedAtOnce": true,
+    "parkedSessionIds": ["session-live-1789801299008-x65un9n", "session-1789801347193-4twhymk"],
+    "stillTwoAfterSwitchBack": true,
+    "activeIsAAfterSwitchBack": true,
+    "aCardAnswerableAfterSwitchBack": true,
+    "continueEnabledAfterPick": true,
+    "aCardCleared": true,
+    "aTurnSettled": true,
+    "aReplyEchoesPick": true,
+    "pendingEmptyAtEnd": true,
+    "pass": true
+  },
+  "sessions": {
+    "A": "session-live-1789801299008-x65un9n",
+    "B": "session-1789801347193-4twhymk",
+    "titleA": "用提问工具问我一个二选一的问题：部署环境用 staging 还是 production"
+  },
+  "finishedAt": "2026-09-19T07:03:56.030Z",
+  "rendererProblems": [
+    {
+      "kind": "console.error",
+      "text": "03:01:39.007 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:01:39.021 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:01:39.134 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:01:39.221 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:01:39.298 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:01:39.375 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:01:39.406 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "03:01:39.424 › [workspace-tree] worktrees-absent Object"
+    }
+  ]
+}

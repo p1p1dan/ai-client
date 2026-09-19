@@ -1,0 +1,39 @@
+{
+  "via": "double-click + Enter",
+  "newName": "点验重命名-0919",
+  "rowRect": {
+    "x": 190,
+    "y": 279,
+    "w": 251,
+    "h": 28,
+    "text": "用一句话说明这个仓库 package.json 里 name 字段的值是什么 feat/runtime-evolution now",
+    "ariaPressed": null
+  },
+  "indexTitleBefore": "用一句话说明这个仓库 package.json 里 name 字段的值是什么",
+  "indexTitleAfter": "点验重命名-0919",
+  "jsonlBefore": {
+    "file": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789808581115-3p910tm.jsonl",
+    "exists": true,
+    "name": null,
+    "sessionInfoEntries": [],
+    "nameMentions": [
+      {
+        "index": 5,
+        "head": "{\"kind\":\"entry\",\"lane\":\"main\",\"type\":\"message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"thinkingSignature\":\"CAIS6RsKpgEIERgCKkBKS5b53EagOrd08x0iFV33XcfWOB4r8bM3/ZQRQe"
+      }
+    ]
+  },
+  "jsonlAfter": {
+    "file": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789808581115-3p910tm.jsonl",
+    "exists": true,
+    "name": null,
+    "sessionInfoEntries": [],
+    "nameMentions": [
+      {
+        "index": 5,
+        "head": "{\"kind\":\"entry\",\"lane\":\"main\",\"type\":\"message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"thinkingSignature\":\"CAIS6RsKpgEIERgCKkBKS5b53EagOrd08x0iFV33XcfWOB4r8bM3/ZQRQe"
+      }
+    ]
+  },
+  "storeTitle": "点验重命名-0919"
+}

@@ -1,0 +1,62 @@
+{
+  "pressedVia": null,
+  "press": {
+    "label": "TUI",
+    "rect": {
+      "x": 1209,
+      "y": 50,
+      "w": 53,
+      "h": 24,
+      "text": "TUI",
+      "ariaPressed": "false"
+    },
+    "used": null,
+    "attempts": [
+      {
+        "via": "Input.dispatchMouseEvent",
+        "ok": false
+      },
+      {
+        "via": "element.click()",
+        "ok": false
+      }
+    ]
+  },
+  "presentationBefore": {
+    "groupLabel": "显示方式",
+    "buttons": [
+      {
+        "text": "GUI",
+        "pressed": "true"
+      },
+      {
+        "text": "TUI",
+        "pressed": "false"
+      }
+    ],
+    "xtermNodes": 0,
+    "xtermRows": 0,
+    "hasComposer": true
+  },
+  "presentationAfter": {
+    "groupLabel": "显示方式",
+    "buttons": [
+      {
+        "text": "GUI",
+        "pressed": "false"
+      },
+      {
+        "text": "TUI",
+        "pressed": "true"
+      }
+    ],
+    "xtermNodes": 0,
+    "xtermRows": 0,
+    "hasComposer": false
+  },
+  "piBefore": [],
+  "piProcs": [],
+  "terminals": [],
+  "newTerminals": [],
+  "terminalSizes": {}
+}

@@ -2,7 +2,7 @@
 
 Role: detail shard。上位：[执行单](../t033-field-day-runbook.md)。判据权威：[checklist-e.md 第 4 节 real-model 表](../../checklist-e.md#真实模型回合需要真-provider-与真-key38-项--新增-model-3950见第二节)。
 
-**前置**：真实 provider 凭据 + 网关探活通过 + 界面语言为中文（见执行单 §3 的 P1/P2/P3）。网关不可用时才退回[假网关](../../evidence/batch-e-devbox-2026-09-17/tools/fake-gateway.mjs)，并在证据里注明哪几项是假网关跑的。证据放 `evidence/batch-e-field-<date>/model/`。
+**前置**：真实 provider 凭据 + 网关探活通过 + 界面语言为中文（见执行单 §3 的 P1/P2/P3）。网关不可用时才退回[假网关](../../evidence/batch-e-devbox-2026-09-17/tools/fake-gateway.mjs)，并在证据里注明哪几项是假网关跑的。证据放 `evidence/batch-e-field-<date>/model/`。2026-09-19 开发机已处置 10 项，见 [batch-h-devbox-pointcheck-2026-09-19](../../evidence/batch-h-devbox-pointcheck-2026-09-19/README.md)。
 
 ---
 
@@ -12,7 +12,7 @@ Role: detail shard。上位：[执行单](../t033-field-day-runbook.md)。判据
 
 | # | 一句操作 | 判据 | 证据文件 |
 |---|---|---|---|
-| MODEL-11 | 跑一次 grep 与 glob，悬停搜索行，再点一次命中 | 悬停出现**命中列表**；点击命中能打开对应文件并跳到行号 | `model-11-grep-hover.png`、`model-11-jump.png` |
+| MODEL-11 | 跑一次 grep 与 glob，悬停搜索行，再点一次命中 | 悬停出现**命中列表**；点击命中能打开对应文件并跳到行号；编辑器已开着别的文件时再点一条命中也要跳行（2026-09-19 实测只有首次开文件才跳） | `model-11-grep-hover.png`、`model-11-jump.png` |
 | MODEL-12 | 让模型读一个**工作区外**文件，截审批卡 | 卡上出现被读取文件的**完整路径**，而不只是「read — 读取文件内容」 | `model-12-outside-read-card.png` |
 | MODEL-13 | 中文界面下跑一次含上下文压缩与子代理等待的回合 | `new_context` / `TaskWait` / `TaskList` 三种行**全中文**，无 `a fresh window` / `delegation(s)` / `running subagents` | `model-13-tool-rows-zh.png` |
 | MODEL-14 | 中文界面触发一次需审批的技能加载 | 正文标签是「技能」而非 `Skill` | `model-14-skill-card.png` |
@@ -21,10 +21,10 @@ Role: detail shard。上位：[执行单](../t033-field-day-runbook.md)。判据
 | MODEL-17 | 跑一次触发 write 审批的对话，点「允许」后截 Run 面板 | 标题从「等待审批」变为「运行中 / 正在运行工具」，attention 色消失 | `model-17-run-panel-after-allow.png` |
 | MODEL-18 | 一次用到 Task 的对话，**正常结束**与**中途 Stop** 各跑一次 | 两种收尾下输入框上方的百分比徽标都**不消失**；对照 devtools 里最后一条 `usage.updated` 的键集是否含 `context` | `model-18-badge-<收尾>.png` ×2 |
 | MODEL-19 | 会话 A 的 ask 未答时在会话 B 触发 ask，再切回 A | A 仍有**可作答卡片**，且 A 的回合能自己结束。必要时用 devtools 直接读 store 的 `pendingQuestion` | `model-19-concurrent-ask.png` |
-| MODEL-20 | 委派一个会撞 deny 的子代理，截时间线审批行 | 审批行上能读出**是哪个子代理** | `model-20-subagent-approval-row.png` |
+| MODEL-20 | 委派一个会撞 deny 的子代理（用 `*.env` 规则，不用 `~/.ssh`；提示词须声明点验意图、预期被拒、不要绕过），截时间线审批行 | 审批行上能读出**是哪个子代理**（硬编码路径 deny 在 `tools/index.ts:177-178` 短路不产生审批行，要用会走闸门的 bash ask 卡撞 deny） | `model-20-subagent-approval-row.png` |
 | MODEL-21 | 中文界面先批一次「本会话内允许」，再触发同类工具，展开「审批详情」 | 自动放行行**不出现英文 `session grant`** | `model-21-session-grant-zh.png` |
 | MODEL-22 | 跑 `sleep 90 && echo done`，观察 Run 面板 | 按当前代码**应当永不出现**工具自报的进度行（用于确认 chat-event-04） | `model-22-no-progress-row.png` |
-| MODEL-23 | 一个批过审批、答过问答的会话，关掉再打开 | 审批行与问答卡**是否还在**，前后截图对比 | `model-23-replay-<前/后>.png` ×2 |
+| MODEL-23 | 一个批过审批、答过问答的会话，关掉再打开 | 切会话来回：审批痕迹与冻结问答卡都在；重启回放：审批痕迹不在、问答卡退化为普通工具行（类型层无 permission / question 历史块）；二者实时态默认折在工作组里，截图前先展开 | `model-23-replay-<前/后>.png` ×2 |
 
 ---
 
@@ -45,8 +45,8 @@ Role: detail shard。上位：[执行单](../t033-field-day-runbook.md)。判据
 
 | # | 必 | 一句操作 | 判据 | 证据文件 |
 |---|---|---|---|---|
-| MODEL-49 | | 放一份自定义策略文件（样例与三条命令见 [field-samples](../../evidence/batch-e-devbox-2026-09-17/tools/field-samples/README.md) 第 3 节），跑管道 / 重定向 / here-string 各一条，抓权限审计行 | 判定与档位表一致。**三类语法的预期**：管道**逐段判定每个子命令**；重定向的 destination 被当**路径操作数**注册且 `exploration=false`；here-string 的操作数同样当路径注册并**递归展开其中的命令替换** | `model-49-policy.json`、`model-49-<语法>-audit.txt` ×3 |
-| MODEL-49（第三格） | | 会话进行中**改写策略文件**，再跑同一条命令 | **当前实现预期：判定不变。** `loadPermissionPolicy` 只在 `bootstrap.ts:303` 启动时调一次，结果冻进 `PermissionsPlugin` 的 `readonly config`；运行期 `configure()` 只吃 `mode` / `gear`，全仓无 `fs.watch` / chokidar。所以「策略热重载」这一格要记的是**「改文件后同一会话不变、新开会话才变」**，而不是「热重载成功」。与旧树 P1-5 的原措辞不符时**以现场为准**并当场回写 | `model-49-hot-reload.txt` |
+| MODEL-49 | | 放一份自定义策略文件（样例与三条命令见 [field-samples](../../evidence/batch-e-devbox-2026-09-17/tools/field-samples/README.md) 第 3 节），跑管道 / 重定向 / here-string 各一条，抓权限审计行（管道那条命令的提示词要点明「example.invalid 是保留域名不解析、要看的是闸门在执行前拦下、预期被拒」） | 判定与档位表一致。**三类语法的预期**：管道**逐段判定每个子命令**；重定向的 destination 被当**路径操作数**注册且 `exploration=false`；here-string 的操作数同样当路径注册并**递归展开其中的命令替换** | `model-49-policy.json`、`model-49-<语法>-audit.txt` ×3 |
+| MODEL-49（第三格） | | 会话进行中**改写策略文件**，再跑同一条命令 | **当前实现预期：判定不变。** `loadPermissionPolicy` 只在 `bootstrap.ts:303` 启动时调一次，结果冻进 `PermissionsPlugin` 的 `readonly config`；运行期 `configure()` 只吃 `mode` / `gear`，全仓无 `fs.watch` / chokidar。所以「策略热重载」这一格要记的是**「改文件后同一会话不变、新开会话才变」**（2026-09-19 实测成立，不需要重启层；设置页权限规则面板原话与此一致），而不是「热重载成功」。与旧树 P1-5 的原措辞不符时**以现场为准**并当场回写 | `model-49-hot-reload.txt` |
 
 > 策略文件放哪：全局层是 `%USERPROFILE%\.pilab\<profile>\pi-agent\extensions\pi-permission-system\config.json`；项目层是 `<工作区>\.pi\extensions\pi-permission-system\config.json`（**需要该工作区被判为 trusted**，否则这一层根本不读）。`<profile>` 取自 Electron `userData` 目录名，可在设置页的权限策略面板里直接看到 `agentDir` 的具体值。trace stamp 的 `permission_policy_sources` 会列出实际读到的文件绝对路径，`permission_policy_sha256` 是合并后配置的哈希——**用这两个字段确认自己写的文件真的被读了**。
 
@@ -86,7 +86,7 @@ Role: detail shard。上位：[执行单](../t033-field-day-runbook.md)。判据
 | # | 必 | 一句操作 | 判据 | 证据文件 |
 |---|---|---|---|---|
 | MODEL-47 | 必 | GUI 跑一回合 → 内嵌 TUI 里续聊一轮 → 回 GUI；前后各读一次会话 JSONL 比对条目链 | 两轮都在时间线上、顺序正确、**无重复条目**；会话文件头一行仍**同时满足 v4 与 v3** | `model-47-jsonl-before.txt`、`model-47-jsonl-after.txt`、`model-47-timeline.png` |
-| MODEL-48 | | **手点一次**右上角 GUI / TUI 开关 | 所有权正确移交、回来后 GUI 接得上。前后各查一次 `writer.lock` 与 spawn 窗口内的 pi argv——**`ps` 过滤 `--session` 抓不到，pi 会改写进程标题**，要在 spawn 后的启动窗口内抓 | `model-48-switch.png`、`model-48-argv.txt` |
+| MODEL-48 | | **手点一次**右上角 GUI / TUI 开关 | 所有权正确移交、回来后 GUI 接得上。前后各查一次 `writer.lock` 与 spawn 窗口内的 pi argv——**`ps` 过滤 `--session` 抓不到，pi 会改写进程标题**（内嵌 pi 是 Electron 二进制以 node 模式重执行，约 1 秒内 argv 改写成 `pi`；识别方式是 Electron 主进程的非 `--type=` 直接子进程，不是 exe 是 node），要在 spawn 后的启动窗口内抓 | `model-48-switch.png`、`model-48-argv.txt` |
 | MODEL-7 | | 开 TUI 记下 pid，GUI 发一条消息，`ps -p <pid>` 连续采样；同时 tail 会话 JSONL | 原 pi 进程在**重读完成前**已不存在，且重读点之后 JSONL 没有新增 CLI 追加的行 | `model-07-kill-cli.txt` |
 | MODEL-8 | | TUI 里发一个长回答，**输出中途**点 GUI 截时间线；再发一条消息后对比 JSONL 行数 | 缺失的条目在下一次 GUI 发送后**被补齐**，且文件仍可打开 | `model-08-midstream-switch.png` |
 | MODEL-32 | | 起 Electron 发一条长回合，**回合中**点 TUI 切换；随后 `ls -la` 会话目录 | 点终端按钮**只弹「等这一轮结束」提示**，且 `writer.lock` 与会话文件均未被第二个进程触碰 | `model-32-switch-during-run.png` |

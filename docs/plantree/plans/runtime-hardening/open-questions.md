@@ -7,6 +7,8 @@ Role: open-questions；只维护尚需拍板的问题。答了就移到 decision
 | Q002 | P2-7 前缀稳定性模块是接进 trace（每次请求记 systemPromptSha256）还是删掉？ | 全仓只有单测引用（context-prompt-09，D9 明写可选） | Deferred |
 | Q019 | 子 agent 独立展示位的形态：侧边抽屉 / 独立浮窗 / 可钉住面板？ | T033 现场反馈用户期待独立展示位，现状是挂在工具行下可展开（[07-findings.md](topics/t033-field-day/07-findings.md) 现象 #9） | T085（H-9，阻塞于此） |
 | Q020 | 用户在自己命令行工具上测试时用的 provider / 模型名，是否与本应用当时用的一致？ | 若不一致，「同一中转、性能可比」这个前提不成立，需要重新核对性能对比结论 | 影响[决策 024](decisions/024-prompt-cache-ttl-split.md)的适用范围 |
+| Q027 | 审批可见性：用户手点「直接允许」无独立审计行（`isQuietPermissionActivity` 只看 `result`，不看 `resolution`），硬编码路径 deny 在闸门之前短路、零审计行（`tools/index.ts:177-178`）。要不要让这两类都留一行？ | 2026-09-19 MODEL-23 / MODEL-20 顺带发现，findings.md F3 / F7 | 审计完整性；不阻塞 |
+| Q028 | 会话名两套存储：GUI 重命名只写 `session-index.json`，pi 只认 JSONL 的 `session_info.name`，pi 侧永远显示空。要不要在重命名与导入时同时写 `session_info`？ | 2026-09-19 MODEL-5，findings.md F8；`NativeSessionIndexAdapter.rename()` 能写回但生产代码零实例化 | GUI/TUI 互通观感；不阻塞 |
 
 ~~Q015~~ 已由[决策 016](decisions/016-home-tier-instruction-gating.md)结案（2026-09-16）：家目录从 project 链移除、改作独立的 **user 层 global**，全局规则对所有项目生效；全局层只取一份，顺序 `~/.pilab/AGENTS.md` → `~/.claude/CLAUDE.md` → `~/.codex/AGENTS.md`，找到即停；家目录之上的多用户共享目录不读；未信任项目仍整条 project 链不读的底线不动。落地任务 **T059**，排在 T032 之前。
 

@@ -1,0 +1,778 @@
+{
+  "probe": "m18-m20.mjs",
+  "criterion": "MODEL-18",
+  "criterionText": "一次用到 Task 的对话，正常结束与中途 Stop 各跑一次；两种收尾下输入框上方的百分比徽标都不消失；对照最后一条 usage.updated 的键集是否含 context",
+  "sessionId": "session-live-1789803932663-ara37a1",
+  "verdict": {
+    "pass": true,
+    "survivesNormalFinish": true,
+    "survivesStop": true
+  },
+  "chip": {
+    "initialEmptySession": {
+      "present": false,
+      "text": null,
+      "visible": false
+    },
+    "afterNormalFinish": {
+      "present": true,
+      "visible": true,
+      "text": "2%",
+      "tag": "BUTTON",
+      "rect": {
+        "x": 943,
+        "y": 658,
+        "w": 32,
+        "h": 24
+      }
+    },
+    "justBeforeStop": {
+      "present": true,
+      "visible": true,
+      "text": "2%",
+      "tag": "BUTTON",
+      "rect": {
+        "x": 913,
+        "y": 658,
+        "w": 32,
+        "h": 24
+      }
+    },
+    "afterStop": {
+      "present": true,
+      "visible": true,
+      "text": "0%",
+      "tag": "BUTTON",
+      "rect": {
+        "x": 943,
+        "y": 658,
+        "w": 32,
+        "h": 24
+      }
+    }
+  },
+  "usage": {
+    "initialEmptySession": {
+      "hasFacts": false,
+      "usageIsNull": true,
+      "keys": null,
+      "hasContext": false,
+      "contextKeys": null,
+      "usage": null
+    },
+    "afterNormalFinish": {
+      "hasFacts": true,
+      "usageIsNull": false,
+      "keys": [
+        "cacheRead",
+        "cacheWrite",
+        "context",
+        "costUsd",
+        "delegated",
+        "input",
+        "output",
+        "reasoning",
+        "session",
+        "totalTokens"
+      ],
+      "hasContext": true,
+      "contextKeys": ["contextWindow", "percent", "tokens"],
+      "usage": {
+        "input": 2,
+        "output": 954,
+        "cacheRead": 12988,
+        "cacheWrite": 1779,
+        "totalTokens": 15723,
+        "costUsd": 0,
+        "reasoning": 951,
+        "context": {
+          "tokens": 15723,
+          "contextWindow": 1000000,
+          "percent": 1.5723
+        },
+        "session": {
+          "turns": 4,
+          "toolResults": 1,
+          "input": 16,
+          "output": 6648,
+          "cacheRead": 70178,
+          "cacheWrite": 29946,
+          "totalTokens": 106788,
+          "costUsd": 0
+        },
+        "delegated": {
+          "input": 8,
+          "output": 3449,
+          "cacheRead": 33848,
+          "cacheWrite": 15179,
+          "totalTokens": 52484,
+          "costUsd": 0
+        }
+      }
+    },
+    "justBeforeStop": {
+      "hasFacts": true,
+      "usageIsNull": false,
+      "keys": [
+        "cacheRead",
+        "cacheWrite",
+        "context",
+        "costUsd",
+        "delegated",
+        "input",
+        "output",
+        "reasoning",
+        "session",
+        "totalTokens"
+      ],
+      "hasContext": true,
+      "contextKeys": ["contextWindow", "percent", "tokens"],
+      "usage": {
+        "input": 2,
+        "output": 1253,
+        "cacheRead": 15772,
+        "cacheWrite": 1287,
+        "totalTokens": 18314,
+        "costUsd": 0,
+        "reasoning": 291,
+        "context": {
+          "tokens": 18378,
+          "contextWindow": 1000000,
+          "percent": 1.8377999999999999
+        },
+        "session": {
+          "turns": 6,
+          "toolResults": 1,
+          "input": 20,
+          "output": 8870,
+          "cacheRead": 100717,
+          "cacheWrite": 32238,
+          "totalTokens": 141845,
+          "costUsd": 0
+        },
+        "delegated": {
+          "input": 8,
+          "output": 3449,
+          "cacheRead": 33848,
+          "cacheWrite": 15179,
+          "totalTokens": 52484,
+          "costUsd": 0
+        }
+      }
+    },
+    "afterStop": {
+      "hasFacts": true,
+      "usageIsNull": false,
+      "keys": [
+        "cacheRead",
+        "cacheWrite",
+        "context",
+        "costUsd",
+        "delegated",
+        "input",
+        "output",
+        "session",
+        "totalTokens"
+      ],
+      "hasContext": true,
+      "contextKeys": ["contextWindow", "percent", "tokens"],
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0,
+        "context": {
+          "tokens": 0,
+          "contextWindow": 1000000,
+          "percent": 0
+        },
+        "session": {
+          "turns": 7,
+          "toolResults": 2,
+          "input": 24,
+          "output": 9249,
+          "cacheRead": 117776,
+          "cacheWrite": 41035,
+          "totalTokens": 168084,
+          "costUsd": 0
+        },
+        "delegated": {
+          "input": 10,
+          "output": 3731,
+          "cacheRead": 33848,
+          "cacheWrite": 22622,
+          "totalTokens": 60211,
+          "costUsd": 0
+        }
+      }
+    }
+  },
+  "usageUpdatedBroadcasts": [
+    {
+      "at": 1789804997747,
+      "sessionId": "session-1789804957167-wiru4he",
+      "keys": [
+        "cacheRead",
+        "cacheWrite",
+        "context",
+        "costUsd",
+        "input",
+        "output",
+        "reasoning",
+        "session",
+        "totalTokens"
+      ],
+      "hasContext": true,
+      "payload": {
+        "input": 2,
+        "output": 1264,
+        "cacheRead": 0,
+        "cacheWrite": 10688,
+        "totalTokens": 11954,
+        "costUsd": 0,
+        "reasoning": 564,
+        "context": {
+          "tokens": 11954,
+          "contextWindow": 1000000,
+          "percent": 1.1954
+        },
+        "session": {
+          "turns": 1,
+          "toolResults": 0,
+          "input": 2,
+          "output": 1264,
+          "cacheRead": 0,
+          "cacheWrite": 10688,
+          "totalTokens": 11954,
+          "costUsd": 0
+        }
+      }
+    },
+    {
+      "at": 1789805212151,
+      "sessionId": "session-1789805117473-jieqyi1",
+      "keys": ["cacheRead", "cacheWrite", "costUsd", "input", "output", "pending", "totalTokens"],
+      "hasContext": false,
+      "payload": {
+        "input": 2,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 10741,
+        "totalTokens": 10743,
+        "costUsd": 0,
+        "pending": true
+      }
+    },
+    {
+      "at": 1789805262652,
+      "sessionId": "session-1789805117473-jieqyi1",
+      "keys": [
+        "cacheRead",
+        "cacheWrite",
+        "context",
+        "costUsd",
+        "input",
+        "output",
+        "reasoning",
+        "session",
+        "totalTokens"
+      ],
+      "hasContext": true,
+      "payload": {
+        "input": 2,
+        "output": 4046,
+        "cacheRead": 0,
+        "cacheWrite": 10741,
+        "totalTokens": 14789,
+        "costUsd": 0,
+        "reasoning": 2998,
+        "context": {
+          "tokens": 14849,
+          "contextWindow": 1000000,
+          "percent": 1.4848999999999999
+        },
+        "session": {
+          "turns": 1,
+          "toolResults": 0,
+          "input": 2,
+          "output": 4046,
+          "cacheRead": 0,
+          "cacheWrite": 10741,
+          "totalTokens": 14789,
+          "costUsd": 0
+        }
+      }
+    },
+    {
+      "at": 1789805271835,
+      "sessionId": "session-1789805117473-jieqyi1",
+      "keys": ["cacheRead", "cacheWrite", "costUsd", "input", "output", "pending", "totalTokens"],
+      "hasContext": false,
+      "payload": {
+        "input": 2,
+        "output": 0,
+        "cacheRead": 10741,
+        "cacheWrite": 4139,
+        "totalTokens": 14882,
+        "costUsd": 0,
+        "pending": true
+      }
+    },
+    {
+      "at": 1789805331435,
+      "sessionId": "session-1789805117473-jieqyi1",
+      "keys": [
+        "cacheRead",
+        "cacheWrite",
+        "context",
+        "costUsd",
+        "input",
+        "output",
+        "reasoning",
+        "session",
+        "totalTokens"
+      ],
+      "hasContext": true,
+      "payload": {
+        "input": 2,
+        "output": 138,
+        "cacheRead": 10741,
+        "cacheWrite": 4139,
+        "totalTokens": 15020,
+        "costUsd": 0,
+        "reasoning": 8,
+        "context": {
+          "tokens": 15127,
+          "contextWindow": 1000000,
+          "percent": 1.5127
+        },
+        "session": {
+          "turns": 2,
+          "toolResults": 0,
+          "input": 4,
+          "output": 4184,
+          "cacheRead": 10741,
+          "cacheWrite": 14880,
+          "totalTokens": 29809,
+          "costUsd": 0
+        }
+      }
+    },
+    {
+      "at": 1789805355293,
+      "sessionId": "session-1789805117473-jieqyi1",
+      "keys": ["cacheRead", "cacheWrite", "costUsd", "input", "output", "pending", "totalTokens"],
+      "hasContext": false,
+      "payload": {
+        "input": 2,
+        "output": 0,
+        "cacheRead": 14880,
+        "cacheWrite": 460,
+        "totalTokens": 15342,
+        "costUsd": 0,
+        "pending": true
+      }
+    },
+    {
+      "at": 1789805362657,
+      "sessionId": "session-1789805117473-jieqyi1",
+      "keys": [
+        "cacheRead",
+        "cacheWrite",
+        "context",
+        "costUsd",
+        "input",
+        "output",
+        "reasoning",
+        "session",
+        "totalTokens"
+      ],
+      "hasContext": true,
+      "payload": {
+        "input": 2,
+        "output": 712,
+        "cacheRead": 14880,
+        "cacheWrite": 460,
+        "totalTokens": 16054,
+        "costUsd": 0,
+        "reasoning": 167,
+        "context": {
+          "tokens": 16054,
+          "contextWindow": 1000000,
+          "percent": 1.6054
+        },
+        "session": {
+          "turns": 3,
+          "toolResults": 0,
+          "input": 6,
+          "output": 4896,
+          "cacheRead": 25621,
+          "cacheWrite": 15340,
+          "totalTokens": 45863,
+          "costUsd": 0
+        }
+      }
+    },
+    {
+      "at": 1789805362673,
+      "sessionId": "session-1789805117473-jieqyi1",
+      "keys": [
+        "cacheRead",
+        "cacheWrite",
+        "context",
+        "costUsd",
+        "delegated",
+        "input",
+        "output",
+        "reasoning",
+        "session",
+        "totalTokens"
+      ],
+      "hasContext": true,
+      "payload": {
+        "input": 2,
+        "output": 712,
+        "cacheRead": 14880,
+        "cacheWrite": 460,
+        "totalTokens": 16054,
+        "costUsd": 0,
+        "reasoning": 167,
+        "context": {
+          "tokens": 16054,
+          "contextWindow": 1000000,
+          "percent": 1.6054
+        },
+        "session": {
+          "turns": 3,
+          "toolResults": 1,
+          "input": 12,
+          "output": 6455,
+          "cacheRead": 40783,
+          "cacheWrite": 23731,
+          "totalTokens": 70981,
+          "costUsd": 0
+        },
+        "delegated": {
+          "input": 6,
+          "output": 1559,
+          "cacheRead": 15162,
+          "cacheWrite": 8391,
+          "totalTokens": 25118,
+          "costUsd": 0,
+          "reasoning": 1148
+        }
+      }
+    }
+  ],
+  "notes": [
+    "PASS on the wording: the chip is still mounted, visible and non-empty after BOTH endings.",
+    "But a Stop RESETS the number. The last two usage.updated broadcasts after the Stop carry context {tokens:0, contextWindow:1000000, percent:0} and totalTokens:0, so the chip reads 0% while the conversation plainly holds ~18k tokens. `session` and `delegated` in the same payload keep their real totals, so this is the `context` sub-object being zeroed, not the whole payload.",
+    "The key set contains `context` in every broadcast that has one. The interleaved in-flight broadcasts (keys: cacheRead/cacheWrite/costUsd/input/output/pending/totalTokens) carry no `context` at all; the chip survives those because the reducer keeps the last good value.",
+    "`reasoning` is present in the settled broadcasts and absent from the two zeroed post-Stop ones."
+  ],
+  "subagentPanel": {
+    "afterNormalFinish": {
+      "laneCount": 1,
+      "lanes": [
+        {
+          "key": "toolu_01VCjkfPgLsYT0Ul23Kow3FK",
+          "parentToolCallId": "toolu_01VCjkfPgLsYT0Ul23Kow3FK",
+          "agentId": "1914dc44-4c22-4118-8ca3-420f60ddeda8",
+          "agentType": "explorer",
+          "description": "统计 scripts 下 .mjs 文件",
+          "status": "completed",
+          "rowCount": 7,
+          "lastRows": [
+            {
+              "kind": "tool",
+              "name": "glob",
+              "status": "ok"
+            },
+            {
+              "kind": "tool",
+              "name": "glob",
+              "status": "ok"
+            },
+            {
+              "kind": "tool",
+              "name": "bash",
+              "status": "ok"
+            },
+            {
+              "kind": "tool",
+              "name": "bash",
+              "status": "ok"
+            },
+            {
+              "kind": "text",
+              "text": "<files>\n- scripts/afterPack.mjs 等 43 个顶层 `.mjs` — 直接位于 scripts/ 下\n- scripts/__tests__/*.test.mjs（9 个）、scripts/runtime-baseline/*.mjs（11 个）、scripts/probes/b1a-shared-skills-probe.mjs（1 个）— 子目录中的 20 个 `.mjs`\n</files>\n\n<ans"
+            }
+          ],
+          "progress": null,
+          "pendingPermission": null,
+          "report": {
+            "status": "completed",
+            "agentType": "explorer",
+            "resolvedModel": "claude/claude-opus-5",
+            "totalDurationMs": 193812,
+            "totalTokens": 52484,
+            "totalToolUseCount": 5
+          }
+        }
+      ],
+      "agentIndex": {
+        "1914dc44-4c22-4118-8ca3-420f60ddeda8": "toolu_01VCjkfPgLsYT0Ul23Kow3FK"
+      },
+      "permissionOrigin": {}
+    },
+    "justBeforeStop": {
+      "laneCount": 2,
+      "lanes": [
+        {
+          "key": "toolu_01VCjkfPgLsYT0Ul23Kow3FK",
+          "parentToolCallId": "toolu_01VCjkfPgLsYT0Ul23Kow3FK",
+          "agentId": "1914dc44-4c22-4118-8ca3-420f60ddeda8",
+          "agentType": "explorer",
+          "description": "统计 scripts 下 .mjs 文件",
+          "status": "completed",
+          "rowCount": 7,
+          "lastRows": [
+            {
+              "kind": "tool",
+              "name": "glob",
+              "status": "ok"
+            },
+            {
+              "kind": "tool",
+              "name": "glob",
+              "status": "ok"
+            },
+            {
+              "kind": "tool",
+              "name": "bash",
+              "status": "ok"
+            },
+            {
+              "kind": "tool",
+              "name": "bash",
+              "status": "ok"
+            },
+            {
+              "kind": "text",
+              "text": "<files>\n- scripts/afterPack.mjs 等 43 个顶层 `.mjs` — 直接位于 scripts/ 下\n- scripts/__tests__/*.test.mjs（9 个）、scripts/runtime-baseline/*.mjs（11 个）、scripts/probes/b1a-shared-skills-probe.mjs（1 个）— 子目录中的 20 个 `.mjs`\n</files>\n\n<ans"
+            }
+          ],
+          "progress": null,
+          "pendingPermission": null,
+          "report": {
+            "status": "completed",
+            "agentType": "explorer",
+            "resolvedModel": "claude/claude-opus-5",
+            "totalDurationMs": 193812,
+            "totalTokens": 52484,
+            "totalToolUseCount": 5
+          }
+        },
+        {
+          "key": "toolu_01YUlrG2HEO2C5Xv34nzclRC",
+          "parentToolCallId": "toolu_01YUlrG2HEO2C5Xv34nzclRC",
+          "agentId": "86894bcb-0d43-45b8-88c8-9359b974abb7",
+          "agentType": "explorer",
+          "description": "摘要 runtime/plugins 各 index.ts",
+          "status": "running",
+          "rowCount": 3,
+          "lastRows": [
+            {
+              "kind": "text",
+              "text": "I'll start by confirming the directory listing, then read the files one at a time."
+            },
+            {
+              "kind": "tool",
+              "name": "glob",
+              "status": "ok"
+            },
+            {
+              "kind": "tool",
+              "name": "bash",
+              "status": "ok"
+            }
+          ],
+          "progress": null,
+          "pendingPermission": null,
+          "report": null
+        }
+      ],
+      "agentIndex": {
+        "1914dc44-4c22-4118-8ca3-420f60ddeda8": "toolu_01VCjkfPgLsYT0Ul23Kow3FK",
+        "86894bcb-0d43-45b8-88c8-9359b974abb7": "toolu_01YUlrG2HEO2C5Xv34nzclRC"
+      },
+      "permissionOrigin": {}
+    },
+    "afterStop": {
+      "laneCount": 2,
+      "lanes": [
+        {
+          "key": "toolu_01VCjkfPgLsYT0Ul23Kow3FK",
+          "parentToolCallId": "toolu_01VCjkfPgLsYT0Ul23Kow3FK",
+          "agentId": "1914dc44-4c22-4118-8ca3-420f60ddeda8",
+          "agentType": "explorer",
+          "description": "统计 scripts 下 .mjs 文件",
+          "status": "completed",
+          "rowCount": 7,
+          "lastRows": [
+            {
+              "kind": "tool",
+              "name": "glob",
+              "status": "ok"
+            },
+            {
+              "kind": "tool",
+              "name": "glob",
+              "status": "ok"
+            },
+            {
+              "kind": "tool",
+              "name": "bash",
+              "status": "ok"
+            },
+            {
+              "kind": "tool",
+              "name": "bash",
+              "status": "ok"
+            },
+            {
+              "kind": "text",
+              "text": "<files>\n- scripts/afterPack.mjs 等 43 个顶层 `.mjs` — 直接位于 scripts/ 下\n- scripts/__tests__/*.test.mjs（9 个）、scripts/runtime-baseline/*.mjs（11 个）、scripts/probes/b1a-shared-skills-probe.mjs（1 个）— 子目录中的 20 个 `.mjs`\n</files>\n\n<ans"
+            }
+          ],
+          "progress": null,
+          "pendingPermission": null,
+          "report": {
+            "status": "completed",
+            "agentType": "explorer",
+            "resolvedModel": "claude/claude-opus-5",
+            "totalDurationMs": 193812,
+            "totalTokens": 52484,
+            "totalToolUseCount": 5
+          }
+        },
+        {
+          "key": "toolu_01YUlrG2HEO2C5Xv34nzclRC",
+          "parentToolCallId": "toolu_01YUlrG2HEO2C5Xv34nzclRC",
+          "agentId": "86894bcb-0d43-45b8-88c8-9359b974abb7",
+          "agentType": "explorer",
+          "description": "摘要 runtime/plugins 各 index.ts",
+          "status": "stopped",
+          "rowCount": 3,
+          "lastRows": [
+            {
+              "kind": "text",
+              "text": "I'll start by confirming the directory listing, then read the files one at a time."
+            },
+            {
+              "kind": "tool",
+              "name": "glob",
+              "status": "ok"
+            },
+            {
+              "kind": "tool",
+              "name": "bash",
+              "status": "ok"
+            }
+          ],
+          "progress": null,
+          "pendingPermission": null,
+          "report": {
+            "status": "stopped",
+            "agentType": "explorer",
+            "resolvedModel": "claude/claude-opus-5",
+            "totalDurationMs": 14746,
+            "totalTokens": 7727,
+            "totalToolUseCount": 2
+          }
+        }
+      ],
+      "agentIndex": {
+        "1914dc44-4c22-4118-8ca3-420f60ddeda8": "toolu_01VCjkfPgLsYT0Ul23Kow3FK",
+        "86894bcb-0d43-45b8-88c8-9359b974abb7": "toolu_01YUlrG2HEO2C5Xv34nzclRC"
+      },
+      "permissionOrigin": {}
+    }
+  },
+  "timings": {
+    "normalTurn": {},
+    "stopRound": {
+      "sentToStopMs": 84705,
+      "stopToIdleMs": 3655,
+      "totalMs": 88360,
+      "laneSeenAtMs": 70412
+    }
+  },
+  "statusTrails": {
+    "normal": null,
+    "stopRoundBeforeStop": [
+      {
+        "status": "idle",
+        "atMs": 19
+      },
+      {
+        "status": "running",
+        "atMs": 2401
+      },
+      {
+        "status": "waiting_permission",
+        "atMs": 77899
+      },
+      {
+        "status": "running",
+        "atMs": 79111
+      }
+    ],
+    "afterStopClick": [
+      {
+        "status": "running",
+        "atMs": 3
+      },
+      {
+        "status": "idle",
+        "atMs": 1233
+      }
+    ]
+  },
+  "permissionCardsHandled": {
+    "normal": [
+      {
+        "at": "2026-09-19T07:48:17.759Z",
+        "decision": "直接允许",
+        "cardTextHead": "权限 高风险 来自子 Agent · 统计 scripts 下 .mjs 文件 bash — 在工作区运行命令 ls -la scripts/ 2>&1 | head -50; echo \"---\"; pwd"
+      },
+      {
+        "at": "2026-09-19T07:48:54.321Z",
+        "decision": "直接允许",
+        "cardTextHead": "权限 高风险 来自子 Agent · 统计 scripts 下 .mjs 文件 bash — 在工作区运行命令 cd /home/ai/code/ai-client echo \"== top-level *.mjs ==\"; find scripts -maxdepth 1 -type f -name '*.mjs' | wc -l ..."
+      },
+      {
+        "at": "2026-09-19T07:49:12.391Z",
+        "decision": "直接允许",
+        "cardTextHead": "权限 高风险 来自子 Agent · 统计 scripts 下 .mjs 文件 bash — 在工作区运行命令 cd /home/ai/code/ai-client; find scripts -maxdepth 1 -type f -name '*.mjs' | sort | sed ..."
+      }
+    ],
+    "stop": [
+      {
+        "at": "2026-09-19T07:56:13.420Z",
+        "decision": "直接允许",
+        "clicked": "直接允许",
+        "card": {
+          "text": "权限\n高风险\n\n来自子 Agent · 摘要 runtime/plugins 各 index.ts\n\nbash — 在工作区运行命令\n\nls -la /home/ai/code/ai-client/src/runtime/plugins/ && echo \"---\" && find /home/ai/code/ai-client/src/runtime/plugins -maxdepth 2 -type f | sort && echo \"---SIZES---\" && wc -l /home/ai/code/ai-client/src/runtime/plugins/*/index.ts\n\n工作目录：/home/ai/code/ai-client\n\n项目：/home/ai/code/ai-client\n\n若 120 秒内未响应将自动拒绝\n直接允许\n本会话内允许\n直接拒绝\n\n「本会话内允许」会记住以 ls, echo, find, sort, wc 开头的命令 · 对本次会话内的所有代理生效，含子代理",
+          "buttons": ["直接允许", "本会话内允许", "直接拒绝"]
+        }
+      }
+    ]
+  },
+  "screenshots": [
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-18/model-18-badge-normal.png",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-18/model-18-badge-stop.png"
+  ]
+}

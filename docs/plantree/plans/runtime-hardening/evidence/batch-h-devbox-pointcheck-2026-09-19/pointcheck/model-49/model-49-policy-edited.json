@@ -1,0 +1,6 @@
+{
+  "permission": {
+    "bash": { "git status *": "allow", "curl *": "allow" },
+    "path": { "*t033-secret.txt": "deny" }
+  }
+}

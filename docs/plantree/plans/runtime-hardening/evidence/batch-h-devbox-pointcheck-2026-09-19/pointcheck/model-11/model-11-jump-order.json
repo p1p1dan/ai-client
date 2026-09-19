@@ -1,0 +1,39 @@
+{
+  "probe": "m11-jump-order.mjs",
+  "startedAt": "2026-09-19T07:33:36.126Z",
+  "rounds": [
+    {
+      "order": "first",
+      "kind": "absolute",
+      "clicked": "fileOpenIntent.ts home/ai/code/ai-client/src/renderer/stores",
+      "state": {
+        "tabs": ["/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts"],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+        "pendingCursor": null,
+        "currentCursorLine": 57
+      },
+      "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-11/model-11-jump-abs-first.png"
+    },
+    {
+      "order": "second",
+      "kind": "relative",
+      "clicked": "toolCard.ts src/renderer/components/chat",
+      "state": {
+        "tabs": [
+          "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+          "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts"
+        ],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+        "pendingCursor": {
+          "path": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "line": 464,
+          "column": 0
+        },
+        "currentCursorLine": 57
+      },
+      "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-11/model-11-jump-rel-second.png"
+    }
+  ],
+  "reset": 0,
+  "finishedAt": "2026-09-19T07:34:32.206Z"
+}

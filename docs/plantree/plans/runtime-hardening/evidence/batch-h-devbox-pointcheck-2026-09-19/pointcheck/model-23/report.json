@@ -1,0 +1,158 @@
+{
+  "criterion": "MODEL-23",
+  "question": "一个批过审批、答过问答的会话，关掉再打开，审批行与问答卡是否还在",
+  "sessionId": "session-live-1789801299008-x65un9n",
+  "howItWasBuilt": {
+    "questionCard": "第一回合 ask 工具，用户点选 staging 后点「继续」",
+    "permissionCard": {
+      "prompt": "读取 /etc/hostname 这个文件，把内容告诉我。",
+      "cardText": "权限\n需确认\n\nread — 读取文件内容\n\n路径\n\n/etc/hostname\n\n项目：/home/ai/code/ai-client\n\n若 120 秒内未响应将自动拒绝\n直接允许\n本会话内允许\n直接拒绝\n\n「本会话内允许」会记住 read 可访问 /etc/hostname · 对本次会话内的所有代理生效，含子代理",
+      "clicked": "直接允许",
+      "note": "只点「直接允许」，没有点「本会话内允许」"
+    }
+  },
+  "captures": {
+    "live": {
+      "messageCount": 6,
+      "blockTypeCounts": {
+        "text": 6,
+        "tool_call": 2,
+        "question": 1,
+        "tool_result": 2,
+        "permission_activity": 1,
+        "permission_request": 1
+      },
+      "cardsExpanded": [
+        {
+          "text": "回答 部署环境用 staging 还是 production？ staging",
+          "buttons": [],
+          "interactiveOptions": 0
+        },
+        {
+          "text": "执行 · 每次询问 1% Claude Opus 5",
+          "buttons": ["执行 · 每次询问", "1%", "Claude Opus 5"],
+          "interactiveOptions": 0
+        }
+      ],
+      "permissionActivityRows": [],
+      "mentions": {
+        "allow": 0,
+        "allowed": 1,
+        "permissionWord": 1,
+        "ask": 5
+      },
+      "screenshots": [
+        "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-23/model-23-replay-前.png",
+        "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-23/model-23-replay-前-展开.png"
+      ]
+    },
+    "switchBack": {
+      "messageCount": 6,
+      "blockTypeCounts": {
+        "text": 6,
+        "tool_call": 2,
+        "question": 1,
+        "tool_result": 2,
+        "permission_activity": 1,
+        "permission_request": 1
+      },
+      "note": "只采了折叠态 DOM；store 块构成与 live 完全一致",
+      "permissionActivityRows": []
+    },
+    "afterRestart": {
+      "messageCount": 6,
+      "blockTypeCounts": {
+        "text": 6,
+        "thinking": 3,
+        "tool_call": 2,
+        "tool_result": 2
+      },
+      "cardsExpanded": [
+        {
+          "text": "执行 · 每次询问 Claude Opus 5",
+          "buttons": ["执行 · 每次询问", "Claude Opus 5"],
+          "interactiveOptions": 0
+        }
+      ],
+      "permissionActivityRows": [],
+      "mentions": {
+        "allow": 0,
+        "allowed": 0,
+        "permissionWord": 1,
+        "ask": 5
+      },
+      "screenshots": [
+        "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-23/model-23-replay-后.png",
+        "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-23/model-23-replay-后-展开.png",
+        "model-23/model-23-replay-后-顶部.png"
+      ],
+      "workGroupSummaries": ["3 steps processed", "2 steps processed"]
+    }
+  },
+  "comparison": [
+    {
+      "item": "消息条数",
+      "live": 6,
+      "switchBack": 6,
+      "afterRestart": 6,
+      "verdict": "一致"
+    },
+    {
+      "item": "question 块",
+      "live": 1,
+      "switchBack": 1,
+      "afterRestart": 0,
+      "verdict": "重启后消失"
+    },
+    {
+      "item": "permission_request 块",
+      "live": 1,
+      "switchBack": 1,
+      "afterRestart": 0,
+      "verdict": "重启后消失"
+    },
+    {
+      "item": "permission_activity 块",
+      "live": 1,
+      "switchBack": 1,
+      "afterRestart": 0,
+      "verdict": "重启后消失"
+    },
+    {
+      "item": "thinking 块",
+      "live": 0,
+      "switchBack": 0,
+      "afterRestart": 3,
+      "verdict": "重启后反而多出来（实时流没落进 store，回放从 JSONL 重建）"
+    },
+    {
+      "item": "审批可见痕迹",
+      "live": "工具行后缀「· 已允许」（已允许出现 1 次）",
+      "switchBack": "同 live",
+      "afterRestart": "无（已允许出现 0 次）",
+      "verdict": "不在了"
+    },
+    {
+      "item": "问答卡",
+      "live": "冻结问答卡：回答 / 部署环境用 staging 还是 production？/ staging",
+      "switchBack": "同 live",
+      "afterRestart": "普通工具行「已询问 + 问题文本」，答案要展开工具行才看得到",
+      "verdict": "退化为普通工具行"
+    },
+    {
+      "item": "PermissionActivityRows（li[data-tone]）",
+      "live": 0,
+      "switchBack": 0,
+      "afterRestart": 0,
+      "verdict": "三处都没有；isQuietPermissionActivity 把 result=allow 的记录全部过滤掉了，所以即使 live 也没有这一行"
+    }
+  ],
+  "extraFinding": "结算后的回合把整个过程折进「Worked for …」工作组（<details>），默认收起。第一次只截折叠态时三份截图都看不到任何卡片——审批行与问答卡在 live 也要点开工作组才可见。重启后同一位置的摘要文案变成英文的「N steps processed」。",
+  "verdict": {
+    "approvalRowSurvives": false,
+    "questionCardSurvives": false,
+    "questionCardDegradesToToolRow": true,
+    "messageCountSame": true,
+    "matchesPrepNotePrediction": true
+  }
+}

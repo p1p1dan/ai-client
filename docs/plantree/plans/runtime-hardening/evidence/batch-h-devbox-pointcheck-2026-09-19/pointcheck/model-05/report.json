@@ -1,0 +1,66 @@
+{
+  "ranAt": "2026-09-19T09:35:32.611Z",
+  "build": {
+    "branch": "feat/runtime-evolution",
+    "head": "9fa5a511"
+  },
+  "app": {
+    "agentDir": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent",
+    "credential": "auth.json entry \"claude\"",
+    "model": "claude/claude-opus-5",
+    "permissionGear": "执行 · 每次询问"
+  },
+  "probe": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/tools/m47-m05-m06.mjs",
+  "criterion": "MODEL-5",
+  "criterionText": "GUI 里重命名一个会话，用 pi CLI 打开同一个 JSONL。判据：pi CLI 的会话列表 / 标题栏显示的是 GUI 改过的名字，还是空。(04-model.md:80)",
+  "verdict": "pi 显示为空 —— 与 prep-notes 预判一致",
+  "sessionId": "session-live-1789808581115-3p910tm",
+  "sessionFile": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-1789808581115-3p910tm.jsonl",
+  "rename": {
+    "via": "double-click + Enter",
+    "newTitle": "点验重命名-0919",
+    "sessionIndexTitleBefore": "用一句话说明这个仓库 package.json 里 name 字段的值是什么",
+    "sessionIndexTitleAfter": "点验重命名-0919",
+    "sessionIndexFile": "/home/ai/.config/jyw-ai-client-dev/session-index.json",
+    "storeTitleAfter": "点验重命名-0919",
+    "jsonlSessionInfoEntriesBefore": 0,
+    "jsonlSessionInfoEntriesAfter": 0,
+    "jsonlLinesUnchanged": true,
+    "jsonlNameMentionsAfter": [
+      {
+        "index": 5,
+        "whatItReallyIs": "assistant message text about package.json's `name` field — not a session name entry"
+      }
+    ]
+  },
+  "simulatedGetSessionName": {
+    "implementation": "pi bundle chunk-OMWWHBTG.js: getSessionName(){ for (i = entries.length-1; i>=0; i--) if (entry.type === \"session_info\") return entry.name?.trim() || undefined }",
+    "result": null,
+    "meaning": "undefined — there is no session_info entry in this file at all"
+  },
+  "piObserved": {
+    "howOpened": "GUI 的 TUI 按钮（真鼠标点击），冷启动的 pi 进程，读的就是这份 JSONL",
+    "statusBar": "~/code/ai-client (feat/runtime-evolution)",
+    "statusBarWouldShow": "pi 的状态栏在有名字时是 `<cwd> (<branch>) • <sessionName>`；这里没有 ` • 点验重命名-0919`",
+    "nameCommand": {
+      "sent": "/name",
+      "output": "Warning: Usage: /name <name>"
+    },
+    "nameCommandMeaning": "`/name` 不带参数时，pi 有名字就打印 “Session name …”，没有就落到 Usage 警告分支 —— 落到警告分支即 getSessionName() 返回 undefined",
+    "terminalTitleOsc": [],
+    "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-05/model-05-rename-in-pi.png"
+  },
+  "mechanism": "GUI 重命名只改 session-index.json 的 title（SessionIndexService.rename）；能写回 JSONL 的 NativeSessionIndexAdapter.rename() 在生产代码里没有实例化。pi CLI 只认 JSONL 里的 session_info.name，两边根本不在同一个地方。",
+  "crossCheck": {
+    "importedSession": "导入会话同理：标题写成 {\"kind\":\"fact\",\"fact\":\"name\",\"name\":\"…\",\"type\":\"custom\",\"customType\":\"aiclient.v4\"}，仍不是 pi 的 session_info，所以 pi 对导入会话也看不到名字。"
+  },
+  "evidence": [
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-05/model-05-pi-name-command.txt",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-05/model-05-rename-in-gui.png",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-05/model-05-rename-in-pi.png",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-05/model-05-rename.json",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-05/model-05-tui-fresh-open.png",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-05/model-05-tui-startup.txt",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/model-05/model-05-tui.json"
+  ]
+}

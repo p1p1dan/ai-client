@@ -1,0 +1,9 @@
+/name                                                                                         → name        Set session display name                                                        
+~/code/ai-client (feat/runtime-evolution)
+↑8 ↓1.3k R22k W20k CH98.1% 1.2%/1.0M (auto)                    (claude) claude-opus-5 • medium Warning: Usage: /name <name>                                                                 
+
+──────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                              
+──────────────────────────────────────────────────────────────────────────────────────────────
+~/code/ai-client (feat/runtime-evolution)
+↑8 ↓1.3k R22k W20k CH98.1% 1.2%/1.0M (auto)                    (claude) claude-opus-5 • medium

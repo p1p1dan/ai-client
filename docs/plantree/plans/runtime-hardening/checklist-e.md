@@ -314,6 +314,13 @@ Role: reference。[T032](roadmap.md) 的产出，取代[批次 D 的草案](evid
 | PKG 组整组的载体前提 | 组名与多条判据默认「Windows 加密机上验 electron-utility 载体」 | **Windows 打包态没有这个载体**：`PiWorkerProcess.ts:79-92` 对「已打包 + win32」写死 `spawn(resources\node-runtime\node.exe)`，三个 utility 功能（评审 / 分支名 / 提交信息）走同一个 fork 函数。凡判据点名 electron-utility 的项，在本轮只能取到 bundled-node 那一半，另一半要留给 Linux / macOS 产物；受影响的项现场记「半边 ✅ + 半边 🚫（载体不存在）」并写明这句话 | 该分支是 D20 的修补（加密 Windows 上 GUI utilityProcess 不工作），本次 Build 的三份 worker-smoke 也印证：Windows `carrier=bundled-node`，Linux / macOS 才是 `electron-utility`。不写明会被日后读成「utility 载体已在 Windows 全验」。另：utility 那条链建 runtime 时 `traceDir: null`（`nativeUtility.ts:154`），`runs.jsonl` 里不会有它的调用记录 |
 | PKG-19 | 判据限定 macOS / Linux 打包产物 | 本轮标 🚫（环境不具备），随下一次非 Windows 产物另排 | 加密测试机是 Windows |
 | 设置页导航路径（2026-09-18 界面调整，影响 DEV-36、MODEL-40、PKG-23 与 2.2 节第 1 / 4 条、2.5 节第 3 条的取证路径） | 判据与取证方式默认这些面板都在「设置 → Pi」一页上 | Pi 页按用户反馈（「内容太多太杂」）拆成三页，**面板与文案一个都没删，只是换了页**：① **设置 → Pi** 只剩「AI 服务」+「Pi 模型管理 / 提示缓存」；② 新增 **设置 → 扩展**（插件、Pi 资源 / Agent features、子代理）；③ 新增 **设置 → 数据迁移**（搬运个人 Pi 配置、从 Claude Code / Codex 导入会话）；④「权限策略」整块挪到 **设置 → 高级**，并改为**默认折叠**（标题与说明常显，规则表要点一下「权限规则」才展开）。取证时按新路径导航即可，判据文字本身不变 | 旧 localStorage 值由 `restoreSettingsCategory` 跟着面板走（`piResources → extensions`、`piPermissions → advanced`），不会开到空页；`AgentMigrationSettings` 的 A 轮闸门 `LOCAL_SETUP_ENTRY_DISABLED` 写在组件内部，换页不影响，`aRoundMigrationGate.test.ts` 原样通过。DEV-36 的两句文案仍在 `PiPluginsSettings.tsx`（`piPluginsPermissionNoticeStatic.test.ts` 逐字钉住），只是该页现在挂在「扩展」下 |
+| MODEL-20（2026-09-19） | 「委派一个会撞 deny 的子代理」，示例 `~/.ssh/id_rsa` | 改用 `*.env` 规则，提示词须声明「点验权限策略、预期被拒、不要绕过」 | 模型对 `~/.ssh` 例子自行拒绝，0 工具调用，权限系统未被叫到 |
+| MODEL-20（2026-09-19） | 「审批行上能读出是哪个子代理」 | 判据不变，但要注明**硬编码路径 deny 不产生审批行**（`tools/index.ts:177-178` 短路），要用会走闸门的 bash ask 卡撞 deny | F7 |
+| MODEL-49（2026-09-19） | 第一条管道命令用中性措辞 | 提示词点明「example.invalid 是保留域名不解析 / 要看的是闸门在执行前拦下 / 预期被拒」 | 中性措辞下模型自拒，71 秒白跑 |
+| MODEL-49 第三格（2026-09-19） | 「改文件后同一会话不变、新开会话才变」 | 措辞成立，**不需要重启层**；补一句「设置页权限规则面板原话与此一致」 | 实测新会话即生效 |
+| MODEL-23（2026-09-19） | 「审批行与问答卡是否还在」 | 预期写死：切会话来回都在；重启回放**审批痕迹不在、问答卡退化为普通工具行**；且实时态下二者默认折在工作组里要展开才见 | 类型层无 permission / question 历史块 |
+| MODEL-48（2026-09-19） | 「`ps` 过滤 `--session` 抓不到，pi 会改写进程标题，要在 spawn 后的启动窗口内抓」 | 补：内嵌 pi 是 Electron 二进制以 node 模式重执行，约 1 秒内 argv 改写成 `pi`；识别方式是「Electron 主进程的非 `--type=` 直接子进程」，不是「exe 是 node」 | MODEL-47 实测 |
+| MODEL-11（2026-09-19） | 「点击命中能打开对应文件并跳到行号」 | 补一格：编辑器已开着别的文件时再点一条命中也要跳行 | F1 只在第二次才暴露 |
 
 ### 5.2 不需要人工执行的项
 

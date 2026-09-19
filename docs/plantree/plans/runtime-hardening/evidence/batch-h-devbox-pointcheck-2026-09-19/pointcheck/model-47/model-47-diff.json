@@ -1,0 +1,33 @@
+{
+  "linesBefore": 8,
+  "linesAfter": 10,
+  "addedLines": 2,
+  "added": [
+    {
+      "index": 8,
+      "type": "message",
+      "kind": null,
+      "id": "0e8c0d60",
+      "parentId": "e872bea4-1e36-4530-b9d4-7ae6e3bf5cac",
+      "role": "user",
+      "customType": null,
+      "textHead": "再用一句话说明 version 字段的值。",
+      "bytes": 234
+    },
+    {
+      "index": 9,
+      "type": "message",
+      "kind": null,
+      "id": "b1295c28",
+      "parentId": "0e8c0d60",
+      "role": "assistant",
+      "customType": null,
+      "textHead": " `version` 字段的值是 `1.0.0-test.13`。",
+      "bytes": 1929
+    }
+  ],
+  "duplicateIds": [],
+  "duplicateTextHeads": [],
+  "headerUnchanged": true,
+  "chainBreaks": []
+}

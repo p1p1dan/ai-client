@@ -1,0 +1,114 @@
+{
+  "file": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-claude-code-c3abf416-6c97-4ef5-824d-47143b9f0a4d.jsonl",
+  "bytes": 75812,
+  "lines": 77,
+  "header": {
+    "parsed": true,
+    "keys": ["kind", "version", "id", "createdAt", "cwd", "type", "timestamp"],
+    "v4": true,
+    "v3": true,
+    "raw": "{\"kind\":\"header\",\"version\":4,\"id\":\"import-claude-code-c3abf416-6c97-4ef5-824d-47143b9f0a4d\",\"createdAt\":1789810144784,\"cwd\":\"/home/ai/code/ai-client\",\"type\":\"session\",\"timestamp\":\"2026-09-19T09:29:04.784Z\"}"
+  },
+  "firstEntries": [
+    {
+      "index": 0,
+      "type": "session",
+      "kind": "header",
+      "id": "import-claude-code-c3abf416-6c97-4ef5-824d-47143b9f0a4d",
+      "parentId": null,
+      "role": null,
+      "customType": null,
+      "textHead": "",
+      "bytes": 206
+    },
+    {
+      "index": 1,
+      "type": "custom",
+      "kind": "entry",
+      "id": "d88f475a-fcbe-4473-80c3-141e64991bcb",
+      "parentId": null,
+      "role": null,
+      "customType": "aiclient.legacy-import.provenance",
+      "textHead": "",
+      "bytes": 634
+    },
+    {
+      "index": 2,
+      "type": "custom",
+      "kind": "fact",
+      "id": "a0838e87-4e71-494e-b9f6-6fda50292d95",
+      "parentId": "d88f475a-fcbe-4473-80c3-141e64991bcb",
+      "role": null,
+      "customType": "aiclient.v4",
+      "textHead": "",
+      "bytes": 274
+    },
+    {
+      "index": 3,
+      "type": "custom",
+      "kind": "entry",
+      "id": "9a465c4f-b116-45bf-ae4a-3c95b179b054",
+      "parentId": "d88f475a-fcbe-4473-80c3-141e64991bcb",
+      "role": null,
+      "customType": "aiclient.legacy-import.display",
+      "textHead": "",
+      "bytes": 374
+    },
+    {
+      "index": 4,
+      "type": "message",
+      "kind": "entry",
+      "id": "bc2aad31-ecb5-41d5-bf11-0fc5bfd38573",
+      "parentId": "9a465c4f-b116-45bf-ae4a-3c95b179b054",
+      "role": "user",
+      "customType": null,
+      "textHead": "/model",
+      "bytes": 246
+    },
+    {
+      "index": 5,
+      "type": "message",
+      "kind": "entry",
+      "id": "0a71423a-a37f-45fd-89f3-235bead6f2e9",
+      "parentId": "bc2aad31-ecb5-41d5-bf11-0fc5bfd38573",
+      "role": "user",
+      "customType": null,
+      "textHead": "help me install this skill:https://github.com/SeemSeam/plan-",
+      "bytes": 304
+    },
+    {
+      "index": 6,
+      "type": "custom",
+      "kind": "entry",
+      "id": "01cc8b15-c346-48de-8284-76f3927c7e06",
+      "parentId": "0a71423a-a37f-45fd-89f3-235bead6f2e9",
+      "role": null,
+      "customType": "aiclient.legacy-import.display",
+      "textHead": "",
+      "bytes": 497
+    },
+    {
+      "index": 7,
+      "type": "custom",
+      "kind": "entry",
+      "id": "6145215b-62f0-4fa3-8b6d-163dd97a54a9",
+      "parentId": "01cc8b15-c346-48de-8284-76f3927c7e06",
+      "role": null,
+      "customType": "aiclient.legacy-import.display",
+      "textHead": "",
+      "bytes": 497
+    }
+  ],
+  "simulatedName": {
+    "file": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/sessions/import-claude-code-c3abf416-6c97-4ef5-824d-47143b9f0a4d.jsonl",
+    "exists": true,
+    "name": null,
+    "sessionInfoEntries": [],
+    "nameMentions": [
+      {
+        "index": 2,
+        "head": "{\"kind\":\"fact\",\"fact\":\"name\",\"name\":\"help me install this skill:https://github.com/SeemSeam/plan-tree\",\"seq\":2,\"type\":\"custom\",\"customType\":\"aiclient.v4\",\"id\":\"a0838e87-4e71-494e-b9f6-6fda50292d95\",\"p"
+      }
+    ]
+  }
+}

