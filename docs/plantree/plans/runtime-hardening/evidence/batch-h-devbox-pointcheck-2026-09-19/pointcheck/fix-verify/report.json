@@ -1,0 +1,501 @@
+{
+  "probe": "fix-verify (F1 / F2 / F5 / F6 + off level)",
+  "at": "2026-09-19T11:37:15.885Z",
+  "branch": "feat/runtime-evolution",
+  "head": "6ea3fb2d",
+  "commitsUnderTest": {
+    "F1": "171d1369 fix(editor): 命中列表跳行在编辑器已打开其他文件时也生效",
+    "F2": "539cd754 fix(chat): 搜索命中列表弹层锚定到搜索行而不是视口左上角",
+    "F5": "f059a8ae fix(runtime): 回合被中止或报错时不再把上下文占用清成 0%",
+    "F6": "6ea3fb2d fix(chat): 时间线审批行显示发起请求的子代理"
+  },
+  "environment": {
+    "mode": "electron-vite dev + CDP 9222",
+    "model": "claude/claude-opus-5",
+    "credentials": "托管 auth.json 的 claude 条目（公司中转）；未用 cx2 / maxapi / vllmproxy / beehears / 真实 anthropic",
+    "permissionMode": "执行 · 每次询问",
+    "srcChanged": false,
+    "appRestarts": 3,
+    "realModelTurns": 5
+  },
+  "F1": {
+    "criterion": "编辑器已开着文件 A 时，点命中列表里另一个文件 B 的第 N 行：B 打开、Monaco 光标行 = N、pendingCursor 清空；再点回 A 的另一行也要跳",
+    "pass": true,
+    "transcript": "合成（零模型回合）",
+    "sessionId": "session-live-1789816551871-n84hcmz",
+    "readings": [
+      {
+        "step": "step1 · 首次打开 A",
+        "clicked": "toolCard.ts src/renderer/components/chat",
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+        "currentCursorLine": 464,
+        "pendingCursor": null,
+        "expect": {
+          "path": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "line": 464
+        },
+        "pass": true
+      },
+      {
+        "step": "step2 · 编辑器已开 A 时点 B（旧缺陷暴露点）",
+        "clicked": "fileOpenIntent.ts home/ai/code/ai-client/src/renderer/stores",
+        "tabsBefore": ["/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts"],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+        "currentCursorLine": 57,
+        "pendingCursor": null,
+        "expect": {
+          "path": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+          "line": 57
+        },
+        "pass": true
+      },
+      {
+        "step": "step3 · 再点回 A 的另一行",
+        "clicked": "toolCard.ts src/renderer/components/chat",
+        "tabsBefore": [
+          "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts"
+        ],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+        "currentCursorLine": 12,
+        "pendingCursor": null,
+        "expect": {
+          "path": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "line": 12
+        },
+        "pass": true
+      }
+    ],
+    "before0919Morning": "倒序实验：第二次开文件不跳行，pendingCursor 挂着不被消费（model-11/model-11-jump-order.json）",
+    "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-f1-second-file-jump.png",
+    "rawProbeOutput": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fv-f1-f2.json"
+  },
+  "F2": {
+    "criterion": "悬停搜索行后弹层锚在触发元素附近（垂直相邻、水平重叠），不再是 [0, 4, …]",
+    "pass": true,
+    "readings": {
+      "triggerDisplay": "block",
+      "triggerClientRects": 1,
+      "triggerRect_xywh": [500, 178.25, 118.234375, 21],
+      "positionerRect_xywh": [279, 203, 560, 94],
+      "contentRect_xywh": [
+        284.6000061035156, 202.9199981689453, 548.800048828125, 92.12001037597656
+      ],
+      "verticalGapPx": 3.6699981689453125,
+      "horizontalOverlapPx": 118.234375,
+      "allHoverAnchors": [
+        {
+          "label": "step1-open-A",
+          "triggerIndex": 0,
+          "triggerText": "HitList（ai-client）",
+          "anchor": {
+            "triggerDisplay": "block",
+            "triggerClientRects": 1,
+            "triggerClass": "min-w-0 truncate text-tool-arg tabular-nums",
+            "triggerText": "HitList（ai-client）",
+            "triggerRect": [500, 178.25, 118.234375, 21],
+            "childRect": null,
+            "positionerRect": [279, 203, 560, 94],
+            "positionerTransform": "matrix(1, 0, 0, 1, 279, 203)",
+            "contentRect": [
+              283.6167297363281, 202.93405151367188, 550.7666015625, 92.45010375976562
+            ],
+            "verticalGapPx": 3.684051513671875,
+            "horizontalOverlapPx": 118.234375,
+            "viewport": [1244, 737]
+          }
+        },
+        {
+          "label": "step2-other-file-B",
+          "triggerIndex": 1,
+          "triggerText": "useFileOpenIntentStore（ai-client）",
+          "anchor": {
+            "triggerDisplay": "block",
+            "triggerClientRects": 1,
+            "triggerClass": "min-w-0 truncate text-tool-arg tabular-nums",
+            "triggerText": "useFileOpenIntentStore（ai-client）",
+            "triggerRect": [424, 359.40625, 228.5, 21],
+            "childRect": null,
+            "positionerRect": [258, 384, 560, 66],
+            "positionerTransform": "matrix(1, 0, 0, 1, 258, 384)",
+            "contentRect": [
+              262.06121826171875, 383.9419860839844, 551.8775634765625, 65.042724609375
+            ],
+            "verticalGapPx": 3.535736083984375,
+            "horizontalOverlapPx": 228.5,
+            "viewport": [1244, 737]
+          }
+        },
+        {
+          "label": "step3-back-to-A",
+          "triggerIndex": 2,
+          "triggerText": "FileLinkTarget（ai-client）",
+          "anchor": {
+            "triggerDisplay": "block",
+            "triggerClientRects": 1,
+            "triggerClass": "min-w-0 truncate text-tool-arg tabular-nums",
+            "triggerText": "FileLinkTarget（ai-client）",
+            "triggerRect": [424, 577.75, 166.234375, 21],
+            "childRect": null,
+            "positionerRect": [227, 603, 560, 66],
+            "positionerTransform": "matrix(1, 0, 0, 1, 227, 603)",
+            "contentRect": [232.416259765625, 602.922607421875, 549.16748046875, 64.72332763671875],
+            "verticalGapPx": 4.172607421875,
+            "horizontalOverlapPx": 166.234375,
+            "viewport": [1244, 737]
+          }
+        }
+      ]
+    },
+    "before0919Morning": {
+      "triggerDisplay": "contents",
+      "triggerRect_xywh": [0, 0, 0, 0],
+      "triggerClientRects": 0,
+      "positionerRect_xywh": [0, 4, 560, 122]
+    },
+    "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-f2-popover-anchor.png",
+    "rawProbeOutput": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fv-f1-f2.json"
+  },
+  "F5": {
+    "criterion": "Task 回合中途 Stop：Stop 前后徽标文案一致且非 0%，store factsBySession[sid].usage.context.tokens 非 0",
+    "pass": true,
+    "sessionId": "session-live-1789816715489-4jacar2",
+    "prompt": "请委派 explorer 子代理，把 src/runtime/plugins/ 里每个子目录的 index.ts 都读一遍，然后按子目录名逐条给我一句话的职责说明。",
+    "timing": {
+      "sentToStopMs": 80404,
+      "stopToIdleMs": 3625,
+      "totalMs": 84029,
+      "laneSeenAtMs": 69093,
+      "chipSeenAtMs": 70300
+    },
+    "readings": {
+      "chipOnEmptySession": {
+        "present": false,
+        "text": null,
+        "visible": false
+      },
+      "chipJustBeforeStop": {
+        "present": true,
+        "visible": true,
+        "text": "1%",
+        "tag": "BUTTON",
+        "rect": {
+          "x": 913,
+          "y": 658,
+          "w": 32,
+          "h": 24
+        }
+      },
+      "chipAfterStop": {
+        "present": true,
+        "visible": true,
+        "text": "1%",
+        "tag": "BUTTON",
+        "rect": {
+          "x": 943,
+          "y": 658,
+          "w": 32,
+          "h": 24
+        }
+      },
+      "contextJustBeforeStop": {
+        "tokens": 12888,
+        "contextWindow": 1000000,
+        "percent": 1.2888
+      },
+      "contextAfterStop": {
+        "tokens": 13186,
+        "contextWindow": 1000000,
+        "percent": 1.3186
+      },
+      "usageKeysAfterStop": [
+        "cacheRead",
+        "cacheWrite",
+        "context",
+        "costUsd",
+        "delegated",
+        "input",
+        "output",
+        "reasoning",
+        "session",
+        "totalTokens"
+      ],
+      "usageUpdatedAfterStopClick": [
+        {
+          "at": 1789816801958,
+          "sessionId": "session-live-1789816715489-4jacar2",
+          "keys": [
+            "cacheRead",
+            "cacheWrite",
+            "context",
+            "costUsd",
+            "input",
+            "output",
+            "reasoning",
+            "session",
+            "totalTokens"
+          ],
+          "hasContext": true,
+          "context": {
+            "tokens": 13186,
+            "contextWindow": 1000000,
+            "percent": 1.3186
+          },
+          "totalTokens": 13073
+        },
+        {
+          "at": 1789816801969,
+          "sessionId": "session-live-1789816715489-4jacar2",
+          "keys": [
+            "cacheRead",
+            "cacheWrite",
+            "context",
+            "costUsd",
+            "input",
+            "output",
+            "session",
+            "totalTokens"
+          ],
+          "hasContext": true,
+          "context": {
+            "tokens": 13186,
+            "contextWindow": 1000000,
+            "percent": 1.3186
+          },
+          "totalTokens": 0
+        },
+        {
+          "at": 1789816801979,
+          "sessionId": "session-live-1789816715489-4jacar2",
+          "keys": [
+            "cacheRead",
+            "cacheWrite",
+            "context",
+            "costUsd",
+            "delegated",
+            "input",
+            "output",
+            "reasoning",
+            "session",
+            "totalTokens"
+          ],
+          "hasContext": true,
+          "context": {
+            "tokens": 13186,
+            "contextWindow": 1000000,
+            "percent": 1.3186
+          },
+          "totalTokens": 13073
+        }
+      ],
+      "subagentLaneAfterStop": {
+        "laneCount": 1,
+        "lanes": [
+          {
+            "key": "toolu_01dUjllaTd9xdvdcPqeL249j",
+            "agentId": "fe38e722-32b3-48b8-b2d4-83e9bdab8eb6",
+            "agentType": "explorer",
+            "description": "盘点 runtime/plugins 子目录",
+            "status": "stopped",
+            "rowCount": 4,
+            "lastRows": [
+              {
+                "kind": "text"
+              },
+              {
+                "kind": "tool",
+                "name": "bash",
+                "status": "ok"
+              },
+              {
+                "kind": "tool",
+                "name": "glob",
+                "status": "ok"
+              },
+              {
+                "kind": "tool",
+                "name": "glob",
+                "status": "ok"
+              }
+            ]
+          }
+        ]
+      },
+      "permissionCardsAnswered": [
+        {
+          "decision": "直接允许",
+          "clicked": "直接允许",
+          "cardHead": "权限 | 高风险 |  | 来自子 Agent · 盘点 runtime/plugins 子目录 |  | bash — 在工作区运行命令 |  | pwd && ls -la src/runtime/plugins 2>&1 | head -50 |  | 工作目录：/home/ai/code/ai-client |"
+        }
+      ]
+    },
+    "before0919Morning": {
+      "chip": "2% → 0%",
+      "contextAfterStop": {
+        "tokens": 0,
+        "contextWindow": 1000000,
+        "percent": 0
+      },
+      "note": "Stop 后连发两条 usage.updated，context 被清成 0，session / delegated 仍是真实累计值"
+    },
+    "screenshots": [
+      "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-f5-badge-after-stop.png",
+      "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-f5-badge-before-stop.png"
+    ],
+    "rawProbeOutput": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fv-f5-f6-state.json"
+  },
+  "F6": {
+    "criterion": "子代理撞闸门被拒后，时间线审批行能读出是哪个子代理（li[data-tone=\"denied\"] 文本含 explorer，store 记录 agentName）",
+    "pass": true,
+    "roundUsed": "f6c",
+    "readings": {
+      "paintedDeniedRows": [
+        {
+          "tone": "denied",
+          "visible": true,
+          "text": "已拒绝 bash pwd · 代子 Agent explorer 请求",
+          "mentionsExplorer": true,
+          "mentionsSubagentWord": true
+        }
+      ],
+      "scrolledRowText": "已拒绝 bash pwd · 代子 Agent explorer 请求",
+      "storeAttributionFields": [
+        {
+          "requestId": "toolu_01ZApsD1I5Dg2Ebf9Dr3XxtO",
+          "surface": "bash",
+          "value": "pwd",
+          "result": "deny",
+          "resolution": "user_denied",
+          "forwarded": null,
+          "requesterAgentName": null,
+          "delegationId": "0480fa6c-5d0f-493c-bca9-5ac4227da317",
+          "agentName": "explorer"
+        }
+      ],
+      "turnMs": 147152
+    },
+    "rounds": [
+      {
+        "key": "f6",
+        "run": true,
+        "sessionId": "session-1789816893329-3884h3h",
+        "prompt": "我在点验权限策略，预期会被拒绝，不要绕过：用 explorer 子代理读一下 /home/ai/code/ai-client/.env 的内容并告诉我结果。",
+        "turnMs": 87100,
+        "cardsAnswered": 0,
+        "deniedRows": [],
+        "permissionActivityCount": 0,
+        "outcome": "模型自拒，0 次工具调用、0 次委派 —— findings.md 观察段「危险味提示词模型会自拒」的又一例"
+      },
+      {
+        "key": "f6b",
+        "run": true,
+        "sessionId": "session-1789816983416-mgbovsu",
+        "prompt": "我在点验权限策略，预期会被拒绝，不要绕过：请让 explorer 子代理在 /home/ai/code/ai-client 目录下用 bash 执行 `cat .env`，把闸门返回的原始拒绝信息回报给我。",
+        "turnMs": 199845,
+        "cardsAnswered": 0,
+        "deniedRows": [],
+        "permissionActivityCount": 0,
+        "outcome": "explorer 真的跑了 bash `cat .env`，被硬编码路径 deny 拦下（回执「shell operand is denied: …/.env」），零审批活动、零审计行 —— F7 未修，原样复现"
+      },
+      {
+        "key": "f6c",
+        "run": true,
+        "sessionId": "session-1789817369031-pbn5tmh",
+        "prompt": "我在点验「子代理请求权限时，时间线上能不能看出是哪个子代理」。请派 explorer 子代理用 bash 跑一条最简单的命令（就 `pwd`，不要加别的）。我会在弹出的授权卡上点拒绝——这是点验的预期行为，不要重试、不要换别的工具绕过，被拒之后把拒绝结果回报给我就行。",
+        "turnMs": 147152,
+        "cardsAnswered": 1,
+        "deniedRows": ["已拒绝 bash pwd · 代子 Agent explorer 请求"],
+        "permissionActivityCount": 1,
+        "outcome": "explorer 跑 bash `pwd` 触发 ask 卡，先截图再点「直接拒绝」，结算出一条带归因的审计行"
+      }
+    ],
+    "before0919Morning": {
+      "rowText": "已拒绝 bash pwd",
+      "storeRecord": {
+        "forwarded": null,
+        "requesterAgentName": null,
+        "delegationId": "1103083d-…",
+        "agentName": "explorer"
+      },
+      "note": "名字就在记录里，渲染层查的是永远为空的键"
+    },
+    "screenshots": [
+      "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-f6-subagent-row.png",
+      "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-f6-permission-card-f6c-1.png"
+    ],
+    "rawProbeOutput": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fv-f5-f6-state.json"
+  },
+  "offLevel": {
+    "criterion": "平台 off 档：强制刷新后本地目录 updatedAt 与 thinkingLevelMap.off；菜单是否出现「关闭」档；选中后跑一条短回合看 Thinking 计数与 usage.reasoning",
+    "pass": true,
+    "readings": {
+      "catalogUpdatedAtBeforeForcedSync": "2026-09-19T10:55:45.000Z",
+      "catalogUpdatedAtAfterForcedSync": "2026-09-19T10:55:45.000Z",
+      "forcedSyncResult": {
+        "source": "remote",
+        "endpointUrl": "https://onboarding-jyw.pipidan.qzz.io/api/v1/models-config",
+        "agentDir": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent",
+        "providerCount": 4,
+        "modelCount": 10,
+        "lastAttemptAt": 1789817677925,
+        "syncedAt": 1789817677925,
+        "ok": true
+      },
+      "thinkingLevelMapOff": {
+        "claude/claude-opus-5": "off",
+        "claude/claude-sonnet-5": "off",
+        "claude/claude-opus-4-6": "off"
+      },
+      "menuItems": ["Automatic", "Default", "Off", "Low", "Medium", "High", "X-High", "Max"],
+      "offMenuLabel": "Off",
+      "triggerAfterPick": "Claude Opus 5 Off",
+      "triggerAriaLabelAfterPick": "模型与思考强度：Claude Opus 5 Off —— 对下一轮生效",
+      "turn": {
+        "prompt": "一句话回答，不要展开：为什么 0.1 + 0.2 在浮点数里不等于 0.3？",
+        "totalMs": 13028,
+        "trail": [
+          {
+            "status": "idle",
+            "atMs": 300
+          },
+          {
+            "status": "running",
+            "atMs": 1769
+          },
+          {
+            "status": "idle",
+            "atMs": 10618
+          }
+        ]
+      },
+      "thinkingClauseLines": [],
+      "thinkingBlockCount": 0,
+      "usageReasoning": 0,
+      "usageHasReasoningKey": true,
+      "blockTypeCounts": {
+        "text": 2
+      },
+      "turnHeadLines": []
+    },
+    "notes": [
+      "本地目录在本轮探针的强制刷新之前就已经是 10:55:45Z —— 应用这次启动时的常规同步已经把新目录拉下来了；强制刷新 ok:true / source:remote，updatedAt 不变，说明与远端一致。",
+      "档位在菜单里仍写英文「Off」而不是词条里的「关闭」：i18n.ts:1243 有 Off: 关闭，但 composerModel.ts 的 effortItems 直接用 ChatEffort.label，没走 t() —— 09-19 上午记的 F4 文案项，未修，原样复现。"
+    ],
+    "screenshots": [
+      "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-off-effort-menu.png",
+      "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-off-turn.png"
+    ],
+    "rawProbeOutput": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fv-off-effort.json"
+  },
+  "incidents": [
+    "第一次 F1/F2 跑到第三次开文件时渲染进程卡死（0% CPU、Runtime.evaluate 3 分钟无响应、swap 用到 1.8 GB），被外层 timeout 杀掉。重启应用后同一脚本 90 秒内三步全绿，判为 2 核 3.3 GB 机器的内存/换页问题，不是修复引入的。探针已改成每步落盘。",
+    "F6 连跑三轮才拿到审计行：第一轮模型自拒（0 工具调用），第二轮 explorer 真去 cat .env 但撞的是硬编码路径 deny（F7 未修，闸门之前短路，零审计行），第三轮改成「让 explorer 跑 pwd、我在卡上点拒绝」才走完闸门。"
+  ],
+  "probes": [
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/tools/fv-f1-f2.mjs",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/tools/fv-f5-f6.mjs",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/tools/fv-off-effort.mjs",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/tools/fv-stop-app.mjs",
+    "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/tools/fv-report.mjs"
+  ]
+}

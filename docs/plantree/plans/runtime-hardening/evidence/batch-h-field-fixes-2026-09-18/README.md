@@ -4,7 +4,7 @@ Role: evidence。记录批次 H（T077～T087 + 提级的 T053，以及 2026-09-
 
 ## 状态
 
-**代码已分 17 个本地提交落地，均未推送**（分支 `feat/runtime-evolution`）：原批次 H 十项 13 个提交 + 下半场追加的 4 个提交（`03e0b6d8` T080 副判据闭环、`a72e0337` / `23abdd48` / `99ab7d57` 新开 T088/T089）。分批提交前的验证（全量 Vitest + 三套 typecheck）已做但未打包；**2026-09-18 开发机 CDP 点验分两轮完成**，第一轮 7 项（T077/T078/T079/T081/T084 五项 PASS、T080 主判据 PASS 但副判据 FAIL、T086 BLOCKED）、第二轮补验第一轮遗留的三条（T080 副判据、T078 bypass 下 `rm`、T086 TUI 登记）全部 PASS，结果见 [pointcheck/README.md](pointcheck/README.md)。**第三轮（2026-09-19）**把 MODEL 组剩余 10 项全部处置（7 ✅ / 1 ❌ MODEL-20 / 2 取证），新增缺陷 F1～F10，见 [batch-h-devbox-pointcheck-2026-09-19](../batch-h-devbox-pointcheck-2026-09-19/README.md)。[Q021](../../open-questions.md) 已完全结案；批次立项时「输出慢的主因是 5 分钟缓存 TTL」的判断已被同日实测推翻，真正主因是思考 token 量，详见 [perf-2026-09-18.md](perf-2026-09-18.md)。效果（除已端到端确认的部分）最终留给 T033 第二轮上机日现场确认。
+**代码已分 17 个本地提交落地，均未推送**（分支 `feat/runtime-evolution`）：原批次 H 十项 13 个提交 + 下半场追加的 4 个提交（`03e0b6d8` T080 副判据闭环、`a72e0337` / `23abdd48` / `99ab7d57` 新开 T088/T089）。分批提交前的验证（全量 Vitest + 三套 typecheck）已做但未打包；**2026-09-18 开发机 CDP 点验分两轮完成**，第一轮 7 项（T077/T078/T079/T081/T084 五项 PASS、T080 主判据 PASS 但副判据 FAIL、T086 BLOCKED）、第二轮补验第一轮遗留的三条（T080 副判据、T078 bypass 下 `rm`、T086 TUI 登记）全部 PASS，结果见 [pointcheck/README.md](pointcheck/README.md)。**第三轮（2026-09-19）**把 MODEL 组剩余 10 项全部处置（7 ✅ / 1 ❌ MODEL-20 / 2 取证），新增缺陷 F1～F10，见 [batch-h-devbox-pointcheck-2026-09-19](../batch-h-devbox-pointcheck-2026-09-19/README.md)；其中 F1 / F2 / F5 / F6 当日已修（T090）。[Q021](../../open-questions.md) 已完全结案；批次立项时「输出慢的主因是 5 分钟缓存 TTL」的判断已被同日实测推翻，真正主因是思考 token 量，详见 [perf-2026-09-18.md](perf-2026-09-18.md)。效果（除已端到端确认的部分）最终留给 T033 第二轮上机日现场确认。
 
 ## 提交
 

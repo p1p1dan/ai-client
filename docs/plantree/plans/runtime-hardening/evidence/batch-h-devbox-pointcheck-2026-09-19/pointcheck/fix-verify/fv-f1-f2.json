@@ -1,0 +1,422 @@
+{
+  "probe": "fv-f1-f2.mjs",
+  "criteria": ["F1 · 命中列表跳行（编辑器已开别的文件）", "F2 · 命中列表弹层锚点"],
+  "commits": {
+    "f1": "171d1369",
+    "f2": "539cd754"
+  },
+  "startedAt": "2026-09-19T11:15:47.408Z",
+  "anchors": [
+    {
+      "label": "step1-open-A",
+      "triggerIndex": 0,
+      "triggerText": "HitList（ai-client）",
+      "anchor": {
+        "triggerDisplay": "block",
+        "triggerClientRects": 1,
+        "triggerClass": "min-w-0 truncate text-tool-arg tabular-nums",
+        "triggerText": "HitList（ai-client）",
+        "triggerRect": [500, 178.25, 118.234375, 21],
+        "childRect": null,
+        "positionerRect": [279, 203, 560, 94],
+        "positionerTransform": "matrix(1, 0, 0, 1, 279, 203)",
+        "contentRect": [283.6167297363281, 202.93405151367188, 550.7666015625, 92.45010375976562],
+        "verticalGapPx": 3.684051513671875,
+        "horizontalOverlapPx": 118.234375,
+        "viewport": [1244, 737]
+      }
+    },
+    {
+      "label": "step2-other-file-B",
+      "triggerIndex": 1,
+      "triggerText": "useFileOpenIntentStore（ai-client）",
+      "anchor": {
+        "triggerDisplay": "block",
+        "triggerClientRects": 1,
+        "triggerClass": "min-w-0 truncate text-tool-arg tabular-nums",
+        "triggerText": "useFileOpenIntentStore（ai-client）",
+        "triggerRect": [424, 359.40625, 228.5, 21],
+        "childRect": null,
+        "positionerRect": [258, 384, 560, 66],
+        "positionerTransform": "matrix(1, 0, 0, 1, 258, 384)",
+        "contentRect": [262.06121826171875, 383.9419860839844, 551.8775634765625, 65.042724609375],
+        "verticalGapPx": 3.535736083984375,
+        "horizontalOverlapPx": 228.5,
+        "viewport": [1244, 737]
+      }
+    },
+    {
+      "label": "step3-back-to-A",
+      "triggerIndex": 2,
+      "triggerText": "FileLinkTarget（ai-client）",
+      "anchor": {
+        "triggerDisplay": "block",
+        "triggerClientRects": 1,
+        "triggerClass": "min-w-0 truncate text-tool-arg tabular-nums",
+        "triggerText": "FileLinkTarget（ai-client）",
+        "triggerRect": [424, 577.75, 166.234375, 21],
+        "childRect": null,
+        "positionerRect": [227, 603, 560, 66],
+        "positionerTransform": "matrix(1, 0, 0, 1, 227, 603)",
+        "contentRect": [232.416259765625, 602.922607421875, 549.16748046875, 64.72332763671875],
+        "verticalGapPx": 4.172607421875,
+        "horizontalOverlapPx": 166.234375,
+        "viewport": [1244, 737]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "label": "step1-open-A",
+      "triggerIndex": 0,
+      "hitIndex": 0,
+      "clicked": "toolCard.ts src/renderer/components/chat",
+      "expect": {
+        "path": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+        "line": 464
+      },
+      "before": {
+        "tabs": [],
+        "activeTabPath": null,
+        "pendingCursor": null,
+        "currentCursorLine": null
+      },
+      "after": {
+        "tabs": ["/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts"],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+        "pendingCursor": null,
+        "currentCursorLine": 464
+      },
+      "pass": true
+    },
+    {
+      "label": "step2-other-file-B",
+      "triggerIndex": 1,
+      "hitIndex": 0,
+      "clicked": "fileOpenIntent.ts home/ai/code/ai-client/src/renderer/stores",
+      "expect": {
+        "path": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+        "line": 57
+      },
+      "before": {
+        "tabs": ["/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts"],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+        "pendingCursor": null,
+        "currentCursorLine": 464
+      },
+      "after": {
+        "tabs": [
+          "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts"
+        ],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+        "pendingCursor": null,
+        "currentCursorLine": 57
+      },
+      "pass": true,
+      "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-f1-second-file-jump.png"
+    },
+    {
+      "label": "step3-back-to-A",
+      "triggerIndex": 2,
+      "hitIndex": 0,
+      "clicked": "toolCard.ts src/renderer/components/chat",
+      "expect": {
+        "path": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+        "line": 12
+      },
+      "before": {
+        "tabs": [
+          "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts"
+        ],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+        "pendingCursor": null,
+        "currentCursorLine": 57
+      },
+      "after": {
+        "tabs": [
+          "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts"
+        ],
+        "activeTabPath": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+        "pendingCursor": null,
+        "currentCursorLine": 12
+      },
+      "pass": true
+    }
+  ],
+  "entry": {
+    "entered": "以 danyuan@jcdz.cc 继续",
+    "dismissed": "知道了"
+  },
+  "sessionId": "session-live-1789816551871-n84hcmz",
+  "seededMessages": 4,
+  "editorReset": 0,
+  "expand": {
+    "summaries": 1,
+    "clicked": ["3 steps processed"]
+  },
+  "triggers": [
+    {
+      "index": 0,
+      "text": "HitList（ai-client）",
+      "measuredOn": "trigger",
+      "display": "block",
+      "clientRects": 1,
+      "x": 559.1171875,
+      "y": 188.75,
+      "w": 118.234375,
+      "h": 21,
+      "hitTestOk": true
+    },
+    {
+      "index": 1,
+      "text": "useFileOpenIntentStore（ai-client）",
+      "measuredOn": "trigger",
+      "display": "block",
+      "clientRects": 1,
+      "x": 614.25,
+      "y": 219.75,
+      "w": 228.5,
+      "h": 21,
+      "hitTestOk": true
+    },
+    {
+      "index": 2,
+      "text": "FileLinkTarget（ai-client）",
+      "measuredOn": "trigger",
+      "display": "block",
+      "clientRects": 1,
+      "x": 583.1171875,
+      "y": 250.75,
+      "w": 166.234375,
+      "h": 21,
+      "hitTestOk": true
+    }
+  ],
+  "f2Anchor": {
+    "triggerDisplay": "block",
+    "triggerClientRects": 1,
+    "triggerClass": "min-w-0 truncate text-tool-arg tabular-nums",
+    "triggerText": "HitList（ai-client）",
+    "triggerRect": [500, 178.25, 118.234375, 21],
+    "childRect": null,
+    "positionerRect": [279, 203, 560, 94],
+    "positionerTransform": "matrix(1, 0, 0, 1, 279, 203)",
+    "contentRect": [284.6000061035156, 202.9199981689453, 548.800048828125, 92.12001037597656],
+    "verticalGapPx": 3.6699981689453125,
+    "horizontalOverlapPx": 118.234375,
+    "viewport": [1244, 737]
+  },
+  "f2Hits": [
+    {
+      "index": 0,
+      "text": "toolCard.ts src/renderer/components/chat"
+    },
+    {
+      "index": 1,
+      "text": "toolHits.ts src/renderer/components/chat"
+    },
+    {
+      "index": 2,
+      "text": "HitListPopover.tsx src/renderer/components/chat"
+    }
+  ],
+  "f2Shot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-f2-popover-anchor.png",
+  "f1Shot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-f1-second-file-jump.png",
+  "verdict": {
+    "f1": {
+      "pass": true,
+      "backToAPass": true,
+      "step3Error": null,
+      "openA": {
+        "label": "step1-open-A",
+        "triggerIndex": 0,
+        "hitIndex": 0,
+        "clicked": "toolCard.ts src/renderer/components/chat",
+        "expect": {
+          "path": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "line": 464
+        },
+        "before": {
+          "tabs": [],
+          "activeTabPath": null,
+          "pendingCursor": null,
+          "currentCursorLine": null
+        },
+        "after": {
+          "tabs": ["/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts"],
+          "activeTabPath": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "pendingCursor": null,
+          "currentCursorLine": 464
+        },
+        "pass": true
+      },
+      "secondFile": {
+        "label": "step2-other-file-B",
+        "triggerIndex": 1,
+        "hitIndex": 0,
+        "clicked": "fileOpenIntent.ts home/ai/code/ai-client/src/renderer/stores",
+        "expect": {
+          "path": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+          "line": 57
+        },
+        "before": {
+          "tabs": ["/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts"],
+          "activeTabPath": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "pendingCursor": null,
+          "currentCursorLine": 464
+        },
+        "after": {
+          "tabs": [
+            "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+            "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts"
+          ],
+          "activeTabPath": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+          "pendingCursor": null,
+          "currentCursorLine": 57
+        },
+        "pass": true,
+        "screenshot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-f1-second-file-jump.png"
+      },
+      "backToA": {
+        "label": "step3-back-to-A",
+        "triggerIndex": 2,
+        "hitIndex": 0,
+        "clicked": "toolCard.ts src/renderer/components/chat",
+        "expect": {
+          "path": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "line": 12
+        },
+        "before": {
+          "tabs": [
+            "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+            "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts"
+          ],
+          "activeTabPath": "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts",
+          "pendingCursor": null,
+          "currentCursorLine": 57
+        },
+        "after": {
+          "tabs": [
+            "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+            "/home/ai/code/ai-client/src/renderer/stores/fileOpenIntent.ts"
+          ],
+          "activeTabPath": "/home/ai/code/ai-client/src/renderer/components/chat/toolCard.ts",
+          "pendingCursor": null,
+          "currentCursorLine": 12
+        },
+        "pass": true
+      }
+    },
+    "f2": {
+      "pass": true,
+      "triggerDisplay": "block",
+      "triggerClientRects": 1,
+      "triggerRect": [500, 178.25, 118.234375, 21],
+      "positionerRect": [279, 203, 560, 94],
+      "contentRect": [284.6000061035156, 202.9199981689453, 548.800048828125, 92.12001037597656],
+      "verticalGapPx": 3.6699981689453125,
+      "horizontalOverlapPx": 118.234375,
+      "allHoverAnchors": [
+        {
+          "label": "step1-open-A",
+          "triggerIndex": 0,
+          "triggerText": "HitList（ai-client）",
+          "anchor": {
+            "triggerDisplay": "block",
+            "triggerClientRects": 1,
+            "triggerClass": "min-w-0 truncate text-tool-arg tabular-nums",
+            "triggerText": "HitList（ai-client）",
+            "triggerRect": [500, 178.25, 118.234375, 21],
+            "childRect": null,
+            "positionerRect": [279, 203, 560, 94],
+            "positionerTransform": "matrix(1, 0, 0, 1, 279, 203)",
+            "contentRect": [
+              283.6167297363281, 202.93405151367188, 550.7666015625, 92.45010375976562
+            ],
+            "verticalGapPx": 3.684051513671875,
+            "horizontalOverlapPx": 118.234375,
+            "viewport": [1244, 737]
+          }
+        },
+        {
+          "label": "step2-other-file-B",
+          "triggerIndex": 1,
+          "triggerText": "useFileOpenIntentStore（ai-client）",
+          "anchor": {
+            "triggerDisplay": "block",
+            "triggerClientRects": 1,
+            "triggerClass": "min-w-0 truncate text-tool-arg tabular-nums",
+            "triggerText": "useFileOpenIntentStore（ai-client）",
+            "triggerRect": [424, 359.40625, 228.5, 21],
+            "childRect": null,
+            "positionerRect": [258, 384, 560, 66],
+            "positionerTransform": "matrix(1, 0, 0, 1, 258, 384)",
+            "contentRect": [
+              262.06121826171875, 383.9419860839844, 551.8775634765625, 65.042724609375
+            ],
+            "verticalGapPx": 3.535736083984375,
+            "horizontalOverlapPx": 228.5,
+            "viewport": [1244, 737]
+          }
+        },
+        {
+          "label": "step3-back-to-A",
+          "triggerIndex": 2,
+          "triggerText": "FileLinkTarget（ai-client）",
+          "anchor": {
+            "triggerDisplay": "block",
+            "triggerClientRects": 1,
+            "triggerClass": "min-w-0 truncate text-tool-arg tabular-nums",
+            "triggerText": "FileLinkTarget（ai-client）",
+            "triggerRect": [424, 577.75, 166.234375, 21],
+            "childRect": null,
+            "positionerRect": [227, 603, 560, 66],
+            "positionerTransform": "matrix(1, 0, 0, 1, 227, 603)",
+            "contentRect": [232.416259765625, 602.922607421875, 549.16748046875, 64.72332763671875],
+            "verticalGapPx": 4.172607421875,
+            "horizontalOverlapPx": 166.234375,
+            "viewport": [1244, 737]
+          }
+        }
+      ]
+    }
+  },
+  "finishedAt": "2026-09-19T11:16:19.539Z",
+  "rendererProblems": [
+    {
+      "kind": "console.error",
+      "text": "07:15:51.870 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "07:15:51.884 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "07:15:52.003 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "07:15:52.102 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "07:15:52.177 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "07:15:52.256 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "07:15:52.293 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "07:15:52.316 › [workspace-tree] worktrees-absent Object"
+    }
+  ]
+}

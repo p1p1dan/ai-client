@@ -46,20 +46,20 @@ MODEL 组累计：09-18 已过 7（24 · 3 · 12 · 28 · 17 · 22 · 29）+ 本
 
 | # | 一句话 | 建议 |
 |---|---|---|
-| F1 | 命中跳行只在编辑器首次开文件时生效（`EditorArea.tsx:607` 守卫恒真） | medium，一行修法 |
-| F2 | 命中列表弹层锚在视口左上角（`HitListPopover.tsx:30` 用 `display: contents` 触发器） | medium，一行修法 |
-| F3 | 用户手点「直接允许」无独立审计行（`isQuietPermissionActivity` 不看 `resolution`） | 待拍板：审批可见性 |
+| F1 | 命中跳行只在编辑器首次开文件时生效（`EditorArea.tsx:607` 守卫恒真） | 已修，`171d1369`（2026-09-19） |
+| F2 | 命中列表弹层锚在视口左上角（`HitListPopover.tsx:30` 用 `display: contents` 触发器） | 已修，`539cd754`（2026-09-19） |
+| F3 | 用户手点「直接允许」无独立审计行（`isQuietPermissionActivity` 不看 `resolution`） | [决策 027](../../decisions/027-permission-rows-no-audit-trail.md) 不做 |
 | F4 | 模型 / 思考强度菜单半中半英 | 文案项，已降级 |
-| F5 | Stop 后上下文徽标清成 0%（aborted `turn_end` 用空消息重算 `context`） | medium |
-| F6 | 时间线审批行读不出子代理（`forwarded` / `requesterAgentName` 无生产者） | medium，MODEL-20 判负的直接原因 |
-| F7 | 硬编码路径 deny 零审计行（`tools/index.ts:177-178` 短路在闸门之前） | 待拍板：审计完整性 |
-| F8 | 应用会话名与 pi 会话名两套存储从未打通 | 待拍板 |
+| F5 | Stop 后上下文徽标清成 0%（aborted `turn_end` 用空消息重算 `context`） | 已修，`f059a8ae`（2026-09-19） |
+| F6 | 时间线审批行读不出子代理（`forwarded` / `requesterAgentName` 无生产者） | 已修，`6ea3fb2d`（2026-09-19） |
+| F7 | 硬编码路径 deny 零审计行（`tools/index.ts:177-178` 短路在闸门之前） | [决策 027](../../decisions/027-permission-rows-no-audit-trail.md) 不做 |
+| F8 | 应用会话名与 pi 会话名两套存储从未打通 | Q028 推迟 |
 | F9 | 切回 GUI 后第一次发送会杀掉挂起的 TUI | 设计如此，记录 |
 | F10 | GUI worker 与 pi CLI 写的 JSONL 条目格式不一致（`kind` / `lane` / `seq`） | 回放正常；读取端守卫要留意 |
 
 ## 用户待办状态
 
-- **平台 off 档**：用户 09-19 上午已在平台勾上，但应用启动（06:35Z）与强制刷新（06:49Z）拉回的目录 `updatedAt` 仍是 `03:16:43Z`，`thinkingLevelMap.off` 仍 null，菜单无「关闭」档。UI 无 bug，平台侧可能还要保存 / 发布；目录时间戳变新后需复核一次。
+- **平台 off 档**：上午勾选后接口未变（`updatedAt` 仍 `03:16:43Z`、`off: null`），直拉接口确认是平台侧未生成新版本，向平台方提了需求（`off` 须为非空字符串，null / 缺省都会被客户端隐藏；后台「留空即可」的说明文字是错的）。平台 10:55Z 修复发布，客户端端到端确认可用（见上节）。
 - **默认模型改回 opus-5**：已是 `claude/claude-opus-5`，不用再做。
 - **重启应用加载弹层修复**：本轮点验起的是 dev 实例，用户自己那份仍需重启。
 
@@ -68,6 +68,23 @@ MODEL 组累计：09-18 已过 7（24 · 3 · 12 · 28 · 17 · 22 · 29）+ 本
 探针全部归档在 [pointcheck/tools/](pointcheck/tools/)：`pc-lib.mjs`（共用：进主界面 / 关公告弹层 / 写 textarea 再点发送 / 动态 import store / evalAsync / 截图 / 展开工作组）、`m27-ask.mjs`、`m19-m23.mjs` + `m23-capture.mjs`、`m11-hover.mjs` + `m11-jump-order.mjs`、`m18-m20.mjs`、`m49-policy.mjs`、`m47-m05-m06.mjs` 及其 peek / shot / reports / stop 四件。后四份都是分阶段 + 状态文件可续跑，改脚本不必重跑已花钱的回合。
 
 本轮沉淀的配方（细节在 findings.md 观察段）：回合结束判定「先等 busy 再连续三次 idle」；工作组默认折叠要先展开；每个搜索调用各占一条 assistant 消息；导入会话首次打开走侧栏行；GUI/TUI 开关用 `Input.dispatchMouseEvent` 且判 `aria-pressed`；「危险味」的测试命令要在提示词里声明测试意图，否则模型自拒。
+
+## 修复与收口验证
+
+2026-09-19 用户拍板后，F1 / F2 / F5 / F6 四条缺陷当日已修，分四个本地提交（均未推送）：
+
+| 提交 | 内容 |
+|---|---|
+| `171d1369` | fix(editor) F1 命中跳行在编辑器已开其他文件时也生效：`EditorArea.tsx` 守卫改比较 Monaco 模型 URI；新增 `files/__tests__/editorPendingCursor.test.ts` 3 条 |
+| `539cd754` | fix(chat) F2 弹层锚定到搜索行：`HitListPopover.tsx` 去掉 `display: contents` 包裹，`children` 收紧为单个 `ReactElement`；新增 `hitListPopoverTrigger.test.ts` 2 条 |
+| `f059a8ae` | fix(runtime) F5 aborted / error 收尾不再清零上下文：`projector.ts` 的 `turn_end` 对占位消息不覆盖 `lastTurnUsage` / `lastContextUsage`；`runtimeEvents.test.ts` +3 条 |
+| `6ea3fb2d` | fix(chat) F6 审批行归因：`permissionActivityRow.ts` 改认 `delegationId` / `agentName`，`runtimeEvents.ts` 类型注释更新；测试 +2 条 |
+
+F3 / F7（审批行审计留痕）经用户拍板结案为「不做」，见[决策 027](../../decisions/027-permission-rows-no-audit-trail.md)；F8（pi 会话名打通）经编排器裁定推迟，见 [Q028](../../open-questions.md)。
+
+收口验证（Linux 开发机）：三套 tsc（根 / `src/runtime` / `src/agent-host`）全部退出 0；全量 Vitest（单 worker）**450 文件 / 6909 条全部通过，277 s**（对比 09-18 收口的 447 文件 / 6843 条）。GUI 实测（HEAD `6ea3fb2d`，5 次真实回合，3 次起停）**四条全部通过**，证据 [pointcheck/fix-verify/](pointcheck/fix-verify/)：F1 先开 A 再点 B 跳到 57 行、再点回 A 跳到 12 行，`pendingCursor` 均清空；F2 触发元素 rect `[500, 178, 118, 21]`，弹层 `[279, 203, 560, 94]` 贴在行下 3.7 px；F5 Stop 前后徽标都是 1%，`context.tokens` 13186 沿用最后一次真实值，Stop 后三条 `usage.updated` 的 `context` 均非零；F6 审批行「已拒绝 bash pwd · 代子 Agent explorer 请求」，store `agentName: "explorer"`。F6 复验再次印证两条规律：`.env` 提示词模型自拒（把「不要绕过」读成「不要用子代理绕过」）；强制 bash `cat .env` 撞的是硬编码 deny、零审计行（F7 原样，决策 027 不修）。
+
+同轮顺带确认 **off 档端到端可用**：平台 10:55Z 发布后，应用常规同步已拉到 `updatedAt = 2026-09-19T10:55:45Z`、三个 claude 模型 `thinkingLevelMap.off = "off"`；菜单出现该档（文案是英文 `Off`，即 F4 未修）；选中后跑一条短问题，回合头无思考子句、`thinking` 块 0 个、`usage.reasoning = 0`。
 
 ## 未做与原因
 

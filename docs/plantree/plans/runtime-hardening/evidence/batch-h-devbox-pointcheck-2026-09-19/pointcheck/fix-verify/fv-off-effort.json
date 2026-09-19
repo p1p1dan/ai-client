@@ -1,0 +1,391 @@
+{
+  "probe": "fv-off-effort.mjs",
+  "startedAt": "2026-09-19T11:34:37.922Z",
+  "catalogBefore": {
+    "updatedAt": "2026-09-19T10:55:45.000Z",
+    "version": 1,
+    "models": {
+      "claude/claude-sonnet-5": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "off",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "xhigh": "xhigh",
+          "max": "max"
+        },
+        "off": "off"
+      },
+      "claude/claude-opus-4-6": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "off",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "max": "max"
+        },
+        "off": "off"
+      },
+      "claude/claude-opus-5": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "off",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "xhigh": "xhigh",
+          "max": "max"
+        },
+        "off": "off"
+      },
+      "gpt/gpt-5.6-luna": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "none",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "xhigh": "xhigh",
+          "max": "max"
+        },
+        "off": "none"
+      },
+      "gpt/gpt-5.6-terra": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "none",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "xhigh": "xhigh",
+          "max": "max"
+        },
+        "off": "none"
+      },
+      "gpt/gpt-5.6-sol": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "none",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "xhigh": "xhigh",
+          "max": "max"
+        },
+        "off": "none"
+      },
+      "grok/grok-4.6": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "xhigh": "xhigh"
+        }
+      },
+      "china/deepseek-v4-flash-0731": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "off",
+          "high": "high",
+          "max": "max"
+        },
+        "off": "off"
+      },
+      "china/deepseek-v4-pro-0813": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "off",
+          "high": "high",
+          "max": "max"
+        },
+        "off": "off"
+      },
+      "china/glm-5.2": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "off",
+          "high": "high",
+          "max": "max"
+        },
+        "off": "off"
+      }
+    }
+  },
+  "sync": {
+    "source": "remote",
+    "endpointUrl": "https://onboarding-jyw.pipidan.qzz.io/api/v1/models-config",
+    "agentDir": "/home/ai/.pilab/jyw-ai-client-dev/pi-agent",
+    "providerCount": 4,
+    "modelCount": 10,
+    "lastAttemptAt": 1789817677925,
+    "syncedAt": 1789817677925,
+    "ok": true
+  },
+  "catalogAfter": {
+    "updatedAt": "2026-09-19T10:55:45.000Z",
+    "version": 1,
+    "models": {
+      "claude/claude-sonnet-5": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "off",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "xhigh": "xhigh",
+          "max": "max"
+        },
+        "off": "off"
+      },
+      "claude/claude-opus-4-6": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "off",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "max": "max"
+        },
+        "off": "off"
+      },
+      "claude/claude-opus-5": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "off",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "xhigh": "xhigh",
+          "max": "max"
+        },
+        "off": "off"
+      },
+      "gpt/gpt-5.6-luna": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "none",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "xhigh": "xhigh",
+          "max": "max"
+        },
+        "off": "none"
+      },
+      "gpt/gpt-5.6-terra": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "none",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "xhigh": "xhigh",
+          "max": "max"
+        },
+        "off": "none"
+      },
+      "gpt/gpt-5.6-sol": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "none",
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "xhigh": "xhigh",
+          "max": "max"
+        },
+        "off": "none"
+      },
+      "grok/grok-4.6": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "low": "low",
+          "medium": "medium",
+          "high": "high",
+          "xhigh": "xhigh"
+        }
+      },
+      "china/deepseek-v4-flash-0731": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "off",
+          "high": "high",
+          "max": "max"
+        },
+        "off": "off"
+      },
+      "china/deepseek-v4-pro-0813": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "off",
+          "high": "high",
+          "max": "max"
+        },
+        "off": "off"
+      },
+      "china/glm-5.2": {
+        "reasoning": true,
+        "thinkingLevelMap": {
+          "off": "off",
+          "high": "high",
+          "max": "max"
+        },
+        "off": "off"
+      }
+    }
+  },
+  "catalogMoved": false,
+  "sessionId": "session-1789817681946-ld3fzeq",
+  "triggerBefore": {
+    "ariaLabel": "模型与思考强度：Claude Opus 5 —— 对下一轮生效",
+    "text": "Claude Opus 5"
+  },
+  "menu": {
+    "count": 8,
+    "items": [
+      {
+        "text": "Automatic",
+        "value": null,
+        "checked": "false"
+      },
+      {
+        "text": "Default",
+        "value": null,
+        "checked": "true"
+      },
+      {
+        "text": "Off",
+        "value": null,
+        "checked": "false"
+      },
+      {
+        "text": "Low",
+        "value": null,
+        "checked": "false"
+      },
+      {
+        "text": "Medium",
+        "value": null,
+        "checked": "false"
+      },
+      {
+        "text": "High",
+        "value": null,
+        "checked": "false"
+      },
+      {
+        "text": "X-High",
+        "value": null,
+        "checked": "false"
+      },
+      {
+        "text": "Max",
+        "value": null,
+        "checked": "false"
+      }
+    ],
+    "popupText": "Model Automatic Claude GPT Grok China 其他模型 Reasoning effort Default Off Low Medium High X-High Max"
+  },
+  "menuShot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-off-effort-menu.png",
+  "offItem": {
+    "text": "Off",
+    "value": null,
+    "checked": "false"
+  },
+  "offPicked": "Off",
+  "triggerAfter": {
+    "ariaLabel": "模型与思考强度：Claude Opus 5 Off —— 对下一轮生效",
+    "text": "Claude Opus 5 Off"
+  },
+  "effortStored": {
+    "effort": null,
+    "model": null
+  },
+  "prompt": "一句话回答，不要展开：为什么 0.1 + 0.2 在浮点数里不等于 0.3？",
+  "turn": {
+    "ok": true,
+    "totalMs": 13028,
+    "trail": [
+      {
+        "status": "idle",
+        "atMs": 300
+      },
+      {
+        "status": "running",
+        "atMs": 1769
+      },
+      {
+        "status": "idle",
+        "atMs": 10618
+      }
+    ]
+  },
+  "usage": {
+    "keys": [
+      "cacheRead",
+      "cacheWrite",
+      "context",
+      "costUsd",
+      "input",
+      "output",
+      "reasoning",
+      "session",
+      "totalTokens"
+    ],
+    "hasReasoning": true,
+    "reasoning": 0,
+    "context": {
+      "tokens": 10850,
+      "contextWindow": 1000000,
+      "percent": 1.085
+    }
+  },
+  "blocks": {
+    "messageCount": 2,
+    "blockTypeCounts": {
+      "text": 2
+    },
+    "reply": "需求回显：用一句话解释 `0.1 + 0.2 !== 0.3` 的浮点数原理，不展开。\n我理解规则。\n\n因为 0.1、0.2、0.3 用二进制表示都是无限循环小数，双精度浮点只能各存一个近似值，而 0.1 与 0.2 相加后又经历一次舍入，其结果恰好与 0.3 的近似值差一个最低有效位，所以两者不相等。"
+  },
+  "turnLine": {
+    "thinkingLines": [],
+    "headLines": [],
+    "tail": [
+      "temporary",
+      "1w",
+      "Session 6k5w7h",
+      "temporary",
+      "1w",
+      "Session xg29cz",
+      "temporary",
+      "1w",
+      "Session d4909j",
+      "temporary",
+      "1w",
+      "写一个test123.txt文件",
+      "temporary",
+      "1w"
+    ]
+  },
+  "turnShot": "/home/ai/code/ai-client/docs/plantree/plans/runtime-hardening/evidence/batch-h-devbox-pointcheck-2026-09-19/pointcheck/fix-verify/fix-off-turn.png",
+  "verdict": {
+    "catalogUpdatedAt": "2026-09-19T10:55:45.000Z",
+    "offValues": {
+      "claude/claude-opus-5": "off",
+      "claude/claude-sonnet-5": "off",
+      "claude/claude-opus-4-6": "off"
+    },
+    "offOfferedInMenu": true,
+    "offMenuLabel": "Off",
+    "triggerAfterPick": "Claude Opus 5 Off",
+    "thinkingClausesOnTurn": [],
+    "thinkingBlocks": 0,
+    "usageReasoning": 0,
+    "usageHasReasoningKey": true
+  },
+  "rendererProblems": [],
+  "finishedAt": "2026-09-19T11:35:05.741Z"
+}

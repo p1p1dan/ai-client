@@ -6,6 +6,8 @@ Role: evidence shard。判据权威：[04-model.md](../../topics/t033-field-day/
 
 ### F1 · 命中列表跳行只在编辑器第一次开文件时生效（MODEL-11）
 
+**处置**：已修，提交 `171d1369`（2026-09-19）。
+
 现象：编辑器已开着别的文件时点命中，新开 tab 但不跳行，`pendingCursor` 挂着不被消费。倒序实验证明与路径形态（相对 / 绝对）无关，只与顺序有关。
 
 根因：`EditorArea.tsx:309` 的 `editorForPathRef` 只在 `handleEditorMount`（`:640`）赋值一次；`<Editor path=…/>`（`:1455-1462`，无 `key`）切 tab 只换 `path` 不重新 mount。运行时 effect 的守卫 `editorForPathRef.current !== activeTabPath`（`:607`）对任何非首个文件恒真，提前 return（`:609`），既不 `setPosition` 也不清 `pendingCursor`。首次开文件走 mount 内联分支（`:712-736`）所以能跳。
@@ -14,6 +16,8 @@ Role: evidence shard。判据权威：[04-model.md](../../topics/t033-field-day/
 
 ### F2 · 命中列表弹层锚在视口左上角盖住标题栏（MODEL-11）
 
+**处置**：已修，提交 `539cd754`（2026-09-19）。
+
 现象：positioner rect `[0, 4, 560, 122]`。
 
 根因：`HitListPopover.tsx:30` 给 `PreviewCardTrigger` 的 `render={<span className="contents" />}`，`display: contents` 无盒子（`getClientRects().length === 0`），floating-ui 拿空盒当 reference。Base UI 不校验也不兜底（`@base-ui/react/preview-card/trigger/PreviewCardTrigger.js:78-86`）。全仓唯一一处 `contents` 触发器；其它 Trigger 都给有盒子的元素（`BranchSwitcher.tsx:192`、`SessionBar.tsx:135`、`BreadcrumbTreeMenu.tsx:295`、`ui/sidebar.tsx:518`）。
@@ -21,6 +25,8 @@ Role: evidence shard。判据权威：[04-model.md](../../topics/t033-field-day/
 最小修法：去掉包裹 span，直接 `render={children as ReactElement}`（调用方 `ToolRows.tsx:336` 传的 `<span className={argClass}>` 本来就有盒子），与 `BreadcrumbTreeMenu.tsx:295` 同写法。
 
 ### F3 · 用户手点「直接允许」没有独立审计行（MODEL-23 顺带）
+
+**处置**：Q027 结案不做（[决策 027](../../decisions/027-permission-rows-no-audit-trail.md)）。
 
 `permissionActivityRow.ts:84-86` 的 `isQuietPermissionActivity` 只看 `result === 'allow' && !resolution.includes('error')`，不看 `resolution`；`USER_RESOLUTIONS`（`:127`）只用于 `derivePermissionActivityRow` 挑 tone。唯一调用点 `MessageTimeline.tsx:2399` 未传 `includeAllowed`，所以 `'allowed'` 这条 tone 分支线上不可达。注释（`PermissionActivityRows.tsx:12-42`）的理由是「policy_allow 不该像用户决策一样醒目」，但把 `user_approved` 一并吞了。实时态唯一痕迹是工具行后缀「· 已允许」；重启回放后连这个后缀也没有（见 MODEL-23）。
 
@@ -32,13 +38,19 @@ Role: evidence shard。判据权威：[04-model.md](../../topics/t033-field-day/
 
 ### F5 · Stop 之后上下文徽标被清成 0%（MODEL-18）
 
+**处置**：已修，提交 `f059a8ae`（2026-09-19）。
+
 徽标不消失（判据通过），但 Stop 触发后连发两条 `usage.updated`，`context` 子对象变成 `{tokens:0, percent:0}`、`totalTokens:0`，同一 payload 里 `session`（16.8 万 token）与 `delegated` 仍是真实累计值；键集比正常结束少了 `reasoning`。徽标只读 `context`，于是从 2% 变 0%。正常结束不出现。原始对象在 `pointcheck/model-18/report.json`。
 
 根因（代码推导，未单独复现）：`runtime/events/projector.ts:444-472` 的 `turn_end` 分支用 `estimateContextTokens([event.message, ...toolResults])` 算 `context`（`:456`）。abort 时 pi-agent-core 的 `runLoop`（`dist/agent-loop.js:122-127`）用空 `toolResults` + 空内容的 `stopReason: 'aborted'` 消息直接 emit `turn_end`；`compaction.js:94-105` 的 `getAssistantUsage` 又显式排除 aborted 消息，于是退化成按字符估算空内容，精确得 0。第二条事件来自 `agent-loop/index.ts:321-326` 的 `foldDelegatedUsage()` → `projector.delegated()`（`:569-587`）复述刚被污染的 `lastContextUsage`。`reasoning` 缺失是流在 `message_delta` 帧前被截断、适配器从未赋值（`anthropic-messages.js:565-572`），属契约行为。
 
 最小修法：`projector.ts` 的 `turn_end` 在 `stopReason === 'aborted'` 时不用空消息覆盖 `lastContextUsage` / `lastTurnUsage`；或 aborted 的 `usage.updated` 不带 `context` 键（同 `buildPiInterimUsagePayload` 的做法），让渲染层保留上次真实值。
 
+**相邻问题留档**：占位消息的顶层轮次账单（input / output / totalTokens）仍是 0，Stop 后「上一轮」数字显示 0，口径待定，本次不处理。
+
 ### F6 · 时间线审批行读不出是哪个子代理（MODEL-20，不通过）
+
+**处置**：已修，提交 `6ea3fb2d`（2026-09-19）。
 
 审批行全文「已拒绝 bash pwd」，无子代理名。store 原始对象：`forwarded: null, requesterAgentName: null, delegationId: "1103083d-…", agentName: "explorer"`。渲染 `permissionActivityRow.ts:140-145` 只读前两个字段，生产者 `runtime/plugins/permissions/activity.ts:70-74` 只写后两个。名字就在记录里，渲染层查的是永远为空的键。活的审批卡是归因的（「来自子 Agent · …」），子代理面板也归因正常（走 `permission.requested` 的 agentId/agentName），只有结算进时间线之后丢失。
 
@@ -46,9 +58,13 @@ Role: evidence shard。判据权威：[04-model.md](../../topics/t033-field-day/
 
 ### F7 · 硬编码路径 deny 不产生任何审批活动记录（MODEL-20 顺带）
 
+**处置**：Q027 结案不做（[决策 027](../../decisions/027-permission-rows-no-audit-trail.md)）。
+
 `src/runtime/plugins/tools/index.ts:177-178` 在调 `runtimePermissions.authorize` 之前先做 `pathPolicy(lexical) === 'deny'` 短路，直接抛 `access denied: <path>`。所以 explorer 读 `.env` 被拦时，时间线零审计行、store 零 `permission_activity`。用户只能从子代理回报文本里得知。走完闸门的只有 bash 那类 ask 档位的调用。审计完整性问题，待拍板是否要让硬编码 deny 也广播一条活动。
 
 ### F8 · 「应用的会话名」与「pi 的会话名」是两套从未打通的存储（MODEL-5）
+
+**处置**：Q028 推迟。
 
 GUI 重命名只改 `~/.config/jyw-ai-client-dev/session-index.json` 的 `title`；JSONL 里 `session_info` 条目 0 条，模拟 pi 的 `getSessionName()` 得 undefined；pi 冷启动打开同一文件状态栏无会话名，`/name` 落到 Usage 警告分支。导入会话的标题也写成 `{"kind":"fact","fact":"name",…,"customType":"aiclient.v4"}` 而非 pi 的 `session_info`。能写回 JSONL 的 `NativeSessionIndexAdapter.rename()` 生产代码零实例化。是否要打通待拍板（pi 侧显示名字属锦上添花）。
 
@@ -76,4 +92,6 @@ GUI worker 写的条目带 `kind` / `lane` / `seq`，id 是 UUID；pi CLI 写的
 - **回合结算后工具行 / 审批行 / 问答卡默认折进「Worked for …」的 `<details>` 工作组**。截图前必须展开；收起态元素 `getBoundingClientRect()` 有坐标但不参与命中测试。重启回放后同一位置的摘要文案是英文「N steps processed」。
 - **合成 transcript 灌 Grep/Glob 时每个搜索调用要各占一条 assistant 消息**：同一条消息里两个搜索会被聚合成「Explored …」一行，聚合行没有 `hitSource`，悬停不出列表。
 - **MODEL-23 回放后 `thinking` 块从 0 变 3**：实时态不显示思考块，回放后显示。未追根因，记录在案。
-- **平台 off 档尚未下发**：应用启动（06:35Z）与强制刷新（06:49Z）都真的远端拉取了，目录 `updatedAt` 仍是 03:16:43Z，`thinkingLevelMap.off` 仍为 null，菜单无「关闭」档。UI 无 bug，等上游。
+- **平台 off 档上午未下发、下午已通**：06:35Z / 06:49Z 两次远端拉取 `updatedAt` 仍 03:16:43Z、`off: null`；直拉 `GET /api/v1/models-config` 证实是平台没生成新版本而非客户端格式问题（客户端契约：字符串或 null，null 与缺省都隐藏）。平台 10:55Z 发布 `off: "off"` 后，应用常规同步拉到、菜单出现 `Off`、选中后回合 `usage.reasoning = 0` 无思考子句。菜单文案仍英文即 F4。
+- **F6 复验又踩一次「模型自拒」**：`.env` 提示词里的「不要绕过」被模型读成「不要用子代理绕过闸门」，0 委派 87 秒白跑；强制 `cat .env` 则撞硬编码 deny 零审计行（F7）。要审批行归因，只能用会弹 ask 卡的 bash 命令（如 `pwd`）再手动拒绝。
+- **2 核机上渲染进程会在连续 CDP 操作下换页卡死**（0% CPU、`Runtime.evaluate` 三分钟无响应、swap 1.8 GB），重启后同脚本 90 秒全绿。探针要每步落盘，卡死不丢已测读数。
