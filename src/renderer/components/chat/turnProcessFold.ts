@@ -22,7 +22,7 @@
  */
 
 import type { TurnItem, TurnSegment } from './chatTurn';
-import { type ToolRun, toolVerb, type ToolVerbState } from './toolCard';
+import { type ToolRun, type ToolVerbState, toolVerb } from './toolCard';
 import { splitWorkedForDuration, type WorkedForParts } from './turnTiming';
 
 /**

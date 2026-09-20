@@ -2310,7 +2310,6 @@ function turnItemKey(item: TurnItem): string {
   }
 }
 
-
 /*
  * `TurnHeadContent` retired with the degradation chain it switched on (T12-b).
  * Its four non-status branches — `workedFor`, `stats`, `thought`, `bare` —
