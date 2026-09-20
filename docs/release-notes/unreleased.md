@@ -1,6 +1,8 @@
-# AiClient 1.0.0-test.11 — Runtime 内部测试候选
+# PiLab Ai 1.0.0-test.17 — Runtime 内部测试候选
 
 本候选通过手动 CI 生成，尚未完成 Windows/企业加密机现场验收，不代表正式发布。
+
+- 应用更名为 **PiLab Ai**：安装包改为 `pilab-alpha-v<版本>-Setup.exe`，本地数据目录由 `AiClient` 迁至 `PiLabAi`。首次启动会自动把旧目录中的登录态与会话历史复制过来（只复制不删除，旧版本仍可回退使用）；界面主题、布局等浏览器本地存储不在迁移范围内，会回到默认值。
 
 - 自有 native runtime 已接入既有 worker RPC，默认仍使用 legacy Pi 后端。
 - 修复权限审计事件缺失、用户消息气泡重复、附件丢失及内部权限记录出现在时间线的问题。

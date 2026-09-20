@@ -498,11 +498,11 @@ jobs:
           if [ "$(uname -m)" = "arm64" ]; then
             echo "arch=arm64" >> "$GITHUB_OUTPUT"
             echo "platform=darwin-arm64" >> "$GITHUB_OUTPUT"
-            echo "app_dir=dist/mac-arm64/AiClient.app" >> "$GITHUB_OUTPUT"
+            echo "app_dir=dist/mac-arm64/PiLab Ai.app" >> "$GITHUB_OUTPUT"
           else
             echo "arch=x64" >> "$GITHUB_OUTPUT"
             echo "platform=darwin-x64" >> "$GITHUB_OUTPUT"
-            echo "app_dir=dist/mac/AiClient.app" >> "$GITHUB_OUTPUT"
+            echo "app_dir=dist/mac/PiLab Ai.app" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Cache bundled Node runtime
@@ -520,7 +520,8 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       - name: Verify packaged Pi worker
-        run: node scripts/verify-packaged-app.mjs --app-dir ${{ steps.target.outputs.app_dir }} --report-file dist/worker-smoke-report.json
+        # Quoted: `productName` is "PiLab Ai", so the bundle path has a space in it.
+        run: node scripts/verify-packaged-app.mjs --app-dir "${{ steps.target.outputs.app_dir }}" --report-file dist/worker-smoke-report.json
 
       - name: Upload worker smoke evidence
         if: always()
@@ -719,9 +720,9 @@ jobs:
 
           | Platform | File |
           |---|---|
-          | Windows x64 installer | [AiClient-Setup-${VERSION}.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-Setup-${VERSION}.exe) |
-          | Windows x64 portable | [AiClient-${VERSION}-portable.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-${VERSION}-portable.exe) |
-          | Linux x64 AppImage | [AiClient-${VERSION}.AppImage](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-${VERSION}.AppImage) |
+          | Windows x64 installer | [pilab-alpha-v${VERSION}-Setup.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/pilab-alpha-v${VERSION}-Setup.exe) |
+          | Windows x64 portable | [pilab-alpha-v${VERSION}-portable.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/pilab-alpha-v${VERSION}-portable.exe) |
+          | Linux x64 AppImage | [pilab-alpha-v${VERSION}.AppImage](https://github.com/${{ github.repository }}/releases/download/${TAG}/pilab-alpha-v${VERSION}.AppImage) |
           | Linux x64 deb | [jyw-ai-client_${VERSION}_amd64.deb](https://github.com/${{ github.repository }}/releases/download/${TAG}/jyw-ai-client_${VERSION}_amd64.deb) |
 
           The macOS CI candidate is unsigned and is intentionally not published

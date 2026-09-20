@@ -139,8 +139,12 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
   const failures = [];
   if (!fs.existsSync(args.appDir)) failures.push(`app directory does not exist: ${args.appDir}`);
-  if (process.platform === 'win32' && !fs.existsSync(path.join(args.appDir, 'AiClient.exe'))) {
-    failures.push('missing AiClient.exe');
+  // Must stay equal to `win.executableName` in electron-builder.yml.
+  // `packaging-config.test.mjs` binds the two, because a stale name here fails
+  // the CI verify step only AFTER the 20-minute Windows packaging job.
+  const windowsExecutable = 'PiLabAi.exe';
+  if (process.platform === 'win32' && !fs.existsSync(path.join(args.appDir, windowsExecutable))) {
+    failures.push(`missing ${windowsExecutable}`);
   }
 
   const resourceDir =

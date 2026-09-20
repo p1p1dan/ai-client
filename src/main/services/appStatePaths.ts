@@ -22,6 +22,7 @@ import {
   buildAppStateRoot,
   buildLegacyAppStateRoot,
   CREDENTIALS_DIR_NAME,
+  PRIOR_USER_DATA_DIR_NAMES,
 } from '@shared/appStateLayout';
 import { app } from 'electron';
 
@@ -45,6 +46,32 @@ export function getAppStateRoot(): string {
 /** `~/.aiclient` — for the migration, and for adoption's "never migrated" fallback. Nothing else. */
 export function getLegacyAppStateRoot(): string {
   return buildLegacyAppStateRoot(resolveHome());
+}
+
+/** One earlier `productName`'s pair of roots, as the migration consumes them. */
+export interface PriorInstallRoots {
+  /** `~/.pilab/<former productName>` — that release's S2 profile root. */
+  root: string;
+  /** `<appData>/<former productName>/credentials` — the vault's pre-S2 home under that release. */
+  credentialsDir: string;
+}
+
+/**
+ * Where a packaged install's state sits under each name this app shipped
+ * before `PACKAGED_USER_DATA_DIR_NAME`, newest first.
+ *
+ * The product rename (`AiClient` -> `PiLab Ai`, 1.0.0-test.17) moved
+ * `<userData>`, and `<profile>` is derived from it — so without this an
+ * existing tester would boot the new build into an empty root and be asked to
+ * log in again. Callers pass it to `migrateAppState`; nothing else may read it.
+ */
+export function getPriorInstallRoots(): PriorInstallRoots[] {
+  const home = resolveHome();
+  const appData = app.getPath('appData');
+  return PRIOR_USER_DATA_DIR_NAMES.map((name) => ({
+    root: buildAppStateRoot(home, name),
+    credentialsDir: join(appData, name, CREDENTIALS_DIR_NAME),
+  }));
 }
 
 /** `~/.pilab/<profile>/credentials`, the vault's home since S2 (it was `<userData>/credentials`). */

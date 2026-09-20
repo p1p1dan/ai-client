@@ -1,5 +1,5 @@
 appId: com.aiclient.app
-productName: AiClient
+productName: PiLab Ai
 copyright: Copyright © 2025
 
 directories:
@@ -167,10 +167,12 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   notarize: true
+  # Keep the `-mac` suffix: the Build workflow uploads `dist/*-mac.zip`.
+  artifactName: pilab-alpha-v${version}-${arch}-mac.${ext}
   # Register aiclient:// URL scheme
   extendInfo:
     CFBundleURLTypes:
-      - CFBundleURLName: AiClient
+      - CFBundleURLName: PiLab Ai
         CFBundleURLSchemes:
           - aiclient
 
@@ -185,7 +187,9 @@ dmg:
       path: /Applications
 
 win:
-  executableName: AiClient
+  # No space, unlike `productName`: this is the file every shortcut, registry
+  # entry and `installer.nsh` line spells out by hand.
+  executableName: PiLabAi
   target:
     # NSIS supports delta updates automatically
     - target: nsis
@@ -194,7 +198,7 @@ win:
       arch: [x64]
 
 portable:
-  artifactName: ${productName}-${version}-portable.exe
+  artifactName: pilab-alpha-v${version}-portable.${ext}
 
 nsis:
   oneClick: false
@@ -203,6 +207,9 @@ nsis:
   deleteAppDataOnUninstall: false
   # Enable differential download for NSIS
   differentialPackage: true
+  # `Setup` stays in the name: the Build workflow uploads `dist/*Setup*.exe`.
+  artifactName: pilab-alpha-v${version}-Setup.${ext}
+  shortcutName: PiLab Ai
   # Register aiclient:// URL scheme
   include: build/installer.nsh
 
@@ -218,6 +225,9 @@ linux:
   # Register aiclient:// URL scheme
   mimeTypes:
     - x-scheme-handler/aiclient
+
+appImage:
+  artifactName: pilab-alpha-v${version}.${ext}
 
 afterPack: scripts/afterPack.mjs
 

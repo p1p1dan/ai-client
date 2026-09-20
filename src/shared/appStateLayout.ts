@@ -32,6 +32,32 @@ import { APP_STATE_DIR, LEGACY_APP_STATE_DIR } from './defaultPaths';
 /** Sub-directory of the profile root that holds `vault.json`. */
 export const CREDENTIALS_DIR_NAME = 'credentials';
 
+/**
+ * `<userData>`'s directory name in a PACKAGED build, pinned rather than
+ * inherited from `productName`.
+ *
+ * Electron would otherwise name it after the product — "PiLab Ai" since the
+ * 1.0.0-test.17 rename — and `<profile>` is that directory's basename, so the
+ * space would land in every path the app writes: `~/.pilab/PiLab Ai/...`, the
+ * vault included. A space-free name keeps those paths quotable in the shell
+ * scripts and agent commands that receive them (user decision, 2026-09-21).
+ *
+ * `main/index.ts` applies it with `app.setPath('userData', …)` before anything
+ * reads a path; dev builds keep their own `<name>-<profile>` directory.
+ */
+export const PACKAGED_USER_DATA_DIR_NAME = 'PiLabAi';
+
+/**
+ * `<userData>` directory names earlier PACKAGED releases wrote under, newest
+ * first. Each one is a former `productName`, and each is a place this install's
+ * own state may still be sitting: `~/.pilab/<name>` for the S2 layout, and
+ * `<appData>/<name>/credentials` for the vault's pre-S2 home.
+ *
+ * Read only by the migration — see `main/services/appStateMigration.ts`. A
+ * normal reader that fell back to these would never notice the copy failed.
+ */
+export const PRIOR_USER_DATA_DIR_NAMES = ['AiClient'];
+
 /** Last path segment of `<userData>` — see "The profile layer" above. */
 function profileSegment(userDataDir: string): string {
   const segments = userDataDir.split(/[\\/]+/).filter(Boolean);

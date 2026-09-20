@@ -1,14 +1,20 @@
 /**
  * One-shot move of an existing install onto the S2 layout.
  *
- * Two things move, from two different places:
+ * Three things move, from three different places:
  *
- *  - `~/.aiclient/*`            ->  `~/.pilab/<profile>/*`      (the rename)
+ *  - `~/.pilab/<prior productName>/*`  ->  `~/.pilab/<profile>/*`  (the product rename)
+ *  - `~/.aiclient/*`            ->  `~/.pilab/<profile>/*`      (the directory rename)
  *  - `<userData>/credentials/*` ->  `~/.pilab/<profile>/credentials/*`  (the merge)
  *
  * The hard requirement this file exists to meet: **an existing user must never
  * be asked to log in again.** The credential vault is the thing that decides
  * that, so it is copied before anything can read from the new root.
+ *
+ * The first line is the newest: `productName` went `AiClient` -> `PiLab Ai` in
+ * 1.0.0-test.17, and `<profile>` is `<userData>`'s basename, so a tester who
+ * had been running `AiClient` has a full state root sitting under the old name.
+ * See `PRIOR_USER_DATA_DIR_NAMES` in `@shared/appStateLayout`.
  *
  * ## Why COPY and never move
  *
@@ -55,6 +61,20 @@ export interface AppStateMigrationInput {
   newRoot: string;
   /** `~/.pilab/<profile>/credentials` — where the vault lives from S2 on. */
   newCredentialsDir: string;
+  /**
+   * Roots written under an earlier `productName`, newest first — see
+   * `getPriorInstallRoots()`. Empty for dev builds, whose `<userData>` name has
+   * never depended on the product name.
+   */
+  priorInstalls?: PriorInstallSource[];
+}
+
+/** One earlier `productName`'s pair of roots. Mirrors `appStatePaths.PriorInstallRoots`. */
+export interface PriorInstallSource {
+  /** `~/.pilab/<former productName>` — already in the S2 layout, vault included. */
+  root: string;
+  /** `<appData>/<former productName>/credentials` — that release's pre-S2 vault. */
+  credentialsDir: string;
 }
 
 export type AppStateMigrationOutcome =
@@ -126,9 +146,18 @@ export function migrateAppState(input: AppStateMigrationInput): AppStateMigratio
     return { kind: 'skipped', reason: 'marker_present' };
   }
 
+  // A root equal to the destination would be the app copying onto itself —
+  // harmless (every `to` already exists, so every entry is skipped) but
+  // meaningless. Dropping it keeps `nothing_to_migrate` honest on a build whose
+  // `<userData>` name has been set back to a former one.
+  const priorInstalls = (input.priorInstalls ?? []).filter((prior) => prior.root !== input.newRoot);
+
   const hasLegacyRoot = existsSync(input.legacyRoot);
   const hasLegacyCredentials = existsSync(input.legacyCredentialsDir);
-  if (!hasLegacyRoot && !hasLegacyCredentials) {
+  const hasPriorInstall = priorInstalls.some(
+    (prior) => existsSync(prior.root) || existsSync(prior.credentialsDir)
+  );
+  if (!hasLegacyRoot && !hasLegacyCredentials && !hasPriorInstall) {
     // A fresh install. Deliberately no marker: writing one would mean a user
     // who restores `~/.aiclient` from a backup tomorrow never gets migrated.
     return { kind: 'skipped', reason: 'nothing_to_migrate' };
@@ -137,6 +166,23 @@ export function migrateAppState(input: AppStateMigrationInput): AppStateMigratio
   const copied: string[] = [];
   const skippedExisting: string[] = [];
   try {
+    // Newest source first, because "first writer wins" makes this ordering the
+    // precedence rule. A prior install's root is already in the S2 layout — it
+    // carries that release's vault in its own `credentials/` sub-tree — so it
+    // outranks every pre-S2 source below it.
+    for (const prior of priorInstalls) {
+      copyTree(prior.root, input.newRoot, '', copied, skippedExisting);
+    }
+    for (const prior of priorInstalls) {
+      copyTree(
+        prior.credentialsDir,
+        input.newCredentialsDir,
+        'credentials',
+        copied,
+        skippedExisting
+      );
+    }
+
     // Credentials first. Everything else is a preference; this is the file
     // that decides whether the user is still logged in.
     copyTree(

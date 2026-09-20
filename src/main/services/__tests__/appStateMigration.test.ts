@@ -6,6 +6,7 @@ import {
   type AppStateMigrationInput,
   MIGRATION_MARKER_FILE_NAME,
   migrateAppState,
+  type PriorInstallSource,
 } from '../appStateMigration';
 
 /**
@@ -157,5 +158,109 @@ describe('app state migration', () => {
 
     expect(outcome.kind).toBe('failed');
     expect(existsSync(path.join(input.newRoot, MIGRATION_MARKER_FILE_NAME))).toBe(false);
+  });
+});
+
+/**
+ * The product rename, 1.0.0-test.17: `productName` went `AiClient` ->
+ * `PiLab Ai` and `<userData>` was pinned to `PiLabAi`.
+ *
+ * `<profile>` is `<userData>`'s basename, so that rename moved the ENTIRE state
+ * root — vault included. Without this source a tester upgrading from test.16
+ * boots into an empty root and is asked to log in again, which is the one
+ * outcome this module exists to prevent.
+ */
+describe('app state migration across a product rename', () => {
+  let root: string;
+  let input: AppStateMigrationInput;
+  let prior: PriorInstallSource;
+
+  function write(file: string, body: string): void {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, body, 'utf-8');
+  }
+
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), 'appstate-rename-'));
+    const newRoot = path.join(root, 'home', '.pilab', 'PiLabAi');
+    prior = {
+      root: path.join(root, 'home', '.pilab', 'AiClient'),
+      credentialsDir: path.join(root, 'appData', 'AiClient', 'credentials'),
+    };
+    input = {
+      legacyRoot: path.join(root, 'home', '.aiclient'),
+      legacyCredentialsDir: path.join(root, 'appData', 'PiLabAi', 'credentials'),
+      newRoot,
+      newCredentialsDir: path.join(newRoot, 'credentials'),
+      priorInstalls: [prior],
+    };
+  });
+
+  it('carries the old product name’s vault and session history across', () => {
+    write(path.join(prior.root, 'credentials', 'vault.json'), '{"version":1}');
+    write(path.join(prior.root, 'settings.json'), '{"theme":"dark"}');
+    write(path.join(prior.root, 'sessions', 'a.json'), '{"id":"a"}');
+
+    const outcome = migrateAppState(input);
+
+    expect(outcome.kind).toBe('migrated');
+    expect(readFileSync(path.join(input.newCredentialsDir, 'vault.json'), 'utf-8')).toBe(
+      '{"version":1}'
+    );
+    expect(readFileSync(path.join(input.newRoot, 'settings.json'), 'utf-8')).toBe(
+      '{"theme":"dark"}'
+    );
+    expect(readFileSync(path.join(input.newRoot, 'sessions', 'a.json'), 'utf-8')).toBe(
+      '{"id":"a"}'
+    );
+  });
+
+  /** An install that never reached S2 still has its vault under the old `<userData>`. */
+  it('picks up the pre-S2 vault left under the old product’s userData', () => {
+    write(path.join(prior.credentialsDir, 'vault.json'), '{"version":2}');
+
+    const outcome = migrateAppState(input);
+
+    expect(outcome.kind).toBe('migrated');
+    expect(readFileSync(path.join(input.newCredentialsDir, 'vault.json'), 'utf-8')).toBe(
+      '{"version":2}'
+    );
+  });
+
+  /**
+   * Both sources can hold the same file. The renamed install is already in the
+   * S2 layout and is therefore the newer writer, so "first writer wins" has to
+   * resolve to it rather than to the much older `~/.aiclient`.
+   */
+  it('prefers the renamed install over the older ~/.aiclient root', () => {
+    write(path.join(prior.root, 'settings.json'), '{"from":"prior"}');
+    write(path.join(input.legacyRoot, 'settings.json'), '{"from":"legacy"}');
+
+    migrateAppState(input);
+
+    expect(readFileSync(path.join(input.newRoot, 'settings.json'), 'utf-8')).toBe(
+      '{"from":"prior"}'
+    );
+  });
+
+  it('leaves a machine that never ran the old build unmarked', () => {
+    expect(migrateAppState(input)).toEqual({ kind: 'skipped', reason: 'nothing_to_migrate' });
+    expect(existsSync(path.join(input.newRoot, MIGRATION_MARKER_FILE_NAME))).toBe(false);
+  });
+
+  /**
+   * Guards a future release that points `<userData>` back at a name already in
+   * `PRIOR_USER_DATA_DIR_NAMES`: the app would otherwise read its own root as a
+   * migration source and report a migration it did not perform.
+   */
+  it('never treats the destination itself as a prior install', () => {
+    write(path.join(input.newRoot, 'settings.json'), '{"current":true}');
+
+    const outcome = migrateAppState({
+      ...input,
+      priorInstalls: [{ root: input.newRoot, credentialsDir: prior.credentialsDir }],
+    });
+
+    expect(outcome).toEqual({ kind: 'skipped', reason: 'nothing_to_migrate' });
   });
 });

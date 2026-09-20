@@ -2,6 +2,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { pathToFileURL, URL } from 'node:url';
 import { electronApp, optimizer } from '@electron-toolkit/utils';
+import { PACKAGED_USER_DATA_DIR_NAME } from '@shared/appStateLayout';
 import { APP_STATE_DIR } from '@shared/defaultPaths';
 import { type Locale, normalizeLocale } from '@shared/i18n';
 import { IPC_CHANNELS, type ProxySettings } from '@shared/types';
@@ -52,6 +53,7 @@ import {
   getAppStateRoot,
   getCredentialsDir,
   getLegacyAppStateRoot,
+  getPriorInstallRoots,
 } from './services/appStatePaths';
 import {
   createRealVaultCrypto,
@@ -151,6 +153,14 @@ function sanitizeProfileName(input: string): string {
 if (isDev) {
   const profile = sanitizeProfileName(process.env.AICLIENT_PROFILE || '') || 'dev';
   app.setPath('userData', join(app.getPath('appData'), `${app.getName()}-${profile}`));
+} else {
+  // Packaged: pin `<userData>` rather than letting Electron name it after
+  // `productName`. That name is "PiLab Ai" since 1.0.0-test.17, and this
+  // directory's basename IS the `<profile>` segment of `~/.pilab/<profile>` —
+  // so the space would reach every path the app writes, the vault included.
+  // Overriding `userData` carries `sessionData` with it, so Chromium's profile
+  // follows rather than splitting off on its own.
+  app.setPath('userData', join(app.getPath('appData'), PACKAGED_USER_DATA_DIR_NAME));
 }
 
 // Phase ⓪ — S2, and it must be the FIRST thing after `setPath('userData')`.
@@ -159,12 +169,17 @@ if (isDev) {
 // those paths, so an install that has not been carried across yet would come
 // up looking like a brand-new machine — which for the vault means "please log
 // in again", the one outcome this slice is not allowed to produce.
+// The product rename added a third source: a tester on 1.0.0-test.16 has that
+// same root under the old product name (`getPriorInstallRoots()`).
 // Never throws: a machine that cannot be migrated still has to start.
 const appStateMigration = migrateAppState({
   legacyRoot: getLegacyAppStateRoot(),
   legacyCredentialsDir: join(app.getPath('userData'), CREDENTIALS_DIR_NAME),
   newRoot: getAppStateRoot(),
   newCredentialsDir: getCredentialsDir(),
+  // Only a packaged build ever renamed its `<userData>`; a dev build's name is
+  // built from package.json's `name`, which the product rename did not touch.
+  priorInstalls: isDev ? [] : getPriorInstallRoots(),
 });
 if (appStateMigration.kind === 'migrated') {
   console.log(

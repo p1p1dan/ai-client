@@ -30,9 +30,9 @@ describe('afterPack resource layout', () => {
       resolveResourcesDir({
         appOutDir: '/tmp/dist/mac-arm64',
         electronPlatformName: 'darwin',
-        packager: { appInfo: { productFilename: 'AiClient' } },
+        packager: { appInfo: { productFilename: 'PiLab Ai' } },
       })
-    ).toBe(path.join('/tmp/dist/mac-arm64', 'AiClient.app', 'Contents', 'Resources'));
+    ).toBe(path.join('/tmp/dist/mac-arm64', 'PiLab Ai.app', 'Contents', 'Resources'));
   });
 
   it('keeps the flat resources directory on Windows and Linux', () => {
@@ -40,9 +40,100 @@ describe('afterPack resource layout', () => {
       resolveResourcesDir({
         appOutDir: '/tmp/dist/linux-unpacked',
         electronPlatformName: 'linux',
-        packager: { appInfo: { productFilename: 'AiClient' } },
+        packager: { appInfo: { productFilename: 'PiLab Ai' } },
       })
     ).toBe(path.join('/tmp/dist/linux-unpacked', 'resources'));
+  });
+});
+
+/**
+ * The 1.0.0-test.17 rename: `AiClient` -> `PiLab Ai`, with `pilab-alpha-v*`
+ * artifact names. Four files have to agree about it, and none of them would
+ * fail to BUILD if they drifted — the release would just be wrong, or the
+ * artifact upload would find nothing.
+ */
+describe('product rename and artifact naming', () => {
+  const nshText = readFileSync(path.join(repoRoot, 'build', 'installer.nsh'), 'utf8');
+  const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+
+  /** The subset of glob syntax `actions/upload-artifact` paths use here. */
+  function matchesGlob(pattern, name) {
+    const source = pattern
+      .split('*')
+      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('[^/]*');
+    return new RegExp(`^${source}$`).test(name);
+  }
+
+  function expandArtifactName(template, ext) {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: electron-builder's own macro syntax, not a JS template
+    return template.replaceAll('${version}', pkg.version).replaceAll('${ext}', ext);
+  }
+
+  it('names the product once, in electron-builder.yml', () => {
+    expect(builderYml.productName).toBe('PiLab Ai');
+  });
+
+  /**
+   * `<userData>`'s basename is the `<profile>` segment of `~/.pilab/<profile>`,
+   * so a space in the executable name is a space in the vault's path. The main
+   * process pins the directory (`PACKAGED_USER_DATA_DIR_NAME`); this keeps the
+   * Windows binary, which every shortcut and registry entry spells by hand,
+   * on the same rule.
+   */
+  it('keeps the Windows executable name space-free', () => {
+    expect(builderYml.win.executableName).toBe('PiLabAi');
+    expect(builderYml.win.executableName).not.toMatch(/\s/);
+  });
+
+  it('registers the URL scheme against the executable the build actually emits', () => {
+    // A stale path here does not fail the build: `aiclient://` just stops
+    // opening the app after the next rename.
+    expect(nshText).toContain(`$INSTDIR\\${builderYml.win.executableName}.exe`);
+  });
+
+  it('checks the packaged Windows binary under the name the build emits', () => {
+    // This one DOES fail CI — but only after the Windows packaging job has
+    // already spent its twenty minutes, which is why it is bound here.
+    const verifyText = readFileSync(
+      path.join(repoRoot, 'scripts', 'verify-packaged-app.mjs'),
+      'utf8'
+    );
+    expect(verifyText).toContain(`'${builderYml.win.executableName}.exe'`);
+  });
+
+  it('produces installer and portable names the Build workflow can upload', () => {
+    // The workflow globs for these two literal patterns. An artifactName that
+    // dropped "Setup" or "portable" would make the upload step fail with
+    // if-no-files-found: error, AFTER the full 20-minute packaging job.
+    const installer = expandArtifactName(builderYml.nsis.artifactName, 'exe');
+    const portable = expandArtifactName(builderYml.portable.artifactName, 'exe');
+
+    expect(installer).toBe(`pilab-alpha-v${pkg.version}-Setup.exe`);
+    expect(portable).toBe(`pilab-alpha-v${pkg.version}-portable.exe`);
+    expect(matchesGlob('*Setup*.exe', installer)).toBe(true);
+    expect(matchesGlob('*portable*.exe', portable)).toBe(true);
+    expect(workflowText).toContain('dist/*Setup*.exe');
+    expect(workflowText).toContain('dist/*portable*.exe');
+  });
+
+  it('keeps the macOS zip suffix the workflow globs for', () => {
+    expect(matchesGlob('*-mac.zip', expandArtifactName(builderYml.mac.artifactName, 'zip'))).toBe(
+      true
+    );
+  });
+
+  /**
+   * The bundle directory is named after `productName`, and the workflow spells
+   * it out twice to hand it to `verify-packaged-app.mjs`. A rename that misses
+   * these lines turns the macOS verify step red with "app dir not found".
+   */
+  it('resolves the macOS bundle path from the current product name', () => {
+    expect(workflowText).toContain(`dist/mac-arm64/${builderYml.productName}.app`);
+    expect(workflowText).toContain(`dist/mac/${builderYml.productName}.app`);
+    // Quoted at the call site, because the name has a space in it.
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions expression syntax
+    expect(workflowText).toContain('--app-dir "${{ steps.target.outputs.app_dir }}"');
   });
 });
 
