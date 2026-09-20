@@ -2901,8 +2901,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // or before the first keystroke) there is no content to measure, so
       // the browser falls back to the HTML default of 2 rows instead of 1.
       // In the docked session card (composerTextareaClass('session')'s
-      // `min-h-6`/`leading-6` — a deliberate one-line, 24px resting-height
-      // contract) that produced a taller-than-intended box; the placeholder
+      // body-tier-derived min-height/leading — a deliberate one-line resting
+      // contract, 24px at the 16px default) that produced a taller-than-intended box; the placeholder
       // text is top-anchored inside it (textareas never vertically center
       // their own content), leaving visible empty space below and reading
       // as "text sits high". `rows={1}` pins the no-content baseline to one

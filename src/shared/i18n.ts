@@ -400,6 +400,19 @@ export const zhTranslations: Record<string, string> = {
   Font: '字体',
   'Font size': '字号',
   'Font weight': '字重',
+  // T104: chat area typography (Appearance page, "Chat area" block). The chat
+  // area's two tiers are named after the roles they play in a turn, not after
+  // their px values, so the labels stay true when the reader changes them.
+  'Chat area': '聊天区',
+  'Font and text size for messages and process information': '消息与过程信息的字体和字号',
+  'Chat font family': '聊天区字体',
+  'Empty follows the app font': '留空则跟随应用字体',
+  'Message text size': '正文字号',
+  'Process text size': '过程信息字号',
+  'For example: this paragraph is the message text, and it changes with the setting.':
+    '例如：这一段是正文，会随上面的设置一起变化。',
+  'Process information (thinking, tool calls) reads at this size.':
+    '过程信息（思考、工具调用）按这个字号显示。',
   'Force delete (ignore uncommitted changes)': '强制删除（忽略未提交的修改）',
   'Folder diff totals': '该目录未提交：+{{insertions}} 行 / -{{deletions}} 行',
   General: '通用',

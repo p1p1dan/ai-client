@@ -2,6 +2,13 @@ import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
 import { EMPTY_CHAT_AGENT_DEFAULTS } from '@shared/models/chatAgentDefaults';
 import {
+  DEFAULT_CHAT_BODY_FONT_SIZE,
+  DEFAULT_CHAT_FONT_FAMILY,
+  DEFAULT_CHAT_PROCESS_FONT_SIZE,
+  resolveChatBodyWrite,
+  resolveChatProcessWrite,
+} from '@shared/types/chatTypography';
+import {
   DEFAULT_PROMPT_CACHE_TTL,
   DEFAULT_SUBAGENT_PROMPT_CACHE_TTL,
 } from '@shared/types/promptCacheTtl';
@@ -173,6 +180,17 @@ export function getInitialState() {
     // cannot show a number the runtime is not using.
     providerIdleTimeoutMs: DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
 
+    // T104: chat typography. Empty family = follow the app's `--font-sans`.
+    // The two sizes are D1's 16 / 13, and MUST equal `globals.css`'s
+    // `--text-chat-body` / `--text-chat-process` defaults — the store value is
+    // what `ChatWorkspace` writes inline, so a mismatch would make the rendered
+    // chat disagree with the token a stylesheet-less consumer reads (and with
+    // `DEFAULT_CHAT_BODY_FONT_SIZE`, which `middleColumnLayout`'s composer
+    // arithmetic is derived from).
+    chatFontFamily: DEFAULT_CHAT_FONT_FAMILY,
+    chatBodyFontSize: DEFAULT_CHAT_BODY_FONT_SIZE,
+    chatProcessFontSize: DEFAULT_CHAT_PROCESS_FONT_SIZE,
+
     // AI Features
     commitMessageGenerator: defaultCommitMessageGeneratorSettings,
     codeReview: defaultCodeReviewSettings,
@@ -311,6 +329,31 @@ export const useSettingsStore = create<SettingsState>()(
       setProviderIdleTimeoutMs: (providerIdleTimeoutMs) => {
         if (isProviderIdleTimeoutMs(providerIdleTimeoutMs)) set({ providerIdleTimeoutMs });
       },
+
+      // T104: three pure `set({…})` writers with no side effects, like every
+      // other setter here — the override is applied by `ChatWorkspace` reading
+      // the value, not by the write reaching out and touching the DOM. That is
+      // also what keeps the `documentElement` red line structurally out of
+      // reach: these setters have no DOM access to abuse.
+      //
+      // The clamps live HERE rather than only in the settings controls, because
+      // "process never exceeds body" is an invariant of the rendering (a process
+      // tier larger than the answer is a broken screen), not a property of one
+      // input widget. `resolveChat*Write` in `@shared/types/chatTypography`
+      // holds the ranges and both cross-clamps; each returns the whole pair so a
+      // body write can drag the process tier down with it in the same `set`,
+      // never through two renders that briefly disagree.
+      setChatFontFamily: (chatFontFamily) => set({ chatFontFamily }),
+      setChatBodyFontSize: (size) =>
+        set((state) => {
+          const { body, process } = resolveChatBodyWrite(size, state.chatProcessFontSize);
+          return { chatBodyFontSize: body, chatProcessFontSize: process };
+        }),
+      setChatProcessFontSize: (size) =>
+        set((state) => {
+          const { body, process } = resolveChatProcessWrite(size, state.chatBodyFontSize);
+          return { chatBodyFontSize: body, chatProcessFontSize: process };
+        }),
 
       // AI Feature Setters
       setCommitMessageGenerator: (settings) =>

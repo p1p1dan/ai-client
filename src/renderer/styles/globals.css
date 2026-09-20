@@ -68,6 +68,26 @@
   --text-ui: 0.875rem;         /* 14px sans -- sidebar rows, buttons, labels, tabs, dropdown triggers */
   --text-title: 1.125rem;      /* 18px sans -- settings L1, the only tier above 15px */
 
+  /*
+   * T104: the chat area's two configurable tiers. These are the ONLY two
+   * font-size tokens in this file whose value is expected to change at
+   * runtime -- `ChatWorkspace`'s root <section> re-declares both as inline
+   * custom properties from the user's settings (`chatBodyFontSize` /
+   * `chatProcessFontSize`), and the utilities resolve through `var()`, so every
+   * descendant picks up the override by inheritance.
+   *
+   * Declared in px, not rem, on purpose: the inline override writes px, and a
+   * rem default would leave the same scale expressed two ways. `--text-2xs`
+   * above is the existing px precedent.
+   *
+   * Scope is the override point, not this declaration: `:root` still holds the
+   * out-of-the-box values, and nothing may ever write these to
+   * `documentElement` (see design-system.md "字体族（分域）" -- the deleted
+   * `applyTerminalFont()` is what that red line was paid for).
+   */
+  --text-chat-body: 16px;      /* D1 -- assistant/user prose, markdown incl. h1-h6, composer */
+  --text-chat-process: 13px;   /* D1 -- tool rows and thinking body (the downgraded tier) */
+
   /* D25 §3.4: reading column = 48 CJK chars @15px = Cursor reference; wide keeps the same -6.25% scaling */
   --container-reading: 45rem;
   --container-reading-wide: 60rem;

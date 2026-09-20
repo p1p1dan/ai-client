@@ -714,19 +714,24 @@ describe('reading ladder (2026-09-18)', () => {
 
   /**
    * The tone is applied through `cn()` on top of `turnBodyClass()`, and
-   * `turnBodyClass()` carries `text-markdown` — a SIZE token. `utils.ts`
+   * `turnBodyClass()` carries `text-chat-body` — a SIZE token. `utils.ts`
    * registers the repo's custom size tokens into tailwind-merge's `font-size`
    * group precisely because they would otherwise fall through to `text-color`
    * and be dropped by the colour that follows them. This is the assertion that
    * that registration is still doing its job for the two new call sites:
-   * without it the answer would silently lose the markdown type scale.
+   * without it the answer would silently lose the body type scale.
+   *
+   * T104 keeps the proposition and changes only the token: `text-chat-body` is
+   * a NEW name, so it is a fresh chance to forget the `extendTailwindMerge`
+   * registration — the failure mode this test exists for is exactly "the size
+   * disappeared and nothing said so".
    */
   it('[LADDER-5] adding a tone to the body class keeps the size token', () => {
     const answer = cn(turnBodyClass(), turnAnswerToneClass());
-    expect(answer).toContain('text-markdown');
+    expect(answer).toContain('text-chat-body');
     expect(answer).toContain('text-foreground');
     const process = cn(turnProcessShellClass(), turnBodyClass(), turnProcessToneClass());
-    expect(process).toContain('text-markdown');
+    expect(process).toContain('text-chat-body');
     expect(process).toContain('text-tool-arg');
   });
 

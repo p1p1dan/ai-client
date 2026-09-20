@@ -692,7 +692,7 @@ const SECTION_GAP = 'mt-6 first:mt-0';
  * (found in T-29 GUI review).
  */
 export function chatMarkdownRootClass(): string {
-  return 'min-w-0 select-text break-words text-markdown leading-relaxed text-foreground';
+  return 'min-w-0 select-text break-words text-chat-body leading-relaxed text-foreground';
 }
 
 export function chatMarkdownParagraphClass(): string {
@@ -702,19 +702,27 @@ export function chatMarkdownParagraphClass(): string {
 /**
  * Heading rank (see the module note for why there are three of them, not six).
  *
- * Every level pins `text-markdown` explicitly instead of relying on Tailwind
+ * Every level pins a size token explicitly instead of relying on Tailwind
  * preflight's `font-size: inherit` reset — a heading that silently picks up a
  * UA `2em` inside a 45rem reading column is precisely the regression D25's
  * "标题不靠字号" ruling exists to prevent, and an explicit token fails loudly if
  * preflight ever changes.
  *
+ * T104: they pin `text-chat-body`, the same token as `chatMarkdownRootClass()`
+ * above, and must keep doing so. D25's ruling is that heading rank comes from
+ * weight + letter-spacing + color and never from size, so a heading that
+ * carried a *different* size token than the body would violate it in the one
+ * way that is invisible in review: leaving these on the old 14px tier while
+ * the body moved to 16px renders every heading 2px smaller than its own
+ * paragraph.
+ *
  * No `tracking-*` at any level: D25's gradient stops at "<18px 一律非负", these
- * are all 15px, and the non-negative value is the default.
+ * are all 16px, and the non-negative value is the default.
  */
 export function chatMarkdownHeadingClass(level: 1 | 2 | 3 | 4 | 5 | 6): string {
-  if (level <= 3) return `${SECTION_GAP} text-markdown font-semibold text-foreground`;
-  if (level <= 5) return `${BLOCK_GAP} text-markdown font-semibold text-muted-foreground`;
-  return `${BLOCK_GAP} text-markdown font-normal text-muted-foreground`;
+  if (level <= 3) return `${SECTION_GAP} text-chat-body font-semibold text-foreground`;
+  if (level <= 5) return `${BLOCK_GAP} text-chat-body font-semibold text-muted-foreground`;
+  return `${BLOCK_GAP} text-chat-body font-normal text-muted-foreground`;
 }
 
 /**

@@ -1,11 +1,13 @@
 import { Play } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import { markSessionsLive } from '@/stores/sessionRetirement';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
+import { useSettingsStore } from '@/stores/settings';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { AgentTerminal } from './AgentTerminal';
 import { ChatComposer } from './ChatComposer';
@@ -63,6 +65,48 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const thinkingEnabled = isThinkingCapable(hostStatus.capabilities);
+
+  // ---------------------------------------------------------------------
+  // T104: the chat area's two configurable tiers, applied as inline custom
+  // properties on this column's ROOT <section>.
+  //
+  // Scope is the whole point. `--text-chat-body` / `--text-chat-process` are
+  // consumed by `var()` inside the chat utilities (`text-chat-body`,
+  // `text-chat-process`), so re-declaring them HERE — on the ancestor of the
+  // timeline, the composer and the question cards — reaches every consumer and
+  // nothing outside this subtree. Writing them to `documentElement` would
+  // re-create the bug T-21 deleted: `applyTerminalFont()` wrote the terminal
+  // font into the root custom properties, which polluted 41 `font-mono` call
+  // sites and scaled the ENTIRE interface by `terminalFontSize / 16`
+  // (design-system.md "分离契约"). That red line stands.
+  //
+  // The family is a direct `fontFamily` declaration rather than an override of
+  // `--font-sans`, for the reason `globals.css` writes
+  // `html[data-font-domain="mono"]` the same way: a theme custom property can
+  // be inlined at build time, and then the runtime override silently does
+  // nothing. A direct declaration only inherits into descendants that do not
+  // set their own family — chat's `font-mono` code blocks and tool output are
+  // untouched, since a utility's family beats inheritance.
+  //
+  // Empty string means "follow the app", so the key is OMITTED rather than set
+  // to a fallback literal: the store's historical `fontFamily` (dead since
+  // T-21) carries `'Inter'`, and copying that shape is what would make the chat
+  // area disagree with the rest of the UI for everyone who never opens the
+  // setting.
+  // ---------------------------------------------------------------------
+  const chatFontFamily = useSettingsStore((state) => state.chatFontFamily);
+  const chatBodyFontSize = useSettingsStore((state) => state.chatBodyFontSize);
+  const chatProcessFontSize = useSettingsStore((state) => state.chatProcessFontSize);
+  const chatSurfaceStyle = useMemo(
+    () =>
+      ({
+        '--text-chat-body': `${chatBodyFontSize}px`,
+        '--text-chat-process': `${chatProcessFontSize}px`,
+        ...(chatFontFamily ? { fontFamily: chatFontFamily } : {}),
+      }) as React.CSSProperties,
+    [chatBodyFontSize, chatProcessFontSize, chatFontFamily]
+  );
+
   // T-05: repo name tail for Grep/Glob rows ("… in ai-client").
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
   const activeWorkspacePath = activeWorkspace?.path?.trim() ?? '';
@@ -195,7 +239,7 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
   }, [activeSessionId, sessions, selectSession]);
 
   return (
-    <section className={cn('relative flex min-h-0 flex-col', className)}>
+    <section className={cn('relative flex min-h-0 flex-col', className)} style={chatSurfaceStyle}>
       {/*
         D07: this column no longer draws a header bar of its own. It used to be
         a second h-9 strip under `MainHeader` carrying only the repo name and the

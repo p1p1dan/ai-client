@@ -908,13 +908,15 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // Unparsed prose still has exactly one spelling, shared by the streaming
     // tail and the pre-gate block.
     expectCalled(
-      'className="text-markdown leading-relaxed text-foreground whitespace-pre-wrap select-text"'
+      'className="text-chat-body leading-relaxed text-foreground whitespace-pre-wrap select-text"'
     );
     // The bubble's own prompt echo (`:845`) reads at the same rhythm but is a
     // different element with a different class order, so the count is of THIS
     // string — assistant prose that has not been parsed.
+    // (T104 moved all of these from `text-markdown` to the runtime-configurable
+    // `text-chat-body`; the DISTINCTIONS they draw are what is under test.)
     const proseClass =
-      'text-markdown leading-relaxed text-foreground whitespace-pre-wrap select-text';
+      'text-chat-body leading-relaxed text-foreground whitespace-pre-wrap select-text';
     expect(
       CALL_SITES.split(proseClass).length - 1,
       'one definition of how unparsed assistant prose reads'
@@ -1009,7 +1011,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // The user bubble's `select-text` moved into `userBubbleTextClass()`
     // (asserted in `chatTimelineLayout.test.ts`); the wiring half is the §5
     // call assertion above.
-    expectCalled('className="select-text whitespace-pre-wrap text-markdown text-foreground"');
+    expectCalled('className="select-text whitespace-pre-wrap text-chat-body text-foreground"');
   });
 
   // The three surfaces T-29 deliberately does NOT touch. Each is model-adjacent
@@ -1020,7 +1022,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   it('T-29: user bubble and notice bodies stay plain text', () => {
     // Both paragraphs still exist and still pre-wrap. The class-string order is
     // what distinguishes them from `TurnItemView`'s streaming fallback, which
-    // spells the same utilities in the opposite order (`text-markdown` first).
+    // spells the same utilities in the opposite order (`text-chat-body` first).
     //
     // These used to be counted through their shared `whitespace-pre-wrap
     // text-markdown` prefix. D3-c inserted `break-words` into the user bubble's
@@ -1029,8 +1031,8 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // than the prefix count it replaces, and it still fails if either is
     // deleted or routed into markdown.
     for (const cls of [
-      'whitespace-pre-wrap break-words text-markdown leading-relaxed text-foreground',
-      'select-text whitespace-pre-wrap text-markdown text-foreground',
+      'whitespace-pre-wrap break-words text-chat-body leading-relaxed text-foreground',
+      'select-text whitespace-pre-wrap text-chat-body text-foreground',
     ]) {
       expect(countIn(SYNTAX, cls), `paragraph must survive verbatim: ${cls}`).toBe(1);
     }
@@ -1570,19 +1572,19 @@ describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest d
       'root + user bubble + streaming fallback'
     ).toBe(3);
     // Spelled out so a failure names the surface, not just the count.
-    expect(CHAT_CODE).toContain('break-words text-markdown leading-relaxed text-foreground');
+    expect(CHAT_CODE).toContain('break-words text-chat-body leading-relaxed text-foreground');
     expect(CHAT_CODE).toContain(
-      'whitespace-pre-wrap break-words text-markdown leading-relaxed text-foreground'
+      'whitespace-pre-wrap break-words text-chat-body leading-relaxed text-foreground'
     );
     expect(CHAT_CODE).toContain(
-      'text-markdown leading-relaxed text-foreground whitespace-pre-wrap select-text'
+      'text-chat-body leading-relaxed text-foreground whitespace-pre-wrap select-text'
     );
   });
 
   it('the tool rows, code block and turn skeleton retain the 1.5 tier', () => {
     expect(countIn(DENSITY_CODE, 'leading-normal')).toBe(3);
-    expect(DENSITY_CODE).toContain('flex flex-col gap-2 text-markdown leading-normal');
-    expect(DENSITY_CODE).toContain('text-left text-markdown leading-normal');
+    expect(DENSITY_CODE).toContain('flex flex-col gap-2 text-chat-body leading-normal');
+    expect(DENSITY_CODE).toContain('text-left text-chat-process leading-normal');
   });
 });
 /**

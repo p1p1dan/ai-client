@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/lib/z-index';
 import { type Theme, useSettingsStore } from '@/stores/settings';
 import { useShellLayoutStore } from '@/stores/shellLayout';
+import { ChatTypographySection } from './ChatTypographySettings';
 import { SettingsSectionBlock } from './SettingsPrimitives';
 
 export function AppearanceSettings() {
@@ -195,6 +196,7 @@ export function AppearanceSettings() {
           />
         </div>
       </SettingsSectionBlock>
+      <ChatTypographySection />
       <SettingsSectionBlock title={t('Beta Features')} description={t('Experimental features')}>
         <Collapsible open={bgSettingsOpen} onOpenChange={setBgSettingsOpen} className="space-y-4">
           <div className="flex items-center justify-between">

@@ -240,6 +240,31 @@ export interface SettingsState {
    */
   providerIdleTimeoutMs: number;
 
+  /**
+   * T104: the chat area's own typeface and its two size tiers.
+   *
+   * Separate from `fontFamily` / `fontSize` above on purpose — those two are
+   * historical dead fields (declared, settable, zero consumers since T-21
+   * deliberately refused to wire them; see design-system.md "分离契约").
+   * Connecting the chat area to them would reintroduce the 14→16 jump that
+   * removal was paid for, and their defaults (`'Inter'` / `14`) are not the
+   * values this feature ships with.
+   *
+   * `chatFontFamily` is the EMPTY STRING when the chat area should follow the
+   * app's `--font-sans`; that is a real value meaning "inherit", so a truthiness
+   * test is the correct read here (unlike `providerIdleTimeoutMs` above, where
+   * `0` is a value). `ChatWorkspace` omits the `fontFamily` key entirely in
+   * that case rather than writing a fallback literal.
+   *
+   * The two sizes are px and runtime-applied: they are the only settings in
+   * this store that reach the UI as inline custom properties
+   * (`--text-chat-body` / `--text-chat-process`), scoped to the chat column's
+   * root node — never `documentElement`.
+   */
+  chatFontFamily: string;
+  chatBodyFontSize: number;
+  chatProcessFontSize: number;
+
   // AI Features
   commitMessageGenerator: CommitMessageGeneratorSettings;
   codeReview: CodeReviewSettings;
@@ -336,6 +361,20 @@ export interface SettingsState {
   setSubagentPromptCacheTtl: (ttl: PromptCacheTtl) => void;
   /** T093: milliseconds, `0` = off. Rejects anything out of range (see the field). */
   setProviderIdleTimeoutMs: (idleTimeoutMs: number) => void;
+
+  // Setters - Chat typography (T104)
+  /** Empty string = follow the app's `--font-sans`. */
+  setChatFontFamily: (family: string) => void;
+  /**
+   * Both sizes are clamped by the store, not by the control that calls them,
+   * and the two are clamped AGAINST EACH OTHER: `chatProcessFontSize` may never
+   * exceed `chatBodyFontSize` (BODY_MIN..BODY_MAX, PROCESS_MIN..PROCESS_MAX
+   * respectively — see the setters for why the ranges are not symmetric).
+   * Callers may therefore pass a raw value; the store is where "process is
+   * never larger than body" is guaranteed to hold no matter who writes.
+   */
+  setChatBodyFontSize: (size: number) => void;
+  setChatProcessFontSize: (size: number) => void;
 
   // Setters - AI Features
   setCommitMessageGenerator: (settings: Partial<CommitMessageGeneratorSettings>) => void;

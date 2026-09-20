@@ -120,8 +120,15 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
   // brightness" rule the user asked for had only two steps instead of three.
   // The row ARG has been on this token since T-05; this aligns the verb with
   // it, which is also what the reference client does.
+  //
+  // T104: the whole row moved from `text-markdown` to `text-chat-process`.
+  // Tool rows used to share the body tier with the prose they interrupt, which
+  // is exactly the "process is not distinguishable from content" complaint
+  // (the head/arg tier split above only separated them by brightness). This
+  // token is runtime-configurable, so the row follows the reader's process
+  // size setting.
   const rowClass = cn(
-    'group/row flex w-full items-baseline gap-1.5 text-left text-markdown leading-normal',
+    'group/row flex w-full items-baseline gap-1.5 text-left text-chat-process leading-normal',
     view.failed ? 'text-destructive' : turnProcessToneClass()
   );
   const verbClass = cn('shrink-0', !view.failed && 'group-hover/row:text-foreground');
@@ -679,7 +686,7 @@ function ToolRowOutputSegment({
     case 'thinking':
     case 'stats':
       return (
-        <div className="mt-1 flex select-text flex-col gap-1.5 text-markdown leading-[1.55] text-tool-arg">
+        <div className="mt-1 flex select-text flex-col gap-1.5 text-chat-process leading-[1.55] text-tool-arg">
           <p className="whitespace-pre-wrap">{view.output}</p>
         </div>
       );

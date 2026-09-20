@@ -114,6 +114,11 @@ const FONT_MONO_WHITELIST: readonly string[] = [
   'components/settings/GitSettings.tsx',
   'components/settings/NetworkSettings.tsx',
   'components/settings/TerminalSettings.tsx',
+  // T104: the chat typography preview shows the reader a mono code line next to
+  // the two sans tiers — the point of that third line is that the family
+  // override must NOT reach it, and a code block that renders in the chat font
+  // is exactly what would make that claim unverifiable by eye.
+  'components/settings/ChatTypographySettings.tsx',
   'components/source-control/ChangesList.tsx',
   'components/source-control/ChangesTree.tsx',
   'components/source-control/CodeReviewModal.tsx',

@@ -22,7 +22,18 @@ import { extendTailwindMerge } from 'tailwind-merge';
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {
-      'font-size': ['text-2xs', 'text-code', 'text-markdown', 'text-meta', 'text-ui', 'text-title'],
+      'font-size': [
+        'text-2xs',
+        'text-code',
+        'text-markdown',
+        'text-meta',
+        'text-ui',
+        'text-title',
+        // T104: the chat area's runtime-configurable pair -- same classifier
+        // hazard as the tokens above, see this block's note.
+        'text-chat-body',
+        'text-chat-process',
+      ],
     },
   },
 });

@@ -1131,7 +1131,7 @@ function UserBubble({ message }: { message: ChatMessage }) {
           {textBlocks.map((block) => (
             <p
               key={block.id}
-              className="whitespace-pre-wrap break-words text-markdown leading-relaxed text-foreground"
+              className="whitespace-pre-wrap break-words text-chat-body leading-relaxed text-foreground"
             >
               {block.text}
             </p>
@@ -1185,7 +1185,7 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
           block.type === 'text' ? (
             <p
               key={block.id}
-              className="select-text whitespace-pre-wrap text-markdown text-foreground"
+              className="select-text whitespace-pre-wrap text-chat-body text-foreground"
             >
               {/* D47 S5 §3: swap the raw spawn-gate rejection text for mapped
                   copy in-place — same paragraph, same class, so this
@@ -2325,7 +2325,7 @@ interface TurnItemViewProps {
  */
 function PlainProse({ text }: { text: string }) {
   return (
-    <p className="text-markdown leading-relaxed text-foreground whitespace-pre-wrap select-text">
+    <p className="text-chat-body leading-relaxed text-foreground whitespace-pre-wrap select-text">
       {text}
     </p>
   );

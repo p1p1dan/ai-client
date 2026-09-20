@@ -190,13 +190,19 @@ export function userBubbleTextClass(): string {
  * `AssistantMessage` used to own.
  */
 export function turnBodyClass(): string {
-  // `text-markdown leading-normal` comes from that same article and is not
+  // `text-chat-body leading-normal` comes from that same article and is not
   // decoration: `QuestionCard`'s header row sets no size of its own and reads
   // the body scale by inheritance. Dropping it here would silently resize a
   // component nothing in this module names. The head and footer slots override
   // it on their own elements — the head with `text-ui`, the hover strip with
   // `text-meta` (D25 S24); see those two functions for why they differ.
-  return 'flex flex-col gap-2 text-markdown leading-normal';
+  //
+  // T104: this is a runtime-configurable token, so the process shell that
+  // shares this class also inherits whatever the reader picked. That is
+  // intended and harmless — `ToolRows`' two sites (`:124` / `:682`) declare
+  // `text-chat-process` explicitly and therefore override the inherited value
+  // on the rows that actually carry process text.
+  return 'flex flex-col gap-2 text-chat-body leading-normal';
 }
 
 /**

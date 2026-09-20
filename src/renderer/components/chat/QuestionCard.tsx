@@ -304,7 +304,7 @@ function QaOptionRow({
           // spellchecker (which ships text to the platform on some systems).
           autoComplete={secret ? 'off' : undefined}
           spellCheck={secret ? false : undefined}
-          className="min-w-0 flex-1 bg-transparent text-markdown text-foreground placeholder:text-muted-foreground focus:outline-none"
+          className="min-w-0 flex-1 bg-transparent text-chat-body text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
       )}
     </div>
@@ -714,7 +714,7 @@ function PermissionQaCard({
         {view.content && (
           <div className="px-1">
             <p className="pb-1 text-meta text-muted-foreground">{t(view.content.label)}</p>
-            <Ident className="block max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2.5 text-markdown text-foreground">
+            <Ident className="block max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2.5 text-chat-body text-foreground">
               {view.content.text}
             </Ident>
           </div>
@@ -737,7 +737,14 @@ function PermissionQaCard({
           </div>
         )}
         {view.waiting ? (
-          <p className="px-1 text-markdown text-muted-foreground">{t(PERMISSION_WAITING)}</p>
+          // T104 adjudication (the task brief left this one open): stays on the
+          // body tier. It is explanatory, but it is the single line a reader
+          // stares at while a permission decision blocks the whole turn --
+          // the same "not passive chrome" test that put the turn status line
+          // on `text-ui` (T097, design-system.md "已记录偏离"). Demoting it to
+          // `text-meta` (13px, same as the process tier) would put the one line
+          // that matters below the tool rows surrounding it.
+          <p className="px-1 text-chat-body text-muted-foreground">{t(PERMISSION_WAITING)}</p>
         ) : (
           // Right-aligned and compact: a decision is one press, not a menu, and
           // four full-width rows are what made the old card swallow the screen.

@@ -12,6 +12,7 @@
  */
 
 import { englishTranslate, type Translate } from '@shared/i18n';
+import { DEFAULT_CHAT_BODY_FONT_SIZE } from '@shared/types/chatTypography';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { isSessionBusy } from './sessionIndex/resumeIntent';
 
@@ -207,6 +208,14 @@ export function composerCardClass(
   // data, including the gap, so a test can cross-check every term of it
   // against this string and against `composerRowsClass()`.
   //
+  // T104: `min-h-18.5` (74px) stays as the FLOOR and is no longer the height.
+  // Row 1 is the textarea, which now follows `--text-chat-body`, so above the
+  // 16px default the content exceeds the floor and the card is taller than
+  // 74px — that is the deal the breakdown documents, and why `min-h-*` is the
+  // right utility here rather than `h-*`: the floor keeps the resting card from
+  // collapsing when the reader shrinks the tier, and never clips it when they
+  // grow it.
+  //
   // No `items-center`: the card's only in-flow child is now one full-width
   // column (`composerRowsClass()`), so there is nothing to centre cross-axis,
   // and the moment the extras stack appears inside that column, centring it
@@ -215,7 +224,7 @@ export function composerCardClass(
 }
 
 /**
- * The 74px resting height of the docked follow-up card, as data.
+ * The resting height of the docked follow-up card, as data.
  *
  * This exists purely so the height contract is assertable as ARITHMETIC rather
  * than as "the class string contains `min-h-18.5`". T-28's blocker was exactly
@@ -224,30 +233,62 @@ export function composerCardClass(
  *
  * F6 (2026-08-18) added `rows` and `rowGap` rather than editing `total` to a
  * new literal, for the same reason the breakdown exists at all — the height
- * has to stay something you can re-derive. `content` remains the height of ONE
- * row (the shared 24px control tier); the card stacks `rows` of them with
- * `rowGap` between each pair.
+ * has to stay something you can re-derive.
+ *
+ * T104 (2026-09-19) SPLITS the old single `content` term in two, because the
+ * two rows stopped being the same height. Row 2 is the control strip and is
+ * still the fixed 24px button tier (`controlRow`, `COMPOSER_CONTROL_SIZE`).
+ * Row 1 is the textarea, and it follows `--text-chat-body`:
+ * `composerTextareaClass('session')` pins its line box to
+ * `calc(var(--text-chat-body) * 1.5)` and derives its `min-h` from the same
+ * expression, so at the 16px default it is 24px — the number the whole 74px
+ * contract was derived from. Above or below 16px the card deliberately grows or
+ * shrinks with the reader's setting; `COMPOSER_TEXTAREA_LINE_SCALE` holds that
+ * multiplier so a test can re-derive both the expression and the total rather
+ * than restating 24px in three places.
+ *
+ * The alternative — pinning the textarea's row to 24px regardless of the
+ * setting — was rejected on the merits, not for convenience: 16px glyphs in a
+ * 24px line box is 1.5 leading (already tighter than the transcript's 1.625),
+ * and at the 24px ceiling the text would overrun a box this arithmetic still
+ * called 24px, i.e. the card would clip its own input at exactly the settings
+ * the feature exists to offer.
  */
+export const COMPOSER_TEXTAREA_LINE_SCALE = 1.5;
+
 export function composerFollowHeightBreakdown(): {
   border: number;
   padding: number;
-  content: number;
+  /** Row 1: the textarea, at the DEFAULT body size (16px → 1.5 → 24px). */
+  textareaRow: number;
+  /** Row 2: the control strip, on the fixed button tier. */
+  controlRow: number;
+  /**
+   * How many rows the card stacks. A structural assertion, not a multiplier:
+   * `total` adds the two named rows rather than `n × one row`, because T104 made
+   * them different heights.
+   */
   rows: number;
   rowGap: number;
   total: number;
 } {
   const border = 2; // 1px top + 1px bottom
   const padding = 16; // p-2 → 8px top + 8px bottom
-  const content = COMPOSER_CONTROL_SIZE;
+  // The body tier's default lives in `@shared/types/chatTypography` (the store,
+  // the settings UI and `globals.css` all key off the same number); this module
+  // only multiplies it by the line scale its own class string spells.
+  const textareaRow = DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE;
+  const controlRow = COMPOSER_CONTROL_SIZE; // 24px button tier, size-6 / h-6
   const rows = 2; // row 1: the textarea; row 2: the control strip
   const rowGap = 8; // composerRowsClass()'s `gap-2`
   return {
     border,
     padding,
-    content,
+    textareaRow,
+    controlRow,
     rows,
     rowGap,
-    total: border + padding + content * rows + rowGap * (rows - 1),
+    total: border + padding + textareaRow + rowGap + controlRow,
   };
 }
 
@@ -573,15 +614,38 @@ export function composerTextareaClass(mode: MiddleColumnMode): string {
     // container) and left the UA default `resize: both` grip on the real
     // element. `[&_textarea]:` pierces through like every sizing class next
     // to it.
-    return 'min-h-14 p-0 [&_textarea]:min-h-14 [&_textarea]:resize-none [&_textarea]:px-0';
+    //
+    // T104: `[&_textarea]:text-chat-body` — the reader's own prompt follows the
+    // body tier, which is the "message text and what I type should match" half
+    // of the request. No height term follows it here: this branch centres its
+    // line with symmetric padding and its 56px floor is a floor, so a larger
+    // font is simply a taller resting card, not a broken contract.
+    return 'min-h-14 p-0 [&_textarea]:text-chat-body [&_textarea]:min-h-14 [&_textarea]:resize-none [&_textarea]:px-0';
   }
   // Round-2 visual fix: same resize pierce-through as the empty branch, plus
-  // `[&_textarea]:leading-6` — the session textarea pins `min-h-6`/`py-0`
-  // (the 24px row the card's height arithmetic counts twice, see
+  // the line box — the session textarea pins the resting height and `py-0`
+  // (the row the card's height arithmetic counts twice, see
   // `composerFollowHeightBreakdown`), and a `<textarea>` never
   // vertically centers its own content, so with zero padding the resting
-  // line sat high in the 24px box. Matching line-height to the height token
+  // line sat high in the box. Matching line-height to the height token
   // fills the box instead of relying on padding.
+  //
+  // T104 MOVES that line box from the literal `min-h-6`/`leading-6` pair to
+  // `calc(var(--text-chat-body) * 1.5)` — height and line-height, both off the
+  // SAME expression, and that is the point rather than a detail. The reader can
+  // put the body tier anywhere in 12..24px, and the old pair was a hard-coded
+  // 24px: 16px of text inside a 24px line box is only 1.5 leading, and at the
+  // 24px ceiling the glyphs would overrun a box the height arithmetic still
+  // insists is 24px. Deriving both from the token keeps "the resting line fills
+  // its box" true at every setting, which is the invariant the round-2 fix was
+  // for. At the 16px default the expression is exactly 24px, so nothing moves
+  // for a reader who never opens the setting.
+  //
+  // The drift this creates is deliberate and stated in
+  // `composerFollowHeightBreakdown()`: the card's resting height follows the
+  // body size. `COMPOSER_CONTROL_SIZE` stays the 24px BUTTON tier it always
+  // was, and the two are no longer the same number — that conflation is what
+  // this change retires.
   //
   // F6 (2026-08-18) RETIRES `min-w-32` (round-4 defect B) and `flex-[2]`
   // (round-4 F5b) together. Both were arbitration between two elastic text
@@ -604,11 +668,13 @@ export function composerTextareaClass(mode: MiddleColumnMode): string {
   // card's 56px, chosen so growth would not invent a third height step. In use
   // that is 2.3 rows — a follow-up longer than two lines scrolls inside a box
   // barely taller than the resting one, which is what the field called
-  // "输入框增高有限". The cap is now eight of the same 24px rows this branch
-  // already pins (`min-h-6` / `leading-6`), so it is still one rule rather than
-  // a new magic number, and the card keeps a scroll boundary instead of pushing
-  // the timeline off screen.
-  return 'w-full p-0 [&_textarea]:min-h-6 [&_textarea]:max-h-48 [&_textarea]:resize-none [&_textarea]:px-0 [&_textarea]:py-0 [&_textarea]:leading-6';
+  // "输入框增高有限". The cap is now eight of the same rows this branch already
+  // pins, so it is still one rule rather than a new magic number, and the card
+  // keeps a scroll boundary instead of pushing the timeline off screen.
+  // T104 re-expresses both the resting row and the cap through
+  // `--text-chat-body` rather than dropping them: they were 24px and 192px
+  // literals, and the row they measure is exactly the derived line box above.
+  return 'w-full p-0 [&_textarea]:text-chat-body [&_textarea]:min-h-[calc(var(--text-chat-body)*1.5)] [&_textarea]:max-h-[calc(var(--text-chat-body)*1.5*8)] [&_textarea]:resize-none [&_textarea]:px-0 [&_textarea]:py-0 [&_textarea]:leading-[calc(var(--text-chat-body)*1.5)]';
 }
 
 /**

@@ -1,4 +1,9 @@
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import {
+  CHAT_BODY_FONT_SIZE_MAX,
+  CHAT_BODY_FONT_SIZE_MIN,
+  DEFAULT_CHAT_BODY_FONT_SIZE,
+} from '@shared/types/chatTypography';
 import { describe, expect, it } from 'vitest';
 import {
   COMPOSER_BAR_LEADING,
@@ -7,6 +12,7 @@ import {
   COMPOSER_POPUP_DESIRED_HEIGHT,
   COMPOSER_POPUP_GAP,
   COMPOSER_POPUP_VIEWPORT_MARGIN,
+  COMPOSER_TEXTAREA_LINE_SCALE,
   composerActionGroupClass,
   composerAttachButtonClass,
   composerBarClass,
@@ -279,19 +285,32 @@ describe('composerCardClass', () => {
   // by omission: the card's only in-flow child is now a single full-width
   // column, so centring it cross-axis is meaningless, and it aligns
   // ambiguously the moment the extras stack appears.
+  // T104: the card's resting height is still DERIVED, and the derivation now
+  // has two content rows of different kinds — the textarea's (which follows
+  // `--text-chat-body`) and the control strip's (the fixed 24px button tier).
+  // Collapsing them back into one term is the regression: it would make the
+  // 16px default and a 24px setting produce the same claimed height, which is
+  // exactly the drift this test is here to notice.
   it('F-A2: rests the follow-up card at exactly 74px, cross-checking the class step against the arithmetic', () => {
     const cls = composerCardClass('session');
     const breakdown = composerFollowHeightBreakdown();
 
     expect(breakdown.rows).toBe(2);
-    expect(breakdown.content).toBe(COMPOSER_CONTROL_SIZE);
+    expect(breakdown.controlRow).toBe(COMPOSER_CONTROL_SIZE);
     expect(
       breakdown.border +
         breakdown.padding +
-        breakdown.content * breakdown.rows +
-        breakdown.rowGap * (breakdown.rows - 1)
+        breakdown.textareaRow +
+        breakdown.rowGap +
+        breakdown.controlRow
     ).toBe(breakdown.total);
     expect(breakdown.total).toBe(74);
+
+    // The textarea's row is not a free 24 either: it is the body tier times the
+    // line scale the session textarea's `min-h`/`leading` calc actually spells
+    // (asserted against that class string in `composerTextareaClass`'s group
+    // below, so the same expression is checked from both ends).
+    expect(breakdown.textareaRow).toBe(DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE);
 
     // The inter-row gap is not a free number either: it is whatever
     // `composerRowsClass()` spells, so the two cannot drift apart.
@@ -299,6 +318,10 @@ describe('composerCardClass', () => {
     expect(gapStep).not.toBeNull();
     expect((gapStep as number) * 4).toBe(breakdown.rowGap);
 
+    // `min-h-18.5` is now the FLOOR, not the height: the card grows with the
+    // body tier above 16px, so the assertion is "the floor equals the default
+    // resting height", which is still the 74px contract — just stated as the
+    // number the card cannot go below.
     const step = stepValue(cls, /(?:^|\s)min-h-(\d+(?:\.\d+)?)(?:\s|$)/);
     expect(step).not.toBeNull();
     expect((step as number) * 4).toBe(breakdown.total);
@@ -522,17 +545,71 @@ describe('composerTextareaClass', () => {
     expect(cls).toContain('[&_textarea]:min-h-14');
   });
 
-  it('collapses the follow-up input to one 24px row', () => {
-    expect(composerTextareaClass('session')).toContain('[&_textarea]:min-h-6');
+  it('collapses the follow-up input to one body-tier line box', () => {
+    // T104: the resting row is no longer the literal `min-h-6`. It is derived
+    // from the body tier so the same class works at every setting the reader
+    // can pick; 24px (the old literal) is what it computes to at the 16px
+    // default, and that is what `composerFollowHeightBreakdown()` counts.
+    expect(composerTextareaClass('session')).toContain(
+      '[&_textarea]:min-h-[calc(var(--text-chat-body)*1.5)]'
+    );
   });
 
-  it('caps follow-up growth at eight of its own 24px rows', () => {
+  it('caps follow-up growth at eight of its own body-tier rows', () => {
     // F7f: the previous cap was the empty card's 56px, which is 2.3 of these
     // rows — long enough to look like the box refuses to grow. Eight rows keeps
     // the cap expressed in the row this branch already pins, and keeps a scroll
     // boundary so a long draft cannot push the timeline off screen.
-    expect(composerTextareaClass('session')).toContain('[&_textarea]:max-h-48');
-    expect(composerTextareaClass('session')).toContain('[&_textarea]:leading-6');
+    // T104: the row is derived now, so the cap is the same expression × 8 —
+    // still one rule, still no new magic number (192px at the 16px default).
+    const cls = composerTextareaClass('session');
+    expect(cls).toContain('[&_textarea]:max-h-[calc(var(--text-chat-body)*1.5*8)]');
+    expect(cls).toContain('[&_textarea]:leading-[calc(var(--text-chat-body)*1.5)]');
+  });
+
+  it('T104: the follow-up textarea follows the body tier, in the same calc as its own line box', () => {
+    // The half of the user request that is easy to miss: "the text I type
+    // should match the message text". The pierce-through form is required, not
+    // stylistic — `<Textarea unstyled>` only puts `className` on the outer span
+    // (textarea.tsx), which is the trap `resize-none` already fell into.
+    const cls = composerTextareaClass('session');
+    expect(cls).toContain('[&_textarea]:text-chat-body');
+    // Empty mode is the same one-line contract but centred with padding; it
+    // follows the tier too, and carries no height term that would need to.
+    expect(composerTextareaClass('empty')).toContain('[&_textarea]:text-chat-body');
+    // leading and min-h must be the SAME expression: a line box and a floor
+    // derived from two different scales is how the resting line ends up sitting
+    // high in its own box again (the round-2 defect this pair fixed).
+    expect(cls).toContain('[&_textarea]:leading-[calc(var(--text-chat-body)*1.5)]');
+    expect(cls).toContain('[&_textarea]:min-h-[calc(var(--text-chat-body)*1.5)]');
+  });
+
+  it('T104: at the 16px default the derived row is the 24px the card arithmetic was built on', () => {
+    // The cross-check between the class string and the breakdown: the same
+    // expression, evaluated at D1's default, has to be the number the 74px
+    // resting contract was derived from — otherwise "nothing moves for a reader
+    // who never opens the setting" is false.
+    expect(composerFollowHeightBreakdown().textareaRow).toBe(
+      DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE
+    );
+    expect(composerFollowHeightBreakdown().textareaRow).toBe(24);
+  });
+
+  it('T104: the derived row stays one line box at the extremes of the body range', () => {
+    // The other end of the same claim: the expression is what makes the row
+    // work at every setting, so the line box stays proportional — 18px at the
+    // 12px floor, 36px at the 24px ceiling — instead of the 24px literal the
+    // old pair froze. Above the default the textarea's row is the taller of the
+    // card's two rows; below it, the control strip's fixed 24px is.
+    expect(CHAT_BODY_FONT_SIZE_MIN * COMPOSER_TEXTAREA_LINE_SCALE).toBe(18);
+    expect(CHAT_BODY_FONT_SIZE_MAX * COMPOSER_TEXTAREA_LINE_SCALE).toBe(36);
+    const breakdown = composerFollowHeightBreakdown();
+    expect(breakdown.textareaRow).toBeGreaterThan(
+      CHAT_BODY_FONT_SIZE_MIN * COMPOSER_TEXTAREA_LINE_SCALE
+    );
+    expect(breakdown.textareaRow).toBeLessThan(
+      CHAT_BODY_FONT_SIZE_MAX * COMPOSER_TEXTAREA_LINE_SCALE
+    );
   });
 
   it('zeroes the inner horizontal padding so the caret lines up with the card edge in both modes', () => {
@@ -545,10 +622,12 @@ describe('composerTextareaClass', () => {
     expect(composerTextareaClass('session')).toContain('[&_textarea]:resize-none');
   });
 
-  it('gives the follow-up textarea a leading-6 line-height so its resting line fills the 24px floor instead of sitting high (round-2 visual fix)', () => {
-    expect(composerTextareaClass('session')).toContain('[&_textarea]:leading-6');
+  it('gives the follow-up textarea a line-height matching its height so its resting line fills the box instead of sitting high (round-2 visual fix)', () => {
+    expect(composerTextareaClass('session')).toContain(
+      '[&_textarea]:leading-[calc(var(--text-chat-body)*1.5)]'
+    );
     // Empty mode keeps its own symmetric padding-based centering — no floor to fill.
-    expect(composerTextareaClass('empty')).not.toContain('leading-6');
+    expect(composerTextareaClass('empty')).not.toContain('leading-');
   });
 
   it('drops the border/bg/shadow/ring counters now that <Textarea unstyled> renders no outer chrome to fight', () => {

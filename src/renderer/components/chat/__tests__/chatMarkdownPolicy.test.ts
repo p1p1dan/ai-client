@@ -752,6 +752,11 @@ const FONT_SIZE_TOKENS = [
   'text-ui',
   'text-markdown',
   'text-title',
+  // T104: the chat area's two runtime-configurable tiers. Listed as SIZE tokens
+  // so a heading that drifted onto e.g. `text-chat-process` is caught as "a
+  // different size token" rather than passing as an unrecognised class.
+  'text-chat-body',
+  'text-chat-process',
   'text-xs',
   'text-sm',
   'text-base',
@@ -832,7 +837,10 @@ describe('F-C4: wide content scrolls at the leaves, so no ancestor may clip', ()
 
   it('F-C4: the root is body copy and drops the plain-text renderer\u2019s pre-wrap', () => {
     const cls = chatMarkdownRootClass();
-    expect(cls).toContain('text-markdown');
+    // T104: the body tier's token is `text-chat-body` (D1's 16px default,
+    // runtime-configurable) \u2014 the heading assertion below pins the same token,
+    // which is what keeps headings from shrinking below their own paragraph.
+    expect(cls).toContain('text-chat-body');
     // D1-b: 1.625, not 1.5. The negative is not redundant — this is a bare
     // string, not a `cn()` call, so tailwind-merge never sees it and two
     // `leading-*` classes would simply coexist, with the CSS cascade (not the
@@ -850,10 +858,13 @@ describe('F-C4: wide content scrolls at the leaves, so no ancestor may clip', ()
 });
 
 describe('F-C4: heading rank is carried by weight + colour + section gap, never by size (D25)', () => {
-  it('F-C4: every heading level is --text-markdown and carries no other size token', () => {
+  it('F-C4: every heading level is --text-chat-body and carries no other size token', () => {
     for (const level of [1, 2, 3, 4, 5, 6] as const) {
       const cls = chatMarkdownHeadingClass(level);
-      expect(fontSizeTokensIn(cls), `h${level}`).toEqual(['text-markdown']);
+      // The token must be the SAME one `chatMarkdownRootClass()` uses: D25 says
+      // rank never comes from size, so a heading on any other tier is the bug
+      // this assertion exists for. (T104 moved both from `text-markdown`.)
+      expect(fontSizeTokensIn(cls), `h${level}`).toEqual(['text-chat-body']);
       // An arbitrary size value would dodge the token list entirely.
       expect(cls, `h${level}`).not.toMatch(/text-\[/);
     }

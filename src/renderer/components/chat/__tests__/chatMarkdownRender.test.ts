@@ -246,7 +246,8 @@ describe('F-C6: prose blocks carry their policy classes', () => {
       ['###### h6\n', 'h6'],
     ] as const) {
       const cls = classOf(render(md), tag);
-      expect(cls, tag).toContain('text-markdown');
+      // T104: the shared body tier, now runtime-configurable (`text-chat-body`).
+      expect(cls, tag).toContain('text-chat-body');
     }
   });
 
@@ -294,14 +295,14 @@ describe('F-C6: the reading column’s own invariants are asserted, not only its
     // `globals.css` disables `user-select` on `*`; the root's `select-text` is
     // what lets the rendered prose be selected at all (T-29 GUI review).
     expect(root).toContain('select-text');
-    // D25's 15px body tier and its line height, pinned explicitly rather than
-    // inherited — the same reason every heading spells `text-markdown`. The two
+    // D25's body tier and its line height, pinned explicitly rather than
+    // inherited — the same reason every heading spells `text-chat-body`. The two
     // are separate decisions, not one: the 15px is D25's, the 1.625 is F5 D1-b's
-    // (2026-08-18) and replaced D25-era 1.5. `text-markdown` carries the size
+    // (2026-08-18) and replaced D25-era 1.5. `text-chat-body` carries the size
     // ONLY, so nothing propagates between them — which is why this rendered
     // assertion and `chatMarkdownPolicy.test.ts`'s class-assembly one are two
     // layers of evidence rather than one restated twice.
-    expect(root).toContain('text-markdown');
+    expect(root).toContain('text-chat-body');
     expect(root).toContain('leading-relaxed');
     expect(root).not.toContain('leading-normal');
     expect(root).toContain('text-foreground');
