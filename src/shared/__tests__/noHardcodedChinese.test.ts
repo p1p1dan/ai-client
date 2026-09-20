@@ -112,9 +112,22 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
  * which shifted every line after the first block comment — tolerable in the
  * renderer, useless in `src/runtime`, where files open with 40-line doc
  * comments and an offender would have been reported dozens of lines early.
+ *
+ * CRLF is normalised to LF before anything else, and that order matters. The
+ * line-comment pattern below anchors on `$` without the `m` flag, so it only
+ * ever matches the end of the WHOLE string — which is why the scan splits on
+ * `\n` first and treats each element as a line. On a CRLF file the trailing
+ * `\r` survives that split, so it sits between the `.*` and the `$` and the
+ * pattern cannot match at all: no `//` comment is ever stripped, and Chinese
+ * in a comment is reported as hardcoded UI copy. `.gitattributes` pins these
+ * sources to `eol=lf`, but a checkout on a `core.autocrlf=true` machine can
+ * still hold CRLF on disk while `git status` reads clean, so the guard has to
+ * be indifferent to line endings rather than trusting the checkout. Collapsing
+ * to LF cannot hide a real offender: the text of every line is unchanged.
  */
 function withoutComments(source: string): string[] {
   return source
+    .replace(/\r\n/g, '\n')
     .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ''))
     .split('\n')
     .map((line) => line.replace(/(^|[^:'"`])\/\/.*$/, '$1'));
