@@ -52,7 +52,8 @@ describe('[U05-b] the composer can send without a bound folder', () => {
     // pin exists for moved to the first half untouched — a chat with a session
     // and no cwd is still admitted by `isUnboundSession`.
     expect(COMPOSER).toMatch(/const hasSendTarget = Boolean\([^)]*isUnboundSession[^)]*\)/);
-    expect(COMPOSER).toContain('const canSend = Boolean(hasSendTarget && !disabled && !canStop)');
+    expect(COMPOSER).toContain('const canSend = Boolean(');
+    expect(COMPOSER).toContain('hasSendTarget && !disabled && !canStop');
   });
 
   it('U28: and admits a chat that has no session yet', () => {

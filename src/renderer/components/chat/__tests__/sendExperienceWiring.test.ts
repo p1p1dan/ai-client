@@ -35,7 +35,14 @@ describe('T24/T26 send experience wiring', () => {
     // happens to be nested (it moved a level when the dispatch grew a
     // `.catch` for WorkerManager refusals).
     expect(composer).toMatch(/attemptId,\n\s+text: trimmed/);
-    expect(composer).toContain("outcome === 'rejected' && pendingAttemptId");
+    expect(composer).toContain('const retirePendingAttempt = () => {');
+    expect(composer).toContain('usePendingUserMessagesStore.getState().clear(pendingAttemptId);');
+    expect(composer).toContain("if (outcome === 'rejected') retirePendingAttempt();");
+    // Three callers, and the two beyond `finalizeOutcome` are the release-origin
+    // early returns. Both are reachable only while `!sawUserEcho`, so nothing
+    // else will ever retire their bubble: skipping the call there leaves a ghost
+    // user message on the timeline, and one more per stop/retry round.
+    expect(composer.split('retirePendingAttempt();').length - 1).toBe(3);
   });
 
   it('pairs a pending attempt with the exact authoritative wire message id', () => {

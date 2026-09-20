@@ -56,6 +56,17 @@ export type QueuePauseReason = 'stopped' | 'send-rejected';
 export interface SessionQueue {
   entries: readonly QueuedMessage[];
   paused: QueuePauseReason | null;
+  /**
+   * The entry the user picked with "Send now".
+   *
+   * Two jobs, both single-use: it keeps an interrupted, unadmitted release
+   * from cutting back in front of this entry (`restoreHead`), and it is the
+   * token `decideQueueRelease` accepts to let THIS entry — and only this one
+   * — past a `'send-rejected'` pause. `takeHead` strips it as it pops the
+   * entry, so the pause closes again behind it and the Host-refusal
+   * protection (`shouldPauseQueueOnRejection`) still covers the rest.
+   */
+  priorityEntryId?: string;
 }
 
 export interface MessageQueueState {
@@ -105,20 +116,20 @@ export type EnqueueResult =
 /**
  * What a successful admission does to the bucket's pause.
  *
- * Stop-hang fix (2026-08-10) — the queue's pause semantics, stated once:
- * **Stop freezes the queue; the user's next message thaws it.**
+ * The queue's pause semantics, stated once: **Stop no longer freezes the
+ * queue at all.** Stop cancels the running turn; the follow-ups the user
+ * already queued are still theirs to send, so they release as soon as the
+ * session settles. `'stopped'` therefore has NO producer today — the member
+ * and the branches below are kept as a sleeping defense (same reasoning as
+ * `decideQueueRelease`'s `head-failed`) for a future pause that is genuinely
+ * the user's rather than the Host's.
  *
  * - EMPTY bucket -> unpaused. `pauseSession` no longer creates empty buckets:
  *   there is nothing to freeze, and a missing bucket may mean lifecycle prune.
- * - NON-EMPTY bucket, `'stopped'` -> cleared (NEW; supersedes m2's "a
- *   non-empty bucket keeps its pause"). m2 reasoned that enqueuing a follow-up
- *   is not "a new turn starting", so a Stopped queue should wait for an
- *   explicit Resume — but that left the interesting case deadlocked: Stop with
+ * - NON-EMPTY bucket, `'stopped'` -> cleared. Dormant with no producer; kept
+ *   so the member cannot come back with the deadlock m2's rule had — Stop with
  *   messages ALREADY queued froze them behind a Resume link the user has no
- *   reason to look for, while the composer happily accepted more. The same
- *   keystroke, one moment later (once status settles to idle), is a direct
- *   Send, and `shouldClearPauseOnSend` clears the pause for THAT — so the old
- *   rule made the outcome depend on how fast the Host tore the turn down.
+ *   reason to look for, while the composer happily accepted more.
  * - NON-EMPTY bucket, `'send-rejected'` -> kept. That pause is the queue
  *   layer's own protection against re-releasing a head entry the Host just
  *   REFUSED (`shouldPauseQueueOnRejection` in queueRelease.ts); a follow-up
@@ -191,6 +202,36 @@ export function enqueue(
 
 // ---- release plumbing (takeHead / restoreHead) ----
 
+/**
+ * Explicit Send now: promote one entry, preserving all other entries and
+ * attachments. Deliberately does NOT clear `paused` — a pause the Host caused
+ * protects every OTHER entry too, and wiping it here let one click restart the
+ * restore->re-release livelock S1 closed. `priorityEntryId` carries a
+ * single-entry exemption instead; see the field's own comment.
+ */
+export function prioritizeEntry(
+  state: MessageQueueState,
+  sessionId: string,
+  entryId: string
+): MessageQueueState {
+  const bucket = state.bySession[sessionId];
+  const entry = bucket?.entries.find((item) => item.id === entryId);
+  if (!bucket || !entry) return state;
+  if (bucket.priorityEntryId === entryId && bucket.entries[0] === entry) {
+    return state;
+  }
+  return {
+    bySession: {
+      ...state.bySession,
+      [sessionId]: {
+        ...bucket,
+        entries: [entry, ...bucket.entries.filter((item) => item.id !== entryId)],
+        priorityEntryId: entryId,
+      },
+    },
+  };
+}
+
 /** Pop the queue's head. Empty/unknown session returns `entry: null` and the same state reference. */
 export function takeHead(
   state: MessageQueueState,
@@ -201,8 +242,9 @@ export function takeHead(
     return { state, entry: null };
   }
   const [entry, ...rest] = bucket.entries;
+  const { priorityEntryId: _priorityEntryId, ...releasedBucket } = bucket;
   return {
-    state: { bySession: { ...state.bySession, [sessionId]: { ...bucket, entries: rest } } },
+    state: { bySession: { ...state.bySession, [sessionId]: { ...releasedBucket, entries: rest } } },
     entry,
   };
 }
@@ -221,10 +263,15 @@ export function takeHead(
 export function restoreHead(state: MessageQueueState, entry: QueuedMessage): MessageQueueState {
   const bucket = state.bySession[entry.sessionId];
   if (!bucket) return state;
+  const head = bucket.entries[0];
+  const entries =
+    head && head.id === bucket.priorityEntryId
+      ? [head, entry, ...bucket.entries.slice(1)]
+      : [entry, ...bucket.entries];
   return {
     bySession: {
       ...state.bySession,
-      [entry.sessionId]: { ...bucket, entries: [entry, ...bucket.entries] },
+      [entry.sessionId]: { ...bucket, entries },
     },
   };
 }

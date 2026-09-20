@@ -112,7 +112,7 @@ describe('runSend cancellation-token ordering (F6 + 2026-08-10 stop-hang fix)', 
    */
   it('handleStop bumps the generation before awaiting anything', () => {
     const stopBump = offsets('sendGenerationRef.current += 1;')[1];
-    const stopCall = only('void stopChatSession(stopTarget);');
+    const stopCall = only('void stopChatSession(stopTarget)');
     expect(stopBump).toBeLessThan(stopCall);
   });
 });
@@ -143,12 +143,27 @@ describe('handleStop targets one session for both the pause and the abort (T091)
     return source.slice(start, end);
   }
 
-  it('stops the session it pauses, never the store’s activeSessionId', () => {
+  it('stops the session whose Stop the user can actually see', () => {
     const body = handleStopBody();
-    // One resolution of "which session is this", used twice.
-    expect(body).toContain('const stopTarget = inFlightSessionIdRef.current ?? activeSessionId;');
-    expect(body).toContain('useMessageQueueStore.getState().pauseSession(stopTarget);');
-    expect(body).toContain('void stopChatSession(stopTarget);');
+    // One resolution of "which session is this", used for the abort.
+    //
+    // As-built: the target is `activeSessionId` again, and that is now the
+    // CORRECT answer rather than the bug this task fixed. Stop no longer
+    // pauses a queue, so there is no second target to disagree with, and the
+    // divergence T091 was about cannot reach this function at all — Stop is
+    // only rendered while `canStop` (`busy || sendingHere`, both pinned
+    // below), and both terms are per-session. Clicking New during a handshake
+    // moves `sendingHere` to false and the new chat's `busy` to false, so
+    // there is no Stop to click on the wrong session in the first place.
+    expect(body).toContain('const stopTarget = activeSessionId;');
+    expect(body).toContain('void stopChatSession(stopTarget)');
+    // Stop cancels the turn, not the queued follow-ups: nothing here may pause.
+    expect(body).not.toContain('pauseSession');
+    // The generation bump is scoped to the send this component owns — a
+    // different chat's in-flight handshake must survive this Stop.
+    expect(body).toContain(
+      'if (inFlightSessionIdRef.current === stopTarget) sendGenerationRef.current += 1;'
+    );
     // The store action that re-resolves the session for itself must not be
     // reachable from this component at all — not from `handleStop`, and not
     // from a selector kept around "just in case".
@@ -247,7 +262,7 @@ describe('the send latch is per-session, and its readers are exhaustively pinned
     // that arms no pause. A per-session value here would spin take/restore.
     const hook = source.slice(
       only('useQueueRelease({'),
-      only('isInFlight: () => inFlightRef.current,')
+      only('isInFlight: () => inFlightRef.current')
     );
     expect(hook).toContain('sending,');
     expect(hook).not.toContain('sendingHere');

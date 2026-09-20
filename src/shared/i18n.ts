@@ -2458,6 +2458,8 @@ export const zhTranslations: Record<string, string> = {
   'Retry last message': '重试上一条消息',
   // T-19: fourth round-button kind — "send, only delayed" while a turn runs.
   'Queue message': '加入队列',
+  'Send now': '立刻发送',
+  'Send now — interrupt the running turn': '立刻发送 — 打断当前回复',
 
   // D47 S5 §1.4: the three-state user profile chip (WindowTitleBar /
   // UserProfileCard, `deriveUserProfilePresentation`) — 'attention'

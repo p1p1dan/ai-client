@@ -19,6 +19,7 @@ import {
   type MessageQueueState,
   moveEntry as moveEntryReducer,
   pauseSession as pauseSessionReducer,
+  prioritizeEntry as prioritizeEntryReducer,
   pruneSessions as pruneSessionsReducer,
   type QueuedMessage,
   type QueueMoveDirection,
@@ -45,6 +46,7 @@ interface MessageQueueStore {
   ) => TakeEntryIntoDraftResult | null;
   pauseSession: (sessionId: string, reason?: QueuePauseReason) => void;
   clearPause: (sessionId: string) => void;
+  prioritizeEntry: (sessionId: string, entryId: string) => void;
   pruneSessions: (liveSessionIds: readonly string[]) => void;
 }
 
@@ -86,6 +88,9 @@ export const useMessageQueueStore = create<MessageQueueStore>()((set, get) => ({
     set({ state: pauseSessionReducer(get().state, sessionId, reason) }),
 
   clearPause: (sessionId) => set({ state: clearPauseReducer(get().state, sessionId) }),
+
+  prioritizeEntry: (sessionId, entryId) =>
+    set({ state: prioritizeEntryReducer(get().state, sessionId, entryId) }),
 
   pruneSessions: (liveSessionIds) =>
     set({ state: pruneSessionsReducer(get().state, liveSessionIds) }),

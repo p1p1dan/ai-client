@@ -16,7 +16,8 @@
  * in the pure layer as a dormant field for a future T-19b; this view simply
  * does not consume them anymore.
  */
-import { ArrowDown, ArrowUp, Pencil, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Pencil, X, Zap } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { queueStripWrapperClass } from './middleColumnLayout';
 import type { QueueStripEntryModel, QueueStripModel } from './queueRelease';
@@ -36,6 +37,10 @@ export interface QueuedMessageStripProps {
   onMove: (entryId: string, direction: 'up' | 'down') => void;
   /** X — remove/discard (decision 5.3). */
   onRemove: (entryId: string) => void;
+  /** Zap — interrupt the running turn and send this entry next. Head row only. */
+  onSendNow: (entryId: string) => void;
+  /** Whether the composer can dispatch right now; `entry.canSendNow` decides WHICH row offers it. */
+  sendNowDisabled?: boolean;
 }
 
 export function QueuedMessageStrip({
@@ -44,6 +49,8 @@ export function QueuedMessageStrip({
   onEdit,
   onMove,
   onRemove,
+  onSendNow,
+  sendNowDisabled,
 }: QueuedMessageStripProps) {
   const { t } = useI18n();
 
@@ -75,6 +82,8 @@ export function QueuedMessageStrip({
           onEdit={onEdit}
           onMove={onMove}
           onRemove={onRemove}
+          onSendNow={onSendNow}
+          sendNowDisabled={sendNowDisabled}
         />
       ))}
     </div>
@@ -86,11 +95,15 @@ function QueueEntryRow({
   onEdit,
   onMove,
   onRemove,
+  onSendNow,
+  sendNowDisabled,
 }: {
   entry: QueueStripEntryModel;
   onEdit: (entryId: string) => void;
   onMove: (entryId: string, direction: 'up' | 'down') => void;
   onRemove: (entryId: string) => void;
+  onSendNow: (entryId: string) => void;
+  sendNowDisabled?: boolean;
 }) {
   const { t } = useI18n();
   return (
@@ -99,6 +112,7 @@ function QueueEntryRow({
       tabIndex={0}
       onClick={() => onEdit(entry.id)}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onEdit(entry.id);
@@ -114,6 +128,21 @@ function QueueEntryRow({
         <span className="shrink-0 text-muted-foreground">
           {entry.attachmentCount} file{entry.attachmentCount > 1 ? 's' : ''}
         </span>
+      )}
+      {entry.canSendNow && (
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={sendNowDisabled}
+          title={t('Send now — interrupt the running turn')}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSendNow(entry.id);
+          }}
+        >
+          <Zap className="size-3" />
+          {t('Send now')}
+        </Button>
       )}
       <button
         type="button"

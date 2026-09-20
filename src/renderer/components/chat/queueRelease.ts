@@ -84,6 +84,14 @@ export interface DecideQueueReleaseInput {
   sessionId: string | null;
   entries: readonly Pick<QueuedMessage, 'id' | 'failure'>[];
   paused: QueuePauseReason | null;
+  /**
+   * The head entry the user explicitly chose with "Send now". A SINGLE-USE
+   * release token: it lets that one entry past `paused`, and `takeHead` strips
+   * it as it pops the entry, so everything queued behind it stays held by the
+   * same pause. It opens the pause gate ONLY: the `head-failed` check below
+   * still holds an unresolved failure, which Retry/Discard alone may clear.
+   */
+  priorityEntryId?: string;
   hasTarget: boolean;
   disabled: boolean;
   sending: boolean;
@@ -122,7 +130,9 @@ export interface DecideQueueReleaseInput {
 export function decideQueueRelease(input: DecideQueueReleaseInput): QueueReleaseDecision {
   if (input.sessionId == null) return { type: 'hold', reason: 'no-session' };
   if (input.entries.length === 0) return { type: 'hold', reason: 'empty' };
-  if (input.paused != null) return { type: 'hold', reason: 'paused' };
+  if (input.paused != null && input.entries[0]?.id !== input.priorityEntryId) {
+    return { type: 'hold', reason: 'paused' };
+  }
   if (input.entries.some((entry) => entry.failure != null)) {
     return { type: 'hold', reason: 'head-failed' };
   }
@@ -618,7 +628,7 @@ export function decidePendingResolution(input: DecidePendingResolutionInput): Pe
 
 // ---- deriveActionButtons (decision 2.5) ----
 
-export type ActionButtonKind = 'send' | 'retry' | 'stop' | 'enqueue';
+export type ActionButtonKind = 'send' | 'retry' | 'stop' | 'enqueue' | 'send-now';
 
 export interface ActionButtonSpec {
   kind: ActionButtonKind;
@@ -692,6 +702,7 @@ export function deriveActionButtons(input: DeriveActionButtonsInput): readonly A
   if (canStop) {
     return [
       { kind: 'stop', disabled: false },
+      ...(input.hasDraftContent ? [{ kind: 'send-now' as const, disabled: false }] : []),
       { kind: 'enqueue', disabled: !input.hasDraftContent },
     ];
   }
@@ -723,6 +734,14 @@ export interface QueueStripEntryModel {
   attachmentCount: number;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  /**
+   * Whether this entry may offer "Send now". HEAD ONLY: "send this one instead
+   * of waiting" is only meaningful for the entry that is next anyway —
+   * promoting an arbitrary entry past the ones in front of it is what Move
+   * up/down is for, and offering both on every row makes the queue's order
+   * look advisory.
+   */
+  canSendNow: boolean;
   failed: boolean;
   failureMessage?: string;
 }
@@ -748,6 +767,10 @@ export interface DeriveQueueStripModelInput {
  * — short and factual, so the user knows whether Resume is "continue where
  * you left off" or "try again, the Host may still be refusing it". Resume
  * itself is unchanged either way (`handleQueueResume`/`clearPause`).
+ *
+ * As-built: `'stopped'` has had no producer since Stop stopped pausing the
+ * queue (it cancels the turn, not its follow-ups). The branch is kept for the
+ * reason `QueuePauseReason` keeps the member — see `messageQueue.ts`.
  */
 function pausedLabelFor(reason: QueuePauseReason, waitingCount: number): string {
   return reason === 'send-rejected'
@@ -769,6 +792,7 @@ export function deriveQueueStripModel(input: DeriveQueueStripModelInput): QueueS
       attachmentCount: entry.attachments.length,
       canMoveUp: index > 0,
       canMoveDown: index < input.entries.length - 1,
+      canSendNow: index === 0,
       failed: entry.failure != null,
       ...(entry.failure ? { failureMessage: entry.failure.message } : {}),
     })),

@@ -54,6 +54,9 @@ export function useQueueRelease(input: UseQueueReleaseInput): void {
       sessionId,
       entries: queue.entries,
       paused: queue.paused,
+      // The one-shot "Send now" exemption. Passed through rather than acted on
+      // here — this hook keeps no judgment of its own (see the header).
+      ...(queue.priorityEntryId ? { priorityEntryId: queue.priorityEntryId } : {}),
       hasTarget,
       disabled,
       sending,

@@ -427,7 +427,7 @@ describe('deriveActionButtons', () => {
     ]);
   });
 
-  it('running with draft content -> [stop, enqueue]', () => {
+  it('running with draft content -> [stop, send-now, enqueue]', () => {
     expect(
       deriveActionButtons({
         status: 'running',
@@ -438,6 +438,7 @@ describe('deriveActionButtons', () => {
       })
     ).toEqual([
       { kind: 'stop', disabled: false },
+      { kind: 'send-now', disabled: false },
       { kind: 'enqueue', disabled: false },
     ]);
   });
@@ -468,6 +469,7 @@ describe('deriveActionButtons', () => {
       })
     ).toEqual([
       { kind: 'stop', disabled: false },
+      { kind: 'send-now', disabled: false },
       { kind: 'enqueue', disabled: false },
     ]);
   });
@@ -558,6 +560,7 @@ describe('deriveActionButtons', () => {
       })
     ).toEqual([
       { kind: 'stop', disabled: false },
+      { kind: 'send-now', disabled: false },
       { kind: 'enqueue', disabled: false },
     ]);
   });

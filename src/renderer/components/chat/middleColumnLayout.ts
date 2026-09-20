@@ -1055,7 +1055,7 @@ export function roundActionButtonClass(): string {
   return 'size-6 sm:size-6 rounded-full [corner-shape:round] supports-[corner-shape:squircle]:rounded-full before:rounded-full supports-[corner-shape:squircle]:before:rounded-full';
 }
 
-export type RoundActionButtonKind = 'send' | 'stop' | 'retry' | 'enqueue';
+export type RoundActionButtonKind = 'send' | 'stop' | 'retry' | 'enqueue' | 'send-now';
 
 /**
  * Per-kind fill for the round action button.
@@ -1083,6 +1083,7 @@ export function roundActionButtonKindClass(kind: RoundActionButtonKind): string 
     case 'stop':
       return 'border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90';
     case 'retry':
+    case 'send-now':
       return 'border-border bg-background text-foreground hover:bg-accent/50';
   }
 }
