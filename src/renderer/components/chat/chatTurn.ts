@@ -1,6 +1,11 @@
 import { HISTORY_MESSAGE_ID_PREFIX } from '@shared/types/sessionHistory';
 import type { ChatMessage } from '@/stores/chatSessions';
-import { groupTimeline, joinResolvedPermissions, type TimelineItem } from './toolCard';
+import {
+  groupTimeline,
+  joinResolvedPermissions,
+  type TimelineItem,
+  type ToolGroupEntry,
+} from './toolCard';
 
 /**
  * T-31 turn layer (reply-anatomy spec §4). The timeline used to be a flat
@@ -136,9 +141,22 @@ function sameTurnContent(a: Turn, b: Turn): boolean {
 }
 
 /** A timeline item stamped with the body message it came from (the `.tsx` layer keys and renders per message). */
-export type TurnItem = (TimelineItem | { kind: 'notice'; message: ChatMessage }) & {
-  messageId: string;
-};
+export type TurnItem =
+  | (Exclude<TimelineItem, { kind: 'toolGroup' }> & { messageId: string })
+  | {
+      kind: 'toolGroup';
+      /** Same field `TimelineItem`'s own arm carries; restated so it stays visible here. */
+      entries: ToolGroupEntry[];
+      blockIndex: number;
+      messageId: string;
+      /**
+       * Every body message this group's entries came from, in order — set only
+       * by `mergeAdjacentToolGroups`, and only when it actually merged. Absent
+       * means "one message", which is what `messageId` already says.
+       */
+      messageIds?: readonly string[];
+    }
+  | { kind: 'notice'; message: ChatMessage; messageId: string };
 
 export type TurnItemKind = TurnItem['kind'];
 
@@ -159,6 +177,13 @@ export type TurnItemKind = TurnItem['kind'];
  * the message the event names but `permission_request` blocks to "the last
  * non-history assistant message", so the pair is only co-located by ordering
  * luck. Pending approvals pass through untouched and keep their own item.
+ *
+ * T105: the last pass is `mergeAdjacentToolGroups`, which stitches the groups
+ * that are now neighbours. Both passes run in this order because the join can
+ * itself bring two groups together (it deletes the permission item from
+ * between them) while the merge never creates a new adjacency for the join to
+ * exploit — `groupTimeline` cannot emit two adjacent groups in the first place,
+ * so without the join there would be nothing for the merge to do.
  */
 export function flattenTurnItems(turn: Turn): TurnItem[] {
   const items: TurnItem[] = [];
@@ -171,7 +196,62 @@ export function flattenTurnItems(turn: Turn): TurnItem[] {
     }
     items.push({ kind: 'notice', message, messageId: message.id });
   }
-  return joinResolvedPermissions(items);
+  return mergeAdjacentToolGroups(joinResolvedPermissions(items));
+}
+
+/**
+ * T105: stitch two `toolGroup` items that sit next to each other into one.
+ *
+ * ## Why the boundary exists at all
+ *
+ * `groupTimeline` is per-MESSAGE, so one continuous stream of tool calls is cut
+ * wherever the Host opened a new assistant message — which it does on every
+ * tool result. A turn that reads three files in a row can therefore arrive as
+ * three `toolGroup` items, and three aggregates is exactly the 「过程条目太碎」
+ * the user reported. Nothing in the block ORDER separates them; only the
+ * message boundary does, and that boundary is invisible on screen.
+ *
+ * ## What counts as "adjacent"
+ *
+ * Two `toolGroup` items with NO item between them. A `text`, `question`,
+ * `permission`, `permissionActivity` or `notice` item between them is a real
+ * interruption — the model spoke, or something had to be answered — so the
+ * merge stops there. That is deliberately the same list `turnItemPlacement`
+ * treats as its own segment kind, and it is what makes the aggregate's promise
+ * honest: N calls in one row are N calls the user watched happen back to back.
+ *
+ * ## Two fields have to survive
+ *
+ *  - **`messageId` / `blockIndex` come from the FIRST item**, so `turnItemKey`
+ *    does not change as the segment grows and the row is never remounted
+ *    (a remount would drop the reader's expanded state mid-turn).
+ *  - **`messageIds` is added**, holding every contributing message in order.
+ *    The renderer resolves the streaming thinking block through
+ *    `streamingBlockIdByMessage.get(item.messageId)`, which after a merge is
+ *    the FIRST message only — so without this field the live "thinking" row of
+ *    any LATER message in the segment would silently stop updating. Silent is
+ *    the operative word: no error, no failed assertion, just a thought that
+ *    stops growing.
+ *
+ * Pure, order-preserving and idempotent (a second pass finds no two adjacent
+ * groups), and `Σ entries` is conserved: the merge moves entries, never drops
+ * or duplicates one.
+ */
+export function mergeAdjacentToolGroups(items: readonly TurnItem[]): TurnItem[] {
+  const merged: TurnItem[] = [];
+  for (const item of items) {
+    const previous = merged[merged.length - 1];
+    if (item.kind === 'toolGroup' && previous?.kind === 'toolGroup') {
+      merged[merged.length - 1] = {
+        ...previous,
+        entries: [...previous.entries, ...item.entries],
+        messageIds: [...(previous.messageIds ?? [previous.messageId]), item.messageId],
+      };
+      continue;
+    }
+    merged.push(item);
+  }
+  return merged;
 }
 
 /** Where an item sits relative to the collapsible shell. */

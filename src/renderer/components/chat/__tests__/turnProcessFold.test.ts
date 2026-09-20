@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { TurnItem, TurnItemKind, TurnSegment } from '../chatTurn';
 import { segmentTurnBody } from '../chatTurn';
+import type { ToolRun, ToolRunStatus } from '../toolCard';
 import {
   countProcessSteps,
+  deriveTurnCurrentAction,
   deriveTurnWorkGroupLabel,
   splitTurnWorkGroup,
   turnWorkGroupAwaitsUser,
@@ -269,33 +271,46 @@ describe('turnWorkGroupAwaitsUser — the Allow/Deny card can never be collapsed
 // Open / closed
 // ---------------------------------------------------------------------------
 
-describe('turnWorkGroupOpen — auto-collapse once, user intent forever', () => {
-  const open = (settled: boolean, forcedOpen: boolean, userOpen: boolean | null): boolean =>
-    turnWorkGroupOpen({ settled, forcedOpen, userOpen });
+describe('turnWorkGroupOpen — always folded, user intent forever', () => {
+  const open = (forcedOpen: boolean, userOpen: boolean | null): boolean =>
+    turnWorkGroupOpen({ forcedOpen, userOpen });
 
-  it('[WG-OPEN-1] a running turn is open, a settled one is closed', () => {
-    expect(open(false, false, null)).toBe(true);
-    expect(open(true, false, null)).toBe(false);
+  /**
+   * ⚠️ INVERTED 2026-09-19 (user decision D6).
+   *
+   * This case used to read `[WG-OPEN-1] a running turn is open, a settled one is
+   * closed` and asserted `open(false, false, null) === true` — the auto-open
+   * that made a long tool sequence a wall of rows. The user's complaint was
+   * about exactly that state, so the assertion flips: the group is closed while
+   * the turn runs and stays closed when it ends. `settled` is gone from the
+   * input entirely, which is why this signature no longer takes it — the rule
+   * cannot be reintroduced by passing a stale flag.
+   *
+   * What the head has to carry instead is `deriveTurnCurrentAction`'s clause,
+   * truth-tabled below: a folded group with a bare ticking clock is what this
+   * decision would otherwise look like.
+   */
+  it('[WG-OPEN-1] the group is closed whether the turn runs or has settled', () => {
+    expect(open(false, null)).toBe(false);
   });
 
-  it('[WG-OPEN-2] the auto-collapse does not override a user who opened it', () => {
-    // The whole point: once the user has clicked, `settled` stops deciding —
-    // which is also what makes the collapse a one-shot at the transition rather
-    // than something every render re-applies.
-    expect(open(true, false, true)).toBe(true);
-    expect(open(false, false, false)).toBe(false);
+  it('[WG-OPEN-2] the default does not override a user who opened it', () => {
+    // The whole point: once the user has clicked, the default stops deciding —
+    // which is also what makes a choice permanent rather than something every
+    // render reapplies.
+    expect(open(false, true)).toBe(true);
+    expect(open(false, false)).toBe(false);
   });
 
   it('[WG-OPEN-3] restored history mounts collapsed with no history-detection at all', () => {
-    // A turn that never ran in this window is `settled` on its first render.
-    expect(open(true, false, null)).toBe(false);
+    // A turn that never ran in this window is settled on its first render —
+    // and now so is a running one, which is the same answer.
+    expect(open(false, null)).toBe(false);
   });
 
-  it('[WG-OPEN-4] an unanswered authorization outranks both the clock and the click', () => {
-    for (const settled of [true, false]) {
-      for (const userOpen of [true, false, null]) {
-        expect(open(settled, true, userOpen), `${settled}/${userOpen}`).toBe(true);
-      }
+  it('[WG-OPEN-4] an unanswered authorization outranks both the default and the click', () => {
+    for (const userOpen of [true, false, null]) {
+      expect(open(true, userOpen), `${userOpen}`).toBe(true);
     }
   });
 });
@@ -400,5 +415,124 @@ describe('countProcessSteps', () => {
       ])
     ).toBe(6);
     expect(countProcessSteps([])).toBe(0);
+  });
+
+  /**
+   * T105 — the same number, and the reason it did NOT have to move.
+   *
+   * The aggregate row's `N` changed meaning (it is the segment's run count now,
+   * not a `file_path`-deduped file count), and the obvious worry was that this
+   * function's "steps" would have to follow it. It does not, because they were
+   * never the same count: this one is summed over the whole turn's grouped
+   * items and deliberately counts a THOUGHT as a step too ("A tool group is not
+   * one step: it is the run(s) and thinking blocks inside it"). Merging two
+   * adjacent groups into one item therefore moves entries, and the sum is
+   * unchanged — asserted rather than assumed, since a merge that dropped an
+   * entry would be invisible everywhere else.
+   */
+  it('is unchanged by merging two adjacent groups into one item', () => {
+    const group = (entries: unknown[]) =>
+      ({ kind: 'toolGroup', blockIndex: 0, messageId: 'm1', entries }) as never;
+    const before = countProcessSteps([
+      group([{ kind: 'run' }, { kind: 'thinking' }]),
+      group([{ kind: 'run' }]),
+    ]);
+    const after = countProcessSteps([
+      group([{ kind: 'run' }, { kind: 'thinking' }, { kind: 'run' }]),
+    ]);
+    expect(after).toBe(before);
+    expect(after).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The head's live clause (T105 / D6)
+// ---------------------------------------------------------------------------
+
+/**
+ * With the work group always folded, this clause is the ONLY progress evidence
+ * a running turn has on screen. So these are not decorative: the fallback case
+ * is what keeps the head from dropping to a bare ticking clock in every gap
+ * between two tool calls, which would read as a hang.
+ */
+describe('deriveTurnCurrentAction — what the head says the turn is doing', () => {
+  function run(toolName: string, status: ToolRunStatus, id: string): ToolRun {
+    return {
+      toolCallId: id,
+      blockIndex: 0,
+      blockId: id,
+      toolName,
+      input: {},
+      status,
+    };
+  }
+
+  const group = (runs: readonly ToolRun[], messageId = 'm1', blockIndex = 0): TurnItem =>
+    ({
+      kind: 'toolGroup',
+      blockIndex,
+      messageId,
+      entries: runs.map((r) => ({ kind: 'run', run: r })),
+    }) as unknown as TurnItem;
+
+  it('[ACT-1] takes the last running call in the group', () => {
+    const action = deriveTurnCurrentAction([
+      group([run('Read', 'ok', 'a'), run('Grep', 'running', 'b')]),
+    ]);
+    expect(action?.run.blockId).toBe('b');
+    expect(action?.state).toBe('running');
+    expect(action?.verb).toBe('Grepping');
+  });
+
+  it('[ACT-2] takes the LAST group, so an earlier group cannot win', () => {
+    const action = deriveTurnCurrentAction([
+      group([run('Read', 'running', 'stale')], 'm1', 0),
+      { kind: 'text', block: { id: 't', type: 'text' }, blockIndex: 1, messageId: 'm1' } as never,
+      group([run('Edit', 'running', 'fresh')], 'm2', 0),
+    ]);
+    expect(action?.run.blockId).toBe('fresh');
+  });
+
+  it('[ACT-3] falls back to the last FINISHED call when nothing is running', () => {
+    // The defect this guards: between two tool calls (thinking, dispatching the
+    // next one) no run is running. Returning null there blinks the clause off
+    // and on while the seconds keep counting — a head indistinguishable from a
+    // frozen one.
+    const action = deriveTurnCurrentAction([group([run('Read', 'ok', 'a'), run('Edit', 'ok', 'b')])]);
+    expect(action?.run.blockId).toBe('b');
+    expect(action?.state).toBe('refused');
+    // The infinitive slot: the head must read 「最后编辑 App.tsx」, never
+    // 「最后已编辑」.
+    expect(action?.verb).toBe('Edit');
+  });
+
+  it('[ACT-4] still reports a fallback when a LATER group holds only thinking', () => {
+    const items = [
+      group([run('Read', 'ok', 'a')]),
+      {
+        kind: 'toolGroup',
+        blockIndex: 1,
+        messageId: 'm2',
+        entries: [{ kind: 'thinking', block: { id: 'th', type: 'thinking' }, blockIndex: 0 }],
+      } as unknown as TurnItem,
+    ];
+    expect(deriveTurnCurrentAction(items)?.run.blockId).toBe('a');
+  });
+
+  it('[ACT-5] an empty list, and a list with no tool group, give null', () => {
+    expect(deriveTurnCurrentAction([])).toBeNull();
+    expect(
+      deriveTurnCurrentAction([
+        { kind: 'text', block: { id: 't', type: 'text' }, blockIndex: 0, messageId: 'm' } as never,
+      ])
+    ).toBeNull();
+  });
+
+  it('[ACT-6] reports what the turn just finished doing, not the first call of the group', () => {
+    const action = deriveTurnCurrentAction([
+      group([run('Read', 'ok', 'a'), run('Read', 'ok', 'b'), run('Bash', 'ok', 'c')]),
+    ]);
+    expect(action?.run.blockId).toBe('c');
+    expect(action?.verb).toBe('Run');
   });
 });

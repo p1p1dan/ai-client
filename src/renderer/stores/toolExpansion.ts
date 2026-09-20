@@ -14,15 +14,23 @@ import { create } from 'zustand';
  *     pi backend, two sequential `read` calls in one turn:
  *
  *       step 1  (a.ts done)          -> [ key "block-a",     "Read a.ts"        ]
- *       step 2a (b.ts running)       -> [ key "block-a", key "block-b" ]
- *       step 2b (b.ts done)          -> [ key "block-a~agg", "Explored 2 files" ]
+ *       step 2  (b.ts running)       -> [ key "block-a~agg", "2 tool calls · Grepping …" ]
+ *       step 3  (b.ts done)          -> [ key "block-a~agg", "2 tool calls · Last Read" ]
  *
- *     At 2b the row the user had open stops existing at top level: both reads
- *     fold into ONE collapsed aggregate whose `detail` holds them. So opening a
- *     file's output while the agent keeps working means that output disappears
- *     the moment the next read finishes. This path is newly reachable — before
- *     T12-b's vocabulary fix `classifyTool` never returned `read` for pi's
- *     lowercase tool names, so aggregation never fired on this backend at all.
+ *     (T105 changed two things here and neither is the key: the aggregate's
+ *     copy is a run count plus the last action, and a running call JOINS the
+ *     segment instead of ending it — so the absorption happens one step earlier
+ *     than it used to. What this note is about is unchanged: `block-a` stops
+ *     existing at top level, and the key it folded into is stable from the
+ *     first moment the aggregate exists.)
+ *
+ *     At the absorption step the row the user had open stops existing at top
+ *     level: both reads fold into ONE collapsed aggregate whose `detail` holds
+ *     them. So opening a file's output while the agent keeps working means that
+ *     output disappears the moment the next read starts. This path is newly
+ *     reachable — before T12-b's vocabulary fix `classifyTool` never returned
+ *     `read` for pi's lowercase tool names, so aggregation never fired on this
+ *     backend at all.
  *
  * ## Why remembering the row is not enough on its own
  *

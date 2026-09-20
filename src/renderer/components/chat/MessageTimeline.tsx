@@ -100,9 +100,10 @@ import { ReadingColumn } from './ReadingColumn';
 import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
 import { SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { useResumeSession } from './sessionIndex/useResumeSession';
+import { streamingBlockIdForItem } from './streamingBlockId';
 import { delegateDisplayName } from './subagentActivityModel';
 import { ToolGroup } from './ToolRows';
-import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
+import { deriveToolGroupRows, formatToolArg, type ToolGroupEntry } from './toolCard';
 import { buildTurnCopyTextFromItems } from './turnCopy';
 import {
   deriveSendStatusBinding,
@@ -112,6 +113,7 @@ import {
 } from './turnHead';
 import {
   countProcessSteps,
+  deriveTurnCurrentAction,
   deriveTurnWorkGroupLabel,
   splitTurnWorkGroup,
   turnWorkGroupAwaitsUser,
@@ -1380,6 +1382,7 @@ function TurnProgressHead({
   elapsedSeconds,
   tokens,
   thinkingMs,
+  repoName,
   hasReplyContent,
   collapsible,
   userOpen,
@@ -1399,6 +1402,12 @@ function TurnProgressHead({
   tokens: TurnTokenTotals | null;
   /** Thinking time so far, or `null` when the provider reports no reasoning. */
   thinkingMs: number | null;
+  /**
+   * Repo tail for the live action clause's argument (T105) — the same value
+   * `ToolGroupItem` already passes down, so the head and the rows below it name
+   * a search the same way.
+   */
+  repoName?: string | null;
   /**
    * The turn has produced at least one block. Stage boundary for the live
    * clauses — see `turnProgressClauses` for why the rule is this fact and not
@@ -1446,11 +1455,12 @@ function TurnProgressHead({
    * `[HEAD-EN-1]` guard is what makes that swap fail loudly.
    */
   const t = englishTranslate;
-  const open = turnWorkGroupOpen({ settled, forcedOpen, userOpen });
+  const open = turnWorkGroupOpen({ forcedOpen, userOpen });
+  const steps = countProcessSteps(items);
   const label = deriveTurnWorkGroupLabel({
     settled,
     workedMs,
-    steps: countProcessSteps(items),
+    steps,
     elapsedSeconds,
   });
   if (!label) {
@@ -1478,6 +1488,31 @@ function TurnProgressHead({
                 minutes: label.minutes,
                 seconds: label.seconds,
               });
+  // T105 (D6): the running head now carries WHAT is running, not just how long
+  // it has been running — with the work group always collapsed this clause is
+  // the only progress evidence the turn has on screen, and a bare ticking clock
+  // reads as a hang. `deriveTurnCurrentAction` never returns null while any
+  // call exists (it falls back to the last finished one), so the clause does
+  // not blink off in the gaps between calls.
+  const currentAction = settled ? null : deriveTurnCurrentAction(items);
+  const actionClause = currentAction
+    ? [
+        t(currentAction.verb),
+        currentAction.state === 'running'
+          ? formatToolArg(currentAction.run, { repoName })
+          : undefined,
+      ]
+        .filter((part): part is string => !!part)
+        .join(' ')
+    : null;
+  // The `N steps` clause closes the SETTLED line only, and only when the
+  // duration is the thing being reported: `label.kind === 'steps'` already
+  // prints the count as the head itself, and repeating it would read as two
+  // different measurements of the same turn.
+  const stepsClause =
+    settled && label.kind === 'worked' && steps > 0
+      ? t(steps === 1 ? '{{count}} step' : '{{count}} steps', { count: steps })
+      : null;
   // 2026-09-18 (third pass): a settled turn KEEPS its ↑↓ clause instead of
   // dropping straight to bare duration. The earlier rule here was "the live
   // clauses ride the running head only", on the reasoning that a settled
@@ -1496,10 +1531,12 @@ function TurnProgressHead({
   // not a `label.kind` check here — so the boundary between 「只有状态词和时间」
   // and 「加上 ↑↓ token」 stays one truth-tabled function for every kind of head,
   // running or settled, rather than a JSX condition duplicating part of it.
-  const line = joinTurnProgressLine(
-    headText,
-    turnProgressClauses({ hasReplyContent, tokens, thinkingMs }, t)
-  );
+  const line = joinTurnProgressLine(headText, [
+    actionClause,
+    stepsClause,
+    ...turnProgressClauses({ hasReplyContent, tokens, thinkingMs }, t),
+  ]);
+
   // A turn can stay silent for a minute; the spinner beside the ticking clock
   // is what says it is alive rather than hung. Same 3.5 size as every other
   // running indicator in the chat surface.
@@ -1875,7 +1912,7 @@ const ChatTurn = memo(function ChatTurn({
       sessionId={sessionId}
       thinkingEnabled={thinkingEnabled}
       repoName={repoName}
-      streamingBlockId={streamingBlockIdByMessage.get(item.messageId) ?? null}
+      streamingBlockId={streamingBlockIdForItem(item, streamingBlockIdByMessage)}
       getThinkingDurationMs={getThinkingDurationMs}
     />
   );
@@ -2060,6 +2097,7 @@ const ChatTurn = memo(function ChatTurn({
           elapsedSeconds={headElapsedSeconds}
           tokens={turnTokens}
           thinkingMs={turnThinkingMs}
+          repoName={repoName}
           // Same fact `deriveTurnStatus` switches its wording on, passed from
           // the same variable: the two lines must agree about when the wait
           // ended, and upstream sends nothing at all until it does.
@@ -2253,7 +2291,9 @@ function RetryBanner({ view, sessionId }: { view: RetryBannerView; sessionId: st
   );
 }
 
-/** Stable per-item key: block ids are unique within a message, group indexes within a message's blocks. */
+/**
+ * Stable per-item key: block ids are unique within a message, group indexes within a message's blocks.
+ */
 function turnItemKey(item: TurnItem): string {
   switch (item.kind) {
     case 'toolGroup':
@@ -2269,6 +2309,7 @@ function turnItemKey(item: TurnItem): string {
       return item.block.id;
   }
 }
+
 
 /*
  * `TurnHeadContent` retired with the degradation chain it switched on (T12-b).

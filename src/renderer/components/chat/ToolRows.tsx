@@ -138,8 +138,11 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
       {/* The ONE place a row's verb becomes words. Every builder upstream
           (`toolCard.ts`, `turnTiming.ts`, `questionCardModel.ts`) emits a
           catalog key so this single call covers tool rows, thought rows,
-          aggregates and settled permissions alike. */}
-      <span className={verbClass}>{t(view.verb)}</span>
+          aggregates and settled permissions alike. `verbText` is the one
+          exception, and the aggregate row is its only producer: that row's
+          leading text interleaves a count, a verb and another key's argument,
+          so it arrives finished (see `ToolRowView.verbText`). */}
+      <span className={verbClass}>{view.verbText ?? t(view.verb)}</span>
       <ToolRowArg view={view} onOpenFile={onOpenFile} />
       <ToolRowPermission view={view} />
       {showDiff && view.diff && (

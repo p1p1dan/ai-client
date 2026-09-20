@@ -722,14 +722,17 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
     expectCalled('turnWorkGroupAwaitsUser(workGroup.grouped)');
     expectCalled('forcedOpen={groupForcedOpen}');
-    expectCalled('turnWorkGroupOpen({ settled, forcedOpen, userOpen })');
+    // T105: `settled` left this call's arguments. It is still a prop of the
+    // head (spinner, label, current-action clause) — it just no longer decides
+    // whether the group is open, which is D6's whole point.
+    expectCalled('turnWorkGroupOpen({ forcedOpen, userOpen })');
 
     const group = nodeSource(topLevelFunction('TurnProgressHead'));
     expect(group, 'the panel renders its children unconditionally').toContain(
       `<div className={cn(turnProcessShellClass(), 'pt-2')}>{children}</div>`
     );
     expect(group, 'the open bit must be the derived one, not a second rule').toContain(
-      'const open = turnWorkGroupOpen({ settled, forcedOpen, userOpen });'
+      'const open = turnWorkGroupOpen({ forcedOpen, userOpen });'
     );
     // Base UI's panel carries `overflow-hidden` (COLLAPSIBLE_PANEL_BASE_CLASS),
     // which creates a containing block — the standing prohibition on the turn
@@ -1322,6 +1325,42 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
         "turnProgressClauses' job alone"
     ).toBe(1);
     expectCalled('joinTurnProgressLine(');
+  });
+
+  /**
+   * T105 (D6) — the head's live clause, and the three things about it that are
+   * easy to get wrong without noticing:
+   *
+   *  1. it must be GATED on `settled`, or a finished turn keeps advertising
+   *     what it was doing an hour ago;
+   *  2. it must be the FIRST clause — 「Working 12s · Reading App.tsx ·
+   *     ↑12.0k tokens」 — so the head reads as progress before it reads as a
+   *     statistic;
+   *  3. the settled `N steps` clause must not print for the `steps` label
+   *     itself, which already IS the count ("9 steps processed · 9 steps").
+   *
+   * The ordering is asserted by position in the joined line rather than by
+   * three separate `expectCalled`s, because "all three appear" is exactly the
+   * claim that would stay green if the current action were appended last.
+   */
+  it('[WG-WIRE-8] the head carries the running action as its first clause, only while it runs', () => {
+    expectCalled('deriveTurnCurrentAction(items)');
+    expectWired('const currentAction = settled ? null : deriveTurnCurrentAction(items);');
+    // The clause is composed from the SAME vocabulary the tool rows use, and
+    // its argument from the same formatter — a second wording here would drift.
+    expectWired('t(currentAction.verb)');
+    expectWired('formatToolArg(currentAction.run, { repoName })');
+    const head = nodeSource(topLevelFunction('TurnProgressHead'));
+    const actionAt = head.indexOf('actionClause,');
+    const stepsAt = head.indexOf('stepsClause,');
+    const clausesAt = head.indexOf('...turnProgressClauses(');
+    expect(actionAt, 'the action clause exists').toBeGreaterThan(-1);
+    expect(actionAt, 'it is the first clause').toBeLessThan(stepsAt);
+    expect(stepsAt, 'and the step count follows it').toBeLessThan(clausesAt);
+    // The count is computed ONCE and shared by the label and the clause, so the
+    // head cannot report two different step totals.
+    expectWired('const steps = countProcessSteps(items);');
+    expectWired('steps,');
   });
 
   /**

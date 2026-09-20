@@ -22,6 +22,7 @@
  */
 
 import type { TurnItem, TurnSegment } from './chatTurn';
+import { type ToolRun, toolVerb, type ToolVerbState } from './toolCard';
 import { splitWorkedForDuration, type WorkedForParts } from './turnTiming';
 
 /**
@@ -169,8 +170,6 @@ export function turnWorkGroupAwaitsUser(segments: readonly TurnSegment<TurnItem>
 }
 
 export interface TurnWorkGroupOpenInput {
-  /** The turn has stopped running — nothing is in flight for it any more. */
-  settled: boolean;
   /** `turnWorkGroupAwaitsUser` over the grouped segments. */
   forcedOpen: boolean;
   /** The user's own click, or `null` while they have not expressed one. */
@@ -178,33 +177,114 @@ export interface TurnWorkGroupOpenInput {
 }
 
 /**
- * Whether the group is open. Three rules, in precedence order.
+ * Whether the group is open. Two rules, in precedence order.
  *
  *  1. an unanswered authorization/question wins over everything (red line
  *     above) — the user cannot collapse away the card they are being asked to
  *     answer, and neither can the auto-collapse;
  *  2. otherwise the user's own choice, once made, is permanent for this turn;
- *  3. otherwise the group is open exactly while the turn runs.
+ *  3. otherwise the group is CLOSED — while the turn runs just as much as once
+ *     it has ended.
  *
- * ## Why this is derived rather than an effect that fires on the transition
+ * ## Rule 3 is the 2026-09-19 change (user decision, D6)
  *
- * "Collapse when the turn ends" is a one-shot, and one-shots are usually built
- * as `useEffect` + a ref holding the previous value. Written that way it has
- * two failure modes that are hard to see in review: the effect can fire twice
- * under StrictMode, and a later re-render that re-runs it slams the group shut
- * under a reader who had opened it. Deriving instead makes both unreachable —
- * rule 3 is a function of `settled`, so the collapse happens on the transition
- * BY CONSTRUCTION, and rule 2 outranks it forever after, so no render can
- * override a choice.
+ * It used to read `return !input.settled`, i.e. a running turn kept its group
+ * open and the tuple collapsed itself at the transition. The user's report was
+ * about the running case specifically: a long tool sequence left a wall of
+ * 「Read / Grep / Read / Edit」 on screen for the whole turn, and the head above
+ * it was lost in the middle. So the group starts folded and STAYS folded, and
+ * the head — which now carries the current action, not just a clock — is the
+ * one-line answer to "what is it doing".
  *
- * It also gives the restored-history case for free: a turn that was never in
- * flight in this window is `settled` from its very first render, so it mounts
- * collapsed without anything having to detect that it is history.
+ * `settled` was DELETED from the input rather than kept and ignored: an
+ * exported input nothing reads is a rule waiting to be mistaken for a live one
+ * (§13 ①), and `TurnProgressHead` still takes `settled` for its own reasons
+ * (spinner, label, the current-action clause) — it simply no longer decides
+ * this.
+ *
+ * What survives from the old rule set: rule 1 unchanged (the authorization red
+ * line), and rule 2 unchanged, which is what keeps a reader's click from being
+ * overridden by any later render.
+ *
+ * ## Why this is still derived rather than an effect
+ *
+ * "Collapse when the turn ends" was the one-shot that motivated deriving this
+ * in the first place, and the objection holds even more strongly now that the
+ * group is always closed: an `useEffect` + ref would fire twice under
+ * StrictMode and could slam the group shut under a reader who had just opened
+ * it. Deriving makes both unreachable — rule 2 outranks the default forever
+ * after, and no render can override a choice.
+ *
+ * It also keeps the restored-history case for free: a turn that was never in
+ * flight in this window mounts collapsed without anything having to detect that
+ * it is history.
  */
 export function turnWorkGroupOpen(input: TurnWorkGroupOpenInput): boolean {
   if (input.forcedOpen) return true;
   if (input.userOpen !== null) return input.userOpen;
-  return !input.settled;
+  return false;
+}
+
+/**
+ * What the turn is doing RIGHT NOW, for the head's live clause (T105, D6).
+ *
+ * ## Why this exists at all
+ *
+ * Once the work group is always collapsed, this clause is the ONLY progress
+ * evidence a running turn has on screen — the head is one line, and if that
+ * line is a bare ticking clock the turn is indistinguishable from a hung one.
+ * The user's own report on the previous arrangement was exactly that: a
+ * 50-second wait whose only signal was a counter.
+ *
+ * ## The fallback is the point, not a nicety
+ *
+ * Between two tool calls — while the model thinks, while a request is being
+ * dispatched, in the gap after a result lands — no run is `running`. Returning
+ * `null` there would blink the clause off and on several times a second while
+ * the seconds kept counting: a head that reads as stuck. So the scan falls back
+ * to the LAST completed run and describes it, which is also the honest answer
+ * to "what has it been doing" one second after a call finished. The verb state
+ * travels with it (`'running'` vs `'refused'` = the plain infinitive) so the
+ * caller never has to guess which grammar the sentence needs.
+ *
+ * Returning the RUN rather than a formatted string keeps this module free of
+ * `toolCard`'s argument formatting and of any translator: the caller already
+ * holds both (`MessageTimeline.tsx` renders in English — user decision
+ * 2026-09-19 — with `formatToolArg`), so the words are composed at paint where
+ * every other verb in this app becomes words. `verb` is the catalog key for
+ * that name, resolved through the same `toolVerb` table the row itself uses.
+ *
+ * Reverse order on both levels, so the newest news wins: the last `toolGroup`
+ * item that holds any run, and within it the last running run (or, failing
+ * that, the last run at all).
+ */
+export interface TurnCurrentAction {
+  run: ToolRun;
+  /** Catalog key for the operation's name — `running` or `refused` (the infinitive). */
+  verb: string;
+  state: Extract<ToolVerbState, 'running' | 'refused'>;
+}
+
+export function deriveTurnCurrentAction(items: readonly TurnItem[]): TurnCurrentAction | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item.kind !== 'toolGroup') continue;
+    let last: ToolRun | null = null;
+    for (let entryIndex = item.entries.length - 1; entryIndex >= 0; entryIndex -= 1) {
+      const entry = item.entries[entryIndex];
+      if (entry.kind !== 'run') continue;
+      last = last ?? entry.run;
+      if (entry.run.status === 'running') {
+        return actionOf(entry.run, 'running');
+      }
+    }
+    if (last) return actionOf(last, 'refused');
+  }
+  return null;
+}
+
+function actionOf(run: ToolRun, state: Extract<ToolVerbState, 'running' | 'refused'>) {
+  return { run, verb: toolVerb(run.toolName, state), state };
 }
 
 /**

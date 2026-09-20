@@ -86,7 +86,7 @@ describe('pi built-in tools are classified for aggregation', () => {
     expect(classifyTool(tool)).toBe(expected);
   });
 
-  it('dedupes read files by pi’s `path`, not only Claude’s `file_path`', () => {
+  it('counts every read call, including two reads of the SAME path (T105)', () => {
     const entries = [
       { kind: 'run' as const, run: run(PI_TOOL_NAMES.read, { path: 'src/a.ts' }) },
       {
@@ -94,9 +94,15 @@ describe('pi built-in tools are classified for aggregation', () => {
         run: run(PI_TOOL_NAMES.read, { path: 'src/a.ts' }, { toolCallId: 'call-2' }),
       },
     ];
-    // Same file twice. Reading only `file_path` falls back to `toolCallId`,
-    // which is unique per call, so this would say "2 files".
-    expect(deriveAggregateRow(entries).arg).toBe('1 file');
+    // ⚠️ REWRITTEN 2026-09-19 (D5). This used to be the `file_path`/`path` dedupe
+    // case — "same file twice, so say 1 file", which the pi dialect fix added
+    // because reading only one of the two field names fell back to `toolCallId`
+    // and silently stopped deduping. T105 deleted the dedupe and the counting
+    // scheme behind it: `N` is now the segment's run count, so the pi/Claude
+    // field-name question no longer has anything to decide here. What the case
+    // still guards is that the count comes from `runEntries.length` rather than
+    // from any path-derived set.
+    expect(deriveAggregateRow(entries).verbText).toBe('2 tool calls · Last Read');
   });
 });
 

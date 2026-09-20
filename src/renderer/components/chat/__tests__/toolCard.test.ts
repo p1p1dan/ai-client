@@ -250,74 +250,110 @@ describe('groupTimeline', () => {
 });
 
 describe('deriveToolGroupRows', () => {
-  it('aggregates two consecutive explore runs into one row with two detail rows', () => {
+  it('aggregates two consecutive tool runs into one row with two detail rows', () => {
     const entries = [
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
       runEntry(makeRun('b', 'Grep', { pattern: 'foo' })),
     ];
     const rows = deriveToolGroupRows(entries);
     expect(rows).toHaveLength(1);
-    expect(rows[0].verb).toBe('Explored');
+    expect(rows[0].verbText).toBe('2 tool calls · Last Grep');
     expect(rows[0].detail).toHaveLength(2);
   });
 
-  it('does not aggregate a single explore run (A07 :2348)', () => {
+  it('does not aggregate a single tool run (A07 :2348)', () => {
     const entries = [runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }))];
     const rows = deriveToolGroupRows(entries);
     expect(rows).toHaveLength(1);
     expect(rows[0].detail).toBeUndefined();
     expect(rows[0].verb).toBe('Read');
+    expect(rows[0].verbText).toBeUndefined();
   });
 
-  it('keeps Edited + Ran as two separate rows, never aggregated (A07 :1769-1772)', () => {
+  /**
+   * ⚠️ INVERTED 2026-09-19 (user decision D3, T105).
+   *
+   * This case used to be `keeps Edited + Ran as two separate rows, never
+   * aggregated (A07 :1769-1772)`. The user's ruling retires that rule:
+   * 「不分类型（读取/搜索/运行/编辑/写入）合并成一条」, so the exact pair A07 kept
+   * apart is now the positive case for cross-type aggregation.
+   */
+  it('aggregates across tool TYPES — Edited + Ran become one row (D3)', () => {
     const entries = [
       runEntry(makeRun('a', 'Edit', { file_path: 'a.ts' })),
       runEntry(makeRun('b', 'Bash', { command: 'ls' })),
     ];
     const rows = deriveToolGroupRows(entries);
-    expect(rows.map((row) => row.verb)).toEqual(['Edited', 'Ran']);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].verbText).toBe('2 tool calls · Last Run');
+    expect(rows[0].detail).toHaveLength(2);
   });
 
-  it('folds a thinking entry inside an explore run into detail without breaking aggregation (A07 :2370)', () => {
+  /**
+   * ⚠️ INVERTED 2026-09-19 (user decision D4, T105).
+   *
+   * This case used to read `folds a thinking entry inside an explore run into
+   * detail without breaking aggregation`. The user's ruling: 夹在中间的思考会
+   * 打断聚合，前后各成一条，思考自己单独一行 — so a thought is now a separator,
+   * and the shape is aggregate / thought / aggregate.
+   */
+  it('a thinking entry BREAKS the aggregate in two, and renders its own row between (D4)', () => {
+    const entries = [
+      runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
+      runEntry(makeRun('b', 'Read', { file_path: 'b.ts' })),
+      thinkEntry(thinkingBlock('th1')),
+      runEntry(makeRun('c', 'Grep', { pattern: 'foo' })),
+      runEntry(makeRun('d', 'Grep', { pattern: 'bar' })),
+    ];
+    const rows = deriveToolGroupRows(entries);
+    expect(rows).toHaveLength(3);
+    expect(rows.map((row) => row.body)).toEqual(['detail', 'thinking', 'detail']);
+    expect(rows[0].detail).toHaveLength(2);
+    expect(rows[2].detail).toHaveLength(2);
+  });
+
+  it('a single call either side of a thought does NOT aggregate — two plain rows', () => {
     const entries = [
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
       thinkEntry(thinkingBlock('th1')),
       runEntry(makeRun('b', 'Grep', { pattern: 'foo' })),
     ];
     const rows = deriveToolGroupRows(entries);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].detail).toHaveLength(3);
-    expect(rows[0].detail?.[1].body).not.toBe('output');
+    expect(rows.map((row) => row.verb)).toEqual(['Read', 'Thought', 'Grepped']);
   });
 
-  it('keeps a still-running call out of the aggregate: 1 completed + 1 running -> not aggregated, two independent rows (T-05 adversarial fix #1)', () => {
+  /**
+   * ⚠️ INVERTED 2026-09-19 (D3/5c, T105).
+   *
+   * This case used to read `keeps a still-running call out of the aggregate:
+   * 1 completed + 1 running -> not aggregated, two independent rows` — the
+   * aggregate's copy was a plain 「已浏览 1 个文件」, which cannot say "one of
+   * these is still going". Now the running call joins the segment and the
+   * aggregate row reports itself as running with its own action named.
+   */
+  it('aggregates a running call WITH the finished one, and says what is running', () => {
     const entries = [
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }, 'ok')),
       runEntry(makeRun('b', 'Grep', { pattern: 'foo' }, 'running', { output: undefined })),
     ];
     const rows = deriveToolGroupRows(entries);
-    expect(rows).toHaveLength(2);
-    expect(rows[0].verb).toBe('Read');
-    expect(rows[0].running).toBe(false);
-    expect(rows[1].verb).toBe('Grepping');
-    expect(rows[1].running).toBe(true);
-    expect(rows[1].expandable).toBe(false);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].running).toBe(true);
+    expect(rows[0].verbText).toBe('2 tool calls · Grepping foo');
+    expect(rows[0].detail).toHaveLength(2);
   });
 
-  it('aggregates the completed prefix (>= 2 runs) and appends a still-running call after it, in original order (T-05 adversarial fix #1)', () => {
+  it('aggregates several finished calls and names the still-running one after them (T105)', () => {
     const entries = [
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }, 'ok')),
       runEntry(makeRun('b', 'Grep', { pattern: 'foo' }, 'ok')),
       runEntry(makeRun('c', 'WebSearch', { query: 'bar' }, 'running', { output: undefined })),
     ];
     const rows = deriveToolGroupRows(entries);
-    expect(rows).toHaveLength(2);
-    expect(rows[0].verb).toBe('Explored');
-    expect(rows[0].running).toBe(false);
-    expect(rows[0].detail).toHaveLength(2);
-    expect(rows[1].verb).toBe('Searching');
-    expect(rows[1].running).toBe(true);
-    expect(rows[1].expandable).toBe(false);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].running).toBe(true);
+    expect(rows[0].verbText).toBe('3 tool calls · Searching bar');
+    expect(rows[0].detail).toHaveLength(3);
   });
 
   it('never lets a detail row carry its own nested detail (flat, depth 0)', () => {
@@ -327,6 +363,37 @@ describe('deriveToolGroupRows', () => {
     ];
     const rows = deriveToolGroupRows(entries);
     expect(rows[0].detail?.every((row) => row.detail === undefined)).toBe(true);
+  });
+
+  /**
+   * ⚠️ FB7 red line, restated for T105.
+   *
+   * A run carrying a permission record is a SEPARATOR: it renders standalone,
+   * and it splits the calls around it into two segments. The reason is the
+   * second half of T105 — with the work group ALWAYS collapsed, a decision
+   * buried in an aggregate's detail body needs two clicks to reach (open the
+   * group, then open the row), while the user who was just asked to allow
+   * something is looking at 「N 次工具调用」.
+   */
+  it('a run carrying a permission record is its own row and breaks the aggregate (FB7)', () => {
+    const permissioned = makeRun('b', 'Write', { file_path: 'b.ts' }, 'ok', {
+      permission: { id: 'p-b', type: 'permission_request', resolved: true, allowed: true },
+    });
+    const entries = [
+      runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
+      runEntry(makeRun('c', 'Read', { file_path: 'c.ts' })),
+      runEntry(permissioned),
+      runEntry(makeRun('d', 'Grep', { pattern: 'x' })),
+      runEntry(makeRun('e', 'Grep', { pattern: 'y' })),
+    ];
+    const rows = deriveToolGroupRows(entries);
+    expect(rows).toHaveLength(3);
+    // The two calls BEFORE it aggregate; the two after it aggregate; the
+    // decision itself is a plain, always-visible row.
+    expect(rows[0].verbText).toBe('2 tool calls · Last Read');
+    expect(rows[1].permissionVerb).toBe('Allowed');
+    expect(rows[1].body).not.toBe('detail');
+    expect(rows[2].verbText).toBe('2 tool calls · Last Grep');
   });
 });
 
@@ -420,17 +487,39 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
     expect(rows[0].defaultOpen).toBeUndefined();
   });
 
-  it('re-stamps a streaming thought folded into an aggregate detail row', () => {
+  /**
+   * ⚠️ DELETED 2026-09-19 (T105), and why it is a deletion rather than a
+   * rewrite.
+   *
+   * This case read `re-stamps a streaming thought folded into an aggregate
+   * detail row`: Read + Read + think, with the thought arriving last, folded
+   * into the aggregate's `detail`. Under D4 a thinking entry BREAKS the
+   * aggregate, so that shape — a thought inside an aggregate's detail — is now
+   * unreachable by construction, and the thing the case was really protecting
+   * (a live thought stays open and keeps its text) is asserted directly by the
+   * two cases above and by `thinkingStreamRender.test.ts`. A rewritten version
+   * would be asserting `applyThinkingDurations` on a branch nothing can enter,
+   * which is the code-path-only-a-unit-call-can-reach shape T-31 already
+   * retired once (see the withdrawn F-B14 note below).
+   */
+
+  it('a thinking entry BEFORE two runs becomes its own row, not aggregate detail (D4)', () => {
+    // The one arrangement where a thought and an aggregate still coexist, so
+    // the re-stamping path is exercised where it is still reachable: the
+    // thought is a separator, and the two runs after it aggregate.
     const entries = [
+      thinkEntry(thinkingBlock('th1', 'mid-turn thought')),
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
       runEntry(makeRun('b', 'Read', { file_path: 'b.ts' })),
-      thinkEntry(thinkingBlock('th1', 'mid-turn thought')),
     ];
     const rows = deriveToolGroupRows(entries, { isStreamingBlockId: 'th1' });
-    const thought = rows[0].detail?.find((row) => row.key === 'th1');
-    expect(thought?.output).toBe('mid-turn thought');
-    expect(thought?.expandable).toBe(true);
-    expect(thought?.defaultOpen).toBe(true);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].key).toBe('th1');
+    expect(rows[0].output).toBe('mid-turn thought');
+    expect(rows[0].expandable).toBe(true);
+    expect(rows[0].defaultOpen).toBe(true);
+    expect(rows[1].verbText).toBe('2 tool calls · Last Read');
+    expect(rows[1].detail).toHaveLength(2);
   });
 
   /**
@@ -452,7 +541,7 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
 });
 
 describe('deriveAggregateRow', () => {
-  it('3 Read + 11 Grep -> "Explored 3 files, 11 searches"', () => {
+  it('counts RUNS, not files: 3 Read + 11 Grep -> "14 tool calls · Last Grep" (T105)', () => {
     const entries = [
       ...['a.ts', 'b.ts', 'c.ts'].map((path, i) =>
         runEntry(makeRun(`r${i}`, 'Read', { file_path: path }))
@@ -462,60 +551,151 @@ describe('deriveAggregateRow', () => {
       ),
     ];
     const row = deriveAggregateRow(entries);
-    expect(`${row.verb} ${row.arg}`).toBe('Explored 3 files, 11 searches');
-    // D25 §2.4: "N files, M searches" is a number+prose summary, sans -- not mono.
-    expect(row.argKind).toBe('prose');
+    expect(row.verbText).toBe('14 tool calls · Last Grep');
+    // D25 §2.4: the summary arg (the last call's own argument here) is a
+    // path/pattern, so it keeps that call's own kind rather than a fixed one.
+    expect(row.arg).toBe('p10');
   });
 
-  it('omits the searches segment when only Read runs are present', () => {
-    const entries = [
-      runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
-      runEntry(makeRun('b', 'Read', { file_path: 'b.ts' })),
-    ];
-    const row = deriveAggregateRow(entries);
-    expect(`${row.verb} ${row.arg}`).toBe('Explored 2 files');
-  });
-
-  it('omits the files segment when only search-class runs are present', () => {
+  /**
+   * ⚠️ The rule that changed, stated once rather than in four cases.
+   *
+   * `{{count}} files` / `{{count}} searches` and the `file_path`/
+   * `path` dedupe behind them are GONE (T105). They answered "how much of the
+   * repo did it touch", which read as 「已浏览 1 个文件」 for four reads of one
+   * file — a summary that shrinks while the work grows is the opposite of what
+   * the user asked for. `N` is now the segment's run count, so it is monotone.
+   */
+  it('does not dedupe by path: reading one file four times is 4 tool calls (T105)', () => {
     const entries = Array.from({ length: 4 }, (_, i) =>
-      runEntry(makeRun(`g${i}`, 'Grep', { pattern: `p${i}` }))
+      runEntry(makeRun(`r${i}`, 'Read', { file_path: 'a.ts' }))
     );
     const row = deriveAggregateRow(entries);
-    expect(`${row.verb} ${row.arg}`).toBe('Explored 4 searches');
+    expect(row.verbText).toBe('4 tool calls · Last Read');
   });
 
-  it('uses singular wording for exactly one file/search', () => {
-    const entries = [
-      runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
-      runEntry(makeRun('b', 'Grep', { pattern: 'p' })),
-    ];
-    expect(deriveAggregateRow(entries).arg).toBe('1 file, 1 search');
+  it('uses the singular count key for a segment of one', () => {
+    // Reachable only through a direct call — `deriveToolGroupRows` sends a
+    // single run to a plain row — but the singular/plural split is a contract
+    // of the catalog, so it is asserted rather than assumed.
+    expect(deriveAggregateRow([runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }))]).verbText).toBe(
+      '1 tool call · Last Read'
+    );
   });
 
-  it('counts a repeated file_path across Read runs only once', () => {
-    const entries = [
-      runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
-      runEntry(makeRun('b', 'Read', { file_path: 'a.ts' })),
-    ];
-    expect(deriveAggregateRow(entries).arg).toBe('1 file');
-  });
-
-  // F-B14 (T-31 §4.5) covered a third "ran N command(s)" counting segment.
-  // Withdrawn in the T-31 review: `classifyTool` calls Bash an `action`, and
-  // `deriveToolGroupRows` splits every action out to a standalone row BEFORE
-  // aggregation, so no production render could ever reach the branch — the
-  // three cases here asserted a code path only a direct unit call could enter.
-  // The F-B numbering is deliberately not re-flowed; F-B14 stays retired so the
-  // spec's own numbering still traces. Reinstating it needs a baseline revision
-  // of A07 :1769-1772 ("an action call is always its own row"), which is a
-  // user-accepted ruling.
-
-  it('uses the running verb when any run is still running', () => {
+  it('names what is running, with its argument, while the segment is live', () => {
     const entries = [
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }, 'ok')),
       runEntry(makeRun('b', 'Read', { file_path: 'b.ts' }, 'running', { output: undefined })),
     ];
-    expect(deriveAggregateRow(entries).verb).toBe('Exploring');
+    expect(deriveAggregateRow(entries).verbText).toBe('2 tool calls · Reading b.ts');
+  });
+
+  it('flags the whole segment as running when ANY call is in flight, and names that call', () => {
+    // Parallel tool use: two calls open, the first of them is the one whose
+    // result has not landed yet, and a later call has already finished. The
+    // clause has to describe a call that is ACTUALLY in flight — reading the
+    // last entry instead would print 「最后读取 a.ts」 for a row that is red-hot.
+    const entries = [
+      runEntry(makeRun('a', 'Grep', { pattern: 'p' }, 'running', { output: undefined })),
+      runEntry(makeRun('b', 'Read', { file_path: 'a.ts' }, 'ok')),
+    ];
+    const row = deriveAggregateRow(entries);
+    expect(row.running).toBe(true);
+    expect(row.verbText).toBe('2 tool calls · Grepping p');
+  });
+
+  it('a settled segment names the LAST call, not an earlier running one', () => {
+    // The mirror of the case above: once every call has a result, the suffix
+    // reports where the work ended up rather than which call was slowest.
+    const entries = [
+      runEntry(makeRun('a', 'Grep', { pattern: 'p' }, 'ok')),
+      runEntry(makeRun('b', 'Read', { file_path: 'a.ts' }, 'ok')),
+    ];
+    const row = deriveAggregateRow(entries);
+    expect(row.running).toBe(false);
+    expect(row.verbText).toBe('2 tool calls · Last Read');
+  });
+
+  it('a settled segment names the last call with the infinitive, never the past tense', () => {
+    // 「最后编辑 App.tsx」, not 「最后已编辑 App.tsx」 — that is what makes
+    // `toolActionNoun` read from `ToolVerbs.refused` rather than `.done`.
+    const entries = [
+      runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
+      runEntry(makeRun('b', 'Edit', { file_path: 'a.ts' })),
+    ];
+    expect(deriveAggregateRow(entries).verbText).toBe('2 tool calls · Last Edit');
+  });
+
+  // F-B14 (T-31 §4.5) covered a third "ran N command(s)" counting segment and
+  // the four file/search counting cases that sat beside it. All of them went
+  // with the counting scheme itself in T105 (D5): the row reports `N tool calls`
+  // plus the last action, so there is no per-type bucket left to assert. The
+  // F-B numbering is deliberately not re-flowed — F-B14 stays retired so the
+  // spec's own numbering still traces.
+
+  it('propagates failure: any child call with toolOk === false makes the aggregate row destructive with the failing detail row intact (T-05 adversarial fix #2)', () => {
+    const entries = [
+      runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }, 'ok')),
+      runEntry(
+        makeRun('b', 'Grep', { pattern: 'foo' }, 'failed', { output: undefined, errorText: 'boom' })
+      ),
+    ];
+    const row = deriveAggregateRow(entries);
+    expect(row.failed).toBe(true);
+    expect(row.detail).toHaveLength(2);
+    expect(row.detail?.[1].failed).toBe(true);
+    // ToolRows.tsx's existing `defaultOpen={view.failed}` chain (unchanged)
+    // auto-expands this row purely off `failed` — body/expandable already
+    // carry the 'detail' shape regardless of failure.
+    expect(row.expandable).toBe(true);
+    expect(row.body).toBe('detail');
+  });
+
+  /**
+   * A07 `:2331`'s "a running row never shows a chevron" is retired for this row
+   * (T105), on the same reasoning T098 used for a streaming thought: the
+   * segment's earlier calls have SETTLED, so their output exists and is worth
+   * opening while the last one is still in flight. The `running` flag keeps the
+   * present-tense verb; only the affordance changes.
+   */
+  it('a running aggregate is still expandable, with the settled detail rows intact', () => {
+    const entries = [
+      runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }, 'ok')),
+      runEntry(makeRun('b', 'Grep', { pattern: 'foo' }, 'running', { output: undefined })),
+    ];
+    const row = deriveAggregateRow(entries);
+    expect(row.running).toBe(true);
+    expect(row.expandable).toBe(true);
+    expect(row.body).toBe('detail');
+    expect(row.detail).toHaveLength(2);
+  });
+
+  /**
+   * The key is what makes the 1 -> 2 run transition survivable: the row is
+   * remounted exactly once (a standalone row becomes an aggregate), and the
+   * remount re-reads the reader's remembered choice — while every later run
+   * appended to the same segment keeps this key, so the aggregate is never
+   * remounted again. Keyed off the FIRST entry's block id for that reason.
+   */
+  it('keys the row off the first entry, so a growing segment keeps its key', () => {
+    const head = runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }));
+    const two = [head, runEntry(makeRun('b', 'Grep', { pattern: 'p' }))];
+    const three = [...two, runEntry(makeRun('c', 'Grep', { pattern: 'q' }))];
+    expect(deriveAggregateRow(two).key).toBe('a~agg');
+    expect(deriveAggregateRow(three).key).toBe(deriveAggregateRow(two).key);
+  });
+
+  it('keeps `verb` a catalog key even though `verbText` is what paints', () => {
+    // Every other row branch hands `ToolRows.tsx` a key to translate; only this
+    // one arrives finished. Keeping a real key in `verb` is what stops a future
+    // reader from treating the field as optional.
+    const row = deriveAggregateRow([
+      runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
+      runEntry(makeRun('b', 'Read', { file_path: 'b.ts' })),
+    ]);
+    expect(row.verb).toBe('Explored');
+    expect(row.verbText).not.toBe(row.verb);
   });
 
   it('propagates failure: any child call with toolOk === false makes the aggregate row destructive with the failing detail row intact (T-05 adversarial fix #2)', () => {

@@ -126,17 +126,24 @@ describe('timeline', () => {
       removed: 0,
     });
   });
-  it('renders one turn: the prompt, the two tool calls, and the answer', () => {
+  it('renders one turn: the prompt, the tool calls, and the answer', () => {
     const turns = groupMessagesIntoTurns(replay().messages[SESSION_ID] ?? []);
     expect(turns).toHaveLength(1);
     // A second turn here would mean something opened one — which is what a
     // leaked `aiclient.permissions` bookkeeping entry used to do, splitting one
     // exchange into two and heading the transcript with a row of raw JSON.
-    expect(flattenTurnItems(turns[0]).map((item) => item.kind)).toEqual([
-      'toolGroup',
-      'toolGroup',
-      'text',
-    ]);
+    //
+    // T105: the recorded exchange is `read` in one assistant message and
+    // `write` in the next, so the two groups the per-message grouping produces
+    // are stitched by `mergeAdjacentToolGroups` into ONE. The claim the case
+    // was making is unchanged — one turn, no stray items — and the entry count
+    // is asserted so the merge cannot pass by dropping a group.
+    const items = flattenTurnItems(turns[0]);
+    expect(items.map((item) => item.kind)).toEqual(['toolGroup', 'text']);
+    const group = items[0];
+    if (group.kind !== 'toolGroup') throw new Error('expected a toolGroup');
+    expect(group.entries).toHaveLength(2);
+    expect(group.messageIds).toHaveLength(2);
   });
 
   it('keeps every tool row, which means every tool row found its message', () => {

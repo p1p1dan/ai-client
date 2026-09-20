@@ -4,12 +4,14 @@ import {
   countAssistantReplyChars,
   flattenTurnItems,
   groupMessagesIntoTurns,
+  mergeAdjacentToolGroups,
   segmentTurnBody,
   stabilizeTurns,
   type Turn,
   type TurnItem,
   turnItemPlacement,
 } from '../chatTurn';
+import { countProcessSteps } from '../turnProcessFold';
 
 let messageSeq = 0;
 
@@ -199,6 +201,149 @@ describe('flattenTurnItems', () => {
   it('keeps block order within a message (tool group before the trailing prose)', () => {
     const a1 = assistant([thinking(), ...toolPair('Read'), text('done')]);
     expect(flattenTurnItems(turnOf([a1])).map((item) => item.kind)).toEqual(['toolGroup', 'text']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T105 — the item layer stitches adjacent tool groups across messages
+// ---------------------------------------------------------------------------
+
+/**
+ * `groupTimeline` is per-MESSAGE, so one continuous stream of tool calls is cut
+ * wherever the Host opened a new assistant message — and opening a new message
+ * per tool result is the normal shape, not an edge case. The aggregate the user
+ * asked for is 「少数几条过程摘要」, so those cuts have to be sewn back together
+ * before the row layer ever sees them.
+ */
+describe('mergeAdjacentToolGroups (T105)', () => {
+  const groupsOf = (items: readonly TurnItem[]) =>
+    items.filter((item) => item.kind === 'toolGroup');
+
+  const entryCount = (items: readonly TurnItem[]) =>
+    items.reduce((total, item) => (item.kind === 'toolGroup' ? total + item.entries.length : total), 0);
+
+  it('[MERGE-1] two groups that touch across a message boundary become one', () => {
+    const a1 = assistant([...toolPair('Read')]);
+    const a2 = assistant([...toolPair('Grep')]);
+    const items = flattenTurnItems(turnOf([a1, a2]));
+    expect(items).toHaveLength(1);
+    expect(items[0].kind).toBe('toolGroup');
+    if (items[0].kind !== 'toolGroup') throw new Error('expected a toolGroup');
+    expect(items[0].entries).toHaveLength(2);
+  });
+
+  it('[MERGE-2] the merge keeps the FIRST item’s messageId, so the key does not move', () => {
+    // `turnItemKey` is `${messageId}~group-${blockIndex}`. Taking the tail's id
+    // would re-key the row on every merge and remount it, discarding the
+    // reader's expanded state mid-turn.
+    const a1 = assistant([...toolPair('Read')]);
+    const a2 = assistant([...toolPair('Grep')]);
+    const merged = flattenTurnItems(turnOf([a1, a2]))[0];
+    expect(merged.messageId).toBe(a1.id);
+    if (merged.kind !== 'toolGroup') throw new Error('expected a toolGroup');
+    expect(merged.blockIndex).toBe(0);
+  });
+
+  it('[MERGE-3] records every contributing message in `messageIds`', () => {
+    // The field the renderer needs: it looks the streaming thinking block up
+    // per MESSAGE, so without this the live thought of any message after the
+    // first silently stops updating — no error, nothing red.
+    const a1 = assistant([...toolPair('Read')]);
+    const a2 = assistant([...toolPair('Grep')]);
+    const a3 = assistant([...toolPair('Bash')]);
+    const merged = flattenTurnItems(turnOf([a1, a2, a3]))[0];
+    if (merged.kind !== 'toolGroup') throw new Error('expected a toolGroup');
+    expect(merged.messageIds).toEqual([a1.id, a2.id, a3.id]);
+  });
+
+  it('[MERGE-4] a group that did NOT merge carries no `messageIds` at all', () => {
+    // Absence is the signal "one message" — a group that always carried a
+    // single-element array would make every consumer branch for nothing.
+    const a1 = assistant([...toolPair('Read')]);
+    const items = flattenTurnItems(turnOf([a1]));
+    if (items[0].kind !== 'toolGroup') throw new Error('expected a toolGroup');
+    expect(items[0].messageIds).toBeUndefined();
+  });
+
+  it('[MERGE-5] prose between two groups is a real interruption — no merge', () => {
+    const a1 = assistant([...toolPair('Read')]);
+    const a2 = assistant([text('here is what I found'), ...toolPair('Grep')]);
+    const items = flattenTurnItems(turnOf([a1, a2]));
+    expect(items.map((item) => item.kind)).toEqual(['toolGroup', 'text', 'toolGroup']);
+    // The second group must survive as its OWN item with its own id — the
+    // shape assertion above is satisfied by the pre-merge code too, so it is
+    // this that actually distinguishes "not merged" from "not implemented".
+    expect(items[2].messageId).toBe(a2.id);
+    expect((items[2] as { messageIds?: unknown }).messageIds).toBeUndefined();
+  });
+
+  it('[MERGE-6] a QUESTION between two groups is not merged through', () => {
+    const a1 = assistant([...toolPair('Read')]);
+    const a2 = assistant([{ id: 'q1', type: 'question' }, ...toolPair('Grep')]);
+    const items = flattenTurnItems(turnOf([a1, a2]));
+    expect(items.map((item) => item.kind)).toEqual(['toolGroup', 'question', 'toolGroup']);
+    expect(items[2].messageId).toBe(a2.id);
+  });
+
+  it('[MERGE-7] an UNANSWERED permission between two groups is not merged through', () => {
+    // The Allow/Deny surface: a merge here would put the pending card's
+    // neighbours in one row and leave the card itself wedged between two
+    // aggregates with nothing to anchor it to.
+    const a1 = assistant([...toolPair('Read')]);
+    const a2 = assistant([
+      { id: 'p1', type: 'permission_request', permissionId: 'nothing-matches', toolName: 'Bash' },
+      ...toolPair('Grep'),
+    ]);
+    const items = flattenTurnItems(turnOf([a1, a2]));
+    expect(items.map((item) => item.kind)).toEqual(['toolGroup', 'permission', 'toolGroup']);
+    expect(items[2].messageId).toBe(a2.id);
+  });
+
+  it('[MERGE-8] a NOTICE between two groups is not merged through', () => {
+    const a1 = assistant([...toolPair('Read')]);
+    const sys = system([text('session resumed')]);
+    const a2 = assistant([...toolPair('Grep')]);
+    const items = flattenTurnItems(turnOf([a1, sys, a2]));
+    expect(items.map((item) => item.kind)).toEqual(['toolGroup', 'notice', 'toolGroup']);
+    expect(items[2].messageId).toBe(a2.id);
+  });
+
+  it('[MERGE-9] conserves Σ entries and the process step count', () => {
+    // The merge moves entries between items; it may never drop or duplicate
+    // one. `countProcessSteps` is what the head reports as 「N 个步骤」, so a
+    // merge that changed the total would silently change the head's copy.
+    const a1 = assistant([...toolPair('Read'), thinking()]);
+    const a2 = assistant([...toolPair('Grep'), ...toolPair('Bash')]);
+    const merged = flattenTurnItems(turnOf([a1, a2]));
+    expect(entryCount(merged)).toBe(4);
+    expect(countProcessSteps(merged as never)).toBe(4);
+  });
+
+  it('[MERGE-10] is idempotent, and preserves everything it does not merge', () => {
+    const a1 = assistant([...toolPair('Read')]);
+    const a2 = assistant([...toolPair('Grep')]);
+    const once = flattenTurnItems(turnOf([a1, a2]));
+    // Re-running over an already-merged list finds no two adjacent groups, so
+    // the second pass is a no-op — asserted on identity, which is the property
+    // `useMemo` and `React.memo` downstream actually depend on.
+    expect(mergeAdjacentToolGroups(once)).toEqual(once);
+    expect(mergeAdjacentToolGroups(once)[0]).toBe(once[0]);
+  });
+
+  it('[MERGE-11] a lone group and an empty list pass through untouched', () => {
+    const a1 = assistant([...toolPair('Read')]);
+    const items = flattenTurnItems(turnOf([a1]));
+    expect(mergeAdjacentToolGroups(items)).toEqual(items);
+    expect(mergeAdjacentToolGroups([])).toEqual([]);
+  });
+
+  it('[MERGE-12] three messages in a row merge into ONE group, keys unchanged', () => {
+    const a1 = assistant([...toolPair('Read')]);
+    const a2 = assistant([...toolPair('Grep')]);
+    const a3 = assistant([...toolPair('Bash')]);
+    const merged = groupsOf(flattenTurnItems(turnOf([a1, a2, a3])));
+    expect(merged).toHaveLength(1);
+    expect(merged[0].messageId).toBe(a1.id);
   });
 });
 

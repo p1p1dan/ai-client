@@ -106,7 +106,8 @@ describe('useToolExpansionStore — session scoping', () => {
  * output, then the agent reads `b.ts`. At that point `deriveToolGroupRows`
  * folds BOTH reads into one aggregate — the row the user opened stops existing
  * at top level — so without the child rule the output they were reading
- * silently disappears behind a collapsed `Explored 2 files`.
+ * silently disappears behind a collapsed 「2 次工具调用 · 最后读取 b.ts」 (T105's
+ * aggregate copy; it was `Explored 2 files` before).
  */
 describe('absorption — the aggregate inherits its children’s open state', () => {
   function readEntry(id: string, path: string): ToolGroupEntry {
@@ -130,7 +131,9 @@ describe('absorption — the aggregate inherits its children’s open state', ()
 
     const after = deriveToolGroupRows([readEntry('a', 'a.ts'), readEntry('b', 'b.ts')]);
     expect(after.map((row) => row.key)).toEqual(['block-a~agg']);
-    expect(after[0].arg).toBe('2 files');
+    // T105: the summary is the run count plus the last action, not a
+    // `file_path`-deduped file tally.
+    expect(after[0].verbText).toBe('2 tool calls · Last Read');
     // The row the user had open now exists only as a child of the aggregate.
     expect((after[0].detail ?? []).map((row) => row.key)).toEqual(['block-a', 'block-b']);
   });

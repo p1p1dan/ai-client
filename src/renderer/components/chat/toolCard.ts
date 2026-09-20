@@ -397,16 +397,37 @@ export interface ToolRowView {
   key: string;
   /**
    * The row's leading word, as a TRANSLATION KEY — always one of the closed
-   * vocabularies (`TOOL_VERBS`, `AGGREGATE_VERB`, the thought verbs, the
-   * permission decision words), never free text.
+   * vocabularies (`TOOL_VERBS`, the thought verbs, the permission decision
+   * words), never free text.
    *
    * Splitting it this way is what keeps one `t()` call able to cover every row
    * shape: `ToolRows.tsx` translates `verb` at the single place a row reaches
    * paint, so no builder in this module has to hold a translator just to name
    * an operation. `arg` is the opposite — it interpolates paths and counts, so
    * it arrives here already finished.
+   *
+   * `verbText` below supercedes it where a key cannot carry the information —
+   * see that field.
    */
   verb: string;
+  /**
+   * The row's leading word, ALREADY TRANSLATED, for a row whose leading word is
+   * not a catalog key at all. `ToolRows.tsx` prefers it over `verb` and its own
+   * translator is bypassed.
+   *
+   * Exactly one producer today — `deriveAggregateRow`'s 「14 次工具调用 · 最后编辑
+   * App.tsx」 — and the reason is the single-`t()` design's one blind spot: that
+   * string interleaves a COUNT key (`{{count}} tool calls`), a verb and another
+   * key's argument, and `t(view.verb)` has no parameter to interpolate a
+   * `{{count}}` with. `verb` is still populated there, so the "names a catalog
+   * key" contract stays readable, but it is not what paints.
+   *
+   * Not to be confused with `arg`, which is always finished text too: `arg` is
+   * rendered AFTER the verb and carries the same `argKind` font-domain
+   * classifier. `verbText` REPLACES the verb slot, and the aggregate row's
+   * `arg` holds the last call's own argument.
+   */
+  verbText?: string;
   /** Finished text, already translated by whoever built it. Never a catalog key. */
   arg?: string;
   /**
@@ -426,9 +447,10 @@ export interface ToolRowView {
    *
    * A07 `:2331` also said a running row never shows a chevron. That half is
    * RETIRED for thought rows (user decision 2026-09-19) — see
-   * `buildThoughtRow` — and was already a registered deviation for the live
-   * subagent panel (`subagentActivityModel.ts`). It still holds for tool calls,
-   * whose output does not exist until they settle.
+   * `buildThoughtRow` — and for the aggregate row (T105) — see
+   * `deriveAggregateRow` — and was already a registered deviation for the live
+   * subagent panel (`subagentActivityModel.ts`). It still holds for a
+   * STANDALONE tool call, whose own output does not exist until it settles.
    */
   running: boolean;
   failed: boolean;
@@ -659,31 +681,58 @@ function isHitListTool(toolName: string): boolean {
 }
 
 /**
- * The aggregate row has no `refused` state: a run carrying an authorization
- * record never aggregates in the first place (`[FB7-10]`), so the roll-up can
- * only ever describe calls that actually ran.
+ * The plain-infinitive verb of an operation, from `ToolVerbs.refused`.
+ *
+ * The slot has TWO consumers now, and neither is a refusal row:
+ *
+ *  1. `deriveToolRowView` — the refused row's own verb ("Edit tmp/x.txt ·
+ *     Denied", §6.4 G-9);
+ *  2. `deriveAggregateRow`'s settled clause — 「最后编辑 App.tsx」. The `done`
+ *     slot would spell "最后已编辑" there, which is what makes the infinitive
+ *     the right pick rather than a coincidence.
+ *
+ * Named rather than reaching into `toolVerb(name, 'refused')` at that call
+ * site, so the second consumer is visible from the table's own doc comment.
  */
-export const AGGREGATE_VERB: Pick<ToolVerbs, 'done' | 'running'> = {
-  done: 'Explored',
-  running: 'Exploring',
-};
+export function toolActionNoun(toolName: string): string {
+  return toolVerb(toolName, 'refused');
+}
 
 /**
- * Aggregate row for a run of `explore`-class calls. Only meant to be called
- * once the caller (`deriveToolGroupRows`) has already decided the segment
- * qualifies (>= 2 explore runs) — this function does not re-check that.
- * `deriveToolGroupRows` (T-05 adversarial fix #1) now only ever passes a
- * *completed* prefix (no running call), so `running` here is a defensive
- * fallback rather than the normal path — a running call always renders as
- * its own standalone row instead of joining the aggregate.
- *  - N = Read/NotebookRead run count, deduped by `file_path`.
- *  - M = Grep/Glob/WebSearch run count.
- *  - A zero segment is omitted; singular/plural follow the count.
+ * Aggregate row for a run of consecutive tool calls (T105).
+ *
+ * Only meant to be called once the caller (`deriveToolGroupRows`) has already
+ * decided the segment qualifies (>= 2 runs) — this function does not re-check
+ * that, and it no longer looks at WHICH KIND of call each run is: the user's
+ * aggregation ruling is 不分类型 (D3), so a Read between two Greps and a Bash
+ * between two Reads count the same.
+ *
+ *  - N = the segment's RUN count. Deliberately not "files touched": a
+ *    `file_path`-deduped count reports 1 for four sequential reads of one file,
+ *    which is the opposite of 「过程条目太碎」's complaint.
+ *  - The clause is `N tool calls · <last action>`, and the action follows the
+ *    segment's progress: `toolVerb(…, 'running')` while the last call is in
+ *    flight, `Last {{action}}` (the infinitive, via `toolActionNoun`) once it
+ *    has finished. `formatToolArg` supplies the argument — it is the one
+ *    formatter that already knows Bash prefers its description over its
+ *    command, Grep carries the repo tail, paths get `shortPath`.
+ *  - A `permission`-carrying run never reaches here — `deriveToolGroupRows`
+ *    keeps it as a separator row of its own, so the decision stays visible
+ *    without opening anything (`[FB7-10]`).
  *  - `failed` is true when any child call's `toolOk === false` (T-05
  *    adversarial fix #2), which colours the row; it no longer auto-expands it
  *    (see `ToolRowView.defaultOpen`).
  *  - `detail` mirrors the entries' original order (thinking included, un-timed
  *    here — `deriveToolGroupRows` re-stamps thinking rows with real duration).
+ *
+ * ## Running rows ARE expandable now (2026-09-19 deviation from A07)
+ *
+ * A07 `:2331` said a running row never offers a chevron. That half was already
+ * retired once for streaming thought rows (T098, user decision 2026-09-19, see
+ * `buildThoughtRow`), and the aggregate row follows it here for the same
+ * reason: the segment's earlier calls have SETTLED, so their output exists and
+ * is worth opening while the last one still runs. The `running` flag still
+ * carries the present-tense verb; only the "no chevron" half is gone.
  */
 export function deriveAggregateRow(
   entries: readonly ToolGroupEntry[],
@@ -692,43 +741,15 @@ export function deriveAggregateRow(
   const runEntries = entries.filter(
     (entry): entry is Extract<ToolGroupEntry, { kind: 'run' }> => entry.kind === 'run'
   );
-  const readEntries = runEntries.filter((entry) => classifyTool(entry.run.toolName) === 'read');
-  const searchEntries = runEntries.filter((entry) => classifyTool(entry.run.toolName) === 'search');
-
-  const uniqueFiles = new Set<string>();
-  for (const entry of readEntries) {
-    // Both dialects: Claude's `file_path`, pi's `path` (T12-b). Reading only
-    // one of them falls back to `toolCallId`, which is unique per call, so the
-    // same file read twice would count as two files — a dedupe that silently
-    // stops deduping.
-    const rec = asRecord(entry.run.input);
-    const path = stringField(rec, 'file_path') ?? stringField(rec, 'path');
-    uniqueFiles.add(path ?? entry.run.toolCallId);
-  }
-  const fileCount = uniqueFiles.size;
-  const searchCount = searchEntries.length;
   const running = runEntries.some((entry) => entry.run.status === 'running');
   const failed = runEntries.some((entry) => entry.run.status === 'failed');
-
-  const t = options.t ?? englishTranslate;
-  const segments: string[] = [];
-  if (fileCount > 0) {
-    segments.push(
-      fileCount === 1
-        ? t('{{count}} file', { count: fileCount })
-        : t('{{count}} files', { count: fileCount })
-    );
-  }
-  if (searchCount > 0) {
-    segments.push(
-      searchCount === 1
-        ? t('{{count}} search', { count: searchCount })
-        : t('{{count}} searches', { count: searchCount })
-    );
-  }
-  // A third "ran N command(s)" counting segment was withdrawn per T-31 review:
-  // unreachable while Bash stays standalone per A07; revisit needs baseline
-  // revision.
+  // Which call the suffix describes: the running one while any is in flight
+  // (parallel tool use can leave an EARLIER call open while a later one has
+  // already settled, so "the last entry" would name the wrong call), and the
+  // last entry once they have all finished.
+  const last = running
+    ? runEntries.filter((entry) => entry.run.status === 'running').at(-1)?.run
+    : runEntries[runEntries.length - 1]?.run;
 
   const firstEntry = entries[0];
   const firstBlockId = firstEntry
@@ -737,39 +758,89 @@ export function deriveAggregateRow(
       : firstEntry.block.id
     : 'empty';
 
-  const arg = segments.length > 0 ? segments.join(', ') : undefined;
+  const t = options.t ?? englishTranslate;
+  // Straight into `verbText`: the COUNT key needs a `count` parameter, which
+  // `ToolRows.tsx`'s single `t(view.verb)` call has nowhere to put (the same
+  // reason `{{duration}}` thoughts arrive as `arg`).
+  const leading = t(runEntries.length === 1 ? '{{count}} tool call' : '{{count}} tool calls', {
+    count: runEntries.length,
+  });
+  const tail = last ? aggregateActionText(last, running, options) : undefined;
+  const verbText = tail ? `${leading} · ${tail}` : leading;
+
+  const entry = runEntries.at(-1);
   return {
     key: `${firstBlockId}~agg`,
-    verb: running ? AGGREGATE_VERB.running : AGGREGATE_VERB.done,
-    arg,
-    // D25 §2.4: "N files, M searches" is a number+prose summary, not an
-    // identifier -- sans, same as the row's verb.
-    argKind: arg ? 'prose' : undefined,
+    // Kept for the "this row names a catalog key" contract every other branch
+    // holds; `verbText` is what actually paints (see `ToolRowView.verbText`).
+    verb: 'Explored',
+    verbText,
+    arg: entry ? formatToolArg(entry.run, options) : undefined,
+    argKind: entry ? formatToolArgKind(entry.run, options) : undefined,
     running,
     failed,
-    expandable: !running,
-    body: running ? undefined : 'detail',
-    detail: running ? undefined : entries.map((entry) => buildEntryRow(entry, options)),
+    expandable: true,
+    body: 'detail',
+    detail: entries.map((detailEntry) => buildEntryRow(detailEntry, options)),
   };
 }
 
 /**
- * One tool group -> its top-level rows.
- *  - Split entries into contiguous "explore" segments (thinking may sit in
- *    the middle without breaking the segment) and standalone action items,
- *    in original order.
- *  - Only the segment's *completed* leading prefix (thinking allowed inside
- *    it, but no running call — a running call has no paired result yet, so
- *    it always ends the prefix) can aggregate; >= 2 completed runs in that
- *    prefix becomes one aggregate row + detail, exactly 1 does not aggregate
- *    (sign-off ②/A07 :2348) and renders as its own row. Anything from the
- *    first running call onward (T-05 adversarial fix #1) renders as
- *    standalone rows in original order instead — a running call keeps its
- *    present-tense verb / no-chevron shape (batch 1) instead of being
- *    swallowed into a row that hasn't actually finished.
- *  - action-class runs (Edit/Write/Bash/TodoWrite/unknown/…) are always
- *    their own row (A07 :1769-1772).
- *  - A standalone thinking run (no adjacent explore run) becomes its own
+ * 「正在运行 npm test」 / 「最后编辑 App.tsx」 for the aggregate row's tail.
+ *
+ * Always translated HERE rather than handed out as a key: both halves
+ * interpolate the last call's own argument, and `ToolRows.tsx`'s one translate
+ * call has no parameter to pass.
+ */
+function aggregateActionText(
+  run: ToolRun,
+  running: boolean,
+  options: ToolCardOptions
+): string | undefined {
+  const t = options.t ?? englishTranslate;
+  if (running) {
+    // The running verb is run through `t` HERE for the same reason the rest of
+    // this string is built here: it shares one sentence with the argument, so
+    // it cannot be left as a key for `ToolRows.tsx` to resolve separately.
+    // `TOOL_VERBS[x].running` stays the one definition — `toolVocabulary.test.ts`
+    // asserts each of those words has a catalog entry.
+    return [t(toolVerb(run.toolName, 'running')), formatToolArg(run, options)]
+      .filter(Boolean)
+      .join(' ');
+  }
+  return t('Last {{action}}', { action: t(toolActionNoun(run.toolName)) });
+}
+
+/**
+ * One tool group -> its top-level rows (T105 rewrote the segmentation).
+ *
+ *  - SEPARATORS: a `thinking` entry, or a run carrying a `permission` record.
+ *    They render standalone, in place, and they break the run of calls around
+ *    them.
+ *  - A maximal run of adjacent separator-free tool calls: >= 2 becomes ONE
+ *    aggregate row plus its detail body; exactly 1 does not aggregate
+ *    (sign-off ②/A07 :2348) and renders as its own row.
+ *  - `failed` and `running` no longer affect the segmentation at all: a running
+ *    call joins the segment like any other, and the aggregate row reports
+ *    itself as running.
+ *
+ * ## Why the permission run is a separator and not a member (FB7 red line)
+ *
+ * It is a deliberate deviation from D3's 不分类型, and the reason is this
+ * batch's own second half. With the work group ALWAYS collapsed, a decision
+ * buried inside an aggregate's detail body takes TWO clicks to reach (open the
+ * group, then open the row) — while the thing the user was just asked to allow
+ * is summarised as 「12 次工具调用」. Standing alone, one click shows it.
+ *
+ * ## What replaced "an action-class call is always its own row"
+ *
+ * A07 `:1769-1772` kept Edit/Write/Bash out of the aggregate. The user's D3
+ * ruling retires that: 「不分类型（读取/搜索/运行/编辑/写入）合并成一条」, so a
+ * turn that reads four files and edits one of them now reads as five steps
+ * rather than "4 + 1". The old text here and in `deriveAggregateRow` said
+ * otherwise; both were replaced by the rule rather than left beside it.
+ *
+ *  - A standalone thinking entry (no tool run beside it) becomes its own
  *    Thought row via `turnTiming.formatThoughtRow`.
  */
 export function deriveToolGroupRows(
@@ -793,58 +864,34 @@ export function deriveToolGroupRows(
         : buildThoughtRow(item.block, thinkingOptions)
     );
   };
+  const breaksSegment = (entry: ToolGroupEntry) =>
+    entry.kind === 'thinking' || entry.run.permission != null;
 
   let i = 0;
   while (i < entries.length) {
-    const entry = entries[i];
-    // A run carrying its own authorization record never aggregates: folding it
-    // into "Explored 3 files, 2 searches" would leave the decision visible only
-    // after expanding the detail body, which is the collapsed-away-authorization
-    // shape the permission red line exists to prevent (FB7).
-    if (
-      entry.kind === 'run' &&
-      (classifyTool(entry.run.toolName) === 'action' || entry.run.permission)
-    ) {
-      rows.push(deriveToolRowView(entry.run, cardOptions));
+    if (breaksSegment(entries[i])) {
+      pushStandaloneRow(entries[i]);
       i += 1;
       continue;
     }
 
     let j = i;
     const segment: ToolGroupEntry[] = [];
-    while (j < entries.length) {
-      const candidate = entries[j];
-      const isExploreRun =
-        candidate.kind === 'run' &&
-        classifyTool(candidate.run.toolName) !== 'action' &&
-        !candidate.run.permission;
-      if (candidate.kind === 'thinking' || isExploreRun) {
-        segment.push(candidate);
-        j += 1;
-      } else {
-        break;
-      }
+    while (j < entries.length && !breaksSegment(entries[j])) {
+      segment.push(entries[j]);
+      j += 1;
     }
 
-    // A running call (no paired result) always stops the aggregatable
-    // prefix — everything from that point on renders standalone below.
-    let prefixEnd = 0;
-    while (prefixEnd < segment.length) {
-      const candidate = segment[prefixEnd];
-      if (candidate.kind === 'run' && candidate.run.status === 'running') break;
-      prefixEnd += 1;
-    }
-    const completedPrefix = segment.slice(0, prefixEnd);
-    const remainder = segment.slice(prefixEnd);
-
-    const completedRunCount = completedPrefix.filter((item) => item.kind === 'run').length;
-    if (completedRunCount >= 2) {
-      const aggregate = deriveAggregateRow(completedPrefix, cardOptions);
-      rows.push(applyThinkingDurations(aggregate, completedPrefix, thinkingOptions));
+    // Counts RUNS, not entries: a thinking entry only ever reaches a segment
+    // as its first element, since it breaks the segment before it.
+    const runCount = segment.filter((item) => item.kind === 'run').length;
+    if (runCount >= 2) {
+      rows.push(
+        applyThinkingDurations(deriveAggregateRow(segment, cardOptions), segment, thinkingOptions)
+      );
     } else {
-      completedPrefix.forEach(pushStandaloneRow);
+      segment.forEach(pushStandaloneRow);
     }
-    remainder.forEach(pushStandaloneRow);
 
     i = j;
   }

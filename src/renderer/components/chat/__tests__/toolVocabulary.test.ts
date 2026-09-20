@@ -24,7 +24,7 @@ import {
   SKIPPED_MARK,
   SKIPPED_TITLE,
 } from '../questionCardModel';
-import { AGGREGATE_VERB, TOOL_VERBS, UNKNOWN_TOOL_VERB } from '../toolCard';
+import { TOOL_VERBS, toolActionNoun, UNKNOWN_TOOL_VERB } from '../toolCard';
 import { THINKING_VERB, THOUGHT_BRIEF_ARG, THOUGHT_VERB, WORKED_FOR_VERB } from '../turnTiming';
 
 /**
@@ -56,8 +56,35 @@ describe('chat vocabulary is translatable', () => {
       verbs.refused,
     ]);
     words.push(UNKNOWN_TOOL_VERB.done, UNKNOWN_TOOL_VERB.running, UNKNOWN_TOOL_VERB.refused);
-    words.push(AGGREGATE_VERB.done, AGGREGATE_VERB.running);
     expectTranslated(words, 'tool verbs');
+  });
+
+  /**
+   * T105 — `toolActionNoun` is `ToolVerbs.refused` under a name that says what
+   * its SECOND consumer does. `AGGREGATE_VERB` used to be listed above and is
+   * gone with the old "Explored 3 files, 11 searches" row; what replaced it is
+   * built from `{{count}} tool calls`, `Last {{action}}` and this table, so the
+   * coverage this assertion provides has to come from the same three slots.
+   */
+  it('the aggregate row’s words all have catalog entries', () => {
+    expectTranslated(
+      [
+        '{{count}} tool call',
+        '{{count}} tool calls',
+        'Last {{action}}',
+        // The head's settled step clause (T105 D6). Distinct from the older
+        // `{{count}} steps processed`, which remains the no-timestamp fallback.
+        '{{count}} step',
+        '{{count}} steps',
+      ],
+      'aggregate row words'
+    );
+    // The infinitive slot, resolved through the real table rather than by
+    // reading `TOOL_VERBS`, so a tool that reaches the fallback is covered too.
+    expectTranslated(
+      [...Object.keys(TOOL_VERBS), 'mcp__server__tool', 'SomeUnknownTool'].map(toolActionNoun),
+      'aggregate action nouns'
+    );
   });
 
   /**

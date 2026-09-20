@@ -58,9 +58,15 @@ function toolRun(
 }
 
 it('renders tool rows in Chinese — the verb, the running verb and the search arg', async () => {
-  // Bash and Grep stay standalone rows (action / permissioned classes never
-  // aggregate), and a running call always ends the aggregatable prefix, so
-  // these three arrive as three separate rows with their own verbs.
+  // ⚠️ REWRITTEN 2026-09-19 (T105). These three used to be three separate rows:
+  // Bash and Edit were "action" calls (always their own row) and the running
+  // call ended the aggregatable prefix. Both rules are gone — Bash/Edit/Grep are
+  // one segment now, and a running call joins it.
+  //
+  // The three checks are kept, split by layer rather than by row, because each
+  // one fails for a different reason: `deriveToolRowView` for the standalone
+  // verb, `deriveAggregateRow` for the aggregate's own copy, and the render for
+  // whichever of them reaches paint un-translated.
   const rows = deriveToolGroupRows(
     [
       toolRun('Bash', 'ok', { command: 'pnpm test' }),
@@ -69,6 +75,11 @@ it('renders tool rows in Chinese — the verb, the running verb and the search a
     ],
     { repoName: 'ai-client', t: zh }
   );
+  // One aggregate, with an already-translated leading line and no English left
+  // in the parts this module owns.
+  expect(rows).toHaveLength(1);
+  expect(rows[0].verbText).toBe('3 次工具调用 · 编辑中 src/a.ts');
+
   const { container, root } = mount();
   try {
     await act(async () =>
@@ -81,13 +92,37 @@ it('renders tool rows in Chinese — the verb, the running verb and the search a
       )
     );
     const text = container.textContent ?? '';
-    expect(text).toContain('已运行');
+    expect(text).toContain('3 次工具调用');
+    expect(text).toContain('编辑中');
+    expect(text).toContain('src/a.ts');
+    expect(text).not.toMatch(/tool calls|Editing|Ran|Grepped/);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
+/**
+ * The single-run path, which is where the per-verb translations actually land
+ * now that a multi-call group is one aggregate row: a lone call is still its
+ * own row, verb and argument translated exactly as before.
+ */
+it('renders a lone tool row in Chinese — verb and search arg alike', async () => {
+  const rows = deriveToolGroupRows([toolRun('Grep', 'ok', { pattern: 'TODO' })], {
+    repoName: 'ai-client',
+    t: zh,
+  });
+  const { container, root } = mount();
+  try {
+    await act(async () =>
+      root.render(createElement(ToolRow, { key: rows[0].key, view: rows[0] }))
+    );
+    const text = container.textContent ?? '';
     expect(text).toContain('已搜索内容');
-    expect(text).toContain('编辑');
     // The repo tail is composed inside the derivation, so it proves the `t`
     // threaded through `ToolCardOptions` actually arrived.
     expect(text).toContain('TODO（ai-client）');
-    expect(text).not.toMatch(/Ran|Grepped|Editing/);
+    expect(text).not.toMatch(/Grepped|Searching/);
   } finally {
     await act(async () => root.unmount());
     container.remove();
