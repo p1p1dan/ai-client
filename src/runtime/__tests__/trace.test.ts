@@ -109,6 +109,16 @@ class FakeIo implements RuntimeHostIoService {
   realpath(): Promise<string> {
     throw new Error('not used');
   }
+  link(from: string, to: string): Promise<void> {
+    this.calls.push(`link ${from} -> ${to}`);
+    const file = this.files.get(from);
+    if (!file) return Promise.reject(ioError('ENOENT', `no such file: ${from}`));
+    // The comparison the writer lock's takeover rests on: an existing name is
+    // refused, never replaced.
+    if (this.files.has(to)) return Promise.reject(ioError('EEXIST', `file already exists: ${to}`));
+    this.files.set(to, file);
+    return Promise.resolve();
+  }
   readDirectory(): AsyncIterable<{ name: string; kind: RuntimeFileInfo['kind'] }> {
     throw new Error('not used');
   }

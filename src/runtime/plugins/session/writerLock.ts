@@ -17,13 +17,17 @@
  *
  * ## The two things "verified" has to mean (concurrency-01, concurrency-02)
  *
- * 1. **A takeover never frees the name.** The lock is replaced by a `rename`
- *    over it, under a short-lived `.takeover` sentinel that serializes
- *    claimants. The earlier shape — move the lock aside, look at it, put it
- *    back — left the name absent for the length of a read, and a third claimant
- *    arriving in that window created its own lock without ever seeing the one
- *    it displaced. Two writers on one JSONL is exactly the outcome this module
- *    exists to prevent, so the window is closed rather than narrowed.
+ * 1. **A takeover never frees the name.** The lock is replaced by a `link` of a
+ *    fully written claim onto it, under a short-lived `.takeover` sentinel that
+ *    serializes claimants. Replacing is only ever an insert: the filesystem
+ *    refuses the link when the name is taken, so of two claimants that judged
+ *    the same stale owner exactly one installs a lock, and the other reports the
+ *    loss instead of believing it won. The earlier shape — move the lock aside,
+ *    look at it, put it back — left the name absent for the length of a read,
+ *    and a third claimant arriving in that window created its own lock without
+ *    ever seeing the one it displaced. Two writers on one JSONL is exactly the
+ *    outcome this module exists to prevent, so the window is closed rather than
+ *    narrowed.
  * 2. **"The pid exists" is not "our writer is running."** Pid numbers are
  *    recycled — quickly on Windows, and unconditionally across a reboot — so a
  *    stranded lock whose number has been handed to an unrelated process would
@@ -372,11 +376,21 @@ async function releaseSentinel(
  * So the sentinel is taken first and the lock is read again under it; anything
  * other than the record we judged means we lost the race and report it.
  *
- * concurrency-01 — the replacement is a `rename` of a fully written claim over
- * the existing name, which is atomic on POSIX and on Windows alike. The name
- * therefore holds a lock at every instant: the old one, then ours. A claimant
- * that arrives mid-takeover always finds an owner to reason about, and never an
- * opening in which its own `createOnly` simply succeeds.
+ * concurrency-01 — the replacement puts the name under our claim with a `link`,
+ * which fails with `EEXIST` instead of overwriting, so the filesystem itself
+ * decides which of two claimants installed its lock. The name therefore holds a
+ * lock at every instant — the old one, then ours — and a claimant that arrives
+ * mid-takeover always finds an owner to reason about, never an opening in which
+ * its own `createOnly` simply succeeds.
+ *
+ * Why not `rename` (the shape this had before): `rename` replaces whatever is at
+ * the destination, so it can only report "the name holds my bytes". Two
+ * claimants that both read the same stale record and both reached this point
+ * both renamed, both returned `taken: true`, and the loser went on writing a
+ * session it did not own — the exact two-writers-one-file outcome this module
+ * exists to prevent, and one no in-process test can see because one event loop
+ * serializes the two renames. `link` has the missing half of the comparison:
+ * it installs the claim only if the name is still free.
  */
 async function takeOver(
   io: RuntimeHostIoService,
@@ -397,7 +411,9 @@ async function takeOver(
   try {
     const held = await readLock(io, lock);
     if (held === undefined) {
-      // The owner released it while we queued: claiming it is the takeover.
+      // The owner released it while we queued: claiming it IS the takeover, and
+      // `createOnly` is the comparison here — a claimant that beat us to the
+      // freed name wins that name.
       try {
         await io.writeFile(lock, claimBytes(token), { createOnly: true, mode: 0o600 });
         return { taken: true };
@@ -414,18 +430,82 @@ async function takeOver(
     // it goes ahead; an automatic one starts over from a fresh reading.
     if (!force && !held.bytes.equals(expected))
       return held.owner === undefined ? { taken: false } : { taken: false, owner: held.owner };
-    const staging = `${lock}.${randomUUID()}.claim`;
-    try {
-      await io.writeFile(staging, claimBytes(token), { createOnly: true, mode: 0o600 });
-      await io.rename(staging, lock);
-    } catch (error) {
-      await unlinkQuiet(io, staging);
-      throw error;
-    }
-    return { taken: true };
+    const holder = await installClaim(io, lock, token);
+    if (holder === undefined) return { taken: true };
+    // The name was taken while we were installing: someone else finished the
+    // same takeover. We own no session, and a third process can already be
+    // writing the one we were about to claim.
+    return { taken: false, ...(holder ? { owner: holder } : {}) };
   } finally {
     await releaseSentinel(io, sentinel, sentinelToken);
   }
+}
+
+/**
+ * Where the staging file the claim is linked from lives, next to the lock.
+ *
+ * A link cannot cross a filesystem, so the claim has to be written in the
+ * directory the lock lives in. Names under this prefix are never locks: one is
+ * only ever linked FROM, and the one thing that can leave one behind is a crash
+ * between the write and the unlink that follows it.
+ */
+function installPath(lock: string): string {
+  return `${lock}.install`;
+}
+
+/**
+ * Post the claim at the lock name, or find out who holds it.
+ *
+ * The install is a `link`, which is the comparison the takeover was missing:
+ * `link` refuses a name that exists instead of replacing it, so of two claimants
+ * that both judged the same stale owner exactly one can post its claim, and the
+ * other learns it lost from the filesystem rather than from its own reading.
+ *
+ * This is why the judged lock is moved aside first: the name has to be free for
+ * the install to be an insert, and moving it aside is what changes "replace
+ * whatever is there" into "take this name only if it is still free". The claim
+ * is linked from a file written in this directory, never renamed into place, so
+ * the name never holds a half-written record.
+ *
+ * The gap between the move-aside and the install is the one window where the
+ * name is free, and it is covered from both sides: this claimant already holds
+ * the takeover sentinel, so no other TAKEOVER is in flight, and an ordinary
+ * claimant that lands in it finds a live writer holding the session on the next
+ * `acquireWriterLock` — the claim posted here, or, if this run loses the install
+ * to that claimant, the claimant's own lock. Either way exactly one of them ends
+ * up owning the name, and whoever owns it is the one the others were refused by.
+ *
+ * Returns `undefined` when the claim was posted, or the owner that got there
+ * first when it was not.
+ */
+async function installClaim(
+  io: RuntimeHostIoService,
+  lock: string,
+  token: string
+): Promise<WriterLockOwner | undefined> {
+  const staging = `${installPath(lock)}.${randomUUID()}.claim`;
+  const aside = `${installPath(lock)}.${randomUUID()}.stale`;
+  await io.writeFile(staging, claimBytes(token), { createOnly: true, mode: 0o600 });
+  try {
+    try {
+      await io.rename(lock, aside);
+    } catch (error) {
+      // Released between the read and here: the name is free, and the install
+      // below is an ordinary `createOnly` claim of an unowned session.
+      if (errorCode(error) !== 'ENOENT') throw error;
+    }
+    await io.link(staging, lock);
+    return undefined;
+  } catch (error) {
+    if (errorCode(error) !== 'EEXIST') throw error;
+  } finally {
+    // One link count each: removing the two names leaves whatever the lock name
+    // points at untouched, whether that is our claim or someone else's.
+    await unlinkQuiet(io, staging);
+    await unlinkQuiet(io, aside);
+  }
+  const winner = await readLock(io, lock).catch(() => undefined);
+  return winner?.owner;
 }
 
 /**

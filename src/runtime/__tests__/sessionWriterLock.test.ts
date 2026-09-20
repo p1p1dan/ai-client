@@ -271,7 +271,7 @@ describe('session writer lock — two takeovers of one stale lock', () => {
     });
     expect(winner).toBeDefined();
     expect(JSON.parse(await readFile(`${target}.writer.lock`, 'utf8')).token).toBe(winner?.token);
-    expect((await readdir(dir)).filter((name) => name.endsWith('.stale'))).toEqual([]);
+    expect(await debris()).toEqual([]);
   });
 
   it('lets exactly one of two concurrent claimants take the lock', async () => {
@@ -294,7 +294,7 @@ describe('session writer lock — two takeovers of one stale lock', () => {
       if (outcome.status === 'rejected')
         expect(outcome.reason).toMatchObject({ code: 'session_locked' });
     expect(JSON.parse(await readFile(`${target}.writer.lock`, 'utf8')).token).toBe(held[0]?.token);
-    expect((await readdir(dir)).filter((name) => name.endsWith('.stale'))).toEqual([]);
+    expect(await debris()).toEqual([]);
   });
 });
 
@@ -327,7 +327,8 @@ function stagedTakeover(
       const value = Reflect.get(target, key) as unknown;
       if (typeof value !== 'function') return value;
       const method = value.bind(target) as (...args: unknown[]) => unknown;
-      if (key !== 'readFile' && key !== 'writeFile' && key !== 'rename') return method;
+      if (key !== 'readFile' && key !== 'writeFile' && key !== 'rename' && key !== 'link')
+        return method;
       return async (...args: unknown[]) => {
         // Only a call that SUCCEEDED changed anything; a rejected create is
         // the claimant discovering the lock, not opening a window in it.
@@ -343,6 +344,11 @@ function stagedTakeover(
       };
     },
   });
+}
+
+/** Every name in the session directory that is not the lock itself. */
+async function debris(): Promise<string[]> {
+  return (await readdir(dir)).filter((name) => !name.endsWith('.writer.lock'));
 }
 
 describe('session writer lock — a third claimant during a takeover', () => {
@@ -379,36 +385,7 @@ describe('session writer lock — a third claimant during a takeover', () => {
     expect(JSON.parse(await readFile(`${target}.writer.lock`, 'utf8')).token).toBe(held[0]?.token);
     // No sidecar debris: neither the aside copy of someone's lock nor a
     // half-finished claim is left for the next open to read.
-    expect((await readdir(dir)).filter((name) => !name.endsWith('.writer.lock'))).toEqual([]);
-  });
-
-  it('holds every other claimant off across the whole replacement', async () => {
-    const io = await hostIo();
-    const target = join(dir, 'replaced.jsonl');
-    await writeFile(
-      `${target}.writer.lock`,
-      JSON.stringify({ pid: vacantPid(), host: hostname(), token: 'stale' })
-    );
-
-    // Nobody else finishes the takeover this time, so it runs to the end — and
-    // an intruder tries at every step of it. concurrency-01: replacing the lock
-    // by freeing the name and creating a new one hands the session to whichever
-    // of these lands in between.
-    const intruders: WriterLock[] = [];
-    const staged = stagedTakeover(io, {
-      afterFirstRead: async () => undefined,
-      afterEachWrite: async () => {
-        await acquireWriterLock(io, target).then(
-          (lock) => intruders.push(lock),
-          () => undefined
-        );
-      },
-    });
-
-    const lock = await acquireWriterLock(staged, target);
-    expect(intruders).toEqual([]);
-    expect(JSON.parse(await readFile(`${target}.writer.lock`, 'utf8')).token).toBe(lock.token);
-    expect((await readdir(dir)).filter((name) => !name.endsWith('.writer.lock'))).toEqual([]);
+    expect(await debris()).toEqual([]);
   });
 
   it('takes over after a crash that stranded a takeover sentinel', async () => {
@@ -640,7 +617,48 @@ describe('session writer lock — separate processes race for one stale lock', (
     expect(sidecar.pid).toBe(winners[0]?.pid);
     // The losers cleaned up after themselves: no sentinel, no aside copy, no
     // half-written claim left in the session directory.
-    expect((await readdir(dir)).filter((name) => !name.endsWith('.writer.lock'))).toEqual([]);
+    expect(await debris()).toEqual([]);
+  }, 60_000);
+
+  /**
+   * concurrency-01's remaining half, against a real second process.
+   *
+   * A takeover moves the judged lock aside and then posts its claim, and the
+   * name is free in between. If that window hands the session to whoever creates
+   * a lock in it, then a claimant that finishes there owns the session while the
+   * takeover goes on to replace the lock and report success — two writers on one
+   * JSONL, which is the outcome this module exists to prevent.
+   *
+   * The claimant is stopped inside that window and the parent takes the session
+   * for itself. The parent keeps it: the paused claimant has to be refused,
+   * because the alternative is a lock installed over a live writer's. This is
+   * also the case that `rename` could not pass — a rename replaces the parent's
+   * lock and both callers are told they won.
+   */
+  it('refuses a takeover whose window is taken by another process', async () => {
+    const target = join(dir, 'window.jsonl');
+    await writeFile(
+      `${target}.writer.lock`,
+      JSON.stringify({ pid: vacantPid(), host: hostname(), token: 'stale' })
+    );
+
+    const child = claimantAtInstall(target);
+    try {
+      await child.opened;
+      // The window itself: the judged lock is moved aside, the claim is written,
+      // and the name is — for this instant — unowned.
+      expect(await readdir(dir)).not.toContain(`${target}.writer.lock`);
+
+      const mine = await acquireWriterLock(await hostIo(), target);
+      child.release();
+      expect(await child.outcome).toMatchObject({ ok: false, code: 'session_locked' });
+      const sidecar = JSON.parse(await readFile(`${target}.writer.lock`, 'utf8'));
+      expect(sidecar.token).toBe(mine.token);
+      expect(sidecar.pid).toBe(process.pid);
+    } finally {
+      await child.stop();
+    }
+    expect(await debris()).toEqual([]);
   }, 60_000);
 });
 
@@ -649,6 +667,58 @@ interface RaceOutcome {
   pid: number;
   token?: string;
   code?: string;
+}
+
+/**
+ * A real claimant stopped inside its takeover, between moving the judged lock
+ * aside and posting its claim.
+ *
+ * That instant is the whole of concurrency-01: the lock name exists nowhere on
+ * disk, so anything that creates a lock there takes the session. Milliseconds
+ * wide against a real clock, which is why the child reports out of band instead
+ * of the parent polling for it.
+ */
+function claimantAtInstall(target: string): {
+  opened: Promise<void>;
+  outcome: Promise<RaceOutcome>;
+  release: () => void;
+  stop: () => Promise<void>;
+} {
+  const script = fileURLToPath(new URL('./fixtures/writerLockRace.ts', import.meta.url));
+  const child = fork(script, [target, 'plain', 'at-link'], {
+    execArgv: ['--experimental-strip-types'],
+    stdio: 'inherit',
+  });
+  let open: () => void = () => {};
+  const opened = new Promise<void>((resolve, reject) => {
+    open = resolve;
+    child.once('error', reject);
+    child.once('exit', (code) => reject(new Error(`claimant exited before its window: ${code}`)));
+  });
+  const outcome = new Promise<RaceOutcome>((resolve) => {
+    child.on('message', (message: unknown) => {
+      if (message === 'ready') {
+        child.send('go');
+        return;
+      }
+      if (message === 'at-link') {
+        open();
+        return;
+      }
+      resolve(message as RaceOutcome);
+    });
+  });
+  return {
+    opened,
+    outcome,
+    release: () => child.send('go'),
+    stop: async () => {
+      child.removeAllListeners('exit');
+      if (child.connected) child.send('stop');
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      await new Promise<void>((resolve) => child.once('exit', () => resolve()));
+    },
+  };
 }
 
 /**

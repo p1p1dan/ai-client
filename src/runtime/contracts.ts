@@ -414,6 +414,20 @@ export interface RuntimeHostIoService {
   readDirectory(path: string): AsyncIterable<{ name: string; kind: RuntimeFileKind }>;
   mkdir(path: string, options?: { recursive?: boolean; mode?: number }): Promise<void>;
   rename(from: string, to: string): Promise<void>;
+  /**
+   * Hard-link `from` to `to`, failing with `EEXIST` when `to` is taken.
+   *
+   * The runtime's compare-and-swap: `rename` overwrites whatever is at the
+   * destination, so it can only ever say "the name now holds my bytes", never
+   * "the name held nothing a moment ago". A link is the create that carries the
+   * file's content, which is what lets the writer lock replace a lock it judged
+   * without a window in which two claimants both believe they replaced it.
+   *
+   * `from` and `to` must be on one filesystem — nothing here moves bytes — so
+   * every caller links a staging file it wrote in the destination's own
+   * directory. Rejects with the filesystem's own code otherwise.
+   */
+  link(from: string, to: string): Promise<void>;
   unlink(path: string): Promise<void>;
   /** Remove an empty directory. Rejects with `ENOTEMPTY` if entries remain. */
   rmdir(path: string): Promise<void>;

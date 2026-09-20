@@ -267,6 +267,29 @@ describe('host IO', () => {
     await io.shutdown();
     await expect(io.rmdir(staging)).rejects.toMatchObject({ code: 'runtime_disposed' });
   });
+  /**
+   * The writer lock's takeover rests on this being an INSERT, not a replace:
+   * both names end up pointing at the claim, and the destination is refused
+   * rather than overwritten when it already exists. `rename` cannot express
+   * that, which is why the lock no longer uses it to install a claim.
+   */
+  it('links a file to a free name and refuses one that is taken', async () => {
+    const source = join(dir, 'claim');
+    const target = join(dir, 'lock');
+    await io.writeFile(source, Buffer.from('mine'));
+    await io.link(source, target);
+    expect(text(await readFile(target))).toBe('mine');
+    // Still readable from the name it was linked from: a hard link, not a move.
+    expect(text(await readFile(source))).toBe('mine');
+
+    await io.writeFile(join(dir, 'other'), Buffer.from('theirs'));
+    await expect(io.link(join(dir, 'other'), target)).rejects.toMatchObject({ code: 'EEXIST' });
+    // The refusal left the winner's bytes exactly where they were.
+    expect(text(await readFile(target))).toBe('mine');
+    await expect(io.link(join(dir, 'absent'), join(dir, 'new'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
   it('rejects a relative path instead of throwing out of the call', async () => {
     const seen: unknown[] = [];
     const settle = (work: Promise<unknown>) => {
@@ -285,12 +308,13 @@ describe('host IO', () => {
         settle(io.unlink('a'));
         settle(io.rmdir('a'));
         settle(io.rename(join(dir, 'from'), 'to'));
+        settle(io.link(join(dir, 'from'), 'to'));
       })
     ).toBeUndefined();
     await sleep(0);
-    expect(seen).toHaveLength(9);
+    expect(seen).toHaveLength(10);
     expect(seen.map((error) => (error as { code: string }).code)).toEqual(
-      Array(9).fill('invalid_host_request')
+      Array(10).fill('invalid_host_request')
     );
   });
   it('reports a bad directory path at the call, not at the first pull', async () => {

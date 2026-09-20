@@ -1,5 +1,6 @@
 import {
   appendFile,
+  link,
   lstat,
   mkdir,
   open,
@@ -285,6 +286,18 @@ export class HostIoPlugin extends Service implements RuntimeHostIoService {
     return this.track(from, async () => {
       absolutePath(to);
       await rename(from, to);
+    });
+  }
+  /**
+   * The compare-and-swap the writer lock's takeover rests on: `EEXIST` means
+   * somebody else already owns `to`, and the caller is not the one who replaced
+   * it. Verified here rather than assumed — the whole point of the primitive is
+   * that the filesystem, not the caller's reading of it, decides.
+   */
+  link(from: string, to: string): Promise<void> {
+    return this.track(from, async () => {
+      absolutePath(to);
+      await link(from, to);
     });
   }
   unlink(path: string): Promise<void> {

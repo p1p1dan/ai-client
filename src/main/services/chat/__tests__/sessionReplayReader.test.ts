@@ -1,4 +1,5 @@
 import {
+  link,
   mkdir,
   mkdtemp,
   open,
@@ -116,6 +117,7 @@ const hostIo: RuntimeHostIoService = {
     await mkdir(path, { recursive: options?.recursive ?? false, mode: options?.mode });
   },
   rename,
+  link,
   unlink,
   rmdir,
 };
