@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+
+import { zhTranslations } from '@shared/i18n';
 import {
   CHAT_BODY_FONT_SIZE_MAX,
   CHAT_BODY_FONT_SIZE_MIN,
@@ -10,7 +12,6 @@ import {
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { zhTranslations } from '@shared/i18n';
 import { useSettingsStore } from '@/stores/settings';
 import { ChatTypographySection } from '../ChatTypographySettings';
 

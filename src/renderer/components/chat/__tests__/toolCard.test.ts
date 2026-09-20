@@ -578,9 +578,9 @@ describe('deriveAggregateRow', () => {
     // Reachable only through a direct call — `deriveToolGroupRows` sends a
     // single run to a plain row — but the singular/plural split is a contract
     // of the catalog, so it is asserted rather than assumed.
-    expect(deriveAggregateRow([runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }))]).verbText).toBe(
-      '1 tool call · Last Read'
-    );
+    expect(
+      deriveAggregateRow([runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }))]).verbText
+    ).toBe('1 tool call · Last Read');
   });
 
   it('names what is running, with its argument, while the segment is live', () => {

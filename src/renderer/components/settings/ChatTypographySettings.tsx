@@ -1,12 +1,12 @@
-import * as React from 'react';
-import { Input } from '@/components/ui/input';
-import { useI18n } from '@/i18n';
 import {
   CHAT_BODY_FONT_SIZE_MAX,
   CHAT_BODY_FONT_SIZE_MIN,
   CHAT_PROCESS_FONT_SIZE_MAX,
   CHAT_PROCESS_FONT_SIZE_MIN,
 } from '@shared/types/chatTypography';
+import * as React from 'react';
+import { Input } from '@/components/ui/input';
+import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
@@ -51,10 +51,11 @@ function ChatTypographyPreview({
   const familyStyle = fontFamily ? { fontFamily } : {};
   return (
     <div className="rounded-lg border bg-card p-3">
-      <p className="leading-relaxed text-foreground" style={{ fontSize: `${bodySize}px`, ...familyStyle }}>
-        {t(
-          'For example: this paragraph is the message text, and it changes with the setting.'
-        )}
+      <p
+        className="leading-relaxed text-foreground"
+        style={{ fontSize: `${bodySize}px`, ...familyStyle }}
+      >
+        {t('For example: this paragraph is the message text, and it changes with the setting.')}
       </p>
       <p
         className="mt-2 leading-normal text-muted-foreground"

@@ -498,7 +498,9 @@ describe('deriveTurnCurrentAction — what the head says the turn is doing', () 
     // next one) no run is running. Returning null there blinks the clause off
     // and on while the seconds keep counting — a head indistinguishable from a
     // frozen one.
-    const action = deriveTurnCurrentAction([group([run('Read', 'ok', 'a'), run('Edit', 'ok', 'b')])]);
+    const action = deriveTurnCurrentAction([
+      group([run('Read', 'ok', 'a'), run('Edit', 'ok', 'b')]),
+    ]);
     expect(action?.run.blockId).toBe('b');
     expect(action?.state).toBe('refused');
     // The infinitive slot: the head must read 「最后编辑 App.tsx」, never

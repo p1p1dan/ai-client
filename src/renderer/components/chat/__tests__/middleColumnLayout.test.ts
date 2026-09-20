@@ -1,9 +1,9 @@
-import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import {
   CHAT_BODY_FONT_SIZE_MAX,
   CHAT_BODY_FONT_SIZE_MIN,
   DEFAULT_CHAT_BODY_FONT_SIZE,
 } from '@shared/types/chatTypography';
+import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import {
   COMPOSER_BAR_LEADING,

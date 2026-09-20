@@ -49,7 +49,7 @@ describe('EventsPlugin.emit', () => {
   it('delivers to the subscribers present when the event was emitted', async () => {
     const { ctx, events: bus } = await events();
     const seen: string[] = [];
-    let unsubscribeSecond = () => undefined as void;
+    let unsubscribeSecond: () => void = () => {};
     bus.subscribe(() => {
       seen.push('first');
       // Iterating the live set would skip the peer this one just removed.

@@ -220,7 +220,10 @@ describe('mergeAdjacentToolGroups (T105)', () => {
     items.filter((item) => item.kind === 'toolGroup');
 
   const entryCount = (items: readonly TurnItem[]) =>
-    items.reduce((total, item) => (item.kind === 'toolGroup' ? total + item.entries.length : total), 0);
+    items.reduce(
+      (total, item) => (item.kind === 'toolGroup' ? total + item.entries.length : total),
+      0
+    );
 
   it('[MERGE-1] two groups that touch across a message boundary become one', () => {
     const a1 = assistant([...toolPair('Read')]);

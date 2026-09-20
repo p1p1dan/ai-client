@@ -114,9 +114,7 @@ it('renders a lone tool row in Chinese — verb and search arg alike', async () 
   });
   const { container, root } = mount();
   try {
-    await act(async () =>
-      root.render(createElement(ToolRow, { key: rows[0].key, view: rows[0] }))
-    );
+    await act(async () => root.render(createElement(ToolRow, { key: rows[0].key, view: rows[0] })));
     const text = container.textContent ?? '';
     expect(text).toContain('已搜索内容');
     // The repo tail is composed inside the derivation, so it proves the `t`
