@@ -1,7 +1,7 @@
 {
   "name": "jyw-ai-client",
-  "version": "1.0.0-test.16",
-  "description": "AiClient - Git Worktree Manager with AI Agent",
+  "version": "1.0.0-test.17",
+  "description": "PiLab Ai - Git Worktree Manager with AI Agent",
   "main": "./out/main/index.js",
   "author": {
     "name": "baseOnEnso",
