@@ -5,7 +5,7 @@ import {
   withAgentPreference,
 } from '@shared/models/chatAgentDefaults';
 import { Check, ChevronDown, Search } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import {
   Menu,
@@ -18,7 +18,7 @@ import {
   MenuSubTrigger,
 } from '@/components/ui/menu';
 import { useI18n } from '@/i18n';
-import { useSettingsStore } from '@/stores/settings';
+import { useSettingsHydrated, useSettingsStore } from '@/stores/settings';
 import {
   type ComposerMenuItem,
   type ComposerMenuSection,
@@ -49,11 +49,11 @@ import {
   modelOptionsFor,
   modelScopeHint,
   modelVerification,
-  reconcileModelSelection,
   resolveModelSelection,
   unverifiedModelLabel,
 } from './models';
 import { catalogModels } from './piModelCatalog';
+import { captureSessionGenerationPreferences } from './sessionGenerationPreferences';
 import { usePiModelCatalog } from './usePiModelCatalog';
 import { useSessionEffort } from './useSessionEffort';
 import { useSessionModel } from './useSessionModel';
@@ -62,24 +62,10 @@ import { useSessionModel } from './useSessionModel';
  * T-30b2: the Composer's single model + reasoning-effort control, replacing
  * the former `ModelSelect` + `EffortSelect` pair.
  *
- * D48 S2 rewired what it reads without changing what it is. Three changes:
- *
- *  1. The catalog is the PROXY's, fetched per agent through
- *     `useAgentModelCatalog` and already family-filtered by Main. The three
- *     hard-coded short names are gone, and so is `ensureModelOptions`' rule that
- *     an unrecognised Host default was automatically a legal option.
- *  2. Both selections are keyed by the (session, AGENT) pair. Which models exist
- *     depends on which runtime runs the chat, so one scalar per session would
- *     lose the Claude pick the moment a zero-turn draft visited Codex (§4.3).
- *  3. `hostDefaultModel` is demoted (§4.3-3): it is no longer an initial value
- *     nor a prepended catalog row, only one more source of an unverified
- *     pre-existing value, consulted when there is no catalog at all.
- *
- * The two `useState`s and the reconciliation effect are the same SHAPE as
- * before — a session switch or a late arrival re-resolves the displayed value —
- * but the late arrival is now the catalog rather than the Host default, and the
- * rules for what a late catalog may overwrite live in `reconcileModelSelection`,
- * truth-tabled under the node-env vitest that can never render this file.
+ * Each session owns its model and effort, including inherited defaults.
+ * Switching sessions remounts both selections together. Explicit picks also
+ * update the defaults for future chats; a catalog refresh only reconciles the
+ * current chat's effort against that model's capabilities.
  *
  * `Menu` rather than `Select`: a `Select` models ONE value, and this popup
  * holds two orthogonal radio groups. `Menu.RadioGroup` is the primitive that
@@ -127,18 +113,15 @@ function MenuRadioRows({
   onSelect: (itemId: string) => void;
 }) {
   return (
-    <MenuRadioGroup
-      value={selectedId}
-      onValueChange={(value) => {
-        if (typeof value === 'string') onSelect(value);
-      }}
-    >
+    <MenuRadioGroup value={selectedId}>
       {items.map((item) => (
         <MenuPrimitive.RadioItem
           key={item.id}
           value={item.id}
           className={composerMenuItemClass()}
           title={item.hint}
+          closeOnClick={false}
+          onClick={() => onSelect(item.id)}
         >
           <span className="min-w-0 flex-1 truncate">{item.label}</span>
           <MenuPrimitive.RadioItemIndicator className="shrink-0">
@@ -161,6 +144,7 @@ function ModelMenuSection({
   query?: string;
   fallbackGroupLabel?: string;
 }) {
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const selectedId = section.items.find((item) => item.selected)?.id ?? null;
   if (section.id === 'model') {
     const direct = section.items.filter(
@@ -185,7 +169,11 @@ function ModelMenuSection({
           const items = group.items as ComposerMenuItem[];
           const selected = items.some((item) => item.id === selectedId);
           return (
-            <MenuSub key={group.id}>
+            <MenuSub
+              key={group.id}
+              open={openGroup === group.id}
+              onOpenChange={(open) => setOpenGroup(open ? group.id : null)}
+            >
               <MenuSubTrigger className={composerMenuItemClass()}>
                 <span className="min-w-0 flex-1 truncate">{group.label}</span>
                 {selected ? <Check className="size-3.5 shrink-0" /> : null}
@@ -194,7 +182,10 @@ function ModelMenuSection({
                 <MenuRadioRows
                   items={items}
                   selectedId={selectedId}
-                  onSelect={(itemId) => onSelect(section.id, itemId)}
+                  onSelect={(itemId) => {
+                    onSelect(section.id, itemId);
+                    setOpenGroup(null);
+                  }}
                 />
               </MenuSubPopup>
             </MenuSub>
@@ -218,7 +209,13 @@ function ModelMenuSection({
   );
 }
 
-export function ComposerModelTrigger({
+export function ComposerModelTrigger(props: ComposerModelTriggerProps) {
+  // Model, effort and open submenus belong to one session. Remount together so
+  // an effect can never reconcile the previous chat's effort into the next one.
+  return <SessionModelTrigger key={props.sessionId ?? 'new-chat'} {...props} />;
+}
+
+function SessionModelTrigger({
   sessionId,
   hostDefaultModel,
   hostState,
@@ -226,14 +223,20 @@ export function ComposerModelTrigger({
   disabled,
 }: ComposerModelTriggerProps) {
   const { t } = useI18n();
-  const { getSessionModel, setSessionModel, clearSessionModel } = useSessionModel();
+  const { getSessionModel, setSessionModel } = useSessionModel();
   const { getSessionEffort, setSessionEffort } = useSessionEffort();
   const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
   const setChatAgentDefaults = useSettingsStore((state) => state.setChatAgentDefaults);
+  const settingsHydrated = useSettingsHydrated();
 
-  const { catalog, loaded, authoritative, loading, status, refresh, retry } =
-    usePiModelCatalog(hostState);
+  const { catalog, authoritative, loading, status, refresh, retry } = usePiModelCatalog(hostState);
   const catalogOptions = catalogModels(catalog);
+
+  useEffect(() => {
+    if (sessionId && settingsHydrated) {
+      captureSessionGenerationPreferences(sessionId, chatAgentDefaults);
+    }
+  }, [sessionId, chatAgentDefaults, settingsHydrated]);
 
   const [model, setModel] = useState<string>(() =>
     resolveModelSelection({
@@ -251,39 +254,30 @@ export function ComposerModelTrigger({
       ) ?? EFFORT_DEFAULT_ID
   );
   const [modelQuery, setModelQuery] = useState('');
+  const [open, setOpen] = useState(false);
 
-  // Which (session, agent) the displayed value was resolved for. This component
-  // is NEVER remounted per session — `ChatWorkspace` renders one `ChatComposer`
-  // with no `key` — so without this ref a session switch is indistinguishable
-  // from a re-render, and §4.3-6's two triggers collapse into one.
-  const resolvedPairRef = useRef<string | null>(sessionId);
-
-  // §4.3-6: the session, the agent, or the catalog moved. A pair change
-  // re-resolves from that pair's own storage unconditionally (anything else
-  // shows the previous session's model while the send path uses the new
-  // session's — R11/A11's display≠send split); a catalog that has not landed
-  // yet changes nothing at all (that is what "show the last value, never a
-  // spinner and never an empty menu" means in state terms); and a catalog that
-  // HAS landed may only overwrite a value nobody chose. Every one of those
-  // branches is `reconcileModelSelection`'s, not this effect's.
+  // Session changes remount this state. Re-read saved preferences after defaults
+  // hydrate; the catalog affects labels, never the saved model choice.
   useEffect(() => {
-    const pair = sessionId;
-    const pairChanged = resolvedPairRef.current !== pair;
-    resolvedPairRef.current = pair;
-    setModel((current) =>
-      reconcileModelSelection({
-        current,
-        pairChanged,
+    if (!settingsHydrated) return;
+    setModel(
+      resolveModelSelection({
         storedModel: sessionId ? getSessionModel(sessionId) : null,
         agentDefaultModel: agentDefaultModel(chatAgentDefaults),
         catalog: catalogOptions,
-        catalogLoaded: loaded,
         hostDefaultModel,
       })
     );
-  }, [sessionId, catalogOptions, loaded, hostDefaultModel, chatAgentDefaults, getSessionModel]);
+  }, [
+    sessionId,
+    catalogOptions,
+    hostDefaultModel,
+    chatAgentDefaults,
+    getSessionModel,
+    settingsHydrated,
+  ]);
 
-  // Session or agent switched: re-read this pair's own effort. T25 applies the
+  // Re-read this session's own effort. T25 applies the
   // selected model's capability in the reconciliation effect below once its
   // catalog metadata is known.
   useEffect(() => {
@@ -300,15 +294,14 @@ export function ComposerModelTrigger({
   const availableEfforts = effortsForModel(selectedCatalogModel);
 
   useEffect(() => {
+    if (!settingsHydrated) return;
     const reconciled = reconcileEffortForModel(effort, selectedCatalogModel);
     if (reconciled === effort) return;
-    // Store the explicit Default sentinel on this (session, agent) pair. That
-    // outranks an incompatible template, while updating the template itself
-    // keeps the next draft from resurrecting the illegal value. The Context
-    // mirror and create/send/resume wire read those same two stores.
+    // Store the fallback only on this chat. Catalog reconciliation must never
+    // rewrite the defaults used by other conversations.
     setEffort(reconciled);
     if (sessionId) setSessionEffort(sessionId, reconciled);
-    setChatAgentDefaults(withAgentPreference(chatAgentDefaults, { effort: reconciled }));
+    else setChatAgentDefaults(withAgentPreference(chatAgentDefaults, { effort: reconciled }));
   }, [
     chatAgentDefaults,
     effort,
@@ -316,6 +309,7 @@ export function ComposerModelTrigger({
     sessionId,
     setChatAgentDefaults,
     setSessionEffort,
+    settingsHydrated,
   ]);
   const isAutomatic = model === AUTOMATIC_MODEL_ID;
   // F07: three states, not two. `pending` — nothing has answered yet, or the
@@ -348,17 +342,9 @@ export function ComposerModelTrigger({
   const handleSelect = (sectionId: ComposerMenuSection['id'], itemId: string) => {
     if (sectionId === 'model') {
       setModel(itemId);
-      // `Automatic` is stored as an ABSENCE, not as a persisted sentinel: it
-      // means "omit the field", which is also what an unset pair means, and
-      // writing a sentinel would freeze the session against a later agent
-      // template. The effort sentinel is stored, because there `Default` and
-      // "never chosen" genuinely differ once a template exists.
+      // Persist Automatic too: it must not inherit another chat's next pick.
       if (sessionId) {
-        if (itemId === AUTOMATIC_MODEL_ID) {
-          clearSessionModel(sessionId);
-        } else {
-          setSessionModel(sessionId, itemId);
-        }
+        setSessionModel(sessionId, itemId);
       }
       const nextModel = catalogOptions.find((option) => option.id === itemId);
       const nextEffort = reconcileEffortForModel(effort, nextModel);
@@ -367,8 +353,16 @@ export function ComposerModelTrigger({
         if (sessionId) setSessionEffort(sessionId, nextEffort);
       }
       // §4.3: an explicit pick also becomes this agent's template, so the next
-      // new draft on the same agent starts where the user left off. T25 updates
-      // model and any forced effort fallback in ONE template write.
+      // new draft on the same agent starts where the user left off.
+      //
+      // The effort half rides along ONLY when this model forced a fallback —
+      // otherwise `nextEffort` is just whatever THIS chat was restored with,
+      // and writing it would leak one conversation's effort onto every future
+      // one (pick a model in a chat running high, and high silently becomes
+      // the default). Effort reaches the template from an explicit effort
+      // pick, below. What is written here is the illegal-combination fix: a
+      // template naming a model that cannot do its own effort would hand the
+      // next draft a value the catalog immediately reconciles away.
       setChatAgentDefaults(
         withAgentPreference(chatAgentDefaults, {
           model: itemId === AUTOMATIC_MODEL_ID ? undefined : itemId,
@@ -383,6 +377,8 @@ export function ComposerModelTrigger({
     // explicit pick this agent's template so the next draft starts where the
     // user left off, and with no chat the template is the only place it lands.
     setChatAgentDefaults(withAgentPreference(chatAgentDefaults, { effort: itemId }));
+    setOpen(false);
+    setModelQuery('');
   };
 
   // §4.6 防线 ① 连带口径: the two axes do NOT share this sentence. A Codex pick
@@ -407,6 +403,7 @@ export function ComposerModelTrigger({
 
   return (
     <Menu
+      open={open}
       // §4.1 刷新: opening the menu is the one moment a stale list is about to
       // be read, so it is where the TTL is checked. Without it a catalog
       // fetched once is frozen for the life of the renderer process — the hook
@@ -416,6 +413,7 @@ export function ComposerModelTrigger({
       // nothing. The menu keeps showing the values it has while it runs, which
       // is what `REFRESHING_CATALOG_NOTICE` is for.
       onOpenChange={(open) => {
+        setOpen(open);
         if (open) refresh();
         else setModelQuery('');
       }}

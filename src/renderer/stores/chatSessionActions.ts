@@ -14,6 +14,7 @@ import {
   isTargetableWorkspace,
   planTargetChange,
 } from '@/components/chat/composerTarget';
+import { restoreIndexedSessionModels } from '@/components/chat/sessionGenerationPreferences';
 import {
   deriveSessionTitleFromFirstMessage,
   isPlaceholderTitle,
@@ -195,6 +196,7 @@ export function materializeIndexedPiChatSession(
   const unbound =
     entry.unbound && entry.workspacePath ? { workspacePath: entry.workspacePath } : undefined;
   if (!workspace && !unbound) return false;
+  restoreIndexedSessionModels([entry]);
   const session: ChatSession = {
     id: entry.sessionId,
     projectId: workspace?.projectId ?? '',

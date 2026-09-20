@@ -125,6 +125,7 @@ import { ReadingColumn } from './ReadingColumn';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { parseSendDispatchErrorCode } from './sendDispatchError';
 import { decideSendPreamble } from './sendPreamble';
+import { captureSessionGenerationPreferences } from './sessionGenerationPreferences';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
 import { archiveSessionIndexEntry } from './sessionIndex/useSessionIndex';
 import { readDefaultPermissions, readSessionPermissions } from './sessionPreferenceStore';
@@ -1348,6 +1349,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
      * ordinary retarget path handles it.
      */
     const sessionId = activeSessionId ?? createUnboundChatSession();
+    captureSessionGenerationPreferences(sessionId, chatAgentDefaults);
     inFlightRef.current = true;
     inFlightSessionIdRef.current = sessionId;
     // F6: this attempt's cancellation token — handleStop bumps the shared

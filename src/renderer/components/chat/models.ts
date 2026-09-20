@@ -239,6 +239,7 @@ export interface ModelSelectionInput {
  */
 export function resolveModelSelection(input: ModelSelectionInput): string {
   const { catalog } = input;
+  if (input.storedModel === AUTOMATIC_MODEL_ID) return AUTOMATIC_MODEL_ID;
   const stored = usableFor(input.storedModel);
   if (stored) return stored;
   const agentDefault = usableFor(input.agentDefaultModel);

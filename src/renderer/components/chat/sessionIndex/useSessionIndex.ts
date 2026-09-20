@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '@/stores/chatSessions';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import { markSessionsLive, markSessionsRetired } from '@/stores/sessionRetirement';
+import { restoreIndexedSessionModels } from '../sessionGenerationPreferences';
 import { dropDismissedSessions, markSessionDismissed, undismissSession } from './dismissedSessions';
 import { mergeSessionIndex, recentSessionIdsFromIndex } from './sessionIndexMerge';
 
@@ -94,6 +95,7 @@ export function applySessionIndexRefresh(
 export async function refreshSessionIndexNow(): Promise<boolean> {
   try {
     const entries = await window.electronAPI.chat.listSessions();
+    restoreIndexedSessionModels(entries);
     useChatSessionsStore.setState(
       applySessionIndexRefresh(entries, useChatSessionsStore.getState())
     );
@@ -132,6 +134,7 @@ export function useSessionIndex(): UseSessionIndexResult {
     setError(null);
     try {
       const entries = await window.electronAPI.chat.listSessions();
+      restoreIndexedSessionModels(entries);
       useChatSessionsStore.setState(
         applySessionIndexRefresh(entries, useChatSessionsStore.getState())
       );
@@ -520,4 +523,4 @@ function touchLiveUpdatedAt(sessionId: string, now = Date.now()): void {
   }
 }
 
-export { touchLiveUpdatedAt, type SessionIndexEntry };
+export { type SessionIndexEntry, touchLiveUpdatedAt };

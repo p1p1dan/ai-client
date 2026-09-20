@@ -14,7 +14,7 @@ describe('T25 grouped model picker wiring', () => {
     expect(trigger).toContain(
       'const grouped = groupChatModels([...direct, ...matches], fallbackGroupLabel);'
     );
-    expect(trigger).toContain('<MenuSub key={group.id}>');
+    expect(trigger).toContain('open={openGroup === group.id}');
     expect(trigger).toContain('<MenuSubTrigger');
     expect(trigger).toContain('<MenuSubPopup');
   });
@@ -34,6 +34,6 @@ describe('T25 grouped model picker wiring', () => {
     expect(trigger).toContain('const nextEffort = reconcileEffortForModel(effort, nextModel);');
     // Pi-only: the effort store is no longer keyed by agent.
     expect(trigger).toContain('setSessionEffort(sessionId, nextEffort);');
-    expect(trigger).toContain('...(nextEffort !== effort ? { effort: nextEffort } : {})');
+    expect(trigger).toContain('effort: nextEffort');
   });
 });
