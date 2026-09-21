@@ -1992,8 +1992,9 @@ const ChatTurn = memo(function ChatTurn({
   const actionsCopyText = turnActive ? '' : copyText;
   // A zero-height collapsed strip costs nothing, but the turn body's 10px gap
   // is spent on it either way — so it exists only when it has an action to
-  // offer. `completedAt` alone is not enough: a bare clock with no button is a
-  // statistic, and statistics are what this batch removed.
+  // offer. The rule was already "an action, not a statistic" (`completedAt`
+  // alone never earned the strip); T114 makes it the only rule there is, since
+  // copy is now the strip's entire contents.
   const showActions = actionsCopyText.length > 0;
 
   const renderItem = (item: TurnItem) => (
@@ -2227,23 +2228,25 @@ const ChatTurn = memo(function ChatTurn({
             <TurnStatusContent status={status} />
           </div>
         )}
-        {/* T12-b: the hover strip — copy and the wall clock, revealed by
-            hovering anywhere in the turn (`group/turn` on the section above).
-            Deliberately hover-only per the 2026-08-29 user decision; the
-            accessibility cost that buys is recorded on
-            `turnActionsSlotClass()`.
+        {/* T12-b: the hover strip, revealed by hovering anywhere in the turn
+            (`group/turn` on the section above). Deliberately hover-only per the
+            2026-08-29 user decision; the accessibility cost that buys is
+            recorded on `turnActionsSlotClass()`.
 
             2026-08-30: the strip RESERVES its height and only fades, so
             hovering no longer pushes the turn below it down. The reasoning for
             the collapse it replaces — and why the user overruled it — is on
-            `turnActionsSlotClass()` too. */}
+            `turnActionsSlotClass()` too. T114 does not touch either of those:
+            the strip is one control shorter, not a different strip.
+
+            T114: copy, and nothing else. The wall clock T12-b re-homed here is
+            on the work zone row above now (「完成于 17:05」), where it is
+            readable without a pointer — so keeping it here would print the same
+            timestamp twice on the same turn, once visibly and once on hover. */}
         {showActions && (
           <div className={turnActionsSlotClass()}>
             <div className={turnActionsInnerClass()}>
               <TurnCopyButton text={actionsCopyText} />
-              {metadata?.completedAt != null && (
-                <span className="shrink-0">{formatAbsoluteTime(metadata.completedAt)}</span>
-              )}
             </div>
           </div>
         )}

@@ -839,20 +839,38 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * `F9: the footer reads an injected clock` retired with the meta row (T12-b).
+   * `F9: the footer reads an injected clock` retired with the meta row (T12-b),
+   * and the reason it cannot come back is unchanged by T113/T114.
    *
    * F9 existed because the footer printed a RELATIVE age and nothing re-renders
    * an idle transcript, so every age froze at whatever it was when the last
-   * token landed. The hover strip prints an absolute `HH:MM`, which stays
-   * correct forever without a clock — so F9's defect class cannot recur here,
-   * and this is what says the relative form did not sneak back in with its
+   * token landed. The clock this app prints is ABSOLUTE (`HH:MM`), which stays
+   * correct forever without a ticker — so F9's defect class cannot recur, and
+   * this is what says the relative form did not sneak back in with its
    * stale-clock problem attached.
+   *
+   * REWRITTEN 2026-09-21 (T114): the assertion used to name the hover strip's
+   * copy of that clock. T113 put a completion time on the always-visible work
+   * zone row, so T114 removed the hover one — two printings of one timestamp on
+   * one turn, one of them reachable only with a pointer. The claim therefore
+   * splits in two: the absolute clock is still rendered, and it is NOT rendered
+   * from the strip.
    */
-  it('T12-b: the strip shows an absolute clock, so no ticking clock is needed', () => {
-    expectCalled('formatAbsoluteTime(metadata.completedAt)');
+  it('T114: the completion clock is absolute, and the hover strip no longer carries it', () => {
+    expectCalled('formatAbsoluteTime(zone.completedAtMs)');
+    expectUnwired('formatAbsoluteTime(metadata.completedAt)');
     for (const gone of ['useMinuteTick', 'footerNowMs', 'formatRelativeTimestamp']) {
       expect(SYNTAX, `the relative-age apparatus must not return: ${gone}`).not.toContain(gone);
     }
+    // The strip is one control and no text. `showActions` was already gated on
+    // the copy text alone, so a timestamp reappearing here would also be a row
+    // that renders for a turn with nothing to copy.
+    const body = nodeSource(turnBodyNode());
+    const strip = body.slice(body.indexOf('turnActionsSlotClass()'));
+    expect(strip).toContain('<TurnCopyButton text={actionsCopyText} />');
+    expect(strip, 'no text node left beside the button').not.toContain('metadata');
+    expect(strip).not.toContain('formatAbsoluteTime');
+    expectWired('const showActions = actionsCopyText.length > 0;');
   });
 
   /**

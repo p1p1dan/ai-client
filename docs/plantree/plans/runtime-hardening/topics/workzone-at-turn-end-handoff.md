@@ -145,6 +145,7 @@ T11X
 - **证据**：[t112-single-step-inline-vs-folded.png](../evidence/batch-k-answer-visibility-2026-09-21/t112-single-step-inline-vs-folded.png) —— 真实会话（`读一下 …turnProcessFold.ts 和 MessageTimeline.tsx`，58 分钟前的真实回合）在当前源码 dev 实例里的样子：同一个回合里，单条过程段的 `已思考` 直接显示在正文之前，再往下是多条合并成的 `10 steps processed ›` 折叠块。同一时刻的 DOM 取证：第一段的外层元素 `hasSummary: false`（没有折叠头），折叠块是 `<details open=false>` 且 `summary` 带 chevron。
 - **不确定的**：
   1. 截图里那条「单条过程段」是**思考行**，不是工具行 —— 这是该真实回合恰好的形态。它自带的 `⌄` 是思考卡自己的展开箭头（`ToolRows` 的 thought fold header），不是本任务撤掉的那层折叠头；改动前这里会是「`1 steps processed ›` 里套着 `已思考 ⌄`」两层。没有另造一个真实回合去凑「单条工具行」的形态。
+     **2026-09-21 补**：T114 取证时的真实回合正好补上了这个形态 —— [t114-hover-strip-copy-only.png](../evidence/batch-k-answer-visibility-2026-09-21/t114-hover-strip-copy-only.png) 里的 `读取 chat/turnCopy.ts ⌄` 就是单条**工具行**直接就地显示、外面没有折叠壳，带着它的主参数。此条不确定项到此关闭。
   2. 该会话是**恢复的历史回合**（无回放计时），所以折叠头走的是步骤数分支。运行中的回合同样只可能出现 ≥2 步的折叠头，但这条是推理，不是这张截图直接证明的。
 
 ### T113
@@ -185,3 +186,16 @@ T11X
   3. **`turnProgressClauses` / `sumTurnTokens` / `formatTurnTokenClauses` 现在没有渲染消费者了**。我按仓库既有做法保留（导出、有测试、注释写明为什么不接），没有退役 —— 因为让它们复活是一个产品决定（要不要在末尾行挂 token），不是清理。如果验收方认为应当退役，这是一处可回退的选择。
   4. **恢复的历史回合不渲染末尾行**（没有计时就没有跨度，A07 `:2399`）。截图里第三张上方那几个老回合就是这样。改动前这些回合的最后一个折叠头会显示「已处理 N 个步骤」，现在每个组头各自报自己的步骤数，信息没丢，但「末尾行对历史回合是空的」这件事没有单独跟用户确认过。
   5. 取证用的是 dev profile 里既有的会话（`读一下 …turnProcessFold.ts 和 MessageTimeline.tsx`，全自动档），我往里发了两个只读提问以产生真实回合。没有新建会话、没有改权限档、没有动用户的登录配置。
+
+### T114
+
+- **改了什么**：`MessageTimeline.tsx` 悬停动作条里的 `formatAbsoluteTime(metadata.completedAt)` 连同它的 `<span>` 撤掉，条上只剩 `<TurnCopyButton>`；`chatTimelineLayout.ts` 的 `turnMetaRowClass()` 退役注释补写「T12-b 当年再安置的四样东西，2026-09-21 之后各自在哪」。
+- **`formatAbsoluteTime` 没有退役**：它在 T113 里获得了新的消费者（末尾行的「完成于 17:05」），所以不构成「失去最后一个消费者」。移交单里的退役条件没有被触发，不是被我跳过了。
+- **偏离**：无。悬停条的**高度预留**行为（`turnActionsSlotClass()` / `turnActionsInnerClass()`）一个字节没动，2026-08-30 那条用户推翻过的裁定原样保留。`turnActionsInnerClass()` 上的 `text-meta tabular-nums text-muted-foreground` 也保留了 —— 它们本来是给时间戳文字用的，现在条上没有文字节点，三个类成了惰性；但删它们属于「顺手改相邻代码」，而且 `turnBodyClass()` 的注释里点名引用了这里的 `text-meta`（D25 S24），删了会让那条注释断线。**这一点留给验收方裁决**。
+- **跑了什么**：`vitest run messageTimelineWiring chatTimelineLayout messageMetadata --maxWorkers=1 --no-file-parallelism` → 117 通过。三套 `tsc --noEmit` 退出 0，改动 3 个文件 Biome `check` 通过。**本机未跑全量 Vitest / Biome / 打包，CI 是权威，本轮未触发 CI。**
+- **判据改写说明**：`T12-b: the strip shows an absolute clock…` 这条的正断言 `formatAbsoluteTime(metadata.completedAt)` 随接线一起失效。改写成 `T114: the completion clock is absolute, and the hover strip no longer carries it`，把原来的一条正断言拆成**两条更紧的**：① `formatAbsoluteTime(zone.completedAtMs)` 仍在（绝对时钟没被换成相对时间，F9 的缺陷类仍然不可能复发）；② `expectUnwired('formatAbsoluteTime(metadata.completedAt)')` 加上「悬停条里不许再出现 `metadata` / `formatAbsoluteTime`、只许有复制按钮」。原来那三条 `useMinuteTick` / `footerNowMs` / `formatRelativeTimestamp` 负断言原样保留。这是收紧，不是放宽。
+- **证据**：[t114-hover-strip-copy-only.png](../evidence/batch-k-answer-visibility-2026-09-21/t114-hover-strip-copy-only.png) —— 真实回合结束后悬停，条上只有一个复制图标；时间只出现在上一行的 `✻ 已工作 12 秒 · 完成于 18:16 · 1 次工具调用 · 思考 1 秒`。同一时刻 CDP 读到的 DOM：悬停条 `opacity: 1`，`innerText` 为空字符串，内层子元素恰好一个 `BUTTON[aria-label="Copy reply"]`。
+- **不确定的**：
+  1. **取这张截图动了启动参数，必须写明**。这台机器的 X 会话里 Chromium 报告 `(hover: none)` / `(pointer: none)`（`matchMedia` 实测，不是猜的），而 Tailwind v4 把 hover 变体包在 `@media (hover: hover)` 里 —— 所以在默认的 dev 启动方式下，**悬停条在这台机器上永远不会显形**，跟 T114 改了什么无关。CDP 合成鼠标事件和 `CSS.forcePseudoState` 都试过，都推不动（媒体查询不匹配，强制伪类也没用）。最后是用 `--blink-settings=availablePointerTypes=4,primaryPointerType=4,availableHoverTypes=2,primaryHoverType=2` 重启 dev，把这台机器误报的指针能力改回普通桌面的取值，再用合成鼠标移动触发真实 `:hover`（`opacity` 实测从 0 变 1）。**渲染是真的、CSS 是真的、悬停状态是真的；被改的是这台机器报告的输入设备能力。** 别的机器上不需要这个参数。
+  2. 上面那条同时意味着：**这台机器上没法验证悬停条在「真人用鼠标」下的观感**，只能验证 CSS 和 DOM。如果验收方要的是真人手感，得换一台 `(hover: hover)` 为真的机器。
+  3. `turnActionsInnerClass()` 那三个惰性类要不要清（见「偏离」一节），我按手术式改动的规矩没动。

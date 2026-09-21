@@ -450,6 +450,19 @@ export function turnWorkZoneClass(): string {
  *  - model name -> dropped from the timeline; the composer's model chip already
  *    answers "which model is this session on", which is the question a user
  *    actually asks.
+ *
+ * ## Where those four stand after 2026-09-21 (T113 / T114)
+ *
+ * Three of the four came back, and NOT to this row — they are on
+ * `turnWorkZoneClass()` above, which is always visible:
+ *
+ *  - duration and tool count are two of the four figures the user named for
+ *    it, which reverses "dropped outright" (the pi-app precedent stands as a
+ *    fact about pi-app; it stopped being this app's ruling);
+ *  - the timestamp moved OFF the hover strip and onto that row too (T114), so
+ *    it is read without a pointer. The strip is copy and nothing else now,
+ *    which is what T12-b said it re-homes — an ACTION rather than a statistic;
+ *  - the model name is the one that stayed dropped, for its original reason.
  */
 
 /**
