@@ -2935,6 +2935,62 @@ export const zhTranslations: Record<string, string> = {
   'Welcome, {{name}}.': '欢迎，{{name}}。',
   'What was produced is kept. You can resend the last message from the composer below.':
     '已产内容保留。可从下方输入框重发上条消息。',
+
+  // 2026-09-21：失败卡片说清楚「为什么停的」。
+  //
+  // 这些句子是 `sessionFailure.ts` 里的字段，卡片用 `t(failure.title)` 这类
+  // 形式取值，所以 `i18nCoverage.test.ts` 的扫描看不到它们（那个扫描只认
+  // 单引号字面量实参）。词条的中文由 `sessionFailure.test.ts` 逐个守着。
+  //
+  // 分工：标题说的是**这是哪一种停止**，正文说**为什么**，提示说**接下来怎么办**。
+  // 原来这里只有一句「Session failed」，那是传感器的名字，不是事件的说明 ——
+  // 用户报的「停下了很莫名其妙」正是这个。
+  //
+  // 「继续」这个词条已经存在（1670 行），共用，不在这里重复。
+  'Stopped at the tool-call ceiling': '到了工具调用上限，已停下',
+  'The assistant called tools 64 turns in a row without finishing. This app stops the turn there so a loop cannot spend without bound.':
+    '助手连续调用了 64 轮工具还没收敛。本应用到这里就停下，避免死循环无限制地消耗。',
+  'Send a message to carry on from here — the work so far is kept.':
+    '发一条消息就能从这里接着做 —— 已经做的工作都保留着。',
+  'The prompt no longer fits the model': '提示词已经超出现有模型的容量',
+  'This chat’s history plus your message is larger than the window the model accepts, so the turn was never sent.':
+    '这个对话的历史加上你这条消息，已经超过该模型接受的上下文窗口，所以这一轮根本没发出去。',
+  'Start a new chat, or pick a model with a larger context window.':
+    '新建一个对话，或者换一个上下文窗口更大的模型。',
+  'The model’s reply was cut off': '模型的回答被截断了',
+  'The provider answered and then the stream ended before it finished.':
+    '服务方已经开始回答，但流在答完之前就断了。',
+  'Continue to ask again — the part that arrived is kept.':
+    '点「继续」可以再问一次 —— 已经收到的部分会保留。',
+  'The turn was stopped': '这一轮已停止',
+  'The turn was cancelled before the model finished replying.': '在模型答完之前，这一轮被取消了。',
+  'Send a message to carry on when you are ready.': '准备好之后发一条消息就能接着聊。',
+  'The turn ended on an internal error': '这一轮因内部错误结束',
+  'Something inside this app failed while the turn was running.':
+    '这一轮运行期间，本应用内部出了错。',
+  'Continue to try again. If it fails the same way, send the detail below.':
+    '点「继续」再试一次。如果还是同样的错，把下面那行细节发出来。',
+  'The model never answered': '模型没有给出回答',
+  'The turn ended without the model producing a reply.': '这一轮结束了，但模型没有产出任何回答。',
+  'Continue to ask again. If it keeps happening, check the model settings.':
+    '点「继续」再问一次。如果反复这样，检查一下模型设置。',
+  'The model took too long': '模型耗时过长',
+  'The provider did not finish the request within the timeout this app allows.':
+    '服务方在本应用允许的超时时间内没有完成这次请求。',
+  'Continue to try again — a slow provider often answers on a second attempt.':
+    '点「继续」再试一次 —— 服务方慢的时候，第二次往往就答上了。',
+  'Another process is holding this chat': '另一个进程正占着这个对话',
+  'This chat is open in another window or process, so the turn could not run.':
+    '这个对话正开在另一个窗口或进程里，所以这一轮没能运行。',
+  'Close the other window, then continue.': '关掉另一个窗口，然后点「继续」。',
+  'The model this chat uses is not installed': '这个对话用的模型没有安装',
+  'The model this chat was created with is not in this app’s model directory.':
+    '这个对话创建时用的模型，不在本应用的模型目录里。',
+  'Open settings and add the model, then continue.': '到设置里把模型加上，然后点「继续」。',
+  'The turn stopped': '这一轮停下了',
+  'This app does not recognise the reason the turn ended with.': '本应用不认识这一轮的结束原因。',
+  'Continue to try again. The detail below is what to report if it repeats.':
+    '点「继续」再试一次。如果反复出现，下面那行细节就是该反馈的内容。',
   'Workspace folder is gone': '工作目录已不存在',
   'Writes, edits and commands inside the workspace run automatically; paths outside it still ask.':
     '工作区内写入、编辑和命令自动执行；外部路径仍询问。',

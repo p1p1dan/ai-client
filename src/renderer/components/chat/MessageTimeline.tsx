@@ -13,6 +13,7 @@ import {
   Lock,
   PackageSearch,
   RefreshCw,
+  Send,
   ShieldAlert,
   TriangleAlert,
 } from 'lucide-react';
@@ -28,6 +29,7 @@ import { cn } from '@/lib/utils';
 import { stopChatSession } from '@/stores/chatSessionActions';
 import type { ChatMessage } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useContinueIntentStore } from '@/stores/continueIntent';
 import {
   isPendingUserMessage,
   type PendingUserMessage,
@@ -99,6 +101,7 @@ import { deriveQuestionCardState } from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
 import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
 import { SEND_SILENCE_CEILING_MS } from './sendBudgets';
+import { canContinueSession, deriveSessionFailure } from './sessionFailure';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { streamingBlockIdForItem } from './streamingBlockId';
 import { delegateDisplayName } from './subagentActivityModel';
@@ -247,6 +250,27 @@ export function MessageTimeline({
       state.sessions.find((session) => session.id === sessionId)?.runtimeError ??
       (state.activeSessionId === sessionId ? state.lastError : null)
   );
+  /**
+   * 2026-09-21: the machine-readable half of the failure, read BESIDE the
+   * sentence rather than parsed out of it. The card's reason line is derived
+   * from this and falls back to "unknown" when it is absent — which covers the
+   * paths that write `runtimeError` without a code (an IPC-level catch, an
+   * older runtime). See `sessionFailure.ts`.
+   */
+  const lastErrorCode = useChatSessionsStore(
+    (state) => state.sessions.find((session) => session.id === sessionId)?.runtimeErrorCode ?? null
+  );
+  /**
+   * What this failure IS, in the user's terms — the answer to 「不知道发生了
+   * 什么为什么报错了」. `lastError` alone is the provider's sentence, which says
+   * what went wrong in words only its author can act on; this says whether the
+   * turn hit a ceiling, lost a stream, or never started.
+   */
+  const failure = useMemo(
+    () => deriveSessionFailure({ error: lastError, errorCode: lastErrorCode }),
+    [lastError, lastErrorCode]
+  );
+  const requestContinue = useContinueIntentStore((state) => state.requestContinue);
   // T091: no `stopActiveSession` selector here any more. This timeline renders
   // ONE session (`sessionId`, a prop), and its Stop button used to hand that
   // fact back to the store and let it re-resolve `activeSessionId` — which is
@@ -355,6 +379,30 @@ export function MessageTimeline({
       .map(pendingUserToChatMessage);
     return visiblePending.length > 0 ? [...authoritative, ...visiblePending] : authoritative;
   }, [bucket, pendingUserMessages]);
+
+  /**
+   * The message Continue would send again: the LAST user message in this
+   * session's transcript.
+   *
+   * The last one, not the first unanswered one, because a turn that failed was
+   * admitted — the Host echoed its user message before anything went wrong, so
+   * the prompt that failed IS the newest user message. Looking further back
+   * would re-send a prompt that already produced a reply.
+   *
+   * `null` means there is nothing to continue from (a failure before any user
+   * message existed, e.g. a create handshake that never got that far), which is
+   * one of the two conditions `canContinueSession` checks.
+   */
+  const resumeMessageId = useMemo(() => {
+    for (let index = sessionMessages.length - 1; index >= 0; index -= 1) {
+      const message = sessionMessages[index];
+      // Synthetic pending rows are skipped: they carry the user's own text but
+      // no Host-issued id, and Continue resolves the message it names out of
+      // the session store, where a pending row does not exist.
+      if (message.role === 'user' && !isPendingUserMessage(message)) return message.id;
+    }
+    return null;
+  }, [sessionMessages]);
 
   const historyNotice = useMemo(
     () =>
@@ -731,7 +779,14 @@ export function MessageTimeline({
                     and hint fall back to muted-foreground so a session-level
                     failure doesn't stack a second red block on top of the
                     already-red failed tool rows above it. */}
-                <p className="font-medium text-destructive">Session failed</p>
+                {/* 2026-09-21: the title used to be the bare words 「Session
+                    failed」, which is the label of the sensor, not of the
+                    event. It is now the KIND of stop ("Stopped at the
+                    tool-call ceiling" / "The model's reply was cut off"), with
+                    a reason line and a next step under it. The user's report
+                    was 「停下了很莫名其妙」, and the fix for that is naming what
+                    happened, not repeating that something did. */}
+                <p className="font-medium text-destructive">{t(failure.title)}</p>
                 {lastError && isAuthRequiredError(lastError) ? (
                   // D47 S5 §3: spawn-gate rejection (resolveSpawnGateDecision,
                   // @shared/authGate) — retrying won't help without a fresh
@@ -775,6 +830,12 @@ export function MessageTimeline({
                   </>
                 ) : (
                   <>
+                    {/* 2026-09-21: WHY it stopped, before the raw sentence that
+                        says what the provider said. The two are different
+                        kinds of fact and the card needs both — the reason is
+                        what a reader can act on, the sentence is the evidence
+                        they forward when they ask for help. */}
+                    <p className="mt-1 text-muted-foreground">{t(failure.reason)}</p>
                     {lastError && failedCardShowsError && (
                       // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
                       // content family as ChatComposer's destructive banner — mono.
@@ -784,16 +845,37 @@ export function MessageTimeline({
                         {lastError}
                       </p>
                     )}
-                    {/* F3 fast-fix batch: affordance-neutral on purpose. Whether
-                        this failure armed the composer's Retry button or restored
-                        the draft into the input is decided by queueRelease's
-                        outcome — this card cannot see which, so it must not name
-                        a button that may not exist (2026-08-17 inspection F2-d). */}
-                    <p className="mt-1 text-muted-foreground">
-                      {t(
-                        'What was produced is kept. You can resend the last message from the composer below.'
-                      )}
-                    </p>
+                    {/* F3 fast-fix batch, superseded 2026-09-21: this used to be
+                        affordance-neutral on purpose — "whether this failure
+                        armed the composer's Retry or restored the draft is
+                        decided by queueRelease's outcome, so the card must not
+                        name a button that may not exist" (2026-08-17). The
+                        user's report is what that reasoning cost: a red card
+                        whose only way out was a round icon beside the send
+                        button, in a different part of the window — 「停下来但
+                        也得给个明确的继续按钮」.
+
+                        The neutrality is kept as a CONDITION rather than as
+                        silence. `canContinueSession` says whether a resend can
+                        work at all, and when it cannot (nothing to resend, or a
+                        reason re-sending cannot fix), the card says what to do
+                        in words instead of offering the button. What is gone
+                        is the case where it did nothing at all. */}
+                    {canContinueSession(failure, resumeMessageId != null) ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2 h-6 text-ui"
+                        onClick={() =>
+                          resumeMessageId && requestContinue(sessionId, resumeMessageId)
+                        }
+                      >
+                        <Send className="mr-1 h-3.5 w-3.5" />
+                        {t('Continue')}
+                      </Button>
+                    ) : (
+                      <p className="mt-1 text-muted-foreground">{t(failure.hint)}</p>
+                    )}
                     {pendingPermissions.some((item) => item.sessionId === sessionId) && (
                       <Button
                         size="sm"

@@ -171,6 +171,27 @@ export interface ChatSession {
   recovery?: SessionRecoveryNote;
   activity?: SessionActivity;
   runtimeError?: string;
+  /**
+   * The machine-readable half of `runtimeError`, straight off
+   * `SessionTerminalEvent.payload.errorCode` (T066).
+   *
+   * Added 2026-09-21 for the failed-card's reason line: the sentence alone
+   * tells a reader what the provider said, and the user's report is that this
+   * is not enough to know WHY the turn stopped — 「tool loop exceeded 64
+   * assistant turns」 and 「terminated」 are a self-explanatory ceiling and a
+   * cut connection respectively, and nothing on screen said which was which.
+   *
+   * Carried BESIDE `runtimeError` rather than folded into it because the two
+   * have different jobs: the sentence is evidence for the user to read and
+   * forward (`sessionFailure.ts` still prints it verbatim), the code is what
+   * this app branches on. A single prefixed string would have made the card
+   * parse text again, which is the mistake `modelMissingError.ts` documents.
+   *
+   * Absent on the paths that write `runtimeError` without a code — an IPC-level
+   * catch, or a runtime that predates the field. The card then falls back to
+   * its "unknown reason" wording, which offers Continue.
+   */
+  runtimeErrorCode?: string;
 }
 
 export interface ChatBlock {
@@ -815,14 +836,30 @@ export function applyRuntimeEvent(
       : recovered
         ? undefined
         : current.runtimeError;
+  // Cleared together with `runtimeError` for the same reason: a code with no
+  // sentence beside it would describe a failure the user can no longer read,
+  // and a later recovery is what makes both stale at once.
+  const runtimeErrorCode =
+    event.type === 'session.failed'
+      ? event.payload?.errorCode
+      : recovered
+        ? undefined
+        : current.runtimeErrorCode;
   if (
     activity !== current.activity ||
     runtimeError !== current.runtimeError ||
+    runtimeErrorCode !== current.runtimeErrorCode ||
     (recovered && current.retry)
   ) {
     patch.sessions = (patch.sessions ?? state.sessions).map((session) =>
       session.id === event.sessionId
-        ? { ...session, activity, runtimeError, ...(recovered ? { retry: undefined } : {}) }
+        ? {
+            ...session,
+            activity,
+            runtimeError,
+            runtimeErrorCode,
+            ...(recovered ? { retry: undefined } : {}),
+          }
         : session
     );
   }

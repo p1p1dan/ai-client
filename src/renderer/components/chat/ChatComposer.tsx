@@ -32,6 +32,7 @@ import {
   stopChatSession,
 } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useContinueIntentStore } from '@/stores/continueIntent';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
@@ -2665,6 +2666,50 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     });
     return unsubscribe;
   }, [resolvePendingReplyLanded, restoreDraftIfComposerEmpty]);
+
+  // 2026-09-21 — the failed card's Continue button, arriving as an intent.
+  //
+  // The card is rendered by the timeline and the only code that can re-send a
+  // turn lives here, so the button publishes {sessionId, messageId} and this
+  // effect resolves and sends it. See `stores/continueIntent.ts` for why the
+  // intent carries an id rather than text.
+  //
+  // Sent through `runSend` with origin `'retry'`, NOT through `handleRetry`:
+  // that path is backed by the component-local `retryable` snapshot, which is
+  // armed by `finalizeOutcome` and absent on a restored or session-level
+  // failure — the very case the button exists for. `'retry'` is the right
+  // origin label because this IS a re-send of the user's own last message, and
+  // `shouldArmRetryable` treats it exactly like the round Retry button.
+  //
+  // Scoped to the ACTIVE session: an intent left behind by a failure in a
+  // session the user has since switched away from must not send into this one.
+  const continueIntent = useContinueIntentStore((state) => state.pending);
+  const clearContinue = useContinueIntentStore((state) => state.clearContinue);
+  useEffect(() => {
+    if (!continueIntent || continueIntent.sessionId !== activeSessionId) return;
+    const bucket = useChatSessionsStore.getState().messages[continueIntent.sessionId] ?? [];
+    const message = bucket.find((item) => item.id === continueIntent.messageId);
+    // Cleared whichever way this goes, before the send: the click is consumed
+    // once. A refused send (the guards inside `runSend`) must not leave the
+    // intent armed, or the next render would fire it again against whatever
+    // the user is doing then.
+    clearContinue();
+    if (!message) return;
+    const text = message.blocks
+      .map((block) => (block.type === 'text' ? (block.text ?? '') : ''))
+      .join('');
+    if (text.trim().length === 0) return;
+    // Drafts stay as they are: `runSend` reads the composer's live attachments
+    // only on the direct-send path. A Continue is a resend of the PROMPT, and
+    // the original attachments' bytes are not recoverable from the transcript
+    // (`ChatMessageAttachment` is metadata). Text-only, and silently so — the
+    // alternative would be a Continue that sends without the image the user
+    // remembers attaching.
+    void runSend(text, [], { origin: 'retry' });
+    // `runSend` / `sessionId` are stable for this component's life; the effect
+    // is keyed on the intent alone so it fires once per click.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: documented above
+  }, [continueIntent, activeSessionId, clearContinue, runSend]);
 
   // T-19 fix review (R5): the strip's failed-row Retry/Discard wiring
   // (`retryQueueHead` / `handleStripRetry`) is removed along with batch 3's
