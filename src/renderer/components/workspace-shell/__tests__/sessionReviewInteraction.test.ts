@@ -25,7 +25,11 @@ it('expands diffs, opens a real file intent, and closes without touching files',
   };
   const props = {
     sessionId: 's',
-    entries: [entry],
+    entries: Array.from({ length: 12 }, (_, index) => ({
+      ...entry,
+      id: `entry-${index}`,
+      path: `/repo/file-${index}.txt`,
+    })),
     onClose,
     onShowFiles,
     filesOpen: true,
@@ -34,15 +38,30 @@ it('expands diffs, opens a real file intent, and closes without touching files',
   };
   try {
     await act(async () => root.render(createElement(SessionReviewPanel, props)));
-    expect(element.textContent).toContain('+abc');
+    expect(element.textContent).not.toContain('+abc');
+    const triggers = element.querySelectorAll<HTMLButtonElement>(
+      '[data-slot="collapsible-trigger"]'
+    );
+    expect(triggers).toHaveLength(12);
+    expect(
+      [...triggers].every((trigger) => trigger.getAttribute('aria-expanded') === 'false')
+    ).toBe(true);
     await act(async () =>
       element.querySelector<HTMLElement>('[data-slot="collapsible-trigger"]')!.click()
     );
-    expect(element.textContent).not.toContain('+abc');
+    expect(element.textContent).toContain('+abc');
+    expect(triggers[0].getAttribute('aria-expanded')).toBe('true');
+    expect(triggers[1].getAttribute('aria-expanded')).toBe('false');
+    expect(triggers[0].tagName).toBe('BUTTON');
+    triggers[0].focus();
+    expect(document.activeElement).toBe(triggers[0]);
+    const added = element.querySelector('[data-diff-line="add"]');
+    expect(added?.querySelector('[data-line-number="old"]')?.textContent).toBe('');
+    expect(added?.querySelector('[data-line-number="new"]')?.textContent).toBe('2');
     await act(async () =>
       element.querySelector<HTMLButtonElement>('button[aria-label="Open file"]')!.click()
     );
-    expect(useFileOpenIntentStore.getState().intent).toMatchObject({ path: '/repo/test.txt' });
+    expect(useFileOpenIntentStore.getState().intent).toMatchObject({ path: '/repo/file-0.txt' });
     expect(onShowFiles).toHaveBeenCalledOnce();
     await act(async () =>
       element.querySelector<HTMLButtonElement>('button[aria-label="Close review"]')!.click()

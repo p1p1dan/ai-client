@@ -156,3 +156,10 @@ T108
 - 跑了什么：分批共 244 条测试通过，三套 tsc 均退出 0，改动文件 Biome 通过。
 - 证据：[执行记录](../evidence/batch-k-answer-visibility-2026-09-21/README.md)，含长命令真实组件 DOM 点击验证。
 - 不确定的：真实模型回合截图待验收。
+
+T109
+- 改了什么：`SessionReviewPanel.tsx` 默认折叠、焦点样式、行号栏；`sessionReviewPatch.ts` 纯 hunk 解析与测试。
+- 偏离：解析抽到独立纯模块便于测试；不改变 patch 生产端。
+- 跑了什么：4 文件 / 22 条测试通过，三套 tsc 退出 0，改动文件 Biome 通过。
+- 证据：[执行记录](../evidence/batch-k-answer-visibility-2026-09-21/README.md) 含 12 条合成记录的 Electron 截图；不冒充真实会话。
+- 不确定的：真实会话与键盘现场验收待补；测试实例出现无登录/凭据提示后已按用户反馈关闭。

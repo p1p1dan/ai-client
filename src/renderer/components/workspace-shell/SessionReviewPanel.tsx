@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import type { SessionReviewEntry } from './sessionReview';
+import { reviewPatchLines } from './sessionReviewPatch';
 
 interface SessionReviewPanelProps {
   sessionId: string | null;
@@ -132,13 +133,8 @@ export function SessionReviewPanel({
             {t('No file changes recorded in this conversation yet.')}
           </p>
         )}
-        {entries.map((entry, index) => (
-          <ReviewEntry
-            key={entry.id}
-            entry={entry}
-            defaultOpen={index === entries.length - 1}
-            onOpenFile={onShowFiles}
-          />
+        {entries.map((entry) => (
+          <ReviewEntry key={entry.id} entry={entry} defaultOpen={false} onOpenFile={onShowFiles} />
         ))}
         <p className="px-1 pt-3 text-2xs text-muted-foreground">
           {t(
@@ -162,12 +158,13 @@ function ReviewEntry({
   const { t } = useI18n();
   const [open, setOpen] = useState(defaultOpen);
   const marker = entry.status === 'added' ? 'A' : entry.status === 'modified' ? 'M' : '·';
-  const lines =
-    entry.patch !== undefined
-      ? entry.patch.split('\n').filter(Boolean)
-      : (entry.preview?.rows.map(
-          (row) => `${row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '}${row.text}`
-        ) ?? []);
+  const lines = reviewPatchLines(
+    entry.patch ??
+      entry.preview?.rows
+        .map((row) => `${row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '}${row.text}`)
+        .join('\n') ??
+      ''
+  );
   const openFile = () => {
     useFileOpenIntentStore.getState().requestFileOpen({ path: entry.path, source: 'tool-row' });
     onOpenFile();
@@ -182,7 +179,7 @@ function ReviewEntry({
     <Collapsible open={open} onOpenChange={setOpen} className="mb-2">
       <div className="flex h-7 min-w-0 items-center gap-1">
         <CollapsibleTrigger
-          className="flex min-w-0 flex-1 items-center gap-1 rounded-sm text-meta hover:bg-accent/50"
+          className="flex h-7 min-w-0 flex-1 items-center gap-1 rounded-sm text-meta hover:bg-accent/50 focus-visible:outline-2 focus-visible:outline-ring"
           title={entry.path}
         >
           <ChevronRight
@@ -235,15 +232,32 @@ function ReviewEntry({
           <div className="max-h-96 overflow-auto rounded-md border bg-card font-mono text-code leading-relaxed">
             {lines.map((line, index) => (
               <div
-                key={`${index}-${line[0]}`}
+                key={`${index}-${line.kind}`}
+                data-diff-line={line.kind}
                 className={cn(
-                  'min-w-fit whitespace-pre px-2',
-                  line.startsWith('+') && 'bg-success/10',
-                  line.startsWith('-') && 'bg-destructive/10',
-                  line.startsWith('@@') && 'bg-muted text-muted-foreground'
+                  'flex min-w-fit whitespace-pre px-2',
+                  line.kind === 'add' && 'bg-success/10',
+                  line.kind === 'del' && 'bg-destructive/10',
+                  line.text.startsWith('@@') && 'bg-muted text-muted-foreground'
                 )}
               >
-                {line.startsWith('\\ No newline') ? t('No newline at end of file') : line}
+                <span
+                  data-line-number="old"
+                  className="w-10 shrink-0 select-none pr-2 text-right text-muted-foreground tabular-nums"
+                >
+                  {line.oldLine}
+                </span>
+                <span
+                  data-line-number="new"
+                  className="w-10 shrink-0 select-none pr-2 text-right text-muted-foreground tabular-nums"
+                >
+                  {line.newLine}
+                </span>
+                <span>
+                  {line.text.startsWith('\\ No newline')
+                    ? t('No newline at end of file')
+                    : line.text}
+                </span>
               </div>
             ))}
           </div>
