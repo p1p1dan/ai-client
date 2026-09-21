@@ -1305,7 +1305,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    *
    *  1. it must be GATED on `settled`, or a finished turn keeps advertising
    *     what it was doing an hour ago;
-   *  2. it must be the FIRST clause — 「Working 12s · Reading App.tsx ·
+   *  2. it must be the FIRST clause — 「Working 12s · Reading ·
    *     ↑12.0k tokens」 — so the head reads as progress before it reads as a
    *     statistic;
    *  3. the settled `N steps` clause must not print for the `steps` label
@@ -1319,9 +1319,9 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('deriveTurnCurrentAction(items)');
     expectWired('const currentAction = settled ? null : deriveTurnCurrentAction(items);');
     // The clause is composed from the SAME vocabulary the tool rows use, and
-    // its argument from the same formatter — a second wording here would drift.
+    // T108 omits arguments; a second wording here would drift.
     expectWired('t(currentAction.verb)');
-    expectWired('formatToolArg(currentAction.run, { repoName })');
+    expectUnwired('formatToolArg(currentAction.run, { repoName })');
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
     const actionAt = head.indexOf('actionClause,');
     const stepsAt = head.indexOf('stepsClause,');

@@ -106,7 +106,7 @@ import { useResumeSession } from './sessionIndex/useResumeSession';
 import { streamingBlockIdForItem } from './streamingBlockId';
 import { delegateDisplayName } from './subagentActivityModel';
 import { ToolGroup } from './ToolRows';
-import { deriveToolGroupRows, formatToolArg, type ToolGroupEntry } from './toolCard';
+import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
 import { buildTurnCopyTextFromItems } from './turnCopy';
 import {
   deriveSendStatusBinding,
@@ -1455,7 +1455,6 @@ function TurnProgressHead({
   elapsedSeconds,
   tokens,
   thinkingMs,
-  repoName,
   hasReplyContent,
   collapsible,
   userOpen,
@@ -1475,12 +1474,6 @@ function TurnProgressHead({
   tokens: TurnTokenTotals | null;
   /** Thinking time so far, or `null` when the provider reports no reasoning. */
   thinkingMs: number | null;
-  /**
-   * Repo tail for the live action clause's argument (T105) — the same value
-   * `ToolGroupItem` already passes down, so the head and the rows below it name
-   * a search the same way.
-   */
-  repoName?: string | null;
   /**
    * The turn has produced at least one block. Stage boundary for the live
    * clauses — see `turnProgressClauses` for why the rule is this fact and not
@@ -1568,16 +1561,8 @@ function TurnProgressHead({
   // call exists (it falls back to the last finished one), so the clause does
   // not blink off in the gaps between calls.
   const currentAction = settled ? null : deriveTurnCurrentAction(items);
-  const actionClause = currentAction
-    ? [
-        t(currentAction.verb),
-        currentAction.state === 'running'
-          ? formatToolArg(currentAction.run, { repoName })
-          : undefined,
-      ]
-        .filter((part): part is string => !!part)
-        .join(' ')
-    : null;
+  // T108 keeps progress words through tool gaps, without rendering arguments.
+  const actionClause = currentAction ? t(currentAction.verb) : null;
   // The `N steps` clause closes the SETTLED line only, and only when the
   // duration is the thing being reported: `label.kind === 'steps'` already
   // prints the count as the head itself, and repeating it would read as two
@@ -2176,7 +2161,6 @@ const ChatTurn = memo(function ChatTurn({
               elapsedSeconds={lastGroup ? headElapsedSeconds : null}
               tokens={lastGroup ? turnTokens : null}
               thinkingMs={lastGroup ? turnThinkingMs : null}
-              repoName={repoName}
               hasReplyContent={turnHasBlocks}
               collapsible
               userOpen={workGroupUserOpen[groupKey] ?? null}

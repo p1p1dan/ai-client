@@ -406,28 +406,11 @@ export interface ToolRowView {
    * an operation. `arg` is the opposite — it interpolates paths and counts, so
    * it arrives here already finished.
    *
-   * `verbText` below supercedes it where a key cannot carry the information —
-   * see that field.
+   * T108 aggregates carry a count, translated by a literal key at paint.
    */
   verb: string;
-  /**
-   * The row's leading word, ALREADY TRANSLATED, for a row whose leading word is
-   * not a catalog key at all. `ToolRows.tsx` prefers it over `verb` and its own
-   * translator is bypassed.
-   *
-   * Exactly one producer today — `deriveAggregateRow`'s 「14 次工具调用 · 最后编辑
-   * App.tsx」 — and the reason is the single-`t()` design's one blind spot: that
-   * string interleaves a COUNT key (`{{count}} tool calls`), a verb and another
-   * key's argument, and `t(view.verb)` has no parameter to interpolate a
-   * `{{count}}` with. `verb` is still populated there, so the "names a catalog
-   * key" contract stays readable, but it is not what paints.
-   *
-   * Not to be confused with `arg`, which is always finished text too: `arg` is
-   * rendered AFTER the verb and carries the same `argKind` font-domain
-   * classifier. `verbText` REPLACES the verb slot, and the aggregate row's
-   * `arg` holds the last call's own argument.
-   */
-  verbText?: string;
+  /** Number of calls in an aggregate; single-tool rows leave this unset. */
+  toolCallCount?: number;
   /** Finished text, already translated by whoever built it. Never a catalog key. */
   arg?: string;
   /**
@@ -681,24 +664,6 @@ function isHitListTool(toolName: string): boolean {
 }
 
 /**
- * The plain-infinitive verb of an operation, from `ToolVerbs.refused`.
- *
- * The slot has TWO consumers now, and neither is a refusal row:
- *
- *  1. `deriveToolRowView` — the refused row's own verb ("Edit tmp/x.txt ·
- *     Denied", §6.4 G-9);
- *  2. `deriveAggregateRow`'s settled clause — 「最后编辑 App.tsx」. The `done`
- *     slot would spell "最后已编辑" there, which is what makes the infinitive
- *     the right pick rather than a coincidence.
- *
- * Named rather than reaching into `toolVerb(name, 'refused')` at that call
- * site, so the second consumer is visible from the table's own doc comment.
- */
-export function toolActionNoun(toolName: string): string {
-  return toolVerb(toolName, 'refused');
-}
-
-/**
  * Aggregate row for a run of consecutive tool calls (T105).
  *
  * Only meant to be called once the caller (`deriveToolGroupRows`) has already
@@ -710,12 +675,8 @@ export function toolActionNoun(toolName: string): string {
  *  - N = the segment's RUN count. Deliberately not "files touched": a
  *    `file_path`-deduped count reports 1 for four sequential reads of one file,
  *    which is the opposite of 「过程条目太碎」's complaint.
- *  - The clause is `N tool calls · <last action>`, and the action follows the
- *    segment's progress: `toolVerb(…, 'running')` while the last call is in
- *    flight, `Last {{action}}` (the infinitive, via `toolActionNoun`) once it
- *    has finished. `formatToolArg` supplies the argument — it is the one
- *    formatter that already knows Bash prefers its description over its
- *    command, Grep carries the repo tail, paths get `shortPath`.
+ *  - T108 narrows the former count + last-action clause to the COUNT alone.
+ *    Arguments remain in the expandable detail rows, not in the summary.
  *  - A `permission`-carrying run never reaches here — `deriveToolGroupRows`
  *    keeps it as a separator row of its own, so the decision stays visible
  *    without opening anything (`[FB7-10]`).
@@ -743,14 +704,6 @@ export function deriveAggregateRow(
   );
   const running = runEntries.some((entry) => entry.run.status === 'running');
   const failed = runEntries.some((entry) => entry.run.status === 'failed');
-  // Which call the suffix describes: the running one while any is in flight
-  // (parallel tool use can leave an EARLIER call open while a later one has
-  // already settled, so "the last entry" would name the wrong call), and the
-  // last entry once they have all finished.
-  const last = running
-    ? runEntries.filter((entry) => entry.run.status === 'running').at(-1)?.run
-    : runEntries[runEntries.length - 1]?.run;
-
   const firstEntry = entries[0];
   const firstBlockId = firstEntry
     ? firstEntry.kind === 'run'
@@ -758,57 +711,16 @@ export function deriveAggregateRow(
       : firstEntry.block.id
     : 'empty';
 
-  const t = options.t ?? englishTranslate;
-  // Straight into `verbText`: the COUNT key needs a `count` parameter, which
-  // `ToolRows.tsx`'s single `t(view.verb)` call has nowhere to put (the same
-  // reason `{{duration}}` thoughts arrive as `arg`).
-  const leading = t(runEntries.length === 1 ? '{{count}} tool call' : '{{count}} tool calls', {
-    count: runEntries.length,
-  });
-  const tail = last ? aggregateActionText(last, running, options) : undefined;
-  const verbText = tail ? `${leading} · ${tail}` : leading;
-
-  const entry = runEntries.at(-1);
   return {
     key: `${firstBlockId}~agg`,
-    // Kept for the "this row names a catalog key" contract every other branch
-    // holds; `verbText` is what actually paints (see `ToolRowView.verbText`).
-    verb: 'Explored',
-    verbText,
-    arg: entry ? formatToolArg(entry.run, options) : undefined,
-    argKind: entry ? formatToolArgKind(entry.run, options) : undefined,
+    verb: runEntries.length === 1 ? '{{count}} tool call' : '{{count}} tool calls',
+    toolCallCount: runEntries.length,
     running,
     failed,
     expandable: true,
     body: 'detail',
     detail: entries.map((detailEntry) => buildEntryRow(detailEntry, options)),
   };
-}
-
-/**
- * 「正在运行 npm test」 / 「最后编辑 App.tsx」 for the aggregate row's tail.
- *
- * Always translated HERE rather than handed out as a key: both halves
- * interpolate the last call's own argument, and `ToolRows.tsx`'s one translate
- * call has no parameter to pass.
- */
-function aggregateActionText(
-  run: ToolRun,
-  running: boolean,
-  options: ToolCardOptions
-): string | undefined {
-  const t = options.t ?? englishTranslate;
-  if (running) {
-    // The running verb is run through `t` HERE for the same reason the rest of
-    // this string is built here: it shares one sentence with the argument, so
-    // it cannot be left as a key for `ToolRows.tsx` to resolve separately.
-    // `TOOL_VERBS[x].running` stays the one definition — `toolVocabulary.test.ts`
-    // asserts each of those words has a catalog entry.
-    return [t(toolVerb(run.toolName, 'running')), formatToolArg(run, options)]
-      .filter(Boolean)
-      .join(' ');
-  }
-  return t('Last {{action}}', { action: t(toolActionNoun(run.toolName)) });
 }
 
 /**

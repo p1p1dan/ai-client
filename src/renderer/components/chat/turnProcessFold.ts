@@ -163,8 +163,8 @@ export function turnWorkGroupOpen(input: TurnWorkGroupOpenInput): boolean {
  *
  * Returning the RUN rather than a formatted string keeps this module free of
  * `toolCard`'s argument formatting and of any translator: the caller already
- * holds both (`MessageTimeline.tsx` renders in English — user decision
- * 2026-09-19 — with `formatToolArg`), so the words are composed at paint where
+ * translates the verb (`MessageTimeline.tsx` stays English). T108 omits the
+ * arguments from the head, so the words are still composed at paint where
  * every other verb in this app becomes words. `verb` is the catalog key for
  * that name, resolved through the same `toolVerb` table the row itself uses.
  *

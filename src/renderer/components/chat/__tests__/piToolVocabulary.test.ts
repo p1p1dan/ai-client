@@ -102,7 +102,7 @@ describe('pi built-in tools are classified for aggregation', () => {
     // field-name question no longer has anything to decide here. What the case
     // still guards is that the count comes from `runEntries.length` rather than
     // from any path-derived set.
-    expect(deriveAggregateRow(entries).verbText).toBe('2 tool calls · Last Read');
+    expect(deriveAggregateRow(entries).toolCallCount).toBe(2);
   });
 });
 

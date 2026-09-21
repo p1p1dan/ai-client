@@ -10,7 +10,7 @@ Role: evidence。日期：2026-09-21。基线：`58341983`。
 ## TODO（实现与完整验收分开）
 
 - [x] T107：正文全露、独立过程组；实现/定向测试/三套类型检查/提交。
-- [ ] T108：聚合行与工作头去参数后缀；实现/验证/提交。
+- [x] T108：聚合行与工作头去参数后缀；实现/验证/提交。
 - [ ] T109：审阅默认折叠、真实行号与独立手势；实现/验证/提交。
 - [ ] T110：审阅图标打开中列工作区 diff；实现/验证/提交。
 - [ ] 现场证据与 T111 取证；未完成项明确保留，不能以单测代替。
@@ -34,3 +34,14 @@ Role: evidence。日期：2026-09-21。基线：`58341983`。
 ## T111 取证条件
 
 T107 后已起一次 dev 核对条件。当前 profile 没有真实消息、模型凭据不可用，无法复现中断，也没有可导出的真实 blocks / history 合并记录。本轮不修改 `chatSessions.ts`、`historyReplayMerge.ts` 等取证目标；不能据此声称缺陷已消失。后续需有模型访问与可复现会话后再取证、报告。
+
+## T108
+
+- 提交前基线：T107 `678d79b7`。
+- 改动：聚合行只携带调用数、使用渲染处字面量词条；删除聚合行 arg/argKind，避免独立参数槽泄漏；工作头只显示动作词。`deriveTurnCurrentAction` 保留，单条工具行和展开明细参数保留。
+- 清理：`verbText`、`aggregateActionText`、`toolActionNoun`、`Last {{action}}` 全部失去生产者/消费者后退役；相应旧注释改写并保留聚合口径与动作间隙裁定。
+- 反向验证：中文 DOM 与工作头接线新判据在旧实现下 2 失败 / 66 通过。
+- Vitest 小批串行：toolCard 115、chineseChatSurface 10、toolExpansion 15（合计 140）；piToolVocabulary 23、toolVocabulary 9、i18nCoverage 2、fontDomainScan 11（合计 45）；messageTimelineWiring 59 通过。共 244 条。
+- DOM 交互：≥100 字符命令在聚合头消失，点击展开后完整命令仍可访问。不是实际模型回合截图。
+- 三套 tsc 均退出 0；改动文件 Biome 通过。
+- 偏离：无范围扩大；真实模型长命令回合证据受前述凭据条件阻塞，保留待验收。

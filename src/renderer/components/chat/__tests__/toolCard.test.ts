@@ -257,7 +257,7 @@ describe('deriveToolGroupRows', () => {
     ];
     const rows = deriveToolGroupRows(entries);
     expect(rows).toHaveLength(1);
-    expect(rows[0].verbText).toBe('2 tool calls · Last Grep');
+    expect(rows[0].toolCallCount).toBe(2);
     expect(rows[0].detail).toHaveLength(2);
   });
 
@@ -267,7 +267,7 @@ describe('deriveToolGroupRows', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].detail).toBeUndefined();
     expect(rows[0].verb).toBe('Read');
-    expect(rows[0].verbText).toBeUndefined();
+    expect(rows[0].toolCallCount).toBeUndefined();
   });
 
   /**
@@ -285,7 +285,7 @@ describe('deriveToolGroupRows', () => {
     ];
     const rows = deriveToolGroupRows(entries);
     expect(rows).toHaveLength(1);
-    expect(rows[0].verbText).toBe('2 tool calls · Last Run');
+    expect(rows[0].toolCallCount).toBe(2);
     expect(rows[0].detail).toHaveLength(2);
   });
 
@@ -339,7 +339,7 @@ describe('deriveToolGroupRows', () => {
     const rows = deriveToolGroupRows(entries);
     expect(rows).toHaveLength(1);
     expect(rows[0].running).toBe(true);
-    expect(rows[0].verbText).toBe('2 tool calls · Grepping foo');
+    expect(rows[0].toolCallCount).toBe(2);
     expect(rows[0].detail).toHaveLength(2);
   });
 
@@ -352,7 +352,7 @@ describe('deriveToolGroupRows', () => {
     const rows = deriveToolGroupRows(entries);
     expect(rows).toHaveLength(1);
     expect(rows[0].running).toBe(true);
-    expect(rows[0].verbText).toBe('3 tool calls · Searching bar');
+    expect(rows[0].toolCallCount).toBe(3);
     expect(rows[0].detail).toHaveLength(3);
   });
 
@@ -390,10 +390,10 @@ describe('deriveToolGroupRows', () => {
     expect(rows).toHaveLength(3);
     // The two calls BEFORE it aggregate; the two after it aggregate; the
     // decision itself is a plain, always-visible row.
-    expect(rows[0].verbText).toBe('2 tool calls · Last Read');
+    expect(rows[0].toolCallCount).toBe(2);
     expect(rows[1].permissionVerb).toBe('Allowed');
     expect(rows[1].body).not.toBe('detail');
-    expect(rows[2].verbText).toBe('2 tool calls · Last Grep');
+    expect(rows[2].toolCallCount).toBe(2);
   });
 });
 
@@ -518,7 +518,7 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
     expect(rows[0].output).toBe('mid-turn thought');
     expect(rows[0].expandable).toBe(true);
     expect(rows[0].defaultOpen).toBe(true);
-    expect(rows[1].verbText).toBe('2 tool calls · Last Read');
+    expect(rows[1].toolCallCount).toBe(2);
     expect(rows[1].detail).toHaveLength(2);
   });
 
@@ -541,7 +541,7 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
 });
 
 describe('deriveAggregateRow', () => {
-  it('counts RUNS, not files: 3 Read + 11 Grep -> "14 tool calls · Last Grep" (T105)', () => {
+  it('counts RUNS, not files: 3 Read + 11 Grep -> "14 tool calls" (T108)', () => {
     const entries = [
       ...['a.ts', 'b.ts', 'c.ts'].map((path, i) =>
         runEntry(makeRun(`r${i}`, 'Read', { file_path: path }))
@@ -551,10 +551,10 @@ describe('deriveAggregateRow', () => {
       ),
     ];
     const row = deriveAggregateRow(entries);
-    expect(row.verbText).toBe('14 tool calls · Last Grep');
-    // D25 §2.4: the summary arg (the last call's own argument here) is a
-    // path/pattern, so it keeps that call's own kind rather than a fixed one.
-    expect(row.arg).toBe('p10');
+    expect(row.toolCallCount).toBe(14);
+    // T108 removes the summary argument; detail retains the original pattern.
+    expect(row.arg).toBeUndefined();
+    expect(row.detail?.at(-1)?.arg).toBe('p10');
   });
 
   /**
@@ -571,7 +571,7 @@ describe('deriveAggregateRow', () => {
       runEntry(makeRun(`r${i}`, 'Read', { file_path: 'a.ts' }))
     );
     const row = deriveAggregateRow(entries);
-    expect(row.verbText).toBe('4 tool calls · Last Read');
+    expect(row.toolCallCount).toBe(4);
   });
 
   it('uses the singular count key for a segment of one', () => {
@@ -579,58 +579,57 @@ describe('deriveAggregateRow', () => {
     // single run to a plain row — but the singular/plural split is a contract
     // of the catalog, so it is asserted rather than assumed.
     expect(
-      deriveAggregateRow([runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }))]).verbText
-    ).toBe('1 tool call · Last Read');
+      deriveAggregateRow([runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }))]).toolCallCount
+    ).toBe(1);
   });
 
-  it('names what is running, with its argument, while the segment is live', () => {
+  it('keeps only a count while the segment is live', () => {
     const entries = [
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }, 'ok')),
       runEntry(makeRun('b', 'Read', { file_path: 'b.ts' }, 'running', { output: undefined })),
     ];
-    expect(deriveAggregateRow(entries).verbText).toBe('2 tool calls · Reading b.ts');
+    expect(deriveAggregateRow(entries).toolCallCount).toBe(2);
   });
 
-  it('flags the whole segment as running when ANY call is in flight, and names that call', () => {
+  it('flags the whole segment as running when ANY call is in flight', () => {
     // Parallel tool use: two calls open, the first of them is the one whose
     // result has not landed yet, and a later call has already finished. The
-    // clause has to describe a call that is ACTUALLY in flight — reading the
-    // last entry instead would print 「最后读取 a.ts」 for a row that is red-hot.
+    // running flag must still describe the entire group after T108 removes
+    // the last-action suffix.
     const entries = [
       runEntry(makeRun('a', 'Grep', { pattern: 'p' }, 'running', { output: undefined })),
       runEntry(makeRun('b', 'Read', { file_path: 'a.ts' }, 'ok')),
     ];
     const row = deriveAggregateRow(entries);
     expect(row.running).toBe(true);
-    expect(row.verbText).toBe('2 tool calls · Grepping p');
+    expect(row.toolCallCount).toBe(2);
   });
 
-  it('a settled segment names the LAST call, not an earlier running one', () => {
-    // The mirror of the case above: once every call has a result, the suffix
-    // reports where the work ended up rather than which call was slowest.
+  it('a settled segment keeps only its count', () => {
+    // The mirror of the case above: after every result lands, running clears
+    // without adding an action suffix back.
     const entries = [
       runEntry(makeRun('a', 'Grep', { pattern: 'p' }, 'ok')),
       runEntry(makeRun('b', 'Read', { file_path: 'a.ts' }, 'ok')),
     ];
     const row = deriveAggregateRow(entries);
     expect(row.running).toBe(false);
-    expect(row.verbText).toBe('2 tool calls · Last Read');
+    expect(row.toolCallCount).toBe(2);
   });
 
-  it('a settled segment names the last call with the infinitive, never the past tense', () => {
-    // 「最后编辑 App.tsx」, not 「最后已编辑 App.tsx」 — that is what makes
-    // `toolActionNoun` read from `ToolVerbs.refused` rather than `.done`.
+  it('a settled mixed segment also keeps only its count', () => {
+    // T108 removes the former infinitive suffix; operation details stay inside.
     const entries = [
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
       runEntry(makeRun('b', 'Edit', { file_path: 'a.ts' })),
     ];
-    expect(deriveAggregateRow(entries).verbText).toBe('2 tool calls · Last Edit');
+    expect(deriveAggregateRow(entries).toolCallCount).toBe(2);
   });
 
   // F-B14 (T-31 §4.5) covered a third "ran N command(s)" counting segment and
   // the four file/search counting cases that sat beside it. All of them went
   // with the counting scheme itself in T105 (D5): the row reports `N tool calls`
-  // plus the last action, so there is no per-type bucket left to assert. The
+  // (T108 also removes the last action), with no per-type bucket to assert. The
   // F-B numbering is deliberately not re-flowed — F-B14 stays retired so the
   // spec's own numbering still traces.
 
@@ -686,16 +685,17 @@ describe('deriveAggregateRow', () => {
     expect(deriveAggregateRow(three).key).toBe(deriveAggregateRow(two).key);
   });
 
-  it('keeps `verb` a catalog key even though `verbText` is what paints', () => {
-    // Every other row branch hands `ToolRows.tsx` a key to translate; only this
-    // one arrives finished. Keeping a real key in `verb` is what stops a future
-    // reader from treating the field as optional.
+  it('keeps the count key and omits both summary argument fields', () => {
+    // T108 restores catalog keys for aggregates too, with the count supplied
+    // separately. Neither suffix nor separate arg may leak a command.
     const row = deriveAggregateRow([
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
       runEntry(makeRun('b', 'Read', { file_path: 'b.ts' })),
     ]);
-    expect(row.verb).toBe('Explored');
-    expect(row.verbText).not.toBe(row.verb);
+    expect(row.verb).toBe('{{count}} tool calls');
+    expect(row.toolCallCount).toBe(2);
+    expect(row.arg).toBeUndefined();
+    expect(row.argKind).toBeUndefined();
   });
 
   it('propagates failure: any child call with toolOk === false makes the aggregate row destructive with the failing detail row intact (T-05 adversarial fix #2)', () => {

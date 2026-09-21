@@ -131,9 +131,9 @@ describe('absorption — the aggregate inherits its children’s open state', ()
 
     const after = deriveToolGroupRows([readEntry('a', 'a.ts'), readEntry('b', 'b.ts')]);
     expect(after.map((row) => row.key)).toEqual(['block-a~agg']);
-    // T105: the summary is the run count plus the last action, not a
+    // T105: T108: the summary is only the run count, not a
     // `file_path`-deduped file tally.
-    expect(after[0].verbText).toBe('2 tool calls · Last Read');
+    expect(after[0].toolCallCount).toBe(2);
     // The row the user had open now exists only as a child of the aggregate.
     expect((after[0].detail ?? []).map((row) => row.key)).toEqual(['block-a', 'block-b']);
   });

@@ -75,10 +75,10 @@ it('renders tool rows in Chinese — the verb, the running verb and the search a
     ],
     { repoName: 'ai-client', t: zh }
   );
-  // One aggregate, with an already-translated leading line and no English left
-  // in the parts this module owns.
+  // T108 leaves count translation to the row, with no command/path suffix.
   expect(rows).toHaveLength(1);
-  expect(rows[0].verbText).toBe('3 次工具调用 · 编辑中 src/a.ts');
+  expect(rows[0].toolCallCount).toBe(3);
+  expect(rows[0].arg).toBeUndefined();
 
   const { container, root } = mount();
   try {
@@ -93,8 +93,8 @@ it('renders tool rows in Chinese — the verb, the running verb and the search a
     );
     const text = container.textContent ?? '';
     expect(text).toContain('3 次工具调用');
-    expect(text).toContain('编辑中');
-    expect(text).toContain('src/a.ts');
+    expect(text).not.toContain('编辑中');
+    expect(text).not.toContain('src/a.ts');
     expect(text).not.toMatch(/tool calls|Editing|Ran|Grepped/);
   } finally {
     await act(async () => root.unmount());
@@ -121,6 +121,27 @@ it('renders a lone tool row in Chinese — verb and search arg alike', async () 
     // threaded through `ToolCardOptions` actually arrived.
     expect(text).toContain('TODO（ai-client）');
     expect(text).not.toMatch(/Grepped|Searching/);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
+it('hides a long command from the aggregate but keeps it accessible in details', async () => {
+  const command = `echo ${'long-command-argument-'.repeat(8)}`;
+  const rows = deriveToolGroupRows(
+    [toolRun('Read', 'ok', { file_path: '/repo/example.ts' }), toolRun('Bash', 'ok', { command })],
+    { t: zh }
+  );
+  const { container, root } = mount();
+  try {
+    await act(async () => root.render(createElement(ToolRow, { view: rows[0] })));
+    const trigger = container.querySelector<HTMLElement>('[data-slot="collapsible-trigger"]')!;
+    expect(trigger.textContent).toBe('2 次工具调用');
+    expect(container.textContent).not.toContain(command);
+    await act(async () => trigger.click());
+    expect(container.textContent).toContain(command);
+    expect(trigger.textContent).toBe('2 次工具调用');
   } finally {
     await act(async () => root.unmount());
     container.remove();

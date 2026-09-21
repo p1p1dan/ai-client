@@ -2586,10 +2586,7 @@ export const zhTranslations: Record<string, string> = {
   '{{pattern}} in {{repo}}': '{{pattern}}（{{repo}}）',
   '{{count}} tool call': '{{count}} 次工具调用',
   '{{count}} tool calls': '{{count}} 次工具调用',
-  // T105 —— 聚合行的「N 个工具调用 · 最后编辑 App.tsx」与回合头部的「9 个步骤」。
-  // `Last {{action}}` 的 action 取 `ToolVerbs.refused` 槽的动词原形（`Edit`→「编辑」），
-  // 所以它拼出的是「最后编辑 App.tsx」而不是「最后已编辑 App.tsx」。
-  'Last {{action}}': '最后{{action}}',
+  // T108 keeps aggregate counts; the work head still reports step totals.
   '{{count}} step': '{{count}} 个步骤',
   '{{count}} steps': '{{count}} 个步骤',
   '{{count}} tool': '{{count}} 个工具',
