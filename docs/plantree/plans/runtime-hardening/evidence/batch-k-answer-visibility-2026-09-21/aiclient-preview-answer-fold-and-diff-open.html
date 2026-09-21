@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>预览 — 正文不留折叠 / 工具行去后缀 / 审阅打开 diff 三方案</title>
+<style>
+  /* ------------------------------------------------------------------
+     取色与排版照抄 src/renderer/styles/globals.css 的 :root（Flexoki 亮色）
+     与 @theme 的字号/圆角 token。目的：这里看到的效果，就是 Electron 里
+     会看到的效果。
+     ------------------------------------------------------------------ */
+  :root {
+    --background: #fffdf4;
+    --foreground: #100f0f;
+    --card: #fbfaf2;
+    --muted: #f6f5ee;
+    --muted-foreground: #575650;
+    --accent: #eeece3;
+    --selection: #e5e3db;
+    --border: #dad8ce;
+    --input: #cecdc3;
+    --primary: #bc5215;
+    --destructive: #af3029;
+    --success: #66800b;
+    --status-running: #205ea6;
+    --folder: #ad8301;
+    --tool-arg: #6b6b62;
+
+    --text-2xs: 10px;
+    --text-meta: 13px;
+    --text-ui: 14px;
+    --text-code: 12px;
+    --text-chat-body: 16px;
+    --text-chat-process: 13px;
+
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+      "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+      "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Cascadia Mono",
+      "Consolas", "Liberation Mono", "DejaVu Sans Mono", "PingFang SC", "Noto Sans CJK SC", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--muted);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: var(--text-ui);
+    line-height: 1.45;
+  }
+  .page { max-width: 1180px; margin: 0 auto; padding: 0 0 64px; }
+
+  /* ---------- 页头与总开关 ---------- */
+  .docbar {
+    position: sticky; top: 0; z-index: 30;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+    padding: 14px 20px;
+  }
+  .docbar h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .docbar p { margin: 0 0 12px; font-size: var(--text-meta); color: var(--muted-foreground); max-width: 900px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+  .ctl { display: flex; align-items: center; gap: 7px; font-size: var(--text-meta); }
+  .ctl > span:first-child { color: var(--muted-foreground); }
+
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+  .seg button {
+    font: inherit; font-size: var(--text-meta); padding: 3px 12px; cursor: pointer;
+    border: 0; background: var(--card); color: var(--muted-foreground);
+    border-right: 1px solid var(--border);
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--foreground); font-weight: 600; }
+
+  /* ---------- 章节 ---------- */
+  section { padding: 22px 20px 0; }
+  h2 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
+  .sub { font-size: var(--text-meta); color: var(--muted-foreground); margin: 0 0 16px; max-width: 900px; }
+  .sub b { color: var(--foreground); font-weight: 600; }
+
+  /* ---------- 聊天列 ---------- */
+  .chat {
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--background);
+    padding: 18px 22px 26px;
+    max-width: 900px;
+  }
+  .turn { margin-bottom: 26px; }
+  .turn:last-child { margin-bottom: 0; }
+  .bubble {
+    background: var(--muted); border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 8px 12px; margin-bottom: 12px;
+    font-size: var(--text-chat-body); line-height: 1.5;
+    display: inline-block; max-width: 86%;
+  }
+  .prose { font-size: var(--text-chat-body); line-height: 1.62; margin: 0 0 12px; }
+  .prose code { font-family: var(--font-mono); font-size: var(--text-code); background: var(--accent); padding: 1px 4px; border-radius: var(--radius-xs); }
+
+  /* 工作条（折叠头） — 照抄 MessageTimeline 的 turnHeadClass 观感 */
+  .workrow {
+    display: flex; align-items: center; gap: 8px;
+    border-left-color: transparent;
+    font-size: var(--text-ui); color: var(--muted-foreground);
+    padding: 2px 0; margin: 0 0 12px;
+    cursor: pointer; user-select: none; width: fit-content; max-width: 100%;
+  }
+  .workrow:hover { color: var(--foreground); }
+  .workrow .chev { transition: transform .15s; transform: rotate(0deg); flex: 0 0 auto; }
+  .workrow[data-open="true"] .chev { transform: rotate(90deg); }
+  .workrow .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* 工作条内部（折叠区） */
+  .workbody {
+    margin: 0 0 14px 2px; padding-left: 12px;
+    border-left: 1px solid var(--border);
+    font-size: var(--text-chat-process);
+  }
+  .workbody[hidden] { display: none; }
+  .toolrow {
+    display: flex; align-items: baseline; gap: 6px;
+    color: var(--tool-arg); padding: 2px 0;
+  }
+  .toolrow .v { color: var(--muted-foreground); flex: 0 0 auto; }
+  .toolrow .a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toolrow.long .a { max-width: 100%; }
+
+  .hiddenanswer {
+    border: 1px dashed var(--border); border-radius: var(--radius-sm);
+    background: var(--card);
+    padding: 6px 10px; margin: 0 0 12px;
+    font-size: var(--text-meta); color: var(--muted-foreground);
+  }
+  .hiddenanswer b { color: var(--destructive); font-weight: 600; }
+
+  /* ---------- 三段对比卡 ---------- */
+  .schemes { display: flex; flex-direction: column; gap: 18px; }
+  .scheme {
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--background); overflow: hidden;
+  }
+  .scheme > header {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--card);
+  }
+  .scheme h3 { margin: 0; font-size: var(--text-ui); font-weight: 600; }
+  .tag {
+    font-size: var(--text-2xs); letter-spacing: .02em; text-transform: uppercase;
+    border: 1px solid var(--border); border-radius: var(--radius-xs);
+    padding: 1px 5px; color: var(--muted-foreground); background: var(--muted);
+  }
+  .scheme > p { margin: 10px 14px 0; font-size: var(--text-meta); color: var(--muted-foreground); }
+  .scheme .stage {
+    display: flex; gap: 0; margin: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden;
+    min-height: 148px;
+  }
+
+  /* 中列（聊天） */
+  .col-chat { flex: 1 1 46%; min-width: 0; background: var(--background); padding: 12px 14px; }
+  .col-chat .mini-bubble {
+    display: inline-block; background: var(--muted); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 4px 9px; font-size: var(--text-ui); margin-bottom: 9px;
+  }
+  .col-chat .mini-prose { font-size: var(--text-ui); margin: 0 0 9px; }
+  .col-chat .mini-prose.dim { color: var(--muted-foreground); }
+  .col-chat .mini-head {
+    font-size: var(--text-meta); color: var(--muted-foreground);
+    display: flex; align-items: center; gap: 5px; margin-bottom: 8px;
+  }
+
+  /* 右列：审阅面板 / 编辑列 */
+  .col-side { flex: 0 0 54%; min-width: 0; border-left: 1px solid var(--border); background: var(--card); display: flex; flex-direction: column; }
+  .side-head {
+    display: flex; align-items: center; gap: 7px;
+    height: 36px; padding: 0 10px; border-bottom: 1px solid var(--border);
+    font-size: var(--text-ui); font-weight: 500;
+  }
+  .side-head .grow { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .icon-btn {
+    border: 0; background: transparent; cursor: pointer; color: var(--muted-foreground);
+    padding: 3px; border-radius: var(--radius-xs); line-height: 0; flex: 0 0 auto;
+  }
+  .icon-btn:hover { background: var(--accent); color: var(--foreground); }
+  .side-body { padding: 8px 10px 12px; overflow: auto; }
+  .side-note { font-size: var(--text-2xs); color: var(--muted-foreground); padding: 8px 2px 0; }
+
+  /* 审阅条目 */
+  .entry { margin-bottom: 8px; }
+  .entry-head {
+    display: flex; align-items: center; gap: 6px; font-size: var(--text-meta);
+    padding: 2px 2px; border-radius: var(--radius-xs); cursor: pointer;
+  }
+  .entry-head:hover { background: var(--accent); }
+  .entry-head .chev { transition: transform .15s; flex: 0 0 auto; }
+  .entry[data-open="true"] .entry-head .chev { transform: rotate(90deg); }
+  .entry-head .mark { font-size: var(--text-2xs); color: var(--muted-foreground); flex: 0 0 auto; }
+  .entry-head .mark.add { color: var(--success); }
+  .entry-head .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-code); }
+  .entry-head .stat { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+  .entry-head .stat .p { color: var(--success); }
+  .entry-head .stat .m { color: var(--destructive); }
+  .entry-body { display: none; }
+  .entry[data-open="true"] .entry-body { display: block; }
+
+  /* diff 渲染 */
+  .diff {
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--card); font-family: var(--font-mono); font-size: var(--text-code);
+    line-height: 1.55; overflow: auto; margin-top: 4px;
+  }
+  .diff .l { display: flex; white-space: pre; min-width: fit-content; }
+  .diff .l > .ln {
+    flex: 0 0 38px; text-align: right; padding-right: 8px;
+    color: var(--muted-foreground); opacity: .6; user-select: none;
+    border-right: 1px solid var(--border);
+  }
+  .diff .l > .tx { padding: 0 8px; }
+  .diff .l.add { background: color-mix(in oklab, var(--success) 12%, transparent); }
+  .diff .l.del { background: color-mix(in oklab, var(--destructive) 12%, transparent); }
+  .diff .l.hunk { background: var(--muted); color: var(--muted-foreground); }
+  .diff .l.hunk > .ln { border-right-color: transparent; }
+
+  .inline-chip {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: var(--text-2xs); border: 1px solid var(--border); border-radius: var(--radius-xs);
+    padding: 0 4px; color: var(--muted-foreground); background: var(--muted); margin-left: 6px;
+  }
+
+  /* 模拟中列 diff 页（A1） */
+  .col-editor { flex: 1 1 100%; display: flex; flex-direction: column; background: var(--background); }
+  .tabs { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); background: var(--card); }
+  .tab {
+    display: flex; align-items: center; gap: 6px; padding: 0 10px; height: 33px;
+    font-size: var(--text-meta); border-right: 1px solid var(--border); color: var(--muted-foreground);
+  }
+  .tab.active { background: var(--background); color: var(--foreground); box-shadow: inset 0 -1px 0 var(--background); }
+  .tab .fileicon { width: 12px; height: 12px; border: 1px solid var(--folder); border-radius: 2px; flex: 0 0 auto; }
+
+  /* A2 专用：单次改动视图 */
+  .hunkcard { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
+  .hunkcard > .hc-head {
+    display: flex; align-items: baseline; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border);
+    font-size: var(--text-meta); color: var(--muted-foreground);
+  }
+  .hunkcard > .hc-head b { color: var(--foreground); font-weight: 600; }
+
+  .legend { font-size: var(--text-meta); color: var(--muted-foreground); margin: 10px 0 0; }
+  .legend code { font-family: var(--font-mono); font-size: var(--text-code); }
+
+  .verdict {
+    margin: 16px 20px 0; padding: 12px 14px;
+    border: 1px solid var(--border); border-left: 3px solid var(--primary);
+    border-radius: var(--radius-sm); background: var(--card);
+    font-size: var(--text-meta); color: var(--muted-foreground);
+  }
+  .verdict b { color: var(--foreground); }
+  .verdict ol { margin: 8px 0 0; padding-left: 20px; }
+  .verdict li { margin-bottom: 4px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="docbar">
+    <h1>预览 — 正文不留折叠 / 工具行去后缀 / 审阅打开 diff 三方案</h1>
+    <p>
+      这是<strong>纯静态演示页</strong>，不接真实数据、不读写任何文件。用于在你拍板前确认观感和交互。
+      取色与字号照抄仓库的 design token，看到的效果就是 Electron 里的效果。
+    </p>
+    <div class="controls">
+      <div class="ctl">
+        <span>正文折叠规则</span>
+        <span class="seg" id="segFold">
+          <button data-v="old" aria-pressed="true">现状：中间正文折进去</button>
+          <button data-v="new" aria-pressed="false">改后：正文一律不折</button>
+        </span>
+      </div>
+      <div class="ctl">
+        <span>工具行后缀</span>
+        <span class="seg" id="segSuffix">
+          <button data-v="long" aria-pressed="true">现状：带命令/参数</button>
+          <button data-v="short" aria-pressed="false">改后：只留计数</button>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 第一节：聊天区 ================= -->
+  <section>
+    <h2>一、聊天区：正文的去留 + 工具行的长度</h2>
+    <p class="sub">
+      上面两个开关直接改这一段。留意两件事：<b>①</b> 「现状」下第一段正文会消失（不是藏在折叠头里，是<b>整段不见了</b>——
+      这是你第 2 条报的现象，我在分析里标的「机制一」）；<b>②</b> 「改后」下正文一律留在外面，工具行只剩一句计数。
+    </p>
+
+    <div class="chat">
+      <div class="turn">
+        <div class="bubble">帮我把 DIEAlgorithm 的 EXPECT 宏改成不走流输出</div>
+
+        <!-- 工作条（折叠头） -->
+        <div class="workrow" data-open="false" data-role="workrow">
+          <span class="chev">›</span>
+          <span class="label" data-role="headlabel">Worked for 47s · 9 steps</span>
+        </div>
+
+        <!-- 折叠区内部 -->
+        <div class="workbody" data-role="workbody" hidden>
+          <div class="toolrow" data-role="toolrow">
+            <span class="v">读取</span>
+            <span class="a" data-role="toolarg">DIEAlgorithm/test/TestHarness.h</span>
+          </div>
+          <div class="toolrow" data-role="toolrow">
+            <span class="v">搜索</span>
+            <span class="a" data-role="toolarg">EXPECT_TRUE</span>
+          </div>
+          <div class="toolrow" data-role="toolrow">
+            <span class="v">已思考</span>
+            <span class="a" data-role="toolarg">宏里不该用 &lt;&lt;，改用纯表达式断言</span>
+          </div>
+          <div class="toolrow" data-role="toolrow">
+            <span class="v">运行</span>
+            <span class="a" data-role="toolarg">cd "/e/Projects/chipTestMachine/DIEAlgorithm/.worktrees/bmo-m1" &amp;&amp; "c:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe" DIEAlgorithm.sln /p:Configuration=Debug /p:Platform=x64 /m</span>
+          </div>
+          <div class="toolrow" data-role="toolrow">
+            <span class="v">编辑</span>
+            <span class="a" data-role="toolarg">TestHarness.h</span>
+          </div>
+        </div>
+
+        <!-- 中间那段正文：现状下被折进去，改后留在外面 -->
+        <p class="prose" data-role="midprose">
+          流输出在 EXPECT 宏里不支持（TestHarness 的 EXPECT_TRUE 是宏，逗号与 <code>&lt;&lt;</code> 解析冲突）。
+          去掉 <code>&lt;&lt; r.cxUm</code> 这些后缀，改用纯表达式比较。
+        </p>
+
+        <!-- 第二段正文：一直可见 -->
+        <p class="prose">
+          已经改完 <code>TestHarness.h</code> 里的 6 处断言，并重新构建通过。下面是要点：
+        </p>
+
+        <div class="hiddenanswer" data-role="hiddennote" hidden>
+          <b>现状下这一段被折进上面的工作条</b> —— 展开也看不见它，因为它被当成了「过程」的一部分。
+        </div>
+      </div>
+    </div>
+
+    <p class="legend">
+      说明：折叠区里的「运行」行就是你说的那串 —— <span data-role="longsample" style="font-family: var(--font-mono); font-size: var(--text-code);">cd "/e/Projects/chipTestMachine/DIEAlgorithm/.worktrees/bmo-m1" &amp;&amp; "c:/Program Files/…</span>
+      ，改成只留计数后它不再出现。
+    </p>
+  </section>
+
+  <!-- ================= 第二节：三段方案对比 ================= -->
+  <section>
+    <h2>二、点文件后在哪儿看 diff —— 三种方案</h2>
+    <p class="sub">
+      三张卡是同一场景（同一次点击、同一个文件）的三种落点。你要的「<b>在审阅面板里就地展开</b>」是 A0；你选的 A1 是第二张；
+      A2 一并放着，供你确认不选它。
+    </p>
+
+    <div class="schemes">
+
+      <!-- ============ A0 ============ -->
+      <div class="scheme">
+        <header>
+          <h3>A0 · 审阅面板内就地展开</h3>
+          <span class="tag">面板内</span>
+          <span class="tag">成本低</span>
+        </header>
+        <p>点条目 → 在这条下面展开 diff。中间列不受影响、编辑器不被关掉；补上行号、着色和「打开文件」按钮。这就是你原话「点击哪个文件，就在审阅面板中展开对应的 diff」。</p>
+        <div class="stage">
+          <div class="col-chat">
+            <div class="mini-bubble">改一下 TestHarness.h 的断言</div>
+            <div class="mini-head"><span>›</span><span>Worked for 47s · 9 steps</span></div>
+            <p class="mini-prose dim">（工具行、思考都收在上面这条里）</p>
+            <p class="mini-prose">已经改完 6 处断言，并重新构建通过。</p>
+          </div>
+          <div class="col-side">
+            <div class="side-head">
+              <span class="grow">审阅</span>
+              <button class="icon-btn" title="跳转到文件" aria-label="跳转到文件">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+              </button>
+            </div>
+            <div class="side-body">
+              <div class="entry" data-open="false">
+                <div class="entry-head" data-role="entryhead">
+                  <span class="chev">›</span>
+                  <span class="mark add">A</span>
+                  <span class="name">TestHarness.h</span>
+                  <span class="stat"><span class="p">+18</span> <span class="m">−6</span></span>
+                </div>
+                <div class="entry-body" data-role="entrybody"></div>
+              </div>
+              <div class="entry" data-open="false">
+                <div class="entry-head" data-role="entryhead">
+                  <span class="chev">›</span>
+                  <span class="mark">M</span>
+                  <span class="name">DIEAlgorithm.cpp</span>
+                  <span class="stat"><span class="p">+4</span> <span class="m">−4</span></span>
+                </div>
+                <div class="entry-body" data-role="entrybody"></div>
+              </div>
+              <div class="side-note">点条目就地展开；面板不关、编辑器不丢。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ A1 ============ -->
+      <div class="scheme">
+        <header>
+          <h3>A1 · 复用现有 diff 页（你选的）</h3>
+          <span class="tag">中列</span>
+          <span class="tag">成本低</span>
+        </header>
+        <p>点条目 → 中列开一个 <code>git-diff://</code> 页签（和 Git 面板里点文件是同一页）。看的是<b>文件此刻相对 git HEAD 的全部差异</b>，包含 agent 之后的所有编辑。代价：中列被占用，聊天区让位（就是 <code>diffTabActive</code> 的现有行为）。</p>
+        <div class="stage">
+          <div class="col-editor">
+            <div class="tabs">
+              <div class="tab"><span class="fileicon"></span>main.cpp</div>
+              <div class="tab active"><span class="fileicon"></span>TestHarness.h · M</div>
+            </div>
+            <div style="padding: 10px 12px;">
+              <div class="diff" data-role="diffmain">
+                <div class="l hunk"><span class="ln"></span><span class="tx">@@ -41,7 +41,9 @@ void RunCase(const Case&amp; c) {</span></div>
+                <div class="l"><span class="ln">41</span><span class="tx">  EXPECT_EQ(c.id, expected.id);</span></div>
+                <div class="l del"><span class="ln">42</span><span class="tx">- EXPECT_TRUE(oss &lt;&lt; r.cxUm &lt;&lt; " mismatch");</span></div>
+                <div class="l add"><span class="ln">42</span><span class="tx">+ EXPECT_TRUE(r.cxUm == expected.cxUm);</span></div>
+                <div class="l del"><span class="ln">43</span><span class="tx">- EXPECT_TRUE(oss &lt;&lt; r.cyUm &lt;&lt; " mismatch");</span></div>
+                <div class="l add"><span class="ln">43</span><span class="tx">+ EXPECT_TRUE(r.cyUm == expected.cyUm);</span></div>
+                <div class="l"><span class="ln">44</span><span class="tx">  }</span></div>
+              </div>
+              <div class="side-note">这一页从磁盘现读，所以 agent 之后的编辑、你自己的手改都会算进来。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ A2 ============ -->
+      <div class="scheme">
+        <header>
+          <h3>A2 · 只看那一次改动的记录</h3>
+          <span class="tag">面板内</span>
+          <span class="tag">成本高</span>
+        </header>
+        <p>渲染工具当时报回的那一小段 patch，只反映<b>那一次</b>编辑。之后的历史一概不进。它更接近「审计记录」，但仓库目前没有任何「按 unified patch 渲染」的视图，要新写一个。</p>
+        <div class="stage">
+          <div class="col-chat" style="flex: 1 1 100%;">
+            <div class="hunkcard">
+              <div class="hc-head">
+                <b>TestHarness.h</b>
+                <span>那一次编辑 · 14:22:07</span>
+                <span class="inline-chip">1 个 hunk</span>
+                <span style="margin-left:auto;"><span style="color:var(--success)">+4</span> <span style="color:var(--destructive)">−4</span></span>
+              </div>
+              <div class="diff" style="border:0; border-radius:0; margin:0;" data-role="diffmain">
+                <div class="l hunk"><span class="ln"></span><span class="tx">@@ -41,7 +41,7 @@</span></div>
+                <div class="l"><span class="ln"></span><span class="tx">  EXPECT_EQ(c.id, expected.id);</span></div>
+                <div class="l del"><span class="ln"></span><span class="tx">- EXPECT_TRUE(oss &lt;&lt; r.cxUm &lt;&lt; " mismatch");</span></div>
+                <div class="l add"><span class="ln"></span><span class="tx">+ EXPECT_TRUE(r.cxUm == expected.cxUm);</span></div>
+                <div class="l"><span class="ln"></span><span class="tx">  }</span></div>
+              </div>
+            </div>
+            <div class="side-note">没有文件行号可跳（记录里只有 hunk 头），也没有「当前文件长什么样」。</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="verdict">
+      <b>我的建议</b>（你可以不采纳）：
+      <ol>
+        <li><b>正文规则那条优先做</b>，它是你唯一报的「内容不见了」，与另外两件互不干扰。</li>
+        <li><b>diff 落点选 A0 + A1 的组合</b>：点条目在面板里就地展开（A0，你要的即时反馈），条目右侧那个「打开文件」图标走 A1 开中列 diff 页（要全貌时用）。两者不冲突，因为它们回答的是不同问题。</li>
+        <li><b>A2 建议不做</b>：它是唯一需要新组件的方案，而它能回答的问题（那一次改了什么）在 A0 展开的 diff 里已经能看个大概。</li>
+      </ol>
+    </div>
+  </section>
+</div>
+
+<script>
+// ---------- diff 片段：A0 的条目展开内容（行号 + 着色） ----------
+const A0_DIFF = `
+<div class="l hunk"><span class="ln"></span><span class="tx">@@ -41,7 +41,9 @@ void RunCase(const Case& c) {</span></div>
+<div class="l"><span class="ln">41</span><span class="tx">  EXPECT_EQ(c.id, expected.id);</span></div>
+<div class="l del"><span class="ln">42</span><span class="tx">- EXPECT_TRUE(oss &lt;&lt; r.cxUm &lt;&lt; " mismatch");</span></div>
+<div class="l add"><span class="ln">42</span><span class="tx">+ EXPECT_TRUE(r.cxUm == expected.cxUm);</span></div>
+<div class="l del"><span class="ln">43</span><span class="tx">- EXPECT_TRUE(oss &lt;&lt; r.cyUm &lt;&lt; " mismatch");</span></div>
+<div class="l add"><span class="ln">43</span><span class="tx">+ EXPECT_TRUE(r.cyUm == expected.cyUm);</span></div>
+<div class="l"><span class="ln">44</span><span class="tx">  }</span></div>
+`;
+const A0_DIFF_2 = `
+<div class="l hunk"><span class="ln"></span><span class="tx">@@ -118,6 +118,6 @@</span></div>
+<div class="l del"><span class="ln">119</span><span class="tx">-  return oldOrder(c);</span></div>
+<div class="l add"><span class="ln">119</span><span class="tx">+  return stableOrder(c);</span></div>
+`;
+
+for (const body of document.querySelectorAll('[data-role="entrybody"]')) {
+  const diff = document.createElement('div');
+  diff.className = 'diff';
+  diff.innerHTML = body.closest('.entry').querySelector('.mark.add') ? A0_DIFF : A0_DIFF_2;
+  body.appendChild(diff);
+  const btn = document.createElement('div');
+  btn.className = 'side-note';
+  btn.innerHTML = '这一条来自那一次 Edit 的记录，行号取自 patch 的 hunk 头。';
+  body.appendChild(btn);
+}
+
+// 点条目头就地展开
+for (const head of document.querySelectorAll('[data-role="entryhead"]')) {
+  head.addEventListener('click', () => {
+    const entry = head.closest('.entry');
+    const open = entry.getAttribute('data-open') === 'true';
+    entry.setAttribute('data-open', open ? 'false' : 'true');
+  });
+}
+
+// ---------- 第一节的两个开关 ----------
+const state = { fold: 'old', suffix: 'long' };
+
+const LONG_ARGS = {
+  'DIEAlgorithm/test/TestHarness.h': 'DIEAlgorithm/test/TestHarness.h',
+  'EXPECT_TRUE': 'EXPECT_TRUE',
+  '宏里不该用 <<，改用纯表达式断言': '宏里不该用 <<，改用纯表达式断言',
+  'edit': 'TestHarness.h',
+};
+
+function shortArg(text) {
+  // 「运行」行：整串命令 → 「已运行」
+  if (text.indexOf('cd "') === 0) return 'MSBuild.exe DIEAlgorithm.sln';
+  return text;
+}
+
+function render() {
+  const workrow = document.querySelector('[data-role="workrow"]');
+  const workbody = document.querySelector('[data-role="workbody"]');
+  const midprose = document.querySelector('[data-role="midprose"]');
+  const hiddennote = document.querySelector('[data-role="hiddennote"]');
+  const headlabel = document.querySelector('[data-role="headlabel"]');
+
+  // 正文规则
+  if (state.fold === 'old') {
+    midprose.hidden = true;
+    hiddennote.hidden = false;
+  } else {
+    midprose.hidden = false;
+    hiddennote.hidden = true;
+  }
+
+  // 工具行后缀
+  for (const arg of document.querySelectorAll('[data-role="toolarg"]')) {
+    const full = arg.getAttribute('data-full') || arg.textContent;
+    arg.setAttribute('data-full', full);
+    arg.textContent = state.suffix === 'short' ? shortArg(full) : full;
+    arg.style.color = state.suffix === 'short' ? 'var(--muted-foreground)' : '';
+  }
+
+  // 折叠头的文案随开关变：长后缀版本只报计数
+  headlabel.textContent = state.suffix === 'short'
+    ? 'Worked for 47s · 9 steps'
+    : 'Worked for 47s · 9 steps';
+
+  // 折叠区本身保持可折叠
+  workbody.hidden = workrow.getAttribute('data-open') !== 'true';
+}
+
+document.querySelector('[data-role="workrow"]').addEventListener('click', (e) => {
+  const row = e.currentTarget;
+  const open = row.getAttribute('data-open') === 'true';
+  row.setAttribute('data-open', open ? 'false' : 'true');
+  document.querySelector('[data-role="workbody"]').hidden = open;
+});
+
+for (const btn of document.querySelectorAll('#segFold button')) {
+  btn.addEventListener('click', () => {
+    state.fold = btn.getAttribute('data-v');
+    for (const b of document.querySelectorAll('#segFold button')) {
+      b.setAttribute('aria-pressed', String(b === btn));
+    }
+    render();
+  });
+}
+for (const btn of document.querySelectorAll('#segSuffix button')) {
+  btn.addEventListener('click', () => {
+    state.suffix = btn.getAttribute('data-v');
+    for (const b of document.querySelectorAll('#segSuffix button')) {
+      b.setAttribute('aria-pressed', String(b === btn));
+    }
+    render();
+  });
+}
+
+render();
+</script>
+</body>
+</html>

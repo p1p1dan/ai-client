@@ -5,12 +5,15 @@ import { loadOlderHistoryPage } from '@/components/chat/historyPageRequest';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Ident } from '@/components/ui/ident';
+import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
+import { useEditorStore } from '@/stores/editor';
 import type { SessionReviewEntry } from './sessionReview';
+import { sessionReviewDiffTarget } from './sessionReviewDiffTarget';
 import { reviewPatchLines } from './sessionReviewPatch';
+import { readWorkspaceRootPath } from './useWorkspaceRootPath';
 
 interface SessionReviewPanelProps {
   sessionId: string | null;
@@ -134,7 +137,7 @@ export function SessionReviewPanel({
           </p>
         )}
         {entries.map((entry) => (
-          <ReviewEntry key={entry.id} entry={entry} defaultOpen={false} onOpenFile={onShowFiles} />
+          <ReviewEntry key={entry.id} entry={entry} defaultOpen={false} onOpenDiff={onClose} />
         ))}
         <p className="px-1 pt-3 text-2xs text-muted-foreground">
           {t(
@@ -149,11 +152,11 @@ export function SessionReviewPanel({
 function ReviewEntry({
   entry,
   defaultOpen,
-  onOpenFile,
+  onOpenDiff,
 }: {
   entry: SessionReviewEntry;
   defaultOpen: boolean;
-  onOpenFile: () => void;
+  onOpenDiff: () => void;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(defaultOpen);
@@ -166,8 +169,25 @@ function ReviewEntry({
       ''
   );
   const openFile = () => {
-    useFileOpenIntentStore.getState().requestFileOpen({ path: entry.path, source: 'tool-row' });
-    onOpenFile();
+    const workspacePath = readWorkspaceRootPath();
+    if (!workspacePath) {
+      toastManager.add({ type: 'info', title: t('Select a Workspace to browse files') });
+      return;
+    }
+    const target = sessionReviewDiffTarget(entry, workspacePath);
+    if (!target) {
+      toastManager.add({
+        type: 'error',
+        title: t('Could not open "{{path}}" — the path is outside the workspace.', {
+          path: entry.path,
+        }),
+      });
+      return;
+    }
+    useEditorStore.getState().openDiffTab(target);
+    // Explicitly dismiss even when this exact diff tab was already active:
+    // WorkspaceShell's active-path effect cannot observe that repeated click.
+    onOpenDiff();
   };
   const unavailable =
     entry.unavailable === 'too-large'

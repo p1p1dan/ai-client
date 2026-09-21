@@ -163,3 +163,10 @@ T109
 - 跑了什么：4 文件 / 22 条测试通过，三套 tsc 退出 0，改动文件 Biome 通过。
 - 证据：[执行记录](../evidence/batch-k-answer-visibility-2026-09-21/README.md) 含 12 条合成记录的 Electron 截图；不冒充真实会话。
 - 不确定的：真实会话与键盘现场验收待补；测试实例出现无登录/凭据提示后已按用户反馈关闭。
+
+T110
+- 改了什么：条目图标打开 editor store 的工作区 diff 页签，成功后关闭审阅；新增 `sessionReviewDiffTarget.ts` 适配真实路径与类型。
+- 偏离：示例需补 `staged:false`、状态转换与工作区相对路径，否则类型不通或 Git 原文件读取错误；`onShowFiles/filesOpen` 仍被顶部文件按钮消费，按条件保留。
+- 跑了什么：6 文件 / 83 条测试通过；三套类型检查结果见执行记录，改动文件 Biome 通过。
+- 证据：[执行记录](../evidence/batch-k-answer-visibility-2026-09-21/README.md)；实际 editor store 地址与交互已测，真实 GUI 截图待补。
+- 不确定的：现场验收尚未完成。中列 diff 会独占中列、聊天区让位，这是既有布局行为。

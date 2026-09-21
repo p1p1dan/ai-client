@@ -2,17 +2,24 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
+import { isDiffTabActive } from '@/stores/diffTabTarget';
+import { useEditorStore } from '@/stores/editor';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { SessionReviewPanel } from '../SessionReviewPanel';
 import type { SessionReviewEntry } from '../sessionReview';
 
+vi.mock('../useWorkspaceRootPath', () => ({ readWorkspaceRootPath: () => '/repo' }));
+
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 
-it('expands diffs, opens a real file intent, and closes without touching files', async () => {
+it('expands diffs, opens a real diff tab, and closes without touching files', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   const element = document.createElement('div');
   document.body.append(element);
   const root = createRoot(element);
+  const editorBefore = useEditorStore.getState();
+  const intentBefore = useFileOpenIntentStore.getState().intent;
+  useEditorStore.setState({ tabs: [], activeTabPath: null });
   const onClose = vi.fn();
   const onShowFiles = vi.fn();
   const entry: SessionReviewEntry = {
@@ -61,12 +68,33 @@ it('expands diffs, opens a real file intent, and closes without touching files',
     await act(async () =>
       element.querySelector<HTMLButtonElement>('button[aria-label="Open file"]')!.click()
     );
-    expect(useFileOpenIntentStore.getState().intent).toMatchObject({ path: '/repo/file-0.txt' });
+    expect(useFileOpenIntentStore.getState().intent).toBe(intentBefore);
+    const editor = useEditorStore.getState();
+    expect(editor.activeTabPath).toBe('git-diff://workdir/unstaged/file-0.txt');
+    expect(editor.tabs[0].diffTarget).toEqual({
+      kind: 'workdir',
+      path: 'file-0.txt',
+      staged: false,
+      status: 'M',
+    });
+    expect(isDiffTabActive(editor.tabs, editor.activeTabPath)).toBe(true);
+    expect(onShowFiles).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(triggers[0].getAttribute('aria-expanded')).toBe('true');
+    await act(async () =>
+      element.querySelector<HTMLButtonElement>('button[aria-label="Open file"]')!.click()
+    );
+    expect(useEditorStore.getState().tabs).toHaveLength(1);
+    expect(onClose).toHaveBeenCalledTimes(2);
+    // The toolbar's Files action is still a live, separate consumer.
+    await act(async () =>
+      element.querySelector<HTMLButtonElement>('button[aria-label="Files"]')!.click()
+    );
     expect(onShowFiles).toHaveBeenCalledOnce();
     await act(async () =>
       element.querySelector<HTMLButtonElement>('button[aria-label="Close review"]')!.click()
     );
-    expect(onClose).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledTimes(3);
     await act(async () =>
       root.render(
         createElement(SessionReviewPanel, {
@@ -82,6 +110,7 @@ it('expands diffs, opens a real file intent, and closes without touching files',
   } finally {
     await act(async () => root.unmount());
     element.remove();
+    useEditorStore.setState(editorBefore, true);
     vi.unstubAllGlobals();
   }
 });
