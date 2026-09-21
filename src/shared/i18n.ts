@@ -3024,6 +3024,11 @@ export const zhTranslations: Record<string, string> = {
   'Working {{seconds}}s': '工作中 {{seconds}} 秒',
   'Working {{minutes}}m {{seconds}}s': '工作中 {{minutes}} 分 {{seconds}} 秒',
   'Working {{minutes}}m': '工作中 {{minutes}} 分',
+  // T113's work zone row: the wall clock the turn finished at. A separate key
+  // from the duration ones above because it is a CLOCK READING, already
+  // formatted as `17:05` by `formatAbsoluteTime` — the catalog owns the word
+  // around it, not the number inside it.
+  'Completed at {{time}}': '完成于 {{time}}',
   // The head's live clauses. `tokens` stays English: it is the unit's own name
   // and the term the user asked for by name, the same treatment `Pi` and the
   // model ids get. The arrows are decoration applied at the call site, exactly

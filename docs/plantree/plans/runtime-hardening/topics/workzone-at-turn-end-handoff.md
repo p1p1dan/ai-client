@@ -146,3 +146,42 @@ T11X
 - **不确定的**：
   1. 截图里那条「单条过程段」是**思考行**，不是工具行 —— 这是该真实回合恰好的形态。它自带的 `⌄` 是思考卡自己的展开箭头（`ToolRows` 的 thought fold header），不是本任务撤掉的那层折叠头；改动前这里会是「`1 steps processed ›` 里套着 `已思考 ⌄`」两层。没有另造一个真实回合去凑「单条工具行」的形态。
   2. 该会话是**恢复的历史回合**（无回放计时），所以折叠头走的是步骤数分支。运行中的回合同样只可能出现 ≥2 步的折叠头，但这条是推理，不是这张截图直接证明的。
+
+### T113
+
+- **改了什么**：
+  - `turnProcessFold.ts`：`deriveTurnWorkGroupLabel` / `TurnWorkGroupLabel` 退役（三选一的职责没了）；新增 `deriveTurnWorkZone`（运行中 / 已结束两态，未测得的项逐项省略）与 `countTurnToolCalls`。
+  - `MessageTimeline.tsx`：`TurnProgressHead` 只剩 `{{count}} steps processed` 一种形态，`settled` / `workedMs` / `elapsedSeconds` / `tokens` / `thinkingMs` / `hasReplyContent` / `collapsible` 七个 prop 全部移除，转圈与当前动作随时钟一起搬走；新增 `TurnWorkZoneRow`（中文、`useI18n`）渲染在 `workSections.map` 之后、`RetryBanner` 之前；`workedHeadText` 与既有 `workingHeadText` 配对；`headElapsedSeconds` 更名 `liveElapsedSeconds`（它不再喂任何 head）。
+  - `chatTimelineLayout.ts`：新增 `turnWorkZoneClass()`。
+  - `i18n.ts`：新增 `'Completed at {{time}}' → '完成于 {{time}}'`，其余四个词条全部复用（`Worked for …` / `Working …` / `{{count}} tool call(s)` / `Thinking …`）。
+  - 按要求改写的五处 T12-b 旧注释：`chatTimelineLayout.ts` 的 Tier 2 头注释与 `turnHeadClass()` 注释、`turnHead.ts` 的 `deriveTurnHeadModel` 退役注释、`messageMetadata.ts` 的 `formatMessageMetadata` 退役注释、`MessageTimeline.tsx` 的两处 import 注释（`formatAbsoluteTime`、`deriveTurnStats`/`formatWorkedForRow`）。每处都写明「T12-b 当时删掉结束态的理由是什么、T113 为什么推翻、推翻的是哪一半」——`turnHeadClass()` 那处明确写了**没有**推翻的那一半（状态行仍然只在运行中出现）。
+  - `turnProcessFold.ts` 里 2026-09-18 那句「The composer row keeps its own count」按要求更正，且连同 2026-09-18「运行中的头带上时钟」的来龙去脉一起搬进退役注释，不留断线。
+- **偏离**（三处，都写理由）：
+  1. **`deriveTurnWorkGroupLabel` 是退役而不是「改成只报步骤数」**。移交单说的是「改这个函数及其调用方」。T112 之后组头只在步骤数 ≥ 2 时才渲染，所以它的三个分支里两个搬去了末尾行、第三个变成 `countProcessSteps` 直读、`null` 分支不可达 —— 留一个只会 `return steps` 的函数是留个空壳。退役注释把三个分支各自的去向逐条写了。
+  2. **运行中的末尾行带当前动作**（`✻ 工作中 17 秒 · 搜索内容`），演示页右栏只画了 `✻ 工作中 47 秒`。按 roadmap 为准：roadmap 与移交单都明写「`deriveTurnCurrentAction` 继续用、不要让它在间隙里闪断」，而组头已经不剩任何位置能放它，末尾行是唯一去处。结束态严格四项，没有加动作。
+  3. **末尾行用 `text-ui` 而不是演示页的 `--text-chat-process`（13px）**。演示页把折叠头也画成了 13px，而真实应用的折叠头是 `text-ui`（14px，2026-09-19 用户决定，理由正是「等待期间读者盯着的就是这行，13px 太小」）—— 所以演示页那是整套字号的近似，不是一个字号决定。末尾行继承的正是「等待期间被盯着的那一行」这个角色，跟它上面的两个类保持同一档；`turnWorkZoneClass()` 的注释把这个推理写在了函数上。仍然是既有 token，没有任意值。
+- **语言归属**（移交单 §5.2 要求先想清楚）：末尾行**用中文**（`useI18n`），组头保持英文。理由：决策 031 D7 的英文例外只覆盖组头，`[HEAD-EN-1]` 守卫也只钉组头；末尾行是新行，用户给的原文就是中文的「已工作 / 完成于 / 次工具调用 / 思考」，且四个词条早就有中文条目。两条守卫都还是绿的。
+- **跑了什么**：
+  - `vitest run turnProcessFold messageTimelineWiring turnProgress chatTimelineLayout fontDomainScan i18nCoverage chineseChatSurface turnHead turnTiming messageMetadata messageTimelinePendingStatic toolVocabulary --maxWorkers=1 --no-file-parallelism` → **12 个文件 304 条全通过**。
+  - **反向验证**：把 `MessageTimeline.tsx` 临时换回 T112 的版本（`f47a69b7`）再跑接线测试 → **7 条失败 / 54 通过**；换回后 61 条全通过。失败的正是改写过的那 7 条。纯函数一侧：`deriveTurnWorkZone` / `countTurnToolCalls` 在旧模块里不存在，旧实现连导入都过不去。
+  - 三套 `tsc --noEmit`（根 / runtime / agent-host）退出 0。改动 8 个文件 Biome `check` 通过（其中 3 个文件是 `--write` 格式化后再复跑测试与类型检查通过）。
+  - **本机未跑全量 Vitest / Biome / 打包，CI 是权威，本轮未触发 CI。**
+- **判据改写说明**（没有放宽，逐条）：接线测试里 6 条旧断言随被删掉的接线失效，改写如下 ——
+  - `settled={processSettled}` → `turnRunning` + `running: turnRunning`（同一个事实，取反后喂末尾行），并新增 `expectUnwired('settled={processSettled}')`；
+  - `workedMs={workedMs}` → `workedMs,`（简写属性）＋ 新增 `expectUnwired('workedMs={workedMs}')` 与 `expectUnwired('deriveTurnWorkGroupLabel(')`；
+  - `[WG-WIRE-4]` 的 `lastProcessSection === -1` / `collapsible={false}` 两条正断言改成同名负断言（那段接线被删了，不是被绕过）；
+  - `[WG-WIRE-5]` 从「头读 token 和思考时长」改写成「末尾行读本回合的时钟、调用数、思考时长」，并把 token 的两条从正断言翻成负断言（`sumTurnTokens` / `turnProgressClauses` / `tokens={` 都不许再出现）——这是把「四项封闭」钉死，比原来更紧；
+  - `[WG-WIRE-7]` 从「不要二次 gate `label.kind`」改写成「组头只有一行文案、且十个回合级输入一个都不许出现」；
+  - `[WG-WIRE-8]` 从组头改写成末尾行，保留「只在运行中出现」「动作词用同一套词表」两条，新增「转圈只出现一次且只在运行分支」和「结束态四项的顺序」。
+  - 新增 `[WG-WIRE-5b]`（末尾行只渲染一次、位置在正文之后 / RetryBanner 之前）与 `[WZ-1…6]`、`[WZ-CALLS-1/2]`。`[WZ-3]` 用 `Object.keys` 把结束态的字段集合钉成恰好五个键，多一个字段就红。
+- **证据**：
+  - [t113-workzone-running.png](../evidence/batch-k-answer-visibility-2026-09-21/t113-workzone-running.png) —— 真实回合运行中：末尾是 `◌ ✻ 工作中 5 秒`（带转圈），在最后一段正文之后；同一张图上方还能看到**上一个**回合的结束态 `✻ 已工作 28 秒 · 完成于 18:07 · 8 次工具调用 · 思考 6 秒`。
+  - [t113-workzone-settled.png](../evidence/batch-k-answer-visibility-2026-09-21/t113-workzone-settled.png) —— **同一个回合**结束后：`✻ 已工作 25 秒 · 完成于 18:08 · 8 次工具调用 · 思考 2 秒`，紧跟在最后一段正文之后。
+  - [t113-heads-report-steps-only.png](../evidence/batch-k-answer-visibility-2026-09-21/t113-heads-report-steps-only.png) —— 同一个回合的整屏（CDP 把视口拉高到 1500px 截的一张，不是拼接）：单条过程段 `已思考 片刻` 直出、折叠头 `9 steps processed ›` 只报步骤数、末尾一行四项。全屏里找不到第二种形态的头。
+  - 取证过程中 CDP 读到的原文（非设计值）：`✻ 工作中 11 秒 · 搜索内容中` → `✻ 工作中 17 秒 · 搜索内容` → `✻ 工作中 22 秒 · 读取` → `✻ 已工作 28 秒 · 完成于 18:05 · 13 次工具调用 · 思考 11 秒`。工具间隙里动作词从「搜索内容中」落到「搜索内容」（进行时 → 原形），没有闪断成空，决策 031 成立。
+- **不确定的**：
+  1. **「N 次工具调用」把失败的调用也算进去了**。`deriveTurnStats` 当年排除了被拒绝的调用，理由是它印的是「1 edit」这种「事情发生了」的断言；「8 次工具调用」只断言发出过 8 次，失败与否不影响这句话真假。而且拒绝集合 `refusedToolCallIds` 是从 `ChatBlock` 派生的，比 `TurnItem` 低一层，这里拿不到。我把这个口径写在函数注释里了，但**这是我定的，不是用户点名的**。
+  2. **折叠头的 9 和末尾行的 8 不一样**，截图里同时能看到。这是故意的：步骤数把思考也算一步，调用数只算 `run`。两个数用的是不同的词（「步骤」/「次工具调用」），但没有用户确认过这个并列读起来不别扭。
+  3. **`turnProgressClauses` / `sumTurnTokens` / `formatTurnTokenClauses` 现在没有渲染消费者了**。我按仓库既有做法保留（导出、有测试、注释写明为什么不接），没有退役 —— 因为让它们复活是一个产品决定（要不要在末尾行挂 token），不是清理。如果验收方认为应当退役，这是一处可回退的选择。
+  4. **恢复的历史回合不渲染末尾行**（没有计时就没有跨度，A07 `:2399`）。截图里第三张上方那几个老回合就是这样。改动前这些回合的最后一个折叠头会显示「已处理 N 个步骤」，现在每个组头各自报自己的步骤数，信息没丢，但「末尾行对历史回合是空的」这件事没有单独跟用户确认过。
+  5. 取证用的是 dev profile 里既有的会话（`读一下 …turnProcessFold.ts 和 MessageTimeline.tsx`，全自动档），我往里发了两个只读提问以产生真实回合。没有新建会话、没有改权限档、没有动用户的登录配置。

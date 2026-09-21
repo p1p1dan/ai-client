@@ -64,6 +64,7 @@ import {
   turnProcessToneClass,
   turnStatusToneClass,
   turnWorkGroupSummaryClass,
+  turnWorkZoneClass,
   userBubbleClass,
   userBubbleRowClass,
   userBubbleTextClass,
@@ -88,9 +89,17 @@ import {
 } from './historyError';
 import { loadOlderHistoryPage } from './historyPageRequest';
 // T12-b: `formatMessageMetadata` / `formatRelativeTimestamp` left with the meta
-// row. The strip that replaced it shows a bare wall clock (`14:32`), so the
-// relative form ("3 minutes ago") and the `model · time` composer are both
-// unused here — see `chatTimelineLayout.ts`'s `turnMetaRowClass()` note.
+// row, and they stay left: the relative form ("3 minutes ago") needs a ticking
+// clock to stay true, and the `model · time` composer duplicates the composer's
+// permanent model chip.
+//
+// T113 reverses the other half of that ruling. T12-b had moved the wall clock
+// onto a HOVER-ONLY strip, on the reasoning that a finished turn should say
+// nothing about itself (pi-app's model). The user's 2026-09-21 decision puts a
+// completion time back into the always-visible line — 「完成于 17:05」 on the
+// work zone row — because the turn-level facts it sits beside (duration, call
+// count, thinking time) were asked for by name. So `formatAbsoluteTime` now has
+// a permanent consumer here, not a hover-gated one.
 import { formatAbsoluteTime, type MessageMetadata } from './messageMetadata';
 import { nextFollowState, shouldShowJumpToBottom } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
@@ -116,20 +125,22 @@ import {
 } from './turnHead';
 import {
   countProcessSteps,
+  countTurnToolCalls,
   deriveTurnCurrentAction,
-  deriveTurnWorkGroupLabel,
+  deriveTurnWorkZone,
   splitTurnWorkGroup,
+  type TurnWorkZone,
   turnProcessGroupFolds,
   turnWorkGroupAwaitsUser,
   turnWorkGroupOpen,
 } from './turnProcessFold';
-import {
-  joinTurnProgressLine,
-  sumTurnThinkingMs,
-  sumTurnTokens,
-  type TurnTokenTotals,
-  turnProgressClauses,
-} from './turnProgress';
+// T113 drops this module's token half from the turn surface. `sumTurnTokens` /
+// `turnProgressClauses` are NOT retired — they are exported, tested and still
+// the one place the two-stage 「先状态词+时间，有内容再加 ↑↓」 rule lives — but the
+// work zone row that replaced the head carries the four figures the user named
+// and token usage is deliberately not among them. Re-wiring them here is a
+// product decision to reopen, not a gap to close.
+import { formatThinkingClause, joinTurnProgressLine, sumTurnThinkingMs } from './turnProgress';
 import {
   deriveTurnStatus,
   isFailedCardBodyDuplicate,
@@ -145,9 +156,15 @@ import {
 // anything they look up (`turnTiming.ts`'s `EDIT_TOOL_NAMES`) is not a live
 // vocabulary table and must not be "fixed" as if it were.
 //
-// 2026-09-18 adds ONE live consumer from that module, and it is deliberately
-// not `formatWorkedForRow`: the work group needs the whole turn's span, which
-// is `deriveTurnElapsedMs`, not the last message's own latency.
+// T113 brings a completed state BACK to the turn and still does not revive
+// those two, which is worth stating because reviving them is the obvious move:
+//   - `deriveTurnStats` buckets into tools / searches / edits and would print
+//     three numbers where the user asked for one 「8 次工具调用」, and it reads
+//     raw `ChatBlock`s. `turnProcessFold.ts`'s `countTurnToolCalls` answers the
+//     question actually asked, off the items this component already has.
+//   - `formatWorkedForRow` reports ONE message's latency; the row needs the
+//     whole turn's span, which is `deriveTurnElapsedMs` — the same reason
+//     2026-09-18 chose it for the head this row replaces.
 import { deriveTurnElapsedMs, type ThinkingTiming } from './turnTiming';
 import { useMessageMetadata } from './useMessageMetadata';
 import { useResolvedSessionModel } from './useResolvedSessionModel';
@@ -1412,22 +1429,37 @@ interface ChatTurnProps {
  * -stable at their source.
  */
 /**
- * The turn's progress head: one line above the reply, and behind it everything
- * the user did not ask to see.
+ * A process group's head: one line, and one fact — how many steps are behind
+ * it.
  *
- * ## Two shapes, one line of copy
+ * ## One shape now, and where the second one went
  *
- * `collapsible` decides which. With work to hide it is a `<details>` whose
- * `<summary>` carries the line and a chevron; with nothing to hide it is a
- * plain row with neither. The second shape is not cosmetic — it is the case
- * the 2026-09-18 field report was actually about: a one-word prompt that takes
- * 50 seconds produces no thinking block and no tool call, so under the old
- * "render the head only when the group has members" rule that turn showed
- * NOTHING at all for the whole wait.
+ * Until T113 this element had two. With work to hide it was a `<details>`
+ * whose `<summary>` carried the line and a chevron; with nothing to hide it
+ * was a plain chevron-less row. That second shape existed for the case the
+ * 2026-09-18 field report was actually about: a one-word prompt that takes 50
+ * seconds produces no thinking block and no tool call, so a head rendered only
+ * "when the group has members" left that turn showing NOTHING for the whole
+ * wait. `TurnWorkZoneRow` covers that now, one line lower and for every turn
+ * including a tool-free one — and T112 stopped rendering a head at all for a
+ * group of fewer than two steps, so nothing reaches this function without
+ * something to disclose. The shape with nothing to disclose has no case left.
  *
- * A head with no chevron is also the honest shape: an affordance that expands
- * to nothing is worse than no affordance, which is the same reasoning
- * `splitTurnWorkGroup` uses to refuse an empty group in the first place.
+ * What has not changed is why the copy and the affordance are one line: an
+ * affordance that expands to nothing is worse than no affordance, which is the
+ * same judgement `splitTurnWorkGroup` makes when it refuses an empty group.
+ *
+ * ## The head says nothing about the TURN any more
+ *
+ * T107 handed the LAST group's head the whole turn's duration, usage and
+ * thinking time (`workedMs={lastGroup ? workedMs : null}`), to avoid reporting
+ * one duration once per group. The cost was two different scopes wearing
+ * identical lines — 「已处理 3 个步骤」 above, 「已工作 47 秒」 below, both a
+ * chevron row — and the user's report on it was 「最后一个理应显示 N 个步骤的
+ * 地方却显示工作区，有点不协调」. T113 splits them by scope: this head is
+ * group-scoped always, and every turn-scoped figure is on the work zone row at
+ * the end of the turn. That is also why `settled` is gone from here — the
+ * spinner and the live action clause went with the clock they belonged to.
  *
  * ## Why a native `<details>` with `preventDefault`
  *
@@ -1450,48 +1482,25 @@ interface ChatTurnProps {
  */
 function TurnProgressHead({
   items,
-  settled,
   forcedOpen,
-  workedMs,
-  elapsedSeconds,
-  tokens,
-  thinkingMs,
-  hasReplyContent,
-  collapsible,
   userOpen,
   onUserOpenChange,
   children,
 }: {
   /** The grouped PROCESS items only — the step count is about work, not paragraphs. */
   items: readonly TurnItem[];
-  settled: boolean;
   /** An unanswered permission/question is inside: the group may not close. */
   forcedOpen: boolean;
-  /** Whole-turn span, or `null` when the turn replayed no timing events. */
-  workedMs: number | null;
-  /** Live seconds while the turn runs; `null` when it is running with no clock. */
-  elapsedSeconds: number | null;
-  /** Tokens billed so far this turn, or `null` when nothing has settled. */
-  tokens: TurnTokenTotals | null;
-  /** Thinking time so far, or `null` when the provider reports no reasoning. */
-  thinkingMs: number | null;
-  /**
-   * The turn has produced at least one block. Stage boundary for the live
-   * clauses — see `turnProgressClauses` for why the rule is this fact and not
-   * "are there any tokens yet".
-   */
-  hasReplyContent: boolean;
-  /** There is work behind the head, so it gets a chevron and a panel. */
-  collapsible: boolean;
   /**
    * The user's own click, held by `ChatTurn` rather than here.
    *
-   * Hoisted on purpose: this component swaps between `<details>` and a plain
-   * row as `collapsible` flips mid-turn (the first tool call of a turn does
-   * exactly that), and a `useState` inside would be discarded by that swap —
-   * silently re-collapsing a group the reader had just opened. Rule 2 of
-   * `turnWorkGroupOpen` ("a choice is permanent for this turn") can only hold
-   * if the choice outlives the element that took it.
+   * Hoisted on purpose, and T112 renewed the reason rather than removing it:
+   * the head used to swap between `<details>` and a plain row as `collapsible`
+   * flipped; it now appears and disappears instead, as a one-step group grows
+   * its second step. A `useState` inside would be discarded by that just as
+   * surely — silently re-collapsing a group the reader had just opened. Rule 2
+   * of `turnWorkGroupOpen` ("a choice is permanent for this turn") can only
+   * hold if the choice outlives the element that took it.
    */
   userOpen: boolean | null;
   onUserOpenChange: (open: boolean) => void;
@@ -1500,7 +1509,10 @@ function TurnProgressHead({
   /**
    * ⚠️ This ONE line renders in English, in a Simplified-Chinese UI (user
    * decision 2026-09-19). Everything else on the chat surface stays Chinese —
-   * do not copy this binding anywhere else.
+   * do not copy this binding anywhere else. `TurnWorkZoneRow` below is the
+   * nearest neighbour and it is deliberately NOT this: it is a new line, its
+   * words are the user's own 「已工作 / 完成于 / 次工具调用 / 思考」, and decision
+   * 031 D7 scopes the English exception to this head.
    *
    * ## Why the identifier is still `t`
    *
@@ -1524,95 +1536,9 @@ function TurnProgressHead({
   const t = englishTranslate;
   const open = turnWorkGroupOpen({ forcedOpen, userOpen });
   const steps = countProcessSteps(items);
-  const label = deriveTurnWorkGroupLabel({
-    settled,
-    workedMs,
-    steps,
-    elapsedSeconds,
-  });
-  if (!label) {
-    // Nothing honest to say about this turn (restored history with no timing
-    // and no steps). `deriveTurnWorkGroupLabel` only returns `null` when the
-    // turn folded no work at all, so `collapsible` is false here — the branch
-    // is kept anyway so a head that declines to render can never take the
-    // children down with it.
-    return collapsible ? <div className={turnBodyClass()}>{children}</div> : null;
-  }
-  // Literal keys rather than one interpolated `{{duration}}`: the unit words
-  // are the catalog's ("1m 6s" vs 「1 分 6 秒」), and a literal single-quoted
-  // key is also the only form `i18nCoverage.test.ts` can scan — a key assembled
-  // from the label's discriminant would ship untranslated.
-  const headText =
-    label.kind === 'working'
-      ? workingHeadText(t, label.elapsed)
-      : label.kind === 'steps'
-        ? t('{{count}} steps processed', { count: label.steps })
-        : label.minutes === 0
-          ? t('Worked for {{seconds}}s', { seconds: label.seconds })
-          : label.seconds === 0
-            ? t('Worked for {{minutes}}m', { minutes: label.minutes })
-            : t('Worked for {{minutes}}m {{seconds}}s', {
-                minutes: label.minutes,
-                seconds: label.seconds,
-              });
-  // T105 (D6): the running head now carries WHAT is running, not just how long
-  // it has been running — with the work group always collapsed this clause is
-  // the only progress evidence the turn has on screen, and a bare ticking clock
-  // reads as a hang. `deriveTurnCurrentAction` never returns null while any
-  // call exists (it falls back to the last finished one), so the clause does
-  // not blink off in the gaps between calls.
-  const currentAction = settled ? null : deriveTurnCurrentAction(items);
-  // T108 keeps progress words through tool gaps, without rendering arguments.
-  const actionClause = currentAction ? t(currentAction.verb) : null;
-  // The `N steps` clause closes the SETTLED line only, and only when the
-  // duration is the thing being reported: `label.kind === 'steps'` already
-  // prints the count as the head itself, and repeating it would read as two
-  // different measurements of the same turn.
-  //
-  // T112 retires the singular key with the case that used it: a head exists
-  // only for a group that folds (two steps or more) or for a turn with no
-  // process at all (zero), so `{{count}} step` had no reachable caller left.
-  const stepsClause =
-    settled && label.kind === 'worked' && steps > 0 ? t('{{count}} steps', { count: steps }) : null;
-  // 2026-09-18 (third pass): a settled turn KEEPS its ↑↓ clause instead of
-  // dropping straight to bare duration. The earlier rule here was "the live
-  // clauses ride the running head only", on the reasoning that a settled
-  // turn's numbers answer "is it still going", which a finished turn no
-  // longer asks. That reasoning missed a real case: `usage.updated` lands at
-  // `turn_end`, so a turn with exactly one model call (no tool use) settles
-  // in the SAME tick that first makes any usage available at all — the old
-  // `label.kind === 'working'` guard threw that number away before the head
-  // ever had a chance to show it, so only multi-step, tool-calling turns ever
-  // displayed a token count. The two-stage rule this app actually asked for —
-  // 「没收到回复时只显示状态词+运行时间，收到内容后再持续更新 ↑↓ token，思考
-  // 量」 — has its second half apply to a settled turn too: content has
-  // plainly been received by the time the turn ends.
-  //
-  // Which clauses appear, and when, is `turnProgressClauses`' two-stage rule —
-  // not a `label.kind` check here — so the boundary between 「只有状态词和时间」
-  // and 「加上 ↑↓ token」 stays one truth-tabled function for every kind of head,
-  // running or settled, rather than a JSX condition duplicating part of it.
-  const line = joinTurnProgressLine(headText, [
-    actionClause,
-    stepsClause,
-    ...turnProgressClauses({ hasReplyContent, tokens, thinkingMs }, t),
-  ]);
-
-  // A turn can stay silent for a minute; the spinner beside the ticking clock
-  // is what says it is alive rather than hung. Same 3.5 size as every other
-  // running indicator in the chat surface.
-  const spinner = settled ? null : <Spinner className="size-3.5 shrink-0" />;
-
-  if (!collapsible) {
-    return (
-      <div className={turnHeadClass()}>
-        {spinner}
-        <span className="min-w-0 truncate" title={line}>
-          {line}
-        </span>
-      </div>
-    );
-  }
+  // One literal key, not a count-picked pair: T112 retired the singular with
+  // the case that reached it, since a head exists only for two steps or more.
+  const line = t('{{count}} steps processed', { count: steps });
 
   return (
     <details className={turnBodyClass()} open={open}>
@@ -1629,9 +1555,9 @@ function TurnProgressHead({
           onUserOpenChange(!open);
         }}
       >
-        {spinner}
-        {/* `title` for the same reason the plain row above has one: the running
-            line carries up to four clauses and truncates on a narrow column. */}
+        {/* `title` kept from the four-clause era: the line is short now, but the
+            column is still narrow enough to truncate a large step count in a
+            translated string. */}
         <span className="min-w-0 truncate underline-offset-2 hover:underline" title={line}>
           {line}
         </span>
@@ -1646,13 +1572,96 @@ function TurnProgressHead({
 }
 
 /**
+ * The turn's WORK ZONE row: one line pinned after the turn's last paragraph,
+ * carrying everything that is true of the TURN rather than of one process
+ * group (T113, user decision 2026-09-21).
+ *
+ * Two states, and they are a relay, never both:
+ *
+ *  - **running** — a spinner and 「✻ 工作中 47 秒」, closed by what the turn is
+ *    doing right now. That clause is `deriveTurnCurrentAction`, which falls
+ *    back to the last finished call rather than returning `null` between two
+ *    calls (decision 031); without it the line blinks off and on several times
+ *    a second while the seconds keep counting, which reads as a hang.
+ *  - **settled** — 「✻ 已工作 54 秒 · 完成于 17:05 · 8 次工具调用 · 思考 12 秒」.
+ *    Those four figures are the user's own list and the list is CLOSED: token
+ *    usage was considered at the same time and deliberately left off. Each one
+ *    is dropped individually when it was never measured, never printed as a
+ *    zero (A07 `:2399`).
+ *
+ * This row is Chinese, unlike the group head above it. The head's English is a
+ * narrowly scoped exception (decision 031 D7, guarded by `[HEAD-EN-1]`); this
+ * is a new line whose wording the user gave in Chinese, and every word it needs
+ * already has a catalog entry.
+ *
+ * It does not decide whether it renders: `deriveTurnWorkZone` returns `null`
+ * for a settled turn that replayed no timing, and the caller drops the row.
+ */
+function TurnWorkZoneRow({
+  items,
+  zone,
+}: {
+  /** The whole turn's items — the running clause reads the newest call out of them. */
+  items: readonly TurnItem[];
+  zone: TurnWorkZone;
+}) {
+  const { t } = useI18n();
+
+  if (zone.kind === 'working') {
+    const action = deriveTurnCurrentAction(items);
+    // T108 keeps the progress word and drops the argument, here as on the row
+    // the same verb table feeds.
+    const line = joinTurnProgressLine(`✻ ${workingHeadText(t, zone.elapsed)}`, [
+      action ? t(action.verb) : null,
+    ]);
+    return (
+      <div className={turnWorkZoneClass()}>
+        {/* A turn can stay silent for a minute; the spinner beside the ticking
+            clock is what says it is alive rather than hung. Same 3.5 size as
+            every other running indicator in the chat surface. */}
+        <Spinner className="size-3.5 shrink-0" />
+        <span className="min-w-0 truncate" title={line}>
+          {line}
+        </span>
+      </div>
+    );
+  }
+
+  const line = joinTurnProgressLine(`✻ ${workedHeadText(t, zone.worked)}`, [
+    zone.completedAtMs === null
+      ? null
+      : t('Completed at {{time}}', { time: formatAbsoluteTime(zone.completedAtMs) }),
+    zone.toolCalls === null
+      ? null
+      : t(zone.toolCalls === 1 ? '{{count}} tool call' : '{{count}} tool calls', {
+          count: zone.toolCalls,
+        }),
+    // Shared with the head this row replaced, so a minute is written the same
+    // way in both places and the two cannot word 「思考」 differently.
+    formatThinkingClause(zone.thinkingMs, t),
+  ]);
+  return (
+    <div className={turnWorkZoneClass()}>
+      <span className="min-w-0 truncate" title={line}>
+        {line}
+      </span>
+    </div>
+  );
+}
+
+/**
  * 「工作中」 / 「工作中 47 秒」 / 「工作中 1 分 6 秒」.
  *
  * A function rather than a fourth nested ternary at the call site, and its four
- * keys are literals for the reason stated there. The bare form is for a turn
- * running with no clock of its own — a session that was already in flight when
- * this window opened replays no `message.started`, and 「工作中 0 秒」 would be
- * a number nobody measured.
+ * keys are literals so `i18nCoverage.test.ts` can see them. The bare form is
+ * for a turn running with no clock of its own — a session that was already in
+ * flight when this window opened replays no `message.started`, and 「工作中 0
+ * 秒」 would be a number nobody measured.
+ *
+ * T113 moved its caller from the group head to the work zone row, which is why
+ * `t` is a parameter rather than this module's `englishTranslate`: the row
+ * hands it the localized translator and the same four keys render 「工作中 47
+ * 秒」.
  */
 function workingHeadText(
   t: (key: string, params?: Record<string, string | number>) => string,
@@ -1664,6 +1673,27 @@ function workingHeadText(
   return t('Working {{minutes}}m {{seconds}}s', {
     minutes: elapsed.minutes,
     seconds: elapsed.seconds,
+  });
+}
+
+/**
+ * 「已工作 54 秒」 / 「已工作 1 分 6 秒」 — the settled twin of the above.
+ *
+ * Three literal keys and not one `{{duration}}` slot, for the reason the whole
+ * turn-timing vocabulary carries: English writes "1m 6s" and Chinese writes
+ * 「1 分 6 秒」, so the unit words belong to the CATALOG. No bare form here:
+ * `deriveTurnWorkZone` only produces a settled row when a span was measured,
+ * so there is no "settled with no clock" case for this to answer.
+ */
+function workedHeadText(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  worked: { minutes: number; seconds: number }
+): string {
+  if (worked.minutes === 0) return t('Worked for {{seconds}}s', { seconds: worked.seconds });
+  if (worked.seconds === 0) return t('Worked for {{minutes}}m', { minutes: worked.minutes });
+  return t('Worked for {{minutes}}m {{seconds}}s', {
+    minutes: worked.minutes,
+    seconds: worked.seconds,
   });
 }
 
@@ -1998,9 +2028,6 @@ const ChatTurn = memo(function ChatTurn({
     !turnActive && !(isLastTurn && inFlightSession && !statusOwnedByPendingHead);
   // T107 replaces the four buckets with ordered, independently folded sections.
   const workSections = useMemo(() => splitTurnWorkGroup(segments), [segments]);
-  const lastProcessSection = workSections.findLastIndex(
-    (section) => section.kind === 'processGroup'
-  );
   // The turn's clock, in ONE derivation for both of the head's states. Running
   // it counts to `nowMs`; finished it counts to the turn's last completion (or,
   // for a stopped/failed turn, to the last stamp on record) — but from the SAME
@@ -2023,15 +2050,14 @@ const ChatTurn = memo(function ChatTurn({
   // is several messages, and reporting the final one's latency told a
   // two-minute turn it took four seconds.
   const workedMs = turnRunning ? null : turnElapsedMs;
-  // The head's live numbers. Both are per-TURN by construction: the usage
-  // registry attributes each `usage.updated` to the assistant message that was
-  // open at the time, and the thinking registry is keyed by block id — so
-  // reading this turn's own messages is what scopes them, with no snapshot to
-  // arm and no counter to reset between sends.
-  const turnTokens = useMemo(
-    () => sumTurnTokens(bodyMetadata.map((entry) => entry?.usage)),
-    [bodyMetadata]
-  );
+  // The row's thinking total, per-TURN by construction: the thinking registry
+  // is keyed by block id, so reading this turn's own messages is what scopes
+  // it, with no snapshot to arm and no counter to reset between sends.
+  //
+  // T113 removed `turnTokens` (`sumTurnTokens` over the same messages) from
+  // beside it. The token totals were the head's; the work zone row that
+  // replaced the head carries the four figures the user named, and usage is
+  // deliberately not one of them — see the `turnProgress` import note.
   const thinkingSpans = useMemo(
     () =>
       turn.body.flatMap((message) =>
@@ -2046,13 +2072,32 @@ const ChatTurn = memo(function ChatTurn({
   // the tick would only add a comparison.
   const turnThinkingMs = sumTurnThinkingMs(thinkingSpans, { nowMs, live: !processSettled });
   // `turnElapsedMs === null` is what says no clock exists — a session that was
-  // already running when this window opened replays no origin, and a head must
-  // not report that as 「Working 0s」. Gated on `turnRunning` rather than
-  // `turnActive` so it matches the branch `deriveTurnWorkGroupLabel` takes on
-  // the very same flag: the two used to disagree in the window between the two,
-  // which left the head saying a bare 「Working」 while a clock was available.
-  const headElapsedSeconds =
+  // already running when this window opened replays no origin, and the row must
+  // not report that as 「工作中 0 秒」. Gated on `turnRunning` rather than
+  // `turnActive` so it matches the branch `deriveTurnWorkZone` takes on the very
+  // same flag: the two used to disagree in the window between them, which left
+  // the line saying a bare 「工作中」 while a clock was available.
+  //
+  // Renamed from `headElapsedSeconds` by T113: it no longer feeds a head.
+  const liveElapsedSeconds =
     turnRunning && turnElapsedMs !== null ? Math.floor(turnElapsedMs / 1000) : null;
+
+  // The turn's own line, pinned after its last paragraph. `running` is
+  // `turnRunning` and nothing else: `processSettled` already folds in
+  // `statusOwnedByPendingHead`, which is what makes this row and
+  // `PendingTurnHead` a relay instead of two rows counting seconds at once.
+  // `null` means the turn has nothing measured to report and no row renders —
+  // never a fabricated zero.
+  const workZone = deriveTurnWorkZone({
+    running: turnRunning,
+    elapsedSeconds: liveElapsedSeconds,
+    workedMs,
+    // The LAST assistant message's stamp, for the same reason `metadata` is
+    // that message's: its completion is what ends the turn.
+    completedAtMs: metadata?.completedAt ?? null,
+    toolCalls: countTurnToolCalls(items),
+    thinkingMs: turnThinkingMs,
+  });
 
   const renderSegment = (segment: TurnSegment<TurnItem>) => {
     // Keyed off the segment's FIRST item, not its index: an index key would
@@ -2125,26 +2170,13 @@ const ChatTurn = memo(function ChatTurn({
       {turn.user && <UserBubble message={turn.user} />}
       <div className={turnBodyClass()}>
         {/* T107 extends FB4 to every answer: only process segments enter a
-            disclosure. A plain progress row still covers a tool-free wait;
-            it has no empty group or chevron (2026-09-18 field regression). */}
-        {lastProcessSection === -1 && (
-          <TurnProgressHead
-            items={[]}
-            settled={processSettled}
-            forcedOpen={false}
-            workedMs={workedMs}
-            elapsedSeconds={headElapsedSeconds}
-            tokens={turnTokens}
-            thinkingMs={turnThinkingMs}
-            hasReplyContent={turnHasBlocks}
-            collapsible={false}
-            userOpen={null}
-            onUserOpenChange={() => {}}
-          >
-            {null}
-          </TurnProgressHead>
-        )}
-        {workSections.map((section, index) => {
+            disclosure. The head that used to render here for a turn with NO
+            process at all is gone (T113) — it existed so a tool-free 50-second
+            wait showed something, and the work zone row below now covers that
+            turn along with every other one, from the same clock. Keeping both
+            would have put two progress lines on a turn whose whole complaint
+            was that it had none. */}
+        {workSections.map((section) => {
           if (section.kind !== 'processGroup') return renderSegment(section.segment);
           // First-item identity survives appended tools and later answers. Each
           // group remembers its own click, even while authorization pins it open.
@@ -2160,21 +2192,16 @@ const ChatTurn = memo(function ChatTurn({
             return <Fragment key={groupKey}>{section.segments.map(renderSegment)}</Fragment>;
           }
           const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);
-          const lastGroup = index === lastProcessSection;
+          // T113: EVERY head reports its own step count and nothing else. The
+          // `lastGroup ? workedMs : null` family that used to sit here made the
+          // final head speak for the whole turn while its neighbours spoke for
+          // their own group — one line, two scopes. Those figures are on the
+          // work zone row below now.
           return (
             <TurnProgressHead
               key={groupKey}
               items={groupedProcessItems}
-              settled={processSettled || !lastGroup}
               forcedOpen={groupForcedOpen}
-              // Earlier groups report their own step counts, not duplicated
-              // whole-turn duration or usage. Only the last head owns totals.
-              workedMs={lastGroup ? workedMs : null}
-              elapsedSeconds={lastGroup ? headElapsedSeconds : null}
-              tokens={lastGroup ? turnTokens : null}
-              thinkingMs={lastGroup ? turnThinkingMs : null}
-              hasReplyContent={turnHasBlocks}
-              collapsible
               userOpen={workGroupUserOpen[groupKey] ?? null}
               onUserOpenChange={(open) =>
                 setWorkGroupUserOpen((previous) => ({ ...previous, [groupKey]: open }))
@@ -2184,6 +2211,11 @@ const ChatTurn = memo(function ChatTurn({
             </TurnProgressHead>
           );
         })}
+        {/* T113: after the last paragraph, before the chrome that talks about
+            the session rather than the turn. This is the 「工作区固定在末尾」 the
+            user asked for — the duration stops moving from group to group as a
+            turn grows. */}
+        {workZone && <TurnWorkZoneRow items={items} zone={workZone} />}
         {retryBanner && <RetryBanner view={retryBanner} sessionId={sessionId} />}
         {/* T12-b: the running status, and ONLY while it is running. FB6's
             position is kept — under the output it describes, not above it —

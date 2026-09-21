@@ -531,7 +531,15 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(turn).toContain(
       'const processSettled = !turnActive && !(isLastTurn && inFlightSession && !statusOwnedByPendingHead);'
     );
-    expectCalled('settled={processSettled}');
+    // T113: this fact no longer reaches a head as `settled` — the head has no
+    // settled state left. It reaches the turn's own row through `turnRunning`,
+    // which is the same fact negated, and that is exactly what keeps the row
+    // and `PendingTurnHead` a RELAY: the handshake window above is folded into
+    // `processSettled`, so a turn that is not running cannot produce a ticking
+    // shape (`deriveTurnWorkZone`, `[WZ-6]`).
+    expectWired('const turnRunning = !processSettled;');
+    expectCalled('running: turnRunning');
+    expectUnwired('settled={processSettled}');
     // The per-segment fold this replaced. Its branch condition must not come
     // back: with one group per turn there is nothing left for a segment to
     // decide about its own visibility.
@@ -561,12 +569,17 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('deriveTurnElapsedMs(');
     expect(turn).toContain('startedAtMs: turnStartedAtMs');
     expect(turn).toContain('running: turnRunning');
-    expectCalled('workedMs={workedMs}');
+    // T113 changed only WHO reads the span: it reaches `deriveTurnWorkZone` as
+    // a shorthand property now, not a group head's prop. The rule it is under
+    // is unchanged — one whole-turn span, from the send.
+    expect(turn).toContain('workedMs,');
+    expectUnwired('workedMs={workedMs}');
     expectUnwired('formatWorkedForRow(');
     // The fallback is chosen inside the pure derivation, so the component must
     // not second-guess it with a `?? 0` on the way in.
     expectUnwired('workedMs={workedMs ?? 0}');
-    expectCalled('deriveTurnWorkGroupLabel(');
+    expectCalled('deriveTurnWorkZone(');
+    expectUnwired('deriveTurnWorkGroupLabel(');
   });
 
   /**
@@ -1203,13 +1216,19 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // old no-empty-disclosure check AND extend FB4 from the last answer to all.
   it('[WG-WIRE-4] every answer renders outside its independently folded process group', () => {
     const body = nodeSource(turnBodyNode());
-    expect(body).toContain('workSections.map((section, index) =>');
+    expect(body).toContain('workSections.map((section) =>');
     expect(body).toContain(
       "if (section.kind !== 'processGroup') return renderSegment(section.segment);"
     );
     expect(body).toContain('{section.segments.map(renderSegment)}');
-    expect(body).toContain('lastProcessSection === -1');
-    expect(body).toContain('collapsible={false}');
+    // T113 removed the `lastProcessSection === -1` head, which existed so a
+    // turn with NO process at all still showed something for a 50-second wait.
+    // `TurnWorkZoneRow` covers that turn along with every other one, from the
+    // same clock — keeping both would put two progress lines on the turn whose
+    // whole complaint was that it had none. `index` went with it: nothing in
+    // this map cares which group is last any more.
+    expect(body).not.toContain('lastProcessSection');
+    expect(body).not.toContain('collapsible=');
     expect(body).not.toContain('workGroup.finalAnswer');
     const groupedHead = body.slice(
       body.indexOf('key={groupKey}'),
@@ -1249,43 +1268,65 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * The head's live numbers, and the one rule that governs all of them: a
+   * The work zone row's numbers, and the one rule that governs all of them: a
    * figure nobody measured is omitted, never printed as zero.
    *
-   * Each is wired from a source that is already scoped to THIS turn — the usage
-   * registry attributes `usage.updated` to the assistant message that was open
-   * at the time, and the thinking registry is keyed by block id — so there is
-   * no per-turn snapshot to arm and nothing to reset between sends. Wiring one
-   * of them to a session-scoped source instead (`sessionRuntimeFacts`'s `usage`
-   * is the tempting one; it holds the LAST settled payload for the session)
-   * would paint the previous turn's tokens onto the turn now running.
+   * REWRITTEN 2026-09-21 (T113). This was `[WG-WIRE-5] the head reads live
+   * tokens and thinking time` — the head does not read any of them now, and
+   * two of the four it used to read are not on screen at all. What survives
+   * unchanged is WHY each source is the one picked: every figure comes from
+   * something already scoped to THIS turn (the usage registry attributes
+   * `usage.updated` to the assistant message open at the time, the thinking
+   * registry is keyed by block id, the call count is read off this turn's own
+   * items), so there is no per-turn snapshot to arm and nothing to reset
+   * between sends. Wiring any of them to a session-scoped source instead
+   * (`sessionRuntimeFacts`'s `usage` is the tempting one; it holds the LAST
+   * settled payload for the session) would paint the previous turn's numbers
+   * onto the turn now running.
    */
-  it('[WG-WIRE-5] the head reads live tokens and thinking time, scoped to this turn', () => {
-    expectCalled('sumTurnTokens(bodyMetadata.map((entry) => entry?.usage))');
+  it('[WG-WIRE-5] the work zone row reads this turn own clock, calls and thinking time', () => {
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
     expectCalled('sumTurnThinkingMs(thinkingSpans, { nowMs, live: !processSettled })');
-    expectCalled('tokens={lastGroup ? turnTokens : null}');
-    expectCalled('thinkingMs={lastGroup ? turnThinkingMs : null}');
-    // The two-stage rule (user decision 2026-09-18): nothing but the status
-    // word and the clock until content has come back. The gate is the same
-    // fact `deriveTurnStatus` switches its own wording on, read from the same
-    // variable, so the two lines cannot disagree about when the wait ended —
-    // and the rule itself lives in `turnProgressClauses`, not in the JSX.
-    expectCalled('hasReplyContent={turnHasBlocks}');
-    expectCalled('hasBlocks: turnHasBlocks');
-    expectCalled('turnProgressClauses({ hasReplyContent, tokens, thinkingMs }, t)');
-    // 2026-09-19: the head's seconds come from the TURN clock, not from the
-    // composer's per-phase ticker. `turnElapsedMs === null` is what says no
-    // clock exists (a session already running when this window opened replays
-    // no origin); the old `?? 0` fallback the previous wiring leaned on is what
-    // made a turn with no measurement print 「工作中 0 秒」.
-    expect(nodeSource(topLevelFunction('ChatTurn'))).toContain(
-      'const headElapsedSeconds = turnRunning && turnElapsedMs !== null ? Math.floor(turnElapsedMs / 1000) : null;'
+    expectCalled('countTurnToolCalls(items)');
+    expect(turn).toContain('completedAtMs: metadata?.completedAt ?? null');
+    expect(turn).toContain('thinkingMs: turnThinkingMs');
+    // Token usage left the turn surface with the head. It is a CLOSED list of
+    // four figures (user decision 2026-09-21), so this negative is the list
+    // being closed — not an accident of refactoring.
+    expectUnwired('sumTurnTokens(');
+    expectUnwired('turnProgressClauses(');
+    expectUnwired('tokens={');
+    // 2026-09-19, unchanged by T113 except for the name: the seconds come from
+    // the TURN clock, not from the composer's per-phase ticker.
+    // `turnElapsedMs === null` is what says no clock exists (a session already
+    // running when this window opened replays no origin); the old `?? 0`
+    // fallback is what made a turn with no measurement print 「工作中 0 秒」.
+    expect(turn).toContain(
+      'const liveElapsedSeconds = turnRunning && turnElapsedMs !== null ? Math.floor(turnElapsedMs / 1000) : null;'
     );
-    expectCalled('elapsedSeconds={headElapsedSeconds}');
+    expectCalled('elapsedSeconds: liveElapsedSeconds');
     expectUnwired('elapsedSeconds={elapsedSeconds}');
+    expectUnwired('headElapsedSeconds');
     // The session-scoped store is not a per-turn source. Named so the next
     // reader does not "simplify" the wiring into it.
     expect(SYNTAX).not.toContain('useSessionRuntimeFactsStore');
+  });
+
+  /**
+   * The row exists, once, and it is pinned after the turn's last paragraph.
+   *
+   * Position is the task: the defect T113 fixed was a turn-level figure riding
+   * whichever process group happened to be last, so it moved as the turn grew.
+   * `[FB6-1]` already pins the trailing chrome (status, then the hover strip);
+   * this pins the row between the content and that chrome, and that there is
+   * exactly one of it.
+   */
+  it('[WG-WIRE-5b] the work zone row renders once, after the sections', () => {
+    const body = nodeSource(turnBodyNode());
+    expectCalled('zone={workZone}');
+    expect(countIn(body, '<TurnWorkZoneRow')).toBe(1);
+    expect(body.indexOf('<TurnWorkZoneRow')).toBeGreaterThan(body.indexOf('workSections.map'));
+    expect(body.indexOf('<TurnWorkZoneRow')).toBeLessThan(body.indexOf('<RetryBanner'));
   });
 
   /**
@@ -1309,60 +1350,84 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * 2026-09-18 (third pass). The line used to be
-   * `label.kind === 'working' ? joinTurnProgressLine(…) : headText`, which threw
-   * a settled turn's ↑↓ tokens away even when they were sitting right there in
-   * `tokens` — the common case for a single-call turn, since `usage.updated`
-   * lands at `turn_end` and settles the turn in the very same tick. Fixed by
-   * deleting the second gate: `label.kind` still picks the head's WORDING
-   * (`headText`, just above), but whether the live clauses attach is
-   * `turnProgressClauses`' call alone, via its own `hasReplyContent` gate.
+   * The head says one thing.
+   *
+   * REWRITTEN 2026-09-21 (T113). This was `[WG-WIRE-7] the settled head keeps
+   * its live clauses instead of re-gating on label.kind`, a guard against one
+   * `label.kind` test being duplicated into a second gate that threw a settled
+   * turn's ↑↓ tokens away. There is no `label` and there are no clauses now —
+   * the head reports its own step count and nothing else — so the guard is
+   * restated as the shape that makes the old defect unreachable: one line of
+   * copy, built from one catalog key, with no turn-level input to re-gate.
    */
-  it('[WG-WIRE-7] the settled head keeps its live clauses instead of re-gating on label.kind', () => {
+  it('[WG-WIRE-7] the group head carries one line of copy and no turn-level figures', () => {
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
-    expect(
-      countIn(head, "label.kind === 'working'"),
-      'label.kind must gate the head TEXT only (headText) — a second occurrence ' +
-        'means something is re-gating whether the live clauses attach, which is ' +
-        "turnProgressClauses' job alone"
-    ).toBe(1);
-    expectCalled('joinTurnProgressLine(');
+    expect(head).toContain("const line = t('{{count}} steps processed', { count: steps });");
+    // The count is computed ONCE, from the same function the fold threshold
+    // uses, so a head can never disagree with the group it heads.
+    expect(head).toContain('const steps = countProcessSteps(items);');
+    expect(countIn(head, 'label')).toBe(0);
+    // Every turn-level input is gone from this element. Each of these coming
+    // back is the exact regression T113 removed: a group-scoped line carrying
+    // a turn-scoped figure.
+    for (const gone of [
+      'workedMs',
+      'elapsedSeconds',
+      'tokens',
+      'thinkingMs',
+      'settled',
+      'hasReplyContent',
+      'collapsible',
+      'turnProgressClauses',
+      'deriveTurnCurrentAction',
+      'Spinner',
+    ]) {
+      expect(head, `the group head must not carry ${gone}`).not.toContain(gone);
+    }
   });
 
   /**
-   * T105 (D6) — the head's live clause, and the three things about it that are
-   * easy to get wrong without noticing:
+   * T105 (D6) — the live clause, and the three things about it that are easy
+   * to get wrong without noticing. T113 moved it from the head to the work
+   * zone row; all three still hold, against the row:
    *
-   *  1. it must be GATED on `settled`, or a finished turn keeps advertising
+   *  1. it is GATED on the turn running, or a finished turn keeps advertising
    *     what it was doing an hour ago;
-   *  2. it must be the FIRST clause — 「Working 12s · Reading ·
-   *     ↑12.0k tokens」 — so the head reads as progress before it reads as a
-   *     statistic;
-   *  3. the settled `N steps` clause must not print for the `steps` label
-   *     itself, which already IS the count ("9 steps processed · 9 steps").
+   *  2. it is the LAST clause of a two-clause line — 「✻ 工作中 47 秒 · 读取中」
+   *     — so the line reads as a clock first and a narration second;
+   *  3. the settled line is the user's four figures in the user's order, with
+   *     no fifth.
    *
-   * The ordering is asserted by position in the joined line rather than by
-   * three separate `expectCalled`s, because "all three appear" is exactly the
-   * claim that would stay green if the current action were appended last.
+   * Ordering is asserted by position in the joined line rather than by three
+   * separate `expectCalled`s, because "all of them appear" is exactly the claim
+   * that would stay green if they came out shuffled.
    */
-  it('[WG-WIRE-8] the head carries the running action as its first clause, only while it runs', () => {
+  it('[WG-WIRE-8] the running row narrates the turn; the settled row lists the four figures', () => {
+    const row = nodeSource(topLevelFunction('TurnWorkZoneRow'));
     expectCalled('deriveTurnCurrentAction(items)');
-    expectWired('const currentAction = settled ? null : deriveTurnCurrentAction(items);');
+    expect(row).toContain("if (zone.kind === 'working') {");
+    expect(row).toContain('const action = deriveTurnCurrentAction(items);');
     // The clause is composed from the SAME vocabulary the tool rows use, and
     // T108 omits arguments; a second wording here would drift.
-    expectWired('t(currentAction.verb)');
+    expectWired('t(action.verb)');
     expectUnwired('formatToolArg(currentAction.run, { repoName })');
-    const head = nodeSource(topLevelFunction('TurnProgressHead'));
-    const actionAt = head.indexOf('actionClause,');
-    const stepsAt = head.indexOf('stepsClause,');
-    const clausesAt = head.indexOf('...turnProgressClauses(');
-    expect(actionAt, 'the action clause exists').toBeGreaterThan(-1);
-    expect(actionAt, 'it is the first clause').toBeLessThan(stepsAt);
-    expect(stepsAt, 'and the step count follows it').toBeLessThan(clausesAt);
-    // The count is computed ONCE and shared by the label and the clause, so the
-    // head cannot report two different step totals.
-    expectWired('const steps = countProcessSteps(items);');
-    expectWired('steps,');
+    // The spinner belongs to the running branch alone — a settled row with a
+    // spinner is the "two rows counting seconds" defect wearing one row.
+    expect(countIn(row, '<Spinner')).toBe(1);
+    expect(row.indexOf('<Spinner')).toBeLessThan(
+      row.indexOf('joinTurnProgressLine(`✻ ${workedHeadText(')
+    );
+
+    const settled = row.slice(row.indexOf('joinTurnProgressLine(`✻ ${workedHeadText('));
+    const completedAt = settled.indexOf("t('Completed at {{time}}'");
+    const calls = settled.indexOf("'{{count}} tool calls'");
+    const thinking = settled.indexOf('formatThinkingClause(');
+    expect(completedAt, 'the completion time is there').toBeGreaterThan(-1);
+    expect(completedAt, 'and the call count follows it').toBeLessThan(calls);
+    expect(calls, 'and the thinking time closes the line').toBeLessThan(thinking);
+    // The closed list, as a negative: no token clause on this row, ever.
+    expect(row).not.toContain('formatTurnTokenClauses');
+    expect(row).not.toContain('tokens');
   });
 
   /**

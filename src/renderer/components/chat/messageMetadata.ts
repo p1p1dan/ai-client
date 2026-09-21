@@ -198,9 +198,18 @@ export function reduceMessageMetadata(
 /*
  * `formatMessageMetadata` retired with the turn meta row (T12-b, user decision
  * 2026-08-29). It composed `claude-opus-5 · 3h ago` — a model name and a
- * relative age — and that row is gone: the hover strip that replaced it shows
- * an absolute `HH:MM` and nothing else, and "which model is this session on" is
- * already answered permanently by the composer's model chip.
+ * relative age — and it stays retired: "which model is this session on" is
+ * answered permanently by the composer's model chip, and a RELATIVE age needs a
+ * ticking clock to stay true on an idle transcript.
+ *
+ * What T12-b said about the other half is now out of date. It recorded that the
+ * absolute `HH:MM` had moved to a hover-only strip, because a finished turn was
+ * to say nothing about itself unless asked. T113 (2026-09-21, user decision)
+ * puts that reading back in the always-visible line: `formatAbsoluteTime` below
+ * is what 「完成于 17:05」 on `MessageTimeline`'s work zone row calls, alongside
+ * the turn's duration, call count and thinking time. Absolute is still the
+ * right form for exactly T12-b's reason — it stays correct forever without a
+ * clock — which is why the relative formatter did not come back with it.
  *
  * `defaultFormatTime` stays: `formatRelativeTimestamp` below is still the
  * sidebar's phrasing layer over `formatRelativeAge`, and this is its

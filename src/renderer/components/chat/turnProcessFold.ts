@@ -1,6 +1,13 @@
 /**
- * The turn's WORK GROUP: what goes behind the 「工作中 / 已工作 57 秒」 line, what
- * stays outside it, and whether it is open.
+ * The turn's WORK GROUP — what folds, whether it is open, and what its head
+ * says — plus the turn's own WORK ZONE row at the very end of it.
+ *
+ * T113 (2026-09-21, user decision) split those two apart. The head used to
+ * carry both: 「已处理 N 个步骤」 for every group but the last, and the whole
+ * TURN's duration/usage/thinking for that one — two different scopes wearing
+ * one identical-looking line, which is what the user called 「有点不协调」. Now
+ * the head only ever reports its own step count, and everything that is true
+ * of the turn rather than of a group lives on `deriveTurnWorkZone`'s row.
  *
  * Pure, and in its own `.ts`: the vitest suite runs `environment: node` and
  * only collects `*.test.ts`, so anything living inside `MessageTimeline.tsx`
@@ -16,7 +23,8 @@
  * T107 (2026-09-21, user-confirmed B shape) supersedes that placement: EVERY
  * answer stays visible, and only process segments fold. The FB4 lesson still
  * applies: ending on an error must never hide earlier prose or the error.
- * `countProcessSteps` remains the head's fallback when timing is unavailable.
+ * `countProcessSteps` is no longer a FALLBACK for a head with no timing (T113):
+ * it is the only thing a head says.
  */
 
 import type { TurnItem, TurnSegment } from './chatTurn';
@@ -167,15 +175,16 @@ export function turnWorkGroupOpen(input: TurnWorkGroupOpenInput): boolean {
 }
 
 /**
- * What the turn is doing RIGHT NOW, for the head's live clause (T105, D6).
+ * What the turn is doing RIGHT NOW, for the live clause on the turn's work zone
+ * row (T105, D6; moved off the group head by T113).
  *
  * ## Why this exists at all
  *
- * Once the work group is always collapsed, this clause is the ONLY progress
- * evidence a running turn has on screen — the head is one line, and if that
- * line is a bare ticking clock the turn is indistinguishable from a hung one.
- * The user's own report on the previous arrangement was exactly that: a
- * 50-second wait whose only signal was a counter.
+ * With every process group collapsed, this clause is the ONLY progress evidence
+ * a running turn has on screen — the row is one line, and if that line is a
+ * bare ticking clock the turn is indistinguishable from a hung one. The user's
+ * own report on the arrangement before it was exactly that: a 50-second wait
+ * whose only signal was a counter.
  *
  * ## The fallback is the point, not a nicety
  *
@@ -189,11 +198,17 @@ export function turnWorkGroupOpen(input: TurnWorkGroupOpenInput): boolean {
  * caller never has to guess which grammar the sentence needs.
  *
  * Returning the RUN rather than a formatted string keeps this module free of
- * `toolCard`'s argument formatting and of any translator: the caller already
- * translates the verb (`MessageTimeline.tsx` stays English). T108 omits the
- * arguments from the head, so the words are still composed at paint where
- * every other verb in this app becomes words. `verb` is the catalog key for
- * that name, resolved through the same `toolVerb` table the row itself uses.
+ * `toolCard`'s argument formatting and of any translator: the caller
+ * translates the verb. T108 omits the arguments, so the words are still
+ * composed at paint where every other verb in this app becomes words. `verb`
+ * is the catalog key for that name, resolved through the same `toolVerb` table
+ * the row itself uses.
+ *
+ * T113 changed WHICH translator that is, and it is worth stating: this clause
+ * used to be composed on the English-only group head (decision 031 D7), and it
+ * now rides the work zone row, which is Chinese like the rest of the chat
+ * surface. The verbs have had Chinese entries all along (`toolVocabulary`), so
+ * the move is a swap of translator, not of vocabulary.
  *
  * Reverse order on both levels, so the newest news wins: the last `toolGroup`
  * item that holds any run, and within it the last running run (or, failing
@@ -228,65 +243,163 @@ function actionOf(run: ToolRun, state: Extract<ToolVerbState, 'running' | 'refus
   return { run, verb: toolVerb(run.toolName, state), state };
 }
 
-/**
- * What the group's head says about itself.
+/*
+ * `TurnWorkGroupLabel` / `deriveTurnWorkGroupLabel` retired with the head shape
+ * they chose between (T113, 2026-09-21).
  *
- * Both duration variants carry NUMBERS, not a formatted string: the render site
- * turns them into one of the catalog keys so Chinese can write 「已工作 1 分 6
- * 秒」 instead of interpolating an English "1m 6s" into a Chinese sentence.
+ * Their whole job was picking one of three things for a head to say — 「工作中
+ * N 秒」 while running, 「已工作 57 秒」 once settled, 「已处理 N 个步骤」 when no
+ * clock was ever measured — and returning `null` for the turn that knew none of
+ * them. Every one of those branches has moved:
  *
- * `working.elapsed` is `null` for a turn that is running with NO clock at all —
- * a session that was already in flight when this window opened replays no
- * `message.started`, so there is no origin to count from and the head says a
- * bare 「工作中」 rather than a fabricated 「工作中 0 秒」.
+ *  - the two duration forms are now the WORK ZONE row's two states
+ *    (`deriveTurnWorkZone` below), where they describe the turn rather than
+ *    whichever group happened to be last;
+ *  - the step count is what a head says, always, and it is `countProcessSteps`
+ *    directly — no choice left to make;
+ *  - the `null` case cannot arise any more. T112 stopped rendering a head for a
+ *    group of fewer than two steps, so by the time one exists it has a count.
+ *
+ * The A07 `:2399` rule they enforced did NOT retire with them: an unmeasured
+ * duration is still omitted rather than printed as `0 秒`, and that is now
+ * `deriveTurnWorkZone`'s `null` return.
+ *
+ * ## What the deleted doc block used to argue, and what survives of it
+ *
+ * Its 2026-09-18 note explained why the running head had been given the clock
+ * at all: it used to say a bare 「工作中」 on the ground that a second-by-second
+ * status row already existed above the composer, and the user's report after
+ * living with that was that the row sits far from the reply it describes and a
+ * 50-second wait behind it reads as a hang. That reasoning is intact — the
+ * clock still lives next to the output it belongs to. T113 only moved it one
+ * line further down, off a group head and onto the turn's own row, because a
+ * clock riding the LAST group is a turn-level fact wearing a group-level line.
+ *
+ * ## One claim from that block was simply wrong, and is not carried forward
+ *
+ * It said 「The composer row keeps its own count; the two are derived from
+ * different origins」 and left an open question about retiring one of them.
+ * There is no second count: that row moved INTO the turn in T-31 §3
+ * (`ChatComposer.tsx`, with its three status values in
+ * `stores/turnSendStatus.ts`). A reviewer was misled by the sentence once —
+ * into expecting two clocks stacked on screen — which is why it is corrected
+ * here rather than deleted quietly. What DOES need to stay a relay is this row
+ * and `PendingTurnHead`, and `statusOwnedByPendingHead` is what arranges it.
  */
-export type TurnWorkGroupLabel =
-  | { kind: 'working'; elapsed: WorkedForParts | null }
-  | { kind: 'worked'; minutes: number; seconds: number }
-  | { kind: 'steps'; steps: number };
 
 /**
- * Head copy for the work group. `null` means the head has nothing honest to
- * say and does not render at all.
+ * How many TOOL CALLS this turn made — the 「8 次工具调用」 clause of the row
+ * below, and one of the four figures the user named for it.
  *
- * ## 2026-09-18 (second pass): the running head carries the clock
+ * Counts `run` entries, so a group holding four calls is four, the same way
+ * `countProcessSteps` refuses to call it one. It deliberately does NOT reuse
+ * `turnTiming.ts`'s `deriveTurnStats`, which was the obvious candidate: that
+ * one buckets into tools / searches / edits and would print three numbers where
+ * the user asked for one, and it reads raw `ChatBlock`s, which this layer does
+ * not have.
  *
- * It used to say 「工作中」 and nothing else, on the ground that "there is
- * already a second-by-second status row" — that row being the one above the
- * composer. The user's report after living with it: that row is the ONLY
- * evidence a turn is alive, it sits far from the reply it describes, and a
- * 50-second wait behind it reads as a hang. So the clock moves here, next to
- * the output it belongs to. The composer row keeps its own count; the two are
- * derived from different origins (`activity.since` vs `message.started`) and
- * can legitimately differ by a second — see the report for the open question
- * about retiring one of them.
+ * ## What it counts, stated plainly
  *
- * ## The `null` cases, and why neither is a zero
+ * Every call the turn ISSUED, including one that failed. `deriveTurnStats`
+ * excluded refused calls, and for a good reason that does not apply here: it
+ * printed 「1 edit」, a claim that an edit HAPPENED, which is false for a write
+ * the user declined. 「8 次工具调用」 claims only that eight calls were made,
+ * which stays true whatever came back — and the refusal set it would need
+ * (`refusedToolCallIds`) is derived from blocks, one layer below this one.
  *
- *  - **settled, no duration, no steps** — a restored history turn that replayed
- *    no timing events and folded no work. Printing 「已工作 0 秒」 or 「已处理 0
- *    个步骤」 would both be claims about a turn this window never watched
- *    (A07 `:2399`, and `deriveTurnWorkedMs`'s own note).
- *  - **settled, no duration, some steps** — still reports the STEP count, which
- *    is the fallback that has been here since 2026-09-10 and is the one thing
- *    such a turn does know about itself.
+ * A thinking block is not a call and is not counted, even though
+ * `countProcessSteps` counts it as a step. The two numbers answer different
+ * questions and are allowed to differ; the row and the head say so by using
+ * different words for them.
  */
-export function deriveTurnWorkGroupLabel(input: {
-  settled: boolean;
-  workedMs: number | null;
-  steps: number;
+export function countTurnToolCalls(items: readonly TurnItem[]): number {
+  return items.reduce(
+    (total, item) =>
+      item.kind === 'toolGroup'
+        ? total + item.entries.filter((entry) => entry.kind === 'run').length
+        : total,
+    0
+  );
+}
+
+/**
+ * The turn's tail row, in its two states.
+ *
+ * `working.elapsed` is `null` for a turn running with NO clock at all — a
+ * session already in flight when this window opened replays no
+ * `message.started`, so there is no origin to count from and the row says a
+ * bare 「工作中」 rather than a fabricated 「工作中 0 秒」.
+ *
+ * The settled shape carries NUMBERS and a timestamp, never formatted text: the
+ * render site turns them into catalog keys so Chinese writes 「已工作 1 分 6
+ * 秒」 instead of interpolating an English "1m 6s" into a Chinese sentence.
+ */
+export type TurnWorkZone =
+  | { kind: 'working'; elapsed: WorkedForParts | null }
+  | {
+      kind: 'worked';
+      worked: WorkedForParts;
+      /** Wall-clock completion, or `null` for a turn that replayed no timing. */
+      completedAtMs: number | null;
+      /** `null` rather than `0` — a turn that called nothing says nothing here. */
+      toolCalls: number | null;
+      /** `null` when the provider reported no reasoning at all. */
+      thinkingMs: number | null;
+    };
+
+/**
+ * The turn's own line: 「✻ 工作中 47 秒」 while it runs, 「✻ 已工作 54 秒 · 完成
+ * 于 17:05 · 8 次工具调用 · 思考 12 秒」 once it stops.
+ *
+ * ## The four settled figures are the user's list, and it is closed
+ *
+ * Duration, completion time, tool calls, thinking time (2026-09-21). Token
+ * usage was considered and explicitly left off — do not add it back here
+ * because the numbers happen to be available; `turnProgress.ts` still formats
+ * them for whoever needs them next, and this row is not that surface.
+ *
+ * ## Why a settled turn with no duration renders NOTHING
+ *
+ * A restored history turn replays no timing events, so there is no span to
+ * report, and A07 `:2399`'s rule is that an unmeasured figure is omitted rather
+ * than printed as a zero. The old head fell back to a step count in that case;
+ * this row does not need to, because T113 gives every process group a head that
+ * reports its own steps — the fallback's information is already on screen, one
+ * line higher, and a tail row carrying only 「8 次工具调用」 would read as a
+ * second, disagreeing count of the same work.
+ *
+ * ## Running beats settled, and the reason it is a branch and not a merge
+ *
+ * A running turn has no completion timestamp, and `workedMs` on an unsettled
+ * turn is whatever a PREVIOUS message in it happened to close with. So the two
+ * states read different inputs on purpose; `running` is the caller's
+ * `!processSettled`, which is also what keeps this row and `PendingTurnHead`
+ * a relay rather than two clocks side by side.
+ */
+export function deriveTurnWorkZone(input: {
+  /** The turn is still going (`!processSettled` at the call site). */
+  running: boolean;
   /** Seconds since the turn's own clock started, or `null` when it has none. */
   elapsedSeconds: number | null;
-}): TurnWorkGroupLabel | null {
-  if (!input.settled) {
+  /** Whole-turn span once settled, or `null` when the turn replayed no timing. */
+  workedMs: number | null;
+  completedAtMs: number | null;
+  toolCalls: number;
+  thinkingMs: number | null;
+}): TurnWorkZone | null {
+  if (input.running) {
     return {
       kind: 'working',
       elapsed:
         input.elapsedSeconds === null ? null : splitWorkedForDuration(input.elapsedSeconds * 1000),
     };
   }
-  if (input.workedMs === null) {
-    return input.steps > 0 ? { kind: 'steps', steps: input.steps } : null;
-  }
-  return { kind: 'worked', ...splitWorkedForDuration(input.workedMs) };
+  if (input.workedMs === null) return null;
+  return {
+    kind: 'worked',
+    worked: splitWorkedForDuration(input.workedMs),
+    completedAtMs: input.completedAtMs,
+    toolCalls: input.toolCalls > 0 ? input.toolCalls : null,
+    thinkingMs: input.thinkingMs,
+  };
 }

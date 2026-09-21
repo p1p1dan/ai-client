@@ -332,9 +332,15 @@ export function thoughtFoldHeaderClass(): string {
 }
 
 /**
- * Tier 2 — the turn's progress head: 「工作中 47 秒 · ↑ 12.0k tokens · ↓ 1.3k
- * tokens · 思考 20 秒」 while the turn runs, 「已工作 57 秒」 once it stops, plus
- * the chevron.
+ * Tier 2 — a process group's head: 「已处理 10 个步骤」 plus the chevron, and
+ * since T113 (2026-09-21) that is ALL it ever says.
+ *
+ * It used to carry the turn's own clock and totals too — 「工作中 47 秒 · ↑ 12.0k
+ * tokens · ↓ 1.3k tokens · 思考 20 秒」 running, 「已工作 57 秒」 settled — but
+ * only on whichever group happened to be last, so two scopes wore the same
+ * line. Those figures moved to `turnWorkZoneClass()` below. The SIZE ruling
+ * recorded here did not move with them; see that function for why it applies
+ * to both.
  *
  * `list-none` + `marker:content-none` strips the `<summary>` disclosure
  * triangle, which points the wrong way in half the browsers that draw it and
@@ -368,11 +374,20 @@ export function turnWorkGroupSummaryClass(): string {
  * retry counter — i.e. the things that are only true WHILE the turn is running.
  *
  * §4.7 used to describe this as "one slot, two states" (status in flight,
- * `Worked for Ns · 2 tools` once complete). T12-b removed the second state:
- * a finished turn now says nothing about itself (see `turnMetaRowClass()`'s
- * retirement note below), so this row exists only while something is happening.
- * `PendingTurnHead` renders the identical shape for the window before the user
- * echo lands, which is why both paths now spell it the same way.
+ * `Worked for Ns · 2 tools` once complete). T12-b removed the second state on
+ * the ground that a finished turn should say nothing about itself at all
+ * (pi-app's model — see `turnMetaRowClass()`'s retirement note below).
+ *
+ * T113 (2026-09-21, user decision) reverses that ground but NOT this row. A
+ * finished turn does describe itself again — 「已工作 54 秒 · 完成于 17:05 · 8
+ * 次工具调用 · 思考 12 秒」 — because the user named those four figures. They
+ * live on `turnWorkZoneClass()` below, a row of their own, rather than coming
+ * back here: this slot is owned by `deriveTurnStatus`, whose whole vocabulary
+ * is about a turn in trouble or in flight, and giving it a settled state again
+ * would re-merge two questions T12-b was right to separate. So this row still
+ * exists only while something is happening. `PendingTurnHead` renders the
+ * identical shape for the window before the user echo lands, which is why both
+ * paths spell it the same way.
  *
  * `tabular-nums` keeps the second counter from jittering the row width as it
  * ticks; `min-w-0` lets the status text truncate rather than wrap, because a
@@ -384,6 +399,36 @@ export function turnWorkGroupSummaryClass(): string {
  * two shapes and share one size.
  */
 export function turnHeadClass(): string {
+  return 'flex min-w-0 items-center gap-1.5 text-ui tabular-nums text-muted-foreground';
+}
+
+/**
+ * The turn's WORK ZONE row (T113, user decision 2026-09-21): one line pinned
+ * after the turn's last paragraph. 「✻ 工作中 47 秒 · 读取中」 while it runs,
+ * 「✻ 已工作 54 秒 · 完成于 17:05 · 8 次工具调用 · 思考 12 秒」 once it stops.
+ *
+ * Same three classes as `turnHeadClass()` above, and they are the same three on
+ * purpose rather than by copy-paste:
+ *
+ *  - `text-ui` — this row INHERITED the job the 2026-09-19 decision raised the
+ *    head to 14px for: it is what the reader watches for the whole length of a
+ *    wait, and 13px was reported as too small to be that. The registered
+ *    deviation from `docs/design-system.md`'s Typography table (which files a
+ *    status line under `meta`) is recorded on `turnWorkGroupSummaryClass()` and
+ *    covers this row for the same reason. The three must move together or the
+ *    turn appears to change type size between its head and its tail.
+ *  - `tabular-nums` — the row ticks once a second while the turn runs, and a
+ *    proportional `1` re-measures the row underneath a stick-to-bottom
+ *    follower.
+ *  - `min-w-0` — the settled line carries four clauses and has to truncate
+ *    rather than wrap, because a row that wraps changes HEIGHT under that same
+ *    follower.
+ *
+ * No `overflow-hidden` and no height: it sits inside the turn body's own gap
+ * (`turnBodyClass()`), and the standing prohibition on creating a containing
+ * block above `position: sticky` applies to every row in this chain.
+ */
+export function turnWorkZoneClass(): string {
   return 'flex min-w-0 items-center gap-1.5 text-ui tabular-nums text-muted-foreground';
 }
 

@@ -4,8 +4,9 @@ import { segmentTurnBody } from '../chatTurn';
 import type { ToolRun, ToolRunStatus } from '../toolCard';
 import {
   countProcessSteps,
+  countTurnToolCalls,
   deriveTurnCurrentAction,
-  deriveTurnWorkGroupLabel,
+  deriveTurnWorkZone,
   splitTurnWorkGroup,
   turnProcessGroupFolds,
   turnWorkGroupAwaitsUser,
@@ -217,88 +218,187 @@ describe('turnWorkGroupOpen — closed by default, user intent forever', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Head copy
+// The turn's work zone row (T113) — what replaced the head's copy rules
 // ---------------------------------------------------------------------------
 
-describe('deriveTurnWorkGroupLabel', () => {
+/**
+ * REWRITTEN 2026-09-21 (T113). These were `[WG-LABEL-*]` over
+ * `deriveTurnWorkGroupLabel`, which chose between three things a HEAD could
+ * say. The head now says one thing (its step count) and the three it used to
+ * choose between describe the TURN, on its own row — so the cases move here
+ * rather than being deleted. The judgements they encode are unchanged and are
+ * restated in each test: a running turn reports the LIVE clock and not the
+ * settled span; a running turn with no clock prints no seconds at all; an
+ * unmeasured duration is OMITTED, never rendered as `0`.
+ */
+describe('deriveTurnWorkZone — the turn describes itself, in two states', () => {
+  const base = {
+    elapsedSeconds: null,
+    workedMs: null,
+    completedAtMs: null,
+    toolCalls: 0,
+    thinkingMs: null,
+  };
+
   /**
-   * 2026-09-18, second pass. This case used to assert the OPPOSITE — 「工作中」
-   * and no second count, on the ground that the composer's own status row was
-   * already counting. The user's report after living with that arrangement is
-   * why it is inverted here: a counter that far from the reply does not read as
-   * progress, and a 50-second wait behind a static 「工作中」 reads as a hang.
-   *
-   * Note which clock it reports: `elapsedSeconds` (the live one), NOT
-   * `workedMs`. A running turn has no completion timestamp, so `workedMs` on an
-   * unsettled turn is whatever a PREVIOUS message in it happened to close with.
+   * Note which clock a running turn reports: `elapsedSeconds` (the live one),
+   * NOT `workedMs`. A running turn has no completion timestamp, so `workedMs`
+   * on an unsettled turn is whatever a PREVIOUS message in it happened to close
+   * with — the defect the 2026-09-19 origin fix was about.
    */
-  it('[WG-LABEL-1] a running turn reports the LIVE clock, not the settled span', () => {
+  it('[WZ-1] a running turn reports the LIVE clock, not the settled span', () => {
     expect(
-      deriveTurnWorkGroupLabel({
-        settled: false,
-        workedMs: 61_000,
-        steps: 3,
-        elapsedSeconds: 47,
-      })
+      deriveTurnWorkZone({ ...base, running: true, workedMs: 61_000, elapsedSeconds: 47 })
     ).toEqual({ kind: 'working', elapsed: { minutes: 0, seconds: 47 } });
-    expect(
-      deriveTurnWorkGroupLabel({ settled: false, workedMs: null, steps: 0, elapsedSeconds: 66 })
-    ).toEqual({ kind: 'working', elapsed: { minutes: 1, seconds: 6 } });
-  });
-
-  /**
-   * A session that was already in flight when this window opened replays no
-   * `message.started`, so it is running with no origin to count from. The head
-   * says a bare 「工作中」 there — `elapsed: null` — rather than 「工作中 0 秒」,
-   * which is the same fabricated-measurement rule as [WG-LABEL-3] below.
-   */
-  it('[WG-LABEL-1b] a running turn with no clock reports no seconds at all', () => {
-    expect(
-      deriveTurnWorkGroupLabel({
-        settled: false,
-        workedMs: null,
-        steps: 2,
-        elapsedSeconds: null,
-      })
-    ).toEqual({ kind: 'working', elapsed: null });
-  });
-
-  it('[WG-LABEL-2] reports the span in the units the catalog writes', () => {
-    const settled = (workedMs: number) =>
-      deriveTurnWorkGroupLabel({ settled: true, workedMs, steps: 3, elapsedSeconds: null });
-    expect(settled(57_000)).toEqual({ kind: 'worked', minutes: 0, seconds: 57 });
-    expect(settled(66_000)).toEqual({ kind: 'worked', minutes: 1, seconds: 6 });
-    expect(settled(120_000)).toEqual({ kind: 'worked', minutes: 2, seconds: 0 });
-  });
-
-  /**
-   * A07 `:2399`'s red line at the turn scale: unknown duration means OMIT, not
-   * `0s`. A restored history turn replays no timing events, and a head reading
-   * 「已工作 0 秒」 about a turn that ran four tools is a fabricated measurement.
-   */
-  it('[WG-LABEL-3] an unknown duration falls back to the step count and prints NO seconds', () => {
-    const label = deriveTurnWorkGroupLabel({
-      settled: true,
-      workedMs: null,
-      steps: 4,
-      elapsedSeconds: null,
+    expect(deriveTurnWorkZone({ ...base, running: true, elapsedSeconds: 66 })).toEqual({
+      kind: 'working',
+      elapsed: { minutes: 1, seconds: 6 },
     });
-    expect(label).toEqual({ kind: 'steps', steps: 4 });
-    expect(Object.keys(label ?? {})).not.toContain('seconds');
-    expect(Object.keys(label ?? {})).not.toContain('minutes');
   });
 
   /**
-   * The head now renders for turns that fold NO work (that is the whole point
-   * of the second pass — a 50-second one-word reply used to show nothing), so
-   * it needs an answer for the one turn that has nothing honest to say: settled,
-   * no timing, no steps. That is restored history, and both fallbacks would be
-   * inventions there — `0 秒` and 「已处理 0 个步骤」 alike.
+   * A session already in flight when this window opened replays no
+   * `message.started`, so it runs with no origin to count from. The row says a
+   * bare 「工作中」 there — `elapsed: null` — rather than 「工作中 0 秒」, which is
+   * the same fabricated-measurement rule as [WZ-4].
    */
-  it('[WG-LABEL-4] a settled turn with neither a duration nor a step renders no head', () => {
+  it('[WZ-2] a running turn with no clock reports no seconds at all', () => {
+    expect(deriveTurnWorkZone({ ...base, running: true, elapsedSeconds: null })).toEqual({
+      kind: 'working',
+      elapsed: null,
+    });
+    // …and none of the settled figures leak into the running shape, even when
+    // the caller happens to have them: a turn still going has not completed.
     expect(
-      deriveTurnWorkGroupLabel({ settled: true, workedMs: null, steps: 0, elapsedSeconds: null })
+      deriveTurnWorkZone({
+        running: true,
+        elapsedSeconds: 3,
+        workedMs: 9_000,
+        completedAtMs: 1_700_000_000_000,
+        toolCalls: 8,
+        thinkingMs: 12_000,
+      })
+    ).toEqual({ kind: 'working', elapsed: { minutes: 0, seconds: 3 } });
+  });
+
+  it('[WZ-3] a settled turn carries the four figures the user named, and only those', () => {
+    const zone = deriveTurnWorkZone({
+      running: false,
+      elapsedSeconds: null,
+      workedMs: 54_000,
+      completedAtMs: 1_700_000_000_000,
+      toolCalls: 8,
+      thinkingMs: 12_000,
+    });
+    expect(zone).toEqual({
+      kind: 'worked',
+      worked: { minutes: 0, seconds: 54 },
+      completedAtMs: 1_700_000_000_000,
+      toolCalls: 8,
+      thinkingMs: 12_000,
+    });
+    // The closed-list half of the claim. Token usage was considered at the same
+    // time and deliberately left off; a field appearing here is a product
+    // decision, not a refactor.
+    expect(Object.keys(zone ?? {}).sort()).toEqual([
+      'completedAtMs',
+      'kind',
+      'thinkingMs',
+      'toolCalls',
+      'worked',
+    ]);
+    // Units the catalog writes, not a pre-formatted string.
+    expect(deriveTurnWorkZone({ ...base, running: false, workedMs: 66_000 })).toMatchObject({
+      worked: { minutes: 1, seconds: 6 },
+    });
+    expect(deriveTurnWorkZone({ ...base, running: false, workedMs: 120_000 })).toMatchObject({
+      worked: { minutes: 2, seconds: 0 },
+    });
+  });
+
+  /**
+   * A07 `:2399`'s red line at turn scale: unknown means OMIT, not `0`.
+   *
+   * The head this replaced fell back to a step count here. The row does not,
+   * and that is not a loss: T113 gives every process group a head that reports
+   * its own steps, so the fallback's information is already on screen one line
+   * higher — and a tail row carrying only 「8 次工具调用」 would read as a
+   * second, disagreeing count of the same work.
+   */
+  it('[WZ-4] a settled turn with no measured span renders no row at all', () => {
+    expect(deriveTurnWorkZone({ ...base, running: false })).toBeNull();
+    // Not even when the other three are known: the span is what the row is
+    // anchored on.
+    expect(
+      deriveTurnWorkZone({
+        running: false,
+        elapsedSeconds: null,
+        workedMs: null,
+        completedAtMs: 1_700_000_000_000,
+        toolCalls: 4,
+        thinkingMs: 3_000,
+      })
     ).toBeNull();
+  });
+
+  it('[WZ-5] each settled figure drops on its own when it was never measured', () => {
+    expect(deriveTurnWorkZone({ ...base, running: false, workedMs: 54_000 })).toEqual({
+      kind: 'worked',
+      worked: { minutes: 0, seconds: 54 },
+      completedAtMs: null,
+      // Zero calls is "this turn called nothing", which is not a figure worth a
+      // clause — and `0 次工具调用` would read as a measurement.
+      toolCalls: null,
+      thinkingMs: null,
+    });
+    expect(
+      deriveTurnWorkZone({ ...base, running: false, workedMs: 54_000, toolCalls: 1 })
+    ).toMatchObject({ toolCalls: 1 });
+  });
+
+  /**
+   * The relay with `PendingTurnHead`, at the layer that can hold it.
+   *
+   * The caller passes `!processSettled`, and `processSettled` already folds in
+   * `statusOwnedByPendingHead` — so the only way two rows count seconds at once
+   * is if this function produced a clock for a turn that is not running. It
+   * cannot: `running` is the single gate, and the settled shape has no live
+   * field to tick.
+   */
+  it('[WZ-6] only a running turn can produce a ticking shape', () => {
+    for (const elapsedSeconds of [null, 0, 47]) {
+      const settled = deriveTurnWorkZone({
+        ...base,
+        running: false,
+        elapsedSeconds,
+        workedMs: 1_000,
+      });
+      expect(settled?.kind, `${elapsedSeconds}`).toBe('worked');
+      expect(Object.keys(settled ?? {})).not.toContain('elapsed');
+    }
+  });
+});
+
+describe('countTurnToolCalls', () => {
+  const group = (entries: unknown[]): TurnItem =>
+    ({ kind: 'toolGroup', blockIndex: 0, messageId: 'm1', entries }) as never;
+
+  it('[WZ-CALLS-1] counts runs across groups, and a thought is not a call', () => {
+    const items = [
+      group([{ kind: 'run' }, { kind: 'thinking' }, { kind: 'run' }]),
+      group([{ kind: 'run' }]),
+    ];
+    expect(countTurnToolCalls(items)).toBe(3);
+    // Deliberately NOT the same number as the step count beside it: a thought
+    // is a step the user watched happen, and it is not a tool call. The two
+    // clauses use different words for that reason.
+    expect(countProcessSteps(items)).toBe(4);
+  });
+
+  it('[WZ-CALLS-2] a turn with no tool group counts zero', () => {
+    expect(countTurnToolCalls([])).toBe(0);
+    expect(countTurnToolCalls([askItem('permission')])).toBe(0);
+    expect(countTurnToolCalls([group([{ kind: 'thinking' }])])).toBe(0);
   });
 });
 

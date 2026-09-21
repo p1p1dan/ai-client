@@ -294,11 +294,24 @@ export function ownsSessionFailure(input: TurnFailureOwnershipInput): boolean {
  * history turn replays no T-06 metadata, so it used to print nothing at all
  * about a turn that plainly did work.
  *
- * Under pi-app's model a finished turn says nothing about itself, restored or
- * not — so the question the rungs answered no longer arises. Only the top rung
- * survives, and `MessageTimeline` now renders it directly: `status` is the sole
- * on-screen evidence that a turn is running, stalled, retrying or failed, which
- * is why F2's "lost stopwatch" defect was about this row and not the others.
+ * T12-b's answer was "nothing, restored or not", which removed the question.
+ * T113 (2026-09-21, user decision) brings the question back — a finished turn
+ * says 「已工作 54 秒 · 完成于 17:05 · 8 次工具调用 · 思考 12 秒」 again — and
+ * still does not bring this chain back, deliberately:
+ *
+ *  - the new row is not a DEGRADATION ladder. Each of its four figures is
+ *    dropped on its own when unmeasured (`turnProcessFold.ts`'s
+ *    `deriveTurnWorkZone`), so there is no "fall to the next rung" to model,
+ *    and the whole row is omitted only when the turn measured no span at all;
+ *  - the rungs' fallbacks are answered elsewhere now. A restored history turn
+ *    with no timing shows its work through the per-group step counts (T113
+ *    gave every process group a head that reports its own), which is what the
+ *    `stats` and `thought` rungs were reaching for.
+ *
+ * Only the top rung of the chain survives here, and `MessageTimeline` renders
+ * it directly: `status` is the sole on-screen evidence that a turn is running,
+ * stalled, retrying or failed, which is why F2's "lost stopwatch" defect was
+ * about that row and not the others.
  *
  * The other half of F1's claim — "`hasProcess` implies a non-null head", which
  * let `collapsible` be decided without waiting for metadata — expired earlier,
