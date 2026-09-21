@@ -724,7 +724,10 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('forcedOpen={groupForcedOpen}');
     // T105: `settled` left this call's arguments. It is still a prop of the
     // head (spinner, label, current-action clause) — it just no longer decides
-    // whether the group is open, which is D6's whole point.
+    // whether the group is open. 2026-09-21 flipped that default from closed
+    // to open (see `turnProcessFold.test.ts`'s [WG-OPEN-1]); what did NOT
+    // change is that this call takes three facts and no fourth, which is what
+    // keeps "is this card unanswered" the only thing that can force it.
     expectCalled('turnWorkGroupOpen({ forcedOpen, userOpen })');
 
     const group = nodeSource(topLevelFunction('TurnProgressHead'));

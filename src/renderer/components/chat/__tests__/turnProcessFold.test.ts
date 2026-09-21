@@ -271,41 +271,46 @@ describe('turnWorkGroupAwaitsUser — the Allow/Deny card can never be collapsed
 // Open / closed
 // ---------------------------------------------------------------------------
 
-describe('turnWorkGroupOpen — always folded, user intent forever', () => {
+describe('turnWorkGroupOpen — open by default, user intent forever', () => {
   const open = (forcedOpen: boolean, userOpen: boolean | null): boolean =>
     turnWorkGroupOpen({ forcedOpen, userOpen });
 
   /**
-   * ⚠️ INVERTED 2026-09-19 (user decision D6).
+   * ⚠️ FLIPPED AGAIN 2026-09-21 (user decision), and the history matters.
    *
-   * This case used to read `[WG-OPEN-1] a running turn is open, a settled one is
-   * closed` and asserted `open(false, false, null) === true` — the auto-open
-   * that made a long tool sequence a wall of rows. The user's complaint was
-   * about exactly that state, so the assertion flips: the group is closed while
-   * the turn runs and stays closed when it ends. `settled` is gone from the
-   * input entirely, which is why this signature no longer takes it — the rule
-   * cannot be reintroduced by passing a stale flag.
+   * 2026-09-19 (D6) asserted `open(false, null) === false`: a long tool
+   * sequence had left a wall of 「Read / Grep / Read / Edit」 on screen for the
+   * whole turn, and the head above it was lost in the middle. The answer then
+   * was to start the group folded.
    *
-   * What the head has to carry instead is `deriveTurnCurrentAction`'s clause,
-   * truth-tabled below: a folded group with a bare ticking clock is what this
-   * decision would otherwise look like.
+   * That is still true about tool rows — which is why `ToolRows.tsx` keeps
+   * every individual row closed and this flip does not touch it. What D6 got
+   * wrong is that the group holds more than tool traffic: thinking blocks and
+   * tool RESULTS are in there, and the user's own follow-up was 「我发现很多
+   * agent 有效输出也在这个栏目下，如果默认折叠,有很多输出都看不到了」. The part of
+   * the agent's work they actually wanted to read was behind a 「已工作 57 秒」
+   * line every single turn.
+   *
+   * The `settled` parameter stays DELETED (D6's reasoning, still correct): the
+   * default does not depend on it, and an exported input nothing reads is a
+   * rule waiting to be mistaken for a live one.
    */
-  it('[WG-OPEN-1] the group is closed whether the turn runs or has settled', () => {
-    expect(open(false, null)).toBe(false);
+  it('[WG-OPEN-1] the group is open by default, whether it runs or has settled', () => {
+    expect(open(false, null)).toBe(true);
   });
 
-  it('[WG-OPEN-2] the default does not override a user who opened it', () => {
-    // The whole point: once the user has clicked, the default stops deciding —
-    // which is also what makes a choice permanent rather than something every
-    // render reapplies.
+  it('[WG-OPEN-2] the default does not override a user who closed it', () => {
+    // The load-bearing half: with the default now OPEN, an expanded group that
+    // ignored the click would be a group the reader cannot put away — strictly
+    // worse than the D6 state it replaces.
     expect(open(false, true)).toBe(true);
     expect(open(false, false)).toBe(false);
   });
 
-  it('[WG-OPEN-3] restored history mounts collapsed with no history-detection at all', () => {
-    // A turn that never ran in this window is settled on its first render —
-    // and now so is a running one, which is the same answer.
-    expect(open(false, null)).toBe(false);
+  it('[WG-OPEN-3] restored history mounts open, like a live turn', () => {
+    // A turn that never ran in this window is settled on its first render and
+    // gets the same answer as a running one — no history detection anywhere.
+    expect(open(false, null)).toBe(true);
   });
 
   it('[WG-OPEN-4] an unanswered authorization outranks both the default and the click', () => {

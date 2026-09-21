@@ -177,52 +177,60 @@ export interface TurnWorkGroupOpenInput {
 }
 
 /**
- * Whether the group is open. Two rules, in precedence order.
+ * Whether the group is open. Three rules, in precedence order.
  *
  *  1. an unanswered authorization/question wins over everything (red line
  *     above) — the user cannot collapse away the card they are being asked to
- *     answer, and neither can the auto-collapse;
+ *     answer, and neither can the default;
  *  2. otherwise the user's own choice, once made, is permanent for this turn;
- *  3. otherwise the group is CLOSED — while the turn runs just as much as once
- *     it has ended.
+ *  3. otherwise the group is OPEN.
  *
- * ## Rule 3 is the 2026-09-19 change (user decision, D6)
+ * ## Rule 3 is the 2026-09-21 change (user decision), and it reverses D6
  *
- * It used to read `return !input.settled`, i.e. a running turn kept its group
- * open and the tuple collapsed itself at the transition. The user's report was
- * about the running case specifically: a long tool sequence left a wall of
- * 「Read / Grep / Read / Edit」 on screen for the whole turn, and the head above
- * it was lost in the middle. So the group starts folded and STAYS folded, and
- * the head — which now carries the current action, not just a clock — is the
- * one-line answer to "what is it doing".
+ * D6 (2026-09-19) made the group start folded and stay folded, on the report
+ * that a long tool sequence left a wall of 「Read / Grep / Read / Edit」 on
+ * screen for the whole turn. That reasoning still holds about what the group
+ * would LOOK like if it were merely a list of tool rows.
  *
- * `settled` was DELETED from the input rather than kept and ignored: an
- * exported input nothing reads is a rule waiting to be mistaken for a live one
- * (§13 ①), and `TurnProgressHead` still takes `settled` for its own reasons
- * (spinner, label, the current-action clause) — it simply no longer decides
- * this.
+ * What it missed is what else is in there. The group is not only tool traffic:
+ * it is thinking blocks and every tool result, and the user's own follow-up was
+ * 「我发现很多 agent 有效输出也在这个栏目下，如果默认折叠,有很多输出都看不到了」.
+ * The effective part of the agent's work — what it read, what it found, what it
+ * reasoned — was behind a line reading 「已工作 57 秒」, and answering "what
+ * actually happened" meant opening the group every single turn.
  *
- * What survives from the old rule set: rule 1 unchanged (the authorization red
- * line), and rule 2 unchanged, which is what keeps a reader's click from being
- * overridden by any later render.
+ * So the default flips, and the wall D6 was worried about is handled where it
+ * belongs instead: `ToolRows.tsx` keeps every individual row closed, and the
+ * thinking fold keeps its own default, so what is on screen is the group's ONE
+ * line plus a column of collapsed rows. The user sees that the work happened
+ * and what it was, without the output being dumped at them.
+ *
+ * `settled` is still absent from this input, for the reason D6 gave and which
+ * is unchanged by the flip: it was DELETED rather than kept and ignored,
+ * because an exported input nothing reads is a rule waiting to be mistaken for
+ * a live one (§13 ①). `TurnProgressHead` still takes `settled` for its own
+ * reasons (spinner, label, the current-action clause) — it simply does not
+ * decide this.
+ *
+ * Rule 1 is unchanged (the authorization red line) and rule 2 is unchanged,
+ * which is what keeps a reader's click from being overridden by any later
+ * render.
  *
  * ## Why this is still derived rather than an effect
  *
- * "Collapse when the turn ends" was the one-shot that motivated deriving this
- * in the first place, and the objection holds even more strongly now that the
- * group is always closed: an `useEffect` + ref would fire twice under
+ * The objection D6 raised stands: an `useEffect` + ref would fire twice under
  * StrictMode and could slam the group shut under a reader who had just opened
- * it. Deriving makes both unreachable — rule 2 outranks the default forever
+ * it. Deriving makes that unreachable — rule 2 outranks the default forever
  * after, and no render can override a choice.
  *
- * It also keeps the restored-history case for free: a turn that was never in
- * flight in this window mounts collapsed without anything having to detect that
- * it is history.
+ * It also keeps the restored-history case consistent for free: a turn that was
+ * never in flight in this window mounts open, exactly like a live one, with
+ * nothing having to detect that it is history.
  */
 export function turnWorkGroupOpen(input: TurnWorkGroupOpenInput): boolean {
   if (input.forcedOpen) return true;
   if (input.userOpen !== null) return input.userOpen;
-  return false;
+  return true;
 }
 
 /**
