@@ -55,8 +55,26 @@ export const PACKAGED_USER_DATA_DIR_NAME = 'PiLabAi';
  *
  * Read only by the migration — see `main/services/appStateMigration.ts`. A
  * normal reader that fell back to these would never notice the copy failed.
+ *
+ * ## `jyw-ai-client` is here because the list was once written from the wrong file
+ *
+ * The 1.0.0-test.17 rename added `AiClient`, read off `electron-builder.yml`'s
+ * `productName`. That is not what named the directory. Electron takes
+ * `app.getName()` from the packaged `package.json`, which had NO `productName`
+ * field before the rename — so `name` won and every pre-test.17 install wrote
+ * `<appData>/jyw-ai-client`, never `<appData>/AiClient`.
+ *
+ * Found on a tester's Windows machine on 2026-09-21: sessions and vault sat in
+ * `~/.pilab/jyw-ai-client` while the migration searched a path that had never
+ * existed, so the upgrade came up factory-fresh — the one outcome
+ * `appStateMigration.ts` says it is not allowed to produce.
+ *
+ * `AiClient` stays: it costs one `existsSync` on a path that is usually absent,
+ * and a build that DID inject `productName` would have used it. Do not prune an
+ * entry from this list to tidy it — a name that never shipped is harmless, and
+ * a name wrongly dropped loses a user's history.
  */
-export const PRIOR_USER_DATA_DIR_NAMES = ['AiClient'];
+export const PRIOR_USER_DATA_DIR_NAMES = ['AiClient', 'jyw-ai-client'];
 
 /** Last path segment of `<userData>` — see "The profile layer" above. */
 function profileSegment(userDataDir: string): string {
