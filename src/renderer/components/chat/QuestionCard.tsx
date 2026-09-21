@@ -1,5 +1,6 @@
 import type { PermissionDecisionId, QuestionItem } from '@shared/types/runtimeEvents';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp } from 'lucide-react';
+import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
@@ -14,13 +15,12 @@ import {
   CONTINUE_CHORD,
   CONTINUE_LABEL,
   canContinue,
-  clampPage,
   deriveCardTitle,
   deriveFrozenPairs,
-  derivePager,
   derivePermissionCardView,
   derivePermissionRowView,
   deriveQuestionCardState,
+  deriveQuestionTabStrip,
   emptySelection,
   type FrozenPair,
   type OptionRow,
@@ -32,6 +32,7 @@ import {
   QUESTION_CARD_BODY_MAX_CLASS,
   QUESTION_TITLE,
   type QuestionSelection,
+  type QuestionTabStrip,
   questionReactKey,
   SKIP_LABEL,
   SKIPPED_MARK,
@@ -147,43 +148,22 @@ export function QuestionCard(props: QuestionCardProps) {
 
 interface QaHeadProps {
   title: string;
-  pager?: { visible: boolean; label: string; canPrev: boolean; canNext: boolean };
-  onPrev?: () => void;
-  onNext?: () => void;
+  /** Answer progress, e.g. `2 / 4`. Absent when the card has nothing to count. */
+  progress?: string | null;
   /** Present only on the interactive variant's collapsible strip. */
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
 }
 
-/** `.qa-head` — 36px bar: title, optional pager, optional collapse chevron. */
-function QaHead({ title, pager, onPrev, onNext, collapsed, onToggleCollapsed }: QaHeadProps) {
+/** `.qa-head` — 36px bar: title, optional progress counter, optional collapse chevron. */
+function QaHead({ title, progress, collapsed, onToggleCollapsed }: QaHeadProps) {
   return (
     <div className="flex min-h-9 items-start gap-2 border-b border-border px-3 py-2 text-muted-foreground">
       <span className="min-w-0 flex-1 whitespace-pre-wrap break-words font-semibold tracking-[0.01em]">
         {title}
       </span>
-      {pager?.visible && (
-        <span className="flex items-center gap-0.5 text-meta tabular-nums text-muted-foreground">
-          <button
-            type="button"
-            className="grid size-6 place-items-center rounded-sm hover:bg-hover disabled:pointer-events-none disabled:opacity-40"
-            disabled={!pager.canPrev}
-            onClick={onPrev}
-            aria-label="Previous question"
-          >
-            <ChevronLeft className="size-[13px]" />
-          </button>
-          <span>{pager.label}</span>
-          <button
-            type="button"
-            className="grid size-6 place-items-center rounded-sm hover:bg-hover disabled:pointer-events-none disabled:opacity-40"
-            disabled={!pager.canNext}
-            onClick={onNext}
-            aria-label="Next question"
-          >
-            <ChevronRight className="size-[13px]" />
-          </button>
-        </span>
+      {progress && (
+        <span className="shrink-0 text-meta tabular-nums text-muted-foreground">{progress}</span>
       )}
       {onToggleCollapsed && (
         <button
@@ -199,6 +179,104 @@ function QaHead({ title, pager, onPrev, onNext, collapsed, onToggleCollapsed }: 
             <ChevronDown className="size-[14px]" />
           )}
         </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * `.qa-tabs` — one tab per question, replacing the `1 of 4` pager (2026-09-20
+ * user decision; the reasoning is on `deriveQuestionTabStrip`).
+ *
+ * A plain `<button role="tab">` strip rather than `ui/tabs.tsx`: that primitive
+ * animates a sliding indicator and sizes itself `w-fit`, both of which fight a
+ * strip that must scroll horizontally once the questions outnumber the column
+ * width. What is kept from it is the part that matters — the roles, the
+ * roving-selection semantics and the keyboard handling below.
+ *
+ * The mark is a CHECK, not a dot: "answered" is the only state the user needs
+ * to find at a glance, and a filled dot cannot say which of several tabs are
+ * done. Unanswered tabs carry no mark at all, so the strip reads as "these are
+ * left" rather than as a wall of identical dots.
+ */
+function QaTabs({
+  strip,
+  active,
+  disabled,
+  onActivate,
+}: {
+  strip: QuestionTabStrip;
+  active: number;
+  disabled: boolean;
+  onActivate: (index: number) => void;
+}) {
+  const { t } = useI18n();
+  const refs = useRef<Record<number, HTMLButtonElement | null>>({});
+  // Left/Right walk the strip, Home/End jump to its ends — the WAI-ARIA tab
+  // pattern. Activation follows focus (`onActivate`), which is the "automatic
+  // activation" variant and the right one here: every panel is cheap to render
+  // and the user's intent in moving focus is plainly to read that question.
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+    if (!keys.includes(event.key)) return;
+    const last = strip.tabs.length - 1;
+    if (last < 0) return;
+    event.preventDefault();
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? last
+          : (active + (event.key === 'ArrowRight' ? 1 : -1) + strip.tabs.length) %
+            strip.tabs.length;
+    onActivate(next);
+    refs.current[next]?.focus();
+  };
+  return (
+    <div
+      className="flex shrink-0 items-stretch overflow-x-auto border-b border-border"
+      onKeyDown={onKeyDown}
+      role="tablist"
+    >
+      {strip.tabs.map((tab) => {
+        const selected = tab.index === active;
+        return (
+          <button
+            key={tab.index}
+            ref={(el) => {
+              refs.current[tab.index] = el;
+            }}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            // Focusable, but not in the Tab order: the strip is one stop and the
+            // arrows move within it, so a card with eight questions does not
+            // cost eight presses to walk past.
+            tabIndex={selected ? 0 : -1}
+            disabled={disabled}
+            onClick={() => onActivate(tab.index)}
+            title={tab.header ? `${tab.label} · ${tab.header}` : tab.label}
+            className={cn(
+              'flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-border border-b-2 border-b-transparent px-2.5 py-1.5 text-ui',
+              'hover:bg-hover disabled:pointer-events-none disabled:opacity-64',
+              'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-primary',
+              selected
+                ? 'border-b-primary bg-background font-medium text-foreground'
+                : 'text-muted-foreground'
+            )}
+          >
+            <span className="tabular-nums">{tab.label}</span>
+            {tab.answered && <Check aria-hidden className="size-3 shrink-0 text-success" />}
+          </button>
+        );
+      })}
+      {strip.total > 1 && (
+        <span className="ml-auto flex shrink-0 items-center px-2.5 text-meta tabular-nums text-muted-foreground">
+          {t('{{answered}} of {{total}} answered', {
+            answered: strip.answeredCount,
+            total: strip.total,
+          })}
+        </span>
       )}
     </div>
   );
@@ -370,7 +448,7 @@ function InteractiveQaCard({
   const { t } = useI18n();
   const items: readonly QuestionItem[] = block.questions ?? [];
   const [sel, setSel] = useState<QuestionSelection>(emptySelection);
-  const [page, setPage] = useState(0);
+  const [active, setActive] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
   const submitLatch = useRef(false);
@@ -378,13 +456,35 @@ function InteractiveQaCard({
 
   if (items.length === 0) return null;
 
-  const pager = derivePager(items.length, page);
+  const strip = deriveQuestionTabStrip(sel, items);
+  // Defensive, not decorative: `items` is re-read from the block on every
+  // render and a question list that shrank (a re-delivered `question.requested`)
+  // would otherwise leave the card showing no panel at all.
+  const activeIndex = active >= 0 && active < items.length ? active : 0;
   const canSubmit = canContinue(sel, items) && !submitting;
+  // `1 of 4` is what the header says now — the tab strip carries WHICH ones are
+  // left, so the two are not the same information twice.
+  const progress = items.length > 1 ? `${strip.answeredCount} / ${strip.total}` : null;
 
-  const goToPage = (next: number) => {
-    const clamped = clampPage(items.length, next);
-    setPage(clamped);
-    questionRefs.current[clamped]?.scrollIntoView({ block: 'nearest' });
+  /**
+   * Activate a tab and bring its panel to the top.
+   *
+   * The panel is the only one rendered, so the card's height changes on every
+   * switch and the old `scrollIntoView` would have nothing to correct. What is
+   * still needed is bringing the CARD back into view for a question the user
+   * jumped to from far down the timeline — `block: 'nearest'` so a card that is
+   * already fully visible does not move.
+   */
+  const goToQuestion = (next: number) => {
+    if (next < 0 || next >= items.length) return;
+    setActive(next);
+    questionRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+  };
+
+  /** The first question still unanswered, or `null` when there is none. */
+  const firstUnanswered = () => {
+    const tab = strip.tabs.find((candidate) => !candidate.answered);
+    return tab ? tab.index : null;
   };
 
   // Await the store round-trip (T-05 adversarial fix #4): a transport
@@ -429,21 +529,30 @@ function InteractiveQaCard({
     >
       <QaHead
         title={t(QUESTION_TITLE)}
-        pager={pager}
-        onPrev={() => goToPage(page - 1)}
-        onNext={() => goToPage(page + 1)}
+        progress={progress}
         collapsed={collapsed}
         onToggleCollapsed={onToggleCollapsed}
       />
       {!collapsed && (
         <>
-          <div className={cn('flex flex-col gap-3 px-2.5', QUESTION_CARD_BODY_MAX_CLASS)}>
+          <QaTabs
+            strip={strip}
+            active={activeIndex}
+            disabled={submitting}
+            onActivate={goToQuestion}
+          />
+          <div className={cn('flex flex-col px-2.5', QUESTION_CARD_BODY_MAX_CLASS)}>
             {items.map((item, index) => (
               <div
                 key={questionReactKey(item, index)}
                 ref={(el) => {
                   questionRefs.current[index] = el;
                 }}
+                // Hidden rather than unmounted: a question the user half-
+                // answered and switched away from keeps its scrolled position
+                // and its DOM, and the option-row arrow-key handler below still
+                // has rows to walk when the user comes back.
+                hidden={index !== activeIndex}
               >
                 {item.header && (
                   // D22 — `QuestionItem.header` is the SDK's ~12-char tag for
@@ -528,11 +637,36 @@ function InteractiveQaCard({
               {t('Could not send your answer. Please try again.')}
             </p>
           )}
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border p-2.5">
-            {submitting && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border p-2.5">
+            {submitting ? (
               <span role="status" className="mr-auto text-meta text-status-running">
                 {t('Submitting…')}
               </span>
+            ) : (
+              /* What the state of the answers IS, said where the press is. The
+                 tab strip marks WHICH questions are left; this says HOW MANY,
+                 and it is the same count Continue gates on — the button is
+                 disabled for exactly the reason printed beside it. */
+              <span className="mr-auto text-meta tabular-nums text-muted-foreground">
+                {strip.unansweredCount > 0
+                  ? t('Unanswered: {{count}}', { count: strip.unansweredCount })
+                  : t('All questions answered')}
+              </span>
+            )}
+            {strip.unansweredCount > 0 && (
+              <Button
+                size="sm"
+                variant="secondary"
+                type="button"
+                className="inline-flex h-6 items-center rounded-sm px-2"
+                disabled={submitting}
+                onClick={() => {
+                  const next = firstUnanswered();
+                  if (next !== null) goToQuestion(next);
+                }}
+              >
+                {t('Next unanswered')}
+              </Button>
             )}
             <Button
               size="sm"

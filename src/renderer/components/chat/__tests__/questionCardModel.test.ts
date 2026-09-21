@@ -30,8 +30,10 @@ import {
   derivePermissionSessionScopeNote,
   derivePermissionVerb,
   deriveQuestionCardState,
+  deriveQuestionTabStrip,
   emptySelection,
   isMaskedAnswer,
+  isQuestionAnswered,
   PERMISSION_ACTION_LABELS,
   PERMISSION_ALLOW_SESSION_NOTE,
   PERMISSION_DECISION_LABELS,
@@ -282,6 +284,81 @@ describe('derivePager / clampPage', () => {
   it('clamps an out-of-range page', () => {
     expect(clampPage(3, 5)).toBe(2);
     expect(clampPage(3, -1)).toBe(0);
+  });
+});
+
+/**
+ * 2026-09-20 — the interactive card's tab strip.
+ *
+ * The contract worth pinning is that a tab's "answered" mark and Continue's
+ * enabled state can never disagree: the mark is what the user reads to decide
+ * whether they are done, and the button is what actually gates the submit. So
+ * the tab assertions below are stated against `canContinue` itself rather than
+ * re-derived here.
+ */
+describe('deriveQuestionTabStrip', () => {
+  const items: QuestionItem[] = [
+    questionItem(['A', 'B'], { question: 'Q1', header: 'Scope' }),
+    questionItem(['C', 'D'], { question: 'Q2' }),
+    questionItem(['E'], { question: 'Q3', multiSelect: true }),
+  ];
+
+  it('marks every question unanswered on an empty selection', () => {
+    const strip = deriveQuestionTabStrip(emptySelection, items);
+    expect(strip.tabs.map((tab) => tab.label)).toEqual(['Q1', 'Q2', 'Q3']);
+    expect(strip.tabs.every((tab) => !tab.answered)).toBe(true);
+    expect(strip.answeredCount).toBe(0);
+    expect(strip.unansweredCount).toBe(3);
+    expect(strip.total).toBe(3);
+  });
+
+  it('carries the question header onto its own tab, null when the agent sent none', () => {
+    const strip = deriveQuestionTabStrip(emptySelection, items);
+    expect(strip.tabs[0].header).toBe('Scope');
+    expect(strip.tabs[1].header).toBeNull();
+  });
+
+  it('marks only the answered question, and counts the rest', () => {
+    const sel = toggleOption(emptySelection, 1, 'C', false);
+    const strip = deriveQuestionTabStrip(sel, items);
+    expect(strip.tabs.map((tab) => tab.answered)).toEqual([false, true, false]);
+    expect(strip.answeredCount).toBe(1);
+    expect(strip.unansweredCount).toBe(2);
+  });
+
+  it('marks Other answered only once it has text — the same rule canContinue uses', () => {
+    const picked = toggleOther(emptySelection, 0, false);
+    const stripNoText = deriveQuestionTabStrip(picked, items);
+    expect(stripNoText.tabs[0].answered).toBe(false);
+    expect(canContinue(picked, [items[0]])).toBe(false);
+
+    const withText = setOtherText(picked, 0, '   ');
+    // Whitespace alone is still unanswered, tab and button agreeing.
+    expect(deriveQuestionTabStrip(withText, items).tabs[0].answered).toBe(false);
+    expect(canContinue(withText, [items[0]])).toBe(false);
+
+    const real = setOtherText(picked, 0, 'a third way');
+    expect(deriveQuestionTabStrip(real, items).tabs[0].answered).toBe(true);
+    expect(canContinue(real, [items[0]])).toBe(true);
+  });
+
+  it('agrees with canContinue for every question in a partly-answered set', () => {
+    const sel = toggleOption(emptySelection, 0, 'A', false);
+    const strip = deriveQuestionTabStrip(sel, items);
+    items.forEach((item, index) => {
+      expect(strip.tabs[index].answered, `tab ${index}`).toBe(
+        isQuestionAnswered(sel, index) && canContinue(sel, [item])
+      );
+    });
+    expect(strip.unansweredCount).toBeGreaterThan(0);
+    expect(canContinue(sel, items)).toBe(false);
+  });
+
+  it('is empty for a card with no questions', () => {
+    const strip = deriveQuestionTabStrip(emptySelection, []);
+    expect(strip.tabs).toEqual([]);
+    expect(strip.total).toBe(0);
+    expect(strip.unansweredCount).toBe(0);
   });
 });
 

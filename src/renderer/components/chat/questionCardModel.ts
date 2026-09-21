@@ -262,6 +262,79 @@ export function derivePager(count: number, page: number): PagerView {
   };
 }
 
+// ---- Tabs (2026-09-20 user decision) ----
+
+/**
+ * One tab per question, plus the two counts the card's header and footer
+ * state.
+ *
+ * ## Why tabs replaced the pager
+ *
+ * The card used to render every question into one scrolling column and offer a
+ * `1 of 4` pager above it, whose buttons slid the column with
+ * `scrollIntoView`. The user's report (2026-09-20): that is a lot of card to
+ * read at once, and the "which ones are still unanswered" question had no
+ * answer until the user scrolled back up and counted. Their words: 「不要一次性
+ * 丢出大量的问题，一个卡片内只问一个问题，可以加上 tab 让用户在不同问题间切换
+ * 并回答。但是都得答了才能提交」. The preview they approved put one question on
+ * screen per tab, with the tab strip itself carrying the progress.
+ *
+ * `answered` is derived from `canContinue`'s own rule for one question rather
+ * than restated, so a tab can never claim "done" for a question the Continue
+ * button would still refuse.
+ *
+ * ## Why `index` is the identity
+ *
+ * Tabs are positional, and a question has no reliable unique id: two questions
+ * in one turn may repeat verbatim (see `answerKeyFor`), so neither the text nor
+ * the agent's id can key the strip. The index is stable because `items` is.
+ */
+export interface QuestionTabView {
+  /** Tab identity and the index the card activates. */
+  index: number;
+  /** `Q1`, `Q2`, … — the tab's own label; the question text is in the panel. */
+  label: string;
+  /** Header chip (D22), when the agent sent one. */
+  header: string | null;
+  /** Answered per {@link canContinue}'s per-question rule. */
+  answered: boolean;
+}
+
+export interface QuestionTabStrip {
+  tabs: QuestionTabView[];
+  /** Questions with an answer. */
+  answeredCount: number;
+  /** Questions still unanswered — what the footer states and Continue gates on. */
+  unansweredCount: number;
+  total: number;
+}
+
+/** Whether ONE question has been answered. The per-question half of `canContinue`. */
+export function isQuestionAnswered(sel: QuestionSelection, index: number): boolean {
+  if ((sel.byQuestion[index] ?? []).length > 0) return true;
+  if (!sel.otherSelected[index]) return false;
+  return (sel.otherText[index] ?? '').trim().length > 0;
+}
+
+export function deriveQuestionTabStrip(
+  sel: QuestionSelection,
+  items: readonly QuestionItem[]
+): QuestionTabStrip {
+  const tabs: QuestionTabView[] = items.map((item, index) => ({
+    index,
+    label: `Q${index + 1}`,
+    header: item.header ?? null,
+    answered: isQuestionAnswered(sel, index),
+  }));
+  const answeredCount = tabs.filter((tab) => tab.answered).length;
+  return {
+    tabs,
+    answeredCount,
+    unansweredCount: tabs.length - answeredCount,
+    total: tabs.length,
+  };
+}
+
 // ---- Frozen (read-only) ----
 
 export interface FrozenPair {

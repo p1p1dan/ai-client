@@ -703,10 +703,7 @@ export const zhTranslations: Record<string, string> = {
   'No Claude Code or Codex conversations were found on this machine.':
     '这台机器上没有找到 Claude Code 或 Codex 的历史对话。',
   'This project has no conversations to import.': '这个项目下没有可导入的对话。',
-  'No matching folder': '未匹配到仓库',
   'No working folder was recorded': '没有记录工作目录',
-  'This folder is not one of your projects here, so these conversations import as temporary chats.':
-    '这个目录不在本应用的项目列表里，所以这些对话会作为临时对话导入。',
   'Import selected ({{count}})': '导入所选（{{count}}）',
   'Importing...': '正在导入…',
   Rescan: '重新扫描',
@@ -714,6 +711,12 @@ export const zhTranslations: Record<string, string> = {
   '{{count}} conversations': '{{count}} 个对话',
   'Imported {{imported}}, already here {{skipped}}, failed {{failed}}.':
     '新导入 {{imported}} 个，已存在 {{skipped}} 个，失败 {{failed}} 个。',
+  'Added {{path}} as a project and imported {{count}} conversations into it.':
+    '已把 {{path}} 加为项目，并导入了 {{count}} 个对话。',
+  'Imported {{count}} conversations into the project {{path}}.':
+    '已导入 {{count}} 个对话到项目 {{path}}。',
+  '{{count}} conversations imported as temporary chats because the folder {{path}} is not on this machine any more.':
+    '{{count}} 个对话导入了临时对话，因为目录 {{path}} 在这台机器上已经不存在了。',
   'Imported conversations appear in the sidebar; open one to keep talking.':
     '导入的对话会出现在侧栏，打开就能接着聊。',
 
@@ -2330,6 +2333,13 @@ export const zhTranslations: Record<string, string> = {
   'Cache write': '缓存写入',
   // A1: `cacheRead / (input + cacheRead)`, cache writes excluded from the base.
   'Cache hit rate': '缓存命中率',
+  // 2026-09-20: the Run panel's own row now says which turn it describes. The
+  // user's report was that 99% looked like a property of the session; it is a
+  // property of the LAST TURN, and the session figure beside it is a running
+  // sum. Every label that could be read as the other one now says which it is.
+  'Cache hit rate (last turn)': '缓存命中率（上一回合）',
+  'Session figures add up every model request, so the cache read is a running sum, not what is in the context now.':
+    '本会话的数字是把每一次模型请求累加起来的结果，所以「缓存读取」是累计量，不是当前上下文里占了多少。',
   Cost: '费用',
   // A2: the conversation total, deliberately labelled apart from the
   // per-turn figures above it — the two are never added together.
@@ -3006,6 +3016,30 @@ export const zhTranslations: Record<string, string> = {
   // Identity on purpose: a key chord is not a sentence. The entry exists so a
   // locale that words it differently has a place to say so.
   'Ctrl + Enter': 'Ctrl + Enter',
+  // 2026-09-20 — the question card's tab strip. Three new strings, all about
+  // the same fact from three angles: which questions are still open. The card
+  // used to answer none of them, because it drew every question at once and a
+  // `1 of 4` pager that said nothing about what had been answered.
+  '{{answered}} of {{total}} answered': '已答 {{answered}} / {{total}}',
+  'Unanswered: {{count}}': '还有 {{count}} 个未回答',
+  'All questions answered': '全部答完，可以提交',
+  'Next unanswered': '下一个未回答',
+
+  // 2026-09-20 — the Context panel's composition chart. Bucketed by message
+  // ROLE it read 「助手 99%」, which was true and useless: tool results ride on
+  // assistant messages, so every file read landed in that one bucket. These
+  // four name the CONTENT, which is the split a reader can act on.
+  'Your instructions': '你的指令',
+  'Assistant reply': '助手正文',
+  'Tool output': '工具输出',
+  // Not `Thinking` — that key already exists as the RUNNING status (「思考中」)
+  // and `i18nCoverage` cannot tell the two uses apart. A bucket label must not
+  // claim the activity is happening.
+  'Thinking content': '思考内容',
+  'By sender': '按发送方',
+  'Composition by content': '构成（按内容）',
+  'Characters in the messages this window has loaded — not tokens, and not the context window. Token usage is on the Run panel.':
+    '这里是本窗口已加载消息的字符数，不是 token，也不是上下文窗口。token 用量在「运行」面板。',
 
   // D21 — the transport-retry banner. Four keys rather than two templates with
   // a `+`: the attempt count sits mid-sentence in English and at the end in

@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>预览 B — 问题卡片：一个问题一张卡 + Tab 自由切换（可交互）</title>
+<style>
+  /* 取色 / 字号 / 圆角 = src/renderer/styles/globals.css 的 :root + @theme（Flexoki 亮色） */
+  :root {
+    --background: #fffdf4;
+    --foreground: #100f0f;
+    --card: #fbfaf2;
+    --muted: #f6f5ee;
+    --muted-foreground: #575650;
+    --accent: #eeece3;
+    --selection: #e5e3db;
+    --border: #dad8ce;
+    --input: #cecdc3;
+    --primary: #bc5215;
+    --primary-foreground: #fffdf4;
+    --destructive: #af3029;
+    --success: #66800b;
+    --info: #205ea6;
+    --folder: #ad8301;
+
+    --text-2xs: 10px;
+    --text-meta: 13px;
+    --text-ui: 14px;
+    --text-code: 12px;
+    --text-chat-body: 16px;
+
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+      "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+      "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Cascadia Mono",
+      "Consolas", "Liberation Mono", "DejaVu Sans Mono", "PingFang SC", "Noto Sans CJK SC", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--muted);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: var(--text-ui);
+    line-height: 1.45;
+  }
+  .page { max-width: 880px; margin: 0 auto; padding: 20px; }
+  .docbar {
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--card); padding: 12px 16px; margin-bottom: 18px;
+  }
+  .docbar h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .docbar p { margin: 0; font-size: var(--text-meta); color: var(--muted-foreground); }
+  .docbar code { font-family: var(--font-mono); font-size: var(--text-code); }
+
+  /* ============ 时间线容器（模拟聊天区） ============ */
+  .timeline {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+  }
+  .reading-column { max-width: 45rem; margin: 0 auto; }
+  .prose { font-size: var(--text-chat-body); line-height: 1.625; margin: 0 0 16px; }
+
+  /* ============ 卡片外壳（= QA_SHELL_CLASS） ============ */
+  .qa {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+    overflow: hidden;
+    font-size: var(--text-chat-body);
+  }
+
+  /* ---------- 头部（= QaHead，36px 条） ---------- */
+  .qa-head {
+    display: flex; align-items: flex-start; gap: 8px;
+    min-height: 36px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted-foreground);
+  }
+  .qa-head .title {
+    flex: 1 1 auto; min-width: 0;
+    font-weight: 600; letter-spacing: 0.01em; color: var(--foreground);
+  }
+  .qa-head .counter {
+    flex: 0 0 auto;
+    font-size: var(--text-meta);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Tab 条（新增） ---------- */
+  .qa-tabs {
+    display: flex; align-items: stretch; gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .qa-tab {
+    appearance: none; background: transparent; border: 0;
+    border-bottom: 2px solid transparent;
+    border-right: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 12px;
+    font-family: var(--font-sans);
+    font-size: var(--text-ui);
+    color: var(--muted-foreground);
+    cursor: pointer;
+    white-space: nowrap;
+    flex: 0 0 auto;
+    transition: background 120ms ease, color 120ms ease;
+  }
+  .qa-tab:last-child { border-right: 0; }
+  .qa-tab:hover { background: var(--accent); color: var(--foreground); }
+  .qa-tab[aria-selected="true"] {
+    color: var(--foreground);
+    border-bottom-color: var(--primary);
+    background: var(--background);
+  }
+  .qa-tab:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+  /* 状态点：空心=未答，实心勾=已答 */
+  .qa-tab .mark {
+    width: 14px; height: 14px; flex: 0 0 auto;
+    border-radius: 999px;
+    border: 1.5px solid var(--input);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; line-height: 1;
+    color: transparent;
+  }
+  .qa-tab.is-answered .mark {
+    border-color: var(--success);
+    background: var(--success);
+    color: var(--primary-foreground);
+  }
+  .qa-tab .idx { font-variant-numeric: tabular-nums; }
+
+  /* ---------- 主体 ---------- */
+  .qa-body { padding: 10px 12px; max-height: 340px; overflow-y: auto; }
+
+  /* 只有在有多张卡时才需要：一张卡只放一个问题 */
+  .qa-card { display: none; }
+  .qa-card.is-active { display: block; }
+
+  .qa-header-chip {
+    display: inline-block;
+    border-radius: var(--radius-xs);
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: var(--text-meta);
+    padding: 1px 6px;
+    margin: 8px 0 0 4px;
+  }
+  .qa-question {
+    padding: 6px 4px 8px;
+    font-weight: 600;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: var(--text-ui);
+  }
+  .opts { display: flex; flex-direction: column; gap: 8px; }
+  .opt {
+    display: flex; align-items: flex-start; gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    cursor: pointer;
+    font-size: var(--text-ui);
+    line-height: 1.5;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .opt:hover { background: var(--accent); }
+  .opt.is-selected { border-color: var(--primary); background: var(--accent); }
+  .opt input { margin: 3px 0 0; accent-color: var(--primary); flex: 0 0 auto; }
+  .opt .label { min-width: 0; flex: 1 1 auto; }
+  .opt .desc { display: block; color: var(--muted-foreground); font-size: var(--text-meta); margin-top: 2px; }
+
+  .other-input {
+    width: 100%;
+    border: 1px solid var(--input);
+    border-radius: var(--radius-sm);
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: var(--text-ui);
+    padding: 6px 8px;
+    margin-top: 6px;
+  }
+  .other-input:focus { outline: 2px solid var(--primary); outline-offset: 0; border-color: var(--primary); }
+
+  /* ---------- 底部 ---------- */
+  .qa-foot {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--muted);
+  }
+  .qa-foot .status {
+    flex: 1 1 auto; min-width: 0;
+    font-size: var(--text-meta);
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .qa-foot .status b { color: var(--foreground); font-weight: 600; }
+  .btn {
+    appearance: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: var(--text-ui);
+    padding: 5px 12px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-ghost { background: transparent; color: var(--muted-foreground); border-color: transparent; }
+  .btn-ghost:hover { background: var(--accent); color: var(--foreground); }
+  .btn-secondary { background: var(--card); color: var(--foreground); border-color: var(--border); }
+  .btn-secondary:hover { background: var(--accent); }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground); }
+  .btn-primary:hover { filter: brightness(1.05); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .kbd {
+    font-family: var(--font-mono); font-size: var(--text-2xs);
+    border: 1px solid var(--border); border-radius: var(--radius-xs);
+    padding: 0 4px; color: var(--muted-foreground);
+  }
+
+  /* ---------- 提示条 ---------- */
+  .hint {
+    margin: 0 0 14px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--info);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    padding: 8px 12px;
+    font-size: var(--text-meta);
+    color: var(--muted-foreground);
+  }
+  .hint b { color: var(--foreground); }
+  .log {
+    margin-top: 14px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-family: var(--font-mono);
+    font-size: var(--text-code);
+    color: var(--muted-foreground);
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="docbar">
+    <h1>预览 B — 问题卡片：一个问题一张卡 + Tab 自由切换</h1>
+    <p>
+      全部可点：Tab 切换、鼠标点任意一张卡的 tab、选项单选、Other 自由输入。
+      底部「继续」在全部答完前是禁用的。切到「已提交样式」那一栏可以看应答后的只读形态。
+    </p>
+  </div>
+
+  <div class="timeline">
+    <div class="reading-column">
+      <p class="prose">我需要确认三个方向再往下改，麻烦你选一下：</p>
+
+      <div class="qa" id="qa">
+        <div class="qa-head">
+          <span class="title">4 个问题需要你确认</span>
+          <span class="counter" id="head-counter">0 / 4 已答</span>
+        </div>
+
+        <!-- ============ Tab 条 ============ -->
+        <div class="qa-tabs" role="tablist" aria-label="问题列表" id="tablist">
+          <!-- 由脚本按数据生成，保证与卡片数量一致 -->
+        </div>
+
+        <!-- ============ 卡片区：一个问题一张卡 ============ -->
+        <div class="qa-body" id="cardhost"></div>
+
+        <!-- ============ 底部 ============ -->
+        <div class="qa-foot">
+          <span class="status" id="foot-status">还有 4 个问题没有回答</span>
+          <button class="btn btn-ghost" id="btn-skip">跳过</button>
+          <button class="btn btn-secondary" id="btn-next">下一个未回答</button>
+          <button class="btn btn-primary" id="btn-continue" disabled>
+            继续 <span class="kbd">Ctrl + Enter</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="log" id="log">（这里会打印点下去之后提交的 payload）</div>
+    </div>
+  </div>
+
+  <div class="hint" style="margin-top:18px">
+    <b>与现状的差别</b>：现在这个卡片是 <b>一次性把 4 个问题全都铺在一屏</b>，
+    上面只有一个 <code>1 of 4</code> 的翻页器，翻页还要靠滚动的 <code>scrollIntoView</code> 被动跟随。
+    改成 Tab 之后，一次只看见一个问题，且能直接点任意一个 tab 跳过去，先答哪个由你决定。
+    <br /><br />
+    <b>「必须全部答完才能提交」现在就已经有了</b>（<code>canContinue()</code> 逐个校验），这次不动。
+  </div>
+</div>
+
+<script>
+(function () {
+  var QUESTIONS = [
+    {
+      key: 'scope',
+      header: '改动范围',
+      question: '这次导入逻辑的修改，只动判定顺序，还是连 workspaceMatched 这个协议字段一起换掉？',
+      multiSelect: false,
+      options: [
+        { label: '只改判定顺序', desc: '保留 workspaceMatched 布尔，主进程额外探一次目录是否存在。改动最小。' },
+        { label: '连协议字段一起换', desc: '换成三态，语义完整，但要同步改主进程类型、校验与两侧测试。' }
+      ]
+    },
+    {
+      key: 'backfill',
+      header: '历史数据',
+      question: '历史上那些已经落进临时对话的导入，要不要一起补回项目？',
+      multiSelect: false,
+      options: [
+        { label: '要，一次性补齐', desc: '按 unbound 标记扫描，能匹配回真实目录的就补上 workspacePath。' },
+        { label: '先不动', desc: '只保证以后的导入正确，历史行保持现状。' }
+      ]
+    },
+    {
+      key: 'report',
+      header: '完成提示',
+      question: '导入完成后的提示，用哪种形式？',
+      multiSelect: false,
+      options: [
+        { label: '一段汇总文案', desc: '「新增项目 3 个、导入到已有项目 12 个、4 个因目录无效进了临时对话」。' },
+        { label: '汇总 + 明细列表', desc: '汇总之外，把每个项目名和对应条数列出来，可折叠。' },
+        { label: '只出一个 toast', desc: '不占页面空间，信息量最少。' }
+      ]
+    },
+    {
+      key: 'verify',
+      header: '验收方式',
+      question: '改完之后怎么算通过？（可多选）',
+      multiSelect: true,
+      options: [
+        { label: '补主进程单测', desc: '目录存在 / 不存在 / 已登记 三种情况各一条。' },
+        { label: '补渲染层交互测试', desc: '断言勾选后发送的不再是「降级」请求。' },
+        { label: '我在界面上手点一遍', desc: '真机导入一次真实的历史对话确认。' }
+      ]
+    }
+  ];
+
+  var state = {
+    active: 0,
+    answers: QUESTIONS.map(function () { return { selected: [], other: '', otherOn: false }; })
+  };
+
+  var tablist = document.getElementById('tablist');
+  var cardhost = document.getElementById('cardhost');
+  var footStatus = document.getElementById('foot-status');
+  var headCounter = document.getElementById('head-counter');
+  var btnContinue = document.getElementById('btn-continue');
+  var btnNext = document.getElementById('btn-next');
+  var btnSkip = document.getElementById('btn-skip');
+  var log = document.getElementById('log');
+
+  // ---------- 构造 Tab ----------
+  QUESTIONS.forEach(function (q, i) {
+    var tab = document.createElement('button');
+    tab.className = 'qa-tab';
+    tab.type = 'button';
+    tab.setAttribute('role', 'tab');
+    tab.dataset.index = String(i);
+    tab.innerHTML =
+      '<span class="mark" aria-hidden="true">✓</span>' +
+      '<span class="idx">Q' + (i + 1) + '</span>';
+    tab.addEventListener('click', function () { setActive(i); });
+    tablist.appendChild(tab);
+  });
+
+  // ---------- 构造卡片（一个问题一张） ----------
+  QUESTIONS.forEach(function (q, i) {
+    var card = document.createElement('div');
+    card.className = 'qa-card';
+    card.dataset.index = String(i);
+    card.setAttribute('role', 'tabpanel');
+
+    var html = '';
+    if (q.header) html += '<span class="qa-header-chip">' + q.header + '</span>';
+    html += '<div class="qa-question">' + q.question + '</div>';
+    html += '<div class="opts" role="' + (q.multiSelect ? 'group' : 'radiogroup') + '">';
+
+    q.options.forEach(function (o, oi) {
+      html +=
+        '<label class="opt" data-opt="' + oi + '">' +
+          '<input type="' + (q.multiSelect ? 'checkbox' : 'radio') + '" name="q' + i + '" value="' + oi + '" />' +
+          '<span class="label">' + o.label +
+            (o.desc ? '<span class="desc">' + o.desc + '</span>' : '') +
+          '</span>' +
+        '</label>';
+    });
+
+    // Other 行
+    html +=
+      '<label class="opt" data-opt="other">' +
+        '<input type="' + (q.multiSelect ? 'checkbox' : 'radio') + '" name="q' + i + '" value="other" />' +
+        '<span class="label">Other' +
+          '<input class="other-input" type="text" placeholder="输入你自己的答案…" data-other="' + i + '" />' +
+        '</span>' +
+      '</label>';
+
+    html += '</div>';
+    card.innerHTML = html;
+    cardhost.appendChild(card);
+  });
+
+  // ---------- 交互 ----------
+  cardhost.addEventListener('click', function (e) {
+    var opt = e.target.closest('.opt');
+    if (!opt) return;
+    var card = opt.closest('.qa-card');
+    var qi = Number(card.dataset.index);
+    var optIdx = opt.dataset.opt;
+
+    if (optIdx === 'other') {
+      state.answers[qi].otherOn = true;
+      if (!QUESTIONS[qi].multiSelect) {
+        // 单选：清掉别的
+        state.answers[qi].selected = [];
+      }
+      render();
+      var inp = card.querySelector('[data-other="' + qi + '"]');
+      if (inp) inp.focus();
+      return;
+    }
+
+    var idx = Number(optIdx);
+    if (QUESTIONS[qi].multiSelect) {
+      var pos = state.answers[qi].selected.indexOf(idx);
+      if (pos >= 0) state.answers[qi].selected.splice(pos, 1);
+      else state.answers[qi].selected.push(idx);
+    } else {
+      state.answers[qi].selected = [idx];
+      state.answers[qi].otherOn = false;
+    }
+    render();
+  });
+
+  cardhost.addEventListener('input', function (e) {
+    var inp = e.target.closest('[data-other]');
+    if (!inp) return;
+    var qi = Number(inp.dataset.other);
+    state.answers[qi].other = inp.value;
+    state.answers[qi].otherOn = true;
+    if (!QUESTIONS[qi].multiSelect) state.answers[qi].selected = [];
+    render(true);
+  });
+
+  btnNext.addEventListener('click', function () {
+    for (var step = 1; step <= QUESTIONS.length; step++) {
+      var i = (state.active + step) % QUESTIONS.length;
+      if (!isAnswered(i)) { setActive(i); return; }
+    }
+  });
+
+  btnSkip.addEventListener('click', function () {
+    log.textContent = 'skip → 发送 { cancel: true }（剩余 ' + remaining() + ' 个未答，跳过即取消本轮提问）';
+  });
+
+  btnContinue.addEventListener('click', function () {
+    if (remaining() > 0) return;
+    var answers = {};
+    QUESTIONS.forEach(function (q, i) {
+      var parts = state.answers[i].selected.map(function (n) { return q.options[n].label; });
+      var other = state.answers[i].other.trim();
+      if (state.answers[i].otherOn && other) parts.push(other);
+      answers[q.key] = parts.join(', ');
+    });
+    log.textContent = 'submit →\n' + JSON.stringify({ answers: answers }, null, 2);
+  });
+
+  // Ctrl/Cmd + Enter
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      btnContinue.click();
+    }
+  });
+
+  function isAnswered(i) {
+    var a = state.answers[i];
+    if (a.selected.length > 0) return true;
+    return a.otherOn && a.other.trim().length > 0;
+  }
+  function remaining() {
+    var n = 0;
+    for (var i = 0; i < QUESTIONS.length; i++) if (!isAnswered(i)) n++;
+    return n;
+  }
+
+  function setActive(i) {
+    state.active = i;
+    render();
+  }
+
+  var renderKeepFocus = false;
+  function render(keepFocus) {
+    renderKeepFocus = !!keepFocus;
+
+    // Tab 状态
+    Array.prototype.forEach.call(tablist.children, function (tab, i) {
+      tab.setAttribute('aria-selected', i === state.active ? 'true' : 'false');
+      tab.classList.toggle('is-answered', isAnswered(i));
+      tab.title = isAnswered(i) ? 'Q' + (i + 1) + ' · 已答' : 'Q' + (i + 1) + ' · 未答';
+    });
+
+    // 卡片：只显示激活那一张
+    var focused = keepFocus ? document.activeElement : null;
+    var selStart = focused && focused.selectionStart;
+
+    Array.prototype.forEach.call(cardhost.children, function (card, i) {
+      card.classList.toggle('is-active', i === state.active);
+      var a = state.answers[i];
+      Array.prototype.forEach.call(card.querySelectorAll('.opt'), function (opt) {
+        var oi = opt.dataset.opt;
+        var on = oi === 'other' ? a.otherOn : a.selected.indexOf(Number(oi)) >= 0;
+        opt.classList.toggle('is-selected', on);
+        var inp = opt.querySelector('input');
+        if (inp) inp.checked = on;
+      });
+      var other = card.querySelector('[data-other]');
+      if (other && other.value !== a.other) other.value = a.other;
+    });
+
+    if (focused && selStart != null && focused.selectionStart != null) {
+      try { focused.focus(); focused.setSelectionRange(selStart, selStart); } catch (_) {}
+    }
+
+    // 计数
+    var done = QUESTIONS.length - remaining();
+    headCounter.textContent = done + ' / ' + QUESTIONS.length + ' 已答';
+    var left = remaining();
+    footStatus.innerHTML = left === 0
+      ? '<b>全部答完</b>，可以提交'
+      : '还有 <b>' + left + '</b> 个问题没有回答';
+    btnContinue.disabled = left > 0;
+    btnNext.disabled = left === 0 || left === QUESTIONS.length && false;
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

@@ -59,10 +59,31 @@ it('supports selection, keyboard, multi-select, free input, failed submission an
       radios[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     });
     expect(radios[1].getAttribute('aria-checked')).toBe('true');
+    // 2026-09-20: the card shows ONE question at a time behind a tab strip, so
+    // the second question's rows are not in the DOM flow until its tab is
+    // activated. Switching is by clicking the tab — the same path a user takes,
+    // and the path that replaced the old `scrollIntoView` pager.
+    const tabs = () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    expect(tabs().length).toBe(2);
+    expect(tabs()[0].getAttribute('aria-selected')).toBe('true');
+    // The ANSWERED question's tab carries its mark; the untouched one does not.
+    expect(tabs()[0].querySelector('.lucide-check')).not.toBeNull();
+    expect(tabs()[1].querySelector('.lucide-check')).toBeNull();
+    expect(container.textContent).toContain('Unanswered: 1');
+    await click(tabs()[1]);
+    expect(tabs()[1].getAttribute('aria-selected')).toBe('true');
+    expect(tabs()[0].getAttribute('aria-selected')).toBe('false');
     const checks = container.querySelectorAll<HTMLButtonElement>('[role="checkbox"]');
     await click(checks[0]);
     await click(checks[1]);
     await click(checks[2]);
+    // Both questions now hold an answer, and the two surfaces that report it
+    // agree: the tab marks and the count beside the Continue button.
+    expect(tabs()[0].querySelector('.lucide-check')).not.toBeNull();
+    expect(tabs()[1].querySelector('.lucide-check')).not.toBeNull();
+    expect(container.textContent).toContain('All questions answered');
+    // Activating a tab moves focus to it, so the free-text input is reached the
+    // way a keyboard user reaches it — after the tab that owns it.
     const input = container.querySelector<HTMLInputElement>('input')!;
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
