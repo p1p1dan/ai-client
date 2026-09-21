@@ -219,6 +219,10 @@ linux:
       arch: [x64]
     - target: deb
       arch: [x64]
+  # Linux can consume the multi-size PNG set directly. Keep it independent
+  # from the macOS ICNS container, which app-builder cannot convert reliably
+  # on the hosted Linux runner.
+  icon: build/icons
   executableName: aiclient
   maintainer: baseOnEnso <admin@123.com>
   category: Development
