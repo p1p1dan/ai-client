@@ -12,13 +12,11 @@
  * 2026-09-10 folded each COMPLETED `process` segment on its own, behind 「已处理
  * N 个步骤」. That left prose and process runs alternating down the turn — the
  * user's report was 「各种调用、授权穿插在 agent 的输出中，严重影响我的观感」.
- * The reply the user actually wants is the LAST thing the model said; the rest
- * is evidence they open when they choose to.
- *
- * So the unit is no longer "one process run" but "everything before the final
- * output": one head, one collapsible body, and the final output permanently
- * outside it. `countProcessSteps` survives unchanged — it is now the head's
- * FALLBACK sentence, used when the turn has no timestamps to report.
+ * That led to a single group containing everything before the last answer.
+ * T107 (2026-09-21, user-confirmed B shape) supersedes that placement: EVERY
+ * answer stays visible, and only process segments fold. The FB4 lesson still
+ * applies: ending on an error must never hide earlier prose or the error.
+ * `countProcessSteps` remains the head's fallback when timing is unavailable.
  */
 
 import type { TurnItem, TurnSegment } from './chatTurn';
@@ -40,98 +38,46 @@ export function countProcessSteps(items: readonly TurnItem[]): number {
   }, 0);
 }
 
-/** Where each segment renders, once the final output has been identified. */
-export interface TurnWorkGroupSplit<T> {
-  /**
-   * Outside the group, ABOVE it. Non-empty only in the one case where a group
-   * would be an empty shell — see `splitTurnWorkGroup`'s "no process, no head".
-   */
-  leading: TurnSegment<T>[];
-  /** Inside the group, in order. Empty means no group head renders at all. */
-  grouped: TurnSegment<T>[];
-  /** The final output. `null` when the turn produced no prose at all. */
-  finalAnswer: TurnSegment<T> | null;
-  /** Outside the group, BELOW the final output, in order. */
-  trailing: TurnSegment<T>[];
-}
+export type TurnWorkSection<T> =
+  | { kind: 'answer'; segment: TurnSegment<T> }
+  | { kind: 'notice'; segment: TurnSegment<T> }
+  | { kind: 'processGroup'; segments: TurnSegment<T>[] };
 
 /**
- * Split a turn's ordered segments into "the work" and "the answer".
+ * T107: preserve every answer and fold only consecutive process segments.
+ * Notices remain outside, including errors after the final answer (FB4).
+ * No process means no empty group or disclosure affordance.
  *
- * **The final output is the LAST `answer` SEGMENT.** Everything before it goes
- * into the group; everything after it stays outside, in order.
+ * The no-answer case keeps the existing ordering exception: notices between
+ * tool runs render after the single process group. Changing that behavior is
+ * outside T107; with answers present, segment order remains exact.
  *
- * ## Why "last answer segment" and not "the trailing run of text items"
- *
- * Because the trailing-run rule is the FB4 defect, and this is the third time
- * the repo has had to write the rule down. Under it, `answer` was the run of
- * `text` items at the very end of the turn — so a turn that ended in an error
- * notice had NO answer, and every paragraph the model had written went into the
- * collapsed segment. The user's report then was "my prose disappeared into
- * Worked for".
- *
- * The difference is exactly this: notices do not participate in the scan. They
- * cannot end the answer (a notice after the final output stays in `trailing`,
- * visible), and they cannot create one. `chatTurn.ts`'s head note carries the
- * other half of the same ruling — a notice is its own segment kind precisely so
- * this stays expressible.
- *
- * ## The three shapes
- *
- *  - **an answer exists** — `grouped` is everything before it, `trailing` is
- *    everything after it. A notice BETWEEN two prose runs therefore does go
- *    inside, which is the spec's own ruling ("它之前的所有 segment"): it is part
- *    of what happened on the way to the answer that followed it.
- *  - **no answer at all** (a turn that only ran tools, or ended on an error) —
- *    the `process` segments go in and the `notice` segments stay out. NOT
- *    "everything in", which would collapse the whole turn to a single line and
- *    hide the error that is the only thing it has to say.
- *  - **no process before the answer** — no group at all. A one-paragraph reply
- *    must not grow an empty shell, and the same reasoning covers the case where
- *    the only thing before the answer is a notice: a head that hides no work is
- *    a head that hides an error message.
- *
- * ## Known ordering deviation, stated rather than hidden
- *
- * In the no-answer shape the two buckets are FILTERED, so a notice that
- * happened between two tool runs renders below the group instead of between
- * them. Everywhere else order is exact. The alternative — splitting the group
- * in two around the notice — would put two heads on one turn and report the
- * same duration twice, which is the shape 2026-09-10 shipped and this replaces.
- *
- * Streaming: `trailing` can legitimately hold `process` segments while a turn
- * runs (the model spoke, then called a tool, and has not spoken again yet).
- * They move into `grouped` when the next prose arrives. That boundary move is
- * expected — `segmentTurnBody` itself never reorders, and every expandable row
- * inside restores its open/closed state from `toolExpansion.ts` at mount, so a
- * remount costs no user state.
+ * Unlike the former last-answer boundary, appending prose does not reparent
+ * earlier tool rows, so their expansion state survives streaming naturally.
  */
-export function splitTurnWorkGroup<T>(segments: readonly TurnSegment<T>[]): TurnWorkGroupSplit<T> {
-  let lastAnswer = -1;
-  for (let index = segments.length - 1; index >= 0; index -= 1) {
-    if (segments[index].kind === 'answer') {
-      lastAnswer = index;
-      break;
+export function splitTurnWorkGroup<T>(segments: readonly TurnSegment<T>[]): TurnWorkSection<T>[] {
+  if (!segments.some((segment) => segment.kind === 'answer')) {
+    const process = segments.filter((segment) => segment.kind === 'process');
+    const sections: TurnWorkSection<T>[] = process.length
+      ? [{ kind: 'processGroup', segments: process }]
+      : [];
+    for (const segment of segments) {
+      if (segment.kind === 'notice') sections.push({ kind: 'notice', segment });
+    }
+    return sections;
+  }
+
+  const sections: TurnWorkSection<T>[] = [];
+  for (const segment of segments) {
+    if (segment.kind !== 'process') {
+      sections.push({ kind: segment.kind, segment });
+    } else {
+      const previous = sections.at(-1);
+      if (previous?.kind === 'processGroup') previous.segments.push(segment);
+      else sections.push({ kind: 'processGroup', segments: [segment] });
     }
   }
-
-  if (lastAnswer === -1) {
-    return {
-      leading: [],
-      grouped: segments.filter((segment) => segment.kind === 'process'),
-      finalAnswer: null,
-      trailing: segments.filter((segment) => segment.kind !== 'process'),
-    };
-  }
-
-  const before = segments.slice(0, lastAnswer);
-  const hidesWork = before.some((segment) => segment.kind === 'process');
-  return {
-    leading: hidesWork ? [] : before,
-    grouped: hidesWork ? before : [],
-    finalAnswer: segments[lastAnswer],
-    trailing: segments.slice(lastAnswer + 1),
-  };
+  return sections;
 }
 
 /**
@@ -177,60 +123,20 @@ export interface TurnWorkGroupOpenInput {
 }
 
 /**
- * Whether the group is open. Three rules, in precedence order.
+ * Authorization wins, then the user's choice, then the closed default.
  *
- *  1. an unanswered authorization/question wins over everything (red line
- *     above) — the user cannot collapse away the card they are being asked to
- *     answer, and neither can the default;
- *  2. otherwise the user's own choice, once made, is permanent for this turn;
- *  3. otherwise the group is OPEN.
+ * D6 first closed groups to avoid a wall of tools. ef26ca5f opened them to
+ * expose hidden prose. T107 now keeps ALL prose outside and, with the user's
+ * explicit confirmation, restores closed process groups. Neither live nor
+ * restored turns need a `settled` input to choose their default.
  *
- * ## Rule 3 is the 2026-09-21 change (user decision), and it reverses D6
- *
- * D6 (2026-09-19) made the group start folded and stay folded, on the report
- * that a long tool sequence left a wall of 「Read / Grep / Read / Edit」 on
- * screen for the whole turn. That reasoning still holds about what the group
- * would LOOK like if it were merely a list of tool rows.
- *
- * What it missed is what else is in there. The group is not only tool traffic:
- * it is thinking blocks and every tool result, and the user's own follow-up was
- * 「我发现很多 agent 有效输出也在这个栏目下，如果默认折叠,有很多输出都看不到了」.
- * The effective part of the agent's work — what it read, what it found, what it
- * reasoned — was behind a line reading 「已工作 57 秒」, and answering "what
- * actually happened" meant opening the group every single turn.
- *
- * So the default flips, and the wall D6 was worried about is handled where it
- * belongs instead: `ToolRows.tsx` keeps every individual row closed, and the
- * thinking fold keeps its own default, so what is on screen is the group's ONE
- * line plus a column of collapsed rows. The user sees that the work happened
- * and what it was, without the output being dumped at them.
- *
- * `settled` is still absent from this input, for the reason D6 gave and which
- * is unchanged by the flip: it was DELETED rather than kept and ignored,
- * because an exported input nothing reads is a rule waiting to be mistaken for
- * a live one (§13 ①). `TurnProgressHead` still takes `settled` for its own
- * reasons (spinner, label, the current-action clause) — it simply does not
- * decide this.
- *
- * Rule 1 is unchanged (the authorization red line) and rule 2 is unchanged,
- * which is what keeps a reader's click from being overridden by any later
- * render.
- *
- * ## Why this is still derived rather than an effect
- *
- * The objection D6 raised stands: an `useEffect` + ref would fire twice under
- * StrictMode and could slam the group shut under a reader who had just opened
- * it. Deriving makes that unreachable — rule 2 outranks the default forever
- * after, and no render can override a choice.
- *
- * It also keeps the restored-history case consistent for free: a turn that was
- * never in flight in this window mounts open, exactly like a live one, with
- * nothing having to detect that it is history.
+ * Keep this derived: an effect/ref under StrictMode can run twice and close
+ * a group the reader just opened. Explicit choices always outrank defaults.
  */
 export function turnWorkGroupOpen(input: TurnWorkGroupOpenInput): boolean {
   if (input.forcedOpen) return true;
   if (input.userOpen !== null) return input.userOpen;
-  return true;
+  return false;
 }
 
 /**

@@ -720,12 +720,12 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    */
   it('[FB6-4] an unanswered authorization pins the work group open, and its card never unmounts', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
-    expectCalled('turnWorkGroupAwaitsUser(workGroup.grouped)');
+    expectCalled('turnWorkGroupAwaitsUser(section.segments)');
     expectCalled('forcedOpen={groupForcedOpen}');
     // T105: `settled` left this call's arguments. It is still a prop of the
     // head (spinner, label, current-action clause) — it just no longer decides
     // whether the group is open. 2026-09-21 flipped that default from closed
-    // to open (see `turnProcessFold.test.ts`'s [WG-OPEN-1]); what did NOT
+    // to open; T107 restores closed process groups with prose outside. What did NOT
     // change is that this call takes three facts and no fourth, which is what
     // keeps "is this card unanswered" the only thing that can force it.
     expectCalled('turnWorkGroupOpen({ forcedOpen, userOpen })');
@@ -1199,54 +1199,23 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(kinds.slice(0, -2).every((kind) => kind === 'retry' || kind.startsWith('?'))).toBe(true);
   });
 
-  /**
-   * The shape the whole 2026-09-18 batch exists to produce, pinned positionally.
-   *
-   * `turnBodyChildKinds()` above cannot see three of the four buckets: they are
-   * `.map(renderSegment)` calls and a direct `renderSegment(…)` call, which
-   * produce no JSX node at this level for the AST walk to classify. So the
-   * order is asserted over the body's source text instead — and the second half
-   * is the one that matters: the final output must not appear anywhere INSIDE
-   * the group element, because a group that owns the answer is a group that can
-   * collapse it.
-   */
-  it('[WG-WIRE-4] the final output renders after the group and outside it', () => {
+  // T107 replaces the old four buckets with ordered sections. Preserve the
+  // old no-empty-disclosure check AND extend FB4 from the last answer to all.
+  it('[WG-WIRE-4] every answer renders outside its independently folded process group', () => {
     const body = nodeSource(turnBodyNode());
-    const at = (token: string): number => {
-      const index = body.indexOf(token);
-      expect(index, `missing from the turn body: ${token}`).toBeGreaterThan(-1);
-      return index;
-    };
-    const head = at('<TurnProgressHead');
-    const leading = at('workGroup.leading.map(renderSegment)');
-    const final = at('renderSegment(workGroup.finalAnswer)');
-    const trailing = at('workGroup.trailing.map(renderSegment)');
-    // 2026-09-18 second pass: the head is the turn's FIRST line, above
-    // everything. `leading` and `grouped` are mutually exclusive shapes
-    // (`splitTurnWorkGroup`), so nothing is reordered by that — the head simply
-    // stops being gated on there being work behind it.
-    expect(head, 'the progress head comes first').toBeLessThan(leading);
-    expect(leading, 'then whatever preceded the answer with no work in it').toBeLessThan(final);
-    expect(final, 'then the final output').toBeLessThan(trailing);
-
-    const groupNode = jsxChildrenOf(turnBodyNode()).find(
-      (child) => tagNameOf(child) === 'TurnProgressHead'
+    expect(body).toContain('workSections.map((section, index) =>');
+    expect(body).toContain(
+      "if (section.kind !== 'processGroup') return renderSegment(section.segment);"
     );
-    if (!groupNode) throw new Error('ChatTurn renders no <TurnProgressHead>');
-    const inside = nodeSource(groupNode);
-    expect(inside, 'the group holds the grouped segments').toContain(
-      'workGroup.grouped.map(renderSegment)'
+    expect(body).toContain('{section.segments.map(renderSegment)}');
+    expect(body).toContain('lastProcessSection === -1');
+    expect(body).toContain('collapsible={false}');
+    expect(body).not.toContain('workGroup.finalAnswer');
+    const groupedHead = body.slice(
+      body.indexOf('key={groupKey}'),
+      body.indexOf('</TurnProgressHead>', body.indexOf('key={groupKey}'))
     );
-    expect(inside, 'and nothing else — the answer is never its child').not.toContain('finalAnswer');
-    expect(inside).not.toContain('workGroup.trailing');
-    // The CHEVRON is gated on there being work to hide — a one-paragraph reply
-    // must not grow an affordance that expands to nothing — but the head itself
-    // is not. That gate moving from the element to one of its props is the
-    // whole fix: the 50-second one-word reply used to render no head at all.
-    expect(inside).toContain('collapsible={workGroup.grouped.length > 0}');
-    expect(body, 'the head is no longer conditional').not.toContain(
-      '{workGroup.grouped.length > 0 && ('
-    );
+    expect(groupedHead).not.toContain('renderSegment(section.segment)');
   });
 
   /**
@@ -1264,8 +1233,8 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   it('[WG-WIRE-5] the head reads live tokens and thinking time, scoped to this turn', () => {
     expectCalled('sumTurnTokens(bodyMetadata.map((entry) => entry?.usage))');
     expectCalled('sumTurnThinkingMs(thinkingSpans, { nowMs, live: !processSettled })');
-    expectCalled('tokens={turnTokens}');
-    expectCalled('thinkingMs={turnThinkingMs}');
+    expectCalled('tokens={lastGroup ? turnTokens : null}');
+    expectCalled('thinkingMs={lastGroup ? turnThinkingMs : null}');
     // The two-stage rule (user decision 2026-09-18): nothing but the status
     // word and the clock until content has come back. The gate is the same
     // fact `deriveTurnStatus` switches its own wording on, read from the same
@@ -1301,10 +1270,10 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   it('[WG-WIRE-6] the expand choice is held by the turn, not by the head element', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
     expect(turn).toContain(
-      'const [workGroupUserOpen, setWorkGroupUserOpen] = useState<boolean | null>(null);'
+      'const [workGroupUserOpen, setWorkGroupUserOpen] = useState<Record<string, boolean>>({});'
     );
-    expectCalled('userOpen={workGroupUserOpen}');
-    expectCalled('onUserOpenChange={setWorkGroupUserOpen}');
+    expectCalled('userOpen={workGroupUserOpen[groupKey] ?? null}');
+    expectCalled('setWorkGroupUserOpen((previous) => ({ ...previous, [groupKey]: open }))');
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
     expect(head, 'no second copy of the choice inside the element').not.toContain('useState');
   });

@@ -1390,20 +1390,11 @@ interface ChatTurnProps {
  * T-31 §4.8: one turn — the container this whole spec exists to introduce.
  *
  * Renders, in order: the user's prompt bubble (§5), then the turn's content in
- * block order under the 2026-09-18 work-group shape —
- *
- * ```
- *   [user bubble]
- *   [work-group head]   工作中 / 已工作 57 秒  ⌄
- *     └ everything before the final output, collapsible
- *   [final output]      always visible
- *   [anything after it] notices, always visible
- * ```
- *
- * — and finally the running status row and the hover action strip. What goes
- * where is `splitTurnWorkGroup`'s ruling, not this component's; see its note
- * for why the final output is "the last `answer` SEGMENT" and not "the trailing
- * run of text items" (the FB4 defect, which that phrasing reintroduces).
+ * block order under T107: answers stay visible, process runs have independent
+ * folded heads, and notices stay outside. This supersedes the 2026-09-18
+ * single group before the final output; the original FB4 prohibition on
+ * hiding prose when a turn ends in an error now covers EVERY answer.
+ * Placement belongs to `splitTurnWorkGroup`, not this renderer.
  *
  * The segments and the status row are deliberately siblings under one
  * `turnBodyClass()`: P-17's "within a turn" gap stays a single source (8px
@@ -1440,7 +1431,7 @@ interface ChatTurnProps {
  * ## Why a native `<details>` with `preventDefault`
  *
  * Two constraints meet here. The panel must be fully CONTROLLED — the group
- * collapses itself when the turn ends, and an unanswered authorization card
+ * starts collapsed, and an unanswered authorization card
  * forces it open regardless of what anyone clicked — and it must not introduce
  * `overflow-hidden`, which is what rules out the Base UI `Collapsible`
  * (`COLLAPSIBLE_PANEL_BASE_CLASS` carries it; see `turnProcessShellClass()`).
@@ -1714,7 +1705,7 @@ const ChatTurn = memo(function ChatTurn({
   // be the same state and rule 2 of `turnWorkGroupOpen` could never hold. Held
   // HERE rather than in the head so it survives the head swapping shape — see
   // `TurnProgressHead`'s `userOpen` note.
-  const [workGroupUserOpen, setWorkGroupUserOpen] = useState<boolean | null>(null);
+  const [workGroupUserOpen, setWorkGroupUserOpen] = useState<Record<string, boolean>>({});
   // One flatten per turn, feeding both the render and the copy payload (F7):
   // the copy builder's `Turn` overload used to re-run `flattenTurnItems` — and
   // through it `groupTimeline`/`pairToolBlocks` over every block — a second
@@ -2017,24 +2008,10 @@ const ChatTurn = memo(function ChatTurn({
   // `turnComplete` cannot serve here, for the reason the paragraph above gives.
   const processSettled =
     !turnActive && !(isLastTurn && inFlightSession && !statusOwnedByPendingHead);
-  // The 2026-09-18 work group. Every placement rule is in `splitTurnWorkGroup`
-  // so it can be truth-tabled in the node suite; this file only renders the
-  // four buckets it returns, in the order it returns them.
-  const workGroup = useMemo(() => splitTurnWorkGroup(segments), [segments]);
-  // The step-count fallback is about WORK, so it counts the grouped process
-  // items only — a paragraph the model wrote on the way is not a step.
-  const groupedProcessItems = useMemo(
-    () =>
-      workGroup.grouped
-        .filter((segment) => segment.kind === 'process')
-        .flatMap((segment) => segment.items),
-    [workGroup]
-  );
-  // The red line: an unanswered Allow/Deny or question inside the group pins it
-  // open, outranking both the auto-collapse and the user's own click.
-  const groupForcedOpen = useMemo(
-    () => turnWorkGroupAwaitsUser(workGroup.grouped),
-    [workGroup.grouped]
+  // T107 replaces the four buckets with ordered, independently folded sections.
+  const workSections = useMemo(() => splitTurnWorkGroup(segments), [segments]);
+  const lastProcessSection = workSections.findLastIndex(
+    (section) => section.kind === 'processGroup'
   );
   // The turn's clock, in ONE derivation for both of the head's states. Running
   // it counts to `nowMs`; finished it counts to the turn's last completion (or,
@@ -2159,44 +2136,58 @@ const ChatTurn = memo(function ChatTurn({
           12px / 8px inside one. */}
       {turn.user && <UserBubble message={turn.user} />}
       <div className={turnBodyClass()}>
-        {/* FB4 survives inside the group: block order, all the way down. What
-            2026-09-18 changed is only WHERE the boundary is — everything before
-            the final output goes behind one head instead of each process run
-            getting its own. The rule that must never come back is "the answer
-            is the TRAILING run of text items": under it a turn that ended in an
-            error notice folded away every paragraph it had written. */}
-        {/* The head comes FIRST, always — it is the turn's own line, and the
-            2026-09-18 report is precisely that a progress indicator far from
-            the reply it describes does not read as progress. `leading` is
-            non-empty only in the shape where `grouped` is empty
-            (`splitTurnWorkGroup`), so the two never compete for this slot and
-            nothing is reordered by putting the head above both. */}
-        <TurnProgressHead
-          items={groupedProcessItems}
-          settled={processSettled}
-          forcedOpen={groupForcedOpen}
-          workedMs={workedMs}
-          elapsedSeconds={headElapsedSeconds}
-          tokens={turnTokens}
-          thinkingMs={turnThinkingMs}
-          repoName={repoName}
-          // Same fact `deriveTurnStatus` switches its wording on, passed from
-          // the same variable: the two lines must agree about when the wait
-          // ended, and upstream sends nothing at all until it does.
-          hasReplyContent={turnHasBlocks}
-          collapsible={workGroup.grouped.length > 0}
-          userOpen={workGroupUserOpen}
-          onUserOpenChange={setWorkGroupUserOpen}
-        >
-          {workGroup.grouped.map(renderSegment)}
-        </TurnProgressHead>
-        {workGroup.leading.map(renderSegment)}
-        {/* The final output — outside the group, in every state, always. */}
-        {workGroup.finalAnswer && renderSegment(workGroup.finalAnswer)}
-        {/* Whatever arrived after it. Settled, that is a notice (an error the
-            turn ended on); mid-stream it can also be a tool run that has not
-            been followed by prose yet. Either way it stays visible. */}
-        {workGroup.trailing.map(renderSegment)}
+        {/* T107 extends FB4 to every answer: only process segments enter a
+            disclosure. A plain progress row still covers a tool-free wait;
+            it has no empty group or chevron (2026-09-18 field regression). */}
+        {lastProcessSection === -1 && (
+          <TurnProgressHead
+            items={[]}
+            settled={processSettled}
+            forcedOpen={false}
+            workedMs={workedMs}
+            elapsedSeconds={headElapsedSeconds}
+            tokens={turnTokens}
+            thinkingMs={turnThinkingMs}
+            hasReplyContent={turnHasBlocks}
+            collapsible={false}
+            userOpen={null}
+            onUserOpenChange={() => {}}
+          >
+            {null}
+          </TurnProgressHead>
+        )}
+        {workSections.map((section, index) => {
+          if (section.kind !== 'processGroup') return renderSegment(section.segment);
+          // First-item identity survives appended tools and later answers. Each
+          // group remembers its own click, even while authorization pins it open.
+          const groupKey = turnItemKey(section.segments[0].items[0]);
+          const groupedProcessItems = section.segments.flatMap((segment) => segment.items);
+          const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);
+          const lastGroup = index === lastProcessSection;
+          return (
+            <TurnProgressHead
+              key={groupKey}
+              items={groupedProcessItems}
+              settled={processSettled || !lastGroup}
+              forcedOpen={groupForcedOpen}
+              // Earlier groups report their own step counts, not duplicated
+              // whole-turn duration or usage. Only the last head owns totals.
+              workedMs={lastGroup ? workedMs : null}
+              elapsedSeconds={lastGroup ? headElapsedSeconds : null}
+              tokens={lastGroup ? turnTokens : null}
+              thinkingMs={lastGroup ? turnThinkingMs : null}
+              repoName={repoName}
+              hasReplyContent={turnHasBlocks}
+              collapsible
+              userOpen={workGroupUserOpen[groupKey] ?? null}
+              onUserOpenChange={(open) =>
+                setWorkGroupUserOpen((previous) => ({ ...previous, [groupKey]: open }))
+              }
+            >
+              {section.segments.map(renderSegment)}
+            </TurnProgressHead>
+          );
+        })}
         {retryBanner && <RetryBanner view={retryBanner} sessionId={sessionId} />}
         {/* T12-b: the running status, and ONLY while it is running. FB6's
             position is kept — under the output it describes, not above it —

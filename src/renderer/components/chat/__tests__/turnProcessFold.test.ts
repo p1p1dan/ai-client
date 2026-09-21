@@ -27,197 +27,115 @@ function segmentsOf(kinds: readonly TurnItemKind[]): TurnSegment<{ kind: TurnIte
   return segmentTurnBody(kinds.map((kind) => ({ kind })));
 }
 
-const kindsOf = <T>(segments: readonly TurnSegment<T>[]) => segments.map((s) => s.kind);
-
-// ---------------------------------------------------------------------------
-// The final-output rule
-// ---------------------------------------------------------------------------
-
-describe('splitTurnWorkGroup — the final output is the LAST answer segment', () => {
-  it('[WG-1] an alternating turn keeps only its last paragraph outside the group', () => {
-    // "said something, ran a tool, said something, ran a tool, said something" —
-    // the shape the user described, and the one the old per-segment fold turned
-    // into three 「已处理 N 个步骤」 lines interleaved with prose.
-    const split = splitTurnWorkGroup(
-      segmentsOf(['text', 'toolGroup', 'text', 'toolGroup', 'text'])
-    );
-    expect(kindsOf(split.grouped)).toEqual(['answer', 'process', 'answer', 'process']);
-    expect(split.finalAnswer?.kind).toBe('answer');
-    expect(split.leading).toEqual([]);
-    expect(split.trailing).toEqual([]);
+// T107 supersedes the last-answer rule: FB4 now protects EVERY paragraph.
+// The real-session shapes below still cover thinking/text/toolCall interleaving,
+// interruption mid-tool, and failures before the first answer.
+describe('splitTurnWorkGroup — every answer stays outside process groups', () => {
+  it('[WG-1] preserves three paragraphs and folds the two intervening process runs', () => {
+    const segments = segmentsOf(['text', 'toolGroup', 'text', 'toolGroup', 'text']);
+    expect(splitTurnWorkGroup(segments)).toEqual([
+      { kind: 'answer', segment: segments[0] },
+      { kind: 'processGroup', segments: [segments[1]] },
+      { kind: 'answer', segment: segments[2] },
+      { kind: 'processGroup', segments: [segments[3]] },
+      { kind: 'answer', segment: segments[4] },
+    ]);
   });
 
-  /**
-   * ⚠️ FB4 REGRESSION CASE — the reason this rule is written as "the last
-   * `answer` SEGMENT" and not "the trailing run of text items".
-   *
-   * Under the tail rule, a turn ending in an error notice has no trailing text
-   * run, so `answer` came out empty and EVERY paragraph the model had written
-   * went into the collapsed segment. The user's report was "my prose
-   * disappeared into Worked for". Here the notice does not participate: the
-   * final output is still the prose before it, still outside the group, and the
-   * notice renders under it.
-   */
-  it('[WG-2] a turn that ENDS in a notice still shows its final output outside the group', () => {
+  it('[WG-2] an error ending cannot hide ANY earlier answer (FB4)', () => {
     const segments = segmentsOf(['text', 'toolGroup', 'text', 'notice']);
-    const split = splitTurnWorkGroup(segments);
-    expect(kindsOf(split.grouped)).toEqual(['answer', 'process']);
-    // Identity, not shape: the prose the tail rule used to swallow is THE
-    // second paragraph, and it is the one thing guaranteed outside the group.
-    expect(split.finalAnswer).toBe(segments[2]);
-    expect(kindsOf(split.trailing)).toEqual(['notice']);
+    const sections = splitTurnWorkGroup(segments);
+    expect(sections.filter((s) => s.kind === 'answer').map((s) => s.segment)).toEqual([
+      segments[0],
+      segments[2],
+    ]);
+    expect(sections.at(-1)).toEqual({ kind: 'notice', segment: segments[3] });
   });
 
-  it('[WG-3] a turn with NO answer at all does not swallow its notice', () => {
-    // Only ran a tool, then failed. Folding everything would leave one line on
-    // screen and hide the error that is the only thing this turn has to say.
-    const split = splitTurnWorkGroup(segmentsOf(['toolGroup', 'notice']));
-    expect(split.finalAnswer).toBeNull();
-    expect(kindsOf(split.grouped)).toEqual(['process']);
-    expect(kindsOf(split.trailing)).toEqual(['notice']);
+  it('[WG-3/4] without prose, notices stay outside, after the process group', () => {
+    const segments = segmentsOf(['toolGroup', 'notice', 'permission']);
+    expect(splitTurnWorkGroup(segments)).toEqual([
+      { kind: 'processGroup', segments: [segments[0], segments[2]] },
+      { kind: 'notice', segment: segments[1] },
+    ]);
   });
 
-  it('[WG-4] with no answer, a notice BETWEEN two tool runs still stays out of the group', () => {
-    const split = splitTurnWorkGroup(segmentsOf(['toolGroup', 'notice', 'permission']));
-    expect(split.finalAnswer).toBeNull();
-    expect(kindsOf(split.grouped)).toEqual(['process', 'process']);
-    expect(kindsOf(split.trailing)).toEqual(['notice']);
+  it('[WG-5/6] no process means no empty group, even with a notice', () => {
+    const segments = segmentsOf(['notice', 'text']);
+    expect(splitTurnWorkGroup(segments)).toEqual([
+      { kind: 'notice', segment: segments[0] },
+      { kind: 'answer', segment: segments[1] },
+    ]);
   });
 
-  it('[WG-5] a plain one-paragraph reply renders NO group head', () => {
-    const split = splitTurnWorkGroup(segmentsOf(['text']));
-    expect(split.grouped).toEqual([]);
-    expect(split.leading).toEqual([]);
-    expect(split.finalAnswer?.kind).toBe('answer');
-    expect(split.trailing).toEqual([]);
-  });
-
-  it('[WG-6] a group that would hide no work is not opened either', () => {
-    // Nothing before the answer but a notice: a head here would hide an error
-    // message and summarise zero steps.
-    const split = splitTurnWorkGroup(segmentsOf(['notice', 'text']));
-    expect(split.grouped).toEqual([]);
-    expect(kindsOf(split.leading)).toEqual(['notice']);
-    expect(split.finalAnswer?.kind).toBe('answer');
-  });
-
-  it('[WG-7] nothing is lost or reordered when an answer exists', () => {
+  it('[WG-7] preserves every segment exactly once and in order when an answer exists', () => {
     for (const kinds of [
       ['text'],
       ['text', 'toolGroup', 'text'],
       ['notice', 'text', 'toolGroup', 'text', 'notice'],
       ['toolGroup', 'text', 'notice', 'text'],
       ['permission', 'text', 'toolGroup'],
+      ['text', 'toolGroup', 'notice', 'toolGroup', 'text'],
     ] as TurnItemKind[][]) {
       const segments = segmentsOf(kinds);
-      const split = splitTurnWorkGroup(segments);
-      const rendered = [
-        ...split.leading,
-        ...split.grouped,
-        ...(split.finalAnswer ? [split.finalAnswer] : []),
-        ...split.trailing,
-      ];
-      expect(rendered, kinds.join(',')).toEqual([...segments]);
+      const sections = splitTurnWorkGroup(segments);
+      expect(
+        sections.flatMap((s) => (s.kind === 'processGroup' ? s.segments : [s.segment]))
+      ).toEqual(segments);
+      for (const section of sections) {
+        if (section.kind === 'processGroup') {
+          expect(section.segments.every((s) => s.kind === 'process')).toBe(true);
+        }
+      }
     }
   });
 
-  it('[WG-8] mid-stream, a tool called after the last paragraph stays visible until the next one', () => {
-    // Streaming order: prose -> tool -> more prose. The boundary moves when the
-    // second paragraph opens, which is expected; what must NOT happen is the
-    // running tool being hidden while it is the newest thing on screen.
-    const streaming = splitTurnWorkGroup(segmentsOf(['text', 'toolGroup']));
-    expect(streaming.finalAnswer?.kind).toBe('answer');
-    expect(kindsOf(streaming.trailing)).toEqual(['process']);
-    expect(streaming.grouped).toEqual([]);
-
-    const settled = splitTurnWorkGroup(segmentsOf(['text', 'toolGroup', 'text']));
-    expect(kindsOf(settled.grouped)).toEqual(['answer', 'process']);
-    expect(settled.trailing).toEqual([]);
+  it('[WG-8] appending an answer never moves existing prose or tools into another group', () => {
+    const segments = segmentsOf(['text', 'toolGroup', 'text']);
+    expect(splitTurnWorkGroup(segments).slice(0, 2)).toEqual(
+      splitTurnWorkGroup(segments.slice(0, 2))
+    );
   });
 
-  it('[WG-9] an empty turn produces nothing to render', () => {
-    const split = splitTurnWorkGroup([]);
-    expect(split).toEqual({ leading: [], grouped: [], finalAnswer: null, trailing: [] });
+  it('[WG-9] an empty turn has no sections', () => {
+    expect(splitTurnWorkGroup([])).toEqual([]);
   });
-});
 
-// ---------------------------------------------------------------------------
-// The same rule against the four turn shapes real sessions actually produce
-// ---------------------------------------------------------------------------
-
-/**
- * Read off `~/.pilab/jyw-ai-client-dev/pi-agent/sessions/session-live-*.jsonl`
- * on 2026-09-18, not imagined. Four shapes account for every turn in the five
- * most recent live sessions:
- *
- * ```
- *   user | text
- *   assistant | thinking,text,toolCall     <- intermediate: explains, then calls
- *   toolResult| text
- *   assistant | thinking,text              <- the final output
- * ```
- *
- * The pieces of one assistant message do NOT stay together on screen:
- * `groupTimeline` flushes the open tool group when a `text` block arrives, so
- * `thinking,text,toolCall` flattens to `toolGroup, text, toolGroup`. That is
- * what makes 「模型在工具调用之间穿插的解释性文字」 an `answer` segment in the
- * middle of the turn — and therefore something the last-answer rule has to have
- * an opinion about.
- */
-describe('splitTurnWorkGroup — the turn shapes real pi sessions produce', () => {
-  /**
-   * The common shape. The mid-turn explanation goes INSIDE the fold; only the
-   * paragraph the model ended on stays out. That is the user's own wording:
-   * 「折叠后只显示 agent 的最终输出」.
-   */
-  it('[WG-REAL-1] explanatory text between tool calls folds away; the last paragraph does not', () => {
-    const split = splitTurnWorkGroup(
+  it('[WG-REAL-1/2] thinking and adjacent calls fold while explanations remain visible', () => {
+    const sections = splitTurnWorkGroup(
       segmentsOf(['toolGroup', 'text', 'toolGroup', 'toolGroup', 'text'])
     );
-    // The two adjacent tool groups are one run-length segment, hence three.
-    expect(kindsOf(split.grouped)).toEqual(['process', 'answer', 'process']);
-    expect(split.finalAnswer?.kind).toBe('answer');
-    expect(split.trailing).toEqual([]);
+    expect(sections.map((s) => s.kind)).toEqual([
+      'processGroup',
+      'answer',
+      'processGroup',
+      'answer',
+    ]);
+    expect(sections[2].kind === 'processGroup' && sections[2].segments[0].items).toHaveLength(2);
   });
 
-  /** A turn that only thought — no tool call anywhere. The thought still folds. */
-  it('[WG-REAL-2] thinking with no tool call is still work, and still folds', () => {
-    const split = splitTurnWorkGroup(segmentsOf(['toolGroup', 'text']));
-    expect(kindsOf(split.grouped)).toEqual(['process']);
-    expect(split.finalAnswer?.kind).toBe('answer');
-    expect(split.leading).toEqual([]);
+  it('[WG-REAL-3/4] interruption keeps prose and errors outside while folding unfinished work', () => {
+    const sections = splitTurnWorkGroup(segmentsOf(['toolGroup', 'text', 'toolGroup', 'notice']));
+    expect(sections.map((s) => s.kind)).toEqual([
+      'processGroup',
+      'answer',
+      'processGroup',
+      'notice',
+    ]);
+    expect(splitTurnWorkGroup(segmentsOf(['toolGroup', 'notice'])).map((s) => s.kind)).toEqual([
+      'processGroup',
+      'notice',
+    ]);
   });
 
-  /**
-   * Interrupted mid-tool (Stop, or a failure): the turn's last event is a tool
-   * call, so there is a `process` segment AFTER the last thing the model said.
-   *
-   * It stays in `trailing`, i.e. VISIBLE, and that is deliberate rather than an
-   * oversight of the collapse: on an interrupted turn the unfinished call is the
-   * explanation for why there is no answer, and folding it away would leave the
-   * turn looking like it simply stopped talking.
-   */
-  it('[WG-REAL-3] a turn interrupted mid-tool keeps the unfinished call on screen', () => {
-    const split = splitTurnWorkGroup(segmentsOf(['toolGroup', 'text', 'toolGroup']));
-    expect(kindsOf(split.grouped)).toEqual(['process']);
-    expect(split.finalAnswer?.kind).toBe('answer');
-    expect(kindsOf(split.trailing)).toEqual(['process']);
-  });
-
-  /**
-   * Interrupted before the model said anything at all — thinking and a tool
-   * call, then the error notice. Everything that ran folds; the notice does
-   * not, because a collapsed head is not allowed to hide the only statement the
-   * turn has to make (`[WG-3]`, restated against the real shape).
-   */
-  it('[WG-REAL-4] an interrupted turn with no prose folds the work and keeps the error', () => {
-    const split = splitTurnWorkGroup(segmentsOf(['toolGroup', 'notice']));
-    expect(split.finalAnswer).toBeNull();
-    expect(kindsOf(split.grouped)).toEqual(['process']);
-    expect(kindsOf(split.trailing)).toEqual(['notice']);
+  it('[WG-LONG] twenty-four consecutive calls create one process section, not twenty-four', () => {
+    const kinds: TurnItemKind[] = ['text', ...Array<TurnItemKind>(24).fill('toolGroup'), 'text'];
+    const sections = splitTurnWorkGroup(segmentsOf(kinds));
+    expect(sections.map((s) => s.kind)).toEqual(['answer', 'processGroup', 'answer']);
   });
 });
 
+// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // The authorization red line
 // ---------------------------------------------------------------------------
@@ -271,46 +189,23 @@ describe('turnWorkGroupAwaitsUser — the Allow/Deny card can never be collapsed
 // Open / closed
 // ---------------------------------------------------------------------------
 
-describe('turnWorkGroupOpen — open by default, user intent forever', () => {
+describe('turnWorkGroupOpen — closed by default, user intent forever', () => {
   const open = (forcedOpen: boolean, userOpen: boolean | null): boolean =>
     turnWorkGroupOpen({ forcedOpen, userOpen });
 
-  /**
-   * ⚠️ FLIPPED AGAIN 2026-09-21 (user decision), and the history matters.
-   *
-   * 2026-09-19 (D6) asserted `open(false, null) === false`: a long tool
-   * sequence had left a wall of 「Read / Grep / Read / Edit」 on screen for the
-   * whole turn, and the head above it was lost in the middle. The answer then
-   * was to start the group folded.
-   *
-   * That is still true about tool rows — which is why `ToolRows.tsx` keeps
-   * every individual row closed and this flip does not touch it. What D6 got
-   * wrong is that the group holds more than tool traffic: thinking blocks and
-   * tool RESULTS are in there, and the user's own follow-up was 「我发现很多
-   * agent 有效输出也在这个栏目下，如果默认折叠,有很多输出都看不到了」. The part of
-   * the agent's work they actually wanted to read was behind a 「已工作 57 秒」
-   * line every single turn.
-   *
-   * The `settled` parameter stays DELETED (D6's reasoning, still correct): the
-   * default does not depend on it, and an exported input nothing reads is a
-   * rule waiting to be mistaken for a live one.
-   */
-  it('[WG-OPEN-1] the group is open by default, whether it runs or has settled', () => {
-    expect(open(false, null)).toBe(true);
+  // ef26ca5f temporarily opened groups to expose hidden prose. T107 moves
+  // that prose outside instead; the user confirmed closed process groups.
+  it('[WG-OPEN-1] process groups default closed while running or settled', () => {
+    expect(open(false, null)).toBe(false);
   });
 
-  it('[WG-OPEN-2] the default does not override a user who closed it', () => {
-    // The load-bearing half: with the default now OPEN, an expanded group that
-    // ignored the click would be a group the reader cannot put away — strictly
-    // worse than the D6 state it replaces.
+  it('[WG-OPEN-2] either explicit user choice overrides the default', () => {
     expect(open(false, true)).toBe(true);
     expect(open(false, false)).toBe(false);
   });
 
-  it('[WG-OPEN-3] restored history mounts open, like a live turn', () => {
-    // A turn that never ran in this window is settled on its first render and
-    // gets the same answer as a running one — no history detection anywhere.
-    expect(open(false, null)).toBe(true);
+  it('[WG-OPEN-3] restored history mounts closed, like a live turn', () => {
+    expect(open(false, null)).toBe(false);
   });
 
   it('[WG-OPEN-4] an unanswered authorization outranks both the default and the click', () => {
