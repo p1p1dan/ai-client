@@ -23,7 +23,10 @@ vi.mock('@/components/chat/sessionIndex/useSessionIndex', () => ({
 
 import { refreshSessionIndexNow } from '@/components/chat/sessionIndex/useSessionIndex';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { ConversationImportSettings } from '../ConversationImportSettings';
+import {
+  ConversationImportSettings,
+  type ConversationImportSettingsProps,
+} from '../ConversationImportSettings';
 
 const api = {
   listProjects: vi.fn<() => Promise<LegacyImportProject[]>>(),
@@ -124,11 +127,19 @@ async function settle(): Promise<void> {
   });
 }
 
-async function mount(): Promise<void> {
+async function mount(options?: {
+  onRegisterRepository?: (path: string) => boolean;
+}): Promise<void> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(() =>
     root.render(
-      createElement(QueryClientProvider, { client }, createElement(ConversationImportSettings))
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement<ConversationImportSettingsProps>(ConversationImportSettings, {
+          onRegisterRepository: options?.onRegisterRepository,
+        })
+      )
     )
   );
   await settle();
@@ -148,25 +159,52 @@ describe('ConversationImportSettings (H/21 C5)', () => {
     expect(text()).toContain('No Claude Code or Codex conversations were found on this machine.');
   });
 
-  it('[CI-03] marks a folder this app does not know, and leaves the known one unmarked', async () => {
+  it('[CI-03] no longer pre-judges a folder this app does not know', async () => {
     await mount();
     const rows = [...document.body.querySelectorAll('li')];
     const known = rows.find((row) => row.textContent?.includes('/home/u/code/known'));
     const stranger = rows.find((row) => row.textContent?.includes('/home/u/code/stranger'));
+    // The badge and the warning that preceded it were a guess this side had no
+    // way to make: "not registered here" is not "not on disk". Whether the
+    // folder works is Main's answer, and it arrives with the result.
     expect(known?.textContent).not.toContain('No matching folder');
-    expect(stranger?.textContent).toContain('No matching folder');
+    expect(stranger?.textContent).not.toContain('No matching folder');
   });
 
-  it('[CI-04] warns before the import that an unmatched folder lands as a temporary chat', async () => {
-    await mount();
+  it('[CI-04] registers the folder an imported conversation kept, and says so', async () => {
+    api.importBatch.mockResolvedValue({
+      results: [
+        {
+          source: {
+            sourceKind: 'claude-code',
+            projectId: 'project-stranger',
+            sourceSessionId: 'session-1',
+          },
+          status: 'imported',
+          outcome: {
+            workspace: 'kept',
+            recordedWorkspacePath: '/home/u/code/stranger',
+            workspacePath: '/home/u/code/stranger',
+          },
+        },
+      ],
+    });
+    const onRegisterRepository = vi.fn(() => true);
+    await mount({ onRegisterRepository });
     await act(() => button('stranger')?.click());
     await settle();
+    await act(() => selectAll()?.click());
+    await settle();
+    await act(() => button('Import selected')?.click());
+    await settle();
+
+    expect(onRegisterRepository).toHaveBeenCalledWith('/home/u/code/stranger');
     expect(text()).toContain(
-      'This folder is not one of your projects here, so these conversations import as temporary chats.'
+      'Added {{path}} as a project and imported {{count}} conversations into it.'
     );
   });
 
-  it('[CI-05] sends the match verdict, reports the outcome, and refreshes the sidebar', async () => {
+  it('[CI-05] sends the source ref and refreshes the sidebar', async () => {
     await mount();
     await act(() => button('known')?.click());
     await settle();
@@ -177,19 +215,36 @@ describe('ConversationImportSettings (H/21 C5)', () => {
 
     expect(api.importBatch).toHaveBeenCalledTimes(1);
     const request = api.importBatch.mock.calls[0][0] as {
-      sources: Array<{ sourceSessionId: string; workspaceMatched: boolean }>;
+      sources: Array<{ sourceSessionId: string }>;
     };
     expect(request.sources.map((source) => source.sourceSessionId).sort()).toEqual([
       'session-1',
       'session-2',
     ]);
-    expect(request.sources.every((source) => source.workspaceMatched === true)).toBe(true);
     expect(text()).toContain('Imported {{imported}}, already here {{skipped}}, failed {{failed}}.');
     expect(refreshSessionIndexNow).toHaveBeenCalledTimes(1);
   });
 
-  it('[CI-06] sends workspaceMatched=false for a folder this app does not know', async () => {
-    await mount();
+  it('[CI-06] counts a gone folder as a temporary chat and names the path', async () => {
+    api.importBatch.mockResolvedValue({
+      results: [
+        {
+          source: {
+            sourceKind: 'claude-code',
+            projectId: 'project-stranger',
+            sourceSessionId: 'session-1',
+          },
+          status: 'imported',
+          outcome: {
+            workspace: 'missing',
+            recordedWorkspacePath: '/home/u/code/stranger',
+            workspacePath: '/tmp/unbound/session-1',
+          },
+        },
+      ],
+    });
+    const onRegisterRepository = vi.fn(() => true);
+    await mount({ onRegisterRepository });
     await act(() => button('stranger')?.click());
     await settle();
     await act(() => selectAll()?.click());
@@ -197,9 +252,40 @@ describe('ConversationImportSettings (H/21 C5)', () => {
     await act(() => button('Import selected')?.click());
     await settle();
 
-    const request = api.importBatch.mock.calls[0][0] as {
-      sources: Array<{ workspaceMatched: boolean }>;
-    };
-    expect(request.sources.every((source) => source.workspaceMatched === false)).toBe(true);
+    expect(onRegisterRepository).not.toHaveBeenCalled();
+    expect(text()).toContain(
+      '{{count}} conversations imported as temporary chats because the folder {{path}} is not on this machine any more.'
+    );
+  });
+
+  it('[CI-07] counts a folder that exists but was already a project as an existing one', async () => {
+    api.importBatch.mockResolvedValue({
+      results: [
+        {
+          source: {
+            sourceKind: 'claude-code',
+            projectId: 'project-known',
+            sourceSessionId: 'session-1',
+          },
+          status: 'imported',
+          outcome: {
+            workspace: 'kept',
+            recordedWorkspacePath: '/home/u/code/known',
+            workspacePath: '/home/u/code/known',
+          },
+        },
+      ],
+    });
+    const onRegisterRepository = vi.fn(() => true);
+    await mount({ onRegisterRepository });
+    await act(() => button('known')?.click());
+    await settle();
+    await act(() => selectAll()?.click());
+    await settle();
+    await act(() => button('Import selected')?.click());
+    await settle();
+
+    expect(onRegisterRepository).not.toHaveBeenCalled();
+    expect(text()).toContain('Imported {{count}} conversations into the project {{path}}.');
   });
 });

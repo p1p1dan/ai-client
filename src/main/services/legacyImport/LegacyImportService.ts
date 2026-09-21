@@ -4,10 +4,12 @@ import path from 'node:path';
 import type {
   LegacyImportBatchResult,
   LegacyImportItemResult,
+  LegacyImportOutcome,
   LegacyImportProject,
   LegacyImportSessionPreview,
   LegacyImportSourceKind,
   LegacyImportSourceRef,
+  LegacyImportWorkspaceOutcome,
   SessionIndexEntry,
 } from '@shared/types';
 import { legacyImportDedupeKey } from '@shared/types';
@@ -144,25 +146,35 @@ export class LegacyImportService {
   /**
    * Decide the working directory the imported session runs in.
    *
-   * Keeping the recorded directory is the good outcome: the conversation stays
-   * attached to the project it is about. It is only possible when that folder
-   * is still on disk AND the caller matched it to a registered workspace —
-   * otherwise the row would merge into the sidebar with no workspace to hang
-   * off and disappear (`mergeSessionIndex` drops such rows as orphans), which
-   * is the failure this fallback exists to prevent.
+   * The question is "does the recorded directory still exist on disk" and
+   * nothing else. It used to be asked as "has the renderer registered this
+   * folder as a project", and the two are not the same question: a folder the
+   * user has never opened in this app (a checkout they work in from the
+   * terminal, say) is a real directory with real history in it, and it was
+   * being imported as a temporary chat. The renderer is expected to register
+   * whatever comes back as `kept`; this side cannot know that list, and does
+   * not need to.
    *
-   * The fallback is an isolated scratch directory, i.e. exactly what an
-   * "unbound" chat already uses. The conversation itself is unaffected — the
-   * JSONL lives under the agent directory, not under the cwd.
+   * Keeping the recorded directory is the good outcome: the conversation stays
+   * attached to the project it is about. The fallback is an isolated scratch
+   * directory, i.e. exactly what an "unbound" chat already uses. The
+   * conversation itself is unaffected — the JSONL lives under the agent
+   * directory, not under the cwd.
+   *
+   * Reports which of the two it took, because the renderer has to tell the user
+   * afterwards and could not have known beforehand.
    */
   private async resolveWorkspace(
-    source: LegacyImportSourceRef,
     recordedPath: string,
     logicalSessionId: string
-  ): Promise<string> {
-    const matched = source.workspaceMatched !== false;
-    if (matched && (await this.directoryExists(recordedPath))) return recordedPath;
-    return this.workspaceFallback.ensure(logicalSessionId);
+  ): Promise<{ workspacePath: string; workspace: LegacyImportWorkspaceOutcome }> {
+    if (recordedPath.trim() && (await this.directoryExists(recordedPath))) {
+      return { workspacePath: recordedPath, workspace: 'kept' };
+    }
+    return {
+      workspacePath: await this.workspaceFallback.ensure(logicalSessionId),
+      workspace: recordedPath.trim() ? 'missing' : 'none',
+    };
   }
 
   reconcile(): Promise<void> {
@@ -303,16 +315,24 @@ export class LegacyImportService {
 
     const logicalSessionId = `session-import-${source.sourceKind}-${this.createId()}`;
     const targetPiSessionId = `import-${source.sourceKind}-${this.createId()}`;
-    let workspacePath: string;
+    const recordedWorkspacePath = read.conversation.workspacePath;
+    let resolved: { workspacePath: string; workspace: LegacyImportWorkspaceOutcome };
     try {
-      workspacePath = await this.resolveWorkspace(
-        source,
-        read.conversation.workspacePath,
-        logicalSessionId
-      );
+      resolved = await this.resolveWorkspace(recordedWorkspacePath, logicalSessionId);
     } catch (error) {
       return { source, status: 'failed', error: errorMessage(error) };
     }
+    const { workspacePath } = resolved;
+    // The caller gets the same verdict the row was built from, so the report it
+    // prints afterwards cannot disagree with where the conversation actually
+    // landed. Absent on an already-imported item on purpose: that one was
+    // decided by an earlier run, and re-reporting it as "kept now" would claim
+    // a fresh registration for a folder nobody is re-registering.
+    const outcome: LegacyImportOutcome = {
+      workspace: resolved.workspace,
+      ...(recordedWorkspacePath.trim() ? { recordedWorkspacePath } : {}),
+      workspacePath,
+    };
     // Everything downstream — the worker cwd, the Pi session directory, the
     // index row, crash reconciliation — must agree on one path, so the
     // conversation carries the resolved one from here on.
@@ -381,7 +401,7 @@ export class LegacyImportService {
           errorMessage(disposeError)
         );
       });
-      return { source, status: 'imported', session: indexed };
+      return { source, status: 'imported', session: indexed, outcome };
     } catch (error) {
       const cleanupErrors: string[] = [];
       if (imported) {

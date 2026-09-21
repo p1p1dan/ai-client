@@ -19,16 +19,6 @@ export interface LegacyImportSourceRef {
   sourceKind: LegacyImportSourceKind;
   projectId: string;
   sourceSessionId: string;
-  /**
-   * H/21 C3 — does the recorded working directory belong to a folder this app
-   * has registered? Only the renderer holds that list, so it answers; Main
-   * still decides where an unmatched conversation actually lands and remains
-   * the only writer of the row's `unbound` flag (U05-c).
-   *
-   * Absent means "not asked": Main then keeps the recorded directory whenever
-   * it exists on disk, which is the behaviour that shipped before this field.
-   */
-  workspaceMatched?: boolean;
 }
 
 export interface LegacyImportProject {
@@ -163,11 +153,42 @@ export interface LegacyImportItemResult {
   source: LegacyImportSourceRef;
   status: LegacyImportItemStatus;
   session?: SessionIndexEntry;
+  /**
+   * Where this conversation's folder ended up, so the renderer can say so.
+   *
+   * The renderer used to answer this itself before the import (`workspaceMatched`
+   * in `LegacyImportSourceRef`) and the answer was wrong for the case this
+   * report exists for: a folder that is NOT registered here but IS a real
+   * directory was reported as "temporary chat" and imported as one. Only Main
+   * can tell "not registered" from "does not exist" — it is the one that
+   * probes the disk — so only Main answers it, and it answers afterwards.
+   */
+  outcome?: LegacyImportOutcome;
   /** Always present on failure: the raw sentence, English, for logs and fallback. */
   error?: string;
   /** Present only when the renderer can word this failure itself (D9). */
   errorCode?: LegacyImportErrorCode;
   errorParams?: LegacyImportErrorParams;
+}
+
+/**
+ * The three places a recorded working directory can end up.
+ *
+ *  - `kept` — the directory exists, so the conversation keeps it. Whether that
+ *    directory is already a registered project is the renderer's business: it
+ *    holds the list, and it is expected to register the folder when it is not.
+ *  - `missing` — the directory is gone. The conversation still imports, into an
+ *    isolated scratch directory, and the row is marked unbound.
+ *  - `none` — the source recorded no working directory at all.
+ */
+export type LegacyImportWorkspaceOutcome = 'kept' | 'missing' | 'none';
+
+export interface LegacyImportOutcome {
+  workspace: LegacyImportWorkspaceOutcome;
+  /** The source's own recorded directory, when it recorded one. */
+  recordedWorkspacePath?: string;
+  /** Where the conversation actually runs: the kept directory or the scratch one. */
+  workspacePath?: string;
 }
 
 export interface LegacyImportBatchResult {
@@ -363,8 +384,7 @@ export function isLegacyImportBatchRequest(value: unknown): value is LegacyImpor
       isRecord(source) &&
       (source.sourceKind === 'claude-code' || source.sourceKind === 'codex') &&
       isLegacyImportPathSegment(source.projectId) &&
-      isLegacyImportPathSegment(source.sourceSessionId) &&
-      (source.workspaceMatched === undefined || typeof source.workspaceMatched === 'boolean')
+      isLegacyImportPathSegment(source.sourceSessionId)
   );
 }
 

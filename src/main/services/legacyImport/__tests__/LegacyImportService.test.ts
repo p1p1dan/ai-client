@@ -51,10 +51,10 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-async function writeSource(text: string): Promise<void> {
+async function writeSource(text: string, cwd: string = workspacePath): Promise<void> {
   await writeFile(
     sourceFile,
-    `${JSON.stringify({ type: 'system', subtype: 'init', cwd: workspacePath })}\n${JSON.stringify({ type: 'user', uuid: 'u1', cwd: workspacePath, message: { role: 'user', content: text } })}\n${JSON.stringify({ type: 'assistant', uuid: 'a1', message: { role: 'assistant', model: 'claude-test', content: [{ type: 'text', text: `answer:${text}` }] } })}\n`,
+    `${JSON.stringify({ type: 'system', subtype: 'init', cwd })}\n${JSON.stringify({ type: 'user', uuid: 'u1', cwd, message: { role: 'user', content: text } })}\n${JSON.stringify({ type: 'assistant', uuid: 'a1', message: { role: 'assistant', model: 'claude-test', content: [{ type: 'text', text: `answer:${text}` }] } })}\n`,
     'utf8'
   );
 }
@@ -610,26 +610,37 @@ describe('B4 multi-source import', () => {
     expect(await readFile(sameIdFile, 'utf8')).toContain('answer:hello');
   });
 
-  // H/21 C3 — an imported row whose workspace matches nothing the app knows
-  // would merge into the sidebar as an orphan and be dropped, so the import
-  // lands in a scratch directory and says so on the row instead.
-  it('keeps the recorded workspace when the caller matched it and it exists', async () => {
+  // H/21 C3 (2026-09-20 revision) — the recorded directory is kept whenever it
+  // exists, full stop.
+  //
+  // This was gated on a `workspaceMatched` verdict from the renderer, whose
+  // answer to "does this folder exist" was actually "is it already a project
+  // here". A real checkout the user had never opened in this app therefore
+  // imported as a temporary chat, and the pane said so before the fact. The
+  // existence check moved to the only layer that can make it.
+  it('keeps the recorded workspace when the directory exists', async () => {
     const h = harness();
-    const result = (await h.service.importBatch([{ ...source, workspaceMatched: true }]))
-      .results[0];
+    const result = (await h.service.importBatch([source])).results[0];
     expect(result.status).toBe('imported');
     expect(result.session?.workspacePath).toBe(workspacePath);
     expect(result.session?.unbound).toBeUndefined();
+    expect(result.outcome?.workspace).toBe('kept');
+    expect(result.outcome?.recordedWorkspacePath).toBe(workspacePath);
     expect(h.workspaceFallback.ensure).not.toHaveBeenCalled();
   });
 
-  it('imports into a scratch workspace and marks the row unbound when nothing matched', async () => {
+  it('imports into a scratch workspace and marks the row unbound when the directory is gone', async () => {
+    await rm(workspacePath, { recursive: true, force: true });
     const h = harness();
-    const result = (await h.service.importBatch([{ ...source, workspaceMatched: false }]))
-      .results[0];
+    const result = (await h.service.importBatch([source])).results[0];
     expect(result.status).toBe('imported');
     expect(result.session?.unbound).toBe(true);
     expect(result.session?.workspacePath.startsWith(h.scratchRoot)).toBe(true);
+    // The user has to be told WHICH folder went missing; the path in the report
+    // is the only part of it they can act on.
+    expect(result.outcome?.workspace).toBe('missing');
+    expect(result.outcome?.recordedWorkspacePath).toBe(workspacePath);
+    expect(result.outcome?.workspacePath).toBe(result.session?.workspacePath);
     // The worker, the manifest and the row must all name the same directory.
     expect(h.createImport.mock.calls[0][0].conversation.workspacePath).toBe(
       result.session?.workspacePath
@@ -638,13 +649,20 @@ describe('B4 multi-source import', () => {
     expect(record.workspacePath).toBe(result.session?.workspacePath);
   });
 
-  it('falls back when the recorded workspace is gone even if the caller matched it', async () => {
-    await rm(workspacePath, { recursive: true, force: true });
+  // The 2026-09-20 report, as a test: the directory is a real one that no
+  // project in this app has ever pointed at, and the ONLY reason it used to be
+  // diverted was that fact. Nothing about the renderer's project list reaches
+  // this decision any more — `resolveWorkspace` is given a path and probed.
+  it('keeps a real directory that no project is registered against', async () => {
+    const unregistered = path.join(root, 'never-opened-here');
+    await mkdir(unregistered, { recursive: true });
+    await writeSource('hello', unregistered);
     const h = harness();
-    const result = (await h.service.importBatch([{ ...source, workspaceMatched: true }]))
-      .results[0];
+    const result = (await h.service.importBatch([source])).results[0];
     expect(result.status).toBe('imported');
-    expect(result.session?.unbound).toBe(true);
+    expect(result.session?.workspacePath).toBe(unregistered);
+    expect(result.session?.unbound).toBeUndefined();
+    expect(result.outcome?.workspace).toBe('kept');
   });
 
   it('keeps Claude projects visible when the Codex root cannot be scanned', async () => {

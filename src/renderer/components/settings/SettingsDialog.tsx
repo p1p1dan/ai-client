@@ -14,6 +14,13 @@ interface SettingsDialogProps {
   activeCategory?: SettingsCategory;
   onCategoryChange?: (category: SettingsCategory) => void;
   repoPath?: string;
+  /**
+   * Register a folder as a project without a dialog (H/21 C3 — the conversation
+   * import needs it for directories it found on disk). Threaded from `App` as a
+   * prop, like `repoPath`, because `App` is the only layer that owns the
+   * repository list.
+   */
+  onRegisterRepository?: (path: string) => boolean;
 }
 
 export function SettingsDialog({
@@ -23,6 +30,7 @@ export function SettingsDialog({
   activeCategory,
   onCategoryChange,
   repoPath,
+  onRegisterRepository,
 }: SettingsDialogProps) {
   const { t } = useI18n();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -62,6 +70,7 @@ export function SettingsDialog({
             activeCategory={activeCategory}
             onCategoryChange={onCategoryChange}
             repoPath={repoPath}
+            onRegisterRepository={onRegisterRepository}
           />
         </div>
       </DialogPopup>

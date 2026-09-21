@@ -41,12 +41,15 @@ interface SettingsContentProps {
   activeCategory?: SettingsCategory;
   onCategoryChange?: (category: SettingsCategory) => void;
   repoPath?: string;
+  /** H/21 C3 — see `SettingsDialog`'s prop of the same name. */
+  onRegisterRepository?: (path: string) => boolean;
 }
 
 export function SettingsContent({
   activeCategory: controlledCategory,
   onCategoryChange,
   repoPath,
+  onRegisterRepository,
 }: SettingsContentProps) {
   const { t } = useI18n();
   const [internalCategory, setInternalCategory] = useState<SettingsCategory>('general');
@@ -138,7 +141,7 @@ export function SettingsContent({
           {activeCategory === 'migration' && (
             <>
               <AgentMigrationSettings />
-              <ConversationImportSettings />
+              <ConversationImportSettings onRegisterRepository={onRegisterRepository} />
             </>
           )}
           {activeCategory === 'keybindings' && <KeybindingsSettings />}

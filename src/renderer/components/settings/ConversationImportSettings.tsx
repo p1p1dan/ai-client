@@ -10,12 +10,21 @@
  * underneath already existed (scan / convert / write a native Pi session /
  * dedupe); what was missing was a way for a user to reach it.
  *
- * One thing this pane decides on its own: whether a conversation's recorded
- * working directory matches a folder this app has registered. Only the renderer
- * holds that list. An unmatched conversation still imports — as a temporary
- * chat — and the row says so before the user presses the button, because the
- * alternative (importing it against a folder the sidebar cannot group) would
- * drop it out of the sidebar entirely.
+ * ## The folder no longer has to be registered first
+ *
+ * This pane used to decide, BEFORE importing, whether a conversation's recorded
+ * working directory matched a folder this app knows, and to send that verdict
+ * down as `workspaceMatched`. "Not registered here" was then reported — and
+ * imported — as a temporary chat. That conflated two different situations: a
+ * directory that is gone, and a directory that is sitting right there but was
+ * never opened in this app. The user hit the second one, and the message they
+ * got was 「这个目录不在本应用的项目列表里，所以这些对话会作为临时对话导入」.
+ *
+ * Now Main answers the only question that matters (does the directory exist?),
+ * this pane registers anything that came back with its folder intact, and the
+ * report afterwards says which projects were added, which conversations went
+ * into projects that already existed, and which fell back to a temporary chat
+ * because their folder really is missing.
  */
 
 import type {
@@ -39,6 +48,11 @@ import {
 } from '@/hooks/useLegacyImport';
 import { useI18n } from '@/i18n';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import {
+  type ConversationImportReport,
+  describeConversationImport,
+  summarizeConversationImport,
+} from './conversationImportReport';
 import { describeLegacyImportFailure } from './legacyImportFailure';
 import { SettingsSectionBlock } from './SettingsPrimitives';
 
@@ -55,7 +69,19 @@ function projectKey(project: LegacyImportProject): string {
   return `${project.sourceKind ?? 'claude-code'}:${project.id}`;
 }
 
-export function ConversationImportSettings() {
+export interface ConversationImportSettingsProps {
+  /**
+   * Register a folder as a project, no dialog. Returns whether it was actually
+   * added — `App` owns the repository list, and the report on screen has to
+   * distinguish "Added X as a project" from "into the project X" for the run
+   * that just happened, not for the list as it stands after it.
+   */
+  onRegisterRepository?: (path: string) => boolean;
+}
+
+export function ConversationImportSettings({
+  onRegisterRepository,
+}: ConversationImportSettingsProps = {}) {
   const { t } = useI18n();
   const projectsQuery = useLegacyImportProjects();
   const projects = projectsQuery.data ?? [];
@@ -63,6 +89,7 @@ export function ConversationImportSettings() {
   const [openProjectKey, setOpenProjectKey] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [report, setReport] = useState<LegacyImportItemResult[] | null>(null);
+  const [summary, setSummary] = useState<ConversationImportReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const importMutation = useLegacyImportMutation();
 
@@ -70,8 +97,36 @@ export function ConversationImportSettings() {
     () => new Set(workspaces.map((workspace) => canonicalPathKey(workspace.path))),
     [workspaces]
   );
-  const isMatched = (projectPath: string): boolean =>
-    !!projectPath.trim() && registeredPaths.has(canonicalPathKey(projectPath));
+
+  /**
+   * Fold the batch's folder verdicts into the report, registering anything
+   * that came back with its folder intact but was not a project here yet.
+   *
+   * `known` is sampled BEFORE the registration loop runs: the question the
+   * report answers is "did this import bring the project along, or find it
+   * here", and after the loop every path looks registered.
+   */
+  const settleReport = (results: LegacyImportItemResult[]): ConversationImportReport => {
+    const known = new Set(registeredPaths);
+    const built = summarizeConversationImport(results, (path) => known.has(canonicalPathKey(path)));
+    const newProjects: typeof built.newProjects = [];
+    const detached = [...built.detached];
+    for (const row of built.newProjects) {
+      if (onRegisterRepository?.(row.path)) {
+        newProjects.push(row);
+        continue;
+      }
+      // Registration is our own localStorage write and can fail. The
+      // conversations are imported by now either way, so the honest thing to
+      // say is that they landed detached — not to drop them from the report.
+      detached.push(row);
+    }
+    return {
+      ...built,
+      newProjects,
+      detached: detached.sort((left, right) => left.path.localeCompare(right.path)),
+    };
+  };
 
   const openProject = useMemo(
     () => projects.find((project) => projectKey(project) === openProjectKey) ?? null,
@@ -92,12 +147,12 @@ export function ConversationImportSettings() {
     setOpenProjectKey(project ? projectKey(project) : null);
     setSelectedIds(new Set());
     setReport(null);
+    setSummary(null);
     setError(null);
   };
 
   const runImport = async () => {
     if (!openProject || selectedIds.size === 0) return;
-    const matched = isMatched(openProject.path);
     setError(null);
     try {
       const result = await importMutation.mutateAsync({
@@ -105,10 +160,10 @@ export function ConversationImportSettings() {
           sourceKind: openProject.sourceKind ?? 'claude-code',
           projectId: openProject.id,
           sourceSessionId: sessionId,
-          workspaceMatched: matched,
         })),
       });
       setReport(result.results);
+      setSummary(settleReport(result.results));
       setSelectedIds(new Set());
       // The rows land in the session index, which the sidebar only re-reads on
       // its own schedule — without this the import looks like it did nothing.
@@ -154,9 +209,6 @@ export function ConversationImportSettings() {
               <span className="min-w-0 truncate text-ui font-medium">
                 {getDisplayPathBasename(openProject.path) || sourceLabel(openProject.sourceKind)}
               </span>
-              {!isMatched(openProject.path) && (
-                <Badge variant="outline">{t('No matching folder')}</Badge>
-              )}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <Button
@@ -176,14 +228,6 @@ export function ConversationImportSettings() {
               </Button>
             </div>
           </div>
-
-          {!isMatched(openProject.path) && (
-            <p className="text-meta text-warning">
-              {t(
-                'This folder is not one of your projects here, so these conversations import as temporary chats.'
-              )}
-            </p>
-          )}
 
           {sessionsQuery.isLoading ? (
             <div className="space-y-2">
@@ -255,9 +299,6 @@ export function ConversationImportSettings() {
                       {getDisplayPathBasename(project.path) || sourceLabel(project.sourceKind)}
                     </span>
                     <Badge variant="secondary">{sourceLabel(project.sourceKind)}</Badge>
-                    {!isMatched(project.path) && (
-                      <Badge variant="outline">{t('No matching folder')}</Badge>
-                    )}
                   </div>
                   <p className="truncate text-meta text-muted-foreground" title={project.path}>
                     {project.path || t('No working folder was recorded')}
@@ -272,15 +313,15 @@ export function ConversationImportSettings() {
         </ul>
       )}
 
-      {report && report.length > 0 && (
-        <p className="rounded-md border bg-card p-3 text-meta">
-          {t('Imported {{imported}}, already here {{skipped}}, failed {{failed}}.', {
-            imported: report.filter((item) => item.status === 'imported').length,
-            skipped: report.filter((item) => item.status === 'already-imported').length,
-            failed: report.filter((item) => item.status === 'failed').length,
-          })}{' '}
-          {t('Imported conversations appear in the sidebar; open one to keep talking.')}
-        </p>
+      {summary && (
+        <div className="space-y-1 rounded-md border bg-card p-3 text-meta">
+          {describeConversationImport(summary, t).map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+          <p className="text-muted-foreground">
+            {t('Imported conversations appear in the sidebar; open one to keep talking.')}
+          </p>
+        </div>
       )}
 
       {error && (

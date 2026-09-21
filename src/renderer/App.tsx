@@ -809,6 +809,33 @@ export default function App() {
     [repositories]
   );
 
+  /**
+   * H/21 C3 — register a folder a feature found on disk, without a dialog.
+   *
+   * Called by the conversation import for every directory an imported
+   * conversation actually kept. The app used to answer "is this folder one of
+   * yours" before importing and, on `no`, divert the conversation to a
+   * temporary chat: a checkout the user had simply never opened here was
+   * treated as a folder that did not exist. The project list is the only thing
+   * that was missing, so this is the smallest fix — ask the user for nothing,
+   * add it, and say so in the import report.
+   *
+   * Returns whether a repository was actually added, which is what lets the
+   * report distinguish "Added X as a project" from "into the project X".
+   * Deliberately does NOT select it: the user is in Settings, and stealing the
+   * workspace focus out from under them would be a worse surprise than the one
+   * this removes.
+   */
+  const handleRegisterRepository = useCallback(
+    (repoPath: string): boolean => {
+      const candidate = createRepositoryEntry(repoPath, null);
+      if (findExistingRepository(candidate)) return false;
+      saveRepositories([...repositories, candidate]);
+      return true;
+    },
+    [createRepositoryEntry, findExistingRepository, repositories, saveRepositories]
+  );
+
   const handleAddLocalRepository = useCallback(
     (selectedPath: string, groupId: string | null) => {
       const candidate = createRepositoryEntry(selectedPath, groupId);
@@ -1145,6 +1172,7 @@ export default function App() {
           activeCategory={settingsCategory}
           onCategoryChange={handleSettingsCategoryChange}
           repoPath={selectedRepo ?? undefined}
+          onRegisterRepository={handleRegisterRepository}
         />
       </div>
     </div>
