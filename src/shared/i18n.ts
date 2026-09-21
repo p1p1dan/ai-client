@@ -3006,12 +3006,15 @@ export const zhTranslations: Record<string, string> = {
   '{{count}} digits, valid for 15 minutes.': '{{count}} 位数字，15 分钟内有效。',
   '{{count}} sessions': '{{count}} 个会话',
   '{{count}} snapshots imported': '已导入 {{count}} 个快照',
-  // The turn work group's head. Three duration keys rather than one with a
-  // pre-formatted `{{duration}}`: English writes "1m 6s" and Chinese writes
-  // 「1 分 6 秒」, so the unit words belong to the CATALOG, not to the
-  // renderer. `deriveTurnWorkGroupLabel` hands over plain numbers and the
-  // render site picks the key. 「已处理 N 个步骤」 is the fallback for a turn
-  // with no timestamps at all (restored history) — never a fabricated 0 秒.
+  // The turn's clock and its step count. Three duration keys rather than one
+  // with a pre-formatted `{{duration}}`: English writes "1m 6s" and Chinese
+  // writes 「1 分 6 秒」, so the unit words belong to the CATALOG, not to the
+  // renderer. `deriveTurnWorkZone` hands over plain numbers and the render site
+  // picks the key. T113 (2026-09-21) split the two audiences: the duration keys
+  // now serve the turn's END ROW, while 「已处理 N 个步骤」 is the fold head's
+  // only line — a head reports its own group, never the whole turn. A turn with
+  // no timestamps at all (restored history) renders no end row rather than a
+  // fabricated 0 秒.
   Working: '工作中',
   'Worked for {{seconds}}s': '已工作 {{seconds}} 秒',
   'Worked for {{minutes}}m {{seconds}}s': '已工作 {{minutes}} 分 {{seconds}} 秒',

@@ -435,7 +435,7 @@ describe('deriveTurnWorkedMs', () => {
    * A07 `:2399` at the turn scale. A restored history turn replays no
    * `message.started` / `message.completed` events, so `null` here is the ONLY
    * honest answer — and callers must read it as "omit the number", never as
-   * "0s". `deriveTurnWorkGroupLabel` is what acts on it.
+   * "0s". `deriveTurnWorkZone` is what acts on it.
    */
   it('[WG-SPAN-3] returns null rather than fabricating a duration', () => {
     expect(deriveTurnWorkedMs([])).toBeNull();
@@ -602,10 +602,10 @@ describe('[WG-CLOCK-5] the turn head clock never runs backwards', () => {
   }
 
   /**
-   * The two steps the head itself performs, reproduced here so the assertion
+   * The two steps the end row itself performs, reproduced here so the assertion
    * is about the NUMBER ON SCREEN and not about an intermediate value: while
    * the turn runs `MessageTimeline` floors the elapsed ms to whole seconds
-   * before `deriveTurnWorkGroupLabel` splits them; once it settles the label
+   * before `deriveTurnWorkZone` splits them; once it settles the row
    * receives the milliseconds directly.
    */
   function renderedSeconds(sample: Sample): number | null {
