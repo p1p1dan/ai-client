@@ -1219,6 +1219,36 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
+   * T112 — a one-step group is rendered, not folded.
+   *
+   * The threshold is asserted to come from `turnProcessGroupFolds` rather than
+   * from a comparison inlined here, because an inlined one is free to drift
+   * from the count the head prints — and the visible symptom of that drift is a
+   * disclosure whose summary reads 「1 个步骤」, which is the row it hides,
+   * counted. The predicate itself is truth-tabled in `turnProcessFold.test.ts`.
+   *
+   * Position matters as much as presence: the early return has to precede the
+   * head, or the group would render both. `indexOf` on the flattened body is
+   * what says so.
+   */
+  it('[WG-WIRE-4b] a group with a single step renders in place, with no head and no chevron', () => {
+    const body = nodeSource(turnBodyNode());
+    expectCalled('turnProcessGroupFolds(groupedProcessItems)');
+    expect(body).toContain('if (!turnProcessGroupFolds(groupedProcessItems)) {');
+    expect(body).toContain(
+      '<Fragment key={groupKey}>{section.segments.map(renderSegment)}</Fragment>'
+    );
+    const branchAt = body.indexOf('if (!turnProcessGroupFolds(groupedProcessItems)) {');
+    expect(branchAt, 'the branch exists').toBeGreaterThan(-1);
+    expect(branchAt, 'and it returns before any head is built').toBeLessThan(
+      body.indexOf('<TurnProgressHead key={groupKey}')
+    );
+    // The fold rule lives in one place: a second threshold spelled here would
+    // be the fork this test exists to prevent.
+    expect(countIn(body, 'countProcessSteps(')).toBe(0);
+  });
+
+  /**
    * The head's live numbers, and the one rule that governs all of them: a
    * figure nobody measured is omitted, never printed as zero.
    *

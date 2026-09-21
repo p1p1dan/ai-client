@@ -3,7 +3,7 @@
 Role: topic capsule。建立：2026-09-19。来源是用户当日直接提出的三条界面诉求，不走审计 / 点验通道。
 任务身份的**权威仍是** [roadmap](../roadmap.md)：本文件不登记状态，只排顺序、定改动点、列测试影响面。两者冲突时以 roadmap 为准。
 
-**本文件是移交施工用的清单，不是已落地记录。** 截至建立日，代码一行未动，roadmap 也尚未登记任务号（建议的 T104～T106 见文末「规划状态同步」）。**2026-09-19 补记**：规划状态同步已完成，任务号已按建议登记为 **T104 / T105 / T106**（[roadmap](roadmap.md) 批次 J），决策结为 [031](decisions/031-tool-calls-aggregate-and-work-group-always-folded.md)（聚合与始终折叠，推翻决策 021 的「运行中自动展开」那一半）与 [032](decisions/032-chat-typography-configurable-two-tiers.md)（两档字号可配置，有据偏离字号表）；`design-system.md` 已补偏离条目，证据目录 [batch-j-chat-typography-2026-09-19](evidence/batch-j-chat-typography-2026-09-19/README.md) 已建（点验图待补）。**线 A（任务 1～4 = T104）已于 2026-09-20 落地 `0bc99095`（未推送）；线 B（任务 5 / 6 = T105 / T106）仍在施工。**
+**本文件是移交施工用的清单，不是已落地记录。** 截至建立日，代码一行未动，roadmap 也尚未登记任务号（建议的 T104～T106 见文末「规划状态同步」）。**2026-09-19 补记**：规划状态同步已完成，任务号已按建议登记为 **T104 / T105 / T106**（[roadmap](../roadmap.md) 批次 J），决策结为 [031](../decisions/031-tool-calls-aggregate-and-work-group-always-folded.md)（聚合与始终折叠，推翻决策 021 的「运行中自动展开」那一半）与 [032](../decisions/032-chat-typography-configurable-two-tiers.md)（两档字号可配置，有据偏离字号表）；`design-system.md` 已补偏离条目，证据目录 [batch-j-chat-typography-2026-09-19](../evidence/batch-j-chat-typography-2026-09-19/README.md) 已建（点验图待补）。**线 A（任务 1～4 = T104）已于 2026-09-20 落地 `0bc99095`（未推送）；线 B（任务 5 / 6 = T105 / T106）仍在施工。**
 文中所有行号对应建立日当天的 `156b038e`，施工前请重新定位。
 
 > 交付物：给施工方直接照做的清单。已含用户拍板结论、既有红线、逐文件改动点、测试影响面。

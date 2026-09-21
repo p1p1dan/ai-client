@@ -2587,7 +2587,9 @@ export const zhTranslations: Record<string, string> = {
   '{{count}} tool call': '{{count}} 次工具调用',
   '{{count}} tool calls': '{{count}} 次工具调用',
   // T108 keeps aggregate counts; the work head still reports step totals.
-  '{{count}} step': '{{count}} 个步骤',
+  // T112 retired the SINGULAR `{{count}} step`: a head now exists only for a
+  // group that folded two steps or more, so the one-step wording had no caller
+  // left. The plural stays — it is what the head's settled clause prints.
   '{{count}} steps': '{{count}} 个步骤',
   '{{count}} tool': '{{count}} 个工具',
   '{{count}} tools': '{{count}} 个工具',

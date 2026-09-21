@@ -5,7 +5,7 @@
 ## 文档职责
 
 - **核心需求与架构**：[Runtime ARD](../plans/2026-09-08-runtime-evolution-ard.md)。维护功能边界、决策、依赖与验收标准；仅需求或决策变化时修改。
-- **活跃 roadmap**：[加固任务树 T001～T111](plans/runtime-hardening/roadmap.md)。任务身份、状态、顺序的唯一权威。
+- **活跃 roadmap**：[加固任务树 T001～T114](plans/runtime-hardening/roadmap.md)。任务身份、状态、顺序的唯一权威。
 - **历史任务树**：[Runtime / GUI 核心任务树](plans/runtime-evolution/README.md)。P0～P6、GUI 子节点的实现/验证状态与证据，2026-09-14 起为历史；审计对其节点状态的异议见[审计证据](plans/runtime-evolution/evidence/runtime-audit-2026-09-14/README.md)。
 - **用户进度看板（implementation status）**：[进度看板](进度看板.md)。只维护当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；通过任务 ID 引用活跃 roadmap。
 - **功能与验收参考**：各计划的 topics、GUI 功能清单及现场验收步骤；描述“做什么、怎么验”，不复制实时状态。
@@ -17,7 +17,7 @@
 
 | 计划 | 状态 | 当前阶段 | 任务树 | 用户看板 |
 |---|---|---|---|---|
-| Runtime 加固与收口 | In Progress | 批次 D4 与批次 G 均已落地；批次 H（T077～T087 + 提级 T053）十项已提交（13 个本地提交，未推送），本地点验三轮完成（09-19 MODEL 组剩余 10 项处置完毕），待 Windows 第二轮验证；T085 未开始（阻塞 Q019）、T087 推迟；批次 I（T091～T103）十三项已落地分 12 个本地提交（未推送）；批次 J（T104～T106，2026-09-19 建立）线 A/T104 已落地 `0bc99095`（未推送），线 B/T105 · T106 已落地 `765729da`；批次 K（T107～T111，2026-09-21 建立，正文可见性与审阅 diff 落点）T107～T110 实现与定向验证完成、逐项提交；真实界面与 T111 取证待补 | [T001～T111](plans/runtime-hardening/roadmap.md) | [当前进度](进度看板.md) |
+| Runtime 加固与收口 | In Progress | 批次 D4 与批次 G 均已落地；批次 H（T077～T087 + 提级 T053）十项已提交（13 个本地提交，未推送），本地点验三轮完成（09-19 MODEL 组剩余 10 项处置完毕），待 Windows 第二轮验证；T085 未开始（阻塞 Q019）、T087 推迟；批次 I（T091～T103）十三项已落地分 12 个本地提交（未推送）；批次 J（T104～T106，2026-09-19 建立）线 A/T104 已落地 `0bc99095`（未推送），线 B/T105 · T106 已落地 `765729da`；批次 K（T107～T111，2026-09-21 建立，正文可见性与审阅 diff 落点）T107～T110 实现与定向验证完成、逐项提交；现场验收已做（发现工作区形态不一致）；批次 K 续（T112～T114，2026-09-21 现场验收当场拍板，工作区行钉回合末尾）未开工；真实界面与 T111 取证待补 | [T001～T114](plans/runtime-hardening/roadmap.md) | [当前进度](进度看板.md) |
 | Runtime 自主化演进（含 GUI 改进） | 已收口（参考与证据基线） | 代码侧节点全部执行完；现场与修补移交上一行 | [P0～P6 / GUI](plans/runtime-evolution/README.md) | [收口快照](plans/runtime-evolution/history/2026-09-14-进度看板-收口快照.md) |
 
 GUI 原计划根保留为[功能与验收参考](plans/gui-sdk-experience/README.md)，不再作为独立执行状态源。

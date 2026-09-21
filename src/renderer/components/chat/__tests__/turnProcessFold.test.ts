@@ -7,6 +7,7 @@ import {
   deriveTurnCurrentAction,
   deriveTurnWorkGroupLabel,
   splitTurnWorkGroup,
+  turnProcessGroupFolds,
   turnWorkGroupAwaitsUser,
   turnWorkGroupOpen,
 } from '../turnProcessFold';
@@ -342,6 +343,75 @@ describe('countProcessSteps', () => {
     ]);
     expect(after).toBe(before);
     expect(after).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T112 — one step does not earn a fold
+// ---------------------------------------------------------------------------
+
+/**
+ * The threshold, truth-tabled against the number the head would have printed.
+ *
+ * These are not a restatement of `countProcessSteps`: the claim is that the
+ * fold and the head's own count are driven by ONE number, so the app can never
+ * render a disclosure whose summary reads 「1 个步骤」. Asserting the predicate
+ * against `countProcessSteps` of the same items is what pins them together.
+ */
+describe('turnProcessGroupFolds — a single step renders in place', () => {
+  const entryGroup = (entries: number): TurnItem =>
+    ({
+      kind: 'toolGroup',
+      blockIndex: 0,
+      messageId: 'm1',
+      entries: Array.from({ length: entries }, () => ({ kind: 'run' })),
+    }) as unknown as TurnItem;
+
+  it('[WG-ONE-1] one step does not fold, two or more do', () => {
+    expect(turnProcessGroupFolds([entryGroup(1)])).toBe(false);
+    expect(turnProcessGroupFolds([entryGroup(2)])).toBe(true);
+    expect(turnProcessGroupFolds([entryGroup(1), entryGroup(1)])).toBe(true);
+    expect(turnProcessGroupFolds([entryGroup(24)])).toBe(true);
+  });
+
+  it('[WG-ONE-2] the threshold IS the head count, not an item count', () => {
+    // Four runs inside ONE item: an item-count threshold would call this a
+    // single row and refuse to fold a group whose head says 「4 个步骤」.
+    const items = [entryGroup(4)];
+    expect(countProcessSteps(items)).toBe(4);
+    expect(turnProcessGroupFolds(items)).toBe(true);
+    for (const steps of [0, 1, 2, 3, 7]) {
+      expect(turnProcessGroupFolds([entryGroup(steps)]), `${steps}`).toBe(
+        countProcessSteps([entryGroup(steps)]) > 1
+      );
+    }
+  });
+
+  it('[WG-ONE-3] a group with nothing to count does not fold either', () => {
+    // Not a new case: `deriveTurnWorkGroupLabel` already returned null for it,
+    // so it never had a head to hide behind.
+    expect(turnProcessGroupFolds([])).toBe(false);
+    expect(turnProcessGroupFolds([entryGroup(0)])).toBe(false);
+  });
+
+  /**
+   * The red line, at the one-step size.
+   *
+   * A sole unanswered permission is the case where "do not fold" and "force it
+   * open" could have disagreed. They cannot: not folding puts the card on
+   * screen unconditionally, which is strictly more than `forcedOpen` buys, and
+   * `turnWorkGroupAwaitsUser` keeps reporting the same answer for the group so
+   * the rule stays in one place for every group that DOES fold.
+   */
+  it('[WG-ONE-4] a lone unanswered authorization renders in place, and still reads as awaiting', () => {
+    const lone = [askItem('permission')];
+    expect(turnProcessGroupFolds(lone)).toBe(false);
+    expect(turnWorkGroupAwaitsUser([processSegment(lone)])).toBe(true);
+    // With a second step it folds — and then the forced-open rule is what keeps
+    // the card visible.
+    const pair = [askItem('permission'), toolItem()];
+    expect(turnWorkGroupAwaitsUser([processSegment(pair)])).toBe(true);
+    expect(turnWorkGroupOpen({ forcedOpen: true, userOpen: false })).toBe(true);
   });
 });
 

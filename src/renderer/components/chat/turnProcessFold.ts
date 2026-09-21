@@ -38,6 +38,33 @@ export function countProcessSteps(items: readonly TurnItem[]): number {
   }, 0);
 }
 
+/**
+ * Does this process group earn a fold at all?
+ *
+ * T112 (user decision 2026-09-21): 「如果只有一条，就直接显示，如果有多条一起，
+ * 那就合并为 N 个步骤」. A single step behind a disclosure costs a click to read
+ * one line that already fits, and the head hiding it would read 「1 个步骤」 —
+ * the row itself, counted.
+ *
+ * This is the rule the TOOL ROWS have had since sign-off ②/A07 `:2348`
+ * (`toolCard.ts`'s `deriveToolGroupRows`: "恰好 1 条不聚合"), applied one level
+ * out to the group that wraps them. Measured in STEPS rather than items, so the
+ * threshold is exactly the number the head would otherwise have printed.
+ *
+ * Zero counts as "no fold" alongside one, and that is not a new case: a group
+ * with nothing to count already had no head, because `deriveTurnWorkGroupLabel`
+ * returns `null` there. It renders in place either way.
+ *
+ * The authorization red line moves only in the safe direction: a group that
+ * does not fold is unconditionally on screen, so an unanswered
+ * permission/question that happens to be the group's only step becomes MORE
+ * reachable, never less. `turnWorkGroupAwaitsUser` still governs every group
+ * that does fold.
+ */
+export function turnProcessGroupFolds(items: readonly TurnItem[]): boolean {
+  return countProcessSteps(items) > 1;
+}
+
 export type TurnWorkSection<T> =
   | { kind: 'answer'; segment: TurnSegment<T> }
   | { kind: 'notice'; segment: TurnSegment<T> }

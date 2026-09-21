@@ -17,7 +17,7 @@ import {
   ShieldAlert,
   TriangleAlert,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -119,6 +119,7 @@ import {
   deriveTurnCurrentAction,
   deriveTurnWorkGroupLabel,
   splitTurnWorkGroup,
+  turnProcessGroupFolds,
   turnWorkGroupAwaitsUser,
   turnWorkGroupOpen,
 } from './turnProcessFold';
@@ -1567,10 +1568,12 @@ function TurnProgressHead({
   // duration is the thing being reported: `label.kind === 'steps'` already
   // prints the count as the head itself, and repeating it would read as two
   // different measurements of the same turn.
+  //
+  // T112 retires the singular key with the case that used it: a head exists
+  // only for a group that folds (two steps or more) or for a turn with no
+  // process at all (zero), so `{{count}} step` had no reachable caller left.
   const stepsClause =
-    settled && label.kind === 'worked' && steps > 0
-      ? t(steps === 1 ? '{{count}} step' : '{{count}} steps', { count: steps })
-      : null;
+    settled && label.kind === 'worked' && steps > 0 ? t('{{count}} steps', { count: steps }) : null;
   // 2026-09-18 (third pass): a settled turn KEEPS its ↑↓ clause instead of
   // dropping straight to bare duration. The earlier rule here was "the live
   // clauses ride the running head only", on the reasoning that a settled
@@ -2147,6 +2150,15 @@ const ChatTurn = memo(function ChatTurn({
           // group remembers its own click, even while authorization pins it open.
           const groupKey = turnItemKey(section.segments[0].items[0]);
           const groupedProcessItems = section.segments.flatMap((segment) => segment.items);
+          // T112: one step is its own best summary, so it renders where it
+          // stands — no head, no chevron, nothing to click. The group grows a
+          // fold the moment a second step lands, and `groupKey` is unchanged
+          // across that transition, so the segments below are not remounted by
+          // it. `turnProcessGroupFolds` owns the threshold; deciding it here
+          // would fork the rule away from the count the head prints.
+          if (!turnProcessGroupFolds(groupedProcessItems)) {
+            return <Fragment key={groupKey}>{section.segments.map(renderSegment)}</Fragment>;
+          }
           const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);
           const lastGroup = index === lastProcessSection;
           return (

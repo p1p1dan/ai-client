@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>预览 — 工作区固定在末尾 + 单条不折叠</title>
+<style>
+  /* 取色与字号照抄 src/renderer/styles/globals.css 的 :root 与 @theme token。 */
+  :root {
+    --background: #fffdf4;
+    --foreground: #100f0f;
+    --card: #fbfaf2;
+    --muted: #f6f5ee;
+    --muted-foreground: #575650;
+    --accent: #eeece3;
+    --border: #dad8ce;
+    --primary: #bc5215;
+    --destructive: #af3029;
+    --success: #66800b;
+    --status-running: #205ea6;
+    --tool-arg: #6b6b62;
+
+    --text-2xs: 10px;
+    --text-meta: 13px;
+    --text-ui: 14px;
+    --text-code: 12px;
+    --text-chat-body: 16px;
+    --text-chat-process: 13px;
+
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+      "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+      "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Cascadia Mono",
+      "Consolas", "Liberation Mono", "DejaVu Sans Mono", "PingFang SC", "Noto Sans CJK SC", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--muted); color: var(--foreground);
+    font-family: var(--font-sans); font-size: var(--text-ui); line-height: 1.45;
+  }
+  .page { max-width: 1400px; margin: 0 auto; padding: 0 0 60px; }
+
+  .docbar {
+    position: sticky; top: 0; z-index: 30;
+    border-bottom: 1px solid var(--border); background: var(--card); padding: 14px 20px;
+  }
+  .docbar h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .docbar p { margin: 0 0 10px; font-size: var(--text-meta); color: var(--muted-foreground); max-width: 980px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+  .ctl { display: flex; align-items: center; gap: 7px; font-size: var(--text-meta); }
+  .ctl > span:first-child { color: var(--muted-foreground); }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+  .seg button {
+    font: inherit; font-size: var(--text-meta); padding: 3px 12px; cursor: pointer;
+    border: 0; background: var(--card); color: var(--muted-foreground);
+    border-right: 1px solid var(--border);
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--foreground); font-weight: 600; }
+  .seg button:disabled { opacity: .4; cursor: not-allowed; }
+
+  .board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 18px 20px 0; }
+  @media (max-width: 1000px) { .board { grid-template-columns: 1fr; } }
+
+  .lane { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--background); display: flex; flex-direction: column; min-width: 0; }
+  .lane > header { padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--card); border-radius: var(--radius-md) var(--radius-md) 0 0; }
+  .lane h2 { margin: 0 0 3px; font-size: var(--text-ui); font-weight: 600; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .lane h2 .tag {
+    font-size: var(--text-2xs); letter-spacing: .02em; border: 1px solid var(--border);
+    border-radius: var(--radius-xs); padding: 1px 5px; color: var(--muted-foreground);
+    background: var(--muted); font-weight: 500;
+  }
+  .lane h2 .tag.bad { border-color: var(--destructive); color: var(--destructive); }
+  .lane > header p { margin: 0; font-size: var(--text-meta); color: var(--muted-foreground); }
+  .lane .body { padding: 16px 16px 18px; }
+  .lane .stat {
+    margin: 0 14px 14px; padding: 8px 10px; border-top: 1px dashed var(--border);
+    font-size: var(--text-2xs); color: var(--muted-foreground); display: flex; gap: 14px; flex-wrap: wrap;
+  }
+  .lane .stat b { color: var(--foreground); font-weight: 600; }
+
+  .bubble {
+    background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 8px 12px; margin-bottom: 14px; font-size: var(--text-chat-body); line-height: 1.5;
+    display: inline-block; max-width: 94%;
+  }
+  .prose { font-size: var(--text-chat-body); line-height: 1.62; margin: 0 0 12px; }
+  .prose:last-child { margin-bottom: 0; }
+  .prose code, .legend code, .note code { font-family: var(--font-mono); font-size: var(--text-code); background: var(--accent); padding: 1px 4px; border-radius: var(--radius-xs); }
+
+  /* 折叠组头 */
+  .workrow {
+    display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%;
+    font-size: var(--text-chat-process); color: var(--muted-foreground);
+    padding: 1px 0; margin: 0 0 12px; cursor: pointer; user-select: none;
+  }
+  .workrow:hover { color: var(--foreground); }
+  .workrow .chev { transition: transform .15s; flex: 0 0 auto; display: inline-block; }
+  .workrow[data-open="true"] .chev { transform: rotate(90deg); }
+  .workbody { margin: -6px 0 14px 1px; padding-left: 12px; border-left: 1px solid var(--border); font-size: var(--text-chat-process); }
+  .workbody[hidden] { display: none; }
+
+  /* 单条工具行（不进折叠） */
+  .toolrow { display: flex; align-items: baseline; gap: 6px; color: var(--tool-arg); font-size: var(--text-chat-process); padding: 1px 0; margin: 0 0 12px; }
+  .toolrow.inbody { margin: 0; }
+  .toolrow .v { color: var(--muted-foreground); flex: 0 0 auto; }
+  .toolrow .a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-code); }
+
+  /* 末尾的工作区行 */
+  .workzone {
+    display: flex; align-items: center; gap: 8px;
+    font-size: var(--text-chat-process); color: var(--status-running);
+    margin: 4px 0 0; padding: 1px 0;
+  }
+  .workzone.settled { color: var(--muted-foreground); }
+  .workzone .spin {
+    width: 12px; height: 12px; flex: 0 0 auto; border-radius: 50%;
+    border: 1.5px solid currentColor; border-right-color: transparent;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 高亮当前讨论的那一行 */
+  .spot { position: relative; }
+  .spot::before {
+    content: ''; position: absolute; inset: -3px -6px; border-radius: var(--radius-xs);
+    background: color-mix(in oklab, var(--primary) 12%, transparent);
+    border: 1px dashed var(--primary); pointer-events: none;
+  }
+
+  .note {
+    border: 1px dashed var(--destructive); border-radius: var(--radius-sm);
+    background: color-mix(in oklab, var(--destructive) 6%, var(--card));
+    padding: 6px 10px; margin: 0 0 12px; font-size: var(--text-meta); color: var(--muted-foreground);
+  }
+  .note b { color: var(--destructive); }
+  .note.ok { border-color: var(--success); background: color-mix(in oklab, var(--success) 7%, var(--card)); }
+  .note.ok b { color: var(--success); }
+
+  .legend { margin: 18px 20px 0; font-size: var(--text-meta); color: var(--muted-foreground); }
+  .legend b { color: var(--foreground); }
+  .legend ul { margin: 8px 0 0; padding-left: 20px; }
+  .legend li { margin-bottom: 6px; }
+  .legend h3 { font-size: var(--text-ui); color: var(--foreground); margin: 16px 0 4px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="docbar">
+    <h1>预览 — 工作区固定在末尾 + 单条不折叠</h1>
+    <p>
+      左边是你刚才在应用里看到的形态，右边是你提的改法。两栏是<strong>同一个回合</strong>。
+      切「回合状态」看运行中与结束后的差别；「结束后保留末尾行」只影响右栏，是需要你拍板的那个子问题。
+    </p>
+    <div class="controls">
+      <div class="ctl">
+        <span>回合状态</span>
+        <span class="seg" id="segRun">
+          <button data-v="running" aria-pressed="true">运行中</button>
+          <button data-v="settled" aria-pressed="false">已结束</button>
+        </span>
+      </div>
+      <div class="ctl">
+        <span>结束后那行挂什么</span>
+        <span class="seg" id="segKeep">
+          <button data-v="min" aria-pressed="false">只挂时长 + 完成时间</button>
+          <button data-v="more" aria-pressed="true">时长 · 完成时间 · 调用次数 · 思考（已定）</button>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="board">
+
+    <!-- ============ A 现状 ============ -->
+    <div class="lane">
+      <header>
+        <h2>A · 现状 <span class="tag">今天应用里的样子</span> <span class="tag bad">作用域混在一起</span></h2>
+        <p>时长挂在「最后一个过程组」上，别的组只报步骤数。</p>
+      </header>
+      <div class="body">
+        <div class="bubble">读一下 turnProcessFold.ts 和 MessageTimeline.tsx，说说 T107 改了什么</div>
+
+        <div class="workrow" data-fold data-open="false"><span class="chev">›</span><span>3 个步骤</span></div>
+        <div class="workbody" hidden>
+          <div class="toolrow inbody"><span class="v">读取</span><span class="a">turnProcessFold.ts</span></div>
+          <div class="toolrow inbody"><span class="v">搜索</span><span class="a">splitTurnWorkGroup</span></div>
+          <div class="toolrow inbody"><span class="v">读取</span><span class="a">chatTurn.ts</span></div>
+        </div>
+
+        <p class="prose">T107 把 <code>splitTurnWorkGroup</code> 的返回形状换掉了：原来是四个桶，现在是一串有序分段。</p>
+
+        <div class="workrow" data-fold data-open="false"><span class="chev">›</span><span>1 个步骤</span></div>
+        <div class="workbody" hidden>
+          <div class="toolrow inbody"><span class="v">读取</span><span class="a">MessageTimeline.tsx</span></div>
+        </div>
+
+        <p class="prose">渲染端改成按分段顺序走，每个过程组各包一个折叠头。</p>
+
+        <div class="workrow" data-fold data-open="false" data-lastA>
+          <span class="chev">›</span><span class="spot" data-lastA-label>工作中 47 秒 · 正在读取</span>
+        </div>
+        <div class="workbody" hidden>
+          <div class="toolrow inbody"><span class="v">读取</span><span class="a">toolCard.ts</span></div>
+          <div class="toolrow inbody"><span class="v">搜索</span><span class="a">deriveAggregateRow</span></div>
+          <div class="toolrow inbody"><span class="v">读取</span><span class="a">ToolRows.tsx</span></div>
+          <div class="toolrow inbody"><span class="v">编辑</span><span class="a">turnProcessFold.ts</span></div>
+        </div>
+
+        <p class="prose">所以正文不会再被折叠区吃掉了。</p>
+
+        <div class="note">
+          <b>不协调点</b>：上面两个头报的是「这一组有几步」，最后一个头报的是「整个回合跑了多久」。
+          长得一模一样的行，说的是两件事。
+        </div>
+      </div>
+      <div class="stat">
+        <span>过程行：<b>3 行</b></span>
+        <span>其中被折叠起来的单条：<b>1 条</b>（「1 个步骤」）</span>
+        <span>时长的位置：<b>飘的</b>，跟着最后一组走</span>
+      </div>
+    </div>
+
+    <!-- ============ B 提议 ============ -->
+    <div class="lane">
+      <header>
+        <h2>B · 你提的改法 <span class="tag">工作区固定在末尾</span> <span class="tag">单条直接显示</span></h2>
+        <p>每组只报自己的步骤数；单条不折叠；时长单独一行钉在回合末尾。</p>
+      </header>
+      <div class="body">
+        <div class="bubble">读一下 turnProcessFold.ts 和 MessageTimeline.tsx，说说 T107 改了什么</div>
+
+        <div class="workrow" data-fold data-open="false"><span class="chev">›</span><span>3 个步骤</span></div>
+        <div class="workbody" hidden>
+          <div class="toolrow inbody"><span class="v">读取</span><span class="a">turnProcessFold.ts</span></div>
+          <div class="toolrow inbody"><span class="v">搜索</span><span class="a">splitTurnWorkGroup</span></div>
+          <div class="toolrow inbody"><span class="v">读取</span><span class="a">chatTurn.ts</span></div>
+        </div>
+
+        <p class="prose">T107 把 <code>splitTurnWorkGroup</code> 的返回形状换掉了：原来是四个桶，现在是一串有序分段。</p>
+
+        <!-- 单条：不再包进「1 个步骤」，直接就是这一行 -->
+        <div class="toolrow"><span class="v spot">读取</span><span class="a">MessageTimeline.tsx</span></div>
+
+        <p class="prose">渲染端改成按分段顺序走，每个过程组各包一个折叠头。</p>
+
+        <div class="workrow" data-fold data-open="false"><span class="chev">›</span><span class="spot">4 个步骤</span></div>
+        <div class="workbody" hidden>
+          <div class="toolrow inbody"><span class="v">读取</span><span class="a">toolCard.ts</span></div>
+          <div class="toolrow inbody"><span class="v">搜索</span><span class="a">deriveAggregateRow</span></div>
+          <div class="toolrow inbody"><span class="v">读取</span><span class="a">ToolRows.tsx</span></div>
+          <div class="toolrow inbody"><span class="v">编辑</span><span class="a">turnProcessFold.ts</span></div>
+        </div>
+
+        <p class="prose">所以正文不会再被折叠区吃掉了。</p>
+
+        <!-- 末尾的工作区行 -->
+        <div class="workzone spot" id="zoneB"><span class="spin"></span><span id="zoneBText">✻ 工作中 47 秒</span></div>
+
+        <div class="note ok" style="margin-top:14px" id="noteB">
+          <b>一致了</b>：每个折叠头都只说「这一组几步」；整回合跑了多久单独一行，钉在末尾，位置不再飘。
+        </div>
+      </div>
+      <div class="stat">
+        <span>过程行：<b id="statBRows">3 行</b></span>
+        <span>被折叠起来的单条：<b>0 条</b></span>
+        <span>时长的位置：<b>固定在末尾</b></span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <h3>这次要你拍板的三个子问题</h3>
+    <ul>
+      <li>
+        <b>① 单条不折叠</b> —— 我同意，而且改动很小。注意：工具行层面<strong>早就是这个规则</strong>了
+        （<code>deriveToolGroupRows</code>：「恰好 1 条不聚合」），漏的是<strong>外面那层折叠组</strong>，
+        它照样给单条套了个「1 个步骤」的壳。补上就对齐了。
+      </li>
+      <li>
+        <b>② 工作区钉在末尾</b> —— 我同意方向。真正被修掉的毛病是<strong>作用域混用</strong>：
+        长得一样的行，有的说「这一组几步」，有的说「整回合几秒」。拆开就干净了。
+      </li>
+      <li>
+        <b>③ 结束后那行长什么样</b> —— 已定：<strong>保留</strong>，形如
+        <code>✻ 已工作 54 秒 · 完成于 17:05</code>。上面的开关切「还要不要再挂用量和思考时长」。
+      </li>
+    </ul>
+
+    <h3>这一行会动到的既有裁定</h3>
+    <ul>
+      <li>
+        2026-08-29（T12-b）删掉了回合头的<strong>结束态</strong>（原本是 <code>Worked for Ns · 2 tools</code>，
+        见 <code>chatTimelineLayout.ts:371</code>），并把墙上时间挪进了<strong>只能悬停才看得到</strong>的动作条。
+        末尾这行等于把这两样装回来。施工时要把那几处注释改写成新规则，<strong>不要留着旧裁定的说法</strong>，
+        否则下一个人会照旧裁定再删一遍。
+      </li>
+      <li>
+        装回来之后，<strong>悬停条上那个时间戳就重复了</strong>（<code>MessageTimeline.tsx</code> 的
+        <code>formatAbsoluteTime(metadata.completedAt)</code>）。要一并决定撤不撤。
+      </li>
+      <li>
+        <b>更正</b>：之前说「输入框上方还有一条状态行，两个时钟会叠在一起」是错的 ——
+        那行在 T-31 §3 已经搬进回合里了（<code>ChatComposer.tsx:419</code>）。
+        <code>turnProcessFold.ts</code> 里那段说「composer row keeps its own count」的注释是<strong>过期的</strong>，
+        顺手一起改掉。
+      </li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+let running = true;
+let verbose = true;
+
+function bindSeg(id, onPick) {
+  const seg = $('#' + id);
+  for (const btn of $$('button', seg)) {
+    btn.addEventListener('click', () => {
+      for (const b of $$('button', seg)) b.setAttribute('aria-pressed', String(b === btn));
+      onPick(btn.getAttribute('data-v'));
+    });
+  }
+}
+
+function render() {
+  // A 栏：最后一个折叠头的文字
+  const labelA = $('[data-lastA-label]');
+  labelA.textContent = running ? '工作中 47 秒 · 正在读取' : '已工作 47 秒';
+
+  // B 栏：末尾工作区行
+  const zone = $('#zoneB');
+  const text = $('#zoneBText');
+  const note = $('#noteB');
+  const statRows = $('#statBRows');
+
+  if (running) {
+    zone.hidden = false;
+    zone.classList.remove('settled');
+    $('.spin', zone).style.display = '';
+    text.textContent = '✻ 工作中 47 秒';
+    note.innerHTML = '<b>一致了</b>：每个折叠头都只说「这一组几步」；整回合的事单独一行，钉在末尾，位置不再飘。';
+    note.className = 'note ok';
+    statRows.textContent = '3 行 + 末尾 1 行';
+  } else {
+    zone.hidden = false;
+    zone.classList.add('settled');
+    $('.spin', zone).style.display = 'none';
+    text.textContent = verbose
+      ? '✻ 已工作 54 秒 · 完成于 17:05 · 8 次工具调用 · 思考 12 秒'
+      : '✻ 已工作 54 秒 · 完成于 17:05';
+    note.innerHTML = '<b>这一行装回了 T12-b 删掉的两样</b>：回合头的「结束态」（<code>Worked for Ns</code>）和墙上时间（当时挪去了只能悬停才看得到的动作条）。装回来之后，<strong>悬停条上那个时间戳就重复了</strong>，要一并决定撤不撤。';
+    note.className = 'note';
+    statRows.textContent = '3 行 + 末尾 1 行';
+  }
+}
+
+bindSeg('segRun', (v) => { running = v === 'running'; render(); });
+bindSeg('segKeep', (v) => { verbose = v === 'more'; render(); });
+
+// 折叠头各自可点
+for (const row of $$('[data-fold]')) {
+  row.addEventListener('click', () => {
+    const open = row.getAttribute('data-open') === 'true';
+    row.setAttribute('data-open', open ? 'false' : 'true');
+    const body = row.nextElementSibling;
+    if (body && body.classList.contains('workbody')) body.hidden = open;
+  });
+}
+
+render();
+</script>
+</body>
+</html>

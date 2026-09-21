@@ -298,7 +298,27 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 
 **施工进度（2026-09-21）**：T107（`678d79b7`）、T108（`3a0c13fa`）、T109（`5c7c7596`）、T110 实现与定向验证完成，真实 GUI 与 T111 取证待补，不标完整 Done；详见 [批次 K 执行记录](evidence/batch-k-answer-visibility-2026-09-21/README.md)。用户确认过程组默认折叠、单条工具行主参数保留。
 
-**本批不新增决策**（三条诉求都不改变既有决策的结论，见上）。演示页两页在 `/tmp`（`aiclient-preview-answer-fold-and-diff-open.html`、`aiclient-preview-answer-visible-3ways.html`），用户已看过并拍板；长期留存需在收口时移入 `evidence/`。
+**本批不新增决策**（三条诉求都不改变既有决策的结论，见上）。演示页三页已归档进 [evidence/batch-k-answer-visibility-2026-09-21](evidence/batch-k-answer-visibility-2026-09-21/)（折叠与 diff 落点、正文全露三方案、工作区钉末尾），用户均已看过并拍板。
+
+### 批次 K 续：工作区形态（2026-09-21 批次 K 现场验收当场发现，用户当日拍板）
+
+**来源是批次 K 自己的现场验收**。2026-09-21 在真实 dev 实例里跑长回合，用户看到的形态是 `N 个步骤 → answer → N 个步骤 → answer → 已工作 47 秒 → answer`，当场指出「最后一个理应显示 N 个步骤的地方却显示工作区，有点不协调」。
+
+**根因是作用域混用，不是渲染顺序**：T107 落地时写了 `workedMs={lastGroup ? workedMs : null}`，本意是躲开「时长被重复报好几遍」，代价是让最后一个折叠头承载**回合级**信息（时长/用量/思考），而其余的头报的是**组级**步骤数 —— 两种信息长着一模一样的行。用户给出的改法是把两者拆开：折叠头一律只报自己的步骤数，回合级信息单独一行钉在回合末尾。演示页 [工作区钉末尾](evidence/batch-k-answer-visibility-2026-09-21/aiclient-preview-workzone-at-end.html)，用户已看过并拍板。
+
+**串行约束**：T112 → T113 → T114，三者都改 `MessageTimeline.tsx`。
+
+**施工移交单**（开工前置、逐任务交付物与证据、dev 起停步骤、要改写的 T12-b 旧裁定清单、验收判据）见 [topics/workzone-at-turn-end-handoff.md](topics/workzone-at-turn-end-handoff.md)。
+
+| ID | 任务 | 优先级 | 来源 | 验收 |
+|---|---|---|---|---|
+| ✅ T112 | 单条过程段被套进「1 个步骤」的折叠壳：点一下才能看到一行本来就能直接显示的内容 | P1 | 用户 2026-09-21 现场：「如果只有一条，就直接显示，如果有多条一起，那就合并为 N 个步骤（折叠块）」 | 外层折叠组**恰好 1 项**时不渲染折叠头与箭头，直接就地渲染该项（工具行带主参数、思考行带时长）；≥ 2 项仍合并为「N 个步骤」折叠块。**注意这一半已是现状**：工具行层面 `deriveToolGroupRows` 的既有规则就是「恰好 1 条不聚合」（`toolCard.ts:733`），本任务补的是**外面那层** `splitTurnWorkGroup` / `MessageTimeline.tsx` 的渲染分支。**必须保住**：`turnWorkGroupAwaitsUser` 强制展开对单项组同样生效（单项若是未应答授权，不能因为「不折叠」就丢掉可达性）。**已落地**：判据落在 `turnProcessFold.ts` 的 `turnProcessGroupFolds`（步骤数 > 1 才折叠，与折叠头打印的数字同源），渲染端在建组头之前提前返回；`{{count}} step` 单数词条随最后一个消费者退役。现场证据 [T112 单条直出 + 多条折叠](evidence/batch-k-answer-visibility-2026-09-21/t112-single-step-inline-vs-folded.png) |
+| ⬜ T113 | 回合级信息骑在最后一个折叠头上，与组级步骤数混用同一种行 | P1 | 用户 2026-09-21 现场：「工作区就直接动态显示在最后，上方的内容不断刷新」 | 折叠头**一律**只报自己的步骤数（删掉 `lastGroup ? … : null` 那组三元，`workedMs`/`tokens`/`thinkingMs` 不再下发给组头）；回合级信息独立成**一行，钉在回合末尾**，两态：**运行中** = 转圈 + 「✻ 工作中 N 秒」（保留决策 031 的「工具间隙不可返回 null」，`deriveTurnCurrentAction` 继续用）；**已结束** = 一行汇总 `✻ 已工作 54 秒 · 完成于 17:05 · 8 次工具调用 · 思考 12 秒`（**用户点名的四项，不挂 token 用量**）。**位置注意**：末尾行在最后一段正文**之后**；`PendingTurnHead` 与它是接力不是并存（`statusOwnedByPendingHead` 的既有职责），不得同时出现两个走秒的行 |
+| ⬜ T114 | 悬停动作条上的完成时间戳与 T113 的末尾行重复 | P2 | 评审方建议，用户未反对 | T113 落地后，`MessageTimeline.tsx` 悬停条里的 `formatAbsoluteTime(metadata.completedAt)` 撤掉，悬停条只留复制按钮；`formatAbsoluteTime` 若失去最后一个消费者则一并退役。**排在 T113 之后**：先有末尾行才谈得上重复 |
+
+**本批改写既有裁定，必须改注释、不许留旧说法**：T12-b（2026-08-29 用户拍板「跟 pi-app 一致，删掉」）删除了回合头的**结束态**（原文是 `Worked for Ns · 2 tools`，见 `chatTimelineLayout.ts:371`），并把墙上时间挪进**只能悬停才看得到**的动作条。T113 把这两样装回来。`chatTimelineLayout.ts:371`、`turnHead.ts:289`、`messageMetadata.ts:199`、`MessageTimeline.tsx:90/138` 几处 T12-b 注释都要**改写成新规则并写明为什么推翻**，按仓库既有做法保留历史脉络；留着旧说法会让下一个人照旧裁定再删一遍。
+
+**一处事实更正（本次验收发现）**：`turnProcessFold.ts` 里 2026-09-18 那段「The composer row keeps its own count; the two are derived from different origins」**已经过期** —— 输入框上方那条状态行在 T-31 §3 就搬进回合里了（`ChatComposer.tsx:419`，三个状态值移入 `stores/turnSendStatus.ts`）。评审时曾据此误判「两个时钟会叠在一起」，实际不存在。该注释在 T113 施工时一并改掉。
 
 
 ## Deferred

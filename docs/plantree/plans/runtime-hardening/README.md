@@ -26,13 +26,14 @@ Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批�
 
 | 文件 | 角色 |
 |---|---|
-| [roadmap.md](roadmap.md) | 任务树 T001～T111，批次 A～D、D2、D3、D4、E、F、G、H、I、J、K，Done / In Progress / Next / Deferred |
+| [roadmap.md](roadmap.md) | 任务树 T001～T114，批次 A～D、D2、D3、D4、E、F、G、H、I、J、K、K 续，Done / In Progress / Next / Deferred |
 | [open-questions.md](open-questions.md) | 修补前要拍板的问题 |
 | [evidence/batch-j-chat-typography-2026-09-19/](evidence/batch-j-chat-typography-2026-09-19/README.md) | 批次 J（T104～T106，用户当日另提三条界面诉求）证据目录：**目录已建、内容待补**——线 A/T104 已落地 `0bc99095`（未推送），线 B/T105 · T106 施工中；GUI 点验四张图 + 阅读栏字数实测 + 反向验证记录待线 B 收口后一次性取，待归档清单见该目录 README（**不得用设计值或推算值充数**） |
 | [evidence/batch-h-field-fixes-2026-09-18/](evidence/batch-h-field-fixes-2026-09-18/README.md) | 批次 H（T077～T087 + 提级 T053，及下半场追加的 T088/T089）落地明细（17 个本地提交，未推送）、验证结果（429 文件 / 6641 条全绿）、两轮本地点验结果、待 T033 第二轮上机验证清单、当日其它发现登记；新增 Q022～Q026 均已结案，Q021 亦已结案（见同目录 [perf-2026-09-18.md](evidence/batch-h-field-fixes-2026-09-18/perf-2026-09-18.md)：性能重测推翻「输出慢＝缓存 TTL」旧判断） |
 | [checklist-e.md](checklist-e.md) | 批次 E 正式上机检查单（T032 产出）：DEV / Windows / 加密机 / utility / 真实模型五组判据与取证方式 |
 | [topics/answer-visibility-and-diff-open.md](topics/answer-visibility-and-diff-open.md) | 批次 K（T107～T111，用户当日三条界面诉求）topic 胶囊：K1～K5 已拍板结论、六条红线、逐文件改动点、测试影响面 |
 | [topics/answer-visibility-and-diff-open-handoff.md](topics/answer-visibility-and-diff-open-handoff.md) | 批次 K 施工移交单：开工前硬前置（含「不得碰别人在途改动」）、逐任务交付物与证据要求、验证与报告格式、验收判据、已知的坑、任务记录栏 |
+| [topics/workzone-at-turn-end-handoff.md](topics/workzone-at-turn-end-handoff.md) | 批次 K 续施工移交单（T112～T114）：单条不折叠、工作区行钉回合末尾两态、撤悬停条时间戳；含 dev 起停与取证步骤、要改写的 T12-b 旧裁定清单 |
 | [topics/t033-field-day-runbook.md](topics/t033-field-day-runbook.md) | T033 上机日执行单（topic capsule）：装机、上机前自检、执行顺序、34 条必做的编号映射、砍单顺序、远程协作与证据命名；逐项分片在 [topics/t033-field-day/](topics/t033-field-day/01-win.md) 七份（WIN / ENC / PKG / MODEL / 批次 D4 复验 / 收尾回填 / [2026-09-18 现场反馈与根因](topics/t033-field-day/07-findings.md)） |
 | [evidence/batch-e-build-2026-09-18/](evidence/batch-e-build-2026-09-18/README.md) | T033 上机前补的那次打包构建（run 35295618831，源码 `13e6cdb7`）：产物与作业清单、三平台 worker-smoke JSON（WIN-19 据此已可标 ✅） |
 | [evidence/batch-e-devbox-2026-09-17/tools/field-samples/](evidence/batch-e-devbox-2026-09-17/tools/field-samples/README.md) | T033 上机日样本包：ENC-12 的编码与二进制样本及生成脚本、MODEL-49 的策略样例与三类 shell 命令、慢启动 stdio MCP 服务器、真实旧格式 Codex rollout 的查找路径 |
