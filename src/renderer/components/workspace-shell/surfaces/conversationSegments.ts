@@ -21,7 +21,7 @@
  * React/electronAPI-free so it runs under the repo's node-env vitest.
  */
 
-import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
+import type { ChatBlock, ChatBlockType, ChatMessage } from '@/stores/chatSessions';
 
 /** Longest body this panel will ever render for one segment. */
 export const SEGMENT_BODY_MAX_CHARS = 2000;
@@ -54,12 +54,78 @@ export interface ConversationRoleShare {
   share: number;
 }
 
+/**
+ * T104-family, 2026-09-20 user report — what the loaded conversation is made of
+ * by KIND of content, alongside {@link ConversationRoleShare}'s by-sender view.
+ *
+ * ## Why two breakdowns, and why the sender one was not enough
+ *
+ * The panel shipped with one chart, bucketed by message role, and the user's
+ * reading of it was 「助手 99% / 用户 0%」 — a true measurement that answers no
+ * question they had. The reason is structural: a tool result is a block on an
+ * ASSISTANT message, and read-a-file / run-a-command payloads are where a long
+ * agent session's characters actually go. So the assistant bucket absorbs
+ * nearly everything, and the chart shows "the agent said 99% of it" when what
+ * happened is "the files it read were 95% of it".
+ *
+ * The by-sender split is kept because it is a different fact (how much of this
+ * conversation is the human talking) and it is now the SECOND chart rather than
+ * the only one. This one answers the question the report was actually asking:
+ * *which* content is filling the window — and that is the one a reader can act
+ * on, because "your instructions are 3% and tool output is 91%" has an
+ * obvious response and "assistant 99%" does not.
+ *
+ * ## Why blocks and not messages
+ *
+ * A bucket is assigned per BLOCK, because one message routinely carries both
+ * prose and tool traffic. Bucketing the message would force the whole thing
+ * into whichever arm won.
+ */
+export type ConversationBucketId = 'user' | 'assistant' | 'tools' | 'thinking';
+
+export interface ConversationBucketShare {
+  id: ConversationBucketId;
+  chars: number;
+  /** 0..1 of total characters; 0 when the conversation is empty. */
+  share: number;
+  /** Blocks counted into this bucket. */
+  blocks: number;
+}
+
 export interface ConversationComposition {
   segments: ConversationSegment[];
-  /** Roles that actually occur, largest share first. */
+  /** Senders that actually occur, largest share first. */
   roles: ConversationRoleShare[];
+  /** Content kinds that actually occur, largest share first. */
+  buckets: ConversationBucketShare[];
   totalMessages: number;
   totalChars: number;
+}
+
+/**
+ * Which bucket one block's characters belong to.
+ *
+ * Exhaustive over `ChatBlockType` through a `Record` rather than a switch with
+ * a default: a tenth block type fails to compile here instead of silently
+ * disappearing from the total, which is exactly the class of bug this whole
+ * panel exists to avoid. `permission_request` / `permission_activity` / the
+ * whole `question` card count as `tools` — they are app- and tool-generated
+ * chrome that rode in on an assistant turn, not something either party wrote.
+ */
+const BLOCK_BUCKET: Record<ChatBlockType, ConversationBucketId> = {
+  text: 'assistant',
+  thinking: 'thinking',
+  tool_call: 'tools',
+  tool_result: 'tools',
+  permission_request: 'tools',
+  permission_activity: 'tools',
+  question: 'tools',
+};
+
+/** {@link BLOCK_BUCKET}, except that a USER message's prose is instruction. */
+export function bucketForBlock(type: ChatBlockType, role: ConversationRole): ConversationBucketId {
+  if (type === 'text' && role === 'user') return 'user';
+  return BLOCK_BUCKET[type];
 }
 
 /**
@@ -145,9 +211,16 @@ export function deriveConversationComposition(
 ): ConversationComposition {
   const segments = messages.map(toSegment);
   const byRole = new Map<ConversationRole, { messages: number; chars: number }>();
+  const byBucket = new Map<ConversationBucketId, { blocks: number; chars: number }>();
   let totalChars = 0;
 
-  for (const segment of segments) {
+  // Buckets are accumulated in the SAME pass as the role totals and from the
+  // same `measureBlock` results, so the two charts are guaranteed to sum to the
+  // same `totalChars`. Computing them from separate walks is how two views of
+  // one conversation start disagreeing.
+  for (const [messageIndex, message] of messages.entries()) {
+    const segment = segments[messageIndex];
+    if (!segment) continue;
     totalChars += segment.chars;
     const bucket = byRole.get(segment.role);
     if (bucket) {
@@ -155,6 +228,17 @@ export function deriveConversationComposition(
       bucket.chars += segment.chars;
     } else {
       byRole.set(segment.role, { messages: 1, chars: segment.chars });
+    }
+    for (const block of message.blocks) {
+      const id = bucketForBlock(block.type, message.role);
+      const chars = measureBlock(block);
+      const counted = byBucket.get(id);
+      if (counted) {
+        counted.blocks += 1;
+        counted.chars += chars;
+      } else {
+        byBucket.set(id, { blocks: 1, chars });
+      }
     }
   }
 
@@ -167,13 +251,37 @@ export function deriveConversationComposition(
     }))
     .sort((a, b) => b.chars - a.chars);
 
+  const buckets: ConversationBucketShare[] = [...byBucket.entries()]
+    .map(([id, bucket]) => ({
+      id,
+      chars: bucket.chars,
+      share: totalChars > 0 ? bucket.chars / totalChars : 0,
+      blocks: bucket.blocks,
+    }))
+    // Largest share first, ties broken by the fixed `BUCKET_ORDER` below so the
+    // chart does not reshuffle between two equal buckets on every render.
+    .sort((a, b) => b.chars - a.chars || BUCKET_ORDER.indexOf(a.id) - BUCKET_ORDER.indexOf(b.id));
+
   return {
     segments: [...segments].reverse(),
     roles,
+    buckets,
     totalMessages: segments.length,
     totalChars,
   };
 }
+
+/**
+ * Reading order for legs of equal size, and the colour/label order the view
+ * renders from. Fixed rather than derived so a legend entry never changes
+ * meaning between two sessions.
+ */
+export const BUCKET_ORDER: readonly ConversationBucketId[] = [
+  'user',
+  'assistant',
+  'tools',
+  'thinking',
+];
 
 /**
  * U16: how many segments the list shows before the "show more" row.
@@ -205,7 +313,8 @@ export function deriveSegmentPage(
 }
 
 export interface CompositionArc {
-  role: ConversationRole;
+  /** The bucket or role this arc paints. */
+  key: string;
   share: number;
   /** `stroke-dasharray` length on a circle whose circumference is normalized to 100. */
   dash: number;
@@ -221,15 +330,21 @@ export interface CompositionArc {
  * ring and the legend beside it, which read the same `share` value.
  *
  * Arcs are laid end to end from the accumulated share rather than from each
- * arc's index, so a role contributing 0 characters occupies no ring and shifts
- * nothing after it.
+ * arc's index, so a bucket contributing 0 characters occupies no ring and
+ * shifts nothing after it.
+ *
+ * Takes `{key, share}` pairs rather than a fixed slice type because two
+ * breakdowns share this geometry (senders and content kinds) and a second copy
+ * of the accumulated-offset loop is how the two rings start disagreeing.
  */
-export function deriveCompositionArcs(roles: readonly ConversationRoleShare[]): CompositionArc[] {
+export function deriveCompositionArcs(
+  slices: readonly { key: string; share: number }[]
+): CompositionArc[] {
   const arcs: CompositionArc[] = [];
   let consumed = 0;
-  for (const role of roles) {
-    const dash = Math.max(0, role.share * 100);
-    arcs.push({ role: role.role, share: role.share, dash, offset: -consumed });
+  for (const slice of slices) {
+    const dash = Math.max(0, slice.share * 100);
+    arcs.push({ key: slice.key, share: slice.share, dash, offset: -consumed });
     consumed += dash;
   }
   return arcs;

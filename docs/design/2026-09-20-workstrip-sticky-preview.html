@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>预览 A — 「工作中」工作条吸附与默认展开（可交互）</title>
+<style>
+  /* ------------------------------------------------------------------
+     取色与排版全部照抄 src/renderer/styles/globals.css 的 :root（Flexoki 亮色）
+     与 @theme 的字号/圆角 token，OKLCH → sRGB 换算后写死。
+     目的：在这里看到的效果，就是 Electron 里会看到的效果。
+     ------------------------------------------------------------------ */
+  :root {
+    --background: #fffdf4;
+    --foreground: #100f0f;
+    --card: #fbfaf2;
+    --muted: #f6f5ee;
+    --muted-foreground: #575650;
+    --accent: #eeece3;
+    --selection: #e5e3db;
+    --border: #dad8ce;
+    --input: #cecdc3;
+    --primary: #bc5215;
+    --primary-foreground: #fffdf4;
+    --destructive: #af3029;
+    --success: #66800b;
+    --status-running: #205ea6;
+    --folder: #ad8301;
+    --tool-arg: #6b6b62;
+
+    --text-2xs: 10px;
+    --text-meta: 13px;
+    --text-ui: 14px;
+    --text-code: 12px;
+    --text-chat-body: 16px;
+    --text-chat-process: 13px;
+
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+      "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+      "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Cascadia Mono",
+      "Consolas", "Liberation Mono", "DejaVu Sans Mono", "PingFang SC", "Noto Sans CJK SC", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--muted);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: var(--text-ui);
+    line-height: 1.45;
+  }
+  .page { display: flex; flex-direction: column; height: 100%; }
+
+  /* ---------- 说明与开关 ---------- */
+  .docbar {
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+    padding: 12px 20px;
+  }
+  .docbar h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .docbar p { margin: 0 0 10px; font-size: var(--text-meta); color: var(--muted-foreground); }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .ctl { display: flex; align-items: center; gap: 6px; font-size: var(--text-meta); }
+
+  /* ---------- 聊天面板（模拟中列） ---------- */
+  .panel {
+    flex: 1 1 auto; min-height: 0;
+    display: flex; flex-direction: column;
+    max-width: 900px; width: 100%;
+    margin: 16px auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--background);
+    overflow: hidden;
+  }
+
+  /* 会话条 —— 工作条要加入的「顶部 chrome 栈」 */
+  .session-bar {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 8px;
+    height: 36px; padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+    font-size: var(--text-meta); color: var(--muted-foreground);
+  }
+  .session-bar .grow { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot-running { width: 7px; height: 7px; border-radius: 999px; background: var(--status-running); flex: 0 0 auto; }
+
+  /* ---------- 方案 B：工作条作为 chrome 的一层，在滚动区之外 ---------- */
+  #chrome-strip {
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--border);
+    background: var(--background);
+  }
+
+  /* ---------- 滚动区 ---------- */
+  .scrollport {
+    flex: 1 1 auto; min-height: 0;
+    overflow-y: auto;
+    /* 模拟 Timeline 的 px-6 pt-5 pb-2 */
+    padding: 20px 24px 8px;
+  }
+  .reading-column { max-width: 45rem; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+  /* ---------- 一轮 turn ---------- */
+  .turn { display: flex; flex-direction: column; gap: 12px; }
+  .user-row { display: flex; justify-content: flex-end; }
+  .user-bubble {
+    max-width: 80%;
+    background: var(--accent);
+    border-radius: var(--radius-md);
+    border-top-right-radius: var(--radius-xs);
+    padding: 8px 12px;
+    font-size: var(--text-chat-body);
+  }
+  .turn-body { display: flex; flex-direction: column; gap: 8px; font-size: var(--text-chat-body); line-height: 1.625; }
+  .prose p { margin: 0 0 10px; }
+  .prose p:last-child { margin-bottom: 0; }
+
+  /* ---------- 工作条本体 ---------- */
+  .work-strip {
+    display: flex; flex-direction: column; gap: 8px;
+    /* 吸顶候选：与 thoughtFoldHeaderClass 同款 */
+    background: var(--background);
+  }
+  .work-strip.is-pinned {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--background);
+  }
+  .work-strip.is-pinned .work-head { border-bottom: 1px solid var(--border); }
+  .work-head {
+    display: flex; align-items: center; gap: 6px;
+    min-width: 0;
+    font-size: var(--text-ui);
+    font-variant-numeric: tabular-nums;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    user-select: none;
+    padding: 2px 0;
+  }
+  .work-head .line { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .spinner {
+    width: 14px; height: 14px; flex: 0 0 auto;
+    border: 2px solid var(--status-running);
+    border-right-color: transparent;
+    border-radius: 999px;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .chev { flex: 0 0 auto; transition: transform 150ms ease; color: var(--muted-foreground); }
+  .chev.open { transform: rotate(90deg); }
+
+  .work-body { display: flex; flex-direction: column; gap: 8px; }
+  .work-body[hidden] { display: none; }
+
+  /* ---------- 思考块（保持折叠） ---------- */
+  .think {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    overflow: hidden;
+  }
+  .think summary {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px;
+    cursor: pointer; list-style: none;
+    font-size: var(--text-chat-process);
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .think summary::-webkit-details-marker { display: none; }
+  .think[open] summary { border-bottom: 1px solid var(--border); }
+  .think .body {
+    padding: 8px 10px;
+    font-size: var(--text-chat-process);
+    color: var(--tool-arg);
+    font-family: var(--font-sans);
+    white-space: pre-wrap;
+  }
+  .think[open] summary .chev { transform: rotate(90deg); }
+
+  /* ---------- 工具行（保持折叠，一行一条） ---------- */
+  .toolrow {
+    display: flex; align-items: center; gap: 6px;
+    font-size: var(--text-chat-process);
+    font-family: var(--font-mono);
+    color: var(--muted-foreground);
+    padding: 1px 0;
+  }
+  .toolrow .arg { color: var(--tool-arg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toolrow .verb { color: var(--foreground); font-family: var(--font-sans); }
+  .toolrow.is-error .verb { color: var(--destructive); }
+
+  /* ---------- 正文里的「有效输出」—— 工作条展开时应看到的东西 ---------- */
+  .notice {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--muted);
+    padding: 8px 10px;
+    font-size: var(--text-meta);
+    color: var(--muted-foreground);
+  }
+
+  /* ---------- 输入区 ---------- */
+  .composer {
+    flex: 0 0 auto;
+    border-top: 1px solid var(--border);
+    background: var(--background);
+    padding: 10px 24px 12px;
+  }
+  .composer .box {
+    max-width: 45rem; margin: 0 auto;
+    border: 1px solid var(--input);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    color: var(--muted-foreground);
+    font-size: var(--text-ui);
+  }
+
+  /* ---------- 红框禁用警示 ---------- */
+  .caveat {
+    max-width: 45rem;
+    margin: 0 auto 4px;
+    border: 1px solid var(--destructive);
+    border-radius: var(--radius-sm);
+    background: #fdf1f0;
+    color: var(--destructive);
+    font-size: var(--text-meta);
+    padding: 6px 10px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="docbar">
+    <h1>预览 A — 「工作中」工作条：吸附形态与默认展开</h1>
+    <p>
+      滚动中间那块聊天区，看工作条的行为。两种形态都做成真的了，点开关切换对比。
+      「仅当前 turn 吸附」已按你的决定实现 —— 历史 turn 的工作条不会吸附。
+    </p>
+    <div class="controls">
+      <label class="ctl">
+        <input type="radio" name="mode" value="pinned-inside" checked />
+        <span><b>A</b> · 吸附在滚动区内（正文从下方穿过）</span>
+      </label>
+      <label class="ctl">
+        <input type="radio" name="mode" value="outside" />
+        <span><b>B</b> · 放在滚动区之外（正文完全不被遮挡）</span>
+      </label>
+      <label class="ctl">
+        <input type="radio" name="mode" value="none" />
+        <span><b>C</b> · 不吸附（现状）</span>
+      </label>
+      <span style="width:1px;height:18px;background:var(--border)"></span>
+      <label class="ctl">
+        <input type="checkbox" id="expand-default" checked />
+        <span>工作条默认展开</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="session-bar">
+      <span class="dot-running"></span>
+      <span>运行中</span>
+      <span style="color:var(--border)">|</span>
+      <span class="grow">feat/runtime-evolution · 修复导入与重试链路</span>
+      <span>china/glm-5.3</span>
+    </div>
+
+    <!-- 方案 B 的挂载点（在滚动区之外，与 session-bar 同属 chrome 栈） -->
+    <div id="chrome-strip" hidden></div>
+
+    <div class="scrollport" id="scrollport">
+      <div class="reading-column" id="column">
+
+        <!-- ================= 历史 turn 1 ================= -->
+        <section class="turn">
+          <div class="user-row"><div class="user-bubble">先看一下导入那条路径现在是怎么判定的</div></div>
+          <div class="turn-body">
+            <div class="work-strip" data-history="1">
+              <div class="work-head" data-toggle="1">
+                <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+                <span class="line">已工作 12 秒 · 4 步 · ↑ 7.6k tokens · ↓ 87 tokens · 思考 20 秒</span>
+              </div>
+              <div class="work-body" data-body="1">
+                <details class="think">
+                  <summary><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>思考 20 秒</summary>
+                  <div class="body">先确认 resolveWorkspace 的判定顺序：matched 为 false 时直接走 scratch，没问过磁盘上目录还在不在。这就是根因。</div>
+                </details>
+                <div class="toolrow"><span class="verb">读取文件</span><span class="arg">src/main/services/legacyImport/LegacyImportService.ts</span></div>
+                <div class="toolrow"><span class="verb">读取文件</span><span class="arg">src/renderer/components/settings/ConversationImportSettings.tsx</span></div>
+                <div class="toolrow"><span class="verb">检索</span><span class="arg">workspaceMatched</span></div>
+              </div>
+            </div>
+            <div class="prose">
+              <p>根因在 <code>resolveWorkspace()</code>：判定顺序反了 —— 「没登记过」和「目录不存在」被当成同一件事，所以一个真实存在的项目目录也会被降级成临时对话。</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= 历史 turn 2 ================= -->
+        <section class="turn">
+          <div class="user-row"><div class="user-bubble">那顺便把历史上那些临时对话也整理一下吧</div></div>
+          <div class="turn-body">
+            <div class="work-strip" data-history="1">
+              <div class="work-head" data-toggle="2">
+                <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+                <span class="line">已工作 2 分 6 秒 · 11 步</span>
+              </div>
+              <div class="work-body" data-body="2">
+                <div class="toolrow"><span class="verb">运行</span><span class="arg">rg -n "unbound" src/</span></div>
+                <div class="toolrow"><span class="verb">读取文件</span><span class="arg">src/main/services/agent-host/ScratchWorkspaceService.ts</span></div>
+                <div class="toolrow"><span class="verb">运行</span><span class="arg">pnpm vitest run LegacyImportService</span></div>
+              </div>
+            </div>
+            <div class="prose">
+              <p>整理完了：按 <code>unbound: true</code> 标出来的行一共有 7 条，全部集中在 8 月那批导入。</p>
+              <p>这批行不动数据库，只补它们的 <code>workspacePath</code>，所以是幂等的，重复跑不会叠加。</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= 当前进行中的 turn（吸附目标） ================= -->
+        <section class="turn" id="current-turn">
+          <div class="user-row"><div class="user-bubble">好，那就按这个方案改。改完跑一下测试</div></div>
+          <div class="turn-body">
+            <div class="work-strip" id="current-strip">
+              <div class="work-head" data-toggle="3">
+                <span class="spinner"></span>
+                <svg class="chev open" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+                <span class="line">工作中 47 秒 · 运行测试 · ↑ 139.7k tokens · ↓ 545 tokens · 思考 12 秒</span>
+              </div>
+              <div class="work-body" data-body="3">
+                <details class="think">
+                  <summary><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>思考 12 秒</summary>
+                  <div class="body">先把三态判定抽成纯函数，再让主进程用 realDirectoryExists 做最终裁决 —— 渲染层的 localStorage 不能作为依据。</div>
+                </details>
+                <div class="toolrow"><span class="verb">编辑文件</span><span class="arg">src/main/services/legacyImport/LegacyImportService.ts</span></div>
+                <div class="toolrow"><span class="verb">编辑文件</span><span class="arg">src/renderer/components/settings/ConversationImportSettings.tsx</span></div>
+                <div class="toolrow"><span class="verb">运行</span><span class="arg">pnpm vitest run legacyImport</span></div>
+                <div class="notice">
+                  <b>这一条就是你说的「默认折叠就看不到了」的内容</b> —— 助手在工作条内部给出的说明、
+                  中间结论、被截断的命令输出摘要，都挂在工作条下面。默认折叠时，屏幕上一轮 turn
+                  只剩一行时间，正文里那几段话看起来像是凭空出现的。
+                </div>
+                <div class="toolrow"><span class="verb">运行</span><span class="arg">pnpm vitest run conversationImportInteraction</span></div>
+              </div>
+            </div>
+            <div class="prose">
+              <p>导入侧改完了。判定顺序改成「目录有效优先」：目录在就直接导入并把项目静默注册进去，只有目录真的不在磁盘上才落临时对话。</p>
+              <p>接下来把 <code>workspaceMatched</code> 这个布尔的协议也一起改掉 —— 它现在只能表达「已登记 / 未登记」，表达不了「未登记但目录存在」。</p>
+            </div>
+          </div>
+        </section>
+
+        <div style="height:40vh"></div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-box" style="max-width:45rem;margin:0 auto">
+        <div class="caveat" id="caveat-a" hidden>
+          ⚠️ 方案 A 的已知代价：吸顶的工作条是 <code>position: sticky</code>，它在滚动区内，
+          正文会从其下方穿过。所以工作条必须是不透明底色 + 一条 <code>border-b</code>，
+          否则文字会从工作条背后透出来。这正是当时 T12 撤掉顶部吸附带的理由。
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;border:1px solid var(--input);border-radius:var(--radius-md);padding:8px 10px;color:var(--muted-foreground);font-size:var(--text-ui);margin-top:8px">
+          输入消息…（预览中不可用）
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var scrollport = document.getElementById('scrollport');
+  var column = document.getElementById('column');
+  var chromeStrip = document.getElementById('chrome-strip');
+  var currentStrip = document.getElementById('current-strip');
+  var caveatA = document.getElementById('caveat-a');
+
+  // 工作条 / 思考块的折叠
+  document.querySelectorAll('.work-head[data-toggle]').forEach(function (head) {
+    head.addEventListener('click', function () {
+      var key = head.getAttribute('data-toggle');
+      var body = document.querySelector('.work-body[data-body="' + key + '"]');
+      if (!body) return;
+      var open = !body.hasAttribute('hidden');
+      if (open) body.setAttribute('hidden', ''); else body.removeAttribute('hidden');
+      var chev = head.querySelector('.chev');
+      if (chev) chev.classList.toggle('open', !open);
+    });
+  });
+
+  function syncWorkBodyVisibility() {
+    var expand = document.getElementById('expand-default').checked;
+    document.querySelectorAll('.work-body').forEach(function (body) {
+      if (expand) body.removeAttribute('hidden'); else body.setAttribute('hidden', '');
+    });
+    document.querySelectorAll('.work-head .chev').forEach(function (chev) {
+      chev.classList.toggle('open', expand);
+    });
+  }
+
+  // 方案 B：把当前工作条整块搬到滚动区之外（session-bar 下面）
+  function moveCurrentStripOutside() {
+    if (currentStrip.parentElement !== chromeStrip) chromeStrip.appendChild(currentStrip);
+    chromeStrip.hidden = false;
+    currentStrip.classList.remove('is-pinned');
+    currentStrip.style.padding = '8px 24px';
+  }
+  // 方案 A：搬回当前 turn 内，并加 sticky
+  function moveCurrentStripInside(pinned) {
+    var target = document.getElementById('current-turn').querySelector('.turn-body');
+    if (currentStrip.parentElement !== target) target.insertBefore(currentStrip, target.firstChild);
+    chromeStrip.hidden = true;
+    currentStrip.style.padding = '';
+    currentStrip.classList.toggle('is-pinned', pinned);
+  }
+
+  function apply() {
+    var mode = document.querySelector('input[name="mode"]:checked').value;
+    syncWorkBodyVisibility();
+    if (mode === 'outside') {
+      moveCurrentStripOutside();
+      caveatA.hidden = true;
+    } else if (mode === 'pinned-inside') {
+      moveCurrentStripInside(true);
+      caveatA.hidden = false;
+    } else {
+      moveCurrentStripInside(false);
+      caveatA.hidden = true;
+    }
+  }
+
+  document.querySelectorAll('input[name="mode"]').forEach(function (r) {
+    r.addEventListener('change', apply);
+  });
+  document.getElementById('expand-default').addEventListener('change', apply);
+
+  apply();
+})();
+</script>
+</body>
+</html>

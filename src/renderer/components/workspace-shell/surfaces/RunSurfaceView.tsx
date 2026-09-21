@@ -341,7 +341,7 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
                 `null` (no prompt tokens, or no reported `cacheRead`) prints
                 nothing rather than 0%. */}
             {view.cacheHitRate !== null && (
-              <RunMetric label={t('Cache hit rate')} value={`${view.cacheHitRate}%`} />
+              <RunMetric label={t('Cache hit rate (last turn)')} value={`${view.cacheHitRate}%`} />
             )}
             {view.usage.costUsd > 0 && (
               <RunMetric label={t('Cost')} value={`$${view.usage.costUsd.toFixed(4)}`} />
@@ -399,6 +399,16 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
                 })}
               />
             )}
+            {/* 2026-09-20 user report: 「缓存读取（本会话累计）8.06M」 read as an
+                occupancy figure, and 8M against a 1M window is alarming if you
+                think that is what it means. It is not: every turn re-sends the
+                whole prompt, so this is that prompt counted once per turn.
+                Stated where the number is, not in a doc nobody opens. */}
+            <p className="px-1 py-1 text-2xs text-muted-foreground">
+              {t(
+                'Session figures add up every model request, so the cache read is a running sum, not what is in the context now.'
+              )}
+            </p>
           </div>
         )}
       </div>

@@ -30,6 +30,7 @@ import {
   deriveSessionReferences,
 } from './contextSurfaceModel';
 import {
+  type ConversationBucketId,
   type ConversationComposition,
   type ConversationRole,
   type ConversationSegment,
@@ -54,6 +55,36 @@ const ROLE_COLOR: Record<ConversationRole, string> = {
   user: 'var(--info)',
   system: 'var(--muted-foreground)',
   error: 'var(--destructive)',
+};
+
+/**
+ * 2026-09-20 — one colour per content kind, on the same rule as `ROLE_COLOR`
+ * above: existing semantic tokens only, and each one chosen for what the bucket
+ * MEANS rather than for contrast.
+ *
+ * `tools` takes `--folder`, the app's own colour for "a file/folder fact" —
+ * which is what the bulk of tool output is. `thinking` takes
+ * `--muted-foreground` deliberately: it is the one bucket a reader would want
+ * to see shrinking, and a muted grey reads as "overhead" against the two
+ * content colours around it.
+ */
+const BUCKET_COLOR: Record<ConversationBucketId, string> = {
+  user: 'var(--info)',
+  assistant: 'var(--primary)',
+  tools: 'var(--folder)',
+  thinking: 'var(--muted-foreground)',
+};
+
+/**
+ * Catalog keys. Literal single-quoted strings at the `t()` call site, so
+ * `i18nCoverage.test.ts` can see them — a key assembled from the bucket id
+ * would ship untranslated, which is the defect class that test exists for.
+ */
+const BUCKET_LABEL: Record<ConversationBucketId, string> = {
+  user: 'Your instructions',
+  assistant: 'Assistant reply',
+  tools: 'Tool output',
+  thinking: 'Thinking content',
 };
 
 // Stable snapshot for "session has no bucket yet": zustand v5 reads selectors
@@ -170,15 +201,51 @@ function ConversationSegmentRow({
  * of the picture came from the runtime, so the two stay on separate surfaces
  * with separate units.
  */
+/**
+ * U16 / 2026-09-20 — the composition chart: a donut plus a stacked bar over the
+ * same shares.
+ *
+ * ## What changed, and why (user report)
+ *
+ * It bucketed by MESSAGE ROLE, and the user's reading was 「助手 424.3k 99% / 用户
+ * 2.1k 0%」. Both numbers were true and neither was useful: a tool result is a
+ * block on an assistant message, so every file the agent read and every command
+ * it ran landed in the assistant bucket. The chart said "the agent wrote 99% of
+ * this conversation" when the fact is "the files it read were 95% of it".
+ *
+ * The donut now shows CONTENT KINDS, which is the split a reader can act on.
+ * The by-sender view is kept beneath it as a bar, not deleted — "how much of
+ * this conversation is me talking" is still a real question, it just is not the
+ * one that was being asked. See `bucketForBlock` for the whole argument.
+ *
+ * ## Why this is NOT a "context window used" gauge
+ *
+ * The prototype this batch follows draws a `63% of 128k` ring. This chart still
+ * does not, and now that is a decision rather than a gap. T38 landed the real
+ * occupancy figures, and they live on the Run surface's ring — measured tokens
+ * against the model's own window. What this chart shows is a different quantity:
+ * how the loaded transcript splits, counted in CHARACTERS, because the runtime
+ * reports no per-kind token split. Putting a measured total and an estimated
+ * split inside one ring would leave a reader unable to tell which half of the
+ * picture came from the runtime, so the two stay on separate surfaces with
+ * separate units. The caption above the chart says which one this is.
+ */
 function CompositionChart({ conversation }: { conversation: ConversationComposition }) {
   const { t } = useI18n();
-  const arcs = deriveCompositionArcs(conversation.roles);
+  const arcs = deriveCompositionArcs(
+    conversation.buckets.map((bucket) => ({ key: bucket.id, share: bucket.share }))
+  );
 
   return (
     <div className="mb-2 flex flex-col gap-2 px-1">
       <div className="flex items-center gap-3">
         <div className="relative h-20 w-20 shrink-0">
-          <svg viewBox="0 0 42 42" className="h-20 w-20" role="img" aria-label={t('Composition')}>
+          <svg
+            viewBox="0 0 42 42"
+            className="h-20 w-20"
+            role="img"
+            aria-label={t('Composition by content')}
+          >
             <circle
               cx="21"
               cy="21"
@@ -190,12 +257,12 @@ function CompositionChart({ conversation }: { conversation: ConversationComposit
             />
             {arcs.map((arc) => (
               <circle
-                key={arc.role}
+                key={arc.key}
                 cx="21"
                 cy="21"
                 r="15.9"
                 fill="none"
-                stroke={ROLE_COLOR[arc.role]}
+                stroke={BUCKET_COLOR[arc.key as ConversationBucketId]}
                 strokeWidth="5"
                 // `pathLength` normalizes the circumference to 100, so the dash
                 // pattern is literally the percentages the legend prints.
@@ -214,17 +281,19 @@ function CompositionChart({ conversation }: { conversation: ConversationComposit
           </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          {conversation.roles.map((role) => (
-            <div key={role.role} className="flex items-center gap-2 text-meta">
+          {conversation.buckets.map((bucket) => (
+            <div key={bucket.id} className="flex items-center gap-2 text-meta">
               <span
                 aria-hidden
                 className="h-2 w-2 shrink-0 rounded-xs"
-                style={{ background: ROLE_COLOR[role.role] }}
+                style={{ background: BUCKET_COLOR[bucket.id] }}
               />
-              <span className="min-w-0 flex-1 truncate text-muted-foreground">{t(role.role)}</span>
-              <span className="shrink-0 tabular-nums">{formatCharCount(role.chars)}</span>
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                {t(BUCKET_LABEL[bucket.id])}
+              </span>
+              <span className="shrink-0 tabular-nums">{formatCharCount(bucket.chars)}</span>
               <span className="w-9 shrink-0 text-right text-muted-foreground tabular-nums">
-                {formatShare(role.share)}
+                {formatShare(bucket.share)}
               </span>
             </div>
           ))}
@@ -232,17 +301,50 @@ function CompositionChart({ conversation }: { conversation: ConversationComposit
       </div>
       {/* The same shares again as one horizontal bar. Not redundant decoration:
           the donut answers "roughly what mix", the bar answers "in what
-          proportion" at a glance for the two-role case where a donut is hardest
-          to read. */}
+          proportion" at a glance for the four-bucket case where a donut is
+          hardest to read. */}
       <div className="flex h-2 overflow-hidden rounded-xs bg-muted">
-        {conversation.roles.map((role) => (
+        {conversation.buckets.map((bucket) => (
           <span
-            key={role.role}
+            key={bucket.id}
             aria-hidden
-            style={{ width: `${role.share * 100}%`, background: ROLE_COLOR[role.role] }}
+            style={{ width: `${bucket.share * 100}%`, background: BUCKET_COLOR[bucket.id] }}
           />
         ))}
       </div>
+      {/* The by-sender split, demoted from the donut to a labelled line. Kept
+          because it is a different question, and stated in WORDS rather than a
+          second chart: with the content-kind ring above it, two rings would
+          compete for the same glance. */}
+      {conversation.roles.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className="text-2xs text-muted-foreground">{t('By sender')}</span>
+          <div className="flex h-2 overflow-hidden rounded-xs bg-muted">
+            {conversation.roles.map((role) => (
+              <span
+                key={role.role}
+                aria-hidden
+                style={{ width: `${role.share * 100}%`, background: ROLE_COLOR[role.role] }}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {conversation.roles.map((role) => (
+              <span key={role.role} className="flex items-center gap-1.5 text-2xs">
+                <span
+                  aria-hidden
+                  className="h-2 w-2 shrink-0 rounded-xs"
+                  style={{ background: ROLE_COLOR[role.role] }}
+                />
+                <span className="text-muted-foreground">{t(role.role)}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {formatShare(role.share)}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -436,15 +538,24 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
           <p className="px-1 py-1 text-meta font-medium text-muted-foreground">
             {t('Conversation (loaded)')}
           </p>
-          {/* Says plainly what this counts. The runtime's real context window
-              is not knowable here — the model catalog strips `contextWindow`
-              and Pi emits no usage — so the panel describes the transcript it
-              has rather than implying it read the context. */}
+          {/* Says plainly what this counts, and — since the 2026-09-20 report —
+              also says what it is NOT. The caption used to leave the reader to
+              work out that the ring above it (real tokens, on the Run surface)
+              is a different quantity from these characters, and the reading it
+              got was 「缓存率一直 99%」 against a chart that holds no cache
+              figure at all. So the unit, the source and the fact that it is a
+              tally of THIS window's transcript are all stated here, before the
+              numbers. */}
           <p className="px-1 pb-1 text-meta text-muted-foreground">
             {t('{{count}} messages · {{chars}} chars in this window', {
               count: conversation.totalMessages,
               chars: formatCharCount(conversation.totalChars),
             })}
+          </p>
+          <p className="px-1 pb-1 text-2xs text-muted-foreground">
+            {t(
+              'Characters in the messages this window has loaded — not tokens, and not the context window. Token usage is on the Run panel.'
+            )}
           </p>
           {/* U16: the shares, as a picture. The per-role table it replaces said
               the same thing in three columns of digits. */}
