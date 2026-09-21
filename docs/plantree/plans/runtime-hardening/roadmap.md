@@ -323,6 +323,23 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 
 **施工进度（2026-09-21，批次 K 续）**：T112 `f47a69b7`、T113 `97af2183`、T114 与本段同一提交，三条分别提交、未推送、未触发 CI。三态现场证据齐全（单条直出 / 折叠头只报步骤数 / 末尾行运行中与结束后 / 悬停条只剩复制），见 [移交单 §6](topics/workzone-at-turn-end-handoff.md) 的逐条记录。**本机只跑了定向单文件 Vitest（累计 304+117 条）与三套 `tsc --noEmit`，全量 Vitest / Biome / 打包未跑，CI 是权威。**
 
+### 批次 L：升级后数据不见（2026-09-21 Windows 现场，交由 Windows 端执行方）
+
+从 `1.0.0-test.16` 升级到改名后的版本，**项目列表与对话列表全部消失**，即使会话 jsonl 完好。根因是状态迁移只覆盖三处位置中的一处，且那一处的目录名写错。现场实测、逐条根因、既有红线与验收方式见 [topics/app-state-migration-gaps.md](topics/app-state-migration-gaps.md)。
+
+**本批不在本机修**：三处里两处是 Windows 专有路径（`%APPDATA%` 与 Chromium profile 布局），Linux 开发机无法实跑，写出来的补丁只能靠推理。用户 2026-09-21 决定交由 Windows 端的执行方改并在真机验收。本机只留诊断与备注（`appStateMigration.ts` 模块头已写明三处缺口与实现陷阱）。
+
+| ID | 任务 | 优先级 | 来源 | 验收 |
+|---|---|---|---|---|
+| ✅ T115 | `PRIOR_USER_DATA_DIR_NAMES` 写的是 `AiClient`，而改名前的安装实际写的是 `jyw-ai-client` | P0 | 2026-09-21 Windows 实测 | 已修 `d4b9445e`：名单补 `jyw-ai-client`，新增 `[PRIOR-1..4]` 守卫，`[PRIOR-1]` 在旧常量下失败已反向验证 |
+| ⬜ T116 | `<appData>/<名>/Local Storage/` 从不迁移，项目 / 仓库列表（`aiclient-repositories`）因此丢失 | P0 | 同上 | **不可复用 `copyTree`**：它逐文件跳过已存在项，而 leveldb 是带 MANIFEST 的多文件存储，半合并比不合并更糟 —— 必须**整目录**粒度，目标目录不存在时才整份复制。`session-state.json` 的 `localStorage` 镜像顶不上：`preload` 的 `sessionStorage` 桥渲染层零调用，镜像只写不读（实测 0 个键） |
+| ⬜ T117 | `<appData>/<名>/session-index.json` 从不迁移，**对话列表**因此丢失 | P0 | 同上 | 该文件就是对话列表（`SessionIndexService.ts:95`）。复制之外**必须改写**每条 `runtimeIdentity` 里的 `.pilab/<旧名>/` → `.pilab/<新名>/`（它是 jsonl 的绝对路径）；`workspacePath` 指向真实仓库目录，**不要改写** |
+
+**验收必须在 Windows 真机**：装新版后首次启动即出现原有项目与对话、不要求重新登录、旧目录原样保留、重复启动不重复迁移。既有红线（只复制不移动、先写者优先、凭据 0600、失败不写标记）一条都不能放宽。
+
+**附带发现，未处理**（详见 topic §6）：`sessionStorage` 桥是死链路；`app:setLanguage` 没有主进程 handler，每次启动抛一次；`sessionWriterLock.test.ts` 在 CI 上会抖，`35604442339` 因它变红而同代码的 `35597486859` 是绿的。
+
+
 ## Deferred
 
 | 项 | 原因 |

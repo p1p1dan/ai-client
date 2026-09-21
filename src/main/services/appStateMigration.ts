@@ -16,6 +16,40 @@
  * had been running `AiClient` has a full state root sitting under the old name.
  * See `PRIOR_USER_DATA_DIR_NAMES` in `@shared/appStateLayout`.
  *
+ * ## ⚠️ What this does NOT migrate — three known gaps, 2026-09-21
+ *
+ * Found on a tester's Windows machine upgrading 1.0.0-test.16 -> test.18. The
+ * name gap below is fixed (`d4b9445e`); the other two are NOT, and together
+ * they mean an upgraded install still comes up with an empty sidebar even
+ * though every session file was copied.
+ *
+ *  1. **The prior name was wrong** — `PRIOR_USER_DATA_DIR_NAMES` said
+ *     `AiClient`, read off `electron-builder.yml`'s `productName`. Electron
+ *     names `<userData>` from the packaged `package.json`, which had no
+ *     `productName` key, so every pre-test.17 install actually wrote
+ *     `jyw-ai-client`. FIXED — see that constant's own note.
+ *  2. **`<appData>/<name>/Local Storage/` is never copied.** Chromium's leveldb
+ *     holds the REPOSITORY LIST (`aiclient-repositories` and the rest of
+ *     `renderer/App/storage.ts`'s keys). NOT FIXED. Note that `copyTree`'s
+ *     per-file "skip existing" is WRONG for leveldb: a half-merged store with
+ *     a stale MANIFEST is worse than no copy, so this one needs
+ *     whole-directory granularity — copy only when the destination directory
+ *     is absent.
+ *  3. **`<appData>/<name>/session-index.json` is never copied.** That file IS
+ *     the conversation list (`services/chat/SessionIndexService.ts:95`), and
+ *     each row's `runtimeIdentity` is an ABSOLUTE path to the `.jsonl`
+ *     containing the old profile name — so copying it is not enough, the paths
+ *     have to be rewritten onto the new root. NOT FIXED.
+ *
+ * `session-state.json`'s `localStorage` mirror looks like it should cover (2),
+ * but it does not: `preload` exposes the `sessionStorage` bridge and NOTHING in
+ * the renderer calls it, so the mirror is write-only and reads back empty.
+ *
+ * Deliberately left unfixed here rather than patched blind: the evidence is in
+ * Windows-only paths this repo's dev machine cannot exercise (user decision,
+ * 2026-09-21). Handover notes:
+ * `docs/plantree/plans/runtime-hardening/topics/app-state-migration-gaps.md`.
+ *
  * ## Why COPY and never move
  *
  * Two reasons, and the first one is a correctness bug waiting to happen:
