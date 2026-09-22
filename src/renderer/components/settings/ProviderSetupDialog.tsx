@@ -14,7 +14,12 @@
  * pre-fill it with even if we wanted to.
  */
 
-import type { UserProviderApi, UserProviderDraft, UserProviderView } from '@shared/userProviders';
+import type {
+  UserModelMeta,
+  UserProviderApi,
+  UserProviderDraft,
+  UserProviderView,
+} from '@shared/userProviders';
 import {
   checkProviderBaseUrl,
   normalizeProviderBaseUrl,
@@ -42,6 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/lib/z-index';
@@ -89,6 +95,7 @@ export function ProviderSetupDialog({
   const [api, setApi] = useState<UserProviderApi>('openai-completions');
   const [apiKey, setApiKey] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
+  const [modelMeta, setModelMeta] = useState<Record<string, UserModelMeta>>({});
   const [probe, setProbe] = useState<Probe>({ state: 'idle' });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -109,6 +116,7 @@ export function ProviderSetupDialog({
       setBaseUrl(editing.baseUrl);
       setApi(editing.api);
       setSelected(editing.models);
+      setModelMeta(editing.modelMeta ?? {});
       return;
     }
     setPreset(CUSTOM_SERVICE);
@@ -116,6 +124,7 @@ export function ProviderSetupDialog({
     setBaseUrl('');
     setApi('openai-completions');
     setSelected([]);
+    setModelMeta({});
   }, [open, editing]);
 
   const applyPreset = useCallback((id: string | null) => {
@@ -153,10 +162,30 @@ export function ProviderSetupDialog({
     setProbe({ state: 'failed', error: result.error });
   }, [baseUrl, api, apiKey, editing]);
 
+  const updateMeta = useCallback((modelId: string, patch: Partial<UserModelMeta>) => {
+    setModelMeta((current) => ({ ...current, [modelId]: { ...current[modelId], ...patch } }));
+  }, []);
+
   const save = useCallback(async () => {
     setSaving(true);
     setSaveError(null);
     try {
+      // Only carry metadata for models that are actually selected, and only
+      // if at least one field is set — an empty entry is noise pi can do
+      // without.
+      const meta: Record<string, UserModelMeta> = {};
+      for (const id of selected) {
+        const m = modelMeta[id];
+        if (
+          m &&
+          (m.contextWindow !== undefined ||
+            m.maxTokens !== undefined ||
+            m.reasoning !== undefined ||
+            m.input !== undefined)
+        ) {
+          meta[id] = m;
+        }
+      }
       const draft: UserProviderDraft = {
         ...(editing ? { id: editing.id } : {}),
         name: name.trim(),
@@ -164,6 +193,7 @@ export function ProviderSetupDialog({
         api,
         ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
         models: selected,
+        ...(Object.keys(meta).length > 0 ? { modelMeta: meta } : {}),
       };
       await window.electronAPI.userProviders.upsert(draft);
       onSaved();
@@ -173,7 +203,7 @@ export function ProviderSetupDialog({
     } finally {
       setSaving(false);
     }
-  }, [editing, name, baseUrl, api, apiKey, selected, onSaved, onOpenChange]);
+  }, [editing, name, baseUrl, api, apiKey, selected, modelMeta, onSaved, onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -318,6 +348,24 @@ export function ProviderSetupDialog({
                 {t('{{count}} selected').replace('{{count}}', `${selected.length}`)}
               </p>
             )}
+
+            {selected.length > 0 && (
+              <details className="rounded-md border">
+                <summary className="cursor-pointer select-none px-3 py-2 text-meta text-muted-foreground">
+                  {t('Per-model metadata')}
+                </summary>
+                <div className="space-y-3 border-t px-3 py-3">
+                  {selected.map((model) => (
+                    <ModelMetaRow
+                      key={model}
+                      modelId={model}
+                      meta={modelMeta[model]}
+                      onChange={updateMeta}
+                    />
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
 
           {saveError && (
@@ -360,6 +408,87 @@ function Field({
           {hint}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * One row of per-model metadata: context window, output cap, reasoning switch
+ * and input modality. All optional; a blank row is the same as no metadata.
+ */
+function ModelMetaRow({
+  modelId,
+  meta,
+  onChange,
+}: {
+  modelId: string;
+  meta: UserModelMeta | undefined;
+  onChange: (modelId: string, patch: Partial<UserModelMeta>) => void;
+}) {
+  const { t } = useI18n();
+  const input = meta?.input ?? [];
+  return (
+    <div className="space-y-2">
+      <p className="truncate text-meta font-semibold">{modelId}</p>
+      <div className="flex flex-wrap gap-3">
+        <label className="flex items-center gap-1.5 text-meta text-muted-foreground">
+          {t('Context window')}
+          <Input
+            type="number"
+            min={0}
+            className="h-7 w-28"
+            value={meta?.contextWindow ?? ''}
+            onChange={(event) => {
+              const value = event.target.value.trim();
+              onChange(modelId, { contextWindow: value ? Number(value) : undefined });
+            }}
+            placeholder="tokens"
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-meta text-muted-foreground">
+          {t('Output limit')}
+          <Input
+            type="number"
+            min={0}
+            className="h-7 w-28"
+            value={meta?.maxTokens ?? ''}
+            onChange={(event) => {
+              const value = event.target.value.trim();
+              onChange(modelId, { maxTokens: value ? Number(value) : undefined });
+            }}
+            placeholder="tokens"
+          />
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-1.5 text-meta text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={meta?.reasoning === true}
+            onChange={(event) =>
+              onChange(modelId, { reasoning: event.target.checked || undefined })
+            }
+          />
+          {t('Reasoning')}
+        </label>
+        <div className="flex items-center gap-1.5 text-meta text-muted-foreground">
+          {t('Input')}
+          <ToggleGroup
+            value={input}
+            onValueChange={(value) =>
+              onChange(modelId, {
+                input:
+                  (value as string[]).length > 0
+                    ? ([...value] as Array<'text' | 'image'>)
+                    : undefined,
+              })
+            }
+          >
+            <ToggleGroupItem value="text">{t('Text')}</ToggleGroupItem>
+            <ToggleGroupItem value="image">{t('Image')}</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      </div>
     </div>
   );
 }

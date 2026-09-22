@@ -790,7 +790,10 @@ function toPiUserProvider(provider: UserProvider): Record<string, unknown> {
     baseUrl: provider.baseUrl,
     api: provider.api,
     headers,
-    models: (provider.models ?? []).map((id) => ({ id })),
+    models: (provider.models ?? []).map((id) => ({
+      id,
+      ...(provider.modelMeta?.[id] ?? {}),
+    })),
   };
 }
 

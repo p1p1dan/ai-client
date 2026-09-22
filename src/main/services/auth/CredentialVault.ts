@@ -82,6 +82,8 @@ export interface VaultPayload {
  * narrowing here would silently drop a provider whose style a later build
  * understands.
  */
+import type { UserModelMeta } from '@shared/userProviders';
+
 export interface UserProvider {
   id: string;
   name: string;
@@ -91,6 +93,8 @@ export interface UserProvider {
   headers?: Record<string, string>;
   /** Model ids the user picked for this service; empty means "not chosen yet". */
   models?: string[];
+  /** Per-model metadata, keyed by model id. Absent entry = no metadata. */
+  modelMeta?: Record<string, UserModelMeta>;
   enabled: boolean;
   createdAt: string;
   /**

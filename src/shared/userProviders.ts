@@ -153,6 +153,21 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
   },
 ] as const;
 
+/**
+ * Per-model metadata a user can set for a model they picked.
+ *
+ * Mirrors the subset of {@link PiManagedModelDefinition} the add/edit form
+ * exposes: the four fields a personal service cannot be inferred from a bare
+ * model id. Everything here is optional so a model with no metadata typed in
+ * behaves exactly like before — pi falls back to its own defaults.
+ */
+export interface UserModelMeta {
+  contextWindow?: number;
+  maxTokens?: number;
+  reasoning?: boolean;
+  input?: Array<'text' | 'image'>;
+}
+
 /** One user-added service as the renderer sees it — never carries the key. */
 export interface UserProviderView {
   id: string;
@@ -162,6 +177,8 @@ export interface UserProviderView {
   /** Whether a key is stored. The key itself never crosses the IPC boundary. */
   hasApiKey: boolean;
   models: string[];
+  /** Per-model metadata, keyed by model id. Absent entry = no metadata. */
+  modelMeta?: Record<string, UserModelMeta>;
   enabled: boolean;
   createdAt: string;
 }
@@ -179,6 +196,8 @@ export interface UserProviderDraft {
    */
   apiKey?: string;
   models?: string[];
+  /** Per-model metadata, keyed by model id. Absent means "no metadata". */
+  modelMeta?: Record<string, UserModelMeta>;
   enabled?: boolean;
 }
 

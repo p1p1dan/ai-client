@@ -118,6 +118,7 @@ export class UserProviderService {
       apiKey,
       ...(existing?.headers ? { headers: existing.headers } : {}),
       models: draft.models ?? existing?.models ?? [],
+      ...(draft.modelMeta ? { modelMeta: draft.modelMeta } : {}),
       enabled: draft.enabled ?? existing?.enabled ?? true,
       createdAt: existing?.createdAt ?? this.now().toISOString(),
       // Carried, never editable. It is the key older sessions recorded, so
@@ -239,6 +240,7 @@ function toView(provider: UserProvider): UserProviderView {
     api: provider.api as UserProviderApi,
     hasApiKey: provider.apiKey.length > 0,
     models: provider.models ?? [],
+    ...(provider.modelMeta ? { modelMeta: provider.modelMeta } : {}),
     enabled: provider.enabled,
     createdAt: provider.createdAt,
   };
