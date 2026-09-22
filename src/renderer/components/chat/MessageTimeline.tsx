@@ -1616,28 +1616,39 @@ function TurnProgressHead({
  * It does not decide whether it renders: `deriveTurnWorkZone` returns `null`
  * for a settled turn that replayed no timing, and the caller drops the row.
  */
-function TurnWorkZoneRow({ zone }: { zone: TurnWorkZone }) {
+function TurnWorkZoneRow({ zone, clock }: { zone: TurnWorkZone; clock: boolean }) {
   const { t } = useI18n();
 
-  // Decision 034: the RUNNING state is gone from this row. Its two parts — the
-  // ticking clock and the live action clause — moved up to the process head,
-  // where zcode puts them and where a reader watching a long wait is already
-  // looking. A running turn therefore renders nothing here at all, rather than
-  // a second line repeating the first.
-  if (zone.kind === 'working') return null;
-  // And nothing when the turn has no BILL to present either. `deriveTurnWorkZone`
-  // stopped returning `null` for that case so the head above could still name
-  // the state; the silence it used to signal belongs here, where a row with no
-  // clause would be a lone 「✻」.
-  if (zone.completedAtMs === null && zone.toolCalls === null && zone.thinkingMs === null) {
-    return null;
+  // Decision 034 moved the RUNNING state up to the process head, and this row
+  // rendered nothing at all while a turn ran. That held only for turns that
+  // HAVE a head: T112 refuses a fold below two steps, so 思考 → 输出 and a bare
+  // paragraph had no head to move it to and reported no clock at all — the
+  // 2026-09-22 report 「有的时候，直接显示：思考+输出，没有已工作 xx 秒」. The
+  // row is the fallback holder now (`clock`), which is what makes the clock
+  // land on exactly one line per turn rather than at most one.
+  //
+  // No live action clause here even so. A turn with no head has at most one
+  // step, and that step's own row is directly above this line — narrating it a
+  // second time is what the clause exists to avoid, not to duplicate.
+  if (zone.kind === 'working') {
+    if (!clock) return null;
+    const runningLine = `✻ ${workingHeadText(t, zone.elapsed)}`;
+    return (
+      <div className={turnWorkZoneClass()}>
+        <Spinner className="size-3.5 shrink-0" />
+        <span className="min-w-0 truncate" title={runningLine}>
+          {runningLine}
+        </span>
+      </div>
+    );
   }
 
-  const line = joinTurnProgressLine('✻', [
-    // The duration went up to the head with the running clock. What is left is
-    // the turn's BILL — the three figures that are only knowable once it ends —
-    // and printing 「已工作 N 秒」 in both places is the T107 defect this split
-    // exists to avoid.
+  const clauses = [
+    // The duration, ONLY when no head took it. Printing 「已工作 N 秒」 in both
+    // places is the T107 defect the latch exists to avoid, and a bare 「已工作」
+    // is a state word that belongs on a head rather than on a bill — so this
+    // clause needs a real measurement, not just permission.
+    clock && zone.worked ? workedHeadText(t, zone.worked) : null,
     zone.completedAtMs === null
       ? null
       : t('Completed at {{time}}', { time: formatAbsoluteTime(zone.completedAtMs) }),
@@ -1646,10 +1657,20 @@ function TurnWorkZoneRow({ zone }: { zone: TurnWorkZone }) {
       : t(zone.toolCalls === 1 ? '{{count}} tool call' : '{{count}} tool calls', {
           count: zone.toolCalls,
         }),
-    // Shared with the head this row replaced, so a minute is written the same
-    // way in both places and the two cannot word 「思考」 differently.
+    // Shared with the head, so a minute is written the same way in both places
+    // and the two cannot word 「思考」 differently.
     formatThinkingClause(zone.thinkingMs, t),
-  ]);
+  ].filter((clause): clause is string => !!clause);
+  // Nothing at all when the turn has no bill to present. `deriveTurnWorkZone`
+  // stopped returning `null` for that case so the head above could still name
+  // the state; the silence it used to signal belongs here.
+  if (clauses.length === 0) return null;
+
+  // 「✻」 is this row's BULLET, so it is PREFIXED onto the first clause — the
+  // same shape the head uses. Passing it as `joinTurnProgressLine`'s head
+  // instead rendered 「✻ · 完成于 17:06」, a separator with nothing on its left
+  // (2026-09-22).
+  const line = joinTurnProgressLine(`✻ ${clauses[0]}`, clauses.slice(1));
   return (
     <div className={turnWorkZoneClass()}>
       <span className="min-w-0 truncate" title={line}>
@@ -2202,6 +2223,20 @@ const ChatTurn = memo(function ChatTurn({
     );
   };
 
+  // Does ANY group in this turn draw a head? T112 refuses a fold below two
+  // steps, so 思考 → 输出, 单工具 → 输出 and a bare paragraph have none — and
+  // decision 034 had put the clock exclusively on the head, which is how those
+  // shapes ended up reporting no duration at all (2026-09-22). When the answer
+  // is no, the clock falls to the tail row instead.
+  //
+  // The same predicate the map below uses, deliberately: a second rule here
+  // could disagree with it and leave the turn with two clocks or none.
+  const clockOnHead = workSections.some(
+    (section) =>
+      section.kind === 'processGroup' &&
+      turnProcessGroupFolds(section.segments.flatMap((segment) => segment.items))
+  );
+
   // Decision 034: the turn's clock rides the FIRST process head that actually
   // folds, and no other. A latch rather than an index test because a section
   // can decline to render a head at all (`turnProcessGroupFolds`), and keying
@@ -2286,7 +2321,7 @@ const ChatTurn = memo(function ChatTurn({
             the session rather than the turn. This is the 「工作区固定在末尾」 the
             user asked for — the duration stops moving from group to group as a
             turn grows. */}
-        <TurnWorkZoneRow zone={workZone} />
+        <TurnWorkZoneRow zone={workZone} clock={!clockOnHead} />
         {retryBanner && <RetryBanner view={retryBanner} sessionId={sessionId} />}
         {/* T12-b: the running status, and ONLY while it is running. FB6's
             position is kept — under the output it describes, not above it —

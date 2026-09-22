@@ -1449,33 +1449,42 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * T105 (D6) — the live clause, and the three things about it that are easy
-   * to get wrong without noticing. T113 moved it from the head to the work
-   * zone row; all three still hold, against the row:
+   * The tail row: the turn's bill, and the clock's FALLBACK home.
    *
-   *  1. it is GATED on the turn running, or a finished turn keeps advertising
-   *     what it was doing an hour ago;
-   *  2. it is the LAST clause of a two-clause line — 「✻ 工作中 47 秒 · 读取中」
-   *     — so the line reads as a clock first and a narration second;
-   *  3. the settled line is the user's four figures in the user's order, with
-   *     no fifth.
+   * ⚠️ **REWRITTEN 2026-09-22 (decision 036).** This case used to assert that
+   * the row has no clock at all — decision 034 had moved the duration and the
+   * live clause up to the process head unconditionally. But a head only exists
+   * where a group FOLDS, and T112 refuses a fold below two steps, so 思考 →
+   * 输出, 单工具 → 输出 and a bare paragraph reported no duration anywhere
+   * (「有的时候，直接显示：思考+输出，没有已工作 xx 秒」).
    *
-   * Ordering is asserted by position in the joined line rather than by three
-   * separate `expectCalled`s, because "all of them appear" is exactly the claim
-   * that would stay green if they came out shuffled.
+   * What survives unchanged is the T107 red line, and it is now the `clock`
+   * prop rather than the absence of code: the row prints a duration only when
+   * no head took one, so exactly one line per turn carries it.
+   *
+   * The live action clause did NOT come back with it. A turn reaching this
+   * fallback has at most one step, whose own row sits directly above this line.
+   *
+   * Ordering is asserted by position in the joined line rather than by separate
+   * `expectCalled`s, because "all of them appear" is exactly the claim that
+   * would stay green if they came out shuffled.
    */
-  it('[WG-WIRE-8] the work zone row is settled-only, and lists three figures', () => {
+  it('[WG-WIRE-8] the tail row lists the bill, and holds the clock only as a fallback', () => {
     const row = nodeSource(topLevelFunction('TurnWorkZoneRow'));
-    // Decision 034: the RUNNING state left this row for the process head, with
-    // the clock and the live clause it was made of. A running turn renders
-    // nothing here — two rows counting the same seconds is the defect.
-    expect(row).toContain("if (zone.kind === 'working') return null;");
-    expect(row).not.toContain('<Spinner');
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    // The running state renders here ONLY as the fallback — a turn with a head
+    // still gets nothing, which is what keeps two rows from counting the same
+    // seconds.
+    expect(row).toContain("if (zone.kind === 'working') {");
+    expect(row).toContain('if (!clock) return null;');
+    // T107 as a positive assertion now: the duration needs permission AND a
+    // real measurement. `clock` alone would print a bare state word on a bill.
+    expect(row).toContain('clock && zone.worked ? workedHeadText(t, zone.worked) : null');
+    // …and the permission is the exact complement of the head's.
+    expect(turn).toContain('const clockOnHead = workSections.some(');
+    expect(turn).toContain('clock={!clockOnHead}');
+    // Still no narration down here: one step's row is already above the line.
     expect(row).not.toContain('deriveTurnCurrentAction');
-    // The duration went up with them: printing 「已工作 N 秒」 in both places is
-    // T107 restated.
-    expect(row).not.toContain('workedHeadText');
-    expect(row).not.toContain('workingHeadText');
 
     const completedAt = row.indexOf("t('Completed at {{time}}'");
     const calls = row.indexOf("'{{count}} tool calls'");
@@ -1486,6 +1495,13 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // The closed list, as a negative: no token clause on this row, ever.
     expect(row).not.toContain('formatTurnTokenClauses');
     expect(row).not.toContain('tokens');
+    // 「✻」 is a bullet, not a clause: passing it as the join HEAD rendered
+    // 「✻ · 完成于 17:06」, a separator with nothing on its left.
+    expect(row).not.toContain("joinTurnProgressLine('✻'");
+    // Split in two to keep a `${` out of a plain string (biome
+    // `noTemplateCurlyInString`); together they pin the prefix form.
+    expect(row).toContain('joinTurnProgressLine(`✻ ');
+    expect(row).toContain(', clauses.slice(1))');
   });
 
   /**
