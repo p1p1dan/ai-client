@@ -212,3 +212,179 @@ describe('ProviderSetupDialog', () => {
     expect(api.fetchModels.mock.calls[0][0]).not.toHaveProperty('apiKey');
   });
 });
+
+/**
+ * P2 / c-2 — the per-model metadata editor is the only place a user's model
+ * capabilities are typed in, and it was the one surface the main-process tests
+ * could not reach: `readDraft` and `toPiUserProvider` were covered, the form
+ * that feeds them was not.
+ *
+ * Everything below drives the REAL dialog and asserts what `userProviders.upsert`
+ * is handed, so the four regressions these guard are the ones a user would hit
+ * (a value that never arrives, a value pi will silently ignore, metadata for a
+ * model that was deselected, and a section that will not reopen).
+ */
+describe('ProviderSetupDialog — per-model metadata', () => {
+  /** React tracks its own value on the node, so the native setter has to be used. */
+  async function type(node: Element | null, value: string, event = 'input'): Promise<void> {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    await act(async () => {
+      if (node instanceof HTMLInputElement) setter?.call(node, value);
+      node?.dispatchEvent(new Event(event, { bubbles: true }));
+    });
+  }
+
+  /**
+   * The metadata block for the single selected model. `placeholder="tokens"` is
+   * shared by both number fields, so they are read positionally (context window
+   * then output limit) — the same order the row renders them in.
+   */
+  function metaBlock(): { contextWindow: HTMLInputElement; maxTokens: HTMLInputElement } {
+    const fields = [
+      ...document.body.querySelectorAll<HTMLInputElement>('input[placeholder="tokens"]'),
+    ];
+    if (fields.length < 2) throw new Error('per-model metadata fields are not on screen');
+    return { contextWindow: fields[0], maxTokens: fields[1] };
+  }
+
+  function panelButton(text: string): HTMLButtonElement | undefined {
+    return [...document.body.querySelectorAll('button')].find((button) =>
+      button.textContent?.trim().includes(text)
+    );
+  }
+
+  async function save(): Promise<void> {
+    const button = [...document.body.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent?.trim() === 'Save'
+    );
+    await act(async () => button?.click());
+    await settle();
+  }
+
+  it('pre-fills the row from stored metadata, so reopening is not a blank form', async () => {
+    api.upsert.mockResolvedValue(provider());
+    await mountDialog(
+      provider({
+        modelMeta: {
+          'deepseek-chat': {
+            contextWindow: 65536,
+            maxTokens: 4096,
+            reasoning: true,
+            input: ['text'],
+          },
+        },
+      })
+    );
+
+    expect(text()).toContain('Per-model metadata');
+    expect(text()).toContain('deepseek-chat');
+    const { contextWindow, maxTokens } = metaBlock();
+    expect(contextWindow.value).toBe('65536');
+    expect(maxTokens.value).toBe('4096');
+    const reasoning = document.body.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    expect(reasoning.checked).toBe(true);
+
+    // Round-tripping the form unchanged must not lose any of it.
+    await save();
+    expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({
+      'deepseek-chat': { contextWindow: 65536, maxTokens: 4096, reasoning: true, input: ['text'] },
+    });
+  });
+
+  it.each([
+    '0',
+    '-1',
+    '1.5',
+    '1e999',
+  ])('drops a context window of %s instead of writing a number pi ignores', async (raw) => {
+    api.upsert.mockResolvedValue(provider());
+    await mountDialog(provider());
+
+    await type(metaBlock().contextWindow, raw);
+    await save();
+
+    // Not `null`, not `Infinity`, not `NaN`: the field is simply absent, which
+    // is what `pi`'s `parseModel` treats as "use the default".
+    expect(api.upsert.mock.calls[0][0].modelMeta).toBeUndefined();
+  });
+
+  it('carries a valid context window and output limit through as numbers', async () => {
+    api.upsert.mockResolvedValue(provider());
+    await mountDialog(provider());
+
+    const { contextWindow, maxTokens } = metaBlock();
+    await type(contextWindow, '200000');
+    await type(maxTokens, '8192');
+    await save();
+
+    expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({
+      'deepseek-chat': { contextWindow: 200000, maxTokens: 8192 },
+    });
+  });
+
+  it('sends the reasoning switch and the input modalities', async () => {
+    api.upsert.mockResolvedValue(provider());
+    await mountDialog(provider());
+
+    await act(async () => {
+      (document.body.querySelector('input[type="checkbox"]') as HTMLInputElement).click();
+    });
+    // One row per selected model, so the modality buttons repeat down the
+    // list; the first pair belongs to the only model here.
+    const modalities = [...document.body.querySelectorAll('button[aria-pressed]')];
+    const image = modalities.find((button) => button.textContent?.trim() === 'Image');
+    await act(async () => image?.click());
+    await save();
+
+    // `text` is left out on purpose: pi's `parseInputs` falls back to it, and
+    // the form only stores what the user actually declared (U08-2's rule that
+    // an undeclared level is a guess).
+    expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({
+      'deepseek-chat': { reasoning: true, input: ['image'] },
+    });
+  });
+
+  it('drops metadata for a model the user deselected', async () => {
+    api.upsert.mockResolvedValue(provider());
+    api.fetchModels.mockResolvedValue({
+      ok: true,
+      models: ['deepseek-chat', 'deepseek-reasoner'],
+    });
+    await mountDialog(
+      provider({
+        models: ['deepseek-chat', 'deepseek-reasoner'],
+        modelMeta: {
+          'deepseek-chat': { contextWindow: 65536 },
+          'deepseek-reasoner': { contextWindow: 163840 },
+        },
+      })
+    );
+
+    // The chips only exist after a probe answers, and they carry `aria-pressed`
+    // — that is the one control in this form that clears a selection.
+    const fetchButton = panelButton('Fetch models');
+    await act(async () => fetchButton?.click());
+    await settle();
+    const chip = [...document.body.querySelectorAll('button[aria-pressed]')].find(
+      (button) => button.textContent?.trim() === 'deepseek-reasoner'
+    );
+    expect(chip?.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => chip?.click());
+    await save();
+
+    expect(api.upsert.mock.calls[0][0]).toMatchObject({
+      models: ['deepseek-chat'],
+      modelMeta: { 'deepseek-chat': { contextWindow: 65536 } },
+    });
+  });
+
+  it('omits modelMeta entirely when every field is left blank', async () => {
+    api.upsert.mockResolvedValue(provider());
+    await mountDialog(provider());
+
+    await save();
+
+    // An empty entry is noise in `models.json`; the save filter drops it.
+    expect(api.upsert.mock.calls[0][0]).not.toHaveProperty('modelMeta');
+  });
+});
