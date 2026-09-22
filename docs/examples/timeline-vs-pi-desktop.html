@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>时间线对照：本仓 Q1 vs PI-Desktop</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --line: #2a3140;
+      --text: #e8eaed;
+      --muted: #8b93a7;
+      --dim: #6b7386;
+      --final: #f4f6fb;
+      --tool: #3d4a63;
+      --head: #252a36;
+      --accent: #7aa2f7;
+      --warn: #e0af68;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    header {
+      padding: 28px 28px 8px;
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 22px; font-weight: 650; margin: 0 0 8px; }
+    .lead { color: var(--muted); font-size: 14px; max-width: 72ch; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      max-width: 1180px;
+      margin: 16px auto 40px;
+      padding: 0 20px;
+    }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .col {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .col h2 {
+      margin: 0;
+      padding: 14px 16px;
+      font-size: 15px;
+      border-bottom: 1px solid var(--line);
+      background: #1c212c;
+    }
+    .col h2 small { color: var(--muted); font-weight: 400; margin-left: 8px; }
+    .thread { padding: 14px 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+    .user {
+      align-self: flex-end;
+      background: #243044;
+      padding: 8px 12px;
+      border-radius: 12px 12px 4px 12px;
+      font-size: 13px;
+      max-width: 80%;
+    }
+    .fold {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #141820;
+    }
+    .fold-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--head);
+      font-size: 12px;
+      color: var(--muted);
+      border-radius: 10px 10px 0 0;
+    }
+    .chev { opacity: .7; font-size: 11px; }
+    .chip { color: #c6d0e4; }
+    .sep { color: #4b5568; }
+    .fold-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+    .mid {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .final {
+      color: var(--final);
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .tool {
+      font-size: 12px;
+      color: #9aa8c3;
+      background: #1a2230;
+      border: 1px dashed var(--tool);
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .think { font-size: 12px; color: var(--dim); font-style: italic; }
+    .bubble {
+      background: #1b2130;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 13.5px;
+      color: var(--final);
+    }
+    .act {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .act-head {
+      padding: 7px 10px;
+      background: var(--head);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .note {
+      font-size: 12px;
+      color: var(--warn);
+      padding: 0 2px;
+    }
+    table {
+      width: calc(100% - 40px);
+      max-width: 1180px;
+      margin: 0 auto 48px;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #1c212c; }
+    caption {
+      text-align: left;
+      font-weight: 650;
+      padding: 0 0 10px;
+      font-size: 15px;
+    }
+    .tag { color: var(--accent); font-size: 11px; letter-spacing: .04em; }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="tag">同一轮对话 · 同一串事件</p>
+    <h1>本仓 Q1 vs PI-Desktop：时间线长什么样</h1>
+    <p class="lead">
+      事件顺序相同：旁白 → 工具 → 旁白 → 工具 → 总结。
+      左边是当前本仓（中间文字进过程组、变灰、最后一段才是终稿）；
+      右边是 PI-Desktop（正文始终是普通气泡，过程组只包思考和工具）。
+    </p>
+  </header>
+
+  <div class="grid">
+    <section class="col">
+      <h2>本仓 Q1 <small>1e33b7fe · splitTurnWorkGroup</small></h2>
+      <div class="thread">
+        <div class="user">帮我看一下项目结构</div>
+        <div class="fold">
+          <div class="fold-head">
+            <span class="chev">▸</span>
+            <span class="chip">思考</span><span class="sep"> · </span>
+            <span class="chip">2 次工具调用</span><span class="sep"> · </span>
+            <span class="chip">2 段说明</span>
+          </div>
+          <div class="fold-body">
+            <div class="think">✦ 先列目录再读入口</div>
+            <div class="mid">我先看目录……</div>
+            <div class="tool">list_dir  .</div>
+            <div class="mid">根目录有 src、docs。接着读入口。</div>
+            <div class="tool">read  src/renderer/App.tsx</div>
+          </div>
+        </div>
+        <div class="final">总结：入口在 App.tsx，主状态也在这一层。</div>
+        <p class="note">前两段说明在组里、颜色更淡；只有最后一段是终稿。说明也计入步数，所以会出折叠头。</p>
+      </div>
+    </section>
+
+    <section class="col">
+      <h2>PI-Desktop <small>buildTranscriptEntries · parts 交错</small></h2>
+      <div class="thread">
+        <div class="user">帮我看一下项目结构</div>
+        <div class="act">
+          <div class="act-head">✦ 已处理 1 步 · Thinking</div>
+        </div>
+        <div class="bubble">我先看目录……</div>
+        <div class="act">
+          <div class="act-head">✦ Processed · list_dir</div>
+          <div class="fold-body"><div class="tool">list_dir  .</div></div>
+        </div>
+        <div class="bubble">根目录有 src、docs。接着读入口。</div>
+        <div class="act">
+          <div class="act-head">✦ Processed · read</div>
+          <div class="fold-body"><div class="tool">read  App.tsx</div></div>
+        </div>
+        <div class="bubble">总结：入口在 App.tsx，主状态也在这一层。</div>
+        <p class="note">三段正文都是同一种气泡，没有「非最后一段就变灰」。过程组不含旁白，折叠步数也不含旁白。</p>
+      </div>
+    </section>
+  </div>
+
+  <table>
+    <caption>同一条规则，两边怎么落</caption>
+    <thead>
+      <tr>
+        <th></th>
+        <th>本仓 Q1</th>
+        <th>PI-Desktop</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>中间旁白</td>
+        <td>进过程组，muted</td>
+        <td>普通气泡，和终稿一样亮</td>
+      </tr>
+      <tr>
+        <td>终稿怎么认</td>
+        <td>最后一个 answer 段落</td>
+        <td>不认；所有 content 都是 message part</td>
+      </tr>
+      <tr>
+        <td>折叠数什么</td>
+        <td>思考 + 工具 + <strong>说明段落</strong></td>
+        <td>只数 thinking + tool</td>
+      </tr>
+      <tr>
+        <td>无工具的多段纯文本</td>
+        <td>前面会变灰、可能进组</td>
+        <td>就是连续几个气泡</td>
+      </tr>
+      <tr>
+        <td>流式：先旁白后工具再总结</td>
+        <td>旁白会从「假终稿」掉进组并变灰</td>
+        <td>旁白位置不变、颜色不变</td>
+      </tr>
+      <tr>
+        <td>产品取向</td>
+        <td>视线集中在最后一段总结</td>
+        <td>调用可以夹在输出中间，答案始终可见</td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

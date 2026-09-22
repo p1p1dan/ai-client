@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>过程组排版预览 · 对比</title>
+<style>
+/* ------------------------------------------------------------------
+   全部颜色取自 jyw-ai-client 的 src/renderer/styles/globals.css，
+   字号取 @theme 的 --text-chat-body(16) / --text-chat-process(13) /
+   --text-ui(14) / --text-meta(13)。未新造任何颜色或尺寸。
+   ------------------------------------------------------------------ */
+:root {
+  --background: oklch(0.9931 0.012 96.42);
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --muted-foreground: oklch(0.4531 0.005 91.5);
+  --accent: oklch(0.935 0.0122 96.43);
+  --border: oklch(0.875 0.0137 97.46);
+  --input: oklch(0.8463 0.0137 102.05);
+  --primary: oklch(0.5665 0.1523 45.02);
+  --warning: oklch(0.5665 0.1523 45.02);
+  --hover: oklch(0.935 0.0122 96.43);
+  --tool-arg: color-mix(in oklab, var(--muted-foreground) 85%, var(--background));
+
+  --text-chat-body: 16px;
+  --text-chat-process: 13px;
+  --text-ui: 14px;
+  --text-meta: 13px;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --gap-standard: 8px;   /* design-system 间距规范 8px 标准档 = turnBodyClass gap-2 */
+  --gap-tight: 4px;      /* design-system 间距规范 4px 紧凑档 */
+  --rail: color-mix(in oklab, var(--border) 65%, var(--background));
+}
+:root[data-theme="dark"] {
+  --background: oklch(0.1981 0.0032 17.43);
+  --foreground: oklch(0.8463 0.0137 102.05);
+  --muted-foreground: oklch(0.6956 0.0103 93.62);
+  --accent: oklch(0.305 0.0029 17.32);
+  --border: oklch(0.375 0.0075 97.46);
+  --input: oklch(0.42 0.0075 97.46);
+  --primary: oklch(0.6576 0.1539 49.3);
+  --warning: oklch(0.6576 0.1539 49.3);
+  --hover: oklch(0.305 0.0029 17.32);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------- 页面外壳（不属于预览内容，仅用于说明） ---------------- */
+.shell { max-width: 1360px; margin: 0 auto; padding: 28px 24px 64px; }
+.page-head { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+.page-head h1 { font-size: 20px; margin: 0 0 6px; letter-spacing: -0.01em; }
+.page-head p { margin: 0; font-size: var(--text-meta); color: var(--muted-foreground); line-height: 1.6; max-width: 780px; }
+.controls { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.seg { display: inline-flex; border: 1px solid var(--input); border-radius: 8px; overflow: hidden; }
+.seg button {
+  font: inherit; font-size: var(--text-meta); color: var(--muted-foreground);
+  background: transparent; border: 0; padding: 6px 12px; cursor: pointer;
+  border-right: 1px solid var(--input); white-space: nowrap;
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--foreground); }
+.seg button:hover:not([aria-pressed="true"]) { background: var(--hover); }
+
+.legend {
+  display: flex; gap: 18px; flex-wrap: wrap; margin: 20px 0 14px;
+  font-size: var(--text-meta); color: var(--muted-foreground);
+}
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 22px; height: 8px; border-radius: 2px; flex: none; }
+.swatch.uniform { background: repeating-linear-gradient(to bottom, var(--border) 0 1px, transparent 1px 8px); border: 1px solid var(--border); }
+.swatch.tiered { background: repeating-linear-gradient(to bottom, var(--border) 0 1px, transparent 1px 4px); border: 1px solid var(--border); }
+
+/* ---------------- 两栏对比 ---------------- */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+@media (max-width: 1080px) { .grid { grid-template-columns: 1fr; } }
+
+.pane { border: 1px solid var(--border); border-radius: 12px; background: var(--background); overflow: hidden; }
+.pane-head {
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: baseline; gap: 10px;
+}
+.pane-head .tag {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted-foreground);
+}
+.pane-head .tag.after { background: var(--accent); color: var(--foreground); border-color: transparent; }
+.pane-head .title { font-size: var(--text-ui); font-weight: 600; }
+.pane-head .sub { font-size: var(--text-meta); color: var(--muted-foreground); margin-left: auto; }
+
+/* 聊天区：px-6 pt-5，与 timeline 一致 */
+.chat { padding: 20px 24px 24px; }
+
+/* ---------------- 回合结构（照抄 chatTimelineLayout 的节拍） ---------------- */
+.turn { display: flex; flex-direction: column; gap: 12px; }          /* chatTurnClass gap-3 */
+.prompt-row { display: flex; justify-content: flex-end; }
+.bubble {
+  max-width: 80%; background: var(--accent); border: 1px solid var(--input);
+  border-radius: 12px; border-top-right-radius: 4px;
+  padding: 8px 14px; font-size: var(--text-chat-body); line-height: 1.5;
+}
+.body { display: flex; flex-direction: column; gap: 8px; font-size: var(--text-chat-body); line-height: 1.6; } /* turnBodyClass gap-2 */
+
+/* 组头：turnWorkGroupSummaryClass() — text-ui(14) tabular-nums muted */
+.group-head {
+  display: flex; min-width: 0; align-items: center; gap: 6px;
+  font-size: var(--text-ui); font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground); cursor: pointer; user-select: none;
+  width: 100%; text-align: left; background: none; border: 0; padding: 0; font-family: inherit;
+}
+.group-head:hover .summary-text { color: var(--foreground); }
+.chev { flex: none; transition: transform 150ms ease-out; }
+.group-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.chip-sep { color: color-mix(in oklab, var(--muted-foreground) 50%, transparent); flex: none; }
+.chip { flex: none; }
+.summary-text {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: color 150ms ease-out;
+}
+/* 建议三：头部的实质摘要用正文色，比数量更醒目 */
+.summary-text.lead { color: var(--foreground); }
+
+/* ---------------- 组内容 ---------------- */
+.group-panel { display: flex; flex-direction: column; gap: 8px; }  /* turnProcessShellClass */
+.group-panel[hidden] { display: none; }
+
+/* 旁白 = 中间说明：tier 2 muted，正文档 */
+.prose { color: var(--muted-foreground); font-size: var(--text-chat-body); line-height: 1.6; }
+.prose p { margin: 0; }
+.prose p + p { margin-top: 8px; }
+
+/* 终稿 = tier 1 */
+.final { color: var(--foreground); font-size: var(--text-chat-body); line-height: 1.6; }
+.final p { margin: 0; }
+.final p + p { margin-top: 8px; }
+.final code, .prose code { font-family: var(--font-mono); font-size: 0.9em; background: var(--accent); padding: 1px 4px; border-radius: 3px; }
+
+/* ============================================================
+   对比的关键：证据块（工具 / 思考）的纵向节拍与层级
+   ------------------------------------------------------------
+   BEFORE：和旁白共用 8px 标准档、零缩进、零层级 → 一列平级碎块
+   AFTER ：4px 紧凑档 + 左内缩 + 一条极淡的引导线 → 挂在旁白下面的注脚
+   ============================================================ */
+
+/* --- BEFORE 证据块 --- */
+.before .evidence { display: flex; flex-direction: column; gap: 8px; }
+.before .ev-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--text-chat-process); color: var(--tool-arg);
+  font-variant-numeric: tabular-nums;
+}
+.before .ev-row .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.before .ev-row .arg { font-family: var(--font-mono); font-size: var(--text-code, 12px); }
+
+/* --- AFTER 证据块：更紧、内缩、带引导线 --- */
+.after .evidence {
+  display: flex; flex-direction: column; gap: var(--gap-tight);
+  padding-left: 12px;
+  border-left: 1px solid var(--rail);
+  margin-left: 1px;
+}
+.after .ev-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--text-chat-process); color: var(--tool-arg);
+  font-variant-numeric: tabular-nums;
+}
+.after .ev-row .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.after .ev-row .arg { font-family: var(--font-mono); font-size: var(--text-code, 12px); }
+
+.icon { width: 14px; height: 14px; flex: none; opacity: 0.75; }
+.ok { color: var(--muted-foreground); flex: none; font-size: var(--text-chat-process); }
+.dur { color: var(--muted-foreground); flex: none; font-variant-numeric: tabular-nums; }
+
+/* 思考行 */
+.think-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer;
+  font-size: var(--text-chat-process); color: var(--tool-arg);
+}
+.think-body {
+  font-size: var(--text-chat-process); color: var(--tool-arg);
+  line-height: 1.65; white-space: pre-wrap; padding-top: 4px;
+}
+.think-body[hidden] { display: none; }
+.after .think-wrap { padding-left: 0; }
+
+/* 回合尾行：turnWorkZoneClass() */
+.work-zone {
+  display: flex; min-width: 0; align-items: center; gap: 6px;
+  font-size: var(--text-ui); font-variant-numeric: tabular-nums; color: var(--muted-foreground);
+}
+.dot { color: color-mix(in oklab, var(--muted-foreground) 50%, transparent); flex: none; }
+.spin {
+  width: 12px; height: 12px; flex: none; border-radius: 50%;
+  border: 1.5px solid color-mix(in oklab, var(--muted-foreground) 35%, transparent);
+  border-top-color: var(--muted-foreground);
+  animation: spin 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 注释引线（说明这次对比在演示什么） */
+.note {
+  margin-top: 24px; border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px;
+  font-size: var(--text-meta); color: var(--muted-foreground); line-height: 1.7;
+}
+.note h2 { font-size: var(--text-ui); color: var(--foreground); margin: 0 0 10px; }
+.note ul { margin: 0; padding-left: 20px; }
+.note li { margin-bottom: 6px; }
+.note li b { color: var(--foreground); font-weight: 600; }
+.note code { font-family: var(--font-mono); font-size: 12px; background: var(--accent); padding: 1px 4px; border-radius: 3px; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="page-head">
+    <div>
+      <h1>过程组排版预览 · 优化前 / 优化后</h1>
+      <p>颜色与字号全部取自 <code style="font-family:var(--font-mono);font-size:12px;background:var(--accent);padding:1px 4px;border-radius:3px">globals.css</code> 的 OKLCH 变量与 <code style="font-family:var(--font-mono);font-size:12px;background:var(--accent);padding:1px 4px;border-radius:3px">@theme</code> 字号档，未新造任何值。切换「模型风格」可以看到同一套排版在两种输出节奏下的表现。</p>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="模型风格">
+        <button id="m-chatty" aria-pressed="true">啰嗦模型</button>
+        <button id="m-terse" aria-pressed="false">简洁模型</button>
+      </div>
+      <div class="seg" role="group" aria-label="主题">
+        <button id="t-light" aria-pressed="true">浅色</button>
+        <button id="t-dark" aria-pressed="false">深色</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i class="swatch uniform"></i> 优化前：所有元素共用 8px 标准档、零缩进</span>
+    <span><i class="swatch tiered"></i> 优化后：旁白保持 8px，证据块降到 4px 紧凑档 + 内缩 + 引导线</span>
+  </div>
+
+  <div class="grid">
+
+    <!-- ==================== BEFORE ==================== -->
+    <section class="pane before">
+      <div class="pane-head">
+        <span class="tag">Before</span>
+        <span class="title">当前实现</span>
+        <span class="sub">1e33b7fe</span>
+      </div>
+      <div class="chat">
+        <div class="turn">
+          <div class="prompt-row"><div class="bubble">帮我把 auth 模块的 token 刷新逻辑重构一下，顺便看看有没有竞态。</div></div>
+          <div class="body">
+
+            <button class="group-head" aria-expanded="true" data-toggle="g1-before">
+              <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+              <span class="think-chip">思考</span><span class="chip-sep">·</span><span class="tools-chip">6 次工具调用</span><span class="chip-sep">·</span><span class="expl-chip">2 段说明</span>
+            </button>
+
+            <div class="group-panel" id="g1-before">
+              <div class="prose"><p>我先读一下 auth 目录，确认现有的刷新入口和调用点。</p></div>
+
+              <div class="evidence">
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M4 9h16"/></svg><span class="label">读取目录</span><span class="arg">src/auth/</span><span class="ok">✓</span><span class="dur">0.3s</span></div>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span class="label">读取文件</span><span class="arg">src/auth/tokenRefresh.ts</span><span class="ok">✓</span><span class="dur">0.1s</span></div>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span class="label">读取文件</span><span class="arg">src/auth/session.ts</span><span class="ok">✓</span><span class="dur">0.1s</span></div>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m21 21-4.3-4.3"/><circle cx="11" cy="11" r="7"/></svg><span class="label">搜索</span><span class="arg">refreshToken(</span><span class="ok">✓</span><span class="dur">0.4s</span></div>
+              </div>
+
+              <div class="prose"><p>找到了：<code>refreshToken</code> 没有做并发合并，两个组件同时过期会各发一次请求。我再看一下调用方。</p></div>
+
+              <div class="evidence">
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m21 21-4.3-4.3"/><circle cx="11" cy="11" r="7"/></svg><span class="label">搜索</span><span class="arg">refreshToken(</span><span class="ok">✓</span><span class="dur">0.4s</span></div>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m21 21-4.3-4.3"/><circle cx="11" cy="11" r="7"/></svg><span class="label">搜索</span><span class="arg">refreshToken(</span><span class="ok">✓</span><span class="dur">0.4s</span></div>
+              </div>
+
+              <div class="final"><p>我把刷新逻辑改成了单飞（single-flight）模式，并补了一个并发测试。</p></div>
+            </div>
+
+            <div class="work-zone">
+              <span class="dot">✻</span><span>已工作 54 秒</span><span class="dot">·</span><span>完成于 17:05</span><span class="dot">·</span><span>6 次工具调用</span><span class="dot">·</span><span>思考 12 秒</span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== AFTER ==================== -->
+    <section class="pane after">
+      <div class="pane-head">
+        <span class="tag after">After</span>
+        <span class="title">建议之后</span>
+        <span class="sub">节拍分档 + 层级 + 渐进摘要</span>
+      </div>
+      <div class="chat">
+        <div class="turn">
+          <div class="prompt-row"><div class="bubble">帮我把 auth 模块的 token 刷新逻辑重构一下，顺便看看有没有竞态。</div></div>
+          <div class="body">
+
+            <button class="group-head" aria-expanded="true" data-toggle="g1-after">
+              <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+              <span class="summary-text lead" data-summary>先读了 auth 目录，确认刷新入口和调用点…</span>
+              <span class="chip-sep">·</span><span class="tools-chip chip">6 次工具调用</span>
+            </button>
+
+            <div class="group-panel" id="g1-after">
+              <div class="prose"><p>我先读一下 auth 目录，确认现有的刷新入口和调用点。</p></div>
+
+              <div class="evidence">
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M4 9h16"/></svg><span class="label">读取目录</span><span class="arg">src/auth/</span><span class="ok">✓</span><span class="dur">0.3s</span></div>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span class="label">读取文件</span><span class="arg">src/auth/tokenRefresh.ts</span><span class="ok">✓</span><span class="dur">0.1s</span></div>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span class="label">读取文件</span><span class="arg">src/auth/session.ts</span><span class="ok">✓</span><span class="dur">0.1s</span></div>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m21 21-4.3-4.3"/><circle cx="11" cy="11" r="7"/></svg><span class="label">搜索</span><span class="arg">refreshToken(</span><span class="ok">✓</span><span class="dur">0.4s</span></div>
+              </div>
+
+              <div class="prose"><p>找到了：<code>refreshToken</code> 没有做并发合并，两个组件同时过期会各发一次请求。我再看一下调用方。</p></div>
+
+              <div class="evidence">
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m21 21-4.3-4.3"/><circle cx="11" cy="11" r="7"/></svg><span class="label">搜索</span><span class="arg">refreshToken(</span><span class="ok">✓</span><span class="dur">0.4s</span></div>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m21 21-4.3-4.3"/><circle cx="11" cy="11" r="7"/></svg><span class="label">搜索</span><span class="arg">refreshToken(</span><span class="ok">✓</span><span class="dur">0.4s</span></div>
+              </div>
+
+              <div class="final"><p>我把刷新逻辑改成了单飞（single-flight）模式，并补了一个并发测试。</p></div>
+            </div>
+
+            <div class="work-zone">
+              <span class="dot">✻</span><span>已工作 54 秒</span><span class="dot">·</span><span>完成于 17:05</span><span class="dot">·</span><span>6 次工具调用</span><span class="dot">·</span><span>思考 12 秒</span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ==================== 简洁模型：验证布局对稀疏输出也成立 ==================== -->
+  <div class="hidden" id="terse-demo">
+    <div class="grid" style="margin-top:20px">
+      <section class="pane before">
+        <div class="pane-head"><span class="tag">Before</span><span class="title">当前实现</span><span class="sub">简洁模型</span></div>
+        <div class="chat">
+          <div class="turn">
+            <div class="prompt-row"><div class="bubble">看一下 package.json 的依赖有没有过期。</div></div>
+            <div class="body">
+              <button class="group-head" aria-expanded="false" data-toggle="g2-before">
+                <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                <span>8 次工具调用</span>
+              </button>
+              <div class="group-panel" id="g2-before" hidden>
+                <div class="evidence">
+                  <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span class="label">读取文件</span><span class="arg">package.json</span><span class="ok">✓</span></div>
+                  <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg><span class="label">运行命令</span><span class="arg">pnpm outdated</span><span class="ok">✓</span></div>
+                </div>
+              </div>
+              <div class="final"><p>只有两个主版本落后：<code>vite</code> 和 <code>vitest</code>。</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="pane after">
+        <div class="pane-head"><span class="tag after">After</span><span class="title">建议之后</span><span class="sub">简洁模型</span></div>
+        <div class="chat">
+          <div class="turn">
+            <div class="prompt-row"><div class="bubble">看一下 package.json 的依赖有没有过期。</div></div>
+            <div class="body">
+              <button class="group-head" aria-expanded="false" data-toggle="g2-after">
+                <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                <span class="summary-text">读取依赖清单并比对版本…</span>
+                <span class="chip-sep">·</span><span class="chip">8 次工具调用</span>
+              </button>
+              <div class="group-panel" id="g2-after" hidden>
+                <div class="evidence">
+                  <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span class="label">读取文件</span><span class="arg">package.json</span><span class="ok">✓</span></div>
+                  <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg><span class="label">运行命令</span><span class="arg">pnpm outdated</span><span class="ok">✓</span></div>
+                </div>
+              </div>
+              <div class="final"><p>只有两个主版本落后：<code>vite</code> 和 <code>vitest</code>。</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="note">
+    <h2>这个预览在证明什么</h2>
+    <ul>
+      <li><b>节拍分档是主药。</b>左右两栏的<b>内容逐字相同</b>、颜色档位也相同，唯一差别是：右侧把工具/思考行从 8px 标准档降到 4px 紧凑档，并加了一层左内缩和一条极淡的引导线。左侧读起来是一列平级碎块，右侧读起来是「叙述 + 挂在它下面的证据」。</li>
+      <li><b>旁白之间不合并、也不调间距。</b>旁白仍是 <code>text-muted-foreground</code> 的正文档，段落间距 8px —— 因为段落边界是<b>模型调用边界</b>（<code>projector.ts</code> 里一条消息只有一个 <code>${messageId}-text</code>），不是可以合并的碎片。</li>
+      <li><b>组头从「数量」换成「当前摘要」。</b>右侧头部先给一句能直接读的实质（正文色），把 <code>6 次工具调用</code> 降为次要 chip。这样大多数时候不需要点开；而且它在<b>流式未完成时</b>和<b>重载后</b>都稳定——数量则不然。</li>
+      <li><b>切换「简洁模型」看第二组。</b>同一个组件、零配置，工具调用很多但一句旁白都没有的那类模型，布局照样成立（没有旁白就没有叙述行，证据块仍然自成一个紧凑块）。这正是上一轮说的「适应任意段数，而不是统一段数」。</li>
+    </ul>
+    <p style="margin:12px 0 0">上面两个折叠头都可以点击；右上角可切深浅色。颜色均来自仓库 <code>globals.css</code> 的真实 token（浅色 <code>--background oklch(0.9931 …)</code>，深色 <code>oklch(0.1981 …)</code>）。</p>
+  </div>
+
+</div>
+
+<script>
+// 折叠
+document.querySelectorAll('.group-head').forEach((head) => {
+  head.addEventListener('click', () => {
+    const id = head.getAttribute('data-toggle');
+    const panel = document.getElementById(id);
+    const open = head.getAttribute('aria-expanded') === 'true';
+    head.setAttribute('aria-expanded', String(!open));
+    if (panel) panel.hidden = open;
+  });
+});
+
+// 主题
+const lightBtn = document.getElementById('t-light');
+const darkBtn = document.getElementById('t-dark');
+function setTheme(name) {
+  document.documentElement.setAttribute('data-theme', name);
+  lightBtn.setAttribute('aria-pressed', String(name === 'light'));
+  darkBtn.setAttribute('aria-pressed', String(name === 'dark'));
+}
+lightBtn.addEventListener('click', () => setTheme('light'));
+darkBtn.addEventListener('click', () => setTheme('dark'));
+
+// 模型风格：切换主演示 / 简洁演示
+const chattyBtn = document.getElementById('m-chatty');
+const terseBtn = document.getElementById('m-terse');
+const mainGrid = document.querySelector('.grid');
+const terseDemo = document.getElementById('terse-demo');
+function setModelStyle(style) {
+  const terse = style === 'terse';
+  mainGrid.classList.toggle('hidden', terse);
+  terseDemo.classList.toggle('hidden', !terse);
+  chattyBtn.setAttribute('aria-pressed', String(!terse));
+  terseBtn.setAttribute('aria-pressed', String(terse));
+}
+chattyBtn.addEventListener('click', () => setModelStyle('chatty'));
+terseBtn.addEventListener('click', () => setModelStyle('terse'));
+
+// 渐进摘要演示：循环模拟流式期间头部摘要随最后一段旁白更新
+const summaries = [
+  '先读了 auth 目录，确认刷新入口和调用点…',
+  '找到 refreshToken 没有做并发合并，再看调用方…',
+  '确认两处并发调用点，准备改成单飞…'
+];
+const summaryEl = document.querySelector('[data-summary]');
+let summaryIndex = 0;
+if (summaryEl && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  setInterval(() => {
+    summaryIndex = (summaryIndex + 1) % summaries.length;
+    summaryEl.textContent = summaries[summaryIndex];
+  }, 3200);
+}
+</script>
+</body>
+</html>

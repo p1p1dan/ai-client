@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>过程组 · 单折叠头 + 完成后提取终稿</title>
+<style>
+/* ------------------------------------------------------------------
+   对齐 zcode 结构。颜色 / 字号取自 globals.css 与 @theme，间距只用
+   design-system 的 8px 标准档与 4px 紧凑档，未新造任何值。
+   ------------------------------------------------------------------ */
+:root {
+  --background: oklch(0.9931 0.012 96.42);
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --muted-foreground: oklch(0.4531 0.005 91.5);
+  --accent: oklch(0.935 0.0122 96.43);
+  --border: oklch(0.875 0.0137 97.46);
+  --input: oklch(0.8463 0.0137 102.05);
+  --primary: oklch(0.5665 0.1523 45.02);
+  --hover: oklch(0.935 0.0122 96.43);
+  --tool-arg: color-mix(in oklab, var(--muted-foreground) 85%, var(--background));
+  --rail: color-mix(in oklab, var(--border) 60%, var(--background));
+
+  --text-chat-body: 16px;
+  --text-chat-process: 13px;
+  --text-ui: 14px;
+  --text-meta: 13px;
+  --text-code: 12px;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+:root[data-theme="dark"] {
+  --background: oklch(0.1981 0.0032 17.43);
+  --foreground: oklch(0.8463 0.0137 102.05);
+  --muted-foreground: oklch(0.6956 0.0103 93.62);
+  --accent: oklch(0.305 0.0029 17.32);
+  --border: oklch(0.375 0.0075 97.46);
+  --input: oklch(0.42 0.0075 97.46);
+  --primary: oklch(0.6576 0.1539 49.3);
+  --hover: oklch(0.305 0.0029 17.32);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--font-sans); background: var(--background); color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+.shell { max-width: 1180px; margin: 0 auto; padding: 26px 24px 64px; }
+
+.page-head { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+.page-head h1 { font-size: 20px; margin: 0 0 6px; letter-spacing: -0.01em; }
+.page-head p { margin: 0; font-size: var(--text-meta); color: var(--muted-foreground); line-height: 1.65; max-width: 820px; }
+.controls { margin-left: auto; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.seg { display: inline-flex; border: 1px solid var(--input); border-radius: 8px; overflow: hidden; }
+.seg button {
+  font: inherit; font-size: var(--text-meta); color: var(--muted-foreground); background: transparent;
+  border: 0; padding: 6px 12px; cursor: pointer; border-right: 1px solid var(--input); white-space: nowrap;
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--foreground); }
+.seg button:hover:not([aria-pressed="true"]) { background: var(--hover); }
+.replay {
+  font: inherit; font-size: var(--text-meta); color: var(--foreground); background: transparent;
+  border: 1px solid var(--input); border-radius: 8px; padding: 6px 14px; cursor: pointer;
+}
+.replay:hover { background: var(--hover); }
+.replay:disabled { opacity: 0.5; cursor: default; }
+
+.phase { margin: 18px 0 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.phase .pill {
+  font-size: var(--text-meta); border: 1px solid var(--border); border-radius: 999px;
+  padding: 4px 12px; color: var(--muted-foreground);
+}
+.phase .pill.on { background: var(--accent); color: var(--foreground); border-color: transparent; }
+.phase .txt { font-size: var(--text-meta); color: var(--muted-foreground); }
+
+.pane { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.pane-head { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: baseline; gap: 10px; }
+.pane-head .tag {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted-foreground);
+}
+.pane-head .title { font-size: var(--text-ui); font-weight: 600; }
+.pane-head .sub { font-size: var(--text-meta); color: var(--muted-foreground); margin-left: auto; }
+
+.chat { padding: 20px 24px 24px; }
+.turn { display: flex; flex-direction: column; gap: 12px; }
+.prompt-row { display: flex; justify-content: flex-end; }
+.bubble {
+  max-width: 80%; background: var(--accent); border: 1px solid var(--input);
+  border-radius: 12px; border-top-right-radius: 4px; padding: 8px 14px;
+  font-size: var(--text-chat-body); line-height: 1.5;
+}
+.body { display: flex; flex-direction: column; gap: 8px; font-size: var(--text-chat-body); line-height: 1.6; }
+
+/* ---------- 折叠头：整轮唯一一个，头里只有数量 ---------- */
+.head {
+  display: flex; min-width: 0; align-items: center; gap: 6px; width: 100%; text-align: left;
+  background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer;
+  font-size: var(--text-ui); font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground); user-select: none;
+}
+.chev { flex: none; transition: transform 150ms ease-out; }
+.head[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.count { flex: none; }
+.sep { color: color-mix(in oklab, var(--muted-foreground) 50%, transparent); flex: none; }
+.chip { flex: none; }
+
+/* ---------- 组内容：旁白 + 思考 + 操作 ---------- */
+.panel { display: flex; flex-direction: column; gap: 8px; }
+.panel[hidden] { display: none; }
+
+.prose { color: var(--muted-foreground); }
+.prose p { margin: 0; }
+.prose p + p { margin-top: 8px; }
+.prose code { font-family: var(--font-mono); font-size: 0.9em; background: var(--accent); padding: 1px 4px; border-radius: 3px; }
+
+/* 思考块 */
+.think-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer;
+  font-size: var(--text-chat-process); color: var(--tool-arg);
+}
+.think-head .lbl { flex: none; }
+.think-body {
+  font-size: var(--text-chat-process); color: var(--tool-arg); line-height: 1.65;
+  white-space: pre-wrap; padding: 4px 0 0 12px; margin-left: 1px; border-left: 1px solid var(--rail);
+}
+.think-body[hidden] { display: none; }
+
+/* 操作块：4px 紧凑档 + 内缩 + 引导线 */
+.evidence {
+  display: flex; flex-direction: column; gap: 4px;
+  padding-left: 12px; margin-left: 1px; border-left: 1px solid var(--rail);
+}
+.ev-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--text-chat-process); color: var(--tool-arg); font-variant-numeric: tabular-nums;
+}
+.ev-row .name { flex: none; }
+.ev-row .arg { font-family: var(--font-mono); font-size: var(--text-code); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-row .ok { margin-left: auto; flex: none; color: var(--muted-foreground); }
+.ev-row .dur { flex: none; color: var(--muted-foreground); font-size: var(--text-meta); }
+.icon { width: 14px; height: 14px; flex: none; opacity: 0.75; }
+/* 聚合行：连续同类操作合并成一条 */
+.ev-agg {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--text-chat-process); color: var(--tool-arg); font-variant-numeric: tabular-nums;
+  cursor: pointer; background: none; border: 0; padding: 0; font-family: inherit; width: 100%; text-align: left;
+}
+.ev-agg .ok { margin-left: auto; flex: none; color: var(--muted-foreground); }
+.ev-detail { display: flex; flex-direction: column; gap: 4px; padding-left: 20px; }
+.ev-detail[hidden] { display: none; }
+
+/* ---------- 分隔线：唯一一次"提取"的痕迹 ---------- */
+.divider {
+  display: flex; align-items: center; gap: 10px;
+  font-size: var(--text-meta); color: var(--muted-foreground);
+}
+.divider::before, .divider::after { content: ''; height: 1px; background: var(--border); }
+.divider::before { flex: 1; }
+.divider::after { flex: 1; }
+.divider[hidden] { display: none; }
+
+/* ---------- 终稿 ---------- */
+.final { color: var(--foreground); }
+.final p { margin: 0; }
+.final[hidden] { display: none; }
+.final code { font-family: var(--font-mono); font-size: 0.9em; background: var(--accent); padding: 1px 4px; border-radius: 3px; }
+
+/* ---------- 回合尾行 ---------- */
+.work-zone {
+  display: flex; min-width: 0; align-items: center; gap: 6px;
+  font-size: var(--text-ui); font-variant-numeric: tabular-nums; color: var(--muted-foreground);
+}
+.spin {
+  width: 12px; height: 12px; flex: none; border-radius: 50%;
+  border: 1.5px solid color-mix(in oklab, var(--muted-foreground) 35%, transparent);
+  border-top-color: var(--muted-foreground); animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.live-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .spin, .live-dot { animation: none; } .chev { transition: none; } }
+
+.note {
+  margin-top: 22px; border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px;
+  font-size: var(--text-meta); color: var(--muted-foreground); line-height: 1.75;
+}
+.note h2 { font-size: var(--text-ui); color: var(--foreground); margin: 0 0 10px; }
+.note h2:not(:first-child) { margin-top: 20px; }
+.note ul { margin: 0; padding-left: 20px; }
+.note li { margin-bottom: 7px; }
+.note li b { color: var(--foreground); font-weight: 600; }
+.note code { font-family: var(--font-mono); font-size: 12px; background: var(--accent); padding: 1px 4px; border-radius: 3px; }
+.note .q { color: var(--foreground); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="page-head">
+    <div>
+      <h1>过程组 · 单折叠头 + 完成后提取终稿</h1>
+      <p>按你说的结构实现：整轮<b>一个</b>折叠头，头里<b>只有数量</b>；中间是旁白 + 思考 + 操作；流式期间<b>不判终稿</b>，一切都显示在折叠头里；流式完毕后出现分隔线，把最终输出<b>提取</b>到折叠头外。</p>
+    </div>
+    <div class="controls">
+      <div style="display:flex;gap:8px">
+        <div class="seg" role="group" aria-label="主题">
+          <button data-theme-btn="light" aria-pressed="true">浅色</button>
+          <button data-theme-btn="dark" aria-pressed="false">深色</button>
+        </div>
+        <button class="replay" id="replay">▶ 播放整轮</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <span class="pill" id="p-stream">① 流式中</span>
+    <span class="pill" id="p-done">② 流式完毕</span>
+    <span class="pill" id="p-open">③ 展开过程</span>
+    <span class="txt" id="phase-txt"></span>
+  </div>
+
+  <section class="pane">
+    <div class="pane-head">
+      <span class="tag">Preview</span>
+      <span class="title">一整轮的三个状态</span>
+      <span class="sub" id="pane-sub"></span>
+    </div>
+    <div class="chat">
+      <div class="turn">
+        <div class="prompt-row">
+          <div class="bubble">帮我把 auth 模块的 token 刷新逻辑重构一下，顺便看看有没有竞态。</div>
+        </div>
+        <div class="body">
+
+          <!-- 唯一的一个折叠头：头里只有数量 -->
+          <button class="head" id="group-head" aria-expanded="true">
+            <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            <span class="count" id="head-count">已处理 1 个步骤</span>
+            <span class="live-dot" id="head-live"></span>
+          </button>
+
+          <!-- 组内容：旁白 + 思考 + 操作 -->
+          <div class="panel" id="group-panel">
+
+            <div class="prose" data-step><p>我先读一下 auth 目录，确认现有的刷新入口和调用点。</p></div>
+
+            <button class="think-head" data-toggle="think-1" aria-expanded="false" data-step>
+              <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+              <span class="lbl">✦ 思考</span>
+            </button>
+            <div class="think-body" id="think-1" hidden data-step>两处并发入口：UserMenu 和 SessionWatcher。refreshToken 本身没有做合并，所以同时过期会各发一次。需要确认调用方是否都在同一个 tick 里读到过期的 token。如果是，那单飞就够了；如果不是，还得加一层乐观锁。</div>
+
+            <!-- 连续同类操作：聚合成一条（可展开） -->
+            <div data-step>
+              <button class="ev-agg" data-toggle="agg-1" aria-expanded="false">
+                <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                <span>读取 3 个文件</span>
+                <span class="ok">✓</span>
+              </button>
+              <div class="ev-detail" id="agg-1" hidden>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M4 9h16"/></svg><span class="name">读取目录</span><span class="arg">src/auth/</span><span class="ok">✓</span><span class="dur">0.3s</span></div>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span class="name">读取文件</span><span class="arg">src/auth/tokenRefresh.ts</span><span class="ok">✓</span><span class="dur">0.1s</span></div>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span class="name">读取文件</span><span class="arg">src/auth/session.ts</span><span class="ok">✓</span><span class="dur">0.1s</span></div>
+              </div>
+            </div>
+
+            <div class="prose" data-step><p>找到了：<code>refreshToken</code> 没有做并发合并，两个组件同时过期会各发一次请求。我再看一下调用方。</p></div>
+
+            <!-- 单条操作：原样显示，不聚合 -->
+            <div class="evidence" data-step>
+              <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m21 21-4.3-4.3"/><circle cx="11" cy="11" r="7"/></svg><span class="name">搜索</span><span class="arg">refreshToken(</span><span class="ok">✓</span><span class="dur">0.4s</span></div>
+            </div>
+
+            <div data-step>
+              <button class="ev-agg" data-toggle="agg-2" aria-expanded="false">
+                <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                <span>编辑 1 个文件 · 运行 1 条命令</span>
+                <span class="ok">✓</span>
+              </button>
+              <div class="ev-detail" id="agg-2" hidden>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span class="name">编辑文件</span><span class="arg">src/auth/tokenRefresh.ts</span><span class="ok">✓</span><span class="dur">0.2s</span></div>
+                <div class="ev-row"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg><span class="name">运行命令</span><span class="arg">pnpm test auth</span><span class="ok">✓</span><span class="dur">4.1s</span></div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 唯一一次"提取"的痕迹 -->
+          <div class="divider" id="divider" hidden>最终输出</div>
+
+          <!-- 被提取出来的终稿 -->
+          <div class="final" id="final" hidden><p>我把刷新逻辑改成了单飞（single-flight）模式，并补了一个并发测试。</p></div>
+
+          <div class="work-zone" id="work-zone"></div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="note">
+    <h2>这个结构解决了什么</h2>
+    <ul>
+      <li><b>流式期间不需要判终稿，所以没有抖动。</b>你上一版问的 C 项（"变灰绑什么"）在这套结构里<b>不存在</b>——因为流式期间没有任何东西被提前点亮。没有提前点亮，就没有"突然变灰"。这是这个结构最大的好处，比我之前给的几个方案都干净。</li>
+      <li><b>"流式完毕"这个信号已经存在。</b><code>MessageTimeline.tsx:1997</code> 的 <code>processSettled</code> 就是它（<code>!turnActive &amp;&amp; !(isLastTurn &amp;&amp; inFlightSession &amp;&amp; !statusOwnedByPendingHead)</code>），"工作中 / 已工作"那两态已经靠它在切。提取终稿可以直接挂在它上面，<b>不需要新增状态</b>。</li>
+      <li><b>头里只有数量，正好回到 T106 的 D6 / D5 形态。</b>这也顺带解决上一轮那个"头一直在动"的问题：数量是单调递增的，最后一段旁白是会被替换的。数量可以动，因为它是进度。</li>
+    </ul>
+
+    <h2>操作合不合并 —— 我的意见：合并，但只在"没被打断"的连续区间内</h2>
+    <ul>
+      <li><b>连续同类操作 → 聚合成一条</b>（上面的「读取 3 个文件」）。一轮十几次读取摊成十行是"太杂"的主要来源。</li>
+      <li><b>但旁白和思考会打断聚合</b>，前后各自成段。理由不是洁癖：旁白是在解释<b>它下面那批操作</b>，这个"解释 → 被解释"的相邻关系一旦被打散，旁白就失去意义了。这也正是仓库现在的行为（<code>groupTimeline</code> 遇到 text / thinking 会 <code>flush()</code>，<code>mergeAdjacentToolGroups</code> 只合并相邻的组），所以<b>这条不需要改代码</b>。</li>
+      <li><b>不要按类型跨段合并。</b>即不要把整轮所有"读取"抽出来堆一起——那会破坏时间顺序，你再也读不出"先读、再想、再改"这条线。</li>
+      <li><b>带授权的操作不要并进聚合</b>（现有决策 031 已有此例外）：它是你需要动手的东西，埋进去要多点一次才看得到。</li>
+    </ul>
+
+    <h2>两处需要你拍板的地方</h2>
+    <ul>
+      <li class="q"><b>① 流式期间组默认展开还是收起？</b>预览里我按你说的"过程中都在折叠头中显示"做成了<b>默认展开</b>（内容可见，头只在上面报数量）。但这和<b>决策 031 D6「工作组始终折叠，运行中也不自动展开」直接冲突</b>——那条是你在 2026-09-21 拍的，理由是不想运行中被自动展开打断阅读。两者只能留一个，我倾向按你现在的意思改成运行中展开，但要在决策记录里显式推翻 D6。</li>
+      <li class="q"><b>② 折叠头用中文还是英文？</b>现在头里只有数量，而数量词条（<code>{{count}} steps processed</code> → 已处理 N 个步骤）是中文的，英文例外（决策 031 D7）随旧头形态一起退休比较自然。但 D7 和它的两条守卫测试（<code>[HEAD-EN-1]</code> / <code>[HEAD-EN-2]</code>）需要同步处理，别让守卫红了才回头改。</li>
+    </ul>
+    <p style="margin:12px 0 0">点「▶ 播放整轮」看一次完整的 ① → ② → ③。注意 ② 那一刻：组收起、分隔线出现、终稿出现在组外——整个回合只发生<b>这一次</b>结构变化。</p>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================ */
+const STEP_MS = 420;
+
+const head = document.getElementById('group-head');
+const panel = document.getElementById('group-panel');
+const headCount = document.getElementById('head-count');
+const headLive = document.getElementById('head-live');
+const divider = document.getElementById('divider');
+const finalEl = document.getElementById('final');
+const workZone = document.getElementById('work-zone');
+const subEl = document.getElementById('pane-sub');
+const phaseTxt = document.getElementById('phase-txt');
+const pills = {
+  stream: document.getElementById('p-stream'),
+  done: document.getElementById('p-done'),
+  open: document.getElementById('p-open')
+};
+const replayBtn = document.getElementById('replay');
+
+const steps = Array.from(panel.querySelectorAll('[data-step]'));
+// 步骤总数 = 每个步骤算 1，聚合行按它里面的真实调用数算
+const cost = (el) => {
+  const detail = el.querySelector('.ev-detail');
+  if (detail) return detail.querySelectorAll('.ev-row').length;
+  const ev = el.querySelectorAll('.ev-row').length;
+  if (ev) return ev;
+  return 1;
+};
+const totals = steps.map(cost);
+const totalSteps = totals.reduce((a, b) => a + b, 0);
+
+let revealed = 0;
+let settled = false;
+let opened = false;
+let timer = null;
+
+/* 折叠交互 */
+function wireToggles() {
+  document.querySelectorAll('[data-toggle]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const el = document.getElementById(btn.getAttribute('data-toggle'));
+      const open = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', String(!open));
+      el.hidden = open;
+    });
+  });
+}
+
+function paint() {
+  const shown = steps.slice(0, revealed);
+  const shownSteps = totals.slice(0, revealed).reduce((a, b) => a + b, 0);
+
+  steps.forEach((el, i) => { el.style.display = i < revealed ? '' : 'none'; });
+
+  if (revealed === 0) {
+    headCount.textContent = '已处理 0 个步骤';
+  } else {
+    headCount.textContent = `已处理 ${shownSteps} 个步骤`;
+  }
+
+  // 流式中：头默认展开，内容可见，头上有脉动点
+  // 完成后：组收起，分隔线出现，终稿出现在组外
+  if (!settled) {
+    head.setAttribute('aria-expanded', 'true');
+    panel.hidden = false;
+    headLive.hidden = false;
+    divider.hidden = true;
+    finalEl.hidden = true;
+    replayBtn.disabled = revealed < steps.length || false;
+  } else {
+    head.setAttribute('aria-expanded', String(opened));
+    panel.hidden = !opened;
+    headLive.hidden = true;
+    divider.hidden = false;
+    finalEl.hidden = false;
+  }
+
+  if (!settled) {
+    const done = revealed >= steps.length;
+    workZone.innerHTML = `<span class="spin"></span><span>✻ 工作中 ${revealed * 18 + 4} 秒</span><span class="sep">·</span><span>读取中</span>`;
+    subEl.textContent = `① 流式中 · 组默认展开，内容实时落地`;
+  } else {
+    workZone.innerHTML = `<span>✻</span><span>已工作 54 秒</span><span class="sep">·</span><span>完成于 17:05</span><span class="sep">·</span><span>${totalSteps} 次工具调用</span><span class="sep">·</span><span>思考 12 秒</span>`;
+    subEl.textContent = opened
+      ? `③ 用户手动展开过程`
+      : `② 流式完毕 · 组收起，终稿被提取到组外`;
+  }
+
+  pills.stream.classList.toggle('on', !settled);
+  pills.done.classList.toggle('on', settled && !opened);
+  pills.open.classList.toggle('on', settled && opened);
+  phaseTxt.textContent = !settled
+    ? '组展开，头只报数量，还没有"终稿"这个概念'
+    : (opened
+        ? '用户点开折叠头回看过程，终稿仍在组外'
+        : '结构只在这一刻变一次：组收起 + 分隔线 + 终稿移出');
+}
+
+function play() {
+  if (timer) clearInterval(timer);
+  revealed = 0;
+  settled = false;
+  opened = false;
+  wireToggles();
+  paint();
+  timer = setInterval(() => {
+    revealed += 1;
+    if (revealed > steps.length) {
+      clearInterval(timer);
+      timer = null;
+      settled = true;
+      opened = false;
+      paint();
+      return;
+    }
+    paint();
+  }, STEP_MS);
+}
+
+head.addEventListener('click', () => {
+  if (!settled) return; // 流式中头不可收起：内容是当前进度的唯一证据
+  opened = !opened;
+  paint();
+});
+
+pills.done.addEventListener('click', () => { settled = true; opened = false; finishNow(); });
+pills.open.addEventListener('click', () => { settled = true; opened = true; finishNow(); });
+pills.stream.addEventListener('click', () => play());
+
+function finishNow() {
+  if (timer) { clearInterval(timer); timer = null; }
+  revealed = steps.length;
+  paint();
+}
+
+document.querySelectorAll('[data-theme-btn]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const t = btn.getAttribute('data-theme-btn');
+    document.documentElement.setAttribute('data-theme', t);
+    document.querySelectorAll('[data-theme-btn]').forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-theme-btn') === t))
+    );
+  });
+});
+
+replayBtn.addEventListener('click', play);
+
+// 初始停在"流式完毕"这一态，方便直接看结果
+revealed = steps.length;
+settled = true;
+opened = false;
+wireToggles();
+paint();
+</script>
+</body>
+</html>
