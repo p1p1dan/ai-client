@@ -401,7 +401,7 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
     expect(rows[0].output).toBeUndefined();
   });
 
-  it('a settled thought keeps the collapsible body and stops asking to be open', () => {
+  it('a settled thought keeps its preview open within the turn', () => {
     const rows = deriveToolGroupRows([thinkEntry(thinkingBlock('th1', 'done thinking'))], {
       isStreamingBlockId: null,
     });
@@ -409,8 +409,7 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
     expect(rows[0].expandable).toBe(true);
     expect(rows[0].body).toBe('thinking');
     expect(rows[0].output).toBe('done thinking');
-    // The absence is what folds an untouched thought away once it ends.
-    expect(rows[0].defaultOpen).toBeUndefined();
+    expect(rows[0].defaultOpen).toBe(true);
   });
 
   it('another block streaming leaves this thought settled', () => {
@@ -418,7 +417,7 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
       isStreamingBlockId: 'some-other-block',
     });
     expect(rows[0].body).toBe('thinking');
-    expect(rows[0].defaultOpen).toBeUndefined();
+    expect(rows[0].defaultOpen).toBe(true);
   });
 
   /**

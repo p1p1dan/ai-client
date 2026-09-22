@@ -254,15 +254,14 @@ describe('turnWorkGroupAwaitsUser — the Allow/Deny card can never be collapsed
 // Open / closed
 // ---------------------------------------------------------------------------
 
-describe('turnWorkGroupOpen — open by default, user intent forever', () => {
-  const open = (forcedOpen: boolean, userOpen: boolean | null): boolean =>
-    turnWorkGroupOpen({ forcedOpen, userOpen });
+describe('turnWorkGroupOpen — running open, completed closed', () => {
+  const open = (forcedOpen: boolean, userOpen: boolean | null, settled = false): boolean =>
+    turnWorkGroupOpen({ forcedOpen, userOpen, settled });
 
-  // D6 closed groups, ef26ca5f opened them, T107 closed them again — and
-  // decision 033 D2 opens them for good at the same user's explicit request
-  // (「折叠头默认展开，输出结束了也保持展开状态」). Only the default moved.
-  it('[WG-OPEN-1] process groups default OPEN while running or settled', () => {
+  it('[WG-OPEN-1] running groups open and completed groups close by default', () => {
     expect(open(false, null)).toBe(true);
+    expect(open(false, null, true)).toBe(false);
+    expect(open(false, true, true)).toBe(true);
   });
 
   it('[WG-OPEN-2] either explicit user choice overrides the default', () => {
@@ -272,8 +271,8 @@ describe('turnWorkGroupOpen — open by default, user intent forever', () => {
     expect(open(false, false)).toBe(false);
   });
 
-  it('[WG-OPEN-3] restored history mounts open, like a live turn', () => {
-    expect(open(false, null)).toBe(true);
+  it('[WG-OPEN-3] restored history mounts closed', () => {
+    expect(open(false, null, true)).toBe(false);
   });
 
   it('[WG-OPEN-4] an unanswered authorization outranks both the default and the click', () => {

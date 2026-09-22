@@ -1,0 +1,30 @@
+[
+  {
+    "name": "header has no button padding or forced height",
+    "result": true
+  },
+  {
+    "name": "header icon stays 13px at desktop width",
+    "result": true
+  },
+  {
+    "name": "inline button has no fixed height or padding",
+    "result": true
+  },
+  {
+    "name": "expansion preserves the reading position even when previously following",
+    "result": true
+  },
+  {
+    "name": "subsequent streaming still follows when previously following",
+    "result": true
+  },
+  {
+    "name": "opening earlier thinking does not jump to the conversation end",
+    "result": true
+  },
+  {
+    "name": "streaming respects a reader who scrolled upward",
+    "result": true
+  }
+]

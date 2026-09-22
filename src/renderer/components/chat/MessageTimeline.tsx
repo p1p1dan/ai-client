@@ -562,6 +562,13 @@ export function MessageTimeline({
    * bottom — `nextFollowState`'s "genuine arrival" case — and agrees with the
    * flag set here instead of overwriting it on the next frame.
    */
+  // A disclosure changes layout, not the reader's intent to follow new tokens.
+  const preserveDisclosurePositionRef = useRef<number | null>(null);
+  const preserveDisclosurePosition = useCallback(() => {
+    const viewport = findViewport(scrollRootRef.current);
+    preserveDisclosurePositionRef.current = viewport?.scrollHeight ?? null;
+  }, []);
+
   const jumpToBottom = useCallback(() => {
     const viewport = findViewport(scrollRootRef.current);
     if (!viewport) return;
@@ -658,7 +665,9 @@ export function MessageTimeline({
     // requestAnimationFrame here delays a large chunk by a visible frame.
     const observer = new ResizeObserver(() => {
       const height = viewport.scrollHeight;
-      if (stickToBottomRef.current) {
+      const disclosureResize = preserveDisclosurePositionRef.current === height;
+      preserveDisclosurePositionRef.current = null;
+      if (!disclosureResize && stickToBottomRef.current) {
         const bottom = Math.max(0, height - viewport.clientHeight);
         if (Math.abs(viewport.scrollTop - bottom) > 1) viewport.scrollTop = bottom;
       }
@@ -703,7 +712,7 @@ export function MessageTimeline({
           BOTTOM-ONLY. It was narrowed to soften the hard bottom clip under the
           composer; a top fade has nothing left to do now that no band is pinned
           up there, and adding one back would only wash out live prose. */}
-      <ThinkingFollowContext value={jumpToBottom}>
+      <ThinkingFollowContext value={preserveDisclosurePosition}>
         <ScrollArea className="min-h-0 flex-1" scrollFade="bottom">
           {/* Padding stays outside ReadingColumn — inside it would shave 24px off
             the documented 45rem/60rem (D25 §3.4) reading width (T-22 spec §2.13). */}
@@ -1820,8 +1829,9 @@ const ChatTurn = memo(function ChatTurn({
   // `null` until the user clicks: "no opinion yet" has to be distinguishable
   // from "chose closed", or the auto-collapse and a deliberate collapse would
   // be the same state and rule 2 of `turnWorkGroupOpen` could never hold. Held
-  // HERE rather than in the head so it survives the head swapping shape — see
-  // `TurnProgressHead`'s `userOpen` note.
+  // HERE rather than in the head so it survives shape changes. Choices are
+  // scoped to the running/settled phase: completion closes once, then users
+  // can reopen the completed process without subsequent renders closing it.
   const [workGroupUserOpen, setWorkGroupUserOpen] = useState<Record<string, boolean>>({});
   // One flatten per turn, feeding both the render and the copy payload (F7):
   // the copy builder's `Turn` overload used to re-run `flattenTurnItems` — and
@@ -2299,7 +2309,8 @@ const ChatTurn = memo(function ChatTurn({
   const clockOnHead = workSections.some(
     (section) =>
       section.kind === 'processGroup' &&
-      turnProcessGroupFolds(section.segments.flatMap((segment) => segment.items))
+      (processSettled ||
+        turnProcessGroupFolds(section.segments.flatMap((segment) => segment.items)))
   );
 
   // Decision 034: the turn's clock rides the FIRST process head that actually
@@ -2357,6 +2368,7 @@ const ChatTurn = memo(function ChatTurn({
           // First-item identity survives appended tools and later answers. Each
           // group remembers its own click, even while authorization pins it open.
           const groupKey = turnItemKey(section.segments[0].items[0]);
+          const groupStateKey = `${groupKey}:${processSettled}`;
           const groupedProcessItems = section.segments.flatMap((segment) => segment.items);
           // Inside the group, answer segments are INTERMEDIATE prose — dimmed,
           // so the final answer below stands out.
@@ -2377,11 +2389,11 @@ const ChatTurn = memo(function ChatTurn({
               zone={workZone}
               clock={headClock}
               forcedOpen={groupForcedOpen}
-              userOpen={workGroupUserOpen[`${groupKey}:${processSettled}`] ?? null}
+              userOpen={workGroupUserOpen[groupStateKey] ?? null}
               onUserOpenChange={(open) =>
                 setWorkGroupUserOpen((previous) => ({
                   ...previous,
-                  [`${groupKey}:${processSettled}`]: open,
+                  [groupStateKey]: open,
                 }))
               }
             >

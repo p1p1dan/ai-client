@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -150,7 +151,21 @@ function ToolRowIcon({ kind }: { kind?: string }) {
 }
 
 /** One `.ct-row`: verb + arg, optionally expandable into an output/detail/thinking body. */
-export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
+export function ToolRow(props: ToolRowProps) {
+  const { view } = props;
+  if (view.toolName && isDelegationTool(view.toolName) && view.toolCallId) {
+    return (
+      <SubagentActivity
+        {...props}
+        parentToolCallId={view.toolCallId}
+        parentRunning={view.running}
+      />
+    );
+  }
+  return <ToolRowContent {...props} />;
+}
+
+function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
   const showDiff = useContext(ToolDiffVisibility);
   const { t } = useI18n();
   // The dim rung of the 2026-09-18 reading ladder (see
@@ -207,19 +222,17 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
     </>
   );
 
-  // T-34: a delegation row carries its live subagent panel directly below
-  // itself (the arbitration's mount point — attached to ITS row, not the
-  // group). Only the panel component subscribes to the adjacent store, so a
-  // task_progress heartbeat re-renders this one small subtree and nothing
-  // above it. Non-delegation rows return the exact pre-T-34 tree.
-  const subagentSlot =
-    view.toolName && isDelegationTool(view.toolName) && view.toolCallId ? (
-      <SubagentActivity
-        parentToolCallId={view.toolCallId}
-        parentRunning={view.running}
+  if (view.body === 'thinking') {
+    return (
+      <ThinkingPreview
+        text={view.output ?? ''}
+        rowKey={view.key}
         sessionId={sessionId}
+        header={rowContent}
+        headerClass={rowClass}
       />
-    ) : null;
+    );
+  }
 
   const row = !view.expandable ? (
     <div className={rowClass}>{rowContent}</div>
@@ -238,62 +251,14 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
     </ToolRowCollapsible>
   );
 
-  if (!subagentSlot) return row;
-  return (
-    <div className="flex flex-col gap-1">
-      {row}
-      {subagentSlot}
-    </div>
-  );
+  return row;
 }
 
 /**
- * The expandable shape of a row: trigger + chevron above a collapsible body.
- *
- * 2026-08-25 (user decision): rows open only when something explicitly asks
- * them to. Failures used to auto-expand (sign-off ②) — with the turn-level
- * collapse gone, that put a wall of output on screen for every failed or denied
- * call, in restored history and live turns alike. Red on the row and a click is
- * enough. `defaultOpen` is still honoured: T-34's LIVE subagent panel sets it,
- * a streaming thought sets it (2026-09-19), and T12-d's remembered choice
- * outranks both.
- *
- * ## Why this is its own component, and why the caller gives it a `key`
- *
- * T12-d: the opening state is SEEDED once from the session's memory, not
- * controlled. Seeding is what preserves T-34's live subagent panel — its
- * `defaultOpen: true` disappears the moment the lane stops being live, and a
- * controlled `open` bound to that expression would slam the panel shut under a
- * reader mid-sentence. It also makes the aggregation case work for free: an
- * aggregate that swallows an open row is a NEW mount, so it re-evaluates
- * `resolveToolRowOpen` against fresh memory.
- *
- * The seed therefore has to be taken at the moment the collapsible APPEARS, not
- * at the moment its row does. Those were the same instant until 2026-09-19;
- * they stopped being the same when a streaming thought became expandable,
- * because that row is expandable BEFORE it settles and its `defaultOpen` is
- * true only while it streams. With the seed in `ToolRow`, the settled thought
- * would have kept the open state the live one was seeded with and never folded
- * itself away. So the state lives here, and `key={running ? 'live' : 'settled'}`
- * re-seeds it exactly once per row, at that crossing:
- *
- *  - nobody touched it  -> memory is empty, the settled view has no
- *    `defaultOpen`, so it re-seeds CLOSED and the thought folds itself away;
- *  - the user folded or re-opened it mid-stream -> `onOpenChange` wrote the
- *    choice, and rule 1 of `resolveToolRowOpen` returns it, so the choice
- *    survives the crossing (and session switches, and aggregation).
- *
- * The live subagent panel is deliberately unaffected: its header row pins
- * `running: false` (a registered deviation in `subagentActivityModel.ts`, so
- * the chevron exists while the delegate works), which keys it `settled` from
- * its first render — it never crosses, so it never re-seeds. The settled
- * permission row `QuestionCard` renders without a session pins it too, which
- * matters because that row has no memory to re-seed FROM.
- *
- * The one other row that does cross is a running `edit`/`write`, expandable for
- * its diff preview. Both rules give it what it already had: a preview the user
- * opened is remembered and stays open through the crossing, and an untouched
- * one re-seeds closed, which is where it was.
+ * Seed from session memory when a body first appears. Explicit choices survive
+ * live/settled transitions. Thoughts keep the same instance across that boundary
+ * so their full-text choice survives; completion folding belongs to the turn.
+ * Delegations start closed, with one disclosure for the header and operations.
  */
 function ToolRowCollapsible({
   view,
@@ -310,13 +275,8 @@ function ToolRowCollapsible({
 }) {
   const [initialOpen] = useState(() => resolveToolRowOpen(view, readToolExpandMemory(sessionId)));
   const setToolRowExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
-  // Decision 033 D3 (2026-09-22): this trigger no longer pins, so there is no
-  // `pinsHeader` flag left to keep, and folding it moves no scroll offset —
-  // which is why the collapse-time re-anchor went with the pin. The prominent
-  // background row that was to replace the pin was withdrawn by the user on
-  // sight the same day (「还是和工具调用一样吧」): a thinking header is an
-  // ordinary tool row, and the thought BODY's height bound is what keeps this
-  // header on screen.
+  // The thought header remains an ordinary tool row. Decision 038 replaces
+  // the old inner height limit with a preview and page-level full-text flow.
   return (
     <Collapsible
       defaultOpen={initialOpen}
@@ -350,34 +310,62 @@ function ToolRowCollapsible({
   );
 }
 
-/**
- * T-34: the delegation row's live subagent panel — the ONLY subscriber to the
- * subagent-activity store. Defined here rather than its own module because it
- * renders through `ToolGroup` (a separate file would form an import cycle).
- * Renders nothing while the lane is absent or content-free — a delegation row
- * without live data stays byte-identical to pre-T-34.
- */
+/** One delegation header owns the child operations; no second agent header. */
 function SubagentActivity({
   parentToolCallId,
   parentRunning,
+  view,
+  onOpenFile,
   sessionId,
-}: {
-  parentToolCallId: string;
-  parentRunning: boolean;
-  sessionId?: string;
-}) {
+}: ToolRowProps & { parentToolCallId: string; parentRunning: boolean }) {
   const { t } = useI18n();
   const lane = useSubagentActivityStore((s) => s.lanes[parentToolCallId] ?? null);
-  const rows = useMemo(
-    () => deriveSubagentPanelRows(lane, { parentRunning, t }),
+  const panel = useMemo(
+    () => deriveSubagentPanelRows(lane, { parentRunning, t })[0],
     [lane, parentRunning, t]
   );
-  if (rows.length === 0) return null;
-  return (
-    <div className="ml-0.5 border-l border-border pl-3.5">
-      <ToolGroup rows={rows} sessionId={sessionId} />
-    </div>
-  );
+  const merged = panel
+    ? {
+        ...view,
+        arg: [lane?.agentType, view.arg ?? lane?.description].filter(Boolean).join(' '),
+        argKind: 'prose' as const,
+        running: lane?.status === 'running' || (lane?.status === null && parentRunning),
+        failed: view.failed || panel.failed,
+        expandable: true,
+        body: 'detail' as const,
+        input: undefined,
+        defaultOpen: false,
+        detail: [
+          ...(panel.detail ?? []),
+          ...(panel.arg
+            ? [
+                {
+                  ...panel,
+                  key: `${view.key}~status`,
+                  verb: 'Status',
+                  expandable: false,
+                  body: undefined,
+                  detail: undefined,
+                },
+              ]
+            : []),
+          ...(view.input || view.output
+            ? [
+                {
+                  ...view,
+                  key: `${view.key}~result`,
+                  toolName: undefined,
+                  verb: view.output ? 'Result' : 'Input',
+                  expandable: true,
+                  defaultOpen: false,
+                  arg: undefined,
+                },
+              ]
+            : []),
+        ],
+      }
+    : view;
+  return <ToolRowContent view={merged} onOpenFile={onOpenFile} sessionId={sessionId} />;
 }
 
 /**
@@ -733,20 +721,8 @@ function ToolRowOutputSegment({
         </SubagentDetail>
       );
     case 'thinking':
+      return <ThinkingPreview text={view.output ?? ''} rowKey={view.key} sessionId={sessionId} />;
     case 'stats':
-      // Decision 033 D3: the thought body carries a height bound and scrolls
-      // inside it, which is what replaces the retired pinned header — the fold
-      // control stays on screen because the block it heads cannot grow taller
-      // than `thoughtBodyMaxHeightClass()`. Applied to the prose itself, not to
-      // the wrapper, so the bound is the TEXT's and the row keeps its own
-      // spacing above it.
-      //
-      // ⚠️ `deriveSubagentPanelRows` emits `body: 'thinking'` too, for an
-      // over-long delegate prose line, and that row already sits inside
-      // `SubagentDetail`'s own `max-h-72 overflow-y-auto` window. The nested
-      // bound is harmless — it is the smaller of the two in every window where
-      // 46vh exceeds 288px, and a second scrollbar only appears when the inner
-      // text passes the inner bound, where scrolling it is the right gesture.
       return (
         <div className="mt-1 flex select-text flex-col gap-1.5 text-chat-process leading-[1.55] text-tool-arg">
           <p className={cn('whitespace-pre-wrap', thoughtBodyMaxHeightClass())}>{view.output}</p>
@@ -755,4 +731,84 @@ function ToolRowOutputSegment({
     default:
       return null;
   }
+}
+
+export const ThinkingFollowContext = createContext<(() => void) | null>(null);
+
+function ThinkingPreview({
+  text,
+  rowKey,
+  sessionId,
+  header,
+  headerClass,
+}: {
+  text: string;
+  rowKey: string;
+  sessionId?: string;
+  header?: ReactNode;
+  headerClass?: string;
+}) {
+  const { t } = useI18n();
+  const follow = useContext(ThinkingFollowContext);
+  const memoryKey = `${rowKey}~full-thinking`;
+  const [full, setFull] = useState(() => readToolExpandMemory(sessionId)[memoryKey] ?? false);
+  const setExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
+  const disclosureChanged = useRef(false);
+  useLayoutEffect(() => {
+    if (!disclosureChanged.current) return;
+    disclosureChanged.current = false;
+    follow?.();
+  });
+  const displayText = text
+    .split(/\r\n|\n|\r/)
+    .filter((line) => line.trim().length > 0)
+    .join('\n');
+  const characters = Array.from(displayText);
+  const truncated = characters.length > 200;
+  const toggle = () => {
+    if (!truncated) return;
+    const next = !full;
+    disclosureChanged.current = true;
+    setFull(next);
+    if (sessionId) setExpanded(sessionId, memoryKey, next);
+  };
+  return (
+    <div>
+      {header &&
+        (truncated ? (
+          <Button
+            variant="ghost"
+            size="none"
+            className={cn(
+              headerClass,
+              'h-auto justify-start rounded-none border-0 p-0 font-normal normal-case tracking-normal [&_svg]:mx-0 [&_svg]:size-[13px] sm:[&_svg]:size-[13px]'
+            )}
+            data-slot="thinking-header"
+            aria-expanded={full}
+            onClick={toggle}
+          >
+            {header}
+          </Button>
+        ) : (
+          <div className={headerClass}>{header}</div>
+        ))}
+      <p className="mt-1 select-text whitespace-pre-wrap text-chat-process leading-[1.55] text-tool-arg">
+        <span data-slot="thinking-text">
+          {full || !truncated ? displayText : `${characters.slice(0, 200).join('')}…`}
+        </span>
+        {truncated && (
+          <Button
+            variant="ghost"
+            size="none"
+            className="ml-1 inline-flex h-auto rounded-none border-0 p-0 align-baseline font-normal text-[length:inherit] normal-case leading-[inherit] tracking-normal"
+            data-slot="thinking-preview-toggle"
+            aria-expanded={full}
+            onClick={toggle}
+          >
+            {full ? t('Show less') : t('Expand')}
+          </Button>
+        )}
+      </p>
+    </div>
+  );
 }

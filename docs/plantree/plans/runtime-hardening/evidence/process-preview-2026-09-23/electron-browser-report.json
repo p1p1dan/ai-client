@@ -1,0 +1,33 @@
+{
+  "checks": [
+    {
+      "name": "running head open",
+      "result": true
+    },
+    {
+      "name": "200 character preview",
+      "result": true
+    },
+    {
+      "name": "full text flows without inner height limit",
+      "result": true
+    },
+    {
+      "name": "page follows growing thought",
+      "result": true
+    },
+    {
+      "name": "scrolling up pauses following",
+      "result": true
+    },
+    {
+      "name": "completion collapses process and leaves final output visible",
+      "result": true
+    },
+    {
+      "name": "completed process can be reopened",
+      "result": true
+    }
+  ],
+  "scope": "Real MessageTimeline and ToolRows in Electron Chromium, isolated host hooks, minimal layout CSS"
+}

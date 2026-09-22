@@ -4,6 +4,8 @@ Role: plan-entrypoint。建立日期：2026-09-14。状态：In Progress（批�
 
 批次 K 当前：T107～T110 实现与定向验证完成、逐项提交，真实 GUI 与 T111 取证待补；见 [执行记录](evidence/batch-k-answer-visibility-2026-09-21/README.md)。
 
+最新展示规则：[决策 038：委派两层、思考预览、完成后折叠](decisions/038-delegation-thinking-preview-and-completion-fold.md)。
+
 ## 范围
 
 承接 [Runtime 自主化演进](../runtime-evolution/README.md)（P0～P6 + H/20）执行完成后的三类工作：

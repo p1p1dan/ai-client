@@ -759,14 +759,14 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // to open; T107 restores closed process groups with prose outside. What did NOT
     // change is that this call takes three facts and no fourth, which is what
     // keeps "is this card unanswered" the only thing that can force it.
-    expectCalled('turnWorkGroupOpen({ forcedOpen, userOpen })');
+    expectCalled("turnWorkGroupOpen({ forcedOpen, userOpen, settled: zone.kind === 'worked' })");
 
     const group = nodeSource(topLevelFunction('TurnProgressHead'));
     expect(group, 'the panel renders its children unconditionally').toContain(
       `<div className={cn(turnProcessShellClass(), 'pt-2')}>{children}</div>`
     );
     expect(group, 'the open bit must be the derived one, not a second rule').toContain(
-      'const open = turnWorkGroupOpen({ forcedOpen, userOpen });'
+      "const open = turnWorkGroupOpen({ forcedOpen, userOpen, settled: zone.kind === 'worked' });"
     );
     // Base UI's panel carries `overflow-hidden` (COLLAPSIBLE_PANEL_BASE_CLASS),
     // which creates a containing block — the standing prohibition on the turn
@@ -1305,14 +1305,16 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * head, or the group would render both. `indexOf` on the flattened body is
    * what says so.
    */
-  it('[WG-WIRE-4b] a group with a single step renders in place, with no head and no chevron', () => {
+  it('[WG-WIRE-4b] a running single-step group renders inline; completion gives it a fold head', () => {
     const body = nodeSource(turnBodyNode());
     expectCalled('turnProcessGroupFolds(groupedProcessItems)');
-    expect(body).toContain('if (!turnProcessGroupFolds(groupedProcessItems)) {');
+    expect(body).toContain('if (!processSettled && !turnProcessGroupFolds(groupedProcessItems)) {');
     expect(body).toContain(
       '<Fragment key={groupKey}>{section.segments.map(renderGroupSegment)}</Fragment>'
     );
-    const branchAt = body.indexOf('if (!turnProcessGroupFolds(groupedProcessItems)) {');
+    const branchAt = body.indexOf(
+      'if (!processSettled && !turnProcessGroupFolds(groupedProcessItems)) {'
+    );
     expect(branchAt, 'the branch exists').toBeGreaterThan(-1);
     expect(branchAt, 'and it returns before any head is built').toBeLessThan(
       body.indexOf('<TurnProgressHead key={groupKey}')
@@ -1402,8 +1404,8 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(turn).toContain(
       'const [workGroupUserOpen, setWorkGroupUserOpen] = useState<Record<string, boolean>>({});'
     );
-    expectCalled('userOpen={workGroupUserOpen[groupKey] ?? null}');
-    expectCalled('setWorkGroupUserOpen((previous) => ({ ...previous, [groupKey]: open }))');
+    expectCalled('userOpen={workGroupUserOpen[groupStateKey] ?? null}');
+    expectCalled('setWorkGroupUserOpen((previous) => ({ ...previous, [groupStateKey]: open, }))');
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
     expect(head, 'no second copy of the choice inside the element').not.toContain('useState');
   });

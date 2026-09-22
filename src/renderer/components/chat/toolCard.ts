@@ -779,11 +779,8 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
     expandable: showBody,
     body: showBody ? 'thinking' : undefined,
     output: showBody ? block.text : undefined,
-    // Only while streaming. A settled thought is reference material once the
-    // answer exists, so it goes back to starting closed — which is also what
-    // folds an untouched thought away by itself the moment it ends, since
-    // `ToolRows.tsx` re-seeds the row at that transition.
-    ...(streaming ? { defaultOpen: true } : {}),
+    // Preview remains readable between tools; the turn owns completion folding.
+    defaultOpen: true,
   };
 }
 

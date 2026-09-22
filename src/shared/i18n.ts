@@ -874,7 +874,6 @@ export const zhTranslations: Record<string, string> = {
   // a throwaway directory, so they belong to no repository.
   'Temporary chats': '临时对话',
   Result: '结果',
-  'Expand full thinking': '展开完整思考',
   'Show more': '显示更多',
   'Show less': '收起',
   'Filter sessions': '筛选会话',

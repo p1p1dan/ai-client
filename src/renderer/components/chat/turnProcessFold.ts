@@ -230,30 +230,14 @@ export interface TurnWorkGroupOpenInput {
   forcedOpen: boolean;
   /** The user's own click, or `null` while they have not expressed one. */
   userOpen: boolean | null;
+  settled?: boolean;
 }
 
-/**
- * Authorization wins, then the user's choice, then the open default.
- *
- * D6 first closed groups to avoid a wall of tools. ef26ca5f opened them to
- * expose hidden prose. T107 restored closed process groups with the user's
- * explicit confirmation — and decision 033 D2 (2026-09-22) reverses THAT, again
- * at the same user's explicit request: 「折叠头默认展开，输出结束了也保持展开状态」.
- * Only the default moved; the two rules above it are untouched, so the user can
- * still collapse a group, and an unanswered authorization still outranks both.
- *
- * There is deliberately no `settled` input: the default is the same number
- * while streaming and after, which is what 「输出结束了也保持展开状态」 asks
- * for, and what keeps the single extraction (D1) the turn's only structural
- * change.
- *
- * Keep this derived: an effect/ref under StrictMode can run twice and close
- * a group the reader just opened. Explicit choices always outrank defaults.
- */
+/** Authorization wins; manual choices apply within the current turn phase. */
 export function turnWorkGroupOpen(input: TurnWorkGroupOpenInput): boolean {
   if (input.forcedOpen) return true;
   if (input.userOpen !== null) return input.userOpen;
-  return true;
+  return !input.settled;
 }
 
 /**
