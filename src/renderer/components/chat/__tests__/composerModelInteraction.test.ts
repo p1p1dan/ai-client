@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsStore } from '@/stores/settings';
 import { ComposerModelTrigger } from '../ComposerModelTrigger';
-import { resolveResumeModel } from '../models';
+import { AUTOMATIC_MODEL_ID, resolveResumeModel } from '../models';
 import {
   captureSessionGenerationPreferences,
   restoreIndexedSessionModels,
@@ -85,6 +85,40 @@ function row(text: string) {
 }
 
 describe('composer model selection', () => {
+  it.each([
+    null,
+    'automatic-history',
+  ])('hides Automatic for draft/history %s without changing its selection', async (sessionId) => {
+    useSettingsStore.setState({ chatAgentDefaults: {} });
+    if (sessionId) writeSessionModel(sessionId, AUTOMATIC_MODEL_ID);
+    await render(sessionId);
+    await click(container.querySelector('button'));
+    expect(row('Automatic')).toBeUndefined();
+    expect(row('Default')).toBeTruthy();
+    expect(useSettingsStore.getState().chatAgentDefaults.model).toBeUndefined();
+    if (sessionId) expect(readSessionModel(sessionId)).toBe(AUTOMATIC_MODEL_ID);
+
+    await click(row('china'));
+    await click(row('GLM 5.2'));
+    expect(container.textContent).toContain('GLM 5.2');
+    expect(useSettingsStore.getState().chatAgentDefaults.model).toBe('china/glm5.2');
+    if (sessionId) expect(readSessionModel(sessionId)).toBe('china/glm5.2');
+    expect(row('Automatic')).toBeUndefined();
+  });
+
+  it('keeps an unverified historical model selectable while hiding Automatic', async () => {
+    writeSessionModel('legacy', 'missing/model');
+    await render('legacy');
+    await click(container.querySelector('button'));
+    expect(row('Automatic')).toBeUndefined();
+    const historical = row('missing/model · unverified');
+    expect(historical?.getAttribute('aria-checked')).toBe('true');
+    await click(historical);
+    expect(readSessionModel('legacy')).toBe('missing/model');
+    expect(row('china')).toBeTruthy();
+    expect(row('Default')).toBeTruthy();
+  });
+
   it('does not freeze startup defaults before settings have hydrated', async () => {
     hydration.ready = false;
     useSettingsStore.setState({ chatAgentDefaults: {} });

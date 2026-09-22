@@ -147,8 +147,9 @@ function ModelMenuSection({
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const selectedId = section.items.find((item) => item.selected)?.id ?? null;
   if (section.id === 'model') {
+    // Q2 hides the menu choice; stored Automatic values keep their runtime semantics.
     const direct = section.items.filter(
-      (item) => item.id === AUTOMATIC_MODEL_ID || item.verified === false
+      (item) => item.id !== AUTOMATIC_MODEL_ID && item.verified === false
     );
     const matches = filterChatModels(
       section.items.filter((item) => item.id !== AUTOMATIC_MODEL_ID && item.verified !== false),
