@@ -101,7 +101,15 @@ export interface SubagentDefinition {
 }
 
 /** pi's reasoning levels, spelled as the loop's `thinkingLevel` expects. */
-export const SUBAGENT_THINKING_LEVELS = ['off', 'low', 'medium', 'high'] as const;
+export const SUBAGENT_THINKING_LEVELS = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
 export type SubagentThinkingLevel = (typeof SUBAGENT_THINKING_LEVELS)[number];
 
 /**

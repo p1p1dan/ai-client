@@ -92,9 +92,18 @@ export function getUserProviderService(): UserProviderService {
       onChange: () => {
         // Lazy import: this module is reached from IPC registration at boot,
         // and `piModelConfig` pulls in the whole managed-config stack.
-        void import('../piModelConfig').then(({ writeUserProviderRuntimeConfig }) =>
-          writeUserProviderRuntimeConfig()
-        );
+        void (async () => {
+          const { writeUserProviderRuntimeConfig } = await import('../piModelConfig');
+          writeUserProviderRuntimeConfig();
+          // Invalidate running workers so a model just added reaches the next
+          // worker without a restart — otherwise the picker shows it but the
+          // call fails with `model_not_in_catalog` (the worker's catalog is a
+          // spawn-time snapshot).
+          const { workerManager } = await import('../agent-host/WorkerManager');
+          await workerManager.invalidateAll();
+        })().catch((error) => {
+          console.warn('[user-providers] failed to refresh runtime after change', error);
+        });
       },
     });
   }

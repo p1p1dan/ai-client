@@ -316,6 +316,41 @@ it('retires the card on the worker’s resolve, and the next request takes its p
   await act(async () => root.unmount());
 });
 
+/**
+ * Regression: approving the first of two queued permissions must not lock
+ * the second card's buttons. Before the fix, `PermissionQaCard` had no React
+ * `key`, so React reused the same instance when the dock swapped from #1 to
+ * #2 — and the local `submitting` flag, stuck `true` by the first card's
+ * successful `handled: true` response, left every button on #2 disabled. The
+ * workaround was to switch chats and switch back (which unmounts/remounts).
+ */
+it('keeps the second card answerable after approving the first', async () => {
+  askPermission('perm-1', { description: 'run ls' });
+  askPermission('perm-2', { description: 'run rm' });
+  const { container, root } = mount();
+  await act(async () => root.render(createElement(PendingPermissionDock, { sessionId: 's1' })));
+
+  // Approve #1 — `handled: true` is the exact condition that used to stick
+  // `submitting` at true (the reset branch only fires on `ok === false`).
+  await act(async () => buttonNamed(container, 'Allow')?.click());
+  await act(async () => resolvePermission('perm-1', true));
+
+  // #2 is now on screen. Its Allow button must exist AND be clickable.
+  const allow = buttonNamed(container, 'Allow');
+  expect(allow).toBeDefined();
+  expect(allow?.disabled).toBe(false);
+
+  // And clicking it fires the IPC for THIS permission, not the old one.
+  respondPermission.mockClear();
+  await act(async () => allow?.click());
+  expect(respondPermission).toHaveBeenCalledWith({
+    sessionId: 's1',
+    decision: 'allow',
+    permissionId: 'perm-2',
+  });
+  await act(async () => root.unmount());
+});
+
 // ---- The two-surface invariant ----
 
 async function renderTimeline(container: HTMLElement, client: QueryClient) {
