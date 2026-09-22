@@ -9,11 +9,17 @@
  * `relative` div OUTSIDE the `ScrollArea`. In there it neither scrolls with
  * the content nor claims any of the reading column's 45rem/60rem width.
  *
- * Positioning is proportional (a minimap idiom, not a stacked list): dash N
- * of M sits at `N/(M-1)` of the rail's height, so the rail stays one glance
- * readable at any prompt count — a stacked list would overflow a short window
- * in a long session. Below 2 prompts there is nothing to navigate and the
- * rail renders nothing.
+ * Positioning is a centred cluster, NOT a spread (round-13 follow-up: the
+ * first version distributed the dashes over the full timeline height and the
+ * user rejected the gaps — 「隔得太远了，离近点集中点」). Every dash sits at
+ * `DASH_PITCH` from its neighbour around the rail's midpoint, so the group
+ * reads as one control instead of a scattered scale.
+ *
+ * The pitch is capped by `min()` against the rail's own height, which is what
+ * keeps a long session from overflowing the window without any measurement:
+ * once `DASH_PITCH * count` would exceed the rail, the cap takes over and the
+ * cluster degrades into the proportional spread it replaced. Below 2 prompts
+ * there is nothing to navigate and the rail renders nothing.
  */
 import type { RefObject } from 'react';
 import { useCallback } from 'react';
@@ -31,6 +37,28 @@ interface PromptNavRailProps {
   prompts: readonly PromptNavItem[];
   /** MessageTimeline's `scrollRootRef`; the viewport is found through it. */
   containerRef: RefObject<HTMLDivElement | null>;
+}
+
+/**
+ * Centre-to-centre distance between two dashes, in px. Round-13 second pass:
+ * 8px (the tightest the tokens allow) clustered them into something the user
+ * could not aim at — 「太近了都不好点」 — so the pitch is the 12px indent unit
+ * instead. That is still one glance's worth of grouping, and it makes each hit
+ * area 12px tall, three times the dash it covers.
+ */
+const DASH_PITCH = 12;
+
+/**
+ * `top` for dash `index` of `count`: the rail's midpoint, offset by whole
+ * pitches. `min()` caps the pitch against the rail's own height (see the head
+ * note), so the cluster can never grow past the window it floats in.
+ */
+function dashTop(index: number, count: number): string {
+  const offset = index - (count - 1) / 2;
+  const pitch = `min(${DASH_PITCH}px, 100% / ${count})`;
+  if (offset === 0) return '50%';
+  const sign = offset > 0 ? '+' : '-';
+  return `calc(50% ${sign} ${Math.abs(offset)} * ${pitch})`;
 }
 
 export function PromptNavRail({ prompts, containerRef }: PromptNavRailProps) {
@@ -60,7 +88,7 @@ export function PromptNavRail({ prompts, containerRef }: PromptNavRailProps) {
   if (prompts.length < 2) return null;
 
   return (
-    <nav aria-label={t('Prompt history')} className="absolute inset-y-4 left-1 z-10 w-3">
+    <nav aria-label={t('Prompt history')} className="absolute inset-y-4 left-1 z-10 w-4">
       {prompts.map((prompt, index) => (
         <Tooltip key={prompt.id}>
           <TooltipTrigger
@@ -68,13 +96,12 @@ export function PromptNavRail({ prompts, containerRef }: PromptNavRailProps) {
             render={
               <button
                 type="button"
-                // Spread across the rail's height (see the head note). The
-                // hit area is taller than the dash itself so a 4px bar stays
-                // clickable; dense sessions let neighbouring hit areas touch,
-                // which degrades far more gracefully than a stacked list
-                // overflowing the window.
-                className="group absolute left-0 flex h-4 w-3 -translate-y-1/2 items-center justify-center"
-                style={{ top: `${(index / (prompts.length - 1)) * 100}%` }}
+                // The hit area is exactly one pitch tall and the rail's full
+                // width: neighbouring targets touch without overlapping, so a
+                // 4px dash stays easy to aim at and no dash can steal the
+                // hover of the one above it.
+                className="group absolute left-0 flex h-3 w-4 -translate-y-1/2 items-center justify-center"
+                style={{ top: dashTop(index, prompts.length) }}
                 aria-label={`${t('Jump to this question')} #${index + 1}`}
                 onClick={() => jumpTo(prompt.id)}
               />
@@ -82,7 +109,11 @@ export function PromptNavRail({ prompts, containerRef }: PromptNavRailProps) {
           >
             <span
               aria-hidden
-              className="h-1 w-3 rounded-full bg-muted-foreground/35 transition-all group-hover:w-3.5 group-hover:bg-primary"
+              // Hover grows the dash on both axes (4→6px tall, 12→16px wide)
+              // and takes it to the accent: at this pitch the pointer is the
+              // only thing that says which prompt the tooltip belongs to, so
+              // the focused dash has to be unmistakable, not merely tinted.
+              className="h-1 w-3 rounded-full bg-muted-foreground/35 transition-all group-hover:h-1.5 group-hover:w-4 group-hover:bg-primary"
             />
           </TooltipTrigger>
           <TooltipPopup side="right" sideOffset={10} className="max-w-72">
