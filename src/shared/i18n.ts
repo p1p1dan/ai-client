@@ -571,6 +571,10 @@ export const zhTranslations: Record<string, string> = {
   // Shared by the two terminals' scrollback buttons and the chat timeline's
   // bottom anchor (T12-d) — one wording for one gesture, in both places.
   'Scroll to bottom': '滚动到底部',
+  // Round-13 (用户需求 17)：聊天页历史提问导航条。
+  'Prompt history': '提问历史',
+  'Jump to this question': '跳转到这条提问',
+  'Attachment only': '仅附件',
   // Pi runs as a local PTY, so a remote workspace has no directory to spawn in.
   'Pi terminal is unavailable for remote repositories': 'Pi 终端不支持远程仓库',
   'Open a local repository or worktree to start a Pi terminal.':
@@ -869,6 +873,8 @@ export const zhTranslations: Record<string, string> = {
   // U13: sidebar group for chats that never got a project folder — they run in
   // a throwaway directory, so they belong to no repository.
   'Temporary chats': '临时对话',
+  Result: '结果',
+  'Expand full thinking': '展开完整思考',
   'Show more': '显示更多',
   'Show less': '收起',
   'Filter sessions': '筛选会话',
