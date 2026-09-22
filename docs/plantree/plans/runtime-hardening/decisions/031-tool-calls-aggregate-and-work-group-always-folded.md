@@ -1,6 +1,15 @@
 # 决策 031：连续工具调用聚合成一条 + 工作组始终折叠（推翻决策 021 的「运行中自动展开」）
 
-日期：2026-09-19 · 拍板人：用户 · 状态：已决 · 任务：T105 / T106（批次 J）
+日期：2026-09-19 · 拍板人：用户 · 状态：**部分被推翻** · 任务：T105 / T106（批次 J）
+
+> ## ⚠️ 2026-09-22 修订（见[决策 033](033-process-group-expanded-and-visual-hierarchy.md)）
+>
+> 本决策的 **D6 与 D7 已被决策 033 推翻**，同一用户于 2026-09-22 提出相反诉求：
+>
+> - **D6（工作组始终折叠，运行中也不自动展开）→ 推翻**。改为「默认展开，输出结束了也保持展开状态」。落地改动在 `turnProcessFold.ts` 的 `turnWorkGroupOpen()`：默认值由 `false` 改为 `true`；用户显式点击仍然优先。纯派生、零 `useEffect` 的要求继续有效。
+> - **D7（折叠头保持英文）→ 推翻**。改为跟随系统语言（改绑 `useI18n()`）。其两条守卫测试（`messageTimelineWiring.test.ts` 的 `[HEAD-EN-1]`、`turnProgress.test.ts` 的 `[HEAD-EN-2]`）**已在 `1e33b7fe` 提前退休**——该提交重做头形态时就已改绑 `useI18n()` 并以 `[HEAD-CN-1]` 反向守卫，本决策只是把这一步记在案上。
+>
+> 本决策中**其余全部结论继续有效**，尤其：`turnWorkGroupAwaitsUser` 红线、零 `useEffect`、用原生 `<details>` 而非 `ui/collapsible.tsx`、带授权记录的 run 不参与聚合。
 
 ## 问题
 

@@ -3,8 +3,6 @@ import type { TurnItem, TurnItemKind, TurnSegment } from '../chatTurn';
 import { segmentTurnBody } from '../chatTurn';
 import type { ToolRun, ToolRunStatus } from '../toolCard';
 import {
-  countProcessGroupExplanations,
-  countProcessGroupThinking,
   countProcessSteps,
   countTurnToolCalls,
   deriveTurnCurrentAction,
@@ -31,13 +29,66 @@ function segmentsOf(kinds: readonly TurnItemKind[]): TurnSegment<{ kind: TurnIte
   return segmentTurnBody(kinds.map((kind) => ({ kind })));
 }
 
-// The user-confirmed 2026-09-22 shape: the LAST answer is the final reply —
-// always visible, highlighted; everything before it (process AND earlier
-// answer segments) folds into one process group. Notices stay outside (FB4).
-describe('splitTurnWorkGroup — the last answer stays outside; earlier prose folds in', () => {
+// Decision 033 D1 (2026-09-22): while the turn STREAMS there is no final reply
+// to find, so everything but a notice stays in one group. Once it has settled,
+// the final reply is the last answer segment with NO process after it, and that
+// extraction is the single structural change the turn makes. Notices stay
+// outside throughout (FB4).
+describe('splitTurnWorkGroup — nothing is final until the turn settles', () => {
+  it('[WG-STREAM-1] while streaming, every answer stays inside the group', () => {
+    const segments = segmentsOf(['text', 'toolGroup', 'text']);
+    expect(splitTurnWorkGroup(segments, false)).toEqual([
+      { kind: 'processGroup', segments: [segments[0], segments[1], segments[2]] },
+    ]);
+  });
+
+  it('[WG-STREAM-2] settling extracts the reply, and the group head does not move', () => {
+    const segments = segmentsOf(['text', 'toolGroup', 'text']);
+    const streaming = splitTurnWorkGroup(segments, false);
+    const settled = splitTurnWorkGroup(segments, true);
+    // `groupKey` is the first item of the first segment, so this identity is
+    // what keeps the reader's expansion across the one change the turn makes.
+    expect(streaming[0].kind === 'processGroup' && streaming[0].segments[0]).toBe(
+      settled[0].kind === 'processGroup' && settled[0].segments[0]
+    );
+    expect(settled.at(-1)).toEqual({ kind: 'finalAnswer', segment: segments[2] });
+  });
+
+  it('[WG-FWD-1] a settled turn that ENDS on a tool call has no final reply at all', () => {
+    // `answer → 工具 → 结束`. The retired `lastAnswerIndex` rule pulled the
+    // trailing narration out as the reply while a call still followed it —
+    // the 「各种调用穿插在 agent 的输出中」 complaint in a new shape.
+    const segments = segmentsOf(['text', 'toolGroup']);
+    expect(splitTurnWorkGroup(segments, true)).toEqual([
+      { kind: 'processGroup', segments: [segments[0], segments[1]] },
+    ]);
+  });
+
+  it('[WG-FWD-2] only PROCESS disqualifies a reply — a trailing notice does not', () => {
+    const segments = segmentsOf(['toolGroup', 'text', 'notice']);
+    expect(splitTurnWorkGroup(segments, true)).toEqual([
+      { kind: 'processGroup', segments: [segments[0]] },
+      { kind: 'finalAnswer', segment: segments[1] },
+      { kind: 'notice', segment: segments[2] },
+    ]);
+  });
+
+  it('[WG-FWD-3] with two qualifying answers the LAST one is the reply', () => {
+    // A forward scan for "the first answer with no process after it" picks the
+    // wrong paragraph here: `segments[1]` passes that test too, and extracting
+    // it would fold the turn's actual last paragraph into the group.
+    const segments = segmentsOf(['toolGroup', 'text', 'notice', 'text']);
+    const sections = splitTurnWorkGroup(segments, true);
+    // Identity, not deep equality: two one-paragraph answer segments are
+    // structurally identical, so `toContainEqual` cannot tell them apart.
+    const final = sections.filter((section) => section.kind === 'finalAnswer');
+    expect(final).toHaveLength(1);
+    expect(final[0].kind === 'finalAnswer' && final[0].segment).toBe(segments[3]);
+  });
+
   it('[WG-1] three paragraphs: the first two fold, the last is the final reply', () => {
     const segments = segmentsOf(['text', 'toolGroup', 'text', 'toolGroup', 'text']);
-    expect(splitTurnWorkGroup(segments)).toEqual([
+    expect(splitTurnWorkGroup(segments, true)).toEqual([
       {
         kind: 'processGroup',
         segments: [segments[0], segments[1], segments[2], segments[3]],
@@ -48,7 +99,7 @@ describe('splitTurnWorkGroup — the last answer stays outside; earlier prose fo
 
   it('[WG-2] an error ending cannot hide the FINAL reply (FB4)', () => {
     const segments = segmentsOf(['text', 'toolGroup', 'text', 'notice']);
-    const sections = splitTurnWorkGroup(segments);
+    const sections = splitTurnWorkGroup(segments, true);
     // The notice stays outside and AFTER everything — it is the last section.
     expect(sections.at(-1)).toEqual({ kind: 'notice', segment: segments[3] });
     // The final reply (the last answer) is a standalone section, not folded.
@@ -57,7 +108,7 @@ describe('splitTurnWorkGroup — the last answer stays outside; earlier prose fo
 
   it('[WG-3/4] without prose, notices stay outside, after the process group', () => {
     const segments = segmentsOf(['toolGroup', 'notice', 'permission']);
-    expect(splitTurnWorkGroup(segments)).toEqual([
+    expect(splitTurnWorkGroup(segments, true)).toEqual([
       { kind: 'processGroup', segments: [segments[0], segments[2]] },
       { kind: 'notice', segment: segments[1] },
     ]);
@@ -65,7 +116,7 @@ describe('splitTurnWorkGroup — the last answer stays outside; earlier prose fo
 
   it('[WG-5/6] no process means no empty group, even with a notice', () => {
     const segments = segmentsOf(['notice', 'text']);
-    expect(splitTurnWorkGroup(segments)).toEqual([
+    expect(splitTurnWorkGroup(segments, true)).toEqual([
       { kind: 'notice', segment: segments[0] },
       { kind: 'finalAnswer', segment: segments[1] },
     ]);
@@ -81,7 +132,7 @@ describe('splitTurnWorkGroup — the last answer stays outside; earlier prose fo
       ['text', 'toolGroup', 'notice', 'toolGroup', 'text'],
     ] as TurnItemKind[][]) {
       const segments = segmentsOf(kinds);
-      const sections = splitTurnWorkGroup(segments);
+      const sections = splitTurnWorkGroup(segments, true);
       expect(
         sections.flatMap((s) => (s.kind === 'processGroup' ? s.segments : [s.segment]))
       ).toEqual(segments);
@@ -97,8 +148,8 @@ describe('splitTurnWorkGroup — the last answer stays outside; earlier prose fo
 
   it('[WG-8] appending an answer folds the old final in — without moving the group head', () => {
     const segments = segmentsOf(['text', 'toolGroup', 'text', 'toolGroup', 'text']);
-    const before = splitTurnWorkGroup(segments.slice(0, 3));
-    const after = splitTurnWorkGroup(segments);
+    const before = splitTurnWorkGroup(segments.slice(0, 3), true);
+    const after = splitTurnWorkGroup(segments, true);
     // The group's FIRST segment is unchanged — it is the `groupKey` the
     // renderer keys on, so expansion state survives a new answer arriving.
     expect(after[0].kind === 'processGroup' && before[0].kind === 'processGroup').toBe(true);
@@ -113,12 +164,13 @@ describe('splitTurnWorkGroup — the last answer stays outside; earlier prose fo
   });
 
   it('[WG-9] an empty turn has no sections', () => {
-    expect(splitTurnWorkGroup([])).toEqual([]);
+    expect(splitTurnWorkGroup([], true)).toEqual([]);
   });
 
   it('[WG-REAL-1/2] interleaved thinking, prose and calls fold into one group before the final', () => {
     const sections = splitTurnWorkGroup(
-      segmentsOf(['toolGroup', 'text', 'toolGroup', 'toolGroup', 'text'])
+      segmentsOf(['toolGroup', 'text', 'toolGroup', 'toolGroup', 'text']),
+      true
     );
     expect(sections.map((s) => s.kind)).toEqual(['processGroup', 'finalAnswer']);
     // The group holds everything before the final: the process runs AND the
@@ -127,23 +179,23 @@ describe('splitTurnWorkGroup — the last answer stays outside; earlier prose fo
     expect(sections[0].kind === 'processGroup' && sections[0].segments).toHaveLength(3);
   });
 
-  it('[WG-REAL-3/4] a notice after the final reply stays visible, outside any group', () => {
-    const sections = splitTurnWorkGroup(segmentsOf(['toolGroup', 'text', 'toolGroup', 'notice']));
-    expect(sections.map((s) => s.kind)).toEqual([
-      'processGroup',
-      'finalAnswer',
-      'processGroup',
-      'notice',
-    ]);
-    expect(splitTurnWorkGroup(segmentsOf(['toolGroup', 'notice'])).map((s) => s.kind)).toEqual([
-      'processGroup',
-      'notice',
-    ]);
+  it('[WG-REAL-3/4] a notice always renders outside, and never splits the group open', () => {
+    // Under the retired rule this shape produced FOUR sections — the middle
+    // paragraph was extracted as the reply even though a call followed it, and
+    // the call behind it started a second group. One group now, one notice.
+    const sections = splitTurnWorkGroup(
+      segmentsOf(['toolGroup', 'text', 'toolGroup', 'notice']),
+      true
+    );
+    expect(sections.map((s) => s.kind)).toEqual(['processGroup', 'notice']);
+    expect(
+      splitTurnWorkGroup(segmentsOf(['toolGroup', 'notice']), true).map((s) => s.kind)
+    ).toEqual(['processGroup', 'notice']);
   });
 
   it('[WG-LONG] twenty-four consecutive calls create one process section, not twenty-four', () => {
     const kinds: TurnItemKind[] = ['text', ...Array<TurnItemKind>(24).fill('toolGroup'), 'text'];
-    const sections = splitTurnWorkGroup(segmentsOf(kinds));
+    const sections = splitTurnWorkGroup(segmentsOf(kinds), true);
     expect(sections.map((s) => s.kind)).toEqual(['processGroup', 'finalAnswer']);
   });
 });
@@ -202,23 +254,26 @@ describe('turnWorkGroupAwaitsUser — the Allow/Deny card can never be collapsed
 // Open / closed
 // ---------------------------------------------------------------------------
 
-describe('turnWorkGroupOpen — closed by default, user intent forever', () => {
+describe('turnWorkGroupOpen — open by default, user intent forever', () => {
   const open = (forcedOpen: boolean, userOpen: boolean | null): boolean =>
     turnWorkGroupOpen({ forcedOpen, userOpen });
 
-  // ef26ca5f temporarily opened groups to expose hidden prose. T107 moves
-  // that prose outside instead; the user confirmed closed process groups.
-  it('[WG-OPEN-1] process groups default closed while running or settled', () => {
-    expect(open(false, null)).toBe(false);
+  // D6 closed groups, ef26ca5f opened them, T107 closed them again — and
+  // decision 033 D2 opens them for good at the same user's explicit request
+  // (「折叠头默认展开，输出结束了也保持展开状态」). Only the default moved.
+  it('[WG-OPEN-1] process groups default OPEN while running or settled', () => {
+    expect(open(false, null)).toBe(true);
   });
 
   it('[WG-OPEN-2] either explicit user choice overrides the default', () => {
     expect(open(false, true)).toBe(true);
+    // The half that matters now the default flipped: a reader who collapses a
+    // group keeps it collapsed. If this drifts, the click has no effect at all.
     expect(open(false, false)).toBe(false);
   });
 
-  it('[WG-OPEN-3] restored history mounts closed, like a live turn', () => {
-    expect(open(false, null)).toBe(false);
+  it('[WG-OPEN-3] restored history mounts open, like a live turn', () => {
+    expect(open(false, null)).toBe(true);
   });
 
   it('[WG-OPEN-4] an unanswered authorization outranks both the default and the click', () => {
@@ -415,39 +470,6 @@ describe('countTurnToolCalls', () => {
 
 // The head's chips: each counts one kind of thing the group holds, and is
 // shown only when its count is above zero.
-describe('countProcessGroupThinking / countProcessGroupExplanations — the head chips', () => {
-  const group = (entries: unknown[]): TurnItem =>
-    ({ kind: 'toolGroup', blockIndex: 0, messageId: 'm1', entries }) as never;
-
-  it('[CHIP-THINK-1] counts thinking entries across groups, not groups', () => {
-    const items = [
-      group([{ kind: 'thinking' }, { kind: 'run' }]),
-      group([{ kind: 'thinking' }, { kind: 'thinking' }]),
-    ];
-    expect(countProcessGroupThinking(items)).toBe(3);
-  });
-
-  it('[CHIP-THINK-2] no thinking means zero — the chip is omitted', () => {
-    expect(countProcessGroupThinking([])).toBe(0);
-    expect(countProcessGroupThinking([group([{ kind: 'run' }])])).toBe(0);
-    expect(
-      countProcessGroupThinking([
-        { kind: 'text', blockIndex: 0, messageId: 'm', block: { id: 'b', type: 'text' } } as never,
-      ])
-    ).toBe(0);
-  });
-
-  it('[CHIP-EXPL-1] counts text items — the intermediate paragraphs', () => {
-    const textItem = () =>
-      ({ kind: 'text', blockIndex: 0, messageId: 'm', block: { id: 'b', type: 'text' } }) as never;
-    expect(countProcessGroupExplanations([textItem(), group([{ kind: 'run' }]), textItem()])).toBe(
-      2
-    );
-    expect(countProcessGroupExplanations([])).toBe(0);
-    expect(countProcessGroupExplanations([group([{ kind: 'run' }])])).toBe(0);
-  });
-});
-
 describe('countProcessSteps', () => {
   it('counts what happened, not how it was grouped', () => {
     // A tool group holding four runs is four steps; counting groups would tell

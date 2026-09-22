@@ -35,13 +35,6 @@ function thought(id: string, text: string): ToolGroupEntry {
 /** The session scope the expand memory is keyed by — without one, nothing is remembered. */
 const SESSION = 'session-under-test';
 
-/**
- * The `data-slot` `ToolRows.tsx` looks for when it re-anchors a folded header.
- * Spelled here as the same literal the component uses, because the whole point
- * of the T096 cases below is that the lookup finds a real scroll surface.
- */
-const SCROLL_SURFACE_SLOT = 'scroll-area-viewport';
-
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 
@@ -58,10 +51,6 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
-  // T096's cases re-home `container` inside a stand-in scroll surface; the
-  // surface outlives `container.remove()` and would be found by the next case's
-  // `closest()` lookup if it were left in the document.
-  document.querySelector(`[data-slot="${SCROLL_SURFACE_SLOT}"]`)?.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -169,96 +158,4 @@ it('a thought the user re-opened mid-stream stays open after it settles', async 
   // this open" and the row settles a second later.
   await settleThought('Long chain of reasoning.');
   expect(container.textContent).toContain('Long chain of reasoning.');
-});
-
-/*
- * ────────────────────────────────────────────────────────────────────────────
- * T096 (decision 028): folding a header that followed the reader down the page
- * ────────────────────────────────────────────────────────────────────────────
- *
- * happy-dom has no layout engine, so the geometry is supplied rather than
- * measured — and that is the right shape for this assertion anyway. What the
- * component owns is a decision ("was the header pinned, and where does the
- * viewport have to land"), not a measurement; `stickyFoldScrollTarget` states
- * the arithmetic and these cases prove the component feeds it the right four
- * numbers and honours the answer. The layout itself is the browser's job.
- */
-
-/**
- * Freeze one element's box. Only `top` is ever read by the code under test;
- * the rest is filled in so the value is a legal `DOMRect`.
- */
-function stubTop(element: Element, top: number): void {
-  const height = 24;
-  vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
-    top,
-    bottom: top + height,
-    height,
-    y: top,
-    left: 0,
-    right: 600,
-    width: 600,
-    x: 0,
-    toJSON: () => ({}),
-  } as DOMRect);
-}
-
-/**
- * Re-home the render container inside a stand-in for the timeline's scroll
- * viewport, tagged with the same `data-slot` the real one carries.
- *
- * `scrollTop` is redefined rather than assigned: the component both reads and
- * writes it, and a plain assignment on a happy-dom element is not guaranteed to
- * read back, which would make the assertion pass for the wrong reason.
- */
-function mountScrollSurface(scrollTop: number): HTMLDivElement {
-  const surface = document.createElement('div');
-  surface.dataset.slot = SCROLL_SURFACE_SLOT;
-  document.body.append(surface);
-  surface.append(container);
-  Object.defineProperty(surface, 'scrollTop', {
-    value: scrollTop,
-    writable: true,
-    configurable: true,
-  });
-  stubTop(surface, 0);
-  return surface;
-}
-
-it('collapsing a stuck thought header scrolls the viewport back to the header', async () => {
-  const surface = mountScrollSurface(800);
-  await streamThought('A chain of reasoning taller than the viewport.');
-  const header = trigger();
-  expect(header, 'no header to fold').not.toBeNull();
-  const block = header?.parentElement;
-  expect(block, 'the header must sit inside the collapsible root').not.toBeNull();
-
-  // What "stuck" looks like in numbers: the block's natural top is 500px above
-  // the viewport's top edge, and the header is NOT there — it has been pinned
-  // to the viewport's own top (`sticky top-0`), 500px below where it belongs.
-  stubTop(block as HTMLElement, -500);
-  stubTop(header as HTMLElement, 0);
-
-  await clickTrigger();
-
-  // 800 (where the reader was) - 500 (the distance the pin had carried the
-  // header) = the offset at which the block's own top sits at the viewport's.
-  expect(surface.scrollTop).toBe(300);
-  expect(container.textContent).not.toContain('A chain of reasoning taller than the viewport.');
-});
-
-it('collapsing a thought header that was never stuck leaves the scroll alone', async () => {
-  const surface = mountScrollSurface(800);
-  await streamThought('A short thought that fits on screen.');
-  const header = trigger();
-  const block = header?.parentElement;
-  // Header and block share a top edge, which is precisely what "not pinned"
-  // means. Moving the viewport here would be the defect, not the feature: the
-  // reader can already see the row they clicked.
-  stubTop(block as HTMLElement, 240);
-  stubTop(header as HTMLElement, 240);
-
-  await clickTrigger();
-
-  expect(surface.scrollTop).toBe(800);
 });

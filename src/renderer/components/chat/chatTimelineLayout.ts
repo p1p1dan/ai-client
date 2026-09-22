@@ -35,15 +35,19 @@
  *
  * ## T096 (2026-09-19): sticky is allowed again, under one stated condition
  *
- * The blanket "no sticky in the timeline" rule this file used to carry was
- * never the real lesson of F10; it was the cheapest way to be sure the lesson
- * held. Decision 028 (`docs/plantree/.../028-thought-block-sticky-fold-header.md`)
- * reopens it for exactly one element — `thoughtFoldHeaderClass()` below, the
- * fold header of a thinking block — because a long thought is unreadable when
- * the only way to put it away is to scroll back to where it started.
+ * ⚠️ **PARTLY REVERSED by decision 033 (2026-09-22).** The grant below was made
+ * for exactly one element — the THINKING block's fold header — and that element
+ * no longer pins: the user reasoned that a pinned thought header and a pinned
+ * process-group head would fight over the same `top-0` inside one stacking
+ * context, and chose to keep the consideration header pinned instead (`D4`) and
+ * give the thought row a prominent BACKGROUND LINE (`D3`). So the permission is
+ * read back to one element again, and it is now the process-group head
+ * (`turnWorkGroupSummaryClass()`).
  *
- * **F10's oscillation needs a cycle, and the cycle needs a height change that
- * is a FUNCTION OF SCROLL POSITION.** All four links have to be present:
+ * What does NOT change, and is why this section is kept rather than deleted:
+ * **the condition.** F10's oscillation needs a cycle, and the cycle needs a
+ * height change that is a FUNCTION OF SCROLL POSITION. All four links have to be
+ * present:
  *
  * ```
  * scroll position -> "is it stuck?" -> layout height -> scrollHeight
@@ -51,23 +55,31 @@
  *      +----- browser clamps scrollTop to the new maximum ---+
  * ```
  *
- * The retired band closed that loop with `@container scroll-state(stuck: top)`
+ * The retired user bubble band closed that loop with `@container scroll-state(stuck: top)`
  * + `line-clamp-3`: getting stuck removed three lines of height, the document
  * got shorter, the engine clamped `scrollTop` back below the sticky threshold,
  * the band un-stuck and grew again, and the bottom-follower pushed the offset
  * back — once per frame.
  *
- * The thought fold header cannot close it because the second link is missing:
- * its height is the same number stuck and un-stuck. Nothing it carries is
- * derived from scroll position at all — no `scroll-state()` query, no clamp,
- * no max-height, and the one decoration that DOES vary (the hairline under it)
- * keys off `data-panel-open`, i.e. a click, not an offset. A height change a
- * user asked for is not a cycle; it settles in one frame.
+ * A header whose height is the same number stuck and un-stuck cannot close it,
+ * which is all either element ever needed to satisfy. Nothing it carries is
+ * derived from scroll position — no `scroll-state()` query, no clamp, no
+ * max-height, and the one decoration that DOES vary (the hairline) keys off
+ * `data-panel-open`, i.e. a click, not an offset. A height change a user asked
+ * for is not a cycle; it settles in one frame.
  *
- * So the rule that replaces the prohibition is: **a sticky element in this
- * timeline may not change its own height as a function of scroll state.** That
- * is what `chatTimelineLayout.test.ts`'s T096 group asserts, and it is the only
- * thing that has to stay true for F10 to stay dead.
+ * So the rule stands, unchanged, and applies to whichever element holds the
+ * pin: **a sticky element in this timeline may not change its own height as a
+ * function of scroll state.** That is what `chatTimelineLayout.test.ts`'s
+ * (rewritten) T096 group asserts, and it is the only thing that has to stay
+ * true for F10 to stay dead.
+ *
+ * The retired machinery — `thoughtFoldHeaderClass()` and the collapse-time
+ * scroll re-anchor it needed (`scrollPinnedFoldHeaderIntoView` /
+ * `stickyFoldScrollTarget`) — went with the pin. Decision 028's problem (the
+ * fold control scrolling out of reach while reading a long thought) is now
+ * solved by bounding the thought BODY instead (`thoughtBodyMaxHeightClass()`),
+ * which needs no scroll-position dependency at all.
  *
  * ## Spacing arithmetic (asserted by F-B9)
  *
@@ -270,73 +282,64 @@ export function turnIntermediateToneClass(): string {
   return 'text-muted-foreground';
 }
 
-/** Tier 3 — thinking and terminal rows. Dimmer than the head that summarises them. */
+/**
+ * Decision 033 D1: the hairline + label that separates the turn's process group
+ * from its FINAL reply.
+ *
+ * It exists because the extraction has to be VISIBLE. The user's own words for
+ * the shape were 「确定流式完毕后，输出分割线，把最终输出提出折叠头」 — the divider
+ * is named there as part of the mechanism, not as decoration. Without it, a
+ * reply that pops out of an already-open group reads as content moving for no
+ * reason; with it, the single structural change a turn makes announces itself.
+ *
+ * Rendered only when a `finalAnswer` section actually exists, which is exactly
+ * when `splitTurnWorkGroup` was given `settled: true` AND found an answer with no
+ * process after it. So it cannot appear mid-stream, and a settled turn that ends
+ * on a tool call or an error notice has none — correctly, since nothing was
+ * extracted for it to announce.
+ *
+ * No `bg-*` and no `sticky`: it is a separator in the flow. Keeping it
+ * non-sticky is what leaves `turnWorkGroupSummaryClass()` the timeline's single
+ * pinned element, which is the property the rewritten T096 group asserts.
+ */
+export function turnFinalAnswerDividerClass(): string {
+  return 'flex min-w-0 items-center gap-2 pt-1 text-meta text-muted-foreground';
+}
+
+/**
+ * Tier 3 — thinking and terminal rows. Dimmer than the head that summarises them. */
 export function turnProcessToneClass(): string {
   return 'text-tool-arg';
 }
 
 /**
- * T096 / decision 028: the ONE pinned surface in this timeline — the fold
- * header of a thinking block, added to `ToolRows.tsx`'s collapsible trigger
- * when (and only when) the row's body is `thinking`.
+ * How tall a thinking block's BODY may get before it scrolls internally
+ * (decision 033 D3's replacement for a pinned fold header).
  *
- * The problem it solves is stated in the head note; what follows is why each
- * of the four classes is the one it is. Read that note first — this string is
- * only legal because of the height rule it records.
+ * ## Why `46vh` and not a pixel tier
  *
- * ## `sticky top-0`
+ * The value is the Bash-family output window (`toolCard.outputMaxHeightClass()`),
+ * reused rather than invented: the two are the same kind of surface — a long,
+ * read-only transcript the reader scrolls inside the timeline — and a second
+ * height for the same job would be two answers to one question.
  *
- * `top-0`, not an inset, because the scroll viewport
- * (`ui/scroll-area.tsx`'s `data-slot="scroll-area-viewport"`) has no padding of
- * its own — the timeline's `px-6 pt-5 pb-2` sits on the content div INSIDE it
- * — so 0 is already flush with the visible top edge. The same viewport is
- * `scrollFade="bottom"`, which matters here rather than being a coincidence: a
- * top fade would render the pinned header half-transparent, which is the exact
- * look the user ruled out (「不要透视效果」).
+ * Viewport-relative rather than the fixed 240px `INPUT_MAX_HEIGHT_CLASS` or the
+ * 288px `max-h-72` diff window, and that is the load-bearing part: a thought can
+ * be arbitrarily long, so what the bound really decides is "how much of the
+ * reading column may this one block occupy". In pixels that share grows as the
+ * viewport shrinks — on a short window a fixed 288px block can push its own
+ * header (and the next rows) off screen entirely, which is the defect this
+ * function exists to prevent. A `vh` bound keeps the share constant, and it
+ * also stays off the `max-h-72` value the subagent panel and diff preview
+ * already occupy, so the three windows remain distinguishable by role.
  *
- * ## `z-10`
- *
- * The thought body is an ordinary sibling at `z-index: auto`, so the header
- * needs to win against it and nothing else. The competition is scoped: the
- * viewport carries a mask (the bottom fade), a mask forms a stacking context,
- * and so every z-index inside the scrollport is settled inside the scrollport.
- * The jump-to-bottom button, the permission dock and `ChatWorkspace`'s overlay
- * all live OUTSIDE it and are therefore unaffected by this number.
- *
- * ## `bg-background`, and the one caveat that comes with it
- *
- * Fully opaque, no alpha of our own, no `backdrop-blur` — the user's ruling was
- * 「吸顶后不得出现内容穿插在折叠按钮后面」 and a blur is still see-through. The
- * token is the timeline's own surface: the shell root is `bg-background`
- * (`WorkspaceShell.tsx`) and nothing between it and the viewport repaints, so
- * this is the same colour the header sits on when it is not pinned — in both
- * themes, without a second value to keep in sync.
- *
- * ⚠️ Caveat, recorded rather than hidden: `--background` is one of the four
- * panel surfaces that multiply in `--panel-bg-opacity` (`globals.css`, see
- * `docs/design-system.md` 「面板半透明（背景图）」). With a wallpaper enabled the
- * header is therefore as translucent as every other panel in the app. That is
- * the app-wide setting behaving as designed, not an alpha this element chose,
- * and the alternative — minting an opaque twin of `--background` — would make
- * the header the one surface that ignores the user's wallpaper.
- *
- * ## `data-panel-open:border-b border-border`
- *
- * A hairline, and it is gated on OPEN, not on stuck. Gating it on stuck would
- * need `scroll-state()`, which is retired, and a 1px height change driven by
- * scroll position is the very cycle the head note forbids. Gated on open it is
- * present exactly when there is a body below it to separate, it never moves
- * while scrolling, and the 1px it adds when the reader expands the row is a
- * click's consequence — not a frame-by-frame feedback loop.
- *
- * Note what is deliberately NOT here: no `h-*`. "Fixed height" in the head
- * note's rule means "does not vary with scroll state", and the row's intrinsic
- * height already satisfies that — its content is identical pinned and unpinned.
- * Pinning a pixel height would instead make the thought row a different height
- * from the tool rows it is interleaved with, for no gain.
+ * ⚠️ `overflow-y-auto` is part of the contract, not decoration: a `max-height`
+ * without it CLIPS the tail of a long thought, which is worse than the unbounded
+ * body it replaced. The pair is applied to the thought body alone — tool output,
+ * diffs and the subagent panel keep their own windows (`ToolRowOutputSegment`).
  */
-export function thoughtFoldHeaderClass(): string {
-  return 'sticky top-0 z-10 bg-background data-panel-open:border-b data-panel-open:border-border';
+export function thoughtBodyMaxHeightClass(): string {
+  return 'max-h-[46vh] overflow-y-auto';
 }
 
 /**
@@ -372,9 +375,70 @@ export function thoughtFoldHeaderClass(): string {
  * ticking clock: the same reason `turnHeadClass()` below has always had it, and
  * the same defect it prevents — a proportional `1` makes the row re-measure
  * every second underneath a stick-to-bottom follower.
+ *
+ * ## 2026-09-22 (decision 033 D4, revised same day): pinned, not painted
+ *
+ * The user's report was 「有时候内容多了根本找不到折叠头」, and the pin is the
+ * whole of the answer. The accent face D4 also asked for was BUILT and then
+ * withdrawn by the same user on sight: 「还是和工具调用一样吧，工具头也是，这个
+ * 背景块太丑了」. So the row keeps `sticky top-0 z-10` and gives up
+ * `bg-accent` + `border` + `rounded-sm` + horizontal padding.
+ *
+ * **`sticky top-0 z-10`** is the direct fix for "cannot find it". This is now
+ * the timeline's ONE pinned element (D3 took the pin off the thought header,
+ * whose `sticky top-0 z-10` was competing for the same slot), so the stacking
+ * argument in the head note is unchanged — the competition is still scoped to
+ * the scrollport's own stacking context, and the docks, the jump-to-bottom
+ * button and `ChatWorkspace`'s overlay all live outside it.
+ *
+ * ⚠️ **The pin is legal for exactly one reason**: this row's height does not
+ * vary with scroll state. It is the same string pinned and unpinned, and it
+ * carries no `scroll-state()` query, no clamp, no max-height. That is F10's
+ * second link and its absence is what keeps the oscillation unreachable — see
+ * the head note, which also records why the pin cannot simply be moved to an
+ * element that clamps itself.
+ *
+ * **`bg-background` is the one thing the pin still requires, and it is not
+ * decoration.** A transparent sticky row lets the rows it is stuck over show
+ * THROUGH it, which is the user's own standing ruling against
+ * (「吸顶后不得出现内容穿插在折叠按钮后面」). `--background` is the surface the
+ * timeline already paints, so the band is opaque without reading as a block —
+ * exactly what 「太丑了」 ruled out. Do not "simplify" it away: the defect it
+ * prevents only appears while scrolling a long group, which is the one state
+ * a static render never enters.
+ *
+ * No `px-*`: with no visible face left, horizontal padding would only push the
+ * head's text out of alignment with the prose column under it.
+ *
+ * Deliberately NOT added: any `h-*` or `shrink-0`. The row's intrinsic height
+ * already satisfies the height rule, and pinning a pixel height would make the
+ * head a different height from `turnHeadClass()`, its other shape.
  */
 export function turnWorkGroupSummaryClass(): string {
-  return 'flex min-w-0 cursor-pointer list-none items-center gap-1.5 text-ui tabular-nums text-muted-foreground marker:content-none';
+  return 'sticky top-0 z-10 flex min-w-0 cursor-pointer list-none items-center gap-1.5 bg-background py-1 text-ui tabular-nums text-muted-foreground marker:content-none';
+}
+
+/**
+ * The count the process head carries at its right end (decision 033 D4).
+ *
+ * The head's own line answers "how much work is folded here" in steps; this one
+ * answers "how much of it was a tool call", and it sits at the right end so it
+ * stays readable while the head is stuck to the top of a long group — which is
+ * the whole reason the user asked for a second figure 「滚动中也能看到进度」.
+ *
+ * `ml-auto` rather than a `justify-between` on the head: the head's chevron is
+ * the LAST child, so pushing from here keeps the chevron pinned to the edge
+ * where every other disclosure on this surface puts it.
+ *
+ * ⚠️ No border, no fill, no rounding — it is a number in the meta tier, not a
+ * pill. The bordered badge the design preview drew was cut with the head's
+ * accent face on the same 2026-09-22 ruling (「这个背景块太丑了」), and a lone
+ * pill on an otherwise unpainted row would have been the loudest thing on it.
+ * `text-meta` is a tier below the head's own `text-ui`, which is what keeps the
+ * step count the line's subject.
+ */
+export function turnWorkGroupCountClass(): string {
+  return 'ml-auto shrink-0 text-meta tabular-nums text-muted-foreground';
 }
 
 /**

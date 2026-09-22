@@ -883,10 +883,29 @@ describe('deriveToolRowView', () => {
   });
 
   it('has no chevron (expandable=false) when ok with no output', () => {
-    const run = makeRun('a', 'Bash', { command: 'true' }, 'ok', { output: undefined });
+    // A tool whose whole input the one-line summary already covers. Bash is no
+    // longer one of those — decision 033 D6 took `command` out of its covered
+    // list, so a Bash row always has at least its command to disclose.
+    const run = makeRun('a', 'Read', { file_path: '/tmp/a.ts' }, 'ok', { output: undefined });
     const view = deriveToolRowView(run);
     expect(view.expandable).toBe(false);
     expect(view.body).toBeUndefined();
+  });
+
+  it('[D6] a Bash command reaches the input body even when a description covers the summary', () => {
+    // The 「指令太长了，没有办法看全」 bug: with `command` marked covered, a run
+    // that carried a description generated NO input body, so the command was
+    // unreachable — not truncated, absent. The row must disclose it.
+    const command = `rg --files-with-matches ${'x'.repeat(200)} src`;
+    const view = deriveToolRowView(
+      makeRun('a', 'Bash', { command, description: 'Search sources' }, 'ok', { output: undefined })
+    );
+    expect(view.expandable).toBe(true);
+    expect(view.input).toContain(command);
+    // `ARG_COVERED_FIELDS` gates WHETHER a body exists, not what goes in it —
+    // once one field is uncovered the body is the whole raw input, description
+    // included. Keeping `description` covered is therefore only about not
+    // minting a body for a run that has nothing else to show.
   });
 
   it('is never expandable while running', () => {

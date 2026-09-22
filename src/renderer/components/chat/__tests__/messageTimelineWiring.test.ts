@@ -628,20 +628,20 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * The head's chip keys are literal `t('…')` calls, not a key built from the
-   * label's discriminant. `i18nCoverage.test.ts` can only scan literals, so a
+   * The head's keys are literal `t('…')` calls, not keys built from a
+   * discriminant. `i18nCoverage.test.ts` can only scan literals, so a
    * `t(label.key)` would ship an untranslated head and no gate would notice.
    */
   it('[WG-WIRE-2] the head words itself from literal catalog keys', () => {
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
-    // The three chips, in the order the head prints them. The working/worked
-    // keys below belong to `TurnWorkZoneRow` since T113.
-    expect(head).toContain("t('Thinking chip')");
+    // Decision 033 D1/D4: the step clause, then the call count. The chip keys
+    // ('Thinking chip' / '{{count}} explanation…') retired with the chips; the
+    // working/worked keys belong to `TurnWorkZoneRow` since T113.
+    expect(head).toContain("t('{{count}} steps processed', { count: steps })");
     expect(head).toContain("'{{count}} tool call'");
     expect(head).toContain("'{{count}} tool calls'");
-    expect(head).toContain("'{{count}} explanation'");
-    expect(head).toContain("'{{count}} explanations'");
-    expect(head).not.toContain('steps processed');
+    expect(head).not.toContain("t('Thinking chip')");
+    expect(head).not.toContain("'{{count}} explanation'");
   });
 
   /**
@@ -1230,8 +1230,14 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(finalAt).toBeGreaterThan(-1);
     expect(finalAt).toBeLessThan(groupAt);
     const finalBranch = body.slice(finalAt, groupAt);
-    expect(finalBranch).toContain('return renderSegment(section.segment);');
+    expect(finalBranch).toContain('{renderSegment(section.segment)}');
     expect(finalBranch).not.toContain('turnFinalAnswerClass');
+    // Decision 033 D1: the extraction announces itself with a divider, and the
+    // divider is the ONLY thing the final branch adds — no border, background
+    // or container around the reply itself (D8 separates it by colour alone).
+    expect(finalBranch).toContain('<div className={turnFinalAnswerDividerClass()}>');
+    expect(finalBranch).toContain("t('Final output')");
+    expect(countIn(body, 'turnFinalAnswerDividerClass()')).toBe(1);
     expect(body).toContain(
       'const renderGroupSegment = (segment: TurnSegment<TurnItem>) => renderSegment(segment, true);'
     );
@@ -1367,25 +1373,26 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * Q1 replaces the generic step total with group-scoped chips. T113's boundary
-   * is unchanged: turn-level timing and usage never ride a process-group head.
+   * Decision 033 D1/D4 replaces Q1's three chips with two counts: the steps the
+   * group folded, and how many of them were tool calls. T113's boundary is
+   * unchanged — turn-level timing and usage never ride a process-group head.
    */
-  it('[WG-WIRE-7] the group head counts its own chips and carries no turn-level figures', () => {
+  it('[WG-WIRE-7] the group head counts its own steps and carries no turn-level figures', () => {
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
-    for (const counter of [
-      'countProcessGroupThinking',
-      'countTurnToolCalls',
-      'countProcessGroupExplanations',
-    ]) {
+    for (const counter of ['countProcessSteps', 'countTurnToolCalls']) {
       expect(countIn(head, `${counter}(items)`)).toBe(1);
     }
-    for (const counter of ['thinkingCount', 'toolCallCount', 'explanationCount']) {
-      expect(head).toContain(`if (${counter} > 0)`);
+    // The step count is the head's subject and is printed unconditionally; the
+    // call count is omitted at zero rather than printed as 「0 次调用」.
+    expect(head).toContain('{toolCalls > 0 && (');
+    // The chips are gone, and so is every counter that fed only them.
+    for (const chip of [
+      'chips.map(',
+      'countProcessGroupThinking',
+      'countProcessGroupExplanations',
+    ]) {
+      expect(head, `the chip machinery is retired: ${chip}`).not.toContain(chip);
     }
-    expect(head).toContain('chips.map(');
-    expect(head).not.toContain('steps processed');
-    expect(head).not.toContain('countProcessSteps(');
-    expect(countIn(head, 'label')).toBe(0);
     // Every turn-level input is gone from this element. Each of these coming
     // back is the exact regression T113 removed: a group-scoped line carrying
     // a turn-scoped figure.

@@ -297,18 +297,18 @@ describe('turnProgressClauses — the two stages', () => {
 });
 
 /**
- * Q1's process-group head uses localized chips. These checks retain the
- * English helper coverage and Chinese keys shared with the work-zone row and
- * Run panel; they no longer describe an English-only group head.
+ * The process head's words, plus the keys the work-zone row and the Run panel
+ * share with it. The chip keys (`Thinking chip`, 「N 段说明」) went with the
+ * chips themselves in decision 033 D1 — what is left here is what a surface
+ * still prints.
  */
 describe('progress-row catalog coverage', () => {
-  it('translates process chips and keeps thinking separate from the running status', () => {
-    expect(zh('Thinking chip')).toBe('思考');
+  it('translates the head counts and keeps thinking separate from the running status', () => {
+    expect(zh('{{count}} steps processed', { count: 7 })).toBe('已处理 7 个步骤');
     expect(zh('Thinking')).toBe('思考中');
     expect(zh('{{count}} tool call', { count: 1 })).toBe('1 次工具调用');
     expect(zh('{{count}} tool calls', { count: 2 })).toBe('2 次工具调用');
-    expect(zh('{{count}} explanation', { count: 1 })).toBe('1 段说明');
-    expect(zh('{{count}} explanations', { count: 2 })).toBe('2 段说明');
+    expect(zh('Final output')).toBe('最终输出');
   });
 
   const en = englishTranslate;

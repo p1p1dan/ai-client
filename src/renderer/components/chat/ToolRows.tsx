@@ -18,9 +18,8 @@ import {
   resolveToolRowOpen,
   useToolExpansionStore,
 } from '@/stores/toolExpansion';
-import { thoughtFoldHeaderClass, turnProcessToneClass } from './chatTimelineLayout';
+import { thoughtBodyMaxHeightClass, turnProcessToneClass } from './chatTimelineLayout';
 import { HitListPopover } from './HitListPopover';
-import { stickyFoldScrollTarget } from './messageTimelineScroll';
 import { deriveSubagentPanelRows } from './subagentActivityModel';
 import {
   type FileLinkTarget,
@@ -204,46 +203,6 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
 }
 
 /**
- * Every scroll surface a timeline row can sit inside, nearest-first.
- *
- * Two, not one: a thought row normally scrolls in the timeline viewport, but
- * `deriveSubagentPanelRows` also emits `body: 'thinking'` for an over-long
- * delegate prose line, and THAT row lives inside `SubagentDetail`'s own
- * `max-h-72 overflow-y-auto` window. A top-sticky element pins to its nearest
- * scrollport, so the re-anchor has to aim at the same one the browser did.
- */
-const SCROLL_SURFACE_SELECTOR = '[data-slot="scroll-area-viewport"], [data-slot="subagent-detail"]';
-
-/**
- * T096: fold a pinned thought header without leaving the reader somewhere else.
- *
- * `stickyFoldScrollTarget` owns the judgement (and returns `null` when the
- * header was never pinned, which is the case where moving the scroll would be
- * the bug); this function only supplies the four measurements and performs the
- * write. Reading the block's top off `parentElement` is exact rather than
- * approximate: the trigger is the first child of the Base UI `Collapsible`
- * root, the root is not sticky, so its top edge IS the header's natural one.
- *
- * The write itself disarms the bottom-follower for free — it moves `scrollTop`
- * upward, which is rule 1 of `nextFollowState` ("away from the bottom -> never
- * following"). Without that, a reader who folded a tall thought while parked at
- * the bottom would be yanked straight back down by the collapse's own
- * `ResizeObserver` frame.
- */
-function scrollPinnedFoldHeaderIntoView(trigger: HTMLElement | null): void {
-  const block = trigger?.parentElement;
-  const surface = trigger?.closest<HTMLElement>(SCROLL_SURFACE_SELECTOR);
-  if (!trigger || !block || !surface) return;
-  const target = stickyFoldScrollTarget({
-    scrollTop: surface.scrollTop,
-    viewportTop: surface.getBoundingClientRect().top,
-    blockTop: block.getBoundingClientRect().top,
-    headerTop: trigger.getBoundingClientRect().top,
-  });
-  if (target !== null) surface.scrollTop = target;
-}
-
-/**
  * The expandable shape of a row: trigger + chevron above a collapsible body.
  *
  * 2026-08-25 (user decision): rows open only when something explicitly asks
@@ -306,31 +265,22 @@ function ToolRowCollapsible({
 }) {
   const [initialOpen] = useState(() => resolveToolRowOpen(view, readToolExpandMemory(sessionId)));
   const setToolRowExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  // T096: a thought is the only body long enough for its own header to scroll
-  // out of reach — tool output is bounded by `outputMaxHeightClass`, a diff by
-  // `max-h-72`, a subagent panel by its own scroll window. So the pin is scoped
-  // to `body === 'thinking'` rather than granted to every expandable row.
-  const pinsHeader = view.body === 'thinking';
+  // Decision 033 D3 (2026-09-22): this trigger no longer pins, so there is no
+  // `pinsHeader` flag left to keep, and folding it moves no scroll offset —
+  // which is why the collapse-time re-anchor went with the pin. The prominent
+  // background row that was to replace the pin was withdrawn by the user on
+  // sight the same day (「还是和工具调用一样吧」): a thinking header is an
+  // ordinary tool row, and the thought BODY's height bound is what keeps this
+  // header on screen.
   return (
     <Collapsible
       defaultOpen={initialOpen}
       onOpenChange={(open) => {
-        // Before the state write, and deliberately: `onOpenChange` runs inside
-        // the click, so the DOM still holds the OPEN geometry the measurement
-        // needs — the header where the pin put it and the block at its natural
-        // top. One React commit later both are gone.
-        if (!open && pinsHeader) scrollPinnedFoldHeaderIntoView(triggerRef.current);
         if (sessionId) setToolRowExpanded(sessionId, view.key, open);
       }}
     >
       <CollapsibleTrigger
-        ref={triggerRef}
-        className={cn(
-          rowClass,
-          '[&[data-panel-open]>svg]:rotate-180',
-          pinsHeader && thoughtFoldHeaderClass()
-        )}
+        className={cn(rowClass, '[&[data-panel-open]>svg]:rotate-180')}
         // A Read row nests a real <button> inside the trigger for its
         // clickable file name (F①) — a native <button> can't contain one,
         // so those rows render the trigger as a <div role="button"> instead
@@ -689,9 +639,22 @@ function ToolRowOutputSegment({
       );
     case 'thinking':
     case 'stats':
+      // Decision 033 D3: the thought body carries a height bound and scrolls
+      // inside it, which is what replaces the retired pinned header — the fold
+      // control stays on screen because the block it heads cannot grow taller
+      // than `thoughtBodyMaxHeightClass()`. Applied to the prose itself, not to
+      // the wrapper, so the bound is the TEXT's and the row keeps its own
+      // spacing above it.
+      //
+      // ⚠️ `deriveSubagentPanelRows` emits `body: 'thinking'` too, for an
+      // over-long delegate prose line, and that row already sits inside
+      // `SubagentDetail`'s own `max-h-72 overflow-y-auto` window. The nested
+      // bound is harmless — it is the smaller of the two in every window where
+      // 46vh exceeds 288px, and a second scrollbar only appears when the inner
+      // text passes the inner bound, where scrolling it is the right gesture.
       return (
         <div className="mt-1 flex select-text flex-col gap-1.5 text-chat-process leading-[1.55] text-tool-arg">
-          <p className="whitespace-pre-wrap">{view.output}</p>
+          <p className={cn('whitespace-pre-wrap', thoughtBodyMaxHeightClass())}>{view.output}</p>
         </div>
       );
     default:

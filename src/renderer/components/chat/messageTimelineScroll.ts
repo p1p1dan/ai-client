@@ -94,53 +94,20 @@ export interface FollowStateInput {
  * Idempotent by construction: feeding a result back in with the same
  * geometry returns the same result, so no alternating sequence is
  * representable — the property `messageTimelineScroll.test.ts` pins.
+ *
+ * ## What retired here (decision 033 D3, 2026-09-22)
+ *
+ * `STICKY_PIN_EPSILON_PX` / `StickyFoldScrollInput` / `stickyFoldScrollTarget()`
+ * used to live between this doc block and the function below. They existed for
+ * exactly one caller — `ToolRows.tsx` re-anchoring the viewport when a PINNED
+ * thought header was folded away — and the user took the pin off that header,
+ * so the re-anchor had nothing left to measure. (The class that carried the
+ * pin, `thoughtFoldHeaderClass()`, is gone too: a thinking row is an ordinary
+ * tool row again.)
+ * Both were deleted in the same change as the pin rather than left orphaned.
+ * `nextFollowState` itself is untouched: it is the general F10 guard, not part
+ * of that mechanism, and it still governs every stick-to-bottom transition.
  */
-/** Displacement below this many px is measurement noise, not a pinned header. */
-export const STICKY_PIN_EPSILON_PX = 0.5;
-
-export interface StickyFoldScrollInput {
-  /** The scroll viewport's current offset. */
-  scrollTop: number;
-  /** The viewport's own top edge, in client coordinates. */
-  viewportTop: number;
-  /**
-   * The fold block's top edge, in client coordinates. The block is NOT sticky,
-   * so this is where the header would sit if it were not pinned.
-   */
-  blockTop: number;
-  /** The header's top edge right now — equal to `blockTop` while it is not pinned. */
-  headerTop: number;
-  /** The offset the header pins at (`sticky top-0` => 0). */
-  stickyTop?: number;
-}
-
-/**
- * T096: where the viewport has to land when a PINNED thought header is folded
- * away, or `null` when the header was not pinned and the scroll must not move.
- *
- * The defect without it: a reader scrolls to the end of a 200-line thought,
- * clicks the header that followed them down the page, and the 200 lines vanish
- * from ABOVE the viewport — leaving them staring at whatever came after the
- * thought, with no cue that the thing they just folded is now off screen
- * upward. Re-anchoring on the header is the only outcome that keeps the click
- * local to the thing clicked.
- *
- * "Pinned" is read as displacement, not as a threshold: a top-sticky element
- * is pinned exactly when it has been pushed off its own natural top, which is
- * `headerTop > blockTop`. That makes the check independent of where the
- * viewport happens to be and of how the header is styled.
- *
- * Pure, and in px rather than in DOM nodes, so the judgement is testable
- * without a layout engine — the same split `nextFollowState` above uses.
- */
-export function stickyFoldScrollTarget(input: StickyFoldScrollInput): number | null {
-  if (input.headerTop - input.blockTop <= STICKY_PIN_EPSILON_PX) return null;
-  const stickyTop = input.stickyTop ?? 0;
-  // Bring the block's natural top to the line the header pins at. Clamped at 0
-  // because a block whose natural top is above the document's own start cannot
-  // be reached by any offset (only reachable when the caller mis-measures).
-  return Math.max(0, input.scrollTop + (input.blockTop - input.viewportTop) - stickyTop);
-}
 
 export function nextFollowState(
   input: FollowStateInput,

@@ -65,13 +65,14 @@ describe('chat vocabulary is translatable', () => {
       [
         '{{count}} tool call',
         '{{count}} tool calls',
-        // The head's settled step clause (T105 D6). Distinct from the older
-        // `{{count}} steps processed`, which remains the no-timestamp fallback.
-        // T112 dropped the singular from this list with the key itself: a head
-        // is only rendered for a group that folds (two steps or more), so
-        // `{{count}} step` could no longer reach the screen and a catalog entry
-        // nothing looks up is one more word to keep translated for nobody.
-        '{{count}} steps',
+        // The process head's own line (decision 033 D1/D4). T112 dropped the
+        // singular with the key itself — a head is only rendered for a group
+        // that folds (two steps or more), so `{{count}} step processed` could
+        // not reach the screen, and a catalog entry nothing looks up is one
+        // more word to keep translated for nobody. The bare `{{count}} steps`
+        // went the same way on 2026-09-22: the head names the verb now, and
+        // nothing else printed the count without it.
+        '{{count}} steps processed',
       ],
       'aggregate row words'
     );

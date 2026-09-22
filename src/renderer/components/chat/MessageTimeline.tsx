@@ -58,11 +58,13 @@ import {
   turnAnswerToneClass,
   turnBodyClass,
   turnCopyButtonClass,
+  turnFinalAnswerDividerClass,
   turnHeadClass,
   turnIntermediateToneClass,
   turnProcessShellClass,
   turnProcessToneClass,
   turnStatusToneClass,
+  turnWorkGroupCountClass,
   turnWorkGroupSummaryClass,
   turnWorkZoneClass,
   userBubbleClass,
@@ -124,8 +126,7 @@ import {
   ownsSessionFailure,
 } from './turnHead';
 import {
-  countProcessGroupExplanations,
-  countProcessGroupThinking,
+  countProcessSteps,
   countTurnToolCalls,
   deriveTurnCurrentAction,
   deriveTurnWorkZone,
@@ -1462,11 +1463,38 @@ interface ChatTurnProps {
  * the end of the turn. That is also why `settled` is gone from here — the
  * spinner and the live action clause went with the clock they belonged to.
  *
+ * ## 2026-09-22 (decision 033 D1/D2/D4/D5): one head, one number, open by default
+ *
+ * The user's list reworked this element again, and the four changes are one
+ * design:
+ *
+ *  - **D5 — the words follow the system language.** The binding was
+ *    `englishTranslate`, an exception decision 031 D7 granted to the OLD head
+ *    shape (an English step-count line). That shape is gone, so the exception
+ *    lost its carrier and the head binds `useI18n()` like every other row on
+ *    this surface. Two guards retired with it ([HEAD-EN-1], [HEAD-EN-2]).
+ *  - **D1 — counts, not chips.** The chips named what the group HELD
+ *    (thinking / N tool calls / N explanations); the user asked for a COUNT of
+ *    the work instead: 「已处理 N 个步骤」, the same number
+ *    `turnProcessGroupFolds` already thresholds on. This element was the only
+ *    caller `countProcessGroupThinking` / `countProcessGroupExplanations` ever
+ *    had, so both retired with the chips rather than staying as exports
+ *    nothing renders.
+ *  - **D4 — pinned and findable.** `turnWorkGroupSummaryClass()` carries the
+ *    sticky pin; see that function for why the pin is legal here, why it had to
+ *    leave the thought header (D3), and why the accent face that shipped with
+ *    it on the first pass was withdrawn hours later. The right-hand tool-call
+ *    count is D4's other half (「滚动中也能看到进度」) and is the ONE place this
+ *    head still reads a second figure.
+ *  - **D2 — open by default.** Not this element's decision
+ *    (`turnWorkGroupOpen` owns it), but it is why this file's copy no longer
+ *    says "starts collapsed".
+ *
  * ## Why a native `<details>` with `preventDefault`
  *
- * Two constraints meet here. The panel must be fully CONTROLLED — the group
- * starts collapsed, and an unanswered authorization card
- * forces it open regardless of what anyone clicked — and it must not introduce
+ * Two constraints meet here. The panel must be fully CONTROLLED — an
+ * unanswered authorization card forces the group open regardless of what anyone
+ * clicked — and it must not introduce
  * `overflow-hidden`, which is what rules out the Base UI `Collapsible`
  * (`COLLAPSIBLE_PANEL_BASE_CLASS` carries it; see `turnProcessShellClass()`).
  *
@@ -1488,7 +1516,7 @@ function TurnProgressHead({
   onUserOpenChange,
   children,
 }: {
-  /** The grouped items — thinking/tool/explanation counts come from these. */
+  /** The grouped items — the step count comes from these. */
   items: readonly TurnItem[];
   /** An unanswered permission/question is inside: the group may not close. */
   forcedOpen: boolean;
@@ -1499,24 +1527,15 @@ function TurnProgressHead({
   const { t } = useI18n();
   const open = turnWorkGroupOpen({ forcedOpen, userOpen });
 
-  // Chips: each shown only when its count > 0, joined by 「 · 」.
-  const thinkingCount = countProcessGroupThinking(items);
-  const toolCallCount = countTurnToolCalls(items);
-  const explanationCount = countProcessGroupExplanations(items);
-  const chips: string[] = [];
-  if (thinkingCount > 0) chips.push(t('Thinking chip'));
-  if (toolCallCount > 0)
-    chips.push(
-      t(toolCallCount === 1 ? '{{count}} tool call' : '{{count}} tool calls', {
-        count: toolCallCount,
-      })
-    );
-  if (explanationCount > 0)
-    chips.push(
-      t(explanationCount === 1 ? '{{count}} explanation' : '{{count}} explanations', {
-        count: explanationCount,
-      })
-    );
+  // Decision 033 D1: the head's subject, and it is the same number
+  // `turnProcessGroupFolds` thresholds on — a head that counted differently
+  // from the fold rule could report 「已处理 1 个步骤」 for a row it is inside,
+  // which is what T112's threshold exists to prevent.
+  const steps = countProcessSteps(items);
+  // The second figure (D4). Omitted at zero rather than printed as 「0 次调用」:
+  // a thinking-only group has nothing to report there, and a count that is
+  // always present but usually zero teaches the reader to stop reading it.
+  const toolCalls = countTurnToolCalls(items);
 
   return (
     <details className={turnBodyClass()} open={open}>
@@ -1527,12 +1546,14 @@ function TurnProgressHead({
           onUserOpenChange(!open);
         }}
       >
-        {chips.map((chip, index) => (
-          <span key={chip} className="min-w-0 shrink-0">
-            {index > 0 && <span className="text-muted-foreground/50"> · </span>}
-            {chip}
+        <span className="min-w-0 truncate">{t('{{count}} steps processed', { count: steps })}</span>
+        {toolCalls > 0 && (
+          <span className={turnWorkGroupCountClass()}>
+            {t(toolCalls === 1 ? '{{count}} tool call' : '{{count}} tool calls', {
+              count: toolCalls,
+            })}
           </span>
-        ))}
+        )}
         <ChevronRight
           className={cn('size-3.5 shrink-0 transition-transform duration-150', open && 'rotate-90')}
           aria-hidden
@@ -1997,7 +2018,15 @@ const ChatTurn = memo(function ChatTurn({
   const processSettled =
     !turnActive && !(isLastTurn && inFlightSession && !statusOwnedByPendingHead);
   // T107 replaces the four buckets with ordered, independently folded sections.
-  const workSections = useMemo(() => splitTurnWorkGroup(segments), [segments]);
+  //
+  // Decision 033 D1 passes `processSettled` in as well, and it is the SECOND
+  // dependency on purpose: the split's answer genuinely changes when the turn
+  // stops (that one extraction is the turn's only structural change), so a memo
+  // keyed on `segments` alone would freeze the streaming shape forever.
+  const workSections = useMemo(
+    () => splitTurnWorkGroup(segments, processSettled),
+    [segments, processSettled]
+  );
   // The turn's clock, in ONE derivation for both of the head's states. Running
   // it counts to `nowMs`; finished it counts to the turn's last completion (or,
   // for a stopped/failed turn, to the last stamp on record) — but from the SAME
@@ -2141,10 +2170,23 @@ const ChatTurn = memo(function ChatTurn({
             progress remains on the trailing work-zone row (T113). */}
         {workSections.map((section) => {
           if (section.kind === 'finalAnswer') {
-            // The final reply remains a normal answer segment. The section kind
-            // keeps the turn-level distinction explicit without adding a new
-            // border, background, or other visual treatment.
-            return renderSegment(section.segment);
+            // Decision 033 D1: the reply keeps its ordinary answer styling (no
+            // new border, background or container — D8 is explicit that it
+            // differs from intermediate prose by COLOUR alone), and the ONE
+            // thing added is the divider that announces the extraction. It is
+            // rendered here rather than inside `renderSegment` because it
+            // belongs to the placement decision `splitTurnWorkGroup` made, not
+            // to the segment: a turn whose final answer sits mid-flow for any
+            // other reason must not grow a second divider.
+            return (
+              <Fragment key={turnItemKey(section.segment.items[0])}>
+                <div className={turnFinalAnswerDividerClass()}>
+                  <span className="shrink-0">{t('Final output')}</span>
+                  <span className="h-px min-w-0 flex-1 bg-border" aria-hidden />
+                </div>
+                {renderSegment(section.segment)}
+              </Fragment>
+            );
           }
           if (section.kind !== 'processGroup') return renderSegment(section.segment);
           // First-item identity survives appended tools and later answers. Each

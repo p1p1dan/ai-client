@@ -2589,8 +2589,9 @@ export const zhTranslations: Record<string, string> = {
   // T108 keeps aggregate counts; the work head still reports step totals.
   // T112 retired the SINGULAR `{{count}} step`: a head now exists only for a
   // group that folded two steps or more, so the one-step wording had no caller
-  // left. The plural stays — it is what the head's settled clause prints.
-  '{{count}} steps': '{{count}} 个步骤',
+  // left. Decision 033 D1/D4 then took the bare plural with it — the head reads
+  // 「已处理 N 个步骤」 now (`{{count}} steps processed` below), and a second key
+  // saying the same number without the verb had no caller of its own.
   '{{count}} tool': '{{count}} 个工具',
   '{{count}} tools': '{{count}} 个工具',
   '{{count}} search': '{{count}} 次搜索',
@@ -3019,14 +3020,21 @@ export const zhTranslations: Record<string, string> = {
   'Worked for {{seconds}}s': '已工作 {{seconds}} 秒',
   'Worked for {{minutes}}m {{seconds}}s': '已工作 {{minutes}} 分 {{seconds}} 秒',
   'Worked for {{minutes}}m': '已工作 {{minutes}} 分',
-  // The process-group head's chips. `{{count}} steps processed` above
-  // retired with the head shape it fed: the head now names what the group
-  // holds rather than counting steps. `Thinking chip` is a separate key from
-  // `Thinking` (the RUNNING status 「思考中」) because the chip labels a
-  // completed block, not an ongoing action.
-  'Thinking chip': '思考',
-  '{{count}} explanation': '{{count}} 段说明',
-  '{{count}} explanations': '{{count}} 段说明',
+  // Decision 033 D1: the divider's label, printed above the reply that was
+  // extracted out of the process group once the turn stopped streaming. A NOUN
+  // PHRASE (what the block below is), not a verb — the group's head already says
+  // what the turn DID (「已处理 N 个步骤」), so a verb here would read as a second
+  // status line about the same turn.
+  'Final output': '最终输出',
+  // Decision 033 D1/D4: the process head's own line. A VERB phrase — the head
+  // reports what the turn has DONE, which is what separates it from the bare
+  // count the aggregate tool row prints one level down.
+  '{{count}} steps processed': '已处理 {{count}} 个步骤',
+  // The process-group head's chips (`Thinking chip` / 「N 段说明」) retired with
+  // the head shape they fed: decision 033 D1 replaced the three chips naming
+  // what the group HELD with the two counts above — steps, and how many of them
+  // were tool calls. `Thinking` (the RUNNING status 「思考中」) is a different
+  // key and stays; it labels an ongoing action, not a completed block.
   // The running half of the same head (2026-09-18). `Working` above stays as
   // the no-clock fallback; these three carry the seconds the field report was
   // about — a 50-second wait whose only evidence was a counter above the

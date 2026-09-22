@@ -7,7 +7,6 @@ import * as layout from '../chatTimelineLayout';
 import {
   chatTurnClass,
   readingColumnSpacingClass,
-  thoughtFoldHeaderClass,
   turnActionsInnerClass,
   turnActionsSlotClass,
   turnAnswerToneClass,
@@ -90,16 +89,22 @@ function spacingPx(classes: string, prefix: string): number {
  * ```
  *
  * The retired band closed it with `scroll-state(stuck: top)` + `line-clamp-3`.
- * The thought fold header cannot: its height is identical pinned and unpinned,
- * nothing it carries reads a scroll offset, and the only thing that varies
- * about it keys off `data-panel-open` — a click, which settles in one frame.
+ * The process head cannot: its height is identical pinned and unpinned, and
+ * nothing it carries reads a scroll offset.
  *
  * ## The rule that replaces it
  *
  * **A sticky element in this timeline may not change its own height as a
  * function of scroll state, and there may be exactly one of them.** The turn
- * chrome is still not allowed to pin itself; what changed is that the thought
- * fold header now is, by name.
+ * chrome is still not allowed to pin itself; what changed is that ONE element
+ * is, by name.
+ *
+ * Decision 033 D3/D4 (2026-09-22) moved which one. T096 pinned the thought fold
+ * header; the process group's head now wants the same `top-0` in the same
+ * stacking context, and asked to choose, the user kept the HEAD pinned
+ * (「思考就不吸顶」). `thoughtFoldHeaderClass()` is deleted, not demoted — a
+ * thinking row is an ordinary tool row again — so the count stays at exactly
+ * one and the rule is untouched.
  */
 describe('T096: one pinned surface, and its height never moves with the scroll', () => {
   it('T12: no turn-level class assembler carries a sticky/fixed hook', () => {
@@ -128,13 +133,13 @@ describe('T096: one pinned surface, and its height never moves with the scroll',
    * here — which is the half of the rule that "the turn chrome is clean" does
    * not cover.
    */
-  it('the thought trigger is the only sticky surface in the timeline', () => {
+  it('the process head is the only sticky surface in the timeline', () => {
     const pinned = Object.entries(layout)
       .filter(([, value]) => typeof value === 'function' && value.length === 0)
       .map(([name, value]) => [name, (value as () => string)()] as const)
       .filter(([, cls]) => /(?:^|\s)(?:sticky|fixed)(?:\s|$)/.test(cls))
       .map(([name]) => name);
-    expect(pinned).toEqual(['thoughtFoldHeaderClass']);
+    expect(pinned).toEqual(['turnWorkGroupSummaryClass']);
 
     // …and no inline class string on the chain pins anything either. Every file
     // is scanned with comments blanked, so the prose above (and in the modules
@@ -143,14 +148,16 @@ describe('T096: one pinned surface, and its height never moves with the scroll',
       const offenders = classTokens(readSource(relative)).filter((token) => PIN_TOKEN.test(token));
       expect(
         offenders,
-        `${relative}: the pin belongs in thoughtFoldHeaderClass(), not in a class literal`
+        `${relative}: the pin belongs in turnWorkGroupSummaryClass(), not in a class literal`
       ).toEqual([]);
     }
-    // The one legal reference: `ToolRows.tsx` reaches the pin by calling the
-    // function above, on the thinking-body condition and nothing else.
-    const toolRows = readSource('ToolRows.tsx');
-    expect(toolRows).toContain("view.body === 'thinking'");
-    expect(toolRows).toContain('pinsHeader && thoughtFoldHeaderClass()');
+    // The one legal reference: `MessageTimeline.tsx` reaches the pin by calling
+    // the function above, on the process head's `<summary>` and nowhere else.
+    const timeline = readSource('MessageTimeline.tsx');
+    expect(timeline).toContain('className={turnWorkGroupSummaryClass()}');
+    expect(timeline.split('turnWorkGroupSummaryClass()').length - 1).toBe(1);
+    // …and the retired pin left no caller behind on the thinking row.
+    expect(readSource('ToolRows.tsx')).not.toContain('thoughtFoldHeaderClass');
   });
 
   /**
@@ -160,8 +167,8 @@ describe('T096: one pinned surface, and its height never moves with the scroll',
    * be a theme token rather than a literal colour so the two themes stay one
    * decision.
    */
-  it('the sticky thought trigger has an opaque themed background and no backdrop filter', () => {
-    const cls = thoughtFoldHeaderClass();
+  it('the sticky process head has an opaque themed background and no backdrop filter', () => {
+    const cls = turnWorkGroupSummaryClass();
     expect(cls).toContain('bg-background');
     expect(cls, 'a translucent background IS the defect, not the feature').not.toMatch(
       /bg-\S+\/\d/
@@ -182,10 +189,14 @@ describe('T096: one pinned surface, and its height never moves with the scroll',
     for (const banned of ['line-clamp', 'max-h-', 'min-h-', 'h-[', 'scroll-state']) {
       expect(cls, `height must not vary under the pin: ${banned}`).not.toContain(banned);
     }
-    // The hairline is gated on OPEN, never on stuck: `data-panel-open` is a
-    // click's state, so the 1px it adds is not in any scroll feedback loop.
-    expect(cls).toContain('data-panel-open:border-b');
-    expect(cls).toContain('data-panel-open:border-border');
+    // No face of its own. D4 shipped `bg-accent` + border + rounding and the
+    // user cut all three on sight (「这个背景块太丑了」); `bg-background` stays
+    // because a transparent sticky row shows the content sliding under it,
+    // which is the ruling quoted above. Anything louder is a regression of the
+    // second ruling, not of the first.
+    expect(cls, 'the head is pinned, not painted').not.toContain('bg-accent');
+    expect(cls).not.toMatch(/(?:^|\s)border(?:-|\s|$)/);
+    expect(cls).not.toMatch(/(?:^|\s)rounded-/);
   });
 
   /**
@@ -210,7 +221,7 @@ describe('T096: one pinned surface, and its height never moves with the scroll',
    *                     <button> <- the pinned header
    * ```
    */
-  it('no ancestor between the thought row and the scroll viewport clips overflow or transforms', () => {
+  it('no ancestor between the process head and the scroll viewport clips overflow or transforms', () => {
     const chain: readonly [string, string][] = [
       ['TIMELINE_PADDING_CLASS', TIMELINE_PADDING_CLASS],
       ['readingColumnSpacingClass', readingColumnSpacingClass()],

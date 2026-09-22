@@ -78,8 +78,42 @@ export type TurnWorkSection<T> =
   | { kind: 'processGroup'; segments: TurnSegment<T>[] };
 
 /**
- * Fold all process AND non-final answer segments into the process group; the
- * LAST answer segment stays outside with its ordinary answer styling.
+ * Is this the turn's FINAL reply, given that the turn has stopped streaming?
+ *
+ * The rule is 「其后不再跟着 process 段落」 — not 「它是最后一段 answer」. Under the
+ * second rule a turn shaped `answer → 工具 → 结束` (the model narrates, then
+ * makes one last call) had its trailing narration pulled out as the final reply
+ * while a tool call still followed it, which is the T107-era 「各种调用穿插在
+ * agent 的输出中」 complaint wearing a new shape.
+ *
+ * ⚠️ **THIS IS THE ONE FORWARD-LOOKING RULE IN THE SPLIT, AND IT IS DELIBERATE.**
+ * `chatTurn.ts` records the segmenter's contract as "no reason to ever look
+ * ahead", and the loop in `splitTurnWorkGroup` honours it — it walks forward
+ * once. This predicate is where that contract is broken, on purpose and at one
+ * point: "does process follow?" cannot be answered by a backward scan, because
+ * the very thing that disqualifies a candidate sits AFTER it.
+ *
+ * Do not "simplify" the caller back to a backward scan for `lastAnswerIndex`.
+ * That version passes every case where prose ends the turn and silently
+ * mislabels the `answer → tool → end` shape, which is the case decision 033 D1
+ * named by name.
+ *
+ * Only meaningful once `processSettled` is true — see `splitTurnWorkGroup`.
+ */
+export function isFinalAnswerSegment<T>(
+  segments: readonly TurnSegment<T>[],
+  index: number
+): boolean {
+  if (segments[index]?.kind !== 'answer') return false;
+  for (let after = index + 1; after < segments.length; after += 1) {
+    if (segments[after].kind === 'process') return false;
+  }
+  return true;
+}
+
+/**
+ * Fold every process AND non-final answer segment into the process group; the
+ * final answer segment stays outside with its ordinary answer styling.
  *
  * Notices remain outside in original order (FB4 — an error after the final
  * reply must never hide earlier prose). No process means no empty group.
@@ -87,15 +121,51 @@ export type TurnWorkSection<T> =
  * The no-answer case keeps the existing ordering exception: notices between
  * tool runs render after the single process group.
  *
- * Streaming: a new answer arriving after the current "final" one makes the
- * previous final fold into the group — but the group's `groupKey` (first
- * item identity) is unchanged, so expansion state survives naturally.
+ * ## `settled` is the whole of decision 033 D1's timing change
+ *
+ * While the turn streams (`settled === false`) there is **no final answer to
+ * find**: the model has not stopped, so any segment picked now is a guess the
+ * next tool call invalidates. Everything stays in the group and nothing is lit
+ * up early — which is also why contention C from `1e33b7fe` (a colour that
+ * flips mid-stream) cannot arise.
+ *
+ * Once settled, the final answer is `isFinalAnswerSegment`'s, and the group
+ * keeps its `groupKey` (first item identity) across the extraction, so the
+ * reader's expansion survives the one structural change the turn makes.
+ *
+ * `settled` is REQUIRED rather than optional with a default: a call site that
+ * forgot to thread it would freeze the turn at "streaming" forever, and a type
+ * error is the cheaper alarm than a transcript that never separates its reply.
  */
-export function splitTurnWorkGroup<T>(segments: readonly TurnSegment<T>[]): TurnWorkSection<T>[] {
-  if (!segments.some((segment) => segment.kind === 'answer')) {
-    const process = segments.filter((segment) => segment.kind === 'process');
-    const sections: TurnWorkSection<T>[] = process.length
-      ? [{ kind: 'processGroup', segments: process }]
+export function splitTurnWorkGroup<T>(
+  segments: readonly TurnSegment<T>[],
+  settled: boolean
+): TurnWorkSection<T>[] {
+  // The LAST answer, then the forward-looking test — in that order. Scanning
+  // forward for the first segment that passes `isFinalAnswerSegment` picks the
+  // WRONG paragraph whenever a turn ends `answer → notice → answer`: the
+  // earlier one also has no process after it, so a forward scan extracts it and
+  // folds the turn's actual last paragraph into the group.
+  //
+  // Taking the last answer first makes the two rules one: if process follows
+  // it, no earlier answer can qualify either (that same process follows them
+  // all), so a failed test here means the turn simply has no final reply — the
+  // `answer → 工具 → 结束` shape decision 033 D1 named.
+  let finalAnswerIndex = -1;
+  if (settled) {
+    for (let index = segments.length - 1; index >= 0; index -= 1) {
+      if (segments[index].kind !== 'answer') continue;
+      finalAnswerIndex = isFinalAnswerSegment(segments, index) ? index : -1;
+      break;
+    }
+  }
+
+  if (finalAnswerIndex === -1) {
+    // Streaming, or a turn with no final answer at all: ONE group holds every
+    // process and answer segment. Notices still stay outside, in order.
+    const grouped = segments.filter((segment) => segment.kind !== 'notice');
+    const sections: TurnWorkSection<T>[] = grouped.length
+      ? [{ kind: 'processGroup', segments: grouped }]
       : [];
     for (const segment of segments) {
       if (segment.kind === 'notice') sections.push({ kind: 'notice', segment });
@@ -103,21 +173,12 @@ export function splitTurnWorkGroup<T>(segments: readonly TurnSegment<T>[]): Turn
     return sections;
   }
 
-  // Find the last answer segment — it becomes the final reply.
-  let lastAnswerIndex = -1;
-  for (let index = segments.length - 1; index >= 0; index -= 1) {
-    if (segments[index].kind === 'answer') {
-      lastAnswerIndex = index;
-      break;
-    }
-  }
-
   const sections: TurnWorkSection<T>[] = [];
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index];
     if (segment.kind === 'notice') {
       sections.push({ kind: 'notice', segment });
-    } else if (segment.kind === 'answer' && index === lastAnswerIndex) {
+    } else if (index === finalAnswerIndex) {
       sections.push({ kind: 'finalAnswer', segment });
     } else {
       // Process or non-final answer → process group.
@@ -172,12 +233,19 @@ export interface TurnWorkGroupOpenInput {
 }
 
 /**
- * Authorization wins, then the user's choice, then the closed default.
+ * Authorization wins, then the user's choice, then the open default.
  *
  * D6 first closed groups to avoid a wall of tools. ef26ca5f opened them to
- * expose hidden prose. T107 now keeps ALL prose outside and, with the user's
- * explicit confirmation, restores closed process groups. Neither live nor
- * restored turns need a `settled` input to choose their default.
+ * expose hidden prose. T107 restored closed process groups with the user's
+ * explicit confirmation — and decision 033 D2 (2026-09-22) reverses THAT, again
+ * at the same user's explicit request: 「折叠头默认展开，输出结束了也保持展开状态」.
+ * Only the default moved; the two rules above it are untouched, so the user can
+ * still collapse a group, and an unanswered authorization still outranks both.
+ *
+ * There is deliberately no `settled` input: the default is the same number
+ * while streaming and after, which is what 「输出结束了也保持展开状态」 asks
+ * for, and what keeps the single extraction (D1) the turn's only structural
+ * change.
  *
  * Keep this derived: an effect/ref under StrictMode can run twice and close
  * a group the reader just opened. Explicit choices always outrank defaults.
@@ -185,7 +253,7 @@ export interface TurnWorkGroupOpenInput {
 export function turnWorkGroupOpen(input: TurnWorkGroupOpenInput): boolean {
   if (input.forcedOpen) return true;
   if (input.userOpen !== null) return input.userOpen;
-  return false;
+  return true;
 }
 
 /**
@@ -334,38 +402,6 @@ export function countTurnToolCalls(items: readonly TurnItem[]): number {
         : total,
     0
   );
-}
-
-/**
- * How many THINKING blocks the process group holds — the 「✦ 思考」 chip on
- * its head.
- *
- * Thinking blocks live inside `toolGroup` items as `entries` of kind
- * `'thinking'` (see `toolCard.ts`'s `ToolGroupEntry`), so counting them means
- * walking every group's entries. A single `toolGroup` can hold several, and a
- * turn can hold several `toolGroup`s, so this is the sum across all of them.
- *
- * The chip shows the label only (no count): "there was thinking" is the
- * information the head carries; the count is what `countProcessSteps` already
- * reports as part of its step total.
- */
-export function countProcessGroupThinking(items: readonly TurnItem[]): number {
-  return items.reduce((total, item) => {
-    if (item.kind !== 'toolGroup') return total;
-    return total + item.entries.filter((entry) => entry.kind === 'thinking').length;
-  }, 0);
-}
-
-/**
- * How many EXPLANATION items the process group holds — the 「✎ N 段说明」 chip.
- *
- * These are the `text` items from intermediate answer segments: the running
- * commentary the model wrote between tool calls, before its final reply. Each
- * `text` item is one paragraph the reader can point at, so "段" counts items
- * rather than segments.
- */
-export function countProcessGroupExplanations(items: readonly TurnItem[]): number {
-  return items.reduce((total, item) => (item.kind === 'text' ? total + 1 : total), 0);
 }
 
 /**

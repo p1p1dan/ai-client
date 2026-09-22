@@ -601,7 +601,23 @@ export const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   MultiEdit: ['file_path'],
   Write: ['file_path'],
   NotebookEdit: ['file_path'],
-  Bash: ['description', 'command'],
+  // Decision 033 D6 (2026-09-22): `command` used to be listed here on the
+  // ground that the one-line summary already covered it — true only when no
+  // `description` was supplied, in which case the summary falls back to the
+  // command (see the `Bash` branch of the arg builder). When a description WAS
+  // supplied the summary printed the description and `deriveToolInputBody` saw
+  // every field as covered, so no input body was generated and the command
+  // became permanently unreachable — expanding the row showed nothing. The
+  // user's report was 「指令太长了，没有办法看全」; this is not truncation, it is a
+  // field that never reached the DOM.
+  //
+  // `description` stays covered: it is what the summary prints, so keeping it
+  // out of the body avoids saying the same sentence twice.
+  Bash: ['description'],
+  // NOT changed with Bash, deliberately: the Claude-era `BashOutput` and
+  // `KillShell` take a `shell_id`/`bash_id` — they never carried a `command`,
+  // so nothing was hidden by the entry and removing it would only mint an input
+  // body for a tool whose whole input is already on screen.
   BashOutput: ['description', 'command'],
   KillShell: ['description', 'command'],
   // T-34 probe: cometix 2.1.212 names the delegation tool `Agent`; older
@@ -1485,8 +1501,19 @@ export function toolRowPermissionNoteClass(): string {
 }
 
 export function toolRowArgClass(view: Pick<ToolRowView, 'failed' | 'argKind'>): string {
+  // Decision 033 D6: only an IDENT truncates. Prose arg is a command line
+  // (Bash's fallback summary), and truncating it made the call unreadable with
+  // no way to recover — a `title` is unreachable by touch and keyboard, which is
+  // why the fix is wrapping rather than a tooltip. Paths, URLs and shell words
+  // keep their single line: they are copy-target content read char by char, and
+  // a wrapped path is harder to scan than a truncated one.
+  //
+  // `min-w-0` stays on both: without it a long unbroken token refuses to shrink
+  // and pushes the row's own verb and icon off a narrow row (the flexbox rule
+  // in `renderer/AGENTS.md`).
   const colorClass = cn(
-    'min-w-0 truncate',
+    'min-w-0',
+    view.argKind === 'ident' ? 'truncate' : 'line-clamp-3',
     view.failed
       ? 'text-[color-mix(in_oklab,var(--destructive)_70%,var(--background))]'
       : 'text-tool-arg'
