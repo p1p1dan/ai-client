@@ -427,6 +427,16 @@ function ModelMetaRow({
 }) {
   const { t } = useI18n();
   const input = meta?.input ?? [];
+  // `min={0}` only clamps the spinner, not typing; `Number('1e999')` is
+  // `Infinity` which `JSON.stringify` turns to `null`, and pi's `parseModel`
+  // silently drops anything that is not a positive integer. So invalid input
+  // is dropped here rather than written as a number pi will ignore.
+  const toPositiveInt = (raw: string): number | undefined => {
+    const trimmed = raw.trim();
+    if (!trimmed) return undefined;
+    const n = Number(trimmed);
+    return Number.isInteger(n) && n > 0 ? n : undefined;
+  };
   return (
     <div className="space-y-2">
       <p className="truncate text-meta font-semibold">{modelId}</p>
@@ -435,13 +445,12 @@ function ModelMetaRow({
           {t('Context window')}
           <Input
             type="number"
-            min={0}
+            min={1}
             className="h-7 w-28"
             value={meta?.contextWindow ?? ''}
-            onChange={(event) => {
-              const value = event.target.value.trim();
-              onChange(modelId, { contextWindow: value ? Number(value) : undefined });
-            }}
+            onChange={(event) =>
+              onChange(modelId, { contextWindow: toPositiveInt(event.target.value) })
+            }
             placeholder="tokens"
           />
         </label>
@@ -449,13 +458,12 @@ function ModelMetaRow({
           {t('Output limit')}
           <Input
             type="number"
-            min={0}
+            min={1}
             className="h-7 w-28"
             value={meta?.maxTokens ?? ''}
-            onChange={(event) => {
-              const value = event.target.value.trim();
-              onChange(modelId, { maxTokens: value ? Number(value) : undefined });
-            }}
+            onChange={(event) =>
+              onChange(modelId, { maxTokens: toPositiveInt(event.target.value) })
+            }
             placeholder="tokens"
           />
         </label>

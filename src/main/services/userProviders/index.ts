@@ -99,6 +99,13 @@ export function getUserProviderService(): UserProviderService {
           // worker without a restart — otherwise the picker shows it but the
           // call fails with `model_not_in_catalog` (the worker's catalog is a
           // spawn-time snapshot).
+          //
+          // Any successful mutation triggers this, including a pure rename or
+          // a setEnabled toggle. That interrupts a running turn the same way
+          // the managed sync path (piModels.ts) does, which is intentional: a
+          // catalog change must reach the next worker, and `onChange` has no
+          // previous value to diff against. The cost (one slot replace) is
+          // the same primitive both routes share.
           const { workerManager } = await import('../agent-host/WorkerManager');
           await workerManager.invalidateAll();
         })().catch((error) => {

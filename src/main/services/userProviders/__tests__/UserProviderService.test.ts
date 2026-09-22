@@ -222,6 +222,25 @@ describe('UserProviderService — upsert', () => {
       ).resolves.toMatchObject({ api });
     }
   });
+
+  it('keeps stored modelMeta when an edit omits it (P1-b)', async () => {
+    // A save that did not open the metadata section, or a non-form path like
+    // setEnabled, must not silently drop metadata the user already typed.
+    store.rows = [
+      makeProvider({
+        modelMeta: { 'deepseek-chat': { contextWindow: 65536, reasoning: true } },
+      }),
+    ];
+    await service().upsert({
+      id: 'svc-1',
+      name: 'Renamed',
+      baseUrl: 'https://api.deepseek.com/v1',
+      api: 'openai-completions',
+    });
+    expect(store.rows[0].modelMeta).toEqual({
+      'deepseek-chat': { contextWindow: 65536, reasoning: true },
+    });
+  });
 });
 
 describe('UserProviderService — remove / setEnabled', () => {

@@ -27,6 +27,7 @@
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { UserModelMeta } from '@shared/userProviders';
 
 const VAULT_FILE_NAME = 'vault.json';
 /**
@@ -82,7 +83,6 @@ export interface VaultPayload {
  * narrowing here would silently drop a provider whose style a later build
  * understands.
  */
-import type { UserModelMeta } from '@shared/userProviders';
 
 export interface UserProvider {
   id: string;

@@ -110,6 +110,10 @@ export class UserProviderService {
     const apiKey = draft.apiKey === undefined ? existing?.apiKey : draft.apiKey.trim();
     if (!apiKey) throw new Error('AI service needs an API key');
 
+    // Absent modelMeta means "keep whatever is stored", not "clear it": a
+    // save that did not open the metadata section (or a non-form path like
+    // setEnabled) must not silently drop metadata the user already typed.
+    const modelMeta = draft.modelMeta ?? existing?.modelMeta;
     const next: UserProvider = {
       id: existing?.id ?? randomUUID(),
       name,
@@ -118,7 +122,7 @@ export class UserProviderService {
       apiKey,
       ...(existing?.headers ? { headers: existing.headers } : {}),
       models: draft.models ?? existing?.models ?? [],
-      ...(draft.modelMeta ? { modelMeta: draft.modelMeta } : {}),
+      ...(modelMeta ? { modelMeta } : {}),
       enabled: draft.enabled ?? existing?.enabled ?? true,
       createdAt: existing?.createdAt ?? this.now().toISOString(),
       // Carried, never editable. It is the key older sessions recorded, so

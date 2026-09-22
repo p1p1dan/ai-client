@@ -15,6 +15,7 @@ import {
   type FetchProviderModelsRequest,
   type FetchProviderModelsResult,
   isUserProviderApi,
+  type UserModelMeta,
   type UserProviderDraft,
   type UserProviderState,
   type UserProviderView,
@@ -47,6 +48,56 @@ function readDraft(payload: unknown): UserProviderDraft {
   if (raw.enabled !== undefined) {
     if (typeof raw.enabled !== 'boolean') throw new Error('Invalid AI service request: enabled');
     draft.enabled = raw.enabled;
+  }
+  if (raw.modelMeta !== undefined) {
+    if (!raw.modelMeta || typeof raw.modelMeta !== 'object') {
+      throw new Error('Invalid AI service request: modelMeta');
+    }
+    const meta: Record<string, UserModelMeta> = {};
+    for (const [modelId, value] of Object.entries(raw.modelMeta as Record<string, unknown>)) {
+      if (!value || typeof value !== 'object') {
+        throw new Error(`Invalid AI service request: modelMeta[${modelId}]`);
+      }
+      const fields = value as Record<string, unknown>;
+      const entry: UserModelMeta = {};
+      if (fields.contextWindow !== undefined) {
+        if (
+          typeof fields.contextWindow !== 'number' ||
+          !Number.isInteger(fields.contextWindow) ||
+          fields.contextWindow <= 0
+        ) {
+          throw new Error(`Invalid AI service request: modelMeta[${modelId}].contextWindow`);
+        }
+        entry.contextWindow = fields.contextWindow;
+      }
+      if (fields.maxTokens !== undefined) {
+        if (
+          typeof fields.maxTokens !== 'number' ||
+          !Number.isInteger(fields.maxTokens) ||
+          fields.maxTokens <= 0
+        ) {
+          throw new Error(`Invalid AI service request: modelMeta[${modelId}].maxTokens`);
+        }
+        entry.maxTokens = fields.maxTokens;
+      }
+      if (fields.reasoning !== undefined) {
+        if (typeof fields.reasoning !== 'boolean') {
+          throw new Error(`Invalid AI service request: modelMeta[${modelId}].reasoning`);
+        }
+        entry.reasoning = fields.reasoning;
+      }
+      if (fields.input !== undefined) {
+        if (
+          !Array.isArray(fields.input) ||
+          fields.input.some((v) => v !== 'text' && v !== 'image')
+        ) {
+          throw new Error(`Invalid AI service request: modelMeta[${modelId}].input`);
+        }
+        entry.input = fields.input as Array<'text' | 'image'>;
+      }
+      meta[modelId] = entry;
+    }
+    draft.modelMeta = meta;
   }
   return draft;
 }

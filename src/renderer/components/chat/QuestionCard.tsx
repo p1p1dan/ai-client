@@ -122,7 +122,7 @@ export function QuestionCard(props: QuestionCardProps) {
   if (props.variant === 'permission') {
     return (
       <PermissionQaCard
-        key={props.block.permissionId ?? props.block.id}
+        key={props.block.permissionId ?? `permission-block-${props.block.id}`}
         block={props.block}
         canRespond={Boolean(props.canRespond)}
         onRespond={props.onRespondPermission}

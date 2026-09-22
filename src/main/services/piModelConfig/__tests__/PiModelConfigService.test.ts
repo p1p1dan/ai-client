@@ -1166,6 +1166,34 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
     expect(models.providers['my-deepseek'].api).toBe('pi-messages');
   });
 
+  it('writes per-model metadata into models.json when present', () => {
+    // P1: metadata that survived the IPC boundary must reach pi's models.json,
+    // not just `{ id }`. Mirrors the `toPiUserProvider` merge.
+    const withMeta = {
+      ...userProvider,
+      modelMeta: { 'deepseek-chat': { contextWindow: 65536, reasoning: true } },
+    };
+    service([withMeta]).writeUserProviderConfig({
+      userProviders: [withMeta],
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    expect(models.providers['my-deepseek'].models).toEqual([
+      { id: 'deepseek-chat', contextWindow: 65536, reasoning: true },
+    ]);
+  });
+
+  it('falls back to `{ id }` when no metadata is present (back-compat)', () => {
+    service([userProvider]).writeUserProviderConfig({
+      userProviders: [userProvider],
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    expect(models.providers['my-deepseek'].models).toEqual([{ id: 'deepseek-chat' }]);
+  });
+
   it('a SUCCESSFUL managed sync keeps the user services in the files pi reads', async () => {
     // The whole reason `userProviders` is a constructor supplier rather than a
     // write-time argument: `sync` rebuilds models.json from the server response
