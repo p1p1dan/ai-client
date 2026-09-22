@@ -120,6 +120,16 @@ export function LeftDock({
   // its way to a negative width.
   const panelWidth = Math.max(0, dockWidth - DOCK_RAIL_WIDTH);
   const isOpen = panelWidth > 0 && activeSurfaceId !== null;
+  // Round-13 (user report 14 — the white strip on the right edge): the dock
+  // column reads the SAME CSS variable the center/chat/editor columns read,
+  // not the committed `dockWidth` prop. A sidebar drag repaints by writing
+  // `--shell-sidebar-w` on the shell root alone; a prop-driven width stayed at
+  // its pre-drag value for the whole gesture, so only the center column moved
+  // and the freed pixels showed the shell's `bg-background`. The px fallback
+  // keeps standalone mounts (tests) on the prop, matching the old behaviour.
+  // Both this and the panel width below inherit the root's painted value, so
+  // the drag path and the commit path can no longer disagree.
+  const dockWidthVar = `var(--shell-sidebar-w, ${dockWidth}px)`;
   // Carried over from `ContextPanel`: content stays mounted across close/open,
   // so anything with cross-toggle state survives the collapse.
   const contentSurfaceId = activeSurfaceId ?? lastSurfaceId;
@@ -154,8 +164,15 @@ export function LeftDock({
   return (
     <div
       ref={dockRef}
-      className="relative flex h-full shrink-0 bg-card/40"
-      style={{ width: dockWidth }}
+      // Round-13: the same width transition the center row has, so a
+      // collapse/expand animates BOTH edges of the boundary in lockstep. The
+      // dock used to snap while the center animated, and the 250ms of
+      // half-painted layout in between was the white strip on the right.
+      className={cn(
+        'relative flex h-full shrink-0 bg-card/40',
+        'transition-[width] duration-[250ms] group-data-[resizing]/shell:transition-none'
+      )}
+      style={{ width: dockWidthVar }}
     >
       <nav
         aria-label={t('Primary navigation')}
@@ -213,7 +230,10 @@ export function LeftDock({
           'transition-[width] duration-[250ms] data-[resizing]:transition-none',
           !isOpen && 'pointer-events-none'
         )}
-        style={{ width: panelWidth }}
+        // Round-13: derived from the painted variable (see `dockWidthVar`), so
+        // a drag frame moves the dock's outer edge and the panel's edge in the
+        // same paint instead of only the columns to its right.
+        style={{ width: `max(0px, calc(${dockWidthVar} - ${DOCK_RAIL_WIDTH}px))` }}
         inert={!isOpen}
         // Panel-scoped Escape, carried over from `ContextPanel`: a subtree
         // marked `data-surface-holds-escape` (a terminal running vim, Monaco's

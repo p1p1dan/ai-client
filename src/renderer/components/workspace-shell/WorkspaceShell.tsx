@@ -365,6 +365,12 @@ export function WorkspaceShell({
               data-resizing={centerResizing || undefined}
               className={cn(
                 'relative min-w-0 shrink-0 flex-col',
+                // Round-13: animates with the center row, so a dock collapse/
+                // expand never leaves chat+editor narrower than (a white gap
+                // inside) or wider than (a clipped) the animating center row.
+                // `group-data-[resizing]` kills it during any drag, where the
+                // painted variables must apply per frame, not eased.
+                'transition-[width] duration-[250ms] group-data-[resizing]/shell:transition-none',
                 // `hidden`, not an unmount: ChatWorkspace owns scroll position
                 // and in-flight composer state.
                 chatVisible ? 'flex' : 'hidden'
@@ -444,6 +450,7 @@ export function WorkspaceShell({
             {(editorOpen || fileIntentPending) && (
               <div
                 className={cn(
+                  'transition-[width] duration-[250ms] group-data-[resizing]/shell:transition-none',
                   editorOpen && !reviewOpen && expanded && 'absolute inset-0 z-20 bg-background',
                   editorOpen && !reviewOpen && !expanded && 'min-w-0 shrink-0',
                   (!editorOpen || reviewOpen) && 'hidden'
@@ -456,6 +463,7 @@ export function WorkspaceShell({
             {reviewOpen && (
               <div
                 className={cn(
+                  'transition-[width] duration-[250ms] group-data-[resizing]/shell:transition-none',
                   expanded ? 'absolute inset-0 z-20 bg-background' : 'min-w-0 shrink-0'
                 )}
                 style={!expanded ? { width: 'var(--shell-editor-w)' } : undefined}
