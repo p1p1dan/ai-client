@@ -26,7 +26,7 @@ import {
   PROVIDER_PRESETS,
   USER_PROVIDER_APIS,
 } from '@shared/userProviders';
-import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -154,9 +154,15 @@ export function ProviderSetupDialog({
     });
     if (result.ok) {
       setProbe({ state: 'ok', models: result.models });
-      // Pre-select what was already chosen; on a first fetch, nothing, so the
-      // user makes a deliberate choice rather than silently enabling 200 models.
-      setSelected((current) => current.filter((id) => result.models.includes(id)));
+      // A fetch must not drop what the user already chose. It used to filter
+      // `selected` down to the service's answer, which silently deleted a
+      // hand-typed model together with the metadata just filled in for it —
+      // and gave no sign it had done so. A model the service does not list is
+      // the user's call, not this form's: removing it stays explicit, through
+      // the row's own X.
+      //
+      // Nothing is ADDED here, which is the intent this always had: a first
+      // fetch must not silently enable the 200 models it returned.
       return;
     }
     setProbe({ state: 'failed', error: result.error });
@@ -164,6 +170,24 @@ export function ProviderSetupDialog({
 
   const updateMeta = useCallback((modelId: string, patch: Partial<UserModelMeta>) => {
     setModelMeta((current) => ({ ...current, [modelId]: { ...current[modelId], ...patch } }));
+  }, []);
+
+  /**
+   * Drop one model from the selection, metadata and all.
+   *
+   * The row's own removal control exists because the chips below only render
+   * once a probe has answered: on an edit opened without fetching, the
+   * metadata section is on screen while the only other way to deselect a
+   * model is not.
+   */
+  const removeModel = useCallback((modelId: string) => {
+    setSelected((current) => current.filter((id) => id !== modelId));
+    setModelMeta((current) => {
+      if (!(modelId in current)) return current;
+      const rest = { ...current };
+      delete rest[modelId];
+      return rest;
+    });
   }, []);
 
   const save = useCallback(async () => {
@@ -361,6 +385,7 @@ export function ProviderSetupDialog({
                       modelId={model}
                       meta={modelMeta[model]}
                       onChange={updateMeta}
+                      onRemove={removeModel}
                     />
                   ))}
                 </div>
@@ -420,10 +445,12 @@ function ModelMetaRow({
   modelId,
   meta,
   onChange,
+  onRemove,
 }: {
   modelId: string;
   meta: UserModelMeta | undefined;
   onChange: (modelId: string, patch: Partial<UserModelMeta>) => void;
+  onRemove: (modelId: string) => void;
 }) {
   const { t } = useI18n();
   const input = meta?.input ?? [];
@@ -439,7 +466,19 @@ function ModelMetaRow({
   };
   return (
     <div className="space-y-2">
-      <p className="truncate text-meta font-semibold">{modelId}</p>
+      <div className="flex items-center gap-2">
+        <p className="min-w-0 flex-1 truncate text-meta font-semibold">{modelId}</p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 shrink-0"
+          aria-label={t('Remove')}
+          onClick={() => onRemove(modelId)}
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
       <div className="flex flex-wrap gap-3">
         <label className="flex items-center gap-1.5 text-meta text-muted-foreground">
           {t('Context window')}

@@ -253,6 +253,30 @@ describe('ProviderSetupDialog — per-model metadata', () => {
     );
   }
 
+  /**
+   * The probe's model chips. They are `aria-pressed` buttons too, and so are
+   * the Text/Image toggles in every metadata row — those two are never model
+   * ids, so they are excluded by name.
+   */
+  function modelChips(): HTMLButtonElement[] {
+    return [...document.body.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].filter(
+      (button) => !['Text', 'Image'].includes(button.textContent?.trim() ?? '')
+    );
+  }
+
+  /** Inside the metadata section, the only `aria-label`d control is that row's X. */
+  function rowRemoveButton(modelId: string): HTMLButtonElement | undefined {
+    const row = [...document.body.querySelectorAll('p')].find(
+      (node) => node.textContent?.trim() === modelId
+    )?.parentElement;
+    return row?.querySelector<HTMLButtonElement>('button[aria-label="Remove"]') ?? undefined;
+  }
+
+  async function fetchModels(): Promise<void> {
+    await act(async () => panelButton('Fetch models')?.click());
+    await settle();
+  }
+
   async function save(): Promise<void> {
     const button = [...document.body.querySelectorAll('button')].find(
       (candidate) => candidate.textContent?.trim() === 'Save'
@@ -331,7 +355,9 @@ describe('ProviderSetupDialog — per-model metadata', () => {
     });
     // One row per selected model, so the modality buttons repeat down the
     // list; the first pair belongs to the only model here.
-    const modalities = [...document.body.querySelectorAll('button[aria-pressed]')];
+    const modalities = [...document.body.querySelectorAll('button[aria-pressed]')].filter(
+      (button) => ['Text', 'Image'].includes(button.textContent?.trim() ?? '')
+    );
     const image = modalities.find((button) => button.textContent?.trim() === 'Image');
     await act(async () => image?.click());
     await save();
@@ -362,12 +388,8 @@ describe('ProviderSetupDialog — per-model metadata', () => {
 
     // The chips only exist after a probe answers, and they carry `aria-pressed`
     // — that is the one control in this form that clears a selection.
-    const fetchButton = panelButton('Fetch models');
-    await act(async () => fetchButton?.click());
-    await settle();
-    const chip = [...document.body.querySelectorAll('button[aria-pressed]')].find(
-      (button) => button.textContent?.trim() === 'deepseek-reasoner'
-    );
+    await fetchModels();
+    const chip = modelChips().find((button) => button.textContent?.trim() === 'deepseek-reasoner');
     expect(chip?.getAttribute('aria-pressed')).toBe('true');
     await act(async () => chip?.click());
     await save();
@@ -376,6 +398,69 @@ describe('ProviderSetupDialog — per-model metadata', () => {
       models: ['deepseek-chat'],
       modelMeta: { 'deepseek-chat': { contextWindow: 65536 } },
     });
+  });
+
+  it('removes a selected model from the row itself, without a fetch first', async () => {
+    // The scenario: an edit opened but never probed. The chips are not on
+    // screen at all, so the row's X is the only way to deselect.
+    api.upsert.mockResolvedValue(provider());
+    await mountDialog(
+      provider({
+        models: ['deepseek-chat', 'deepseek-reasoner'],
+        modelMeta: { 'deepseek-chat': { contextWindow: 65536 } },
+      })
+    );
+
+    expect(modelChips()).toHaveLength(0);
+    const remove = rowRemoveButton('deepseek-chat');
+    expect(remove).toBeDefined();
+    await act(async () => remove?.click());
+    await save();
+
+    // Gone from the selection, and its metadata with it — the same state the
+    // chip path produces.
+    expect(api.upsert.mock.calls[0][0]).toMatchObject({ models: ['deepseek-reasoner'] });
+    expect(api.upsert.mock.calls[0][0]).not.toHaveProperty('modelMeta');
+  });
+
+  it('keeps a hand-typed model across a fetch the service does not list it in', async () => {
+    // The regression: `runProbe` used to filter `selected` down to the
+    // service's answer, silently deleting a model the user had typed — and
+    // with it the metadata they had just filled in.
+    api.upsert.mockResolvedValue(provider());
+    api.fetchModels.mockResolvedValue({ ok: true, models: ['deepseek-chat'] });
+    await mountDialog(
+      provider({
+        models: ['my-gateway/llama-4-preview'],
+        modelMeta: { 'my-gateway/llama-4-preview': { contextWindow: 131072 } },
+      })
+    );
+
+    await fetchModels();
+
+    // Still selected, still carrying its metadata, still on screen.
+    expect(text()).toContain('my-gateway/llama-4-preview');
+    await save();
+    expect(api.upsert.mock.calls[0][0]).toMatchObject({
+      models: ['my-gateway/llama-4-preview'],
+      modelMeta: { 'my-gateway/llama-4-preview': { contextWindow: 131072 } },
+    });
+  });
+
+  it('does not auto-select anything on a first fetch', async () => {
+    // The intent the old filter also served, and the one it must not lose:
+    // 200 returned models must not become 200 selected models.
+    api.upsert.mockResolvedValue(provider());
+    api.fetchModels.mockResolvedValue({ ok: true, models: ['a', 'b', 'c'] });
+    await mountDialog(provider({ models: [] }));
+
+    await fetchModels();
+
+    expect(document.body.textContent).not.toContain('1 selected');
+    expect(document.body.textContent).not.toContain('3 selected');
+    const chips = modelChips();
+    expect(chips).toHaveLength(3);
+    expect(chips.every((chip) => chip.getAttribute('aria-pressed') === 'false')).toBe(true);
   });
 
   it('omits modelMeta entirely when every field is left blank', async () => {
