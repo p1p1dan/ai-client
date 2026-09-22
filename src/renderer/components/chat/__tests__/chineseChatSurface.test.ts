@@ -127,7 +127,18 @@ it('renders a lone tool row in Chinese — verb and search arg alike', async () 
   }
 });
 
-it('hides a long command from the aggregate but keeps it accessible in details', async () => {
+/**
+ * Where a long command lives, after the user moved it twice on 2026-09-22.
+ *
+ * It used to be the aggregate's DETAIL row: open the aggregate and the whole
+ * command was on screen. The ruling 「不想显示那么长…具体的指令内容在展开栏目里
+ * 显示」 puts it one level further down — the detail row names the call within
+ * `COMMAND_SUMMARY_MAX_CHARS`, and the command itself is behind that row's own
+ * disclosure. What has NOT changed is that it must be reachable at all, which
+ * is what decision 033 D6 fixed (`command` was marked "covered", so the body
+ * was never generated and no number of clicks reached it).
+ */
+it('keeps a long command off both rows, and reachable behind the second one', async () => {
   const command = `echo ${'long-command-argument-'.repeat(8)}`;
   const rows = deriveToolGroupRows(
     [toolRun('Read', 'ok', { file_path: '/repo/example.ts' }), toolRun('Bash', 'ok', { command })],
@@ -139,7 +150,18 @@ it('hides a long command from the aggregate but keeps it accessible in details',
     const trigger = container.querySelector<HTMLElement>('[data-slot="collapsible-trigger"]')!;
     expect(trigger.textContent).toBe('2 次工具调用');
     expect(container.textContent).not.toContain(command);
+
     await act(async () => trigger.click());
+    // The detail row is on screen and it is NOT the command — it is a capped
+    // summary of it, which is the whole of the ruling.
+    expect(container.textContent).toContain('已运行');
+    expect(container.textContent).not.toContain(command);
+
+    const bashRow = [
+      ...container.querySelectorAll<HTMLElement>('[data-slot="collapsible-trigger"]'),
+    ].find((element) => element !== trigger && element.textContent?.includes('已运行'));
+    expect(bashRow, 'the capped row must still offer a disclosure').toBeDefined();
+    await act(async () => bashRow?.click());
     expect(container.textContent).toContain(command);
     expect(trigger.textContent).toBe('2 次工具调用');
   } finally {

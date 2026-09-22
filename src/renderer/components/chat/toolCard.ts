@@ -742,12 +742,13 @@ export function deriveAggregateRow(
 /**
  * One tool group -> its top-level rows (T105 rewrote the segmentation).
  *
- *  - SEPARATORS: a `thinking` entry, or a run carrying a `permission` record.
- *    They render standalone, in place, and they break the run of calls around
- *    them.
- *  - A maximal run of adjacent separator-free tool calls: >= 2 becomes ONE
- *    aggregate row plus its detail body; exactly 1 does not aggregate
- *    (sign-off ②/A07 :2348) and renders as its own row.
+ *  - SEPARATOR: a run carrying a `permission` record. It renders standalone,
+ *    in place, and breaks the run of calls around it. A `thinking` entry used
+ *    to be one too; it is a MEMBER since 2026-09-22 (see `breaksSegment`).
+ *  - A maximal run of adjacent separator-free entries, counted by its TOOL
+ *    CALLS: >= 2 becomes ONE aggregate row plus its detail body (thinking
+ *    included, in place); exactly 1 does not aggregate (sign-off ②/A07 :2348)
+ *    and its entries render as their own rows, thought included.
  *  - `failed` and `running` no longer affect the segmentation at all: a running
  *    call joins the segment like any other, and the aggregate row reports
  *    itself as running.
@@ -768,8 +769,9 @@ export function deriveAggregateRow(
  * rather than "4 + 1". The old text here and in `deriveAggregateRow` said
  * otherwise; both were replaced by the rule rather than left beside it.
  *
- *  - A standalone thinking entry (no tool run beside it) becomes its own
- *    Thought row via `turnTiming.formatThoughtRow`.
+ *  - A thinking entry that never reaches an aggregate — because its segment
+ *    holds fewer than two calls — becomes its own Thought row via
+ *    `turnTiming.formatThoughtRow`, exactly as before.
  */
 export function deriveToolGroupRows(
   entries: readonly ToolGroupEntry[],
@@ -792,8 +794,19 @@ export function deriveToolGroupRows(
         : buildThoughtRow(item.block, thinkingOptions)
     );
   };
+  // Decision 033 D7 revised (2026-09-22, user decision): a thinking entry no
+  // longer breaks the run it sits in. D7 had ruled the break 「已是正确行为」 on
+  // the argument that prose or thought genuinely ends one stretch of work — but
+  // the model emits a thought before nearly EVERY call, so the break fired on
+  // nearly every call and the aggregate almost never formed. The user's report
+  // on the result was 「每句输出之间还是一团乱麻，太多东西了」: 12 rows between two
+  // paragraphs where the rule was supposed to produce one.
+  //
+  // An authorization record still breaks it, and that is the FB7 red line below
+  // — a decision the user was asked to make must never be summarised as
+  // 「12 次工具调用」 behind two clicks.
   const breaksSegment = (entry: ToolGroupEntry) =>
-    entry.kind === 'thinking' || entry.run.permission != null;
+    entry.kind === 'run' && entry.run.permission != null;
 
   let i = 0;
   while (i < entries.length) {
@@ -810,8 +823,9 @@ export function deriveToolGroupRows(
       j += 1;
     }
 
-    // Counts RUNS, not entries: a thinking entry only ever reaches a segment
-    // as its first element, since it breaks the segment before it.
+    // Counts RUNS, not entries: thinking entries now travel INSIDE a segment,
+    // and counting them would make 「2 次工具调用」 out of one call with a thought
+    // beside it — a row whose own detail body contradicts its count.
     const runCount = segment.filter((item) => item.kind === 'run').length;
     if (runCount >= 2) {
       rows.push(
@@ -1111,6 +1125,64 @@ function numberField(rec: Record<string, unknown> | undefined, field: string): n
 }
 
 /**
+ * A shell command as the ROW summarises it: the `cd <path> &&` prefix removed,
+ * and what is left cut to a fixed number of characters.
+ *
+ * ## Two rulings, one function (user, 2026-09-22)
+ *
+ * The first report was 「已运行那一行，总是特别长，而且我也看不全指令」 and the
+ * prefix is half of it: an agent puts the same repository path in front of
+ * nearly every call, so the forty characters a row had room for were spent
+ * before the command said anything.
+ *
+ * Stripping it was not enough — 「不想显示那么长，直接限制个长度显示调用了什么
+ * 工具，具体的指令内容在展开栏目里显示」. So the row no longer tries to carry the
+ * command at all: it carries enough of it to tell one call from the next
+ * (`sed -n '452,500p' src/rend…`), and the command itself lives one click away.
+ *
+ * ⚠️ The cap is in CHARACTERS, and `toolRowArgClass()`'s `truncate` still
+ * applies on top. They answer different questions: the class stops a row from
+ * overflowing a narrow window, this stops a row from filling a wide one. A
+ * width-only rule leaves the 900px case as long as it ever was, which is what
+ * the ruling above is about.
+ *
+ * ⚠️ DISPLAY ONLY. `deriveToolInputBody` keeps the raw input, so the expanded
+ * row still shows the command exactly as it ran, `cd` included — which is the
+ * copy-and-rerun path and must not be rewritten. Decision 033 D6 is what made
+ * that body exist for Bash in the first place; both halves here lean on it, and
+ * neither is safe to apply to a tool whose input has nowhere else to appear.
+ *
+ * Quoted and unquoted paths both match, and a bare `cd /somewhere` with nothing
+ * after it is left alone: stripping it would leave an empty row for a call that
+ * really did only change directory.
+ */
+const CD_PREFIX_PATTERN = /^\s*cd\s+(?:'[^']*'|"[^"]*"|[^\s;|&()]+)\s*&&\s*/;
+
+/**
+ * Chosen against the row, not against the string: 40 characters is about where
+ * a second call's summary stops being distinguishable from the first at this
+ * font size, and it leaves the chevron and any aggregate count a stable column
+ * to sit in. Cutting mid-token is deliberate — a word-boundary cut makes the
+ * length vary per row, and a ragged right edge is the thing being fixed.
+ */
+const COMMAND_SUMMARY_MAX_CHARS = 40;
+
+function commandSummary(command: string): string {
+  let rest = command;
+  // A loop, not a single replace: `cd a && cd b && cmd` is rare but real, and
+  // stripping one level would leave the row looking like it starts at `cd`.
+  while (CD_PREFIX_PATTERN.test(rest)) {
+    const next = rest.replace(CD_PREFIX_PATTERN, '');
+    if (!next.trim()) break;
+    rest = next;
+  }
+  const stripped = rest.trim() || command.trim();
+  return stripped.length > COMMAND_SUMMARY_MAX_CHARS
+    ? `${stripped.slice(0, COMMAND_SUMMARY_MAX_CHARS)}…`
+    : stripped;
+}
+
+/**
  * T101 — the argument text for a Write/Edit row, whether or not its arguments
  * have finished arriving.
  *
@@ -1265,7 +1337,10 @@ function formatToolArgDetail(
     case PI_TOOL_NAMES.powershell: {
       // pi's bash schema has `command` and `timeout` only — no `description`
       // sibling, so unlike Claude's Bash there is no prose alternative here.
-      raw = stringField(rec, 'command');
+      // Which is exactly why the `cd` prefix has to go: with no description to
+      // fall back on, the command IS the summary.
+      const command = stringField(rec, 'command');
+      raw = command ? commandSummary(command) : command;
       if (raw) kind = 'ident';
       break;
     }
@@ -1314,7 +1389,8 @@ function formatToolArgDetail(
         raw = description;
         kind = 'prose';
       } else {
-        raw = stringField(rec, 'command');
+        const command = stringField(rec, 'command');
+        raw = command ? commandSummary(command) : command;
         if (raw) kind = 'ident';
       }
       break;

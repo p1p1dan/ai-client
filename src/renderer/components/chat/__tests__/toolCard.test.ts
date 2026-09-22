@@ -290,14 +290,19 @@ describe('deriveToolGroupRows', () => {
   });
 
   /**
-   * ⚠️ INVERTED 2026-09-19 (user decision D4, T105).
+   * ⚠️ INVERTED TWICE, and the second inversion is the one that holds.
    *
-   * This case used to read `folds a thinking entry inside an explore run into
-   * detail without breaking aggregation`. The user's ruling: 夹在中间的思考会
-   * 打断聚合，前后各成一条，思考自己单独一行 — so a thought is now a separator,
-   * and the shape is aggregate / thought / aggregate.
+   * 2026-09-19 (D4, T105): 夹在中间的思考会打断聚合，前后各成一条 — a thought
+   * became a separator, and the shape was aggregate / thought / aggregate.
+   *
+   * 2026-09-22 (decision 033 D7 revised): the model emits a thought before
+   * nearly every call, so that separator fired on nearly every call and the
+   * aggregate almost never formed — 12 rows between two paragraphs. The user's
+   * report was 「每句输出之间还是一团乱麻，太多东西了」, so a thought is a MEMBER
+   * again and the four calls read as one row. An authorization record is the
+   * only separator left (FB7).
    */
-  it('a thinking entry BREAKS the aggregate in two, and renders its own row between (D4)', () => {
+  it('a thinking entry does NOT break the aggregate — it joins it as detail', () => {
     const entries = [
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
       runEntry(makeRun('b', 'Read', { file_path: 'b.ts' })),
@@ -306,20 +311,36 @@ describe('deriveToolGroupRows', () => {
       runEntry(makeRun('d', 'Grep', { pattern: 'bar' })),
     ];
     const rows = deriveToolGroupRows(entries);
-    expect(rows).toHaveLength(3);
-    expect(rows.map((row) => row.body)).toEqual(['detail', 'thinking', 'detail']);
-    expect(rows[0].detail).toHaveLength(2);
-    expect(rows[2].detail).toHaveLength(2);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].body).toBe('detail');
+    // The COUNT is calls only — the thought is in the body, not in the number.
+    expect(rows[0].toolCallCount).toBe(4);
+    // The body keeps every entry in its original order, thought included.
+    expect(rows[0].detail).toHaveLength(5);
+    expect(rows[0].detail?.[2].body).toBe('thinking');
   });
 
-  it('a single call either side of a thought does NOT aggregate — two plain rows', () => {
+  it('a single call either side of a thought aggregates — the calls are what is counted', () => {
     const entries = [
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
       thinkEntry(thinkingBlock('th1')),
       runEntry(makeRun('b', 'Grep', { pattern: 'foo' })),
     ];
     const rows = deriveToolGroupRows(entries);
-    expect(rows.map((row) => row.verb)).toEqual(['Read', 'Thought', 'Grepped']);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].toolCallCount).toBe(2);
+    expect(rows[0].detail?.map((row) => row.verb)).toEqual(['Read', 'Thought', 'Grepped']);
+  });
+
+  it('a lone call beside a thought still does not aggregate — one call is its own summary', () => {
+    // The threshold is unchanged: below two CALLS the entries render in place,
+    // so a thought beside one call is still two plain rows, not a 「1 次工具
+    // 调用」 row whose body says the same thing one click away.
+    const rows = deriveToolGroupRows([
+      thinkEntry(thinkingBlock('th1')),
+      runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
+    ]);
+    expect(rows.map((row) => row.verb)).toEqual(['Thought', 'Read']);
   });
 
   /**
@@ -503,23 +524,25 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
    * retired once (see the withdrawn F-B14 note below).
    */
 
-  it('a thinking entry BEFORE two runs becomes its own row, not aggregate detail (D4)', () => {
-    // The one arrangement where a thought and an aggregate still coexist, so
-    // the re-stamping path is exercised where it is still reachable: the
-    // thought is a separator, and the two runs after it aggregate.
+  it('a thought inside an aggregate keeps its live text and its duration stamp', () => {
+    // `applyThinkingDurations` re-stamps the detail rows `deriveAggregateRow`
+    // built without timing. Since 2026-09-22 this is the ORDINARY path for a
+    // mid-segment thought rather than a corner of one, so a streaming thought
+    // has to survive being aggregate detail: same text, same auto-open.
     const entries = [
       thinkEntry(thinkingBlock('th1', 'mid-turn thought')),
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' })),
       runEntry(makeRun('b', 'Read', { file_path: 'b.ts' })),
     ];
     const rows = deriveToolGroupRows(entries, { isStreamingBlockId: 'th1' });
-    expect(rows).toHaveLength(2);
-    expect(rows[0].key).toBe('th1');
-    expect(rows[0].output).toBe('mid-turn thought');
-    expect(rows[0].expandable).toBe(true);
-    expect(rows[0].defaultOpen).toBe(true);
-    expect(rows[1].toolCallCount).toBe(2);
-    expect(rows[1].detail).toHaveLength(2);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].toolCallCount).toBe(2);
+    expect(rows[0].detail).toHaveLength(3);
+    const thought = rows[0].detail?.[0];
+    expect(thought?.key).toBe('th1');
+    expect(thought?.output).toBe('mid-turn thought');
+    expect(thought?.expandable).toBe(true);
+    expect(thought?.defaultOpen).toBe(true);
   });
 
   /**
@@ -926,6 +949,49 @@ describe('deriveToolRowView', () => {
       description: 'List files',
     });
     expect(deriveToolRowView(bashWithDescription).argKind).toBe('prose');
+  });
+
+  /**
+   * 2026-09-22 (user report 「已运行那一行，总是特别长，而且我也看不全指令」).
+   *
+   * The row was already one truncated line; what it spent that line on was the
+   * repository path an agent prefixes to every call. Stripping it is a DISPLAY
+   * change only — `input` keeps the command exactly as it ran.
+   */
+  it('[D6-b] the row summary drops a leading `cd <path> &&`, and the body keeps it', () => {
+    const command =
+      "cd /home/pi/code/ai-client-runtime && sed -n '452,500p' src/renderer/components/chat/ToolRows.tsx";
+    const view = deriveToolRowView(makeRun('a', 'Bash', { command }));
+    // The prefix is gone, so the width the row does spend goes on the command.
+    expect(view.arg?.startsWith("sed -n '452,500p' src/")).toBe(true);
+    expect(view.arg).not.toContain('cd /home/pi');
+    // …and the rest is capped rather than left to fill the row.
+    expect(view.arg?.endsWith('…')).toBe(true);
+    expect(view.arg).toHaveLength(41);
+    // The copy-and-rerun path is untouched.
+    expect(view.input).toContain('cd /home/pi/code/ai-client-runtime &&');
+  });
+
+  it('[D6-c] a command that fits is left whole — the cap only cuts what exceeds it', () => {
+    const view = deriveToolRowView(makeRun('a', 'Bash', { command: 'cd /repo && pnpm typecheck' }));
+    expect(view.arg).toBe('pnpm typecheck');
+  });
+
+  it('[D6-b] a quoted path, a repeated cd, and a bare cd', () => {
+    const arg = (command: string) => deriveToolRowView(makeRun('a', 'Bash', { command })).arg;
+    expect(arg('cd "/home/with space/repo" && pnpm test')).toBe('pnpm test');
+    expect(arg("cd '/tmp/a' && cd '/tmp/b' && ls")).toBe('ls');
+    // Nothing follows it, so the row would be empty — the call really did only
+    // change directory, and that is what it should say.
+    expect(arg('cd /tmp/a')).toBe('cd /tmp/a');
+  });
+
+  it('[D6-b] a Bash description still wins over the command, prefix or not', () => {
+    const view = deriveToolRowView(
+      makeRun('a', 'Bash', { command: 'cd /repo && ls', description: 'List files' })
+    );
+    expect(view.arg).toBe('List files');
+    expect(view.argKind).toBe('prose');
   });
 
   it('carries the raw output as hitSource for Grep/Glob', () => {
