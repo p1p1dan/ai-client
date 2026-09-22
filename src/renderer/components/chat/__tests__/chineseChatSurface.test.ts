@@ -58,15 +58,10 @@ function toolRun(
 }
 
 it('renders tool rows in Chinese — the verb, the running verb and the search arg', async () => {
-  // ⚠️ REWRITTEN 2026-09-19 (T105). These three used to be three separate rows:
-  // Bash and Edit were "action" calls (always their own row) and the running
-  // call ended the aggregatable prefix. Both rules are gone — Bash/Edit/Grep are
-  // one segment now, and a running call joins it.
-  //
-  // The three checks are kept, split by layer rather than by row, because each
-  // one fails for a different reason: `deriveToolRowView` for the standalone
-  // verb, `deriveAggregateRow` for the aggregate's own copy, and the render for
-  // whichever of them reaches paint un-translated.
+  // ⚠️ REWRITTEN TWICE. T105 (2026-09-19) merged these three into one aggregate
+  // row; decision 034 (2026-09-22) deleted the aggregate and they are three
+  // rows again — with the past-tense verbs replaced by two-character TYPE
+  // LABELS, which is the half this case now protects.
   const rows = deriveToolGroupRows(
     [
       toolRun('Bash', 'ok', { command: 'pnpm test' }),
@@ -75,10 +70,9 @@ it('renders tool rows in Chinese — the verb, the running verb and the search a
     ],
     { repoName: 'ai-client', t: zh }
   );
-  // T108 leaves count translation to the row, with no command/path suffix.
-  expect(rows).toHaveLength(1);
-  expect(rows[0].toolCallCount).toBe(3);
-  expect(rows[0].arg).toBeUndefined();
+  // Decision 034: three calls are three rows, each wearing its own verb.
+  expect(rows).toHaveLength(3);
+  expect(rows.map((row) => row.verb)).toEqual(['Ran', 'Grepped', 'Editing']);
 
   const { container, root } = mount();
   try {
@@ -92,9 +86,14 @@ it('renders tool rows in Chinese — the verb, the running verb and the search a
       )
     );
     const text = container.textContent ?? '';
-    expect(text).toContain('3 次工具调用');
-    expect(text).not.toContain('编辑中');
-    expect(text).not.toContain('src/a.ts');
+    // Type labels, not past-tense verbs: 「终端」 rather than 「已运行」.
+    expect(text).toContain('终端');
+    expect(text).toContain('搜索');
+    // The PRESENT tense is untouched — `Running` / `Editing` are shared with the
+    // Run panel, so only the settled side became a type label.
+    expect(text).toContain('编辑中');
+    // Decision 034 path order: file name first, directory behind it.
+    expect(text).toContain('a.ts');
     expect(text).not.toMatch(/tool calls|Editing|Ran|Grepped/);
   } finally {
     await act(async () => root.unmount());
@@ -116,7 +115,8 @@ it('renders a lone tool row in Chinese — verb and search arg alike', async () 
   try {
     await act(async () => root.render(createElement(ToolRow, { key: rows[0].key, view: rows[0] })));
     const text = container.textContent ?? '';
-    expect(text).toContain('已搜索内容');
+    expect(text).toContain('搜索');
+    expect(text).not.toContain('已搜索内容');
     // The repo tail is composed inside the derivation, so it proves the `t`
     // threaded through `ToolCardOptions` actually arrived.
     expect(text).toContain('TODO（ai-client）');
@@ -138,7 +138,7 @@ it('renders a lone tool row in Chinese — verb and search arg alike', async () 
  * is what decision 033 D6 fixed (`command` was marked "covered", so the body
  * was never generated and no number of clicks reached it).
  */
-it('keeps a long command off both rows, and reachable behind the second one', async () => {
+it('keeps a long command off the row, and reachable behind it', async () => {
   const command = `echo ${'long-command-argument-'.repeat(8)}`;
   const rows = deriveToolGroupRows(
     [toolRun('Read', 'ok', { file_path: '/repo/example.ts' }), toolRun('Bash', 'ok', { command })],
@@ -146,24 +146,17 @@ it('keeps a long command off both rows, and reachable behind the second one', as
   );
   const { container, root } = mount();
   try {
-    await act(async () => root.render(createElement(ToolRow, { view: rows[0] })));
+    // `rows[1]` is the Bash call — one row per entry since decision 034.
+    await act(async () => root.render(createElement(ToolRow, { view: rows[1] })));
+    // Decision 034: no aggregate, so the Bash row IS the top-level row. The
+    // command is still not on it — the summary is capped — and it is still one
+    // click away rather than none, which is what decision 033 D6 restored.
     const trigger = container.querySelector<HTMLElement>('[data-slot="collapsible-trigger"]')!;
-    expect(trigger.textContent).toBe('2 次工具调用');
+    expect(trigger.textContent).toContain('终端');
     expect(container.textContent).not.toContain(command);
 
     await act(async () => trigger.click());
-    // The detail row is on screen and it is NOT the command — it is a capped
-    // summary of it, which is the whole of the ruling.
-    expect(container.textContent).toContain('已运行');
-    expect(container.textContent).not.toContain(command);
-
-    const bashRow = [
-      ...container.querySelectorAll<HTMLElement>('[data-slot="collapsible-trigger"]'),
-    ].find((element) => element !== trigger && element.textContent?.includes('已运行'));
-    expect(bashRow, 'the capped row must still offer a disclosure').toBeDefined();
-    await act(async () => bashRow?.click());
     expect(container.textContent).toContain(command);
-    expect(trigger.textContent).toBe('2 次工具调用');
   } finally {
     await act(async () => root.unmount());
     container.remove();
@@ -185,7 +178,8 @@ it('renders a thought row in Chinese, duration and all', async () => {
   try {
     await act(async () => root.render(createElement(ToolRow, { view: rows[0] })));
     const text = container.textContent ?? '';
-    expect(text).toContain('已思考');
+    expect(text).toContain('思考');
+    expect(text).not.toContain('已思考');
     expect(text).toContain('耗时 1m 6s');
     expect(text).not.toContain('Thought');
   } finally {

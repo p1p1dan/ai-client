@@ -59,23 +59,12 @@ describe('chat vocabulary is translatable', () => {
     expectTranslated(words, 'tool verbs');
   });
 
-  // T108 retires the action suffix; counts and step words remain translatable.
-  it('the aggregate row’s words all have catalog entries', () => {
-    expectTranslated(
-      [
-        '{{count}} tool call',
-        '{{count}} tool calls',
-        // The process head's own line (decision 033 D1/D4). T112 dropped the
-        // singular with the key itself — a head is only rendered for a group
-        // that folds (two steps or more), so `{{count}} step processed` could
-        // not reach the screen, and a catalog entry nothing looks up is one
-        // more word to keep translated for nobody. The bare `{{count}} steps`
-        // went the same way on 2026-09-22: the head names the verb now, and
-        // nothing else printed the count without it.
-        '{{count}} steps processed',
-      ],
-      'aggregate row words'
-    );
+  // The call count outlived the aggregate row that introduced it: decision 034
+  // deleted that row, and the turn's work-zone line still prints 「73 次调用」.
+  // The step words went with the head that counted them (033 D1 added
+  // `{{count}} steps processed`, 034 removed it a day later).
+  it('the work zone row’s counts all have catalog entries', () => {
+    expectTranslated(['{{count}} tool call', '{{count}} tool calls'], 'work zone words');
   });
 
   /**
@@ -94,9 +83,13 @@ describe('chat vocabulary is translatable', () => {
     expect(zhTranslations.Editing).toBe('编辑中');
     expect(zhTranslations.Reading).toBe('读取中');
     expect(zhTranslations.Running).toBe('运行中');
-    // Both halves of the pair, so a swap between them would fail too.
-    expect(zhTranslations.Edited).toBe('已编辑');
+    // Both halves of the pair, so a swap between them would fail too. Decision
+    // 034 made the SETTLED side a two-character type label (「编辑」) while the
+    // running side stays a verb — which is also the reason they are checked
+    // together: a refactor that "harmonises" them would break exactly one.
+    expect(zhTranslations.Edited).toBe('编辑');
     expect(zhTranslations.Read).toBe('读取');
+    expect(zhTranslations.Ran).toBe('终端');
   });
 
   it('the table it checks is the real one, not an empty object', () => {

@@ -1,4 +1,14 @@
-import { ChevronDown } from 'lucide-react';
+import {
+  Braces,
+  FileText,
+  Globe,
+  ListTree,
+  PencilLine,
+  Search,
+  SquareTerminal,
+  Users,
+  Wrench,
+} from 'lucide-react';
 import {
   createContext,
   type ReactNode,
@@ -108,6 +118,37 @@ interface ToolRowProps {
   sessionId?: string;
 }
 
+/**
+ * Decision 034: every process row leads with an icon.
+ *
+ * The mapping lives here and the DECISION lives in `toolCard.toolIconKind()` —
+ * that module is React-free by contract, so it returns a kind and this table
+ * turns the kind into an element. A kind with no entry falls back to the
+ * generic mark rather than rendering nothing, because a missing icon would
+ * silently break the column the other rows align to.
+ *
+ * `size-[13px]` matches the row's own `--text-chat-process` tier, and the icons
+ * inherit `currentColor` so they dim with the row instead of needing a second
+ * colour decision.
+ */
+const ROW_ICONS: Record<string, typeof Wrench> = {
+  terminal: SquareTerminal,
+  edit: PencilLine,
+  read: FileText,
+  search: Search,
+  list: ListTree,
+  web: Globe,
+  delegate: Users,
+  plan: ListTree,
+  thinking: Braces,
+  tool: Wrench,
+};
+
+function ToolRowIcon({ kind }: { kind?: string }) {
+  const Icon = ROW_ICONS[kind ?? 'tool'] ?? Wrench;
+  return <Icon className="size-[13px] shrink-0 self-center opacity-80" aria-hidden />;
+}
+
 /** One `.ct-row`: verb + arg, optionally expandable into an output/detail/thinking body. */
 export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
   const showDiff = useContext(ToolDiffVisibility);
@@ -134,29 +175,33 @@ export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
 
   const rowContent = (
     <>
-      {/* T108: aggregate counts use literal catalog keys so the coverage scan
-          sees them. Other rows retain their closed-vocabulary verb and arg. */}
-      <span className={verbClass}>
-        {view.toolCallCount === undefined
-          ? t(view.verb)
-          : t(view.toolCallCount === 1 ? '{{count}} tool call' : '{{count}} tool calls', {
-              count: view.toolCallCount,
-            })}
-      </span>
+      {/* Decision 034: the aggregate row is gone, so every row words itself
+          from its own closed-vocabulary verb — there is no count branch left. */}
+      <ToolRowIcon kind={view.iconKind} />
+      <span className={verbClass}>{t(view.verb)}</span>
       <ToolRowArg view={view} onOpenFile={onOpenFile} />
       <ToolRowPermission view={view} />
       {showDiff && view.diff && (
-        <span className="shrink-0 text-meta">
-          {t(
-            view.running
-              ? 'Modification preview'
-              : view.failed
-                ? 'Modification failed'
-                : view.diff.source === 'write-content'
-                  ? 'Written content'
-                  : 'Modified'
-          )}{' '}
-          · +{view.diff.added} −{view.diff.removed}
+        <span className="shrink-0 text-meta tabular-nums">
+          {/* Decision 034: the ordinary settled edit prints the NUMBERS only.
+              The label 「已修改」 restated the row's own verb one span to the
+              right, which is the per-row redundancy the zcode comparison was
+              about. A preview, a failure and a whole-file write keep theirs —
+              those three say something the verb does not. */}
+          {view.running || view.failed || view.diff.source === 'write-content' ? (
+            <>
+              {t(
+                view.running
+                  ? 'Modification preview'
+                  : view.failed
+                    ? 'Modification failed'
+                    : 'Written content'
+              )}{' '}
+              ·{' '}
+            </>
+          ) : null}
+          <span className="text-success">+{view.diff.added}</span>{' '}
+          <span className="text-destructive">−{view.diff.removed}</span>
         </span>
       )}
     </>
@@ -280,7 +325,7 @@ function ToolRowCollapsible({
       }}
     >
       <CollapsibleTrigger
-        className={cn(rowClass, '[&[data-panel-open]>svg]:rotate-180')}
+        className={rowClass}
         // A Read row nests a real <button> inside the trigger for its
         // clickable file name (F①) — a native <button> can't contain one,
         // so those rows render the trigger as a <div role="button"> instead
@@ -288,8 +333,15 @@ function ToolRowCollapsible({
         nativeButton={!view.link}
         render={view.link ? <div /> : undefined}
       >
+        {/* Decision 034 (2026-09-22, user decision): NO CHEVRON. The whole row
+            is the trigger, and it always was — the chevron only advertised
+            that. At one per row it was also the single densest thing on the
+            surface, which is what 「一团乱麻」 and the zcode comparison were
+            about. The cost is recorded rather than hidden: a row that CAN
+            expand now looks exactly like one that cannot, and the only way to
+            find out is to click. That is the trade the user chose after
+            seeing both in `docs/examples/process-rows-zcode-style.html`. */}
         {children}
-        <ChevronDown className="size-[13px] shrink-0 self-center text-tool-arg transition-transform duration-150" />
       </CollapsibleTrigger>
       <CollapsibleContent>
         <ToolRowBody view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
@@ -361,6 +413,47 @@ function ToolRowPermission({ view }: { view: ToolRowView }) {
  * Grep/Glob row's hover hit list (F②). `link` and `hitSource` never both
  * populate the same view (toolCard.ts only sets one or the other).
  */
+/**
+ * A path-shaped argument, as zcode writes it: the FILE NAME first, the
+ * directory behind it and dimmer (decision 034).
+ *
+ * `chat/ToolRows.tsx` becomes `ToolRows.tsx  chat/`. The reordering is the
+ * point, not the dimming: the name is what tells two adjacent edit rows apart,
+ * and putting it first means the reader finds it at a fixed left offset
+ * instead of at wherever the directory happened to end.
+ *
+ * Display-only, and deliberately built by splitting the finished `arg` rather
+ * than by threading a second field through `deriveToolRowView`: the shortening
+ * rule (`shortPath`) already ran, the link's `title` still carries the whole
+ * path, and a row whose arg is not a path (a command, a pattern, a duration)
+ * must come through untouched — which the `includes('/')` guard is for.
+ *
+ * ⚠️ Only the leading token is split. An arg like `ToolRows.tsx · 已收到 12 行`
+ * keeps its suffix intact, because the suffix is not part of the path and a
+ * naive `lastIndexOf('/')` would have swallowed it.
+ */
+function splitPathArg(arg: string): { name: string; dir: string } | null {
+  const [head, ...rest] = arg.split(' ');
+  if (!head.includes('/')) return null;
+  const cut = head.lastIndexOf('/');
+  const name = head.slice(cut + 1);
+  if (!name) return null;
+  return { name: [name, ...rest].join(' '), dir: `${head.slice(0, cut)}/` };
+}
+
+function ArgText({ arg }: { arg: string }) {
+  const split = splitPathArg(arg);
+  if (!split) return <>{arg}</>;
+  return (
+    <>
+      {split.name}{' '}
+      <span className="text-[color-mix(in_oklab,currentColor_55%,var(--background))]">
+        {split.dir}
+      </span>
+    </>
+  );
+}
+
 function ToolRowArg({
   view,
   onOpenFile,
@@ -388,7 +481,7 @@ function ToolRowArg({
           (onOpenFile ?? ((target: FileLinkTarget) => openFileTarget(target, 'tool-row')))(link);
         }}
       >
-        {view.arg}
+        <ArgText arg={view.arg} />
       </button>
     );
   }
@@ -399,7 +492,9 @@ function ToolRowArg({
         source={view.hitSource}
         onOpenFile={onOpenFile ?? ((target) => openFileTarget(target, 'hit-list'))}
       >
-        <span className={argClass}>{view.arg}</span>
+        <span className={argClass}>
+          <ArgText arg={view.arg} />
+        </span>
       </HitListPopover>
     );
   }

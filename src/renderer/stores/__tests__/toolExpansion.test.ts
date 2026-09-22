@@ -100,16 +100,21 @@ describe('useToolExpansionStore — session scoping', () => {
 });
 
 /**
- * The absorption case, driven through the real derivation.
+ * ⚠️ RETIRED PREMISE, kept as a regression net.
  *
- * Sequence: the agent reads `a.ts`, the user opens that row to look at the
- * output, then the agent reads `b.ts`. At that point `deriveToolGroupRows`
- * folds BOTH reads into one aggregate — the row the user opened stops existing
- * at top level — so without the child rule the output they were reading
- * silently disappears behind a collapsed 「2 次工具调用 · 最后读取 b.ts」 (T105's
- * aggregate copy; it was `Explored 2 files` before).
+ * This block was the ABSORPTION case: the agent reads `a.ts`, the user opens
+ * that row, the agent reads `b.ts`, and `deriveToolGroupRows` folded both into
+ * one aggregate — so the row the user had open stopped existing at top level
+ * and the output they were reading vanished behind a collapsed summary. The
+ * child rule in `resolveToolRowOpen` existed to carry their choice onto the
+ * parent.
+ *
+ * Decision 034 deleted the aggregate, so a row can no longer be absorbed by
+ * anything and the defect is unreachable. What the cases below now assert is
+ * the SIMPLER property that replaced it: a remembered choice still belongs to
+ * the row that owns the key, and nothing opens itself.
  */
-describe('absorption — the aggregate inherits its children’s open state', () => {
+describe('a remembered choice survives a new call landing beside it', () => {
   function readEntry(id: string, path: string): ToolGroupEntry {
     const toolRun: ToolRun = {
       toolCallId: `call-${id}`,
@@ -125,29 +130,27 @@ describe('absorption — the aggregate inherits its children’s open state', ()
     return { kind: 'run', run: toolRun };
   }
 
-  it('folds two completed reads into one aggregate row (the precondition)', () => {
+  it('a second read does not swallow the first row (decision 034)', () => {
     const before = deriveToolGroupRows([readEntry('a', 'a.ts')]);
     expect(before.map((row) => row.key)).toEqual(['block-a']);
 
+    // The aggregate this suite was written around is gone. `block-a` keeps its
+    // own key and its own row when `block-b` lands, which is why the remembered
+    // expansion below no longer has to be migrated onto a parent at all.
     const after = deriveToolGroupRows([readEntry('a', 'a.ts'), readEntry('b', 'b.ts')]);
-    expect(after.map((row) => row.key)).toEqual(['block-a~agg']);
-    // T105: T108: the summary is only the run count, not a
-    // `file_path`-deduped file tally.
-    expect(after[0].toolCallCount).toBe(2);
-    // The row the user had open now exists only as a child of the aggregate.
-    expect((after[0].detail ?? []).map((row) => row.key)).toEqual(['block-a', 'block-b']);
+    expect(after.map((row) => row.key)).toEqual(['block-a', 'block-b']);
+    expect(after.every((row) => row.body !== 'detail')).toBe(true);
   });
 
-  it('the aggregate mounts OPEN when it swallowed the row the user was reading', () => {
+  it('the opened row stays open, and the new one does not inherit the choice', () => {
     const memory = { 'block-a': true };
     const rows = deriveToolGroupRows([readEntry('a', 'a.ts'), readEntry('b', 'b.ts')]);
 
     expect(resolveToolRowOpen(rows[0], memory)).toBe(true);
-    // …and the child inside it is open too, or the aggregate would open onto
-    // two collapsed rows and the output would still be off screen.
-    const child = (rows[0].detail ?? []).find((row) => row.key === 'block-a');
-    expect(child).toBeDefined();
-    expect(resolveToolRowOpen(child as { key: string }, memory)).toBe(true);
+    // `block-b` is a call the reader has never seen. Opening it because its
+    // neighbour is open would be the auto-expand the 2026-08-25 decision
+    // refused — the same rule the last case in this block pins.
+    expect(resolveToolRowOpen(rows[1], memory)).toBe(false);
   });
 
   it('stays closed when the user never opened either read', () => {
@@ -168,8 +171,7 @@ describe('absorption — the aggregate inherits its children’s open state', ()
       readEntry('b', 'b.ts'),
       readEntry('c', 'c.ts'),
     ]);
-    const everyRow = [...rows, ...(rows[0].detail ?? [])];
-    for (const row of everyRow) {
+    for (const row of rows) {
       expect(
         resolveToolRowOpen(row, EMPTY_TOOL_EXPAND_MEMORY),
         `row ${row.key} opened itself`

@@ -266,7 +266,12 @@
      * references resolve against whichever element uses --tool-arg, so
      * .dark's --muted-foreground/--background overrides are picked up
      * automatically without a second .dark declaration. */
-    --tool-arg: color-mix(in oklab, var(--muted-foreground) 85%, var(--background));
+    /* 2026-09-22 (decision 034): 85% -> 62%. The process tier is meant to be
+       skimmed PAST, and at 85% it still competed with the prose it interrupts —
+       the zcode comparison the user brought in reads cleaner in large part
+       because its process rows sit much closer to the background. Lowering the
+       mix is what widens the gap without touching a single size or weight. */
+    --tool-arg: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
   }
 
   /* Flexoki Dark - flexoki-dark.json */

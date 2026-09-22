@@ -634,14 +634,19 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    */
   it('[WG-WIRE-2] the head words itself from literal catalog keys', () => {
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
-    // Decision 033 D1/D4: the step clause, then the call count. The chip keys
-    // ('Thinking chip' / '{{count}} explanation…') retired with the chips; the
-    // working/worked keys belong to `TurnWorkZoneRow` since T113.
-    expect(head).toContain("t('{{count}} steps processed', { count: steps })");
-    expect(head).toContain("'{{count}} tool call'");
-    expect(head).toContain("'{{count}} tool calls'");
-    expect(head).not.toContain("t('Thinking chip')");
-    expect(head).not.toContain("'{{count}} explanation'");
+    // Decision 034: the head words itself from the turn's CLOCK, through the
+    // two helpers that own the four duration keys each. It prints no count of
+    // its own — the step count and the call count were both cut by the user.
+    expect(head).toContain('workingHeadText(t, zone.elapsed)');
+    expect(head).toContain('workedHeadText(t, zone.worked)');
+    for (const retired of [
+      "'{{count}} steps processed'",
+      "'{{count}} tool calls'",
+      "t('Thinking chip')",
+      "'{{count}} explanation'",
+    ]) {
+      expect(head, `the head no longer counts anything: ${retired}`).not.toContain(retired);
+    }
   });
 
   /**
@@ -1377,36 +1382,38 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * group folded, and how many of them were tool calls. T113's boundary is
    * unchanged — turn-level timing and usage never ride a process-group head.
    */
-  it('[WG-WIRE-7] the group head counts its own steps and carries no turn-level figures', () => {
+  it('[WG-WIRE-7] the head carries the turn clock, and exactly one head gets it', () => {
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
-    for (const counter of ['countProcessSteps', 'countTurnToolCalls']) {
-      expect(countIn(head, `${counter}(items)`)).toBe(1);
-    }
-    // The step count is the head's subject and is printed unconditionally; the
-    // call count is omitted at zero rather than printed as 「0 次调用」.
-    expect(head).toContain('{toolCalls > 0 && (');
-    // The chips are gone, and so is every counter that fed only them.
-    for (const chip of [
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    // Decision 034 moved the clock and the live action clause UP from the work
+    // zone row. Both now belong here, and nothing counts anything.
+    expect(countIn(head, 'deriveTurnCurrentAction(items)')).toBe(1);
+    expect(head).toContain('<Spinner');
+    for (const counter of [
+      'countProcessSteps',
+      'countTurnToolCalls',
       'chips.map(',
       'countProcessGroupThinking',
       'countProcessGroupExplanations',
     ]) {
-      expect(head, `the chip machinery is retired: ${chip}`).not.toContain(chip);
+      expect(head, `the head counts nothing: ${counter}`).not.toContain(counter);
     }
-    // Every turn-level input is gone from this element. Each of these coming
-    // back is the exact regression T113 removed: a group-scoped line carrying
-    // a turn-scoped figure.
+    // ⚠️ The T107 defect, as a wiring assertion: two groups in one turn must
+    // not both print the turn's duration. The latch is what guarantees it, and
+    // a refactor that drops it fails HERE rather than on screen.
+    expect(turn).toContain('let zoneClaimed = false;');
+    expect(turn).toContain('const headZone = zoneClaimed ? null : workZone;');
+    expect(turn).toContain('zone={headZone}');
+    // Every OTHER turn-level figure is still out of this element — the head
+    // reports a clock, not a bill.
     for (const gone of [
       'workedMs',
       'elapsedSeconds',
       'tokens',
       'thinkingMs',
-      'settled',
       'hasReplyContent',
       'collapsible',
       'turnProgressClauses',
-      'deriveTurnCurrentAction',
-      'Spinner',
     ]) {
       expect(head, `the group head must not carry ${gone}`).not.toContain(gone);
     }
@@ -1428,26 +1435,22 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * separate `expectCalled`s, because "all of them appear" is exactly the claim
    * that would stay green if they came out shuffled.
    */
-  it('[WG-WIRE-8] the running row narrates the turn; the settled row lists the four figures', () => {
+  it('[WG-WIRE-8] the work zone row is settled-only, and lists three figures', () => {
     const row = nodeSource(topLevelFunction('TurnWorkZoneRow'));
-    expectCalled('deriveTurnCurrentAction(items)');
-    expect(row).toContain("if (zone.kind === 'working') {");
-    expect(row).toContain('const action = deriveTurnCurrentAction(items);');
-    // The clause is composed from the SAME vocabulary the tool rows use, and
-    // T108 omits arguments; a second wording here would drift.
-    expectWired('t(action.verb)');
-    expectUnwired('formatToolArg(currentAction.run, { repoName })');
-    // The spinner belongs to the running branch alone — a settled row with a
-    // spinner is the "two rows counting seconds" defect wearing one row.
-    expect(countIn(row, '<Spinner')).toBe(1);
-    expect(row.indexOf('<Spinner')).toBeLessThan(
-      row.indexOf('joinTurnProgressLine(`✻ ${workedHeadText(')
-    );
+    // Decision 034: the RUNNING state left this row for the process head, with
+    // the clock and the live clause it was made of. A running turn renders
+    // nothing here — two rows counting the same seconds is the defect.
+    expect(row).toContain("if (zone.kind === 'working') return null;");
+    expect(row).not.toContain('<Spinner');
+    expect(row).not.toContain('deriveTurnCurrentAction');
+    // The duration went up with them: printing 「已工作 N 秒」 in both places is
+    // T107 restated.
+    expect(row).not.toContain('workedHeadText');
+    expect(row).not.toContain('workingHeadText');
 
-    const settled = row.slice(row.indexOf('joinTurnProgressLine(`✻ ${workedHeadText('));
-    const completedAt = settled.indexOf("t('Completed at {{time}}'");
-    const calls = settled.indexOf("'{{count}} tool calls'");
-    const thinking = settled.indexOf('formatThinkingClause(');
+    const completedAt = row.indexOf("t('Completed at {{time}}'");
+    const calls = row.indexOf("'{{count}} tool calls'");
+    const thinking = row.indexOf('formatThinkingClause(');
     expect(completedAt, 'the completion time is there').toBeGreaterThan(-1);
     expect(completedAt, 'and the call count follows it').toBeLessThan(calls);
     expect(calls, 'and the thinking time closes the line').toBeLessThan(thinking);

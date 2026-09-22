@@ -417,30 +417,6 @@ export function thoughtBodyMaxHeightClass(): string {
 export function turnWorkGroupSummaryClass(): string {
   return 'sticky top-0 z-10 flex min-w-0 cursor-pointer list-none items-center gap-1.5 bg-background py-1 text-ui tabular-nums text-muted-foreground marker:content-none';
 }
-
-/**
- * The count the process head carries at its right end (decision 033 D4).
- *
- * The head's own line answers "how much work is folded here" in steps; this one
- * answers "how much of it was a tool call", and it sits at the right end so it
- * stays readable while the head is stuck to the top of a long group — which is
- * the whole reason the user asked for a second figure 「滚动中也能看到进度」.
- *
- * `ml-auto` rather than a `justify-between` on the head: the head's chevron is
- * the LAST child, so pushing from here keeps the chevron pinned to the edge
- * where every other disclosure on this surface puts it.
- *
- * ⚠️ No border, no fill, no rounding — it is a number in the meta tier, not a
- * pill. The bordered badge the design preview drew was cut with the head's
- * accent face on the same 2026-09-22 ruling (「这个背景块太丑了」), and a lone
- * pill on an otherwise unpainted row would have been the loudest thing on it.
- * `text-meta` is a tier below the head's own `text-ui`, which is what keeps the
- * step count the line's subject.
- */
-export function turnWorkGroupCountClass(): string {
-  return 'ml-auto shrink-0 text-meta tabular-nums text-muted-foreground';
-}
-
 /**
  * The turn's status row: `Awaiting first token 8s`, `Stalled`, `Failed`, the
  * retry counter — i.e. the things that are only true WHILE the turn is running.

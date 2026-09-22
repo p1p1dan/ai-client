@@ -303,8 +303,7 @@ describe('turnProgressClauses — the two stages', () => {
  * still prints.
  */
 describe('progress-row catalog coverage', () => {
-  it('translates the head counts and keeps thinking separate from the running status', () => {
-    expect(zh('{{count}} steps processed', { count: 7 })).toBe('已处理 7 个步骤');
+  it('translates the work zone counts and keeps thinking separate from the running status', () => {
     expect(zh('Thinking')).toBe('思考中');
     expect(zh('{{count}} tool call', { count: 1 })).toBe('1 次工具调用');
     expect(zh('{{count}} tool calls', { count: 2 })).toBe('2 次工具调用');

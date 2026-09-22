@@ -64,7 +64,6 @@ import {
   turnProcessShellClass,
   turnProcessToneClass,
   turnStatusToneClass,
-  turnWorkGroupCountClass,
   turnWorkGroupSummaryClass,
   turnWorkZoneClass,
   userBubbleClass,
@@ -126,7 +125,6 @@ import {
   ownsSessionFailure,
 } from './turnHead';
 import {
-  countProcessSteps,
   countTurnToolCalls,
   deriveTurnCurrentAction,
   deriveTurnWorkZone,
@@ -1511,13 +1509,25 @@ interface ChatTurnProps {
  */
 function TurnProgressHead({
   items,
+  zone,
   forcedOpen,
   userOpen,
   onUserOpenChange,
   children,
 }: {
-  /** The grouped items — the step count comes from these. */
+  /** The whole turn's items — the live action clause reads the newest call. */
   items: readonly TurnItem[];
+  /**
+   * The turn's clock, or `null` for a head that is not the turn's first.
+   *
+   * Only ONE head per turn carries it. That is T107's defect restated as a
+   * prop: two groups wearing the same duration is what 「最后一个理应显示 N 个
+   * 步骤的地方却显示工作区，有点不协调」 was about, and a turn grows a second
+   * group whenever a notice lands mid-process. A head with no zone is a bare
+   * disclosure — a chevron and nothing else — which is honest: everything it
+   * could say about the turn is already one group above it.
+   */
+  zone: TurnWorkZone | null;
   /** An unanswered permission/question is inside: the group may not close. */
   forcedOpen: boolean;
   userOpen: boolean | null;
@@ -1527,15 +1537,24 @@ function TurnProgressHead({
   const { t } = useI18n();
   const open = turnWorkGroupOpen({ forcedOpen, userOpen });
 
-  // Decision 033 D1: the head's subject, and it is the same number
-  // `turnProcessGroupFolds` thresholds on — a head that counted differently
-  // from the fold rule could report 「已处理 1 个步骤」 for a row it is inside,
-  // which is what T112's threshold exists to prevent.
-  const steps = countProcessSteps(items);
-  // The second figure (D4). Omitted at zero rather than printed as 「0 次调用」:
-  // a thinking-only group has nothing to report there, and a count that is
-  // always present but usually zero teaches the reader to stop reading it.
-  const toolCalls = countTurnToolCalls(items);
+  // Decision 034: the head reports the turn's CLOCK, and nothing else. The step
+  // count and the call count that used to sit here were cut by the user on
+  // sight (「折叠头就不要那个 73 次工具调用了。也不要显示什么已处理 xxx 个步骤」)
+  // — they described the fold, and what a reader watches during a long wait is
+  // whether the turn is still moving.
+  const running = zone?.kind === 'working';
+  const liveAction = running ? deriveTurnCurrentAction(items) : null;
+  const line = !zone
+    ? null
+    : zone.kind === 'working'
+      ? joinTurnProgressLine(`✻ ${workingHeadText(t, zone.elapsed)}`, [
+          // The live clause, moved up from the work zone row with the clock it
+          // belongs to: a clock with no subject reads as a stopwatch, and this
+          // is the sentence that says the turn is doing something rather than
+          // merely still open.
+          liveAction ? t(liveAction.verb) : null,
+        ])
+      : workedHeadText(t, zone.worked);
 
   return (
     <details className={turnBodyClass()} open={open}>
@@ -1546,16 +1565,18 @@ function TurnProgressHead({
           onUserOpenChange(!open);
         }}
       >
-        <span className="min-w-0 truncate">{t('{{count}} steps processed', { count: steps })}</span>
-        {toolCalls > 0 && (
-          <span className={turnWorkGroupCountClass()}>
-            {t(toolCalls === 1 ? '{{count}} tool call' : '{{count}} tool calls', {
-              count: toolCalls,
-            })}
+        {running && <Spinner className="size-3.5 shrink-0" />}
+        {line && (
+          <span className="min-w-0 truncate" title={line}>
+            {line}
           </span>
         )}
         <ChevronRight
-          className={cn('size-3.5 shrink-0 transition-transform duration-150', open && 'rotate-90')}
+          className={cn(
+            'size-3.5 shrink-0 transition-transform duration-150',
+            !line && 'ml-0',
+            open && 'rotate-90'
+          )}
           aria-hidden
         />
       </summary>
@@ -1576,49 +1597,31 @@ function TurnProgressHead({
  *    back to the last finished call rather than returning `null` between two
  *    calls (decision 031); without it the line blinks off and on several times
  *    a second while the seconds keep counting, which reads as a hang.
- *  - **settled** — 「✻ 已工作 54 秒 · 完成于 17:05 · 8 次工具调用 · 思考 12 秒」.
- *    Those four figures are the user's own list and the list is CLOSED: token
- *    usage was considered at the same time and deliberately left off. Each one
- *    is dropped individually when it was never measured, never printed as a
- *    zero (A07 `:2399`).
- *
- * This row and the process-group chips both use the localized catalog.
- * Q1 retired the old group head's English-only exception.
+ *  - **settled** — 「✻ 完成于 17:05 · 8 次工具调用 · 思考 12 秒」. T113's list was
+ *    four figures; decision 034 moved the first of them (the duration) up to
+ *    the process head, because that is the one a reader wants WHILE the turn
+ *    runs. The list is still CLOSED — token usage was considered at the same
+ *    time and deliberately left off — and each figure is dropped individually
+ *    when it was never measured, never printed as a zero (A07 `:2399`).
  *
  * It does not decide whether it renders: `deriveTurnWorkZone` returns `null`
  * for a settled turn that replayed no timing, and the caller drops the row.
  */
-function TurnWorkZoneRow({
-  items,
-  zone,
-}: {
-  /** The whole turn's items — the running clause reads the newest call out of them. */
-  items: readonly TurnItem[];
-  zone: TurnWorkZone;
-}) {
+function TurnWorkZoneRow({ zone }: { zone: TurnWorkZone }) {
   const { t } = useI18n();
 
-  if (zone.kind === 'working') {
-    const action = deriveTurnCurrentAction(items);
-    // T108 keeps the progress word and drops the argument, here as on the row
-    // the same verb table feeds.
-    const line = joinTurnProgressLine(`✻ ${workingHeadText(t, zone.elapsed)}`, [
-      action ? t(action.verb) : null,
-    ]);
-    return (
-      <div className={turnWorkZoneClass()}>
-        {/* A turn can stay silent for a minute; the spinner beside the ticking
-            clock is what says it is alive rather than hung. Same 3.5 size as
-            every other running indicator in the chat surface. */}
-        <Spinner className="size-3.5 shrink-0" />
-        <span className="min-w-0 truncate" title={line}>
-          {line}
-        </span>
-      </div>
-    );
-  }
+  // Decision 034: the RUNNING state is gone from this row. Its two parts — the
+  // ticking clock and the live action clause — moved up to the process head,
+  // where zcode puts them and where a reader watching a long wait is already
+  // looking. A running turn therefore renders nothing here at all, rather than
+  // a second line repeating the first.
+  if (zone.kind === 'working') return null;
 
-  const line = joinTurnProgressLine(`✻ ${workedHeadText(t, zone.worked)}`, [
+  const line = joinTurnProgressLine('✻', [
+    // The duration went up to the head with the running clock. What is left is
+    // the turn's BILL — the three figures that are only knowable once it ends —
+    // and printing 「已工作 N 秒」 in both places is the T107 defect this split
+    // exists to avoid.
     zone.completedAtMs === null
       ? null
       : t('Completed at {{time}}', { time: formatAbsoluteTime(zone.completedAtMs) }),
@@ -2155,6 +2158,16 @@ const ChatTurn = memo(function ChatTurn({
     );
   };
 
+  // Decision 034: the turn's clock rides the FIRST process head that actually
+  // folds, and no other. A latch rather than an index test because a section
+  // can decline to render a head at all (`turnProcessGroupFolds`), and keying
+  // on `index === 0` would hand the clock to a group that never draws one —
+  // leaving the turn with no visible clock while it runs.
+  //
+  // Reset on every render and consumed during the same synchronous map, so it
+  // never outlives the pass that sets it.
+  let zoneClaimed = false;
+
   return (
     <section className={chatTurnClass()}>
       {/* T12: an ordinary first row, not a pinned band. The `sticky top-0`
@@ -2202,15 +2215,18 @@ const ChatTurn = memo(function ChatTurn({
           // fold the moment a second step lands, and `groupKey` is unchanged
           // across that transition, so the segments below are not remounted by
           // it. `turnProcessGroupFolds` owns the threshold; deciding it here
-          // would fork the rule away from the count the head prints.
+          // would fork the rule away from the one the head is built for.
           if (!turnProcessGroupFolds(groupedProcessItems)) {
             return <Fragment key={groupKey}>{section.segments.map(renderGroupSegment)}</Fragment>;
           }
           const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);
+          const headZone = zoneClaimed ? null : workZone;
+          zoneClaimed = true;
           return (
             <TurnProgressHead
               key={groupKey}
-              items={groupedProcessItems}
+              items={items}
+              zone={headZone}
               forcedOpen={groupForcedOpen}
               userOpen={workGroupUserOpen[groupKey] ?? null}
               onUserOpenChange={(open) =>
@@ -2225,7 +2241,7 @@ const ChatTurn = memo(function ChatTurn({
             the session rather than the turn. This is the 「工作区固定在末尾」 the
             user asked for — the duration stops moving from group to group as a
             turn grows. */}
-        {workZone && <TurnWorkZoneRow items={items} zone={workZone} />}
+        {workZone && <TurnWorkZoneRow zone={workZone} />}
         {retryBanner && <RetryBanner view={retryBanner} sessionId={sessionId} />}
         {/* T12-b: the running status, and ONLY while it is running. FB6's
             position is kept — under the output it describes, not above it —

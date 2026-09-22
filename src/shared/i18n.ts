@@ -2517,9 +2517,27 @@ export const zhTranslations: Record<string, string> = {
   // 时间线的工具动词、思考动词、子 Agent 面板动词。这些词以「键」的形式一路
   // 传到 ToolRows.tsx 才翻译（见 ToolRowView.verb），所以扫描器看不到它们 —
   // 同目录的 toolVocabulary 测试专门盯住这三张表。
+  // ## 2026-09-22 (decision 034): the done-state verbs are TYPE LABELS now
+  //
+  // 「已运行 / 已编辑 / 已搜索内容」 became 「终端 / 编辑 / 搜索」. The user's
+  // comparison against zcode is the reason: a row there is an icon plus a
+  // two-character noun, and the width that buys goes to the argument — which
+  // is the thing that actually differs between two adjacent rows. A past-tense
+  // verb spends three or four characters re-stating what the icon already says,
+  // once per row, on every row.
+  //
+  // ⚠️ ENGLISH KEYS ARE UNTOUCHED. They are the catalog's primary key and three
+  // separate coverage scans (`toolVocabulary` / `piToolVocabulary` /
+  // `runtimeToolVocabulary`) enumerate them by name.
+  //
+  // ⚠️ `Running` and `Thinking` keep their values: both are SHARED with the Run
+  // panel and the left nav (`runPanelModel.ts`, `LeftNav.tsx`), where they are
+  // a session's status rather than a tool row's verb. That is the T101 defect
+  // exactly — one key, two surfaces — and it is why the present-tense side of
+  // this table did not move with the past-tense side.
   Read: '读取',
   Reading: '读取中',
-  Edited: '已编辑',
+  Edited: '编辑',
   // T101 — the write/edit present tense. It had no entry of its own: the key
   // `Editing` existed, but as the editor settings heading (see its note near
   // the top of this catalog), so every running Write row rendered that
@@ -2530,17 +2548,17 @@ export const zhTranslations: Record<string, string> = {
   // model is still dictating it and the total is not knowable yet, which is
   // what “so far” has to carry in both languages.
   '{{count}} lines so far': '已收到 {{count}} 行',
-  Ran: '已运行',
+  Ran: '终端',
   Grep: '搜索内容',
-  Grepped: '已搜索内容',
-  Grepping: '搜索内容中',
-  'Searched files': '已搜索文件',
-  'Searching files': '搜索文件中',
+  Grepped: '搜索',
+  Grepping: '搜索中',
+  'Searched files': '搜索',
+  'Searching files': '搜索中',
   // subagent-data-06 — this app's own registered tools. They had no entry at
   // all, so every one of these rows read as the unknown-tool fallback 已运行.
-  Previewed: '已预览',
+  Previewed: '预览',
   Previewing: '预览中',
-  Asked: '已询问',
+  Asked: '询问',
   Asking: '询问中',
   Ask: '询问',
   'Loaded skill': '已加载技能',
@@ -2558,14 +2576,14 @@ export const zhTranslations: Record<string, string> = {
   'Stopped subagents': '已停止子 Agent',
   'Stopping subagents': '停止子 Agent 中',
   'Stop subagents': '停止子 Agent',
-  Called: '已调用',
+  Called: '调用',
   Calling: '调用中',
   Call: '调用',
-  Listed: '已列出',
-  Listing: '列出中',
-  Searched: '已搜索',
+  Listed: '列目录',
+  Listing: '列目录中',
+  Searched: '搜索',
   Searching: '搜索中',
-  Fetched: '已获取',
+  Fetched: '获取',
   Fetching: '获取中',
   Planned: '已规划',
   Planning: '规划中',
@@ -2574,7 +2592,7 @@ export const zhTranslations: Record<string, string> = {
   Delegating: '委派中',
   Explored: '已浏览',
   Exploring: '浏览中',
-  Thought: '已思考',
+  Thought: '思考',
   briefly: '片刻',
   'Worked for': '耗时',
   Subagent: '子 Agent',
@@ -3026,10 +3044,10 @@ export const zhTranslations: Record<string, string> = {
   // what the turn DID (「已处理 N 个步骤」), so a verb here would read as a second
   // status line about the same turn.
   'Final output': '最终输出',
-  // Decision 033 D1/D4: the process head's own line. A VERB phrase — the head
-  // reports what the turn has DONE, which is what separates it from the bare
-  // count the aggregate tool row prints one level down.
-  '{{count}} steps processed': '已处理 {{count}} 个步骤',
+  // `{{count}} steps processed` lived here for one day. Decision 033 D1 put it
+  // on the process head; decision 034 took the head's step count off on the
+  // user's 「也不要显示什么已处理 xxx 个步骤」, and the head reports the turn's
+  // clock instead — which reuses the `Working …` / `Worked for …` keys below.
   // The process-group head's chips (`Thinking chip` / 「N 段说明」) retired with
   // the head shape they fed: decision 033 D1 replaced the three chips naming
   // what the group HELD with the two counts above — steps, and how many of them

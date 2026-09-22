@@ -22,8 +22,8 @@ export { MCP_TOOL_PREFIX, mcpToolLabel, PI_TOOL_NAMES, RUNTIME_TOOL_NAMES } from
  *     keeps them adjacent, but this function does not rely on either shape).
  *  2. grouping  — `groupTimeline` folds one assistant message's blocks into
  *     an ordered list of text / question / permission / toolGroup items.
- *  3. rows      — `deriveToolRowView` / `deriveAggregateRow` /
- *     `deriveToolGroupRows` turn a tool group into the rows `ToolRows.tsx`
+ *  3. rows      — `deriveToolRowView` / `deriveToolGroupRows` turn a tool
+ *     group into the rows `ToolRows.tsx`
  *     (T-05 batch 2) renders.
  *
  * No React, no `window` — every decision here is unit-tested directly.
@@ -406,18 +406,21 @@ export interface ToolRowView {
    * an operation. `arg` is the opposite — it interpolates paths and counts, so
    * it arrives here already finished.
    *
-   * T108 aggregates carry a count, translated by a literal key at paint.
    */
   verb: string;
-  /** Number of calls in an aggregate; single-tool rows leave this unset. */
-  toolCallCount?: number;
+  /**
+   * Which icon leads the row (decision 034). Optional: a view built outside
+   * `deriveToolRowView` — the delegation panel's own rows — falls back to the
+   * generic tool mark rather than claiming a type it did not classify.
+   */
+  iconKind?: ToolIconKind;
   /** Finished text, already translated by whoever built it. Never a catalog key. */
   arg?: string;
   /**
    * Font-domain classifier for `arg` (D25 §2.4/§2.5): 'ident' renders mono
    * (paths, URLs, raw commands -- copy-target content the user reads
    * char-by-char); 'prose' renders sans (human-written descriptions,
-   * aggregate summaries, thought/worked-for durations). Mandatory semantics
+   * thought/worked-for durations). Mandatory semantics
    * whenever `arg` is set for a branch D25's arg-kind table covers; branches
    * it does not cover (Grep/Glob/WebSearch/Task/TodoWrite/unknown-tool
    * fallback) leave this undefined, which `toolRowArgClass` treats the same
@@ -428,12 +431,12 @@ export interface ToolRowView {
    * The row is still in flight: present-tense verb, and a live body where the
    * row has one.
    *
-   * A07 `:2331` also said a running row never shows a chevron. That half is
-   * RETIRED for thought rows (user decision 2026-09-19) — see
-   * `buildThoughtRow` — and for the aggregate row (T105) — see
-   * `deriveAggregateRow` — and was already a registered deviation for the live
-   * subagent panel (`subagentActivityModel.ts`). It still holds for a
-   * STANDALONE tool call, whose own output does not exist until it settles.
+   * A07 `:2331` also said a running row never shows a chevron. Decision 034
+   * retired the chevron itself (the whole row is the affordance now), and the
+   * half of that rule which survives is about the BODY: a standalone call has
+   * nothing to disclose until it settles, while a thought row (user decision
+   * 2026-09-19) and the live subagent panel
+   * (`subagentActivityModel.ts`) both do.
    */
   running: boolean;
   failed: boolean;
@@ -553,6 +556,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   return {
     key: run.blockId,
     verb,
+    iconKind: toolIconKind(run.toolName),
     arg: argDetail?.text,
     argKind: argDetail?.kind,
     running,
@@ -680,98 +684,20 @@ function isHitListTool(toolName: string): boolean {
 }
 
 /**
- * Aggregate row for a run of consecutive tool calls (T105).
+ * One tool group -> its top-level rows. One row per entry, in order.
  *
- * Only meant to be called once the caller (`deriveToolGroupRows`) has already
- * decided the segment qualifies (>= 2 runs) — this function does not re-check
- * that, and it no longer looks at WHICH KIND of call each run is: the user's
- * aggregation ruling is 不分类型 (D3), so a Read between two Greps and a Bash
- * between two Reads count the same.
+ * A run becomes a tool row (`deriveToolRowView`); a thinking entry becomes a
+ * Thought row (`turnTiming.formatThoughtRow`). Nothing is grouped, counted or
+ * summarised here any more — see the note inside for why T105's segmentation
+ * and decision 031's aggregate row were retired together on 2026-09-22.
  *
- *  - N = the segment's RUN count. Deliberately not "files touched": a
- *    `file_path`-deduped count reports 1 for four sequential reads of one file,
- *    which is the opposite of 「过程条目太碎」's complaint.
- *  - T108 narrows the former count + last-action clause to the COUNT alone.
- *    Arguments remain in the expandable detail rows, not in the summary.
- *  - A `permission`-carrying run never reaches here — `deriveToolGroupRows`
- *    keeps it as a separator row of its own, so the decision stays visible
- *    without opening anything (`[FB7-10]`).
- *  - `failed` is true when any child call's `toolOk === false` (T-05
- *    adversarial fix #2), which colours the row; it no longer auto-expands it
- *    (see `ToolRowView.defaultOpen`).
- *  - `detail` mirrors the entries' original order (thinking included, un-timed
- *    here — `deriveToolGroupRows` re-stamps thinking rows with real duration).
+ * ## What the FB7 red line turned into
  *
- * ## Running rows ARE expandable now (2026-09-19 deviation from A07)
- *
- * A07 `:2331` said a running row never offers a chevron. That half was already
- * retired once for streaming thought rows (T098, user decision 2026-09-19, see
- * `buildThoughtRow`), and the aggregate row follows it here for the same
- * reason: the segment's earlier calls have SETTLED, so their output exists and
- * is worth opening while the last one still runs. The `running` flag still
- * carries the present-tense verb; only the "no chevron" half is gone.
- */
-export function deriveAggregateRow(
-  entries: readonly ToolGroupEntry[],
-  options: ToolCardOptions = {}
-): ToolRowView {
-  const runEntries = entries.filter(
-    (entry): entry is Extract<ToolGroupEntry, { kind: 'run' }> => entry.kind === 'run'
-  );
-  const running = runEntries.some((entry) => entry.run.status === 'running');
-  const failed = runEntries.some((entry) => entry.run.status === 'failed');
-  const firstEntry = entries[0];
-  const firstBlockId = firstEntry
-    ? firstEntry.kind === 'run'
-      ? firstEntry.run.blockId
-      : firstEntry.block.id
-    : 'empty';
-
-  return {
-    key: `${firstBlockId}~agg`,
-    verb: runEntries.length === 1 ? '{{count}} tool call' : '{{count}} tool calls',
-    toolCallCount: runEntries.length,
-    running,
-    failed,
-    expandable: true,
-    body: 'detail',
-    detail: entries.map((detailEntry) => buildEntryRow(detailEntry, options)),
-  };
-}
-
-/**
- * One tool group -> its top-level rows (T105 rewrote the segmentation).
- *
- *  - SEPARATOR: a run carrying a `permission` record. It renders standalone,
- *    in place, and breaks the run of calls around it. A `thinking` entry used
- *    to be one too; it is a MEMBER since 2026-09-22 (see `breaksSegment`).
- *  - A maximal run of adjacent separator-free entries, counted by its TOOL
- *    CALLS: >= 2 becomes ONE aggregate row plus its detail body (thinking
- *    included, in place); exactly 1 does not aggregate (sign-off ②/A07 :2348)
- *    and its entries render as their own rows, thought included.
- *  - `failed` and `running` no longer affect the segmentation at all: a running
- *    call joins the segment like any other, and the aggregate row reports
- *    itself as running.
- *
- * ## Why the permission run is a separator and not a member (FB7 red line)
- *
- * It is a deliberate deviation from D3's 不分类型, and the reason is this
- * batch's own second half. With the work group ALWAYS collapsed, a decision
- * buried inside an aggregate's detail body takes TWO clicks to reach (open the
- * group, then open the row) — while the thing the user was just asked to allow
- * is summarised as 「12 次工具调用」. Standing alone, one click shows it.
- *
- * ## What replaced "an action-class call is always its own row"
- *
- * A07 `:1769-1772` kept Edit/Write/Bash out of the aggregate. The user's D3
- * ruling retires that: 「不分类型（读取/搜索/运行/编辑/写入）合并成一条」, so a
- * turn that reads four files and edits one of them now reads as five steps
- * rather than "4 + 1". The old text here and in `deriveAggregateRow` said
- * otherwise; both were replaced by the rule rather than left beside it.
- *
- *  - A thinking entry that never reaches an aggregate — because its segment
- *    holds fewer than two calls — becomes its own Thought row via
- *    `turnTiming.formatThoughtRow`, exactly as before.
+ * A run carrying a `permission` record used to be a SEPARATOR, so that a
+ * decision the user had been asked to make could never be summarised as
+ * 「12 次工具调用」 behind two clicks. With no aggregate row left, every run is
+ * its own row and the property holds by construction — the rule did not lose
+ * its reason, it lost the thing it was defending against.
  */
 export function deriveToolGroupRows(
   entries: readonly ToolGroupEntry[],
@@ -794,55 +720,25 @@ export function deriveToolGroupRows(
         : buildThoughtRow(item.block, thinkingOptions)
     );
   };
-  // Decision 033 D7 revised (2026-09-22, user decision): a thinking entry no
-  // longer breaks the run it sits in. D7 had ruled the break 「已是正确行为」 on
-  // the argument that prose or thought genuinely ends one stretch of work — but
-  // the model emits a thought before nearly EVERY call, so the break fired on
-  // nearly every call and the aggregate almost never formed. The user's report
-  // on the result was 「每句输出之间还是一团乱麻，太多东西了」: 12 rows between two
-  // paragraphs where the rule was supposed to produce one.
+  // 2026-09-22 (decision 034, user decision): ONE ROW PER ENTRY. The
+  // segmentation that used to live here — group adjacent calls, collapse two or
+  // more into an aggregate row, break the run on a separator — is retired whole.
   //
-  // An authorization record still breaks it, and that is the FB7 red line below
-  // — a decision the user was asked to make must never be summarised as
-  // 「12 次工具调用」 behind two clicks.
-  const breaksSegment = (entry: ToolGroupEntry) =>
-    entry.kind === 'run' && entry.run.permission != null;
-
-  let i = 0;
-  while (i < entries.length) {
-    if (breaksSegment(entries[i])) {
-      pushStandaloneRow(entries[i]);
-      i += 1;
-      continue;
-    }
-
-    let j = i;
-    const segment: ToolGroupEntry[] = [];
-    while (j < entries.length && !breaksSegment(entries[j])) {
-      segment.push(entries[j]);
-      j += 1;
-    }
-
-    // Counts RUNS, not entries: thinking entries now travel INSIDE a segment,
-    // and counting them would make 「2 次工具调用」 out of one call with a thought
-    // beside it — a row whose own detail body contradicts its count.
-    const runCount = segment.filter((item) => item.kind === 'run').length;
-    if (runCount >= 2) {
-      rows.push(
-        applyThinkingDurations(deriveAggregateRow(segment, cardOptions), segment, thinkingOptions)
-      );
-    } else {
-      segment.forEach(pushStandaloneRow);
-    }
-
-    i = j;
-  }
+  // It was decision 031's answer to 「过程条目太碎」, and it did reduce the row
+  // COUNT. What the user reported after living with it is that it did not
+  // reduce the NOISE, because it paid for every folded run with a third
+  // disclosure level: a turn had a process head, an aggregate row inside it,
+  // and a chevron on every row inside that. Compared against zcode — 「为什么
+  // 它的看起来这么简洁清爽呢」 — the difference was never how much is hidden;
+  // zcode hides nothing at this level and reads cleaner because each row is
+  // short, dim and has no control on it.
+  //
+  // So the density fix moved down a layer (icon + two-character type label, a
+  // capped argument, no chevron) and this layer went flat. `turnProcessFold`'s
+  // per-turn head is the one disclosure left, which is also what zcode's
+  // 「已工作 6 分 41 秒 ⌄」 is.
+  for (const entry of entries) pushStandaloneRow(entry);
   return rows;
-}
-
-function buildEntryRow(entry: ToolGroupEntry, options: ToolCardOptions): ToolRowView {
-  if (entry.kind === 'run') return deriveToolRowView(entry.run, options);
-  return buildThoughtRow(entry.block, { t: options.t });
 }
 
 function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRowView {
@@ -875,6 +771,7 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
   return {
     key: block.id,
     verb,
+    iconKind: 'thinking',
     arg,
     argKind,
     running: streaming,
@@ -888,20 +785,6 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
     // `ToolRows.tsx` re-seeds the row at that transition.
     ...(streaming ? { defaultOpen: true } : {}),
   };
-}
-
-/** Re-stamp an aggregate row's detail thinking entries with real duration/streaming info. */
-function applyThinkingDurations(
-  row: ToolRowView,
-  entries: readonly ToolGroupEntry[],
-  options: ThinkingRowOptions
-): ToolRowView {
-  if (!row.detail) return row;
-  const detail = row.detail.map((detailRow, index) => {
-    const entry = entries[index];
-    return entry?.kind === 'thinking' ? buildThoughtRow(entry.block, options) : detailRow;
-  });
-  return { ...row, detail };
 }
 
 // ---------------------------------------------------------------------------
@@ -1099,6 +982,78 @@ const SEARCH_TOOL_NAMES = new Set([
   // so a burst of searches stayed as N separate "Ran" lines.
   RUNTIME_TOOL_NAMES.glob,
 ]);
+
+/**
+ * Which ICON a row wears (decision 034, 2026-09-22).
+ *
+ * A kind, not a component: this module is React-free by contract (see the file
+ * header — "No React, no `window`"), so the mapping to a Lucide element lives
+ * in `ToolRows.tsx` and only the decision lives here, where it is unit-testable
+ * next to the verb tables it has to agree with.
+ *
+ * Finer than `classifyTool`, and deliberately so. That function answers "which
+ * bucket does this COUNT into", and `terminal` / `edit` / `delegate` are all
+ * one bucket (`action`) to it — a distinction that does not matter for a count
+ * and is the entire point of an icon. Reusing it would have put a hammer on a
+ * `git grep`.
+ *
+ * ⚠️ The icon and the verb are two statements about the same row, and they are
+ * kept in lockstep by test rather than by structure: a tool whose verb says
+ * 「编辑」 and whose icon is a terminal is not a type error. If you add a tool
+ * to `TOOL_VERBS`, add it here too.
+ */
+export type ToolIconKind =
+  | 'terminal'
+  | 'edit'
+  | 'read'
+  | 'search'
+  | 'list'
+  | 'web'
+  | 'delegate'
+  | 'plan'
+  | 'thinking'
+  | 'tool';
+
+const TERMINAL_TOOL_NAMES = new Set<string>([
+  'Bash',
+  'BashOutput',
+  'KillShell',
+  PI_TOOL_NAMES.bash,
+  PI_TOOL_NAMES.powershell,
+  RUNTIME_TOOL_NAMES.bash,
+]);
+const EDIT_TOOL_NAMES = new Set<string>([
+  'Edit',
+  'MultiEdit',
+  'Write',
+  'NotebookEdit',
+  PI_TOOL_NAMES.edit,
+  PI_TOOL_NAMES.write,
+]);
+const WEB_TOOL_NAMES = new Set<string>([
+  'WebFetch',
+  'WebSearch',
+  RUNTIME_TOOL_NAMES.browserPreview,
+]);
+const PLAN_TOOL_NAMES = new Set<string>(['TodoWrite', 'ExitPlanMode']);
+
+export function toolIconKind(toolName: string): ToolIconKind {
+  // Order matters where the sets overlap: `WebSearch` is a SEARCH to
+  // `classifyTool` (it counts as one) but a globe to the reader, and a reader
+  // who sees a magnifier expects local hits.
+  if (WEB_TOOL_NAMES.has(toolName)) return 'web';
+  if (TERMINAL_TOOL_NAMES.has(toolName)) return 'terminal';
+  if (EDIT_TOOL_NAMES.has(toolName)) return 'edit';
+  if (PLAN_TOOL_NAMES.has(toolName)) return 'plan';
+  if (isDelegationTool(toolName)) return 'delegate';
+  // `ls` splits off from the search bucket here: its verb is 「列目录」 and a
+  // magnifier would be the wrong promise for a listing.
+  if (toolName === PI_TOOL_NAMES.ls) return 'list';
+  const bucket = classifyTool(toolName);
+  if (bucket === 'read') return 'read';
+  if (bucket === 'search') return 'search';
+  return 'tool';
+}
 
 /** Decides whether a tool participates in aggregation, and which bucket it counts into. */
 export function classifyTool(toolName: string): ToolClass {
@@ -1311,7 +1266,7 @@ function formatToolArgDetail(
     case RUNTIME_TOOL_NAMES.taskStop: {
       const ids = rec?.delegationIds;
       const count = Array.isArray(ids) ? ids.length : 0;
-      // Singular and plural are separate keys, as in `deriveAggregateRow`:
+      // Singular and plural are separate keys:
       // `N delegation(s)` cannot be translated at all — Chinese has no plural
       // and the parenthesis is not a word in either language.
       raw =
