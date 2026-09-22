@@ -3,6 +3,8 @@ import type { TurnItem, TurnItemKind, TurnSegment } from '../chatTurn';
 import { segmentTurnBody } from '../chatTurn';
 import type { ToolRun, ToolRunStatus } from '../toolCard';
 import {
+  countProcessGroupExplanations,
+  countProcessGroupThinking,
   countProcessSteps,
   countTurnToolCalls,
   deriveTurnCurrentAction,
@@ -29,29 +31,28 @@ function segmentsOf(kinds: readonly TurnItemKind[]): TurnSegment<{ kind: TurnIte
   return segmentTurnBody(kinds.map((kind) => ({ kind })));
 }
 
-// T107 supersedes the last-answer rule: FB4 now protects EVERY paragraph.
-// The real-session shapes below still cover thinking/text/toolCall interleaving,
-// interruption mid-tool, and failures before the first answer.
-describe('splitTurnWorkGroup — every answer stays outside process groups', () => {
-  it('[WG-1] preserves three paragraphs and folds the two intervening process runs', () => {
+// The user-confirmed 2026-09-22 shape: the LAST answer is the final reply —
+// always visible, highlighted; everything before it (process AND earlier
+// answer segments) folds into one process group. Notices stay outside (FB4).
+describe('splitTurnWorkGroup — the last answer stays outside; earlier prose folds in', () => {
+  it('[WG-1] three paragraphs: the first two fold, the last is the final reply', () => {
     const segments = segmentsOf(['text', 'toolGroup', 'text', 'toolGroup', 'text']);
     expect(splitTurnWorkGroup(segments)).toEqual([
-      { kind: 'answer', segment: segments[0] },
-      { kind: 'processGroup', segments: [segments[1]] },
-      { kind: 'answer', segment: segments[2] },
-      { kind: 'processGroup', segments: [segments[3]] },
-      { kind: 'answer', segment: segments[4] },
+      {
+        kind: 'processGroup',
+        segments: [segments[0], segments[1], segments[2], segments[3]],
+      },
+      { kind: 'finalAnswer', segment: segments[4] },
     ]);
   });
 
-  it('[WG-2] an error ending cannot hide ANY earlier answer (FB4)', () => {
+  it('[WG-2] an error ending cannot hide the FINAL reply (FB4)', () => {
     const segments = segmentsOf(['text', 'toolGroup', 'text', 'notice']);
     const sections = splitTurnWorkGroup(segments);
-    expect(sections.filter((s) => s.kind === 'answer').map((s) => s.segment)).toEqual([
-      segments[0],
-      segments[2],
-    ]);
+    // The notice stays outside and AFTER everything — it is the last section.
     expect(sections.at(-1)).toEqual({ kind: 'notice', segment: segments[3] });
+    // The final reply (the last answer) is a standalone section, not folded.
+    expect(sections).toContainEqual({ kind: 'finalAnswer', segment: segments[2] });
   });
 
   it('[WG-3/4] without prose, notices stay outside, after the process group', () => {
@@ -66,7 +67,7 @@ describe('splitTurnWorkGroup — every answer stays outside process groups', () 
     const segments = segmentsOf(['notice', 'text']);
     expect(splitTurnWorkGroup(segments)).toEqual([
       { kind: 'notice', segment: segments[0] },
-      { kind: 'answer', segment: segments[1] },
+      { kind: 'finalAnswer', segment: segments[1] },
     ]);
   });
 
@@ -86,41 +87,51 @@ describe('splitTurnWorkGroup — every answer stays outside process groups', () 
       ).toEqual(segments);
       for (const section of sections) {
         if (section.kind === 'processGroup') {
-          expect(section.segments.every((s) => s.kind === 'process')).toBe(true);
+          // A group holds process AND intermediate answer segments — but a
+          // notice never enters one (FB4).
+          expect(section.segments.every((s) => s.kind !== 'notice')).toBe(true);
         }
       }
     }
   });
 
-  it('[WG-8] appending an answer never moves existing prose or tools into another group', () => {
-    const segments = segmentsOf(['text', 'toolGroup', 'text']);
-    expect(splitTurnWorkGroup(segments).slice(0, 2)).toEqual(
-      splitTurnWorkGroup(segments.slice(0, 2))
-    );
+  it('[WG-8] appending an answer folds the old final in — without moving the group head', () => {
+    const segments = segmentsOf(['text', 'toolGroup', 'text', 'toolGroup', 'text']);
+    const before = splitTurnWorkGroup(segments.slice(0, 3));
+    const after = splitTurnWorkGroup(segments);
+    // The group's FIRST segment is unchanged — it is the `groupKey` the
+    // renderer keys on, so expansion state survives a new answer arriving.
+    expect(after[0].kind === 'processGroup' && before[0].kind === 'processGroup').toBe(true);
+    if (after[0].kind === 'processGroup' && before[0].kind === 'processGroup') {
+      expect(after[0].segments[0]).toBe(before[0].segments[0]);
+      const previousFinal = before.at(-1);
+      expect(previousFinal?.kind).toBe('finalAnswer');
+      if (previousFinal?.kind === 'finalAnswer') {
+        expect(after[0].segments).toContain(previousFinal.segment);
+      }
+    }
   });
 
   it('[WG-9] an empty turn has no sections', () => {
     expect(splitTurnWorkGroup([])).toEqual([]);
   });
 
-  it('[WG-REAL-1/2] thinking and adjacent calls fold while explanations remain visible', () => {
+  it('[WG-REAL-1/2] interleaved thinking, prose and calls fold into one group before the final', () => {
     const sections = splitTurnWorkGroup(
       segmentsOf(['toolGroup', 'text', 'toolGroup', 'toolGroup', 'text'])
     );
-    expect(sections.map((s) => s.kind)).toEqual([
-      'processGroup',
-      'answer',
-      'processGroup',
-      'answer',
-    ]);
-    expect(sections[2].kind === 'processGroup' && sections[2].segments[0].items).toHaveLength(2);
+    expect(sections.map((s) => s.kind)).toEqual(['processGroup', 'finalAnswer']);
+    // The group holds everything before the final: the process runs AND the
+    // intermediate prose between them (the two adjacent toolGroups merge into
+    // one process segment, so three segments, not four).
+    expect(sections[0].kind === 'processGroup' && sections[0].segments).toHaveLength(3);
   });
 
-  it('[WG-REAL-3/4] interruption keeps prose and errors outside while folding unfinished work', () => {
+  it('[WG-REAL-3/4] a notice after the final reply stays visible, outside any group', () => {
     const sections = splitTurnWorkGroup(segmentsOf(['toolGroup', 'text', 'toolGroup', 'notice']));
     expect(sections.map((s) => s.kind)).toEqual([
       'processGroup',
-      'answer',
+      'finalAnswer',
       'processGroup',
       'notice',
     ]);
@@ -133,7 +144,7 @@ describe('splitTurnWorkGroup — every answer stays outside process groups', () 
   it('[WG-LONG] twenty-four consecutive calls create one process section, not twenty-four', () => {
     const kinds: TurnItemKind[] = ['text', ...Array<TurnItemKind>(24).fill('toolGroup'), 'text'];
     const sections = splitTurnWorkGroup(segmentsOf(kinds));
-    expect(sections.map((s) => s.kind)).toEqual(['answer', 'processGroup', 'answer']);
+    expect(sections.map((s) => s.kind)).toEqual(['processGroup', 'finalAnswer']);
   });
 });
 
@@ -399,6 +410,41 @@ describe('countTurnToolCalls', () => {
     expect(countTurnToolCalls([])).toBe(0);
     expect(countTurnToolCalls([askItem('permission')])).toBe(0);
     expect(countTurnToolCalls([group([{ kind: 'thinking' }])])).toBe(0);
+  });
+});
+
+// The head's chips: each counts one kind of thing the group holds, and is
+// shown only when its count is above zero.
+describe('countProcessGroupThinking / countProcessGroupExplanations — the head chips', () => {
+  const group = (entries: unknown[]): TurnItem =>
+    ({ kind: 'toolGroup', blockIndex: 0, messageId: 'm1', entries }) as never;
+
+  it('[CHIP-THINK-1] counts thinking entries across groups, not groups', () => {
+    const items = [
+      group([{ kind: 'thinking' }, { kind: 'run' }]),
+      group([{ kind: 'thinking' }, { kind: 'thinking' }]),
+    ];
+    expect(countProcessGroupThinking(items)).toBe(3);
+  });
+
+  it('[CHIP-THINK-2] no thinking means zero — the chip is omitted', () => {
+    expect(countProcessGroupThinking([])).toBe(0);
+    expect(countProcessGroupThinking([group([{ kind: 'run' }])])).toBe(0);
+    expect(
+      countProcessGroupThinking([
+        { kind: 'text', blockIndex: 0, messageId: 'm', block: { id: 'b', type: 'text' } } as never,
+      ])
+    ).toBe(0);
+  });
+
+  it('[CHIP-EXPL-1] counts text items — the intermediate paragraphs', () => {
+    const textItem = () =>
+      ({ kind: 'text', blockIndex: 0, messageId: 'm', block: { id: 'b', type: 'text' } }) as never;
+    expect(countProcessGroupExplanations([textItem(), group([{ kind: 'run' }]), textItem()])).toBe(
+      2
+    );
+    expect(countProcessGroupExplanations([])).toBe(0);
+    expect(countProcessGroupExplanations([group([{ kind: 'run' }])])).toBe(0);
   });
 });
 

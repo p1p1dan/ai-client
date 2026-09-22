@@ -245,8 +245,8 @@ export function turnProcessShellClass(): string {
  *
  * ```
  *                      light   dark    role
- * text-foreground      18.78   11.38   the final output, and mid-turn prose
- * text-muted-foreground 7.20    6.70   the work-group head
+ * text-foreground      18.78   11.38   answer text
+ * text-muted-foreground 7.20    6.70   the work-group head, and mid-turn prose
  * text-tool-arg         5.09    5.02   thinking / terminal rows inside it
  * ```
  *
@@ -257,9 +257,17 @@ export function turnProcessShellClass(): string {
  * introduced for tool-row arguments.
  */
 
-/** Tier 1 — the final output, and any prose the model wrote on the way there. */
+/** Tier 1 — ordinary answer text. */
 export function turnAnswerToneClass(): string {
   return 'text-foreground';
+}
+
+/**
+ * Tier 2 — intermediate prose inside the process group. No italics — Chinese
+ * readability.
+ */
+export function turnIntermediateToneClass(): string {
+  return 'text-muted-foreground';
 }
 
 /** Tier 3 — thinking and terminal rows. Dimmer than the head that summarises them. */

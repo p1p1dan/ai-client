@@ -1,4 +1,3 @@
-import { englishTranslate } from '@shared/i18n';
 import type { SessionRetryInfo, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import {
   ArrowDown,
@@ -60,6 +59,7 @@ import {
   turnBodyClass,
   turnCopyButtonClass,
   turnHeadClass,
+  turnIntermediateToneClass,
   turnProcessShellClass,
   turnProcessToneClass,
   turnStatusToneClass,
@@ -124,7 +124,8 @@ import {
   ownsSessionFailure,
 } from './turnHead';
 import {
-  countProcessSteps,
+  countProcessGroupExplanations,
+  countProcessGroupThinking,
   countTurnToolCalls,
   deriveTurnCurrentAction,
   deriveTurnWorkZone,
@@ -1487,80 +1488,51 @@ function TurnProgressHead({
   onUserOpenChange,
   children,
 }: {
-  /** The grouped PROCESS items only — the step count is about work, not paragraphs. */
+  /** The grouped items — thinking/tool/explanation counts come from these. */
   items: readonly TurnItem[];
   /** An unanswered permission/question is inside: the group may not close. */
   forcedOpen: boolean;
-  /**
-   * The user's own click, held by `ChatTurn` rather than here.
-   *
-   * Hoisted on purpose, and T112 renewed the reason rather than removing it:
-   * the head used to swap between `<details>` and a plain row as `collapsible`
-   * flipped; it now appears and disappears instead, as a one-step group grows
-   * its second step. A `useState` inside would be discarded by that just as
-   * surely — silently re-collapsing a group the reader had just opened. Rule 2
-   * of `turnWorkGroupOpen` ("a choice is permanent for this turn") can only
-   * hold if the choice outlives the element that took it.
-   */
   userOpen: boolean | null;
   onUserOpenChange: (open: boolean) => void;
   children: React.ReactNode;
 }) {
-  /**
-   * ⚠️ This ONE line renders in English, in a Simplified-Chinese UI (user
-   * decision 2026-09-19). Everything else on the chat surface stays Chinese —
-   * do not copy this binding anywhere else. `TurnWorkZoneRow` below is the
-   * nearest neighbour and it is deliberately NOT this: it is a new line, its
-   * words are the user's own 「已工作 / 完成于 / 次工具调用 / 思考」, and decision
-   * 031 D7 scopes the English exception to this head.
-   *
-   * ## Why the identifier is still `t`
-   *
-   * `englishTranslate` is `@shared/i18n`'s own "resolve against the English
-   * catalog" translator, built for exactly this: the call sites below keep
-   * their literal single-quoted keys, so `i18nCoverage.test.ts`'s scan — which
-   * looks for a quoted first argument to a call named exactly `t` — still sees
-   * every one of them and still REQUIRES a `zhTranslations` entry for each.
-   * (That scan reads comments too, so this note may not spell its own pattern
-   * out: doing so registers a key nothing translates. Measured, not guessed.)
-   *
-   * Renaming the binding would hide these keys from that scan and leave their
-   * catalog entries looking like orphans — and three of the words here
-   * (`Thinking`, `Stopping`, `Retrying`) are shared with the Run panel
-   * (`runPanelModel.ts`), which is still Chinese and still needs them.
-   *
-   * So: this is not `useI18n()`, and swapping it back for `useI18n()` silently
-   * re-Chinesifies the line. `messageTimelineWiring.test.ts`'s
-   * `[HEAD-EN-1]` guard is what makes that swap fail loudly.
-   */
-  const t = englishTranslate;
+  const { t } = useI18n();
   const open = turnWorkGroupOpen({ forcedOpen, userOpen });
-  const steps = countProcessSteps(items);
-  // One literal key, not a count-picked pair: T112 retired the singular with
-  // the case that reached it, since a head exists only for two steps or more.
-  const line = t('{{count}} steps processed', { count: steps });
+
+  // Chips: each shown only when its count > 0, joined by 「 · 」.
+  const thinkingCount = countProcessGroupThinking(items);
+  const toolCallCount = countTurnToolCalls(items);
+  const explanationCount = countProcessGroupExplanations(items);
+  const chips: string[] = [];
+  if (thinkingCount > 0) chips.push(t('Thinking chip'));
+  if (toolCallCount > 0)
+    chips.push(
+      t(toolCallCount === 1 ? '{{count}} tool call' : '{{count}} tool calls', {
+        count: toolCallCount,
+      })
+    );
+  if (explanationCount > 0)
+    chips.push(
+      t(explanationCount === 1 ? '{{count}} explanation' : '{{count}} explanations', {
+        count: explanationCount,
+      })
+    );
 
   return (
     <details className={turnBodyClass()} open={open}>
       <summary
         className={turnWorkGroupSummaryClass()}
-        // While `forcedOpen` holds, this records the intent without acting on
-        // it — the group stays open and the click takes effect once the card
-        // has been answered. Deliberately NOT a disabled trigger: a control
-        // that goes dead for the duration of an authorization is a second thing
-        // to explain, and the recorded intent is the behaviour a user who
-        // clicked "collapse" actually wanted.
         onClick={(event) => {
           event.preventDefault();
           onUserOpenChange(!open);
         }}
       >
-        {/* `title` kept from the four-clause era: the line is short now, but the
-            column is still narrow enough to truncate a large step count in a
-            translated string. */}
-        <span className="min-w-0 truncate underline-offset-2 hover:underline" title={line}>
-          {line}
-        </span>
+        {chips.map((chip, index) => (
+          <span key={chip} className="min-w-0 shrink-0">
+            {index > 0 && <span className="text-muted-foreground/50"> · </span>}
+            {chip}
+          </span>
+        ))}
         <ChevronRight
           className={cn('size-3.5 shrink-0 transition-transform duration-150', open && 'rotate-90')}
           aria-hidden
@@ -1589,10 +1561,8 @@ function TurnProgressHead({
  *    is dropped individually when it was never measured, never printed as a
  *    zero (A07 `:2399`).
  *
- * This row is Chinese, unlike the group head above it. The head's English is a
- * narrowly scoped exception (decision 031 D7, guarded by `[HEAD-EN-1]`); this
- * is a new line whose wording the user gave in Chinese, and every word it needs
- * already has a catalog entry.
+ * This row and the process-group chips both use the localized catalog.
+ * Q1 retired the old group head's English-only exception.
  *
  * It does not decide whether it renders: `deriveTurnWorkZone` returns `null`
  * for a settled turn that replayed no timing, and the caller drops the row.
@@ -1659,9 +1629,8 @@ function TurnWorkZoneRow({
  * 秒」 would be a number nobody measured.
  *
  * T113 moved its caller from the group head to the work zone row, which is why
- * `t` is a parameter rather than this module's `englishTranslate`: the row
- * hands it the localized translator and the same four keys render 「工作中 47
- * 秒」.
+ * `t` is a parameter: the row hands it the localized translator and the same
+ * four keys render 「工作中 47 秒」.
  */
 function workingHeadText(
   t: (key: string, params?: Record<string, string | number>) => string,
@@ -2100,24 +2069,21 @@ const ChatTurn = memo(function ChatTurn({
     thinkingMs: turnThinkingMs,
   });
 
-  const renderSegment = (segment: TurnSegment<TurnItem>) => {
+  const renderSegment = (segment: TurnSegment<TurnItem>, intermediate = false) => {
     // Keyed off the segment's FIRST item, not its index: an index key would
     // remount every later segment the moment a new one opened mid-stream,
     // throwing away the expanded tool bodies inside them.
     const key = `${segment.kind}:${turnItemKey(segment.items[0])}`;
     if (segment.kind === 'answer') {
-      // T12: bare prose. The `turnAnswerContainerClass()` ring that used to
-      // wrap this retired with the box model it belonged to — after FB4 made
-      // answer segments repeat within a turn, one ring per prose run stacked
-      // several boxes inside a single reply (Q14). The role signal moved
-      // entirely to the user side's shape; see the note in
-      // `chatTimelineLayout.ts` where the container used to be defined.
+      // T12: bare prose. The role signal lives on the user side's shape; the
+      // container ring retired with the box model it belonged to (Q14).
       //
-      // The tone is the SAME inside the group and outside it (2026-09-18): the
-      // brightest rung belongs to prose wherever it sits, so a paragraph the
-      // model wrote mid-turn is not dimmed for having been written early.
+      // Intermediate prose (inside the process group, before the final
+      // reply) dims to tier 2 so the eye is drawn to the final answer
+      // below. Standalone answer segments keep the brightest rung.
+      const tone = intermediate ? turnIntermediateToneClass() : turnAnswerToneClass();
       return (
-        <div key={key} className={cn(turnBodyClass(), turnAnswerToneClass())}>
+        <div key={key} className={cn(turnBodyClass(), tone)}>
           {segment.items.map(renderItem)}
         </div>
       );
@@ -2170,19 +2136,25 @@ const ChatTurn = memo(function ChatTurn({
           12px / 8px inside one. */}
       {turn.user && <UserBubble message={turn.user} />}
       <div className={turnBodyClass()}>
-        {/* T107 extends FB4 to every answer: only process segments enter a
-            disclosure. The head that used to render here for a turn with NO
-            process at all is gone (T113) — it existed so a tool-free 50-second
-            wait showed something, and the work zone row below now covers that
-            turn along with every other one, from the same clock. Keeping both
-            would have put two progress lines on a turn whose whole complaint
-            was that it had none. */}
+        {/* Q1 keeps the final answer and notices outside the process groups;
+            intermediate prose joins the process it describes. Turn-level
+            progress remains on the trailing work-zone row (T113). */}
         {workSections.map((section) => {
+          if (section.kind === 'finalAnswer') {
+            // The final reply remains a normal answer segment. The section kind
+            // keeps the turn-level distinction explicit without adding a new
+            // border, background, or other visual treatment.
+            return renderSegment(section.segment);
+          }
           if (section.kind !== 'processGroup') return renderSegment(section.segment);
           // First-item identity survives appended tools and later answers. Each
           // group remembers its own click, even while authorization pins it open.
           const groupKey = turnItemKey(section.segments[0].items[0]);
           const groupedProcessItems = section.segments.flatMap((segment) => segment.items);
+          // Inside the group, answer segments are INTERMEDIATE prose — dimmed,
+          // so the final answer below stands out.
+          const renderGroupSegment = (segment: TurnSegment<TurnItem>) =>
+            renderSegment(segment, true);
           // T112: one step is its own best summary, so it renders where it
           // stands — no head, no chevron, nothing to click. The group grows a
           // fold the moment a second step lands, and `groupKey` is unchanged
@@ -2190,14 +2162,9 @@ const ChatTurn = memo(function ChatTurn({
           // it. `turnProcessGroupFolds` owns the threshold; deciding it here
           // would fork the rule away from the count the head prints.
           if (!turnProcessGroupFolds(groupedProcessItems)) {
-            return <Fragment key={groupKey}>{section.segments.map(renderSegment)}</Fragment>;
+            return <Fragment key={groupKey}>{section.segments.map(renderGroupSegment)}</Fragment>;
           }
           const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);
-          // T113: EVERY head reports its own step count and nothing else. The
-          // `lastGroup ? workedMs : null` family that used to sit here made the
-          // final head speak for the whole turn while its neighbours spoke for
-          // their own group — one line, two scopes. Those figures are on the
-          // work zone row below now.
           return (
             <TurnProgressHead
               key={groupKey}
@@ -2208,7 +2175,7 @@ const ChatTurn = memo(function ChatTurn({
                 setWorkGroupUserOpen((previous) => ({ ...previous, [groupKey]: open }))
               }
             >
-              {section.segments.map(renderSegment)}
+              {section.segments.map(renderGroupSegment)}
             </TurnProgressHead>
           );
         })}

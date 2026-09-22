@@ -297,26 +297,20 @@ describe('turnProgressClauses — the two stages', () => {
 });
 
 /**
- * ## [HEAD-EN-2] The turn progress head renders in English (user decision
- * 2026-09-19)
- *
- * The rest of the chat surface stays Simplified Chinese — `chineseChatSurface`
- * is the suite that holds that line, and it is not being relaxed. This ONE row,
- * the one directly above the agent's reply, is the exception the user asked
- * for, and `MessageTimeline`'s `TurnProgressHead` implements it by binding
- * `englishTranslate` instead of `useI18n()`'s `t`.
- *
- * Both halves of the guard matter and neither substitutes for the other:
- *
- *  - the SOURCE half (`messageTimelineWiring.test.ts` `[HEAD-EN-1]`) is what
- *    catches the actual regression — somebody restoring `useI18n()` because the
- *    binding "looks wrong" next to every other component in the file;
- *  - this half is what says the catalog can still produce both, so that
- *    regression would be silent rather than a crash: every key below has a
- *    Chinese entry, and the entries must stay (three of these words are shared
- *    with the Run panel, which is still Chinese).
+ * Q1's process-group head uses localized chips. These checks retain the
+ * English helper coverage and Chinese keys shared with the work-zone row and
+ * Run panel; they no longer describe an English-only group head.
  */
-describe('[HEAD-EN-2] the turn progress head speaks English', () => {
+describe('progress-row catalog coverage', () => {
+  it('translates process chips and keeps thinking separate from the running status', () => {
+    expect(zh('Thinking chip')).toBe('思考');
+    expect(zh('Thinking')).toBe('思考中');
+    expect(zh('{{count}} tool call', { count: 1 })).toBe('1 次工具调用');
+    expect(zh('{{count}} tool calls', { count: 2 })).toBe('2 次工具调用');
+    expect(zh('{{count}} explanation', { count: 1 })).toBe('1 段说明');
+    expect(zh('{{count}} explanations', { count: 2 })).toBe('2 段说明');
+  });
+
   const en = englishTranslate;
   /** Anything in the CJK Unified Ideographs block — the check the rule is about. */
   const CJK = /[一-鿿]/;
@@ -333,7 +327,6 @@ describe('[HEAD-EN-2] the turn progress head speaks English', () => {
       'Worked for 1m 6s'
     );
     expect(en('Worked for {{minutes}}m', { minutes: 1 })).toBe('Worked for 1m');
-    expect(en('{{count}} steps processed', { count: 3 })).toBe('3 steps processed');
   });
 
   it('renders the whole line — clauses included — with no Chinese in it', () => {
@@ -369,7 +362,6 @@ describe('[HEAD-EN-2] the turn progress head speaks English', () => {
   it('the Chinese entries these keys would otherwise resolve to are still there', () => {
     expect(zh('Working {{seconds}}s', { seconds: 12 })).toMatch(CJK);
     expect(zh('Worked for {{seconds}}s', { seconds: 57 })).toMatch(CJK);
-    expect(zh('{{count}} steps processed', { count: 3 })).toMatch(CJK);
     expect(zh('Thinking {{seconds}}s', { seconds: 20 })).toMatch(CJK);
     expect(zh('Thinking {{count}} tokens', { count: 86 })).toMatch(CJK);
     // The Run panel's own use of the shared word, still Chinese

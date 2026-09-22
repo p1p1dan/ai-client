@@ -6,7 +6,7 @@
  * carry both: 「已处理 N 个步骤」 for every group but the last, and the whole
  * TURN's duration/usage/thinking for that one — two different scopes wearing
  * one identical-looking line, which is what the user called 「有点不协调」. Now
- * the head only ever reports its own step count, and everything that is true
+ * the head reports its own thinking/tool/explanation chips, and everything true
  * of the turn rather than of a group lives on `deriveTurnWorkZone`'s row.
  *
  * Pure, and in its own `.ts`: the vitest suite runs `environment: node` and
@@ -20,11 +20,10 @@
  * N 个步骤」. That left prose and process runs alternating down the turn — the
  * user's report was 「各种调用、授权穿插在 agent 的输出中，严重影响我的观感」.
  * That led to a single group containing everything before the last answer.
- * T107 (2026-09-21, user-confirmed B shape) supersedes that placement: EVERY
- * answer stays visible, and only process segments fold. The FB4 lesson still
- * applies: ending on an error must never hide earlier prose or the error.
- * `countProcessSteps` is no longer a FALLBACK for a head with no timing (T113):
- * it is the only thing a head says.
+ * T107 kept every answer visible. Q1 now folds intermediate prose with the
+ * process while keeping the last answer and notices outside. The last answer
+ * retains its ordinary visual treatment; `countProcessSteps` only controls
+ * the fold threshold, while separate counters supply the chips.
  */
 
 import type { TurnItem, TurnSegment } from './chatTurn';
@@ -74,21 +73,23 @@ export function turnProcessGroupFolds(items: readonly TurnItem[]): boolean {
 }
 
 export type TurnWorkSection<T> =
-  | { kind: 'answer'; segment: TurnSegment<T> }
+  | { kind: 'finalAnswer'; segment: TurnSegment<T> }
   | { kind: 'notice'; segment: TurnSegment<T> }
   | { kind: 'processGroup'; segments: TurnSegment<T>[] };
 
 /**
- * T107: preserve every answer and fold only consecutive process segments.
- * Notices remain outside, including errors after the final answer (FB4).
- * No process means no empty group or disclosure affordance.
+ * Fold all process AND non-final answer segments into the process group; the
+ * LAST answer segment stays outside with its ordinary answer styling.
+ *
+ * Notices remain outside in original order (FB4 — an error after the final
+ * reply must never hide earlier prose). No process means no empty group.
  *
  * The no-answer case keeps the existing ordering exception: notices between
- * tool runs render after the single process group. Changing that behavior is
- * outside T107; with answers present, segment order remains exact.
+ * tool runs render after the single process group.
  *
- * Unlike the former last-answer boundary, appending prose does not reparent
- * earlier tool rows, so their expansion state survives streaming naturally.
+ * Streaming: a new answer arriving after the current "final" one makes the
+ * previous final fold into the group — but the group's `groupKey` (first
+ * item identity) is unchanged, so expansion state survives naturally.
  */
 export function splitTurnWorkGroup<T>(segments: readonly TurnSegment<T>[]): TurnWorkSection<T>[] {
   if (!segments.some((segment) => segment.kind === 'answer')) {
@@ -102,11 +103,24 @@ export function splitTurnWorkGroup<T>(segments: readonly TurnSegment<T>[]): Turn
     return sections;
   }
 
+  // Find the last answer segment — it becomes the final reply.
+  let lastAnswerIndex = -1;
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    if (segments[index].kind === 'answer') {
+      lastAnswerIndex = index;
+      break;
+    }
+  }
+
   const sections: TurnWorkSection<T>[] = [];
-  for (const segment of segments) {
-    if (segment.kind !== 'process') {
-      sections.push({ kind: segment.kind, segment });
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (segment.kind === 'notice') {
+      sections.push({ kind: 'notice', segment });
+    } else if (segment.kind === 'answer' && index === lastAnswerIndex) {
+      sections.push({ kind: 'finalAnswer', segment });
     } else {
+      // Process or non-final answer → process group.
       const previous = sections.at(-1);
       if (previous?.kind === 'processGroup') previous.segments.push(segment);
       else sections.push({ kind: 'processGroup', segments: [segment] });
@@ -320,6 +334,38 @@ export function countTurnToolCalls(items: readonly TurnItem[]): number {
         : total,
     0
   );
+}
+
+/**
+ * How many THINKING blocks the process group holds — the 「✦ 思考」 chip on
+ * its head.
+ *
+ * Thinking blocks live inside `toolGroup` items as `entries` of kind
+ * `'thinking'` (see `toolCard.ts`'s `ToolGroupEntry`), so counting them means
+ * walking every group's entries. A single `toolGroup` can hold several, and a
+ * turn can hold several `toolGroup`s, so this is the sum across all of them.
+ *
+ * The chip shows the label only (no count): "there was thinking" is the
+ * information the head carries; the count is what `countProcessSteps` already
+ * reports as part of its step total.
+ */
+export function countProcessGroupThinking(items: readonly TurnItem[]): number {
+  return items.reduce((total, item) => {
+    if (item.kind !== 'toolGroup') return total;
+    return total + item.entries.filter((entry) => entry.kind === 'thinking').length;
+  }, 0);
+}
+
+/**
+ * How many EXPLANATION items the process group holds — the 「✎ N 段说明」 chip.
+ *
+ * These are the `text` items from intermediate answer segments: the running
+ * commentary the model wrote between tool calls, before its final reply. Each
+ * `text` item is one paragraph the reader can point at, so "段" counts items
+ * rather than segments.
+ */
+export function countProcessGroupExplanations(items: readonly TurnItem[]): number {
+  return items.reduce((total, item) => (item.kind === 'text' ? total + 1 : total), 0);
 }
 
 /**

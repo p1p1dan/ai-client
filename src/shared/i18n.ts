@@ -3019,7 +3019,14 @@ export const zhTranslations: Record<string, string> = {
   'Worked for {{seconds}}s': '已工作 {{seconds}} 秒',
   'Worked for {{minutes}}m {{seconds}}s': '已工作 {{minutes}} 分 {{seconds}} 秒',
   'Worked for {{minutes}}m': '已工作 {{minutes}} 分',
-  '{{count}} steps processed': '已处理 {{count}} 个步骤',
+  // The process-group head's chips. `{{count}} steps processed` above
+  // retired with the head shape it fed: the head now names what the group
+  // holds rather than counting steps. `Thinking chip` is a separate key from
+  // `Thinking` (the RUNNING status 「思考中」) because the chip labels a
+  // completed block, not an ongoing action.
+  'Thinking chip': '思考',
+  '{{count}} explanation': '{{count}} 段说明',
+  '{{count}} explanations': '{{count}} 段说明',
   // The running half of the same head (2026-09-18). `Working` above stays as
   // the no-clock fallback; these three carry the seconds the field report was
   // about — a 50-second wait whose only evidence was a counter above the

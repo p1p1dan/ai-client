@@ -607,32 +607,20 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * ⚠️ [HEAD-EN-1] The turn progress head renders in ENGLISH, alone on a
-   * Simplified-Chinese surface (user decision 2026-09-19).
+   * ⚠️ [HEAD-CN-1] The turn progress head is CHINESE again, like the rest of
+   * the chat surface (user decision 2026-09-22 — the chips redesign retired
+   * the English exception that decision 031 D7 scoped to the old head).
    *
-   * This is the guard the decision rests on, because the regression is a
-   * one-word edit that nothing else would catch: `TurnProgressHead` looks like
-   * every other component in this file, so restoring `const { t } =
-   * useI18n();` reads as a cleanup and silently puts 「工作中 12 秒」 back on
-   * screen. No type error, no failing render, no other assertion.
-   *
-   * The mechanism is `@shared/i18n`'s own `englishTranslate`, not a set of
-   * hardcoded English literals: the call sites keep their catalog keys, so
-   * `i18nCoverage.test.ts` still scans them and their `zhTranslations` entries
-   * are still required to exist — which matters because `Thinking` is shared
-   * with the Run panel (`runPanelModel.ts`), which stays Chinese.
-   *
-   * `turnProgress.test.ts`'s `[HEAD-EN-2]` is the other half: it runs the same
-   * keys through the same translator and asserts the line comes out English.
+   * The regression this guards is the mirror of the old one: somebody
+   * restoring `englishTranslate` because the binding "looks wrong" next to a
+   * file-wide convention would silently put English chips on a Chinese
+   * surface. No type error, no failing render, no other assertion.
    */
-  it('[HEAD-EN-1] the head binds englishTranslate, and does not reach for useI18n', () => {
+  it('[HEAD-CN-1] the head binds useI18n, and never englishTranslate', () => {
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
-    expect(head).toContain('const t = englishTranslate;');
-    expect(
-      head,
-      'TurnProgressHead must not take the localized translator — that is the regression'
-    ).not.toContain('useI18n()');
-    expect(SYNTAX).toContain("import { englishTranslate } from '@shared/i18n';");
+    expect(head).toContain('const { t } = useI18n();');
+    expect(head).not.toContain('englishTranslate');
+    expect(SYNTAX).not.toContain("import { englishTranslate } from '@shared/i18n';");
     // The rest of the file is untouched: the status row and the retry banner
     // below the head are still localized, and still fed by the hook's `t`.
     const turn = nodeSource(topLevelFunction('ChatTurn'));
@@ -640,22 +628,20 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * The three head keys are literal `t('…')` calls, not a key built from the
+   * The head's chip keys are literal `t('…')` calls, not a key built from the
    * label's discriminant. `i18nCoverage.test.ts` can only scan literals, so a
    * `t(label.key)` would ship an untranslated head and no gate would notice.
    */
   it('[WG-WIRE-2] the head words itself from literal catalog keys', () => {
-    // The bare 「工作中」 survives as the no-clock fallback only — a session
-    // already in flight when this window opened has no origin to count from.
-    expectCalled("t('Working')");
-    expectCalled("t('Working {{seconds}}s'");
-    expectCalled("t('Working {{minutes}}m {{seconds}}s'");
-    expectCalled("t('Working {{minutes}}m'");
-    expectCalled("t('Worked for {{seconds}}s'");
-    expectCalled("t('Worked for {{minutes}}m {{seconds}}s'");
-    expectCalled("t('Worked for {{minutes}}m'");
-    // The no-timestamp fallback, kept from the 2026-09-10 fold.
-    expectCalled("t('{{count}} steps processed'");
+    const head = nodeSource(topLevelFunction('TurnProgressHead'));
+    // The three chips, in the order the head prints them. The working/worked
+    // keys below belong to `TurnWorkZoneRow` since T113.
+    expect(head).toContain("t('Thinking chip')");
+    expect(head).toContain("'{{count}} tool call'");
+    expect(head).toContain("'{{count}} tool calls'");
+    expect(head).toContain("'{{count}} explanation'");
+    expect(head).toContain("'{{count}} explanations'");
+    expect(head).not.toContain('steps processed');
   });
 
   /**
@@ -795,9 +781,10 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // applies, inside the group and in the streaming tail alike.
   it('F11: the process panel carries the process shell spacing and the dim tone', () => {
     expectCalled('cn(turnProcessShellClass(), turnBodyClass(), turnProcessToneClass())');
-    // The answer keeps the brightest rung wherever it sits — a paragraph the
-    // model wrote mid-turn must not be dimmed for having been written early.
-    expectCalled('cn(turnBodyClass(), turnAnswerToneClass())');
+    // Answer text stays at the ordinary answer tone when it is final; only
+    // grouped, intermediate prose uses the muted tone.
+    expectWired('const tone = intermediate ? turnIntermediateToneClass() : turnAnswerToneClass();');
+    expectCalled('cn(turnBodyClass(), tone)');
   });
 
   // F12: `waiting_*` must count as in flight for the shell, or the head and the
@@ -1230,15 +1217,25 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(kinds.slice(0, -2).every((kind) => kind === 'retry' || kind.startsWith('?'))).toBe(true);
   });
 
-  // T107 replaces the old four buckets with ordered sections. Preserve the
-  // old no-empty-disclosure check AND extend FB4 from the last answer to all.
-  it('[WG-WIRE-4] every answer renders outside its independently folded process group', () => {
+  // Q1 keeps the final answer visible; earlier prose joins the process group.
+  // Notices still render independently, and a tool-free turn has no empty fold.
+  it('[WG-WIRE-4] the final answer stays outside and grouped prose uses the intermediate tone', () => {
     const body = nodeSource(turnBodyNode());
     expect(body).toContain('workSections.map((section) =>');
     expect(body).toContain(
       "if (section.kind !== 'processGroup') return renderSegment(section.segment);"
     );
-    expect(body).toContain('{section.segments.map(renderSegment)}');
+    const finalAt = body.indexOf("if (section.kind === 'finalAnswer') {");
+    const groupAt = body.indexOf("if (section.kind !== 'processGroup')");
+    expect(finalAt).toBeGreaterThan(-1);
+    expect(finalAt).toBeLessThan(groupAt);
+    const finalBranch = body.slice(finalAt, groupAt);
+    expect(finalBranch).toContain('return renderSegment(section.segment);');
+    expect(finalBranch).not.toContain('turnFinalAnswerClass');
+    expect(body).toContain(
+      'const renderGroupSegment = (segment: TurnSegment<TurnItem>) => renderSegment(segment, true);'
+    );
+    expect(body).toContain('{section.segments.map(renderGroupSegment)}');
     // T113 removed the `lastProcessSection === -1` head, which existed so a
     // turn with NO process at all still showed something for a 50-second wait.
     // `TurnWorkZoneRow` covers that turn along with every other one, from the
@@ -1253,6 +1250,8 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
       body.indexOf('</TurnProgressHead>', body.indexOf('key={groupKey}'))
     );
     expect(groupedHead).not.toContain('renderSegment(section.segment)');
+    expect(groupedHead).not.toContain('turnFinalAnswerClass()');
+    expect(groupedHead).toContain('{section.segments.map(renderGroupSegment)}');
   });
 
   /**
@@ -1273,7 +1272,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('turnProcessGroupFolds(groupedProcessItems)');
     expect(body).toContain('if (!turnProcessGroupFolds(groupedProcessItems)) {');
     expect(body).toContain(
-      '<Fragment key={groupKey}>{section.segments.map(renderSegment)}</Fragment>'
+      '<Fragment key={groupKey}>{section.segments.map(renderGroupSegment)}</Fragment>'
     );
     const branchAt = body.indexOf('if (!turnProcessGroupFolds(groupedProcessItems)) {');
     expect(branchAt, 'the branch exists').toBeGreaterThan(-1);
@@ -1368,22 +1367,24 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * The head says one thing.
-   *
-   * REWRITTEN 2026-09-21 (T113). This was `[WG-WIRE-7] the settled head keeps
-   * its live clauses instead of re-gating on label.kind`, a guard against one
-   * `label.kind` test being duplicated into a second gate that threw a settled
-   * turn's ↑↓ tokens away. There is no `label` and there are no clauses now —
-   * the head reports its own step count and nothing else — so the guard is
-   * restated as the shape that makes the old defect unreachable: one line of
-   * copy, built from one catalog key, with no turn-level input to re-gate.
+   * Q1 replaces the generic step total with group-scoped chips. T113's boundary
+   * is unchanged: turn-level timing and usage never ride a process-group head.
    */
-  it('[WG-WIRE-7] the group head carries one line of copy and no turn-level figures', () => {
+  it('[WG-WIRE-7] the group head counts its own chips and carries no turn-level figures', () => {
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
-    expect(head).toContain("const line = t('{{count}} steps processed', { count: steps });");
-    // The count is computed ONCE, from the same function the fold threshold
-    // uses, so a head can never disagree with the group it heads.
-    expect(head).toContain('const steps = countProcessSteps(items);');
+    for (const counter of [
+      'countProcessGroupThinking',
+      'countTurnToolCalls',
+      'countProcessGroupExplanations',
+    ]) {
+      expect(countIn(head, `${counter}(items)`)).toBe(1);
+    }
+    for (const counter of ['thinkingCount', 'toolCallCount', 'explanationCount']) {
+      expect(head).toContain(`if (${counter} > 0)`);
+    }
+    expect(head).toContain('chips.map(');
+    expect(head).not.toContain('steps processed');
+    expect(head).not.toContain('countProcessSteps(');
     expect(countIn(head, 'label')).toBe(0);
     // Every turn-level input is gone from this element. Each of these coming
     // back is the exact regression T113 removed: a group-scoped line carrying

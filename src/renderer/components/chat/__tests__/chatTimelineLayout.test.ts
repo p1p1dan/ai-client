@@ -14,6 +14,7 @@ import {
   turnBodyClass,
   turnCopyButtonClass,
   turnHeadClass,
+  turnIntermediateToneClass,
   turnProcessShellClass,
   turnProcessToneClass,
   turnStatusToneClass,
@@ -684,6 +685,18 @@ describe('turnStatusToneClass (F456 §7.5)', () => {
  * any single-class assertion.
  */
 describe('reading ladder (2026-09-18)', () => {
+  it('Q1 only dims intermediate prose and preserves plain answer styling', () => {
+    expect(turnIntermediateToneClass()).toBe('text-muted-foreground');
+    const intermediate = cn(turnBodyClass(), turnIntermediateToneClass());
+    expect(intermediate).toContain('text-chat-body');
+    expect(intermediate).toContain('text-muted-foreground');
+    const answer = cn(turnBodyClass(), turnAnswerToneClass());
+    expect(turnAnswerToneClass()).toBe('text-foreground');
+    for (const classes of [answer, intermediate]) {
+      expect(classes).not.toMatch(/(?:^|\s)(?:italic|border-\S+|bg-\S+|pl-\S+)(?:\s|$)/);
+    }
+  });
+
   it('[LADDER-1] the three rungs are pairwise different colours, and all three are tokens', () => {
     const answer = turnAnswerToneClass();
     const process = turnProcessToneClass();
