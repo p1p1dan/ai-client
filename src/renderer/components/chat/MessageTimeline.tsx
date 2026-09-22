@@ -1510,6 +1510,7 @@ interface ChatTurnProps {
 function TurnProgressHead({
   items,
   zone,
+  clock,
   forcedOpen,
   userOpen,
   onUserOpenChange,
@@ -1517,17 +1518,23 @@ function TurnProgressHead({
 }: {
   /** The whole turn's items — the live action clause reads the newest call. */
   items: readonly TurnItem[];
+  /** The turn's state, always. What this head is allowed to SAY about it is `clock`. */
+  zone: TurnWorkZone;
   /**
-   * The turn's clock, or `null` for a head that is not the turn's first.
+   * May this head print the turn's DURATION? True for the turn's first folding
+   * group and no other.
    *
-   * Only ONE head per turn carries it. That is T107's defect restated as a
-   * prop: two groups wearing the same duration is what 「最后一个理应显示 N 个
-   * 步骤的地方却显示工作区，有点不协调」 was about, and a turn grows a second
-   * group whenever a notice lands mid-process. A head with no zone is a bare
-   * disclosure — a chevron and nothing else — which is honest: everything it
-   * could say about the turn is already one group above it.
+   * That is T107's defect restated as a prop: two groups wearing the same
+   * duration is what 「最后一个理应显示 N 个步骤的地方却显示工作区，有点不协调」
+   * was about, and a turn grows a second group whenever a notice lands
+   * mid-process.
+   *
+   * ⚠️ It gates the NUMBER, not the line. Passing `zone: null` here is what the
+   * first cut did, and it made every non-first head a chevron with no text —
+   * the same blank row the missing clock produced (2026-09-22). A head always
+   * knows what state the turn is in; only one of them knows it in seconds.
    */
-  zone: TurnWorkZone | null;
+  clock: boolean;
   /** An unanswered permission/question is inside: the group may not close. */
   forcedOpen: boolean;
   userOpen: boolean | null;
@@ -1542,10 +1549,18 @@ function TurnProgressHead({
   // sight (「折叠头就不要那个 73 次工具调用了。也不要显示什么已处理 xxx 个步骤」)
   // — they described the fold, and what a reader watches during a long wait is
   // whether the turn is still moving.
-  const running = zone?.kind === 'working';
-  const liveAction = running ? deriveTurnCurrentAction(items) : null;
-  const line = !zone
-    ? null
+  //
+  // Without the clock it reports the STATE and stops there — 「工作中」 /
+  // 「已工作」, the bare forms of the very same two keys. That case is a head
+  // that is not the turn's first, and a turn whose span nothing measured; both
+  // used to render an empty row, which is what the user saw as 「折叠头没了」.
+  const running = zone.kind === 'working';
+  const showsSpinner = running && clock;
+  const liveAction = showsSpinner ? deriveTurnCurrentAction(items) : null;
+  const line = !clock
+    ? running
+      ? workingHeadText(t, null)
+      : workedHeadText(t, null)
     : zone.kind === 'working'
       ? joinTurnProgressLine(`✻ ${workingHeadText(t, zone.elapsed)}`, [
           // The live clause, moved up from the work zone row with the clock it
@@ -1565,18 +1580,12 @@ function TurnProgressHead({
           onUserOpenChange(!open);
         }}
       >
-        {running && <Spinner className="size-3.5 shrink-0" />}
-        {line && (
-          <span className="min-w-0 truncate" title={line}>
-            {line}
-          </span>
-        )}
+        {showsSpinner && <Spinner className="size-3.5 shrink-0" />}
+        <span className="min-w-0 truncate" title={line}>
+          {line}
+        </span>
         <ChevronRight
-          className={cn(
-            'size-3.5 shrink-0 transition-transform duration-150',
-            !line && 'ml-0',
-            open && 'rotate-90'
-          )}
+          className={cn('size-3.5 shrink-0 transition-transform duration-150', open && 'rotate-90')}
           aria-hidden
         />
       </summary>
@@ -1616,6 +1625,13 @@ function TurnWorkZoneRow({ zone }: { zone: TurnWorkZone }) {
   // looking. A running turn therefore renders nothing here at all, rather than
   // a second line repeating the first.
   if (zone.kind === 'working') return null;
+  // And nothing when the turn has no BILL to present either. `deriveTurnWorkZone`
+  // stopped returning `null` for that case so the head above could still name
+  // the state; the silence it used to signal belongs here, where a row with no
+  // clause would be a lone 「✻」.
+  if (zone.completedAtMs === null && zone.toolCalls === null && zone.thinkingMs === null) {
+    return null;
+  }
 
   const line = joinTurnProgressLine('✻', [
     // The duration went up to the head with the running clock. What is left is
@@ -1674,14 +1690,20 @@ function workingHeadText(
  *
  * Three literal keys and not one `{{duration}}` slot, for the reason the whole
  * turn-timing vocabulary carries: English writes "1m 6s" and Chinese writes
- * 「1 分 6 秒」, so the unit words belong to the CATALOG. No bare form here:
- * `deriveTurnWorkZone` only produces a settled row when a span was measured,
- * so there is no "settled with no clock" case for this to answer.
+ * 「1 分 6 秒」, so the unit words belong to the CATALOG.
+ *
+ * The bare fourth (`Worked`, 「已工作」) answers two callers, and it is a
+ * sentence rather than a zero: a head that is not the turn's first, which must
+ * not repeat the number, and a turn whose span nothing measured. The second one
+ * is why this function used to have no bare form at all — `deriveTurnWorkZone`
+ * signalled it by returning `null`, which deleted the head's whole line
+ * (2026-09-22).
  */
 function workedHeadText(
   t: (key: string, params?: Record<string, string | number>) => string,
-  worked: { minutes: number; seconds: number }
+  worked: { minutes: number; seconds: number } | null
 ): string {
+  if (!worked) return t('Worked');
   if (worked.minutes === 0) return t('Worked for {{seconds}}s', { seconds: worked.seconds });
   if (worked.seconds === 0) return t('Worked for {{minutes}}m', { minutes: worked.minutes });
   return t('Worked for {{minutes}}m {{seconds}}s', {
@@ -1735,8 +1757,19 @@ const ChatTurn = memo(function ChatTurn({
   const metadata = lastAssistant ? getMetadata(lastAssistant.id) : undefined;
   // Whole-turn metadata, for the two ownership questions that need evidence
   // rather than the absence of a latency (F2 / F4).
+  //
+  // A replayed row has no registry entry, and falls back to the stamp the
+  // history file dated it with — as `completedAt` ONLY. Pi dates an entry when
+  // it writes it, so there is no start to claim, and claiming one would make
+  // `earliestTurnStartMs` take the first assistant's COMPLETION as the turn's
+  // origin and report a 6-minute turn as a few seconds.
   const bodyMetadata = useMemo(
-    () => turn.body.map((message) => getMetadata(message.id)),
+    () =>
+      turn.body.map(
+        (message) =>
+          getMetadata(message.id) ??
+          (message.timestamp === undefined ? undefined : { completedAt: message.timestamp })
+      ),
     [turn.body, getMetadata]
   );
 
@@ -1811,6 +1844,12 @@ const ChatTurn = memo(function ChatTurn({
    *     `pending-user:` bubble and no Host stamp exists yet.
    *  3. **the pending-reply watch** — after the silence ceiling, where the
    *     snapshot is gone and the Host has still said nothing.
+   *  4. **the replayed user row's own stamp** (`ChatMessage.timestamp`) — LAST,
+   *     because it is the only candidate that is not a measurement this window
+   *     took. It is the date Pi wrote the prompt entry, so it may never
+   *     displace a live reading — and it is the reason a restored turn has a
+   *     clock at all, which is what 2026-09-22 found missing when the process
+   *     fold head was made to report the clock and nothing else.
    *
    * Known residual, recorded rather than hidden: at the handover from (2) to
    * (1) the origin moves forward by the Agent-Host start plus one IPC round
@@ -1826,7 +1865,9 @@ const ChatTurn = memo(function ChatTurn({
   const turnStartedAtMs =
     (turn.user ? (getMetadata(turn.user.id)?.startedAt ?? null) : null) ??
     (inFlight && sendStatus ? sendStatus.turnStartedAtMs : null) ??
-    (pendingActive && pendingReply ? pendingReply.turnStartedAtMs : null);
+    (pendingActive && pendingReply ? pendingReply.turnStartedAtMs : null) ??
+    turn.user?.timestamp ??
+    null;
 
   // T-33 (review F1, round 2): the turn's progress stamp — block count PLUS
   // streamed characters. A resumed call may append into an EXISTING text
@@ -2095,8 +2136,11 @@ const ChatTurn = memo(function ChatTurn({
     elapsedSeconds: liveElapsedSeconds,
     workedMs,
     // The LAST assistant message's stamp, for the same reason `metadata` is
-    // that message's: its completion is what ends the turn.
-    completedAtMs: metadata?.completedAt ?? null,
+    // that message's: its completion is what ends the turn. Falls back to the
+    // replayed row's own date, which is the same instant recorded one layer
+    // down — a turn restored from history says 「完成于 17:05」 rather than
+    // dropping the clause.
+    completedAtMs: metadata?.completedAt ?? lastAssistant?.timestamp ?? null,
     toolCalls: countTurnToolCalls(items),
     thinkingMs: turnThinkingMs,
   });
@@ -2166,7 +2210,7 @@ const ChatTurn = memo(function ChatTurn({
   //
   // Reset on every render and consumed during the same synchronous map, so it
   // never outlives the pass that sets it.
-  let zoneClaimed = false;
+  let clockClaimed = false;
 
   return (
     <section className={chatTurnClass()}>
@@ -2220,13 +2264,14 @@ const ChatTurn = memo(function ChatTurn({
             return <Fragment key={groupKey}>{section.segments.map(renderGroupSegment)}</Fragment>;
           }
           const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);
-          const headZone = zoneClaimed ? null : workZone;
-          zoneClaimed = true;
+          const headClock = !clockClaimed;
+          clockClaimed = true;
           return (
             <TurnProgressHead
               key={groupKey}
               items={items}
-              zone={headZone}
+              zone={workZone}
+              clock={headClock}
               forcedOpen={groupForcedOpen}
               userOpen={workGroupUserOpen[groupKey] ?? null}
               onUserOpenChange={(open) =>
@@ -2241,7 +2286,7 @@ const ChatTurn = memo(function ChatTurn({
             the session rather than the turn. This is the 「工作区固定在末尾」 the
             user asked for — the duration stops moving from group to group as a
             turn grows. */}
-        {workZone && <TurnWorkZoneRow zone={workZone} />}
+        <TurnWorkZoneRow zone={workZone} />
         {retryBanner && <RetryBanner view={retryBanner} sessionId={sessionId} />}
         {/* T12-b: the running status, and ONLY while it is running. FB6's
             position is kept — under the output it describes, not above it —

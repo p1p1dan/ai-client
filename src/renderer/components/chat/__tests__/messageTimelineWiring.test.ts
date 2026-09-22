@@ -591,11 +591,23 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * means the origin moves mid-turn — which is the reset this batch removed.
    * The other two exist for the window before the Host echoes the prompt back,
    * where the turn on screen is the composer's optimistic bubble.
+   *
+   * A fourth landed 2026-09-22 and is deliberately LAST: the replayed user
+   * row's own `timestamp`. It is the only candidate this window did not measure
+   * itself — the date Pi wrote the prompt entry — so it may never displace a
+   * live reading, and it is the reason a restored turn has a clock at all.
    */
   it('[WG-WIRE-1b] the turn origin prefers the durable stamp over the two live ones', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
     expect(turn).toContain(
-      'const turnStartedAtMs = (turn.user ? (getMetadata(turn.user.id)?.startedAt ?? null) : null) ?? (inFlight && sendStatus ? sendStatus.turnStartedAtMs : null) ?? (pendingActive && pendingReply ? pendingReply.turnStartedAtMs : null);'
+      'const turnStartedAtMs = (turn.user ? (getMetadata(turn.user.id)?.startedAt ?? null) : null) ?? (inFlight && sendStatus ? sendStatus.turnStartedAtMs : null) ?? (pendingActive && pendingReply ? pendingReply.turnStartedAtMs : null) ?? turn.user?.timestamp ?? null;'
+    );
+    // The replayed body rows reach the span the same way, and as `completedAt`
+    // ONLY: Pi dates an entry when it writes it, so claiming a `startedAt`
+    // would make the first assistant's COMPLETION the turn's origin and report
+    // a six-minute turn as a few seconds.
+    expect(turn).toContain(
+      'getMetadata(message.id) ?? (message.timestamp === undefined ? undefined : { completedAt: message.timestamp })'
     );
     // Exactly one derivation of it: a second one elsewhere would be a fork of
     // the judgement this whole fix rests on.
@@ -1316,7 +1328,11 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
     expectCalled('sumTurnThinkingMs(thinkingSpans, { nowMs, live: !processSettled })');
     expectCalled('countTurnToolCalls(items)');
-    expect(turn).toContain('completedAtMs: metadata?.completedAt ?? null');
+    // …falling back to the replayed row's own date, so a restored turn says
+    // 「完成于 17:05」 instead of dropping the clause (2026-09-22).
+    expect(turn).toContain(
+      'completedAtMs: metadata?.completedAt ?? lastAssistant?.timestamp ?? null'
+    );
     expect(turn).toContain('thinkingMs: turnThinkingMs');
     // Token usage left the turn surface with the head. It is a CLOSED list of
     // four figures (user decision 2026-09-21), so this negative is the list
@@ -1401,9 +1417,22 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // ⚠️ The T107 defect, as a wiring assertion: two groups in one turn must
     // not both print the turn's duration. The latch is what guarantees it, and
     // a refactor that drops it fails HERE rather than on screen.
-    expect(turn).toContain('let zoneClaimed = false;');
-    expect(turn).toContain('const headZone = zoneClaimed ? null : workZone;');
-    expect(turn).toContain('zone={headZone}');
+    //
+    // ⚠️ **The latch gates the NUMBER, never the ZONE.** It handed the head
+    // `zone={zoneClaimed ? null : workZone}` for one day, and a head with no
+    // zone had no line — a chevron with no text, which is half of the
+    // 2026-09-22 report 「现在折叠头和尾栏都没了」. Every head gets the zone and
+    // can therefore always name the STATE; only the first gets the seconds.
+    expect(turn).toContain('let clockClaimed = false;');
+    expect(turn).toContain('const headClock = !clockClaimed;');
+    expect(turn).toContain('clockClaimed = true;');
+    expect(turn).toContain('zone={workZone}');
+    expect(turn).toContain('clock={headClock}');
+    expect(turn, 'the zone is never withheld from a head').not.toContain('zone={null}');
+    // …and the head honours it: no clock, no number, no spinner, no live
+    // clause — just the state word.
+    expect(head).toContain('const line = !clock');
+    expect(head).toContain('const showsSpinner = running && clock;');
     // Every OTHER turn-level figure is still out of this element — the head
     // reports a clock, not a bill.
     for (const gone of [

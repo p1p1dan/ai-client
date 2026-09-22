@@ -385,16 +385,27 @@ describe('deriveTurnWorkZone — the turn describes itself, in two states', () =
   /**
    * A07 `:2399`'s red line at turn scale: unknown means OMIT, not `0`.
    *
-   * The head this replaced fell back to a step count here. The row does not,
-   * and that is not a loss: T113 gives every process group a head that reports
-   * its own steps, so the fallback's information is already on screen one line
-   * higher — and a tail row carrying only 「8 次工具调用」 would read as a
-   * second, disagreeing count of the same work.
+   * ⚠️ **REWRITTEN 2026-09-22.** This case used to assert a `null` RETURN, and
+   * that return was the defect. Two elements read this zone — the process fold
+   * head and the tail row — and `null` deleted both, so a turn with no measured
+   * span lost its head's text as well as its row (「现在折叠头和尾栏都没了」).
+   * The absence now lives INSIDE the zone as `worked: null`, and the two
+   * readers answer for themselves: the head prints the bare state word, the row
+   * prints nothing when it has no clause.
+   *
+   * The rule itself did not move an inch — nothing here fabricates a `0`.
    */
-  it('[WZ-4] a settled turn with no measured span renders no row at all', () => {
-    expect(deriveTurnWorkZone({ ...base, running: false })).toBeNull();
-    // Not even when the other three are known: the span is what the row is
-    // anchored on.
+  it('[WZ-4] a settled turn with no measured span reports the absence, not a zero', () => {
+    expect(deriveTurnWorkZone({ ...base, running: false })).toEqual({
+      kind: 'worked',
+      worked: null,
+      completedAtMs: null,
+      toolCalls: null,
+      thinkingMs: null,
+    });
+    // The other three are independent of it: a replayed turn knows when it
+    // finished and how many calls it made, and an unmeasured SPAN is no reason
+    // to throw those away.
     expect(
       deriveTurnWorkZone({
         running: false,
@@ -404,7 +415,13 @@ describe('deriveTurnWorkZone — the turn describes itself, in two states', () =
         toolCalls: 4,
         thinkingMs: 3_000,
       })
-    ).toBeNull();
+    ).toEqual({
+      kind: 'worked',
+      worked: null,
+      completedAtMs: 1_700_000_000_000,
+      toolCalls: 4,
+      thinkingMs: 3_000,
+    });
   });
 
   it('[WZ-5] each settled figure drops on its own when it was never measured', () => {

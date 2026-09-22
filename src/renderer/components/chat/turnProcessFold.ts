@@ -420,7 +420,12 @@ export type TurnWorkZone =
   | { kind: 'working'; elapsed: WorkedForParts | null }
   | {
       kind: 'worked';
-      worked: WorkedForParts;
+      /**
+       * `null` for a turn whose span nothing measured — a replayed entry Pi
+       * could not date. The render site prints the bare state word there, never
+       * 「已工作 0 秒」 (A07 `:2399`).
+       */
+      worked: WorkedForParts | null;
       /** Wall-clock completion, or `null` for a turn that replayed no timing. */
       completedAtMs: number | null;
       /** `null` rather than `0` — a turn that called nothing says nothing here. */
@@ -440,15 +445,20 @@ export type TurnWorkZone =
  * because the numbers happen to be available; `turnProgress.ts` still formats
  * them for whoever needs them next, and this row is not that surface.
  *
- * ## Why a settled turn with no duration renders NOTHING
+ * ## Why this ALWAYS returns a zone, and the row decides its own silence
  *
- * A restored history turn replays no timing events, so there is no span to
- * report, and A07 `:2399`'s rule is that an unmeasured figure is omitted rather
- * than printed as a zero. The old head fell back to a step count in that case;
- * this row does not need to, because T113 gives every process group a head that
- * reports its own steps — the fallback's information is already on screen, one
- * line higher, and a tail row carrying only 「8 次工具调用」 would read as a
- * second, disagreeing count of the same work.
+ * It used to return `null` for a settled turn with no measured span, and the
+ * two elements reading it both dropped out together: no tail row (correct) AND
+ * a fold head with no text at all (the 2026-09-22 defect 「现在折叠头和尾栏都
+ * 没了」). A head must still say WHAT STATE the turn is in when it cannot say
+ * how long — that is a fact it always has — so the absence now lives INSIDE the
+ * zone as `worked: null`, and each reader answers for itself: the head prints
+ * the bare state word, and `TurnWorkZoneRow` renders nothing when it has no
+ * clause to print.
+ *
+ * A07 `:2399` is unchanged by that move — an unmeasured figure is still omitted
+ * rather than printed as a zero. What changed is that "unmeasured" is now
+ * representable, instead of being signalled by deleting the whole row.
  *
  * ## Running beats settled, and the reason it is a branch and not a merge
  *
@@ -468,7 +478,7 @@ export function deriveTurnWorkZone(input: {
   completedAtMs: number | null;
   toolCalls: number;
   thinkingMs: number | null;
-}): TurnWorkZone | null {
+}): TurnWorkZone {
   if (input.running) {
     return {
       kind: 'working',
@@ -476,10 +486,9 @@ export function deriveTurnWorkZone(input: {
         input.elapsedSeconds === null ? null : splitWorkedForDuration(input.elapsedSeconds * 1000),
     };
   }
-  if (input.workedMs === null) return null;
   return {
     kind: 'worked',
-    worked: splitWorkedForDuration(input.workedMs),
+    worked: input.workedMs === null ? null : splitWorkedForDuration(input.workedMs),
     completedAtMs: input.completedAtMs,
     toolCalls: input.toolCalls > 0 ? input.toolCalls : null,
     thinkingMs: input.thinkingMs,

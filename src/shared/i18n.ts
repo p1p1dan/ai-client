@@ -3035,6 +3035,13 @@ export const zhTranslations: Record<string, string> = {
   // no timestamps at all (restored history) renders no end row rather than a
   // fabricated 0 秒.
   Working: '工作中',
+  // The settled twin of the bare `Working` above, and it exists for the same
+  // reason: a turn whose span nothing measured. Decision 034 made the fold head
+  // report the clock and NOTHING else, so a head with no clock rendered a lone
+  // chevron with no text — the 2026-09-22 report 「现在折叠头和尾栏都没了」. The
+  // head now falls back to the state word, which is the honest thing to say
+  // when the number is unknown. Still no fabricated 「已工作 0 秒」.
+  Worked: '已工作',
   'Worked for {{seconds}}s': '已工作 {{seconds}} 秒',
   'Worked for {{minutes}}m {{seconds}}s': '已工作 {{minutes}} 分 {{seconds}} 秒',
   'Worked for {{minutes}}m': '已工作 {{minutes}} 分',

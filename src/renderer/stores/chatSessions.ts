@@ -288,6 +288,26 @@ export interface ChatMessage {
    * `message.started`, never mutated after.
    */
   attachments?: ChatMessageAttachment[];
+  /**
+   * Epoch ms this message was DATED BY THE HISTORY FILE — present only on
+   * replayed rows, never on a live echo (same optional-field discipline as
+   * `attachments` above).
+   *
+   * It exists because the live timing registry (`useMessageMetadata`) is
+   * in-memory and per-mount: it holds the turns this window watched run and
+   * nothing else, so every replayed turn had no clock at all. That was
+   * invisible until decision 034 made the process fold head report the clock
+   * and nothing else, at which point replayed turns rendered a head with no
+   * text (2026-09-22 field report 「现在折叠头和尾栏都没了」).
+   *
+   * ⚠️ This is a COARSER instrument than the metadata registry and must not be
+   * mistaken for it. Pi dates an entry when it writes it, so on an assistant
+   * row this is a completion instant and there is no matching start — which is
+   * why `turnTiming.ts` feeds it in as `completedAt` only and takes the turn's
+   * ORIGIN from the user row's own stamp. A replayed turn therefore reports
+   * prompt→reply wall clock, not the assistant message's own span.
+   */
+  timestamp?: number;
 }
 
 interface PendingPermission {
@@ -745,6 +765,12 @@ function mapHistoryMessageToChatMessage(
     // `message.started`).
     ...(historyMessage.attachments?.length
       ? { attachments: historyMessage.attachments.map(mapHistoryAttachment) }
+      : {}),
+    // Absent when Pi could not date the entry, for the same reason as above:
+    // an exact-shape assertion on an undated row must stay untouched, and a
+    // fabricated stamp is exactly what A07 :2399 forbids.
+    ...(typeof historyMessage.timestamp === 'number'
+      ? { timestamp: historyMessage.timestamp }
       : {}),
   };
 }

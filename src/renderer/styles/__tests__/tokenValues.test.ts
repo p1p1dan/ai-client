@@ -63,10 +63,20 @@ describe('[D2-1] globals.css minor-tier token value lock (F456 D2-b)', () => {
     expect(darkBlock).toContain('--muted-foreground: oklch(0.6956 0.0103 93.62);');
   });
 
-  it('② --tool-arg mix ratio is 85%, not the old 78% (§2.3 kept-derivation ruling)', () => {
+  /**
+   * ⚠️ 78% → 85% (F456 D2-b) → 62% (decision 034, 2026-09-22).
+   *
+   * The last move was not a readability tune: the process tier is meant to be
+   * skimmed PAST, and at 85% it still competed with the prose it interrupts.
+   * Lowering the mix is what widened the gap without touching a size or a
+   * weight. The lock is kept at the new literal for the reason the file header
+   * gives — this asserts the value the argument was made against, and does not
+   * re-derive the contrast math.
+   */
+  it('② --tool-arg mix ratio is 62%, the decision 034 value (§2.3 kept-derivation ruling)', () => {
     const percentMatch = source.match(/--tool-arg:[^;]*var\(--muted-foreground\)\s*(\d+)%/);
     expect(percentMatch).not.toBeNull();
-    expect(Number(percentMatch?.[1])).toBe(85);
+    expect(Number(percentMatch?.[1])).toBe(62);
   });
 
   it('③ --tool-arg stays derived from var(--muted-foreground), not an independent literal', () => {

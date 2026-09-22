@@ -654,7 +654,48 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
       role: 'user',
       blocks: [],
       attachments: [{ kind: 'image', mediaType: 'image/png' }],
+      timestamp: 1500,
     });
+  });
+
+  /**
+   * The turn clock's only durable source (2026-09-22).
+   *
+   * `useMessageMetadata` is an in-memory registry fed by live Runtime Events,
+   * so it holds exactly the turns the open window watched run. Every replayed
+   * turn had no clock at all, which went unnoticed until the process fold head
+   * was made to report the clock and nothing else — and then rendered a head
+   * with no text. This field is what gives a restored turn 「已工作 6 分 41 秒」;
+   * `historyTurnClock.test.ts` asserts the other end of the same wire.
+   */
+  it('carries the history entry timestamp through to the message', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const dated: HistoryMessage = {
+      id: 'h:uuid-dated',
+      role: 'assistant',
+      timestamp: 1_700_000_000_000,
+      blocks: [{ type: 'text', id: 'b1', text: 'done' }],
+    };
+
+    const patch = applyRuntimeEvent(state, makeHistoryEvent({ messages: [dated] }));
+    expect(patch.messages?.[SESSION_ID]?.[0]?.timestamp).toBe(1_700_000_000_000);
+  });
+
+  /**
+   * The A07 `:2399` half of the same field: an entry Pi could not date carries
+   * no key at all, rather than a `0` the clock would happily format as a
+   * duration. Same discipline as `attachments` two cases up.
+   */
+  it('omits the timestamp key entirely for an undated history message', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const undated: HistoryMessage = {
+      id: 'h:uuid-undated',
+      role: 'assistant',
+      blocks: [{ type: 'text', id: 'b1', text: 'done' }],
+    };
+
+    const patch = applyRuntimeEvent(state, makeHistoryEvent({ messages: [undated] }));
+    expect(patch.messages?.[SESSION_ID]?.[0]).not.toHaveProperty('timestamp');
   });
 });
 
