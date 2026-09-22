@@ -57,6 +57,7 @@ import {
   turnActionsSlotClass,
   turnAnswerToneClass,
   turnBodyClass,
+  turnClockRowClass,
   turnCopyButtonClass,
   turnFinalAnswerDividerClass,
   turnHeadClass,
@@ -1507,6 +1508,76 @@ interface ChatTurnProps {
  * The children stay mounted when collapsed (that is what `<details>` does), so
  * collapsing never discards a tool row's expanded body.
  */
+/**
+ * The turn's clock line, in one place, for the two elements that draw it.
+ *
+ * Decision 037: the duration is the turn's FIRST line in every case — 「什么情况
+ * 都让 已工作 x 分 xx 秒 落在顶部」 — but only a folding group has a head to put
+ * it on (T112 refuses a fold below two steps). So there are two carriers: the
+ * `<summary>` of `TurnProgressHead`, and the plain `TurnClockRow` for the turns
+ * T112 leaves headless.
+ *
+ * ⚠️ **Both must read this function and neither may word the line itself.** The
+ * user's rejection of the first fix was about exactly this — 「那样展示出来的
+ * 风格都不统一」 — and two call sites each building 「已工作 N 秒」 from the same
+ * catalog keys is how that comes back without anyone deciding it should.
+ *
+ * `clock` is the T107 latch, not a visibility flag: a head that is not the
+ * turn's first still names the STATE (「工作中」 /「已工作」, the bare forms of
+ * the same two keys) and only withholds the seconds. Rendering nothing there is
+ * what left an empty row on 2026-09-22.
+ */
+function useTurnClockLine({
+  zone,
+  clock,
+  items,
+}: {
+  zone: TurnWorkZone;
+  clock: boolean;
+  /** Read only for the live action clause, and only while the clock ticks. */
+  items: readonly TurnItem[];
+}): { line: string; spinner: boolean } {
+  const { t } = useI18n();
+  const running = zone.kind === 'working';
+  const spinner = running && clock;
+  const liveAction = spinner ? deriveTurnCurrentAction(items) : null;
+  if (!clock) {
+    return { line: running ? workingHeadText(t, null) : workedHeadText(t, null), spinner };
+  }
+  if (zone.kind === 'working') {
+    return {
+      line: joinTurnProgressLine(`✻ ${workingHeadText(t, zone.elapsed)}`, [
+        // The live clause: a clock with no subject reads as a stopwatch, and
+        // this is the sentence that says the turn is doing something rather
+        // than merely still open.
+        liveAction ? t(liveAction.verb) : null,
+      ]),
+      spinner,
+    };
+  }
+  return { line: workedHeadText(t, zone.worked), spinner };
+}
+
+/**
+ * The clock line for a turn with nothing to fold (decision 037).
+ *
+ * Same words, same class, no chevron and no `<details>` — because there is
+ * genuinely nothing behind it: T112 renders a one-step group in place, so a
+ * disclosure here would expand to nothing. That threshold is untouched by this
+ * element; what it fixes is the clock's dependence on a fold existing.
+ */
+function TurnClockRow({ zone, items }: { zone: TurnWorkZone; items: readonly TurnItem[] }) {
+  const { line, spinner } = useTurnClockLine({ zone, clock: true, items });
+  return (
+    <div className={turnClockRowClass()}>
+      {spinner && <Spinner className="size-3.5 shrink-0" />}
+      <span className="min-w-0 truncate" title={line}>
+        {line}
+      </span>
+    </div>
+  );
+}
+
 function TurnProgressHead({
   items,
   zone,
@@ -1541,7 +1612,6 @@ function TurnProgressHead({
   onUserOpenChange: (open: boolean) => void;
   children: React.ReactNode;
 }) {
-  const { t } = useI18n();
   const open = turnWorkGroupOpen({ forcedOpen, userOpen });
 
   // Decision 034: the head reports the turn's CLOCK, and nothing else. The step
@@ -1554,22 +1624,7 @@ function TurnProgressHead({
   // 「已工作」, the bare forms of the very same two keys. That case is a head
   // that is not the turn's first, and a turn whose span nothing measured; both
   // used to render an empty row, which is what the user saw as 「折叠头没了」.
-  const running = zone.kind === 'working';
-  const showsSpinner = running && clock;
-  const liveAction = showsSpinner ? deriveTurnCurrentAction(items) : null;
-  const line = !clock
-    ? running
-      ? workingHeadText(t, null)
-      : workedHeadText(t, null)
-    : zone.kind === 'working'
-      ? joinTurnProgressLine(`✻ ${workingHeadText(t, zone.elapsed)}`, [
-          // The live clause, moved up from the work zone row with the clock it
-          // belongs to: a clock with no subject reads as a stopwatch, and this
-          // is the sentence that says the turn is doing something rather than
-          // merely still open.
-          liveAction ? t(liveAction.verb) : null,
-        ])
-      : workedHeadText(t, zone.worked);
+  const { line, spinner } = useTurnClockLine({ zone, clock, items });
 
   return (
     <details className={turnBodyClass()} open={open}>
@@ -1580,7 +1635,7 @@ function TurnProgressHead({
           onUserOpenChange(!open);
         }}
       >
-        {showsSpinner && <Spinner className="size-3.5 shrink-0" />}
+        {spinner && <Spinner className="size-3.5 shrink-0" />}
         <span className="min-w-0 truncate" title={line}>
           {line}
         </span>
@@ -1616,39 +1671,23 @@ function TurnProgressHead({
  * It does not decide whether it renders: `deriveTurnWorkZone` returns `null`
  * for a settled turn that replayed no timing, and the caller drops the row.
  */
-function TurnWorkZoneRow({ zone, clock }: { zone: TurnWorkZone; clock: boolean }) {
+function TurnWorkZoneRow({ zone }: { zone: TurnWorkZone }) {
   const { t } = useI18n();
 
-  // Decision 034 moved the RUNNING state up to the process head, and this row
-  // rendered nothing at all while a turn ran. That held only for turns that
-  // HAVE a head: T112 refuses a fold below two steps, so 思考 → 输出 and a bare
-  // paragraph had no head to move it to and reported no clock at all — the
-  // 2026-09-22 report 「有的时候，直接显示：思考+输出，没有已工作 xx 秒」. The
-  // row is the fallback holder now (`clock`), which is what makes the clock
-  // land on exactly one line per turn rather than at most one.
+  // Decision 034: the RUNNING state is gone from this row. Its two parts — the
+  // ticking clock and the live action clause — belong to the turn's TOP line,
+  // where zcode puts them and where a reader watching a long wait is already
+  // looking. A running turn renders nothing here at all.
   //
-  // No live action clause here even so. A turn with no head has at most one
-  // step, and that step's own row is directly above this line — narrating it a
-  // second time is what the clause exists to avoid, not to duplicate.
-  if (zone.kind === 'working') {
-    if (!clock) return null;
-    const runningLine = `✻ ${workingHeadText(t, zone.elapsed)}`;
-    return (
-      <div className={turnWorkZoneClass()}>
-        <Spinner className="size-3.5 shrink-0" />
-        <span className="min-w-0 truncate" title={runningLine}>
-          {runningLine}
-        </span>
-      </div>
-    );
-  }
+  // ⚠️ **The duration does not live here, in any case.** 2026-09-22's first fix
+  // gave it a fallback slot on this row for turns T112 leaves headless, and the
+  // user rejected it on sight — 「不要什么一个折叠头都没有时，落到尾栏，那样展示
+  // 出来的风格都不统一」. `TurnClockRow` is the headless turn's answer, at the
+  // top with every other turn's. What is left down here is the turn's BILL: the
+  // figures that are only knowable once it ends.
+  if (zone.kind === 'working') return null;
 
   const clauses = [
-    // The duration, ONLY when no head took it. Printing 「已工作 N 秒」 in both
-    // places is the T107 defect the latch exists to avoid, and a bare 「已工作」
-    // is a state word that belongs on a head rather than on a bill — so this
-    // clause needs a real measurement, not just permission.
-    clock && zone.worked ? workedHeadText(t, zone.worked) : null,
     zone.completedAtMs === null
       ? null
       : t('Completed at {{time}}', { time: formatAbsoluteTime(zone.completedAtMs) }),
@@ -1657,17 +1696,17 @@ function TurnWorkZoneRow({ zone, clock }: { zone: TurnWorkZone; clock: boolean }
       : t(zone.toolCalls === 1 ? '{{count}} tool call' : '{{count}} tool calls', {
           count: zone.toolCalls,
         }),
-    // Shared with the head, so a minute is written the same way in both places
-    // and the two cannot word 「思考」 differently.
+    // Shared with the clock line above, so a minute is written the same way in
+    // both places and the two cannot word 「思考」 differently.
     formatThinkingClause(zone.thinkingMs, t),
   ].filter((clause): clause is string => !!clause);
   // Nothing at all when the turn has no bill to present. `deriveTurnWorkZone`
-  // stopped returning `null` for that case so the head above could still name
+  // stopped returning `null` for that case so the line above could still name
   // the state; the silence it used to signal belongs here.
   if (clauses.length === 0) return null;
 
   // 「✻」 is this row's BULLET, so it is PREFIXED onto the first clause — the
-  // same shape the head uses. Passing it as `joinTurnProgressLine`'s head
+  // same shape the clock line uses. Passing it as `joinTurnProgressLine`'s head
   // instead rendered 「✻ · 完成于 17:06」, a separator with nothing on its left
   // (2026-09-22).
   const line = joinTurnProgressLine(`✻ ${clauses[0]}`, clauses.slice(1));
@@ -2227,7 +2266,9 @@ const ChatTurn = memo(function ChatTurn({
   // steps, so 思考 → 输出, 单工具 → 输出 and a bare paragraph have none — and
   // decision 034 had put the clock exclusively on the head, which is how those
   // shapes ended up reporting no duration at all (2026-09-22). When the answer
-  // is no, the clock falls to the tail row instead.
+  // is no, `TurnClockRow` draws the same line at the TOP of the turn instead
+  // (decision 037 — the first fix put it on the tail row and the user rejected
+  // the split: 「什么情况都让 已工作 x 分 xx 秒 落在顶部」).
   //
   // The same predicate the map below uses, deliberately: a second rule here
   // could disagree with it and leave the turn with two clocks or none.
@@ -2257,6 +2298,11 @@ const ChatTurn = memo(function ChatTurn({
           12px / 8px inside one. */}
       {turn.user && <UserBubble message={turn.user} />}
       <div className={turnBodyClass()}>
+        {/* Decision 037: the turn's clock, first line, whenever no fold head is
+            going to carry it. Above `workSections` rather than woven into them
+            because "first" is the whole requirement — a group that is not the
+            turn's opening section would otherwise push it down the turn. */}
+        {!clockOnHead && <TurnClockRow zone={workZone} items={items} />}
         {/* Q1 keeps the final answer and notices outside the process groups;
             intermediate prose joins the process it describes. Turn-level
             progress remains on the trailing work-zone row (T113). */}
@@ -2321,7 +2367,7 @@ const ChatTurn = memo(function ChatTurn({
             the session rather than the turn. This is the 「工作区固定在末尾」 the
             user asked for — the duration stops moving from group to group as a
             turn grows. */}
-        <TurnWorkZoneRow zone={workZone} clock={!clockOnHead} />
+        <TurnWorkZoneRow zone={workZone} />
         {retryBanner && <RetryBanner view={retryBanner} sessionId={sessionId} />}
         {/* T12-b: the running status, and ONLY while it is running. FB6's
             position is kept — under the output it describes, not above it —

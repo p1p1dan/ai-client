@@ -50,6 +50,7 @@ vi.mock('../useResolvedSessionModel', () => ({ useResolvedSessionModel: () => ()
 vi.mock('../sessionIndex/useResumeSession', () => ({ useResumeSession: () => () => undefined }));
 
 import { type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
+import { turnClockRowClass, turnWorkGroupSummaryClass } from '../chatTimelineLayout';
 import { MessageTimeline } from '../MessageTimeline';
 
 const SENT_AT = Date.UTC(2026, 8, 22, 9, 0, 0);
@@ -166,28 +167,32 @@ it('[HEAD-BLANK-1] a fold head is never an empty row, even with no timestamps at
 });
 
 /**
- * The clock has exactly one home per turn, and EVERY turn has one.
+ * The duration sits at the TOP of the turn. In every case.
  *
- * ## The second 2026-09-22 report
+ * ## Two reports, one rule
  *
- * 「有的时候，直接显示：思考+输出，没有已工作 xx 秒」. Decision 034 D2 put the
- * duration on the process fold head and took it off the tail row — but a head
- * only exists where a group FOLDS, and T112 refuses a fold for a group of fewer
- * than two steps. So a turn shaped 思考 → 输出 (one step), 单工具 → 输出 (one
- * step), or a plain paragraph with no process at all (no group) had nowhere
- * left to put its clock, and simply did not report one.
+ * 「有的时候，直接显示：思考+输出，没有已工作 xx 秒」 — decision 034 D2 put the
+ * duration on the process fold head, and a head only exists where a group
+ * FOLDS. T112 refuses a fold below two steps, so 思考 → 输出, 单工具 → 输出 and
+ * a bare paragraph reported no duration at all.
  *
- * The fix does not touch T112's threshold — a one-step group still renders in
- * place, which is what the user asked for. It gives the clock a FALLBACK home:
- * the tail row, which is the one line every settled turn already has. So the
- * invariant is now "exactly one line per turn carries the duration", where it
- * used to be "at most one".
+ * The first fix gave it a fallback home on the TAIL row, and the user rejected
+ * that on sight: 「什么情况都让 已工作 x 分 xx 秒 落在顶部。不要什么一个折叠头
+ * 都没有时，落到尾栏，那样展示出来的风格都不统一」. The rule is not "the clock
+ * has a home somewhere" — it is **the clock is the turn's first line**, folded
+ * or not.
+ *
+ * So these cases assert POSITION, not mere presence. A test that only asked
+ * 「时长在页面上吗」 passed against the rejected design too.
+ *
+ * T112's threshold is untouched: a one-step group still renders in place. What
+ * changed is that the clock line no longer depends on a fold existing.
  *
  * `[CLOCK-ONCE-1]` is the other half and is not optional: T107 is the defect
- * where two elements print the same duration, and a fallback with no latch is
+ * where two elements print the same duration, and a second line carrying it is
  * exactly how that comes back.
  */
-it('[CLOCK-ANYWHERE-1] a turn whose group is too small to fold still reports its duration', async () => {
+it('[CLOCK-TOP-1] a turn too small to fold still leads with its duration', async () => {
   for (const [label, blocks] of [
     [
       '思考 + 输出',
@@ -216,8 +221,21 @@ it('[CLOCK-ANYWHERE-1] a turn whose group is too small to fold still reports its
       expect(container.querySelectorAll('summary'), `${label}: no fold head, by T112`).toHaveLength(
         0
       );
-      expect(container.textContent ?? '', `${label}: the clock still has a home`).toContain(
-        WORKED_LINE
+      const text = container.textContent ?? '';
+      expect(text, `${label}: the clock is on screen`).toContain(WORKED_LINE);
+      // …and it LEADS. Before everything the turn has to show, exactly as it
+      // does on a folded turn.
+      expect(text.indexOf(WORKED_LINE), `${label}: the clock comes first`).toBeLessThan(
+        text.indexOf('答案')
+      );
+      expect(
+        text.indexOf(WORKED_LINE),
+        `${label}: …including before the process rows`
+      ).toBeLessThan(text.indexOf(zh('Final output')));
+      // The tail row is the BILL. The duration is not part of it — that was the
+      // rejected shape.
+      expect(text.lastIndexOf(WORKED_LINE), `${label}: not on the tail row`).toBeLessThan(
+        text.indexOf('完成于')
       );
     } finally {
       await unmount();
@@ -225,16 +243,44 @@ it('[CLOCK-ANYWHERE-1] a turn whose group is too small to fold still reports its
   }
 });
 
-it('[CLOCK-ANYWHERE-2] a turn with no process at all reports its duration too', async () => {
+it('[CLOCK-TOP-2] a turn with no process at all leads with its duration too', async () => {
   const { container, unmount } = await renderHistory(
     historyTurn(true, [{ id: 'h:a1:b1', type: 'text', text: '答案' }])
   );
   try {
     expect(container.querySelectorAll('summary')).toHaveLength(0);
-    expect(container.textContent ?? '').toContain(WORKED_LINE);
+    const text = container.textContent ?? '';
+    expect(text.indexOf(WORKED_LINE)).toBeGreaterThan(-1);
+    expect(text.indexOf(WORKED_LINE)).toBeLessThan(text.indexOf('答案'));
+    expect(text.lastIndexOf(WORKED_LINE)).toBeLessThan(text.indexOf('完成于'));
   } finally {
     await unmount();
   }
+});
+
+/**
+ * One row, one look. 「那样展示出来的风格都不统一」 is the failure this pins, so
+ * the assertion is on the CLASS SETS and not on a screenshot: every token the
+ * plain row carries is a token the fold head carries, and the difference is a
+ * closed, named list.
+ *
+ * Three of the five extras are what a `<summary>` needs to stop looking like a
+ * `<summary>`. The other two are the pin, which T096 grants to exactly one
+ * surface in the timeline and which changes nothing about the line's
+ * appearance — see `turnClockRowClass`.
+ */
+it('[CLOCK-TOP-3] the unfolded clock row wears the folded head class, minus a closed list', () => {
+  const summary = turnWorkGroupSummaryClass().split(' ');
+  const plain = turnClockRowClass().split(' ');
+  expect(plain.every((token) => summary.includes(token))).toBe(true);
+  expect(summary.filter((token) => !plain.includes(token)).sort()).toEqual([
+    'cursor-pointer',
+    'list-none',
+    'marker:content-none',
+    'sticky',
+    'top-0',
+    'z-10',
+  ]);
 });
 
 it('[CLOCK-ONCE-1] a turn that HAS a fold head does not repeat the duration below it', async () => {

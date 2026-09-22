@@ -415,8 +415,41 @@ export function thoughtBodyMaxHeightClass(): string {
  * head a different height from `turnHeadClass()`, its other shape.
  */
 export function turnWorkGroupSummaryClass(): string {
-  return 'sticky top-0 z-10 flex min-w-0 cursor-pointer list-none items-center gap-1.5 bg-background py-1 text-ui tabular-nums text-muted-foreground marker:content-none';
+  return `sticky top-0 z-10 ${TURN_CLOCK_ROW_BASE} cursor-pointer list-none marker:content-none`;
 }
+
+/**
+ * The same row when there is nothing to fold behind it (decision 037).
+ *
+ * The turn's duration sits at the TOP of the turn in every case — 「什么情况都
+ * 让 已工作 x 分 xx 秒 落在顶部」 — but a head only exists where a group folds,
+ * and T112 refuses a fold below two steps. This is that line for the turns
+ * T112 leaves headless. Every class that has a LOOK comes from the shared
+ * constant below, so the two cannot drift: 「那样展示出来的风格都不统一」 is the
+ * failure this construction exists to make impossible.
+ *
+ * ⚠️ **It is NOT pinned, and that is not an oversight.** T096 allows exactly one
+ * sticky surface in the timeline (see `chatTimelineLayout.test.ts` and the F10
+ * oscillation note at the top of this file), and the pin buys this row nothing:
+ * it heads a group of at most one step, so there is no long body to scroll past
+ * while keeping the clock in view. `sticky` / `z-10` change nothing about how
+ * the line LOOKS when it is not stuck, so the unified appearance is intact.
+ */
+export function turnClockRowClass(): string {
+  return TURN_CLOCK_ROW_BASE;
+}
+
+/**
+ * ⚠️ Shared by the two functions above and by nothing else. Edit it, not them:
+ * a change made to one call site instead of here is how the folded and the
+ * unfolded turn start looking like different products.
+ *
+ * Holds every class that AFFECTS THE LOOK. The pin (`sticky top-0 z-10`) is
+ * deliberately outside it — see `turnClockRowClass` for why only one of the two
+ * carries it.
+ */
+const TURN_CLOCK_ROW_BASE =
+  'flex min-w-0 items-center gap-1.5 bg-background py-1 text-ui tabular-nums text-muted-foreground';
 /**
  * The turn's status row: `Awaiting first token 8s`, `Stalled`, `Failed`, the
  * retry counter — i.e. the things that are only true WHILE the turn is running.

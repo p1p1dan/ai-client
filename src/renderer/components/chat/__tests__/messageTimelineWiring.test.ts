@@ -628,8 +628,11 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * file-wide convention would silently put English chips on a Chinese
    * surface. No type error, no failing render, no other assertion.
    */
-  it('[HEAD-CN-1] the head binds useI18n, and never englishTranslate', () => {
-    const head = nodeSource(topLevelFunction('TurnProgressHead'));
+  it('[HEAD-CN-1] the clock line binds useI18n, and never englishTranslate', () => {
+    // Decision 037 moved the wording out of the head and into the derivation
+    // both carriers read, so the binding under guard moved with it. The rule is
+    // unchanged; only the function that holds `t` is different.
+    const head = nodeSource(topLevelFunction('useTurnClockLine'));
     expect(head).toContain('const { t } = useI18n();');
     expect(head).not.toContain('englishTranslate');
     expect(SYNTAX).not.toContain("import { englishTranslate } from '@shared/i18n';");
@@ -644,20 +647,32 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * discriminant. `i18nCoverage.test.ts` can only scan literals, so a
    * `t(label.key)` would ship an untranslated head and no gate would notice.
    */
-  it('[WG-WIRE-2] the head words itself from literal catalog keys', () => {
+  it('[WG-WIRE-2] the clock line words itself from literal catalog keys, in ONE place', () => {
+    const line = nodeSource(topLevelFunction('useTurnClockLine'));
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
-    // Decision 034: the head words itself from the turn's CLOCK, through the
+    const plain = nodeSource(topLevelFunction('TurnClockRow'));
+    // Decision 034: the line words itself from the turn's CLOCK, through the
     // two helpers that own the four duration keys each. It prints no count of
     // its own — the step count and the call count were both cut by the user.
-    expect(head).toContain('workingHeadText(t, zone.elapsed)');
-    expect(head).toContain('workedHeadText(t, zone.worked)');
+    expect(line).toContain('workingHeadText(t, zone.elapsed)');
+    expect(line).toContain('workedHeadText(t, zone.worked)');
     for (const retired of [
       "'{{count}} steps processed'",
       "'{{count}} tool calls'",
       "t('Thinking chip')",
       "'{{count}} explanation'",
     ]) {
-      expect(head, `the head no longer counts anything: ${retired}`).not.toContain(retired);
+      expect(line, `the clock line no longer counts anything: ${retired}`).not.toContain(retired);
+    }
+    // ⚠️ Decision 037: TWO elements draw this line — the fold head's summary and
+    // the plain row for turns T112 leaves headless — and NEITHER may word it
+    // itself. Two call sites building 「已工作 N 秒」 from the same keys is how
+    // 「风格都不统一」 comes back without anyone deciding it should.
+    for (const element of [head, plain]) {
+      expect(element).toContain('useTurnClockLine({');
+      expect(element).not.toContain('workedHeadText(');
+      expect(element).not.toContain('workingHeadText(');
+      expect(element).not.toContain('joinTurnProgressLine(');
     }
   });
 
@@ -1402,9 +1417,18 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     const head = nodeSource(topLevelFunction('TurnProgressHead'));
     const turn = nodeSource(topLevelFunction('ChatTurn'));
     // Decision 034 moved the clock and the live action clause UP from the work
-    // zone row. Both now belong here, and nothing counts anything.
-    expect(countIn(head, 'deriveTurnCurrentAction(items)')).toBe(1);
+    // zone row; decision 037 moved both one step further, into the shared
+    // derivation the head and the headless turn's row both read. Exactly one
+    // copy of the live clause exists.
+    const line = nodeSource(topLevelFunction('useTurnClockLine'));
+    expect(countIn(line, 'deriveTurnCurrentAction(items)')).toBe(1);
+    expect(countIn(SYNTAX, 'deriveTurnCurrentAction(items)')).toBe(1);
     expect(head).toContain('<Spinner');
+    // Decision 037: when no head is going to carry the clock, the turn draws it
+    // itself — at the TOP, as its first line. The user rejected the tail-row
+    // fallback on sight (「什么情况都让 已工作 x 分 xx 秒 落在顶部」).
+    expect(turn).toContain('{!clockOnHead && <TurnClockRow zone={workZone} items={items} />}');
+    expect(nodeSource(topLevelFunction('TurnClockRow'))).toContain('turnClockRowClass()');
     for (const counter of [
       'countProcessSteps',
       'countTurnToolCalls',
@@ -1429,10 +1453,11 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(turn).toContain('zone={workZone}');
     expect(turn).toContain('clock={headClock}');
     expect(turn, 'the zone is never withheld from a head').not.toContain('zone={null}');
-    // …and the head honours it: no clock, no number, no spinner, no live
-    // clause — just the state word.
-    expect(head).toContain('const line = !clock');
-    expect(head).toContain('const showsSpinner = running && clock;');
+    // …and the shared derivation honours it: no clock, no number, no spinner,
+    // no live clause — just the state word.
+    expect(line).toContain('if (!clock) {');
+    expect(line).toContain('const spinner = running && clock;');
+    expect(line).toContain('const liveAction = spinner ? deriveTurnCurrentAction(items) : null;');
     // Every OTHER turn-level figure is still out of this element — the head
     // reports a clock, not a bill.
     for (const gone of [
@@ -1449,41 +1474,35 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
-   * The tail row: the turn's bill, and the clock's FALLBACK home.
+   * The tail row: the turn's BILL, and nothing that belongs at the top.
    *
-   * ⚠️ **REWRITTEN 2026-09-22 (decision 036).** This case used to assert that
-   * the row has no clock at all — decision 034 had moved the duration and the
-   * live clause up to the process head unconditionally. But a head only exists
-   * where a group FOLDS, and T112 refuses a fold below two steps, so 思考 →
-   * 输出, 单工具 → 输出 and a bare paragraph reported no duration anywhere
-   * (「有的时候，直接显示：思考+输出，没有已工作 xx 秒」).
-   *
-   * What survives unchanged is the T107 red line, and it is now the `clock`
-   * prop rather than the absence of code: the row prints a duration only when
-   * no head took one, so exactly one line per turn carries it.
-   *
-   * The live action clause did NOT come back with it. A turn reaching this
-   * fallback has at most one step, whose own row sits directly above this line.
+   * ⚠️ **REWRITTEN TWICE ON 2026-09-22.** Decision 036 gave this row a fallback
+   * slot for the duration, for the turns T112 leaves headless. The user
+   * rejected that within the hour — 「什么情况都让 已工作 x 分 xx 秒 落在顶部。
+   * 不要什么一个折叠头都没有时，落到尾栏，那样展示出来的风格都不统一」 — and
+   * decision 037 put the headless turn's clock at the top instead, where every
+   * other turn's already was. So this row is bill-only again, and the negative
+   * assertions below are the ones that keep it that way.
    *
    * Ordering is asserted by position in the joined line rather than by separate
    * `expectCalled`s, because "all of them appear" is exactly the claim that
    * would stay green if they came out shuffled.
    */
-  it('[WG-WIRE-8] the tail row lists the bill, and holds the clock only as a fallback', () => {
+  it('[WG-WIRE-8] the tail row lists the bill, and never the duration', () => {
     const row = nodeSource(topLevelFunction('TurnWorkZoneRow'));
     const turn = nodeSource(topLevelFunction('ChatTurn'));
-    // The running state renders here ONLY as the fallback — a turn with a head
-    // still gets nothing, which is what keeps two rows from counting the same
-    // seconds.
-    expect(row).toContain("if (zone.kind === 'working') {");
-    expect(row).toContain('if (!clock) return null;');
-    // T107 as a positive assertion now: the duration needs permission AND a
-    // real measurement. `clock` alone would print a bare state word on a bill.
-    expect(row).toContain('clock && zone.worked ? workedHeadText(t, zone.worked) : null');
-    // …and the permission is the exact complement of the head's.
-    expect(turn).toContain('const clockOnHead = workSections.some(');
-    expect(turn).toContain('clock={!clockOnHead}');
-    // Still no narration down here: one step's row is already above the line.
+    // A running turn renders nothing here: the ticking clock is the turn's
+    // first line, in both of its carriers.
+    expect(row).toContain("if (zone.kind === 'working') return null;");
+    expect(row).not.toContain('<Spinner');
+    // ⚠️ Decision 037's ruling, as three negatives. The duration does not live
+    // on this row in ANY case — not as a fallback, not behind a flag.
+    expect(row).not.toContain('workedHeadText');
+    expect(row).not.toContain('workingHeadText');
+    expect(row).not.toContain('clock');
+    // The row takes the zone and nothing else.
+    expect(turn).toContain('<TurnWorkZoneRow zone={workZone} />');
+    // Still no narration down here.
     expect(row).not.toContain('deriveTurnCurrentAction');
 
     const completedAt = row.indexOf("t('Completed at {{time}}'");
