@@ -36,6 +36,34 @@ export class AutoUpdaterService {
   ): void {
     this.cleanup();
     this.mainWindow = window;
+    // Pin the STABLE channel regardless of what this build's own version looks
+    // like. electron-updater derives `allowPrerelease` from
+    // `hasPrereleaseComponents(currentVersion)` (AppUpdater.js:218), so a
+    // `1.0.0-test.20` build turns it ON and then walks the releases feed
+    // looking for a tag whose PRERELEASE COMPONENT matches its own ("test"):
+    //
+    //   const currentChannel = semver.prerelease(currentVersion)?.[0]  // "test"
+    //   const isNextPreRelease = hrefChannel && hrefChannel === currentChannel
+    //
+    // No published tag is spelled `*-test.*`, so `tag` stays null and the
+    // provider throws ERR_UPDATER_NO_PUBLISHED_VERSIONS — 「No published
+    // versions on GitHub」 — even though v1.0.1 is published and marked latest.
+    // Every 1.0.0-test.* tester package hit exactly this, which is why none of
+    // them ever saw 1.0.1.
+    //
+    // This is the ONLY lever that reaches testers already in the field: the
+    // app checks for updates, so the channel decision has to be made here, in
+    // a build they install. Release-side workarounds do not exist — tagging a
+    // `v1.0.0-test.21` would satisfy `isNextPreRelease` for them, but it would
+    // also have to carry a `latest.yml`, and that release would then be served
+    // to every stable install as the newest stable version.
+    //
+    // Forcing it also removes the silent downgrade hazard the option carries
+    // on purpose: with `allowPrerelease` true the updater is permitted to move
+    // a test build onto any stable tag, `allowDowngrade` and all. Stable
+    // installs (0.3.4, 1.0.1) already resolve this way; this makes the test
+    // builds agree with them instead of diverging.
+    autoUpdater.allowPrerelease = false;
     registerUpdaterSession(autoUpdater.netSession);
     if (proxySettings) {
       void applyProxy(proxySettings).catch((error) =>

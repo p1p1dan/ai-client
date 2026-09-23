@@ -18,6 +18,7 @@ vi.mock('electron-updater', async () => {
         quitAndInstall: mocks.install,
         autoDownload: false,
         autoInstallOnAppQuit: false,
+        allowPrerelease: true,
       }),
     },
   };
@@ -53,6 +54,12 @@ describe('update reminders', () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(mocks.check).toHaveBeenCalledOnce();
     expect(electronUpdater.autoUpdater.autoDownload).toBe(false);
+    // The mock starts at `true` (what electron-updater derives for a
+    // `1.0.0-test.*` build), so this passing proves `init` actively pins the
+    // stable channel rather than inheriting it. Without the pin, a test build
+    // walks the feed looking for a `-test.*` tag, finds none, and reports
+    // 「No published versions on GitHub」 while v1.0.1 sits published.
+    expect(electronUpdater.autoUpdater.allowPrerelease).toBe(false);
     await vi.advanceTimersByTimeAsync(31 * 60 * 1000);
     window.emit('focus');
     await Promise.resolve();
