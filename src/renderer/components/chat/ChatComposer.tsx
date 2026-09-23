@@ -3137,7 +3137,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             return;
           }
         }
-        // Esc stops the running turn (user request 2026-10-13): while a turn
+        // Esc stops the running turn (user request 2026-09-23): while a turn
         // streams, the user's hands are already on this textarea, and hunting
         // for the Stop button with the pointer was the complaint. Scoped to
         // this keydown on purpose: the slash/@ popups above own their Esc

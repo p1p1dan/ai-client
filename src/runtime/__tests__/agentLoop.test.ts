@@ -13,7 +13,11 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentEvent } from '@earendil-works/pi-agent-core';
-import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
+import {
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxToolCall,
+} from '@earendil-works/pi-ai/providers/faux';
 import { describe, expect, it } from 'vitest';
 import { createRuntime } from '../bootstrap.ts';
 import { traceSafeToolArgs } from '../plugins/agent-loop/index.ts';
@@ -57,6 +61,24 @@ describe('agent loop', () => {
       expect(events).toContain('agent_end');
       expect(events).not.toContain('tool_execution_start');
     });
+  });
+
+  it('stops a single-turn run after its first assistant turn even when the model asks for a tool', async () => {
+    // P0 probe (`singleTurn`, the default with no tools): a model that
+    // requests a tool anyway must not start a second request. The queued
+    // second reply is the tripwire — it stays unconsumed.
+    await withRuntime(
+      fauxAssistantMessage([fauxToolCall('read', { path: 'x' })], { stopReason: 'toolUse' }),
+      async (runtime, faux) => {
+        faux.appendResponses([fauxAssistantMessage('should never be requested')]);
+        const result = await runtime.run({ prompt: 'probe', systemPrompt: 'probe' });
+        expect(result.turns).toBe(1);
+        expect(result.stopReason).toBe('toolUse');
+        expect(faux.state.callCount).toBe(1);
+        expect(faux.getPendingResponseCount()).toBe(1);
+        expect(result.error?.code).not.toBe('turn_limit');
+      }
+    );
   });
 
   it('records the provider usage the D9 cache-rate gate will read', async () => {

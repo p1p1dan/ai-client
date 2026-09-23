@@ -840,21 +840,24 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
    * (the "stop has no effect" field report).
    */
   it('[D-5] a user Stop clears the pending watch too', () => {
-    const chain = source.slice(
-      only('const unsubscribe = subscribeRuntimeEvent((event) => {'),
-      only('  }, [resolvePendingReplyLanded, restoreDraftIfComposerEmpty]);')
-    );
+    const chainStart = only('const unsubscribe = subscribeRuntimeEvent((event) => {');
+    const chainEnd = only('  }, [resolvePendingReplyLanded, restoreDraftIfComposerEmpty]);');
     const completed = only('if (isSessionCompletedForSend(event, watch.sessionId)) {');
     const stopped = only('if (isSessionStoppedForSend(event, watch.sessionId)) {');
     // Inside the cleanup chain, and after the completed branch it mirrors.
-    expect(chain).toContain('if (isSessionStoppedForSend(event, watch.sessionId)) {');
+    expect(chainStart).toBeLessThan(completed);
     expect(completed).toBeLessThan(stopped);
-    // And it routes into the one cleanup authority like every other ending.
-    expect(chain).toContain('resolvePendingReplyLanded(watch.sessionId);');
+    expect(stopped).toBeLessThan(chainEnd);
+    // The stopped branch is the last one in the chain, so everything from its
+    // `if` to the chain's end is that branch alone: it routes into the one
+    // cleanup authority, and — unlike the failed branch — restores no draft.
+    const branch = source.slice(stopped, chainEnd);
+    expect(branch).toContain('resolvePendingReplyLanded(watch.sessionId);');
+    expect(branch).not.toContain('restoreDraftIfComposerEmpty(');
   });
 
   /**
-   * `[E-1]` — Esc stops the running turn (user request 2026-10-13). Scoped to
+   * `[E-1]` — Esc stops the running turn (user request 2026-09-23). Scoped to
    * the composer textarea's keydown: the slash/@ popups consume their own Esc
    * first, then this block — gated on `canStop` (the Stop button's own
    * predicate, so the key can never stop more than the button could) and on
@@ -862,19 +865,24 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
    * no-op path: an Esc with nothing to stop is nobody's business.
    */
   it('[E-1] Escape in the composer textarea stops the running turn', () => {
-    const escBlock = only(
-      "if (event.key === 'Escape') {\n          if (composingRef.current) return;\n          if (canStop) {\n            event.preventDefault();\n            handleStop();\n          }\n          return;\n        }"
-    );
     // Three Escape consumers in this keydown, and the stopper is the LAST:
     // the slash and @ popups above it return first, so an open popup's Esc
     // still closes only the popup.
     const escapes = offsets("if (event.key === 'Escape') {");
     expect(escapes).toHaveLength(3);
-    expect(escapes[2]).toBe(escBlock);
-    // The stopper sits before the send Enter handler that ends the keydown.
-    const enters = offsets("if (event.key === 'Enter' && !event.shiftKey) {");
-    expect(enters.length).toBeGreaterThanOrEqual(3);
-    expect(escBlock).toBeLessThan(enters[enters.length - 1]);
+    const escAt = escapes[2];
+    // The very next Enter handler is the one that sends: the stopper sits
+    // between the popups and the send, not after it.
+    const sendEnterAt = source.indexOf("if (event.key === 'Enter' && !event.shiftKey) {", escAt);
+    expect(sendEnterAt).toBeGreaterThan(escAt);
+    expect(source.slice(sendEnterAt, sendEnterAt + 400)).toContain('void handleSend();');
+    // The stopper's body, whitespace-normalised so a reformat cannot break the
+    // guard: IME first, then the Stop button's own `canStop` gate, and
+    // `preventDefault` only on the path that actually stops.
+    const escBlock = source.slice(escAt, sendEnterAt).replace(/\s+/g, ' ').trim();
+    expect(escBlock).toBe(
+      "if (event.key === 'Escape') { if (composingRef.current) return; if (canStop) { event.preventDefault(); handleStop(); } return; }"
+    );
   });
 
   /**
