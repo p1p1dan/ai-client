@@ -3137,6 +3137,23 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             return;
           }
         }
+        // Esc stops the running turn (user request 2026-10-13): while a turn
+        // streams, the user's hands are already on this textarea, and hunting
+        // for the Stop button with the pointer was the complaint. Scoped to
+        // this keydown on purpose: the slash/@ popups above own their Esc
+        // first (they `return` before this line), an IME composition must not
+        // stop anything (same guard Enter uses), and `canStop` — not
+        // `turnActive` — is the gate because it is the same predicate the
+        // composer's own Stop button runs under. No `preventDefault` when it
+        // does not apply: an Esc with nothing to stop is nobody's business.
+        if (event.key === 'Escape') {
+          if (composingRef.current) return;
+          if (canStop) {
+            event.preventDefault();
+            handleStop();
+          }
+          return;
+        }
         if (event.key === 'Enter' && !event.shiftKey) {
           // An IME confirming a candidate fires Enter before
           // compositionend — sending here would fire off a half-typed

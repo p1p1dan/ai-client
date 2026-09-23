@@ -854,6 +854,30 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
   });
 
   /**
+   * `[E-1]` — Esc stops the running turn (user request 2026-10-13). Scoped to
+   * the composer textarea's keydown: the slash/@ popups consume their own Esc
+   * first, then this block — gated on `canStop` (the Stop button's own
+   * predicate, so the key can never stop more than the button could) and on
+   * the IME composition guard Enter already uses. No `preventDefault` on the
+   * no-op path: an Esc with nothing to stop is nobody's business.
+   */
+  it('[E-1] Escape in the composer textarea stops the running turn', () => {
+    const escBlock = only(
+      "if (event.key === 'Escape') {\n          if (composingRef.current) return;\n          if (canStop) {\n            event.preventDefault();\n            handleStop();\n          }\n          return;\n        }"
+    );
+    // Three Escape consumers in this keydown, and the stopper is the LAST:
+    // the slash and @ popups above it return first, so an open popup's Esc
+    // still closes only the popup.
+    const escapes = offsets("if (event.key === 'Escape') {");
+    expect(escapes).toHaveLength(3);
+    expect(escapes[2]).toBe(escBlock);
+    // The stopper sits before the send Enter handler that ends the keydown.
+    const enters = offsets("if (event.key === 'Enter' && !event.shiftKey) {");
+    expect(enters.length).toBeGreaterThanOrEqual(3);
+    expect(escBlock).toBeLessThan(enters[enters.length - 1]);
+  });
+
+  /**
    * `[D-4]` — the strongest form of "does not replay input": the `'pending'`
    * branch contains no writer of the composer AT ALL. Not "we checked and it
    * looked fine" — there is structurally nothing in there that could write.
