@@ -391,7 +391,7 @@ export function MessageTimeline({
     delegateDisplayName(state, sessionRetry?.delegationId)
   );
   const { get: getMeta } = useMessageMetadata(sessionId);
-  const { getThinking } = useTurnTiming(sessionId);
+  const { getThinking, getTool } = useTurnTiming(sessionId);
 
   const sessionMessages = useMemo(() => {
     const authoritative = bucket ?? [];
@@ -526,6 +526,15 @@ export function MessageTimeline({
   const getThinkingDurationMs = useCallback(
     (blockId: string) => getThinking(blockId)?.durationMs,
     [getThinking]
+  );
+
+  // 2026-09-23: a running tool row's live elapsed tail reads the `tool.started`
+  // stamp out of the same registry the thinking durations come from. Same
+  // stable-identity rule as `getThinkingDurationMs` (F7): it feeds the memoized
+  // `ChatTurn`.
+  const getToolStartedAtMs = useCallback(
+    (blockId: string) => getTool(blockId)?.startedAt,
+    [getTool]
   );
 
   // Stick-to-bottom scroll following. `scrollRootRef` wraps `ScrollArea` (the
@@ -795,6 +804,7 @@ export function MessageTimeline({
                       thinkingEnabled={thinkingEnabled}
                       repoName={repoName}
                       getThinkingDurationMs={getThinkingDurationMs}
+                      getToolStartedAtMs={getToolStartedAtMs}
                       // The progress head needs the SPAN, not just the settled
                       // duration: a thought that has started and not finished is
                       // the whole point of a live 「思考 N 秒」 clause, and
@@ -1447,6 +1457,8 @@ interface ChatTurnProps {
   thinkingEnabled: boolean;
   repoName?: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
+  /** 2026-09-23: `tool.started` stamps for running rows' live elapsed tail. */
+  getToolStartedAtMs: (blockId: string) => number | null | undefined;
   /** The whole span, for the head's live 「思考 N 秒」 clause (`sumTurnThinkingMs`). */
   getThinkingTiming: (blockId: string) => ThinkingTiming | undefined;
 }
@@ -1836,6 +1848,7 @@ const ChatTurn = memo(function ChatTurn({
   thinkingEnabled,
   repoName,
   getThinkingDurationMs,
+  getToolStartedAtMs,
   getThinkingTiming,
 }: ChatTurnProps) {
   const { t } = useI18n();
@@ -2147,6 +2160,8 @@ const ChatTurn = memo(function ChatTurn({
       repoName={repoName}
       streamingBlockId={streamingBlockIdForItem(item, streamingBlockIdByMessage)}
       getThinkingDurationMs={getThinkingDurationMs}
+      getToolStartedAtMs={getToolStartedAtMs}
+      nowMs={nowMs}
     />
   );
 
@@ -2659,6 +2674,9 @@ interface TurnItemViewProps {
   /** The one block in this item's source message that may still be streaming, if any. */
   streamingBlockId: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
+  /** 2026-09-23: running rows' live clock inputs, see `ToolGroupItem`. */
+  getToolStartedAtMs: (blockId: string) => number | null | undefined;
+  nowMs: number;
 }
 
 /**
@@ -2763,6 +2781,8 @@ function TurnItemView({
   repoName,
   streamingBlockId,
   getThinkingDurationMs,
+  getToolStartedAtMs,
+  nowMs,
 }: TurnItemViewProps) {
   switch (item.kind) {
     /**
@@ -2804,6 +2824,8 @@ function TurnItemView({
           repoName={repoName}
           streamingBlockId={streamingBlockId}
           getThinkingDurationMs={getThinkingDurationMs}
+          getToolStartedAtMs={getToolStartedAtMs}
+          nowMs={nowMs}
         />
       );
 
@@ -2871,6 +2893,8 @@ function ToolGroupItem({
   repoName,
   streamingBlockId,
   getThinkingDurationMs,
+  getToolStartedAtMs,
+  nowMs,
 }: {
   item: Extract<TurnItem, { kind: 'toolGroup' }>;
   sessionId: string;
@@ -2878,6 +2902,8 @@ function ToolGroupItem({
   repoName?: string | null;
   streamingBlockId: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
+  getToolStartedAtMs: (blockId: string) => number | null | undefined;
+  nowMs: number;
 }) {
   const { t } = useI18n();
   const rows = useMemo(
@@ -2886,9 +2912,20 @@ function ToolGroupItem({
         repoName,
         thinkingDurationMs: getThinkingDurationMs,
         isStreamingBlockId: streamingBlockId,
+        toolStartedAtMs: getToolStartedAtMs,
+        nowMs,
         t,
       }),
-    [item.entries, thinkingEnabled, repoName, getThinkingDurationMs, streamingBlockId, t]
+    [
+      item.entries,
+      thinkingEnabled,
+      repoName,
+      getThinkingDurationMs,
+      streamingBlockId,
+      getToolStartedAtMs,
+      nowMs,
+      t,
+    ]
   );
   return <ToolGroup rows={rows} sessionId={sessionId} showDiff={false} />;
 }

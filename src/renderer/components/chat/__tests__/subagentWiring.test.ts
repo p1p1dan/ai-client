@@ -14,8 +14,9 @@ import { describe, expect, it } from 'vitest';
  *
  * Guarded wirings:
  *  - ToolRows.tsx mounts `SubagentActivity` behind the `isDelegationTool`
- *    gate, keyed by the row's own `toolCallId`, and the Collapsible open
- *    default is `view.defaultOpen ?? view.failed`.
+ *    gate, keyed by the row's own `toolCallId`; the Collapsible's open state
+ *    is seeded once at mount from `resolveToolRowOpen` and afterwards moved
+ *    only by the user's own clicks.
  *  - ChatWorkspace.tsx owns the store's `init()` latch (app-lifetime mount).
  *  - QuestionCard.tsx derives the permission-origin chip from the store.
  *  - RED LINE: `chatSessions.ts` remains untouched by T-34 — its source
@@ -106,9 +107,14 @@ describe('ToolRows.tsx — subagent panel mount', () => {
    * answer this assertion used to read literally — with a remembered user
    * choice ahead of it. The negatives are unchanged and still load-bearing:
    * `view.failed` must not re-enter the mount decision by any route.
+   *
+   * 2026-09-23: the Collapsible became CONTROLLED, but by state seeded ONCE at
+   * mount (`useState(initialOpen)`), so the seed rule below is unchanged in
+   * substance — see the next case for the invariant that controlled-ness must
+   * not break.
    */
-  it('the Collapsible default is the resolved open state, seeded once at mount', () => {
-    expect(callSites).toContain('defaultOpen={initialOpen}');
+  it('the Collapsible open state is the resolved choice, seeded once at mount', () => {
+    expect(callSites).toContain('useState(initialOpen)');
     expect(
       callSites.some((site) =>
         site.includes('resolveToolRowOpen(view, readToolExpandMemory(sessionId))')
@@ -128,19 +134,31 @@ describe('ToolRows.tsx — subagent panel mount', () => {
 
   /**
    * T12-d: the memory is WRITE-THROUGH on the user's own toggle and read only
-   * at mount. A `open={...}` prop here instead would be the regression this
-   * design exists to avoid: T-34's `defaultOpen: true` disappears the moment
-   * the subagent lane stops being live, so a controlled binding would slam the
-   * panel shut under a reader mid-sentence.
+   * at mount. An `open={…}` prop RE-DERIVED per render would be the regression
+   * this design exists to avoid: T-34's `defaultOpen: true` disappears the
+   * moment the subagent lane stops being live, so binding the panel to a
+   * re-derived value would slam it shut under a reader mid-sentence.
+   *
+   * 2026-09-23: the row IS controlled now (`open={open}`), because a thought's
+   * disclosure has to re-run `ThinkingFollowContext` after the panel actually
+   * resized — an uncontrolled Collapsible never re-renders this component on
+   * toggle, so there is no effect to hang that on. What this still forbids is
+   * the dangerous HALF of controlled-ness: `open` bound to anything that
+   * changes under the row while it is open. `useState(initialOpen)` is seeded
+   * once and then only the user's own clicks move it.
    */
-  it('records the user toggle and never binds the row as controlled', () => {
+  it('records the user toggle and never re-derives the open binding', () => {
     expect(
-      callSites.some((site) => site.includes('setToolRowExpanded(sessionId, view.key, open)')),
+      callSites.some((site) => site.includes('setToolRowExpanded(sessionId, view.key, next)')),
       'the toggle must be written to the session memory'
     ).toBe(true);
     expect(
-      callSites.some((site) => /^open=\{/.test(site)),
-      'a controlled `open` would re-close the live subagent panel when it settles'
+      callSites.some((site) => /^open=\{open\}$/.test(site)),
+      'the panel is controlled by the component-local, click-driven state'
+    ).toBe(true);
+    expect(
+      callSites.some((site) => /^open=\{/.test(site) && !/^open=\{open\}$/.test(site)),
+      'an `open` bound to a re-derived value would re-close the live subagent panel when it settles'
     ).toBe(false);
   });
 });

@@ -6,10 +6,13 @@ import { classifyTool, pairToolBlocks, refusedToolCallIds } from './toolCard';
  * T-05 turn-timing side registry (T-06 pattern): folds `thinking.started` /
  * `thinking.completed` Runtime Events into a per-block duration lookup.
  *
- * Scope is deliberately narrow — A07 screen 5 (groups A-F) has no per-tool
- * duration column (that "right-hand latency column" was explicitly cut), so
- * `tool.started`/`tool.completed` never enter this registry. Only thinking
- * timing is folded HERE.
+ * Since 2026-09-23 the same registry also folds `tool.started` /
+ * `tool.completed`, keyed by the `toolCallId` (which IS the `tool_call` block
+ * id the store mints, `chatSessions.ts`). A07 screen 5 still has no per-tool
+ * duration COLUMN — that "right-hand latency column" stays cut — but a RUNNING
+ * row needs its start instant for the live 「已运行 Ns / 上限 Ms」 tail the user
+ * asked for after being stuck behind an unexplained 1800s command. Settled
+ * tool rows do not read the registry: their span is not surfaced anywhere.
  *
  * The turn's own "Worked for Ns" head is not folded either: it is DERIVED from
  * the T-06 metadata the message registry already holds, by
@@ -26,6 +29,9 @@ export interface ThinkingTiming {
   /** completed - started; only set once both timestamps are known. */
   durationMs?: number | null;
 }
+
+/** A timing entry keyed by block id — thinking blocks and tool_call blocks share the shape. */
+export type BlockTiming = ThinkingTiming;
 
 export interface TurnTimingRegistry {
   byBlock: Record<string, ThinkingTiming>;
@@ -54,23 +60,37 @@ function readBlockId(event: TurnTimingEvent): string | undefined {
   return undefined;
 }
 
+/** Tool events key their timing by `toolCallId`, not `blockId`. */
+function readToolCallId(event: TurnTimingEvent): string | undefined {
+  const payload = event.payload;
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    typeof (payload as { toolCallId?: unknown }).toolCallId === 'string'
+  ) {
+    return (payload as { toolCallId: string }).toolCallId;
+  }
+  return undefined;
+}
+
 /**
- * Fold one Runtime Event into the registry. Pure; only `thinking.started` /
- * `thinking.completed` are handled — everything else returns `prev` by
- * reference so callers can skip a re-render.
+ * Fold one Runtime Event into the registry. Pure; only the four timing events
+ * (`thinking.started` / `thinking.completed` / `tool.started` /
+ * `tool.completed`) are handled — everything else returns `prev` by reference
+ * so callers can skip a re-render.
  */
 export function reduceTurnTiming(
   prev: TurnTimingRegistry,
   event: TurnTimingEvent
 ): TurnTimingRegistry {
-  if (event.type !== 'thinking.started' && event.type !== 'thinking.completed') {
-    return prev;
-  }
-  const blockId = readBlockId(event);
+  const isThinking = event.type === 'thinking.started' || event.type === 'thinking.completed';
+  const isTool = event.type === 'tool.started' || event.type === 'tool.completed';
+  if (!isThinking && !isTool) return prev;
+  const blockId = isTool ? readToolCallId(event) : readBlockId(event);
   if (!blockId) return prev;
 
   const existing = prev.byBlock[blockId] ?? {};
-  if (event.type === 'thinking.started') {
+  if (event.type === 'thinking.started' || event.type === 'tool.started') {
     return {
       byBlock: {
         ...prev.byBlock,
@@ -79,7 +99,7 @@ export function reduceTurnTiming(
     };
   }
 
-  // thinking.completed
+  // *.completed
   const startedAt = existing.startedAt ?? null;
   const completedAt = event.timestamp ?? null;
   const durationMs = startedAt != null && completedAt != null ? completedAt - startedAt : null;

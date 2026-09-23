@@ -1,23 +1,16 @@
 // @vitest-environment happy-dom
 /**
- * The thought a user can actually read — and put away — WHILE the model thinks.
+ * The thought row a user can open and close — and that starts CLOSED.
  *
- * `toolCard.test.ts` locks the view model; this locks the paint. The two are
- * separate because the bug this covers lived in the gap between them: the
- * store held the thinking text the whole time, the row builder saw it, and the
- * renderer still put nothing on screen for the 12-20s a turn spends thinking —
- * `showBody` was gated on `!streaming`, so the text only became reachable once
- * the thought was over, behind a chevron the reader had to find and click.
- *
- * The fix for that shipped a row with the opposite problem: text visible, no
- * control at all, on the argument that "a row whose content is still arriving
- * must not offer a toggle whose state would be meaningless a second later".
- * The user's answer (2026-09-19) is that a 40-second think is exactly when the
- * toggle is worth having. So a streaming thought is now an ordinary expandable
- * row that starts open, and what these assert is the pair that argument missed:
- * the text is there without a click, AND the reader can fold it away —
- * mid-stream, with deltas still landing, and the fold outlives the moment the
- * thought settles.
+ * `toolCard.test.ts` locks the view model; this locks the paint. The shape
+ * locked here is the 2026-09-23 user decision 「思考默认折叠，点击后展开所有
+ * 内容，去掉预览的展开/收起按钮」: no 200-character preview tier, no inline
+ * button, the whole row is the trigger, and the expanded body is the complete
+ * text. Before this the row always painted a preview (truncated with an
+ * inline 展开/收起 button); before THAT a streaming thought painted bare live
+ * text with no control at all (2026-09-19's complaint). Both shapes retired —
+ * the "something is happening" signal lives at the turn head's live
+ * 「思考 N 秒」 clause, which never depended on this row.
  */
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -76,89 +69,60 @@ function trigger(): HTMLElement | null {
   return container.querySelector<HTMLElement>('[data-slot="collapsible-trigger"]');
 }
 
+function thoughtText(): string | null {
+  return container.querySelector<HTMLElement>('[data-slot="thinking-text"]')?.textContent ?? null;
+}
+
 async function clickTrigger() {
   const node = trigger();
   expect(node, 'no trigger to click').not.toBeNull();
   await act(async () => node?.click());
 }
 
-it('shows short thoughts without a control that can hide them', async () => {
+it('mounts collapsed — no preview, no button, the row itself is the trigger', async () => {
   await streamThought('Checking the model catalog first.');
-  expect(container.textContent).toContain('Checking the model catalog first.');
+  // The 200-char preview tier and its inline toggle are both gone; a short
+  // thought is behind the same click as a long one.
   expect(container.querySelector('[data-slot="thinking-header"]')).toBeNull();
-  expect(container.querySelector('[data-slot="collapsible-trigger"]')).toBeNull();
+  expect(container.querySelector('[data-slot="thinking-preview-toggle"]')).toBeNull();
+  expect(thoughtText()).toBeNull();
+  expect(trigger()).not.toBeNull();
+  await clickTrigger();
+  expect(thoughtText()).toBe('Checking the model catalog first.');
 });
 
 it('removes all blank lines for display without changing nonblank indentation', async () => {
   const raw = '\n \r\nfirst\n\t\n  second\r\n\r\nthird\n';
   await streamThought(raw);
-  expect(container.querySelector('[data-slot="thinking-text"]')?.textContent).toBe(
-    'first\n  second\nthird'
-  );
+  await clickTrigger();
+  expect(thoughtText()).toBe('first\n  second\nthird');
   await streamThought(`${raw}fourth`);
-  expect(container.querySelector('[data-slot="thinking-text"]')?.textContent).toBe(
-    'first\n  second\nthird\nfourth'
-  );
+  expect(thoughtText()).toBe('first\n  second\nthird\nfourth');
 });
 
-it('the heading and inline button share full/preview state without hiding the preview', async () => {
+it('the full text renders with no length cap and keeps streaming while open', async () => {
   const text = '思'.repeat(240);
   await streamThought(text);
-  const header = container.querySelector<HTMLButtonElement>('[data-slot="thinking-header"]');
-  const button = container.querySelector<HTMLButtonElement>(
-    '[data-slot="thinking-preview-toggle"]'
-  );
-  expect(button?.parentElement?.tagName).toBe('P');
-  await act(async () => header?.click());
-  expect(container.querySelector('[data-slot="thinking-text"]')?.textContent).toBe(text);
-  expect(button?.getAttribute('aria-expanded')).toBe('true');
-  await act(async () => button?.click());
-  expect(container.querySelector('[data-slot="thinking-text"]')?.textContent).toBe(
-    `${'思'.repeat(200)}…`
-  );
-  expect(header?.getAttribute('aria-expanded')).toBe('false');
-  await settleThought(text);
-  expect(container.querySelector('[data-slot="thinking-text"]')?.textContent).toBe(
-    `${'思'.repeat(200)}…`
-  );
-});
-
-it('blank lines do not consume the preview budget', async () => {
-  await streamThought(`\n${'\n \n'.repeat(100)}${'思'.repeat(200)}\n`);
-  expect(container.querySelector('[data-slot="thinking-text"]')?.textContent).toBe(
-    '思'.repeat(200)
-  );
-  expect(container.querySelector('[data-slot="thinking-preview-toggle"]')).toBeNull();
-});
-
-it('limits the preview to 200 Unicode characters and streams the full text after a click', async () => {
-  const preview = '想😀'.repeat(100);
-  await streamThought(preview);
-  expect(container.querySelector('[data-slot="thinking-text"]')?.textContent).toBe(preview);
-  await streamThought(`${preview}隐藏的尾部`);
-  expect(container.querySelector('[data-slot="thinking-text"]')?.textContent).toBe(`${preview}…`);
-  const expand = container.querySelector<HTMLButtonElement>(
-    '[data-slot="thinking-preview-toggle"][aria-expanded="false"]'
-  );
-  expect(expand?.textContent).toBe('Expand');
-  await act(async () => expand?.click());
-  expect(container.querySelector('[data-slot="thinking-text"]')?.textContent).toBe(
-    `${preview}隐藏的尾部`
-  );
-  await streamThought(`${preview}隐藏的尾部继续输出`);
-  expect(container.querySelector('[data-slot="thinking-text"]')?.textContent).toBe(
-    `${preview}隐藏的尾部继续输出`
-  );
-  await settleThought(`${preview}隐藏的尾部继续输出`);
-  expect(container.querySelector('[data-slot="thinking-text"]')?.textContent).toBe(
-    `${preview}隐藏的尾部继续输出`
-  );
+  expect(thoughtText()).toBeNull();
+  await clickTrigger();
+  expect(thoughtText()).toBe(text);
+  // Deltas keep landing in the OPEN body — expanding mid-stream is how a
+  // reader watches a long think happen.
+  await streamThought(`${text}tail`);
+  expect(thoughtText()).toBe(`${text}tail`);
+  await settleThought(`${text}tail`);
+  expect(thoughtText()).toBe(`${text}tail`);
+  // No inner height limit: decision 038's page-level full-text flow.
   expect(container.querySelector('p')?.className).not.toContain('overflow');
-  const collapse = container.querySelector<HTMLButtonElement>(
-    '[data-slot="thinking-preview-toggle"][aria-expanded="true"]'
-  );
-  await act(async () => collapse?.click());
-  expect(container.querySelector('[data-slot="thinking-text"]')?.textContent).toBe(`${preview}…`);
+  // And folding it back is the same click.
+  await clickTrigger();
+  expect(thoughtText()).toBeNull();
+});
+
+it('an empty thought stays a bare row — nothing to read, nothing to open', async () => {
+  await streamThought('');
+  expect(trigger()).toBeNull();
+  expect(thoughtText()).toBeNull();
 });
 
 it('both disclosure directions preserve the reading position instead of requesting a bottom jump', async () => {
@@ -175,12 +139,9 @@ it('both disclosure directions preserve the reading position instead of requesti
       )
     )
   );
-  const expand = container.querySelector<HTMLButtonElement>(
-    '[data-slot="thinking-preview-toggle"]'
-  );
-  await act(async () => expand?.click());
+  await clickTrigger();
   expect(follow).toHaveBeenCalledTimes(1);
-  await act(async () => expand?.click());
+  await clickTrigger();
   expect(follow).toHaveBeenCalledTimes(2);
 });
 

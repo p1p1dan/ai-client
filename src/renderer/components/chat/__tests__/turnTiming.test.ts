@@ -64,6 +64,21 @@ function event(
   };
 }
 
+/** Tool events key their timing by `toolCallId`, not `blockId` (2026-09-23). */
+function toolEvent(
+  type: 'tool.started' | 'tool.completed',
+  opts: { toolCallId?: string; timestamp?: number; messageId?: string } = {}
+) {
+  return {
+    type,
+    timestamp: opts.timestamp,
+    payload: {
+      messageId: opts.messageId ?? 'm1',
+      toolCallId: opts.toolCallId,
+    },
+  };
+}
+
 describe('reduceTurnTiming', () => {
   it('records thinking.started as startedAt', () => {
     const next = reduceTurnTiming(
@@ -95,8 +110,35 @@ describe('reduceTurnTiming', () => {
       initialTurnTimingRegistry,
       event('thinking.started', { blockId: 'th1', timestamp: 1000 })
     );
-    expect(reduceTurnTiming(reg, event('tool.started', { blockId: 'x' }))).toBe(reg);
     expect(reduceTurnTiming(reg, event('message.completed'))).toBe(reg);
+  });
+
+  // 2026-09-23: tool timing folds into the same registry, keyed by toolCallId
+  // (= the tool_call block id). A running row's live 「已运行 Ns / 上限 Ms」 tail
+  // reads `startedAt` from here; the settled span is not surfaced anywhere.
+  it('records tool.started/tool.completed by toolCallId', () => {
+    let reg = reduceTurnTiming(
+      initialTurnTimingRegistry,
+      toolEvent('tool.started', { toolCallId: 'call-1', timestamp: 2000 })
+    );
+    expect(reg.byBlock['call-1']).toEqual({ startedAt: 2000 });
+    reg = reduceTurnTiming(
+      reg,
+      toolEvent('tool.completed', { toolCallId: 'call-1', timestamp: 9000 })
+    );
+    expect(reg.byBlock['call-1']).toEqual({
+      startedAt: 2000,
+      completedAt: 9000,
+      durationMs: 7000,
+    });
+  });
+
+  it('a tool event without a toolCallId leaves the registry untouched by reference', () => {
+    const reg = reduceTurnTiming(
+      initialTurnTimingRegistry,
+      event('thinking.started', { blockId: 'th1', timestamp: 1000 })
+    );
+    expect(reduceTurnTiming(reg, toolEvent('tool.started', {}))).toBe(reg);
   });
 
   it('keeps multiple blockIds independent', () => {

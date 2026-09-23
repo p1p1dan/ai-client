@@ -353,22 +353,20 @@ describe('buildThoughtRow empty-block behavior (via deriveToolGroupRows)', () =>
 });
 
 /**
- * A thought that is still arriving must be READABLE without a click — and
- * foldable WITH one (user decision 2026-09-19).
+ * A thought row is collapsed by default (user decision 2026-09-23).
  *
- * Two shapes collapsed into one here. `showBody` used to be
- * `!streaming && hasText`, so a thought in flight had no collapsible at all:
- * its text went to a `liveText` field that painted a bare, control-less
- * paragraph. That kept the text visible (the point) but left no way to put a
- * long think away while it happened (the complaint). A streaming thought is now
- * an ordinary expandable row that happens to carry `defaultOpen` — visible
- * without a click, foldable at any time, and `resolveToolRowOpen` is what
- * carries the fold across the moment it settles.
- *
- * `liveText` retired with the branch: one shape, one code path.
+ * History, for the ledger: `showBody` used to be `!streaming && hasText`, so a
+ * thought in flight had no collapsible at all — bare live text, no control. The
+ * 2026-09-19 fix made a streaming thought an ordinary expandable row with
+ * `defaultOpen: true`, on the argument that a 12-20s think must not look like a
+ * frozen window. What the user reported after living with that is that the
+ * open-by-default preview (200 chars + an inline 展开/收起 button) was itself the
+ * noise — 「改成默认折叠，点击后展开所有内容，去掉预览按钮」 — so the row now
+ * starts closed. The "thinking is happening" signal survives at the turn head's
+ * live 「思考 N 秒」 clause, which never depended on this row's default.
  */
 describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
-  it('gives a streaming thought a body, a chevron and an open default', () => {
+  it('gives a streaming thought a body but mounts it collapsed', () => {
     const entries = [thinkEntry(thinkingBlock('th1', 'Let me check the catalog'))];
     const rows = deriveToolGroupRows(entries, { isStreamingBlockId: 'th1' });
     expect(rows).toHaveLength(1);
@@ -376,9 +374,7 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
     expect(rows[0].expandable).toBe(true);
     expect(rows[0].body).toBe('thinking');
     expect(rows[0].output).toBe('Let me check the catalog');
-    // Without this the row would mount collapsed and the wait would look
-    // frozen again — the defect the live text was introduced for.
-    expect(rows[0].defaultOpen).toBe(true);
+    expect(rows[0].defaultOpen).toBeUndefined();
   });
 
   it('grows the body as deltas land (the append the store already does)', () => {
@@ -401,7 +397,7 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
     expect(rows[0].output).toBeUndefined();
   });
 
-  it('a settled thought keeps its preview open within the turn', () => {
+  it('a settled thought mounts collapsed too — one default for both phases', () => {
     const rows = deriveToolGroupRows([thinkEntry(thinkingBlock('th1', 'done thinking'))], {
       isStreamingBlockId: null,
     });
@@ -409,7 +405,7 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
     expect(rows[0].expandable).toBe(true);
     expect(rows[0].body).toBe('thinking');
     expect(rows[0].output).toBe('done thinking');
-    expect(rows[0].defaultOpen).toBe(true);
+    expect(rows[0].defaultOpen).toBeUndefined();
   });
 
   it('another block streaming leaves this thought settled', () => {
@@ -417,7 +413,7 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
       isStreamingBlockId: 'some-other-block',
     });
     expect(rows[0].body).toBe('thinking');
-    expect(rows[0].defaultOpen).toBe(true);
+    expect(rows[0].defaultOpen).toBeUndefined();
   });
 
   /**
@@ -436,12 +432,12 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
    * retired once (see the withdrawn F-B14 note below).
    */
 
-  it('a thought between calls keeps its live text and its auto-open', () => {
+  it('a thought between calls keeps its text reachable and its default closed', () => {
     // This used to be an assertion about `applyThinkingDurations` re-stamping
     // an aggregate's detail rows. With one row per entry (decision 034) the
     // thought is a top-level row built by `buildThoughtRow` directly, and what
-    // still has to hold is the part the user sees: a thought that is still
-    // arriving shows its text without a click.
+    // still has to hold is the part the user sees: a mid-turn thought is an
+    // expandable row that starts closed.
     const rows = deriveToolGroupRows(
       [
         thinkEntry(thinkingBlock('th1', 'mid-turn thought')),
@@ -455,22 +451,21 @@ describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
     expect(thought.key).toBe('th1');
     expect(thought.output).toBe('mid-turn thought');
     expect(thought.expandable).toBe(true);
-    expect(thought.defaultOpen).toBe(true);
+    expect(thought.defaultOpen).toBeUndefined();
   });
 
   /**
-   * `defaultOpen` is the LAST rule in `resolveToolRowOpen`, and it has to stay
-   * there for the streaming thought as well: a reader who folds a think away
-   * mid-stream is telling the app something about this row, and the row asking
-   * to be open is only a default. Asserted against the real resolver rather
-   * than by reading the field, because the precedence — not the flag — is what
-   * keeps a collapsed think collapsed when the aggregate below re-mounts it.
+   * `defaultOpen` is the LAST rule in `resolveToolRowOpen` — it has to stay
+   * there for exactly the producers that still set it (the live subagent
+   * header). A thought no longer does, so what these assert is the simpler
+   * property the 2026-09-23 decision rests on: a remembered choice is the only
+   * way a thought mounts open, and either direction of it wins.
    */
-  it('a streaming thought’s open default loses to a remembered choice', () => {
+  it('a thought mounts closed unless the reader explicitly opened it', () => {
     const rows = deriveToolGroupRows([thinkEntry(thinkingBlock('th1', 'thinking out loud'))], {
       isStreamingBlockId: 'th1',
     });
-    expect(resolveToolRowOpen(rows[0], EMPTY_TOOL_EXPAND_MEMORY)).toBe(true);
+    expect(resolveToolRowOpen(rows[0], EMPTY_TOOL_EXPAND_MEMORY)).toBe(false);
     expect(resolveToolRowOpen(rows[0], { th1: false })).toBe(false);
     expect(resolveToolRowOpen(rows[0], { th1: true })).toBe(true);
   });
@@ -667,9 +662,17 @@ describe('deriveToolRowView', () => {
     // minting a body for a run that has nothing else to show.
   });
 
-  it('is never expandable while running', () => {
+  // Reversed 2026-09-23 (user report 「执行中的指令点不开也看不到」): a running
+  // bash row IS expandable — into its live input. What stays closed while
+  // running is the OUTPUT body (`showOutputBody`), which does not exist until
+  // the result lands; the old blanket rule made a long command unreadable for
+  // its entire run.
+  it('is expandable while running — into the live input, never an output body', () => {
     const run = makeRun('a', 'Bash', { command: 'sleep 5' }, 'running', { output: undefined });
-    expect(deriveToolRowView(run).expandable).toBe(false);
+    const view = deriveToolRowView(run);
+    expect(view.expandable).toBe(true);
+    expect(view.body).toBeUndefined();
+    expect(view.input).toContain('sleep 5');
   });
 
   it('gives a Read row a file link with path/line/endLine', () => {
@@ -761,6 +764,111 @@ describe('deriveToolRowView', () => {
     const argOnlyView = deriveToolRowView(argOnly);
     expect(argOnlyView.input).toBeUndefined();
     expect(argOnlyView.expandable).toBe(false);
+  });
+});
+
+/**
+ * 2026-09-23 (user report 「执行中的指令点不开、看不到完整命令、不知道进度」):
+ * a RUNNING call now expands into its live input, and carries the elapsed /
+ * timeout pair the renderer prints as the 「12s / 30m」 tail.
+ */
+describe('deriveToolRowView — running input preview and live clock', () => {
+  it('expands a running bash row into its full input', () => {
+    const run = makeRun('b1', 'bash', { command: 'pnpm test --maxWorkers=1' }, 'running');
+    const view = deriveToolRowView(run);
+    expect(view.running).toBe(true);
+    expect(view.expandable).toBe(true);
+    expect(view.body).toBeUndefined();
+    expect(view.input).toContain('pnpm test --maxWorkers=1');
+  });
+
+  it('a running row whose fields the summary covers stays non-expandable', () => {
+    // file_path is the only field Read's arg summary needs, so even running
+    // there is no input body — the preview exists to surface what the summary
+    // hides, nothing more.
+    const view = deriveToolRowView(makeRun('b2', 'Read', { file_path: '/repo/a.ts' }, 'running'));
+    expect(view.input).toBeUndefined();
+    expect(view.expandable).toBe(false);
+  });
+
+  it('never prints the __streaming size marker as an input body', () => {
+    const view = deriveToolRowView(
+      makeRun(
+        'b3',
+        'bash',
+        { command: 'npm run bui', __streaming: { bytes: 0, lines: 0 } },
+        'running'
+      )
+    );
+    expect(view.input).toBeUndefined();
+  });
+
+  it('derives the elapsed tail from tool.started and the clock, omitting it when either is missing', () => {
+    const run = makeRun('b4', 'bash', { command: 'sleep 30' }, 'running');
+    const startedAt = 10_000;
+    const withBoth = deriveToolRowView(run, {
+      toolStartedAtMs: (blockId) => (blockId === 'b4' ? startedAt : undefined),
+      nowMs: 42_000,
+    });
+    expect(withBoth.runningElapsedMs).toBe(32_000);
+
+    // No lookup threaded (e.g. a caller that never heard of the registry).
+    expect(deriveToolRowView(run).runningElapsedMs).toBeUndefined();
+    // Lookup threaded but no start stamp on record (history replay).
+    expect(
+      deriveToolRowView(run, { toolStartedAtMs: () => undefined, nowMs: 42_000 }).runningElapsedMs
+    ).toBeUndefined();
+    // Start stamp but a static clock (a turn that is not the active one).
+    expect(
+      deriveToolRowView(run, { toolStartedAtMs: () => startedAt }).runningElapsedMs
+    ).toBeUndefined();
+    // A clock that predates the stamp is unknown time, not negative time.
+    expect(
+      deriveToolRowView(run, { toolStartedAtMs: () => startedAt, nowMs: 5_000 }).runningElapsedMs
+    ).toBeUndefined();
+  });
+
+  it('reads the timeout the input asked for, with the runtime 120s default', () => {
+    const seconds = deriveToolRowView(
+      makeRun('b5', 'bash', { command: 'sleep 1', timeoutSeconds: 1800 }, 'running'),
+      { toolStartedAtMs: () => 0, nowMs: 1000 }
+    );
+    expect(seconds.runningTimeoutMs).toBe(1_800_000);
+
+    const ms = deriveToolRowView(
+      makeRun('b6', 'bash', { command: 'sleep 1', timeoutMs: 300_000 }, 'running'),
+      { toolStartedAtMs: () => 0, nowMs: 1000 }
+    );
+    expect(ms.runningTimeoutMs).toBe(300_000);
+
+    const neither = deriveToolRowView(makeRun('b7', 'bash', { command: 'ls' }, 'running'), {
+      toolStartedAtMs: () => 0,
+      nowMs: 1000,
+    });
+    expect(neither.runningTimeoutMs).toBe(120_000);
+
+    // timeoutSeconds wins over timeoutMs — the interface a model reaches for.
+    const both = deriveToolRowView(
+      makeRun('b8', 'bash', { command: 'ls', timeoutSeconds: 60, timeoutMs: 300_000 }, 'running'),
+      { toolStartedAtMs: () => 0, nowMs: 1000 }
+    );
+    expect(both.runningTimeoutMs).toBe(60_000);
+
+    // Non-bash tools name no deadline this side can read.
+    const read = deriveToolRowView(makeRun('b9', 'read', { path: '/repo/a.ts' }, 'running'), {
+      toolStartedAtMs: () => 0,
+      nowMs: 1000,
+    });
+    expect(read.runningTimeoutMs).toBeUndefined();
+  });
+
+  it('a settled row carries neither clock field', () => {
+    const view = deriveToolRowView(makeRun('b10', 'bash', { command: 'ls' }), {
+      toolStartedAtMs: () => 0,
+      nowMs: 1000,
+    });
+    expect(view.runningElapsedMs).toBeUndefined();
+    expect(view.runningTimeoutMs).toBeUndefined();
   });
 });
 

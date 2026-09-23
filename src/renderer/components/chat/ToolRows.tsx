@@ -18,7 +18,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -41,6 +40,7 @@ import {
   toolRowPermissionNoteClass,
 } from './toolCard';
 import type { ToolDiff } from './toolDiff';
+import { formatWorkedForDuration } from './turnTiming';
 
 /**
  * T-05 batch 2/4: bare tool-row rendering (A07 screen 5, groups A-E), plus
@@ -196,6 +196,17 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
       <span className={verbClass}>{t(view.verb)}</span>
       <ToolRowArg view={view} onOpenFile={onOpenFile} />
       <ToolRowPermission view={view} />
+      {/* 2026-09-23 (user report 「1800s 的指令不知道进度」): the live clock on a
+          running row — elapsed since `tool.started`, and the deadline the
+          runtime will enforce when the input named one. "12s / 30m" reads
+          without a label because the row's own verb already says Running. */}
+      {view.running && typeof view.runningElapsedMs === 'number' && (
+        <span className="shrink-0 text-meta tabular-nums">
+          · {formatWorkedForDuration(view.runningElapsedMs)}
+          {typeof view.runningTimeoutMs === 'number' &&
+            ` / ${formatWorkedForDuration(view.runningTimeoutMs)}`}
+        </span>
+      )}
       {showDiff && view.diff && (
         <span className="shrink-0 text-meta tabular-nums">
           {/* Decision 034: the ordinary settled edit prints the NUMBERS only.
@@ -222,18 +233,11 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
     </>
   );
 
-  if (view.body === 'thinking') {
-    return (
-      <ThinkingPreview
-        text={view.output ?? ''}
-        rowKey={view.key}
-        sessionId={sessionId}
-        header={rowContent}
-        headerClass={rowClass}
-      />
-    );
-  }
-
+  // 2026-09-23 (user decision 「思考默认折叠，点击展开全部」): a thought row is
+  // an ordinary collapsible row again — the special `ThinkingPreview` branch
+  // (always-visible 200-char preview + inline 展开/收起 button) was the shape
+  // the user asked to remove. What survives from it is the blank-line
+  // filtering, now inside `ToolRowBody`'s 'thinking' case.
   const row = !view.expandable ? (
     <div className={rowClass}>{rowContent}</div>
   ) : (
@@ -256,9 +260,10 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
 
 /**
  * Seed from session memory when a body first appears. Explicit choices survive
- * live/settled transitions. Thoughts keep the same instance across that boundary
- * so their full-text choice survives; completion folding belongs to the turn.
- * Delegations start closed, with one disclosure for the header and operations.
+ * live/settled transitions. Thoughts open only on a click (2026-09-23, the
+ * preview-and-button shape retired the same day); completions fold with the
+ * turn. Delegations start closed, with one disclosure for the header and
+ * operations.
  */
 function ToolRowCollapsible({
   view,
@@ -275,13 +280,30 @@ function ToolRowCollapsible({
 }) {
   const [initialOpen] = useState(() => resolveToolRowOpen(view, readToolExpandMemory(sessionId)));
   const setToolRowExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
-  // The thought header remains an ordinary tool row. Decision 038 replaces
-  // the old inner height limit with a preview and page-level full-text flow.
+  // Controlled on purpose: a thought's disclosure changes LAYOUT, and the
+  // timeline's scroll-follower needs to be told AFTER the panel has actually
+  // grown or shrunk — `ThinkingFollowContext`'s callback records the new
+  // scrollHeight so the follow logic does not read the disclosure as new
+  // content. An uncontrolled Collapsible never re-renders this component on
+  // toggle, so there is no effect to hang that on.
+  const follow = useContext(ThinkingFollowContext);
+  const [open, setOpen] = useState(initialOpen);
+  // Deps-less layout effect + ref guard (the retired `ThinkingPreview`'s own
+  // pattern): runs after every render, does nothing unless the flag a toggle
+  // set is waiting to be consumed.
+  const followAfterLayout = useRef(false);
+  useLayoutEffect(() => {
+    if (!followAfterLayout.current) return;
+    followAfterLayout.current = false;
+    follow?.();
+  });
   return (
     <Collapsible
-      defaultOpen={initialOpen}
-      onOpenChange={(open) => {
-        if (sessionId) setToolRowExpanded(sessionId, view.key, open);
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (view.body === 'thinking') followAfterLayout.current = true;
+        if (sessionId) setToolRowExpanded(sessionId, view.key, next);
       }}
     >
       <CollapsibleTrigger
@@ -721,7 +743,7 @@ function ToolRowOutputSegment({
         </SubagentDetail>
       );
     case 'thinking':
-      return <ThinkingPreview text={view.output ?? ''} rowKey={view.key} sessionId={sessionId} />;
+      return <ThinkingBody text={view.output ?? ''} />;
     case 'stats':
       return (
         <div className="mt-1 flex select-text flex-col gap-1.5 text-chat-process leading-[1.55] text-tool-arg">
@@ -735,80 +757,24 @@ function ToolRowOutputSegment({
 
 export const ThinkingFollowContext = createContext<(() => void) | null>(null);
 
-function ThinkingPreview({
-  text,
-  rowKey,
-  sessionId,
-  header,
-  headerClass,
-}: {
-  text: string;
-  rowKey: string;
-  sessionId?: string;
-  header?: ReactNode;
-  headerClass?: string;
-}) {
-  const { t } = useI18n();
-  const follow = useContext(ThinkingFollowContext);
-  const memoryKey = `${rowKey}~full-thinking`;
-  const [full, setFull] = useState(() => readToolExpandMemory(sessionId)[memoryKey] ?? false);
-  const setExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
-  const disclosureChanged = useRef(false);
-  useLayoutEffect(() => {
-    if (!disclosureChanged.current) return;
-    disclosureChanged.current = false;
-    follow?.();
-  });
+/**
+ * A thought's expanded body (2026-09-23): the full text, nothing trimmed, no
+ * preview tier. Only the display cleanup of the retired `ThinkingPreview`
+ * survives — blank lines are dropped so a stream of `\n\n` separators between
+ * paragraphs does not open gaps — and the page-level full-text flow (decision
+ * 038) is kept: no inner height limit.
+ */
+function ThinkingBody({ text }: { text: string }) {
   const displayText = text
     .split(/\r\n|\n|\r/)
     .filter((line) => line.trim().length > 0)
     .join('\n');
-  const characters = Array.from(displayText);
-  const truncated = characters.length > 200;
-  const toggle = () => {
-    if (!truncated) return;
-    const next = !full;
-    disclosureChanged.current = true;
-    setFull(next);
-    if (sessionId) setExpanded(sessionId, memoryKey, next);
-  };
   return (
-    <div>
-      {header &&
-        (truncated ? (
-          <Button
-            variant="ghost"
-            size="none"
-            className={cn(
-              headerClass,
-              'h-auto justify-start rounded-none border-0 p-0 font-normal normal-case tracking-normal [&_svg]:mx-0 [&_svg]:size-[13px] sm:[&_svg]:size-[13px]'
-            )}
-            data-slot="thinking-header"
-            aria-expanded={full}
-            onClick={toggle}
-          >
-            {header}
-          </Button>
-        ) : (
-          <div className={headerClass}>{header}</div>
-        ))}
-      <p className="mt-1 select-text whitespace-pre-wrap text-chat-process leading-[1.55] text-tool-arg">
-        <span data-slot="thinking-text">
-          {full || !truncated ? displayText : `${characters.slice(0, 200).join('')}…`}
-        </span>
-        {truncated && (
-          <Button
-            variant="ghost"
-            size="none"
-            className="ml-1 inline-flex h-auto rounded-none border-0 p-0 align-baseline font-normal text-[length:inherit] normal-case leading-[inherit] tracking-normal"
-            data-slot="thinking-preview-toggle"
-            aria-expanded={full}
-            onClick={toggle}
-          >
-            {full ? t('Show less') : t('Expand')}
-          </Button>
-        )}
-      </p>
-    </div>
+    <p
+      data-slot="thinking-text"
+      className="mt-1 select-text whitespace-pre-wrap text-chat-process leading-[1.55] text-tool-arg"
+    >
+      {displayText}
+    </p>
   );
 }

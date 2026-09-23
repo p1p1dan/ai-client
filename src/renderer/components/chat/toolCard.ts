@@ -433,13 +433,25 @@ export interface ToolRowView {
    *
    * A07 `:2331` also said a running row never shows a chevron. Decision 034
    * retired the chevron itself (the whole row is the affordance now), and the
-   * half of that rule which survives is about the BODY: a standalone call has
-   * nothing to disclose until it settles, while a thought row (user decision
-   * 2026-09-19) and the live subagent panel
-   * (`subagentActivityModel.ts`) both do.
+   * half of that rule which survives is about the BODY: since 2026-09-23 a
+   * standalone call DOES disclose its live input (the user could not see a
+   * long-running bash command at all), while its output still only exists once
+   * the call settles.
    */
   running: boolean;
   failed: boolean;
+  /**
+   * Live elapsed for a running row (2026-09-23), derived from the
+   * `tool.started` timestamp and the ticking `nowMs`. Undefined when no
+   * timestamp is known — omitted, never zero (the A07 :2399 rule).
+   */
+  runningElapsedMs?: number;
+  /**
+   * The timeout the runtime will enforce on a running row, when the input
+   * names one. Bash-family only; read from `timeoutSeconds`/`timeoutMs` with
+   * the runtime's own 120s default. Rendered as the "elapsed / limit" tail.
+   */
+  runningTimeoutMs?: number;
   /** Only a row with a body can expand. */
   expandable: boolean;
   body?: ToolRowBody;
@@ -495,9 +507,9 @@ export interface ToolRowView {
    * outranked by a remembered user choice (`resolveToolRowOpen`).
    *
    * `deriveToolRowView` never sets it — a tool call opens only when the user
-   * asks (2026-08-25). Exactly two producers do: the subagent panel's LIVE
-   * header row (T-34) and a thought that is still streaming (2026-09-19). Both
-   * are rows whose content is the only thing happening at that moment.
+   * asks (2026-08-25). The one remaining producer is the subagent panel's LIVE
+   * header row (T-34); the streaming thought's `defaultOpen` was retired with
+   * the 2026-09-23 collapsed-by-default decision (see `buildThoughtRow`).
    */
   defaultOpen?: boolean;
 }
@@ -519,6 +531,14 @@ export interface ToolCardOptions {
    * bytes (see `englishTranslate`).
    */
   t?: Translate;
+  /**
+   * 2026-09-23 (user report 「1800s 的指令既点不开也不知道进度」): a running
+   * row's live elapsed readout. Lookup into the turn-timing registry, keyed by
+   * the `tool_call` block id; the value is the `tool.started` event timestamp.
+   */
+  toolStartedAtMs?: (blockId: string) => number | null | undefined;
+  /** Clock for the elapsed readout. Ticking on the active turn; static elsewhere. */
+  nowMs?: number;
 }
 
 /** Injected thinking-duration lookup, shared by the group/aggregate row builders. */
@@ -544,14 +564,33 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   const hitSource = isHitListTool(run.toolName) ? run.output : undefined;
 
   const showOutputBody = !running && (failed || Boolean(run.output));
-  // A running call's input can still change before it settles, so the input
-  // segment only appears once the call is done (T-05 adversarial fix #3).
+  // 2026-09-23 (user report 「执行中的指令点不开、看不到完整命令」): a running
+  // call's input is now expandable as a live preview. `tool.updated` rewrites
+  // `toolInput` in the store, so the preview follows the input the same way the
+  // settled body does — the old T-05 rule (input hidden until the call settles)
+  // made the one command a reader most wants to watch, a long-running bash,
+  // unreachable for its entire run.
   const recordedChange = reviewFromToolResult(run.result);
-  const inputBody = running || recordedChange ? undefined : deriveToolInputBody(run);
+  const inputBody = recordedChange ? undefined : deriveToolInputBody(run);
   // Running Edit/Write arguments are explicitly labelled as a preview;
   // successful Edit results prefer the SDK patch once the call settles.
   const diff = recordedChange ? null : deriveToolDiff(run);
   const expandable = showOutputBody || Boolean(inputBody) || Boolean(diff);
+
+  // The live clock. `tool.started` is stamped when the call is issued, so the
+  // elapsed includes any approval wait that preceded execution — that is the
+  // honest "how long has this row been on screen" number, and the alternative
+  // (measuring from the exec start) has no event to read. Guarded to undefined
+  // whenever either input is missing, so non-active turns (STATIC_NOW_MS) and
+  // un-timestamped history simply omit the readout.
+  const startedAtMs = running ? options.toolStartedAtMs?.(run.blockId) : undefined;
+  const runningElapsedMs =
+    typeof startedAtMs === 'number' &&
+    typeof options.nowMs === 'number' &&
+    options.nowMs >= startedAtMs
+      ? options.nowMs - startedAtMs
+      : undefined;
+  const runningTimeoutMs = running ? bashTimeoutMsFromInput(run) : undefined;
 
   return {
     key: run.blockId,
@@ -561,6 +600,8 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     argKind: argDetail?.kind,
     running,
     failed,
+    runningElapsedMs,
+    runningTimeoutMs,
     expandable,
     body: showOutputBody ? 'output' : undefined,
     output: showOutputBody ? run.output : undefined,
@@ -636,7 +677,14 @@ export const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   [RUNTIME_TOOL_NAMES.edit]: ['path'],
   [RUNTIME_TOOL_NAMES.glob]: ['pattern'],
   [RUNTIME_TOOL_NAMES.grep]: ['pattern'],
-  [RUNTIME_TOOL_NAMES.bash]: ['command'],
+  // Decision 033 D6, applied to the pi-native spelling on 2026-09-23: the
+  // one-line summary HARD-TRUNCATES the command at 40 characters
+  // (`COMMAND_SUMMARY_MAX_CHARS`), so listing `command` as covered made every
+  // character past the cut permanently unreachable — the input body was never
+  // built, running or settled, and a long command could not be read in full at
+  // any point in its life. This is what 「超长指令完全不知情」 turned out to be
+  // made of. `description` stays covered: it is what the summary prints.
+  [RUNTIME_TOOL_NAMES.bash]: ['description'],
   [RUNTIME_TOOL_NAMES.browserPreview]: ['path'],
   // Empty on purpose, and declared rather than left to the default: the arg is
   // the FIRST question only, so the body is where the rest of them live.
@@ -659,6 +707,12 @@ function deriveToolInputBody(run: ToolRun): string | undefined {
   if (!rec) return undefined;
   const keys = Object.keys(rec);
   if (keys.length === 0) return undefined;
+  // T101: while the marker is present the long fields are withheld and the
+  // "body" would be the size summary printed back at the user as JSON — the
+  // raw-argument body stays closed until the final `tool.updated` lands. This
+  // now also guards the 2026-09-23 running-input preview, not just the settled
+  // body it was written for.
+  if (readStreamingToolArgs(run.input)) return undefined;
   const covered = new Set(ARG_COVERED_FIELDS[run.toolName] ?? []);
   const hasExtra = keys.some((key) => !covered.has(key));
   if (!hasExtra) return undefined;
@@ -683,6 +737,29 @@ function isHitListTool(toolName: string): boolean {
   return classifyTool(toolName) === 'search';
 }
 
+/** Mirrors the runtime's own default (`plugins/tools` DEFAULT_BASH_TIMEOUT_MS). */
+const DEFAULT_BASH_TIMEOUT_MS = 120_000;
+
+const BASH_TIMEOUT_TOOL_NAMES = new Set(['Bash', RUNTIME_TOOL_NAMES.bash]);
+
+/**
+ * The timeout a running bash-family call asked for, as the runtime will apply
+ * it: `timeoutSeconds` wins over `timeoutMs` (the interface a model reaches
+ * for), and neither present means the 120s default. Non-bash tools have no
+ * deadline this side can name, so they return undefined and the row shows a
+ * bare elapsed.
+ */
+function bashTimeoutMsFromInput(run: ToolRun): number | undefined {
+  if (!BASH_TIMEOUT_TOOL_NAMES.has(run.toolName)) return undefined;
+  const rec = asRecord(run.input);
+  if (!rec) return DEFAULT_BASH_TIMEOUT_MS;
+  const seconds = rec.timeoutSeconds;
+  if (typeof seconds === 'number' && seconds > 0) return seconds * 1000;
+  const ms = rec.timeoutMs;
+  if (typeof ms === 'number' && ms > 0) return ms;
+  return DEFAULT_BASH_TIMEOUT_MS;
+}
+
 /**
  * One tool group -> its top-level rows. One row per entry, in order.
  *
@@ -703,7 +780,8 @@ export function deriveToolGroupRows(
   entries: readonly ToolGroupEntry[],
   options: ToolCardOptions & ThinkingRowOptions = {}
 ): ToolRowView[] {
-  const { thinkingDurationMs, isStreamingBlockId, ...cardOptions } = options;
+  const { thinkingDurationMs, isStreamingBlockId, toolStartedAtMs, nowMs, ...cardOptions } =
+    options;
   // `t` belongs to both halves: the rest-spread keeps it on `cardOptions` for
   // the tool rows, and it is named again here so thought rows get it too.
   const thinkingOptions: ThinkingRowOptions = {
@@ -753,21 +831,17 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
   // honest Cursor form and was approved & registered in the T-05 ledger
   // (see `deriveToolGroupRows` empty-block test below for the locked case).
   //
-  // ## The streaming thought is an ordinary expandable row (2026-09-19)
+  // ## A thought is collapsed by default (2026-09-23, user decision)
   //
-  // It used to be two shapes: a settled thought went behind a chevron, and a
-  // thought in flight painted its text with NO control at all (`liveText`),
-  // on the argument that "a row whose content is still arriving must not offer
-  // a toggle whose state is meaningless a second later".
-  //
-  // That argument was half right. It correctly refused to HIDE a thought in
-  // flight — hiding it is what made a 12-20s think look like a frozen window —
-  // but it also took away the only way to get a long think out of the way
-  // while it happens, which is what the user then asked for. Both halves are
-  // satisfied by one row: expandable, and `defaultOpen` so it starts visible
-  // without a click. Folding it back is now a choice the reader can make at
-  // any time, and `resolveToolRowOpen` keeps that choice across the moment the
-  // thought settles.
+  // It used to start OPEN — first as bare live text, then (2026-09-19) as an
+  // ordinary expandable row with `defaultOpen: true`, on the argument that a
+  // 12-20s think must not look like a frozen window. What the user reported
+  // after living with that is that the open-by-default preview (200 chars +
+  // an inline 展开/收起 button) was itself the noise: 「思考的展示形式不喜欢，
+  // 改成默认折叠，点击后展开所有内容，去掉预览按钮」. The frozen-window worry is
+  // now carried elsewhere — the turn head's live 「思考 N 秒」 clause still shows
+  // that thinking is happening — so the row starts closed, one click opens the
+  // full text, and `resolveToolRowOpen` keeps that choice across the settle.
   return {
     key: block.id,
     verb,
@@ -779,8 +853,6 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
     expandable: showBody,
     body: showBody ? 'thinking' : undefined,
     output: showBody ? block.text : undefined,
-    // Preview remains readable between tools; the turn owns completion folding.
-    defaultOpen: true,
   };
 }
 

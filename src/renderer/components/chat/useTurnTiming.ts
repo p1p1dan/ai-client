@@ -11,12 +11,16 @@ import {
 /**
  * Team-side thinking-timing registry surface (T-05, mirrors `useMessageMetadata.ts`):
  * subscribes to Runtime Events for the active session and folds
- * `thinking.started`/`thinking.completed` into a per-block duration lookup,
- * without touching the red-line `chatSessions` store.
+ * `thinking.started`/`thinking.completed` — and, since 2026-09-23,
+ * `tool.started`/`tool.completed` for the running rows' live elapsed tail —
+ * into a per-block duration lookup, without touching the red-line
+ * `chatSessions` store.
  */
 
 export interface UseTurnTimingResult {
   getThinking: (blockId: string) => ThinkingTiming | undefined;
+  /** Tool timing, keyed by toolCallId (= the `tool_call` block id). */
+  getTool: (blockId: string) => ThinkingTiming | undefined;
 }
 
 export function useTurnTiming(sessionId: string | null): UseTurnTimingResult {
@@ -43,6 +47,7 @@ export function useTurnTiming(sessionId: string | null): UseTurnTimingResult {
   // `useMessageMetadata`'s `get` (review batch F7): it feeds a prop of the
   // memoized `ChatTurn`.
   const getThinking = useCallback((blockId: string) => registry.byBlock[blockId], [registry]);
+  const getTool = useCallback((blockId: string) => registry.byBlock[blockId], [registry]);
 
-  return { getThinking };
+  return { getThinking, getTool };
 }
