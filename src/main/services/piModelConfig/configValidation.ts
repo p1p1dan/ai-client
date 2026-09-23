@@ -1,4 +1,4 @@
-import { deriveInheritedBaseUrl } from '@shared/modelBaseUrl';
+import { deriveInheritedBaseUrl, stripRedundantVersion } from '@shared/modelBaseUrl';
 import {
   PI_MODEL_APIS,
   PI_USER_AGENT_ENV,
@@ -125,6 +125,12 @@ function validateModel(value: unknown, field: string): PiManagedModelDefinition 
       throw new Error(`${field}.baseUrl must be a non-empty string`);
     }
     baseUrl = validateAbsoluteUrl(value.baseUrl.trim(), `${field}.baseUrl`);
+    // An explicitly stated api carries its own version rule, so the segment
+    // can be corrected here. An api-less model inherits the provider's, which
+    // this validator cannot see; that address keeps its verbatim form, the
+    // same status quo the provider-level field below improves on only because
+    // the provider's own api IS in scope there.
+    if (baseUrl && api) baseUrl = stripRedundantVersion(baseUrl, api);
   }
   const reasoning = value.reasoning === undefined ? undefined : Boolean(value.reasoning);
 
@@ -251,9 +257,17 @@ function validateProvider(
   }
 
   const name = typeof value.name === 'string' && value.name.trim() ? value.name.trim() : undefined;
+  // The administrator's address is used verbatim by D15 ("an explicit value
+  // wins"), but "verbatim" means the host and path they chose — not a version
+  // segment the SDK is about to append a second copy of. A managed
+  // anthropic-messages base ending in `/v1` would make the SDK ask for
+  // `/v1/v1/messages`. The user-entered lane already applies this same
+  // correction (`normalizeProviderBaseUrl` in `userProviders.ts`); this wires
+  // the managed lane to the identical rule so the two cannot drift.
+  const managedBaseUrl = rawBaseUrl ? stripRedundantVersion(rawBaseUrl, api) : undefined;
   return {
     ...(name ? { name } : {}),
-    ...(rawBaseUrl ? { baseUrl: rawBaseUrl } : {}),
+    ...(managedBaseUrl ? { baseUrl: managedBaseUrl } : {}),
     api,
     credentials,
     ...(rawApiKey ? { apiKey: rawApiKey } : {}),

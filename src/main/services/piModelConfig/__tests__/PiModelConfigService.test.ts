@@ -5,6 +5,7 @@ import {
   PI_USER_AGENT_ENV,
   PI_USER_AGENT_HEADER,
   type PiManagedModelsConfig,
+  type PiModelApi,
 } from '@shared/piModelConfig';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { toPiModelsJson, validatePiManagedModelsConfig } from '../configValidation';
@@ -343,7 +344,7 @@ describe('PiModelConfigService', () => {
         pinned: {
           api: 'anthropic-messages',
           credentials: { baseUrl: 'managed', apiKey: 'onboarding' },
-          baseUrl: 'https://exception.example/v1',
+          baseUrl: 'https://exception.example/anthropic',
           models: [{ id: 'claude-opus-5' }],
         },
       },
@@ -362,9 +363,12 @@ describe('PiModelConfigService', () => {
     const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
     expect(models.providers.claude.baseUrl).toBe('https://cch.example');
     expect(models.providers.codex.baseUrl).toBe('https://cch.example/v1');
-    // The escape hatch D15 keeps: a provider that states an address is never
-    // rewritten, however odd the address looks to us.
-    expect(models.providers.pinned.baseUrl).toBe('https://exception.example/v1');
+    // The escape hatch D15 keeps: a provider that states an address keeps the
+    // host and path it chose (custom prefixes are never rewritten). The one
+    // thing an explicit address does NOT keep is a version segment the SDK is
+    // about to append a second copy of — that correction has its own tests
+    // below (`managed explicit baseUrl version normalization`).
+    expect(models.providers.pinned.baseUrl).toBe('https://exception.example/anthropic');
   });
 
   it('carries a single model’s own address all the way to models.json (D15 / MC02)', async () => {
@@ -831,6 +835,83 @@ describe('validatePiManagedModelsConfig', () => {
       },
     });
     expect(emptyProvider.providers.dan.models).toEqual([]);
+  });
+});
+
+/**
+ * Managed explicit baseUrl: the host and path an administrator typed are kept
+ * verbatim (D15 escape hatch), but a version segment the SDK will append again
+ * is stripped, so the two cannot end up requesting `/v1/v1/messages`.
+ *
+ * This is the managed-lane counterpart of what `normalizeProviderBaseUrl`
+ * already does for the user-entered lane (`userProviders.ts`); wiring both to
+ * the same `stripRedundantVersion` rule keeps the two from drifting.
+ */
+describe('managed explicit baseUrl version normalization', () => {
+  function managed(api: PiModelApi, baseUrl: string) {
+    const config = {
+      version: 1 as const,
+      providers: {
+        p: {
+          api,
+          credentials: { baseUrl: 'managed' as const, apiKey: 'onboarding' as const },
+          baseUrl,
+          models: [{ id: 'm1' }],
+        },
+      },
+    };
+    return (
+      toPiModelsJson(validatePiManagedModelsConfig(config), {
+        inheritedBaseUrl: 'https://unused.example/v1',
+      }).providers as Record<string, { baseUrl: string }>
+    ).p.baseUrl;
+  }
+
+  it('strips a trailing /v1 from an anthropic-messages base (SDK appends /v1/messages)', () => {
+    expect(managed('anthropic-messages', 'https://gw.example/v1')).toBe('https://gw.example');
+  });
+
+  it('leaves an anthropic-messages base that carries no /v1 unchanged (idempotent)', () => {
+    expect(managed('anthropic-messages', 'https://gw.example')).toBe('https://gw.example');
+  });
+
+  it('keeps the version segment for openai shapes (SDK appends /responses or /chat/completions)', () => {
+    expect(managed('openai-responses', 'https://gw.example/v1')).toBe('https://gw.example/v1');
+    expect(managed('openai-completions', 'https://gw.example/v1')).toBe('https://gw.example/v1');
+  });
+
+  it('does not invent a /v1 for an openai base that lacks one', () => {
+    expect(managed('openai-responses', 'https://gw.example')).toBe('https://gw.example');
+  });
+
+  it('preserves a custom path prefix while still stripping a trailing version', () => {
+    expect(managed('anthropic-messages', 'https://gw.example/paas/v1')).toBe(
+      'https://gw.example/paas'
+    );
+  });
+
+  it('applies the same rule to a model-level explicit baseUrl when the model states its own api', () => {
+    const config = {
+      version: 1 as const,
+      providers: {
+        p: {
+          api: 'openai-responses' as const,
+          credentials: { baseUrl: 'managed' as const, apiKey: 'onboarding' as const },
+          baseUrl: 'https://gw.example/v1',
+          models: [
+            { id: 'm1' },
+            { id: 'm2', api: 'anthropic-messages' as const, baseUrl: 'https://other.example/v1' },
+          ],
+        },
+      },
+    };
+    const models = (
+      toPiModelsJson(validatePiManagedModelsConfig(config), {
+        inheritedBaseUrl: 'https://unused.example/v1',
+      }).providers as Record<string, { baseUrl: string; models: Array<{ baseUrl?: string }> }>
+    ).p;
+    expect(models.baseUrl).toBe('https://gw.example/v1');
+    expect(models.models[1]?.baseUrl).toBe('https://other.example');
   });
 });
 
