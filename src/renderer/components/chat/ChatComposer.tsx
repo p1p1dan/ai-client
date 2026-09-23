@@ -2631,13 +2631,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     resolvePendingReplyLanded(watch.sessionId);
   }, [activeSessionId, activeSession?.status, activeMessages, resolvePendingReplyLanded]);
 
-  // The OTHER two wire endings, both read straight off the event stream:
+  // The OTHER three wire endings, all read straight off the event stream:
   // `chatSessions.ts` collapses `session.completed` AND `session.stopped` into
   // the same `'idle'` status, so the effect above (derived state only) cannot
   // tell a real completion from a user Stop.
   //
-  // `session.failed` is the third, and it is the only one that changes
-  // anything: it is CONFIRMED DEATH (§6.1 — the single red-card entry point),
+  // `session.failed` is the one ending that changes anything beyond the
+  // watch: it is CONFIRMED DEATH (§6.1 — the single red-card entry point),
   // so D1 applies and the payload goes back to the composer. This is the causal
   // order the whole batch exists to restore — the user waits, the Host says it
   // failed, and only THEN does the text come back, with a red card that is
@@ -2661,6 +2661,18 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // A clean completion with zero new assistant blocks. The turn ended
         // fine; the found-material is dropped in silence and the composer is
         // never touched.
+        resolvePendingReplyLanded(watch.sessionId);
+      }
+      if (isSessionStoppedForSend(event, watch.sessionId)) {
+        // The user stopped the turn — this composer's Stop, another window's,
+        // or a host-side abort; the projector reports all three the same way.
+        // No draft restore: D1's restore is for a turn the HOST killed, and
+        // the text of one the user stopped is already in the timeline as the
+        // echoed user bubble. This is the ending the 2026-08-10 Stop-hang fix
+        // taught the WAIT about (assistantProgress.ts) but this chain, added
+        // eight days later, did not port — without it a stopped-with-no-blocks
+        // turn kept the watch armed and the head read 「工作中」 forever while
+        // every later Stop answered `stopped: false`.
         resolvePendingReplyLanded(watch.sessionId);
       }
     });

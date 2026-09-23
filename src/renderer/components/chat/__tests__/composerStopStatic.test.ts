@@ -822,9 +822,35 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
     expect(dropRef).toBeGreaterThanOrEqual(0);
     expect(dropRef).toBeLessThan(dropSlot);
     expect(dropSlot).toBeLessThan(revoke);
-    // One cleanup authority; the three endings a pending turn can have (new
-    // progress, a confirmed failure, a clean completion) all route into it.
-    expect(offsets('resolvePendingReplyLanded(')).toHaveLength(3);
+    // One cleanup authority; the four endings a pending turn can have (new
+    // progress, a confirmed failure, a clean completion, a user Stop) all
+    // route into it.
+    expect(offsets('resolvePendingReplyLanded(')).toHaveLength(4);
+  });
+
+  /**
+   * `[D-5]` — the fourth ending. A turn the user stopped produces
+   * `session.stopped`, which `chatSessions.ts` collapses to the same `'idle'`
+   * a completion produces, so the derived-state effect cannot see the
+   * difference and the wire-event chain must carry the branch itself. This is
+   * the port of the 2026-08-10 Stop-hang fix (which taught the WAIT about the
+   * same event) to the watch batch F2 added eight days later — without it, a
+   * turn stopped with no new assistant blocks kept the watch armed, the head
+   * read 「工作中」 forever, and every later Stop answered `stopped: false`
+   * (the "stop has no effect" field report).
+   */
+  it('[D-5] a user Stop clears the pending watch too', () => {
+    const chain = source.slice(
+      only('const unsubscribe = subscribeRuntimeEvent((event) => {'),
+      only('  }, [resolvePendingReplyLanded, restoreDraftIfComposerEmpty]);')
+    );
+    const completed = only('if (isSessionCompletedForSend(event, watch.sessionId)) {');
+    const stopped = only('if (isSessionStoppedForSend(event, watch.sessionId)) {');
+    // Inside the cleanup chain, and after the completed branch it mirrors.
+    expect(chain).toContain('if (isSessionStoppedForSend(event, watch.sessionId)) {');
+    expect(completed).toBeLessThan(stopped);
+    // And it routes into the one cleanup authority like every other ending.
+    expect(chain).toContain('resolvePendingReplyLanded(watch.sessionId);');
   });
 
   /**
