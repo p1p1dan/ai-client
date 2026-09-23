@@ -2989,6 +2989,11 @@ export const zhTranslations: Record<string, string> = {
     '助手连续调用了 64 轮工具还没收敛。本应用到这里就停下，避免死循环无限制地消耗。',
   'Send a message to carry on from here — the work so far is kept.':
     '发一条消息就能从这里接着做 —— 已经做的工作都保留着。',
+  // decision 040：轮次上限是「暂停」而不是「失败」，所以走中性提示条（TurnCeilingNotice），
+  // 不进上面的失败卡片词条。上限的具体数字故意不写进文案：它归 runtime 管。
+  'Paused at the turn ceiling': '已达到轮次上限，已暂停',
+  'This run reached the turn ceiling for one request, so the assistant summarised its progress and paused. The work so far is kept.':
+    '这次运行达到了单次请求的轮次上限，助手已总结进度并暂停。已经做的工作都保留着。',
   'The prompt no longer fits the model': '提示词已经超出现有模型的容量',
   'This chat’s history plus your message is larger than the window the model accepts, so the turn was never sent.':
     '这个对话的历史加上你这条消息，已经超过该模型接受的上下文窗口，所以这一轮根本没发出去。',

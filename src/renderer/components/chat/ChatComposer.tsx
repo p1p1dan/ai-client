@@ -2699,13 +2699,21 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const clearContinue = useContinueIntentStore((state) => state.clearContinue);
   useEffect(() => {
     if (!continueIntent || continueIntent.sessionId !== activeSessionId) return;
-    const bucket = useChatSessionsStore.getState().messages[continueIntent.sessionId] ?? [];
-    const message = bucket.find((item) => item.id === continueIntent.messageId);
     // Cleared whichever way this goes, before the send: the click is consumed
     // once. A refused send (the guards inside `runSend`) must not leave the
     // intent armed, or the next render would fire it again against whatever
     // the user is doing then.
     clearContinue();
+    if (continueIntent.kind === 'carry-on') {
+      // decision 040 — the turn-ceiling pause. The prompt is NOT resent (that
+      // would restart the task); the model already wrote where things stand
+      // and was told a plain "continue" carries on from there. `'retry'` for
+      // the same reason the resend uses it: a send the composer did not type.
+      void runSend(t('Continue'), [], { origin: 'retry' });
+      return;
+    }
+    const bucket = useChatSessionsStore.getState().messages[continueIntent.sessionId] ?? [];
+    const message = bucket.find((item) => item.id === continueIntent.messageId);
     if (!message) return;
     const text = message.blocks
       .map((block) => (block.type === 'text' ? (block.text ?? '') : ''))
@@ -2719,9 +2727,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // remembers attaching.
     void runSend(text, [], { origin: 'retry' });
     // `runSend` / `sessionId` are stable for this component's life; the effect
-    // is keyed on the intent alone so it fires once per click.
+    // is keyed on the intent alone so it fires once per click. `t` (decision
+    // 040's carry-on wording) only changes with the locale, and the intent is
+    // cleared on the first pass, so listing it cannot send twice.
     // biome-ignore lint/correctness/useExhaustiveDependencies: documented above
-  }, [continueIntent, activeSessionId, clearContinue, runSend]);
+  }, [continueIntent, activeSessionId, clearContinue, runSend, t]);
 
   // T-19 fix review (R5): the strip's failed-row Retry/Discard wiring
   // (`retryQueueHead` / `handleStripRetry`) is removed along with batch 3's

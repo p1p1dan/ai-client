@@ -30,11 +30,24 @@ import { create } from 'zustand';
  * place: a copy in this store would be a second, staler version of the user's
  * own prompt — and would survive a session switch, so a Continue clicked in
  * session B could resend session A's text.
+ *
+ * ## The second kind: carry on (decision 040)
+ *
+ * A run that paused at the turn ceiling must NOT resend its prompt — that
+ * would restart the whole task on top of everything already done. Its
+ * Continue asks for a plain "continue" instead, so the intent is a union:
+ * `resend` names a message, `carry-on` names only the session. The composer
+ * words the message itself.
  */
+export type ContinueIntent =
+  | { kind: 'resend'; sessionId: string; messageId: string }
+  | { kind: 'carry-on'; sessionId: string };
+
 interface ContinueIntentState {
-  /** The user message to send again, and the session it belongs to. */
-  pending: { sessionId: string; messageId: string } | null;
+  /** What to send, and the session it belongs to. */
+  pending: ContinueIntent | null;
   requestContinue: (sessionId: string, messageId: string) => void;
+  requestCarryOn: (sessionId: string) => void;
   clearContinue: () => void;
 }
 
@@ -42,6 +55,8 @@ export const useContinueIntentStore = create<ContinueIntentState>((set) => ({
   pending: null,
   // Last write wins: two failures in a row leave one Continue to honour, and it
   // names the message the user was looking at when they clicked.
-  requestContinue: (sessionId, messageId) => set({ pending: { sessionId, messageId } }),
+  requestContinue: (sessionId, messageId) =>
+    set({ pending: { kind: 'resend', sessionId, messageId } }),
+  requestCarryOn: (sessionId) => set({ pending: { kind: 'carry-on', sessionId } }),
   clearContinue: () => set({ pending: null }),
 }));

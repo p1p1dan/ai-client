@@ -23,6 +23,7 @@ import {
 const ORIGINS = [
   'subagent-report',
   'project-instructions',
+  'turn-ceiling',
 ] as const satisfies readonly InternalMessageOrigin[];
 
 describe('internal message marks', () => {

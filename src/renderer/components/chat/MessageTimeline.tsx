@@ -118,6 +118,7 @@ import { useResumeSession } from './sessionIndex/useResumeSession';
 import { streamingBlockIdForItem } from './streamingBlockId';
 import { delegateDisplayName } from './subagentActivityModel';
 import { ThinkingFollowContext, ToolGroup } from './ToolRows';
+import { TurnCeilingNotice } from './TurnCeilingNotice';
 import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
 import { buildTurnCopyTextFromItems } from './turnCopy';
 import {
@@ -280,6 +281,10 @@ export function MessageTimeline({
   const lastErrorCode = useChatSessionsStore(
     (state) => state.sessions.find((session) => session.id === sessionId)?.runtimeErrorCode ?? null
   );
+  /** decision 040 — the last run paused at the turn ceiling (see `TurnCeilingNotice`). */
+  const stopCause = useChatSessionsStore(
+    (state) => state.sessions.find((session) => session.id === sessionId)?.stopCause ?? null
+  );
   /**
    * What this failure IS, in the user's terms — the answer to 「不知道发生了
    * 什么为什么报错了」. `lastError` alone is the provider's sentence, which says
@@ -291,6 +296,7 @@ export function MessageTimeline({
     [lastError, lastErrorCode]
   );
   const requestContinue = useContinueIntentStore((state) => state.requestContinue);
+  const requestCarryOn = useContinueIntentStore((state) => state.requestCarryOn);
   // T091: no `stopActiveSession` selector here any more. This timeline renders
   // ONE session (`sessionId`, a prop), and its Stop button used to hand that
   // fact back to the store and let it re-resolve `activeSessionId` — which is
@@ -935,6 +941,13 @@ export function MessageTimeline({
                     </>
                   )}
                 </div>
+              )}
+              {/* decision 040: a run that paused at the turn ceiling COMPLETED —
+                its wrap-up summary is the last reply above — so this is a
+                neutral notice beside it, not the failed card. Idle only: the
+                store clears the cause as soon as the next run starts. */}
+              {sessionId && status === 'idle' && stopCause === 'turn_limit' && (
+                <TurnCeilingNotice onContinue={() => requestCarryOn(sessionId)} />
               )}
             </ReadingColumn>
           </div>

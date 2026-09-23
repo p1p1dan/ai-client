@@ -192,6 +192,18 @@ export interface ChatSession {
    * its "unknown reason" wording, which offers Continue.
    */
   runtimeErrorCode?: string;
+  /**
+   * decision 040 — the last run COMPLETED at the interactive turn ceiling,
+   * straight off `session.completed.payload.stopCause`. The timeline shows a
+   * neutral "paused" notice with a Continue button for it; a failure card
+   * would call a pause a failure.
+   *
+   * Live-only: set by that completion, cleared by anything that starts the
+   * next run (and by a failure or Stop). A reopened session does not rebuild
+   * it — the wrap-up reply itself is in the transcript and says where things
+   * stand.
+   */
+  stopCause?: 'turn_limit';
 }
 
 export interface ChatBlock {
@@ -871,10 +883,20 @@ export function applyRuntimeEvent(
       : recovered
         ? undefined
         : current.runtimeErrorCode;
+  // decision 040. `session.completed` is itself a recovery event, so it is
+  // matched first; every OTHER recovery event (a new run starting, its first
+  // output) and a failure clear the notice.
+  const stopCause =
+    event.type === 'session.completed'
+      ? event.payload?.stopCause
+      : event.type === 'session.failed' || recovered
+        ? undefined
+        : current.stopCause;
   if (
     activity !== current.activity ||
     runtimeError !== current.runtimeError ||
     runtimeErrorCode !== current.runtimeErrorCode ||
+    stopCause !== current.stopCause ||
     (recovered && current.retry)
   ) {
     patch.sessions = (patch.sessions ?? state.sessions).map((session) =>
@@ -884,6 +906,7 @@ export function applyRuntimeEvent(
             activity,
             runtimeError,
             runtimeErrorCode,
+            stopCause,
             ...(recovered ? { retry: undefined } : {}),
           }
         : session

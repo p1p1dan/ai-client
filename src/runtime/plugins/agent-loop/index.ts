@@ -162,6 +162,51 @@ export interface AgentLoopConfig {
    * every SDK we talk through reads 0 as "time out immediately".
    */
   providerTimeoutMs: number;
+  /**
+   * decision 040 — the most assistant turns one multi-turn run takes before it
+   * pauses. Ignored when `singleTurn` is set.
+   *
+   * Reaching it is a PAUSE, not a failure: the loop stops calling the model,
+   * waits for any delegate still running, then gives the model exactly one
+   * wrap-up turn with every tool call refused, so the run ends on a written
+   * summary instead of on a bare tool row. The run reports success with
+   * `stopCause: 'turn_limit'`. Decision 039 had removed the old 64-turn cap,
+   * which ended the run as `turn_limit` straight after a tool batch — no
+   * final words, and a red card for what was really a pause.
+   *
+   * A config field rather than a literal so a test can reach it in a handful
+   * of turns; the one production value is `DEFAULT_TURN_CEILING`.
+   */
+  turnCeiling: number;
+}
+
+/** decision 040 — high enough that real long tasks never meet it. */
+export const DEFAULT_TURN_CEILING = 500;
+
+/** What a tool call in the wrap-up turn gets back instead of running. */
+const TURN_CEILING_TOOL_REFUSAL =
+  'Refused: this run has reached its turn ceiling. Do not call tools; write your summary for the user instead.';
+
+/**
+ * decision 040 — the wrap-up request. Any delegate reports that arrived after
+ * the ceiling ride along in front of it, so the summary can account for work
+ * the parent never got to integrate; the instruction comes LAST because each
+ * report opens with the resume prompt's "continue the user's task", which this
+ * one overrides.
+ */
+function turnCeilingPrompt(ceiling: number, reports: readonly string[]): string {
+  const instruction = [
+    `You have taken ${ceiling} assistant turns on this request, which is this app's ceiling for one run.`,
+    'Stop working now and do not call any tool — a tool call in this reply will be refused.',
+    ...(reports.length > 0
+      ? [
+          'The subagent reports above arrived after the ceiling; account for them in your summary, but do not continue the work they describe.',
+        ]
+      : []),
+    'Write your final reply to the user, in the language they have been using: what you have done, where things stand, and what is left.',
+    'The user can reply "continue" to carry on from exactly here.',
+  ].join(' ');
+  return [...reports, instruction].join('\n\n');
 }
 
 export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
@@ -169,6 +214,7 @@ export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
   defaultThinkingLevel: 'medium',
   cacheRetention: 'long',
   providerTimeoutMs: DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
+  turnCeiling: DEFAULT_TURN_CEILING,
 };
 
 export class AgentLoopPlugin extends Service implements AgentLoopService {
@@ -400,6 +446,17 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       trace.note('note', { event: `permission_${record.phase}`, ...traceSafeActivity(record) });
       this.ctx.runtimeEvents.emit(permissionActivityEvent(sessionId, record));
     });
+    // decision 040 — the turn ceiling's state for this run. `reached` is set at
+    // the turn boundary that hits the ceiling and stops the loop there;
+    // `wrapping` is the single tool-less turn that follows. Reports delegates
+    // deliver in between are held for that turn rather than each buying the
+    // parent another one.
+    // `as`, not an annotation: the only writes before the wrap-up check happen
+    // inside pi's callbacks, which control-flow analysis cannot see, so an
+    // annotated `= 'none'` would be narrowed to `'none'` for the whole body.
+    let turns = 0;
+    let ceiling = 'none' as 'none' | 'reached' | 'wrapping';
+    const heldReports: string[] = [];
     // One budget per run: a 429 burst and a later gateway fault each get their
     // own bounded allowance, and neither may borrow from the other.
     const retryBudget = createProviderRetryBudget({
@@ -524,11 +581,26 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         tools: [...(this.ctx.get('runtimeTools')?.list() ?? [])],
         messages: snapshot?.messages ?? [],
       },
-      // decision 039 — no turn ceiling on the multi-turn path: neither pi
-      // itself nor PI-Desktop caps an interactive session (stopping is the
-      // user's and the watchdog's job). singleTurn keeps the P0 probe
-      // behaviour: answer once, then stop.
-      ...(this.config.singleTurn ? { shouldStopAfterTurn: () => true } : {}),
+      // decision 040 (superseding 039's "no ceiling"): singleTurn is the P0
+      // probe — answer once, then stop. A multi-turn run stops at the turn that
+      // reaches the ceiling, and every turn after that (the wrap-up, or a
+      // stream recovery re-asking it) is the last one.
+      shouldStopAfterTurn: () => {
+        if (this.config.singleTurn || ceiling !== 'none') return true;
+        turns += 1;
+        if (turns < this.config.turnCeiling) return false;
+        ceiling = 'reached';
+        trace.note('note', { event: 'turn_ceiling_reached', turns });
+        return true;
+      },
+      // The wrap-up turn must end in words. Its tools stay DEFINED — a request
+      // whose history holds tool_use blocks but declares no tools is a 400 on
+      // Anthropic — so a call the model makes anyway is refused here instead,
+      // with `terminate` so pi does not go back to the model with the refusal.
+      beforeToolCall: async () =>
+        ceiling === 'wrapping'
+          ? { block: true, reason: TURN_CEILING_TOOL_REFUSAL, terminate: true }
+          : undefined,
       // The turn boundary is where compaction is safe: the batch of tool
       // results that belongs to the turn just finished is already in the
       // context, so a model that asked for a new window mid-batch does not
@@ -750,6 +822,14 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
           // not once everything is over.
           foldDelegatedUsage();
           if (report === undefined) break;
+          // decision 040: past the ceiling the parent takes no further turn per
+          // report. The user chose to WAIT for running delegates rather than
+          // stop them, so their reports are collected here and handed to the
+          // one wrap-up turn below.
+          if (ceiling !== 'none') {
+            heldReports.push(report);
+            continue;
+          }
           trace.note('note', { event: 'delegation_resume', report_bytes: report.length });
           // Marked, not plain text. pi wraps any prompt as `role: 'user'`, and
           // an unmarked one is indistinguishable from something the person
@@ -771,6 +851,24 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
           await agent.waitForIdle();
           await drainStreamRetries();
         }
+      }
+      if (ceiling === 'reached' && !request.signal?.aborted) {
+        ceiling = 'wrapping';
+        trace.note('note', { event: 'turn_ceiling_wrap_up', held_reports: heldReports.length });
+        await agent.prompt(
+          markInternalMessage(
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: turnCeilingPrompt(this.config.turnCeiling, heldReports) },
+              ],
+              timestamp: Date.now(),
+            } satisfies AgentMessage,
+            'turn-ceiling'
+          )
+        );
+        await agent.waitForIdle();
+        await drainStreamRetries();
       }
       await session?.flush();
     } catch (error) {
@@ -816,6 +914,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       latencyMs: 0,
       turns: collected.turns.length,
       ...(error ? { error } : {}),
+      ...(ceiling === 'wrapping' ? { stopCause: 'turn_limit' as const } : {}),
     };
     const finished = await trace.finish({
       final_output: result.text,

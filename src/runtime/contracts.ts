@@ -293,6 +293,11 @@ export interface RuntimeRunResult {
   /** Assistant turns the loop completed. P0's single-turn flag pins this at 1 on success. */
   turns: number;
   error?: { code: string; message: string };
+  /**
+   * decision 040 — set when the run paused at the interactive turn ceiling
+   * after its wrap-up turn. Carried onto `session.completed` by the projector.
+   */
+  stopCause?: 'turn_limit';
   trace: RunTrace;
 }
 

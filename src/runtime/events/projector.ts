@@ -802,7 +802,7 @@ export class RuntimeEventProjector {
     if (payload) this.emit({ type: 'usage.updated', sessionId: this.sink.sessionId, payload });
   }
 
-  finish(result: Pick<RuntimeRunResult, 'success' | 'error' | 'stopReason'>): void {
+  finish(result: Pick<RuntimeRunResult, 'success' | 'error' | 'stopReason' | 'stopCause'>): void {
     this.closeAssistant();
     const type =
       result.stopReason === 'aborted'
@@ -819,6 +819,11 @@ export class RuntimeEventProjector {
       // any later branching reader read `errorCode` instead.
       payload: {
         ...(result.error ? { error: result.error.message, errorCode: result.error.code } : {}),
+        // decision 040: only a completion can carry it — a wrap-up turn that
+        // then failed or was stopped reports that ending, not the ceiling.
+        ...(type === 'session.completed' && result.stopCause
+          ? { stopCause: result.stopCause }
+          : {}),
       },
     });
     this.emit({

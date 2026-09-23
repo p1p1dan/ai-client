@@ -701,6 +701,20 @@ export interface SessionTerminalEvent extends RuntimeEventBase {
      * path prefixes it there for the renderer's recovery cards.
      */
     errorCode?: string;
+    /**
+     * decision 040 — why a run that COMPLETED stopped where it did, when that
+     * was not the model's own choice. Only ever set on `session.completed`.
+     *
+     * `turn_limit`: the run reached the interactive turn ceiling, got one
+     * tool-less wrap-up turn to summarise, and paused. Not a failure — the
+     * work is intact and a plain "continue" carries on — which is why it rides
+     * on the completed event instead of `session.failed` + `errorCode`.
+     *
+     * Optional-field addition, the same compatibility precedent as
+     * `SessionLivenessNote`: a renderer that predates it reads a plain
+     * completion.
+     */
+    stopCause?: 'turn_limit';
   };
 }
 

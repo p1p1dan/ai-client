@@ -16,7 +16,8 @@
  * `SessionTerminalEvent.payload` carries BOTH `error` (the sentence) and
  * `errorCode` (T066's machine-readable half, added so the operator log had
  * something greppable). The code is written by whoever knew what happened:
- * `turn_limit` by the loop's own ceiling check, `stop_error` by `resolveError`
+ * `turn_limit` by the loop's old 64-turn ceiling (legacy — see the entry
+ * below), `stop_error` by `resolveError`
  * when a provider stream died, `context_too_large` by the preflight budget
  * check, `loop_threw` by an exception inside the loop.
  *
@@ -70,10 +71,12 @@ export interface SessionFailureView {
  * guessing.
  */
 const FAILURE_VIEWS = {
-  // decision 039 — the runtime no longer emits `turn_limit` (the interactive
-  // loop is uncapped; subagents still report `truncated` on their own
-  // maxTurns cap). Kept so sessions recorded before that change still render
-  // their original failure card instead of the unknown fallback.
+  // Legacy. Since decision 040 the runtime no longer ENDS a run as
+  // `turn_limit`: reaching the interactive ceiling pauses after a tool-less
+  // wrap-up turn and arrives as `session.completed` + `stopCause`, drawn by
+  // `TurnCeilingNotice`, not this card. Kept so sessions recorded under the old
+  // 64-turn cap still render their original card instead of the unknown
+  // fallback; subagents report their own `maxTurns` cap as `truncated`.
   turn_limit: {
     title: 'Stopped at the tool-call ceiling',
     reason:

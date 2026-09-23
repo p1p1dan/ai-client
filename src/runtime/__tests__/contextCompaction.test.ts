@@ -687,6 +687,7 @@ describe('internal messages at a checkpoint (T005, extended by decision 007)', (
   it.each([
     'subagent-report',
     'project-instructions',
+    'turn-ceiling',
   ] as const)('never promotes a %s message to the surviving user instruction', (origin) => {
     const preparation = {
       messagesToSummarize: [],

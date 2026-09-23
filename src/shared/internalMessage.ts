@@ -30,8 +30,12 @@
  * subtree. It needs the same three guarantees the subagent report does — no
  * user bubble, not "the latest real user task", and the mark survives the JSONL
  * round trip — so it is the same mechanism rather than a second one.
+ *
+ * `turn-ceiling` is decision 040's wrap-up request: the one message the loop
+ * sends after a run reaches its turn ceiling, asking the model to summarise
+ * instead of calling another tool. Same three guarantees, same reason.
  */
-export type InternalMessageOrigin = 'subagent-report' | 'project-instructions';
+export type InternalMessageOrigin = 'subagent-report' | 'project-instructions' | 'turn-ceiling';
 
 /**
  * Recognised values, as data.
@@ -41,7 +45,11 @@ export type InternalMessageOrigin = 'subagent-report' | 'project-instructions';
  * one, which is the exact failure mode this file exists to prevent — so the
  * list is written once and both the type and the check come off it.
  */
-const ORIGINS: readonly InternalMessageOrigin[] = ['subagent-report', 'project-instructions'];
+const ORIGINS: readonly InternalMessageOrigin[] = [
+  'subagent-report',
+  'project-instructions',
+  'turn-ceiling',
+];
 
 const FIELD = 'aiclientInternal';
 
