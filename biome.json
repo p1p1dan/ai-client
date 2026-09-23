@@ -57,6 +57,7 @@
       "!**/*.min.js",
       "!**/*.css",
       "!docs/design",
+      "!docs/**/*.html",
       "!docs/plans/**/*.mjs",
       "!docs/plantree/plans/runtime-evolution/evidence",
       "!docs/plantree/plans/runtime-hardening/evidence/**/artifacts",

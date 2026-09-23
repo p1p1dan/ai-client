@@ -41,7 +41,9 @@ function overrideLiteral(): string {
 describe('T104: chat typography override is scoped to the chat column', () => {
   it('sets both size tiers as inline custom properties', () => {
     const literal = overrideLiteral();
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the placeholder is the source text being matched, not an interpolation
     expect(literal).toContain("'--text-chat-body': `${chatBodyFontSize}px`");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: same — this scan asserts on the literal the component writes
     expect(literal).toContain("'--text-chat-process': `${chatProcessFontSize}px`");
   });
 
