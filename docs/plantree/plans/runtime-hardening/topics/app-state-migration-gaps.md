@@ -113,6 +113,10 @@ PowerShell 实测（**不是推断**）：
   - 在默认 session 的 file:// 空白页里写入合并结果（`planLocalStorageMerge`）：`aiclient-repositories` 按规范化路径取并集，`aiclient-repository-groups` 按 id 取并集，新库已有的条目都不动；其他键只在新库没有时才写入；新库里解析失败的列表不碰；
   - 不用 BrowserWindow 的原因：第一个 BrowserWindow 会触发 `browser-window-created`，也就是 vault 加密升级的时机；最后一个窗口关闭会触发 `window-all-closed`，直接退出应用。已实测 `WebContentsView` 不会触发这两个事件，整个过程约 0.4 秒。
 - **幂等**：两个新步骤各用独立的标记（`<userData>\.migrated-prior-userdata` 和 `<userData>\.migrated-prior-local-storage`），不受 `.migrated-from-aiclient` 影响。合并规则本身也只增不改，去掉标记重跑结果不变，已有测试覆盖。
+
+  标记必须**只在确认写入已落盘之后**才写。DOM storage 是懒提交的，`flushStorageData()` 只是发起提交、并不等待；如果在这之后立刻写标记，中间崩溃就会留下「标记已写、数据丢失」的状态，而标记会让以后每次启动都跳过，仓库列表从此永远不再补齐，侧栏一直空且不再自愈。现在的做法是写完先用新的空白页把计划中的键逐个读回，全部确认后才写标记；超时未确认则报 `failed`、不写标记，下次启动重跑（合并规则只增不改，重跑安全）。
+
+  同一链路上的另一处：`cpSync` 会把旧 store 的 `LOCK` 一起复制过去，而 Chromium 不会打开已被占用的 leveldb，这一处会让该步骤**每次启动都失败**且侧栏依旧为空。拷贝后显式删除 `<scratch>\<i>\Local Storage\LOCK`（拷贝是暂存副本，旧目录仍保持只读）。
 - **红线**：旧目录只读不写；先写者优先的判断粒度，leveldb 提到整目录或单个键；失败时不抛异常、不写标记，下次启动重试；日志只输出计数，报错经 `redactStderrLine` 脱敏。
 
 ---

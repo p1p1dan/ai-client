@@ -42,6 +42,17 @@ const SCRATCH_DIR_NAME = '.prior-local-storage';
 /** A hung renderer must not hold the app's startup hostage; the next boot retries. */
 const STEP_TIMEOUT_MS = 15_000;
 
+/**
+ * How long the merged keys get to become durable before the marker is withheld.
+ *
+ * The cost of waiting is startup latency on the ONE boot that migrates; the
+ * cost of not waiting is the defect this loop exists to close. Total budget is
+ * the timeout, not the per-attempt one: every attempt is a fresh read of one
+ * key out of a small `file://` store.
+ */
+const PERSIST_CONFIRM_TIMEOUT_MS = 5_000;
+const PERSIST_CONFIRM_INTERVAL_MS = 50;
+
 export type PriorLocalStorageImportOutcome =
   | { kind: 'skipped'; reason: 'marker_present' | 'nothing_to_migrate' }
   | { kind: 'migrated'; addedKeys: number; addedRepositories: number; addedGroups: number }
@@ -59,6 +70,9 @@ const READ_ALL = `JSON.stringify(Object.fromEntries(
   Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)])
 ))`;
 
+/** One key, or `null`. Used to confirm a write survived, not to plan one. */
+const readKey = (key: string) => `localStorage.getItem(${JSON.stringify(key)})`;
+
 /** Loads the blank page in `ses` and runs `use` against it. The view is always closed. */
 async function withBlankPage<T>(
   ses: Electron.Session,
@@ -75,6 +89,49 @@ async function withBlankPage<T>(
     );
   } finally {
     view.webContents.close();
+  }
+}
+
+/**
+ * Reads the planned keys back out of `ses` until they all match, or gives up.
+ *
+ * Deliberately a FRESH page load per round (via `withBlankPage`), not the page
+ * that did the writing: a script that re-reads from the same context can be
+ * answered out of that renderer's in-memory DOM storage, which proves nothing
+ * about what reached disk. A new page faces the same question the next boot
+ * will face.
+ *
+ * Never throws — a page that will not load is reported as "nothing confirmed",
+ * which withholds the marker, which is the correct answer for a boot that
+ * could not verify its own work.
+ */
+async function confirmWrittenKeys(
+  ses: Electron.Session,
+  blankPage: string,
+  writes: Record<string, string>
+): Promise<{ missingKeys: string[] }> {
+  const keys = Object.keys(writes);
+  if (keys.length === 0) return { missingKeys: [] };
+
+  const deadline = Date.now() + PERSIST_CONFIRM_TIMEOUT_MS;
+  let missingKeys = keys;
+  for (;;) {
+    try {
+      const observed = await withBlankPage(ses, blankPage, async (run) => {
+        const seen: Record<string, string | null> = {};
+        for (const key of keys) seen[key] = (await run(readKey(key))) as string | null;
+        return seen;
+      });
+      missingKeys = keys.filter((key) => observed[key] !== writes[key]);
+    } catch {
+      missingKeys = keys;
+    }
+    if (missingKeys.length === 0 || Date.now() >= deadline) return { missingKeys };
+    await new Promise((resolve) => setTimeout(resolve, PERSIST_CONFIRM_INTERVAL_MS));
+    // The commit is re-requested on every round: the flush is asynchronous, and
+    // a round that observed a stale value is the one that can benefit from
+    // asking again.
+    ses.flushStorageData();
   }
 }
 
@@ -119,6 +176,13 @@ export async function importPriorLocalStorage(input: {
     for (const [index, source] of sources.entries()) {
       const profileDir = join(scratchDir, String(index));
       cpSync(source, join(profileDir, LOCAL_STORAGE_DIR_NAME), { recursive: true });
+      // Chromium refuses to open a leveldb whose `LOCK` is already taken, and a
+      // `cpSync` carries the previous build's `LOCK` along. That file is a
+      // stale artifact of a process that is gone (the old build is not running
+      // — this one holds the single-instance lock), and leaving it in place
+      // makes this whole step fail on EVERY boot, forever, with the sidebar
+      // still empty. Copied stores are scratch, so dropping it is safe.
+      rmSync(join(profileDir, LOCAL_STORAGE_DIR_NAME, 'LOCK'), { force: true });
       const raw = await withBlankPage(session.fromPath(profileDir), blankPage, (run) =>
         run(READ_ALL)
       );
@@ -137,12 +201,31 @@ export async function importPriorLocalStorage(input: {
       return next;
     });
 
-    // DOM storage commits to leveldb lazily. This REQUESTS the commit; it does
-    // not wait for it, so a crash in the next moment could still lose the
-    // writes after the marker lands. Accepted: the main window opens right
-    // after and keeps the session alive far longer than one commit takes.
+    // DOM storage commits to leveldb lazily, and `flushStorageData()` only
+    // REQUESTS that commit — it does not wait for it. Writing the marker on the
+    // strength of that call is the defect this block closes: a crash in the
+    // window between the request and the commit left the marker on disk and the
+    // writes lost, and because the marker short-circuits every later boot, the
+    // repository list was never migrated again. The sidebar stayed empty and
+    // nothing ever retried.
+    //
+    // So the marker is now gated on EVIDENCE instead: the writes are read back
+    // from the live session until every planned key returns the planned value.
+    // Only then is the merge declared done. If confirmation never arrives the
+    // function fails without marking, and the next boot replays the merge —
+    // which is safe by construction, since every rule in
+    // `planLocalStorageMerge` is "add only" and the second pass computes the
+    // same no-op plan.
     session.defaultSession.flushStorageData();
-    writeFileSync(markerPath, `${new Date().toISOString()}\n`, 'utf-8');
+    const confirmed = await confirmWrittenKeys(session.defaultSession, blankPage, plan.writes);
+    if (!confirmed.missingKeys.length) {
+      writeFileSync(markerPath, `${new Date().toISOString()}\n`, 'utf-8');
+    } else {
+      return {
+        kind: 'failed',
+        error: `local storage writes did not persist: ${confirmed.missingKeys.join(', ')}`,
+      };
+    }
     return {
       kind: 'migrated',
       addedKeys: plan.addedKeys,
