@@ -9,6 +9,7 @@ import { IPC_CHANNELS, type ProxySettings } from '@shared/types';
 import { customProtocolUriToPath, type SupportedFileUrlPlatform } from '@shared/utils/fileUrl';
 import { resolveIsDarkTheme } from '@shared/windowTheme';
 import { app, BrowserWindow, ipcMain, Menu, nativeTheme, net, protocol } from 'electron';
+import { redactStderrLine } from '../agent-host/stderrRedaction';
 
 // Register custom protocol privileges
 protocol.registerSchemesAsPrivileged([
@@ -47,13 +48,14 @@ import { cleanupAllResources, cleanupAllResourcesSync, registerIpcHandlers } fro
 import { cleanupTempFiles } from './ipc/files';
 import { readSettings } from './ipc/settings';
 import { registerWindowHandlers } from './ipc/window';
-import { migrateAppState } from './services/appStateMigration';
+import { migrateAppState, migratePriorUserData } from './services/appStateMigration';
 import {
   CREDENTIALS_DIR_NAME,
   getAppStateRoot,
   getCredentialsDir,
   getLegacyAppStateRoot,
   getPriorInstallRoots,
+  getPriorUserDataDirs,
 } from './services/appStatePaths';
 import {
   createRealVaultCrypto,
@@ -77,6 +79,7 @@ import { checkGitInstalled } from './services/git/checkGit';
 import { gitAutoFetchService } from './services/git/GitAutoFetchService';
 import { setCurrentLocale } from './services/i18n';
 import { buildAppMenu } from './services/MenuBuilder';
+import { importPriorLocalStorage } from './services/priorLocalStorageImport';
 import {
   getSharedStatePaths,
   isLegacySettingsMigrated,
@@ -188,6 +191,28 @@ if (appStateMigration.kind === 'migrated') {
 } else if (appStateMigration.kind === 'failed') {
   console.error(
     `[appState] migration failed after ${appStateMigration.copied.length} file(s): ${appStateMigration.error}`
+  );
+}
+
+// Phase ⓪, second half — the repository list (`Local Storage`) and the
+// conversation list (`session-index.json`) live in the OLD `<userData>`, not
+// in `~/.pilab`. After the step above, so rewritten `.jsonl` paths can be
+// checked against the new root; before any `BrowserWindow`, because Chromium
+// opens `Local Storage` with the first renderer. Its own marker: the one above
+// is already present on every test.17+ machine. Never throws.
+const priorUserDataMigration = migratePriorUserData({
+  userDataDir: app.getPath('userData'),
+  newRoot: getAppStateRoot(),
+  priorUserDataDirs: isDev ? [] : getPriorUserDataDirs(),
+});
+if (priorUserDataMigration.kind === 'migrated') {
+  const s = priorUserDataMigration.sessionIndex;
+  console.log(
+    `[appState] prior userData: local-storage=${priorUserDataMigration.localStorage} sessions-added=${s.added} kept-existing=${s.keptExisting} identity-rewritten=${s.identityRewritten} identity-kept=${s.identityKept} unreadable-sources=${s.unreadableSources}`
+  );
+} else if (priorUserDataMigration.kind === 'failed') {
+  console.error(
+    `[appState] prior userData migration failed: ${redactStderrLine(priorUserDataMigration.error)}`
   );
 }
 
@@ -434,6 +459,25 @@ app
 
     // Set app user model id for windows
     electronApp.setAppUserModelId('com.aiclient.app');
+
+    // Phase ⓪, third part — needs Chromium, so it cannot run next to the other
+    // two above, but it must run before the main window: the renderer reads
+    // the repository list from `localStorage` once, on mount. Fills a store the
+    // new build already created (test.17+ machines), where the whole-directory
+    // copy above rightly refused to touch it. Never throws.
+    const priorLocalStorage = await importPriorLocalStorage({
+      userDataDir: app.getPath('userData'),
+      priorUserDataDirs: isDev ? [] : getPriorUserDataDirs(),
+    });
+    if (priorLocalStorage.kind === 'migrated') {
+      console.log(
+        `[appState] prior local storage: keys-added=${priorLocalStorage.addedKeys} repositories-added=${priorLocalStorage.addedRepositories} groups-added=${priorLocalStorage.addedGroups}`
+      );
+    } else if (priorLocalStorage.kind === 'failed') {
+      console.error(
+        `[appState] prior local storage merge failed: ${redactStderrLine(priorLocalStorage.error)}`
+      );
+    }
 
     // Allow EnhancedInput temp images to be previewed via local-file:// protocol.
     // NOTE: This is registered here (in the same module as the protocol handler)

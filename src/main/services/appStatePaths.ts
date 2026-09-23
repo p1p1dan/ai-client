@@ -74,6 +74,17 @@ export function getPriorInstallRoots(): PriorInstallRoots[] {
   }));
 }
 
+/**
+ * `<appData>/<former name>` for each earlier packaged release, newest first —
+ * the `<userData>` those releases ran under, which still holds their
+ * `Local Storage` (repository list) and `session-index.json` (conversation
+ * list). Passed to `migratePriorUserData`; nothing else may read it.
+ */
+export function getPriorUserDataDirs(): string[] {
+  const appData = app.getPath('appData');
+  return PRIOR_USER_DATA_DIR_NAMES.map((name) => join(appData, name));
+}
+
 /** `~/.pilab/<profile>/credentials`, the vault's home since S2 (it was `<userData>/credentials`). */
 export function getCredentialsDir(): string {
   return join(getAppStateRoot(), CREDENTIALS_DIR_NAME);
