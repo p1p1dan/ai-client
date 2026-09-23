@@ -797,6 +797,17 @@ export const zhTranslations: Record<string, string> = {
     '这个终端已经在运行另一个对话，请先关掉那个终端，再打开这一个。',
   'This chat is still running a turn; wait for it to finish before opening the Pi terminal':
     '这个对话还有一轮没跑完，等它结束之后再打开 Pi 终端。',
+  // D4 回炉 — ProviderSetupDialog 的「各模型元数据」小节。这六个键是
+  // i18nCoverage 唯一漏掉的一组：它们全部只在该对话框里使用，所以译名按
+  // 「模型能力声明」的语境定，`Input` 取「输入类型」而非孤零零的「输入」，
+  // 免得和同一行的「输出上限」读成一对数值字段。
+  Image: '图像',
+  Input: '输入类型',
+  'Output limit': '输出上限',
+  'Per-model metadata': '各模型元数据',
+  Reasoning: '推理',
+  Text: '文本',
+
   'Preview limit': '预览上限',
   'Review changes with AI assistance': '用 AI 协助审阅改动',
   'Save changes (Cmd+S)': '保存改动（Cmd+S）',

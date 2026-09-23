@@ -355,9 +355,9 @@ describe('ProviderSetupDialog — per-model metadata', () => {
     });
     // One row per selected model, so the modality buttons repeat down the
     // list; the first pair belongs to the only model here.
-    const modalities = [...document.body.querySelectorAll('button[aria-pressed]')].filter(
-      (button) => ['Text', 'Image'].includes(button.textContent?.trim() ?? '')
-    );
+    const modalities = [
+      ...document.body.querySelectorAll<HTMLButtonElement>('button[aria-pressed]'),
+    ].filter((button) => ['Text', 'Image'].includes(button.textContent?.trim() ?? ''));
     const image = modalities.find((button) => button.textContent?.trim() === 'Image');
     await act(async () => image?.click());
     await save();
