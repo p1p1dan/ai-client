@@ -47,8 +47,9 @@ describe('afterPack resource layout', () => {
 });
 
 /**
- * The 1.0.0-test.17 rename: `AiClient` -> `PiLab Ai`, with `pilab-alpha-v*`
- * artifact names. Four files have to agree about it, and none of them would
+ * The 1.0.0-test.17 rename: `AiClient` -> `PiLab Ai`, with `pilab-v*` artifact
+ * names (`pilab-alpha-v*` until the 1.0.1 drop of the `alpha` marker). Four files
+ * have to agree about it, and none of them would
  * fail to BUILD if they drifted — the release would just be wrong, or the
  * artifact upload would find nothing.
  */
@@ -108,7 +109,7 @@ describe('product rename and artifact naming', () => {
     // AFTER the full 20-minute packaging job.
     const installer = expandArtifactName(builderYml.nsis.artifactName, 'exe');
 
-    expect(installer).toBe(`pilab-alpha-v${pkg.version}-Setup.exe`);
+    expect(installer).toBe(`pilab-v${pkg.version}-Setup.exe`);
     expect(matchesGlob('*Setup*.exe', installer)).toBe(true);
     expect(workflowText).toContain('dist/*Setup*.exe');
   });
@@ -233,8 +234,11 @@ describe('build.yml gate wiring (C5)', () => {
     for (const job of ['build-windows', 'build-linux', 'build-macos']) {
       expect([jobs[job].needs].flat()).toContain('build-app');
     }
+    // `build-macos` is NOT in this list: d0d129bc (2026-09-23) took it off the
+    // tag path — unsigned dmg, never a download, and hdiutil was blocking every
+    // release. It still exists and is still gated above (dispatch-only).
     expect([jobs['generate-release-notes'].needs].flat().sort()).toEqual(
-      ['build-remote-runtime-linux', 'build-linux', 'build-macos', 'build-windows'].sort()
+      ['build-remote-runtime-linux', 'build-linux', 'build-windows'].sort()
     );
   });
 
