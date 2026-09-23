@@ -735,8 +735,8 @@ jobs:
 
           | Platform | File |
           |---|---|
-          | Windows x64 installer | [pilab-alpha-v${VERSION}-Setup.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/pilab-alpha-v${VERSION}-Setup.exe) |
-          | Linux x64 AppImage | [pilab-alpha-v${VERSION}.AppImage](https://github.com/${{ github.repository }}/releases/download/${TAG}/pilab-alpha-v${VERSION}.AppImage) |
+          | Windows x64 installer | [pilab-v${VERSION}-Setup.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/pilab-v${VERSION}-Setup.exe) |
+          | Linux x64 AppImage | [pilab-v${VERSION}.AppImage](https://github.com/${{ github.repository }}/releases/download/${TAG}/pilab-v${VERSION}.AppImage) |
 
           The macOS CI candidate is unsigned and is intentionally not published
           as a general-release download. Signing, notarization, and Gatekeeper
