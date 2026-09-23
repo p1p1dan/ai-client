@@ -280,11 +280,10 @@ jobs:
       # Without these, a workflow_dispatch run builds a Windows package and then
       # throws it away — the only way to obtain a test build was a Windows machine.
       # Tag runs also publish a draft release; these artifacts are the fallback.
-      # Split from one `dist/*.exe` artifact into two (2026-08-28, user request).
-      # The single artifact swept BOTH exes together, so downloading the
-      # installer meant pulling the portable build with it — 522 MB zipped for
-      # something the tester only needed half of. The `win` target list is
-      # unchanged: both are still built, they are just fetched separately.
+      # One artifact again (2026-09-23): the 2026-08-28 split existed because a
+      # single `dist/*.exe` swept the portable build in with the installer, 522
+      # MB zipped for half of what the tester wanted. The portable target is
+      # gone now, so there is nothing left to separate it from.
       - name: Upload Windows installer
         uses: actions/upload-artifact@v5
         with:
@@ -297,16 +296,8 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-      - name: Upload Windows portable
-        uses: actions/upload-artifact@v5
-        with:
-          name: windows-portable
-          path: dist/*portable*.exe
-          retention-days: 14
-          if-no-files-found: error
-
-      # Directory build: the encrypted-machine test plan requires win-unpacked
-      # (portable re-extracts to a temp dir, so the bundled node.exe path drifts).
+      # Directory build: the encrypted-machine test plan requires win-unpacked,
+      # an installed layout it can point at without running the installer.
       # Only on manual runs — tag runs get the installers from the draft release.
       - name: Upload Windows unpacked directory
         if: github.event_name == 'workflow_dispatch'
@@ -422,9 +413,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: linux-packages
-          path: |
-            dist/*.AppImage
-            dist/*.deb
+          path: dist/*.AppImage
           retention-days: 7
           if-no-files-found: error
 
@@ -721,9 +710,7 @@ jobs:
           | Platform | File |
           |---|---|
           | Windows x64 installer | [pilab-alpha-v${VERSION}-Setup.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/pilab-alpha-v${VERSION}-Setup.exe) |
-          | Windows x64 portable | [pilab-alpha-v${VERSION}-portable.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/pilab-alpha-v${VERSION}-portable.exe) |
           | Linux x64 AppImage | [pilab-alpha-v${VERSION}.AppImage](https://github.com/${{ github.repository }}/releases/download/${TAG}/pilab-alpha-v${VERSION}.AppImage) |
-          | Linux x64 deb | [jyw-ai-client_${VERSION}_amd64.deb](https://github.com/${{ github.repository }}/releases/download/${TAG}/jyw-ai-client_${VERSION}_amd64.deb) |
 
           The macOS CI candidate is unsigned and is intentionally not published
           as a general-release download. Signing, notarization, and Gatekeeper

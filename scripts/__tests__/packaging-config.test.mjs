@@ -102,19 +102,31 @@ describe('product rename and artifact naming', () => {
     expect(verifyText).toContain(`'${builderYml.win.executableName}.exe'`);
   });
 
-  it('produces installer and portable names the Build workflow can upload', () => {
-    // The workflow globs for these two literal patterns. An artifactName that
-    // dropped "Setup" or "portable" would make the upload step fail with
-    // if-no-files-found: error, AFTER the full 20-minute packaging job.
+  it('produces an installer name the Build workflow can upload', () => {
+    // The workflow globs for this literal pattern. An artifactName that dropped
+    // "Setup" would make the upload step fail with if-no-files-found: error,
+    // AFTER the full 20-minute packaging job.
     const installer = expandArtifactName(builderYml.nsis.artifactName, 'exe');
-    const portable = expandArtifactName(builderYml.portable.artifactName, 'exe');
 
     expect(installer).toBe(`pilab-alpha-v${pkg.version}-Setup.exe`);
-    expect(portable).toBe(`pilab-alpha-v${pkg.version}-portable.exe`);
     expect(matchesGlob('*Setup*.exe', installer)).toBe(true);
-    expect(matchesGlob('*portable*.exe', portable)).toBe(true);
     expect(workflowText).toContain('dist/*Setup*.exe');
-    expect(workflowText).toContain('dist/*portable*.exe');
+  });
+
+  /**
+   * The 2026-09-23 decision (「就生产个 linux window macos 的安装包」) cut the
+   * Windows portable exe and the Linux deb. Asserted here because the cost of
+   * a silent re-add is a 500MB-class asset nobody asked for, and because the
+   * two survivors are load-bearing for auto-update: electron-updater needs the
+   * macOS zip and the Linux AppImage, and cannot update a deb at all.
+   */
+  it('builds exactly one installer per platform, plus the macOS update zip', () => {
+    expect(builderYml.win.target.map((entry) => entry.target)).toEqual(['nsis']);
+    expect(builderYml.linux.target.map((entry) => entry.target)).toEqual(['AppImage']);
+    expect(builderYml.mac.target).toEqual(['dmg', 'zip']);
+    expect(builderYml.portable).toBeUndefined();
+    expect(workflowText).not.toContain('portable*.exe');
+    expect(workflowText).not.toContain('dist/*.deb');
   });
 
   it('keeps the macOS zip suffix the workflow globs for', () => {

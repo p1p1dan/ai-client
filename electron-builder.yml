@@ -191,14 +191,12 @@ win:
   # entry and `installer.nsh` line spells out by hand.
   executableName: PiLabAi
   target:
-    # NSIS supports delta updates automatically
+    # NSIS supports delta updates automatically. The portable target was
+    # dropped (user decision, 2026-09-23 — 「就生产个 linux window macos 的
+    # 安装包」): it produced a second 500MB-class exe nobody installed, and
+    # electron-updater cannot update it anyway.
     - target: nsis
       arch: [x64]
-    - target: portable
-      arch: [x64]
-
-portable:
-  artifactName: pilab-alpha-v${version}-portable.${ext}
 
 nsis:
   oneClick: false
@@ -215,9 +213,12 @@ nsis:
 
 linux:
   target:
+    # AppImage only (same user decision as `win.target`). It stays instead of
+    # `deb` because electron-updater can update an AppImage and cannot update a
+    # deb, so dropping the other way round would have cost Linux auto-update.
+    # `maintainer` / `category` below are deb/rpm fields — left in place so the
+    # target can come back without re-deriving them.
     - target: AppImage
-      arch: [x64]
-    - target: deb
       arch: [x64]
   # Linux can consume the multi-size PNG set directly. Keep it independent
   # from the macOS ICNS container, which app-builder cannot convert reliably
