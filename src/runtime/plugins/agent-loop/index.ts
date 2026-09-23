@@ -400,7 +400,6 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       trace.note('note', { event: `permission_${record.phase}`, ...traceSafeActivity(record) });
       this.ctx.runtimeEvents.emit(permissionActivityEvent(sessionId, record));
     });
-    let turnCount = 0;
     // One budget per run: a 429 burst and a later gateway fault each get their
     // own bounded allowance, and neither may borrow from the other.
     const retryBudget = createProviderRetryBudget({
@@ -525,7 +524,11 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         tools: [...(this.ctx.get('runtimeTools')?.list() ?? [])],
         messages: snapshot?.messages ?? [],
       },
-      shouldStopAfterTurn: () => ++turnCount >= (this.config.singleTurn ? 1 : 64),
+      // decision 039 — no turn ceiling on the multi-turn path: neither pi
+      // itself nor PI-Desktop caps an interactive session (stopping is the
+      // user's and the watchdog's job). singleTurn keeps the P0 probe
+      // behaviour: answer once, then stop.
+      ...(this.config.singleTurn ? { shouldStopAfterTurn: () => true } : {}),
       // The turn boundary is where compaction is safe: the batch of tool
       // results that belongs to the turn just finished is already in the
       // context, so a model that asked for a new window mid-batch does not
@@ -798,10 +801,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
 
     const aborted = request.signal?.aborted === true;
     const last = collected.turns.at(-1);
-    const error =
-      turnCount >= 64 && last?.stopReason === 'toolUse'
-        ? { code: 'turn_limit', message: 'tool loop exceeded 64 assistant turns' }
-        : resolveError({ thrown, aborted, last });
+    const error = resolveError({ thrown, aborted, last });
     // The last fold: `drain()` settles stragglers, and a run that failed or was
     // stopped never reached the loop above at all. `takeUsage()` drains, so
     // this cannot re-bill what the loop already took.

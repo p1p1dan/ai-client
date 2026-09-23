@@ -70,6 +70,10 @@ export interface SessionFailureView {
  * guessing.
  */
 const FAILURE_VIEWS = {
+  // decision 039 — the runtime no longer emits `turn_limit` (the interactive
+  // loop is uncapped; subagents still report `truncated` on their own
+  // maxTurns cap). Kept so sessions recorded before that change still render
+  // their original failure card instead of the unknown fallback.
   turn_limit: {
     title: 'Stopped at the tool-call ceiling',
     reason:
