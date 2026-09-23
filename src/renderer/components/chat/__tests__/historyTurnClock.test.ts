@@ -185,8 +185,13 @@ it('[HEAD-BLANK-1] a fold head is never an empty row, even with no timestamps at
  * So these cases assert POSITION, not mere presence. A test that only asked
  * 「时长在页面上吗」 passed against the rejected design too.
  *
- * T112's threshold is untouched: a one-step group still renders in place. What
- * changed is that the clock line no longer depends on a fold existing.
+ * T112's threshold no longer decides the SHAPE of a finished turn. 5b7853dc
+ * ties the fold to the turn's phase instead (`processSettled || …folds()`,
+ * `turnWorkGroupOpen` returning `!settled`), so a settled turn gets a head even
+ * where T112 would have rendered its one step in place. That is a deliberate
+ * behaviour change and this case follows it: what it guards is unchanged and is
+ * the part the user actually reported — the clock is the turn's FIRST line,
+ * whatever shape the process rows take around it.
  *
  * `[CLOCK-ONCE-1]` is the other half and is not optional: T107 is the defect
  * where two elements print the same duration, and a second line carrying it is
@@ -218,9 +223,13 @@ it('[CLOCK-TOP-1] a turn too small to fold still leads with its duration', async
   ] as [string, ChatMessage['blocks']][]) {
     const { container, unmount } = await renderHistory(historyTurn(true, blocks));
     try {
-      expect(container.querySelectorAll('summary'), `${label}: no fold head, by T112`).toHaveLength(
-        0
-      );
+      // One head, not zero (5b7853dc — see the note above) and not two: a
+      // second head would mean the turn folded its process rows twice, which
+      // is how the duplicated-duration defect of T107 comes back.
+      expect(
+        container.querySelectorAll('summary'),
+        `${label}: the settled turn folds under exactly one head`
+      ).toHaveLength(1);
       const text = container.textContent ?? '';
       expect(text, `${label}: the clock is on screen`).toContain(WORKED_LINE);
       // …and it LEADS. Before everything the turn has to show, exactly as it
